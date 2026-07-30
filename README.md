@@ -11,6 +11,10 @@ output — and filter coefficients are traced back to their original design
 intent so they can be *regenerated* at a different sample rate rather than
 merely resampled.
 
+Abbreviations are decoded in **[docs/glossary.md](docs/glossary.md)** — worth
+reading first, since several are misleading (`MRF` is *multi-rate filter*, not
+"matched root filter"; `FP_Pow` computes `exp()`).
+
 Start with **[docs/findings.md](docs/findings.md)**: what the blob is, how it
 is structured, and the commands that prove each claim.
 
