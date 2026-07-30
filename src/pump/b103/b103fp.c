@@ -60,13 +60,13 @@ TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits, short *out,
 		unsigned short nbits)
 {
 	struct b103_dsp *dsp = fp->dsp;
-	short saved_scale = dsp->fsm.scale;
+	short saved_scale = dsp->fsm.cfg.scale;
 	unsigned short nsamples;
 
-	dsp->fsm.scale = 0;
+	dsp->fsm.cfg.scale = 0;
 	nsamples = (unsigned short)FPM_FSM_modulate(&dsp->fsm, bits,
 						    dsp->scratch, nbits);
-	dsp->fsm.scale = saved_scale;
+	dsp->fsm.cfg.scale = saved_scale;
 
 	return (short)(unsigned short)FPM_MRF_filter(&dsp->tx_mrf,
 						     dsp->scratch, out,

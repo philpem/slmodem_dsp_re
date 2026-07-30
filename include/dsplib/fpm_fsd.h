@@ -57,6 +57,9 @@ void FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg,
 		  int fresh);
 void FPM_FSD_free(struct fpm_fsd *state);
 
+/* The library default: no filters, but Bell 103's scalars throughout. */
+extern const struct fpm_fsd_cfg FPM_FSD_CFG_data;
+
 /*
  * Demodulate `count` samples, appending bits to `bits_out` as they complete.
  * Returns the number of bits written -- usually far fewer than `count`, since

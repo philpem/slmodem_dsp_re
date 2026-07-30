@@ -50,14 +50,14 @@ main(void)
 	memset(&a, 0, sizeof(a));
 	memset(&b, 0, sizeof(b));
 	ref_FPM_FSM_init(&a, ref_FPM_FSM_CFG);
-	FPM_FSM_init(&b, (const struct fpm_fsm *)ref_FPM_FSM_CFG);
+	FPM_FSM_init(&b, (const struct fpm_fsm_cfg *)ref_FPM_FSM_CFG);
 
 	diff_begin("FSM init");
-	diff_eq_int("freq[0] (%ld)", b.freq[0], a.freq[0], 0);
-	diff_eq_int("freq[1] (%ld)", b.freq[1], a.freq[1], 0);
-	diff_eq_int("samples per symbol (%ld)", b.samples_per_sym,
-		    a.samples_per_sym, 0);
-	diff_eq_int("scale (%ld)", b.scale, a.scale, 0);
+	diff_eq_int("freq[0] (%ld)", b.cfg.freq[0], a.cfg.freq[0], 0);
+	diff_eq_int("freq[1] (%ld)", b.cfg.freq[1], a.cfg.freq[1], 0);
+	diff_eq_int("samples per symbol (%ld)", b.cfg.samples_per_sym,
+		    a.cfg.samples_per_sym, 0);
+	diff_eq_int("scale (%ld)", b.cfg.scale, a.cfg.scale, 0);
 	diff_eq_int("scaled[0] (%ld)", b.scaled[0], a.scaled[0], 0);
 	diff_eq_int("scaled[1] (%ld)", b.scaled[1], a.scaled[1], 0);
 	diff_eq_int("tone built (%ld)", b.tone != 0, 1, 0);
@@ -93,11 +93,11 @@ main(void)
 	rc |= diff_end();
 
 	diff_begin("FSM config");
-	diff_eq_int("samples per symbol (%ld)", a.samples_per_sym, SPS, 0);
+	diff_eq_int("samples per symbol (%ld)", a.cfg.samples_per_sym, SPS, 0);
 	diff_eq_int("mark scaled by 10/9 (%ld)", a.scaled[0],
-		    (short)(((int)a.freq[0] * 0x471c) >> 14), 0);
+		    (short)(((int)a.cfg.freq[0] * 0x471c) >> 14), 0);
 	diff_eq_int("space scaled by 10/9 (%ld)", a.scaled[1],
-		    (short)(((int)a.freq[1] * 0x471c) >> 14), 0);
+		    (short)(((int)a.cfg.freq[1] * 0x471c) >> 14), 0);
 	diff_eq_int("tone object built (%ld)", a.tone != 0, 1, 0);
 	rc |= diff_end();
 

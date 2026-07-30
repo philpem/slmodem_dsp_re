@@ -216,14 +216,14 @@ main(void)
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
 			diff_eq_int("loopback high channel -> 2025 (%ld)",
-				    fp->dsp->fsm.freq[0], 2025, 0);
+				    fp->dsp->fsm.cfg.freq[0], 2025, 0);
 			ref_B103FP_delete(fp);
 		}
 		cfg.call_type = B103_CALL_ORIGINATE;
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
 			diff_eq_int("originate ignores it -> 1070 (%ld)",
-				    fp->dsp->fsm.freq[0], 1070, 0);
+				    fp->dsp->fsm.cfg.freq[0], 1070, 0);
 			ref_B103FP_delete(fp);
 		}
 
@@ -250,7 +250,7 @@ main(void)
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
 			diff_eq_int("tx_scale reaches fsm.scale (%ld)",
-				    fp->dsp->fsm.scale, 1234, 0);
+				    fp->dsp->fsm.cfg.scale, 1234, 0);
 			ref_B103FP_delete(fp);
 		}
 	}
@@ -293,10 +293,10 @@ main(void)
 
 			snprintf(buf, sizeof(buf), "%s: transmits mark (%%ld)",
 				 plans[p].plan);
-			diff_eq_int(buf, fp->dsp->fsm.freq[0], plans[p].tx0, (long)p);
+			diff_eq_int(buf, fp->dsp->fsm.cfg.freq[0], plans[p].tx0, (long)p);
 			snprintf(buf, sizeof(buf), "%s: transmits space (%%ld)",
 				 plans[p].plan);
-			diff_eq_int(buf, fp->dsp->fsm.freq[1], plans[p].tx1, (long)p);
+			diff_eq_int(buf, fp->dsp->fsm.cfg.freq[1], plans[p].tx1, (long)p);
 
 			det = (*(short *)((char *)fp->hdx->tone_detect + 0x26)
 			       * 8000 + 16384) / 32768;
@@ -345,13 +345,13 @@ main(void)
 
 		if (o && a) {
 			diff_eq_int("originate transmits 1070 (%ld)",
-				    o->dsp->fsm.freq[0], 1070, 0);
+				    o->dsp->fsm.cfg.freq[0], 1070, 0);
 			diff_eq_int("originate transmits 1270 (%ld)",
-				    o->dsp->fsm.freq[1], 1270, 0);
+				    o->dsp->fsm.cfg.freq[1], 1270, 0);
 			diff_eq_int("answer transmits 2025 (%ld)",
-				    a->dsp->fsm.freq[0], 2025, 0);
+				    a->dsp->fsm.cfg.freq[0], 2025, 0);
 			diff_eq_int("answer transmits 2225 (%ld)",
-				    a->dsp->fsm.freq[1], 2225, 0);
+				    a->dsp->fsm.cfg.freq[1], 2225, 0);
 			/*
 			 * Both oscillators bring the pair they receive down to
 			 * 675/875 Hz, straddling the 775 Hz null.  1350 - 1070

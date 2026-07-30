@@ -14,20 +14,35 @@
 #ifndef DSPLIB_FPM_FSM_H
 #define DSPLIB_FPM_FSM_H
 
-struct fpm_fsm {
-	short freq[2];		/* +0x00 mark and space, in Hz          */
-	short samples_per_sym;	/* +0x04                                */
-	short scale;		/* +0x06 output gain                    */
-	short scaled[2];	/* +0x08 freq * 10/9, what the tone sees */
-	void *tone;		/* +0x0c FPM_TONE object                */
+/*
+ * The config is the first 8 bytes of the state and nothing more -- init reads
+ * exactly these four fields and derives the rest.  Declared separately so a
+ * caller building one does not have to supply a whole state's worth.
+ */
+struct fpm_fsm_cfg {
+	short freq[2];		/* +0x00 indexed by the bit: [0] space,
+				 *       [1] mark.  Which is the HIGHER of
+				 *       the two differs by standard -- Bell
+				 *       103's mark is higher, V.21's lower. */
+	short samples_per_sym;	/* +0x04 24 for 300 baud at 7200 Hz     */
+	short scale;		/* +0x06 output gain, Q15               */
 };
+
+struct fpm_fsm {
+	struct fpm_fsm_cfg cfg;	/* +0x00 copied wholesale by init       */
+	short scaled[2];	/* +0x08 freq * 10/9, what the tone sees */
+	struct fpm_tone *tone;	/* +0x0c                                */
+};
+
+/* The library default: V.21 channel 2, full scale. */
+extern const struct fpm_fsm_cfg FPM_FSM_CFG_data;
 
 /*
  * Build a modulator.  `cfg` supplies the two frequencies, the symbol length
  * in samples and the output scale; the frequencies are stored both as given
  * and pre-scaled for the tone generator.
  */
-void FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm *cfg);
+void FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg);
 void FPM_FSM_delete(struct fpm_fsm *state);
 
 /*

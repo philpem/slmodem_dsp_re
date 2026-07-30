@@ -63,7 +63,7 @@ compare_tx_state(const char *what, struct b103_dsp *ours,
 	int i;
 
 	snprintf(buf, sizeof(buf), "%s: fsm.scale (%%ld)", what);
-	diff_eq_int(buf, ours->fsm.scale, ref->fsm.scale, tag);
+	diff_eq_int(buf, ours->fsm.cfg.scale, ref->fsm.cfg.scale, tag);
 	snprintf(buf, sizeof(buf), "%s: mrf.need (%%ld)", what);
 	diff_eq_int(buf, ours->tx_mrf.need, ref->tx_mrf.need, tag);
 	snprintf(buf, sizeof(buf), "%s: mrf.phase (%%ld)", what);
@@ -334,8 +334,8 @@ main(void)
 				    d->dsp->tx_mrf.widx,
 				    c->dsp->tx_mrf.widx, 0);
 			diff_eq_int("scale restored (%ld)",
-				    d->dsp->fsm.scale,
-				    c->dsp->fsm.scale, 0);
+				    d->dsp->fsm.cfg.scale,
+				    c->dsp->fsm.cfg.scale, 0);
 
 			/* And it really was silent, unlike the other. */
 			for (i = 0, k = 0; i < nd; i++)

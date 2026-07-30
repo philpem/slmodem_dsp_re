@@ -36,9 +36,9 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 * increment for a 7200 Hz stream.
 		 */
 		FPM_TONE_set_freq(state->tone, state->scaled[bit]);
-		FPM_TONE_set_scale(state->tone, state->scale);
+		FPM_TONE_set_scale(state->tone, state->cfg.scale);
 
-		total += state->samples_per_sym;
+		total += state->cfg.samples_per_sym;
 
 		/*
 		 * One sample per call, not one block call.  That matters: the
@@ -48,7 +48,7 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 * correct for data, where a 180 degree hop mid-symbol would
 		 * corrupt the bit.
 		 */
-		for (k = 0; k < state->samples_per_sym; k++)
+		for (k = 0; k < state->cfg.samples_per_sym; k++)
 			FPM_TONE_generate(state->tone, out++, 1);
 	}
 
@@ -56,20 +56,17 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 }
 
 void
-FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm *cfg)
+FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg)
 {
 	struct fpm_tone_cfg tone;
 
 	/* The first four shorts: both frequencies, symbol length and scale. */
-	state->freq[0] = cfg->freq[0];
-	state->freq[1] = cfg->freq[1];
-	state->samples_per_sym = cfg->samples_per_sym;
-	state->scale = cfg->scale;
+	state->cfg = *cfg;
 
 	state->scaled[0] =
-		(short)(((int)state->freq[0] * FPM_FSM_RATE_SCALE) >> 14);
+		(short)(((int)state->cfg.freq[0] * FPM_FSM_RATE_SCALE) >> 14);
 	state->scaled[1] =
-		(short)(((int)state->freq[1] * FPM_FSM_RATE_SCALE) >> 14);
+		(short)(((int)state->cfg.freq[1] * FPM_FSM_RATE_SCALE) >> 14);
 
 	/*
 	 * Start from the built-in tone configuration and override only the
@@ -77,7 +74,7 @@ FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm *cfg)
 	 * bit, so whatever the default carries is immediately replaced.
 	 */
 	tone = FPM_TONE_CFG_data;
-	tone.scale = state->scale;
+	tone.scale = state->cfg.scale;
 
 	/*
 	 * Passing the existing pointer means a re-init reuses the object;
@@ -92,3 +89,15 @@ FPM_FSM_delete(struct fpm_fsm *state)
 	if (state != 0)
 		FPM_TONE_delete(state->tone);
 }
+
+/*
+ * The library default, from .data:0x8198.  V.21 channel 2 at full scale --
+ * note freq[0] is the HIGHER tone here, because V.21's mark is the lower one.
+ * B103FP_create overwrites both frequencies and the scale for every
+ * configuration it builds, so this is only what an unpatched caller gets.
+ */
+const struct fpm_fsm_cfg FPM_FSM_CFG_data = {
+	{ 1850, 1650 },	/* +0x00 space, mark */
+	24,		/* +0x04 300 baud at 7200 Hz */
+	32767		/* +0x06 full scale */
+};
