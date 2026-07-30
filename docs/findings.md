@@ -772,10 +772,50 @@ So `B103FP_create` owns its whole tree, and `b103_create` calls it as
 `B103FP_create(NULL, &cfg)` — the "pass NULL to allocate" idiom, used at two
 levels: once for the object itself and once per sub-block.
 
-The two 0x144 blocks are the likely `FPM_TONE` objects: that object reaches at
-least `+0x106` (262 bytes) and 324 leaves room for its internal buffers. Two of
-them fits a modem that both generates and detects. **Not confirmed** — the
-`FPM_TONE_create` call sites have not been matched to these pointers yet.
+**The 0x144 guess was wrong.** All four `FPM_TONE_create` call sites inside
+`B103FP_create` pass **NULL** as the state, so `FPM_TONE` allocates its own:
+
+```
+aacd9:  movl $0x108,(%esp)
+        call sysdep_malloc
+        mov %eax,%esi
+        mov $0x1,%edx           /* ownership flag */
+        jmp back into the main path
+```
+
+**0x108 = 264 bytes**, which matches the highest observed field offset
+(`+0x106`) exactly — so the `FPM_TONE` object is fully accounted for.
+
+It has two further allocations, of 0xa and 0x8 bytes, and they are **guarded by
+the ownership flag**:
+
+```
+allocated_by_us = (edx != 0)
+if (allocated_by_us && state[0x14] > 0)  -> allocate the two buffers
+```
+
+So the contract is: a caller that supplies the object also supplies its
+buffers; a caller that passes NULL gets both. That resolves the open question
+from finding 19 — the buffers at `state[0x2c]`, `state[0x30]`, `state[0xf4]`
+and `state[0xf8]` are these 0xa and 0x8 blocks, self-allocated.
+
+### The allocation idiom, library-wide
+
+| function | allocations when passed NULL |
+|---|---|
+| `b103_create` | 0x348 — its own state, `struct dp` as the leading 0x14 |
+| `B103FP_create` | 0x58 own state, 0x24, 0x100, 2 × 0x144, 0x54 |
+| `FPM_TONE_create` | 0x108 own state, plus 0xa and 0x8 buffers if it owns the object |
+
+Every level uses the same "pass NULL to allocate" idiom with an ownership flag
+so the matching `_delete` frees only what it created. The reconstruction must
+reproduce that flag, not just the allocation — a version that always frees
+would double-free whenever a caller supplies its own storage.
+
+The two 0x144 blocks and the 0x54 remain unattributed; they are reached at
+`+0xe8`, `+0xec` and `+0xf0` of the 0x100 block and are candidates for the FSD
+and MRF working buffers, since those are the modules `B103FP_create` inits
+against `state[0x54]`.
 
 **Possible rate dependency, unconfirmed.** The `/20` with a floor of 700 has
 the shape of a duration in samples or milliseconds. If `state[0x0c]` carries a
