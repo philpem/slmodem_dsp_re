@@ -30,6 +30,32 @@ corresponds to a mantissa of `(i + 64) * 128`, i.e. a Q15 fraction of
 The original's table stops at 192 entries, one short of what its own index
 expression can produce — see deviation D1 in `docs/deviations.md`.
 
+### `FPM_cos_table` / `FPM_sin_table` — quarter-wave sine, 257 entries each ✅
+
+```
+cos[i] = trunc(32768 * cos(i * pi / 512))
+sin[i] = trunc(32768 * sin(i * pi / 512))      i in [0, 257)
+```
+
+**Truncated, not rounded.** Rounding differs on 114 of the 257 entries, all by
+exactly 1 — the same flat ±1 LSB signature that made the `FixedRC` banks
+resist fitting. Here it resolved cleanly: the residual was always 0 or −1,
+never +1, which is the fingerprint of truncation rather than of precision
+noise. Worth remembering when the `FixedRC` audit (task 8) revisits that fit —
+a one-sided residual means a rounding-mode mismatch, a two-sided one means
+noise.
+
+Also `sin[i] == cos[256 - i]` exactly, so the two tables are one quarter wave
+stored twice. Both are kept because the original has both and `FPM_phasor`
+indexes them independently.
+
+257 entries, not 256, so the linear interpolation can read `idx + 1` without a
+bounds check — the opposite of `FPM_sqrt_table`, which is one entry *short* of
+what its index expression produces (deviation D1). Same library, same era,
+opposite outcome.
+
+`t_fpm_phasor` checks the generator against all 514 extracted entries.
+
 ---
 
 ## In progress
