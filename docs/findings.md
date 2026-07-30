@@ -1384,3 +1384,41 @@ are what smooth the product.
 the slicer, and the bit-timing recovery that turns 8 samples per symbol into
 one bit. That is the bulk of the function and the part where a subtle error
 would show up as a bit-error rate rather than a crash.
+
+## 28. `FPM_AGC_agc` — the gain update, partially decoded
+
+The two pointers the relocation audit found in `AGCb103_CFG` (finding 22) are
+now confirmed as **coefficient arrays used by the gain update**:
+
+```
+/* the in-range path, .text 0x0a6895 */
+gain = ((short)*state[0x0c] * gain) >> 15
+gain = gain + (((short)*state[0x10] * level) >> 15)
+```
+
+so `state[0x0c]` supplies a decay factor applied to the running gain and
+`state[0x10]` a term scaled by the measured level — a first-order gain loop
+with both coefficients supplied by the config rather than hard-coded. Reading
+those two fields as scalars, which is what an `int16` dump of the config
+invites, would have made this section unintelligible.
+
+**The out-of-range path** (`.text 0x0a6833`) writes zeroes across the block
+rather than adjusting the gain: when the level sits outside the configured
+window the samples are **silenced**, not merely attenuated.
+
+**On exit** (`.text 0x0a6860`):
+
+```
+state[0x20] = gain
+state[0x24], state[0x26] = loop state
+state[0x1c] = (blocks_processed > threshold/2)     /* a settled flag */
+```
+
+**Still to decode:** the middle of the block loop — how the low and high
+thresholds at `+0x02` and `+0x04` gate between the adjust and silence paths,
+and the role of `state[0x24]` in that decision. Roughly 200 bytes remain.
+
+This wants a careful pass rather than a hurried one: an AGC that adapts at the
+wrong rate still passes a bit-exactness test on short blocks and only diverges
+after the loop has had time to settle, which is a long way into any realistic
+stream.
