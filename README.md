@@ -20,7 +20,20 @@ is structured, and the commands that prove each claim.
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `FP_math`, `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | registration, `FPM_phasor`, `fpm_tone` generator done |
+| 2 | Bell 103 / V.21 — *first real connection* | see below |
+
+### Phase 2 detail
+
+| module | state |
+|---|---|
+| `fpm_mrf` | complete — the 7200↔8000 and 8000↔2400 converters |
+| `fpm_fsm` | complete — FSK modulator |
+| `fpm_tone` | generator complete; detector pending |
+| `fpm_fsd` | init/free done; `demodulate` pending |
+| `fpm_agc` | init/Freeze/Release done; gain update pending |
+| `fpm_mtd` | create/delete done; `detect` pending |
+| primitives | `FPM_phasor`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div` — all complete |
+| `b103` | registration done; `B103FP` pending |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
