@@ -5,7 +5,6 @@
  *   FPM_MRF_init  .text 0x0a8e00
  *   FPM_MRF_free  .text 0x0a8df0
  *
- * FPM_MRF_filter (.text 0x0a8ed0, 533 bytes) is not yet reconstructed.
  *
  * The history buffer holds one phase's worth of samples -- taps / branches --
  * which is what makes this a polyphase implementation rather than a plain
@@ -25,9 +24,9 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 	int i;
 
 	state->cfg = *cfg;
-	state->f10 = 1;
-	state->f12 = 0;
-	state->f14 = 0;
+	state->need = 1;
+	state->phase = 0;
+	state->widx = 0;
 
 	per_phase = (short)(cfg->taps / cfg->branches);
 
@@ -63,4 +62,84 @@ void
 FPM_MRF_free(struct fpm_mrf *state)
 {
 	sysdep_free(state->history);
+}
+
+/* Branchless circular increment, as the original writes it. */
+static int
+advance(int idx, int len)
+{
+	int next = idx + 1;
+
+	return (next < len) ? next : 0;
+}
+
+short
+FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
+{
+	const int branches = state->cfg.branches;
+	const int decimate = state->cfg.decimate;
+	const short *coeff = state->cfg.coeff;
+	short *history = state->history;
+	const int hlen = state->history_len;
+	int phase = state->phase;
+	int widx = state->widx;
+	int need = state->need;
+	int produced = 0;
+	int remaining = count;
+
+	while (remaining != 0) {
+		const short *c;
+		int acc = 0;
+		int k;
+
+		/*
+		 * Not enough input left for another output.  Take what there
+		 * is and carry the shortfall in `need` -- this is what lets a
+		 * stream be fed in arbitrary fragments.
+		 */
+		if (remaining < need) {
+			need -= remaining;
+			while (remaining-- > 0) {
+				widx = advance(widx, hlen);
+				history[widx] = *in++;
+			}
+			break;
+		}
+
+		for (k = 0; k < need; k++) {
+			widx = advance(widx, hlen);
+			history[widx] = *in++;
+		}
+		remaining -= need;
+
+		/*
+		 * One output: the whole history, newest first, against
+		 * coefficients strided by `branches` starting at `phase`.
+		 * The walk wraps from index 0 round to the top of the buffer.
+		 */
+		c = coeff + phase;
+		for (k = widx; k >= 0; k--) {
+			acc += history[k] * *c;
+			c += branches;
+		}
+		for (k = hlen - 1; k > widx; k--) {
+			acc += history[k] * *c;
+			c += branches;
+		}
+
+		out[produced++] = (short)(acc >> 15);
+
+		/* Advance the phase; each wrap past `branches` costs an input. */
+		phase += decimate;
+		need = 0;
+		while (phase >= branches) {
+			phase -= branches;
+			need++;
+		}
+	}
+
+	state->phase = (short)phase;
+	state->widx = (short)widx;
+	state->need = (short)need;
+	return (short)produced;
 }

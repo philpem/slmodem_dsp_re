@@ -27,9 +27,9 @@ struct fpm_mrf_cfg {
 
 struct fpm_mrf {
 	struct fpm_mrf_cfg cfg;	/* +0x00 copied wholesale by init        */
-	unsigned short f10;	/* +0x10 set to 1 by init                */
-	unsigned short f12;	/* +0x12 cleared                         */
-	unsigned short f14;	/* +0x14 cleared                         */
+	short need;		/* +0x10 inputs owed before the next out */
+	short phase;		/* +0x12 polyphase position, 0 .. L-1    */
+	short widx;		/* +0x14 circular history write index    */
 	short history_len;	/* +0x16 taps / branches                 */
 	short *history;		/* +0x18 history_len entries             */
 };
@@ -42,5 +42,15 @@ struct fpm_mrf {
 void FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg,
 		  int fresh);
 void FPM_MRF_free(struct fpm_mrf *state);
+
+/*
+ * Resample `count` input samples.  Returns the number of outputs produced,
+ * which is roughly count * branches / decimate.
+ *
+ * `phase`, `widx` and `need` persist across calls, so a stream may be fed in
+ * arbitrary fragments -- including fragments shorter than one output needs.
+ */
+short FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out,
+		     short count);
 
 #endif /* DSPLIB_FPM_MRF_H */

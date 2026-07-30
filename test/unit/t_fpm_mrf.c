@@ -33,9 +33,9 @@ compare(const struct fpm_mrf *ours, const struct fpm_mrf *ref, const char *tag)
 	diff_eq_int("taps (%ld)", ours->cfg.taps, ref->cfg.taps, 0);
 	diff_eq_int("coeff ptr matches cfg (%ld)",
 		    ours->cfg.coeff == ref->cfg.coeff, 1, 0);
-	diff_eq_int("f10 (%ld)", ours->f10, ref->f10, 0);
-	diff_eq_int("f12 (%ld)", ours->f12, ref->f12, 0);
-	diff_eq_int("f14 (%ld)", ours->f14, ref->f14, 0);
+	diff_eq_int("need (%ld)", ours->need, ref->need, 0);
+	diff_eq_int("phase (%ld)", ours->phase, ref->phase, 0);
+	diff_eq_int("widx (%ld)", ours->widx, ref->widx, 0);
 	diff_eq_int("history_len (%ld)", ours->history_len, ref->history_len, 0);
 	diff_eq_int("history allocated (%ld)", ours->history != 0, 1, 0);
 
