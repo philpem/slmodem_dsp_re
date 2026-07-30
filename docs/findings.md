@@ -744,11 +744,18 @@ FPM_TONE_create(state, cfg)
     state[0x40 .. 0x50] = 0
     state[0x52 .. 0xf0] = 0                    /* 80-entry working array     */
 
-    /* reference waveform: state[0x0e] entries into the two buffers */
-    for (i = 0; i < state[0x0e]; i++) {
+    /*
+     * Correlation reference.  state[0x10] is a POINTER to a source waveform;
+     * each sample is modulated by a cosine running at the tone frequency.
+     * The loop bound is state[0x14] -- the same field that sized the buffer
+     * and gated its allocation, not state[0x0e].
+     */
+    p.inc = p.phase                        /* now advance at the tone rate */
+    for (i = 0; i < (short)state[0x14]; i++) {
             FPM_phasor(&p)
             ((short *)state[0x30])[i] = 0
-            ((short *)state[0x2c])[i] = (2 * src[i] * p.cos) >> 14
+            ((short *)state[0x2c])[i] =
+                    (2 * ((short *)state[0x10])[i] * p.cos) >> 14
     }
 
     /* damped resonator, r = 0.96, via the pointer at state[0xf4] */
@@ -776,14 +783,23 @@ finding 20. `FPM_TONE_delete` must mirror that, or it double-frees.
 | `+0x02` | 27852 | output scale, Q15 |
 | `+0x04` | 450 | phase-reversal period, 8-sample units |
 | `+0x0c` | — | resonator damping input |
-| `+0x0e` | — | reference-waveform length |
-| `+0x14` | — | buffer size; zero suppresses allocation |
+| `+0x10` | — | pointer to the source waveform |
+| `+0x14` | — | buffer size *and* reference length; zero suppresses allocation |
 | `+0x20` | — | extra length added to the second buffer |
 
-Implementation is now mechanical; the remaining unknown is only what the
-reference waveform at `state[0x2c]` is correlated against, which matters for
-the detector half (`FPM_TONE_detect`, `_find_rev`, `_filter`) rather than for
-`create` itself.
+**How the phasor is used to derive coefficients.** Before the first
+`FPM_phasor` call the local phasor is set up as `phase = increment, inc = 0`,
+so the call evaluates cos and sin *at* the increment — i.e. at
+`omega = 2*pi*f/8000` — without advancing. That is exactly what the Goertzel
+coefficient `-2*cos(omega)` needs. The fill loop afterwards sets `inc = phase`
+so subsequent calls sweep at the tone frequency.
+
+Two errors in the first version of this pseudocode, corrected above and
+recorded because both would have produced a plausible but wrong module: the
+fill loop is bounded by `state[0x14]`, not `state[0x0e]`, and `state[0x10]` is
+a pointer to a source waveform rather than a scalar.
+
+Implementation is now mechanical.
 
 ## 20. `B103FP_create` — partial decode
 
