@@ -76,26 +76,22 @@ bug, and this entry should be revisited.
 Not deviations yet — things that need resolving before the affected modules can
 be called done.
 
-### Q1 — the resampler's per-mode filter designs
+### Q1 — the resampler's per-mode filter designs *(ordering resolved)*
 
-`RcFixed_Create()` dispatches through a 20-way jump table at `.rodata 0x10f14`
-to a per-mode filter initialiser, each of which installs a different
-coefficient set into the 420-byte state block. Those coefficient sets are the
-real content of `FixedRC.c`.
+The mode-to-table map, the storage rule (`bytes = taps * up * 2`), Q14 scaling
+and now the **coefficient ordering** are all established — see
+`docs/coefficients.md`. The ordering was settled by reading
+`RcFixed_Resample`'s address arithmetic: phase-major, reverse-tap, confirmed
+independently by the frequency response.
 
-The mode-to-table map, the storage rule (`bytes = taps * up * 2`) and the Q14
-scaling are now established — see `docs/coefficients.md`. What remains open is
-the **coefficient ordering within each table**, which blocks recovery of the
-prototype FIR and therefore the generator.
+Mode 3 (9600 -> 8000) is fully characterised: a 161-tap Type-I linear-phase
+prototype, passband flat to 3400 Hz, stopband >= 49.6 dB from 4400 Hz — a
+deliberate voiceband design rather than a generic anti-alias filter.
 
-All four plausible interleavings give an identical symmetry error, so the
-ordering cannot be settled by inference; it needs `RcFixed_Resample`'s address
-arithmetic read directly. Details and the evidence both ways are in
-`docs/coefficients.md`.
-
-Until then these tables must not be copied in as opaque bytes: that would
-defeat the entire purpose of recovering derivations, since a copied table can
-only be resampled at 8 kHz, never re-designed.
+What remains is fitting each prototype to a named design so a generator can be
+written. Until that is done the tables must not be copied in as opaque bytes:
+that would defeat the purpose of recovering derivations, since a copied table
+can only be resampled at 8 kHz, never re-designed.
 
 ### Q2 — x87 vs SSE equivalence regime
 

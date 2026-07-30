@@ -84,38 +84,82 @@ narrow for mode 6, but correct. The decimation-only modes (up = 1: modes 5, 7,
 that is 1.0 in Q14. Phase DC gains are equal by construction, as they must be
 for a polyphase bank.
 
-**Unresolved: the coefficient ordering within a table.**
+**Coefficient ordering: settled, from `RcFixed_Resample`'s address arithmetic.**
 
-The obvious next step is to recover the underlying prototype FIR and fit its
-design (windowed sinc, window type, cutoff). That requires knowing how the
-`taps * up` values map onto prototype taps, and **this has not been settled**.
+The inner product at `.text 0x0b13df-0x0b1442` is unambiguous:
 
-All four plausible interleavings — `(phase, tap)`, `(phase, reversed tap)`,
-`(reversed phase, tap)` and `(reversed phase, reversed tap)` — give the same
-symmetry error of 2768 against a peak of 12959, i.e. none produces the linear-
-phase symmetric prototype a windowed-sinc design would.
+```
+mov    (%edi),%ebp            ebp = state[0]              coefficient base
+movswl 0x19a(%esi),%ecx       ecx = taps                  N
+movswl 0x194(%esi),%eax       eax = state[0x194]          phase index
+imul   %ecx,%eax              eax = phase * N
+lea    0x0(%ebp,%eax,2),%esi  esi = base + phase*N        <- coefficient pointer
+lea    0x4(%edi,%edx,2),%ebx  ebx = state+4+(pos-N)*2     <- history pointer
+...
+movswl (%esi),%eax ; add $2,%esi     walk coefficients forward
+movswl (%ebx),%edx ; add $2,%ebx     walk history forward (oldest -> newest)
+imul   %edx,%eax ; add %eax,%edi     accumulate
+...
+sar    $0xe,%edi              >> 14                       <- Q14 confirmed
+mov    %di,0x0(%ebp)          store int16
+```
 
-The evidence is genuinely mixed, which is why it is being left open rather than
-guessed:
+So the table is **phase-major**: phase `p` occupies `coeff[p*N .. p*N+N-1]`
+contiguously. Both pointers walk *forward*, and the history walks oldest to
+newest, so `coeff[0]` multiplies the **oldest** sample. Standard convolution
+pairs the newest sample with `h[0]`, so the stored order is reversed relative
+to convolution order:
 
-- *For* a single symmetric prototype: the main lobe **is** symmetric about
-  index 80 under ordering `(phase, tap)` — `3143` at the centre with `5911`,
-  `8624`, `10905`, `12425` mirrored either side. Phase peaks progress 15, 15,
-  15, 16, 16, exactly the fractional-delay ramp of a polyphase decomposition
-  whose centre falls between taps.
-- *Against*: the symmetry breaks immediately outside that lobe, and the
-  reconstructed prototype's magnitude response, while a good lowpass overall
-  (−85 dB at 4800 Hz, −94 dB at 9600 Hz), has implausible bumps at −3 dB at
-  6000 Hz and −12 dB at 12000 Hz — precisely `fs/8` and `fs/4`. Artefacts at
-  exact binary fractions of the rate are the signature of a wrong
-  de-interleave, not of a real filter.
+```
+coeff[p*N + k] = h[(N-1-k)*L + p]        equivalently
+h[j*L + p]     = coeff[p*N + (N-1-j)]
+```
 
-**Settle it by reading `RcFixed_Resample`'s addressing**, not by inference.
-That function (`.text 0x0b12a0`, 2640 bytes) indexes the coefficient array
-directly, so its address arithmetic is definitive where symmetry heuristics are
-not. Once the ordering is known, the prototype can be extracted and fitted, and
-only then can a generator be written.
+That reverse-tap ordering is confirmed independently by the frequency response.
+It gives a clean lowpass; the forward-tap alternative gives bumps at exactly
+`fs/8` and `fs/4`, the signature of a wrong de-interleave:
 
-Until that is done these tables must not be copied into the reconstruction as
-opaque bytes — doing so would carry the 8 kHz retarget's whole purpose away
-with it.
+| | 3000 Hz | 4000 Hz | 4800 Hz | 6000 Hz | 12000 Hz |
+|---|--:|--:|--:|--:|--:|
+| reverse-tap (correct) | 0.0 dB | -13.4 | -85.0 | **-73.8** | **-81.4** |
+| forward-tap | -6.3 | -27.5 | -85.0 | **-3.0** | **-12.1** |
+
+**Why inference failed earlier.** All four candidate interleavings appeared to
+give the same symmetry error of 2768, which suggested none was right. That was
+a measurement error: symmetry was being tested about `h[i] == h[159-i]`, the
+midpoint of a 160-element array. The prototype is in fact exactly symmetric
+about `h[i] == h[160-i]` — **max error 0** — i.e. it is a 161-tap Type-I
+linear-phase FIR centred at index 80, of which only the first 160 taps are
+stored because 161 does not divide into `L * N = 5 * 32`. The dropped final tap
+equals `h[0] = 6`, negligible against a peak of 12959.
+
+The lesson worth keeping: a near-miss symmetry test is worse than none, because
+it argues actively against the correct answer. The address arithmetic settled in
+minutes what heuristics had made look impossible.
+
+### Mode 3 design (9600 -> 8000), fully characterised
+
+| property | value |
+|---|---|
+| polyphase | L = 5 branches of N = 32 taps, phase-major |
+| prototype | 161-tap Type-I linear-phase FIR, last tap dropped |
+| scaling | Q14; accumulator `>> 14`; each phase sums to 16384 |
+| design rate | `fs = L * 9600 = 48000 Hz` |
+| passband | flat to 3400 Hz (-0.49 dB); -6 dB at 3800 Hz |
+| transition | 3400 -> 4400 Hz |
+| stopband | >= 49.6 dB from 4400 Hz; -85 dB at 4800 Hz |
+
+This is not a generic `pi/6` anti-alias filter. The passband is placed to
+preserve the 300-3400 Hz telephony voiceband exactly, and the stopband starts
+below 4000 Hz, the Nyquist frequency of the 8 kHz side. That is a deliberate
+voiceband design, and it is the specification the 8 kHz retarget must
+reproduce — not the coefficient values.
+
+### Remaining for `FixedRC`
+
+- Fit the prototype to a named design (windowed sinc, Remez, or similar) and
+  write the generator. The 49.6 dB stopband with a ~1000 Hz transition at
+  161 taps is consistent with a windowed-sinc design; identifying the window
+  is the next step.
+- Repeat for the other 17 banks. The ordering rule above applies to all of
+  them, so this is now mechanical.
