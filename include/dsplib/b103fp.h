@@ -71,8 +71,12 @@ struct b103_dsp {
 	unsigned char re4[4];	/* +0xe4 .. +0xe7                          */
 	short *scratch;		/* +0xe8 324 bytes, shared by both paths   */
 	short *rx_scratch;	/* +0xec 324 bytes                         */
-	void *p_f0;		/* +0xf0 84 bytes                          */
-	unsigned char rf4[8];	/* +0xf4 .. +0xfb                          */
+	short *bpf_hist;	/* +0xf0 84 bytes: the channel filter's
+				 *       circular history                  */
+	const short *bpf;	/* +0xf4 B103_BPF_CALLER or _ANSWER, chosen
+				 *       by B103FP_create on is_answer     */
+	short bpf_idx;		/* +0xf8 its write position                */
+	short bpf_taps;		/* +0xfa 40 for the caller, 50 for answer  */
 	short rx_state;		/* +0xfc receive state machine             */
 	short rfe;		/* +0xfe                                   */
 };
@@ -184,6 +188,15 @@ short RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
 
 /* Indexed by hdx->mode; entries are the three B103*NextState functions. */
 extern void (*const B103NextState[3])(struct b103fp *fp);
+
+/*
+ * One call of the datapump, both directions.  `n_tx` and `n_rx` are in/out and
+ * change units: n_tx takes bits and returns samples, n_rx takes samples and
+ * returns bits.  `rx_in` is filtered IN PLACE.  Returns the 32-bit word at
+ * fp+0x1c -- status in the low byte, flags in the next.
+ */
+int B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
+		 short *rx_in, int *rx_bits, short *n_tx, short *n_rx);
 
 void B103LocLoopNextState(struct b103fp *fp);
 void B103OriginateNextState(struct b103fp *fp);

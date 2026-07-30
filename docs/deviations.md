@@ -369,3 +369,38 @@ five-bit shift mask. The AGC would go from "slightly too much gain" to
 **Reproduced as-is.** `src/pump/b103/b103_agc_cfg.c` carries `{16384, 32604}`
 and `{16384, 1638}` verbatim, and the shift mask is reproduced in
 `src/dsp/fpm_agc.c`, so the two agree even along the path neither takes.
+
+## D7 — `B103FP_create` leaves the channel filter's history uninitialised ⚠
+
+Found by the differential test failing, which is the only way it could have
+been found: two objects built by the **same** `B103FP_create` with the **same**
+arguments produced **different** filtered output.
+
+`B103FP_create` allocates the 84-byte block at `dsp[+0xf0]` — the circular
+history for the receive channel bandpass that `B103FP_modem` applies — and does
+not clear it. So the first `bpf_taps` output samples after a create depend on
+whatever the allocator left there. For the caller side that is 40 samples at
+8 kHz, i.e. the first 5 ms of every call.
+
+```sh
+# reproduce: build two objects, install the caller bandpass in both, feed
+# both the same samples, compare.  See test/unit/t_b103hdx.c, which zeroes
+# the history precisely so the rest of the comparison means something.
+```
+
+**Not reproduced, and deliberately not.** There is nothing to reproduce: the
+original's behaviour here is *undefined*, not merely odd, so "bit-exact" has no
+meaning for those samples. The reconstruction reads the same uninitialised
+memory the original does — that is faithful — and the test zeroes the buffer
+on both sides so that the 119,520 checks after it are testing the filter
+rather than the allocator.
+
+**Consequences in practice.** Small: the bandpass is fed garbage for 40
+samples during call setup, when the receiver is still waiting for the answer
+tone and the AGC has not settled either. It is the kind of defect that would
+never show up as a symptom, only as an unreproducible first block.
+
+Note the contrast with `FPM_MRF_init`, which *does* clear its history, and
+with `FPM_FSD_init`, which does not clear `fir_hist` either — but the FSD's
+history is filled before use by the same call that reads it, so it has no
+equivalent exposure.

@@ -26,6 +26,12 @@
 extern void *ref_B103FP_create(void *state, const void *cfg);
 extern void ref_B103FP_delete(void *state);
 extern short ref_B103_CFG[];
+extern short ref_B103_BPF_CALLER[];
+extern int ref_B103FP_modem(void *fp, const int *tx_bits, short *tx_out,
+			    short *rx_in, int *rx_bits, short *n_tx,
+			    short *n_rx);
+extern short ref_ModDataB103(void *fp, const unsigned short *bits, short *out,
+			     unsigned short n);
 extern void *ref_FPM_TONE_create(void *state, void *cfg);
 extern short ref_FPM_TONE_CFG[];
 
@@ -85,6 +91,7 @@ static int seen_tx_state[8];
 static int seen_rx_state[8];
 static int seen_substate[8];
 static int seen_status[16];
+static int seen_modem_return[256];
 
 static void
 compare_hdx(const char *what, struct b103fp *ours, struct b103fp *ref, int tag)
@@ -330,6 +337,117 @@ main(void)
 			teardown(a, b);
 		}
 	}
+	rc |= diff_end();
+
+
+	/*
+	 * 6. B103FP_modem, the driver.
+	 *
+	 * A default object has dsp->bpf NULL and bpf_taps zero, so running the
+	 * channel filter on one would dereference NULL in both
+	 * implementations -- B103_CFG does not reach the branch of
+	 * B103FP_create that installs it (finding 32).  The caller-side
+	 * bandpass is therefore installed by hand, which is the state that
+	 * branch would have produced.
+	 */
+	diff_begin("B103FP_modem");
+	for (mode = 0; mode < 3; mode++) {
+		static int txbits_a[64], txbits_b[64];
+		static int rxbits_a[64], rxbits_b[64];
+		static short txout_a[512], txout_b[512];
+		static short rxin_a[512], rxin_b[512];
+		struct b103fp *tx;
+		char what[64];
+		short nta, ntb, nra, nrb;
+		int ra, rb, n8;
+
+		if (!build(&a, &b, mode, B103_STATE_START, mode == 2))
+			continue;
+		tx = ref_B103FP_create(0, ref_B103_CFG);
+		if (tx == 0) {
+			teardown(a, b);
+			continue;
+		}
+
+		a->dsp->bpf = b->dsp->bpf = ref_B103_BPF_CALLER;
+		a->dsp->bpf_taps = b->dsp->bpf_taps = 40;
+		/*
+		 * B103FP_create allocates the filter history but does not
+		 * clear it, so the two objects start with different heap
+		 * garbage in it.  Zero both -- otherwise the first `taps`
+		 * outputs differ for a reason that has nothing to do with
+		 * either implementation.
+		 */
+		memset(a->dsp->bpf_hist, 0, 42 * sizeof(short));
+		memset(b->dsp->bpf_hist, 0, 42 * sizeof(short));
+		a->hdx->tone_timeout = b->hdx->tone_timeout = 10;
+		ref_B103NextState[mode](b);
+		B103NextState[mode](a);
+
+		for (k = 0; k < 120; k++) {
+			unsigned short mbits[8];
+
+			/* Real FSK for the first stretch, then the 2100 Hz
+			 * answer tone so acquisition can complete. */
+			if (k < 30) {
+				for (i = 0; i < 6; i++)
+					mbits[i] = (unsigned short)
+						((0x2d3u >> ((k * 6 + i) % 10)) & 1);
+				n8 = ref_ModDataB103(tx, mbits, rxin_a, 6);
+			} else {
+				n8 = 160;
+				for (i = 0; i < n8; i++) {
+					double t = (k * 160.0 + i) / 8000.0;
+
+					rxin_a[i] = (short)(12000.0
+						* sin(2.0 * M_PI * 2100.0 * t));
+				}
+			}
+			memcpy(rxin_b, rxin_a, (unsigned)n8 * sizeof(short));
+
+			for (i = 0; i < 6; i++)
+				txbits_a[i] = txbits_b[i] = (k >> i) & 1;
+			memset(txout_a, 0x3c, sizeof(txout_a));
+			memset(txout_b, 0x3c, sizeof(txout_b));
+			memset(rxbits_a, 0x3c, sizeof(rxbits_a));
+			memset(rxbits_b, 0x3c, sizeof(rxbits_b));
+			nta = ntb = 6;
+			nra = nrb = (short)n8;
+
+			rb = ref_B103FP_modem(b, txbits_b, txout_b, rxin_b,
+					      rxbits_b, &ntb, &nrb);
+			ra = B103FP_modem(a, txbits_a, txout_a, rxin_a,
+					  rxbits_a, &nta, &nra);
+
+			snprintf(what, sizeof(what), "%s modem %d", modes[mode], k);
+			diff_eq_int("modem return (%ld)", ra, rb, k);
+			diff_eq_int("modem n_tx (%ld)", nta, ntb, k);
+			diff_eq_int("modem n_rx (%ld)", nra, nrb, k);
+			for (i = 0; i < ntb; i++)
+				diff_eq_int("modem tx sample[%ld]",
+					    txout_a[i], txout_b[i], i);
+			for (i = 0; i < n8; i++)
+				diff_eq_int("modem filtered rx[%ld]",
+					    rxin_a[i], rxin_b[i], i);
+			for (i = 0; i < nrb; i++)
+				diff_eq_int("modem rx bit[%ld]",
+					    rxbits_a[i], rxbits_b[i], i);
+			diff_eq_int("modem bpf_idx (%ld)",
+				    a->dsp->bpf_idx, b->dsp->bpf_idx, k);
+			compare_hdx(what, a, b, k);
+			seen_modem_return[rb & 0xff]++;
+		}
+
+		ref_B103FP_delete(tx);
+		teardown(a, b);
+	}
+	rc |= diff_end();
+
+	diff_begin("B103FP_modem coverage");
+	for (i = 0, k = 0; i < 16; i++)
+		if (seen_modem_return[i])
+			k++;
+	diff_eq_int("distinct returned statuses (%ld)", k >= 2, 1, k);
 	rc |= diff_end();
 
 	/*

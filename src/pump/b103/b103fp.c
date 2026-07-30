@@ -13,6 +13,8 @@
  * See findings 17 and 24.
  */
 
+#include <string.h>
+
 #include "dsplib/b103fp.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_tone.h"
@@ -117,7 +119,10 @@ B103_ASSERT_OFF(struct b103_dsp, fsd, 0x9c);
 B103_ASSERT_OFF(struct b103_dsp, fsm, 0xd4);
 B103_ASSERT_OFF(struct b103_dsp, scratch, 0xe8);
 B103_ASSERT_OFF(struct b103_dsp, rx_scratch, 0xec);
-B103_ASSERT_OFF(struct b103_dsp, p_f0, 0xf0);
+B103_ASSERT_OFF(struct b103_dsp, bpf_hist, 0xf0);
+B103_ASSERT_OFF(struct b103_dsp, bpf, 0xf4);
+B103_ASSERT_OFF(struct b103_dsp, bpf_idx, 0xf8);
+B103_ASSERT_OFF(struct b103_dsp, bpf_taps, 0xfa);
 B103_ASSERT_OFF(struct b103_dsp, rx_state, 0xfc);
 B103_ASSERT_OFF(struct b103_hdx, tx, 0x08);
 B103_ASSERT_OFF(struct b103_hdx, rx, 0x10);
@@ -628,3 +633,164 @@ void (*const B103NextState[3])(struct b103fp *fp) = {
 	B103OriginateNextState,		/* 1 */
 	B103AnswerNextState		/* 2 */
 };
+
+/*
+ * ---------------------------------------------------------------------------
+ * B103FP_modem -- .text 0x08f010, 775 bytes.  The driver.
+ *
+ * One call carries both directions.  It contains no calls of its own at all --
+ * every relocation in it is a data reference -- because it reaches the DSP
+ * entirely through hdx->tx and hdx->rx.  That is the clearest evidence for the
+ * architecture: the state machine IS the datapump.
+ *
+ * `n_tx` and `n_rx` are both in/out, and both change units:
+ *
+ *     n_tx   in: bits to send        out: samples produced
+ *     n_rx   in: samples received    out: bits recovered
+ *
+ * ---------------------------------------------------------------------------
+ * The receive bandpass, at last
+ *
+ * The filter B103FP_create selects between B103_BPF_CALLER and
+ * B103_BPF_ANSWER and parks at dsp[+0xf4] is applied HERE, before anything
+ * else sees the signal -- which is why nothing reconstructed before this
+ * touched it (finding 32).  It is a plain circular FIR, in place:
+ *
+ *     rx_in[i] = ((sum(h[j] * (rx_in[i-j] >> 2))) >>> 15) << 2
+ *
+ * The input is scaled down by four before the filter and the result back up
+ * by four after, which buys two bits of headroom in the accumulator at the
+ * cost of two bits at the bottom.  The shift is LOGICAL in the original;
+ * arithmetic would give the same 16 bits after the << 2 and the truncation,
+ * so nothing rests on it, but it is reproduced as written.
+ *
+ * ---------------------------------------------------------------------------
+ * Two things that look like loops and are really state-machine hand-overs
+ *
+ * Both the transmit and receive loops repeat "while the count has not been
+ * consumed".  Every Hdx state zeroes the count, so normally each runs once --
+ * except TxHdxStartB103, which produces nothing and leaves the count alone,
+ * so the loop immediately re-enters with whatever state it just installed.
+ * That is how a state can advance without emitting a sample.
+ *
+ * ---------------------------------------------------------------------------
+ * The transmit data is discarded whenever the link is not up
+ *
+ * If `fp->status` is non-zero the staged bits are overwritten with mark
+ * before the modulator sees them.  A caller feeding data during call setup
+ * therefore loses it silently; the layer above has to know not to.
+ */
+
+/*
+ * The two staging buffers, with the original's own names, from .bss:0x6c0 and
+ * 0x7a0.  100 shorts each, and file-static in the original -- so a second
+ * B103FP instance would share them.  Reproduced as-is; nothing here is
+ * re-entrant and the datapump is single-threaded.
+ */
+#define B103_INTERNAL_BITS 100
+
+static short tx_in_internal[B103_INTERNAL_BITS];
+static short rx_out_internal[B103_INTERNAL_BITS];
+
+int
+B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
+	     short *rx_in, int *rx_bits, short *n_tx, short *n_rx)
+{
+	struct b103_dsp *dsp;
+	int total;
+	short count;
+	int i;
+
+	/* Stage the transmit bits, narrowing int to short. */
+	for (i = 0; i < (short)*n_tx; i++)
+		tx_in_internal[i] = (short)tx_bits[i];
+
+	/* Not connected: send mark, whatever was offered. */
+	if (fp->status != 0) {
+		for (i = 0; i < (short)*n_tx; i++)
+			tx_in_internal[i] = 1;
+	}
+
+	/* The channel bandpass, in place. */
+	dsp = fp->dsp;
+	for (i = 0; i < (short)*n_rx; i++) {
+		short *hist = (short *)dsp->bpf_hist;
+		const short *coeff = (const short *)dsp->bpf;
+		int taps = dsp->bpf_taps;
+		int widx = (unsigned short)dsp->bpf_idx;
+		const short *c;
+		short *p;
+		int acc = 0;
+		int k;
+
+		widx = (taps > widx + 1) ? widx + 1 : 0;
+		dsp->bpf_idx = (short)widx;
+
+		hist[widx] = (short)(rx_in[i] >> 2);
+
+		c = coeff;
+		p = &hist[widx];
+		for (k = widx; k >= 0; k--)
+			acc += *p-- * *c++;
+		p += taps;
+		for (k = taps - 1; k > widx; k--)
+			acc += *p-- * *c++;
+
+		rx_in[i] = (short)(((unsigned)acc >> 15) << 2);
+	}
+
+	fp->flags &= (unsigned char)~B103_FLAG_TIMEOUT;
+	if (fp->flags & 0x01)
+		fp->status = 0;
+
+	/* Pad the transmit bits out to a full six with mark. */
+	for (i = (short)*n_tx; i <= 5; i++)
+		tx_in_internal[i] = 1;
+
+	/* Transmit.  Always six bits, however many were offered. */
+	count = 6;
+	total = 0;
+	do {
+		short n = fp->hdx->tx(fp, tx_in_internal, tx_out, &count);
+
+		tx_out += n;
+		total = (short)(total + n);
+	} while (count > 0);
+	*n_tx = (short)total;
+
+	/* Receive. */
+	{
+		short *staging = rx_out_internal;
+		short remaining;
+
+		total = 0;
+		do {
+			short n;
+
+			remaining = (short)*n_rx;
+			n = fp->hdx->rx(fp, rx_in, staging, n_rx);
+			rx_in += remaining - (unsigned short)*n_rx;
+			staging += n;
+			total = (short)(total + n);
+		} while (*n_rx != 0);
+
+		*n_rx = (short)total;
+	}
+
+	/* Widen the recovered bits back out to int. */
+	for (i = 0; i < (unsigned short)*n_rx; i++)
+		rx_bits[i] = (unsigned short)rx_out_internal[i];
+
+	/*
+	 * The original returns the whole 32-bit word at +0x1c -- status in the
+	 * low byte, flags in the next -- not just the status.  The switch it
+	 * runs first is debug-only: every arm returns the same thing, and only
+	 * status 5 ("Bell103 internal error detected!") prints anything.
+	 */
+	{
+		int word;
+
+		memcpy(&word, &fp->status, sizeof word);
+		return word;
+	}
+}
