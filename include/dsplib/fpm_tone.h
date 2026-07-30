@@ -96,6 +96,13 @@ void FPM_TONE_set_scale(void *state, short scale);
  */
 void FPM_TONE_generate(void *state, short *out, short count);
 
+/*
+ * The reference oscillator for the demodulator: the same tone as
+ * FPM_TONE_generate but taken from the cosine, and with no phase reversals.
+ * Returns `count`.
+ */
+short FPM_TONE_generate_demod(void *state, short *out, short count);
+
 /* Detector field offsets. */
 #define FPM_TONE_OFF_RATIO      0x06	/* s16 out-of-band fraction allowed, Q15 */
 #define FPM_TONE_OFF_MIN_LEVEL  0x0a	/* s16 below this, report no signal      */

@@ -23,6 +23,8 @@ extern void ref_FPM_TONE_set_freq(void *state, short hz);
 extern void ref_FPM_TONE_set_scale(void *state, short scale);
 extern void ref_FPM_TONE_generate(void *state, short *out, short count);
 extern short ref_FPM_TONE_CFG[];
+extern short ref_FPM_TONE_generate_demod(void *state, short *out,
+					 short count);
 extern short ref_FPM_TONE_detect(void *state, const short *samples,
 				 short count);
 
@@ -321,6 +323,80 @@ main(void)
 	}
 	rc |= diff_end();
 
+
+
+	/*
+	 * FPM_TONE_generate_demod: cosine, no reversals, returns count.
+	 *
+	 * Run long enough to pass several reversal periods -- 3600 samples
+	 * apiece -- because the thing worth proving is that the reversal
+	 * bookkeeping is ABSENT.  A short burst cannot tell the two
+	 * generators apart.
+	 */
+	diff_begin("FPM_TONE_generate_demod");
+	memcpy(a, built, sizeof(a));
+	memcpy(b, built, sizeof(b));
+	ref_FPM_TONE_set_freq(a, 2100);
+	FPM_TONE_set_freq(b, 2100);
+	ref_FPM_TONE_set_scale(a, 32767);
+	FPM_TONE_set_scale(b, 32767);
+	for (k = 0; k < 400; k++) {
+		int n = (k % 37) + 1, i;
+		short ra, rb;
+
+		ra = ref_FPM_TONE_generate_demod(a, oa, (short)n);
+		rb = FPM_TONE_generate_demod(b, ob, (short)n);
+
+		diff_eq_int("returned count (%ld)", rb, ra, n);
+		for (i = 0; i < n; i++)
+			diff_eq_int("demod sample %ld", ob[i], oa[i], i);
+		compare_state(b, a, "generate_demod");
+	}
+	rc |= diff_end();
+
+	/* Zero count writes the phase back unchanged and returns zero. */
+	diff_begin("FPM_TONE_generate_demod zero count");
+	{
+		short ra = ref_FPM_TONE_generate_demod(a, oa, 0);
+		short rb = FPM_TONE_generate_demod(b, ob, 0);
+
+		diff_eq_int("returned (%ld)", rb, ra, 0);
+		compare_state(b, a, "generate_demod zero");
+	}
+	rc |= diff_end();
+
+	/*
+	 * And that it really is the cosine of the same oscillator: after the
+	 * same number of samples from the same start, generate_demod's phase
+	 * must match generate's minus whatever the reversal moved.  Compare
+	 * against a fresh pair well inside one reversal period.
+	 */
+	diff_begin("generate_demod is generate's cosine");
+	{
+		unsigned char ga[FPM_TONE_STATE_SIZE], gb[FPM_TONE_STATE_SIZE];
+		int i;
+
+		memcpy(ga, built, sizeof(ga));
+		memcpy(gb, built, sizeof(gb));
+		ref_FPM_TONE_set_freq(ga, 2100);
+		ref_FPM_TONE_set_freq(gb, 2100);
+		ref_FPM_TONE_set_scale(ga, 32767);
+		ref_FPM_TONE_set_scale(gb, 32767);
+
+		FPM_TONE_generate(ga, oa, 1000);
+		FPM_TONE_generate_demod(gb, ob, 1000);
+
+		/* Same phase advance, so the accumulators agree. */
+		diff_eq_int("phase agrees (%ld)",
+			    *(short *)(gb + FPM_TONE_OFF_PHASE),
+			    *(short *)(ga + FPM_TONE_OFF_PHASE), 0);
+		/* And the two waveforms are a quarter cycle apart, not equal. */
+		for (i = 0, k = 0; i < 1000; i++)
+			if (oa[i] != ob[i])
+				k++;
+		diff_eq_int("waveforms differ (%ld)", k > 900, 1, k);
+	}
+	rc |= diff_end();
 
 	/* --- FPM_TONE_detect -------------------------------------------- */
 

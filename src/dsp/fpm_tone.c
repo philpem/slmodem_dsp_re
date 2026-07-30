@@ -370,3 +370,41 @@ FPM_TONE_detect(void *state, const short *samples, short count)
 	return (out_of_band <= ((ratio * (short)total) >> 15))
 		? FPM_TONE_PRESENT : FPM_TONE_ABSENT;
 }
+
+/*
+ * FPM_TONE_generate_demod -- .text 0x0aaed0, 125 bytes.
+ *
+ * The reference oscillator the demodulator correlates against: the same
+ * generator as FPM_TONE_generate, minus two things.
+ *
+ *   - it uses the COSINE, via FPM_phasor_demod, where the modulator uses the
+ *     sine.  Same tone, ninety degrees apart.
+ *   - there is no phase-reversal bookkeeping at all.  This is a plain
+ *     oscillator; the reversals belong to the ANSam transmitter.
+ *
+ * It also returns `count`, which FPM_TONE_generate does not.
+ *
+ * The original leaves the phasor's cos and sin fields uninitialised on the
+ * stack.  Harmless -- FPM_phasor_demod writes cos before anything reads it,
+ * and sin is never touched -- but they are cleared here so the reconstruction
+ * has no indeterminate reads.
+ */
+short
+FPM_TONE_generate_demod(void *state, short *out, short count)
+{
+	struct fpm_phasor p;
+	int scale = *fld(state, FPM_TONE_OFF_SCALE);
+	int i;
+
+	p.phase = (unsigned short)*fld(state, FPM_TONE_OFF_PHASE);
+	p.inc = (unsigned short)*fld(state, FPM_TONE_OFF_INC);
+	p.cos = p.sin = 0;
+
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		FPM_phasor_demod(&p);
+		*out++ = (short)((scale * p.cos) >> 14);
+	}
+
+	*fld(state, FPM_TONE_OFF_PHASE) = (short)p.phase;
+	return count;
+}
