@@ -1,0 +1,222 @@
+/*
+ * t_b103link.c -- Bell 103 end to end: does the reconstruction carry data?
+ *
+ * Every other test in this tree asks "does the reconstruction agree with the
+ * blob".  This one asks the question the project actually exists to answer:
+ * feed a known bit stream into an originating transmitter, take it out of an
+ * answering receiver, and count the errors.
+ *
+ * The two are a genuine pair, not a loopback.  An originating station
+ * transmits 1070/1270 Hz and an answering one receives it, so this is the
+ * real Bell 103 direction and the real tone pair.  The answering receiver
+ * mixes with a 395 Hz local oscillator, bringing 1070/1270 down to 675/875 Hz
+ * -- either side of the demodulator's 775 Hz discriminator null.  That is why
+ * it works, and it is worth stating because feeding a station its own
+ * transmitter instead measures BER 0.485 (finding 32).
+ *
+ * Three combinations are run, and all three must be error-free:
+ *
+ *     blob      -> blob          the reference link, to prove the setup
+ *     ours      -> ours          the reconstruction standing alone
+ *     ours <-> blob (both ways)  interoperation
+ *
+ * The last is the interesting one.  Bit-exactness already implies it, so it
+ * is not new evidence -- but it is the form the claim has to take to be worth
+ * anything to someone deciding whether to run this against real hardware.
+ */
+
+#include <string.h>
+
+#include "harness.h"
+#include "dsplib/b103fp.h"
+
+extern void *ref_B103FP_create(void *state, const void *cfg);
+extern void ref_B103FP_delete(void *state);
+extern short ref_B103_CFG[];
+extern short ref_ModDataB103(void *fp, const unsigned short *bits, short *out,
+			     unsigned short n);
+extern short ref_DemodDataB103(void *fp, short *in, unsigned short *bits,
+			       unsigned short n);
+extern void (*ref_B103NextState[3])(void *fp);
+
+/* Call types, as B103FP_create reads them from config word 0. */
+#define B103_CALL_ORIGINATE 0
+#define B103_CALL_ANSWER    1
+#define B103_CALL_LOOPBACK  2
+
+#define NBITS 4000
+
+static unsigned char sent[NBITS];
+static unsigned char got[NBITS];
+
+static struct b103fp *
+make(int call_type)
+{
+	unsigned char cfg[28];
+
+	memcpy(cfg, ref_B103_CFG, sizeof(cfg));
+	*(int *)cfg = call_type;
+	return ref_B103FP_create(0, cfg);
+}
+
+/*
+ * Put a receiver straight into its data state.  Call setup is exercised by
+ * t_b103hdx; here the question is whether bits survive the channel, so the
+ * handshake is skipped rather than simulated.
+ */
+static void
+force_data_state(struct b103fp *fp)
+{
+	fp->hdx->substate = B103_STATE_WAIT1;
+	ref_B103NextState[fp->hdx->mode](fp);
+	fp->dsp->rx_state = 16;
+}
+
+/*
+ * Run `bits` bits through tx -> rx and return the bit error rate, ignoring a
+ * lead-in and allowing for the pipeline delay.  `use_ours_tx`/`use_ours_rx`
+ * select the reconstruction or the blob at each end.
+ */
+static double
+run_link(int use_ours_tx, int use_ours_rx, int *nsent, int *ngot, int *lag_out)
+{
+	struct b103fp *tx = make(B103_CALL_ORIGINATE);
+	struct b103fp *rx = make(B103_CALL_ANSWER);
+	short air[512];
+	unsigned short tbits[8], rbits[64];
+	unsigned lfsr = 0xACE1u;
+	int ns = 0, ng = 0, f, i, n8, nb;
+	int best_err = NBITS, best_lag = 0;
+	int lag;
+
+	if (tx == 0 || rx == 0)
+		return 1.0;
+	force_data_state(rx);
+
+	for (f = 0; ns + 6 < NBITS && ng + 8 < NBITS; f++) {
+		for (i = 0; i < 6; i++) {
+			lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xB400u);
+			tbits[i] = (unsigned short)(lfsr & 1);
+			sent[ns++] = (unsigned char)(lfsr & 1);
+		}
+
+		n8 = use_ours_tx ? ModDataB103(tx, tbits, air, 6)
+				 : ref_ModDataB103(tx, tbits, air, 6);
+		nb = use_ours_rx
+			? DemodDataB103(rx, air, rbits, (unsigned short)n8)
+			: ref_DemodDataB103(rx, air, rbits, (unsigned short)n8);
+
+		for (i = 0; i < nb && ng < NBITS; i++)
+			got[ng++] = (unsigned char)rbits[i];
+	}
+
+	/* Find the pipeline delay, then count errors at it. */
+	for (lag = -60; lag <= 60; lag++) {
+		int err = 0, n = 0;
+
+		for (i = 300; i < ns - 100 && i < ng - 100; i++) {
+			int j = i + lag;
+
+			if (j < 0 || j >= ng)
+				continue;
+			err += (sent[i] != got[j]);
+			n++;
+		}
+		if (n > 500 && err < best_err) {
+			best_err = err;
+			best_lag = lag;
+		}
+	}
+
+	ref_B103FP_delete(tx);
+	ref_B103FP_delete(rx);
+
+	*nsent = ns;
+	*ngot = ng;
+	*lag_out = best_lag;
+	return (double)best_err / (double)(ns - 400);
+}
+
+int
+main(void)
+{
+	static const struct {
+		const char *name;
+		int ours_tx, ours_rx;
+	} links[] = {
+		{ "blob -> blob", 0, 0 },
+		{ "ours -> ours", 1, 1 },
+		{ "ours -> blob", 1, 0 },
+		{ "blob -> ours", 0, 1 }
+	};
+	int rc = 0;
+	unsigned k;
+
+	/*
+	 * Confirm the two ends really are a pair before measuring anything.
+	 * If the oscillators came out wrong the BER would be ~0.5 and it
+	 * would not be obvious why.
+	 */
+	diff_begin("B103 link setup");
+	{
+		struct b103fp *o = make(B103_CALL_ORIGINATE);
+		struct b103fp *a = make(B103_CALL_ANSWER);
+
+		if (o && a) {
+			diff_eq_int("originate transmits 1070 (%ld)",
+				    o->dsp->fsm.freq[0], 1070, 0);
+			diff_eq_int("originate transmits 1270 (%ld)",
+				    o->dsp->fsm.freq[1], 1270, 0);
+			diff_eq_int("answer transmits 2025 (%ld)",
+				    a->dsp->fsm.freq[0], 2025, 0);
+			diff_eq_int("answer transmits 2225 (%ld)",
+				    a->dsp->fsm.freq[1], 2225, 0);
+			/*
+			 * Both oscillators bring the pair they receive down to
+			 * 675/875 Hz, straddling the 775 Hz null.  1350 - 1070
+			 * = 280 and 1350 - 1270 = 80 would NOT work, which is
+			 * the check: it is 2025/2225 the originator receives.
+			 */
+			diff_eq_int("originate LO is 1350 Hz (%ld)",
+				    (*(short *)((char *)o->hdx->tone_lo + 0x26)
+				     * 8000 + 16384) / 32768, 1350, 0);
+			diff_eq_int("answer LO is 395 Hz (%ld)",
+				    (*(short *)((char *)a->hdx->tone_lo + 0x26)
+				     * 8000 + 16384) / 32768, 395, 0);
+			diff_eq_int("originate installs a 40-tap bandpass (%ld)",
+				    o->dsp->bpf_taps, 40, 0);
+			diff_eq_int("answer installs a 50-tap bandpass (%ld)",
+				    a->dsp->bpf_taps, 50, 0);
+			diff_eq_int("both have a tone detector (%ld)",
+				    o->hdx->tone_detect != 0
+				    && a->hdx->tone_detect != 0, 1, 0);
+			ref_B103FP_delete(o);
+			ref_B103FP_delete(a);
+		} else {
+			diff_eq_int("objects built (%ld)", 0, 1, 0);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("B103 bit error rate");
+	for (k = 0; k < sizeof(links) / sizeof(links[0]); k++) {
+		int ns = 0, ng = 0, lag = 0;
+		double ber = run_link(links[k].ours_tx, links[k].ours_rx,
+				      &ns, &ng, &lag);
+
+		printf("  %-14s %d bits sent, %d received, lag %d, BER %.5f\n",
+		       links[k].name, ns, ng, lag, ber);
+
+		/*
+		 * Zero, not "low".  This is a noiseless channel with no
+		 * impairment at all, so a single error would mean a real
+		 * defect rather than bad luck.
+		 */
+		diff_eq_int("%s: bit errors", (long)(ber * (ns - 400) + 0.5),
+			    0, (long)k);
+		diff_eq_int("%s: bits recovered", ng > 3000, 1, (long)k);
+	}
+	rc |= diff_end();
+
+	return rc;
+}

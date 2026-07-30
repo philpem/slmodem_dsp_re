@@ -1952,3 +1952,66 @@ One subtlety cost a run: **both** objects are built by the reference
 a table has since overwritten differ. The lookup therefore has to search both
 tables — searching only the reconstruction's reported every untouched slot as
 unknown.
+
+## 35. Config word 0 is the call type — and the link works, at BER 0
+
+The open question from finding 32 — how does one get a link-capable
+configuration — has a one-word answer. `B103FP_create`'s config word 0 is the
+**call type**, and `B103_CFG` sets it to 2, which is loopback.
+
+Found by sweeping rather than by reading the 2151 bytes: build an object for
+each value of each config word and print what came out.
+
+| word 0 | | `hdx->mode` | bandpass | tone detector | transmits | local oscillator |
+|--:|---|--:|---|---|---|--:|
+| 0 | **originate** | 1 | `B103_BPF_CALLER`, 40 taps | yes | 1070 / 1270 | **1350.1 Hz** |
+| 1 | **answer** | 2 | `B103_BPF_ANSWER`, 50 taps | yes | 2025 / 2225 | **395.0 Hz** |
+| 2 | **loopback** | 0 | none | no | 1070 / 1270 | 1350.1 Hz |
+
+### The frequency plan, closed
+
+Each side mixes the pair it *receives* down to the same place:
+
+| side | receives | LO | at baseband |
+|---|---|--:|---|
+| originate | 2025 / 2225 | 1350 | **675 / 875** |
+| answer | 1070 / 1270 | 395 | **675 / 875** |
+
+and 675 and 875 straddle the 775 Hz discriminator null measured in finding 32.
+One demodulator design, one filter set, both directions — the oscillator is
+the only thing that differs. The null predicted 1350 before the oscillator was
+found; the answer side's 395 then fell out of the same arithmetic.
+
+### It carries data
+
+`test/unit/t_b103link.c` runs an originating transmitter into an answering
+receiver over a noiseless channel, 4000 bits of a maximal-length sequence:
+
+```
+  blob -> blob   3996 bits sent, 3991 received, lag -3, BER 0.00000
+  ours -> ours   3996 bits sent, 3991 received, lag -3, BER 0.00000
+  ours -> blob   3996 bits sent, 3991 received, lag -3, BER 0.00000
+  blob -> ours   3996 bits sent, 3991 received, lag -3, BER 0.00000
+```
+
+Zero errors, not "low" — the channel is ideal, so one error would be a defect
+rather than bad luck. The mixed pair matters and the test asserts it: feeding
+a station its own transmitter measures **BER 0.485**, because a station does
+not receive the band it transmits.
+
+Bit-exactness already implied the cross combinations would work, so they are
+not new evidence. They are the form the claim has to take to mean anything to
+someone deciding whether to point this at real hardware.
+
+### Two corrections
+
+- **`fp[+0x04]` is not the caller/answer selector.** Finding 32 read the
+  branch at `.text 0x08ecd7` as switching on it. It does — but that whole
+  region is gated by an earlier test on word 0, and changing `+0x04` alone
+  changes nothing observable. Sweeping caught this in a minute; reading would
+  not have.
+- **The bandpass history is usually zero.** D7 stands — two objects from the
+  same `create` really did filter the same input differently — but a *fresh*
+  allocation comes back zeroed, so the exposure needs a dirtied heap. D7 is
+  re-classified as an out-of-contract divergence with the boundary stated,
+  rather than claiming a faithfulness that is not available.

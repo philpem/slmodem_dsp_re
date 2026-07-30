@@ -24,7 +24,7 @@ is structured, and the commands that prove each claim.
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | DSP path done; state machines pending |
+| 2 | Bell 103 / V.21 — *first real connection* | **carries data at BER 0**; `B103FP_create` and the `b103_*` glue pending |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
@@ -47,7 +47,7 @@ is structured, and the commands that prove each claim.
 | `fpm_tone` | complete except `FPM_TONE_find_rev` / `_kill` |
 | `fpm_fsd` | complete — Schmitt slicer and edge-resynchronised bit clock |
 | `fpm_agc` | complete — block AGC and noise gate |
-| `b103fp` | signal path complete: `ModData`, `TxNoCarrier`, `CarrierDetect`, `DemodData` |
+| `b103fp` | signal path, seven Hdx states, three NextState tables and `B103FP_modem` complete; `B103FP_create/delete` pending |
 | primitives | `FPM_phasor`, `FPM_phasor_demod`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
 | `b103` | registration done; `B103FP_create/modem/delete`, the Hdx state machines and `b103_create` pending |
 
