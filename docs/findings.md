@@ -1268,3 +1268,58 @@ resamplers differ.
 `need` — the number of inputs still owed before the next output. That last one
 is why fragment boundaries matter: a reconstruction that recomputed `need` from
 scratch each call would drift, and only under uneven chunking.
+
+## 26. `FPM_iir_filt` — the shared biquad cascade
+
+`.text 0x0a8a50`, 191 bytes. Six callers, including **both** remaining Bell 103
+cores (`FPM_FSD_demodulate` and `FPM_MTD_detect`) as well as `band_pass`,
+`BwChDem_Progress`, `CID_MTD_detect` and `DTMF_MTD_detect`. So it is the next
+thing to reconstruct: it unblocks two modules at once and is reused across
+CID and DTMF later.
+
+```c
+short FPM_iir_filt(short x, const short *coeff, short *state, short sections)
+```
+
+A **direct-form II biquad cascade**, Q14, with **5 coefficients and 2 state
+words per section**:
+
+```
+per section:
+        w1  = state[0]
+        acc = x + (coeff[0] * w1 + 0x2000) >> 14
+        ff  =     (coeff[1] * w1)          >> 14
+        w2  = state[1]
+        state[0] = w2                        /* shift the delay line     */
+        acc += (coeff[2] * w2 + 0x2000) >> 14
+        ff  += (coeff[3] * w2)          >> 14
+        w   = saturate_s16(acc)              /* recursive node only      */
+        state[1] = w
+        x = (short)(ff + ((coeff[4] * w) >> 14))   /* feeds the next     */
+        coeff += 5
+        state += 2
+```
+
+Two details worth preserving:
+
+- **Only the recursive node saturates.** `acc` is clamped to
+  `[-0x7fff, 0x7fff]` — note the negative limit is `-0x7fff`, not `-0x8000` —
+  before being stored as state. The feedforward sum is merely truncated to 16
+  bits. Clamping both, or neither, would be wrong in opposite ways.
+- **Rounding is asymmetric.** The two terms feeding `acc` add `0x2000` before
+  the shift; the two feeding the feedforward sum do not. That is not a
+  symmetry worth "fixing".
+
+### This explains the 5-word blocks seen earlier
+
+`FPM_TONE_create` allocates 10 bytes at `state[0xf4]` and 8 at `state[0xf8]`,
+and writes exactly five coefficients into the first (finding 18). Those are
+**one biquad section and two sections' worth of state** — the damped resonator
+at r = 0.96 is a single biquad run through this function. The odd-looking
+allocation sizes were the cascade layout all along.
+
+`FPM_MTD_detect` likewise calls it twice per sample: once with `COEF_DC` and
+one section over `state[0x10]`, then once with the tone bank
+(`state[0x00]`, `state[0x0c]`, `state[0x04]` sections). Its output feeds two
+leaky energy integrators with `alpha = 820/32768` (~0.025) against
+`31948/32768` (~0.975) — a 40-sample time constant.
