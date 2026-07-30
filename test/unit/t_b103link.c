@@ -39,11 +39,6 @@ extern short ref_DemodDataB103(void *fp, short *in, unsigned short *bits,
 			       unsigned short n);
 extern void (*ref_B103NextState[3])(void *fp);
 
-/* Call types, as B103FP_create reads them from config word 0. */
-#define B103_CALL_ORIGINATE 0
-#define B103_CALL_ANSWER    1
-#define B103_CALL_LOOPBACK  2
-
 #define NBITS 4000
 
 static unsigned char sent[NBITS];
@@ -157,6 +152,110 @@ main(void)
 	 * If the oscillators came out wrong the BER would be ~0.5 and it
 	 * would not be obvious why.
 	 */
+	/*
+	 * The reconstructed config must be the blob's, byte for byte, and the
+	 * field meanings documented in b103fp.h must actually hold.  Prose in
+	 * a header is worth what the build enforces, so each documented effect
+	 * is asserted against a freshly built object here.
+	 */
+	diff_begin("B103_CFG reconstruction");
+	{
+		diff_eq_int("config is 28 bytes (%ld)",
+			    (long)sizeof(struct b103_cfg), 28, 0);
+		diff_eq_int("matches the blob byte for byte (%ld)",
+			    memcmp(&B103_CFG_data, ref_B103_CFG,
+				   sizeof(struct b103_cfg)), 0, 0);
+		diff_eq_int("the built-in config is LOOPBACK (%ld)",
+			    B103_CFG_data.call_type, B103_CALL_LOOPBACK, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("B103_CFG documented field effects");
+	{
+		struct b103_cfg cfg;
+		struct b103fp *fp;
+
+		/* call_type: the documented table, one row at a time. */
+		cfg = B103_CFG_data;
+		cfg.call_type = B103_CALL_ORIGINATE;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("originate -> mode 1 (%ld)",
+				    fp->hdx->mode, 1, 0);
+			diff_eq_int("originate -> 40-tap bandpass (%ld)",
+				    fp->dsp->bpf_taps, 40, 0);
+			diff_eq_int("originate -> tone detector (%ld)",
+				    fp->hdx->tone_detect != 0, 1, 0);
+			ref_B103FP_delete(fp);
+		}
+		cfg.call_type = B103_CALL_ANSWER;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("answer -> mode 2 (%ld)",
+				    fp->hdx->mode, 2, 0);
+			diff_eq_int("answer -> 50-tap bandpass (%ld)",
+				    fp->dsp->bpf_taps, 50, 0);
+			ref_B103FP_delete(fp);
+		}
+		/* Anything else is loopback -- no range check in the original. */
+		cfg.call_type = 99;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("out-of-range call_type -> loopback (%ld)",
+				    fp->hdx->mode, 0, 0);
+			diff_eq_int("loopback -> no bandpass (%ld)",
+				    fp->dsp->bpf_taps, 0, 0);
+			diff_eq_int("loopback -> no tone detector (%ld)",
+				    fp->hdx->tone_detect == 0, 1, 0);
+			ref_B103FP_delete(fp);
+		}
+
+		/* loop_high_channel: loopback only. */
+		cfg = B103_CFG_data;
+		cfg.loop_high_channel = 1;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("loopback high channel -> 2025 (%ld)",
+				    fp->dsp->fsm.freq[0], 2025, 0);
+			ref_B103FP_delete(fp);
+		}
+		cfg.call_type = B103_CALL_ORIGINATE;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("originate ignores it -> 1070 (%ld)",
+				    fp->dsp->fsm.freq[0], 1070, 0);
+			ref_B103FP_delete(fp);
+		}
+
+		/* tone_timeout_ticks: /20, floored at 700. */
+		cfg = B103_CFG_data;
+		cfg.tone_timeout_ticks = 28000;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("28000/20 -> 1400 blocks (%ld)",
+				    fp->hdx->tone_timeout, 1400, 0);
+			ref_B103FP_delete(fp);
+		}
+		cfg.tone_timeout_ticks = 100;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("below the floor -> 700 blocks (%ld)",
+				    fp->hdx->tone_timeout, 700, 0);
+			ref_B103FP_delete(fp);
+		}
+
+		/* tx_scale: straight into the modulator. */
+		cfg = B103_CFG_data;
+		cfg.tx_scale = 1234;
+		fp = ref_B103FP_create(0, &cfg);
+		if (fp) {
+			diff_eq_int("tx_scale reaches fsm.scale (%ld)",
+				    fp->dsp->fsm.scale, 1234, 0);
+			ref_B103FP_delete(fp);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("B103 link setup");
 	{
 		struct b103fp *o = make(B103_CALL_ORIGINATE);

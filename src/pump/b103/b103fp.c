@@ -129,6 +129,9 @@ B103_ASSERT_OFF(struct b103_hdx, rx, 0x10);
 B103_ASSERT_OFF(struct b103_hdx, tone_detect, 0x1c);
 B103_ASSERT_OFF(struct b103_hdx, tone_lo, 0x20);
 B103_ASSERT_OFF(struct b103fp, is_answer, 0x04);
+B103_ASSERT_OFF(struct b103_cfg, loop_high_channel, 0x08);
+B103_ASSERT_OFF(struct b103_cfg, tone_timeout_ticks, 0x0c);
+B103_ASSERT_OFF(struct b103_cfg, tx_scale, 0x18);
 B103_ASSERT_OFF(struct b103fp, status, 0x1c);
 B103_ASSERT_OFF(struct b103fp, flags, 0x1d);
 B103_ASSERT_OFF(struct b103_hdx, tone_timeout, 0x02);
@@ -141,6 +144,7 @@ B103_ASSERT_OFF(struct b103fp, dsp, 0x54);
 typedef char b103_dsp_size[(sizeof(struct b103_dsp) == 0x100) ? 1 : -1];
 typedef char b103fp_size[(sizeof(struct b103fp) == 0x58) ? 1 : -1];
 typedef char b103_hdx_size[(sizeof(struct b103_hdx) == 0x24) ? 1 : -1];
+typedef char b103_cfg_size[(sizeof(struct b103_cfg) == 28) ? 1 : -1];
 
 #endif /* 32-bit */
 

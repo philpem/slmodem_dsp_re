@@ -40,6 +40,64 @@
 struct b103fp;
 
 /*
+ * ---------------------------------------------------------------------------
+ * The datapump configuration: 28 bytes, copied wholesale into the first 28
+ * bytes of the object by B103FP_create.
+ *
+ * Field meanings were established by sweeping each word and observing the
+ * resulting object, not by reading B103FP_create.  See src/pump/b103/b103_cfg.c
+ * for the evidence and findings 32 and 35 for why that distinction matters.
+ */
+struct b103_cfg {
+	int call_type;		/* +0x00 B103_CALL_*; see below.  THE field --
+				 *       the only one that changes the object's
+				 *       shape, and the only one that decides
+				 *       whether a call can complete at all. */
+	int is_answer;		/* +0x04 read by TxHdxMarksB103, which lets an
+				 *       answering station stop transmitting
+				 *       mark on its block count alone while a
+				 *       calling one must also have acquired */
+	int loop_high_channel;	/* +0x08 LOOPBACK ONLY: non-zero transmits
+				 *       2025/2225 instead of 1070/1270.
+				 *       Ignored for originate and answer,
+				 *       which take their tones from call_type */
+	int tone_timeout_ticks;	/* +0x0c hdx->tone_timeout = max(this/20, 700),
+				 *       in blocks.  14000 gives exactly the
+				 *       700 floor, so the clamp is a no-op for
+				 *       the built-in config and only bites if
+				 *       a caller lowers it */
+	int f10;		/* +0x10 no observed effect                  */
+	int f14;		/* +0x14 no observed effect                  */
+	int tx_scale;		/* +0x18 modulator output gain, straight into
+				 *       fsm.scale.  3200 built in            */
+};
+
+/*
+ * `call_type`.  Anything other than 0 or 1 is loopback -- B103FP_create has no
+ * range check, it simply falls through to the default arm.
+ *
+ *  value | mode | bandpass        | detector | transmits | local oscillator
+ * -------|------|-----------------|----------|-----------|------------------
+ *    0   |  1   | B103_BPF_CALLER | yes      | 1070/1270 | 1350.1 Hz
+ *    1   |  2   | B103_BPF_ANSWER | yes      | 2025/2225 |  395.0 Hz
+ *  else  |  0   | none            | no       | 1070/1270 | 1350.1 Hz
+ *
+ * The two oscillators ARE the frequency plan: each side mixes the pair it
+ * receives down to 675/875 Hz, straddling the demodulator's 775 Hz
+ * discriminator null, so one demodulator design serves both directions.
+ *
+ * NOTE the built-in B103_CFG_data is LOOPBACK.  It installs no bandpass and no
+ * tone detector, so an object built from it cannot complete a call; the
+ * measured bit error rate for such a station is 0.485.  `b103_create` is
+ * expected to build its own copy with call_type set from its caller argument.
+ */
+#define B103_CALL_ORIGINATE 0
+#define B103_CALL_ANSWER    1
+#define B103_CALL_LOOPBACK  2
+
+extern const struct b103_cfg B103_CFG_data;
+
+/*
  * The half-duplex states are all one type, so B103FP_modem can hold the
  * current one as a pointer.  For transmit `in` is the bit stream and `out`
  * the samples; for receive it is the other way round.  `count` is in/out:

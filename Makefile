@@ -25,7 +25,7 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/pump/b103/b103.c src/dsp/fpm_sqrt.c src/dsp/fpm_phasor.c src/dsp/fpm_tone.c src/dsp/fpm_rms.c src/dsp/fpm_div.c src/dsp/fpm_mrf.c src/dsp/fpm_fsm.c src/dsp/fpm_tone_cfg.c src/dsp/fpm_fsd.c src/dsp/fpm_mtd.c src/dsp/fpm_mtd_cfg.c src/dsp/fpm_iir.c src/dsp/fpm_iir_coeffs.c src/dsp/fp_math.c src/dsp/fpm_agc.c src/pump/b103/b103_agc_cfg.c src/pump/b103/b103fp.c
+SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/pump/b103/b103.c src/dsp/fpm_sqrt.c src/dsp/fpm_phasor.c src/dsp/fpm_tone.c src/dsp/fpm_rms.c src/dsp/fpm_div.c src/dsp/fpm_mrf.c src/dsp/fpm_fsm.c src/dsp/fpm_tone_cfg.c src/dsp/fpm_fsd.c src/dsp/fpm_mtd.c src/dsp/fpm_mtd_cfg.c src/dsp/fpm_iir.c src/dsp/fpm_iir_coeffs.c src/dsp/fp_math.c src/dsp/fpm_agc.c src/pump/b103/b103_agc_cfg.c src/pump/b103/b103fp.c src/pump/b103/b103_cfg.c
 CXXSRC     := src/dsp/FloatIIR.cpp
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))

@@ -15,6 +15,10 @@ Abbreviations are decoded in **[docs/glossary.md](docs/glossary.md)** — worth
 reading first, since several are misleading (`MRF` is *multi-rate filter*, not
 "matched root filter"; `FP_Pow` computes `exp()`).
 
+Datapump configuration — what each config field means and how to ask for an
+originating or answering station — is in
+**[docs/configuration.md](docs/configuration.md)**.
+
 Start with **[docs/findings.md](docs/findings.md)**: what the blob is, how it
 is structured, and the commands that prove each claim.
 
