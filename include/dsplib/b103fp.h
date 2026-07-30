@@ -17,16 +17,23 @@
  * four bytes wide.  The offset assertions in src/pump/b103/b103fp.c are
  * compiled only under that ABI, and say so.
  *
+ * The DSP block is now almost fully accounted for.  Its five sub-objects sit
+ * end to end with no slack at all -- AGC at +0x0c, the two rate converters at
+ * +0x64 and +0x80, the demodulator at +0x9c and the modulator at +0xd4, each
+ * starting exactly where the previous one ends -- which is a strong check on
+ * all five of their sizes at once.  Only +0x38..+0x63 and a few odd words
+ * remain unattributed.
+ *
  * STATUS: partial.  The transmit path (ModDataB103, TxNoCarrierB103) and
- * CarrierDetectB103 are reconstructed.  The structs below therefore name only
- * the fields those need; everything else is reserved, sized so the offsets
- * that ARE known land where the original puts them.  The compile-time checks
- * at the bottom of src/pump/b103/b103fp.c enforce that.
+ * CarrierDetectB103 are reconstructed.  The compile-time checks at the bottom
+ * of src/pump/b103/b103fp.c pin every named offset.
  */
 
 #ifndef DSPLIB_B103FP_H
 #define DSPLIB_B103FP_H
 
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_mrf.h"
 
@@ -37,18 +44,24 @@
  * later can be sited without recounting.
  */
 struct b103_dsp {
-	int r00;		/* +0x00                                    */
-	int rx_energy;		/* +0x04 set by the receiver                */
-	int rx_tone;		/* +0x08 set by the receiver                */
-	unsigned char r0c[0x58];/* +0x0c .. +0x63                           */
-	struct fpm_mrf tx_mrf;	/* +0x64 7200 -> 8000, the transmit side    */
-	unsigned char r80[0x54];/* +0x80 .. +0xd3                           */
-	struct fpm_fsm fsm;	/* +0xd4 the FSK modulator                  */
-	unsigned char re4[4];	/* +0xe4 .. +0xe7                           */
-	short *scratch;		/* +0xe8 324 bytes: the 7200 Hz staging buf */
-	short *rx_scratch;	/* +0xec 324 bytes                          */
-	void *p_f0;		/* +0xf0 84 bytes                           */
-	unsigned char rf4[12];	/* +0xf4 .. +0xff                           */
+	int r00;		/* +0x00 copied into agc.f18 before each
+				 *       FPM_AGC_agc call, which never
+				 *       reads it -- purpose unknown       */
+	int rx_energy;		/* +0x04 <- agc.signal after each block    */
+	int rx_tone;		/* +0x08 set by the receive state machine  */
+	struct fpm_agc agc;	/* +0x0c                                   */
+	unsigned char r38[0x2c];/* +0x38 .. +0x63                          */
+	struct fpm_mrf tx_mrf;	/* +0x64 7200 -> 8000, the transmit side   */
+	struct fpm_mrf rx_mrf;	/* +0x80 8000 -> 2400, the receive side    */
+	struct fpm_fsd fsd;	/* +0x9c the FSK demodulator               */
+	struct fpm_fsm fsm;	/* +0xd4 the FSK modulator                 */
+	unsigned char re4[4];	/* +0xe4 .. +0xe7                          */
+	short *scratch;		/* +0xe8 324 bytes, shared by both paths   */
+	short *rx_scratch;	/* +0xec 324 bytes                         */
+	void *p_f0;		/* +0xf0 84 bytes                          */
+	unsigned char rf4[8];	/* +0xf4 .. +0xfb                          */
+	short rx_state;		/* +0xfc receive state machine             */
+	short rfe;		/* +0xfe                                   */
 };
 
 /* The object itself, 88 bytes. */

@@ -107,11 +107,15 @@ CarrierDetectB103(struct b103fp *fp)
 
 B103_ASSERT_OFF(struct b103_dsp, rx_energy, 0x04);
 B103_ASSERT_OFF(struct b103_dsp, rx_tone, 0x08);
+B103_ASSERT_OFF(struct b103_dsp, agc, 0x0c);
 B103_ASSERT_OFF(struct b103_dsp, tx_mrf, 0x64);
+B103_ASSERT_OFF(struct b103_dsp, rx_mrf, 0x80);
+B103_ASSERT_OFF(struct b103_dsp, fsd, 0x9c);
 B103_ASSERT_OFF(struct b103_dsp, fsm, 0xd4);
 B103_ASSERT_OFF(struct b103_dsp, scratch, 0xe8);
 B103_ASSERT_OFF(struct b103_dsp, rx_scratch, 0xec);
 B103_ASSERT_OFF(struct b103_dsp, p_f0, 0xf0);
+B103_ASSERT_OFF(struct b103_dsp, rx_state, 0xfc);
 B103_ASSERT_OFF(struct b103fp, hdx, 0x50);
 B103_ASSERT_OFF(struct b103fp, dsp, 0x54);
 
