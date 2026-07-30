@@ -46,7 +46,7 @@ is structured, and the commands that prove each claim.
 | `fpm_mtd` | complete — multi-tone detector |
 | `fpm_tone` | generator complete; detector pending |
 | `fpm_fsd` | init/free done; `demodulate` pending |
-| `fpm_agc` | init/Freeze/Release done; gain update pending |
+| `fpm_agc` | complete — block AGC and noise gate |
 | primitives | `FPM_phasor`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
 | `b103` | registration done; `B103FP` pending |
 
@@ -89,6 +89,7 @@ third_party/spandsp/   test peer, LGPL, never linked into src/
 | `tools/tuattrib.py` | attribute `.text` functions to their translation unit |
 | `tools/symmap.py` | emit the `objcopy --redefine-syms` list for the harness |
 | `tools/tabdump.py` | extract a named coefficient table from the blob as C |
+| `tools/relocscan.py` | resolve relocations to the objects they point at |
 
 ```sh
 python3 tools/tumap.py    ../slmodemd/dsplibs.o --md docs/modules.md

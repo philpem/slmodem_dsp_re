@@ -310,3 +310,62 @@ x87 does naturally.
 `fstl` (mirror, stays 80-bit) or `fstpl` (store and pop, genuinely rounds).
 That single distinction decides the accumulator type, and it is invisible in
 the C.
+
+## D6 — `AGC_DEF_ALPHA`'s slow pair is copy-pasted, breaking unity gain 🐛 💤
+
+**Dormant: nothing selects the affected element.** Recorded because it is one
+config field away from being live, and because it is the only thing that could
+make `FPM_AGC_agc`'s shift go negative (finding 29).
+
+`FPM_AGC_agc` smooths its level estimate with
+
+```
+level = (alpha[0] * level + beta[0] * measured) >> 15
+```
+
+which has unity DC gain exactly when `alpha + beta == 32768`. `AGC_DEF_ALPHA`
+and `AGC_DEF_BETA` are 4-byte objects — two Q15 coefficients each, a fast
+"acquisition" pair at `[0]` and a slow "tracking" pair at `[1]`. There are 18
+such objects across the blob (`readelf -sW dsplibs.o | grep AGC_DEF`), one per
+translation unit that declared them file-static.
+
+Element `[0]` is 16384/16384 in **every** one of them — always exactly unity.
+Element `[1]` is not:
+
+| object | α[1] | β[1] | α+β | DC gain |
+|---|--:|--:|--:|--:|
+| `.rodata:0x9e2c` / `0x9e28` | 29491 | 3277 | 32768 | 1.000 ✓ |
+| `.rodata:0xab10` / `0xab0c` | 29491 | 3277 | 32768 | 1.000 ✓ |
+| `.rodata:0xb298` / `0xb294` | 29491 | 3277 | 32768 | 1.000 ✓ |
+| `.rodata:0xa100` / `0xa0fc` (`_v21`) | 32604 | 164 | 32768 | 1.000 ✓ |
+| `.data:0x77bc` / `0x77b8` | 32604 | 164 | 32768 | 1.000 ✓ |
+| `.data:0x7810` / `0x780c` (Bell 103) | 32604 | 1638 | 34242 | **1.045** ✗ |
+| `.data:0x778c` / `0x7788` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
+| `.data:0x7794` / `0x7790` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
+| `.data:0x7664` / `0x7660` (global) | 32604 | 2277 | 34881 | **1.064** ✗ |
+
+The four wrong ones all carry α = 32604, which is `32768 - 164` — the value
+that belongs with the β of the `0x77b8` pair. Someone copied that TU's α while
+changing β. The intended values are plainly `32768 - β`: 31130 for β = 1638,
+30491 for β = 2277.
+
+**Why it is dormant.** All 6794 section-relative `R_386_32` relocations in the
+object were resolved; every config field that points at one of these objects
+points at **element 0**. Element 1 is present in all 18 and selected by none —
+and four of the 18 are not pointed at by anything at all.
+
+```sh
+python3 tools/relocscan.py ../slmodemd/dsplibs.o --into AGC_DEF
+```
+
+**What would happen if it were selected.** A DC gain of 1.045 makes the level
+estimate climb without bound on a steady input. `FPM_AGC_agc` truncates it to
+`short` each block, so it would eventually wrap negative, `FPM_div` would see a
+denominator with its top bit set, `norm` would be 0 and `shift` would be −1 —
+which the apply loop turns into a **left shift by 31** via `movzbl` and x86's
+five-bit shift mask. The AGC would go from "slightly too much gain" to
+"garbage" in one block.
+
+**Reproduced as-is.** `src/pump/b103/b103_agc_cfg.c` carries `{16384, 32604}`
+and `{16384, 1638}` verbatim, and the shift mask is reproduced in
+`src/dsp/fpm_agc.c`, so the two agree even along the path neither takes.

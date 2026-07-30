@@ -982,7 +982,7 @@ scaling, so it may well be unreachable in practice.
 `FPM_div` → `FPM_AGC`. Each is small (143, 62, 150, 868 bytes) and the first
 three are exhaustively or near-exhaustively testable.
 
-## 22. `FPM_AGC` — structure (agc() reconstruction pending)
+## 22. `FPM_AGC` — structure (superseded in part by finding 28)
 
 Three of the four functions are trivial and decoded; the fourth is the work.
 
@@ -1053,10 +1053,9 @@ good cross-check that both readings are right.
 | `+0x20`, `+0x24`, `+0x26` | gain//hysteresis state, cleared on reset |
 | `+0x28` | freeze flag |
 
-**Still to decode:** the gain update itself — the ~450 bytes after the
-threshold comparison, including how `FPM_div` is used to form the gain and
-where the freeze flag short-circuits. That is the part worth getting right,
-since it determines the loop's time constants.
+Two details in this section were wrong and are corrected in finding 28:
+`FPM_AGC_Release` also clears the level estimate, and `state[0x20]` is that
+estimate rather than a gain. Read finding 28 in preference to this one.
 
 ## 23. The 7200 Hz question, sharpened — and every conversion candidate excluded
 
@@ -1385,40 +1384,122 @@ the slicer, and the bit-timing recovery that turns 8 samples per symbol into
 one bit. That is the bulk of the function and the part where a subtle error
 would show up as a bit-error rate rather than a crash.
 
-## 28. `FPM_AGC_agc` — the gain update, partially decoded
+## 28. `FPM_AGC` — complete
 
-The two pointers the relocation audit found in `AGCb103_CFG` (finding 22) are
-now confirmed as **coefficient arrays used by the gain update**:
+`fpm_agc.c` is reconstructed and bit-exact: `src/dsp/fpm_agc.c`,
+`include/dsplib/fpm_agc.h`, tested by `test/unit/t_fpm_agc.c` (50,200
+differential checks). This supersedes the partial readings in finding 22.
 
-```
-/* the in-range path, .text 0x0a6895 */
-gain = ((short)*state[0x0c] * gain) >> 15
-gain = gain + (((short)*state[0x10] * level) >> 15)
-```
-
-so `state[0x0c]` supplies a decay factor applied to the running gain and
-`state[0x10]` a term scaled by the measured level — a first-order gain loop
-with both coefficients supplied by the config rather than hard-coded. Reading
-those two fields as scalars, which is what an `int16` dump of the config
-invites, would have made this section unintelligible.
-
-**The out-of-range path** (`.text 0x0a6833`) writes zeroes across the block
-rather than adjusting the gain: when the level sits outside the configured
-window the samples are **silenced**, not merely attenuated.
-
-**On exit** (`.text 0x0a6860`):
-
-```
-state[0x20] = gain
-state[0x24], state[0x26] = loop state
-state[0x1c] = (blocks_processed > threshold/2)     /* a settled flag */
+```sh
+objdump -d -r --start-address=0x0a66c0 --stop-address=0x0a6a20 \
+        ../slmodemd/dsplibs.o
 ```
 
-**Still to decode:** the middle of the block loop — how the low and high
-thresholds at `+0x02` and `+0x04` gate between the adjust and silence paths,
-and the role of `state[0x24]` in that decision. Roughly 200 bytes remain.
+### It is a block AGC and a noise gate at once
 
-This wants a careful pass rather than a hurried one: an AGC that adapts at the
-wrong rate still passes a bit-exactness test on short blocks and only diverges
-after the loop has had time to settle, which is a long way into any realistic
-stream.
+`count` samples are chopped into blocks of `cfg.block_len` (36 for Bell 103,
+which is exactly what `FPM_rms`'s 1/36 scaling was dimensioned for). One RMS
+per block decides that block's fate:
+
+```
+level = FPM_rms(block)
+
+silence  if (level < acquire_level && mult == 0)      /* nothing acquired yet */
+      or if (level < squelch_level && mult != 0)      /* running, but too quiet */
+adjust   otherwise
+```
+
+Silenced blocks are **zeroed**, not attenuated. Bell 103's thresholds are 10
+and 80 against a full-scale RMS of ~23,000, so both are near-silence: the
+first is "is there anything at all", the second a proper noise-gate floor once
+the loop is running.
+
+### The gain, and where the factor of two lives
+
+```
+recip ~= 2^30 / (level * 2^norm)      from FPM_div
+mult   = (recip * ref_level) >> 15
+y      = ((x * mult) >> 15) << (norm - 1)
+```
+
+which collapses to `y = x * ref_level / (2 * level)`. **The loop settles at an
+output RMS of `ref_level / 2`** — 8192 for Bell 103, a quarter of full scale,
+not the 16384 the config field's value suggests. The factor of two is the
+`norm - 1`, which reads like an off-by-one and is not. Check it with numbers:
+`level = 8192` gives `norm = 2`, `recip = 32768`, `mult = 16384`, `shift = 1`,
+i.e. a gain of exactly 1.0 — which is what "settled" should mean at 8192.
+
+### The block partition has two sharp edges
+
+```
+blocks = count / block_len;  tail = count % block_len;
+if (block_len/2 <= tail)  blocks++;        /* the tail is its own block */
+else                      tail += block_len;   /* fold it into the last one */
+```
+
+- **`count` below `block_len/2` is passed through completely untouched** —
+  not gated, not scaled. For Bell 103 that is any call of 1..17 samples.
+  `signal` is still written (as 0). `t_fpm_agc` sweeps every length 0..200.
+- the folded block can reach `block_len + block_len/2 - 1` = **53** samples,
+  which is past what `FPM_rms` is dimensioned for. That does not wrap: see
+  finding 29.
+
+### Corrections to finding 22
+
+| finding 22 said | actually |
+|---|---|
+| `Release` sets `state[0x28] = 0` | it also clears `state[0x20]`, the level estimate — but **not** the gain, so the squelch stays at the higher threshold |
+| `state[0x20]` is "gain state" | it is the smoothed **level** estimate; the gain is `mult`/`shift` at `+0x24`/`+0x26` |
+| `state[0x0c]`/`[0x10]` are "a decay factor" and "a term scaled by level" | correct, and they are named in the blob: `AGC_DEF_ALPHA` and `AGC_DEF_BETA` |
+
+### `state[+0x06]`, `[+0x08]`, `[+0x14]` and `[+0x18]`
+
+Copied by `init` (`+0x18` is written by it), read by **no** function in
+`fpm_agc.c`. Something upstream must consume them; resolve when
+`DemodDataB103` is decoded. Left unnamed in the header per the project's
+convention.
+
+## 29. `FPM_sqrt_dp` saturates at 32703 — which is load-bearing
+
+`FPM_sqrt_dp` clamps its table index (unlike `FPM_sqrt`, see D1), so its
+return never exceeds **32703** for any 32-bit input:
+
+```sh
+# in claude_re/, against the reconstruction
+printf '#include <stdio.h>\n#include "dsplib/fpm.h"\nint main(void){unsigned i,m=0;\
+for(i=0;i<0xffffffffu;i+=65537u){unsigned r=FPM_sqrt_dp(i);if(r>m)m=r;}\
+printf("%%u\\n",m);return 0;}\n' > /tmp/m.c
+gcc -m32 -Iinclude -O2 -o /tmp/m /tmp/m.c src/dsp/fpm_sqrt.c -lm && /tmp/m
+# 32703
+```
+
+Three consequences worth having written down:
+
+1. **`FPM_rms` can never return a negative value.** Its result is
+   `(short)FPM_sqrt_dp(...)`, and 32703 < 32768. This holds even when the
+   accumulator overflows (D2) — a wrapped sum is handed over as a huge
+   unsigned and saturates like any other.
+
+2. **So `FPM_AGC_agc`'s `shift` is never negative** for any shipped
+   configuration: `level` stays in [0, 32703], the smoother keeps
+   `level_est` there because `alpha[0] + beta[0] == 32768` exactly, and
+   `FPM_div` therefore always sees a denominator below 0x8000 and returns
+   `norm >= 1`. The five-bit shift mask in the apply loop is dead code —
+   reproduced anyway, because only the *second* of those conditions is a
+   property of the data rather than the code, and D6 shows the data has a
+   pair that breaks it.
+
+3. **A very loud long block under-estimates its own level**, silently. At 53
+   samples the true RMS passes 32767 somewhere around 82% of full scale and
+   the reported level sticks at 32703, so the AGC applies less gain reduction
+   than it should. Wrong, but in the safe direction, and only for blocks that
+   the folding rule made over-long in the first place.
+
+### An asymmetry in `FPM_rms` worth knowing when writing tests
+
+`(x * 910) >> 15` is **0** for `0 <= x <= 36` but **-1** for `-36 <= x < 0`,
+because the shift is arithmetic. So a small DC-free signal measures a few
+counts rather than zero — 72 samples of ±4 measure 12, not 0. Picking a test
+amplitude by computing the textbook RMS therefore misses the gate you were
+aiming at; `t_fpm_agc` picks amplitudes against what `FPM_rms` actually
+returns, and says so.

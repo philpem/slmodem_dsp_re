@@ -80,11 +80,34 @@ def relocations_in(obj, section, lo, hi):
 
 
 def find_symbol(obj, sym):
-    for s in elfinfo.read_symbols(obj):
-        if s.name == sym:
-            sections = elfinfo.read_sections(obj)
-            return elfinfo.section_name(sections, s.ndx), s.value, s.size
-    return None, None, None
+    """Resolve a symbol name, refusing to guess between duplicates.
+
+    dsplibs.o is a partial link of 283 translation units, so a name that was
+    file-static in the original appears once per TU that declared it -- there
+    are eight distinct AGC_DEF_ALPHA objects, at eight different addresses,
+    holding different values.  Silently taking the first match dumps some
+    other datapump's coefficients under the name you asked for, and they look
+    entirely plausible.  That happened; hence this check.
+    """
+    matches = [s for s in elfinfo.read_symbols(obj) if s.name == sym]
+    if not matches:
+        return None, None, None
+
+    sections = elfinfo.read_sections(obj)
+    distinct = sorted({(s.ndx, s.value, s.size) for s in matches})
+    if len(distinct) > 1:
+        where = "\n".join(
+            "    --at %s:0x%x --count N   (st_size %d)"
+            % (elfinfo.section_name(sections, ndx), value, size)
+            for ndx, value, size in distinct)
+        sys.exit(
+            "error: %d distinct symbols are named %r -- this name was "
+            "file-static in\nthe original, so each translation unit that "
+            "declared it has its own.\nPick one explicitly:\n\n%s\n"
+            % (len(distinct), sym, where))
+
+    s = matches[0]
+    return elfinfo.section_name(sections, s.ndx), s.value, s.size
 
 
 def main():
