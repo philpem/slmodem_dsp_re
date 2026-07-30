@@ -1,5 +1,5 @@
 /*
- * fpm_rms.c -- scaled RMS of a sample block.
+ * fpm_rms.c -- Fixed Point Modem: block RMS.
  *
  * Reconstructed from dsplibs.o fpm_rms.c, .text 0x0a99d0.
  *

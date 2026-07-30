@@ -1,5 +1,5 @@
 /*
- * fpm_iir.h -- Q14 biquad cascade.
+ * fpm_iir.h -- Fixed Point Modem: IIR biquad cascades.
  *
  * The shared filter engine: six callers across the tone detector, the FSK
  * demodulator, CID, DTMF, the bandpass helper and the channel-bandwidth

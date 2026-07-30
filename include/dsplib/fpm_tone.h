@@ -1,5 +1,5 @@
 /*
- * fpm_tone.h -- tone generator and detector.
+ * fpm_tone.h -- Fixed Point Modem: tone generation and detection.
  *
  * One object carries three things tuned to the same frequency: a phase
  * accumulator, an exact-frequency Goertzel, and a damped resonator.  That is

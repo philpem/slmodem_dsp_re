@@ -1,5 +1,5 @@
 /*
- * fixedrc.c -- fixed rational-factor sample rate conversion.
+ * fixedrc.c -- Fixed Rate Converter: fixed rational-factor resampling.
  *
  * Reconstructed from dsplibs.o FixedRC.c, .text 0x0b0d90-0x0b1cf0 and the
  * factor tables at .data 0x94e0 / 0x9540.

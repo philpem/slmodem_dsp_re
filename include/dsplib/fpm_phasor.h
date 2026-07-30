@@ -1,5 +1,5 @@
 /*
- * fpm_phasor.h -- quarter-wave sine/cosine phase accumulator.
+ * fpm_phasor.h -- Fixed Point Modem: sine/cosine phase accumulator.
  *
  * The oscillator underneath every tone the library generates or correlates
  * against.  One call advances the phase by `inc` and leaves the sine and

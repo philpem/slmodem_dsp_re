@@ -1,5 +1,5 @@
 /*
- * dp.h -- the datapump interface, as slmodemd defines it.
+ * dp.h -- DataPump: the interface slmodemd defines.
  *
  * These layouts are fixed by the existing ABI: slmodemd's modem.o is already
  * compiled against them, so they are reproduced exactly rather than

@@ -1,5 +1,5 @@
 /*
- * dp_param.c -- datapump access to modem parameters.
+ * dp_param.c -- DataPump: access to modem parameters.
  *
  * Reconstructed from dsplibs.o dp_param.c, .text 0x0058c0.
  *

@@ -1,6 +1,5 @@
 /*
- * dp_wrapper.c -- rate and fragment adaptation between the host and a
- * datapump.
+ * dp_wrapper.c -- DataPump: rate and fragment adaptation.
  *
  * Reconstructed from dsplibs.o dp_wrapper.c:
  *   dp_wrapper_create  .text 0x005a80

@@ -1,6 +1,5 @@
 /*
- * FloatIIR.cpp -- GenericIIR implementation and the one instantiation the
- * original ships.
+ * FloatIIR.cpp -- Floating-point IIR: the GenericIIR instantiation the blob uses.
  *
  * Reconstructed from dsplibs.o FloatIIR.cpp:
  *   .gnu.linkonce.t._ZN10GenericIIRIfdEC1EjjPdS1_j   constructor

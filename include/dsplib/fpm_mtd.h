@@ -1,5 +1,5 @@
 /*
- * fpm_mtd.h -- multi-tone detector.
+ * fpm_mtd.h -- Fixed Point Modem: Multi-Tone Detector.
  *
  * Holds a bank of resonators, one per tone, and reports which is ringing.
  * Bell 103 builds one with MTDb103_COEF; the DTMF path uses the same module

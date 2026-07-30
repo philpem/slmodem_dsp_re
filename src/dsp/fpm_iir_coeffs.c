@@ -1,5 +1,5 @@
 /*
- * fpm_iir_coeffs.c -- shared biquad coefficient sets.
+ * fpm_iir_coeffs.c -- Fixed Point Modem: shared IIR coefficient sets.
  *
  * Extracted from dsplibs.o.  These are reference bytes; where a design has
  * been recovered it is recorded in docs/coefficients.md.

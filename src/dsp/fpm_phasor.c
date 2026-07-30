@@ -1,5 +1,5 @@
 /*
- * fpm_phasor.c -- quarter-wave sine/cosine phase accumulator.
+ * fpm_phasor.c -- Fixed Point Modem: sine/cosine phase accumulator.
  *
  * Reconstructed from dsplibs.o fpm_phasor.c, .text 0x0a9300, with tables at
  * .rodata 0x0cde0 (cos) and 0x0cbc0 (sin) and signs at .data 0x081e4.

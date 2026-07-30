@@ -1,5 +1,5 @@
 /*
- * fpm_mrf.c -- multi-rate (polyphase resampling) filter.
+ * fpm_mrf.c -- Fixed Point Modem: Multi-Rate Filter (polyphase resampler).
  *
  * Reconstructed from dsplibs.o fpm_mrf.c:
  *   FPM_MRF_init  .text 0x0a8e00

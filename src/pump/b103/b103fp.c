@@ -1,5 +1,5 @@
 /*
- * b103fp.c -- Bell 103 / V.21 transmit path and carrier detect.
+ * b103fp.c -- Bell 103 / V.21 Fixed Point: the modulation proper.
  *
  * Reconstructed from dsplibs.o b103fp.c:
  *   ModDataB103        .text 0x08f9a0    99 bytes

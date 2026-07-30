@@ -1,5 +1,5 @@
 /*
- * fpm_sqrt.c -- Q15 fixed-point square root.
+ * fpm_sqrt.c -- Fixed Point Modem: square root.
  *
  * Reconstructed from dsplibs.o fpm_sqrt.c, .text 0x0a9d70-0x0a9df5, table at
  * .rodata 0x0c520.

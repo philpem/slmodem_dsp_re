@@ -1,5 +1,5 @@
 /*
- * b103.h -- Bell 103 / V.21 datapump.
+ * b103.h -- Bell 103 / V.21: datapump registration and glue.
  *
  * 300 bit/s FSK, full duplex, no equaliser.  The two standards differ only in
  * their tone frequencies, so one implementation serves both and registers

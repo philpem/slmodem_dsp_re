@@ -1,5 +1,5 @@
 /*
- * fpm_mrf.h -- multi-rate (polyphase resampling) filter.
+ * fpm_mrf.h -- Fixed Point Modem: Multi-Rate Filter (polyphase resampler).
  *
  * Despite the abbreviation, MRF is *multi-rate*, not "matched root filter".
  * It is the library's second polyphase resampler, alongside FixedRC -- and

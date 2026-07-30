@@ -1,5 +1,5 @@
 /*
- * b103fp.h -- Bell 103 / V.21 fixed-point datapump.
+ * b103fp.h -- Bell 103 / V.21 Fixed Point: the modulation proper.
  *
  * `B103FP` is the modulation proper: the object `b103_create` builds and the
  * half-duplex state machines drive.  It is two allocations deep --

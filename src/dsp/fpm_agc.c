@@ -1,5 +1,5 @@
 /*
- * fpm_agc.c -- block automatic gain control.
+ * fpm_agc.c -- Fixed Point Modem: automatic gain control.
  *
  * Reconstructed from dsplibs.o fpm_agc.c:
  *   FPM_AGC_Freeze   .text 0x0a66c0    59 bytes

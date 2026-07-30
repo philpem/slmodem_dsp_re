@@ -1,5 +1,5 @@
 /*
- * fpm_fsd.h -- FSK demodulator.
+ * fpm_fsd.h -- Fixed Point Modem: Frequency Shift Demodulator.
  *
  * Bell 103 receives at 2400 Hz (FPM_MRF brings 8000 down to it), which is 8
  * samples per symbol at 300 baud.  The chain is:

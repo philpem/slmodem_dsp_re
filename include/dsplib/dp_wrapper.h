@@ -1,6 +1,5 @@
 /*
- * dp_wrapper.h -- rate and fragment adaptation between the host and a
- * datapump.
+ * dp_wrapper.h -- DataPump: rate and fragment adaptation.
  *
  * The classic datapumps run natively at 8 kHz while the host runs at 9600.
  * This layer hides that: it buffers the host's sample stream into whole

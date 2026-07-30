@@ -1,5 +1,5 @@
 /*
- * fpm_div.c -- reciprocal lookup for fixed-point division.
+ * fpm_div.c -- Fixed Point Modem: reciprocal lookup for division.
  *
  * Reconstructed from dsplibs.o fpm_div.c, .text 0x0a6bf0, table at
  * .rodata 0x0c6a0.

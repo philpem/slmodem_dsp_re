@@ -1,5 +1,5 @@
 /*
- * fixedrc.h -- fixed rational-factor sample rate conversion.
+ * fixedrc.h -- Fixed Rate Converter: fixed rational-factor resampling.
  *
  * The datapumps run at their own native rates (8 kHz for B103/V.21, V.22,
  * V.23 and V.32) while the host runs at 9600.  This module is the bridge, and

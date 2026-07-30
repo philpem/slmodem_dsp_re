@@ -1,5 +1,5 @@
 /*
- * fp_math.h -- Q14 fixed-point helpers used by the V.32 diagnostics path.
+ * fp_math.h -- Fixed Point maths helpers.
  */
 
 #ifndef DSPLIB_FP_MATH_H

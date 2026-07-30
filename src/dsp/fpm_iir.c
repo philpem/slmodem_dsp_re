@@ -1,5 +1,5 @@
 /*
- * fpm_iir.c -- Q14 biquad cascade.
+ * fpm_iir.c -- Fixed Point Modem: IIR biquad cascades.
  *
  * Reconstructed from dsplibs.o fpm_iir.c.  The TU holds three filters:
  *

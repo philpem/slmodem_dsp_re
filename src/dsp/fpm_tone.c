@@ -1,5 +1,5 @@
 /*
- * fpm_tone.c -- tone generator and detector.
+ * fpm_tone.c -- Fixed Point Modem: tone generation and detection.
  *
  * Reconstructed from dsplibs.o fpm_tone.c:
  *   FPM_TONE_set_freq   .text 0x0aaf50

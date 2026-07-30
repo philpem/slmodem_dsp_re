@@ -1,5 +1,5 @@
 /*
- * b103_agc_cfg.c -- Bell 103's AGC configuration.
+ * b103_agc_cfg.c -- Bell 103 / V.21: the AGC configuration.
  *
  * Extracted from dsplibs.o .data:0x77f4 (AGCb103_CFG), with the two
  * coefficient objects it points at, .data:0x7810 and .data:0x780c.

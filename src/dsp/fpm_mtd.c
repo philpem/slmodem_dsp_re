@@ -1,5 +1,5 @@
 /*
- * fpm_mtd.c -- multi-tone detector.
+ * fpm_mtd.c -- Fixed Point Modem: Multi-Tone Detector.
  *
  * Reconstructed from dsplibs.o fpm_mtd.c:
  *   FPM_MTD_create  .text 0x0a90f0

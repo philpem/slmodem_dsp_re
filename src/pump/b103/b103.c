@@ -1,5 +1,5 @@
 /*
- * b103.c -- Bell 103 / V.21 datapump registration and glue.
+ * b103.c -- Bell 103 / V.21: datapump registration and glue.
  *
  * Reconstructed from dsplibs.o b103.c:
  *   dp_b103_init   .text 0x005840

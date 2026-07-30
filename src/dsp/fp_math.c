@@ -1,5 +1,5 @@
 /*
- * fp_math.c -- Q14 fixed-point helpers.
+ * fp_math.c -- Fixed Point maths helpers.
  *
  * Reconstructed from dsplibs.o FP_math.c:
  *   GetFP_Value  .text 0x07e150

@@ -1,5 +1,5 @@
 /*
- * fpm.h -- fixed-point maths kernels used by the datapumps.
+ * fpm.h -- Fixed Point Modem: arithmetic kernels.
  *
  * The `fpm_*` layer is Q15 fixed point throughout, so every function here is
  * held to bit-exact equivalence with the original -- no tolerance.

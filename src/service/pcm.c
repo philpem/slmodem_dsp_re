@@ -1,5 +1,5 @@
 /*
- * pcm.c -- ITU-T G.711 companding: A-law and u-law <-> 16-bit linear.
+ * pcm.c -- ITU-T G.711 companding.
  *
  * Reconstructed from dsplibs.o .text 0x0b07a0-0x0b0951.
  *

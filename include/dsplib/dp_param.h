@@ -1,5 +1,5 @@
 /*
- * dp_param.h -- datapump access to modem parameters.
+ * dp_param.h -- DataPump: access to modem parameters.
  */
 
 #ifndef DSPLIB_DP_PARAM_H

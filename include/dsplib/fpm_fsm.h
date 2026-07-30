@@ -1,5 +1,5 @@
 /*
- * fpm_fsm.h -- FSK modulator.
+ * fpm_fsm.h -- Fixed Point Modem: Frequency Shift Modulator.
  *
  * Turns a bit stream into audio by switching a tone generator between two
  * frequencies, holding each for a fixed number of samples.

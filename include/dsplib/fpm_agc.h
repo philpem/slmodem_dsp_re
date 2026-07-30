@@ -1,5 +1,5 @@
 /*
- * fpm_agc.h -- block automatic gain control.
+ * fpm_agc.h -- Fixed Point Modem: automatic gain control.
  *
  * Not a per-sample AGC: the input is chopped into fixed-length measurement
  * blocks, one RMS is taken per block, and the whole block is scaled by a

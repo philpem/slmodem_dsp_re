@@ -1,5 +1,5 @@
 /*
- * fpm_fsd.c -- FSK demodulator.
+ * fpm_fsd.c -- Fixed Point Modem: Frequency Shift Demodulator.
  *
  * Reconstructed from dsplibs.o fpm_fsd.c:
  *   FPM_FSD_init  .text 0x0a78e0

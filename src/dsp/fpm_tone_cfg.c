@@ -1,5 +1,5 @@
 /*
- * fpm_tone_cfg.c -- the built-in tone configuration and its filter prototype.
+ * fpm_tone_cfg.c -- Fixed Point Modem: tone configuration and filter prototype.
  *
  * GENERATED-ish: extracted from dsplibs.o .rodata (FPM_TONE_CFG at 0xd000,
  * ToneLPF at 0xd040) -- do not edit the numbers.

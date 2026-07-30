@@ -1,6 +1,5 @@
 /*
- * GenericIIR.h -- direct-form IIR filter, templated on sample and coefficient
- * type.
+ * GenericIIR.h -- Generic IIR filter, templated on sample and coefficient type.
  *
  * Reconstructed from dsplibs.o FloatIIR.cpp.  The original ships exactly one
  * instantiation, GenericIIR<float, double>: float samples with double

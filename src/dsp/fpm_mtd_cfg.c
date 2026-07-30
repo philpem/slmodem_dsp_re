@@ -1,5 +1,5 @@
 /*
- * fpm_mtd_cfg.c -- the built-in multi-tone detector configuration.
+ * fpm_mtd_cfg.c -- Fixed Point Modem: Multi-Tone Detector configuration.
  *
  * Extracted from dsplibs.o .data:0x81b0.  Mixed struct: +0x00 is a pointer
  * to the coefficient bank (R_386_32 into .data), which is why this is a
