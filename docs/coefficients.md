@@ -41,9 +41,13 @@ sin[i] = trunc(32768 * sin(i * pi / 512))      i in [0, 257)
 exactly 1 — the same flat ±1 LSB signature that made the `FixedRC` banks
 resist fitting. Here it resolved cleanly: the residual was always 0 or −1,
 never +1, which is the fingerprint of truncation rather than of precision
-noise. Worth remembering when the `FixedRC` audit (task 8) revisits that fit —
-a one-sided residual means a rounding-mode mismatch, a two-sided one means
-noise.
+noise. That test was then applied back to `FixedRC`, and it came out negative: the
+resampler banks' residual is spread roughly symmetrically from −4 to +4 under
+round, truncate *and* floor, whereas a rounding-mode mismatch would be
+one-sided like the sine table's strict {0, −1}. So the `FixedRC` fit really is
+limited by precision or by a slightly different design, not by rounding, and
+the "~9.6 dB worse than a clean regeneration" conclusion stands. Recorded so
+task 8 does not chase it again.
 
 Also `sin[i] == cos[256 - i]` exactly, so the two tables are one quarter wave
 stored twice. Both are kept because the original has both and `FPM_phasor`
