@@ -2015,3 +2015,99 @@ someone deciding whether to point this at real hardware.
   allocation comes back zeroed, so the exposure needs a dirtied heap. D7 is
   re-classified as an out-of-contract divergence with the boundary stated,
   rather than claiming a faithfulness that is not available.
+
+## 36. `B103FP_create` — the common path, mapped
+
+Working notes for the 2151-byte constructor. The three call-type branches and
+the four allocation paths are not yet decoded; **everything below is the path
+all three call types share**, and it is recorded now so the mapping is not
+lost between sessions.
+
+### Shape
+
+It is not 2151 bytes of logic. It is a sequence of *build a config on the
+stack from the library default, patch the Bell 103 fields into it, call the
+init*, repeated eight times. The relocation census makes that plain:
+
+```sh
+objdump -d -r --start-address=0x8e690 --stop-address=0x8ef00 dsplibs.o \
+  | grep R_386 | awk '{print $3}' | sort | uniq -c | sort -rn
+```
+
+```
+9 FPM_TONE_CFG   7 FPM_FSD_CFG   7 B103_CFG   6 sysdep_malloc
+4 FPM_TONE_create   3 FPM_MRF_CFG   2 FPM_MTD_CFG   2 FPM_MRF_init
+2 FPM_FSM_CFG   2 FPM_AGC_init   2 AGCb103_CFG   ...
+```
+
+### Order of construction
+
+| # | what | notes |
+|--:|---|---|
+| 1 | copy 28 bytes of config into `state[0x00..0x1b]` | seven dwords |
+| 2 | `hdx->tone_timeout = max(cfg.tone_timeout_ticks / 20, 700)` | see the sign note below |
+| 3 | `hdx->tx = TxHdxStartB103`; `tx_blocks`, `rx_count`, `substate`, `r18`, `tone_detect`, `tone_lo` all zeroed | |
+| 4 | `hdx->tone_lo = FPM_TONE_create(NULL, patched FPM_TONE_CFG)` | then `inc = 0x159a` (1350.1 Hz), `phase = 0` |
+| 5 | **branch on `call_type`** | 0 originate, 1 answer, else loopback |
+| 6 | `FPM_MRF_init(&dsp->tx_mrf, ...)` | `FPM_MRF_CFG` patched: 10:9, `B103_MRF_FILT_TX`, 270 taps |
+| 7 | `FPM_MRF_init(&dsp->rx_mrf, ...)` | patched: 3:10, `B103_MRF_FILT_RX`, 90 taps |
+| 8 | `FPM_AGC_init(&dsp->agc, AGCb103_CFG, 0)` | |
+| 9 | `FPM_AGC_init(&dsp->det_agc, AGCb103_CFG, 0)` | then `dsp[0x42] = 40` — the acquisition AGC's block length is **patched after init**, which is why the two AGCs differ (36 vs 40) despite sharing a config |
+| 10 | `FPM_FSM_init(&dsp->fsm, ...)` | tones per branch, 24 samples/symbol, scale from `cfg.tx_scale` |
+| 11 | `FPM_FSD_init(&dsp->fsd, ...)` | `B103_CHAN_INTRP`, delay 4, `B103_IIR_LPF` |
+| 12 | `dsp[0xe4] = FPM_MTD_create(dsp[0xe4], ...)` | `MTDb103_COEF`, 2 tones, ratio `0x3666`, min level 2 |
+
+So `dsp[+0xe4]` — previously an unnamed reserved word — is the **multi-tone
+detector object pointer**, and the DSP block is now completely accounted for.
+
+### Fields the tail sets
+
+```
+dsp->r00      = 1        (the value DemodDataB103 copies into agc.f18)
+dsp->rx_energy = 0 ; dsp->rx_tone = 0 ; dsp->rx_state = 0
+state[0x20]   = dsp->fsd.trace       (dsp + 0xb8)
+state[0x28]   = &dsp->fsd.last_count (dsp + 0xbc)
+state[0x1c]   = 0, then flags |= 0x40, then status = 1
+state[0x24], [0x2c], [0x30], [0x34], [0x38], [0x3c], [0x40],
+state[0x44], [0x48], [0x4c] = 0
+```
+
+`status = 1` and `flags = 0x40` on exit match what the probes read back.
+
+### `call_type` out of range sets an error and builds a loopback anyway
+
+```
+cmp $0x1,%eax ; je  answer
+              ; jb  originate
+cmp $0x2,%eax ; je  loopback
+              ; else: flags |= 0x02 ; status = 5 ; fall through to loopback
+```
+
+So `call_type` of 3 or more is flagged (status 5 is "Bell103 internal error
+detected!", finding 34) but still produces a working loopback object. That
+matches the sweep, which showed mode 0 for every value tried above 2.
+
+### The timeout clamp is unsigned, and the divide is signed
+
+```
+t = cfg.tone_timeout_ticks / 20     /* signed, via the 0x66666667 idiom */
+cmp $0x2bc,%edx
+jae  keep                            /* UNSIGNED compare */
+t = 700
+```
+
+A **negative** `tone_timeout_ticks` divides to a negative `t`, which as
+unsigned is enormous, passes the `jae`, and is stored as a negative short.
+The clamp is meant to enforce a floor and does not, for that one class of
+input. Not reachable from `B103_CFG` (14000/20 is exactly 700, so the clamp
+is a no-op there) and not yet reachable from anything else, so it is recorded
+here rather than as a deviation until `b103_create` is decoded and the caller
+of this field is known.
+
+### Still to decode
+
+The three call-type branch bodies (which install the bandpass, the tone
+detector, the transmit tones and the oscillator — all four already known by
+measurement, finding 35), the `loop_high_channel` branch, and the four
+allocation paths: object (0x58), `hdx` (0x24), `dsp` (0x100), and the
+default-config path taken when `cfg` is NULL.
