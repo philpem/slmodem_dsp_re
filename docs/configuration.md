@@ -23,10 +23,10 @@ meanings on it. This document is the overview; the header is the reference.
 | offset | field | built-in | meaning |
 |---|---|--:|---|
 | `+0x00` | `call_type` | **2** | `B103_CALL_*`. The only field that changes the object's shape. |
-| `+0x04` | `is_answer` | 0 | Read by `TxHdxMarksB103`; see below. |
+| `+0x04` | `v21` | 0 | Selects the **V.21 tone plan** instead of Bell 103's. Not a direction flag; see below. |
 | `+0x08` | `loop_high_channel` | 0 | **Loopback only**: non-zero transmits 2025/2225. Ignored otherwise. |
 | `+0x0c` | `tone_timeout_ticks` | 14000 | `hdx->tone_timeout = max(this / 20, 700)` blocks. |
-| `+0x10` | `f10` | 1 | No observed effect. |
+| `+0x10` | `f10` | 1 | Gates a branch in `B103FP_create`. No effect on any field observed so far, but **not inert**. |
 | `+0x14` | `f14` | 0 | No observed effect. |
 | `+0x18` | `tx_scale` | 3200 | Modulator output gain, straight into `fsm.scale`. |
 

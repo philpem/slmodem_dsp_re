@@ -128,7 +128,7 @@ B103_ASSERT_OFF(struct b103_hdx, tx, 0x08);
 B103_ASSERT_OFF(struct b103_hdx, rx, 0x10);
 B103_ASSERT_OFF(struct b103_hdx, tone_detect, 0x1c);
 B103_ASSERT_OFF(struct b103_hdx, tone_lo, 0x20);
-B103_ASSERT_OFF(struct b103fp, is_answer, 0x04);
+B103_ASSERT_OFF(struct b103fp, v21, 0x04);
 B103_ASSERT_OFF(struct b103_cfg, loop_high_channel, 0x08);
 B103_ASSERT_OFF(struct b103_cfg, tone_timeout_ticks, 0x0c);
 B103_ASSERT_OFF(struct b103_cfg, tx_scale, 0x18);
@@ -307,11 +307,7 @@ TxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count)
  * The bit buffer is FILLED with ones here rather than supplied, so the caller
  * hands over an empty buffer and a length.
  *
- * The exit condition differs by direction, and that difference is the whole
- * handshake: an answering modem stops after `tx_blocks` regardless, while a
- * calling modem also waits for its own receiver to have acquired
- * (dsp->rx_state past 14).  So the caller holds mark until it hears the
- * answering modem, which is exactly what Bell 103 call setup requires.
+ * The exit condition differs by TONE PLAN -- see the note at the test below.
  */
 short
 TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count)
@@ -330,7 +326,14 @@ TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count)
 	hdx = fp->hdx;
 	hdx->tx_blocks = (short)(hdx->tx_blocks - 1);
 
-	if (fp->is_answer) {
+	/*
+	 * The exit condition differs by tone plan, not by direction: under
+	 * V.21 the block count alone ends the mark hold, while Bell 103 also
+	 * requires this station's own receiver to have acquired.  The field
+	 * is named `v21` rather than `is_answer` because that is what it
+	 * selects everywhere else -- see the tone table in b103fp.h.
+	 */
+	if (fp->v21) {
 		if (hdx->tx_blocks <= 0)
 			B103NextState[hdx->mode](fp);
 	} else if (hdx->tx_blocks <= 0 && fp->dsp->rx_state > 14) {

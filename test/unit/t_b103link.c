@@ -256,6 +256,88 @@ main(void)
 	}
 	rc |= diff_end();
 
+
+	/*
+	 * The tone plan table from b103fp.h, driven.  Every row of it -- and
+	 * in particular the last, where the receive side is configured for
+	 * V.21 channel 1 while the transmitter stays on Bell 103's tones.
+	 * That asymmetry is measured, not inferred, and asserting it here
+	 * means a future decode of B103FP_create that "fixes" it fails rather
+	 * than silently diverging from the blob.
+	 */
+	diff_begin("B103 tone plans");
+	{
+		static const struct {
+			int call_type, v21;
+			int tx0, tx1, detect_hz, lo_hz, lands_at;
+			const char *plan;
+		} plans[] = {
+			{ 0, 0, 1070, 1270, 2225, 1350, 875, "Bell 103 originate" },
+			{ 0, 1, 1180,  980, 1650,  975, 675, "V.21 channel 1" },
+			{ 1, 0, 2025, 2225, 1270,  395, 875, "Bell 103 answer" },
+			{ 1, 1, 2025, 2225, 1180,  305, 875, "V.21 answer, mixed" }
+		};
+		unsigned p;
+
+		for (p = 0; p < sizeof(plans) / sizeof(plans[0]); p++) {
+			struct b103_cfg cfg = B103_CFG_data;
+			struct b103fp *fp;
+			char buf[96];
+			int det, lo;
+
+			cfg.call_type = plans[p].call_type;
+			cfg.v21 = plans[p].v21;
+			fp = ref_B103FP_create(0, &cfg);
+			if (fp == 0)
+				continue;
+
+			snprintf(buf, sizeof(buf), "%s: transmits mark (%%ld)",
+				 plans[p].plan);
+			diff_eq_int(buf, fp->dsp->fsm.freq[0], plans[p].tx0, (long)p);
+			snprintf(buf, sizeof(buf), "%s: transmits space (%%ld)",
+				 plans[p].plan);
+			diff_eq_int(buf, fp->dsp->fsm.freq[1], plans[p].tx1, (long)p);
+
+			det = (*(short *)((char *)fp->hdx->tone_detect + 0x26)
+			       * 8000 + 16384) / 32768;
+			lo = (*(short *)((char *)fp->hdx->tone_lo + 0x26)
+			      * 8000 + 16384) / 32768;
+			snprintf(buf, sizeof(buf), "%s: detector (%%ld)", plans[p].plan);
+			diff_eq_int(buf, det, plans[p].detect_hz, (long)p);
+			snprintf(buf, sizeof(buf), "%s: oscillator (%%ld)", plans[p].plan);
+			diff_eq_int(buf, lo, plans[p].lo_hz, (long)p);
+
+			/*
+			 * The invariant behind all of it: whatever the plan,
+			 * the detector's tone mixes down onto 675 or 875 Hz --
+			 * the pair the one demodulator design is built for.
+			 *
+			 * WHICH of the two took two corrections to get right,
+			 * and both were the test catching the assumption:
+			 *
+			 *  - asserting 875 everywhere failed on V.21 channel 1.
+			 *    Bell 103's mark is the HIGHER tone of its pair
+			 *    (1270, 2225); V.21's is the LOWER (980, 1650), so
+			 *    the detector sits on mark at 875 for one and 675
+			 *    for the other.
+			 *  - asserting "675 whenever v21" then failed on the
+			 *    last row, which lands at 875 because its detector
+			 *    is on channel 1's SPACE.  That row is the one
+			 *    whose transmitter is also mis-set (see above), so
+			 *    it is tabulated rather than reasoned about.
+			 *
+			 * Hence `lands_at` is a column, not a rule.
+			 */
+			snprintf(buf, sizeof(buf),
+				 "%s: detector mixes to %d Hz (%%ld)",
+				 plans[p].plan, plans[p].lands_at);
+			diff_eq_int(buf, det - lo, plans[p].lands_at, (long)p);
+
+			ref_B103FP_delete(fp);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("B103 link setup");
 	{
 		struct b103fp *o = make(B103_CALL_ORIGINATE);

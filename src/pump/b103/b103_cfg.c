@@ -43,10 +43,10 @@
  */
 const struct b103_cfg B103_CFG_data = {
 	B103_CALL_LOOPBACK,	/* +0x00 call_type                        */
-	0,			/* +0x04 is_answer                        */
+	B103_TONES_BELL103,	/* +0x04 v21                              */
 	0,			/* +0x08 loop_high_channel                */
 	14000,			/* +0x0c tone_timeout_ticks -> 700 blocks */
-	1,			/* +0x10 f10, no observed effect          */
+	1,			/* +0x10 f10; gates a create branch       */
 	0,			/* +0x14 f14, no observed effect          */
 	3200			/* +0x18 tx_scale                         */
 };

@@ -138,7 +138,7 @@ compare_hdx(const char *what, struct b103fp *ours, struct b103fp *ref, int tag)
 /* A pair of freshly built objects, put into a known state. */
 static int
 build(struct b103fp **a, struct b103fp **b, int mode, int substate,
-      int is_answer)
+      int v21)
 {
 	*a = ref_B103FP_create(0, ref_B103_CFG);
 	*b = ref_B103FP_create(0, ref_B103_CFG);
@@ -150,7 +150,7 @@ build(struct b103fp **a, struct b103fp **b, int mode, int substate,
 
 	(*a)->hdx->mode = (*b)->hdx->mode = (short)mode;
 	(*a)->hdx->substate = (*b)->hdx->substate = (short)substate;
-	(*a)->is_answer = (*b)->is_answer = is_answer;
+	(*a)->v21 = (*b)->v21 = v21;
 	(*a)->status = (*b)->status = 0;
 	(*a)->flags = (*b)->flags = 0;
 	return 1;

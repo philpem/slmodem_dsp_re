@@ -53,10 +53,13 @@ struct b103_cfg {
 				 *       the only one that changes the object's
 				 *       shape, and the only one that decides
 				 *       whether a call can complete at all. */
-	int is_answer;		/* +0x04 read by TxHdxMarksB103, which lets an
-				 *       answering station stop transmitting
-				 *       mark on its block count alone while a
-				 *       calling one must also have acquired */
+	int v21;		/* +0x04 selects the V.21 tone plan instead of
+				 *       Bell 103's.  NOT a caller/answer flag,
+				 *       despite where it is read -- see the
+				 *       tone table below.  Also read by
+				 *       TxHdxMarksB103, which drops the
+				 *       requirement to have acquired before
+				 *       ending the mark hold.               */
 	int loop_high_channel;	/* +0x08 LOOPBACK ONLY: non-zero transmits
 				 *       2025/2225 instead of 1070/1270.
 				 *       Ignored for originate and answer,
@@ -66,25 +69,44 @@ struct b103_cfg {
 				 *       700 floor, so the clamp is a no-op for
 				 *       the built-in config and only bites if
 				 *       a caller lowers it */
-	int f10;		/* +0x10 no observed effect                  */
+	int f10;		/* +0x10 gates a branch in B103FP_create --
+				 *       non-zero skips the block that would
+				 *       pre-advance the half-duplex state.
+				 *       No effect on any field observed so
+				 *       far, but it is NOT inert.           */
 	int f14;		/* +0x14 no observed effect                  */
 	int tx_scale;		/* +0x18 modulator output gain, straight into
 				 *       fsm.scale.  3200 built in            */
 };
 
 /*
- * `call_type`.  Anything other than 0 or 1 is loopback -- B103FP_create has no
- * range check, it simply falls through to the default arm.
+ * `call_type` and `v21` together choose the tone plan.  Anything other than 0
+ * or 1 for call_type is loopback -- B103FP_create has no range check, it
+ * simply falls through to the default arm.
  *
- *  value | mode | bandpass        | detector | transmits | local oscillator
- * -------|------|-----------------|----------|-----------|------------------
- *    0   |  1   | B103_BPF_CALLER | yes      | 1070/1270 | 1350.1 Hz
- *    1   |  2   | B103_BPF_ANSWER | yes      | 2025/2225 |  395.0 Hz
- *  else  |  0   | none            | no       | 1070/1270 | 1350.1 Hz
+ * call_type | v21 | transmits | detects | local osc | bandpass       | plan
+ * ----------|-----|-----------|---------|-----------|----------------|------
+ *     0     |  0  | 1070/1270 |  2225   |  1350.1   | CALLER, 40     | Bell 103 originate
+ *     0     |  1  | 1180/ 980 |  1650   |   975.1   | CALLER, 40     | V.21 channel 1
+ *     1     |  0  | 2025/2225 |  1270   |   395.0   | ANSWER, 50     | Bell 103 answer
+ *     1     |  1  | 2025/2225 |  1180   |   305.2   | ANSWER, 50     | see the note
+ *   else    |  -  | see loop_high_channel | none | 1350.1 | none     | loopback
  *
- * The two oscillators ARE the frequency plan: each side mixes the pair it
- * receives down to 675/875 Hz, straddling the demodulator's 775 Hz
- * discriminator null, so one demodulator design serves both directions.
+ * The oscillator IS the frequency plan.  Every configuration mixes the pair
+ * it *receives* down to 675/875 Hz, straddling the demodulator's 775 Hz
+ * discriminator null, so one demodulator design serves every case and only
+ * the oscillator differs:
+ *
+ *     originate  2025/2225 - 1350 = 675/875      V.21 ch1  1650/1850 - 975
+ *     answer     1070/1270 -  395 = 675/875      V.21 ch2  980/1180  - 305
+ *
+ * NOTE the asymmetry in the last row.  With call_type 1 and v21 set, the
+ * receive side is configured for V.21 channel 1 correctly -- 305 Hz brings
+ * 980/1180 to 675/875 -- but the TRANSMIT tones stay at Bell 103's 2025/2225
+ * rather than moving to V.21 channel 2's 1650/1850.  Measured, not inferred.
+ * Whether that is a defect or a combination `b103_create` never asks for is
+ * open until `b103_create` is decoded; it is recorded rather than filed as a
+ * deviation for that reason.
  *
  * NOTE the built-in B103_CFG_data is LOOPBACK.  It installs no bandpass and no
  * tone detector, so an object built from it cannot complete a call; the
@@ -94,6 +116,10 @@ struct b103_cfg {
 #define B103_CALL_ORIGINATE 0
 #define B103_CALL_ANSWER    1
 #define B103_CALL_LOOPBACK  2
+
+/* `v21` values, for readability at call sites. */
+#define B103_TONES_BELL103  0
+#define B103_TONES_V21      1
 
 extern const struct b103_cfg B103_CFG_data;
 
@@ -132,7 +158,7 @@ struct b103_dsp {
 	short *bpf_hist;	/* +0xf0 84 bytes: the channel filter's
 				 *       circular history                  */
 	const short *bpf;	/* +0xf4 B103_BPF_CALLER or _ANSWER, chosen
-				 *       by B103FP_create on is_answer     */
+				 *       by B103FP_create on call_type     */
 	short bpf_idx;		/* +0xf8 its write position                */
 	short bpf_taps;		/* +0xfa 40 for the caller, 50 for answer  */
 	short rx_state;		/* +0xfc receive state machine             */
@@ -168,7 +194,8 @@ struct b103_hdx {
 /* The object itself, 88 bytes. */
 struct b103fp {
 	int r00;		/* +0x00                                    */
-	int is_answer;		/* +0x04 zero selects the caller side       */
+	int v21;		/* +0x04 copied from cfg.v21; selects the
+				 *       V.21 tone plan, not a direction   */
 	unsigned char r08[0x14];/* +0x08 .. +0x1b config and timing         */
 	unsigned char status;	/* +0x1c reported upward; 5 = timed out
 				 *       waiting, 6 = carrier lost          */
