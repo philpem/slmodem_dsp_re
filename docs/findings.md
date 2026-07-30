@@ -1379,10 +1379,52 @@ tone pairs before being relied on.
 `state[0x08]`/`state[0x0c]` — the IIR lowpass, run through `FPM_iir_filt` —
 are what smooth the product.
 
-**Still to decode:** the discriminator product and its scaling, the IIR stage,
-the slicer, and the bit-timing recovery that turns 8 samples per symbol into
-one bit. That is the bulk of the function and the part where a subtle error
-would show up as a bit-error rate rather than a crash.
+### Three points settled since
+
+**The signature's hole is filled.** From the call site at `.text 0x08fc7b`:
+
+```c
+short FPM_FSD_demodulate(struct fpm_fsd *fsd, const short *samples,
+                         unsigned short *bits_out, unsigned short count);
+```
+
+`arg2` is the **output bit buffer**, passed straight through from
+`DemodDataB103`'s own third argument.
+
+**The delay is 4**, read off a live object rather than out of
+`B103FP_create` (finding 31) -- which matters, because `B103FP_create` is the
+function this project has misread twice.
+
+**The delayed read wraps properly.** `.text 0x0a7b45`:
+
+```
+sub  %edi,%eax          idx - delay
+cwtl
+test %ax,%ax
+js   a7c9a       ->     add taps; rejoin
+```
+
+so a negative index has `taps` added rather than indexing before the buffer.
+Worth checking explicitly: had it not wrapped, both objects would read the
+heap bytes below their own allocation, those differ between allocations, and
+the differential test would have agreed on most runs and not others -- the
+same shape as the `0x2e`/`0xfe` bug in finding 30.
+
+The discriminator itself then reads:
+
+```
+product = (short)((fir_out * history[idx - delay]) >> 13)
+smoothed = FPM_iir_filt(product, iir_coeff, iir_state, iir_sections)
+```
+
+-- a shift of 13, not 15, so the product carries a gain of four into the
+lowpass.
+
+**Still to decode:** everything after the lowpass -- the slicer and the
+bit-timing recovery that turns 8 samples per symbol into one bit. That is the
+part where a subtle error shows up as a bit-error rate rather than a crash,
+and where finding 31's warning about both tones giving a positive
+discriminator output has to be resolved.
 
 ## 28. `FPM_AGC` — complete
 
