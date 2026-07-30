@@ -22,6 +22,15 @@ unsigned short FPM_sqrt(unsigned short x);
  */
 unsigned short FPM_sqrt_dp(unsigned int x);
 
+/*
+ * Scaled RMS of a block of samples.
+ *
+ * Computes sqrt(sum(x^2) / 36) -- the 1/36 is headroom, keeping the sum inside
+ * 32 bits for up to 36 full-scale samples.  Beyond 72 it overflows anyway; see
+ * src/dsp/fpm_rms.c.
+ */
+short FPM_rms(const short *samples, unsigned short count);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);
