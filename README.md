@@ -1,4 +1,4 @@
-# claude_re — reconstructing `dsplibs.o`
+# dsplibs — a source reconstruction of `dsplibs.o`
 
 A documented, modular, maintainable source reconstruction of
 `slmodemd/dsplibs.o`: the 1.2 MB x86-32 binary blob holding the entire Smart

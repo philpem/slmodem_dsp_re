@@ -202,3 +202,41 @@ C symbol prefixes against the TU list, filtered by address bracket:
 Name-derived attribution is authoritative. `fill` and `name-only` are hints
 and must not be relied on — the tool keeps the two populations separate for
 exactly this reason.
+
+## 11. `dcr_process` really does take three arguments
+
+`modem.c:79` declares `void dcr_process(void *, void *, int)` and `modem.c:677`
+calls it with three. The blob agrees — after its `sub $0x2c,%esp` prologue it
+reads exactly three incoming slots and no more:
+
+```sh
+objdump -d -j .text --start-address=0x100 --stop-address=0x338 dsplibs.o | head -20
+#   mov 0x30(%esp),%ebx    <- arg0  dcr
+#   mov 0x34(%esp),%ebp    <- arg1  buf
+#   mov 0x38(%esp),%esi    <- arg2  len
+```
+
+`dcr_create` reads no arguments at all, matching `dcr_create()`. It allocates
+**32 bytes** and initialises: `byte[0] |= 7`, `word[0x0a] = 3000`,
+`long[0x14] = 5760`, `long[0x18] = 9600`, `long[0x1c] = 19200`. The 9600 is the
+host sample rate, so the DC remover is one of the host-rate modules that will
+need attention in the 8 kHz retarget.
+
+`dcr_reset` is exported but never declared by slmodemd; it clears the three
+accumulator fields at `+0x08`, `+0x0c`, `+0x10`.
+
+## 12. Tier-1 differential testing is proven working
+
+`make test` renames all 2350 defined symbols in the blob to `ref_*`, plus the
+12 stateful imports, links it alongside the reconstruction and compares.
+
+The import split is the part that matters. Sharing `modem_get_bits` between
+the two implementations would make each consume the bits the other should have
+seen — producing a plausible-looking waveform and a completely invalid result.
+`tools/symmap.py` refuses to run if any import is unclassified, so a future
+blob revision cannot silently introduce a shared stateful callback.
+
+First module through the rig: the six G.711 companding routines
+(`src/service/pcm.c`), tested **exhaustively** — all 65536 linear inputs and
+all 256 code inputs, both directions, plus the saturation branch beyond
+±32767. 161,028 checks, zero mismatches.

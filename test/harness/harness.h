@@ -1,0 +1,44 @@
+/*
+ * harness.h -- Tier-1 differential test scaffolding.
+ *
+ * A differential test drives the reconstruction and the original object from
+ * the same input and compares the results.  The original is linked in as
+ * dsplibs_ref.o, produced by:
+ *
+ *     python3 tools/symmap.py ../slmodemd/dsplibs.o -o build/symmap.txt
+ *     objcopy --redefine-syms=build/symmap.txt \
+ *             ../slmodemd/dsplibs.o build/dsplibs_ref.o
+ *
+ * so every original entry point is reachable as `ref_<name>`.  Declare the
+ * ones a test needs with DIFF_REF() and compare against them.
+ *
+ * Failure output always prints the input that triggered it, because a
+ * companding or filter mismatch is meaningless without knowing which sample
+ * produced it.
+ */
+
+#ifndef DSPLIB_TEST_HARNESS_H
+#define DSPLIB_TEST_HARNESS_H
+
+#include <stdio.h>
+#include <stdlib.h>
+
+extern int diff_checks;
+extern int diff_failures;
+extern int diff_max_report;
+
+void diff_begin(const char *name);
+int diff_end(void);
+
+/*
+ * Compare one integer result.  `desc` should identify the input, e.g.
+ *   diff_eq_int("alaw2linear(0x%02x)", got, want, in);
+ */
+void diff_eq_int_(const char *file, int line, const char *fmt,
+		  long got, long want, long input);
+
+#define diff_eq_int(fmt, got, want, input) \
+	diff_eq_int_(__FILE__, __LINE__, (fmt), (long)(got), (long)(want), \
+		     (long)(input))
+
+#endif /* DSPLIB_TEST_HARNESS_H */
