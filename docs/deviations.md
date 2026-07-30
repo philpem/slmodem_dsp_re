@@ -404,3 +404,48 @@ Note the contrast with `FPM_MRF_init`, which *does* clear its history, and
 with `FPM_FSD_init`, which does not clear `fir_hist` either — but the FSD's
 history is filled before use by the same call that reads it, so it has no
 equivalent exposure.
+
+## D8 — `B103FP_delete` frees the object even when the caller supplied it 🐛
+
+The same defect as D5, one level up, and found the same way it should be: by
+counting allocations rather than by reading code.
+
+`B103FP_create(state, cfg)` follows the library's "pass NULL to allocate"
+idiom — a caller may supply its own storage and get it back. `B103FP_delete`
+does not honour that. It ends with an unconditional tail call:
+
+```
+8f003:  mov  %ebx,0x10(%esp)        /* ebx is the object */
+8f007:  add  $0x8,%esp
+8f00a:  pop  %ebx
+8f00b:  jmp  sysdep_free
+```
+
+There is no ownership flag on the object, and no branch guarding that free —
+both exit paths reach it.
+
+**Measured**, with the harness's allocation tracking:
+
+```
+type 0, NULL state:  create allocs=28  after delete live=0 frees=28 bad_free=0
+type 0, own state:   create allocs=27  after delete live=0 frees=27 bad_free=1
+```
+
+The 28th allocation on the NULL path is the object itself; on the caller-
+supplied path there are only 27 allocations but still 28 frees, and the extra
+one is the caller's buffer. With a real `free()` that is heap corruption if
+the buffer was malloc'd by the caller, or an abort if it was on the stack.
+
+Note the sub-objects are *not* affected: 27 of the 28 balance exactly on both
+paths, so every `FPM_*_create`'s own ownership flag is honoured correctly.
+It is only `B103FP_delete`'s treatment of the outermost object that is wrong.
+
+**Reachable?** Nothing inside `dsplibs.o` passes a non-NULL state to
+`B103FP_create` — `b103_create` passes NULL — so as shipped this never fires.
+It is a latent trap for any new caller using the documented idiom.
+
+**Reproduced.** The reconstruction frees unconditionally too, and
+`t_b103fp_alloc` asserts the counts above **including the `bad_free`**, so the
+defect cannot be quietly tidied away. The harness swallows frees of pointers
+it never handed out rather than passing them to `free()`, which is what lets
+the test observe this instead of crashing on it.

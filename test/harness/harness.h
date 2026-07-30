@@ -65,6 +65,25 @@ extern struct reg_log harness_reg_ours;
 extern struct reg_log harness_reg_ref;
 void harness_reg_reset(void);
 
+/*
+ * Allocation bookkeeping, so a test can assert that create/delete balance.
+ * `bad_free` counts frees of pointers the allocator never handed out --
+ * double frees and wild pointers -- which are swallowed rather than passed to
+ * free(), so the run survives to report them.
+ */
+struct alloc_log {
+	int allocs;	/* successful sysdep_malloc calls          */
+	int frees;	/* sysdep_free calls that released memory  */
+	int live;	/* outstanding allocations                 */
+	unsigned bytes;	/* outstanding bytes                       */
+	int bad_free;	/* frees of unknown pointers               */
+	int free_null;	/* sysdep_free(NULL)                       */
+	int overflow;	/* live set full; counts are unreliable    */
+};
+
+extern struct alloc_log harness_alloc;
+void harness_alloc_reset(void);
+
 extern int diff_checks;
 extern int diff_failures;
 extern int diff_max_report;

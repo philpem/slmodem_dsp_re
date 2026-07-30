@@ -32,15 +32,106 @@
 
 /* ---------------------------------------------------------------- shared */
 
+/*
+ * Allocation tracking.
+ *
+ * A leak or a double free is invisible to a differential test that compares
+ * field values -- both sides can agree perfectly on every byte and still be
+ * wrong about who owns what.  dsplibs uses a "pass NULL to allocate" idiom at
+ * three nesting levels with an ownership flag at each, so this is exactly the
+ * kind of code where that goes wrong, and the only place it can be caught.
+ *
+ * The live set is a small open-addressed table.  It only has to hold one
+ * datapump's worth of allocations, and it reports rather than aborts so a
+ * test can assert on the numbers.
+ */
+#define HARNESS_ALLOC_SLOTS 4096
+
+static void *alloc_slots[HARNESS_ALLOC_SLOTS];
+
+struct alloc_log harness_alloc;
+
+static unsigned
+alloc_hash(const void *p)
+{
+	return (unsigned)((unsigned long)p >> 4) % HARNESS_ALLOC_SLOTS;
+}
+
+static void
+alloc_insert(void *p)
+{
+	unsigned i = alloc_hash(p);
+	unsigned n;
+
+	for (n = 0; n < HARNESS_ALLOC_SLOTS; n++) {
+		unsigned k = (i + n) % HARNESS_ALLOC_SLOTS;
+
+		if (alloc_slots[k] == 0) {
+			alloc_slots[k] = p;
+			return;
+		}
+	}
+	harness_alloc.overflow++;
+}
+
+/* Returns non-zero if `p` was in the live set (and removes it). */
+static int
+alloc_remove(void *p)
+{
+	unsigned i = alloc_hash(p);
+	unsigned n;
+
+	for (n = 0; n < HARNESS_ALLOC_SLOTS; n++) {
+		unsigned k = (i + n) % HARNESS_ALLOC_SLOTS;
+
+		if (alloc_slots[k] == p) {
+			alloc_slots[k] = 0;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void
+harness_alloc_reset(void)
+{
+	memset(alloc_slots, 0, sizeof(alloc_slots));
+	memset(&harness_alloc, 0, sizeof(harness_alloc));
+}
+
 void *
 sysdep_malloc(unsigned size)
 {
-	return malloc(size);
+	void *p = malloc(size);
+
+	if (p != 0) {
+		harness_alloc.allocs++;
+		harness_alloc.live++;
+		harness_alloc.bytes += size;
+		alloc_insert(p);
+	}
+	return p;
 }
 
 void
 sysdep_free(void *ptr)
 {
+	if (ptr == 0) {
+		harness_alloc.free_null++;
+		return;
+	}
+	if (!alloc_remove(ptr)) {
+		/*
+		 * Freeing something we never handed out: a double free, or a
+		 * pointer that was never allocated.  Count it and DO NOT pass
+		 * it on -- letting it reach the real free() would abort the
+		 * run before the test could report the number.
+		 */
+		harness_alloc.bad_free++;
+		return;
+	}
+	harness_alloc.frees++;
+	harness_alloc.live--;
 	free(ptr);
 }
 
