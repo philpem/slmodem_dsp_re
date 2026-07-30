@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "harness.h"
+
 /* ---------------------------------------------------------------- shared */
 
 void *
@@ -118,6 +120,55 @@ ref_modem_debug_log_data(void *m, unsigned id, const void *buf, int len)
 	return 0;			/* harmless: logging only */
 }
 
+/*
+ * Parameter store.
+ *
+ * Each side gets its own recorder so a test can check not just that the two
+ * agreed on the returned value, but that they asked for the same parameter --
+ * a module that reads the wrong MDMPRM_* would otherwise pass whenever the
+ * store happened to hold matching values.
+ *
+ * The returned value is derived from the request rather than fixed, so a
+ * module that silently ignores its arguments cannot pass by accident.
+ */
+struct param_log harness_param_ours;
+struct param_log harness_param_ref;
+
+static long
+param_value(unsigned param)
+{
+	return 0x5A000000L + (long)param * 7L;
+}
+
+static long
+param_get(struct param_log *log, void *m, unsigned param)
+{
+	log->calls++;
+	log->last_modem = m;
+	log->last_param = param;
+	return param_value(param);
+}
+
+void
+harness_param_reset(void)
+{
+	memset(&harness_param_ours, 0, sizeof(harness_param_ours));
+	memset(&harness_param_ref, 0, sizeof(harness_param_ref));
+}
+
+/* Our side calls the unprefixed names; the reference calls ref_*. */
+long
+modem_get_param(void *m, unsigned param)
+{
+	return param_get(&harness_param_ours, m, param);
+}
+
+long
+ref_modem_get_param_impl(void *m, unsigned param)
+{
+	return param_get(&harness_param_ref, m, param);
+}
+
 int ref_modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
 { (void)m; (void)nbits; (void)buf; (void)n; unexpected("modem_get_bits"); return 0; }
 
@@ -125,7 +176,7 @@ int ref_modem_put_bits(void *m, int nbits, unsigned char *buf, int n)
 { (void)m; (void)nbits; (void)buf; (void)n; unexpected("modem_put_bits"); return 0; }
 
 long ref_modem_get_param(void *m, unsigned param)
-{ (void)m; (void)param; unexpected("modem_get_param"); return 0; }
+{ return ref_modem_get_param_impl(m, param); }
 
 long ref_modem_set_param(void *m, unsigned name, int val)
 { (void)m; (void)name; (void)val; unexpected("modem_set_param"); return 0; }

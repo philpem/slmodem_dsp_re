@@ -28,6 +28,20 @@
 extern "C" {
 #endif
 
+/*
+ * Records how a side used the parameter interface, so tests can assert which
+ * MDMPRM_* was requested rather than only what came back.
+ */
+struct param_log {
+	int calls;
+	void *last_modem;
+	unsigned last_param;
+};
+
+extern struct param_log harness_param_ours;
+extern struct param_log harness_param_ref;
+void harness_param_reset(void);
+
 extern int diff_checks;
 extern int diff_failures;
 extern int diff_max_report;

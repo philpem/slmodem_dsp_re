@@ -286,3 +286,57 @@ merely copied:
 all 193 extracted entries. This is the pattern every coefficient table should
 follow: the generator is the maintainable artefact, the extracted bytes are the
 reference the generator is checked against.
+
+## 15. `dp_wrapper` — signature and layout (reconstruction pending)
+
+The layer that lets an 8 kHz datapump sit under a 9600 Hz host. Established by
+disassembly; recorded here so the reconstruction starts from facts.
+
+**Signature**, from the call sites in `b103_create` / `v32_create` and the
+argument use in `dp_wrapper_create` (`.text 0x5a80`, 0x2b6 bytes):
+
+```c
+void *dp_wrapper_create(void *dp_data, dp_process_fn process,
+                        int dp_frag, int host_srate, int dp_srate);
+```
+
+`b103_create` passes `frag = 160` (20 ms at 8 kHz) and `dp_srate = 8000`,
+with `host_srate` forwarded from `dp_operations::create`'s `srate` argument.
+`v32_create` passes `frag = 40` (5 ms = 12 symbols at 2400 baud).
+
+**Validation**, before anything is allocated: `dp_frag` must be non-zero and
+**no greater than 192**; `host_srate` and `dp_srate` must both be non-zero.
+Otherwise it returns NULL.
+
+**State** is a single 2360-byte (`0x938`) allocation:
+
+| offset | contents |
+|---|---|
+| `+0x000` | `dp_data` |
+| `+0x004` | datapump `process` function |
+| `+0x008` | back-pointer to the `struct dp` (filled by the caller) |
+| `+0x00c` | resampler, host → dp direction |
+| `+0x010` | resampler, dp → host direction |
+| `+0x014` | start of the sample buffers |
+| `+0x314` | host-side fragment = `dp_frag * host_srate / dp_srate` |
+| `+0x318`, `+0x324` | same value, copied |
+| `+0x628` | second buffer region |
+
+**Two resamplers, one per direction**, confirmed by `dp_wrapper_delete`
+(`.text 0x5a20`) calling `RcFixed_Delete` on both `+0x0c` and `+0x10`.
+
+**Rate dispatch.** `dp_wrapper_create` compares the rate pair against literals
+and picks a `RcFixed` mode directly — it never calls
+`RcFixed_Check_Combination`, which is exported but dead (finding 10 in
+`docs/deviations.md` D3). Pairs seen so far: 8000↔9600 (`0x1f40`/`0x2580`),
+and both directions against 48000 (`0xbb80`). Equal rates short-circuit to no
+resampling at all.
+
+That last point is the mechanism behind the 8 kHz retarget: with the host at
+8000 the `dp_srate == host_srate` branch is taken and the wrapper becomes a
+pass-through, exactly as `RcFixed_Check_Combination(8000, 8000)` predicted.
+
+**Still to do:** `dp_wrapper_run` (`.text 0x5d40`, 0x23f bytes) — the
+buffering and fragment assembly around the two resamplers. Differential
+testing it needs a synthetic datapump on both sides, since `process` is a
+caller-supplied function pointer.
