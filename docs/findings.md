@@ -465,3 +465,78 @@ retarget has to find. It is **not confirmed** — it could equally be a
 generator-specific normalisation — and it should be settled from
 `FPM_TONE_create`'s use of the value rather than guessed, because if it *is* a
 rate conversion it needs regenerating rather than copying.
+
+## 17. Bell 103 / V.21's FSK core runs at **7200 Hz**, not 8000
+
+Finding 5 established that the pumps present an 8 kHz interface to
+`dp_wrapper`. That is true of the *interface*, but Bell 103 converts again
+internally: its FSK core runs at **7200 Hz**.
+
+Three independent pieces of evidence.
+
+**1. The modulator config says so outright.**
+
+```sh
+python3 tools/tabdump.py dsplibs.o --sym FPM_FSM_CFG --type s16
+#   1850, 1650, 24, 32767
+```
+
+1850 and 1650 Hz are the V.21 channel-2 space and mark frequencies. **24** is
+samples per symbol — and 7200 / 300 baud = 24 exactly, where 8000 / 300 =
+26.667. A 300 baud FSK modulator wants an integer symbol period, and only 7200
+gives one.
+
+**2. The frequency scaling composes to 7200.**
+
+`FPM_TONE_create` converts Hz to a Q15 phase increment:
+
+```
+imul $0x8312, freq -> add $0x1000 -> sar $13      freq * 33554/8192 = freq * 4.096
+```
+
+4.096 = 32768/8000, so the tone generator assumes **8000 Hz**.
+
+`FPM_FSM_init` pre-scales its frequencies before handing them over:
+
+```
+imul $0x471c, freq -> sar $14                     freq * 18204/16384 = freq * 1.11108
+```
+
+1.11108 = round(16384 × 10/9)/16384, and 10/9 = 8000/7200. Composing the two:
+
+```
+phase = f * (10/9) * (32768/8000) = f * 32768/7200
+```
+
+That is a phase increment correct for a **7200 Hz** sample rate. The 10/9 is
+not a quirk of the modulator — it is the correction that retargets an
+8000-assuming tone generator to 7200.
+
+**3. `B103FP_create` installs a channel interpolator.**
+
+`B103_CHAN_INTRP`, a 15-tap asymmetric FIR referenced only from
+`B103FP_create`:
+
+```
+56, -104, 259, -583, 1225, -2768, 13089, 6543, -2521, 1368, -774, 414, -198, 83, -46
+```
+
+The two large adjacent taps (13089, 6543 — 0.80 and 0.40 in Q14) are the
+signature of a fractional-delay filter rather than a symmetric lowpass.
+
+**What is confirmed and what is not.** That the FSK core is clocked at 7200 is
+confirmed by (1) and (2) — the samples-per-symbol constant and the phase
+scaling agree independently. The exact mechanism by which 8000 becomes 7200,
+and the precise role of `B103_CHAN_INTRP` in it, is **not** yet traced; that
+needs reading how `B103FP_modem` and the Hdx state functions use it.
+
+Note that `RcFixed` already offers 9:10 and 10:9 as modes 18 and 19, so the
+ratio is one the resampler supports — but `dp_wrapper`'s rate table lists only
+{8000, 9600, 48000}, so whatever B103 does internally, it does not go through
+`dp_wrapper`.
+
+**Consequence for the retarget.** The picture "host 9600 → pumps 8000, remove
+the conversion and everything is native" is too simple for Bell 103. Moving the
+host to 8000 removes the outer conversion, but the inner 8000 → 7200 stage
+remains, because 7200 is what makes 300 baud come out as an integer. Recorded
+as R-8 in `docs/rate_assumptions.md`.

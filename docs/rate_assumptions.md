@@ -65,7 +65,41 @@ remover runs at the host rate.
 
 **Retarget:** these need re-deriving for 8000. Finding 11.
 
-## 🟡 R-6 — `FPM_FSM_init` scales tone frequencies by 1.11108
+## 🔴 R-8 — Bell 103's FSK core is clocked at 7200 Hz
+
+`FPM_FSM_CFG` carries `24` samples per symbol, which at 300 baud is 7200 Hz
+(8000 would give 26.667). Independently, `FPM_FSM_init`'s 10/9 pre-scale
+composed with `FPM_TONE_create`'s 32768/8000 yields phase increments for
+exactly 7200. See finding 17.
+
+So B103 converts twice: `dp_wrapper` brings the host 9600 down to 8000, and
+B103 converts 8000 to 7200 internally. `RcFixed` modes 18 and 19 are 9:10 and
+10:9, so the ratio is supported, but `dp_wrapper`'s table has no 7200 entry --
+whatever B103 does internally does not go through the wrapper.
+
+**Retarget:** moving the host to 8000 removes the *outer* stage only. The inner
+8000 → 7200 has to stay, because 7200 is what makes 300 baud an integer number
+of samples. Any attempt to run the FSK core at 8000 would need the symbol
+timing redesigned, not just the filters regenerated.
+
+## 🔴 R-9 — `FPM_TONE_create` bakes in 8 kHz
+
+`(freq * 0x8312 + 0x1000) >> 13` is `freq * 32768/8000`: the tone generator
+converts Hz to a Q15 phase increment assuming a 8000 Hz sample rate. Every
+modulation uses it (14 callers), so this constant is load-bearing across the
+whole library.
+
+**Retarget:** callers running at another rate currently compensate by
+pre-scaling the frequency (see R-8). A rate-agnostic version would take the
+sample rate as a parameter instead, and the pre-scales would disappear.
+
+## 🟢 R-6 — `FPM_FSM_init` scales tone frequencies by 1.11108 — **explained**
+
+Superseded by R-8 and R-9: the 10/9 is the correction that retargets the
+8000-assuming tone generator to the FSK core's 7200 Hz. Not a mystery constant
+and not an independent dependency; it is a consequence of the other two.
+
+<details><summary>original note</summary>
 
 `FPM_FSM_init` multiplies its mark and space frequencies by `0x471c` in Q14
 before passing them to the tone generator:
@@ -81,6 +115,7 @@ exception to "the pumps are rate-agnostic" (R-1).
 **Unconfirmed.** It could equally be a generator-specific normalisation with no
 rate meaning. Settle it from how `FPM_TONE_create` consumes the value before
 concluding. Reproduced verbatim either way.
+</details>
 
 ## 🟡 R-7 — `dp_wrapper`'s rate table is a fixed list of six pairs
 
