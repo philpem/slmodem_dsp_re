@@ -648,3 +648,37 @@ was unreachable, because `objdump` filtering had hidden
 `lea 0x0(%ebp,%ebx,1),%eax` — the instruction that computes the counter. A
 disassembly filter that drops `lea` as "just padding" is unsafe: GCC uses `lea`
 for arithmetic constantly. Filter on address ranges, not opcodes.
+
+### `FPM_TONE_create` also builds a Goertzel detector
+
+`FPM_TONE` is not only a generator. `FPM_TONE_create` initialises a
+correlator alongside the oscillator, which is what `FPM_TONE_detect` and
+`FPM_TONE_find_rev` run.
+
+From `.text 0x0aaaa4`, after the phase increment is stored:
+
+```
+state[0x36] = 0x4000                      /* 1.0 in Q14                     */
+state[0x38] = 0x4000
+state[0x3a] = -(2 * phasor.cos)           /* Goertzel coefficient, -2cos(w) */
+state[0x3c] = (state[0x0c] * state[0x0c]) >> 16
+state[0x3e] = -(phasor.cos * state[0x0c]) >> 14
+state[0x40 .. 0x50] = 0                   /* accumulators                   */
+```
+
+`-2·cos(ω)` at `+0x3a` is the Goertzel recurrence coefficient; `+0x36` and
+`+0x38` are unity in Q14, and `+0x40` upward are the running accumulators the
+recurrence updates. `phasor.cos` here comes from the same `FPM_phasor` call
+that derives the increment, so the detector is tuned to exactly the frequency
+the generator produces — one config drives both halves.
+
+A second loop then fills two buffers, `state[0x2c]` and `state[0x30]`, of
+`state[0x0e]` entries, calling `FPM_phasor` per entry and scaling by
+`2 * phasor.cos >> 14`. That looks like a pre-computed reference waveform for
+correlation, but it is **not yet confirmed** — the source buffer `state[0x10]`
+has not been traced to where it is filled.
+
+The object extends to at least `+0xf2`, so a good deal of state remains
+unmapped. Reconstructing `fpm_tone.c` means finishing `FPM_TONE_create`'s
+remaining ~500 bytes first; the generator half (`generate`, `set_freq`,
+`set_scale`, and the reversal logic) is fully understood already.
