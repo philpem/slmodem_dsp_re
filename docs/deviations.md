@@ -18,7 +18,11 @@ Anything that does not fit one of those is a reconstruction error, not a
 deviation, and belongs in the issue list rather than here.
 
 **Status key:** ✅ verified bit-exact over the stated domain · ⚠ deliberate
-behavioural difference · 🐛 defect in the original
+behavioural difference · 🐛 defect in the original · ❌ retracted
+
+Retracted entries are kept, not deleted. A claim about the original that
+turned out to be wrong is worth as much as one that held, and more if the
+route to it was a mistake worth not repeating.
 
 ---
 
@@ -370,40 +374,76 @@ five-bit shift mask. The AGC would go from "slightly too much gain" to
 and `{16384, 1638}` verbatim, and the shift mask is reproduced in
 `src/dsp/fpm_agc.c`, so the two agree even along the path neither takes.
 
-## D7 — `B103FP_create` leaves the channel filter's history uninitialised ⚠
+## D7 — RETRACTED: the channel filter's history *is* cleared ❌
 
-Found by the differential test failing, which is the only way it could have
-been found: two objects built by the **same** `B103FP_create` with the **same**
-arguments produced **different** filtered output.
+**This entry claimed a defect in the original that does not exist.** It is kept
+rather than deleted because the way it was reached is worth more than the
+claim was.
 
-`B103FP_create` allocates the 84-byte block at `dsp[+0xf0]` — the circular
-history for the receive channel bandpass that `B103FP_modem` applies — and does
-not clear it. So the first `bpf_taps` output samples after a create depend on
-whatever the allocator left there. For the caller side that is 40 samples at
-8 kHz, i.e. the first 5 ms of every call.
+### What it said
 
-```sh
-# reproduce: build two objects, install the caller bandpass in both, feed
-# both the same samples, compare.  See test/unit/t_b103hdx.c, which zeroes
-# the history precisely so the rest of the comparison means something.
+That `B103FP_create` allocates the 84-byte history for the receive channel
+bandpass and never clears it, so the first `bpf_taps` output samples after a
+create depend on whatever the allocator left behind.
+
+### Why that looked true
+
+The differential test failed, and failed in the one way that admits no other
+explanation: two objects built by the **same** `B103FP_create` with the
+**same** arguments filtered identical input differently. That really did
+happen, and uninitialised memory really was the cause.
+
+### What was actually wrong
+
+The test built **loopback** objects and installed a bandpass into them by
+hand, because at the time `B103_CFG`'s `call_type` was not understood
+(finding 35). `B103FP_create` clears that buffer in the branch that installs
+the filter — and loopback does not install one, so the memset never ran.
+
+Reading the branch settles it. The caller path:
+
+```
+8ecfb:  dsp->bpf = B103_BPF_CALLER ; dsp->bpf_taps = 40
+8ed1e:  mov  $0x50,%eax                  /* 80 bytes = 40 taps */
+8ed39:  call sysdep_memset               /* (dsp->bpf_hist, 0, 80) */
 ```
 
-**Not reproduced, and deliberately not.** There is nothing to reproduce: the
-original's behaviour here is *undefined*, not merely odd, so "bit-exact" has no
-meaning for those samples. The reconstruction reads the same uninitialised
-memory the original does — that is faithful — and the test zeroes the buffer
-on both sides so that the 119,520 checks after it are testing the filter
-rather than the allocator.
+and the answer path allocates a **larger** buffer for its longer filter and
+clears all of it:
 
-**Consequences in practice.** Small: the bandpass is fed garbage for 40
-samples during call setup, when the receiver is still waiting for the answer
-tone and the AGC has not settled either. It is the kind of defect that would
-never show up as a symptom, only as an unreproducible first block.
+```
+8eed3:  movl $0x68,(%esp)                /* 104 bytes, not 84 */
+8eea5:  mov  $0x64,%eax                  /* 100 bytes = 50 taps */
+```
 
-Note the contrast with `FPM_MRF_init`, which *does* clear its history, and
-with `FPM_FSD_init`, which does not clear `fir_hist` either — but the FSD's
-history is filled before use by the same call that reads it, so it has no
-equivalent exposure.
+So each configuration allocates enough and clears exactly what it uses.
+
+### Measured, against a deliberately dirtied heap
+
+```
+type 0 (originate): taps=40  first 40 history words: 0 non-zero
+type 1 (answer):    taps=50  first 50 history words: 0 non-zero
+type 2 (loopback):  taps= 0  first 42 history words: 3 non-zero
+```
+
+Loopback is dirty and always was — but its `bpf` is NULL and its `bpf_taps`
+is zero, so nothing ever reads it.
+
+### The lesson, which is the reason this stays
+
+A differential failure proves the two sides *differ*. It does not prove the
+original is at fault, and it does not prove the input state was one the
+original can produce. Here the state was one it cannot: a loopback object
+with a bandpass bolted on. The check that would have caught it immediately —
+build the object the way the library builds it, and only then compare — is
+now what `t_b103link` does for the configuration itself.
+
+`t_b103hdx` still zeroes the history before comparing, and still should: it
+uses loopback objects for the state-machine tests, so the buffer genuinely is
+dirty there. The comment saying `B103FP_create` does not clear it has been
+corrected.
+
+---
 
 ## D8 — `B103FP_delete` frees the object even when the caller supplied it 🐛
 

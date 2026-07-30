@@ -372,11 +372,15 @@ main(void)
 		a->dsp->bpf = b->dsp->bpf = ref_B103_BPF_CALLER;
 		a->dsp->bpf_taps = b->dsp->bpf_taps = 40;
 		/*
-		 * B103FP_create allocates the filter history but does not
-		 * clear it, so the two objects start with different heap
-		 * garbage in it.  Zero both -- otherwise the first `taps`
-		 * outputs differ for a reason that has nothing to do with
-		 * either implementation.
+		 * These are LOOPBACK objects with a bandpass installed by
+		 * hand, which is not a state B103FP_create produces -- it
+		 * clears this buffer in the branch that installs the filter,
+		 * and loopback has no such branch.  So the history really is
+		 * dirty here, and differently in each object.  Zero both.
+		 *
+		 * Do not read this as a defect in the original: it was, until
+		 * the buffer was checked on a configuration the library
+		 * actually builds.  See the retraction of D7.
 		 */
 		memset(a->dsp->bpf_hist, 0, 42 * sizeof(short));
 		memset(b->dsp->bpf_hist, 0, 42 * sizeof(short));
