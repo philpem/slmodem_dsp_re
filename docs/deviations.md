@@ -133,6 +133,50 @@ side fails the build rather than passing silently.
 
 ---
 
+## D4 — `FPM_div` reads past its table and returns a zero reciprocal 🐛
+
+**Module** `src/dsp/fpm_div.c` · original `fpm_div.c`, `.text 0x0a6bf0`,
+table at `.rodata 0x0c6a0`
+
+**The defect.** `FPM_div` normalises the denominator into `[0x8000, 0xffff]`
+and indexes its table with `((mantissa + 0x80) >> 8) - 0x80`. That expression
+runs 0..**128**, but `FPM_div_table` holds **128** entries, 0..127.
+
+It is reached whenever the normalised denominator is `0xff80` or above —
+**255 of the 65535 possible denominators, 0.39%** — including values as
+ordinary as 511, 1023, 2047 and 65535.
+
+**Why this one is serious.** It is the same defect as D1, but without the luck.
+There, the word past the end happened to be exactly the right value. Here the
+read lands on `FPM_xor_table[0]`, which is **0**, where the correct entry would
+be **16384**.
+
+So for those 255 denominators the original returns a reciprocal of **zero**,
+and any division built on it collapses to zero. `FPM_div` exists to let callers
+multiply instead of divide, so a zero reciprocal silently turns a division into
+a zero result rather than raising anything.
+
+**What we do: reproduce it.** The table here has a 129th entry of 0 — not a
+coefficient, but the neighbouring table's first word. That follows the
+project's rule (guard only where the contract makes the input impossible), and
+nothing rules these denominators out.
+
+`t_fpm_div` sweeps all 65536 denominators and **asserts that exactly 255 yield
+a zero reciprocal**, so this cannot quietly regress into a tidied version that
+returns 16384.
+
+**This one is worth raising with the user.** Unlike D1, fixing it would change
+behaviour for real inputs — plausibly for the better, since a zero reciprocal
+is almost certainly not what the DSP intends. But it would break bit-exactness
+with the blob, which is currently the overriding requirement. The decision is
+deliberately deferred rather than taken quietly.
+
+**Table derivation**, exact for all 128 entries:
+`table[i] = trunc(2^30 / ((i + 0x80) * 0x100))` — truncated, like the sine
+tables; rounding differs on 58 of them.
+
+---
+
 ## Bugs found in the reconstruction (not deviations)
 
 Recorded because how they were caught is worth remembering.

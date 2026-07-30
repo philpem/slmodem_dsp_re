@@ -31,6 +31,15 @@ unsigned short FPM_sqrt_dp(unsigned int x);
  */
 short FPM_rms(const short *samples, unsigned short count);
 
+/*
+ * Reciprocal lookup for fixed-point division.  Leaves an approximate 1/denom
+ * in *recip and the normalisation shift in *shift; returns 1 if denom is zero.
+ */
+int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
+
+unsigned short FPM_div_table_entry(int i);
+unsigned short FPM_div_table_generate(int i);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);
