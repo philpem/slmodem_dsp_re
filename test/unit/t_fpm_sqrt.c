@@ -19,6 +19,7 @@
 #include "dsplib/fpm.h"
 
 extern unsigned short ref_FPM_sqrt(unsigned short x);
+extern unsigned short ref_FPM_sqrt_dp(unsigned int x);
 
 int
 main(void)
@@ -30,6 +31,47 @@ main(void)
 	for (i = 0; i < FPM_sqrt_table_size(); i++)
 		diff_eq_int("table[%ld]", FPM_sqrt_table_generate(i),
 			    FPM_sqrt_table_entry(i), i);
+	rc |= diff_end();
+
+	/*
+	 * 32-bit sibling.  The input space is too large to sweep exhaustively,
+	 * so cover it structurally: every power of two and its neighbours (the
+	 * normalisation boundaries), the 0x1fffffff threshold, the 0x80000000
+	 * point where the mantissa truncation bites, and a deterministic
+	 * pseudorandom spread.
+	 */
+	diff_begin("FPM_sqrt_dp structural");
+	{
+		unsigned lfsr = 0x13579BDFu;
+		int b;
+
+		for (b = 0; b < 32; b++) {
+			unsigned base = 1u << b;
+			int d;
+
+			for (d = -2; d <= 2; d++) {
+				unsigned v = base + (unsigned)d;
+
+				diff_eq_int("sqrt_dp(0x%08lx)", FPM_sqrt_dp(v),
+					    ref_FPM_sqrt_dp(v), v);
+			}
+		}
+		for (i = 0; i < 200000; i++) {
+			lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xD0000001u);
+			diff_eq_int("sqrt_dp(0x%08lx)", FPM_sqrt_dp(lfsr),
+				    ref_FPM_sqrt_dp(lfsr), lfsr);
+		}
+	}
+	rc |= diff_end();
+
+	/* The region FPM_rms can actually reach, swept densely. */
+	diff_begin("FPM_sqrt_dp rms range");
+	for (i = 0; i < 0x40000; i++) {
+		unsigned v = (unsigned)i * 8192u;
+
+		diff_eq_int("sqrt_dp(0x%08lx)", FPM_sqrt_dp(v),
+			    ref_FPM_sqrt_dp(v), v);
+	}
 	rc |= diff_end();
 
 	diff_begin("FPM_sqrt/Q15");

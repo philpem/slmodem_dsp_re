@@ -16,6 +16,12 @@
  */
 unsigned short FPM_sqrt(unsigned short x);
 
+/*
+ * 32-bit square root over the same table.  Unlike FPM_sqrt this one clamps its
+ * table index, so it has no out-of-range read -- see src/dsp/fpm_sqrt.c.
+ */
+unsigned short FPM_sqrt_dp(unsigned int x);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);

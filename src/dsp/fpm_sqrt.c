@@ -139,6 +139,62 @@ FPM_sqrt(unsigned short x)
 }
 
 /*
+ * 32-bit square root, sharing the same table.
+ *
+ * Structurally identical to FPM_sqrt: left-normalise, halve the exponent,
+ * index the quarter-scale table, shift the result down.  It normalises until
+ * the value exceeds 0x1fffffff and takes bits 15 upward as the mantissa.
+ *
+ * The interesting difference is that **this one bounds-checks**:
+ *
+ *     if ((unsigned short)index > 0xbf) index = 0xbf;
+ *
+ * clamping to entry 191, the last of the original's 192.  FPM_sqrt, indexing
+ * the same table from the same author, does not -- it reads entry 192 and
+ * lands in FPM_div_table (deviation D1).  So the bound was known; the 16-bit
+ * version simply missed it.
+ *
+ * Note the clamp is *unsigned*, so a negative index wraps to a large unsigned
+ * value and also clamps to 191 rather than to 0.  That is reachable: an input
+ * at or above 0x80000000 gives `x >> 15 >= 0x10000`, which truncates to a
+ * small or zero mantissa and drives the index negative.
+ *
+ * That truncation is reproduced rather than corrected.  Unlike FPM_sqrt's
+ * Q15 contract (deviation D2), there is no domain here that rules the case
+ * out: FPM_rms is the only caller, its accumulator overflows 0x80000000 at 73
+ * full-scale samples, and every call site passes a runtime sample count -- so
+ * reachability cannot be established statically, and matching the blob is the
+ * only defensible choice.
+ */
+unsigned short
+FPM_sqrt_dp(unsigned int x)
+{
+	unsigned exponent = 0;
+	unsigned mantissa;
+	int index;
+
+	if (x == 0)
+		return 0;
+
+	while (x <= 0x1fffffffu) {
+		x += x;
+		exponent++;
+	}
+
+	/* Truncated to 16 bits, which is where large inputs lose their top bit. */
+	mantissa = (unsigned short)(x >> 15);
+
+	if (exponent & 1)
+		mantissa >>= 1;
+
+	index = (int)((mantissa + 64) >> 7) - 64;
+	if ((unsigned short)index > 0xbf)
+		index = 0xbf;
+
+	return (unsigned short)(fpm_sqrt_table[index] >> (exponent >> 1));
+}
+
+/*
  * Regenerate one table entry from the design parameters.  Kept alongside the
  * table so the derivation stays checkable: the unit test regenerates all 192
  * entries and compares against the extracted originals.

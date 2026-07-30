@@ -50,6 +50,24 @@ happened to place `FPM_div_table`. Regenerating the tables, reordering
 `.rodata`, or changing the sample rate would move it, and the failure would be
 a subtly wrong square root at the top of the range — the hardest kind to trace.
 
+**Corroborated by its sibling.** `FPM_sqrt_dp` indexes the *same table* and
+does bounds-check it:
+
+```
+cmp $0xbf,%ax
+jbe use_it
+mov $0xbf,%eax          /* clamp to entry 191, the last of the original 192 */
+```
+
+So the correct bound was known to whoever wrote these; the 16-bit version
+simply omitted the check its 32-bit counterpart has. That makes D1 an
+oversight rather than a deliberate trick, and removes any doubt about fixing
+it.
+
+Note the reconstruction keeps `FPM_sqrt_dp` clamping at **191**, not at the
+193-entry table's new limit — the clamp is observable behaviour, not an
+implementation detail, and raising it would diverge from the blob.
+
 ---
 
 ## D2 — `FPM_sqrt`: clamped above Q15 range ⚠
@@ -68,6 +86,18 @@ neither achievable nor desirable.
 
 **If a caller is ever found passing more than `0x7fff`**, that caller is the
 bug, and this entry should be revisited.
+
+**Contrast with `FPM_sqrt_dp`, which is reproduced rather than guarded.** That
+function truncates `x >> 15` to 16 bits, so inputs at or above `0x80000000`
+lose their top bit and drive the table index negative — which its unsigned
+clamp then pins to 191. That case is *not* guarded here, because unlike
+`FPM_sqrt`'s Q15 contract there is no domain ruling it out: `FPM_rms` is the
+only caller, its accumulator passes `0x80000000` at 73 full-scale samples, and
+every call site passes a runtime sample count. Reachability cannot be
+established statically, so matching the blob is the only defensible choice.
+
+The distinction is the rule this project uses: guard only where the contract
+makes the input impossible; otherwise reproduce.
 
 ---
 
