@@ -428,7 +428,40 @@ helpers.
 
 `FPM_TONE` is the outlier at ~3 KB with 12 exported functions, and it has a
 second, separate implementation alongside it (`TONE_create/generate/detect/…`
-at `.text 0xaf690`, in `TONE.c`). Which of the two Bell 103 actually uses at
-run time needs establishing before either is reconstructed — `B103FP_create`
-calls the `FPM_` variant, but the half-duplex state functions may call the
-other.
+at `.text 0xaf690`, in `TONE.c`).
+
+**Resolved: `FPM_TONE` is the real one; `TONE.c` is very nearly dead.**
+
+```sh
+objdump -d -r -j .text dsplibs.o \
+  | awk '/^[0-9a-f]+ </{fn=$2} /R_386_PC32[ \t]+FPM_TONE_create$/{print fn}' | sort -u
+```
+
+`FPM_TONE_create` has **14** callers spanning every modulation — `B103FP_create`,
+`V17RX_create`, `V22FP_create`, `v22_originate`, `v22_answer`,
+`v23FP_tx_create`, `v23FP_rx_create`, `V29RX_create`, `V32FP_recreate`,
+`fax_class1_create`, `CreateV23Modem`, `BwChDem_Create`, `SetToneDetect`, and
+`FPM_FSM_init`.
+
+`TONE_create` has **one** (`detector_create`), and `TONE_generate` has
+**none at all**. So `TONE.c` survives only to serve `detector.c`, and its
+generator half is unreachable. Reconstruct `fpm_tone.c` and treat `TONE.c` as
+a low-priority curiosity.
+
+### `FPM_FSM_init` — a scale factor worth explaining before reuse
+
+`FPM_FSM_init(state, cfg)` copies the mark and space frequencies from an
+8-byte `FPM_FSM_CFG`, then scales each by `0x471c` in Q14 before handing them
+to the tone generator:
+
+```
+imul $0x471c, freq -> sar $14        i.e. freq * 18204 / 16384 = freq * 1.11108
+```
+
+That ratio is 10/9 to five figures, and 8000/7200 = 1.1111. The obvious reading
+is a conversion from a 7200 Hz reference to the 8 kHz the datapumps run at,
+which would make it exactly the kind of embedded rate assumption the 8 kHz
+retarget has to find. It is **not confirmed** — it could equally be a
+generator-specific normalisation — and it should be settled from
+`FPM_TONE_create`'s use of the value rather than guessed, because if it *is* a
+rate conversion it needs regenerating rather than copying.
