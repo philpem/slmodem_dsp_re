@@ -721,8 +721,7 @@ understood already.
 `.text 0x08e690`, 2151 bytes. Signature `B103FP_create(state, cfg)`.
 
 Opens by copying 28 bytes from the config (`B103_CFG`) into the state at
-offsets 0x00–0x18, then works through `state[0x50]`, a **caller-supplied
-pointer** that must be non-NULL — the function returns early otherwise.
+offsets 0x00–0x18, then works through `state[0x50]`.
 
 Through that pointer it builds a half-duplex transmit context:
 
@@ -740,11 +739,43 @@ so `state[0x50]` is a transmit state block with a function-pointer entry, and
 fields are then copied both onto the stack and into that block — the tone
 configuration is built per-instance rather than shared.
 
-**This answers the ownership question from finding 19**: `FPM_TONE`'s buffers
-are not allocated by `FPM_TONE_create`, and they are not allocated here either
-— `state[0x50]` arrives already populated. The allocation is further out
-still, in `b103_create`, which is the layer that calls `sysdep_malloc` before
-handing off. That needs confirming.
+### Ownership: `B103FP_create` allocates everything — two earlier readings were wrong
+
+Checked directly, and both of my previous conclusions about this were
+mistaken. Recording the corrections because the wrong version would have led
+to a reconstruction that double-frees or leaks.
+
+**Wrong reading 1:** that `state[0x50]` "must be non-NULL or the function
+returns early". It is the opposite — NULL is the *allocate* case:
+
+```
+8e6e0:  mov 0x50(%esi),%ecx
+8e6e3:  test %ecx,%ecx
+8e6e5:  je 8ed70            ->  malloc(0x24); state[0x50] = it; rejoin
+```
+
+**Wrong reading 2:** that the allocations "must be in `b103_create`".
+`b103_create` has exactly **one** `sysdep_malloc`, of 0x348 bytes, which is its
+own datapump state (the leading 0x14 bytes of which are the `struct dp`).
+`B103FP_create` has **six**:
+
+| size | stored at | note |
+|--:|---|---|
+| 0x58 (88) | returned | its own state, when called with a NULL state |
+| 0x24 (36) | `state[0x50]` | half-duplex TX block |
+| 0x100 (256) | `state[0x54]` | holds the three pointers below |
+| 0x144 (324) | `+0xe8` of that block | |
+| 0x144 (324) | `+0xec` | |
+| 0x54 (84) | `+0xf0` | |
+
+So `B103FP_create` owns its whole tree, and `b103_create` calls it as
+`B103FP_create(NULL, &cfg)` — the "pass NULL to allocate" idiom, used at two
+levels: once for the object itself and once per sub-block.
+
+The two 0x144 blocks are the likely `FPM_TONE` objects: that object reaches at
+least `+0x106` (262 bytes) and 324 leaves room for its internal buffers. Two of
+them fits a modem that both generates and detects. **Not confirmed** — the
+`FPM_TONE_create` call sites have not been matched to these pointers yet.
 
 **Possible rate dependency, unconfirmed.** The `/20` with a floor of 700 has
 the shape of a duration in samples or milliseconds. If `state[0x0c]` carries a
