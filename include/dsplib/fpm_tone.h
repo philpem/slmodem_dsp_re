@@ -9,10 +9,11 @@
  * The default config is the ITU-T V.25 answer tone: 2100 Hz with a 180 degree
  * phase reversal every 450 ms, which disables network echo cancellers.
  *
- * STATUS: partial.  set_freq, set_scale and generate are reconstructed and
- * verified.  create, delete and the detector half are not yet done, so the
- * object is treated as opaque storage of a known size and the tests build it
- * with the reference implementation.
+ * STATUS: create, delete, set_freq, set_scale, generate and detect are all
+ * reconstructed and verified.  The object is still treated as opaque storage
+ * of a known size, accessed by offset, because a good half of its 0x108 bytes
+ * has no known purpose yet -- FPM_TONE_find_rev and FPM_TONE_kill use fields
+ * this module does not.
  */
 
 #ifndef DSPLIB_FPM_TONE_H
@@ -94,5 +95,29 @@ void FPM_TONE_set_scale(void *state, short scale);
  * a plain oscillator.  A zero or negative period disables reversals.
  */
 void FPM_TONE_generate(void *state, short *out, short count);
+
+/* Detector field offsets. */
+#define FPM_TONE_OFF_RATIO      0x06	/* s16 out-of-band fraction allowed, Q15 */
+#define FPM_TONE_OFF_MIN_LEVEL  0x0a	/* s16 below this, report no signal      */
+#define FPM_TONE_OFF_TAPS       0x14	/* s16 correlator length                 */
+#define FPM_TONE_OFF_KERNEL     0x2c	/* short * correlator coefficients       */
+#define FPM_TONE_OFF_HISTORY    0x30	/* short * circular history, TAPS words  */
+#define FPM_TONE_OFF_HIST_IDX   0x34	/* s16 write position                    */
+#define FPM_TONE_OFF_IIR_COEFF  0x36	/* s16[5] Goertzel resonator             */
+#define FPM_TONE_OFF_IIR_STATE  0x40	/* s16[4] its direct form I state        */
+#define FPM_TONE_OFF_E_EXCESS   0x48	/* s16 smoothed out-of-band energy       */
+#define FPM_TONE_OFF_E_TOTAL    0x4a	/* s16 smoothed total energy             */
+
+/* Verdicts, the same three FPM_MTD_detect uses. */
+#define FPM_TONE_ABSENT   0	/* signal present, but not this tone */
+#define FPM_TONE_PRESENT  1	/* the tone is there                 */
+#define FPM_TONE_NOSIGNAL 2	/* below the minimum level           */
+
+/*
+ * Run `count` samples through the correlator and resonator and report whether
+ * the configured tone is present.  Energy estimates persist in the state, so
+ * the answer reflects a running average rather than this block alone.
+ */
+short FPM_TONE_detect(void *state, const short *samples, short count);
 
 #endif /* DSPLIB_FPM_TONE_H */

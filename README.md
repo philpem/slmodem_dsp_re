@@ -40,14 +40,14 @@ is structured, and the commands that prove each claim.
 
 | module | state |
 |---|---|
-| `fpm_iir` | complete — the shared biquad cascade |
+| `fpm_iir` | `FPM_iir_filt` (form II) and `FPM_iir_filt_II` (form I) complete; `FPM_iir_filt_block` pending |
 | `fpm_mrf` | complete — the 7200↔8000 and 8000↔2400 converters |
 | `fpm_fsm` | complete — FSK modulator |
 | `fpm_mtd` | complete — multi-tone detector |
-| `fpm_tone` | generator complete; detector pending |
+| `fpm_tone` | complete except `FPM_TONE_find_rev` / `_kill` |
 | `fpm_fsd` | init/free done; `demodulate` pending |
 | `fpm_agc` | complete — block AGC and noise gate |
-| primitives | `FPM_phasor`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
+| primitives | `FPM_phasor`, `FPM_phasor_demod`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
 | `b103` | registration done; `B103FP` pending |
 
 Full plan, including rationale for the ordering:

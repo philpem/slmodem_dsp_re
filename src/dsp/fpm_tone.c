@@ -19,6 +19,7 @@
 
 #include "dsplib/fpm_tone.h"
 #include "dsplib/fpm_phasor.h"
+#include "dsplib/fpm_iir.h"
 
 extern void *sysdep_malloc(unsigned size);
 extern void sysdep_free(void *ptr);
@@ -247,4 +248,125 @@ FPM_TONE_delete(void *state)
 		sysdep_free(*pfld(state, 0x2c));
 	}
 	sysdep_free(state);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * FPM_TONE_detect -- .text 0x0aaf80, 488 bytes.
+ *
+ * The detector half of the tone object.  Same shape as FPM_MTD_detect: measure
+ * total energy and in-band energy, and call the tone present when what is left
+ * over is a small enough fraction of the total.
+ *
+ * Per sample:
+ *
+ *   1. push the sample into a circular history of `taps` words and correlate
+ *      the whole history against the kernel at +0x2c -- the ToneLPF prototype
+ *      FPM_TONE_create copied there;
+ *   2. square the result: that is the TOTAL energy in this sample;
+ *   3. run the same result through the one-section Goertzel resonator that
+ *      FPM_TONE_create built at +0x36, and square that: the IN-BAND energy;
+ *   4. smooth both, with the difference standing in for out-of-band energy.
+ *
+ * The two smoothers use 31130 and 1638 -- 0.95 and 0.05 in Q15, summing to
+ * exactly 32768, i.e. unity DC gain.  Worth noticing: 31130 is precisely the
+ * alpha that `AGC_DEF_ALPHA`'s slow pair should have carried alongside its
+ * beta of 1638 and does not.  Whoever wrote this got it right; see D6.
+ *
+ * The verdict is FPM_MTD's, and uses the same three values:
+ *
+ *   total < state[+0x0a]                     -> 2, no signal at all
+ *   out_of_band <= ratio * total / 32768     -> 1, the tone is present
+ *   otherwise                                -> 0, signal, but not this tone
+ */
+short
+FPM_TONE_detect(void *state, const short *samples, short count)
+{
+	const short *kernel = (const short *)*pfld(state, 0x2c);
+	short *hist = (short *)*pfld(state, 0x30);
+	short *iir_coeff = fld(state, 0x36);
+	short *iir_state = fld(state, 0x40);
+	int taps = *fld(state, 0x14);
+	int idx = *fld(state, 0x34);
+	int out_of_band = *fld(state, 0x48);
+	int total = *fld(state, 0x4a);
+	int ratio = *fld(state, 0x06);
+	int min_level = *fld(state, 0x0a);
+	int i;
+
+	/*
+	 * Counted as a 16-bit value and tested against -1, so `count` of 0
+	 * does nothing and a NEGATIVE count runs about 65536 times.  Written
+	 * out rather than as `i < count` because the difference is real.
+	 */
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		const short *c = kernel;
+		short *p;
+		int acc = 0;
+		int filtered, energy, in_band, excess;
+		short sample;
+		int k;
+
+		/*
+		 * Advance the write index, wrapping to zero.  The original
+		 * does this branchlessly (setl/neg/and), which is GCC 3.4.2
+		 * rendering exactly this conditional.
+		 */
+		idx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;
+		hist[idx] = *samples++;
+
+		/*
+		 * Correlate the whole history against the kernel, newest
+		 * first, wrapping once at the bottom of the buffer.  Two
+		 * loops rather than a modulo: idx+1 taps then taps-1-idx.
+		 */
+		p = &hist[idx];
+		for (k = idx; k >= 0; k--)
+			acc += *p-- * *c++;
+		p += taps;		/* p is at hist[-1]; wrap to the top */
+		for (k = taps - 1; k > idx; k--)
+			acc += *p-- * *c++;
+
+		sample = (short)(acc >> 15);
+
+		/*
+		 * Total energy.  Note this can come out as -32768: a sample of
+		 * -32768 squares to 2^30, and 2^30 >> 15 is 32768, which does
+		 * not fit.  Faithful, and the smoother recovers.
+		 */
+		energy = (short)(((int)sample * sample) >> 15);
+
+		/* In-band energy: the same sample through the resonator. */
+		filtered = sample;
+		{
+			short one = (short)filtered;
+
+			FPM_iir_filt_II(&one, iir_coeff, iir_state, 1, 1);
+			filtered = one;
+		}
+		in_band = ((int)filtered * filtered) >> 15;
+
+		excess = (short)(energy - in_band);
+
+		out_of_band = (short)((31130 * out_of_band + 1638 * excess) >> 15);
+		total = (short)((31130 * total + 1638 * energy) >> 15);
+	}
+
+	/*
+	 * Negative out-of-band energy is clamped away on the way into the
+	 * state -- the subtraction above can undershoot -- but only here, so
+	 * it stays negative for the rest of this call.  The original does it
+	 * branchlessly as `(~v >> 15) & v`.
+	 */
+	if (out_of_band < 0)
+		out_of_band = 0;
+
+	*fld(state, 0x34) = (short)idx;
+	*fld(state, 0x4a) = (short)total;
+	*fld(state, 0x48) = (short)out_of_band;
+
+	if ((short)total < min_level)
+		return FPM_TONE_NOSIGNAL;
+	return (out_of_band <= ((ratio * (short)total) >> 15))
+		? FPM_TONE_PRESENT : FPM_TONE_ABSENT;
 }

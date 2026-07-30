@@ -23,6 +23,8 @@ extern void ref_FPM_TONE_set_freq(void *state, short hz);
 extern void ref_FPM_TONE_set_scale(void *state, short scale);
 extern void ref_FPM_TONE_generate(void *state, short *out, short count);
 extern short ref_FPM_TONE_CFG[];
+extern short ref_FPM_TONE_detect(void *state, const short *samples,
+				 short count);
 
 /* Compare the whole object, so unnamed fields are covered too. */
 static void
@@ -101,6 +103,82 @@ compare_created(const unsigned char *ours, const unsigned char *ref, int len,
 		for (i = 0; i < 4; i++)
 			diff_eq_int("resonator acc[%ld]", ab[i], aa[i], i);
 	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * FPM_TONE_detect.
+ *
+ * Unlike the generator tests, the two sides must NOT share an object: detect
+ * writes into the history buffer through the pointer at +0x30, so cloning one
+ * reference object into two byte-identical copies would have both sides
+ * scribbling on the same array and comparing it with itself.  Two separately
+ * created objects it is, which means the pointer slots differ and are skipped.
+ */
+static int detect_verdicts[3];
+
+static void
+compare_detect(unsigned char *ours, unsigned char *ref, int taps, int tag)
+{
+	const short *ho = *(const short *const *)(ours + FPM_TONE_OFF_HISTORY);
+	const short *hr = *(const short *const *)(ref + FPM_TONE_OFF_HISTORY);
+	int i;
+
+	for (i = 0; i < FPM_TONE_STATE_SIZE; i += 2) {
+		/*
+		 * Pointers are four bytes, so both halves must be skipped --
+		 * skipping only the low one leaves the high half of two
+		 * different heap addresses being compared, which agrees
+		 * roughly eleven runs in twelve.  A test that usually passes
+		 * is worse than one that fails.
+		 */
+		if (is_pointer_slot(i) || is_pointer_slot(i - 2))
+			continue;
+		diff_eq_int("state 0x%02lx",
+			    *(short *)(ours + i), *(short *)(ref + i), i);
+	}
+	for (i = 0; i < taps; i++)
+		diff_eq_int("history[%ld]", ho[i], hr[i], i);
+	(void)tag;
+}
+
+static int
+detect_stream(const char *what, void *src, int freq, int scale,
+	      int blocks, int len)
+{
+	unsigned char *a, *b;
+	static short buf[4096];
+	int taps, k, rc;
+
+	a = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+	b = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+	if (a == 0 || b == 0) {
+		diff_begin(what);
+		diff_eq_int("objects built (%ld)", 0, 1, 0);
+		return diff_end();
+	}
+	taps = *(short *)(a + FPM_TONE_OFF_TAPS);
+
+	ref_FPM_TONE_set_freq(src, (short)freq);
+	ref_FPM_TONE_set_scale(src, (short)scale);
+
+	diff_begin(what);
+	for (k = 0; k < blocks; k++) {
+		short va, vb;
+
+		ref_FPM_TONE_generate(src, buf, (short)len);
+
+		va = ref_FPM_TONE_detect(a, buf, (short)len);
+		vb = FPM_TONE_detect(b, buf, (short)len);
+
+		diff_eq_int("verdict at block %ld", vb, va, k);
+		compare_detect(b, a, taps, k);
+
+		if (va >= 0 && va <= 2)
+			detect_verdicts[va]++;
+	}
+	rc = diff_end();
+	return rc;
 }
 
 int
@@ -242,6 +320,81 @@ main(void)
 		compare_state(b, a, "generate ragged");
 	}
 	rc |= diff_end();
+
+
+	/* --- FPM_TONE_detect -------------------------------------------- */
+
+	/*
+	 * Stimulus comes from a third tone object, so the in-band case really
+	 * is the frequency the detector was configured for rather than
+	 * something merely nearby.
+	 */
+	{
+		void *src = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+
+		if (src == 0) {
+			diff_begin("FPM_TONE_detect stimulus");
+			diff_eq_int("stimulus object built (%ld)", 0, 1, 0);
+			rc |= diff_end();
+		} else {
+			/* On frequency: should settle to PRESENT. */
+			rc |= detect_stream("detect 2100 Hz", src, 2100,
+					    32767, 40, 80);
+			/* Off frequency: energy, but not this tone. */
+			rc |= detect_stream("detect 1650 Hz", src, 1650,
+					    32767, 40, 80);
+			rc |= detect_stream("detect 400 Hz", src, 400,
+					    32767, 20, 80);
+			/* Too quiet: below the minimum level. */
+			rc |= detect_stream("detect quiet", src, 2100,
+					    2, 20, 80);
+			/* Fragmentation: the history index must carry. */
+			rc |= detect_stream("detect frag 1", src, 2100,
+					    32767, 300, 1);
+			rc |= detect_stream("detect frag 7", src, 2100,
+					    32767, 200, 7);
+			rc |= detect_stream("detect frag 160", src, 2100,
+					    32767, 30, 160);
+			/* Longer than the correlator, so the history wraps
+			 * several times inside a single call. */
+			rc |= detect_stream("detect frag 500", src, 2100,
+					    32767, 10, 500);
+		}
+	}
+
+	/* A zero-length call re-evaluates the verdict and changes nothing else. */
+	diff_begin("FPM_TONE_detect zero count");
+	{
+		unsigned char *za = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *zb = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		short dummy = 0;
+
+		if (za != 0 && zb != 0) {
+			short va = ref_FPM_TONE_detect(za, &dummy, 0);
+			short vb = FPM_TONE_detect(zb, &dummy, 0);
+
+			diff_eq_int("verdict (%ld)", vb, va, 0);
+			compare_detect(zb, za, 0, 0);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * Anti-vacuity: all three verdicts must have been produced.  A
+	 * detector stuck on any single answer would otherwise agree with a
+	 * reconstruction that was stuck on the same one.
+	 */
+	diff_begin("FPM_TONE_detect coverage");
+	diff_eq_int("ABSENT seen (%ld)", detect_verdicts[0] > 0, 1,
+		    detect_verdicts[0]);
+	diff_eq_int("PRESENT seen (%ld)", detect_verdicts[1] > 0, 1,
+		    detect_verdicts[1]);
+	diff_eq_int("NOSIGNAL seen (%ld)", detect_verdicts[2] > 0, 1,
+		    detect_verdicts[2]);
+	rc |= diff_end();
+
+	printf("t_fpm_tone: verdicts absent/present/nosignal %d/%d/%d\n",
+	       detect_verdicts[0], detect_verdicts[1], detect_verdicts[2]);
 
 	return rc;
 }

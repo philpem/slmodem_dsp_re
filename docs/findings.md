@@ -1503,3 +1503,85 @@ counts rather than zero — 72 samples of ±4 measure 12, not 0. Picking a test
 amplitude by computing the textbook RMS therefore misses the gate you were
 aiming at; `t_fpm_agc` picks amplitudes against what `FPM_rms` actually
 returns, and says so.
+
+## 30. `FPM_TONE_detect` — the detector half, and what it says about D6
+
+`FPM_TONE_detect` (`.text 0x0aaf80`, 488 bytes) is reconstructed and
+bit-exact. It closes out `fpm_tone.c` apart from `FPM_TONE_find_rev` and
+`FPM_TONE_kill`.
+
+The structure is `FPM_MTD_detect`'s, one tone instead of a bank. Per sample:
+
+```
+hist[++idx] = x                       circular, `taps` words
+sample  = (sum(hist[idx-j] * kernel[j]) for j in 0..taps-1) >> 15
+energy  = (sample * sample) >> 15                      total
+filtered = one section of FPM_iir_filt_II              the Goertzel resonator
+in_band = (filtered * filtered) >> 15
+excess  = energy - in_band                             out-of-band
+```
+
+and both `energy` and `excess` go through a first-order smoother before the
+verdict. This is what `FPM_TONE_create` was building all along: the five words
+at `+0x36` are `FPM_iir_filt_II` coefficients and the four at `+0x40` are its
+direct-form-I state, which is why they are 5 and 4 rather than 5 and 2.
+
+Reading `create`'s setup through `FPM_iir_filt_II`'s `{ b0, b2, b1, a2, a1 }`
+ordering, the resonator is exactly the textbook damped Goertzel:
+
+| slot | `create` writes | as a biquad |
+|---|---|---|
+| `+0x36` | `0x4000` | b0 = 1 |
+| `+0x38` | `0x4000` | b2 = 1 |
+| `+0x3a` | `-2 * cos` | b1 = −2cos ω |
+| `+0x3c` | `(damp * damp) >> 16` | a2 = r² |
+| `+0x3e` | `-(cos * damp) >> 14` | a1 = −2r cos ω |
+
+so `damp` is the pole radius r in Q15 — the "0.96 resonator" of finding 18,
+now pinned to a coefficient rather than inferred.
+
+### The smoother coefficients corroborate D6
+
+The two energy smoothers are hard-coded:
+
+```
+out_of_band = (31130 * out_of_band + 1638 * excess) >> 15
+total       = (31130 * total       + 1638 * energy) >> 15
+```
+
+31130 + 1638 = 32768 exactly, i.e. unity DC gain. **31130 is precisely the
+alpha that `AGC_DEF_ALPHA`'s slow pair should carry alongside its beta of
+1638, and does not** — D6 predicted 31130 from `32768 - beta` before this
+function was decoded, and here it is, written out longhand by whoever wrote
+the tone detector. That is independent evidence that D6 is a copy-paste slip
+and not an intentional design choice.
+
+### Verdict
+
+Same three values as `FPM_MTD_detect`, and the same meanings:
+
+```
+total < state[+0x0a]                       -> 2   no signal
+out_of_band <= (ratio * total) >> 15       -> 1   tone present
+otherwise                                  -> 0   signal, but not this tone
+```
+
+Negative `out_of_band` is clamped to zero on the way into the state — the
+original does it branchlessly as `(~v >> 15) & v` — but only there, so it
+stays negative for the remainder of a call.
+
+### A test-methodology note
+
+The first version of this test agreed with the blob on about eleven runs in
+twelve. The failures were at object offsets `0x2e` and `0xfe`: the *high*
+halves of two heap pointers, where the comparison skipped only the low halves.
+Whether the two `malloc` results shared their top 16 bits decided the run.
+
+Two things follow, both applied:
+
+- when skipping a pointer slot in a byte-wise state comparison, skip **all
+  four** bytes. The existing `compare_created` already did; the new one did
+  not, and copying the wrong neighbour was enough.
+- an intermittently-passing differential test is worse than a failing one,
+  because eleven green runs read as evidence. `t_fpm_tone` is now run 40 times
+  in a row when it changes.
