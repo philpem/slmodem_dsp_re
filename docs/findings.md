@@ -336,7 +336,51 @@ That last point is the mechanism behind the 8 kHz retarget: with the host at
 8000 the `dp_srate == host_srate` branch is taken and the wrapper becomes a
 pass-through, exactly as `RcFixed_Check_Combination(8000, 8000)` predicted.
 
-**Still to do:** `dp_wrapper_run` (`.text 0x5d40`, 0x23f bytes) — the
-buffering and fragment assembly around the two resamplers. Differential
-testing it needs a synthetic datapump on both sides, since `process` is a
-caller-supplied function pointer.
+### `dp_wrapper_run` — buffering (partially decoded)
+
+`.text 0x5d40`, 0x23f bytes. Signature:
+
+```c
+int dp_wrapper_run(struct dp *dp, void *in, void *out, int count);
+```
+
+It reaches the wrapper state through `dp->dp_data` (`struct dp` offset
+`+0x10`), so the state pointer is not passed directly.
+
+**Two ring buffers**, each with a 16-byte descriptor followed by its data:
+
+| | descriptor | data | capacity |
+|---|---|---|---|
+| output side | `+0x318` | `+0x328` | 768 bytes = 384 × int16 |
+| input side | `+0x628` | `+0x638` | 768 bytes = 384 × int16 |
+
+Descriptor fields: `+0x00` running total, `+0x04` write position, `+0x0c` read
+position. Positions wrap modulo `2 * host_frag`, so each buffer is
+double-buffered at the host fragment size — and 384 = 2 × 192 is exactly why
+`dp_wrapper_create` rejects a `dp_frag` above 192.
+
+**Per-call flow:**
+
+1. Take `n = min(count, host_frag, space in the input ring)` — the space term
+   is computed against *both* the write position and a second index, so a
+   partially-drained buffer cannot be overrun.
+2. `sysdep_memcpy` that many samples into the input ring at its write
+   position; advance the caller's `in` pointer and the running total; reduce
+   the write position modulo `2 * host_frag`.
+3. If the accumulated total is still below `host_frag`, return without calling
+   the datapump — the wrapper buffers until a whole fragment is available.
+4. Otherwise dispatch. If the host→dp resampler at `+0x0c` is non-NULL, take
+   the resampling path at `.text 0x5f30`; if it is NULL (equal rates) call the
+   datapump directly:
+
+   ```c
+   status = w->process(dp, &inbuf[w->in_rd], &outbuf[w->out_wr], host_frag);
+   ```
+
+   A non-zero return is latched as the call's status.
+
+**Still to decode:** the resampling path at `.text 0x5f30`, the output copy
+back to the caller's buffer, and the loop tail. Differential testing will need
+a synthetic datapump installed on both sides, since `process` is a
+caller-supplied function pointer — the harness's existing shim approach does
+not cover indirect calls, so that is new machinery.
