@@ -14,3 +14,7 @@ symmap.txt
 
 # vendored test peer is a submodule; its build tree is not ours
 third_party/spandsp/
+
+# python
+__pycache__/
+*.pyc
