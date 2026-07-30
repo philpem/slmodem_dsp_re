@@ -126,8 +126,10 @@ short FPM_TONE_generate_demod(void *state, short *out, short count);
  * Measured directly: a 2100 Hz input yields 0, 2000 and 2200 Hz yield 1,
  * silence yields 2.  See findings 30 and 33.
  *
- * FPM_MTD_detect's constants were named by the same analogy and have NOT been
- * re-checked; do not assume they match.
+ * FPM_MTD_detect uses the OPPOSITE convention, and correctly so -- it has been
+ * swept and checked.  Its filters are per-tone bandpasses rather than a notch,
+ * so its "out of band" really is the leftover and 1 means detected.  Two
+ * functions in one library, same shape, opposite polarity: check, never infer.
  */
 #define FPM_TONE_PRESENT  0	/* the configured tone is there      */
 #define FPM_TONE_OTHER    1	/* signal present, but not this tone */

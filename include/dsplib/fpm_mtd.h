@@ -37,8 +37,17 @@ struct fpm_mtd *FPM_MTD_create(struct fpm_mtd *state,
 			       const struct fpm_mtd_cfg *cfg);
 void FPM_MTD_delete(struct fpm_mtd *state);
 
-/* Detection verdicts. */
-#define FPM_MTD_ABSENT   0	/* signal present, but not this tone     */
+/*
+ * Detection verdicts.  Verified by sweeping a live detector: with Bell 103's
+ * two-section bank, 800..2200 Hz returns 1 and 2300 Hz and above returns 0.
+ *
+ * NOTE this is the OPPOSITE polarity to FPM_TONE_detect, where zero means the
+ * tone is present.  The difference is real, not a mistake in either: this
+ * module's coefficients are per-tone bandpasses, so `out_of_band` is genuinely
+ * the leftover; FPM_TONE's are a notch, so its equivalent quantity is the
+ * tone's own share.  See finding 33.
+ */
+#define FPM_MTD_ABSENT   0	/* signal present, but not in band       */
 #define FPM_MTD_PRESENT  1	/* tone detected                         */
 #define FPM_MTD_NOSIGNAL 2	/* level below cfg.min_level             */
 
