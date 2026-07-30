@@ -75,6 +75,13 @@ void *FPM_TONE_create(void *state, const void *cfg);
 #define FPM_TONE_OFF_INC       0x26	/* u16 phase increment               */
 #define FPM_TONE_OFF_REV_COUNT 0x28	/* u16 samples since last reversal   */
 
+/*
+ * Free a tone object and its buffers.  Frees unconditionally, including the
+ * object itself -- see the note in src/dsp/fpm_tone.c before calling it on
+ * anything not built by FPM_TONE_create(NULL, ...).
+ */
+void FPM_TONE_delete(void *state);
+
 /* Set the tone frequency in Hz.  Assumes an 8 kHz sample rate -- see R-9. */
 void FPM_TONE_set_freq(void *state, short hz);
 

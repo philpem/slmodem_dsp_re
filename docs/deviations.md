@@ -194,6 +194,41 @@ tables; rounding differs on 58 of them.
 
 ---
 
+## D5 — `FPM_TONE_delete` frees what `create` may not have allocated 🐛
+
+**Module** `src/dsp/fpm_tone.c` · original `.text 0x0aad00` (delete),
+`0x0aaa00` (create)
+
+The two do not agree on ownership.
+
+```
+create:  if (owned && len > 0)  allocate the four buffers
+delete:  if (len > 0)           free the four buffers, then free the object
+```
+
+`create` only allocates when it allocated the object itself. `delete` has no
+ownership test at all: it frees the buffers on `len > 0` alone, and frees the
+object unconditionally.
+
+So a caller that supplied its own state with a positive `len` would have four
+never-allocated pointer slots passed to `free`, and its state freed even if it
+lived on the stack or inside a larger structure.
+
+**Unreachable in practice.** Every call site passes NULL to `create` — the
+four in `B103FP_create` and the one in `FPM_FSM_init`, which passes the
+existing pointer that is NULL on a zeroed state. So `owned` is always 1 and
+the two halves agree.
+
+**Reproduced, not fixed**, per the project rule: nothing establishes that a
+caller-supplied state is impossible, only that none exists today. Adding an
+ownership flag to `delete` would also change the object layout, which is
+observable.
+
+**If a caller-supplied state is ever introduced**, this must be revisited
+first — it is a double-free and a free-of-non-heap in one.
+
+---
+
 ## Bugs found in the reconstruction (not deviations)
 
 Recorded because how they were caught is worth remembering.

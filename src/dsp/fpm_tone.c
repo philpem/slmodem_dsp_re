@@ -21,6 +21,7 @@
 #include "dsplib/fpm_phasor.h"
 
 extern void *sysdep_malloc(unsigned size);
+extern void sysdep_free(void *ptr);
 extern void *sysdep_memcpy(void *dst, const void *src, unsigned n);
 
 /* Little-endian field access into the opaque object. */
@@ -219,4 +220,31 @@ FPM_TONE_create(void *state, const void *cfg)
 	}
 
 	return state;
+}
+
+/*
+ * Tear down a tone object.
+ *
+ * Note the asymmetry with create, which is the original's and is reproduced.
+ * create allocates the four buffers only when it allocated the object *and*
+ * len > 0; delete frees them whenever len > 0, with no ownership test, and
+ * then frees the object unconditionally.
+ *
+ * So a caller that supplied its own state with a positive len would have its
+ * buffer slots freed without them ever having been allocated, and its state
+ * freed even if it lived on the stack.  That never happens in practice --
+ * every call site passes NULL to create -- but the mismatch is real, and
+ * "tidying" delete to match create would change behaviour for the paths that
+ * do exist.  See D5 in docs/deviations.md.
+ */
+void
+FPM_TONE_delete(void *state)
+{
+	if (*fld(state, FPM_TONE_CFG_LEN) > 0) {
+		sysdep_free(*pfld(state, 0xf8));
+		sysdep_free(*pfld(state, 0xf4));
+		sysdep_free(*pfld(state, 0x30));
+		sysdep_free(*pfld(state, 0x2c));
+	}
+	sysdep_free(state);
 }

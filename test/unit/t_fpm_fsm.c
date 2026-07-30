@@ -42,10 +42,55 @@ main(void)
 		bits[i] = (unsigned short)((i % 17 < 5) ? (i & 1) : (lfsr & 1));
 	}
 
+	/*
+	 * `a` is built by the reference, `b` by ours -- so init is under test
+	 * too, not just modulate.  Each gets its own tone object; cloning one
+	 * would leave both sides driving the same oscillator.
+	 */
 	memset(&a, 0, sizeof(a));
 	memset(&b, 0, sizeof(b));
 	ref_FPM_FSM_init(&a, ref_FPM_FSM_CFG);
-	ref_FPM_FSM_init(&b, ref_FPM_FSM_CFG);
+	FPM_FSM_init(&b, (const struct fpm_fsm *)ref_FPM_FSM_CFG);
+
+	diff_begin("FSM init");
+	diff_eq_int("freq[0] (%ld)", b.freq[0], a.freq[0], 0);
+	diff_eq_int("freq[1] (%ld)", b.freq[1], a.freq[1], 0);
+	diff_eq_int("samples per symbol (%ld)", b.samples_per_sym,
+		    a.samples_per_sym, 0);
+	diff_eq_int("scale (%ld)", b.scale, a.scale, 0);
+	diff_eq_int("scaled[0] (%ld)", b.scaled[0], a.scaled[0], 0);
+	diff_eq_int("scaled[1] (%ld)", b.scaled[1], a.scaled[1], 0);
+	diff_eq_int("tone built (%ld)", b.tone != 0, 1, 0);
+	/* The tone objects differ in address but must agree field for field. */
+	{
+		const unsigned char *ta = (const unsigned char *)a.tone;
+		const unsigned char *tb = (const unsigned char *)b.tone;
+		int off;
+
+		for (off = 0; off < 0x2c; off += 2) {
+			/*
+			 * +0x10 holds a pointer, so both halves differ
+			 * between builds -- ours points at our extracted
+			 * ToneLPF, the reference at the blob's.  Skip the
+			 * whole 4-byte slot, not just its first short.
+			 */
+			if (off == 0x10 || off == 0x12)
+				continue;
+			diff_eq_int("tone byte 0x%02lx",
+				    *(const short *)(tb + off),
+				    *(const short *)(ta + off), off);
+		}
+		/* Check the prototype itself matches, tap for tap. */
+		{
+			const short *pa = *(const short *const *)(ta + 0x10);
+			const short *pb = *(const short *const *)(tb + 0x10);
+			int t;
+
+			for (t = 0; t < 53; t++)
+				diff_eq_int("ToneLPF[%ld]", pb[t], pa[t], t);
+		}
+	}
+	rc |= diff_end();
 
 	diff_begin("FSM config");
 	diff_eq_int("samples per symbol (%ld)", a.samples_per_sym, SPS, 0);

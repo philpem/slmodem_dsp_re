@@ -1,13 +1,23 @@
 /*
  * fpm_fsm.c -- FSK modulator.
  *
- * Reconstructed from dsplibs.o fpm_fsm.c, FPM_FSM_modulate at .text 0x0a8940.
- * FPM_FSM_init and FPM_FSM_delete are pending -- init builds the FPM_TONE
- * object, which is not reconstructed yet.
+ * Reconstructed from dsplibs.o fpm_fsm.c:
+ *   FPM_FSM_init      .text 0x0a8880
+ *   FPM_FSM_modulate  .text 0x0a8940
+ *   FPM_FSM_delete    .text 0x0a8a30
  */
+
+#include <string.h>
 
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_tone.h"
+
+/*
+ * Frequencies are pre-scaled by 10/9 = 8000/7200 before reaching FPM_TONE,
+ * which assumes 8 kHz.  The product is a phase increment correct for the
+ * 7200 Hz the modulator actually runs at.  0x471c is 10/9 in Q14.
+ */
+#define FPM_FSM_RATE_SCALE 0x471c
 
 short
 FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
@@ -43,4 +53,42 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 	}
 
 	return (short)total;
+}
+
+void
+FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm *cfg)
+{
+	struct fpm_tone_cfg tone;
+
+	/* The first four shorts: both frequencies, symbol length and scale. */
+	state->freq[0] = cfg->freq[0];
+	state->freq[1] = cfg->freq[1];
+	state->samples_per_sym = cfg->samples_per_sym;
+	state->scale = cfg->scale;
+
+	state->scaled[0] =
+		(short)(((int)state->freq[0] * FPM_FSM_RATE_SCALE) >> 14);
+	state->scaled[1] =
+		(short)(((int)state->freq[1] * FPM_FSM_RATE_SCALE) >> 14);
+
+	/*
+	 * Start from the built-in tone configuration and override only the
+	 * output scale.  The frequency is not set here -- modulate retunes per
+	 * bit, so whatever the default carries is immediately replaced.
+	 */
+	tone = FPM_TONE_CFG_data;
+	tone.scale = state->scale;
+
+	/*
+	 * Passing the existing pointer means a re-init reuses the object;
+	 * on a zeroed state it is NULL and FPM_TONE_create allocates.
+	 */
+	state->tone = FPM_TONE_create(state->tone, &tone);
+}
+
+void
+FPM_FSM_delete(struct fpm_fsm *state)
+{
+	if (state != 0)
+		FPM_TONE_delete(state->tone);
 }

@@ -23,6 +23,14 @@ struct fpm_fsm {
 };
 
 /*
+ * Build a modulator.  `cfg` supplies the two frequencies, the symbol length
+ * in samples and the output scale; the frequencies are stored both as given
+ * and pre-scaled for the tone generator.
+ */
+void FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm *cfg);
+void FPM_FSM_delete(struct fpm_fsm *state);
+
+/*
  * Modulate `nbits` bits, one 16-bit word each, using only bit 0.  Returns the
  * number of samples written: nbits * samples_per_sym.
  */
