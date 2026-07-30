@@ -24,7 +24,7 @@ is structured, and the commands that prove each claim.
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | in progress, see below |
+| 2 | Bell 103 / V.21 — *first real connection* | DSP path done; state machines pending |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
@@ -45,10 +45,11 @@ is structured, and the commands that prove each claim.
 | `fpm_fsm` | complete — FSK modulator |
 | `fpm_mtd` | complete — multi-tone detector |
 | `fpm_tone` | complete except `FPM_TONE_find_rev` / `_kill` |
-| `fpm_fsd` | init/free done; `demodulate` pending |
+| `fpm_fsd` | complete — Schmitt slicer and edge-resynchronised bit clock |
 | `fpm_agc` | complete — block AGC and noise gate |
+| `b103fp` | signal path complete: `ModData`, `TxNoCarrier`, `CarrierDetect`, `DemodData` |
 | primitives | `FPM_phasor`, `FPM_phasor_demod`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
-| `b103` | registration done; `B103FP` pending |
+| `b103` | registration done; `B103FP_create/modem/delete`, the Hdx state machines and `b103_create` pending |
 
 Full plan, including rationale for the ordering:
 `~/.claude/plans/the-directory-slmodemd-contains-compiled-lark.md`
