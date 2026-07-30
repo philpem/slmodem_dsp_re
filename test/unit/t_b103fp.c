@@ -26,6 +26,7 @@
  *      silence would agree with a blob that emitted silence.
  */
 
+#include <math.h>
 #include <string.h>
 
 #include "harness.h"
@@ -39,6 +40,10 @@ extern short ref_ModDataB103(void *fp, const unsigned short *bits, short *out,
 extern short ref_TxNoCarrierB103(void *fp, const unsigned short *bits,
 				 short *out, unsigned short nbits);
 extern int ref_CarrierDetectB103(void *fp);
+extern short ref_DemodDataB103(void *fp, short *in, unsigned short *bits,
+			       unsigned short count);
+extern void *ref_FPM_TONE_create(void *state, void *cfg);
+extern short ref_FPM_TONE_CFG[];
 
 /* Coverage counters. */
 static int saw_nonzero_output;
@@ -126,6 +131,109 @@ tx_call(const char *what, struct b103fp *a, struct b103fp *b,
 		saw_silent_output++;
 
 	compare_tx_state(what, b->dsp, a->dsp, tag);
+}
+
+/* Coverage for the receive chain. */
+static int rx_states_seen[24];
+static int rx_bits_seen;
+static int rx_reset_seen;
+
+/*
+ * Compare everything DemodDataB103 can touch.  The two objects have separate
+ * buffers, so the pointer fields differ and the contents are compared instead.
+ */
+static void
+compare_rx(const char *what, struct b103_dsp *ours, struct b103_dsp *ref,
+	   int tag)
+{
+	char buf[96];
+	int i;
+
+	snprintf(buf, sizeof(buf), "%s: rx_state (%%ld)", what);
+	diff_eq_int(buf, ours->rx_state, ref->rx_state, tag);
+	snprintf(buf, sizeof(buf), "%s: rx_energy (%%ld)", what);
+	diff_eq_int(buf, ours->rx_energy, ref->rx_energy, tag);
+	snprintf(buf, sizeof(buf), "%s: rx_tone (%%ld)", what);
+	diff_eq_int(buf, ours->rx_tone, ref->rx_tone, tag);
+
+	snprintf(buf, sizeof(buf), "%s: agc level (%%ld)", what);
+	diff_eq_int(buf, ours->agc.level, ref->agc.level, tag);
+	snprintf(buf, sizeof(buf), "%s: agc mult (%%ld)", what);
+	diff_eq_int(buf, ours->agc.mult, ref->agc.mult, tag);
+	snprintf(buf, sizeof(buf), "%s: agc shift (%%ld)", what);
+	diff_eq_int(buf, ours->agc.shift, ref->agc.shift, tag);
+	snprintf(buf, sizeof(buf), "%s: agc freeze (%%ld)", what);
+	diff_eq_int(buf, ours->agc.freeze, ref->agc.freeze, tag);
+	snprintf(buf, sizeof(buf), "%s: det_agc level (%%ld)", what);
+	diff_eq_int(buf, ours->det_agc.level, ref->det_agc.level, tag);
+	snprintf(buf, sizeof(buf), "%s: det_agc mult (%%ld)", what);
+	diff_eq_int(buf, ours->det_agc.mult, ref->det_agc.mult, tag);
+
+	snprintf(buf, sizeof(buf), "%s: rx_mrf phase (%%ld)", what);
+	diff_eq_int(buf, ours->rx_mrf.phase, ref->rx_mrf.phase, tag);
+	snprintf(buf, sizeof(buf), "%s: rx_mrf widx (%%ld)", what);
+	diff_eq_int(buf, ours->rx_mrf.widx, ref->rx_mrf.widx, tag);
+	snprintf(buf, sizeof(buf), "%s: rx_mrf hist[%%ld]", what);
+	for (i = 0; i < ours->rx_mrf.history_len; i++)
+		diff_eq_int(buf, ours->rx_mrf.history[i],
+			    ref->rx_mrf.history[i], i);
+
+	snprintf(buf, sizeof(buf), "%s: fsd bit (%%ld)", what);
+	diff_eq_int(buf, ours->fsd.bit, ref->fsd.bit, tag);
+	snprintf(buf, sizeof(buf), "%s: fsd since_bit (%%ld)", what);
+	diff_eq_int(buf, ours->fsd.since_bit, ref->fsd.since_bit, tag);
+	snprintf(buf, sizeof(buf), "%s: fsd hist_idx (%%ld)", what);
+	diff_eq_int(buf, ours->fsd.hist_idx, ref->fsd.hist_idx, tag);
+
+	snprintf(buf, sizeof(buf), "%s: scratch[%%ld]", what);
+	for (i = 0; i < 48; i++)
+		diff_eq_int(buf, ours->scratch[i], ref->scratch[i], i);
+	snprintf(buf, sizeof(buf), "%s: rx_scratch[%%ld]", what);
+	for (i = 0; i < 160; i++)
+		diff_eq_int(buf, ours->rx_scratch[i], ref->rx_scratch[i], i);
+}
+
+/*
+ * One receive call through both sides.  `in` is modified in place, so each
+ * side gets its own copy and both copies are compared afterwards -- the mixer
+ * writes back through that pointer and a divergence there would otherwise be
+ * invisible.
+ */
+static void
+rx_call(const char *what, struct b103fp *a, struct b103fp *b,
+	const short *in, int n, int tag)
+{
+	static short ia[512], ib[512];
+	static unsigned short ba[64], bb[64];
+	char buf[96];
+	short na, nb;
+	int i;
+
+	memcpy(ia, in, (unsigned)n * sizeof(short));
+	memcpy(ib, in, (unsigned)n * sizeof(short));
+	memset(ba, 0x5a, sizeof(ba));
+	memset(bb, 0x5a, sizeof(bb));
+
+	na = ref_DemodDataB103(a, ia, ba, (unsigned short)n);
+	nb = DemodDataB103(b, ib, bb, (unsigned short)n);
+
+	snprintf(buf, sizeof(buf), "%s: bit count (%%ld)", what);
+	diff_eq_int(buf, nb, na, tag);
+
+	snprintf(buf, sizeof(buf), "%s: mixed input[%%ld]", what);
+	for (i = 0; i < n; i++)
+		diff_eq_int(buf, ib[i], ia[i], i);
+
+	snprintf(buf, sizeof(buf), "%s: bit[%%ld]", what);
+	for (i = 0; i < na; i++) {
+		diff_eq_int(buf, bb[i], ba[i], i);
+		rx_bits_seen++;
+	}
+
+	if (a->dsp->rx_state >= 0 && a->dsp->rx_state < 24)
+		rx_states_seen[a->dsp->rx_state]++;
+
+	compare_rx(what, b->dsp, a->dsp, tag);
 }
 
 int
@@ -278,6 +386,107 @@ main(void)
 
 	printf("t_b103fp: %d signal calls, %d silent, %d distinct sample counts\n",
 	       saw_nonzero_output, saw_silent_output, k);
+
+
+	/* --- DemodDataB103 --------------------------------------------- */
+
+	/*
+	 * B103_CFG leaves hdx->tone_detect NULL -- the branch of
+	 * B103FP_create that fills it is not reached with this config, the
+	 * same way dsp[+0xf4]'s bandpass is not (finding 32).  Calling the
+	 * acquisition path on such an object would dereference NULL in both
+	 * implementations, so a real tone object is installed first.  That is
+	 * a state the original supports; it is only the default config that
+	 * does not build it.
+	 */
+	diff_begin("DemodDataB103");
+	{
+		struct b103fp *ra = ref_B103FP_create(0, ref_B103_CFG);
+		struct b103fp *rb = ref_B103FP_create(0, ref_B103_CFG);
+		struct b103fp *tx = ref_B103FP_create(0, ref_B103_CFG);
+		static short air[512];
+		int f, n8;
+
+		if (ra && rb && tx) {
+			ra->hdx->tone_detect =
+				ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+			rb->hdx->tone_detect =
+				ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+
+			/*
+			 * The stimulus walks the acquisition state machine
+			 * deliberately.  What it acquires on is the 2100 Hz
+			 * answer tone -- Bell 103 FSK does not advance it,
+			 * because the detector is a sharp bandpass at 2100
+			 * (1900-2300 Hz) and reports NOSIGNAL outside that.
+			 *
+			 *   frames 0-1    2100 Hz   0 -> 5 -> 10
+			 *   frame  2      silence   reset to 0, proving it can
+			 *   frames 3-22   2100 Hz   climbs through 15 to 16
+			 *   frames 23+    FSK       demodulated, since 16 parks
+			 *
+			 * Once the state reaches 16 the detector is never
+			 * consulted again, so the FSK cannot undo it.
+			 */
+			for (f = 0; f < 150; f++) {
+				if (f == 2 || (f > 100 && (f % 17) == 0)) {
+					n8 = 160;
+					for (i = 0; i < n8; i++)
+						air[i] = 0;
+				} else if (f < 23) {
+					n8 = 160;
+					for (i = 0; i < n8; i++) {
+						double tt = (f * 160.0 + i)
+							    / 8000.0;
+
+						air[i] = (short)(12000.0 *
+							sin(2.0 * 3.14159265358979
+							    * 2100.0 * tt));
+					}
+				} else {
+					for (i = 0; i < 6; i++)
+						bits[i] = (unsigned short)
+							((0x2d3u >> ((f * 6 + i) % 10)) & 1);
+					n8 = ref_ModDataB103(tx, bits, air, 6);
+				}
+				rx_call("demod", ra, rb, air, n8, f);
+			}
+
+			ref_B103FP_delete(ra);
+			ref_B103FP_delete(rb);
+			ref_B103FP_delete(tx);
+		} else {
+			diff_eq_int("three objects built (%ld)", 0, 1, 0);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * Anti-vacuity for the acquisition state machine.  It advances in
+	 * steps of five and parks at 16, so seeing 0 and 16 is not enough --
+	 * the intermediate states are where a mis-transcribed increment or a
+	 * wrong comparison would show.
+	 */
+	diff_begin("DemodDataB103 coverage");
+	for (i = 0, k = 0; i < 24; i++)
+		if (rx_states_seen[i])
+			k++;
+	diff_eq_int("distinct rx_states reached (%ld)", k >= 4, 1, k);
+	diff_eq_int("acquisition reached 5 (%ld)", rx_states_seen[5] > 0, 1,
+		    rx_states_seen[5]);
+	diff_eq_int("acquisition reached 10 (%ld)", rx_states_seen[10] > 0, 1,
+		    rx_states_seen[10]);
+	diff_eq_int("demodulating state 16 reached (%ld)",
+		    rx_states_seen[16] > 0, 1, rx_states_seen[16]);
+	diff_eq_int("acquisition reset to 0 (%ld)", rx_states_seen[0] > 0, 1,
+		    rx_states_seen[0]);
+	diff_eq_int("bits demodulated (%ld)", rx_bits_seen > 0, 1, rx_bits_seen);
+	rc |= diff_end();
+	(void)rx_reset_seen;
+
+	printf("t_b103fp: rx states 0/5/10/15/16 seen %d/%d/%d/%d/%d, %d bits\n",
+	       rx_states_seen[0], rx_states_seen[5], rx_states_seen[10],
+	       rx_states_seen[15], rx_states_seen[16], rx_bits_seen);
 
 	ref_B103FP_delete(a);
 	ref_B103FP_delete(b);

@@ -49,8 +49,9 @@ struct b103_dsp {
 				 *       reads it -- purpose unknown       */
 	int rx_energy;		/* +0x04 <- agc.signal after each block    */
 	int rx_tone;		/* +0x08 set by the receive state machine  */
-	struct fpm_agc agc;	/* +0x0c                                   */
-	unsigned char r38[0x2c];/* +0x38 .. +0x63                          */
+	struct fpm_agc agc;	/* +0x0c the data path's gain control      */
+	struct fpm_agc det_agc;	/* +0x38 the acquisition path's, run on an
+				 *       untouched copy of the input       */
 	struct fpm_mrf tx_mrf;	/* +0x64 7200 -> 8000, the transmit side   */
 	struct fpm_mrf rx_mrf;	/* +0x80 8000 -> 2400, the receive side    */
 	struct fpm_fsd fsd;	/* +0x9c the FSK demodulator               */
@@ -64,10 +65,32 @@ struct b103_dsp {
 	short rfe;		/* +0xfe                                   */
 };
 
+/*
+ * The half-duplex context, `struct b103fp`'s +0x50.  36 bytes.
+ *
+ * Despite the name it carries both directions' odds and ends: the transmit
+ * state machine's entry point, and the two tone objects the receiver uses.
+ */
+struct b103_hdx {
+	short r00;		/* +0x00                                   */
+	short timing;		/* +0x02 cfg[0x0c]/20, floored at 700      */
+	int r04;		/* +0x04                                   */
+	void *entry;		/* +0x08 -> TxHdxStartB103                 */
+	int r0c;		/* +0x0c                                   */
+	int r10;		/* +0x10                                   */
+	int r14;		/* +0x14                                   */
+	int r18;		/* +0x18                                   */
+	void *tone_detect;	/* +0x1c FPM_TONE object: the guard tone   */
+	void *tone_lo;		/* +0x20 FPM_TONE object: the receive local
+				 *       oscillator -- see DemodDataB103   */
+};
+
 /* The object itself, 88 bytes. */
 struct b103fp {
-	unsigned char r00[0x50];/* +0x00 .. +0x4f config and timing         */
-	void *hdx;		/* +0x50 transmit state machine context     */
+	int r00;		/* +0x00                                    */
+	int is_answer;		/* +0x04 zero selects the caller side       */
+	unsigned char r08[0x48];/* +0x08 .. +0x4f config and timing         */
+	struct b103_hdx *hdx;	/* +0x50                                    */
 	struct b103_dsp *dsp;	/* +0x54                                    */
 };
 
@@ -93,5 +116,13 @@ short TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits,
 
 /* Carrier present: both receiver flags at once. */
 int CarrierDetectB103(struct b103fp *fp);
+
+/*
+ * The receive chain.  `in` is modified IN PLACE -- it is mixed with the local
+ * oscillator before anything else touches it -- and `count` samples at 8 kHz
+ * become at most a handful of bits, which is the return value.
+ */
+short DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
+		    unsigned short count);
 
 #endif /* DSPLIB_B103FP_H */

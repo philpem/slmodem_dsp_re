@@ -1723,8 +1723,9 @@ the tail silently.
 
 ### The receiver's actual passband, measured
 
-Driving pure tones through `rx_mrf -> AGC -> FSD` and reading the slicer input
-out of the trace buffer:
+**Corrected by finding 33** -- this is the response *after* the mixer, not the
+radio-frequency passband. Read the figures as baseband. Driving tones through
+`rx_mrf -> AGC -> FSD` and reading the slicer input out of the trace buffer:
 
 | input | slicer level (no AGC) |
 |--:|--:|
@@ -1778,3 +1779,80 @@ bit-exact against the blob on exactly these objects. It is a statement about
 what still has to be reconstructed before the datapump can complete a call,
 and it is the answer to "why does loopback not work" — asked and answered
 before it could be mistaken for a DSP bug.
+
+## 33. `DemodDataB103` — the receiver mixes to baseband, and the tone verdict was backwards
+
+Two corrections to earlier findings, both from measuring rather than reading.
+
+### The receiver is a superheterodyne
+
+`DemodDataB103` multiplies the incoming samples by a locally generated tone
+**before** anything else touches them:
+
+```c
+FPM_TONE_generate_demod(fp->hdx->tone_lo, lo, count);
+for (i = 0; i < count; i++)
+        in[i] = (short)((in[i] * lo[i]) >> 14);
+```
+
+Read off a live object, that oscillator runs at **1350.1 Hz** (phase increment
+5530 at 8 kHz). So the Bell 103 answer channel comes down as:
+
+| tone | mixed with 1350 | slicer level |
+|--:|--:|---|
+| 2025 Hz | **675 Hz** | negative |
+| 2225 Hz | **875 Hz** | positive |
+
+and the discriminator null measured in finding 32 sits at **775 Hz** —
+squarely between them. The frequency plan is exact, and it was predicted from
+the null before the oscillator was found.
+
+This corrects finding 32's passband table: those figures are the *baseband*
+response of everything after the mixer. Feeding 1070/1270 straight into
+`rx_mrf` bypasses the mixer entirely, which is why they appeared to be the
+resolved pair. They are not; the caller receives 2025/2225, as Bell 103 says
+it should.
+
+### `FPM_TONE_detect`'s verdicts are the reverse of what finding 30 recorded
+
+The biquad `FPM_TONE_create` builds at `+0x36` is `{ 1, -2cos w, 1 }` over a
+pole pair at radius r — a pair of zeros **on** the unit circle, i.e. a
+**notch** at the tone frequency, with the poles only narrowing it. So what the
+state calls out-of-band energy is the signal with the tone *removed*, and the
+quantity compared against `ratio` is the tone's own share.
+
+Measured on a live detector, 12000-amplitude sine in:
+
+| input | E_total | tone share | verdict |
+|--:|--:|--:|--:|
+| 1900 Hz | 225 | 2 | 1 |
+| 2000 Hz | 1175 | 363 | 1 |
+| **2100 Hz** | 1810 | **1810** | **0** |
+| 2200 Hz | 1179 | 367 | 1 |
+| 2300 Hz | 224 | 0 | 1 |
+| below 1900 / above 2300 | 0 | 0 | 2 |
+
+So **0 means the tone IS present**. Corrected in `include/dsplib/fpm_tone.h`;
+the constant formerly called `FPM_TONE_ABSENT` is now `FPM_TONE_PRESENT` and
+vice versa. `FPM_MTD_detect`'s constants were named by the same analogy and
+have **not** been re-checked — flagged in the header rather than assumed.
+
+### Which makes the acquisition sequence read correctly
+
+`DemodDataB103` advances `rx_state` by five on each `FPM_TONE_PRESENT`. With
+the polarity right, that is a **calling modem listening for the 2100 Hz answer
+tone**, exactly as V.25 specifies — not, as the first reading had it, listening
+for energy that is anything but. Three consecutive detections reach 15, which
+freezes the data AGC (sensible: the gain is locked on a steady tone rather than
+on data) and switches to demodulating at 16, after which the detector is never
+consulted again.
+
+### Two AGCs
+
+`dsp->agc` at `+0x0c` (36-sample blocks) serves the data path, after the mixer
+and rate conversion. `dsp->det_agc` at `+0x38` (40-sample blocks) runs on an
+untouched **copy** of the input, before the mixer, and feeds only the tone
+detector. That separation is what lets the data AGC be frozen at acquisition
+without blinding the detector. It also completes the DSP block: `+0x38..+0x63`
+was the last unattributed region, and a second `struct fpm_agc` fits it
+exactly.

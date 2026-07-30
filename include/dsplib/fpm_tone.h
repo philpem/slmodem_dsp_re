@@ -115,9 +115,22 @@ short FPM_TONE_generate_demod(void *state, short *out, short count);
 #define FPM_TONE_OFF_E_EXCESS   0x48	/* s16 smoothed out-of-band energy       */
 #define FPM_TONE_OFF_E_TOTAL    0x4a	/* s16 smoothed total energy             */
 
-/* Verdicts, the same three FPM_MTD_detect uses. */
-#define FPM_TONE_ABSENT   0	/* signal present, but not this tone */
-#define FPM_TONE_PRESENT  1	/* the tone is there                 */
+/*
+ * Verdicts.  NOTE THE POLARITY -- zero means the tone IS present.
+ *
+ * This was recorded the other way round at first, by analogy with
+ * FPM_MTD_detect, and it is wrong: the biquad FPM_TONE_create builds at +0x36
+ * is a NOTCH at the tone frequency, not a bandpass.  So the value the code
+ * calls "out of band" is what is left after the tone is removed, and the
+ * quantity compared against `ratio` is the tone's own share of the energy.
+ * Measured directly: a 2100 Hz input yields 0, 2000 and 2200 Hz yield 1,
+ * silence yields 2.  See findings 30 and 33.
+ *
+ * FPM_MTD_detect's constants were named by the same analogy and have NOT been
+ * re-checked; do not assume they match.
+ */
+#define FPM_TONE_PRESENT  0	/* the configured tone is there      */
+#define FPM_TONE_OTHER    1	/* signal present, but not this tone */
 #define FPM_TONE_NOSIGNAL 2	/* below the minimum level           */
 
 /*

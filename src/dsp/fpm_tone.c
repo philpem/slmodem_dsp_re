@@ -273,11 +273,18 @@ FPM_TONE_delete(void *state)
  * alpha that `AGC_DEF_ALPHA`'s slow pair should have carried alongside its
  * beta of 1638 and does not.  Whoever wrote this got it right; see D6.
  *
- * The verdict is FPM_MTD's, and uses the same three values:
+ * The verdict, and its polarity, which is the reverse of the obvious reading:
  *
- *   total < state[+0x0a]                     -> 2, no signal at all
- *   out_of_band <= ratio * total / 32768     -> 1, the tone is present
- *   otherwise                                -> 0, signal, but not this tone
+ *   total < state[+0x0a]                 -> 2, no signal at all
+ *   tone_share <= ratio * total / 32768  -> 1, signal, but not this tone
+ *   otherwise                            -> 0, THE TONE IS PRESENT
+ *
+ * The reason is the biquad: { 1, -2cos(w), 1 } is a pair of zeros on the unit
+ * circle, i.e. a NOTCH at the tone frequency, and the poles just inside it at
+ * radius r only narrow the notch.  So `filtered` is the signal with the tone
+ * taken OUT, and `energy - filtered^2` is the tone's own contribution.  A
+ * large share means the tone dominates, which is why the large case returns
+ * zero.  Measured: 2100 Hz in gives 0, 2000 and 2200 give 1.
  */
 short
 FPM_TONE_detect(void *state, const short *samples, short count)
@@ -346,6 +353,11 @@ FPM_TONE_detect(void *state, const short *samples, short count)
 		}
 		in_band = ((int)filtered * filtered) >> 15;
 
+		/*
+		 * `filtered` has the tone notched OUT, so this difference is
+		 * the tone's own share of the energy -- not, as the name in
+		 * the state suggests, what is left over.
+		 */
 		excess = (short)(energy - in_band);
 
 		out_of_band = (short)((31130 * out_of_band + 1638 * excess) >> 15);
@@ -368,7 +380,7 @@ FPM_TONE_detect(void *state, const short *samples, short count)
 	if ((short)total < min_level)
 		return FPM_TONE_NOSIGNAL;
 	return (out_of_band <= ((ratio * (short)total) >> 15))
-		? FPM_TONE_PRESENT : FPM_TONE_ABSENT;
+		? FPM_TONE_OTHER : FPM_TONE_PRESENT;
 }
 
 /*
