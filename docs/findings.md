@@ -874,3 +874,64 @@ scaling, so it may well be unreachable in practice.
 **Reconstruction order that falls out:** `FPM_sqrt_dp` → `FPM_rms` →
 `FPM_div` → `FPM_AGC`. Each is small (143, 62, 150, 868 bytes) and the first
 three are exhaustively or near-exhaustively testable.
+
+## 22. `FPM_AGC` — structure (agc() reconstruction pending)
+
+Three of the four functions are trivial and decoded; the fourth is the work.
+
+```c
+FPM_AGC_Freeze(state)   ->  state[0x28] = 1     /* hold the current gain */
+FPM_AGC_Release(state)  ->  state[0x28] = 0
+FPM_AGC_init(state, cfg, reset)
+        state[0x1c] = 0
+        copy 24 bytes of cfg into state[0x00 .. 0x14]
+        if (reset) { state[0x18] = 1; state[0x20] = state[0x24] = state[0x26] = 0; }
+        state[0x28] = 0
+        state[0x20] = 0
+```
+
+### `FPM_AGC_agc(state, samples, count)` — `.text 0x0a6750`, 566 bytes
+
+It is a **block** AGC, not per-sample. The entry computes how to divide the
+input into measurement blocks:
+
+```
+blocksize = (unsigned short)state[0x0a]
+blocks    = count / blocksize
+tail      = count % blocksize
+if (tail < blocksize / 2)
+        tail += blocksize      /* fold a short tail into the last block   */
+```
+
+so a remainder shorter than half a block is absorbed rather than measured on
+its own — which stops a stray few samples producing a wild RMS and yanking the
+gain.
+
+The loop then calls `FPM_rms` per block and compares the result against two
+thresholds from the config, `state[0x02]` and `state[0x04]`, with the
+behaviour gated on `state[0x24]`. That is the classic
+low-threshold/high-threshold AGC shape: below the low mark increase gain,
+above the high mark decrease it, in between hold.
+
+**Config fields identified so far** (from `AGCb103_CFG`, 24 bytes copied at
+init):
+
+| offset | use |
+|---|---|
+| `+0x00` | compared against RMS (a target or reference) |
+| `+0x02` | low threshold |
+| `+0x04` | high threshold |
+| `+0x0a` | measurement block size, in samples |
+
+**Runtime state:**
+
+| offset | use |
+|---|---|
+| `+0x18` | set to 1 by `init` when reset |
+| `+0x20`, `+0x24`, `+0x26` | gain//hysteresis state, cleared on reset |
+| `+0x28` | freeze flag |
+
+**Still to decode:** the gain update itself — the ~450 bytes after the
+threshold comparison, including how `FPM_div` is used to form the gain and
+where the freeze flag short-circuits. That is the part worth getting right,
+since it determines the loop's time constants.
