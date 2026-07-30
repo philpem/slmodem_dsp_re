@@ -190,8 +190,45 @@ int ref_modem_send_to_tty(void *m, const void *buf, int n)
 int ref_modem_recv_from_tty(void *m, void *buf, int n)
 { (void)m; (void)buf; (void)n; unexpected("modem_recv_from_tty"); return 0; }
 
+/*
+ * Datapump registry.  Each side records into its own log; see harness.h.
+ */
+struct reg_log harness_reg_ours;
+struct reg_log harness_reg_ref;
+
+void
+harness_reg_reset(void)
+{
+	memset(&harness_reg_ours, 0, sizeof(harness_reg_ours));
+	memset(&harness_reg_ref, 0, sizeof(harness_reg_ref));
+}
+
+static int
+reg_add(struct reg_log *log, int id, void *ops)
+{
+	if (log->count < HARNESS_MAX_REG) {
+		log->id[log->count] = id;
+		log->ops[log->count] = ops;
+	}
+	log->count++;
+	return 0;
+}
+
+int
+modem_dp_register(int id, void *op)
+{
+	return reg_add(&harness_reg_ours, id, op);
+}
+
+void
+modem_dp_deregister(int id, void *op)
+{
+	(void)id; (void)op;
+	harness_reg_ours.deregistered++;
+}
+
 int ref_modem_dp_register(int id, void *op)
-{ (void)id; (void)op; return 0; }	/* registration is inert in unit tests */
+{ return reg_add(&harness_reg_ref, id, op); }
 
 void ref_modem_dp_deregister(int id, void *op)
-{ (void)id; (void)op; }
+{ (void)id; (void)op; harness_reg_ref.deregistered++; }

@@ -42,6 +42,29 @@ extern struct param_log harness_param_ours;
 extern struct param_log harness_param_ref;
 void harness_param_reset(void);
 
+/*
+ * Datapump registry.
+ *
+ * Every datapump module registers one or more DP_IDs against a
+ * struct dp_operations at init time.  Recording those calls lets a test
+ * assert which IDs a module claims and in what order -- the part of a
+ * datapump's contract that is pure bookkeeping and easy to get subtly wrong
+ * (a transposed ID would only show up as the wrong modulation being selected,
+ * far downstream).
+ */
+#define HARNESS_MAX_REG 32
+
+struct reg_log {
+	int count;
+	int id[HARNESS_MAX_REG];
+	void *ops[HARNESS_MAX_REG];
+	int deregistered;
+};
+
+extern struct reg_log harness_reg_ours;
+extern struct reg_log harness_reg_ref;
+void harness_reg_reset(void);
+
 extern int diff_checks;
 extern int diff_failures;
 extern int diff_max_report;

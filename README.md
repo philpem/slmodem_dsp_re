@@ -20,7 +20,7 @@ is structured, and the commands that prove each claim.
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `FP_math`, `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | — |
+| 2 | Bell 103 / V.21 — *first real connection* | registration done; modulation pending |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
