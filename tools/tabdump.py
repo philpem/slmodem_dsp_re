@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import re
 import struct
 import subprocess
 import sys
@@ -49,6 +50,33 @@ def section_bytes(obj, name):
         ["objcopy", "-O", "binary", "--only-section", name, obj, "/dev/stdout"],
         capture_output=True, check=True).stdout
     return out
+
+
+def relocations_in(obj, section, lo, hi):
+    """Relocation offsets within [lo, hi) of `section`.
+
+    Load-bearing.  A table that looks like plain numbers may contain embedded
+    pointers, and in a .o those read as the *addend* only -- the linker
+    supplies the rest.  FPM_TONE_CFG is exactly this: dumped as int16 its
+    +0x10 field reads -12224, which looks like a scalar and is in fact the low
+    half of a pointer to a waveform table.  Interpreting it as data sends the
+    reader down a blind alley.
+    """
+    out = subprocess.run(["readelf", "-rW", obj],
+                         capture_output=True, text=True).stdout
+    hits, cur = [], None
+    for line in out.splitlines():
+        m = re.search(r"Relocation section '(\S+)'", line)
+        if m:
+            cur = m.group(1)
+            continue
+        if cur != ".rel" + section:
+            continue
+        m = re.match(r"^([0-9a-f]{8})\s+\S+\s+(\S+)\s+\S*\s*(.*)$",
+                     line.strip())
+        if m and lo <= int(m.group(1), 16) < hi:
+            hits.append((int(m.group(1), 16), m.group(2), m.group(3).strip()))
+    return hits
 
 
 def find_symbol(obj, sym):
@@ -95,6 +123,18 @@ def main():
 
     vals = [struct.unpack_from(fmt, blob, off + i * width)[0]
             for i in range(count)]
+
+    # Warn loudly: an embedded pointer is not data, and reading it as such is
+    # a silent misinterpretation rather than an error.
+    relocs = relocations_in(args.obj, sec, off, end)
+    if relocs:
+        print("/*\n * WARNING: %d relocation(s) inside this range -- the values"
+              " below are\n * ADDENDS, not final values.  These offsets hold"
+              " pointers or\n * section-relative references, not data:\n *"
+              % len(relocs))
+        for r_off, r_type, r_sym in relocs:
+            print(" *   +0x%04x  %-14s %s" % (r_off - off, r_type, r_sym))
+        print(" */")
 
     print("/* %s[%d] - extracted from %s %s:0x%06x by tools/tabdump.py.\n"
           " * Reference bytes only: the maintainable form is a generator that\n"

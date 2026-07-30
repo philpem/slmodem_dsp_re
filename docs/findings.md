@@ -783,7 +783,7 @@ finding 20. `FPM_TONE_delete` must mirror that, or it double-frees.
 | `+0x02` | 27852 | output scale, Q15 |
 | `+0x04` | 450 | phase-reversal period, 8-sample units |
 | `+0x0c` | — | resonator damping input |
-| `+0x10` | — | pointer to the source waveform |
+| `+0x10` | *(relocated)* | **pointer** to the source waveform |
 | `+0x14` | — | buffer size *and* reference length; zero suppresses allocation |
 | `+0x20` | — | extra length added to the second buffer |
 
@@ -798,6 +798,28 @@ Two errors in the first version of this pseudocode, corrected above and
 recorded because both would have produced a plausible but wrong module: the
 fill loop is bounded by `state[0x14]`, not `state[0x0e]`, and `state[0x10]` is
 a pointer to a source waveform rather than a scalar.
+
+**How the second error happened, and the tool fix it prompted.** Dumping
+`FPM_TONE_CFG` as `int16` showed `-12224` at `+0x10`, which reads perfectly
+well as a scalar. It is not: there is an `R_386_32` relocation there, so the
+stored value is only the *addend* and the linker supplies the rest. A probe
+against the reference confirmed the field holds a valid pointer
+(`0x810c300`), not `0xd040`.
+
+In a relocatable object any table may contain embedded pointers, and dumping
+it as scalars hides them silently — the numbers look plausible and the
+misreading only surfaces much later. `tools/tabdump.py` now checks the dumped
+range against the relocation table and prints a warning naming each offset and
+target:
+
+```
+ * WARNING: 1 relocation(s) inside this range -- the values below are
+ * ADDENDS, not final values. ...
+ *   +0x0010  R_386_32       .rodata
+```
+
+Worth applying retrospectively: any table already extracted should be
+re-checked, though the coefficient banks are pure data and unaffected.
 
 Implementation is now mechanical.
 
@@ -1001,12 +1023,27 @@ above the high mark decrease it, in between hold.
 **Config fields identified so far** (from `AGCb103_CFG`, 24 bytes copied at
 init):
 
-| offset | use |
-|---|---|
-| `+0x00` | compared against RMS (a target or reference) |
-| `+0x02` | low threshold |
-| `+0x04` | high threshold |
-| `+0x0a` | measurement block size, in samples |
+| offset | value in `AGCb103_CFG` | use |
+|---|--:|---|
+| `+0x00` | 16384 | compared against RMS (a target or reference), 1.0 in Q14 |
+| `+0x02` | 10 | low threshold |
+| `+0x04` | 80 | high threshold |
+| `+0x06` | 1000 | |
+| `+0x08` | 1 | |
+| `+0x0a` | 36 | measurement block size, in samples |
+| `+0x0c` | *(relocated)* | **pointer** into `.data` |
+| `+0x10` | *(relocated)* | **pointer** into `.data` |
+| `+0x14` | 158 | |
+
+The two pointers were found by the relocation audit prompted by
+`FPM_TONE_CFG` (see the note under finding 18). Dumped as scalars they read as
+30736 and 30732, which look like plausible coefficients; they are addends.
+`FPM_AGC_init` copies 24 bytes, so both are carried into the state and the
+gain update presumably indexes through them.
+
+Note the block size of **36** matches `FPM_rms`'s 1/36 scaling exactly — the
+accumulator headroom was sized for precisely this block length, which is a
+good cross-check that both readings are right.
 
 **Runtime state:**
 
