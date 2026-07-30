@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/sysdep.h"
 
 /* ---------------------------------------------------------------- shared */
 
@@ -100,7 +101,7 @@ harness_alloc_reset(void)
 }
 
 void *
-sysdep_malloc(unsigned size)
+sysdep_malloc(unsigned int size)
 {
 	void *p = malloc(size);
 
@@ -114,8 +115,10 @@ sysdep_malloc(unsigned size)
 }
 
 void
-sysdep_free(void *ptr)
+sysdep_free(void *mem)
 {
+	void *ptr = mem;
+
 	if (ptr == 0) {
 		harness_alloc.free_null++;
 		return;
@@ -136,13 +139,13 @@ sysdep_free(void *ptr)
 }
 
 void *
-sysdep_memcpy(void *dst, const void *src, unsigned n)
+sysdep_memcpy(void *dst, const void *src, size_t n)
 {
 	return memcpy(dst, src, n);
 }
 
 void *
-sysdep_memset(void *dst, int c, unsigned n)
+sysdep_memset(void *dst, int c, size_t n)
 {
 	return memset(dst, c, n);
 }
@@ -260,17 +263,94 @@ ref_modem_get_param_impl(void *m, unsigned param)
 	return param_get(&harness_param_ref, m, param);
 }
 
+/*
+ * The bit pipe.
+ *
+ * modem_get_bits hands out bits from one stream and modem_put_bits consumes
+ * them, so sharing an implementation between the two sides would have each
+ * consuming the other's data and the comparison would be meaningless.  Each
+ * side therefore gets its OWN cursor over the SAME scripted pattern, and its
+ * own sink -- identical input, independently observed output.
+ *
+ * modem_set_param is logged rather than acted on: what a test wants to know
+ * is that the datapump reported 300 bit/s each way at the right moment.
+ */
+struct modem_shim harness_modem_ours;
+struct modem_shim harness_modem_ref;
+
+static const unsigned char *shim_pattern;
+static int shim_pattern_len;
+
+void
+harness_modem_reset(const unsigned char *pattern, int len)
+{
+	shim_pattern = pattern;
+	shim_pattern_len = len;
+	memset(&harness_modem_ours, 0, sizeof(harness_modem_ours));
+	memset(&harness_modem_ref, 0, sizeof(harness_modem_ref));
+}
+
+static int
+shim_get_bits(struct modem_shim *s, unsigned char *buf, int n)
+{
+	int i;
+
+	if (shim_pattern == 0 || shim_pattern_len == 0)
+		return 0;
+	for (i = 0; i < n; i++) {
+		buf[i] = shim_pattern[s->tx_pos % shim_pattern_len];
+		s->tx_pos++;
+	}
+	s->gets++;
+	return n;
+}
+
+static int
+shim_put_bits(struct modem_shim *s, const unsigned char *buf, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		if (s->rx_len < HARNESS_SHIM_BITS)
+			s->rx[s->rx_len++] = buf[i];
+		else
+			s->rx_overflow++;
+	}
+	s->puts++;
+	return n;
+}
+
+static long
+shim_set_param(struct modem_shim *s, unsigned name, int val)
+{
+	if (s->nparams < HARNESS_SHIM_PARAMS) {
+		s->param_name[s->nparams] = name;
+		s->param_value[s->nparams] = val;
+		s->nparams++;
+	}
+	return 0;
+}
+
+int modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
+{ (void)m; (void)nbits; return shim_get_bits(&harness_modem_ours, buf, n); }
+
+int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n)
+{ (void)m; (void)nbits; return shim_put_bits(&harness_modem_ours, buf, n); }
+
+int modem_set_param(void *m, unsigned name, int val)
+{ (void)m; return (int)shim_set_param(&harness_modem_ours, name, val); }
+
 int ref_modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
-{ (void)m; (void)nbits; (void)buf; (void)n; unexpected("modem_get_bits"); return 0; }
+{ (void)m; (void)nbits; return shim_get_bits(&harness_modem_ref, buf, n); }
 
 int ref_modem_put_bits(void *m, int nbits, unsigned char *buf, int n)
-{ (void)m; (void)nbits; (void)buf; (void)n; unexpected("modem_put_bits"); return 0; }
+{ (void)m; (void)nbits; return shim_put_bits(&harness_modem_ref, buf, n); }
 
 long ref_modem_get_param(void *m, unsigned param)
 { return ref_modem_get_param_impl(m, param); }
 
 long ref_modem_set_param(void *m, unsigned name, int val)
-{ (void)m; (void)name; (void)val; unexpected("modem_set_param"); return 0; }
+{ (void)m; return shim_set_param(&harness_modem_ref, name, val); }
 
 long ref_modem_get_sreg(void *m, unsigned sreg)
 { (void)m; (void)sreg; unexpected("modem_get_sreg"); return 0; }

@@ -13,37 +13,13 @@
 
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/fixedrc.h"
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
-extern void *sysdep_memcpy(void *dst, const void *src, unsigned n);
-extern void *sysdep_memset(void *dst, int c, unsigned n);
+#include "dsplib/sysdep.h"
 
 /*
  * One direction's ring.  Two host fragments deep, so the datapump can be
  * filling one half while the caller drains the other; `dp_pos` and the
  * caller-side position therefore just alternate between 0 and host_frag.
  */
-struct dpw_ring {
-	int total;			/* samples currently held        */
-	int wr;				/* caller write position (input) */
-	int rd;				/* caller read position (output) */
-	int dp_pos;			/* the datapump's end            */
-	short data[DPW_RING_SAMPLES];
-};
-
-struct dp_wrapper {
-	void *dp_data;			/* +0x000 datapump's own state   */
-	dp_process_fn process;		/* +0x004                        */
-	struct dp *dp;			/* +0x008 set by the caller      */
-	struct rc *rc_to_dp;		/* +0x00c host rate -> dp rate   */
-	struct rc *rc_to_host;		/* +0x010 dp rate -> host rate   */
-	short scratch_in[DPW_MAX_FRAG];	 /* +0x014 resampled input       */
-	short scratch_out[DPW_MAX_FRAG]; /* +0x194 datapump output       */
-	int host_frag;			/* +0x314 dp_frag scaled to host */
-	struct dpw_ring out;		/* +0x318                        */
-	struct dpw_ring in;		/* +0x628                        */
-};
 
 /*
  * Rate pairs the original supports, and the RcFixed mode for each.

@@ -18,10 +18,7 @@
 #include "dsplib/b103fp.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_tone.h"
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
-extern void *sysdep_memset(void *dst, int c, unsigned n);
+#include "dsplib/sysdep.h"
 
 /*
  * Modulate, then resample.

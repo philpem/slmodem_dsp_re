@@ -117,13 +117,13 @@ static void
 compare_block(const char *what, const unsigned char *ours,
 	      const unsigned char *ref, int size, int (*is_ptr)(int), int tag)
 {
-	char buf[96];
+	char buf[160];
 	int i;
 
 	for (i = 0; i < size; i += 2) {
 		if (is_ptr(i) || is_ptr(i - 2))
 			continue;
-		snprintf(buf, sizeof(buf), "%s word 0x%02x (%%ld)", what, i);
+		snprintf(buf, sizeof(buf), "%.90s word 0x%02x (%%ld)", what, i);
 		diff_eq_int(buf, *(const short *)(ours + i),
 			    *(const short *)(ref + i), tag);
 	}
@@ -133,7 +133,7 @@ static void
 compare_shorts(const char *what, const short *ours, const short *ref, int n,
 	       int tag)
 {
-	char buf[96];
+	char buf[160];
 	int i;
 
 	if (ours == 0 || ref == 0) {
@@ -168,7 +168,7 @@ fn_id(const void *p)
 static void
 compare_tree(const char *what, struct b103fp *a, struct b103fp *b, int tag)
 {
-	char buf[96];
+	char buf[160];
 
 	compare_block(what, (unsigned char *)a, (unsigned char *)b,
 		      (int)sizeof(*a), fp_is_pointer, tag);

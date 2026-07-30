@@ -26,7 +26,33 @@
 #define DPW_RING_SAMPLES (DPW_RING_BYTES / (int)sizeof(short))	/* 384 */
 #define DPW_MAX_FRAG     (DPW_RING_SAMPLES / 2)			/* 192 */
 
-struct dp_wrapper;
+/*
+ * The wrapper's layout is public because the datapumps write to it: every
+ * `*_create` stores itself in `dp` immediately after building one.  It is
+ * declared here rather than kept private for that reason, not for
+ * convenience.
+ */
+struct dpw_ring {
+	int total;			/* samples currently held        */
+	int wr;				/* caller write position (input) */
+	int rd;				/* caller read position (output) */
+	int dp_pos;			/* the datapump's end            */
+	short data[DPW_RING_SAMPLES];
+};
+
+struct dp_wrapper {
+	void *dp_data;			/* +0x000 datapump's own state   */
+	dp_process_fn process;		/* +0x004                        */
+	struct dp *dp;			/* +0x008 set by the caller      */
+	struct rc *rc_to_dp;		/* +0x00c host rate -> dp rate   */
+	struct rc *rc_to_host;		/* +0x010 dp rate -> host rate   */
+	short scratch_in[DPW_MAX_FRAG];	 /* +0x014 resampled input       */
+	short scratch_out[DPW_MAX_FRAG]; /* +0x194 datapump output       */
+	int host_frag;			/* +0x314 dp_frag scaled to host */
+	struct dpw_ring out;		/* +0x318                        */
+	struct dpw_ring in;		/* +0x628                        */
+};
+
 
 /*
  * `dp_frag` is the fragment size the datapump wants, in samples at

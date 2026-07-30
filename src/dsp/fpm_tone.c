@@ -20,12 +20,9 @@
 #include "dsplib/fpm_tone.h"
 #include "dsplib/fpm_phasor.h"
 #include "dsplib/fpm_iir.h"
+#include "dsplib/sysdep.h"
 
 #define NELEMS(a) (sizeof(a) / sizeof((a)[0]))
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
-extern void *sysdep_memcpy(void *dst, const void *src, unsigned n);
 
 /*
  * Hz to phase increment.  A cycle is FPM_PHASOR_CYCLE (0x8000) units, so the
@@ -99,7 +96,6 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 
 /* Pointer-sized field access, for the slots that hold buffers. */
 /* The built-in configuration: the ITU-T V.25 answer tone. */
-
 
 struct fpm_tone *
 FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)

@@ -10,10 +10,7 @@
 
 #include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_iir.h"
-
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
+#include "dsplib/sysdep.h"
 
 void
 FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg, int fresh)

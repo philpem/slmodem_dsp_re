@@ -12,6 +12,7 @@
 
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_iir.h"
+#include "dsplib/sysdep.h"
 
 /* The wideband reference filter, shared with the rest of the library. */
 extern const short COEF_DC[];
@@ -22,9 +23,6 @@ extern const short COEF_DC[];
  */
 #define FPM_MTD_ALPHA     0x334
 #define FPM_MTD_ONE_ALPHA 0x7ccc
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
 
 struct fpm_mtd *
 FPM_MTD_create(struct fpm_mtd *state, const struct fpm_mtd_cfg *cfg)

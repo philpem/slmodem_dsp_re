@@ -81,6 +81,32 @@ struct alloc_log {
 	int overflow;	/* live set full; counts are unreliable    */
 };
 
+/*
+ * The modem core's bit pipe, one instance per side.
+ *
+ * `modem_get_bits` hands out data and `modem_put_bits` consumes it, so a
+ * shared implementation would have the two sides eating each other's stream.
+ * Each gets its own cursor over the same scripted pattern and its own sink.
+ */
+#define HARNESS_SHIM_BITS   8192
+#define HARNESS_SHIM_PARAMS 32
+
+struct modem_shim {
+	int tx_pos;		/* cursor into the scripted pattern   */
+	int gets;		/* modem_get_bits calls               */
+	int puts;		/* modem_put_bits calls               */
+	unsigned char rx[HARNESS_SHIM_BITS];
+	int rx_len;
+	int rx_overflow;
+	unsigned param_name[HARNESS_SHIM_PARAMS];
+	int param_value[HARNESS_SHIM_PARAMS];
+	int nparams;
+};
+
+extern struct modem_shim harness_modem_ours;
+extern struct modem_shim harness_modem_ref;
+void harness_modem_reset(const unsigned char *pattern, int len);
+
 extern struct alloc_log harness_alloc;
 void harness_alloc_reset(void);
 

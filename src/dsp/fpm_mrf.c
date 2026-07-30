@@ -12,9 +12,7 @@
  */
 
 #include "dsplib/fpm_mrf.h"
-
-extern void *sysdep_malloc(unsigned size);
-extern void sysdep_free(void *ptr);
+#include "dsplib/sysdep.h"
 
 void
 FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
