@@ -14,20 +14,19 @@
 
 /* 12 bytes, copied wholesale by create. */
 struct fpm_mtd_cfg {
-	const short *coeff;	/* +0x00 one pair per tone */
-	short tones;		/* +0x04 */
-	short f06;		/* +0x06 */
-	short f08;		/* +0x08 */
-	short f0a;		/* +0x0a */
+	const short *coeff;	/* +0x00 biquad sections, one per tone   */
+	short tones;		/* +0x04 number of sections              */
+	short ratio;		/* +0x06 detection threshold, Q15        */
+	short min_level;	/* +0x08 below this, report "no signal"  */
+	short f0a;		/* +0x0a                                 */
 };
 
 struct fpm_mtd {
-	struct fpm_mtd_cfg cfg;	/* +0x00 .. +0x0a */
-	short *acc;		/* +0x0c two accumulators per tone */
-	short f10;		/* +0x10 */
-	short f12;		/* +0x12 */
-	short f14;		/* +0x14 */
-	short f16;		/* +0x16 */
+	struct fpm_mtd_cfg cfg;	/* +0x00 .. +0x0a                        */
+	short *acc;		/* +0x0c two words per tone section      */
+	short dc_state[2];	/* +0x10 the DC filter's biquad state    */
+	short out_of_band;	/* +0x14 wideband minus tone energy      */
+	short wideband;		/* +0x16 total energy                    */
 };
 
 /*
@@ -37,6 +36,18 @@ struct fpm_mtd {
 struct fpm_mtd *FPM_MTD_create(struct fpm_mtd *state,
 			       const struct fpm_mtd_cfg *cfg);
 void FPM_MTD_delete(struct fpm_mtd *state);
+
+/* Detection verdicts. */
+#define FPM_MTD_ABSENT   0	/* signal present, but not this tone     */
+#define FPM_MTD_PRESENT  1	/* tone detected                         */
+#define FPM_MTD_NOSIGNAL 2	/* level below cfg.min_level             */
+
+/*
+ * Run `count` samples through the detector and report the verdict.  Energy
+ * estimates persist in the state, so the result reflects a running average
+ * rather than this block alone.
+ */
+short FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count);
 
 extern const struct fpm_mtd_cfg FPM_MTD_CFG_data;
 

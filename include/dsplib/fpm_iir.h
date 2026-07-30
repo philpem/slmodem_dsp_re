@@ -20,4 +20,7 @@
  */
 short FPM_iir_filt(short x, const short *coeff, short *state, short sections);
 
+/* Wideband reference filter: one section, used for total-energy estimates. */
+extern const short COEF_DC[FPM_IIR_COEFF_PER_SECTION];
+
 #endif /* DSPLIB_FPM_IIR_H */
