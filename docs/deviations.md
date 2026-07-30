@@ -165,11 +165,28 @@ nothing rules these denominators out.
 a zero reciprocal**, so this cannot quietly regress into a tidied version that
 returns 16384.
 
-**This one is worth raising with the user.** Unlike D1, fixing it would change
-behaviour for real inputs — plausibly for the better, since a zero reciprocal
-is almost certainly not what the DSP intends. But it would break bit-exactness
-with the blob, which is currently the overriding requirement. The decision is
-deliberately deferred rather than taken quietly.
+**Decision: reproduce, do not fix.** Raised with the user and delegated back.
+The reasoning:
+
+- The stated goal is a drop-in replacement that behaves as the blob does. A
+  reconstruction that is *better* than the original is a different artefact,
+  and mixing the two goals makes it impossible to tell a reconstruction error
+  from an intentional improvement.
+- Every test in this project is differential against the blob. Fixing D4 means
+  those 255 denominators can no longer be tested at all — we would be asserting
+  a value with nothing to check it against, in the one module where we have
+  proof the original is wrong.
+- The fix is one table entry and is fully documented here. It costs nothing to
+  apply later, once there is an independent reference (tier-3 interop) that can
+  actually validate the corrected behaviour.
+
+So the correct sequence is: stay faithful now, get SpanDSP interop working,
+*then* revisit — at which point the improvement can be measured rather than
+assumed. Filed against task 5.
+
+**If modem behaviour is ever traced to a division collapsing to zero**, this is
+the first place to look: `FPM_div` sits under both `FPM_AGC` and the V.22
+demodulator.
 
 **Table derivation**, exact for all 128 entries:
 `table[i] = trunc(2^30 / ((i + 0x80) * 0x100))` — truncated, like the sine
