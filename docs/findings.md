@@ -1098,9 +1098,51 @@ the same trick reversed, and `FPM_MRF` a genuine circular buffer. Three
 different history strategies in one library, each chosen for its access
 pattern.
 
-**Not yet decoded:** the phase accounting and the multiply-accumulate itself —
-how `+0x12`/`+0x14` sequence the polyphase branches against the decimation
-factor, and the inner product's scaling. That is the substance of the function
-and it needs a careful pass; a resampler that is subtly wrong passes bulk
-tests and fails only at fragment boundaries, which is the failure mode the
-`RcFixed` output-limit bug already demonstrated once.
+### The algorithm, fully decoded
+
+```
+L = state->branches      (cfg[0x00])   /* interpolation factor  */
+M = state->decimate      (cfg[0x02])   /* decimation factor     */
+phase = state[0x12]      widx = state[0x14]      need = state[0x10]
+
+while (count >= need) {
+        /* consume `need` inputs into the circular history */
+        repeat need times:
+                widx = (widx + 1 < hlen) ? widx + 1 : 0
+                history[widx] = *in++
+        count -= need
+
+        /* one output: inner product over the whole circular history,
+           newest first, with coefficients strided by L from `phase`   */
+        acc = 0
+        c = &coeff[phase]
+        for (k = widx;      k >= 0;    k--)  { acc += history[k] * *c; c += L; }
+        for (k = hlen - 1;  k > widx;  k--)  { acc += history[k] * *c; c += L; }
+        *out++ = acc >> 15
+
+        /* advance the phase; each wrap past L costs one more input */
+        phase += M
+        need = 0
+        while (phase >= L) { phase -= L; need++; }
+}
+state[0x12] = phase;  state[0x14] = widx;  state[0x10] = need
+```
+
+**The coefficient stride is `L` shorts**, set up once as `2 * branches` bytes.
+So the bank is stored *phase-interleaved* — `coeff[k * L + p]` — the opposite
+of `FixedRC`, which is phase-major (`coeff[p * N + k]`). Two polyphase
+resamplers in one library with opposite storage conventions; neither layout can
+be assumed from the other.
+
+**Output rate is `L / M`.** Each output advances the phase by `M` and consumes
+one input per wrap past `L`. For Bell 103's transmit filter, L=10 and M=9 gives
+10 outputs per 9 inputs — 7200 → 8000 exactly. For receive, L=3 and M=10 gives
+3 per 10 — 8000 → 2400.
+
+**Scaling is Q15** (`sar $0xf`), unlike `FixedRC`'s Q14. Another place the two
+resamplers differ.
+
+**State that persists across calls:** `phase`, the history write index, and
+`need` — the number of inputs still owed before the next output. That last one
+is why fragment boundaries matter: a reconstruction that recomputed `need` from
+scratch each call would drift, and only under uneven chunking.
