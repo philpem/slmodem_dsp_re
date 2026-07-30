@@ -150,7 +150,7 @@ build(struct b103fp **a, struct b103fp **b, int mode, int substate,
 
 	(*a)->hdx->mode = (*b)->hdx->mode = (short)mode;
 	(*a)->hdx->substate = (*b)->hdx->substate = (short)substate;
-	(*a)->v21 = (*b)->v21 = v21;
+	(*a)->cfg.v21 = (*b)->cfg.v21 = v21;
 	(*a)->status = (*b)->status = 0;
 	(*a)->flags = (*b)->flags = 0;
 	return 1;

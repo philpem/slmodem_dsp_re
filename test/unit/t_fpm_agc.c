@@ -34,10 +34,10 @@ extern void ref_FPM_AGC_Freeze(void *agc);
 extern void ref_FPM_AGC_Release(void *agc);
 extern short ref_FPM_rms(const short *samples, unsigned short count);
 
-extern const struct fpm_agc_cfg AGCb103_CFG;
+extern const struct fpm_agc_cfg AGCb103_CFG_data;
 
 /*
- * The original's AGCb103_CFG is a global, but the coefficient arrays it points
+ * The original's AGCb103_CFG_data is a global, but the coefficient arrays it points
  * at are TU-local and so not linkable.  Both sides are pointed at OUR copies,
  * which is what makes the comparison meaningful: any difference is in the
  * code, not in the data.  b103_agc_cfg.c documents where the values came from.
@@ -208,7 +208,7 @@ int
 main(void)
 {
 	struct fpm_agc a, b;
-	struct fpm_agc_cfg cfg = AGCb103_CFG;
+	struct fpm_agc_cfg cfg = AGCb103_CFG_data;
 	int rc = 0;
 	int n;
 

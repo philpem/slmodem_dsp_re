@@ -36,6 +36,8 @@
 #include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_tone.h"
 
 struct b103fp;
 
@@ -152,7 +154,7 @@ struct b103_dsp {
 	struct fpm_mrf rx_mrf;	/* +0x80 8000 -> 2400, the receive side    */
 	struct fpm_fsd fsd;	/* +0x9c the FSK demodulator               */
 	struct fpm_fsm fsm;	/* +0xd4 the FSK modulator                 */
-	unsigned char re4[4];	/* +0xe4 .. +0xe7                          */
+	struct fpm_mtd *mtd;	/* +0xe4 the multi-tone detector           */
 	short *scratch;		/* +0xe8 324 bytes, shared by both paths   */
 	short *rx_scratch;	/* +0xec 324 bytes                         */
 	short *bpf_hist;	/* +0xf0 84 bytes: the channel filter's
@@ -186,22 +188,28 @@ struct b103_hdx {
 	short substate;		/* +0x14 1 = advance on detection          */
 	short pad16;
 	int r18;		/* +0x18                                   */
-	void *tone_detect;	/* +0x1c FPM_TONE object: the answer tone  */
-	void *tone_lo;		/* +0x20 FPM_TONE object: the receive local
-				 *       oscillator -- see DemodDataB103   */
+	struct fpm_tone *tone_detect;	/* +0x1c the tone this station is
+					 *       waiting to hear          */
+	struct fpm_tone *tone_lo;	/* +0x20 the receive local oscillator;
+					 *       see DemodDataB103        */
 };
 
-/* The object itself, 88 bytes. */
+/*
+ * The object itself, 88 bytes.
+ *
+ * Its first 28 bytes ARE the configuration -- B103FP_create copies the whole
+ * struct in -- so it is embedded rather than duplicated field by field.
+ */
 struct b103fp {
-	int r00;		/* +0x00                                    */
-	int v21;		/* +0x04 copied from cfg.v21; selects the
-				 *       V.21 tone plan, not a direction   */
-	unsigned char r08[0x14];/* +0x08 .. +0x1b config and timing         */
+	struct b103_cfg cfg;	/* +0x00 .. +0x1b                           */
 	unsigned char status;	/* +0x1c reported upward; 5 = timed out
 				 *       waiting, 6 = carrier lost          */
 	unsigned char flags;	/* +0x1d see B103_FLAG_* below              */
 	unsigned char r1e[2];	/* +0x1e .. +0x1f                           */
-	unsigned char r20[0x30];/* +0x20 .. +0x4f                           */
+	short *trace;		/* +0x20 <- dsp->fsd.trace, for the caller  */
+	unsigned char r24[4];	/* +0x24 .. +0x27                           */
+	short *fsd_count;	/* +0x28 <- &dsp->fsd.last_count            */
+	unsigned char r2c[0x24];/* +0x2c .. +0x4f                           */
 	struct b103_hdx *hdx;	/* +0x50                                    */
 	struct b103_dsp *dsp;	/* +0x54                                    */
 };
@@ -310,6 +318,38 @@ extern void (*const B103NextState[3])(struct b103fp *fp);
  */
 int B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 		 short *rx_in, int *rx_bits, short *n_tx, short *n_rx);
+
+/*
+ * Build a datapump.  NULL `state` allocates one; NULL `cfg` uses
+ * B103_CFG_data, which is loopback and will not complete a call.
+ *
+ * A caller supplying its own `state` must ZERO it first: the sub-object
+ * pointers at +0x50 and +0x54 are tested for NULL to decide whether to
+ * allocate, so uninitialised memory is read as a tree that already exists.
+ */
+struct b103fp *B103FP_create(struct b103fp *state, const struct b103_cfg *cfg);
+
+/*
+ * Tear one down.  Frees the object itself unconditionally, even when the
+ * caller supplied it -- see D8 in docs/deviations.md before passing anything
+ * this function did not allocate.
+ */
+void B103FP_delete(struct b103fp *fp);
+
+/*
+ * The coefficient tables, in src/pump/b103/b103_tables.c.  Reference bytes;
+ * regenerating them from the filters' design parameters is task 8.
+ */
+extern const short B103_MRF_FILT_TX[270];	/* 10:9, 7200 -> 8000       */
+extern const short B103_MRF_FILT_RX[90];	/* 3:10, 8000 -> 2400       */
+extern const short B103_BPF_CALLER[40];		/* originate channel filter */
+extern const short B103_BPF_ANSWER[50];		/* answer channel filter    */
+extern const short B103_CHAN_INTRP[15];		/* demodulator input FIR    */
+extern const short B103_IIR_LPF[15];		/* 3 biquads: the lowpass   */
+extern const short MTDb103_COEF[10];		/* 2 biquads: the detector  */
+
+/* Bell 103's gain-control configuration, in b103_agc_cfg.c. */
+extern const struct fpm_agc_cfg AGCb103_CFG_data;
 
 void B103LocLoopNextState(struct b103fp *fp);
 void B103OriginateNextState(struct b103fp *fp);

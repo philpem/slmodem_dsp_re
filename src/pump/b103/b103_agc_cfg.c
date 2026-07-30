@@ -42,7 +42,7 @@
 static const short AGC_DEF_ALPHA[2] = { 16384, 32604 };
 static const short AGC_DEF_BETA[2] = { 16384, 1638 };
 
-const struct fpm_agc_cfg AGCb103_CFG = {
+const struct fpm_agc_cfg AGCb103_CFG_data = {
 	16384,		/* +0x00 ref_level: output settles at 8192      */
 	10,		/* +0x02 acquire_level                          */
 	80,		/* +0x04 squelch_level                          */
