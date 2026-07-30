@@ -678,7 +678,40 @@ A second loop then fills two buffers, `state[0x2c]` and `state[0x30]`, of
 correlation, but it is **not yet confirmed** — the source buffer `state[0x10]`
 has not been traced to where it is filled.
 
-The object extends to at least `+0xf2`, so a good deal of state remains
-unmapped. Reconstructing `fpm_tone.c` means finishing `FPM_TONE_create`'s
-remaining ~500 bytes first; the generator half (`generate`, `set_freq`,
-`set_scale`, and the reversal logic) is fully understood already.
+### A second, damped resonator
+
+`FPM_TONE_create`'s tail (`.text 0x0aab90`) sets up more:
+
+```
+state[0x52 .. 0xf0] = 0                  /* 80-entry working array        */
+state[0xfc] = &state[0x36]               /* pointer to the first section  */
+state[0x100 .. 0x106] = 0
+```
+
+then calls `FPM_phasor` a *second* time with phase 0 — so `cos = 1.0` — and
+writes a second coefficient block through the pointer at `state[0xf4]`:
+
+```
+blk[0] = 0x4000                          /*  1.0 in Q14                   */
+blk[1] = 0x4000
+blk[2] = -(2 * cos)                       /* -2 r cos(w), with cos = 1.0   */
+blk[3] = 0x3afb                           /*  0.9216                       */
+blk[4] = (cos * -31457) >> 14             /* -1.92                         */
+```
+
+Those constants identify it: 0.9216 = 0.96² and −1.92 = −2 × 0.96, so this is
+a **damped** resonator with pole radius **r = 0.96** rather than the
+undamped Goertzel of the first section. Tuned at ω = 0 as initialised, which
+makes it an energy or envelope follower; a caller retunes it via
+`FPM_TONE_set_freq`.
+
+So one `FPM_TONE` object carries an oscillator, an exact-frequency Goertzel,
+and a leaky resonator — which is why a single config serves generation,
+detection and the phase-reversal search.
+
+The object reaches at least `+0x106`, and the buffers behind `state[0x2c]`,
+`state[0x30]`, `state[0xf4]` and `state[0xf8]` are allocated elsewhere — the
+allocation is not in `FPM_TONE_create`, so the caller supplies them.
+Reconstructing `fpm_tone.c` needs those owners identified first; the generator
+half (`generate`, `set_freq`, `set_scale`, and the reversal logic) is fully
+understood already.
