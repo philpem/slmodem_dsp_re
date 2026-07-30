@@ -1056,3 +1056,51 @@ Its coefficient banks (`B103_MRF_FILT_TX`, 270 × int16; `B103_MRF_FILT_RX`,
 90 × int16) should be run through `tools/rcfilter.py`'s analysis once the
 storage order is established — the design rule recovered for `FixedRC`
 (cutoff ≈ 0.94 of the binding Nyquist) is worth checking against these.
+
+## 25. `FPM_MRF_filter` — partial decode
+
+`.text 0x0a8ed0`, 533 bytes. The polyphase resampling core. Signature, from
+the stack slots read:
+
+```c
+FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
+```
+
+with `state` at `0x3c(%esp)`, `in` at `0x40`, `out` at `0x44` and `count` at
+`0x48` after the prologue.
+
+**State fields it reads**, beyond the config copied by `init`:
+
+| offset | role |
+|---|---|
+| `+0x10` | compared against `count` to decide whether a full pass runs |
+| `+0x12` | running index, saved back across calls |
+| `+0x14` | limit paired with `+0x12` |
+| `+0x16` | history length (`taps / branches`) |
+| `+0x18` | history buffer |
+
+**The history is circular, incremented branchlessly:**
+
+```
+next = idx + 1
+in_range = (next < state[0x16])          /* setl                        */
+idx = next & -(in_range)                 /* next if in range, else 0    */
+history[idx] = *in++
+```
+
+`neg` of a `setl` result to form a 0/-1 mask, then `and` — no branch. Worth
+recognising rather than puzzling over: GCC 3.4.2 emits this shape wherever a
+wrap-to-zero appears, and it will recur in the other `fpm_*` modules.
+
+Note this differs from both resamplers reconstructed so far: `FixedRC` uses a
+flat window compacted periodically, `GenericIIR` a downward-growing one with
+the same trick reversed, and `FPM_MRF` a genuine circular buffer. Three
+different history strategies in one library, each chosen for its access
+pattern.
+
+**Not yet decoded:** the phase accounting and the multiply-accumulate itself —
+how `+0x12`/`+0x14` sequence the polyphase branches against the decimation
+factor, and the inner product's scaling. That is the substance of the function
+and it needs a careful pass; a resampler that is subtly wrong passes bulk
+tests and fails only at fragment boundaries, which is the failure mode the
+`RcFixed` output-limit bug already demonstrated once.
