@@ -540,3 +540,62 @@ the conversion and everything is native" is too simple for Bell 103. Moving the
 host to 8000 removes the outer conversion, but the inner 8000 → 7200 stage
 remains, because 7200 is what makes 300 baud come out as an integer. Recorded
 as R-8 in `docs/rate_assumptions.md`.
+
+## 18. `fpm_tone.c` and `FPM_phasor` — structure (reconstruction pending)
+
+The tone generator every modulation depends on (finding 16). Decoded far
+enough to record the shapes; not yet implemented.
+
+### `FPM_phasor` — quarter-wave table lookup with interpolation
+
+`.text 0x0a9300`, 211 bytes. Operates on a 8-byte phasor:
+
+```c
+struct fpm_phasor {
+	unsigned short phase;	/* +0x00 accumulator            */
+	short cos;		/* +0x02 output                 */
+	short sin;		/* +0x04 output                 */
+	unsigned short inc;	/* +0x06 phase increment        */
+};
+```
+
+The lookup splits the 16-bit phase into a table index and a 5-bit fraction:
+
+```
+idx   = phase >> 5
+frac  = phase - (idx << 5)          /* 0..31                      */
+oct   = idx >> 8                    /* octant                     */
+if (oct & 1) { frac = 32 - frac; idx = ~idx; }   /* mirror        */
+idx  &= 0xff
+v     = cos_table[idx] + ((cos_table[idx+1] - cos_table[idx]) * frac >> 5)
+out   = (v * cos_sign[oct]) >> 15
+```
+
+So the tables (`FPM_cos_table`, `FPM_sin_table`, both 257 × u16 at `.rodata
+0xcde0` and `0xcbc0`) hold one octant, mirrored and sign-flipped via
+`FPM_cos_sign` — the classic quarter-wave trick. The 257th entry exists so the
+interpolation can read `idx+1` without a bounds check.
+
+### `FPM_TONE_*` — the accessors are trivial, the state is not
+
+```c
+FPM_TONE_set_freq(state, hz)  -> state[0x26] = (hz * 0x8312 + 0x1000) >> 13
+FPM_TONE_set_scale(state, s)  -> state[0x02] = s
+```
+
+`state[0x26]` is the phase increment and `state[0x02]` the output scale, both
+confirmed by `FPM_TONE_generate`, which copies phase (`state[0x24]`) and
+increment into a local phasor, calls `FPM_phasor` per sample, and scales:
+
+```
+out[i] = (state[0x02] * phasor.sin) >> 14
+```
+
+`FPM_TONE_create` copies a 36-byte config (`FPM_TONE_CFG`) into the state and
+derives the initial phase increment with the same 0x8312 scaling — the 8 kHz
+assumption recorded as R-9.
+
+Beyond the generator loop, `FPM_TONE_generate` reads `state[0x28]` and
+`state[0x04]` and branches — an envelope or duration counter, not yet decoded.
+That, and the detector half (`FPM_TONE_detect`, `_find_rev`, `_filter`), remain
+to do.
