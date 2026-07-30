@@ -223,6 +223,59 @@ extracted tables stay as the reference for differential testing, and the design
 above is recorded as the *regeneration recipe* for the retarget. That
 distinction is deliberate and should not be quietly collapsed.
 
+### What the 4 LSB actually costs, and which filter is better
+
+The coefficient difference is small but not negligible where it lands.
+Measured against the fitted design:
+
+| | stopband floor, 5.2-24 kHz |
+|---|--:|
+| ideal Kaiser, unquantised | **-80.6 dB** |
+| our Q14 rounding of it | **-77.8 dB** |
+| the original | **-68.2 dB** |
+
+So Q14 quantisation costs only about 3 dB, while the original sits a further
+**9.6 dB worse**. The worst-case spectral difference between the two filters is
+-56.7 dB relative to DC gain — *above* the original's own stopband floor, which
+is why the difference shows up there and nowhere else. In the passband the two
+are indistinguishable: 0.475 dB peak-to-peak ripple versus 0.495 dB.
+
+**The original's stopband is limited by its own coefficient noise, not by its
+window.** Two pieces of evidence:
+
+- The stopband is not equiripple — ripple peaks decay from -67.8 dB near the
+  transition to -83 dB at high frequency — so it is a windowed design, not
+  Remez. A window that produces -80.6 dB unquantised cannot produce -68 dB
+  unless something else is adding error.
+- The residual is **flat with respect to coefficient magnitude**: mean 1.65 LSB
+  on taps above 2000, 1.82 LSB on taps below 200. A parameter mismatch (wrong
+  cutoff, wrong beta, wrong gain) produces error *proportional* to the
+  coefficients. Flat error across four orders of magnitude is the signature of
+  limited-precision arithmetic or rounding, applied uniformly.
+
+No rounding mode explains it either — round, truncate, floor, and single-
+precision variants of each all plateau at 4-5 LSB with only ~17 of 161
+coefficients matching.
+
+So the original was very likely generated with a limited-precision tool, and
+**a clean regeneration is strictly better** — about 9.6 dB more stopband
+attenuation for free.
+
+**Practical impact: real but modest.** Aliased energy at -68 dB is already far
+below the SNR that governs V.22 or V.32 slicing decisions, so this will not
+change modem performance. It is simply better, and costs nothing.
+
+**Important:** this improvement does *not* apply to the reconstruction as
+shipped. We keep the original extracted bytes, so the built filter is
+bit-identical to the original and Tier-1 differential testing still holds. The
+9.6 dB only materialises if and when the banks are regenerated for 8 kHz —
+which is the right trade, and the reason the design and the bytes are tracked
+as separate artefacts.
+
+Before trusting regenerated filters, our own design path needs auditing —
+rounding mode, series convergence, per-branch normalisation, and fitting
+against the response rather than coefficient distance. Tracked as a task.
+
 ### Remaining for `FixedRC`
 
 - Reconstruct `RcFixed_Create/_Reset/_Delete/_Resample` themselves and
