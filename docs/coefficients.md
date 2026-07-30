@@ -155,11 +155,77 @@ below 4000 Hz, the Nyquist frequency of the 8 kHz side. That is a deliberate
 voiceband design, and it is the specification the 8 kHz retarget must
 reproduce — not the coefficient values.
 
+### The design rate is `L * f_in`, not a fixed host rate
+
+Worth stating explicitly because it is easy to get wrong — an earlier version
+of `tools/rcfilter.py` did. `Check_Combination(in, out)` sets `down = in/gcd`
+and `up = out/gcd`, so the conversion is `out = in * up / down` and the
+polyphase design rate is `up * f_in`, where `f_in` is the **input** rate of
+that particular conversion.
+
+For the pair `dp_wrapper` actually uses:
+
+| direction | mode | down:up | design rate |
+|---|--:|--:|--:|
+| host → pump, 9600 → 8000 | 3 | 6:5 | 5 × 9600 = **48000** |
+| pump → host, 8000 → 9600 | 2 | 5:6 | 6 × 8000 = **48000** |
+
+Both land on 48 kHz. Their binding Nyquist is identical too — `min(1/2L, 1/2M)`
+is `1/12` either way — and their cutoffs agree closely (0.07925 vs 0.07825 of
+`fs`, i.e. 3804 Hz and 3756 Hz). They are near-identical filters at the same
+design rate; they exist as separate tables only because the polyphase structure
+differs, 5 branches versus 6, so the prototype length must be a multiple of 5 in
+one case and 6 in the other.
+
+`tools/rcfilter.py` therefore reports frequencies **normalised to the design
+rate**, which holds at any input rate; pass `--fin` for absolute figures.
+
+### The cutoff design rule
+
+Across all 18 banks (`docs/rc_banks.md`), the −6 dB point sits at a consistent
+fraction of the binding Nyquist:
+
+```
+binding Nyquist / fs = min(1/(2*up), 1/(2*down))
+-6 dB cutoff        ~= 0.94 * binding Nyquist          (range 0.92 .. 0.97)
+```
+
+Every bank falls in that range except **mode 6 at 0.792**, and that is the
+expected exception: mode 6 (1:5) shares mode 3's table, which was designed for
+mode 3's stricter `1/12` requirement rather than mode 6's `1/10`. The outlier
+is evidence *for* the rule, not against it.
+
+Stopband floors run −55 to −78 dB, tracking the tap budget rather than a single
+specification, so each bank was designed individually to its own transition
+width and tap count.
+
+**This rule, not the coefficient values, is what an 8 kHz retarget needs.**
+
+### Window fit
+
+Mode 3's prototype fits a Kaiser-windowed sinc closely but not exactly:
+
+| | value |
+|---|---|
+| window | Kaiser, β ≈ 7.0 |
+| cutoff | ≈ 0.0791 × fs (3796 Hz at fs = 48000) |
+| best max error | **4 LSB** against a peak of 12959 (0.03%) |
+| exact coefficients | 42 of 161 |
+
+Searching β ∈ [6.0, 8.2], cutoff ±3%, both Kaiser normalisation conventions and
+free gain does not get below 4 LSB. So the *design* is recovered — enough to
+redesign the filter at any rate — but the exact generation recipe is not, and
+would depend on tool-specific details of whatever produced the original.
+
+**Consequence for the method.** Unlike `FPM_sqrt_table`, this generator does not
+reproduce the bytes exactly, so it cannot serve as the bit-exact source. The
+extracted tables stay as the reference for differential testing, and the design
+above is recorded as the *regeneration recipe* for the retarget. That
+distinction is deliberate and should not be quietly collapsed.
+
 ### Remaining for `FixedRC`
 
-- Fit the prototype to a named design (windowed sinc, Remez, or similar) and
-  write the generator. The 49.6 dB stopband with a ~1000 Hz transition at
-  161 taps is consistent with a windowed-sinc design; identifying the window
-  is the next step.
-- Repeat for the other 17 banks. The ordering rule above applies to all of
-  them, so this is now mechanical.
+- Reconstruct `RcFixed_Create/_Reset/_Delete/_Resample` themselves and
+  differential-test them.
+- Extract the remaining banks' coefficients into the reconstruction, keeping
+  the extracted bytes as reference and the design rule as the retarget recipe.
