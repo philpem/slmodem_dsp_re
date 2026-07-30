@@ -23,6 +23,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Reconstructed C++ modules link against this too. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int diff_checks;
 extern int diff_failures;
 extern int diff_max_report;
@@ -40,5 +45,9 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
 #define diff_eq_int(fmt, got, want, input) \
 	diff_eq_int_(__FILE__, __LINE__, (fmt), (long)(got), (long)(want), \
 		     (long)(input))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DSPLIB_TEST_HARNESS_H */

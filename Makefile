@@ -16,7 +16,8 @@ BUILD      := build
 # compiles for a native target; it just cannot be differential-tested there.
 ARCH32     := -m32
 CC         := gcc
-CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude
+CXX        := g++
+CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP
 PYTHON     := python3
 
 # x87 with 80-bit intermediates, matching GCC 3.4.2's -m32 default and the
@@ -25,13 +26,28 @@ PYTHON     := python3
 FPFLAGS    := -mfpmath=387
 
 SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/dsp/fpm_sqrt.c
-OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC))
+CXXSRC     := src/dsp/FloatIIR.cpp
+OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
+              $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
+
+# The original was built -fno-exceptions -fno-rtti with no new/delete (zero
+# __cxa_*, _Unwind_* or _ZTI* references -- docs/findings.md section 2), so
+# match it.
+#
+# Deliberately NOT -ffloat-store: the original accumulates at 80-bit extended
+# precision and rounds once at the end, and -ffloat-store would additionally
+# round every intermediate product.  See src/dsp/FloatIIR.cpp.
+# -nostdinc++ keeps <stdio.h> and friends resolving to the plain C headers.
+# We use none of the C++ standard library (nor did the original), and the
+# 32-bit libstdc++ headers are typically absent on a 64-bit host.
+CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++
 
 HARNESS    := test/harness/harness.c test/harness/runtime.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
 TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample
-TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS))
+CXXTESTS   := t_genericiir
+TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
 SYMMAP     := $(BUILD)/symmap.txt
@@ -68,6 +84,14 @@ $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -c $< -o $@
 
+$(BUILD)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+# Linked with $(CC), not $(CXX): the C++ here is -fno-exceptions -fno-rtti with
+# no virtuals and no new/delete, exactly as the original was built, so nothing
+# needs libstdc++ -- which is just as well, since the 32-bit one is often not
+# installed alongside a 64-bit toolchain.
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^ -lm
@@ -75,6 +99,10 @@ $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -Itest/harness -c $< -o $@
+
+$(BUILD)/test/unit/%.o: test/unit/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -Itest/harness -c $< -o $@
 
 $(BUILD):
 	@mkdir -p $(BUILD)
@@ -86,7 +114,9 @@ test: $(TESTBIN)
 
 # The reconstruction must not depend on 32-bit; only the reference does.
 check64:
-	@$(CC) $(CFLAGS) -fsyntax-only $(SRC) && echo "64-bit clean: OK"
+	@$(CC) $(CFLAGS) -fsyntax-only $(SRC) \
+	  && $(CXX) $(CXXFLAGS) -fsyntax-only $(CXXSRC) \
+	  && echo "64-bit clean: OK"
 
 # Regenerate the analysis documents from the blob.
 docs:
@@ -96,3 +126,7 @@ docs:
 
 clean:
 	rm -rf $(BUILD)
+
+# Auto-generated header dependencies (-MMD), so editing a header rebuilds
+# everything that includes it.
+-include $(shell find $(BUILD) -name '*.d' 2>/dev/null)

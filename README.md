@@ -19,7 +19,7 @@ is structured, and the commands that prove each claim.
 | phase | content | state |
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
-| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | `FixedRC` **done**, rest in progress |
+| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | `FixedRC`, `GenericIIR` **done** |
 | 2 | Bell 103 / V.21 — *first real connection* | — |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |

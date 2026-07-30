@@ -125,8 +125,33 @@ written. Until that is done the tables must not be copied in as opaque bytes:
 that would defeat the purpose of recovering derivations, since a copied table
 can only be resampled at 8 kHz, never re-designed.
 
-### Q2 — x87 vs SSE equivalence regime
+### Q2 — x87 equivalence regime — **RESOLVED: bit-exact is achievable**
 
-Still unsettled: no float module has been reconstructed yet. `fpm_*` is fixed
-point, so it does not exercise the question. To be answered when the first
-genuine float module lands, before any tolerance-based test is written.
+Settled by `GenericIIR<float, double>`, the first float module through the rig.
+It agrees with the original **bit for bit** — compared as raw bit patterns, not
+with a tolerance — across 31,200 samples of recursive filtering, where any
+rounding difference compounds rather than cancels. Covered: biquad, 4th order,
+pure FIR, both `den[0]` conventions, tight buffers that force frequent history
+compaction, and block processing at three chunk sizes.
+
+So float modules are held to **bit-exact**, the same standard as fixed point.
+The per-class tolerance table in the plan can be simplified accordingly; no
+tolerance-based test has been needed.
+
+**The one thing that matters for getting there.** The original mirrors its
+accumulator to memory after every multiply-accumulate (`fstl 0x2c(%ecx)`),
+which looks like per-iteration rounding to double. It is not: `fstl` stores
+*without popping*, so the running sum stays in the x87 register at 80-bit
+extended precision. Rounding to double happens exactly once, at the end.
+
+Reconstruct that as a plain `double` accumulator and you round every step;
+reconstruct it with `-ffloat-store` and you additionally round every *product*,
+which the original never does. Both are wrong, and both hide on short filters —
+the error only appeared on an 8-tap FIR, at 35 samples in 3200. The correct
+form accumulates in `long double` and rounds once on the way out, which is what
+x87 does naturally.
+
+**Guidance for later float modules:** read whether the original's spill is
+`fstl` (mirror, stays 80-bit) or `fstpl` (store and pop, genuinely rounds).
+That single distinction decides the accumulator type, and it is invisible in
+the C.
