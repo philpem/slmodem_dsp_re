@@ -1856,3 +1856,99 @@ detector. That separation is what lets the data AGC be frozen at acquisition
 without blinding the detector. It also completes the DSP block: `+0x38..+0x63`
 was the last unattributed region, and a second `struct fpm_agc` fits it
 exactly.
+
+## 34. The Bell 103 call-setup state machine, with the author's own names
+
+Ten functions reconstructed and bit-exact: seven half-duplex states and the
+three tables that sequence them. 72,114 differential checks.
+
+### Shape
+
+`hdx` carries **two** current states, not one — transmit at `+0x08` and
+receive at `+0x10` — and a substate number at `+0x14`. Every Hdx function has
+the same signature and the same shape:
+
+```
+do this state's work
+zero the caller's count
+move a counter
+if the counter says so, call B103NextState[hdx->mode](fp)
+```
+
+No Hdx function chooses its own successor. That is entirely the business of
+the three tables, which is why the same seven states serve originate, answer
+and loopback. `B103NextState` is a three-entry function-pointer table at
+`.data:0x77e8`: **loopback, originate, answer**, in that order.
+
+### The substate names are the original's
+
+The blob still carries the debug strings, so these are not invented:
+
+```sh
+python3 - <<'EOF'
+import subprocess
+d = subprocess.run(['objcopy','-O','binary','--only-section=.rodata.str1.1',
+                    'dsplibs.o','/dev/stdout'], capture_output=True).stdout
+for off in (0x3d8b, 0x3d5c, 0x3d70, 0x3d9d):
+    print(repr(d[off:d.index(b'\0', off)].decode()))
+EOF
+# 'B103_STATE_START\n' 'B103_STATE_CARRDET\n' 'B103_STATE_WAIT1\n' 'B103_STATE_WAIT2\n'
+```
+
+| substate | name | originate does |
+|--:|---|---|
+| 0 | `B103_STATE_START` | transmit silence, listen for the answer tone, `tone_timeout` blocks |
+| 1 | `B103_STATE_CARRDET` | tone heard — hold eight more blocks |
+| 2 | `B103_STATE_WAIT1` | transmit 40 blocks of mark |
+| 3 | `B103_STATE_WAIT2` | data both ways |
+| 4 | *(none)* | connected; asking again prints "default" |
+
+Answer and loopback have no WAIT2 and jump from WAIT1 straight to 4. The
+answerer transmits mark from START — that mark **is** the tone the caller is
+listening for.
+
+### The handshake is asymmetric, and deliberately
+
+`TxHdxMarksB103` exits on different conditions in the two directions:
+
+```c
+if (fp->is_answer) {
+        if (hdx->tx_blocks <= 0) advance;
+} else if (hdx->tx_blocks <= 0 && fp->dsp->rx_state > 14) {
+        advance;
+}
+```
+
+An answering modem stops after its block count regardless. A **calling** modem
+also waits for its own receiver to have acquired. So the caller holds mark
+until it hears the answering modem, which is what Bell 103 call setup
+requires and is not something either side could do alone.
+
+### `RxHdxStartB103` is installed by nothing
+
+None of the three tables ever selects it — they go straight from
+`RxDetMarkB103` to `RxHdxDataB103`. Either `B103FP_create` uses it as the
+initial receive state or it is dead. It is reconstructed and driven directly
+by the test rather than left uncovered; resolve which when `B103FP_create` is
+decoded.
+
+### Status and flags are B103's own, not `DPSTAT_*`
+
+The tables set `fp->status` to 2, 3, 4 and 7, and the Hdx states set 5 and 6
+on their failure paths. These are **not** the `DPSTAT_*` codes in `dp.h` — 7
+here means connected, where `DPSTAT_BUSY` is 7. Something above this layer
+maps them; `B103FP_modem` is the candidate. Left as literals rather than given
+invented names.
+
+### Testing control flow differentially
+
+The state is a function pointer, so it necessarily holds a different value in
+the reconstruction than in the blob. Comparing pointers fails on every
+transition; comparing nothing tests nothing. `t_b103hdx.c` maps each pointer
+through a table of the seven known states and compares the resulting index.
+
+One subtlety cost a run: **both** objects are built by the reference
+`B103FP_create`, so both start holding reference pointers, and only the slots
+a table has since overwritten differ. The lookup therefore has to search both
+tables — searching only the reconstruction's reported every untouched slot as
+unknown.

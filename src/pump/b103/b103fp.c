@@ -14,6 +14,7 @@
  */
 
 #include "dsplib/b103fp.h"
+#include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_tone.h"
 
 /*
@@ -118,10 +119,17 @@ B103_ASSERT_OFF(struct b103_dsp, scratch, 0xe8);
 B103_ASSERT_OFF(struct b103_dsp, rx_scratch, 0xec);
 B103_ASSERT_OFF(struct b103_dsp, p_f0, 0xf0);
 B103_ASSERT_OFF(struct b103_dsp, rx_state, 0xfc);
-B103_ASSERT_OFF(struct b103_hdx, entry, 0x08);
+B103_ASSERT_OFF(struct b103_hdx, tx, 0x08);
+B103_ASSERT_OFF(struct b103_hdx, rx, 0x10);
 B103_ASSERT_OFF(struct b103_hdx, tone_detect, 0x1c);
 B103_ASSERT_OFF(struct b103_hdx, tone_lo, 0x20);
 B103_ASSERT_OFF(struct b103fp, is_answer, 0x04);
+B103_ASSERT_OFF(struct b103fp, status, 0x1c);
+B103_ASSERT_OFF(struct b103fp, flags, 0x1d);
+B103_ASSERT_OFF(struct b103_hdx, tone_timeout, 0x02);
+B103_ASSERT_OFF(struct b103_hdx, tx_blocks, 0x04);
+B103_ASSERT_OFF(struct b103_hdx, rx_count, 0x0c);
+B103_ASSERT_OFF(struct b103_hdx, substate, 0x14);
 B103_ASSERT_OFF(struct b103fp, hdx, 0x50);
 B103_ASSERT_OFF(struct b103fp, dsp, 0x54);
 
@@ -239,3 +247,384 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 
 	return (short)nbits;
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * The half-duplex state machines.
+ *
+ * Seven states, one shared signature, and one shared shape:
+ *
+ *     do this state's work
+ *     zero the caller's count
+ *     move a counter
+ *     if the counter says so, dispatch B103NextState[hdx->mode](fp)
+ *
+ * The dispatch is what advances `hdx->state`.  None of these functions
+ * chooses its own successor -- that is entirely the business of the three
+ * NextState tables, which is why the same seven states serve originate,
+ * answer and local loopback.
+ *
+ * `count` is in/out.  Every state zeroes it after use, so the caller knows
+ * the input was consumed even when the state produced nothing.
+ */
+
+/* Transmit: nothing to send yet, just advance. */
+short
+TxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	(void)in;
+	(void)out;
+	(void)count;
+
+	B103NextState[fp->hdx->mode](fp);
+	return 0;
+}
+
+/* Transmit: one block of data. */
+short
+TxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	short n;
+
+	n = ModDataB103(fp, (const unsigned short *)in, out,
+			(unsigned short)*count);
+	*count = 0;
+	return n;
+}
+
+/*
+ * Transmit: a block of continuous mark.
+ *
+ * The bit buffer is FILLED with ones here rather than supplied, so the caller
+ * hands over an empty buffer and a length.
+ *
+ * The exit condition differs by direction, and that difference is the whole
+ * handshake: an answering modem stops after `tx_blocks` regardless, while a
+ * calling modem also waits for its own receiver to have acquired
+ * (dsp->rx_state past 14).  So the caller holds mark until it hears the
+ * answering modem, which is exactly what Bell 103 call setup requires.
+ */
+short
+TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	unsigned short *bits = (unsigned short *)in;
+	struct b103_hdx *hdx;
+	unsigned short i;
+	short n;
+
+	for (i = 0; i < (unsigned short)*count; i++)
+		bits[i] = 1;
+
+	n = ModDataB103(fp, bits, out, (unsigned short)*count);
+	*count = 0;
+
+	hdx = fp->hdx;
+	hdx->tx_blocks = (short)(hdx->tx_blocks - 1);
+
+	if (fp->is_answer) {
+		if (hdx->tx_blocks <= 0)
+			B103NextState[hdx->mode](fp);
+	} else if (hdx->tx_blocks <= 0 && fp->dsp->rx_state > 14) {
+		B103NextState[hdx->mode](fp);
+	}
+
+	return n;
+}
+
+/* Transmit: a block of silence, with the modulator still running. */
+short
+TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	struct b103_hdx *hdx;
+	short n;
+
+	n = TxNoCarrierB103(fp, (const unsigned short *)in, out,
+			    (unsigned short)*count);
+	*count = 0;
+
+	hdx = fp->hdx;
+	hdx->tx_blocks = (short)(hdx->tx_blocks - 1);
+	if (hdx->tx_blocks <= 0)
+		B103NextState[hdx->mode](fp);
+
+	return n;
+}
+
+/*
+ * Receive: wait for the answer tone.
+ *
+ * Runs the acquisition AGC and the tone detector directly rather than going
+ * through DemodDataB103 -- there is no point mixing and demodulating while
+ * still waiting.  Note it uses the same two objects DemodDataB103's
+ * acquisition phase does, dsp->det_agc and hdx->tone_detect.
+ *
+ * Two exits: the tone arrives (advance, if the substate says to), or
+ * `tone_timeout` blocks pass without it (advance anyway, and report 5).
+ */
+short
+RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	struct b103_hdx *hdx = fp->hdx;
+	struct b103_dsp *dsp = fp->dsp;
+
+	(void)out;
+
+	hdx->rx_count = (short)(hdx->rx_count + 1);
+
+	FPM_AGC_agc(&dsp->det_agc, in, (unsigned short)*count);
+
+	if (FPM_TONE_detect(hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
+		dsp->rx_state = (short)(dsp->rx_state + 5);
+		if (hdx->substate == 1)
+			B103NextState[hdx->mode](fp);
+	} else if (hdx->rx_count >= hdx->tone_timeout) {
+		hdx->substate = 5;
+		B103NextState[hdx->mode](fp);
+		fp->flags |= B103_FLAG_TIMEOUT;
+		fp->status = 5;
+	}
+
+	*count = 0;
+	return 0;
+}
+
+/*
+ * Receive: demodulate while waiting for carrier.
+ *
+ * Counts DOWN, unlike RxDetMark: `rx_count` blocks are allowed before giving
+ * up.  Carrier appearing advances immediately; running out advances too, but
+ * reports 5.
+ */
+short
+RxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	struct b103_hdx *hdx;
+
+	DemodDataB103(fp, in, (unsigned short *)out, (unsigned short)*count);
+	*count = 0;
+
+	if (CarrierDetectB103(fp)) {
+		B103NextState[fp->hdx->mode](fp);
+		return 0;
+	}
+
+	hdx = fp->hdx;
+	hdx->rx_count = (short)(hdx->rx_count - 1);
+	if (hdx->rx_count <= 0) {
+		hdx->substate = 5;
+		B103NextState[hdx->mode](fp);
+		fp->flags |= B103_FLAG_TIMEOUT;
+		fp->status = 5;
+	}
+
+	return 0;
+}
+
+/*
+ * Receive: carry data, and watch for the carrier going away.
+ *
+ * `rx_count` is reset to zero on every block with carrier and incremented on
+ * every block without, so it counts CONSECUTIVE losses.  Eight in a row ends
+ * the call with status 6.  A single dropout does not.
+ */
+short
+RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count)
+{
+	struct b103_hdx *hdx;
+	short nbits;
+
+	nbits = DemodDataB103(fp, in, (unsigned short *)out,
+			      (unsigned short)*count);
+	*count = 0;
+
+	fp->flags &= (unsigned char)~B103_FLAG_CARRIER;
+
+	if (CarrierDetectB103(fp)) {
+		fp->flags |= B103_FLAG_CARRIER;
+		fp->hdx->rx_count = 0;
+		fp->flags &= (unsigned char)~B103_FLAG_80;
+		return nbits;
+	}
+
+	hdx = fp->hdx;
+	hdx->rx_count = (short)(hdx->rx_count + 1);
+	if (hdx->rx_count <= 7) {
+		fp->flags &= (unsigned char)~B103_FLAG_80;
+		return nbits;
+	}
+
+	B103NextState[hdx->mode](fp);
+	fp->flags &= (unsigned char)~B103_FLAG_80;
+	fp->status = 6;
+	return 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The three state tables.
+ *
+ * Each is a switch on hdx->substate that installs the next pair of half-duplex
+ * states and sets the status the layer above reads.  The seven Hdx functions
+ * never choose their own successor -- they only decide *when* to ask -- so the
+ * same seven serve all three call types.
+ *
+ * The substate names are the original author's, recovered from the debug
+ * strings the blob still carries at .rodata.str1.1+0x3d5c onward.  They label
+ * the case, not the state being entered:
+ *
+ *     0  B103_STATE_START      1  B103_STATE_CARRDET
+ *     2  B103_STATE_WAIT1      3  B103_STATE_WAIT2
+ *     4  connected -- no case, falls through to "default"
+ *
+ * Answer and loopback skip WAIT2 and jump from WAIT1 straight to 4.
+ *
+ * The `status` values (2, 3, 4, 7) and the `flags` bits are B103's own, not
+ * the DPSTAT_* codes in dp.h -- 7 here means connected, where DPSTAT_BUSY is
+ * 7.  Whatever maps them lives above this layer; B103FP_modem is the
+ * candidate.  Left as literals rather than given invented names.
+ */
+
+/*
+ * Local loopback: transmit mark to yourself and demodulate it back.  No tone
+ * detection at all -- the receive state is never set to RxDetMarkB103, it goes
+ * straight to RxHdxDataB103.
+ */
+void
+B103LocLoopNextState(struct b103fp *fp)
+{
+	struct b103_hdx *hdx = fp->hdx;
+
+	switch (hdx->substate) {
+	case B103_STATE_START:
+		hdx->tx = TxHdxMarksB103;
+		hdx->substate = B103_STATE_CARRDET;
+		hdx->tx_blocks = (short)(hdx->tone_timeout * 2);
+		hdx->rx_count = hdx->tone_timeout;
+		fp->flags |= 0x10;
+		fp->status = 2;
+		break;
+
+	case B103_STATE_CARRDET:
+		hdx->tx_blocks = 8;
+		hdx->rx = RxHdxDataB103;
+		hdx->rx_count = 0;
+		hdx->substate = B103_STATE_WAIT1;
+		fp->flags &= (unsigned char)~0x40;
+		fp->status = 3;
+		break;
+
+	case B103_STATE_WAIT1:
+		hdx->tx = TxHdxMarksB103;
+		hdx->substate = B103_STATE_DATA;
+		fp->flags |= 0x2d;
+		fp->status = 7;
+		break;
+
+	default:
+		break;
+	}
+}
+
+/*
+ * Originate.  The four-step Bell 103 calling sequence:
+ *
+ *   START    transmit silence, listen for the answer tone (RxDetMark),
+ *            giving up after tone_timeout blocks
+ *   CARRDET  the tone arrived -- hold for eight more blocks
+ *   WAIT1    transmit 40 blocks of mark, so the answerer can train
+ *   WAIT2    data both ways
+ */
+void
+B103OriginateNextState(struct b103fp *fp)
+{
+	struct b103_hdx *hdx = fp->hdx;
+
+	switch (hdx->substate) {
+	case B103_STATE_START:
+		hdx->tx = TxHdxSilenceB103;
+		hdx->rx_count = 1;
+		hdx->rx = RxDetMarkB103;
+		hdx->tx_blocks = hdx->tone_timeout;
+		hdx->substate = B103_STATE_CARRDET;
+		fp->flags |= 0x10;
+		fp->status = 2;
+		break;
+
+	case B103_STATE_CARRDET:
+		hdx->tx_blocks = 8;
+		hdx->rx_count = 0;
+		hdx->substate = B103_STATE_WAIT1;
+		fp->flags &= (unsigned char)~0x40;
+		fp->status = 3;
+		break;
+
+	case B103_STATE_WAIT1:
+		hdx->tx_blocks = 40;
+		hdx->rx_count = 0;
+		hdx->tx = TxHdxMarksB103;
+		hdx->substate = B103_STATE_WAIT2;
+		fp->flags |= 0x24;
+		fp->status = 4;
+		break;
+
+	case B103_STATE_WAIT2:
+		hdx->tx = TxHdxDataB103;
+		hdx->rx = RxHdxDataB103;
+		hdx->substate = B103_STATE_DATA;
+		fp->flags |= 0x09;
+		fp->status = 7;
+		break;
+
+	default:
+		break;
+	}
+}
+
+/*
+ * Answer.  Three steps rather than four: the answerer transmits mark from the
+ * start (that IS the answer tone the caller is listening for) and jumps from
+ * WAIT1 straight to data without an equivalent of WAIT2.
+ */
+void
+B103AnswerNextState(struct b103fp *fp)
+{
+	struct b103_hdx *hdx = fp->hdx;
+
+	switch (hdx->substate) {
+	case B103_STATE_START:
+		hdx->tx = TxHdxMarksB103;
+		hdx->rx = RxDetMarkB103;
+		hdx->rx_count = 0;
+		hdx->tx_blocks = hdx->tone_timeout;
+		hdx->substate = B103_STATE_CARRDET;
+		fp->flags |= 0x10;
+		fp->status = 2;
+		break;
+
+	case B103_STATE_CARRDET:
+		hdx->tx_blocks = 8;
+		hdx->rx_count = 8;
+		hdx->substate = B103_STATE_WAIT1;
+		fp->flags &= (unsigned char)~0x40;
+		fp->status = 3;
+		break;
+
+	case B103_STATE_WAIT1:
+		hdx->tx = TxHdxDataB103;
+		hdx->rx = RxHdxDataB103;
+		hdx->substate = B103_STATE_DATA;
+		fp->flags |= 0x2d;
+		fp->status = 7;
+		break;
+
+	default:
+		break;
+	}
+}
+
+/* Indexed by hdx->mode.  The order is the original's, from .data:0x77e8. */
+void (*const B103NextState[3])(struct b103fp *fp) = {
+	B103LocLoopNextState,		/* 0 */
+	B103OriginateNextState,		/* 1 */
+	B103AnswerNextState		/* 2 */
+};

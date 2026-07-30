@@ -37,6 +37,18 @@
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_mrf.h"
 
+struct b103fp;
+
+/*
+ * The half-duplex states are all one type, so B103FP_modem can hold the
+ * current one as a pointer.  For transmit `in` is the bit stream and `out`
+ * the samples; for receive it is the other way round.  `count` is in/out:
+ * the caller sets it, the state consumes it and zeroes it.  The return is
+ * however many units were produced in the other direction.
+ */
+typedef short (*b103_hdx_fn)(struct b103fp *fp, short *in, short *out,
+			     short *count);
+
 /*
  * The DSP block, `struct b103fp`'s +0x54.  256 bytes.
  *
@@ -72,15 +84,21 @@ struct b103_dsp {
  * state machine's entry point, and the two tone objects the receiver uses.
  */
 struct b103_hdx {
-	short r00;		/* +0x00                                   */
-	short timing;		/* +0x02 cfg[0x0c]/20, floored at 700      */
-	int r04;		/* +0x04                                   */
-	void *entry;		/* +0x08 -> TxHdxStartB103                 */
-	int r0c;		/* +0x0c                                   */
-	int r10;		/* +0x10                                   */
-	int r14;		/* +0x14                                   */
+	short mode;		/* +0x00 index into B103NextState:
+				 *       0 loopback, 1 originate, 2 answer */
+	short tone_timeout;	/* +0x02 blocks to wait for the answer tone;
+				 *       cfg[0x0c]/20, floored at 700      */
+	short tx_blocks;	/* +0x04 transmit countdown                */
+	short pad06;
+	b103_hdx_fn tx;		/* +0x08 the current transmit state        */
+	short rx_count;		/* +0x0c receive-side counter: blocks
+				 *       waited, or blocks since carrier   */
+	short pad0e;
+	b103_hdx_fn rx;		/* +0x10 the current receive state         */
+	short substate;		/* +0x14 1 = advance on detection          */
+	short pad16;
 	int r18;		/* +0x18                                   */
-	void *tone_detect;	/* +0x1c FPM_TONE object: the guard tone   */
+	void *tone_detect;	/* +0x1c FPM_TONE object: the answer tone  */
 	void *tone_lo;		/* +0x20 FPM_TONE object: the receive local
 				 *       oscillator -- see DemodDataB103   */
 };
@@ -89,10 +107,36 @@ struct b103_hdx {
 struct b103fp {
 	int r00;		/* +0x00                                    */
 	int is_answer;		/* +0x04 zero selects the caller side       */
-	unsigned char r08[0x48];/* +0x08 .. +0x4f config and timing         */
+	unsigned char r08[0x14];/* +0x08 .. +0x1b config and timing         */
+	unsigned char status;	/* +0x1c reported upward; 5 = timed out
+				 *       waiting, 6 = carrier lost          */
+	unsigned char flags;	/* +0x1d see B103_FLAG_* below              */
+	unsigned char r1e[2];	/* +0x1e .. +0x1f                           */
+	unsigned char r20[0x30];/* +0x20 .. +0x4f                           */
 	struct b103_hdx *hdx;	/* +0x50                                    */
 	struct b103_dsp *dsp;	/* +0x54                                    */
 };
+
+/*
+ * Bits in `flags`.  Named for what sets and clears them; the meaning the
+ * layer above attaches to them is not yet established.
+ */
+#define B103_FLAG_TIMEOUT  0x02	/* set when a wait expires               */
+#define B103_FLAG_CARRIER  0x20	/* tracks CarrierDetectB103 each block   */
+#define B103_FLAG_80       0x80	/* cleared on every receive-data block   */
+
+/*
+ * `hdx->substate`.  These are the ORIGINAL AUTHOR'S names, recovered from the
+ * debug strings the blob still carries at .rodata.str1.1+0x3d5c onward -- the
+ * NextState tables print them, so they label the case rather than being our
+ * invention.  There is no name for 4: reaching it means connected, and asking
+ * for a next state from there prints "default".
+ */
+#define B103_STATE_START    0
+#define B103_STATE_CARRDET  1
+#define B103_STATE_WAIT1    2
+#define B103_STATE_WAIT2    3
+#define B103_STATE_DATA     4
 
 /*
  * Modulate `nbits` bits into `out` and return the number of 8 kHz samples
@@ -124,5 +168,25 @@ int CarrierDetectB103(struct b103fp *fp);
  */
 short DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 		    unsigned short count);
+
+/*
+ * The half-duplex state machines.  Each ends by dispatching through
+ * B103NextState[hdx->mode] when its condition is met, which is what advances
+ * `hdx->state` to the next one.
+ */
+short TxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count);
+short TxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
+short TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count);
+short TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count);
+short RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count);
+short RxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count);
+short RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
+
+/* Indexed by hdx->mode; entries are the three B103*NextState functions. */
+extern void (*const B103NextState[3])(struct b103fp *fp);
+
+void B103LocLoopNextState(struct b103fp *fp);
+void B103OriginateNextState(struct b103fp *fp);
+void B103AnswerNextState(struct b103fp *fp);
 
 #endif /* DSPLIB_B103FP_H */
