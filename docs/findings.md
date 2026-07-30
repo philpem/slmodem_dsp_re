@@ -709,12 +709,81 @@ So one `FPM_TONE` object carries an oscillator, an exact-frequency Goertzel,
 and a leaky resonator — which is why a single config serves generation,
 detection and the phase-reversal search.
 
-The object reaches at least `+0x106`, and the buffers behind `state[0x2c]`,
-`state[0x30]`, `state[0xf4]` and `state[0xf8]` are allocated elsewhere — the
-allocation is not in `FPM_TONE_create`, so the caller supplies them.
-Reconstructing `fpm_tone.c` needs those owners identified first; the generator
-half (`generate`, `set_freq`, `set_scale`, and the reversal logic) is fully
-understood already.
+### `FPM_TONE_create` fully decoded
+
+```c
+FPM_TONE_create(state, cfg)
+
+    owned = 0
+    if (state == NULL) {                       /* .text 0x0aacd9 */
+            state = sysdep_malloc(0x108)
+            owned = 1
+    }
+    if (cfg == NULL)                           /* .text 0x0aac89 */
+            copy FPM_TONE_CFG (36 bytes) into state[0x00 .. 0x20]
+    else
+            copy cfg (36 bytes) into state[0x00 .. 0x20]
+
+    if (owned && (short)state[0x14] > 0) {     /* .text 0x0aac3c */
+            state[0x2c] = malloc(state[0x14] * 2)
+            state[0x30] = malloc((state[0x14] + state[0x20]) * 2)
+            state[0xf4] = malloc(10)           /* 5 shorts: resonator coeffs */
+            state[0xf8] = malloc(8)            /* 4 shorts: its accumulators */
+    }
+
+    /* oscillator */
+    state[0x24] = 0                            /* phase                     */
+    state[0x28] = 0                            /* reversal counter          */
+    state[0x26] = (state[0x00] * 0x8312 + 0x1000) >> 13    /* increment      */
+
+    /* exact-frequency Goertzel, tuned by a phasor run at the same frequency */
+    state[0x36] = state[0x38] = 0x4000
+    state[0x3a] = -(2 * phasor.cos)
+    state[0x3c] = (state[0x0c] * state[0x0c]) >> 16
+    state[0x3e] = -(phasor.cos * state[0x0c]) >> 14
+    state[0x40 .. 0x50] = 0
+    state[0x52 .. 0xf0] = 0                    /* 80-entry working array     */
+
+    /* reference waveform: state[0x0e] entries into the two buffers */
+    for (i = 0; i < state[0x0e]; i++) {
+            FPM_phasor(&p)
+            ((short *)state[0x30])[i] = 0
+            ((short *)state[0x2c])[i] = (2 * src[i] * p.cos) >> 14
+    }
+
+    /* damped resonator, r = 0.96, via the pointer at state[0xf4] */
+    state[0xfc] = &state[0x36]
+    state[0x100 .. 0x106] = 0
+    run FPM_phasor once more from phase 0, so cos = 1.0, then:
+            blk = state[0xf4]
+            blk[0] = blk[1] = 0x4000
+            blk[2] = -(2 * cos)
+            blk[3] = 0x3afb                    /* 0.96^2                     */
+            blk[4] = (cos * -31457) >> 14      /* -2 * 0.96                  */
+            ((short *)state[0xf8])[0..3] = 0
+```
+
+**Ownership.** The four buffers are allocated only when `FPM_TONE_create`
+allocated the object itself *and* `state[0x14]` is positive. A caller
+supplying its own object supplies its own buffers — the contract recorded in
+finding 20. `FPM_TONE_delete` must mirror that, or it double-frees.
+
+**Config layout** (36 bytes, `FPM_TONE_CFG` = the V.25 answer tone):
+
+| offset | value in `FPM_TONE_CFG` | role |
+|---|--:|---|
+| `+0x00` | 2100 | frequency, Hz |
+| `+0x02` | 27852 | output scale, Q15 |
+| `+0x04` | 450 | phase-reversal period, 8-sample units |
+| `+0x0c` | — | resonator damping input |
+| `+0x0e` | — | reference-waveform length |
+| `+0x14` | — | buffer size; zero suppresses allocation |
+| `+0x20` | — | extra length added to the second buffer |
+
+Implementation is now mechanical; the remaining unknown is only what the
+reference waveform at `state[0x2c]` is correlated against, which matters for
+the detector half (`FPM_TONE_detect`, `_find_rev`, `_filter`) rather than for
+`create` itself.
 
 ## 20. `B103FP_create` — partial decode
 
