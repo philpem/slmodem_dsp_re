@@ -85,3 +85,38 @@ bandpass, the tones or the oscillator, which is the error finding 32 made.
 blob byte for byte, and asserts each documented effect above against a freshly
 built object. If a future edit changes what a field does, the build fails
 rather than this page going quietly stale.
+
+
+---
+
+## Bit-set fields
+
+Several fields are used as bit sets rather than scalars. They are documented
+where they live, but collected here because they are the one category in this
+reconstruction where a *plausible* name is worse than no name: knowing where a
+bit is written says nothing about what the layer above does with it, and a
+wrong guess propagates into every caller.
+
+The rule applied throughout: **name a bit only once something is found that
+reads it**; otherwise document the set and clear sites and leave the literal.
+
+### `struct b103fp`'s `flags` (+0x1d)
+
+Full table with set/clear sites in `include/dsplib/b103fp.h`. Three of eight
+bits are named; the other five have known write sites and no known reader.
+
+`B103FP_modem` returns the whole 32-bit word at `+0x1c` — status in byte 0,
+these flags in byte 1 — so the consumer is `b103_process`, which is not
+reconstructed yet. Decoding it should settle the remaining five.
+
+One is worth knowing now regardless: **`0x02` is a one-shot**. Every timeout
+path sets it, and `B103FP_modem` clears it at the top of every call, so a
+caller that does not read it each block loses the event.
+
+### Still to identify
+
+- the other five bits of `b103fp.flags`
+- `struct dp`'s `status`, which slmodemd's own `modem_defs.h` may name
+- whatever the V.22 and V.32 configurations turn out to use
+
+Tracked as task 15.

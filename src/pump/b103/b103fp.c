@@ -454,19 +454,19 @@ RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count)
 	if (CarrierDetectB103(fp)) {
 		fp->flags |= B103_FLAG_CARRIER;
 		fp->hdx->rx_count = 0;
-		fp->flags &= (unsigned char)~B103_FLAG_80;
+		fp->flags &= (unsigned char)~0x80;
 		return nbits;
 	}
 
 	hdx = fp->hdx;
 	hdx->rx_count = (short)(hdx->rx_count + 1);
 	if (hdx->rx_count <= 7) {
-		fp->flags &= (unsigned char)~B103_FLAG_80;
+		fp->flags &= (unsigned char)~0x80;
 		return nbits;
 	}
 
 	B103NextState[hdx->mode](fp);
-	fp->flags &= (unsigned char)~B103_FLAG_80;
+	fp->flags &= (unsigned char)~0x80;
 	fp->status = 6;
 	return 0;
 }
@@ -747,7 +747,7 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 	}
 
 	fp->flags &= (unsigned char)~B103_FLAG_TIMEOUT;
-	if (fp->flags & 0x01)
+	if (fp->flags & B103_FLAG_CLEAR_STATUS)
 		fp->status = 0;
 
 	/* Pad the transmit bits out to a full six with mark. */

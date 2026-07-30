@@ -207,12 +207,40 @@ struct b103fp {
 };
 
 /*
- * Bits in `flags`.  Named for what sets and clears them; the meaning the
- * layer above attaches to them is not yet established.
+ * Bits in `flags`.
+ *
+ * INCOMPLETE, and named for what sets and clears them rather than for what
+ * they mean -- the meaning belongs to whatever reads the word, and that is
+ * `b103_process`, which is not reconstructed yet.  B103FP_modem returns the
+ * whole 32-bit word at +0x1c (status in byte 0, these in byte 1), so the
+ * consumer is one level up.
+ *
+ * Every bit's set/clear sites are known and listed below; three of the eight
+ * have no name because knowing where a bit is written is not the same as
+ * knowing what it means, and inventing a name for the difference would be
+ * worse than leaving the literal.  Tracked as task 15.
+ *
+ *  bit  | set by                                  | cleared by
+ * ------|-----------------------------------------|---------------------------
+ *  0x01 | Originate WAIT2 (|= 0x09)               | --
+ *       | READ by B103FP_modem: if set, status = 0
+ *  0x02 | every timeout: RxDetMark, RxHdxStart,   | B103FP_modem, every call
+ *       | and create for a bad call_type          |
+ *  0x04 | Originate WAIT1, LocLoop/Answer WAIT1,  | --
+ *       | create's originate arm                  |
+ *  0x08 | Originate WAIT2, LocLoop/Answer WAIT1   | --
+ *  0x10 | START, in all three tables              | --
+ *  0x20 | RxHdxData, when carrier is present      | RxHdxData, every block
+ *  0x40 | B103FP_create                           | CARRDET, in all three tables
+ *  0x80 | nothing observed                        | RxHdxData, every block
+ *
+ * The 0x02 row is the one worth noticing: it is set on a failure and cleared
+ * at the top of every `B103FP_modem` call, so it is a **one-shot event** the
+ * caller must read each block or lose.
  */
-#define B103_FLAG_TIMEOUT  0x02	/* set when a wait expires               */
-#define B103_FLAG_CARRIER  0x20	/* tracks CarrierDetectB103 each block   */
-#define B103_FLAG_80       0x80	/* cleared on every receive-data block   */
+#define B103_FLAG_CLEAR_STATUS 0x01	/* B103FP_modem zeroes status if set */
+#define B103_FLAG_TIMEOUT      0x02	/* one-shot; see above               */
+#define B103_FLAG_CARRIER      0x20	/* tracks CarrierDetectB103          */
 
 /*
  * `hdx->substate`.  These are the ORIGINAL AUTHOR'S names, recovered from the
