@@ -6,7 +6,7 @@
  *   FPM_TONE_set_scale  .text 0x0aaf70
  *   FPM_TONE_generate   .text 0x0aad50
  *
- * Not yet reconstructed: FPM_TONE_create/_delete and the detector half
+ * Not yet reconstructed: FPM_TONE_delete and the detector half
  * (_detect, _find_rev, _filter, _kill, _generate2, _generate_demod).
  *
  * The object is 0x108 bytes and is treated here as opaque storage accessed at
@@ -15,8 +15,13 @@
  * has not been established, and a wrong layout is worse than none.
  */
 
+#include <stddef.h>
+
 #include "dsplib/fpm_tone.h"
 #include "dsplib/fpm_phasor.h"
+
+extern void *sysdep_malloc(unsigned size);
+extern void *sysdep_memcpy(void *dst, const void *src, unsigned n);
 
 /* Little-endian field access into the opaque object. */
 static short *
@@ -93,4 +98,125 @@ FPM_TONE_generate(void *state, short *out, short count)
 	}
 
 	*fld(state, FPM_TONE_OFF_PHASE) = (short)p.phase;
+}
+
+/* Pointer-sized field access, for the slots that hold buffers. */
+static void **
+pfld(void *state, int off)
+{
+	return (void **)((char *)state + off);
+}
+
+/* The built-in configuration: the ITU-T V.25 answer tone. */
+
+
+void *
+FPM_TONE_create(void *state, const void *cfg)
+{
+	struct fpm_phasor p;
+	int owned = 0;
+	int increment;
+	int damp;
+	int len;
+	int i;
+
+	if (state == NULL) {
+		state = sysdep_malloc(FPM_TONE_STATE_SIZE);
+		if (state == NULL)
+			return NULL;
+		owned = 1;
+	}
+
+	sysdep_memcpy(state, cfg != NULL ? cfg : (const void *)FPM_TONE_CFG,
+		      FPM_TONE_CFG_BYTES);
+
+	len = *fld(state, FPM_TONE_CFG_LEN);
+
+	/*
+	 * Buffers belong to whoever allocated the object.  A caller supplying
+	 * its own state supplies its own buffers, so this is skipped -- see
+	 * the ownership contract in docs/findings.md.
+	 */
+	if (owned && len > 0) {
+		*pfld(state, 0x2c) = sysdep_malloc((unsigned)len * 2);
+		*pfld(state, 0x30) = sysdep_malloc(
+			(unsigned)(len + *fld(state, FPM_TONE_CFG_EXTRA)) * 2);
+		*pfld(state, 0xf4) = sysdep_malloc(10);
+		*pfld(state, 0xf8) = sysdep_malloc(8);
+	}
+
+	/*
+	 * Evaluate cos and sin *at* the phase increment, without advancing:
+	 * phase = increment, inc = 0.  That gives cos(omega) for
+	 * omega = 2*pi*f/8000, which is what the Goertzel coefficient needs.
+	 */
+	increment = ((int)*fld(state, FPM_TONE_CFG_FREQ) * 0x8312 + 0x1000) >> 13;
+	p.phase = (unsigned short)increment;
+	p.inc = 0;
+	p.cos = p.sin = 0;
+	FPM_phasor(&p);
+
+	*fld(state, FPM_TONE_OFF_PHASE) = 0;
+	*fld(state, FPM_TONE_OFF_REV_COUNT) = 0;
+	*fld(state, FPM_TONE_OFF_INC) = (short)p.phase;
+
+	damp = *fld(state, FPM_TONE_CFG_DAMP);
+
+	/* Exact-frequency Goertzel section. */
+	*fld(state, 0x36) = 0x4000;
+	*fld(state, 0x38) = 0x4000;
+	*fld(state, 0x3a) = (short)-(2 * p.cos);
+	*fld(state, 0x3c) = (short)((damp * damp) >> 16);
+	*fld(state, 0x3e) = (short)((-(p.cos * damp)) >> 14);
+	for (i = 0x40; i <= 0x50; i += 2)
+		*fld(state, i) = 0;
+	*fld(state, 0x34) = 0;
+	for (i = 0x52; i <= 0xf0; i += 2)
+		*fld(state, i) = 0;
+
+	/*
+	 * Correlation reference: the source waveform modulated by a cosine
+	 * sweeping at the tone frequency.  Setting inc to the current phase is
+	 * what starts that sweep.
+	 */
+	p.inc = p.phase;
+	{
+		const short *src = (const short *)*pfld(state, FPM_TONE_CFG_SRC);
+		short *ref = (short *)*pfld(state, 0x2c);
+		short *zero = (short *)*pfld(state, 0x30);
+
+		for (i = 0; i < len; i++) {
+			FPM_phasor(&p);
+			zero[i] = 0;
+			ref[i] = (short)((2 * src[i] * p.cos) >> 14);
+		}
+	}
+
+	/*
+	 * Damped resonator, r = 0.96.  Evaluated from phase 0 so cos = 1.0;
+	 * a caller retunes it later via FPM_TONE_set_freq.
+	 */
+	*pfld(state, 0xfc) = (char *)state + 0x36;
+	*fld(state, 0x100) = 0;
+	*fld(state, 0x102) = 0;
+	*fld(state, 0x104) = 0;
+	*fld(state, 0x106) = 0;
+
+	p.phase = 0;
+	p.inc = 0;
+	FPM_phasor(&p);
+	{
+		short *blk = (short *)*pfld(state, 0xf4);
+		short *acc = (short *)*pfld(state, 0xf8);
+
+		blk[0] = 0x4000;
+		blk[1] = 0x4000;
+		blk[2] = (short)-(2 * p.cos);
+		blk[3] = 0x3afb;			/* 0.96^2       */
+		blk[4] = (short)((p.cos * -31457) >> 14);	/* -2 * 0.96 */
+
+		acc[0] = acc[1] = acc[2] = acc[3] = 0;
+	}
+
+	return state;
 }

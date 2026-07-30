@@ -36,6 +36,73 @@ compare_state(const unsigned char *ours, const unsigned char *ref,
 	(void)what;
 }
 
+/*
+ * Compare two created objects.  The four buffer pointers and the internal
+ * self-pointer at +0xfc necessarily differ between builds, so those slots are
+ * skipped and the buffers compared by content instead.
+ */
+static int
+is_pointer_slot(int off)
+{
+	return off == 0x10 || off == 0x2c || off == 0x30
+	       || off == 0xf4 || off == 0xf8 || off == 0xfc;
+}
+
+static void
+compare_created(const unsigned char *ours, const unsigned char *ref, int len,
+		int extra, int same_cfg)
+{
+	int i;
+
+	for (i = 0; i < FPM_TONE_STATE_SIZE; i += 2) {
+		if (is_pointer_slot(i) || is_pointer_slot(i - 2))
+			continue;
+		diff_eq_int("created byte 0x%02lx",
+			    *(const short *)(ours + i),
+			    *(const short *)(ref + i), i);
+	}
+
+	if (same_cfg) {
+		/* Same config object, so the copied pointer must be identical. */
+		diff_eq_int("source pointer copied (%ld)",
+			    *(void *const *)(ours + 0x10)
+			    == *(void *const *)(ref + 0x10), 1, 0);
+	} else {
+		/*
+		 * Different config objects -- ours uses our extracted ToneLPF,
+		 * the reference its own.  The addresses cannot match, so check
+		 * the thing that actually matters: that our extraction of the
+		 * prototype agrees with the blob's, tap for tap.
+		 */
+		const short *pa = *(const short *const *)(ref + 0x10);
+		const short *pb = *(const short *const *)(ours + 0x10);
+
+		for (i = 0; i < len; i++)
+			diff_eq_int("ToneLPF[%ld]", pb[i], pa[i], i);
+	}
+
+	/* Buffer contents, not addresses. */
+	{
+		const short *ra = *(const short *const *)(ref + 0x2c);
+		const short *rb = *(const short *const *)(ours + 0x2c);
+		const short *za = *(const short *const *)(ref + 0x30);
+		const short *zb = *(const short *const *)(ours + 0x30);
+		const short *ka = *(const short *const *)(ref + 0xf4);
+		const short *kb = *(const short *const *)(ours + 0xf4);
+		const short *aa = *(const short *const *)(ref + 0xf8);
+		const short *ab = *(const short *const *)(ours + 0xf8);
+
+		for (i = 0; i < len; i++)
+			diff_eq_int("reference[%ld]", rb[i], ra[i], i);
+		for (i = 0; i < len + extra; i++)
+			diff_eq_int("zeroed[%ld]", zb[i], za[i], i);
+		for (i = 0; i < 5; i++)
+			diff_eq_int("resonator coeff[%ld]", kb[i], ka[i], i);
+		for (i = 0; i < 4; i++)
+			diff_eq_int("resonator acc[%ld]", ab[i], aa[i], i);
+	}
+}
+
 int
 main(void)
 {
@@ -52,6 +119,34 @@ main(void)
 		diff_eq_int("reference built an object (%ld)", 0, 1, 0);
 		return diff_end();
 	}
+
+	/* create: the whole object, buffers included. */
+	diff_begin("FPM_TONE_create default cfg");
+	{
+		unsigned char *ca = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *cb = FPM_TONE_create(0, ref_FPM_TONE_CFG);
+
+		diff_eq_int("ours built an object (%ld)", cb != 0, 1, 0);
+		if (cb != 0)
+			compare_created(cb, ca,
+					*(short *)(ca + FPM_TONE_CFG_LEN),
+					*(short *)(ca + FPM_TONE_CFG_EXTRA), 1);
+	}
+	rc |= diff_end();
+
+	/* create with NULL cfg must fall back to the built-in configuration. */
+	diff_begin("FPM_TONE_create NULL cfg");
+	{
+		unsigned char *ca = ref_FPM_TONE_create(0, 0);
+		unsigned char *cb = FPM_TONE_create(0, 0);
+
+		diff_eq_int("ours built an object (%ld)", cb != 0, 1, 0);
+		if (cb != 0)
+			compare_created(cb, ca,
+					*(short *)(ca + FPM_TONE_CFG_LEN),
+					*(short *)(ca + FPM_TONE_CFG_EXTRA), 0);
+	}
+	rc |= diff_end();
 
 	diff_begin("FPM_TONE_set_freq");
 	for (k = 0; k < 4000; k += 7) {

@@ -25,6 +25,49 @@
  */
 #define FPM_TONE_STATE_SIZE 0x108
 
+/*
+ * Config offsets.  NOTE +0x10 holds a POINTER in the original -- dumping the
+ * config as int16 hides that behind a plausible-looking scalar.  See the
+ * relocation note in docs/findings.md.
+ */
+#define FPM_TONE_CFG_FREQ      0x00	/* s16 Hz                            */
+#define FPM_TONE_CFG_SCALE     0x02	/* s16 output gain                   */
+#define FPM_TONE_CFG_REVPERIOD 0x04	/* s16 reversal period, 8-sample units */
+#define FPM_TONE_CFG_DAMP      0x0c	/* s16 feeds the Goertzel coefficients */
+#define FPM_TONE_CFG_SRC       0x10	/* short * -- source waveform        */
+#define FPM_TONE_CFG_LEN       0x14	/* s16 buffer size and fill length    */
+#define FPM_TONE_CFG_EXTRA     0x20	/* s16 added to the second buffer     */
+#define FPM_TONE_CFG_BYTES     0x24	/* 36 bytes copied wholesale          */
+
+/*
+ * The built-in configuration, laid out as a struct so the pointer at +0x10 is
+ * a pointer.  Total size must stay 36 bytes to match the original.
+ */
+struct fpm_tone_cfg {
+	short freq;		/* +0x00 */
+	short scale;		/* +0x02 */
+	short rev_period;	/* +0x04 */
+	short pad06[3];		/* +0x06 .. +0x0a */
+	short damp;		/* +0x0c */
+	short pad0e;		/* +0x0e */
+	const short *src;	/* +0x10 pointer to the filter prototype */
+	short len;		/* +0x14 */
+	short pad16[5];		/* +0x16 .. +0x1e */
+	short extra;		/* +0x20 */
+	short pad22;		/* +0x22 */
+};
+
+extern const struct fpm_tone_cfg FPM_TONE_CFG_data;
+extern const short *const FPM_TONE_CFG;
+extern const short ToneLPF[53];
+
+/*
+ * Build a tone object.  Passing NULL for `state` allocates one (and its
+ * buffers); supplying your own means you supply its buffers too.  Passing
+ * NULL for `cfg` uses the built-in V.25 answer-tone configuration.
+ */
+void *FPM_TONE_create(void *state, const void *cfg);
+
 /* Field offsets established so far; the rest of the object is detector state. */
 #define FPM_TONE_OFF_SCALE     0x02	/* s16 output gain, Q14 applied      */
 #define FPM_TONE_OFF_REV_PERIOD 0x04	/* s16 reversal period, 8-sample units */
