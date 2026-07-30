@@ -117,6 +117,17 @@ rate meaning. Settle it from how `FPM_TONE_create` consumes the value before
 concluding. Reproduced verbatim either way.
 </details>
 
+## 🔴 R-10 — `FPM_TONE`'s phase-reversal period is counted in 8-sample units
+
+`FPM_TONE_generate` advances its reversal counter by `count >> 3` and compares
+against `state[0x04]`, whose default is 450. That reaches threshold after 3600
+samples, which is 450 ms **only at 8000 Hz** — the config carries the ITU-T
+V.25 figure in milliseconds precisely because the scaling assumes 8 kHz.
+
+**Retarget:** at another rate the divisor must change with it, or the reversal
+period drifts. At 7200 Hz (where the B103 FSK core runs, R-8) the same config
+would give 500 ms instead of 450. Finding 19.
+
 ## 🟡 R-7 — `dp_wrapper`'s rate table is a fixed list of six pairs
 
 `dp_wrapper_create` dispatches on literal rate pairs among {8000, 9600, 48000}

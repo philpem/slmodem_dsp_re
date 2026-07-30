@@ -599,3 +599,52 @@ Beyond the generator loop, `FPM_TONE_generate` reads `state[0x28]` and
 `state[0x04]` and branches — an envelope or duration counter, not yet decoded.
 That, and the detector half (`FPM_TONE_detect`, `_find_rev`, `_filter`), remain
 to do.
+
+## 19. `FPM_TONE` is the V.25 answer tone generator, reversals and all
+
+`FPM_TONE_generate`'s post-loop branch is not an envelope. It is a periodic
+**180° phase reversal**, and the default config is literally the ITU-T V.25
+answer tone.
+
+```sh
+python3 tools/tabdump.py dsplibs.o --sym FPM_TONE_CFG --type s16
+#   2100, 27852, 450, 24576, 328, 1, 30720, 0, -12224, ...
+```
+
+- **2100** — the V.25 answer tone frequency, in Hz
+- 27852 — output scale, ≈0.85 in Q15
+- **450** — the reversal period
+
+V.25 and V.8 specify ANSam as 2100 Hz reversing phase every **450 ms**, which
+is what disables echo cancellers in the network so a modem can use the return
+path.
+
+The mechanism, from `.text 0x0aadb9`:
+
+```
+counter = state[0x28] + (count >> 3)
+if (state[0x04] > 0 && counter >= state[0x04]) {
+        state[0x28] = 0;
+        phase += 0x4000;                  /* half of a 0x8000 cycle = 180° */
+        if (phase > 0x7fff) phase -= 0x4000;
+} else {
+        state[0x28] = counter;
+}
+```
+
+`0x4000` is exactly half the `0x8000` phase cycle, so the hop is 180°, not the
+90° a first reading of the constant suggests.
+
+**The `>> 3` is another 8 kHz assumption.** The counter advances by
+`count / 8` per call, so a threshold of 450 is reached after 3600 samples —
+and 3600 samples is 450 ms only at 8000 Hz. The config value is the ITU
+figure in milliseconds *because* the scaling assumes 8 kHz. Recorded as R-10.
+
+The detector counterpart exists too: `FPM_TONE_find_rev` is called from
+`RxHdxPhsReversal`, the half-duplex receiver's phase-reversal detector.
+
+**Reconstruction note.** An earlier reading of this code concluded the branch
+was unreachable, because `objdump` filtering had hidden
+`lea 0x0(%ebp,%ebx,1),%eax` — the instruction that computes the counter. A
+disassembly filter that drops `lea` as "just padding" is unsafe: GCC uses `lea`
+for arithmetic constantly. Filter on address ranges, not opcodes.
