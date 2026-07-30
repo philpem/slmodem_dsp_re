@@ -1,0 +1,7060 @@
+{
+ "attrib": {
+  "AnalyseDialString": {
+   "how": "ambiguous",
+   "tu": "Callprog.c|Dialer.c"
+  },
+  "ApplyBulkDelay": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "B103AnswerNextState": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "B103FP_create": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "B103FP_delete": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "B103FP_modem": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "B103LocLoopNextState": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "B103OriginateNextState": {
+   "how": "prefix",
+   "tu": "B103.c"
+  },
+  "BwChDem_Create": {
+   "how": "prefix",
+   "tu": "bwchdem.c"
+  },
+  "BwChDem_Delete": {
+   "how": "prefix",
+   "tu": "bwchdem.c"
+  },
+  "BwChDem_Progress": {
+   "how": "prefix",
+   "tu": "bwchdem.c"
+  },
+  "CALLPROG_Create": {
+   "how": "prefix",
+   "tu": "Callprog.c"
+  },
+  "CALLPROG_Delete": {
+   "how": "prefix",
+   "tu": "Callprog.c"
+  },
+  "CALLPROG_Dial": {
+   "how": "prefix",
+   "tu": "Callprog.c"
+  },
+  "CALLPROG_Progress": {
+   "how": "prefix",
+   "tu": "Callprog.c"
+  },
+  "CALLPROG_Status_string": {
+   "how": "prefix",
+   "tu": "Callprog.c"
+  },
+  "CID_FSD_demodulate": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "CID_MTD_detect": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "CID_create": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "CID_delete": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "CID_process": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "CalcTurnAroundDelay": {
+   "how": "fill",
+   "tu": "Rx.c"
+  },
+  "CarrierDetect": {
+   "how": "ambiguous",
+   "tu": "Tx.c|B103.c"
+  },
+  "CarrierDetectB103": {
+   "how": "ambiguous",
+   "tu": "Tx.c|cid.c"
+  },
+  "CarrierDetectV17": {
+   "how": "ambiguous",
+   "tu": "V29tx.c|Data.c"
+  },
+  "CarrierDetectV21": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "CarrierDetectV27": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "CarrierDetectV29": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "CodeESeq": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "CodeFinalRateSeq": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "CodeRateSeq": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "CreateV23Modem": {
+   "how": "ambiguous",
+   "tu": "V32.c|v23modem.c"
+  },
+  "CrossDataLinks": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "DILdescriptorPacker": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "DTMF_MTD_detect": {
+   "how": "name-only",
+   "tu": "Dtmf.c"
+  },
+  "DataCarrierDetectV17": {
+   "how": "name-only",
+   "tu": "Data.c"
+  },
+  "DataCarrierDetectV27": {
+   "how": "name-only",
+   "tu": "Data.c"
+  },
+  "DataCarrierDetectV29": {
+   "how": "name-only",
+   "tu": "Data.c"
+  },
+  "DecodeRateSeq": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "DeleteV23Modem": {
+   "how": "ambiguous",
+   "tu": "V32.c|v23modem.c"
+  },
+  "DemodDataB103": {
+   "how": "ambiguous",
+   "tu": "Tx.c|cid.c"
+  },
+  "DemodDataV17": {
+   "how": "ambiguous",
+   "tu": "V29tx.c|Data.c"
+  },
+  "DemodDataV21": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "DemodDataV22": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "DemodDataV27": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "DemodDataV29": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "DemodDataV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "DescrambleDataV17": {
+   "how": "ambiguous",
+   "tu": "V29tx.c|Data.c"
+  },
+  "DescrambleDataV22": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "DescrambleDataV27": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "DescrambleDataV29": {
+   "how": "ambiguous",
+   "tu": "Tx.c|Data.c"
+  },
+  "DescrambleDataV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "DescramblerOn": {
+   "how": "ambiguous",
+   "tu": "Tx.c|B103.c"
+  },
+  "DetSequence": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "Detect_1s": {
+   "how": "ambiguous",
+   "tu": "Rx.c|Tx.c"
+  },
+  "Detect_Retrain": {
+   "how": "ambiguous",
+   "tu": "Rx.c|Tx.c"
+  },
+  "Detect_Rmloop2_ACK": {
+   "how": "ambiguous",
+   "tu": "Rx.c|Tx.c"
+  },
+  "Detect_v22": {
+   "how": "ambiguous",
+   "tu": "Rx.c|Tx.c"
+  },
+  "DialerAbort": {
+   "how": "prefix",
+   "tu": "Dialer.c"
+  },
+  "DialerCreate": {
+   "how": "prefix",
+   "tu": "Dialer.c"
+  },
+  "DialerProgress": {
+   "how": "prefix",
+   "tu": "Dialer.c"
+  },
+  "Dialer_IsDialStringInvalid": {
+   "how": "ambiguous",
+   "tu": "V8.c|Callprog.c"
+  },
+  "Dual_TONE_create": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V32.c"
+  },
+  "Dual_TONE_delete": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V32.c"
+  },
+  "Dual_TONE_detect": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V32.c"
+  },
+  "EchoCanceler": {
+   "how": "fill",
+   "tu": "Fdsp.c"
+  },
+  "EpochDetectV17": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "EpochDetectV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "EpochDetectV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "EpochDetectV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FAXVMI_control": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAXVMI_create": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAXVMI_delete": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAXVMI_message": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAXVMI_process": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAXVMI_status": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "FAX_FSE_decision_128pt": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "FAX_FSE_decision_16pt": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "FAX_FSE_decision_32pt": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "FAX_FSE_decision_64pt": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "FAX_FSE_decision_AB": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "FAX_class1_command": {
+   "how": "prefix",
+   "tu": "fax.c"
+  },
+  "FAX_create": {
+   "how": "prefix",
+   "tu": "fax.c"
+  },
+  "FAX_delete": {
+   "how": "prefix",
+   "tu": "fax.c"
+  },
+  "FAX_process": {
+   "how": "prefix",
+   "tu": "fax.c"
+  },
+  "FDSP_DP_Create": {
+   "how": "prefix",
+   "tu": "Fdsp.c"
+  },
+  "FDSP_DP_Delete": {
+   "how": "prefix",
+   "tu": "Fdsp.c"
+  },
+  "FDSP_DP_Run": {
+   "how": "prefix",
+   "tu": "Fdsp.c"
+  },
+  "FDSP_Kernel_InitObj": {
+   "how": "name-only",
+   "tu": "Fdsp.c"
+  },
+  "FDSP_Kernel_Loop": {
+   "how": "name-only",
+   "tu": "Fdsp.c"
+  },
+  "FDSP_Kernel_SetInternalBeepInProgress": {
+   "how": "name-only",
+   "tu": "Fdsp.c"
+  },
+  "FIFO8_create": {
+   "how": "prefix",
+   "tu": "Fifo8.c"
+  },
+  "FIFO8_delete": {
+   "how": "prefix",
+   "tu": "Fifo8.c"
+  },
+  "FIFO8_read": {
+   "how": "prefix",
+   "tu": "Fifo8.c"
+  },
+  "FIFO8_write": {
+   "how": "prefix",
+   "tu": "Fifo8.c"
+  },
+  "FIFO_create": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "FIFO_delete": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "FIFO_full_test": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "FIFO_read": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "FIFO_write": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "FPM_AGC_Freeze": {
+   "how": "prefix",
+   "tu": "fpm_agc.c"
+  },
+  "FPM_AGC_Release": {
+   "how": "prefix",
+   "tu": "fpm_agc.c"
+  },
+  "FPM_AGC_agc": {
+   "how": "prefix",
+   "tu": "fpm_agc.c"
+  },
+  "FPM_AGC_init": {
+   "how": "prefix",
+   "tu": "fpm_agc.c"
+  },
+  "FPM_ECC_cancel": {
+   "how": "prefix",
+   "tu": "fpm_ecc.c"
+  },
+  "FPM_ECC_free": {
+   "how": "prefix",
+   "tu": "fpm_ecc.c"
+  },
+  "FPM_ECC_init": {
+   "how": "prefix",
+   "tu": "fpm_ecc.c"
+  },
+  "FPM_FSD_demodulate": {
+   "how": "prefix",
+   "tu": "fpm_fsd.c"
+  },
+  "FPM_FSD_free": {
+   "how": "prefix",
+   "tu": "fpm_fsd.c"
+  },
+  "FPM_FSD_init": {
+   "how": "prefix",
+   "tu": "fpm_fsd.c"
+  },
+  "FPM_FSE_free": {
+   "how": "prefix",
+   "tu": "fpm_fse.c"
+  },
+  "FPM_FSE_init": {
+   "how": "prefix",
+   "tu": "fpm_fse.c"
+  },
+  "FPM_FSE_receive": {
+   "how": "prefix",
+   "tu": "fpm_fse.c"
+  },
+  "FPM_FSM_delete": {
+   "how": "prefix",
+   "tu": "fpm_fsm.c"
+  },
+  "FPM_FSM_init": {
+   "how": "prefix",
+   "tu": "fpm_fsm.c"
+  },
+  "FPM_FSM_modulate": {
+   "how": "prefix",
+   "tu": "fpm_fsm.c"
+  },
+  "FPM_MRF_filter": {
+   "how": "prefix",
+   "tu": "fpm_mrf.c"
+  },
+  "FPM_MRF_free": {
+   "how": "prefix",
+   "tu": "fpm_mrf.c"
+  },
+  "FPM_MRF_init": {
+   "how": "prefix",
+   "tu": "fpm_mrf.c"
+  },
+  "FPM_MTD_create": {
+   "how": "prefix",
+   "tu": "fpm_mtd.c"
+  },
+  "FPM_MTD_delete": {
+   "how": "prefix",
+   "tu": "fpm_mtd.c"
+  },
+  "FPM_MTD_detect": {
+   "how": "prefix",
+   "tu": "fpm_mtd.c"
+  },
+  "FPM_PPS_filter": {
+   "how": "prefix",
+   "tu": "fpm_pps.c"
+  },
+  "FPM_PPS_free": {
+   "how": "prefix",
+   "tu": "fpm_pps.c"
+  },
+  "FPM_PPS_init": {
+   "how": "prefix",
+   "tu": "fpm_pps.c"
+  },
+  "FPM_SDM_descrambler": {
+   "how": "prefix",
+   "tu": "fpm_sdm.c"
+  },
+  "FPM_SDM_init": {
+   "how": "prefix",
+   "tu": "fpm_sdm.c"
+  },
+  "FPM_SDM_scrambler": {
+   "how": "prefix",
+   "tu": "fpm_sdm.c"
+  },
+  "FPM_SMC_encoder": {
+   "how": "prefix",
+   "tu": "fpm_smc.c"
+  },
+  "FPM_SMC_init": {
+   "how": "prefix",
+   "tu": "fpm_smc.c"
+  },
+  "FPM_SRE_free": {
+   "how": "prefix",
+   "tu": "fpm_sre.c"
+  },
+  "FPM_SRE_init": {
+   "how": "prefix",
+   "tu": "fpm_sre.c"
+  },
+  "FPM_SRE_recover": {
+   "how": "prefix",
+   "tu": "fpm_sre.c"
+  },
+  "FPM_TONE_create": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_delete": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_detect": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_filter": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_find_rev": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_generate": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_generate2": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_generate_demod": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_kill": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_set_freq": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_TONE_set_scale": {
+   "how": "prefix",
+   "tu": "fpm_tone.c"
+  },
+  "FPM_atan": {
+   "how": "prefix",
+   "tu": "fpm_atan.c"
+  },
+  "FPM_block_update": {
+   "how": "ambiguous",
+   "tu": "fpm_tone.c|voice.c"
+  },
+  "FPM_circ_dotp2": {
+   "how": "ambiguous",
+   "tu": "fpm_div.c|fpm_ecc.c"
+  },
+  "FPM_div": {
+   "how": "prefix",
+   "tu": "fpm_div.c"
+  },
+  "FPM_div_32": {
+   "how": "prefix",
+   "tu": "fpm_div.c"
+  },
+  "FPM_iir_filt": {
+   "how": "prefix",
+   "tu": "fpm_iir.c"
+  },
+  "FPM_iir_filt_II": {
+   "how": "prefix",
+   "tu": "fpm_iir.c"
+  },
+  "FPM_iir_filt_block": {
+   "how": "prefix",
+   "tu": "fpm_iir.c"
+  },
+  "FPM_lmsupd": {
+   "how": "ambiguous",
+   "tu": "fpm_tone.c|voice.c"
+  },
+  "FPM_lmsupd2": {
+   "how": "ambiguous",
+   "tu": "fpm_tone.c|voice.c"
+  },
+  "FPM_log10": {
+   "how": "prefix",
+   "tu": "fpm_log10.c"
+  },
+  "FPM_phasor": {
+   "how": "prefix",
+   "tu": "fpm_phasor.c"
+  },
+  "FPM_phasor_demod": {
+   "how": "prefix",
+   "tu": "fpm_phasor.c"
+  },
+  "FPM_phasor_dp": {
+   "how": "prefix",
+   "tu": "fpm_phasor.c"
+  },
+  "FPM_rms": {
+   "how": "prefix",
+   "tu": "fpm_rms.c"
+  },
+  "FPM_sqrt": {
+   "how": "prefix",
+   "tu": "fpm_sqrt.c"
+  },
+  "FPM_sqrt_dp": {
+   "how": "prefix",
+   "tu": "fpm_sqrt.c"
+  },
+  "FP_Pow": {
+   "how": "ambiguous",
+   "tu": "Cadence.c|TONE.c"
+  },
+  "FSE_Bridge_det": {
+   "how": "fill",
+   "tu": "fax.c"
+  },
+  "FSE_decision_128pt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_16Tpt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_16pt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_32pt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_4pt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_64pt": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_AB": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_CD": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_decision_eqtrn": {
+   "how": "ambiguous",
+   "tu": "fax.c|V17tx.c"
+  },
+  "FSE_decision_trn": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "FSE_getdiag": {
+   "how": "ambiguous",
+   "tu": "fpm_fsd.c|fpm_fse.c"
+  },
+  "FSEv22_decision12": {
+   "how": "fill",
+   "tu": "V22.c"
+  },
+  "FSEv22_decision24": {
+   "how": "fill",
+   "tu": "V22.c"
+  },
+  "FindCorrelation": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "GenEQTrnSequenceV27": {
+   "how": "ambiguous",
+   "tu": "V27tx.c|Tx.c"
+  },
+  "GenEQTrnSequenceV29": {
+   "how": "ambiguous",
+   "tu": "V29tx.c|Tx.c"
+  },
+  "GenSequence": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "GenerateAnsTone": {
+   "how": "ambiguous",
+   "tu": "V32.c|v23modem.c"
+  },
+  "GenerateCallingTone": {
+   "how": "ambiguous",
+   "tu": "Cadence.c|TONE.c"
+  },
+  "GetDialerConfig": {
+   "how": "ambiguous",
+   "tu": "Dialer.c|toneiir.c"
+  },
+  "GetFP_Value": {
+   "how": "ambiguous",
+   "tu": "Cadence.c|TONE.c"
+  },
+  "GetGain": {
+   "how": "ambiguous",
+   "tu": "voice.c|Beepgen.c"
+  },
+  "GetNextDigitAndReturnNextState": {
+   "how": "ambiguous",
+   "tu": "Callprog.c|Dialer.c"
+  },
+  "GetRateV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "GetSNRV17": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "GetSNRV21": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "GetSNRV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "GetSNRV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "GetSequence": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "GetSignalQuality": {
+   "how": "ambiguous",
+   "tu": "Tx.c|B103.c"
+  },
+  "GetT30FrameIDFromBuffer": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "GetT30FrameNameByID": {
+   "how": "ambiguous",
+   "tu": "faxvmi.c|V17rx.c"
+  },
+  "GetVPcmMinimalTxPowerReduction": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "Get_Detection_Threshold_Table": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V32.c"
+  },
+  "InitDetSequence": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "InitGenSequence": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "IsDialStringInvalid": {
+   "how": "ambiguous",
+   "tu": "Callprog.c|Dialer.c"
+  },
+  "IsPulseDialerReady": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "K56FLEX_Create": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "K56FLEX_Delete": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "K56FLEX_SessionTermination": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "LastPulseDigitDialed": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "LoadReg": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "MTK_phasor": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "MakeTxData": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "ModDataB103": {
+   "how": "ambiguous",
+   "tu": "B103.c|Tx.c"
+  },
+  "ModDataV17": {
+   "how": "ambiguous",
+   "tu": "Smc.c|Tx.c"
+  },
+  "ModDataV21": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "ModDataV22": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "ModDataV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "ModDataV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "ModDataV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "PulseDialDigit": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "QualityDetectV17": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "QualityDetectV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "QualityDetectV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "RD_create": {
+   "how": "prefix",
+   "tu": "rd.c"
+  },
+  "RD_delete": {
+   "how": "prefix",
+   "tu": "rd.c"
+  },
+  "RD_process": {
+   "how": "prefix",
+   "tu": "rd.c"
+  },
+  "RD_ring_details": {
+   "how": "prefix",
+   "tu": "rd.c"
+  },
+  "RateToSeq": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "ReadGTimer": {
+   "how": "ambiguous",
+   "tu": "Rx.c|V22.c"
+  },
+  "RenegotiateDetectV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "ResetCallingTone": {
+   "how": "ambiguous",
+   "tu": "Cadence.c|TONE.c"
+  },
+  "ResetRx": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "Restore_rateV17": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "RetrainDetectV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "RingDetector_Create": {
+   "how": "prefix",
+   "tu": "ringDetector.c"
+  },
+  "RingDetector_Delete": {
+   "how": "prefix",
+   "tu": "ringDetector.c"
+  },
+  "RingDetector_GetLastRing": {
+   "how": "prefix",
+   "tu": "ringDetector.c"
+  },
+  "RingDetector_Process": {
+   "how": "prefix",
+   "tu": "ringDetector.c"
+  },
+  "RingDetector_Reset": {
+   "how": "prefix",
+   "tu": "ringDetector.c"
+  },
+  "RxClampV22": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxClampV32": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxDetMarkB103": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxBridgeV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxData": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxDataB103": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxDataV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxDataV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxDataV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxDataV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxEpoch": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxEpochDetV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxEpochDetV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxEpochDetV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxError": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxErrorV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxErrorV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxErrorV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxErrorV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxIdleV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxIdleV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxIdleV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxIdleV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxNoSignal": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxNull": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxPhsReversal": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxPrtcolV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxPrtcolV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxPrtcolV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxRateSequence": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxSTone": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxScramV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxSequence": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxSequenceE": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxStartB103": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxStartV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxStartV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxStartV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxStartV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxTone": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxToneData": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxHdxWaitV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxNextStateV17": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxNextStateV21": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxNextStateV27": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxNextStateV29": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxTrained1200": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "RxTrained2400": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "SDM_descrambler": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDM_init": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDM_scrambler": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDMv27_descrambler": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDMv27_init": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDMv27_scrambler": {
+   "how": "prefix",
+   "tu": "SDM.c"
+  },
+  "SDMv32_descrambler": {
+   "how": "name-only",
+   "tu": "SDM.c"
+  },
+  "SDMv32_scrambler": {
+   "how": "name-only",
+   "tu": "SDM.c"
+  },
+  "SGD_control": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_correlate": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_create": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_delete": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_pattern_det": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_sequence_det": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_sequence_gen": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_status": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SGD_symbol_gen": {
+   "how": "prefix",
+   "tu": "Sgd.c"
+  },
+  "SMC_encoder": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMC_init": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMCv17_encoder_abs": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMCv17_encoder_dif": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMCv17_encoder_tcm": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMCv17_init": {
+   "how": "prefix",
+   "tu": "Smc.c"
+  },
+  "SMCv32_encoder_abs": {
+   "how": "name-only",
+   "tu": "Smc.c"
+  },
+  "SMCv32_encoder_dif": {
+   "how": "name-only",
+   "tu": "Smc.c"
+  },
+  "SMCv32_encoder_tcm": {
+   "how": "name-only",
+   "tu": "Smc.c"
+  },
+  "STRM_VCE_GetFDSPEnvironmentalParams": {
+   "how": "ambiguous",
+   "tu": "voice.c|fax.c"
+  },
+  "ScrambleDataV17": {
+   "how": "ambiguous",
+   "tu": "V17rx.c|Smc.c"
+  },
+  "ScrambleDataV22": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "ScrambleDataV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "ScrambleDataV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "ScrambleDataV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "ScramblerOn": {
+   "how": "ambiguous",
+   "tu": "Tx.c|B103.c"
+  },
+  "SeedScramblerV17": {
+   "how": "ambiguous",
+   "tu": "V17rx.c|Smc.c"
+  },
+  "SeedScramblerV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "SeedScramblerV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SeqToRate": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetAdaptEcV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetAdaptEqV22": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "SetAdaptEqV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetECRndTripDelayV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetEncoderV17": {
+   "how": "ambiguous",
+   "tu": "V17rx.c|Smc.c"
+  },
+  "SetEncoderV29": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "SetPulseBreakTime": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "SetPulseMakeTime": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "SetRxLoopsV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetRxModeV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetRxRate": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "SetScramblerV27": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "SetToneDetect": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "SetTxModeV17": {
+   "how": "ambiguous",
+   "tu": "Smc.c|Tx.c"
+  },
+  "SetTxModeV32": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "SetTxRate": {
+   "how": "ambiguous",
+   "tu": "V22.c|Tx.c"
+  },
+  "SignalDetect": {
+   "how": "ambiguous",
+   "tu": "Tx.c|B103.c"
+  },
+  "StoreCoefV17": {
+   "how": "ambiguous",
+   "tu": "Data.c|Tx.c"
+  },
+  "StoreReg": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "TONE_create": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_delete": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_detect": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_filter": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_generate": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_kill": {
+   "how": "prefix",
+   "tu": "TONE.c"
+  },
+  "TONE_read": {
+   "how": "name-only",
+   "tu": "TONE.c"
+  },
+  "TimingV34": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "TxClockSync": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxClockSyncV32": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxABV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxABV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxAltV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxBridgeV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxCarrierState": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxData": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxDataB103": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxDataV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxDataV21": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxDataV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxDataV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxEQCondV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxEQCondV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxEQCondV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxFinishFrame": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxIdleV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxIdleV21": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxIdleV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxIdleV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxMarksB103": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxNoCarrier": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxNull": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxQuietV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxQuietV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxSCR1V17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxSCR1V27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxSCR1V29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxScrSequence": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxSilenceB103": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxSilenceV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxStartB103": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxStartV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxStartV21": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxStartV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxStartV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxTEP_V17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxTRN": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxHdxTone": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNOP": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNextStateV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNextStateV21": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNextStateV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNextStateV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierB103": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierV17": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierV21": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierV27": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierV29": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "TxNoCarrierV32": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "V17RX_control": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "V17RX_create": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "V17RX_delete": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "V17RX_modem": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "V17RX_status": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "V17TX_control": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "V17TX_create": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "V17TX_delete": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "V17TX_modem": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "V17TX_status": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "V21RX_control": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "V21RX_create": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "V21RX_delete": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "V21RX_modem": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "V21RX_status": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "V21TX_control": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "V21TX_create": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "V21TX_delete": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "V21TX_modem": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "V21TX_status": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "V22FP_GetDiagnostics": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22FP_control": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22FP_create": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22FP_delete": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22FP_modem": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22IIRFilterInit": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_FSE_free": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_FSE_getdiag": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_FSE_init": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_FSE_receive": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_MRF_filter": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_MRF_free": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_MRF_init": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_PPS_filter": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_PPS_free": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_PPS_init": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_SRE_free": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_SRE_init": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_SRE_recover": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_iir_filt_demod": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V22_status": {
+   "how": "prefix",
+   "tu": "V22.c"
+  },
+  "V23ModemMain": {
+   "how": "prefix",
+   "tu": "v23modem.c"
+  },
+  "V27RX_control": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_create": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_decision": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_delete": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_epoch_det": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_eq_train": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_modem": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27RX_status": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "V27TX_control": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "V27TX_create": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "V27TX_delete": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "V27TX_modem": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "V27TX_status": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "V29RX_control": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_create": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_decision": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_delete": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_epoch_det": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_eq_train": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_modem": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29RX_status": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "V29TX_control": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "V29TX_create": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "V29TX_delete": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "V29TX_modem": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "V29TX_status": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "V32AnsNextState": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32FP_GetCleanedSamples": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_GetDiagnostics": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_control": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32FP_create": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_delete": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_modem": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_recreate": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V32FP_status": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32LocLoopNextState": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32OrgNextState": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32RngInitNextState": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32RngRespNextState": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32RxHdxModem": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32StateName": {
+   "how": "name-only",
+   "tu": "V32.c"
+  },
+  "V32TxHdxModem": {
+   "how": "prefix",
+   "tu": "V32.c"
+  },
+  "V34EchoAdapt": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoCleanUp": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoEstimateDelayLineEnergy": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoHistoryBackwardClean": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoPreFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoPreFilterCopy": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoReportCoeff": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EchoUpdateDelayLine": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerAdapt": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerCenterAdapt": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerCleanUp": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerClearCenterTaps": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34EqualizerUpdateDelayLine": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34Filter2": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34GiveINFO0dBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34GiveINFO1aBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34GiveINFO1dBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34GiveProbeResults": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34HilbertFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34InitHilbertFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34InitializeImplementationSpecific": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34ModulatorProcess": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34PremptxCopy": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34SetINFO0aBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34SetINFO0dBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34SetINFO1aBits": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34SetupDemodulator": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34SetupModulator": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34TimingFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34TimingFiltersInit": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34TimingHPFilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34TimingPrefilter": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34XF_GetInfo0BitsPtr": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34XF_GetMaxUpstreamRateIndex": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34XF_GetProbeResultsPtr": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34XF_GetRTD": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34XF_IndicateDilReceived": {
+   "how": "prefix",
+   "tu": "V34.c"
+  },
+  "V34XF_IndicateJdReceived": {
+   "how": "prefix",
+   "tu": "V34.c"
+  },
+  "V34XF_IndicateK56FlexJdReceived": {
+   "how": "prefix",
+   "tu": "V34.c"
+  },
+  "V34XF_IndicateK56FlexRateDetermined": {
+   "how": "prefix",
+   "tu": "V34.c"
+  },
+  "V34XF_IndicateTrn2dReceived": {
+   "how": "prefix",
+   "tu": "V34.c"
+  },
+  "V34agc": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34demodulate": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34descrambler": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34nlencoder": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V34scrambler": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "V8Control": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8Create": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8Delete": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8GetMessage": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8Process": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8SetMessage": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8UpdateModemParameters": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8_V21_reset": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8_setFilters": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V8agc": {
+   "how": "prefix",
+   "tu": "V8.c"
+  },
+  "V92createConstellations": {
+   "how": "ambiguous",
+   "tu": "V92Jd.cpp|V92Modem.cpp"
+  },
+  "V92createFilterCoefficients": {
+   "how": "ambiguous",
+   "tu": "V92Jd.cpp|V92Modem.cpp"
+  },
+  "V92deleteConstellations": {
+   "how": "ambiguous",
+   "tu": "V92Jd.cpp|V92Modem.cpp"
+  },
+  "V92deleteFilterCoefficients": {
+   "how": "ambiguous",
+   "tu": "V92Jd.cpp|V92Modem.cpp"
+  },
+  "V92setParamsInfoFromCPUnPck": {
+   "how": "ambiguous",
+   "tu": "V92Jd.cpp|V92Modem.cpp"
+  },
+  "VOICE_command": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "VOICE_create": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "VOICE_delete": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "VOICE_process": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "VPCMXF_Create": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPCMXF_Delete": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPCMXF_SessionTermination": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34Create": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34Delete": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCleanedSamples": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentRxBaudRate": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentRxBitRate": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentRxCarrier": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentSessionDP": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentTxBaudRate": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentTxBitRate": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetCurrentTxCarrier": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetDiagnostics": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetMaxUpstreamRateIndex": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetQuickConnectIndication": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetSNR": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34GetVisualDiagnostics": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34IndicateLocalRRN": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34IndicateRemoteRRN": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34InitMOH": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34InitiateHangUp": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34InitiateRateRenegotiation": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34InitiateRetrain": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34InterpretMohMessageBits": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "VPcmV34LogTimingOffset": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34NotifyDP": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34Progress": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34ReportMiddleOfEchoAdapt": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "VPcmV34ReportStartOfEchoAdapt": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "VPcmV34RequestDPNotification": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34SetIndicationOfRemoteRetrain": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "VPcmV34SetMaxBlockLength": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34SetMohMessageBits": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "VPcmV34SetTxScale": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "VPcmV34SetV90RateReneg": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "VTB_decoder": {
+   "how": "ambiguous",
+   "tu": "fpm_tone.c|voice.c"
+  },
+  "VTBv32_init": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V32.c"
+  },
+  "Vparser_read_float": {
+   "how": "prefix",
+   "tu": "Vparser.c"
+  },
+  "Vparser_read_int": {
+   "how": "prefix",
+   "tu": "Vparser.c"
+  },
+  "_Z10float2BitsfPhi": {
+   "how": "fill",
+   "tu": "V92CP.cpp"
+  },
+  "_Z10float2BitsfPsi": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_Z11V90CPPackerP16V90MappingParamsP22tagV90AdditionalCPinfoPsi": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_Z14getMPrecvdBitsP12tagV34Object": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "_Z15retrainDetectorP17tag_retrainReqDetPsi": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z16VPcmV34SetDelaysP12tagV34Object": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z16setDilDescriptorP19tagV90DILdescriptor7DilType": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_Z17VPcmV34SetTimeOutP12tagV34Objecti": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z17getSegmentPointer7PcmTypei": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_Z17print_echo_coeffsPfj": {
+   "how": "ambiguous",
+   "tu": "GenericToneDetector.cpp|V92EchoCanceller.cpp"
+  },
+  "_Z18calculateDilLength7DilType7PcmType": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_Z18calculateDilLengthP19tagV90DILdescriptor7PcmType": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_Z19interpretMohTimeouts": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z20resetRetrainDetectorP17tag_retrainReqDets": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z22V92DILdescriptorPackerP19tagV90DILdescriptorPhPi": {
+   "how": "ambiguous",
+   "tu": "V92CP.cpp|V92Mapper.cpp"
+  },
+  "_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z25SetUpstreamModulationInfoP12tagV34Object": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z25VPcmV34SetMinimumSigLevelP12tagV34Object": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "_Z5four1Pfmi": {
+   "how": "ambiguous",
+   "tu": "V90CP.cpp|V92Transmitter.cpp"
+  },
+  "_Z7realfftPfmi": {
+   "how": "ambiguous",
+   "tu": "V90CP.cpp|V92Transmitter.cpp"
+  },
+  "_ZN11V90Demapper12hardDecisionEs": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper15resetNoSpectralEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper18linearMappingStudyEss": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper18updateConstelationEv": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper20resetLinearMappStudyEj": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper25incrementRBSFramePositionEv": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper27printErrorHistogramAndResetEv": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper5resetEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90Demapper7processEPhRj": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90DemapperC2EjP13V90ParametersP25V90AutoDigitalImpDetector": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90DemapperD1Ev": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V90DemapperD2Ev": {
+   "how": "class",
+   "tu": "V90Demapper.cpp"
+  },
+  "_ZN11V92Precoder15setCoefficientsEPfS0_jj": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92Precoder5resetEP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92Precoder5resetEv": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92Precoder7processEPjiiPiPf": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92PrecoderC1Ej": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92PrecoderC2Ej": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92PrecoderD1Ev": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN11V92PrecoderD2Ev": {
+   "how": "class",
+   "tu": "V92Precoder.cpp"
+  },
+  "_ZN12V90Equalizer10getDfeBetaEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer10setDfeBetaEf": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer11enterPhase3Ev": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer11enterPhase4Ev": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer11setDfeCoeffEPfj": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer12zeroDfeCoefsEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer13printEquStuffEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer14enterDataPhaseEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer16setLinearEquBetaEf": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer17loadCoefsFromFileEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer17setLinearEquCoeffEPfj": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer18linearEquFadeEdgesEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer18zeroLinearEquCoefsEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer21convertEqualizerToMmxEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer23calcMeanErrorStatisticsEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer23restoreEqualizerToFloatEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer24enterChannelVerificationEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer29setLinearEquEdgesFadingParamsEff": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer31resetMeanErrorEnergyDiagnosticsEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer5resetEj": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer6freezeEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer7processEPfjPsS0_Rj": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer8enterFPEEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Equalizer8enterRRNEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4DemodulatorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMode": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90EqualizerC2EjjP20V90Phase3DemodulatorP20V90Phase4DemodulatorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMode": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90EqualizerD1Ev": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90EqualizerD2Ev": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZN12V90Modulator11enterPhase3Ev": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator11enterPhase4Ev": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator11exitJdPhaseEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator11initiateFPEEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator11initiateRRNEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator14enterDataPhaseEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator21acknowledgeEReceptionEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator22acknowledgeCPReceptionEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator25acknowledgeCPNotReceptionEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator5resetEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator6exitJdEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator6exitRiEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator7exitDILEv": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90Modulator8progressEPiRjPfj": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90ModulatorC1EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DILdescriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CPP5V90MPP13V90Parametersj": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90ModulatorC2EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DILdescriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CPP5V90MPP13V90Parametersj": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Modulator.cpp"
+  },
+  "_ZN12V90PreFilter12selectFilterEv": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter12setParamEia6Ev": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter13autoSelectionEv": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter15getFilterLengthEj": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter16displayParamEia6Ev": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter16getFilterPointerEj": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter16getV90CapabilityEv": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter5resetEv": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter9setFilterE17PreFilterCoefTypej": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilter9setFilterEj": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilterC2E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilterD1Ev": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90PreFilterD2Ev": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZN12V90RDetector10detectRNotEs": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetector11detectRfNotEs": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetector5resetEjj": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetector7detectREs": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetector8detectRfEs": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetectorC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetectorC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetectorD1Ev": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90RDetectorD2Ev": {
+   "how": "class",
+   "tu": "V90RDetector.cpp"
+  },
+  "_ZN12V90Resampler11setBllStateE11V90BllStatej": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90Resampler19getTimingHistoryStdEv": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90Resampler20getTimingHistoryMeanEv": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90Resampler5resetEv": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90Resampler8resampleEPKfjPfRj": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerC1EjfjPfP13V90Parametersfj": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerC1EjfjfP13V90Parametersfj": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerC2EjfjPfP13V90Parametersfj": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerC2EjfjfP13V90Parametersfj": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerD0Ev": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerD1Ev": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V90ResamplerD2Ev": {
+   "how": "class",
+   "tu": "V90Resampler.cpp"
+  },
+  "_ZN12V92Modulator11enterPhase3Ev": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator11enterPhase4Ev": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator11exitSilenceEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator11initiateFPEEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator11initiateRRNEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator12exitSuSecondEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator14enterDataPhaseEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator15exitTRN1uSecondEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator17mkResampledSignalERj": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator5resetEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator6exitJaEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator7exitCPtEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92Modulator8progressEPiRjPfj": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92ModulatorC2EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZN12V92PreFilter15setCoefficientsEPfS0_jj": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilter5resetEv": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilter7processEPfS0_": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilterC1Ej": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilterC2Ej": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilterD1Ev": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12V92PreFilterD2Ev": {
+   "how": "class",
+   "tu": "V92PreFilter.cpp"
+  },
+  "_ZN12VPcmFloModem11enterPhase3Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem12getV90CpBitsEPs": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem12getV90JaBitsEPs": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem13externalResetEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem13getUinfoValueEs": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem13internalResetEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem14setPhaseIIinfoEPii": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem15resetBitPointerEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem16getConstellationEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem16setNofBitsPhase4Ej": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem16setV34BaudForV34Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem16setV34BaudForV90Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem17setPcmSessionTypeEi": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem18getLinearEqualizerEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem18setTerminateCpFlagEh": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem18setTerminateJaFlagEh": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem20vPcmResetPhase3ModemEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem21setTerminateCpNotFlagEh": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem22copyMpInfoForInterfaceEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem26setMinNofTransmitSequencesEt": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModem6getDFEEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModemC1EPv12V90ModemSideP19_tagModemParametersj20V90ComputationalMode20V92ComputationalMode": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModemC2EPv12V90ModemSideP19_tagModemParametersj20V90ComputationalMode20V92ComputationalMode": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModemD1Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN12VPcmFloModemD2Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN13V90Parameters10loadParamsEPc": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90Parameters11initSessionEv": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90Parameters12setToDefaultEv": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90Parameters19loadModemParamsDataEv": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90Parameters4initEv": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90ParametersC1EP19_tagModemParameters": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90ParametersC2EP19_tagModemParameters": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90ParametersD1Ev": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90ParametersD2Ev": {
+   "how": "class",
+   "tu": "V90Parameters.cpp"
+  },
+  "_ZN13V90Phase2Info12setToDefaultEv": {
+   "how": "class",
+   "tu": "V90Phase2Info.cpp"
+  },
+  "_ZN13V90Phase2InfoC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Phase2Info.cpp"
+  },
+  "_ZN13V90Phase2InfoC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Phase2Info.cpp"
+  },
+  "_ZN13V90SdDetector5resetEv": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V90SdDetector7processEf": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V90SdDetectorC1Efffj": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V90SdDetectorC2Efffj": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V90SdDetectorD1Ev": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V90SdDetectorD2Ev": {
+   "how": "class",
+   "tu": "V90SdDetector.cpp"
+  },
+  "_ZN13V92Parameters10loadParamsEPc": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92Parameters12setToDefaultEv": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92Parameters4initEv": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92ParametersC1EP19_tagModemParameters": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92ParametersC2EP19_tagModemParameters": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92ParametersD1Ev": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92ParametersD2Ev": {
+   "how": "class",
+   "tu": "V92Parameters.cpp"
+  },
+  "_ZN13V92Phase2Info12setToDefaultEv": {
+   "how": "class",
+   "tu": "V92Phase2Info.cpp"
+  },
+  "_ZN13V92Phase2InfoC1EP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Phase2Info.cpp"
+  },
+  "_ZN13V92Phase2InfoC2EP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Phase2Info.cpp"
+  },
+  "_ZN14ModulusDecoder8progressEPhPj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusDecoderC1Ejjjjjjj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusDecoderC1Ev": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusDecoderC2Ejjjjjjj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusDecoderC2Ev": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusEncoder8progressEPhPj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusEncoderC1Ejjjjjjj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusEncoderC1Ev": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusEncoderC2Ejjjjjjj": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14ModulusEncoderC2Ev": {
+   "how": "ambiguous",
+   "tu": "V90SignBitsExtractor.cpp|V90SpectralShaper.cpp"
+  },
+  "_ZN14V90Demodulator10exitPhase3Ev": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator11enterPhase3Ev": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator11enterPhase4Ev": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator14enterDataPhaseEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator18sessionTerminationEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator20enterDataSteadyStateEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator24enterChannelVerificationEss": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator5resetEj": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator6reInitEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator8enterFPEEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator8enterRRNEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90Demodulator8progressEPiRjPfj": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90DemodulatorC1EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DILdescriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CPP5V90MP23__tHardwareCodecTypes__P13V90Parameters20V90ComputationalModej": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90DemodulatorC2EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DILdescriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CPP5V90MP23__tHardwareCodecTypes__P13V90Parameters20V90ComputationalModej": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90DemodulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V90DemodulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZN14V92Transmitter5resetEP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN14V92Transmitter7processEPhjPsRj": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN14V92TransmitterC1Ev": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN14V92TransmitterC2Ev": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN14V92TransmitterD1Ev": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN14V92TransmitterD2Ev": {
+   "how": "class",
+   "tu": "V92Transmitter.cpp"
+  },
+  "_ZN15K56FlexFloModem13externalResetEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem13internalResetEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem14setMinMaxRatesEii": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem16getConstellationEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem16getK56FlexJaBitsEPs": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem16getK56FlexMpBitsEPs": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem17getDecisionErrorsEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem17getK56MPsReceiverEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem17getResamplerPhaseEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem18getLinearEqualizerEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem18getResamplerOffsetEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem18k56FlexEnterPhase3Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem21enterPhase3FullDuplexEv": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem21k56FlexRunDemodulatorEPfjPiS1_": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModem6getDFEEP11int_complexm": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModemC1EPviP19_tagModemParameters": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModemC2EPviP19_tagModemParameters": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModemD1Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15K56FlexFloModemD2Ev": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "_ZN15ResamplerTiming11invertPhaseEv": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming13SdHalfBaudDftEf": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming16timingCorrectionEf": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming18resetSdHalfBaudDftEv": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming21adjustHalfBaudBpfGainEf": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming5resetEj": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTiming8addPhaseEf": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingC1EjfjPffj": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingC1Ejfjffj": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingC2EjfjPffj": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingC2Ejfjffj": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingD0Ev": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingD1Ev": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15ResamplerTimingD2Ev": {
+   "how": "class",
+   "tu": "ResamplerTiming.cpp"
+  },
+  "_ZN15V90BitsToSymbol15resetNoSpectralEP16V90MappingParams7PcmType": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol18nofBitsForNextTimeEv": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol19setSymbolsBlockSizeEj": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol5resetEP16V90MappingParams7PcmType": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol7processEPhRjPs": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol7processEPhj": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbol7processERjPs": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbolC1EjP13V90Parameters": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbolC2EjP13V90Parameters": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbolD1Ev": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90BitsToSymbolD2Ev": {
+   "how": "ambiguous",
+   "tu": "V90Phase4Modulator.cpp|V90Mapper.cpp"
+  },
+  "_ZN15V90TRN2Designer13V90TRN2DesignEP16V90MappingParamsPA128_sS3_PA128_hPs7PcmTypeS7_sPhjh28V90SpecialSpectralConditions": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2Designer18setNofUcodesInTrn2Es": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2Designer19setTrn2DummyConstelEP16V90MappingParams": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2Designer4maxKEP16V90MappingParams": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2DesignerC1EP13V90ParametersP21V90ConstellationPower": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2DesignerC2EP13V90ParametersP21V90ConstellationPower": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2DesignerD1Ev": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V90TRN2DesignerD2Ev": {
+   "how": "ambiguous",
+   "tu": "V90SdDetector.cpp|V90RDetector.cpp"
+  },
+  "_ZN15V92BitsToSymbol18nofBitsForNextTimeEv": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbol19setSymbolsBlockSizeEj": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbol5resetEP16V92MappingParams": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbol7processEPhRjPs": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbol7processEPhj": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbol7processERjPs": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbolC1EjP13V92Parameters": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbolC2EjP13V92Parameters": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbolD1Ev": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN15V92BitsToSymbolD2Ev": {
+   "how": "ambiguous",
+   "tu": "V90ConstellationDesigner.cpp|V92CP.cpp"
+  },
+  "_ZN16V92EchoCanceller11setEchoBetaEf": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller12setEchoDelayEj": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller13setEchoParamsEffj": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller13zeroEchoCoeffEv": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller14setDecayFactorEf": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller16resetEchoHistoryEv": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller17updateEchoHistoryEPfj": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller5resetEv": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller7processEPfS0_j": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCanceller8setStateE21V92EchoCancellerState": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCancellerC1EP13V92Parametersjj": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCancellerC2EP13V92Parametersjj": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCancellerD1Ev": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN16V92EchoCancellerD2Ev": {
+   "how": "class",
+   "tu": "V92EchoCanceller.cpp"
+  },
+  "_ZN17ANSamToneDetectorC1Ejjfjfjjj": {
+   "how": "ambiguous",
+   "tu": "GenericToneDetector.cpp|V92EchoCanceller.cpp"
+  },
+  "_ZN17ANSamToneDetectorC2Ejjfjfjjj": {
+   "how": "ambiguous",
+   "tu": "GenericToneDetector.cpp|V92EchoCanceller.cpp"
+  },
+  "_ZN17ANSamToneDetectorD1Ev": {
+   "how": "ambiguous",
+   "tu": "GenericToneDetector.cpp|V92EchoCanceller.cpp"
+  },
+  "_ZN17ANSamToneDetectorD2Ev": {
+   "how": "ambiguous",
+   "tu": "GenericToneDetector.cpp|V92EchoCanceller.cpp"
+  },
+  "_ZN17V90SpectralShaper11applyActionEiPs": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaper13resetSSFilterEffff": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaper14advanceTrellisEv": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaper16applyFrameActionENS_7ACTIONSEPsi": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaper5resetEjjffff": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaper7processEPsPhS0_": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaperC1Ev": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaperC2Ev": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaperD1Ev": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V90SpectralShaperD2Ev": {
+   "how": "class",
+   "tu": "V90SpectralShaper.cpp"
+  },
+  "_ZN17V92ModulusEncoder5resetEP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92ModulusEncoder.cpp"
+  },
+  "_ZN17V92ModulusEncoder8progressEPhPj": {
+   "how": "class",
+   "tu": "V92ModulusEncoder.cpp"
+  },
+  "_ZN17V92ModulusEncoderC1Ev": {
+   "how": "class",
+   "tu": "V92ModulusEncoder.cpp"
+  },
+  "_ZN17V92ModulusEncoderC2Ev": {
+   "how": "class",
+   "tu": "V92ModulusEncoder.cpp"
+  },
+  "_ZN18V90Phase3Modulator10generateJdEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator10generateSdEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator11exitJdPhaseEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator11generateDILEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator13generateJdNotEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator13generateSdNotEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator13generateTRN1dEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator13generateV92JdEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator14generateSymbolEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator15generateJdPhaseEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator17generateV90SymbolEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator17generateV92SymbolEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator17resetDILGeneratorEPK19tagV90DILdescriptor": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator24updateCodeSegmentPointerEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator6exitJdEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3Modulator7exitDILEv": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3ModulatorC1EP13V90Parametersj": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3ModulatorC2EP13V90Parametersj": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase3ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Phase3Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10generateEdEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10generateMPEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10generateRfEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10generateRiEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10recivedE2uEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator10recivedSUVEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator11exitSilenceEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator11generateB1dEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator11generateCPdEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator12generateRdRtEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator12generateSUVdEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator12recivedCPtagEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator12setRfSymbolsEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator13generateRfNotEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator13generateRiNotEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator13generateTRN2dEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator13recivedSUVtagEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator13resetBeforRRNEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator14generateSymbolEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator14setRdRtSymbolsEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator15generateRdRtNotEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator16enterRepeatedCPdEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator16setMappingParamsEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator17generateV90SymbolEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator17generateV92SymbolEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator18recivedFirstRrnE2uEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator21resetRRNSecondSectionEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator22setNextStateAfterTRN2dE20Phase4ModulatorState": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator26recivedFirstSUVuPartTwoRrnEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator27generateDataSymbolBeforeFPEEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator27generateDataSymbolBeforeRRNEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator27recivedPartOneSilenceRrnSUVEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator27recivedPartTwoSilenceRrnSUVEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator5resetE7PcmTypeh20Phase4ModulatorStatejj": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator6exitMPEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator6exitRiEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator9exitMPNotEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4Modulator9recivedCPEv": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4ModulatorC1EP13V90ParametersjP15V90BitsToSymbolP5V90MPP16V90MappingParamsS7_P5V90CPj": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4ModulatorC2EP13V90ParametersjP15V90BitsToSymbolP5V90MPP16V90MappingParamsS7_P5V90CPj": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V90Phase4ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator10generateJaEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator10generateRuEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator10genereteSuEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator11exitSilenceEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator12exitSuSecondEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator13generateRuNotEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator13generateTRN1uEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator13genereteSuNotEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator14generateSymbolEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator5resetEs23V92Phase3ModulatorStatejP5V92JaPK19tagV90DILdescriptorj": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator6exitJaEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3Modulator9exitTRN1uEv": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3ModulatorC1EP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3ModulatorC2EP13V92Parameters": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase3ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V92Phase3Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator10generateRmEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator10generateRuEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator10recivedSUVEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator11generateB1uEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator11generateCPtEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator11generateCPuEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator11generateE1uEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator11generateE2uEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator12generateSUVuEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator12recivedCPtagEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator13generateRuNotEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator13generateTRN2uEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator13recivedSUVtagEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator13resetBeforFPEEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator13resetBeforRRNEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator14generateSymbolEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator15enterRepeatedCPEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator16setMappingParamsEP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator17recivedFirstRrnEdEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator21resetRRNSecondSectionEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator27generateDataSymbolBeforeFPEEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator27generateDataSymbolBeforeRRNEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator27recivedPartOneSilenceRrnSUVEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator27recivedPartTwoSilenceRrnSUVEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator7exitCPtEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator9exitTRN2uEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator9recivedCPEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator9recivedEdEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4Modulator9recivedRtEv": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4ModulatorC1EP13V92ParametersP15V92BitsToSymbolP5V92CPP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4ModulatorC2EP13V92ParametersP15V92BitsToSymbolP5V92CPP16V92MappingParams": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4ModulatorD1Ev": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN18V92Phase4ModulatorD2Ev": {
+   "how": "class",
+   "tu": "V92Phase4Modulator.cpp"
+  },
+  "_ZN19GenericToneDetector5resetEv": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetector7processEPfj": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetector7processEf": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetectorC1EjjPdS0_jjfjfjj": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetectorC2EjjPdS0_jjfjfjj": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetectorD1Ev": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19GenericToneDetectorD2Ev": {
+   "how": "class",
+   "tu": "GenericToneDetector.cpp"
+  },
+  "_ZN19V90SpectralVerifier17startAccumulationEv": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifier30checkSpecialSpectralConditionsEv": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifier5resetEv": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifier7processEPfj": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifierC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifierC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifierD1Ev": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN19V90SpectralVerifierD2Ev": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZN20V90Phase3Demodulator11getDecisionEf": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator11getMaxUcodeEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator13JdNotDetectorEi": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator13twoLevelDemodEfRi": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator14getV90DecisionEf": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator14getV92DecisionEf": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator15setAltRbsParamsEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator18resetJdNotDetectorEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator22enterWaitForANSpcmDropEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator22incrementFramePositionEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator23clearVerificationStatusEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator24setDigitalImairmentsInfoEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator5resetE7PcmTypeh22Phase3DemodulatorStatejP5V90JdP5V92JdP19tagV90DILdescriptorssfj": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3Demodulator7exitDILEv": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3DemodulatorC2EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3DemodulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase3DemodulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Phase3Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator11getDecisionEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator13resetBeforRRNEv": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14enterWaitForCPEv": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14enterWaitForEdEv": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14enterWaitForMPEv": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14getV90DecisionEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14getV92DecisionEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator15trn2dKnownDemodEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator16resetRRNDetectorEv": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator9detectFPEEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4Demodulator9detectRRNEs": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4DemodulatorC1EP16V90MappingParamsS1_P11V90DemapperP5V90CPP5V90MPP11DescramblerIhiEP22V90ConnectionEvaluatorP13V90ParametersP20V90Phase3DemodulatorP25V90AutoDigitalImpDetectorj": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4DemodulatorC2EP16V90MappingParamsS1_P11V90DemapperP5V90CPP5V90MPP11DescramblerIhiEP22V90ConnectionEvaluatorP13V90ParametersP20V90Phase3DemodulatorP25V90AutoDigitalImpDetectorj": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4DemodulatorD1Ev": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90Phase4DemodulatorD2Ev": {
+   "how": "class",
+   "tu": "V90Phase4Demodulator.cpp"
+  },
+  "_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractor5resetEjj": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractor7processEPhS0_": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractorC1Ev": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractorC2Ev": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractorD1Ev": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN20V90SignBitsExtractorD2Ev": {
+   "how": "class",
+   "tu": "V90SignBitsExtractor.cpp"
+  },
+  "_ZN21ResamplerTimingOffset15setTimingOffsetEf": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffset16timingCorrectionEf": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffset5resetEv": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetC1EjfjPffj": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetC1Ejfjffj": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetC2EjfjPffj": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetC2Ejfjffj": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetD0Ev": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetD1Ev": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21ResamplerTimingOffsetD2Ev": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZN21V90ConstellationPower17isLegalPowerIndexEj": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPower20getConstellationInfoEP16V90MappingParams26V90TxPowerMeasurementPointj": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPower21calcModulusParametersEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPower21getPowerIndexForPowerEf": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPower8getPowerEP16V90MappingParams26V90TxPowerMeasurementPoint7PcmType": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPowerC1Ev": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPowerC2Ev": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPowerD1Ev": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V90ConstellationPowerD2Ev": {
+   "how": "class",
+   "tu": "V90ConstellationPower.cpp"
+  },
+  "_ZN21V92ConvolutionEncoder10inverseMapEPi": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoder25makeStateTtransitionTableEv": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoder5resetEi": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoder7processEPi": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoderC1Ev": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoderC2Ev": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoderD1Ev": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN21V92ConvolutionEncoderD2Ev": {
+   "how": "ambiguous",
+   "tu": "V92Transmitter.cpp|V92ModulusEncoder.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator14evaluatePhase3Ev": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator14evaluatePhase4Ef": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator14updateAvePdsnrEfj": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator18evaluateConnectionEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator20indicateLocalRetrainEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator21indicateRemoteRetrainEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator23indicateRemoteRateRenegEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator26evaluateMeanErrorStdPhase3Ef": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator26evaluateMeanErrorStdPhase4Eff": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator30updateCurrentConstellationDataEsfff": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluator5resetEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluatorC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluatorC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluatorD1Ev": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN22V90ConnectionEvaluatorD2Ev": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZN24V90ConstellationDesigner12constelBuildEss": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner14setMinMaxRatesEjj": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner17findMinValueIndexEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner19constellationDesignEfPA128_sS1_PsPhS3_PA128_h": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner19determineDminForRrnEj": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner23setConstellationToNoiseEfPA128_sS1_PsPhPA128_h": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner25adjustConstellationsPowerEv": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner26adjustConstellationsToNewKEPA128_sS1_PsPA128_h": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner28reconstructInitialConditionsEP16V90MappingParamsPh": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner33setConstellationToNoise_forceRateEfPA128_sS1_PsPhS3_PA128_h": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner4pow6Es": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner5calcKEjPf": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner5realKEP16V90MappingParams": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner5resetEv": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesigner7processEjP25V90AutoDigitalImpDetectorfiP16V90MappingParamsPA128_sS5_PsPhS7_h23__tHardwareCodecTypes__j28V90SpecialSpectralConditions": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesignerC2EP13V90ParametersP12V90PreFilterP21V90ConstellationPower": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesignerD1Ev": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90ConstellationDesignerD2Ev": {
+   "how": "class",
+   "tu": "V90ConstellationDesigner.cpp"
+  },
+  "_ZN24V90SpectralShapingFilter14setFilterCoeffEffff": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZN24V90SpectralShapingFilter5resetEv": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZN24V90SpectralShapingFilter8progressEPKs": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZN24V90SpectralShapingFilterC1Ev": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZN24V90SpectralShapingFilterC2Ev": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector10updateUrefEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector11findPadGainEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector13updateUrefAltEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector15getAltVarThreshEPff": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector16setMaxUcodeArrayEPh": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector16studyUrefHandlerEfj": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector17determineMaxUcodeEs": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector17porcessFirstStudyEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector17setConnectionTypeEs": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector18clearCamulativeValEss": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector18porcessSecondStudyEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector18resetLinearMappingEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector18setQcLinearMappingEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector21applyPadGainToLinMappEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector21clearCamulativeAltValEss": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector21isThereAnyAltRbsPhaseEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector21resetStudyUrefHandlerEj": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector21unitePhasesInfoOfUrefEs": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector22updateAltRbsPhaseInDilEv": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector23updateLinMappMeanAndVarEss": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector24adjustUinfoToPhaseOffsetEs": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector25calculateLinearMeanAndVarEssj": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector26addReceivedSampleToStorageEshf": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector26updateLinMappMeanAndVarAltEss": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector27setPrevSessionLinearMappingEPs": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector28calculateLinearMeanAndVarAltEsj": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector30unSuspectedPhaseNearestLinMappEss": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector35uniteLinMappInfoOfUnsuspectedPhasesEh": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector5resetEh7PcmTypes": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetector8isAltRbsEssf": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetectorC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetectorD1Ev": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN25V90AutoDigitalImpDetectorD2Ev": {
+   "how": "class",
+   "tu": "V90AutoDigitalImpDetector.cpp"
+  },
+  "_ZN3Psd13setWindowTypeE10WindowType": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3Psd16setOverlapLengthEj": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3Psd7processEPfjS0_NS_12OutputOptionE": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3PsdC1Ej10WindowTypej": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3PsdC2Ej10WindowTypej": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3PsdD1Ev": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN3PsdD2Ev": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZN5V90CP10bitsToInfoEh": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP10infoToBitsEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP11evaluateCRCEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP12evaluateInfoEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP12getBitVectorERj": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP13resetDetectorEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP18calcSequenceLengthEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP23printNofRecievedMpMpNotEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP5resetEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP7calcCRCEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CP8resetCRCEv": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CPC1Ev": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CPC2Ev": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CPD1Ev": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90CPD2Ev": {
+   "how": "class",
+   "tu": "V90CP.cpp"
+  },
+  "_ZN5V90Jd10unPackDataEi": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd11unPackResetEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd12getBitVectorEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd12getRatesMaskEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd12setRatesMaskEi": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd14setConstelSizeEhh": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd15getMaxLookaheadEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd15setMaxLookaheadEh": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd19getConstelationSizeEPhS0_": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd8packDataEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90Jd8resetCrcEv": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90JdC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90JdC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90JdD1Ev": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90JdD2Ev": {
+   "how": "class",
+   "tu": "V90Jd.cpp"
+  },
+  "_ZN5V90MP10PrintBase2EPcmt": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP10bitsToInfoEi": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP10infoToBitsEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP11evaluateCRCEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP12evaluateInfoEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP12getBitVectorERj": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP13resetDetectorEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP18calcSequenceLengthEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP23printNofRecievedMpMpNotEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP5resetEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP7calcCRCEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MP8resetCRCEv": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MPC1Ev": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MPC2Ev": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MPD1Ev": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V90MPD2Ev": {
+   "how": "class",
+   "tu": "V90MP.cpp"
+  },
+  "_ZN5V92CP10bitsToInfoEh": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP10infoToBitsEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP11evaluateCRCEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP12evaluateInfoEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP12getBitVectorERj": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP13resetDetectorEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP5resetEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP6setSUVEj": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP7calcCRCEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CP8resetCRCEv": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CPC1Ev": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CPC2Ev": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CPD1Ev": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92CPD2Ev": {
+   "how": "class",
+   "tu": "V92CP.cpp"
+  },
+  "_ZN5V92Jd10getJdPhaseEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd10packJdDataEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd10setJdPhaseEf": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd12getRatesMaskEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd12setRatesMaskEi": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd12unPackJdDataEi": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd13unPackJdResetEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd14getJdBitVectorEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd14setConstelSizeEhh": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd15getMaxLookaheadEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd15packJdPhaseDataEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd15setMaxLookaheadEh": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd17unPackJdPhaseDataEi": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd18unPackJdPhaseResetEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd19getConstelationSizeEPhS0_": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd19getJdPhaseBitVectorEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92Jd8resetCrcEv": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92JdC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92JdC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92JdD1Ev": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN5V92JdD2Ev": {
+   "how": "class",
+   "tu": "V92Jd.cpp"
+  },
+  "_ZN8FloatFIR15setCoefficientsEPfj": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIR5resetEv": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIR7processEPKfPfj": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIR7processEf": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIRC1EjPfj": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIRC2EjPfj": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIRD1Ev": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatFIRD2Ev": {
+   "how": "class",
+   "tu": "FloatFIR.cpp"
+  },
+  "_ZN8FloatIIR15setCoefficientsEPfj": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIR5resetEv": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIR7processEPKfPfj": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIRC1EjPfj": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIRC2EjPfj": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIRD1Ev": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8FloatIIRD2Ev": {
+   "how": "class",
+   "tu": "FloatIIR.cpp"
+  },
+  "_ZN8V90Modem10printTitleEv": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90Modem14setSessionFlagEj": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90Modem5resetEj": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90Modem8progressEPiRjPfj": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90ModemC1E12V90ModemSideP19_tagModemParametersP19tagV90DILdescriptorj20V90ComputationalModej": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90ModemC2E12V90ModemSideP19_tagModemParametersP19tagV90DILdescriptorj20V90ComputationalModej": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90ModemD1Ev": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V90ModemD2Ev": {
+   "how": "class",
+   "tu": "V90Modem.cpp"
+  },
+  "_ZN8V92Modem10printTitleEv": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92Modem5resetEv": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92Modem8progressEPiRjPfj": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92ModemC1E12V92ModemSideP19_tagModemParametersjP19tagV90DILdescriptor20V92ComputationalMode": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92ModemC2E12V92ModemSideP19_tagModemParametersjP19tagV90DILdescriptor20V92ComputationalMode": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92ModemD1Ev": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN8V92ModemD2Ev": {
+   "how": "class",
+   "tu": "V92Modem.cpp"
+  },
+  "_ZN9FloatARMA5resetEv": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMA7processEPKfPfj": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMA7processEf": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMAC1EjjPfS0_j": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMAC2EjjPfS0_j": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMAD1Ev": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9FloatARMAD2Ev": {
+   "how": "class",
+   "tu": "FloatARMA.cpp"
+  },
+  "_ZN9Resampler15copyHistoryTailEv": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9Resampler17resetHistoryIndexEv": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9Resampler18setNormalizedPhaseEf": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9Resampler5resetEv": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9Resampler8resampleEPKfjPfRj": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerC1EjfjPfj": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerC1Ejfjfj": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerC2EjfjPfj": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerC2Ejfjfj": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerD0Ev": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerD1Ev": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9ResamplerD2Ev": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_ZN9V90Mapper15resetNoSpectralEP16V90MappingParams7PcmType": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90Mapper5resetEP16V90MappingParams7PcmType": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90Mapper7processEPhjPsRj": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90MapperC1EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90MapperC2EP13V90Parameters": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90MapperD1Ev": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V90MapperD2Ev": {
+   "how": "class",
+   "tu": "V90Mapper.cpp"
+  },
+  "_ZN9V92Mapper5resetEsh": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZN9V92Mapper7processEPh": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZN9V92MapperC1Ev": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZN9V92MapperC2Ev": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZN9V92MapperD1Ev": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZN9V92MapperD2Ev": {
+   "how": "class",
+   "tu": "V92Mapper.cpp"
+  },
+  "_ZNK12V90Equalizer16printCoefsToFileEv": {
+   "how": "class",
+   "tu": "V90Equalizer.cpp"
+  },
+  "_ZNK12V90PreFilter13isV90WithEia6Ev": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZNK12V90PreFilter14getNofRefLoopsEv": {
+   "how": "class",
+   "tu": "V90PreFilter.cpp"
+  },
+  "_ZNK12V92Modulator19getV92TxFilterDelayEv": {
+   "how": "class",
+   "tu": "V92Modulator.cpp"
+  },
+  "_ZNK13V90Phase2Info9printInfoEv": {
+   "how": "class",
+   "tu": "V90Phase2Info.cpp"
+  },
+  "_ZNK13V92Phase2Info9printInfoEv": {
+   "how": "class",
+   "tu": "V92Phase2Info.cpp"
+  },
+  "_ZNK14V90Demodulator10getBitRateEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZNK14V90Demodulator13getRbsPatternEPj": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZNK14V90Demodulator23indicateRemoteRateRenegEv": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZNK14V90Demodulator8getAT_UDEP21TAG_DiagnosticResults": {
+   "how": "class",
+   "tu": "V90Demodulator.cpp"
+  },
+  "_ZNK19V90SpectralVerifier13freqToLeftBinEf": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK19V90SpectralVerifier13printSpectrumEv": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK19V90SpectralVerifier14freqToRightBinEf": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK19V90SpectralVerifier16freqToNearestBinEf": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK19V90SpectralVerifier16getSpectrumOfBinEm": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK19V90SpectralVerifier23getSpectrumOfNearestBinEf": {
+   "how": "class",
+   "tu": "V90SpectralVerifier.cpp"
+  },
+  "_ZNK21ResamplerTimingOffset18getTimingOffsetPPMEv": {
+   "how": "class",
+   "tu": "ResamplerTimingOffset.cpp"
+  },
+  "_ZNK22V90ConnectionEvaluator11printStatusEv": {
+   "how": "class",
+   "tu": "V90ConnectionEvaluator.cpp"
+  },
+  "_ZNK24V90SpectralShapingFilter9getMetricEPKsj": {
+   "how": "class",
+   "tu": "V90SpectralShapingFilter.cpp"
+  },
+  "_ZNK3Psd14getFrequenciesEPff": {
+   "how": "ambiguous",
+   "tu": "V90SpectralVerifier.cpp|FloatFIR.cpp"
+  },
+  "_ZNK9Resampler18getNormalizedPhaseEv": {
+   "how": "class",
+   "tu": "Resampler.cpp"
+  },
+  "_answer_tone_state": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_cHDLCrx_init_from_idle": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_delete_data_rx_modem": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_delete_data_tx_modem": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_handle_data_input": {
+   "how": "ambiguous",
+   "tu": "cHDLCtx.c|cTOOLS.c"
+  },
+  "_handle_data_output": {
+   "how": "fill",
+   "tu": "cTOOLS.c"
+  },
+  "_handle_hdlc_input": {
+   "how": "ambiguous",
+   "tu": "cHDLCtx.c|cTOOLS.c"
+  },
+  "_handle_hdlc_input_close": {
+   "how": "ambiguous",
+   "tu": "cHDLCtx.c|cTOOLS.c"
+  },
+  "_handle_hdlc_input_open": {
+   "how": "ambiguous",
+   "tu": "cHDLCtx.c|cTOOLS.c"
+  },
+  "_handle_status": {
+   "how": "fill",
+   "tu": "voice.c"
+  },
+  "_hdlc_emulate_receive_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_hdlc_receive_between_buffers_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_hdlc_receive_look_carrier_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_hdlc_receive_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_hdlc_receive_state_init": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_idle_state": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_idle_state_init": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_iir_filter_create": {
+   "how": "ambiguous",
+   "tu": "toneiir.c|Cadence.c"
+  },
+  "_iir_filter_delete": {
+   "how": "ambiguous",
+   "tu": "toneiir.c|Cadence.c"
+  },
+  "_iir_filter_progress": {
+   "how": "ambiguous",
+   "tu": "toneiir.c|Cadence.c"
+  },
+  "_init_receiver": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_init_transmitter": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_init_tx_nulls_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_look_for": {
+   "how": "ambiguous",
+   "tu": "cid.c|Data.c"
+  },
+  "_look_for_other_than": {
+   "how": "ambiguous",
+   "tu": "cid.c|Data.c"
+  },
+  "_put_silence": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_recieve_silence_state": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_recieve_silence_state_init": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_rx_data_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_rx_look_carrier_init": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_rx_look_carrier_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_send_hdlc_between_buffer_state": {
+   "how": "fill",
+   "tu": "cHDLCtx.c"
+  },
+  "_send_hdlc_between_buffer_state_init": {
+   "how": "fill",
+   "tu": "cHDLCtx.c"
+  },
+  "_send_hdlc_buffer_state": {
+   "how": "fill",
+   "tu": "cHDLCtx.c"
+  },
+  "_send_silence_state": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_send_silence_state_init": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|fax.c"
+  },
+  "_set_modem_rate": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_status": {
+   "how": "ambiguous",
+   "tu": "TONE.c|silence.c"
+  },
+  "_sym_size": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "_t30_preabmle_state": {
+   "how": "fill",
+   "tu": "cHDLCtx.c"
+  },
+  "_t30_silence_before_tx_state": {
+   "how": "fill",
+   "tu": "cHDLCtx.c"
+  },
+  "_tx_data_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_tx_nulls_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_tx_scrambled_ones_init": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_tx_scrambled_ones_state": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "_tx_silence_before_scrm_ones": {
+   "how": "ambiguous",
+   "tu": "V29rx.c|cHDLCtx.c"
+  },
+  "adaptecho": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "agcadapt": {
+   "how": "ambiguous",
+   "tu": "Rx.c|V34.c"
+  },
+  "alaw2linear": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "alaw2ulaw": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "b103_create": {
+   "how": "prefix",
+   "tu": "b103.c"
+  },
+  "b103_delete": {
+   "how": "prefix",
+   "tu": "b103.c"
+  },
+  "b103_process": {
+   "how": "prefix",
+   "tu": "b103.c"
+  },
+  "bSearchEnergy": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "bValidateEnergyValue": {
+   "how": "fill",
+   "tu": "Fdsp.c"
+  },
+  "band_pass": {
+   "how": "ambiguous",
+   "tu": "Data.c|Dtmf.c"
+  },
+  "beepgen_create": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "beepgen_delete": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "beepgen_get_freqs": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "beepgen_sample": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "beepgen_start_beep": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "beepgen_start_dtmf": {
+   "how": "prefix",
+   "tu": "Beepgen.c"
+  },
+  "biquad_filter": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "bitreverse": {
+   "how": "fill",
+   "tu": "Tx.c"
+  },
+  "cHDLCtx_off": {
+   "how": "prefix",
+   "tu": "cHDLCtx.c"
+  },
+  "cHDLCtx_off_init": {
+   "how": "prefix",
+   "tu": "cHDLCtx.c"
+  },
+  "cHDLCtx_preamble_state_init": {
+   "how": "prefix",
+   "tu": "cHDLCtx.c"
+  },
+  "cTOOLS_handle_data_output_reset": {
+   "how": "prefix",
+   "tu": "cTOOLS.c"
+  },
+  "cTOOLS_handle_hdlc_output": {
+   "how": "prefix",
+   "tu": "cTOOLS.c"
+  },
+  "cadence_create": {
+   "how": "prefix",
+   "tu": "Cadence.c"
+  },
+  "cadence_delete": {
+   "how": "prefix",
+   "tu": "Cadence.c"
+  },
+  "cadence_progress": {
+   "how": "prefix",
+   "tu": "Cadence.c"
+  },
+  "cadence_reset": {
+   "how": "prefix",
+   "tu": "Cadence.c"
+  },
+  "call_GetSRegister": {
+   "how": "prefix",
+   "tu": "call.c"
+  },
+  "call_create": {
+   "how": "prefix",
+   "tu": "call.c"
+  },
+  "call_delete": {
+   "how": "prefix",
+   "tu": "call.c"
+  },
+  "call_run": {
+   "how": "prefix",
+   "tu": "call.c"
+  },
+  "charFlip": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "checkSignalStability": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "check_for_valid": {
+   "how": "fill",
+   "tu": "Dtmf.c"
+  },
+  "check_for_valid_easy": {
+   "how": "fill",
+   "tu": "Dtmf.c"
+  },
+  "chkForceBaudRate": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "cid_create": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_delete": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_freq_sampl": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_get_strings": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_modem": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_progress": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_reset": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_threshold": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "cid_value": {
+   "how": "prefix",
+   "tu": "cid.c"
+  },
+  "connect_1200": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "connect_2400": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "cosread": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V8.c"
+  },
+  "create_cid": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|cid.c"
+  },
+  "create_cid_dtmf": {
+   "how": "ambiguous",
+   "tu": "Data.c|Dtmf.c"
+  },
+  "create_dtmf": {
+   "how": "fill",
+   "tu": "Dtmf.c"
+  },
+  "data_formatted_output": {
+   "how": "prefix",
+   "tu": "Data.c"
+  },
+  "data_raw": {
+   "how": "prefix",
+   "tu": "Data.c"
+  },
+  "data_unformatted_output": {
+   "how": "prefix",
+   "tu": "Data.c"
+  },
+  "datapumpv34": {
+   "how": "name-only",
+   "tu": "Data.c"
+  },
+  "dcr_create": {
+   "how": "prefix",
+   "tu": "dcr.c"
+  },
+  "dcr_delete": {
+   "how": "prefix",
+   "tu": "dcr.c"
+  },
+  "dcr_process": {
+   "how": "prefix",
+   "tu": "dcr.c"
+  },
+  "dcr_reset": {
+   "how": "prefix",
+   "tu": "dcr.c"
+  },
+  "decision": {
+   "how": "ambiguous",
+   "tu": "Rx.c|V34.c"
+  },
+  "decodeDepth": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "decoderv34": {
+   "how": "ambiguous",
+   "tu": "V34.c|Tx.c"
+  },
+  "demapFrame": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "descrambleGPA": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "descrambleGPC": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "detectRetrainReq": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "detector_create": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detector_delete": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detector_progress": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detector_set_enable": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detector_set_output_in_stream": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detector_set_output_status": {
+   "how": "name-only",
+   "tu": "detector.c"
+  },
+  "detectorinit": {
+   "how": "prefix",
+   "tu": "detector.c"
+  },
+  "dftRetrainDetInit": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "dftenergy": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V8.c"
+  },
+  "dftfreqinit": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "dftnlinitNoiseBins": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "dftnlinitSignalBins": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "dftupdate": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V8.c"
+  },
+  "displaySpectralParams": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "dp_b103_exit": {
+   "how": "ambiguous",
+   "tu": "b103.c|dp_param.c"
+  },
+  "dp_b103_init": {
+   "how": "ambiguous",
+   "tu": "b103.c|dp_param.c"
+  },
+  "dp_call_exit": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "dp_call_init": {
+   "how": "ambiguous",
+   "tu": "call.c|v8.c"
+  },
+  "dp_param_get": {
+   "how": "prefix",
+   "tu": "dp_param.c"
+  },
+  "dp_runtime_create": {
+   "how": "ambiguous",
+   "tu": "dp_param.c|dp_wrapper.c"
+  },
+  "dp_runtime_delete": {
+   "how": "ambiguous",
+   "tu": "dp_param.c|dp_wrapper.c"
+  },
+  "dp_v22_exit": {
+   "how": "ambiguous",
+   "tu": "v22.c|b103.c"
+  },
+  "dp_v22_init": {
+   "how": "ambiguous",
+   "tu": "v22.c|b103.c"
+  },
+  "dp_v23_exit": {
+   "how": "ambiguous",
+   "tu": "v23.c|v22.c"
+  },
+  "dp_v23_init": {
+   "how": "ambiguous",
+   "tu": "v23.c|v22.c"
+  },
+  "dp_v32_exit": {
+   "how": "ambiguous",
+   "tu": "v32.c|v23.c"
+  },
+  "dp_v32_init": {
+   "how": "ambiguous",
+   "tu": "v32.c|v23.c"
+  },
+  "dp_v8_exit": {
+   "how": "ambiguous",
+   "tu": "v8.c|vpcm.c"
+  },
+  "dp_v8_init": {
+   "how": "ambiguous",
+   "tu": "v8.c|vpcm.c"
+  },
+  "dp_vpcm_exit": {
+   "how": "ambiguous",
+   "tu": "vpcm.c|v32.c"
+  },
+  "dp_vpcm_init": {
+   "how": "ambiguous",
+   "tu": "vpcm.c|v32.c"
+  },
+  "dp_wrapper_create": {
+   "how": "prefix",
+   "tu": "dp_wrapper.c"
+  },
+  "dp_wrapper_delete": {
+   "how": "prefix",
+   "tu": "dp_wrapper.c"
+  },
+  "dp_wrapper_run": {
+   "how": "prefix",
+   "tu": "dp_wrapper.c"
+  },
+  "dpskDetectInfo1Init": {
+   "how": "prefix",
+   "tu": "DPSK.c"
+  },
+  "dpskinit": {
+   "how": "prefix",
+   "tu": "DPSK.c"
+  },
+  "dtmf_detect": {
+   "how": "prefix",
+   "tu": "Dtmf.c"
+  },
+  "dtmf_modem": {
+   "how": "name-only",
+   "tu": "Dtmf.c"
+  },
+  "dtmf_progress": {
+   "how": "prefix",
+   "tu": "Dtmf.c"
+  },
+  "dtmf_set_easy": {
+   "how": "prefix",
+   "tu": "Dtmf.c"
+  },
+  "dtmf_test": {
+   "how": "prefix",
+   "tu": "Dtmf.c"
+  },
+  "evaluateRxJMSequence": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "fComputeRMSValueFloatBuf": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "fComputeRMSValueShortBuf": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "fax_class1_GetConstalation": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_command": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_create": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_delete": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_info": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_progress": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "fax_class1_status": {
+   "how": "name-only",
+   "tu": "fax.c"
+  },
+  "faxvmi_asyc_pack": {
+   "how": "prefix",
+   "tu": "faxvmi_asyc.c"
+  },
+  "faxvmi_asyc_unpack": {
+   "how": "prefix",
+   "tu": "faxvmi_asyc.c"
+  },
+  "faxvmi_byte_reverse": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_frame_reverse": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_gen_fcs16": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_hdlc_frame": {
+   "how": "prefix",
+   "tu": "faxvmi_hdlc.c"
+  },
+  "faxvmi_hdlc_unframe": {
+   "how": "prefix",
+   "tu": "faxvmi_hdlc.c"
+  },
+  "faxvmi_simp_pack": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_simp_unpack": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_write_fifo": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "faxvmi_write_frame": {
+   "how": "prefix",
+   "tu": "faxvmi.c"
+  },
+  "fskdemodulate": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V8.c"
+  },
+  "fskdetect": {
+   "how": "ambiguous",
+   "tu": "TONE.c|V8.c"
+  },
+  "getCodecConstellationMask": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "getConstellationMask": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "getConstellationsIndex": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "getDataBitRate": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "getFrame": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "getTimingOffset": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "getTimingPhase": {
+   "how": "ambiguous",
+   "tu": "dp_wrapper.c|V34.c"
+  },
+  "getbit": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "indicateJaTransmission": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "initG248": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "initTxSequence": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "initV34": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "init_vmi_v17rx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "init_vmi_v17tx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "init_vmi_v27rx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "init_vmi_v27tx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "init_vmi_v29rx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "init_vmi_v29tx": {
+   "how": "ambiguous",
+   "tu": "fax.c|faxvmi.c"
+  },
+  "initdigital": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "k56FlexPhase34": {
+   "how": "ambiguous",
+   "tu": "V34.c|GenericToneDetector.cpp"
+  },
+  "linear2alaw": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "linear2ulaw": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "modem_serrint": {
+   "how": "ambiguous",
+   "tu": "V34.c|Tx.c"
+  },
+  "modulatevector": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "notch": {
+   "how": "prefix",
+   "tu": "Notch.c"
+  },
+  "notch_filter": {
+   "how": "name-only",
+   "tu": "Notch.c"
+  },
+  "null_control": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "null_create": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "null_delete": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "null_message": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "null_process": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "null_status": {
+   "how": "ambiguous",
+   "tu": "cTOOLS.c|SDM.c"
+  },
+  "pack_next_bit": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|cid.c"
+  },
+  "polyValue": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "preempindex": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "preinitV34": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "preinitdigital": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "probeselect": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "putFrame": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "rebuildJMSequence": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "receiver": {
+   "how": "ambiguous",
+   "tu": "V34.c|Tx.c"
+  },
+  "reset_cid": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|cid.c"
+  },
+  "reset_dtmf": {
+   "how": "ambiguous",
+   "tu": "Data.c|Dtmf.c"
+  },
+  "rxinit": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "rxreadqueue": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "rxtiming": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "rxtiminginit": {
+   "how": "name-only",
+   "tu": "Rx.c"
+  },
+  "scaleVector": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "scrambleGPA": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "scrambleGPC": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "setCodecConstellationMask": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setConstellationMask": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setDataBitRate": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setInitialPhase": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "setParamsInfoFromCPUnPck": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setParamsInfoFromV92CPUnPck": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setScramble": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "setTimingStateParameters": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "setV92CPpckFromParamsInfo": {
+   "how": "ambiguous",
+   "tu": "V90SpectralShapingFilter.cpp|V90Resampler.cpp"
+  },
+  "setfinalrate": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "settxlevel": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "setupreceiver": {
+   "how": "fill",
+   "tu": "DPSK.c"
+  },
+  "shellDemapper": {
+   "how": "ambiguous",
+   "tu": "FloatIIR.cpp|Rx.c"
+  },
+  "silence_create": {
+   "how": "prefix",
+   "tu": "silence.c"
+  },
+  "silence_delete": {
+   "how": "prefix",
+   "tu": "silence.c"
+  },
+  "silence_is_more_then": {
+   "how": "prefix",
+   "tu": "silence.c"
+  },
+  "silence_progress": {
+   "how": "prefix",
+   "tu": "silence.c"
+  },
+  "tone_detect": {
+   "how": "name-only",
+   "tu": "TONE.c"
+  },
+  "toneiir_create": {
+   "how": "prefix",
+   "tu": "toneiir.c"
+  },
+  "toneiir_delete": {
+   "how": "prefix",
+   "tu": "toneiir.c"
+  },
+  "toneiir_get_default_configuration": {
+   "how": "prefix",
+   "tu": "toneiir.c"
+  },
+  "toneiir_progress": {
+   "how": "prefix",
+   "tu": "toneiir.c"
+  },
+  "toneiir_reset": {
+   "how": "prefix",
+   "tu": "toneiir.c"
+  },
+  "txinit": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "txmit": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "txmitdibit": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "txmitquadbit": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "txrxdmainit": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "txwritequeue": {
+   "how": "name-only",
+   "tu": "Tx.c"
+  },
+  "ulaw2alaw": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "ulaw2linear": {
+   "how": "ambiguous",
+   "tu": "silence.c|Vparser.c"
+  },
+  "updateAlpha": {
+   "how": "ambiguous",
+   "tu": "V34.c|Tx.c"
+  },
+  "v17rx_control": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17rx_create": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17rx_delete": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17rx_message": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17rx_process": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17rx_status": {
+   "how": "prefix",
+   "tu": "V17rx.c"
+  },
+  "v17tx_control": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v17tx_create": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v17tx_delete": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v17tx_message": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v17tx_process": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v17tx_status": {
+   "how": "prefix",
+   "tu": "V17tx.c"
+  },
+  "v21rx_control": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21rx_create": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21rx_delete": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21rx_message": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21rx_process": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21rx_status": {
+   "how": "prefix",
+   "tu": "V21rx.c"
+  },
+  "v21tx_control": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v21tx_create": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v21tx_delete": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v21tx_message": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v21tx_process": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v21tx_status": {
+   "how": "prefix",
+   "tu": "V21tx.c"
+  },
+  "v22_ans_rmloop2": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_answer": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_create": {
+   "how": "prefix",
+   "tu": "v22.c"
+  },
+  "v22_data": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_delete": {
+   "how": "prefix",
+   "tu": "v22.c"
+  },
+  "v22_local_loop": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_org_rmloop2": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_originate": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v22_process": {
+   "how": "prefix",
+   "tu": "v22.c"
+  },
+  "v22_retrain": {
+   "how": "ambiguous",
+   "tu": "V22.c|Rx.c"
+  },
+  "v23FP_rx_create": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23FP_rx_delete": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23FP_rx_progress": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23FP_tx_create": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23FP_tx_delete": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23FP_tx_progress": {
+   "how": "ambiguous",
+   "tu": "v23modem.c|bwchdem.c"
+  },
+  "v23_create": {
+   "how": "prefix",
+   "tu": "v23.c"
+  },
+  "v23_delete": {
+   "how": "prefix",
+   "tu": "v23.c"
+  },
+  "v23_process": {
+   "how": "prefix",
+   "tu": "v23.c"
+  },
+  "v27rx_control": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27rx_create": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27rx_delete": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27rx_message": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27rx_process": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27rx_status": {
+   "how": "prefix",
+   "tu": "V27rx.c"
+  },
+  "v27tx_control": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v27tx_create": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v27tx_delete": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v27tx_message": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v27tx_process": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v27tx_status": {
+   "how": "prefix",
+   "tu": "V27tx.c"
+  },
+  "v29rx_control": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29rx_create": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29rx_delete": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29rx_message": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29rx_process": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29rx_status": {
+   "how": "prefix",
+   "tu": "V29rx.c"
+  },
+  "v29tx_control": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v29tx_create": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v29tx_delete": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v29tx_message": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v29tx_process": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v29tx_status": {
+   "how": "prefix",
+   "tu": "V29tx.c"
+  },
+  "v32_create": {
+   "how": "prefix",
+   "tu": "v32.c"
+  },
+  "v32_data": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "v32_delete": {
+   "how": "prefix",
+   "tu": "v32.c"
+  },
+  "v32_handshake": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "v32_null_protocol": {
+   "how": "fill",
+   "tu": "V32.c"
+  },
+  "v32_process": {
+   "how": "prefix",
+   "tu": "v32.c"
+  },
+  "v34FreezeEcho": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "v34handshak": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "v34handshakinit": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "v34modeminit": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "v34setuptxmit": {
+   "how": "name-only",
+   "tu": "V34.c"
+  },
+  "v8_TONEq_generate": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_TONEq_init": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_V21_Init": {
+   "how": "ambiguous",
+   "tu": "V8.c|Callprog.c"
+  },
+  "v8_absfn": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "v8_agcadapt": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "v8_ansamgenerate": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_ansaminit": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_copycoeff": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_cosread": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_crc": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "v8_create": {
+   "how": "prefix",
+   "tu": "v8.c"
+  },
+  "v8_delete": {
+   "how": "prefix",
+   "tu": "v8.c"
+  },
+  "v8_detectorinit": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_dftenergy": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_dftupdate": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_fskdemodulate": {
+   "how": "ambiguous",
+   "tu": "V8.c|Callprog.c"
+  },
+  "v8_fskmodulate": {
+   "how": "ambiguous",
+   "tu": "V8.c|Callprog.c"
+  },
+  "v8_fsktxfilter": {
+   "how": "ambiguous",
+   "tu": "V8.c|Callprog.c"
+  },
+  "v8_getbit": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_mpyint": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "v8_phase_rev_detect": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_phase_rev_init": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_process": {
+   "how": "prefix",
+   "tu": "v8.c"
+  },
+  "v8_rxinit": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_rxreadqueue": {
+   "how": "fill",
+   "tu": "V8.c"
+  },
+  "v8_tone_detect": {
+   "how": "ambiguous",
+   "tu": "Notch.c|V8.c"
+  },
+  "v8_txinit": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8_txwritequeue": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8handshak": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v8handshakinit": {
+   "how": "ambiguous",
+   "tu": "V8.c|Notch.c"
+  },
+  "v90Phase34": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "v90RateReneg": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "v90RateRenegSilence": {
+   "how": "fill",
+   "tu": "V34.c"
+  },
+  "vce_get_sreg": {
+   "how": "ambiguous",
+   "tu": "cid.c|voice.c"
+  },
+  "vce_hook_off": {
+   "how": "ambiguous",
+   "tu": "cid.c|voice.c"
+  },
+  "vce_hook_on": {
+   "how": "ambiguous",
+   "tu": "cid.c|voice.c"
+  },
+  "voice_command": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_create": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_delete": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_dle_command": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_duplex": {
+   "how": "ambiguous",
+   "tu": "TONE.c|silence.c"
+  },
+  "voice_modem": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_online": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_rx": {
+   "how": "ambiguous",
+   "tu": "Notch.c|TONE.c"
+  },
+  "voice_set_duplex": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_set_online": {
+   "how": "prefix",
+   "tu": "voice.c"
+  },
+  "voice_set_rx": {
+   "how": "ambiguous",
+   "tu": "Notch.c|TONE.c"
+  },
+  "voice_set_tx": {
+   "how": "ambiguous",
+   "tu": "TONE.c|silence.c"
+  },
+  "voice_tx": {
+   "how": "ambiguous",
+   "tu": "TONE.c|silence.c"
+  },
+  "vpcm_create": {
+   "how": "prefix",
+   "tu": "vpcm.c"
+  },
+  "vpcm_delete": {
+   "how": "prefix",
+   "tu": "vpcm.c"
+  },
+  "vpcm_run": {
+   "how": "prefix",
+   "tu": "vpcm.c"
+  },
+  "zFLTUTL_Float2Linear": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "zFLTUTL_FloatMemSet": {
+   "how": "fill",
+   "tu": "Fdsp.c"
+  },
+  "zFLTUTL_Linear2Float": {
+   "how": "ambiguous",
+   "tu": "Dtmf.c|Fdsp.c"
+  },
+  "zfFLTUTL_GetMaxAbsValue": {
+   "how": "fill",
+   "tu": "Fdsp.c"
+  }
+ }
+}

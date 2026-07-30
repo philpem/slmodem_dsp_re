@@ -1,0 +1,16 @@
+# build products
+*.o
+*.a
+*.so
+*.d
+build/
+test/harness/*_test
+test/harness/*_diff
+
+# generated reference objects (derived from ../slmodemd/dsplibs.o at build time)
+*_ref.o
+*_weak.o
+symmap.txt
+
+# vendored test peer is a submodule; its build tree is not ours
+third_party/spandsp/
