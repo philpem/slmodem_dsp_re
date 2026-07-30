@@ -24,13 +24,13 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/service/pcm.c
+SRC        := src/service/pcm.c src/core/fixedrc.c
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC))
 
 HARNESS    := test/harness/harness.c test/harness/runtime.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_pcm
+TESTS      := t_pcm t_fixedrc
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
