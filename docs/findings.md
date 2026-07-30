@@ -715,3 +715,44 @@ allocation is not in `FPM_TONE_create`, so the caller supplies them.
 Reconstructing `fpm_tone.c` needs those owners identified first; the generator
 half (`generate`, `set_freq`, `set_scale`, and the reversal logic) is fully
 understood already.
+
+## 20. `B103FP_create` — partial decode
+
+`.text 0x08e690`, 2151 bytes. Signature `B103FP_create(state, cfg)`.
+
+Opens by copying 28 bytes from the config (`B103_CFG`) into the state at
+offsets 0x00–0x18, then works through `state[0x50]`, a **caller-supplied
+pointer** that must be non-NULL — the function returns early otherwise.
+
+Through that pointer it builds a half-duplex transmit context:
+
+```
+timing = state[0x0c] / 20               /* signed divide, magic 0x66666667 */
+if (timing < 700) timing = 700          /* clamped                         */
+ptr[0x02] = timing
+ptr[0x08] = TxHdxStartB103              /* state-machine entry point       */
+ptr[0x04] = ptr[0x0c] = ptr[0x14] = 0
+ptr[0x18] = ptr[0x1c] = ptr[0x20] = 0
+```
+
+so `state[0x50]` is a transmit state block with a function-pointer entry, and
+`TxHdxStartB103` is where the half-duplex transmitter begins. `FPM_TONE_CFG`
+fields are then copied both onto the stack and into that block — the tone
+configuration is built per-instance rather than shared.
+
+**This answers the ownership question from finding 19**: `FPM_TONE`'s buffers
+are not allocated by `FPM_TONE_create`, and they are not allocated here either
+— `state[0x50]` arrives already populated. The allocation is further out
+still, in `b103_create`, which is the layer that calls `sysdep_malloc` before
+handing off. That needs confirming.
+
+**Possible rate dependency, unconfirmed.** The `/20` with a floor of 700 has
+the shape of a duration in samples or milliseconds. If `state[0x0c]` carries a
+rate or a sample count, the divisor moves with it. Logged as a candidate
+rather than a confirmed entry in `docs/rate_assumptions.md`, because
+`B103_CFG`'s field meanings are not yet established —
+`B103_CFG = { 2, 0, 0, 0, 0, 0, 14000, 0, 1, 0, 0, 0, 3200, 0 }` as int16, and
+`state[0x0c]` is the 14000.
+
+14000 / 20 = 700, exactly the clamp floor, so the clamp is a no-op for the
+default config and only bites if a caller lowers the value.
