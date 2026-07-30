@@ -1323,3 +1323,64 @@ one section over `state[0x10]`, then once with the tone bank
 (`state[0x00]`, `state[0x0c]`, `state[0x04]` sections). Its output feeds two
 leaky energy integrators with `alpha = 820/32768` (~0.025) against
 `31948/32768` (~0.975) — a 40-sample time constant.
+
+## 27. `FPM_FSD_demodulate` — partial decode
+
+`.text 0x0a79f0`, 745 bytes — the largest single function on the Bell 103 path.
+
+```c
+short FPM_FSD_demodulate(struct fpm_fsd *state, const short *in,
+                         <arg2>, short count);
+```
+
+The compiler hoists nearly every state field into stack slots before the loop,
+so the entry is 200 bytes of loads. Mapped so far:
+
+| stack slot | field |
+|---|---|
+| `0x50` | `state[0x00]` FIR coefficients |
+| `0x68` | `state[0x04]` FIR tap count |
+| `0x60` | `state[0x06]` **discriminator delay** |
+| `0x4c` | `state[0x08]` IIR coefficients |
+| `0x64` | `state[0x0c]` IIR sections |
+| `0x48` | `state[0x24]` FIR history |
+| `0x44` | `state[0x2c]` IIR history |
+| `0x40` | `state[0x1c]` third buffer |
+| `ebp` | `state[0x28]` FIR write index |
+
+### The input FIR
+
+Same shape as `FPM_MRF_filter`: a circular history with the branchless wrap,
+walked backward in two loops (write index down to 0, then top down to write
+index + 1), accumulating into a Q15 result.
+
+```
+idx = (idx + 1 < taps) ? idx + 1 : 0
+history[idx] = *in++
+acc = 0
+for (k = idx;      k >= 0;   k--)  acc += history[k] * coeff[j++]
+for (k = taps - 1; k > idx;  k--)  acc += history[k] * coeff[j++]
+y = acc >> 15
+```
+
+### It is a delay-line discriminator
+
+The next step takes `history[idx - state[0x06]]` — the input delayed by
+`state[0x06]` samples, which `B103FP_create` sets to **4**. Multiplying the
+current sample by a delayed one is the classic FSK discriminator: the product's
+DC component varies with the input frequency, so a lowpass afterwards yields a
+signal whose sign is the received bit.
+
+At the demodulator's 2400 Hz (finding 24), a 4-sample delay is one sixth of a
+cycle at 900 Hz — sitting between the Bell 103 originate tones of 1070 and
+1270 Hz in a way that makes the discriminator monotonic across the pair. That
+is consistent but **not verified**; it should be checked against the actual
+tone pairs before being relied on.
+
+`state[0x08]`/`state[0x0c]` — the IIR lowpass, run through `FPM_iir_filt` —
+are what smooth the product.
+
+**Still to decode:** the discriminator product and its scaling, the IIR stage,
+the slicer, and the bit-timing recovery that turns 8 samples per symbol into
+one bit. That is the bulk of the function and the part where a subtle error
+would show up as a bit-error rate rather than a crash.
