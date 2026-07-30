@@ -1585,3 +1585,56 @@ Two things follow, both applied:
 - an intermittently-passing differential test is worse than a failing one,
   because eleven green runs read as evidence. `t_fpm_tone` is now run 40 times
   in a row when it changes.
+
+## 31. Bell 103's configuration, read off a live object
+
+Rather than infer these from `B103FP_create`'s 2151 bytes, build one with the
+reference implementation and read the fields. Every number below is measured,
+not derived:
+
+```sh
+# see the probe in the session log; links against build/dsplibs_ref.o
+FSD cfg: fir_taps=15 delay=4 iir_len=3
+         f0e=10 f10=1 f12=8 f14=6 f16=160 f18=0
+FSD state: f22=4
+FSM:     freq=1070/1270  sps=24  scale=3200  scaled=1188/1411
+RX MRF:  L=3 M=10 taps=90 hist_len=30
+AGC:     ref=16384 acq=10 sq=80 blk=36
+```
+
+What each confirms:
+
+| observed | confirms |
+|---|---|
+| `freq = 1070 / 1270` | Bell 103 **originate** mark/space, exactly the standard |
+| `sps = 24` | 300 baud at 7200 Hz — finding 17 |
+| `scaled = 1188 / 1411` | freq × 10/9, so FPM_TONE's hard-wired 8 kHz yields 7200 |
+| RX MRF `L=3 M=10` | 8000 × 3/10 = 2400 Hz — finding 24, measured |
+| AGC = 16384/10/80/36 | `AGCb103_CFG` verbatim, so `b103_agc_cfg.c` is what `create` installs |
+| FSD `delay = 4` | finding 27's claim, from the object rather than the disassembly |
+| FSD `f12 = 8`, state `f22 = 4` | 2400 Hz / 300 baud = 8 samples per symbol, and half of it — bit timing |
+
+### The 4-sample delay, worked through
+
+Worth doing carefully, because the receive path **aliases** and the obvious
+calculation is wrong. After the 3:10 decimation the sample rate is 2400 Hz, so
+Nyquist is 1200 — and the space tone at 1270 Hz is above it. It folds to
+2400 − 1270 = **1130 Hz**. The demodulator therefore sees 1070 and 1130, not
+1070 and 1270.
+
+A delay-line discriminator's DC output is cos(2π f D / fs) / 2 for D = 4:
+
+| tone | as seen at 2400 Hz | 4ω | DC term |
+|---|---|--:|--:|
+| mark 1070 | 1070 | 1.783 cycles | +0.208 |
+| space 1270 | **1130** (aliased) | 1.883 cycles | +0.743 |
+
+So the two are well separated — but **both positive**. The slice threshold
+cannot be zero, which is presumably what the three-section IIR and whatever
+follows it are for. Finding 27 called the frequency plan "consistent but not
+verified"; it is now verified, and the part that needed verifying turned out
+to be exactly the part that a Nyquist-ignoring reading gets wrong.
+
+This is the number to check first if the demodulator ever produces a stuck
+output: a discriminator whose two states are both the same sign is one
+mis-sited threshold away from never toggling.
