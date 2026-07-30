@@ -19,43 +19,82 @@
 #ifndef DSPLIB_FPM_TONE_H
 #define DSPLIB_FPM_TONE_H
 
-/*
- * Object size, from FPM_TONE_create's own allocation (0x108).  Matches the
- * highest field offset observed (+0x106), so the object is fully accounted
- * for even though most fields are still unnamed.
- */
+/* Object size, from FPM_TONE_create's own allocation. */
 #define FPM_TONE_STATE_SIZE 0x108
-
-/*
- * Config offsets.  NOTE +0x10 holds a POINTER in the original -- dumping the
- * config as int16 hides that behind a plausible-looking scalar.  See the
- * relocation note in docs/findings.md.
- */
-#define FPM_TONE_CFG_FREQ      0x00	/* s16 Hz                            */
-#define FPM_TONE_CFG_SCALE     0x02	/* s16 output gain                   */
-#define FPM_TONE_CFG_REVPERIOD 0x04	/* s16 reversal period, 8-sample units */
-#define FPM_TONE_CFG_DAMP      0x0c	/* s16 feeds the Goertzel coefficients */
-#define FPM_TONE_CFG_SRC       0x10	/* short * -- source waveform        */
-#define FPM_TONE_CFG_LEN       0x14	/* s16 buffer size and fill length    */
-#define FPM_TONE_CFG_EXTRA     0x20	/* s16 added to the second buffer     */
-#define FPM_TONE_CFG_BYTES     0x24	/* 36 bytes copied wholesale          */
 
 /*
  * The built-in configuration, laid out as a struct so the pointer at +0x10 is
  * a pointer.  Total size must stay 36 bytes to match the original.
  */
 struct fpm_tone_cfg {
-	short freq;		/* +0x00 */
-	short scale;		/* +0x02 */
-	short rev_period;	/* +0x04 */
-	short pad06[3];		/* +0x06 .. +0x0a */
-	short damp;		/* +0x0c */
-	short pad0e;		/* +0x0e */
-	const short *src;	/* +0x10 pointer to the filter prototype */
-	short len;		/* +0x14 */
-	short pad16[5];		/* +0x16 .. +0x1e */
-	short extra;		/* +0x20 */
-	short pad22;		/* +0x22 */
+	short freq;		/* +0x00 Hz                                  */
+	short scale;		/* +0x02 generator output gain, Q14 applied  */
+	short rev_period;	/* +0x04 phase reversals, in 8-sample ticks;
+				 *       zero or negative disables them      */
+	short ratio;		/* +0x06 detector: the share of the energy
+				 *       the tone must hold, Q15             */
+	short f08;		/* +0x08                                     */
+	short min_level;	/* +0x0a detector: below this, no signal     */
+	short damp;		/* +0x0c the notch's pole radius r, Q15      */
+	short pad0e;
+	const short *src;	/* +0x10 correlator prototype, copied into
+				 *       the object's own kernel by create   */
+	short len;		/* +0x14 its length, and the detector's tap
+				 *       count                               */
+	short pad16[5];		/* +0x16 .. +0x1e                            */
+	short extra;		/* +0x20 added to the history buffer's length */
+	short pad22;
+};
+
+/*
+ * The object.  264 bytes, and laid out here rather than reached by offset --
+ * an address like `+0x4a` says nothing about what lives there, and this
+ * module has three separate sub-systems sharing one allocation.
+ *
+ * Roughly a third of it is still unattributed: `r4c` covers everything
+ * between the detector's energy estimates and the reversal buffers, which
+ * FPM_TONE_find_rev and FPM_TONE_kill presumably use.  It is a named
+ * reserved region rather than a hole, so a field can be sited in it later
+ * without recounting anything.
+ *
+ * 32-BIT LAYOUT: the reserved region is a byte count from a build where
+ * pointers are four bytes.  See the assertions in src/dsp/fpm_tone.c.
+ */
+struct fpm_tone {
+	struct fpm_tone_cfg cfg;	/* +0x00 copied wholesale by create   */
+
+	/* --- the oscillator ------------------------------------------- */
+	unsigned short phase;		/* +0x24 accumulator                  */
+	unsigned short inc;		/* +0x26 increment; hz * 32768 / 8000 */
+	unsigned short rev_count;	/* +0x28 8-sample ticks since the last
+					 *       phase reversal               */
+	short pad2a;
+
+	/* --- the detector --------------------------------------------- */
+	short *kernel;			/* +0x2c cfg.len taps, filled by
+					 *       create from cfg.src          */
+	short *history;			/* +0x30 cfg.len + cfg.extra entries,
+					 *       circular                     */
+	short hist_idx;			/* +0x34 write position               */
+	short iir_coeff[5];		/* +0x36 the notch at cfg.freq -- see
+					 *       FPM_TONE_detect              */
+	short iir_state[4];		/* +0x40 direct form I, so four       */
+	short e_tone;			/* +0x48 smoothed tone energy.  The
+					 *       original's own naming would
+					 *       call this out-of-band; it is
+					 *       not.  See finding 33.        */
+	short e_total;			/* +0x4a smoothed total energy        */
+
+	/* --- unattributed --------------------------------------------- */
+	short r4c[84];			/* +0x4c .. +0xf3                     */
+
+	/* --- the phase-reversal search -------------------------------- */
+	short *rev_block;		/* +0xf4 10 bytes                     */
+	short *rev_acc;			/* +0xf8 8 bytes                      */
+	short *iir_self;		/* +0xfc points at iir_coeff[0]; the
+					 *       original stores it rather than
+					 *       recomputing it               */
+	short r100[4];			/* +0x100 .. +0x107                   */
 };
 
 extern const struct fpm_tone_cfg FPM_TONE_CFG_data;
@@ -67,53 +106,36 @@ extern const short ToneLPF[53];
  * buffers); supplying your own means you supply its buffers too.  Passing
  * NULL for `cfg` uses the built-in V.25 answer-tone configuration.
  */
-void *FPM_TONE_create(void *state, const void *cfg);
-
-/* Field offsets established so far; the rest of the object is detector state. */
-#define FPM_TONE_OFF_SCALE     0x02	/* s16 output gain, Q14 applied      */
-#define FPM_TONE_OFF_REV_PERIOD 0x04	/* s16 reversal period, 8-sample units */
-#define FPM_TONE_OFF_PHASE     0x24	/* u16 phase accumulator             */
-#define FPM_TONE_OFF_INC       0x26	/* u16 phase increment               */
-#define FPM_TONE_OFF_REV_COUNT 0x28	/* u16 samples since last reversal   */
+struct fpm_tone *FPM_TONE_create(struct fpm_tone *state,
+				 const struct fpm_tone_cfg *cfg);
 
 /*
  * Free a tone object and its buffers.  Frees unconditionally, including the
  * object itself -- see the note in src/dsp/fpm_tone.c before calling it on
  * anything not built by FPM_TONE_create(NULL, ...).
  */
-void FPM_TONE_delete(void *state);
+void FPM_TONE_delete(struct fpm_tone *state);
 
 /* Set the tone frequency in Hz.  Assumes an 8 kHz sample rate -- see R-9. */
-void FPM_TONE_set_freq(void *state, short hz);
+void FPM_TONE_set_freq(struct fpm_tone *state, short hz);
 
 /* Set the output gain, applied as (sample * scale) >> 14. */
-void FPM_TONE_set_scale(void *state, short scale);
+void FPM_TONE_set_scale(struct fpm_tone *state, short scale);
 
 /*
  * Generate `count` samples.  Every `rev_period` units of 8 samples the phase
  * jumps 180 degrees, which is what makes this an ANSam generator rather than
  * a plain oscillator.  A zero or negative period disables reversals.
  */
-void FPM_TONE_generate(void *state, short *out, short count);
+void FPM_TONE_generate(struct fpm_tone *state, short *out, short count);
 
 /*
  * The reference oscillator for the demodulator: the same tone as
  * FPM_TONE_generate but taken from the cosine, and with no phase reversals.
  * Returns `count`.
  */
-short FPM_TONE_generate_demod(void *state, short *out, short count);
-
-/* Detector field offsets. */
-#define FPM_TONE_OFF_RATIO      0x06	/* s16 out-of-band fraction allowed, Q15 */
-#define FPM_TONE_OFF_MIN_LEVEL  0x0a	/* s16 below this, report no signal      */
-#define FPM_TONE_OFF_TAPS       0x14	/* s16 correlator length                 */
-#define FPM_TONE_OFF_KERNEL     0x2c	/* short * correlator coefficients       */
-#define FPM_TONE_OFF_HISTORY    0x30	/* short * circular history, TAPS words  */
-#define FPM_TONE_OFF_HIST_IDX   0x34	/* s16 write position                    */
-#define FPM_TONE_OFF_IIR_COEFF  0x36	/* s16[5] Goertzel resonator             */
-#define FPM_TONE_OFF_IIR_STATE  0x40	/* s16[4] its direct form I state        */
-#define FPM_TONE_OFF_E_EXCESS   0x48	/* s16 smoothed out-of-band energy       */
-#define FPM_TONE_OFF_E_TOTAL    0x4a	/* s16 smoothed total energy             */
+short FPM_TONE_generate_demod(struct fpm_tone *state, short *out,
+			      short count);
 
 /*
  * Verdicts.  NOTE THE POLARITY -- zero means the tone IS present.
@@ -140,6 +162,7 @@ short FPM_TONE_generate_demod(void *state, short *out, short count);
  * the configured tone is present.  Energy estimates persist in the state, so
  * the answer reflects a running average rather than this block alone.
  */
-short FPM_TONE_detect(void *state, const short *samples, short count);
+short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
+		      short count);
 
 #endif /* DSPLIB_FPM_TONE_H */

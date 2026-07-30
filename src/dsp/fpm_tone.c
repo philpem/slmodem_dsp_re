@@ -21,16 +21,11 @@
 #include "dsplib/fpm_phasor.h"
 #include "dsplib/fpm_iir.h"
 
+#define NELEMS(a) (sizeof(a) / sizeof((a)[0]))
+
 extern void *sysdep_malloc(unsigned size);
 extern void sysdep_free(void *ptr);
 extern void *sysdep_memcpy(void *dst, const void *src, unsigned n);
-
-/* Little-endian field access into the opaque object. */
-static short *
-fld(void *state, int off)
-{
-	return (short *)((char *)state + off);
-}
 
 /*
  * Hz to phase increment.  A cycle is FPM_PHASOR_CYCLE (0x8000) units, so the
@@ -41,28 +36,28 @@ fld(void *state, int off)
  * in docs/rate_assumptions.md; do not "fix" it without reading that entry.
  */
 void
-FPM_TONE_set_freq(void *state, short hz)
+FPM_TONE_set_freq(struct fpm_tone *state, short hz)
 {
-	*fld(state, FPM_TONE_OFF_INC) = (short)(((int)hz * 0x8312 + 0x1000) >> 13);
+	state->inc = (short)(((int)hz * 0x8312 + 0x1000) >> 13);
 }
 
 void
-FPM_TONE_set_scale(void *state, short scale)
+FPM_TONE_set_scale(struct fpm_tone *state, short scale)
 {
-	*fld(state, FPM_TONE_OFF_SCALE) = scale;
+	state->cfg.scale = scale;
 }
 
 void
-FPM_TONE_generate(void *state, short *out, short count)
+FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 {
 	struct fpm_phasor p;
-	int scale = *fld(state, FPM_TONE_OFF_SCALE);
-	int period = *fld(state, FPM_TONE_OFF_REV_PERIOD);
+	int scale = state->cfg.scale;
+	int period = state->cfg.rev_period;
 	int elapsed;
 	int i;
 
-	p.phase = (unsigned short)*fld(state, FPM_TONE_OFF_PHASE);
-	p.inc = (unsigned short)*fld(state, FPM_TONE_OFF_INC);
+	p.phase = (unsigned short)state->phase;
+	p.inc = (unsigned short)state->inc;
 	p.cos = p.sin = 0;
 
 	for (i = 0; i < count; i++) {
@@ -75,13 +70,13 @@ FPM_TONE_generate(void *state, short *out, short count)
 	 * samples, so at 8 kHz it ticks in milliseconds and the default period
 	 * of 450 is the ITU-T V.25 figure directly.
 	 */
-	elapsed = (unsigned short)*fld(state, FPM_TONE_OFF_REV_COUNT)
+	elapsed = (unsigned short)state->rev_count
 		  + (count >> 3);
 
 	if (period > 0 && period <= elapsed) {
 		int phase = (short)p.phase;
 
-		*fld(state, FPM_TONE_OFF_REV_COUNT) = 0;
+		state->rev_count = 0;
 
 		/*
 		 * Half of a 0x8000 cycle is 180 degrees.  The original adds
@@ -96,24 +91,18 @@ FPM_TONE_generate(void *state, short *out, short count)
 
 		p.phase = (unsigned short)phase;
 	} else {
-		*fld(state, FPM_TONE_OFF_REV_COUNT) = (short)elapsed;
+		state->rev_count = (short)elapsed;
 	}
 
-	*fld(state, FPM_TONE_OFF_PHASE) = (short)p.phase;
+	state->phase = (short)p.phase;
 }
 
 /* Pointer-sized field access, for the slots that hold buffers. */
-static void **
-pfld(void *state, int off)
-{
-	return (void **)((char *)state + off);
-}
-
 /* The built-in configuration: the ITU-T V.25 answer tone. */
 
 
-void *
-FPM_TONE_create(void *state, const void *cfg)
+struct fpm_tone *
+FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 {
 	struct fpm_phasor p;
 	int owned = 0;
@@ -123,16 +112,18 @@ FPM_TONE_create(void *state, const void *cfg)
 	int i;
 
 	if (state == NULL) {
-		state = sysdep_malloc(FPM_TONE_STATE_SIZE);
+		state = (struct fpm_tone *)sysdep_malloc(FPM_TONE_STATE_SIZE);
 		if (state == NULL)
 			return NULL;
 		owned = 1;
 	}
 
-	sysdep_memcpy(state, cfg != NULL ? cfg : (const void *)FPM_TONE_CFG,
-		      FPM_TONE_CFG_BYTES);
+	sysdep_memcpy(&state->cfg,
+		      cfg != NULL ? (const void *)cfg
+				  : (const void *)FPM_TONE_CFG,
+		      sizeof(state->cfg));
 
-	len = *fld(state, FPM_TONE_CFG_LEN);
+	len = state->cfg.len;
 
 	/*
 	 * Buffers belong to whoever allocated the object.  A caller supplying
@@ -140,11 +131,11 @@ FPM_TONE_create(void *state, const void *cfg)
 	 * the ownership contract in docs/findings.md.
 	 */
 	if (owned && len > 0) {
-		*pfld(state, 0x2c) = sysdep_malloc((unsigned)len * 2);
-		*pfld(state, 0x30) = sysdep_malloc(
-			(unsigned)(len + *fld(state, FPM_TONE_CFG_EXTRA)) * 2);
-		*pfld(state, 0xf4) = sysdep_malloc(10);
-		*pfld(state, 0xf8) = sysdep_malloc(8);
+		state->kernel = (short *)sysdep_malloc((unsigned)len * 2);
+		state->history = (short *)sysdep_malloc(
+			(unsigned)(len + state->cfg.extra) * 2);
+		state->rev_block = (short *)sysdep_malloc(10);
+		state->rev_acc = (short *)sysdep_malloc(8);
 	}
 
 	/*
@@ -152,29 +143,42 @@ FPM_TONE_create(void *state, const void *cfg)
 	 * phase = increment, inc = 0.  That gives cos(omega) for
 	 * omega = 2*pi*f/8000, which is what the Goertzel coefficient needs.
 	 */
-	increment = ((int)*fld(state, FPM_TONE_CFG_FREQ) * 0x8312 + 0x1000) >> 13;
+	increment = ((int)state->cfg.freq * 0x8312 + 0x1000) >> 13;
 	p.phase = (unsigned short)increment;
 	p.inc = 0;
 	p.cos = p.sin = 0;
 	FPM_phasor(&p);
 
-	*fld(state, FPM_TONE_OFF_PHASE) = 0;
-	*fld(state, FPM_TONE_OFF_REV_COUNT) = 0;
-	*fld(state, FPM_TONE_OFF_INC) = (short)p.phase;
+	state->phase = 0;
+	state->rev_count = 0;
+	state->inc = (short)p.phase;
 
-	damp = *fld(state, FPM_TONE_CFG_DAMP);
+	damp = state->cfg.damp;
 
 	/* Exact-frequency Goertzel section. */
-	*fld(state, 0x36) = 0x4000;
-	*fld(state, 0x38) = 0x4000;
-	*fld(state, 0x3a) = (short)-(2 * p.cos);
-	*fld(state, 0x3c) = (short)((damp * damp) >> 16);
-	*fld(state, 0x3e) = (short)((-(p.cos * damp)) >> 14);
-	for (i = 0x40; i <= 0x50; i += 2)
-		*fld(state, i) = 0;
-	*fld(state, 0x34) = 0;
-	for (i = 0x52; i <= 0xf0; i += 2)
-		*fld(state, i) = 0;
+	state->iir_coeff[0] = 0x4000;
+	state->iir_coeff[1] = 0x4000;
+	state->iir_coeff[2] = (short)-(2 * p.cos);
+	state->iir_coeff[3] = (short)((damp * damp) >> 16);
+	state->iir_coeff[4] = (short)((-(p.cos * damp)) >> 14);
+	/*
+	 * Clear the running state: the notch's history, both energy
+	 * estimates, and everything unattributed up to +0xf0.
+	 *
+	 * The original does this as two loops, 0x40..0x50 and 0x52..0xf0,
+	 * split around the hist_idx write between them.  Note the end: 0xf0,
+	 * not 0xf2, so the LAST word of the reserved region is NOT cleared.
+	 * Whether that is deliberate or an off-by-one in the original is
+	 * unknowable until something is found that reads it; it is reproduced
+	 * either way.
+	 */
+	for (i = 0; i < (int)NELEMS(state->iir_state); i++)
+		state->iir_state[i] = 0;
+	state->e_tone = 0;
+	state->e_total = 0;
+	for (i = 0; i < (int)NELEMS(state->r4c) - 1; i++)
+		state->r4c[i] = 0;
+	state->hist_idx = 0;
 
 	/*
 	 * Correlation reference: the source waveform modulated by a cosine
@@ -183,9 +187,9 @@ FPM_TONE_create(void *state, const void *cfg)
 	 */
 	p.inc = p.phase;
 	{
-		const short *src = (const short *)*pfld(state, FPM_TONE_CFG_SRC);
-		short *ref = (short *)*pfld(state, 0x2c);
-		short *zero = (short *)*pfld(state, 0x30);
+		const short *src = (const short *)state->cfg.src;
+		short *ref = (short *)state->kernel;
+		short *zero = (short *)state->history;
 
 		for (i = 0; i < len; i++) {
 			FPM_phasor(&p);
@@ -198,18 +202,18 @@ FPM_TONE_create(void *state, const void *cfg)
 	 * Damped resonator, r = 0.96.  Evaluated from phase 0 so cos = 1.0;
 	 * a caller retunes it later via FPM_TONE_set_freq.
 	 */
-	*pfld(state, 0xfc) = (char *)state + 0x36;
-	*fld(state, 0x100) = 0;
-	*fld(state, 0x102) = 0;
-	*fld(state, 0x104) = 0;
-	*fld(state, 0x106) = 0;
+	state->iir_self = state->iir_coeff;
+	state->r100[0] = 0;
+	state->r100[1] = 0;
+	state->r100[2] = 0;
+	state->r100[3] = 0;
 
 	p.phase = 0;
 	p.inc = 0;
 	FPM_phasor(&p);
 	{
-		short *blk = (short *)*pfld(state, 0xf4);
-		short *acc = (short *)*pfld(state, 0xf8);
+		short *blk = (short *)state->rev_block;
+		short *acc = (short *)state->rev_acc;
 
 		blk[0] = 0x4000;
 		blk[1] = 0x4000;
@@ -239,13 +243,13 @@ FPM_TONE_create(void *state, const void *cfg)
  * do exist.  See D5 in docs/deviations.md.
  */
 void
-FPM_TONE_delete(void *state)
+FPM_TONE_delete(struct fpm_tone *state)
 {
-	if (*fld(state, FPM_TONE_CFG_LEN) > 0) {
-		sysdep_free(*pfld(state, 0xf8));
-		sysdep_free(*pfld(state, 0xf4));
-		sysdep_free(*pfld(state, 0x30));
-		sysdep_free(*pfld(state, 0x2c));
+	if (state->cfg.len > 0) {
+		sysdep_free(state->rev_acc);
+		sysdep_free(state->rev_block);
+		sysdep_free(state->history);
+		sysdep_free(state->kernel);
 	}
 	sysdep_free(state);
 }
@@ -261,11 +265,11 @@ FPM_TONE_delete(void *state)
  * Per sample:
  *
  *   1. push the sample into a circular history of `taps` words and correlate
- *      the whole history against the kernel at +0x2c -- the ToneLPF prototype
+ *      the whole history against `kernel` -- the ToneLPF prototype
  *      FPM_TONE_create copied there;
  *   2. square the result: that is the TOTAL energy in this sample;
  *   3. run the same result through the one-section Goertzel resonator that
- *      FPM_TONE_create built at +0x36, and square that: the IN-BAND energy;
+ *      FPM_TONE_create built in `iir_coeff`, and square that;
  *   4. smooth both, with the difference standing in for out-of-band energy.
  *
  * The two smoothers use 31130 and 1638 -- 0.95 and 0.05 in Q15, summing to
@@ -287,18 +291,18 @@ FPM_TONE_delete(void *state)
  * zero.  Measured: 2100 Hz in gives 0, 2000 and 2200 give 1.
  */
 short
-FPM_TONE_detect(void *state, const short *samples, short count)
+FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 {
-	const short *kernel = (const short *)*pfld(state, 0x2c);
-	short *hist = (short *)*pfld(state, 0x30);
-	short *iir_coeff = fld(state, 0x36);
-	short *iir_state = fld(state, 0x40);
-	int taps = *fld(state, 0x14);
-	int idx = *fld(state, 0x34);
-	int out_of_band = *fld(state, 0x48);
-	int total = *fld(state, 0x4a);
-	int ratio = *fld(state, 0x06);
-	int min_level = *fld(state, 0x0a);
+	const short *kernel = (const short *)state->kernel;
+	short *hist = (short *)state->history;
+	short *iir_coeff = state->iir_coeff;
+	short *iir_state = state->iir_state;
+	int taps = state->cfg.len;
+	int idx = state->hist_idx;
+	int out_of_band = state->e_tone;
+	int total = state->e_total;
+	int ratio = state->cfg.ratio;
+	int min_level = state->cfg.min_level;
 	int i;
 
 	/*
@@ -373,9 +377,9 @@ FPM_TONE_detect(void *state, const short *samples, short count)
 	if (out_of_band < 0)
 		out_of_band = 0;
 
-	*fld(state, 0x34) = (short)idx;
-	*fld(state, 0x4a) = (short)total;
-	*fld(state, 0x48) = (short)out_of_band;
+	state->hist_idx = (short)idx;
+	state->e_total = (short)total;
+	state->e_tone = (short)out_of_band;
 
 	if ((short)total < min_level)
 		return FPM_TONE_NOSIGNAL;
@@ -402,14 +406,14 @@ FPM_TONE_detect(void *state, const short *samples, short count)
  * has no indeterminate reads.
  */
 short
-FPM_TONE_generate_demod(void *state, short *out, short count)
+FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
 {
 	struct fpm_phasor p;
-	int scale = *fld(state, FPM_TONE_OFF_SCALE);
+	int scale = state->cfg.scale;
 	int i;
 
-	p.phase = (unsigned short)*fld(state, FPM_TONE_OFF_PHASE);
-	p.inc = (unsigned short)*fld(state, FPM_TONE_OFF_INC);
+	p.phase = (unsigned short)state->phase;
+	p.inc = (unsigned short)state->inc;
 	p.cos = p.sin = 0;
 
 	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
@@ -417,6 +421,38 @@ FPM_TONE_generate_demod(void *state, short *out, short count)
 		*out++ = (short)((scale * p.cos) >> 14);
 	}
 
-	*fld(state, FPM_TONE_OFF_PHASE) = (short)p.phase;
+	state->phase = (short)p.phase;
 	return count;
 }
+
+/*
+ * The reserved region is a byte count from a 32-bit build, so these are
+ * compiled only under that ABI -- see the same note in src/pump/b103/b103fp.c.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define TONE_ASSERT_OFF(field, off) \
+	typedef char fpm_tone_off_##field[ \
+		((int)__builtin_offsetof(struct fpm_tone, field) == (off)) \
+			? 1 : -1]
+
+TONE_ASSERT_OFF(phase, 0x24);
+TONE_ASSERT_OFF(inc, 0x26);
+TONE_ASSERT_OFF(rev_count, 0x28);
+TONE_ASSERT_OFF(kernel, 0x2c);
+TONE_ASSERT_OFF(history, 0x30);
+TONE_ASSERT_OFF(hist_idx, 0x34);
+TONE_ASSERT_OFF(iir_coeff, 0x36);
+TONE_ASSERT_OFF(iir_state, 0x40);
+TONE_ASSERT_OFF(e_tone, 0x48);
+TONE_ASSERT_OFF(e_total, 0x4a);
+TONE_ASSERT_OFF(rev_block, 0xf4);
+TONE_ASSERT_OFF(rev_acc, 0xf8);
+TONE_ASSERT_OFF(iir_self, 0xfc);
+TONE_ASSERT_OFF(r100, 0x100);
+
+typedef char fpm_tone_cfg_size[(sizeof(struct fpm_tone_cfg) == 0x24) ? 1 : -1];
+typedef char fpm_tone_size[(sizeof(struct fpm_tone) == FPM_TONE_STATE_SIZE)
+			   ? 1 : -1];
+
+#endif /* 32-bit */

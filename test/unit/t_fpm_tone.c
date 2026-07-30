@@ -122,8 +122,8 @@ static int detect_verdicts[3];
 static void
 compare_detect(unsigned char *ours, unsigned char *ref, int taps, int tag)
 {
-	const short *ho = *(const short *const *)(ours + FPM_TONE_OFF_HISTORY);
-	const short *hr = *(const short *const *)(ref + FPM_TONE_OFF_HISTORY);
+	const short *ho = ((const struct fpm_tone *)ours)->history;
+	const short *hr = ((const struct fpm_tone *)ref)->history;
 	int i;
 
 	for (i = 0; i < FPM_TONE_STATE_SIZE; i += 2) {
@@ -159,7 +159,7 @@ detect_stream(const char *what, void *src, int freq, int scale,
 		diff_eq_int("objects built (%ld)", 0, 1, 0);
 		return diff_end();
 	}
-	taps = *(short *)(a + FPM_TONE_OFF_TAPS);
+	taps = ((struct fpm_tone *)a)->cfg.len;
 
 	ref_FPM_TONE_set_freq(src, (short)freq);
 	ref_FPM_TONE_set_scale(src, (short)scale);
@@ -171,7 +171,7 @@ detect_stream(const char *what, void *src, int freq, int scale,
 		ref_FPM_TONE_generate(src, buf, (short)len);
 
 		va = ref_FPM_TONE_detect(a, buf, (short)len);
-		vb = FPM_TONE_detect(b, buf, (short)len);
+		vb = FPM_TONE_detect((struct fpm_tone *)b, buf, (short)len);
 
 		diff_eq_int("verdict at block %ld", vb, va, k);
 		compare_detect(b, a, taps, k);
@@ -204,13 +204,13 @@ main(void)
 	diff_begin("FPM_TONE_create default cfg");
 	{
 		unsigned char *ca = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
-		unsigned char *cb = FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *cb = (unsigned char *)FPM_TONE_create(0, (const struct fpm_tone_cfg *)ref_FPM_TONE_CFG);
 
 		diff_eq_int("ours built an object (%ld)", cb != 0, 1, 0);
 		if (cb != 0)
 			compare_created(cb, ca,
-					*(short *)(ca + FPM_TONE_CFG_LEN),
-					*(short *)(ca + FPM_TONE_CFG_EXTRA), 1);
+					((struct fpm_tone *)ca)->cfg.len,
+					((struct fpm_tone *)ca)->cfg.extra, 1);
 	}
 	rc |= diff_end();
 
@@ -218,13 +218,13 @@ main(void)
 	diff_begin("FPM_TONE_create NULL cfg");
 	{
 		unsigned char *ca = ref_FPM_TONE_create(0, 0);
-		unsigned char *cb = FPM_TONE_create(0, 0);
+		unsigned char *cb = (unsigned char *)FPM_TONE_create(0, 0);
 
 		diff_eq_int("ours built an object (%ld)", cb != 0, 1, 0);
 		if (cb != 0)
 			compare_created(cb, ca,
-					*(short *)(ca + FPM_TONE_CFG_LEN),
-					*(short *)(ca + FPM_TONE_CFG_EXTRA), 0);
+					((struct fpm_tone *)ca)->cfg.len,
+					((struct fpm_tone *)ca)->cfg.extra, 0);
 	}
 	rc |= diff_end();
 
@@ -232,8 +232,8 @@ main(void)
 	for (k = 0; k < 4000; k += 7) {
 		memcpy(a, built, sizeof(a));
 		memcpy(b, built, sizeof(b));
-		ref_FPM_TONE_set_freq(a, (short)k);
-		FPM_TONE_set_freq(b, (short)k);
+		ref_FPM_TONE_set_freq((struct fpm_tone *)a, (short)k);
+		FPM_TONE_set_freq((struct fpm_tone *)b, (short)k);
 		compare_state(b, a, "set_freq");
 	}
 	rc |= diff_end();
@@ -242,8 +242,8 @@ main(void)
 	for (k = -32768; k < 32768; k += 251) {
 		memcpy(a, built, sizeof(a));
 		memcpy(b, built, sizeof(b));
-		ref_FPM_TONE_set_scale(a, (short)k);
-		FPM_TONE_set_scale(b, (short)k);
+		ref_FPM_TONE_set_scale((struct fpm_tone *)a, (short)k);
+		FPM_TONE_set_scale((struct fpm_tone *)b, (short)k);
 		compare_state(b, a, "set_scale");
 	}
 	rc |= diff_end();
@@ -252,13 +252,13 @@ main(void)
 	diff_begin("FPM_TONE_generate short");
 	memcpy(a, built, sizeof(a));
 	memcpy(b, built, sizeof(b));
-	ref_FPM_TONE_set_freq(a, 2100);
-	FPM_TONE_set_freq(b, 2100);
+	ref_FPM_TONE_set_freq((struct fpm_tone *)a, 2100);
+	FPM_TONE_set_freq((struct fpm_tone *)b, 2100);
 	for (k = 0; k < 60; k++) {
 		int n = (k % 13) + 1, i;
 
-		ref_FPM_TONE_generate(a, oa, (short)n);
-		FPM_TONE_generate(b, ob, (short)n);
+		ref_FPM_TONE_generate((struct fpm_tone *)a, oa, (short)n);
+		FPM_TONE_generate((struct fpm_tone *)b, ob, (short)n);
 		for (i = 0; i < n; i++)
 			diff_eq_int("burst sample %ld", ob[i], oa[i], i);
 		compare_state(b, a, "generate");
@@ -275,21 +275,21 @@ main(void)
 	diff_begin("FPM_TONE_generate reversals");
 	memcpy(a, built, sizeof(a));
 	memcpy(b, built, sizeof(b));
-	ref_FPM_TONE_set_freq(a, 2100);
-	FPM_TONE_set_freq(b, 2100);
+	ref_FPM_TONE_set_freq((struct fpm_tone *)a, 2100);
+	FPM_TONE_set_freq((struct fpm_tone *)b, 2100);
 	{
 		int resets = 0, prev = 0;
 
 		for (k = 0; k < 400; k++) {
 			int n = 40 + (k % 7) * 24, i, now;
 
-			ref_FPM_TONE_generate(a, oa, (short)n);
-			FPM_TONE_generate(b, ob, (short)n);
+			ref_FPM_TONE_generate((struct fpm_tone *)a, oa, (short)n);
+			FPM_TONE_generate((struct fpm_tone *)b, ob, (short)n);
 			for (i = 0; i < n; i++)
 				diff_eq_int("long sample %ld", ob[i], oa[i], i);
 			compare_state(b, a, "generate long");
 
-			now = *(unsigned short *)(b + FPM_TONE_OFF_REV_COUNT);
+			now = ((struct fpm_tone *)b)->rev_count;
 			if (now < prev)
 				resets++;
 			prev = now;
@@ -310,13 +310,13 @@ main(void)
 	diff_begin("FPM_TONE_generate ragged counts");
 	memcpy(a, built, sizeof(a));
 	memcpy(b, built, sizeof(b));
-	ref_FPM_TONE_set_freq(a, 1650);
-	FPM_TONE_set_freq(b, 1650);
+	ref_FPM_TONE_set_freq((struct fpm_tone *)a, 1650);
+	FPM_TONE_set_freq((struct fpm_tone *)b, 1650);
 	for (k = 0; k < 900; k++) {
 		int n = (k % 8) + 1, i;
 
-		ref_FPM_TONE_generate(a, oa, (short)n);
-		FPM_TONE_generate(b, ob, (short)n);
+		ref_FPM_TONE_generate((struct fpm_tone *)a, oa, (short)n);
+		FPM_TONE_generate((struct fpm_tone *)b, ob, (short)n);
 		for (i = 0; i < n; i++)
 			diff_eq_int("ragged sample %ld", ob[i], oa[i], i);
 		compare_state(b, a, "generate ragged");
@@ -336,16 +336,16 @@ main(void)
 	diff_begin("FPM_TONE_generate_demod");
 	memcpy(a, built, sizeof(a));
 	memcpy(b, built, sizeof(b));
-	ref_FPM_TONE_set_freq(a, 2100);
-	FPM_TONE_set_freq(b, 2100);
-	ref_FPM_TONE_set_scale(a, 32767);
-	FPM_TONE_set_scale(b, 32767);
+	ref_FPM_TONE_set_freq((struct fpm_tone *)a, 2100);
+	FPM_TONE_set_freq((struct fpm_tone *)b, 2100);
+	ref_FPM_TONE_set_scale((struct fpm_tone *)a, 32767);
+	FPM_TONE_set_scale((struct fpm_tone *)b, 32767);
 	for (k = 0; k < 400; k++) {
 		int n = (k % 37) + 1, i;
 		short ra, rb;
 
-		ra = ref_FPM_TONE_generate_demod(a, oa, (short)n);
-		rb = FPM_TONE_generate_demod(b, ob, (short)n);
+		ra = ref_FPM_TONE_generate_demod((struct fpm_tone *)a, oa, (short)n);
+		rb = FPM_TONE_generate_demod((struct fpm_tone *)b, ob, (short)n);
 
 		diff_eq_int("returned count (%ld)", rb, ra, n);
 		for (i = 0; i < n; i++)
@@ -357,8 +357,8 @@ main(void)
 	/* Zero count writes the phase back unchanged and returns zero. */
 	diff_begin("FPM_TONE_generate_demod zero count");
 	{
-		short ra = ref_FPM_TONE_generate_demod(a, oa, 0);
-		short rb = FPM_TONE_generate_demod(b, ob, 0);
+		short ra = ref_FPM_TONE_generate_demod((struct fpm_tone *)a, oa, 0);
+		short rb = FPM_TONE_generate_demod((struct fpm_tone *)b, ob, 0);
 
 		diff_eq_int("returned (%ld)", rb, ra, 0);
 		compare_state(b, a, "generate_demod zero");
@@ -383,13 +383,13 @@ main(void)
 		ref_FPM_TONE_set_scale(ga, 32767);
 		ref_FPM_TONE_set_scale(gb, 32767);
 
-		FPM_TONE_generate(ga, oa, 1000);
-		FPM_TONE_generate_demod(gb, ob, 1000);
+		FPM_TONE_generate((struct fpm_tone *)ga, oa, 1000);
+		FPM_TONE_generate_demod((struct fpm_tone *)gb, ob, 1000);
 
 		/* Same phase advance, so the accumulators agree. */
 		diff_eq_int("phase agrees (%ld)",
-			    *(short *)(gb + FPM_TONE_OFF_PHASE),
-			    *(short *)(ga + FPM_TONE_OFF_PHASE), 0);
+			    ((struct fpm_tone *)gb)->phase,
+			    ((struct fpm_tone *)ga)->phase, 0);
 		/* And the two waveforms are a quarter cycle apart, not equal. */
 		for (i = 0, k = 0; i < 1000; i++)
 			if (oa[i] != ob[i])
@@ -447,7 +447,7 @@ main(void)
 
 		if (za != 0 && zb != 0) {
 			short va = ref_FPM_TONE_detect(za, &dummy, 0);
-			short vb = FPM_TONE_detect(zb, &dummy, 0);
+			short vb = FPM_TONE_detect((struct fpm_tone *)zb, &dummy, 0);
 
 			diff_eq_int("verdict (%ld)", vb, va, 0);
 			compare_detect(zb, za, 0, 0);

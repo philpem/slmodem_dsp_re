@@ -37,8 +37,10 @@ const struct fpm_tone_cfg FPM_TONE_CFG_data = {
 	2100,	/* +0x00 frequency, Hz            */
 	27852,	/* +0x02 output scale, Q15        */
 	450,	/* +0x04 reversal period, 8-sample units */
-	{ 24576, 328, 1 },	/* +0x06 .. +0x0a */
-	30720,	/* +0x0c damping input            */
+	24576,	/* +0x06 detector ratio, 0.75 in Q15 */
+	328,	/* +0x08                          */
+	1,	/* +0x0a detector minimum level   */
+	30720,	/* +0x0c notch pole radius, 0.9375 in Q15 */
 	0,	/* +0x0e                          */
 	ToneLPF,	/* +0x10 source waveform  */
 	53,	/* +0x14 length: 53 taps          */
