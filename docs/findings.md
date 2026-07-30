@@ -935,3 +935,68 @@ init):
 threshold comparison, including how `FPM_div` is used to form the gain and
 where the freeze flag short-circuits. That is the part worth getting right,
 since it determines the loop's time constants.
+
+## 23. The 7200 Hz question, sharpened — and every conversion candidate excluded
+
+Task 11 asked what converts 8000 to 7200 inside Bell 103. The answer so far is
+**nothing found**, and that is now a specific, well-bounded puzzle rather than
+a vague one.
+
+### Confirmed: the FSK core is 7200 Hz
+
+Two independent facts, both now read directly rather than inferred.
+
+**`FPM_FSM_modulate` emits exactly 24 samples per bit.** The per-bit loop calls
+`FPM_TONE_generate` once per sample, 24 times, and accumulates 24 into a total
+it returns:
+
+```
+per bit:  set_freq(tone, prescaled[bit]); set_scale(tone, scale)
+          total += 24
+          repeat 24 times: FPM_TONE_generate(tone, out++, 1)
+```
+
+Integer, no fractional accumulator. At 300 baud that is 7200 Hz exactly;
+8000 would need 26.667.
+
+**The tone frequencies are prescaled by 10/9.** `FPM_FSM_init` stores
+`cfg[0] * 0x471c >> 14` and `cfg[1] * 0x471c >> 14`, and `FPM_FSM_modulate`
+passes those to `FPM_TONE_set_freq`, which assumes 8000. Composed, that yields
+phase increments correct for 7200. With `FPM_FSM_CFG`'s 1850/1650 — the V.21
+channel-2 pair — the prescaled values are 2055.6 and 1833.3, which are only
+the right tones if the stream is clocked at 7200.
+
+### Excluded
+
+- **`B103_CHAN_INTRP` is not a resampler.** It is passed to `FPM_FSD_init` as
+  a 15-tap coefficient array with a tap count of 15 alongside `B103_IIR_LPF` —
+  it is the demodulator's input filter.
+- **`RcFixed` is not involved.** Its only callers are `dp_wrapper_run`,
+  `call_run`, `FAX_process` and `VOICE_process` (finding 5). Nothing in the
+  B103 path calls it.
+- **`b103_process` does not resample.** Its entire call graph is
+  `B103FP_modem`, `modem_get_bits`, `modem_put_bits`, `modem_set_param` and
+  the debug printf.
+- **`dp_wrapper` is told 8000.** `b103_create` passes `dp_srate = 8000` and
+  `dp_frag = 160`, giving `host_frag = 160 * 9600 / 8000 = 192` — which is
+  exactly `DPW_MAX_FRAG`, so b103 uses the ring to its limit.
+
+### What that leaves
+
+Either the conversion lives somewhere not yet read — `B103FP_modem` (0x307
+bytes) and the `TxHdx*`/`RxHdx*` state functions are the remaining
+unexamined code on this path — or there is none, and the modem runs 10/9 fast
+relative to the standard.
+
+The second possibility should not be dismissed on plausibility alone. It would
+mean two Smart Link modems interoperate happily while neither matches a
+standards-compliant peer, which is the kind of defect that survives if it is
+never tested against third-party hardware. It would also be invisible to every
+test in this project, since we compare against the blob and the blob would be
+consistently wrong.
+
+**This is exactly what tier-3 interop testing exists to catch** (SpanDSP, task
+5, currently deferred). If B103 is 10/9 fast, a SpanDSP V.21 peer will fail to
+train against it while our differential tests stay green. That makes task 5
+worth pulling forward once B103 is reconstructed, rather than leaving it to
+phase 9.
