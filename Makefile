@@ -24,13 +24,13 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/service/pcm.c src/core/fixedrc.c
+SRC        := src/service/pcm.c src/core/fixedrc.c src/dsp/fpm_sqrt.c
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC))
 
 HARNESS    := test/harness/harness.c test/harness/runtime.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_pcm t_fixedrc
+TESTS      := t_pcm t_fixedrc t_fpm_sqrt
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
@@ -70,7 +70,7 @@ $(BUILD)/%.o: %.c
 
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^
+	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
