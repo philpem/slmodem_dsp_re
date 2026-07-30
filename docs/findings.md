@@ -827,3 +827,50 @@ rather than a confirmed entry in `docs/rate_assumptions.md`, because
 
 14000 / 20 = 700, exactly the clamp floor, so the clamp is a no-op for the
 default config and only bites if a caller lowers the value.
+
+## 21. The `fpm_*` dependency web
+
+Mapped while scoping `FPM_AGC`. The six modules Bell 103 needs are not
+independent — they bottom out in a small set of arithmetic primitives, and the
+order they have to be reconstructed in follows from that.
+
+```
+FPM_AGC_agc ──> FPM_div  ──> FPM_div_table
+            └─> FPM_rms  ──> FPM_sqrt_dp ──> FPM_sqrt_table   (done)
+FPM_FSM_init ──> FPM_TONE_create ──> FPM_phasor                (done)
+```
+
+**Decoded, trivial:**
+
+```c
+FPM_AGC_Freeze(state)   ->  state[0x28] = 1
+FPM_AGC_Release(state)  ->  state[0x28] = 0
+FPM_AGC_init(state, cfg, reset)
+        state[0x1c] = 0
+        copy 24 bytes of cfg into state[0x00 .. 0x14]
+        if (reset) { state[0x18] = 1; state[0x20] = state[0x24] = state[0x26] = 0; }
+        state[0x28] = 0
+        state[0x20] = 0
+```
+
+**`FPM_rms(samples, count)`** accumulates `(x * 910 >> 15) * x` per sample and
+takes `FPM_sqrt_dp` of the total. 910/32768 = 0.02777 ≈ 1/36, so it computes
+`sqrt(Σ x² / 36)` — the /36 is headroom, keeping the sum inside 32 bits for up
+to 36 full-scale samples.
+
+**`FPM_sqrt_dp(x)`** is the 32-bit sibling of `FPM_sqrt`, sharing
+`FPM_sqrt_table` and the same normalise-index-interpolate shape. It
+left-normalises until `x > 0x1fffffff`, then takes `x >> 15` as the mantissa.
+
+**Edge case to check before reconstructing it.** After normalisation
+`x ∈ [0x20000000, 0xffffffff]`, so `x >> 15` reaches `0x1ffff` — which does not
+fit the `unsigned short` the mantissa is stored in, and wraps for
+`x ≥ 0x80000000`. That is the same shape of latent defect as `FPM_sqrt`'s
+one-past-the-end read (D1), and it needs the same treatment: establish whether
+callers can reach it before deciding whether to reproduce or guard. `FPM_rms`
+is the only caller found so far, and its accumulator is bounded by the /36
+scaling, so it may well be unreachable in practice.
+
+**Reconstruction order that falls out:** `FPM_sqrt_dp` → `FPM_rms` →
+`FPM_div` → `FPM_AGC`. Each is small (143, 62, 150, 868 bytes) and the first
+three are exhaustively or near-exhaustively testable.
