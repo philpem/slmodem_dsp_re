@@ -29,6 +29,12 @@ struct fpm_phasor {
 
 void FPM_phasor(struct fpm_phasor *p);
 
+/*
+ * The same, but cosine only.  `sin` is left UNTOUCHED, not zeroed -- a caller
+ * that alternates the two functions sees a stale sine, and that is faithful.
+ */
+void FPM_phasor_demod(struct fpm_phasor *p);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_phasor_cos_entry(int i);
 unsigned short FPM_phasor_sin_entry(int i);

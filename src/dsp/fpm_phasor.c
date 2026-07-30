@@ -140,36 +140,83 @@ interpolate(const unsigned short *table, int idx, int frac)
 	return base + ((((int)table[idx + 1] - base) * frac) >> 5);
 }
 
-void
-FPM_phasor(struct fpm_phasor *p)
+/*
+ * Split the phase into a table index, an interpolation fraction and a
+ * quadrant.  Odd quadrants are the mirror of even ones, so the table is
+ * walked backwards and the fraction reflected with it.
+ */
+static void
+phasor_split(int phase, int *idx_out, int *frac_out, int *quad_out)
 {
-	int phase = (short)p->phase;
 	int idx = phase >> 5;
 	int frac = phase - (idx << 5);
 	int quad = idx >> 8;
 
-	/*
-	 * Odd quadrants are the mirror of even ones: walk the table backwards
-	 * and reflect the fraction with it.
-	 */
 	if (quad & 1) {
 		frac = 32 - frac;
 		idx = ~idx;
 	}
-	idx &= 0xff;
 
-	/*
-	 * The interpolated value is truncated to 16 bits before the sign is
-	 * applied -- entry 0 is 32768, so this is not a no-op at the extremes.
-	 */
-	p->cos = (short)(((unsigned short)interpolate(fpm_cos_table, idx, frac)
-			  * fpm_cos_sign[quad]) >> 15);
-	p->sin = (short)(((unsigned short)interpolate(fpm_sin_table, idx, frac)
-			  * fpm_sin_sign[quad]) >> 15);
+	*idx_out = idx & 0xff;
+	*frac_out = frac;
+	*quad_out = quad;
+}
 
-	/* Advance, wrapping at one cycle. */
-	phase += (short)p->inc;
+/*
+ * One table lookup with the quadrant sign applied.
+ *
+ * The interpolated value is truncated to 16 bits before the sign -- entry 0
+ * is 32768, so this is not a no-op at the extremes.
+ */
+static short
+phasor_value(const unsigned short *table, const short *sign,
+	     int idx, int frac, int quad)
+{
+	return (short)(((unsigned short)interpolate(table, idx, frac)
+			* sign[quad]) >> 15);
+}
+
+/* Advance by one increment, wrapping at one cycle. */
+static unsigned short
+phasor_advance(int phase, int inc)
+{
+	phase += inc;
 	if (phase > 0x7fff)
 		phase -= FPM_PHASOR_CYCLE;
-	p->phase = (unsigned short)phase;
+	return (unsigned short)phase;
+}
+
+void
+FPM_phasor(struct fpm_phasor *p)
+{
+	int phase = (short)p->phase;
+	int idx, frac, quad;
+
+	phasor_split(phase, &idx, &frac, &quad);
+	p->cos = phasor_value(fpm_cos_table, fpm_cos_sign, idx, frac, quad);
+	p->sin = phasor_value(fpm_sin_table, fpm_sin_sign, idx, frac, quad);
+	p->phase = phasor_advance(phase, (short)p->inc);
+}
+
+/*
+ * FPM_phasor_demod -- .text 0x0a94e0, 161 bytes.
+ *
+ * Identical to FPM_phasor except that it does not compute the sine: `p->sin`
+ * is left exactly as the caller found it, not zeroed.  The original is a
+ * separate function rather than a flag, and the two were clearly written by
+ * copying; the shared parts are factored here because the behaviour is
+ * identical, not because the original shared them.
+ *
+ * Its one caller is FPM_TONE_generate_demod, which correlates against a
+ * reference tone and only needs one phase of it.
+ */
+void
+FPM_phasor_demod(struct fpm_phasor *p)
+{
+	int phase = (short)p->phase;
+	int idx, frac, quad;
+
+	phasor_split(phase, &idx, &frac, &quad);
+	p->cos = phasor_value(fpm_cos_table, fpm_cos_sign, idx, frac, quad);
+	p->phase = phasor_advance(phase, (short)p->inc);
 }

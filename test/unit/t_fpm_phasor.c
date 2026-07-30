@@ -16,6 +16,7 @@
 #include "dsplib/fpm_phasor.h"
 
 extern void ref_FPM_phasor(struct fpm_phasor *p);
+extern void ref_FPM_phasor_demod(struct fpm_phasor *p);
 
 /* Increments spanning DC, the tones Bell 103 and V.21 use, and the extremes. */
 static const int increments[] = {
@@ -62,6 +63,56 @@ main(void)
 			diff_eq_int("phase 0x%04lx: sin", b.sin, a.sin, i);
 			diff_eq_int("phase 0x%04lx: next", b.phase, a.phase, i);
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * FPM_phasor_demod: the same accumulator, cosine only.  Swept
+	 * exhaustively for the same reason, and with `sin` pre-loaded with a
+	 * sentinel because the interesting part of its contract is what it
+	 * does NOT write -- an implementation that zeroed `sin`, or that
+	 * computed it anyway, would pass a test that only looked at `cos`.
+	 */
+	diff_begin("FPM_phasor_demod exhaustive");
+	for (k = 0; k < sizeof(increments) / sizeof(increments[0]); k++) {
+		for (i = 0; i < 0x8000; i++) {
+			struct fpm_phasor a, b;
+
+			a.phase = b.phase = (unsigned short)i;
+			a.inc = b.inc = (unsigned short)increments[k];
+			a.cos = b.cos = 0;
+			a.sin = b.sin = (short)0x5a5a;
+
+			ref_FPM_phasor_demod(&a);
+			FPM_phasor_demod(&b);
+
+			diff_eq_int("phase 0x%04lx: cos", b.cos, a.cos, i);
+			diff_eq_int("phase 0x%04lx: next", b.phase, a.phase, i);
+			diff_eq_int("phase 0x%04lx: sin untouched",
+				    b.sin, (short)0x5a5a, i);
+			diff_eq_int("phase 0x%04lx: ref sin untouched too",
+				    a.sin, (short)0x5a5a, i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * And that demod's cosine really is FPM_phasor's cosine, so the two
+	 * cannot drift apart under a future edit to the shared lookup.
+	 */
+	diff_begin("FPM_phasor_demod matches FPM_phasor");
+	for (i = 0; i < 0x8000; i += 7) {
+		struct fpm_phasor full, cosonly;
+
+		full.phase = cosonly.phase = (unsigned short)i;
+		full.inc = cosonly.inc = 4506;
+		full.cos = cosonly.cos = full.sin = cosonly.sin = 0;
+
+		FPM_phasor(&full);
+		FPM_phasor_demod(&cosonly);
+		diff_eq_int("phase 0x%04lx: cos agrees", cosonly.cos, full.cos, i);
+		diff_eq_int("phase 0x%04lx: phase agrees",
+			    cosonly.phase, full.phase, i);
 	}
 	rc |= diff_end();
 
