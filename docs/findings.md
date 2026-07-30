@@ -1680,3 +1680,101 @@ to be exactly the part that a Nyquist-ignoring reading gets wrong.
 This is the number to check first if the demodulator ever produces a stuck
 output: a discriminator whose two states are both the same sign is one
 mis-sited threshold away from never toggling.
+
+## 32. `FPM_FSD_demodulate` — complete, and why loopback still carries no data
+
+`.text 0x0a79f0`, 745 bytes, reconstructed and bit-exact:
+`src/dsp/fpm_fsd.c`, 130,447 differential checks driven by **real** Bell 103
+FSK from `ModDataB103` through the actual receive front end.
+
+### The chain
+
+Per input sample: 15-tap circular FIR, then the delay-line discriminator
+(`>> 13`, so a gain of four), then `FPM_iir_filt` with three sections, then a
+**Schmitt slicer** — the bit changes only when the lowpass output passes
+±`slice_level` (10) and holds in between.
+
+### The bit clock resynchronises on edges
+
+Two counters, and this is the part worth reading twice:
+
+| | |
+|---|---|
+| `since_bit` | samples since a bit was last emitted |
+| `disagreements` | samples on which the slicer disagreed with the committed bit — **cumulative within the bit period, not consecutive**, and reset only when a bit is emitted |
+
+A bit comes out either when the slicer agrees and `bit_samples` have elapsed
+(free-running, carrying a run of identical bits), or when `disagreements`
+reaches `bit_samples / 2`, at which point the new bit is committed, emitted,
+and **both counters reset** — which drags the bit clock back into step with
+the sender. There is no separate phase detector; the edge simply restarts the
+count. A glitch shorter than half a bit never reaches the output.
+
+`bit_samples == 5` is special-cased to a half of 3 rather than 2; every other
+value is shifted right.
+
+### Output cap: input is discarded, not held over
+
+The loop stops once `max_bits + 1` bits have been written and **throws away
+the remaining samples**. Bell 103's `max_bits` is 6 and `bit_samples` is 8, so
+the ceiling is 8 bits from 64 samples. `DemodDataB103` feeds 48 at a time, so
+it never bites in normal use — but a caller passing a longer fragment loses
+the tail silently.
+
+### The receiver's actual passband, measured
+
+Driving pure tones through `rx_mrf -> AGC -> FSD` and reading the slicer input
+out of the trace buffer:
+
+| input | slicer level (no AGC) |
+|--:|--:|
+| 600 Hz | −3106 |
+| 750 Hz | −1234 |
+| **775 Hz** | **~0 — the discriminator null** |
+| 900 Hz | +3876 |
+| 1100 Hz | +331 |
+| 1250 Hz | −10 |
+| ≥1300 Hz | ~0, out of band |
+
+So the usable range is roughly 600–1200 Hz with the crossing at 775. With the
+AGC supplying gain, 1070 slices to 1 and 1270 to 0 — the pair **is** resolved,
+confirmed directly:
+
+```
+Bell103 originate 1070/1270   bit(1070)=1  bit(1270)=0   RESOLVED
+Bell103 answer    2025/2225   both 0        -- cannot carry data
+V.21 channel 1     980/1180   both 1        -- cannot carry data
+```
+
+### Why a loopback measures BER 0.485
+
+Feeding `ModDataB103`'s output straight back in gives essentially random bits.
+This is the **blob** doing it, not the reconstruction — the two agree
+bit-for-bit throughout — and the cause is configuration, not DSP:
+
+1. A Bell 103 originate station transmits 1070/1270 and receives 2025/2225.
+   Looping its own transmitter back is not a valid link in the first place.
+
+2. 1270 Hz sits on the receive filter's skirt, ~20 dB below 1070. With a
+   steady tone the AGC winds up enough to slice it; in a data stream the AGC
+   gain is set by the strong 1070 bursts, so the 1270 bursts never reach
+   −`slice_level` and the slicer holds. The output is ~2/3 ones.
+
+3. **`B103_CFG` does not build a link-capable object.** `B103FP_create` picks
+   between `B103_BPF_CALLER` (40 taps) and `B103_BPF_ANSWER` (50 taps) on
+   `b103fp` state `+0x04`, and stores the choice at `dsp[+0xf4]` with its
+   length at `+0xfa`. Built from `B103_CFG` those fields come out **NULL and
+   zero** — the branch is never reached. The tone pairs are chosen in the same
+   region: 1070/1270 (Bell 103 originate), 2025/2225 (answer), 980/1180
+   (V.21 channel 1).
+
+So the per-direction bandpass is selected by a configuration `b103_create`
+builds from its `caller` argument, and `B103_CFG` alone is a template. Nothing
+reconstructed so far applies the filter at `dsp[+0xf4]`; finding its consumer
+is part of the `B103FP_modem` / `DemodDataB103` work.
+
+**This does not block anything already done.** Every module on the path is
+bit-exact against the blob on exactly these objects. It is a statement about
+what still has to be reconstructed before the datapump can complete a call,
+and it is the answer to "why does loopback not work" — asked and answered
+before it could be mistaken for a DSP bug.

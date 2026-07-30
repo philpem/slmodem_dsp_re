@@ -2,8 +2,10 @@
  * fpm_fsd.h -- FSK demodulator.
  *
  * Bell 103 receives at 2400 Hz (FPM_MRF brings 8000 down to it), which is 8
- * samples per symbol at 300 baud.  The config carries two filters: an input
- * FIR and an IIR lowpass.
+ * samples per symbol at 300 baud.  The chain is:
+ *
+ *     input FIR  ->  delay-line discriminator  ->  IIR lowpass
+ *             ->  Schmitt slicer  ->  edge-resynchronised bit clock
  *
  * NOTE the config is a mixed struct with POINTERS at +0x00 and +0x08 --
  * dumping it as int16 hides them behind plausible-looking scalars.
@@ -12,34 +14,41 @@
 #ifndef DSPLIB_FPM_FSD_H
 #define DSPLIB_FPM_FSD_H
 
-/* 28 bytes, copied wholesale by init. */
+/* 28 bytes, copied wholesale by init.  Bell 103's values in the comments. */
 struct fpm_fsd_cfg {
 	const short *fir;	/* +0x00 input FIR coefficients          */
-	short fir_taps;		/* +0x04                                 */
-	short f06;		/* +0x06                                 */
+	short fir_taps;		/* +0x04 15                              */
+	short delay;		/* +0x06 discriminator delay, samples: 4 */
 	const short *iir;	/* +0x08 IIR lowpass coefficients        */
-	short iir_len;		/* +0x0c                                 */
-	short f0e;		/* +0x0e                                 */
-	short f10;		/* +0x10                                 */
-	short f12;		/* +0x12 halved into the state at +0x22  */
-	short f14;		/* +0x14                                 */
-	short f16;		/* +0x16 length of the third buffer      */
-	short f18;		/* +0x18                                 */
+	short iir_len;		/* +0x0c sections: 3                     */
+	short slice_level;	/* +0x0e Schmitt threshold, +/-: 10      */
+	short high_bit;		/* +0x10 bit value for a positive slice
+				 *       result; 1 - it for a negative.
+				 *       Setting it to 0 inverts the data. */
+	short bit_samples;	/* +0x12 samples per bit: 8              */
+	short max_bits;		/* +0x14 output cap; see the note below  */
+	short trace_len;	/* +0x16 length of the trace buffer: 160 */
+	short f18;		/* +0x18 not read by demodulate          */
 	short pad1a;
 };
 
 struct fpm_fsd {
 	struct fpm_fsd_cfg cfg;	/* +0x00 .. +0x1a */
-	short *buf1c;		/* +0x1c f16 entries        */
-	short f20;		/* +0x20 */
-	short f22;		/* +0x22 f12 / 2 */
-	short *fir_hist;	/* +0x24 fir_taps entries   */
-	short f28;		/* +0x28 */
+	short *trace;		/* +0x1c trace_len entries: the lowpass
+				 *       output, one word per input sample.
+				 *       Rewritten from the start on every
+				 *       call and never read back.        */
+	short last_count;	/* +0x20 the `count` of the last call     */
+	short f22;		/* +0x22 bit_samples / 2, set by init and
+				 *       then never read -- demodulate
+				 *       recomputes it.                   */
+	short *fir_hist;	/* +0x24 fir_taps entries, circular       */
+	short hist_idx;		/* +0x28 its write position               */
 	short pad2a;
-	short *iir_hist;	/* +0x2c 2 * iir_len entries */
-	short f30;		/* +0x30 */
-	short f32;		/* +0x32 */
-	short f34;		/* +0x34 */
+	short *iir_hist;	/* +0x2c 2 * iir_len entries              */
+	short bit;		/* +0x30 the committed bit                */
+	short since_bit;	/* +0x32 samples since the last one       */
+	short disagreements;	/* +0x34 samples sliced against `bit`     */
 	short pad36;
 };
 
@@ -47,5 +56,18 @@ struct fpm_fsd {
 void FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg,
 		  int fresh);
 void FPM_FSD_free(struct fpm_fsd *state);
+
+/*
+ * Demodulate `count` samples, appending bits to `bits_out` as they complete.
+ * Returns the number of bits written -- usually far fewer than `count`, since
+ * a bit takes `bit_samples` samples.
+ *
+ * At most `max_bits + 2` bits are written in one call, and the remaining
+ * input is DISCARDED rather than held over, so a caller feeding it more than
+ * that many bits' worth of samples silently loses data.  See
+ * src/dsp/fpm_fsd.c.
+ */
+short FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
+			 unsigned short *bits_out, unsigned short count);
 
 #endif /* DSPLIB_FPM_FSD_H */
