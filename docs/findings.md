@@ -1000,3 +1000,59 @@ consistently wrong.
 train against it while our differential tests stay green. That makes task 5
 worth pulling forward once B103 is reconstructed, rather than leaving it to
 phase 9.
+
+## 24. Task 11 RESOLVED — `FPM_MRF` is the rate converter
+
+`FPM_MRF` is a **multi-rate filter**, not the "matched root filter" the
+abbreviation suggests. That misreading is why the converter went unfound for
+several passes: it was excluded on the strength of an assumed expansion of
+three letters.
+
+`FPM_MRF_init` computes taps-per-phase directly, which settles the semantics:
+
+```
+state[0x16] = (short)(cfg[0x08] / cfg[0x00])      /* taps / branches */
+```
+
+`B103FP_create` initialises two of them:
+
+| | factors | taps | phases × taps | conversion |
+|---|---|--:|---|---|
+| TX, `B103_MRF_FILT_TX` | 10 : 9 | 270 | 10 × 27 | **7200 → 8000** |
+| RX, `B103_MRF_FILT_RX` | 3 : 10 | 90 | 3 × 30 | **8000 → 2400** |
+
+### The complete Bell 103 rate chain
+
+```
+host 9600 ──RcFixed mode 3──> 8000 ──┬── RX: FPM_MRF(3:10) ──> 2400 ──> FPM_FSD
+                                     │
+      8000 <──FPM_MRF(10:9)── 7200 <─┴── TX: FPM_FSM at 24 samples/symbol
+```
+
+Every number now agrees. The FSK modulator runs at **7200** (24 samples/symbol
+× 300 baud) with tones prescaled by 10/9 so an 8000-assuming tone generator
+produces the right phase increment. The demodulator runs at **2400** — 8
+samples per symbol at 300 baud, a sensible FSK demod rate. `FPM_MRF` bridges
+both to the 8000 the datapump interface uses.
+
+### The worry in finding 23 is resolved
+
+That finding raised the possibility that no conversion existed and the modem
+therefore ran 10/9 fast relative to the standard — invisible to differential
+testing because the blob would be consistently wrong. **It does not.** The
+conversion is present and exactly 10/9.
+
+The tier-3 argument still holds on its own merits, but this specific alarm is
+stood down.
+
+### For the reconstruction
+
+`FPM_MRF` joins `FixedRC` as a second, independent polyphase resampler in the
+library — different implementation, different layer, same job. It is one of
+the six `fpm_*` modules Bell 103 needs, and now clearly among the more
+important: it carries both rate conversions in the datapump.
+
+Its coefficient banks (`B103_MRF_FILT_TX`, 270 × int16; `B103_MRF_FILT_RX`,
+90 × int16) should be run through `tools/rcfilter.py`'s analysis once the
+storage order is established — the design rule recovered for `FixedRC`
+(cutoff ≈ 0.94 of the binding Nyquist) is worth checking against these.
