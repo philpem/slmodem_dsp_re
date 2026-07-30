@@ -398,3 +398,37 @@ back to the caller's buffer, and the loop tail. Differential testing will need
 a synthetic datapump installed on both sides, since `process` is a
 caller-supplied function pointer — the harness's existing shim approach does
 not cover indirect calls, so that is new machinery.
+
+## 16. Bell 103 needs six `fpm_*` modules — a plan correction
+
+The plan scheduled the `fpm_*` fixed-point framework with V.22 in phase 6, on
+the assumption that Bell 103 was "FSK, no equaliser" and therefore standalone.
+That is wrong. `B103FP_create` and `B103FP_delete` call:
+
+| module | functions | bytes |
+|---|---|--:|
+| `fpm_agc.c` | `FPM_AGC_init/agc/Freeze/Release` | 868 |
+| `fpm_fsd.c` | `FPM_FSD_init/demodulate/free` | 1059 |
+| `fpm_fsm.c` | `FPM_FSM_init/modulate/delete` | 428 |
+| `fpm_mrf.c` | `FPM_MRF_init/filter/free` | 742 |
+| `fpm_mtd.c` | `FPM_MTD_create/detect/delete` | 513 |
+| `fpm_tone.c` | `FPM_TONE_create/delete` and friends | ~3000 |
+
+So phase 2 is not just `b103.c` + `B103*.c`; it is those six modules first.
+Total for phase 2 is roughly 10–11 KB of code across ~10 translation units,
+rather than the ~16 KB of B103 alone that the plan assumed — the count is
+similar but the *composition* is different, and the `fpm_*` work lands earlier
+than planned.
+
+This is good news for the phases that follow: V.22 (phase 6) and the fax
+modems (phase 9) both lean on the same framework, so most of it is paid for
+once here. What remains for V.22 is the equaliser and timing-recovery half
+(`fpm_fse`, `fpm_sre`, `fpm_pps`, `fpm_adeq`, `fpm_ecc`) plus the arithmetic
+helpers.
+
+`FPM_TONE` is the outlier at ~3 KB with 12 exported functions, and it has a
+second, separate implementation alongside it (`TONE_create/generate/detect/…`
+at `.text 0xaf690`, in `TONE.c`). Which of the two Bell 103 actually uses at
+run time needs establishing before either is reconstructed — `B103FP_create`
+calls the `FPM_` variant, but the half-duplex state functions may call the
+other.

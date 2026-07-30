@@ -20,11 +20,11 @@ is structured, and the commands that prove each claim.
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `FP_math`, `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | registration done; modulation pending |
+| 2 | Bell 103 / V.21 — *first real connection* | registration done; needs the `fpm_*` subset below |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
-| 6 | V.22 / V.22bis / Bell 212 + the `fpm_*` framework | — |
+| 6 | V.22 / V.22bis / Bell 212 (rest of `fpm_*`) | — |
 | 7 | V.32 / V.32bis | — |
 | 8 | remaining services (CID, DTMF, ring detect, voice, beep) | — |
 | 9 | fax Class 1 (V.17 / V.27ter / V.29) | — |
