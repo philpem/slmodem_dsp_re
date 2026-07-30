@@ -23,21 +23,8 @@ is structured, and the commands that prove each claim.
 | phase | content | state |
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
-| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `FP_math`, `MEMORYC` |
-| 2 | Bell 103 / V.21 — *first real connection* | see below |
-
-### Phase 2 detail
-
-| module | state |
-|---|---|
-| `fpm_mrf` | complete — the 7200↔8000 and 8000↔2400 converters |
-| `fpm_fsm` | complete — FSK modulator |
-| `fpm_tone` | generator complete; detector pending |
-| `fpm_fsd` | init/free done; `demodulate` pending |
-| `fpm_agc` | init/Freeze/Release done; gain update pending |
-| `fpm_mtd` | create/delete done; `detect` pending |
-| primitives | `FPM_phasor`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div` — all complete |
-| `b103` | registration done; `B103FP` pending |
+| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `MEMORYC` |
+| 2 | Bell 103 / V.21 — *first real connection* | in progress, see below |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
 | 5 | V.8 negotiation | — |
@@ -48,6 +35,20 @@ is structured, and the commands that prove each claim.
 | 10 | V.34 | — |
 | 11 | V.90 / V.92 | — |
 | 12 | 8 kHz retarget | — |
+
+### Phase 2 detail
+
+| module | state |
+|---|---|
+| `fpm_iir` | complete — the shared biquad cascade |
+| `fpm_mrf` | complete — the 7200↔8000 and 8000↔2400 converters |
+| `fpm_fsm` | complete — FSK modulator |
+| `fpm_mtd` | complete — multi-tone detector |
+| `fpm_tone` | generator complete; detector pending |
+| `fpm_fsd` | init/free done; `demodulate` pending |
+| `fpm_agc` | init/Freeze/Release done; gain update pending |
+| primitives | `FPM_phasor`, `FPM_sqrt`, `FPM_sqrt_dp`, `FPM_rms`, `FPM_div`, `FP_math` — complete |
+| `b103` | registration done; `B103FP` pending |
 
 Full plan, including rationale for the ordering:
 `~/.claude/plans/the-directory-slmodemd-contains-compiled-lark.md`
