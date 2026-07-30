@@ -359,6 +359,20 @@ position. Positions wrap modulo `2 * host_frag`, so each buffer is
 double-buffered at the host fragment size — and 384 = 2 × 192 is exactly why
 `dp_wrapper_create` rejects a `dp_frag` above 192.
 
+**Reconstruction note.** The 192 is not an independent constant; it is a
+consequence of the ring size. The reconstruction should derive it so the
+relationship is visible and cannot drift:
+
+```c
+#define DPW_RING_BYTES   768                                  /* per ring   */
+#define DPW_RING_SAMPLES (DPW_RING_BYTES / sizeof(short))      /* 384        */
+#define DPW_MAX_FRAG     (DPW_RING_SAMPLES / 2)                /* 192        */
+```
+
+with the buffer declared as `short data[DPW_RING_SAMPLES]` and the validation
+written against `DPW_MAX_FRAG`. Writing `192` in the check and `768` in the
+declaration would leave two numbers that must agree with nothing saying so.
+
 **Per-call flow:**
 
 1. Take `n = min(count, host_frag, space in the input ring)` — the space term

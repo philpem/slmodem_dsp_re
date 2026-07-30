@@ -103,6 +103,35 @@ side fails the build rather than passing silently.
 
 ---
 
+## Bugs found in the reconstruction (not deviations)
+
+Recorded because how they were caught is worth remembering.
+
+### R1 — `RcFixed_Resample` ignored its output limit
+
+The incoming value of `*out_count` is an output **cap**, read before the
+function zeroes it. Conversion stops when either the input runs out or that
+many samples have been produced.
+
+The first implementation ignored it entirely and ran until the input was
+exhausted. `t_rcresample` did not catch this because every case passed `0` —
+and `0` behaves as "no limit", since the original compares for *inequality*
+after producing a sample, so the count can never equal 0 again. Both readings
+are real and both are now reproduced.
+
+It surfaced only when `dp_wrapper` — the one caller that passes a genuine cap —
+disagreed on 2 of 14 cases. The lesson: a test that only ever passes the
+degenerate value of a parameter is not testing that parameter. `t_rcresample`
+now drives real caps (1, 7, 192, exactly one fragment, and larger than
+possible) and asserts the cap is respected.
+
+A second, smaller error in the same fix: the limit test belongs at the *bottom*
+of the loop, because the original always produces one output before applying
+it. Putting it at the top made a limit of 0 mean "produce nothing" and broke
+all 18 modes at once — loudly, which is the good kind of wrong.
+
+---
+
 ## Open questions
 
 Not deviations yet — things that need resolving before the affected modules can

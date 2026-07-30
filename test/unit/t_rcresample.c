@@ -129,6 +129,45 @@ run_mode(int mode, const char *label, const int *chunks, int nchunks)
 	return rc;
 }
 
+/*
+ * Drive one mode with a fixed output cap on every call, checking both the
+ * samples and that neither side exceeds the cap.
+ */
+static int
+run_limited(const char *label, int mode, int limit)
+{
+	void *ref = ref_RcFixed_Create(mode);
+	struct rc *ours = RcFixed_Create(mode);
+	short out_a[NSAMP * 8], out_b[NSAMP * 8];
+	int pos = 0, na = 0, nb = 0, k, rc;
+
+	diff_begin(label);
+	while (pos < NSAMP) {
+		int n = 64, ca = limit, cb = limit;
+
+		if (pos + n > NSAMP)
+			n = NSAMP - pos;
+
+		ref_RcFixed_Resample(ref, input + pos, n, out_a + na, &ca);
+		RcFixed_Resample(ours, input + pos, n, out_b + nb, &cb);
+
+		diff_eq_int("limit %ld: output count", cb, ca, limit);
+		diff_eq_int("limit %ld: cap respected", cb <= limit, 1, limit);
+		if (ca != cb)
+			break;
+		for (k = 0; k < ca; k++)
+			diff_eq_int("limit %ld: sample", out_b[nb + k],
+				    out_a[na + k], limit);
+		na += ca;
+		nb += cb;
+		pos += n;
+	}
+	rc = diff_end();
+	ref_RcFixed_Delete(ref);
+	RcFixed_Delete(ours);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -159,6 +198,19 @@ main(void)
 		       sizeof(tiny) / sizeof(tiny[0]));
 	rc |= run_mode(2, "rc 8000->9600 one-at-a-time", tiny,
 		       sizeof(tiny) / sizeof(tiny[0]));
+
+	/*
+	 * Output limits.  The incoming *out_count is a cap, and 0 means "no
+	 * limit" because the original tests for inequality after producing.
+	 * Every case above passes 0, so none of them exercises a real cap --
+	 * which is exactly how a missing limit went unnoticed until
+	 * dp_wrapper, the only caller that passes one, disagreed.
+	 */
+	rc |= run_limited("rc limit 1", 3, 1);
+	rc |= run_limited("rc limit 7", 3, 7);
+	rc |= run_limited("rc limit 192", 3, 192);
+	rc |= run_limited("rc limit exact frag", 2, 160);
+	rc |= run_limited("rc limit huge", 3, 100000);
 
 	/* Deviation D3: unreachable modes 0 and 1, which we decline to build. */
 	rc |= run_mode(0, "rc mode 0 declined (D3)", bulk, 1);

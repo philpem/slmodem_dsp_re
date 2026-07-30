@@ -280,6 +280,20 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 {
 	struct rc_state *s;
 	int produced = 0;
+	int limit;
+
+	/*
+	 * The incoming value of *out_count is an output limit, read before it
+	 * is zeroed.  Conversion stops when either the input runs out or that
+	 * many samples have been produced.
+	 *
+	 * Passing 0 therefore means "no limit", not "produce nothing": the
+	 * original compares for inequality, so once the first sample is
+	 * emitted the count can never equal 0 again and the loop runs until
+	 * the input is exhausted.  dp_wrapper relies on the limit; callers
+	 * that pass 0 rely on the other reading.  Both are reproduced.
+	 */
+	limit = (out_count != NULL) ? *out_count : 0;
 
 	if (out_count != NULL)
 		*out_count = 0;
@@ -311,6 +325,14 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 
 		out[produced++] = rc_output(s);
 		rc_advance(s);
+
+		/*
+		 * Limit test at the bottom, matching the original: one output
+		 * is always produced before it applies.  That is what makes a
+		 * limit of 0 behave as "no limit" -- see the note above.
+		 */
+		if (produced == limit)
+			break;
 	}
 
 	if (out_count != NULL)

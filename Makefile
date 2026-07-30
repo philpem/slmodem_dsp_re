@@ -25,7 +25,7 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/dsp/fpm_sqrt.c
+SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/dsp/fpm_sqrt.c
 CXXSRC     := src/dsp/FloatIIR.cpp
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
@@ -42,10 +42,11 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # 32-bit libstdc++ headers are typically absent on a 64-bit host.
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++
 
-HARNESS    := test/harness/harness.c test/harness/runtime.c
+HARNESS    := test/harness/harness.c test/harness/runtime.c \
+              test/harness/fakedp.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param
+TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper
 CXXTESTS   := t_genericiir
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
