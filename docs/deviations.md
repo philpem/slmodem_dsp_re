@@ -445,7 +445,7 @@ It is only `B103FP_delete`'s treatment of the outermost object that is wrong.
 It is a latent trap for any new caller using the documented idiom.
 
 **Reproduced.** The reconstruction frees unconditionally too, and
-`t_b103fp_alloc` asserts the counts above **including the `bad_free`**, so the
+`t_b103alloc` asserts the counts above **including the `bad_free`**, so the
 defect cannot be quietly tidied away. The harness swallows frees of pointers
 it never handed out rather than passing them to `free()`, which is what lets
 the test observe this instead of crashing on it.
