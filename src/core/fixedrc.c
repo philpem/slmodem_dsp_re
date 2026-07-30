@@ -8,11 +8,14 @@
  * at 9600.  RcFixed_Resample() is called from exactly four places in the
  * original: dp_wrapper_run(), call_run(), FAX_process() and VOICE_process().
  *
- * STATUS: partial.  RcFixed_Check_Combination() and the factor tables are
- * complete and differentially verified.  RcFixed_Create(), _Reset(), _Delete()
- * and _Resample() are not yet reconstructed -- see the note at the end of this
- * file for what is known about them so far.
+ * Modes 0 and 1 use a different state layout in the original (a 40-byte block
+ * with three sub-allocations) and are not implemented here.  They are the
+ * explicit-only x4 and /4 entries, unreachable from
+ * RcFixed_Check_Combination(), so nothing in the modem can request them.
  */
+
+#include <stdlib.h>
+#include <string.h>
 
 #include "dsplib/fixedrc.h"
 
@@ -40,13 +43,13 @@
  * The trailing {0, 0} is a terminator, and its index doubles as the
  * "unsupported" return value from RcFixed_Check_Combination().
  */
-static const int fixedRc_DownFact[RCFIXED_NMODES + 1] = {
+const int fixedRc_DownFact[RCFIXED_NMODES + 1] = {
 	1, 4, 5, 6, 1, 6, 1, 5, 1, 4,
 	5, 24, 4, 5, 2, 3, 3, 10, 9, 10,
 	0,
 };
 
-static const int fixedRc_UpFact[RCFIXED_NMODES + 1] = {
+const int fixedRc_UpFact[RCFIXED_NMODES + 1] = {
 	4, 1, 6, 5, 6, 1, 5, 1, 4, 1,
 	24, 5, 5, 4, 3, 2, 10, 3, 10, 9,
 	0,
@@ -108,25 +111,208 @@ RcFixed_Check_Combination(int in_rate, int out_rate)
 }
 
 /*
- * Still to reconstruct: RcFixed_Create/_Reset/_Delete/_Resample.
- *
- * What is established so far, from the original:
- *
- *   RcFixed_Create(mode)
- *       Rejects mode > 999 outright.  Allocates an 8-byte handle
- *       { int kind; void *state; }.  Modes 0 and 1 take a separate path;
- *       modes 2..19 allocate 420 bytes of state, store the mode's up factor
- *       at state+0x198 and its down factor at state+0x196 (both u16), then
- *       dispatch through a 20-way jump table at .rodata+0x10f14 to a
- *       per-mode filter initialiser.  Modes above 19 leave kind = 0 and no
- *       state, i.e. an identity converter.
- *
- *   RcFixed_Resample()
- *       0xa50 bytes at .text 0x0b12a0 -- a polyphase FIR, with the phase
- *       accumulator and history buffer living in the 420-byte state block.
- *
- * The per-mode coefficient sets reached through that jump table are the real
- * content here, and each needs extracting with tools/tabdump.py and pairing
- * with a generator that reproduces it from its design parameters, per
- * docs/coefficients.md.
+ * ---------------------------------------------------------------------------
+ * Converter
+ * ---------------------------------------------------------------------------
  */
+
+struct rc {
+	int kind;               /* +0x00 0 = polyphase, 1 = modes 0/1 */
+	struct rc_state *state; /* +0x04 */
+};
+
+struct rc_state *
+RcFixed_State(struct rc *h)
+{
+	return h ? h->state : NULL;
+}
+
+/*
+ * Set the running state to its initial condition.
+ *
+ * `pos` starts at `taps`, not zero: the first `taps` history entries are left
+ * as zero padding so the very first output has a full window to convolve
+ * against without a special case.
+ *
+ * `input_needed` starts at 1 when up <= down and 0 otherwise.  Interpolating
+ * ratios can emit an output before consuming anything; decimating ones cannot.
+ */
+static void
+rc_reset_state(struct rc_state *s)
+{
+	int r;
+
+	memset(s->history, 0, sizeof(s->history));
+	s->pos = s->taps;
+	s->input_needed = (s->up <= s->down) ? 1 : 0;
+
+	/*
+	 * The original uses the C remainder, then corrects a negative result by
+	 * adding `up`.  Rates are positive so the correction is unreachable in
+	 * practice, but it is reproduced to keep behaviour identical.
+	 */
+	r = (int)s->down % (int)s->up;
+	if (r < 0)
+		r += (int)s->up;
+	s->phase = (unsigned short)r;
+}
+
+struct rc *
+RcFixed_Create(int mode)
+{
+	struct rc *h;
+	struct rc_state *s;
+
+	/* The original rejects absurd mode numbers before touching the tables. */
+	if (mode < 0 || mode > 999)
+		return NULL;
+
+	/* Modes 0 and 1, and anything past the table, have no polyphase bank. */
+	if (mode >= RCFIXED_NMODES || rc_banks[mode].coeff == NULL)
+		return NULL;
+
+	h = calloc(1, sizeof(*h));
+	if (h == NULL)
+		return NULL;
+
+	s = calloc(1, sizeof(*s));
+	if (s == NULL) {
+		free(h);
+		return NULL;
+	}
+
+	h->kind = 0;
+	h->state = s;
+
+	s->coeff = rc_banks[mode].coeff;
+	s->taps = (short)rc_banks[mode].taps;
+	s->up = (unsigned short)fixedRc_UpFact[mode];
+	s->down = (unsigned short)fixedRc_DownFact[mode];
+
+	rc_reset_state(s);
+	return h;
+}
+
+void
+RcFixed_Reset(struct rc *h)
+{
+	if (h != NULL && h->kind == 0 && h->state != NULL)
+		rc_reset_state(h->state);
+}
+
+void
+RcFixed_Delete(struct rc *h)
+{
+	if (h == NULL)
+		return;
+	free(h->state);
+	free(h);
+}
+
+/*
+ * Append one sample to the sliding window.
+ *
+ * The original does not use a circular buffer.  It writes forward through a
+ * flat 200-entry array and, on reaching the end, copies the most recent `taps`
+ * samples back to the start and resumes from there.  Compaction costs a short
+ * memmove once every (200 - taps) samples, and in exchange the convolution
+ * inner loop is a straight walk with no index wrapping -- worth it on a 2003
+ * CPU, and reproduced here because it also determines exactly which samples
+ * survive across the boundary.
+ */
+static void
+rc_push(struct rc_state *s, short sample)
+{
+	s->history[s->pos++] = sample;
+
+	if (s->pos == RCFIXED_HISTORY) {
+		memmove(s->history, s->history + RCFIXED_HISTORY - s->taps,
+			(size_t)s->taps * sizeof(s->history[0]));
+		s->pos = s->taps;
+	}
+}
+
+/*
+ * One output sample: the inner product of the current polyphase branch with
+ * the most recent `taps` inputs.
+ *
+ * Coefficients are Q14 and the accumulator is shifted right by 14.  The branch
+ * base is `phase * taps`, and both pointers walk forward -- so coeff[0]
+ * multiplies the *oldest* sample of the window, which is the reverse of
+ * textbook convolution order.  See docs/coefficients.md.
+ */
+static short
+rc_output(struct rc_state *s)
+{
+	const short *coeff = s->coeff + (int)s->phase * s->taps;
+	const short *hist = s->history + (s->pos - s->taps);
+	int acc = 0;
+	int k;
+
+	for (k = 0; k < s->taps; k++)
+		acc += (int)coeff[k] * (int)hist[k];
+
+	return (short)(acc >> 14);
+}
+
+/*
+ * Advance the phase accumulator by `down`; every time it passes `up` another
+ * input sample is owed.  This is the standard rational-rate bookkeeping:
+ *
+ *     input_needed = (phase + down) / up
+ *     phase        = (phase + down) % up
+ *
+ * The original spells the division out as a subtract-and-count loop, which is
+ * equivalent for the small factors involved.
+ */
+static void
+rc_advance(struct rc_state *s)
+{
+	int acc = (int)s->phase + (int)s->down;
+
+	s->input_needed = acc / (int)s->up;
+	s->phase = (unsigned short)(acc % (int)s->up);
+}
+
+void
+RcFixed_Resample(struct rc *h, const short *in, int in_count,
+		 short *out, int *out_count)
+{
+	struct rc_state *s;
+	int produced = 0;
+
+	if (out_count != NULL)
+		*out_count = 0;
+
+	if (h == NULL || h->kind != 0 || h->state == NULL)
+		return;
+
+	s = h->state;
+
+	while (in_count > 0) {
+		int need = s->input_needed;
+		int take = (need < in_count) ? need : in_count;
+		int i;
+
+		for (i = 0; i < take; i++)
+			rc_push(s, *in++);
+
+		/*
+		 * Ran out part-way through the samples this output needs.  The
+		 * consumed ones stay in the history and `input_needed` carries
+		 * the shortfall into the next call.
+		 */
+		if (need > in_count) {
+			s->input_needed = need - take;
+			break;
+		}
+
+		in_count -= need;
+
+		out[produced++] = rc_output(s);
+		rc_advance(s);
+	}
+
+	if (out_count != NULL)
+		*out_count = produced;
+}

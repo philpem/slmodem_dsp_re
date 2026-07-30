@@ -19,7 +19,7 @@ is structured, and the commands that prove each claim.
 | phase | content | state |
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
-| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | in progress |
+| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | `FixedRC` **done**, rest in progress |
 | 2 | Bell 103 / V.21 — *first real connection* | — |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
@@ -66,6 +66,8 @@ third_party/spandsp/   test peer, LGPL, never linked into src/
 | tool | purpose |
 |---|---|
 | `tools/tumap.py` | recover the 281-TU map from `STT_FILE` symbols |
+| `tools/rcfilter.py` | characterise the 18 resampler filter banks |
+| `tools/gen_rc_coeffs.py` | emit `src/core/rc_coeffs.c` from the blob |
 | `tools/tuattrib.py` | attribute `.text` functions to their translation unit |
 | `tools/symmap.py` | emit the `objcopy --redefine-syms` list for the harness |
 | `tools/tabdump.py` | extract a named coefficient table from the blob as C |

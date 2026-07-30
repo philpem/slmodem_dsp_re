@@ -41,4 +41,61 @@ int RcFixed_Check_Combination(int in_rate, int out_rate);
 int RcFixed_UpFactor(int mode);
 int RcFixed_DownFactor(int mode);
 
+/*
+ * History depth.  The original allocates a flat 200-sample int16 window and
+ * compacts it when the write position reaches the end, rather than using a
+ * circular buffer -- see rc_resample() in src/core/fixedrc.c.
+ */
+#define RCFIXED_HISTORY 200
+
+/* One polyphase coefficient bank: `up` branches of `taps` int16 Q14. */
+struct rc_bank {
+	const short *coeff;
+	int taps;
+};
+
+extern const struct rc_bank rc_banks[RCFIXED_NMODES];
+
+/*
+ * Converter state.  Field order follows the original's 420-byte layout so the
+ * two can be compared field by field during differential testing; see the
+ * offsets in the comments.
+ */
+struct rc_state {
+	const short *coeff;                 /* +0x000 selected bank         */
+	short history[RCFIXED_HISTORY];     /* +0x004 sliding input window  */
+	unsigned short phase;               /* +0x194 accumulator, 0..up-1  */
+	unsigned short down;                /* +0x196 input rate factor     */
+	unsigned short up;                  /* +0x198 output rate factor    */
+	short taps;                         /* +0x19a per-branch length     */
+	int pos;                            /* +0x19c history write index   */
+	int input_needed;                   /* +0x1a0 samples before next out */
+};
+
+/* Opaque handle. */
+struct rc;
+
+/*
+ * Create a converter for a mode from RcFixed_Check_Combination().
+ *
+ * Returns NULL for modes 0 and 1 (which use a different state layout in the
+ * original and are not implemented here) and for modes at or above
+ * RCFIXED_NMODES, i.e. unsupported ratios.
+ */
+struct rc *RcFixed_Create(int mode);
+void RcFixed_Delete(struct rc *h);
+void RcFixed_Reset(struct rc *h);
+
+/*
+ * Convert `in_count` samples.  Writes at most as many outputs as the ratio
+ * allows and stores the count through `out_count`.  Consumes all of `in`
+ * unless it runs out mid-way through the samples needed for one more output,
+ * in which case the remainder is held in the history for the next call.
+ */
+void RcFixed_Resample(struct rc *h, const short *in, int in_count,
+		      short *out, int *out_count);
+
+/* Test accessor: the live state, for field-by-field comparison. */
+struct rc_state *RcFixed_State(struct rc *h);
+
 #endif /* DSPLIB_FIXEDRC_H */

@@ -71,6 +71,38 @@ bug, and this entry should be revisited.
 
 ---
 
+## D3 — `FixedRC` modes 0 and 1 not implemented ⚠
+
+**Module** `src/core/fixedrc.c` · original `FixedRC.c`, `.text 0x0b0fd0`
+
+`RcFixed_Create(0)` and `RcFixed_Create(1)` build a converter in the original,
+using a **different state layout** from every other mode: a 40-byte block with
+three sub-allocations (6, 174 and 30 bytes) and three separate coefficient
+tables at `.rodata 0x10f0e`, `0x10e60` and `0x10e30`, rather than the 420-byte
+polyphase state the other 18 modes share.
+
+This reconstruction returns `NULL` for both.
+
+**Why that is safe.** Nothing can request them:
+
+- `RcFixed_Check_Combination()` begins its table scan at index 2, so it can
+  never return 0 or 1.
+- Every call site inside `dsplibs.o` passes a **literal** mode: `dp_wrapper_create`
+  passes 2 and 7, `call_create` passes 2, 3, 4 and 5. None passes 0 or 1.
+- `RcFixed_Check_Combination` is exported but **never called** anywhere in the
+  object, so the only paths to `RcFixed_Create` are those literals.
+
+Modes 0 and 1 are the plain x4 and /4 ratios, which modes 8 and 9 also provide
+through the ordinary polyphase path. They look like an earlier implementation
+that was superseded and left in place.
+
+**If a caller is ever found passing 0 or 1**, this becomes a real gap and the
+40-byte path must be reconstructed. `t_rcresample` asserts the current shape
+explicitly — that we decline and the original does not — so a change on either
+side fails the build rather than passing silently.
+
+---
+
 ## Open questions
 
 Not deviations yet — things that need resolving before the affected modules can
