@@ -3506,21 +3506,37 @@ guessed: `CALLPROG_NO_LEGAL_STATE`, `CALLPROG_WAIT_DIAL`, `CALLPROG_DIALING`,
 reconstruction, because the original's two enums overlap: `CALLPROG_DIALING`
 is state 2 and, separately, message 3.
 
-### An open coverage gap
+### One coverage gap, and what it is not
 
-`t_callprog_progress` compares 113 cases sample-for-sample and visits all ten
-states, but **neither cadence detector ever asserts under synthetic input**.
-Both filter banks were swept over all eight indices, with cadence windows set
-and loose detection enabled, and a clean 425 Hz tone at the right cadence
-still produces no verdict. So the branch in `detect` that turns a verdict
-into an event is exercised only in the sense that `cadence_progress` is
-called; what the supervisor does with a non-zero verdict is not covered
-here.
+`t_callprog_progress` compares 120 cases sample-for-sample and visits all ten
+states, but **neither cadence detector asserts when it is configured through
+`CALLPROG_Create`**. Both filter banks were swept over all eight indices,
+with the cadence windows that `t_cadence` uses to get a detection, loose
+detection enabled, and a clean 425 Hz tone at 500 ms on / 500 ms off. No
+verdict.
 
-The transition machinery it feeds *is* covered, by a different route: the
-state timeout and the line-clear timeout are plain counters, so seeding them
-short drives `request_state`, the per-state timeout tables and the commit in
-every state. That is what raises the run from two distinct messages to nine,
-`CALLPROG_BUSY` among them. Closing the remaining gap needs a detector
-configuration that actually asserts, which is a question about
-`cadence_create` and the filter bank rather than about this function.
+It is worth being precise about the size of this, because the loose version
+of the claim would be much worse than the truth. `cadence_progress` *does*
+assert elsewhere in the suite: `t_cadence` drives it to `CADENCE_DETECTED`
+and to `CADENCE_RESTART` against the same shape of input, so the detector's
+own assert path is verified. What is not covered is reaching a non-zero
+verdict *through the supervisor's configuration of it* -- so the branch in
+`detect` that turns a verdict into an event is untaken here, and finding out
+why belongs with `cadence_create` and the parameter plumbing rather than
+with this function.
+
+Everything that branch feeds is covered by a different route. The state
+timeout and the line-clear timeout are plain counters, so seeding them short
+drives `request_state`, the per-state timeout and line-clear tables and the
+commit, in every one of the ten states. That is what raises the run from two
+distinct messages to nine, `CALLPROG_BUSY` among them.
+
+Two smaller branches needed seeding for the same kind of reason:
+
+- the answered-at-last transition in state 8 needs 250 consecutive quiet
+  buffers, which no run of a sane length reaches, so `quiet_count` is seeded
+  to 248;
+- no value of `GetCallingToneFlag` reaches `CALLPROG_Dial`'s arming arm from
+  this harness, so state 3 emits silence and `GenerateCallingTone` is never
+  called. `calling_tone_armed` is seeded instead, and the case asserts that
+  the output is actually audible -- which is how the silence was noticed.

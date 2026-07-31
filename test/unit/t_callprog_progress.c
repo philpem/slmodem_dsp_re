@@ -131,9 +131,17 @@ fill_input(int signal)
 /* Which call-progress filter the busy detector uses; swept by main(). */
 static int busy_filter;
 
-/* Seeded into the two counters after CALLPROG_Dial; see drive(). */
+/* Seeded into the counters after CALLPROG_Dial; see drive(). */
 static int seed_countdown;
 static int seed_line_clear;
+static int seed_quiet;
+static int seed_armed;
+
+/* GetCallingToneFlag, which decides whether state 3 generates anything. */
+static int opt_calling_tone = 1;
+
+/* Non-silent output samples the reference produced in the last run(). */
+static long last_nonzero;
 
 static void
 params(void)
@@ -152,7 +160,7 @@ params(void)
 	harness_param_set(GetDTMFDialSpeed, 70);
 	harness_param_set(GetDTMFHighToneLevel, 9);
 	harness_param_set(GetDTMFHighAndLowToneLevelDifference, 2);
-	harness_param_set(GetCallingToneFlag, 1);
+	harness_param_set(GetCallingToneFlag, opt_calling_tone);
 	harness_param_set(GetHookFlashTime, 50);
 
 	/*
@@ -162,13 +170,13 @@ params(void)
 	 * Windows are in centiseconds.
 	 */
 	harness_param_set(GetCallProgressSamplesBufferLength, BUFSAMP);
-	harness_param_set(GetMinBusyCadenceOnTime, 30);
-	harness_param_set(GetMaxBusyCadenceOnTime, 70);
-	harness_param_set(GetMinBusyCadenceOffTime, 30);
-	harness_param_set(GetMaxBusyCadenceOffTime, 70);
-	harness_param_set(GetBusyDetectionCyclesNumber, 2);
+	harness_param_set(GetMinBusyCadenceOnTime, 4);
+	harness_param_set(GetMaxBusyCadenceOnTime, 12);
+	harness_param_set(GetMinBusyCadenceOffTime, 4);
+	harness_param_set(GetMaxBusyCadenceOffTime, 12);
+	harness_param_set(GetBusyDetectionCyclesNumber, 3);
 	harness_param_set(GetBusyToneCallProgressFilterIndex, busy_filter);
-	harness_param_set(GetBusyToneDiffTime, 10);
+	harness_param_set(GetBusyToneDiffTime, 3);
 	harness_param_set(GetDialToneCallProgressFilterIndex, busy_filter);
 	harness_param_set(GetDialToneFilterSubindex, 0);
 	harness_param_set(GetBusyToneLooseDetectionEnabled, 1);
@@ -221,6 +229,15 @@ drive(struct side *s, int ref, const char *dialstr, int seed, int calls)
 	 */
 	if (seed_countdown > 0)
 		s->cp.countdown = seed_countdown;
+	if (seed_quiet > 0)
+		s->cp.quiet_count = seed_quiet;
+	/*
+	 * No value of GetCallingToneFlag reaches CALLPROG_Dial's arming arm
+	 * from this harness, so the flag alone leaves state 3 emitting
+	 * silence.  Seeding the field is what covers GenerateCallingTone.
+	 */
+	if (seed_armed)
+		s->cp.calling_tone_armed = 1;
 	if (seed_line_clear > 0) {
 		s->cp.line_clear_active = 1;
 		s->cp.line_clear_limit = seed_line_clear;
@@ -285,6 +302,7 @@ run(const char *label, const char *dialstr, int signal, int seed, int calls)
 
 	diff_eq_int("same number of calls", side_b.calls, side_a.calls, 0);
 
+	last_nonzero = 0;
 	for (n = 0; n < side_a.calls && n < side_b.calls; n++) {
 		diff_eq_int("call %ld: message", side_b.msg[n], side_a.msg[n],
 			    n);
@@ -292,9 +310,12 @@ run(const char *label, const char *dialstr, int signal, int seed, int calls)
 			    side_a.state[n], n);
 		diff_eq_int("call %ld: countdown", side_b.countdown[n],
 			    side_a.countdown[n], n);
-		for (i = 0; i < BUFSAMP; i++)
+		for (i = 0; i < BUFSAMP; i++) {
 			diff_eq_int("call %ld: sample", side_b.out[n][i],
 				    side_a.out[n][i], n);
+			if (side_a.out[n][i] != 0)
+				last_nonzero++;
+		}
 
 		if (side_a.msg[n] >= 0
 		    && side_a.msg[n] < CALLPROG_MAX_MESSAGES)
@@ -379,6 +400,41 @@ main(void)
 		rc |= run(label, "T5551234", SIG_SILENCE, i, 90);
 		seed_line_clear = 0;
 	}
+
+	/*
+	 * The answered-at-last transition in state 8.  It needs 40000/160 =
+	 * 250 consecutive quiet buffers, so a 90-call run can never reach it;
+	 * seeding the counter just short is the only way to cover the
+	 * comparison and the transition it guards.
+	 */
+	seed_countdown = 0;
+	seed_quiet = 248;
+	rc |= run("callprog: state 8, silence runs out", "T5551234",
+		  SIG_SILENCE, CPSTATE_WFS_STATE, 20);
+	rc |= run("callprog: state 8, noise resets the count", "T5551234",
+		  SIG_NOISE, CPSTATE_WFS_STATE, 20);
+	seed_quiet = 0;
+
+	/*
+	 * State 3 with the calling tone actually armed.  Flag 1 disarms it, so
+	 * every run above took the silence branch and GenerateCallingTone was
+	 * never called.
+	 */
+	opt_calling_tone = 3;
+	seed_armed = 1;
+	rc |= run("callprog: state 3, calling tone armed", "T5551234",
+		  SIG_SILENCE, CPSTATE_WAIT_RING, 60);
+	seed_armed = 0;
+	diff_begin("callprog: the armed calling tone is audible");
+	diff_eq_int("state 3 generated a tone (%ld samples)", last_nonzero > 0,
+		    1, last_nonzero);
+	rc |= diff_end();
+	rc |= run("callprog: caret with the tone armed", "T5^5", SIG_SILENCE,
+		  -1, 120);
+	opt_calling_tone = 2;
+	rc |= run("callprog: caret, calling tone mode 2", "T5^5", SIG_SILENCE,
+		  -1, 120);
+	opt_calling_tone = 1;
 
 	/* The modifiers, which are how the dialler drives the supervisor. */
 	rc |= run("callprog: W modifier", "T5W5", SIG_SILENCE, -1, 120);
