@@ -16,8 +16,13 @@
  * HOW IT WORKS
  *
  * `cadence_progress` takes one sample, passes it to its `toneiir`, and does
- * nothing at all until that returns a verdict -- which is once every 500
- * samples, so everything below is measured in 62.5 ms units, not samples.
+ * nothing at all until that returns a verdict.  How often that is comes from
+ * `GetCallProgressSamplesBufferLength` -- 666 samples by default, so 83.25 ms
+ * at the fixed 8000 Hz this runs at.  EVERY duration below is a count of
+ * those intervals, never samples and never milliseconds.
+ *
+ * The country table speaks in units of 10 ms and `cadence_create` does the
+ * conversion; see docs/parameters.md.
  *
  * On each verdict it tracks how long the current period has lasted and, at
  * every transition, records it:
@@ -83,8 +88,16 @@ struct cadence {
 	int	reserved[25];				/* +0x1f4 */
 
 	/*
-	 * Timing windows, in 62.5 ms units, from the country table:
-	 * GetMin/MaxBusyCadenceOnTime and friends.
+	 * Timing windows, from the country table
+	 * (GetMin/MaxBusyCadenceOnTime and friends), converted by
+	 * cadence_create from the table's units of 10 ms into a count of
+	 * toneiir intervals:
+	 *
+	 *     intervals = time * 80 / GetCallProgressSamplesBufferLength
+	 *
+	 * With the default buffer length of 666 an interval is 83.25 ms, so a
+	 * 500 ms busy tone is 50 in the table and 6 here.  See
+	 * docs/parameters.md for why the table's unit has to be 10 ms.
 	 */
 	int	max_on;					/* +0x258 */
 	int	max_off;				/* +0x25c */

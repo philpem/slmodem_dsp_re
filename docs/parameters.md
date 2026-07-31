@@ -102,6 +102,48 @@ the struct they live in as `struct homolog_params` in `modem_homolog.h` --
 friends: the busy-tone cadence a British modem should expect is not the one an
 American modem should.
 
+## UNITS: the cadence times are in tens of milliseconds
+
+**Every `*CadenceOnTime` and `*CadenceOffTime` in the country table is a count
+of 10 ms units, not milliseconds and not samples.** A 500 ms busy tone is 50.
+
+Nothing in the object says so; it falls out of the conversion
+`cadence_create` applies to each of the four windows before storing it:
+
+```
+    intervals = (GetFP_Value(1, buflen) * time * 80) >> 14
+```
+
+`GetFP_Value(1, b)` is `ceil(16384 / b)`, so the expression is
+`time * 80 / buflen`, where `buflen` is
+`GetCallProgressSamplesBufferLength` -- the number of samples between
+`toneiir` verdicts, and therefore the unit `cadence_progress` counts in.
+
+For the result to be a count of those intervals:
+
+```
+    intervals = time_seconds * 8000 / buflen
+             => time * 80 / buflen = time_seconds * 8000 / buflen
+             => time_seconds = time / 100
+             => time is in units of 10 ms
+```
+
+Worked through with the shipped defaults: `buflen` is 666, so an interval is
+83.25 ms. A 500 ms busy tone is `50` in the table, and
+`50 * 80 / 666 = 6` intervals, which is 500 ms. It closes.
+
+This matters beyond cadence, because the same 10 ms convention almost
+certainly applies to the other durations in `struct homolog_params` --
+`HookFlashTime`, `DialPauseTime`, `DialToneValidationTime`,
+`PulseBetweenDigitsInterval`. Those are read by the dialler and by
+`CALLPROG_Create`, which are not reconstructed yet, so treat the extension as
+a strong expectation rather than an established fact until each one is
+checked against its own arithmetic.
+
+The two pulse-dial times are the known exception in the other direction:
+`GetPulseDialMakeTime` and `GetPulseDialBreakTime` go to `SetPulseMakeTime`
+and `SetPulseBreakTime`, whose own conversion has not been read yet.
+
 ## The other namespace
 
 `CALLPROG_Dial` also fetches through an indirect callback stored in the

@@ -15,6 +15,26 @@ meanings on it. This document is the overview; the header is the reference.
 
 ---
 
+## Call progress — the country table's units
+
+The call-progress modules are configured almost entirely from the host, via
+`modem_get_param`, rather than from a configuration block. `docs/parameters.md`
+has the index table and the full derivation; the one thing worth repeating
+here, because getting it wrong silently mis-times every tone:
+
+> **The cadence times in the country table are in units of 10 milliseconds.**
+> A 500 ms busy tone is `50`. `cadence_create` converts each window to a count
+> of `toneiir` intervals with `time * 80 / GetCallProgressSamplesBufferLength`,
+> and that expression only means "intervals" if the input is centiseconds.
+
+The interval itself is `GetCallProgressSamplesBufferLength` samples, default
+666, which at the fixed 8000 Hz call-progress rate (finding 41) is 83.25 ms.
+So a 500 ms tone is six intervals, and the cadence detector's resolution is
+83 ms — which is why `GetBusyToneDiffTime`, the matching tolerance, is clamped
+to a minimum of 3.
+
+---
+
 ## Bell 103 / V.21 — `struct b103_cfg`
 
 28 bytes, copied wholesale into the first 28 bytes of the `b103fp` object by
