@@ -66,7 +66,15 @@ struct reg_log {
 	int count;
 	int id[HARNESS_MAX_REG];
 	void *ops[HARNESS_MAX_REG];
+	/*
+	 * And the same for the way out.  Recorded rather than merely counted
+	 * because a datapump that deregisters an id or a table other than the
+	 * one it registered leaves the core holding a pointer into something
+	 * that thinks it has gone, and a bare count cannot see that.
+	 */
 	int deregistered;
+	int dereg_id[HARNESS_MAX_REG];
+	void *dereg_ops[HARNESS_MAX_REG];
 };
 
 /*

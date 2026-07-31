@@ -195,6 +195,37 @@ main(void)
 	int mode, sub, i, k;
 
 	/*
+	 * 0. The dispatch table itself, entry by entry.
+	 *
+	 * Everything below reaches these three functions through
+	 * `B103NextState[mode]`, which checks the table and the functions
+	 * together and so cannot tell a permuted table from a permuted
+	 * implementation.  The order is the original's, from .data:0x77e8,
+	 * and this is what pins it.
+	 */
+	diff_begin("B103NextState table order");
+	{
+		void (*const ours[3])(struct b103fp *) = {
+			B103LocLoopNextState, B103OriginateNextState,
+			B103AnswerNextState
+		};
+		void (*const refs[3])(void *) = {
+			ref_B103LocLoopNextState, ref_B103OriginateNextState,
+			ref_B103AnswerNextState
+		};
+
+		for (mode = 0; mode < 3; mode++) {
+			diff_eq_int("ours[%ld] is the named function",
+				    B103NextState[mode] == ours[mode], 1,
+				    mode);
+			diff_eq_int("reference[%ld] is the named function",
+				    ref_B103NextState[mode] == refs[mode], 1,
+				    mode);
+		}
+	}
+	rc |= diff_end();
+
+	/*
 	 * 1. The three NextState tables, over every substate including two
 	 *    past the last real one -- the default arm has to be a no-op and
 	 *    a reconstruction that fell through would be caught here.

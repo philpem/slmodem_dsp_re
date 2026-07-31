@@ -23,7 +23,19 @@ a call as a definition.  By reading symbol tables:
 
   ours     every T symbol our own build defines, from build/src/**/*.o
   blob     every T and t symbol dsplibs.o defines, with its size
-  tested   every `ref_NAME` mentioned anywhere under test/
+  tested   every `ref_NAME` a compiled test object actually REFERENCES,
+           from `nm -u` on build/test/**/*.o
+
+That last distinction matters and was got wrong once.  Every test file opens
+with a block of `extern ref_*` declarations, so grepping the sources counts a
+symbol as tested the moment it is declared -- including one whose calls were
+deleted in some earlier revision.  An undefined symbol in the object file
+means the compiler emitted a reference to it, which only a call or an address
+can do.
+
+The interop programs compile straight to executables with no intermediate
+object, so those few sources are still read by name; they are listed
+explicitly rather than swept up by a directory walk.
 
 File-local symbols (`t` in nm) are counted when we have reconstructed one of
 the same name -- several are, `AnalyseDialString` among them -- but they can
@@ -93,17 +105,36 @@ def our_symbols(build):
     return syms
 
 
-def tested_symbols(testdir):
-    pat = re.compile(r"\bref_([A-Za-z_][A-Za-z0-9_]*)")
+# Interop sources, which have no intermediate object to read.
+INTEROP_BY_NAME = ("test/interop/v8peer.c",)
+
+
+def undefined(path):
+    out = subprocess.run(["nm", "-u", path], capture_output=True,
+                         text=True).stdout
+    return {line.split()[-1] for line in out.splitlines() if line.split()}
+
+
+def tested_symbols(build, extra_sources=INTEROP_BY_NAME):
+    """Symbols some test actually references, not merely declares."""
     found = set()
-    for root, _dirs, files in os.walk(testdir):
+    for root, _dirs, files in os.walk(os.path.join(build, "test")):
         for name in files:
-            if not name.endswith((".c", ".cpp", ".h")):
+            if not name.endswith(".o"):
                 continue
-            with open(os.path.join(root, name), encoding="utf-8",
-                      errors="replace") as fh:
-                for m in pat.finditer(fh.read()):
-                    found.add(m.group(1))
+            for sym in undefined(os.path.join(root, name)):
+                if sym.startswith("ref_"):
+                    found.add(sym[4:])
+
+    pat = re.compile(r"\bref_([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+    for src in extra_sources:
+        try:
+            with open(src, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        for m in pat.finditer(text):
+            found.add(m.group(1))
     return found
 
 
@@ -156,14 +187,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
     ap.add_argument("--build", default="build")
-    ap.add_argument("--tests", default="test")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--md", help="also write a markdown summary here")
     args = ap.parse_args()
 
     blob = nm_symbols(args.obj)
     ours = our_symbols(args.build)
-    tested = tested_symbols(args.tests)
+    tested = tested_symbols(args.build)
     addr = blob_addresses(args.obj)
     tus = load_tus(args.tumap)
 

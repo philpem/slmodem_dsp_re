@@ -193,6 +193,16 @@ RcFixed_Create(int mode)
 	return h;
 }
 
+/*
+ * Put a converter back to the state Create left it in.
+ *
+ * The null check is ours and the original has none -- `RcFixed_Delete`
+ * checks, this one dereferences its argument on the first instruction.  Kept
+ * because a caller error should not be a fault here, and because it cannot
+ * be differentially tested either way: the only input that would tell the two
+ * apart crashes the reference.  Noted so it is not mistaken for something the
+ * object does.
+ */
 void
 RcFixed_Reset(struct rc *h)
 {

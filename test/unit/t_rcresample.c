@@ -212,6 +212,74 @@ main(void)
 	rc |= run_limited("rc limit exact frag", 2, 160);
 	rc |= run_limited("rc limit huge", 3, 100000);
 
+	/*
+	 * Reset, which puts a converter back to the state Create left it in.
+	 * Checked by running one, resetting it, and requiring that it then
+	 * produces exactly what a freshly built one does -- the state struct
+	 * alone would not prove it, since a field Reset forgot could be one
+	 * the resampler reads and the comparison would still pass.
+	 */
+	diff_begin("RcFixed_Reset");
+	{
+		static short fresh_a[NSAMP], fresh_b[NSAMP];
+		static short again_a[NSAMP], again_b[NSAMP];
+		void *ha, *hb;
+		void *fa, *fb;
+		int na, nb, ma, mb, i;
+		int mode;
+
+		for (mode = 2; mode <= 3; mode++) {
+			ha = ref_RcFixed_Create(mode);
+			hb = RcFixed_Create(mode);
+			fa = ref_RcFixed_Create(mode);
+			fb = RcFixed_Create(mode);
+			diff_eq_int("all four built (%ld)",
+				    ha && hb && fa && fb, 1, mode);
+			if (!ha || !hb || !fa || !fb)
+				continue;
+
+			/* Dirty them, then reset. */
+			na = nb = 0;
+			ref_RcFixed_Resample(ha, input, NSAMP, again_a, &na);
+			RcFixed_Resample(hb, input, NSAMP, again_b, &nb);
+			ref_RcFixed_Reset(ha);
+			RcFixed_Reset(hb);
+
+			na = nb = ma = mb = 0;
+			ref_RcFixed_Resample(ha, input, 800, again_a, &na);
+			RcFixed_Resample(hb, input, 800, again_b, &nb);
+			ref_RcFixed_Resample(fa, input, 800, fresh_a, &ma);
+			RcFixed_Resample(fb, input, 800, fresh_b, &mb);
+
+			diff_eq_int("counts agree (%ld)", nb, na, mode);
+			diff_eq_int("reset matches fresh, reference (%ld)",
+				    na, ma, mode);
+			diff_eq_int("reset matches fresh, ours (%ld)", nb, mb,
+				    mode);
+			diff_eq_int("it produced something (%ld)", na > 100, 1,
+				    na);
+			for (i = 0; i < na && i < ma; i++) {
+				diff_eq_int("sample %ld", again_b[i],
+					    again_a[i], i);
+				diff_eq_int("reset == fresh %ld", again_a[i],
+					    fresh_a[i], i);
+			}
+
+			/*
+			 * NULL is deliberately NOT driven here: the original
+			 * dereferences its argument on the first instruction
+			 * and the reconstruction checks, so the one input
+			 * that would tell them apart crashes the reference.
+			 * See the note on RcFixed_Reset.
+			 */
+			ref_RcFixed_Delete(ha);
+			RcFixed_Delete(hb);
+			ref_RcFixed_Delete(fa);
+			RcFixed_Delete(fb);
+		}
+	}
+	rc |= diff_end();
+
 	/* Deviation D3: unreachable modes 0 and 1, which we decline to build. */
 	rc |= run_mode(0, "rc mode 0 declined (D3)", bulk, 1);
 	rc |= run_mode(1, "rc mode 1 declined (D3)", bulk, 1);

@@ -464,6 +464,16 @@ reg_add(struct reg_log *log, int id, void *ops)
 	return 0;
 }
 
+static void
+reg_remove(struct reg_log *log, int id, void *ops)
+{
+	if (log->deregistered < HARNESS_MAX_REG) {
+		log->dereg_id[log->deregistered] = id;
+		log->dereg_ops[log->deregistered] = ops;
+	}
+	log->deregistered++;
+}
+
 int
 modem_dp_register(int id, void *op)
 {
@@ -473,12 +483,11 @@ modem_dp_register(int id, void *op)
 void
 modem_dp_deregister(int id, void *op)
 {
-	(void)id; (void)op;
-	harness_reg_ours.deregistered++;
+	reg_remove(&harness_reg_ours, id, op);
 }
 
 int ref_modem_dp_register(int id, void *op)
 { return reg_add(&harness_reg_ref, id, op); }
 
 void ref_modem_dp_deregister(int id, void *op)
-{ (void)id; (void)op; harness_reg_ref.deregistered++; }
+{ reg_remove(&harness_reg_ref, id, op); }

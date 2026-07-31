@@ -123,5 +123,41 @@ main(void)
 	diff_eq_int("pumps were built (%ld)", built > 0, 1, built);
 	diff_eq_int("and refused (%ld)", refused > 0, 1, refused);
 	rc |= diff_end();
+
+	/*
+	 * And the other end of the registration.  `dp_v8_exit` hands the same
+	 * id and the same ops table back, which is the only thing it does and
+	 * the only thing worth checking -- a deregistration naming a
+	 * different table would leave the core holding a pointer into a
+	 * datapump that thinks it has gone.
+	 */
+	diff_begin("dp_v8_exit");
+	{
+		harness_reg_reset();
+		ref_dp_v8_init();
+		ref_dp_v8_exit();
+		dp_v8_init();
+		dp_v8_exit();
+
+		diff_eq_int("both deregistered once (%ld)",
+			    harness_reg_ours.deregistered,
+			    harness_reg_ref.deregistered, 0);
+		diff_eq_int("reference deregistered at all (%ld)",
+			    harness_reg_ref.deregistered, 1, 0);
+		diff_eq_int("same id (%ld)", harness_reg_ours.dereg_id[0],
+			    harness_reg_ref.dereg_id[0], 0);
+		/*
+		 * And the table it hands back is the one it registered --
+		 * each side's own, so the pointers cannot be compared to each
+		 * other, only to what that side registered.
+		 */
+		diff_eq_int("reference gave back what it registered (%ld)",
+			    harness_reg_ref.dereg_ops[0]
+			    == harness_reg_ref.ops[0], 1, 0);
+		diff_eq_int("and so did ours (%ld)",
+			    harness_reg_ours.dereg_ops[0]
+			    == harness_reg_ours.ops[0], 1, 0);
+	}
+	rc |= diff_end();
 	return rc;
 }
