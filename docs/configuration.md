@@ -27,11 +27,15 @@ here, because getting it wrong silently mis-times every tone:
 > of `toneiir` intervals with `time * 80 / GetCallProgressSamplesBufferLength`,
 > and that expression only means "intervals" if the input is centiseconds.
 
-The interval itself is `GetCallProgressSamplesBufferLength` samples, default
-666, which at the fixed 8000 Hz call-progress rate (finding 41) is 83.25 ms.
-So a 500 ms tone is six intervals, and the cadence detector's resolution is
-83 ms — which is why `GetBusyToneDiffTime`, the matching tolerance, is clamped
-to a minimum of 3.
+The interval itself is per tone. Busy, congestion and ringback hard-code 160
+samples — 20 ms at the fixed 8000 Hz call-progress rate (finding 41) — and
+only dial tone takes it from `GetCallProgressSamplesBufferLength`, defaulting
+to 666 when the table says zero, which is 83.25 ms.
+
+So a 500 ms busy tone is 25 intervals and the cadence resolution is 20 ms,
+while dial tone is measured four times more coarsely. `GetBusyToneDiffTime`,
+the matching tolerance, is clamped to a minimum of 3 intervals — 60 ms for the
+cadenced tones.
 
 ---
 

@@ -16,10 +16,12 @@
  * HOW IT WORKS
  *
  * `cadence_progress` takes one sample, passes it to its `toneiir`, and does
- * nothing at all until that returns a verdict.  How often that is comes from
- * `GetCallProgressSamplesBufferLength` -- 666 samples by default, so 83.25 ms
- * at the fixed 8000 Hz this runs at.  EVERY duration below is a count of
- * those intervals, never samples and never milliseconds.
+ * nothing at all until that returns a verdict.  How often that is depends on
+ * the tone: busy, congestion and ringback use 160 samples, which is 20 ms at
+ * the fixed 8000 Hz this runs at, and dial tone uses
+ * `GetCallProgressSamplesBufferLength` (666 by default, so 83.25 ms).  EVERY
+ * duration below is a count of those intervals, never samples and never
+ * milliseconds.
  *
  * The country table speaks in units of 10 ms and `cadence_create` does the
  * conversion; see docs/parameters.md.
@@ -93,11 +95,12 @@ struct cadence {
 	 * cadence_create from the table's units of 10 ms into a count of
 	 * toneiir intervals:
 	 *
-	 *     intervals = time * 80 / GetCallProgressSamplesBufferLength
+	 *     intervals = time * 80 / buflen
 	 *
-	 * With the default buffer length of 666 an interval is 83.25 ms, so a
-	 * 500 ms busy tone is 50 in the table and 6 here.  See
-	 * docs/parameters.md for why the table's unit has to be 10 ms.
+	 * where buflen is 160 samples for these three tones, so an interval is
+	 * 20 ms and a 500 ms busy tone is 50 in the table and 25 here.  See
+	 * docs/parameters.md for why the table's unit has to be 10 ms -- the
+	 * derivation does not depend on buflen, which cancels.
 	 */
 	int	max_on;					/* +0x258 */
 	int	max_off;				/* +0x25c */

@@ -115,9 +115,16 @@ Nothing in the object says so; it falls out of the conversion
 ```
 
 `GetFP_Value(1, b)` is `ceil(16384 / b)`, so the expression is
-`time * 80 / buflen`, where `buflen` is
-`GetCallProgressSamplesBufferLength` -- the number of samples between
-`toneiir` verdicts, and therefore the unit `cadence_progress` counts in.
+`time * 80 / buflen`, where `buflen` is the number of samples between
+`toneiir` verdicts -- the unit `cadence_progress` counts in.
+
+`buflen` is **per tone**, and only the dial-tone detector takes it from the
+country table:
+
+```
+    DIAL              GetCallProgressSamplesBufferLength, or 666 if that is 0
+    BUSY, CONG, RING  160, hard-coded
+```
 
 For the result to be a count of those intervals:
 
@@ -128,9 +135,14 @@ For the result to be a count of those intervals:
              => time is in units of 10 ms
 ```
 
-Worked through with the shipped defaults: `buflen` is 666, so an interval is
-83.25 ms. A 500 ms busy tone is `50` in the table, and
-`50 * 80 / 666 = 6` intervals, which is 500 ms. It closes.
+Note the conclusion does not depend on `buflen` -- it cancels -- which is the
+point of writing the conversion that way.
+
+Worked through for busy tone, where `buflen` is 160 and an interval is 20 ms:
+a 500 ms busy tone is `50` in the table, and `50 * 80 / 160 = 25` intervals,
+which is 500 ms. And for dial tone, where `buflen` is 666 and an interval is
+83.25 ms: a 500 ms validation time is `50`, and `50 * 80 / 666 = 6` intervals,
+which is 500 ms. Both close.
 
 This matters beyond cadence, because the same 10 ms convention almost
 certainly applies to the other durations in `struct homolog_params` --
