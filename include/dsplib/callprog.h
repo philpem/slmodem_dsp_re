@@ -39,6 +39,13 @@
 #define CALLPROG_ANSWER_STATE_TIMEOUT	13
 #define CALLPROG_END_DIALING_PARTIALLY	14
 #define CALLPROG_V8BIS_MODEM_ANSWER	15
+/*
+ * Two the object does not name: they are what the automode dual-tone
+ * detector reports, for its verdicts 3 and 5.  Named after where they come
+ * from, since the original's names for them were not recovered.
+ */
+#define CALLPROG_DUALTONE_A		16
+#define CALLPROG_DUALTONE_B		17
 #define CALLPROG_MAX_MESSAGES		18
 
 /*

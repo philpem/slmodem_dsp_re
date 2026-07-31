@@ -26,6 +26,23 @@
 #include "dsplib/toneiir.h"
 #include "dsplib/callingtone.h"
 
+/*
+ * The states, with the author's own names: the object carries them as debug
+ * strings, so these are recovered rather than invented.  They are prefixed
+ * here because the original's two enums overlap -- `CALLPROG_DIALING` is
+ * state 2 and, separately, message 3.
+ */
+#define CPSTATE_NO_LEGAL_STATE		0
+#define CPSTATE_WAIT_DIAL		1
+#define CPSTATE_DIALING			2
+#define CPSTATE_WAIT_RING		3
+#define CPSTATE_WAIT_TO_ANSWER		4
+#define CPSTATE_ANSWER_STATE		5
+#define CPSTATE_END			6
+#define CPSTATE_END_PARTIALLY_STATE	7
+#define CPSTATE_WFS_STATE		8	/* wait for silence */
+#define CPSTATE_BONGTONE_STATE		9
+
 /* Ten states, and eight possible verdicts from the tone detector. */
 #define CALLPROG_STATES		10
 #define CALLPROG_CPTD_EVENTS	8
@@ -86,12 +103,41 @@ struct callprog {
 	int	f28;					/* +0x28 */
 
 	int	state;					/* +0x2c */
-	int	f30;					/* +0x30 */
-	int	f34;		/* timeout[0] in samples   +0x34 */
-	int	f38, f3c, f40, f44;			/* +0x38 */
-	int	f48;		/* timeout[4] in samples   +0x48 */
-	int	f4c;					/* +0x4c */
-	int	f50, f54, f58, f5c, f60;		/* +0x50 */
+
+	/*
+	 * The state as of the end of the last call.  A transition is only
+	 * taken when it would land somewhere other than here, which is what
+	 * stops a detector that keeps firing from re-entering its own state.
+	 */
+	int	last_state;				/* +0x30 */
+
+	/* Counts down in samples; -10 once fired, so it fires once. */
+	int	countdown;				/* +0x34 */
+
+	/* Where to go at the end of this call, and whether to go anywhere. */
+	int	pending_state;				/* +0x38 */
+	int	pending;				/* +0x3c */
+
+	int	message;	/* the last one reported  +0x40 */
+
+	/* The line-clear timeout: its own counter, limit and enable. */
+	int	line_clear_count;			/* +0x44 */
+	int	line_clear_limit;			/* +0x48 */
+	int	line_clear_active;			/* +0x4c */
+
+	int	event;		/* last detector verdict  +0x50 */
+
+	/*
+	 * Consecutive quiet buffers in state 8, which is how waiting for the
+	 * far end to answer is decided.  Reset whenever the envelope rises.
+	 */
+	int	quiet_count;				/* +0x54 */
+
+	int	fatal;		/* 7 means give up        +0x58 */
+
+	/* The calling tone: what the country asked for, and whether it is on. */
+	int	calling_tone_mode;			/* +0x5c */
+	int	calling_tone_armed;			/* +0x60 */
 
 	struct cadence	*dial;				/* +0x64 */
 	int		f68;				/* +0x68 */
@@ -106,7 +152,11 @@ struct callprog {
 	struct iir_filter *band;			/* +0x78 */
 	int		band_wanted;			/* +0x7c */
 
-	unsigned char	f80;				/* +0x80 */
+	/*
+	 * Latched the moment dial tone is heard.  It gates the band filter,
+	 * which is therefore applied only until then -- see findings.
+	 */
+	unsigned char	dialtone_seen;			/* +0x80 */
 	unsigned char	pad81[3];
 
 	struct dual_tone *dtmf;				/* +0x84 */
@@ -137,5 +187,13 @@ void CALLPROG_Delete(struct callprog *cp);
  * configured.
  */
 void CALLPROG_Dial(struct callprog *cp, const char *s);
+
+/*
+ * One buffer.  Reads `count` samples from `in`, writes `count` to `out`, and
+ * returns the `CALLPROG_*` message for this buffer -- at most one transition
+ * happens per call, at the very end.
+ */
+int CALLPROG_Progress(struct callprog *cp, const short *in, short *out,
+		      int count);
 
 #endif /* DSPLIB_CALLPROG_STATE_H */

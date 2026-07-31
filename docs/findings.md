@@ -3444,3 +3444,83 @@ reachable from any shipped country table, so this is reproduced rather than
 fixed, and noted here rather than in `deviations.md`.
 
 That completes the decode of Dialer.c.
+
+## 60. CALLPROG_Progress: one transition per buffer, decided sample by sample
+
+The supervisor's per-buffer step does three things in order, and separating
+them is what makes it readable:
+
+1. every sample is offered to whichever cadence detector the current state
+   listens to, and the verdict, the state's timeout and the line-clear
+   timeout each get a chance to *request* a transition;
+2. the state does something with the buffer -- dial into it, put a calling
+   tone in it, or judge whether the far end has gone quiet;
+3. the requested transition, if any, is taken.
+
+Nothing in steps 1 and 2 moves `cp->state`. Every sample in a call is judged
+against the same state, and the caller sees at most one transition per
+buffer. `request_state` refuses a second request, and refuses any request
+that would land on `last_state` -- which is what stops a detector that fires
+on every sample from re-entering the state it is already in.
+
+### The verdict is not cleared between samples
+
+It is set once before the loop, not once per sample. So the first detector
+hit in a buffer re-applies its transition on every remaining sample of that
+buffer. It is harmless -- the second request is refused, and the message and
+`event` are simply rewritten with the same values -- but it is not what the
+shape of the code suggests, and a reconstruction that resets the verdict each
+sample diverges the moment a detector fires near the start of a buffer.
+
+### `CALLPROG_DIALING` is set and then dropped
+
+The dialler's `DIALER_BUSY` -- still dialling -- sets a local code of 3,
+`CALLPROG_DIALING`. The tail then copies the code into the message only for
+4, 12 and 14. Three is not in that list, so the message is discarded and
+`CALLPROG_DIALING` is never reported from this path. Reproduced.
+
+### The band filter is switched off by dial tone
+
+`cp->dialtone_seen` is latched the first time the dial-tone cadence detector
+asserts, and the band filter at the top of the function is applied only while
+it is clear. The filter is there to help find dial tone; once found, it would
+only colour what follows.
+
+### Waiting for an answer is waiting for silence
+
+State 8 is `CALLPROG_WFS_STATE`, and the object's own name gives the game
+away: wait for silence. There is no tone to detect. The buffer is passed
+through a rectifier and a single-pole smoother -- `env = |x/100| +
+|0.99*env|`, both in Q14 -- and a buffer whose final envelope is at or below
+99 counts as quiet. Five seconds of consecutive quiet buffers
+(`40000 / count` of them) means the far end has picked up, and the machine
+goes back to state 2 to carry on dialling.
+
+### The states have their own names
+
+The object carries them as debug strings, so they are recovered rather than
+guessed: `CALLPROG_NO_LEGAL_STATE`, `CALLPROG_WAIT_DIAL`, `CALLPROG_DIALING`,
+`CALLPROG_WAIT_RING`, `CALLPROG_WAIT_TO_ANSWER`, `CALLPROG_ANSWER_STATE`,
+`CALLPROG_END`, `CALLPROG_END_PARTIALLY_STATE`, `CALLPROG_WFS_STATE`,
+`CALLPROG_BONGTONE_STATE`. They are prefixed `CPSTATE_` in the
+reconstruction, because the original's two enums overlap: `CALLPROG_DIALING`
+is state 2 and, separately, message 3.
+
+### An open coverage gap
+
+`t_callprog_progress` compares 113 cases sample-for-sample and visits all ten
+states, but **neither cadence detector ever asserts under synthetic input**.
+Both filter banks were swept over all eight indices, with cadence windows set
+and loose detection enabled, and a clean 425 Hz tone at the right cadence
+still produces no verdict. So the branch in `detect` that turns a verdict
+into an event is exercised only in the sense that `cadence_progress` is
+called; what the supervisor does with a non-zero verdict is not covered
+here.
+
+The transition machinery it feeds *is* covered, by a different route: the
+state timeout and the line-clear timeout are plain counters, so seeding them
+short drives `request_state`, the per-state timeout tables and the commit in
+every state. That is what raises the run from two distinct messages to nine,
+`CALLPROG_BUSY` among them. Closing the remaining gap needs a detector
+configuration that actually asserts, which is a question about
+`cadence_create` and the filter bank rather than about this function.

@@ -101,13 +101,13 @@ build_timeouts(struct callprog *cp)
 static void
 enter_state(struct callprog *cp)
 {
-	cp->f34 = timeout_table[cp->state] * 8000;
+	cp->countdown = timeout_table[cp->state] * 8000;
 
 	if (next_state_due_line_clear_timeout[cp->state] != 0)
-		cp->f4c = enable_line_clear_timeout[cp->state];
+		cp->line_clear_active = enable_line_clear_timeout[cp->state];
 
 	if (cp->state == 8)
-		cp->f54 = 0;
+		cp->quiet_count = 0;
 }
 
 static void
@@ -243,7 +243,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 					      CALLPROG_BandFilter_b,
 					      CALLPROG_BandFilter_shift);
 
-	cp->f80 = 0;
+	cp->dialtone_seen = 0;
 
 	setup.tone = CADENCE_TONE_BUSY;
 	cp->busy = cadence_create(0, &setup, 0, cp->modem);
@@ -260,7 +260,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	cp->state = CALLPROG_STATE_START;
 	enter_state(cp);
 
-	cp->f48 = cp->timeout[4] * 8000;
+	cp->line_clear_limit = cp->timeout[4] * 8000;
 }
 
 void
@@ -309,13 +309,13 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 		return;
 
 	flag = modem_get_param(cp->modem, GetCallingToneFlag);
-	cp->f5c = flag;
+	cp->calling_tone_mode = flag;
 	if (flag == 0)
-		cp->f60 = 0;
+		cp->calling_tone_armed = 0;
 	else if (flag == 1)
-		cp->f60 = 1;
+		cp->calling_tone_armed = 1;
 	else
-		cp->f60 = (flag == 2);
+		cp->calling_tone_armed = (flag == 2);
 
 	/*
 	 * S221, through the accessor call.c installed.  Narrowed to a signed
@@ -326,7 +326,7 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	level = cp->get_sreg(cp->modem, 221);
 	ResetCallingTone(&cp->calling_tone, (char)level);
 
-	cp->f58 = DialerCreate(&cp->dialer, s, cp->modem);
+	cp->fatal = DialerCreate(&cp->dialer, s, cp->modem);
 
 	/*
 	 * Five timeouts, all from the same parameter.  Whatever they were
@@ -386,4 +386,334 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 		cp->state = CALLPROG_STATE_START;
 
 	enter_state(cp);
+}
+
+/*
+ * The supervisor's per-buffer step.  Everything above builds the machine;
+ * this runs it.
+ *
+ * Three things happen in order, and keeping them apart is what makes the
+ * function readable:
+ *
+ *   1. every sample is offered to whichever cadence detector this state
+ *      listens to, and the verdict, the timeout and the line-clear timeout
+ *      each get a chance to request a transition;
+ *   2. the state decides what to do with the buffer -- dial into it, put a
+ *      calling tone in it, or judge whether the far end has gone quiet;
+ *   3. the requested transition, if any, is taken.
+ *
+ * Only step 3 moves `cp->state`, so every sample in one call is judged
+ * against the same state, and the caller sees at most one transition per
+ * buffer.
+ */
+
+/* One buffer, and the largest this will accept. */
+#define CALLPROG_MAX_SAMPLES	160
+
+/* Detector verdicts, which index the eight-wide dimension of the tables. */
+#define CPTD_NONE		0
+#define CPTD_DIAL_TONE		1
+#define CPTD_BUSY		2
+#define CPTD_BUSY_GIVE_UP	7
+
+/*
+ * Waiting for the far end to answer: the envelope is a rectifier with a
+ * single-pole smoother, and anything below the threshold counts as quiet.
+ * `CALLPROG_ANSWER_SAMPLES / count` buffers of it means answered.
+ */
+#define ANSWER_GAIN		164	/* Q14: 0.01 */
+#define ANSWER_DECAY		0x3f5c	/* Q14: 0.99 */
+#define ANSWER_THRESHOLD	99
+#define CALLPROG_ANSWER_SAMPLES	40000	/* five seconds at 8 kHz */
+
+/*
+ * Ask for a transition to `next`, unless one has already been asked for this
+ * call, or `next` is nowhere, or it is where we already are.  The last test
+ * is against `last_state` rather than `state`, so a detector that fires on
+ * every sample cannot keep re-entering the state it is already in.
+ */
+static void
+request_state(struct callprog *cp, int next)
+{
+	if (cp->pending == 1)
+		return;
+	if (next == 0 || cp->last_state == next)
+		return;
+	cp->pending_state = next;
+	cp->pending = 1;
+}
+
+/* The leaky-integrator envelope used to decide the line has gone quiet. */
+static int
+answer_envelope(const short *buf, int count)
+{
+	int env = 0;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		int x = (buf[i] * ANSWER_GAIN) >> 14;
+		int decayed = (env * ANSWER_DECAY) >> 14;
+
+		if (x < 0)
+			x = -x;
+		if (decayed < 0)
+			decayed = -decayed;
+		env = (short)(x + decayed);
+	}
+	return (short)env;
+}
+
+/*
+ * Offer one sample to the detectors this state listens to and return the
+ * verdict.  Dial tone is asked first and busy second, and both can be asked
+ * for the same sample -- the tables allow it, even though no state currently
+ * sets both.
+ */
+static int
+detect(struct callprog *cp, short sample, int event)
+{
+	if (toneiir_dialtone_table[cp->state] == 1) {
+		if (cadence_progress(cp->dial, sample) == 1
+		    && event == CPTD_NONE) {
+			/*
+			 * Dial tone heard.  This also latches off the band
+			 * filter for the rest of the call: it is there to help
+			 * find dial tone, and once found it only colours what
+			 * follows.
+			 */
+			cp->dialtone_seen = 1;
+			event = CPTD_DIAL_TONE;
+		}
+	}
+
+	if (toneiir_busy_table[cp->state] == 1) {
+		int r = cadence_progress(cp->busy, sample);
+
+		if (r == 1) {
+			event = CPTD_BUSY;
+		} else if (r == 7) {
+			/*
+			 * The busy detector has given up.  The timeout is
+			 * zeroed so that the state's own timeout fires on this
+			 * same sample rather than a moment later.
+			 */
+			cp->countdown = 0;
+			event = CPTD_BUSY_GIVE_UP;
+		}
+	}
+
+	return event;
+}
+
+/* Take the verdict's transition and report its message. */
+static void
+apply_event(struct callprog *cp, int event, int *message)
+{
+	cp->event = event;
+	cp->line_clear_count = 0;
+	*message = message_due_cptd[cp->state][event];
+	request_state(cp, next_state_due_cptd[cp->state][event]);
+}
+
+/*
+ * Run the timeouts for one sample.  The state's own timeout counts down in
+ * samples and then sits at -10 so it fires once; the line-clear timeout
+ * counts buffers of state 6 and is the way a cleared line is noticed.
+ */
+static void
+run_timeouts(struct callprog *cp, int *message)
+{
+	if (cp->countdown > 0) {
+		cp->countdown--;
+	} else if (cp->countdown == 0) {
+		/*
+		 * States 2 and 7 are exempt: dialling and the command-mode
+		 * stop both last as long as they last.
+		 */
+		if (cp->state != CPSTATE_DIALING
+		    && cp->state != CPSTATE_END_PARTIALLY_STATE) {
+			cp->countdown = -10;
+			*message = message_due_timeout[cp->state];
+			request_state(cp, next_state_due_timeout[cp->state]);
+		}
+	}
+
+	/*
+	 * In the terminal state the previous message is repeated for as long
+	 * as nothing else has anything to say.
+	 */
+	if (cp->state == CPSTATE_END)
+		*message = cp->message;
+
+	if (cp->line_clear_active != 1)
+		return;
+	if (++cp->line_clear_count <= cp->line_clear_limit)
+		return;
+
+	*message = message_due_line_clear_timeout[cp->state];
+	request_state(cp, next_state_due_line_clear_timeout[cp->state]);
+	cp->line_clear_active = 0;
+}
+
+int
+CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
+{
+	short work[CALLPROG_MAX_SAMPLES];
+	int message = 0;
+	int pos = 0;
+	int code = 0;
+	int i;
+
+	/*
+	 * The verdict is NOT cleared between samples.  Once a detector fires,
+	 * every remaining sample of the buffer re-applies its transition --
+	 * harmless, because `request_state` refuses the second one, but it is
+	 * why `message` and `event` end up holding the last sample's view.
+	 */
+	int event = CPTD_NONE;
+
+	if (count > CALLPROG_MAX_SAMPLES)
+		return CALLPROG_ERROR;
+
+	sysdep_memcpy(work, in, count * 2);
+	cp->pending = 0;
+	cp->event = 0;
+
+	/* The band filter, until dial tone has been heard. */
+	if (cp->band_wanted != 0 && cp->dialtone_seen == 0)
+		_iir_filter_progress(cp->band, count, work);
+
+	if (cp->fatal == 7) {
+		/*
+		 * The dial string was rejected.  Note that the transition is
+		 * recorded and then thrown away -- this returns without
+		 * reaching the commit at the end, and the next call clears
+		 * `pending` on entry.  Reproduced; it changes nothing, since
+		 * every later call takes this same branch.
+		 */
+		request_state(cp, CPSTATE_END);
+		return CALLPROG_ERROR;
+	}
+
+	/* 1. The detectors, sample by sample. */
+	for (i = 0; i < count; i++) {
+		event = detect(cp, work[i], event);
+
+		if (event != CPTD_NONE)
+			apply_event(cp, event, &message);
+		run_timeouts(cp, &message);
+	}
+
+	/* 2. What this state does with the buffer. */
+	if (automode_table[cp->state] == 1) {
+		/*
+		 * The answer-tone detector reads the caller's samples, not
+		 * the filtered copy.
+		 */
+		int r = Dual_TONE_detect(cp->dtmf, in, count);
+
+		if (r == 3)
+			message = CALLPROG_DUALTONE_A;
+		else if (r == 5)
+			message = CALLPROG_DUALTONE_B;
+	}
+
+	if (cp->state == CPSTATE_WFS_STATE && count != 0) {
+		/*
+		 * Waiting for an answer, which is decided by silence rather
+		 * than by any tone: five seconds below the threshold.
+		 */
+		if (answer_envelope(work, count) > ANSWER_THRESHOLD)
+			cp->quiet_count = 0;
+		else if (++cp->quiet_count == CALLPROG_ANSWER_SAMPLES / count)
+			request_state(cp, CPSTATE_DIALING);
+	} else if (cp->state == CPSTATE_WAIT_RING) {
+		if (cp->calling_tone_armed != 0)
+			GenerateCallingTone(&cp->calling_tone, out, count);
+		else
+			sysdep_memset(out, 0, count * 2);
+	}
+
+	/*
+	 * Dialling is the only state that writes the outgoing buffer itself.
+	 * The loop is for `^`, which arms or disarms the calling tone and then
+	 * hands straight back to the dialler rather than ending the buffer.
+	 */
+	while (cp->state == CPSTATE_DIALING) {
+		int rc = DialerProgress(&cp->dialer, out, &pos, count - 1);
+
+		if (rc == DIALER_CALLING_TONE) {
+			switch (cp->calling_tone_mode) {
+			case 0: case 1:	cp->calling_tone_armed = 0; break;
+			case 2: case 3:	cp->calling_tone_armed = 1; break;
+			default:	break;
+			}
+			continue;
+		}
+
+		switch (rc) {
+		case DIALER_BUSY:
+			/*
+			 * Still dialling.  This sets a message that the tail
+			 * below then declines to use -- see findings; the
+			 * effect is that CALLPROG_DIALING is never reported
+			 * from here.
+			 */
+			code = CALLPROG_DIALING;
+			break;
+		case DIALER_WAIT_DIALTONE:
+			request_state(cp, CPSTATE_WAIT_DIAL);
+			cadence_reset(cp->dial);
+			break;
+		case DIALER_WAIT_ANSWER:
+			request_state(cp, CPSTATE_WFS_STATE);
+			break;
+		case DIALER_WAIT_BONG:
+			request_state(cp, CPSTATE_BONGTONE_STATE);
+			break;
+		case DIALER_COMMAND:
+			request_state(cp, CPSTATE_END_PARTIALLY_STATE);
+			code = CALLPROG_END_DIALING_PARTIALLY;
+			break;
+		case DIALER_DONE:
+			request_state(cp, CPSTATE_WAIT_RING);
+			code = CALLPROG_END_DIALING;
+			break;
+		default:
+			request_state(cp, CPSTATE_END);
+			code = CALLPROG_ERROR;
+			break;
+		}
+		break;
+	}
+
+	/* Silence for whatever the dialler did not fill. */
+	if (cp->state != CPSTATE_WAIT_RING) {
+		while (pos < count)
+			out[pos++] = 0;
+	}
+
+	/*
+	 * Only three of the codes the block above can set are actually
+	 * reported.  `CALLPROG_DIALING` is set and dropped.
+	 */
+	if (code == CALLPROG_END_DIALING || code == CALLPROG_ERROR
+	    || code == CALLPROG_END_DIALING_PARTIALLY)
+		message = code;
+
+	/* 3. Take the transition. */
+	if (cp->pending != 0) {
+		int next = cp->pending_state;
+
+		cp->state = next;
+		cp->countdown = timeout_table[next] * 8000;
+		if (next_state_due_line_clear_timeout[next] != 0)
+			cp->line_clear_active = enable_line_clear_timeout[next];
+		if (next == CPSTATE_WFS_STATE)
+			cp->quiet_count = 0;
+	}
+
+	cp->last_state = cp->state;
+	cp->message = message;
+	return message;
 }

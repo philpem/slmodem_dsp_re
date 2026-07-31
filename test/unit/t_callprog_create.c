@@ -127,15 +127,15 @@ compare_object(const struct callprog *b, const struct callprog *a, long n)
 	diff_eq_int("same modem", b->modem == a->modem, 1, n);
 	diff_eq_int("f28", b->f28, a->f28, n);
 	diff_eq_int("state", b->state, a->state, n);
-	diff_eq_int("f34", b->f34, a->f34, n);
-	diff_eq_int("f48", b->f48, a->f48, n);
-	diff_eq_int("f4c", b->f4c, a->f4c, n);
+	diff_eq_int("countdown", b->countdown, a->countdown, n);
+	diff_eq_int("line_clear_limit", b->line_clear_limit, a->line_clear_limit, n);
+	diff_eq_int("line_clear_active", b->line_clear_active, a->line_clear_active, n);
 	diff_eq_int("band_wanted", b->band_wanted, a->band_wanted, n);
 	diff_eq_int("band allocated", b->band != 0, a->band != 0, n);
 	diff_eq_int("dial allocated", b->dial != 0, a->dial != 0, n);
 	diff_eq_int("busy allocated", b->busy != 0, a->busy != 0, n);
 	diff_eq_int("dtmf allocated", b->dtmf != 0, a->dtmf != 0, n);
-	diff_eq_int("f80", b->f80, a->f80, n);
+	diff_eq_int("dialtone_seen", b->dialtone_seen, a->dialtone_seen, n);
 }
 
 static int
@@ -269,9 +269,9 @@ run_dial(const char *label, int blind, int calling_tone, int validate,
 
 	compare_object(&b, &a, 0);
 	compare_tables(0);
-	diff_eq_int("f5c", b.f5c, a.f5c, 0);
-	diff_eq_int("f60", b.f60, a.f60, 0);
-	diff_eq_int("f58", b.f58, a.f58, 0);
+	diff_eq_int("calling_tone_mode", b.calling_tone_mode, a.calling_tone_mode, 0);
+	diff_eq_int("calling_tone_armed", b.calling_tone_armed, a.calling_tone_armed, 0);
+	diff_eq_int("fatal", b.fatal, a.fatal, 0);
 	diff_eq_int("state after dial", b.state, a.state, 0);
 	diff_eq_int("calling tone armed", b.calling_tone.remaining,
 		    a.calling_tone.remaining, 0);
