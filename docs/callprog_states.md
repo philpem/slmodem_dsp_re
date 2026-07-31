@@ -1,13 +1,36 @@
 # The call-progress state machine
 
 `CALLPROG_Create` builds its state machine at run time, in module-scope
-`.bss`, rather than declaring it as static data. Two tables of ten states by
-eight events:
+`.bss`, rather than declaring it as static data.
+
+**The tables keep their names.** They are file statics, so `nm` reports them
+lower-case `b` and `objcopy --redefine-syms` cannot give them `ref_` aliases --
+but the symbol table still carries what the author called them, and that names
+every dimension of the machine:
 
 ```
-    .bss+0x20   unsigned char next_state[10][8]
-    .bss+0xc0   unsigned char message[10][8]
+    0x020  next_state_due_cptd                [10][8]
+    0x0c0  message_due_cptd                   [10][8]
+    0x070  next_state_due_line_clear_timeout  [10]
+    0x110  message_due_line_clear_timeout     [10]
+    0x11a  next_state_due_timeout             [10]
+    0x124  message_due_timeout                [10]
+    0x140  timeout_table                      [10] ints
+    0x080  enable_line_clear_timeout          [10] ints
+    0x168  automode_table                     [10]
+    0x172  toneiir_dialtone_table             [10]
+    0x17c  toneiir_busy_table                 [10]
 ```
+
+So there are **three** ways to leave a state, each with its own next-state and
+message pair: the call-progress tone detector (`cptd`), a general timeout, and
+a line-clear timeout. The eight-wide dimension of the first pair is the
+detector's verdict.
+
+And the last two name what phase 3 has already built: `toneiir_dialtone_table`
+and `toneiir_busy_table` say, per state, which of the two cadence detectors
+`CALLPROG_Create` made is the one being listened to. That is why only two are
+created (finding 55) -- the machine only ever asks about dial tone and busy.
 
 Both are cleared, then every state gets the same three "from anywhere"
 transitions, then eleven individual entries are patched in. This document is
@@ -54,28 +77,49 @@ emitted them, and state 6 being `CALLPROG_END` fits the table exactly.
 enum order, which is usual but not guaranteed. `CALLPROG_Progress` is what will
 confirm it.
 
-## The other module statics
+It gains support from the timeout table, though: the state that times out with
+`CALLPROG_NO_DIAL_TONE` is state 1, and state 1 is `CALLPROG_WAIT_DIAL` under
+this mapping. Four of the six timeout messages line up with their state's name
+the same way, which is a lot of coincidence to attribute to a wrong ordering.
+
+## The other tables
 
 ```
-    .bss+0x070  unsigned char [10]     cleared, then [4] = 5
-    .bss+0x080  int           [10]     cleared
-    .bss+0x110  unsigned char [10]     cleared, then [4] = 7
-    .bss+0x11a  unsigned char [10]     cleared, then a scattering of 6s,
-                                       and [11]=2 [13]=1 [14]=6 [15]=13 [18]=10
-    .bss+0x124  unsigned char [10]     cleared
-    .bss+0x140  int           [10]     cleared, then six entries taken from
-                                       the CALLPROG object's own first seven
-                                       words
-    .bss+0x168  unsigned char [10]     cleared, then [3]=[4]=[5]=1
-    .bss+0x172  unsigned char [10]     cleared, then [1]=[2]=1
-    .bss+0x17c  unsigned char [10]     all set to 1
+    next_state_due_line_clear_timeout   cleared, then [4] = 5
+    message_due_line_clear_timeout      cleared, then [4] = 7
+    enable_line_clear_timeout           cleared
 ```
 
-Being module statics they have no symbols, so a differential test cannot read
-them. They will be verified through `CALLPROG_Progress`, which is the only
-thing that consumes them -- the same situation as `AnalyseDialString`, and the
-reason Callprog.c should be reconstructed as one unit rather than
-create-then-progress.
+So exactly one state -- 4 -- has a line-clear timeout at all, and it moves to
+state 5 reporting message 7 (`CALLPROG_ANSWER`).
+
+```
+    next_state_due_timeout   cleared, then [1]=6 [3]=6 [4]=6 [5]=6 [8]=6 [9]=6
+    message_due_timeout      cleared, then [1]=2 [3]=1 [4]=6 [5]=13 [8]=10
+```
+
+Six states can time out and all six go to state 6, the terminal one, with a
+different message each: 2 is `CALLPROG_NO_DIAL_TONE`, 1 `CALLPROG_NO_RING`, 6
+`CALLPROG_NO_ANSWER`, 13 `CALLPROG_ANSWER_STATE_TIMEOUT`, 10 `CALLPROG_BUSY`.
+Read down that column and it is the list of ways a call fails to connect.
+
+```
+    timeout_table         cleared, then six entries taken from the
+                          CALLPROG object's own first seven words
+    automode_table        cleared, then [3] = [4] = [5] = 1
+    toneiir_dialtone_table  cleared, then [1] = [2] = 1
+    toneiir_busy_table      all ten set to 1
+```
+
+`toneiir_busy_table` being all ones is the clearest statement in the machine:
+**busy tone is listened for in every state**, and dial tone only in states 1
+and 2, which is where a modem is waiting to dial.
+
+Being file statics none of these can be read by a differential test, so they
+will be verified through `CALLPROG_Progress` -- the only thing that consumes
+them, and the reason Callprog.c should be reconstructed as one unit rather
+than create-then-progress. The same constraint shaped `AnalyseDialString` and
+`GetNextDigitAndReturnNextState`.
 
 ## Why this is written down before the code
 
