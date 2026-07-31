@@ -227,3 +227,91 @@ v8_agcadapt(struct v8 *v)
 	}
 	return 0;
 }
+
+/*
+ * Four samples of ANSam.
+ *
+ * Two phase accumulators: the carrier, and a slower one that modulates its
+ * amplitude by five percent either way.  The amplitude itself is negated
+ * every 1080 blocks, and that inversion is the whole point -- it is what
+ * tells a listening modem this is ANSam and not a bare answer tone.
+ *
+ * The reversal counter only runs while the enable at +0x0e is set, so a
+ * caller can have the tone without the reversals.
+ */
+void
+v8_ansamgenerate(struct v8 *v, short *out)
+{
+	struct v8_tone *t = &v->tone;
+	int i;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned carrier;
+		unsigned modulator;
+		short depth;
+		short level;
+
+		carrier = ((unsigned)(unsigned short)t->f00
+			   + (unsigned short)t->f04) & 0x3fff;
+		t->f00 = (short)carrier;
+
+		modulator = ((unsigned)(unsigned short)t->f02
+			     + (unsigned short)t->f06) & 0x3fff;
+		t->f02 = (short)modulator;
+
+		depth = v8_mpyint(V8_ANSAM_DEPTH,
+				  v8_cosread((unsigned char)((carrier + 0x20)
+							     >> 6)));
+		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->f08);
+
+		out[i] = v8_fsktxfilter(v,
+			v8_mpyint(v8_cosread((unsigned char)((t->f02 + 0x20)
+							     >> 6)), level));
+	}
+
+	if (t->f0e == 0)
+		return;
+
+	if ((unsigned short)(t->f0a + 1) == V8_ANSAM_REVERSAL) {
+		t->f0a = 0;
+		t->f08 = (short)-t->f08;
+	} else {
+		t->f0a = (short)(t->f0a + 1);
+	}
+}
+
+/*
+ * Nudge the handshake from outside.
+ *
+ * Each request is accepted only from the one state it makes sense in, and
+ * refused otherwise -- there is no queueing and no error beyond the return
+ * value, so a caller that asks at the wrong moment simply gets -1.
+ */
+int
+V8Control(struct v8 *v, int what)
+{
+	switch (what) {
+	case V8_CONTROL_START:
+		if (v->mode != 0 || v->f9d6 != 0x19 || v->fdbe != 0)
+			return -1;
+		v->fdbe = 1;
+		return 0;
+
+	case V8_CONTROL_ANSWER:
+		if (v->f9d8 != 0x32)
+			return -1;
+		v->f9d8 = 0x23;
+		return 0;
+
+	case V8_CONTROL_PROCEED:
+		if (v->f9d8 != 0x33)
+			return -1;
+		v->f9d8 = 0x2a;
+		v->fe64 = 0;
+		v->f9d4 = 0x17;
+		return 0;
+
+	default:
+		return -1;
+	}
+}

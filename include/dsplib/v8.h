@@ -567,6 +567,29 @@ int v8_fskmodulate(struct v8 *v, short which);
 /* One step of the receive AGC. */
 int v8_agcadapt(struct v8 *v);
 
+/*
+ * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
+ * oscillator, with the amplitude negated every V8_ANSAM_REVERSAL blocks --
+ * which is the periodic phase reversal that distinguishes ANSam from a plain
+ * answer tone.
+ */
+#define V8_ANSAM_REVERSAL	0x438
+#define V8_ANSAM_DEPTH		0xccd	/* Q14: 0.05 */
+#define V8_ANSAM_UNITY		0x4000	/* Q14: 1.0  */
+
+void v8_ansamgenerate(struct v8 *v, short *out);
+
+/*
+ * Nudge the handshake from outside.  Three requests, each valid only from one
+ * state; returns 0 when it was accepted and -1 when it was not, including for
+ * an unknown request.
+ */
+#define V8_CONTROL_START	0
+#define V8_CONTROL_ANSWER	1
+#define V8_CONTROL_PROCEED	2
+
+int V8Control(struct v8 *v, int what);
+
 /* How many samples each queue operation moves. */
 #define V8_QUEUE_BLOCK	4
 

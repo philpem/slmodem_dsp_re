@@ -24,6 +24,8 @@ extern void ref_v8_dftupdate(struct v8_dft_bin *b, short n, const short *s,
 			     short ns);
 extern int ref_v8_fskmodulate(struct v8 *v, short which);
 extern int ref_v8_agcadapt(struct v8 *v);
+extern void ref_v8_ansamgenerate(struct v8 *v, short *out);
+extern int ref_V8Control(struct v8 *v, int what);
 
 static struct v8 obj_a, obj_b;
 
@@ -71,7 +73,7 @@ int
 main(void)
 {
 	int rc = 0;
-	int k, i;
+	int k, i, n;
 	long moved = 0;
 
 	diff_begin("v8_ansaminit");
@@ -239,6 +241,90 @@ main(void)
 		diff_eq_int("returns (%ld)", v8_agcadapt(&obj_b),
 			    ref_v8_agcadapt(&obj_a), k);
 		whole(k);
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_ansamgenerate");
+	{
+		short out_a[4], out_b[4];
+		int nonzero = 0, reversals = 0;
+
+		for (k = 0; k < 32; k++) {
+			fill(&obj_a, sizeof(obj_a), 2600u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			ref_v8_txinit(&obj_a);
+			ref_v8_txinit(&obj_b);
+			ref_v8_ansaminit(&obj_a);
+			ref_v8_ansaminit(&obj_b);
+			obj_a.tone.f08 = obj_b.tone.f08 = (short)(8000 - k * 5);
+			/*
+			 * Land on the reversal boundary in some runs, and
+			 * make sure the enable is set in exactly those --
+			 * the first version gated the enable on odd k and
+			 * the boundary on even, so no reversal could ever
+			 * happen and the guard caught it.
+			 */
+			obj_a.tone.f0e = obj_b.tone.f0e =
+				(short)(k % 4 == 0 ? 1 : (k & 1));
+			obj_a.tone.f0a = obj_b.tone.f0a =
+				(short)(k % 4 == 0 ? 0x437 : k * 13);
+
+			for (i = 0; i < 6; i++) {
+				short before = obj_a.tone.f08;
+
+				memset(out_a, 0x5a, sizeof(out_a));
+				memset(out_b, 0x5a, sizeof(out_b));
+				ref_v8_ansamgenerate(&obj_a, out_a);
+				v8_ansamgenerate(&obj_b, out_b);
+				for (n = 0; n < 4; n++) {
+					diff_eq_int("sample %ld", out_b[n],
+						    out_a[n], n);
+					if (out_a[n] != 0)
+						nonzero++;
+				}
+				if (obj_a.tone.f08 != before)
+					reversals++;
+			}
+			normalise(offsetof(struct v8, tx_ring_half));
+			normalise(offsetof(struct v8, tx_ring_base));
+			normalise(offsetof(struct v8, tx_sym_a));
+			normalise(offsetof(struct v8, tx_sym_b));
+			whole(k);
+		}
+		diff_eq_int("a tone came out (%ld)", nonzero > 100, 1,
+			    nonzero);
+		diff_eq_int("the phase reversed (%ld)", reversals > 0, 1,
+			    reversals);
+	}
+	rc |= diff_end();
+
+	diff_begin("V8Control");
+	{
+		long accepted = 0;
+		int what;
+
+		for (k = 0; k < 64; k++) {
+			for (what = -1; what <= 3; what++) {
+				fill(&obj_a, sizeof(obj_a), 3100u + k);
+				memcpy(&obj_b, &obj_a, sizeof(obj_a));
+				/* Sweep the states each request needs. */
+				obj_a.mode = obj_b.mode = k & 1;
+				obj_a.f9d6 = obj_b.f9d6 =
+					(short)(k & 2 ? 0x19 : 0x18);
+				obj_a.fdbe = obj_b.fdbe = (short)(k & 4);
+				obj_a.f9d8 = obj_b.f9d8 =
+					(short)(k & 8 ? 0x32
+						      : k & 16 ? 0x33 : 0x30);
+				n = V8Control(&obj_b, what);
+				diff_eq_int("returns (%ld)", n,
+					    ref_V8Control(&obj_a, what), what);
+				whole(k);
+				if (n == 0)
+					accepted++;
+			}
+		}
+		diff_eq_int("requests were accepted (%ld)", accepted > 10, 1,
+			    accepted);
 	}
 	rc |= diff_end();
 
