@@ -222,9 +222,9 @@ V8_V21_reset(struct v8 *v)
 
 	for (i = 0; i < V8_V21_DELAY; i++)
 		v->v21.delay[i] = 0;
-	v->v21.f10 = 0;
-	v->v21.f14 = 0;
-	v->v21.f18 = 0;
+	v->v21.pos = 0;
+	v->v21.space_run = 0;
+	v->v21.mark_run = 0;
 }
 
 /* Arm the tone queue: nothing pending, and the period set to 0x688. */

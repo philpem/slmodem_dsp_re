@@ -236,6 +236,7 @@ struct v8_cm {
  * compile-time assertions in v8util.c caught exactly that.
  */
 #define V8_V21_DELAY	40
+#define V8_V21_INBUF	12
 
 struct v8_v21 {
 	/* The four filter designs, swapped as a set. */
@@ -244,10 +245,14 @@ struct v8_v21 {
 	const short	*c;			/* +0x08 */
 	const short	*d;			/* +0x0c */
 
-	int	f10;				/* +0x10  obj +0xde8 */
-	int	f14;				/* +0x14 */
-	int	f18;				/* +0x18 */
-	unsigned char pad1c[0x34 - 0x1c];
+	int	pos;		/* where the next symbol falls  +0x10 */
+	int	space_run;	/* consecutive space decisions  +0x14 */
+	int	mark_run;	/* consecutive mark decisions   +0x18 */
+
+	/* The twelve samples that arrived this block, oldest first. */
+	short	inbuf[V8_V21_INBUF];		/* +0x1c  obj +0xdf4 */
+
+	/* The forty before them, which the correlator runs back into. */
 	short	delay[V8_V21_DELAY];		/* +0x34  obj +0xe0c */
 };
 
@@ -641,6 +646,20 @@ int V8Control(struct v8 *v, int what);
  * Returns 1 while the tone is considered present.
  */
 int v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
+
+/*
+ * Demodulate V.21.
+ *
+ * Four correlations per symbol -- the mark pair and the space pair, each a
+ * real and an imaginary arm -- and the larger energy wins.  If neither
+ * reaches the threshold the line is called silent and both run counters are
+ * dropped, which is what stops noise between characters producing bits.
+ *
+ * Bits come out of run lengths rather than one per symbol: four consecutive
+ * decisions the same way is one bit, and the remainder is carried.  That is
+ * how a 300 baud signal sampled at 1200 symbols a second is decoded.
+ */
+void v8_fskdemodulate(struct v8 *v);
 
 /* How many samples each queue operation moves. */
 #define V8_QUEUE_BLOCK	4

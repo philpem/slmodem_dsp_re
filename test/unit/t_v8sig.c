@@ -35,6 +35,8 @@ extern int ref_v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
 extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
 				const short *t, short a3, short a4, short a5,
 				short a6, short a7);
+extern void ref_v8_fskdemodulate(struct v8 *v);
+extern void ref_v8_V21_Init(struct v8 *v, short ch, short ans);
 
 static struct v8 obj_a, obj_b;
 
@@ -48,6 +50,29 @@ fill(void *p, size_t n, unsigned seed)
 		seed = seed * 1103515245u + 12345u;
 		b[i] = (unsigned char)(seed >> 16);
 	}
+}
+
+/* The four filter pointers exist twice; compare by content, then blank. */
+static void
+compare_v21(void)
+{
+	const short *pa[4], *pb[4];
+	int i, k2;
+
+	pa[0] = obj_a.v21.a; pb[0] = obj_b.v21.a;
+	pa[1] = obj_a.v21.b; pb[1] = obj_b.v21.b;
+	pa[2] = obj_a.v21.c; pb[2] = obj_b.v21.c;
+	pa[3] = obj_a.v21.d; pb[3] = obj_b.v21.d;
+	for (k2 = 0; k2 < 4; k2++) {
+		if (pa[k2] == 0 || pb[k2] == 0)
+			continue;
+		for (i = 0; i < 40; i++)
+			diff_eq_int("v21 coeff %ld", pb[k2][i], pa[k2][i], i);
+	}
+	obj_a.v21.a = obj_b.v21.a = 0;
+	obj_a.v21.b = obj_b.v21.b = 0;
+	obj_a.v21.c = obj_b.v21.c = 0;
+	obj_a.v21.d = obj_b.v21.d = 0;
 }
 
 /* A pointer into the object, compared as an offset and then blanked. */
@@ -545,6 +570,74 @@ main(void)
 			    moved3);
 		diff_eq_int("the detector asserted (%ld)", asserted > 0, 1,
 			    asserted);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The demodulator, fed the modulator's own output so the correlator
+	 * sees a real V.21 signal rather than noise.
+	 */
+	diff_begin("v8_fskdemodulate");
+	{
+		long bits = 0;
+
+		for (k = 0; k < 16; k++) {
+			int blk;
+
+			fill(&obj_a, sizeof(obj_a), 7700u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			ref_v8_txinit(&obj_a);
+			ref_v8_txinit(&obj_b);
+			ref_v8_V21_Init(&obj_a, (short)(k & 1),
+					(short)((k >> 1) & 1));
+			ref_v8_V21_Init(&obj_b, (short)(k & 1),
+					(short)((k >> 1) & 1));
+			obj_a.v21_params.f16 = obj_b.v21_params.f16 = 0;
+			obj_a.v21.pos = obj_b.v21.pos = 0;
+			obj_a.v21.mark_run = obj_b.v21.mark_run = 0;
+			obj_a.v21.space_run = obj_b.v21.space_run = 0;
+
+			for (blk = 0; blk < 60; blk++) {
+				/* Alternate mark and space every few blocks. */
+				short w = (short)((blk / 5) & 1);
+				int m;
+
+				ref_v8_fskmodulate(&obj_a, w);
+				ref_v8_fskmodulate(&obj_b, w);
+				/* The modulator wrote the ring; feed the
+				 * staging buffer from it so both sides see
+				 * identical input. */
+				for (m = 0; m < 4; m++) {
+					obj_a.rx_stage[m] = obj_a.tx_stage[m];
+					obj_b.rx_stage[m] = obj_b.tx_stage[m];
+				}
+				ref_v8_fskdemodulate(&obj_a);
+				v8_fskdemodulate(&obj_b);
+
+				diff_eq_int("bitcount (%ld)",
+					    obj_b.v21_params.f18,
+					    obj_a.v21_params.f18, k);
+				diff_eq_int("bits (%ld)", obj_b.v21_params.f1a,
+					    obj_a.v21_params.f1a, k);
+				diff_eq_int("mark run (%ld)", obj_b.v21.mark_run,
+					    obj_a.v21.mark_run, k);
+				diff_eq_int("space run (%ld)",
+					    obj_b.v21.space_run,
+					    obj_a.v21.space_run, k);
+				for (i = 0; i < V8_V21_DELAY; i++)
+					diff_eq_int("tap %ld",
+						    obj_b.v21.delay[i],
+						    obj_a.v21.delay[i], i);
+			}
+			bits += obj_a.v21_params.f18;
+			normalise(offsetof(struct v8, tx_ring_half));
+			normalise(offsetof(struct v8, tx_ring_base));
+			normalise(offsetof(struct v8, tx_sym_a));
+			normalise(offsetof(struct v8, tx_sym_b));
+			compare_v21();
+			whole(k);
+		}
+		diff_eq_int("bits were recovered (%ld)", bits > 0, 1, bits);
 	}
 	rc |= diff_end();
 
