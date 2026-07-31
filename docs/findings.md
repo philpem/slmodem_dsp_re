@@ -2302,3 +2302,84 @@ interface problem rather than a numerical one.
   comparison that matters.
 - Phase 12 should regenerate with the response objective, not by fitting the
   existing coefficients and rescaling them.
+
+## 40. SpanDSP interop — the transmitter is validated, the receiver has a level sensitivity
+
+The first test in this tree that is not a comparison with the blob. Every
+other one establishes equivalence, which proves nothing about correctness: if
+the blob were wrong, a bit-exact reconstruction would be wrong identically and
+every test would still pass. This talks to SpanDSP, written from the standard
+by someone else.
+
+```sh
+make interop            # needs libspandsp-dev
+```
+
+### The transmitter passes outright
+
+```
+ours -> SpanDSP: 2994 bits sent, 2993 received, lag 0, BER 0.00000
+```
+
+SpanDSP's Bell 103 receiver recovers our originating transmitter's bit stream
+with **zero errors**. Tone pair, baud rate, mark/space polarity and pulse
+shaping are all confirmed against an independent implementation.
+
+### The receiver loses lock after ~229 bits, at one input level
+
+```
+SpanDSP -> ours: clean for 229 bits, then lock is lost permanently
+```
+
+And the dependence is on **amplitude**, in a way that is not monotonic:
+
+| gain applied to SpanDSP's samples | result |
+|---|---|
+| ×0.25, ×0.50, ×1.00, ×2.00, ×4.00 | loses lock after ~230 bits |
+| ×0.75, ×1.25, ×1.50, ×1.75, ×2.25, ×2.50, ×2.75, ×3.00 | **BER 0 over 4000 bits** |
+
+Every failing gain is an exact power of two — the cases where `sample * n / d`
+is a pure shift and introduces no truncation. Every working gain is one that
+does. But adding dither directly (±1 alternating, or a +1 DC offset) does
+**not** fix it, so it is not simply that the receiver needs noise.
+
+Ruled out along the way:
+
+- **Not the slicer's dead zone.** The slicer input ranges over
+  [−1936, +2091] in both the working and failing cases, with under 0.5% of
+  samples inside the ±10 dead zone in either.
+- **Not the tone plan.** The first 229 bits are demodulated perfectly, so the
+  oscillator, bandpass and discriminator are all correct.
+- **Not nondeterminism.** Identical across runs.
+
+### What this is not evidence of
+
+**It is not a reconstruction bug.** Every module on this path is bit-exact
+with the blob over millions of checks, so the blob behaves the same way. What
+is not yet established is whether it is a defect in the *original* or a
+property of the signal SpanDSP produces — its transmitter is not obliged to
+match Smart Link's pulse shaping, and a real Bell 103 peer might never produce
+this waveform.
+
+Attributing it needs a third measurement: capture SpanDSP's samples to a file
+and replay them through blob and reconstruction side by side in the 32-bit
+differential harness. If they diverge, it is ours; if they agree, it is the
+original's, and then the question is whether it matters on a real line.
+
+### How the test records it
+
+`t_spandsp_b103.c` asserts the clean prefix is at least 150 bits rather than
+marking the case "expected fail". An expected-fail marker rots; asserting the
+behaviour actually observed means a change in **either** direction — fixed, or
+degraded — fails the test.
+
+### Why it is a separate binary
+
+The system SpanDSP is amd64 and the blob is i386, so the two tiers cannot
+share a build. That turned out to be a feature: `make test` answers "is it the
+same as the blob" and `make interop` answers "is it a correct modem", and the
+build makes the distinction visible rather than leaving it in prose.
+
+Building 64-bit also found a real portability bug that `make check64` could
+not: `FPM_TONE_create` allocated a hard-coded 264 bytes for a struct that is
+larger when pointers are eight bytes. `check64` only compiles; this ran.

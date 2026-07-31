@@ -59,7 +59,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: all test check64 docs clean
+.PHONY: all test check64 docs clean interop
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -112,6 +112,18 @@ $(BUILD):
 
 test: $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
+
+# SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
+# the blob is i386, so the two tiers cannot share a build.  That is a feature --
+# this tier answers "is it a correct Bell 103 modem", which the blob cannot be
+# the judge of.  Needs libspandsp-dev.
+INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
+interop: $(BUILD)/test/t_spandsp_b103
+	@./$(BUILD)/test/t_spandsp_b103
+
+$(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $(INTEROP_SRC) $(SRC) -lspandsp -lm
 
 # The reconstruction must not depend on 32-bit; only the reference does.
 check64:

@@ -1,0 +1,56 @@
+========================================================================
+mode 2: 36 taps, prototype 217, fs 57600
+
+  current tooling (half-up rounding, coefficient objective)
+    beta=7.25 fc=4498.2  max|err|=6 LSB  exact=20/217
+
+  1. COST of that 6 LSB, as ripple and stopband:
+                                     pb ripple    stopband
+     ORIGINAL                         0.0125 dB    -73.5 dB
+     fitted, quantised to Q14         0.0030 dB    -77.4 dB
+     fitted, unquantised              0.0029 dB    -84.3 dB
+     -- the gap between the last two rows is what 14-bit
+        quantisation costs, and it dwarfs the fit residual.
+
+  2. ROUNDING mode (coefficient objective):
+     half-up    max|err|= 6 LSB  exact= 20/217  beta=7.25
+     trunc      max|err|= 6 LSB  exact= 16/217  beta=7.25
+     floor      max|err|= 6 LSB  exact= 22/217  beta=7.30
+     half-even  max|err|= 6 LSB  exact= 20/217  beta=7.25
+
+  3. NORMALISATION -- per-branch sums of the ORIGINAL:
+     branch sums: [16384, 16382, 16383, 16384, 16383, 16382]
+     spread 2, mean 16383.0 -- UNEQUAL, so the designer did not normalise per branch
+
+  4. OBJECTIVE -- minimise response error instead:
+     coefficient-fitted   Q14   0.0030 dB   -77.4 dB | exact   -84.3 dB |    6 LSB
+     response-fitted      Q14   0.0187 dB   -78.3 dB | exact  -108.8 dB |  179 LSB
+     -- coefficient fitting REPRODUCES; response fitting DESIGNS.
+========================================================================
+mode 3: 32 taps, prototype 161, fs 48000
+
+  current tooling (half-up rounding, coefficient objective)
+    beta=7.00 fc=3796.4  max|err|=4 LSB  exact=22/161
+
+  1. COST of that 4 LSB, as ripple and stopband:
+                                     pb ripple    stopband
+     ORIGINAL                         0.0725 dB    -68.3 dB
+     fitted, quantised to Q14         0.0587 dB    -75.4 dB
+     fitted, unquantised              0.0591 dB    -79.8 dB
+     -- the gap between the last two rows is what 14-bit
+        quantisation costs, and it dwarfs the fit residual.
+
+  2. ROUNDING mode (coefficient objective):
+     half-up    max|err|= 4 LSB  exact= 22/161  beta=7.00
+     trunc      max|err|= 5 LSB  exact= 20/161  beta=6.95
+     floor      max|err|= 5 LSB  exact= 18/161  beta=7.00
+     half-even  max|err|= 4 LSB  exact= 22/161  beta=7.00
+
+  3. NORMALISATION -- per-branch sums of the ORIGINAL:
+     branch sums: [16391, 16385, 16386, 16386, 16385]
+     spread 6, mean 16386.6 -- UNEQUAL, so the designer did not normalise per branch
+
+  4. OBJECTIVE -- minimise response error instead:
+     coefficient-fitted   Q14   0.0587 dB   -75.4 dB | exact   -79.8 dB |    4 LSB
+     response-fitted      Q14   0.0302 dB   -59.3 dB | exact   -59.5 dB |  355 LSB
+     -- coefficient fitting REPRODUCES; response fitting DESIGNS.
