@@ -118,12 +118,20 @@ test: $(TESTBIN)
 # this tier answers "is it a correct Bell 103 modem", which the blob cannot be
 # the judge of.  Needs libspandsp-dev.
 INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
+SPANDSP     := third_party/spandsp
+SPANDSP_LIB := $(SPANDSP)/src/.libs/libspandsp.a
+
 interop: $(BUILD)/test/t_spandsp_b103
 	@./$(BUILD)/test/t_spandsp_b103
 
 $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
+	@test -f $(SPANDSP_LIB) || { \
+	  echo "$(SPANDSP_LIB) not built -- see third_party/README.md"; \
+	  echo "(do NOT substitute the distro libspandsp: 0.0.6 has the"; \
+	  echo " Bell 103 channels swapped)"; exit 1; }
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $(INTEROP_SRC) $(SRC) -lspandsp -lm
+	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ $(INTEROP_SRC) $(SRC) \
+	    $(SPANDSP_LIB) -lm
 
 # The reconstruction must not depend on 32-bit; only the reference does.
 check64:

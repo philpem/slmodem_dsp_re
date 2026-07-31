@@ -1,0 +1,4 @@
+# The vendored SpanDSP working tree is not committed -- it is 41 MB of
+# third-party source with its own history and its own licence.  README.md
+# records the exact revision and the commands that reproduce it.
+spandsp/

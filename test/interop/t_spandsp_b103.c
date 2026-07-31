@@ -136,6 +136,22 @@ main(void)
 
 	printf("SpanDSP interop\n");
 
+	/*
+	 * Assert the channel numbering before using it.  SpanDSP 0.0.6 ships
+	 * these two entries swapped relative to 3.x, so a build against the
+	 * wrong version would otherwise fail deep in the bit comparison with
+	 * a symptom that looks nothing like the cause.
+	 */
+	check("BELL103CH1 is the caller's 1070/1270",
+	      preset_fsk_specs[FSK_BELL103CH1].freq_zero == 1070
+	      && preset_fsk_specs[FSK_BELL103CH1].freq_one == 1270,
+	      "channel 1 is not 1070/1270 -- this is SpanDSP 0.0.6, which has "
+	      "the Bell 103 channels swapped.  Build against third_party/spandsp");
+	check("BELL103CH2 is the answerer's 2025/2225",
+	      preset_fsk_specs[FSK_BELL103CH2].freq_zero == 2025
+	      && preset_fsk_specs[FSK_BELL103CH2].freq_one == 2225,
+	      "channel 2 is not 2025/2225");
+
 	for (i = 0; i < NBITS; i++) {
 		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xB400u);
 		sent[i] = (unsigned char)(lfsr & 1);
@@ -144,14 +160,14 @@ main(void)
 	/*
 	 * 1. Our originating transmitter -> SpanDSP's Bell 103 receiver.
 	 *
-	 *    Note the channel: SpanDSP's FSK_BELL103CH1 is 2025/2225 and CH2
-	 *    is 1070/1270 -- the opposite of the obvious reading, and checked
-	 *    against preset_fsk_specs rather than assumed.  An originating
-	 *    station sends 1070/1270, so it is CH2 that must receive it.
-	 *
-	 *    Getting this backwards is not a subtle failure: it demodulates
-	 *    the wrong band and returns the exact COMPLEMENT of the data,
-	 *    which reads as a polarity bug rather than a wrong channel.
+	 *    FSK_BELL103CH1 is 1070/1270 -- SpanDSP's own comment calls it
+	 *    "the tx channel for the caller" -- so it is CH1 that receives an
+	 *    originating station.  The channel numbers are ASSERTED against
+	 *    preset_fsk_specs below rather than trusted, because SpanDSP
+	 *    0.0.6 had these two entries SWAPPED and a build against the
+	 *    distro package silently demodulates the wrong band, returning
+	 *    the exact complement of the data.  That reads as a polarity bug
+	 *    and is not one.
 	 */
 	{
 		struct b103fp *tx = make(B103_CALL_ORIGINATE);
@@ -163,7 +179,7 @@ main(void)
 		int lag, cmp;
 
 		nsent = ngot = 0;
-		rx = fsk_rx_init(NULL, &preset_fsk_specs[FSK_BELL103CH2],
+		rx = fsk_rx_init(NULL, &preset_fsk_specs[FSK_BELL103CH1],
 				 FSK_FRAME_MODE_SYNC, put_bit, NULL);
 		check("spandsp rx init", rx != NULL && tx != NULL, "init failed");
 
@@ -190,8 +206,8 @@ main(void)
 	}
 
 	/*
-	 * 2. SpanDSP's Bell 103 CH1 transmitter -> our originating receiver.
-	 *    CH1 is 2025/2225, what an answering station sends and therefore
+	 * 2. SpanDSP's Bell 103 CH2 transmitter -> our originating receiver.
+	 *    CH2 is 2025/2225, what an answering station sends and therefore
 	 *    what an originating station listens for.
 	 */
 	{
@@ -204,7 +220,7 @@ main(void)
 		int lag, cmp;
 
 		nsent = ngot = 0;
-		tx = fsk_tx_init(NULL, &preset_fsk_specs[FSK_BELL103CH1],
+		tx = fsk_tx_init(NULL, &preset_fsk_specs[FSK_BELL103CH2],
 				 get_bit, NULL);
 		check("spandsp tx init", tx != NULL && rx != NULL, "init failed");
 

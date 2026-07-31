@@ -2,9 +2,32 @@
 
 ## SpanDSP 3
 
-`spandsp/` is <https://github.com/freeswitch/spandsp>, vendored as a git
-submodule and used **only** as an independent interoperability peer and
-stimulus generator inside `test/`.
+`spandsp/` is <https://github.com/freeswitch/spandsp>, used **only** as an
+independent interoperability peer and stimulus generator inside `test/`.
+
+It is **not committed** — 41 MB of third-party source with its own history and
+licence. Reproduce it with:
+
+```sh
+git clone --depth 1 --branch version-3.1.0 \
+    https://github.com/freeswitch/spandsp third_party/spandsp
+cd third_party/spandsp && ./bootstrap.sh && \
+    ./configure --disable-shared --enable-static && make
+```
+
+Pinned revision: **`6a0e9f51fd5a6bd3f8c3a5337522e4b6743a6637`**, branch
+`version-3.1.0`. `make interop` links `src/.libs/libspandsp.a` from that tree.
+
+### Do NOT use the distro package
+
+`libspandsp-dev` is 0.0.6, and its `preset_fsk_specs` has the two Bell 103
+entries **swapped** relative to 3.x: its `FSK_BELL103CH1` is the answerer's
+2025/2225 where 3.x's is the caller's 1070/1270. Building against it
+demodulates the wrong band and returns the exact complement of the data —
+a symptom that reads as a polarity bug and is not one.
+
+`t_spandsp_b103.c` asserts the two channel frequencies before using them, so
+a build against the wrong version fails immediately and says why.
 
 ### Licence firewall
 

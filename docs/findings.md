@@ -2312,8 +2312,22 @@ every test would still pass. This talks to SpanDSP, written from the standard
 by someone else.
 
 ```sh
-make interop            # needs libspandsp-dev
+make interop            # needs third_party/spandsp built -- see its README
 ```
+
+**Version matters, and the first run of this got it wrong.** This was written
+against the distro's `libspandsp-dev` 0.0.6 rather than the SpanDSP 3 the plan
+called for, and 0.0.6 ships its two Bell 103 preset entries **swapped**: its
+`FSK_BELL103CH1` is the answerer's 2025/2225 where 3.x's is the caller's
+1070/1270. The substitution was convenient and went unflagged, and the
+conclusion drawn from it -- "SpanDSP numbers these backwards from the obvious
+reading" -- was a statement about one buggy release presented as a fact about
+SpanDSP.
+
+Re-run against **3.1.0** (`6a0e9f51`, built from source) with the correct
+channel numbering, every result below is unchanged, including the 229-bit
+figure exactly. The test now asserts both channels' frequencies before using
+them, so a build against 0.0.6 fails immediately and says why.
 
 ### The transmitter passes outright
 
