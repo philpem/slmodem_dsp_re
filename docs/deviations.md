@@ -837,3 +837,65 @@ all has demonstrated V.21.
 
 **Reproduced.** `t_v8jm` pins the behaviour, and the reconstruction carries
 the same `& 3`.
+
+## D17 — loopback calls a receive handler that was never installed 🐛 💤
+
+`B103FP_create` sets `hdx->tx` unconditionally and `hdx->rx` on exactly one
+arm -- originate with `cfg.f10 == 0`, which installs `RxHdxDataB103`
+directly:
+
+```
+    8ebbc:  movl $0x0,0x10(%ecx)      <== R_386_32 RxHdxDataB103
+```
+
+Everywhere else `hdx->rx` is whatever the allocator handed back. That is
+fine for two of the three modes, because their first transition installs one:
+
+```
+    B103OriginateNextState  START -> hdx->rx = RxDetMarkB103
+    B103AnswerNextState     START -> hdx->rx = RxDetMarkB103
+    B103LocLoopNextState    START -> tx, tx_blocks, rx_count, substate
+                                     -- and nothing else
+```
+
+`B103LocLoopNextState` does not install a receive handler until `CARRDET`,
+one transition later:
+
+```
+    8f754:  movzwl 0x2(%ecx),%edx
+    8f758:  movl   $0x0,0x8(%ecx)     <== R_386_32 TxHdxMarksB103
+    8f75f:  movw   $0x1,0x14(%ecx)    ; substate = CARRDET
+    8f765:  lea    (%edx,%edx,1),%eax
+    8f768:  mov    %ax,0x4(%ecx)      ; tx_blocks
+    8f76c:  mov    %dx,0xc(%ecx)      ; rx_count
+    ...                               ; +0x10 is not written
+```
+
+And `B103FP_modem` calls the handler without checking it:
+
+```
+    n = fp->hdx->rx(fp, rx_in, staging, n_rx);
+```
+
+So a loopback object faults on the *first* block it is given. The transmit
+loop runs `TxHdxStartB103`, which takes START to CARRDET and installs no
+receive state, and the receive loop then calls through whatever was in the
+allocation.
+
+**Reachable?** No. `b103_create` sets `cfg.call_type` from its `caller`
+argument, which is 0 or 1 -- originate or answer -- and never the value that
+selects loopback. The only way in is to hand `B103FP_create` the library
+default `B103_CFG_data`, whose `call_type` *is* loopback, which nothing in
+the object does.
+
+**How it was found.** Not by reading: by filling fresh allocations with
+`0xa5` instead of letting them be zero. With a zeroing allocator the
+uninstalled handler is NULL, `t_b103hdx` guarded on `== 0`, and the whole
+thing read as a deliberate "no handler in this state". With a fill it is a
+jump to `0xa5a5a5a5`, which is what it always was.
+
+**Reproduced.** `t_b103hdx` now asserts that loopback has installed nothing
+one transition after START -- pinning the defect rather than avoiding it --
+and then takes the extra transition before driving the receive states, which
+also gained coverage of `RxHdxDataB103` under loopback that the old guard
+had been silently skipping.

@@ -17,6 +17,7 @@
  */
 
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "harness.h"
@@ -84,6 +85,27 @@ state_id(const void *p, int reference)
 		if (p == ours[i] || p == refs[i])
 			return i;
 	return -1;
+}
+
+/*
+ * Is this pointer still exactly what the allocator handed back?
+ *
+ * `B103FP_create` does not initialise `hdx->rx` except on one arm, so
+ * whether a receive handler exists at all depends on which transitions have
+ * run since.  With a zeroing allocator that reads as NULL and is easy to
+ * miss; with the harness's fill it is a recognisable pattern, and this is
+ * what tells "nothing has written it" apart from "something wrote a state
+ * this test does not know about", which `state_id` reports as -1.
+ */
+static int
+untouched(const void *p)
+{
+	uintptr_t fill = 0;
+	unsigned i;
+
+	for (i = 0; i < sizeof(fill); i++)
+		fill = (fill << 8) | (unsigned char)HARNESS_MALLOC_FILL;
+	return (uintptr_t)p == fill;
 }
 
 /* Coverage. */
@@ -267,6 +289,26 @@ main(void)
 			continue;
 		ref_B103NextState[mode](b);
 		B103NextState[mode](a);
+
+		/*
+		 * Loopback leaves START without a receive handler -- see D17
+		 * -- so pin that, then take the extra transition that installs
+		 * one.  Originate and answer install theirs at START and this
+		 * loop does not run for them.
+		 */
+		diff_eq_int("no receive handler yet (%ld)",
+			    untouched((const void *)a->hdx->rx),
+			    untouched((const void *)b->hdx->rx), mode);
+		for (k = 0; k < 4 && untouched((const void *)b->hdx->rx); k++) {
+			ref_B103NextState[mode](b);
+			B103NextState[mode](a);
+		}
+		if (untouched((const void *)b->hdx->rx)
+		    || state_id((const void *)b->hdx->rx, 1) < 0) {
+			teardown(a, b);
+			continue;
+		}
+
 		/* Keep the timeout short so it is reachable in this run. */
 		a->hdx->tone_timeout = b->hdx->tone_timeout = 12;
 
@@ -283,7 +325,8 @@ main(void)
 			ca = cb = 160;
 
 			snprintf(what, sizeof(what), "%s rx %d", modes[mode], k);
-			if (b->hdx->rx == 0 || a->hdx->rx == 0)
+			if (state_id((const void *)b->hdx->rx, 1) < 0
+			    || state_id((const void *)a->hdx->rx, 0) < 0)
 				break;
 			nb = b->hdx->rx(b, out, (short *)obits_b, &cb);
 			na = a->hdx->rx(a, air, (short *)obits_a, &ca);
@@ -387,6 +430,21 @@ main(void)
 		a->hdx->tone_timeout = b->hdx->tone_timeout = 10;
 		ref_B103NextState[mode](b);
 		B103NextState[mode](a);
+
+		/*
+		 * Same as section 4: loopback has no receive handler until
+		 * one transition after START, and B103FP_modem calls the
+		 * handler without checking.  See D17.
+		 */
+		for (k = 0; k < 4 && untouched((const void *)b->hdx->rx); k++) {
+			ref_B103NextState[mode](b);
+			B103NextState[mode](a);
+		}
+		if (untouched((const void *)b->hdx->rx)) {
+			ref_B103FP_delete(tx);
+			teardown(a, b);
+			continue;
+		}
 
 		for (k = 0; k < 120; k++) {
 			unsigned short mbits[8];

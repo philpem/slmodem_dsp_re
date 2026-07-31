@@ -70,15 +70,19 @@ struct reg_log {
 };
 
 /*
- * What sysdep_malloc should fill fresh allocations with, and does not yet.
+ * What sysdep_malloc fills fresh allocations with.
  *
  * Handing back a fixed non-zero pattern makes a constructor that leaves a
  * field uninitialised comparable -- both sides see the same value -- and
  * makes anything that reads such a field get an obviously wrong number
- * instead of the zero fresh pages happen to give.  Turning it on found two
- * real defects straight away (see findings 69) and also made one half-duplex
- * test exit before reporting, which is why it is staged here rather than
- * enabled.
+ * instead of the zero a fresh page happens to give.  Zero is the one value
+ * that makes an uninitialised field look deliberate.
+ *
+ * It found two constructor defects in the reconstruction the moment it was
+ * turned on (findings 69), and one in the original: D17, the half-duplex
+ * receive handler that loopback never installs.  t_b103hdx uses this
+ * constant directly, to tell "nothing has written it" apart from "something
+ * wrote a state this test does not know".
  */
 #define HARNESS_MALLOC_FILL	0xa5
 

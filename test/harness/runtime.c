@@ -107,11 +107,13 @@ sysdep_malloc(unsigned int size)
 
 	if (p != 0) {
 		/*
-		 * NOT filled with a pattern yet, though it should be: see the
-		 * note on HARNESS_MALLOC_FILL in harness.h.  Filling found two
-		 * real defects immediately and also killed a half-duplex test
-		 * outright, so it is staged rather than enabled.
+		 * A fixed non-zero pattern, so that a field a constructor
+		 * leaves alone is the same on both sides and is obviously
+		 * wrong when something reads it.  Fresh pages are zero, which
+		 * is the one value that makes an uninitialised field look
+		 * deliberate.
 		 */
+		memset(p, HARNESS_MALLOC_FILL, size);
 		harness_alloc.allocs++;
 		harness_alloc.live++;
 		harness_alloc.bytes += size;

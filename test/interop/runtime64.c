@@ -19,7 +19,25 @@
 
 #include "dsplib/sysdep.h"
 
-void *sysdep_malloc(unsigned int size) { return malloc(size); }
+/*
+ * Filled to the same pattern as the differential harness, for the same
+ * reason: a field the constructor leaves alone should be obviously wrong
+ * rather than plausibly zero.  The interop tier builds real objects through
+ * V8Create and B103FP_create, so it is exposed to exactly the same
+ * uninitialised reads.
+ */
+#define INTEROP_MALLOC_FILL	0xa5
+
+void *
+sysdep_malloc(unsigned int size)
+{
+	void *p = malloc(size);
+
+	if (p != NULL)
+		memset(p, INTEROP_MALLOC_FILL, size);
+	return p;
+}
+
 void sysdep_free(void *mem) { free(mem); }
 void *sysdep_memset(void *d, int c, size_t l) { return memset(d, c, l); }
 void *sysdep_memcpy(void *d, const void *s, size_t l) { return memcpy(d, s, l); }
