@@ -22,12 +22,19 @@ ext_expected(unsigned char c)
  * Returns non-zero if anything matched.  On a mismatch the expected
  * character advances but the received word does not, so a repeated word
  * still lines up; once something has matched, the first mismatch ends it.
+ *
+ * `*matched` is the "something has matched" flag, and it belongs to the
+ * caller because the two callers give it different lifetimes: the first
+ * keeps it in `febc` and clears it before every marker word, the second in
+ * a local that is set up once and then carries across markers -- so once
+ * anything has matched there, a later marker whose very first character is
+ * wrong is abandoned instead of scanned through.
  */
 static int
-match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep)
+match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
+		int *matched)
 {
 	struct v8_tx_sequence *seq = &v->seq[2];
-	int matched = 0;
 	int k = 0;
 
 	while (ext[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
@@ -35,18 +42,18 @@ match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep)
 
 		if (w == (unsigned short)ext_expected(ext[k])) {
 			*keep = (short)w;
-			matched = 1;
+			*matched = 1;
 			k++;
 			(*at)++;
 			continue;
 		}
-		if (matched)
+		if (*matched)
 			break;
 		k++;
 	}
 
 	/* Ran to the end of the field, rather than stopping on a mismatch. */
-	if ((ext[k] == 0 || k == V8_CM_EXT_MAX) && matched)
+	if ((ext[k] == 0 || k == V8_CM_EXT_MAX) && *matched)
 		return 1;
 	return 0;
 }
@@ -56,6 +63,7 @@ evaluateRxJMSequence(struct v8 *v)
 {
 	struct v8_tx_sequence *seq = &v->seq[2];
 	struct v8_cm *cm = v->cm;
+	int matched;
 	int i;
 
 	v->febc = 0;
@@ -68,7 +76,9 @@ evaluateRxJMSequence(struct v8 *v)
 			continue;
 
 		if (cm->b2 & V8_CM_EXT1_PRESENT) {
-			if (match_extension(v, cm->ext1, &i, &v->fec0)) {
+			matched = 0;
+			if (match_extension(v, cm->ext1, &i, &v->fec0,
+					    &matched)) {
 				v->febc = 1;
 				break;
 			}
@@ -93,8 +103,12 @@ evaluateRxJMSequence(struct v8 *v)
 		}
 	}
 
-	/* The second extension, against its own marker. */
-	v->febe = 0;
+	/*
+	 * The second extension, against its own marker.  `febe` is only ever
+	 * set here, never cleared: whatever the caller left in it stands if
+	 * nothing matches.
+	 */
+	matched = 0;
 	for (i = 0; i < (short)seq->wordidx; i++) {
 		unsigned short w = (unsigned short)seq->word[i];
 
@@ -106,7 +120,7 @@ evaluateRxJMSequence(struct v8 *v)
 			v->febe = 1;
 			continue;
 		}
-		if (match_extension(v, cm->ext2, &i, &v->fec2)) {
+		if (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {
 			v->febe = 1;
 			return;
 		}

@@ -1,11 +1,6 @@
 /*
  * v8handshak.c -- the handshake state machine.
  *
- * NOT YET IN THE BUILD.  It calls `rebuildJMSequence`, which is the last
- * function of phase 5 still to be reconstructed; this file is committed
- * ahead of it so the decode is not lost, and is wired into the Makefile in
- * the commit that adds its dependency.
- *
  * Two state variables, one per direction, which is why a single function
  * covers what looks like it should be two:
  *
@@ -23,16 +18,12 @@
 
 #include "dsplib/v8.h"
 
-/* Rebuild the JM from what was received.  The last piece of phase 5. */
-extern void rebuildJMSequence(struct v8 *v);
-
 /*
- * The two long receive paths, in their own file: the one that waits for the
- * AGC and the tone, and the one that demodulates and matches.  Split out
- * because between them they are most of this function's four kilobytes and
- * neither shares anything with the transmit side but the object.
+ * The two long receive paths are in v8hsrx.c: the one that waits for the AGC
+ * and the tone, and the one that demodulates and matches.  Split out because
+ * between them they are most of this function's four kilobytes and neither
+ * shares anything with the transmit side but the object.
  */
-
 
 /* Transmit states, as `f9d4` holds them. */
 #define V8_TX_SILENCE	5
@@ -142,8 +133,13 @@ v8handshak(struct v8 *v)
 	int done = 0;
 	int rc;
 
-	/* Transmit until the queue is full. */
-	while ((unsigned short)v->f21c < (unsigned short)v->fa3e) {
+	/*
+	 * Transmit until the queue is full.  The comparison is signed, and
+	 * `f21c` does go negative -- `V8Process` decrements it once a sample
+	 * whatever the queue is doing -- so this keeps transmitting where an
+	 * unsigned one would stop.
+	 */
+	while ((short)v->f21c < (short)v->fa3e) {
 		int st = (short)v->f9d4 - 5;
 
 		if ((unsigned)st > 0x28)
@@ -171,7 +167,7 @@ v8handshak(struct v8 *v)
 		if ((short)v->fdb6 <= V8_RX_SETTLE_BLOCKS)
 			return 0;
 		v->f9d6 = V8_RX_DEMOD;
-		v->f9d8 = 0x29;
+		v->f9d8 = V8_HS_HUNT;
 		r->f20 = 0x800;
 		v->fdb6 = 0;
 		return 0;

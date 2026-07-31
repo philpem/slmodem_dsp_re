@@ -18,6 +18,13 @@
 /* The only rate the handshake runs at. */
 #define V8_DP_RATE	9600
 
+/* Where the negotiated result is left for whoever asked for the call. */
+struct v8_dspinfo {
+	unsigned char	pad00[8];
+	int		f08;			/* +0x08 */
+	int		f0c;			/* +0x0c */
+};
+
 /*
  * The wrapper's object, 52 bytes.  The first five words are the datapump
  * header every pump in this library shares; the rest is V.8's.
@@ -32,11 +39,22 @@ struct v8_dp {
 	int			want;		/* +0x18  the requested id */
 	int			f1c;		/* +0x1c */
 	int			f20;		/* +0x20 */
-	int			dspinfo;	/* +0x24 */
+	/*
+	 * MDMPRM_DSPINFO is an address, not a number: the wrapper writes the
+	 * negotiated result into it when the handshake finishes.
+	 */
+	struct v8_dspinfo	*dspinfo;	/* +0x24 */
 	struct v8_cm		*cm;		/* +0x28 */
 	int			f2c;		/* +0x2c */
 	struct v8			*v8;	/* +0x30 */
 };
+
+/*
+ * One buffer through the handshake.  Returns a DPSTAT_* code, and when the
+ * negotiation finishes it publishes the result and asks the modem to change
+ * datapump.
+ */
+int v8_process(struct dp *dp, void *in, void *out, int count);
 
 /* Register the datapump.  Called from prop_dp_init. */
 void dp_v8_init(void);

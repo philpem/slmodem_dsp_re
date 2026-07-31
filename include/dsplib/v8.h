@@ -447,12 +447,23 @@ struct v8 {
 
 	short			fdb4;		/* +0xdb4 */
 	short			fdb6;		/* +0xdb6 */
-	short			fdb8;		/* +0xdb8 */
+	/* Consecutive zero bits, for the CJ detector.  +0xdb8 */
+	short			fdb8;
 	short			fdba;		/* +0xdba */
-	unsigned char		paddbc[2];
+	/* Which word of a received message comes next.  +0xdbc */
+	short			fdbc;
 	short			fdbe;		/* +0xdbe */
 	short			fdc0;		/* +0xdc0 */
 	unsigned char		paddc2[2];
+
+	/*
+	 * What the QCA1 exchange decided.  `fdc4` is the flag the JM builder
+	 * reads to say a QCA1 message was accepted at all -- it is also what
+	 * makes `V8GetMessage` hand back `seq_spare` rather than `tx_seq` --
+	 * and the other two are fields lifted out of that message.  The
+	 * original's own debug output names them: "LAPM Indication" for the
+	 * one bit and "ANSpcm level index" for the two.
+	 */
 	int			fdc4;		/* +0xdc4 */
 	int			fdc8;		/* +0xdc8 */
 	int			fdcc;		/* +0xdcc */
@@ -726,9 +737,31 @@ void rebuildJMSequence(struct v8 *v);
  */
 int v8handshak(struct v8 *v);
 
+/* One buffer of samples through the handshake; returns a status. */
+int V8Process(struct v8 *v, const short *in, short *out, int count);
+
 /* The two long receive paths, in v8hsrx.c. */
 int v8_handshak_agc(struct v8 *v);
 int v8_handshak_demod(struct v8 *v);
+
+/*
+ * Sub-states of the demodulate path, as `f9d8` holds them.  They pick what
+ * the character stream is being matched against; the receive state stays at
+ * 0x28 throughout.  Values below 0x28 belong to the other receive states and
+ * are not listed here.
+ */
+#define V8_HS_DRAIN	0x23	/* let the outgoing sequence finish   */
+#define V8_HS_COLLECT	0x28	/* the fifteen-word message, twice    */
+#define V8_HS_HUNT	0x29	/* look for either preamble           */
+#define V8_HS_CJ	0x2a	/* look for CJ                        */
+#define V8_HS_QCA1	0x2c	/* the six-word QCA1 message          */
+/*
+ * And two that mean "stop matching": the message has been taken and the
+ * character stream is ignored from here.  Which one is set says which side
+ * took it, and `V8Process` reports them as different statuses.
+ */
+#define V8_HS_TAKEN_RX	0x32	/* mode != 1, fa48 == 1 */
+#define V8_HS_TAKEN_TX	0x33	/* mode == 1, fa48 == 1 */
 
 /*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower

@@ -6,8 +6,10 @@
  * side except the object.
  *
  * `v8_handshak_agc` waits for the line to settle and then for a tone.
+ *
  * `v8_handshak_demod` turns the demodulator's bits into characters and
- * decides when a whole message has arrived.
+ * matches them.  What it matches against is `f9d8`, a sub-state below the
+ * receive state, and each value gets its own function below.
  */
 
 #include "dsplib/v8.h"
@@ -93,7 +95,7 @@ v8_handshak_agc(struct v8 *v)
 		v->fdb6 = 0;
 		v->fdb4 = 0;
 		v->f9d6 = 0x28;
-		v->f9d8 = 0x29;
+		v->f9d8 = V8_HS_HUNT;
 		v->f9d4 = (v->cm->b2 & 0x10) ? 0x2b : 0x17;
 		return 0;
 	}
@@ -109,6 +111,289 @@ v8_handshak_agc(struct v8 *v)
 	return 1;
 }
 
+/*
+ * The rest of this file is the matching half, one function per sub-state.
+ *
+ * Bits arrive ten to a character: a start bit, eight data bits and a stop
+ * bit, oldest first in the bottom of `f1a`.  `f18` counts them.  Two of the
+ * sub-states look at the raw shift register instead and so never wait for a
+ * whole character; the other four take `f1a & 0x3ff` once `f18` reaches ten.
+ */
+
+/* Ten bits to a character, and the top bit of one. */
+#define V8_HS_CHAR_BITS		10
+#define V8_HS_CHAR_TOP		0x200
+#define V8_HS_CHAR_MASK		0x3ff
+
+/*
+ * The two preambles the hunt matches, twelve bits wide because each is the
+ * tail of one character and the head of the next.  `0xc0f` introduces the
+ * fifteen-word message, `0xd55` the six-word QCA1 one.
+ */
+#define V8_HS_PREAMBLE_MSG	0xc0f
+#define V8_HS_PREAMBLE_QCA1	0xd55
+
+/* The word each message starts with, which is also its frame marker. */
+#define V8_HS_MARK_MSG		0x0f
+#define V8_HS_MARK_QCA1		0x155
+
+/* Words in each, not counting the marker. */
+#define V8_HS_MSG_WORDS		14
+#define V8_HS_QCA1_WORDS	5
+
+/* Every bit set: what a word is filled with before anything is received. */
+#define V8_HS_WORD_ANY		0x3ff
+
+/* A CJ octet is nine zero bits and a stop bit, and it must arrive twice. */
+#define V8_HS_CJ_ZEROS		9
+#define V8_HS_CJ_COUNT		2
+
+/* How long the drain waits before giving up on the sequence emptying. */
+#define V8_HS_DRAIN_BLOCKS	0x104
+
+/*
+ * Waiting for the transmit sequence to run out, then swapping to the next
+ * buffer and starting a long count.  When that count expires the handshake
+ * is over.
+ */
+static int
+v8_hs_drain(struct v8 *v)
+{
+	if (v->fdb6 != 0) {
+		v->fdb6 = (short)(v->fdb6 + 1);
+		if (v->fdb6 != V8_HS_DRAIN_BLOCKS)
+			return 0;
+		v->f9d4 = 5;
+		v->f9d6 = 0x63;
+		return 2;
+	}
+	if (v->tx_seq->nleft != 0)
+		return 0;
+	v->tx_seq = &v->seq[1];
+	v->fdb6 = 1;
+	return 0;
+}
+
+/*
+ * Hunting for a preamble in the raw bit stream.  Either match arms the
+ * matching buffer -- marker in the first word, "anything" in the rest, and
+ * -1 in `wordidx`, which is where the length of the previous repetition is
+ * kept and cannot be a valid one -- and restarts the character framing.
+ */
+static int
+v8_hs_hunt(struct v8 *v)
+{
+	struct v8_v21_params *p = &v->v21_params;
+	struct v8_tx_sequence *s;
+	int bits = (unsigned short)p->f1a & 0xfff;
+	int n;
+	int i;
+
+	if (bits == V8_HS_PREAMBLE_MSG) {
+		s = v->seq_alt;
+		s->word[0] = V8_HS_MARK_MSG;
+		n = V8_HS_MSG_WORDS;
+		v->f9d8 = V8_HS_COLLECT;
+	} else if (bits != V8_HS_PREAMBLE_QCA1) {
+		return 0;
+	} else if (!(v->cm->b2 & 0x10)) {
+		/* The far end never offered PCM, so there is no QCA1. */
+		return 0;
+	} else {
+		s = v->seq_spare;
+		s->word[0] = V8_HS_MARK_QCA1;
+		n = V8_HS_QCA1_WORDS;
+		v->f9d8 = V8_HS_QCA1;
+	}
+
+	for (i = 1; i <= n; i++)
+		s->word[i] = V8_HS_WORD_ANY;
+	v->fdb6 = 1;
+	v->fdbc = 1;
+	s->wordidx = -1;
+	p->f18 = 0;
+	p->f1a = 0;
+	return 0;
+}
+
+/*
+ * The far end's message has arrived twice the same.  What that means depends
+ * on which side this is and on `fa48`; only the two answering arms rebuild
+ * the JM and reset the transmitter with it.
+ */
+static int
+v8_hs_message_done(struct v8 *v)
+{
+	struct v8_rx *r = &v->rx;
+	int rebuild = 1;
+
+	if (v->mode != 1) {
+		evaluateRxJMSequence(v);
+		v->f9d8 = v->fa48 == 1 ? V8_HS_TAKEN_RX : V8_HS_DRAIN;
+		rebuild = 0;
+	} else if (v->fa48 == 1) {
+		v->f9d8 = V8_HS_TAKEN_TX;
+	} else {
+		v->f9d8 = V8_HS_CJ;
+		v->f9d4 = 0x17;
+		v->fe64 = 0;
+	}
+
+	if (rebuild) {
+		rebuildJMSequence(v);
+		v->fdb4 = 0;
+		v->fdbc = 0;
+		v->fa3c = 1;
+		v->tx_seq->shifter = 0;
+		v->tx_seq->nleft = 0;
+	}
+
+	r->flags |= V8_RX_DETECTOR_ARMED;
+	v->fa40 = r->f1c;
+	v->fdb6 = 0;
+	return 0;
+}
+
+/*
+ * Collecting the fifteen-word message.  Each character either matches what
+ * the buffer already holds -- which counts towards accepting it -- or
+ * replaces it and resets the count.  The marker starts a repetition, and a
+ * repetition that ran as far as the last one did is the message.
+ */
+static int
+v8_hs_collect(struct v8 *v, int ch)
+{
+	struct v8_tx_sequence *s = v->seq_alt;
+	/*
+	 * The bound check below comes *after* this read in the original, so
+	 * `fdbc == 15` looks at `crc`, and the matching path raises `fdbc`
+	 * with no cap at all.  Reproduced, but read through a view of the
+	 * whole sequence object so that it stays a defined access here.  It
+	 * only runs away on a stream that never sends the marker again and
+	 * whose characters go on matching the transmit fields past the array;
+	 * a well-formed message resets `fdbc` to 1 every fifteen words.
+	 */
+	const short *w = (const short *)s;
+	int idx;
+
+	if (ch == V8_HS_MARK_MSG) {
+		if (s->wordidx == v->fdb6)
+			return v8_hs_message_done(v);
+		s->word[0] = V8_HS_MARK_MSG;
+		s->wordidx = v->fdbc;
+		v->fdb6 = 1;
+		v->fdbc = 1;
+		return 0;
+	}
+
+	idx = (short)v->fdbc;
+	if ((unsigned short)w[idx] == (unsigned)ch) {
+		v->fdbc = (short)(idx + 1);
+		v->fdb6 = (short)(v->fdb6 + 1);
+		return 0;
+	}
+
+	if ((short)v->fdbc <= V8_HS_MSG_WORDS) {
+		s->word[idx] = (short)ch;
+		v->fdbc = (short)(v->fdbc + 1);
+	}
+	v->fdb6 = 0;
+	return 0;
+}
+
+/*
+ * Collecting the six-word QCA1 message, and checking it when the sixth
+ * arrives.  Word 1 and word 4 carry the same field twice over, words 2 and 3
+ * are fixed, and word 5 has to have its top six bits set; word 1 then says
+ * which of the two shapes this is.  The original's own names for them are
+ * QCA1a and QCA1d, from its debug output.
+ */
+static int
+v8_hs_qca1(struct v8 *v, int ch)
+{
+	struct v8_tx_sequence *s = v->seq_spare;
+	int idx = (short)v->fdbc;
+	int w1;
+	int is_d;
+	int ok;
+
+	v->fdbc = (short)(idx + 1);
+	s->word[idx] = (short)ch;
+	if (v->fdbc != V8_HS_QCA1_WORDS + 1)
+		return 0;
+
+	w1 = (unsigned short)s->word[1];
+	is_d = (w1 & 0x3b9) == 0x181;
+
+	/*
+	 * Words 2 and 3 are constants on the wire -- all ones, then the
+	 * marker again -- not leftovers of the fill, which the two words
+	 * before them would also still be if nothing had arrived.
+	 */
+	ok = (is_d || (w1 & 0x391) == 0x81)
+	     && (unsigned short)s->word[2] == 0x3ff
+	     && (unsigned short)s->word[3] == 0x155
+	     && (unsigned short)s->word[4] == (unsigned short)w1
+	     && ((unsigned short)s->word[5] & 0x3f0) == 0x3f0;
+
+	if (!ok) {
+		/* "V8: reseting QCA1 detector..." */
+		v->f9d8 = V8_HS_HUNT;
+		return 0;
+	}
+
+	v->fdc4 = 1;
+	v->fdc8 = (w1 >> 6) & 1;
+
+	if (!is_d) {
+		/*
+		 * QCA1a.  Back to waiting for the answer tone, with the
+		 * detector told that one has already been through.
+		 */
+		v->f9d4 = 5;
+		v->f9d8 = 0x19;
+		v->f9d6 = 0x19;
+		v->fdd0 = 1;
+		return 0;
+	}
+
+	/* QCA1d, and that is the whole negotiation. */
+	v->fdcc = (w1 >> 1) & 3;
+	v->f9d4 = 5;
+	v->f9d6 = 0x63;
+	return 2;
+}
+
+/*
+ * Hunting for CJ: nine zero bits followed by a one, twice.  The zero count
+ * lives in the object rather than on the stack because a run can straddle
+ * two characters.
+ */
+static int
+v8_hs_cj(struct v8 *v, int ch)
+{
+	int mask = V8_HS_CHAR_TOP;
+	int i;
+
+	for (i = 0; i < V8_HS_CHAR_BITS; i++) {
+		if ((ch & mask) != 0) {
+			if (v->fdb8 == V8_HS_CJ_ZEROS) {
+				v->fdb6 = (short)(v->fdb6 + 1);
+				if (v->fdb6 == V8_HS_CJ_COUNT) {
+					v->f9d4 = 5;
+					v->f9d6 = 0x63;
+					return 2;
+				}
+			}
+			v->fdb8 = 0;
+		} else {
+			v->fdb8 = (short)(v->fdb8 + 1);
+		}
+		mask >>= 1;
+	}
+	return 0;
+}
+
 int
 v8_handshak_demod(struct v8 *v)
 {
@@ -116,6 +401,8 @@ v8_handshak_demod(struct v8 *v)
 	int before;
 	int got;
 	int k;
+	int sub;
+	int ch;
 
 	V8agc(v);
 	before = (short)p->f18;
@@ -145,5 +432,38 @@ v8_handshak_demod(struct v8 *v)
 		p->f20 = 0;
 	}
 
-	return 0;
+	sub = (unsigned short)v->f9d8;
+
+	/*
+	 * A character of ones went by since the last look, and it was not the
+	 * first: the far end is between messages, so drop what is half
+	 * assembled and start the next character six bits in.  Not done while
+	 * hunting for CJ, which is all zeros and would never survive it.
+	 */
+	if ((unsigned short)p->f26 != (unsigned short)p->f24
+	    && (short)(p->f24 - 1) > 0 && sub != V8_HS_CJ) {
+		p->f18 = V8_HS_ZERO_RUN;
+		p->f1a = 0;
+		p->f26 = (short)(p->f26 + 1);
+	}
+
+	/* Two sub-states read the raw stream and so run every block. */
+	if (sub == V8_HS_HUNT)
+		return v8_hs_hunt(v);
+	if (sub == V8_HS_DRAIN)
+		return v8_hs_drain(v);
+
+	/* The rest wait for a whole character. */
+	if ((short)p->f18 != V8_HS_CHAR_BITS)
+		return 0;
+	ch = (short)p->f1a & V8_HS_CHAR_MASK;
+	p->f18 = 0;
+
+	if (sub == V8_HS_COLLECT)
+		return v8_hs_collect(v, ch);
+	if (sub == V8_HS_QCA1)
+		return v8_hs_qca1(v, ch);
+	if ((unsigned short)(sub - V8_HS_TAKEN_RX) <= 1)
+		return 0;
+	return v8_hs_cj(v, ch);
 }

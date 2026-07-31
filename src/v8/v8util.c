@@ -56,6 +56,8 @@ V8_ASSERT_OFFSET(v8, v21_params, 0xc20);
 V8_ASSERT_OFFSET(v8, tx_seq, 0xc48);
 V8_ASSERT_OFFSET(v8, seq, 0xc54);
 V8_ASSERT_OFFSET(v8, tone, 0xda4);
+V8_ASSERT_OFFSET(v8, fdbc, 0xdbc);
+V8_ASSERT_OFFSET(v8, fdc4, 0xdc4);
 V8_ASSERT_OFFSET(v8, deadline_a, 0xe5c);
 V8_ASSERT_OFFSET(v8, agc_line, 0xe68);
 V8_ASSERT_OFFSET(v8, febc, 0xebc);

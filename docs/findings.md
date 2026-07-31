@@ -4178,3 +4178,96 @@ The generator emitted silence at peak zero, because it runs through a
 shaping filter whose taps only `v8_V21_Init` populates and the test had not
 called it. Nothing in the differential harness would have noticed -- both
 sides would have been equally silent, and equal.
+## 73. Four kilobytes, and the half that a passing test did not reach
+
+`v8handshak` reconstructed as 188 lines of C against 4243 bytes of x86 was
+already suspicious, but the differential test said 114,572 checks and zero
+failures, so nothing pushed back. What eventually did was `V8Process`: three
+bytes of a 3780-byte object comparison disagreed, at `+0xc38` and `+0xdb8`.
+
+Both are counters. `+0xc38` is the demodulator's bit count, and the
+reconstruction had let it run to 29 where the original stopped at 9; `+0xdb8`
+the original cleared and the reconstruction never touched. Searching the
+whole object for stores to those two offsets found them in a region of
+`v8handshak` between `0x77916` and `0x783a3` that the reconstruction did not
+have at all -- roughly 2700 bytes, the entire message-matching half of the
+receive path.
+
+The reason the earlier test passed is that it could not reach any of it. The
+matching half runs only with receive state `0x28`, and dispatches below that
+on `f9d8`, which the sweep seeded at `0x19` or `0x24` and drove for thirty
+blocks -- not nearly enough to leave the AGC state, whose own counter needs
+0x960 blocks. Every check it made was real; none of them was of this code.
+
+### What the matching half is
+
+`f9d8` is a sub-state under the receive state, and each value matches the
+character stream against something different:
+
+```
+    0x23  wait for the outgoing sequence to drain, then swap buffers
+    0x28  collect the fifteen-word message, marker 0x00f, into seq_alt
+    0x29  hunt the raw bit stream for 0xc0f or 0xd55
+    0x2a  hunt for CJ
+    0x2c  collect and check the six-word QCA1 message into seq_spare
+    0x32  stop matching (answering side)
+    0x33  stop matching (calling side)
+```
+
+Two of them -- the hunt and the drain -- look at the raw shift register and
+so run every block; the other four wait for ten bits to have arrived and take
+`f1a & 0x3ff` as a character.
+
+The names are the original author's, not invented. Its debug strings still
+carry `QCA1a`, `QCA1d`, `U_QTS`, `LAPM Indication` and `ANSpcm level index`,
+which is also what identifies the three result fields at `+0xdc4`, `+0xdc8`
+and `+0xdcc` -- and those in turn are what `V8GetMessage` reads to decide
+whether to hand back `seq_spare` instead of `tx_seq`.
+
+Acceptance of a message is by repetition, not by checksum: the buffer is
+armed with the marker in word 0 and all-ones in the rest, each character
+either matches what is already there or replaces it, and a repetition that
+ran as far as the previous one did is the message. CJ is simpler still --
+nine zero bits followed by a one, twice, with the zero count in the object
+because a run straddles characters.
+
+### The comparison that had been unsigned
+
+The transmit loop's `cmp %dx,%cx; jge` is signed, and the reconstruction had
+written it `(unsigned short)f21c < (unsigned short)fa3e`. `f21c` does go
+negative -- `V8Process` decrements it once per sample whatever the queue is
+doing -- so the two differ in practice, and fixing the loop moved the
+`V8Process` failures rather than removing them. Both changes were needed.
+
+### And a flag that should not have been a field
+
+Rewriting the test to construct the sub-states rather than try to reach them
+put 6.8 million checks through the matching half and turned up one more
+defect, two bytes at `+0xebe`, in a function that had been passing for
+several commits.
+
+`evaluateRxJMSequence` has two extension-matching loops that look identical.
+The first keeps its "something has matched" flag in `febc`, a field, and
+clears it before every marker word. The second keeps its flag in a stack
+local, set up once before the loop -- and never cleared. The reconstruction
+had made both of them fields, which meant `febe` was being zeroed on entry
+to the second loop where the original leaves whatever was there, and the
+flag was being reset per marker where the original carries it across. Once
+anything has matched in that second loop, a later marker whose first
+character is wrong is abandoned rather than scanned through.
+
+Nothing about the source distinguishes the two. What distinguishes them is
+that one is `mov %si,0xebe(%edi)` and the other is `mov %ebx,0x18(%esp)`.
+
+### The bound check that comes after the read
+
+At `0x78070` the collector reads `word[fdbc]` and only then checks
+`fdbc <= 14`. `word[]` has fifteen entries, so `fdbc == 15` reads the CRC
+field beyond it, and the matching path raises `fdbc` with no cap at all.
+
+Measured rather than assumed: it does not fire in normal operation, because
+every fifteen-word message begins with the marker and the marker resets
+`fdbc` to 1. It needs a stream that never sends the marker again and whose
+characters go on matching the transmit fields past the array. Reproduced as
+written, but read through a view of the whole sequence object so that it
+stays a defined access on this side.

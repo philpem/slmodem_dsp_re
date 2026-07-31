@@ -57,7 +57,8 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	st->answerer = caller == 0;
 	st->want = id;
 	st->f20 = 0;
-	st->dspinfo = modem_get_param(modem, MDMPRM_DSPINFO);
+	st->dspinfo = (struct v8_dspinfo *)(intptr_t)
+		      modem_get_param(modem, MDMPRM_DSPINFO);
 
 	cm = dp_param_get(modem);
 	st->cm = cm;
@@ -105,7 +106,7 @@ static struct dp_operations v8_op = {
 	.use_count = 0,
 	.create = v8_create,
 	.destroy = v8_delete,
-	.process = 0,
+	.process = v8_process,
 	.hangup = 0
 };
 
