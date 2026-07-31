@@ -132,7 +132,26 @@ struct cadence {
 	const short	*sel_b;				/* +0x28c */
 	const short	*sel_scales;			/* +0x290 */
 
-	int	f294, f298, f29c;			/* +0x294 */
+	/*
+	 * The toneiir envelope floor, from
+	 * Get_Detection_Threshold_Table(GetDialToneDetectionThreshold).  A
+	 * short in an int-sized slot: cadence_create writes only the low
+	 * half.
+	 */
+	short	threshold;				/* +0x294 */
+	short	pad296;
+
+	/*
+	 * Dial tone only: 100 times GetDialToneValidationTime, less 100 if
+	 * that exceeds 100.  Zero for the other three.
+	 */
+	int	validation;				/* +0x298 */
+
+	/*
+	 * Samples between toneiir verdicts.  160 for busy, congestion and
+	 * ringback; GetCallProgressSamplesBufferLength (or 666) for dial.
+	 */
+	int	buflen;					/* +0x29c */
 	const char *name;	/* for debug output               +0x2a0 */
 	int	f2a4;					/* +0x2a4 */
 
@@ -168,6 +187,54 @@ struct cadence {
 
 	void	*modem;		/* for modem_get_param            +0x2d8 */
 };
+
+/*
+ * Which tone a detector is for.  The names are the object's own -- it carries
+ * them as debug strings at .rodata+0x6208 and indexes that table with this
+ * value, clamped to CADENCE_TONE_INVALID.
+ */
+#define CADENCE_TONE_BUSY	0
+#define CADENCE_TONE_DIAL	1
+#define CADENCE_TONE_CONG	2
+#define CADENCE_TONE_RING	3
+#define CADENCE_TONE_INVALID	4
+
+/*
+ * What the caller hands to cadence_create.  Seven words on its stack; only
+ * three of them are read, and one is written back.
+ */
+struct cadence_setup {
+	int	w0;		/* +0x00  read into nothing            */
+	int	w1;		/* +0x04                               */
+	int	w2;		/* +0x08                               */
+	int	w3;		/* +0x0c  -> c->f27c                   */
+
+	/*
+	 * The tone.  cadence_create clamps this to CADENCE_TONE_INVALID and
+	 * WRITES THE CLAMPED VALUE BACK here before using it to pick the
+	 * debug name -- so a caller that reuses one setup across several
+	 * creates sees its own field change under it.
+	 *
+	 * Note the clamp affects only the name.  Any value that is not 0, 2
+	 * or 3 behaves as DIAL, so a tone of 7 is configured as dial tone and
+	 * labelled "INVALID".
+	 */
+	int	tone;		/* +0x10 */
+
+	int	w5;		/* +0x14                               */
+	int	w6;		/* +0x18  -> c->f2a4                   */
+};
+
+/*
+ * Build a detector.  Pass NULL for `c` to allocate one; returns NULL if the
+ * allocation fails, or if the tone's timing windows are unusable (only the
+ * ringback case can decide that, and it frees what it built first).
+ *
+ * `extra` does two things: any positive value clears `continuous`, and
+ * `extra + 1` scales the tone duration handed to the underlying toneiir.
+ */
+struct cadence *cadence_create(struct cadence *c, struct cadence_setup *s,
+			       int extra, void *modem);
 
 void cadence_delete(struct cadence *c);
 

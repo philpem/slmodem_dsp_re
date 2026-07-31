@@ -5,7 +5,7 @@
  *
  *   cadence_delete    .text 0x07d3f0
  *   cadence_progress  .text 0x07cd80
- *   cadence_create    .text 0x07d430   (not yet reconstructed)
+ *   cadence_create    .text 0x07d430
  *   cadence_reset     .text 0x07dff0
  *
  * See cadence.h for what the detector is for.  This file is about the three
@@ -16,6 +16,10 @@
 #include "dsplib/cadence.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/cpfiltrs.h"
+#include "dsplib/elliptic.h"
+#include "dsplib/fp_math.h"
+#include "dsplib/dualtone.h"
 
 extern int modem_get_param(void *modem, int name);
 
@@ -282,4 +286,322 @@ cadence_progress(struct cadence *c, short sample)
 	}
 
 	return result;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * cadence_create
+ *
+ * Four tones, four near-identical blocks, one shared tail.  The parameters
+ * each block reads are what name it -- GetMinBusyCadenceOnTime and friends --
+ * and the four blocks differ in only three respects: which parameters, how
+ * often the underlying toneiir should return a verdict, and whether the tone
+ * has a cadence at all.
+ */
+
+/*
+ * The debug names, .rodata+0x6208, indexed by the clamped tone.  Reproduced
+ * because `name` is part of the object and a differential test compares it.
+ */
+static const char *const cadence_tone_names[CADENCE_TONE_INVALID + 1] = {
+	"BUSY", "DIAL", "CONG", "RING", "INVALID"
+};
+
+/*
+ * Milliseconds-times-ten to toneiir intervals.  `GetFP_Value(1, buflen)` is
+ * `ceil(16384 / buflen)`, so this is `t * 80 / buflen` -- and see
+ * docs/parameters.md for why that means the country table is in units of
+ * 10 ms.  The intermediate `* 80` is spelled `(x * 5) << 4` in the original.
+ */
+static int
+to_intervals(int fp, int t)
+{
+	return ((fp * t) * 5 << 4) >> 14;
+}
+
+/*
+ * The filter-bank dispatch.  Five of the eight indices select a bank of seven
+ * designs and need a subindex in 1..7; the rest are single designs.  Each
+ * bank falls back to its OWN nearest CP_* design rather than a common one,
+ * which is why this is a table of three pointers rather than one.
+ */
+struct cadence_bank {
+	const short	*a, *b, *scales;	/* the bank, or NULL         */
+	const short	*fb_a, *fb_b, *fb_scales;	/* its fallback      */
+};
+
+static void
+select_filter(struct cadence *c, int index, int sub)
+{
+	static const struct cadence_bank banks[8] = {
+		{ Filter_350_500_a, Filter_350_500_b, Filter_350_500_scales,
+		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
+		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
+		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
+		{ Filter_350_500_a, Filter_350_500_b, Filter_350_500_scales,
+		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
+		{ Filter_276_504_a, Filter_276_504_b, Filter_276_504_scales,
+		  CP_276_504_a, CP_276_504_b, CP_276_504_scales },
+		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
+		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
+		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
+		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
+		{ 0, 0, 0, CP_450_630_a, CP_450_630_b, CP_450_630_scales },
+		{ 0, 0, 0, CP_100_550_a, CP_100_550_b, CP_100_550_scales }
+	};
+	const struct cadence_bank *bank;
+
+	c->sel_n_a = IIR_FILTER_COEFF;
+	c->sel_n_b = IIR_FILTER_COEFF;
+
+	if ((unsigned)index > 7) {
+		c->sel_a = CP_350_600_a;
+		c->sel_b = CP_350_600_b;
+		c->sel_scales = CP_350_600_scales;
+		return;
+	}
+
+	bank = &banks[index];
+
+	/*
+	 * One-based, and checked unsigned, so a subindex of 0 -- which is what
+	 * slmodemd supplies, always -- lands here rather than reading behind
+	 * the table.
+	 */
+	if (bank->a == 0 || (unsigned)(sub - 1) > 6) {
+		c->sel_a = bank->fb_a;
+		c->sel_b = bank->fb_b;
+		c->sel_scales = bank->fb_scales;
+		return;
+	}
+
+	c->sel_a = bank->a + IIR_FILTER_COEFF * (sub - 1);
+	c->sel_b = bank->b + IIR_FILTER_COEFF * (sub - 1);
+	c->sel_scales = bank->scales + IIR_FILTER_SCALES * (sub - 1);
+}
+
+/* Windows the busy and ringback cases fall back on, in 10 ms units. */
+#define CADENCE_DEFAULT_MAX	55
+#define CADENCE_DEFAULT_MIN	20
+
+static void
+default_windows(struct cadence *c)
+{
+	c->max_on = CADENCE_DEFAULT_MAX;
+	c->min_on = CADENCE_DEFAULT_MIN;
+	c->max_off = CADENCE_DEFAULT_MAX;
+	c->min_off = CADENCE_DEFAULT_MIN;
+}
+
+static int
+windows_are_set(const struct cadence *c)
+{
+	return c->max_on != 0 && c->min_on != 0
+	    && c->max_off != 0 && c->min_off != 0;
+}
+
+struct cadence *
+cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
+	       void *modem)
+{
+	struct toneiir_cfg cfg;
+	int filter_index = 0;
+	/*
+	 * Zero unless dial tone supplies one, and zero is out of range -- so
+	 * every bank selection for busy, congestion and ringback falls back to
+	 * that bank's own single design.  See finding 49.
+	 */
+	int subindex = 0;
+	int silence_mult = 4;
+	int usable = 1;
+	int tone, fp, name;
+
+	/*
+	 * Before the object is even known to exist -- the original fetches the
+	 * template first and checks its argument second.
+	 */
+	toneiir_get_default_configuration(&cfg);
+
+	if (c == 0) {
+		c = (struct cadence *)sysdep_malloc(sizeof(*c));
+		if (c == 0)
+			return 0;
+		sysdep_memset(c, 0, sizeof(*c));
+		c->filter = 0;
+	}
+
+	c->modem = modem;
+	c->use_allpass = 0;
+	c->continuous = 0;
+	tone = s->tone;
+
+	/*
+	 * Fetched and discarded -- the result is overwritten before it is
+	 * read.  Reproduced because the harness counts parameter calls and a
+	 * missing one is a difference.
+	 */
+	(void)modem_get_param(modem, GetDialToneCallProgressFilterIndex);
+
+	c->threshold = Get_Detection_Threshold_Table(
+		(short)modem_get_param(modem, GetDialToneDetectionThreshold));
+
+	c->cycles = 100;
+	c->looped_match = 0;
+
+	if (tone == CADENCE_TONE_BUSY) {
+		filter_index = modem_get_param(modem,
+					       GetBusyToneCallProgressFilterIndex);
+		/*
+		 * Busy tolerates a shorter silence than the others before
+		 * dropping what it has measured -- three times the maximum
+		 * off period rather than four.  This is NOT the filter
+		 * subindex, which stays zero here: only dial tone ever sets
+		 * one, and conflating the two selects a bank design where the
+		 * original falls back.
+		 */
+		silence_mult = 3;
+		c->buflen = 160;
+		c->continuous = 0;
+		c->validation = 0;
+		c->max_on = modem_get_param(modem, GetMaxBusyCadenceOnTime);
+		c->min_on = modem_get_param(modem, GetMinBusyCadenceOnTime);
+		c->min_off = modem_get_param(modem, GetMinBusyCadenceOffTime);
+		c->max_off = modem_get_param(modem, GetMaxBusyCadenceOffTime);
+		c->cycles = modem_get_param(modem, GetBusyDetectionCyclesNumber);
+		c->looped_match = modem_get_param(modem,
+						  GetBusyToneLooseDetectionEnabled);
+		if (!windows_are_set(c))
+			default_windows(c);
+	} else if (tone == CADENCE_TONE_CONG) {
+		filter_index = modem_get_param(modem,
+					       GetCongestionToneCallProgressFilterIndex);
+		c->buflen = 160;
+		c->continuous = 0;
+		c->validation = 0;
+		c->max_on = modem_get_param(modem, GetMaxCongestionCadenceOnTime);
+		c->min_on = modem_get_param(modem, GetMinCongestionCadenceOnTime);
+		c->min_off = modem_get_param(modem, GetMinCongestionCadenceOffTime);
+		c->max_off = modem_get_param(modem, GetMaxCongestionCadenceOffTime);
+		c->cycles = modem_get_param(modem,
+					    GetCongestionDetectionCyclesNumber);
+		if (!windows_are_set(c)) {
+			usable = 0;
+			default_windows(c);
+		}
+	} else if (tone == CADENCE_TONE_RING) {
+		filter_index = modem_get_param(modem,
+					       GetRingbackToneCallProgressFilterIndex);
+		c->buflen = 160;
+		c->continuous = 0;
+		c->validation = 0;
+		c->max_on = modem_get_param(modem, GetMaxRingbackCadenceOnTime);
+		c->min_on = modem_get_param(modem, GetMinRingbackCadenceOnTime);
+		c->min_off = modem_get_param(modem, GetMinRingbackCadenceOffTime);
+		c->max_off = modem_get_param(modem, GetMaxRingbackCadenceOffTime);
+		c->cycles = modem_get_param(modem,
+					    GetRingbackDetectionCyclesNumber);
+		/*
+		 * Congestion and ringback both give up if any window is zero.
+		 * Busy meets the same condition by substituting defaults and
+		 * carrying on -- it is the tone the modem most needs to hear,
+		 * so it is the one that refuses to be switched off by a gap in
+		 * the country table.
+		 */
+		if (!windows_are_set(c)) {
+			usable = 0;
+			default_windows(c);
+		}
+	} else {
+		/* DIAL, and anything that is not 0, 2 or 3. */
+		filter_index = modem_get_param(modem,
+					       GetDialToneCallProgressFilterIndex);
+		subindex = modem_get_param(modem, GetDialToneFilterSubindex);
+		c->buflen = modem_get_param(modem,
+					    GetCallProgressSamplesBufferLength);
+		if (c->buflen == 0)
+			c->buflen = 666;
+		c->continuous = 1;
+		c->validation = 100 * modem_get_param(modem,
+						      GetDialToneValidationTime);
+		c->max_off = 0;
+		c->max_on = 0;
+	}
+
+	select_filter(c, filter_index, subindex);
+
+	/*
+	 * Convert every window from the country table's 10 ms units into
+	 * toneiir intervals.  GetFP_Value is called once per window in the
+	 * original rather than hoisted, and it is deterministic, so calling it
+	 * once here would change nothing except the harness's call count --
+	 * which the differential test checks.
+	 */
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->max_on = to_intervals(fp, c->max_on);
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->min_on = to_intervals(fp, c->min_on);
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->max_off = to_intervals(fp, c->max_off);
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->min_off = to_intervals(fp, c->min_off);
+
+	/* Computed from the already-converted max_off. */
+	c->max_silence = silence_mult * c->max_off;
+
+	if (c->validation > 100)
+		c->validation -= 100;
+
+	if (!usable) {
+		if (c->filter != 0)
+			toneiir_delete(c->filter);
+		sysdep_free(c);
+		return 0;
+	}
+
+	if (extra > 0)
+		c->continuous = 0;
+
+	c->f2a4 = s->w6;
+
+	/*
+	 * The clamp is for the NAME only, and it is written back into the
+	 * caller's descriptor.  Behaviour was already decided above, so a
+	 * tone of 7 is configured as dial tone and labelled INVALID.
+	 */
+	name = s->tone;
+	if ((unsigned)name > CADENCE_TONE_INVALID)
+		name = CADENCE_TONE_INVALID;
+	s->tone = name;
+	c->name = cadence_tone_names[name];
+
+	cfg.a = c->sel_a;
+	cfg.b = c->sel_b;
+	cfg.n_a = c->sel_n_a;
+	cfg.n_b = c->sel_n_b;
+	cfg.interval = (short)c->buflen;
+	cfg.threshold = (cfg.threshold & ~0xffff) | (unsigned short)c->threshold;
+	cfg.duration_ms = (extra + 1) * c->validation;
+	cfg.keep_on_gap = c->continuous;
+	cfg.scales = c->sel_scales;
+
+	c->filter = toneiir_create(c->filter, &cfg);
+
+	c->n = 0;
+	c->state = CADENCE_IN_SILENCE;
+	c->run = 0;
+
+	/*
+	 * Two more fields put through the same conversion, and nothing ever
+	 * assigns them -- so on a fresh object they are zero going in and
+	 * zero coming out.  Reproduced because they are part of the object.
+	 */
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->f278 = to_intervals(fp, c->f278);
+	fp = GetFP_Value(1, (short)c->buflen);
+	c->f274 = to_intervals(fp, c->f274);
+
+	c->fixed_pattern = 0;
+	c->f27c = s->w3;
+
+	return c;
 }

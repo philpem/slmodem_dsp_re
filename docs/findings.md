@@ -2891,3 +2891,47 @@ might touch a table.
 What caught it was not care but measurement: the claim was tested against the
 blob before being written down, and the test failed. That is the habit worth
 keeping -- for a claim about what the original does, drive the original.
+
+---
+
+## 50. Cadence.c is complete, and busy tone is the one that refuses to fail
+
+`cadence_create` is reconstructed. Three details were only settled by driving
+the blob, and each of them was a plausible wrong guess first:
+
+**The silence multiplier is not the subindex.** `cadence_create` keeps a
+value on its stack -- 4 by default, 3 for busy -- which reads at a glance like
+the filter subindex being defaulted per tone. It is not: it multiplies the
+converted `max_off` to give `max_silence`, the gap after which the detector
+throws away what it has measured. The subindex lives in a register, is zero
+for every tone but dial, and is never defaulted at all.
+
+Conflating them makes busy select a design out of a `Filter_*` bank where the
+original falls back, which is a different filter with a different passband and
+no test that only checks the cadence would notice.
+
+**Congestion and ringback give up; busy does not.** All three substitute the
+same default windows (20 to 550 ms) when the country table leaves any of the
+four at zero -- but congestion and ringback then return NULL, freeing what
+they have built, while busy carries on with the defaults.
+
+That asymmetry looks like an oversight and reads better as a decision: busy
+tone is the one a modem most needs to hear, since it is the difference
+between redialling and waiting forever on a dead call. Congestion and
+ringback are advisory. A country that does not specify busy timings gets a
+detector anyway.
+
+**Two fields are converted and never assigned.** `+0x274` and `+0x278` go
+through the same 10 ms-to-intervals conversion as the four windows, and
+nothing anywhere writes them, so on a freshly allocated object they are zero
+in and zero out. Reproduced because they are part of the 732 bytes a
+differential test compares.
+
+### The Elliptic banks are reconstructed but unreachable
+
+All twenty-one `Filter_*` designs are now in `src/callprog/elliptic.c` and
+compared word for word against the blob. None of them is ever selected on a
+shipped configuration: reaching one needs a subindex in 1..7, and slmodemd
+answers `GetDialToneFilterSubindex` with a literal zero (finding 49). Three
+banks of seven progressively wider bandpasses, fully designed, fully shipped,
+and entirely dead unless a different host supplies that one parameter.

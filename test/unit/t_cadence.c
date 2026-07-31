@@ -26,6 +26,8 @@
 #include "dsplib/cadence.h"
 #include "dsplib/cpfiltrs.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/elliptic.h"
+#include <stddef.h>
 
 extern struct cadence *ref_cadence_create(struct cadence *c, void *setup,
 					  int extra, void *modem);
@@ -40,6 +42,10 @@ extern const short ref_CP_450_630_scales[], ref_CP_450_630_a[],
 extern const short ref_CP_350_600_a[], ref_CP_276_504_a[], ref_CP_100_550_a[];
 extern const short ref_Filter_350_500_a[], ref_Filter_100_550_a[],
 		   ref_Filter_276_504_a[];
+extern const short ref_Filter_350_500_b[], ref_Filter_100_550_b[],
+		   ref_Filter_276_504_b[];
+extern const short ref_Filter_350_500_scales[], ref_Filter_100_550_scales[],
+		   ref_Filter_276_504_scales[];
 
 /*
  * Drive level.  The CP_450_630 cascade overflows above about 8000: its
@@ -351,6 +357,179 @@ run_filter_dispatch(void)
 	return diff_end();
 }
 
+/*
+ * The Elliptic1/2/3.c tables, word for word.  Global symbols, so unlike the
+ * anonymous statics elsewhere in this module they can be compared directly.
+ */
+static int
+run_elliptic_tables(void)
+{
+	static const struct {
+		const char *name;
+		const short *ours, *ref;
+		int n;
+	} tables[] = {
+		{ "Filter_350_500_scales", Filter_350_500_scales,
+		  ref_Filter_350_500_scales, 7 * IIR_FILTER_SCALES },
+		{ "Filter_350_500_a", Filter_350_500_a, ref_Filter_350_500_a,
+		  7 * IIR_FILTER_COEFF },
+		{ "Filter_350_500_b", Filter_350_500_b, ref_Filter_350_500_b,
+		  7 * IIR_FILTER_COEFF },
+		{ "Filter_100_550_scales", Filter_100_550_scales,
+		  ref_Filter_100_550_scales, 7 * IIR_FILTER_SCALES },
+		{ "Filter_100_550_a", Filter_100_550_a, ref_Filter_100_550_a,
+		  7 * IIR_FILTER_COEFF },
+		{ "Filter_100_550_b", Filter_100_550_b, ref_Filter_100_550_b,
+		  7 * IIR_FILTER_COEFF },
+		{ "Filter_276_504_scales", Filter_276_504_scales,
+		  ref_Filter_276_504_scales, 7 * IIR_FILTER_SCALES },
+		{ "Filter_276_504_a", Filter_276_504_a, ref_Filter_276_504_a,
+		  7 * IIR_FILTER_COEFF },
+		{ "Filter_276_504_b", Filter_276_504_b, ref_Filter_276_504_b,
+		  7 * IIR_FILTER_COEFF }
+	};
+	unsigned t;
+	int i;
+
+	diff_begin("Elliptic1/2/3.c tables");
+
+	for (t = 0; t < sizeof(tables) / sizeof(tables[0]); t++)
+		for (i = 0; i < tables[t].n; i++)
+			diff_eq_int(tables[t].name, tables[t].ours[i],
+				    tables[t].ref[i], i);
+
+	return diff_end();
+}
+
+/*
+ * cadence_create, swept.
+ *
+ * The whole 732-byte object is compared, plus the 168-byte toneiir it builds
+ * and the setup descriptor it writes back into.  The parameter store is
+ * driven from a table so each case can put a different value in every
+ * window -- including zeros, which is the only way to reach the default
+ * substitution that busy and ringback perform (and the give-up that only
+ * ringback performs).
+ */
+static int
+run_create(const char *label, int tone, int extra, int index, int sub,
+	   int windows_zero, int buflen, int cycles, int loose)
+{
+	struct cadence *a, *b;
+	struct cadence_setup sa, sb;
+	unsigned k;
+	int i;
+
+	diff_begin(label);
+
+	harness_param_reset();
+	harness_param_set(GetDialToneCallProgressFilterIndex, index);
+	harness_param_set(GetBusyToneCallProgressFilterIndex, index);
+	harness_param_set(GetCongestionToneCallProgressFilterIndex, index);
+	harness_param_set(GetRingbackToneCallProgressFilterIndex, index);
+	harness_param_set(GetDialToneFilterSubindex, sub);
+	harness_param_set(GetCallProgressSamplesBufferLength, buflen);
+	harness_param_set(GetDialToneValidationTime, 50);
+	harness_param_set(GetDialToneDetectionThreshold, 40);
+	harness_param_set(GetBusyToneLooseDetectionEnabled, loose);
+	harness_param_set(GetBusyDetectionCyclesNumber, cycles);
+	harness_param_set(GetCongestionDetectionCyclesNumber, cycles);
+	harness_param_set(GetRingbackDetectionCyclesNumber, cycles);
+	for (k = 0; k < 4; k++) {
+		static const int on_off[4] = {
+			GetMaxBusyCadenceOnTime, GetMinBusyCadenceOnTime,
+			GetMinBusyCadenceOffTime, GetMaxBusyCadenceOffTime
+		};
+		static const int cong[4] = {
+			GetMaxCongestionCadenceOnTime,
+			GetMinCongestionCadenceOnTime,
+			GetMinCongestionCadenceOffTime,
+			GetMaxCongestionCadenceOffTime
+		};
+		static const int ring[4] = {
+			GetMaxRingbackCadenceOnTime, GetMinRingbackCadenceOnTime,
+			GetMinRingbackCadenceOffTime, GetMaxRingbackCadenceOffTime
+		};
+		/* Distinct values, so a swapped pair shows up. */
+		int v = windows_zero ? 0 : (int)(60 + k * 13);
+
+		harness_param_set(on_off[k], v);
+		harness_param_set(cong[k], v);
+		harness_param_set(ring[k], v);
+	}
+
+	memset(&sa, 0, sizeof(sa));
+	sa.w0 = 50; sa.w1 = 50; sa.w2 = 3; sa.w3 = 0x1234;
+	sa.tone = tone; sa.w5 = 0; sa.w6 = 7;
+	sb = sa;
+
+	a = ref_cadence_create(0, (void *)&sa, extra, (void *)0xD00Du);
+	b = cadence_create(0, &sb, extra, (void *)0xD00Du);
+
+	diff_eq_int("both NULL or both not", (a == 0) == (b == 0), 1, 0);
+	/* The descriptor is written back whether or not the create succeeds. */
+	diff_eq_int("setup.tone written back", sb.tone, sa.tone, 0);
+
+	if (a == 0 || b == 0) {
+		diff_eq_int("ref returned NULL as expected", a == 0, b == 0, 0);
+		if (a)
+			ref_cadence_delete(a);
+		if (b)
+			cadence_delete(b);
+		return diff_end();
+	}
+
+	/*
+	 * Every word of the object except the two pointers, which necessarily
+	 * differ -- each side's filter and each side's coefficient tables.
+	 * Those are checked by offset instead.
+	 */
+	for (i = 0; i < (int)(sizeof(struct cadence) / sizeof(int)); i++) {
+		const int *pa = (const int *)a, *pb = (const int *)b;
+		size_t off = (size_t)i * sizeof(int);
+
+		if (off == offsetof(struct cadence, filter)
+		    || off == offsetof(struct cadence, sel_a)
+		    || off == offsetof(struct cadence, sel_b)
+		    || off == offsetof(struct cadence, sel_scales)
+		    || off == offsetof(struct cadence, name))
+			continue;
+		diff_eq_int("word at +0x%lx", pb[i], pa[i], (long)off);
+	}
+
+	/* The selected design, compared by content rather than address. */
+	for (i = 0; i < IIR_FILTER_COEFF; i++) {
+		diff_eq_int("selected a[%ld]", b->sel_a[i], a->sel_a[i], i);
+		diff_eq_int("selected b[%ld]", b->sel_b[i], a->sel_b[i], i);
+	}
+	for (i = 0; i < IIR_FILTER_SCALES; i++)
+		diff_eq_int("selected scales[%ld]", b->sel_scales[i],
+			    a->sel_scales[i], i);
+	diff_eq_int("same debug name", strcmp(b->name, a->name), 0, 0);
+
+	/* And the toneiir underneath, field by field. */
+	diff_eq_int("filter n_a", b->filter->cfg.n_a, a->filter->cfg.n_a, 0);
+	diff_eq_int("filter n_b", b->filter->cfg.n_b, a->filter->cfg.n_b, 0);
+	diff_eq_int("filter interval", b->filter->cfg.interval,
+		    a->filter->cfg.interval, 0);
+	diff_eq_int("filter threshold", b->filter->cfg.threshold,
+		    a->filter->cfg.threshold, 0);
+	diff_eq_int("filter duration_ms", b->filter->cfg.duration_ms,
+		    a->filter->cfg.duration_ms, 0);
+	diff_eq_int("filter keep_on_gap", b->filter->cfg.keep_on_gap,
+		    a->filter->cfg.keep_on_gap, 0);
+	diff_eq_int("filter need", b->filter->need, a->filter->need, 0);
+
+	/* Both sides must have asked for the same parameters, in the same order. */
+	diff_eq_int("parameter calls", harness_param_ours.calls,
+		    harness_param_ref.calls, 0);
+
+	ref_cadence_delete(a);
+	cadence_delete(b);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -416,6 +595,39 @@ main(void)
 
 	rc |= run_reset_and_delete();
 	rc |= run_filter_dispatch();
+	rc |= run_elliptic_tables();
+
+	{
+		static const struct {
+			const char *label;
+			int tone, extra, index, sub, zero, buflen, cycles, loose;
+		} cases[] = {
+		 { "cadence_create: BUSY",        0, 0, 0, 0, 0, 666, 3, 0 },
+		 { "cadence_create: DIAL",        1, 0, 1, 0, 0, 666, 3, 0 },
+		 { "cadence_create: CONG",        2, 0, 3, 0, 0, 666, 3, 0 },
+		 { "cadence_create: RING",        3, 0, 6, 0, 0, 666, 3, 0 },
+		 { "cadence_create: tone 4",      4, 0, 0, 0, 0, 666, 3, 0 },
+		 { "cadence_create: tone 9",      9, 0, 2, 0, 0, 666, 3, 0 },
+		 { "cadence_create: BUSY zero windows",  0, 0, 0, 0, 1, 666, 3, 0 },
+		 { "cadence_create: RING zero windows",  3, 0, 0, 0, 1, 666, 3, 0 },
+		 { "cadence_create: CONG zero windows",  2, 0, 0, 0, 1, 666, 3, 0 },
+		 { "cadence_create: DIAL buflen 0",      1, 0, 1, 0, 0,   0, 3, 0 },
+		 { "cadence_create: DIAL subindex 4",    1, 0, 1, 4, 0, 666, 3, 0 },
+		 { "cadence_create: BUSY loose",  0, 0, 3, 2, 0, 160, 5, 1 },
+		 { "cadence_create: extra 1",     1, 1, 7, 0, 0, 666, 3, 0 },
+		 { "cadence_create: extra 4",     0, 4, 6, 0, 0, 200, 2, 0 },
+		 { "cadence_create: buflen 160",  2, 0, 5, 3, 0, 160, 4, 0 }
+		};
+		unsigned k;
+
+		for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++)
+			rc |= run_create(cases[k].label, cases[k].tone,
+					 cases[k].extra, cases[k].index,
+					 cases[k].sub, cases[k].zero,
+					 cases[k].buflen, cases[k].cycles,
+					 cases[k].loose);
+	}
+
 
 	diff_begin("guards");
 	for (i = 0; i < 8; i++)
