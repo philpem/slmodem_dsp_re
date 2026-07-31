@@ -191,7 +191,13 @@ params(void)
 	harness_param_set(GetDialToneCallProgressFilterIndex, busy_filter);
 	harness_param_set(GetDialToneFilterSubindex, 0);
 	harness_param_set(GetBusyToneLooseDetectionEnabled, 1);
-	harness_param_set(GetDialToneDetectionThreshold, 1);
+	/*
+	 * A level in dB, and the conversion to a linear threshold is
+	 * exponential: 40 gives 102, 30 gives 560, and anything below about
+	 * 30 wraps to roughly 16324 -- a threshold no signal can reach, which
+	 * is why every detector was inert while this was set to 1.
+	 */
+	harness_param_set(GetDialToneDetectionThreshold, 40);
 	harness_param_set(GetDialToneValidationTime, 10);
 	harness_param_set(GetDialToneWaitTime, 100);
 }
@@ -489,6 +495,16 @@ main(void)
 			    distinct >= 3, 1, distinct);
 		diff_eq_int("messages were reported at all (%ld)",
 			    total_messages > 0, 1, total_messages);
+		/*
+		 * CALLPROG_DIALING can only be reached one way: the dial-tone
+		 * detector asserting in state 1, which is message_due_cptd[1][1].
+		 * It is therefore the guard that the detectors are actually
+		 * live -- for a long time they were not, and everything else
+		 * here passed regardless.
+		 */
+		diff_eq_int("a detector verdict drove a transition (%ld)",
+			    message_seen[CALLPROG_DIALING] > 0, 1,
+			    message_seen[CALLPROG_DIALING]);
 		diff_eq_int("CALLPROG_BUSY was reported (%ld)",
 			    message_seen[CALLPROG_BUSY] > 0, 1,
 			    message_seen[CALLPROG_BUSY]);

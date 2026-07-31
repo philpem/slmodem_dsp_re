@@ -3506,57 +3506,47 @@ guessed: `CALLPROG_NO_LEGAL_STATE`, `CALLPROG_WAIT_DIAL`, `CALLPROG_DIALING`,
 reconstruction, because the original's two enums overlap: `CALLPROG_DIALING`
 is state 2 and, separately, message 3.
 
-### One coverage gap, and what it is not
+### The detectors were inert, and why
 
-`t_callprog_progress` compares 120 cases sample-for-sample and visits all ten
-states, but **neither cadence detector asserts when it is configured through
-`CALLPROG_Create`**. Both filter banks were swept over all eight indices,
-with the cadence windows that `t_cadence` uses to get a detection, loose
-detection enabled, and a clean 425 Hz tone at 500 ms on / 500 ms off. No
-verdict.
+For a long stretch this function's differential test passed with **neither
+cadence detector ever asserting**. The cause was not the tone, the cadence,
+the filter bank or the level -- all of which were swept -- but a single
+parameter.
 
-It is worth being precise about the size of this, because the loose version
-of the claim would be much worse than the truth. `cadence_progress` *does*
-assert elsewhere in the suite: `t_cadence` builds a detector directly and
-drives it to `CADENCE_DETECTED` and to `CADENCE_RESTART`, so the detector's
-own assert path is verified. What is not covered is reaching a non-zero
-verdict *through the supervisor's configuration of it*.
+`GetDialToneDetectionThreshold` is a level in dB, and `cadence_create`
+converts it to a linear threshold exponentially. Measured through a detector
+built by `CALLPROG_Create`:
 
-A detector taken straight out of `CALLPROG_Create` was driven with a
-continuous tone swept over 300, 350, 400, 425, 450, 500, 550, 600, 650, 700,
-800 and 1000 Hz, 32000 samples each, at amplitudes 5000 and 30000, through
-both the dial detector (which is in continuous mode, so it should report on
-every interval the tone is present) and the busy one. **Zero verdicts,
-everywhere.** So this is not a matter of picking the right frequency, level
-or cadence: the detector as configured by `CALLPROG_Create` cannot assert at
-all.
+```
+    parameter    0     1     5    10    20    30    40    50    60   100
+    threshold  16319 16324 16340 16356 16378  560   102    0   8192  7765
+    asserts?     no    no    no    no    no   yes   yes   yes   no    no
+```
 
-Two things it is *not*:
+Below about 30 the conversion wraps to roughly 16324 -- a threshold no signal
+can reach. The test had been setting the parameter to 1, so every detector it
+built was unreachable by construction, and every check passed because both
+sides were equally deaf. Realistic country values are 30 to 50.
 
-- not the filter selection, which arrives intact -- `sel_n_a` and `sel_n_b`
-  are both 12 and all three coefficient pointers are non-null, the same check
-  `t_cadence` makes;
-- not the parameters failing to arrive -- the country table's 4 and 12 come
-  out as 2 and 6 intervals, exactly the `time * 80 / buflen` conversion with
-  `buflen` 160, so `cadence_create` is being handed what the store holds.
+Two further things had to be right at the same time, and each was wrong on
+its own first:
 
-That puts the fault downstream of both, in whatever `cadence_create` stages
-into the toneiir configuration versus what `t_cadence` supplies directly.
-Comparing the two toneiir configurations side by side is the next step, and
-it is a question about `cadence_create`, not about `CALLPROG_Progress`.
+- **550 Hz, not 425.** The default call-progress filter is the 450--630 Hz
+  band, so a 425 Hz tone -- the obvious choice for a European busy tone -- is
+  outside it.
+- **The cadence windows are in units of 10 ms and are converted**:
+  `intervals = time * 80 / buflen`, so the country table's 4 and 12 become 2
+  and 6 intervals of 20 ms. `t_cadence` is not a guide here, because it
+  hand-builds its cadence object and never calls `cadence_create` at all --
+  its 4 and 12 are already intervals.
 
-Everything that branch feeds is covered by a different route. The state
-timeout and the line-clear timeout are plain counters, so seeding them short
-drives `request_state`, the per-state timeout and line-clear tables and the
-commit, in every one of the ten states. That is what raises the run from two
-distinct messages to nine, `CALLPROG_BUSY` among them.
+With the threshold at 40 the machine comes alive: `CALLPROG_DIALING` appears,
+which can only be reached by the dial-tone detector asserting in state 1, and
+the run visits state 2 more than four times as often. Everything still
+matches the blob sample-for-sample, which is the point -- it means the
+verdict-to-event path, including the fact that the verdict is not cleared
+between samples, is now verified rather than merely written.
 
-Two smaller branches needed seeding for the same kind of reason:
-
-- the answered-at-last transition in state 8 needs 250 consecutive quiet
-  buffers, which no run of a sane length reaches, so `quiet_count` is seeded
-  to 248;
-- no value of `GetCallingToneFlag` reaches `CALLPROG_Dial`'s arming arm from
-  this harness, so state 3 emits silence and `GenerateCallingTone` is never
-  called. `calling_tone_armed` is seeded instead, and the case asserts that
-  the output is actually audible -- which is how the silence was noticed.
+`t_callprog_progress` guards this directly: it requires
+`CALLPROG_DIALING` to have been reported at least once, so a future change
+that quietly deafens the detectors fails instead of passing.
