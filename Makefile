@@ -72,7 +72,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: all test check64 docs clean interop capture
+.PHONY: all test check64 docs clean interop capture coverage
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -218,6 +218,15 @@ check64:
 	  && echo "64-bit clean, both configurations: OK"
 
 # Regenerate the analysis documents from the blob.
+# Two numbers, both from symbol tables rather than from grepping source:
+# how much of the blob has a same-named function in this tree, and how much
+# of that some test drives against the blob itself.
+coverage: $(BUILD)/tumap.json $(OBJ)
+	@$(PYTHON) tools/coverage.py --md docs/coverage.md
+
+$(BUILD)/tumap.json: tools/tumap.py $(BLOB) | $(BUILD)
+	@$(PYTHON) tools/tumap.py $(BLOB) --json $@ >/dev/null
+
 docs:
 	$(PYTHON) tools/tumap.py    $(BLOB) --md docs/modules.md
 	$(PYTHON) tools/tuattrib.py $(BLOB) --verify --md docs/attribution.md \

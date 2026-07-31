@@ -22,6 +22,7 @@ extern void ref_FPM_FSM_init(void *state, const void *cfg);
 extern short ref_FPM_FSM_modulate(void *state, const unsigned short *bits,
 				  short *out, unsigned short nbits);
 extern short ref_FPM_FSM_CFG[];
+extern void ref_FPM_FSM_delete(void *state);
 
 #define NBITS 400
 #define SPS   24
@@ -136,6 +137,67 @@ main(void)
 		}
 		rc |= diff_end();
 	}
+
+	/*
+	 * Destruction.  `FPM_FSM_delete` frees the modulator's tone and
+	 * nothing else -- not the fsm itself, which every caller embeds
+	 * rather than allocates (`struct b103_dsp` holds one by value).  So
+	 * "it frees exactly one object" is the behaviour, and a version that
+	 * also freed the fsm would be freeing a pointer into the middle of
+	 * somebody's DSP block.
+	 *
+	 * Also driven with NULL, which the original checks for.
+	 */
+	diff_begin("FPM_FSM_delete");
+	{
+		struct fpm_fsm x, y;
+		int fa, fb;
+
+		/*
+		 * Zeroed first: init hands `state->tone` to
+		 * FPM_TONE_create, which treats a non-null pointer as an
+		 * object the caller supplied and writes through it.
+		 */
+		memset(&x, 0, sizeof(x));
+		memset(&y, 0, sizeof(y));
+		harness_alloc_reset();
+		ref_FPM_FSM_init(&x, ref_FPM_FSM_CFG);
+		ref_FPM_FSM_init(&y, ref_FPM_FSM_CFG);
+		diff_eq_int("init allocated a tone (%ld)",
+			    harness_alloc.live >= 2, 1, 0);
+
+		fa = harness_alloc.frees;
+		ref_FPM_FSM_delete(&x);
+		fa = harness_alloc.frees - fa;
+
+		fb = harness_alloc.frees;
+		FPM_FSM_delete(&y);
+		fb = harness_alloc.frees - fb;
+
+		diff_eq_int("frees (%ld)", fb, fa, 0);
+		/*
+		 * Five: the tone object and the four buffers it owns.  That
+		 * it is five and not six is the point -- the fsm here is a
+		 * stack object, so if delete freed it too the allocator would
+		 * see a pointer it never handed out, which is what `bad_free`
+		 * counts.
+		 */
+		diff_eq_int("it freed the tone and its buffers (%ld)", fa, 5,
+			    0);
+		diff_eq_int("and did not free the fsm itself (%ld)",
+			    harness_alloc.bad_free, 0, 0);
+
+		fa = harness_alloc.frees;
+		ref_FPM_FSM_delete(0);
+		fa = harness_alloc.frees - fa;
+		fb = harness_alloc.frees;
+		FPM_FSM_delete(0);
+		fb = harness_alloc.frees - fb;
+		diff_eq_int("NULL frees nothing (%ld)", fb, fa, 0);
+		diff_eq_int("and really nothing (%ld)", fa, 0, 0);
+		harness_alloc_reset();
+	}
+	rc |= diff_end();
 
 	return rc;
 }

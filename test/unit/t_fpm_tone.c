@@ -27,6 +27,7 @@ extern short ref_FPM_TONE_generate_demod(void *state, short *out,
 					 short count);
 extern short ref_FPM_TONE_detect(void *state, const short *samples,
 				 short count);
+extern void ref_FPM_TONE_delete(void *state);
 
 /* Compare the whole object, so unnamed fields are covered too. */
 static void
@@ -467,6 +468,64 @@ main(void)
 		    detect_verdicts[1]);
 	diff_eq_int("NOSIGNAL seen (%ld)", detect_verdicts[2] > 0, 1,
 		    detect_verdicts[2]);
+	rc |= diff_end();
+
+	/*
+	 * Destruction, measured by the allocator rather than by looking at
+	 * freed memory.  Both branches: a detector whose `cfg.len` is
+	 * positive owns four buffers as well as itself, one whose is not owns
+	 * only itself, and the number of frees is the whole behaviour.
+	 *
+	 * The second branch is reached by clearing `len` on a built object
+	 * rather than by configuring one that way -- `FPM_TONE_create` faults
+	 * on a zero length, so a zero-length object is not something it can
+	 * produce.  The four buffers are then deliberately leaked, equally on
+	 * both sides, which is what the branch does.
+	 */
+	diff_begin("FPM_TONE_delete");
+	{
+		int pass;
+
+		for (pass = 0; pass < 2; pass++) {
+			struct fpm_tone *ra, *rb;
+			int fa, fb, la, lb;
+
+			harness_alloc_reset();
+			ra = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+			rb = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+			diff_eq_int("both built (%ld)", ra != 0 && rb != 0, 1,
+				    pass);
+			if (ra == 0 || rb == 0)
+				continue;
+			if (pass == 1)
+				ra->cfg.len = rb->cfg.len = 0;
+
+			la = harness_alloc.live;
+			fa = harness_alloc.frees;
+			ref_FPM_TONE_delete(ra);
+			fa = harness_alloc.frees - fa;
+			la = la - harness_alloc.live;
+
+			lb = harness_alloc.live;
+			fb = harness_alloc.frees;
+			FPM_TONE_delete(rb);
+			fb = harness_alloc.frees - fb;
+			lb = lb - harness_alloc.live;
+
+			diff_eq_int("frees (%ld)", fb, fa, pass);
+			diff_eq_int("allocations released (%ld)", lb, la,
+				    pass);
+			diff_eq_int("nothing unknown was freed (%ld)",
+				    harness_alloc.bad_free, 0, pass);
+			/*
+			 * Anti-vacuity, and the difference between the two
+			 * branches: five frees with a kernel, one without.
+			 */
+			diff_eq_int("frees for this branch (%ld)", fa,
+				    pass == 0 ? 5 : 1, pass);
+		}
+		harness_alloc_reset();
+	}
 	rc |= diff_end();
 
 	printf("t_fpm_tone: verdicts absent/present/nosignal %d/%d/%d\n",
