@@ -31,6 +31,7 @@ extern int ref_v8_rxinit(struct v8 *v);
 extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2,
 				short a3, short a4, short a5, short a6,
 				short a7);
+extern void ref_v8_V21_Init(struct v8 *v, short channel, short answerer);
 
 /*
  * The initialisers write scattered fields of a 3780-byte object, so the only
@@ -91,6 +92,37 @@ static const size_t tx_pointers[] = {
 	offsetof(struct v8, tx_ring_base),
 	offsetof(struct v8, tx_ring_half)
 };
+
+/*
+ * The four filter designs are separate copies of the same numbers -- one set
+ * in the object file, one in v8v21.c -- so the pointers can never match.
+ * Compare 48 coefficients through each, then blank the four words so the
+ * whole-object sweep still covers everything around them.
+ */
+static void
+compare_filters(void)
+{
+	const short *pa[4], *pb[4];
+	int i, k;
+
+	pa[0] = obj_a.v21.a; pb[0] = obj_b.v21.a;
+	pa[1] = obj_a.v21.b; pb[1] = obj_b.v21.b;
+	pa[2] = obj_a.v21.c; pb[2] = obj_b.v21.c;
+	pa[3] = obj_a.v21.d; pb[3] = obj_b.v21.d;
+
+	for (k = 0; k < 4; k++) {
+		diff_eq_int("filter %ld is set", pb[k] != 0, pa[k] != 0, k);
+		if (pa[k] == 0 || pb[k] == 0)
+			continue;
+		for (i = 0; i < 48; i++)
+			diff_eq_int("filter coefficient %ld", pb[k][i],
+				    pa[k][i], i);
+	}
+	obj_a.v21.a = obj_b.v21.a = 0;
+	obj_a.v21.b = obj_b.v21.b = 0;
+	obj_a.v21.c = obj_b.v21.c = 0;
+	obj_a.v21.d = obj_b.v21.d = 0;
+}
 
 static const size_t rx_pointers[] = {
 	offsetof(struct v8, rx) + offsetof(struct v8_rx, buf)
@@ -202,6 +234,31 @@ t_inits(void)
 				whole_object("detectorinit");
 			}
 		}
+
+		/*
+		 * v8_V21_Init, over all four combinations of its two
+		 * independent choices.  It plants pointers to coefficient
+		 * tables, and those live in the object file on one side and
+		 * in v8v21.c on the other, so the tables are compared by
+		 * content and the pointer words are then blanked.
+		 */
+		{
+			int ch, ans;
+
+			for (ch = 0; ch <= 1; ch++) {
+				for (ans = 0; ans <= 1; ans++) {
+					fill(&obj_a, sizeof(obj_a),
+					     808u + i * 8 + ch * 2 + ans);
+					memcpy(&obj_b, &obj_a, sizeof(obj_a));
+					ref_v8_V21_Init(&obj_a, (short)ch,
+							(short)ans);
+					v8_V21_Init(&obj_b, (short)ch,
+						    (short)ans);
+					compare_filters();
+					whole_object("V21_Init");
+				}
+			}
+		}
 	}
 
 	/*
@@ -228,6 +285,20 @@ t_inits(void)
 		    V8_RX_DETECTOR_ARMED, 0);
 	diff_eq_int("the negated argument", obj_b.detector.f08, -4, 0);
 	diff_eq_int("accumulators cleared", obj_b.detector.acc_d[2], 0, 0);
+
+	/* The channel and role choices really do pick different things. */
+	fill(&obj_b, sizeof(obj_b), 21u);
+	v8_V21_Init(&obj_b, 1, 1);
+	diff_eq_int("channel 2 carrier", obj_b.v21_params.carrier_a, 0x62b, 0);
+	diff_eq_int("answerer constant", obj_b.v21_params.f0e, -100, 0);
+	diff_eq_int("V.21 flag set", obj_b.rx.flags & V8_RX_V21_ARMED,
+		    V8_RX_V21_ARMED, 0);
+	fill(&obj_b, sizeof(obj_b), 22u);
+	v8_V21_Init(&obj_b, 0, 0);
+	diff_eq_int("channel 1 carrier", obj_b.v21_params.carrier_a, 0x3ef, 0);
+	diff_eq_int("caller constant", obj_b.v21_params.f0e, 0, 0);
+	diff_eq_int("the two channels differ in taps",
+		    obj_b.v21_taps[0] != -14, 1, obj_b.v21_taps[0]);
 
 	fill(&obj_b, sizeof(obj_b), 13u);
 	V8_V21_reset(&obj_b);

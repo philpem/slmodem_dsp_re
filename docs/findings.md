@@ -3801,3 +3801,41 @@ holding the fill pattern and doing pointer arithmetic on garbage -- and that
 is how it came to dump core rather than merely report a mismatch. A test that
 crashes is at least loud; the same mistake in the reconstruction would have
 been a silent wrong answer.
+
+## 65. v8_V21_Init, and a layout guess that a later function corrected
+
+V.8's CM and JM ride on a 300 baud V.21 link, and `v8_V21_Init` configures
+it. Two choices are made, and they are independent:
+
+| choice | picks |
+|---|---|
+| `channel` -- which V.21 channel this modem sends on | the two carrier constants and which 61-tap filter is copied in |
+| `answerer` -- whether this modem answered the call | the four filter designs and two more constants |
+
+All four combinations are reachable and all four are tested. That two
+separate things are selected here, rather than one "am I the caller" switch,
+is the interesting part: the channel and the role are orthogonal in V.8, and
+the code says so.
+
+### It corrected an earlier guess about the object
+
+`struct v8_phase_rev` had been given a size of 0x114 bytes, which was a guess
+-- `v8_phase_rev_init` only writes up to +0xdc, and 0x114 was the distance to
+the next thing then known. `v8_V21_Init` writes a block at +0xc20, which is
+0xe0 into the phase-reversal detector. So the detector is 0xe0 bytes, not
+0x114, and the V.21 parameters begin exactly where it ends.
+
+This is the normal way the object gets mapped: a region's extent is a guess
+until something else claims the space after it. The `offsetof` assertions are
+what make the correction safe -- moving a boundary either still satisfies
+every recorded offset or stops the build.
+
+### Comparing two copies of the same coefficients
+
+`v8_V21_Init` plants pointers to filter tables. One side's tables live in the
+object file and the other's in `v8v21.c`, so the pointers can never match.
+The test compares 48 coefficients through each pointer and then blanks the
+four words, so the whole-object byte sweep still covers everything around
+them. That is the same shape as the pointer-into-self problem in finding 64,
+but the fix is different: those had to be compared as offsets, these have to
+be compared by dereferencing.

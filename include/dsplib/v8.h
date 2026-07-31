@@ -94,8 +94,43 @@ struct v8_phase_rev {
 	short	window[64];			/* +0x14 */
 	unsigned char pad94[0xdc - 0x94];
 	short	fdc;				/* +0xdc */
-	unsigned char padde[0x114 - 0xde];
+	unsigned char padde[0xe0 - 0xde];
 };
+
+/*
+ * The V.21 modem's working parameters, at +0xc20.  `v8_V21_Init` sets them
+ * from two independent choices: which channel is being sent (which picks the
+ * carrier constants and the 61-tap filter) and whether this modem answered
+ * the call (which picks the four filter designs and two more constants).
+ */
+struct v8_v21_params {
+	short	f00;				/* +0xc20 */
+	short	carrier_a;	/* 0x62b or 0x3ef  +0xc22 */
+	short	carrier_b;	/* 0x580 or 0x344  +0xc24 */
+	short	f06;		/* 0x20            +0xc26 */
+	short	f08;				/* +0xc28 */
+	short	f0a;		/* scaled by v8_mpyint  +0xc2a */
+	short	f0c;		/* 4 or 7          +0xc2c */
+	short	f0e;		/* -100 or 0       +0xc2e */
+	short	f10;				/* +0xc30 */
+	short	f12;		/* 1               +0xc32 */
+	short	f14;		/* 0x18            +0xc34 */
+	short	f16;				/* +0xc36 */
+	short	f18;				/* +0xc38 */
+	short	f1a;				/* +0xc3a */
+	short	f1c;				/* +0xc3c */
+	short	f1e;				/* +0xc3e */
+	short	f20;				/* +0xc40 */
+	short	f22;				/* +0xc42 */
+	short	f24;				/* +0xc44 */
+	short	f26;				/* +0xc46 */
+};
+
+/* The 61-tap filter v8_V21_Init copies in, chosen by channel. */
+#define V8_V21_TAPS	61
+
+/* What v8_V21_Init sets in the receiver's flag word. */
+#define V8_RX_V21_ARMED	0x800
 
 /*
  * The V.21 modem V.8 signals over, at +0xdd8.  `V8_setFilters` swaps the four
@@ -204,10 +239,15 @@ struct v8 {
 	short			tx_shape[V8_TX_SHAPE];		/* +0x77c */
 	short			rx_scratch[V8_RX_SCRATCH];	/* +0x894 */
 
-	unsigned char		pad9d4[0xad8 - 0x9d4];
+	unsigned char		pad9d4[0xa42 - 0x9d4];
+	short			fa42;		/* +0xa42 */
+	unsigned char		pada44[0xa5c - 0xa44];
+	short			v21_taps[V8_V21_TAPS];	/* +0xa5c */
+	unsigned char		pada_d6[2];
 	struct v8_detector	detector;	/* +0xad8 */
 	struct v8_phase_rev	phase_rev;	/* +0xb40 */
-	unsigned char		padc54[0xdd2 - 0xc54];
+	struct v8_v21_params	v21_params;	/* +0xc20 */
+	unsigned char		padc48[0xdd2 - 0xc48];
 
 	/* The tone queue, which v8_TONEq_init arms. */
 	short			toneq_pending;	/* +0xdd2 */
@@ -248,6 +288,13 @@ void v8_dftenergy(struct v8_dft_bin *bin, short n, short shift);
  */
 void v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
 		     short a4, short a5, short a6, short a7);
+
+/*
+ * Bring up the V.21 modem V.8 signals over.  `channel` picks which of the two
+ * V.21 channels this modem transmits on, and `answerer` whether it answered
+ * the call; the two choices are independent and pick different things.
+ */
+void v8_V21_Init(struct v8 *v, short channel, short answerer);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);
