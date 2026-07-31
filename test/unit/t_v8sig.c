@@ -28,6 +28,9 @@ extern void ref_v8_ansamgenerate(struct v8 *v, short *out);
 extern int ref_V8Control(struct v8 *v, int what);
 extern int ref_v8_getbit(struct v8_tx_sequence *s);
 extern void ref_initTxSequence(struct v8 *v);
+extern void ref_v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in,
+				    short count);
+extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
 
 static struct v8 obj_a, obj_b;
 
@@ -387,6 +390,64 @@ main(void)
 		diff_eq_int("both values appeared (%ld)",
 			    ones > 0 && ones < bits, 1, ones);
 		diff_eq_int("the end was reached (%ld)", ends > 0, 1, ends);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The detector, fed real ANSam: the generator's own output, so the
+	 * signal has the phase reversals the detector exists to find.
+	 */
+	diff_begin("v8_phase_rev_detect");
+	{
+		static struct v8_phase_rev pa, pb;
+		static short air[4096];
+		long detected = 0, reversals = 0;
+
+		for (k = 0; k < 6; k++) {
+			int blk;
+
+			/* Generate a stretch of ANSam into `air`. */
+			fill(&obj_a, sizeof(obj_a), 5000u + k);
+			ref_v8_txinit(&obj_a);
+			ref_v8_ansaminit(&obj_a);
+			obj_a.tone.f08 = (short)(6000 + k * 400);
+			obj_a.tone.f0e = 1;
+			/* Start near a reversal so several happen. */
+			obj_a.tone.f0a = (short)(0x430 - k);
+			for (blk = 0; blk < 1024; blk++)
+				ref_v8_ansamgenerate(&obj_a, air + blk * 4);
+
+			memset(&pa, 0, sizeof(pa));
+			memset(&pb, 0, sizeof(pb));
+			ref_v8_phase_rev_init(&pa);
+			ref_v8_phase_rev_init(&pb);
+
+			for (blk = 0; blk < 4096; blk += 64) {
+				ref_v8_phase_rev_detect(&pa, air + blk, 64);
+				v8_phase_rev_detect(&pb, air + blk, 64);
+				diff_eq_int("corr (%ld)", pb.corr, pa.corr, k);
+				diff_eq_int("energy (%ld)", pb.energy,
+					    pa.energy, k);
+				diff_eq_int("smoothed (%ld)", pb.smoothed,
+					    pa.smoothed, k);
+				diff_eq_int("run (%ld)", pb.run, pa.run, k);
+				diff_eq_int("detected (%ld)", pb.detected,
+					    pa.detected, k);
+			}
+			diff_eq_int("state (%ld)",
+				    memcmp(&pa, &pb, sizeof(pa)) == 0, 1, k);
+			if (pa.detected)
+				detected++;
+			reversals += pa.reversals;
+		}
+		/*
+		 * Anti-vacuity: the detector must actually have seen
+		 * reversals in the generator's output, or it agreed with
+		 * itself about silence.
+		 */
+		diff_eq_int("reversals were seen (%ld)", reversals > 0, 1,
+			    reversals);
+		(void)detected;
 	}
 	rc |= diff_end();
 

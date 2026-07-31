@@ -315,3 +315,79 @@ V8Control(struct v8 *v, int what)
 		return -1;
 	}
 }
+
+/*
+ * Look for ANSam's phase reversals.
+ *
+ * Each new sample is correlated against the one half a window back.  While
+ * the carrier's phase is steady that product stays positive; when it inverts
+ * the product goes sharply negative, and the run of samples since the last
+ * such event is what gets measured.  The comparison is against a smoothed
+ * energy rather than a fixed threshold, so it holds at whatever level the
+ * AGC settles on.
+ */
+void
+v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
+{
+	int corr = pr->corr;
+	int energy = pr->energy;
+	int smoothed = pr->smoothed;
+	short widx = pr->widx;
+	int half = pr->half;
+	int full = half * 2;
+	int spacing = 0;
+	short i;
+
+	for (i = 0; i < count; i++) {
+		int back;
+		int x, old, diff;
+		int level;
+
+		/* Advance the write cursor, wrapping at the window's end. */
+		widx = (short)(widx + 1);
+		if (widx >= full)
+			widx = 0;
+
+		back = widx - half;
+		if ((short)back < 0)
+			back = (short)(back + full);
+
+		x = in[i];
+		old = pr->window[widx];
+		diff = x - old;
+
+		/* The window's energy, one sample in and one sample out. */
+		energy += (x * x + 0x8000) >> 16;
+		energy -= (old * old + 0x8000) >> 16;
+
+		corr += (pr->window[back] * diff + 0x8000) >> 16;
+
+		level = smoothed * 0x7fe2 + (energy * 15) * 2;
+		smoothed = level >> 15;
+
+		if (corr * 2 < (level >> 17)) {
+			/* A reversal, if the run since the last one is long
+			 * enough to be one rather than noise. */
+			if ((short)pr->run > (short)(pr->half * 4)) {
+				spacing = ((short)pr->run * 0xd55) >> 15;
+				pr->run = 0;
+				pr->reversals = (short)(pr->reversals + 1);
+			} else {
+				pr->run = (short)(pr->run + 1);
+			}
+		} else {
+			pr->run = (short)(pr->run + 1);
+		}
+
+		if ((unsigned)(spacing - V8_PHASE_REV_MIN) <= V8_PHASE_REV_SPAN
+		    && (short)pr->reversals > 1)
+			pr->detected = 1;
+
+		pr->window[widx] = (short)x;
+	}
+
+	pr->widx = widx;
+	pr->corr = corr;
+	pr->energy = energy;
+	pr->smoothed = smoothed;
+}

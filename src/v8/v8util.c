@@ -60,6 +60,8 @@ V8_ASSERT_OFFSET(v8, deadline_a, 0xe5c);
 V8_ASSERT_OFFSET(v8, febc, 0xebc);
 V8_ASSERT_OFFSET(v8, mode, 0xa44);
 V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
+typedef char v8_pr_det[V8_OFFSET_OK == 0
+			|| offsetof(struct v8_phase_rev, detected) == 0xdc ? 1 : -1];
 V8_ASSERT_OFFSET(v8, v21, 0xdd8);
 V8_ASSERT_OFFSET(v8, toneq_pending, 0xdd2);
 typedef char v8_size_check[V8_OFFSET_OK == 0 || sizeof(struct v8) == V8_STATE_BYTES ? 1 : -1];
@@ -68,7 +70,7 @@ typedef char v8_v21_delay[V8_OFFSET_OK == 0 || offsetof(struct v8, v21)
 			  + offsetof(struct v8_v21, delay) == 0xe0c ? 1 : -1];
 typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, window) == 0x14
 			  ? 1 : -1];
-typedef char v8_pr_fdc[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, fdc) == 0xdc ? 1 : -1];
+
 
 /*
  * A Q14 cosine table, one full cycle in 256 steps.  Every entry but one is
@@ -243,14 +245,14 @@ v8_phase_rev_init(struct v8_phase_rev *pr)
 {
 	int i;
 
-	pr->fdc = 0;
-	pr->f00 = 0;
-	pr->f04 = 0;
-	pr->f08 = 0;
-	pr->f12 = 0;
-	pr->f0c = 0;
-	pr->f0e = 0x20;
-	pr->f10 = 0;
+	pr->detected = 0;
+	pr->corr = 0;
+	pr->energy = 0;
+	pr->smoothed = 0;
+	pr->run = 0;
+	pr->reversals = 0;
+	pr->half = 0x20;
+	pr->widx = 0;
 	for (i = 0; i < 64; i++)
 		pr->window[i] = 0;
 }

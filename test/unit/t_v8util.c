@@ -428,7 +428,7 @@ t_inits(void)
 
 	fill(&obj_b, sizeof(obj_b), 11u);
 	v8_phase_rev_init(&obj_b.phase_rev);
-	diff_eq_int("phase-rev countdown", obj_b.phase_rev.f0e, 0x20, 0);
+	diff_eq_int("phase-rev countdown", obj_b.phase_rev.half, 0x20, 0);
 	diff_eq_int("phase-rev window cleared", obj_b.phase_rev.window[63], 0,
 		    0);
 

@@ -101,16 +101,16 @@ struct v8_detector {
  * three accumulators, a window of 64 samples, and a countdown.
  */
 struct v8_phase_rev {
-	int	f00;				/* +0x00 */
-	int	f04;				/* +0x04 */
-	int	f08;				/* +0x08 */
-	short	f0c;				/* +0x0c */
-	short	f0e;		/* set to 0x20   +0x0e */
-	short	f10;				/* +0x10 */
-	short	f12;				/* +0x12 */
+	int	corr;		/* the correlation      +0x00 */
+	int	energy;		/* the running energy   +0x04 */
+	int	smoothed;	/* energy, smoothed     +0x08 */
+	short	reversals;	/* how many seen        +0x0c */
+	short	half;		/* half the window, 32  +0x0e */
+	short	widx;		/* where the next sample goes  +0x10 */
+	short	run;		/* samples since the last one  +0x12 */
 	short	window[64];			/* +0x14 */
 	unsigned char pad94[0xdc - 0x94];
-	short	fdc;				/* +0xdc */
+	short	detected;	/* the verdict          +0xdc */
 	unsigned char padde[0xe0 - 0xde];
 };
 
@@ -440,6 +440,23 @@ void v8_TONEq_init(struct v8 *v);
 
 /* Arm the ANSam phase-reversal detector. */
 void v8_phase_rev_init(struct v8_phase_rev *pr);
+
+/*
+ * Look for ANSam's phase reversals.
+ *
+ * The window holds the last 64 samples.  Each new sample is correlated
+ * against the one half a window back: while the phase is steady that product
+ * stays positive, and when the carrier inverts it goes sharply negative.  The
+ * comparison is against a smoothed energy rather than a fixed threshold, so
+ * it works at any level the AGC leaves.
+ *
+ * Two reversals the right distance apart set `detected`.
+ */
+#define V8_PHASE_REV_MIN	0x1af	/* the spacing that counts */
+#define V8_PHASE_REV_SPAN	0x26
+
+void v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in,
+			 short count);
 
 /*
  * Reverse the eight bits of a byte.
