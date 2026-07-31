@@ -4487,3 +4487,99 @@ implicit 1.0 in Q14 -- and every reader skips it and indexes from `0x5726`.
 `notch_filter` and `biquad_filter` therefore belong to `V8Detector.c`
 alongside `v8_detectorinit` and `v8_tone_detect`, which is where the
 reconstruction had put them for unrelated reasons.
+
+## 77. v34handshak, and three wrong answers about its shape
+
+`v34handshak` is 61,541 bytes -- the largest function in the object by a
+factor of ten, and about a fifth of everything V.34 needs.  Planning around it
+needs to know what is actually in there, and the first three attempts all
+produced a confident number that was false.
+
+The function dispatches on a state variable through three jump tables:
+
+```
+  62961: cmp $0x51,%eax ; jmp *0x2da0(,%eax,4)   82 entries, states 5..86
+  62af7: cmp $0x45,%eax ; jmp *0x2ee8(,%eax,4)   70 entries, states 5..74
+  64ac9: cmp $0x27,%eax ; jmp *0x3000(,%eax,4)   40 entries, states 41..80
+```
+
+Three tables over one state variable, not three separate machines: several
+states appear in two of them.  `TX_L1` is dispatched at `0x62c69` from the
+first and at `0x65c47` from the third, which is what a transmit switch and a
+receive switch over the same state look like when the compiler has finished
+with them.
+
+`V34hshak.c` also carries a `StateName` table -- 87 pointers at `.data+0x6c00`
+into `.rodata.str1.1`, one per state, left in the object by whatever debug
+build produced it.  So the state machine is not anonymous.  The names run
+`SILENCE`, `ANSAM`, `TONE_2100`, `DET_CM_JM`, `TX_PHASE1_ANS`, `SSEG`,
+`SBARSEG`, `PPSEG`, `TRNSEG4`, `XMITMP`, `EXMIT`, `DATAXMIT`, and seven
+`MOH_*` states for V.92 modem-on-hold.
+
+The wrong answer, three times over, came from sizing each case as the distance
+from its jump-table target to the next one.  That is wrong twice:
+
+  - it hands every byte between the highest target and the end of the function
+    to whichever case happens to sit last, which produced a 54,823-byte
+    `TRNSEG4` and then, after that was noticed, a 44,883-byte `RX_PHASE1_ANS`;
+  - it assumes the compiler lays each case out contiguously, and GCC does not.
+    Cases are interleaved, so even the interior figures are fiction.
+
+`tools/cfgsplit.py` answers it from the control-flow graph instead: build the
+basic blocks, compute what each dispatch target can reach, and count only the
+blocks reachable from that target *and no other*.  Blocks two or more targets
+reach are shared machinery and belong to no single state:
+
+```
+  exclusive to one case    48958 bytes
+  shared by two or more    12290 bytes
+  reached by no case         162 bytes
+```
+
+with the largest single case being `DET_INFO` at 6,046 bytes -- an order of
+magnitude below any of the three earlier estimates.  Grouped by the phase of
+the recommendation the state names come from:
+
+```
+  tone / detect / V.8 bridge       8713 bytes   7 cases
+  phase 2: INFO + line probe      22727 bytes  14 cases
+  phase 3: training segments       9575 bytes   9 cases
+  phase 4: MP / E exchange         4992 bytes   5 cases
+  data mode + retrain               926 bytes   3 cases
+  V.92 modem on hold               2025 bytes   3 cases
+  shared engine                   12290 bytes
+```
+
+The shared 12 KB is not one module: its largest block is 250 bytes and there
+are dozens, which is the per-sample body every state falls through into
+(`dftupdate`, `dftenergy`, `detectorinit`, `V34SetINFO1aBits`, `probeselect`).
+It has to be reconstructed alongside the first group of states, not before
+them.
+
+## 78. Two tools that claimed more precision than the symbol table has
+
+Both found while sizing V.34, both the same mistake in different clothes.
+
+`deps.py` attributed every relocation target to a translation-unit span by
+address.  Sections in an `ld -r` object each start at zero, so a `.rodata`
+address compared against a `.text` span map lands somewhere arbitrary: it put
+`V23_IIR_FILT` in the Bell 103 bracket and the whole V.34 coefficient set in
+`call.c`.  Data references are now reported separately, with no span.
+
+`tumap.py` takes an "exact" TU's `lo` to be the address of its first local
+symbol.  A TU's *globals* can precede its first local, so `lo` is an upper
+bound on where the TU starts, not the boundary.  `VPcmV34Main.cpp` is anchored
+at `0x9250` by `_Z14getMPrecvdBitsP12tagV34Object`, but `VPcmV34GetSNR`,
+`VPcmV34GetDiagnostics` and the whole `V34SetINFO*`/`V34GiveINFO*` family sit
+between `0x6f00` and `0x9250` and are plainly the same file's.  Every span
+endpoint that comes from an "exact" TU is therefore soft at the low end, which
+matters most for the C++ bracket -- 45% of `.text` -- where almost nothing
+else is anchored.
+
+That last point has a consequence for V.34 specifically: the INFO message
+codec V.34's phase 2 cannot run without -- `V34SetINFO0aBits`,
+`V34SetINFO0dBits`, `V34SetINFO1aBits`, `V34GiveINFO0dBits`,
+`V34GiveINFO1aBits`, `V34GiveINFO1dBits`, `V34GiveProbeResults` -- is not in
+the V.34 files at all.  It is the `extern "C"` surface of `VPcmV34Main.cpp`,
+which is the V.90/V.92 side.  About 6 KB, and a prerequisite rather than a
+consequence of the handshake.
