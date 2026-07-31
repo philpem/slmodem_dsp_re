@@ -75,22 +75,34 @@ def span_of(addr, spans, override=()):
 
 
 def symbol_addresses(obj):
+    """{name: (address, kind)} for every defined symbol."""
     out = subprocess.run(["nm", "--defined-only", obj], capture_output=True,
                          text=True).stdout
     addr = {}
     for line in out.splitlines():
         f = line.split()
         if len(f) == 3:
-            addr[f[2]] = int(f[0], 16)
+            addr[f[2]] = (int(f[0], 16), f[1])
     return addr
 
 
 def build_edges(obj, spans, override=()):
-    """{(from_span, to_span): {(caller, callee), ...}}"""
+    """({(from_span, to_span): {(caller, callee)}}, {from_span: {(c, t)}})
+
+    The second return is references to *data* -- tables, mostly.  They are not
+    module edges and must not be attributed as if they were: this is an `ld -r`
+    object, so every section starts at zero and a `.rodata` address means
+    nothing when compared against a `.text` span.  Doing that silently placed
+    `V23_IIR_FILT` in the Bell 103 bracket, three hundred kilobytes from where
+    it lives.  A coefficient table's owning TU comes from the STT_FILE order in
+    the symbol table instead, which is a different question and answered by
+    tumap.py.
+    """
     text = subprocess.run(["objdump", "-dr", "-j", ".text", obj],
                           capture_output=True, text=True).stdout
     addr = symbol_addresses(obj)
     edges = {}
+    data = {}
     here = None
     here_span = None
     for line in text.splitlines():
@@ -108,11 +120,15 @@ def build_edges(obj, spans, override=()):
             continue
         if target not in addr:
             continue            # an import: not a module edge
-        to_span = span_of(addr[target], spans, override)
+        where, kind = addr[target]
+        if kind not in "Tt":
+            data.setdefault(here_span, set()).add((here, target))
+            continue
+        to_span = span_of(where, spans, override)
         if to_span is None or to_span == here_span:
             continue
         edges.setdefault((here_span, to_span), set()).add((here, target))
-    return edges
+    return edges, data
 
 
 def main():
@@ -135,7 +151,7 @@ def main():
         span, _, name = spec.partition("=")
         lo, _, hi = span.partition(":")
         override.append((int(lo, 0), int(hi, 0), name or span))
-    edges = build_edges(args.obj, spans, override)
+    edges, data = build_edges(args.obj, spans, override)
 
     if not args.span:
         counts = {}
@@ -176,6 +192,12 @@ def main():
             if len(pairs) > args.examples:
                 print("        ... and %d more" % (len(pairs) - args.examples))
         print()
+        pairs = sorted(data.get(label, ()))
+        if pairs:
+            print("  READS (data, so no span -- see the note in build_edges):")
+            for caller, target in pairs:
+                print("        %s -> %s" % (caller, target))
+            print()
         print("  NEEDED BY (calls into this span):")
         rows = sorted((a, pairs) for (a, b), pairs in edges.items()
                       if b == label)
