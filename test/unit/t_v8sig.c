@@ -39,6 +39,7 @@ extern void ref_v8_fskdemodulate(struct v8 *v);
 extern void ref_v8_V21_Init(struct v8 *v, short ch, short ans);
 extern int ref_V8agc(struct v8 *v);
 extern int ref_v8_rxinit(struct v8 *v);
+extern void ref_checkSignalStability(struct v8 *v);
 
 static struct v8 obj_a, obj_b;
 
@@ -704,6 +705,53 @@ main(void)
 		diff_eq_int("the gain moved (%ld)", adapted > 0, 1, adapted);
 		diff_eq_int("saturation happened (%ld)", clipped > 0, 1,
 			    clipped);
+	}
+	rc |= diff_end();
+
+	diff_begin("checkSignalStability");
+	{
+		long stable = 0, reset = 0;
+
+		for (k = 0; k < 40; k++) {
+			int step;
+
+			fill(&obj_a, sizeof(obj_a), 9600u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			obj_a.rx.f84 = obj_b.rx.f84 = (short)(k * 25);
+			obj_a.rx.f86 = obj_b.rx.f86 = (short)(400 + k * 90);
+			obj_a.rx.f88 = obj_b.rx.f88 = (short)(k * 24);
+			obj_a.rx.f8a = obj_b.rx.f8a = 0;
+			obj_a.rx.f1c = obj_b.rx.f1c = (short)(400 + k * 90);
+
+			/*
+			 * Hold the gain steady for a while, then move it
+			 * enough to break the tolerance, so both the settling
+			 * and the reset paths run.
+			 */
+			for (step = 0; step < 400; step++) {
+				if (step == 300) {
+					obj_a.rx.f1c = (short)(obj_a.rx.f1c * 2);
+					obj_b.rx.f1c = obj_a.rx.f1c;
+				}
+				ref_checkSignalStability(&obj_a);
+				checkSignalStability(&obj_b);
+				diff_eq_int("f84 (%ld)", obj_b.rx.f84,
+					    obj_a.rx.f84, k);
+				diff_eq_int("f86 (%ld)", obj_b.rx.f86,
+					    obj_a.rx.f86, k);
+				diff_eq_int("f88 (%ld)", obj_b.rx.f88,
+					    obj_a.rx.f88, k);
+				diff_eq_int("stable (%ld)", obj_b.rx.f8a,
+					    obj_a.rx.f8a, k);
+				if (obj_a.rx.f8a)
+					stable++;
+				if (obj_a.rx.f88 == 0)
+					reset++;
+			}
+			whole(k);
+		}
+		diff_eq_int("the line settled (%ld)", stable > 0, 1, stable);
+		diff_eq_int("and was reset (%ld)", reset > 0, 1, reset);
 	}
 	rc |= diff_end();
 

@@ -172,3 +172,49 @@ V8agc(struct v8 *v)
 
 	return v8_agcadapt(v);
 }
+
+void
+checkSignalStability(struct v8 *v)
+{
+	struct v8_rx *r = &v->rx;
+	int elapsed = (unsigned short)r->f84 + 4;
+	int settled;
+	int delta;
+
+	if ((short)elapsed > V8_STABLE_PERIOD) {
+		/*
+		 * Time to refresh the reference.  Note that the comparison
+		 * below then measures the gain against the value just taken
+		 * from it, so it is always zero on this pass -- the original
+		 * does the store first and the arithmetic afterwards.
+		 */
+		r->f84 = 0;
+		r->f86 = r->f1c;
+	} else {
+		r->f84 = (short)elapsed;
+	}
+
+	/*
+	 * The relative change, in Q14.  A zero reference would divide by zero
+	 * in the original; nothing reaches it, because the gain is only ever
+	 * this function's reference after having been non-zero.
+	 */
+	if (r->f86 == 0)
+		delta = 0;
+	else
+		delta = (short)((((int)r->f1c - r->f86) << 14) / r->f86);
+
+	if (delta < 0)
+		delta = -(short)delta;
+
+	if ((short)delta > V8_STABLE_TOLERANCE) {
+		r->f88 = 0;
+		r->f8a = 0;
+		return;
+	}
+
+	settled = (unsigned short)r->f88 + 4;
+	r->f88 = (short)settled;
+	if ((short)settled > V8_STABLE_PERIOD)
+		r->f8a = 1;
+}

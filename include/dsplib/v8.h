@@ -626,6 +626,21 @@ int v8_agcadapt(struct v8 *v);
 int V8agc(struct v8 *v);
 
 /*
+ * Watch the AGC's gain and decide when it has settled.
+ *
+ * Every call advances two counters by four.  The first sets how often the
+ * reference is refreshed; between refreshes the gain is compared against it,
+ * and a relative change of more than about five percent resets the second
+ * counter.  When the second counter survives long enough the line is called
+ * stable, which is what the handshake waits for before believing anything it
+ * hears.
+ */
+#define V8_STABLE_PERIOD	0x3bf	/* counter limit, stepped by four */
+#define V8_STABLE_TOLERANCE	0x333	/* Q14: about five percent     */
+
+void checkSignalStability(struct v8 *v);
+
+/*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
  * oscillator, with the amplitude negated every V8_ANSAM_REVERSAL blocks --
  * which is the periodic phase reversal that distinguishes ANSam from a plain
