@@ -274,6 +274,16 @@ void v8_TONEq_init(struct v8 *v);
 /* Arm the ANSam phase-reversal detector. */
 void v8_phase_rev_init(struct v8_phase_rev *pr);
 
+/*
+ * Reverse the eight bits of a byte.
+ *
+ * V.8 transmits its octets least significant bit first, so every byte of a
+ * CM or JM sequence passes through here on its way out.  The original does it
+ * as two table lookups on the nibbles, with the halves swapped -- reversing
+ * each nibble and exchanging them is the same as reversing all eight bits.
+ */
+unsigned char charFlip(unsigned char b);
+
 short v8_mpyint(short a, short b);
 short v8_absfn(short x);
 short v8_cosread(unsigned char phase);

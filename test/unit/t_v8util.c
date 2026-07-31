@@ -32,6 +32,44 @@ extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2,
 				short a3, short a4, short a5, short a6,
 				short a7);
 extern void ref_v8_V21_Init(struct v8 *v, short channel, short answerer);
+extern unsigned char ref_charFlip(unsigned char b);
+
+/* Reverse eight bits the slow, obvious way, to check the table against. */
+static unsigned char
+reverse_bits(unsigned char b)
+{
+	unsigned char r = 0;
+	int i;
+
+	for (i = 0; i < 8; i++)
+		if (b & (1u << i))
+			r |= (unsigned char)(0x80u >> i);
+	return r;
+}
+
+static int
+t_charflip(void)
+{
+	int i;
+
+	diff_begin("charFlip: bit reversal, exhaustive");
+	for (i = 0; i < 256; i++) {
+		unsigned char b = (unsigned char)i;
+
+		diff_eq_int("charFlip(%ld)", charFlip(b), ref_charFlip(b), i);
+		/*
+		 * Independently of the blob: it really is a bit reversal, not
+		 * some other permutation that happens to agree with the
+		 * table.  Both sides read the same table, so agreeing with
+		 * each other proves nothing about what the table means.
+		 */
+		diff_eq_int("charFlip(%ld) reverses the bits", charFlip(b),
+			    reverse_bits(b), i);
+		diff_eq_int("charFlip is an involution (%ld)",
+			    charFlip(charFlip(b)), i, i);
+	}
+	return diff_end();
+}
 
 /*
  * The initialisers write scattered fields of a 3780-byte object, so the only
@@ -499,6 +537,7 @@ main(void)
 	rc |= t_crc();
 	rc |= t_copycoeff();
 	rc |= t_dftenergy();
+	rc |= t_charflip();
 	rc |= t_inits();
 	return rc;
 }
