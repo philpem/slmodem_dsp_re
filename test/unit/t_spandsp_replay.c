@@ -177,6 +177,52 @@ main(void)
 	diff_eq_int("same clean prefix (%ld)", clean_a, clean_b, 0);
 	rc |= diff_end();
 
+	/*
+	 * The mechanism.  Lock is lost because the AGC's gain goes to ZERO
+	 * for one block, silencing it -- and the gain goes to zero because
+	 * FPM_div returns a zero reciprocal for that block's level estimate.
+	 * That is D4, the out-of-range table read, firing in earnest.
+	 *
+	 * Replayed here rather than inferred: the whole capture is run again
+	 * and every block whose AGC gain came out zero is counted.
+	 */
+	diff_begin("spandsp replay: the mechanism is D4");
+	{
+		struct b103fp *c = make_rx();
+		static short in[256];
+		static unsigned short out[64];
+		int zero_gain = 0, first_zero = -1, blocks = 0;
+
+		if (c != 0) {
+			for (off = 0; off + 160 <= nsamp; off += 160) {
+				memcpy(in, pcm + off, 160 * sizeof(short));
+				ref_DemodDataB103(c, in, out, 160);
+				if (c->dsp->agc.mult == 0) {
+					zero_gain++;
+					if (first_zero < 0)
+						first_zero = blocks;
+				}
+				blocks++;
+			}
+			printf("  AGC gain hit zero on %d of %d blocks, "
+			       "first at block %d\n",
+			       zero_gain, blocks, first_zero);
+			printf("  (its level estimate normalises to mantissa "
+			       "0xff80, index 128 -- one past the table)\n");
+
+			diff_eq_int("the AGC gain reaches zero (%ld)",
+				    zero_gain > 0, 1, zero_gain);
+			/*
+			 * The first zero must coincide with the loss of lock.
+			 * At six bits a block, bit 229 is block 38.
+			 */
+			diff_eq_int("it happens where lock is lost (%ld)",
+				    first_zero, clean_a / 6, 0);
+			ref_B103FP_delete(c);
+		}
+	}
+	rc |= diff_end();
+
 	ref_B103FP_delete(a);
 	ref_B103FP_delete(b);
 	return rc;

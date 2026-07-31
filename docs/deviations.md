@@ -137,7 +137,7 @@ side fails the build rather than passing silently.
 
 ---
 
-## D4 — `FPM_div` reads past its table and returns a zero reciprocal 🐛
+## D4 — `FPM_div` reads past its table and returns a zero reciprocal 🐛 **CONFIRMED HARMFUL**
 
 **Module** `src/dsp/fpm_div.c` · original `fpm_div.c`, `.text 0x0a6bf0`,
 table at `.rodata 0x0c6a0`

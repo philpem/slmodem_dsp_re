@@ -2366,6 +2366,28 @@ Ruled out along the way:
   oscillator, bandpass and discriminator are all correct.
 - **Not nondeterminism.** Identical across runs.
 
+### RESOLVED: it is D4, firing in the AGC
+
+Both questions below are now answered; the text is kept because the route to
+the answer is the useful part.
+
+**Attribution:** the blob does exactly the same thing. `gen_spandsp_capture`
+freezes the signal and `t_spandsp_replay` runs it through both — 116,954
+agreeing checks, and both lose lock at the same bit.
+
+**Mechanism:** at the failing block the AGC's gain becomes **zero** and the
+block is multiplied to silence. Its level estimate, 4088, normalises to
+mantissa `0xff80` — the value that indexes one past `FPM_div`'s table, which
+returns a zero reciprocal. That is **D4**, previously filed as a defect that
+could fire and now shown to drop a call. It fires on 46 of the 700 blocks in
+this capture.
+
+**And the power-of-two pattern was the clue, not a red herring.** Scaling the
+input by 2^k scales the level estimate by 2^k, which leaves the normalised
+mantissa *identical* — so every power-of-two gain re-triggers the same
+out-of-range index and every other gain escapes it. A failure that survives a
+factor of eight in level but not a factor of 1.25 was never a level problem.
+
 ### What this is not evidence of
 
 **It is not a reconstruction bug.** Every module on this path is bit-exact
