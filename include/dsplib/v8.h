@@ -361,7 +361,9 @@ struct v8 {
 	short			f9d4;		/* +0x9d4 */
 	short			f9d6;		/* +0x9d6 */
 	short			f9d8;		/* +0x9d8 */
-	unsigned char		pad9da[0xa3e - 0x9da];
+	unsigned char		pad9da[0xa3c - 0x9da];
+	/* The bit currently going out, as v8_fskmodulate wants it. */
+	short			fa3c;		/* +0xa3c */
 
 	short			fa3e;		/* 0x10     +0xa3e */
 	short			fa40;		/* 0x200    +0xa40 */
