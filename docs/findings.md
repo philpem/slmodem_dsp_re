@@ -2214,3 +2214,91 @@ was for, the code that set it is not here.
 `struct dp`'s `status` is not a bit set. It holds a `DPSTAT_*` scalar, assigned
 0, 1 or 4 by `b103_process`. No other bit-set field has appeared so far;
 re-check when V.22 and V.32 are reached.
+
+## 39. The resampler filter audit — the LSB residual is quantisation, not design
+
+`rcfilter.py` reports each bank's fit as a maximum coefficient error in LSB,
+and that number has been quoted throughout this project as if it measured
+something. It does not measure what it appears to. Audited with
+`tools/filteraudit.py`; four questions, four measurements.
+
+### 1. What six LSB actually costs
+
+Mode 2's prototype, 217 taps, fitted at beta 7.25 / fc 4498 Hz, max error
+6 LSB and only 20 of 217 coefficients exact. In the numbers a filter designer
+reads:
+
+| design | passband ripple | stopband floor |
+|---|--:|--:|
+| **the original** | 0.0125 dB | **−73.5 dB** |
+| our fit, quantised to Q14 | 0.0030 dB | **−77.4 dB** |
+| our fit, unquantised | 0.0029 dB | −84.3 dB |
+| response-fitted, unquantised | 0.0174 dB | **−108.8 dB** |
+
+Two things fall out.
+
+**Our fit is already better than the original** — 3.9 dB more stopband
+rejection and four times less passband ripple. The 6 LSB is not a deficiency
+to be chased; it is the distance between two designs that both sit near the
+Q14 floor.
+
+**Quantisation, not design, is the binding constraint.** The response-fitted
+design achieves −108.8 dB unquantised and −79.0 dB in Q14 — thirty decibels
+lost to fourteen bits. Any effort spent making the *design* better than about
+−80 dB is wasted unless the coefficient width changes with it.
+
+Stopband figures here start at 1.35× the −6 dB point, the allowance
+`rcfilter.measure` already used. Measuring from the binding Nyquist instead
+puts the transition band in the window and reports about −20 dB for every
+filter, original included — worth stating because the first version of this
+audit did exactly that and the number looked alarming.
+
+### 2. Rounding mode: ruled out
+
+| mode | max err | exact |
+|---|--:|--:|
+| half-up | 6 | 20/217 |
+| truncate | 6 | 16/217 |
+| floor | 6 | 22/217 |
+| half-even | 6 | 20/217 |
+
+All four give the same maximum error. The library's other tables truncate
+(the sine, sqrt and div tables all do), so truncation was the obvious
+hypothesis; it is not the explanation. Stop looking here.
+
+### 3. Per-branch normalisation: ruled out
+
+Mode 2's six polyphase branches sum to `16384, 16382, 16383, 16384, 16383,
+16382` — a spread of 2 about a mean of 16383. Had the designer normalised
+each branch to unity DC gain they would all be 16384. They are not, so the
+prototype was designed and quantised as one filter and the branches inherited
+whatever the rounding gave. The whole-prototype normalisation the tool already
+does is the right model.
+
+### 4. Objective: it depends what the fit is for, and the tool should say
+
+Minimising response error instead of coefficient error picks a genuinely
+different design — beta 10.6 rather than 7.25 — that is 24 dB better
+unquantised and 1.6 dB better in Q14, but sits 180 LSB from the original.
+
+So the two objectives answer different questions:
+
+- **Reproducing** the original — which is what `docs/coefficients.md` is for —
+  wants coefficient distance. 180 LSB is not the same filter.
+- **Regenerating** at another sample rate — which is the project's actual goal
+  for phase 12 — wants response. There is no original to be near.
+
+The tool currently does the first and is documented as if it did the second.
+That is the one real defect this audit found, and it is a documentation and
+interface problem rather than a numerical one.
+
+### What changes
+
+- `filteraudit.py` is added, and reports ripple and stopband alongside the LSB
+  figure. An LSB count without the quantisation floor beside it is not
+  interpretable.
+- The "our design is ~9.6 dB better" note recorded earlier was measured
+  loosely; the careful figure is **3.9 dB**, and it is the *quantised*
+  comparison that matters.
+- Phase 12 should regenerate with the response objective, not by fitting the
+  existing coefficients and rescaling them.
