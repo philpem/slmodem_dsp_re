@@ -41,7 +41,12 @@ struct fpm_tone_cfg {
 				 *       the object's own kernel by create   */
 	short len;		/* +0x14 its length, and the detector's tap
 				 *       count                               */
-	short pad16[5];		/* +0x16 .. +0x1e                            */
+	short r16[3];		/* +0x16 .. +0x1a                            */
+	short f1c;		/* +0x1c NOT padding: 16384 in the built-in
+				 *       config.  Nothing reconstructed reads
+				 *       it yet -- FPM_TONE_find_rev and
+				 *       _kill are the candidates.          */
+	short f1e;		/* +0x1e NOT padding: 40                     */
 	short extra;		/* +0x20 added to the history buffer's length */
 	short pad22;
 };

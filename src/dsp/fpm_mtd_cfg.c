@@ -14,9 +14,9 @@
 #include "dsplib/fpm_mtd.h"
 
 const struct fpm_mtd_cfg FPM_MTD_CFG_data = {
-	0,	/* +0x00 coefficient bank -- see note above */
-	2,	/* +0x04 tone count */
-	24576,	/* +0x06 */
-	246,	/* +0x08 */
-	0	/* +0x0a */
+	.coeff = 0,		/* deliberately NULL -- see the note above */
+	.tones = 2,
+	.ratio = 24576,		/* 0.75 in Q15 */
+	.min_level = 246
+	/* f0a is zero */
 };

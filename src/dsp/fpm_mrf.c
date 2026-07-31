@@ -148,9 +148,8 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
  * a usable converter.
  */
 const struct fpm_mrf_cfg FPM_MRF_CFG_data = {
-	9,	/* +0x00 branches  */
-	10,	/* +0x02 decimate  */
-	0,	/* +0x04 coeff     */
-	270,	/* +0x08 taps      */
-	0	/* +0x0c aux       */
+	.branches = 9,
+	.decimate = 10,
+	.taps = 270
+	/* coeff and aux are NULL: every caller supplies its own filter */
 };

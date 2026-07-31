@@ -97,7 +97,7 @@ FPM_FSM_delete(struct fpm_fsm *state)
  * configuration it builds, so this is only what an unpatched caller gets.
  */
 const struct fpm_fsm_cfg FPM_FSM_CFG_data = {
-	{ 1850, 1650 },	/* +0x00 space, mark */
-	24,		/* +0x04 300 baud at 7200 Hz */
-	32767		/* +0x06 full scale */
+	.freq = { 1850, 1650 },	/* space, mark -- V.21's mark is the lower */
+	.samples_per_sym = 24,	/* 300 baud at 7200 Hz */
+	.scale = 32767
 };

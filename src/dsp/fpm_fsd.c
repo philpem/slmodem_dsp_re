@@ -235,16 +235,14 @@ FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
  * (for V.21) `high_bit`.
  */
 const struct fpm_fsd_cfg FPM_FSD_CFG_data = {
-	0,	/* +0x00 fir          */
-	0,	/* +0x04 fir_taps     */
-	0,	/* +0x06 delay        */
-	0,	/* +0x08 iir          */
-	0,	/* +0x0c iir_len      */
-	10,	/* +0x0e slice_level  */
-	1,	/* +0x10 high_bit     */
-	8,	/* +0x12 bit_samples  */
-	6,	/* +0x14 max_bits     */
-	160,	/* +0x16 trace_len    */
-	0,	/* +0x18 f18          */
-	0	/* +0x1a pad          */
+	.slice_level = 10,
+	.high_bit = 1,
+	.bit_samples = 8,
+	.max_bits = 6,
+	.trace_len = 160
+	/*
+	 * fir, fir_taps, delay, iir and iir_len are all zero: the caller
+	 * supplies both filters.  B103FP_create patches exactly those five,
+	 * plus high_bit for V.21.
+	 */
 };

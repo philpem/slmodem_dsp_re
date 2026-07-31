@@ -34,19 +34,24 @@ const short ToneLPF[53] = {
  * whole point.
  */
 const struct fpm_tone_cfg FPM_TONE_CFG_data = {
-	2100,	/* +0x00 frequency, Hz            */
-	27852,	/* +0x02 output scale, Q15        */
-	450,	/* +0x04 reversal period, 8-sample units */
-	24576,	/* +0x06 detector ratio, 0.75 in Q15 */
-	328,	/* +0x08                          */
-	1,	/* +0x0a detector minimum level   */
-	30720,	/* +0x0c notch pole radius, 0.9375 in Q15 */
-	0,	/* +0x0e                          */
-	ToneLPF,	/* +0x10 source waveform  */
-	53,	/* +0x14 length: 53 taps          */
-	{ 0, 0, 0, 16384, 40 },	/* +0x16 .. +0x1e */
-	0,	/* +0x20 extra length             */
-	0	/* +0x22                          */
+	.freq = 2100,		/* the ITU-T V.25 answer tone */
+	.scale = 27852,
+	.rev_period = 450,	/* 450 ms at 8 kHz, the V.25 figure */
+	.ratio = 24576,		/* 0.75 in Q15 */
+	.f08 = 328,
+	.min_level = 1,
+	.damp = 30720,		/* notch pole radius, 0.9375 in Q15 */
+	.src = ToneLPF,
+	.len = 53,
+	/*
+	 * These two were carried as `pad16[5]` and are not padding -- the
+	 * positional form hid that, and converting to designated initialisers
+	 * dropped them, which the differential test caught immediately.  That
+	 * is the argument for this form in one line.
+	 */
+	.f1c = 16384,
+	.f1e = 40
+	/* r16 and extra are zero */
 };
 
 const short *const FPM_TONE_CFG = (const short *)&FPM_TONE_CFG_data;

@@ -51,13 +51,16 @@ extern void modem_dp_deregister(int id, void *op);
  * is why one ops table is registered under both.
  */
 struct dp_operations b103_ops = {
-	"b103",				/* +0x00 name                     */
-	0,				/* +0x04 use_count                */
-	b103_create,			/* +0x08                          */
-	b103_delete,			/* +0x0c                          */
-	(int (*)(struct dp *, void *, void *, int))dp_wrapper_run,
-					/* +0x10 process = the wrapper    */
-	0				/* +0x14 hangup, unused           */
+	.name = "b103",
+	.create = b103_create,
+	.destroy = b103_delete,
+	/*
+	 * `process` is dp_wrapper_run, NOT b103_process.  The core always
+	 * calls the wrapper; the wrapper calls b103_process at the datapump's
+	 * own rate and fragment size once it has buffered and rate-converted.
+	 */
+	.process = (int (*)(struct dp *, void *, void *, int))dp_wrapper_run
+	/* use_count and hangup are zero */
 };
 
 int

@@ -43,14 +43,13 @@ static const short AGC_DEF_ALPHA[2] = { 16384, 32604 };
 static const short AGC_DEF_BETA[2] = { 16384, 1638 };
 
 const struct fpm_agc_cfg AGCb103_CFG_data = {
-	16384,		/* +0x00 ref_level: output settles at 8192      */
-	10,		/* +0x02 acquire_level                          */
-	80,		/* +0x04 squelch_level                          */
-	1000,		/* +0x06 f06, not read by fpm_agc               */
-	1,		/* +0x08 f08, not read by fpm_agc               */
-	36,		/* +0x0a block_len -- matches FPM_rms's 1/36    */
-	AGC_DEF_ALPHA,	/* +0x0c                                        */
-	AGC_DEF_BETA,	/* +0x10                                        */
-	158,		/* +0x14 f14, not read by fpm_agc               */
-	0		/* +0x16 pad                                    */
+	.ref_level = 16384,	/* output settles at half this: 8192 */
+	.acquire_level = 10,
+	.squelch_level = 80,
+	.f06 = 1000,
+	.f08 = 1,
+	.block_len = 36,	/* matches FPM_rms's 1/36 scaling */
+	.alpha = AGC_DEF_ALPHA,
+	.beta = AGC_DEF_BETA,
+	.f14 = 158
 };
