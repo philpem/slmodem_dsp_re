@@ -536,3 +536,119 @@ Not listed as a defect because nothing misbehaves — it is an unused table.
 Recorded because "reconstruct everything the object defines" and "reconstruct
 everything the modem uses" give different answers here, and this tree follows
 the first. See finding 43.
+
+---
+
+## D11 — the calling tone's phase scaling is out by a factor of eight 🐛
+
+**Status:** reproduced, not fixed.
+
+`GenerateCallingTone` keeps a phase accumulator that wraps at 0x4000 and
+indexes `TONE_read`, whose cycle is 0x800, with
+
+```
+    7e0b0:  movswl 0x0(%ebp),%edx     ; phase, 0..16383
+    7e0b8:  add    $0x20,%edx          ; round to nearest
+    7e0bb:  sar    $0x6,%edx           ; -> 0..256
+```
+
+16384/2048 is 8, so the shift should be 3. At 6 the index only ever reaches
+256, so the generator sweeps the first eighth of a cosine — 0° to 45° — and
+back. The output never goes negative.
+
+**Measured**, at level −12 over 4096 samples:
+
+```
+    mean 29347 of a 32540 peak      range 23007 .. 32540
+    negative samples 0 of 4096      AC rms 2760, 9.4% of the mean
+```
+
+So 90% of the amplitude is DC, which a line transformer removes, leaving a
+tone about 20 dB weaker than intended and shaped like a sawtooth rather than a
+sine. The repetition rate is unaffected — the accumulator still wraps at the
+right interval — which is why this is easy to miss.
+
+**Reachable?** Only when `GetCallingToneFlag` (parameter 27) is 2, which is a
+per-country homologation setting. Most configurations do not send a calling
+tone at all.
+
+**Not fixed.** Unlike D4 this does not stop a call completing; it degrades an
+optional courtesy signal. `t_callingtone` asserts the measurements above so a
+later edit cannot change the output silently.
+
+---
+
+## D12 — the calling tone's period counter double-counts across a transition 🐛
+
+**Status:** reproduced, not fixed.
+
+The generator clamps its per-iteration bound against the block size rather
+than against the samples remaining in the block:
+
+```
+    end = min(remaining, count)      /* an index bound, not a length */
+    ...fill from i to end...
+    remaining -= end                 /* but only end - i were written */
+```
+
+On the first pass `i` is zero and the two agree. After a cadence transition
+inside a block, `i` is not zero, and the next period is charged for the
+samples the previous one already emitted.
+
+**Measured**, tone burst 5760 samples, silence 16800:
+
+```
+    block 64 (divides 5760)      silence 16800 samples   correct
+    block 50 (leaves 10 over)    silence 16790 samples   10 short
+```
+
+The shortfall is exactly the overhang of the previous burst, so the error is
+bounded by the block size — under 0.3% of a period at the 48-sample blocks
+`call_run` uses. The burst that *ends* is always correct; it is the one that
+follows that is clipped.
+
+**Not fixed**, and asserted by `t_callingtone`.
+
+---
+
+## D13 — the calling tone's level control does almost nothing 🐛
+
+**Status:** reproduced, not fixed.
+
+`ResetCallingTone` turns a level into an amplitude with
+
+```
+    amplitude = FP_Pow((level * 154791) >> 14)
+```
+
+`FP_Pow` is exp() in Q14 (finding 9), so turning decibels into a linear ratio
+wants a multiply by ln(10)/20, which is 1886 in Q14 — `FP_Pow(level * 1886)`
+would have been right. What is there is `level * 9.45`, about 200 times too
+small.
+
+**Measured** across the whole range of the signed char it takes:
+
+```
+    level -128   amplitude 15216      0.93 of full scale
+    level  -12   amplitude 16270      0.99
+    level    0   amplitude 16384      1.00
+    level  127   amplitude 17626      1.08
+```
+
+1.4 dB from end to end, where the argument spans 255 dB. Asking for −12 dB
+gives 0.99 of full scale instead of 0.25.
+
+The visible consequence is an overflow. The sample computation is
+
+```
+    buf[i] = (short)((amplitude * TONE_read(...)) >> 13)
+```
+
+which doubles — correct if `amplitude` were a proper fraction, but it is
+always near 16384, so the product reaches 32768 and wraps to −32768 in the
+16-bit store. At level 0 that happens on 40 samples in every 4096; at −12 it
+does not happen at all, which is what identifies it as an overflow rather
+than a scaling choice.
+
+**Not fixed**, and both the level range and the overflow are asserted by
+`t_callingtone`.

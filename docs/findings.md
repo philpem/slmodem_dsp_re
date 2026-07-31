@@ -2539,3 +2539,60 @@ file static in `Callprog.c`. The measured passbands match the names exactly --
 so they are a coherent bank that nothing uses. They are reproduced because
 they are part of the object's published surface, and because being able to
 compare them word for word against the blob is free.
+
+---
+
+## 44. The parameter numbering is recoverable from slmodemd
+
+`modem_get_param(modem, n)` appears in the object as a bare immediate, and
+until now every one has been an unknown. slmodemd still ships the enum they
+index — `enum MODEM_PARAMETER_NAMES` in `modem_param.h` — and the names are
+specific enough to read the call-progress code almost directly:
+`GetMinBusyCadenceOnTime`, `GetDialToneCallProgressFilterIndex`,
+`GetRingbackDetectionCyclesNumber`, `GetCallingToneFlag`.
+
+The whole table is in `docs/parameters.md` and the constants in
+`include/dsplib/modem_params.h`. Sixteen of them are per-country homologation
+settings, carried in `struct homolog_params`.
+
+**There is one trap.** The enum contains an alias, `MDMPRM_RATE =
+MDMPRM_RX_RATE`, and the enumerator *after* an alias continues from the
+alias's value plus one. Index it as if the alias consumed nothing and
+everything from `MDMPRM_TX_RATE` onward shifts down by one — which is
+self-consistent, plausible, and wrong. Four uses in the object pin it:
+
+```
+    dp_param_get           10  MDMPRM_DPRUNTIME       (tested in phase 1)
+    call_create            7   MDMPRM_DIALSTR         (checks it starts with a digit)
+    call_create            17  GetPulseDialMakeTime
+    CALLPROG_Dial          27  GetCallingToneFlag     (gates the calling tone)
+```
+
+This also settles what `CALLPROG_Create`'s configuration block is for, and it
+should make cadence.c substantially easier: its magic numbers are named.
+
+## 45. CallingTone.c was written for 9600 Hz and is used at 8000
+
+Three of its constants only make sense at 9600:
+
+```
+    phase step 2219 of 16384    1300.2 Hz at 9600   V.25 calling tone exactly
+                                1083.7 Hz at 8000
+    on  5760 samples            0.60 s at 9600      V.25 wants 0.5 to 0.7
+                                0.72 s at 8000      outside it
+    off 16800 samples           1.75 s at 9600      V.25 wants 1.5 to 2.0
+                                2.10 s at 8000      outside it
+```
+
+Call progress runs at a fixed 8000 (finding 41), so all three land outside
+V.25's tolerances, and the tone is 1084 Hz rather than 1300.
+
+This is the first module found to carry a rate assumption that the code around
+it does not satisfy, and it is worth noting *how* it was found: not by reading
+the module, which is short and looks fine, but by asking what its magic
+numbers would mean at each of the rates the library uses. 2219/16384 is a
+meaningless constant until it is 1300.2 Hz.
+
+Whether it was ever right is unknowable from the object alone. What is certain
+is that as shipped the calling tone is the wrong frequency with the wrong
+cadence, on top of being the wrong shape (D11) at the wrong level (D13).

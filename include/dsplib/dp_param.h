@@ -6,13 +6,10 @@
 #define DSPLIB_DP_PARAM_H
 
 /*
- * Parameter index for the dp_runtime block, from slmodemd's
- * enum MODEM_PARAMETER_NAMES (modem_param.h).  Duplicated as a bare constant
- * because the reconstruction does not include slmodemd's headers, and the
- * value is fixed by the existing ABI -- modem.o is already compiled against
- * it.
+ * The whole parameter numbering now lives in one place; MDMPRM_DPRUNTIME used
+ * to be defined here alone, back when it was the only index anything needed.
  */
-#define MDMPRM_DPRUNTIME 10
+#include "dsplib/modem_params.h"
 
 /* Fetch the modem's dp_runtime pointer. */
 void *dp_param_get(void *modem);
