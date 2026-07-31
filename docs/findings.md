@@ -3338,3 +3338,47 @@ string can make the modem sit silent holding the line.
 
 That completes the reading of Dialer.c. Every parameter `GetDialerConfig`
 fetches is now accounted for by something that uses it.
+
+---
+
+## 58. The DTMF generator, and how accurate it is
+
+The tone half of `DialerProgress`'s dial state is a two-oscillator DTMF
+generator, and its tables are the standard ones:
+
+```
+    rows     .rodata+0x5e72    697  770  852  941
+    columns  .rodata+0x5e68   1209 1336 1477 1633
+```
+
+which is exactly the keypad `GetNextDigitAndReturnNextState` encodes into
+`row` and `col` (finding 52's successor -- the matrix is in the task notes).
+So the two halves of Dialer.c meet here: one turns a character into a grid
+position, the other turns a grid position into two frequencies.
+
+Each frequency becomes a phase increment for a 14-bit accumulator:
+
+```
+    increment = (hertz * 16777) >> 13
+```
+
+16777/8192 is 2.04797, and one cycle of a 14-bit accumulator at 8000 Hz is
+16384/8000 = 2.048 increments per hertz. So the constant is that ratio in
+Q13, and the generator uses the same `TONE_read((phase + 32) >> 6)` idiom as
+the calling tone.
+
+### It is accurate, unlike the calling tone
+
+```
+    nominal   697.0   770.0   852.0   941.0  1209.0  1336.0  1477.0  1633.0
+    actual    696.8   769.5   851.6   940.9  1209.0  1335.9  1476.6  1632.8
+    error    -0.03%  -0.06%  -0.05%  -0.01%   0.00%  -0.01%  -0.03%  -0.01%
+```
+
+The worst is 0.06%, against a DTMF tolerance of ±1.5%. Which is worth saying
+plainly next to D11: the *same* phase-accumulator idiom, in the same library,
+written correctly here and wrong in `CallingTone.c` -- where the shift is 6
+rather than 3 and the output is a sawtooth. Whoever wrote this one knew what
+they were doing; the calling tone is not a limitation of the technique.
+
+That completes the decode of Dialer.c.
