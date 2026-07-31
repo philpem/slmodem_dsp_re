@@ -1,10 +1,20 @@
 /*
  * toneiir.h -- Tone IIR: the four-section filter engine.
  *
- * The engine every call-progress filter runs on.  Fixed at four biquad
- * sections, direct form I, Q13, with a rescaling shift between sections.  Its
- * callers hand it one of the designs in cpfiltrs.h or the supervisor's own
- * band filter in callprog_cfg.h.
+ * Two filters live here, sharing a shape and nothing else.
+ *
+ *   _iir_filter_*   a bare four-section biquad cascade.  Copies its
+ *                   coefficients, filters a block in place, returns nothing.
+ *                   CALLPROG_Progress runs every received block through one.
+ *
+ *   toneiir_*       the same cascade with a tone detector bolted on top.
+ *                   Points at its coefficients rather than copying them,
+ *                   takes one sample at a time, and returns a verdict every
+ *                   `interval` samples.  cadence_create builds one.
+ *
+ * Both are fixed at four sections, direct form I, Q13, with a rescaling shift
+ * between sections.  Their callers hand them one of the designs in cpfiltrs.h
+ * or the supervisor's own band filter in callprog_cfg.h.
  *
  * Relationship to the other IIR engine in this library:
  *
@@ -111,5 +121,134 @@ void _iir_filter_delete(struct iir_filter *f);
 
 /* Filter `count` samples in place. */
 void _iir_filter_progress(struct iir_filter *f, int count, short *samples);
+
+/*
+ * ---------------------------------------------------------------------------
+ * toneiir -- the same cascade, plus "is a tone present in that band?"
+ *
+ * The detector is an energy comparison made once every `interval` samples.
+ * Two rectified envelopes are tracked, one on the incoming signal and one on
+ * the filter's output, and at the end of each interval the band is judged to
+ * hold a tone when all four of these hold:
+ *
+ *   band >= input / 4        the band carries at least a quarter of the total
+ *   band >= previous * 0.7   and the previous interval's band envelope
+ *   previous >= band * 0.7   agrees with it to within 30%
+ *   band >= threshold        and there is enough of it to bother with
+ *
+ * The stability pair is what separates a tone from speech: a voice moves more
+ * than 30% in 62 milliseconds and a dial tone does not.
+ */
+
+/* Verdicts from toneiir_progress. */
+#define TONEIIR_UNDECIDED	0	/* mid-interval; nothing to report  */
+#define TONEIIR_ABSENT		1	/* interval ended, no sustained tone */
+#define TONEIIR_PRESENT		2	/* interval ended, tone sustained    */
+
+/*
+ * The configuration, copied whole into the head of the object.  cadence_create
+ * builds one on the stack from `toneiir_get_default_configuration` and then
+ * overwrites everything except `stability`, `status` and `pad`.
+ */
+struct toneiir_cfg {
+	/*
+	 * Pointed at, not copied.  Section s uses a[3*s..3*s+2] and
+	 * b[3*s..3*s+2]; whatever these point at must outlive the filter.
+	 */
+	const short	*a;		/* +0x00  denominator, Q13         */
+	const short	*b;		/* +0x04  numerator, Q13           */
+
+	/*
+	 * How much history to clear at create.  Clamped to 25 there, and read
+	 * for nothing else -- toneiir_progress is hand-unrolled to four
+	 * sections and never looks at them.
+	 */
+	int		n_a;		/* +0x08 */
+	int		n_b;		/* +0x0c */
+
+	/* Samples between verdicts.  500, which is 62.5 ms at 8000 Hz. */
+	short		interval;	/* +0x10 */
+	short		pad12;		/* +0x12 */
+
+	/*
+	 * How closely consecutive intervals must agree for the band envelope
+	 * to count as steady.  Q14; 11467 is 0.7.
+	 */
+	short		stability;	/* +0x14 */
+
+	/*
+	 * Written back as 2 by every verdict, over the 2 already there.  It
+	 * costs a store per interval and changes nothing.
+	 */
+	short		status;		/* +0x16 */
+
+	/*
+	 * Envelope floor.  80 in the template; cadence_create replaces it with
+	 * the country's value from Get_Detection_Threshold_Table.
+	 */
+	int		threshold;	/* +0x18 */
+
+	/*
+	 * How long the tone must persist, in milliseconds.  Converted to a
+	 * count of intervals at create -- 2200 ms becomes 35 intervals.
+	 */
+	int		duration_ms;	/* +0x1c */
+
+	/* Consecutive absent intervals tolerated inside one tone. */
+	int		gap_tolerance;	/* +0x20 */
+
+	/* When zero, a gap shorter than the tolerance resets both counters. */
+	int		keep_on_gap;	/* +0x24 */
+
+	/* Interstage shifts, as for struct iir_filter. */
+	const short	*scales;	/* +0x28 */
+};
+
+struct toneiir {
+	struct toneiir_cfg	cfg;		/* +0x00 */
+	int			n;		/* +0x2c  samples into the interval */
+	short			x[IIR_FILTER_MAX_COEFF];	/* +0x30 */
+	short			y[IIR_FILTER_MAX_COEFF];	/* +0x62 */
+
+	/*
+	 * Rectified envelopes, one-pole, 0.99 old plus 0.01 new.  Reset at
+	 * every verdict, with the band envelope carried into `env_prev` so
+	 * the next interval has something to compare against.
+	 */
+	short			env_in;		/* +0x94  before the filter */
+	short			env_band;	/* +0x96  after it          */
+	short			env_prev;	/* +0x98  last interval's   */
+
+	int			need;		/* +0x9c  intervals required */
+	int			total;		/* +0xa0  intervals counted  */
+	int			run;		/* +0xa4  consecutive absent */
+};
+
+/*
+ * The one configuration the object exports by name.  cadence_create is its
+ * only reference, on a branch that cannot be taken -- see
+ * src/callprog/toneiir.c.
+ */
+extern const struct toneiir_cfg toneiir_configuration_allpass;
+
+/*
+ * Copy the built-in configuration into `dst`, which must have room for one.
+ * Every coefficient pointer in it is to an array of zeros, so the template is
+ * useful only for the numeric fields; a caller is expected to fill in the
+ * filter.  cadence_create does exactly that.
+ */
+void toneiir_get_default_configuration(struct toneiir_cfg *dst);
+
+/* Pass NULL for `st` to allocate, or NULL for `cfg` to take the default. */
+struct toneiir *toneiir_create(struct toneiir *st,
+			       const struct toneiir_cfg *cfg);
+
+void toneiir_delete(struct toneiir *st);
+
+/* Start a fresh interval, keeping the coefficients and the derived count. */
+void toneiir_reset(struct toneiir *st);
+
+/* Feed one sample; returns one of the TONEIIR_* verdicts. */
+int toneiir_progress(struct toneiir *st, short sample);
 
 #endif /* DSPLIB_TONEIIR_H */

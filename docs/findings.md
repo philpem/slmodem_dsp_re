@@ -2637,7 +2637,7 @@ at +0x62, then a group of counters and a threshold at +0x94 onward.
 and `n_b` entirely — the same shape as `_iir_filter_progress`, which is why
 the two live in one file.
 
-### Two things do not add up yet
+### Two things that did not add up, and how they resolved
 
 **The default configuration's filter is all zeros.** The arrays at 0x61cc,
 0x61d6 and 0x61ee are 5, 12 and 12 words of nothing. A filter with a zero
@@ -2659,10 +2659,25 @@ to establish, and it should be settled before any of toneiir is reconstructed
 — building it against the wrong reading of these two tables would be a lot of
 work to unwind.
 
+### What the interval count proves
+
+`toneiir_create` turns the configured duration into a count of intervals with
+
+```
+    need = (GetFP_Value(8, interval) * duration_ms) >> 14
+```
+
+`GetFP_Value(a, b)` is `ceil(a << 14 / b)`, so this is
+`duration_ms * 8 / interval` -- and the 8 is **samples per millisecond**.
+2200 ms at 500 samples an interval gives 35. The literal is a third
+independent statement that this module runs at 8000 Hz, alongside
+`call_create`'s resampler choices and `CALLPROG_Create`'s `imul $0x1f40`.
+
 (Recorded because the relocation query that produced this nearly went the
 other way: a malformed `readelf -r` filter reported *no* relocations in the
 region, which would have made the configuration look like a struct of plain
 integers with three implausibly similar values around 25000. Those "values"
 are addresses. Anything that looks like a suspiciously narrow range of large
 integers in this object is worth re-checking against the relocation table
-before it is interpreted.)
+before it is interpreted -- and see D10, where the same class of mistake was
+made a second time.)

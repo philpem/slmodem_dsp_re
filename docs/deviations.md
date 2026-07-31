@@ -704,3 +704,36 @@ disables the generator, so the amplitude is computed whether or not it is used.
 
 **Not fixed**, and both the level range and the overflow are asserted by
 `t_callingtone`.
+
+---
+
+## D14 — `toneiir_create` reads its envelope before writing it 🐛 💤
+
+**Status:** reproduced, harmless.
+
+`toneiir_create` finishes by performing `toneiir_reset`'s body inline, and
+that body's first act is to carry the current band envelope into `env_prev`:
+
+```
+    7c37a:  movzwl 0x96(%ebx),%edi     ; edi = env_band
+    7c38c:  mov    %ax,0x96(%ebx)      ; env_band = 0
+    7c398:  mov    %di,0x98(%ebx)      ; env_prev = the old env_band
+```
+
+In `toneiir_reset` that is exactly right and is the whole point: the interval
+just finished becomes the one the next interval is compared against. In
+`toneiir_create` there is no interval just finished. On the allocating path
+`env_band` is whatever `sysdep_malloc` returned, and that value lands in
+`env_prev`, where the first verdict's stability test compares against it.
+
+**Consequence:** at most one wrong verdict, 62.5 ms after the filter is built,
+and only if the junk happens to fall in the narrow band that changes the
+outcome. The stability test needs `env_band >= env_prev * 0.7` **and**
+`env_prev >= env_band * 0.7`, so a large junk value fails it and a zero one
+fails it too; the first interval is much more likely to report ABSENT than
+PRESENT either way, and `cadence_progress` needs 35 consecutive intervals
+before it reports anything.
+
+**Reproduced**, and the test pre-fills both objects with the same pattern so
+the field is comparable at all — `t_toneiir` asserts that `env_prev` comes out
+holding the pre-fill, which is what proves the read happens.

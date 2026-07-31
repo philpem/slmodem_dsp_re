@@ -57,6 +57,14 @@ extern const short ref_CP_350_600_scales[], ref_CP_350_600_a[],
 extern const short ref_CP_450_630_scales[], ref_CP_450_630_a[],
 		   ref_CP_450_630_b[];
 
+extern void ref_toneiir_get_default_configuration(struct toneiir_cfg *dst);
+extern struct toneiir *ref_toneiir_create(struct toneiir *st,
+					  const struct toneiir_cfg *cfg);
+extern void ref_toneiir_delete(struct toneiir *st);
+extern void ref_toneiir_reset(struct toneiir *st);
+extern int ref_toneiir_progress(struct toneiir *st, short sample);
+extern const struct toneiir_cfg ref_toneiir_configuration_allpass;
+
 #define NSAMP 6000
 
 /* Counts, across the whole run, how often a section output left 16 bits. */
@@ -361,6 +369,301 @@ run_cp_tables(void)
 
 /*
  * --------------------------------------------------------------------------
+ * 2c. toneiir -- the cascade with a detector on top
+ */
+
+/* Times each verdict was returned across the whole run. */
+static int verdict_seen[3];
+
+/*
+ * Everything toneiir_create writes, compared field by field.  A whole-object
+ * byte compare works too and is used where both objects were pre-filled with
+ * the same junk, but not on the allocating path: create leaves the history
+ * past n_a/n_b untouched, and there it is uninitialised heap.
+ */
+static void
+compare_toneiir(const struct toneiir *b, const struct toneiir *a, long n)
+{
+	int i;
+
+	diff_eq_int("%ld: n_a", b->cfg.n_a, a->cfg.n_a, n);
+	diff_eq_int("%ld: n_b", b->cfg.n_b, a->cfg.n_b, n);
+	diff_eq_int("%ld: interval", b->cfg.interval, a->cfg.interval, n);
+	diff_eq_int("%ld: stability", b->cfg.stability, a->cfg.stability, n);
+	diff_eq_int("%ld: status", b->cfg.status, a->cfg.status, n);
+	diff_eq_int("%ld: threshold", b->cfg.threshold, a->cfg.threshold, n);
+	diff_eq_int("%ld: duration_ms", b->cfg.duration_ms, a->cfg.duration_ms,
+		    n);
+	diff_eq_int("%ld: gap_tolerance", b->cfg.gap_tolerance,
+		    a->cfg.gap_tolerance, n);
+	diff_eq_int("%ld: keep_on_gap", b->cfg.keep_on_gap, a->cfg.keep_on_gap,
+		    n);
+	diff_eq_int("%ld: n", b->n, a->n, n);
+	diff_eq_int("%ld: env_in", b->env_in, a->env_in, n);
+	diff_eq_int("%ld: env_band", b->env_band, a->env_band, n);
+	diff_eq_int("%ld: env_prev", b->env_prev, a->env_prev, n);
+	diff_eq_int("%ld: need", b->need, a->need, n);
+	diff_eq_int("%ld: total", b->total, a->total, n);
+	diff_eq_int("%ld: run", b->run, a->run, n);
+	for (i = 0; i < IIR_FILTER_MAX_COEFF; i++) {
+		diff_eq_int("%ld: x", b->x[i], a->x[i], n);
+		diff_eq_int("%ld: y", b->y[i], a->y[i], n);
+	}
+}
+
+/*
+ * Build the configuration cadence_create would: the numeric fields from the
+ * template, the filter from one of the CPfiltrs.c designs.  `ref` selects the
+ * blob's copy of the tables so the reference filter reads its own .rodata.
+ */
+static void
+make_cfg(struct toneiir_cfg *c, int ref, int threshold, int duration_ms)
+{
+	if (ref)
+		ref_toneiir_get_default_configuration(c);
+	else
+		toneiir_get_default_configuration(c);
+
+	c->a = ref ? ref_CP_450_630_a : CP_450_630_a;
+	c->b = ref ? ref_CP_450_630_b : CP_450_630_b;
+	c->scales = ref ? ref_CP_450_630_scales : CP_450_630_scales;
+	c->n_a = IIR_FILTER_COEFF;
+	c->n_b = IIR_FILTER_COEFF;
+	c->threshold = threshold;
+	c->duration_ms = duration_ms;
+}
+
+static int
+run_toneiir_config(void)
+{
+	struct toneiir_cfg a, b;
+	unsigned i;
+
+	diff_begin("toneiir_get_default_configuration");
+
+	memset(&a, 0xA5, sizeof(a));
+	memset(&b, 0xA5, sizeof(b));
+	ref_toneiir_get_default_configuration(&a);
+	toneiir_get_default_configuration(&b);
+
+	/* The pointers must differ -- each points into its own object. */
+	diff_eq_int("copies 44 bytes", (int)sizeof(struct toneiir_cfg), 44, 0);
+	diff_eq_int("n_a", b.n_a, a.n_a, 0);
+	diff_eq_int("n_b", b.n_b, a.n_b, 0);
+	diff_eq_int("interval", b.interval, a.interval, 0);
+	diff_eq_int("pad12", b.pad12, a.pad12, 0);
+	diff_eq_int("stability", b.stability, a.stability, 0);
+	diff_eq_int("status", b.status, a.status, 0);
+	diff_eq_int("threshold", b.threshold, a.threshold, 0);
+	diff_eq_int("duration_ms", b.duration_ms, a.duration_ms, 0);
+	diff_eq_int("gap_tolerance", b.gap_tolerance, a.gap_tolerance, 0);
+	diff_eq_int("keep_on_gap", b.keep_on_gap, a.keep_on_gap, 0);
+
+	/*
+	 * The arrays the template points at are all zeros in both.  Asserted
+	 * rather than assumed: this is what makes the default unusable as a
+	 * filter, and finding 46 turns on it.
+	 */
+	for (i = 0; i < IIR_FILTER_COEFF; i++) {
+		diff_eq_int("default a[%ld] is zero", b.a[i], 0, i);
+		diff_eq_int("default b[%ld] is zero", b.b[i], 0, i);
+		diff_eq_int("ref default a[%ld] is zero", a.a[i], 0, i);
+		diff_eq_int("ref default b[%ld] is zero", a.b[i], 0, i);
+	}
+	for (i = 0; i < IIR_FILTER_SCALES; i++) {
+		diff_eq_int("default scales[%ld] is zero", b.scales[i], 0, i);
+		diff_eq_int("ref default scales[%ld] is zero", a.scales[i], 0,
+			    i);
+	}
+
+	/* And the exported all-pass configuration, field by field. */
+	diff_eq_int("allpass n_a", toneiir_configuration_allpass.n_a,
+		    ref_toneiir_configuration_allpass.n_a, 0);
+	diff_eq_int("allpass n_b", toneiir_configuration_allpass.n_b,
+		    ref_toneiir_configuration_allpass.n_b, 0);
+	diff_eq_int("allpass a is NULL", toneiir_configuration_allpass.a == 0,
+		    ref_toneiir_configuration_allpass.a == 0, 0);
+	diff_eq_int("allpass scales is NULL",
+		    toneiir_configuration_allpass.scales == 0,
+		    ref_toneiir_configuration_allpass.scales == 0, 0);
+	diff_eq_int("allpass b[0]", toneiir_configuration_allpass.b[0],
+		    ref_toneiir_configuration_allpass.b[0], 0);
+	diff_eq_int("allpass threshold", toneiir_configuration_allpass.threshold,
+		    ref_toneiir_configuration_allpass.threshold, 0);
+
+	return diff_end();
+}
+
+static int
+run_toneiir_create(void)
+{
+	struct toneiir_cfg ca, cb;
+	unsigned char bufa[sizeof(struct toneiir)];
+	unsigned char bufb[sizeof(struct toneiir)];
+	struct toneiir *a, *b;
+
+	diff_begin("toneiir_create");
+
+	diff_eq_int("object is 168 bytes", (int)sizeof(struct toneiir), 0xa8,
+		    0);
+
+	make_cfg(&ca, 1, 300, 2200);
+	make_cfg(&cb, 0, 300, 2200);
+
+	/*
+	 * Identical junk in both.  create reads env_band before writing it and
+	 * copies what it finds into env_prev, so the pre-fill is what makes
+	 * that field comparable at all -- see D14.
+	 */
+	memset(bufa, 0x3C, sizeof(bufa));
+	memset(bufb, 0x3C, sizeof(bufb));
+
+	a = ref_toneiir_create((struct toneiir *)bufa, &ca);
+	b = toneiir_create((struct toneiir *)bufb, &cb);
+	diff_eq_int("returns its argument", b == (struct toneiir *)bufb, 1, 0);
+	compare_toneiir(b, a, 0);
+	diff_eq_int("env_prev carries the pre-fill", b->env_prev,
+		    (short)0x3C3C, 0);
+	diff_eq_int("need is 35 intervals", b->need, 35, 0);
+
+	/* A short coefficient list, to check the clamp and the clear bounds. */
+	make_cfg(&ca, 1, 300, 500);
+	make_cfg(&cb, 0, 300, 500);
+	ca.n_a = cb.n_a = 40;
+	ca.n_b = cb.n_b = 3;
+	memset(bufa, 0x11, sizeof(bufa));
+	memset(bufb, 0x11, sizeof(bufb));
+	a = ref_toneiir_create((struct toneiir *)bufa, &ca);
+	b = toneiir_create((struct toneiir *)bufb, &cb);
+	compare_toneiir(b, a, 1);
+	diff_eq_int("n_a clamped to 25", b->cfg.n_a, IIR_FILTER_MAX_COEFF, 1);
+	diff_eq_int("n_b left at 3", b->cfg.n_b, 3, 1);
+	diff_eq_int("x[3] untouched by the clear", b->x[3], (short)0x1111, 1);
+	diff_eq_int("y[24] cleared", b->y[24], 0, 1);
+
+	/* Allocation. */
+	harness_alloc_reset();
+	make_cfg(&ca, 1, 300, 2200);
+	make_cfg(&cb, 0, 300, 2200);
+	a = ref_toneiir_create(0, &ca);
+	b = toneiir_create(0, &cb);
+	diff_eq_int("allocs", harness_alloc.allocs, 2, 0);
+	diff_eq_int("bytes", (int)harness_alloc.bytes, 2 * 0xa8, 0);
+	ref_toneiir_delete(a);
+	toneiir_delete(b);
+	diff_eq_int("live", harness_alloc.live, 0, 0);
+	diff_eq_int("bad frees", harness_alloc.bad_free, 0, 0);
+
+	return diff_end();
+}
+
+static int
+run_toneiir_reset(void)
+{
+	struct toneiir_cfg ca, cb;
+	unsigned char bufa[sizeof(struct toneiir)];
+	unsigned char bufb[sizeof(struct toneiir)];
+	struct toneiir *a, *b;
+	int i;
+
+	diff_begin("toneiir_reset");
+
+	make_cfg(&ca, 1, 300, 2200);
+	make_cfg(&cb, 0, 300, 2200);
+	memset(bufa, 0, sizeof(bufa));
+	memset(bufb, 0, sizeof(bufb));
+	a = ref_toneiir_create((struct toneiir *)bufa, &ca);
+	b = toneiir_create((struct toneiir *)bufb, &cb);
+
+	/* Run some signal in so reset has something to clear. */
+	for (i = 0; i < 900; i++) {
+		short v = noise(9000);
+
+		ref_toneiir_progress(a, v);
+		toneiir_progress(b, v);
+	}
+	diff_eq_int("state is dirty before reset", a->env_band != 0, 1, 0);
+
+	ref_toneiir_reset(a);
+	toneiir_reset(b);
+	compare_toneiir(b, a, 0);
+	diff_eq_int("env_prev took the band envelope", b->env_prev != 0, 1, 0);
+	diff_eq_int("history is NOT cleared", b->x[0] != 0 || b->y[0] != 0, 1,
+		    0);
+
+	return diff_end();
+}
+
+/*
+ * `want` is the verdict this stimulus should mostly produce once the detector
+ * has settled, or -1 to make no claim.
+ */
+static int
+run_toneiir_progress(const char *label, double freq, int amplitude,
+		     int samples, int threshold, int want)
+{
+	struct toneiir_cfg ca, cb;
+	struct toneiir a, b;
+	double phase = 0.0;
+	int hits = 0, decided = 0;
+	int hist[3];
+	int i;
+
+	diff_begin(label);
+	memset(hist, 0, sizeof(hist));
+
+	make_cfg(&ca, 1, threshold, 2200);
+	make_cfg(&cb, 0, threshold, 2200);
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	ref_toneiir_create(&a, &ca);
+	toneiir_create(&b, &cb);
+
+	for (i = 0; i < samples; i++) {
+		short v;
+		int va, vb;
+
+		if (freq > 0.0) {
+			v = (short)(amplitude * sin(phase));
+			phase += 2.0 * 3.14159265358979323846 * freq / 8000.0;
+		} else {
+			v = amplitude ? noise(amplitude) : 0;
+		}
+
+		va = ref_toneiir_progress(&a, v);
+		vb = toneiir_progress(&b, v);
+
+		diff_eq_int("sample %ld: verdict", vb, va, i);
+		if (va != 0 || (i % 100) == 0)
+			compare_toneiir(&b, &a, i);
+
+		if (va >= 0 && va < 3) {
+			verdict_seen[va]++;
+			hist[va]++;
+		}
+		if (va != TONEIIR_UNDECIDED) {
+			decided++;
+			/* Judge only the second half, after settling. */
+			if (i > samples / 2 && va == want)
+				hits++;
+		}
+	}
+
+	if (want >= 0) {
+		char msg[128];
+
+		snprintf(msg, sizeof(msg),
+			 "verdict %d dominates late: %d hits, %d intervals "
+			 "[%d %d %d]", want, hits, decided, hist[0], hist[1],
+			 hist[2]);
+		diff_eq_int(msg, hits * 4 > decided, 1, want);
+	}
+
+	return diff_end();
+}
+
+/*
+ * --------------------------------------------------------------------------
  * 3. the design itself
  */
 static double
@@ -528,6 +831,21 @@ main(void)
 
 	rc |= run_fragmentation();
 	rc |= run_cp_tables();
+
+	rc |= run_toneiir_config();
+	rc |= run_toneiir_create();
+	rc |= run_toneiir_reset();
+	rc |= run_toneiir_progress("toneiir_progress: 550 Hz in band",
+				  550.0, 9000, 40000, 300, TONEIIR_PRESENT);
+	rc |= run_toneiir_progress("toneiir_progress: 1500 Hz out of band",
+				  1500.0, 9000, 20000, 300, TONEIIR_ABSENT);
+	rc |= run_toneiir_progress("toneiir_progress: silence",
+				  0.0, 0, 20000, 300, TONEIIR_ABSENT);
+	rc |= run_toneiir_progress("toneiir_progress: noise",
+				  0.0, 9000, 20000, 300, -1);
+	rc |= run_toneiir_progress("toneiir_progress: 550 Hz below threshold",
+				  550.0, 9000, 20000, 30000, TONEIIR_ABSENT);
+
 	rc |= run_response();
 	rc |= run_cp_response();
 
@@ -536,6 +854,12 @@ main(void)
 	 * agreeing about a path neither implementation ever entered.
 	 */
 	diff_begin("guards");
+	diff_eq_int("toneiir reported UNDECIDED (%ld)", verdict_seen[0] > 0, 1,
+		    verdict_seen[0]);
+	diff_eq_int("toneiir reported ABSENT (%ld)", verdict_seen[1] > 0, 1,
+		    verdict_seen[1]);
+	diff_eq_int("toneiir reported PRESENT (%ld)", verdict_seen[2] > 0, 1,
+		    verdict_seen[2]);
 	diff_eq_int("section outputs left 16 bits (%ld seen)",
 		    wrap_seen > 1000, 1, wrap_seen);
 	rc |= diff_end();
