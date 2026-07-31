@@ -3226,3 +3226,49 @@ and 1 -- BUSY and DIAL. There is no third or fourth call. So the ringback and
 congestion cases in `cadence_create`, both fully written and both reading
 their own country parameters, are dead in this build. Ringback is detected, if
 at all, by something other than a cadence detector.
+
+---
+
+## 56. Three national pulse-dialling conventions
+
+`DialerProgress`'s pulse state turns the keypad position `GetNextDigit...`
+produced -- `row * 3 + col`, so `1` is 0 and `0` is 10 -- into a count of loop
+interruptions, and it does it three different ways depending on
+`GetPulseDialDigitPattern`.
+
+```
+    pattern 1        pattern 2            pattern 3
+    n + 1            n == 10 ?  1         n + 1, then
+    11 -> 10                : n + 2       > 9 kept, 11 -> 10,
+                                          otherwise 10 - (n+1)
+```
+
+Worked through in digits:
+
+```
+    digit    1  2  3  4  5  6  7  8  9  0
+    pattern 1    1  2  3  4  5  6  7  8  9  10
+    pattern 2    2  3  4  5  6  7  8  9 10   1
+    pattern 3    9  8  7  6  5  4  3  2  1  10
+```
+
+Pattern 1 is the convention most of the world uses: *N* pulses for *N*, ten
+for zero. Pattern 2 sends one more than the digit and one pulse for zero,
+which is the Swedish and Norwegian scheme. Pattern 3 sends *10 − N*, which is
+New Zealand's.
+
+Any other value of the parameter -- including zero, which is what a country
+table that never thought about it would hold -- leaves the pulse count at the
+-1 the state initialised it to, and `PulseDialDigit` is called with that.
+Since `PulseDialDigit` only special-cases zero, -1 is loaded as the count and
+`IsPulseDialerReady` counts it down past zero, which does not terminate.
+
+**Reachable?** `GetPulseDialDigitPattern` comes from
+`struct homolog_params::PulseDialDigitPattern`, so it is whatever the country
+table says. Worth checking against the shipped data before grading it; that
+check is not done yet.
+
+This is the second place where the library encodes something genuinely
+national rather than technical -- the first being the cadence windows. It is a
+reminder of what "homologation" meant: not a compliance checkbox but a real
+per-country dialect that the modem had to speak.
