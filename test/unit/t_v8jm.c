@@ -15,6 +15,7 @@
 
 extern void ref_evaluateRxJMSequence(struct v8 *v);
 extern void ref_initTxSequence(struct v8 *v);
+extern int ref_V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
 
 static struct v8 obj_a, obj_b;
 static struct v8_cm cm_a, cm_b;
@@ -110,6 +111,77 @@ main(void)
 	diff_eq_int("JMs were rejected (%ld)", rejected > 0, 1, rejected);
 	diff_eq_int("the second field matched (%ld)", second > 0, 1, second);
 
+	rc |= diff_end();
+
+	diff_begin("V8UpdateModemParameters");
+	{
+		static struct v8_cm out_a, out_b;
+		long filled = 0, empty = 0;
+
+		for (b1 = 0; b1 < 256; b1 += 5) {
+			for (b2 = 0; b2 < 32; b2++) {
+				for (ext = 0; ext < 4; ext++) {
+					memset(&obj_a, 0, sizeof(obj_a));
+					memset(&obj_b, 0, sizeof(obj_b));
+					memset(&cm_a, 0, sizeof(cm_a));
+					cm_a.b0 = (unsigned char)(b1 ^ b2);
+					cm_a.b1 = (unsigned char)b1;
+					cm_a.b2 = (unsigned char)(b2 | 0x04);
+					cm_a.menu = (int)(b1 * 65537u);
+					cm_a.ext1[0] = 'G';
+					cm_a.ext2[0] = 'B';
+					memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+					obj_a.cm = &cm_a;
+					obj_b.cm = &cm_b;
+					obj_a.tx_seq = &obj_a.seq[2];
+					obj_b.tx_seq = &obj_b.seq[2];
+					ref_initTxSequence(&obj_a);
+					initTxSequence(&obj_b);
+					obj_a.seq[2].wordidx = (short)
+						(ext == 0 ? 0
+						 : obj_a.seq[2].nbits / 10);
+					obj_b.seq[2].wordidx =
+						obj_a.seq[2].wordidx;
+					memcpy(obj_b.seq[2].word,
+					       obj_a.seq[2].word,
+					       sizeof(obj_a.seq[2].word));
+
+					obj_a.mode = obj_b.mode = ext & 1;
+					obj_a.fdc4 = obj_b.fdc4 =
+						(ext == 3 ? 1 : 0);
+					obj_a.fdc8 = obj_b.fdc8 = b2 & 1;
+					obj_a.fdcc = obj_b.fdcc = (int)b1;
+					obj_a.febc = obj_b.febc =
+						(short)(b2 & 2 ? 1 : 0);
+					obj_a.fec0 = obj_b.fec0 =
+						(short)(b1 & 1 ? 0x107 : 0x103);
+					obj_a.fec2 = obj_b.fec2 =
+						(short)(b2 & 4 ? 0xa9 : 0x155);
+
+					memset(&out_a, 0x11, sizeof(out_a));
+					memcpy(&out_b, &out_a, sizeof(out_a));
+
+					k = V8UpdateModemParameters(&obj_b,
+								    &out_b);
+					diff_eq_int("returns (%ld)", k,
+						    ref_V8UpdateModemParameters(
+							    &obj_a, &out_a),
+						    (long)b1);
+					diff_eq_int("menu out (%ld)",
+						    memcmp(&out_a, &out_b,
+							   sizeof(out_a)) == 0,
+						    1, (long)b1);
+					if (k == 0)
+						filled++;
+					else
+						empty++;
+				}
+			}
+		}
+		diff_eq_int("menus were filled (%ld)", filled > 0, 1, filled);
+		diff_eq_int("and refused (%ld)", empty > 0, 1, empty);
+	}
 	rc |= diff_end();
 	return rc;
 }

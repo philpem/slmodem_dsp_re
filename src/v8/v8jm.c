@@ -113,3 +113,119 @@ evaluateRxJMSequence(struct v8 *v)
 		v->fec2 = 0;
 	}
 }
+
+/*
+ * Turn a received sequence into a call menu.
+ *
+ * The words carry their meaning in their top nibble: 0x14 opens the
+ * modulation list, 0x16 and 0x1c carry two more flags, and a word whose bit 4
+ * is set says another word of the same group follows.  Everything the menu
+ * does NOT offer is cleared, so the result is the intersection of what was
+ * asked for and what came back.
+ */
+int
+V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
+{
+	struct v8_tx_sequence *seq = v->mode != 0 ? &v->seq[0] : &v->seq[2];
+	int flag_a = 0, flag_b = 0, flag_c = 0;
+	int i;
+
+	out->b2 = (unsigned char)((out->b2 & 0xef)
+				  | (((unsigned char)v->fdc4 & 1) << 4));
+	out->offered = v->fdcc;
+	out->b2 = (unsigned char)((out->b2 & 0xbf)
+				  | ((v->fdc8 != 0 && (out->b2 & 0x40)) << 6));
+
+	if (v->fdc4 != 0) {
+		out->b0 |= 9;
+		return 0;
+	}
+
+	if ((short)seq->wordidx <= 0)
+		return -1;
+
+	out->b2 &= 0xf8;
+	out->ext1[0] = 0;
+	out->b1 &= 0x3f;
+
+	if (v->febc != 0) {
+		short fn = v->fec0;
+
+		if (fn == 0x107) {
+			out->b1 |= 0x40;
+		} else if (fn == 0x109) {
+			out->b2 |= 2;
+		} else if (fn == 0x10b) {
+			out->b1 |= 0x80;
+		} else if (fn == 0x103) {
+			out->b2 |= 1;
+		} else if (fn != 0) {
+			/* Something else: keep it as an extension octet. */
+			out->b2 |= 4;
+			out->ext1[0] = charFlip((unsigned char)(fn >> 1));
+		}
+
+		/* Walk the sequence for the modulation list and its flags. */
+		for (i = 0; i < (short)(unsigned short)seq->wordidx; i++) {
+			unsigned w = (unsigned short)seq->word[i];
+			unsigned top = w >> 4;
+
+			if (top == 0x14) {
+				unsigned f = (w & 0xf) >> 1;
+
+				if ((f & 2) == 0)
+					out->b0 &= 0xdf;
+				if ((f & 1) == 0)
+					out->b0 &= 0xbf;
+				flag_a = (int)(f >> 2);
+
+				if (((unsigned short)seq->word[i + 1] & 0x10)
+				    == 0)
+					continue;
+				i++;
+				f = (unsigned short)seq->word[i] >> 1;
+				if ((f & 0x01) == 0)
+					out->b1 &= 0xf7;
+				if ((f & 0x02) == 0)
+					out->b1 &= 0xfb;
+				if ((f & 0x20) == 0)
+					out->b1 &= 0xfd;
+				if ((f & 0x40) == 0)
+					out->b1 &= 0xfe;
+				if ((f & 0x80) == 0)
+					out->b0 &= 0x7f;
+
+				if (((unsigned short)seq->word[i + 1] & 0x10)
+				    == 0)
+					continue;
+				i++;
+				f = (unsigned short)seq->word[i];
+				if ((f & 0x40) == 0)
+					out->b1 &= 0xef;
+				if ((f & 3) == 0)
+					out->b1 &= 0xdf;
+			} else if (top == 0x16) {
+				flag_b = (int)((w >> 1) & 1);
+			} else if (top == 0x1c) {
+				flag_c = (int)((w >> 2) & 3);
+			}
+		}
+
+		/*
+		 * The three flags together decide one bit of the menu: the
+		 * offer only stands if all of them agree.
+		 */
+		out->b0 = (unsigned char)((out->b0 & 0xf7)
+			  | (((out->b0 & 8) && flag_a != 0 && flag_b != 0
+			      && flag_c == 1) << 3));
+	}
+
+	/* The second extension, if one came back that is not the filler. */
+	if (v->fec2 != 0 && v->fec2 != 0xa9) {
+		out->b2 |= 8;
+		out->ext2[0] = charFlip((unsigned char)(v->fec2 >> 1));
+	}
+
+	out->b0 |= 1;
+	return 0;
+}

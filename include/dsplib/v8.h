@@ -204,7 +204,13 @@ struct v8_cm {
 	unsigned char	b1;			/* +0x01 */
 	unsigned char	b2;			/* +0x02 */
 	unsigned char	b3;			/* +0x03 */
-	unsigned char	pad04[0x10 - 4];
+	unsigned char	pad04[0x0c - 4];
+	/*
+	 * What the far end offered, copied straight out of the handshake by
+	 * V8UpdateModemParameters.  Distinct from `menu` below, which is what
+	 * the JM builder reads.
+	 */
+	int		offered;		/* +0x0c */
 	/* The modulation list, read as one word when the JM is built. */
 	int		menu;			/* +0x10 */
 	unsigned char	pad14[0x18 - 0x14];
@@ -657,6 +663,18 @@ void checkSignalStability(struct v8 *v);
 #define V8_JM_EXT2_MARK	0x0a1
 
 void evaluateRxJMSequence(struct v8 *v);
+
+/*
+ * Turn what was received into a call menu.
+ *
+ * This is the other half of the monitoring story: `V8GetMessage` hands back
+ * the octets, and this reads the fields out of them -- which call function
+ * was asked for, which modulations were offered, and what the two extension
+ * bytes carried.
+ *
+ * Returns 0 when it filled the menu and -1 when there was nothing to read.
+ */
+int V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
 
 /*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
