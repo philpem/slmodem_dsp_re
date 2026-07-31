@@ -1,21 +1,23 @@
 /*
- * t_spandsp_v8sock.c -- the same negotiation, between two processes.
+ * t_spandsp_v8sock.c -- SpanDSP against a peer in another process.
  *
- * t_spandsp_v8neg.c has both ends in one address space, which is convenient
- * but lets a mistake hide: a shared global, a buffer written by one end and
- * read by the other, an ordering that only works because the two run in
- * lock-step inside one loop.  Here the reconstruction and SpanDSP are
- * separate processes and the only thing that passes between them is audio,
- * over a datagram socket, one frame at a time -- which is what a call over a
- * SIP leg actually looks like.
+ * The negotiation itself is already proved in one process by
+ * t_spandsp_v8neg.c, which is the readable version and where a failure is
+ * easiest to diagnose.  This exists for something that cannot be done in one
+ * process at all: running the SAME negotiation against the original object
+ * file.
  *
- * Both directions are run: SpanDSP calls and the reconstruction answers, then
- * the reconstruction calls and SpanDSP answers.
+ * The blob is i386 and the SpanDSP built here is amd64, so the two cannot be
+ * linked together.  Put the peer behind a socket and the constraint goes
+ * away.  Then every call below is run twice, once against the reconstruction
+ * and once against the blob, and the two are compared -- which is a different
+ * question from the one the differential harness asks.  That one asks whether
+ * the reconstruction computes the same bytes; this one asks whether a modem
+ * written by someone else negotiates the same call with each.
  *
- * The two processes take strict turns, so there is nothing to deadlock on:
- * SpanDSP sends first, the reconstruction always answers exactly one frame
- * per frame received, and SpanDSP ends the call with a stop frame.  A receive
- * timeout on both sides keeps a crashed peer from hanging the test.
+ * The peer is `build/test/v8peer` and `build/test/v8peer_ref`; both take the
+ * mode, the menu and the expected outcome on the command line and answer with
+ * their exit status.
  */
 
 #include <errno.h>
@@ -27,15 +29,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "v8spandsp.h"
 #include "v8neg.h"
+#include "v8pkt.h"
 
-/* One frame on the wire.  `n` of -1 means "the call is over". */
-struct pkt {
-	int32_t	n;
-	int16_t	s[V8NEG_FRAME * 2];
-};
-
-#define PKT_STOP	(-1)
+/* Where the peer expects to find the socket. */
+#define PEER_FD		3
 
 static int checks;
 static int failures;
@@ -50,99 +49,24 @@ check(const char *what, int got, int want)
 	printf("  FAIL %-52s got %d, want %d\n", what, got, want);
 }
 
-static void
-set_timeout(int fd, int seconds)
-{
-	struct timeval tv;
+/* What one call came to, so the two peers can be compared. */
+struct outcome {
+	int		exit_status;
+	int		sp_status;
+	int		sp_call_function;
+	uint32_t	sp_modulations;
+	int		frames;
+};
 
-	tv.tv_sec = seconds;
-	tv.tv_usec = 0;
-	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-}
-
-static int
-pkt_send(int fd, const struct pkt *p)
-{
-	size_t len = sizeof(p->n);
-
-	if (p->n > 0)
-		len += (size_t)p->n * sizeof(p->s[0]);
-	return send(fd, p, len, 0) == (ssize_t)len ? 0 : -1;
-}
-
-static int
-pkt_recv(int fd, struct pkt *p)
-{
-	ssize_t got = recv(fd, p, sizeof(*p), 0);
-
-	if (got < (ssize_t)sizeof(p->n))
-		return -1;
-	if (p->n > (int32_t)(sizeof(p->s) / sizeof(p->s[0])))
-		return -1;
-	return 0;
-}
-
-/* ------------------------------------------------------------------ child */
-
-/*
- * The reconstruction's end.  Answers every frame with one frame, until the
- * far end says the call is over.  Exits 0 only if it both completed the
- * negotiation and read the menu it was sent.
- */
-static void
-run_ours(int fd, int mode, const char *who)
-{
-	struct side us;
-	struct pkt in, out;
-	int ok;
-
-	set_timeout(fd, 20);
-
-	if (!side_create(&us, mode)) {
-		printf("  FAIL %s could not build its end\n", who);
-		fflush(stdout);
-		_exit(2);
-	}
-
-	for (;;) {
-		if (pkt_recv(fd, &in) != 0) {
-			printf("  FAIL %s lost the far end (%s)\n", who,
-			       strerror(errno));
-			fflush(stdout);
-			_exit(3);
-		}
-		if (in.n == PKT_STOP)
-			break;
-
-		out.n = side_frame(&us, in.s, (int)in.n, out.s,
-				   (int)(sizeof(out.s) / sizeof(out.s[0])));
-		if (pkt_send(fd, &out) != 0) {
-			printf("  FAIL %s could not send (%s)\n", who,
-			       strerror(errno));
-			fflush(stdout);
-			_exit(3);
-		}
-	}
-
-	ok = us.negotiated && side_report(&us, who);
-	fflush(stdout);
-	side_delete(&us);
-	_exit(ok ? 0 : 1);
-}
-
-/* ----------------------------------------------------------------- parent */
-
-static int sp_status;
-static int sp_call_function;
-static uint32_t sp_modulations;
+static struct outcome now;
 
 static void
 result_handler(void *user_data, v8_parms_t *result)
 {
 	(void)user_data;
-	sp_status = result->status;
-	sp_call_function = result->jm_cm.call_function;
-	sp_modulations = result->jm_cm.modulations;
+	now.sp_status = result->status;
+	now.sp_call_function = result->jm_cm.call_function;
+	now.sp_modulations = result->jm_cm.modulations;
 }
 
 /*
@@ -150,21 +74,20 @@ result_handler(void *user_data, v8_parms_t *result)
  * first, so the two processes stay in step without either having to poll.
  */
 static int
-run_theirs(int fd, int calling, int *frames)
+run_spandsp(int fd, int calling, uint32_t menu)
 {
 	v8_state_t *them;
 	v8_parms_t parms;
-	struct pkt out, in;
+	struct v8pkt out, in;
+	struct timeval tv;
 	int frame;
 	int got;
 
-	set_timeout(fd, 20);
+	tv.tv_sec = 20;
+	tv.tv_usec = 0;
+	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-	v8neg_spandsp_parms(&parms);
-	sp_status = -1;
-	sp_call_function = -1;
-	sp_modulations = 0;
-
+	v8neg_spandsp_parms(&parms, menu);
 	them = v8_init(NULL, calling, &parms, result_handler, NULL);
 	if (them == NULL)
 		return -1;
@@ -173,100 +96,165 @@ run_theirs(int fd, int calling, int *frames)
 		memset(out.s, 0, sizeof(out.s));
 		got = v8_tx(them, out.s, V8NEG_FRAME);
 		out.n = got > 0 ? got : V8NEG_FRAME;
-		if (pkt_send(fd, &out) != 0)
+		if (v8pkt_send(fd, &out) != 0)
 			break;
 
-		if (pkt_recv(fd, &in) != 0)
+		if (v8pkt_recv(fd, &in) != 0)
 			break;
 		if (in.n > 0)
 			v8_rx(them, in.s, (int)in.n);
 
-		if (sp_status == V8_STATUS_V8_CALL)
+		if (now.sp_status == V8_STATUS_V8_CALL)
 			break;
 	}
 
-	out.n = PKT_STOP;
-	pkt_send(fd, &out);
+	out.n = V8PKT_STOP;
+	v8pkt_send(fd, &out);
 
 	v8_free(them);
-	*frames = frame;
+	now.frames = frame;
 	return 0;
 }
 
-/* ------------------------------------------------------------------ calls */
-
-static void
-run_call(const char *title, int our_mode)
+/*
+ * One call: fork, hand the child one end of a datagram socketpair on fd 3,
+ * exec the peer, and run SpanDSP on the other end.
+ */
+static int
+run_call(const char *peer, int our_mode, unsigned char our_b0,
+	 unsigned char our_b1, uint32_t their_menu,
+	 const struct v8neg_expect *e, struct outcome *out)
 {
+	char a_mode[8], a_b0[8], a_b1[8];
+	char a_s0[8], a_c0[8], a_s1[8], a_c1[8];
 	int sv[2];
 	pid_t pid;
-	int frames = 0;
 	int wstatus = 0;
 
-	printf("\n%s\n", title);
-	fflush(stdout);
+	memset(&now, 0, sizeof(now));
+	now.sp_status = -1;
+	now.sp_call_function = -1;
 
 	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sv) != 0) {
 		printf("  FAIL socketpair: %s\n", strerror(errno));
-		failures++;
-		return;
+		return -1;
 	}
+
+	snprintf(a_mode, sizeof(a_mode), "%d", our_mode);
+	snprintf(a_b0, sizeof(a_b0), "0x%02x", our_b0);
+	snprintf(a_b1, sizeof(a_b1), "0x%02x", our_b1);
+	snprintf(a_s0, sizeof(a_s0), "0x%02x", e->b0_set);
+	snprintf(a_c0, sizeof(a_c0), "0x%02x", e->b0_clear);
+	snprintf(a_s1, sizeof(a_s1), "0x%02x", e->b1_set);
+	snprintf(a_c1, sizeof(a_c1), "0x%02x", e->b1_clear);
 
 	pid = fork();
 	if (pid < 0) {
 		printf("  FAIL fork: %s\n", strerror(errno));
-		failures++;
 		close(sv[0]);
 		close(sv[1]);
-		return;
+		return -1;
 	}
 
 	if (pid == 0) {
 		close(sv[0]);
-		run_ours(sv[1], our_mode, "ours");
-		/* not reached */
+		if (sv[1] != PEER_FD) {
+			dup2(sv[1], PEER_FD);
+			close(sv[1]);
+		}
+		execl(peer, peer, a_mode, a_b0, a_b1, a_s0, a_c0, a_s1, a_c1,
+		      (char *)NULL);
+		fprintf(stderr, "  FAIL exec %s: %s\n", peer, strerror(errno));
+		_exit(127);
 	}
 
 	close(sv[1]);
-	if (run_theirs(sv[0], our_mode == 1, &frames) != 0) {
+	if (run_spandsp(sv[0], our_mode == 1, their_menu) != 0)
 		printf("  FAIL could not build SpanDSP's end\n");
-		failures++;
-	}
 	close(sv[0]);
 
 	if (waitpid(pid, &wstatus, 0) != pid) {
 		printf("  FAIL waitpid: %s\n", strerror(errno));
+		return -1;
+	}
+
+	now.exit_status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : -1;
+	*out = now;
+	return 0;
+}
+
+/*
+ * The same call against both peers, then a comparison.  The reconstruction
+ * has to pass on its own terms; the blob's run is what says the bar was set
+ * where the original actually stands.
+ */
+static void
+compare_call(const char *title, int our_mode, unsigned char our_b0,
+	     unsigned char our_b1, uint32_t their_menu,
+	     const struct v8neg_expect *e)
+{
+	struct outcome ours, blob;
+
+	printf("\n%s\n", title);
+	fflush(stdout);
+
+	if (run_call("build/test/v8peer", our_mode, our_b0, our_b1,
+		     their_menu, e, &ours) != 0) {
 		failures++;
 		return;
 	}
-
-	printf("  after %d frames (%.1f s of audio):\n", frames,
-	       frames * (double)V8NEG_FRAME / SPANDSP_RATE);
 	printf("    spandsp: status %d (%s), call function %d,"
-	       " modulations 0x%x\n",
-	       sp_status, v8neg_status_name(sp_status), sp_call_function,
-	       (unsigned)sp_modulations);
+	       " modulations 0x%x, %d frames\n",
+	       ours.sp_status, v8neg_status_name(ours.sp_status),
+	       ours.sp_call_function, (unsigned)ours.sp_modulations,
+	       ours.frames);
 
-	check("SpanDSP completed the negotiation", sp_status,
-	      V8_STATUS_V8_CALL);
-	check("SpanDSP read our call function", sp_call_function,
-	      V8_CALL_V_SERIES);
-	check("SpanDSP read our whole modulation list",
-	      (int)(sp_modulations & (V8_MOD_V21 | V8_MOD_V23 | V8_MOD_V32
-				      | V8_MOD_V34)),
-	      V8_MOD_V21 | V8_MOD_V23 | V8_MOD_V32 | V8_MOD_V34);
-	check("the other process exited normally", WIFEXITED(wstatus), 1);
-	check("and it negotiated and read the menu",
-	      WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : -1, 0);
+	if (run_call("build/test/v8peer_ref", our_mode, our_b0, our_b1,
+		     their_menu, e, &blob) != 0) {
+		failures++;
+		return;
+	}
+	printf("    spandsp: status %d (%s), call function %d,"
+	       " modulations 0x%x, %d frames\n",
+	       blob.sp_status, v8neg_status_name(blob.sp_status),
+	       blob.sp_call_function, (unsigned)blob.sp_modulations,
+	       blob.frames);
+
+	check("the reconstruction negotiated with SpanDSP", ours.exit_status,
+	      0);
+	check("the blob negotiated with SpanDSP", blob.exit_status, 0);
+	check("SpanDSP reached the same status with both", ours.sp_status,
+	      blob.sp_status);
+	check("and read the same call function from both",
+	      (int)ours.sp_call_function, (int)blob.sp_call_function);
+	check("and the same modulation list from both",
+	      (int)ours.sp_modulations, (int)blob.sp_modulations);
+	/*
+	 * How long it took, to the frame.  The two run the same state machine
+	 * over the same samples, so anything but an exact match means one of
+	 * them took a different path through it -- which the byte-for-byte
+	 * differential would have caught only if its sweep reached that path.
+	 */
+	check("and took the same number of frames", ours.frames, blob.frames);
 }
 
 int
 main(void)
 {
-	printf("SpanDSP interop: a whole V.8 negotiation, over a socket\n");
+	static const struct v8neg_expect wide = V8NEG_EXPECT_WIDE;
+	static const struct v8neg_expect narrow = V8NEG_EXPECT_NARROW;
 
-	run_call("SpanDSP calls, the reconstruction answers", 1);
-	run_call("The reconstruction calls, SpanDSP answers", 0);
+	printf("SpanDSP interop: the reconstruction and the blob, "
+	       "each in its own process\n");
+
+	compare_call("SpanDSP calls, the peer answers", 1,
+		     V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_OURS, &wide);
+	compare_call("The peer calls, SpanDSP answers", 0,
+		     V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_OURS, &wide);
+	compare_call("SpanDSP calls with a narrower menu", 1,
+		     V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_NARROW, &narrow);
+	compare_call("The peer calls with a narrower menu", 0,
+		     V8NEG_B0_NARROW, V8NEG_B1_NARROW, V8NEG_OURS, &narrow);
 
 	printf("\n%s: %d checks, %d failures\n",
 	       failures ? "FAIL" : "PASS", checks, failures);

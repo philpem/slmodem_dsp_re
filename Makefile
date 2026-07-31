@@ -144,31 +144,53 @@ $(BUILD)/capture/spandsp_b103.pcm: test/interop/gen_spandsp_capture.c $(SPANDSP_
 	@./$(BUILD)/gen_capture $(BUILD)/capture
 
 interop: $(BUILD)/test/t_spandsp_b103 $(BUILD)/test/t_spandsp_v8 \
-        $(BUILD)/test/t_spandsp_v8neg $(BUILD)/test/t_spandsp_v8sock
+        $(BUILD)/test/t_spandsp_v8neg $(BUILD)/test/t_spandsp_v8sock \
+        $(BUILD)/test/v8peer $(BUILD)/test/v8peer_ref
 	@./$(BUILD)/test/t_spandsp_b103
 	@./$(BUILD)/test/t_spandsp_v8
 	@./$(BUILD)/test/t_spandsp_v8neg
 	@./$(BUILD)/test/t_spandsp_v8sock
 
+V8NEG_SRC  := test/interop/v8neg.c test/interop/v8spandsp.c \
+              test/interop/runtime64.c
+
 $(BUILD)/test/t_spandsp_v8neg: test/interop/t_spandsp_v8neg.c \
-        test/interop/v8neg.c test/interop/runtime64.c $(SRC) | $(BUILD)
+        $(V8NEG_SRC) $(SRC) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -I$(SPANDSP)/src -Itest/interop -o $@ \
-	    test/interop/t_spandsp_v8neg.c test/interop/v8neg.c \
-	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
+	    test/interop/t_spandsp_v8neg.c $(V8NEG_SRC) $(SRC) \
+	    $(SPANDSP_LIB) -lm
 
 $(BUILD)/test/t_spandsp_v8sock: test/interop/t_spandsp_v8sock.c \
-        test/interop/v8neg.c test/interop/runtime64.c $(SRC) | $(BUILD)
+        $(V8NEG_SRC) $(SRC) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -I$(SPANDSP)/src -Itest/interop -o $@ \
-	    test/interop/t_spandsp_v8sock.c test/interop/v8neg.c \
-	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
+	    test/interop/t_spandsp_v8sock.c $(V8NEG_SRC) $(SRC) \
+	    $(SPANDSP_LIB) -lm
+
+# The peer, twice.  64-bit against the reconstruction...
+$(BUILD)/test/v8peer: test/interop/v8peer.c test/interop/v8neg.c \
+        test/interop/runtime64.c $(SRC) | $(BUILD)
+	@mkdir -p $(BUILD)/test
+	$(CC) $(CFLAGS) -Itest/interop -o $@ test/interop/v8peer.c \
+	    test/interop/v8neg.c test/interop/runtime64.c $(SRC) -lm
+
+# ...and 32-bit against the blob, which is the only way SpanDSP can be made
+# to talk to the original: it is i386 and the SpanDSP here is amd64, so they
+# cannot share a process, only a socket.
+$(BUILD)/test/v8peer_ref: test/interop/v8peer.c test/interop/v8neg.c \
+        $(OBJ) $(HARNESS_OBJ) $(REF) | $(BUILD)
+	@mkdir -p $(BUILD)/test
+	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -DV8PEER_REF \
+	    -Itest/interop -Itest/harness $(LDFLAGS) -o $@ \
+	    test/interop/v8peer.c test/interop/v8neg.c \
+	    $(OBJ) $(HARNESS_OBJ) $(REF) -lm
 
 $(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c $(SRC) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \

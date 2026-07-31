@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "v8spandsp.h"
 #include "v8neg.h"
 
 static int checks;
@@ -52,7 +53,9 @@ result_handler(void *user_data, v8_parms_t *result)
  * SpanDSP takes the other end.
  */
 static void
-run_call(const char *title, int our_mode, int verbose)
+run_call(const char *title, int our_mode, unsigned char our_b0,
+	 unsigned char our_b1, uint32_t their_menu,
+	 const struct v8neg_expect *expect, uint32_t expect_mods, int verbose)
 {
 	struct side us;
 	v8_state_t *them;
@@ -64,13 +67,13 @@ run_call(const char *title, int our_mode, int verbose)
 
 	printf("\n%s\n", title);
 
-	if (!side_create(&us, our_mode)) {
+	if (!side_create(&us, &v8neg_ours, our_mode, our_b0, our_b1)) {
 		printf("  FAIL could not build our end\n");
 		failures++;
 		return;
 	}
 
-	v8neg_spandsp_parms(&parms);
+	v8neg_spandsp_parms(&parms, their_menu);
 	sp_status = -1;
 	sp_call_function = -1;
 	sp_modulations = 0;
@@ -131,12 +134,15 @@ run_call(const char *title, int our_mode, int verbose)
 	      V8_STATUS_V8_CALL);
 	check("SpanDSP read our call function", sp_call_function,
 	      V8_CALL_V_SERIES);
-	check("SpanDSP read our whole modulation list",
-	      (int)(sp_modulations & (V8_MOD_V21 | V8_MOD_V23 | V8_MOD_V32
-				      | V8_MOD_V34)),
-	      V8_MOD_V21 | V8_MOD_V23 | V8_MOD_V32 | V8_MOD_V34);
+	/*
+	 * Exactly, not masked: a spurious bit our encoder sets -- V.22, V.90
+	 * -- is as much a misread menu as a missing one, and masking down to
+	 * the four we care about would hide it.
+	 */
+	check("SpanDSP read our modulation list exactly",
+	      (int)sp_modulations, (int)expect_mods);
 	check("the reconstruction read SpanDSP's menu",
-	      side_report(&us, "ours"), 1);
+	      side_check(&us, "ours", expect), 1);
 
 	v8_free(them);
 	side_delete(&us);
@@ -145,12 +151,49 @@ run_call(const char *title, int our_mode, int verbose)
 int
 main(int argc, char **argv)
 {
+	static const struct v8neg_expect wide = V8NEG_EXPECT_WIDE;
+	static const struct v8neg_expect narrow = V8NEG_EXPECT_NARROW;
 	int verbose = argc > 1 && strcmp(argv[1], "-v") == 0;
 
 	printf("SpanDSP interop: a whole V.8 negotiation, in one process\n");
 
-	run_call("SpanDSP calls, the reconstruction answers", 1, verbose);
-	run_call("The reconstruction calls, SpanDSP answers", 0, verbose);
+	/*
+	 * Both ends offering the same four proves the negotiation runs, but
+	 * not that either end computed an intersection: with nothing to
+	 * remove, a menu walk that never ran looks the same as one that did.
+	 */
+	run_call("SpanDSP calls, the reconstruction answers", 1,
+		 V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_OURS,
+		 &wide, V8NEG_OURS, verbose);
+	run_call("The reconstruction calls, SpanDSP answers", 0,
+		 V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_OURS,
+		 &wide, V8NEG_OURS, verbose);
+
+	/*
+	 * So run two more where the offers differ, one testing each half of
+	 * the mapping.
+	 *
+	 * SpanDSP calls with less than we offer: V.34 and V.23 have to
+	 * disappear from what our end agrees, which exercises the decoder,
+	 * and the JM we build back carries the narrowed list, so SpanDSP's own
+	 * report narrows too -- the same intersection seen from the other side
+	 * of the wire.
+	 */
+	run_call("SpanDSP calls with a narrower menu", 1,
+		 V8NEG_B0_WIDE, V8NEG_B1_WIDE, V8NEG_NARROW,
+		 &narrow, V8NEG_NARROW, verbose);
+
+	/*
+	 * And we call with less than SpanDSP offers, which exercises the
+	 * encoder: SpanDSP has to see exactly the two we asked for.  Narrowing
+	 * SpanDSP's own parameters would not do it -- SpanDSP builds its JM
+	 * from the CM it received, not from what it was configured with, so an
+	 * answering SpanDSP echoes our list back whatever it was told to
+	 * offer.
+	 */
+	run_call("The reconstruction calls with a narrower menu", 0,
+		 V8NEG_B0_NARROW, V8NEG_B1_NARROW, V8NEG_OURS,
+		 &narrow, V8NEG_NARROW, verbose);
 
 	printf("\n%s: %d checks, %d failures\n",
 	       failures ? "FAIL" : "PASS", checks, failures);

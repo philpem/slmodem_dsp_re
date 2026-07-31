@@ -4368,10 +4368,49 @@ it. The interop tier leaves the bit clear and says so; the code path is
 reconstructed and differentially tested against the blob like everything
 else, which is the only kind of proof available for it.
 
-### What the negotiation proves that the differential harness cannot
+### Proving the intersection, not just the exchange
 
-`sp_modulations` came back as `0xa12` -- V.21, V.23, V.32, V.34, exactly what
-was offered -- and our end decoded SpanDSP's menu to the same four. Every one
-of those bits is a place where agreeing with the blob about a wrong bit looks
-identical to agreeing about a right one. There are eleven such bits in the
-modulation list alone, and the differential harness is blind to all of them.
+Both ends offering the same four modulations does not prove either end
+computed an intersection: with nothing to remove, a menu walk that never ran
+leaves exactly the bits it started with and passes. So two more calls run with
+the offers deliberately different.
+
+SpanDSP calls offering V.21 and V.32 only. Our end has to drop V.34 and V.23
+from what it agrees -- which exercises the decoder -- and the JM we build back
+carries the narrowed list, so SpanDSP's own report comes back `0x202` instead
+of `0xa12`. That is the same intersection seen from the other side of the
+wire, and it is what makes `rebuildJMSequence` an assertion rather than an
+assumption.
+
+Then we call offering V.21 and V.32 only, which exercises the encoder:
+SpanDSP has to see exactly those two. Narrowing SpanDSP's own parameters
+would not have done it -- SpanDSP builds its JM from the CM it received
+rather than from what it was configured with, so an answering SpanDSP echoes
+our list back whatever it was told to offer.
+
+Between them these cover eleven bits of the modulation list, in both
+directions, and every one is a place where agreeing with the blob about a
+wrong bit looks identical to agreeing about a right one.
+
+They also found D16: the V.21 bit can never be withdrawn, because the test
+that should clear it reads the stop bit as well and so is never true.
+
+### The same call, against the original object
+
+The socket driver exists for one reason, and it is not tidiness. The blob is
+i386 and the SpanDSP built here is amd64, so the two cannot be linked into
+one program -- but they can be put either side of a socket. `v8peer` is built
+twice from one source, 64-bit against the reconstruction and 32-bit against
+the blob's own `ref_V8Create`/`ref_V8Process`/`ref_RcFixed_*`, and
+`t_spandsp_v8sock` runs all four calls against each and compares.
+
+SpanDSP reaches the same status, reads the same call function and the same
+modulation list, and takes the same number of frames to do it -- 190 when it
+calls, 136 when it answers -- against the reconstruction and against the
+original alike.
+
+That is a different question from the one the differential harness asks. That
+one asks whether the reconstruction computes the same bytes as the original
+for the inputs a test can construct. This one asks whether a modem written by
+someone else, from the standard, negotiates the same call with each of them,
+over four seconds of audio and every path the handshake takes to get there.

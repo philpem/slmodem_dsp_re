@@ -792,3 +792,48 @@ structure rather than a pointer that can be null.
 
 **Reproduced**, and `t_dialer` drives NULL explicitly so the behaviour is
 pinned rather than merely inherited.
+
+## D16 — the V.21 offer can never be withdrawn 🐛 💤
+
+`V8UpdateModemParameters` intersects the received menu with the local one by
+clearing a bit for every modulation the far end did not offer. The third
+modulation octet carries V.23 in bit 6 and V.21 in bit 7, and the object
+tests them like this:
+
+```
+    74bd5:  movzwl (%esi,%eax,2),%edx    ; the 10-bit character, raw
+    74bd9:  test   $0x40,%dl
+    74bdc:  jne    74be6
+    74bde:  andb   $0xef,0x1(%edi)       ; V.23 not offered -- clear it
+    74be2:  movzwl (%esi,%eax,2),%edx
+    74be6:  test   $0x3,%dl
+    74be9:  jne    74bf0
+    74beb:  andb   $0xdf,0x1(%edi)       ; V.21 not offered -- clear it
+```
+
+Both tests are against the raw sequence word rather than the octet, and the
+two differ by the framing: a word is the octet shifted up one with a stop bit
+in bit 0. The V.23 test survives that, because bit 6 of the word is bit 5 of
+the octet and nothing else lands there. The V.21 test does not: `word & 3`
+takes in the stop bit, which is set in every character V.21 can carry, so the
+test is never zero and the `and` is dead code.
+
+The V.21 bit that should have been consulted is bit 1 of the word. `& 3`
+instead of `& 2` is a one-character slip.
+
+**Effect.** `cm->b1` bit 5 stays set whatever the far end said, so the modem
+believes V.21 is on the menu after a negotiation in which it was not offered.
+
+**Reachable?** Yes, trivially -- any far end that omits V.21. Measured
+against SpanDSP in `t_spandsp_v8sock`: with SpanDSP offering V.21 and V.32,
+V.34 and V.23 are correctly dropped and V.21 correctly kept, so the defect
+does not show there. It would show against a far end offering, say, V.32
+alone.
+
+**Harmless in practice**, which is presumably why it survived: V.21 at 300
+bit/s is the fallback every V.8-capable modem supports, and the handshake has
+just finished conducting a conversation in it. A modem that negotiated V.8 at
+all has demonstrated V.21.
+
+**Reproduced.** `t_v8jm` pins the behaviour, and the reconstruction carries
+the same `& 3`.
