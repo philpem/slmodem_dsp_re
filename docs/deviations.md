@@ -702,6 +702,14 @@ than a scaling choice.
 is called on *all three* of `CALLPROG_Dial`'s branches, including the one that
 disables the generator, so the amplitude is computed whether or not it is used.
 
+**Where the level comes from.** S-register 221, fetched through a callback
+that `call_create` fills in with `call_GetSRegister`, a fourteen-byte tail-call
+to `modem_get_sreg`. That namespace was unidentified when this entry was first
+written and is now settled (docs/parameters.md); the index is valid and in
+range, so there is no additional fault here. `CALLPROG_Dial` narrows the
+result with `movsbl`, so an S221 of 128 or more arrives negative -- which,
+given the 1.4 dB span, moves the amplitude by well under a decibel.
+
 **Not fixed**, and both the level range and the overflow are asserted by
 `t_callingtone`.
 

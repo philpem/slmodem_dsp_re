@@ -3167,3 +3167,62 @@ being pulsed, not yet released, with the progress state in range. `t_dialer`
 sweeps all fifty-two combinations of the three and asserts both that the right
 one acts and that the other fifty-one leave the object untouched and tell the
 host nothing.
+
+---
+
+## 55. The 221 callback is an S-register, and CALLPROG_Delete does not free
+
+Two things settled by reading `CALLPROG_Create` and `CALLPROG_Delete`, ahead
+of reconstructing them.
+
+### S221
+
+`CALLPROG_Dial` fetches the calling tone's level through a function pointer in
+its object at +0x20, with index 221 -- which is outside
+`enum MODEM_PARAMETER_NAMES` and had been an open question since finding 44.
+
+The pointer comes from `CALLPROG_Create`'s configuration block, and
+`call_create` fills it with `call_GetSRegister`:
+
+```
+    2b60:  movzwl 0x8(%esp),%eax
+    2b65:  mov    %eax,0x8(%esp)
+    2b69:  jmp    modem_get_sreg
+```
+
+So it is an **AT S-register**, and slmodemd's `sregs[]` is 256 entries, so 221
+is in range. Not a defect -- just a second namespace that nothing named.
+
+The lesson is the one D10 already taught in another form: an index that looks
+out of range is evidence that the *namespace* is wrong, not that the index is.
+Both times the temptation was to write up a bug.
+
+### CALLPROG_Delete leaks nothing, and frees nothing either
+
+```c
+    DialerAbort(&cp->dialer);
+    if (cp->busy)   cadence_delete(cp->busy);      /* +0x64 */
+    if (cp->dial)   cadence_delete(cp->dial);      /* +0x6c */
+    if (cp->f7c)    _iir_filter_delete(cp->band);  /* +0x78, gated on +0x7c */
+    cp->f70 = 0;
+    cp->busy = 0;
+    if (cp->dtmf)   Dual_TONE_delete(cp->dtmf);    /* +0x84 */
+```
+
+The CALLPROG object itself is never freed -- it belongs to `call_create`,
+which embeds it. Of the four sub-objects it does free, only two have their
+pointers cleared afterwards: `busy` and `f70`. `dial`, `band` and `dtmf` are
+left dangling, so a second `CALLPROG_Delete` on the same object would free
+them again.
+
+**Reachable?** `call_delete` calls it once. But `CALLPROG_Delete` is a global
+symbol and the asymmetry is invisible from outside -- two of five cleared is
+the kind of thing that reads as deliberate until you count.
+
+### And the RING/CONG question is answered
+
+`CALLPROG_Create` calls `cadence_create` exactly twice, with `setup[4]` of 0
+and 1 -- BUSY and DIAL. There is no third or fourth call. So the ringback and
+congestion cases in `cadence_create`, both fully written and both reading
+their own country parameters, are dead in this build. Ringback is detected, if
+at all, by something other than a cadence detector.

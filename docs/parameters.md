@@ -156,11 +156,36 @@ The two pulse-dial times are the known exception in the other direction:
 `GetPulseDialMakeTime` and `GetPulseDialBreakTime` go to `SetPulseMakeTime`
 and `SetPulseBreakTime`, whose own conversion has not been read yet.
 
-## The other namespace
+## The other namespace: S-registers
 
-`CALLPROG_Dial` also fetches through an indirect callback stored in the
-CALLPROG object at +0x20, with the index `0xdd` (221) -- far outside this
-enum. That is a second parameter namespace, and which one is not yet
-established. It will be settled by `CALLPROG_Create`, which is what installs
-the callback. The one use so far is the calling tone's level, and it does not
-matter much what comes back: see D13.
+`CALLPROG_Dial` fetches the calling tone's level through an indirect callback
+stored in the CALLPROG object at +0x20, with the index `0xdd` -- 221, far
+outside the enum above. **It is not a parameter index. It is an AT
+S-register.**
+
+The callback is installed by `CALLPROG_Create` from its configuration block,
+and `call_create` supplies `call_GetSRegister`, which is fourteen bytes:
+
+```
+    2b60:  movzwl 0x8(%esp),%eax        ; narrow the index to 16 bits
+    2b65:  mov    %eax,0x8(%esp)
+    2b69:  jmp    modem_get_sreg        ; and tail-call
+```
+
+slmodemd's `modem_get_sreg` indexes `unsigned char sregs[256]` and returns -1
+above that, so 221 is comfortably in range and answers with `sregs[221]`.
+
+So the calling tone's transmit level is **S221**, settable from the AT command
+line like any other S-register, and the library reads it through a callback
+precisely so that call.c can decide where S-registers come from.
+
+This resolves a question carried since finding 44. It is *not* a defect: the
+index is valid, the namespace is real, and nothing is out of range. D13 -- the
+level control that spans 1.4 dB across its whole argument -- stands on its own
+and is unaffected.
+
+One detail follows from it. `modem_get_sreg` returns an `unsigned char`
+promoted to `long`, and `CALLPROG_Dial` narrows it with `movsbl` before
+passing it on, so an S221 of 128 or more arrives at `ResetCallingTone` as a
+negative level. Given D13, that changes the amplitude by well under a
+decibel.
