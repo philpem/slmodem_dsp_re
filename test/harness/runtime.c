@@ -228,9 +228,50 @@ ref_modem_debug_log_data(void *m, unsigned id, const void *buf, int len)
 struct param_log harness_param_ours;
 struct param_log harness_param_ref;
 
+/*
+ * A test that needs a particular value -- a tolerance, a cycle count -- can
+ * override one parameter without disturbing the rest.  Both sides read the
+ * same table, so an override cannot make the two disagree; it only moves
+ * where in the input space the comparison happens.
+ */
+#define HARNESS_PARAM_OVERRIDES 32
+
+static struct {
+	unsigned	param;
+	long		value;
+	int		set;
+} harness_param_override[HARNESS_PARAM_OVERRIDES];
+
+void
+harness_param_set(unsigned param, long value)
+{
+	int i;
+
+	for (i = 0; i < HARNESS_PARAM_OVERRIDES; i++)
+		if (harness_param_override[i].set
+		    && harness_param_override[i].param == param) {
+			harness_param_override[i].value = value;
+			return;
+		}
+	for (i = 0; i < HARNESS_PARAM_OVERRIDES; i++)
+		if (!harness_param_override[i].set) {
+			harness_param_override[i].param = param;
+			harness_param_override[i].value = value;
+			harness_param_override[i].set = 1;
+			return;
+		}
+}
+
 static long
 param_value(unsigned param)
 {
+	int i;
+
+	for (i = 0; i < HARNESS_PARAM_OVERRIDES; i++)
+		if (harness_param_override[i].set
+		    && harness_param_override[i].param == param)
+			return harness_param_override[i].value;
+
 	return 0x5A000000L + (long)param * 7L;
 }
 
@@ -248,6 +289,7 @@ harness_param_reset(void)
 {
 	memset(&harness_param_ours, 0, sizeof(harness_param_ours));
 	memset(&harness_param_ref, 0, sizeof(harness_param_ref));
+	memset(harness_param_override, 0, sizeof(harness_param_override));
 }
 
 /* Our side calls the unprefixed names; the reference calls ref_*. */

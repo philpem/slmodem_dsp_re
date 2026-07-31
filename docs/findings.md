@@ -2681,3 +2681,73 @@ are addresses. Anything that looks like a suspiciously narrow range of large
 integers in this object is worth re-checking against the relocation table
 before it is interpreted -- and see D10, where the same class of mistake was
 made a second time.)
+
+---
+
+## 47. The cadence detector, and the level it needs
+
+`cadence_progress` is the piece that tells dial tone from ringback from busy.
+They share frequencies; what separates them is rhythm. It takes one sample,
+hands it to a `toneiir`, and does nothing at all until that returns a verdict
+— every 500 samples — so every duration it deals in is a count of 62.5 ms
+intervals, not samples.
+
+At each transition it records the period that just ended:
+
+```
+    silence -> tone   off[n] = run
+    tone -> silence   on[n]  = run, then n++
+```
+
+`off[0]` is however long the detector happened to be listening before
+anything happened, which is why every comparison below skips it.
+
+### Three matchers, not one
+
+Once `n` reaches the configured cycle count, the recorded periods are matched
+— in one of three separately written forms, selected by two flags:
+
+- **fixed** (`+0x2d0` set): `on[0]`, `off[1]`, `on[1]`, `off[2]` against four
+  configured values, each within tolerance.
+
+- **looped** (`+0x2ac` set): the last period must fall inside the timing
+  windows, every earlier period back to `cycles` ago must agree with it, and
+  then two final comparisons against the period `cycles` back — of which the
+  silence test is **one-sided** (`off[last] > off[first+1]` fails) and the
+  tone test is two-sided. Not a symmetry anyone would write on purpose, and
+  reproduced as found.
+
+- **unrolled** (neither): two patterns, either of which will do. A one-period
+  cadence — the last three tones alike and the last three silences alike — or
+  a **two-period** one, where the tone matches the period two and four cycles
+  back rather than the one immediately before. That second form is what a
+  double ring is, and a one-period test rejects it. It needs six cycles of
+  history and is skipped below that.
+
+The tolerance is `GetBusyToneDiffTime`, clamped to a minimum of three
+intervals whatever the country table says.
+
+### It needs the signal kept below about 8000
+
+Measured, driving CP_450_630 with a 550 Hz tone and watching the interval
+envelope:
+
+```
+    amplitude   envelope over 40 intervals   verdicts
+      500          295 ..   304              8 present, 32 absent
+     1000          596 ..   610             38 present,  2 absent
+     5000         3278 ..  3335             38 present,  2 absent
+     8000         5267 ..  5355             38 present,  2 absent
+    12000         6995 .. 17438              4 present, 36 absent
+```
+
+At 12000 the cascade wraps internally — its passband gain is about 42 dB and
+the interstage shifts only take that back out at the end — so the envelope
+stops being steady, the stability test fails, and the detector reports the
+tone as absent. **A loud busy tone is not detected.**
+
+This is the same shape as the answer-tone detector's ceiling (finding 42) but
+it bites four times lower, and unlike that one it is inside the range a real
+line can produce. Whatever keeps the level down is upstream of call progress
+and is not in this module; establishing what, and whether the margin is
+adequate, belongs with `CALLPROG_Progress`.

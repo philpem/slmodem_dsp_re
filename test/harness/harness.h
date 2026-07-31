@@ -43,6 +43,14 @@ extern struct param_log harness_param_ref;
 void harness_param_reset(void);
 
 /*
+ * Force one parameter to a chosen value for both sides.  Cleared by
+ * harness_param_reset.  Without this the store derives its answer from the
+ * index, which is fine for proving a module asks for the right parameter but
+ * useless when the value itself has to be in a particular range.
+ */
+void harness_param_set(unsigned param, long value);
+
+/*
  * Datapump registry.
  *
  * Every datapump module registers one or more DP_IDs against a
