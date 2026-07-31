@@ -4081,3 +4081,44 @@ queued enough to transmit, so one call does as much work as the transmit
 queue has room for rather than a fixed amount. That is why `V8Process` calls
 it from inside its own per-sample loop and only when the queue is nearly
 empty.
+
+### What the five states transmit
+
+| f9d4 | what it puts on the line |
+|---|---|
+| 5 | silence -- four zeros into the staging buffer, then queue |
+| 6 | ANSam, `v8_ansamgenerate` inlined, until `deadline_a` |
+| 23 | FSK, until `deadline_b` |
+| 43 | FSK, with no deadline |
+| 45 | the queued tone, `v8_TONEq_generate` inlined, then queue |
+
+States 6 and 45 are the two generator functions inlined rather than called,
+the same way `v8handshakinit` inlines `v8_ansaminit`. Nothing is lost by
+having them as functions here: the object simply chose to inline them.
+
+The two FSK states share a structure. Each modulates the current bit
+(`v->fa3c`), advances a sample counter by four, and when that counter reaches
+the bit length in `v21_params.f06` fetches the next bit with `v8_getbit` and
+resets the counter. State 43 additionally counts bits and does something
+after sixty of them; state 23 counts elapsed blocks against `deadline_b`
+instead.
+
+So the transmit side is: pick a signal, emit four samples of it, and pull a
+new bit whenever the current one has been on the wire long enough.
+
+### A second state variable drives the receive side
+
+When the loop exits -- the queue is full -- the function dispatches again, on
+`v->f9d6` rather than `f9d4`, and only when `v->f110` says at least six
+symbols have arrived:
+
+| f9d6 | |
+|---|---|
+| 0x19 | run `V8agc` and go on to the detectors |
+| 0x20 | a second receive path |
+| 0x23 | just `v8_rxreadqueue` |
+| 0x28 | a third |
+| 0x63 | return 2, which is what `V8Process` reads as "something changed" |
+
+Two independent state variables, one per direction, is why a single 4 KB
+function covers what looks like it should be two.
