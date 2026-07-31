@@ -51,11 +51,13 @@ check(const char *what, int got, int want)
 
 /* What one call came to, so the two peers can be compared. */
 struct outcome {
-	int		exit_status;
-	int		sp_status;
-	int		sp_call_function;
-	uint32_t	sp_modulations;
-	int		frames;
+	int			exit_status;
+	int			sp_status;
+	int			sp_call_function;
+	uint32_t		sp_modulations;
+	int			frames;
+	int			have_result;
+	struct v8pkt_result	peer;
 };
 
 static struct outcome now;
@@ -110,6 +112,15 @@ run_spandsp(int fd, int calling, uint32_t menu)
 
 	out.n = V8PKT_STOP;
 	v8pkt_send(fd, &out);
+
+	/*
+	 * The peer answers the stop frame with its verdict.  The receive
+	 * timeout set above is what keeps a peer that died first from hanging
+	 * the driver here.
+	 */
+	if (recv(fd, &now.peer, sizeof(now.peer), 0)
+	    == (ssize_t)sizeof(now.peer))
+		now.have_result = 1;
 
 	v8_free(them);
 	now.frames = frame;
@@ -169,8 +180,10 @@ run_call(const char *peer, int our_mode, unsigned char our_b0,
 	}
 
 	close(sv[1]);
-	if (run_spandsp(sv[0], our_mode == 1, their_menu) != 0)
+	if (run_spandsp(sv[0], our_mode == 1, their_menu) != 0) {
 		printf("  FAIL could not build SpanDSP's end\n");
+		failures++;
+	}
 	close(sv[0]);
 
 	if (waitpid(pid, &wstatus, 0) != pid) {
@@ -236,6 +249,29 @@ compare_call(const char *title, int our_mode, unsigned char our_b0,
 	 * differential would have caught only if its sweep reached that path.
 	 */
 	check("and took the same number of frames", ours.frames, blob.frames);
+
+	/*
+	 * And the peers' own verdicts, which SpanDSP cannot see.  Without
+	 * these the test would pass on two peers that decoded different
+	 * messages, so long as the bits the expectation names still agreed --
+	 * the printed blocks would differ and nothing would notice.
+	 */
+	check("both peers reported back", ours.have_result && blob.have_result,
+	      1);
+	if (!ours.have_result || !blob.have_result)
+		return;
+	check("both reached the same V8Process status", ours.peer.best,
+	      blob.peer.best);
+	/* Anti-vacuity: two empty messages would compare equal. */
+	check("the message was not empty", ours.peer.msg_len > 0, 1);
+	check("both received a message of the same length", ours.peer.msg_len,
+	      blob.peer.msg_len);
+	check("and the same message",
+	      memcmp(ours.peer.msg, blob.peer.msg,
+		     sizeof(ours.peer.msg)) == 0, 1);
+	check("and agreed the same menu",
+	      ours.peer.b0 == blob.peer.b0 && ours.peer.b1 == blob.peer.b1
+	      && ours.peer.b2 == blob.peer.b2, 1);
 }
 
 int

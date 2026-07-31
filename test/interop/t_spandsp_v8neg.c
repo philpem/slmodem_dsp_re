@@ -142,7 +142,7 @@ run_call(const char *title, int our_mode, unsigned char our_b0,
 	check("SpanDSP read our modulation list exactly",
 	      (int)sp_modulations, (int)expect_mods);
 	check("the reconstruction read SpanDSP's menu",
-	      side_check(&us, "ours", expect), 1);
+	      side_check(&us, "ours", expect, NULL), 1);
 
 	v8_free(them);
 	side_delete(&us);

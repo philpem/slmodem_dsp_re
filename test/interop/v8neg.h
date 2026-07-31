@@ -129,12 +129,29 @@ struct v8neg_expect {
  */
 #define V8NEG_EXPECT_NARROW	{ 0x80, 0x20, 0x40, 0x10 }
 
+/* Longest received message the interop tier keeps. */
+#define V8NEG_MSG_MAX	32
+
+/*
+ * Everything a side decided, so that two of them can be compared rather than
+ * merely printed side by side and looked at.
+ */
+struct side_result {
+	int		ok;
+	int		best;		/* the highest V8Process status */
+	int		msg_len;
+	unsigned char	msg[V8NEG_MSG_MAX];
+	unsigned char	b0, b1, b2;	/* the agreed menu */
+};
+
 /*
  * Print what our end decided and check it against `e`.  Returns non-zero if
- * it holds.  Must be called after the negotiation: it runs
- * V8UpdateModemParameters, which is what the datapump layer does on status
- * 13 and is where the received menu becomes the intersection of the two.
+ * it holds, and fills `r` if it is not null.  Must be called after the
+ * negotiation: it runs V8UpdateModemParameters, which is what the datapump
+ * layer does on status 13 and is where the received menu becomes the
+ * intersection of the two.
  */
-int side_check(struct side *s, const char *who, const struct v8neg_expect *e);
+int side_check(struct side *s, const char *who, const struct v8neg_expect *e,
+	       struct side_result *r);
 
 #endif /* DSPLIB_INTEROP_V8NEG_H */

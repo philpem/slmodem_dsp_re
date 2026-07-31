@@ -81,6 +81,8 @@ int
 main(int argc, char **argv)
 {
 	struct side us;
+	struct side_result r;
+	struct v8pkt_result res;
 	struct v8neg_expect expect;
 	struct v8pkt in, out;
 	struct timeval tv;
@@ -130,8 +132,24 @@ main(int argc, char **argv)
 	}
 
 	printf("    %s: V8Process reached status %d\n", PEER_NAME, us.best);
-	ok = us.negotiated && side_check(&us, PEER_NAME, &expect);
+	ok = us.negotiated && side_check(&us, PEER_NAME, &expect, &r);
 	fflush(stdout);
+
+	/*
+	 * And hand the whole verdict back, not just an exit status.  Two peers
+	 * whose decoded messages differed would otherwise both exit 0 as long
+	 * as the bits the expectation happens to name still matched.
+	 */
+	memset(&res, 0, sizeof(res));
+	res.ok = ok;
+	res.best = r.best;
+	res.msg_len = r.msg_len;
+	res.b0 = r.b0;
+	res.b1 = r.b1;
+	res.b2 = r.b2;
+	memcpy(res.msg, r.msg, sizeof(res.msg));
+	send(PEER_FD, &res, sizeof(res), 0);
+
 	side_delete(&us);
 	return ok ? 0 : 1;
 }

@@ -29,6 +29,24 @@ struct v8pkt {
 	short	s[V8PKT_MAX];
 };
 
+/* Longest received message carried back.  Must match V8NEG_MSG_MAX. */
+#define V8PKT_MSG_MAX	32
+
+/*
+ * What the peer decided, sent once after the stop frame.  Without this the
+ * driver would see only an exit status, and two peers whose decoded messages
+ * differed would still both exit 0 as long as the bits the expectation names
+ * happened to match.  Every field is fixed width and explicitly padded, since
+ * one end of this socket is i386 and the other amd64.
+ */
+struct v8pkt_result {
+	int		ok;
+	int		best;
+	int		msg_len;
+	unsigned char	b0, b1, b2, pad;
+	unsigned char	msg[V8PKT_MSG_MAX];
+};
+
 static int
 v8pkt_send(int fd, const struct v8pkt *p)
 {

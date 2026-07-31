@@ -4409,6 +4409,15 @@ modulation list, and takes the same number of frames to do it -- 190 when it
 calls, 136 when it answers -- against the reconstruction and against the
 original alike.
 
+The peers' own verdicts are compared too, not merely printed side by side:
+each answers the stop frame with a record carrying the message it decoded and
+the menu it agreed, and those are asserted equal. Without that the test would
+pass on two peers whose decoded messages differed, so long as the handful of
+bits the expectation names happened to agree -- the two printed blocks would
+differ on screen and nothing would notice. Verified by making one peer offer
+a different menu on purpose: "and the same message" and "and agreed the same
+menu" both fail, as they should.
+
 That is a different question from the one the differential harness asks. That
 one asks whether the reconstruction computes the same bytes as the original
 for the inputs a test can construct. This one asks whether a modem written by

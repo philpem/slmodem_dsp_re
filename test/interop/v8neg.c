@@ -113,19 +113,29 @@ side_frame(struct side *s, const short *in, int n_in, short *out, int out_max)
 }
 
 int
-side_check(struct side *s, const char *who, const struct v8neg_expect *e)
+side_check(struct side *s, const char *who, const struct v8neg_expect *e,
+	   struct side_result *r)
 {
-	unsigned char msg[32];
+	unsigned char msg[V8NEG_MSG_MAX];
 	int count = (int)sizeof(msg);
 	int rc;
 	int i;
 	int ok;
+
+	if (r != NULL) {
+		memset(r, 0, sizeof(*r));
+		r->best = s->best;
+	}
 
 	rc = s->ops->get_message(s->v8, msg, &count);
 	printf("    %s: received", who);
 	if (rc == V8_GET_EMPTY) {
 		printf(" nothing\n");
 		return 0;
+	}
+	if (r != NULL) {
+		r->msg_len = count;
+		memcpy(r->msg, msg, (size_t)count);
 	}
 	for (i = 0; i < count; i++)
 		printf(" %02x", msg[i]);
@@ -162,5 +172,11 @@ side_check(struct side *s, const char *who, const struct v8neg_expect *e)
 	if (!ok)
 		printf("    %s: expected b0 +%02x -%02x, b1 +%02x -%02x\n",
 		       who, e->b0_set, e->b0_clear, e->b1_set, e->b1_clear);
+	if (r != NULL) {
+		r->b0 = s->cm.b0;
+		r->b1 = s->cm.b1;
+		r->b2 = s->cm.b2;
+		r->ok = ok;
+	}
 	return ok;
 }
