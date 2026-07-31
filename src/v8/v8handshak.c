@@ -32,8 +32,7 @@ extern void rebuildJMSequence(struct v8 *v);
  * because between them they are most of this function's four kilobytes and
  * neither shares anything with the transmit side but the object.
  */
-int v8_handshak_agc(struct v8 *v);
-int v8_handshak_demod(struct v8 *v);
+
 
 /* Transmit states, as `f9d4` holds them. */
 #define V8_TX_SILENCE	5

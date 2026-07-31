@@ -720,6 +720,17 @@ int V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
 void rebuildJMSequence(struct v8 *v);
 
 /*
+ * One pass of the handshake: transmit until the queue is full, then run the
+ * receiver once.  Returns 0 normally, 1 when a deadline expired, 2 when the
+ * handshake finished.
+ */
+int v8handshak(struct v8 *v);
+
+/* The two long receive paths, in v8hsrx.c. */
+int v8_handshak_agc(struct v8 *v);
+int v8_handshak_demod(struct v8 *v);
+
+/*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
  * oscillator, with the amplitude negated every V8_ANSAM_REVERSAL blocks --
  * which is the periodic phase reversal that distinguishes ANSam from a plain
