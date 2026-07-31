@@ -133,6 +133,21 @@ struct v8_v21_params {
 };
 
 /*
+ * A tone generator's working parameters.  Sixteen bytes, and the same shape
+ * appears at +0xda4 with its own constants.
+ */
+struct v8_tone {
+	short	f00;				/* +0x00 */
+	short	f02;				/* +0x02 */
+	short	f04;		/* 0x1a          +0x04 */
+	short	f06;		/* 0xe00         +0x06 */
+	short	f08;		/* scaled        +0x08 */
+	short	f0a;				/* +0x0a */
+	short	f0c;				/* +0x0c */
+	short	f0e;		/* 1             +0x0e */
+};
+
+/*
  * The transmit sequence: the CM or JM about to go on the wire, as 10-bit
  * V.21 characters -- start bit, eight data bits least significant first, stop
  * bit -- terminated by 0xffff, followed by the transmitter's control block.
@@ -171,7 +186,10 @@ struct v8_cm {
 	unsigned char	b1;			/* +0x01 */
 	unsigned char	b2;			/* +0x02 */
 	unsigned char	b3;			/* +0x03 */
-	unsigned char	pad04[0x18 - 4];
+	unsigned char	pad04[0x10 - 4];
+	/* The modulation list, read as one word when the JM is built. */
+	int		menu;			/* +0x10 */
+	unsigned char	pad14[0x18 - 0x14];
 	unsigned char	ext1[4];		/* +0x18 */
 	unsigned char	ext2[4];		/* +0x1c */
 };
@@ -296,26 +314,89 @@ struct v8 {
 	short			tx_shape[V8_TX_SHAPE];		/* +0x77c */
 	short			rx_scratch[V8_RX_SCRATCH];	/* +0x894 */
 
-	unsigned char		pad9d4[0xa42 - 0x9d4];
+	unsigned char		pad9d4[0x9d4 - 0x9d4];
+	short			f9d4;		/* +0x9d4 */
+	short			f9d6;		/* +0x9d6 */
+	short			f9d8;		/* +0x9d8 */
+	unsigned char		pad9da[0xa3e - 0x9da];
+
+	short			fa3e;		/* 0x10     +0xa3e */
+	short			fa40;		/* 0x200    +0xa40 */
 	short			fa42;		/* +0xa42 */
-	unsigned char		pada44[0xa58 - 0xa44];
+
+	/*
+	 * The configuration V8Create plants, which v8handshakinit reads back.
+	 * `mode` picks between three whole shapes of handshake and is the
+	 * first thing looked at; anything but 0 or 1 makes the function
+	 * return having done only the common preamble.
+	 */
+	int			mode;		/* +0xa44 */
+	int			fa48;		/* +0xa48 */
+	int			timeout_a;	/* +0xa4c */
+	int			timeout_b;	/* +0xa50 */
+	unsigned char		pada54[0xa58 - 0xa54];
+
 	struct v8_cm		*cm;		/* +0xa58 */
 	short			v21_taps[V8_V21_TAPS];	/* +0xa5c */
 	unsigned char		pada_d6[2];
 	struct v8_detector	detector;	/* +0xad8 */
 	struct v8_phase_rev	phase_rev;	/* +0xb40 */
 	struct v8_v21_params	v21_params;	/* +0xc20 */
-	struct v8_tx_sequence	*tx_seq;	/* +0xc48 */
-	void			*fc4c;		/* +0xc4c */
-	unsigned char		padc50[0xdd2 - 0xc50];
 
-	/* The tone queue, which v8_TONEq_init arms. */
+	/* Which sequence is being sent, and two more of the five. */
+	struct v8_tx_sequence	*tx_seq;	/* +0xc48 */
+	struct v8_tx_sequence	*seq_alt;	/* +0xc4c */
+	struct v8_tx_sequence	*seq_spare;	/* +0xc50 */
+
+	/*
+	 * Five sequence buffers in a row.  That they are exactly five, and
+	 * exactly 0x40 bytes each, is confirmed by the object rather than
+	 * assumed: the hand-built one at +0xd14 puts its terminator at +0xd32
+	 * and its length at +0xd36, which is where struct v8_tx_sequence puts
+	 * them, and 60 bits is exactly the six words written above it.
+	 */
+	struct v8_tx_sequence	seq[5];		/* +0xc54 */
+
+	short			fd94;		/* +0xd94 */
+	short			fd96;		/* 0x1a     +0xd96 */
+	int			fd98;		/* +0xd98 */
+	int			fd9c;		/* +0xd9c */
+	short			fda0;		/* +0xda0 */
+	unsigned char		padda2[2];
+
+	/*
+	 * A tone generator, laid out like the V.21 parameters but with its own
+	 * constants -- this is the one the answering side uses.
+	 */
+	struct v8_tone		tone;		/* +0xda4 */
+
+	short			fdb4;		/* +0xdb4 */
+	short			fdb6;		/* +0xdb6 */
+	short			fdb8;		/* +0xdb8 */
+	unsigned char		paddba[0xdbe - 0xdba];
+	short			fdbe;		/* +0xdbe */
+	short			fdc0;		/* +0xdc0 */
+	unsigned char		paddc2[2];
+	int			fdc4;		/* +0xdc4 */
+	int			fdc8;		/* +0xdc8 */
+	int			fdcc;		/* +0xdcc */
+	short			fdd0;		/* +0xdd0 */
+
 	short			toneq_pending;	/* +0xdd2 */
 	short			toneq_period;	/* +0xdd4 */
 	unsigned char		paddd6[2];
-
 	struct v8_v21		v21;		/* +0xdd8 */
-	unsigned char		pade5c[V8_STATE_BYTES - 0xe5c];
+
+	/* The two timeouts, in samples, and a counter. */
+	int			deadline_a;	/* +0xe5c */
+	int			deadline_b;	/* +0xe60 */
+	int			fe64;		/* +0xe64 */
+	unsigned char		pade68[0xebc - 0xe68];
+	short			febc;		/* +0xebc */
+	short			febe;		/* +0xebe */
+	short			fec0;		/* +0xec0 */
+	short			fec2;		/* +0xec2 */
+	unsigned char		padec4[V8_STATE_BYTES - 0xec4];
 };
 
 /*
@@ -372,6 +453,12 @@ void v8_V21_Init(struct v8 *v, short channel, short answerer);
  * is how one function serves both messages.
  */
 void initTxSequence(struct v8 *v);
+
+/*
+ * Lay out the handshake from the configuration V8Create planted.  Reads
+ * `v->mode` and builds one of three shapes.
+ */
+void v8handshakinit(struct v8 *v);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);

@@ -34,6 +34,7 @@ extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
 extern void ref_v8_V21_Init(struct v8 *v, short channel, short answerer);
 extern unsigned char ref_charFlip(unsigned char b);
 extern void ref_initTxSequence(struct v8 *v);
+extern void ref_v8handshakinit(struct v8 *v);
 
 /* The two objects every comparison below runs through. */
 static struct v8 obj_a, obj_b;
@@ -246,6 +247,24 @@ compare_filters(void)
 	obj_a.v21.d = obj_b.v21.d = 0;
 }
 
+/*
+ * Blank a pointer slot in both objects without comparing it.  For the ones
+ * the test itself set (the call menu) or that have already been compared by
+ * content (the detector's table), an offset comparison would be meaningless
+ * -- they do not point into the object at all.
+ */
+static void
+blank(const size_t *offs, int n)
+{
+	long zero = 0;
+	int i;
+
+	for (i = 0; i < n; i++) {
+		memcpy((char *)&obj_a + offs[i], &zero, sizeof(zero));
+		memcpy((char *)&obj_b + offs[i], &zero, sizeof(zero));
+	}
+}
+
 static const size_t rx_pointers[] = {
 	offsetof(struct v8, rx) + offsetof(struct v8_rx, buf)
 };
@@ -259,7 +278,13 @@ whole_object(const char *what)
 	int differed = 0;
 
 	for (i = 0; i < sizeof(struct v8); i++) {
-		diff_eq_int("%s: byte", b[i], a[i], (long)i);
+		/*
+		 * The label takes the byte offset, so it must be a numeric
+		 * conversion.  It said "%s" for a long time and nothing
+		 * noticed, because the label is only formatted when a check
+		 * fails and this one never had.
+		 */
+		diff_eq_int("byte at +%ld", b[i], a[i], (long)i);
 		if (a[i] != 0)
 			differed++;
 	}
@@ -616,6 +641,112 @@ t_dftenergy(void)
 	return diff_end();
 }
 
+/*
+ * v8handshakinit plants pointers to its own sequence buffers and reads the
+ * call menu through another, so both kinds are normalised: the ones into the
+ * object become offsets, and the detector's coefficient table -- which exists
+ * once in the object file and once in v8hs.c -- is compared by content.
+ */
+static int
+t_handshakinit(void)
+{
+	/* Written by both shapes that write anything. */
+	static const size_t seq_pointers[] = {
+		offsetof(struct v8, tx_seq),
+		offsetof(struct v8, seq_alt)
+	};
+	/* Written only when the JM branch runs. */
+	static const size_t spare_pointer[] = {
+		offsetof(struct v8, seq_spare)
+	};
+	/* Never compared as offsets: these do not point into the object. */
+	static const size_t outside_pointers[] = {
+		offsetof(struct v8, cm),
+		offsetof(struct v8, detector) + offsetof(struct v8_detector,
+							table)
+	};
+	int mode, t, b2, i;
+	long built = 0;
+
+	diff_begin("v8handshakinit: laying out the handshake");
+
+	for (mode = -1; mode <= 3; mode++) {
+		for (t = 0; t <= 2; t++) {
+			for (b2 = 0; b2 < 4; b2++) {
+				fill(&obj_a, sizeof(obj_a),
+				     4000u + mode * 64 + t * 8 + b2);
+				memcpy(&obj_b, &obj_a, sizeof(obj_a));
+
+				memset(&cm_a, 0, sizeof(cm_a));
+				cm_a.b0 = (unsigned char)(0x11 * b2);
+				cm_a.b1 = (unsigned char)(0x22 * t);
+				cm_a.b2 = (unsigned char)((b2 & 1 ? 0x10 : 0)
+							  | (b2 & 2 ? 0x40 : 0)
+							  | 0x04);
+				cm_a.menu = 0x0f0f0f0f * (t + 1);
+				cm_a.ext1[0] = 'G';
+				cm_a.ext2[0] = 'B';
+				memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+				obj_a.mode = mode;
+				obj_b.mode = mode;
+				obj_a.timeout_a = obj_b.timeout_a = t - 1;
+				obj_a.timeout_b = obj_b.timeout_b = t * 5;
+				obj_a.fa48 = obj_b.fa48 = (t == 1);
+				obj_a.fa42 = obj_b.fa42 = (short)(1000 * t);
+				obj_a.cm = &cm_a;
+				obj_b.cm = &cm_b;
+
+				ref_v8handshakinit(&obj_a);
+				v8handshakinit(&obj_b);
+
+				/*
+				 * Only dereference what this mode actually
+				 * wrote.  Mode 0 arms the detector, mode 1
+				 * brings up the V.21 filters; in any other
+				 * mode those words still hold the fill
+				 * pattern, and reading them as pointers is
+				 * how the first version of this crashed.
+				 */
+				if (mode == 0) {
+					for (i = 0; i < 8; i++)
+						diff_eq_int("detector table %ld",
+							    obj_b.detector.table[i],
+							    obj_a.detector.table[i],
+							    i);
+				}
+				if (mode == 1)
+					compare_filters();
+
+				blank(outside_pointers, 2);
+				/*
+				 * v8_rxinit and v8_txinit run in the preamble,
+				 * before the mode is looked at, so their
+				 * pointers are set whatever shape follows.
+				 * Only the sequence pointers are conditional.
+				 */
+				normalise(tx_pointers, 4);
+				normalise(rx_pointers, 1);
+				if (mode == 0 || mode == 1)
+					normalise(seq_pointers, 2);
+				if (mode == 0 && (cm_a.b2 & 0x10))
+					normalise(spare_pointer, 1);
+				whole_object("handshakinit");
+
+				diff_eq_int("menu after, mode %ld",
+					    memcmp(&cm_a, &cm_b,
+						   sizeof(cm_a)) == 0, 1,
+					    mode);
+				if (obj_a.seq[0].nbits != 0)
+					built++;
+			}
+		}
+	}
+
+	diff_eq_int("sequences were built (%ld)", built > 0, 1, built);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -630,5 +761,6 @@ main(void)
 	rc |= t_charflip();
 	rc |= t_inits();
 	rc |= t_txsequence();
+	rc |= t_handshakinit();
 	return rc;
 }

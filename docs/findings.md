@@ -3924,3 +3924,57 @@ been declared `int`. It is passed a `.rodata` address. On a 32-bit target
 both are four bytes and the value copies through either way, so every
 differential check passed while the declaration said the wrong thing. Nothing
 in a same-width comparison can find that -- only reading the caller can.
+
+## 68. v8handshakinit, and three ways to read a table wrong
+
+The map in finding 67 turned out to be the easy part. The function itself is
+three shapes chosen by `v->mode`: 0 is the full handshake, 1 is the answering
+side, and anything else returns having done only the preamble every shape
+shares. That preamble includes `v8_rxinit` and `v8_txinit`, so the transmit
+and receive pointers are set whatever follows -- which matters more for the
+test than for the code.
+
+### Five sequence buffers, confirmed rather than assumed
+
+`struct v8_tx_sequence` was inferred in finding 66 from the encoder alone.
+This function confirms it from the other side: it hand-builds a sequence at
++0xd14 without calling the encoder, and puts the terminator at +0xd32 and the
+length at +0xd36 -- exactly where the struct says they go -- with a length of
+60 for the six words written above them. A second hand-built one at +0xc94
+has three words and a length of 30.
+
+So the object holds five of them in a row, +0xc54 through +0xd94, and the
+arithmetic closes: five times 0x40 lands exactly on the next named field.
+
+### The flag word is assigned, not or-ed
+
+Both shapes store a constant into `rx.flags` rather than or-ing one in, which
+drops whatever `v8_rxinit` left there. Order therefore matters both ways:
+mode 0 stores 0x8000 and *then* runs the detector initialiser, which ors in
+its own bit; mode 1 runs `v8_V21_Init`, which ors in a bit, and *then* stores
+0x8004 over the top of it. The same two lines in the other order would give
+different answers in both shapes.
+
+### The detector's table is eight entries, not a hundred
+
+The table passed to `v8_detectorinit` sits at .rodata+0x5670, and the next
+thing known was the cosine table at +0x5740, so a first pass copied the whole
+0xd0-byte gap. It failed from index 8 onwards, and the values gave the reason
+away: one side held small numbers and the other pairs that read as addresses.
+Relocations begin at .rodata+0x5680. Everything past index 8 is a pointer
+array belonging to something else, and a verbatim copy holds link-time
+addends where the running object holds real addresses.
+
+Three separate mistakes about this table in one sitting -- wrong type
+(finding 67), wrong length, and a test that dereferenced it in modes that
+never set it. The general lesson is the same each time: a region's extent is
+never implied by the distance to the next thing you happen to know about.
+
+### A test bug that had been latent for five commits
+
+`whole_object` passed a label containing `%s` while handing the harness a
+byte offset to format. It had been there since finding 63 and had never
+fired, because the label is only formatted when a check fails and that
+comparison had never failed. The first genuine mismatch turned it into a
+segfault. Worth recording as the failure mode of a diagnostic path that is
+only exercised by failure.
