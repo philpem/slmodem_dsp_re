@@ -143,8 +143,17 @@ $(BUILD)/capture/spandsp_b103.pcm: test/interop/gen_spandsp_capture.c $(SPANDSP_
 	    $(SPANDSP_LIB) -lm
 	@./$(BUILD)/gen_capture $(BUILD)/capture
 
-interop: $(BUILD)/test/t_spandsp_b103
+interop: $(BUILD)/test/t_spandsp_b103 $(BUILD)/test/t_spandsp_v8
 	@./$(BUILD)/test/t_spandsp_b103
+	@./$(BUILD)/test/t_spandsp_v8
+
+$(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c $(SRC) | $(BUILD)
+	@test -f $(SPANDSP_LIB) || { \
+	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
+	    exit 1; }
+	@mkdir -p $(BUILD)/test
+	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v8.c \
+	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
 
 $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
