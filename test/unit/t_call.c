@@ -7,6 +7,12 @@
  * so calling it and taking the three pointers out of the harness's
  * registration log reaches every one of them.  That is what `ops_of` does.
  *
+ * S56 matters more here than anywhere else: through `CALLPROG_Create`'s `w0`
+ * it decides which states listen to which detector, and with 0, 1 or 3 *no*
+ * state listens for dial tone -- the machine blind-dials after a fixed wait.
+ * Both halves of that split are covered below, because only the dial-tone
+ * half ever puts samples on the line.
+ *
  * As with the dialler and the supervisor, the two sides cannot run
  * interleaved: `CALLPROG_Dial` reaches the pulse dialler through the single
  * `MDMPRM_DP_ADDR` slot.  Each side is driven to completion with the store
@@ -32,6 +38,13 @@ extern void ref_dp_call_init(void);
 static int status_seen[16];
 static long total_nonzero;
 
+/*
+ * S56 decides whether the supervisor waits for dial tone, and through
+ * CALLPROG_Create's `w0` it decides which states listen to which detector.
+ * 0, 1 and 3 mean one thing; everything else means the other.
+ */
+static int sreg56;
+
 struct side {
 	struct dp_operations	*op;
 	struct dp		*dp;
@@ -47,14 +60,14 @@ static short input[MAXCALLS][MAXSAMP];
 
 /* 550 Hz at amplitude 5000, the level and frequency the detectors respond to. */
 static const short cycle[64] = {
-	     0,    488,    957,   1389,   1768,   2079,   2310,   2452,
-	  2500,   2452,   2310,   2079,   1768,   1389,    957,    488,
-	     0,   -488,   -957,  -1389,  -1768,  -2079,  -2310,  -2452,
-	 -2500,  -2452,  -2310,  -2079,  -1768,  -1389,   -957,   -488,
-	     0,    488,    957,   1389,   1768,   2079,   2310,   2452,
-	  2500,   2452,   2310,   2079,   1768,   1389,    957,    488,
-	     0,   -488,   -957,  -1389,  -1768,  -2079,  -2310,  -2452,
-	 -2500,  -2452,  -2310,  -2079,  -1768,  -1389,   -957,   -488
+	     0,    490,    975,   1451,   1913,   2357,   2778,   3172,
+	  3536,   3865,   4157,   4410,   4619,   4785,   4904,   4976,
+	  5000,   4976,   4904,   4785,   4619,   4410,   4157,   3865,
+	  3536,   3172,   2778,   2357,   1913,   1451,    975,    490,
+	     0,   -490,   -975,  -1451,  -1913,  -2357,  -2778,  -3172,
+	 -3536,  -3865,  -4157,  -4410,  -4619,  -4785,  -4904,  -4976,
+	 -5000,  -4976,  -4904,  -4785,  -4619,  -4410,  -4157,  -3865,
+	 -3536,  -3172,  -2778,  -2357,  -1913,  -1451,   -975,   -490
 };
 
 #define TONE_STEP	9011		/* 550 * 64 * 2048 / 8000 */
@@ -126,7 +139,7 @@ params(const char *dialstr)
 	harness_param_set(GetDialToneWaitTime, 100);
 
 	harness_sreg_set(16, 1);	/* tone dialling when no prefix */
-	harness_sreg_set(56, 0);
+	harness_sreg_set(56, sreg56);
 }
 
 /*
@@ -275,6 +288,28 @@ main(void)
 
 	/* With something on the line, so the supervisor has work to do. */
 	rc |= run("call: 8k, tone", "5551234", SIG_TONE, 8000, 160, 80);
+
+	/*
+	 * Both halves of the S56 split.  With 0, 1 or 3 the machine starts in
+	 * WAIT_DIAL and *no* state listens for dial tone -- it is blind
+	 * dialling, and only the state timeout moves it on.  With 2 or 4 it
+	 * starts in DIALING and dial tone is listened for in states 1 and 2.
+	 * The long run is there to outlast the timeout, which is seconds.
+	 */
+	for (i = 0; i <= 4; i++) {
+		char lb[64];
+
+		sreg56 = i;
+		sprintf(lb, "call: S56=%d, tone", i);
+		rc |= run(lb, "5551234", SIG_TONE, 8000, 160, 80);
+	}
+	sreg56 = 0;
+	rc |= run("call: blind dial outlasts its timeout", "5551234",
+		  SIG_SILENCE, 8000, 160, 120);
+	sreg56 = 2;
+	rc |= run("call: dial-tone detection, long run", "5551234", SIG_TONE,
+		  8000, 160, 120);
+	sreg56 = 0;
 	rc |= run("call: 8k, noise", "5551234", SIG_NOISE, 8000, 160, 60);
 
 	/* The two rates that get resamplers, and one that does not. */
@@ -307,16 +342,14 @@ main(void)
 			    status_seen[DPSTAT_OK] > 0, 1,
 			    status_seen[DPSTAT_OK]);
 		/*
-		 * Not "audio was generated": the outgoing buffer stays silent
-		 * throughout, because the supervisor never leaves WAIT_DIAL
-		 * under any input this test can produce, and only the DIALING
-		 * state writes samples.  Fed 48 at a time through the block
-		 * machinery, the 550 Hz tone that moves the supervisor along
-		 * in t_callprog_progress does not do so here.  Recorded as a
-		 * known limit rather than guarded against.
+		 * The outgoing side only carries samples once the supervisor
+		 * reaches DIALING, which needs S56 to be 2 or 4 -- with 0, 1
+		 * or 3 no state listens for dial tone at all and the machine
+		 * waits out its timeout in silence.  So this guard is really
+		 * a guard on the S56 cases above being present.
 		 */
-		diff_eq_int("the outgoing side stayed silent (%ld non-zero)",
-			    total_nonzero == 0, 1, total_nonzero);
+		diff_eq_int("the dialler reached the line (%ld samples)",
+			    total_nonzero > 1000, 1, total_nonzero);
 		diff_eq_int("several messages were seen (%ld)",
 			    side_a.message[side_a.calls - 1]
 			    != CALLPROG_MAX_MESSAGES, 1,

@@ -107,13 +107,34 @@ Read down that column and it is the list of ways a call fails to connect.
     timeout_table         cleared, then six entries taken from the
                           CALLPROG object's own first seven words
     automode_table        cleared, then [3] = [4] = [5] = 1
-    toneiir_dialtone_table  cleared, then [1] = [2] = 1
-    toneiir_busy_table      all ten set to 1
+    toneiir_dialtone_table  cleared, then [1] = [2] = 1   -- but see below
+    toneiir_busy_table      all ten set to 1              -- but see below
 ```
 
-`toneiir_busy_table` being all ones is the clearest statement in the machine:
-**busy tone is listened for in every state**, and dial tone only in states 1
-and 2, which is where a modem is waiting to dial.
+### CORRECTION: the last two tables are conditional
+
+The two lines above describe only one of the two shapes this machine takes.
+`CALLPROG_Create`'s configuration word -- `cfg.w0`, which `call_create`
+derives from **S56** -- decides which detector each state listens to, and it
+inverts the answer:
+
+```
+    w0 = 0  (S56 is 2, 4, ...)      w0 = 1  (S56 is 0, 1 or 3)
+    dialtone  0 1 1 0 0 0 0 0 0 0   dialtone  0 0 0 0 0 0 0 0 0 0
+    busy      1 1 1 1 1 1 1 1 1 1   busy      1 0 0 1 1 1 1 1 1 1
+```
+
+With `w0 = 1` **no state listens for dial tone at all**, and states 1 and 2
+listen to nothing whatever. That is blind dialling: the modem waits a fixed
+time in `CALLPROG_WAIT_DIAL`, hears nothing because it is not listening, and
+leaves only when the state's timeout expires. `CALLPROG_Dial` starts the
+machine in state 1 for `w0 = 1` and state 2 for `w0 = 0`.
+
+This was measured, not read: it is why `t_call` sat in `CALLPROG_WAIT_DIAL`
+through every input for a while, with a dial-tone detector that asserted
+perfectly well when driven directly. Both halves of the split are now
+covered by `t_call`, and only the `w0 = 0` half ever puts samples on the
+line.
 
 Being file statics none of these can be read by a differential test, so they
 will be verified through `CALLPROG_Progress` -- the only thing that consumes

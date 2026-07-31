@@ -64,11 +64,15 @@ extern int enable_line_clear_timeout[CALLPROG_STATES];
 extern unsigned char automode_table[CALLPROG_STATES];
 
 /*
- * Which cadence detector each state listens to.  `toneiir_busy_table` is all
- * ones -- busy tone is listened for everywhere -- and dial tone only in states
- * 1 and 2, which is where a modem is waiting to dial.  That is why
- * CALLPROG_Create builds two detectors and never a ringback or congestion
- * one: the machine never asks.
+ * Which cadence detector each state listens to.  Both tables depend on
+ * `cfg.w0`, which `call_create` derives from S56, and it inverts them: with
+ * w0 = 0 dial tone is heard in states 1 and 2 and busy everywhere, while with
+ * w0 = 1 dial tone is heard nowhere and states 1 and 2 hear nothing at all --
+ * blind dialling, where the wait in CALLPROG_WAIT_DIAL ends on its timeout
+ * rather than on a tone.  See docs/callprog_states.md.
+ *
+ * Either way only these two detectors are ever named, which is why
+ * CALLPROG_Create builds two and never a ringback or congestion one.
  */
 extern unsigned char toneiir_dialtone_table[CALLPROG_STATES];
 extern unsigned char toneiir_busy_table[CALLPROG_STATES];

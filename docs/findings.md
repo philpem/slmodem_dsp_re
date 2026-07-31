@@ -3620,12 +3620,38 @@ is guaranteed to differ from. Worth noting because 17 is a real message and
 the off-by-one is invisible until a test runs fewer than 48 samples through
 and never completes a block.
 
-### A limit worth recording
+### It was waiting for a dial tone it was configured never to listen for
 
-`t_call` compares 15 configurations sample-for-sample -- every fragment size
-from 1 to 200, both resampled rates and one with no converter, and six dial
-strings -- and the outgoing buffer is silent in all of them. The supervisor
-never leaves `CALLPROG_WAIT_DIAL`, and only the dialling state writes
-samples. Fed 48 at a time through the block machinery, the 550 Hz tone that
-moves the supervisor along in `t_callprog_progress` does not do so here. The
-test asserts the silence rather than pretending to guard against it.
+`t_call` first ran with the outgoing buffer silent in every configuration:
+the supervisor never left `CALLPROG_WAIT_DIAL`, and only the dialling state
+writes samples. Three plausible explanations were wrong -- the tone level
+(the table really was half scale, and fixing it changed nothing), the
+call-progress filter index (all eight behave the same), and the 48-sample
+block size. Driving the built dial-tone detector directly settled it: 354
+detections in 64000 samples. The detector worked; nothing was asking it.
+
+`toneiir_dialtone_table` was **all zeros**, and `toneiir_busy_table` was zero
+in exactly states 1 and 2 -- the inverse of what the machine looks like from
+`CALLPROG_Create` alone. Both tables depend on `cfg.w0`, which `call_create`
+derives from **S56**:
+
+```
+    S56 = 2, 4, ...  -> w0 = 0    dialtone  0 1 1 0 0 0 0 0 0 0
+                                  busy      1 1 1 1 1 1 1 1 1 1
+                                  CALLPROG_Dial starts in state 2
+
+    S56 = 0, 1 or 3  -> w0 = 1    dialtone  0 0 0 0 0 0 0 0 0 0
+                                  busy      1 0 0 1 1 1 1 1 1 1
+                                  CALLPROG_Dial starts in state 1
+```
+
+So with `w0 = 1` no state listens for dial tone anywhere, and states 1 and 2
+listen to nothing at all. That is blind dialling: the modem waits a fixed
+time in `CALLPROG_WAIT_DIAL`, hears nothing because it is not listening, and
+moves on when the timeout expires -- which is seconds, longer than the first
+version of the test ran. `t_call` had S56 at 0.
+
+This corrects `docs/callprog_states.md`, which recorded the `w0 = 0` shape as
+though it were the only one. `t_call` now covers both halves of the split,
+and with S56 = 2 the dialler's DTMF reaches the line -- 13840 non-silent
+samples where there were none.
