@@ -425,6 +425,77 @@ biquad(short *x, short *y, const short *b, const short *a, int in)
 	return acc;
 }
 
+/*
+ * The same two sections again, standing on their own.
+ *
+ * Nothing in the object calls either of them.  The compiler inlined copies
+ * into `v8_tone_detect` -- the same coefficients at .rodata+0x5726, the same
+ * histories -- and left the out-of-line originals behind, so these are what
+ * that code was written from.  Reconstructed because they are in the
+ * translation unit, not because anything reaches them.
+ *
+ * They are not quite the inlined code, either: each product is truncated to
+ * a short before it is accumulated here, and `v8_tone_detect` accumulates
+ * the full result.  That is visible in the object as a `cwtl` after every
+ * call, and it is why these cannot just call the helpers above.
+ */
+short
+notch_filter(const short *in, struct v8_detector *d)
+{
+	int acc = 0;
+	int i;
+
+	d->acc_c[0] = *in;
+	for (i = 0; i < 3; i++)
+		acc += (short)v8_mpyint(d->acc_c[i], tone_in_b[i]);
+	for (i = 0; i < 2; i++)
+		acc -= (short)v8_mpyint(d->acc_d[i], tone_in_a[i]);
+
+	d->acc_c[2] = d->acc_c[1];
+	d->acc_d[2] = d->acc_d[1];
+	d->acc_c[1] = d->acc_c[0];
+	d->acc_d[1] = d->acc_d[0];
+	d->acc_d[0] = (short)acc;
+	return (short)acc;
+}
+
+short
+biquad_filter(short in, struct v8_detector *d, const short *coeff)
+{
+	int acc = in >> 4;
+	int stage1;
+	short x0, y0;
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		acc += (short)v8_mpyint(d->acc_a[i], coeff[i]);
+		acc -= (short)v8_mpyint(d->acc_b[i], coeff[4 + i]);
+	}
+
+	/* Old before new, both histories. */
+	y0 = d->acc_b[0];
+	x0 = d->acc_a[0];
+	d->acc_b[0] = (short)acc;
+	d->acc_a[0] = (short)(in >> 4);
+	d->acc_b[1] = y0;
+	d->acc_a[1] = x0;
+
+	stage1 = (short)(acc >> 4);
+	acc = stage1;
+	for (i = 0; i < 2; i++) {
+		acc += (short)v8_mpyint(d->acc_a[2 + i], coeff[2 + i]);
+		acc -= (short)v8_mpyint(d->acc_b[2 + i], coeff[6 + i]);
+	}
+
+	y0 = d->acc_b[2];
+	x0 = d->acc_a[2];
+	d->acc_b[2] = (short)acc;
+	d->acc_a[2] = (short)stage1;
+	d->acc_b[3] = y0;
+	d->acc_a[3] = x0;
+	return (short)acc;
+}
+
 int
 v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 {

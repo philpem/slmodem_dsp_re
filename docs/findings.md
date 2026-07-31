@@ -4271,3 +4271,26 @@ every fifteen-word message begins with the marker and the marker resets
 characters go on matching the transmit fields past the array. Reproduced as
 written, but read through a view of the whole sequence object so that it
 stays a defined access on this side.
+
+## 74. Three functions nothing calls
+
+With the matching half in, a sweep of every `T` symbol between `V8Delete` and
+`CALLPROG_Create` against the reconstruction found three still missing.
+
+`notch_filter` and `biquad_filter` are the tone detector's two filter
+sections as standalone functions. Nothing in the object references either:
+the compiler inlined copies into `v8_tone_detect` -- same coefficients at
+`.rodata+0x5726`, same histories at `+0x24`/`+0x2a` and `+0x14`/`+0x1c` --
+and left the out-of-line originals behind. They are also not identical to
+what was inlined: each product is truncated to a short before it is
+accumulated, which shows up as a `cwtl` after every `v8_mpyint` call and does
+not appear in the inlined version. Reconstructed as their own functions
+because that is what the translation unit contains, and tested against the
+blob, which is the only thing that ever runs them.
+
+`Dialer_IsDialStringInvalid` is two instructions: add 0x98 to the first
+argument and tail-jump to `IsDialStringInvalid`. 0x98 is where `struct
+dialer` sits inside `struct callprog`, so it is the same question asked of
+the dialler the supervisor owns. Trivial, and exactly the sort of thing that
+would have gone missing quietly -- which is the argument for sweeping the
+symbol table rather than working from a list.

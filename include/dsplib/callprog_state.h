@@ -197,6 +197,12 @@ void CALLPROG_Dial(struct callprog *cp, const char *s);
  * returns the `CALLPROG_*` message for this buffer -- at most one transition
  * happens per call, at the very end.
  */
+/*
+ * Grade a dial string, asked of the dialler the supervisor owns.  The object
+ * defines this as a two-instruction thunk onto `IsDialStringInvalid`.
+ */
+int Dialer_IsDialStringInvalid(struct callprog *cp, const char *s);
+
 int CALLPROG_Progress(struct callprog *cp, const short *in, short *out,
 		      int count);
 

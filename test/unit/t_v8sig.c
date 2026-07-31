@@ -31,6 +31,9 @@ extern void ref_initTxSequence(struct v8 *v);
 extern void ref_v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in,
 				    short count);
 extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
+extern short ref_notch_filter(const short *in, struct v8_detector *d);
+extern short ref_biquad_filter(short in, struct v8_detector *d,
+			       const short *coeff);
 extern int ref_v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
 extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
 				const short *t, short a3, short a4, short a5,
@@ -573,6 +576,53 @@ main(void)
 			    moved3);
 		diff_eq_int("the detector asserted (%ld)", asserted > 0, 1,
 			    asserted);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The same two filter sections as standalone functions.  Nothing in
+	 * the object calls either, so this is the only thing that ever runs
+	 * them; they get their own group because they are not quite what
+	 * v8_tone_detect has inlined -- each product is truncated to a short
+	 * before it is accumulated.
+	 */
+	diff_begin("notch_filter and biquad_filter");
+	{
+		static const short tab[8] = {
+			15000, -9000, 14000, -8000, -7000, 13000, -6000, 12000
+		};
+		long moved = 0;
+
+		for (k = 0; k < 16; k++) {
+			int n;
+
+			fill(&obj_a, sizeof(obj_a), 8800u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+
+			for (n = 0; n < 200; n++) {
+				short x = (short)((n * 977 + k * 313) % 20001
+						  - 10000);
+				short in_a = x, in_b = x;
+				int ra, rb;
+
+				ra = ref_notch_filter(&in_a, &obj_a.detector);
+				rb = notch_filter(&in_b, &obj_b.detector);
+				diff_eq_int("notch (%ld)", rb, ra, (long)n);
+
+				ra = ref_biquad_filter((short)ra,
+						       &obj_a.detector, tab);
+				rb = biquad_filter((short)rb,
+						   &obj_b.detector, tab);
+				diff_eq_int("biquad (%ld)", rb, ra, (long)n);
+				if (ra != 0)
+					moved++;
+			}
+			diff_eq_int("detector state (%ld)",
+				    memcmp(&obj_a.detector, &obj_b.detector,
+					   sizeof(obj_a.detector)) == 0, 1, k);
+		}
+		diff_eq_int("the sections produced something (%ld)",
+			    moved > 100, 1, moved);
 	}
 	rc |= diff_end();
 

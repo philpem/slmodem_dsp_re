@@ -740,6 +740,13 @@ int v8handshak(struct v8 *v);
 /* One buffer of samples through the handshake; returns a status. */
 int V8Process(struct v8 *v, const short *in, short *out, int count);
 
+/*
+ * The tone detector's two filter sections as standalone functions.  The
+ * object defines both and calls neither: `v8_tone_detect` has them inlined.
+ */
+short notch_filter(const short *in, struct v8_detector *d);
+short biquad_filter(short in, struct v8_detector *d, const short *coeff);
+
 /* The two long receive paths, in v8hsrx.c. */
 int v8_handshak_agc(struct v8 *v);
 int v8_handshak_demod(struct v8 *v);

@@ -717,3 +717,17 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 	cp->message = message;
 	return message;
 }
+
+/*
+ * Grade a dial string on behalf of the supervisor.
+ *
+ * A thunk, and nothing but: the object's version adds 0x98 to its first
+ * argument and tail-jumps.  0x98 is where the dialler sits inside the
+ * supervisor, so this is the same question asked of the one the supervisor
+ * owns rather than of a dialler the caller has to reach into.
+ */
+int
+Dialer_IsDialStringInvalid(struct callprog *cp, const char *s)
+{
+	return IsDialStringInvalid(&cp->dialer, s);
+}

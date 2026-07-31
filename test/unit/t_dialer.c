@@ -26,9 +26,12 @@
 
 #include "harness.h"
 #include "dsplib/dialer.h"
+#include "dsplib/callprog_state.h"
 #include "dsplib/modem_params.h"
 
 extern int ref_IsDialStringInvalid(struct dialer *d, const char *s);
+extern int ref_Dialer_IsDialStringInvalid(struct callprog *cp,
+					  const char *s);
 extern int ref_DialerCreate(struct dialer *d, const char *s, void *modem);
 extern void ref_DialerAbort(struct dialer *d);
 
@@ -379,6 +382,52 @@ main(void)
 	rc |= run_length();
 	rc |= run_create();
 	rc |= run_abort();
+
+	/*
+	 * The supervisor's thunk onto the same parser.  Two instructions in
+	 * the object, but they encode where the dialler sits inside the
+	 * supervisor, and getting that offset wrong would be silent.
+	 */
+	diff_begin("Dialer_IsDialStringInvalid");
+	{
+		static const char *const strings[] = {
+			"1234", "T5551212", "*67,555", "AB#", "", "P;9W1",
+			"12!34", "0123456789012345678901234567890123456789"
+		};
+		static struct callprog cp_a, cp_b;
+		unsigned si;
+
+		for (si = 0; si < sizeof(strings) / sizeof(strings[0]); si++) {
+			int ra, rb;
+
+			harness_param_reset();
+			harness_param_set(GetABCDDialingPermittedFlag,
+					  (int)(si & 1));
+			harness_param_set(
+				GetPulseAndToneDialInSameDialStringPermittedFlag,
+				(int)((si >> 1) & 1));
+			harness_param_set(GetDialModifierValidation,
+					  (int)((si >> 2) & 1));
+			harness_param_set(GetCallingToneFlag, 0);
+			harness_param_set(GetDTMFHighToneLevel, 9);
+			harness_param_set(
+				GetDTMFHighAndLowToneLevelDifference, 2);
+
+			memset(&cp_a, 0, sizeof(cp_a));
+			memset(&cp_b, 0, sizeof(cp_b));
+			cp_a.dialer.modem = cp_b.dialer.modem =
+				(void *)0xD1A1u;
+
+			ra = ref_Dialer_IsDialStringInvalid(&cp_a,
+							    strings[si]);
+			rb = Dialer_IsDialStringInvalid(&cp_b, strings[si]);
+			diff_eq_int("verdict (%ld)", rb, ra, (long)si);
+			diff_eq_int("supervisor matches (%ld)",
+				    memcmp(&cp_a, &cp_b, sizeof(cp_a)) == 0,
+				    1, (long)si);
+		}
+	}
+	rc |= diff_end();
 
 	/*
 	 * Anti-vacuity.  All four grades must have been produced; a parser
