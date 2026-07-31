@@ -2935,3 +2935,64 @@ shipped configuration: reaching one needs a subindex in 1..7, and slmodemd
 answers `GetDialToneFilterSubindex` with a literal zero (finding 49). Three
 banks of seven progressively wider bandpasses, fully designed, fully shipped,
 and entirely dead unless a different host supplies that one parameter.
+
+---
+
+## 51. DialerConfig.c, and a calling convention that is not cdecl
+
+`GetDialerConfig` fills a 60-byte struct with sixteen `modem_get_param` calls.
+Fifteen are straight copies. The two that are not tell you what the numbers
+mean.
+
+### The DTMF levels are decibel tables
+
+`GetDTMFHighToneLevel` indexes a seven-entry table directly, valid over 6..12,
+and the entries are one decibel apart from 16384:
+
+```
+    6   16384    0 dB        10   10338   -4 dB
+    7   14602   -1 dB        11    9213   -5 dB
+    8   13014   -2 dB        12    8211   -6 dB
+    9   11599   -3 dB
+```
+
+`GetDTMFHighAndLowToneLevelDifference` indexes a five-entry table of Q15
+ratios over 1..5, giving -1 dB to -5 dB, and the low group is the high group
+scaled by it. That is the DTMF twist.
+
+Out of range, both fall back to **-2 dB** -- not to zero, and not clamped to
+the nearest end of the table. Two decibels of twist is what the ITU asks for,
+so the fallbacks are the specified values rather than arbitrary ones.
+
+### `GetPulseBetweenDigitsInterval` is multiplied by ten
+
+The only arithmetic in the function. It confirms the 10 ms convention
+established for the cadence times (docs/parameters.md) outside cadence for the
+first time: the parameter is in centiseconds and the dialler wants
+milliseconds.
+
+### AnalyseDialString is not called with the C calling convention
+
+```
+    7af5b:  movl $0x0,(%esp)        ; third argument, on the stack
+    7af62:  mov  %ebx,%eax          ; first argument, in eax
+    7af64:  mov  %esi,%edx          ; second argument, in edx
+    7af66:  call 7a9f0 <AnalyseDialString>
+```
+
+and the callee reads them from exactly there. This is GCC's `regparm(2)`:
+the first two integer arguments in `eax` and `edx`, the rest on the stack. It
+is used for intra-translation-unit calls in Dialer.c, and the call carries no
+relocation, which is how you can tell it is intra-TU.
+
+**This matters for the reconstruction ahead.** A differential test cannot call
+`ref_AnalyseDialString` with an ordinary prototype -- it will pass arguments on
+the stack that the callee reads from registers, and get garbage that looks
+like a plausible failure. The declaration needs
+`__attribute__((regparm(2)))`, and every Dialer.c function reached only from
+inside Dialer.c has to be checked for the same treatment before it is called
+from a test.
+
+This is the first non-standard convention found in the object. Bell 103 and
+the call-progress modules are cdecl throughout, so nothing before now would
+have shown it.
