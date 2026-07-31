@@ -4122,3 +4122,59 @@ symbols have arrived:
 
 Two independent state variables, one per direction, is why a single 4 KB
 function covers what looks like it should be two.
+
+## 72. What the blob cannot be the judge of
+
+Twenty-seven million differential checks establish one thing: the
+reconstruction does what the object does. They cannot establish that the
+object was read correctly in the first place. A misread frequency, an
+inverted mark and space, a sign error in a filter -- each would make both
+sides wrong in exactly the same way, and every check would still pass.
+
+Two kinds of evidence answer the other question, and both are now in place.
+
+### The constants are the standard's
+
+Derived from the reconstruction's own integers, at the rate the handshake
+runs at:
+
+```
+    ANSam carrier      0x0e00 / 16384 * 9600 = 2100.00 Hz
+    ANSam modulation   0x001a / 16384 * 9600 =   15.23 Hz
+    ANSam reversals    0x438 blocks * 4 / 9600 = 450 ms
+
+    V.21 ch1 space     0x03ef /  8192 * 9600 = 1180.1 Hz
+    V.21 ch1 mark      0x0344 /  8192 * 9600 =  979.7 Hz
+    V.21 ch2 space     0x062b /  8192 * 9600 = 1850.4 Hz
+    V.21 ch2 mark      0x0580 /  8192 * 9600 = 1650.0 Hz
+```
+
+V.8 specifies 2100 Hz amplitude modulated at 15 Hz with a phase reversal
+every 450 ms; V.21 specifies 980/1180 and 1650/1850. These are not close to
+those numbers, they are those numbers -- which also settles that the
+handshake's sample rate really is 9600, since no other rate makes the same
+integers come out right.
+
+### An independent implementation agrees
+
+`make interop` builds a separate 64-bit binary against SpanDSP, whose V.8 has
+nothing to do with this object file, and runs the signal both ways:
+
+- SpanDSP's own tone detector identifies our generated ANSam as
+  `MODEM_CONNECT_TONES_ANSAM_PR`.
+- SpanDSP's generated ANSam, resampled from 8000 to 9600 by the
+  reconstructed converter, gives our phase-reversal detector eight
+  reversals. That direction matters more than the first: it is what would
+  catch a detector tuned to our own generator's quirks rather than to the
+  standard.
+
+The full V.8 state machine's verdict is printed but not asserted on.
+Completing a negotiation needs the sequencer, which is not finished, and
+asserting on something that cannot yet pass would be a check in name only.
+
+### Two mistakes this found
+
+The generator emitted silence at peak zero, because it runs through a
+shaping filter whose taps only `v8_V21_Init` populates and the test had not
+called it. Nothing in the differential harness would have noticed -- both
+sides would have been equally silent, and equal.

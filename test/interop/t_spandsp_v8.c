@@ -143,6 +143,20 @@ main(void)
 	check("ANSam reversal period is 450 ms",
 	      (int)(0x438 * 4 * 1000.0 / NATIVE_RATE + 0.5), 450);
 
+	/*
+	 * The V.21 carriers, the same way: `v8_V21_Init`'s constants against
+	 * a 13-bit accumulator at 9600.  V.21 puts channel 1 at 980 and 1180
+	 * and channel 2 at 1650 and 1850, and these are those numbers -- not
+	 * approximately, exactly.  Nothing in the differential harness could
+	 * have told us that; agreeing with the blob about a wrong frequency
+	 * looks identical to agreeing about a right one.
+	 */
+#define V21_HZ(step)	((int)((step) / 8192.0 * NATIVE_RATE + 0.5))
+	check("V.21 channel 1 space is 1180 Hz", V21_HZ(0x3ef), 1180);
+	check("V.21 channel 1 mark is 980 Hz", V21_HZ(0x344), 980);
+	check("V.21 channel 2 space is 1850 Hz", V21_HZ(0x62b), 1850);
+	check("V.21 channel 2 mark is 1650 Hz", V21_HZ(0x580), 1650);
+
 	/* Now the live check: does SpanDSP hear our ANSam? */
 	n = make_ansam(air, (int)(sizeof(air) / sizeof(air[0])), 4000);
 	check("ANSam was generated", n > SPANDSP_RATE, 1 * (n > SPANDSP_RATE));
