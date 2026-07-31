@@ -22,7 +22,6 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 
-extern int modem_get_param(void *modem, int name);
 
 /*
  * ---------------------------------------------------------------------------

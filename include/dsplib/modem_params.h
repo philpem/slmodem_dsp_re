@@ -88,4 +88,14 @@
 #define GetDialToneFilterSubindex                        61
 #define GetBusyToneLooseDetectionEnabled                 62
 #define MDMPRM_LAST                                      63
+/*
+ * The store itself, declared the way slmodemd declares it.  The `long` is not
+ * cosmetic: MDMPRM_DP_ADDR carries the datapump's address through this
+ * otherwise int-shaped API, so a narrower return type truncates the pointer
+ * anywhere `long` is wider than one.  `modem` is slmodemd's `struct modem *`,
+ * opaque here.
+ */
+extern long modem_get_param(void *modem, unsigned param);
+extern long modem_set_param(void *modem, unsigned param, int value);
+
 #endif /* DSPLIB_MODEM_PARAMS_H */

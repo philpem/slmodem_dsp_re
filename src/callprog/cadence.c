@@ -21,7 +21,6 @@
 #include "dsplib/fp_math.h"
 #include "dsplib/dualtone.h"
 
-extern int modem_get_param(void *modem, int name);
 
 void
 cadence_delete(struct cadence *c)

@@ -14,7 +14,6 @@
 #include "dsplib/dialercfg.h"
 #include "dsplib/modem_params.h"
 
-extern int modem_get_param(void *modem, int name);
 
 /*
  * DTMF send levels, .rodata+0x6178, indexed directly by

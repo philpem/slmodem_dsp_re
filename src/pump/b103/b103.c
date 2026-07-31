@@ -33,6 +33,7 @@
 #include "dsplib/b103.h"
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/modem_params.h"
 
 /* Provided by the modem core (slmodemd/modem.c). */
 
@@ -41,7 +42,6 @@ extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
 			  unsigned short count);
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
 			  unsigned short count);
-extern int modem_set_param(void *modem, unsigned param, int value);
 
 extern void modem_dp_deregister(int id, void *op);
 

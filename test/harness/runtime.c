@@ -379,7 +379,7 @@ int modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
 int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n)
 { (void)m; (void)nbits; return shim_put_bits(&harness_modem_ours, buf, n); }
 
-int modem_set_param(void *m, unsigned name, int val)
+long modem_set_param(void *m, unsigned name, int val)
 { (void)m; return (int)shim_set_param(&harness_modem_ours, name, val); }
 
 int ref_modem_get_bits(void *m, int nbits, unsigned char *buf, int n)

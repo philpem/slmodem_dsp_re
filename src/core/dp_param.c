@@ -10,9 +10,9 @@
  */
 
 #include "dsplib/dp_param.h"
+#include "dsplib/modem_params.h"
 
 /* Provided by the modem core (slmodemd/modem_param.c). */
-extern long modem_get_param(void *modem, unsigned param);
 
 void *
 dp_param_get(void *modem)

@@ -14,11 +14,11 @@
  * and nothing else in call.c does.
  */
 
+#include <stdint.h>
+
 #include "dsplib/pulse.h"
 #include "dsplib/modem_params.h"
 
-extern int modem_get_param(void *modem, int name);
-extern void modem_set_param(void *modem, int name, int value);
 
 /*
  * The call object, or NULL when the modem has no datapump.  Every function
@@ -27,7 +27,7 @@ extern void modem_set_param(void *modem, int name, int value);
 static struct call *
 call_of(void *modem)
 {
-	return (struct call *)modem_get_param(modem, MDMPRM_DP_ADDR);
+	return (struct call *)(intptr_t)modem_get_param(modem, MDMPRM_DP_ADDR);
 }
 
 void
