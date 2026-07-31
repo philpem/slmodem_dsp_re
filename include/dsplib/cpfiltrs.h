@@ -16,20 +16,18 @@
  * takes: `_scales` is the five interstage shifts, `_a` the twelve denominator
  * coefficients and `_b` the twelve numerator coefficients, all Q13.
  *
- * NOTHING IN THE OBJECT REFERENCES THEM.
+ * WHO USES THEM
  *
- * All twelve symbols are global and every one is dead: no relocation anywhere
- * in dsplibs.o points at them, and the filter CALLPROG_Create actually
- * installs is a separate file static in Callprog.c (see callprog_cfg.h).
- * They survive only because being global stopped the linker collecting them.
+ * `cadence_create`, and nothing else -- these four and the nine `Filter_*`
+ * banks in Elliptic1/2/3.c are the per-country filter bank the cadence
+ * detector picks from.  Which design detects which tone is chosen by
+ * `GetDialToneCallProgressFilterIndex` and its three siblings (see
+ * docs/parameters.md), so a British modem and an American one listen for busy
+ * tone through different filters.
  *
- * The natural reading is that these are an earlier or alternative detector's
- * filter bank, kept against a caller outside this library.  They are
- * reproduced because they are part of the object's published surface and
- * something linking against it may still want them -- but if you are looking
- * for the filters the modem uses, they are the Filter_* banks in
- * Elliptic1/2/3.c, which cadence_create selects from, and the supervisor's
- * own band filter in callprog_cfg.h -- not here.
+ * They are not the filter `CALLPROG_Create` installs -- that is a separate
+ * file static in Callprog.c, reproduced in callprog_cfg.h, and is a
+ * band-limiter rather than a tone filter.
  */
 
 #ifndef DSPLIB_CPFILTRS_H

@@ -523,19 +523,50 @@ that reproducing a defect is free exactly when it is unreachable.
 
 ---
 
-## D10 — the four `CP_*` filter designs are dead 💤
+## D10 — RETRACTED: the `CP_*` filter designs are not dead ❌
 
-**Status:** reproduced, not a defect.
+**This entry claimed the four `CPfiltrs.c` designs are unreferenced. They are
+referenced, by `cadence_create`, along with all nine `Filter_*` symbols in
+Elliptic1/2/3.c.** Twenty-one tables, all used, all by one function.
 
-Every symbol `CPfiltrs.c` defines is global, and no relocation anywhere in
-`dsplibs.o` refers to any of them. The filter `CALLPROG_Create` actually
-installs is a separate file static in `Callprog.c` with a different design
-(135–1280 Hz, where `CP_*` are narrow tone bands).
+### Why that looked true
 
-Not listed as a defect because nothing misbehaves — it is an unused table.
-Recorded because "reconstruct everything the object defines" and "reconstruct
-everything the modem uses" give different answers here, and this tree follows
-the first. See finding 43.
+A query that asked which functions relocate against each symbol returned
+nothing. It was malformed, and returned nothing for every input — including
+inputs that certainly do have references. "No results" was read as "no
+references" rather than as "the query did not work", which is the whole of the
+mistake.
+
+### The correct answer
+
+```
+  CP_100_550_{a,b,scales}          <- cadence_create
+  CP_276_504_{a,b,scales}          <- cadence_create
+  CP_350_600_{a,b,scales}          <- cadence_create
+  CP_450_630_{a,b,scales}          <- cadence_create
+  Filter_100_550_{a,b,scales}      <- cadence_create
+  Filter_276_504_{a,b,scales}      <- cadence_create
+  Filter_350_500_{a,b,scales}      <- cadence_create
+  toneiir_configuration_allpass    <- cadence_create
+```
+
+This also explains what the parameters recovered in finding 44 select.
+`GetDialToneCallProgressFilterIndex`, `GetBusyToneCallProgressFilterIndex`,
+`GetRingbackToneCallProgressFilterIndex` and
+`GetCongestionToneCallProgressFilterIndex` choose *which* design a given tone
+is detected with, and `GetDialToneFilterSubindex` chooses which of the seven
+variants within a `Filter_*` family. The tables are not leftovers; they are a
+per-country filter bank, and the homologation data picks from it.
+
+### The rule this earns
+
+Twice in this phase a negative result from a hand-written `readelf`/`objdump`
+query has been believed: once for relocations inside the toneiir configuration
+(finding 46), once here. **A query that returns nothing must be shown to
+return something for a case known to have results before its silence is
+evidence of anything.** Both mistakes would have been caught by one control
+input.
+
 
 ---
 

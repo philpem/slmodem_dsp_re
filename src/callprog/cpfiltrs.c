@@ -4,9 +4,9 @@
  * Reconstructed from dsplibs.o CPfiltrs.c, .rodata 0x626e..0x6355.  The whole
  * translation unit is data: it contributes no .text.
  *
- * Every symbol here is dead in the object -- see cpfiltrs.h for why they are
- * reproduced anyway.  Ordered as the original lays them out, which is by
- * descending passband rather than by name.
+ * `cadence_create` is the only caller; see cpfiltrs.h.  Ordered as the
+ * original lays them out, which is by descending passband rather than by
+ * name.
  *
  * Each section's numerator has b0 = b2 = 8192, so its zeros sit on the unit
  * circle: these are elliptic (Cauer) designs, and the zeros are what put the

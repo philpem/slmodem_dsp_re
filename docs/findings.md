@@ -2530,15 +2530,24 @@ The semantically obvious answer -- "`CPfiltrs.c` is called CP*filters*, so the
 filter engine is in it" -- is the wrong one. Worth remembering: in this object
 the file names describe what a file *holds*, and a file can hold only tables.
 
-### The four CP_* designs are dead
+### What the four CP_* designs are for
 
-All twelve `CP_*` symbols are global and no relocation anywhere in dsplibs.o
-refers to them. The filter `CALLPROG_Create` actually installs is a separate
-file static in `Callprog.c`. The measured passbands match the names exactly --
-`CP_450_630` is 396 to 670 Hz, which is busy and congestion at 480 + 620 --
-so they are a coherent bank that nothing uses. They are reproduced because
-they are part of the object's published surface, and because being able to
-compare them word for word against the blob is free.
+They are a per-country filter bank, and `cadence_create` is the single
+function that reads them -- along with all nine `Filter_*` symbols in
+Elliptic1/2/3.c. Twenty-one tables, one caller.
+
+The measured passbands match the names exactly (`CP_450_630` is 396 to 670 Hz,
+which is busy and congestion at 480 + 620), and finding 44 supplies the
+selector: `GetDialToneCallProgressFilterIndex`,
+`GetBusyToneCallProgressFilterIndex`, `GetRingbackToneCallProgressFilterIndex`
+and `GetCongestionToneCallProgressFilterIndex` each choose which design
+detects that tone, with `GetDialToneFilterSubindex` choosing among the seven
+variants of a `Filter_*` family. A British modem and an American one listen
+for busy tone through different filters.
+
+(An earlier version of this section said the `CP_*` tables were unreferenced.
+That was a broken query believed on a negative result -- see the retraction at
+D10.)
 
 ---
 
