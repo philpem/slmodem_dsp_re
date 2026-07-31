@@ -2423,3 +2423,119 @@ build makes the distinction visible rather than leaving it in prose.
 Building 64-bit also found a real portability bug that `make check64` could
 not: `FPM_TONE_create` allocated a hard-coded 264 bytes for a struct that is
 larger when pointers are eight bytes. `check64` only compiles; this ran.
+
+---
+
+## 41. The call-progress path runs at 8000 Hz, whatever the host rate
+
+`call_create` takes the host sample rate as its last argument and builds two
+resamplers around the supervisor:
+
+```
+    rate == 8000    neither converter is created; CALLPROG sees the host
+                    samples directly
+    rate == 9600    +0x14 = RcFixed_Create(3)   9600 -> 8000  (down, 6:5)
+                    +0x18 = RcFixed_Create(2)   8000 -> 9600  (up,   5:6)
+    rate == 48000   +0x14 = RcFixed_Create(5)  48000 -> 8000  (down, 6:1)
+                    +0x18 = RcFixed_Create(4)   8000 -> 48000 (up,   1:6)
+```
+
+Any other rate leaves both converters null and logs at debug level 2. So the
+whole of Callprog.c, Cadence.c, DualTone_Detector.c and CallingTone.c is
+written against a fixed 8000 Hz, and every frequency in their coefficient
+tables should be read at that rate. `CALLPROG_Create`'s `imul $0x1f40` --
+8000 -- confirms it independently: its timeouts are seconds times the sample
+rate.
+
+This matters more than it sounds. Read at 9600 the supervisor's band filter
+looks like a 200 Hz to 1600 Hz bandpass with a notch at 2712 Hz, which is
+plausible enough to go unquestioned. Read at 8000 it is 135 Hz to 1280 Hz with
+the null at 2260 Hz -- and 350, 440, 480 and 620 Hz, every call-progress tone,
+land inside 1.3 dB of each other. The 9600 reading is not obviously wrong; it
+is just wrong.
+
+Note this is also the *first* module whose rate is genuinely fixed. Bell 103
+runs at the host rate; call progress does not.
+
+## 42. `Dual_TONE_detect` is an answer-tone detector, not a call-progress one
+
+Six verdicts, from a state 68 bytes long, decided by comparing three leaky
+energy estimates:
+
+```
+    0   total energy below the floor -- nothing on the line
+    1   energy present, neither tone dominates -- a person answered
+    2   tone A present, held for less than 1280 samples (160 ms)
+    3   tone A present and confirmed
+    4   tone B present, held for less than 1280 samples
+    5   tone B present and confirmed
+```
+
+The measurement is a Goertzel-style notch difference, the same trick
+`FPM_TONE_detect` uses: run the signal through a notch, square both, and the
+drop is the energy that was at the notch frequency. Three notches, all with
+pole radius 0.9, at 0.2625, 0.225 and 0.28125 of the sample rate -- that is
+**2100, 1800 and 2250 Hz** at 8000. Notch A alone gives tone A; notches B and
+C are cascaded and give tone B together.
+
+2100 Hz is the V.25 answer tone and the carrier for V.8 ANSam. 1800 and
+2250 Hz bracket the FSK answer carriers -- V.21 channel 2 at 1650/1850 and
+Bell 103 answer at 2025/2225 -- and the notches are wide enough (about
+±127 Hz at r = 0.9) to cover them. So the two "tones" are *the far end
+answered with a pure answer tone* and *the far end answered with an FSK
+carrier*, which is exactly the distinction `CALLPROG_MODEM_ANSWER`,
+`CALLPROG_V8BIS_MODEM_ANSWER` and `CALLPROG_VOICE_ANSWER` need.
+
+Dial tone, ringback and busy are not detected here at all. That is cadence.c's
+job, and it uses an entirely different filter bank.
+
+Two details worth keeping:
+
+- The energy floor `Dual_TONE_create` installs is **1**. Not 1000, not a
+  fraction of full scale -- one. The "no signal" branch is very nearly
+  unreachable, so a detector fed anything at all will report 1 rather than 0.
+- The sample index is truncated to 16 bits every iteration (`cwtl` inside the
+  loop), so a block longer than 32767 samples would loop forever. Nothing in
+  the library passes one.
+
+## 43. CPfiltrs.c and Elliptic1/2/3.c contain no code
+
+The translation-unit bracket that holds the call-progress code is nineteen
+files deep and mostly unanchored, so which symbol lives in which file has to
+be argued rather than read off.
+
+The FILE order is `toneiir.c`, `Cadence.c`, `CPfiltrs.c`, `Elliptic1.c`,
+`Elliptic2.c`, `Elliptic3.c`. The `.text` blocks in that range are, in
+address order, `toneiir_*` at 0x7c330, `_iir_filter_*` at 0x7c960 and
+`cadence_*` at 0x7cd80 -- three blocks for six files.
+
+`.rodata` settles it, because each file's *anonymous* statics can only be
+referenced from its own translation unit, and `ld -r` concatenates `.rodata`
+in the same order as `.text`:
+
+```
+    0x6240  toneiir_configuration_allpass                toneiir.c
+    0x626e  CP_450_630 / CP_276_504 / CP_100_550 / CP_350_600   CPfiltrs.c
+    0x6360  Filter_350_500 x 7                           Elliptic1.c
+    0x6540  Filter_100_550 x 7                           Elliptic2.c
+    0x6720  Filter_276_504 x 7                           Elliptic3.c
+```
+
+Monotonic, and in FILE order. Since `cadence_*` sits at a *higher* address
+than `_iir_filter_*` while `Cadence.c` precedes `CPfiltrs.c`, `_iir_filter_*`
+cannot be in `CPfiltrs.c`. It is in `toneiir.c`; `CPfiltrs.c` and the three
+`Elliptic` files are pure data.
+
+The semantically obvious answer -- "`CPfiltrs.c` is called CP*filters*, so the
+filter engine is in it" -- is the wrong one. Worth remembering: in this object
+the file names describe what a file *holds*, and a file can hold only tables.
+
+### The four CP_* designs are dead
+
+All twelve `CP_*` symbols are global and no relocation anywhere in dsplibs.o
+refers to them. The filter `CALLPROG_Create` actually installs is a separate
+file static in `Callprog.c`. The measured passbands match the names exactly --
+`CP_450_630` is 396 to 670 Hz, which is busy and congestion at 480 + 620 --
+so they are a coherent bank that nothing uses. They are reproduced because
+they are part of the object's published surface, and because being able to
+compare them word for word against the blob is free.

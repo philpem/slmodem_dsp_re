@@ -8,10 +8,10 @@
 #ifndef DSPLIB_CALLPROG_CFG_H
 #define DSPLIB_CALLPROG_CFG_H
 
-#include "dsplib/cpfiltrs.h"
+#include "dsplib/toneiir.h"
 
-extern const short CALLPROG_BandFilter_shift[CP_IIR_SECTIONS + 1];
-extern const short CALLPROG_BandFilter_b[3 * CP_IIR_SECTIONS];
-extern const short CALLPROG_BandFilter_a[3 * CP_IIR_SECTIONS];
+extern const short CALLPROG_BandFilter_shift[IIR_FILTER_SCALES];
+extern const short CALLPROG_BandFilter_b[3 * IIR_FILTER_SECTIONS];
+extern const short CALLPROG_BandFilter_a[3 * IIR_FILTER_SECTIONS];
 
 #endif /* DSPLIB_CALLPROG_CFG_H */

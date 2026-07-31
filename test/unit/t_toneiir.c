@@ -1,5 +1,5 @@
 /*
- * t_cpfiltrs.c -- differential test of the call-progress band filter.
+ * t_toneiir.c -- differential test of the call-progress band filter.
  *
  * Three things are being proved, and they are not the same thing:
  *
@@ -31,16 +31,31 @@
 #include <math.h>
 
 #include "harness.h"
-#include "dsplib/cpfiltrs.h"
+#include "dsplib/toneiir.h"
 #include "dsplib/callprog_cfg.h"
+#include "dsplib/cpfiltrs.h"
 
-extern struct cp_iir *ref__iir_filter_create(struct cp_iir *f, int n_a,
+extern struct iir_filter *ref__iir_filter_create(struct iir_filter *f, int n_a,
 					     int n_b, const short *a,
 					     const short *b,
 					     const short *shift);
-extern void ref__iir_filter_delete(struct cp_iir *f);
-extern void ref__iir_filter_progress(struct cp_iir *f, int count,
+extern void ref__iir_filter_delete(struct iir_filter *f);
+extern void ref__iir_filter_progress(struct iir_filter *f, int count,
 				     short *samples);
+
+/*
+ * Unlike the supervisor's own band filter, the four CPfiltrs.c designs are
+ * global symbols, so they can be compared directly rather than only through
+ * their effect.
+ */
+extern const short ref_CP_100_550_scales[], ref_CP_100_550_a[],
+		   ref_CP_100_550_b[];
+extern const short ref_CP_276_504_scales[], ref_CP_276_504_a[],
+		   ref_CP_276_504_b[];
+extern const short ref_CP_350_600_scales[], ref_CP_350_600_a[],
+		   ref_CP_350_600_b[];
+extern const short ref_CP_450_630_scales[], ref_CP_450_630_a[],
+		   ref_CP_450_630_b[];
 
 #define NSAMP 6000
 
@@ -66,12 +81,12 @@ noise(int amplitude)
  * would agree with itself.
  */
 static void
-shadow_step(struct cp_iir *f, short x0)
+shadow_step(struct iir_filter *f, short x0)
 {
 	int v = x0 >> f->shift[0];
 	int s;
 
-	for (s = 0; s < CP_IIR_SECTIONS; s++) {
+	for (s = 0; s < IIR_FILTER_SECTIONS; s++) {
 		const short *a = &f->a[3 * s];
 		const short *b = &f->b[3 * s];
 		short *x = &f->x[3 * s];
@@ -85,7 +100,7 @@ shadow_step(struct cp_iir *f, short x0)
 		for (k = 1; k <= 2; k++)
 			acc -= (long long)y[k - 1] * a[k];
 
-		w = (int)(acc >> CP_IIR_SHIFT);
+		w = (int)(acc >> IIR_FILTER_SHIFT);
 		if (w < -32768 || w > 32767)
 			wrap_seen++;
 
@@ -94,7 +109,7 @@ shadow_step(struct cp_iir *f, short x0)
 		x[1] = x[0];
 		y[1] = y[0];
 		y[0] = (short)v;
-		if (s < CP_IIR_SECTIONS - 1 || f->shift[s + 1] > 0)
+		if (s < IIR_FILTER_SECTIONS - 1 || f->shift[s + 1] > 0)
 			v >>= f->shift[s + 1];
 	}
 }
@@ -104,12 +119,12 @@ shadow_step(struct cp_iir *f, short x0)
  * 1. create
  */
 static void
-compare_written(const struct cp_iir *fb, const struct cp_iir *fa, int n_a,
+compare_written(const struct iir_filter *fb, const struct iir_filter *fa, int n_a,
 		int n_b)
 {
 	int i;
 
-	for (i = 0; i < CP_IIR_MAX_COEFF; i++) {
+	for (i = 0; i < IIR_FILTER_MAX_COEFF; i++) {
 		diff_eq_int("x[%ld]", fb->x[i], fa->x[i], i);
 		diff_eq_int("y[%ld]", fb->y[i], fa->y[i], i);
 	}
@@ -117,7 +132,7 @@ compare_written(const struct cp_iir *fb, const struct cp_iir *fa, int n_a,
 		diff_eq_int("a[%ld]", fb->a[i], fa->a[i], i);
 	for (i = 0; i < n_b; i++)
 		diff_eq_int("b[%ld]", fb->b[i], fa->b[i], i);
-	for (i = 0; i < CP_IIR_SECTIONS + 1; i++)
+	for (i = 0; i < IIR_FILTER_SCALES; i++)
 		diff_eq_int("shift[%ld]", fb->shift[i], fa->shift[i], i);
 	diff_eq_int("n_b", fb->n_b, fa->n_b, 0);
 	diff_eq_int("n_a_minus_1", fb->n_a_minus_1, fa->n_a_minus_1, 0);
@@ -127,9 +142,9 @@ static int
 run_create(const char *label, int n_a, int n_b, const short *a, const short *b,
 	   const short *shift)
 {
-	unsigned char bufa[sizeof(struct cp_iir)];
-	unsigned char bufb[sizeof(struct cp_iir)];
-	struct cp_iir *fa, *fb;
+	unsigned char bufa[sizeof(struct iir_filter)];
+	unsigned char bufb[sizeof(struct iir_filter)];
+	struct iir_filter *fa, *fb;
 	unsigned i;
 
 	diff_begin(label);
@@ -141,15 +156,15 @@ run_create(const char *label, int n_a, int n_b, const short *a, const short *b,
 	memset(bufa, 0xA5, sizeof(bufa));
 	memset(bufb, 0xA5, sizeof(bufb));
 
-	fa = ref__iir_filter_create((struct cp_iir *)bufa, n_a, n_b, a, b,
+	fa = ref__iir_filter_create((struct iir_filter *)bufa, n_a, n_b, a, b,
 				    shift);
-	fb = _iir_filter_create((struct cp_iir *)bufb, n_a, n_b, a, b, shift);
+	fb = _iir_filter_create((struct iir_filter *)bufb, n_a, n_b, a, b, shift);
 
-	diff_eq_int("returns its argument", fb == (struct cp_iir *)bufb, 1, 0);
-	diff_eq_int("ref returns its argument", fa == (struct cp_iir *)bufa,
+	diff_eq_int("returns its argument", fb == (struct iir_filter *)bufb, 1, 0);
+	diff_eq_int("ref returns its argument", fa == (struct iir_filter *)bufa,
 		    1, 0);
 
-	for (i = 0; i < sizeof(struct cp_iir); i++)
+	for (i = 0; i < sizeof(struct iir_filter); i++)
 		diff_eq_int("byte %ld", ((unsigned char *)fb)[i],
 			    ((unsigned char *)fa)[i], (long)i);
 
@@ -159,7 +174,7 @@ run_create(const char *label, int n_a, int n_b, const short *a, const short *b,
 static int
 run_create_alloc(void)
 {
-	struct cp_iir *fa, *fb;
+	struct iir_filter *fa, *fb;
 
 	diff_begin("_iir_filter_create: allocated");
 
@@ -212,7 +227,7 @@ static int
 run_progress(const char *label, int n_a, int n_b, const short *a,
 	     const short *b, const short *shift, int amplitude, int frag)
 {
-	struct cp_iir fa, fb, shadow;
+	struct iir_filter fa, fb, shadow;
 	short ba[512], bb[512];
 	int n, i;
 
@@ -235,7 +250,7 @@ run_progress(const char *label, int n_a, int n_b, const short *a,
 		for (i = 0; i < frag; i++)
 			diff_eq_int("block %ld: sample", bb[i], ba[i],
 				    (long)n * frag + i);
-		for (i = 0; i < CP_IIR_MAX_COEFF; i++) {
+		for (i = 0; i < IIR_FILTER_MAX_COEFF; i++) {
 			diff_eq_int("block %ld: x state", fb.x[i], fa.x[i],
 				    (long)n);
 			diff_eq_int("block %ld: y state", fb.y[i], fa.y[i],
@@ -255,7 +270,7 @@ run_progress(const char *label, int n_a, int n_b, const short *a,
 static int
 run_fragmentation(void)
 {
-	struct cp_iir f;
+	struct iir_filter f;
 	short whole[1024], part[1024];
 	static const int fragments[] = { 1, 3, 160 };
 	unsigned k;
@@ -296,12 +311,63 @@ run_fragmentation(void)
 
 /*
  * --------------------------------------------------------------------------
+ * 2b. the CPfiltrs.c tables, compared word for word
+ */
+struct cp_design {
+	const char	*name;
+	const short	*scales, *a, *b;
+	const short	*ref_scales, *ref_a, *ref_b;
+	double		lo, hi;		/* -6 dB band, Hz, at 8000 */
+};
+
+static const struct cp_design cp_designs[] = {
+	{ "CP_100_550", CP_100_550_scales, CP_100_550_a, CP_100_550_b,
+	  ref_CP_100_550_scales, ref_CP_100_550_a, ref_CP_100_550_b,
+	  0.0, 596.0 },
+	{ "CP_276_504", CP_276_504_scales, CP_276_504_a, CP_276_504_b,
+	  ref_CP_276_504_scales, ref_CP_276_504_a, ref_CP_276_504_b,
+	  230.0, 546.0 },
+	{ "CP_350_600", CP_350_600_scales, CP_350_600_a, CP_350_600_b,
+	  ref_CP_350_600_scales, ref_CP_350_600_a, ref_CP_350_600_b,
+	  263.0, 898.0 },
+	{ "CP_450_630", CP_450_630_scales, CP_450_630_a, CP_450_630_b,
+	  ref_CP_450_630_scales, ref_CP_450_630_a, ref_CP_450_630_b,
+	  396.0, 670.0 }
+};
+
+#define CP_DESIGNS ((int)(sizeof(cp_designs) / sizeof(cp_designs[0])))
+
+static int
+run_cp_tables(void)
+{
+	int d, i;
+
+	diff_begin("CPfiltrs.c tables");
+
+	for (d = 0; d < CP_DESIGNS; d++) {
+		const struct cp_design *c = &cp_designs[d];
+
+		for (i = 0; i < IIR_FILTER_SCALES; i++)
+			diff_eq_int("scales[%ld]", c->scales[i],
+				    c->ref_scales[i], i);
+		for (i = 0; i < IIR_FILTER_COEFF; i++) {
+			diff_eq_int("a[%ld]", c->a[i], c->ref_a[i], i);
+			diff_eq_int("b[%ld]", c->b[i], c->ref_b[i], i);
+		}
+	}
+
+	return diff_end();
+}
+
+/*
+ * --------------------------------------------------------------------------
  * 3. the design itself
  */
 static double
-tone_response_db(double freq)
+design_response_db(const short *a, const short *b, const short *shift,
+		   double freq)
 {
-	struct cp_iir f;
+	struct iir_filter f;
 	short buf[128];
 	double sum = 0.0;
 	double phase = 0.0;
@@ -310,8 +376,7 @@ tone_response_db(double freq)
 	const int measure = 60;
 	int i, n;
 
-	_iir_filter_create(&f, 12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, CALLPROG_BandFilter_shift);
+	_iir_filter_create(&f, 12, 12, a, b, shift);
 
 	for (n = 0; n < settle + measure; n++) {
 		for (i = 0; i < 128; i++) {
@@ -327,6 +392,46 @@ tone_response_db(double freq)
 	sum = sqrt(sum / ((double)measure * 128.0));
 	/* Relative to the 16000-amplitude input, whose RMS is 16000/sqrt(2). */
 	return 20.0 * log10((sum + 1e-9) / (16000.0 / sqrt(2.0)));
+}
+
+static double
+tone_response_db(double freq)
+{
+	return design_response_db(CALLPROG_BandFilter_a, CALLPROG_BandFilter_b,
+				  CALLPROG_BandFilter_shift, freq);
+}
+
+/*
+ * Each CPfiltrs.c design must pass mid-band and reject an octave above its
+ * upper edge.  Byte equality against the reference already proves the
+ * transcription; this proves the names mean what they say, which byte
+ * equality cannot.
+ */
+static int
+run_cp_response(void)
+{
+	int d;
+
+	diff_begin("CPfiltrs.c designs: response");
+
+	for (d = 0; d < CP_DESIGNS; d++) {
+		const struct cp_design *c = &cp_designs[d];
+		double mid = (c->lo + c->hi) / 2.0;
+		double out = c->hi * 2.0;
+		double mid_db = design_response_db(c->a, c->b, c->scales, mid);
+		double out_db = design_response_db(c->a, c->b, c->scales, out);
+		char msg[128];
+
+		snprintf(msg, sizeof(msg),
+			 "%s passes %.0f Hz at %.1f dB", c->name, mid, mid_db);
+		diff_eq_int(msg, mid_db > -6.0 && mid_db < 6.0, 1, d);
+
+		snprintf(msg, sizeof(msg),
+			 "%s rejects %.0f Hz at %.1f dB", c->name, out, out_db);
+		diff_eq_int(msg, out_db < -25.0, 1, d);
+	}
+
+	return diff_end();
 }
 
 static int
@@ -374,12 +479,12 @@ main(void)
 	 * denominators, so the accumulator leaves 16 bits regularly.  The real
 	 * design never does, and the wrap path would otherwise go untested.
 	 */
-	static const short hot_a[CP_IIR_MAX_COEFF] = {
+	static const short hot_a[IIR_FILTER_MAX_COEFF] = {
 		8192, -16000, 7900,  8192, -16100, 7950,
 		8192, -16200, 8000,  8192, -16300, 8050,
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 	};
-	static const short hot_b[CP_IIR_MAX_COEFF] = {
+	static const short hot_b[IIR_FILTER_MAX_COEFF] = {
 		8192, 0, -8192,  8192, 0, -8192,
 		8192, 0, -8192,  8192, 0, -8192,
 		-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13
@@ -399,7 +504,7 @@ main(void)
 	rc |= run_create("_iir_filter_create: partial coefficients",
 			 3, 3, short_a, short_b, odd_shift);
 	rc |= run_create("_iir_filter_create: full 25 coefficients",
-			 CP_IIR_MAX_COEFF, CP_IIR_MAX_COEFF, hot_a, hot_b,
+			 IIR_FILTER_MAX_COEFF, IIR_FILTER_MAX_COEFF, hot_a, hot_b,
 			 odd_shift);
 	rc |= run_create_alloc();
 
@@ -422,7 +527,9 @@ main(void)
 			   CALLPROG_BandFilter_b, odd_shift, 32000, 64);
 
 	rc |= run_fragmentation();
+	rc |= run_cp_tables();
 	rc |= run_response();
+	rc |= run_cp_response();
 
 	/*
 	 * Anti-vacuity.  Without this the wrapping case above could be

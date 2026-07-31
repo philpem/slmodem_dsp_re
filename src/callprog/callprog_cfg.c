@@ -10,26 +10,32 @@
  * filter object our create builds against the original's, coefficients
  * included, which fails on a single wrong word.
  *
- * The design is described in src/callprog/cpfiltrs.c.  Q13.
+ * The engine is described in src/callprog/toneiir.c.  Q13, and every
+ * frequency below is at the call-progress rate of 8000 Hz.
+ *
+ * End to end: -6 dB from 135 Hz to 1280 Hz, within 1.3 dB across the whole
+ * 350..620 Hz call-progress range, and a 105 dB null at 2260 Hz.  It is a
+ * band-limiter, not a tone filter -- picking tones out of this band is
+ * cadence.c's job.
  */
 
-#include "dsplib/cpfiltrs.h"
+#include "dsplib/toneiir.h"
 #include "dsplib/callprog_cfg.h"
 
 /*
- * All the headroom is taken from the input.  See cpfiltrs.c: the cascade has
- * about +30 dB of passband gain, and 32 is 30.1 dB.
+ * All the headroom is taken from the input.  The cascade has about +30 dB of
+ * passband gain and 32 is 30.1 dB, so the net is roughly unity.
  */
-const short CALLPROG_BandFilter_shift[CP_IIR_SECTIONS + 1] = {
+const short CALLPROG_BandFilter_shift[IIR_FILTER_SCALES] = {
 	5, 0, 0, 0, 0
 };
 
 /* { b0, b1, b2 } per section, Q13.  Section 3's b0 is 2.0 -- hence Q13. */
-const short CALLPROG_BandFilter_b[3 * CP_IIR_SECTIONS] = {
-	 8192,  13289,  8192,	/* zero at 3845 Hz, on the unit circle */
-	 8192, -16379,  8192,	/* zero at   38 Hz                     */
-	 8192,   3322,  8192,	/* zero at 2712 Hz -- the deep notch   */
-	16384, -16182,  7781	/* zero at 1179 Hz, radius 0.689       */
+const short CALLPROG_BandFilter_b[3 * IIR_FILTER_SECTIONS] = {
+	 8192,  13289,  8192,	/* zero at 3204 Hz, on the unit circle */
+	 8192, -16379,  8192,	/* zero at   31 Hz                     */
+	 8192,   3322,  8192,	/* zero at 2260 Hz -- the deep null    */
+	16384, -16182,  7781	/* zero at  983 Hz, radius 0.689       */
 };
 
 /*
@@ -39,9 +45,9 @@ const short CALLPROG_BandFilter_b[3 * CP_IIR_SECTIONS] = {
  * like a copy-paste in the original's table and is equally harmless, since
  * nothing looks at it.
  */
-const short CALLPROG_BandFilter_a[3 * CP_IIR_SECTIONS] = {
-	8192,  -9150,  3671,	/* pole  892 Hz, r 0.669, Q  3.9 */
-	8192,  -6770,  5246,	/* pole 1571 Hz, r 0.800, Q  7.0 */
-	8192, -15686,  7643,	/* pole  203 Hz, r 0.966, Q 45.3 */
-	2787,   1540,  2787	/* pole 2647 Hz, r 0.583, Q  2.9 */
+const short CALLPROG_BandFilter_a[3 * IIR_FILTER_SECTIONS] = {
+	8192,  -9150,  3671,	/* pole  744 Hz, r 0.669, Q  3.9 */
+	8192,  -6770,  5246,	/* pole 1309 Hz, r 0.800, Q  7.0 */
+	8192, -15686,  7643,	/* pole  169 Hz, r 0.966, Q 45.3 */
+	2787,   1540,  2787	/* pole 2206 Hz, r 0.583, Q  2.9 */
 };
