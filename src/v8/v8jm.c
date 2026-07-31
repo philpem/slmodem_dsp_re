@@ -229,3 +229,290 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 	out->b0 |= 1;
 	return 0;
 }
+
+/* Up to eight entries in each acceptance list. */
+#define V8_FN_LIST_MAX	8
+
+/*
+ * Is `c` in one of the menu's acceptance lists?  The list ends at the first
+ * zero or after eight entries, whichever comes first.
+ */
+static int
+in_list(const unsigned char *list, unsigned char c)
+{
+	int i;
+
+	if (list[0] == 0)
+		return 0;
+	for (i = 0; i <= V8_FN_LIST_MAX - 1 && list[i] != 0; i++)
+		if (list[i] == c)
+			return 1;
+	return 0;
+}
+
+/*
+ * Echo an extension field into the JM, one character per word.  Used when
+ * nothing was matched against the received message and the local field is
+ * simply sent as it stands.
+ */
+static void
+emit_extension_words(struct v8_tx_sequence *jm, int *n,
+		     const unsigned char *ext)
+{
+	int k = 0;
+
+	while (ext[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+		jm->word[*n] = ext_expected(ext[k]);
+		(*n)++;
+		k++;
+	}
+}
+
+void
+rebuildJMSequence(struct v8 *v)
+{
+	struct v8_tx_sequence *jm = v->tx_seq;
+	struct v8_tx_sequence *rx = &v->seq[0];
+	struct v8_cm *cm = v->cm;
+	int n = 2;
+	int base;
+	int fn_matched = 0;
+	int ext2_matched = 0;
+	int flag_a = 0, flag_b = 0, flag_c = 0;
+	int words;
+	int i;
+
+	jm->word[0] = V8_SEQ_PREAMBLE_0;
+	jm->word[1] = V8_SEQ_PREAMBLE_1;
+
+	/* Find the call function in what arrived, and try to accept it. */
+	for (i = 0; i < (short)rx->wordidx; i++) {
+		unsigned short w = (unsigned short)rx->word[i];
+		int accept = 0;
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
+			continue;
+
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			/* An extension stands in for the function. */
+			int k = 0;
+
+			while (cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				unsigned short got =
+					(unsigned short)rx->word[i];
+
+				if (got == (unsigned short)
+					   ext_expected(cm->ext1[k])) {
+					jm->word[n++] = (short)got;
+					v->fec0 = (short)got;
+					fn_matched = 1;
+					i++;
+					k++;
+					continue;
+				}
+				if (fn_matched)
+					break;
+				k++;
+			}
+			if ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)
+			    && fn_matched)
+				break;
+			w = (unsigned short)rx->word[i];
+		}
+
+		/* One of the four the flags name? */
+		if (w == 0x107)
+			accept = (cm->b1 & 0x40) != 0;
+		else if (w == 0x103)
+			accept = (cm->b2 & 0x01) != 0;
+		else if (w == 0x10b)
+			accept = (cm->b1 & 0x80) != 0;
+		else if (w == 0x109)
+			accept = (cm->b2 & 0x02) != 0;
+
+		/* Or one the menu lists explicitly? */
+		if (!accept)
+			accept = in_list(cm->fn_list,
+					 charFlip((unsigned char)(w >> 1)));
+
+		if (accept)
+			fn_matched = 1;
+
+		if (v->febc == 0 && fn_matched) {
+			jm->word[n++] = (short)w;
+			v->fec0 = (short)w;
+			v->febc = 1;
+		}
+		break;
+	}
+
+	if (v->febc == 0) {
+		/*
+		 * Nothing accepted: send our own field instead, or the call
+		 * function the menu asks for.
+		 */
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			emit_extension_words(jm, &n, cm->ext1);
+		} else if (cm->b1 & 0x40) {
+			jm->word[n++] = 0x107;
+		} else if (cm->b2 & 0x01) {
+			jm->word[n++] = 0x103;
+		} else if (cm->b1 & 0x80) {
+			jm->word[n++] = 0x10b;
+		} else if (cm->b2 & 0x02) {
+			jm->word[n++] = 0x109;
+		} else {
+			cm->b1 |= 0x40;
+			jm->word[n++] = 0x107;
+		}
+	}
+
+	base = n;
+
+	if (v->febc != 0) {
+		/*
+		 * Intersect: walk what arrived and AND its menu words into
+		 * the three already in the buffer, gathering the three flags
+		 * on the way.
+		 */
+		for (i = 0; i < (short)rx->wordidx; i++) {
+			unsigned short w = (unsigned short)rx->word[i];
+
+			if ((w & V8_JM_FN_MASK) == 0x141) {
+				int at = base;
+
+				jm->word[at] = (short)(jm->word[at] & w);
+				at++;
+				flag_a = (rx->word[i] >> 3) & 1;
+				i++;
+				w = (unsigned short)rx->word[i];
+				while ((w & 0x39) == 0x11 && at < base + 3) {
+					jm->word[at] = (short)(jm->word[at]
+							       & w);
+					at++;
+					i++;
+					w = (unsigned short)rx->word[i];
+				}
+				n = base + 3;
+			}
+			if ((w & V8_JM_FN_MASK) == 0x161)
+				flag_b = (w >> 1) & 1;
+			else if ((w & V8_JM_FN_MASK) == 0x1c1)
+				flag_c = (w >> 2) & 3;
+		}
+	} else {
+		jm->word[n] = 0x141;
+		jm->word[n + 1] = 0x011;
+		jm->word[n + 2] = 0x011;
+		n += 3;
+	}
+
+	/* One bit of the first menu word depends on all three flags. */
+	if ((cm->b0 & 8) && flag_a != 0 && flag_b != 0 && flag_c == 1)
+		jm->word[base] |= 8;
+
+	/*
+	 * The second extension.  Like the first, this matches against what
+	 * arrived rather than simply sending ours: a word carrying the second
+	 * marker is compared against the local field character by character,
+	 * or against the acceptance list when there is no local field, and
+	 * what matched is echoed back.
+	 */
+	{
+		int all_flags = (cm->b0 & 8) && flag_a != 0 && flag_b != 0
+				&& flag_c == 1;
+
+		for (i = 0; i < (short)rx->wordidx && v->febe == 0; i++) {
+			unsigned short w = (unsigned short)rx->word[i];
+			int k = 0;
+
+			if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
+				continue;
+
+			if (cm->b2 & V8_CM_EXT2_PRESENT) {
+				while (cm->ext2[k] != 0
+				       && k <= V8_CM_EXT_MAX - 1) {
+					unsigned short got = (unsigned short)
+							     rx->word[i];
+
+					if (got == (unsigned short)
+						   ext_expected(cm->ext2[k])) {
+						jm->word[n++] = (short)got;
+						v->fec2 = (short)got;
+						ext2_matched = 1;
+						i++;
+					} else if (ext2_matched) {
+						break;
+					}
+					k++;
+				}
+				if ((cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
+				    && ext2_matched) {
+					v->febe = 1;
+					break;
+				}
+				v->fec2 = 0;
+				continue;
+			}
+
+			/* No local field: is it one the menu accepts? */
+			if (in_list(cm->ext_list,
+				    charFlip((unsigned char)(w >> 1))))
+				ext2_matched = 1;
+			else if (w == V8_SEQ_TAIL_A)
+				ext2_matched = 1;
+
+			if (!ext2_matched)
+				continue;
+
+			if (!(all_flags && w == V8_SEQ_TAIL_A))
+				jm->word[n++] = (short)w;
+			v->fec2 = (short)w;
+			v->febe = 1;
+			break;
+		}
+
+		if (v->febe != 0) {
+			/* Already settled by the scan above. */
+		} else if (cm->b2 & V8_CM_EXT2_PRESENT) {
+			/*
+			 * Nothing matched, but we have a field of our own:
+			 * send it, and remember the last word of it.
+			 */
+			int k = 0;
+
+			while (cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				jm->word[n] = ext_expected(cm->ext2[k]);
+				v->fec2 = jm->word[n];
+				n++;
+				k++;
+			}
+		} else if (!all_flags) {
+			/* Nothing to send either: the filler. */
+			jm->word[n++] = V8_SEQ_TAIL_A;
+			v->fec2 = V8_SEQ_TAIL_A;
+		}
+	}
+
+	/* The tail. */
+	jm->word[n] = V8_SEQ_TAIL_B;
+	words = n + 1;
+	if ((cm->b0 & 8) && flag_a != 0 && flag_b != 0 && flag_c == 1) {
+		jm->word[n + 1] = V8_SEQ_TAIL_C;
+		jm->word[n + 2] = V8_SEQ_TAIL_D;
+		words = n + 3;
+	}
+
+	jm->crc = (short)0xffff;
+	jm->bitpos = 0;
+	jm->wordidx = 0;
+	jm->repeats = 0;
+	jm->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
+	jm->wordbits = V8_SEQ_BITS_PER_WORD;
+	jm->crc_enable = 0;
+	jm->shifter = 0;
+	jm->shifter0 = 0;
+	jm->nleft = 0;
+	jm->nleft0 = 0;
+	jm->repeat = 1;
+}

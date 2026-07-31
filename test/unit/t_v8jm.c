@@ -16,6 +16,7 @@
 extern void ref_evaluateRxJMSequence(struct v8 *v);
 extern void ref_initTxSequence(struct v8 *v);
 extern int ref_V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
+extern void ref_rebuildJMSequence(struct v8 *v);
 
 static struct v8 obj_a, obj_b;
 static struct v8_cm cm_a, cm_b;
@@ -181,6 +182,78 @@ main(void)
 		}
 		diff_eq_int("menus were filled (%ld)", filled > 0, 1, filled);
 		diff_eq_int("and refused (%ld)", empty > 0, 1, empty);
+	}
+	rc |= diff_end();
+
+	diff_begin("rebuildJMSequence");
+	{
+		long built = 0;
+
+		for (b1 = 0; b1 < 256; b1 += 7) {
+			for (b2 = 0; b2 < 32; b2++) {
+				for (ext = 0; ext < 4; ext++) {
+					memset(&obj_a, 0, sizeof(obj_a));
+					memset(&obj_b, 0, sizeof(obj_b));
+					memset(&cm_a, 0, sizeof(cm_a));
+					cm_a.b0 = (unsigned char)(b1 ^ 0x5a);
+					cm_a.b1 = (unsigned char)b1;
+					cm_a.b2 = (unsigned char)b2;
+					if (ext & 1) {
+						cm_a.ext1[0] = 'G';
+						cm_a.ext1[1] = 'B';
+					}
+					if (ext & 2) {
+						cm_a.ext2[0] = 'Z';
+						cm_a.ext2[1] = '9';
+					}
+					cm_a.fn_list[0] = 0x83;
+					cm_a.ext_list[0] = 0x54;
+					memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+					/* A received CM to answer. */
+					obj_a.cm = &cm_a;
+					obj_b.cm = &cm_b;
+					obj_a.tx_seq = &obj_a.seq[0];
+					obj_b.tx_seq = &obj_b.seq[0];
+					ref_initTxSequence(&obj_a);
+					initTxSequence(&obj_b);
+					obj_a.seq[0].wordidx = (short)
+						(obj_a.seq[0].nbits / 10);
+					obj_b.seq[0].wordidx =
+						obj_a.seq[0].wordidx;
+
+					/* Build the JM into another buffer. */
+					obj_a.tx_seq = &obj_a.seq[2];
+					obj_b.tx_seq = &obj_b.seq[2];
+					obj_a.febc = obj_b.febc =
+						(short)(b2 & 1);
+					obj_a.febe = obj_b.febe =
+						(short)((b2 >> 1) & 1);
+
+					ref_rebuildJMSequence(&obj_a);
+					rebuildJMSequence(&obj_b);
+
+					diff_eq_int("JM (%ld)",
+						    memcmp(&obj_a.seq[2],
+							   &obj_b.seq[2],
+							   sizeof(obj_a.seq[2]))
+						    == 0, 1, (long)b1);
+					diff_eq_int("menu after (%ld)",
+						    memcmp(&cm_a, &cm_b,
+							   sizeof(cm_a)) == 0,
+						    1, (long)b1);
+					diff_eq_int("fec0 (%ld)", obj_b.fec0,
+						    obj_a.fec0, (long)b1);
+					diff_eq_int("fec2 (%ld)", obj_b.fec2,
+						    obj_a.fec2, (long)b1);
+					diff_eq_int("febc (%ld)", obj_b.febc,
+						    obj_a.febc, (long)b1);
+					if (obj_a.seq[2].nbits != 0)
+						built++;
+				}
+			}
+		}
+		diff_eq_int("JMs were built (%ld)", built > 0, 1, built);
 	}
 	rc |= diff_end();
 	return rc;

@@ -17,28 +17,6 @@
 
 #include "dsplib/v8.h"
 
-/* The two characters every sequence opens with. */
-#define V8_SEQ_PREAMBLE_0	0x3ff
-#define V8_SEQ_PREAMBLE_1	0x00f
-
-/*
- * The call-function character, chosen by the first flags that match.  These
- * are the "what do you want to do" codes -- data, fax, and so on.
- */
-#define V8_SEQ_FN_DEFAULT	0x107
-#define V8_SEQ_FN_B0		0x103
-#define V8_SEQ_FN_B1_80		0x10b
-#define V8_SEQ_FN_B2		0x109
-
-/* The characters that close a sequence. */
-#define V8_SEQ_TAIL_A		0x0a9
-#define V8_SEQ_TAIL_B		0x161
-#define V8_SEQ_TAIL_C		0x1c9
-#define V8_SEQ_TAIL_D		0x011
-
-/* Ten bits per character on the wire. */
-#define V8_SEQ_BITS_PER_WORD	10
-
 /*
  * One extension character.  The octet is reversed -- V.8 goes least
  * significant bit first -- shifted up one and given a low bit, which is the

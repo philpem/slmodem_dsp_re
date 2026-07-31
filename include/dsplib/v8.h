@@ -216,7 +216,37 @@ struct v8_cm {
 	unsigned char	pad14[0x18 - 0x14];
 	unsigned char	ext1[4];		/* +0x18 */
 	unsigned char	ext2[4];		/* +0x1c */
+	/*
+	 * Up to eight call-function octets this end will accept.  When the
+	 * received function is none of the four the flags name,
+	 * rebuildJMSequence looks for it here before giving up.
+	 */
+	unsigned char	fn_list[8];		/* +0x20 */
+	/* And eight more, checked the same way for the second field. */
+	unsigned char	ext_list[8];		/* +0x28 */
 };
+
+/* The two characters every sequence opens with. */
+#define V8_SEQ_PREAMBLE_0	0x3ff
+#define V8_SEQ_PREAMBLE_1	0x00f
+
+/*
+ * The call-function character, chosen by the first flags that match.  These
+ * are the "what do you want to do" codes -- data, fax, and so on.
+ */
+#define V8_SEQ_FN_DEFAULT	0x107
+#define V8_SEQ_FN_B0		0x103
+#define V8_SEQ_FN_B1_80		0x10b
+#define V8_SEQ_FN_B2		0x109
+
+/* The characters that close a sequence. */
+#define V8_SEQ_TAIL_A		0x0a9
+#define V8_SEQ_TAIL_B		0x161
+#define V8_SEQ_TAIL_C		0x1c9
+#define V8_SEQ_TAIL_D		0x011
+
+/* Ten bits per character on the wire. */
+#define V8_SEQ_BITS_PER_WORD	10
 
 /* At most four characters are taken from each extension field. */
 #define V8_CM_EXT_MAX	4
@@ -677,6 +707,17 @@ void evaluateRxJMSequence(struct v8 *v);
  * Returns 0 when it filled the menu and -1 when there was nothing to read.
  */
 int V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
+
+/*
+ * Build the JM that answers a received CM.
+ *
+ * Unlike `initTxSequence`, which builds a message from the local menu alone,
+ * this one is driven by what arrived: the call function is echoed when it is
+ * one this end accepts, the extensions are echoed character for character,
+ * and the three menu words are ANDed with the ones received -- so what goes
+ * back is the intersection of what was offered and what is wanted.
+ */
+void rebuildJMSequence(struct v8 *v);
 
 /*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
