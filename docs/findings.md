@@ -2595,7 +2595,9 @@ meaningless constant until it is 1300.2 Hz.
 
 Whether it was ever right is unknowable from the object alone. What is certain
 is that as shipped the calling tone is the wrong frequency with the wrong
-cadence, on top of being the wrong shape (D11) at the wrong level (D13).
+cadence, on top of being the wrong shape (D11) at the wrong level (D13) -- and
+that one of slmodemd's fifty country configurations, CZECH_REPUBLIC, turns it
+on.
 
 ---
 

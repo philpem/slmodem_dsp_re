@@ -21,10 +21,13 @@
  * signed char it takes, the amplitude moves between 0.93 and 1.08 of full
  * scale.
  *
- * All three are in the original; see docs/deviations.md D11 to D13, which
- * also record how far each one is from what was evidently meant.  Nothing is
- * fixed here -- unlike D4 these do not stop a call from completing, and the
- * whole feature is off unless the caller asks for it.
+ * All three are in the original; see docs/deviations.md D11 to D13, which also
+ * record how far each one is from what was evidently meant.  Nothing is fixed
+ * here: they degrade an optional courtesy signal rather than dropping a call.
+ *
+ * They are not unreachable, though.  CALLPROG_Dial enables the generator when
+ * GetCallingToneFlag is 1 or 2, and of slmodemd's fifty country parameter sets
+ * one -- CZECH_REPUBLIC -- ships 1.
  */
 
 #ifndef DSPLIB_CALLINGTONE_H

@@ -568,13 +568,30 @@ tone about 20 dB weaker than intended and shaped like a sawtooth rather than a
 sine. The repetition rate is unaffected — the accumulator still wraps at the
 right interval — which is why this is easy to miss.
 
-**Reachable?** Only when `GetCallingToneFlag` (parameter 27) is 2, which is a
-per-country homologation setting. Most configurations do not send a calling
-tone at all.
+**Reachable? Yes, on shipped hardware.** `CALLPROG_Dial` enables the generator
+for two values of `GetCallingToneFlag` (parameter 27), not one:
 
-**Not fixed.** Unlike D4 this does not stop a call completing; it degrades an
-optional courtesy signal. `t_callingtone` asserts the measurements above so a
-later edit cannot change the output silently.
+```
+    7a882:  movl $0x0,0x60(%ebx)     ; flag == 0  -> off
+    7a99e:  movl $0x1,0x60(%ebx)     ; flag == 1  -> ON
+    7a611:  cmp  $0x2,%eax
+    7a614:  sete %al                 ; flag == 2  -> ON, anything else off
+```
+
+Reading only the `sete` gives "enabled when the flag is 2", which is what an
+earlier version of this entry said and is wrong: the flag == 1 case is a
+separate branch that sets the same field.
+
+slmodemd ships fifty country parameter sets. Forty-nine carry
+`CallingToneFlag = 0`; **`params014`, CZECH_REPUBLIC (id 0x002e), carries 1**.
+No set carries 2. So the generator is off in forty-nine configurations and on
+in one, and everything below happens on a real Czech line.
+
+**Not fixed.** It does not stop a call completing -- it degrades an optional
+courtesy signal that the far end may ignore anyway -- but it is not
+unreachable, so this is a deliberate decision to stay faithful rather than the
+free choice D4's rule describes. `t_callingtone` asserts the measurements
+above so a later edit cannot change the output silently.
 
 ---
 
@@ -649,6 +666,10 @@ always near 16384, so the product reaches 32768 and wraps to −32768 in the
 16-bit store. At level 0 that happens on 40 samples in every 4096; at −12 it
 does not happen at all, which is what identifies it as an overflow rather
 than a scaling choice.
+
+**Reachable** wherever D11 is: see its entry. Note also that `ResetCallingTone`
+is called on *all three* of `CALLPROG_Dial`'s branches, including the one that
+disables the generator, so the amplitude is computed whether or not it is used.
 
 **Not fixed**, and both the level range and the overflow are asserted by
 `t_callingtone`.
