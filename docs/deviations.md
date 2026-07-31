@@ -489,3 +489,50 @@ It is a latent trap for any new caller using the documented idiom.
 defect cannot be quietly tidied away. The harness swallows frees of pointers
 it never handed out rather than passing them to `free()`, which is what lets
 the test observe this instead of crashing on it.
+
+---
+
+## D9 — `Dual_TONE_detect` truncates its loop counter to 16 bits 🐛 💤
+
+**Status:** reproduced, unreachable as shipped.
+
+`Dual_TONE_detect`'s sample loop increments its index and then sign-extends
+the low 16 bits back into it:
+
+```
+    7e602:  inc    %eax
+    7e606:  cwtl
+    7e60b:  cmp    %ebp,%eax          ; against `count`, a full 32-bit int
+```
+
+So the index counts 0, 1, ... 32767, −32768, ... and never reaches a `count`
+of 32768 or more. The loop would not terminate.
+
+Everything else in the function treats `count` as a full `int` — both hold
+timers are advanced by it before the loop, in 32-bit arithmetic — so this is
+the compiler faithfully reproducing a `short i` in the source, not a
+deliberate narrowing.
+
+**Reachable?** No. The only caller is `CALLPROG_Progress`, working in blocks
+of at most a few hundred samples, and a 32768-sample block would be four
+seconds of audio at the 8000 Hz this module runs at.
+
+**Reproduced.** The reconstruction declares `short i` for the same reason and
+the same effect. Not fixed: unlike D4 it cannot fire, and the rule from D4 is
+that reproducing a defect is free exactly when it is unreachable.
+
+---
+
+## D10 — the four `CP_*` filter designs are dead 💤
+
+**Status:** reproduced, not a defect.
+
+Every symbol `CPfiltrs.c` defines is global, and no relocation anywhere in
+`dsplibs.o` refers to any of them. The filter `CALLPROG_Create` actually
+installs is a separate file static in `Callprog.c` with a different design
+(135–1280 Hz, where `CP_*` are narrow tone bands).
+
+Not listed as a defect because nothing misbehaves — it is an unused table.
+Recorded because "reconstruct everything the object defines" and "reconstruct
+everything the modem uses" give different answers here, and this tree follows
+the first. See finding 43.
