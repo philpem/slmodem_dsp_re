@@ -73,7 +73,13 @@ blank_filters(void)
 int
 main(void)
 {
-	static const short tx_states[] = { 5, 6, 23, 43, 45, 7 };
+	/*
+	 * The five states that have bodies.  An unknown state is deliberately
+	 * NOT swept: the original's default path jumps back to re-read a
+	 * counter that only this loop advances, so it spins forever.  That is
+	 * faithful, and it means the test would hang rather than fail.
+	 */
+	static const short tx_states[] = { 5, 6, 23, 43, 45 };
 	static const short rx_states[] = { 0x19, 0x20, 0x23, 0x28, 0x63, 0 };
 	int rc = 0;
 	unsigned t, r;
