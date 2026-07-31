@@ -19,6 +19,117 @@ extern short ref_v8_cosread(unsigned char phase);
 extern void ref_v8_crc(struct v8_handshake *hs, int bit);
 extern void ref_v8_copycoeff(short *dst, const short *src, short n);
 extern void ref_v8_dftenergy(struct v8_dft_bin *bin, short n, short shift);
+extern void ref_V8_setFilters(struct v8 *v, const short *a, const short *b,
+			      const short *c, const short *d);
+extern void ref_V8_V21_reset(struct v8 *v);
+extern void ref_v8_TONEq_init(struct v8 *v);
+extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
+
+/*
+ * The initialisers write scattered fields of a 3780-byte object, so the only
+ * comparison worth making is the whole thing: both sides start from the same
+ * non-zero fill, and every byte must agree afterwards.  That catches a
+ * mis-stated offset, a missed field and a field written one byte too wide,
+ * none of which a field-by-field check would find unless it happened to name
+ * the field that moved.
+ */
+static struct v8 obj_a, obj_b;
+
+static void
+fill(void *p, size_t n, unsigned seed)
+{
+	unsigned char *b = p;
+	size_t i;
+
+	for (i = 0; i < n; i++) {
+		seed = seed * 1103515245u + 12345u;
+		b[i] = (unsigned char)(seed >> 16);
+	}
+}
+
+static int
+whole_object(const char *what)
+{
+	size_t i;
+	const unsigned char *a = (const unsigned char *)&obj_a;
+	const unsigned char *b = (const unsigned char *)&obj_b;
+	int differed = 0;
+
+	for (i = 0; i < sizeof(struct v8); i++) {
+		diff_eq_int("%s: byte", b[i], a[i], (long)i);
+		if (a[i] != 0)
+			differed++;
+	}
+	/* The fill was non-zero, so a no-op initialiser cannot pass silently. */
+	diff_eq_int("the object is not all zero after init (%ld)",
+		    differed > 100, 1, differed);
+	(void)what;
+	return 0;
+}
+
+static int
+t_inits(void)
+{
+	int i;
+
+	diff_begin("v8 initialisers: whole-object comparison");
+
+	for (i = 0; i < 4; i++) {
+		const short c0[4] = { 1, 2, 3, 4 };
+
+		/* V8_setFilters */
+		fill(&obj_a, sizeof(obj_a), 99u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		ref_V8_setFilters(&obj_a, c0, c0 + 1, c0 + 2, c0 + 3);
+		V8_setFilters(&obj_b, c0, c0 + 1, c0 + 2, c0 + 3);
+		whole_object("setFilters");
+
+		/* V8_V21_reset */
+		fill(&obj_a, sizeof(obj_a), 555u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		ref_V8_V21_reset(&obj_a);
+		V8_V21_reset(&obj_b);
+		whole_object("V21_reset");
+
+		/* v8_TONEq_init */
+		fill(&obj_a, sizeof(obj_a), 4242u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		ref_v8_TONEq_init(&obj_a);
+		v8_TONEq_init(&obj_b);
+		whole_object("TONEq_init");
+
+		/* v8_phase_rev_init, through the object so overruns show up */
+		fill(&obj_a, sizeof(obj_a), 31337u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		ref_v8_phase_rev_init(&obj_a.phase_rev);
+		v8_phase_rev_init(&obj_b.phase_rev);
+		whole_object("phase_rev_init");
+	}
+
+	/*
+	 * The values the initialisers are supposed to plant.  Each is checked
+	 * straight after its own call -- the first version of this checked the
+	 * tone queue after a phase-reversal init, and read the fill.
+	 */
+	fill(&obj_b, sizeof(obj_b), 7u);
+	v8_TONEq_init(&obj_b);
+	diff_eq_int("tone queue period", obj_b.toneq_period, 0x688, 0);
+	diff_eq_int("tone queue empty", obj_b.toneq_pending, 0, 0);
+
+	fill(&obj_b, sizeof(obj_b), 11u);
+	v8_phase_rev_init(&obj_b.phase_rev);
+	diff_eq_int("phase-rev countdown", obj_b.phase_rev.f0e, 0x20, 0);
+	diff_eq_int("phase-rev window cleared", obj_b.phase_rev.window[63], 0,
+		    0);
+
+	fill(&obj_b, sizeof(obj_b), 13u);
+	V8_V21_reset(&obj_b);
+	diff_eq_int("V.21 delay line cleared", obj_b.v21.delay[V8_V21_DELAY - 1],
+		    0, 0);
+
+	return diff_end();
+}
+
 
 static int
 t_mpyint(void)
@@ -210,5 +321,6 @@ main(void)
 	rc |= t_crc();
 	rc |= t_copycoeff();
 	rc |= t_dftenergy();
+	rc |= t_inits();
 	return rc;
 }

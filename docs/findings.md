@@ -3717,3 +3717,47 @@ path; both are reproduced.
 `v8_crc` is CRC-16-CCITT, polynomial 0x1021, MSB first and unreflected, one
 bit per call. Its bit argument is compared sixteen bits at a time, so a value
 that is non-zero overall but zero in its low half counts as a zero bit.
+
+## 63. The V.8 object, and how its layout is being pinned down
+
+`V8Create` allocates 0xec4 -- 3780 bytes -- and hands it to `v8handshakinit`,
+which parcels it out among the initialisers:
+
+```
+    v8_rxinit(v)                +0x01c..+0x0f6, +0x894..+0x9d2
+    v8_txinit(v)                +0x004..+0x018, +0x110..+0x5be, +0x77c..+0x892
+    v8_phase_rev_init(v+0xb40)  its own sub-object
+    v8_detectorinit(...)        around +0xc54 and +0xcd4
+    v8_V21_Init(v, 1, 0)        +0xdd8..+0xe5c
+    v8_TONEq_init(v)            +0xdd2, +0xdd4
+```
+
+The regions are disjoint, which is what makes a bottom-up reconstruction
+possible: each initialiser can be written and proved on its own before
+anything that reads what it writes exists.
+
+### The offsets are asserted, not trusted
+
+Every struct in v8.h carries `offsetof` assertions in v8util.c, so a careless
+edit stops the build rather than failing a test somewhere far away. They
+earned their place immediately: the first version put the tone-queue shorts
+at +0xdd2 and the V.21 pointers at +0xdd8 in one struct, and the compiler
+quietly realigned the whole thing to a four-byte boundary. The assertion
+failed on the spot. Splitting the tone queue out of `struct v8_v21` fixes it,
+and is the better description anyway -- a tone queue and a V.21 modem are not
+one object.
+
+The assertions are compiled only where a pointer is four bytes. The object
+holds pointers at fixed offsets, so its layout is a property of the
+original's ABI and cannot hold on a 64-bit host; `make check64` compiles this
+file only to keep the C portable.
+
+### Testing an initialiser
+
+The comparison that matters is the whole object, not the fields: fill 3780
+bytes of both sides with the same non-zero pattern, run each initialiser, and
+require every byte to agree. That catches a mis-stated offset, a missed
+field, and a field written one byte too wide -- none of which a field-by-field
+check would find unless it happened to name the field that moved. The
+non-zero fill also means an initialiser that does nothing cannot pass by
+agreeing with itself.

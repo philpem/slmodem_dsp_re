@@ -8,7 +8,47 @@
  * signal layer through `v8handshakinit`, and the signal layer reaches these.
  */
 
+#include <stddef.h>
+
 #include "dsplib/v8.h"
+
+/*
+ * The offsets are the whole point of this file, so they are checked at
+ * compile time rather than trusted.  Every number below was read out of the
+ * object; if a struct is edited carelessly the build stops here instead of a
+ * test failing somewhere far away.
+ */
+/*
+ * Only on a 32-bit build.  The object holds pointers at fixed offsets, so its
+ * layout is a property of the original's ABI and cannot hold where a pointer
+ * is eight bytes.  `make check64` compiles this file for the host purely to
+ * keep the C portable, and these numbers are not portable by construction.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define V8_ASSERT_OFFSET(s, m, off) \
+	typedef char v8_off_##m[offsetof(struct s, m) == (off) ? 1 : -1]
+#else
+#define V8_ASSERT_OFFSET(s, m, off) \
+	typedef char v8_off_##m[1]
+#define V8_OFFSETS_UNCHECKED	1
+#endif
+
+#ifdef V8_OFFSETS_UNCHECKED
+#define V8_OFFSET_OK	0
+#else
+#define V8_OFFSET_OK	1
+#endif
+
+V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
+V8_ASSERT_OFFSET(v8, v21, 0xdd8);
+V8_ASSERT_OFFSET(v8, toneq_pending, 0xdd2);
+typedef char v8_size_check[V8_OFFSET_OK == 0 || sizeof(struct v8) == V8_STATE_BYTES ? 1 : -1];
+
+typedef char v8_v21_delay[V8_OFFSET_OK == 0 || offsetof(struct v8, v21)
+			  + offsetof(struct v8_v21, delay) == 0xe0c ? 1 : -1];
+typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, window) == 0x14
+			  ? 1 : -1];
+typedef char v8_pr_fdc[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, fdc) == 0xdc ? 1 : -1];
 
 /*
  * A Q14 cosine table, one full cycle in 256 steps.  Every entry but one is
@@ -135,4 +175,62 @@ v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
 
 		bin[i].energy = (short)((re * re + im * im) >> 16);
 	}
+}
+
+/*
+ * Point the V.21 modem at a set of filter designs.  The four are swapped
+ * together, which is how one modem serves both channels of V.21: the
+ * handshake calls this again whenever it changes direction.
+ */
+void
+V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
+	      const short *d)
+{
+	v->v21.a = a;
+	v->v21.b = b;
+	v->v21.c = c;
+	v->v21.d = d;
+}
+
+/* Clear the V.21 delay line and the three accumulators behind it. */
+void
+V8_V21_reset(struct v8 *v)
+{
+	int i;
+
+	for (i = 0; i < V8_V21_DELAY; i++)
+		v->v21.delay[i] = 0;
+	v->v21.f10 = 0;
+	v->v21.f14 = 0;
+	v->v21.f18 = 0;
+}
+
+/* Arm the tone queue: nothing pending, and the period set to 0x688. */
+void
+v8_TONEq_init(struct v8 *v)
+{
+	v->toneq_pending = 0;
+	v->toneq_period = 0x688;
+}
+
+/*
+ * Arm the ANSam phase-reversal detector.  The window is cleared and the
+ * countdown at +0x0e set to 32 -- half the window, which is how long it
+ * waits before its first verdict.
+ */
+void
+v8_phase_rev_init(struct v8_phase_rev *pr)
+{
+	int i;
+
+	pr->fdc = 0;
+	pr->f00 = 0;
+	pr->f04 = 0;
+	pr->f08 = 0;
+	pr->f12 = 0;
+	pr->f0c = 0;
+	pr->f0e = 0x20;
+	pr->f10 = 0;
+	for (i = 0; i < 64; i++)
+		pr->window[i] = 0;
 }
