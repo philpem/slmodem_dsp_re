@@ -51,6 +51,13 @@ struct side {
 
 static struct side side_a, side_b;
 
+/*
+ * Two country flags most cases do not care about.  Kept as state rather than
+ * as a seventh and eighth argument on every line of main().
+ */
+static int opt_calling_tone = 1;
+static int opt_mixed;
+
 static void
 params(int pattern, int tone, int abcd, int pause, int cap)
 {
@@ -58,7 +65,8 @@ params(int pattern, int tone, int abcd, int pause, int cap)
 	harness_param_set(GetPulseDialDigitPattern, pattern);
 	harness_param_set(GetPulseDialingFlag, tone);
 	harness_param_set(GetABCDDialingPermittedFlag, abcd);
-	harness_param_set(GetPulseAndToneDialInSameDialStringPermittedFlag, 0);
+	harness_param_set(GetPulseAndToneDialInSameDialStringPermittedFlag,
+			  opt_mixed);
 	harness_param_set(GetDialModifierValidation, 1);
 	harness_param_set(GetDialPauseTime, pause);
 	harness_param_set(GetComaPauseDurationLimit, cap);
@@ -68,7 +76,7 @@ params(int pattern, int tone, int abcd, int pause, int cap)
 	harness_param_set(GetDTMFDialSpeed, 70);
 	harness_param_set(GetDTMFHighToneLevel, 9);
 	harness_param_set(GetDTMFHighAndLowToneLevelDifference, 2);
-	harness_param_set(GetCallingToneFlag, 1);
+	harness_param_set(GetCallingToneFlag, opt_calling_tone);
 	harness_param_set(GetHookFlashTime, 50);
 }
 
@@ -176,6 +184,21 @@ run(const char *label, const char *dialstr, int pattern, int tone, int abcd,
 	return diff_end();
 }
 
+/* run() with the two uncommon flags set, then put them back. */
+static int
+run_flags(int calling_tone, int mixed, const char *label, const char *dialstr,
+	  int pattern, int tone, int abcd, int pause, int cap)
+{
+	int rc;
+
+	opt_calling_tone = calling_tone;
+	opt_mixed = mixed;
+	rc = run(label, dialstr, pattern, tone, abcd, pause, cap);
+	opt_calling_tone = 1;
+	opt_mixed = 0;
+	return rc;
+}
+
 int
 main(void)
 {
@@ -200,6 +223,35 @@ main(void)
 		  10);
 	rc |= run("dial: empty", "T", 1, 1, 0, 2, 10);
 
+	/*
+	 * The calling tone, which is the only way to reach state 8, and both
+	 * of the flag values that enable it -- plus one that does not, where
+	 * the character has to be stepped over instead.
+	 */
+	rc |= run_flags(1, 0, "dial: caret, calling tone on", "T5^5", 1, 1, 0,
+			2, 10);
+	rc |= run_flags(3, 0, "dial: caret, calling tone mode 3", "T5^5", 1, 1,
+			0, 2, 10);
+	rc |= run_flags(0, 0, "dial: caret, calling tone off", "T5^5", 1, 1, 0,
+			2, 10);
+
+	/*
+	 * Mode switches away from the first character, which is where the
+	 * country's say in mixed dialling applies.  Both values of the flag,
+	 * both directions of switch.
+	 */
+	rc |= run_flags(1, 0, "dial: switch to tone mid-string", "P5T5", 1, 0,
+			0, 2, 10);
+	rc |= run_flags(1, 1, "dial: switch to tone, mixed refused", "P5T5", 1,
+			0, 0, 2, 10);
+	rc |= run_flags(1, 0, "dial: switch to pulse mid-string", "T5P5", 1, 1,
+			0, 2, 10);
+	rc |= run_flags(1, 1, "dial: switch to pulse, mixed refused", "T5P5", 1,
+			1, 0, 2, 10);
+
+	/* A semicolon anywhere but the end means nothing and is stepped over. */
+	rc |= run("dial: semicolon mid-string", "T5;5", 1, 1, 0, 2, 10);
+
 	/* Pulse dialling, all three national patterns. */
 	rc |= run("dial: pulse pattern 1", "P1234567890", 1, 0, 0, 2, 10);
 	rc |= run("dial: pulse pattern 2 (Sweden)", "P1234567890", 2, 0, 0, 2,
@@ -215,19 +267,15 @@ main(void)
 	 */
 	diff_begin("guards");
 	{
-		int distinct = 0;
-
-		for (c = 0; c < 8; c++)
-			if (code_seen[c] != 0)
-				distinct++;
-		diff_eq_int("several distinct codes were returned (%ld)",
-			    distinct >= 3, 1, distinct);
-		diff_eq_int("DIALER_BUSY was returned (%ld)",
-			    code_seen[DIALER_BUSY] > 0, 1,
-			    code_seen[DIALER_BUSY]);
-		diff_eq_int("DIALER_DONE was returned (%ld)",
-			    code_seen[DIALER_DONE] > 0, 1,
-			    code_seen[DIALER_DONE]);
+		/*
+		 * Every code the generator can return must have been returned
+		 * by something above.  A count of distinct codes would have
+		 * let DIALER_CALLING_TONE go untested, which is how this
+		 * check came to be written this way.
+		 */
+		for (c = DIALER_BUSY; c <= DIALER_DONE; c++)
+			diff_eq_int("code %ld was returned at least once",
+				    code_seen[c] > 0, 1, c);
 		diff_eq_int("audio was actually generated (%ld samples)",
 			    total_nonzero > 10000, 1, total_nonzero);
 	}
