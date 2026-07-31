@@ -334,8 +334,8 @@ v8_rxinit(struct v8 *v)
  * effect and is not reproduced; everything that touches memory is.
  */
 void
-v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
-		short a4, short a5, short a6, short a7)
+v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
+		short a3, short a4, short a5, short a6, short a7)
 {
 	int i;
 
@@ -351,7 +351,7 @@ v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
 	d->f04 = a3;
 	d->f08 = (short)-a5;
 	d->f0c = 1;
-	d->f00 = a2;
+	d->table = table;
 	d->f06 = 0;
 	d->f0a = a4;
 	d->f10 = a6;

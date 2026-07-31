@@ -58,7 +58,13 @@ struct v8_handshake {
  * of small accumulator arrays: two two-by-two, then two of three.
  */
 struct v8_detector {
-	int	f00;				/* +0x00 */
+	/*
+	 * A coefficient table in .rodata, not a number: v8handshakinit passes
+	 * an address here.  Typed as an int until the caller was read, which
+	 * a 32-bit differential test could never have caught -- both are four
+	 * bytes and the value copies through either way.
+	 */
+	const short	*table;			/* +0x00 */
 	short	f04;				/* +0x04 */
 	short	f06;				/* +0x06 */
 	short	f08;		/* the negated argument  +0x08 */
@@ -350,8 +356,8 @@ void v8_dftenergy(struct v8_dft_bin *bin, short n, short shift);
  * flag set), the detector itself, and six configuration values.  `a5` is
  * stored negated, which is the only one that is not a straight copy.
  */
-void v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
-		     short a4, short a5, short a6, short a7);
+void v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
+		     short a3, short a4, short a5, short a6, short a7);
 
 /*
  * Bring up the V.21 modem V.8 signals over.  `channel` picks which of the two
