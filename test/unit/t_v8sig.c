@@ -37,6 +37,8 @@ extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
 				short a6, short a7);
 extern void ref_v8_fskdemodulate(struct v8 *v);
 extern void ref_v8_V21_Init(struct v8 *v, short ch, short ans);
+extern int ref_V8agc(struct v8 *v);
+extern int ref_v8_rxinit(struct v8 *v);
 
 static struct v8 obj_a, obj_b;
 
@@ -638,6 +640,70 @@ main(void)
 			whole(k);
 		}
 		diff_eq_int("bits were recovered (%ld)", bits > 0, 1, bits);
+	}
+	rc |= diff_end();
+
+	diff_begin("V8agc");
+	{
+		long adapted = 0, clipped = 0;
+
+		for (k = 0; k < 24; k++) {
+			int blk;
+
+			fill(&obj_a, sizeof(obj_a), 8800u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			ref_v8_txinit(&obj_a);
+			ref_v8_txinit(&obj_b);
+			ref_v8_rxinit(&obj_a);
+			ref_v8_rxinit(&obj_b);
+			obj_a.mode = obj_b.mode = k & 1;
+			/* Sweep the gain across the saturating range. */
+			obj_a.rx.f1c = obj_b.rx.f1c = (short)(200 + k * 1300);
+			obj_a.rx.f1a = obj_b.rx.f1a = (short)(k * 900 - 8000);
+			obj_a.rx.f1e = obj_b.rx.f1e = (short)(k * 41);
+			obj_a.rx.f20 = obj_b.rx.f20 = (short)(k * 133 - 1000);
+			obj_a.rx.flags = obj_b.rx.flags =
+				(unsigned short)(k & 2 ? V8_RX_DETECTOR_ARMED
+						       : 0);
+			obj_a.f9d8 = obj_b.f9d8 = (short)(k & 4 ? 0x24 : 0x19);
+
+			for (blk = 0; blk < 40; blk++) {
+				int m;
+				short lvl = (short)(3000 + k * 900);
+
+				/* Something with energy in the passband. */
+				for (m = 0; m < V8_TX_SYMBOLS; m++) {
+					short x = (short)((m & 4) ? lvl
+							          : -lvl);
+					obj_a.tx_symbols[m] = x;
+					obj_b.tx_symbols[m] = x;
+				}
+				diff_eq_int("returns (%ld)", V8agc(&obj_b),
+					    ref_V8agc(&obj_a), k);
+				for (m = 0; m < V8_QUEUE_BLOCK; m++)
+					diff_eq_int("sample %ld",
+						    obj_b.rx_stage[m],
+						    obj_a.rx_stage[m], m);
+				diff_eq_int("gain (%ld)", obj_b.rx.f1c,
+					    obj_a.rx.f1c, k);
+				diff_eq_int("clip count (%ld)", obj_b.rx.fac,
+					    obj_a.rx.fac, k);
+				if (obj_a.rx.fac != 0)
+					clipped++;
+				if (obj_a.rx.f1c != (short)(200 + k * 1300))
+					adapted++;
+			}
+			normalise(offsetof(struct v8, tx_sym_a));
+			normalise(offsetof(struct v8, tx_sym_b));
+			normalise(offsetof(struct v8, tx_ring_base));
+			normalise(offsetof(struct v8, tx_ring_half));
+			normalise(offsetof(struct v8, rx)
+				  + offsetof(struct v8_rx, buf));
+			whole(k);
+		}
+		diff_eq_int("the gain moved (%ld)", adapted > 0, 1, adapted);
+		diff_eq_int("saturation happened (%ld)", clipped > 0, 1,
+			    clipped);
 	}
 	rc |= diff_end();
 

@@ -238,6 +238,13 @@ struct v8_cm {
 #define V8_V21_DELAY	40
 #define V8_V21_INBUF	12
 
+/*
+ * The receive front end's filter and its running history.  The history wraps
+ * at 36 entries, which is what its index is tested against.
+ */
+#define V8_AGC_TAPS	40
+#define V8_AGC_HIST	35
+
 struct v8_v21 {
 	/* The four filter designs, swapped as a set. */
 	const short	*a;			/* +0x00  obj +0xdd8 */
@@ -422,7 +429,8 @@ struct v8 {
 	int			deadline_a;	/* +0xe5c */
 	int			deadline_b;	/* +0xe60 */
 	int			fe64;		/* +0xe64 */
-	unsigned char		pade68[0xeb8 - 0xe68];
+	/* The receive front end's own filter line, oldest last. */
+	short			agc_line[V8_AGC_TAPS];	/* +0xe68 */
 	int			feb8;		/* +0xeb8 */
 	short			febc;		/* +0xebc */
 	short			febe;		/* +0xebe */
@@ -609,6 +617,13 @@ int v8_fskmodulate(struct v8 *v, short which);
 
 /* One step of the receive AGC. */
 int v8_agcadapt(struct v8 *v);
+
+/*
+ * The receive front end.  Takes a block out of the symbol buffer, filters it
+ * with the design that matches which end of the call this is, applies the
+ * current gain with saturation, and adapts that gain from what it measured.
+ */
+int V8agc(struct v8 *v);
 
 /*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
