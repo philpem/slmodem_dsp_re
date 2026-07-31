@@ -126,6 +126,57 @@ struct v8_v21_params {
 	short	f26;				/* +0xc46 */
 };
 
+/*
+ * The transmit sequence: the CM or JM about to go on the wire, as 10-bit
+ * V.21 characters -- start bit, eight data bits least significant first, stop
+ * bit -- terminated by 0xffff, followed by the transmitter's control block.
+ *
+ * `nbits` is the character count times ten, which is what confirms the
+ * entries are ten bits each rather than bytes with framing added later.
+ */
+#define V8_TX_SEQ_WORDS	15
+
+struct v8_tx_sequence {
+	short	word[V8_TX_SEQ_WORDS];		/* +0x00 */
+	short	terminator;	/* 0xffff       +0x1e */
+	short	f20;				/* +0x20 */
+	short	nbits;		/* words * 10   +0x22 */
+	short	f24;				/* +0x24 */
+	short	f26;		/* 10           +0x26 */
+	short	f28;				/* +0x28 */
+	short	f2a;		/* 1            +0x2a */
+	short	f2c;				/* +0x2c */
+	short	f2e;				/* +0x2e */
+	int	f30;				/* +0x30 */
+	short	f34;				/* +0x34 */
+	short	f36;				/* +0x36 */
+	int	f38;				/* +0x38 */
+	short	f3c;				/* +0x3c */
+	short	f3e;				/* +0x3e */
+};
+
+/*
+ * The call menu itself -- the bits V.8 is actually negotiating over.  Three
+ * flag bytes and two optional four-byte extensions, which is what the
+ * standard calls the country code and vendor-specific fields.
+ */
+struct v8_cm {
+	unsigned char	b0;			/* +0x00 */
+	unsigned char	b1;			/* +0x01 */
+	unsigned char	b2;			/* +0x02 */
+	unsigned char	b3;			/* +0x03 */
+	unsigned char	pad04[0x18 - 4];
+	unsigned char	ext1[4];		/* +0x18 */
+	unsigned char	ext2[4];		/* +0x1c */
+};
+
+/* At most four characters are taken from each extension field. */
+#define V8_CM_EXT_MAX	4
+
+/* Bits of v8_cm.b2 saying whether each extension is present. */
+#define V8_CM_EXT1_PRESENT	0x04
+#define V8_CM_EXT2_PRESENT	0x08
+
 /* The 61-tap filter v8_V21_Init copies in, chosen by channel. */
 #define V8_V21_TAPS	61
 
@@ -241,13 +292,16 @@ struct v8 {
 
 	unsigned char		pad9d4[0xa42 - 0x9d4];
 	short			fa42;		/* +0xa42 */
-	unsigned char		pada44[0xa5c - 0xa44];
+	unsigned char		pada44[0xa58 - 0xa44];
+	struct v8_cm		*cm;		/* +0xa58 */
 	short			v21_taps[V8_V21_TAPS];	/* +0xa5c */
 	unsigned char		pada_d6[2];
 	struct v8_detector	detector;	/* +0xad8 */
 	struct v8_phase_rev	phase_rev;	/* +0xb40 */
 	struct v8_v21_params	v21_params;	/* +0xc20 */
-	unsigned char		padc48[0xdd2 - 0xc48];
+	struct v8_tx_sequence	*tx_seq;	/* +0xc48 */
+	void			*fc4c;		/* +0xc4c */
+	unsigned char		padc50[0xdd2 - 0xc50];
 
 	/* The tone queue, which v8_TONEq_init arms. */
 	short			toneq_pending;	/* +0xdd2 */
@@ -305,6 +359,13 @@ void v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
  * the call; the two choices are independent and pick different things.
  */
 void v8_V21_Init(struct v8 *v, short channel, short answerer);
+
+/*
+ * Build the CM or JM sequence about to be transmitted, from the call menu at
+ * `v->cm` into the buffer at `v->tx_seq`.  Both are set by the caller, which
+ * is how one function serves both messages.
+ */
+void initTxSequence(struct v8 *v);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);

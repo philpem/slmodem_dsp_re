@@ -3839,3 +3839,46 @@ four words, so the whole-object byte sweep still covers everything around
 them. That is the same shape as the pointer-into-self problem in finding 64,
 but the fix is different: those had to be compared as offsets, these have to
 be compared by dereferencing.
+
+## 66. initTxSequence: where V.8's negotiation becomes bits
+
+This is the function the monitoring goal depends on. It reads the call menu
+-- three flag bytes and two optional four-character extension fields -- and
+writes the message out as V.21 characters, then records how long it came to.
+
+### The entries are ten bits, already framed
+
+The constants written into the buffer are 0x3ff, 0x107, 0x141, 0x161 and so
+on: nine and ten bit values, not octets. What settles it is the length the
+function stores at the end, which is the character count times **ten** -- a
+start bit, eight data bits and a stop bit, with the framing already folded
+into the constant rather than added by the modulator later.
+
+Extension characters go through `charFlip` and then `(x << 1) | 1`, which
+puts the same framing round a reversed octet. So the fixed characters and the
+variable ones are the same shape, which is the confirmation that reading them
+as ten-bit words is right.
+
+### One function, both messages
+
+`initTxSequence` takes only the object. Which message it builds, and where it
+puts it, come from two pointers the caller sets first -- `v->cm` and
+`v->tx_seq`. That is why `v8handshakinit` calls it twice with different
+pointers and no other difference: CM and JM are the same encoder over
+different menus.
+
+### An extension declared but left empty un-declares itself
+
+Both extension fields are copied up to four characters, stopping at the first
+zero. If a field is marked present but its first character is zero, nothing
+is emitted **and the present bit is cleared in the menu itself**. The call
+function is then chosen by re-testing that same bit, so clearing it changes
+which branch runs a few lines later. An initialiser that mutated its input
+would be a surprise in most code; here it is load-bearing.
+
+### The tail is chosen by two bits read as one word
+
+The original tests `*(int *)cm & 0x80008` -- a single 32-bit read across the
+flag bytes, which is bit 3 of the first byte or bit 3 of the third. Written
+out as the two byte tests it plainly is, since a 32-bit read of a
+three-byte-plus structure is only correct by accident of layout.

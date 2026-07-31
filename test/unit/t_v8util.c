@@ -33,6 +33,91 @@ extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2,
 				short a7);
 extern void ref_v8_V21_Init(struct v8 *v, short channel, short answerer);
 extern unsigned char ref_charFlip(unsigned char b);
+extern void ref_initTxSequence(struct v8 *v);
+
+/* The two objects every comparison below runs through. */
+static struct v8 obj_a, obj_b;
+
+/*
+ * The sequence builder works through two pointers the caller sets, so each
+ * side gets its own pair and the results are compared directly rather than
+ * through the object.
+ */
+static struct v8_tx_sequence seq_a, seq_b;
+static struct v8_cm cm_a, cm_b;
+
+static int
+t_txsequence(void)
+{
+	unsigned b0, b1, b2, e;
+	long built = 0;
+
+	diff_begin("initTxSequence: CM and JM assembly");
+
+	/*
+	 * Every combination of the bits the builder looks at -- b0 has five,
+	 * b1 has seven, b2 has four -- would be 2^16 runs; sweep each byte
+	 * over its full range against a few values of the others, which
+	 * covers every branch and every pair that shares a word.
+	 */
+	for (b0 = 0; b0 < 256; b0++) {
+		for (b1 = 0; b1 < 256; b1 += 17) {
+			for (b2 = 0; b2 < 16; b2++) {
+				for (e = 0; e < 3; e++) {
+					memset(&seq_a, 0x5a, sizeof(seq_a));
+					memset(&seq_b, 0x5a, sizeof(seq_b));
+					memset(&cm_a, 0, sizeof(cm_a));
+					cm_a.b0 = (unsigned char)b0;
+					cm_a.b1 = (unsigned char)b1;
+					cm_a.b2 = (unsigned char)b2;
+					/*
+					 * e = 0 no extension characters,
+					 * 1 one, 2 the full four.
+					 */
+					if (e > 0) {
+						cm_a.ext1[0] = 'G';
+						cm_a.ext2[0] = 'B';
+					}
+					if (e > 1) {
+						cm_a.ext1[1] = 'b';
+						cm_a.ext1[2] = 0x7f;
+						cm_a.ext1[3] = 0x01;
+						cm_a.ext2[1] = 0xff;
+						cm_a.ext2[2] = 'z';
+						cm_a.ext2[3] = '4';
+					}
+					memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+					obj_a.cm = &cm_a;
+					obj_a.tx_seq = &seq_a;
+					obj_b.cm = &cm_b;
+					obj_b.tx_seq = &seq_b;
+					ref_initTxSequence(&obj_a);
+					initTxSequence(&obj_b);
+
+					diff_eq_int("b0=%ld: sequence",
+						    memcmp(&seq_a, &seq_b,
+							   sizeof(seq_a)) == 0,
+						    1, (long)b0);
+					diff_eq_int("b0=%ld: menu after",
+						    memcmp(&cm_a, &cm_b,
+							   sizeof(cm_a)) == 0,
+						    1, (long)b0);
+					if (seq_a.nbits != 0)
+						built++;
+				}
+			}
+		}
+	}
+
+	/* Ten bits a character, and the terminator is really planted. */
+	diff_eq_int("sequences were built (%ld)", built > 1000, 1, built);
+	diff_eq_int("bit count is a multiple of ten", seq_a.nbits % 10, 0, 0);
+	diff_eq_int("terminator", (unsigned short)seq_a.terminator, 0xffff, 0);
+	diff_eq_int("preamble", seq_a.word[0], 0x3ff, 0);
+
+	return diff_end();
+}
 
 /* Reverse eight bits the slow, obvious way, to check the table against. */
 static unsigned char
@@ -79,7 +164,6 @@ t_charflip(void)
  * none of which a field-by-field check would find unless it happened to name
  * the field that moved.
  */
-static struct v8 obj_a, obj_b;
 
 static void
 fill(void *p, size_t n, unsigned seed)
@@ -539,5 +623,6 @@ main(void)
 	rc |= t_dftenergy();
 	rc |= t_charflip();
 	rc |= t_inits();
+	rc |= t_txsequence();
 	return rc;
 }
