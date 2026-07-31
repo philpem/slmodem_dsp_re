@@ -27,11 +27,11 @@ is structured, and the commands that prove each claim.
 | phase | content | state |
 |--:|---|---|
 | 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
-| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** except `MEMORYC` |
+| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** |
 | 2 | Bell 103 / V.21 — *first real connection* | **complete** — connects and carries data at BER 0 |
 | 3 | call progress / dialler — *originate as well as answer* | — |
 | 4 | V.23 | — |
-| 5 | V.8 negotiation | — |
+| 5 | V.8 negotiation | — (also where `MEMORYC.c` gets identified — finding 37) |
 | 6 | V.22 / V.22bis / Bell 212 (rest of `fpm_*`) | — |
 | 7 | V.32 / V.32bis | — |
 | 8 | remaining services (CID, DTMF, ring detect, voice, beep) | — |

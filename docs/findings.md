@@ -2111,3 +2111,53 @@ detector, the transmit tones and the oscillator — all four already known by
 measurement, finding 35), the `loop_high_channel` branch, and the four
 allocation paths: object (0x58), `hdx` (0x24), `dsp` (0x100), and the
 default-config path taken when `cfg` is NULL.
+
+## 37. `MEMORYC.c` — not identifiable, and not a phase 1 remainder
+
+Carried since finding 1 as "the one TU with no function attributed to it".
+Investigated properly; the answer is that it cannot be identified yet, and the
+reason is structural rather than a gap in the tooling.
+
+### Where it sits
+
+`MEMORYC.c` is one of **fourteen** translation units sharing a single
+unresolvable address bracket, `.text 0x05dd10-0x07a9f0`:
+
+```
+V34hshak.c  v34filters.c  detector.c  DFTC.c  DPSK.c  MEMORYC.c
+V8Interface.c  V8global.c  V8.c  V8Detector.c  V8Dftc.c  V8Dpsk.c
+V8Fsk.c  Callprog.c
+```
+
+That is the V.8 negotiation and V.34 handshake cluster. The bracket holds 113
+functions and none of the fourteen contributes a local symbol, so there is
+nothing to split it on: `tuattrib.py` assigns what it can by name prefix and
+puts the remainder in the nearest TU as `fill`. 95 of the 113 are `fill` or
+`name-only`.
+
+### It is not an allocator
+
+The name invites the reading "memory management", and that is checkable:
+
+- **No memory-flavoured symbol anywhere in the bracket.** Searching all 113
+  for `mem|alloc|free|buf|pool|heap` returns exactly one hit, `v34FreezeEcho`,
+  which is a false positive on "free".
+- **No arena.** The largest `.bss` object in the whole library is 320 bytes
+  (`rx_in_internal`, a staging buffer). A pooled allocator would need a static
+  block and there is none.
+- **Everything allocates through `sysdep_malloc`.** Every `*_create` in the
+  reconstruction so far calls it directly; nothing routes through a library
+  allocator.
+
+So whatever `MEMORYC.c` holds, it is not a general allocator, and the guess
+that it might be is now ruled out rather than left hanging.
+
+### Re-scoped
+
+Identifying it requires attributing that bracket, and attributing that bracket
+requires reconstructing V.8 — the functions have to be recognised by what they
+do, since their names will not do it. It was listed as a **phase 1 remainder**
+and it is not one: it belongs to phase 5.
+
+Nothing depends on it. No reconstructed function calls into the bracket, and
+Bell 103 is complete without it.
