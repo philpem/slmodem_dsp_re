@@ -3074,3 +3074,49 @@ This is the third file static that has had to be tested through a caller, and
 the pattern is worth stating plainly: **a `t` symbol is not a testing
 inconvenience, it is a signal that the calling convention may not be the C
 one.** Check before writing the prototype, not after the comparison fails.
+
+---
+
+## 53. The pulse dialler
+
+Five functions in call.c, and the only part of the library that operates a
+relay rather than a filter. Dialer.c calls across to them; nothing else does.
+
+`PulseDialDigit` loads a count, then `IsPulseDialerReady` is polled once per
+5 ms tick and walks one cycle per pulse:
+
+```
+    elapsed <  break            hook on, line interrupted
+    elapsed >= break            hook off, line restored
+    elapsed >= break + make     one pulse done; count down, restart
+```
+
+returning true once the count reaches zero. The tick is a literal `5` in the
+code, so every duration here is milliseconds -- unlike the cadence timings,
+which are centiseconds (docs/parameters.md), and unlike everything in the
+call-progress detector, which counts filter intervals. Three different time
+units inside one phase, and none of them is stated anywhere.
+
+Three details worth keeping:
+
+- **A digit of zero is loaded as ten**, which is how loop disconnect has
+  always spelled it.
+
+- **`LastPulseDigitDialed` never touches the call object.** It only clears
+  `MDMPRM_PULSE_DIAL`, the parameter `PulseDialDigit` set. So the *host* owns
+  "a digit is being pulsed" and the library owns only the timing.
+
+- **All five tolerate a missing datapump**, and `IsPulseDialerReady` answers
+  *ready* rather than *busy* when there is none -- which is what stops a
+  caller polling it from spinning forever on a torn-down modem. That is a
+  deliberate-looking choice; the lazy version of this function would have
+  returned 0.
+
+### A configuration that dials nothing
+
+With `break` set to zero, `elapsed < break` is never true, the line is never
+interrupted, and the digit still counts down to completion on the make timer
+alone. So a country table with a zero break time produces a pulse dialler that
+appears to work and sends no pulses. Nothing in the code guards against it,
+and `t_pulse` asserts it in that direction rather than treating it as a case
+to avoid.

@@ -38,7 +38,7 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/pump/b103/b103.c src/dsp/fpm_sqrt.c src/dsp/fpm_phasor.c src/dsp/fpm_tone.c src/dsp/fpm_rms.c src/dsp/fpm_div.c src/dsp/fpm_mrf.c src/dsp/fpm_fsm.c src/dsp/fpm_tone_cfg.c src/dsp/fpm_fsd.c src/dsp/fpm_mtd.c src/dsp/fpm_mtd_cfg.c src/dsp/fpm_iir.c src/dsp/fpm_iir_coeffs.c src/dsp/fp_math.c src/dsp/fpm_agc.c src/pump/b103/b103_agc_cfg.c src/pump/b103/b103fp.c src/pump/b103/b103_cfg.c src/pump/b103/b103_tables.c src/callprog/callprog_status.c src/callprog/callprog_cfg.c src/callprog/cpfiltrs.c src/callprog/toneiir.c src/callprog/dualtone.c src/callprog/callingtone.c src/callprog/cadence.c src/callprog/elliptic.c src/dialer/dialercfg.c src/dialer/dialer.c
+SRC        := src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/pump/b103/b103.c src/dsp/fpm_sqrt.c src/dsp/fpm_phasor.c src/dsp/fpm_tone.c src/dsp/fpm_rms.c src/dsp/fpm_div.c src/dsp/fpm_mrf.c src/dsp/fpm_fsm.c src/dsp/fpm_tone_cfg.c src/dsp/fpm_fsd.c src/dsp/fpm_mtd.c src/dsp/fpm_mtd_cfg.c src/dsp/fpm_iir.c src/dsp/fpm_iir_coeffs.c src/dsp/fp_math.c src/dsp/fpm_agc.c src/pump/b103/b103_agc_cfg.c src/pump/b103/b103fp.c src/pump/b103/b103_cfg.c src/pump/b103/b103_tables.c src/callprog/callprog_status.c src/callprog/callprog_cfg.c src/callprog/cpfiltrs.c src/callprog/toneiir.c src/callprog/dualtone.c src/callprog/callingtone.c src/callprog/cadence.c src/callprog/elliptic.c src/dialer/dialercfg.c src/dialer/dialer.c src/call/pulse.c
 CXXSRC     := src/dsp/FloatIIR.cpp
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
@@ -59,7 +59,7 @@ HARNESS    := test/harness/harness.c test/harness/runtime.c \
               test/harness/fakedp.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp t_toneiir t_callprog t_dualtone t_callingtone t_cadence t_dialercfg t_dialer t_spandsp_replay
+TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp t_toneiir t_callprog t_dualtone t_callingtone t_cadence t_dialercfg t_dialer t_pulse t_spandsp_replay
 CXXTESTS   := t_genericiir
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
