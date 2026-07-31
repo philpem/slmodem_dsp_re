@@ -58,3 +58,4 @@ int modem_put_bits(void *m, int c, const unsigned char *b, int n)
 long modem_set_param(void *m, unsigned p, int v)
 { (void)m; (void)p; (void)v; return 0; }
 long modem_get_param(void *m, unsigned p) { (void)m; (void)p; return 0; }
+long modem_get_sreg(void *m, unsigned n) { (void)m; (void)n; return 0; }

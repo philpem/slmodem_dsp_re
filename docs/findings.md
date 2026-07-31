@@ -3550,3 +3550,82 @@ between samples, is now verified rather than merely written.
 `t_callprog_progress` guards this directly: it requires
 `CALLPROG_DIALING` to have been reported at least once, so a future change
 that quietly deafens the detectors fails instead of passing.
+
+## 61. call.c: the datapump that runs before there is a connection
+
+`DP_CALL` is registered from `dp_call_init` and runs between going off hook
+and having a carrier. All the judgement is `CALLPROG_Progress`; this module
+dials, feeds the supervisor 48 samples at a time whatever size the host asks
+in, and turns the message into a `DPSTAT_*` code.
+
+### Reaching it at all
+
+All four functions are file statics, so `objcopy --redefine-syms` cannot give
+them `ref_` aliases and there is no way to call them by name. The way in is
+the operations table: `dp_call_init` is global and passes `&call_op` to
+`modem_dp_register`, so calling it and taking the pointers out of the
+harness's registration log reaches every one of them. Finding it needed the
+in-place addends -- these are REL relocations against `.text`, so `objdump -r`
+shows no addend at all and the four references only appear once the four
+bytes at each relocation site are read out of the section.
+
+### The message-to-status map
+
+```
+    CALLPROG_NO_RING, NO_ANSWER, ANSWER_STATE_TIMEOUT  -> DPSTAT_NOANSWER
+    CALLPROG_NO_DIAL_TONE                              -> DPSTAT_NODIALTONE
+    CALLPROG_BUSY, CONGESTION                          -> DPSTAT_BUSY
+    CALLPROG_ERROR                                     -> DPSTAT_ERROR
+    CALLPROG_ANSWER, MODEM_ANSWER, VOICE_ANSWER,
+      V8BIS_MODEM_ANSWER, and messages 16 and 17       -> DPSTAT_CHANGEDP
+    everything else                                    -> DPSTAT_OK
+```
+
+Which settles what messages 16 and 17 are, the two the object does not name:
+they are handled exactly like the four answer messages, latching `answered`
+and asking the host to change datapump. They come from the automode dual-tone
+detector, so they are answer-tone verdicts.
+
+`DPSTAT_CHANGEDP` also latches `answered`, and from then on the incoming
+block is discarded rather than listened to and the outgoing side is filled
+with silence -- the line belongs to whatever datapump takes over.
+
+### Two rings and a double buffer
+
+The host hands over arbitrary sample counts and the supervisor wants fixed
+48-sample blocks, so each direction has a 192-byte ring the host's samples
+flow through plus a 96-byte double buffer the supervisor works in. The
+`active` field of each queue holds a byte offset that is only ever 0 or 96,
+and both flip after every block. The original tests them with `cmp $1` and
+`sbb`, which reads as a comparison but is only ever distinguishing those two
+values.
+
+The outgoing side is primed at create with one block of silence and its
+`active` pointed at the *other* half, so the first call has something to send
+before it has processed anything. That is a one-block delay through the
+datapump, by construction.
+
+### The dial string gets a prefix if it has none
+
+`MDMPRM_DIALSTR` is the host's string. If it starts with a digit it carries
+no mode prefix, so one is put in front of it into a 64-byte stack buffer --
+`p` or `t` according to S16. Anything else, and anything longer than 62
+characters, is passed through untouched.
+
+### The initial message is one past the end
+
+`call_create` sets the remembered message to 18, which is
+`CALLPROG_MAX_MESSAGES` -- not a message at all, but a value the first block
+is guaranteed to differ from. Worth noting because 17 is a real message and
+the off-by-one is invisible until a test runs fewer than 48 samples through
+and never completes a block.
+
+### A limit worth recording
+
+`t_call` compares 15 configurations sample-for-sample -- every fragment size
+from 1 to 200, both resampled rates and one with no converter, and six dial
+strings -- and the outgoing buffer is silent in all of them. The supervisor
+never leaves `CALLPROG_WAIT_DIAL`, and only the dialling state writes
+samples. Fed 48 at a time through the block machinery, the 550 Hz tone that
+moves the supervisor along in `t_callprog_progress` does not do so here. The
+test asserts the silence rather than pretending to guard against it.

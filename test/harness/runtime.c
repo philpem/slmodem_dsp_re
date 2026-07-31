@@ -394,8 +394,37 @@ long ref_modem_get_param(void *m, unsigned param)
 long ref_modem_set_param(void *m, unsigned name, int val)
 { (void)m; return shim_set_param(&harness_modem_ref, name, val); }
 
+/*
+ * The S-registers.  One store for both sides: unlike the parameters, nothing
+ * writes them, so there is nothing to keep apart and no log worth having.
+ */
+static long harness_sreg[HARNESS_SREGS];
+
+void
+harness_sreg_reset(void)
+{
+	unsigned i;
+
+	for (i = 0; i < HARNESS_SREGS; i++)
+		harness_sreg[i] = 0;
+}
+
+void
+harness_sreg_set(unsigned n, long v)
+{
+	if (n < HARNESS_SREGS)
+		harness_sreg[n] = v;
+}
+
+long
+modem_get_sreg(void *m, unsigned sreg)
+{
+	(void)m;
+	return sreg < HARNESS_SREGS ? harness_sreg[sreg] : 0;
+}
+
 long ref_modem_get_sreg(void *m, unsigned sreg)
-{ (void)m; (void)sreg; unexpected("modem_get_sreg"); return 0; }
+{ return modem_get_sreg(m, sreg); }
 
 int ref_modem_send_to_tty(void *m, const void *buf, int n)
 { (void)m; (void)buf; (void)n; unexpected("modem_send_to_tty"); return 0; }

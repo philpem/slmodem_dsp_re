@@ -69,6 +69,11 @@ struct reg_log {
 	int deregistered;
 };
 
+/* slmodemd has 256 S-registers; the store mirrors that. */
+#define HARNESS_SREGS	256
+void harness_sreg_reset(void);
+void harness_sreg_set(unsigned n, long v);
+
 extern struct reg_log harness_reg_ours;
 extern struct reg_log harness_reg_ref;
 void harness_reg_reset(void);
