@@ -93,18 +93,18 @@ v8handshakinit(struct v8 *v)
 		v->seq[1].word[0] = 1;
 		v->seq[1].word[1] = 1;
 		v->seq[1].word[2] = 1;
-		v->seq[1].terminator = -1;
+		v->seq[1].crc = -1;
 		v->seq[1].nbits = 30;
-		v->seq[1].f26 = 10;
-		v->seq[1].f2a = 1;
-		v->seq[1].f20 = 0;
-		v->seq[1].f24 = 0;
-		v->seq[1].f28 = 0;
-		v->seq[1].f2c = 0;
-		v->seq[1].f30 = 0;
-		v->seq[1].f34 = 0;
-		v->seq[1].f38 = 0;
-		v->seq[1].f3c = 0;
+		v->seq[1].wordbits = 10;
+		v->seq[1].repeat = 1;
+		v->seq[1].crc_enable = 0;
+		v->seq[1].bitpos = 0;
+		v->seq[1].wordidx = 0;
+		v->seq[1].repeats = 0;
+		v->seq[1].shifter = 0;
+		v->seq[1].nleft = 0;
+		v->seq[1].shifter0 = 0;
+		v->seq[1].nleft0 = 0;
 
 		v->fdbe = (short)(v->fa48 == 0);
 		cm = v->cm;
@@ -134,18 +134,18 @@ v8handshakinit(struct v8 *v)
 			v->toneq_pending = 0;
 			v->toneq_period = 0x688;
 
-			v->seq[3].terminator = -1;
-			v->seq[3].f24 = 0;
-			v->seq[3].f28 = 0;
-			v->seq[3].f2c = 0;
+			v->seq[3].crc = -1;
+			v->seq[3].bitpos = 0;
+			v->seq[3].wordidx = 0;
+			v->seq[3].repeats = 0;
 			v->seq[3].nbits = 60;
-			v->seq[3].f26 = 10;
-			v->seq[3].f20 = 0;
-			v->seq[3].f30 = 0;
-			v->seq[3].f38 = 0;
-			v->seq[3].f34 = 0;
-			v->seq[3].f3c = 0;
-			v->seq[3].f2a = 1;
+			v->seq[3].wordbits = 10;
+			v->seq[3].crc_enable = 0;
+			v->seq[3].shifter = 0;
+			v->seq[3].shifter0 = 0;
+			v->seq[3].nleft = 0;
+			v->seq[3].nleft0 = 0;
+			v->seq[3].repeat = 1;
 		}
 
 		v->fdb6 = 0;

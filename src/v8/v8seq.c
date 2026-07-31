@@ -151,19 +151,19 @@ initTxSequence(struct v8 *v)
 		words = n + 3;
 	}
 
-	seq->terminator = (short)0xffff;
+	seq->crc = (short)0xffff;
 
-	seq->f24 = 0;
-	seq->f28 = 0;
-	seq->f2c = 0;
+	seq->bitpos = 0;
+	seq->wordidx = 0;
+	seq->repeats = 0;
 	seq->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
-	seq->f26 = V8_SEQ_BITS_PER_WORD;
-	seq->f20 = 0;
-	seq->f30 = 0;
-	seq->f38 = 0;
-	seq->f34 = 0;
-	seq->f3c = 0;
-	seq->f2a = 1;
+	seq->wordbits = V8_SEQ_BITS_PER_WORD;
+	seq->crc_enable = 0;
+	seq->shifter = 0;
+	seq->shifter0 = 0;
+	seq->nleft = 0;
+	seq->nleft0 = 0;
+	seq->repeat = 1;
 }
 
 /*
@@ -186,7 +186,7 @@ int
 V8GetMessage(struct v8 *v, unsigned char *out, int *count)
 {
 	const struct v8_tx_sequence *seq = rx_sequence(v);
-	int n = seq->f28;
+	int n = seq->wordidx;
 	int rc = 0;
 	int i;
 
@@ -248,18 +248,110 @@ V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n)
 	for (i = 0; i < n; i++)
 		seq->word[i] = ext_word(octets[i]);
 
-	seq->terminator = (short)0xffff;
-	seq->f24 = 0;
-	seq->f28 = 0;
-	seq->f2c = 0;
+	seq->crc = (short)0xffff;
+	seq->bitpos = 0;
+	seq->wordidx = 0;
+	seq->repeats = 0;
 	seq->nbits = (short)(n * V8_SEQ_BITS_PER_WORD);
-	seq->f26 = V8_SEQ_BITS_PER_WORD;
-	seq->f20 = 0;
-	seq->f30 = 0;
-	seq->f38 = 0;
-	seq->f34 = 0;
-	seq->f3c = 0;
-	seq->f2a = 1;
+	seq->wordbits = V8_SEQ_BITS_PER_WORD;
+	seq->crc_enable = 0;
+	seq->shifter = 0;
+	seq->shifter0 = 0;
+	seq->nleft = 0;
+	seq->nleft0 = 0;
+	seq->repeat = 1;
 
 	return rc;
+}
+
+/*
+ * Hand out the next bit of a sequence, least significant first.
+ *
+ * The sequence is 10-bit characters; this is what turns them into a bit
+ * stream. A shift register holds whatever has been loaded and not yet handed
+ * out, `nleft` says how much of it is still owed, and each load folds the new
+ * bits into the CRC.
+ *
+ * Three things happen at the end of a message, in this order: the finished
+ * CRC is appended as sixteen more bits, then four more bits of ones, and only
+ * then does the sequence either repeat from the top or report that it is
+ * done.  The two overruns are recognised by how far past the length the bit
+ * position has gone, which is why `remaining` is allowed to go negative
+ * rather than being clamped.
+ */
+int
+v8_getbit(struct v8_tx_sequence *s)
+{
+	int remaining;
+	int loaded = 0;
+	int pos;
+
+	if (s->nleft != 0)
+		goto emit;
+
+	pos = (unsigned short)s->bitpos;
+	remaining = (short)((unsigned short)s->nbits - (unsigned short)pos);
+
+	if (remaining <= 0) {
+		if (remaining == 0 && s->crc_enable != 0) {
+			/* The CRC itself, sixteen bits of it. */
+			s->shifter = (unsigned short)s->crc;
+			s->nleft = 16;
+			s->bitpos = (short)(pos + 16);
+			goto emit;
+		}
+		if (remaining == -16) {
+			/* Four ones behind the CRC. */
+			s->shifter = 0xf;
+			s->nleft = 4;
+			s->bitpos = (short)(pos + 4);
+			goto emit;
+		}
+		if (s->repeat == 0)
+			return V8_GETBIT_END;
+
+		s->crc = (short)0xffff;
+		s->bitpos = 0;
+		s->wordidx = 0;
+		s->repeats = (short)(s->repeats + 1);
+		s->shifter = s->shifter0;
+		s->nleft = s->nleft0;
+		return (short)v8_getbit(s);
+	}
+
+	/*
+	 * Load a whole character, or whatever is left of one when the message
+	 * ends part way through.
+	 */
+	loaded = (unsigned short)s->wordbits;
+	if (loaded > remaining)
+		loaded = remaining;
+
+	s->nleft = (short)loaded;
+	s->shifter = (s->shifter << loaded)
+		     | (unsigned short)s->word[(unsigned short)s->wordidx];
+	if ((unsigned short)s->wordbits <= (unsigned)remaining)
+		s->wordidx = (short)(s->wordidx + 1);
+	s->bitpos = (short)(pos + loaded);
+
+	if (s->crc_enable != 0 && loaded != 0) {
+		int c = loaded;
+
+		do {
+			unsigned crc = (unsigned short)s->crc;
+			int msb = (short)crc < 0 ? 1 : 0;
+
+			c--;
+			if ((s->shifter >> c) & 1)
+				msb ^= 1;
+			crc += crc;
+			if (msb)
+				crc ^= 0x1021;
+			s->crc = (short)crc;
+		} while (c != 0);
+	}
+
+emit:
+	s->nleft = (short)(s->nleft - 1);
+	return (s->shifter >> (short)s->nleft) & 1;
 }

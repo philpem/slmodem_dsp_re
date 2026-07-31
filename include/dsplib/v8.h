@@ -46,6 +46,11 @@ struct v8_dft_bin {
  * The handshake state.  Only the CRC register is known so far -- the rest
  * arrives with `v8handshakinit`, which is what fills it.
  */
+/*
+ * What `v8_crc` is handed.  It is a `struct v8_tx_sequence` -- the CRC lives
+ * at +0x1e of one -- kept as its own name only because v8_crc was
+ * reconstructed before that was known.
+ */
 struct v8_handshake {
 	unsigned char	pad[0x1e];	/* +0x00 */
 	short		crc;		/* +0x1e */
@@ -165,20 +170,26 @@ struct v8_tone {
 
 struct v8_tx_sequence {
 	short	word[V8_TX_SEQ_WORDS];		/* +0x00 */
-	short	terminator;	/* 0xffff       +0x1e */
-	short	f20;				/* +0x20 */
+	/*
+	 * CRC-16-CCITT, and 0xffff is its initial value rather than a
+	 * terminator: `v8_getbit` folds each bit it hands out into this as it
+	 * goes, and appends the finished register to the message.  It was
+	 * called a terminator for as long as only the builder had been read.
+	 */
+	short	crc;				/* +0x1e */
+	short	crc_enable;			/* +0x20 */
 	short	nbits;		/* words * 10   +0x22 */
-	short	f24;				/* +0x24 */
-	short	f26;		/* 10           +0x26 */
-	short	f28;				/* +0x28 */
-	short	f2a;		/* 1            +0x2a */
-	short	f2c;				/* +0x2c */
+	short	bitpos;		/* bits handed out   +0x24 */
+	short	wordbits;	/* 10               +0x26 */
+	short	wordidx;			/* +0x28 */
+	short	repeat;		/* 1                +0x2a */
+	short	repeats;			/* +0x2c */
 	short	f2e;				/* +0x2e */
-	int	f30;				/* +0x30 */
-	short	f34;				/* +0x34 */
+	int	shifter;	/* the bits being handed out  +0x30 */
+	short	nleft;		/* how many are still in it   +0x34 */
 	short	f36;				/* +0x36 */
-	int	f38;				/* +0x38 */
-	short	f3c;				/* +0x3c */
+	int	shifter0;	/* both restored on repeat    +0x38 */
+	short	nleft0;				/* +0x3c */
 	short	f3e;				/* +0x3e */
 };
 
@@ -533,6 +544,15 @@ int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
 #define V8_SET_REJECTED		(-1)
 
 int V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n);
+
+/*
+ * Hand out the next bit of a sequence, least significant first, folding each
+ * into the CRC on the way.  Returns 0 or 1, or -1 when the sequence is
+ * finished and not set to repeat.
+ */
+#define V8_GETBIT_END	(-1)
+
+int v8_getbit(struct v8_tx_sequence *s);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);

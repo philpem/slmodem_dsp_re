@@ -26,6 +26,8 @@ extern int ref_v8_fskmodulate(struct v8 *v, short which);
 extern int ref_v8_agcadapt(struct v8 *v);
 extern void ref_v8_ansamgenerate(struct v8 *v, short *out);
 extern int ref_V8Control(struct v8 *v, int what);
+extern int ref_v8_getbit(struct v8_tx_sequence *s);
+extern void ref_initTxSequence(struct v8 *v);
 
 static struct v8 obj_a, obj_b;
 
@@ -325,6 +327,66 @@ main(void)
 		}
 		diff_eq_int("requests were accepted (%ld)", accepted > 10, 1,
 			    accepted);
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_getbit");
+	{
+		static struct v8_cm cm_a, cm_b;
+		long bits = 0, ends = 0, ones = 0;
+
+		for (k = 0; k < 48; k++) {
+			struct v8_tx_sequence *sa, *sb;
+
+			memset(&obj_a, 0, sizeof(obj_a));
+			memset(&obj_b, 0, sizeof(obj_b));
+			memset(&cm_a, 0, sizeof(cm_a));
+			cm_a.b0 = (unsigned char)(k * 5);
+			cm_a.b1 = (unsigned char)(k * 11);
+			cm_a.b2 = (unsigned char)(k & 3 ? 0x04 : 0);
+			cm_a.ext1[0] = 'G';
+			memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+			obj_a.cm = &cm_a;
+			obj_b.cm = &cm_b;
+			obj_a.tx_seq = &obj_a.seq[0];
+			obj_b.tx_seq = &obj_b.seq[0];
+			ref_initTxSequence(&obj_a);
+			initTxSequence(&obj_b);
+			sa = &obj_a.seq[0];
+			sb = &obj_b.seq[0];
+
+			/* Sweep the CRC and repeat switches. */
+			sa->crc_enable = sb->crc_enable = (short)(k & 1);
+			sa->repeat = sb->repeat = (short)(k & 2 ? 1 : 0);
+
+			/* Well past the end, so the tail cases all run. */
+			for (i = 0; i < 400; i++) {
+				int ba = ref_v8_getbit(sa);
+				int bb = v8_getbit(sb);
+
+				diff_eq_int("bit %ld", bb, ba, i);
+				diff_eq_int("crc after %ld", sb->crc, sa->crc,
+					    i);
+				diff_eq_int("nleft after %ld", sb->nleft,
+					    sa->nleft, i);
+				diff_eq_int("bitpos after %ld", sb->bitpos,
+					    sa->bitpos, i);
+				if (ba == V8_GETBIT_END)
+					ends++;
+				else {
+					bits++;
+					if (ba == 1)
+						ones++;
+				}
+			}
+			diff_eq_int("sequence state (%ld)",
+				    memcmp(sa, sb, sizeof(*sa)) == 0, 1, k);
+		}
+		diff_eq_int("bits came out (%ld)", bits > 1000, 1, bits);
+		diff_eq_int("both values appeared (%ld)",
+			    ones > 0 && ones < bits, 1, ones);
+		diff_eq_int("the end was reached (%ld)", ends > 0, 1, ends);
 	}
 	rc |= diff_end();
 

@@ -120,7 +120,7 @@ t_txsequence(void)
 	/* Ten bits a character, and the terminator is really planted. */
 	diff_eq_int("sequences were built (%ld)", built > 1000, 1, built);
 	diff_eq_int("bit count is a multiple of ten", seq_a.nbits % 10, 0, 0);
-	diff_eq_int("terminator", (unsigned short)seq_a.terminator, 0xffff, 0);
+	diff_eq_int("terminator", (unsigned short)seq_a.crc, 0xffff, 0);
 	diff_eq_int("preamble", seq_a.word[0], 0x3ff, 0);
 
 	return diff_end();
@@ -887,8 +887,8 @@ t_getmessage(void)
 					       sizeof(sa->word));
 					memcpy(sb->word, obj_b.seq[0].word,
 					       sizeof(sb->word));
-					sa->f28 = (short)n;
-					sb->f28 = (short)n;
+					sa->wordidx = (short)n;
+					sb->wordidx = (short)n;
 
 					/* cap 3 is deliberately too small. */
 					ca = cb = cap == 3 ? 2 : 32;
@@ -971,7 +971,7 @@ t_setmessage(void)
 	memset(&obj_b, 0, sizeof(obj_b));
 	obj_b.mode = 1;
 	V8SetMessage(&obj_b, V8_SET_CM, msg, 9);
-	obj_b.seq[0].f28 = 9;
+	obj_b.seq[0].wordidx = 9;
 	cnt = (int)sizeof(back);
 	diff_eq_int("round trip returns 0",
 		    V8GetMessage(&obj_b, back, &cnt), 0, 0);
