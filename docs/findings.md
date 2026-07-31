@@ -3517,13 +3517,33 @@ verdict.
 
 It is worth being precise about the size of this, because the loose version
 of the claim would be much worse than the truth. `cadence_progress` *does*
-assert elsewhere in the suite: `t_cadence` drives it to `CADENCE_DETECTED`
-and to `CADENCE_RESTART` against the same shape of input, so the detector's
+assert elsewhere in the suite: `t_cadence` builds a detector directly and
+drives it to `CADENCE_DETECTED` and to `CADENCE_RESTART`, so the detector's
 own assert path is verified. What is not covered is reaching a non-zero
-verdict *through the supervisor's configuration of it* -- so the branch in
-`detect` that turns a verdict into an event is untaken here, and finding out
-why belongs with `cadence_create` and the parameter plumbing rather than
-with this function.
+verdict *through the supervisor's configuration of it*.
+
+A detector taken straight out of `CALLPROG_Create` was driven with a
+continuous tone swept over 300, 350, 400, 425, 450, 500, 550, 600, 650, 700,
+800 and 1000 Hz, 32000 samples each, at amplitudes 5000 and 30000, through
+both the dial detector (which is in continuous mode, so it should report on
+every interval the tone is present) and the busy one. **Zero verdicts,
+everywhere.** So this is not a matter of picking the right frequency, level
+or cadence: the detector as configured by `CALLPROG_Create` cannot assert at
+all.
+
+Two things it is *not*:
+
+- not the filter selection, which arrives intact -- `sel_n_a` and `sel_n_b`
+  are both 12 and all three coefficient pointers are non-null, the same check
+  `t_cadence` makes;
+- not the parameters failing to arrive -- the country table's 4 and 12 come
+  out as 2 and 6 intervals, exactly the `time * 80 / buflen` conversion with
+  `buflen` 160, so `cadence_create` is being handed what the store holds.
+
+That puts the fault downstream of both, in whatever `cadence_create` stages
+into the toneiir configuration versus what `t_cadence` supplies directly.
+Comparing the two toneiir configurations side by side is the next step, and
+it is a question about `cadence_create`, not about `CALLPROG_Progress`.
 
 Everything that branch feeds is covered by a different route. The state
 timeout and the line-clear timeout are plain counters, so seeding them short

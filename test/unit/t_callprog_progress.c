@@ -46,10 +46,13 @@ extern void ref_CALLPROG_Delete(struct callprog *cp);
 
 /* The shapes of input the supervisor is fed. */
 #define SIG_SILENCE	0
-#define SIG_DIALTONE	1	/* a continuous 425 Hz tone            */
-#define SIG_BUSY	2	/* 425 Hz, half a second on, half off  */
+#define SIG_DIALTONE	1	/* a continuous 550 Hz tone            */
+#define SIG_BUSY	2	/* 550 Hz, half a second on, half off  */
 #define SIG_NOISE	3	/* deterministic, and loud             */
 #define SIG_COUNT	4
+
+/* Half a second at 8 kHz, which is what t_cadence uses to get a detection. */
+#define BUSY_ON_SAMPLES	4000
 
 static long total_messages;
 static int message_seen[CALLPROG_MAX_MESSAGES];
@@ -69,27 +72,28 @@ static struct side side_a, side_b;
 static short input[MAXCALLS][BUFSAMP];
 
 /*
- * A sine at 425 Hz, 8 kHz, from a fixed table so that both sides and every
- * run see bit-identical input.  No libm, and no floating point.
+ * A sine at 550 Hz and amplitude 5000, from a fixed table so that both sides
+ * and every run see bit-identical input.  No libm, and no floating point.
  *
- * The phase step is 425/8000 of a 64-entry cycle, in Q11.  Getting that
- * shift wrong is what made the first version of this test feed the detectors
- * an aliased 7.5 kHz buzz that nothing could ever recognise.
+ * Both numbers are copied from `t_cadence`, which is the only place in the
+ * suite that gets a cadence detector to assert.  425 Hz at full scale -- the
+ * obvious choice for a European busy tone -- produces no verdict at all,
+ * which cost a while to work out.
  */
-#define TONE_STEP	6963		/* 425 * 64 * 2048 / 8000 */
+#define TONE_STEP	9011		/* 550 * 64 * 2048 / 8000 */
 
 static short
-tone425(long n)
+tone550(long n)
 {
 	static const short cycle[64] = {
-		     0,   1274,   2536,   3774,   4975,   6128,   7222,   8247,
-		  9192,  10049,  10809,  11465,  12010,  12440,  12750,  12937,
-		 13000,  12937,  12750,  12440,  12010,  11465,  10809,  10049,
-		  9192,   8247,   7222,   6128,   4975,   3774,   2536,   1274,
-		     0,  -1274,  -2536,  -3774,  -4975,  -6128,  -7222,  -8247,
-		 -9192, -10049, -10809, -11465, -12010, -12440, -12750, -12937,
-		-13000, -12937, -12750, -12440, -12010, -11465, -10809, -10049,
-		 -9192,  -8247,  -7222,  -6128,  -4975,  -3774,  -2536,  -1274,
+		     0,    490,    975,   1451,   1913,   2357,   2778,   3172,
+		  3536,   3865,   4157,   4410,   4619,   4785,   4904,   4976,
+		  5000,   4976,   4904,   4785,   4619,   4410,   4157,   3865,
+		  3536,   3172,   2778,   2357,   1913,   1451,    975,    490,
+		     0,   -490,   -975,  -1451,  -1913,  -2357,  -2778,  -3172,
+		 -3536,  -3865,  -4157,  -4410,  -4619,  -4785,  -4904,  -4976,
+		 -5000,  -4976,  -4904,  -4785,  -4619,  -4410,  -4157,  -3865,
+		 -3536,  -3172,  -2778,  -2357,  -1913,  -1451,   -975,   -490,
 	};
 
 	return cycle[((n * TONE_STEP) >> 11) & 63];
@@ -111,11 +115,18 @@ fill_input(int signal)
 				v = 0;
 				break;
 			case SIG_DIALTONE:
-				v = tone425(n);
+				v = tone550(n);
 				break;
 			case SIG_BUSY:
-				/* 0.5 s on, 0.5 s off: the usual UK busy. */
-				v = ((n / 4000) & 1) ? 0 : tone425(n);
+				/*
+				 * The cadence has to land inside the window
+				 * the detector was built with, and that
+				 * window is in toneiir intervals: the table's
+				 * 4..12 becomes 2..6 intervals of 20 ms, so
+				 * 40..120 ms.  80 ms sits in the middle.
+				 */
+				v = ((n / BUSY_ON_SAMPLES) & 1) ? 0
+								: tone550(n);
 				break;
 			default:
 				r = r * 1103515245u + 12345u;
