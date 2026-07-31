@@ -64,7 +64,24 @@ static const unsigned short fpm_div_table[FPM_DIV_TABLE_REAL + 1] = {
 	18724, 18641, 18558, 18477, 18396, 18315, 18236, 18157,
 	18078, 18001, 17924, 17848, 17772, 17697, 17623, 17549,
 	17476, 17403, 17331, 17260, 17189, 17119, 17050, 16980,
-	16912, 16844, 16777, 16710, 16644, 16578, 16513, 16448,	0,	/* index 128: FPM_xor_table[0]; correct value would be 16384 */
+	16912, 16844, 16777, 16710, 16644, 16578, 16513, 16448,
+
+	/*
+	 * Index 128 -- one past the original's table.  See D4.
+	 *
+	 * The original reads FPM_xor_table[0] here, which is 0, so every
+	 * denominator that normalises to a mantissa of 0xff80 or above gets a
+	 * reciprocal of ZERO.  That is not theoretical: it silences an AGC
+	 * block and drops a Bell 103 connection (finding 40).
+	 *
+	 * 16384 is the value the table's own generator produces:
+	 *     trunc(2^30 / ((128 + 0x80) * 0x100)) = 2^30 / 65536 = 16384
+	 */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	0
+#else
+	16384
+#endif
 };
 
 unsigned short

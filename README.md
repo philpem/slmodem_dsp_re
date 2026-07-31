@@ -58,6 +58,22 @@ is structured, and the commands that prove each claim.
 Full plan, including rationale for the ordering:
 `~/.claude/plans/the-directory-slmodemd-contains-compiled-lark.md`
 
+## Bug compatibility
+
+The reconstruction fixes a defect found in the original **only** where leaving
+it in would break a working modem, and every such fix sits behind
+`DSPLIB_REPRODUCE_BUGS` so bit-exactness stays provable:
+
+```sh
+make test      # -DDSPLIB_REPRODUCE_BUGS: proves equivalence with the blob
+make interop   # without it: proves the fixed build is a working modem
+```
+
+There is currently one, **D4** — `FPM_div` reading one past its table and
+handing the AGC a zero gain, which silences a block and drops a Bell 103 call
+on 6.6% of blocks. Everything else the original gets wrong is reproduced
+faithfully and recorded in [docs/deviations.md](docs/deviations.md).
+
 ## Ground rules
 
 - **This tree builds standalone.** It never modifies `slmodemd/` or its

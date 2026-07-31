@@ -114,20 +114,6 @@ bit_error_rate(const unsigned char *a, int na, const unsigned char *b, int nb,
 	return best_n ? (double)best_err / best_n : 1.0;
 }
 
-/* How many bits are correct from the start, at a known alignment. */
-static int
-clean_prefix(const unsigned char *a, int na, const unsigned char *b, int nb,
-	     int lag)
-{
-	int i;
-
-	for (i = 0; i < na && i + lag < nb; i++)
-		if (a[i] != b[i + lag])
-			return i;
-	return i;
-}
-
-
 int
 main(void)
 {
@@ -251,32 +237,22 @@ main(void)
 			      "implementation's Bell 103 answer channel");
 
 			/*
-			 * KNOWN OPEN ISSUE -- finding 40.
+			 * This used to lose lock after 229 bits, and finding
+			 * 40 traced it to D4 -- FPM_div's out-of-range table
+			 * read handing the AGC a zero gain, which silenced a
+			 * block and cost the demodulator its bit clock.
 			 *
-			 * The receiver demodulates SpanDSP's signal correctly
-			 * for a couple of hundred bits and then loses bit-clock
-			 * lock, at THIS INPUT LEVEL only.  Scaling the same
-			 * samples by 0.75 or 1.25 gives BER 0 over the whole
-			 * stream; leaving them alone, or scaling by any exact
-			 * power of two, loses lock.
-			 *
-			 * Asserting a clean prefix rather than a clean stream
-			 * is deliberate.  Marking it "expected fail" would let
-			 * it rot; asserting the behaviour that is actually
-			 * observed means a change in either direction -- fixed,
-			 * or worse -- fails here.
+			 * This binary is built WITHOUT -DDSPLIB_REPRODUCE_BUGS,
+			 * so it has the fixed table, and this assertion is the
+			 * payoff: the whole stream, error-free.  The
+			 * differential tier still builds with the bug and still
+			 * proves bit-exactness against the blob, so both claims
+			 * hold at once.
 			 */
-			{
-				int clean = clean_prefix(sent, nsent,
-							 got, ngot, 3);
-
-				printf("    (clean for %d bits before lock is "
-				       "lost -- finding 40)\n", clean);
-				check("SpanDSP -> ours: demodulates initially",
-				      clean >= 150,
-				      "lock is lost almost immediately, which is "
-				      "worse than the recorded behaviour");
-			}
+			check("SpanDSP -> ours error-free", ber < 0.001,
+			      "we disagree with what SpanDSP sent -- if this "
+			      "regressed, check whether DSPLIB_REPRODUCE_BUGS "
+			      "leaked into the interop build");
 		}
 		if (rx)
 			B103FP_delete(rx);

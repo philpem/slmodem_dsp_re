@@ -18,6 +18,19 @@ ARCH32     := -m32
 CC         := gcc
 CXX        := g++
 CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP
+
+# Bug-compatibility switch.
+#
+# The reconstruction fixes defects found in the original ONLY where leaving
+# them in would break a working modem, and every such fix is behind this
+# define so bit-exactness against the blob remains provable.  Currently one:
+# D4, FPM_div's out-of-range table read, which silences an AGC block and drops
+# a Bell 103 call (finding 40).
+#
+# The differential tier defines it -- those tests exist to prove equivalence
+# and cannot do that against a fixed build.  Everything else, including the
+# interop tier and anyone linking this library for real, gets the fix.
+REPRODUCE  := -DDSPLIB_REPRODUCE_BUGS
 PYTHON     := python3
 
 # x87 with 80-bit intermediates, matching GCC 3.4.2's -m32 default and the
@@ -83,11 +96,11 @@ $(REF): $(SYMMAP) $(BLOB)
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -c $< -o $@
 
 $(BUILD)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -c $< -o $@
 
 # Linked with $(CC), not $(CXX): the C++ here is -fno-exceptions -fno-rtti with
 # no virtuals and no new/delete, exactly as the original was built, so nothing
@@ -99,11 +112,11 @@ $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
 
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -Itest/harness -c $< -o $@
+	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
 $(BUILD)/test/unit/%.o: test/unit/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -Itest/harness -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
 $(BUILD):
 	@mkdir -p $(BUILD)
@@ -146,7 +159,9 @@ $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
 check64:
 	@$(CC) $(CFLAGS) -fsyntax-only $(SRC) \
 	  && $(CXX) $(CXXFLAGS) -fsyntax-only $(CXXSRC) \
-	  && echo "64-bit clean: OK"
+	  && $(CC) $(CFLAGS) $(REPRODUCE) -fsyntax-only $(SRC) \
+	  && $(CXX) $(CXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
+	  && echo "64-bit clean, both configurations: OK"
 
 # Regenerate the analysis documents from the blob.
 docs:

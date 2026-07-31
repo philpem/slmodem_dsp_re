@@ -51,8 +51,21 @@ main(void)
 	 * yield a zero reciprocal in the original.
 	 */
 	diff_begin("D4 overrun reproduced");
+	/*
+	 * This binary is built with -DDSPLIB_REPRODUCE_BUGS, because its job
+	 * is to prove equivalence with the blob and it cannot do that against
+	 * a fixed table.  Assert BOTH the count and the switch, so a build
+	 * that lost the define fails here rather than quietly comparing a
+	 * fixed implementation against a buggy blob and reporting a mismatch
+	 * somewhere far away.
+	 */
+#ifndef DSPLIB_REPRODUCE_BUGS
+#error "t_fpm_div must be built with -DDSPLIB_REPRODUCE_BUGS"
+#endif
 	diff_eq_int("denominators yielding a zero reciprocal (%ld)",
 		    overrun, 255, 0);
+	diff_eq_int("the fixed table would return 16384 there (%ld)",
+		    FPM_div_table_generate(128), 16384, 0);
 	rc |= diff_end();
 
 	return rc;

@@ -2375,6 +2375,10 @@ the answer is the useful part.
 freezes the signal and `t_spandsp_replay` runs it through both — 116,954
 agreeing checks, and both lose lock at the same bit.
 
+**FIXED.** D4's table entry is now correct by default, with
+`-DDSPLIB_REPRODUCE_BUGS` restoring the original's zero for the differential
+tier. Both directions of this test now measure **BER 0.00000**.
+
 **Mechanism:** at the failing block the AGC's gain becomes **zero** and the
 block is multiplied to silence. Its level estimate, 4088, normalises to
 mantissa `0xff80` — the value that indexes one past `FPM_div`'s table, which
