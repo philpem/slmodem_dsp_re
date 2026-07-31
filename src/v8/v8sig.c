@@ -115,3 +115,115 @@ v8_fsktxfilter(struct v8 *v, short sample)
 
 	return (short)(acc >> 16);
 }
+
+/*
+ * Advance a sliding DFT.  One oscillator per bin rather than a transform over
+ * a block: each bin steps its own phase, reads cosine and sine out of the one
+ * table a quarter cycle apart, and adds the products into its running sums.
+ */
+void
+v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
+	     short nsamples)
+{
+	short j;
+
+	for (j = 0; j < nsamples; j++) {
+		short i;
+
+		for (i = 0; i < nbins; i++) {
+			struct v8_dft_bin *b = &bins[i];
+			unsigned phase;
+			unsigned idx;
+			int x = samples[j];
+
+			phase = ((unsigned)(unsigned short)b->phase
+				 + (unsigned short)b->step) & 0x3fff;
+			b->phase = (short)phase;
+
+			idx = phase >> 6;
+			b->re += (v8_cosread((unsigned char)idx) * x) >> 6;
+			b->im += (v8_cosread((unsigned char)(idx + 0x40)) * x)
+				 >> 6;
+		}
+	}
+}
+
+/*
+ * Four samples of FSK.  The two carriers differ only in which increment is
+ * added to the shared phase, so the branch is one field apart; everything
+ * after -- table lookup, amplitude, shaping filter -- is common.
+ */
+int
+v8_fskmodulate(struct v8 *v, short which)
+{
+	struct v8_v21_params *p = &v->v21_params;
+	short step = which != 0 ? p->carrier_b : p->carrier_a;
+	int i;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned phase;
+		short c;
+
+		phase = ((unsigned)(unsigned short)p->f00
+			 + (unsigned short)step) & 0x1fff;
+		p->f00 = (short)phase;
+
+		c = v8_cosread((unsigned char)(phase >> 5));
+		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->f0a));
+	}
+
+	return v8_txwritequeue(v);
+}
+
+/*
+ * One step of the receive AGC.
+ *
+ * A smoothed level estimate, then two nested dead bands: the level has to be
+ * more than 2000 away from its target before anything happens at all, and the
+ * correction that accumulates from that has to reach 1000 before the gain
+ * moves.  The gain then goes down by a factor or up by a smaller one, which
+ * is the usual fast-attack slow-release asymmetry.
+ */
+int
+v8_agcadapt(struct v8 *v)
+{
+	struct v8_rx *r = &v->rx;
+	int level;
+	int delta;
+	int acc;
+
+	level = ((r->f1a * 0x6ccd) >> 15) + (unsigned short)r->f16;
+
+	/*
+	 * Accept the new estimate only when it has not run away: the top
+	 * bits must be all zero or all one, which is the original's way of
+	 * asking whether it still fits in a short.
+	 */
+	if (((unsigned)level >> 15) == 0 || ((unsigned)level >> 15) == 0x1ffff)
+		r->f1a = (short)level;
+	else
+		r->f1a = 0x7f00;
+
+	if (r->flags & V8_RX_DETECTOR_ARMED)
+		return 0;
+
+	delta = (short)((unsigned short)r->f1a - 0xfa0);
+	if ((short)((delta < 0 ? -delta : delta) - 0x7d0) <= 0)
+		return 0;
+
+	acc = ((r->f20 * delta) >> 16) + (unsigned short)r->f1e;
+	acc = (short)acc;
+
+	if ((short)((acc < 0 ? -acc : acc) - 0x3e8) <= 0) {
+		r->f1e = (short)acc;
+		return 0;
+	}
+	r->f1e = 0;
+
+	if (acc > 0) {
+		r->f1c = (short)((r->f1c * 0x390a) >> 14);
+	} else if ((short)(unsigned short)r->f1c <= 0x6a00) {
+		r->f1c = (short)((r->f1c * 0x47cf) >> 14);
+	}
+	return 0;
+}

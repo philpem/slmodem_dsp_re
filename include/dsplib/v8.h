@@ -29,7 +29,13 @@ extern const short v8_costab[V8_COSTAB_SIZE];
  * halves of the complex value and writes the magnitude squared beside them.
  */
 struct v8_dft_bin {
-	int	f00;			/* +0x00 */
+	/*
+	 * A phase accumulator per bin, stepped by its own increment: this is
+	 * a sliding DFT, one oscillator per frequency of interest, not a
+	 * transform over a block.
+	 */
+	short	phase;			/* +0x00 */
+	short	step;			/* +0x02 */
 	int	re;			/* +0x04 */
 	int	im;			/* +0x08 */
 	short	energy;			/* +0x0c */
@@ -244,7 +250,8 @@ struct v8_rx {
 	unsigned short	flags;			/* +0x0a */
 	unsigned char	pad0c[4];
 	short		*buf;			/* +0x10  -> v8.rx_stage  */
-	int		f14;			/* +0x14 */
+	short		f14;			/* +0x14 */
+	short		f16;			/* +0x16 */
 	unsigned char	pad18[2];
 	short		f1a;			/* +0x1a */
 	short		f1c;		/* 0x200     +0x1c */
@@ -543,6 +550,22 @@ int v8_txwritequeue(struct v8 *v);
 
 /* One sample through the 61-tap transmit shaping filter. */
 short v8_fsktxfilter(struct v8 *v, short sample);
+
+/*
+ * Advance a sliding DFT.  Each bin has its own phase accumulator and step,
+ * and takes `nsamples` samples into its running real and imaginary sums.
+ */
+void v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
+		  short nsamples);
+
+/*
+ * Four samples of FSK.  `which` picks the mark or the space carrier; the
+ * result goes through the shaping filter and straight into the transmit ring.
+ */
+int v8_fskmodulate(struct v8 *v, short which);
+
+/* One step of the receive AGC. */
+int v8_agcadapt(struct v8 *v);
 
 /* How many samples each queue operation moves. */
 #define V8_QUEUE_BLOCK	4

@@ -624,7 +624,8 @@ t_dftenergy(void)
 	for (shift = 0; shift <= 15; shift++) {
 		for (n = 0; n <= 16; n++) {
 			for (i = 0; i < 16; i++) {
-				a[i].f00 = b[i].f00 = i;
+				a[i].phase = b[i].phase = (short)i;
+				a[i].step = b[i].step = (short)(i * 3);
 				a[i].re = b[i].re = (i - 8) * 0x01234567;
 				a[i].im = b[i].im = (i * 7 - 40) * 0x00765432;
 				a[i].energy = b[i].energy = 0x1234;

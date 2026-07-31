@@ -20,6 +20,10 @@ extern int ref_v8_rxreadqueue(struct v8 *v);
 extern int ref_v8_txwritequeue(struct v8 *v);
 extern short ref_v8_fsktxfilter(struct v8 *v, short sample);
 extern int ref_v8_txinit(struct v8 *v);
+extern void ref_v8_dftupdate(struct v8_dft_bin *b, short n, const short *s,
+			     short ns);
+extern int ref_v8_fskmodulate(struct v8 *v, short which);
+extern int ref_v8_agcadapt(struct v8 *v);
 
 static struct v8 obj_a, obj_b;
 
@@ -149,6 +153,91 @@ main(void)
 			diff_eq_int("sample %ld", v8_fsktxfilter(&obj_b, s),
 				    ref_v8_fsktxfilter(&obj_a, s), i);
 		}
+		whole(k);
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_dftupdate");
+	{
+		struct v8_dft_bin ba[8], bb[8];
+		short samp[16];
+		int n, ns;
+		long moved2 = 0;
+
+		for (i = 0; i < 16; i++)
+			samp[i] = (short)(i * 1301 - 9000);
+		for (n = 0; n <= 8; n++) {
+			for (ns = 0; ns <= 16; ns += 4) {
+				for (i = 0; i < 8; i++) {
+					ba[i].phase = bb[i].phase =
+						(short)(i * 511);
+					ba[i].step = bb[i].step =
+						(short)(i * 97 + 13);
+					ba[i].re = bb[i].re = i * 1000;
+					ba[i].im = bb[i].im = -i * 700;
+					ba[i].energy = bb[i].energy = 0x1234;
+					ba[i].f0e = bb[i].f0e = 0x4321;
+				}
+				ref_v8_dftupdate(ba, (short)n, samp,
+						 (short)ns);
+				v8_dftupdate(bb, (short)n, samp, (short)ns);
+				for (i = 0; i < 8; i++) {
+					diff_eq_int("bin %ld phase", bb[i].phase,
+						    ba[i].phase, i);
+					diff_eq_int("bin %ld re", bb[i].re,
+						    ba[i].re, i);
+					diff_eq_int("bin %ld im", bb[i].im,
+						    ba[i].im, i);
+					if (ba[i].re != i * 1000)
+						moved2++;
+				}
+			}
+		}
+		diff_eq_int("bins accumulated (%ld)", moved2 > 20, 1, moved2);
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_fskmodulate");
+	for (k = 0; k < 24; k++) {
+		int w;
+
+		fill(&obj_a, sizeof(obj_a), 1700u + k);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		ref_v8_txinit(&obj_a);
+		ref_v8_txinit(&obj_b);
+		obj_a.v21_params.carrier_a = obj_b.v21_params.carrier_a =
+			(short)(300 + k * 11);
+		obj_a.v21_params.carrier_b = obj_b.v21_params.carrier_b =
+			(short)(700 + k * 13);
+		obj_a.v21_params.f0a = obj_b.v21_params.f0a =
+			(short)(4000 + k * 100);
+		for (w = 0; w <= 1; w++) {
+			diff_eq_int("returns (%ld)",
+				    v8_fskmodulate(&obj_b, (short)w),
+				    ref_v8_fskmodulate(&obj_a, (short)w), w);
+		}
+		normalise(offsetof(struct v8, tx_ring_half));
+		normalise(offsetof(struct v8, tx_ring_base));
+		normalise(offsetof(struct v8, tx_sym_a));
+		normalise(offsetof(struct v8, tx_sym_b));
+		whole(k);
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_agcadapt");
+	for (k = 0; k < 400; k++) {
+		fill(&obj_a, sizeof(obj_a), 2100u + k);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		/* Sweep the two dead bands and the armed flag. */
+		obj_a.rx.f1a = obj_b.rx.f1a = (short)(k * 163 - 32000);
+		obj_a.rx.f16 = obj_b.rx.f16 = (short)(k * 71);
+		obj_a.rx.f1e = obj_b.rx.f1e = (short)(k * 37 - 1200);
+		obj_a.rx.f20 = obj_b.rx.f20 = (short)(k * 29 - 4000);
+		obj_a.rx.f1c = obj_b.rx.f1c = (short)(k * 211);
+		obj_a.rx.flags = obj_b.rx.flags =
+			(unsigned short)(k & 1 ? V8_RX_DETECTOR_ARMED : 0);
+		diff_eq_int("returns (%ld)", v8_agcadapt(&obj_b),
+			    ref_v8_agcadapt(&obj_a), k);
 		whole(k);
 	}
 	rc |= diff_end();

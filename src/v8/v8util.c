@@ -326,7 +326,12 @@ v8_rxinit(struct v8 *v)
 
 	v->rx.buf = v->rx_stage;
 	v->rx.f1a = 0;
+	/*
+	 * One 32-bit store in the original, covering both halves.  They are
+	 * two shorts here because v8_agcadapt reads the upper one on its own.
+	 */
 	v->rx.f14 = 0;
+	v->rx.f16 = 0;
 	v->rx.fac = 0;
 
 	return 0;
