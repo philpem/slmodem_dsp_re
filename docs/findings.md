@@ -3284,3 +3284,57 @@ This is the second place where the library encodes something genuinely
 national rather than technical -- the first being the cadence windows. It is a
 reminder of what "homologation" meant: not a compliance checkbox but a real
 per-country dialect that the modem had to speak.
+
+---
+
+## 57. DialerProgress is a generator, and what the comma limit is for
+
+`DialerProgress` is not a state machine that gets polled -- it produces audio:
+
+```c
+    int DialerProgress(struct dialer *d, short *buf, int *pos, int limit);
+```
+
+It fills `buf` from `*pos` up to `limit`, advancing `*pos`, and returns a
+status. The first thing it does is `if (*pos > limit) return 0`, and every
+state either returns or updates `d->progress_state` and loops.
+
+That explains a shape that made no sense while the signature was unknown: two
+of the eleven states do nothing but write zeros. The dialler emits its own
+silence -- pauses, inter-digit gaps, the waits after a comma -- rather than
+asking anything else to.
+
+### The states
+
+```
+    0        ask GetNextDigitAndReturnNextState what is next, and dispatch
+    1        pulse-dial a digit: convert the keypad position with the
+             country's pattern (finding 56), PulseDialDigit, then poll
+             IsPulseDialerReady
+    2, 4     emit `f_bc` samples of silence, clamped to what fits in the
+             caller's buffer, carrying the remainder to the next call
+    3        end of a pulse train: re-apply the make and break times and
+             queue `cfg.pulse_gap * 8` samples of silence
+    5 - 8    report an event (1, 2, 3 or 4) and go idle
+    9, 10    release the line and report 5 or 6
+    over 10  report 7
+```
+
+### `GetComaPauseDurationLimit`
+
+The comma handler is where the last unexplained dialler parameter lands.
+`GetNextDigitAndReturnNextState` counts a run of consecutive commas into
+`d->repeat`, and this state turns that into
+
+```
+    total = cfg.pause * repeat        seconds
+    if (total > cfg.coma_pause_limit)
+            total = cfg.coma_pause_limit
+```
+
+So `,,,,,,,,,,` does not pause for ten times S8. The country table caps it,
+which is what `GetComaPauseDurationLimit` is: a limit on how long a dial
+string can make the modem sit silent holding the line.
+
+That completes the reading of Dialer.c. Every parameter `GetDialerConfig`
+fetches is now accounted for by something that uses it.
