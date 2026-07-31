@@ -27,6 +27,8 @@
 #include "dsplib/cpfiltrs.h"
 #include "dsplib/modem_params.h"
 
+extern struct cadence *ref_cadence_create(struct cadence *c, void *setup,
+					  int extra, void *modem);
 extern void ref_cadence_delete(struct cadence *c);
 extern void ref_cadence_reset(struct cadence *c);
 extern int ref_cadence_progress(struct cadence *c, short sample);
@@ -35,6 +37,9 @@ extern struct toneiir *ref_toneiir_create(struct toneiir *st,
 extern void ref_toneiir_get_default_configuration(struct toneiir_cfg *dst);
 extern const short ref_CP_450_630_scales[], ref_CP_450_630_a[],
 		   ref_CP_450_630_b[];
+extern const short ref_CP_350_600_a[], ref_CP_276_504_a[], ref_CP_100_550_a[];
+extern const short ref_Filter_350_500_a[], ref_Filter_100_550_a[],
+		   ref_Filter_276_504_a[];
 
 /*
  * Drive level.  The CP_450_630 cascade overflows above about 8000: its
@@ -258,6 +263,94 @@ run_reset_and_delete(void)
 	return diff_end();
 }
 
+/*
+ * The filter-bank dispatch, measured against the ORIGINAL.
+ *
+ * cadence_create is not reconstructed yet, so this drives the blob alone
+ * rather than comparing two implementations -- which is the point: it
+ * establishes what the reconstruction will have to reproduce, in the one
+ * place where reading the disassembly is most likely to mislead.
+ *
+ * Three of the eight filter indices select a seven-deep `Filter_*` bank and
+ * need a subindex in 1..7 to pick within it.  slmodemd returns 0 for
+ * `GetDialToneFilterSubindex` unconditionally, so in practice every bank
+ * selection falls back -- and each bank falls back to its OWN nearest CP_*
+ * design, not to a common default.  That is worth pinning: an earlier reading
+ * of this code had bank 3 installing NULL coefficient pointers, which would
+ * have been a crash on the ten countries that select it.  It does not; it
+ * installs CP_276_504.  The claim was wrong because a grep dropped the
+ * relocation lines, and this test is what caught it.  See tools/dis.py.
+ */
+static int
+run_filter_dispatch(void)
+{
+	static const struct {
+		int		index;
+		int		sub;
+		const short	*want_a;
+		const char	*what;
+	} cases[] = {
+		/* Subindex 0 -- what slmodemd actually supplies. */
+		{ 0, 0, ref_CP_350_600_a, "bank 350_500 falls back" },
+		{ 1, 0, ref_CP_350_600_a, "bank 100_550 falls back" },
+		{ 2, 0, ref_CP_350_600_a, "bank 350_500 falls back" },
+		{ 3, 0, ref_CP_276_504_a, "bank 276_504 falls back to its own" },
+		{ 4, 0, ref_CP_350_600_a, "bank 100_550 falls back" },
+		{ 5, 0, ref_CP_350_600_a, "bank 100_550 falls back" },
+		{ 6, 0, ref_CP_450_630_a, "direct CP_450_630" },
+		{ 7, 0, ref_CP_100_550_a, "direct CP_100_550" },
+		{ 8, 0, ref_CP_350_600_a, "out of range" },
+		{ 99, 0, ref_CP_350_600_a, "far out of range" },
+		/* A subindex in range picks within the bank, one-based. */
+		{ 0, 1, ref_Filter_350_500_a, "bank 350_500 variant 1" },
+		{ 1, 1, ref_Filter_100_550_a, "bank 100_550 variant 1" },
+		{ 3, 1, ref_Filter_276_504_a, "bank 276_504 variant 1" },
+		{ 3, 7, ref_Filter_276_504_a + 6 * 12, "variant 7" },
+		{ 1, 4, ref_Filter_100_550_a + 3 * 12, "variant 4" },
+		{ 1, 8, ref_CP_350_600_a, "subindex 8 is out of range" }
+	};
+	unsigned k;
+
+	diff_begin("cadence_create: the filter dispatch");
+
+	for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+		int setup[7];
+		struct cadence *c;
+		char msg[160];
+
+		harness_param_reset();
+		harness_param_set(GetDialToneCallProgressFilterIndex,
+				  cases[k].index);
+		harness_param_set(GetDialToneFilterSubindex, cases[k].sub);
+		harness_param_set(GetCallProgressSamplesBufferLength, 666);
+		harness_param_set(GetDialToneValidationTime, 50);
+		harness_param_set(GetDialToneDetectionThreshold, 40);
+
+		memset(setup, 0, sizeof(setup));
+		setup[4] = 1;			/* DIAL */
+
+		c = ref_cadence_create(0, setup, 0, (void *)0xD00Du);
+		diff_eq_int("allocated", c != 0, 1, (long)k);
+		if (c == 0)
+			continue;
+
+		snprintf(msg, sizeof(msg), "index %d subindex %d: %s",
+			 cases[k].index, cases[k].sub, cases[k].what);
+		diff_eq_int(msg, c->sel_a == cases[k].want_a, 1, (long)k);
+
+		/* Never NULL, for any input -- there is no such fallback. */
+		diff_eq_int("coefficients are never NULL",
+			    c->sel_a != 0 && c->sel_b != 0 && c->sel_scales != 0,
+			    1, (long)k);
+		diff_eq_int("always twelve coefficients", c->sel_n_a, 12,
+			    (long)k);
+
+		ref_cadence_delete(c);
+	}
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -322,6 +415,7 @@ main(void)
 	}
 
 	rc |= run_reset_and_delete();
+	rc |= run_filter_dispatch();
 
 	diff_begin("guards");
 	for (i = 0; i < 8; i++)

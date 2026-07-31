@@ -2826,3 +2826,68 @@ that sixteen-entry table is for, and is written into the configuration as a
 RING or CONG detector, although both cases are fully written and both sets of
 country parameters are read when they are. Whether ringback is detected some
 other way, or simply is not detected, is a question for `CALLPROG_Progress`.
+
+---
+
+## 49. Each filter bank falls back to its own default, and a near-miss
+
+`cadence_create`'s eight-way filter dispatch selects a `Filter_*` bank for
+five of its indices, and each of those needs a subindex in 1..7 to pick one
+of the bank's seven designs. **slmodemd returns 0 for
+`GetDialToneFilterSubindex` unconditionally** -- the field is commented out of
+`struct homolog_params` and the parameter is answered with a literal `return
+0;` -- so in practice every bank selection falls back.
+
+Measured against the blob, by calling `ref_cadence_create` and reading the
+pointer it installed:
+
+```
+    index   subindex 0 gives        subindex 1..7 gives
+      0     CP_350_600              Filter_350_500[sub-1]
+      1     CP_350_600              Filter_100_550[sub-1]
+      2     CP_350_600              Filter_350_500[sub-1]
+      3     CP_276_504              Filter_276_504[sub-1]
+      4     CP_350_600              Filter_100_550[sub-1]
+      5     CP_350_600              Filter_100_550[sub-1]
+      6     CP_450_630              (not a bank)
+      7     CP_100_550              (not a bank)
+     >7     CP_350_600              (not a bank)
+```
+
+Bank 3 falls back to `CP_276_504` -- its own nearest equivalent -- where the
+other two fall back to the generic `CP_350_600`. That asymmetry is deliberate
+and sensible, not an oversight.
+
+### The near-miss
+
+An earlier reading of the same code had bank 3 installing **NULL** coefficient
+pointers, which `toneiir_progress` dereferences on its first sample. Ten of
+slmodemd's fifty countries select bank 3 for dial tone -- Latvia, Turkey,
+Jordan, Egypt, Lebanon, Malta, Morocco, Portugal, South Africa, UAE -- so that
+would have been a null-pointer crash on a fifth of the shipped
+configurations, and it was about to be written up as one.
+
+It is not true. The three `mov $0x0,%reg` instructions that looked like NULL
+each carry an `R_386_32 CP_276_504_*` relocation, and the greps used to trim
+the disassembly had dropped the relocation lines, which `objdump -d -r` prints
+separately and indented with tabs.
+
+**This is the third time output filtering has caused a wrong reading here:**
+
+```
+  finding 46   the toneiir configuration's three pointers read as integers
+               near 25000, because a readelf filter found no relocations
+  D10          the CP_* tables read as unreferenced, because a query
+               returned nothing for every input
+  here         a fallback read as NULL, because a grep dropped relocations
+```
+
+Three of the same shape is a tooling problem, not three lapses of attention,
+so it is now a tool: `tools/dis.py` disassembles a range with every relocation
+folded into the instruction line it belongs to, leaving nothing that can be
+accidentally filtered away. Use it instead of raw `objdump` for anything that
+might touch a table.
+
+What caught it was not care but measurement: the claim was tested against the
+blob before being written down, and the test failed. That is the habit worth
+keeping -- for a claim about what the original does, drive the original.
