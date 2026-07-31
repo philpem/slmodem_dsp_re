@@ -2596,3 +2596,62 @@ meaningless constant until it is 1300.2 Hz.
 Whether it was ever right is unknowable from the object alone. What is certain
 is that as shipped the calling tone is the wrong frequency with the wrong
 cadence, on top of being the wrong shape (D11) at the wrong level (D13).
+
+---
+
+## 46. toneiir's configuration, and an unresolved question about it
+
+`toneiir_create(state, cfg)` copies 44 bytes of configuration into the head of
+its 168-byte object and hangs the coefficients off pointers rather than
+copying them, which is what distinguishes it from `_iir_filter_create` in the
+same file. The layout, from `toneiir_create` and `toneiir_progress`:
+
+| off | type | default @.rodata+0x61a0 | `toneiir_configuration_allpass` @0x6240 |
+| --- | --- | --- | --- |
+| +0x00 | `const short *a` | → 0x61ee | NULL |
+| +0x04 | `const short *b` | → 0x61d6 | → 0x626c |
+| +0x08 | `int n_a` | 12 | 0 |
+| +0x0c | `int n_b` | 12 | 1 |
+| +0x10 | `short` | 500 | 500 |
+| +0x14 | `int` | 142539 | 142539 |
+| +0x18 | `int` | 80 | 80 |
+| +0x1c | `int` | 2200 | 2200 |
+| +0x20 | `int` | 4 | 4 |
+| +0x24 | `int` | 0 | 0 |
+| +0x28 | `const short *scales` | → 0x61cc | NULL |
+
+The object beyond the configuration is `short x[25]` at +0x30, `short y[25]`
+at +0x62, then a group of counters and a threshold at +0x94 onward.
+`toneiir_progress` filters exactly four biquads, hand-unrolled, ignoring `n_a`
+and `n_b` entirely — the same shape as `_iir_filter_progress`, which is why
+the two live in one file.
+
+### Two things do not add up yet
+
+**The default configuration's filter is all zeros.** The arrays at 0x61cc,
+0x61d6 and 0x61ee are 5, 12 and 12 words of nothing. A filter with a zero
+numerator outputs silence. So `toneiir_create(state, NULL)` — the "give me the
+default" path — builds a filter that cannot pass a signal.
+
+**`toneiir_configuration_allpass` has a NULL scales pointer**, and
+`toneiir_progress` dereferences it before the first sample. It also declares
+one numerator tap with the value 1, which in the Q13 the engine uses is a gain
+of 1/8192, not the unity an all-pass implies.
+
+Both readings are from relocations and are not in doubt — the pointers are
+`R_386_32 .rodata` entries at 0x61a0, 0x61a4, 0x61c8 and 0x6244. What is in
+doubt is what the caller does with them. `cadence_create` is the only user of
+`toneiir_configuration_allpass` and is 2994 bytes; it is likely that it
+overwrites the pointers after `toneiir_create` returns, using the config as a
+template for the fields it does not want to set itself. That is the next thing
+to establish, and it should be settled before any of toneiir is reconstructed
+— building it against the wrong reading of these two tables would be a lot of
+work to unwind.
+
+(Recorded because the relocation query that produced this nearly went the
+other way: a malformed `readelf -r` filter reported *no* relocations in the
+region, which would have made the configuration look like a struct of plain
+integers with three implausibly similar values around 25000. Those "values"
+are addresses. Anything that looks like a suspiciously narrow range of large
+integers in this object is worth re-checking against the relocation table
+before it is interpreted.)
