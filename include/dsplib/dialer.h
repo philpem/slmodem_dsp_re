@@ -43,12 +43,24 @@ struct dialer {
 	/* What AnalyseDialString made of the string, kept for the caller. */
 	int	grade;				/* +0xa4 */
 
-	int	f_a8;				/* +0xa8 */
+	/*
+	 * How many consecutive commas the last pause stood for.  Reset to 1 by
+	 * every call to GetNextDigitAndReturnNextState and incremented as it
+	 * walks a run, so ",,," is one pause of three units rather than three
+	 * pauses.
+	 */
+	int	repeat;				/* +0xa8 */
 
 	/* How far through the string the dialler has got.  -1 before it starts. */
 	int	pos;				/* +0xac */
 
-	int	f_b0, f_b4;			/* +0xb0 */
+	/*
+	 * The keypad position of the digit being sent, 0-based.  Row and
+	 * column index the DTMF frequency tables directly, and together they
+	 * give the pulse count through the country's pattern.
+	 */
+	int	row;				/* +0xb0 */
+	int	col;				/* +0xb4 */
 
 	/*
 	 * A state DialerAbort refuses to act on above 10.  DialerProgress will
@@ -56,7 +68,21 @@ struct dialer {
 	 */
 	int	progress_state;			/* +0xb8 */
 
-	int	f_bc, f_c0, f_c4, f_c8;		/* +0xbc */
+	/* Samples of silence still owed to the caller. */
+	int	silence;			/* +0xbc */
+
+	/*
+	 * The DTMF generator: two 14-bit phase accumulators and their
+	 * increments.  Same idiom as the calling tone and, unlike it, correct
+	 * -- see D11.
+	 */
+	short	phase_low;			/* +0xc0 */
+	short	phase_high;			/* +0xc2 */
+	short	inc_low;			/* +0xc4 */
+	short	inc_high;			/* +0xc6 */
+
+	/* Whether a pulse train has been started for the current digit. */
+	int	pulse_started;			/* +0xc8 */
 
 	/*
 	 * The pulse dialler's handshake.  `pulse_active` says a digit is being
@@ -104,5 +130,35 @@ int DialerCreate(struct dialer *d, const char *s, void *modem);
  * being pulsed.
  */
 void DialerAbort(struct dialer *d);
+
+/*
+ * What DialerProgress reports.  The first six mirror the modifiers
+ * `GetNextDigitAndReturnNextState` finds in the string; the last two are the
+ * dialler's own.
+ */
+/*
+ * Every code above zero corresponds to one dial-string modifier, and each is
+ * reached through a state of its own -- the parser returns the state number
+ * and the state returns the code.  A hook flash and a comma pause have no
+ * code: both are carried out inside the generator without the caller hearing
+ * about it, which is why the list jumps straight from `busy` to `W`.
+ */
+#define DIALER_BUSY		0	/* buffer full, nothing to report   */
+#define DIALER_WAIT_DIALTONE	1	/* 'W'                              */
+#define DIALER_WAIT_ANSWER	2	/* '@'                              */
+#define DIALER_WAIT_BONG	3	/* '$' -- the credit-card tone      */
+#define DIALER_CALLING_TONE	4	/* '^'                              */
+#define DIALER_COMMAND		5	/* ';' -- back to command mode      */
+#define DIALER_DONE		6	/* end of string                    */
+#define DIALER_BAD_STATE	7	/* progress_state out of range      */
+
+/*
+ * Produce the next stretch of dialling audio.
+ *
+ * Fills `buf` from `*pos` up to and including `limit`, advancing `*pos`, and
+ * returns one of the codes above.  It is a generator, not a poll: pauses and
+ * inter-digit gaps are silence it writes itself, not silence it asks for.
+ */
+int DialerProgress(struct dialer *d, short *buf, int *pos, int limit);
 
 #endif /* DSPLIB_DIALER_H */

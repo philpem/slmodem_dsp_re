@@ -3364,8 +3364,7 @@ Each frequency becomes a phase increment for a 14-bit accumulator:
 
 16777/8192 is 2.04797, and one cycle of a 14-bit accumulator at 8000 Hz is
 16384/8000 = 2.048 increments per hertz. So the constant is that ratio in
-Q13, and the generator uses the same `TONE_read((phase + 32) >> 6)` idiom as
-the calling tone.
+Q13, and the generator reads the table as `TONE_read((phase + 4) >> 3)`.
 
 ### It is accurate, unlike the calling tone
 
@@ -3380,5 +3379,68 @@ plainly next to D11: the *same* phase-accumulator idiom, in the same library,
 written correctly here and wrong in `CallingTone.c` -- where the shift is 6
 rather than 3 and the output is a sawtooth. Whoever wrote this one knew what
 they were doing; the calling tone is not a limitation of the technique.
+
+## 59. The dialler's generator: the parser chooses the state
+
+`DialerProgress` is a switch on `d->progress_state` over eleven states, and
+the surprise is where those numbers come from. There is no mapping step:
+`GetNextDigitAndReturnNextState` returns the state number directly, and every
+site that consults the parser writes the answer straight into
+`progress_state`. So the parser's vocabulary and the generator's are one
+vocabulary, and reading either half alone hides that.
+
+| state | reached by | what it does |
+|---|---|---|
+| 0 | nothing in flight | ask the parser, set up whatever it names |
+| 1 | a digit | DTMF burst, or one pulse train |
+| 2 | *(nothing -- see below)* | inter-digit gap |
+| 3 | `!` | hook flash |
+| 4 | `,` | comma pause |
+| 5 | `W` | return `DIALER_WAIT_DIALTONE` |
+| 6 | `@` | return `DIALER_WAIT_ANSWER` |
+| 7 | `$` | return `DIALER_WAIT_BONG` |
+| 8 | `^` | return `DIALER_CALLING_TONE` |
+| 9 | `;` | return `DIALER_COMMAND` |
+| 10 | end of string | return `DIALER_DONE` |
+
+Which settles the return codes, and they are not what their shape suggests.
+Every code above zero is one modifier character, in the order the jump table
+at `.rodata+0x5fdc` happens to put them -- there is no code for "hook flash
+done" and none for "pause finished", because states 3 and 4 finish into state
+2 and the caller never hears about either. A dial string of `5!5` and one of
+`55` return exactly the same sequence of codes; only the audio differs.
+
+State 2 is the one nothing selects. The generator has a case for it, and both
+of the parser-consulting sites have a `case 2:` branch that sets up an
+inter-digit gap -- but no path through the jump table returns 2. Every
+character maps to 1, 3, 4, 5, 6, 8, 9 or 10, or to "skip and read another".
+State 2 is entered only by falling into it from states 1 and 3, never chosen.
+Reproduced anyway, since the original's switch has it.
+
+### The hook flash borrows the pulse dialler
+
+State 3 is worth its own paragraph because it is not what a hook flash usually
+looks like. There is no separate timer: it rewrites the pulse dialler's two
+timings -- make time to zero, break time to `GetHookFlashTime * 10` -- dials a
+single "digit" of one pulse, and then puts `GetPulseDialMakeTime` and
+`GetPulseDialBreakTime` back before leaving. A flash is a one-pulse digit with
+no make. This is also the only place `hook_flash` is read, and the `* 10` is
+the same centisecond-to-millisecond conversion as `GetPulseBetweenDigitsInterval`.
+
+### After the last digit there is no gap
+
+The post-digit handler compares `d->pos` against `d->last_digit` -- the index
+`AnalyseDialString` recorded for the final dialable character. Anything before
+it is followed by an inter-digit gap; the last one is not, and the parser is
+consulted immediately instead. That is what lets a trailing `;` or `W` take
+effect the instant the final digit stops sounding, rather than a gap later.
+
+### A zero tone time never elapses
+
+The DTMF burst tests `GetDTMFDialSpeed` for zero before it does any of its
+sample accounting, and if it is zero it skips the accounting entirely: the
+burst then fills every buffer it is handed and the digit never finishes. Not
+reachable from any shipped country table, so this is reproduced rather than
+fixed, and noted here rather than in `deviations.md`.
 
 That completes the decode of Dialer.c.
