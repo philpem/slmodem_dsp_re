@@ -3761,3 +3761,43 @@ field, and a field written one byte too wide -- none of which a field-by-field
 check would find unless it happened to name the field that moved. The
 non-zero fill also means an initialiser that does nothing cannot pass by
 agreeing with itself.
+
+## 64. The V.8 transmitter and receiver, and what their pointers say
+
+`v8_txinit` and `v8_rxinit` both take the whole object and between them claim
+most of the low half of it. They are pure field writes, but the pointers they
+plant are the interesting part, because a pointer into your own object is a
+statement about how the buffer is used.
+
+```
+    tx_sym_a, tx_sym_b  -> tx_symbols[0]     both to the start
+    tx_ring_base        -> tx_ring[0]
+    tx_ring_half        -> tx_ring[64]       a quarter of the way in
+    rx.buf              -> rx_scratch2
+```
+
+Two cursors half a buffer apart on the same ring is a shaping filter being
+kept fed while the modulator drains behind it; two cursors to the *same*
+place is a queue that starts empty. That is worth more than the offsets.
+
+### The receiver clears a buffer and then writes into it again
+
+`v8_rxinit` zeroes all 160 words of the receive scratch and then sets element
+40 to 0x1000. Reproduced in that order. Doing it the tidy way round -- seed
+first, clear after -- would zero the seed, and doing the clear as a `memset`
+that stops short of element 40 would only work by luck of the index.
+
+### Testing an initialiser that plants pointers
+
+The whole-object byte comparison from finding 63 has a hole in it here: two
+objects at different addresses cannot hold the same bytes where a pointer
+into themselves lives. Each pointer is therefore compared as an offset from
+its own base and then overwritten with that offset, after which the byte
+comparison covers everything.
+
+Only the pointers the call just wrote may be touched. The first version
+normalised all five after every call, which meant reading the ones still
+holding the fill pattern and doing pointer arithmetic on garbage -- and that
+is how it came to dump core rather than merely report a mismatch. A test that
+crashes is at least loud; the same mistake in the reconstruction would have
+been a silent wrong answer.

@@ -8,6 +8,8 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "harness.h"
@@ -24,6 +26,8 @@ extern void ref_V8_setFilters(struct v8 *v, const short *a, const short *b,
 extern void ref_V8_V21_reset(struct v8 *v);
 extern void ref_v8_TONEq_init(struct v8 *v);
 extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
+extern int ref_v8_txinit(struct v8 *v);
+extern int ref_v8_rxinit(struct v8 *v);
 
 /*
  * The initialisers write scattered fields of a 3780-byte object, so the only
@@ -46,6 +50,48 @@ fill(void *p, size_t n, unsigned seed)
 		b[i] = (unsigned char)(seed >> 16);
 	}
 }
+
+/*
+ * The initialisers plant pointers into the object itself, and two objects at
+ * different addresses cannot hold the same bytes there.  Each is compared as
+ * an offset from its own base and then overwritten with that offset, so the
+ * byte comparison afterwards covers everything with no hole in it.
+ *
+ * Only the pointers the call just wrote are touched.  The first version
+ * normalised all five after every call, read the ones still holding the fill
+ * pattern, and did pointer arithmetic on garbage -- which is how it came to
+ * dump core rather than merely report a mismatch.
+ */
+static void
+normalise(const size_t *offs, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		uintptr_t pa, pb;
+		long da, db;
+
+		memcpy(&pa, (char *)&obj_a + offs[i], sizeof(pa));
+		memcpy(&pb, (char *)&obj_b + offs[i], sizeof(pb));
+		da = (long)(pa - (uintptr_t)&obj_a);
+		db = (long)(pb - (uintptr_t)&obj_b);
+		diff_eq_int("pointer at +%ld holds the same offset", db, da,
+			    (long)offs[i]);
+		memcpy((char *)&obj_a + offs[i], &da, sizeof(da));
+		memcpy((char *)&obj_b + offs[i], &db, sizeof(db));
+	}
+}
+
+static const size_t tx_pointers[] = {
+	offsetof(struct v8, tx_sym_a),
+	offsetof(struct v8, tx_sym_b),
+	offsetof(struct v8, tx_ring_base),
+	offsetof(struct v8, tx_ring_half)
+};
+
+static const size_t rx_pointers[] = {
+	offsetof(struct v8, rx) + offsetof(struct v8_rx, buf)
+};
 
 static int
 whole_object(const char *what)
@@ -104,6 +150,26 @@ t_inits(void)
 		ref_v8_phase_rev_init(&obj_a.phase_rev);
 		v8_phase_rev_init(&obj_b.phase_rev);
 		whole_object("phase_rev_init");
+
+		/*
+		 * The transmitter and receiver set pointers into the object,
+		 * so the two sides can never agree byte-for-byte on those four
+		 * words -- they live at different addresses.  Compare them as
+		 * offsets instead, and the rest of the object as bytes.
+		 */
+		fill(&obj_a, sizeof(obj_a), 2001u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		diff_eq_int("txinit returns 0", v8_txinit(&obj_b),
+			    ref_v8_txinit(&obj_a), 0);
+		normalise(tx_pointers, 4);
+		whole_object("txinit");
+
+		fill(&obj_a, sizeof(obj_a), 90210u + i);
+		memcpy(&obj_b, &obj_a, sizeof(obj_a));
+		diff_eq_int("rxinit returns 0", v8_rxinit(&obj_b),
+			    ref_v8_rxinit(&obj_a), 0);
+		normalise(rx_pointers, 1);
+		whole_object("rxinit");
 	}
 
 	/*

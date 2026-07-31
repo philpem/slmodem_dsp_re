@@ -39,6 +39,14 @@
 #define V8_OFFSET_OK	1
 #endif
 
+V8_ASSERT_OFFSET(v8, rx, 0x01c);
+V8_ASSERT_OFFSET(v8, f110, 0x110);
+V8_ASSERT_OFFSET(v8, tx_symbols, 0x11c);
+V8_ASSERT_OFFSET(v8, f21c, 0x21c);
+V8_ASSERT_OFFSET(v8, tx_ring, 0x228);
+V8_ASSERT_OFFSET(v8, rx_scratch2, 0x5c8);
+V8_ASSERT_OFFSET(v8, tx_shape, 0x77c);
+V8_ASSERT_OFFSET(v8, rx_scratch, 0x894);
 V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
 V8_ASSERT_OFFSET(v8, v21, 0xdd8);
 V8_ASSERT_OFFSET(v8, toneq_pending, 0xdd2);
@@ -233,4 +241,81 @@ v8_phase_rev_init(struct v8_phase_rev *pr)
 	pr->f10 = 0;
 	for (i = 0; i < 64; i++)
 		pr->window[i] = 0;
+}
+
+/*
+ * Arm the transmitter.  Three buffers are cleared and four pointers set to
+ * point inside them: the symbol buffer gets two pointers to its start, and
+ * the ring gets one to its start and one to the sixty-fourth sample -- a read
+ * and a write cursor half a buffer apart, which is how the shaping filter is
+ * kept fed while the modulator drains behind it.
+ */
+int
+v8_txinit(struct v8 *v)
+{
+	int i;
+
+	v->f014 = 1;
+	v->f00c = 0;
+	v->f018 = 0;
+	v->f004 = 0;
+
+	for (i = 0; i < V8_TX_SHAPE; i++)
+		v->tx_shape[i] = 0;
+
+	v->tx_ring_base = v->tx_ring;
+	for (i = 0; i < V8_TX_RING; i++)
+		v->tx_ring[i] = 0;
+
+	v->f21c = 0x20;
+	v->tx_ring_half = v->tx_ring + V8_TX_RING_HALF;
+
+	v->tx_sym_a = v->tx_symbols;
+	v->tx_sym_b = v->tx_symbols;
+	v->f110 = 0;
+	for (i = 0; i < V8_TX_SYMBOLS; i++)
+		v->tx_symbols[i] = 0;
+
+	return 0;
+}
+
+/*
+ * Arm the receiver.  Note the order at the top: the scratch buffer is cleared
+ * and then one element of it is written again.  Reproduced as written --
+ * seeding after the clear is what the original does, and doing it the tidy
+ * way round would be the same result only by luck of the index.
+ */
+int
+v8_rxinit(struct v8 *v)
+{
+	int i;
+
+	for (i = 0; i < V8_RX_SCRATCH; i++)
+		v->rx_scratch[i] = 0;
+	v->rx_scratch[V8_RX_SCRATCH_SEED_INDEX] = V8_RX_SCRATCH_SEED;
+
+	v->rx.f86 = 0x200;
+	v->rx.f82 = 0;
+	v->rx.f1c = 0x200;
+	v->rx.f20 = 0x3333;
+
+	for (i = 0; i < V8_RX_HIST; i++)
+		v->rx.hist[i] = 0;
+
+	v->rx.f1e = 0;
+	v->rx.f84 = 0;
+	v->rx.f88 = 0;
+	v->rx.f8a = 0;
+	v->rx.fc2 = 0x50;
+	v->rx.fc8 = 0;
+	v->rx.fc6 = 0;
+	v->rx.fda = 0;
+	v->rx.fd8 = 0;
+
+	v->rx.buf = v->rx_scratch2;
+	v->rx.f1a = 0;
+	v->rx.f14 = 0;
+	v->rx.fac = 0;
+
+	return 0;
 }
