@@ -2996,3 +2996,81 @@ from a test.
 This is the first non-standard convention found in the object. Bell 103 and
 the call-progress modules are cdecl throughout, so nothing before now would
 have shown it.
+
+---
+
+## 52. The dial-string parser, and three flags that mean the opposite of their names
+
+`AnalyseDialString` grades a dial string on a four-point scale the object
+names itself, at `.rodata+0x613c`:
+
+```
+    0 FATAL      too long to store
+    1 INVALID
+    2 TOLERABLE  oddities, but dial it anyway
+    3 VALID
+```
+
+`IsDialStringInvalid` is exactly `grade <= INVALID`, so the name is precise.
+
+The mode letter is mandatory and leading. A string starting with anything but
+`T`, `t`, `P` or `p` is not examined at all -- it returns `VALID` if empty and
+`INVALID` otherwise -- so `"5551234"` is rejected and `"T5551234"` accepted.
+Whatever parses the AT line is expected to have put the letter there.
+
+After it, an 88-entry jump table over `c - ' '` sorts characters into eight
+classes: digits and `* # !`; the pause set `space $ ( ) , - @ W w`; `A`–`D`;
+`T`; `P`; `^`; `;`, legal only as the last character; and 52 characters that
+are simply illegal.
+
+### The length limit is the buffer
+
+100 characters, and the reason is visible in the object layout: the dial
+string occupies bytes 0 to 99 of the dialler and the configuration begins at
++0x64, which is 100. `DialerCreate` copies the string in with `sysdep_strcpy`
+and nothing bounds it, so the grade is the bound.
+
+### Three flags test inverted
+
+```
+    cfg.abcd_permitted  != 0   ->  A-D are ILLEGAL
+    cfg.mixed_permitted != 0   ->  switching T/P mid-string is ILLEGAL
+```
+
+Both read as the negation of their names. Rather than assume the code is
+wrong, check what ships: 49 of slmodemd's 50 countries leave
+`ABCDDialingPermittedFlag` at zero, and `modem_param.c` answers the mixed flag
+with a literal `return 0;`. So both features are *enabled* almost everywhere,
+which is the sensible behaviour -- the names are what mislead, not the code.
+
+The third is genuinely counterintuitive and its polarity is not a naming
+problem:
+
+```
+    cfg.modifier_validation == 0  ->  an unknown character makes it INVALID
+    cfg.modifier_validation != 0  ->  an unknown character makes it TOLERABLE
+```
+
+Turning validation *on* makes the parser more forgiving. Twenty of the fifty
+countries set it.
+
+### It cannot be tested directly
+
+`AnalyseDialString` is a file static -- `t`, not `T` -- so
+`objcopy --redefine-syms` cannot give it a `ref_` name and there is nothing to
+link against. That is also why it takes its arguments in registers
+(finding 51): GCC picks its own convention for a function whose callers it can
+all see.
+
+It is therefore reached through `IsDialStringInvalid`, which collapses four
+grades into a boolean and never exercises the `store` path. The
+classification itself -- the part with the eight classes and the three flags --
+is swept exhaustively through that caller: every byte value from 1 to 255, at
+every combination of the flags. The grades the boolean hides are asserted
+against the reconstruction alone and marked as such; `DialerProgress` is the
+other caller and will close the gap.
+
+This is the third file static that has had to be tested through a caller, and
+the pattern is worth stating plainly: **a `t` symbol is not a testing
+inconvenience, it is a signal that the calling convention may not be the C
+one.** Check before writing the prototype, not after the comparison fails.

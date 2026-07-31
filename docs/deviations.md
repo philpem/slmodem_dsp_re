@@ -737,3 +737,31 @@ before it reports anything.
 **Reproduced**, and the test pre-fills both objects with the same pattern so
 the field is comparable at all — `t_toneiir` asserts that `env_prev` comes out
 holding the pre-fill, which is what proves the read happens.
+
+---
+
+## D15 — a null dial string grades VALID 🐛 💤
+
+**Status:** reproduced, unreachable as shipped.
+
+`AnalyseDialString` sets its grade to `VALID` before checking its argument,
+and the null check falls straight into the return:
+
+```
+    7aa18:  mov  $0x3,%ebp          ; grade = VALID
+    7aa21:  mov  $0x3,%edx          ; and the return value
+    7aa26:  mov  %eax,0xa0(%esi)    ; d->last_digit = -2
+    7aa2c:  je   7aaa0              ; s == NULL -> return edx, which is 3
+```
+
+So `IsDialStringInvalid(d, NULL)` answers "not invalid" and the caller
+proceeds to dial nothing. The length check immediately below gets this right
+-- a string longer than the buffer grades `FATAL` -- which is what makes the
+null case look like an oversight rather than a decision.
+
+**Reachable?** No. The only callers pass `modem_get_param(MDMPRM_DIALSTR)`,
+which slmodemd answers with `m->dial_string`, an array inside the modem
+structure rather than a pointer that can be null.
+
+**Reproduced**, and `t_dialer` drives NULL explicitly so the behaviour is
+pinned rather than merely inherited.
