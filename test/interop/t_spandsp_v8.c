@@ -254,9 +254,12 @@ main(void)
 	}
 
 	/*
-	 * The full state machine is reported but not asserted on: completing
-	 * a negotiation needs the sequencer, which is still being
-	 * reconstructed.  What is proved here is the signal layer.
+	 * The full state machine is reported but not asserted on here, and
+	 * for a reason that is about this test rather than about the
+	 * reconstruction: nothing replies to SpanDSP in this file, so its
+	 * negotiation cannot finish however correct our ANSam is.  A whole
+	 * two-way negotiation is t_spandsp_v8neg.c, and the same one between
+	 * two processes over a socket is t_spandsp_v8sock.c.
 	 */
 	memset(&parms, 0, sizeof(parms));
 	parms.modem_connect_tone = MODEM_CONNECT_TONES_ANSAM_PR;

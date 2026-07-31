@@ -4168,9 +4168,10 @@ nothing to do with this object file, and runs the signal both ways:
   catch a detector tuned to our own generator's quirks rather than to the
   standard.
 
-The full V.8 state machine's verdict is printed but not asserted on.
-Completing a negotiation needs the sequencer, which is not finished, and
-asserting on something that cannot yet pass would be a check in name only.
+The full V.8 state machine's verdict is printed but not asserted on in that
+file, because nothing there replies to SpanDSP -- its negotiation cannot
+finish however correct our ANSam is. A whole two-way negotiation is section
+75 below.
 
 ### Two mistakes this found
 
@@ -4294,3 +4295,83 @@ dialer` sits inside `struct callprog`, so it is the same question asked of
 the dialler the supervisor owns. Trivial, and exactly the sort of thing that
 would have gone missing quietly -- which is the argument for sweeping the
 symbol table rather than working from a list.
+
+## 75. A whole negotiation, against something that has never seen this object
+
+Everything up to here proves the reconstruction agrees with the blob, plus a
+signal-layer check that our ANSam is ANSam. Neither answers the question the
+work is actually for: can this thing negotiate a call with a modem that was
+written by someone else, from the standard, with no knowledge of Smart Link?
+
+It can, in both directions.
+
+```
+    SpanDSP calls, the reconstruction answers
+      after 190 frames (3.8 s of audio)
+      spandsp: status 2 (V.8 negotiated), call function 6, mods 0xa12
+      ours   : received e0 c1 45 11 94 2a 0e ff
+      ours   : agreed V.32 V.34 V.21 V.23 (V-series call)
+
+    The reconstruction calls, SpanDSP answers
+      after 137 frames (2.7 s of audio)
+      spandsp: status 2 (V.8 negotiated), call function 6, mods 0xa12
+      ours   : received e0 c1 45 11 94 2a 0e ff
+      ours   : agreed V.32 V.34 V.21 V.23 (V-series call)
+```
+
+The audio crosses at 8000 Hz, which is what a SIP leg carries, with the
+reconstructed rational resampler on our side of it because the handshake runs
+at 9600. `t_spandsp_v8neg` runs both ends in one process;
+`t_spandsp_v8sock` runs them as two processes with the frames going over a
+datagram socket, one at a time, which is the arrangement a real call has and
+which rules out anything working by accident of shared memory.
+
+### Why it works: the framing is standard after all
+
+The reconstruction's constants look proprietary until they are decoded. A
+sequence word is a 10-bit V.21 character sent most significant bit first:
+bit 9 is the start bit, bits 8 down to 1 are the octet least significant bit
+first, and bit 0 is the stop bit. Undo that and the CM is ITU-T V.8:
+
+```
+    0x00f -> 0xE0   the CM/JM synchronisation octet
+    0x107 -> 0xC1   tag 1, call function 6 -- V-series data call
+    0x141 -> 0x05   tag 5, modulation list, first octet
+    0x011 -> 0x10   a modulation continuation octet
+    0x0a9 -> 0x2A   tag 0x0A, protocols, LAPM/V.42
+    0x161 -> 0x0D   tag 0x0D, PSTN access
+    0x1c9 -> 0x27   tag 0x07, PCM modem availability
+```
+
+Which also names the flag bytes `initTxSequence` reads, since each bit of
+`cm->b0`/`b1` is one bit of one of those octets:
+
+```
+    b0 bit 3  V.90            b1 bit 0  V.22        b1 bit 4  V.23
+    b0 bit 5  V.34            b1 bit 1  V.17        b1 bit 5  V.21
+    b0 bit 6  V.34 half-dx    b1 bit 2  V.29        b1 bit 6  V-series call
+    b0 bit 7  V.32            b1 bit 3  V.27ter
+```
+
+And it explains the CJ detector's "nine zero bits then a one": that is a
+start bit, eight zero data bits and a stop bit, which is the all-zero octet
+V.8 specifies for CJ.
+
+### The one part that cannot interoperate, and it is not a defect
+
+Setting bit 4 of `cm->b2` -- the PCM offer -- takes the handshake off the
+fifteen-word CM entirely and onto the six-word exchange the object's own
+debug strings call QCA1a and QCA1d, with marker `0x155` and a payload
+assembled by bit-shuffling `cm->menu`. That is Smart Link's proprietary
+V.90/V.92 quick-connect, not V.8, and nothing outside this object can answer
+it. The interop tier leaves the bit clear and says so; the code path is
+reconstructed and differentially tested against the blob like everything
+else, which is the only kind of proof available for it.
+
+### What the negotiation proves that the differential harness cannot
+
+`sp_modulations` came back as `0xa12` -- V.21, V.23, V.32, V.34, exactly what
+was offered -- and our end decoded SpanDSP's menu to the same four. Every one
+of those bits is a place where agreeing with the blob about a wrong bit looks
+identical to agreeing about a right one. There are eleven such bits in the
+modulation list alone, and the differential harness is blind to all of them.
