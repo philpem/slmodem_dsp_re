@@ -15,6 +15,7 @@
  */
 
 #include "dsplib/v8.h"
+#include "dsplib/sysdep.h"
 
 /*
  * The detector's coefficient table, .rodata+0x5670.  Eight entries, not the
@@ -180,4 +181,44 @@ v8handshakinit(struct v8 *v)
 	v->fdb8 = 0;
 	v->fdb6 = 0;
 	v->fdb4 = 0;
+}
+
+/*
+ * Build a handshake.
+ *
+ * Note what is NOT here: the object is allocated and never zeroed.  Only the
+ * six configuration words below and whatever `v8handshakinit` writes are
+ * defined when this returns, and the rest is whatever the allocator had.  A
+ * caller that reads anything else is reading rubbish -- which is worth
+ * knowing, because on a fresh page that rubbish is usually zero and so looks
+ * deliberate.
+ */
+struct v8 *
+V8Create(const struct v8_cfg *cfg)
+{
+	struct v8 *v = sysdep_malloc(sizeof(struct v8));
+
+	if (v == 0)
+		return 0;
+
+	v->mode = cfg->mode;
+	v->fa48 = cfg->f04;
+	v->timeout_a = cfg->timeout_a;
+	v->timeout_b = cfg->timeout_b;
+	v->fa54 = cfg->f10;
+	v->cm = cfg->cm;
+
+	v->fa42 = 0x4000;
+	v8handshakinit(v);
+
+	v->fdba = 0;
+	v->feb8 = 0;
+	return v;
+}
+
+void
+V8Delete(struct v8 *v)
+{
+	if (v != 0)
+		sysdep_free(v);
 }

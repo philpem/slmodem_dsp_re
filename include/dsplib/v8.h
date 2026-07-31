@@ -334,7 +334,7 @@ struct v8 {
 	int			fa48;		/* +0xa48 */
 	int			timeout_a;	/* +0xa4c */
 	int			timeout_b;	/* +0xa50 */
-	unsigned char		pada54[0xa58 - 0xa54];
+	int			fa54;		/* +0xa54 */
 
 	struct v8_cm		*cm;		/* +0xa58 */
 	short			v21_taps[V8_V21_TAPS];	/* +0xa5c */
@@ -373,7 +373,8 @@ struct v8 {
 	short			fdb4;		/* +0xdb4 */
 	short			fdb6;		/* +0xdb6 */
 	short			fdb8;		/* +0xdb8 */
-	unsigned char		paddba[0xdbe - 0xdba];
+	short			fdba;		/* +0xdba */
+	unsigned char		paddbc[2];
 	short			fdbe;		/* +0xdbe */
 	short			fdc0;		/* +0xdc0 */
 	unsigned char		paddc2[2];
@@ -391,7 +392,8 @@ struct v8 {
 	int			deadline_a;	/* +0xe5c */
 	int			deadline_b;	/* +0xe60 */
 	int			fe64;		/* +0xe64 */
-	unsigned char		pade68[0xebc - 0xe68];
+	unsigned char		pade68[0xeb8 - 0xe68];
+	int			feb8;		/* +0xeb8 */
 	short			febc;		/* +0xebc */
 	short			febe;		/* +0xebe */
 	short			fec0;		/* +0xec0 */
@@ -459,6 +461,28 @@ void initTxSequence(struct v8 *v);
  * `v->mode` and builds one of three shapes.
  */
 void v8handshakinit(struct v8 *v);
+
+/*
+ * What V8Create is handed: six words the object keeps and reads back from
+ * v8handshakinit onwards.
+ */
+struct v8_cfg {
+	int		mode;			/* +0x00 -> v8.mode      */
+	int		f04;			/* +0x04 */
+	int		timeout_a;		/* +0x08 */
+	int		timeout_b;		/* +0x0c */
+	int		f10;			/* +0x10 */
+	struct v8_cm	*cm;			/* +0x14 */
+};
+
+/*
+ * Build a handshake.  Allocates 3780 bytes and does NOT zero them: only the
+ * fields below and whatever v8handshakinit writes are defined afterwards.
+ */
+struct v8 *V8Create(const struct v8_cfg *cfg);
+
+/* Free it.  Tolerates NULL. */
+void V8Delete(struct v8 *v);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);

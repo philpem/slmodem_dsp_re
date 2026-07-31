@@ -4019,3 +4019,24 @@ the fill is not applied yet.
 A test that silently stops running is the failure mode to watch for here:
 the group count is the only thing that shows it, which is why it is reported
 alongside the check count every time.
+
+## 70. V8Create, and the limit it puts on its own test
+
+The constructor is short: allocate 3780 bytes, copy six configuration words
+in, plant 0x4000 at +0xa42, call `v8handshakinit`, clear two fields. Most of
+its 1124 bytes are debug output.
+
+It does **not** zero the object. So only the six words, the constant, the two
+final clears, and whatever `v8handshakinit` writes are defined when it
+returns -- everything else is allocator leftovers. A caller reading anything
+else is reading rubbish that, on a fresh page, is usually zero and therefore
+looks deliberate.
+
+That bounds the test. Comparing all 3780 bytes would compare two lots of
+leftovers, so `t_v8create` compares what the constructor is responsible for
+and leaves the rest to `t_handshakinit`, which proves the handshake
+byte-for-byte on an object the test controls. Splitting it that way is not a
+weakening: every byte is still covered by one test or the other, and neither
+covers bytes nobody writes -- because nothing can.
+
+Removing that limit is what task #23 is about.

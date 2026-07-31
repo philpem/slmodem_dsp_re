@@ -35,6 +35,8 @@ extern void ref_v8_V21_Init(struct v8 *v, short channel, short answerer);
 extern unsigned char ref_charFlip(unsigned char b);
 extern void ref_initTxSequence(struct v8 *v);
 extern void ref_v8handshakinit(struct v8 *v);
+extern struct v8 *ref_V8Create(const struct v8_cfg *cfg);
+extern void ref_V8Delete(struct v8 *v);
 
 /* The two objects every comparison below runs through. */
 static struct v8 obj_a, obj_b;
@@ -747,6 +749,84 @@ t_handshakinit(void)
 	return diff_end();
 }
 
+/*
+ * V8Create allocates without zeroing, so the two objects differ wherever
+ * nothing wrote -- comparing all 3780 bytes would compare two lots of
+ * allocator leftovers.  What is compared instead is everything the
+ * constructor is responsible for: the six configuration words it copies, the
+ * constant it plants, the two it clears at the end, and a sample of what
+ * v8handshakinit wrote through it.  The handshake itself is already proved
+ * byte-for-byte by t_handshakinit.
+ */
+static int
+t_v8create(void)
+{
+	struct v8_cfg cfg;
+	struct v8 *a, *b;
+	int mode;
+
+	diff_begin("V8Create");
+
+	for (mode = -1; mode <= 2; mode++) {
+		memset(&cm_a, 0, sizeof(cm_a));
+		cm_a.b0 = 0x2a;
+		cm_a.b1 = 0x14;
+		cm_a.b2 = 0x14;
+		cm_a.menu = 0x01020304;
+		cm_a.ext1[0] = 'G';
+		memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+		cfg.mode = mode;
+		cfg.f04 = 7;
+		cfg.timeout_a = 12;
+		cfg.timeout_b = 3;
+		cfg.f10 = 9600;
+
+		cfg.cm = &cm_a;
+		b = ref_V8Create(&cfg);
+		cfg.cm = &cm_b;
+		a = V8Create(&cfg);
+
+		diff_eq_int("both allocated (%ld)", a != 0 && b != 0, 1, mode);
+		if (a == 0 || b == 0)
+			continue;
+
+		diff_eq_int("mode (%ld)", a->mode, b->mode, mode);
+		diff_eq_int("f04 (%ld)", a->fa48, b->fa48, mode);
+		diff_eq_int("timeout_a (%ld)", a->timeout_a, b->timeout_a,
+			    mode);
+		diff_eq_int("timeout_b (%ld)", a->timeout_b, b->timeout_b,
+			    mode);
+		diff_eq_int("f10 (%ld)", a->fa54, b->fa54, mode);
+		diff_eq_int("fa42 (%ld)", a->fa42, b->fa42, mode);
+		diff_eq_int("fdba cleared (%ld)", a->fdba, b->fdba, mode);
+		diff_eq_int("feb8 cleared (%ld)", a->feb8, b->feb8, mode);
+
+		/* The handshake ran through it: a sample of what it writes. */
+		diff_eq_int("fa3e (%ld)", a->fa3e, b->fa3e, mode);
+		diff_eq_int("fa40 (%ld)", a->fa40, b->fa40, mode);
+		diff_eq_int("f9d4 (%ld)", a->f9d4, b->f9d4, mode);
+		diff_eq_int("deadline_a (%ld)", a->deadline_a, b->deadline_a,
+			    mode);
+		diff_eq_int("rx.flags (%ld)", a->rx.flags, b->rx.flags, mode);
+		diff_eq_int("menu untouched (%ld)",
+			    memcmp(&cm_a, &cm_b, sizeof(cm_a)) == 0, 1, mode);
+
+		/* The constant really is planted, not agreed by accident. */
+		diff_eq_int("fa42 is 0x4000 (%ld)", a->fa42, 0x4000, mode);
+
+		V8Delete(a);
+		ref_V8Delete(b);
+	}
+
+	/* Deleting nothing is allowed. */
+	V8Delete(0);
+	ref_V8Delete(0);
+	diff_eq_int("V8Delete(NULL) survives", 1, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -762,5 +842,6 @@ main(void)
 	rc |= t_inits();
 	rc |= t_txsequence();
 	rc |= t_handshakinit();
+	rc |= t_v8create();
 	return rc;
 }
