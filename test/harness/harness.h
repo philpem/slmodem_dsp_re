@@ -69,6 +69,19 @@ struct reg_log {
 	int deregistered;
 };
 
+/*
+ * What sysdep_malloc should fill fresh allocations with, and does not yet.
+ *
+ * Handing back a fixed non-zero pattern makes a constructor that leaves a
+ * field uninitialised comparable -- both sides see the same value -- and
+ * makes anything that reads such a field get an obviously wrong number
+ * instead of the zero fresh pages happen to give.  Turning it on found two
+ * real defects straight away (see findings 69) and also made one half-duplex
+ * test exit before reporting, which is why it is staged here rather than
+ * enabled.
+ */
+#define HARNESS_MALLOC_FILL	0xa5
+
 /* slmodemd has 256 S-registers; the store mirrors that. */
 #define HARNESS_SREGS	256
 void harness_sreg_reset(void);

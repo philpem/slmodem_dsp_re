@@ -106,6 +106,12 @@ sysdep_malloc(unsigned int size)
 	void *p = malloc(size);
 
 	if (p != 0) {
+		/*
+		 * NOT filled with a pattern yet, though it should be: see the
+		 * note on HARNESS_MALLOC_FILL in harness.h.  Filling found two
+		 * real defects immediately and also killed a half-duplex test
+		 * outright, so it is staged rather than enabled.
+		 */
 		harness_alloc.allocs++;
 		harness_alloc.live++;
 		harness_alloc.bytes += size;

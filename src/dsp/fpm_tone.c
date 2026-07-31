@@ -170,17 +170,20 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * estimates, and everything unattributed up to +0xf0.
 	 *
 	 * The original does this as two loops, 0x40..0x50 and 0x52..0xf0,
-	 * split around the hist_idx write between them.  Note the end: 0xf0,
-	 * not 0xf2, so the LAST word of the reserved region is NOT cleared.
-	 * Whether that is deliberate or an off-by-one in the original is
-	 * unknowable until something is found that reads it; it is reproduced
-	 * either way.
+	 * split around the hist_idx write between them.
+	 *
+	 * CORRECTION: an earlier version of this stopped at 0xf0 and claimed
+	 * the last word of the region was deliberately left alone.  It is
+	 * not -- there is a separate store of zero to +0xf2 immediately after
+	 * the loop, outside it.  The mistake was invisible for as long as the
+	 * test harness handed out zeroed memory; it showed up the moment
+	 * fresh allocations were filled with a non-zero pattern.
 	 */
 	for (i = 0; i < (int)NELEMS(state->iir_state); i++)
 		state->iir_state[i] = 0;
 	state->e_tone = 0;
 	state->e_total = 0;
-	for (i = 0; i < (int)NELEMS(state->r4c) - 1; i++)
+	for (i = 0; i < (int)NELEMS(state->r4c); i++)
 		state->r4c[i] = 0;
 	state->hist_idx = 0;
 

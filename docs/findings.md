@@ -3978,3 +3978,44 @@ fired, because the label is only formatted when a check fails and that
 comparison had never failed. The first genuine mismatch turned it into a
 segfault. Worth recording as the failure mode of a diagnostic path that is
 only exercised by failure.
+
+## 69. Two constructors were wrong, and the harness could not see it
+
+`V8Create` allocates its object and never zeroes it. That prompted an
+experiment: make the harness allocator hand back a fixed non-zero pattern
+instead of whatever `malloc` had lying around. Fresh pages from the operating
+system are usually zero, so a constructor that misses a field looks correct
+for as long as nothing else has used that memory.
+
+Two real defects surfaced within seconds of turning it on, in code that had
+been green for weeks.
+
+**FPM_TONE_create cleared one word too few.** The original clears its running
+state in two loops ending at +0xf0, and then stores zero to +0xf2 in a
+separate instruction just after. An earlier reading saw the loop bound, did
+not see the separate store, and wrote a comment claiming the last word was
+deliberately left alone. It is not. Corrected, and the comment retracted in
+place.
+
+**B103FP_create cleared twenty-four bytes too many.** The reserved block at
++0x2c is three twelve-byte entries, and the original clears only the first
+ten bytes of each -- the last word of every entry keeps whatever the
+allocator left. Clearing all thirty-six reads as tidier and is wrong.
+
+Both are the same shape of error in opposite directions, and neither could
+ever have been caught by a differential test against zeroed memory: with both
+sides reading zeros, a missing write and a spurious write are equally
+invisible.
+
+### Why the fill is staged rather than enabled
+
+Turning it on also made one half-duplex test exit before reporting -- eight
+groups stopped appearing rather than failing, which is worse than a failure
+because the suite still says zero failed. Something in that path reads memory
+that has always happened to be zero. That is a third defect and wants its own
+investigation, so the constant is defined in harness.h with the reasoning and
+the fill is not applied yet.
+
+A test that silently stops running is the failure mode to watch for here:
+the group count is the only thing that shows it, which is why it is reported
+alongside the check count every time.

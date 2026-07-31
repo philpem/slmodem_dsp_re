@@ -1128,8 +1128,16 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	fp->fsd_count = &dsp->fsd.last_count;
 	for (i = 0; i < (int)sizeof(fp->r24); i++)
 		fp->r24[i] = 0;
+	/*
+	 * The reserved block at +0x2c is three twelve-byte entries, and only
+	 * the first ten bytes of each are cleared -- the last word of every
+	 * entry keeps whatever the allocator left.  Clearing all thirty-six
+	 * bytes reads as tidier and is wrong; the difference was invisible
+	 * until fresh allocations stopped arriving zeroed.
+	 */
 	for (i = 0; i < (int)sizeof(fp->r2c); i++)
-		fp->r2c[i] = 0;
+		if ((i % 12) < 10)
+			fp->r2c[i] = 0;
 
 	return fp;
 }
