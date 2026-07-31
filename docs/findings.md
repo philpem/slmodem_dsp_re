@@ -3253,9 +3253,21 @@ Worked through in digits:
 ```
 
 Pattern 1 is the convention most of the world uses: *N* pulses for *N*, ten
-for zero. Pattern 2 sends one more than the digit and one pulse for zero,
-which is the Swedish and Norwegian scheme. Pattern 3 sends *10 − N*, which is
-New Zealand's.
+for zero. Pattern 2 sends one more than the digit and one pulse for zero.
+Pattern 3 sends *10 − N*.
+
+**The shipped country table names them.** Of slmodemd's fifty sets, forty-eight
+hold pattern 1, and the two that do not are:
+
+```
+    SWEDEN         pattern 2
+    NEW_ZEALAND    pattern 3
+```
+
+Which is exactly what the arithmetic says they should be -- pattern 2 is the
+Swedish scheme and pattern 3 is New Zealand's. The identification was made
+from the instructions alone and the data agrees, which is about as good a
+confirmation as this kind of work offers.
 
 Any other value of the parameter -- including zero, which is what a country
 table that never thought about it would hold -- leaves the pulse count at the
@@ -3263,10 +3275,10 @@ table that never thought about it would hold -- leaves the pulse count at the
 Since `PulseDialDigit` only special-cases zero, -1 is loaded as the count and
 `IsPulseDialerReady` counts it down past zero, which does not terminate.
 
-**Reachable?** `GetPulseDialDigitPattern` comes from
-`struct homolog_params::PulseDialDigitPattern`, so it is whatever the country
-table says. Worth checking against the shipped data before grading it; that
-check is not done yet.
+**Reachable?** No. `GetPulseDialDigitPattern` comes from
+`struct homolog_params::PulseDialDigitPattern`, and every one of the fifty
+shipped sets holds 1, 2 or 3. A country table that left it at zero would hang
+the pulse dialler; none does.
 
 This is the second place where the library encodes something genuinely
 national rather than technical -- the first being the cadence windows. It is a
