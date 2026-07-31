@@ -3655,3 +3655,65 @@ This corrects `docs/callprog_states.md`, which recorded the `w0 = 0` shape as
 though it were the only one. `t_call` now covers both halves of the split,
 and with S56 = 2 the dialler's DTMF reaches the line -- 13840 non-silent
 samples where there were none.
+
+
+## 62. V.8, and why it comes before V.23
+
+V.8 is the negotiation that runs once a call is answered and before any
+datapump starts. It is pulled ahead of V.23 because it is the direct
+successor to `call.c` -- which hands over with `DPSTAT_CHANGEDP` the moment it
+hears an answer -- because its modulation dependency (V.21 FSK) is already
+done, because SpanDSP ships an independent V.8 to cross-check against, and
+because it is the smallest thing that makes an end-to-end negotiation
+watchable over SIP. Nothing depends on V.23.
+
+### The public surface is all global
+
+Unusually for this object file, every V.8 entry point is a global symbol:
+`V8Create`, `V8Delete`, `V8Process`, `V8Control`, `V8SetMessage`,
+`V8GetMessage`, `V8UpdateModemParameters`, `V8agc`, `V8_setFilters`,
+`V8_V21_reset`, and about thirty-four lower-case `v8_*` helpers. All of it
+can be driven by name in a differential test -- the opposite of the
+call-progress code, where the work lived in file statics reachable only
+through a caller.
+
+### The dependency order
+
+`V8Create` calls exactly two things: `sysdep_malloc` and `v8handshakinit`.
+That second one is the whole signal layer:
+
+```
+    V8Create
+      +- v8handshakinit
+           +- initTxSequence   v8_detectorinit   v8_phase_rev_init
+           +- v8_rxinit        v8_txinit         v8_V21_Init
+           +- v8_mpyint
+```
+
+So the build is bottom-up: arithmetic leaves, then the init functions, then
+`v8handshakinit`, then `V8Create`, then the `v8.c` datapump wrapper -- which
+is the same shape as `call.c`, registering under id 8 from `dp_v8_init` and
+refusing any sample rate but 9600.
+
+### The cosine table
+
+256 entries of Q14 cosine, and the generator is
+`(short)(16384.0 * cos(2 * PI * i / 256))` with C truncation towards zero.
+255 of the 256 match that exactly.
+
+The exception is index 128 -- half a cycle -- which holds -16383 where the
+arithmetic gives -16384. That is floating point showing through: their cosine
+returned slightly more than -1, so truncating dropped a unit. Reproduced
+verbatim; regenerating the table would quietly change one sample of every
+tone V.8 emits.
+
+### Two corners in the leaves
+
+`v8_absfn(-32768)` returns -32768, because negating it overflows and the
+result is narrowed back to a short. `v8_copycoeff` counts with a short, so a
+count above 32767 never terminates. Neither is reachable from the signal
+path; both are reproduced.
+
+`v8_crc` is CRC-16-CCITT, polynomial 0x1021, MSB first and unreflected, one
+bit per call. Its bit argument is compared sixteen bits at a time, so a value
+that is non-zero overall but zero in its low half counts as a zero bit.
