@@ -942,3 +942,72 @@ This is the first entry of its category. Others are likely: the
 reconstruction was written by people reading assembly, and a null check is
 the kind of thing that gets written without noticing the original had none.
 Finding the rest is its own task rather than a claim made here.
+
+## D19 — the V.23 transmitter's mute reports samples where everything else reports bits 🐛 💤
+
+**Module** `src/pump/v23/v23tx.c` · original `v23tx.c`, `.text 0x0873b0`
+
+`v23FP_tx_progress` writes the number of bits it finished through its
+`consumed` argument, and that is how the caller knows to advance its own bit
+stream. Every path does this except the one-shot mute, which reports the
+sample count instead:
+
+```
+   873c9:  mov    0x14(%ebx),%eax      ; the mute flag
+   873cc:  test   %eax,%eax
+   873ce:  je     8743d                ; not muting: the normal path
+   873d6:  mov    %edi,%eax            ; edi = count, in SAMPLES
+   873e0:  movw   $0x0,(%esi)          ; ... write count zeros ...
+   873eb:  mov    %edi,0x18(%esp)      ; consumed = count
+   873f3:  movl   $0x0,0x14(%ebx)      ; clear the flag
+```
+
+A caller that advanced its bit stream by the reported figure would skip
+`count` bits instead of the zero it actually sent -- for the 160-sample block
+the datapump uses, 160 bits rather than 0.
+
+**Reproduced**, not fixed: the reconstruction returns the same number.
+
+**Reachable?** Only if something sets the flag. `CreateV23Modem` passes the
+first byte of its configuration straight in, so a configuration with that
+byte set arms it for exactly one block. Whether any configuration in the
+tree does is a question for `v23modem.c` and `v23.c`, which are not
+reconstructed yet -- `t_v23tx` drives the path directly and pins the
+behaviour either way.
+
+## D20 — the V.23 transmitter can hold an uninitialised bit ⚠
+
+**Module** `src/pump/v23/v23tx.c` · original `v23tx.c`, `.text 0x0873b0`
+
+`v23FP_tx_create` leaves the object's `held` field alone, which is safe
+because it is only read when `resume` is set and only the tail of
+`v23FP_tx_progress` sets that -- writing `held` in the same breath.
+
+Except on one path. If `progress` is called with `count == 0`, the sample
+loop never runs, `%ebp` is never loaded with a bit, and the tail still
+executes:
+
+```
+   8743d:  test   %edi,%edi            ; count
+   8743f:  je     8748f                ; straight to the tail
+   8748f:  cmpw   $0x0,0x8(%ebx)       ; remaining != 0 after create
+   874ea:  movl   $0x1,0x10(%ebx)      ; resume = 1
+   874f5:  mov    %ebp,0xc(%ebx)       ; held = whatever %ebp holds
+```
+
+The next call then transmits a whole bit period at a frequency chosen by an
+uninitialised register.
+
+The reconstruction initialises the bit to zero, so a `count == 0` call holds
+a space rather than something arbitrary. **Not behind
+`DSPLIB_REPRODUCE_BUGS`**: there is nothing to reproduce -- an uninitialised
+register has no defined value to match, and reading one in C is undefined
+rather than merely unpredictable.
+
+**Reachable?** Not from `V23ModemMain`, which is the only caller and passes
+its own block size. It is reachable by anything else linking this library.
+
+**Why keep it.** Same argument as D18: ours is defined where the original is
+not, and the only input that tells them apart is one where the original has
+no behaviour to be equivalent to. `t_v23tx` does not drive `count == 0` and
+says why.

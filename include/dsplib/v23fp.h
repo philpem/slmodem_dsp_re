@@ -27,6 +27,8 @@
 #ifndef DSPLIB_V23FP_H
 #define DSPLIB_V23FP_H
 
+#include "dsplib/fpm_tone.h"
+
 /*
  * ---------------------------------------------------------------------------
  * V23filt.c -- the four global coefficient tables.
@@ -80,5 +82,60 @@ extern const short _V23RX_IIR_LPF[15];
  * terms that happen to be equal, which is not a thing filters do by accident.
  */
 extern const short V23_IIR_FILT[20];
+
+/*
+ * ---------------------------------------------------------------------------
+ * v23tx.c -- the transmitter, 32 bytes.
+ *
+ * One object serves either channel.  What makes it the 1200 bps forward
+ * transmitter or the 75 bps backward one is entirely in the arguments
+ * v23FP_tx_create is given, so the frequencies and the bit-period table are
+ * fields rather than constants.
+ *
+ * 32-BIT LAYOUT: `period` and `tone` are pointers, so the offsets in the
+ * comments hold only where they are four bytes wide.  The assertions in
+ * src/pump/v23/v23tx.c are compiled only under that ABI.
+ */
+struct v23tx {
+	short		period_index;	/* +0x00 where in `period` we are    */
+	short		period_len;	/* +0x02 its length                  */
+	const short	*period;	/* +0x04 samples per bit, cyclic:
+					 *       { 7, 7, 6 } forward,
+					 *       { 107, 107, 106 } backward  */
+	unsigned short	remaining;	/* +0x08 samples left in this bit    */
+	short		pad0a;
+	int		held;		/* +0x0c the bit being sent, kept
+					 *       across a call boundary.  NOT
+					 *       initialised by create -- see
+					 *       the note there              */
+	int		resume;		/* +0x10 `held` is mid-transmission  */
+	int		mute;		/* +0x14 one-shot: emit silence for
+					 *       one block, then clear       */
+	short		space;		/* +0x18 Hz for a 0 bit: 2100 forward,
+					 *       450 backward                */
+	short		mark;		/* +0x1a Hz for a 1 bit: 1300 forward,
+					 *       390 backward                */
+	struct fpm_tone	*tone;		/* +0x1c the generator               */
+};
+
+/*
+ * Build a transmitter.  NULL `state` allocates one.  `period` is not copied
+ * -- the object keeps the caller's pointer, so it must outlive the object.
+ */
+struct v23tx *v23FP_tx_create(struct v23tx *tx, short mark, short space,
+			      short period_len, const short *period, int mute);
+
+/* Tear one down, freeing the tone generator and then the object itself. */
+void v23FP_tx_delete(struct v23tx *tx);
+
+/*
+ * Generate `count` samples from `bits`, one int per bit, writing how many
+ * bits that finished through `consumed`.
+ *
+ * The original returns whatever happens to be in %eax and no caller uses it,
+ * so this is declared void rather than inventing a return value.
+ */
+void v23FP_tx_progress(struct v23tx *tx, short *out, int count,
+		       const int *bits, int *consumed);
 
 #endif /* DSPLIB_V23FP_H */
