@@ -587,6 +587,25 @@ indexes `TONE_read`, whose cycle is 0x800, with
 256, so the generator sweeps the first eighth of a cosine — 0° to 45° — and
 back. The output never goes negative.
 
+**The correct version is in the same object.** `DialerProgress`'s DTMF
+generator uses the identical idiom on an identical 14-bit accumulator:
+
+```
+    DTMF          idx = (phase + 4)  >> 3      correct
+    calling tone  idx = (phase + 32) >> 6      wrong
+```
+
+Both round to nearest — 4 is half of 8, 32 is half of 64 — so the rounding was
+adjusted to match the shift, which makes the calling tone's version look
+considered rather than mistyped. But 3 is the shift that maps a 14-bit
+accumulator onto `TONE_read`'s 2048-point cycle and 6 is not: the DTMF tones
+land within 0.06% of nominal (finding 58) and the calling tone emits a
+sawtooth.
+
+That removes the last charitable reading of this entry. It is not a limit of
+the technique, and not something nobody in the codebase understood — two
+functions in the same phase, one right and one wrong.
+
 **Measured**, at level −12 over 4096 samples:
 
 ```
