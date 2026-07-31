@@ -5,8 +5,9 @@
  *
  *   CALLPROG_Create   .text 0x079570
  *   CALLPROG_Delete   .text 0x079440
+ *   CALLPROG_Dial     .text 0x07a5a0
  *
- * CALLPROG_Dial and CALLPROG_Progress are not reconstructed yet.
+ * CALLPROG_Progress is not reconstructed yet.
  *
  * Most of Create is not object initialisation at all -- it is the state
  * machine, assembled a byte at a time into eleven module-scope tables.  The
@@ -50,6 +51,65 @@ static const int callprog_default_timeout[7] = { 10, 20, 15, 10, 8, 60, 60 };
 /* The state the machine ends in, and the one it starts in. */
 #define CALLPROG_STATE_END	6
 #define CALLPROG_STATE_START	1
+
+/*
+ * The timeout half of the machine.  Built by Create and again by Dial, which
+ * refreshes the durations from the host before every call -- so this is one
+ * function here where the original has it twice, inlined.
+ */
+static void
+build_timeouts(struct callprog *cp)
+{
+	int s;
+
+	for (s = 0; s < CALLPROG_STATES; s++)
+		next_state_due_timeout[s] = 0;
+	for (s = 0; s < CALLPROG_STATES; s++)
+		message_due_timeout[s] = 0;
+
+	/*
+	 * Six states can time out and all six end the call.  Read the messages
+	 * down the column and they are the list of ways a call fails to
+	 * connect.
+	 */
+	next_state_due_timeout[1] = CALLPROG_STATE_END;
+	message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
+	next_state_due_timeout[3] = CALLPROG_STATE_END;
+	message_due_timeout[3] = CALLPROG_NO_RING;
+	next_state_due_timeout[4] = CALLPROG_STATE_END;
+	message_due_timeout[4] = CALLPROG_NO_ANSWER;
+	next_state_due_timeout[5] = CALLPROG_STATE_END;
+	message_due_timeout[5] = CALLPROG_ANSWER_STATE_TIMEOUT;
+	next_state_due_timeout[8] = CALLPROG_STATE_END;
+	message_due_timeout[8] = CALLPROG_BUSY;
+	next_state_due_timeout[9] = CALLPROG_STATE_END;
+
+	for (s = 0; s < CALLPROG_STATES; s++)
+		timeout_table[s] = 0;
+
+	timeout_table[1] = cp->timeout[0];
+	timeout_table[3] = cp->timeout[1];
+	timeout_table[4] = cp->timeout[2];
+	timeout_table[5] = cp->timeout[3];
+	timeout_table[8] = cp->timeout[5];
+	timeout_table[9] = cp->timeout[6];
+}
+
+/*
+ * Arm the state the machine is about to enter: load its timeout, and its
+ * line-clear timeout if it has one.  Create and Dial both end this way.
+ */
+static void
+enter_state(struct callprog *cp)
+{
+	cp->f34 = timeout_table[cp->state] * 8000;
+
+	if (next_state_due_line_clear_timeout[cp->state] != 0)
+		cp->f4c = enable_line_clear_timeout[cp->state];
+
+	if (cp->state == 8)
+		cp->f54 = 0;
+}
 
 static void
 build_state_machine(struct callprog *cp)
@@ -120,37 +180,7 @@ build_state_machine(struct callprog *cp)
 	next_state_due_line_clear_timeout[4] = 5;
 	message_due_line_clear_timeout[4] = CALLPROG_ANSWER;
 
-	for (s = 0; s < CALLPROG_STATES; s++)
-		next_state_due_timeout[s] = 0;
-	for (s = 0; s < CALLPROG_STATES; s++)
-		message_due_timeout[s] = 0;
-
-	/*
-	 * Six states can time out and all six end the call.  Read the messages
-	 * down the column and they are the list of ways a call fails to
-	 * connect.
-	 */
-	next_state_due_timeout[1] = CALLPROG_STATE_END;
-	message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
-	next_state_due_timeout[3] = CALLPROG_STATE_END;
-	message_due_timeout[3] = CALLPROG_NO_RING;
-	next_state_due_timeout[4] = CALLPROG_STATE_END;
-	message_due_timeout[4] = CALLPROG_NO_ANSWER;
-	next_state_due_timeout[5] = CALLPROG_STATE_END;
-	message_due_timeout[5] = CALLPROG_ANSWER_STATE_TIMEOUT;
-	next_state_due_timeout[8] = CALLPROG_STATE_END;
-	message_due_timeout[8] = CALLPROG_BUSY;
-	next_state_due_timeout[9] = CALLPROG_STATE_END;
-
-	for (s = 0; s < CALLPROG_STATES; s++)
-		timeout_table[s] = 0;
-
-	timeout_table[1] = cp->timeout[0];
-	timeout_table[3] = cp->timeout[1];
-	timeout_table[4] = cp->timeout[2];
-	timeout_table[5] = cp->timeout[3];
-	timeout_table[8] = cp->timeout[5];
-	timeout_table[9] = cp->timeout[6];
+	build_timeouts(cp);
 
 	for (s = 0; s < CALLPROG_STATES; s++)
 		automode_table[s] = 0;
@@ -229,13 +259,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	build_state_machine(cp);
 
 	cp->state = CALLPROG_STATE_START;
-	cp->f34 = cp->timeout[0] * 8000;
-
-	if (next_state_due_line_clear_timeout[CALLPROG_STATE_START] != 0)
-		cp->f4c = enable_line_clear_timeout[CALLPROG_STATE_START];
-
-	if (cp->state == 8)
-		cp->f54 = 0;
+	enter_state(cp);
 
 	cp->f48 = cp->timeout[4] * 8000;
 }
@@ -262,4 +286,105 @@ CALLPROG_Delete(struct callprog *cp)
 
 	if (cp->dtmf != 0)
 		Dual_TONE_delete(cp->dtmf);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * CALLPROG_Dial  .text 0x07a5a0
+ *
+ * Everything the supervisor needs that could have changed since it was built:
+ * the calling-tone setting, the dial string, and the timeouts.  Then it either
+ * waits for dial tone or does not, which is the one real decision here.
+ */
+void
+CALLPROG_Dial(struct callprog *cp, const char *s)
+{
+	long level;
+	int flag;
+
+	/*
+	 * No S-register accessor means no way to find the calling tone's
+	 * level, and the function gives up rather than calling through null.
+	 */
+	if (cp->get_sreg == 0)
+		return;
+
+	flag = modem_get_param(cp->modem, GetCallingToneFlag);
+	cp->f5c = flag;
+	if (flag == 0)
+		cp->f60 = 0;
+	else if (flag == 1)
+		cp->f60 = 1;
+	else
+		cp->f60 = (flag == 2);
+
+	/*
+	 * S221, through the accessor call.c installed.  Narrowed to a signed
+	 * char, so an S-register of 128 or more arrives negative -- see D13,
+	 * where it makes almost no difference because the level control barely
+	 * works.
+	 */
+	level = cp->get_sreg(cp->modem, 221);
+	ResetCallingTone(&cp->calling_tone, (char)level);
+
+	cp->f58 = DialerCreate(&cp->dialer, s, cp->modem);
+
+	/*
+	 * Five timeouts, all from the same parameter.  Whatever they were
+	 * meant to be individually, the host is asked the same question five
+	 * times and gives the same answer.
+	 */
+	cp->timeout[1] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[2] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[3] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[4] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[5] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+
+	build_timeouts(cp);
+
+	if (cp->f1c != 0) {
+		/*
+		 * Blind dialling: do not wait for dial tone.  State 1 times
+		 * out straight into dialling rather than into an error, and
+		 * both detectors are switched off for the two states that
+		 * would otherwise be listening.
+		 */
+		timeout_table[1] = modem_get_param(cp->modem,
+						   GetBlindDialPause);
+		next_state_due_timeout[1] = 2;
+		message_due_timeout[1] = CALLPROG_DIALING;
+		toneiir_dialtone_table[1] = 0;
+		toneiir_busy_table[1] = 0;
+		toneiir_dialtone_table[2] = 0;
+		toneiir_busy_table[2] = 0;
+	} else {
+		int wait = modem_get_param(cp->modem, GetDialToneWaitTime);
+		int validate = modem_get_param(cp->modem,
+					       GetDialToneValidationTime);
+		int extra = (validate + 9) / 10;
+
+		/*
+		 * Long enough to hear dial tone, plus long enough to be sure
+		 * of it -- the validation time in whole seconds, rounded up,
+		 * and never less than two.
+		 */
+		if (extra <= 2)
+			extra = 2;
+		timeout_table[1] = wait + extra;
+
+		next_state_due_timeout[1] = CALLPROG_STATE_END;
+		message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
+		toneiir_dialtone_table[1] = 1;
+		toneiir_busy_table[1] = 1;
+		toneiir_dialtone_table[2] = 1;
+		toneiir_busy_table[2] = 1;
+	}
+
+	/* State 7 dials again without going back to waiting. */
+	if (cp->state == 7)
+		cp->state = 2;
+	else
+		cp->state = CALLPROG_STATE_START;
+
+	enter_state(cp);
 }

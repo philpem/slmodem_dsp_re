@@ -25,6 +25,7 @@
 
 extern void ref_CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
 extern void ref_CALLPROG_Delete(struct callprog *cp);
+extern void ref_CALLPROG_Dial(struct callprog *cp, const char *s);
 
 /* The anchor.  .bss+0x188 in the object, whatever it lands at when linked. */
 extern unsigned char ref_SMCv32_CFG[];
@@ -203,6 +204,131 @@ run_create(const char *label, int band_wanted)
 	return diff_end();
 }
 
+/*
+ * CALLPROG_Dial, driven on top of a freshly created supervisor.  It rebuilds
+ * the timeout half of the state machine from parameters the host may have
+ * changed, so the tables are compared again afterwards -- and the blind-dial
+ * branch is the one real decision in the function, so both arms are driven.
+ */
+static int
+run_dial(const char *label, int blind, int calling_tone, int validate,
+	 int state_in, const char *dialstr)
+{
+	struct callprog a, b;
+	struct callprog_cfg ca, cb;
+
+	diff_begin(label);
+
+	harness_param_reset();
+	harness_alloc_reset();
+	harness_param_set(MustNoiseFilterBeApplied, 1);
+	harness_param_set(GetDialToneCallProgressFilterIndex, 1);
+	harness_param_set(GetBusyToneCallProgressFilterIndex, 0);
+	harness_param_set(GetDialToneFilterSubindex, 0);
+	harness_param_set(GetCallProgressSamplesBufferLength, 666);
+	harness_param_set(GetDialToneDetectionThreshold, 40);
+	harness_param_set(GetMaxBusyCadenceOnTime, 55);
+	harness_param_set(GetMinBusyCadenceOnTime, 20);
+	harness_param_set(GetMinBusyCadenceOffTime, 20);
+	harness_param_set(GetMaxBusyCadenceOffTime, 55);
+	harness_param_set(GetBusyDetectionCyclesNumber, 3);
+	harness_param_set(GetBusyToneLooseDetectionEnabled, 0);
+	harness_param_set(GetCallingToneFlag, calling_tone);
+	harness_param_set(GetNoAnswerTimeOut, 45);
+	harness_param_set(GetBlindDialPause, 6);
+	harness_param_set(GetDialToneWaitTime, 9);
+	harness_param_set(GetDialToneValidationTime, validate);
+	harness_param_set(GetDialModifierValidation, 0);
+	harness_param_set(GetPulseDialMakeTime, 33);
+	harness_param_set(GetPulseDialBreakTime, 67);
+	harness_param_set(GetDTMFHighToneLevel, 9);
+	harness_param_set(GetDTMFHighAndLowToneLevelDifference, 2);
+	/*
+	 * No datapump.  CALLPROG_Dial reaches SetPulseMakeTime through
+	 * DialerCreate, and that dereferences whatever this parameter returns
+	 * -- so leaving it at the store's derived value is a wild pointer, not
+	 * a harmless one.  Zero is the path both sides handle by doing
+	 * nothing, which is what this test wants.
+	 */
+	harness_param_set(MDMPRM_DP_ADDR, 0);
+
+	memset(&a, 0xA5, sizeof(a));
+	memset(&b, 0xA5, sizeof(b));
+	ca.w0 = blind;
+	ca.get_sreg = sreg_stub;
+	ca.modem = (void *)0xC0DEu;
+	ca.w3 = 0;
+	cb = ca;
+
+	ref_CALLPROG_Create(&a, &ca);
+	CALLPROG_Create(&b, &cb);
+	a.state = b.state = state_in;
+
+	ref_CALLPROG_Dial(&a, dialstr);
+	CALLPROG_Dial(&b, dialstr);
+
+	compare_object(&b, &a, 0);
+	compare_tables(0);
+	diff_eq_int("f5c", b.f5c, a.f5c, 0);
+	diff_eq_int("f60", b.f60, a.f60, 0);
+	diff_eq_int("f58", b.f58, a.f58, 0);
+	diff_eq_int("state after dial", b.state, a.state, 0);
+	diff_eq_int("calling tone armed", b.calling_tone.remaining,
+		    a.calling_tone.remaining, 0);
+	diff_eq_int("calling tone amplitude", b.calling_tone.amplitude,
+		    a.calling_tone.amplitude, 0);
+	diff_eq_int("dial string copied", strcmp(a.dialer.string,
+						 b.dialer.string), 0, 0);
+	diff_eq_int("dialler graded it", b.dialer.grade, a.dialer.grade, 0);
+
+	ref_CALLPROG_Delete(&a);
+	CALLPROG_Delete(&b);
+	diff_eq_int("everything freed", harness_alloc.live, 0, 0);
+
+	return diff_end();
+}
+
+/*
+ * And the one path that does nothing: no S-register accessor.
+ */
+static int
+run_dial_no_accessor(void)
+{
+	struct callprog a, b;
+	struct callprog_cfg ca, cb;
+
+	diff_begin("CALLPROG_Dial: no S-register accessor");
+
+	harness_param_reset();
+	harness_alloc_reset();
+	harness_param_set(MustNoiseFilterBeApplied, 0);
+	harness_param_set(MDMPRM_DP_ADDR, 0);
+
+	memset(&a, 0xA5, sizeof(a));
+	memset(&b, 0xA5, sizeof(b));
+	ca.w0 = 0;
+	ca.get_sreg = sreg_stub;
+	ca.modem = (void *)0xC0DEu;
+	ca.w3 = 0;
+	cb = ca;
+	ref_CALLPROG_Create(&a, &ca);
+	CALLPROG_Create(&b, &cb);
+
+	a.get_sreg = b.get_sreg = 0;
+	a.state = b.state = 4;
+	ref_CALLPROG_Dial(&a, "T5551234");
+	CALLPROG_Dial(&b, "T5551234");
+
+	diff_eq_int("state untouched", b.state, a.state, 0);
+	diff_eq_int("both left state 4", a.state, 4, 0);
+	compare_object(&b, &a, 0);
+
+	ref_CALLPROG_Delete(&a);
+	CALLPROG_Delete(&b);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -211,6 +337,18 @@ main(void)
 	rc |= run_create("CALLPROG_Create: no band filter", 0);
 	rc |= run_create("CALLPROG_Create: with band filter", 1);
 	rc |= run_create("CALLPROG_Create: band flag 99", 99);
+
+	rc |= run_dial("CALLPROG_Dial: wait for dial tone", 0, 2, 5, 1,
+		       "T5551234");
+	rc |= run_dial("CALLPROG_Dial: blind dial", 1, 2, 5, 1, "T5551234");
+	rc |= run_dial("CALLPROG_Dial: long validation", 0, 2, 95, 1,
+		       "T5551234");
+	rc |= run_dial("CALLPROG_Dial: calling tone 0", 0, 0, 5, 1, "P123");
+	rc |= run_dial("CALLPROG_Dial: calling tone 1", 0, 1, 5, 1, "P123");
+	rc |= run_dial("CALLPROG_Dial: calling tone 7", 0, 7, 5, 1, "P123");
+	rc |= run_dial("CALLPROG_Dial: from state 7", 0, 2, 5, 7, "T9");
+	rc |= run_dial("CALLPROG_Dial: bad dial string", 0, 2, 5, 1, "5551234");
+	rc |= run_dial_no_accessor();
 
 	/*
 	 * Anti-vacuity: the tables must not be all zeros, which is what they

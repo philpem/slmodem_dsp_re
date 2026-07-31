@@ -24,6 +24,7 @@
 #include "dsplib/dualtone.h"
 #include "dsplib/dialer.h"
 #include "dsplib/toneiir.h"
+#include "dsplib/callingtone.h"
 
 /* Ten states, and eight possible verdicts from the tone detector. */
 #define CALLPROG_STATES		10
@@ -109,7 +110,9 @@ struct callprog {
 	unsigned char	pad81[3];
 
 	struct dual_tone *dtmf;				/* +0x84 */
-	unsigned char	pad88[0x10];			/* +0x88 */
+
+	/* The calling-tone generator, armed by CALLPROG_Dial. */
+	struct calling_tone calling_tone;		/* +0x88 */
 
 	struct dialer	dialer;				/* +0x98 */
 };
@@ -126,5 +129,13 @@ void CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
  * clears only two of the five pointers it releases -- see finding 55.
  */
 void CALLPROG_Delete(struct callprog *cp);
+
+/*
+ * Start a call: refresh everything that could have changed since Create,
+ * arm the calling tone, hand the string to the dialler, and decide whether to
+ * wait for dial tone.  Does nothing at all if no S-register accessor was
+ * configured.
+ */
+void CALLPROG_Dial(struct callprog *cp, const char *s);
 
 #endif /* DSPLIB_CALLPROG_STATE_H */
