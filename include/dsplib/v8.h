@@ -81,6 +81,7 @@ struct v8_detector {
 	short	f08;		/* the negated argument  +0x08 */
 	short	f0a;				/* +0x0a */
 	short	f0c;		/* 1                     +0x0c */
+	/* Below: acc_a and acc_b are the two biquads' x and y histories. */
 	short	f0e;				/* +0x0e */
 	short	f10;				/* +0x10 */
 	short	f12;				/* +0x12 */
@@ -626,6 +627,20 @@ void v8_ansamgenerate(struct v8 *v, short *out);
 #define V8_CONTROL_PROCEED	2
 
 int V8Control(struct v8 *v, int what);
+
+/*
+ * Run the tone detector over the samples between `in` and `v->rx.buf`,
+ * filtering in place.
+ *
+ * A fixed input biquad, then two more from the table the detector was built
+ * with, then a rectifier and a leaky integrator.  The verdict comes from
+ * counting how long the integrator stays the right side of two thresholds,
+ * which is the hysteresis that stops a passing noise burst counting as a
+ * tone.
+ *
+ * Returns 1 while the tone is considered present.
+ */
+int v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
 
 /* How many samples each queue operation moves. */
 #define V8_QUEUE_BLOCK	4

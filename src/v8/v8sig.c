@@ -391,3 +391,103 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 	pr->energy = energy;
 	pr->smoothed = smoothed;
 }
+
+/*
+ * The fixed input biquad every tone detector shares, in Q14.  The two arrays
+ * are the numerator and the denominator; the detector's own table supplies
+ * the two stages after it.
+ */
+static const short tone_in_b[3] = { 15565, -8057, 15565 };
+static const short tone_in_a[2] = { -8057, 14787 };
+
+/*
+ * One biquad, direct form I, with the histories kept as four shorts: x1, x2
+ * then y1, y2.  The original writes them back in a fixed order that matters,
+ * because x2 takes the old x1 and y2 the old y1.
+ */
+static int
+biquad(short *x, short *y, const short *b, const short *a, int in)
+{
+	int acc = in;
+
+	acc += v8_mpyint(x[0], b[0]);
+	acc += v8_mpyint(x[1], b[1]);
+	acc -= v8_mpyint(y[0], a[0]);
+	acc -= v8_mpyint(y[1], a[1]);
+
+	x[1] = x[0];
+	y[1] = y[0];
+	x[0] = (short)in;
+	y[0] = (short)acc;
+
+	return acc;
+}
+
+int
+v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
+{
+	while (in < v->rx.buf) {
+		int acc;
+		int stage1;
+		int stage2;
+		int i;
+
+		/* The fixed input section, over its own three-deep history. */
+		d->acc_c[0] = *in;
+		acc = 0;
+		for (i = 0; i < 3; i++)
+			acc += v8_mpyint(d->acc_c[i], tone_in_b[i]);
+		for (i = 0; i < 2; i++)
+			acc -= v8_mpyint(d->acc_d[i], tone_in_a[i]);
+
+		d->acc_c[2] = d->acc_c[1];
+		d->acc_d[2] = d->acc_d[1];
+		d->acc_c[1] = d->acc_c[0];
+		d->acc_d[1] = d->acc_d[0];
+		d->acc_d[0] = (short)acc;
+
+		*in++ = (short)acc;
+
+		/* Then the detector's own two sections. */
+		stage1 = biquad(&d->acc_a[0], &d->acc_b[0], &d->table[0],
+				&d->table[4], (short)acc >> 4);
+		stage2 = biquad(&d->acc_a[2], &d->acc_b[2], &d->table[2],
+				&d->table[6], (short)stage1 >> 4);
+
+		d->f12 = (short)(v8_absfn((short)((short)stage2 >> 4))
+				 + v8_mpyint(d->f12, 0x3ccd));
+	}
+
+	if (d->f04 != 0) {
+		if ((short)d->f12 < d->f0e)
+			d->f08 = (short)(d->f08 + 1);
+		if ((short)d->f12 > d->f10)
+			d->f08 = 0;
+		return d->f08 > d->f0a;
+	}
+
+	if (d->f06 != 0) {
+		if ((short)d->f12 > d->f10)
+			d->f08 = (short)(d->f08 + 1);
+		else
+			d->f08 = 0;
+		return d->f08 > d->f0a;
+	}
+
+	/*
+	 * Not armed yet: wait for the level to stay up for 0x33 blocks, then
+	 * switch to the second rule and take the detector out of the
+	 * receiver's flag word.
+	 */
+	if ((short)d->f12 <= 0x30) {
+		d->f30 = 0;
+		return 0;
+	}
+	d->f30 = (short)(d->f30 + 1);
+	if (d->f30 == 0x33) {
+		d->f06 = 1;
+		v->rx.flags &= (unsigned short)~V8_RX_DETECTOR_ARMED;
+		d->f08 = 0;
+	}
+	return 0;
+}

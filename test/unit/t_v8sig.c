@@ -31,6 +31,10 @@ extern void ref_initTxSequence(struct v8 *v);
 extern void ref_v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in,
 				    short count);
 extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
+extern int ref_v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
+extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
+				const short *t, short a3, short a4, short a5,
+				short a6, short a7);
 
 static struct v8 obj_a, obj_b;
 
@@ -448,6 +452,99 @@ main(void)
 		diff_eq_int("reversals were seen (%ld)", reversals > 0, 1,
 			    reversals);
 		(void)detected;
+	}
+	rc |= diff_end();
+
+	diff_begin("v8_tone_detect");
+	{
+		static short air_a[512], air_b[512];
+		static const short tab[8] = {
+			15000, -9000, 14000, -8000, -7000, 13000, -6000, 12000
+		};
+		long asserted = 0, moved3 = 0;
+
+		for (k = 0; k < 12; k++) {
+			int blk;
+
+			/* ANSam again, so the detector sees a real tone. */
+			fill(&obj_a, sizeof(obj_a), 6100u + k);
+			ref_v8_txinit(&obj_a);
+			ref_v8_ansaminit(&obj_a);
+			obj_a.tone.f08 = (short)(9000 - k * 300);
+			obj_a.tone.f0e = 0;
+			for (blk = 0; blk < 128; blk++)
+				ref_v8_ansamgenerate(&obj_a, air_a + blk * 4);
+			memcpy(air_b, air_a, sizeof(air_a));
+
+			memset(&obj_a, 0, sizeof(obj_a));
+			memset(&obj_b, 0, sizeof(obj_b));
+			ref_v8_detectorinit(&obj_a, &obj_a.detector, tab, 0,
+					    100, 50, 1500, 0);
+			ref_v8_detectorinit(&obj_b, &obj_b.detector, tab, 0,
+					    100, 50, 1500, 0);
+			/* Sweep the three rules the verdict can follow. */
+			obj_a.detector.f04 = obj_b.detector.f04 =
+				(short)(k % 3 == 0);
+			obj_a.detector.f06 = obj_b.detector.f06 =
+				(short)(k % 3 == 1);
+			/*
+			 * Thresholds that let each rule actually fire.  The
+			 * first version used 400 and 200 for both, which for
+			 * the f04 rule means every level either increments
+			 * the counter and resets it, or does neither -- so it
+			 * could never reach the count and the guard caught
+			 * it.
+			 */
+			if (k % 3 == 0) {
+				obj_a.detector.f0e = obj_b.detector.f0e =
+					30000;
+				obj_a.detector.f10 = obj_b.detector.f10 =
+					30000;
+			} else {
+				obj_a.detector.f0e = obj_b.detector.f0e = 400;
+				obj_a.detector.f10 = obj_b.detector.f10 = 5;
+			}
+			obj_a.detector.f0a = obj_b.detector.f0a = 3;
+			/*
+			 * v8_detectorinit seeds the counter with the negated
+			 * argument -- here -50 -- which is a deliberate
+			 * warm-up: the detector cannot assert for fifty
+			 * blocks however loud the tone.  Cleared so the
+			 * verdict is reachable in a test of this length.
+			 */
+			obj_a.detector.f08 = obj_b.detector.f08 = 0;
+
+			for (blk = 0; blk + 64 <= 512; blk += 64) {
+				int ra, rb;
+
+				obj_a.rx.buf = air_a + blk + 64;
+				obj_b.rx.buf = air_b + blk + 64;
+				ra = ref_v8_tone_detect(&obj_a,
+							&obj_a.detector,
+							air_a + blk);
+				rb = v8_tone_detect(&obj_b, &obj_b.detector,
+						    air_b + blk);
+				diff_eq_int("verdict (%ld)", rb, ra, k);
+				diff_eq_int("integrator (%ld)",
+					    obj_b.detector.f12,
+					    obj_a.detector.f12, k);
+				for (i = 0; i < 64; i++)
+					diff_eq_int("filtered %ld",
+						    air_b[blk + i],
+						    air_a[blk + i], i);
+				if (ra)
+					asserted++;
+				if (obj_a.detector.f12 != 0)
+					moved3++;
+			}
+			diff_eq_int("detector state (%ld)",
+				    memcmp(&obj_a.detector, &obj_b.detector,
+					   sizeof(obj_a.detector)) == 0, 1, k);
+		}
+		diff_eq_int("the integrator moved (%ld)", moved3 > 10, 1,
+			    moved3);
+		diff_eq_int("the detector asserted (%ld)", asserted > 0, 1,
+			    asserted);
 	}
 	rc |= diff_end();
 
