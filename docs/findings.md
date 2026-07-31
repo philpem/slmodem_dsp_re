@@ -3120,3 +3120,50 @@ alone. So a country table with a zero break time produces a pulse dialler that
 appears to work and sends no pulses. Nothing in the code guards against it,
 and `t_pulse` asserts it in that direction rather than treating it as a case
 to avoid.
+
+---
+
+## 54. DialerCreate, and a bound that lives in another function
+
+`DialerCreate` does not allocate. It takes an object, fills in the country's
+rules, resets eleven fields, pushes the pulse timings through to the call
+object, grades the string and copies it in:
+
+```c
+    d->grade = AnalyseDialString(d, s, 1);
+    if (d->grade <= DIALER_INVALID)
+        return 7;
+    sysdep_strcpy(d->string, s);        /* into 100 bytes, unbounded */
+```
+
+The copy has no length check of its own. What keeps it inside the 100-byte
+buffer is the check *inside `AnalyseDialString`*, which grades anything longer
+`FATAL` -- and `FATAL` is 0, which is `<= INVALID`, so the function returns
+before the copy. The two are a hundred lines and a function call apart, and
+neither says the other exists.
+
+It holds. But it holds by a coincidence of the grade ordering: if `FATAL` had
+been given a value above `INVALID` -- which reads perfectly naturally, since
+it is the *worse* condition -- the length check would still run, still grade
+correctly, and the copy would overflow.
+
+This is also the only call anywhere that passes `store = 1`, so it is the only
+path that writes `d->last_digit`. That closed a gap the parser test could not
+reach: `AnalyseDialString` is a file static (finding 52) and can only be
+driven through its callers, and `IsDialStringInvalid` passes zero.
+
+### DialerAbort acts in one state of sixteen
+
+```c
+    if (d->progress_state > 10)   return;
+    if (d->pulse_released != 0)   return;
+    if (d->pulse_active == 0)     return;
+    LastPulseDigitDialed(d->modem);
+    d->pulse_released = 1;
+```
+
+Three guards, and the only combination that does anything is a digit actually
+being pulsed, not yet released, with the progress state in range. `t_dialer`
+sweeps all fifty-two combinations of the three and asserts both that the right
+one acts and that the other fifty-one leave the object untouched and tell the
+host nothing.

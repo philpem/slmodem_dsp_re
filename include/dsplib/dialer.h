@@ -40,11 +40,32 @@ struct dialer {
 	 */
 	int	last_digit;			/* +0xa0 */
 
-	int	f_a4;				/* +0xa4 */
-	int	state;				/* +0xa8 */
+	/* What AnalyseDialString made of the string, kept for the caller. */
+	int	grade;				/* +0xa4 */
+
+	int	f_a8;				/* +0xa8 */
+
+	/* How far through the string the dialler has got.  -1 before it starts. */
 	int	pos;				/* +0xac */
-	int	f_b0, f_b4, f_b8, f_bc;		/* +0xb0 */
-	int	f_c0, f_c4, f_c8, f_cc, f_d0;	/* +0xc0 */
+
+	int	f_b0, f_b4;			/* +0xb0 */
+
+	/*
+	 * A state DialerAbort refuses to act on above 10.  DialerProgress will
+	 * name it; for now the only thing established is that bound.
+	 */
+	int	progress_state;			/* +0xb8 */
+
+	int	f_bc, f_c0, f_c4, f_c8;		/* +0xbc */
+
+	/*
+	 * The pulse dialler's handshake.  `pulse_active` says a digit is being
+	 * pulsed and `pulse_released` says the host has been told it is over;
+	 * DialerAbort is the only place both are visible at once.
+	 */
+	int	pulse_active;			/* +0xcc */
+	int	pulse_released;			/* +0xd0 */
+
 	void	*modem;				/* +0xd4 */
 };
 
@@ -64,5 +85,24 @@ int AnalyseDialString(struct dialer *d, const char *s, int store);
 
 /* True when the string is too poor to dial: `AnalyseDialString(...) <= 1`. */
 int IsDialStringInvalid(struct dialer *d, const char *s);
+
+/*
+ * Prepare a dialler.  Does NOT allocate -- the object belongs to the
+ * call-progress supervisor, which is why this takes one rather than returning
+ * one.
+ *
+ * Returns 0 when the string was accepted and DIALER_CREATE_REJECTED when it
+ * was not.  A null string is accepted, and leaves an empty one behind.
+ */
+#define DIALER_CREATE_REJECTED	7
+
+int DialerCreate(struct dialer *d, const char *s, void *modem);
+
+/*
+ * Give up on the current digit, telling the host the pulse dialler has
+ * finished with the line -- but only once, and only if a digit was actually
+ * being pulsed.
+ */
+void DialerAbort(struct dialer *d);
 
 #endif /* DSPLIB_DIALER_H */

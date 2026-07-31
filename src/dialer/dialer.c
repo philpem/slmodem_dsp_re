@@ -174,3 +174,80 @@ IsDialStringInvalid(struct dialer *d, const char *s)
 
 	return AnalyseDialString(d, s, 0) <= DIALER_INVALID;
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * DialerCreate  .text 0x07afd0
+ * DialerAbort   .text 0x07bde0
+ */
+
+extern void SetPulseMakeTime(void *modem, int ms);
+extern void SetPulseBreakTime(void *modem, int ms);
+extern void LastPulseDigitDialed(void *modem);
+
+int
+DialerCreate(struct dialer *d, const char *s, void *modem)
+{
+	d->modem = modem;
+	GetDialerConfig(&d->cfg, modem);
+
+	d->progress_state = 0;
+	d->f_b4 = 0;
+	d->pos = -1;
+	d->f_b0 = 0;
+	d->f_bc = 0;
+	d->f_c8 = 0;
+
+	/*
+	 * The country's pulse timings go straight through to the call object,
+	 * so the pulse dialler is configured before the string is even looked
+	 * at -- and stays configured if the string is then rejected.
+	 */
+	SetPulseMakeTime(modem, d->cfg.pulse_make);
+	SetPulseBreakTime(modem, d->cfg.pulse_break);
+
+	d->pulse_active = 0;
+	d->pulse_released = 0;
+
+	/*
+	 * A null string leaves an empty one and succeeds, which is the same
+	 * judgement AnalyseDialString makes about NULL (D15) arrived at by a
+	 * different route.
+	 */
+	if (s == 0) {
+		d->string[0] = '\0';
+		return 0;
+	}
+
+	/*
+	 * The only call anywhere that asks AnalyseDialString to store the
+	 * position of the last dialable character.
+	 */
+	d->grade = AnalyseDialString(d, s, 1);
+	if (d->grade <= DIALER_INVALID)
+		return DIALER_CREATE_REJECTED;
+
+	/*
+	 * Unbounded, into a 100-byte buffer.  What keeps it in bounds is the
+	 * length check inside AnalyseDialString, which grades anything longer
+	 * FATAL and so returns above.  The two are a hundred lines and one
+	 * function call apart.
+	 */
+	sysdep_strcpy(d->string, s);
+
+	return 0;
+}
+
+void
+DialerAbort(struct dialer *d)
+{
+	if (d->progress_state > 10)
+		return;
+	if (d->pulse_released != 0)
+		return;
+	if (d->pulse_active == 0)
+		return;
+
+	LastPulseDigitDialed(d->modem);
+	d->pulse_released = 1;
+}
