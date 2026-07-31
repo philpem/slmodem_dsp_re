@@ -44,7 +44,8 @@ V8_ASSERT_OFFSET(v8, f110, 0x110);
 V8_ASSERT_OFFSET(v8, tx_symbols, 0x11c);
 V8_ASSERT_OFFSET(v8, f21c, 0x21c);
 V8_ASSERT_OFFSET(v8, tx_ring, 0x228);
-V8_ASSERT_OFFSET(v8, rx_scratch2, 0x5c8);
+V8_ASSERT_OFFSET(v8, rx_stage, 0x5c8);
+V8_ASSERT_OFFSET(v8, tx_stage, 0x5c0);
 V8_ASSERT_OFFSET(v8, tx_shape, 0x77c);
 V8_ASSERT_OFFSET(v8, rx_scratch, 0x894);
 V8_ASSERT_OFFSET(v8, fa42, 0xa42);
@@ -323,7 +324,7 @@ v8_rxinit(struct v8 *v)
 	v->rx.fda = 0;
 	v->rx.fd8 = 0;
 
-	v->rx.buf = v->rx_scratch2;
+	v->rx.buf = v->rx_stage;
 	v->rx.f1a = 0;
 	v->rx.f14 = 0;
 	v->rx.fac = 0;

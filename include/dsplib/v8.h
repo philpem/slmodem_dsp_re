@@ -243,7 +243,7 @@ struct v8_rx {
 	/* `v8_detectorinit` sets bit 9 here; the rest is not yet known. */
 	unsigned short	flags;			/* +0x0a */
 	unsigned char	pad0c[4];
-	short		*buf;			/* +0x10  -> v8.rx_scratch */
+	short		*buf;			/* +0x10  -> v8.rx_stage  */
 	int		f14;			/* +0x14 */
 	unsigned char	pad18[2];
 	short		f1a;			/* +0x1a */
@@ -309,8 +309,14 @@ struct v8 {
 	short			*tx_ring_base;	/* +0x220 -> tx_ring[0]  */
 	short			*tx_ring_half;	/* +0x224 -> tx_ring[64] */
 	short			tx_ring[V8_TX_RING];		/* +0x228 */
-	unsigned char		pad5c0[8];
-	short			rx_scratch2[(0x77c - 0x5c8) / 2];/* +0x5c8 */
+	/*
+	 * Two four-sample staging buffers.  `v8_txwritequeue` copies out of
+	 * the first into the transmit ring; `v8_rxreadqueue` copies into the
+	 * second out of the symbol buffer.  Four samples at a time is the
+	 * handshake's block.
+	 */
+	short			tx_stage[4];	/* +0x5c0 */
+	short			rx_stage[(0x77c - 0x5c8) / 2];	/* +0x5c8 */
 	short			tx_shape[V8_TX_SHAPE];		/* +0x77c */
 	short			rx_scratch[V8_RX_SCRATCH];	/* +0x894 */
 
@@ -524,5 +530,30 @@ int V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n);
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);
 int v8_rxinit(struct v8 *v);
+
+/* Arm the ANSam tone generator.  The same fields v8handshakinit sets inline. */
+void v8_ansaminit(struct v8 *v);
+
+/* Four samples of the queued tone, from the phase accumulator. */
+void v8_TONEq_generate(struct v8 *v, short *out);
+
+/* Move four samples between the rings and their staging buffers. */
+int v8_rxreadqueue(struct v8 *v);
+int v8_txwritequeue(struct v8 *v);
+
+/* One sample through the 61-tap transmit shaping filter. */
+short v8_fsktxfilter(struct v8 *v, short sample);
+
+/* How many samples each queue operation moves. */
+#define V8_QUEUE_BLOCK	4
+
+/*
+ * Where the transmit ring ends, in samples, and the top of the shaping
+ * filter's delay line.  Both come out of the object rather than the array
+ * sizes: the ring's wrap point is +0x5c0 and the filter's line starts at
+ * +0x90c, which is the sixtieth sample of the receive scratch.
+ */
+#define V8_TX_RING_END	((0x5c0 - 0x228) / 2)
+#define V8_FSK_TAP_TOP	((0x90c - 0x894) / 2)
 
 #endif /* DSPLIB_V8_H */
