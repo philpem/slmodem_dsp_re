@@ -641,6 +641,24 @@ int V8agc(struct v8 *v);
 void checkSignalStability(struct v8 *v);
 
 /*
+ * Check that a received JM answers the CM that was sent.
+ *
+ * Two passes over the received sequence.  The first looks for the call
+ * function and, when the menu declared one, matches the extension characters
+ * that follow it; the second does the same for the second extension against
+ * its own marker.  Each pass records what it matched and sets a flag.
+ *
+ * A mismatch inside an extension slides the expected character along rather
+ * than the received word, so a JM that repeats a character still matches --
+ * which is what makes this tolerant of the framing jitter a real line gives.
+ */
+#define V8_JM_FN_MASK	0xfff1	/* what identifies a call-function word */
+#define V8_JM_FN_MARK	0x101
+#define V8_JM_EXT2_MARK	0x0a1
+
+void evaluateRxJMSequence(struct v8 *v);
+
+/*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
  * oscillator, with the amplitude negated every V8_ANSAM_REVERSAL blocks --
  * which is the periodic phase reversal that distinguishes ANSam from a plain
