@@ -47,6 +47,7 @@ V8_ASSERT_OFFSET(v8, tx_ring, 0x228);
 V8_ASSERT_OFFSET(v8, rx_scratch2, 0x5c8);
 V8_ASSERT_OFFSET(v8, tx_shape, 0x77c);
 V8_ASSERT_OFFSET(v8, rx_scratch, 0x894);
+V8_ASSERT_OFFSET(v8, detector, 0xad8);
 V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
 V8_ASSERT_OFFSET(v8, v21, 0xdd8);
 V8_ASSERT_OFFSET(v8, toneq_pending, 0xdd2);
@@ -318,4 +319,40 @@ v8_rxinit(struct v8 *v)
 	v->rx.fac = 0;
 
 	return 0;
+}
+
+/*
+ * Arm the tone detector.
+ *
+ * The original has an empty inner loop here -- three iterations that do
+ * nothing -- left over from whatever the accumulators used to be.  It has no
+ * effect and is not reproduced; everything that touches memory is.
+ */
+void
+v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
+		short a4, short a5, short a6, short a7)
+{
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		d->acc_a[i] = 0;
+		d->acc_b[i] = 0;
+	}
+	for (i = 0; i < 3; i++) {
+		d->acc_c[i] = 0;
+		d->acc_d[i] = 0;
+	}
+
+	d->f04 = a3;
+	d->f08 = (short)-a5;
+	d->f0c = 1;
+	d->f00 = a2;
+	d->f06 = 0;
+	d->f0a = a4;
+	d->f10 = a6;
+	d->f0e = a7;
+	d->f12 = 0;
+	d->f30 = 0;
+
+	v->rx.flags |= V8_RX_DETECTOR_ARMED;
 }

@@ -54,6 +54,31 @@ struct v8_handshake {
 #define V8_STATE_BYTES		0xec4
 
 /*
+ * The tone detector, at +0xad8.  Everything above the fixed fields is a set
+ * of small accumulator arrays: two two-by-two, then two of three.
+ */
+struct v8_detector {
+	int	f00;				/* +0x00 */
+	short	f04;				/* +0x04 */
+	short	f06;				/* +0x06 */
+	short	f08;		/* the negated argument  +0x08 */
+	short	f0a;				/* +0x0a */
+	short	f0c;		/* 1                     +0x0c */
+	short	f0e;				/* +0x0e */
+	short	f10;				/* +0x10 */
+	short	f12;				/* +0x12 */
+	short	acc_a[4];			/* +0x14 */
+	short	acc_b[4];			/* +0x1c */
+	short	acc_c[3];			/* +0x24 */
+	short	acc_d[3];			/* +0x2a */
+	short	f30;				/* +0x30 */
+	unsigned char pad32[0x68 - 0x32];
+};
+
+/* What v8_detectorinit sets in the receiver's flag word. */
+#define V8_RX_DETECTOR_ARMED	0x200
+
+/*
  * The phase-reversal detector, at +0xb40.  ANSam is a 2100 Hz tone whose
  * phase inverts every 450 ms, and this is what watches for the inversions:
  * three accumulators, a window of 64 samples, and a countdown.
@@ -104,7 +129,10 @@ struct v8_v21 {
  * sub-object rather than a scattering of fields.
  */
 struct v8_rx {
-	unsigned char	pad00[0x10];
+	unsigned char	pad00[0x0a];
+	/* `v8_detectorinit` sets bit 9 here; the rest is not yet known. */
+	unsigned short	flags;			/* +0x0a */
+	unsigned char	pad0c[4];
 	short		*buf;			/* +0x10  -> v8.rx_scratch */
 	int		f14;			/* +0x14 */
 	unsigned char	pad18[2];
@@ -176,7 +204,8 @@ struct v8 {
 	short			tx_shape[V8_TX_SHAPE];		/* +0x77c */
 	short			rx_scratch[V8_RX_SCRATCH];	/* +0x894 */
 
-	unsigned char		pad9d4[0xb40 - 0x9d4];
+	unsigned char		pad9d4[0xad8 - 0x9d4];
+	struct v8_detector	detector;	/* +0xad8 */
 	struct v8_phase_rev	phase_rev;	/* +0xb40 */
 	unsigned char		padc54[0xdd2 - 0xc54];
 
@@ -211,6 +240,14 @@ short v8_cosread(unsigned char phase);
 void v8_crc(struct v8_handshake *hs, int bit);
 void v8_copycoeff(short *dst, const short *src, short n);
 void v8_dftenergy(struct v8_dft_bin *bin, short n, short shift);
+
+/*
+ * Arm the tone detector.  Eight arguments: the object (whose receiver gets a
+ * flag set), the detector itself, and six configuration values.  `a5` is
+ * stored negated, which is the only one that is not a straight copy.
+ */
+void v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2, short a3,
+		     short a4, short a5, short a6, short a7);
 
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);

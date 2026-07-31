@@ -28,6 +28,9 @@ extern void ref_v8_TONEq_init(struct v8 *v);
 extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
 extern int ref_v8_txinit(struct v8 *v);
 extern int ref_v8_rxinit(struct v8 *v);
+extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d, int a2,
+				short a3, short a4, short a5, short a6,
+				short a7);
 
 /*
  * The initialisers write scattered fields of a 3780-byte object, so the only
@@ -170,6 +173,35 @@ t_inits(void)
 			    ref_v8_rxinit(&obj_a), 0);
 		normalise(rx_pointers, 1);
 		whole_object("rxinit");
+
+		/*
+		 * The detector, over a spread of arguments including the
+		 * negation corner: a5 is stored negated, so -32768 is the one
+		 * value that comes back unchanged.
+		 */
+		{
+			static const short a5v[] = { 0, 1, -1, 300, -32768,
+						     32767 };
+			unsigned k;
+
+			for (k = 0; k < sizeof a5v / sizeof a5v[0]; k++) {
+				fill(&obj_a, sizeof(obj_a), 606u + i * 16 + k);
+				memcpy(&obj_b, &obj_a, sizeof(obj_a));
+				ref_v8_detectorinit(&obj_a, &obj_a.detector,
+						    0x11223344 + k,
+						    (short)(100 + k),
+						    (short)(-200 - k), a5v[k],
+						    (short)(7 * k),
+						    (short)(-9 * k));
+				v8_detectorinit(&obj_b, &obj_b.detector,
+						0x11223344 + k,
+						(short)(100 + k),
+						(short)(-200 - k), a5v[k],
+						(short)(7 * k),
+						(short)(-9 * k));
+				whole_object("detectorinit");
+			}
+		}
 	}
 
 	/*
@@ -187,6 +219,15 @@ t_inits(void)
 	diff_eq_int("phase-rev countdown", obj_b.phase_rev.f0e, 0x20, 0);
 	diff_eq_int("phase-rev window cleared", obj_b.phase_rev.window[63], 0,
 		    0);
+
+	fill(&obj_b, sizeof(obj_b), 17u);
+	obj_b.rx.flags = 0;
+	v8_detectorinit(&obj_b, &obj_b.detector, 1, 2, 3, 4, 5, 6);
+	diff_eq_int("detector flag set in the receiver",
+		    obj_b.rx.flags & V8_RX_DETECTOR_ARMED,
+		    V8_RX_DETECTOR_ARMED, 0);
+	diff_eq_int("the negated argument", obj_b.detector.f08, -4, 0);
+	diff_eq_int("accumulators cleared", obj_b.detector.acc_d[2], 0, 0);
 
 	fill(&obj_b, sizeof(obj_b), 13u);
 	V8_V21_reset(&obj_b);
