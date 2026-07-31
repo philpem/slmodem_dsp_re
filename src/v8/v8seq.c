@@ -165,3 +165,47 @@ initTxSequence(struct v8 *v)
 	seq->f3c = 0;
 	seq->f2a = 1;
 }
+
+/*
+ * Which of the five buffers holds what was received.  Three cases, and the
+ * middle one is the reason the object keeps a spare pointer at all: once
+ * `fdc4` is set the handshake has moved on and the message lives wherever
+ * that pointer says, rather than at a fixed place.
+ */
+static const struct v8_tx_sequence *
+rx_sequence(const struct v8 *v)
+{
+	if (v->fdc4 != 0)
+		return v->seq_spare;
+	if (v->mode != 0)
+		return &v->seq[0];
+	return &v->seq[2];
+}
+
+int
+V8GetMessage(struct v8 *v, unsigned char *out, int *count)
+{
+	const struct v8_tx_sequence *seq = rx_sequence(v);
+	int n = seq->f28;
+	int rc = 0;
+	int i;
+
+	if (n <= 0)
+		return V8_GET_EMPTY;
+
+	/*
+	 * Too long for the caller's buffer: fill what fits and hand back the
+	 * length it would have needed, which is how truncation is told apart
+	 * from a message that was simply this short.
+	 */
+	if (n > *count) {
+		rc = n;
+		n = *count;
+	}
+
+	for (i = 0; i < n; i++)
+		out[i] = charFlip((unsigned char)(seq->word[i] >> 1));
+
+	*count = n;
+	return rc;
+}

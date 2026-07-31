@@ -484,6 +484,23 @@ struct v8 *V8Create(const struct v8_cfg *cfg);
 /* Free it.  Tolerates NULL. */
 void V8Delete(struct v8 *v);
 
+/*
+ * Read back the message that was received, as octets.
+ *
+ * This is the inverse of what `initTxSequence` builds: each 10-bit character
+ * has its framing shifted off and its bits put back in order, so a CM or JM
+ * captured off the line becomes the bytes the standard describes.  It is the
+ * decode half of V.8 and the one thing needed to watch a negotiation.
+ *
+ * `count` is in/out: the caller's capacity going in, the number of octets
+ * written coming out.  Returns 0 normally, the full length when the message
+ * did not fit (so the caller can tell truncation from a short message), and
+ * -1 when there is nothing to read.
+ */
+#define V8_GET_EMPTY	(-1)
+
+int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
+
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);
 int v8_rxinit(struct v8 *v);

@@ -37,17 +37,19 @@ extern void ref_initTxSequence(struct v8 *v);
 extern void ref_v8handshakinit(struct v8 *v);
 extern struct v8 *ref_V8Create(const struct v8_cfg *cfg);
 extern void ref_V8Delete(struct v8 *v);
+extern int ref_V8GetMessage(struct v8 *v, unsigned char *out, int *count);
+
 
 /* The two objects every comparison below runs through. */
 static struct v8 obj_a, obj_b;
+static struct v8_tx_sequence seq_a, seq_b;
+static struct v8_cm cm_a, cm_b;
 
 /*
  * The sequence builder works through two pointers the caller sets, so each
  * side gets its own pair and the results are compared directly rather than
  * through the object.
  */
-static struct v8_tx_sequence seq_a, seq_b;
-static struct v8_cm cm_a, cm_b;
 
 static int
 t_txsequence(void)
@@ -827,6 +829,110 @@ t_v8create(void)
 	return diff_end();
 }
 
+/*
+ * The decode side.  Its value is that it is the exact inverse of the encoder,
+ * so the strongest check available is a round trip: build a CM from a menu,
+ * copy the words across as if they had arrived, read them back as octets, and
+ * require the octets to be what the encoder was given.
+ */
+static int
+t_getmessage(void)
+{
+	unsigned char out_a[32], out_b[32];
+	int ca, cb, ra, rb;
+	unsigned b0, b1, cap, mode;
+	long decoded = 0;
+
+	diff_begin("V8GetMessage: decoding a received message");
+
+	for (mode = 0; mode <= 1; mode++) {
+		for (b0 = 0; b0 < 256; b0 += 7) {
+			for (b1 = 0; b1 < 256; b1 += 13) {
+				for (cap = 0; cap <= 3; cap++) {
+					struct v8_tx_sequence *sa, *sb;
+					int n;
+
+					memset(&obj_a, 0, sizeof(obj_a));
+					memset(&obj_b, 0, sizeof(obj_b));
+					memset(&cm_a, 0, sizeof(cm_a));
+					cm_a.b0 = (unsigned char)b0;
+					cm_a.b1 = (unsigned char)b1;
+					cm_a.b2 = 0x04;
+					cm_a.ext1[0] = 'G';
+					cm_a.ext1[1] = 'B';
+					memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+					/* Build a message into buffer 0. */
+					obj_a.cm = &cm_a;
+					obj_b.cm = &cm_b;
+					obj_a.tx_seq = &obj_a.seq[0];
+					obj_b.tx_seq = &obj_b.seq[0];
+					ref_initTxSequence(&obj_a);
+					initTxSequence(&obj_b);
+
+					/*
+					 * Present it as received: mode picks
+					 * which buffer the reader looks in.
+					 */
+					obj_a.mode = obj_b.mode = (int)mode;
+					sa = mode ? &obj_a.seq[0]
+						  : &obj_a.seq[2];
+					sb = mode ? &obj_b.seq[0]
+						  : &obj_b.seq[2];
+					n = obj_a.seq[0].nbits / 10;
+					memcpy(sa->word, obj_a.seq[0].word,
+					       sizeof(sa->word));
+					memcpy(sb->word, obj_b.seq[0].word,
+					       sizeof(sb->word));
+					sa->f28 = (short)n;
+					sb->f28 = (short)n;
+
+					/* cap 3 is deliberately too small. */
+					ca = cb = cap == 3 ? 2 : 32;
+					memset(out_a, 0, sizeof(out_a));
+					memset(out_b, 0, sizeof(out_b));
+					ra = ref_V8GetMessage(&obj_a, out_a,
+							      &ca);
+					rb = V8GetMessage(&obj_b, out_b, &cb);
+
+					diff_eq_int("return (%ld)", rb, ra,
+						    (long)b0);
+					diff_eq_int("count (%ld)", cb, ca,
+						    (long)b0);
+					diff_eq_int("octets (%ld)",
+						    memcmp(out_a, out_b,
+							   sizeof(out_a)) == 0,
+						    1, (long)b0);
+					if (ca > 0)
+						decoded++;
+
+					/*
+					 * The round trip, checked against the
+					 * encoder rather than against the
+					 * blob: the first extension character
+					 * was 'G', so that is what must come
+					 * back out of the third octet.
+					 */
+					if (cap != 3 && ca >= 3)
+						diff_eq_int("round trip (%ld)",
+							    out_b[2], 'G',
+							    (long)b0);
+				}
+			}
+		}
+	}
+
+	/* Nothing received reads as empty, not as a zero-length message. */
+	memset(&obj_b, 0, sizeof(obj_b));
+	obj_b.mode = 1;
+	cb = 32;
+	diff_eq_int("empty reads as empty", V8GetMessage(&obj_b, out_b, &cb),
+		    V8_GET_EMPTY, 0);
+	diff_eq_int("messages were decoded (%ld)", decoded > 100, 1, decoded);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -843,5 +949,6 @@ main(void)
 	rc |= t_txsequence();
 	rc |= t_handshakinit();
 	rc |= t_v8create();
+	rc |= t_getmessage();
 	return rc;
 }
