@@ -501,6 +501,26 @@ void V8Delete(struct v8 *v);
 
 int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
 
+/*
+ * Put a message of your own into one of the five buffers, as octets.  The
+ * counterpart to V8GetMessage and the same framing: each octet is reversed,
+ * shifted up one and given a low bit.
+ *
+ * `which` selects the buffer, and the mapping is not the order they sit in
+ * memory -- 1 and 2 are swapped.  Returns 0 normally, V8_SET_TRUNCATED when
+ * the message was longer than a buffer holds and only the first fifteen
+ * octets went in, and -1 for an unknown selector or an empty message.
+ */
+#define V8_SET_CM	0
+#define V8_SET_JM	1
+#define V8_SET_CJ	2
+#define V8_SET_CI	3
+
+#define V8_SET_TRUNCATED	15
+#define V8_SET_REJECTED		(-1)
+
+int V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n);
+
 /* Arm the transmitter and the receiver.  Both always return 0. */
 int v8_txinit(struct v8 *v);
 int v8_rxinit(struct v8 *v);

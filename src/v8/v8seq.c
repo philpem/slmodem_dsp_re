@@ -209,3 +209,57 @@ V8GetMessage(struct v8 *v, unsigned char *out, int *count)
 	*count = n;
 	return rc;
 }
+
+/*
+ * Which buffer a selector names.  The order is not the order they sit in
+ * memory: selector 1 is the third buffer and selector 2 the second.  Kept as
+ * the original has it -- guessing that the swap is a mistake and "fixing" it
+ * would put messages in the wrong place.
+ */
+static struct v8_tx_sequence *
+selected_sequence(struct v8 *v, int which)
+{
+	switch (which) {
+	case V8_SET_CM:	return &v->seq[0];
+	case V8_SET_JM:	return &v->seq[2];
+	case V8_SET_CJ:	return &v->seq[1];
+	case V8_SET_CI:	return &v->seq[3];
+	default:	return 0;
+	}
+}
+
+int
+V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n)
+{
+	struct v8_tx_sequence *seq = selected_sequence(v, which);
+	int rc = 0;
+	int i;
+
+	if (seq == 0)
+		return V8_SET_REJECTED;
+	if (n == 0)
+		return V8_SET_REJECTED;
+
+	if (n > V8_TX_SEQ_WORDS) {
+		n = V8_TX_SEQ_WORDS;
+		rc = V8_SET_TRUNCATED;
+	}
+
+	for (i = 0; i < n; i++)
+		seq->word[i] = ext_word(octets[i]);
+
+	seq->terminator = (short)0xffff;
+	seq->f24 = 0;
+	seq->f28 = 0;
+	seq->f2c = 0;
+	seq->nbits = (short)(n * V8_SEQ_BITS_PER_WORD);
+	seq->f26 = V8_SEQ_BITS_PER_WORD;
+	seq->f20 = 0;
+	seq->f30 = 0;
+	seq->f38 = 0;
+	seq->f34 = 0;
+	seq->f3c = 0;
+	seq->f2a = 1;
+
+	return rc;
+}

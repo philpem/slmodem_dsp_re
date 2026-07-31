@@ -38,6 +38,8 @@ extern void ref_v8handshakinit(struct v8 *v);
 extern struct v8 *ref_V8Create(const struct v8_cfg *cfg);
 extern void ref_V8Delete(struct v8 *v);
 extern int ref_V8GetMessage(struct v8 *v, unsigned char *out, int *count);
+extern int ref_V8SetMessage(struct v8 *v, int which, const unsigned char *o,
+			    int n);
 
 
 /* The two objects every comparison below runs through. */
@@ -933,6 +935,53 @@ t_getmessage(void)
 	return diff_end();
 }
 
+static int
+t_setmessage(void)
+{
+	unsigned char msg[24], back[32];
+	int which, n, i, ra, rb, cnt;
+	long ok = 0;
+
+	diff_begin("V8SetMessage: encoding octets into a buffer");
+
+	for (i = 0; i < (int)sizeof(msg); i++)
+		msg[i] = (unsigned char)(i * 37 + 11);
+
+	/* Every selector, including two that are not selectors. */
+	for (which = -1; which <= 4; which++) {
+		for (n = 0; n <= 20; n++) {
+			memset(&obj_a, 0x33, sizeof(obj_a));
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			ra = ref_V8SetMessage(&obj_a, which, msg, n);
+			rb = V8SetMessage(&obj_b, which, msg, n);
+			diff_eq_int("return (which %ld)", rb, ra, which);
+			diff_eq_int("object (which %ld)",
+				    memcmp(&obj_a, &obj_b,
+					   sizeof(obj_a)) == 0, 1, which);
+			if (ra == 0)
+				ok++;
+		}
+	}
+
+	/*
+	 * Set then get, through the pair of selectors that name the same
+	 * buffer the reader looks in.  What went in must come back out.
+	 */
+	memset(&obj_b, 0, sizeof(obj_b));
+	obj_b.mode = 1;
+	V8SetMessage(&obj_b, V8_SET_CM, msg, 9);
+	obj_b.seq[0].f28 = 9;
+	cnt = (int)sizeof(back);
+	diff_eq_int("round trip returns 0",
+		    V8GetMessage(&obj_b, back, &cnt), 0, 0);
+	diff_eq_int("round trip length", cnt, 9, 0);
+	for (i = 0; i < 9; i++)
+		diff_eq_int("round trip octet %ld", back[i], msg[i], i);
+
+	diff_eq_int("selectors were accepted (%ld)", ok > 0, 1, ok);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -950,5 +999,6 @@ main(void)
 	rc |= t_handshakinit();
 	rc |= t_v8create();
 	rc |= t_getmessage();
+	rc |= t_setmessage();
 	return rc;
 }
