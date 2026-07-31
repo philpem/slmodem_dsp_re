@@ -2161,3 +2161,56 @@ and it is not one: it belongs to phase 5.
 
 Nothing depends on it. No reconstructed function calls into the bracket, and
 Bell 103 is complete without it.
+
+## 38. The `b103fp.flags` bits — six of eight are write-only
+
+Resolved by enumerating every access rather than by guessing meanings.
+
+```sh
+# every read and write of the status word in the b103fp translation unit
+objdump -d ../slmodemd/dsplibs.o \
+        --start-address=0x8e690 --stop-address=0x8fd00 \
+  | grep -E '0x1[cd]\(%e'
+```
+
+Sorting those by whether they load or store gives the answer directly. There
+are exactly **two** loads of `+0x1d` in the whole library:
+
+- one in `B103FP_create`, a read-modify-write (`flags = (flags & ~0x40) | 0x34`)
+  that tests nothing;
+- one in `B103FP_modem`, which clears `0x02` and then tests `0x01`.
+
+So `0x01` is the only bit whose value ever changes behaviour. `0x02` is never
+tested but *is* consumed — cleared at the top of every `B103FP_modem` call —
+which makes it a one-shot event a caller must read each block or lose.
+
+**The remaining six are written and never read.** And they cannot be read from
+outside either: `b103_process` masks `B103FP_modem`'s return with `0xff`, so
+the flags byte never leaves the library.
+
+| bit | set by | tested? |
+|---|---|---|
+| `0x01` | Originate WAIT2 | **yes**, by `B103FP_modem` |
+| `0x02` | every timeout path | no, but consumed |
+| `0x04` | Originate/LocLoop/Answer WAIT1, `create` | no |
+| `0x08` | Originate WAIT2, LocLoop/Answer WAIT1 | no |
+| `0x10` | START, all three tables | no |
+| `0x20` | `RxHdxData`, tracking carrier | no |
+| `0x40` | `B103FP_create`; cleared at CARRDET | no |
+| `0x80` | nothing sets it; `RxHdxData` clears it | no |
+
+### Why they are still not named
+
+They are reproduced faithfully — they cost nothing and a caller outside the
+blob may want them. But they are left as literals. A name asserts a meaning,
+and the meaning of a bit that nothing reads cannot be recovered from the code;
+inventing one would put a claim in the header with nothing behind it.
+
+`0x80` is the clearest case: **nothing in the library sets it**. Whatever it
+was for, the code that set it is not here.
+
+### Scope
+
+`struct dp`'s `status` is not a bit set. It holds a `DPSTAT_*` scalar, assigned
+0, 1 or 4 by `b103_process`. No other bit-set field has appeared so far;
+re-check when V.22 and V.32 are reached.

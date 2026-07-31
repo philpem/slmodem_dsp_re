@@ -215,36 +215,35 @@ struct b103fp {
 };
 
 /*
- * Bits in `flags`.
+ * Bits in `flags`.  RESOLVED -- see finding 38.
  *
- * INCOMPLETE, and named for what sets and clears them rather than for what
- * they mean -- the meaning belongs to whatever reads the word, and that is
- * `b103_process`, which is not reconstructed yet.  B103FP_modem returns the
- * whole 32-bit word at +0x1c (status in byte 0, these in byte 1), so the
- * consumer is one level up.
+ * Every set and clear site was enumerated, and so was every *read*.  Within
+ * dsplibs.o only TWO of the eight bits are ever tested:
  *
- * Every bit's set/clear sites are known and listed below; three of the eight
- * have no name because knowing where a bit is written is not the same as
- * knowing what it means, and inventing a name for the difference would be
- * worse than leaving the literal.  Tracked as task 15.
+ *   0x01  read by B103FP_modem, which clears `status` when it is set.
+ *         Set only by B103OriginateNextState's WAIT2 arm.
+ *   0x02  read by nothing -- but cleared by B103FP_modem at the top of every
+ *         call and set by every timeout path, so it is a ONE-SHOT event bit
+ *         that a caller must read each block or lose.
  *
- *  bit  | set by                                  | cleared by
- * ------|-----------------------------------------|---------------------------
- *  0x01 | Originate WAIT2 (|= 0x09)               | --
- *       | READ by B103FP_modem: if set, status = 0
- *  0x02 | every timeout: RxDetMark, RxHdxStart,   | B103FP_modem, every call
- *       | and create for a bad call_type          |
- *  0x04 | Originate WAIT1, LocLoop/Answer WAIT1,  | --
- *       | create's originate arm                  |
- *  0x08 | Originate WAIT2, LocLoop/Answer WAIT1   | --
- *  0x10 | START, in all three tables              | --
- *  0x20 | RxHdxData, when carrier is present      | RxHdxData, every block
- *  0x40 | B103FP_create                           | CARRDET, in all three tables
- *  0x80 | nothing observed                        | RxHdxData, every block
+ * The other six are written and never read.  Not by dsplibs, and not outside
+ * it either: `b103_process` masks B103FP_modem's return with 0xff, so the
+ * flags byte never leaves the library at all.
  *
- * The 0x02 row is the one worth noticing: it is set on a failure and cleared
- * at the top of every `B103FP_modem` call, so it is a **one-shot event** the
- * caller must read each block or lose.
+ *  bit  | set by                                   | ever tested?
+ * ------|------------------------------------------|--------------
+ *  0x01 | Originate WAIT2                          | YES, by B103FP_modem
+ *  0x02 | every timeout path                       | no, but consumed
+ *  0x04 | Originate/LocLoop/Answer WAIT1, create   | no
+ *  0x08 | Originate WAIT2, LocLoop/Answer WAIT1    | no
+ *  0x10 | START, all three tables                  | no
+ *  0x20 | RxHdxData, tracking carrier              | no
+ *  0x40 | B103FP_create; cleared at CARRDET        | no
+ *  0x80 | nothing; cleared by RxHdxData            | no
+ *
+ * The six are still written faithfully -- they cost nothing and a future
+ * caller may want them -- but they are NOT given invented names.  A name
+ * implies a meaning, and the meaning of a bit nothing reads is unknowable.
  */
 #define B103_FLAG_CLEAR_STATUS 0x01	/* B103FP_modem zeroes status if set */
 #define B103_FLAG_TIMEOUT      0x02	/* one-shot; see above               */

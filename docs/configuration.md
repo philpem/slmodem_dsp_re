@@ -113,10 +113,13 @@ One is worth knowing now regardless: **`0x02` is a one-shot**. Every timeout
 path sets it, and `B103FP_modem` clears it at the top of every call, so a
 caller that does not read it each block loses the event.
 
-### Still to identify
+### Resolved
 
-- the other five bits of `b103fp.flags`
-- `struct dp`'s `status`, which slmodemd's own `modem_defs.h` may name
-- whatever the V.22 and V.32 configurations turn out to use
+`b103fp.flags` is settled — finding 38. Only `0x01` is ever tested, and `0x02`
+is consumed as a one-shot without being tested. **The other six are written
+and never read**, by anything: `b103_process` masks the return with `0xff`, so
+the flags byte does not leave the library. They are reproduced but left as
+literals, because a name asserts a meaning and there is none to recover.
 
-Tracked as task 15.
+`struct dp`'s `status` turned out not to be a bit set at all — it holds a
+`DPSTAT_*` scalar. Re-check for others when V.22 and V.32 are reached.
