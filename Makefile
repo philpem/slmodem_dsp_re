@@ -46,7 +46,7 @@ HARNESS    := test/harness/harness.c test/harness/runtime.c \
               test/harness/fakedp.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp
+TESTS      := t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp t_spandsp_replay
 CXXTESTS   := t_genericiir
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
@@ -59,7 +59,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: all test check64 docs clean interop
+.PHONY: all test check64 docs clean interop capture
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -120,6 +120,15 @@ test: $(TESTBIN)
 INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
 SPANDSP     := third_party/spandsp
 SPANDSP_LIB := $(SPANDSP)/src/.libs/libspandsp.a
+
+# Freeze a SpanDSP signal so the 32-bit differential harness can replay it.
+capture: $(BUILD)/capture/spandsp_b103.pcm
+
+$(BUILD)/capture/spandsp_b103.pcm: test/interop/gen_spandsp_capture.c $(SPANDSP_LIB)
+	@mkdir -p $(BUILD)/capture
+	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $(BUILD)/gen_capture $< \
+	    $(SPANDSP_LIB) -lm
+	@./$(BUILD)/gen_capture $(BUILD)/capture
 
 interop: $(BUILD)/test/t_spandsp_b103
 	@./$(BUILD)/test/t_spandsp_b103
