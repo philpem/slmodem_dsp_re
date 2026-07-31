@@ -12,7 +12,15 @@ one of:
 - **Out-of-contract divergence** — behaviour differs only for inputs no caller
   can produce. Must state precisely where the boundary is.
 - **Deliberate fix** — the original is wrong and we are not reproducing it.
-  Must state the impact and why reproducing the bug would be worse.
+  Must state the impact and why reproducing the bug would be worse.  Every
+  one of these is behind `DSPLIB_REPRODUCE_BUGS`, so bit-exactness against
+  the blob stays provable: the differential tier defines it and everything
+  else, including anyone linking this library for real, gets the fix.
+- **Added hardening** — a check the original does not have, on an input no
+  caller produces.  Not behind the define, because there is nothing to
+  reproduce: the original's behaviour on that input is a fault, and a
+  differential test cannot compare against a fault.  Must say what the input
+  is and why no caller can produce it.
 
 Anything that does not fit one of those is a reconstruction error, not a
 deviation, and belongs in the issue list rather than here.
@@ -899,3 +907,38 @@ one transition after START -- pinning the defect rather than avoiding it --
 and then takes the extra transition before driving the receive states, which
 also gained coverage of `RxHdxDataB103` under loopback that the old guard
 had been silently skipping.
+
+## D18 — `RcFixed_Reset` checks for null and the original does not ⚠
+
+**Module** `src/core/fixedrc.c` · original `FixedRC.c`, `.text 0x0b0e10`
+
+The original dereferences its argument on the first instruction:
+
+```
+    b0e10:  sub    $0x1c,%esp
+    b0e13:  mov    0x20(%esp),%eax      ; the handle
+    b0e1f:  mov    (%eax),%edx          ; ->kind, unconditionally
+    b0e21:  test   %edx,%edx
+```
+
+`RcFixed_Delete`, twenty bytes earlier in the same file, does check
+(`test %ebx,%ebx; je`). The reconstruction checks in both.
+
+**Not behind `DSPLIB_REPRODUCE_BUGS`**, unlike every deliberate fix, because
+there is nothing to reproduce: the original's behaviour on null is a
+segmentation fault, and a differential test cannot compare our return against
+that. The one input that distinguishes the two implementations kills the
+reference, so `t_rcresample` deliberately does not drive it and says so.
+
+**Reachable?** No. Every caller of `RcFixed_Reset` in the object holds a
+handle it built itself; nothing passes a pointer that can be null.
+
+**Why keep it.** The contract is functional equivalence over inputs a caller
+can produce, and this is outside that domain in the only direction that
+matters -- ours is defined where the original is not. Removing it would buy
+bit-exactness on an input that crashes.
+
+This is the first entry of its category. Others are likely: the
+reconstruction was written by people reading assembly, and a null check is
+the kind of thing that gets written without noticing the original had none.
+Finding the rest is its own task rather than a claim made here.
