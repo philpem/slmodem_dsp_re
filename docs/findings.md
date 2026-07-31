@@ -4040,3 +4040,44 @@ weakening: every byte is still covered by one test or the other, and neither
 covers bytes nobody writes -- because nothing can.
 
 Removing that limit is what task #23 is about.
+
+## 71. v8handshak's shape, before reconstructing it
+
+The last large function in phase 5 is 4243 bytes, which suggested a big state
+machine. It is not: it is a small one with large state bodies.
+
+The entry is a loop:
+
+```
+    while (v->f21c < v->fa3e) {          /* until the transmit queue is full */
+        state = v->f9d4 - 5;
+        if ((unsigned)state > 0x28)
+            continue;                    /* unknown: keep waiting */
+        goto state_table[state];         /* .rodata+0x5680, 41 entries */
+    }
+```
+
+The table has 41 entries but only **six** distinct targets, and one of those is
+the loop head itself -- 36 of the 41 entries point back at it. So five states
+have bodies, and `v->f9d4` only ever holds:
+
+| f9d4 | entry |
+|---|---|
+| 5 | 0x775e8 |
+| 6 | 0x774d9 |
+| 23 (0x17) | 0x7746a |
+| 43 (0x2b) | 0x773d0 |
+| 45 (0x2d) | 0x77363 |
+
+Which agrees with everything already reconstructed: `v8handshakinit` sets
+`f9d4` to 5 in its full-handshake shape and 6 in its answering one,
+`V8Control`'s third request sets it to 0x17, and `V8Process` tests for 0x2b
+when deciding what to report. The remaining 36 table entries are the
+compiler filling the gaps in a switch whose cases are sparse, and they are
+not dead code so much as "no such state".
+
+The loop condition is the interesting part: the machine runs until it has
+queued enough to transmit, so one call does as much work as the transmit
+queue has room for rather than a fixed amount. That is why `V8Process` calls
+it from inside its own per-sample loop and only when the queue is nearly
+empty.
