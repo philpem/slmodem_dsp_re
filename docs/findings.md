@@ -4423,3 +4423,67 @@ one asks whether the reconstruction computes the same bytes as the original
 for the inputs a test can construct. This one asks whether a modem written by
 someone else, from the standard, negotiates the same call with each of them,
 over four seconds of audio and every path the handshake takes to get there.
+
+## 76. MEMORYC.c, which is not there
+
+`MEMORYC.c` is translation unit 96 of 283, sitting between `DPSK.c` and
+`V8Interface.c` in link order. It has been open since phase 0 because the
+name promised something -- an allocator, a pool, a memory map -- and nothing
+in the object obviously answered to it.
+
+Nothing in the object answers to it because it contributed nothing.
+
+Two pieces of evidence, and together they close it.
+
+**No local symbols, in any section.** `ld -r` writes each input object's
+locals immediately after its `STT_FILE` entry, so a TU's statics are exactly
+the local symbols between its FILE entry and the next one. For `MEMORYC.c`
+there are none: its FILE entry is followed directly by `V8Interface.c`'s.
+
+```
+   334: FILE  DPSK.c
+   335: 000071a0  160  OBJECT  LOCAL  fsklpfcoeff600
+   336: FILE  MEMORYC.c
+   337: FILE  V8Interface.c
+   338: FILE  V8global.c
+   339: 00005420   82  OBJECT  LOCAL  ANSWER_Entrance_Filter
+```
+
+**And no `.text`.** The whole stretch from `datapumpv34` to
+`Dialer_IsDialStringInvalid` is contiguous to within alignment: every gap
+between adjacent functions is 15 bytes or fewer, which is what 16-byte
+function alignment leaves. There is nowhere for a translation unit to hide.
+At the place `MEMORYC.c` would have to be, the gap is one byte:
+
+```
+    fskdemodulate  ends 0x073e1f
+    V8Create     starts 0x073e20
+```
+
+So the TU was in the link and emitted no code and no data. The most likely
+reading, and the one the rest of the object supports, is that it declared
+the memory interface rather than implementing it: `sysdep_malloc` and
+`sysdep_free` are imported, not defined here, and they are called *directly*
+-- 424 and 473 times respectively, scattered across every datapump -- with no
+wrapper anywhere in between. A header-like `.c` full of macros and
+declarations compiles to an empty object and leaves exactly this trace.
+
+There is nothing to reconstruct, and `claude_re` has no file for it. That is
+the finding, not a gap in the work.
+
+### What the same evidence settled on the way past
+
+The local symbols above also attribute two tables this reconstruction had
+already recovered by reading the code. `V8Detector.c` owns
+
+```
+   346: 00005724  6  OBJECT  LOCAL  a
+   347: 0000572a  6  OBJECT  LOCAL  b
+```
+
+which are the tone detector's denominator and numerator, and they are three
+entries each, not two and three: `a` starts at `0x5724` with `0x4000` -- the
+implicit 1.0 in Q14 -- and every reader skips it and indexes from `0x5726`.
+`notch_filter` and `biquad_filter` therefore belong to `V8Detector.c`
+alongside `v8_detectorinit` and `v8_tone_detect`, which is where the
+reconstruction had put them for unrelated reasons.

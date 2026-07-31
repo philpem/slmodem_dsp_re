@@ -395,9 +395,11 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 }
 
 /*
- * The fixed input biquad every tone detector shares, in Q14.  The two arrays
- * are the numerator and the denominator; the detector's own table supplies
- * the two stages after it.
+ * The fixed input biquad every tone detector shares, in Q14.  The originals
+ * are called `a` and `b` -- local symbols of V8Detector.c, at .rodata+0x5724
+ * and +0x572a -- and both are three entries: `a[0]` is 0x4000, the implicit
+ * 1.0, and every reader skips it.  Kept two entries here because that is
+ * what the code uses.
  */
 static const short tone_in_b[3] = { 15565, -8057, 15565 };
 static const short tone_in_a[2] = { -8057, 14787 };
