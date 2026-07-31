@@ -2751,3 +2751,78 @@ it bites four times lower, and unlike that one it is inside the range a real
 line can produce. Whatever keeps the level down is upstream of call progress
 and is not in this module; establishing what, and whether the margin is
 adequate, belongs with `CALLPROG_Progress`.
+
+---
+
+## 48. `cadence_create`, and the units the country table speaks
+
+`cadence_create(struct cadence *c, struct cadence_setup *s, int extra, void *modem)`.
+`s` is a seven-word descriptor the caller builds on its stack; `s[4]` selects
+which tone the detector is for, and the object names them itself, in a table
+of debug strings at `.rodata+0x6208`:
+
+```
+    0  BUSY      1  DIAL      2  CONG      3  RING      4  INVALID
+```
+
+`cadence_create` clamps `s[4]` to 4 and **writes the clamped value back into
+the caller's descriptor** before using it to index that table.
+
+Each of the four cases reads its own parameters and they are the obvious ones
+-- `GetMinBusyCadenceOnTime` and its three siblings for BUSY,
+`GetRingbackDetectionCyclesNumber` for RING, and so on. DIAL is the odd one:
+it has no cadence to match, so instead of timing windows it sets
+`continuous`, and every interval in which the tone is present reports a
+detection. It reads `GetDialToneValidationTime` in place of the cadence
+windows.
+
+### The filter bank, indexed
+
+`Get*CallProgressFilterIndex` runs an eight-way jump table:
+
+```
+    0  Filter_350_500[sub]      4  Filter_100_550[sub]
+    1  Filter_100_550[sub]      5  Filter_100_550[sub]
+    2  Filter_350_500[sub]      6  CP_450_630
+    3  Filter_276_504[sub]      7  CP_100_550
+                              >7  CP_350_600
+```
+
+The three `Filter_*` families hold seven designs each, and
+`GetDialToneFilterSubindex` picks one -- **one-based**, so `sub` runs 1 to 7
+and the address arithmetic is `base + 24 * (sub - 1)` for the coefficients and
+`base + 10 * (sub - 1)` for the scales. A subindex outside 1..7 falls back to
+`CP_350_600`, the same default as an out-of-range filter index.
+
+### The units, which were not obvious
+
+Two conversions settle what the country table's numbers mean.
+
+`GetCallProgressSamplesBufferLength` -- default 666 when the table says zero
+-- becomes the `toneiir` **interval**, so a verdict arrives every 666 samples,
+which at 8000 Hz is 83.25 ms.
+
+Each of the four cadence windows is then converted by
+
+```
+    intervals = (GetFP_Value(1, buflen) * time * 80) >> 14
+```
+
+and `GetFP_Value(1, b)` is `ceil(16384 / b)`, so that is `time * 80 / buflen`.
+For this to be a count of intervals, `time * 80 / buflen` must equal
+`time_seconds * 8000 / buflen` -- which makes **the country table's cadence
+times units of 10 milliseconds**. A 500 ms busy tone is 50 in the table and
+six intervals in the detector.
+
+The `toneiir` envelope floor comes from
+`Get_Detection_Threshold_Table(GetDialToneDetectionThreshold)`, which is what
+that sixteen-entry table is for, and is written into the configuration as a
+16-bit store over the low half of an `int` field.
+
+### Only two of the four are built
+
+`CALLPROG_Create` calls `cadence_create` exactly twice, with `s[4]` of 0 and
+1: a BUSY detector and a DIAL detector. Nothing in the object constructs a
+RING or CONG detector, although both cases are fully written and both sets of
+country parameters are read when they are. Whether ringback is detected some
+other way, or simply is not detected, is a question for `CALLPROG_Progress`.
