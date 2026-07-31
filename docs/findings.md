@@ -3882,3 +3882,45 @@ The original tests `*(int *)cm & 0x80008` -- a single 32-bit read across the
 flag bytes, which is bit 3 of the first byte or bit 3 of the third. Written
 out as the two byte tests it plainly is, since a 32-bit read of a
 three-byte-plus structure is only correct by accident of layout.
+
+## 67. v8handshakinit: the map before the code
+
+Every dependency of `v8handshakinit` is now reconstructed, so it is next.
+This section records what it touches, because the function is not hard so
+much as wide: 65 distinct fields written, most of them nowhere near anything
+already mapped.
+
+```
+    written  0x9d4 0x9d6 0x9d8  0xa3e 0xa40
+             0xc48 0xc4c 0xc50  0xc94 0xc96 0xc98
+             0xcb2 0xcb4 0xcb6 0xcb8 0xcba 0xcbc 0xcbe 0xcc0
+             0xcc4 0xcc8 0xccc 0xcd0
+             0xd14 0xd16 0xd18 0xd1a 0xd1c 0xd1e
+             0xd32 0xd34 0xd36 0xd38 0xd3a 0xd3c 0xd3e 0xd40
+             0xd44 0xd48 0xd4c 0xd50
+             0xd94 0xd96 0xd98 0xd9c 0xda0 0xda4
+             0xdb4 0xdb6 0xdb8 0xdbe 0xdc0 0xdc4 0xdc8 0xdcc 0xdd0
+             0xdd2 0xdd4  0xe5c 0xe60 0xe64  0xebc 0xebe 0xec0 0xec2
+
+    read     0xa42 0xa44 0xa4c 0xa50 0xa58 0xd14 0xd16
+```
+
+The four reads at 0xa44, 0xa4c, 0xa50 and 0xa58 are the configuration
+`V8Create` planted: 0xa44 selects between three whole shapes of handshake
+(and returns early on one of them), 0xa4c and 0xa50 are timeouts converted by
+`* 9600 >> 2`, and 0xa58 is the call menu. So the object arrives configured
+and this function lays out the machine to match, which is why it is wide
+rather than deep.
+
+0xc48 and 0xc4c are written twice: once before the first `initTxSequence`
+call and again before the second, with a third pointer at 0xc50 set in
+between. That is the CM and the JM being built into different buffers by the
+same encoder, which finding 66 predicted from the encoder's side alone.
+
+### An argument type a differential test could not catch
+
+Reading this caller corrected `v8_detectorinit`, whose third argument had
+been declared `int`. It is passed a `.rodata` address. On a 32-bit target
+both are four bytes and the value copies through either way, so every
+differential check passed while the declaration said the wrong thing. Nothing
+in a same-width comparison can find that -- only reading the caller can.
