@@ -268,7 +268,7 @@ v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg)
 	rx->silence = 0;
 	/*
 	 * Truncated to 16 bits, where BwChDem_Create keeps all 32 of the same
-	 * field.  Two halves of one modem disagreeing about the width of one
+	 * field.  The two receivers of one modem disagreeing about the width of one
 	 * configuration value; see docs/deviations.md.
 	 */
 	rx->silence_limit = (unsigned short)cfg->silence_limit;

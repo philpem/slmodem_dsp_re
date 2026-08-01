@@ -968,12 +968,20 @@ the datapump uses, 160 bits rather than 0.
 
 **Reproduced**, not fixed: the reconstruction returns the same number.
 
-**Reachable?** Only if something sets the flag. `CreateV23Modem` passes the
-first byte of its configuration straight in, so a configuration with that
-byte set arms it for exactly one block. Whether any configuration in the
-tree does is a question for `v23modem.c` and `v23.c`, which are not
-reconstructed yet -- `t_v23tx` drives the path directly and pins the
-behaviour either way.
+**Reachable?** Only if something sets the flag, and `v23modem.c` now says
+what that flag *is*: the same configuration byte that arms the 2100 Hz answer
+tone. `CreateV23Modem` passes it straight to `v23FP_tx_create` as the mute,
+so any answering configuration arms it for exactly one block.
+
+That also says exactly when it fires. A configuration with the byte set
+starts in state 0, and `V23ModemMain` returns before reaching the transmitter
+in states 0 and 1 -- so the data transmitter is not called at all until three
+seconds of answer tone and a silence have gone by. The mute is still armed
+when it finally runs, eats that block, and reports `count` bits consumed when
+it sent none. How much that costs depends on whether the layer above is
+offering data three seconds into an answering sequence, which is a question
+for `v23.c` -- as is whether any shipped configuration sets the byte at all.
+`t_v23tx` drives the path directly and pins the behaviour either way.
 
 ## D20 — the V.23 transmitter can hold an uninitialised bit ⚠
 
@@ -1012,7 +1020,7 @@ not, and the only input that tells them apart is one where the original has
 no behaviour to be equivalent to. `t_v23tx` does not drive `count == 0` and
 says why.
 
-## D21 — the two halves of V.23 disagree about the width of one configuration field 🐛 💤
+## D21 — V.23's two receivers disagree about the width of one configuration field 🐛 💤
 
 **Module** `src/pump/v23/v23rx.c` · original `v23rx.c`, `.text 0x086d30`
 
@@ -1048,3 +1056,75 @@ sides of a differential test would stop agreeing.
 longer. What the shipped configurations actually contain is a question for
 `v23modem.c` and `v23.c`, which are not reconstructed yet. `t_v23rx` drives
 the truncating path directly with a limit of 200 ms and pins it.
+
+## D22 — `CreateV23Modem` builds nothing at all when handed storage 🐛 💤
+
+**Module** `src/pump/v23/v23modem.c` · original `v23modem.c`, `.text 0x086890`
+
+Every other create in this library follows the same shape: allocate if the
+caller passed NULL, then build. `CreateV23Modem` puts the *building* inside
+the allocation branch:
+
+```
+   868a2:  test   %ebx,%ebx
+   868a4:  je     869f4                 ; NULL -> allocate AND construct
+   868aa:  ...                          ; non-NULL enters here
+   ...
+   869f4:  movl   $0x28,(%esp)
+   869fb:  call   sysdep_malloc
+   86a00:  mov    %di,(%eax)            ; mode -- inside the branch
+   86a1a:  call   BwChDem_Create        ; and both sub-objects
+   86a4f:  call   v23FP_tx_create
+   86a57:  jmp    868aa                 ; only now join the common tail
+```
+
+So `CreateV23Modem(&my_modem, mode, cfg)` returns `&my_modem` with the
+answer-tone sequence set up correctly and with `mode`, `tx` and `rx` holding
+whatever was in that memory. The first `V23ModemMain` then reads `mode` to
+decide which receiver it has and dereferences `rx` to ask it about carrier.
+
+**Reproduced**, not fixed: the reconstruction builds inside the same branch.
+An added guard would be a behaviour change on an input the original does
+handle — it returns, it does not fault — and the differential test can
+compare what both sides leave behind, which it does.
+
+**Reachable?** Only from a caller that supplies storage. `v23_create` is the
+only caller and is not reconstructed yet; every other create in this tree is
+called with NULL. `t_v23modem` drives the path with a known fill pattern on
+both sides and compares all forty bytes, so whichever way `v23.c` turns out,
+the behaviour is pinned.
+
+## D23 — the answer-tone states size the transmit buffer by the receive count 🐛 💤
+
+**Module** `src/pump/v23/v23modem.c` · original `v23modem.c`, `.text 0x086b10`
+
+`V23ModemMain` takes a sample count for each direction. In data it uses them
+correctly. In the two states before it, both writes to the *transmit* buffer
+are sized by the *receive* count:
+
+```
+   86b35:  mov    0x48(%esp),%ebp       ; rx_count
+   ...
+   86cf4:  movswl %bp,%ecx              ; state 0: the answer tone
+   86cf7:  mov    %ecx,0x8(%esp)        ; ...FPM_TONE_generate's length
+   ...
+   86c71:  test   %ebp,%ebp             ; state 1: the silence
+   86c80:  movw   $0x0,(%edx)           ; ...zeroing rx_count samples
+```
+
+The transmit count at `+0x40` is untouched until data. So a caller whose
+receive frame is longer than its transmit frame overruns the transmit buffer
+during the answer tone, and one whose receive frame is shorter leaves the
+tail of it holding whatever was there before -- three seconds of a stale
+buffer going down the line.
+
+The elapsed-time bookkeeping uses the same figure, so the *duration* of the
+sequence is measured in receive samples too. That part is arguably right:
+it is the far end's clock that matters.
+
+**Reproduced**, not fixed.
+
+**Reachable?** Not from `dp_wrapper`, which delivers one 160-sample frame in
+each direction and therefore makes the two counts equal. Reachable by
+anything else driving `V23ModemMain` directly. `t_v23modem` passes equal
+counts, as every real caller does, and says so.

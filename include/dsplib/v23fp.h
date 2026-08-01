@@ -5,23 +5,23 @@
  * a mark, 2100 Hz for a space) and the backward channel carries 75 bps in the
  * other direction (390 Hz mark, 450 Hz space), so a V.23 modem is not one
  * modem run twice but two different ones sharing a line.  That is why the
- * object is built from three independent halves rather than a symmetric pair:
+ * object is built from three independent parts rather than a symmetric pair:
  *
  *     CreateV23Modem              the composite, in v23modem.c
  *       -> v23FP_rx_create        1200 bps receiver, v23rx.c
  *       -> v23FP_tx_create        1200 bps transmitter, v23tx.c
  *       -> BwChDem_Create         75 bps backward channel, bwchdem.c
  *
- * The coefficient tables split the same way: each half owns its own static
+ * The coefficient tables split the same way: each part owns its own static
  * configuration, and only the four filters below are global.  Two of the
- * three halves define statics of the SAME NAMES (`AGCv23_CFG`,
+ * three parts define statics of the SAME NAMES (`AGCv23_CFG`,
  * `TONEv23_CFG`, `V23_AGC_DEF_ALPHA`, `V23_AGC_DEF_BETA`) at different
  * addresses with different contents, so those must stay file-local in the
  * file that owns them.  Hoisting either into this header would silently merge
  * two different filters into one.
  *
- * STATUS: partial.  V23filt.c (the tables below), v23tx.c, v23rx.c and
- * bwchdem.c are reconstructed; the composite is not yet.
+ * STATUS: partial.  Everything below is reconstructed; v23.c, the datapump
+ * wrapper that owns the composite, is not yet.
  */
 
 #ifndef DSPLIB_V23FP_H
@@ -34,19 +34,27 @@
 
 /*
  * ---------------------------------------------------------------------------
- * The configuration CreateV23Modem is handed and passes down to both
- * receivers.  PROVISIONAL: only the two fields something reads are named.
- * `mute` is the byte CreateV23Modem tests and forwards to the transmitter;
- * `silence_limit` is the int both demodulators use as their carrier-loss
- * timeout.  The rest is reserved rather than invented, and will be filled in
- * with v23modem.c and v23.c.
+ * The configuration CreateV23Modem is handed and passes down to the parts.
+ * Three fields, and every one of them is read.
  */
 struct v23_cfg {
-	unsigned char	mute;		/* +0x00 arm the transmitter's one-shot
-					 *       silence for the first block  */
+	/*
+	 * Two jobs, one byte.  It arms the 2100 Hz answer tone in the
+	 * composite -- which is why the modem starts in state 0 rather than
+	 * straight in data -- and it is ALSO handed to v23FP_tx_create as the
+	 * transmitter's one-shot mute, so the data transmitter stays silent
+	 * for its first block while the tone plays.  See D19.
+	 */
+	unsigned char	answer_tone;	/* +0x00 */
 	unsigned char	r01[3];
-	int		r04;
-	int		silence_limit;	/* +0x08 give up after this much quiet */
+	/*
+	 * Samples per second, 8000 in every configuration this library builds.
+	 * The composite turns it into the two durations of the answer-tone
+	 * sequence: three seconds of tone and 50 ms of silence.
+	 */
+	int		sample_rate;	/* +0x04 */
+	int		silence_limit;	/* +0x08 give up after this much quiet,
+					 *       in milliseconds              */
 };
 
 /*
@@ -278,5 +286,71 @@ void BwChDem_Delete(struct bwchdem *bw);
  */
 short BwChDem_Progress(struct bwchdem *bw, short *samples, short count,
 		       int *bits, int *nbits);
+
+/*
+ * ---------------------------------------------------------------------------
+ * v23modem.c -- the composite, 40 bytes.
+ *
+ * Two of the three parts above, chosen by `mode`, plus a V.25 answer-tone
+ * generator and the three-state sequence that plays it.  A V.23 modem is
+ * asymmetric, so the two ends run different code rather than the same code
+ * with the frequencies swapped:
+ *
+ *              transmits                 receives
+ *   mode 0     75 bps backward channel   1200 bps forward channel (v23rx)
+ *   mode != 0  1200 bps forward channel  75 bps backward channel (bwchdem)
+ *
+ * Mode 0 is the terminal end of a Viewdata call -- it types at 75 bps and
+ * reads pages at 1200 -- and any other mode is the host end.
+ */
+struct v23modem {
+	short		mode;		/* +0x00 0 = terminal, else host     */
+	short		pad02;
+	int		state;		/* +0x04 0 answer tone, 1 the silence
+					 *       after it, 2 data            */
+	int		reported;	/* +0x08 the state the debug line last
+					 *       announced                   */
+	int		elapsed;	/* +0x0c samples spent in this state  */
+	int		tone_samples;	/* +0x10 sample_rate * 3, i.e. 3 s   */
+	int		silence_samples;/* +0x14 sample_rate / 20, i.e. 50 ms  */
+	int		sample_rate;	/* +0x18 kept; nothing in this module
+					 *       reads it back               */
+	struct fpm_tone	*answer_tone;	/* +0x1c NULL unless it was armed    */
+	struct v23tx	*tx;		/* +0x20 whichever channel this end
+					 *       transmits on                */
+	/*
+	 * And whichever it receives on: a `struct v23rx *` when `mode` is
+	 * zero and a `struct bwchdem *` otherwise.  One slot, two types, and
+	 * `mode` is the only thing that says which -- so every use of it in
+	 * v23modem.c is guarded by the same test.
+	 */
+	void		*rx;		/* +0x24 */
+};
+
+/*
+ * Build a V.23 modem.
+ *
+ * `state` MUST be NULL.  A non-null one is not an error and not a crash: the
+ * original skips the whole of the construction and fills in only the timing
+ * fields, leaving `mode`, `tx` and `rx` as it found them.  See D22.
+ */
+struct v23modem *CreateV23Modem(struct v23modem *m, int mode,
+				const struct v23_cfg *cfg);
+
+/* Tear one down, and everything it built. */
+void DeleteV23Modem(struct v23modem *m);
+
+/*
+ * One block, both directions.
+ *
+ * `tx_nbits` is in/out -- in: bits available at `tx_bits`, out: bits the
+ * transmitter finished -- exactly as Bell 103's B103FP_modem does it.
+ *
+ * Returns 1 throughout the answer-tone sequence, and after that whatever the
+ * receiver returns: 0 carrier up, 1 acquiring, 2 given up.
+ */
+short V23ModemMain(struct v23modem *m, int *tx_bits, int *tx_nbits,
+		   short *tx_out, int tx_count, short *rx_in, int rx_count,
+		   int *rx_bits, int *rx_nbits);
 
 #endif /* DSPLIB_V23FP_H */

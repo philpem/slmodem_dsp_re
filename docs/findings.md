@@ -4688,8 +4688,8 @@ the gain control does not believe in is never passed up as if it were real.
 The cost is the first block or two of every recovery, which at 1200 bps is
 around 24 bits.
 
-Three smaller asymmetries with `BwChDem_Progress`, which is the other half of
-the same modem and was written by the same hand:
+Three smaller asymmetries with `BwChDem_Progress`, the other receiver in
+the same modem, written by the same hand:
 
 - `BwChDem_Progress` sets `*nbits = 0` in its prologue. `v23FP_rx_progress`
   writes `*nbits` only on the paths that return 0, so a caller has to
@@ -4701,3 +4701,61 @@ the same modem and was written by the same hand:
   status field; the 2 goes straight into `%eax`. So the field holds whatever
   the last non-terminal call left, and a caller that reads it instead of the
   return value sees the receiver still claiming to be running.
+
+## 83. The answer tone the other end cannot hear
+
+`CreateV23Modem` builds its 2100 Hz generator from the library's shared
+`FPM_TONE_CFG` and changes exactly three fields:
+
+```
+   86956:  movw   $0x834,0x20(%esp)     ; freq  = 2100 -- already 2100
+   8695d:  movw   $0x0,0x24(%esp)       ; rev_period = 0
+   86964:  cmpw   $0x0,(%ebx)           ; mode
+   8696a:  mov    $0xee4,%eax
+   8696f:  mov    %ax,0x22(%esp)        ; scale = mode ? 0xee4 : 0
+```
+
+Two of those are worth stopping on.
+
+**`rev_period = 0`** turns off the 450 ms phase reversals that `FPM_TONE_CFG`
+carries by default. The reversals are the part of V.25's answer tone that
+tells a network echo canceller to disable itself. A 1200 bps FSK modem has no
+echo canceller and no interest in the far end's, so V.23 sends the plain tone
+-- the only place in this library that takes the shared V.25 configuration and
+removes something from it.
+
+**`scale = 0` at the terminal end** means the calling end builds a tone
+generator, enters the answer-tone state, runs the generator for three seconds
+and emits silence. It does not skip the state. Both ends therefore take
+exactly the same time to reach data without either having to know what the
+other is doing, and the terminal end's transmit buffer is filled by the same
+code path in both roles. It is the same trick `TxNoCarrierB103` uses to mute
+Bell 103 -- zero the modulator's scale rather than the output -- applied to a
+state machine instead of a sample buffer.
+
+## 84. Two accidents that put V.25's silence back in spec
+
+The answer-tone sequence's two durations come from the configured sample
+rate: `rate * 3` and `rate / 20`. At 8000 that is 24000 samples of tone --
+three seconds, inside V.25's 2.6-to-4 -- and 400 samples of silence, which is
+50 ms and is *outside* V.25's 75 +/- 20.
+
+It ends up in range anyway. The tone state advances when `elapsed >=` its
+limit and the silence state when `elapsed >`, and `elapsed` moves a whole
+frame at a time:
+
+```
+   86d0f:  cmp    0x10(%ebx),%eax       ; tone
+   86d12:  jl     86d27                 ; ...stay while <
+   86c90:  cmp    0x14(%ebx),%eax       ; silence
+   86c93:  jle    86d27                 ; ...stay while <=
+```
+
+With the 160-sample frames `dp_wrapper` delivers, 400 samples of nominal
+silence takes three frames to exceed: 480 samples, 60 ms, inside the window.
+A strict comparison, or a different frame size, would put it back out.
+
+Recorded rather than fixed. It is not clear the asymmetry was deliberate --
+the two states are otherwise written identically -- but the arithmetic only
+works out with it, and a reconstruction that tidied the comparison would
+produce a modem that answers slightly out of specification.
