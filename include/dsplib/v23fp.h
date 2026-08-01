@@ -20,14 +20,32 @@
  * file that owns them.  Hoisting either into this header would silently merge
  * two different filters into one.
  *
- * STATUS: partial.  V23filt.c (the tables below) is reconstructed; the three
- * halves and the composite are not yet.
+ * STATUS: partial.  V23filt.c (the tables below), v23tx.c and bwchdem.c are
+ * reconstructed; v23rx.c and the composite are not yet.
  */
 
 #ifndef DSPLIB_V23FP_H
 #define DSPLIB_V23FP_H
 
+#include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_tone.h"
+
+/*
+ * ---------------------------------------------------------------------------
+ * The configuration CreateV23Modem is handed and passes down to both
+ * receivers.  PROVISIONAL: only the two fields something reads are named.
+ * `mute` is the byte CreateV23Modem tests and forwards to the transmitter;
+ * `silence_limit` is the int both demodulators use as their carrier-loss
+ * timeout.  The rest is reserved rather than invented, and will be filled in
+ * with v23modem.c and v23.c.
+ */
+struct v23_cfg {
+	unsigned char	mute;		/* +0x00 arm the transmitter's one-shot
+					 *       silence for the first block  */
+	unsigned char	r01[3];
+	int		r04;
+	int		silence_limit;	/* +0x08 give up after this much quiet */
+};
 
 /*
  * ---------------------------------------------------------------------------
@@ -137,5 +155,54 @@ void v23FP_tx_delete(struct v23tx *tx);
  */
 void v23FP_tx_progress(struct v23tx *tx, short *out, int count,
 		       const int *bits, int *consumed);
+
+/*
+ * ---------------------------------------------------------------------------
+ * bwchdem.c -- the 75 bps backward-channel demodulator, 104 bytes.
+ *
+ * Two resonators and an energy comparison rather than a discriminator; see
+ * the file comment in src/pump/v23/bwchdem.c for why that is enough at this
+ * rate and how the bit timing falls out of it.
+ */
+struct bwchdem {
+	short		mark_state[2];	/* +0x00 the 390 Hz resonator        */
+	short		space_state[2];	/* +0x04 the 450 Hz one              */
+	short		mark_energy;	/* +0x08 accumulated over one block  */
+	short		space_energy;	/* +0x0a                             */
+	short		r0c;		/* +0x0c zeroed by create, read by
+					 *       nothing                     */
+	short		blocks;		/* +0x0e blocks since create, against
+					 *       the carrier timeout         */
+	int		remaining;	/* +0x10 samples left in this block  */
+	int		block_index;	/* +0x14 where in block_size_table   */
+	int		settle;		/* +0x18 blocks to skip before the
+					 *       next decision is emitted    */
+	int		last_bit;	/* +0x1c to notice a transition      */
+	short		silence;	/* +0x20 charged 20 per quiet block  */
+	short		pad22;
+	int		silence_limit;	/* +0x24 from the configuration      */
+	short		carrier_blocks;	/* +0x28 consecutive blocks of 390 Hz */
+	short		pad2a;
+	struct fpm_tone	*tone;		/* +0x2c the carrier detector        */
+	struct fpm_agc	agc;		/* +0x30 .. +0x5b                    */
+	const short	*iir_coeff;	/* +0x5c the 3-biquad channel filter */
+	short		*iir_state;	/* +0x60 12 words, heap-allocated    */
+	short		iir_sections;	/* +0x64 3                           */
+	short		status;		/* +0x66 the last return value       */
+};
+
+/* Build one.  NULL `state` allocates it; `cfg` supplies the silence timeout. */
+struct bwchdem *BwChDem_Create(struct bwchdem *bw, const struct v23_cfg *cfg);
+
+/* Tear one down, including the tone detector and the filter state. */
+void BwChDem_Delete(struct bwchdem *bw);
+
+/*
+ * Demodulate one block IN PLACE -- `samples` is filtered and gain-controlled
+ * where it lies.  Returns 0 once carrier is up, 1 while acquiring it, 2 after
+ * giving up on it.
+ */
+short BwChDem_Progress(struct bwchdem *bw, short *samples, short count,
+		       int *bits, int *nbits);
 
 #endif /* DSPLIB_V23FP_H */
