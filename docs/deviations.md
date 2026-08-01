@@ -1037,15 +1037,21 @@ agree about how much of it to copy:
 ```
 
 So one configuration value produces two different timeouts. Below 65536 they
-agree exactly. At or above it the 1200 bps receiver's silently wraps: 65536
-becomes 0, which makes `silence_limit <= silence` true on the first quiet
-block and the forward channel gives up the moment the line dips, while the
-backward channel goes on waiting for another eighteen hours.
+agree exactly. At or above it they do not merely differ, they fail in
+*opposite* directions:
+
+- the forward channel's limit wraps to 0, so `silence_limit <= silence` is
+  true on the first quiet block and it gives up the moment the line dips;
+- the backward channel never gives up at all. Its test is
+  `(int)(unsigned short)bw->silence >= bw->silence_limit` against a counter
+  that steps by 20 with 16-bit wrap, so the largest value it can ever take is
+  65520. Any limit above that is unreachable and the demodulator holds a dead
+  line for ever.
 
 The unit is milliseconds — both counters are charged 20 per call, which is
-one 160-sample block at 8 kHz — so the wrap is at 65.5 seconds of tolerated
-silence. That is a long time for a modem to hold a dead line, which is why
-this is dormant rather than live.
+one 160-sample block at 8 kHz — so the boundary is 65.5 seconds of tolerated
+silence. That is already a long time for a modem to hold a dead line, which
+is why this is dormant rather than live: `v23.c` configures 700 ms.
 
 **Reproduced**, not fixed: the reconstruction truncates in `v23rx.c` and does
 not in `bwchdem.c`, exactly as the original does. Widening the field would be
@@ -1053,9 +1059,10 @@ a behaviour change on an input the original handles differently, and the two
 sides of a differential test would stop agreeing.
 
 **Reachable?** Only from a configuration that asks for a 65-second timeout or
-longer. What the shipped configurations actually contain is a question for
-`v23modem.c` and `v23.c`, which are not reconstructed yet. `t_v23rx` drives
-the truncating path directly with a limit of 200 ms and pins it.
+longer, and `v23.c` — the only caller — asks for 700 ms. So nothing in the
+shipped library reaches it. `t_v23rx` drives the truncating path directly
+with a limit of 200 ms and pins it, and `t_v23dp` checks that both receivers
+come out of `v23_create` holding the same 700.
 
 ## D22 — `CreateV23Modem` builds nothing at all when handed storage 🐛 💤
 

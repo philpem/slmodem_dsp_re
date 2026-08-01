@@ -134,16 +134,16 @@ compare_dp(const char *what, const struct v23_dp *a, const struct v23_dp *b,
 			    tag);
 }
 
-/* Generate forward-channel FSK, using the transmitter this tree proves. */
+/* Generate FSK on either channel, using the transmitter this tree proves. */
 static void
-generate(short *out, int n, const int *bits, int nbits)
+generate(short *out, int n, short mark, short space, const short *period,
+	 const int *bits, int nbits)
 {
-	static const short fw_period[3] = { 7, 7, 6 };
 	struct v23tx *tx;
 	int at = 0;
 	int done = 0;
 
-	tx = v23FP_tx_create(NULL, 1300, 2100, 3, fw_period, 0);
+	tx = v23FP_tx_create(NULL, mark, space, 3, period, 0);
 	while (done < n) {
 		int chunk = n - done > 160 ? 160 : n - done;
 		int used = 0;
@@ -157,10 +157,107 @@ generate(short *out, int n, const int *bits, int nbits)
 	v23FP_tx_delete(tx);
 }
 
+/*
+ * The host end spends three seconds playing the answer tone before it reaches
+ * data, and only then starts acquiring, so it needs the longer run.
+ */
 #define NFRAME 300
-#define NSAMP  (NFRAME * 160)
+#define HOST_FRAME 400
+#define NSAMP  (HOST_FRAME * 160)
 
-static short signal[NSAMP];
+static const short fw_period[3] = { 7, 7, 6 };
+static const short bw_period[3] = { 107, 107, 106 };
+
+static short fw_signal[NSAMP];	/* 1300/2100, what a terminal listens to */
+static short bw_signal[NSAMP];	/*   390/450, what a host listens to     */
+
+/*
+ * One end, driven block by block through the glue.  Everything observable is
+ * compared: the DPSTAT_*, the transmitted samples, the whole datapump object
+ * and everything it points at, and afterwards the modem core's side of the
+ * conversation.
+ */
+static void
+drive(const char *what, int caller, const short *signal, int frames)
+{
+	static short in_a[512], in_b[512], out_a[512], out_b[512];
+	struct dp *da, *db;
+	int f, i;
+
+	harness_modem_reset(pattern, (int)sizeof(pattern));
+	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
+			    ref_ops);
+	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, &v23_ops);
+	diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, caller);
+	if (da == 0 || db == 0)
+		return;
+
+	for (f = 0; f < frames; f++) {
+		int ra, rb;
+
+		memcpy(in_a, signal + f * 160, 160 * sizeof(short));
+		memcpy(in_b, signal + f * 160, 160 * sizeof(short));
+		memset(out_a, 0x33, sizeof(out_a));
+		memset(out_b, 0x33, sizeof(out_b));
+
+		rb = ref_process_of(db)(db, in_b, out_b, 160);
+		ra = v23_process(da, in_a, out_a, 160);
+
+		diff_eq_int("block %ld: status", ra, rb, f);
+		for (i = 0; i < 160; i++)
+			diff_eq_int("transmitted[%ld]", out_a[i], out_b[i], i);
+		compare_dp(what, (struct v23_dp *)da, (struct v23_dp *)db, f);
+	}
+
+	diff_eq_int("same number of get_bits calls (%ld)",
+		    harness_modem_ours.gets, harness_modem_ref.gets, 0);
+	diff_eq_int("same number of put_bits calls (%ld)",
+		    harness_modem_ours.puts, harness_modem_ref.puts, 0);
+	diff_eq_int("same bits handed back (%ld)", harness_modem_ours.rx_len,
+		    harness_modem_ref.rx_len, 0);
+	for (i = 0; i < harness_modem_ref.rx_len; i++)
+		diff_eq_int("recovered bit[%ld]", harness_modem_ours.rx[i],
+			    harness_modem_ref.rx[i], i);
+	diff_eq_int("same parameters set (%ld)", harness_modem_ours.nparams,
+		    harness_modem_ref.nparams, 0);
+	for (i = 0; i < harness_modem_ref.nparams; i++) {
+		diff_eq_int("param[%ld] name",
+			    (long)harness_modem_ours.param_name[i],
+			    (long)harness_modem_ref.param_name[i], i);
+		diff_eq_int("param[%ld] value",
+			    harness_modem_ours.param_value[i],
+			    harness_modem_ref.param_value[i], i);
+	}
+	printf("  %s: %d get_bits, %d put_bits, %d bits back, %d params\n",
+	       what, harness_modem_ref.gets, harness_modem_ref.puts,
+	       harness_modem_ref.rx_len, harness_modem_ref.nparams);
+
+	/*
+	 * Anti-vacuity.  Without these the run above proves only that two
+	 * datapumps agreed on doing nothing.
+	 */
+	diff_eq_int("the data path ran (%ld)", harness_modem_ref.gets > 0, 1,
+		    harness_modem_ref.gets);
+	diff_eq_int("bits were handed back (%ld)",
+		    harness_modem_ref.rx_len > 0, 1, harness_modem_ref.rx_len);
+	diff_eq_int("the line rates were reported (%ld)",
+		    harness_modem_ref.nparams, 2, harness_modem_ref.nparams);
+	/*
+	 * D24.  One rate is computed and both parameters get it, so the pair
+	 * is always the RECEIVE rate: 1200 at the terminal, which transmits
+	 * 75, and 75 at the host, which transmits 1200.  Asserted as the wrong
+	 * number deliberately -- a reconstruction that quietly fixed it would
+	 * still pass the comparison above against a reference that does not.
+	 */
+	for (i = 0; i < harness_modem_ref.nparams; i++)
+		diff_eq_int("param[%ld] is the receive rate, both ways",
+			    harness_modem_ref.param_value[i],
+			    caller == 0 ? V23_RATE_BACKWARD
+					: V23_RATE_FORWARD, i);
+
+	v23_delete(da);
+	ref_v23_delete(db);
+}
 
 int
 main(void)
@@ -174,8 +271,17 @@ main(void)
 		idle[i] = 1;
 		data[i] = (i / 2) & 1;
 	}
-	generate(signal, NSAMP / 4, idle, 64);
-	generate(signal + NSAMP / 4, NSAMP - NSAMP / 4, data, 64);
+	generate(fw_signal, NSAMP / 4, 1300, 2100, fw_period, idle, 64);
+	generate(fw_signal + NSAMP / 4, NSAMP - NSAMP / 4, 1300, 2100,
+		 fw_period, data, 64);
+	/*
+	 * The host does not start listening until three seconds of its own
+	 * answer tone have gone by, so its idle run has to outlast that or the
+	 * backward-channel demodulator never sees carrier at all.
+	 */
+	generate(bw_signal, NSAMP * 2 / 3, 390, 450, bw_period, idle, 64);
+	generate(bw_signal + NSAMP * 2 / 3, NSAMP - NSAMP * 2 / 3, 390, 450,
+		 bw_period, data, 64);
 
 	diff_begin("v23 registration");
 	{
@@ -284,108 +390,26 @@ main(void)
 	}
 	rc |= diff_end();
 
-	diff_begin("v23_process: the terminal end, block by block");
-	{
-		static short in_a[512], in_b[512], out_a[512], out_b[512];
-		struct dp *da, *db;
-		int f;
+	diff_begin("v23_process: the terminal end");
+	/*
+	 * caller = 1: this station originated, so it is the terminal.  It
+	 * receives the 1200 bps forward channel and plays no answer tone, so
+	 * it reaches data on the first block.
+	 */
+	drive("terminal", 1, fw_signal, NFRAME);
+	rc |= diff_end();
 
-		harness_modem_reset(pattern, (int)sizeof(pattern));
-		/*
-		 * caller = 1: this station originated, so it is the terminal.
-		 * It receives the 1200 bps forward channel, which is what
-		 * `signal` carries, and it does NOT play an answer tone -- so
-		 * the datapump reaches data on the first block instead of
-		 * three seconds in.
-		 */
-		db = ref_v23_create((void *)0x1234, DP_V23, 1, 8000, 160,
-				    ref_ops);
-		da = v23_create((void *)0x1234, DP_V23, 1, 8000, 160,
-				&v23_ops);
-
-		if (da != 0 && db != 0) {
-			for (f = 0; f < NFRAME; f++) {
-				int ra, rb;
-
-				memcpy(in_a, signal + f * 160,
-				       160 * sizeof(short));
-				memcpy(in_b, signal + f * 160,
-				       160 * sizeof(short));
-				memset(out_a, 0x33, sizeof(out_a));
-				memset(out_b, 0x33, sizeof(out_b));
-
-				rb = ref_process_of(db)(db, in_b, out_b, 160);
-				ra = v23_process(da, in_a, out_a, 160);
-
-				diff_eq_int("block %ld: status", ra, rb, f);
-				for (i = 0; i < 160; i++)
-					diff_eq_int("transmitted[%ld]",
-						    out_a[i], out_b[i], i);
-				compare_dp("in data", (struct v23_dp *)da,
-					   (struct v23_dp *)db, f);
-			}
-
-			diff_eq_int("same number of get_bits calls (%ld)",
-				    harness_modem_ours.gets,
-				    harness_modem_ref.gets, 0);
-			diff_eq_int("same number of put_bits calls (%ld)",
-				    harness_modem_ours.puts,
-				    harness_modem_ref.puts, 0);
-			diff_eq_int("same bits handed back (%ld)",
-				    harness_modem_ours.rx_len,
-				    harness_modem_ref.rx_len, 0);
-			for (i = 0; i < harness_modem_ref.rx_len; i++)
-				diff_eq_int("recovered bit[%ld]",
-					    harness_modem_ours.rx[i],
-					    harness_modem_ref.rx[i], i);
-			diff_eq_int("same parameters set (%ld)",
-				    harness_modem_ours.nparams,
-				    harness_modem_ref.nparams, 0);
-			for (i = 0; i < harness_modem_ref.nparams; i++) {
-				diff_eq_int("param[%ld] name",
-					    (long)harness_modem_ours.param_name[i],
-					    (long)harness_modem_ref.param_name[i],
-					    i);
-				diff_eq_int("param[%ld] value",
-					    harness_modem_ours.param_value[i],
-					    harness_modem_ref.param_value[i], i);
-			}
-			printf("  %d get_bits, %d put_bits, %d bits back, "
-			       "%d params\n", harness_modem_ref.gets,
-			       harness_modem_ref.puts,
-			       harness_modem_ref.rx_len,
-			       harness_modem_ref.nparams);
-
-			/*
-			 * Anti-vacuity.  Without these the run above proves
-			 * only that two datapumps agreed on doing nothing.
-			 */
-			diff_eq_int("the data path ran (%ld)",
-				    harness_modem_ref.gets > 0, 1,
-				    harness_modem_ref.gets);
-			diff_eq_int("bits were handed back (%ld)",
-				    harness_modem_ref.rx_len > 0, 1,
-				    harness_modem_ref.rx_len);
-			diff_eq_int("the line rates were reported (%ld)",
-				    harness_modem_ref.nparams, 2,
-				    harness_modem_ref.nparams);
-			/*
-			 * D24.  This end RECEIVES at 1200 and TRANSMITS at 75,
-			 * and both parameters are set to 1200.  Asserted as
-			 * the wrong number deliberately: it is what the
-			 * original does, and a reconstruction that quietly
-			 * fixed it would still pass the comparison above
-			 * against a reference that does not.
-			 */
-			for (i = 0; i < harness_modem_ref.nparams; i++)
-				diff_eq_int("param[%ld] is 1200, both ways",
-					    harness_modem_ref.param_value[i],
-					    V23_RATE_FORWARD, i);
-
-			v23_delete(da);
-			ref_v23_delete(db);
-		}
-	}
+	diff_begin("v23_process: the host end");
+	/*
+	 * caller = 0: this station answered.  A different receiver
+	 * (BwChDem_Progress rather than v23FP_rx_progress, reached through the
+	 * other arm of every `mode` test in v23modem.c), a different
+	 * transmitter, a different sub-allocation count -- and three seconds
+	 * of answer tone and its silence to walk through before any of it
+	 * runs.  None of that is exercised by the run above, which is why both
+	 * are here.
+	 */
+	drive("host", 0, bw_signal, HOST_FRAME);
 	rc |= diff_end();
 
 	diff_begin("v23_create/delete balance");

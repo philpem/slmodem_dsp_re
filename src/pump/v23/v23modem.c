@@ -268,6 +268,25 @@ V23ModemMain(struct v23modem *m, int *tx_bits, int *tx_nbits, short *tx_out,
 
 	v23FP_tx_progress(m->tx, tx_out, tx_count, tx_bits, tx_nbits);
 
+	/*
+	 * The two returns are not widened the same way in the original: it
+	 * sign-extends after v23FP_rx_progress (`cwtl` at 0x86c28) and returns
+	 * BwChDem_Progress's %eax untouched.  So its own return type is `int`,
+	 * with one of the two receivers declared `short` to it and the other
+	 * `int` -- a header disagreement, and the kind that normally costs
+	 * something.
+	 *
+	 * It costs nothing here.  Every return path in BwChDem_Progress leaves
+	 * a whole 32-bit value in %eax: either `movswl 0x66(%esi),%eax` at
+	 * 0x87896, sign-extending the status field, or `mov $0x2,%eax` at
+	 * 0x878c6.  There is no path that writes only the low half.  So the
+	 * unwidened return is 0, 1 or 2 exactly as the widened one is, and
+	 * declaring this function `short` -- which forces both -- is the same
+	 * function.  Checked rather than assumed: if BwChDem_Progress ever
+	 * grew a path that left rubbish above bit 15, the original's host end
+	 * would take v23_process's `else` branch and report DPSTAT_ERROR on
+	 * every block.
+	 */
 	if (m->mode != 0)
 		return BwChDem_Progress(m->rx, rx_in, (short)rx_count,
 					rx_bits, rx_nbits);
