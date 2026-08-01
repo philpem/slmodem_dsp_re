@@ -4759,3 +4759,55 @@ Recorded rather than fixed. It is not clear the asymmetry was deliberate --
 the two states are otherwise written identically -- but the arithmetic only
 works out with it, and a reconstruction that tidied the comparison would
 produce a modem that answers slightly out of specification.
+
+## 85. One comparison decides which end of a V.23 call this is
+
+`v23_create` takes the same six arguments every datapump create does, and
+uses exactly one of them to decide everything V.23-specific:
+
+```
+   4cc1:  test   %esi,%esi              ; caller
+   4ccb:  sete   %dl
+   4cde:  mov    %dl,0x20(%esp)         ; cfg.answer_tone
+   4cdb:  movzbl %dl,%esi               ; ...and the mode argument
+   4cf5:  call   CreateV23Modem
+```
+
+One `sete`, used twice. The station that did **not** place the call is the
+host: it answers with the 2100 Hz tone, transmits the 1200 bps forward
+channel and listens on the 75 bps backward one. The station that placed the
+call is the terminal and does the opposite. Note the polarity -- `caller`
+non-zero means this station originated -- which is the same inversion
+`b103_create` carries.
+
+The rest of the configuration is two constants: 8000, which is the datapump's
+own rate rather than whatever the host asked for, so the answer-tone sequence
+is timed against the clock the modulation actually runs on; and 700, the
+carrier-loss timeout in milliseconds, which both receivers charge at 20 per
+block -- 35 blocks of dead line before the call is dropped.
+
+## 86. How many bits to ask for, when the rate is not a whole number
+
+Bell 103 asks the modem core for six bits a block and always six. V.23
+cannot: its two directions are sixteen times apart and neither is a whole
+number of bits per 160-sample frame -- 24 bits one way, one or two the other.
+
+`v23_process` does not compute it. It asks for whatever the transmitter
+reported it *consumed* last block:
+
+```
+   4db1:  mov    0x18(%esi),%ecx        ; last block's answer
+   4db7:  mov    %ecx,0x24(%esp)        ; ...becomes this block's request
+   ...    call   V23ModemMain           ; which overwrites it with what it used
+   4e68:  mov    0x24(%esp),%ecx
+   4e70:  mov    %ecx,0x18(%esi)        ; ...and back again for next time
+```
+
+`V23ModemMain`'s `tx_nbits` is in/out precisely so this can work, and the
+whole rate question stays inside `v23tx.c` where the bit-period table is.
+
+The field starts at zero from the `memset`, and the fetch is gated on
+`connected` as well, so the core's data is not touched until carrier has been
+up once *and* the transmitter has run once. Those two together are what keeps
+application data off a line that is still training -- the same job b103.c's
+`tx_bits_wanted` does, reached by a different route.

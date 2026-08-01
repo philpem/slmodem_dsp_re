@@ -1128,3 +1128,53 @@ it is the far end's clock that matters.
 each direction and therefore makes the two counts equal. Reachable by
 anything else driving `V23ModemMain` directly. `t_v23modem` passes equal
 counts, as every real caller does, and says so.
+
+## D24 — V.23 reports the same line rate in both directions 🐛
+
+**Module** `src/pump/v23/v23.c` · original `v23.c`, `.text 0x004da0`
+
+V.23 is asymmetric by definition: 1200 bps one way, 75 the other. On the edge
+into carrier, `v23_process` computes one rate and sets both parameters to it:
+
+```
+   4ec1:  mov    $0x2,%eax
+   4ec6:  mov    %eax,0x4(%esp)         ; MDMPRM_TX_RATE
+   4eca:  cmp    $0x1,%edx              ; caller
+   4ecd:  sbb    %ebx,%ebx
+   4ecf:  and    $0xfffffb9b,%ebx       ; -1125
+   4ed5:  add    $0x4b0,%ebx            ; +1200  -> 75 or 1200
+   4edb:  mov    %ebx,0x8(%esp)
+   4ee5:  call   modem_set_param
+   4eea:  mov    %ebx,0x8(%esp)         ; the SAME value
+   4eee:  mov    $0x1,%ebx
+   4ef3:  mov    %ebx,0x4(%esp)         ; MDMPRM_RX_RATE
+   4f02:  call   modem_set_param
+```
+
+`%ebx` is callee-saved, so the second call passes exactly what the first did.
+
+Worked through, the one number it computes is always the **receive** rate:
+
+| `caller` | end | receives | transmits | TX reported | RX reported |
+|---|---|---|---|---|---|
+| 0 | host | 75 | 1200 | **75** | 75 |
+| non-zero | terminal | 1200 | 75 | **1200** | 1200 |
+
+So `MDMPRM_RX_RATE` is right at both ends and `MDMPRM_TX_RATE` is wrong at
+both, by a factor of sixteen in opposite directions.
+
+**What it does not break.** Transmit pacing does not come from this. The core
+is asked for exactly as many bits as `V23ModemMain` reported the transmitter
+consumed last block, which is derived from the bit-period table and is
+correct. What is wrong is the rate the core *reports* -- the CONNECT message
+and anything sized from it.
+
+**Reproduced**, not fixed: the reconstruction sets both to the same value.
+The correct pair is not guessable from the object either, since nothing in it
+records which figure was meant to be which.
+
+**Reachable?** Every V.23 call, at both ends, on the first block after
+carrier. This is the one entry in this register that is not dormant.
+`t_v23dp` asserts the wrong value deliberately -- a reconstruction that
+quietly fixed it would still pass a comparison against a reference that does
+not.

@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          728304 bytes, 1782 symbols
 
-  translated  [###...............................]   9.0%     65298 bytes, 163 symbols
-  tested      [##################################] 100.0%     63212 bytes, 158 of 158 that can be
+  translated  [###...............................]   9.2%     67336 bytes, 171 symbols
+  tested      [##################################] 100.0%     64440 bytes, 163 of 163 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -16,11 +16,14 @@ dsplibs.o reconstruction coverage
   has no `ref_` alias to link against, because objcopy cannot rename it.
 
   file-local in the object, so reached through a caller instead
-  (5 symbols, 2086 bytes -- outside the figure above):
+  (8 symbols, 2896 bytes -- outside the figure above):
     AnalyseDialString                               436 bytes
     b103_create                                     406 bytes
     b103_delete                                      72 bytes
     b103_process                                    582 bytes
+    v23_create                                      274 bytes
+    v23_delete                                       72 bytes
+    v23_process                                     464 bytes
     v8_process                                      590 bytes
 
   we define these and the object has no symbol of that name --
@@ -32,7 +35,7 @@ dsplibs.o reconstruction coverage
     VPcmV34Main.cpp +72                           327391 bytes   835 symbols
     V34hshak.c +13                                 89012 bytes    60 symbols
     class1tx.c +94                                 88586 bytes   329 symbols
-    V32mod.c +39                                   55801 bytes   119 symbols
+    V32mod.c +39                                   54631 bytes   116 symbols
     Dialer.c +18                                   16087 bytes    52 symbols
     b103.c +2                                      12980 bytes    50 symbols
     V34RX.c +1                                     10513 bytes    15 symbols
