@@ -22,6 +22,17 @@ struct fpm_mrf_cfg {
 	short decimate;		/* +0x02 decimation factor               */
 	const short *coeff;	/* +0x04                                 */
 	short taps;		/* +0x08 total, across all phases        */
+	/*
+	 * Named, not implied.  Callers build one of these on the stack by
+	 * copying a static and patching `coeff`, and init then copies the
+	 * whole thing into the object -- so the two bytes here end up in a
+	 * differential comparison.  The original's copy is dword-wise and
+	 * carries the static's zero; a struct assignment over unnamed padding
+	 * is free to leave stack garbage there instead.  Naming it makes it a
+	 * member, which both the assignment and the designated initialisers
+	 * below have to honour.
+	 */
+	short pad0a;
 	void *aux;		/* +0x0c                                 */
 };
 

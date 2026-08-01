@@ -4583,3 +4583,121 @@ codec V.34's phase 2 cannot run without -- `V34SetINFO0aBits`,
 the V.34 files at all.  It is the `extern "C"` surface of `VPcmV34Main.cpp`,
 which is the V.90/V.92 side.  About 6 KB, and a prerequisite rather than a
 consequence of the handshake.
+
+## 79. V.23's rates come out exact, and Bell 103's do not
+
+`v23FP_rx_create` configures a 3:4 multirate filter and a demodulator at 5
+samples per bit. The datapump speaks 8 kHz, so:
+
+```
+8000 * 3 / 4  =  6000
+6000 / 5      =  1200
+```
+
+Both steps are exact. That is worth stating because the same three modules --
+`FPM_MRF_filter`, `FPM_iir_filt_II`, `FPM_FSD_demodulate` -- carry Bell 103,
+where nothing lands cleanly: 8000 is converted 9:10 to 7200 so that 300 baud
+comes to 24 samples per symbol, and findings 17 and 24 exist entirely because
+of the arithmetic that follows from that. V.23 needed no such contrivance and
+the original's author did not invent one.
+
+The AGC block lengths are the same story from the other side. The data path's
+is 30 samples and the detector's is 40; those look like unrelated constants
+until the rates are applied, and then both are 5 milliseconds -- 30 at the
+resampler's 6 kHz output, 40 at the 8 kHz input the detector sees. Two
+different windows in samples, one window in time.
+
+## 80. Two timeouts, in milliseconds, one of which does not fit
+
+`v23FP_rx_progress` carries two counters, and both advance by 20 per call
+rather than per sample. A call is one 160-sample block at 8 kHz, which is
+20 ms, so the counters are milliseconds and the limits read as times:
+
+| field | limit | meaning |
+|---|---|---|
+| `+0x23a` | `+0x23c` = 60000 | one minute to find carrier |
+| `+0x236` | `+0x238`, from the configuration | how long a dead line is tolerated |
+
+The debug strings confirm both: `Carrier Detection Time Out ` and
+`Energy drop detected......`.
+
+60000 does not fit in a signed 16-bit field, and the field is signed -- the
+original loads it as `mov $0xffffea60,%eax` and stores the low word. It works
+because **both comparisons are unsigned**:
+
+```
+   87003:  movzwl 0x23a(%esi),%edx
+   8700a:  add    $0x14,%edx
+   8700d:  cmp    %dx,0x23c(%esi)
+   8701b:  jbe    8723b                 ; give up
+```
+
+Reading `0xea60` as the -5536 the field's type says it is would make
+`limit <= counter` true on the first call and the receiver would give up
+before it had heard anything. The reconstruction declares all four as
+`unsigned short` for that reason; it is the one place in this module where
+following the declared type rather than the instruction would break it.
+
+## 81. The V.23 acquisition gate counts detections, not consecutive ones
+
+`v23FP_rx_progress` and `DemodDataB103` are the same function with different
+constants -- the same private copy for the detector, the same `+= 5` on a
+state counter, the same freeze of the data gain when it reaches its target.
+They differ in one instruction that is not there:
+
+```
+; DemodDataB103, on a failed detect
+   ...    dsp->rx_state = 0;
+
+; v23FP_rx_progress, on a failed detect
+   87082:  jne    870a0                 ; and that is all
+```
+
+Bell 103 demands three consecutive blocks of answer tone. V.23 accepts two
+blocks of 1300 Hz however far apart they fall, and once the counter has
+reached 10 it never returns. The original's own debug line -- `v23 tone
+detected, counter = %d,threshold = 2` -- prints the counter divided by five
+against a threshold of two, so the author was counting detections and knew it.
+
+What compensates is the detector's configuration rather than the gate. V.23
+raises `FPM_TONE`'s in-band energy ratio from the shared 0.75 to 0.885
+(`0x7148`), so nearly nine tenths of the energy has to be at 1300 Hz before a
+block counts at all. Modulated data spends half its time at 2100 Hz and cannot
+pass that test, which is what makes a two-detection gate with no reset safe.
+
+## 82. A receiver that demodulates and then throws the bits away
+
+Once carrier is up, `v23FP_rx_progress` charges the silence counter on any
+block where the gain control reports no signal, and resets it on any block
+where it does. That much is ordinary. What is not is the order of what
+follows:
+
+```
+   87172:  call   FPM_FSD_demodulate    ; always
+   87177:  cmpw   $0x0,0x236(%esi)      ; silence
+   87189:  jne    871e9                 ; -> *nbits = 0, return 0
+```
+
+The demodulator runs first and its output is discarded afterwards, so a block
+during a fade costs the work and produces nothing. The bits are not held over
+either -- `FPM_FSD_demodulate` has already consumed the samples and advanced
+its bit clock, so they are simply gone.
+
+The effect is a deliberate-looking conservatism: data recovered from a signal
+the gain control does not believe in is never passed up as if it were real.
+The cost is the first block or two of every recovery, which at 1200 bps is
+around 24 bits.
+
+Three smaller asymmetries with `BwChDem_Progress`, which is the other half of
+the same modem and was written by the same hand:
+
+- `BwChDem_Progress` sets `*nbits = 0` in its prologue. `v23FP_rx_progress`
+  writes `*nbits` only on the paths that return 0, so a caller has to
+  initialise it -- and the differential test poisons it before every call for
+  exactly that reason.
+- `BwChDem_Progress` takes its sample count as a `short`;
+  `v23FP_rx_progress` takes it as an `int` and compares it as one.
+- neither give-up path in `v23FP_rx_progress` stores 2 into the object's
+  status field; the 2 goes straight into `%eax`. So the field holds whatever
+  the last non-terminal call left, and a caller that reads it instead of the
+  return value sees the receiver still claiming to be running.

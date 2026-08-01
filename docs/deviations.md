@@ -1011,3 +1011,40 @@ its own block size. It is reachable by anything else linking this library.
 not, and the only input that tells them apart is one where the original has
 no behaviour to be equivalent to. `t_v23tx` does not drive `count == 0` and
 says why.
+
+## D21 — the two halves of V.23 disagree about the width of one configuration field 🐛 💤
+
+**Module** `src/pump/v23/v23rx.c` · original `v23rx.c`, `.text 0x086d30`
+
+`struct v23_cfg` carries one carrier-loss timeout at `+0x08`, and both of
+V.23's receivers copy it into their own object at create time. They do not
+agree about how much of it to copy:
+
+```
+; v23FP_rx_create
+   86f10:  mov    0x8(%eax),%ecx        ; the whole 32 bits
+   86f25:  mov    %cx,0x238(%ebx)       ; ...stored as 16
+
+; BwChDem_Create keeps all 32
+```
+
+So one configuration value produces two different timeouts. Below 65536 they
+agree exactly. At or above it the 1200 bps receiver's silently wraps: 65536
+becomes 0, which makes `silence_limit <= silence` true on the first quiet
+block and the forward channel gives up the moment the line dips, while the
+backward channel goes on waiting for another eighteen hours.
+
+The unit is milliseconds — both counters are charged 20 per call, which is
+one 160-sample block at 8 kHz — so the wrap is at 65.5 seconds of tolerated
+silence. That is a long time for a modem to hold a dead line, which is why
+this is dormant rather than live.
+
+**Reproduced**, not fixed: the reconstruction truncates in `v23rx.c` and does
+not in `bwchdem.c`, exactly as the original does. Widening the field would be
+a behaviour change on an input the original handles differently, and the two
+sides of a differential test would stop agreeing.
+
+**Reachable?** Only from a configuration that asks for a 65-second timeout or
+longer. What the shipped configurations actually contain is a question for
+`v23modem.c` and `v23.c`, which are not reconstructed yet. `t_v23rx` drives
+the truncating path directly with a limit of 200 ms and pins it.

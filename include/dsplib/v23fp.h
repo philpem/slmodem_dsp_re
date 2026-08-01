@@ -20,14 +20,16 @@
  * file that owns them.  Hoisting either into this header would silently merge
  * two different filters into one.
  *
- * STATUS: partial.  V23filt.c (the tables below), v23tx.c and bwchdem.c are
- * reconstructed; v23rx.c and the composite are not yet.
+ * STATUS: partial.  V23filt.c (the tables below), v23tx.c, v23rx.c and
+ * bwchdem.c are reconstructed; the composite is not yet.
  */
 
 #ifndef DSPLIB_V23FP_H
 #define DSPLIB_V23FP_H
 
 #include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fsd.h"
+#include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_tone.h"
 
 /*
@@ -155,6 +157,78 @@ void v23FP_tx_delete(struct v23tx *tx);
  */
 void v23FP_tx_progress(struct v23tx *tx, short *out, int count,
 		       const int *bits, int *consumed);
+
+/*
+ * ---------------------------------------------------------------------------
+ * v23rx.c -- the 1200 bps forward-channel receiver, 576 bytes.
+ *
+ * A conventional FSK receive chain, and structurally the twin of Bell 103's:
+ * gain control, a channel filter, resampling, then a delay-line discriminator
+ * with its own slicer and bit clock.  What is V.23-specific is the rates.  The
+ * datapump speaks 8 kHz; the multirate filter runs 3:4, which lands on 6 kHz;
+ * and the demodulator is configured for 5 samples per bit.  6000 / 5 is 1200
+ * exactly, so unlike Bell 103 -- which resamples to 7200 to get 24 samples per
+ * 300 baud symbol -- nothing here is approximate.
+ *
+ * The object carries two gain controls, and they are not interchangeable: one
+ * runs on a private copy of the input for the carrier detector, the other on
+ * the demodulator's own signal after resampling and gets frozen once carrier
+ * is up.  See src/pump/v23/v23rx.c.
+ */
+struct v23rx {
+	short		rx_state;	/* +0x00 the acquisition gate: 0, 5,
+					 *       10, then 11 for ever        */
+	short		pad02;		/* +0x02 never written by anything   */
+	struct fpm_tone	*tone;		/* +0x04 the 1300 Hz carrier detector */
+	struct fpm_agc	agc;		/* +0x08 the data path's, frozen once
+					 *       carrier is up               */
+	struct fpm_agc	det_agc;	/* +0x34 the detector's, never frozen */
+	struct fpm_mrf	mrf;		/* +0x60 8 kHz -> 6 kHz, 3:4         */
+	struct fpm_fsd	fsd;		/* +0x7c the discriminator            */
+	const short	*iir_coeff;	/* +0xb4 V23_IIR_FILT                */
+	short		*iir_state;	/* +0xb8 16 words, heap-allocated    */
+	short		iir_sections;	/* +0xbc 4                           */
+	short		padbe;
+	/*
+	 * The carrier detector's private copy of the block.  160 shorts is one
+	 * 20 ms frame at 8 kHz and is the whole of the gap to `bits`; nothing
+	 * in the original bounds the copy against it.  See the note in
+	 * v23rx.c.
+	 */
+	short		det_buf[160];	/* +0xc0 .. +0x1ff                   */
+	/*
+	 * Where FPM_FSD_demodulate writes.  26 is FSDv23_CFG's max_bits of 24
+	 * plus the two the demodulator is allowed to overshoot by.
+	 */
+	unsigned short	bits[26];	/* +0x200 .. +0x233                  */
+	short		nbits;		/* +0x234 how many the last call made */
+	unsigned short	silence;	/* +0x236 ms of dead line since the
+					 *       last block with signal      */
+	unsigned short	silence_limit;	/* +0x238 from the configuration     */
+	unsigned short	acquire;	/* +0x23a ms spent waiting for the
+					 *       1300 Hz carrier             */
+	unsigned short	acquire_limit;	/* +0x23c 60000, i.e. one minute     */
+	short		status;		/* +0x23e the last return value      */
+};
+
+/* Build one.  NULL `state` allocates it; `cfg` supplies the silence timeout. */
+struct v23rx *v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg);
+
+/* Tear one down: the tone detector, both filters and the IIR state. */
+void v23FP_rx_delete(struct v23rx *rx);
+
+/*
+ * Demodulate one block IN PLACE -- `samples` is filtered, resampled and
+ * gain-controlled where it lies, so on return it holds 3/4 as many samples as
+ * it did.  Returns 0 once carrier is up, 1 while acquiring it, 2 after giving
+ * up on it.
+ *
+ * `bits` and `nbits` are written only on a 0 return, and not even then if the
+ * line has gone quiet; see the note in v23rx.c.  A caller must therefore
+ * initialise `*nbits` itself, which is the opposite of BwChDem_Progress.
+ */
+short v23FP_rx_progress(struct v23rx *rx, short *samples, int count,
+			int *bits, int *nbits);
 
 /*
  * ---------------------------------------------------------------------------
