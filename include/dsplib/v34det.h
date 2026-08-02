@@ -9,8 +9,9 @@
  *                  hysteresis counter, for "is this tone present"
  *     DFTC.c       a bank of single-bin sliding DFTs, for "how much energy is
  *                  at each of these frequencies"
- *     DPSK.c       a delay-and-multiply FSK discriminator (declared here, in
- *                  dpsk.h, once it is reconstructed)
+ *     DPSK.c       a delay-and-multiply FSK discriminator -- declared in
+ *                  v34fsk.h, because it needs a partial map of the enclosing
+ *                  V.34 object and nothing here does
  *
  * The file names come from the object's STT_FILE entries; `detector.c` and
  * `DFTC.c` have no local symbols at all, so the boundary between those two
@@ -51,6 +52,13 @@ extern "C" {
  *
  * The offset is pinned by an assertion at the bottom of detector.c, so when
  * the real struct arrives it cannot silently move.
+ *
+ * THE OTHER PARTIAL MAP.  v34fsk.h declares `struct v34_object`, which is the
+ * same object from a DIFFERENT BASE: this one is the sub-object at
+ * V34object+0x264, so `flags` here is V34object+0x386.  Two partial maps of
+ * one object is already one more than anybody wants; a third would be a mess.
+ * When the next V.34 file needs a field, extend one of these two and say
+ * which -- do not start a third.
  */
 struct v34_rx {
 	unsigned char unmapped_000[0x122];

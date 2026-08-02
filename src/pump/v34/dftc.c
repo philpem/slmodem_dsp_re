@@ -182,13 +182,25 @@ dftenergy(struct v34_dftbin *bins, short nbins, short scale)
 
 	for (i = 0; i < nbins; i++, bins++) {
 		/*
-		 * `scale` is used as a byte.  A caller passing 256 therefore
-		 * shifts by zero, not by an amount x86 would have masked to
-		 * zero anyway -- the truncation is in the original's load,
-		 * not in the shift instruction, so it is reproduced here
-		 * rather than left to the platform.
+		 * `scale` is used as a byte, and then as a shift count.
+		 *
+		 * The truncation to a byte is the original's own load
+		 * (`movzbl`), so a caller passing 256 shifts by zero.  The
+		 * mask to 5 bits after it is the `shl %cl` instruction's,
+		 * which x86 applies whether the compiler asks for it or not
+		 * -- so `& 31` here is not added behaviour, it is the only
+		 * way to spell what the object does for a count of 32 or
+		 * more without leaving the C undefined.  Same idiom as
+		 * src/dsp/fpm_agc.c.
+		 *
+		 * All eight call sites pass a small literal -- 2, 4, 5 or 6,
+		 * materialised through a register by GCC 3.4 rather than as
+		 * an immediate -- so the masked range is not reached in
+		 * practice.  It is handled anyway because "not reached by any
+		 * caller we have translated" is a weaker claim than it looks
+		 * while 90% of the object is still opaque.
 		 */
-		unsigned sh = (unsigned char)scale;
+		unsigned sh = (unsigned char)scale & 31;
 		int re = (int)((unsigned)bins->acc_re << sh);
 		int im = (int)((unsigned)bins->acc_im << sh);
 		unsigned e;

@@ -87,6 +87,11 @@ struct v34_fskdelay {
  * Every named offset is checked by a static assertion in dpsk.c, so the
  * padding cannot drift silently once the surrounding translation units
  * arrive and start filling it in.
+ *
+ * THE OTHER PARTIAL MAP.  v34det.h declares `struct v34_rx`, which is this
+ * same object seen from +0x264 -- so its `flags` at +0x122 is this struct's
+ * +0x386.  Extend one of the two when the next V.34 file needs a field, and
+ * say which; do not start a third.
  */
 struct v34_object {
 	unsigned char unmapped_0000[0x402];

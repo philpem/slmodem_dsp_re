@@ -161,6 +161,13 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 		 * this address once, before the loop, and it stays correct
 		 * only because the line shifts under it rather than the index
 		 * moving.
+		 *
+		 * NOT bounds-checked, and deliberately so: the original does
+		 * not check either, and a `delay` past the end of the line
+		 * reads whatever follows it in both.  Adding a clamp would
+		 * be added hardening on an input no caller has been seen to
+		 * get wrong -- and would make the two disagree exactly where
+		 * a differential test could not tell which was right.
 		 */
 		work[j] = (short)((work[j] * d->line[cfg->delay]) >> 14);
 	}

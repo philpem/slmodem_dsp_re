@@ -183,8 +183,23 @@ run(const char *what, const short *coeff, short polarity, short limit,
 
 		diff_eq_int(what, ra, rb, call);
 		compare_obj(what, &ours, ref);
-		diff_eq_int("the receiver flags agree", rx_ours.flags,
-			    rx_ref.flags, call);
+		/*
+		 * The whole receiver stub, not just `flags`.  The
+		 * disassembly says 0x14(%esp) has exactly one use in
+		 * tone_detect, so comparing the one field would be
+		 * defensible -- but a wrong offset is precisely the mistake
+		 * that would land in the padding, and t_v34fsk holds its own
+		 * object map to the same standard.
+		 */
+		{
+			const unsigned char *p = (const unsigned char *)&rx_ours;
+			const unsigned char *q = (const unsigned char *)&rx_ref;
+			unsigned b;
+
+			for (b = 0; b < sizeof(rx_ours); b++)
+				diff_eq_int("the receiver object", p[b], q[b],
+					    b);
+		}
 
 		if (before_state == V34_DET_STATE_WARMUP
 		    && ours.state == V34_DET_STATE_WARMUP)
