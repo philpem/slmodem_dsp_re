@@ -5237,3 +5237,53 @@ above, run at three taps each, with a 0.7 input gain. What is **not** yet
 established: the loop bound (three is inferred from the array size, not read),
 what the four `V34TimingIIR_*` tables are for — nothing here reads them — and
 what the function returns.
+
+## 100. The FSK discriminator's delay line lives inside the echo canceller
+
+Two things this reconstruction mapped independently turn out to be the same
+memory.
+
+`fskdetect` (DPSK.c) fetches a pointer from the V.34 object and treats what it
+points at as a 49-entry delay line starting 0x14 bytes in:
+
+```
+   73bb3:  mov  0x80c4(%edx),%esi
+   73bb9:  lea  0x14(%esi,%eax,2),%ecx
+```
+
+`V34InitializeImplementationSpecific` (v34filters.c) writes that same word:
+
+```
+   71dc0:  lea  0x80d8(%eax),%edx
+   71dd2:  mov  %edx,0x80c4(%eax)
+```
+
+and `0x80c4` is `0x80b8 + 0x0c` — the **`coeff_frac` field of the first echo
+canceller** (finding 98). So the pointer the FSK discriminator dereferences is
+the echo canceller's fractional-coefficient array, and its delay line occupies
+`obj+0x80ec` through `obj+0x8150`: 49 shorts inside a 144-short array that
+spans `obj+0x80d8` to `obj+0x81f7`.
+
+**They cannot both be live.** `V34EchoCleanUp` zeroes all 144 entries of
+`coeff_frac`, which erases the whole FSK delay line, and `V34EchoAdapt`
+writes every one of them each time it runs.
+
+The reading that fits is deliberate reuse: the FSK discriminator carries the
+INFO messages of phase 2, and the echo canceller's fractional coefficients
+only matter once adaptation is running in data mode. Two phases that never
+overlap, sharing one buffer — which is exactly the kind of economy a modem
+DSP with a fixed memory budget makes, and exactly the kind that is invisible
+until two modules are reconstructed separately and their maps collide.
+
+**What this changes.** Nothing in the code: both modules address the memory
+through a pointer and neither assumes exclusivity, so the reconstruction is
+already faithful. What it changes is the object map. `struct v34_fskdelay` in
+v34fsk.h is not a distinct object; it is a *view* onto
+`struct v34_echo::coeff_frac`, and the headers now say so. When V34RX.c
+arrives and defines the parent, the two must be declared as one region with
+two readings — not as two members, which would double-allocate 288 bytes and
+silently break the aliasing the original depends on.
+
+It also vindicates the rule written into both headers when the second partial
+map was created: extend one of the existing maps, never start a third. This
+is what starting a third would have cost.

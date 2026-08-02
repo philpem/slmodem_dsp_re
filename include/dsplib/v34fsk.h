@@ -68,7 +68,20 @@ struct v34_fsk {
 	short prev;		/* +0x14  last sample, for the sign test  */
 };
 
-/* The object that holds the discriminator's delay line, via a pointer. */
+/*
+ * The discriminator's delay line.
+ *
+ * NOT A DISTINCT OBJECT.  The pointer at V.34 object offset +0x80c4 that
+ * fskdetect dereferences is the first echo canceller's `coeff_frac` field,
+ * so this is a VIEW onto `struct v34_echo::coeff_frac` -- the delay line
+ * occupies 49 of that array's 144 shorts.  The two are never live at the
+ * same time: the FSK receiver carries phase 2's INFO messages and the echo
+ * canceller's fractional coefficients only matter in data mode.
+ *
+ * See docs/findings.md, 100.  When V34RX.c defines the parent these must be
+ * ONE region with two readings; declaring them as two members would
+ * double-allocate and break the aliasing the original depends on.
+ */
 struct v34_fskdelay {
 	unsigned char unmapped_00[0x14];
 	short line[V34_FSK_DELAY_LINE];		/* +0x14 .. +0x74 */
@@ -102,7 +115,7 @@ struct v34_object {
 	 */
 	short fsk_inhibit;				/* +0x402 */
 	unsigned char unmapped_0404[0x80c4 - 0x404];
-	struct v34_fskdelay *fsk_delay;			/* +0x80c4 */
+	struct v34_fskdelay *fsk_delay;			/* +0x80c4, see above */
 	unsigned char unmapped_80c8[0xaad0 - 0x80c8];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */

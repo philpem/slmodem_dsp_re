@@ -51,7 +51,12 @@ struct v34_echo {
 	short *cursor;		/* +0x00  write position in `dline`      */
 	short *dline;		/* +0x04  circular, `dlen` shorts        */
 	short *coeff;		/* +0x08  high half, `taps` shorts       */
-	short *coeff_frac;	/* +0x0c  low half                       */
+	/*
+	 * +0x0c, the low half -- and also what DPSK.c's fskdetect
+	 * dereferences as its delay line.  The two share the array and are
+	 * never live together; see docs/findings.md, 100.
+	 */
+	short *coeff_frac;
 	short *hist;		/* +0x10  tap history, `taps` shorts     */
 	void *unused_14;	/* +0x14  no reader or writer found      */
 	unsigned dlen;		/* +0x18  delay line length, in shorts   */
