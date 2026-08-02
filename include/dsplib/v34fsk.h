@@ -137,16 +137,30 @@ struct v34_object {
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
-	unsigned char unmapped_25c2[0x25c6 - 0x25c2];
+	short f25c2;					/* +0x25c2 bit 9 gates the echo feed */
+	unsigned char unmapped_25c4[0x25c6 - 0x25c4];
 	short f25c6;					/* +0x25c6 */
 	unsigned char unmapped_25c8[0x25cc - 0x25c8];
 	int f25cc;					/* +0x25cc */
-	unsigned char unmapped_25d0[0x2aa4 - 0x25d0];
+	short f25d0;					/* +0x25d0 symbol re */
+	short f25d2;					/* +0x25d2 symbol im */
+	short f25d4;					/* +0x25d4 tx scale  */
+	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
 	short f2aa4;					/* +0x2aa4 */
 	unsigned char unmapped_2aa6[0x3550 - 0x2aa6];
 	short f3550;					/* +0x3550 */
 	short f3552;					/* +0x3552 */
-	unsigned char unmapped_3554[0x80b8 - 0x3554];
+	unsigned char unmapped_3554[0x35a8 - 0x3554];
+	/*
+	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
+	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
+	 * subtracting -- unlike every other ring here.  Finding 116.
+	 */
+	int bulk_head;					/* +0x35a8 */
+	int bulk_tail;					/* +0x35ac */
+	short *bulk_ring;				/* +0x35b0 */
+	int bulk_len;					/* +0x35b4 */
+	unsigned char unmapped_35b8[0x80b8 - 0x35b8];
 	/*
 	 * The two echo cancellers and the arrays they point at, one
 	 * contiguous block each (finding 98).  Declared here rather than in

@@ -115,6 +115,9 @@ void rxtiminginit(void *obj);
 /* Reset the receive side: equaliser, Hilbert state, AGC and scalars. */
 void rxinit(void *obj);
 
+/* Modulate one symbol, enqueue it, pre-filter it, feed the echo cancellers. */
+void txmit(void *obj);
+
 /*
  * The receive AGC's state, mapped where `agcadapt` touches it.
  */

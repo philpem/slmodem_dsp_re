@@ -404,3 +404,65 @@ rxinit(void *objp)
 	rx->rx_samples = (short *)((char *)rx + 0x10c);
 	rx->f248 = 0;   rx->f24c = 0;
 }
+
+/* The bulk ring's wrap: reset to zero, not subtract.  See finding 116. */
+static int
+bulk_next(int idx, int len)
+{
+	idx++;
+	return idx & -(int)((unsigned)len > (unsigned)idx);
+}
+
+void
+txmit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_queue *txq = &obj->txq;
+	short local[38];
+	int sym, n, i;
+
+	sym = (int)(((unsigned)(unsigned short)obj->f25d2 << 16)
+		    | (unsigned short)obj->f25d0);
+	n = (short)V34ModulatorProcess(
+		(struct v34_modulator *)((char *)obj + 0x1450), sym, local);
+
+	if (n > 0) {
+		int *wr = txq->wr;
+
+		for (i = 0; i < n; i++) {
+			int v = (local[i] * obj->f25d4 + 0x2000) >> 14;
+
+			/*
+			 * One per sample.  txwritequeue adds four per call to
+			 * the same field; two producers, two conventions.
+			 */
+			txq->count = (short)(txq->count + 1);
+			((short *)wr)[0] = (short)v;
+			((short *)wr)[1] = 0;
+			wr++;
+			if ((char *)wr >= (char *)obj + 0x25c0)
+				wr = txq->ring;
+		}
+		txq->wr = wr;
+	}
+
+	V34EchoPreFilter(local, (short)n, &obj->prefilter);
+
+	/* Bit 9 of the short at +0x25c2; the original tests byte 0x25c3 for 2. */
+	if ((obj->f25c2 & 0x0200) == 0)
+		return;
+
+	for (i = 0; i < n; i++) {
+		short *ring = obj->bulk_ring;
+		int len = obj->bulk_len;
+		int delayed = ring[obj->bulk_head];
+
+		obj->bulk_head = bulk_next(obj->bulk_head, len);
+		ring[obj->bulk_tail] = local[i];
+		obj->bulk_tail = bulk_next(obj->bulk_tail, len);
+
+		/* Near end takes the current sample, far end the delayed one. */
+		V34EchoUpdateDelayLine(&obj->echo0, (short)(local[i] >> 1));
+		V34EchoUpdateDelayLine(&obj->echo1, (short)(delayed >> 1));
+	}
+}

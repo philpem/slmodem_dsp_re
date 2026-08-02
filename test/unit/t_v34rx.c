@@ -20,6 +20,9 @@ extern void ref_txinit(void *obj);
 extern int ref_agcadapt(void *a);
 extern void ref_rxtiminginit(void *obj);
 extern void ref_rxinit(void *obj);
+extern void ref_txmit(void *obj);
+extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
+				  int r);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -381,6 +384,92 @@ main(void)
 				     ((char *)&oa + 0x264))->agc_accum,
 				    (short)(unsigned long)
 				    ((char *)&oa + 0xa1b8), fl);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 txmit");
+	{
+		static struct v34_object oa, ob;
+		/*
+		 * shaped, the bulk ring and the pre-filter coefficients all
+		 * live OUTSIDE the object.  Pointing any of them into it
+		 * collides with the arrays
+		 * V34InitializeImplementationSpecific set up -- identically
+		 * on both sides, so a comparison cannot see it.  Finding 116b
+		 * is what that cost.
+		 */
+		static short shp_a[512], shp_b[512];
+		static short bra[64], brb[64];
+		int gate, it;
+
+		for (gate = 0; gate <= 1; gate++) {
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			memset(shp_a, 0, sizeof(shp_a));
+			memset(shp_b, 0, sizeof(shp_b));
+			memset(bra, 0, sizeof(bra)); memset(brb, 0, sizeof(brb));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			((struct v34_modulator *)((char *)&oa + 0x1450))->shaped
+				= shp_a;
+			((struct v34_modulator *)((char *)&ob + 0x1450))->shaped
+				= shp_b;
+			V34SetupModulator((struct v34_modulator *)
+					  ((char *)&oa + 0x1450), 2400, 1600,
+					  0, 0, 1);
+			ref_V34SetupModulator((char *)&ob + 0x1450, 2400,
+					      1600, 0, 0, 1);
+			oa.prefilter.coeff = ob.prefilter.coeff =
+				V34TimingPrefilterCoeff;
+			oa.prefilter.shift = ob.prefilter.shift = 14;
+			oa.f25d4 = ob.f25d4 = 0x4000;
+			oa.f25c2 = ob.f25c2 = (short)(gate ? 0x200 : 0);
+			oa.bulk_ring = bra;  ob.bulk_ring = brb;
+			oa.bulk_len  = ob.bulk_len = 64;
+
+			for (it = 0; it < 60; it++) {
+				unsigned b;
+
+				oa.f25d0 = ob.f25d0 = (short)(it * 811 - 9000);
+				oa.f25d2 = ob.f25d2 = (short)(it * 337 - 5000);
+				txmit(&oa); ref_txmit(&ob);
+
+				for (b = 0; b < sizeof(oa); b++) {
+					/* Every pointer field: two objects. */
+					if ((b >= 0x268 && b < 0x270)
+					    || (b >= 0x2074 && b < 0x2078)
+					    || (b >= 0x20cc && b < 0x20d0)
+					    || (b >= 0x2220 && b < 0x2228)
+					    || (b >= 0x35b0 && b < 0x35b4)
+					    || (b >= 0x80b8 && b < 0x80d8)
+					    || (b >= 0x9138 && b < 0x9158)
+					    || (b >= 0x1450 + 0x10
+						&& b < 0x1450 + 0x18)
+					    || (b >= 0x1450 + 0xc24
+						&& b < 0x1450 + 0xc28)
+					    || (b >= 0x1450 + 0xc7c
+						&& b < 0x1450 + 0xc80)
+					    || (b >= 0x1450 + 0xcb0
+						&& b < 0x1450 + 0xcb4))
+						continue;
+					/*
+					 * Stride larger than the object, so
+					 * (iteration, offset) is unambiguous
+					 * -- finding 116a.
+					 */
+					diff_eq_int("txmit at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)it * 100000 + b);
+				}
+				for (b = 0; b < 64; b++)
+					diff_eq_int("bulk ring", bra[b],
+						    brb[b], b);
+				for (b = 0; b < 512; b++)
+					diff_eq_int("shaped", shp_a[b],
+						    shp_b[b], b);
+			}
 		}
 	}
 	rc |= diff_end();
