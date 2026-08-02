@@ -5626,3 +5626,69 @@ real rates gets the INFO-channel configuration.
 
 The same `--entries` option will be needed for any other compare-chain
 dispatch in what remains; `v34handshak` uses jump tables and does not need it.
+
+## 107. `V34SetupModulator` decoded: a polyphase loader and two dispatches
+
+The engine (0x72e7a-0x72ee8) is a **polyphase filter loader**, and it is the
+same 590 bytes for every rate:
+
+```
+   for (row = 0; row < m[0x08]; row++) {
+       for (i = 0; i < m[0x00]; i++)
+           dst[i] = src[m[0x00] - 1 - i];      /* REVERSED */
+       for (; i <= 0x3f; i++)
+           dst[i] = 0;                          /* pad to 64 shorts */
+       dst += 64;  src += m[0x00];
+   }
+```
+
+with `dst = m[0xc24]` and `src` the `tx*c1` row the rate selected. So each
+phase is stored time-reversed and zero-padded to 64 taps — which is why the
+`tx*c1` tables are stacks of 16-tap rows (finding 97) and why the destination
+is 64 shorts per row regardless.
+
+**Dispatch 1, on baud** (arg1), setting three counts and two table pointers:
+
+```
+   baud   m[0x00]  m[0x04]  m[0x08]   tx*c1 source
+    600      8        1      0x10     tx600c1            (the DEFAULT case)
+   2400      ?        1       4       tx2400c1
+   2800     0x20      7      0x18     tx2800c1
+   3000      ?        5      0x10     tx3000c1
+   3200      ?        1       3       tx3200c1_for_v34 / _for_v90
+   3429      ?        5      0xe      tx3429c1
+   4800     0x20      1       4       txAllPass
+```
+
+**Dispatch 2, on carrier frequency** (arg2), setting a sine table pointer at
+`m[0x10]` and its length in COMPLEX PAIRS at `m[0x14]`:
+
+```
+   0x4b0 1200 -> hsine1200   8      0x725 1829 -> hsine1829  0x15
+   0x640 1600 -> hsine1600   6      0x74b 1867 -> hsine1867  0x24
+   0x690 1680 -> hsine1680  0x28    0x780 1920 -> hsine1920   5
+   0x708 1800 -> hsine1800  0x10    0x7a7 1959 -> hsine1959  0x31
+   0x960 2400 -> hsine2400   8      0x7d0 2000 -> hsine2000  0x18
+```
+
+Every `m[0x14]` is exactly the table's byte size / 4 — its length in complex
+pairs — so the tables are interleaved (sin, cos) and this is confirmation
+rather than assumption. Anything not matching falls through to `hsine1200`
+after a debug message.
+
+**The `High` / plain pre-emphasis choice is made on CARRIER FREQUENCY, not on
+baud.** The 2800 case tests `0x690` (1680 Hz) and installs
+`ec_prem_coef_B2800` if it matches, `ec_prem_coef_B2800High` otherwise. That
+reframes findings 96 and 105 again: `High` is not a per-rate variant, it is
+the not-1680-Hz variant, and 600 and 3429 having only one table means those
+rates only ever run at one carrier.
+
+Also established: `m[0xcb0] = preemp0` unconditionally at entry; `m[0xc7c]`
+takes the `ec_prem_coef_*` pointer; the `p*` tables are reached as
+`p<baud> + 32 * (arg3 - 1)`; and a non-zero arg5 diverts to a separate path
+at 0x72f64 that zeroes `m[0x0c]` and `m[0x18]` and calls `sysdep_memset`
+twice.
+
+**Not yet written.** `m[0x00]` is unread for four of the seven rates, and the
+arg5 path and the 0x73013 tail are unread. What is above is enough to write
+most of it; the remainder is one more disassembly pass.
