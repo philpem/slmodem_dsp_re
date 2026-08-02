@@ -1,10 +1,11 @@
 /*
  * v34shell.h -- ITU-T V.34: the shell mapper's index arithmetic.
  *
- * V.34 9.3 maps a group of eight sub-indices onto one index into a shell of
- * the constellation, so that points of equal energy are equally likely --
- * the shaping that buys V.34 its ~0.8 dB over a uniform mapping.  This is
- * the inverse direction, used by the receiver.
+ * V.34 9.4 (shell mapping; 9.3 is the parser, per T-REC-V.34-199802) maps a
+ * group of eight sub-indices onto one index into a shell of the
+ * constellation, so that points of equal energy are equally likely -- the
+ * shaping that buys V.34 its ~0.8 dB over a uniform mapping.  This is the
+ * inverse direction, used by the receiver.
  *
  * THE OBJECT IS PARTIALLY MAPPED, and deliberately so: `shellDemapper` is
  * being reconstructed ahead of the rest of its module because it is a leaf
