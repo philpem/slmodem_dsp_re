@@ -7600,3 +7600,54 @@ has not reached yet.
 
 Recovered only because finding 134 went looking for what had been dropped.
 A call site nobody carried was holding the build date.
+
+### 136. What the cadence detector's dropped strings name
+
+Extracted ahead of restoring the call sites, because the strings are the
+annotation and are useful on their own -- finding 134's argument in
+miniature.  Twenty-four sites across the two functions.
+
+`cadence_progress` (7):
+
+```
+   NO ANSWER state recognized
+   CYCLES_COUNTER= %d
+   BUSY cadence recognized
+   CADENCE %s: CONDITION B SATISFIED
+    CADENCE SERIRES COMPARISON ========================>
+   CADENCE %s: CONDITION C SATISFIED
+   CADENCE %s: CONDITION -- SERIES --- SATISFIED
+```
+
+`cadence_create` (17):
+
+```
+   TYPE %s                        Filter index %d
+   Filter SubIndex %d             BUFFER LENGTH %d samples.
+   INTEGRATION_LENGTH %d[ms]      LEVEL %d
+   Disable CONGESTION detector    BUFFER LENGTH is INVALID!
+   ============> %d               Disable RINGBACK detector
+   Ringback index====> %d
+   MAX_ON_TIME %d Buffers     MIN_ON_TIME %d Buffers
+   MAX_OFF_TIME %d Buffers    MIN_OFF_TIME %d Buffers
+   OFF_TIME_THAT_RESETS_CYCLE %d
+   Detection Thresholds: levle_fix=%d,--> LEVEL_THRESHOLD=%d
+   Cadence: Busy Tone loose detection is %d
+```
+
+**What they settle.**  The detector has three named acceptance conditions --
+B, C and a "series" comparison -- which is structure `cadence_progress`'s
+control flow shows but does not label; the reconstruction currently
+describes them positionally.  `CYCLES_COUNTER`, `OFF_TIME_THAT_RESETS_CYCLE`
+and `LEVEL_THRESHOLD` are the author's names for three fields this tree
+calls something else.  And `levle_fix` is a typo in the original's own
+source, which is the kind of thing that identifies a variable beyond
+argument.
+
+Two of the three `%s` arguments are a type name the caller passes, so
+`TYPE %s` and `CADENCE %s:` share it -- the detector knows whether it is
+busy, congestion or ringback, and says so.
+
+Restoring the call sites themselves is still owed; this is the half that can
+be banked without placing each gate exactly, and it is the half that helps
+whoever reads `cadence.c` next.
