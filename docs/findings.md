@@ -7657,3 +7657,39 @@ busy, congestion or ringback, and says so.
 Restoring the call sites themselves is still owed; this is the half that can
 be banked without placing each gate exactly, and it is the half that helps
 whoever reads `cadence.c` next.
+
+### 137. The object holds TWO shell contexts, receive and transmit, 0x1be0 apart
+
+`getFrame` takes one pointer and indexes it at `0x25e0`, `0x25f4`, `0x2a28`,
+`0x2a30`... none of which are in `struct v34_shell` as mapped.  Subtract
+0x1be0 from every one and they land exactly on fields already named:
+
+```
+   0x25e0 -> 0xa00  fa00        0x2a28 -> 0xe48  the bit callback
+   0x25e4 -> 0xa04  fa04        0x2a30 -> 0xe50  frame[0]
+   0x25f4 -> 0xa14  fa14        0x2a34..0x2a52 -> frame[2..17]
+```
+
+Twenty-three offsets, no exceptions.  So the V.34 object carries two
+instances of the same structure -- the receive one at +0, which `demapFrame`
+and `shellDemapper` work on, and a transmit one at +0x1be0, which `getFrame`
+does.  They do not overlap: the struct is 0x1450 and the second starts well
+past it.
+
+**The two unmapped ones name themselves.**  `0x2a60` and `0x2a64` -- i.e.
++0xe80 and +0xe84, inside what was `pad_e74` -- are a 32-bit bit buffer and
+its bit position: the position is compared against 15 and used as the shift
+count for the buffer, and `lsbMask[n]` masks off the field width.  So the
+transmit context has a bit *source* where the receive context has none, and
+`putFrame`'s callback at +0xe48 is matched by `getFrame`'s at the same
+offset.
+
+**And it confirms the wide field.**  `getFrame` writes `frame[0]` with a
+32-BIT store, spanning `frame[0]` and `frame[1]` -- the same pair
+`demapFrame` writes and `putFrame` splits when the width exceeds 16, and the
+only reason `frame[1]` exists.  Three functions, reached from three
+directions, agreeing.
+
+This is the encoder/decoder pairing the call graph's `--pairs` mode was
+built to find, and it arrived with the structure already proved rather than
+assumed.
