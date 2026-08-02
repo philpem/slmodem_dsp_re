@@ -6258,3 +6258,41 @@ has a reconstructed caller. Of what is left in task #36:
 `ApplyBulkDelay` should be deferred until at least one of its two calling
 states in `v34handshak` exists — it is a phase 6g-6m dependency, not a 6d
 one.
+
+## 118. `rxtiming` and `V34demodulate` must be done as a pair
+
+`rxtiming` (0x5b390, 669 bytes, GLOBAL) calls `V34demodulate` (0x5af10,
+1142 bytes, LOCAL) directly:
+
+```
+   5b3f8:  call 5af10 <V34demodulate>
+```
+
+That settles the question finding 117 left open. `V34demodulate` is local and
+has no `ref_` alias, but **`rxtiming` is its caller and is global**, so the
+blob's copy is reachable through it — exactly the pattern the eight
+file-local symbols in `docs/coverage.md` already use.
+
+The cost is that the two cannot be separated. Writing `rxtiming` alone leaves
+nothing for it to call; testing `V34demodulate` alone is impossible. They are
+one unit of about 1,800 bytes, and it is the first piece of V.34's actual
+receive signal path — everything before it has been initialisation, queueing
+or arithmetic helpers.
+
+What the opening of `rxtiming` already shows:
+
+- it re-points `rx->rx_samples` at `obj+0x370` on every call, which
+  `rxtiminginit` also does once — so the field is refreshed rather than
+  trusted;
+- the loop is driven by a counter at `rx+0x128` and a pair of positions at
+  `rx+0x1ac` and `rx+0x1b0`, differenced into a step;
+- after each `V34demodulate` it runs a two-tap IIR over `rx+0x208`/`+0x20a`
+  with coefficients `0x599b` and `-0x3eba`, writing the result to three
+  fields at once (`+0x240`, `+0x208`, `+0x244`);
+- `0x599b` is one more than the `0x599a` in `V34TimingFilter` (finding 99),
+  which is the sort of near-match worth not "correcting".
+
+**Scheduling:** this is the natural next unit of task #36, and it is a
+session's work rather than an increment. `V34agc` (827 B, GLOBAL),
+`adaptecho` (755 B, GLOBAL) and `decoderv34` (714 B, GLOBAL) are all
+independently testable and cheaper.
