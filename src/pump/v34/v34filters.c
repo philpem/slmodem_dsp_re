@@ -34,6 +34,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v34filt.h"
+#include "dsplib/v34fsk.h"	/* struct v34_object owns the cancellers' storage */
 
 /*
  * The Hilbert transform pair, 64 taps each, Q15.
@@ -299,6 +300,53 @@ V34EchoReportCoeff(struct v34_echo *e)
 				     e->coeff[i + 2], e->coeff[i + 3],
 				     e->coeff[i + 4], e->coeff[i + 5]);
 	}
+}
+
+/*
+ * Wire the two echo cancellers to their arrays.
+ *
+ * Everything here is a fixed offset into the enclosing object: the storage is
+ * part of the object rather than separately allocated, so this is layout
+ * rather than construction.  Finding 98 has the block diagram; the short
+ * version is that each canceller's four arrays are contiguous with the
+ * descriptor, and the second canceller repeats the first 0x1080 later.
+ *
+ * `cursor` IS NOT SET TO THE START OF THE DELAY LINE.  Each canceller's
+ * cursor is loaded with the PREVIOUS contents of its own `dline` field, read
+ * a few instructions before that field is overwritten:
+ *
+ *     71d85:  mov 0x80bc(%eax),%edx     ; old dline
+ *     71da3:  mov %edx,0x80b8(%eax)     ; cursor = it
+ *     71daf:  mov %ecx,0x80bc(%eax)     ; dline = obj+0x81f8
+ *
+ * On a re-initialisation that is the old base, which is the same address, so
+ * it is harmless.  On a FIRST initialisation it is whatever the field held --
+ * uninitialised memory.  Nothing dereferences it before V34EchoCleanUp
+ * rewrites it with `dline`, which every setup path calls, so it is dormant;
+ * registered as D30 and reproduced rather than tidied.
+ */
+void
+V34InitializeImplementationSpecific(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->p_2074 = (char *)obj + 0x146c;
+
+	obj->echo0.cursor = obj->echo0.dline;	/* the OLD dline; see above */
+	obj->echo0.dline = obj->echo0_dline;
+	obj->echo0.coeff = obj->echo0_coeff;
+	obj->echo0.coeff_frac = obj->echo0_frac;
+	obj->echo0.hist = obj->echo0_hist;
+	obj->echo0.dlen = V34_ECHO_DLEN;
+	obj->echo0.taps = V34_ECHO_TAPS;
+
+	obj->echo1.cursor = obj->echo1.dline;
+	obj->echo1.dline = obj->echo1_dline;
+	obj->echo1.coeff = obj->echo1_coeff;
+	obj->echo1.coeff_frac = obj->echo1_frac;
+	obj->echo1.hist = obj->echo1_hist;
+	obj->echo1.dlen = V34_ECHO_DLEN;
+	obj->echo1.taps = V34_ECHO_TAPS;
 }
 
 /* ------------------------------------------------------- Hilbert transformer */

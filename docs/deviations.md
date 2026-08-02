@@ -1353,3 +1353,36 @@ reconstructed; **the consequence is unmeasured** and recorded as such.
 **Not fixed.** `t_v34ec` asserts the upper twenty entries still hold the
 harness fill after init, so a reconstruction that helpfully zeroed all forty
 fails rather than passes.
+
+---
+
+## D30 🐛 `V34InitializeImplementationSpecific` seeds `cursor` from the old `dline`
+
+**Where:** `src/pump/v34/v34filters.c`.
+
+**What the original does:** for each echo canceller, reads the current
+contents of the `dline` field and stores that into `cursor`, a few
+instructions before overwriting `dline` with the correct base:
+
+```
+   71d85:  mov 0x80bc(%eax),%edx     ; the OLD dline
+   71da3:  mov %edx,0x80b8(%eax)     ; cursor = it
+   71daf:  mov %ecx,0x80bc(%eax)     ; dline = obj+0x81f8
+```
+
+The obvious intent is `cursor = dline`, and on any re-initialisation that is
+exactly what it computes, because the old base and the new base are the same
+address. On a **first** initialisation the field has never been written, so
+`cursor` is seeded from uninitialised memory.
+
+**What we do:** the same — `obj->echo0.cursor = obj->echo0.dline;` placed
+before the assignment to `dline`, which is the same read-before-write.
+
+**Reachable?** The bad value exists only between this function and the first
+`V34EchoCleanUp`, which unconditionally rewrites `cursor` with `dline`, and
+every setup path calls it. Nothing dereferences `cursor` in between.
+**Dormant.**
+
+**Not fixed.** `t_v34fsk` asserts `cursor` still holds the harness fill after
+initialisation, so a reconstruction that helpfully set it to the new base
+fails rather than passes — the same shape of check as D26 and D29.

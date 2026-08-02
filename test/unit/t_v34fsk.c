@@ -24,6 +24,7 @@
 extern void ref_fskdetect(void *obj, const short *in, short *out,
 			  const void *cfg);
 extern void ref_fskdemodulate(void *obj, const short *in, void *st);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern const short ref_intcoef1[V34_FSK_TAPS];
 extern const short ref_intcoef2[V34_FSK_TAPS];
 extern const short ref_intcoef3[V34_FSK_TAPS];
@@ -57,8 +58,10 @@ compare_all(const char *what)
 	unsigned i;
 
 	for (i = 0; i < sizeof(obj_a); i++) {
-		if (i >= __builtin_offsetof(struct v34_object, fsk_delay)
-		    && i < __builtin_offsetof(struct v34_object, fsk_delay)
+		if (i >= __builtin_offsetof(struct v34_object, echo0)
+			 + __builtin_offsetof(struct v34_echo, coeff_frac)
+		    && i < __builtin_offsetof(struct v34_object, echo0)
+			   + __builtin_offsetof(struct v34_echo, coeff_frac)
 			   + sizeof(void *))
 			continue;
 		diff_eq_int(what, a[i], b[i], i);
@@ -89,8 +92,15 @@ setup(const struct v34_fsk *cfg)
 	memset(dly_a.line, 0, sizeof(dly_a.line));
 	memset(dly_b.line, 0, sizeof(dly_b.line));
 
-	obj_a.fsk_delay = &dly_a;
-	obj_b.fsk_delay = &dly_b;
+	/*
+	 * Point each side's canceller at its own scratch array rather than at
+	 * its own `echo0_frac`, so the two sides cannot share storage and the
+	 * delay line stays comparable on its own.  The object does point it
+	 * at echo0_frac (finding 100); that aliasing is asserted separately
+	 * once V34InitializeImplementationSpecific is driven.
+	 */
+	obj_a.echo0.coeff_frac = (short *)&dly_a;
+	obj_b.echo0.coeff_frac = (short *)&dly_b;
 	obj_a.fsk_inhibit = obj_b.fsk_inhibit = 0;
 	obj_a.fsk = *cfg;
 	obj_b.fsk = *cfg;
@@ -313,6 +323,70 @@ main(void)
 	 */
 	diff_eq_int("and about the right number of them",
 		    bits > 40 && bits < 200, 1, bits);
+	rc |= diff_end();
+
+	diff_begin("v34 InitializeImplementationSpecific");
+	{
+		static struct v34_object ia, ib;
+
+		memset(&ia, HARNESS_MALLOC_FILL, sizeof(ia));
+		memset(&ib, HARNESS_MALLOC_FILL, sizeof(ib));
+		V34InitializeImplementationSpecific(&ia);
+		ref_V34InitializeImplementationSpecific(&ib);
+
+		/*
+		 * Pointers cannot be compared across the two objects, so
+		 * every installed one is checked as an OFFSET from its own
+		 * base -- which is stronger than comparing values, because
+		 * the offsets are what the layout actually asserts.
+		 */
+#define OFF(o, p)  ((long)((char *)(p) - (char *)&(o)))
+		diff_eq_int("p_2074", OFF(ia, ia.p_2074), 0x146c, 0);
+		diff_eq_int("echo0.dline", OFF(ia, ia.echo0.dline), 0x81f8, 0);
+		diff_eq_int("echo0.coeff", OFF(ia, ia.echo0.coeff), 0x9018, 0);
+		diff_eq_int("echo0.coeff_frac", OFF(ia, ia.echo0.coeff_frac),
+			    0x80d8, 0);
+		diff_eq_int("echo0.hist", OFF(ia, ia.echo0.hist), 0x8ee8, 0);
+		diff_eq_int("echo1.dline", OFF(ia, ia.echo1.dline), 0x9278, 0);
+		diff_eq_int("echo1.coeff", OFF(ia, ia.echo1.coeff), 0xa098, 0);
+		diff_eq_int("echo1.coeff_frac", OFF(ia, ia.echo1.coeff_frac),
+			    0x9158, 0);
+		diff_eq_int("echo1.hist", OFF(ia, ia.echo1.hist), 0x9f68, 0);
+		diff_eq_int("echo0.dlen", (long)ia.echo0.dlen, V34_ECHO_DLEN,
+			    0);
+		diff_eq_int("echo0.taps", (long)ia.echo0.taps, V34_ECHO_TAPS,
+			    0);
+		diff_eq_int("echo1.dlen", (long)ia.echo1.dlen, V34_ECHO_DLEN,
+			    0);
+		diff_eq_int("echo1.taps", (long)ia.echo1.taps, V34_ECHO_TAPS,
+			    0);
+		/* And the reference installed exactly the same offsets. */
+		diff_eq_int("ref echo0.dline", OFF(ib, ib.echo0.dline),
+			    OFF(ia, ia.echo0.dline), 0);
+		diff_eq_int("ref echo1.coeff", OFF(ib, ib.echo1.coeff),
+			    OFF(ia, ia.echo1.coeff), 0);
+		diff_eq_int("ref p_2074", OFF(ib, ib.p_2074),
+			    OFF(ia, ia.p_2074), 0);
+
+		/*
+		 * D30: `cursor` is loaded with the OLD contents of `dline`,
+		 * not with the new base.  Under the fill that is the fill
+		 * pattern, and both sides must agree on it -- so this asserts
+		 * the defect rather than the tidy behaviour.
+		 */
+		diff_eq_int("cursor holds the old dline, not the new",
+			    (long)(unsigned)(unsigned long)ia.echo0.cursor,
+			    (long)(unsigned)0xa5a5a5a5u, 0);
+		diff_eq_int("and the reference agrees",
+			    (long)(unsigned)(unsigned long)ib.echo0.cursor,
+			    (long)(unsigned)0xa5a5a5a5u, 0);
+
+		/* Finding 100, asserted: the FSK delay line IS echo0_frac. */
+		diff_eq_int("the FSK delay line is echo0's fractional array",
+			    OFF(ia, ia.echo0.coeff_frac),
+			    OFF(ia, ia.echo0_frac), 0);
+#undef OFF
+	}
 	rc |= diff_end();
 
 	diff_begin("v34 fsk: coverage");

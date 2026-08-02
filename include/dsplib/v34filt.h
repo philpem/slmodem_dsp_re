@@ -37,6 +37,15 @@ extern "C" {
  */
 
 /*
+ * The sizes V34InitializeImplementationSpecific installs, for both cancellers
+ * (finding 98).  Named here because three other things are derived from
+ * them: the report dump length, D27's wrap bound, and the storage layout in
+ * struct v34_object.
+ */
+#define V34_ECHO_TAPS	144	/* 0x90  */
+#define V34_ECHO_DLEN	1656	/* 0x678 */
+
+/*
  * One echo canceller, 0x20 bytes, and every field but one is a pointer or a
  * length -- the arrays live outside it.
  *
@@ -91,6 +100,16 @@ int V34EchoEstimateDelayLineEnergy(struct v34_echo *e);
 
 /* Log the coefficients, if logging is on.  See the note in v34filters.c. */
 void V34EchoReportCoeff(struct v34_echo *e);
+
+/*
+ * Point both echo cancellers at their storage inside the V.34 object, and
+ * set their two lengths.
+ *
+ * Declared with `void *` rather than `struct v34_object *` to keep v34filt.h
+ * free of v34fsk.h -- the dependency runs the other way, because the object
+ * owns the cancellers' storage.  v34filters.c casts once, at the top.
+ */
+void V34InitializeImplementationSpecific(void *obj);
 
 /* ------------------------------------------------------------------------
  * The Hilbert transformer

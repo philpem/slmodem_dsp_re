@@ -113,7 +113,13 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 	  const struct v34_fsk *cfg)
 {
 	short work[V34_FSK_INTERP];
-	struct v34_fskdelay *d = obj->fsk_delay;
+	/*
+	 * The delay line is the first echo canceller's fractional coefficient
+	 * array, reached through the canceller's own pointer exactly as the
+	 * original does -- `mov 0x80c4(%edx),%esi`, which is echo0.coeff_frac.
+	 * See finding 100 for why one array serves both.
+	 */
+	struct v34_fskdelay *d = (struct v34_fskdelay *)obj->echo0.coeff_frac;
 	short *hist = obj->fsk_interp;
 	int i, j, k;
 
@@ -298,7 +304,26 @@ typedef char v34fsk_size[(sizeof(struct v34_fsk) == 0x16) ? 1 : -1];
 V34FSK_ASSERT(line,    struct v34_fskdelay, line,        0x14);
 
 V34FSK_ASSERT(inhibit, struct v34_object, fsk_inhibit,   0x402);
-V34FSK_ASSERT(dline,   struct v34_object, fsk_delay,     0x80c4);
+V34FSK_ASSERT(echo0,   struct v34_object, echo0,         0x80b8);
+V34FSK_ASSERT(e0frac,  struct v34_object, echo0_frac,    0x80d8);
+V34FSK_ASSERT(e0dline, struct v34_object, echo0_dline,   0x81f8);
+V34FSK_ASSERT(e0hist,  struct v34_object, echo0_hist,    0x8ee8);
+V34FSK_ASSERT(e0coeff, struct v34_object, echo0_coeff,   0x9018);
+V34FSK_ASSERT(echo1,   struct v34_object, echo1,         0x9138);
+V34FSK_ASSERT(e1frac,  struct v34_object, echo1_frac,    0x9158);
+V34FSK_ASSERT(e1dline, struct v34_object, echo1_dline,   0x9278);
+V34FSK_ASSERT(e1hist,  struct v34_object, echo1_hist,    0x9f68);
+V34FSK_ASSERT(e1coeff, struct v34_object, echo1_coeff,   0xa098);
+V34FSK_ASSERT(hilb,    struct v34_object, hilbert,       0xa1b8);
+/*
+ * The pointer field DPSK.c dereferences is echo0's coeff_frac, at +0x80c4.
+ * Asserted as a sum so that a change to either struct breaks here rather
+ * than silently moving the FSK delay line -- finding 100.
+ */
+typedef char v34fsk_off_dline[
+	((int)(__builtin_offsetof(struct v34_object, echo0)
+	       + __builtin_offsetof(struct v34_echo, coeff_frac)) == 0x80c4)
+	? 1 : -1];
 V34FSK_ASSERT(state,   struct v34_object, fsk,           0xaad0);
 V34FSK_ASSERT(interp,  struct v34_object, fsk_interp,    0xaae6);
 V34FSK_ASSERT(lpf,     struct v34_object, fsk_lpf,       0xab00);

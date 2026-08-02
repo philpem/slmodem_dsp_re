@@ -22,6 +22,8 @@
 #ifndef DSPLIB_V34FSK_H
 #define DSPLIB_V34FSK_H
 
+#include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -114,9 +116,42 @@ struct v34_object {
 	 * switched off".  Nothing here sets it.
 	 */
 	short fsk_inhibit;				/* +0x402 */
-	unsigned char unmapped_0404[0x80c4 - 0x404];
-	struct v34_fskdelay *fsk_delay;			/* +0x80c4, see above */
-	unsigned char unmapped_80c8[0xaad0 - 0x80c8];
+	unsigned char unmapped_0404[0x2074 - 0x404];
+	/*
+	 * A pointer V34InitializeImplementationSpecific aims at +0x146c of
+	 * this same object.  What lives there is not yet known; the echo
+	 * pre-filter is at +0x2078, immediately after, so this is plausibly
+	 * its input buffer.
+	 */
+	void *p_2074;					/* +0x2074 */
+	unsigned char unmapped_2078[0x80b8 - 0x2078];
+	/*
+	 * The two echo cancellers and the arrays they point at, one
+	 * contiguous block each (finding 98).  Declared here rather than in
+	 * v34filt.h because this is the struct that owns the storage; the
+	 * descriptors are `struct v34_echo` and the arrays are named
+	 * separately because the object's own pointers are what tie them
+	 * together, not adjacency.
+	 *
+	 * `echo0.coeff_frac` points at `echo0_frac`, and that array is ALSO
+	 * DPSK.c's FSK delay line -- see finding 100 and the note on
+	 * `struct v34_fskdelay` above.  One region, two readings; there is
+	 * deliberately no separate member for the second.
+	 */
+	struct v34_echo echo0;				/* +0x80b8 */
+	short echo0_frac[V34_ECHO_TAPS];		/* +0x80d8 */
+	short echo0_dline[V34_ECHO_DLEN];		/* +0x81f8 */
+	short echo0_hist[V34_ECHO_TAPS];		/* +0x8ee8 */
+	unsigned char gap_9008[0x9018 - 0x9008];
+	short echo0_coeff[V34_ECHO_TAPS];		/* +0x9018 */
+	struct v34_echo echo1;				/* +0x9138 */
+	short echo1_frac[V34_ECHO_TAPS];		/* +0x9158 */
+	short echo1_dline[V34_ECHO_DLEN];		/* +0x9278 */
+	short echo1_hist[V34_ECHO_TAPS];		/* +0x9f68 */
+	unsigned char gap_a088[0xa098 - 0xa088];
+	short echo1_coeff[V34_ECHO_TAPS];		/* +0xa098 */
+	short hilbert[V34_HILBERT_TAPS];		/* +0xa1b8 */
+	unsigned char unmapped_a238[0xaad0 - 0xa238];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
