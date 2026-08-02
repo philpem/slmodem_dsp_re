@@ -207,10 +207,66 @@ sysdep_vsnprintf(char *buf, unsigned size, const char *fmt, va_list ap)
  */
 unsigned int dsplibs_debug_level = 0;
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * Debug capture.
+ *
+ * The diagnostic paths were, until this existed, the one part of the object
+ * no test could reach: `dsplibs_debug_level` ships at zero, so every gated
+ * call site is dead in both the blob and the reconstruction, and a wrong
+ * format string or a wrong argument list there survives indefinitely.  That
+ * is not hypothetical -- `updateAlpha` had all three wrong (finding 126).
+ *
+ * Both sides already have their own printf (symmap prefixes it, because it
+ * is a stateful callback), so each can be captured separately and the two
+ * transcripts compared like any other output.
+ */
+#define DBGCAP_SIZE 16384
+
+int dsplib_debug_capture_on;
+static char dbgcap[2][DBGCAP_SIZE];
+static unsigned dbgcap_len[2];
+
+void
+dsplib_debug_capture_reset(void)
+{
+	dbgcap_len[0] = dbgcap_len[1] = 0;
+	dbgcap[0][0] = dbgcap[1][0] = '\0';
+}
+
+const char *
+dsplib_debug_capture_text(int side)
+{
+	return dbgcap[side & 1];
+}
+
+static void
+dbgcap_add(int side, const char *fmt, va_list ap)
+{
+	int n;
+
+	if (!dsplib_debug_capture_on)
+		return;
+	if (dbgcap_len[side] + 1 >= DBGCAP_SIZE)
+		return;
+	n = vsnprintf(dbgcap[side] + dbgcap_len[side],
+		      DBGCAP_SIZE - dbgcap_len[side], fmt, ap);
+	if (n > 0) {
+		dbgcap_len[side] += (unsigned)n;
+		if (dbgcap_len[side] >= DBGCAP_SIZE)
+			dbgcap_len[side] = DBGCAP_SIZE - 1;
+	}
+}
+
 int
 dsplibs_debug_printf(const char *fmt, ...)
 {
-	(void)fmt;
+	va_list ap;
+
+	va_start(ap, fmt);
+	dbgcap_add(0, fmt, ap);
+	va_end(ap);
 	return 0;			/* logging only, as on the ref side */
 }
 
@@ -238,7 +294,11 @@ unexpected(const char *who)
 int
 ref_dsplibs_debug_printf(const char *fmt, ...)
 {
-	(void)fmt;
+	va_list ap;
+
+	va_start(ap, fmt);
+	dbgcap_add(1, fmt, ap);
+	va_end(ap);
 	return 0;			/* harmless: logging only */
 }
 

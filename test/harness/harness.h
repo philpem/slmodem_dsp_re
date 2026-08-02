@@ -166,6 +166,17 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
 	diff_eq_int_(__FILE__, __LINE__, (fmt), (long)(got), (long)(want), \
 		     (long)(input))
 
+/*
+ * Debug capture: with this set, each side's dsplibs_debug_printf appends to
+ * its own transcript, so the diagnostic paths can be compared like any other
+ * output.  Side 0 is the reconstruction, side 1 the blob.  Remember to raise
+ * BOTH dsplibs_debug_level and ref_dsplibs_debug_level, or the two will take
+ * different branches for reasons unrelated to the modem.
+ */
+extern int dsplib_debug_capture_on;
+void dsplib_debug_capture_reset(void);
+const char *dsplib_debug_capture_text(int side);
+
 #ifdef __cplusplus
 }
 #endif

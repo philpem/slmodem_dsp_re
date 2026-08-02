@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "harness.h"
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34recv.h"
@@ -14,7 +17,8 @@ extern void ref_txwritequeue(void *q, const short *src);
 extern int ref_bitreverse(unsigned short v, short nbits);
 extern void ref_decision(void *d, const int *pts, short npts);
 extern void ref_V34nlencoder(const short *in, short *out);
-extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
+extern void ref_updateAlpha(short *a, int e, int d, int g, int dec,
+			    const char *t);
 extern int ref_V34descrambler(void *s, short bits, short nbits);
 extern void ref_txinit(void *obj);
 extern int ref_agcadapt(void *a);
@@ -24,6 +28,7 @@ extern void ref_txmit(void *obj);
 extern void ref_V34agc(void *rx);
 extern void ref_rxtiming(void *obj);
 extern void ref_txrxdmainit(short *dst, const short *src);
+extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
 extern void ref_v34FreezeEcho(void *obj);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
@@ -204,11 +209,65 @@ main(void)
 		for (ap = 0; ap <= 1; ap++) {
 			short aa = 1234, ab = 1234;
 
-			updateAlpha(&aa, energies[e], ap, g, dc, 7);
-			ref_updateAlpha(&ab, energies[e], ap, g, dc, 7);
+			updateAlpha(&aa, energies[e], ap, g, dc, "NE");
+			ref_updateAlpha(&ab, energies[e], ap, g, dc, "NE");
 			diff_eq_int("alpha", aa, ab,
 				    (long)energies[e] * 31 + g);
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The DIAGNOSTIC path, which nothing had ever exercised.  Both sides
+	 * gate on their own debug level and print through their own hook, so
+	 * with capture on the two transcripts can be compared directly.
+	 *
+	 * This is the test that was missing: updateAlpha's message had the
+	 * wrong format string, the wrong argument count and the wrong types,
+	 * and no differential run could see it because dsplibs_debug_level is
+	 * zero everywhere.  See finding 126.
+	 */
+	diff_begin("v34 updateAlpha debug transcript");
+	{
+		/*
+		 * No small negative energies here: they divide by zero in
+		 * the original as well as in the reconstruction, and the
+		 * quantity is a sum of squares, so reaching one means the
+		 * estimate has already overflowed.  Finding 127.
+		 */
+		static const int energies[] = { 0, 1, 0x4000, 0x1000000,
+						0x40000000, 0x7fffffff,
+						-65536 };
+		short aa, ab;
+		unsigned e;
+		int ap, g;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (e = 0; e < sizeof(energies) / sizeof(energies[0]); e++)
+		for (ap = 0; ap <= 1; ap++)
+		for (g = 0x1000; g <= 0x7000; g += 0x3000) {
+			dsplib_debug_capture_reset();
+			aa = ab = (short)(0x1234 + (int)e * 977);
+			updateAlpha(&aa, energies[e], ap, g, 0x4000, "NE");
+			ref_updateAlpha(&ab, energies[e], ap, g, 0x4000, "NE");
+			diff_eq_int("debug transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)e * 100 + ap * 10 + g / 0x1000);
+			diff_eq_int("debug alpha", aa, ab,
+				    (long)e * 100 + ap * 10 + g / 0x1000);
+		}
+
+		/* And it must actually have printed something. */
+		diff_eq_int("transcript non-empty",
+			    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
@@ -874,6 +933,102 @@ main(void)
 			    V34_EC_FROZEN, 0);
 		diff_eq_int("freeze kept the rest", oa.f25c2 & ~V34_EC_FROZEN,
 			    0x0102, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * V34SetupDemodulator: the six rates and eight carriers, plus values
+	 * that match neither.  Both lookups fall through silently, so the
+	 * unrecognised cases are the ones worth driving -- they must leave
+	 * the previous setup in place, not clear it.
+	 */
+	diff_begin("v34 V34SetupDemodulator");
+	{
+		static struct v34_object oa, ob;
+		static const short rates[] = { 2400, 2743, 2800, 3000, 3200,
+					       3429, 0, 1, 2401, -1, 32767 };
+		static const short carrs[] = { 1600, 1680, 1800, 1829, 1867,
+					       1920, 1959, 2000, 0, 1801, -5 };
+		unsigned r, c, b;
+
+		for (r = 0; r < sizeof(rates) / sizeof(rates[0]); r++)
+		for (c = 0; c < sizeof(carrs) / sizeof(carrs[0]); c++) {
+			struct v34_receiver *ra, *rb;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			/* A known previous setup, so fall-through shows. */
+			V34SetupDemodulator(&oa, 2400, 1800);
+			ref_V34SetupDemodulator(&ob, 2400, 1800);
+
+			V34SetupDemodulator(&oa, rates[r], carrs[c]);
+			ref_V34SetupDemodulator(&ob, rates[r], carrs[c]);
+
+			for (b = 0; b < sizeof(oa); b++) {
+				/* carrier is a pointer; compared below. */
+				unsigned cp = 0x264 + __builtin_offsetof(
+					struct v34_receiver, carrier);
+
+				if (b >= cp && b < cp + 4)
+					continue;
+				diff_eq_int("setup at %ld",
+					    ((unsigned char *)&oa)[b],
+					    ((unsigned char *)&ob)[b],
+					    ((long)r * 20 + c) * 100000 + b);
+			}
+			/*
+			 * The two sides point at their own copies of the
+			 * table, so the pointers cannot be compared -- but
+			 * the CONTENTS can, and that is the check that
+			 * matters: it says both picked the same table.
+			 * Comparing the pointers would only have measured
+			 * that the blob and the reconstruction live at
+			 * different addresses.
+			 */
+			{
+				int k;
+
+				for (k = 0; k < 2 * (int)ra->f1ba; k++)
+					diff_eq_int("carrier entry",
+						    ra->carrier[k],
+						    rb->carrier[k],
+						    ((long)r * 20 + c) * 1000
+						    + k);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The quarter-cycle relation the demodulator depends on: every
+	 * carrier table is exactly 2 * f1ba shorts, so carrier[i + f1ba] is
+	 * carrier[i] shifted a quarter period.  A property check, not a
+	 * differential one -- but it is the invariant that makes
+	 * V34demodulate's two reads a cosine and a sine, and it would catch a
+	 * table paired with the wrong length.
+	 */
+	diff_begin("v34 carrier tables are 2 x f1ba");
+	{
+		static struct v34_object o;
+		static const struct { short c; unsigned len; } tab[] = {
+			{ 1600, 12 }, { 1680, 80 }, { 1800, 32 }, { 1829, 42 },
+			{ 1867, 72 }, { 1920, 10 }, { 1959, 98 }, { 2000, 48 },
+		};
+		unsigned i;
+
+		for (i = 0; i < sizeof(tab) / sizeof(tab[0]); i++) {
+			struct v34_receiver *r;
+
+			memset(&o, 0, sizeof(o));
+			V34SetupDemodulator(&o, 2400, tab[i].c);
+			r = (struct v34_receiver *)((char *)&o + 0x264);
+			diff_eq_int("2 x half length",
+				    2 * (unsigned)r->f1ba, tab[i].len,
+				    tab[i].c);
+		}
 	}
 	rc |= diff_end();
 

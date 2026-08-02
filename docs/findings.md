@@ -7236,3 +7236,56 @@ it took one search rather than an argument.
 The `rxtiming` fixture now fills with `HARNESS_MALLOC_FILL` rather than
 zeroing, and sets `f19c` explicitly to stand in for those two callers -- a
 zeroed object would have hidden the question that fill exists to ask.
+
+### 126. The diagnostic paths were untestable, so one of them was wrong
+
+`updateAlpha`'s debug call was reconstructed as
+
+```c
+    dsplibs_debug_printf("updateAlpha %d %d\n", tag, *alpha);
+```
+
+with `tag` declared `int`.  All three of those are wrong.  The object has
+
+```c
+    dsplibs_debug_printf("updateAlpha%s: updated %d => %d\n", tag, was, now);
+```
+
+-- `tag` is a `const char *` that completes the function name (`adaptecho`
+passes `"NE"`, for the near canceller), and the two integers are the alpha
+BEFORE and after, with the before-value read at function entry rather than
+where the message is printed.
+
+It survived because `dsplibs_debug_level` ships at zero and every gate in the
+object is `> 1`, so no differential run had ever entered a debug path.  The
+comparison was structurally incapable of seeing it.  It was found only by
+reconstructing `adaptecho`, which inlines the same call and therefore made
+the same format string visible from a second angle.
+
+**The fix is a test, not just a corrected string.**  Both sides already have
+their own printf -- symmap prefixes it, because a shared one would interleave
+the two transcripts -- so `dsplib_debug_capture_on` now routes each side's
+output into its own buffer and the two are compared like any other result.
+Raising `dsplibs_debug_level` and `ref_dsplibs_debug_level` together keeps
+the control flow identical on both sides, so this costs nothing but coverage.
+
+Worth stating what this generalises to: an untested surface is not merely
+unverified, it is a place where a reconstruction and its reference can differ
+indefinitely while every green test stays green.  debug.h already argued the
+call sites were worth carrying because the format strings are the author's
+own words.  That argument was right and incomplete -- carrying them without
+comparing them meant carrying a guess.
+
+### 127. `updateAlpha` divides by zero on a small negative energy
+
+`(1 << (shift + 21)) / ((energy + 0x8000) >> 16)` traps when the divisor is
+zero, which needs `energy` in [-0x8000, -1]: the normalisation loop stops
+immediately because bit 30 is already set in a negative value, so no shift
+rescues it, and `energy + 0x8000` lands inside 16 bits.
+
+The original does the same -- this is not a reconstruction error.  `energy`
+comes from `V34EchoEstimateDelayLineEnergy`, a sum of squares, so reaching a
+small negative means that sum has already overflowed.  Not filed as a
+deviation yet because reachability is exactly what has not been measured;
+that belongs with task #47.  The test sweep avoids the range deliberately and
+says so, rather than silently not covering it.

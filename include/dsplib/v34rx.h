@@ -81,7 +81,7 @@ void V34nlencoder(const short *in, short *out);
  * `energy` leaves the first alone and a zero `apply_decay` the second.
  */
 void updateAlpha(short *alpha, int energy, int apply_decay, int gain,
-		 int decay, int tag);
+		 int decay, const char *tag);
 
 /*
  * The descrambler's state, mapped where V34descrambler touches it.
@@ -178,6 +178,13 @@ void v34FreezeEcho(void *obj);
  * generator.  The inverse of V34descrambler, and the same two polynomials.
  */
 int V34scrambler(unsigned *sr, short mode, short bits, short nbits);
+
+/*
+ * Install the timing constants for one of the six V.34 symbol rates and the
+ * carrier table for one of the eight carriers.  Unrecognised values for
+ * either are ignored rather than rejected.
+ */
+void V34SetupDemodulator(void *obj, short baud, short carrier);
 
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);

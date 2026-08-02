@@ -73,7 +73,10 @@ struct v34_receiver {
 	short           f1b8;            /* +0x1b8   phase increment */
 	short           f1ba;            /* +0x1ba   half-length */
 	short           f1bc;            /* +0x1bc   phase */
-	unsigned char pad_1be[0x1c0 - 0x1be];
+	short           f1be;            /* +0x1be V34SetupDemodulator: the
+					 * unmodified symbol period, kept
+					 * beside f1ae which the timing loop
+					 * then slews */
 	short           f1c0;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
 	int             f1c8;            /* +0x1c8 */

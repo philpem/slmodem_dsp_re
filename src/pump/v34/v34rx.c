@@ -147,8 +147,11 @@ V34nlencoder(const short *in, short *out)
 
 void
 updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
-	    int tag)
+	    const char *tag)
 {
+	/* Read at entry, so the message reports the value before the update. */
+	short was = *alpha;
+
 	if (energy != 0) {
 		int shift = 0;
 		int r;
@@ -180,8 +183,9 @@ updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
 		*alpha = (short)(-((r * gain + 0x2000) >> 15));
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("updateAlpha %d %d\n", tag,
-					     *alpha);
+			dsplibs_debug_printf(
+				"updateAlpha%s: updated %d => %d\n", tag,
+				(int)was, (int)*alpha);
 	}
 
 	if (apply_decay != 0)
@@ -1035,4 +1039,88 @@ V34scrambler(unsigned *sr, short mode, short bits, short nbits)
 	 * input was consumed in.
 	 */
 	return (short)((reg >> ((0x1f - (int)nbits) & 31)) & (unsigned)mask);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34SetupDemodulator -- point the receiver at one of the six symbol rates
+ * and one of the eight carriers.
+ *
+ * Two independent lookups, both spelled as compare chains in the original.
+ * Neither has a default: an unrecognised rate leaves the timing constants
+ * alone and an unrecognised carrier leaves the table pointer alone, so a bad
+ * argument keeps whatever the previous call installed rather than failing.
+ *
+ * THE TIMING CONSTANTS.  `f1b0` is the interpolator's wrap and `f1ae` its
+ * step, so `f1ae / f1b0` is the ratio between the symbol rate and the sample
+ * rate; `f1be` keeps the step as configured, since the timing loop slews the
+ * live one; `f1ac` starts the phase at half a step.  2400 baud is the
+ * degenerate case where step equals wrap -- one output per input, no
+ * resampling -- and every other rate interpolates down from it.
+ *
+ * 2800 is the odd one out: 0x3e82 and 0x1f41 where every other rate uses
+ * 0x3e80 and 0x1f40.  Two counts on the wrap, one on the initial phase.  A
+ * wrap of 0x3e82 makes 2800's ratio 0x3594/0x3e82 rather than 0x3594/0x3e80,
+ * which is a closer rational fit to 2800/9600 -- so it reads as deliberate
+ * rather than as a typo, but the derivation is owed to task #47.
+ *
+ * THE CARRIER TABLES are each exactly twice `f1ba` shorts long, which is
+ * what makes V34demodulate's `carrier[i]` and `carrier[i + f1ba]` a cosine
+ * and its sine: the second half is the first shifted a quarter cycle.  That
+ * relation holds for all eight and is the reason f1ba is stored at all.
+ */
+void
+V34SetupDemodulator(void *objp, short baud, short carrier)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34SetupDemodulator: baudrate %ld, carrier %ld\n",
+			(long)baud, (long)carrier);
+
+	/* Four outputs per call, whatever the rate. */
+	rx->f128 = 4;
+
+	switch (baud) {
+	case 2400:
+		rx->f1b0 = 0x3e80; rx->f1ae = 0x3e80;
+		rx->f1be = 0x3e80; rx->f1ac = 0x1f40;
+		break;
+	case 2743:
+		rx->f1ae = 0x36b0; rx->f1b0 = 0x3e80;
+		rx->f1be = 0x36b0; rx->f1ac = 0x1f40;
+		break;
+	case 2800:
+		rx->f1b0 = 0x3e82; rx->f1ae = 0x3594;
+		rx->f1be = 0x3594; rx->f1ac = 0x1f41;
+		break;
+	case 3000:
+		rx->f1b0 = 0x3e80; rx->f1ae = 0x3200;
+		rx->f1be = 0x3200; rx->f1ac = 0x1f40;
+		break;
+	case 3200:
+		rx->f1ae = 0x2ee0; rx->f1b0 = 0x3e80;
+		rx->f1be = 0x2ee0; rx->f1ac = 0x1f40;
+		break;
+	case 3429:
+		rx->f1b0 = 0x3e80; rx->f1ae = 0x2bc0;
+		rx->f1be = 0x2bc0; rx->f1ac = 0x1f40;
+		break;
+	default:
+		break;
+	}
+
+	switch (carrier) {
+	case 1600: rx->carrier = hsine1600; rx->f1ba = 6;    break;
+	case 1680: rx->carrier = hsine1680; rx->f1ba = 0x28; break;
+	case 1800: rx->carrier = hsine1800; rx->f1ba = 0x10; break;
+	case 1829: rx->carrier = hsine1829; rx->f1ba = 0x15; break;
+	case 1867: rx->carrier = hsine1867; rx->f1ba = 0x24; break;
+	case 1920: rx->carrier = hsine1920; rx->f1ba = 5;    break;
+	case 1959: rx->carrier = hsine1959; rx->f1ba = 0x31; break;
+	case 2000: rx->carrier = hsine2000; rx->f1ba = 0x18; break;
+	default:   break;
+	}
 }

@@ -97,5 +97,15 @@ unsigned int dsplibs_debug_level = 0;
 
 int dsplibs_debug_printf(const char *fmt, ...) { (void)fmt; return 0; }
 
+/*
+ * The 64-bit build has no blob to compare against, so capture is a stub --
+ * but the symbols must exist, because harness.h declares them and the two
+ * tiers link different runtimes.  Forgetting that broke `make interop` for
+ * two commits once already.
+ */
+int dsplib_debug_capture_on;
+void dsplib_debug_capture_reset(void) { }
+const char *dsplib_debug_capture_text(int side) { (void)side; return ""; }
+
 int modem_debug_log_data(void *m, unsigned id, const void *b, int l)
 { (void)m; (void)id; (void)b; (void)l; return 0; }
