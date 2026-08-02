@@ -6972,3 +6972,37 @@ So the correct shape is:
 one symptom of it; the fact that the reconstruction passed 876360 of 876680
 checks with the wrong loop shape is a caution about how much a differential
 test can agree with while still being wrong about structure.
+
+### 121j. The restructure made it worse, and the evidence conflicts
+
+Applying 121i took the failures from **320 to 1141**, and the first failing
+offset is `rx+0x00` — the queue count, off by one. So the restructured loop
+pulls a different number of samples, which is the one thing 121i claimed to
+fix.
+
+**The two readings contradict each other.**
+
+The disassembly says two pulls per crossing: 0x5b3e0 calls `V34demodulate`,
+runs an IIR writing three fields, falls through to 0x5b491, calls
+`V34demodulate` again, and runs an IIR writing two.
+
+The probe (121e) says one. `f12a` — which `V34demodulate` increments on every
+call — reads `1, 2, 3, 0` across four consecutive `rxtiming` calls. Two pulls
+per crossing would step it by two.
+
+Both cannot be right, and the probe is the measurement. So the fall-through
+at 0x5b48a to 0x5b491 is probably not a fall-through: either the block at
+0x5b3e0 ends in a jump this reading missed, or 0x5b491 is a separate branch
+target reached only on a path the probe's parameters never take.
+
+**Reverted to the 320 state's shape** — which is wrong about `f244`/`f246`
+but right about the pull count, and therefore closer.
+
+**Next, and it must be a control-flow answer rather than another guess:**
+run `tools/cfgsplit.py --entries` over `rxtiming` with 0x5b3e0, 0x5b491 and
+0x5b546 as entries. That tool exists precisely to say which blocks reach
+which, it was extended for compare-chain dispatch in this session, and it
+would settle the fall-through question directly instead of by inference.
+
+Five reversals on this function now. Every one came from reading control flow
+by eye; every correction came from a measurement.
