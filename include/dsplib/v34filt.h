@@ -123,24 +123,49 @@ void V34HilbertFilter(short *state, short sample, int *re, int *im);
  * and 14.
  */
 extern const short V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
+extern const short V34TimingPrefilterCoeff[40];
+
 /*
- * V34TimingPrefilterCoeff, V34TimingIIR_Acoef and V34TimingIIR_Bcoef are the
- * rest of the set and are declared with the functions that read them, once
- * V34TimingFilter and V34TimingPrefilter are reconstructed.
+ * V34TimingIIR_Acoef and V34TimingIIR_Bcoef are the rest of the set and are
+ * declared once V34TimingFilter, which reads them, is reconstructed.
  */
 
 /*
  * The timing object, mapped only as far as the high-pass needs.
  *
- * V34TimingHPFilter is handed the whole object and reaches its delay line at
- * +0x24, so the argument is not the array.  The rest of the struct belongs to
- * V34TimingFilter and V34TimingFiltersInit and is a pad until those land; the
- * offset is held by an assertion in v34filters.c meanwhile.
+ * V34TimingHPFilter is handed the whole object and reaches its history at
+ * +0x24, so the argument is not the array.  What is named here is what
+ * V34TimingFiltersInit touches; the gap between is a pad until
+ * V34TimingFilter lands, and every named offset is held by an assertion in
+ * v34filters.c meanwhile.
  */
 struct v34_timing {
-	unsigned char unmapped_00[0x24];
-	short hp_hist[V34_TIMING_HP_TAPS];	/* +0x24 */
+	/*
+	 * Six three-entry groups, zeroed by V34TimingFiltersInit as a 3-outer
+	 * 6-inner nest striding by six shorts -- which is what a `short[6][3]`
+	 * looks like once the compiler has transposed the loops.  The IIR
+	 * coefficient pair below is five entries, so these are most likely its
+	 * state; V34TimingFilter will settle it.
+	 */
+	short iir[6][3];			/* +0x000 */
+	/*
+	 * Eighty shorts, of which V34TimingHPFilter uses the first forty.
+	 * The length is FiltersInit's loop bound, not an assumption.
+	 */
+	short hist[80];				/* +0x024 */
+	unsigned char unmapped_0c4[0x114 - 0xc4];
+	const short *prefilter_coeff;		/* +0x114 */
+	const short *hp_coeff;			/* +0x118 */
 };
+
+/*
+ * Zero the state and install the two coefficient pointers.
+ *
+ * Note that V34TimingHPFilter does NOT read `hp_coeff`: it addresses
+ * V34TimingHPFilterCoeff directly.  The pointer is installed for whoever
+ * else needs it, presumably V34TimingFilter.
+ */
+void V34TimingFiltersInit(struct v34_timing *t);
 
 /* The 40-tap high-pass ahead of the timing recovery. */
 int V34TimingHPFilter(struct v34_timing *t, short sample);
@@ -219,6 +244,41 @@ void V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re,
  */
 void V34EchoPreFilterCopy(void *dst, const short *coeff);
 void V34PremptxCopy(void *modulator, const short *coeff);
+
+#define V34_ECHO_PREFILTER_TAPS	42
+
+/*
+ * The echo path's pre-filter, mapped as far as its two users need.
+ *
+ * `coeff` is the field V34EchoPreFilterCopy installs into, which is what
+ * attributes that one-line function to this object rather than to another.
+ * The three fields at +0x58, +0x5c and +0x60 are read by
+ * V34EchoHistoryBackwardClean and are named when that lands.
+ */
+struct v34_echo_prefilter {
+	short state[V34_ECHO_PREFILTER_TAPS];	/* +0x00 */
+	const short *coeff;			/* +0x54 */
+	unsigned char unmapped_58[0x64 - 0x58];
+	int shift;				/* +0x64 */
+};
+
+/*
+ * Filter `count` samples in place through a 42-tap FIR, rounding with 0x4000
+ * and shifting by `p->shift`.
+ */
+void V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p);
+
+/*
+ * A generic FIR: one sample in, `taps` of state shifted, the raw accumulator
+ * out.
+ *
+ * NOTHING IN THE OBJECT CALLS IT.  It is the general form of a loop that
+ * V34TimingHPFilter, V34EchoPreFilter and the DPSK interpolator each write
+ * out by hand, which is a plausible reason for it to have been written and
+ * then not used.  Reproduced for the same reason as `cosread` -- see
+ * docs/findings.md.
+ */
+int V34Filter2(short sample, short *state, const short *coeff, unsigned taps);
 
 #ifdef __cplusplus
 }

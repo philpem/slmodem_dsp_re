@@ -37,6 +37,10 @@ extern void ref_V34PremptxCopy(void *m, const short *coeff);
 extern const short ref_V34hilbertrealcoef[V34_HILBERT_TAPS];
 extern const short ref_V34hilbertimagcoef[V34_HILBERT_TAPS];
 extern const short ref_V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
+extern const short ref_V34TimingPrefilterCoeff[40];
+extern void ref_V34TimingFiltersInit(void *t);
+extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
+extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
 
 #define DLEN	64
 #define TAPS	32
@@ -118,6 +122,108 @@ main(void)
 		diff_eq_int("V34TimingHPFilterCoeff[%ld]",
 			    V34TimingHPFilterCoeff[i],
 			    ref_V34TimingHPFilterCoeff[i], i);
+	for (i = 0; i < 40; i++)
+		diff_eq_int("V34TimingPrefilterCoeff[%ld]",
+			    V34TimingPrefilterCoeff[i],
+			    ref_V34TimingPrefilterCoeff[i], i);
+	rc |= diff_end();
+
+	diff_begin("v34 timing: FiltersInit");
+	{
+		struct v34_timing ta, tb;
+
+		memset(&ta, HARNESS_MALLOC_FILL, sizeof(ta));
+		memset(&tb, HARNESS_MALLOC_FILL, sizeof(tb));
+		V34TimingFiltersInit(&ta);
+		ref_V34TimingFiltersInit(&tb);
+		/*
+		 * Byte for byte, pointers included: both sides install the
+		 * SAME two addresses, because the coefficient tables are
+		 * separate objects but the harness links only one of each
+		 * into the comparison... which is not true, so the two
+		 * pointer fields are skipped and checked by value instead.
+		 */
+		for (i = 0; i < (int)__builtin_offsetof(struct v34_timing,
+						       prefilter_coeff); i++)
+			diff_eq_int("FiltersInit state",
+				    ((unsigned char *)&ta)[i],
+				    ((unsigned char *)&tb)[i], i);
+		diff_eq_int("prefilter pointer installed",
+			    ta.prefilter_coeff == V34TimingPrefilterCoeff, 1, 0);
+		diff_eq_int("hp pointer installed",
+			    ta.hp_coeff == V34TimingHPFilterCoeff, 1, 0);
+		diff_eq_int("and the reference installed its own",
+			    tb.prefilter_coeff == ref_V34TimingPrefilterCoeff,
+			    1, 0);
+		diff_eq_int("likewise its hp",
+			    tb.hp_coeff == ref_V34TimingHPFilterCoeff, 1, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 Filter2, the generic FIR nothing calls");
+	{
+		static short st_a[64], st_b[64];
+		static short co[64];
+		unsigned taps;
+
+		for (i = 0; i < 64; i++)
+			co[i] = (short)(i * 401 - 12000);
+		for (taps = 0; taps <= 64; taps += 16) {
+			memset(st_a, HARNESS_MALLOC_FILL, sizeof(st_a));
+			memset(st_b, HARNESS_MALLOC_FILL, sizeof(st_b));
+			for (i = 0; i < 300; i++) {
+				short x = (short)((i * 5443) % 60001 - 30000);
+
+				diff_eq_int("Filter2",
+					    V34Filter2(x, st_a, co, taps),
+					    ref_V34Filter2(x, st_b, co, taps),
+					    (long)taps * 1000 + i);
+				for (k = 0; k < 64; k++)
+					diff_eq_int("Filter2 state", st_a[k],
+						    st_b[k], k);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo pre-filter");
+	{
+		struct v34_echo_prefilter pa, pb;
+		static short co[V34_ECHO_PREFILTER_TAPS];
+		static short buf_a[64], buf_b[64];
+		int sh;
+
+		for (i = 0; i < V34_ECHO_PREFILTER_TAPS; i++)
+			co[i] = (short)(i * 211 - 3000);
+
+		/* Every shift the field can plausibly hold, plus a byte-sized one. */
+		for (sh = 0; sh <= 16; sh += 4) {
+			memset(&pa, HARNESS_MALLOC_FILL, sizeof(pa));
+			memset(&pb, HARNESS_MALLOC_FILL, sizeof(pb));
+			memset(pa.state, 0, sizeof(pa.state));
+			memset(pb.state, 0, sizeof(pb.state));
+			pa.coeff = co; pb.coeff = co;
+			pa.shift = sh; pb.shift = sh;
+
+			for (i = 0; i < 60; i++) {
+				int n;
+
+				for (n = 0; n < 64; n++)
+					buf_a[n] = buf_b[n] =
+						(short)((i * 64 + n) * 313
+							- 20000);
+				V34EchoPreFilter(buf_a, 64, &pa);
+				ref_V34EchoPreFilter(buf_b, 64, &pb);
+				for (n = 0; n < 64; n++)
+					diff_eq_int("prefiltered", buf_a[n],
+						    buf_b[n], n);
+				for (n = 0; n < V34_ECHO_PREFILTER_TAPS; n++)
+					diff_eq_int("prefilter state",
+						    pa.state[n], pb.state[n],
+						    n);
+			}
+		}
+	}
 	rc |= diff_end();
 
 	diff_begin("v34 echo: CleanUp leaves the delay line alone");
@@ -275,16 +381,16 @@ main(void)
 	diff_begin("v34 timing high-pass");
 	memset(&t_a, HARNESS_MALLOC_FILL, sizeof(t_a));
 	memset(&t_b, HARNESS_MALLOC_FILL, sizeof(t_b));
-	memset(t_a.hp_hist, 0, sizeof(t_a.hp_hist));
-	memset(t_b.hp_hist, 0, sizeof(t_b.hp_hist));
+	memset(t_a.hist, 0, sizeof(t_a.hist));
+	memset(t_b.hist, 0, sizeof(t_b.hist));
 	for (i = 0; i < 3000; i++) {
 		short x = (short)((i * 4409) % 65536 - 32768);
 
 		diff_eq_int("timing hp", V34TimingHPFilter(&t_a, x),
 			    ref_V34TimingHPFilter(&t_b, x), i);
 		for (k = 0; k < V34_TIMING_HP_TAPS; k++)
-			diff_eq_int("timing hp state", t_a.hp_hist[k],
-				    t_b.hp_hist[k], k);
+			diff_eq_int("timing hp state", t_a.hist[k],
+				    t_b.hist[k], k);
 	}
 	rc |= diff_end();
 

@@ -84,6 +84,20 @@ const short V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS] = {
 	  -195,     75,     87,    -34,    -27,      9,      3,      0,
 };
 
+/*
+ * The timing prefilter, 40 taps.  Installed by V34TimingFiltersInit and read
+ * by V34TimingFilter, which is not reconstructed yet -- so its Q format is
+ * not yet established.  See finding 94 on why that cannot be read off the
+ * table.
+ */
+const short V34TimingPrefilterCoeff[40] = {
+	     1,     -5,     -5,      8,     32,     40,      1,    -84,
+	  -150,   -102,     94,    337,    406,    115,   -481,  -1014,
+	  -958,     23,   1779,   3649,   4789,   4653,   3322,   1450,
+	  -137,   -899,   -819,   -293,    195,    371,    252,     32,
+	  -111,   -121,    -53,     12,     34,     21,      4,     -4,
+};
+
 /* ------------------------------------------------------------ echo canceller */
 
 void
@@ -301,7 +315,7 @@ V34HilbertFilter(short *state, short sample, int *re, int *im)
 int
 V34TimingHPFilter(struct v34_timing *t, short sample)
 {
-	short *hist = t->hp_hist;
+	short *hist = t->hist;
 	int carry = sample;
 	int acc = 0x8000;		/* Q16 round-to-nearest */
 	int k;
@@ -480,7 +494,88 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 	}
 }
 
-/* --------------------------------------------------------------- odds and ends */
+/* ------------------------------------------------------------ odds and ends */
+
+void
+V34TimingFiltersInit(struct v34_timing *t)
+{
+	int i, j;
+
+	/*
+	 * The original walks this as three outer steps of one short each,
+	 * writing six entries six shorts apart -- the transposed form of a
+	 * `short[6][3]`, which is why the type is two-dimensional here.
+	 */
+	for (i = 0; i < 6; i++)
+		for (j = 0; j < 3; j++)
+			t->iir[i][j] = 0;
+
+	for (i = 0; i < 80; i++)
+		t->hist[i] = 0;
+
+	t->prefilter_coeff = V34TimingPrefilterCoeff;
+	t->hp_coeff = V34TimingHPFilterCoeff;
+}
+
+int
+V34Filter2(short sample, short *state, const short *coeff, unsigned taps)
+{
+	int carry = sample;
+	int acc = 0;
+	unsigned k;
+
+	/*
+	 * `taps` is unsigned -- the original's loop guard is `jb`, so a count
+	 * of zero does nothing rather than running four billion times.
+	 */
+	for (k = 0; k < taps; k++) {
+		int old = state[k];
+
+		state[k] = (short)carry;
+		acc = (int)((unsigned)acc + (unsigned)(carry * coeff[k]));
+		carry = old;
+	}
+
+	return acc;
+}
+
+void
+V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
+{
+	short i;
+
+	for (i = 0; i < count; i++) {
+		const short *coeff = p->coeff;
+		unsigned shift = (unsigned char)p->shift;
+		int carry = buf[i];
+		int acc = 0;
+		int k;
+
+		/*
+		 * Same read-then-overwrite shift as V34TimingHPFilter and
+		 * V34Filter2, with the tap count fixed at 42 rather than
+		 * passed in.
+		 */
+		for (k = 0; k < V34_ECHO_PREFILTER_TAPS; k++) {
+			int old = p->state[k];
+
+			p->state[k] = (short)carry;
+			acc = (int)((unsigned)acc
+				    + (unsigned)(carry * coeff[k]));
+			carry = old;
+		}
+
+		/*
+		 * In place: the input array is the output array.  `shift` is
+		 * read as a byte and masked to five bits for the same reason
+		 * as dftenergy's -- the object's `sar %cl` does the masking
+		 * and C would otherwise be undefined.  Re-read every sample,
+		 * as the original does, rather than hoisted.
+		 */
+		buf[i] = (short)((acc + 0x4000) >> (shift & 31));
+	}
+}
+
 
 void
 V34EchoPreFilterCopy(void *dst, const short *coeff)
@@ -514,7 +609,11 @@ V34F_ASSERT(dlen,       struct v34_echo, dlen,       0x18);
 V34F_ASSERT(taps,       struct v34_echo, taps,       0x1c);
 typedef char v34f_echo_size[(sizeof(struct v34_echo) == 0x20) ? 1 : -1];
 
-V34F_ASSERT(hp_hist,    struct v34_timing, hp_hist,  0x24);
+V34F_ASSERT(t_hist,     struct v34_timing, hist,      0x024);
+V34F_ASSERT(t_pre,      struct v34_timing, prefilter_coeff, 0x114);
+V34F_ASSERT(t_hp,       struct v34_timing, hp_coeff,  0x118);
+V34F_ASSERT(pf_coeff,   struct v34_echo_prefilter, coeff, 0x54);
+V34F_ASSERT(pf_shift,   struct v34_echo_prefilter, shift, 0x64);
 
 V34F_ASSERT(eq_dly_re,  struct v34_equalizer, dly_re,  0x000);
 V34F_ASSERT(eq_dly_im,  struct v34_equalizer, dly_im,  0x0a0);
