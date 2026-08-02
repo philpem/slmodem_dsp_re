@@ -903,3 +903,136 @@ rxtiming(void *objp)
 		rx_iir(rx, 0);
 	}
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * txrxdmainit -- build the twelve-short coefficient block from three pairs.
+ *
+ * `src` is read from +0x4, as three complex coefficients packed (re, im).
+ * `dst` gets each of them twice, in the two arrangements a fixed-point
+ * complex multiply needs:
+ *
+ *     dst[0..5]    (re, -im) for each pair -- the conjugates
+ *     dst[6..11]   (im,  re) for each pair -- real and imaginary swapped
+ *
+ * So a caller wanting `a * conj(c)` dots against the first half and `a * c`
+ * against the second, without either having to negate or swap at run time.
+ * The original spells all twelve stores out; the negations reload the source
+ * rather than reusing the register they just negated, which is why each
+ * source short is read twice.
+ */
+void
+txrxdmainit(short *dst, const short *src)
+{
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		int re = (unsigned short)src[2 + i * 2];
+		int im = (unsigned short)src[3 + i * 2];
+
+		dst[i * 2] = (short)re;
+		dst[i * 2 + 1] = (short)-im;
+		dst[6 + i * 2] = (short)im;
+		dst[6 + i * 2 + 1] = (short)re;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * v34FreezeEcho -- stop both cancellers adapting.
+ *
+ * Sets bit 2 of f25c2 and then dumps both cancellers' coefficients.  The
+ * dump is the whole reason the debug hooks are carried (see debug.h): with
+ * `dsplibs_debug_level` at its shipped zero this function is three stores
+ * and two calls, and the message names -- "Near" and "Far" -- are what fix
+ * which of echo0 and echo1 is which.
+ */
+void
+v34FreezeEcho(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34HSHAK: Freeze EC\n");
+
+	obj->f25c2 = (short)(obj->f25c2 | V34_EC_FROZEN);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"==== Near Echo Canceller report ======\n");
+	V34EchoReportCoeff(&obj->echo0);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"==== Far Echo Canceller report ======\n");
+	V34EchoReportCoeff(&obj->echo1);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34scrambler -- the transmit side of V34descrambler.
+ *
+ * Same two generators and the same register, run the other way round: the
+ * scrambled bit is fed back into the register, where the descrambler feeds
+ * back the bit it received.  `mode` selects the generator directly here
+ * rather than through the flags word.
+ *
+ * THE REGISTER SHIFTS RIGHT, which is what makes the tap positions look
+ * wrong.  A new bit is OR-ed in at bit 31 and the register is then shifted,
+ * so it lands at bit 30 and the bit generated `m` steps ago sits at 30 - m:
+ *
+ *     bit 26  ->  m = 4   ->  five steps back   ->  x^-5
+ *     bit 13  ->  m = 17  ->  eighteen back     ->  x^-18
+ *     bit  8  ->  m = 22  ->  twenty-three back ->  x^-23
+ *
+ * giving 1 + x^-5 + x^-23 for the caller and 1 + x^-18 + x^-23 for the
+ * answerer, exactly as V.34 4.2 specifies.  V34descrambler reaches the same
+ * two polynomials with taps at 5/18 and 23 because it shifts the other way;
+ * see finding 110, which is the same offset trap from the other side.
+ *
+ * The three-way XOR is spelled as a running increment and a parity test,
+ * not as `^`, so a tap that fires twice cancels the same way.
+ */
+int
+V34scrambler(unsigned *sr, short mode, short bits, short nbits)
+{
+	int mask = (short)((int)((unsigned)1 << ((int)nbits & 31)) - 1);
+	unsigned reg = *sr;
+	short i;
+
+	/*
+	 * The two variants differ only in the second tap, but the original
+	 * emits the loop twice rather than testing per bit; the branch is
+	 * hoisted out.  Kept as one loop with the tap chosen up front, which
+	 * computes the same thing without duplicating the body.
+	 */
+	unsigned tap = mode ? 0x00002000u : 0x04000000u;
+
+	for (i = 0; i < nbits; i = (short)(i + 1)) {
+		int parity = (bits & 1) ? 1 : 0;
+
+		/* Arithmetic, so a negative `bits` feeds ones for ever. */
+		bits = (short)(bits >> 1);
+
+		if (reg & tap)
+			parity = (short)(parity + 1);
+		if (reg & 0x00000100u)
+			parity = (short)(parity + 1);
+
+		if (parity & 1)
+			reg |= 0x80000000u;
+
+		reg >>= 1;
+	}
+
+	/* Written once, after the loop -- and not at all when nbits <= 0. */
+	if (nbits > 0)
+		*sr = reg;
+
+	/*
+	 * The newest bit sits at 30, so shifting down by 31 - nbits leaves
+	 * the run of them at the bottom, oldest first -- the same order the
+	 * input was consumed in.
+	 */
+	return (short)((reg >> ((0x1f - (int)nbits) & 31)) & (unsigned)mask);
+}

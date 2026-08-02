@@ -161,6 +161,24 @@ int agcadapt(struct v34_receiver *a);
  */
 void V34agc(struct v34_receiver *rx);
 
+/*
+ * Build the twelve-short complex-multiply coefficient block: three pairs
+ * from `src + 4`, emitted as conjugates then as swapped pairs.
+ */
+void txrxdmainit(short *dst, const short *src);
+
+/* Bit 2 of f25c2: both echo cancellers have stopped adapting. */
+#define V34_EC_FROZEN	0x0004
+
+/* Freeze both cancellers, and report their coefficients if debugging. */
+void v34FreezeEcho(void *obj);
+
+/*
+ * Scramble `nbits` bits, LSB first.  `mode` non-zero selects the answerer's
+ * generator.  The inverse of V34descrambler, and the same two polynomials.
+ */
+int V34scrambler(unsigned *sr, short mode, short bits, short nbits);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 

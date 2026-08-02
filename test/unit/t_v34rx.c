@@ -23,6 +23,9 @@ extern void ref_rxinit(void *obj);
 extern void ref_txmit(void *obj);
 extern void ref_V34agc(void *rx);
 extern void ref_rxtiming(void *obj);
+extern void ref_txrxdmainit(short *dst, const short *src);
+extern void ref_v34FreezeEcho(void *obj);
+extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
 
@@ -743,6 +746,134 @@ main(void)
 						    tag + 90000 + k);
 			}
 		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 txrxdmainit");
+	{
+		short src[8], da[12], db[12];
+		int n, k;
+
+		for (n = 0; n < 400; n++) {
+			for (k = 0; k < 8; k++)
+				src[k] = (short)(n * 7919 + k * 4093 - 32768);
+			/* -32768 negates to itself; make sure that is hit. */
+			if (n % 37 == 0)
+				src[3] = src[5] = (short)-32768;
+			memset(da, 0x5a, sizeof(da));
+			memset(db, 0x5a, sizeof(db));
+			txrxdmainit(da, src);
+			ref_txrxdmainit(db, src);
+			for (k = 0; k < 12; k++)
+				diff_eq_int("dma coeff", da[k], db[k],
+					    (long)n * 100 + k);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 V34scrambler");
+	{
+		unsigned s0;
+		int md, nb, bv, ra2, rb2;
+		unsigned sa, sb;
+		int n;
+
+		for (n = 0; n < 40; n++)
+		for (md = 0; md <= 1; md++)
+		for (nb = -2; nb <= 17; nb++)
+		for (bv = 0; bv < 65536; bv += 2731) {
+			s0 = (unsigned)(n * 0x9e3779b9u + 0x0f0f0f0fu);
+			sa = sb = s0;
+			ra2 = V34scrambler(&sa, (short)md, (short)bv,
+					   (short)nb);
+			rb2 = ref_V34scrambler(&sb, (short)md, (short)bv,
+					       (short)nb);
+			diff_eq_int("scr out", ra2, rb2,
+				    ((long)n * 100 + md * 50 + (nb + 2)) * 100000
+				    + bv);
+			diff_eq_int("scr sr", (long)sa, (long)sb,
+				    ((long)n * 100 + md * 50 + (nb + 2)) * 100000
+				    + bv);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * V34scrambler and V34descrambler must be inverses.  Not a
+	 * differential check -- both sides are ours -- but it is the property
+	 * the pair exists for, and it would catch a tap that matched the blob
+	 * in one direction only.
+	 */
+	diff_begin("v34 scrambler round trip");
+	{
+		int md, n;
+
+		for (md = 0; md <= 1; md++) {
+			static struct v34_receiver d;
+			unsigned tx = 0x2a2a2a2au;
+
+			memset(&d, 0, sizeof(d));
+			d.scrambler_sr = 0;
+			d.flags = (unsigned short)(md ? V34_SCR_ANSWERER : 0);
+
+			/*
+			 * The descrambler is self-synchronising, so the first
+			 * 23 bits come out wrong by construction; compare
+			 * once the register has filled.
+			 */
+			for (n = 0; n < 64; n++) {
+				int plain = (n * 13) & 0xff;
+				int coded = V34scrambler(&tx, (short)md,
+							 (short)plain, 8);
+				int back = V34descrambler(&d, (short)coded, 8);
+
+				if (n >= 4)
+					diff_eq_int("round trip", back, plain,
+						    (long)md * 1000 + n);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 v34FreezeEcho");
+	{
+		static struct v34_object oa, ob;
+		unsigned b;
+
+		memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+		memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+		V34InitializeImplementationSpecific(&oa);
+		ref_V34InitializeImplementationSpecific(&ob);
+		txinit(&oa); ref_txinit(&ob);
+		oa.f25c2 = ob.f25c2 = 0x0102;
+
+		v34FreezeEcho(&oa);
+		ref_v34FreezeEcho(&ob);
+
+		for (b = 0; b < sizeof(oa); b++) {
+			static const unsigned skip[][2] = {
+			  { 0x264 + 0x04, 8 },
+			  { 0x221c + 0x04, 8 },
+			  { 0x2074, 4 },
+			  { 0x80b8, 0x18 },
+			  { 0x9138, 0x18 },
+			  { 0x2078, 4 },
+			};
+			unsigned s2, hit = 0;
+
+			for (s2 = 0; s2 < sizeof(skip) / sizeof(skip[0]); s2++)
+				if (b >= skip[s2][0]
+				    && b < skip[s2][0] + skip[s2][1])
+					hit = 1;
+			if (!hit)
+				diff_eq_int("freeze at %ld",
+					    ((unsigned char *)&oa)[b],
+					    ((unsigned char *)&ob)[b], b);
+		}
+		diff_eq_int("freeze set bit 2", oa.f25c2 & V34_EC_FROZEN,
+			    V34_EC_FROZEN, 0);
+		diff_eq_int("freeze kept the rest", oa.f25c2 & ~V34_EC_FROZEN,
+			    0x0102, 0);
 	}
 	rc |= diff_end();
 
