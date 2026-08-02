@@ -7517,3 +7517,45 @@ the equaliser).
     word, so this is the receiver declaring loss of signal.
 
 Still unread: 0x5c722..0x5cf76, roughly 500 disassembly lines.
+
+### 134. 242 debug call sites were dropped, and nothing could have noticed
+
+`debug.h` states the policy: the diagnostic call sites are carried because
+the gating comparison is real control flow, and because the format strings
+are the original author's own words -- "Discarding a call site discards the
+annotation."
+
+Counting them says the policy was not followed.  The blob has 399 calls to
+`dsplibs_debug_printf`; this tree has 22.  Restricted to functions that ARE
+reconstructed, 58 of them are missing 242 call sites between them:
+
+```
+   29  CALLPROG_Progress      16  V8Create           7  cadence_progress
+   28  DialerProgress         16  GetDialerConfig    7  CALLPROG_Dial
+   17  cadence_create         11  rebuildJMSequence  5  v8_process
+                              10  v8handshak         ... and 49 more
+```
+
+They cluster in the early phases -- call progress, the dialler, V.8, Bell
+103, V.23 -- and thin out through V.34, which is where the policy started
+being applied rather than where it was written down.
+
+**Why no test caught it.**  `dsplibs_debug_level` ships at zero and every
+gate is `> 1`, so a missing call site and a present one behave identically
+under every test in the tree.  Finding 126 made the same point about a
+*wrong* format string; a missing call is the same hole one step further
+along, and worse, because a wrong string can at least be found by reading
+whereas a missing call leaves nothing to read.
+
+**What it costs.**  Three things, in increasing order of seriousness.  The
+control flow differs by a branch, which is the least of it since the branch
+is not taken.  The annotation is lost -- and this reconstruction has leaned
+on those strings repeatedly: "Near"/"Far" fixed which echo canceller is
+which, "V34HSHAK: Freeze EC" named `v34FreezeEcho`'s flag,
+"polyValue(k2)+polyValue(k)" identified an inlined function.  And the debug
+transcript comparison built for finding 126 cannot test what is not there,
+so restoring the sites is a prerequisite for that sweep rather than a
+cosmetic tidy.
+
+Recorded as one measurement rather than 58 separate defects, because the
+cause is one decision applied consistently and the fix is mechanical.
