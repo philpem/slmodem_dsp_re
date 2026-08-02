@@ -5327,3 +5327,55 @@ implicit.
 history at `t+0x18`/`t+0x1e`, what the `V34TimingIIR_*` pair is for — nothing
 read so far touches it — and the return value. Disassembly beyond 0x72560 is
 not yet examined.
+
+## 102. `V34TimingFilter` inlines the high-pass with twice the gain
+
+Third pass, reading 0x72640-0x726b0 — the function's tail. Still not
+reconstructed; the middle (0x72560-0x72640, the negative filter's output
+loop) remains unread.
+
+The tail settles what the function is for. After both half-baud filters have
+produced a complex output, it takes their **cross product**:
+
+```
+   7265d:  imul %eax,%ebp        ; pos_re * neg_im  (roughly)
+   72663:  imul %edx,%edi
+   7266d:  sub  %edi,%ebp
+   7266f:  add  $0x2000,%ebp
+   72675:  sar  $0xe,%ebp
+```
+
+which is the standard V.34 timing discriminator: the phase difference between
+the two half-baud lines, extracted as an imaginary part, and it is exactly
+what the ±baud/2 filter pair exists to produce.
+
+That result is then run through a **40-tap filter using
+`V34TimingHPFilterCoeff` over the history at `t+0x24`** — the same table and
+the same array as the standalone `V34TimingHPFilter`. And it is **not the
+same filter**:
+
+| | rounding | shift | net gain |
+|---|---|---|---|
+| `V34TimingHPFilter` | `0x8000` | 16 | 1x |
+| this inline copy | `0x4000` | 15 | **2x** |
+
+```
+   72666:  mov  $0x4000,%esi        ; vs 0x8000 at 72312
+   726a6:  sar  $0xf,%esi           ; vs sar $0x10 at 72354
+```
+
+Same coefficients, same 40-tap history, same read-then-overwrite shift —
+twice the output. So the two are not interchangeable, and a reconstruction
+that called `V34TimingHPFilter` from `V34TimingFilter` to avoid duplicating
+the loop would be wrong by a factor of two in the timing loop's gain. That is
+a defect which would not show up as a wrong waveform, only as a
+differently-damped timing loop, and tier-1 would catch it only if the test
+drove the whole function rather than the pieces.
+
+They also share one history array, so calling one perturbs the other. Whether
+both are ever live at once is V34RX.c's question.
+
+**Still unread:** 0x72560-0x72640, which must contain the negative filter's
+output-history loop over `t+0x18`/`t+0x1e`. Until that is read the function
+cannot be written; what the tail gives is the certainty that the inline
+high-pass must be written out rather than delegated.
