@@ -28,8 +28,15 @@ extern "C" {
 
 struct v34_receiver {
 	unsigned char pad_000[0x120 - 0x0];
-	short           f120;            /* +0x120 */
+	short           f120;            /* +0x120 receiver: the vectpp cursor */
 	unsigned short  flags;           /* +0x122 */
+	/*
+	 * +0x124.  `rxsymcnt` -- receiver's own debug string names it, in
+	 * "S-S1 is detected,rxsymcnt= %d,pllcnt= %d,gain= 0x%x".  It counts
+	 * received symbols, and receiver reads it as an acquisition clock:
+	 * thresholds at 0x11, 0x40, 0x68, 0x132, 0x143, 0x153, 0x212, 0x332
+	 * and 0x7530 each move the receiver to a different behaviour.
+	 */
 	short           f124;            /* +0x124 */
 	short           best_index;      /* +0x126 */
 	short           f128;            /* +0x128 rxtiming: output count */
@@ -80,6 +87,10 @@ struct v34_receiver {
 					 * unmodified symbol period, kept
 					 * beside f1ae which the timing loop
 					 * then slews */
+	/*
+	 * +0x1c0.  `pllcnt`, from the same debug string as f124.  receiver
+	 * declines to do anything at all until it exceeds 1.
+	 */
 	short           f1c0;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
 	int             f1c8;            /* +0x1c8 */
@@ -113,8 +124,15 @@ struct v34_receiver {
 	short           f1f2;            /* +0x1f2 */
 	short           f1f4;            /* +0x1f4 */
 	unsigned char pad_1f6[0x1f8 - 0x1f6];
-	int             f1f8;            /* +0x1f8 */
-	unsigned char pad_1fc[0x200 - 0x1fc];
+	int             f1f8;            /* +0x1f8 the carrier loop's
+					  * integrator */
+	/*
+	 * +0x1fc.  The phase error: the imaginary part of
+	 * decision* x target, shifted up two.  receiver computes it three
+	 * ways depending on which decoder ran, and the NCO at the end of the
+	 * same call is its only consumer.
+	 */
+	int             f1fc;            /* +0x1fc */
 	short           f200;            /* +0x200 */
 	short           f202;            /* +0x202 */
 	short           f204;            /* +0x204 */
@@ -134,15 +152,32 @@ struct v34_receiver {
 			short   q;       /* +0x20e   Q(-2)                   */
 		} iir2;
 	} dp;
+	/*
+	 * +0x210.  TWO QUANTITIES, ONE PAIR OF FIELDS, WITHIN ONE CALL.
+	 * receiver first writes the DEROTATED RECEIVED point here, and then,
+	 * after the decoder has run, overwrites it with the DECISION rotated
+	 * back up by the same carrier.  Everything between the two reads the
+	 * first; the error term at the end reads the second.
+	 */
 	short           target_re;       /* +0x210 */
 	short           target_im;       /* +0x212 */
-	unsigned char pad_214[0x218 - 0x214];
-	short           f218;            /* +0x218 */
-	short           f21a;            /* +0x21a */
-	short           f21c;            /* +0x21c */
+	/* The decision error, target - decision, and the predictor's input. */
+	short           f214;            /* +0x214 */
+	short           f216;            /* +0x216 */
+	short           f218;            /* +0x218 the equaliser's step, Q15 */
+	short           f21a;            /* +0x21a `equerr` -- see f220 */
+	short           f21c;            /* +0x21c the 1024-symbol counter
+					  * that publishes them */
 	unsigned char pad_21e[0x220 - 0x21e];
+	/*
+	 * Two error energies accumulated over 1024 symbols and republished as
+	 * shorts when the counter wraps.  receiver's own names, from
+	 * "V34EQU, equerr = %d, preerr = %d": f220 -> f21a is the EQUALISER
+	 * error and f228 -> f224 the PREDICTOR error, so the pair says which
+	 * of the two stages is failing to converge.
+	 */
 	int             f220;            /* +0x220 */
-	short           f224;            /* +0x224 */
+	short           f224;            /* +0x224 `preerr` */
 	unsigned char pad_226[0x228 - 0x226];
 	int             f228;            /* +0x228 */
 	unsigned char pad_22c[0x22e - 0x22c];
@@ -176,20 +211,69 @@ struct v34_receiver {
 	unsigned char pad_262[0x266 - 0x262];
 	short           f266;            /* +0x266 demapFrame's sub-frame
 					  * counter, stepped by decoderv34 */
-	unsigned char pad_268[0x27a - 0x268];
 	/*
-	 * +0x27a.  The length is fixed by the POINTER that follows it at
-	 * +0x2a4, not by anything rxtiming does -- twenty-one entries.  In
-	 * practice V34SetupDemodulator sets f128 to 4, so only the first
-	 * four are ever written; the earlier [64] here was a guess that
-	 * would have overlapped f2a4.
+	 * +0x268.  The equaliser output one and two symbols ago, which
+	 * receiver's retrain detector differences against the current one.
+	 * Kept as two pairs so the copy `f26c/f26e = f268/f26a` can be one
+	 * 32-bit move, which is how the object does it.
 	 */
-	short           timing_out[21];  /* +0x27a rxtiming's metric */
+	short           f268;            /* +0x268 */
+	short           f26a;            /* +0x26a */
+	short           f26c;            /* +0x26c */
+	short           f26e;            /* +0x26e */
+	unsigned char pad_270[0x27a - 0x270];
+	/*
+	 * +0x27a.  SEVEN, not twenty-one.  The earlier figure came from the
+	 * pointer at +0x2a4 and assumed everything between belonged to this
+	 * array; `receiver` shows it does not -- the predictor's coefficients
+	 * start at +0x288, which is entry seven.
+	 *
+	 * Two unrelated constraints land on the same number.  Finding 123
+	 * measured fourteen shorts of headroom in the receive burst before
+	 * it eats rxtiming's own loop bound, and seven outputs at up to two
+	 * pulls each is exactly fourteen.  So f128 <= 7 is both what fits
+	 * here and what the burst survives, and the fixtures assert both.
+	 */
+	short           timing_out[7];   /* +0x27a rxtiming's metric */
+	/*
+	 * The three-tap complex predictor, +0x288 to +0x2a3.
+	 *
+	 * `b` is the real half of its coefficients and `a` the imaginary, in
+	 * the sense that the prediction is the complex product
+	 * (b + ja) . (hist_i + j hist_q).  receiver runs the same engine
+	 * twice per symbol -- once on the equaliser output and once on the
+	 * decision error -- over ONE shared set of coefficients and ONE
+	 * shared history, and only the second run adapts them.
+	 *
+	 * The histories are four long and only three are read: the shift
+	 * writes hist[3] and nothing ever looks at it again except the LMS
+	 * update, which reads taps 3..1 because it runs after the shift.
+	 */
+	short           pred_b[3];       /* +0x288 */
+	short           pred_a[3];       /* +0x28e */
+	short           pred_i[4];       /* +0x294 */
+	short           pred_q[4];       /* +0x29c */
 	const short *   f2a4;            /* +0x2a4 modem_serrint: the 60-tap
 					  * receive filter's coefficients */
 	unsigned char pad_2a8[0x798 - 0x2a8];
+	/*
+	 * +0x798.  `rtncount`, from receiver's two retrain strings.  A
+	 * saturating up/down counter over how far the equaliser output moves
+	 * between symbols: it counts UP while the signal is standing still,
+	 * and passing 0x8c that way raises V34_RX_FLAG_RETRAIN.  It counts
+	 * DOWN on the middling case, and being between -0x84 and -0x78 when
+	 * the signal moves again raises V34_RX_FLAG_RENEG instead.
+	 */
 	short           f798;            /* +0x798 */
 };
+
+/*
+ * The adaptive equaliser sits at +0x3cc, which is `struct v34_equalizer` --
+ * declared in v34filt.h, which this header must not include, since the
+ * dependency runs the other way.  Reach it with a cast at the one place that
+ * needs it.
+ */
+#define V34_RX_EQ_OFFSET	0x3cc
 
 /*
  * `flags` at +0x122.
@@ -202,6 +286,27 @@ struct v34_receiver {
 /* Bit 11: modem_serrint runs the 60-tap FIR instead of the Hilbert pair. */
 #define V34_RX_FLAG_FIR		0x0800
 #define V34_RX_FLAG_AGC_FREEZE	V34_RX_FLAG_DET_PENDING
+
+/*
+ * The rest, all of them read by `receiver` and all of them set elsewhere --
+ * mostly in v34handshak, which is not reconstructed.  Bit 2 is the
+ * scrambler's polynomial select, already spelt V34_SCR_ANSWERER in v34rx.h;
+ * both names are kept because the two readers mean different things by it.
+ */
+#define V34_RX_FLAG_RENEG	0x0020	/* RRN request seen: see f798     */
+#define V34_RX_FLAG_RETRAIN	0x0040	/* retrain request seen           */
+#define V34_RX_FLAG_LATE_TRN	0x0008	/* shifts f124's decoder threshold
+					 * on by 0x120 symbols            */
+#define V34_RX_FLAG_TRN_WATCH	0x0010	/* run the shifted-TRN2 check     */
+#define V34_RX_FLAG_TRAINED	0x0100	/* set at f124 > 0x68; suppresses
+					 * the carrier loop's error term  */
+#define V34_RX_FLAG_DATA	0x0400	/* the decoder, not the handshake
+					 * slicer; and the loss-of-signal
+					 * gate                           */
+#define V34_RX_FLAG_PREDICT	0x1000	/* adapt the predictor on the
+					 * decision error                 */
+#define V34_RX_FLAG_PRECODE	0x2000	/* run the predictor on the
+					 * equaliser output               */
 
 #ifdef __cplusplus
 }

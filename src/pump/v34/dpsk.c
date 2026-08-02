@@ -303,6 +303,8 @@ typedef char v34fsk_size[(sizeof(struct v34_fsk) == 0x16) ? 1 : -1];
 
 V34FSK_ASSERT(line,    struct v34_fskdelay, line,        0x14);
 
+V34FSK_ASSERT(status,  struct v34_object, status,        0x000);
+V34FSK_ASSERT(enfloor, struct v34_object, rx_energy_floor, 0x230);
 V34FSK_ASSERT(inhibit, struct v34_object, fsk_inhibit,   0x402);
 V34FSK_ASSERT(echo0,   struct v34_object, echo0,         0x80b8);
 V34FSK_ASSERT(e0frac,  struct v34_object, echo0_frac,    0x80d8);
