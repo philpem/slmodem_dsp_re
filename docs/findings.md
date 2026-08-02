@@ -6746,3 +6746,37 @@ odd-exponent halving.
 derivable**, so unlike `costbl` (finding 88) it need not be shipped as data —
 though it should be, for the same reason every other table is: the generator
 is a claim, the bytes are the reference.
+
+### 121d. Four fixes applied: 651 -> 576, and the remainder is the level gate
+
+All four fixes from 121c were written and each one moved the number:
+
+```
+   651  starting point
+   600  gained real part written through rx_samples, pointer advanced
+        f12a/f12c not cleared on the count <= 3 path
+   576  the accumulator squares the REAL part, not the imaginary
+        (0x10(%esp) at 0x5afe3 is where the real half was saved)
+```
+
+Reverted, since it still fails. **The remaining 576 are localised**: the
+failing offsets are now only `rx+0x138` (`agc_accum`) and `rx+0x208` (the
+IIR state), and the pattern is ours non-zero where the blob has zero.
+
+That means **the blob is not running the AGC where the reconstruction is** —
+so the level gate differs, not the AGC itself. The gate is
+
+```
+   5b0cd:  cmp $0x1f,%ax
+   5b0d1:  jle 5b1b0          ; skip the AGC entirely
+```
+
+with `%ax` the `sqrt_table` result shifted by half the exponent. Ours comes
+out above 0x1f where the blob's does not, so the fault is in the level
+computation feeding it — most likely the `shift / 2` (the original uses `%cl`
+set somewhere not yet traced) or the sign handling of `lvl`, which is read as
+a signed short after an unsigned table load.
+
+**Next step, and it is one probe:** log `lvl` per call from both sides.
+Every previous localisation in this function came from a probe rather than a
+re-read, and this one is a single value.
