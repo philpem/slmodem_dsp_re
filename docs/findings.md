@@ -5746,3 +5746,44 @@ loop, so by the time the shift runs it holds something else. One more
 disassembly pass over 0x73569-0x735ae settles it, and then the function is
 done — everything else is already proven correct by the 731719 checks that
 passed.
+
+## 109. Where the two sample queues live, and what the echo cleaner was walking
+
+`txinit` (0x5d670) locates both `struct v34_queue` instances in the V.34
+object, and closes a loose end from finding 98's neighbourhood.
+
+```
+   obj+0x0264   the RECEIVE queue    count 0x264, rd 0x268, wr 0x26c,
+                                     ring 0x270 .. 0x370
+   obj+0x221c   the TRANSMIT queue   count 0x221c, rd 0x2220, wr 0x2224,
+                                     ring 0x2228 .. 0x25c0
+```
+
+Both are confirmed by their own initialisation: `txinit` writes
+`obj+0x270` into the receive queue's two cursors, `obj+0x2228` and
+`obj+0x22a8` into the transmit queue's, and then
+`sysdep_memset(obj+0x2228, 0, 0x398)` — and `0x2228 + 0x398` is `0x25c0`,
+exactly the end address `txwritequeue` hardcodes relative to its own base
+(`0x221c + 0x3a4`). Two independent readings agreeing to the byte.
+
+**And it identifies the ring `V34EchoHistoryBackwardClean` walks.** That
+function ends by zeroing three entries of a ring at `obj+0x2228`, backwards,
+with a wrap this reconstruction described as "running off the front into a
+second cursor". It is the **transmit queue's ring**, and the walk is
+`&ring[(wr - 1 - k) mod len]` — the last three samples queued for
+transmission, rolled back along with the echo canceller's history. Which is
+exactly what a function called `EchoHistoryBackwardClean` should be doing:
+if the receiver rewinds, the samples the canceller has not yet accounted for
+have to go too.
+
+That was reconstructed and differential-tested without knowing what the ring
+was; it is right either way, but the comment in `v34filters.c` describing the
+wrap as an oddity should be replaced with this.
+
+`txinit` also calls `V34EchoCleanUp` on **both** cancellers, at `obj+0x80b8`
+and `obj+0x9138` — the first confirmation from a caller that the pair in
+finding 98 really is a pair, rather than one object and something that
+happens to look like it.
+
+**Not yet reconstructed:** `txinit` continues past 0x5d731 and the rest is
+unread.
