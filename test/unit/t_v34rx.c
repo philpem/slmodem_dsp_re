@@ -12,6 +12,7 @@ extern int ref_bitreverse(unsigned short v, short nbits);
 extern void ref_decision(void *d, const int *pts, short npts);
 extern void ref_V34nlencoder(const short *in, short *out);
 extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
+extern int ref_V34descrambler(void *s, short bits, short nbits);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -192,6 +193,33 @@ main(void)
 			ref_updateAlpha(&ab, energies[e], ap, g, dc, 7);
 			diff_eq_int("alpha", aa, ab,
 				    (long)energies[e] * 31 + g);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 descrambler");
+	{
+		static struct v34_scrambler sa, sb;
+		int ans, n, v;
+
+		for (ans = 0; ans <= 1; ans++)
+		for (n = 0; n <= 16; n++) {
+			memset(&sa, HARNESS_MALLOC_FILL, sizeof(sa));
+			memset(&sb, HARNESS_MALLOC_FILL, sizeof(sb));
+			sa.sr = sb.sr = 0;
+			sa.flags = sb.flags =
+				(unsigned short)(ans ? V34_SCR_ANSWERER : 0);
+			for (v = 0; v < 4000; v += 7) {
+				diff_eq_int("descrambled",
+					    V34descrambler(&sa, (short)v,
+							   (short)n),
+					    ref_V34descrambler(&sb, (short)v,
+							       (short)n),
+					    (long)ans * 1000000 + n * 10000
+					    + v);
+				diff_eq_int("scrambler sr", (long)sa.sr,
+					    (long)sb.sr, v);
+			}
 		}
 	}
 	rc |= diff_end();

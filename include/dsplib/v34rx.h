@@ -79,6 +79,27 @@ void V34nlencoder(const short *in, short *out);
 void updateAlpha(short *alpha, int energy, int apply_decay, int gain,
 		 int decay, int tag);
 
+/*
+ * The descrambler's state, mapped where V34descrambler touches it.
+ */
+struct v34_scrambler {
+	unsigned char unmapped_000[0x122];
+	unsigned short flags;	/* +0x122  bit 2 picks the polynomial    */
+	unsigned char unmapped_124[0x1a4 - 0x124];
+	unsigned sr;		/* +0x1a4  the shift register            */
+};
+
+/* Bit 2 of `flags`: set selects the answerer's polynomial. */
+#define V34_SCR_ANSWERER	0x0004
+
+/*
+ * Descramble `nbits` bits, LSB first, returning them in the same order.
+ *
+ * V.34 gives the two ends different generators and this is both of them:
+ * 1 + x^-5 + x^-23 for the caller, 1 + x^-18 + x^-23 for the answerer.
+ */
+int V34descrambler(struct v34_scrambler *s, short bits, short nbits);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 

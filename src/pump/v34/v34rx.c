@@ -184,3 +184,40 @@ updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
 	if (apply_decay != 0)
 		*alpha = (short)((*alpha * decay + 0x4000) >> 15);
 }
+
+int
+V34descrambler(struct v34_scrambler *s, short bits, short nbits)
+{
+	unsigned sr = s->sr;
+	unsigned mask = 1;
+	int out = 0;
+	short i;
+	int tap = (s->flags & V34_SCR_ANSWERER) ? 18 : 5;
+
+	if (nbits <= 0)
+		return 0;
+
+	for (i = 0; i < nbits; i = (short)(i + 1)) {
+		unsigned in = ((unsigned)(unsigned short)bits & mask) ? 1u : 0u;
+		unsigned bit;
+
+		bit = ((sr >> 23) & 1) ^ in;
+		bit ^= (sr >> tap) & 1;
+
+		/*
+		 * The register takes the input bit at position 0 and is then
+		 * shifted up, so the bit lands at position 1 rather than 0 --
+		 * which is why the taps read as 5/18 and 23 rather than the
+		 * recommendation's 6/19 and 24.
+		 */
+		sr = (sr + in) * 2;
+
+		if (bit)
+			out = (short)(out | (int)mask);
+
+		mask = (unsigned short)(mask * 2);
+	}
+
+	s->sr = sr;
+	return out;
+}
