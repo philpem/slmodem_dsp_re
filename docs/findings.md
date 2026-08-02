@@ -5507,3 +5507,41 @@ Add the byte index to the test's failure message first — `diff_eq_int` prints
 its `input` argument, and the current call passes `k` without a `%ld` in the
 format, so the offsets are being discarded. That alone should identify which
 field is wrong in one run.
+
+## 104. `V34SetupModulator`'s stores, extracted mechanically
+
+Groundwork for the last unreconstructed pair in v34filters.c, gathered
+without reading 1,599 bytes of dispatch line by line. **Not a
+reconstruction** — a map of what the function writes.
+
+Every constant store in the function lands in one of five words at the head
+of the modulator object (obj+0x1450), plus three fields further in:
+
+```
+   +0x00   0x20
+   +0x04   1, 5, 7
+   +0x08   3, 4, 0xe, 0x18
+   +0x10   0                      (always zero, on three paths)
+   +0x14   5, 6, 8, 0x15, 0x18, 0x24, 0x28, 0x31
+
+   +0xc7c  a tx*c1 shaping row     (finding 97: base, or base + len - 32)
+   +0xc8c  0xf
+   +0xcb0  preemp0, or a p* row    (finding 97: 10 rows of 16, indexed from 1)
+```
+
+Five small integers per baud rate, chosen from a dispatch on
+0x960/0xaf0/0xbb8/0xc80/0xd65 — 2400/2800/3000/3200/3429 — with a second
+dimension the relocations show as `_for_v34` versus `_for_v90`.
+
+The shape of those numbers is a resampler's: a fixed 0x20 at +0x00, then
+small factors and tap counts at +0x04 and +0x08, and a larger figure at +0x14
+that tracks the baud rate. Reconstructing the function is therefore mostly
+transcription — read the dispatch, tabulate five integers and three pointers
+per (baud, variant) pair, and let the differential test check the table.
+
+That is a much cheaper job than it looked, and it is worth doing before
+`V34ModulatorProcess`, which reads these fields.
+
+**Caution carried from finding 96:** 3429 baud installs `ec_prem_coef_B3429`
+in both the `*High` and the plain role. Anyone tabulating this from a pattern
+will produce a fifth `High` table that does not exist.
