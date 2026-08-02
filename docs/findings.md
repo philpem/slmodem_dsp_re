@@ -7325,3 +7325,52 @@ The 60-tap filter's delay line is `echo1.coeff_frac` -- the same array
 finding 100 found DPSK.c using as its FSK delay line, and `V34EchoFilter`
 using as fractional coefficients.  One region, three readers, none of them
 live at the same time.
+
+### 129. The shell demapper's tables are indexed with nothing bounding them
+
+`shellDemapper` indexes three tables -- `t1` at +0xa48, `t2` at +0xb48 and
+`t3` at +0xc48 -- with running totals of the eight sub-indices, and clamps
+none of them.  The two clamps it does apply are to the *addends*, not to the
+index:
+
+```
+   if (d - c >= n)  scale = n - sub[3];
+   if (c >= n)      base  = n - sub[1];
+```
+
+so `t1[c]`, `t2[d1]` and `t3[d1 + d2]` are read wherever the sums land.  Both
+correlation loops walk down from `t[d]` as well, so an over-large `d` reads
+below the table as it goes.
+
+Found by driving it: the first sweep allowed sub-indices up to 40, which puts
+`d1 + d2` past 300 against tables of 128, and it segfaulted.  That is the
+good outcome again -- a slightly smaller overrun would have read adjacent
+object fields on both sides and, where those happened to agree, passed.
+
+Not filed as a deviation: the caller is `demapFrame`, which is not
+reconstructed, so whether it can produce an out-of-range group is exactly
+what has not been measured.  Task #49 should check it, and the fixture now
+asserts the bound rather than assuming it.
+
+Worth noting alongside finding 123, which is the same shape in `rxtiming`:
+in both cases the object relies on a caller-side invariant it does not state,
+and in both cases the reconstruction found it by exceeding it rather than by
+reading.
+
+### 130. Two cursors, not one pointer and an index
+
+`shell_correlate` is `t[0]*t[d] + t[1]*t[d-1] + ...`.  Written first as
+
+```c
+    sum += t[0] * t[d];  t++;  d--;
+```
+
+which advances the base AND decrements the offset, so `t[d]` names the same
+element every iteration and the sum becomes `t[i] * t[d]` for a fixed `d`.
+It compiles, it runs, it terminates, and it is a different function.
+
+The differential test caught it on the first comparison.  Recorded because
+the failure mode is invisible to inspection -- the line reads exactly like
+the comment above it -- and because it is the second time in this session
+that a helper factored out of three identical inlined copies was itself the
+thing that went wrong.
