@@ -91,7 +91,7 @@ detectorinit(struct v34_detector *d, const short *coeff, short polarity,
 }
 
 int
-tone_detect(struct v34_rx *rx, struct v34_detector *d, const short *start,
+tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 	    const short *end)
 {
 	const short *p;
@@ -231,6 +231,7 @@ typedef char v34det_size[(sizeof(struct v34_detector) == 0x24) ? 1 : -1];
  * honest until V34hshak.c fills the rest in.
  */
 typedef char v34det_rx_flags[
-	((int)__builtin_offsetof(struct v34_rx, flags) == 0x122) ? 1 : -1];
+	((int)__builtin_offsetof(struct v34_receiver, flags) == 0x122)
+	? 1 : -1];
 
 #endif

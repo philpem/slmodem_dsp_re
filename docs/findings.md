@@ -5918,3 +5918,36 @@ receiver starting up assuming the slowest rate until the handshake says
 otherwise.
 
 The remaining stores run to 0x5bac5 and are unread.
+
+## 114. The AGC freeze and the detector-pending flag are one bit
+
+Found by unifying four partial maps of the receiver sub-object into one
+`struct v34_receiver`. Each had been declared as its own type when the
+function that needed it was reconstructed — the detector's flags word,
+`decision`'s target and result, `agcadapt`'s gain state,
+`V34descrambler`'s shift register — which is precisely what finding 100 said
+not to do, and doing it hid this.
+
+```
+   agcadapt      testb  $0x2,0x123(%ebx)      ; freeze if set
+   tone_detect   andl   $0xfffffdff,%eax      ; clear 0x200 at 0x122
+```
+
+Byte `0x123` is the **high half** of the short at `0x122`, so its bit 1 is
+that short's bit 9 — `0x200`. The two functions are reading and writing the
+same bit.
+
+So the arrangement is: the handshake sets bit 9 when it arms a tone detector;
+`agcadapt` refuses to adapt while it is set; `tone_detect` clears it the
+moment the integrated level first crosses its floor. **The AGC is held frozen
+until a detector has heard something, and starts adapting on the same event
+that arms the receiver.** That is a sensible design and neither function
+states it — it only appears when both are looked at together.
+
+Two functions reconstructed a long way apart, sharing a flag neither knew
+about. The lesson is finding 100's, restated: partial maps of one object hide
+the relationships between the things that use it, and the cost is not
+confusion later but a fact never discovered at all.
+
+`struct v34_receiver` is now the single map; `v34_rx`, `v34_decoder`,
+`v34_agcstate` and `v34_scrambler` are gone.

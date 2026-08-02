@@ -91,7 +91,7 @@ bitreverse(unsigned short v, short nbits)
 }
 
 void
-decision(struct v34_decoder *d, const int *pts, short npts)
+decision(struct v34_receiver *d, const int *pts, short npts)
 {
 	const int *best = pts;
 	int best_dist = 0x7fff;
@@ -119,7 +119,7 @@ decision(struct v34_decoder *d, const int *pts, short npts)
 	}
 
 	d->best_index = (short)(best - pts);
-	d->best_point = *best;
+	d->decision_point = *best;
 }
 
 void
@@ -188,9 +188,9 @@ updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
 }
 
 int
-V34descrambler(struct v34_scrambler *s, short bits, short nbits)
+V34descrambler(struct v34_receiver *s, short bits, short nbits)
 {
-	unsigned sr = s->sr;
+	unsigned sr = s->scrambler_sr;
 	unsigned mask = 1;
 	int out = 0;
 	short i;
@@ -220,7 +220,7 @@ V34descrambler(struct v34_scrambler *s, short bits, short nbits)
 		mask = (unsigned short)(mask * 2);
 	}
 
-	s->sr = sr;
+	s->scrambler_sr = sr;
 	return out;
 }
 
@@ -261,14 +261,14 @@ txinit(void *objp)
 }
 
 int
-agcadapt(struct v34_agcstate *a)
+agcadapt(struct v34_receiver *a)
 {
 	int level;
 	int err;
 	int acc;
 
 	/* Smooth: 0.85 of the old level plus the new measurement. */
-	level = ((a->level * V34_AGC_SMOOTH) >> 15) + a->input;
+	level = ((a->agc_level * V34_AGC_SMOOTH) >> 15) + a->agc_input;
 
 	/*
 	 * Range check, spelled as the original does it: valid when the top
@@ -278,36 +278,36 @@ agcadapt(struct v34_agcstate *a)
 	 * used, since the check falls through rather than returning.
 	 */
 	if (((unsigned)level >> 15) == 0 || ((unsigned)level >> 15) == 0x1ffff)
-		a->level = (short)level;
+		a->agc_level = (short)level;
 	else
-		a->level = 0x7f00;
+		a->agc_level = 0x7f00;
 
-	if (a->flags & V34_AGC_FREEZE)
+	if (a->flags & V34_RX_FLAG_AGC_FREEZE)
 		return 0;
 
 	/* How far off target, and is it outside the deadband? */
-	err = (short)((unsigned short)a->level - V34_AGC_TARGET);
+	err = (short)((unsigned short)a->agc_level - V34_AGC_TARGET);
 	if ((short)((err < 0 ? -err : err) - V34_AGC_DEADBAND) <= 0)
 		return 0;
 
 	/* Integrate the error, and check that against its own deadband. */
-	acc = (short)(((a->step * err) >> 16) + (unsigned short)a->accum);
+	acc = (short)(((a->agc_step * err) >> 16) + (unsigned short)a->agc_accum);
 	if ((short)((acc < 0 ? -acc : acc) - V34_AGC_ACCUM_LIMIT) <= 0) {
-		a->accum = (short)acc;
+		a->agc_accum = (short)acc;
 		return 0;
 	}
 
 	/* Tripped: reset the integrator and move the gain one step. */
-	a->accum = 0;
+	a->agc_accum = 0;
 
 	if (acc > 0) {
-		a->gain = (short)((a->gain * V34_AGC_GAIN_DOWN) >> 14);
-	} else if ((short)(unsigned short)a->gain <= V34_AGC_GAIN_CEILING) {
+		a->agc_gain = (short)((a->agc_gain * V34_AGC_GAIN_DOWN) >> 14);
+	} else if ((short)(unsigned short)a->agc_gain <= V34_AGC_GAIN_CEILING) {
 		/*
 		 * Up and down are not inverses: 0.883 * 1.122 is 0.9907, so
 		 * a signal that oscillates about the target drifts downward.
 		 */
-		a->gain = (short)((a->gain * V34_AGC_GAIN_UP) >> 14);
+		a->agc_gain = (short)((a->agc_gain * V34_AGC_GAIN_UP) >> 14);
 	}
 
 	return 0;

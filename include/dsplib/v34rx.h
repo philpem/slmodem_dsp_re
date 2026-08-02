@@ -8,6 +8,8 @@
 #ifndef DSPLIB_V34RX_H
 #define DSPLIB_V34RX_H
 
+#include "dsplib/v34recv.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,14 +57,7 @@ void txwritequeue(struct v34_queue *q, const short *src);
  * The decoder's state, mapped where `decision` touches it.  A sub-object of
  * the V.34 receiver; the pads are not a claim about their contents.
  */
-struct v34_decoder {
-	unsigned char unmapped_000[0x126];
-	short best_index;	/* +0x126  index of the nearest point    */
-	unsigned char unmapped_128[0x20c - 0x128];
-	int best_point;		/* +0x20c  the point itself              */
-	short target_re;	/* +0x210  what we are deciding on       */
-	short target_im;	/* +0x212                                */
-};
+
 
 /*
  * Slice: find the nearest of `npts` constellation points to the target, and
@@ -70,7 +65,7 @@ struct v34_decoder {
  *
  * Each point is one int, real in the low half and imaginary in the high.
  */
-void decision(struct v34_decoder *d, const int *pts, short npts);
+void decision(struct v34_receiver *d, const int *pts, short npts);
 
 /*
  * The non-linear encoder: scale a complex point by a gain derived from its
@@ -91,12 +86,7 @@ void updateAlpha(short *alpha, int energy, int apply_decay, int gain,
 /*
  * The descrambler's state, mapped where V34descrambler touches it.
  */
-struct v34_scrambler {
-	unsigned char unmapped_000[0x122];
-	unsigned short flags;	/* +0x122  bit 2 picks the polynomial    */
-	unsigned char unmapped_124[0x1a4 - 0x124];
-	unsigned sr;		/* +0x1a4  the shift register            */
-};
+
 
 /* Bit 2 of `flags`: set selects the answerer's polynomial. */
 #define V34_SCR_ANSWERER	0x0004
@@ -107,7 +97,7 @@ struct v34_scrambler {
  * V.34 gives the two ends different generators and this is both of them:
  * 1 + x^-5 + x^-23 for the caller, 1 + x^-18 + x^-23 for the answerer.
  */
-int V34descrambler(struct v34_scrambler *s, short bits, short nbits);
+int V34descrambler(struct v34_receiver *s, short bits, short nbits);
 
 /*
  * Reset the transmit side: both echo cancellers, both sample queues, the
@@ -122,19 +112,9 @@ void txinit(void *obj);
 /*
  * The receive AGC's state, mapped where `agcadapt` touches it.
  */
-struct v34_agcstate {
-	unsigned char unmapped_000[0x123];
-	unsigned char flags;	/* +0x123  bit 1 freezes the adaptation  */
-	unsigned char unmapped_124[0x12e - 0x124];
-	unsigned short input;	/* +0x12e  the new energy measurement    */
-	unsigned char unmapped_130[0x134 - 0x130];
-	short level;		/* +0x134  smoothed, clamped             */
-	short gain;		/* +0x136  what the AGC applies          */
-	short accum;		/* +0x138  error integrator              */
-	short step;		/* +0x13a                                */
-};
 
-#define V34_AGC_FREEZE		0x02	/* flags bit 1                   */
+
+/* The freeze bit lives in v34recv.h: it is the detector-pending flag. */
 #define V34_AGC_TARGET		0xfa0	/* 4000: the level it aims for   */
 #define V34_AGC_DEADBAND	0x4b0	/* 1200: error ignored below this*/
 #define V34_AGC_ACCUM_LIMIT	0x1f4	/*  500: integrator trip point   */
@@ -146,7 +126,7 @@ struct v34_agcstate {
 /*
  * One AGC step.  Always returns zero; the state is the output.
  */
-int agcadapt(struct v34_agcstate *a);
+int agcadapt(struct v34_receiver *a);
 
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);

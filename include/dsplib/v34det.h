@@ -36,6 +36,8 @@
 #ifndef DSPLIB_V34DET_H
 #define DSPLIB_V34DET_H
 
+#include "dsplib/v34recv.h"	/* struct v34_receiver: one map, not four */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,10 +67,7 @@ extern "C" {
  * When the next V.34 file needs a field, extend one of these two and say
  * which -- do not start a third.
  */
-struct v34_rx {
-	unsigned char unmapped_000[0x122];
-	unsigned short flags;			/* +0x122 */
-};
+
 
 /*
  * Bit 9 of that word.  Set by the handshake state that arms a detector (for
@@ -76,7 +75,7 @@ struct v34_rx {
  * time the integrated level crosses V34_DET_ARM_LEVEL.  So it reads as "a
  * detector has been armed and has not yet seen anything".
  */
-#define V34_RX_FLAG_DET_PENDING		0x0200
+
 
 /*
  * The level a presence detector must reach before it will start counting.
@@ -153,7 +152,7 @@ void detectorinit(struct v34_detector *d, const short *coeff, short polarity,
  * `rx` is only ever used to clear V34_RX_FLAG_DET_PENDING, and only on the
  * one call that arms a presence detector.
  */
-int tone_detect(struct v34_rx *rx, struct v34_detector *d, const short *start,
+int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 		const short *end);
 
 /* ------------------------------------------------------------------------

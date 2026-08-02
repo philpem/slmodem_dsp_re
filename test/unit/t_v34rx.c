@@ -6,6 +6,7 @@
 #include "harness.h"
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
 
 extern void ref_rxreadqueue(void *q);
@@ -129,7 +130,7 @@ main(void)
 
 	diff_begin("v34 decision");
 	{
-		static struct v34_decoder da, db;
+		static struct v34_receiver da, db;
 		static int pts[64];
 		int n, t;
 
@@ -149,8 +150,8 @@ main(void)
 			ref_decision(&db, pts, (short)n);
 			diff_eq_int("best index", da.best_index,
 				    db.best_index, (long)n * 100000 + t);
-			diff_eq_int("best point", da.best_point,
-				    db.best_point, (long)n * 100000 + t);
+			diff_eq_int("best point", da.decision_point,
+				    db.decision_point, (long)n * 100000 + t);
 			for (i = 0; i < (int)sizeof(da); i++)
 				diff_eq_int("decoder state",
 					    ((unsigned char *)&da)[i],
@@ -165,8 +166,8 @@ main(void)
 		ref_decision(&db, pts, 0);
 		diff_eq_int("zero points, index", da.best_index,
 			    db.best_index, 0);
-		diff_eq_int("zero points, point", da.best_point,
-			    db.best_point, 0);
+		diff_eq_int("zero points, point", da.decision_point,
+			    db.decision_point, 0);
 	}
 	rc |= diff_end();
 
@@ -203,14 +204,14 @@ main(void)
 
 	diff_begin("v34 descrambler");
 	{
-		static struct v34_scrambler sa, sb;
+		static struct v34_receiver sa, sb;
 		int ans, n, v;
 
 		for (ans = 0; ans <= 1; ans++)
 		for (n = 0; n <= 16; n++) {
 			memset(&sa, HARNESS_MALLOC_FILL, sizeof(sa));
 			memset(&sb, HARNESS_MALLOC_FILL, sizeof(sb));
-			sa.sr = sb.sr = 0;
+			sa.scrambler_sr = sb.scrambler_sr = 0;
 			sa.flags = sb.flags =
 				(unsigned short)(ans ? V34_SCR_ANSWERER : 0);
 			for (v = 0; v < 4000; v += 7) {
@@ -221,8 +222,8 @@ main(void)
 							       (short)n),
 					    (long)ans * 1000000 + n * 10000
 					    + v);
-				diff_eq_int("scrambler sr", (long)sa.sr,
-					    (long)sb.sr, v);
+				diff_eq_int("scrambler sr", (long)sa.scrambler_sr,
+					    (long)sb.scrambler_sr, v);
 			}
 		}
 	}
@@ -282,7 +283,7 @@ main(void)
 
 	diff_begin("v34 agcadapt");
 	{
-		static struct v34_agcstate aa, ab;
+		static struct v34_receiver aa, ab;
 		int lv, in, st, gn, fl;
 
 		for (fl = 0; fl <= 2; fl += 2)
@@ -292,12 +293,12 @@ main(void)
 		for (gn = -32768; gn < 32768; gn += 13107) {
 			memset(&aa, HARNESS_MALLOC_FILL, sizeof(aa));
 			memset(&ab, HARNESS_MALLOC_FILL, sizeof(ab));
-			aa.flags = ab.flags = (unsigned char)fl;
-			aa.level = ab.level = (short)lv;
-			aa.input = ab.input = (unsigned short)in;
-			aa.step = ab.step = (short)st;
-			aa.gain = ab.gain = (short)gn;
-			aa.accum = ab.accum = (short)(lv / 3);
+			aa.flags = ab.flags = (unsigned short)(fl ? V34_RX_FLAG_AGC_FREEZE : 0);
+			aa.agc_level = ab.agc_level = (short)lv;
+			aa.agc_input = ab.agc_input = (unsigned short)in;
+			aa.agc_step = ab.agc_step = (short)st;
+			aa.agc_gain = ab.agc_gain = (short)gn;
+			aa.agc_accum = ab.agc_accum = (short)(lv / 3);
 
 			diff_eq_int("agcadapt ret", agcadapt(&aa),
 				    ref_agcadapt(&ab), lv);

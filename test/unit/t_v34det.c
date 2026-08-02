@@ -10,7 +10,7 @@
  * byte object as well as the verdict, and the counters at the bottom refuse
  * to let the test pass unless each of the four decision paths was reached.
  *
- * Two objects and two `struct v34_rx`, not one of each: both sides write to
+ * Two objects and two `struct v34_receiver`, not one of each: both sides write to
  * their detector and both clear a bit in their receiver, and a shared one
  * would have each side comparing against the other's writes.
  */
@@ -155,7 +155,7 @@ run(const char *what, const short *coeff, short polarity, short limit,
 {
 	struct v34_detector ours;
 	unsigned char ref[0x24];
-	struct v34_rx rx_ours, rx_ref;
+	struct v34_receiver rx_ours, rx_ref;
 	int asserts = 0;
 	int i;
 	int call = 0;
