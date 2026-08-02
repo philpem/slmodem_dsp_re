@@ -98,6 +98,34 @@ const short V34TimingPrefilterCoeff[40] = {
 	  -111,   -121,    -53,     12,     34,     21,      4,     -4,
 };
 
+/*
+ * The half-baud band-pass pair, and its fourth-order real equivalent.
+ *
+ * `pos` and `neg` are identical except for the sign of Acoef_Imag, so they
+ * are one complex filter and its mirror about DC.  Both numerators are
+ * 64 * (1 - z^-2) with a zero imaginary part -- a real band-pass numerator on
+ * a complex denominator.
+ *
+ * The poles are at +/-1/8 of the sample rate at a radius of 0.985, which is
+ * +/-half the baud rate exactly when the timing path runs at four samples per
+ * symbol.  That is why one set covers all five V.34 baud rates.
+ *
+ * V34TimingIIR_Bcoef is 1768 * (1 - z^-2)^2 -- the same numerator squared --
+ * and V34TimingIIR_Acoef's four poles land on the same two frequencies,
+ * mirrored.  So the fourth-order real filter and the complex pair are two
+ * spellings of one design.  docs/coefficients.md has the derivation.
+ */
+const short negHalfBaud_Acoef_Imag[3] = { 0, 22853, -15908 };
+const short negHalfBaud_Acoef_Real[3] = { 16384, -22805, -33 };
+const short negHalfBaud_Bcoef_Imag[3] = { 0, 0, 0 };
+const short negHalfBaud_Bcoef_Real[3] = { 64, 0, -64 };
+const short posHalfBaud_Acoef_Imag[3] = { 0, -22853, 15908 };
+const short posHalfBaud_Acoef_Real[3] = { 16384, -22805, -33 };
+const short posHalfBaud_Bcoef_Imag[3] = { 0, 0, 0 };
+const short posHalfBaud_Bcoef_Real[3] = { 64, 0, -64 };
+const short V34TimingIIR_Acoef[5] = { 8192, -22805, 31776, -22143, 7723 };
+const short V34TimingIIR_Bcoef[5] = { 1768, 0, -3536, 0, 1768 };
+
 /* ------------------------------------------------------------ echo canceller */
 
 void

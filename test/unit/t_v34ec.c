@@ -38,6 +38,11 @@ extern const short ref_V34hilbertrealcoef[V34_HILBERT_TAPS];
 extern const short ref_V34hilbertimagcoef[V34_HILBERT_TAPS];
 extern const short ref_V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
 extern const short ref_V34TimingPrefilterCoeff[40];
+extern const short ref_negHalfBaud_Acoef_Imag[3], ref_negHalfBaud_Acoef_Real[3];
+extern const short ref_negHalfBaud_Bcoef_Imag[3], ref_negHalfBaud_Bcoef_Real[3];
+extern const short ref_posHalfBaud_Acoef_Imag[3], ref_posHalfBaud_Acoef_Real[3];
+extern const short ref_posHalfBaud_Bcoef_Imag[3], ref_posHalfBaud_Bcoef_Real[3];
+extern const short ref_V34TimingIIR_Acoef[5], ref_V34TimingIIR_Bcoef[5];
 extern void ref_V34TimingFiltersInit(void *t);
 extern int ref_V34TimingPrefilter(void *t);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
@@ -127,6 +132,66 @@ main(void)
 		diff_eq_int("V34TimingPrefilterCoeff[%ld]",
 			    V34TimingPrefilterCoeff[i],
 			    ref_V34TimingPrefilterCoeff[i], i);
+	for (i = 0; i < 3; i++) {
+		diff_eq_int("negHalfBaud_Acoef_Imag[%ld]",
+			    negHalfBaud_Acoef_Imag[i],
+			    ref_negHalfBaud_Acoef_Imag[i], i);
+		diff_eq_int("negHalfBaud_Acoef_Real[%ld]",
+			    negHalfBaud_Acoef_Real[i],
+			    ref_negHalfBaud_Acoef_Real[i], i);
+		diff_eq_int("negHalfBaud_Bcoef_Imag[%ld]",
+			    negHalfBaud_Bcoef_Imag[i],
+			    ref_negHalfBaud_Bcoef_Imag[i], i);
+		diff_eq_int("negHalfBaud_Bcoef_Real[%ld]",
+			    negHalfBaud_Bcoef_Real[i],
+			    ref_negHalfBaud_Bcoef_Real[i], i);
+		diff_eq_int("posHalfBaud_Acoef_Imag[%ld]",
+			    posHalfBaud_Acoef_Imag[i],
+			    ref_posHalfBaud_Acoef_Imag[i], i);
+		diff_eq_int("posHalfBaud_Acoef_Real[%ld]",
+			    posHalfBaud_Acoef_Real[i],
+			    ref_posHalfBaud_Acoef_Real[i], i);
+		diff_eq_int("posHalfBaud_Bcoef_Imag[%ld]",
+			    posHalfBaud_Bcoef_Imag[i],
+			    ref_posHalfBaud_Bcoef_Imag[i], i);
+		diff_eq_int("posHalfBaud_Bcoef_Real[%ld]",
+			    posHalfBaud_Bcoef_Real[i],
+			    ref_posHalfBaud_Bcoef_Real[i], i);
+	}
+	for (i = 0; i < 5; i++) {
+		diff_eq_int("V34TimingIIR_Acoef[%ld]", V34TimingIIR_Acoef[i],
+			    ref_V34TimingIIR_Acoef[i], i);
+		diff_eq_int("V34TimingIIR_Bcoef[%ld]", V34TimingIIR_Bcoef[i],
+			    ref_V34TimingIIR_Bcoef[i], i);
+	}
+
+	/*
+	 * Structure, not bytes.  The two half-baud filters must be mirror
+	 * images -- identical but for the sign of the imaginary denominator
+	 * half -- and their numerators must be real.  A regenerated table
+	 * that broke either property would still match the reference above
+	 * only if it were wrong on both sides, which it cannot be; this says
+	 * the property out loud so a future derivation has it to fail
+	 * against.  See docs/coefficients.md.
+	 */
+	for (i = 0; i < 3; i++) {
+		diff_eq_int("pos and neg share a real denominator at %ld",
+			    posHalfBaud_Acoef_Real[i],
+			    negHalfBaud_Acoef_Real[i], i);
+		diff_eq_int("and mirror the imaginary one at %ld",
+			    posHalfBaud_Acoef_Imag[i],
+			    -negHalfBaud_Acoef_Imag[i], i);
+		diff_eq_int("the numerators are identical at %ld",
+			    posHalfBaud_Bcoef_Real[i],
+			    negHalfBaud_Bcoef_Real[i], i);
+		diff_eq_int("and purely real at %ld",
+			    posHalfBaud_Bcoef_Imag[i], 0, i);
+	}
+	/* B is 1768 * (1 - z^-2)^2, so it is symmetric with a zero middle. */
+	diff_eq_int("IIR numerator is symmetric", V34TimingIIR_Bcoef[0],
+		    V34TimingIIR_Bcoef[4], 0);
+	diff_eq_int("IIR numerator middle is -2x the ends",
+		    V34TimingIIR_Bcoef[2], -2 * V34TimingIIR_Bcoef[0], 0);
 	rc |= diff_end();
 
 	diff_begin("v34 timing: FiltersInit");

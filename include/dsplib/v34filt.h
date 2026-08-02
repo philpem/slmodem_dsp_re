@@ -133,9 +133,37 @@ extern const short V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
 extern const short V34TimingPrefilterCoeff[40];
 
 /*
- * V34TimingIIR_Acoef and V34TimingIIR_Bcoef are the rest of the set and are
- * declared once V34TimingFilter, which reads them, is reconstructed.
+ * The half-baud band-pass pair, and the fourth-order real filter that is the
+ * same thing in another form.
+ *
+ * V.34 recovers symbol timing by watching the two spectral lines a modulated
+ * signal shows at plus and minus half the baud rate.  These are the filters
+ * that isolate them: `pos` and `neg` are complex second-order sections
+ * differing ONLY in the sign of their imaginary denominator half, which makes
+ * them one filter and its mirror image about DC.
+ *
+ * Their poles sit at +/-1/8 of the sample rate -- +/-45 degrees, measured at
+ * 0.98 radius -- and that is why there is one set rather than five.  An
+ * eighth of the sample rate is half the baud rate exactly when the timing
+ * path runs at four samples per symbol, so the filters are rate-independent
+ * and the resampler ahead of them carries the rate.  The object's own C++
+ * side names that resampler: `ResamplerTiming::adjustHalfBaudBpfGain`.
+ *
+ * `V34TimingIIR_Acoef`/`Bcoef` are a fourth-order REAL filter whose four
+ * poles land on the same two frequencies, positive and negative -- the
+ * cascade of the two complex sections written out as one real one.  See
+ * docs/coefficients.md for the numbers.
  */
+extern const short negHalfBaud_Acoef_Imag[3];
+extern const short negHalfBaud_Acoef_Real[3];
+extern const short negHalfBaud_Bcoef_Imag[3];
+extern const short negHalfBaud_Bcoef_Real[3];
+extern const short posHalfBaud_Acoef_Imag[3];
+extern const short posHalfBaud_Acoef_Real[3];
+extern const short posHalfBaud_Bcoef_Imag[3];
+extern const short posHalfBaud_Bcoef_Real[3];
+extern const short V34TimingIIR_Acoef[5];
+extern const short V34TimingIIR_Bcoef[5];
 
 /*
  * The timing object, mapped only as far as the high-pass needs.

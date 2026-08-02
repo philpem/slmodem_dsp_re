@@ -368,3 +368,65 @@ sum = 49120 = 2.9980 x 16384          -3 dB at about 280 Hz
 600 bit/s and 280 Hz is a sensible matched cutoff for 600 baud. See
 findings 91 before concluding that a table named for a frequency has been
 transcribed wrongly.
+
+## V.34 timing recovery: the half-baud pair
+
+Ten tables in `v34filters.c`'s global block, contiguous from `.rodata+0x3590`
+to `+0x3624`.
+
+```
+negHalfBaud_Acoef_Real   16384  -22805     -33      posHalfBaud_Acoef_Real   same
+negHalfBaud_Acoef_Imag       0   22853  -15908      posHalfBaud_Acoef_Imag   negated
+negHalfBaud_Bcoef_Real      64       0     -64      posHalfBaud_Bcoef_Real   same
+negHalfBaud_Bcoef_Imag       0       0       0      posHalfBaud_Bcoef_Imag   same
+```
+
+**`pos` and `neg` differ in exactly one thing: the sign of `Acoef_Imag`.** So
+they are one complex second-order section and its mirror image about DC. Both
+numerators are `64 * (1 - z^-2)` with a zero imaginary part — a real
+band-pass numerator on a complex denominator.
+
+**Derivation.** Normalising by `a0 = 16384` (Q14) and solving
+`a0 + a1 z^-1 + a2 z^-2`:
+
+```
+   neg:  poles at r = 0.9844, -1179.3 Hz   and   r = 0.9863, -1223.9 Hz
+   pos:  the same two, positive
+                                            (frequencies quoted at 9600 Hz)
+```
+
+Two poles a little either side of **1/8 of the sample rate** — 45 degrees.
+An eighth of the sample rate is half the baud rate exactly when the timing
+path runs at **four samples per symbol**, which is why one set of coefficients
+serves all five V.34 baud rates instead of five sets. The resampler ahead of
+them carries the rate, and the object names it: the C++ side has
+`ResamplerTiming::adjustHalfBaudBpfGain(float)` and
+`ResamplerTiming::SdHalfBaudDft(float)`.
+
+The split pole pair rather than a single one is a deliberately widened
+resonance — a band-pass, not a resonator, so it tolerates the timing offset it
+is there to measure.
+
+## V.34 `V34TimingIIR_Acoef` / `_Bcoef` — the same filter, written once
+
+```
+   A = { 8192, -22805, 31776, -22143, 7723 }      (a0 = 8192, so Q13)
+   B = { 1768, 0, -3536, 0, 1768 }
+```
+
+`B` is exactly `1768 * (1 - z^-2)^2` — the half-baud numerator squared. And
+`A`'s four poles are:
+
+```
+   r = 0.9860 at +/-1224.6 Hz        r = 0.9847 at +/-1178.6 Hz
+```
+
+which are the half-baud pair's two frequencies, mirrored. So this is a
+fourth-order **real** filter that is the cascade of the two complex sections
+above, and the object carries the design in both forms. Which one
+`V34TimingFilter` uses where is not yet established — it reads the complex
+pair; nothing reconstructed so far reads `V34TimingIIR_*`.
+
+`t_v34ec` asserts the structural properties — the mirror relationship, the
+real numerators, `B`'s symmetry — as well as the bytes, so a future
+regeneration has something to fail against beyond a byte comparison.
