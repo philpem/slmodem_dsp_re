@@ -6479,3 +6479,47 @@ have to keep both in step. Write it once with the wrap handled before it.
 
 **Remaining: about 420 bytes** — the clamp arms, the gain-up arm, and
 whatever follows 0x5b260.
+
+### 120d. The demodulation proper: a complex down-conversion, and a signed clamp
+
+Read to 0x5b2c0 (about 880 of 1142 bytes).
+
+**The clamp arm at 0x5b219 is signed and branchless:**
+
+```
+   xor  %ecx,%ecx
+   test %edx,%edx
+   setg %cl                      ; 1 if the product was positive
+   dec  %ecx                     ; 0 or -1
+   and  $0xffff0200,%ecx
+   add  $0x7f00,%ecx             ; 0x7f00 or 0xffff8100
+```
+
+`0xffff8100` is `-0x7f00`. So an out-of-range gain product clamps to
+**plus or minus 0x7f00**, not to the rail and not to a single value —
+unlike `agcadapt`'s level clamp, which is the unsigned `0x7f00` only. Two
+clamps, same constant, different symmetry. It also logs when
+`dsplibs_debug_level > 1`, which is how the intent is confirmed.
+
+**The demodulation itself** (0x5b260) is a complex down-conversion against a
+table the receiver holds a pointer to:
+
+```
+   ph   = rx->f1bc;             tbl = rx->f1b4;   quarter = rx->f1ba;
+   sin  = tbl[ph];              cos = tbl[ph + quarter];
+   I    = (re * cos + im * sin + 0x2000) >> 14;      -> rx->f240
+   ... im * cos and re * sin follow, for Q ...
+   ph  += rx->f1b8;                                  /* phase increment */
+```
+
+Two contiguous halves again, quarter apart — the same layout as the
+modulator's `hsine*` tables (finding 116's correction), so the receiver and
+transmitter share a table convention even though the tables themselves are
+separate.
+
+And `rx->f240` is the field `rxtiming` reads immediately after calling this
+function (finding 118). So the chain is now traced end to end:
+**dequeue -> gain -> RMS -> inlined AGC -> down-convert -> `f240` ->
+`rxtiming`'s IIR.**
+
+**Remaining: about 260 bytes.**
