@@ -6109,3 +6109,49 @@ filter by noise pattern only, and check that consecutive addresses abut. And
 when static reading contradicts a measurement three times, run the
 measurement directly instead of reading a fourth time: the probe cost one
 tool call and settled what three rounds of analysis could not.
+
+## 116. `txmit`: the transmit path in one function, and a second ring
+
+Read to 0x5d904; the last ~50 bytes are unread. **Not written.**
+
+```
+   sym = (txq->f3b6 << 16) | txq->f3b4;          /* obj+0x25d2, +0x25d0 */
+   n   = V34ModulatorProcess(obj + 0x1450, sym, local);
+
+   for (i = 0; i < n; i++) {                     /* scale and enqueue   */
+       v = (local[i] * txq->f3b8 + 0x2000) >> 14;  /* obj+0x25d4        */
+       txq->count++;                             /* ONE per sample      */
+       *wr = v;  ((short *)wr)[1] = 0;
+       wr++;  if (wr >= ring_end) wr = ring_base;
+   }
+
+   V34EchoPreFilter(local, n, obj + 0x2078);
+
+   if (txq->f3a7 & 2)                            /* obj+0x25c3          */
+       for (i = 0; i < n; i++) {
+           ... feed both echo cancellers from a ring at obj+0x35a8 ...
+       }
+```
+
+Three things worth having before it is written.
+
+**The enqueue is `txwritequeue` open-coded, with a different count step.**
+`txwritequeue` adds four to `count` per call; this adds **one per sample**,
+and writes the same "low half the value, high half zero" pairs into the same
+ring. So the transmit queue has two producers with different accounting, and
+whichever consumer reads `count` has to agree with both.
+
+**There is a second ring at `obj+0x35a8`**, with head at `+0x35a8`, tail at
+`+0x35ac`, base pointer at `+0x35b0` and length at `+0x35b4`. Its wrap is
+branchless — `seta`/`neg`/`and`, i.e. `idx &= -(len > idx)` — which resets
+the index to zero on overflow rather than subtracting. That is a different
+wrap idiom from every other ring in this reconstruction, and it is worth not
+"normalising" while transcribing.
+
+**The echo feed is gated on `txq->f3a7 & 2`** — a byte at `obj+0x25c3`,
+which is the high half of the short at `+0x25c2`. Another flag packed into a
+neighbouring field, like finding 114's.
+
+To write it, `struct v34_object` needs `+0x25d0`, `+0x25d2`, `+0x25d4`,
+`+0x25c3` and the four ring words at `+0x35a8`..`+0x35b4`, and the tail from
+0x5d904 needs reading.
