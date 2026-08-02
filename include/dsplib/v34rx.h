@@ -119,6 +119,35 @@ int V34descrambler(struct v34_scrambler *s, short bits, short nbits);
  */
 void txinit(void *obj);
 
+/*
+ * The receive AGC's state, mapped where `agcadapt` touches it.
+ */
+struct v34_agcstate {
+	unsigned char unmapped_000[0x123];
+	unsigned char flags;	/* +0x123  bit 1 freezes the adaptation  */
+	unsigned char unmapped_124[0x12e - 0x124];
+	unsigned short input;	/* +0x12e  the new energy measurement    */
+	unsigned char unmapped_130[0x134 - 0x130];
+	short level;		/* +0x134  smoothed, clamped             */
+	short gain;		/* +0x136  what the AGC applies          */
+	short accum;		/* +0x138  error integrator              */
+	short step;		/* +0x13a                                */
+};
+
+#define V34_AGC_FREEZE		0x02	/* flags bit 1                   */
+#define V34_AGC_TARGET		0xfa0	/* 4000: the level it aims for   */
+#define V34_AGC_DEADBAND	0x4b0	/* 1200: error ignored below this*/
+#define V34_AGC_ACCUM_LIMIT	0x1f4	/*  500: integrator trip point   */
+#define V34_AGC_GAIN_CEILING	0x6a00	/* gain is not raised past this  */
+#define V34_AGC_SMOOTH		0x6ccd	/* 0.85 in Q15                   */
+#define V34_AGC_GAIN_DOWN	0x390a	/* 0.883 in Q14                  */
+#define V34_AGC_GAIN_UP		0x47cf	/* 1.122 in Q14                  */
+
+/*
+ * One AGC step.  Always returns zero; the state is the output.
+ */
+int agcadapt(struct v34_agcstate *a);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 

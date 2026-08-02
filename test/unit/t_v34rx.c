@@ -16,6 +16,7 @@ extern void ref_V34nlencoder(const short *in, short *out);
 extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
 extern int ref_V34descrambler(void *s, short bits, short nbits);
 extern void ref_txinit(void *obj);
+extern int ref_agcadapt(void *a);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -276,6 +277,35 @@ main(void)
 		diff_eq_int("rxq wr", oa.rxq.wr - oa.rxq.ring,
 			    ob.rxq.wr - ob.rxq.ring, 0);
 		diff_eq_int("txq primed with 32", oa.txq.count, 0x20, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 agcadapt");
+	{
+		static struct v34_agcstate aa, ab;
+		int lv, in, st, gn, fl;
+
+		for (fl = 0; fl <= 2; fl += 2)
+		for (lv = -32768; lv < 32768; lv += 4093)
+		for (in = 0; in < 65536; in += 12289)
+		for (st = -32768; st < 32768; st += 21851)
+		for (gn = -32768; gn < 32768; gn += 13107) {
+			memset(&aa, HARNESS_MALLOC_FILL, sizeof(aa));
+			memset(&ab, HARNESS_MALLOC_FILL, sizeof(ab));
+			aa.flags = ab.flags = (unsigned char)fl;
+			aa.level = ab.level = (short)lv;
+			aa.input = ab.input = (unsigned short)in;
+			aa.step = ab.step = (short)st;
+			aa.gain = ab.gain = (short)gn;
+			aa.accum = ab.accum = (short)(lv / 3);
+
+			diff_eq_int("agcadapt ret", agcadapt(&aa),
+				    ref_agcadapt(&ab), lv);
+			for (i = 0; i < (int)sizeof(aa); i++)
+				diff_eq_int("agc state at %ld",
+					    ((unsigned char *)&aa)[i],
+					    ((unsigned char *)&ab)[i], i);
+		}
 	}
 	rc |= diff_end();
 

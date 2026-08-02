@@ -5864,3 +5864,31 @@ partly there — `ring_pos` at `+0x2224` is that queue's `wr` cursor and
 `ring` at `+0x2228` is its ring, which is why finding 109's identification
 worked. Renaming those two into a `struct v34_queue` at `+0x221c` is the
 tidy version and touches `V34EchoHistoryBackwardClean` and `t_v34fsk`.
+
+## 112. The receive AGC's gain steps are not inverses
+
+`agcadapt` moves its gain by one of two fixed factors when the error
+integrator trips:
+
+```
+   down   0x390a / 16384  =  0.88300
+   up     0x47cf / 16384  =  1.12201
+```
+
+`0.88300 * 1.12201 = 0.99074`. So a signal that oscillates about the target,
+tripping the integrator equally often in each direction, **drifts downward**
+by about 0.9% per pair of steps.
+
+Whether that is deliberate — a deliberate bias toward attenuation, which is
+the safe direction for a receiver that must not clip — or an artefact of
+picking two round-ish Q14 constants independently, the object does not say.
+It is reproduced either way.
+
+Two other things worth having: the up-step is skipped entirely once the gain
+exceeds `0x6a00`, so there is a ceiling but no floor; and the range check on
+the smoothed level replaces an out-of-range value with `0x7f00` and then
+**falls through to use it** rather than returning, so a single overflowing
+measurement still drives one adaptation step from a fabricated level.
+
+Reachability of both is unmeasured — `agcadapt`'s caller is `receiver`,
+which is not reconstructed. Task #47.

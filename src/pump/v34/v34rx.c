@@ -259,3 +259,56 @@ txinit(void *objp)
 	sysdep_memset(obj->prefilter.state, 0,
 		      V34_ECHO_PREFILTER_TAPS * sizeof(short));
 }
+
+int
+agcadapt(struct v34_agcstate *a)
+{
+	int level;
+	int err;
+	int acc;
+
+	/* Smooth: 0.85 of the old level plus the new measurement. */
+	level = ((a->level * V34_AGC_SMOOTH) >> 15) + a->input;
+
+	/*
+	 * Range check, spelled as the original does it: valid when the top
+	 * 17 bits are all zero or all one, i.e. when the sum still fits a
+	 * signed short.  Anything else is replaced by 0x7f00 rather than
+	 * clamped to the rail -- and the clamped value then goes on to be
+	 * used, since the check falls through rather than returning.
+	 */
+	if (((unsigned)level >> 15) == 0 || ((unsigned)level >> 15) == 0x1ffff)
+		a->level = (short)level;
+	else
+		a->level = 0x7f00;
+
+	if (a->flags & V34_AGC_FREEZE)
+		return 0;
+
+	/* How far off target, and is it outside the deadband? */
+	err = (short)((unsigned short)a->level - V34_AGC_TARGET);
+	if ((short)((err < 0 ? -err : err) - V34_AGC_DEADBAND) <= 0)
+		return 0;
+
+	/* Integrate the error, and check that against its own deadband. */
+	acc = (short)(((a->step * err) >> 16) + (unsigned short)a->accum);
+	if ((short)((acc < 0 ? -acc : acc) - V34_AGC_ACCUM_LIMIT) <= 0) {
+		a->accum = (short)acc;
+		return 0;
+	}
+
+	/* Tripped: reset the integrator and move the gain one step. */
+	a->accum = 0;
+
+	if (acc > 0) {
+		a->gain = (short)((a->gain * V34_AGC_GAIN_DOWN) >> 14);
+	} else if ((short)(unsigned short)a->gain <= V34_AGC_GAIN_CEILING) {
+		/*
+		 * Up and down are not inverses: 0.883 * 1.122 is 0.9907, so
+		 * a signal that oscillates about the target drifts downward.
+		 */
+		a->gain = (short)((a->gain * V34_AGC_GAIN_UP) >> 14);
+	}
+
+	return 0;
+}
