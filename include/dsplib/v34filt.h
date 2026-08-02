@@ -312,30 +312,31 @@ void V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re,
  * The modulator, mapped where V34SetupModulator writes it.  A member of the
  * V.34 object at +0x1450; the pads are not a claim about their contents.
  *
- * The ten `hsine*` tables are carrier sine/cosine pairs, interleaved, and
- * `sine_len` is the length in PAIRS -- exactly each table's byte size / 4.
+ * The ten `hsine*` tables hold `sine_len` sine values followed by `sine_len`
+ * cosine values -- two contiguous halves, not interleaved.  `sine_len` is
+ * therefore each table's byte size / 4.
  */
 struct v34_modulator {
 	int taps;		/* +0x00  source taps per polyphase row  */
 	int f04;		/* +0x04                                 */
 	int rows;		/* +0x08  polyphase rows to load         */
-	int f0c;		/* +0x0c  reduced mod `rows` on exit     */
+	int row;		/* +0x0c  polyphase row, mod `rows`      */
 	const short *sine;	/* +0x10  carrier table                  */
 	int sine_len;		/* +0x14  its length, in complex pairs   */
-	int f18;		/* +0x18  reduced mod `sine_len` on exit */
+	int phase;		/* +0x18  carrier phase, mod `sine_len`  */
 	unsigned char unmapped_1c[0xc24 - 0x1c];
 	short *shaped;		/* +0xc24  where the engine writes       */
 	unsigned char unmapped_c28[0xc7c - 0xc28];
 	const short *ec_prem;	/* +0xc7c                                */
 	unsigned char unmapped_c80[0xc8c - 0xc80];
 	int fc8c;		/* +0xc8c  an integer, 14 or 15          */
-	unsigned char pad_c90[0xcb0 - 0xc90];	/* memset 0x20 from +0xc90 */
+	short prem_hist[16];	/* +0xc90  pre-emphasis history          */
 	const short *preemp;	/* +0xcb0                                */
 	unsigned char unmapped_cb4[0xcbc - 0xcb4];
 	unsigned char work_cbc[0x100];		/* memset 0x100 from +0xcbc */
 	unsigned char unmapped_dbc[0xdbc - (0xcbc + 0x100)];
-	int fdbc;		/* +0xdbc                                */
-	int fdc0;		/* +0xdc0                                */
+	int wpos;		/* +0xdbc  write index into work_cbc     */
+	int wstep;		/* +0xdc0  offset to the imaginary half  */
 };
 
 extern const short hsine1200[16], hsine1600[12], hsine1680[80];
@@ -352,6 +353,12 @@ extern const short hsine2400[16];
  */
 void V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		       short phase, int arg4, int reset);
+
+/*
+ * Modulate one complex symbol into `out`, returning how many samples it
+ * produced.  The symbol arrives packed as (im << 16) | (unsigned short)re.
+ */
+int V34ModulatorProcess(struct v34_modulator *m, int symbol, short *out);
 
 /* ------------------------------------------------------------------------
  * Odds and ends

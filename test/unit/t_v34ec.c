@@ -47,6 +47,7 @@ extern void ref_V34TimingFiltersInit(void *t);
 extern int ref_V34TimingPrefilter(void *t);
 extern void ref_V34SetupModulator(void *m, short baud, short carrier,
 				  short phase, int a4, int reset);
+extern int ref_V34ModulatorProcess(void *m, int symbol, short *out);
 extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
@@ -339,8 +340,8 @@ main(void)
 			memset(shb, 0x5a, sizeof(shb));
 			ma.shaped = sha; mb.shaped = shb;
 			/* f0c/f18 feed the modulo on the non-reset path. */
-			ma.f0c = mb.f0c = 12345;
-			ma.f18 = mb.f18 = 6789;
+			ma.row = mb.row = 12345;
+			ma.phase = mb.phase = 6789;
 
 			V34SetupModulator(&ma, bauds[bi], carr[ci],
 					  (short)ph, 0, rst);
@@ -351,12 +352,12 @@ main(void)
 			diff_eq_int("taps", ma.taps, mb.taps, bauds[bi]);
 			diff_eq_int("f04", ma.f04, mb.f04, bauds[bi]);
 			diff_eq_int("rows", ma.rows, mb.rows, bauds[bi]);
-			diff_eq_int("f0c", ma.f0c, mb.f0c, bauds[bi]);
+			diff_eq_int("row", ma.row, mb.row, bauds[bi]);
 			diff_eq_int("sine_len", ma.sine_len, mb.sine_len,
 				    carr[ci]);
-			diff_eq_int("f18", ma.f18, mb.f18, carr[ci]);
-			diff_eq_int("fdbc", ma.fdbc, mb.fdbc, rst);
-			diff_eq_int("fdc0", ma.fdc0, mb.fdc0, rst);
+			diff_eq_int("phase", ma.phase, mb.phase, carr[ci]);
+			diff_eq_int("wpos", ma.wpos, mb.wpos, rst);
+			diff_eq_int("wstep", ma.wstep, mb.wstep, rst);
 			/*
 			 * Pointers cannot be compared across the two sides,
 			 * so each is checked by the CONTENT it selects --
@@ -386,6 +387,69 @@ main(void)
 			/* And the loaded polyphase bank, byte for byte. */
 			for (k = 0; k < ma.rows * V34_MOD_ROW; k++)
 				diff_eq_int("shaped", sha[k], shb[k], k);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 modulator process");
+	{
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		static short oa[256], ob[256];
+		static const short bauds[] = { 600, 2400, 2800, 3000, 3200,
+					       3429 };
+		static const short carr[] = { 1200, 1680, 1829, 2400 };
+		unsigned bi, ci;
+
+		for (bi = 0; bi < sizeof(bauds) / sizeof(bauds[0]); bi++)
+		for (ci = 0; ci < sizeof(carr) / sizeof(carr[0]); ci++) {
+			memset(&ma, 0, sizeof(ma)); memset(&mb, 0, sizeof(mb));
+			memset(sha, 0, sizeof(sha)); memset(shb, 0, sizeof(shb));
+			ma.shaped = sha; mb.shaped = shb;
+			V34SetupModulator(&ma, bauds[bi], carr[ci], 0, 0, 1);
+			ref_V34SetupModulator(&mb, bauds[bi], carr[ci], 0, 0, 1);
+
+			for (i = 0; i < 120; i++) {
+				int sym = (int)(((unsigned)(i * 811 - 9000)
+						 << 16)
+						| (unsigned short)(i * 337
+								   - 5000));
+				int na, nb;
+
+				memset(oa, 0x5a, sizeof(oa));
+				memset(ob, 0x5a, sizeof(ob));
+				na = V34ModulatorProcess(&ma, sym, oa);
+				nb = ref_V34ModulatorProcess(&mb, sym, ob);
+				diff_eq_int("nout", na, nb,
+					    bauds[bi] * 10000L + i);
+				for (k = 0; k < 256; k++)
+					diff_eq_int("mod out", oa[k], ob[k],
+						    bauds[bi] * 10000L + k);
+				/*
+				 * The whole modulator object, so the work
+				 * buffer's shift is compared as well as the
+				 * outputs -- including the stale seed D32
+				 * puts at index 0.  Pointers skipped: each
+				 * side holds its own tables.
+				 */
+				for (k = 0; k < (int)sizeof(ma); k++) {
+					if (k >= (int)__builtin_offsetof(
+						struct v34_modulator, sine)
+					    && k < (int)__builtin_offsetof(
+						struct v34_modulator, sine) + 4)
+						continue;
+					if (k >= (int)__builtin_offsetof(
+						struct v34_modulator, shaped)
+					    && k < (int)__builtin_offsetof(
+						struct v34_modulator, preemp)
+						   + 4)
+						continue;
+					diff_eq_int("mod state at %ld",
+						    ((unsigned char *)&ma)[k],
+						    ((unsigned char *)&mb)[k],
+						    k);
+				}
+			}
 		}
 	}
 	rc |= diff_end();

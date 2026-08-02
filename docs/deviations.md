@@ -1431,3 +1431,41 @@ filter a 3200-baud V.90 connection uses.
 carrier-based condition. The test disagreed at exactly one (baud, carrier)
 pair each time, which is what pointed at the branch rather than at the
 tables.
+
+---
+
+## D32 🐛 `V34ModulatorProcess` seeds its delay-line shift from a stale register
+
+**Where:** `src/pump/v34/v34filters.c`, the two shift loops at the end.
+
+**What the original does:** after producing its output samples it advances the
+symbol delay line by one, each half separately, writing `%ebp` into index 0:
+
+```
+   735b2:  movswl 0xcbc(%edi,%edx,2),%ebx   ; read work[i]
+   735ba:  mov    %bp,0xcbc(%edi,%edx,2)    ; write the carry
+   735c7:  mov    %ebx,%ebp                 ; carry = the old value
+```
+
+`%ebp` is zeroed at function entry, but the row loop reuses it — it last
+holds `sine[phase]` from the final iteration (set at 0x734dc, and untouched
+between there and the shift). So a **carrier sample is pushed into a symbol
+delay line**.
+
+**What we do:** the same, keeping the last `sine[phase]` explicitly so the
+value written is the value the original writes.
+
+**Why it does not break anything:** index 0 is overwritten by the incoming
+symbol at the top of the next call, before the convolution reads it. The
+garbage never reaches the filter. The second shift inherits the first's final
+carry, which is a real delay-line value, so the imaginary half is seeded with
+something meaningful by accident.
+
+**Reachable?** Every call. **Observable?** Only by inspecting the object
+between calls, which `t_v34ec` does — it compares the whole modulator,
+including `work_cbc`, so a reconstruction that seeded the shift with zero
+would fail.
+
+**Not fixed.** Writing a zero would be tidier and would differ from the
+object in a field the differential test reads. There is nothing to gain: the
+value is dead before it is used.

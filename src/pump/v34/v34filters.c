@@ -1065,10 +1065,10 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	m->preemp = preemp0;
 
 	if (reset) {
-		m->f0c = 0;
-		m->f18 = 0;
+		m->row = 0;
+		m->phase = 0;
 		sysdep_memset(m->work_cbc, 0, sizeof(m->work_cbc));
-		sysdep_memset(m->pad_c90, 0, sizeof(m->pad_c90));
+		sysdep_memset(m->prem_hist, 0, sizeof(m->prem_hist));
 	}
 
 	/*
@@ -1170,12 +1170,114 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	mod_carrier(m, carrier);
 
 	if (reset) {
-		m->fdc0 = 0x40;
-		m->fdbc = 0;
+		m->wstep = 0x40;
+		m->wpos = 0;
 	} else {
-		m->f0c = m->f0c % m->rows;
-		m->f18 = m->f18 % m->sine_len;
+		m->row = m->row % m->rows;
+		m->phase = m->phase % m->sine_len;
 	}
+}
+
+int
+V34ModulatorProcess(struct v34_modulator *m, int symbol, short *out)
+{
+	short *work = (short *)m->work_cbc;
+	const short *sine = m->sine;
+	const short *preemp = m->preemp;
+	int step = m->wstep;
+	int slen = m->sine_len;
+	int taps = m->taps;
+	int phase = m->phase;
+	int row = m->row;
+	int nout = 0;
+	int carry = 0;
+	int i;
+
+	/* The symbol's two halves, `step` apart in the work buffer. */
+	work[m->wpos] = (short)symbol;
+	work[m->wpos + step] = (short)(symbol >> 16);
+
+	if (row >= m->rows)
+		return 0;
+
+	do {
+		const short *src = &m->shaped[row * V34_MOD_ROW];
+		const short *p_re = &work[m->wpos];
+		const short *p_im = p_re + step;
+		int acc_re = 0x1000;
+		int acc_im = 0x1000;
+		int re, im, mixed, acc;
+
+		/* Interpolate: this row of the polyphase bank, both halves. */
+		for (i = 0; i < taps; i++) {
+			int c = src[i];
+
+			acc_re += p_re[i] * c;
+			acc_im += p_im[i] * c;
+		}
+		re = acc_re >> 13;
+		im = acc_im >> 13;
+
+		/*
+		 * Up-convert.  The table holds `sine_len` sine values then
+		 * `sine_len` cosine values, so the quadrature partner is
+		 * `slen` entries further on rather than the next one.
+		 */
+		carry = sine[phase];		/* kept; see the shift below */
+		mixed = (short)(((re * sine[phase + slen]) - (im * carry)
+				 + 0x2000) >> 14);
+
+		if (++phase >= slen)
+			phase -= slen;
+
+		/*
+		 * Pre-emphasis: 16 taps, read-then-overwrite, the same shift
+		 * idiom as the timing high-pass.
+		 */
+		acc = 0;
+		for (i = 0; i < 16; i++) {
+			int old = m->prem_hist[i];
+
+			m->prem_hist[i] = (short)mixed;
+			acc += mixed * preemp[i];
+			mixed = old;
+		}
+
+		out[nout++] = (short)((acc + 0x2000) >> 14);
+
+		row += m->f04;
+	} while (row < m->rows);
+
+	m->phase = phase;
+
+	/*
+	 * Advance the symbol delay line by one, each half separately.
+	 *
+	 * THE SEED IS A STALE REGISTER.  The original writes `%ebp` into
+	 * index 0 and `%ebp` was last set inside the row loop, where it holds
+	 * `sine[phase]` from the final iteration -- a carrier sample being
+	 * pushed into a symbol buffer.  It is harmless only because the next
+	 * call overwrites index 0 with the incoming symbol before anything
+	 * reads it.  Registered as D32 and reproduced; see the comment there
+	 * for why leaving it out would be a real difference rather than a
+	 * tidy-up.
+	 */
+	for (i = 0; i < taps; i++) {
+		int old = work[i];
+
+		work[i] = (short)carry;
+		carry = old;
+	}
+	for (i = 0; i < taps; i++) {
+		int old = work[step + i];
+
+		work[step + i] = (short)carry;
+		carry = old;
+	}
+
+	m->row = row - m->rows;
+
+	return nout;
 }
 
 /* ------------------------------------------------------------ timing recovery */
