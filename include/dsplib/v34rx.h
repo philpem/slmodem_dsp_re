@@ -112,6 +112,9 @@ void txinit(void *obj);
 /* Reset the receive timing chain and the receiver's scalars. */
 void rxtiminginit(void *obj);
 
+/* Reset the receive side: equaliser, Hilbert state, AGC and scalars. */
+void rxinit(void *obj);
+
 /*
  * The receive AGC's state, mapped where `agcadapt` touches it.
  */

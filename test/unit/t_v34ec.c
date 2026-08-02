@@ -30,7 +30,7 @@ extern int ref_V34EchoFilter(void *e, short lag);
 extern void ref_V34EchoAdapt(void *e, short err);
 extern int ref_V34EchoEstimateDelayLineEnergy(void *e);
 extern void ref_V34EchoReportCoeff(void *e);
-extern void ref_V34InitHilbertFilter(short *state);
+extern void *ref_V34InitHilbertFilter(short *state);
 extern void ref_V34HilbertFilter(short *state, short sample, int *re, int *im);
 extern int ref_V34TimingHPFilter(void *t, short sample);
 extern void ref_V34EchoPreFilterCopy(void *dst, const short *coeff);

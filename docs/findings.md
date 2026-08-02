@@ -6003,3 +6003,42 @@ fields.
 
 Registered as **D34**; the field is an integrator that `agcadapt` overwrites
 on its first trip, so the garbage has a short life, but it is garbage.
+
+### 115a. `rxinit` attempted: two bytes short, and one fill value corrected
+
+Written and driven. **60 of 87862 checks failed**, then 4 after one fix.
+Reverted; recorded so the next pass starts from the measurement.
+
+**Corrected on the way — the memsets fill with ZERO, not 1.** Finding 115
+read `mov $0x1,%ecx` at the top of the function as the fill value. It is
+not: `%ecx` is caller-saved and `V34EqualizerCleanUp` is called between that
+load and the memsets, so what reaches them is whatever that function left
+behind, which is zero. Finding 115's warning about "easy to correct while
+transcribing" was itself the error. The differential test found it in one
+run.
+
+**Still failing: two bytes, at receiver +0x135 and +0x1f5.** Both are the
+HIGH half of a short the disassembly sets to `0x4000`:
+
+```
+   5ac09:  mov  $0x4000,%ecx
+   5ac0e:  mov  $0x4000,%edx
+   5ac15:  mov  %cx,0x218(%ebx)     <- matches
+   5ac1e:  mov  %dx,0x1f2(%ebx)     <- matches
+   5ac27:  testb $0x8,0x122(%ebx)
+   5ac2e:  mov  %ax,0x138(%ebx)
+   5ac35:  mov  %cx,0x134(%ebx)     <- ours 0x4000, blob's high byte 0
+   5ac3c:  mov  %dx,0x1f4(%ebx)     <- same
+```
+
+The first two stores of the same registers agree; the second two do not.
+Nothing between them writes `%ecx` or `%edx`, and the `testb` sets only
+flags. So either something later in `rxinit` overwrites `0x134` and `0x1f4`
+and was missed in the reading, or those two fields overlap something else in
+`struct v34_object` that the test is comparing.
+
+The second is worth checking first: `struct v34_queue rxq` is declared at
+`+0x264` and `struct v34_receiver` is addressed from `+0x264` too, so the
+receiver's first 0x120 bytes ARE the receive queue. That overlap is real and
+intended, but it means an offset error in either struct shows up as exactly
+this — two isolated bytes, in fields whose neighbours are fine.

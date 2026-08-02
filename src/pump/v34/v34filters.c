@@ -1065,10 +1065,10 @@ V34EchoHistoryBackwardClean(void *objp, unsigned n)
 
 /* ------------------------------------------------------- Hilbert transformer */
 
-void
+void *
 V34InitHilbertFilter(short *state)
 {
-	sysdep_memset(state, 0, V34_HILBERT_TAPS * sizeof(short));
+	return sysdep_memset(state, 0, V34_HILBERT_TAPS * sizeof(short));
 }
 
 void

@@ -125,8 +125,16 @@ void V34InitializeImplementationSpecific(void *obj);
 extern const short V34hilbertrealcoef[V34_HILBERT_TAPS];
 extern const short V34hilbertimagcoef[V34_HILBERT_TAPS];
 
-/* Zero the 64-entry state.  Takes the state array, not an object. */
-void V34InitHilbertFilter(short *state);
+/*
+ * Zero the 64-entry state, and RETURN IT.
+ *
+ * The original is a tail call to sysdep_memset, so it leaves the destination
+ * in the return register.  Declared `void *` because a caller relies on it:
+ * `rxinit` stores the low half into a receiver field (D34).  Reproducing
+ * that needs the value, so the signature says what the object does rather
+ * than what the source probably said.
+ */
+void *V34InitHilbertFilter(short *state);
 
 /*
  * One sample in, a complex pair out, both as unshifted 32-bit accumulators.

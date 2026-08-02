@@ -141,7 +141,9 @@ struct v34_object {
 	short f25c6;					/* +0x25c6 */
 	unsigned char unmapped_25c8[0x25cc - 0x25c8];
 	int f25cc;					/* +0x25cc */
-	unsigned char unmapped_25d0[0x3550 - 0x25d0];
+	unsigned char unmapped_25d0[0x2aa4 - 0x25d0];
+	short f2aa4;					/* +0x2aa4 */
+	unsigned char unmapped_2aa6[0x3550 - 0x2aa6];
 	short f3550;					/* +0x3550 */
 	short f3552;					/* +0x3552 */
 	unsigned char unmapped_3554[0x80b8 - 0x3554];

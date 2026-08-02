@@ -27,31 +27,35 @@ extern "C" {
 #endif
 
 struct v34_receiver {
-	unsigned char pad_000[0x122 - 0x0];
+	unsigned char pad_000[0x120 - 0x0];
+	short           f120;            /* +0x120 */
 	unsigned short  flags;           /* +0x122 see V34_RX_* below */
 	short           f124;            /* +0x124 */
-	short           best_index;      /* +0x126 decision: index of the nearest point */
-	unsigned char pad_128[0x12e - 0x128];
+	short           best_index;      /* +0x126 decision: nearest point index */
+	unsigned char pad_128[0x12a - 0x128];
+	short           f12a;            /* +0x12a */
+	short           f12c;            /* +0x12c rxinit clears 0x12c..0x12f as one int */
 	unsigned short  agc_input;       /* +0x12e agcadapt: the new energy measurement */
 	short *         rx_samples;      /* +0x130 -> the receive queue output at +0x10c */
 	short           agc_level;       /* +0x134 */
 	short           agc_gain;        /* +0x136 */
-	short           agc_accum;       /* +0x138 */
+	short           agc_accum;       /* +0x138 D34: rxinit seeds this from a stale register */
 	short           agc_step;        /* +0x13a */
-	unsigned char pad_13c[0x1a4 - 0x13c];
+	unsigned char pad_13c[0x1a0 - 0x13c];
+	int             f1a0;            /* +0x1a0 */
 	unsigned        scrambler_sr;    /* +0x1a4 */
 	unsigned char pad_1a8[0x1b8 - 0x1a8];
-	short           f1b8;            /* +0x1b8 rxtiminginit: 1 */
+	short           f1b8;            /* +0x1b8 */
 	unsigned char pad_1ba[0x1bc - 0x1ba];
 	short           f1bc;            /* +0x1bc */
 	unsigned char pad_1be[0x1c0 - 0x1be];
-	short           f1c0;            /* +0x1c0 rxtiminginit: -1 */
+	short           f1c0;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
-	int             f1c8;            /* +0x1c8 rxtiminginit: 1 */
+	int             f1c8;            /* +0x1c8 */
 	short           f1cc;            /* +0x1cc */
 	short           f1ce;            /* +0x1ce */
 	short           f1d0;            /* +0x1d0 */
-	short           baud;            /* +0x1d2 rxtiminginit: 2400, the slowest rate */
+	short           baud;            /* +0x1d2 starts at 2400 */
 	short           f1d4;            /* +0x1d4 */
 	unsigned char pad_1d6[0x1d8 - 0x1d6];
 	int             f1d8;            /* +0x1d8 */
@@ -61,25 +65,38 @@ struct v34_receiver {
 	int             f1e8;            /* +0x1e8 */
 	unsigned char pad_1ec[0x1f0 - 0x1ec];
 	short           f1f0;            /* +0x1f0 */
-	unsigned char pad_1f2[0x208 - 0x1f2];
+	short           f1f2;            /* +0x1f2 */
+	short           f1f4;            /* +0x1f4 */
+	unsigned char pad_1f6[0x1f8 - 0x1f6];
+	int             f1f8;            /* +0x1f8 */
+	unsigned char pad_1fc[0x200 - 0x1fc];
+	short           f200;            /* +0x200 */
+	short           f202;            /* +0x202 */
+	short           f204;            /* +0x204 */
+	short           f206;            /* +0x206 */
 	short           f208;            /* +0x208 */
 	short           f20a;            /* +0x20a */
-	/*
-	 * +0x20c.  `decision` writes all four bytes at once; rxtiminginit
-	 * clears it as two shorts, at 0x20c and 0x20e.
-	 */
-	int             decision_point;
-	short           target_re;       /* +0x210 decision: what we are deciding on */
+	int             decision_point;  /* +0x20c decision: the winning point */
+	short           target_re;       /* +0x210 */
 	short           target_im;       /* +0x212 */
-	unsigned char pad_214[0x21a - 0x214];
-	short           f21a;            /* +0x21a datapumpv34 reads this */
-	unsigned char pad_21c[0x22e - 0x21c];
+	unsigned char pad_214[0x218 - 0x214];
+	short           f218;            /* +0x218 */
+	short           f21a;            /* +0x21a */
+	short           f21c;            /* +0x21c */
+	unsigned char pad_21e[0x220 - 0x21e];
+	int             f220;            /* +0x220 */
+	short           f224;            /* +0x224 */
+	unsigned char pad_226[0x228 - 0x226];
+	int             f228;            /* +0x228 */
+	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
 	short           f230;            /* +0x230 */
 	unsigned char pad_232[0x244 - 0x232];
 	short           f244;            /* +0x244 */
 	short           f246;            /* +0x246 */
-	unsigned char pad_248[0x252 - 0x248];
+	int             f248;            /* +0x248 */
+	int             f24c;            /* +0x24c */
+	unsigned char pad_250[0x252 - 0x250];
 	short           f252;            /* +0x252 */
 	short           f254;            /* +0x254 */
 	short           f256;            /* +0x256 */
@@ -88,6 +105,8 @@ struct v34_receiver {
 	short           f25c;            /* +0x25c */
 	short           f25e;            /* +0x25e */
 	short           f260;            /* +0x260 */
+	unsigned char pad_262[0x798 - 0x262];
+	short           f798;            /* +0x798 */
 };
 
 /*
