@@ -94,7 +94,13 @@ struct v34_receiver {
 	int             f1e0;            /* +0x1e0 */
 	int             f1e4;            /* +0x1e4 */
 	int             f1e8;            /* +0x1e8 */
-	unsigned char pad_1ec[0x1f0 - 0x1ec];
+	/*
+	 * The two timing_out[] indices TimingV34 differences.  setInitialPhase
+	 * picks them, and the pair is (1,2) or (2,1) depending on where the
+	 * metric changed sign -- so the order encodes the slope's direction.
+	 */
+	short           f1ec;            /* +0x1ec */
+	short           f1ee;            /* +0x1ee */
 	short           f1f0;            /* +0x1f0 */
 	short           f1f2;            /* +0x1f2 */
 	short           f1f4;            /* +0x1f4 */

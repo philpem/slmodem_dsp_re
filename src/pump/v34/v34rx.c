@@ -1600,3 +1600,124 @@ decoderv34(void *objp)
 	else if (rx->f124 == obj->faa96)
 		rx->f218 = 0x2000;
 }
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * polyValue -- the quadratic setInitialPhase fits its timing metric against.
+ *
+ *     P(k) = -21k^2 + 837k - 354,  truncated to a short.
+ *
+ * It peaks near k = 20 and is what turns a measured ratio into a phase
+ * index; the derivation belongs with task #47.
+ */
+int
+polyValue(short k)
+{
+	return (short)(-21 * (int)k * k + 837 * k - 354);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * setInitialPhase -- put the interpolator's phase where the timing metric
+ * says the symbol centre is.
+ *
+ * Three steps.  First find where `timing_out[]` changes sign: the metric is
+ * a discriminant, so the crossing is the symbol boundary.  The search only
+ * runs when the first two samples already disagree in sign, and it gives up
+ * at index 5 with a message rather than looking further.
+ *
+ * Second, interpolate across the crossing -- `(b - a) / (b + a)` in Q13,
+ * with both negated first if `a` is negative so the ratio is computed on the
+ * positive side either way.
+ *
+ * Third, find which of twenty candidate phases the ratio matches, by running
+ * the same ratio over `polyValue(i + 20)` against `polyValue(i)` and keeping
+ * the closest.  That index then moves the phase by `(10 - i) * 560`, clamped
+ * one below the wrap -- so index 10 means "already centred".
+ *
+ * The two error paths divide by zero if not guarded, and the original guards
+ * both and says so in the message; that is a check the author put in, not
+ * hardening added here.
+ */
+void
+setInitialPhase(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	short k = 1;
+	int a, b;
+	int ratio = 0;
+	int best = 0x7d00;
+	int besti = 0;
+	int i;
+	int pos;
+
+	/* Only search when the first pair already straddles the crossing. */
+	if ((int)rx->timing_out[0] * rx->timing_out[1] < 0) {
+		do {
+			k = (short)(k + 1);
+		} while ((int)rx->timing_out[k - 1] * rx->timing_out[k] < 0
+			 && k <= 4);
+
+		if (k == 5 && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"setInitialPhase: Error (i==5)  !!!!!!!\n");
+		if (k == 5)
+			k = 1;
+	}
+
+	a = (short)rx->timing_out[k - 1];
+	b = (short)rx->timing_out[k];
+	if (a < 0) {
+		a = (short)-a;
+		b = (short)-b;
+	}
+
+	/* The order of the pair records which way the metric was going. */
+	if (k == 2) {
+		rx->f1ec = 2;
+		rx->f1ee = 1;
+	} else {
+		rx->f1ec = 1;
+		rx->f1ee = 2;
+	}
+
+	if (a + b == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("setInitialPhase() : Error - "
+					     "deviding by 0 (samp2+samp1=0)\n");
+	} else {
+		ratio = (((b - a) << 13) + (a + b) / 2) / (a + b);
+	}
+
+	for (i = 0; i <= 0x13; i++) {
+		int p0 = polyValue((short)i);
+		int p1 = polyValue((short)(i + 20));
+		int r = 0;
+		int e;
+
+		if (p1 + p0 == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"setInitialPhase() : Error - deviding "
+					"by 0 (polyValue(k2)+polyValue(k)=0)\n");
+		} else {
+			r = ((((p1 - p0) << 13) + (p1 + p0) / 2)
+			     / (p1 + p0));
+		}
+
+		e = (short)((((ratio - r) * (ratio - r)) + 0x1000) >> 13);
+		if (e < best) {
+			best = e;
+			besti = i;
+		}
+	}
+
+	pos = (10 - besti) * 0x230 + (unsigned short)rx->f1ac;
+
+	if ((int)(unsigned short)pos < (int)(short)rx->f1b0)
+		rx->f1ac = (short)pos;
+	else
+		rx->f1ac = (short)(rx->f1b0 - 1);
+}

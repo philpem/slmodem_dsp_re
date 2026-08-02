@@ -38,6 +38,8 @@ extern void ref_v34FreezeEcho(void *obj);
 extern int ref_adaptecho(void *obj);
 extern int ref_modem_serrint(void *obj);
 extern void ref_decoderv34(void *obj);
+extern int ref_polyValue(short k);
+extern void ref_setInitialPhase(void *obj);
 extern void ref_VPcmV34LogTimingOffset(void *obj, short v);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
@@ -1425,6 +1427,79 @@ main(void)
 						    ((long)fl * 100
 						     + (re + 12000) / 5100)
 						    * 100000 + b);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 polyValue");
+	{
+		int k;
+
+		for (k = -32768; k < 32768; k += 1)
+			diff_eq_int("polyValue", polyValue((short)k),
+				    ref_polyValue((short)k), k);
+	}
+	rc |= diff_end();
+
+	/*
+	 * setInitialPhase: the sign-crossing search, both interpolation
+	 * error paths, and the twenty-candidate fit.  The metric patterns
+	 * are chosen so the crossing lands at each possible index and so
+	 * the give-up-at-5 path is reached.
+	 */
+	diff_begin("v34 setInitialPhase");
+	{
+		static struct v34_object oa, ob;
+		int pat, ph, wrap, k;
+
+		for (pat = 0; pat < 12; pat++)
+		for (ph = 0; ph < 4; ph++)
+		for (wrap = 1; wrap <= 2; wrap++) {
+			struct v34_receiver *ra, *rb;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			for (k = 0; k < 21; k++) {
+				short v;
+
+				/*
+				 * pat 0..5   crossing at index pat+1
+				 * pat 6      never crosses (all positive)
+				 * pat 7      crosses everywhere -> the k==5
+				 *            give-up path
+				 * pat 8..11  equal-and-opposite pairs, which
+				 *            is the a+b == 0 divide guard
+				 */
+				if (pat < 6)
+					v = (short)(k <= pat ? 900 - k * 40
+							     : -700 + k * 30);
+				else if (pat == 6)
+					v = (short)(500 + k * 11);
+				else if (pat == 7)
+					v = (short)((k & 1) ? 800 : -800);
+				else
+					v = (short)((k & 1) ? 1000 : -1000);
+				ra->timing_out[k] = rb->timing_out[k] = v;
+			}
+
+			ra->f1ac = rb->f1ac = (short)(ph * 700);
+			ra->f1b0 = rb->f1b0 = (short)(wrap * 0x1f40);
+			ra->f1ec = rb->f1ec = 0;
+			ra->f1ee = rb->f1ee = 0;
+
+			setInitialPhase(&oa);
+			ref_setInitialPhase(&ob);
+
+			{
+				long tag = ((long)pat * 100 + ph * 10 + wrap);
+
+				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
+				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
+				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
 			}
 		}
 	}

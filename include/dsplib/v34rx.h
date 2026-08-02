@@ -207,6 +207,15 @@ int modem_serrint(void *obj);
  */
 void decoderv34(void *obj);
 
+/* P(k) = -21k^2 + 837k - 354, truncated to a short. */
+int polyValue(short k);
+
+/*
+ * Centre the interpolator's phase on the symbol, from the timing metric's
+ * zero crossing.
+ */
+void setInitialPhase(void *obj);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 
