@@ -5692,3 +5692,57 @@ twice.
 **Not yet written.** `m[0x00]` is unread for four of the seven rates, and the
 arg5 path and the 0x73013 tail are unread. What is above is enough to write
 most of it; the remainder is one more disassembly pass.
+
+## 108. `V34ModulatorProcess`, and the buffer shift that finishes it
+
+Written and driven against the blob: **60281 of 792000 checks failed**, all
+of them output samples. `nout`, `row`, `phase` and the pre-emphasis history
+all matched. Reverted under the fast-pass rule; this records how far it got.
+
+The structure, confirmed by everything that passed:
+
+```
+   work[wpos]        = (short)symbol           /* real */
+   work[wpos + step] = (short)(symbol >> 16)   /* imaginary */
+
+   while (row < rows) {
+       src = &shaped[row * 64]
+       acc_re = acc_im = 0x1000
+       for (i = 0; i < taps; i++) {
+           acc_re += work[wpos + i]        * src[i]
+           acc_im += work[wpos + step + i] * src[i]
+       }
+       re = acc_re >> 13;  im = acc_im >> 13
+
+       /* up-convert; the table is sine_len sines then sine_len cosines,
+          so the quadrature partner is slen entries on, not the next one */
+       x = (re * sine[phase + slen] - im * sine[phase] + 0x2000) >> 14
+       if (++phase >= slen) phase -= slen
+
+       /* pre-emphasis, 16 taps, read-then-overwrite */
+       out[nout++] = (acc + 0x2000) >> 14
+
+       row += f04
+   }
+   m->phase = phase;  m->row = row - rows
+```
+
+**What is missing** is at 0x735ae and 0x735d4: after the row loop the work
+buffer is **shifted by one**, separately for each half —
+
+```
+   735b2:  movswl 0xcbc(%edi,%edx,2),%ebx     ; read work[i]
+   735ba:  mov    %bp,0xcbc(%edi,%edx,2)      ; write the carry
+   735c7:  mov    %ebx,%ebp                   ; carry = the old value
+```
+
+over `taps` entries at index 0, then again at index `step`. That is a delay
+line advancing one symbol per call, and without it the FIR convolves a stale
+window — which is exactly the 7.6% of samples that differed.
+
+**Unresolved:** what seeds `%ebp` on entry to that first shift. It is
+`xor %ebp,%ebp` at function entry but is reused as `acc_im` inside the row
+loop, so by the time the shift runs it holds something else. One more
+disassembly pass over 0x73569-0x735ae settles it, and then the function is
+done — everything else is already proven correct by the 731719 checks that
+passed.

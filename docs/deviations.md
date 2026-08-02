@@ -1413,10 +1413,15 @@ the V.90 arm is dead.
 **What we do:** take the V.34 arm unconditionally, and say why.
 
 **Consequence:** `tx3200c1_for_v90` (384 bytes) and `V90EchoPrefilterCoeff`
-(84 bytes) are never installed by this function. They are still referenced
-from it, so they are not dead data — something else may reach them, or the
-V.90 path may be selected before this function is called. **Unmeasured**;
-re-open when `VPcmV34Main.cpp` is reconstructed.
+(84 bytes) are never installed by this function.
+
+**They are not dead data.** V.90 is planned for a later phase, so those
+tables have a reader that has not been reconstructed yet. The likely reading
+is therefore not "someone forgot a `cmp`" but "the V.90 configuration is
+selected somewhere else, and this arm is a leftover from when it was
+selected here". Re-open when `VPcmV34Main.cpp` lands — if V.90 sets the
+modulator up by another route, this arm is vestigial rather than broken and
+the entry should be retracted.
 
 **Not fixed.** A missing `cmp` cannot be guessed at: there is no way to know
 which comparison was intended, and inventing one would change which shaping
