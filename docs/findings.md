@@ -6598,3 +6598,50 @@ from `f1b0 - f1ac` — the position pair finding 118 identified.
 
 **Remaining in `rxtiming`: the entry and exit blocks**, 0x5b546-0x5b62d,
 about 230 bytes.
+
+### 121a. `rxtiming` complete: a fractional resampler with a magnitude detector
+
+The block at 0x5b546 and the loop control at 0x5b5a8 finish it.
+
+**Per output sample**, it linearly interpolates between two consecutive
+demodulator outputs and takes the squared magnitude:
+
+```
+   I = (f240 * wa + f244 * wb + 0x2000) >> 14;
+   Q = (f242 * wa + f246 * wb + 0x2000) >> 14;
+   m = ((short)I * (short)I + ... + 0x2000) >> 14;   /* |z|^2, twice-rounded */
+   out[i] = V34TimingHPFilter(timing, (short)m);      /* into rx+0x27a */
+```
+
+Each square is truncated to 16 bits before the sum, and the sum is rounded
+and shifted again — so the magnitude is computed in Q14 throughout with two
+separate roundings, not one.
+
+**The resampling** is the loop control:
+
+```
+   pos += rx->f1ae;                        /* fractional step  */
+   if (pos >= rx->f1b0) {                  /* crossed a sample */
+       pos -= step;  ... V34demodulate(rx);   /* pull a new one */
+   }
+   rx->f1ac = pos;
+   if (++i >= rx->f128) break;
+```
+
+So `f1ac` is a phase accumulator, `f1ae` its increment and `f1b0` its
+wrap — and `V34demodulate` is called **only when the accumulator crosses**,
+not once per output. That is why the two could never be separated: the
+consumption rate of the receive queue is decided here, not there, and it is
+fractional.
+
+**Both functions are now fully read.** The pair is:
+
+```
+   rxtiming: for each of f128 outputs
+       advance a fractional phase; on crossing, V34demodulate() ->
+           dequeue one sample, gain, RMS, inlined agcadapt, down-convert
+       two-pole IIR at baud/2 over I and Q
+       interpolate, square, V34TimingHPFilter, store to rx+0x27a
+```
+
+Nothing further needs reading before writing them.
