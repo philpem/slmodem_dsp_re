@@ -8009,3 +8009,38 @@ gone.  For an enum, the table IS the enum, in order, with no gaps to guess.
 `CadenceNames` independently confirms `CADENCE_TONE_BUSY/DIAL/CONG/RING` as
 0..3, which this tree had from behaviour.  `statenames` at 0x7e80 has 35
 entries and is not yet read.
+
+### 145. `statenames` is V.32's, and its lettering is the Recommendation's
+
+The last of finding 144's six tables.  Thirty-five entries at
+.rodata+0x7e80, and `V32StateName` is its accessor:
+
+```
+   84519:  cmp  $0x22,%edx
+   8451c:  ja   84525            ; out of range -> "INVALID!"
+   8451e:  mov  0x7e80(,%edx,4),%eax
+```
+
+0x22 is 34, exactly the last index, so the table's length is confirmed by
+the code rather than inferred from the symbol size -- and the function
+bounds-checks, unlike the three tables of finding 129.
+
+The names are `STATE_A` through `STATE_Z`, plus `STATE_B2`, `STATE_D2`,
+`STATE_F2`, `STATE_X2`, and then `END`, `CLEARDOWN`, `DONE`, `ERROR`,
+`DONT_CARE`.
+
+**The lettering is not the author's.**  V.32 labels its call-setup states A
+through Z in the Recommendation itself, and the doubled ones are the spec's
+own sub-states.  So this table is a direct index into the standard, which is
+worth more than invented names would be: reconstructing V.32 can proceed
+against the published state diagram with the mapping already established.
+
+Emitted as `include/dsplib/v32state.h`.  V.32 is not reconstructed -- one of
+the six build stamps in finding 135 is its translation unit
+(`V32FP_recreate`, 15:48:07), so it is present in the object and simply not
+reached yet.  Written down now because the table cost nothing to read and
+would otherwise be rediscovered later.
+
+That closes the table sweep: six tables, five named by `nm`, and between them
+the state machines of V.8, V.32 and V.34's handshake plus the cadence types
+-- three of which belong to code this project has not written yet.
