@@ -6296,3 +6296,33 @@ What the opening of `rxtiming` already shows:
 session's work rather than an increment. `V34agc` (827 B, GLOBAL),
 `adaptecho` (755 B, GLOBAL) and `decoderv34` (714 B, GLOBAL) are all
 independently testable and cheaper.
+
+## 119. `decoderv34`'s opening: a four-point slicer over `rxvect4`
+
+Read to 0x5bc88 of 714 bytes. **Not written.**
+
+It opens by testing `rx->flags & 0x98` for equality with `0x98` — three bits
+at once, and an early exit when all three are set. Then it runs the same
+nearest-point search `decision` does, but **inlined with a fixed count of
+four** and against a global table:
+
+```
+   5bbfc:  mov  $0x0,%ecx        <== R_386_32 rxvect4
+   ...
+   5bc3f:  shr  $0xe,%eax        ; the same logical shift and 16-bit
+   5bc42:  cwtl                  ; truncation as decision (finding 110)
+```
+
+So `decision` and `decoderv34` carry the same distance metric — including the
+truncation that lets a distant point wrap and win — written out twice. A
+reconstruction that called `decision` from `decoderv34` would be tidier and
+would differ if the two ever drift.
+
+After the search it converts the winning pointer back to an index by
+subtracting `rxvect4` and shifting by 2, then reads the scrambler register at
+`rx+0x1a4` and a field at `rx+0x1aa`, and writes the winning point to
+`rx+0x20c` — the same field `decision` writes.
+
+**Remaining:** about 580 bytes unread, and `rxvect4` needs dumping (it is a
+global; check its size before assuming four entries — the search is over four
+but the table may serve several constellations).
