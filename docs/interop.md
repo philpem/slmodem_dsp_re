@@ -82,5 +82,30 @@ defect in practice.
   exercises. The V.8 tests are the exception: they negotiate, so they cover
   sequencing as well as modulation.
 - **It cannot reach anything SpanDSP does not implement**, which is most of
-  what is left: V.32, V.34, V.90, V.92. Those will rest on tiers 1 and 2, and
-  the reconstruction should say so wherever it makes a claim they cannot check.
+  what is left: V.32, V.34, V.90, V.92. Until the hardware peer below is in
+  place those rest on tier 1 alone, and the reconstruction says so wherever it
+  makes a claim they cannot check — see the standing caveat at the top of
+  `include/dsplib/v34det.h`.
+
+---
+
+## The hardware peer
+
+SpanDSP is not the only independent implementation available to this project.
+A **real multi-standard modem** is to be brought in as a test peer, connected
+to a SIP ATA for the audio path and to a serial port for AT-command control.
+
+That closes the gap SpanDSP structurally cannot: V.32, V.34, V.90 and V.92.
+It is also a *stronger* peer than SpanDSP for the standards both cover, because
+it is a shipped product that interoperated commercially rather than a second
+software implementation that could share a misreading of the recommendation.
+
+**What this means for work in progress.** V.34 modules and their tests should
+be written so this peer can drive them — bit stream in, bit stream out, at the
+datapump boundary — rather than needing internal state to be poked. It does
+not change the tier-1 obligation: differential testing against the blob stays
+the primary tier, because it is the only one that can prove *equivalence*
+rather than *agreement*.
+
+The matrix above will gain rows as the peer is exercised. Nothing has been
+confirmed against it yet, and no row claims otherwise.

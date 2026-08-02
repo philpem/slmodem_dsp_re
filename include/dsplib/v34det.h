@@ -18,14 +18,19 @@
  * rests on the function names and on link order, not on evidence.  See
  * docs/findings.md.
  *
- * WHAT NO TEST HERE CAN TELL YOU.  SpanDSP has no V.34, and neither does any
- * other implementation this project can legally read, so every V.34 claim
- * rests on tier-1 differential testing alone -- which proves the
- * reconstruction matches `dsplibs.o` and says nothing about whether
- * `dsplibs.o` is right.  Where that distinction has bitten before it took an
- * independent peer to find it (D4, and finding 87).  For V.34 there is no
- * such peer, so read every "confirmed" in this subtree as "confirmed
- * identical to the original", never as "confirmed correct".
+ * WHAT NO TEST HERE CAN TELL YOU *YET*.  SpanDSP has no V.34, so at the time
+ * of writing every V.34 claim rests on tier-1 differential testing alone --
+ * which proves the reconstruction matches `dsplibs.o` and says nothing about
+ * whether `dsplibs.o` is right.  Where that distinction has bitten before it
+ * took an independent peer to find it (D4, and finding 87).  So read every
+ * "confirmed" in this subtree as "confirmed identical to the original", never
+ * as "confirmed correct", until docs/interop.md says otherwise.
+ *
+ * That is a CURRENT GAP WITH A PLANNED CLOSURE, not a permanent condition: a
+ * real multi-standard modem is to be brought in as a hardware peer, reached
+ * over a SIP ATA for audio and a serial port for control.  Design tests in
+ * this subtree so that peer can drive them -- bit stream in, bit stream out,
+ * at the datapump boundary -- rather than needing a debugger.
  */
 
 #ifndef DSPLIB_V34DET_H

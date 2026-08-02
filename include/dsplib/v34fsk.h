@@ -15,8 +15,8 @@
  * two functions here, via the `fsklpfcoeff600` static they own.
  *
  * See the standing caveat in v34det.h: there is no tier-2 peer for any V.34
- * code, so "confirmed" here means "identical to the original" and nothing
- * more.
+ * code *yet*, so "confirmed" here means "identical to the original" and
+ * nothing more -- until the hardware peer described there is in place.
  */
 
 #ifndef DSPLIB_V34FSK_H
