@@ -7452,3 +7452,46 @@ throughout and that is exactly the kind of difference that reads as
 significant and is not.  The measurement to make when writing it is whether
 the two blocks are bit-identical in behaviour or differ somewhere subtle, as
 `V34agc` and `V34demodulate` did over a single `+0x200`.
+
+### 133. `receiver`'s shape, recorded before writing it
+
+4326 bytes, 128 blocks, no jump tables.  The call sequence gives the spine,
+and it is the per-symbol receive chain end to end:
+
+```
+   V34TimingFilter          per output, inside an interpolation loop
+   TimingV34                once
+   V34EqualizerFilter       once
+   V34TimingPrefilter
+   V34EqualizerUpdateDelayLine
+   decoderv34
+   V34EqualizerAdapt  /  V34EqualizerCenterAdapt  /  V34EqualizerClearCenterTaps
+   V34scrambler       x2
+   V34EqualizerCleanUp
+   sysdep_memset
+```
+
+**The opening loop is rxtiming's, and NOT quite.**  Same interpolation --
+`wa = f1ac`, `wb = f1b0 - f1ac`, the two Q14 cross-products, the packed
+`(Q << 16) | I` -- and the same one-or-two-pull wrap structure.  But the
+`f244`/`f246` copy sits BETWEEN the two `V34demodulate` calls here, where in
+`rxtiming` it precedes a single pull:
+
+```
+   5bee5:  pos -= wrap  (second time)
+   5bef0:  call V34demodulate
+   5bef5:  f244 = f240 ; f246 = f242
+   5bf13:  call V34demodulate
+```
+
+There is also a parity test the interpolator does not have -- `test $1,%esi`
+at `0x5bf96` diverts odd-numbered outputs to `0x5c532` -- so the two are
+related but not the same function, and reconstructing this by adapting
+`rxtiming` would be a mistake.  Finding 121l cost seven readings; the useful
+lesson is not "the shape is X" but "look at THIS function's branches, not the
+neighbouring one's".
+
+Entry points worth naming when `cfgsplit --entries` is next pointed at it:
+`0x5bed8` (wrap), `0x5c526` (single pull), `0x5c532` (odd output),
+`0x5bfe2` (loop exit into TimingV34), `0x5c100` (the flag-0x400 branch after
+the equaliser).
