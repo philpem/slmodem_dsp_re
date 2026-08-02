@@ -6451,3 +6451,31 @@ the `decision` / `decoderv34` duplication in finding 119, and the second
 instance of the object open-coding a function it already has.
 
 **Remaining: about 550 bytes.**
+
+### 120c. The inlined AGC is complete and identical; and the function is two-pathed
+
+Read to 0x5b210 (about 720 of 1142 bytes).
+
+The `agcadapt` copy runs to its end with every remaining constant matching:
+`0x1f4` for the integrator limit, `0x390a` for the gain-down step. The
+gain-up arm at 0x5b369 is reached the same way. So the inlined AGC is
+**complete and, so far, byte-identical to `agcadapt`** — which means the
+block can be written as a call, subject to reading the two clamp arms at
+0x5b330 and 0x5b34f-0x5b369 to confirm.
+
+**Common exit at 0x5b1b0**: `rx->f12a = 0` and `rx->f12c = 0` — the sample
+counter and the RMS accumulator both cleared, whatever path was taken.
+
+**The function has two nearly identical halves.** The block at 0x5b1c6 is the
+0x5af3b block again: same append to `rx+0x13c` at index `rx+0x19c`, same
+`cmp $0x23`, same gain multiply against `rx+0x136` with the same
+`shr $0x19` / `cmp $0x7f` range check. The difference is only which branch of
+the queue-wrap test reached it — GCC has duplicated the body rather than
+joining the paths.
+
+That matters for writing it: the two halves are one piece of C, and a
+reconstruction that mirrors the assembly's structure would write it twice and
+have to keep both in step. Write it once with the wrap handled before it.
+
+**Remaining: about 420 bytes** — the clamp arms, the gain-up arm, and
+whatever follows 0x5b260.
