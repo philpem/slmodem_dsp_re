@@ -12,6 +12,8 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/v34filt.h"
+#include "dsplib/v34fsk.h"
 #include "dsplib/v34rx.h"
 
 /*
@@ -220,4 +222,40 @@ V34descrambler(struct v34_scrambler *s, short bits, short nbits)
 
 	s->sr = sr;
 	return out;
+}
+
+void
+txinit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->f3550 = 0;
+	obj->f3552 = 0;
+	obj->f25cc = 0;
+	obj->f25c6 = 0;
+	obj->f25c0 = 0;
+
+	V34EchoCleanUp(&obj->echo0);
+	V34EchoCleanUp(&obj->echo1);
+
+	/*
+	 * The transmit queue is PRIMED, not emptied: the write cursor starts
+	 * 32 entries ahead of the read cursor and the count says so, giving
+	 * the modulator a full block of silence to draw on before the first
+	 * symbol arrives.
+	 */
+	obj->txq.count = 0x20;
+	obj->txq.rd = obj->txq.ring;
+	obj->txq.wr = obj->txq.ring + 0x20;
+	sysdep_memset(obj->txq.ring, 0, V34_TXQ_RING * sizeof(int));
+
+	/* The receive queue is emptied outright. */
+	obj->rxq.count = 0;
+	obj->rxq.rd = obj->rxq.ring;
+	obj->rxq.wr = obj->rxq.ring;
+	sysdep_memset(obj->rxq.ring, 0, V34_RXQ_RING * sizeof(int));
+
+	/* And the pre-filter's 42-tap history. */
+	sysdep_memset(obj->prefilter.state, 0,
+		      V34_ECHO_PREFILTER_TAPS * sizeof(short));
 }

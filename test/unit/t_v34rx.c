@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "harness.h"
+#include "dsplib/v34filt.h"
+#include "dsplib/v34fsk.h"
 #include "dsplib/v34rx.h"
 
 extern void ref_rxreadqueue(void *q);
@@ -13,6 +15,7 @@ extern void ref_decision(void *d, const int *pts, short npts);
 extern void ref_V34nlencoder(const short *in, short *out);
 extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
 extern int ref_V34descrambler(void *s, short bits, short nbits);
+extern void ref_txinit(void *obj);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -221,6 +224,58 @@ main(void)
 					    (long)sb.sr, v);
 			}
 		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 txinit");
+	{
+		static struct v34_object oa, ob;
+		unsigned b;
+
+		memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+		memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+		/* The cancellers must be wired or CleanUp walks nowhere. */
+		V34InitializeImplementationSpecific(&oa);
+		ref_V34InitializeImplementationSpecific(&ob);
+		txinit(&oa);
+		ref_txinit(&ob);
+
+		for (b = 0; b < sizeof(oa); b++) {
+			/* Every pointer: each side holds its own addresses. */
+			unsigned skip[][2] = {
+			  { __builtin_offsetof(struct v34_object, rxq)
+			    + __builtin_offsetof(struct v34_queue, rd), 8 },
+			  { __builtin_offsetof(struct v34_object, txq)
+			    + __builtin_offsetof(struct v34_queue, rd), 8 },
+			  { __builtin_offsetof(struct v34_object, p_2074), 4 },
+			  { __builtin_offsetof(struct v34_object, echo0), 0x20 },
+			  { __builtin_offsetof(struct v34_object, echo1), 0x20 },
+			  { __builtin_offsetof(struct v34_object, prefilter)
+			    + __builtin_offsetof(struct v34_echo_prefilter,
+						 coeff), 4 },
+			};
+			unsigned s2, hit = 0;
+
+			for (s2 = 0; s2 < sizeof(skip) / sizeof(skip[0]); s2++)
+				if (b >= skip[s2][0]
+				    && b < skip[s2][0] + skip[s2][1])
+					hit = 1;
+			if (hit)
+				continue;
+			diff_eq_int("txinit at %ld",
+				    ((unsigned char *)&oa)[b],
+				    ((unsigned char *)&ob)[b], b);
+		}
+		/* And the cursors, as offsets. */
+		diff_eq_int("txq rd", oa.txq.rd - oa.txq.ring,
+			    ob.txq.rd - ob.txq.ring, 0);
+		diff_eq_int("txq wr", oa.txq.wr - oa.txq.ring,
+			    ob.txq.wr - ob.txq.ring, 0);
+		diff_eq_int("rxq rd", oa.rxq.rd - oa.rxq.ring,
+			    ob.rxq.rd - ob.rxq.ring, 0);
+		diff_eq_int("rxq wr", oa.rxq.wr - oa.rxq.ring,
+			    ob.rxq.wr - ob.rxq.ring, 0);
+		diff_eq_int("txq primed with 32", oa.txq.count, 0x20, 0);
 	}
 	rc |= diff_end();
 

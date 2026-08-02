@@ -1037,21 +1037,21 @@ V34EchoHistoryBackwardClean(void *objp, unsigned n)
 	sysdep_memset(obj->scratch_20e0, 0, sizeof(obj->scratch_20e0));
 
 	/*
-	 * And three entries of a ring of ints, walked backwards from
-	 * `ring_pos`.  Only the low short of each is cleared, and the wrap
-	 * runs off the FRONT of the ring into a second cursor that starts
-	 * before the object -- which is how the original spells
-	 * `&ring[(pos - 1) mod len]` when it has already decided the ring is
-	 * addressed from a base four bytes below `obj`.
+	 * And the last three samples queued for transmission, rolled back
+	 * along with the canceller's history -- which is what makes this
+	 * function's name literal.  Walked backwards from the transmit
+	 * queue's write cursor, clearing only the low short of each; the
+	 * wrap is spelled as a second cursor running down from a base four
+	 * bytes below the object.  See findings 109.
 	 */
 	{
-		int *p = obj->ring_pos - 1;
+		int *p = obj->txq.wr - 1;
 		char *base = (char *)obj - 4;
 
 		for (i = 2; i >= 0; i--) {
 			short *q;
 
-			if (p >= obj->ring) {
+			if (p >= obj->txq.ring) {
 				q = (short *)p;
 			} else {
 				q = (short *)(base + 0x25c0);

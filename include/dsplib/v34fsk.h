@@ -23,6 +23,7 @@
 #define DSPLIB_V34FSK_H
 
 #include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one */
+#include "dsplib/v34rx.h"	/* struct v34_queue: the object owns both      */
 
 #ifdef __cplusplus
 extern "C" {
@@ -109,7 +110,10 @@ struct v34_fskdelay {
  * say which; do not start a third.
  */
 struct v34_object {
-	unsigned char unmapped_0000[0x402];
+	unsigned char unmapped_0000[0x264];
+	struct v34_queue rxq;				/* +0x264 */
+	int rxq_ring_tail[V34_RXQ_RING - 1];		/* to +0x370 */
+	unsigned char unmapped_0370[0x402 - 0x370];
 	/*
 	 * Non-zero makes fskdemodulate return without doing anything -- not
 	 * even running the detector -- so it reads as "the FSK receiver is
@@ -129,10 +133,18 @@ struct v34_object {
 	unsigned char scratch_20e0[0x20];		/* +0x20e0 */
 	unsigned char unmapped_2100[0x210c - 0x2100];
 	unsigned char scratch_210c[0x100];		/* +0x210c */
-	unsigned char unmapped_220c[0x2224 - 0x220c];
-	int *ring_pos;					/* +0x2224 */
-	int ring[(0x25c4 - 0x2228) / 4];		/* +0x2228 */
-	unsigned char unmapped_25c4[0x80b8 - 0x25c4];
+	unsigned char unmapped_220c[0x221c - 0x220c];
+	struct v34_queue txq;				/* +0x221c */
+	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
+	short f25c0;					/* +0x25c0 */
+	unsigned char unmapped_25c2[0x25c6 - 0x25c2];
+	short f25c6;					/* +0x25c6 */
+	unsigned char unmapped_25c8[0x25cc - 0x25c8];
+	int f25cc;					/* +0x25cc */
+	unsigned char unmapped_25d0[0x3550 - 0x25d0];
+	short f3550;					/* +0x3550 */
+	short f3552;					/* +0x3552 */
+	unsigned char unmapped_3554[0x80b8 - 0x3554];
 	/*
 	 * The two echo cancellers and the arrays they point at, one
 	 * contiguous block each (finding 98).  Declared here rather than in

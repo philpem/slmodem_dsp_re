@@ -25,12 +25,21 @@ extern "C" {
 #define V34_TXQ_END	0x3a4		/* txwritequeue's ring end  */
 #define V34_QUEUE_BURST	4		/* entries moved per call   */
 
+/* Ring lengths in entries, from those ends: (END - 0x0c) / 4. */
+#define V34_RXQ_RING	((V34_RXQ_END - 0x0c) / 4)	/*  64 */
+#define V34_TXQ_RING	((V34_TXQ_END - 0x0c) / 4)	/* 230 */
+
 struct v34_queue {
 	short count;		/* +0x00  entries held, in samples       */
 	short pad_02;
 	int *rd;		/* +0x04  read cursor                    */
 	int *wr;		/* +0x08  write cursor                   */
-	int ring[1];		/* +0x0c  length is the caller's         */
+	/*
+	 * +0x0c.  Declared as one entry because the two instances differ:
+	 * the enclosing object carries the rest immediately after, and
+	 * V34_RXQ_RING / V34_TXQ_RING say how many.
+	 */
+	int ring[1];
 };
 
 /*
@@ -99,6 +108,16 @@ struct v34_scrambler {
  * 1 + x^-5 + x^-23 for the caller, 1 + x^-18 + x^-23 for the answerer.
  */
 int V34descrambler(struct v34_scrambler *s, short bits, short nbits);
+
+/*
+ * Reset the transmit side: both echo cancellers, both sample queues, the
+ * echo pre-filter's history, and a handful of scalars.
+ *
+ * Declared `void *` for the same reason the other whole-object functions
+ * are -- v34rx.h must not depend on v34fsk.h, since the dependency runs the
+ * other way.
+ */
+void txinit(void *obj);
 
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);

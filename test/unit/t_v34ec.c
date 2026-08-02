@@ -478,8 +478,8 @@ main(void)
 			oa.prefilter.hist_pos = ob.prefilter.hist_pos = 9;
 			oa.prefilter.hist_len = ob.prefilter.hist_len = 42;
 			oa.prefilter.span = ob.prefilter.span = 84;
-			oa.ring_pos = oa.ring + 40;
-			ob.ring_pos = ob.ring + 40;
+			oa.txq.wr = oa.txq.ring + 40;
+			ob.txq.wr = ob.txq.ring + 40;
 			for (b = 0; b < sizeof(oa.echo0_dline)
 					/ sizeof(short); b++) {
 				oa.echo0_dline[b] = ob.echo0_dline[b] =
@@ -501,7 +501,9 @@ main(void)
 				int o1 = (int)__builtin_offsetof(
 					struct v34_object, echo1);
 				int rp = (int)__builtin_offsetof(
-					struct v34_object, ring_pos);
+					struct v34_object, txq)
+					+ (int)__builtin_offsetof(
+						struct v34_queue, rd);
 				int pc = (int)__builtin_offsetof(
 					struct v34_object, prefilter)
 					+ (int)__builtin_offsetof(
@@ -513,7 +515,7 @@ main(void)
 				/* Every pointer: each side holds its own. */
 				if ((k >= o0 && k < o0 + 0x20)
 				    || (k >= o1 && k < o1 + 0x20)
-				    || (k >= rp && k < rp + 4)
+				    || (k >= rp && k < rp + 8)
 				    || (k >= pc && k < pc + 4)
 				    || (k >= p2 && k < p2 + 4))
 					continue;
