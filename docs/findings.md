@@ -6884,3 +6884,42 @@ the value — `0x65f8` being an address — distinguishes them.
 **Next, and it is a one-line probe:** print `lvl` and `f12a` from inside our
 `V34demodulate`. Either `f12a` never reaches 4, or `lvl` never exceeds 0x1f.
 Two candidates, one print, no more inference.
+
+### 121h. Probed our own side: 576 -> 320, and the last gap is a pre-loop block
+
+The probe answered it in one run, as 121g predicted it would:
+
+```
+   OURS f12a=4 in=967 lvl=2660 shift=7
+```
+
+`agc_input` is **967 — identical to the blob's** — and `lvl` is 2660, far
+above the `0x1f` gate. So our AGC does run, and 121g's conclusion that it
+never does was wrong too. Four inferences, four reversals, one probe.
+
+What the failing bytes actually were, in order as each was fixed:
+
+  - **`agc_accum` (`rx+0x138`)**: D34's address-derived seed, which differs
+    between the two objects until the AGC first runs. The test had to skip
+    it, exactly as `t_v34rx`'s `rxinit` case already does. **576 -> 570.**
+    The *sixth* instance this session of a differential failure that was the
+    test comparing something that cannot match.
+  - **`f208` (`rx+0x208`)**: the two-pole IIR was omitted from `rxtiming`
+    altogether — findings 118 and 121 described it and the reconstruction
+    simply did not have it. Adding it, with the two halves of
+    `decision_point` as each filter's second state word, took **570 -> 320.**
+
+**What remains, identified:** `rx+0x244` and `rx+0x246`. The object writes
+the IIR result to **three** fields in its pre-loop block —
+
+```
+   5b443: f240 = cx    5b44a: f208 = cx    5b451: f244 = cx
+   5b47c: f242 = dx    5b483: f20a = dx    5b48a: f246 = dx
+```
+
+— and to only **two** inside the loop. So `f244`/`f246` are seeded once,
+before the loop, and then left as the interpolator's "previous" pair. The
+reconstruction has no pre-loop block at all.
+
+That is the last gap. Adding a pre-loop IIR pass that also writes
+`f244`/`f246` should close the remaining 320.
