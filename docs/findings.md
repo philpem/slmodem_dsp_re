@@ -6326,3 +6326,49 @@ subtracting `rxvect4` and shifting by 2, then reads the scrambler register at
 **Remaining:** about 580 bytes unread, and `rxvect4` needs dumping (it is a
 global; check its size before assuming four entries — the search is over four
 but the table may serve several constellations).
+
+## 120. `V34demodulate` takes its argument in a register, and dequeues one sample
+
+Read to 0x5afe7 of 1142 bytes. **Not written.**
+
+**It does not use the C calling convention.** The argument arrives in `%eax`:
+
+```
+   5af12:  mov  %eax,%edi        ; first instruction after the pushes
+```
+
+and `rxtiming` sets it up that way:
+
+```
+   5b3ef:  mov  %esi,%eax
+   5b3f8:  call 5af10 <V34demodulate>
+```
+
+GCC does this for `static` functions when it can see every call site — the
+same reason `V34demodulate` is LOCAL. It costs nothing for the
+reconstruction, because the only caller is one this project also writes, and
+nothing outside can observe the register choice; but it means the function
+cannot be declared or called as ordinary C from a test even if it had a
+`ref_` alias, which finding 118's pairing already made moot.
+
+**Its argument is the receiver base** (`obj+0x264`) and it opens by
+dequeuing **one** complex sample from the receive queue, inline:
+
+```
+   count--;                              /* (%eax)          */
+   re = *(short *)rd;  im = ((short *)rd)[1];
+   rd += 4;  if (rd >= base + 0x10c) rd = base + 0xc;
+```
+
+That is `rxreadqueue`'s body with a count step of **one** instead of four and
+a single sample instead of four. So the receive queue, like the transmit
+queue (finding 116), has two consumers that account for it differently —
+`rxreadqueue` takes four and subtracts four, `V34demodulate` takes one and
+subtracts one. Neither is wrong; anything reading `count` must accept both.
+
+It then appends the real part to a buffer at `rx+0x13c` indexed by a counter
+at `rx+0x19c`, resetting the counter when it passes 0x23 (35), and advances a
+pointer at `rx+0x130` by two — the same field `rxtiming` re-points at
+`obj+0x370` on every call.
+
+**Remaining: about 880 bytes unread.**
