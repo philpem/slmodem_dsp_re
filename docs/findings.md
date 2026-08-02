@@ -6780,3 +6780,42 @@ a signed short after an unsigned table load.
 **Next step, and it is one probe:** log `lvl` per call from both sides.
 Every previous localisation in this function came from a probe rather than a
 re-read, and this one is a single value.
+
+### 121e. The probe: the blob's AGC trips every time, so `agc_accum` is always 0
+
+Driving `ref_rxtiming` alone and printing the receiver's AGC state per call:
+
+```
+   it | f12a  acc32       agc_input  agc_accum  agc_level
+    0 |   1   0x0134fd90    308          0          0
+    1 |   2   0x023a8520    570          0          0
+    2 |   3   0x0314a8b9    788          0          0
+    3 |   0   0x00000000      0          0        967
+    4 |   1   0x00b3d511    179          0        967
+    5 |   3   0x01a9397e    425          0        967
+    6 |   0   0x00000000      0          0       1321
+```
+
+Three things it settles.
+
+**The AGC runs when `f12a` reaches 4 and then clears both fields** — the
+`1,2,3,0` pattern — confirming the `<= 3` short path and the clear on the
+long one. The step from 1 to 3 between calls 4 and 5 is the fractional
+resampler pulling two samples in one `rxtiming`, as expected.
+
+**`agc_accum` is zero because the AGC trips, not because it is skipped.**
+`agc_level` reaches only 967 against a 4000 target, so the error is -3033,
+well past the 1200 deadband; the integrator step is
+`(0x3333 * -3033) >> 16 = -607`, past the 500 limit, so it trips and resets
+to zero on every single run. The level gate is therefore **not** the
+problem — finding 121d's conclusion was wrong.
+
+**So the fault is that the reconstruction's AGC does NOT trip**, meaning its
+`agc_level` or `agc_step` differs by the time `agcadapt` is called. Since
+`agc_level` at `rx+0x134` does not appear in the failing offsets, the suspect
+is narrower still: either the level differs only transiently, within a call,
+or `agc_step` is being read before `rxinit` set it.
+
+**Next:** the same probe on both sides in one run, printing `agc_level` and
+`agc_step` immediately before each `agcadapt` entry. That is the comparison
+121d should have been.
