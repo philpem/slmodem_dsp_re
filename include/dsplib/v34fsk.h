@@ -232,10 +232,21 @@ struct v34_object {
 	short fa23e;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short fa240;					/* +0xa240 */
-	unsigned char unmapped_a242[0xaad0 - 0xa242];
+	unsigned char unmapped_a242[0xaa96 - 0xa242];
+	/*
+	 * decoderv34 compares f124 against this and against half of it, and
+	 * sets f218 accordingly -- so it is a frame length in symbols and the
+	 * two tests are "half way" and "at the end".
+	 */
+	short faa96;					/* +0xaa96 */
+	unsigned char unmapped_aa98[0xaad0 - 0xaa98];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
+	unsigned char unmapped_aba0[0xac0c - 0xaba0];
+	/* Where the V.90 side is told the recovered timing offset. */
+	short fac0c;					/* +0xac0c */
+	unsigned char unmapped_ac0e[0xac10 - 0xac0e];
 };
 
 /*

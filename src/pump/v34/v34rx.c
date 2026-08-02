@@ -16,6 +16,7 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
+#include "dsplib/v34shell.h"
 
 /*
  * Advance a ring cursor, wrapping at `end` back to the first entry.
@@ -1479,4 +1480,123 @@ modem_serrint(void *objp)
 	}
 
 	return 0;
+}
+
+
+/*
+ * rxvect4 -- the four-point constellation the non-trellis path slices
+ * against, at .rodata+0x5360.  Packed (re, im) per entry.
+ *
+ * Note 2289 against -2290: the points are not symmetric about zero but about
+ * -0.5, which is what rounding a symmetric constellation to integers gives
+ * when the rounding is toward negative infinity.
+ */
+static const int rxvect4[4] = {
+	(int)((unsigned short)2289  | ((unsigned)(unsigned short)2289  << 16)),
+	(int)((unsigned short)2289  | ((unsigned)(unsigned short)-2290 << 16)),
+	(int)((unsigned short)-2290 | ((unsigned)(unsigned short)-2290 << 16)),
+	(int)((unsigned short)-2290 | ((unsigned)(unsigned short)2289  << 16)),
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * decoderv34 -- turn one demodulated point into bits.
+ *
+ * Two entirely separate decoders, chosen by three flag bits together:
+ *
+ *   flags & 0x98 == 0x98   the full 8D trellis path.  Step the sub-frame
+ *                          counter and hand the point to demapFrame, which
+ *                          accumulates eight of them into a frame.
+ *   otherwise              a four-point slice against `rxvect4`, whose index
+ *                          is DIFFERENTIALLY decoded: the change since the
+ *                          last symbol, modulo four, run through the same
+ *                          V34descrambler the data path uses.
+ *
+ * The second is the handshake's decoder -- QPSK with differential quadrant
+ * coding is what V.34 sends before the trellis is trained -- which is why
+ * all three flag bits have to agree before the real one is used.
+ *
+ * `f218` is set to 0x2000 or 0x4000 on the way out, and what selects between
+ * them is `f124` against the frame length at +0xaa96 and against half of it:
+ * half way through gives 0x4000, the end gives 0x2000.  So it is a progress
+ * signal for whoever is counting symbols, not a decode result.
+ */
+void
+decoderv34(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+
+	if ((rx->flags & 0x98) == 0x98) {
+		short n = rx->f266;
+
+		rx->f266 = (short)(n + 1);
+
+		if (demapFrame(obj, (char *)obj + 0x474,
+			       (char *)obj + 0x470, n)) {
+			rx->flags = (unsigned short)(rx->flags & ~0x100);
+		} else {
+			/*
+			 * The frame was rejected: clear the timing IIR's
+			 * second-order history and say so.  Those two shorts
+			 * are the +0x20c overlay -- `decision` writes them
+			 * as one packed point, rxtiming as two taps, and
+			 * this zeroes them as two.
+			 */
+			rx->dp.iir2.i = 0;
+			rx->dp.iir2.q = 0;
+			rx->flags = (unsigned short)(rx->flags | 0x100);
+		}
+
+		/*
+		 * A narrow band, not a threshold: the message fires only for
+		 * -70 < f798 < -64.  Below -64 the flag is set regardless.
+		 */
+		if ((short)rx->f798 < -64) {
+			rx->flags = (unsigned short)(rx->flags | 0x100);
+			if ((short)rx->f798 > -70 && DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"V34RENEG, may be renegotiation,"
+					"equalizer adaptation disabled\n");
+		}
+
+		rx->f218 = 0x2000;
+		return;
+	}
+
+	/* Slice against the four points, same shape as `decision`. */
+	{
+		int best_dist = 0x7fff;
+		int bestidx = 0;
+		int tx = (unsigned short)rx->target_re;
+		int ty = (unsigned short)rx->target_im;
+		int i;
+		int diff;
+
+		for (i = 0; i < 4; i++) {
+			const short *p = (const short *)&rxvect4[i];
+			int dx = (short)(tx - (unsigned short)p[0]);
+			int dy = (short)(ty - (unsigned short)p[1]);
+			/* Logical shift then truncate, as `decision` does. */
+			int d = (short)((unsigned)(dx * dx + dy * dy) >> 14);
+
+			if (d < best_dist) {
+				best_dist = d;
+				bestidx = i;
+			}
+		}
+
+		rx->dp.point = rxvect4[bestidx];
+
+		/* Differential: the change in quadrant since last symbol. */
+		diff = (bestidx - (unsigned short)rx->f1aa) & 3;
+		rx->f1aa = (short)bestidx;
+
+		rx->best_index = (short)V34descrambler(rx, (short)diff, 2);
+	}
+
+	if (rx->f124 == (short)(obj->faa96 >> 1))
+		rx->f218 = 0x4000;
+	else if (rx->f124 == obj->faa96)
+		rx->f218 = 0x2000;
 }

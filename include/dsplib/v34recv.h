@@ -64,7 +64,10 @@ struct v34_receiver {
 	unsigned char pad_19e[0x1a0 - 0x19e];
 	int             f1a0;            /* +0x1a0 */
 	unsigned        scrambler_sr;    /* +0x1a4 */
-	unsigned char pad_1a8[0x1ac - 0x1a8];
+	unsigned char pad_1a8[0x1aa - 0x1a8];
+	short           f1aa;            /* +0x1aa decoderv34: the previous
+					  * constellation index, for the
+					  * differential decode */
 	short           f1ac;            /* +0x1ac rxtiming: fractional phase */
 	short           f1ae;            /* +0x1ae   its increment */
 	short           f1b0;            /* +0x1b0   its wrap */
@@ -147,7 +150,10 @@ struct v34_receiver {
 	short           f25c;            /* +0x25c */
 	short           f25e;            /* +0x25e */
 	short           f260;            /* +0x260 */
-	unsigned char pad_262[0x27a - 0x262];
+	unsigned char pad_262[0x266 - 0x262];
+	short           f266;            /* +0x266 demapFrame's sub-frame
+					  * counter, stepped by decoderv34 */
+	unsigned char pad_268[0x27a - 0x268];
 	/*
 	 * +0x27a.  The length is fixed by the POINTER that follows it at
 	 * +0x2a4, not by anything rxtiming does -- twenty-one entries.  In

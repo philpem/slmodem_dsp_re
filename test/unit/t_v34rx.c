@@ -11,6 +11,11 @@ extern unsigned int ref_dsplibs_debug_level;
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
+#include "dsplib/v34shell.h"
+#include "dsplib/v34pcmif.h"
+
+static void shell_sink_a(void *s, int v, int n) { (void)s;(void)v;(void)n; }
+static void shell_sink_b(void *s, int v, int n) { (void)s;(void)v;(void)n; }
 
 extern void ref_rxreadqueue(void *q);
 extern void ref_txwritequeue(void *q, const short *src);
@@ -32,6 +37,8 @@ extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
 extern void ref_v34FreezeEcho(void *obj);
 extern int ref_adaptecho(void *obj);
 extern int ref_modem_serrint(void *obj);
+extern void ref_decoderv34(void *obj);
+extern void ref_VPcmV34LogTimingOffset(void *obj, short v);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
@@ -1259,6 +1266,166 @@ main(void)
 				    (long)(oa.txq.rd - oa.txq.ring),
 				    (long)(ob.txq.rd - ob.txq.ring),
 				    (long)mode * 100 + feed * 10 + far);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 VPcmV34LogTimingOffset");
+	{
+		static struct v34_object oa, ob;
+		int v;
+
+		for (v = -32768; v < 32768; v += 4093) {
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			VPcmV34LogTimingOffset(&oa, (short)v);
+			ref_VPcmV34LogTimingOffset(&ob, (short)v);
+			diff_eq_int("timing offset", oa.fac0c, ob.fac0c, v);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * decoderv34: both decoders.  The 0x98 flag combination selects the
+	 * trellis path, and ALL THREE bits must be set -- so the sweep walks
+	 * every subset of them, not just on and off, to prove the others
+	 * fall through to the four-point slice.
+	 */
+	diff_begin("v34 decoderv34");
+	{
+		static struct v34_object oa, ob;
+		static const short coeffs[12] = {
+			  30,  -21,   15,   -9,    6,   -3,
+			 -28,   19,  -14,    8,   -5,    2
+		};
+		int fl, re, im, it;
+		unsigned b;
+
+		for (fl = 0; fl < 8; fl++)
+		for (re = -12000; re < 12000; re += 5100) {
+			struct v34_receiver *ra, *rb;
+			unsigned short flags = (unsigned short)
+			    (((fl & 1) ? 0x08 : 0) | ((fl & 2) ? 0x10 : 0)
+			     | ((fl & 4) ? 0x80 : 0));
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			/* Enough shell state for the trellis path to run. */
+			{
+				struct v34_shell *sa = (struct v34_shell *)&oa;
+				struct v34_shell *sb = (struct v34_shell *)&ob;
+				int k;
+
+				for (k = 0; k < 32 * 16; k++)
+					sa->trellis[k] = sb->trellis[k] = 0;
+				for (k = 0; k < 32; k++) {
+					sa->state[k].seed =
+					sb->state[k].seed = 0;
+					sa->state[k].a = sb->state[k].a =
+					    (short)((k % 9) * 4 - 16);
+					sa->state[k].b = sb->state[k].b =
+					    (short)((k % 7) * 4 - 12);
+					sa->state[k].c = sb->state[k].c =
+					    (short)((k % 11) * 4 - 20);
+					sa->state[k].d = sb->state[k].d =
+					    (short)((k % 5) * 4 - 8);
+				}
+				for (k = 0; k < 16; k++)
+					sa->cost[k] = sb->cost[k] = (short)k;
+				for (k = 0; k < 18; k++)
+					sa->frame[k] = sb->frame[k] = 0;
+				for (k = 0; k < 8; k++)
+					sa->sub[k] = sb->sub[k] = 0;
+				for (k = 0; k < 6; k++)
+					sa->hist[k] = sb->hist[k] = 0;
+				for (k = 0; k < 0x80; k++) {
+					sa->t1[k] = sb->t1[k] = (short)(k + 1);
+					sa->t2[k] = sb->t2[k] = (short)(k + 2);
+					sa->t3[k] = sb->t3[k] = k;
+				}
+				sa->coeff = coeffs; sb->coeff = coeffs;
+				sa->put_bits = shell_sink_a;
+				sb->put_bits = shell_sink_b;
+				sa->state_idx = sb->state_idx = 0;
+				sa->divisor = sb->divisor = 1;
+				sa->wrap = sb->wrap = 1;
+				sa->fa14 = sb->fa14 = 2;
+				sa->fa44 = sb->fa44 = 2;
+				sa->invert = sb->invert = 0;
+				sa->fa00 = sb->fa00 = 3;
+				sa->fa02 = sb->fa02 = 4;
+				sa->fa3c = sb->fa3c = 0;
+				sa->fa3e = sb->fa3e = 0;
+				sa->fa40 = sb->fa40 = 3;
+				sa->latched = sb->latched = 1;
+				sa->count = sb->count = 9;
+				sa->fa06 = sb->fa06 = 3;
+				sa->fa08 = sb->fa08 = 0;
+				sa->fa0e = sb->fa0e = 8;
+				sa->fa10 = sb->fa10 = 8;
+				sa->fa04 = sb->fa04 = 7;
+				sa->prev_k = sb->prev_k = 0;
+			}
+
+			ra->flags = rb->flags = flags;
+			ra->f266 = rb->f266 = 0;
+			ra->f1aa = rb->f1aa = 0;
+			ra->f124 = rb->f124 = 20;
+			ra->f798 = rb->f798 = (short)(-60 - (re / 3000));
+			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
+			oa.faa96 = ob.faa96 = 40;
+
+			for (it = 0; it < 10; it++) {
+				long tag = ((long)fl * 100
+					    + (re + 12000) / 5100) * 100 + it;
+
+				im = re / 2 + it * 700 - 3000;
+				ra->target_re = rb->target_re = (short)re;
+				ra->target_im = rb->target_im = (short)im;
+
+				decoderv34(&oa);
+				ref_decoderv34(&ob);
+
+				diff_eq_int("dec best", ra->best_index,
+					    rb->best_index, tag);
+				diff_eq_int("dec f218", ra->f218, rb->f218,
+					    tag);
+				diff_eq_int("dec flags", ra->flags, rb->flags,
+					    tag);
+			}
+
+			for (b = 0; b < sizeof(oa); b++) {
+				static const unsigned skip[][2] = {
+				  { 0x264 + 0x04, 8 },
+				  { 0x264 + 0x130, 4 },
+				  { 0x264 + 0x1b4, 4 },
+				  { 0x264 + 0x2a4, 4 },
+				  { 0x221c + 0x04, 8 },
+				  { 0x2074, 4 },
+				  { 0x2078, 4 },
+				  { 0x80b8, 0x14 }, { 0x80b8 + 0x16, 2 },
+				  { 0x9138, 0x14 }, { 0x9138 + 0x16, 2 },
+				  { 0xa24, 4 },     /* shell coeff  */
+				  { 0xe48, 4 },     /* shell sink   */
+				};
+				unsigned s2, hit = 0;
+
+				for (s2 = 0; s2 < sizeof(skip)
+					     / sizeof(skip[0]); s2++)
+					if (b >= skip[s2][0]
+					    && b < skip[s2][0] + skip[s2][1])
+						hit = 1;
+				if (!hit)
+					diff_eq_int("decoderv34 at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    ((long)fl * 100
+						     + (re + 12000) / 5100)
+						    * 100000 + b);
+			}
 		}
 	}
 	rc |= diff_end();

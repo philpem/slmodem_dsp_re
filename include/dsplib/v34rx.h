@@ -200,6 +200,13 @@ int adaptecho(void *obj);
  */
 int modem_serrint(void *obj);
 
+/*
+ * Decode one demodulated point.  Uses the 8D trellis when all three of the
+ * 0x98 flag bits are set, and a differentially-coded four-point slice
+ * otherwise -- the handshake's decoder.
+ */
+void decoderv34(void *obj);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 
