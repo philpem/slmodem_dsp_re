@@ -5089,3 +5089,63 @@ zeroes, and it contains tap 40 -- the unity tap `V34EqualizerCleanUp`
 installs. So the three functions agree on which taps are "the middle", which
 is corroboration that 36..43 is a real boundary and not an artefact of how the
 loop was compiled.
+
+## 96. `ec_prem_coef_B3429High` does not exist, and 3429 uses one table twice
+
+Four of V.34's five symbol rates have a pair of echo pre-emphasis tables in
+v34filters.c's static block:
+
+```
+   ec_prem_coef_B2400High   ec_prem_coef_B2400
+   ec_prem_coef_B2800High   ec_prem_coef_B2800
+   ec_prem_coef_B3000High   ec_prem_coef_B3000
+   ec_prem_coef_B3200High   ec_prem_coef_B3200
+                            ec_prem_coef_B3429
+```
+
+3429 baud has no `High` variant. That asymmetry could have been a stripped
+symbol, a table shared by address with a neighbour, or a rate that simply
+never takes the `High` path — and it is none of those.
+
+`V34SetupModulator` installs **`ec_prem_coef_B3429` at both call sites**:
+
+```
+   0x072e57   ec_prem_coef_B3429     <- where other rates install *High
+   0x0731d9   ec_prem_coef_B3429     <- where other rates install the plain one
+```
+
+So the table is not missing and the path is not skipped. At 3429 baud the
+same 84 bytes serve both roles, where every other rate has two distinct sets.
+
+Whether that is deliberate — 3429 is the widest V.34 rate and its pre-emphasis
+may genuinely not need a second variant — or an unfinished table left pointing
+at its sibling, the object cannot say. It is recorded because a reconstruction
+that generated the `High` tables from a rule would produce a fifth one, and
+would then be wrong at exactly one rate.
+
+## 97. The `tx*c1` shaping tables are rows of sixteen, and the last row is special
+
+Every relocation `V34SetupModulator` makes into a `tx*c1` table is either the
+base of the table or **exactly 32 bytes before its end**:
+
+```
+   tx2400c1          256 bytes      +224   =  256 - 32
+   txAllPass         256 bytes      +224
+   tx2800c1         1536 bytes     +1504   = 1536 - 32
+   tx3000c1         1024 bytes      +992
+   tx3200c1_for_v90  384 bytes      +352
+```
+
+32 bytes is sixteen shorts. So each table is a stack of 16-tap rows and the
+code selects either the first or the last, which is what a set of shaping
+filters indexed by some per-rate parameter looks like with the two extremes
+picked out by name.
+
+The `p*` tables are the same shape seen from the other side: every reference
+to `p2400`, `p2800`, `p3000`, `p3200` and `p3429` is to `base - 32` with an
+index scaled by 32 (`shl $0x5`), so those are 320-byte tables of ten 16-short
+rows **indexed from one**.
+
+This matters for the remaining work: the row size is a property of the tables,
+so `V34ModulatorProcess` can be reconstructed knowing that a "filter" here is
+16 taps, before its own disassembly is read.
