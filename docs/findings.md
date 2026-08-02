@@ -5892,3 +5892,29 @@ measurement still drives one adaptation step from a fabricated level.
 
 Reachability of both is unmeasured — `agcadapt`'s caller is `receiver`,
 which is not reconstructed. Task #47.
+
+## 113. `rxtiminginit` locates the timing object and the receive queue's output
+
+Partial reading of 0x5b9c0-0x5ba88. **Not written** — the function is ~25
+constant stores into a receiver sub-object at `obj+0x264` and writing it
+needs that struct declared field by field, which is the bulk of the work.
+Two placements are worth having now.
+
+**`struct v34_timing` is at `obj+0x50c`.** The first thing `rxtiminginit`
+does is `V34TimingFiltersInit(obj + 0x50c)`, so the object whose layout was
+pinned in findings 99 and 101-103 — `iir[6][3]`, the 40-tap high-pass
+history, the 40-entry complex prefilter state, the two coefficient pointers
+— sits there.
+
+**`rx[0x130] = obj + 0x370`**, and `obj + 0x370` is exactly
+`obj + 0x264 + 0x10c` — the **receive queue's output buffer**, the four
+shorts `rxreadqueue` writes immediately after its ring. So the receiver keeps
+a pointer to where its samples land, and `V34_RXQ_END` is confirmed a fourth
+time.
+
+The constants stored are otherwise unremarkable except one: `rx[0x1d2]` is
+set to `0x960` — **2400**, the lowest V.34 symbol rate — which is the
+receiver starting up assuming the slowest rate until the handshake says
+otherwise.
+
+The remaining stores run to 0x5bac5 and are unread.
