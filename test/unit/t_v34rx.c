@@ -42,6 +42,7 @@ extern int ref_polyValue(short k);
 extern void ref_setInitialPhase(void *obj);
 extern void ref_setTimingStateParameters(void *obj);
 extern void ref_TimingV34(void *obj);
+extern void ref_receiver(void *obj);
 extern void ref_VPcmV34LogTimingOffset(void *obj, short v);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
@@ -1625,6 +1626,522 @@ main(void)
 				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
 			}
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * receiver: the whole per-symbol chain, staged by its three flag
+	 * gates.  Stage one leaves 0x400, 0x1000 and 0x2000 clear, so the
+	 * spine runs alone -- interpolate, equalise, derotate, slice against
+	 * rxvect4, drive the carrier NCO, adapt the centre taps.
+	 *
+	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
+	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
+	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * the step becomes garbage, every output wraps twice, and twelve
+	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * f124 and best_index, which are the fields `receiver` then reads.
+	 * That is finding 123's overrun, and it makes both sides agree on
+	 * nonsense.  The real rates keep f1ae below f1b0, which is what
+	 * bounds the pulls at one per output.
+	 *
+	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * entries before the predictor's coefficients begin at +0x288, and
+	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * Seven outputs at up to two pulls each is fourteen samples, so one
+	 * bound implies the other; both are asserted below.
+	 */
+	/*
+	 * receiver: the whole per-symbol chain.  Built and brought up one
+	 * flag gate at a time -- 0x400 (data mode and the retrain detector),
+	 * 0x2000 (the precoder) and 0x1000 (the predictor and its LMS) -- and
+	 * then swept together, because the two predictor gates share one set
+	 * of coefficients and one history and a shared-state fault hides if
+	 * only ever one is set.
+	 *
+	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
+	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
+	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * the step becomes garbage, every output wraps twice, and twelve
+	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * f124 and best_index, which are the fields `receiver` then reads.
+	 * Both sides then agree on nonsense.  The real rates keep f1ae below
+	 * f1b0, which is what bounds the pulls at one per output.
+	 *
+	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * entries before the predictor's coefficients begin at +0x288, and
+	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * Seven outputs at up to two pulls each is fourteen samples, so one
+	 * bound implies the other; both are asserted below.
+	 *
+	 * f124 IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
+	 * threshold in the function is a comparison against it -- 0x11, 0x40,
+	 * 0x68, 0x132, 0x143, 0x152, 0x153, 0x332, 0x7530.  Nothing inside
+	 * `receiver` advances it past 2, so the sweep sets it outright.
+	 */
+	/*
+	 * receiver: the whole per-symbol chain.  Built and brought up one
+	 * flag gate at a time -- 0x400 (data mode and the retrain detector),
+	 * 0x2000 (the precoder) and 0x1000 (the predictor and its LMS) -- and
+	 * then swept together, because the two predictor gates share one set
+	 * of coefficients and one history and a shared-state fault hides if
+	 * only ever one is set.
+	 *
+	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
+	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
+	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * the step becomes garbage, every output wraps twice, and twelve
+	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * f124 and best_index, which are the fields `receiver` then reads.
+	 * Both sides then agree on nonsense.  The real rates keep f1ae below
+	 * f1b0, which is what bounds the pulls at one per output.
+	 *
+	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * entries before the predictor's coefficients begin at +0x288, and
+	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * Seven outputs at up to two pulls each is fourteen samples, so one
+	 * bound implies the other; both are asserted below.
+	 *
+	 * f124 IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
+	 * threshold in the function is a comparison against it -- 0x11, 0x40,
+	 * 0x68, 0x132, 0x143, 0x152, 0x153, 0x332, 0x7530.  Nothing inside
+	 * `receiver` advances it past 2, so the sweep sets it outright.
+	 *
+	 * THE TWEAKS EXIST BECAUSE SIX BRANCHES ARE OTHERWISE UNREACHABLE
+	 * from any starting state a caller could produce in 72 symbols: the
+	 * two-pull path needs a step wider than the wrap, the retrain and
+	 * renegotiation flags need a counter 140 symbols deep, the equaliser
+	 * error report needs 1024, its saturation needs an accumulator
+	 * already overflowed, and the shifted-TRN2 branch needs an equaliser
+	 * whose energy has settled late.  Each is seeded rather than waited
+	 * for, and a temporary counter per branch was used to confirm every
+	 * one of them is reached.
+	 */
+	diff_begin("v34 receiver");
+	{
+		static struct v34_object oa, ob;
+		static const struct { short baud, carrier; } rates[] = {
+			{ 2400, 1800 }, { 3200, 1920 },
+		};
+		/*
+		 * The symbol counts either side of every threshold, plus the
+		 * sixteen-symbol window 0x143..0x152 where TRN runs a second
+		 * scrambler, and 0x153 where the shifted-TRN2 check fires.
+		 */
+		static const short syms[] = {
+			0, 1, 2, 0x11, 0x12, 0x40, 0x41, 0x68, 0x69,
+			0x132, 0x133, 0x142, 0x143, 0x14a, 0x152, 0x153,
+			0x154, 0x212, 0x213, 0x332, 0x333, 0x400,
+			0x7530, 0x7531,
+		};
+#define RXT_WIDE_STEP	0x01	/* f1ae > f1b0: the two-pull path        */
+#define RXT_DEAD_EQ	0x02	/* zero taps: the point stops moving     */
+#define RXT_RTN_UP	0x04	/* seed rtncount just under its trip     */
+#define RXT_RTN_DOWN	0x08	/* and inside the renegotiation band     */
+#define RXT_REPORT	0x10	/* seed the 1024-symbol error report     */
+#define RXT_SATURATE	0x20	/* with both accumulators overflowed     */
+#define RXT_LATE_EQ	0x40	/* energy in taps 60..75, not 32..47     */
+#define RXT_NO_SIGNAL	0x80	/* a floor the burst cannot clear        */
+		static const struct {
+			unsigned short flags;
+			short gain;
+			unsigned char tweak;
+		} cases[] = {
+		  { 0,                                        0x0400, 0 },
+		  { V34_RX_FLAG_PRECODE,                      0x0400, 0 },
+		  { V34_RX_FLAG_PREDICT,                      0x0400, 0 },
+		  { V34_RX_FLAG_PRECODE | V34_RX_FLAG_PREDICT, 0x0400, 0 },
+		  { V34_RX_FLAG_DATA,                         0x0400, 0 },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_TRN_WATCH, 0x0400, 0 },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_LATE_TRN,  0x0400, 0 },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_TRN_WATCH
+		    | V34_SCR_ANSWERER,                       0x0400, 0 },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_PRECODE
+		    | V34_RX_FLAG_PREDICT,                    0x0400, 0 },
+		  /* Frozen AGC and 16x gain: the only way the slicer error
+		   * clears 0x600 and the S-S1 reset fires. */
+		  { V34_RX_FLAG_DET_PENDING,                  0x4000, 0 },
+		  { V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_PRECODE
+		    | V34_RX_FLAG_PREDICT,                    0x4000, 0 },
+		  { V34_RX_FLAG_DET_PENDING,                  0x4000,
+		    RXT_NO_SIGNAL },
+		  { 0,                                        0x0400,
+		    RXT_WIDE_STEP },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_PRECODE,   0x0400,
+		    RXT_WIDE_STEP },
+		  { V34_RX_FLAG_DATA,                         0x0400,
+		    RXT_DEAD_EQ | RXT_RTN_UP },
+		  { V34_RX_FLAG_DATA,                         0x0400,
+		    RXT_RTN_DOWN },
+		  { V34_RX_FLAG_PREDICT,                      0x0400,
+		    RXT_REPORT },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_PREDICT,   0x0400,
+		    RXT_REPORT | RXT_SATURATE },
+		  { V34_RX_FLAG_DATA | V34_RX_FLAG_TRN_WATCH, 0x0400,
+		    RXT_LATE_EQ },
+		};
+		unsigned sw, cs, b;
+		int k, it;
+
+		for (sw = 0; sw < sizeof(rates) / sizeof(rates[0]); sw++)
+		for (cs = 0; cs < sizeof(cases) / sizeof(cases[0]); cs++) {
+			struct v34_receiver *ra, *rb;
+			struct v34_equalizer *qa2, *qb2;
+			unsigned tweak = cases[cs].tweak;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			rxinit(&oa); ref_rxinit(&ob);
+			rxtiminginit(&oa); ref_rxtiminginit(&ob);
+			V34SetupDemodulator(&oa, rates[sw].baud,
+					    rates[sw].carrier);
+			ref_V34SetupDemodulator(&ob, rates[sw].baud,
+						rates[sw].carrier);
+
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+			qa2 = (struct v34_equalizer *)((char *)&oa + 0x630);
+			qb2 = (struct v34_equalizer *)((char *)&ob + 0x630);
+
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)ra)->ring[b] =
+				((struct v34_queue *)rb)->ring[b] =
+				    (int)((unsigned)(unsigned short)
+					  (short)(b * 2731 - 12000)
+					  | ((unsigned)(unsigned short)
+					     (short)(b * 991 - 8000) << 16));
+			((struct v34_queue *)ra)->count =
+			((struct v34_queue *)rb)->count = V34_RXQ_RING;
+
+			/*
+			 * The RMS index, as in the rxtiming fixture: neither
+			 * init writes it, dpskinit and v34modeminit do.
+			 */
+			ra->f19c = rb->f19c = 0;
+			ra->agc_gain = rb->agc_gain = cases[cs].gain;
+			ra->agc_step = rb->agc_step = 0x3333;
+
+			/*
+			 * Past state 1, so TimingV34 neither re-seeds the
+			 * phase nor advances a state; f232 == -1 disables the
+			 * dwell.  At 1 or below `receiver` returns before the
+			 * slicer, which would leave two thirds of it untested.
+			 */
+			ra->f1c0 = rb->f1c0 = 4;
+			ra->f232 = rb->f232 = -1;
+			ra->f234 = rb->f234 = 0x1000;
+			ra->f236 = rb->f236 = 0x0800;
+			ra->f1ec = rb->f1ec = 1;
+			ra->f1ee = rb->f1ee = 2;
+
+			/*
+			 * The predictor's own state.  Nothing in either init
+			 * touches +0x288..+0x2a3, so at the fill the taps are
+			 * -23131 and the prediction saturates on the first
+			 * symbol -- identically on both sides, which is a
+			 * pass that measures nothing.
+			 */
+			for (k = 0; k < 3; k++) {
+				ra->pred_b[k] = rb->pred_b[k] =
+				    (short)(0x0c00 >> k);
+				ra->pred_a[k] = rb->pred_a[k] =
+				    (short)(-0x0300 >> k);
+			}
+			for (k = 0; k < 4; k++)
+				ra->pred_i[k] = rb->pred_i[k] =
+				ra->pred_q[k] = rb->pred_q[k] = 0;
+
+			ra->f268 = rb->f268 = 0;
+			ra->f26a = rb->f26a = 0;
+			ra->f26c = rb->f26c = 0;
+			ra->f26e = rb->f26e = 0;
+			ra->f798 = rb->f798 = 0;
+
+			oa.rx_energy_floor = ob.rx_energy_floor =
+			    (tweak & RXT_NO_SIGNAL) ? 0x40000000 : 900;
+			oa.status = ob.status = 0;
+
+			if (tweak & RXT_WIDE_STEP) {
+				/*
+				 * A step a quarter wider than the wrap, which
+				 * TimingV34 will keep reproducing.  Eight
+				 * pulls at four outputs still fits the burst.
+				 */
+				ra->f1be = rb->f1be = 20000;
+				ra->f1ae = rb->f1ae = 20000;
+			}
+			if (tweak & RXT_DEAD_EQ) {
+				memset(qa2->re, 0, sizeof qa2->re);
+				memset(qb2->re, 0, sizeof qb2->re);
+				memset(qa2->im, 0, sizeof qa2->im);
+				memset(qb2->im, 0, sizeof qb2->im);
+			}
+			if (tweak & RXT_LATE_EQ)
+				for (k = 60; k < 76; k++) {
+					qa2->re[k] = qb2->re[k] = 0x2000;
+					qa2->im[k] = qb2->im[k] = -0x1800;
+				}
+			if (tweak & RXT_REPORT)
+				ra->f21c = rb->f21c = 0x3fd;
+			if (tweak & RXT_SATURATE) {
+				ra->f220 = rb->f220 = 0x7ffffff0;
+				ra->f228 = rb->f228 = 0x7ffffff0;
+			}
+
+			ra->flags = rb->flags = cases[cs].flags;
+
+			for (it = 0; it < (int)(sizeof(syms) / sizeof(syms[0]))
+					   * 3; it++) {
+				long tag = ((long)sw * 100 + cs) * 10000000
+					 + (long)it * 100000;
+
+				/*
+				 * The count is re-imposed every symbol: the
+				 * handshake path writes 1 or 2 into it and
+				 * the S-S1 reset writes 0, so leaving it
+				 * alone would collapse the sweep to those.
+				 */
+				ra->f124 = rb->f124 =
+				    syms[it % (sizeof(syms) / sizeof(syms[0]))];
+				if (tweak & RXT_RTN_UP)
+					ra->f798 = rb->f798 = 0x8c;
+				if (tweak & RXT_RTN_DOWN)
+					ra->f798 = rb->f798 =
+					    (short)((it & 1) ? -0x7c : -0x85);
+
+				receiver(&oa);
+				ref_receiver(&ob);
+
+				if ((char *)ra->rx_samples
+				    > (char *)&ra->f120) {
+					printf("FIXTURE: the burst reached "
+					       "+0x120 -- it is eating "
+					       "flags, not spare buffer\n");
+					return 1;
+				}
+				if (ra->f128 > 7) {
+					printf("FIXTURE: f128 > 7 runs "
+					       "timing_out into the "
+					       "predictor\n");
+					return 1;
+				}
+
+				for (b = 0; b < sizeof(oa); b++) {
+					static const unsigned skip[][2] = {
+					  { 0x264 + 0x04, 8 },   /* rxq rd/wr */
+					  { 0x264 + 0x130, 4 },  /* samples   */
+					  { 0x264 + 0x1b4, 4 },  /* carrier   */
+					  { 0x264 + 0x2a4, 4 },  /* f2a4      */
+					  { 0x50c + __builtin_offsetof(
+					      struct v34_timing,
+					      prefilter_coeff), 8 },
+					  { 0x221c + __builtin_offsetof(
+					      struct v34_queue, rd), 8 },
+					  { 0x2074, 4 },
+					  { 0x2078 + __builtin_offsetof(
+					      struct v34_echo_prefilter,
+					      coeff), 4 },
+					  { 0x80b8, 0x18 },  /* echo0 ptrs */
+					  { 0x9138, 0x18 },  /* echo1 ptrs */
+					};
+					unsigned s2, hit = 0;
+
+					for (s2 = 0; s2 < sizeof(skip)
+						     / sizeof(skip[0]); s2++)
+						if (b >= skip[s2][0]
+						    && b < skip[s2][0]
+							   + skip[s2][1])
+							hit = 1;
+					if (hit)
+						continue;
+					diff_eq_int("receiver at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    tag + b);
+				}
+				diff_eq_int("receiver rxq rd",
+				    (long)(((struct v34_queue *)ra)->rd
+					   - ((struct v34_queue *)ra)->ring),
+				    (long)(((struct v34_queue *)rb)->rd
+					   - ((struct v34_queue *)rb)->ring),
+				    tag);
+				diff_eq_int("receiver samples",
+				    (long)((char *)ra->rx_samples - (char *)ra),
+				    (long)((char *)rb->rx_samples - (char *)rb),
+				    tag);
+				for (k = 0; k < 7; k++)
+					diff_eq_int("receiver timing out",
+						    ra->timing_out[k],
+						    rb->timing_out[k],
+						    tag + 90000 + k);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * And the seven diagnostic paths, which are seven of this function's
+	 * own annotations and are dead code at level 1.  Finding 134: a
+	 * dropped call site is a dropped annotation, and an untested one is
+	 * finding 126 -- the only reconstruction so far whose debug string
+	 * was wrong was the one nothing drove.
+	 */
+	diff_begin("v34 receiver debug transcript");
+	{
+		static struct v34_object oa, ob;
+		static const short syms[] = { 0x11, 0x40, 0x69, 0x143, 0x153,
+					      0x333, 0x7531 };
+		unsigned cs, b;
+		int it, saw;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (cs = 0; cs < 6; cs++) {
+			struct v34_receiver *ra, *rb;
+			struct v34_equalizer *qa2, *qb2;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			rxinit(&oa); ref_rxinit(&ob);
+			rxtiminginit(&oa); ref_rxtiminginit(&ob);
+			V34SetupDemodulator(&oa, 3000, 1800);
+			ref_V34SetupDemodulator(&ob, 3000, 1800);
+
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+			qa2 = (struct v34_equalizer *)((char *)&oa + 0x630);
+			qb2 = (struct v34_equalizer *)((char *)&ob + 0x630);
+
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)ra)->ring[b] =
+				((struct v34_queue *)rb)->ring[b] =
+				    (int)((unsigned)(unsigned short)
+					  (short)(b * 2731 - 12000)
+					  | ((unsigned)(unsigned short)
+					     (short)(b * 991 - 8000) << 16));
+			((struct v34_queue *)ra)->count =
+			((struct v34_queue *)rb)->count = V34_RXQ_RING;
+
+			ra->f19c = rb->f19c = 0;
+			ra->agc_gain = rb->agc_gain = 0x4000;
+			ra->agc_step = rb->agc_step = 0x3333;
+			ra->f1c0 = rb->f1c0 = 4;
+			ra->f232 = rb->f232 = -1;
+			ra->f234 = rb->f234 = 0x1000;
+			ra->f236 = rb->f236 = 0x0800;
+			ra->f1ec = rb->f1ec = 1;
+			ra->f1ee = rb->f1ee = 2;
+			memset(ra->pred_b, 0, 12); memset(rb->pred_b, 0, 12);
+			memset(ra->pred_i, 0, 16); memset(rb->pred_i, 0, 16);
+			ra->f268 = rb->f268 = 0; ra->f26a = rb->f26a = 0;
+			ra->f26c = rb->f26c = 0; ra->f26e = rb->f26e = 0;
+			ra->f798 = rb->f798 = 0;
+			ra->f21c = rb->f21c = 0x3fd;
+			oa.status = ob.status = 0;
+
+			/*
+			 * cs picks which annotation is reachable: the retrain
+			 * pair needs a dead equaliser and a primed counter,
+			 * the shifted-TRN2 report needs energy late in the
+			 * taps, and the disconnection needs a floor nothing
+			 * clears.
+			 */
+			oa.rx_energy_floor = ob.rx_energy_floor =
+			    (cs == 3) ? 0x40000000 : 900;
+			if (cs == 1 || cs == 2) {
+				memset(qa2->re, 0, sizeof qa2->re);
+				memset(qb2->re, 0, sizeof qb2->re);
+				memset(qa2->im, 0, sizeof qa2->im);
+				memset(qb2->im, 0, sizeof qb2->im);
+			}
+			if (cs == 4)
+				for (b = 60; b < 76; b++) {
+					qa2->re[b] = qb2->re[b] = 0x2000;
+					qa2->im[b] = qb2->im[b] = -0x1800;
+				}
+			ra->flags = rb->flags = (unsigned short)
+			    ((cs == 0 || cs == 3) ? V34_RX_FLAG_DET_PENDING
+			     : cs == 4 ? (V34_RX_FLAG_DATA
+					  | V34_RX_FLAG_TRN_WATCH)
+			     : cs == 5 ? V34_RX_FLAG_PREDICT
+			     : V34_RX_FLAG_DATA);
+
+			saw = 0;
+			for (it = 0; it < 28; it++) {
+				long tag = (long)cs * 1000 + it;
+
+				ra->f124 = rb->f124 =
+				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
+				if (cs == 1)
+					ra->f798 = rb->f798 = 0x8c;
+				if (cs == 2)
+					ra->f798 = rb->f798 =
+					    (short)((it & 1) ? -0x7c : -0x85);
+
+				dsplib_debug_capture_reset();
+				receiver(&oa);
+				ref_receiver(&ob);
+				diff_eq_int("receiver transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+				if (dsplib_debug_capture_text(1)[0] != 0)
+					saw = 1;
+				for (b = 0; b < sizeof(oa); b++) {
+					if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)
+						continue;
+					if (b >= 0x264 + 0x130 && b < 0x264 + 0x134)
+						continue;
+					if (b >= 0x264 + 0x1b4 && b < 0x264 + 0x1b8)
+						continue;
+					if (b >= 0x264 + 0x2a4 && b < 0x264 + 0x2a8)
+						continue;
+					if (b >= 0x620 && b < 0x628)
+						continue;
+					if (b >= 0x221c + 4 && b < 0x221c + 0xc)
+						continue;
+					if (b >= 0x2074 && b < 0x2078)
+						continue;
+					if (b >= 0x2078 + __builtin_offsetof(
+						  struct v34_echo_prefilter,
+						  coeff)
+					    && b < 0x2078 + __builtin_offsetof(
+						  struct v34_echo_prefilter,
+						  coeff) + 4)
+						continue;
+					if (b >= 0x80b8 && b < 0x80b8 + 0x18)
+						continue;
+					if (b >= 0x9138 && b < 0x9138 + 0x18)
+						continue;
+					diff_eq_int("receiver debug state %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    tag * 100000 + b);
+				}
+			}
+
+			/*
+			 * Each case must actually have said something --
+			 * checked across the whole case, not on whatever the
+			 * last symbol happened to print.  An empty transcript
+			 * compares equal to an empty transcript, which is
+			 * finding 122's failure mode in another costume.
+			 */
+			diff_eq_int("receiver transcript non-empty",
+				    saw, 1, (long)cs);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

@@ -58,7 +58,7 @@
  * "STATE:  %s --> %s", and both arguments index a table of string pointers
  * at .rodata+0x5d40 with the state itself -- so the table index IS the enum
  * value.  The order guessed from emission order was right; this confirms it
- * rather than assuming it.  See finding 139.
+ * rather than assuming it.  See finding 142.
  *
  * Note the table continues past these ten with the sixteen MESSAGE names
  * above, in our exact order -- an independent check on that enum too.

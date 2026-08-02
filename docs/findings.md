@@ -7518,6 +7518,10 @@ the equaliser).
 
 Still unread: 0x5c722..0x5cf76, roughly 500 disassembly lines.
 
+**Now fully read and written** -- findings 139, 140 and 141.  Both traps
+recorded above held.  The third, the `f128` bound, turned out to be tighter
+than finding 123 said, and for a second and unrelated reason.
+
 ### 134. 242 debug call sites were dropped, and nothing could have noticed
 
 `debug.h` states the policy: the diagnostic call sites are carried because
@@ -7565,6 +7569,14 @@ cosmetic tidy.
 
 Recorded as one measurement rather than 58 separate defects, because the
 cause is one decision applied consistently and the fix is mechanical.
+
+**The number moves, and `tools/debugaudit.py` is the current answer** -- 237
+across 54 functions as of `receiver`.  It is also a slight over-count, for a
+reason worth knowing: it attributes a call site to the C function containing
+it, so a site that moved into a helper split out of the blob's function is
+reported missing.  `V34agc`'s one site lives in `agc_gain_sample` and
+`receiver`'s seventh in `rx_train_point`; both are present, and both are
+counted as gone.
 
 ### 135. The blob was built on 22 September 2005, 15:48 — and the seconds name six TUs
 
@@ -7730,7 +7742,156 @@ The same strings also name two procedures the dialler calls --
 the first direct evidence of an original filename; every other name in
 `docs/modules.md` is inferred from symbol grouping.
 
-### 139. The call-progress states pin themselves, and confirm the messages
+### 139. `receiver` found a bug in `V34TimingFilter`, which its own test could not
+
+Reconstructing `receiver` cost one real defect, and it was not in
+`receiver`.  Its opening loop feeds `V34TimingFilter` a point interpolated
+between two demodulated symbols; at the third rate tried, on the sixteenth
+symbol, `timing_out[3]` came out 1 count low, and from there the timing
+loop's integrator diverged and everything downstream with it.
+
+The state made the fault look impossible.  Comparing every byte of both
+objects, the filter's *entire* IIR state matched -- all eighteen shorts --
+and so did `in0`, `in1` and thirty-nine of the forty high-pass history
+entries.  The only difference was `hist[0]`, ours 5568 against the blob's
+-5168, which is the discriminator this call had just computed.  But the
+discriminator is a function of the four `iir[2..5][0]` values alone, and
+those matched.  Two states that agree cannot produce outputs that differ,
+so one of the two premises had to be wrong.
+
+It was the second.  The object computes
+
+```
+   72611:  mov  0x3c(%esp),%eax        <-- &iir[3][0]
+   72619:  mov  0x2c(%esp),%ebp        <-- pi
+   72631:  add  $0x2000,%ebp
+   72637:  sar  $0xe,%ebp
+   7263a:  mov  %bp,(%eax)             <-- iir[3][0] = (short) of it
+   ...
+   7265d:  imul %eax,%ebp              <-- and multiplies %ebp, not (%eax)
+```
+
+so the four `imul`s take the registers the stores came *out of*, which still
+hold the full 32-bit `(x + 0x2000) >> 14`.  The state gets the low sixteen
+bits; the discriminator does not.  Reading them back from `iir[][0]`, as the
+reconstruction did, is correct until the loop rings hard enough to push one
+past a short -- here `(ni + 0x2000) >> 14` was 33359, stored as -32177 --
+and then it is wrong by 65536 times a coefficient.
+
+**Why its own test passed 114,000 checks and never saw it.**  `t_v34ec`
+drives the filter with a smooth ramp from a zeroed state.  That is a
+perfectly good test of the arithmetic and a poor one of the range: the
+resonator never rings up far enough for any of the four to leave a short.
+`receiver` drives it with the interpolator's output at three symbol rates,
+which does.
+
+**The lesson, and it is not "test harder".**  A truncating store and a
+non-truncating use of the same value are indistinguishable across the whole
+range where the value fits.  Wherever the object stores a shifted
+accumulator into a `short` and then uses it again, the question "which one
+does it use" has to be answered from the disassembly, because no input can
+answer it until the value overflows.  This tree has three more such places
+-- `V34demodulate`'s gained sample, `agcadapt`'s level, `TimingV34`'s
+`whole` -- and they were re-read after this.  All three use the stored
+short, and all three are written that way.
+
+### 140. `receiver` is complete, and its own strings name six of its fields
+
+4326 bytes, the last function of `V34RX.c`, and the file is now fully
+translated.  The spine went in with the three flag gates held clear, then
+one gate at a time, which is the discipline finding 133 asked for; the two
+traps it named -- the loop is not `rxtiming`'s, and `0x5c40e` is `agc_rms` a
+fourth time -- both held.
+
+**What the seven debug strings settled**, and none of it was inferable from
+the arithmetic:
+
+| field | the original's name for it |
+|---|---|
+| `f124`  | `rxsymcnt` -- the received-symbol count |
+| `f1c0`  | `pllcnt` -- the timing loop's state |
+| `f798`  | `rtncount` -- the retrain counter |
+| `f21a`  | `equerr` -- the equaliser's error, over 1024 symbols |
+| `f224`  | `preerr` -- the predictor's, over the same window |
+| flag 0x40 | a retrain request |
+| flag 0x20 | an RRN -- renegotiation -- request |
+
+So the block at `0x5c058`, which reads as three squared distances and a
+saturating counter, is the retrain detector: it counts up while the
+equalised point stops moving between symbols, and 0x8c consecutive still
+symbols is a request to retrain.  The `V34EQU` pair says which of the two
+adaptive stages is failing to converge, which is why they are published
+together and never separately.
+
+**The predictor is one engine run twice.**  `0x5c100` and `0x5c5eb` are the
+same three-tap complex predictor over ONE set of coefficients at `+0x288`
+and ONE history at `+0x294`: the first runs it on the equaliser output
+(precoding), the second on the decision error, and only the second adapts.
+The reconstruction is one function called twice with different `(x, y)`
+pointers -- the same shape `V34agc`/`V34demodulate` and `decodeDepth` turned
+out to have, and the third time that guess has been right.
+
+Its rounding is asymmetric and deliberate-looking-but-not: the imaginary
+accumulator starts at `+0x2000` and the real one is formed as
+`b.hist_i - (0x2000 + a.hist_q)`, so the real axis rounds the wrong way by
+half an LSB.  Reproduced.
+
+**Six of its seven diagnostic sites are carried, and the seventh is too.**
+`tools/debugaudit.py` reports one missing because the shifted-TRN2 report
+sits in `rx_train_point`, a helper the blob does not have -- see the note
+added to finding 134.  All seven are driven by a debug-transcript sweep
+rather than merely written, which is what finding 126 asked for.
+
+**And `receiver` never returns a value.**  Three `ret` sites, no common
+`%eax`, and both callers -- `v34handshak` and `datapumpv34` -- are
+unreconstructed, so nothing constrains it.  `void`.
+
+### 141. `timing_out` is seven entries, and the burst's "headroom" is four live fields
+
+Two corrections to finding 123, from `receiver`.
+
+**Seven, not twenty-one.**  `timing_out[]`'s length was taken from the
+pointer at `+0x2a4` on the assumption that everything between belonged to
+it.  It does not: `receiver`'s predictor keeps its coefficients at `+0x288`,
+which is entry seven.  The array runs `+0x27a..+0x287` and no further.
+
+What makes this worth stating rather than just fixing is that a completely
+independent constraint lands on the same number.  Finding 123 measured
+fourteen shorts of receive-burst headroom before the burst overwrites
+`rxtiming`'s own loop bound.  Seven outputs at up to two pulls each is
+fourteen samples.  So `f128 <= 7` is both what fits the array and what the
+burst survives, and the two arguments are unrelated -- one is about the
+object's layout past `+0x27a`, the other about its layout past `+0x10c`.
+Both fixtures now assert it.
+
+**And the headroom is not headroom.**  Finding 123 described `+0x10c`
+onwards as "not spare buffer -- it is the receiver's own bookkeeping", and
+then listed the bookkeeping starting at `+0x128`.  The four shorts before
+that are not spare either:
+
+```
+   +0x120   f120        the vectpp cursor
+   +0x122   flags       every gate in receiver
+   +0x124   f124        rxsymcnt
+   +0x126   best_index
+```
+
+so the eleventh pull lands on `f120` and the twelfth on `flags`.  This was
+not a reading -- it happened.  The first `receiver` fixture set `f1ae` by
+hand and left `f1be` at the harness fill; `TimingV34` recomputes `f1ae` from
+`f1be` every symbol, so the hand-set step survived exactly one call, after
+which every output wrapped twice, twelve pulls ran, and `flags` became
+garbage.  Both sides agreed on the garbage and the test passed 99% of its
+checks while measuring nothing -- finding 116b's failure mode, reached by a
+different route.
+
+The fix was to stop setting the interpolator by hand and drive the fixture
+through `V34SetupDemodulator`, whose six rates all have `f1ae < f1b0` and so
+bound the pulls at one per output.  The real bound on the caller is
+therefore not `f128 <= 7` but `f1ae < f1b0` *and* `f128 <= 7`; the first is
+what keeps the second sufficient.
+
+### 142. The call-progress states pin themselves, and confirm the messages
 
 `callprog.h` recorded ten state names taken from the object's debug strings
 and said of them: "The numeric values are not yet pinned;
@@ -7776,7 +7937,7 @@ Two other strings from the same function are worth keeping: "Found 2100" and
 finding 138's correction that '@' waits for silence rather than for an
 answer.
 
-### 140. The dialler config's field names, and a V.8 version string
+### 143. The dialler config's field names, and a V.8 version string
 
 `GetDialerConfig`'s sixteen dropped call sites print every field of
 `struct dialer_cfg` by name.  This tree had inferred names from the

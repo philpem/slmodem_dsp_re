@@ -225,6 +225,13 @@ void TimingV34(void *obj);
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 
+/*
+ * The per-symbol receive chain, end to end: resample onto the recovered
+ * clock, equalise, predict, derotate, decide, and close the carrier and
+ * equaliser loops.  V34RX.c's last function, and its largest.
+ */
+void receiver(void *obj);
+
 #ifdef __cplusplus
 }
 #endif

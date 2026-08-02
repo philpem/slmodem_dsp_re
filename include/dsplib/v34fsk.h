@@ -110,7 +110,21 @@ struct v34_fskdelay {
  * say which; do not start a third.
  */
 struct v34_object {
-	unsigned char unmapped_0000[0x25c];
+	/*
+	 * +0x0000.  The datapump's own status word: `receiver` puts 10 in it
+	 * on loss of signal, alongside the string "Signal Energy below
+	 * Threshold %d, initiate a disconnection".  What the other values
+	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
+	 */
+	int status;					/* +0x0000 */
+	unsigned char unmapped_0004[0x230 - 0x004];
+	/*
+	 * The signal-energy floor `receiver` compares its 36-sample RMS
+	 * against before declaring the line dead.  An int, and the only field
+	 * either V.34 core reads through `obj + 4` rather than `obj`.
+	 */
+	int rx_energy_floor;				/* +0x0230 */
+	unsigned char unmapped_0234[0x25c - 0x234];
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * f25c is the base the echo filter's lag is measured from, f25e the

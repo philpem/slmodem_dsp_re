@@ -1673,10 +1673,14 @@ V34TimingFilter(struct v34_timing *t, int sample)
 	 * both loops have run, because those loops are still reading them.
 	 */
 	pr -= par; pi -= pai; nr -= nar; ni -= nai;
-	t->iir[2][0] = (short)((pr + 0x2000) >> 14);
-	t->iir[3][0] = (short)((pi + 0x2000) >> 14);
-	t->iir[4][0] = (short)((nr + 0x2000) >> 14);
-	t->iir[5][0] = (short)((ni + 0x2000) >> 14);
+	pr = (pr + 0x2000) >> 14;
+	pi = (pi + 0x2000) >> 14;
+	nr = (nr + 0x2000) >> 14;
+	ni = (ni + 0x2000) >> 14;
+	t->iir[2][0] = (short)pr;
+	t->iir[3][0] = (short)pi;
+	t->iir[4][0] = (short)nr;
+	t->iir[5][0] = (short)ni;
 
 	/* The discriminator: the cross product of the two complex outputs. */
 	/*
@@ -1686,8 +1690,18 @@ V34TimingFilter(struct v34_timing *t, int sample)
 	 *   sub  %edi,%ebp
 	 * so the opposite order gives the negated discriminator -- a timing
 	 * loop that corrects the wrong way.
+	 *
+	 * AND IT MULTIPLIES THE SHIFTED VALUES, NOT THE STORED SHORTS.  The
+	 * four `imul`s take the registers the stores came out of, which still
+	 * hold the full 32-bit `(x + 0x2000) >> 14`; the state gets the low
+	 * sixteen bits of that and the discriminator does not.  Reading them
+	 * back from `iir[][0]` is right until the loop rings hard enough to
+	 * push one past a short, and then it is wrong by 65536 times a
+	 * coefficient.  Found by `receiver`, whose inputs reach that state
+	 * and whose timing loop then corrects the wrong way -- see finding
+	 * 139.
 	 */
-	acc = t->iir[3][0] * t->iir[4][0] - t->iir[2][0] * t->iir[5][0];
+	acc = pi * nr - pr * ni;
 	acc = (short)((acc + 0x2000) >> 14);
 
 	/*

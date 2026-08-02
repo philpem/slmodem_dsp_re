@@ -37,7 +37,7 @@
 
 /*
  * The author's own field names are given alongside ours, recovered from
- * GetDialerConfig's dropped debug output (findings 134, 140).  Ours were
+ * GetDialerConfig's dropped debug output (findings 134, 143).  Ours were
  * inferred from the modem_get_param name that fills each field, so the two
  * agree everywhere -- the value is in the places they differ, noted inline.
  */
