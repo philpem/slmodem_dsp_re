@@ -436,11 +436,17 @@ regeneration has something to fail against beyond a byte comparison.
 192 entries at `.rodata+0x2860`, Q15 in and Q15 out, read by
 `V34demodulate`'s level estimator.
 
-**Derivation, exact to 1 LSB:**
+**Derivation, exact for all 192 entries:**
 
 ```
-   sqrt_table[i] = round(sqrt((i + 0x40) * 128 / 32768) * 32768)
+   sqrt_table[i] = floor(sqrt((i + 0x40) * 128 / 32768) * 32768)
 ```
+
+TRUNCATED, not rounded.  Worth stating plainly because rounding is the
+natural first guess and misses 98 of the 192 entries by one -- which reads
+as "exact to 1 LSB", i.e. as a table built in floating point and rounded
+inconsistently, rather than as the exact output of a deliberate generator.
+It is the latter.
 
 The index covers mantissas in `[0.25, 1)`, which is what normalising to
 bit 30 and halving on an odd exponent leaves. The lookup is followed by a

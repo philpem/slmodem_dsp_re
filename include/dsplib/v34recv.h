@@ -33,9 +33,26 @@ struct v34_receiver {
 	short           f124;            /* +0x124 */
 	short           best_index;      /* +0x126 */
 	short           f128;            /* +0x128 rxtiming: output count */
-	short           f12a;            /* +0x12a */
-	short           f12c;            /* +0x12c */
-	unsigned short  agc_input;       /* +0x12e */
+	short           f12a;            /* +0x12a V34demodulate: samples held */
+	/*
+	 * +0x12c.  ONE LOCATION, TWO WIDTHS.  V34demodulate and V34agc
+	 * accumulate a 32-bit sum of squared gained samples here; agcadapt
+	 * reads `movzwl 0x12e` -- the high half of that same int -- as its
+	 * measurement.  So the AGC's input is the energy sum divided by
+	 * 65536, and the two were only ever separate fields because they
+	 * were reconstructed by different functions weeks apart.
+	 *
+	 * The union spells the aliasing out rather than casting a pointer,
+	 * which -O2 is entitled to reorder.  It assumes a little-endian
+	 * layout, as the whole port does.
+	 */
+	union {
+		int             sum;        /* +0x12c the accumulator      */
+		struct {
+			short           lo;         /* +0x12c              */
+			unsigned short  agc_input;  /* +0x12e  == sum >> 16*/
+		} h;
+	} energy;
 	short *         rx_samples;      /* +0x130 */
 	short           agc_level;       /* +0x134 */
 	short           agc_gain;        /* +0x136 */
@@ -82,9 +99,21 @@ struct v34_receiver {
 	short           f202;            /* +0x202 */
 	short           f204;            /* +0x204 */
 	short           f206;            /* +0x206 */
-	short           f208;            /* +0x208 rxtiming IIR state, I */
-	short           f20a;            /* +0x20a   Q */
-	int             decision_point;  /* +0x20c and IIR state I(-2) */
+	short           f208;            /* +0x208 rxtiming IIR state, I(-1) */
+	short           f20a;            /* +0x20a   Q(-1) */
+	/*
+	 * +0x20c.  The same trick again, and just as load-bearing: `decision`
+	 * writes the winning constellation point here as one 32-bit word (real
+	 * in the low half, imaginary in the high), while rxtiming uses those
+	 * four bytes as the two second-order history taps of its timing IIR.
+	 */
+	union {
+		int             point;   /* +0x20c decision(): packed (re,im) */
+		struct {
+			short   i;       /* +0x20c rxtiming: I(-2)           */
+			short   q;       /* +0x20e   Q(-2)                   */
+		} iir2;
+	} dp;
 	short           target_re;       /* +0x210 */
 	short           target_im;       /* +0x212 */
 	unsigned char pad_214[0x218 - 0x214];

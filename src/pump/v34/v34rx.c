@@ -120,7 +120,7 @@ decision(struct v34_receiver *d, const int *pts, short npts)
 	}
 
 	d->best_index = (short)(best - pts);
-	d->decision_point = *best;
+	d->dp.point = *best;
 }
 
 void
@@ -261,6 +261,161 @@ txinit(void *objp)
 		      V34_ECHO_PREFILTER_TAPS * sizeof(short));
 }
 
+/*
+ * The AGC's square-root table: 192 entries, Q15 in and Q15 out, at
+ * .rodata+0x2860.  Covers mantissas in [0.25, 1), which is what normalising
+ * to bit 30 and halving on an odd exponent leaves.
+ *
+ *     v34_sqrt_table[i] = floor(sqrt((i + 0x40) / 256) * 32768)
+ *
+ * Exact for all 192 entries -- TRUNCATED, not rounded, which is worth
+ * stating because rounding misses 98 of them by one.  Emitted as data all
+ * the same: the generator is a claim about intent, the bytes are the
+ * reference.
+ */
+static const unsigned short v34_sqrt_table[192] = {
+	0x4000, 0x407f, 0x40fe, 0x417b, 0x41f8, 0x4273, 0x42ee, 0x4368,
+	0x43e1, 0x445a, 0x44d1, 0x4548, 0x45be, 0x4633, 0x46a7, 0x471b,
+	0x478d, 0x4800, 0x4871, 0x48e2, 0x4952, 0x49c1, 0x4a30, 0x4a9e,
+	0x4b0b, 0x4b78, 0x4be5, 0x4c50, 0x4cbb, 0x4d26, 0x4d90, 0x4df9,
+	0x4e62, 0x4eca, 0x4f32, 0x4f99, 0x5000, 0x5066, 0x50cb, 0x5130,
+	0x5195, 0x51f9, 0x525d, 0x52c0, 0x5323, 0x5385, 0x53e7, 0x5449,
+	0x54a9, 0x550a, 0x556a, 0x55ca, 0x5629, 0x5688, 0x56e6, 0x5745,
+	0x57a2, 0x5800, 0x585c, 0x58b9, 0x5915, 0x5971, 0x59cc, 0x5a27,
+	0x5a82, 0x5adc, 0x5b36, 0x5b90, 0x5be9, 0x5c42, 0x5c9b, 0x5cf3,
+	0x5d4b, 0x5da3, 0x5dfa, 0x5e51, 0x5ea8, 0x5efe, 0x5f54, 0x5faa,
+	0x6000, 0x6055, 0x60aa, 0x60fe, 0x6152, 0x61a7, 0x61fa, 0x624e,
+	0x62a1, 0x62f4, 0x6347, 0x6399, 0x63eb, 0x643d, 0x648e, 0x64e0,
+	0x6531, 0x6582, 0x65d2, 0x6623, 0x6673, 0x66c3, 0x6712, 0x6761,
+	0x67b1, 0x6800, 0x684e, 0x689d, 0x68eb, 0x6939, 0x6986, 0x69d4,
+	0x6a21, 0x6a6e, 0x6abb, 0x6b08, 0x6b54, 0x6ba1, 0x6bed, 0x6c38,
+	0x6c84, 0x6ccf, 0x6d1a, 0x6d65, 0x6db0, 0x6dfb, 0x6e45, 0x6e8f,
+	0x6ed9, 0x6f23, 0x6f6d, 0x6fb6, 0x7000, 0x7049, 0x7091, 0x70da,
+	0x7123, 0x716b, 0x71b3, 0x71fb, 0x7243, 0x728a, 0x72d2, 0x7319,
+	0x7360, 0x73a7, 0x73ee, 0x7434, 0x747b, 0x74c1, 0x7507, 0x754d,
+	0x7593, 0x75d8, 0x761e, 0x7663, 0x76a8, 0x76ed, 0x7732, 0x7777,
+	0x77bb, 0x7800, 0x7844, 0x7888, 0x78cc, 0x790f, 0x7953, 0x7996,
+	0x79da, 0x7a1d, 0x7a60, 0x7aa3, 0x7ae5, 0x7b28, 0x7b6b, 0x7bad,
+	0x7bef, 0x7c31, 0x7c73, 0x7cb5, 0x7cf6, 0x7d38, 0x7d79, 0x7dba,
+	0x7dfb, 0x7e3c, 0x7e7d, 0x7ebe, 0x7efe, 0x7f3f, 0x7f7f, 0x7fbf,
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * The AGC's measurement chain.
+ *
+ * The object carries this code THREE times: once in `agcadapt`, which is a
+ * real global; once inlined in `V34agc`; and once inlined in `V34demodulate`.
+ * They were almost certainly one set of functions in the original -- the
+ * instruction sequences match one for one -- so they are one set here, with
+ * the two places the copies genuinely differ passed in as arguments rather
+ * than duplicated.  The differences are real and neither is a slip:
+ *
+ *   - V34demodulate rounds before the Q10 gain shift (`lea 0x200(%ecx)`);
+ *     V34agc truncates (`sar $0xa` with nothing added).
+ *   - the two overflow messages name their own function.
+ *
+ * Keeping one copy is also the only way to keep them honest: the reason this
+ * function was reconstructed six times is that a hand-transcribed second copy
+ * of a 40-line fixed-point chain is indistinguishable from a correct one
+ * until a differential test disagrees.
+ */
+
+/*
+ * Apply the current gain to one sample, saturating rather than wrapping.
+ *
+ * In range when the top seven bits of the product are all zero or all one,
+ * which is the object's own spelling of "still fits after the Q10 shift".
+ * Out of range it is replaced by a rail at +/-0x7f00 -- note that the
+ * negative rail is 0x8100, one count short of a symmetric -0x7f00... which
+ * it is, exactly: 0x8100 == -32512 == -0x7f00.  The asymmetric-looking
+ * constant is just the two's-complement spelling.
+ */
+static int
+agc_gain_sample(struct v34_receiver *rx, int x, int round, const char *fmt)
+{
+	int g = (int)rx->agc_gain * x;
+	unsigned top = (unsigned)g >> 25;
+	int over;
+
+	if (top == 0 || top == 0x7f)
+		return (short)((g + round) >> 10);
+
+	/*
+	 * V34agc tests this 16 bits wide and V34demodulate 32; with both
+	 * operands 16-bit the product cannot leave [-2^30, 2^30], so the
+	 * shifted value cannot leave a short and the two always agree.
+	 */
+	over = g >> 16;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(fmt, over);
+
+	return over > 0 ? 0x7f00 : (short)0x8100;
+}
+
+/*
+ * The 36-sample RMS, and the gate it feeds.
+ *
+ * Worth being clear about what this returns and what uses it: the square
+ * root is computed in full -- normalise, halve the mantissa on an odd
+ * exponent, look up `sqrt_table`, shift back -- and then the ONLY thing
+ * either caller does with it is compare it against 31.  The quantity that
+ * actually drives the loop is the energy sum, not this.  So the whole
+ * square root exists to answer "is there enough signal to adapt on?".
+ *
+ * 0x38e is 910, and 910/32768 is 1/36.008 -- the reciprocal of the window
+ * length, so the accumulator is a mean square rather than a sum.
+ */
+static int
+agc_rms(const short *buf)
+{
+	int acc = 0;
+	int i;
+	unsigned shift = 0;
+	unsigned mant;
+	unsigned v;
+
+	for (i = 0; i < V34_AGC_RMS_TAPS; i++)
+		acc += ((buf[i] * V34_AGC_RMS_SCALE) >> 15) * buf[i];
+
+	if (acc == 0)
+		return 0;
+
+	/* Normalise into the top three bits, counting the shifts. */
+	v = (unsigned)acc;
+	if (v <= 0x1fffffffu) {
+		do {
+			v += v;
+			shift++;
+		} while (v <= 0x1fffffffu);
+	}
+	mant = v >> 15;
+
+	/* An odd exponent is carried as a halved mantissa, not a half-shift. */
+	if (shift != ((shift >> 1) * 2))
+		mant = (unsigned short)mant >> 1;
+
+	/*
+	 * The index is formed as a signed round-and-bias and then compared
+	 * UNSIGNED, so a mantissa small enough to make it negative wraps to
+	 * a huge value and clamps to the top of the table rather than the
+	 * bottom.  The normalisation above keeps `mant` >= 0x2000, which is
+	 * exactly the value that makes the biased index zero, so the wrap is
+	 * unreachable from here -- but it is the code that is written.
+	 */
+	{
+		unsigned idx = (unsigned short)((((unsigned short)mant + 0x40)
+						 >> 7) - 0x40);
+
+		if (idx > 0xbf)
+			idx = 0xbf;
+
+		return (short)(unsigned short)(v34_sqrt_table[idx]
+					       >> ((shift >> 1) & 31));
+	}
+}
+
 int
 agcadapt(struct v34_receiver *a)
 {
@@ -269,7 +424,7 @@ agcadapt(struct v34_receiver *a)
 	int acc;
 
 	/* Smooth: 0.85 of the old level plus the new measurement. */
-	level = ((a->agc_level * V34_AGC_SMOOTH) >> 15) + a->agc_input;
+	level = ((a->agc_level * V34_AGC_SMOOTH) >> 15) + a->energy.h.agc_input;
 
 	/*
 	 * Range check, spelled as the original does it: valid when the top
@@ -343,7 +498,7 @@ rxtiminginit(void *objp)
 	rx->f1f0 = 0;
 	rx->f208 = 0;
 	rx->f20a = 0;
-	rx->decision_point = 0;
+	rx->dp.point = 0;
 	rx->f22e = 0;
 	rx->f230 = 0;
 	rx->f244 = 0;
@@ -399,7 +554,7 @@ rxinit(void *objp)
 	rx->f798 = 0;   rx->f21c = 0;  rx->f206 = 0;  rx->f21a = 0;
 	rx->f204 = 0;   rx->f224 = 0;  rx->f220 = 0;  rx->f228 = 0;
 	rx->f1a0 = 0;   rx->f246 = 0;  rx->f124 = 0;  rx->scrambler_sr = 0;
-	rx->f244 = 0;   rx->f1bc = 0;  rx->f12c = 0;  rx->agc_input = 0;
+	rx->f244 = 0;   rx->f1bc = 0;  rx->energy.sum = 0;
 	rx->f120 = 0;   rx->f12a = 0;  obj->f2aa4 = 0;
 	rx->rx_samples = (short *)((char *)rx + 0x10c);
 	rx->f248 = 0;   rx->f24c = 0;
@@ -465,4 +620,66 @@ txmit(void *objp)
 		V34EchoUpdateDelayLine(&obj->echo0, (short)(local[i] >> 1));
 		V34EchoUpdateDelayLine(&obj->echo1, (short)(delayed >> 1));
 	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34agc -- gain a burst and adapt, with no timing recovery.
+ *
+ * The handshake runs this while it is still listening for tones, before the
+ * timing loop has anything to lock to.  It is the same chain V34demodulate
+ * runs, in the same order, over four samples instead of two:
+ *
+ *     read a burst          -> +0x10c
+ *     record it for the RMS -> rms_buf, UNGAINED
+ *     apply the gain        -> in place at +0x10c, saturating
+ *     measure and adapt     -> agcadapt
+ *
+ * The gain applied is the one adapted on the PREVIOUS call: agcadapt runs
+ * last, so a correction always takes effect one burst later.  That ordering
+ * is load-bearing and is the thing this reconstruction got wrong before.
+ */
+void
+V34agc(struct v34_receiver *rx)
+{
+	short *buf = (short *)((char *)rx + V34_RXQ_END);
+	int i;
+	int sum;
+
+	rxreadqueue((struct v34_queue *)rx);
+
+	/* Where the gained burst will be, for whoever consumes it next. */
+	rx->rx_samples = buf + V34_QUEUE_BURST;
+
+	/*
+	 * The energy window is fed the RAW samples, before the gain -- so it
+	 * measures the line, not the AGC's own output, and the loop it closes
+	 * is therefore feed-forward rather than feedback.
+	 */
+	for (i = 0; i < V34_QUEUE_BURST; i++) {
+		short idx = rx->f19c;
+
+		rx->f19c = (short)(idx + 1);
+		rx->rms_buf[idx] = buf[i];
+		if ((short)(idx + 1) > V34_AGC_RMS_TAPS - 1)
+			rx->f19c = 0;
+	}
+
+	for (i = 0; i < V34_QUEUE_BURST; i++)
+		buf[i] = (short)agc_gain_sample(rx, buf[i], 0,
+						"V34AGC, overflow = 0x%x,\n");
+
+	if (rx->flags & V34_RX_FLAG_AGC_FREEZE)
+		return;
+
+	if (agc_rms(rx->rms_buf) <= V34_AGC_RMS_FLOOR)
+		return;
+
+	/* The gained burst's energy is what the loop actually integrates. */
+	sum = 0;
+	for (i = 0; i < V34_QUEUE_BURST; i++)
+		sum += (int)buf[i] * buf[i];
+
+	rx->energy.sum = sum;
+	agcadapt(rx);
 }

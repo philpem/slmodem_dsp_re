@@ -131,11 +131,24 @@ void txmit(void *obj);
 #define V34_AGC_SMOOTH		0x6ccd	/* 0.85 in Q15                   */
 #define V34_AGC_GAIN_DOWN	0x390a	/* 0.883 in Q14                  */
 #define V34_AGC_GAIN_UP		0x47cf	/* 1.122 in Q14                  */
+#define V34_AGC_RMS_TAPS	36	/* the energy window, in samples */
+#define V34_AGC_RMS_SCALE	0x38e	/* 910/32768 == 1/36.008         */
+#define V34_AGC_RMS_FLOOR	0x1f	/* below this the AGC will not adapt */
 
 /*
  * One AGC step.  Always returns zero; the state is the output.
  */
 int agcadapt(struct v34_receiver *a);
+
+/*
+ * Pull one burst from the receive queue, gain it in place, and run the AGC.
+ *
+ * The handshake's entry point: the same measurement chain V34demodulate runs
+ * per sample-pair, but over a whole four-sample burst and with no timing
+ * recovery or down-mixing.  It leaves the gained samples at +0x10c and points
+ * `rx_samples` just past them.
+ */
+void V34agc(struct v34_receiver *rx);
 
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);

@@ -21,6 +21,7 @@ extern int ref_agcadapt(void *a);
 extern void ref_rxtiminginit(void *obj);
 extern void ref_rxinit(void *obj);
 extern void ref_txmit(void *obj);
+extern void ref_V34agc(void *rx);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
 
@@ -155,8 +156,8 @@ main(void)
 			ref_decision(&db, pts, (short)n);
 			diff_eq_int("best index", da.best_index,
 				    db.best_index, (long)n * 100000 + t);
-			diff_eq_int("best point", da.decision_point,
-				    db.decision_point, (long)n * 100000 + t);
+			diff_eq_int("best point", da.dp.point,
+				    db.dp.point, (long)n * 100000 + t);
 			for (i = 0; i < (int)sizeof(da); i++)
 				diff_eq_int("decoder state",
 					    ((unsigned char *)&da)[i],
@@ -171,8 +172,8 @@ main(void)
 		ref_decision(&db, pts, 0);
 		diff_eq_int("zero points, index", da.best_index,
 			    db.best_index, 0);
-		diff_eq_int("zero points, point", da.decision_point,
-			    db.decision_point, 0);
+		diff_eq_int("zero points, point", da.dp.point,
+			    db.dp.point, 0);
 	}
 	rc |= diff_end();
 
@@ -300,7 +301,7 @@ main(void)
 			memset(&ab, HARNESS_MALLOC_FILL, sizeof(ab));
 			aa.flags = ab.flags = (unsigned short)(fl ? V34_RX_FLAG_AGC_FREEZE : 0);
 			aa.agc_level = ab.agc_level = (short)lv;
-			aa.agc_input = ab.agc_input = (unsigned short)in;
+			aa.energy.h.agc_input = ab.energy.h.agc_input = (unsigned short)in;
 			aa.agc_step = ab.agc_step = (short)st;
 			aa.agc_gain = ab.agc_gain = (short)gn;
 			aa.agc_accum = ab.agc_accum = (short)(lv / 3);
@@ -469,6 +470,103 @@ main(void)
 				for (b = 0; b < 512; b++)
 					diff_eq_int("shaped", shp_a[b],
 						    shp_b[b], b);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * V34agc: the AGC chain with no timing loop around it.
+	 *
+	 * Driven directly rather than through rxtiming, which is the whole
+	 * point -- V34demodulate is a local symbol and can only be reached
+	 * through the interpolator, so every AGC defect it had presented as
+	 * a loop-shape failure.  This one is global and isolates them.
+	 *
+	 * The sweep has to cross the three gates that decide anything: the
+	 * freeze flag, the RMS floor at 31, and the |err| > 1200 deadband.
+	 * A sweep that stays below the floor exercises two `return`s and
+	 * proves nothing, so the amplitudes run from silence to clipping.
+	 */
+	diff_begin("v34 V34agc");
+	{
+		static struct v34_receiver ra, rb;
+		/* The receive queue IS the receiver's first 0x10c bytes. */
+		struct v34_queue *qa2 = (struct v34_queue *)&ra;
+		struct v34_queue *qb2 = (struct v34_queue *)&rb;
+		int amp, gn, fl, it;
+		unsigned b;
+
+		for (fl = 0; fl <= 2; fl += 2)
+		for (amp = 0; amp < 32767; amp += 3037)
+		for (gn = 0x100; gn < 0x7000; gn += 0x1a01) {
+			memset(&ra, HARNESS_MALLOC_FILL, sizeof(ra));
+			memset(&rb, HARNESS_MALLOC_FILL, sizeof(rb));
+
+			ra.flags = rb.flags =
+			    (unsigned short)(fl ? V34_RX_FLAG_AGC_FREEZE : 0);
+			ra.agc_gain = rb.agc_gain = (short)gn;
+			ra.agc_level = rb.agc_level = 0;
+			ra.agc_accum = rb.agc_accum = 0;
+			ra.agc_step = rb.agc_step = 0x3333;
+			ra.f19c = rb.f19c = 0;
+			ra.energy.sum = rb.energy.sum = 0;
+			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
+				ra.rms_buf[b] = rb.rms_buf[b] = 0;
+
+			/* Prime the ring with a ramp, and both cursors. */
+			qa2->count = qb2->count = V34_RXQ_RING;
+			for (b = 0; b < V34_RXQ_RING; b++)
+				qa2->ring[b] = qb2->ring[b] =
+				    (int)(short)((b * amp) % 32768
+						 - (int)(b & 1) * amp);
+			qa2->rd = qa2->ring;
+			qb2->rd = qb2->ring;
+			qa2->wr = qa2->ring;
+			qb2->wr = qb2->ring;
+
+			/*
+			 * Sixteen bursts: enough for the 36-entry RMS window
+			 * to fill and wrap, so the adapt path runs on a full
+			 * window rather than on the memset fill.
+			 */
+			for (it = 0; it < 16; it++) {
+				long tag = ((long)fl * 1000 + amp / 3037) * 100000
+					 + (long)it * 1000;
+
+				V34agc(&ra);
+				ref_V34agc(&rb);
+
+				for (b = 0; b < sizeof(ra); b++) {
+					/* rx_samples: each side's own address. */
+					if (b >= __builtin_offsetof(
+						    struct v34_receiver,
+						    rx_samples)
+					    && b < __builtin_offsetof(
+						    struct v34_receiver,
+						    rx_samples) + 4)
+						continue;
+					/* And the queue cursors. */
+					if (b >= __builtin_offsetof(
+						    struct v34_queue, rd)
+					    && b < __builtin_offsetof(
+						    struct v34_queue, wr) + 4)
+						continue;
+					diff_eq_int("V34agc at %ld",
+						    ((unsigned char *)&ra)[b],
+						    ((unsigned char *)&rb)[b],
+						    tag + b);
+				}
+				diff_eq_int("V34agc rxq rd",
+					    (long)(qa2->rd - qa2->ring),
+					    (long)(qb2->rd - qb2->ring),
+					    tag);
+				diff_eq_int("V34agc samples",
+					    (long)((char *)ra.rx_samples
+						   - (char *)&ra),
+					    (long)((char *)rb.rx_samples
+						   - (char *)&rb),
+					    tag);
 			}
 		}
 	}
