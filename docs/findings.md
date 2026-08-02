@@ -5464,3 +5464,46 @@ found this in one run — so write it incrementally and run it often rather
 than writing the whole function and debugging afterwards.
 
 The same caution applies to every "ready to write" note in this file.
+
+### 103b. Second attempt: the cross-product sign, and where it now stands
+
+Re-reading the tail found a definite error in 103's description. The
+discriminator is
+
+```
+   7265d:  imul %eax,%ebp      ; pos_im * neg_re
+   72663:  imul %edx,%edi      ; pos_re * neg_im
+   7266d:  sub  %edi,%ebp      ; pos_im*neg_re - pos_re*neg_im
+```
+
+and finding 103's summary implies the opposite order — which negates the
+discriminator, i.e. a timing loop that corrects the wrong way. Correcting it
+took the differential result from
+
+```
+   32503/117200 failed        ->        2000/117200 failed
+```
+
+and, more usefully, **every returned value is now correct**. The remaining
+failures are all `timing state`: about five bytes of the 292-byte object per
+call. So the arithmetic path — both band-passes, the feedback, the
+discriminator, the high-pass and its doubled gain — is right, and something
+in the *history bookkeeping* is not.
+
+Reverted again rather than committed; a function that returns the right
+number while leaving the wrong state is worse than one that is absent,
+because the error only surfaces after the caller has run for a while.
+
+**Where to look next**, in order of likelihood:
+
+  1. which index loops B and C seed their carry from — 103 says `iir[n][0]`,
+     but the two loops start at k=1, so the first value written may belong at
+     a different slot;
+  2. whether the four `[0]` stores happen before or after the high-pass runs
+     — the tail interleaves them and the order is not obvious from a summary;
+  3. the 40-tap history at `+0x24`, which `V34TimingHPFilter` also writes.
+
+Add the byte index to the test's failure message first — `diff_eq_int` prints
+its `input` argument, and the current call passes `k` without a `%ld` in the
+format, so the offsets are being discarded. That alone should identify which
+field is wrong in one run.
