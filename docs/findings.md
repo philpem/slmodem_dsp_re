@@ -6675,3 +6675,43 @@ not:** either function. Neither has passed a single differential check, and
 finding 121a's claim that "nothing further needs reading" is now known to be
 optimistic — the crash is in code that needed no further *reading*, but did
 need a test fixture that respects C's aliasing rules.
+
+### 121c. Fixture fixed; two real errors in `V34demodulate` located
+
+The segfault was the test: it called `rxinit` and `rxtiminginit` but not
+`txinit`, and **`txinit` is what sets the receive queue's cursors**. A
+receive-only fixture leaves `rxq.rd` NULL. Setting the cursors explicitly
+fixes it — and the ring must still be reached through a derived pointer, not
+`rxq.ring[]`.
+
+With that, the pair runs and fails **651 of 876720 checks (0.07%)**. The
+failing offsets are `rx+0x10c`, `+0x12a`, `+0x12c`-`0x12f`, `+0x138` and
+`+0x208`, which name two errors precisely.
+
+**1. `V34demodulate` writes its gained samples through `rx_samples`.**
+
+```
+   5af5f:  mov  0x130(%edi),%esi     ; rx_samples
+   5afa0:  lea  0x2(%esi),%edx
+   5afa3:  mov  %edx,0x130(%edi)     ; advance it
+   5afa9:  mov  %cx,(%esi)           ; store the gained sample
+```
+
+Every gained half is stored there and the pointer advances by two. The
+reconstruction dropped it entirely, which is why `rx+0x10c` differs.
+
+**2. `f12a` and `f12c` are not cleared unconditionally.** When the sample
+count is still `<= 3` the function stores the *incremented* count and the
+running accumulator (0x5b253) and returns; only the path that runs the AGC
+clears them at 0x5b1b0.
+
+**3. And `f12c` is not what finding 120a said.** It is a running sum of the
+gained imaginary part squared — `imul %ebp,%ebp; add %esi,%ebp` at
+0x5afed — whose *high 16 bits* become `agc_input`. The 36-entry `rms_buf` is
+a separate path that ends in a **table lookup at `.rodata+0x2860`** indexed
+by the normalised accumulator and shifted by the exponent (0x5b0bf), not the
+shift-and-halve square root finding 120a described.
+
+So finding 120a is **wrong about which quantity feeds the AGC**, and the
+`.rodata+0x2860` table has not been identified. That is the next thing to
+read, and it is a table this reconstruction does not yet know about.
