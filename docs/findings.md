@@ -5818,3 +5818,49 @@ The general rule, and the reason this entry exists at all: **a discrepancy
 against the recommendation is evidence about the recommendation's numbering
 conventions, not automatically evidence about the code.** The blob is the
 reference for this project. The standard is context.
+
+## 111. `txinit` decoded in full — ready to write, needs one struct change first
+
+Complete reading of 0x5d670-0x5d764. **Not written**; the blocker is
+mechanical and named at the end.
+
+```
+   obj->f3550 = 0;  obj->f3552 = 0;            /* shorts               */
+   obj->f25c0 = 0;  obj->f25c6 = 0;            /* shorts               */
+   obj->f25cc = 0;                             /* int                  */
+
+   V34EchoCleanUp(&obj->echo0);
+   V34EchoCleanUp(&obj->echo1);
+
+   txq->count = 0x20;                          /* 32 entries pre-queued */
+   txq->rd    = obj + 0x2228;                  /* the ring's base       */
+   txq->wr    = obj + 0x22a8;                  /* 32 ints further on    */
+   memset(obj + 0x2228, 0, 0x398);             /* the whole ring        */
+
+   rxq->count = 0;
+   rxq->rd = rxq->wr = obj + 0x270;
+   memset(obj + 0x270, 0, 0x100);              /* the whole ring        */
+
+   memset(obj + 0x2078, 0, 0x54);              /* the prefilter's state */
+```
+
+Three things it confirms rather than assumes:
+
+- `txq->wr` starts 32 ints past `rd` and `count` starts at 32. The transmit
+  queue is **primed with 32 entries of silence**, not empty — so the
+  modulator has a full block to draw on before the first symbol arrives.
+- The final `memset` is 0x54 bytes at `obj+0x2078`, which is exactly
+  `V34_ECHO_PREFILTER_TAPS * sizeof(short)` — 42 shorts — confirming the
+  prefilter's state length from a second, independent site.
+- The ring lengths match `rxreadqueue`'s and `txwritequeue`'s hardcoded ends
+  a third time: `0x270 + 0x100` is `0x370` (`0x264 + 0x10c`), and
+  `0x2228 + 0x398` is `0x25c0` (`0x221c + 0x3a4`).
+
+**What is needed before it can be written:** `struct v34_object` must gain the
+receive queue at `+0x264`, which currently falls inside
+`unmapped_0404[0x2074 - 0x404]`, plus the three scalars at `+0x25c0`,
+`+0x25c6`, `+0x25cc` and the pair at `+0x3550`. The transmit queue is already
+partly there — `ring_pos` at `+0x2224` is that queue's `wr` cursor and
+`ring` at `+0x2228` is its ring, which is why finding 109's identification
+worked. Renaming those two into a `struct v34_queue` at `+0x221c` is the
+tidy version and touches `V34EchoHistoryBackwardClean` and `t_v34fsk`.
