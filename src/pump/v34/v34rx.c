@@ -10,6 +10,7 @@
  * is not pinned by any local symbol.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v34rx.h"
 
@@ -139,4 +140,47 @@ V34nlencoder(const short *in, short *out)
 
 	out[0] = (short)((re * g) >> 14);
 	out[1] = (short)((im * g) >> 14);
+}
+
+void
+updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
+	    int tag)
+{
+	if (energy != 0) {
+		int shift = 0;
+		int r;
+
+		/*
+		 * Normalise `energy` up until bit 30 is set, counting the
+		 * shifts.  The counter is truncated to 16 bits on every
+		 * iteration -- `cwtl` sits inside the loop -- which cannot
+		 * bite for any input that terminates, since bit 30 is
+		 * reached in at most 31 steps.
+		 */
+		while ((energy & 0x40000000) == 0) {
+			shift++;
+			shift = (short)shift;
+			energy += energy;
+		}
+
+		/* A reciprocal: (1 << (shift + 21)) / (normalised >> 16). */
+		r = (short)((1 << (shift + 0x15))
+			    / ((energy + 0x8000) >> 16));
+
+		/*
+		 * A negative quotient means the divide overflowed; the
+		 * original substitutes a fixed 0x2000 rather than clamping.
+		 */
+		if (r < 0)
+			r = 0x2000;
+
+		*alpha = (short)(-((r * gain + 0x2000) >> 15));
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("updateAlpha %d %d\n", tag,
+					     *alpha);
+	}
+
+	if (apply_decay != 0)
+		*alpha = (short)((*alpha * decay + 0x4000) >> 15);
 }

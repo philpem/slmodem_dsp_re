@@ -1469,3 +1469,28 @@ would fail.
 **Not fixed.** Writing a zero would be tidier and would differ from the
 object in a field the differential test reads. There is nothing to gain: the
 value is dead before it is used.
+
+---
+
+## D33 🐛 `updateAlpha` divides by zero for `energy = -1`
+
+**Where:** `src/pump/v34/v34rx.c`.
+
+**What the original does:** normalises `energy` upward until bit 30 is set,
+then divides `1 << (shift + 21)` by `(energy + 0x8000) >> 16`.
+
+For `energy = -1` the normalising loop does not run — bit 30 is already set
+in `0xffffffff` — and `(-1 + 0x8000) >> 16` is **zero**. The `idiv` faults.
+
+**What we do:** the same. The reconstruction divides by the same value and
+faults identically.
+
+**Reachable?** `energy` is an energy estimate, so a caller producing -1 would
+already be wrong. **Unmeasured** — the callers are `rxinit`, `agcadapt` and
+`adaptecho`, none of which is reconstructed yet. Re-open when they are.
+
+**Not fixed.** There is no correct value to substitute: the function's own
+overflow guard (`if (quotient < 0) quotient = 0x2000`) shows the author
+thought about the divide's range and did not guard this case, so any clamp
+would be invention. `t_v34rx` documents the domain in a comment rather than
+driving it.

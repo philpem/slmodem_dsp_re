@@ -11,6 +11,7 @@ extern void ref_txwritequeue(void *q, const short *src);
 extern int ref_bitreverse(unsigned short v, short nbits);
 extern void ref_decision(void *d, const int *pts, short npts);
 extern void ref_V34nlencoder(const short *in, short *out);
+extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -161,6 +162,37 @@ main(void)
 			    db.best_index, 0);
 		diff_eq_int("zero points, point", da.best_point,
 			    db.best_point, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 updateAlpha");
+	{
+		/*
+		 * Non-negative energies only, plus the two negatives that are
+		 * safe.  `energy = -1` is NOT in the domain: it already has
+		 * bit 30 set so the normalising loop does not run, and
+		 * (-1 + 0x8000) >> 16 is zero, so the divide faults -- in the
+		 * blob exactly as in the reconstruction.  Driving it proves
+		 * nothing except that both sides use `idiv`.
+		 */
+		static const int energies[] = { 0, 1, 2, 3, 255, 256, 32767,
+						65536, 0x100000, 0x3fffffff,
+						0x40000000, 0x7fffffff,
+						-65536, -0x40000000 };
+		unsigned e;
+		int g, dc, ap;
+
+		for (e = 0; e < sizeof(energies) / sizeof(energies[0]); e++)
+		for (g = -32768; g <= 32767; g += 9973)
+		for (dc = 0; dc <= 32767; dc += 11311)
+		for (ap = 0; ap <= 1; ap++) {
+			short aa = 1234, ab = 1234;
+
+			updateAlpha(&aa, energies[e], ap, g, dc, 7);
+			ref_updateAlpha(&ab, energies[e], ap, g, dc, 7);
+			diff_eq_int("alpha", aa, ab,
+				    (long)energies[e] * 31 + g);
+		}
 	}
 	rc |= diff_end();
 

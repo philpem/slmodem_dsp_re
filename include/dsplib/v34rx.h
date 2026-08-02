@@ -69,6 +69,16 @@ void decision(struct v34_decoder *d, const int *pts, short npts);
  */
 void V34nlencoder(const short *in, short *out);
 
+/*
+ * Recompute an adaptation step from an energy estimate.
+ *
+ * `*alpha` is replaced by -(reciprocal(energy) * gain), and then optionally
+ * scaled again by `decay`.  Both stages are skipped independently: a zero
+ * `energy` leaves the first alone and a zero `apply_decay` the second.
+ */
+void updateAlpha(short *alpha, int energy, int apply_decay, int gain,
+		 int decay, int tag);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 
