@@ -17,6 +17,7 @@
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
 #include "dsplib/v34shell.h"
+#include "dsplib/v34pcmif.h"
 
 /*
  * Advance a ring cursor, wrapping at `end` back to the first entry.
@@ -494,7 +495,7 @@ rxtiminginit(void *objp)
 	rx->f1ce = 0;
 	rx->f1d0 = 0;
 	/* The slowest V.34 rate: what the receiver assumes until told. */
-	rx->baud = 2400;
+	rx->f1d2 = 2400;
 	rx->f1d4 = 0;
 	rx->f1d8 = 0;
 	rx->f1e0 = 0;
@@ -1720,4 +1721,244 @@ setInitialPhase(void *objp)
 		rx->f1ac = (short)pos;
 	else
 		rx->f1ac = (short)(rx->f1b0 - 1);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * setTimingStateParameters -- install the timing loop's gains for a state.
+ *
+ * A nine-way switch on `f1c0`, the timing state, spelled as a jump table.
+ * There are TWO tables, chosen by whether `f359c` is 0x65, and they agree
+ * except on states 5, 6 and 7 -- the fast part of the acquisition ramp --
+ * so the second is a retuning of the same schedule rather than a different
+ * one.  Both are reproduced as one switch with the variant inline, since
+ * splitting them would hide how little differs.
+ *
+ * States 0 and 1 install nothing.  States 5 and 8 additionally report the
+ * timing offset to the V.90 side, as `f1d0 * 10` -- the only place that
+ * number leaves the datapump.
+ *
+ * The state is compared UNSIGNED against 8, so a negative `f1c0` misses the
+ * table entirely rather than indexing behind it.  That is the bounds check
+ * the other three tables in this reconstruction do not have (finding 129).
+ */
+void
+setTimingStateParameters(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	int variant = (obj->f359c == 0x65);
+	int state = (short)rx->f1c0;
+	int report = 0;
+
+	if ((unsigned)state <= 8) {
+		switch (state) {
+		case 2:
+			rx->f234 = 0x36b0; rx->f236 = 0;    rx->f232 = 0x190;
+			break;
+		case 3:
+			rx->f234 = 0x2ee0; rx->f236 = 0xd2; rx->f232 = 0x3e8;
+			break;
+		case 4:
+			rx->f234 = 0x1770; rx->f236 = 0x5a; rx->f232 = 0x3e8;
+			break;
+		case 5:
+			rx->f234 = 0xdac;  rx->f236 = 0x1e;
+			rx->f232 = (short)(variant ? -1 : 0x3e8);
+			report = 1;
+			break;
+		case 6:
+			if (variant) {
+				rx->f234 = 0xdac; rx->f236 = 3;
+			} else {
+				rx->f234 = 0x7d0; rx->f236 = 0xa;
+			}
+			rx->f232 = 0x7d0;
+			break;
+		case 7:
+			if (variant) {
+				rx->f234 = 0x3e8; rx->f236 = 2;
+				rx->f232 = 0x7d0;
+			} else {
+				rx->f234 = 0x5dc; rx->f236 = 2;
+				rx->f232 = 0xfa0;
+			}
+			break;
+		case 8:
+			rx->f234 = 0x1f4;  rx->f236 = 1;    rx->f232 = -1;
+			report = 1;
+			break;
+		default:		/* 0 and 1 install nothing */
+			break;
+		}
+	}
+
+	if (report)
+		VPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));
+
+	/* State 2 alone also sets the dwell from the frame length. */
+	if ((unsigned short)rx->f1c0 == 2)
+		rx->f1d2 = (short)(obj->faa96 >> 3);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * TimingV34 -- the timing recovery loop's state machine and its integrator.
+ *
+ * Called once per symbol from `receiver`.  Three parts:
+ *
+ *   THE STATE MACHINE.  `f1c0` is the state.  -1 means done and returns
+ *   immediately.  1 means "start": zero the dwell counter, centre the phase
+ *   with setInitialPhase, and move to state 2 -- or to state 6 if `f1c8`
+ *   says to skip the slow part of the ramp.  Otherwise, once the dwell
+ *   counter `f230` reaches the limit `f232`, the state advances by one and
+ *   the gains are reinstalled.  A limit of -1 means never advance.
+ *
+ *   THE PHASE DETECTOR.  Two timing_out[] entries, indexed by the pair
+ *   setInitialPhase chose, are each squared and summed as (I^2 + Q^2) for
+ *   two positions; the loop then forms (b - a) / (b + a) in Q15 after
+ *   normalising both up until neither has bits above 30.  That
+ *   normalisation is a loop with its own 16-step cap, and the shift is
+ *   applied to both so the ratio is unaffected -- it is there for the
+ *   divide's range, not for accuracy.
+ *
+ *   THE INTEGRATOR.  error * f236 in Q15 accumulates into the 32-bit f1e0;
+ *   error * f234 in Q11 is added on top per symbol.  The sum is carried in
+ *   f1d8 and its whole part, in units of 1/32768 of a symbol, is added to
+ *   the interpolator's step f1ae.  Every 0x1d2 symbols the accumulated
+ *   offset is converted to parts per million -- the `* 10000 / n` then
+ *   `* 100 / f1be` -- and stored in f1d0 for setTimingStateParameters to
+ *   report onward.
+ */
+void
+TimingV34(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	int state;
+	int i0, i1;
+	int a, b;
+	int err = 0;
+	int acc;
+	int whole;
+	int n;
+
+	state = (unsigned short)rx->f1c0;
+
+	if (state == 0xffff)
+		return;
+
+	if (state == 1) {
+		rx->f230 = 0;
+		setInitialPhase(obj);
+		if (rx->f1c8 == 1) {
+			rx->f1c0 = 2;
+			rx->f1c8 = 0;
+		} else {
+			rx->f1c0 = 6;
+		}
+		setTimingStateParameters(obj);
+		state = (unsigned short)rx->f1c0;
+	}
+
+	/* Dwell: advance a state once f230 reaches f232, which -1 disables. */
+	if ((unsigned short)rx->f232 != 0xffff && state != 0) {
+		int next = (unsigned short)(rx->f230 + 1);
+
+		if (next == (int)(short)rx->f232) {
+			rx->f230 = 0;
+			rx->f1c0 = (short)(state + 1);
+			setTimingStateParameters(obj);
+			state = (unsigned short)rx->f1c0;
+		} else {
+			rx->f230 = (short)next;
+		}
+	}
+
+	/* The phase detector: two squared magnitudes, differenced. */
+	i0 = rx->f1ec;
+	i1 = rx->f1ee;
+	/*
+	 * EARLY AND LATE, either side of the index -- [i-1] and [i+1], not
+	 * [i-1] and [i].  Reading them as adjacent gives a discriminator
+	 * with no gap in the middle and an error term about 2.5x too large.
+	 */
+	a = (int)rx->timing_out[i0 - 1] * rx->timing_out[i0 - 1]
+	  + (int)rx->timing_out[i0 + 1] * rx->timing_out[i0 + 1];
+	b = (int)rx->timing_out[i1 - 1] * rx->timing_out[i1 - 1]
+	  + (int)rx->timing_out[i1 + 1] * rx->timing_out[i1 + 1];
+
+	if (state == 0) {
+		acc = rx->f1e0;
+	} else {
+		int sh = 0;
+
+		/*
+		 * Normalise both up together, capped at 16 steps.  Applied to
+		 * both, so the ratio below is unchanged -- this is range for
+		 * the divide, not precision.
+		 */
+		if (a >= 0 && b >= 0) {
+			unsigned m = 0x80000000u;
+
+			/*
+			 * The counter is incremented BEFORE the first test,
+			 * so an exit on `a` still counts the step.  Doing it
+			 * after leaves the shift one short and the error
+			 * term exactly twice too large.
+			 */
+			for (;;) {
+				m >>= 1;
+				sh = (short)(sh + 1);
+				if ((unsigned)a & m)
+					break;
+				if (((unsigned)b & m) != 0 || sh > 15)
+					break;
+			}
+		}
+
+		a = (unsigned short)((a >> ((16 - sh) & 31)));
+		b = (unsigned short)((b >> ((16 - sh) & 31)));
+
+		if ((a | b) != 0)
+			err = (((b - a) << 15) + (a + b) / 2) / (a + b);
+
+		acc = rx->f1e0 + (((int)rx->f236 * err + 0x4000) >> 15);
+		rx->f1e0 = acc;
+		acc += ((int)rx->f234 * err + 0x200) >> 11;
+	}
+
+	/* Carry the fraction, hand the whole part to the interpolator. */
+	acc += rx->f1d8;
+	whole = (short)((acc + 0x4000) >> 15);
+	rx->f1d8 = acc - (whole << 15);
+	rx->f1ae = (short)(whole + (unsigned short)rx->f1be);
+
+	n = (unsigned short)(rx->f1ce + 1);
+	acc = whole + (unsigned short)rx->f1cc;
+
+	if (n < (int)(short)rx->f1d2) {
+		rx->f1ce = (short)n;
+		rx->f1cc = (short)acc;
+		return;
+	}
+
+	/* Every f1d2 symbols: convert the accumulated slip to ppm. */
+	{
+		int ppm = ((short)acc * 10000 + n / 2) / n;
+
+		ppm = (ppm * 25 * 4 + (short)rx->f1be / 2)
+		      / (short)rx->f1be;
+		rx->f1d0 = (short)ppm;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"TimingV34: Timing Offset [ppm] = %d\n",
+				(int)(short)ppm);
+	}
+
+	rx->f1ce = 0;
+	rx->f1cc = 0;
 }

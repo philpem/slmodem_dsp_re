@@ -216,6 +216,12 @@ int polyValue(short k);
  */
 void setInitialPhase(void *obj);
 
+/* Install the timing loop's gains for the current state in f1c0. */
+void setTimingStateParameters(void *obj);
+
+/* One step of the timing recovery loop: state machine, detector, integrator. */
+void TimingV34(void *obj);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 

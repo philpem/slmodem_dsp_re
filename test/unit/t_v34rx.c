@@ -40,6 +40,8 @@ extern int ref_modem_serrint(void *obj);
 extern void ref_decoderv34(void *obj);
 extern int ref_polyValue(short k);
 extern void ref_setInitialPhase(void *obj);
+extern void ref_setTimingStateParameters(void *obj);
+extern void ref_TimingV34(void *obj);
 extern void ref_VPcmV34LogTimingOffset(void *obj, short v);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
@@ -419,7 +421,7 @@ main(void)
 				    ((unsigned char *)&ob)[b], b);
 		}
 		diff_eq_int("baud starts at 2400",
-			    ((struct v34_receiver *)((char *)&oa + 0x264))->baud,
+			    ((struct v34_receiver *)((char *)&oa + 0x264))->f1d2,
 			    2400, 0);
 	}
 	rc |= diff_end();
@@ -1500,6 +1502,127 @@ main(void)
 				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
 				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
 				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * setTimingStateParameters: all nine states, both parameter tables,
+	 * and states outside the table -- including negative ones, which the
+	 * unsigned compare is what keeps from indexing behind it.
+	 */
+	diff_begin("v34 setTimingStateParameters");
+	{
+		static struct v34_object oa, ob;
+		static const short states[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
+						9, 100, -1, -8, 32767, -32768 };
+		unsigned si;
+		int var, d0;
+
+		for (si = 0; si < sizeof(states) / sizeof(states[0]); si++)
+		for (var = 0; var <= 1; var++)
+		for (d0 = -3000; d0 <= 3000; d0 += 1500) {
+			struct v34_receiver *ra, *rb;
+			long tag = (long)si * 1000 + var * 100 + (d0 + 3000) / 1500;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
+			oa.faa96 = ob.faa96 = 400;
+			ra->f1c0 = rb->f1c0 = states[si];
+			ra->f1d0 = rb->f1d0 = (short)d0;
+			ra->f232 = rb->f232 = 0;
+			ra->f234 = rb->f234 = 0;
+			ra->f236 = rb->f236 = 0;
+			ra->f1d2 = rb->f1d2 = 0;
+			oa.fac0c = ob.fac0c = 0;
+
+			setTimingStateParameters(&oa);
+			ref_setTimingStateParameters(&ob);
+
+			diff_eq_int("sts f232", ra->f232, rb->f232, tag);
+			diff_eq_int("sts f234", ra->f234, rb->f234, tag);
+			diff_eq_int("sts f236", ra->f236, rb->f236, tag);
+			diff_eq_int("sts f1d2", ra->f1d2, rb->f1d2, tag);
+			diff_eq_int("sts offset", oa.fac0c, ob.fac0c, tag);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * TimingV34: the state machine, the detector and the integrator, run
+	 * long enough for the dwell counters to advance states and for the
+	 * ppm report to fire.  f1c0 == -1 (done) and the f1c8 branch out of
+	 * state 1 are both driven.
+	 */
+	diff_begin("v34 TimingV34");
+	{
+		static struct v34_object oa, ob;
+		int st, skip, var, it, k;
+
+		for (st = -1; st <= 8; st++)
+		for (skip = 0; skip <= 1; skip++)
+		for (var = 0; var <= 1; var++) {
+			struct v34_receiver *ra, *rb;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			for (k = 0; k < 21; k++)
+				ra->timing_out[k] = rb->timing_out[k] =
+				    (short)(k <= 2 ? 900 - k * 40
+						   : -700 + k * 30);
+
+			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
+			oa.faa96 = ob.faa96 = 400;
+			oa.fac0c = ob.fac0c = 0;
+			ra->f1c0 = rb->f1c0 = (short)st;
+			ra->f1c8 = rb->f1c8 = skip;
+			ra->f1ec = rb->f1ec = 1;
+			ra->f1ee = rb->f1ee = 2;
+			ra->f1ac = rb->f1ac = 700;
+			ra->f1ae = rb->f1ae = 0x3e80;
+			ra->f1b0 = rb->f1b0 = 0x3e80;
+			ra->f1be = rb->f1be = 0x3e80;
+			ra->f1cc = rb->f1cc = 0;
+			ra->f1ce = rb->f1ce = 0;
+			ra->f1d0 = rb->f1d0 = 0;
+			ra->f1d2 = rb->f1d2 = 40;
+			ra->f1d8 = rb->f1d8 = 0;
+			ra->f1e0 = rb->f1e0 = 0;
+			ra->f230 = rb->f230 = 0;
+			ra->f232 = rb->f232 = 0;
+			ra->f234 = rb->f234 = 0;
+			ra->f236 = rb->f236 = 0;
+
+			for (it = 0; it < 120; it++) {
+				long tag = (((long)(st + 1) * 10 + skip) * 10
+					    + var) * 1000 + it;
+
+				/* Perturb the metric so the loop has work. */
+				ra->timing_out[1] = rb->timing_out[1] =
+				    (short)(800 - it * 7);
+				ra->timing_out[2] = rb->timing_out[2] =
+				    (short)(-600 + it * 5);
+
+				TimingV34(&oa);
+				ref_TimingV34(&ob);
+
+				diff_eq_int("tv state", ra->f1c0, rb->f1c0, tag);
+				diff_eq_int("tv step",  ra->f1ae, rb->f1ae, tag);
+				diff_eq_int("tv acc",  (long)ra->f1d8,
+					    (long)rb->f1d8, tag);
+				diff_eq_int("tv int",  (long)ra->f1e0,
+					    (long)rb->f1e0, tag);
+				diff_eq_int("tv ppm",   ra->f1d0, rb->f1d0, tag);
+				diff_eq_int("tv dwell", ra->f230, rb->f230, tag);
+				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
 			}
 		}
 	}

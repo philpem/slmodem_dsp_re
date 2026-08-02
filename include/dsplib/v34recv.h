@@ -86,7 +86,15 @@ struct v34_receiver {
 	short           f1cc;            /* +0x1cc */
 	short           f1ce;            /* +0x1ce */
 	short           f1d0;            /* +0x1d0 */
-	short           baud;            /* +0x1d2 */
+	/*
+	 * +0x1d2.  Named `baud` when rxtiminginit was the only thing seen
+	 * writing it (2400, the slowest V.34 rate).  It is not: 
+	 * setTimingStateParameters loads it from the frame length over 8, and
+	 * TimingV34 uses it as the interval between timing-offset reports.
+	 * So it is a symbol count, and 2400 was a plausible-looking
+	 * coincidence.
+	 */
+	short           f1d2;            /* +0x1d2 */
 	short           f1d4;            /* +0x1d4 */
 	unsigned char pad_1d6[0x1d8 - 0x1d6];
 	int             f1d8;            /* +0x1d8 */
@@ -140,7 +148,16 @@ struct v34_receiver {
 	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
 	short           f230;            /* +0x230 */
-	unsigned char pad_232[0x240 - 0x232];
+	/*
+	 * setTimingStateParameters installs these three together, one triple
+	 * per timing state.  f234 and f236 are the loop's two gains -- see
+	 * TimingV34, which scales them by the phase error in Q15 and Q11 --
+	 * and f232 is a dwell count, or -1 for "no limit".
+	 */
+	short           f232;            /* +0x232 */
+	short           f234;            /* +0x234 */
+	short           f236;            /* +0x236 */
+	unsigned char pad_238[0x240 - 0x238];
 	short           f240;            /* +0x240 demodulated I */
 	short           f242;            /* +0x242 demodulated Q */
 	short           f244;            /* +0x244 previous I */

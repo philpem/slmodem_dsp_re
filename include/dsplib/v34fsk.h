@@ -180,7 +180,15 @@ struct v34_object {
 	int f3558;					/* +0x3558 */
 	int f355c;					/* +0x355c */
 	int f3560;					/* +0x3560 */
-	unsigned char unmapped_3564[0x35a8 - 0x3564];
+	unsigned char unmapped_3564[0x359c - 0x3564];
+	/*
+	 * 0x65 here selects setTimingStateParameters' second parameter
+	 * table.  The two differ only in states 5, 6 and 7 -- the fast part
+	 * of the acquisition ramp -- so this is a variant tuning rather than
+	 * a different algorithm.
+	 */
+	short f359c;					/* +0x359c */
+	unsigned char unmapped_359e[0x35a8 - 0x359e];
 	/*
 	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
 	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
