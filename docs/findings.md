@@ -7693,3 +7693,39 @@ directions, agreeing.
 This is the encoder/decoder pairing the call graph's `--pairs` mode was
 built to find, and it arrived with the structure already proved rather than
 assumed.
+
+### 138. The dialler's state machine, in the author's names
+
+`DialerProgress` switches on `progress_state` with eleven bare cases, and
+this reconstruction's header said so: "DialerProgress will name it; for now
+the only thing established is that bound."  It never did name it, because
+the twenty-eight debug call sites that would have were dropped (finding
+134).
+
+Restoring the strings names five of them, and four are pinned exactly -- each
+small case block prints its own name before returning:
+
+```
+   progress_state 5   DIALER_WAIT_FOR_DIALTONE_STATE   -> DIALER_WAIT_DIALTONE
+   progress_state 6   DIALER_WAIT_FOR_SILENCE_STATE    -> DIALER_WAIT_ANSWER
+   progress_state 7   DIALER_WAIT_FOR_BONGTONE_STATE   -> DIALER_WAIT_BONG
+   progress_state 8   DIALER_CALLING_TONE_STATE        -> DIALER_CALLING_TONE
+   progress_state 9   DIALER_END_PARTIALLY_STATE
+```
+
+`DIALER_INITIAL_STATE` and `DIALER_END_STATE` are named by the same strings
+but print from no case block, so placing them needs the surrounding
+disassembly rather than a lookup.
+
+**One of these corrects the reconstruction.**  State 6 returns
+`DIALER_WAIT_ANSWER`, which this header glosses as "'@'".  The author calls
+the state WAIT_FOR_SILENCE, which is the better name and the accurate one:
+'@' waits for a period of quiet, not for an answer.  A gloss that reads
+plausibly, was never wrong enough to fail a test, and is not what the code
+is doing.
+
+The same strings also name two procedures the dialler calls --
+`PULSE_IS_DIALER_READY_PROC` and `PULSE_DIAL_DIGIT_PROC` -- a variable,
+`digitToPulseDial`, and the original source file, `Dialer.C`.  That last is
+the first direct evidence of an original filename; every other name in
+`docs/modules.md` is inferred from symbol grouping.

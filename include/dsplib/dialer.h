@@ -63,8 +63,14 @@ struct dialer {
 	int	col;				/* +0xb4 */
 
 	/*
-	 * A state DialerAbort refuses to act on above 10.  DialerProgress will
-	 * name it; for now the only thing established is that bound.
+	 * +0xb8.  The dialler's own state machine, named by the AUTHOR --
+	 * recovered from DialerProgress's debug strings, which this
+	 * reconstruction had dropped (findings 134, 138).  Four are pinned to
+	 * their case exactly; the rest are named but not yet placed.
+	 *
+	 * Note DIALER_WAIT_FOR_SILENCE_STATE: it returns DIALER_WAIT_ANSWER,
+	 * which this header describes as "'@'".  The author's name is the
+	 * better one -- '@' waits for quiet, not for an answer as such.
 	 */
 	int	progress_state;			/* +0xb8 */
 
@@ -151,6 +157,22 @@ void DialerAbort(struct dialer *d);
 #define DIALER_COMMAND		5	/* ';' -- back to command mode      */
 #define DIALER_DONE		6	/* end of string                    */
 #define DIALER_BAD_STATE	7	/* progress_state out of range      */
+
+/*
+ * `progress_state` values, in the author's own names.  Confirmed by which
+ * debug string each switch case prints; see finding 138.
+ */
+#define DIALER_WAIT_FOR_DIALTONE_STATE	5	/* -> DIALER_WAIT_DIALTONE */
+#define DIALER_WAIT_FOR_SILENCE_STATE	6	/* -> DIALER_WAIT_ANSWER   */
+#define DIALER_WAIT_FOR_BONGTONE_STATE	7	/* -> DIALER_WAIT_BONG     */
+#define DIALER_CALLING_TONE_STATE	8	/* -> DIALER_CALLING_TONE  */
+#define DIALER_END_PARTIALLY_STATE	9
+
+/*
+ * Named by the same strings but not yet tied to a case: DIALER_INITIAL_STATE
+ * and DIALER_END_STATE.  Cases 0 and 10 print no state name, so placing
+ * them needs the surrounding disassembly rather than a string lookup.
+ */
 
 /*
  * Produce the next stretch of dialling audio.
