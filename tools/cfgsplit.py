@@ -205,6 +205,14 @@ def main():
                     metavar="SEC:OFF:N:FIRST", help="override table detection")
     ap.add_argument("--min", type=int, default=0,
                     help="only list cases owning at least this many bytes")
+    ap.add_argument("--entries", metavar="LABEL=ADDR[,LABEL=ADDR...]",
+                    help="dispatch targets given explicitly, for a function "
+                         "that selects with a compare/branch chain rather "
+                         "than a jump table.  V34SetupModulator is the "
+                         "reason this exists: it dispatches on seven baud "
+                         "rates with cmp/je and find_tables correctly "
+                         "reports no tables, which left the whole function "
+                         "as 'reached by no case'.")
     args = ap.parse_args()
 
     lo, size = symbol(args.obj, args.func)
@@ -235,6 +243,13 @@ def main():
 
     # Every dispatch target, and which cases select it.
     cases = {}
+    if args.entries:
+        names = []
+        for i, spec in enumerate(args.entries.split(",")):
+            label, addr = spec.split("=")
+            cases.setdefault(int(addr, 0), []).append(i)
+            names.append(label)
+        tables = []
     for off, count, first, section in tables:
         entries = read_table(args.obj, section, off, count)
         for i, target in enumerate(entries):

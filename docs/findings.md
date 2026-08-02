@@ -5595,3 +5595,34 @@ GCC has interleaved the two dispatches heavily, so the branch targets do not
 read in source order. Reconstructing this needs the control-flow graph, not a
 linear read — `tools/cfgsplit.py` exists for exactly that and has not yet been
 pointed at this function.
+
+## 106. `V34SetupModulator` partitioned: 587 bytes of rate code, 590 of engine
+
+`tools/cfgsplit.py` reported the whole function as "reached by no case",
+which was correct and useless: it only understands jump tables, and this
+function dispatches with a `cmp`/`je` chain. The tool now takes `--entries`
+so a compare-chain dispatch can be partitioned too.
+
+```
+   exclusive to one case      587 bytes
+   shared by two or more      590 bytes   <- the common engine
+   reached by no case         412 bytes   (prologue, epilogue, padding)
+
+     142  0x732f1   3200          83  0x731cf   3429
+     101  0x72fbe   3000          40  0x72e52    600   (the default case)
+      95  0x73180   2400          35  0x732a7   4800
+      91  0x72dcd   2800
+```
+
+**No case exceeds 142 bytes.** A function that reads as 1,599 bytes of
+interleaved dispatch is seven small blocks of per-rate constants over one
+590-byte engine — which is what finding 104's store extraction suggested and
+this measures.
+
+That also settles the shape of the work: the engine is written once, and each
+rate is a table row. The 600-baud case being the **default** rather than a
+match is worth noting on its own — anything not recognised as one of the six
+real rates gets the INFO-channel configuration.
+
+The same `--entries` option will be needed for any other compare-chain
+dispatch in what remains; `v34handshak` uses jump tables and does not need it.
