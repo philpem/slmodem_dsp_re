@@ -146,6 +146,65 @@ struct v34_timing {
 int V34TimingHPFilter(struct v34_timing *t, short sample);
 
 /* ------------------------------------------------------------------------
+ * The adaptive equaliser
+ */
+
+#define V34_EQ_TAPS		80
+#define V34_EQ_CENTRE_FIRST	36	/* first tap CenterAdapt touches   */
+#define V34_EQ_CENTRE_TAPS	8
+#define V34_EQ_UNITY		0x1000	/* what CleanUp puts in tap 40     */
+
+/*
+ * The equaliser: an 80-tap complex FIR with a circular delay line, 0x3cc
+ * bytes, entirely self-contained.
+ *
+ * The coefficients use the same double-width trick as the echo canceller --
+ * `re`/`im` are the high halves and `re_frac`/`im_frac` the low ones -- but
+ * only `V34EqualizerAdapt` honours it.  `V34EqualizerCenterAdapt` writes the
+ * high halves only, with rounding, and leaves the fractional halves stale.
+ * See docs/findings.md; that is a real asymmetry and not a reconstruction
+ * artefact.
+ */
+struct v34_equalizer {
+	short dly_re[V34_EQ_TAPS];	/* +0x000 */
+	short dly_im[V34_EQ_TAPS];	/* +0x0a0 */
+	short re[V34_EQ_TAPS];		/* +0x140 */
+	short im[V34_EQ_TAPS];		/* +0x1e0 */
+	short re_frac[V34_EQ_TAPS];	/* +0x280 */
+	short im_frac[V34_EQ_TAPS];	/* +0x320 */
+	int cursor;			/* +0x3c0 */
+	/*
+	 * Eight bytes CleanUp's memset covers and nothing here reads or
+	 * writes.  Sized from that memset -- 0x3cc -- rather than assumed,
+	 * which is the only evidence for the object's extent there is.
+	 */
+	int reserved_3c4[2];		/* +0x3c4 */
+};
+
+/* Zero everything, then set tap 40 to unity -- a flat initial response. */
+void V34EqualizerCleanUp(struct v34_equalizer *q);
+
+/* Zero taps 36..43 of both the real and imaginary coefficient arrays. */
+void V34EqualizerClearCenterTaps(struct v34_equalizer *q);
+
+/* Push one complex sample into the delay line. */
+void V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re, short im);
+
+/* Convolve; both outputs are unshifted 32-bit accumulators. */
+void V34EqualizerFilter(struct v34_equalizer *q, int *re, int *im);
+
+/* Complex LMS over every tap, at 32-bit precision.  dc = -e * conj(d). */
+void V34EqualizerAdapt(struct v34_equalizer *q, short err_re, short err_im);
+
+/*
+ * The same gradient over the 8 centre taps only, at 16-bit precision with
+ * round-to-nearest.  NOT a subset of V34EqualizerAdapt -- see the header
+ * comment on the struct.
+ */
+void V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re,
+			     short err_im);
+
+/* ------------------------------------------------------------------------
  * Odds and ends
  */
 

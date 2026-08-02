@@ -324,6 +324,162 @@ V34TimingHPFilter(struct v34_timing *t, short sample)
 	return acc >> 16;
 }
 
+/* --------------------------------------------------------------- equaliser */
+
+void
+V34EqualizerCleanUp(struct v34_equalizer *q)
+{
+	sysdep_memset(q, 0, sizeof(*q));
+
+	/*
+	 * A flat initial response: one unity tap in the middle and nothing
+	 * else.  0x1000 rather than 0x4000 or 0x7fff, so the coefficients are
+	 * Q12 here even though the delay line they multiply is a raw sample.
+	 */
+	q->re[V34_EQ_TAPS / 2] = V34_EQ_UNITY;
+}
+
+void
+V34EqualizerClearCenterTaps(struct v34_equalizer *q)
+{
+	int k;
+
+	/*
+	 * Taps 36..43, which includes the unity tap CleanUp installs at 40.
+	 * The fractional halves are NOT cleared, which matters because
+	 * V34EqualizerAdapt will read them back.
+	 */
+	for (k = V34_EQ_CENTRE_FIRST;
+	     k < V34_EQ_CENTRE_FIRST + V34_EQ_CENTRE_TAPS; k++) {
+		q->re[k] = 0;
+		q->im[k] = 0;
+	}
+}
+
+void
+V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re, short im)
+{
+	int c = q->cursor;
+
+	q->dly_re[c] = re;
+	q->dly_im[c] = im;
+
+	c++;
+	q->cursor = (c == V34_EQ_TAPS) ? 0 : c;
+}
+
+void
+V34EqualizerFilter(struct v34_equalizer *q, int *re, int *im)
+{
+	int acc_re = 0;
+	int acc_im = 0;
+	int k = 0;
+	int j;
+
+	/*
+	 * Two loops rather than one modulo: from the cursor to the end of the
+	 * line, then from the start back to the cursor.  The coefficient
+	 * index runs straight through both, so tap 0 always multiplies the
+	 * OLDEST sample.
+	 */
+	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
+		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
+		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
+	}
+	for (j = 0; j < q->cursor; j++, k++) {
+		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
+		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
+	}
+
+	*re = acc_re;
+	*im = acc_im;
+}
+
+/*
+ * One tap of the complex LMS gradient, at full 32-bit width.
+ *
+ * The update is dc = -e * conj(d), spelled out: the real part loses
+ * dre*ere + dim*eim and the imaginary part loses dre*eim while gaining
+ * dim*ere.
+ */
+static void
+eq_adapt_tap(short *hi, short *lo, int dre, int dim, int ere, int eim,
+	     int conj)
+{
+	int tap = (int)((unsigned)*hi << 16) + (unsigned short)*lo;
+
+	if (conj)
+		tap = (int)((unsigned)tap - (unsigned)(dre * eim)
+			    + (unsigned)(dim * ere));
+	else
+		tap = (int)((unsigned)tap - (unsigned)(dre * ere)
+			    - (unsigned)(dim * eim));
+
+	*hi = (short)(tap >> 16);
+	*lo = (short)tap;
+}
+
+void
+V34EqualizerAdapt(struct v34_equalizer *q, short err_re, short err_im)
+{
+	int k = 0;
+	int j;
+
+	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
+		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 0);
+		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 1);
+	}
+	for (j = 0; j < q->cursor; j++, k++) {
+		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 0);
+		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 1);
+	}
+}
+
+void
+V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
+{
+	int n;
+
+	/*
+	 * The same gradient as V34EqualizerAdapt over the 8 centre taps, and
+	 * NOT the same arithmetic:
+	 *
+	 *   - the tap is assembled from its high half alone, so whatever
+	 *     V34EqualizerAdapt accumulated in the fractional half is
+	 *     discarded on the way in and left stale on the way out;
+	 *   - the result is rounded with 0x8000 rather than truncated.
+	 *
+	 * Read as a design that is plausible -- a fast coarse pull on the
+	 * centre taps during acquisition, a fine 32-bit one everywhere
+	 * afterwards -- but the two do fight over the same eight taps if both
+	 * run, and nothing in this file arbitrates.  See docs/findings.md.
+	 */
+	for (n = 0; n < V34_EQ_CENTRE_TAPS; n++) {
+		int k = V34_EQ_CENTRE_FIRST + n;
+		int j = q->cursor + V34_EQ_CENTRE_FIRST + n;
+		int dre, dim, tap;
+
+		if (j >= V34_EQ_TAPS)
+			j -= V34_EQ_TAPS;
+		dre = q->dly_re[j];
+		dim = q->dly_im[j];
+
+		tap = (int)((unsigned)((unsigned)q->re[k] << 16)
+			    - (unsigned)(dre * err_re)
+			    - (unsigned)(dim * err_im) + 0x8000u);
+		q->re[k] = (short)(tap >> 16);
+
+		tap = (int)((unsigned)((unsigned)q->im[k] << 16)
+			    - (unsigned)(dre * err_im)
+			    + (unsigned)(dim * err_re) + 0x8000u);
+		q->im[k] = (short)(tap >> 16);
+	}
+}
+
 /* --------------------------------------------------------------- odds and ends */
 
 void
@@ -359,5 +515,20 @@ V34F_ASSERT(taps,       struct v34_echo, taps,       0x1c);
 typedef char v34f_echo_size[(sizeof(struct v34_echo) == 0x20) ? 1 : -1];
 
 V34F_ASSERT(hp_hist,    struct v34_timing, hp_hist,  0x24);
+
+V34F_ASSERT(eq_dly_re,  struct v34_equalizer, dly_re,  0x000);
+V34F_ASSERT(eq_dly_im,  struct v34_equalizer, dly_im,  0x0a0);
+V34F_ASSERT(eq_re,      struct v34_equalizer, re,      0x140);
+V34F_ASSERT(eq_im,      struct v34_equalizer, im,      0x1e0);
+V34F_ASSERT(eq_re_frac, struct v34_equalizer, re_frac, 0x280);
+V34F_ASSERT(eq_im_frac, struct v34_equalizer, im_frac, 0x320);
+V34F_ASSERT(eq_cursor,  struct v34_equalizer, cursor,  0x3c0);
+typedef char v34f_eq_size[(sizeof(struct v34_equalizer) == 0x3cc) ? 1 : -1];
+
+/* The unity tap CleanUp installs really is the one ClearCenterTaps clears. */
+typedef char v34f_eq_centre[
+	(V34_EQ_TAPS / 2 >= V34_EQ_CENTRE_FIRST
+	 && V34_EQ_TAPS / 2 < V34_EQ_CENTRE_FIRST + V34_EQ_CENTRE_TAPS)
+	? 1 : -1];
 
 #endif

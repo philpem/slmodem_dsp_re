@@ -5038,3 +5038,54 @@ pair even though both are 16-bit tables in the same `.rodata` block.
 
 The practical consequence is that "is this table Q15?" is not answerable from
 the table. It has to come from the shift in the function that reads it.
+
+## 95. The V.34 equaliser has two adapters that disagree about precision
+
+`V34EqualizerAdapt` and `V34EqualizerCenterAdapt` compute the *same* complex
+LMS gradient -- `dc = -e * conj(d)` in both, instruction for instruction --
+over the same coefficient arrays. They differ in two ways that are easy to
+miss and that make the second not a subset of the first.
+
+**Width.** `V34EqualizerAdapt` assembles each tap from its high half and its
+fractional half, exactly as the echo canceller does (finding 93):
+
+```
+   72a00:  movswl 0x0(%ebp),%edx      ; re[k], signed
+   72a04:  movzwl (%esi),%eax         ; re_frac[k], unsigned
+   72a07:  shl    $0x10,%edx
+   72a0a:  add    %eax,%edx
+```
+
+`V34EqualizerCenterAdapt` does not read the fractional half at all:
+
+```
+   72b84:  movswl (%esi),%edx         ; re[k]
+   72b87:  ...
+   72b8b:  shl    $0x10,%edx          ; and nothing added
+```
+
+**Rounding.** The 32-bit adapter truncates; the centre adapter adds 0x8000
+before its shift (`add $0x8000,%edx` at 0x72ba2, and the `lea 0x8000(...)` at
+0x72bd1).
+
+So over taps 36..43 the two write the same field with different arithmetic,
+and the centre adapter both discards whatever the fine adapter had
+accumulated below the LSB and leaves `re_frac`/`im_frac` holding a value that
+no longer belongs to the tap above them. The fine adapter reads those stale
+halves back on its next pass.
+
+**The most likely reading** is that this is deliberate: a fast coarse pull on
+the centre taps during acquisition, and a fine 32-bit adaptation everywhere
+once the equaliser is open. Nothing in v34filters.c arbitrates between them,
+so which runs when is V34RX.c's decision and is not yet reconstructed.
+
+The reconstruction reproduces both exactly and `t_v34eq` drives them
+interleaved -- the case a reconstruction that had assumed `CenterAdapt` was
+`Adapt` over a sub-range would fail, and the only case where the stale halves
+are actually read back.
+
+The centre range is also the same eight taps `V34EqualizerClearCenterTaps`
+zeroes, and it contains tap 40 -- the unity tap `V34EqualizerCleanUp`
+installs. So the three functions agree on which taps are "the middle", which
+is corroboration that 36..43 is a real boundary and not an artefact of how the
+loop was compiled.
