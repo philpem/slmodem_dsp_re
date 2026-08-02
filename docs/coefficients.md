@@ -430,3 +430,23 @@ pair; nothing reconstructed so far reads `V34TimingIIR_*`.
 `t_v34ec` asserts the structural properties — the mirror relationship, the
 real numerators, `B`'s symmetry — as well as the bytes, so a future
 regeneration has something to fail against beyond a byte comparison.
+
+## V.34 `sqrt_table`
+
+192 entries at `.rodata+0x2860`, Q15 in and Q15 out, read by
+`V34demodulate`'s level estimator.
+
+**Derivation, exact to 1 LSB:**
+
+```
+   sqrt_table[i] = round(sqrt((i + 0x40) * 128 / 32768) * 32768)
+```
+
+The index covers mantissas in `[0.25, 1)`, which is what normalising to
+bit 30 and halving on an odd exponent leaves. The lookup is followed by a
+right shift of half the exponent, so the whole routine is a normalise-index-
+shift square root.
+
+Unlike `costbl`, this one **is** reproducible from its generator — the only
+V.34 table so far that is. It is still emitted as data: the generator is a
+claim about intent, the bytes are the reference.

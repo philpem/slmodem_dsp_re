@@ -6712,6 +6712,37 @@ a separate path that ends in a **table lookup at `.rodata+0x2860`** indexed
 by the normalised accumulator and shifted by the exponent (0x5b0bf), not the
 shift-and-halve square root finding 120a described.
 
-So finding 120a is **wrong about which quantity feeds the AGC**, and the
-`.rodata+0x2860` table has not been identified. That is the next thing to
-read, and it is a table this reconstruction does not yet know about.
+So finding 120a is **wrong about which quantity feeds the AGC**.
+
+### The table is `sqrt_table`, and it is exactly that
+
+`.rodata+0x2860` is `sqrt_table`, 384 bytes — **192 entries, Q15 in and
+Q15 out**:
+
+```
+   sqrt_table[i] == round(sqrt((i + 0x40) * 128 / 32768) * 32768)
+```
+
+to within **1 LSB across all 192 entries**. The first is 16384 (`sqrt(0.25)`
+in Q15) and the last 32703, just under full scale.
+
+The full sequence, then, is a normalise-index-shift square root:
+
+```
+   while (acc <= 0x1fffffff) { acc += acc; shift++; }
+   mant  = acc >> 15;
+   if (shift & 1) mant >>= 1;              /* odd exponent  */
+   idx   = ((mant + 0x40) >> 7) - 0x40;
+   if (idx > 0xbf) idx = 0xbf;             /* 192 entries   */
+   result = sqrt_table[idx] >> (shift / 2);
+```
+
+which is what finding 120a described up to the halving and then invented.
+The table is the missing step, and its index range `0x40`..`0xff` maps
+mantissas in `[0.25, 1)` — the range a normalise-to-bit-30 leaves after the
+odd-exponent halving.
+
+**It is the first V.34 table this reconstruction has found that is fully
+derivable**, so unlike `costbl` (finding 88) it need not be shipped as data —
+though it should be, for the same reason every other table is: the generator
+is a claim, the bytes are the reference.
