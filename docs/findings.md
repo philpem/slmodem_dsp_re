@@ -5787,3 +5787,34 @@ happens to look like it.
 
 **Not yet reconstructed:** `txinit` continues past 0x5d731 and the rest is
 unread.
+
+## 110. Three places the reconstruction looks wrong against the standard and is not
+
+Collected because they share a failure mode: someone checks the code against
+ITU-T V.34, sees a discrepancy, and "fixes" a function that was bit-exact.
+The differential test would catch it — but only if it is re-run, and a
+confident spec-based correction is exactly the change someone makes without
+re-running it.
+
+**1. The descrambler's taps read one lower than the recommendation.**
+V.34 specifies `1 + x^-6 + x^-19 + ...` numbering; `V34descrambler` tests
+bits 5, 18 and 23. Not an off-by-one: the register takes the input bit at
+position 0 and is *then* shifted up, so every bit sits one place higher than
+its tap number by the time it is tested. The polynomials are the
+recommendation's, spelled against a register that has already moved.
+
+**2. `V34EchoReportCoeff` dumps a hardcoded 144 while scanning `taps`.**
+Already retracted as D28 — `taps` *is* 144 — but the retraction lives in the
+deviation register and the code still contains a literal that looks
+unexplained. See D28 before changing it.
+
+**3. `decision` truncates its squared distance to 16 bits.** The sum is
+shifted *logically* and then truncated, so a constellation point far enough
+from the target wraps to a small distance and can win. That is a real
+property of the original and is reproduced; whether it fires with a real V.34
+constellation is unmeasured and belongs to task #47.
+
+The general rule, and the reason this entry exists at all: **a discrepancy
+against the recommendation is evidence about the recommendation's numbering
+conventions, not automatically evidence about the code.** The blob is the
+reference for this project. The standard is context.
