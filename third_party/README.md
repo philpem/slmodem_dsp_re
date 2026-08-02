@@ -39,9 +39,15 @@ replaces. To keep those separable:
 - **No SpanDSP source, tables, coefficients or algorithms are read into or
   copied into `src/`.** It is a black box: audio in, audio out, and a verdict.
 
-The check is mechanical — `src/` must contain no `spandsp` include:
+The check is mechanical and **`make test` runs it** — `make firewall` fails the
+build if anything under `src/` or `include/` includes a SpanDSP header:
 
-    ! grep -rl 'spandsp' src/ include/
+    grep -rnE '^[ \t]*#[ \t]*include.*spandsp' src/ include/
+
+It matches an `#include`, not the bare word, so a comment may name an interop
+test: `src/pump/v23/bwchdem.c` cites `t_spandsp_v23` for what settled the
+question about its resonators. A check that fires on prose is a check people
+learn to ignore.
 
 ### Why it is here
 
@@ -53,5 +59,5 @@ bug-compatible.
 
 Coverage is partial: SpanDSP implements Bell 103, V.21, V.23, V.22bis and the
 fax modems V.17/V.27ter/V.29, but **not** V.32/V.32bis and **not**
-V.34/V.90/V.92. Those modules rest on Tiers 1-2 alone. The confirmed matrix
-lives in `docs/interop.md`.
+V.34/V.90/V.92. Those modules rest on Tiers 1-2 alone. What has actually been
+confirmed, direction by direction, is in `docs/interop.md`.

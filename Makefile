@@ -72,7 +72,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: all test check64 docs clean interop capture coverage
+.PHONY: firewall all test check64 docs clean interop capture coverage
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -123,8 +123,24 @@ $(BUILD):
 
 # --- targets --------------------------------------------------------------
 
-test: $(TESTBIN)
+test: firewall $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
+
+# The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
+# and the rule is that no SpanDSP header, source, table or algorithm is
+# reachable from src/ -- it is a test peer and nothing else.
+#
+# Checked as an INCLUDE rather than as the bare word, which is what
+# third_party/README.md always meant: a comment may refer to an interop test
+# by name, and src/pump/v23/bwchdem.c does exactly that, recording what the
+# third party settled about its resonators.  A grep for the word would fail on
+# that and teach everyone to ignore the check.
+firewall:
+	@if grep -rnE '^[ \t]*#[ \t]*include.*spandsp' src/ include/; then \
+	    echo "LICENCE FIREWALL BREACHED: the line above includes a SpanDSP header from src/"; \
+	    exit 1; \
+	fi
+	@echo "licence firewall: no SpanDSP include reachable from src/  OK"
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --
@@ -143,13 +159,26 @@ $(BUILD)/capture/spandsp_b103.pcm: test/interop/gen_spandsp_capture.c $(SPANDSP_
 	    $(SPANDSP_LIB) -lm
 	@./$(BUILD)/gen_capture $(BUILD)/capture
 
-interop: $(BUILD)/test/t_spandsp_b103 $(BUILD)/test/t_spandsp_v8 \
+interop: $(BUILD)/test/t_spandsp_b103 $(BUILD)/test/t_spandsp_v23 \
+        $(BUILD)/test/t_spandsp_v8 \
         $(BUILD)/test/t_spandsp_v8neg $(BUILD)/test/t_spandsp_v8sock \
         $(BUILD)/test/v8peer $(BUILD)/test/v8peer_ref
 	@./$(BUILD)/test/t_spandsp_b103
+	@./$(BUILD)/test/t_spandsp_v23
 	@./$(BUILD)/test/t_spandsp_v8
 	@./$(BUILD)/test/t_spandsp_v8neg
 	@./$(BUILD)/test/t_spandsp_v8sock
+
+# V.23, four directions: two channels each way.  Same 64-bit build as the
+# Bell 103 interop test and for the same reason.
+$(BUILD)/test/t_spandsp_v23: test/interop/t_spandsp_v23.c \
+        test/interop/runtime64.c $(SRC) | $(BUILD)
+	@test -f $(SPANDSP_LIB) || { \
+	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
+	    exit 1; }
+	@mkdir -p $(BUILD)/test
+	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v23.c \
+	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
 
 V8NEG_SRC  := test/interop/v8neg.c test/interop/v8spandsp.c \
               test/interop/runtime64.c

@@ -19,9 +19,27 @@
  * CARRYING A BIT ACROSS CALLS.  The caller asks for a number of samples, not
  * a number of bits, so a call almost always ends part way through a bit.  The
  * object keeps the bit being sent in `held` and sets `resume`; the next call
- * finishes it and only then advances the caller's bit pointer.  `consumed`
- * counts bits FINISHED, so a caller can advance its own stream by that much
- * and the two stay in step without either having to know the period table.
+ * finishes it from there rather than re-reading it.
+ *
+ * WHICH MAKES `consumed` A TRAP, and it is worth being exact about.  It
+ * counts bits FINISHED.  A bit that is still in flight has already been TAKEN
+ * from the caller's buffer and is not counted, so `consumed` is one short of
+ * the number of buffer slots read whenever a bit is held.
+ *
+ * The contract that follows is: **`bits[0]` is the next bit that has never
+ * been handed over**.  A caller must refill from index zero with `consumed`
+ * fresh bits each call, which is what v23_process does.  A caller that
+ * instead advances a cursor into a long array by `consumed` re-supplies the
+ * held bit, and this object sends it twice -- once out of `held` and once as
+ * the next bit to start.
+ *
+ * That mistake is invisible on the forward channel, where 160 samples is
+ * exactly eight cycles of { 7, 7, 6 } and no bit is ever held.  On the
+ * backward channel every 160-sample block ends mid-bit, so it corrupts every
+ * third bit -- which is how this paragraph came to replace an earlier one
+ * saying a caller could simply advance by `consumed`.  It was the SpanDSP
+ * interop test that found it; no differential test could, because the blob
+ * does exactly the same thing with the same wrong caller.
  */
 
 #include "dsplib/sysdep.h"

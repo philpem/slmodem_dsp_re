@@ -4811,3 +4811,44 @@ The field starts at zero from the `memset`, and the fetch is gated on
 up once *and* the transmitter has run once. Those two together are what keeps
 application data off a line that is still training -- the same job b103.c's
 `tx_bits_wanted` does, reached by a different route.
+
+## 87. `consumed` counts bits finished, not bits taken
+
+`v23FP_tx_progress` reports how many bits it FINISHED. A bit still in flight
+at the end of a call has already been read out of the caller's buffer and
+parked in `held`, and it is not counted -- so the figure is one short of the
+number of buffer slots read whenever a call ends mid-bit, which is almost
+always.
+
+The contract that follows is that `bits[0]` is the next bit *that has never
+been handed over*, and a caller must refill from index zero with `consumed`
+fresh bits. `v23_process` does exactly that:
+
+```
+   modem_get_bits(dp->modem, 1, (unsigned char *)self->tx_bits, n_tx)
+```
+
+— always into `tx_bits[0]`, never at an offset. A caller that instead keeps a
+cursor into a long array and advances it by `consumed` re-supplies the held
+bit, and the transmitter sends it twice: once out of `held`, once as the next
+bit to start.
+
+**How this was found, which is the point.** The forward channel hides it
+completely: 160 samples is exactly eight cycles of `{ 7, 7, 6 }`, so a
+datapump-sized block never ends mid-bit and `resume` is never set. The
+backward channel is 320 samples per cycle, so every block ends mid-bit. Fed
+through the wrong caller protocol, channel 2 came out with a 14.2% bit error
+rate against SpanDSP -- and the errors were at bit indices 203, 206, 230, 236,
+248, 263 ... every one of them ≡ 2 (mod 3), the third entry of the period
+table, each carrying the value of the bit before it.
+
+No differential test could have found this. The blob has the same contract and
+would have been driven by the same wrong caller, and the two would have agreed
+perfectly about sending the wrong bit. It took an implementation that had
+never seen this object. That is the entire argument for the interop tier, and
+this is the second time it has paid for itself -- the first was D4.
+
+The reconstruction's own file comment asserted the wrong contract in so many
+words ("a caller can advance its own stream by that much and the two stay in
+step"), so the finding is a correction to this tree's documentation rather
+than to its code: `v23_process` was right all along.

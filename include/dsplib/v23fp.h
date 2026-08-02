@@ -20,8 +20,9 @@
  * file that owns them.  Hoisting either into this header would silently merge
  * two different filters into one.
  *
- * STATUS: partial.  Everything below is reconstructed; v23.c, the datapump
- * wrapper that owns the composite, is not yet.
+ * STATUS: complete.  All five modules below are reconstructed and driven
+ * against the blob, as is the datapump glue that owns the composite -- that
+ * lives in v23.h because it is the modem core's interface rather than V.23's.
  */
 
 #ifndef DSPLIB_V23FP_H
@@ -158,7 +159,13 @@ void v23FP_tx_delete(struct v23tx *tx);
 
 /*
  * Generate `count` samples from `bits`, one int per bit, writing how many
- * bits that finished through `consumed`.
+ * bits that FINISHED through `consumed`.
+ *
+ * `bits[0]` must be the next bit that has never been handed over.  A bit left
+ * in flight at the end of a call has already been taken from the buffer and
+ * is NOT counted in `consumed`, so refill from index zero with `consumed`
+ * fresh bits -- do not advance a cursor into a longer array by it, or the
+ * held bit goes out twice.  See the note in src/pump/v23/v23tx.c.
  *
  * The original returns whatever happens to be in %eax and no caller uses it,
  * so this is declared void rather than inventing a return value.

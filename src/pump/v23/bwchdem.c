@@ -51,6 +51,13 @@ static const int block_size_table[12] = {
  * is in the discriminator alone.  Recorded rather than explained: a
  * deliberate bias away from the 450 Hz filter and a design slip look the same
  * from here, and the bytes are what the original ran.
+ *
+ * WHATEVER IT IS, IT WORKS.  t_spandsp_v23 feeds this module a 390/450 signal
+ * from SpanDSP -- an implementation written from the standard, by someone
+ * else -- and it demodulates 887 bits with no errors at all.  So the 26 Hz is
+ * not a reconstruction error and not a defect in practice: the decision is a
+ * comparison between two accumulators rather than a threshold on either, and
+ * biasing the mark resonator low mostly moves it further from the space tone.
  */
 static const short Mark_Coefs[FPM_IIR_COEFF_PER_SECTION] = {
 	-14786, 16384, 29861, -31242, 16384,
