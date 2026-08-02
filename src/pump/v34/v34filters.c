@@ -510,11 +510,67 @@ V34TimingFiltersInit(struct v34_timing *t)
 		for (j = 0; j < 3; j++)
 			t->iir[i][j] = 0;
 
-	for (i = 0; i < 80; i++)
+	/*
+	 * Eighty SHORTS from +0x024, which is not the same as "both arrays".
+	 * The high-pass history is forty shorts and the prefilter state is
+	 * forty INTS, so this run covers the first and only half of the
+	 * second -- twenty of its forty entries.  The upper twenty are left
+	 * holding whatever was there.
+	 *
+	 * Written as two loops rather than one, because a single loop over
+	 * `hist` would be indexing past the end of an array in C even though
+	 * it is exactly what the object does.  The bytes touched are the
+	 * same.  See docs/deviations.md, D29.
+	 */
+	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
 		t->hist[i] = 0;
+	for (i = 0; i < (V34_TIMING_INIT_SHORTS - V34_TIMING_HP_TAPS) / 2; i++)
+		t->pre_state[i] = 0;
 
 	t->prefilter_coeff = V34TimingPrefilterCoeff;
 	t->hp_coeff = V34TimingHPFilterCoeff;
+}
+
+int
+V34TimingPrefilter(struct v34_timing *t)
+{
+	int carry0 = t->in0;
+	int carry1 = t->in1;
+	int acc_re = 0x2000;		/* Q14 round-to-nearest, both parts */
+	int acc_im = 0x2000;
+	int k;
+
+	/*
+	 * Two taps per iteration, because two complex inputs arrive per call
+	 * and each is pushed into its own slot of the state.  The real and
+	 * imaginary halves share a coefficient -- this is a real filter
+	 * applied to a complex signal, not a complex filter.
+	 */
+	for (k = 0; k < V34_TIMING_PRE_TAPS; k += 2) {
+		int old0 = t->pre_state[k];
+		int old1 = t->pre_state[k + 1];
+		int c0 = V34TimingPrefilterCoeff[k];
+		int c1 = V34TimingPrefilterCoeff[k + 1];
+
+		t->pre_state[k] = carry0;
+		t->pre_state[k + 1] = carry1;
+
+		acc_re = (int)((unsigned)acc_re
+			       + (unsigned)((short)carry0 * c0));
+		acc_im = (int)((unsigned)acc_im
+			       + (unsigned)((carry0 >> 16) * c0));
+		acc_re = (int)((unsigned)acc_re
+			       + (unsigned)((short)carry1 * c1));
+		acc_im = (int)((unsigned)acc_im
+			       + (unsigned)((carry1 >> 16) * c1));
+
+		carry0 = old0;
+		carry1 = old1;
+	}
+
+	/* Repacked the way it arrived. */
+	return (int)(((unsigned)(acc_im >> 14) << 16)
+		     | (unsigned short)(acc_re >> 14));
 }
 
 int
@@ -609,7 +665,11 @@ V34F_ASSERT(dlen,       struct v34_echo, dlen,       0x18);
 V34F_ASSERT(taps,       struct v34_echo, taps,       0x1c);
 typedef char v34f_echo_size[(sizeof(struct v34_echo) == 0x20) ? 1 : -1];
 
+V34F_ASSERT(t_iir,      struct v34_timing, iir,       0x000);
 V34F_ASSERT(t_hist,     struct v34_timing, hist,      0x024);
+V34F_ASSERT(t_pre_st,   struct v34_timing, pre_state, 0x074);
+V34F_ASSERT(t_in0,      struct v34_timing, in0,       0x11c);
+V34F_ASSERT(t_in1,      struct v34_timing, in1,       0x120);
 V34F_ASSERT(t_pre,      struct v34_timing, prefilter_coeff, 0x114);
 V34F_ASSERT(t_hp,       struct v34_timing, hp_coeff,  0x118);
 V34F_ASSERT(pf_coeff,   struct v34_echo_prefilter, coeff, 0x54);

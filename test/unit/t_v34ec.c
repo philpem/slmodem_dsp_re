@@ -39,6 +39,7 @@ extern const short ref_V34hilbertimagcoef[V34_HILBERT_TAPS];
 extern const short ref_V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
 extern const short ref_V34TimingPrefilterCoeff[40];
 extern void ref_V34TimingFiltersInit(void *t);
+extern int ref_V34TimingPrefilter(void *t);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
 
@@ -157,6 +158,58 @@ main(void)
 			    1, 0);
 		diff_eq_int("likewise its hp",
 			    tb.hp_coeff == ref_V34TimingHPFilterCoeff, 1, 0);
+
+		/*
+		 * D29 stated as its own assertion.  FiltersInit zeroes eighty
+		 * SHORTS past `iir`, which is the whole high-pass history and
+		 * only half the prefilter state -- so the upper twenty
+		 * entries still hold the fill.  Both sides agreeing would
+		 * pass the byte comparison above whichever way it went, so
+		 * this has to be said out loud.
+		 */
+		for (i = 0; i < V34_TIMING_PRE_TAPS; i++) {
+			int want = (i < 20) ? 0 : (int)0xa5a5a5a5;
+
+			diff_eq_int("prefilter state after init",
+				    ta.pre_state[i], want, i);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 timing prefilter");
+	{
+		struct v34_timing ta, tb;
+
+		memset(&ta, HARNESS_MALLOC_FILL, sizeof(ta));
+		memset(&tb, HARNESS_MALLOC_FILL, sizeof(tb));
+		V34TimingFiltersInit(&ta);
+		ref_V34TimingFiltersInit(&tb);
+		/*
+		 * Zero the whole state first, so the run below starts from a
+		 * defined point rather than from D29's half-initialised one --
+		 * that is asserted above and does not need re-proving here.
+		 */
+		memset(ta.pre_state, 0, sizeof(ta.pre_state));
+		memset(tb.pre_state, 0, sizeof(tb.pre_state));
+
+		for (i = 0; i < 500; i++) {
+			int ra, rb;
+
+			ta.in0 = tb.in0 = (int)(((unsigned)(i * 277 - 6000)
+						 << 16)
+						| (unsigned short)(i * 613
+								   - 9000));
+			ta.in1 = tb.in1 = (int)(((unsigned)(4000 - i * 131)
+						 << 16)
+						| (unsigned short)(i * 907
+								   - 15000));
+			ra = V34TimingPrefilter(&ta);
+			rb = ref_V34TimingPrefilter(&tb);
+			diff_eq_int("prefilter out", ra, rb, i);
+			for (k = 0; k < V34_TIMING_PRE_TAPS; k++)
+				diff_eq_int("prefilter state", ta.pre_state[k],
+					    tb.pre_state[k], k);
+		}
 	}
 	rc |= diff_end();
 

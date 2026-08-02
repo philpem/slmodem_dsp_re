@@ -1286,3 +1286,47 @@ library's own allocation rather than of anything a caller owns.
 path with no effect on the signal, so there is nothing for a fix to protect.
 Recorded because it is evidence about the intended size of a coefficient
 array — 144 taps is a number that came from somewhere.
+
+---
+
+## D29 🐛 `V34TimingFiltersInit` zeroes half the prefilter state
+
+**Where:** `src/pump/v34/v34filters.c`, `V34TimingFiltersInit`.
+
+**What the original does:** after clearing the IIR state, runs one loop
+zeroing **eighty shorts** from +0x024:
+
+```
+   72700:  movw   $0x0,0x24(%ecx,%eax,2)
+   72709:  cmp    $0x4f,%ax
+   7270d:  jbe    72700
+```
+
+Two arrays live in that region. The high-pass history is 40 **shorts** at
++0x024, and the prefilter state is 40 **ints** at +0x074 — `V34TimingPrefilter`
+addresses it with `(%esi,%edi,4)` and it abuts the coefficient pointer at
++0x114 exactly, so both the type and the length are pinned.
+
+Eighty shorts is 160 bytes: the whole high-pass history, and then the first
+**twenty** of the prefilter's forty entries. The upper twenty are left
+holding whatever was there.
+
+**What we do:** the same bytes, written as two loops — one over `hist` and
+one over the first twenty entries of `pre_state` — because a single loop over
+`hist` would be indexing past an array in C even though it is exactly what the
+object emits.
+
+**Why it looks like a slip rather than a design:** the loop bound reads as
+"the length of the thing at +0x24", and it would be correct if both arrays
+were shorts. `V34TimingPrefilter` then convolves 40 taps against a state
+whose upper half was never initialised.
+
+**Reachable?** On every call to `V34TimingFiltersInit`, which is once per
+setup. The prefilter's output is wrong until 20 more complex samples have
+shifted through — about 20 symbols. Whether that matters depends on what
+V34RX.c does with the prefilter during acquisition, which is not
+reconstructed; **the consequence is unmeasured** and recorded as such.
+
+**Not fixed.** `t_v34ec` asserts the upper twenty entries still hold the
+harness fill after init, so a reconstruction that helpfully zeroed all forty
+fails rather than passes.

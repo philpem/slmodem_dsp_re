@@ -116,6 +116,13 @@ void V34HilbertFilter(short *state, short sample, int *re, int *im);
  */
 
 #define V34_TIMING_HP_TAPS	40
+#define V34_TIMING_PRE_TAPS	40
+/*
+ * How much of the object V34TimingFiltersInit actually zeroes past `iir`:
+ * eighty SHORTS, which is the high-pass history plus the first twenty
+ * entries of the prefilter state.  See docs/deviations.md, D29.
+ */
+#define V34_TIMING_INIT_SHORTS	80
 
 /*
  * `V34TimingHPFilterCoeff` is Q16, not Q15 -- V34TimingHPFilter rounds with
@@ -148,14 +155,18 @@ struct v34_timing {
 	 * state; V34TimingFilter will settle it.
 	 */
 	short iir[6][3];			/* +0x000 */
+	short hist[V34_TIMING_HP_TAPS];		/* +0x024, to +0x073 */
 	/*
-	 * Eighty shorts, of which V34TimingHPFilter uses the first forty.
-	 * The length is FiltersInit's loop bound, not an assumption.
+	 * The prefilter's state: forty COMPLEX entries, each packed into one
+	 * int as (im << 16) | (unsigned short)re.  It abuts the coefficient
+	 * pointer below exactly, which is what fixes both its length and the
+	 * high-pass history's above it.
 	 */
-	short hist[80];				/* +0x024 */
-	unsigned char unmapped_0c4[0x114 - 0xc4];
+	int pre_state[V34_TIMING_PRE_TAPS];	/* +0x074, to +0x113 */
 	const short *prefilter_coeff;		/* +0x114 */
 	const short *hp_coeff;			/* +0x118 */
+	int in0;				/* +0x11c  newest complex pair */
+	int in1;				/* +0x120  and the one before  */
 };
 
 /*
@@ -169,6 +180,14 @@ void V34TimingFiltersInit(struct v34_timing *t);
 
 /* The 40-tap high-pass ahead of the timing recovery. */
 int V34TimingHPFilter(struct v34_timing *t, short sample);
+
+/*
+ * The 40-tap complex prefilter.
+ *
+ * Takes no sample: it reads the two newest complex inputs out of `in0` and
+ * `in1` and returns the result packed the same way, (im << 16) | re.
+ */
+int V34TimingPrefilter(struct v34_timing *t);
 
 /* ------------------------------------------------------------------------
  * The adaptive equaliser
