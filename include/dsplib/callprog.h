@@ -54,14 +54,26 @@
  * are a different enum from the messages above -- CALLPROG_END_PARTIALLY_STATE
  * and CALLPROG_END_DIALING_PARTIALLY are unrelated.
  *
- * The numeric values are not yet pinned; CALLPROG_Create/Progress will settle
- * them.  Listed here in the order the strings appear, which is the order the
- * compiler emitted them and so most likely the enum order.
+ * NOW PINNED.  `CALLPROG_Progress` logs every transition as
+ * "STATE:  %s --> %s", and both arguments index a table of string pointers
+ * at .rodata+0x5d40 with the state itself -- so the table index IS the enum
+ * value.  The order guessed from emission order was right; this confirms it
+ * rather than assuming it.  See finding 139.
+ *
+ * Note the table continues past these ten with the sixteen MESSAGE names
+ * above, in our exact order -- an independent check on that enum too.
  */
-/* CALLPROG_NO_LEGAL_STATE, CALLPROG_WAIT_DIAL, CALLPROG_DIALING,
- * CALLPROG_WAIT_RING, CALLPROG_WAIT_TO_ANSWER, CALLPROG_ANSWER_STATE,
- * CALLPROG_END, CALLPROG_END_PARTIALLY_STATE, CALLPROG_WFS_STATE,
- * CALLPROG_BONGTONE_STATE */
+#define CALLPROG_NO_LEGAL_STATE		0
+#define CALLPROG_WAIT_DIAL		1
+#define CALLPROG_DIALING_STATE		2	/* not the message of the
+						 * same name, which is 3 */
+#define CALLPROG_WAIT_RING		3
+#define CALLPROG_WAIT_TO_ANSWER		4
+#define CALLPROG_ANSWER_STATE		5
+#define CALLPROG_END			6
+#define CALLPROG_END_PARTIALLY_STATE	7
+#define CALLPROG_WFS_STATE		8	/* wait for silence */
+#define CALLPROG_BONGTONE_STATE		9
 
 /*
  * Name of a progress message, for logging.  Unknown codes give "", not NULL,

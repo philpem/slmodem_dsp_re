@@ -7729,3 +7729,49 @@ The same strings also name two procedures the dialler calls --
 `digitToPulseDial`, and the original source file, `Dialer.C`.  That last is
 the first direct evidence of an original filename; every other name in
 `docs/modules.md` is inferred from symbol grouping.
+
+### 139. The call-progress states pin themselves, and confirm the messages
+
+`callprog.h` recorded ten state names taken from the object's debug strings
+and said of them: "The numeric values are not yet pinned;
+CALLPROG_Create/Progress will settle them.  Listed here in the order the
+strings appear, which is the order the compiler emitted them and so most
+likely the enum order."
+
+`CALLPROG_Progress` settles it.  It logs every transition as
+
+```
+    STATE:  %s --> %s
+```
+
+and both arguments come from `0x5d40(,%reg,4)` -- a table of string pointers
+indexed by the state variable itself.  The table index IS the enum value, so
+the guess from emission order was right, and is now confirmed rather than
+assumed:
+
+```
+   0 CALLPROG_NO_LEGAL_STATE      5 CALLPROG_ANSWER_STATE
+   1 CALLPROG_WAIT_DIAL           6 CALLPROG_END
+   2 CALLPROG_DIALING             7 CALLPROG_END_PARTIALLY_STATE
+   3 CALLPROG_WAIT_RING           8 CALLPROG_WFS_STATE
+   4 CALLPROG_WAIT_TO_ANSWER      9 CALLPROG_BONGTONE_STATE
+```
+
+**And it checks the message enum for free.**  The table continues past those
+ten with sixteen more strings, which are our sixteen `CALLPROG_*` message
+names in our exact order -- `NO_MESSAGE` through `V8BIS_MODEM_ANSWER`.  Two
+adjacent arrays the compiler laid out together, and the second is an
+independent confirmation of an enum reconstructed from behaviour in phase 3.
+
+`CALLPROG_Status_string` does NOT use this table -- it searches a separate
+array of {code, string} pairs at 0x5dc0 -- which is what makes the 0x5d40
+indexing unambiguous rather than a coincidence of ordering.
+
+Note `CALLPROG_DIALING` names both state 2 and message 3.  The header now
+spells the state `CALLPROG_DIALING_STATE` to keep them apart, and says why.
+
+Two other strings from the same function are worth keeping: "Found 2100" and
+"Found 2250" -- the V.25 answer tone and the V.8 ANSam variant -- and
+"CALLPROG: 5 sec. silence was detected", which independently confirms
+finding 138's correction that '@' waits for silence rather than for an
+answer.
