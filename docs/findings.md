@@ -7559,3 +7559,44 @@ cosmetic tidy.
 
 Recorded as one measurement rather than 58 separate defects, because the
 cause is one decision applied consistently and the fix is mechanical.
+
+### 135. The blob was built on 22 September 2005, 15:48 — and the seconds name six TUs
+
+One of the dropped call sites (finding 134) is `FPM_AGC_init`'s:
+
+```c
+    dsplibs_debug_printf("AGC %s %s\n", __DATE__, __TIME__);
+```
+
+`__DATE__` and `__TIME__` are baked into `.rodata` at compile time, so the
+blob carries its own build stamp.  There are six copies of each, at six
+distinct addresses -- string pooling is per translation unit, so six copies
+means six TUs that each contained such a line:
+
+```
+   0x03798  15:48:07   V32FP_recreate
+   0x039a2  15:48:09   CreateV23Modem
+   0x03b02  15:48:09   V22FP_create
+   0x03d47  15:48:11   B103FP_create
+   0x04144  15:48:16   fax_class1_create
+   0x04e70  15:48:18   FPM_AGC_init
+```
+
+All six dated `Sep 22 2005`.  An eleven-second window, so this is one build
+of one tree, not an archive assembled over time.
+
+**Why it is worth more than trivia.**  The seconds are an INDEPENDENT check
+on translation-unit boundaries, which `tumap.py` otherwise infers from
+symbol ordering and address ranges.  `CreateV23Modem` and `V22FP_create`
+share a second but NOT an address -- 0x39a2 against 0x3b02 -- so they are
+two TUs compiled back to back, not one TU with two entry points.  That is
+the kind of question the inference cannot settle on its own, and here the
+compiler answered it.
+
+The five functions named are also, by construction, one per TU that
+contained the macro -- so each is a confirmed member of a distinct TU, and
+`V32FP_recreate` and `V22FP_create` name two datapumps this reconstruction
+has not reached yet.
+
+Recovered only because finding 134 went looking for what had been dropped.
+A call site nobody carried was holding the build date.
