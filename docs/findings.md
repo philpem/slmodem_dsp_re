@@ -5287,3 +5287,43 @@ silently break the aliasing the original depends on.
 It also vindicates the rule written into both headers when the second partial
 map was created: extend one of the existing maps, never start a third. This
 is what starting a third would have cost.
+
+## 101. `V34TimingFilter`, second pass: the loop bound is read, and it is two loops
+
+Continues finding 99. Still **not reconstructed** and **not tested**; three
+more things are now established rather than inferred.
+
+**The loop bound is three, read rather than guessed.** `cmpl $0x2,0x5c(%esp)`
+at 0x724b2 — indices 0, 1, 2, matching the three-entry coefficient arrays.
+Finding 99 inferred it from the array size, which was a weaker argument.
+
+**It is two loops, not one.**
+
+- **0x72407-0x724b7** walks the two shared INPUT histories — `t+0x00` real,
+  `t+0x06` imaginary — against `posHalfBaud_Bcoef_*` and
+  `negHalfBaud_Bcoef_*`, accumulating four sums: a real/imaginary pair per
+  filter, at `0x2c/0x30(%esp)` and `0x24/0x28(%esp)`. It writes the scaled
+  input into both histories as it goes — the same read-then-overwrite shift
+  this module uses everywhere else.
+- **0x724c1 onward** walks the *pos* filter's OUTPUT history at `t+0x0c` and
+  `t+0x12` against `posHalfBaud_Acoef_*`.
+
+**The second loop starts at index 1, not 0** — `mov $0x1,%ebp` at 0x724df.
+That is what a denominator with an implicit `a0` looks like, and
+`Acoef_Real[0]` is 16384, the Q14 one. So the entry is present in the table
+and skipped deliberately, not missed by an off-by-one.
+
+That last point is the one worth having in advance. A reconstruction that
+started both loops at zero would multiply by 1.0 one extra time and be wrong
+by exactly one tap — an error that produces a plausible-looking filter rather
+than an obviously broken one, and that a casual differential test with a
+short input might not separate from rounding.
+
+So the shape is a direct-form complex biquad pair: numerator over the shared
+input history, denominator over each filter's own output history, `a0`
+implicit.
+
+**Unread:** the third loop that must handle the negative filter's output
+history at `t+0x18`/`t+0x1e`, what the `V34TimingIIR_*` pair is for — nothing
+read so far touches it — and the return value. Disassembly beyond 0x72560 is
+not yet examined.
