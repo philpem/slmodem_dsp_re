@@ -194,6 +194,33 @@ sysdep_vsnprintf(char *buf, unsigned size, const char *fmt, va_list ap)
 	return vsnprintf(buf, size, fmt, ap);
 }
 
+/*
+ * The diagnostic hooks, our side.  slmodemd defines these; the harness has to
+ * because the reconstruction imports them exactly as the object does.
+ *
+ * Zero, like slmodemd's own default, so every gated call site takes the
+ * not-logging branch -- which is the configuration a working modem runs in
+ * and therefore the one the differential tests should be comparing.  A test
+ * that wants to drive a logging path can raise it, but must raise
+ * ref_dsplibs_debug_level to match or the two sides will diverge in their
+ * control flow for reasons that have nothing to do with the modem.
+ */
+unsigned int dsplibs_debug_level = 0;
+
+int
+dsplibs_debug_printf(const char *fmt, ...)
+{
+	(void)fmt;
+	return 0;			/* logging only, as on the ref side */
+}
+
+int
+modem_debug_log_data(void *m, unsigned id, const void *buf, int len)
+{
+	(void)m; (void)id; (void)buf; (void)len;
+	return 0;
+}
+
 /* -------------------------------------------------------- reference side */
 
 unsigned int ref_dsplibs_debug_level = 0;

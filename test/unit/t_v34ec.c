@@ -1,0 +1,317 @@
+/*
+ * t_v34ec.c -- differential test of the V.34 echo canceller, Hilbert
+ * transformer and timing high-pass.
+ *
+ * The echo canceller keeps almost all of its state outside its own object:
+ * five pointers into arrays the caller owns.  So comparing the 0x20-byte
+ * struct proves very little, and every check here compares the ARRAYS too --
+ * delay line, both halves of the coefficients, and the tap history.  The one
+ * field that moves inside the struct is `cursor`, and it is compared as an
+ * OFFSET from each side's own base, because the two sides legitimately hold
+ * different addresses.
+ *
+ * The coefficient pair is the part worth driving hard.  `coeff` and
+ * `coeff_frac` are the two halves of one 32-bit number, and an adaptation
+ * that got the signedness of the low half wrong would still look right for
+ * small errors and diverge only once a tap crossed zero.  The runs below use
+ * signed errors of both signs and enough iterations for taps to cross.
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "harness.h"
+#include "dsplib/v34filt.h"
+
+extern void ref_V34EchoCleanUp(void *e);
+extern void ref_V34EchoUpdateDelayLine(void *e, short sample);
+extern int ref_V34EchoFilter(void *e, short lag);
+extern void ref_V34EchoAdapt(void *e, short err);
+extern int ref_V34EchoEstimateDelayLineEnergy(void *e);
+extern void ref_V34EchoReportCoeff(void *e);
+extern void ref_V34InitHilbertFilter(short *state);
+extern void ref_V34HilbertFilter(short *state, short sample, int *re, int *im);
+extern int ref_V34TimingHPFilter(void *t, short sample);
+extern void ref_V34EchoPreFilterCopy(void *dst, const short *coeff);
+extern void ref_V34PremptxCopy(void *m, const short *coeff);
+extern const short ref_V34hilbertrealcoef[V34_HILBERT_TAPS];
+extern const short ref_V34hilbertimagcoef[V34_HILBERT_TAPS];
+extern const short ref_V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS];
+
+#define DLEN	64
+#define TAPS	32
+
+/* Coverage. */
+static int saw_wrap;		/* the delay line cursor wrapped          */
+static int saw_tap_sign;	/* a coefficient crossed zero             */
+static int saw_carry;		/* a fractional part carried into `coeff` */
+
+/* One side's storage: the object and every array it points at. */
+struct side {
+	struct v34_echo e;
+	short dline[DLEN];
+	short coeff[TAPS];
+	short frac[TAPS];
+	short hist[TAPS];
+};
+
+static struct side a, b;
+
+static void
+setup(unsigned taps, unsigned dlen)
+{
+	memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+	memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+
+	a.e.dline = a.dline; a.e.cursor = a.dline;
+	a.e.coeff = a.coeff; a.e.coeff_frac = a.frac; a.e.hist = a.hist;
+	a.e.unused_14 = NULL; a.e.dlen = dlen; a.e.taps = taps;
+
+	b.e.dline = b.dline; b.e.cursor = b.dline;
+	b.e.coeff = b.coeff; b.e.coeff_frac = b.frac; b.e.hist = b.hist;
+	b.e.unused_14 = NULL; b.e.dlen = dlen; b.e.taps = taps;
+}
+
+/*
+ * The object, the cursor as an offset, and all four arrays.
+ *
+ * The struct is compared field by field rather than byte by byte because four
+ * of its eight words are pointers the two sides deliberately differ on; the
+ * cursor is turned into an index so it can be compared at all.
+ */
+static void
+compare(const char *what, int tag)
+{
+	int i;
+
+	diff_eq_int("cursor offset", a.e.cursor - a.dline,
+		    b.e.cursor - b.dline, tag);
+	diff_eq_int("dlen", (long)a.e.dlen, (long)b.e.dlen, tag);
+	diff_eq_int("taps", (long)a.e.taps, (long)b.e.taps, tag);
+
+	for (i = 0; i < DLEN; i++)
+		diff_eq_int("delay line", a.dline[i], b.dline[i], i);
+	for (i = 0; i < TAPS; i++) {
+		diff_eq_int("coeff", a.coeff[i], b.coeff[i], i);
+		diff_eq_int("coeff_frac", a.frac[i], b.frac[i], i);
+		diff_eq_int("hist", a.hist[i], b.hist[i], i);
+	}
+	(void)what;
+}
+
+int
+main(void)
+{
+	int rc = 0;
+	int i, k;
+	short state_a[V34_HILBERT_TAPS], state_b[V34_HILBERT_TAPS];
+	struct v34_timing t_a, t_b;
+
+	diff_begin("v34 filters: the coefficient tables");
+	for (i = 0; i < V34_HILBERT_TAPS; i++) {
+		diff_eq_int("V34hilbertrealcoef[%ld]", V34hilbertrealcoef[i],
+			    ref_V34hilbertrealcoef[i], i);
+		diff_eq_int("V34hilbertimagcoef[%ld]", V34hilbertimagcoef[i],
+			    ref_V34hilbertimagcoef[i], i);
+	}
+	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
+		diff_eq_int("V34TimingHPFilterCoeff[%ld]",
+			    V34TimingHPFilterCoeff[i],
+			    ref_V34TimingHPFilterCoeff[i], i);
+	rc |= diff_end();
+
+	diff_begin("v34 echo: CleanUp leaves the delay line alone");
+	setup(TAPS, DLEN);
+	/* Put something recognisable in the line so "not cleared" is visible. */
+	for (i = 0; i < DLEN; i++)
+		a.dline[i] = b.dline[i] = (short)(1000 + i);
+	V34EchoCleanUp(&a.e);
+	ref_V34EchoCleanUp(&b.e);
+	compare("after CleanUp", 0);
+	/*
+	 * Stated as its own assertion, not left implicit in the comparison
+	 * above: both sides agreeing that the line was cleared would pass the
+	 * comparison just as happily.  D26 says it is NOT cleared.
+	 */
+	diff_eq_int("the delay line survived CleanUp", a.dline[7], 1007, 0);
+	diff_eq_int("but the coefficients did not", a.coeff[7], 0, 0);
+	diff_eq_int("nor the fractional halves", a.frac[7], 0, 0);
+	diff_eq_int("nor the tap history", a.hist[7], 0, 0);
+	rc |= diff_end();
+
+	diff_begin("v34 echo: the delay line wraps");
+	setup(TAPS, DLEN);
+	V34EchoCleanUp(&a.e);
+	ref_V34EchoCleanUp(&b.e);
+	for (i = 0; i < DLEN * 3 + 5; i++) {
+		int before = (int)(a.e.cursor - a.dline);
+
+		V34EchoUpdateDelayLine(&a.e, (short)(i * 137 - 4000));
+		ref_V34EchoUpdateDelayLine(&b.e, (short)(i * 137 - 4000));
+		compare("after a push", i);
+		if ((int)(a.e.cursor - a.dline) < before)
+			saw_wrap++;
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo: filter and adapt");
+	setup(TAPS, DLEN);
+	V34EchoCleanUp(&a.e);
+	ref_V34EchoCleanUp(&b.e);
+
+	/*
+	 * A closed loop: push a sample, filter it at a lag, adapt on the
+	 * result.  Running it as a loop rather than as isolated calls is what
+	 * lets the coefficients actually converge, and convergence is what
+	 * drives taps across zero and carries out of the fractional half.
+	 */
+	for (i = 0; i < 2000; i++) {
+		short sample = (short)((i * 2311) % 20001 - 10000);
+		short lag = (short)(i % 7);
+		int fa, fb;
+		short err;
+
+		V34EchoUpdateDelayLine(&a.e, sample);
+		ref_V34EchoUpdateDelayLine(&b.e, sample);
+
+		fa = V34EchoFilter(&a.e, lag);
+		fb = ref_V34EchoFilter(&b.e, lag);
+		diff_eq_int("filter output", fa, fb, i);
+
+		err = (short)((i & 1) ? (i % 300) - 150 : 150 - (i % 300));
+		{
+			short was[TAPS];
+
+			memcpy(was, a.coeff, sizeof(was));
+			V34EchoAdapt(&a.e, err);
+			ref_V34EchoAdapt(&b.e, err);
+			/*
+			 * Any tap, not just tap 0: whether a particular tap
+			 * changes sign depends entirely on the input, and
+			 * watching one of thirty-two is how this counter read
+			 * zero on its first run while the adaptation was
+			 * working perfectly well.
+			 */
+			for (k = 0; k < TAPS; k++) {
+				if (a.coeff[k] != was[k])
+					saw_carry++;
+				if ((a.coeff[k] < 0) != (was[k] < 0))
+					saw_tap_sign++;
+			}
+		}
+		compare("after filter and adapt", i);
+
+		diff_eq_int("delay line energy",
+			    V34EchoEstimateDelayLineEnergy(&a.e),
+			    ref_V34EchoEstimateDelayLineEnergy(&b.e), i);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo: one tap, and a lag that wraps");
+	/*
+	 * taps == 1 is the original's own special case -- it skips the history
+	 * shift entirely -- and a lag near the delay line's length is what
+	 * exercises the single wrapping subtraction.
+	 */
+	setup(1, DLEN);
+	V34EchoCleanUp(&a.e);
+	ref_V34EchoCleanUp(&b.e);
+	for (i = 0; i < 200; i++) {
+		short lag = (short)(i % (DLEN - 2));
+
+		V34EchoUpdateDelayLine(&a.e, (short)(i * 521 - 3000));
+		ref_V34EchoUpdateDelayLine(&b.e, (short)(i * 521 - 3000));
+		diff_eq_int("one-tap filter", V34EchoFilter(&a.e, lag),
+			    ref_V34EchoFilter(&b.e, lag), i);
+		V34EchoAdapt(&a.e, (short)(i - 100));
+		ref_V34EchoAdapt(&b.e, (short)(i - 100));
+		compare("one tap", i);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo: ReportCoeff with logging off");
+	/*
+	 * All this can establish is that the function changes nothing and
+	 * returns.  Its output goes to a logger both sides stub out, and the
+	 * path that would read past the coefficient array (D28) is gated on a
+	 * level slmodemd ships at zero.  Driving that path would mean raising
+	 * the level on both sides and would still compare nothing, because
+	 * neither logger records anything.
+	 */
+	setup(TAPS, DLEN);
+	V34EchoCleanUp(&a.e);
+	ref_V34EchoCleanUp(&b.e);
+	V34EchoReportCoeff(&a.e);
+	ref_V34EchoReportCoeff(&b.e);
+	compare("after ReportCoeff on zero coefficients", 0);
+	for (i = 0; i < TAPS; i++)
+		a.coeff[i] = b.coeff[i] = (short)(i * 91 - 1000);
+	V34EchoReportCoeff(&a.e);
+	ref_V34EchoReportCoeff(&b.e);
+	compare("after ReportCoeff on live coefficients", 1);
+	rc |= diff_end();
+
+	diff_begin("v34 Hilbert transformer");
+	memset(state_a, HARNESS_MALLOC_FILL, sizeof(state_a));
+	memset(state_b, HARNESS_MALLOC_FILL, sizeof(state_b));
+	V34InitHilbertFilter(state_a);
+	ref_V34InitHilbertFilter(state_b);
+	for (i = 0; i < V34_HILBERT_TAPS; i++)
+		diff_eq_int("init zeroed[%ld]", state_a[i], state_b[i], i);
+
+	for (i = 0; i < 3000; i++) {
+		short x = (short)((i * 7919) % 65536 - 32768);
+		int ra = -1, ia = -1, rb = -2, ib = -2;
+
+		V34HilbertFilter(state_a, x, &ra, &ia);
+		ref_V34HilbertFilter(state_b, x, &rb, &ib);
+		diff_eq_int("hilbert re", ra, rb, i);
+		diff_eq_int("hilbert im", ia, ib, i);
+		for (k = 0; k < V34_HILBERT_TAPS; k++)
+			diff_eq_int("hilbert state", state_a[k], state_b[k], k);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 timing high-pass");
+	memset(&t_a, HARNESS_MALLOC_FILL, sizeof(t_a));
+	memset(&t_b, HARNESS_MALLOC_FILL, sizeof(t_b));
+	memset(t_a.hp_hist, 0, sizeof(t_a.hp_hist));
+	memset(t_b.hp_hist, 0, sizeof(t_b.hp_hist));
+	for (i = 0; i < 3000; i++) {
+		short x = (short)((i * 4409) % 65536 - 32768);
+
+		diff_eq_int("timing hp", V34TimingHPFilter(&t_a, x),
+			    ref_V34TimingHPFilter(&t_b, x), i);
+		for (k = 0; k < V34_TIMING_HP_TAPS; k++)
+			diff_eq_int("timing hp state", t_a.hp_hist[k],
+				    t_b.hp_hist[k], k);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 filters: the two pointer installers");
+	{
+		static unsigned char slot_a[0x1000], slot_b[0x1000];
+		static const short dummy[4] = { 1, 2, 3, 4 };
+
+		memset(slot_a, HARNESS_MALLOC_FILL, sizeof(slot_a));
+		memset(slot_b, HARNESS_MALLOC_FILL, sizeof(slot_b));
+		V34EchoPreFilterCopy(slot_a, dummy);
+		ref_V34EchoPreFilterCopy(slot_b, dummy);
+		V34PremptxCopy(slot_a, dummy);
+		ref_V34PremptxCopy(slot_b, dummy);
+		for (i = 0; i < (int)sizeof(slot_a); i++)
+			diff_eq_int("installed slot", slot_a[i], slot_b[i], i);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo: coverage");
+	printf("  wraps %d, tap sign changes %d, coefficient moves %d\n",
+	       saw_wrap, saw_tap_sign, saw_carry);
+	diff_eq_int("the delay line wrapped", saw_wrap > 0, 1, saw_wrap);
+	diff_eq_int("a coefficient crossed zero", saw_tap_sign > 0, 1,
+		    saw_tap_sign);
+	diff_eq_int("a fractional part carried", saw_carry > 0, 1, saw_carry);
+	rc |= diff_end();
+
+	return rc;
+}

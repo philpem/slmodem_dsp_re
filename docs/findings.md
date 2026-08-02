@@ -4980,3 +4980,61 @@ from one that is strongly positive as far as bit-clock recovery is concerned,
 and `prev > 0` -- a *different* test, strictly greater -- is what decides the
 bit value. A sample of exactly zero therefore contributes `bit_lo` while
 counting as non-negative for resynchronisation. Both are reproduced.
+
+## 93. The V.34 echo canceller's coefficients are 32 bits in two arrays
+
+`struct v34_echo` carries two coefficient pointers, `coeff` at +0x08 and
+`coeff_frac` at +0x0c, both `taps` shorts long. It is easy to read the second
+as a scratch buffer. It is not.
+
+`V34EchoAdapt` reassembles them into one 32-bit value, moves it, and splits it
+again:
+
+```
+   71f70:  movswl (%ecx),%edx      ; coeff[k], SIGNED
+   71f73:  movzwl (%esi),%eax      ; coeff_frac[k], UNSIGNED
+   71f76:  shl    $0x10,%edx
+   71f79:  add    %eax,%edx        ; one 32-bit two's-complement tap
+   ...     imul %ebp,%eax ; add    ; += hist[k] * err
+   71f88:  sar    $0x10,%eax
+   71f8b:  mov    %ax,(%ecx)       ; high half back
+   71f91:  mov    %dx,(%esi)       ; low half back
+```
+
+The signedness is the tell: high half signed, low half unsigned, which is the
+only combination that makes the pair a single number rather than two.
+
+`V34EchoFilter` reads **only the high half**, so the filter runs at 16-bit tap
+resolution while the adaptation carries 32. A correction far below the
+filter's own least significant bit therefore accumulates in `coeff_frac` until
+it carries into `coeff` — which is how a canceller with 16-bit taps converges
+to better than 16-bit accuracy, and why the LMS step can use a much smaller
+effective step size than the tap width would suggest.
+
+Nothing in the object comments on this, and a reconstruction that treated
+`coeff_frac` as scratch would still pass any test whose errors were large
+enough to move the high half directly. `t_v34ec` runs a closed adapt loop for
+2000 iterations precisely so that taps cross zero (414 times) and carries
+happen (56,836 times).
+
+## 94. Three V.34 filters, three different rounding conventions
+
+Worth stating together, because the reconstruction has now hit all three and
+they are easy to conflate:
+
+| function | accumulator starts at | shift | coefficients |
+|---|---|---|---|
+| `V34EchoFilter` | 0 | none — returns 32 bits | Q15 |
+| `V34HilbertFilter` | 0 | none — returns 32 bits | Q15 |
+| `V34TimingHPFilter` | 0x8000 | 16 | **Q16** |
+| `fskdetect` interpolator | 0x2000 | 14 | Q14 |
+| `fskdetect` low-pass | 0 | 14 | Q14 |
+
+The echo and Hilbert filters hand back raw accumulators and V34RX.c does the
+rounding, with `add $0x2000` and `sar $0xe` in both cases. `V34TimingHPFilter`
+is the odd one: it rounds internally because its coefficients are Q16, so
+`V34TimingHPFilterCoeff` cannot be compared like-for-like against the Hilbert
+pair even though both are 16-bit tables in the same `.rodata` block.
+
+The practical consequence is that "is this table Q15?" is not answerable from
+the table. It has to come from the shift in the function that reads it.

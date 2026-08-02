@@ -1216,3 +1216,73 @@ tell which of the two orders was intended, so there is no "fixed" version to
 put behind the flag. Changing either one would change which signals the
 handshake believes it has heard, and no tier-2 peer exists for V.34 to say
 which answer is right.
+
+---
+
+## D26 🐛 `V34EchoCleanUp` does not clear the delay line
+
+**Where:** `src/pump/v34/v34filters.c`, `V34EchoCleanUp`.
+
+**What the original does:** rewinds the cursor to the start of the delay
+line and zeroes the coefficients (both halves) and the tap history, for
+`taps` entries each. It does **not** touch the `dlen` entries of the delay
+line itself.
+
+**What we do:** the same.
+
+**Why it might matter:** the next `V34EchoFilter` convolves freshly zeroed
+coefficients against whatever the previous connection left in the line.
+
+**Reachable?** Yes, on every reset — but harmless, and provably so: the
+coefficients are zero at that moment, so the first output is zero whatever
+the line holds, and by the time adaptation has moved a coefficient far enough
+to matter the line has been overwritten by `V34EchoUpdateDelayLine`. The
+window is `taps` samples wide and the output over it is zero.
+
+**Not fixed.** `t_v34ec` asserts the line survives, so a reconstruction that
+quietly zeroed it would fail rather than pass.
+
+---
+
+## D27 🐛 `V34EchoFilter` wraps its read index only once
+
+**Where:** `src/pump/v34/v34filters.c`, `V34EchoFilter`.
+
+**What the original does:** computes `cursor + lag + taps - 1`, compares it
+against the end of the delay line, and subtracts the length **once** if it is
+past. An index more than one full length past the end stays past the end and
+the read leaves the buffer.
+
+**What we do:** the same, single subtraction.
+
+**Reachable?** Requires `lag + taps - 1 >= 2 * dlen - (cursor - dline)`, so it
+depends on the range of `lag` at the two call sites in `V34RX.c` and on how
+`dlen` is sized relative to `taps` — none of which is reconstructed yet.
+**Unmeasured**, and deliberately recorded as such rather than guessed at;
+re-open this when `V34RX.c` lands.
+
+**Not fixed.** A second wrap would be a different function, and with no
+tier-2 peer for V.34 there is nothing that could say which one the caller
+wants.
+
+---
+
+## D28 🐛 `V34EchoReportCoeff` scans `taps` coefficients and prints 144
+
+**Where:** `src/pump/v34/v34filters.c`, `V34EchoReportCoeff`.
+
+**What the original does:** decides whether there is anything to report by
+scanning `(taps / 6) * 6` coefficients, and then dumps a **hardcoded** 144 of
+them, six to a line, regardless of `taps`. A canceller with fewer than 144
+taps has its coefficient array over-read.
+
+**What we do:** the same, with the 144 named `V34_ECHO_REPORT_TAPS`.
+
+**Reachable?** Only with `dsplibs_debug_level > 1`, which slmodemd ships at
+zero, so it cannot fire on a working modem. The read is also of the
+library's own allocation rather than of anything a caller owns.
+
+**Not fixed**, and not behind `DSPLIB_REPRODUCE_BUGS`: it is a diagnostic
+path with no effect on the signal, so there is nothing for a fix to protect.
+Recorded because it is evidence about the intended size of a coefficient
+array — 144 taps is a number that came from somewhere.
