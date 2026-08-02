@@ -6372,3 +6372,42 @@ pointer at `rx+0x130` by two — the same field `rxtiming` re-points at
 `obj+0x370` on every call.
 
 **Remaining: about 880 bytes unread.**
+
+### 120a. `V34demodulate`'s second block: an RMS estimator over 36 samples
+
+Read to 0x5b0ae (about 430 of 1142 bytes).
+
+After the dequeue, four samples are accumulated (`cmp $0x3,%ax`) and then,
+once `rx->flags & 0x200` is clear — the AGC-freeze / detector-pending bit
+from finding 114 — it computes the RMS of the 36-entry buffer at `rx+0x13c`:
+
+```
+   acc = 0;
+   for (i = 0; i < 36; i++)                 /* counter runs 0x23 down */
+       acc += ((buf[i] * 0x38e) >> 15) * buf[i];
+```
+
+`0x38e / 32768` is `0.027771`, and `1/36` is `0.027778` — so the per-sample
+scale is the mean, folded into the square. The loop counts **down** from
+0x23 and terminates on `inc %ax` setting ZF, which is 36 iterations, not 35.
+
+Then a normalise-and-halve square root:
+
+```
+   shift = 0;
+   while (acc <= 0x1fffffff) { acc += acc; shift++; }   /* skipped if big */
+   mant = acc >> 15;
+   if (shift & 1) mant >>= 1;                            /* odd exponent */
+   result = (mant + 0x40) >> 7;
+```
+
+The `if (shift & 1)` is spelled as `cmp` against `(shift >> 1) * 2` rather
+than a bit test, which is the same thing and is worth not simplifying while
+transcribing.
+
+So this block turns 36 samples into one RMS figure — the receiver's own
+level estimate, and presumably what `agcadapt`'s `agc_input` is fed from.
+That would close the loop between `V34demodulate`, `agcadapt` and the
+freeze bit, but the connection is not yet read.
+
+**Remaining: about 700 bytes.**
