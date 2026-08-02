@@ -12,8 +12,10 @@ test/harness/*_diff
 *_weak.o
 symmap.txt
 
-# vendored test peer is a submodule; its build tree is not ours
-third_party/spandsp/
+# vendored test peer; its build tree is not ours.  No trailing slash: with
+# one, the pattern matches a directory but NOT a symlink, and a `git worktree`
+# checkout wants to symlink this rather than rebuild 36 MB of it.
+third_party/spandsp
 
 # python
 __pycache__/
