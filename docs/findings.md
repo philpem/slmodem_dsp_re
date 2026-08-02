@@ -5951,3 +5951,55 @@ confusion later but a fact never discovered at all.
 
 `struct v34_receiver` is now the single map; `v34_rx`, `v34_decoder`,
 `v34_agcstate` and `v34_scrambler` are gone.
+
+## 115. `rxinit` stores a leftover return register into a receiver field
+
+Full reading of 0x5ab80-0x5ad45. **Not written** — see the trap below.
+
+Structure:
+
+```
+   rx->agc_gain = 0x200;  rx->agc_step = 0x3333;  rx->f1b8 = 1;
+   V34EqualizerCleanUp(obj + 0x630);          /* the equaliser         */
+   sysdep_memset(obj + 0x4ec, 1, 0xc);        /* FILL 1, NOT 0         */
+   sysdep_memset(obj + 0x4f8, 1, 0x10);       /* FILL 1                */
+   V34InitHilbertFilter(obj + 0xa1b8);
+   rx->f218 = 0x4000;  rx->f1f2 = 0x4000;
+   rx->f138 = <see below>;
+   rx->agc_level = 0x4000;  rx->f1f4 = 0x4000;
+   if (rx->flags & 8)  { rx->f200 = 2; rx->f202 = 10; }
+   else                { rx->f1f8 = 0; rx->f200 = 2; rx->f202 = 8; }
+   ... about twenty more fields cleared to zero ...
+   rx->rx_samples = rx + 0x10c;
+```
+
+Two things worth having before it is written.
+
+**The two memsets fill with 1, not 0.** `sysdep_memset(obj+0x4ec, 1, 0xc)`
+writes `0x01010101`, not zeros — twelve bytes and then sixteen. Easy to
+"correct" while transcribing.
+
+**`rx->f138` is stored from `%eax` immediately after the
+`V34InitHilbertFilter` call**, and that function returns nothing:
+
+```
+   5ac04:  call   V34InitHilbertFilter
+   5ac09:  mov    $0x4000,%ecx
+   ...
+   5ac2e:  mov    %ax,0x138(%ebx)
+```
+
+`V34InitHilbertFilter` ends by tail-calling `sysdep_memset`, which returns its
+destination, so `%eax` holds `obj + 0xa1b8` and its low half lands in
+`f138` — the AGC's error integrator. **The value depends on where the object
+was allocated.**
+
+That makes it the first V.34 field whose correct value differs between the
+blob and the reconstruction by construction: two objects at two addresses
+give two answers, both "right". Writing `rxinit` therefore needs
+`V34InitHilbertFilter` declared to return its argument — which is what it
+does — and `t_v34rx` must skip `f138`, the same way it already skips pointer
+fields.
+
+Registered as **D34**; the field is an integrator that `agcadapt` overwrites
+on its first trip, so the garbage has a short life, but it is garbage.

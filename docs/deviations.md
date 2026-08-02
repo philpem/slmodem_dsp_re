@@ -1494,3 +1494,29 @@ overflow guard (`if (quotient < 0) quotient = 0x2000`) shows the author
 thought about the divide's range and did not guard this case, so any clamp
 would be invention. `t_v34rx` documents the domain in a comment rather than
 driving it.
+
+---
+
+## D34 🐛 `rxinit` seeds the AGC integrator from a stale return register
+
+**Where:** `src/pump/v34/v34rx.c`, `rxinit` (not yet written).
+
+**What the original does:** stores `%eax` into the receiver's `f138` right
+after calling `V34InitHilbertFilter`, which returns nothing. That function
+tail-calls `sysdep_memset`, so `%eax` holds the memset's destination —
+`obj + 0xa1b8` — and its low half becomes the AGC's error integrator.
+
+**Reachable?** Every call. The value is whatever the object's address happens
+to be, so it varies per allocation.
+
+**Consequence:** small. `agcadapt` overwrites the integrator the first time
+its error leaves the deadband, and the deadband is 1200 wide, so the bad seed
+survives only until the first significant level error. But it is a genuine
+uninitialised-value bug of the same family as D30 and D32, and this is the
+third in V.34 — the pattern is a compiler reusing a register the author
+assumed was dead.
+
+**To be reproduced**, which requires declaring `V34InitHilbertFilter` to
+return its argument. It is the first V.34 field whose value legitimately
+differs between the blob and the reconstruction, because the two objects live
+at different addresses, so the test must skip it.
