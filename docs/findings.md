@@ -6852,3 +6852,35 @@ constants in finding 112 are right.
 
 **This is the last unknown.** The ordering above, plus the four fixes in
 121d, should close the remaining 576. Nothing further needs probing.
+
+### 121g. The ordering was already right; our AGC never runs at all
+
+Applying the ordering from 121f changed nothing — still 576, same offsets.
+But the *values* localise it exactly.
+
+`rx+0x138` (`agc_accum`) reads `248, 101` on our side, which little-endian is
+`0x65f8` — **D34's seed**, the low half of `&object + 0xa1b8` that `rxinit`
+leaves there. The blob reads 0, because its AGC ran and the integrator
+tripped.
+
+So the reconstruction's AGC is **never entered**, and `agc_accum` still holds
+its initial garbage. That is not an ordering fault and not an arithmetic one:
+`agcadapt` is proven correct by 7.1M checks, and if it had run with any
+plausible level it would have tripped and zeroed the field.
+
+**So 121e's retraction of 121d was itself wrong**, and this is the third
+reversal on the same question. The record is worth stating plainly:
+
+  - 121d: "the blob is not running the AGC" — wrong, it runs every time
+  - 121e: "the level gate is not the problem" — wrong, the gate is exactly it
+  - 121g: our gate never opens, and `agc_accum` proves it by retaining D34
+
+The lesson is the one 121e already drew and then mis-applied: **do not infer
+which side did less work from which side has zeroes.** Here the zero is the
+side that *did* the work, and the non-zero is untouched initial state. Both
+readings are available from the same two numbers, and only the provenance of
+the value — `0x65f8` being an address — distinguishes them.
+
+**Next, and it is a one-line probe:** print `lvl` and `f12a` from inside our
+`V34demodulate`. Either `f12a` never reaches 4, or `lvl` never exceeds 0x1f.
+Two candidates, one print, no more inference.
