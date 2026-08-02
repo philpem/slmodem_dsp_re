@@ -4852,3 +4852,90 @@ The reconstruction's own file comment asserted the wrong contract in so many
 words ("a caller can advance its own stream by that much and the two stay in
 step"), so the finding is a correction to this tree's documentation rather
 than to its code: `v23_process` was right all along.
+
+## 88. `costbl` is 255 derivable entries and one that is not
+
+The V.34 cosine table at `.data+0x6d60` is 256 entries over one full period in
+Q14, shared by `DFTC.c` and `V34RX.c`. Every entry but one is exactly
+
+```
+(short)(16384.0 * cos(2 * pi * i / 256))
+```
+
+truncated toward zero rather than rounded, which is what a generator that
+assigns a double straight to a short produces. Index 128 is the exception:
+`cos` is -1 there, the formula gives -16384, and the table holds **-16383**.
+
+That is not a range limit. `-16384` is representable, index 0 carries
+`+16384`, and no other entry is clamped. Nor is it a rounding artefact: the
+angle at i=128 comes out as `M_PI` exactly under any evaluation order a
+generator would use, and `cos(M_PI)` is exactly `-1.0` in IEEE double, so
+every plausible generator gives -16384.
+
+So one entry was floored by hand. The most likely reason is that negating a
+Q14 value is only safe above -16384 and this table is read by code that
+negates it -- but that is a guess, and the reconstruction does not act on it.
+
+The consequence is concrete and small: **the table cannot be generated**, and
+`src/pump/v34/dftc.c` emits it as data. A reconstruction that computed it
+would be wrong by one LSB at exactly the index the phase accumulator lands on
+for half a turn, which is not a rare input.
+
+## 89. Two functions in V.34 that nothing in the object calls
+
+`cosread` (14 bytes) is a one-line accessor returning `costbl[idx]` for a
+`unsigned char` index. The relocation table has **no reference to it** from
+anywhere in `.text`, and neither does any datapump's operations table. Its
+own table is reached directly by the two functions that use it.
+
+It is global, so a caller outside `dsplibs.o` could in principle reach it,
+and nothing in slmodemd does. It is reproduced anyway: an exported symbol
+with no internal caller is a fact about the original's interface, and this
+reconstruction does not get to decide that the interface was wrong.
+
+The same reasoning applies to `denergy`, the `double` energy `dftenergy`
+writes at bin offset +0x20. Both accumulator paths are maintained on every
+sample of every bin -- an x87 load, add and store each -- and no reader for
+the double result has been found. Unlike `cosread` it is not exported, so
+its reader would have to be inside the object; the search covered the
+relocations and the constant-offset loads in `v34handshak` and `V34RX.c`, and
+neither turned one up. Recorded as unresolved rather than as dead code,
+because 91% of `.text` is still untranslated and a null result over the part
+that is translated is not evidence.
+
+## 90. The V.34 detector scales its two sections differently
+
+`tone_detect` runs two second-order sections in cascade and divides by 16
+between them, which is ordinary headroom management. What is not ordinary is
+that the two divisions are not the same operation.
+
+Section 1 shifts the 32-bit accumulator and then truncates:
+
+```
+   7374a:  sar    $0x4,%ecx          ; the full accumulator
+   73754:  movswl %cx,%ecx           ; then take the low word
+```
+
+Section 2 truncates and then shifts:
+
+```
+   737a0:  movswl %cx,%edi           ; take the low word
+   737a3:  sar    $0x4,%edi          ; then shift
+```
+
+The two agree while the accumulator fits in 16 bits and diverge as soon as it
+does not -- which is precisely when the detector is being driven hard, and
+therefore precisely when it is being asked to make a decision. Section 2's
+order discards the high bits before they can be shifted down into range, so
+its output folds instead of scaling.
+
+There is no reading under which both are intended. One is a slip, and which
+one cannot be recovered from the object: the surrounding code gives no
+independent scale for either section's output, and the coefficients the
+handshake installs (`obj+0xaab0`) belong to a translation unit that is still
+opaque, so there is nothing to check the intended gain against.
+
+Reproduced, and registered as D25. See the bug policy: this is not a defect
+that stops a working modem, because both orders behave identically over the
+levels a correctly-AGC'd detector sees, and "fixing" it would change which
+signals the handshake believes it has heard.

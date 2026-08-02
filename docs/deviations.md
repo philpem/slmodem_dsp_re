@@ -1185,3 +1185,34 @@ carrier. This is the one entry in this register that is not dormant.
 `t_v23dp` asserts the wrong value deliberately -- a reconstruction that
 quietly fixed it would still pass a comparison against a reference that does
 not.
+
+---
+
+## D25 🐛 the V.34 detector's two sections scale differently
+
+**Where:** `src/pump/v34/detector.c`, `tone_detect`.
+
+**What the original does:** divides section 1's output by 16 by shifting the
+32-bit accumulator and then truncating to 16 bits, and divides section 2's
+output by 16 by truncating to 16 bits and then shifting. Finding 90 has the
+two instruction sequences.
+
+**What we do:** the same, both of them, in the same order.
+
+**Why it is a defect:** the two orders are not the same function. Once the
+accumulator leaves 16 bits, section 2's output folds where section 1's would
+have scaled, so the level fed to the integrator -- and therefore the
+detector's verdict -- is wrong in a way that depends on how far the
+accumulator overflowed rather than on how much signal there was.
+
+**Reachable?** Only above 16-bit accumulator range, which a detector fed by a
+working AGC does not reach. `t_v34det` drives it deliberately (the
+resonators there are deliberately soft precisely so the behavioural
+assertions measure the filter and not this), and both sides agree byte for
+byte throughout. Dormant in normal operation.
+
+**Not fixed**, and not behind `DSPLIB_REPRODUCE_BUGS`: there is no way to
+tell which of the two orders was intended, so there is no "fixed" version to
+put behind the flag. Changing either one would change which signals the
+handshake believes it has heard, and no tier-2 peer exists for V.34 to say
+which answer is right.

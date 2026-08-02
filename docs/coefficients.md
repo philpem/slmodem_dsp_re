@@ -312,3 +312,18 @@ against the response rather than coefficient distance. Tracked as a task.
   differential-test them.
 - Extract the remaining banks' coefficients into the reconstruction, keeping
   the extracted bytes as reference and the design rule as the retarget recipe.
+
+## V.34 `costbl`
+
+256 entries, one full period, Q14, at `.data+0x6d60`. Global, and shared
+between `DFTC.c` and `V34RX.c`.
+
+**Derivation:** `(short)(16384.0 * cos(2 * pi * i / 256))`, truncated toward
+zero, **for 255 of the 256 entries**. Index 128 holds -16383 where the
+formula gives -16384.
+
+This is the only table recovered so far that its own generator does not
+reproduce, so it is the only one emitted as literal data for a reason other
+than convenience. See findings 88 for why the exception is a hand-applied
+floor rather than rounding, and why regenerating the table would be wrong at
+an index that is reached on every half turn of the phase accumulator.
