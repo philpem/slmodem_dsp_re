@@ -45,6 +45,7 @@ extern const short ref_posHalfBaud_Bcoef_Imag[3], ref_posHalfBaud_Bcoef_Real[3];
 extern const short ref_V34TimingIIR_Acoef[5], ref_V34TimingIIR_Bcoef[5];
 extern void ref_V34TimingFiltersInit(void *t);
 extern int ref_V34TimingPrefilter(void *t);
+extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
 
@@ -274,6 +275,42 @@ main(void)
 			for (k = 0; k < V34_TIMING_PRE_TAPS; k++)
 				diff_eq_int("prefilter state", ta.pre_state[k],
 					    tb.pre_state[k], k);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 timing filter");
+	{
+		struct v34_timing ta, tb;
+
+		memset(&ta, 0, sizeof(ta)); memset(&tb, 0, sizeof(tb));
+		V34TimingFiltersInit(&ta); ref_V34TimingFiltersInit(&tb);
+		memset(ta.pre_state, 0, sizeof(ta.pre_state));
+		memset(tb.pre_state, 0, sizeof(tb.pre_state));
+		for (i = 0; i < 400; i++) {
+			int smp = (int)(((unsigned)(i * 311 - 5000) << 16)
+					| (unsigned short)(i * 701 - 11000));
+
+			diff_eq_int("timing out", V34TimingFilter(&ta, smp),
+				    ref_V34TimingFilter(&tb, smp), i);
+			/*
+			 * Everything except the two coefficient pointers,
+			 * which the two sides legitimately hold different
+			 * addresses in -- each side installed its own table.
+			 * Skipping them is the same reason compare_obj skips
+			 * `tone` in t_v23tx.
+			 */
+			for (k = 0; k < (int)sizeof(ta); k++) {
+				if (k >= (int)__builtin_offsetof(
+						struct v34_timing,
+						prefilter_coeff)
+				    && k < (int)__builtin_offsetof(
+						struct v34_timing, in0))
+					continue;
+				diff_eq_int("timing state at %ld",
+					    ((unsigned char *)&ta)[k],
+					    ((unsigned char *)&tb)[k], k);
+			}
 		}
 	}
 	rc |= diff_end();

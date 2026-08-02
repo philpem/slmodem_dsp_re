@@ -607,6 +607,120 @@ V34TimingFiltersInit(struct v34_timing *t)
 	t->hp_coeff = V34TimingHPFilterCoeff;
 }
 
+/*
+ * Symbol timing recovery: two half-baud band-passes, a cross product, and a
+ * high-pass.  See findings 99, 101, 102 and 103; the traps are noted inline.
+ */
+int
+V34TimingFilter(struct v34_timing *t, int sample)
+{
+	int cr, ci, k;
+	int pr = 0, pi = 0, nr = 0, ni = 0;	/* numerator accumulators   */
+	int par = 0, pai = 0, nar = 0, nai = 0;	/* denominator accumulators */
+	int acc, hp;
+
+	t->in1 = t->in0;
+	t->in0 = sample;
+
+	/* 0x599a / 32768 = 0.70001, rounded. */
+	cr = (short)(((short)sample * 0x599a + 0x8000) >> 15);
+	ci = (short)(((sample >> 16) * 0x599a + 0x8000) >> 15);
+
+	/* Numerator, over the shared input history, for both filters. */
+	for (k = 0; k < 3; k++) {
+		int or_ = t->iir[0][k], oi = t->iir[1][k];
+
+		t->iir[0][k] = (short)cr;
+		t->iir[1][k] = (short)ci;
+
+		pr += cr * posHalfBaud_Bcoef_Real[k]
+		      - ci * posHalfBaud_Bcoef_Imag[k];
+		pi += ci * posHalfBaud_Bcoef_Real[k]
+		      + cr * posHalfBaud_Bcoef_Imag[k];
+		nr += cr * negHalfBaud_Bcoef_Real[k]
+		      - ci * negHalfBaud_Bcoef_Imag[k];
+		ni += cr * negHalfBaud_Bcoef_Imag[k]
+		      + ci * negHalfBaud_Bcoef_Real[k];
+
+		cr = or_;
+		ci = oi;
+	}
+
+	/*
+	 * Denominator, over each filter's OWN output history, from index 1:
+	 * Acoef_Real[0] is 16384, the implicit Q14 one, and skipping it is
+	 * deliberate.
+	 */
+	cr = t->iir[2][0];
+	ci = t->iir[3][0];
+	for (k = 1; k < 3; k++) {
+		int or_ = t->iir[2][k], oi = t->iir[3][k];
+
+		t->iir[2][k] = (short)cr;
+		t->iir[3][k] = (short)ci;
+		par += cr * posHalfBaud_Acoef_Real[k]
+		       - ci * posHalfBaud_Acoef_Imag[k];
+		pai += cr * posHalfBaud_Acoef_Imag[k]
+		       + ci * posHalfBaud_Acoef_Real[k];
+		cr = or_;
+		ci = oi;
+	}
+
+	cr = t->iir[4][0];
+	ci = t->iir[5][0];
+	for (k = 1; k < 3; k++) {
+		int or_ = t->iir[4][k], oi = t->iir[5][k];
+
+		t->iir[4][k] = (short)cr;
+		t->iir[5][k] = (short)ci;
+		nar += cr * negHalfBaud_Acoef_Real[k]
+		       - ci * negHalfBaud_Acoef_Imag[k];
+		nai += cr * negHalfBaud_Acoef_Imag[k]
+		       + ci * negHalfBaud_Acoef_Real[k];
+		cr = or_;
+		ci = oi;
+	}
+
+	/*
+	 * Feedback, then the outputs -- written to the [0] slots only AFTER
+	 * both loops have run, because those loops are still reading them.
+	 */
+	pr -= par; pi -= pai; nr -= nar; ni -= nai;
+	t->iir[2][0] = (short)((pr + 0x2000) >> 14);
+	t->iir[3][0] = (short)((pi + 0x2000) >> 14);
+	t->iir[4][0] = (short)((nr + 0x2000) >> 14);
+	t->iir[5][0] = (short)((ni + 0x2000) >> 14);
+
+	/* The discriminator: the cross product of the two complex outputs. */
+	/*
+	 * pos_im * neg_re - pos_re * neg_im, in that order.  The original is
+	 *   imul %eax,%ebp   (pos_im * neg_re)
+	 *   imul %edx,%edi   (pos_re * neg_im)
+	 *   sub  %edi,%ebp
+	 * so the opposite order gives the negated discriminator -- a timing
+	 * loop that corrects the wrong way.
+	 */
+	acc = t->iir[3][0] * t->iir[4][0] - t->iir[2][0] * t->iir[5][0];
+	acc = (short)((acc + 0x2000) >> 14);
+
+	/*
+	 * The high-pass, written out rather than delegated: this rounds with
+	 * 0x4000 and shifts 15 where V34TimingHPFilter uses 0x8000 and 16 --
+	 * twice the gain, same table, same history.  Finding 102.
+	 */
+	hp = 0x4000;
+	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
+		int old = t->hist[k];
+
+		t->hist[k] = (short)acc;
+		hp = (int)((unsigned)hp
+			   + (unsigned)(acc * V34TimingHPFilterCoeff[k]));
+		acc = old;
+	}
+
+	return (short)(hp >> 15);
+}
+
 int
 V34TimingPrefilter(struct v34_timing *t)
 {

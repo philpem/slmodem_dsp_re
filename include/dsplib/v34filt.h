@@ -230,6 +230,8 @@ struct v34_timing {
  */
 void V34TimingFiltersInit(struct v34_timing *t);
 
+int V34TimingFilter(struct v34_timing *t, int sample);
+
 /* The 40-tap high-pass ahead of the timing recovery. */
 int V34TimingHPFilter(struct v34_timing *t, short sample);
 
