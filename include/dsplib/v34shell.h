@@ -58,7 +58,23 @@ struct v34_shell {
 	 */
 	short           count;			/* +0xa12 */
 	short           fa14;			/* +0xa14 the repeated width */
-	unsigned char pad_a16[0xa48 - 0xa16];
+	unsigned char pad_a16[0xa18 - 0xa16];
+	/*
+	 * decodeDepth's delay line: three COMPLEX taps, shifted a pair at a
+	 * time.  hist[2..3] take hist[0..1] and hist[4..5] take hist[2..3];
+	 * the new pair is written to hist[0..1].
+	 */
+	short           hist[6];		/* +0xa18 */
+	unsigned char pad_a24_[0xa24 - 0xa24];
+	/* Twelve coefficients as two rows of six, the second at +6. */
+	const short *   coeff;			/* +0xa24 */
+	unsigned char pad_a28[0xa38 - 0xa28];
+	short           prev_k;			/* +0xa38 last quadrant   */
+	unsigned char pad_a3a[0xa42 - 0xa3a];
+	short           divisor;		/* +0xa42 zero means one  */
+	unsigned char pad_a44[0xa46 - 0xa44];
+	short           wrap;			/* +0xa46 sets the masks  */
+	unsigned char pad_a48_[0xa48 - 0xa48];
 	short           t1[0x80];		/* +0xa48 */
 	short           t2[0x80];		/* +0xb48 */
 	/*
@@ -82,6 +98,27 @@ struct v34_shell {
 	 * in shellDemapper; that asymmetry is the object's, not a slip here.
 	 */
 	short           sub[V34_SHELL_SUBS];	/* +0xe9c */
+	unsigned char pad_eac[0xecc - 0xeac];
+	/*
+	 * The trellis, 32 states of 16 branches.  Each entry is two bytes
+	 * read separately and with different signedness: the LOW byte is an
+	 * output code, taken unsigned, and the HIGH byte is the next branch,
+	 * taken SIGNED.  decodeDepth walks it backwards 31 steps.
+	 */
+	unsigned short  trellis[32 * 16];	/* +0xecc */
+	/*
+	 * Per-state parameters, one six-short group each.  The second entry
+	 * of every group is unread by decodeDepth.
+	 */
+	struct {
+		short   seed;			/* +0x0 walk's first branch */
+		short   unread_2;		/* +0x2 */
+		short   a;			/* +0x4 */
+		short   b;			/* +0x6 */
+		short   c;			/* +0x8 */
+		short   d;			/* +0xa */
+	}               state[32];		/* +0x12cc */
+	short           state_idx;		/* +0x144c */
 };
 
 /*
@@ -96,6 +133,14 @@ int shellDemapper(void *shell);
  * four groups of (1 bit, a small field, and two `fa14`-wide fields).
  */
 void putFrame(void *shell);
+
+/*
+ * Walk the trellis back 31 steps and decode one 8D frame.
+ *
+ * `quad` receives four shorts (two quadrant deltas and two masked grid
+ * values) and `idx` two -- the grid values shifted down by `fa14`.
+ */
+void decodeDepth(void *shell, short *quad, short *idx);
 
 #ifdef __cplusplus
 }

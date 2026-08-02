@@ -7352,6 +7352,15 @@ reconstructed, so whether it can produce an out-of-range group is exactly
 what has not been measured.  Task #49 should check it, and the fixture now
 asserts the bound rather than assuming it.
 
+**`grid` is the third.**  `decodeDepth` indexes it with
+`(23*hi + lo + 0x408) >> 2` into 529 entries, again unclamped, where `hi` is
+a per-state parameter minus a residue.  A parameter of 200 -- unremarkable
+on its face -- gives an index near 1200.  That cost a debugging round: the
+reconstruction was correct and the fixture was reading past the table on both
+sides, which presents exactly like a decode error.  Three tables in one file
+with no bounds check is a property of the module, not an accident of one
+function.
+
 Worth noting alongside finding 123, which is the same shape in `rxtiming`:
 in both cases the object relies on a caller-side invariant it does not state,
 and in both cases the reconstruction found it by exceeding it rather than by

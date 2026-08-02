@@ -309,9 +309,229 @@ putFrame(void *shellp)
 	}
 }
 
+
 /*
  * ---------------------------------------------------------------------------
- * Layout, pinned to what shellDemapper and putFrame read.
+ * decodeDepth -- walk the trellis back and decode one 8D frame.
+ *
+ * Three parts: a traceback, then the same 4D decode twice, then a pair of
+ * grid lookups.
+ *
+ * THE TRACEBACK.  `state_idx` picks a starting state; the walk then takes 31
+ * steps through a 32x16 table, at each step indexing by `(state << 4) +
+ * branch`, taking the entry's HIGH byte as the next branch and stepping the
+ * state down by one modulo 32.  The entry's LOW byte at the final position is
+ * the decision, and it is read UNSIGNED where every intermediate high byte is
+ * read SIGNED -- same address, two byte lanes, two signednesses.
+ *
+ * THE FOUR-WAY PREAMBLES.  `code >> 2` and `code & 3` each select how a pair
+ * of per-state parameters is nudged: each may be pushed two counts up or two
+ * down depending on how the state's stored value compares with `divisor`
+ * times the parameter.  The mapping is not the bit pattern it looks like --
+ *
+ *     0   neither
+ *     1   the second only
+ *     2   BOTH
+ *     3   the first only
+ *
+ * -- because case 2 falls through into case 1's block rather than jumping
+ * past it, and case 3 jumps out.  Reading it as "bit 0 does B, bit 1 does A"
+ * gives the wrong answer for exactly half the cases.
+ *
+ * THE DECODE, run twice.  Six complex taps against two coefficient rows,
+ * both accumulators seeded with 0x1fff for rounding; each result rounded
+ * toward zero, shifted down 14, folded against a mask derived from `wrap`,
+ * then shifted down 7.  The delay line then shifts by one COMPLEX pair and
+ * takes the new one.  A four-bit code assembled from three separate pairs of
+ * bits indexes `kLookup` for the quadrant.
+ *
+ * The two halves are the same computation on different parameters, which is
+ * why they are one function here; the object emits them twice with different
+ * stack slots throughout.  See finding 132.  The one asymmetry worth naming:
+ * the second accumulator's mask variable is AND-ed in place rather than
+ * copied, in both halves -- harmless because neither reuses it, but it is
+ * why the two look less alike than they are.
+ */
+
+/* Round toward zero, drop 14 bits, fold against the wrap, drop 7 more. */
+static int
+depth_quant(int acc, int lim, int maskhi, int mask2, short *q_out)
+{
+	unsigned v = (unsigned)(acc < 0 ? acc + 1 : acc);
+	int q;
+	int t;
+
+	q = (short)(unsigned short)(v >> 14);
+	*q_out = (short)(v >> 14);
+
+	/*
+	 * The fold test is SIXTEEN bits wide (`cmp 0x6c(%esp),%ax`), even
+	 * though the AND that feeds it is 32.  Comparing the full words
+	 * agrees only while the high half happens to match.
+	 */
+	t = (short)(((unsigned)(v >> 14) & (unsigned)maskhi)) == (short)lim
+	    ? q : q + lim;
+
+	return (int)(short)(((unsigned)t >> 7) & (unsigned)mask2);
+}
+
+/*
+ * One 4D half: the dot products, the two quantisations, the delay-line
+ * shift and the kLookup index.  `p`/`q` are the pair of parameters this
+ * half was handed; `r0`/`r1` come back for the caller's arithmetic.
+ */
+static int
+depth_half(struct v34_shell *s, int p, int q, int codebits, short *r0,
+	   short *r1)
+{
+	const short *c = s->coeff;
+	int acc0 = 0x1fff, acc1 = 0x1fff;
+	int lim = (short)(s->wrap << 7);
+	int maskhi = lim | (int)0xffff80ff;
+	int mask2 = (short)(-(s->wrap * 2));
+	short qa, qb;
+	int ra, rb;
+	int j;
+
+	for (j = 0; j < 6; j++) {
+		int h = s->hist[j];
+
+		acc0 += h * c[j];
+		acc1 += h * c[j + 6];
+	}
+
+	ra = depth_quant(acc0, lim, maskhi, mask2, &qa);
+	rb = depth_quant(acc1, lim, maskhi, mask2, &qb);
+
+	/* Shift by one complex pair, then take the new one. */
+	s->hist[5] = s->hist[3];
+	s->hist[4] = s->hist[2];
+	s->hist[3] = s->hist[1];
+	s->hist[2] = s->hist[0];
+	s->hist[0] = (short)((p << 7) - (unsigned short)qa);
+	s->hist[1] = (short)((q << 7) - (unsigned short)qb);
+
+	*r0 = (short)ra;
+	*r1 = (short)rb;
+
+	return kLookup[(codebits & 0xc) | (ra & 2) | ((rb & 2) >> 1)];
+}
+
+/* Nudge `v` two counts toward the state's stored parameter. */
+static int
+depth_nudge(int v, int stored, int divisor)
+{
+	return stored > divisor * v ? v + 2 : v - 2;
+}
+
+/* Rotate a packed (lo, hi) pair by `k` quadrants and scale by 23. */
+static int
+depth_rotate(int packed, int k)
+{
+	int lo = (short)packed;
+	int hi = packed >> 16;
+
+	switch (k) {
+	case 1:  return (short)(23 * lo - hi);
+	case 2:  return (short)(-23 * hi - packed);
+	case 3:  return (short)(-23 * lo + hi);
+	default: return (short)(23 * hi + packed);
+	}
+}
+
+void
+decodeDepth(void *shellp, short *quad, short *idx)
+{
+	struct v34_shell *s = (struct v34_shell *)shellp;
+	int div = s->divisor ? s->divisor : 1;
+	int st = (unsigned short)(s->state_idx - 1) & 0x1f;
+	int branch = s->state[st].seed;
+	int code;
+	int a, b, c, d;
+	short r0, r1, r2, r3;
+	int k1, k2;
+	int packed, g;
+	short prev;
+	int n;
+
+	/*
+	 * Thirty-ONE steps back, high byte signed, state stepping down.  The
+	 * counter is incremented before its `<= 30` test, so the body runs
+	 * once more than the bound reads.
+	 */
+	for (n = 1; n <= 31; n++) {
+		branch = (signed char)(s->trellis[(st << 4) + branch] >> 8);
+		st = (st - 1) & 0x1f;
+	}
+
+	code = (unsigned char)s->trellis[(st << 4) + branch];
+
+	/* The two parameter pairs, each rounded up to a multiple of 4 plus 1. */
+	a = (((s->state[st].a / div) + (s->state[st].a > 0 ? 1 : 0)) & ~3) + 1;
+	b = (((s->state[st].b / div) + (s->state[st].b > 0 ? 1 : 0)) & ~3) + 1;
+
+	switch (code >> 2) {
+	case 1:
+		b = depth_nudge(b, s->state[st].b, div);
+		break;
+	case 2:
+		a = depth_nudge(a, s->state[st].a, div);
+		b = depth_nudge(b, s->state[st].b, div);
+		break;
+	case 3:
+		a = depth_nudge(a, s->state[st].a, div);
+		break;
+	default:
+		break;
+	}
+
+	k1 = depth_half(s, a, b, code, &r0, &r1);
+
+	c = (((s->state[st].c / div) + (s->state[st].c > 0 ? 1 : 0)) & ~3) + 1;
+	d = (((s->state[st].d / div) + (s->state[st].d > 0 ? 1 : 0)) & ~3) + 1;
+
+	switch (code & 3) {
+	case 1:
+		d = depth_nudge(d, s->state[st].d, div);
+		break;
+	case 2:
+		c = depth_nudge(c, s->state[st].c, div);
+		d = depth_nudge(d, s->state[st].d, div);
+		break;
+	case 3:
+		c = depth_nudge(c, s->state[st].c, div);
+		break;
+	default:
+		break;
+	}
+
+	k2 = depth_half(s, c, d, code << 2, &r2, &r3);
+
+	/* The quadrant pair, and the running quadrant folded back. */
+	prev = s->prev_k;
+	quad[0] = (short)(((k2 - k1) & 2) >> 1);
+	quad[1] = (short)((k1 - (unsigned short)prev) & 3);
+	s->prev_k = (short)k1;
+
+	/* First grid lookup, from the first half's residues. */
+	packed = (unsigned short)(a - r0)
+	       | ((unsigned)(unsigned short)(b - r1) << 16);
+	g = grid[(depth_rotate(packed, k1) + 0x408) >> 2];
+	idx[0] = (short)((g >> (s->fa14 & 31)) & 0x1f);
+	/* The mask is truncated to a short first, so fa14 == 16 gives -1. */
+	quad[2] = (short)(g & (short)((1 << (s->fa14 & 31)) - 1));
+
+	/* Second, from the second half's. */
+	packed = (unsigned short)(c - r2)
+	       | ((unsigned)(unsigned short)(d - r3) << 16);
+	g = grid[(depth_rotate(packed, k2) + 0x408) >> 2];
+	idx[1] = (short)((g >> (s->fa14 & 31)) & 0x1f);
+	quad[3] = (short)(g & (short)((1 << (s->fa14 & 31)) - 1));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned to what shellDemapper, putFrame and decodeDepth read.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 

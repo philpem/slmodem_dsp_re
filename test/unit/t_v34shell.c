@@ -10,6 +10,8 @@ extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
 extern const short ref_kLookup[16];
 extern const short ref_grid[529];
+extern void ref_decodeDepth(void *s, short *quad, short *idx);
+
 
 /*
  * putFrame writes through a pointer the object carries, so each side gets
@@ -248,6 +250,113 @@ main(void)
 				    rowseen, 0xf, i);
 			diff_eq_int("kLookup column is a permutation",
 				    colseen, 0xf, i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * decodeDepth.  The sweep has to reach all sixteen combinations of
+	 * the two four-way preambles (code >> 2 and code & 3), which means
+	 * varying the trellis contents rather than just the inputs -- the
+	 * code byte comes out of the traceback, not from a parameter.
+	 * Filling the table so the walk lands on a chosen entry is the only
+	 * way to drive them.
+	 */
+	diff_begin("v34 decodeDepth");
+	{
+		static struct v34_shell a, b;
+		/*
+		 * Small, because `grid` is indexed by (rotate + 0x408) >> 2
+		 * into 529 entries with nothing clamping it -- finding 129's
+		 * shape again.  Large coefficients push the residues, and
+		 * hence the rotate, straight off the end of the table, where
+		 * each side reads its own adjacent .rodata and the two
+		 * disagree for reasons that are the fixture's, not the
+		 * reconstruction's.
+		 */
+		static const short coeffs[12] = {
+			  30,  -21,   15,   -9,    6,   -3,
+			 -28,   19,  -14,    8,   -5,    2
+		};
+		short qa[4], qb[4], ia[2], ib[2];
+		int cd, si, w, k, i;
+
+		for (cd = 0; cd < 16; cd++)
+		for (si = 0; si < 4; si++)
+		for (w = 1; w <= 3; w++) {
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+
+			/*
+			 * Every trellis entry carries the same code and a
+			 * next-branch of zero, so wherever the walk goes it
+			 * ends on the code under test.
+			 */
+			for (k = 0; k < 32 * 16; k++)
+				a.trellis[k] = b.trellis[k] =
+				    (unsigned short)cd;
+
+			/*
+			 * SMALL, and this is the constraint that matters:
+			 * grid is indexed by (23*hi + lo + 0x408) >> 2 with
+			 * no clamp, where hi is one of these parameters
+			 * minus a residue.  A parameter of 200 gives an
+			 * index near 1200 into a 529-entry table, and each
+			 * side then reads its own adjacent .rodata.  See
+			 * finding 129 -- this is the third table in this
+			 * file with the same property.
+			 */
+			for (k = 0; k < 32; k++) {
+				a.state[k].seed = b.state[k].seed = 0;
+				a.state[k].a = b.state[k].a =
+				    (short)((k % 9) * 4 - 16);
+				a.state[k].b = b.state[k].b =
+				    (short)((k % 7) * 4 - 12);
+				a.state[k].c = b.state[k].c =
+				    (short)((k % 11) * 4 - 20);
+				a.state[k].d = b.state[k].d =
+				    (short)((k % 5) * 4 - 8);
+			}
+			a.state_idx = b.state_idx = (short)(si * 7 + 1);
+			a.divisor = b.divisor = (short)(si);   /* 0 -> 1 */
+			a.wrap = b.wrap = (short)w;
+			a.fa14 = b.fa14 = (short)(w + 1);
+			a.prev_k = b.prev_k = (short)si;
+			a.coeff = coeffs;
+			b.coeff = coeffs;
+			for (k = 0; k < 6; k++)
+				a.hist[k] = b.hist[k] =
+				    (short)(k * 41 - 90 + cd * 3);
+
+			memset(qa, 0x5a, sizeof(qa));
+			memset(qb, 0x5a, sizeof(qb));
+			memset(ia, 0x5a, sizeof(ia));
+			memset(ib, 0x5a, sizeof(ib));
+
+			decodeDepth(&a, qa, ia);
+			ref_decodeDepth(&b, qb, ib);
+
+
+			for (k = 0; k < 4; k++)
+				diff_eq_int("depth quad %ld", qa[k], qb[k],
+					    ((long)cd * 100 + si * 10 + w)
+					    * 10 + k);
+			for (k = 0; k < 2; k++)
+				diff_eq_int("depth idx %ld", ia[k], ib[k],
+					    ((long)cd * 100 + si * 10 + w)
+					    * 10 + k);
+			for (i = 0; i < (int)sizeof(a); i++) {
+				unsigned cp = __builtin_offsetof(
+					struct v34_shell, coeff);
+
+				if (i >= (int)cp && i < (int)cp + 4)
+					continue;	/* each side's table */
+				diff_eq_int("depth object at %ld",
+					    ((unsigned char *)&a)[i],
+					    ((unsigned char *)&b)[i],
+					    ((long)cd * 100 + si * 10 + w)
+					    * 100000 + i);
+			}
 		}
 	}
 	rc |= diff_end();
