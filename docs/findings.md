@@ -5433,3 +5433,34 @@ traced — the 0.7 input gain, the ±1/8-sample-rate poles
     entries are written in step 6, *after* both loops have run — so a
     reconstruction that stores the result inside the loop corrupts its own
     feedback.
+
+### 103a. Writing it from that map alone does not work — measured
+
+The structure in 103 was written up as "ready to write". It is not. An
+implementation following it exactly — all three loops, the index-1 starts, the
+deferred `[0]` stores, the doubled-gain high-pass, every trap in 103 avoided —
+was built and driven against the blob:
+
+```
+   FAIL v34 timing filter   32503/117200 checks failed
+```
+
+It was reverted, not committed. About 28% of comparisons differ, so the
+skeleton is close and something inside the complex multiply-accumulates is
+not: most likely the operand pairing in one of the four MACs, or which of
+`iir[4]`/`iir[5]` the cross product takes, neither of which the summary in 103
+pins tightly enough to reproduce.
+
+**The lesson, which is the point of writing this down.** Finding 103 is an
+accurate *description* and an insufficient *specification*. A summary of a
+fixed-point DSP routine records what it does; reproducing it bit-exactly needs
+the operand order, the sign of every term, and which register holds what at
+each step — and those live in the disassembly, not in prose about it.
+
+So: do not write `V34TimingFilter` from finding 103. Use 103 to know the
+shape and to avoid the three traps, and take every arithmetic line from
+0x72360-0x726b0 directly. The differential test is cheap and decisive — it
+found this in one run — so write it incrementally and run it often rather
+than writing the whole function and debugging afterwards.
+
+The same caution applies to every "ready to write" note in this file.
