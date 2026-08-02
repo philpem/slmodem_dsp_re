@@ -7006,3 +7006,49 @@ would settle the fall-through question directly instead of by inference.
 
 Five reversals on this function now. Every one came from reading control flow
 by eye; every correction came from a measurement.
+
+### 121k. cfgsplit settles it: the pull block is a multi-crossing loop
+
+```
+   rxtiming: 669 bytes, 10 blocks, 3 entries
+     exclusive to one case      0 bytes
+     shared by two or more    588 bytes
+     0x5b546 output   7 blocks      0x5b491 second   7 blocks
+     0x5b3e0 pull     7 blocks
+```
+
+**Nothing is exclusive and every entry reaches all seven blocks.** So the
+three are one strongly-connected loop, and 121i's reading of a linear
+fall-through — output, then pull, then pull again — was the wrong shape.
+
+Re-reading `0x5b3e0` with that in hand:
+
+```
+   5b3e0:  sub  %ebx,%edx           ; phase -= step
+   5b3e5:  cmp  %ecx,%eax
+   5b3e7:  jl   5b605               ; ONE crossing: take the short tail
+   5b3ed:  sub  %ebx,%edx           ; otherwise subtract AGAIN
+   5b3f8:  call V34demodulate       ; and pull another
+```
+
+So the block is not "pull twice". It is a **loop over however many times the
+phase has wrapped**, with `0x5b605` as the single-crossing exit. The two
+`V34demodulate` calls are the same call site reached on different iterations,
+which is why cfgsplit shows them mutually reachable and why `f12a` stepped by
+one in the probe — the probe's parameters never produced a double crossing.
+
+**So the correct shape is a `while`, not an `if`:**
+
+```
+   output;
+   while (phase has crossed) { phase -= step; V34demodulate(); IIR; }
+```
+
+and the reconstruction's `if` is right for every input that crosses at most
+once — which is why it reached 320 of 876680 and why the failures were
+confined to `f244`/`f246`, the fields the second iteration would write.
+
+This is the fifth reversal on `rxtiming` and the first one settled by a tool
+rather than by eye. cfgsplit answered in one run what five readings did not,
+and it was extended for compare-chain dispatch earlier in this same session
+without my thinking to point it at a loop.
