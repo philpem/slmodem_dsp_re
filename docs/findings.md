@@ -6819,3 +6819,36 @@ or `agc_step` is being read before `rxinit` set it.
 **Next:** the same probe on both sides in one run, printing `agc_level` and
 `agc_step` immediately before each `agcadapt` entry. That is the comparison
 121d should have been.
+
+### 121f. Both sides start identical; the divergence is in the fourth sample
+
+`agc_step`, `agc_gain` and `agc_level` after `rxinit` are **13107, 512 and 0
+on both sides**. So finding 121e's second suspect — `agc_step` read before
+`rxinit` set it — is ruled out, and the divergence is behavioural.
+
+The reference's trajectory, with the gate opened:
+
+```
+   f12a=1  agc_input=308   level=0     gain=512
+   f12a=2  agc_input=570   level=0     gain=512
+   f12a=3  agc_input=788   level=0     gain=512
+   f12a=0  agc_input=0     level=967   gain=574   <- the AGC ran
+```
+
+`agc_input` is the high half of the running `acc32`, and it accumulates
+across the short-path calls. At `f12a=3` the accumulator is `0x0314a8b9`,
+whose high half is 788 — but the level the AGC computes is **967**, not 788.
+
+**So the fourth sample is added before the AGC runs, not after.** The order
+is `acc32 += re*re; f12a++; if (f12a > 3) { run AGC; clear }` — the
+accumulator takes the fourth sample and *then* the AGC consumes it. A
+reconstruction that ran the AGC first, or that cleared before accumulating,
+would be one sample light and produce a level below the trip threshold —
+which is exactly the observed symptom, the reconstruction's integrator not
+tripping.
+
+`512 * 0x47cf >> 14` is 574, so the gain-up arm is confirmed live and the
+constants in finding 112 are right.
+
+**This is the last unknown.** The ordering above, plus the four fixes in
+121d, should close the remaining 576. Nothing further needs probing.
