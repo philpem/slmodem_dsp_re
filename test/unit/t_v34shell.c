@@ -10,6 +10,71 @@ extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
 extern const short ref_kLookup[16];
 extern const short ref_grid[529];
+extern const unsigned short ref_lsbMask[17];
+extern void ref_getFrame(void *obj);
+
+/*
+ * getFrame's bit source.  Each side gets its own, for the same reason
+ * putFrame's sinks are separate: one shared callback would interleave.
+ * It refills the buffer from a deterministic stream and returns the new
+ * bit position, which is the contract the object expects.
+ */
+/* --- the round-trip harness: a sink and a source over one bit stream --- */
+static unsigned long long rt_bits;
+static int rt_n, rt_rd;
+static short rt_want[18];
+
+static void
+rt_sink(void *ctx, int value, int nbits)
+{
+	(void)ctx;
+	if (nbits <= 0)
+		return;
+	rt_bits |= (unsigned long long)(value & ((1 << nbits) - 1)) << rt_n;
+	rt_n += nbits;
+}
+
+/*
+ * The contract getFrame expects: it calls this when the position has passed
+ * 15, meaning the low sixteen bits of the window are spent.  So advance the
+ * window by sixteen and hand back the position relative to the new one.
+ * Returning a fixed 0 instead -- the obvious first guess -- silently drops
+ * whatever was left above bit 15.
+ */
+static int
+rt_source(void *o, int pos)
+{
+	struct v34_shell *t = (struct v34_shell *)((char *)o + V34_SHELL_TX);
+
+	rt_rd += 16;
+	t->bitbuf = (int)(unsigned)(rt_bits >> rt_rd);
+	return pos - 16;
+}
+
+static unsigned src_words_a[64], src_words_b[64];
+static int src_i_a, src_i_b;
+
+static int
+bitsrc_a(void *obj, int pos)
+{
+	struct v34_shell *s = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+
+	s->bitbuf = (int)src_words_a[src_i_a & 63];
+	src_i_a++;
+	(void)pos;
+	return 0;
+}
+
+static int
+bitsrc_b(void *obj, int pos)
+{
+	struct v34_shell *s = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+
+	s->bitbuf = (int)src_words_b[src_i_b & 63];
+	src_i_b++;
+	(void)pos;
+	return 0;
+}
 extern void ref_decodeDepth(void *s, short *quad, short *idx);
 extern int ref_demapFrame(void *s, void *a, void *b, short n);
 
@@ -132,7 +197,7 @@ main(void)
 				diff_eq_int("shell object at %ld",
 					    ((unsigned char *)&a)[i],
 					    ((unsigned char *)&b)[i],
-					    (long)cnt * 1000000 + v * 10000 + i);
+					    (long)cnt * 1000000 + v * 100000 + i);
 		}
 	}
 	rc |= diff_end();
@@ -215,7 +280,7 @@ main(void)
 					    ((unsigned char *)&a)[i],
 					    ((unsigned char *)&b)[i],
 					    ((long)(nb + 6) * 100 + wide * 10
-					     + a04) * 10000 + i);
+					     + a04) * 100000 + i);
 			}
 		}
 	}
@@ -492,6 +557,158 @@ main(void)
 					    ((unsigned char *)&b)[i],
 					    ((long)inv * 100 + w * 10 + base)
 					    * 100000 + i);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 lsbMask");
+	{
+		int i;
+
+		for (i = 0; i < 17; i++) {
+			diff_eq_int("lsbMask", lsbMask[i], ref_lsbMask[i], i);
+			/* And the generator, which is exact. */
+			diff_eq_int("lsbMask is (1<<n)-1", lsbMask[i],
+				    (1 << i) - 1, i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * getFrame: the three wide-field paths and all four groups, driven
+	 * through a bit source that each side owns.  The object is compared
+	 * whole, so the transmit context at +V34_SHELL_TX is covered without
+	 * naming its fields individually.
+	 */
+	diff_begin("v34 getFrame");
+	{
+		static unsigned char oa[V34_SHELL_TX + sizeof(struct v34_shell)];
+		static unsigned char ob[V34_SHELL_TX + sizeof(struct v34_shell)];
+		struct v34_shell *sa, *sb;
+		int nb, wide, a04, k, i;
+
+		/*
+		 * nb from -1, not lower: below that `small + nb` goes
+		 * negative and the object indexes lsbMask before the table.
+		 * A field width is never negative in operation, so this is
+		 * the same bound finding 129 describes, asserted rather than
+		 * discovered.
+		 */
+		for (nb = -1; nb <= 20; nb++)
+		for (wide = 0; wide <= 1; wide++)
+		for (a04 = 6; a04 <= 10; a04 += 2) {
+			memset(oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			sa = (struct v34_shell *)(oa + V34_SHELL_TX);
+			sb = (struct v34_shell *)(ob + V34_SHELL_TX);
+
+			for (k = 0; k < 64; k++)
+				src_words_a[k] = src_words_b[k] =
+				    (unsigned)(k * 2654435761u
+					       + (unsigned)nb * 40503u);
+			src_i_a = src_i_b = 0;
+
+			sa->get_bits = bitsrc_a;
+			sb->get_bits = bitsrc_b;
+			sa->fa14 = sb->fa14 = 3;
+			sa->fa04 = sb->fa04 = (short)a04;
+			sa->fa06 = sb->fa06 = 100;
+			sa->fa08 = sb->fa08 = 200;
+			sa->fa00 = sb->fa00 = (short)(wide ? 1000 : 10);
+			sa->fa10 = sb->fa10 = (short)nb;
+			sa->fa0e = sb->fa0e = (short)nb;
+			sa->bitbuf = sb->bitbuf = (int)0x5a3c7e91;
+			sa->bitpos = sb->bitpos = 0;
+			for (k = 0; k < 18; k++)
+				sa->frame[k] = sb->frame[k] = 0;
+
+			getFrame(oa);
+			ref_getFrame(ob);
+
+			for (i = 0; i < (int)sizeof(oa); i++) {
+				unsigned bp = V34_SHELL_TX
+				    + __builtin_offsetof(struct v34_shell,
+						     put_bits);
+
+				if (i >= (int)bp && i < (int)bp + 4)
+					continue;	/* each side's source */
+				diff_eq_int("getFrame at %ld", oa[i], ob[i],
+					    ((long)(nb + 6) * 100 + wide * 10
+					     + a04) * 100000 + i);
+			}
+			diff_eq_int("getFrame refills", src_i_a, src_i_b,
+				    (long)(nb + 6) * 100 + wide * 10 + a04);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * ROUND TRIP.  putFrame emits a frame through a bit sink; getFrame
+	 * reads one back from a bit source.  Feeding one into the other must
+	 * return the frame unchanged, and that has to hold for reasons that
+	 * have NOTHING to do with matching the blob -- which is the point.
+	 * Both sides here are ours, so this is not a differential test and
+	 * does not replace one; two functions sharing one wrong table would
+	 * still round-trip.  It is an additional oracle, and it catches the
+	 * class a differential test cannot: a field packed at the wrong
+	 * offset in BOTH directions consistently.
+	 */
+	diff_begin("v34 putFrame/getFrame round trip");
+	{
+		static unsigned char obj[V34_SHELL_TX
+					 + sizeof(struct v34_shell)];
+		struct v34_shell *tx;
+		int nb, a04, k, g;
+
+		for (nb = 1; nb <= 16; nb++)
+		for (a04 = 6; a04 <= 10; a04 += 2) {
+			int w = 3;
+			int small = 2;
+
+			memset(obj, 0, sizeof(obj));
+			tx = (struct v34_shell *)(obj + V34_SHELL_TX);
+
+			tx->fa14 = (short)w;
+			tx->fa04 = (short)a04;
+			tx->fa06 = 100;
+			tx->fa08 = 200;
+			tx->fa00 = 10;		/* takes the fa0e branch */
+			tx->fa0e = tx->fa10 = (short)nb;
+
+			/* A frame whose every field is inside its width. */
+			tx->frame[0] = (short)(((1 << nb) - 1) & 0x5a5a);
+			tx->frame[1] = 0;
+			for (g = 0; g < 4; g++) {
+				short *p = &tx->frame[2 + g * 4];
+
+				p[0] = (short)(g & 1);
+				p[1] = (short)((g + 1) & ((1 << small) - 1));
+				p[2] = (short)((g * 3 + 1) & ((1 << w) - 1));
+				p[3] = (short)((g * 5 + 2) & ((1 << w) - 1));
+			}
+
+			/* Remember it, emit it, read it back. */
+			memcpy(rt_want, tx->frame, sizeof(rt_want));
+			rt_bits = 0;
+			rt_n = 0;
+			tx->put_bits = rt_sink;
+			putFrame(tx);
+
+			memset(tx->frame, 0, sizeof(tx->frame));
+			tx->fa08 = 200;		/* putFrame advanced it */
+			rt_rd = -16;
+			tx->get_bits = rt_source;
+			tx->bitbuf = 0;
+			tx->bitpos = 16;	/* just past, so refill first */
+			getFrame(obj);
+
+			for (k = 0; k < 18; k++) {
+				if (k == 1)
+					continue;	/* unused below 17 bits */
+				diff_eq_int("round trip frame[%ld]",
+					    tx->frame[k], rt_want[k],
+					    (long)nb * 1000 + a04 * 100 + k);
 			}
 		}
 	}

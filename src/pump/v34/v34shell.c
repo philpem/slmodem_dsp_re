@@ -330,7 +330,7 @@ putFrame(void *shellp)
 	} else if (nb > 0) {
 		put(s, (unsigned short)v[0], nb);
 	} else {
-		small = 2 - ((unsigned short)s->fa04 <= 8 ? 1 : 0);
+		small = 2 - ((unsigned short)s->fa04 < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
 
@@ -785,9 +785,129 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	return 1;
 }
 
+
+/*
+ * lsbMask[n] == (1 << n) - 1, at .rodata+0x1f40.  Seventeen entries, so
+ * fields up to sixteen bits wide.  Reproducible exactly, and emitted as data
+ * anyway on the same principle as the others.
+ */
+const unsigned short lsbMask[17] = {
+	     0,      1,      3,      7,     15,     31,     63,    127,
+	   255,    511,   1023,   2047,   4095,   8191,  16383,  32767,
+	 65535,
+};
+
 /*
  * ---------------------------------------------------------------------------
- * Layout, pinned to what the four functions above read.
+ * getFrame -- putFrame run backwards.
+ *
+ * Unpacks one frame from a bit stream into the TRANSMIT shell context, which
+ * lives at `obj + V34_SHELL_TX` and is the same structure as the receive one
+ * (finding 137).  The field layout is putFrame's exactly:
+ *
+ *     wide                  the shell index, into frame[0..1] as ONE 32-bit
+ *                           store -- the pair putFrame splits above sixteen
+ *                           bits, and the reason frame[1] exists
+ *     (1, small, w, w) x 4  one group per 2D symbol, into frame[2..17]
+ *
+ * and the widths are chosen the same way, from `fa00` against `fa06 + fa08`.
+ *
+ * THE BIT WINDOW.  A 32-bit buffer at +0xe80 with a position at +0xe84;
+ * fields come out as `(buf >> pos) & lsbMask[width]` and the position
+ * advances by the width.  Whenever it passes 15 the callback is invoked to
+ * refill, and the callback RETURNS the new position rather than taking a
+ * pointer to it.  It is handed the object, not the context.
+ */
+void
+getFrame(void *objp)
+{
+	struct v34_shell *s =
+	    (struct v34_shell *)((char *)objp + V34_SHELL_TX);
+	int w = s->fa14;
+	int small = 2;
+	int small_last = 2;
+	int sum;
+	int nb;
+	int pos;
+	int g;
+
+	sum = (unsigned short)s->fa08 + (unsigned short)s->fa06;
+
+	if ((unsigned short)s->fa00 > (unsigned short)sum) {
+		s->fa08 = (short)sum;
+		nb = s->fa10;
+	} else {
+		s->fa08 = (short)(sum - s->fa00);
+		nb = s->fa0e;
+	}
+
+	pos = (unsigned short)s->bitpos;
+
+	/* Refill before reading, and keep refilling while short. */
+	while (pos > 15)
+		pos = s->get_bits(objp, (short)pos);
+
+	if (nb > 16) {
+		/*
+		 * Split, mirroring putFrame: sixteen bits, refill, then the
+		 * remainder.  The first half is stored narrow and the second
+		 * completes the 32-bit pair.
+		 */
+		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
+		pos = s->get_bits(objp, 0);
+		s->frame[1] = (short)(((unsigned)s->bitbuf >> (pos & 31))
+				      & lsbMask[nb & 15]);
+		pos += nb & 15;
+	} else if (nb > 0) {
+		*(int *)&s->frame[0] =
+		    (int)(((unsigned)s->bitbuf >> (pos & 31))
+			  & lsbMask[nb]);
+		pos += nb;
+	} else {
+		/*
+		 * No wide field: frame[0..1] is EXPLICITLY zeroed, as one
+		 * 32-bit store, and the group widths change instead.
+		 * putFrame simply emits nothing here, so the zeroing has no
+		 * counterpart on that side and is easy to miss.
+		 */
+		*(int *)&s->frame[0] = 0;
+		small = 2 - ((unsigned short)s->fa04 < 9 ? 1 : 0);
+		small_last = (short)(nb + small);
+	}
+
+	for (g = 0; g < 4; g++) {
+		short *p = &s->frame[2 + g * 4];
+		int sw = (g == 3) ? small_last : small;
+		unsigned v;
+
+		if (pos > 15)
+			pos = s->get_bits(objp, (short)pos);
+
+		s->bitpos = (short)pos;
+		v = (unsigned)s->bitbuf >> (pos & 31);
+
+		/*
+		 * `sw` is NOT bounds-checked, here or in the object.  On the
+		 * no-wide-field path it is `nb + small`, so an `nb` below -2
+		 * makes it negative and the object reads `.rodata` BEFORE
+		 * lsbMask -- deterministic in that build, not reproducible
+		 * here, and outside anything a real caller produces since a
+		 * field width is never negative.  Same shape as finding 129;
+		 * the fixture stays inside and says so.
+		 */
+		p[0] = (short)(v & 1);
+		p[1] = (short)((v >> 1) & lsbMask[sw]);
+		p[2] = (short)((v >> ((1 + sw) & 31)) & lsbMask[w & 31]);
+		p[3] = (short)((v >> ((1 + sw + w) & 31)) & lsbMask[w & 31]);
+
+		pos += 1 + sw + 2 * w;
+		s->bitpos = (short)pos;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned to what the five functions above read.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -802,6 +922,8 @@ V34SH_ASSERT(t2, 0xb48);
 V34SH_ASSERT(t3, 0xc48);
 V34SH_ASSERT(sub, 0xe9c);
 V34SH_ASSERT(put_bits, 0xe48);
+V34SH_ASSERT(bitbuf, 0xe80);
+V34SH_ASSERT(bitpos, 0xe84);
 V34SH_ASSERT(frame, 0xe50);
 V34SH_ASSERT(fa00, 0xa00);
 V34SH_ASSERT(fa14, 0xa14);

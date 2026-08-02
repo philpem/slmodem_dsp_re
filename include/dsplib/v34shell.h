@@ -44,6 +44,23 @@ extern const short kTable[64];
 /* The bit sink putFrame writes through: (context, value, bit count). */
 typedef void (*v34_putbits_fn)(void *shell, int value, int nbits);
 
+/*
+ * The bit SOURCE getFrame refills through, at the same offset in the
+ * transmit context.  Handed the OBJECT (not the context) and the current
+ * bit position, and returns the new one.
+ */
+typedef int (*v34_getbits_fn)(void *obj, int pos);
+
+/*
+ * The transmit shell context sits this far past the receive one.  Every
+ * offset getFrame uses lands on a field of this struct once the difference
+ * is subtracted -- see finding 137.
+ */
+#define V34_SHELL_TX	0x1be0
+
+/* lsbMask[n] == (1 << n) - 1, seventeen entries.  Emitted as data. */
+extern const unsigned short lsbMask[17];
+
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           fa00;			/* +0xa00 */
@@ -91,7 +108,17 @@ struct v34_shell {
 	 * to be padded to the next known field and came out at 149.
 	 */
 	int             t3[0x80];		/* +0xc48 */
-	v34_putbits_fn  put_bits;		/* +0xe48 */
+	/*
+	 * +0xe48.  A sink in the receive context and a source in the
+	 * transmit one -- same offset, two signatures, so a union rather
+	 * than a cast.
+	 */
+	union {
+		v34_putbits_fn	put_bits;	/* the receive context's sink */
+		v34_getbits_fn	get_bits;	/* the transmit one's source  */
+	};					/* +0xe48, anonymous so both
+						 * spellings reach it directly
+						 * and no caller has to change */
 	short           latched;		/* +0xe4c */
 	unsigned char pad_e4e[0xe50 - 0xe4e];
 	/*
@@ -99,7 +126,15 @@ struct v34_shell {
 	 * (1 bit, a small width, and two of `fa14`).
 	 */
 	short           frame[18];		/* +0xe50 */
-	unsigned char pad_e74[0xe9c - 0xe74];
+	unsigned char pad_e74[0xe80 - 0xe74];
+	/*
+	 * getFrame's bit window: a 32-bit buffer and the position within it.
+	 * Refilled through `bits.get` whenever the position passes 15.  The
+	 * receive context has no reader for either.
+	 */
+	int             bitbuf;			/* +0xe80 */
+	short           bitpos;			/* +0xe84 */
+	unsigned char pad_e86[0xe9c - 0xe86];
 	/*
 	 * The eight sub-indices, read as two groups of four.  Alternate
 	 * entries are taken signed and the others unsigned -- see the note
@@ -142,6 +177,14 @@ int shellDemapper(void *shell);
  * four groups of (1 bit, a small field, and two `fa14`-wide fields).
  */
 void putFrame(void *shell);
+
+/*
+ * The transmit-side counterpart of putFrame: unpack one frame from the bit
+ * source into the TRANSMIT shell context at `obj + V34_SHELL_TX`.
+ *
+ * Takes the object, not the context -- the callback is handed the object too.
+ */
+void getFrame(void *obj);
 
 /*
  * Walk the trellis back 31 steps and decode one 8D frame.
