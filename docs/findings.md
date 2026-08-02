@@ -4939,3 +4939,44 @@ Reproduced, and registered as D25. See the bug policy: this is not a defect
 that stops a working modem, because both orders behave identically over the
 levels a correctly-AGC'd detector sees, and "fixing" it would change which
 signals the handshake believes it has heard.
+
+## 91. `fsklpfcoeff600` is named for a bit rate, not a cutoff
+
+DPSK.c's 80-tap post-detection low-pass is called `fsklpfcoeff600`, which
+reads as a 600 Hz filter and is not one. Measured at the rate it actually
+runs at -- 28800 Hz, the 9600 Hz input after this module's own 3x
+interpolation -- its -3 dB point is about **280 Hz**, and by 600 Hz it is
+already 15 dB down.
+
+The name is the bit rate. V.34's phase 2 INFO messages are carried at
+**600 bit/s**, and a 280 Hz cutoff is what a matched low-pass for 600 baud
+wants. So the filter is correctly designed and correctly named; it is the
+reading of the name as a frequency that is wrong, and it is the reading a
+reconstruction would naturally reach for when deciding whether a table had
+been transcribed correctly.
+
+Recorded because the same trap is set several more times in this object:
+`tx600c1` and `V90EchoPrefilterCoeff` sit in v34filters.c's static block
+next to tables that really are named for frequencies.
+
+## 92. The V.34 FSK slicer's counter wrap is unreachable on a live signal
+
+`fskdemodulate` runs a phase counter that restarts when it reaches
+`bit_len * 256`, and separately restarts it on every sign change of the
+discriminator output. On any real FSK input the second of those fires
+constantly -- a modulated signal crosses zero many times per bit -- so the
+counter never gets within two orders of magnitude of its wrap.
+
+The only input that reaches it is **silence**: a stream of zeroes never
+changes sign, because the test is `< 0` on both samples and zero is not
+negative, so the phase runs free. That makes the wrap exactly what it looks
+like -- a backstop for a bit clock left running on a dead line -- and it
+means a test that drives only signal cannot cover it. `t_v34fsk` has a
+silence run for that reason and nothing else.
+
+The same asymmetry is worth noting for its own sake: the sign test treats
+zero as positive, so a signal that sits exactly at zero is indistinguishable
+from one that is strongly positive as far as bit-clock recovery is concerned,
+and `prev > 0` -- a *different* test, strictly greater -- is what decides the
+bit value. A sample of exactly zero therefore contributes `bit_lo` while
+counting as non-negative for resynchronisation. Both are reproduced.

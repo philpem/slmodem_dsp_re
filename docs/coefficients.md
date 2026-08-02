@@ -327,3 +327,44 @@ reproduce, so it is the only one emitted as literal data for a reason other
 than convenience. See findings 88 for why the exception is a hand-applied
 floor rather than rounding, and why regenerating the table would be wrong at
 an index that is reached on every half turn of the phase accumulator.
+
+## V.34 `intcoef1` / `intcoef2` / `intcoef3` — the FSK interpolator
+
+Three tables of 12 shorts, Q14, global in the object, at `.data+0x7088`,
+`+0x7070` and `+0x7058`. Used only by `fskdetect`.
+
+**Structure, confirmed:** `intcoef3` is `intcoef1` reversed, exactly, and
+`intcoef2` is its own reverse. Interleaving them as `h[3k+p]` -- phase 1 into
+`h[0], h[3], h[6]…`, phase 2 into `h[1], h[4]…`, phase 3 into `h[2], h[5]…` --
+gives a **36-tap symmetric** prototype. So these are one linear-phase
+low-pass decomposed into the three phases of a 3x interpolator, which is what
+the reversal relationship between phases 1 and 3 means.
+
+**Gains, measured:**
+
+```
+sum(intcoef1) = 21859   = 1.3342 x 16384
+sum(intcoef2) = 21872   = 1.3350 x 16384
+sum(intcoef3) = 21859   = 1.3342 x 16384
+sum(prototype) = 65590  = 4.0033 x 16384
+```
+
+Each phase carries a gain of 4/3 rather than the unity an amplitude-preserving
+interpolator would use. `t_v34fsk` asserts the reversal and the symmetry, so
+a future regeneration has a structural property to fail against and not only
+a byte comparison.
+
+## V.34 `fsklpfcoeff600` — the post-detection low-pass
+
+80 taps, symmetric, all positive, at `.data+0x71a0`; a local symbol, so
+DPSK.c owns it.
+
+```
+sum = 49120 = 2.9980 x 16384          -3 dB at about 280 Hz
+                                       (at the 28800 Hz interpolated rate)
+```
+
+**The name is a bit rate, not a cutoff** — V.34's INFO messages are sent at
+600 bit/s and 280 Hz is a sensible matched cutoff for 600 baud. See
+findings 91 before concluding that a table named for a frequency has been
+transcribed wrongly.
