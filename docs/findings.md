@@ -6185,3 +6185,37 @@ differently, which would mean `n` is wrong on some later call, which would
 mean `V34ModulatorProcess`'s row counter is being carried differently across
 calls than `txmit` expects. That is testable directly: log `n` per call from
 both sides.
+
+### 116b. The `txmit` drift was the test's own buffer overlap
+
+Probing `ref_txmit` alone over 32 calls: `obj+0x20e4` is zero through
+iteration 27 and non-zero from 28 on, while the modulator's row counter stays
+0 and the queue count grows by exactly 4 per call. So the blob is behaving
+consistently and something in the *setup* changes underneath it.
+
+`obj+0x20e4` is not scratch. The modulator sits at `obj+0x1450` and its
+pre-emphasis history is at `+0xc90` — `obj+0x20e0`. So `0x20e4` is
+`prem_hist[2]`, and it goes non-zero exactly when the modulator starts
+producing non-zero output.
+
+**The test pointed the modulator's `shaped` bank at `obj+0x8000`.**
+`V34SetupModulator` loads `rows * 64` shorts there — 512 bytes for 2400 baud,
+so `0x8000`..`0x81ff`. And `V34InitializeImplementationSpecific` puts
+`echo0`'s fractional coefficients at `0x80d8`..`0x81f7` and its delay line
+from `0x81f8`. The three overlap. Every `V34EchoUpdateDelayLine` call in
+`txmit`'s feed loop writes into the shaping bank the modulator is reading,
+so the output changes once the cursor has walked far enough.
+
+**Both sides did this identically**, which is why early iterations matched
+exactly — and why it took a probe rather than a comparison to see it. Two
+objects corrupting themselves the same way still diverge once the corrupted
+values feed back through address-dependent state.
+
+The fix is to the test, not the code: give `shaped` its own buffer outside
+the object, as `t_v34ec` already does for the modulator tests. `txmit`
+itself may well be correct as written; it has not been shown otherwise.
+
+Worth generalising, because this reconstruction now allocates real objects in
+tests: **a scratch pointer aimed inside the object under test can collide
+with the object's own arrays**, and the collision is invisible to a
+differential comparison because both sides suffer it equally.
