@@ -146,6 +146,41 @@ const short grid[529] = {
 	    0,
 };
 
+
+/*
+ * demapFrame's four tables.
+ *
+ * kkNormal and kkInvert are alternative branch-code lists, selected by
+ * `invert`; each pairs two candidate codes per position and the demapper
+ * keeps whichever costs less.  kTable drives the 16-state add-compare-select,
+ * four branches per state.  gInvertPat supplies the invert flag itself.
+ */
+const short gInvertPat[16] = {
+	    0,     1,     1,     1,     0,     1,     1,     1,
+	    1,     1,     1,     1,     1,     0,     1,     0,
+};
+
+const short kkInvert[16] = {
+	    1,    11,     6,    12,     3,     9,     4,    14,
+	    0,    10,     5,    15,     2,     8,     7,    13,
+};
+
+const short kkNormal[16] = {
+	    0,    10,     5,    15,     2,     8,     7,    13,
+	    1,    11,     6,    12,     3,     9,     4,    14,
+};
+
+const short kTable[64] = {
+	    0,     1,     2,     3,     2,     3,     0,     1,
+	    1,     0,     3,     2,     3,     2,     1,     0,
+	    4,     5,     6,     7,     6,     7,     4,     5,
+	    5,     4,     7,     6,     7,     6,     5,     4,
+	    2,     3,     0,     1,     0,     1,     2,     3,
+	    3,     2,     1,     0,     1,     0,     3,     2,
+	    6,     7,     4,     5,     4,     5,     6,     7,
+	    7,     6,     5,     4,     5,     4,     7,     6,
+};
+
 /*
  * `t[0]*t[d] + t[1]*t[d-1] + ...`, `n` terms.
  *
@@ -529,9 +564,230 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	quad[3] = (short)(g & (short)((1 << (s->fa14 & 31)) - 1));
 }
 
+
 /*
  * ---------------------------------------------------------------------------
- * Layout, pinned to what shellDemapper, putFrame and decodeDepth read.
+ * demapFrame -- one sub-frame of the 8D demapper, and the frame it completes.
+ *
+ * This is the piece that makes the rest of the file make sense.  Eight
+ * sub-frames make a frame, counted by `n`, and the two parities do entirely
+ * different jobs:
+ *
+ *   n even   run decodeDepth, writing its four quadrant/point shorts into
+ *            frame[2 + (n&7)/2 * 4] and its two shell sub-indices into
+ *            sub[n & 7].  Four even sub-frames therefore fill exactly the
+ *            sixteen shorts putFrame emits as four groups, and exactly the
+ *            eight sub-indices shellDemapper consumes.  Returns 0.
+ *
+ *   n odd    build the branch costs and run a sixteen-state
+ *            add-compare-select over the trellis.  Returns 1.
+ *
+ *   n & 7 == 7   additionally: shellDemapper into frame[0], then putFrame.
+ *
+ * So `frame[0]` is the shell index and `frame[2..17]` the four 2D symbols,
+ * which is why putFrame sends one wide field and then four groups of four.
+ *
+ * THE ODD PATH, in order:
+ *
+ *   1. Store the caller's pair into this state's (c, d), and rebuild eight
+ *      candidate values -- for each of the state's four parameters, the
+ *      rounded value and that value two counts away, the direction chosen by
+ *      which side of it the parameter falls.  This is decodeDepth's nudge
+ *      run forwards.
+ *   2. Square-distance every combination: four sums per parameter pair.
+ *   3. For each of eight positions take the cheaper of two branch codes from
+ *      kkNormal or kkInvert.
+ *   4. Sixteen states x four branches, keeping the best cost and branch, and
+ *      write each state's decision into the trellis as
+ *      `(derived << 8) | code` -- the two byte lanes decodeDepth reads back
+ *      with different signedness.
+ *   5. Normalise all sixteen costs against the best, remember which state
+ *      achieved it, and hand two values back through `b`.
+ *
+ * The two counters at +0xa3c and +0xa3e are sub-frame and frame indices with
+ * their own limits; when the frame counter wraps it takes a new invert flag
+ * from gInvertPat, which is what switches the branch-code table.
+ */
+
+/* Round a parameter to the grid, and give the neighbour two counts away. */
+static void
+demap_candidates(int p, int div, short *lo, short *hi)
+{
+	int q = p / div;
+
+	q = ((p > 0 ? q + 1 : q) & ~3) + 1;
+	q *= div;
+
+	*lo = (short)q;
+	*hi = (short)(p > (short)q ? q + 2 * div : q - 2 * div);
+}
+
+int
+demapFrame(void *shellp, void *ap, void *bp, short n)
+{
+	struct v34_shell *s = (struct v34_shell *)shellp;
+	int div = s->divisor ? s->divisor : 1;
+	int sub = n & 7;
+	short cand[8];
+	short dist[8];
+	short code[8];
+	short cost[8];
+	short best[16];
+	int st = s->state_idx;
+	int i, j;
+
+	if (!(n & 1)) {
+		/* Even: fill four frame shorts and two sub-indices. */
+		decodeDepth(s, &s->frame[2 + (sub / 2) * 4], &s->sub[sub]);
+		*(int *)&s->state[s->state_idx].a = *(int *)ap;
+		return 0;
+	}
+
+	*(int *)&s->state[st].c = *(int *)ap;
+
+	/* 1. Eight candidates, two per parameter. */
+	for (i = 0; i < 4; i++)
+		demap_candidates((&s->state[st].a)[i], div,
+				 &cand[i * 2], &cand[i * 2 + 1]);
+
+	/* 2. Squared distances, four combinations per parameter pair. */
+	for (i = 0; i < 2; i++) {
+		int p0 = (&s->state[st].a)[i * 2];
+		int p1 = (&s->state[st].a)[i * 2 + 1];
+		int sh = s->fa44 & 31;
+		int d0 = ((p0 - cand[i * 4 + 0]) * (p0 - cand[i * 4 + 0])) >> sh;
+		int d1 = ((p0 - cand[i * 4 + 1]) * (p0 - cand[i * 4 + 1])) >> sh;
+		int e0 = ((p1 - cand[i * 4 + 2]) * (p1 - cand[i * 4 + 2])) >> sh;
+		int e1 = ((p1 - cand[i * 4 + 3]) * (p1 - cand[i * 4 + 3])) >> sh;
+
+		dist[i * 4 + 0] = (short)(d0 + e0);
+		dist[i * 4 + 1] = (short)(d0 + e1);
+		dist[i * 4 + 2] = (short)(d1 + e1);
+		dist[i * 4 + 3] = (short)(d1 + e0);
+	}
+
+	/* 3. The cheaper of two branch codes at each of eight positions. */
+	{
+		const short *kk = s->invert ? kkInvert : kkNormal;
+
+		for (i = 0; i < 8; i++) {
+			int c0 = kk[i * 2];
+			int c1 = kk[i * 2 + 1];
+			int v0 = (unsigned short)dist[4 + (c0 & 3)]
+			       + (unsigned short)dist[c0 >> 2];
+			int v1 = (unsigned short)dist[c1 >> 2]
+			       + (unsigned short)dist[4 + (c1 & 3)];
+
+			code[i] = (short)c0;
+			cost[i] = (short)v0;
+			if ((short)v1 < (unsigned short)v0) {
+				cost[i] = (short)v1;
+				code[i] = (short)c1;
+			}
+		}
+	}
+
+	/* 4. Sixteen states, four branches each. */
+	{
+		int overall = 0x7fff;
+		const short *kt = kTable;
+
+		for (i = 15; i >= 0; i--) {
+			int bestc = 0x7fff;
+			int bestb = 3;
+			const short *prior = &s->cost[3 - (i >> 2)];
+			int hi;
+
+			for (j = 3; j >= 0; j--) {
+				int v = (unsigned short)cost[*kt]
+				      + (unsigned short)prior[(3 - j) * 4];
+
+				kt++;
+				if ((unsigned short)v < (unsigned)bestc) {
+					bestc = (unsigned short)v;
+					bestb = j;
+				}
+			}
+
+			best[15 - i] = (short)bestc;
+			if ((unsigned)bestc < (unsigned)overall)
+				overall = bestc;
+
+			hi = (-(bestb * 4) - (i >> 2)) + 0xf;
+			s->trellis[(st << 4) + (15 - i)] =
+			    (unsigned short)((hi << 8)
+					     + (unsigned short)code[kt[-1 - bestb]]);
+		}
+
+		/* 5. Normalise, and remember which state was best. */
+		{
+			int win = 0xf;
+
+			for (i = 0; i < 16; i++) {
+				s->cost[i] = (short)(best[i] - overall);
+				if (s->cost[i] == 0)
+					win = 15 - i;
+			}
+			s->state[st].seed = (short)(0xf - win);
+		}
+	}
+
+	{
+		int seed = s->state[st].seed;
+		int t = (short)s->trellis[(st << 4) + seed];
+		int k = (t >> 1) & 1;
+
+		((short *)bp)[0] = cand[4 + k];
+		k ^= t & 1;
+		((short *)bp)[1] = cand[6 + k];
+	}
+
+	s->state_idx = (short)((s->state_idx + 1) & 0x1f);
+
+	/* The two counters, and the invert flag the outer one refreshes. */
+	if ((short)(s->fa3c + 1) < s->fa02) {
+		s->fa3c = (short)(s->fa3c + 1);
+		s->invert = 0;
+	} else {
+		s->fa3c = 0;
+		if ((short)(s->fa3e + 1) < s->fa40) {
+			s->fa3e = (short)(s->fa3e + 1);
+			s->invert = gInvertPat[s->fa3e & 15];
+		} else {
+			s->fa3e = 0;
+			s->invert = 0;
+		}
+	}
+
+	if (sub != 7)
+		return 1;
+
+	/*
+	 * The shell index is stored THIRTY-TWO bits wide, across frame[0]
+	 * and frame[1] -- which is precisely the pair putFrame splits when
+	 * its width exceeds 16, and the only path that reads frame[1].
+	 */
+	if (s->latched) {
+		*(int *)&s->frame[0] = shellDemapper(s);
+		putFrame(s);
+		return 1;
+	}
+
+	if (n <= 0x40)
+		return 1;
+
+	*(int *)&s->frame[0] = shellDemapper(s);
+	putFrame(s);
+
+	if (n >= 0x40 + (unsigned short)s->fa00 * 8)
+		s->latched = 1;
+
+	return 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned to what the four functions above read.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 

@@ -11,6 +11,7 @@ extern void ref_putFrame(void *s);
 extern const short ref_kLookup[16];
 extern const short ref_grid[529];
 extern void ref_decodeDepth(void *s, short *quad, short *idx);
+extern int ref_demapFrame(void *s, void *a, void *b, short n);
 
 
 /*
@@ -355,6 +356,141 @@ main(void)
 					    ((unsigned char *)&a)[i],
 					    ((unsigned char *)&b)[i],
 					    ((long)cd * 100 + si * 10 + w)
+					    * 100000 + i);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * demapFrame, driven eight sub-frames at a time so both parities and
+	 * the frame-completing eighth are reached.  Parameters stay small for
+	 * the same reason as decodeDepth's: grid is indexed unclamped.
+	 */
+	diff_begin("v34 demapFrame");
+	{
+		static struct v34_shell a, b;
+		static const short coeffs[12] = {
+			  30,  -21,   15,   -9,    6,   -3,
+			 -28,   19,  -14,    8,   -5,    2
+		};
+		int inv, w, base, k, i, sf;
+		int pa[2], pb[2], oa[2], ob[2];
+
+		for (inv = 0; inv <= 1; inv++)
+		for (w = 1; w <= 2; w++)
+		for (base = 0; base < 3; base++) {
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+
+			for (k = 0; k < 32 * 16; k++)
+				a.trellis[k] = b.trellis[k] = 0;
+			for (k = 0; k < 32; k++) {
+				a.state[k].seed = b.state[k].seed = 0;
+				a.state[k].a = b.state[k].a =
+				    (short)((k % 9) * 4 - 16);
+				a.state[k].b = b.state[k].b =
+				    (short)((k % 7) * 4 - 12);
+				a.state[k].c = b.state[k].c =
+				    (short)((k % 11) * 4 - 20);
+				a.state[k].d = b.state[k].d =
+				    (short)((k % 5) * 4 - 8);
+			}
+			for (k = 0; k < 16; k++)
+				a.cost[k] = b.cost[k] = (short)(k * 3);
+			for (k = 0; k < 18; k++)
+				a.frame[k] = b.frame[k] = (short)(k * 7);
+			for (k = 0; k < 8; k++)
+				a.sub[k] = b.sub[k] = (short)(k + 1);
+			for (k = 0; k < 6; k++)
+				a.hist[k] = b.hist[k] =
+				    (short)(k * 41 - 90 + base * 3);
+			for (k = 0; k < 0x80; k++) {
+				a.t1[k] = b.t1[k] = (short)(k * 3 + 1);
+				a.t2[k] = b.t2[k] = (short)(k * 5 + 2);
+			}
+			for (k = 0; k < 0x80; k++)
+				a.t3[k] = b.t3[k] = k * 11;
+
+			a.coeff = coeffs; b.coeff = coeffs;
+			a.put_bits = sink_a; b.put_bits = sink_b;
+			a.state_idx = b.state_idx = (short)(base * 5);
+			a.divisor = b.divisor = 1;
+			a.wrap = b.wrap = (short)w;
+			a.fa14 = b.fa14 = (short)(w + 1);
+			a.fa44 = b.fa44 = 2;
+			a.invert = b.invert = (short)inv;
+			a.fa00 = b.fa00 = 3;
+			a.fa02 = b.fa02 = 4;
+			a.fa3c = b.fa3c = 0;
+			a.fa3e = b.fa3e = 0;
+			a.fa40 = b.fa40 = 3;
+			a.latched = b.latched = 0;
+			a.prev_k = b.prev_k = 0;
+			a.count = b.count = 9;
+			a.fa08 = b.fa08 = 0;
+			a.fa06 = b.fa06 = 3;
+			a.fa0e = b.fa0e = 8;
+			a.fa10 = b.fa10 = 8;
+			a.fa04 = b.fa04 = 7;
+
+			nlog_a = nlog_b = 0;
+
+			for (sf = 0; sf < 16; sf++) {
+				long tag = ((long)inv * 100 + w * 10 + base)
+					 * 100 + sf;
+				int ra, rb2;
+
+				pa[0] = pb[0] = (sf * 37) & 0xffff;
+				pa[1] = pb[1] = (sf * 53) & 0xffff;
+				memset(oa, 0x5a, sizeof(oa));
+				memset(ob, 0x5a, sizeof(ob));
+
+				ra  = demapFrame(&a, pa, oa,
+						 (short)(sf + 0x41));
+				rb2 = ref_demapFrame(&b, pb, ob,
+						     (short)(sf + 0x41));
+
+				diff_eq_int("demap ret", ra, rb2, tag);
+				diff_eq_int("demap out0", ((short *)oa)[0],
+					    ((short *)ob)[0], tag);
+				diff_eq_int("demap out1", ((short *)oa)[1],
+					    ((short *)ob)[1], tag);
+			}
+
+			diff_eq_int("demap emit count", nlog_a, nlog_b,
+				    (long)inv * 100 + w * 10 + base);
+			/*
+			 * And it must actually have emitted: with n running
+			 * 0x41..0x50 the eighth sub-frame falls twice, so a
+			 * zero here would mean the frame-completing path
+			 * never ran and the comparison above proved nothing.
+			 */
+			diff_eq_int("demap emitted at all", nlog_a > 0, 1,
+				    (long)inv * 100 + w * 10 + base);
+			for (i = 0; i < nlog_a && i < LOGMAX; i++) {
+				long tag = ((long)inv * 100 + w * 10 + base)
+					 * 100 + i;
+
+				diff_eq_int("demap emit value", log_a[i].val,
+					    log_b[i].val, tag);
+				diff_eq_int("demap emit nbits",
+					    log_a[i].nbits, log_b[i].nbits,
+					    tag);
+			}
+			for (i = 0; i < (int)sizeof(a); i++) {
+				unsigned cp = __builtin_offsetof(
+					struct v34_shell, coeff);
+				unsigned pb2 = __builtin_offsetof(
+					struct v34_shell, put_bits);
+
+				if ((i >= (int)cp && i < (int)cp + 4)
+				    || (i >= (int)pb2 && i < (int)pb2 + 4))
+					continue;
+				diff_eq_int("demap object at %ld",
+					    ((unsigned char *)&a)[i],
+					    ((unsigned char *)&b)[i],
+					    ((long)inv * 100 + w * 10 + base)
 					    * 100000 + i);
 			}
 		}

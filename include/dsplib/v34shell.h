@@ -36,6 +36,10 @@ extern "C" {
  */
 extern const short kLookup[16];
 extern const short grid[529];
+extern const short gInvertPat[16];
+extern const short kkInvert[16];
+extern const short kkNormal[16];
+extern const short kTable[64];
 
 /* The bit sink putFrame writes through: (context, value, bit count). */
 typedef void (*v34_putbits_fn)(void *shell, int value, int nbits);
@@ -43,7 +47,7 @@ typedef void (*v34_putbits_fn)(void *shell, int value, int nbits);
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           fa00;			/* +0xa00 */
-	unsigned char pad_a02[0xa04 - 0xa02];
+	short           fa02;			/* +0xa02 sub-frame limit  */
 	short           fa04;			/* +0xa04 */
 	short           fa06;			/* +0xa06 */
 	short           fa08;			/* +0xa08 an accumulator putFrame
@@ -70,9 +74,12 @@ struct v34_shell {
 	const short *   coeff;			/* +0xa24 */
 	unsigned char pad_a28[0xa38 - 0xa28];
 	short           prev_k;			/* +0xa38 last quadrant   */
-	unsigned char pad_a3a[0xa42 - 0xa3a];
+	short           invert;			/* +0xa3a picks kkInvert  */
+	short           fa3c;			/* +0xa3c sub-frame count */
+	short           fa3e;			/* +0xa3e frame count     */
+	short           fa40;			/* +0xa40 its limit       */
 	short           divisor;		/* +0xa42 zero means one  */
-	unsigned char pad_a44[0xa46 - 0xa44];
+	short           fa44;			/* +0xa44 cost shift      */
 	short           wrap;			/* +0xa46 sets the masks  */
 	unsigned char pad_a48_[0xa48 - 0xa48];
 	short           t1[0x80];		/* +0xa48 */
@@ -85,7 +92,8 @@ struct v34_shell {
 	 */
 	int             t3[0x80];		/* +0xc48 */
 	v34_putbits_fn  put_bits;		/* +0xe48 */
-	unsigned char pad_e4c[0xe50 - 0xe4c];
+	short           latched;		/* +0xe4c */
+	unsigned char pad_e4e[0xe50 - 0xe4e];
 	/*
 	 * The frame putFrame emits: one wide value, then four groups of
 	 * (1 bit, a small width, and two of `fa14`).
@@ -98,7 +106,8 @@ struct v34_shell {
 	 * in shellDemapper; that asymmetry is the object's, not a slip here.
 	 */
 	short           sub[V34_SHELL_SUBS];	/* +0xe9c */
-	unsigned char pad_eac[0xecc - 0xeac];
+	/* Sixteen path costs, normalised against the best each sub-frame. */
+	short           cost[16];		/* +0xeac */
 	/*
 	 * The trellis, 32 states of 16 branches.  Each entry is two bytes
 	 * read separately and with different signedness: the LOW byte is an
@@ -141,6 +150,13 @@ void putFrame(void *shell);
  * values) and `idx` two -- the grid values shifted down by `fa14`.
  */
 void decodeDepth(void *shell, short *quad, short *idx);
+
+/*
+ * One sub-frame of the 8D demapper.  `n` counts sub-frames; even ones run
+ * decodeDepth, odd ones the trellis update, and the eighth emits a frame.
+ * Returns zero on an even sub-frame and one on an odd one.
+ */
+int demapFrame(void *shell, void *a, void *b, short n);
 
 #ifdef __cplusplus
 }
