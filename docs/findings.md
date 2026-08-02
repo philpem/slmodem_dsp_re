@@ -6219,3 +6219,42 @@ Worth generalising, because this reconstruction now allocates real objects in
 tests: **a scratch pointer aimed inside the object under test can collide
 with the object's own arrays**, and the collision is invisible to a
 differential comparison because both sides suffer it equally.
+
+## 117. `ApplyBulkDelay` cannot be tested yet, and that re-orders the work
+
+`ApplyBulkDelay` (0x5dd10, 467 bytes) is **LOCAL** in the object, so
+`objcopy` cannot give it a `ref_` alias and no test can call the blob's copy
+directly. The project has handled that before — eight file-local symbols are
+driven through their callers instead (see `docs/coverage.md`).
+
+Here there is no such caller. Its only two call sites are
+
+```
+   6639f:  call 5dd10 <ApplyBulkDelay>
+   66af5:  call 5dd10 <ApplyBulkDelay>
+```
+
+both inside **`v34handshak`** — 61 KB, 87 states, tasks #39-#45, not
+reconstructed. There is no relocation for either, because a local symbol
+called from its own translation unit needs none, which is why a relocation
+search reported zero callers and a disassembly search found two.
+
+**So it is unwritable under the fast pass**, whose one unrelaxed rule is that
+nothing commits without passing a differential test. Writing it now would
+produce code with no way to check it, in a tree whose entire value is that
+every line has been checked.
+
+**Consequence for the schedule.** `V34RX.c`'s remaining functions are not
+uniformly available. Before starting one, check that it is either GLOBAL or
+has a reconstructed caller. Of what is left in task #36:
+
+```
+   rxtiming, decoderv34, adaptecho, V34SetupDemodulator,
+   V34agc, V34demodulate, modem_serrint, receiver     GLOBAL -- testable
+   ApplyBulkDelay, V34demodulate?                     check before starting
+```
+
+`V34demodulate` is also LOCAL (0x5af10, 1142 bytes) and needs the same check.
+`ApplyBulkDelay` should be deferred until at least one of its two calling
+states in `v34handshak` exists — it is a phase 6g-6m dependency, not a 6d
+one.
