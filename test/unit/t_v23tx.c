@@ -148,6 +148,16 @@ run(const char *what, short mark, short space, const short *period,
 		if (ours->period_index < prev_index)
 			saw_wrap++;
 
+		/*
+		 * DO NOT COPY THIS INTO A REAL CALLER.  Advancing a cursor by
+		 * `consumed` re-supplies a held bit and transmits it twice --
+		 * see the note in src/pump/v23/v23tx.c and finding 87.  It is
+		 * right HERE because this is a differential test: both sides
+		 * get the identical wrong input and must produce identical
+		 * output, and the block sizes below deliberately include ones
+		 * that end mid-bit so the carry-over path runs.  v23_process
+		 * is the correct caller and refills from index zero.
+		 */
 		at += used_a;
 		if (at + 64 > nbits)
 			at = 0;		/* wrap the pattern, not the object */
