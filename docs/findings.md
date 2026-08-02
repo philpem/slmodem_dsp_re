@@ -6042,3 +6042,36 @@ The second is worth checking first: `struct v34_queue rxq` is declared at
 receiver's first 0x120 bytes ARE the receive queue. That overlap is real and
 intended, but it means an offset error in either struct shows up as exactly
 this — two isolated bytes, in fields whose neighbours are fine.
+
+### 115b. Both hypotheses ruled out; the contradiction stands
+
+**The struct overlap is real but harmless.** Compiling `offsetof` for every
+field involved gives `flags 0x122`, `agc_level 0x134`, `f1f4 0x1f4`,
+`f218 0x218`, `f1f2 0x1f2` — all exactly where the disassembly puts them —
+and `struct v34_queue`'s ring at object offset `0x270`, ending at `0x370`,
+well below the `0x398` in question. The structs are right.
+
+**And nothing overwrites the two fields.** `objdump` finds exactly one store
+to each in the whole function:
+
+```
+   5ac35:  mov  %cx,0x134(%ebx)
+   5ac3c:  mov  %dx,0x1f4(%ebx)
+```
+
+So: `%ecx` and `%edx` are provably `0x4000`, set four and five instructions
+earlier with only a `testb` and one unrelated store between; `%ebx` is
+callee-saved and provably `obj + 0x264`; nothing writes either field again;
+and the **first** pair of stores from those same two registers — to `0x218`
+and `0x1f2`, four instructions before — lands correctly.
+
+Static reading is exhausted and the disassembly contradicts the measurement.
+
+**Next step is a runtime probe, not more reading.** Call `ref_rxinit` on a
+known buffer and print `obj+0x398` and `obj+0x458` directly, instead of
+inferring them from a byte-wise comparison. That distinguishes "the blob does
+not do what the instruction says" — which would mean the reading is wrong
+somewhere earlier — from "the test is comparing the wrong bytes". This
+session has produced two of the latter (`V34TimingFilter`'s pointer fields,
+`V34EchoHistoryBackwardClean`'s `p_2074`) and none of the former, so that is
+where the prior sits.
