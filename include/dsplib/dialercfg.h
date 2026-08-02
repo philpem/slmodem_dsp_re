@@ -35,6 +35,12 @@
 #define DIALER_DTMF_LEVEL_DEFAULT	13014
 #define DIALER_DTMF_TWIST_DEFAULT	26029
 
+/*
+ * The author's own field names are given alongside ours, recovered from
+ * GetDialerConfig's dropped debug output (findings 134, 140).  Ours were
+ * inferred from the modem_get_param name that fills each field, so the two
+ * agree everywhere -- the value is in the places they differ, noted inline.
+ */
 struct dialer_cfg {
 	/*
 	 * How long a DTMF digit lasts and how long the gap after it is.  Both
@@ -43,27 +49,31 @@ struct dialer_cfg {
 	 * calls and so is reproduced.
 	 */
 	int	dtmf_duration;		/* +0x00  GetDTMFDialSpeed          */
+	/*   author: tone_DigitLength */
 	int	dtmf_gap;		/* +0x04  the same, fetched again   */
+	/*   author: tone_BetweenDigitsInterval */
 
 	/* Q14 amplitudes; see above. */
-	short	dtmf_low;		/* +0x08 */
-	short	dtmf_high;		/* +0x0a */
+	short	dtmf_low;		/* +0x08  author: DTMF_Gain1 */
+	short	dtmf_high;		/* +0x0a  author: DTMF_Gain2 */
 
-	int	pulse_break;		/* +0x0c  GetPulseDialBreakTime     */
-	int	pulse_make;		/* +0x10  GetPulseDialMakeTime      */
-	int	pulse_gap;		/* +0x14  GetPulseBetweenDigitsInterval */
-	int	pause;			/* +0x18  GetDialPauseTime          */
-	int	hook_flash;		/* +0x1c  GetHookFlashTime          */
+	int	pulse_break;		/* +0x0c  author: pulse_OffHookTime */
+	int	pulse_make;		/* +0x10  author: pulse_OnHookTime  */
+	int	pulse_gap;		/* +0x14  author: pulse_BetweenDigitsInterval */
+	int	pause;			/* +0x18  author: dialPauseTime     */
+	int	hook_flash;		/* +0x1c  author: flashTime         */
 
 	/* Normalised to 0 or 1 by the original, unlike every other flag. */
-	int	pulse_dialing;		/* +0x20  GetPulseDialingFlag       */
+	int	pulse_dialing;		/* +0x20  author: toneOrPulseFlag   */
 
-	int	modifier_validation;	/* +0x24  GetDialModifierValidation */
-	int	abcd_permitted;		/* +0x28  GetABCDDialingPermittedFlag */
-	int	mixed_permitted;	/* +0x2c  GetPulseAndToneDialInSameDialStringPermittedFlag */
-	int	calling_tone;		/* +0x30  GetCallingToneFlag        */
-	int	coma_pause_limit;	/* +0x34  GetComaPauseDurationLimit */
-	int	pulse_pattern;		/* +0x38  GetPulseDialDigitPattern  */
+	int	modifier_validation;	/* +0x24  author: dialModifierValidationFlag */
+	int	abcd_permitted;		/* +0x28  author: ABCD_PermittedFlag */
+	int	mixed_permitted;	/* +0x2c  author: pulseAndToneInSameStringPermittedFlag */
+	int	calling_tone;		/* +0x30  author: callingToneFlag   */
+	int	coma_pause_limit;	/* +0x34  author: commaPauseDurLimit -- TWO m's;
+				 * the parameter name has the typo,
+				 * the struct field does not */
+	int	pulse_pattern;		/* +0x38  author: digitPattern      */
 };
 
 /* Fill `cfg` from the host.  Reads fifteen parameters and returns nothing. */

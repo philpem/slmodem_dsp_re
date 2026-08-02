@@ -7775,3 +7775,39 @@ Two other strings from the same function are worth keeping: "Found 2100" and
 "CALLPROG: 5 sec. silence was detected", which independently confirms
 finding 138's correction that '@' waits for silence rather than for an
 answer.
+
+### 140. The dialler config's field names, and a V.8 version string
+
+`GetDialerConfig`'s sixteen dropped call sites print every field of
+`struct dialer_cfg` by name.  This tree had inferred names from the
+`modem_get_param` getter that fills each field, and the two agree
+everywhere -- which is itself worth knowing, since it means that inference
+method is sound and can be trusted elsewhere.  The value is in the three
+places they differ:
+
+  - `DTMF_Gain1` / `DTMF_Gain2` for what this tree calls `dtmf_low` /
+    `dtmf_high`.  Confirmed by offset, +0x08 and +0x0a.  Ours reads as a
+    frequency pair; they are amplitudes, which the comment said but the
+    name contradicted.
+  - `toneOrPulseFlag` for `pulse_dialing`.  The author's name says it
+    SELECTS between two modes; ours implies a boolean "is pulse".
+  - `commaPauseDurLimit` -- with two m's -- for `coma_pause_limit`.  The
+    getter is `GetComaPauseDurationLimit`, with one.  So the author typed
+    the parameter name wrong and the struct field right, and this
+    reconstruction copied the typo because the getter was all it had.
+
+`V8Create`'s sixteen name the V.8 configuration the same way, and one of
+them is not a field at all:
+
+```
+   V8: Create called, V8 version 23/09/03 .
+```
+
+A version string, dated 23 September 2003 -- two years before the 22
+September 2005 build stamp of finding 135.  So the object is a 2005 build of
+a V.8 module last versioned in 2003, which is a fact about the source tree's
+age that nothing else in the binary records.
+
+Its modulation list also fixes an order: V90, V34, V34HD, V32, V22, V17,
+V29, V27, V23, V21 -- worth having when the V.8 capability bitmaps are
+revisited.
