@@ -6523,3 +6523,42 @@ function (finding 118). So the chain is now traced end to end:
 `rxtiming`'s IIR.**
 
 **Remaining: about 260 bytes.**
+
+### 120e. Fully read, and the inlined AGC is confirmed byte-identical
+
+All 1142 bytes. The tail settles both open questions.
+
+**The inlined `agcadapt` is identical in full.** Every remaining arm matches:
+
+```
+   5b330:  mov $0x7f00,%bx ; mov %bx,0x134   ; the unsigned level clamp
+   5b341:  neg / sub $0x4b0                  ; |err| - deadband
+   5b34f:  mov %cx,0x138                     ; store the integrator
+   5b35b:  neg / sub $0x1f4                  ; |acc| - limit
+   5b369:  cmp $0x6a00 ... imul $0x47cf      ; the gain ceiling and up-step
+```
+
+`0x6a00`, `0x47cf`, `0x390a`, `0x4b0`, `0x1f4`, `0x7f00` — all of them.
+So the block **can be written as a call to `agcadapt`**, which removes about
+a fifth of the function and reuses 1.16M checks of existing coverage.
+Finding 120b said to verify rather than assume; verified.
+
+**The complex output and the phase wrap:**
+
+```
+   I  = (re * cos + im * sin + 0x2000) >> 14;   -> rx->f240
+   Q  = (im * cos - re * sin + 0x2000) >> 14;   -> rx->f242
+   ph += rx->f1b8;
+   if (ph >= rx->f1ba) ph -= rx->f1ba;          /* wraps at the quarter */
+   rx->f1bc = ph;
+```
+
+The phase wraps at `f1ba`, the same value used as the sine/cosine offset —
+confirming the table is `f1ba` sines followed by `f1ba` cosines, identical in
+shape to the modulator's (finding 116) and to `V34SetupModulator`'s
+`sine_len`.
+
+**`V34demodulate` is fully specified.** What remains before it can be
+written is `rxtiming`'s own body (about 540 bytes, of which ~130 are read in
+finding 118), plus the struct fields: `f13c[36]`, `f19c`, `f1b4`, `f1b8`,
+`f1ba`, `f1bc`, `f240`, `f242` — several already present.
