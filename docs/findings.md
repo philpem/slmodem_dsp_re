@@ -7495,3 +7495,25 @@ Entry points worth naming when `cfgsplit --entries` is next pointed at it:
 `0x5bed8` (wrap), `0x5c526` (single pull), `0x5c532` (odd output),
 `0x5bfe2` (loop exit into TimingV34), `0x5c100` (the flag-0x400 branch after
 the equaliser).
+
+**Read so far, 0x5be90..0x5c722 of 0x5cf76.**
+
+  - `0x5c532` resolves the parity test: odd-numbered outputs run
+    `V34TimingPrefilter` and feed its result -- split as `(v >> 16, (short)v)`
+    -- into `V34EqualizerUpdateDelayLine`.  So the interpolator produces a
+    timing metric on every output and advances the equaliser's delay line on
+    every OTHER one.  That is the two-samples-per-symbol structure, and it is
+    why the loop looks like `rxtiming`'s but cannot share its shape.
+  - `0x5c377` computes `|target|^2 >> 14` and compares `f124` against 0x40 and
+    0x68, setting flags 0x200 and 0x100 at those two thresholds -- an
+    acquisition ramp keyed on symbol count, not on signal quality.
+  - `0x5c3d4` forms the cross-product `f20c*f212 - f20e*f210`, shifted up 2,
+    into `f1fc`.  That is a phase-error term: the imaginary part of
+    (decision* x target).
+  - `0x5c40e` is `agc_rms` AGAIN -- the 36-tap `0x38e` window, the
+    normalise/`sqrt_table`/index chain, identical to the one in v34rx.c.  A
+    FOURTH copy.  It compares the result against `obj[0x22c]` and, if not
+    greater, writes 10 into `obj[0]` -- which is the datapump's own status
+    word, so this is the receiver declaring loss of signal.
+
+Still unread: 0x5c722..0x5cf76, roughly 500 disassembly lines.
