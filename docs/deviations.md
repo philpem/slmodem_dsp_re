@@ -1255,11 +1255,20 @@ the read leaves the buffer.
 
 **What we do:** the same, single subtraction.
 
-**Reachable?** Requires `lag + taps - 1 >= 2 * dlen - (cursor - dline)`, so it
-depends on the range of `lag` at the two call sites in `V34RX.c` and on how
-`dlen` is sized relative to `taps` — none of which is reconstructed yet.
-**Unmeasured**, and deliberately recorded as such rather than guessed at;
-re-open this when `V34RX.c` lands.
+**Reachable?** Now bounded. `V34InitializeImplementationSpecific` sets
+`dlen = 0x678` (1656) and `taps = 0x90` (144) for both cancellers. The read
+index is `cursor + lag + taps - 1` with `cursor` at most `dlen - 1`, so one
+subtraction suffices whenever
+
+```
+    lag  <=  dlen - taps + 1  =  1656 - 144 + 1  =  1513
+```
+
+A `lag` above 1513 would in any case be asking for a sample older than the
+delay line holds, so the single wrap covers the whole domain in which the
+function returns anything meaningful. **Dormant**, unless `V34RX.c` passes a
+`lag` that is already out of range — which remains worth confirming when it
+lands, but is no longer an open question about this function.
 
 **Not fixed.** A second wrap would be a different function, and with no
 tier-2 peer for V.34 there is nothing that could say which one the caller
@@ -1267,7 +1276,7 @@ wants.
 
 ---
 
-## D28 🐛 `V34EchoReportCoeff` scans `taps` coefficients and prints 144
+## D28 ~~🐛 `V34EchoReportCoeff` scans `taps` coefficients and prints 144~~ RETRACTED
 
 **Where:** `src/pump/v34/v34filters.c`, `V34EchoReportCoeff`.
 
@@ -1282,10 +1291,24 @@ taps has its coefficient array over-read.
 zero, so it cannot fire on a working modem. The read is also of the
 library's own allocation rather than of anything a caller owns.
 
-**Not fixed**, and not behind `DSPLIB_REPRODUCE_BUGS`: it is a diagnostic
-path with no effect on the signal, so there is nothing for a fix to protect.
-Recorded because it is evidence about the intended size of a coefficient
-array — 144 taps is a number that came from somewhere.
+**RETRACTED.** 144 is not a magic number: it is `taps`.
+`V34InitializeImplementationSpecific` sets both echo cancellers' tap counts
+to `0x90` — 144 — at 0x71dc6 and 0x71e1e. So the dump is sized to the array
+exactly, and there is no over-read.
+
+The scan is not odd either, once the same number is applied: `(144 / 6) * 6`
+is 144, so the rounding-down that looked like a mismatch is a no-op at the
+only tap count the object ever uses.
+
+This entry was filed as a defect on the strength of "the two loops use
+different bounds", without measuring what `taps` actually is. The bug policy
+requires measuring whether a defect fires, and this one was registered before
+that was done. Left in the register rather than deleted, because a retraction
+is more useful than a gap — see D7 and D10.
+
+The reconstruction is unchanged: it still spells the dump length as
+`V34_ECHO_REPORT_TAPS`, which is correct and now documented as equalling
+`taps` rather than as an unexplained constant.
 
 ---
 

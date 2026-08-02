@@ -5149,3 +5149,54 @@ rows **indexed from one**.
 This matters for the remaining work: the row size is a property of the tables,
 so `V34ModulatorProcess` can be reconstructed knowing that a "filter" here is
 16 taps, before its own disassembly is read.
+
+## 98. The echo canceller's arrays are one contiguous block, and it closes two open entries
+
+`V34InitializeImplementationSpecific` (0x71d70, 181 bytes) does nothing but
+fill in the two `struct v34_echo` objects. It was one of the two functions
+this reconstruction could not attribute to a translation unit; what it
+installs settles both its own home and two register entries.
+
+For the canceller at +0x80b8:
+
+```
+  +0x04 dline       obj+0x81f8      +0x18 dlen   0x678  (1656 shorts)
+  +0x08 coeff       obj+0x9018      +0x1c taps   0x90   ( 144 shorts)
+  +0x0c coeff_frac  obj+0x80d8
+  +0x10 hist        obj+0x8ee8
+```
+
+Every one of those abuts its neighbour exactly:
+
+```
+  0x80b8  struct        0x20 bytes    -> 0x80d8
+  0x80d8  coeff_frac    144 shorts    -> 0x81f8
+  0x81f8  dline        1656 shorts    -> 0x8ee8
+  0x8ee8  hist          144 shorts    -> 0x9008
+  0x9008  (16 bytes unaccounted)      -> 0x9018
+  0x9018  coeff         144 shorts    -> 0x9138  = the second canceller
+```
+
+The second canceller repeats it at +0x9138 with the same sizes and the same
+16-byte gap before `coeff`, which is why the two are exactly 0x1080 apart.
+Two independent readings agreeing to the byte is strong evidence the struct
+is right.
+
+**It retracts D28.** That entry called `V34EchoReportCoeff` an over-read,
+because it scans `(taps/6)*6` coefficients and dumps a hardcoded 144. `taps`
+IS 144, so the dump is sized to the array and `(144/6)*6` is 144 as well.
+The entry was filed on the strength of two loop bounds disagreeing, without
+measuring the value they disagreed about — which is precisely what the bug
+policy exists to prevent.
+
+**It bounds D27.** `V34EchoFilter`'s single wrapping subtraction suffices for
+any `lag <= dlen - taps + 1 = 1513`, and a larger `lag` would be asking for a
+sample older than the line holds. Dormant, with an exact figure instead of an
+"unmeasured".
+
+**And it attributes the function.** The two unattributed functions between
+`V34hshak.c` and `v34filters.c` were `datapumpv34` and this one. This one
+initialises v34filters.c's own object type and nothing else, so it belongs
+here. `datapumpv34` is still open — it calls only `v34handshak`,
+`modulatevector`, `receiver` and `v34handshakinit`, none of which are this
+file's, so the balance of evidence puts it at the tail of `V34hshak.c`.
