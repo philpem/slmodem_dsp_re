@@ -7374,3 +7374,46 @@ the failure mode is invisible to inspection -- the line reads exactly like
 the comment above it -- and because it is the second time in this session
 that a helper factored out of three identical inlined copies was itself the
 thing that went wrong.
+
+### 131. `decodeDepth` is one engine with four preambles, not four decoders
+
+The function opens with a compare chain on a table byte shifted right by two:
+
+```
+   589f1:  shr  $0x2,%eax
+   589f8:  cmp  $0x2,%eax   ; je 58f7f
+   58a01:  jg   58f3e
+   58a07:  dec  %eax        ; je 58faf
+           fall through     ;    58a10
+```
+
+Four targets, which reads as four constellation sizes each with its own
+decoder -- and at 2075 bytes that would be the largest thing left in the
+cluster by some margin.  Partitioning it says otherwise:
+
+```
+   exclusive to one case      114 bytes
+   shared by two or more     1661 bytes   <- the common engine
+   reached by no case         249 bytes
+
+         63  0x58f3e   k3plus
+         51  0x58f7f   k2
+          0  0x58faf   k1
+          0  0x58a10   k0
+```
+
+Two of the four contribute NO exclusive bytes at all -- they jump straight
+into the shared engine -- and the other two contribute 63 and 51 bytes of
+setup before doing the same.  So there is one Viterbi core, entered four ways
+with different parameters, and the reconstruction is one loop nest plus a
+short switch, not four algorithms.
+
+Worth recording as a measurement rather than an impression, because the
+impression was wrong in the expensive direction: budgeting four decoders
+would have justified deferring the whole cluster, when what is actually
+there is comparable to `demapFrame` beside it.
+
+`cfgsplit` needed `--entries` here, as it did for `rxtiming` (121k): the
+dispatch is a compare chain, so there is no jump table for it to find, and
+without the four targets named it reports the entire function as
+unreachable-by-any-case.
