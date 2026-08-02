@@ -7,8 +7,8 @@ WHY THIS EXISTS
 `debug.h` states the policy: carry the `dsplibs_debug_printf` call sites,
 because the gate is real control flow and the format strings are the original
 author's own words.  Finding 134 counted them and found the policy had not
-been followed -- 399 calls in the blob, 22 in the tree, 242 of them missing
-from functions that ARE reconstructed.
+been followed -- 1670 calls in the blob across 399 functions, 22 in the
+tree, and 242 missing from functions that ARE reconstructed.
 
 Nothing could have caught that.  `dsplibs_debug_level` ships at zero and
 every gate is `> 1`, so a missing call site and a present one behave
