@@ -303,6 +303,57 @@ void V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re,
 			     short err_im);
 
 /* ------------------------------------------------------------------------
+ * The transmit modulator
+ */
+
+#define V34_MOD_ROW	64	/* destination taps per polyphase row */
+
+/*
+ * The modulator, mapped where V34SetupModulator writes it.  A member of the
+ * V.34 object at +0x1450; the pads are not a claim about their contents.
+ *
+ * The ten `hsine*` tables are carrier sine/cosine pairs, interleaved, and
+ * `sine_len` is the length in PAIRS -- exactly each table's byte size / 4.
+ */
+struct v34_modulator {
+	int taps;		/* +0x00  source taps per polyphase row  */
+	int f04;		/* +0x04                                 */
+	int rows;		/* +0x08  polyphase rows to load         */
+	int f0c;		/* +0x0c  reduced mod `rows` on exit     */
+	const short *sine;	/* +0x10  carrier table                  */
+	int sine_len;		/* +0x14  its length, in complex pairs   */
+	int f18;		/* +0x18  reduced mod `sine_len` on exit */
+	unsigned char unmapped_1c[0xc24 - 0x1c];
+	short *shaped;		/* +0xc24  where the engine writes       */
+	unsigned char unmapped_c28[0xc7c - 0xc28];
+	const short *ec_prem;	/* +0xc7c                                */
+	unsigned char unmapped_c80[0xc8c - 0xc80];
+	int fc8c;		/* +0xc8c  an integer, 14 or 15          */
+	unsigned char pad_c90[0xcb0 - 0xc90];	/* memset 0x20 from +0xc90 */
+	const short *preemp;	/* +0xcb0                                */
+	unsigned char unmapped_cb4[0xcbc - 0xcb4];
+	unsigned char work_cbc[0x100];		/* memset 0x100 from +0xcbc */
+	unsigned char unmapped_dbc[0xdbc - (0xcbc + 0x100)];
+	int fdbc;		/* +0xdbc                                */
+	int fdc0;		/* +0xdc0                                */
+};
+
+extern const short hsine1200[16], hsine1600[12], hsine1680[80];
+extern const short hsine1800[32], hsine1829[42], hsine1867[72];
+extern const short hsine1920[10], hsine1959[98], hsine2000[48];
+extern const short hsine2400[16];
+
+/*
+ * Configure the modulator for one (baud, carrier) pair.
+ *
+ * `baud` selects the shaping filter and the three counts; `carrier` selects
+ * the sine table AND the pre-emphasis variant; `phase` picks a row of the
+ * p<baud> table when non-zero; `reset` non-zero clears the working state.
+ */
+void V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
+		       short phase, int arg4, int reset);
+
+/* ------------------------------------------------------------------------
  * Odds and ends
  */
 

@@ -1386,3 +1386,43 @@ every setup path calls it. Nothing dereferences `cursor` in between.
 **Not fixed.** `t_v34fsk` asserts `cursor` still holds the harness fill after
 initialisation, so a reconstruction that helpfully set it to the new base
 fails rather than passes — the same shape of check as D26 and D29.
+
+---
+
+## D31 🐛 `V34SetupModulator`'s V.90 arm is unreachable
+
+**Where:** `src/pump/v34/v34filters.c`, the 3200-baud case.
+
+**What the original does:** the 3200 case looks like it chooses between a V.34
+configuration (0x20 taps from `tx3200c1_for_v34`) and a V.90 one (0x40 taps
+from `tx3200c1_for_v90`, with `V90EchoPrefilterCoeff` as the pre-emphasis).
+The branch that would select the V.90 arm is
+
+```
+   732f1:  ...                       ; entered via je from cmp $0xc80,%ebx
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; <- always taken
+```
+
+**`movl` does not set flags.** So the `je` inherits ZF from the
+`cmp $0xc80,%ebx` that selected this case in the first place — which was
+equal, or control would not be here. The branch is unconditionally taken and
+the V.90 arm is dead.
+
+**What we do:** take the V.34 arm unconditionally, and say why.
+
+**Consequence:** `tx3200c1_for_v90` (384 bytes) and `V90EchoPrefilterCoeff`
+(84 bytes) are never installed by this function. They are still referenced
+from it, so they are not dead data — something else may reach them, or the
+V.90 path may be selected before this function is called. **Unmeasured**;
+re-open when `VPcmV34Main.cpp` is reconstructed.
+
+**Not fixed.** A missing `cmp` cannot be guessed at: there is no way to know
+which comparison was intended, and inventing one would change which shaping
+filter a 3200-baud V.90 connection uses.
+
+**How it was found:** by the differential test, after two wrong guesses at a
+carrier-based condition. The test disagreed at exactly one (baud, carrier)
+pair each time, which is what pointed at the branch rather than at the
+tables.

@@ -45,6 +45,8 @@ extern const short ref_posHalfBaud_Bcoef_Imag[3], ref_posHalfBaud_Bcoef_Real[3];
 extern const short ref_V34TimingIIR_Acoef[5], ref_V34TimingIIR_Bcoef[5];
 extern void ref_V34TimingFiltersInit(void *t);
 extern int ref_V34TimingPrefilter(void *t);
+extern void ref_V34SetupModulator(void *m, short baud, short carrier,
+				  short phase, int a4, int reset);
 extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
@@ -311,6 +313,79 @@ main(void)
 					    ((unsigned char *)&ta)[k],
 					    ((unsigned char *)&tb)[k], k);
 			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 setup modulator");
+	{
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		static const short bauds[] = { 600, 2400, 2800, 3000, 3200,
+					       3429, 4800, 1234 };
+		static const short carr[] = { 1200, 1600, 1680, 1800, 1829,
+					      1867, 1920, 1959, 2000, 2400,
+					      999 };
+		unsigned bi, ci;
+		int ph, rst;
+
+		for (bi = 0; bi < sizeof(bauds) / sizeof(bauds[0]); bi++)
+		for (ci = 0; ci < sizeof(carr) / sizeof(carr[0]); ci++)
+		for (ph = 0; ph <= 3; ph++)
+		for (rst = 0; rst <= 1; rst++) {
+			memset(&ma, HARNESS_MALLOC_FILL, sizeof(ma));
+			memset(&mb, HARNESS_MALLOC_FILL, sizeof(mb));
+			memset(sha, 0x5a, sizeof(sha));
+			memset(shb, 0x5a, sizeof(shb));
+			ma.shaped = sha; mb.shaped = shb;
+			/* f0c/f18 feed the modulo on the non-reset path. */
+			ma.f0c = mb.f0c = 12345;
+			ma.f18 = mb.f18 = 6789;
+
+			V34SetupModulator(&ma, bauds[bi], carr[ci],
+					  (short)ph, 0, rst);
+			ref_V34SetupModulator(&mb, bauds[bi], carr[ci],
+					      (short)ph, 0, rst);
+
+			/* Scalars. */
+			diff_eq_int("taps", ma.taps, mb.taps, bauds[bi]);
+			diff_eq_int("f04", ma.f04, mb.f04, bauds[bi]);
+			diff_eq_int("rows", ma.rows, mb.rows, bauds[bi]);
+			diff_eq_int("f0c", ma.f0c, mb.f0c, bauds[bi]);
+			diff_eq_int("sine_len", ma.sine_len, mb.sine_len,
+				    carr[ci]);
+			diff_eq_int("f18", ma.f18, mb.f18, carr[ci]);
+			diff_eq_int("fdbc", ma.fdbc, mb.fdbc, rst);
+			diff_eq_int("fdc0", ma.fdc0, mb.fdc0, rst);
+			/*
+			 * Pointers cannot be compared across the two sides,
+			 * so each is checked by the CONTENT it selects --
+			 * which is what actually matters and is stronger than
+			 * an address comparison would be.
+			 */
+			for (k = 0; k < ma.sine_len * 2; k++)
+				diff_eq_int("sine table", ma.sine[k],
+					    mb.sine[k], k);
+			for (k = 0; k < 16; k++)
+				diff_eq_int("preemp", ma.preemp[k],
+					    mb.preemp[k], k);
+			/*
+			 * 4800 baud installs no pre-emphasis table at all --
+			 * it takes txAllPass and jumps straight to the
+			 * engine -- so the field keeps whatever it held and
+			 * must not be dereferenced.  Both sides leave it, so
+			 * a comparison would be of two fill patterns anyway.
+			 */
+			if (bauds[bi] != 4800)
+				for (k = 0; k < 42; k++)
+					diff_eq_int("ec_prem b=%ld",
+						    ma.ec_prem[k],
+						    mb.ec_prem[k],
+						    bauds[bi] * 10000L
+						    + carr[ci]);
+			/* And the loaded polyphase bank, byte for byte. */
+			for (k = 0; k < ma.rows * V34_MOD_ROW; k++)
+				diff_eq_int("shaped", sha[k], shb[k], k);
 		}
 	}
 	rc |= diff_end();
