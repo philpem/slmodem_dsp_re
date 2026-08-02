@@ -9,6 +9,8 @@
 extern void ref_rxreadqueue(void *q);
 extern void ref_txwritequeue(void *q, const short *src);
 extern int ref_bitreverse(unsigned short v, short nbits);
+extern void ref_decision(void *d, const int *pts, short npts);
+extern void ref_V34nlencoder(const short *in, short *out);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -95,6 +97,70 @@ main(void)
 			ref_txwritequeue(&qb.q, src);
 			compare("after txwritequeue", start * 100 + i);
 		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 nlencoder");
+	{
+		int re, im;
+
+		for (re = -32768; re < 32768; re += 331)
+		for (im = -20000; im < 20000; im += 4441) {
+			short in[2], oa[2], ob[2];
+
+			in[0] = (short)re; in[1] = (short)im;
+			oa[0] = oa[1] = 0x5a5a;
+			ob[0] = ob[1] = 0x5a5a;
+			V34nlencoder(in, oa);
+			ref_V34nlencoder(in, ob);
+			diff_eq_int("nlenc re", oa[0], ob[0],
+				    (long)re * 100000 + im);
+			diff_eq_int("nlenc im", oa[1], ob[1],
+				    (long)re * 100000 + im);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 decision");
+	{
+		static struct v34_decoder da, db;
+		static int pts[64];
+		int n, t;
+
+		for (i = 0; i < 64; i++)
+			pts[i] = (int)(((unsigned)(short)(i * 719 - 12000)
+					<< 16)
+				       | (unsigned short)(short)(i * 431
+								 - 9000));
+
+		for (n = 1; n <= 64; n += 3)
+		for (t = -30000; t < 30000; t += 2711) {
+			memset(&da, HARNESS_MALLOC_FILL, sizeof(da));
+			memset(&db, HARNESS_MALLOC_FILL, sizeof(db));
+			da.target_re = db.target_re = (short)t;
+			da.target_im = db.target_im = (short)(-t / 3);
+			decision(&da, pts, (short)n);
+			ref_decision(&db, pts, (short)n);
+			diff_eq_int("best index", da.best_index,
+				    db.best_index, (long)n * 100000 + t);
+			diff_eq_int("best point", da.best_point,
+				    db.best_point, (long)n * 100000 + t);
+			for (i = 0; i < (int)sizeof(da); i++)
+				diff_eq_int("decoder state",
+					    ((unsigned char *)&da)[i],
+					    ((unsigned char *)&db)[i], i);
+		}
+		/* npts of zero: the loop must not run and best must be pts[0]. */
+		memset(&da, HARNESS_MALLOC_FILL, sizeof(da));
+		memset(&db, HARNESS_MALLOC_FILL, sizeof(db));
+		da.target_re = db.target_re = 1234;
+		da.target_im = db.target_im = -567;
+		decision(&da, pts, 0);
+		ref_decision(&db, pts, 0);
+		diff_eq_int("zero points, index", da.best_index,
+			    db.best_index, 0);
+		diff_eq_int("zero points, point", da.best_point,
+			    db.best_point, 0);
 	}
 	rc |= diff_end();
 

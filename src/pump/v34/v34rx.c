@@ -86,3 +86,57 @@ bitreverse(unsigned short v, short nbits)
 
 	return out;
 }
+
+void
+decision(struct v34_decoder *d, const int *pts, short npts)
+{
+	const int *best = pts;
+	int best_dist = 0x7fff;
+	int tx = (unsigned short)d->target_re;
+	int ty = (unsigned short)d->target_im;
+	short i;
+
+	for (i = 0; i < npts; i++) {
+		const int *p = &pts[i];
+		int dx = (short)(tx - (unsigned short)*(const short *)p);
+		int dy = (short)(ty - (unsigned short)((const short *)p)[1]);
+		int dist;
+
+		/*
+		 * The sum of squares is shifted LOGICALLY and then truncated
+		 * to 16 bits, so a pair far enough apart wraps to a small
+		 * distance and can win.  Reproduced.
+		 */
+		dist = (short)((unsigned)(dx * dx + dy * dy) >> 14);
+
+		if (dist < best_dist) {
+			best = p;
+			best_dist = dist;
+		}
+	}
+
+	d->best_index = (short)(best - pts);
+	d->best_point = *best;
+}
+
+void
+V34nlencoder(const short *in, short *out)
+{
+	int re = in[0];
+	int im = in[1];
+	int mag, g, t;
+
+	/* |z|^2, in Q12, then scaled by 341/4096. */
+	mag = (re * re + im * im + 0x800) >> 12;
+	mag = (short)((mag * 0x155 + 0x800) >> 12);
+
+	/* A cubic correction: mag + (mag^2 * 19661 >> 16), offset by 1.0. */
+	t = (short)((mag * mag + 0x2000) >> 14);
+	g = (short)(mag + ((t * 0x4ccd) >> 16) + 0x4000);
+
+	/* And the gain itself, Q14. */
+	g = (g * 0x3b17) >> 14;
+
+	out[0] = (short)((re * g) >> 14);
+	out[1] = (short)((im * g) >> 14);
+}

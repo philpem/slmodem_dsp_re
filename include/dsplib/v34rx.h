@@ -42,6 +42,33 @@ void rxreadqueue(struct v34_queue *q);
 /* Put four shorts onto the transmit queue, zeroing each entry's high half. */
 void txwritequeue(struct v34_queue *q, const short *src);
 
+/*
+ * The decoder's state, mapped where `decision` touches it.  A sub-object of
+ * the V.34 receiver; the pads are not a claim about their contents.
+ */
+struct v34_decoder {
+	unsigned char unmapped_000[0x126];
+	short best_index;	/* +0x126  index of the nearest point    */
+	unsigned char unmapped_128[0x20c - 0x128];
+	int best_point;		/* +0x20c  the point itself              */
+	short target_re;	/* +0x210  what we are deciding on       */
+	short target_im;	/* +0x212                                */
+};
+
+/*
+ * Slice: find the nearest of `npts` constellation points to the target, and
+ * record both the point and its index.
+ *
+ * Each point is one int, real in the low half and imaginary in the high.
+ */
+void decision(struct v34_decoder *d, const int *pts, short npts);
+
+/*
+ * The non-linear encoder: scale a complex point by a gain derived from its
+ * own magnitude, which is V.34's warping of the outer constellation shells.
+ */
+void V34nlencoder(const short *in, short *out);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 
