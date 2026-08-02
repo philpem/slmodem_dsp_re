@@ -5200,3 +5200,40 @@ initialises v34filters.c's own object type and nothing else, so it belongs
 here. `datapumpv34` is still open — it calls only `v34handshak`,
 `modulatevector`, `receiver` and `v34handshakinit`, none of which are this
 file's, so the balance of evidence puts it at the tail of `V34hshak.c`.
+
+## 99. `V34TimingFilter`'s shape, before it is reconstructed
+
+Partial reading of 0x72360-0x724c0, recorded so the next pass starts from
+evidence. **Not yet reconstructed** and not yet tested against the blob.
+
+Signature: `V34TimingFilter(struct v34_timing *t, int sample)`, where the
+sample is a complex pair packed as `(im << 16) | (unsigned short)re` — the
+same packing `V34TimingPrefilter` uses.
+
+The first thing it does is shift the two input slots:
+
+```
+   72373:  mov 0x11c(%esi),%edi      ; old in0
+   72379:  mov %ebp,0x11c(%esi)      ; in0 = the new sample
+   72386:  mov %edi,0x120(%esi)      ; in1 = the old in0
+```
+
+which confirms `in0`/`in1` at +0x11c/+0x120 are a two-deep complex history
+shared with the prefilter, and settles the direction: `in0` is newest.
+
+Both halves are then scaled by **0x599a with rounding at 0x8000 and a shift
+of 15** — 22938/32768 = 0.70001, a gain of 0.7 — before anything else
+touches them.
+
+The `iir[6][3]` field is confirmed as six three-entry arrays, addressed as
+`t+0x00`, `+0x06`, `+0x0c`, `+0x12`, `+0x18` and `+0x1e`. The loop writes the
+scaled input into the first two, so those are the real and imaginary input
+histories and the remaining four are the two complex filters' output
+histories — which matches the four `posHalfBaud`/`negHalfBaud` denominator
+tables exactly.
+
+So the function is the half-baud band-pass pair from finding/coefficients
+above, run at three taps each, with a 0.7 input gain. What is **not** yet
+established: the loop bound (three is inferred from the array size, not read),
+what the four `V34TimingIIR_*` tables are for — nothing here reads them — and
+what the function returns.
