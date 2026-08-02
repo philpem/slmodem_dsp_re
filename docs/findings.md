@@ -6411,3 +6411,43 @@ That would close the loop between `V34demodulate`, `agcadapt` and the
 freeze bit, but the connection is not yet read.
 
 **Remaining: about 700 bytes.**
+
+### 120b. `agcadapt` appears a second time, inlined inside `V34demodulate`
+
+Read to 0x5b160 (about 590 of 1142 bytes). The block from 0x5b0d7 is
+`agcadapt` written out again, instruction for instruction:
+
+```
+   5b0e7:  imul $0x6ccd,%ecx,%esi        ; the same 0.85 smoothing
+   5b0f5:  shr  $0xf,%ebp                ; the same 17-bit range check
+   5b0fb:  cmp  $0x1ffff,%ebp            ;   against 0 or 0x1ffff
+   5b115:  testw $0x200,...              ; the same freeze bit
+   5b129:  sub  $0xfa0,%eax              ; the same 4000 target
+   5b134:  lea  -0x4b0(%edx),%eax        ; the same 1200 deadband
+   5b146:  imul agc_step ... >> 16       ; the same integrator step
+```
+
+Every constant matches `agcadapt` (finding 112 and its deviation entries),
+including the clamp to `0x7f00` on range failure at 0x5b330 and the
+fall-through that uses the clamped value.
+
+**And it closes the loop the RMS block opened.** `rx[0x12c]` is written with
+the RMS accumulator and then shifted right by 16 — and `0x12c` is the int
+whose *high half* is `agc_input` at `0x12e`. So the level estimate computed
+in 120a is exactly what this inlined AGC consumes.
+
+Two consequences.
+
+**The remaining work is smaller than 1142 bytes suggests.** `agcadapt` is
+already reconstructed and differential-tested (1.16M checks), so this block
+can be written by calling it — but **only if it is bit-identical**, which
+needs checking rather than assuming: the inlined copy might differ in a
+constant, and finding 110's rule applies. If it is identical, say so and
+call; if not, write it out and record the difference.
+
+**The AGC exists twice in the object**, which is worth knowing before the
+V.90 work: a fix to one would not reach the other. That is the same shape as
+the `decision` / `decoderv34` duplication in finding 119, and the second
+instance of the object open-coding a function it already has.
+
+**Remaining: about 550 bytes.**
