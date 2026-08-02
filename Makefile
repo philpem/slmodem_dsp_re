@@ -17,7 +17,19 @@ BUILD      := build
 ARCH32     := -m32
 CC         := gcc
 CXX        := g++
-CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP
+#
+# Header-dependency generation, kept separate so it can be filtered back out.
+# `check64` compiles with -fsyntax-only and no -o, and GCC then writes each
+# .d beside the Makefile rather than into $(BUILD) -- 62 stray files in the
+# working tree after every `make phase`.  They are gitignored, so this was
+# untidiness rather than breakage, but the fix is to not emit them.
+#
+DEPFLAGS   := -MMD -MP
+CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude $(DEPFLAGS)
+
+# The same flags without the dependency generation, for syntax-only passes.
+SYNCFLAGS   = $(filter-out $(DEPFLAGS),$(CFLAGS))
+SYNCXXFLAGS = $(filter-out $(DEPFLAGS),$(CXXFLAGS))
 
 # Bug-compatibility switch.
 #
@@ -253,10 +265,10 @@ $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
 
 # The reconstruction must not depend on 32-bit; only the reference does.
 check64:
-	@$(CC) $(CFLAGS) -fsyntax-only $(SRC) \
-	  && $(CXX) $(CXXFLAGS) -fsyntax-only $(CXXSRC) \
-	  && $(CC) $(CFLAGS) $(REPRODUCE) -fsyntax-only $(SRC) \
-	  && $(CXX) $(CXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
+	@$(CC) $(SYNCFLAGS) -fsyntax-only $(SRC) \
+	  && $(CXX) $(SYNCXXFLAGS) -fsyntax-only $(CXXSRC) \
+	  && $(CC) $(SYNCFLAGS) $(REPRODUCE) -fsyntax-only $(SRC) \
+	  && $(CXX) $(SYNCXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
 	  && echo "64-bit clean, both configurations: OK"
 
 # Regenerate the analysis documents from the blob.
@@ -276,6 +288,7 @@ docs:
 
 clean:
 	rm -rf $(BUILD)
+	@rm -f a-*.d *.d
 
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds
 # everything that includes it.
