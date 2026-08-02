@@ -7052,3 +7052,53 @@ This is the fifth reversal on `rxtiming` and the first one settled by a tool
 rather than by eye. cfgsplit answered in one run what five readings did not,
 and it was extended for compare-chain dispatch earlier in this same session
 without my thinking to point it at a loop.
+
+### 121l. Not a `while` either: exactly one or two pulls, on two distinct paths
+
+Applying 121k's `while` gives 2238 of 2630040 across a five-step sweep
+(0.085%), with the failure now in `agc_gain` rather than `f244`/`f246`. So
+the copy is placed right and the pull *count* is still wrong.
+
+Tracing the two paths precisely:
+
+```
+   5b3e0:  phase -= step
+   5b3e7:  jl 5b605                  ; ONE wrap
+                 5b605: store phase; f244 = f240; f246 = f242
+                 5b628: jmp 5b491    ; then ONE demodulate + IIR
+   5b3ed:  phase -= step             ; TWO wraps
+   5b3f8:  V34demodulate; IIR writing f240, f208, f244
+   5b491:  V34demodulate; IIR writing f240, f208
+```
+
+So it is **not** an unbounded loop. There are exactly two paths:
+
+  - **one wrap:** copy `f240`/`f242` down to `f244`/`f246`, then one pull.
+  - **two wraps:** subtract twice, then *two* pulls — the first writing
+    `f244` from its own IIR result, the second writing `f240`.
+
+Both converge on `0x5b491`, which is why cfgsplit reported them mutually
+reachable and why 121k read it as a loop. It is a loop in the graph and a
+two-way branch in the source.
+
+Three or more wraps are not handled at all: the phase would still be above
+`f1b0` after two subtractions and the function would carry the excess. With
+`f1ae < f1b0` that cannot happen, so it is a bound on the caller rather than
+a defect — worth confirming when `receiver` is reconstructed.
+
+**The correct shape:**
+
+```
+   output;
+   pos = phase + step;
+   if (pos >= wrap) {
+       pos -= wrap;
+       if (pos < wrap) { f244 = f240; f246 = f242; pull(); }
+       else            { pos -= wrap; pull(); pull(); }
+   }
+   phase = pos;
+```
+
+Sixth reading of this control flow. The tool said "one loop" and that was
+true of the graph; the source distinction is which of two entries into that
+loop is taken.
