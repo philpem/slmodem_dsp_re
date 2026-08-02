@@ -75,18 +75,25 @@
  * but is never selected -- see D6 in docs/deviations.md.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
 
 void
 FPM_AGC_Freeze(struct fpm_agc *agc)
 {
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("AGC_Freeze\n");
+
 	agc->freeze = 1;
 }
 
 void
 FPM_AGC_Release(struct fpm_agc *agc)
 {
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("AGC_Release\n");
+
 	agc->freeze = 0;
 	agc->level = 0;	/* the level estimate, but deliberately not the gain */
 }
@@ -104,9 +111,28 @@ FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg, int reset)
 		agc->level = 0;
 	}
 
+	/*
+	 * Two messages, and the ORDER is not the source order: the object
+	 * emits "AGC_Release" first -- reusing Release's string, so the two
+	 * shared one literal -- and the build stamp second, after the two
+	 * stores below.  Both gates are evaluated before either store.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("AGC_Release\n");
+
 	/* Unconditional, and in this order -- the same pair Release writes. */
 	agc->freeze = 0;
 	agc->level = 0;
+
+	/*
+	 * __DATE__ and __TIME__ as the original compiled them, NOT as this
+	 * file compiles.  Reproducing the macro would stamp the
+	 * reconstruction's build date and diverge from the blob every time;
+	 * the blob's own values are the reference.  See finding 135 -- these
+	 * two strings are what dated it.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("AGC %s %s\n", "Sep 22 2005", "15:48:18");
 }
 
 void

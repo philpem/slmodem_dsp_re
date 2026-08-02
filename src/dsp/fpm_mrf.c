@@ -11,6 +11,7 @@
  * upsample-filter-downsample.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/sysdep.h"
 
@@ -38,7 +39,10 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 		state->history_len = per_phase;
 		allocate = 1;
 	} else if (state->history_len < per_phase) {
-		/* Existing buffer too small: replace it. */
+		/* Existing buffer too small: replace it.  No newline in the
+		 * original's message, unlike every other one here. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Reallocate FPM_MRF buffer");
 		sysdep_free(state->history);
 		state->history_len = per_phase;
 		allocate = 1;

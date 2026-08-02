@@ -40,6 +40,7 @@
  * is not a real coefficient, it is the neighbouring table's first word.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 
 /*
@@ -103,8 +104,12 @@ FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift)
 	unsigned count = 0;
 	int index;
 
-	if (denom == 0)
+	if (denom == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Fatal error: Division by zero!\n");
 		return 1;
+	}
 
 	/* Left-normalise until the top bit is set, counting the shifts. */
 	while ((short)mantissa >= 0) {

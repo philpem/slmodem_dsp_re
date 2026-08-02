@@ -36,6 +36,9 @@ extern short ref_FPM_rms(const short *samples, unsigned short count);
 
 extern const struct fpm_agc_cfg AGCb103_CFG_data;
 
+#include "dsplib/debug.h"
+extern unsigned int ref_dsplibs_debug_level;
+
 /*
  * The original's AGCb103_CFG_data is a global, but the coefficient arrays it points
  * at are TU-local and so not linkable.  Both sides are pointed at OUR copies,
@@ -406,6 +409,55 @@ main(void)
 	       "signal set %d, clamp hi/lo %d/%d, attributable blocks %d\n",
 	       seen_silence_acquire, seen_silence_squelch, seen_gain,
 	       seen_clamp_hi, seen_clamp_lo, seen_one_block);
+
+	/*
+	 * The DIAGNOSTIC paths, restored by finding 134 and comparable only
+	 * because they exist again.  Freeze and Release emit one message
+	 * each; init emits two, and the second carries the ORIGINAL's build
+	 * stamp rather than this file's -- reproducing __DATE__ here would
+	 * diverge on every rebuild.  Finding 135 is what those two strings
+	 * turned out to be worth.
+	 */
+	diff_begin("fpm agc debug transcript");
+	{
+		static struct fpm_agc a, b;
+		int reset;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (reset = 0; reset <= 1; reset++) {
+			dsplib_debug_capture_reset();
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+
+			FPM_AGC_init(&a, &cfg, reset);
+			ref_FPM_AGC_init(&b, &cfg, reset);
+			FPM_AGC_Freeze(&a);
+			ref_FPM_AGC_Freeze(&b);
+			FPM_AGC_Release(&a);
+			ref_FPM_AGC_Release(&b);
+
+			diff_eq_int("agc transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, reset);
+			diff_eq_int("agc transcript non-empty",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    reset);
+			/* And it must carry the blob's build stamp. */
+			diff_eq_int("build stamp present",
+				    strstr(dsplib_debug_capture_text(1),
+					   "Sep 22 2005 15:48:18") != NULL,
+				    1, reset);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
 
 	return rc;
 }
