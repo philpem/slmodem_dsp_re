@@ -72,7 +72,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall all test check64 docs clean interop capture coverage
+.PHONY: firewall all test check64 docs clean interop capture coverage phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -141,6 +141,19 @@ firewall:
 	    exit 1; \
 	fi
 	@echo "licence firewall: no SpanDSP include reachable from src/  OK"
+
+# Everything a phase boundary is supposed to check, in one target.
+#
+# This exists because `make test` and `make interop` link DIFFERENT runtimes,
+# so a module added to $(SRC) can build and pass every differential test while
+# leaving the interop tier unbuildable.  That is exactly what happened when
+# v34filters.c became the first module to import the debug hooks: 546 tests
+# passed and `make interop` had been broken for two commits.
+#
+# Run this at every phase boundary, not `make test`.
+phase: test check64 interop coverage
+	@echo
+	@echo "phase boundary: differential, 64-bit, interop and coverage all OK"
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --

@@ -77,3 +77,25 @@ long modem_set_param(void *m, unsigned p, int v)
 { (void)m; (void)p; (void)v; return 0; }
 long modem_get_param(void *m, unsigned p) { (void)m; (void)p; return 0; }
 long modem_get_sreg(void *m, unsigned n) { (void)m; (void)n; return 0; }
+
+/*
+ * The diagnostic hooks.
+ *
+ * Duplicated from test/harness/runtime.c rather than shared, because the two
+ * runtimes are deliberately separate builds: this one is 64-bit and links no
+ * reference object, so it has no `ref_` half and cannot include the other.
+ *
+ * Zero, which is slmodemd's default and what the differential tier uses, so
+ * the interop build takes the same branch through every gated call site.
+ *
+ * Their absence here broke `make interop` the moment v34filters.c became the
+ * first module to import them, and `make test` did not notice -- the two
+ * tiers link different runtimes.  Adding a module to $(SRC) therefore means
+ * running BOTH targets, which is now what the phase-boundary check does.
+ */
+unsigned int dsplibs_debug_level = 0;
+
+int dsplibs_debug_printf(const char *fmt, ...) { (void)fmt; return 0; }
+
+int modem_debug_log_data(void *m, unsigned id, const void *b, int l)
+{ (void)m; (void)id; (void)b; (void)l; return 0; }
