@@ -6645,3 +6645,33 @@ fractional.
 ```
 
 Nothing further needs reading before writing them.
+
+### 121b. Both written; the struct landed, the pair segfaults
+
+`struct v34_receiver` was extended for both functions and **that part is
+committed and green** — `rms_buf[36]` at `+0x13c`, `f19c`, the fractional
+phase trio `f1ac`/`f1ae`/`f1b0`, the carrier pointer at `+0x1b4` with
+`f1b8`/`f1ba`/`f1bc`, `f240`-`f246`, and `timing_out[64]` at `+0x27a`. All
+12 existing test groups still pass through it.
+
+Both functions were then written from findings 118-121a and compile clean,
+but the test **segfaults**. Reverted; the struct kept.
+
+**Most likely cause, in order.** The test primes the queue with
+`oa.rxq.ring[b]` for `b` up to 63, and `struct v34_queue` declares
+`ring[1]` with the remainder in the enclosing object's `rxq_ring_tail`. That
+is the same out-of-bounds-in-C-but-fine-in-layout pattern that D26's clearing
+loop had, and at `-O2` it is not safe to assume it behaves. Writing through
+a `short *` derived from `&rxq` rather than indexing `ring[]` would settle it.
+
+Second candidate: `V34demodulate` pulls one sample per phase crossing, and
+with `f1ae = 300`, `f1b0 = 1024` and 12 outputs per call it crosses about
+four times — 100 pulls over 25 calls against a 64-entry ring. The ring wraps,
+so no read leaves the buffer, but `count` goes deeply negative and nothing
+checks it. Whether the blob guards that is unread.
+
+**What is proven:** the struct extension is correct and harmless. **What is
+not:** either function. Neither has passed a single differential check, and
+finding 121a's claim that "nothing further needs reading" is now known to be
+optimistic — the crash is in code that needed no further *reading*, but did
+need a test fixture that respects C's aliasing rules.

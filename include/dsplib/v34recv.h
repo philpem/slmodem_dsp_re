@@ -29,25 +29,33 @@ extern "C" {
 struct v34_receiver {
 	unsigned char pad_000[0x120 - 0x0];
 	short           f120;            /* +0x120 */
-	unsigned short  flags;           /* +0x122 see V34_RX_* below */
+	unsigned short  flags;           /* +0x122 */
 	short           f124;            /* +0x124 */
-	short           best_index;      /* +0x126 decision: nearest point index */
-	unsigned char pad_128[0x12a - 0x128];
+	short           best_index;      /* +0x126 */
+	short           f128;            /* +0x128 rxtiming: output count */
 	short           f12a;            /* +0x12a */
-	short           f12c;            /* +0x12c rxinit clears 0x12c..0x12f as one int */
-	unsigned short  agc_input;       /* +0x12e agcadapt: the new energy measurement */
-	short *         rx_samples;      /* +0x130 -> the receive queue output at +0x10c */
+	short           f12c;            /* +0x12c */
+	unsigned short  agc_input;       /* +0x12e */
+	short *         rx_samples;      /* +0x130 */
 	short           agc_level;       /* +0x134 */
 	short           agc_gain;        /* +0x136 */
-	short           agc_accum;       /* +0x138 D34: rxinit seeds this from a stale register */
+	short           agc_accum;       /* +0x138 */
 	short           agc_step;        /* +0x13a */
-	unsigned char pad_13c[0x1a0 - 0x13c];
+	short           rms_buf[36];     /* +0x13c V34demodulate: 36 samples for the RMS */
+	unsigned char pad_184[0x19c - 0x184];
+	short           f19c;            /* +0x19c its index */
+	unsigned char pad_19e[0x1a0 - 0x19e];
 	int             f1a0;            /* +0x1a0 */
 	unsigned        scrambler_sr;    /* +0x1a4 */
-	unsigned char pad_1a8[0x1b8 - 0x1a8];
-	short           f1b8;            /* +0x1b8 */
-	unsigned char pad_1ba[0x1bc - 0x1ba];
-	short           f1bc;            /* +0x1bc */
+	unsigned char pad_1a8[0x1ac - 0x1a8];
+	short           f1ac;            /* +0x1ac rxtiming: fractional phase */
+	short           f1ae;            /* +0x1ae   its increment */
+	short           f1b0;            /* +0x1b0   its wrap */
+	unsigned char pad_1b2[0x1b4 - 0x1b2];
+	const short *   carrier;         /* +0x1b4 V34demodulate: sin then cos */
+	short           f1b8;            /* +0x1b8   phase increment */
+	short           f1ba;            /* +0x1ba   half-length */
+	short           f1bc;            /* +0x1bc   phase */
 	unsigned char pad_1be[0x1c0 - 0x1be];
 	short           f1c0;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
@@ -55,7 +63,7 @@ struct v34_receiver {
 	short           f1cc;            /* +0x1cc */
 	short           f1ce;            /* +0x1ce */
 	short           f1d0;            /* +0x1d0 */
-	short           baud;            /* +0x1d2 starts at 2400 */
+	short           baud;            /* +0x1d2 */
 	short           f1d4;            /* +0x1d4 */
 	unsigned char pad_1d6[0x1d8 - 0x1d6];
 	int             f1d8;            /* +0x1d8 */
@@ -74,9 +82,9 @@ struct v34_receiver {
 	short           f202;            /* +0x202 */
 	short           f204;            /* +0x204 */
 	short           f206;            /* +0x206 */
-	short           f208;            /* +0x208 */
-	short           f20a;            /* +0x20a */
-	int             decision_point;  /* +0x20c decision: the winning point */
+	short           f208;            /* +0x208 rxtiming IIR state, I */
+	short           f20a;            /* +0x20a   Q */
+	int             decision_point;  /* +0x20c and IIR state I(-2) */
 	short           target_re;       /* +0x210 */
 	short           target_im;       /* +0x212 */
 	unsigned char pad_214[0x218 - 0x214];
@@ -91,9 +99,11 @@ struct v34_receiver {
 	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
 	short           f230;            /* +0x230 */
-	unsigned char pad_232[0x244 - 0x232];
-	short           f244;            /* +0x244 */
-	short           f246;            /* +0x246 */
+	unsigned char pad_232[0x240 - 0x232];
+	short           f240;            /* +0x240 demodulated I */
+	short           f242;            /* +0x242 demodulated Q */
+	short           f244;            /* +0x244 previous I */
+	short           f246;            /* +0x246 previous Q */
 	int             f248;            /* +0x248 */
 	int             f24c;            /* +0x24c */
 	unsigned char pad_250[0x252 - 0x250];
@@ -105,7 +115,9 @@ struct v34_receiver {
 	short           f25c;            /* +0x25c */
 	short           f25e;            /* +0x25e */
 	short           f260;            /* +0x260 */
-	unsigned char pad_262[0x798 - 0x262];
+	unsigned char pad_262[0x27a - 0x262];
+	short           timing_out[64];  /* +0x27a rxtiming writes its metric here */
+	unsigned char pad_2fa[0x798 - 0x2fa];
 	short           f798;            /* +0x798 */
 };
 
