@@ -5545,3 +5545,53 @@ That is a much cheaper job than it looked, and it is worth doing before
 **Caution carried from finding 96:** 3429 baud installs `ec_prem_coef_B3429`
 in both the `*High` and the plain role. Anyone tabulating this from a pattern
 will produce a fifth `High` table that does not exist.
+
+## 105. `V34SetupModulator` dispatches on SEVEN rates, not five
+
+Extracted mechanically from the branch targets and relocations. Corrects
+finding 96/97, which assumed V.34's five symbol rates.
+
+```
+   0x258  =  600     tx600c1              ec_prem_coef_B3429
+   0x960  = 2400     tx2400c1             ec_prem_coef_B2400High / B2400
+   0xaf0  = 2800     tx2800c1             ec_prem_coef_B2800High / B2800
+   0xbb8  = 3000     tx3000c1             ec_prem_coef_B3000High / B3000
+   0xc80  = 3200     tx3200c1_for_v34     ec_prem_coef_B3200High / B3200
+                     tx3200c1_for_v90  + V90EchoPrefilterCoeff
+   0xd65  = 3429     tx3429c1             ec_prem_coef_B3429
+   0x12c0 = 4800     txAllPass            —
+```
+
+600 and 4800 are not V.34 symbol rates. 600 baud is the rate V.34's INFO
+messages are sent at — the same 600 that names `fsklpfcoeff600` (finding 91)
+— so this function also configures the modulator for the phase-2 signalling
+channel, not only for data. 4800 gets `txAllPass`, a flat response, which is
+what a path that must not be shaped looks like.
+
+**600 baud shares 3429's pre-emphasis table.** So `ec_prem_coef_B3429` serves
+three roles: 3429's `High`, 3429's plain, and 600's. Finding 96 read the
+first two as a curiosity; with 600 in the picture it looks more like a table
+that was simply reused wherever a wide or unshaped response was wanted.
+
+Per-rate integer stores at the head of the modulator object:
+
+```
+   baud    +0x00   +0x04   +0x08
+    600      —       1      0x10
+   2400      —       1       4
+   2800      —       7      0x18
+   3000      —       5      0x10
+   3200      —       1       3
+   3429      —       5      0xe
+   4800     0x20     1       4
+```
+
+A **second, independent dispatch** then writes `+0x10 = 0` and `+0x14` = one
+of 5, 6, 8, 0x10, 0x15, 0x18, 0x24, 0x28, 0x31 — nine values, so it is not
+keyed on baud. It is keyed on one of the other arguments; which one is not
+yet established.
+
+GCC has interleaved the two dispatches heavily, so the branch targets do not
+read in source order. Reconstructing this needs the control-flow graph, not a
+linear read — `tools/cfgsplit.py` exists for exactly that and has not yet been
+pointed at this function.
