@@ -970,6 +970,99 @@ V34InitializeImplementationSpecific(void *objp)
 	obj->echo1.taps = V34_ECHO_TAPS;
 }
 
+/*
+ * Walk one echo canceller's delay line backwards from its cursor, zeroing
+ * `n` entries and wrapping at the start back to the end.
+ */
+static void
+echo_rewind(struct v34_echo *e, int n)
+{
+	short *p = e->cursor - 1;
+	int k;
+
+	if (e->cursor == e->dline)
+		p = e->dline + e->dlen - 1;
+
+	for (k = 0; k < n; k++) {
+		*p = 0;
+		if (p == e->dline)
+			p = e->dline + e->dlen - 1;
+		else
+			p--;
+	}
+}
+
+void
+V34EchoHistoryBackwardClean(void *objp, unsigned n)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_echo_prefilter *pf = &obj->prefilter;
+	unsigned span;
+	int i;
+
+	/*
+	 * The pre-filter's history first.  If the rollback covers the whole
+	 * buffer it is cleared outright; otherwise `n` entries are cleared
+	 * circularly from the current position.
+	 */
+	if (n >= (unsigned)pf->hist_len) {
+		sysdep_memset(pf->state, 0,
+			      (unsigned)pf->hist_len * sizeof(short));
+	} else if ((int)n > 0) {
+		short *p = &pf->state[pf->hist_pos];
+		short *end = &pf->state[pf->hist_len];
+		unsigned k = n;
+
+		for (;;) {
+			*p++ = 0;
+			if (p == end)
+				p = pf->state;
+			if (--k == 0)
+				break;
+		}
+	}
+
+	/*
+	 * Then both cancellers, but only by the part of the rollback that
+	 * exceeds HALF of `span` -- the first half is absorbed by the
+	 * pre-filter's own delay and does not reach the line.
+	 */
+	span = (unsigned)pf->span >> 1;
+	if (n > span) {
+		echo_rewind(&obj->echo0, (int)(n - span));
+		echo_rewind(&obj->echo1, (int)(n - span));
+	}
+
+	sysdep_memset(obj->scratch_210c, 0, sizeof(obj->scratch_210c));
+	sysdep_memset(obj->scratch_20e0, 0, sizeof(obj->scratch_20e0));
+
+	/*
+	 * And three entries of a ring of ints, walked backwards from
+	 * `ring_pos`.  Only the low short of each is cleared, and the wrap
+	 * runs off the FRONT of the ring into a second cursor that starts
+	 * before the object -- which is how the original spells
+	 * `&ring[(pos - 1) mod len]` when it has already decided the ring is
+	 * addressed from a base four bytes below `obj`.
+	 */
+	{
+		int *p = obj->ring_pos - 1;
+		char *base = (char *)obj - 4;
+
+		for (i = 2; i >= 0; i--) {
+			short *q;
+
+			if (p >= obj->ring) {
+				q = (short *)p;
+			} else {
+				q = (short *)(base + 0x25c0);
+				base -= 4;
+			}
+			*q = 0;
+			p--;
+		}
+	}
+}
+
 /* ------------------------------------------------------- Hilbert transformer */
 
 void

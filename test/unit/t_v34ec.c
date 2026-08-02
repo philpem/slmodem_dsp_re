@@ -22,6 +22,7 @@
 
 #include "harness.h"
 #include "dsplib/v34filt.h"
+#include "dsplib/v34fsk.h"	/* struct v34_object owns the canceller storage */
 
 extern void ref_V34EchoCleanUp(void *e);
 extern void ref_V34EchoUpdateDelayLine(void *e, short sample);
@@ -48,6 +49,7 @@ extern int ref_V34TimingPrefilter(void *t);
 extern void ref_V34SetupModulator(void *m, short baud, short carrier,
 				  short phase, int a4, int reset);
 extern int ref_V34ModulatorProcess(void *m, int symbol, short *out);
+extern void ref_V34EchoHistoryBackwardClean(void *obj, unsigned n);
 extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
@@ -449,6 +451,76 @@ main(void)
 						    ((unsigned char *)&mb)[k],
 						    k);
 				}
+			}
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 echo history backward clean");
+	{
+		static struct v34_object oa, ob;
+		static const unsigned ns[] = { 0, 1, 5, 41, 42, 43, 100,
+					       1000, 1655, 1656, 2000 };
+		unsigned ni;
+
+		for (ni = 0; ni < sizeof(ns) / sizeof(ns[0]); ni++) {
+			unsigned b;
+
+			memset(&oa, 0, sizeof(oa));
+			memset(&ob, 0, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			/* A cursor part way in, so the backward wrap runs. */
+			oa.echo0.cursor = oa.echo0_dline + 17;
+			ob.echo0.cursor = ob.echo0_dline + 17;
+			oa.echo1.cursor = oa.echo1_dline;
+			ob.echo1.cursor = ob.echo1_dline;
+			oa.prefilter.hist_pos = ob.prefilter.hist_pos = 9;
+			oa.prefilter.hist_len = ob.prefilter.hist_len = 42;
+			oa.prefilter.span = ob.prefilter.span = 84;
+			oa.ring_pos = oa.ring + 40;
+			ob.ring_pos = ob.ring + 40;
+			for (b = 0; b < sizeof(oa.echo0_dline)
+					/ sizeof(short); b++) {
+				oa.echo0_dline[b] = ob.echo0_dline[b] =
+					(short)(b * 7 + 1);
+				oa.echo1_dline[b] = ob.echo1_dline[b] =
+					(short)(b * 11 + 3);
+			}
+			for (b = 0; b < 42; b++)
+				oa.prefilter.state[b] = ob.prefilter.state[b] =
+					(short)(b + 100);
+
+			V34EchoHistoryBackwardClean(&oa, ns[ni]);
+			ref_V34EchoHistoryBackwardClean(&ob, ns[ni]);
+
+			/* Whole object, pointers skipped. */
+			for (k = 0; k < (int)sizeof(oa); k++) {
+				int o0 = (int)__builtin_offsetof(
+					struct v34_object, echo0);
+				int o1 = (int)__builtin_offsetof(
+					struct v34_object, echo1);
+				int rp = (int)__builtin_offsetof(
+					struct v34_object, ring_pos);
+				int pc = (int)__builtin_offsetof(
+					struct v34_object, prefilter)
+					+ (int)__builtin_offsetof(
+						struct v34_echo_prefilter,
+						coeff);
+				int p2 = (int)__builtin_offsetof(
+					struct v34_object, p_2074);
+
+				/* Every pointer: each side holds its own. */
+				if ((k >= o0 && k < o0 + 0x20)
+				    || (k >= o1 && k < o1 + 0x20)
+				    || (k >= rp && k < rp + 4)
+				    || (k >= pc && k < pc + 4)
+				    || (k >= p2 && k < p2 + 4))
+					continue;
+				diff_eq_int("ehbc at %ld",
+					    ((unsigned char *)&oa)[k],
+					    ((unsigned char *)&ob)[k],
+					    (long)ns[ni] * 100000 + k);
 			}
 		}
 	}

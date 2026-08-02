@@ -124,7 +124,15 @@ struct v34_object {
 	 * its input buffer.
 	 */
 	void *p_2074;					/* +0x2074 */
-	unsigned char unmapped_2078[0x80b8 - 0x2078];
+	struct v34_echo_prefilter prefilter;		/* +0x2078 */
+	unsigned char unmapped_20e0[0x20e0 - (0x2078 + 0x68)];
+	unsigned char scratch_20e0[0x20];		/* +0x20e0 */
+	unsigned char unmapped_2100[0x210c - 0x2100];
+	unsigned char scratch_210c[0x100];		/* +0x210c */
+	unsigned char unmapped_220c[0x2224 - 0x220c];
+	int *ring_pos;					/* +0x2224 */
+	int ring[(0x25c4 - 0x2228) / 4];		/* +0x2228 */
+	unsigned char unmapped_25c4[0x80b8 - 0x25c4];
 	/*
 	 * The two echo cancellers and the arrays they point at, one
 	 * contiguous block each (finding 98).  Declared here rather than in

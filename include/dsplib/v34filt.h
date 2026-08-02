@@ -389,7 +389,10 @@ void V34PremptxCopy(void *modulator, const short *coeff);
 struct v34_echo_prefilter {
 	short state[V34_ECHO_PREFILTER_TAPS];	/* +0x00 */
 	const short *coeff;			/* +0x54 */
-	unsigned char unmapped_58[0x64 - 0x58];
+	short hist_pos;				/* +0x58  index into `state` */
+	short pad_5a;
+	int hist_len;				/* +0x5c  entries in `state` */
+	int span;				/* +0x60  halved, see below  */
 	int shift;				/* +0x64 */
 };
 
@@ -398,6 +401,16 @@ struct v34_echo_prefilter {
  * and shifting by `p->shift`.
  */
 void V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p);
+
+/*
+ * Roll the echo canceller's history back by `n` samples.
+ *
+ * Takes the whole V.34 object, not a canceller: it clears the pre-filter's
+ * circular history, walks BOTH cancellers' delay lines backwards, and zeroes
+ * three fixed scratch areas.  Declared `void *` for the same reason
+ * V34InitializeImplementationSpecific is.
+ */
+void V34EchoHistoryBackwardClean(void *obj, unsigned n);
 
 /*
  * A generic FIR: one sample in, `taps` of state shifted, the raw accumulator
