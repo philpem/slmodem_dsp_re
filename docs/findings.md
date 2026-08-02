@@ -7972,3 +7972,40 @@ age that nothing else in the binary records.
 Its modulation list also fixes an order: V90, V34, V34HD, V32, V22, V17,
 V29, V27, V23, V21 -- worth having when the V.8 capability bitmaps are
 revisited.
+
+### 144. Name tables outlive the code that printed them
+
+The dropped-call-site sweep (finding 134) kept turning up state names, so I
+looked for the tables rather than the call sites.  `.rodata` and `.data`
+hold six arrays of string pointers, and `nm` names five of them outright:
+
+```
+   v8ControlName    0x5380  .rodata  11 entries
+   v8SequenceName   0x53ac  .rodata   4
+   v8StatusName     0x53c0  .rodata  19   the whole V.8 state machine
+   CadenceNames     0x6208  .rodata   5   BUSY DIAL CONG RING INVALID
+   statenames       0x7e80  .rodata  35
+   StateName        0x6c00  .data    87   v34handshak's states
+```
+
+**The V.34 handshake's eighty-seven states are all here**, in index order,
+and are now `include/dsplib/v34hshak.h`.  That is the 61 KB function tasks
+#39-#45 are about, and the difference between planning it against "state 47"
+and against `TX_PHASE3_ANS` is not small.  Four are placeholders --
+`NOSTATE0`, `NOSTATE2`, `NOSTATE3`, `NOSTATE36` -- so the enum has holes and
+eighty-three real states.
+
+**`v8StatusName` and `v8ControlName` are referenced by nothing in this
+object.**  No `.text` instruction indexes either.  The printf that used them
+was compiled out or lives in another translation unit -- but the tables
+survived, because a name table is separately addressable data and the linker
+had no reason to drop a global.
+
+That is the general point, and it is more useful than any single table: **a
+name table outlives the code that printed it.**  Finding 134 recovered names
+from surviving call sites; this recovers them where even the call site is
+gone.  For an enum, the table IS the enum, in order, with no gaps to guess.
+
+`CadenceNames` independently confirms `CADENCE_TONE_BUSY/DIAL/CONG/RING` as
+0..3, which this tree had from behaviour.  `statenames` at 0x7e80 has 35
+entries and is not yet read.
