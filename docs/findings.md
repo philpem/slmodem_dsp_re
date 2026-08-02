@@ -7525,9 +7525,15 @@ the gating comparison is real control flow, and because the format strings
 are the original author's own words -- "Discarding a call site discards the
 annotation."
 
-Counting them says the policy was not followed.  The blob has 399 calls to
-`dsplibs_debug_printf`; this tree has 22.  Restricted to functions that ARE
-reconstructed, 58 of them are missing 242 call sites between them:
+Counting them says the policy was not followed.  The blob makes **1670**
+calls to `dsplibs_debug_printf`, spread over 399 functions; this tree makes
+22.  Restricted to functions that ARE reconstructed, 58 of them are missing
+242 call sites between them:
+
+(The first version of this entry said "399 calls".  That was the count of
+functions containing a call, not of calls -- an error found by writing
+`tools/debugaudit.py` to make the count repeatable, which is a fair argument
+for making one-off measurements into tools.)
 
 ```
    29  CALLPROG_Progress      16  V8Create           7  cadence_progress
