@@ -6155,3 +6155,33 @@ neighbouring field, like finding 114's.
 To write it, `struct v34_object` needs `+0x25d0`, `+0x25d2`, `+0x25d4`,
 `+0x25c3` and the four ring words at `+0x35a8`..`+0x35b4`, and the tail from
 0x5d904 needs reading.
+
+### 116a. `txmit` attempted: correct for ~27 iterations, then drifts
+
+Written and driven. Reverted. Two test flaws found and fixed on the way, and
+one real difference left.
+
+**Fixed: the receive queue's pointers were being compared.** `txinit` runs in
+the setup and points `rxq.rd`/`rxq.wr` into each side's own object, so bytes
+`0x268`-`0x26f` differ legitimately. Fifth instance this session of a
+differential failure that was the test comparing addresses.
+
+**Still failing: a difference that appears only after roughly 27 calls**, in
+the region around `obj+0x20e4` — past `struct v34_echo_prefilter`'s 0x68
+bytes and inside the scratch area at `+0x20e0`. Early iterations match
+exactly, so the modulation, the scaling, the enqueue and the ring wrap are
+all right; something accumulates.
+
+**And a test flaw that blocked localising it**: the failure tag was encoded
+as `gate * 1000000 + iteration * 20000 + offset`, but the object is 0xaba0
+bytes — larger than 20000 — so the encoding is ambiguous and the reported
+number does not identify a unique (iteration, offset) pair. Any future tag
+must use a stride larger than `sizeof(struct v34_object)`.
+
+**Where to look next**, given early iterations are exact: the echo feed loop
+runs only when the gate bit is set, and the drift region is not one the feed
+loop writes — so the suspect is `V34EchoPreFilter`'s state advancing
+differently, which would mean `n` is wrong on some later call, which would
+mean `V34ModulatorProcess`'s row counter is being carried differently across
+calls than `txmit` expects. That is testable directly: log `n` per call from
+both sides.
