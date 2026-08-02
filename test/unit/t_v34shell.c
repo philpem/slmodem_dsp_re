@@ -7,6 +7,39 @@
 #include "dsplib/v34shell.h"
 
 extern int ref_shellDemapper(void *s);
+extern void ref_putFrame(void *s);
+
+/*
+ * putFrame writes through a pointer the object carries, so each side gets
+ * its OWN sink and its own log.  Installing one shared callback would
+ * interleave the two call sequences into a single buffer and compare it
+ * against itself -- which passes whatever either side does.
+ */
+#define LOGMAX 64
+static struct { int val, nbits; } log_a[LOGMAX], log_b[LOGMAX];
+static int nlog_a, nlog_b;
+
+static void
+sink_a(void *s, int value, int nbits)
+{
+	(void)s;
+	if (nlog_a < LOGMAX) {
+		log_a[nlog_a].val = value;
+		log_a[nlog_a].nbits = nbits;
+	}
+	nlog_a++;
+}
+
+static void
+sink_b(void *s, int value, int nbits)
+{
+	(void)s;
+	if (nlog_b < LOGMAX) {
+		log_b[nlog_b].val = value;
+		log_b[nlog_b].nbits = nbits;
+	}
+	nlog_b++;
+}
 
 int
 main(void)
@@ -111,6 +144,75 @@ main(void)
 			    ref_shellDemapper(&b), 0);
 		diff_eq_int("count 1 returns 0 literally", shellDemapper(&a),
 			    0, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * putFrame: the three ways it sends the wide field, including the
+	 * one that sends nothing and narrows the last group instead.  `nb`
+	 * comes from fa0e or fa10 depending on how fa00 compares with the
+	 * running sum, so both of those are swept as well as the widths.
+	 */
+	diff_begin("v34 putFrame");
+	{
+		static struct v34_shell a, b;
+		int nb, wide, a04, k, i;
+
+		for (nb = -6; nb <= 20; nb++)
+		for (wide = 0; wide <= 1; wide++)
+		for (a04 = 6; a04 <= 10; a04 += 2) {
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+
+			a.put_bits = sink_a;
+			b.put_bits = sink_b;
+			a.fa14 = b.fa14 = 3;
+			a.fa04 = b.fa04 = (short)a04;
+			a.fa06 = b.fa06 = 100;
+			a.fa08 = b.fa08 = 200;
+			/*
+			 * `wide` picks which branch supplies nb, by making
+			 * fa00 larger or smaller than fa06 + fa08.
+			 */
+			a.fa00 = b.fa00 = (short)(wide ? 1000 : 10);
+			a.fa10 = b.fa10 = (short)nb;
+			a.fa0e = b.fa0e = (short)nb;
+
+			for (k = 0; k < 18; k++)
+				a.frame[k] = b.frame[k] =
+				    (short)(k * 4919 + nb * 31);
+
+			nlog_a = nlog_b = 0;
+			putFrame(&a);
+			ref_putFrame(&b);
+
+			diff_eq_int("putFrame call count", nlog_a, nlog_b,
+				    (long)(nb + 6) * 100 + wide * 10 + a04);
+			for (i = 0; i < nlog_a && i < LOGMAX; i++) {
+				long tag = ((long)(nb + 6) * 100 + wide * 10
+					    + a04) * 100 + i;
+
+				diff_eq_int("putFrame value", log_a[i].val,
+					    log_b[i].val, tag);
+				diff_eq_int("putFrame nbits", log_a[i].nbits,
+					    log_b[i].nbits, tag);
+			}
+			/* fa08 is folded back into the object. */
+			diff_eq_int("putFrame fa08", a.fa08, b.fa08,
+				    (long)(nb + 6) * 100 + wide * 10 + a04);
+			for (i = 0; i < (int)sizeof(a); i++) {
+				unsigned pb = __builtin_offsetof(
+					struct v34_shell, put_bits);
+
+				if (i >= (int)pb && i < (int)pb + 4)
+					continue;	/* each side's sink */
+				diff_eq_int("putFrame object at %ld",
+					    ((unsigned char *)&a)[i],
+					    ((unsigned char *)&b)[i],
+					    ((long)(nb + 6) * 100 + wide * 10
+					     + a04) * 10000 + i);
+			}
+		}
 	}
 	rc |= diff_end();
 
