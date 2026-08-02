@@ -18,6 +18,7 @@ extern void ref_updateAlpha(short *a, int e, int d, int g, int dec, int t);
 extern int ref_V34descrambler(void *s, short bits, short nbits);
 extern void ref_txinit(void *obj);
 extern int ref_agcadapt(void *a);
+extern void ref_rxtiminginit(void *obj);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -307,6 +308,35 @@ main(void)
 					    ((unsigned char *)&aa)[i],
 					    ((unsigned char *)&ab)[i], i);
 		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 rxtiminginit");
+	{
+		static struct v34_object oa, ob;
+		unsigned b;
+
+		memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+		memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+		rxtiminginit(&oa);
+		ref_rxtiminginit(&ob);
+
+		for (b = 0; b < sizeof(oa); b++) {
+			/* The two installed pointers differ by construction. */
+			unsigned rs = 0x264 + __builtin_offsetof(
+				struct v34_receiver, rx_samples);
+			unsigned tp = 0x50c + __builtin_offsetof(
+				struct v34_timing, prefilter_coeff);
+
+			if ((b >= rs && b < rs + 4) || (b >= tp && b < tp + 8))
+				continue;
+			diff_eq_int("rxtiminginit at %ld",
+				    ((unsigned char *)&oa)[b],
+				    ((unsigned char *)&ob)[b], b);
+		}
+		diff_eq_int("baud starts at 2400",
+			    ((struct v34_receiver *)((char *)&oa + 0x264))->baud,
+			    2400, 0);
 	}
 	rc |= diff_end();
 

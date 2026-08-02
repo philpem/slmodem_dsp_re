@@ -109,6 +109,9 @@ int V34descrambler(struct v34_receiver *s, short bits, short nbits);
  */
 void txinit(void *obj);
 
+/* Reset the receive timing chain and the receiver's scalars. */
+void rxtiminginit(void *obj);
+
 /*
  * The receive AGC's state, mapped where `agcadapt` touches it.
  */

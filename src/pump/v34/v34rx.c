@@ -14,6 +14,7 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
 
 /*
@@ -311,4 +312,40 @@ agcadapt(struct v34_receiver *a)
 	}
 
 	return 0;
+}
+
+void
+rxtiminginit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+
+	V34TimingFiltersInit((struct v34_timing *)((char *)obj + 0x50c));
+
+	/* Where rxreadqueue leaves its four samples. */
+	rx->rx_samples = (short *)((char *)obj + 0x370);
+
+	rx->f124 = 0;
+	rx->f1b8 = 1;
+	rx->f1bc = 0;
+	rx->f1c0 = -1;
+	rx->f1c8 = 1;
+	rx->f1cc = 0;
+	rx->f1ce = 0;
+	rx->f1d0 = 0;
+	/* The slowest V.34 rate: what the receiver assumes until told. */
+	rx->baud = 2400;
+	rx->f1d4 = 0;
+	rx->f1d8 = 0;
+	rx->f1e0 = 0;
+	rx->f1e4 = 0;
+	rx->f1e8 = 0;
+	rx->f1f0 = 0;
+	rx->f208 = 0;
+	rx->f20a = 0;
+	rx->decision_point = 0;
+	rx->f22e = 0;
+	rx->f230 = 0;
+	rx->f244 = 0;
+	rx->f246 = 0;
 }

@@ -61,8 +61,14 @@ struct v34_receiver {
 	int             f1e8;            /* +0x1e8 */
 	unsigned char pad_1ec[0x1f0 - 0x1ec];
 	short           f1f0;            /* +0x1f0 */
-	unsigned char pad_1f2[0x20c - 0x1f2];
-	int             decision_point;  /* +0x20c decision: the winning point */
+	unsigned char pad_1f2[0x208 - 0x1f2];
+	short           f208;            /* +0x208 */
+	short           f20a;            /* +0x20a */
+	/*
+	 * +0x20c.  `decision` writes all four bytes at once; rxtiminginit
+	 * clears it as two shorts, at 0x20c and 0x20e.
+	 */
+	int             decision_point;
 	short           target_re;       /* +0x210 decision: what we are deciding on */
 	short           target_im;       /* +0x212 */
 	unsigned char pad_214[0x21a - 0x214];
@@ -70,7 +76,10 @@ struct v34_receiver {
 	unsigned char pad_21c[0x22e - 0x21c];
 	short           f22e;            /* +0x22e */
 	short           f230;            /* +0x230 */
-	unsigned char pad_232[0x252 - 0x232];
+	unsigned char pad_232[0x244 - 0x232];
+	short           f244;            /* +0x244 */
+	short           f246;            /* +0x246 */
+	unsigned char pad_248[0x252 - 0x248];
 	short           f252;            /* +0x252 */
 	short           f254;            /* +0x254 */
 	short           f256;            /* +0x256 */
