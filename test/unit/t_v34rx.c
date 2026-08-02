@@ -19,6 +19,7 @@ extern int ref_V34descrambler(void *s, short bits, short nbits);
 extern void ref_txinit(void *obj);
 extern int ref_agcadapt(void *a);
 extern void ref_rxtiminginit(void *obj);
+extern void ref_rxinit(void *obj);
 
 /* Big enough for the larger of the two rings, plus the output slot. */
 union qbuf { struct v34_queue q; unsigned char raw[0x400]; };
@@ -337,6 +338,50 @@ main(void)
 		diff_eq_int("baud starts at 2400",
 			    ((struct v34_receiver *)((char *)&oa + 0x264))->baud,
 			    2400, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 rxinit");
+	{
+		static struct v34_object oa, ob;
+		int fl;
+
+		for (fl = 0; fl <= 8; fl += 8) {
+			unsigned b;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			((struct v34_receiver *)((char *)&oa + 0x264))->flags =
+				(unsigned short)fl;
+			((struct v34_receiver *)((char *)&ob + 0x264))->flags =
+				(unsigned short)fl;
+			rxinit(&oa);
+			ref_rxinit(&ob);
+
+			for (b = 0; b < sizeof(oa); b++) {
+				unsigned rs = 0x264 + __builtin_offsetof(
+					struct v34_receiver, rx_samples);
+				/*
+				 * D34: seeded from the object's own address,
+				 * so the two sides differ legitimately.
+				 */
+				unsigned ac = 0x264 + __builtin_offsetof(
+					struct v34_receiver, agc_accum);
+
+				if ((b >= rs && b < rs + 4)
+				    || (b >= ac && b < ac + 2))
+					continue;
+				diff_eq_int("rxinit at %ld",
+					    ((unsigned char *)&oa)[b],
+					    ((unsigned char *)&ob)[b],
+					    (long)fl * 100000 + b);
+			}
+			diff_eq_int("agc_accum is the hilbert address",
+				    ((struct v34_receiver *)
+				     ((char *)&oa + 0x264))->agc_accum,
+				    (short)(unsigned long)
+				    ((char *)&oa + 0xa1b8), fl);
+		}
 	}
 	rc |= diff_end();
 

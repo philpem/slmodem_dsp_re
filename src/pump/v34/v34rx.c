@@ -349,3 +349,58 @@ rxtiminginit(void *objp)
 	rx->f244 = 0;
 	rx->f246 = 0;
 }
+
+void
+rxinit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	void *hilbert;
+
+	rx->agc_gain = 0x200;
+	rx->agc_step = 0x3333;
+	rx->f1b8 = 1;
+
+	V34EqualizerCleanUp((struct v34_equalizer *)((char *)obj + 0x630));
+
+	/*
+	 * The fill is %ecx, which held 1 before V34EqualizerCleanUp and is
+	 * caller-saved -- so what reaches the memset is whatever that call
+	 * left behind, which is zero.
+	 */
+	sysdep_memset((char *)obj + 0x4ec, 0, 0xc);
+	sysdep_memset((char *)obj + 0x4f8, 0, 0x10);
+
+	hilbert = V34InitHilbertFilter((short *)((char *)obj + 0xa1b8));
+
+	/*
+	 * 0x4000 goes to f218 and f1f2 ONLY.  The registers holding it are
+	 * zeroed immediately after each of those two stores, so agc_level and
+	 * f1f4 -- written from the same two registers a few instructions
+	 * later -- get zero.  Four stores, two values, and the pairing is not
+	 * the one the instruction order suggests at a glance.
+	 */
+	rx->f218 = 0x4000;
+	rx->f1f2 = 0x4000;
+	/* D34: seeded from V34InitHilbertFilter's leftover return register. */
+	rx->agc_accum = (short)(unsigned long)hilbert;
+	rx->agc_level = 0;
+	rx->f1f4 = 0;
+
+	if (rx->flags & 0x0008) {
+		rx->f200 = 2;
+		rx->f202 = 10;		/* and f1f8 is left alone */
+	} else {
+		rx->f1f8 = 0;
+		rx->f200 = 2;
+		rx->f202 = 8;
+	}
+
+	rx->f798 = 0;   rx->f21c = 0;  rx->f206 = 0;  rx->f21a = 0;
+	rx->f204 = 0;   rx->f224 = 0;  rx->f220 = 0;  rx->f228 = 0;
+	rx->f1a0 = 0;   rx->f246 = 0;  rx->f124 = 0;  rx->scrambler_sr = 0;
+	rx->f244 = 0;   rx->f1bc = 0;  rx->f12c = 0;  rx->agc_input = 0;
+	rx->f120 = 0;   rx->f12a = 0;  obj->f2aa4 = 0;
+	rx->rx_samples = (short *)((char *)rx + 0x10c);
+	rx->f248 = 0;   rx->f24c = 0;
+}

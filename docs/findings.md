@@ -6075,3 +6075,37 @@ somewhere earlier — from "the test is comparing the wrong bytes". This
 session has produced two of the latter (`V34TimingFilter`'s pointer fields,
 `V34EchoHistoryBackwardClean`'s `p_2074`) and none of the former, so that is
 where the prior sits.
+
+### 115c. Resolved by the probe: my own grep filter hid two instructions
+
+`ref_rxinit` on a known buffer printed `obj+0x398 = 0x0000` while
+`obj+0x47c` and `obj+0x456` — written from the *same two registers* — both
+held `0x4000`. So the blob really does write zero, and the reading was wrong.
+
+The cause was in the tooling, not the object. Every disassembly of this
+function in findings 115 and 115a was taken through
+`grep -vE "89 f6|8d 76 00|^\[|xor +%e"`, and that last term removed the
+register-zeroing instructions:
+
+```
+   5ac15:  mov  %cx,0x218(%ebx)
+   5ac1c:  xor  %ecx,%ecx          <- filtered out
+   5ac1e:  mov  %dx,0x1f2(%ebx)
+   5ac25:  xor  %edx,%edx          <- filtered out
+```
+
+`0x4000` goes to `f218` and `f1f2` **only**; both registers are cleared
+immediately afterwards, so `agc_level` and `f1f4` — written from them a few
+instructions later — get zero.
+
+**The tell was visible in the filtered output all along**: `0x5ac15 + 7` is
+`0x5ac1c`, and the next line printed was `0x5ac1e`. A two-byte hole. Reading
+addresses for continuity would have caught it without the probe, and
+`tools/dis.py` exists precisely because a previous filter dropped relocations
+the same way (see its header comment, and finding 78).
+
+**Two rules earned.** Never filter a disassembly by instruction mnemonic —
+filter by noise pattern only, and check that consecutive addresses abut. And
+when static reading contradicts a measurement three times, run the
+measurement directly instead of reading a fourth time: the probe cost one
+tool call and settled what three rounds of analysis could not.
