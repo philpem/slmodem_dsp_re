@@ -6923,3 +6923,52 @@ reconstruction has no pre-loop block at all.
 
 That is the last gap. Adding a pre-loop IIR pass that also writes
 `f244`/`f246` should close the remaining 320.
+
+### 121i. The loop is inverted, and each crossing demodulates TWICE
+
+Reading the entry path settles the last gap, and the reconstruction's whole
+loop shape is wrong.
+
+```
+   5b3d6:  jmp 5b546            ; enter at the OUTPUT block, not the top
+   ...
+   5b5cf:  jge 5b3e0            ; and branch back only when the phase crosses
+```
+
+So `rxtiming` **starts** at the interpolate-and-output block and jumps back to
+the sample-pulling block only when the fractional phase crosses. The
+reconstruction has it the other way round — test the phase, maybe pull, then
+output.
+
+And the pulling block pulls **twice**:
+
+```
+   5b3f8:  call V34demodulate      ; first sample
+   5b3fd:  ... IIR, writing f240, f208 AND f244
+   5b491:  call V34demodulate      ; second sample
+   5b498:  ... IIR, writing f240, f208 only
+```
+
+That is the whole explanation for `f244`/`f246`. They are not a pre-loop
+seed: **they are the previous sample's filtered output**, written by the
+first of the two IIR passes, while the second overwrites `f240`/`f242` with
+the current one. The interpolator then has a consecutive pair to work
+between — which is what an interpolator needs and what the reconstruction
+was never giving it.
+
+So the correct shape is:
+
+```
+   goto output;
+   pull:
+       V34demodulate();  IIR -> f244, f246 (via f240/f208, then copied)
+       V34demodulate();  IIR -> f240, f242
+   output:
+       interpolate between the pair, square, high-pass, store
+       advance the phase; if it crossed, goto pull
+```
+
+**This is a restructure, not an addition.** The 320 remaining failures are
+one symptom of it; the fact that the reconstruction passed 876360 of 876680
+checks with the wrong loop shape is a caution about how much a differential
+test can agree with while still being wrong about structure.
