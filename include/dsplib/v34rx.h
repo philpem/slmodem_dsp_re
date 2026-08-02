@@ -169,6 +169,8 @@ void txrxdmainit(short *dst, const short *src);
 
 /* Bit 2 of f25c2: both echo cancellers have stopped adapting. */
 #define V34_EC_FROZEN	0x0004
+/* Bit 9: feed the transmit sample through the cancellers at all. */
+#define V34_EC_FEED	0x0200
 
 /* Freeze both cancellers, and report their coefficients if debugging. */
 void v34FreezeEcho(void *obj);
@@ -191,6 +193,12 @@ void V34SetupDemodulator(void *obj, short baud, short carrier);
  * adapt on a schedule.  Always returns zero.
  */
 int adaptecho(void *obj);
+
+/*
+ * The per-symbol tick: dequeue, cancel, make a complex sample, push it onto
+ * the receive queue, and adapt both cancellers.  Always returns zero.
+ */
+int modem_serrint(void *obj);
 
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);

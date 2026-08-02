@@ -156,7 +156,16 @@ struct v34_object {
 	short f25d4;					/* +0x25d4 tx scale  */
 	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
 	short f2aa4;					/* +0x2aa4 */
-	unsigned char unmapped_2aa6[0x354c - 0x2aa6];
+	short f2aa6;					/* +0x2aa6 */
+	/*
+	 * Two per-symbol history rings modem_serrint fills, indexed by f2aa4
+	 * and f2aa6 and wrapping at 0x12b and 0x257 respectively.  The first
+	 * holds each residual TWICE, as both halves of its int -- so it is a
+	 * complex buffer being written with a real value.
+	 */
+	int hist_2aa8[0x12c];				/* +0x2aa8 */
+	short hist_2f58[0x258];				/* +0x2f58 */
+	unsigned char unmapped_3408[0x354c - 0x3408];
 	/*
 	 * adaptecho's adaptation state.  f354c counts calls and gates the
 	 * whole slow path; f3550 is the LMS step (updateAlpha's alpha, and
@@ -208,14 +217,22 @@ struct v34_object {
 	unsigned char gap_a088[0xa098 - 0xa088];
 	short echo1_coeff[V34_ECHO_TAPS];		/* +0xa098 */
 	short hilbert[V34_HILBERT_TAPS];		/* +0xa1b8 */
-	unsigned char unmapped_a238[0xa23e - 0xa238];
+	unsigned char unmapped_a238[0xa23c - 0xa238];
+	/*
+	 * Non-zero switches the FAR echo canceller on: modem_serrint filters
+	 * and adapts echo1 only when this is set, and adaptecho never looks
+	 * at it because it only ever drives the near one.
+	 */
+	short fa23c;					/* +0xa23c */
 	/*
 	 * adaptecho reads this, adds it to the residual, and clears it -- so
 	 * it is a one-shot correction somebody upstream deposits.  Whoever
 	 * writes it has not been reconstructed yet.
 	 */
 	short fa23e;					/* +0xa23e */
-	unsigned char unmapped_a240[0xaad0 - 0xa240];
+	/* A leaky estimate of the residual's energy, updated per symbol. */
+	short fa240;					/* +0xa240 */
+	unsigned char unmapped_a242[0xaad0 - 0xa242];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */

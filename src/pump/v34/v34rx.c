@@ -1264,3 +1264,219 @@ adaptecho(void *objp)
 
 	return 0;
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * modem_serrint -- the per-symbol tick.
+ *
+ * Named for a serial interrupt and shaped like one: it takes one transmit
+ * sample off the queue, cancels the echo it will produce, turns the residual
+ * into a complex sample, pushes that onto the RECEIVE queue for rxtiming to
+ * pull, and then adapts both cancellers on their own schedules.  This is the
+ * function that couples the two halves of the modem.
+ *
+ * Its opening is `adaptecho`'s, instruction for instruction -- same lag from
+ * the queue depth, same dequeue, same wrap -- and then the two diverge
+ * completely.  Kept as a shared helper here; see `serr_dequeue`.
+ *
+ * THREE WAYS TO MAKE THE COMPLEX SAMPLE, chosen by the receiver's flags:
+ *
+ *   bit 15 set    store the residual as-is, imaginary part zero
+ *   bit 11 set    a 60-tap FIR from `f2a4`, whose delay line is ECHO1's
+ *                 fractional coefficient array -- the same overlay finding
+ *                 100 found DPSK.c using, now with a third reader
+ *   otherwise     V34HilbertFilter, giving a genuine analytic pair
+ *
+ * TWO ADAPTATION SCHEDULES, one per canceller, and they are not the same:
+ * the near one measures its delay line on call 0x90 and stops adapting after
+ * 0x464f; the far one measures at 0x90 past its own 0x2bb offset and starts
+ * adapting only after 0x2bc.  Both recompute their step every 45th call once
+ * past 2000, which is the `count % 45` the compiler renders as a multiply by
+ * 0xb60b60b7.
+ */
+static short
+serr_dequeue(struct v34_object *obj)
+{
+	struct v34_queue *txq = &obj->txq;
+	short lag;
+
+	lag = (short)((unsigned short)obj->f25c - (unsigned short)txq->count);
+	txq->count = (short)(txq->count - 1);
+	obj->f25e = (short)*txq->rd;
+	txq->rd = q_next(txq, txq->rd + 1, V34_TXQ_END);
+	return lag;
+}
+
+int
+modem_serrint(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_queue *rxq = (struct v34_queue *)rx;
+	short lag = serr_dequeue(obj);
+	short acc;
+	int cancel = 0;
+	short sample;
+	int out;
+	int near_energy = 0, far_energy = 0;
+	int near_step = 0, far_step = 0;
+	short near_err, far_err = 0;
+	int count;
+	short *wr;
+	short idx;
+
+	/*
+	 * The residual, and its own leaky update.  `fa23e` is a one-shot
+	 * correction that adaptecho merely consumes; here it is recomputed,
+	 * so the two functions are the producer and the consumer of it.
+	 */
+	acc = (short)((unsigned short)obj->f260 + (unsigned short)obj->fa23e);
+	obj->fa23e = (short)((acc * 0xed8 - ((int)obj->f260 << 12)) >> 12);
+
+	if (obj->f25c2 & V34_EC_FEED) {
+		int near = V34EchoFilter(&obj->echo0, lag);
+		int far = 0;
+
+		if (obj->fa23c != 0)
+			far = V34EchoFilter(&obj->echo1, lag);
+
+		cancel = (near * 4 + far * 4 + 0x8000) >> 16;
+	}
+
+	sample = (short)(acc + cancel);
+	out = sample;
+
+	/* Per-symbol history, wrapping at 0x257: the RAW residual. */
+	idx = obj->f2aa6;
+	obj->hist_2f58[idx] = sample;
+	obj->f2aa6 = (short)(idx + 1);
+	if ((short)(idx + 1) > 0x257)
+		obj->f2aa6 = 0;
+
+	rxq->count = (short)(rxq->count + 1);
+	wr = (short *)rxq->wr;
+
+	if ((short)rx->flags < 0) {
+		wr[0] = sample;
+		wr[1] = 0;
+	} else if (rx->flags & V34_RX_FLAG_FIR) {
+		/*
+		 * The 60-tap filter.  Its delay line is echo1's fractional
+		 * coefficient array -- one region, now three readings.  The
+		 * history is shifted UP as it is read down, so the newest
+		 * sample goes in at [0] before the loop and each tap moves
+		 * one place as its product is accumulated.
+		 */
+		short *dl = obj->echo1.coeff_frac;
+		const short *c = rx->f2a4;
+		int sum = 0x8000;
+		int i;
+
+		dl[0] = sample;
+		for (i = 0; i < 60; i++) {
+			short v = dl[0x3b - i];
+
+			dl[0x3c - i] = v;
+			sum += (int)c[i] * v;
+		}
+		/*
+		 * And the filtered value REPLACES the residual from here
+		 * on: the second history ring, the energy estimate and both
+		 * error terms all see this rather than what came in.  The
+		 * other two paths leave `out` as the raw sample.  Missing
+		 * that is what made this mode, and only this mode, diverge.
+		 *
+		 * It is not truncated to 16 bits either -- the register is
+		 * used at full width downstream and only the queue store
+		 * narrows it.
+		 */
+		out = sum >> 16;
+		wr[0] = (short)out;
+		wr[1] = 0;
+	} else {
+		int re = 0, im = 0;
+
+		V34HilbertFilter((short *)((char *)obj + 0xa1b8), sample,
+				 &re, &im);
+		wr[0] = (short)((re + 0x2000) >> 14);
+		wr[1] = (short)((im + 0x2000) >> 14);
+	}
+
+	rxq->wr = q_next(rxq, (int *)wr + 1, V34_RXQ_END);
+
+	if (obj->f25c2 & V34_EC_FROZEN)
+		return 0;
+
+	/* The second history ring: the residual in both halves of an int. */
+	{
+		short k = obj->f2aa4;
+
+		obj->f2aa4 = (short)(k + 1);
+		((short *)&obj->hist_2aa8[k])[0] = (short)out;
+		((short *)&obj->hist_2aa8[k])[1] = (short)out;
+		if ((unsigned short)obj->f2aa4 > 0x12b)
+			obj->f2aa4 = 0;
+	}
+
+	obj->fa240 = (short)(((out * out) >> 10)
+			     + (((int)obj->fa240 * 0x3f48) >> 14));
+
+	count = obj->f354c + 1;
+	obj->f354c = count;
+
+	if (count == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34NEC, Start NEC Adaptation\n");
+	} else {
+		int far_count = (short)(count - 0x2bb);
+		int every45 = (count % 45) == 0;
+
+		near_step = every45 && count > 2000;
+		far_step = every45 && far_count > 2000;
+
+		if (count == 0x90)
+			near_energy =
+				V34EchoEstimateDelayLineEnergy(&obj->echo0);
+		if (far_count == 0x90 && obj->fa23c != 0)
+			far_energy =
+				V34EchoEstimateDelayLineEnergy(&obj->echo1);
+
+		updateAlpha(&obj->f3550, near_energy, near_step, 0x6666,
+			    0x7f5c, "NE");
+		if (obj->fa23c != 0)
+			updateAlpha(&obj->f3552, far_energy, far_step, 0x2b84,
+				    0x7f5c, "FE");
+	}
+
+	obj->echo0.adapt_count = (short)(obj->echo0.adapt_count + 1);
+	near_err = (short)((((int)obj->f3550 * out) * 2 + 0x2000) >> 14);
+
+	if (obj->fa23c != 0) {
+		obj->echo1.adapt_count = (short)(obj->echo1.adapt_count + 1);
+		far_err = (short)((((int)obj->f3552 * out) * 2 + 0x2000)
+				  >> 14);
+	}
+
+	if (lag < 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34NEC, --------ERROR--------- "
+					     "occured in modem_serrint\n");
+		return 0;
+	}
+
+	if (obj->f354c <= 0x464f) {
+		V34EchoAdapt(&obj->echo0, near_err);
+	} else if (obj->f354c == 0x4650) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34NEC - stop NEC adaptation\n");
+	}
+
+	if (obj->fa23c != 0) {
+		if (obj->f354c > 0x2bc)
+			V34EchoAdapt(&obj->echo1, far_err);
+		else if (obj->f354c == 0x2bc && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34FEC - start FEC adaptation\n");
+	}
+
+	return 0;
+}

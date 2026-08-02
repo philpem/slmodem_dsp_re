@@ -31,6 +31,7 @@ extern void ref_txrxdmainit(short *dst, const short *src);
 extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
 extern void ref_v34FreezeEcho(void *obj);
 extern int ref_adaptecho(void *obj);
+extern int ref_modem_serrint(void *obj);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
@@ -1128,6 +1129,136 @@ main(void)
 				    (long)(ob.txq.rd - ob.txq.ring), lagbase);
 			diff_eq_int("adapt counter stepped",
 				    oa.echo0.adapt_count != 0, 1, lagbase);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * modem_serrint: 300 calls per configuration, which crosses the near
+	 * canceller's 0x90 measurement and the far one's 0x2bb offset, and
+	 * the flag sweep covers all three ways it builds the complex sample.
+	 *
+	 * `fir` needs coefficients at f2a4 and uses ECHO1's fractional array
+	 * as its delay line -- the finding-100 overlay, third reader.  The
+	 * coefficient block must live OUTSIDE the object: pointing it inside
+	 * collides with what V34InitializeImplementationSpecific set up, and
+	 * does so identically on both sides, which is finding 116b.
+	 */
+	diff_begin("v34 modem_serrint");
+	{
+		static struct v34_object oa, ob;
+		static short coeff[64];
+		int mode, feed, far, it;
+		unsigned b;
+
+		for (b = 0; b < 64; b++)
+			coeff[b] = (short)(b * 617 - 9000);
+
+		for (mode = 0; mode < 3; mode++)
+		for (feed = 0; feed <= 1; feed++)
+		for (far = 0; far <= 1; far++) {
+			struct v34_receiver *ra, *rb;
+
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			rxinit(&oa); ref_rxinit(&ob);
+			rxtiminginit(&oa); ref_rxtiminginit(&ob);
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			ra->flags = rb->flags = (unsigned short)
+			    (mode == 0 ? 0x8000 : mode == 1 ? 0x0800 : 0);
+			ra->f2a4 = rb->f2a4 = coeff;
+
+			oa.f25c  = ob.f25c  = 0x40;
+			oa.f25c2 = ob.f25c2 = (short)(feed ? V34_EC_FEED : 0);
+			oa.f260  = ob.f260  = 1234;
+			oa.fa23c = ob.fa23c = (short)(far ? 1 : 0);
+			oa.fa23e = ob.fa23e = 0;
+			oa.fa240 = ob.fa240 = 0;
+			oa.f2aa4 = ob.f2aa4 = 0;
+			oa.f2aa6 = ob.f2aa6 = 0;
+			oa.f354c = ob.f354c = 0;
+			oa.f3550 = ob.f3550 = -0x1800;
+			oa.f3552 = ob.f3552 = -0x1400;
+			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
+			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
+			for (b = 0; b < 0x12c; b++)
+				oa.hist_2aa8[b] = ob.hist_2aa8[b] = 0;
+			for (b = 0; b < 0x258; b++)
+				oa.hist_2f58[b] = ob.hist_2f58[b] = 0;
+
+			for (b = 0; b < V34_TXQ_RING; b++)
+				oa.txq.ring[b] = ob.txq.ring[b] =
+				    (int)(short)(b * 2777 - 12000);
+			oa.txq.count = ob.txq.count = 0x30;
+			oa.rxq.count = ob.rxq.count = 0;
+			for (b = 0; b < V34_RXQ_RING; b++)
+				oa.rxq.ring[b] = ob.rxq.ring[b] = 0;
+
+			dsplibs_debug_level = 2;
+			ref_dsplibs_debug_level = 2;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			for (it = 0; it < 300; it++) {
+				modem_serrint(&oa);
+				ref_modem_serrint(&ob);
+			}
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = 0;
+			ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("serrint transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)mode * 100 + feed * 10 + far);
+
+			for (b = 0; b < sizeof(oa); b++) {
+				static const unsigned skip[][2] = {
+				  { 0x264 + 0x04, 8 },
+				  { 0x264 + 0x130, 4 },
+				  { 0x264 + 0x1b4, 4 },
+				  { 0x264 + 0x2a4, 4 },
+				  /* rxtiminginit installs these two. */
+				  { 0x50c + __builtin_offsetof(
+				      struct v34_timing,
+				      prefilter_coeff), 8 },
+				  { 0x221c + 0x04, 8 },
+				  { 0x2074, 4 },
+				  { 0x2078, 4 },
+				  { 0x80b8, 0x14 },
+				  { 0x80b8 + 0x16, 2 },
+				  { 0x9138, 0x14 },
+				  { 0x9138 + 0x16, 2 },
+				};
+				unsigned s2, hit = 0;
+
+				for (s2 = 0; s2 < sizeof(skip)
+					     / sizeof(skip[0]); s2++)
+					if (b >= skip[s2][0]
+					    && b < skip[s2][0] + skip[s2][1])
+						hit = 1;
+				if (!hit)
+					diff_eq_int("serrint at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    ((long)mode * 100
+						     + feed * 10 + far)
+						    * 100000 + b);
+			}
+			diff_eq_int("serrint rxq wr",
+				    (long)(oa.rxq.wr - oa.rxq.ring),
+				    (long)(ob.rxq.wr - ob.rxq.ring),
+				    (long)mode * 100 + feed * 10 + far);
+			diff_eq_int("serrint txq rd",
+				    (long)(oa.txq.rd - oa.txq.ring),
+				    (long)(ob.txq.rd - ob.txq.ring),
+				    (long)mode * 100 + feed * 10 + far);
 		}
 	}
 	rc |= diff_end();

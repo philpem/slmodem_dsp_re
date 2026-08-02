@@ -7289,3 +7289,39 @@ small negative means that sum has already overflowed.  Not filed as a
 deviation yet because reachability is exactly what has not been measured;
 that belongs with task #47.  The test sweep avoids the range deliberately and
 says so, rather than silently not covering it.
+
+### 128. `modem_serrint`'s filter path replaces the value, not just the output
+
+The per-symbol tick builds its complex sample three ways, chosen by the
+receiver's flags: store the residual raw (bit 15), run a 60-tap FIR (bit 11),
+or run `V34HilbertFilter`.  The first and third leave the residual alone.
+The second does not:
+
+```
+   5d392:  mov 0x18(%esp),%ebx
+   5d396:  mov 0x1c(%esp),%ebp      ; the filter accumulator
+   5d3a1:  mov %ebp,%esi            ; <-- overwrites the residual
+   5d3a3:  sar $0x10,%esi
+```
+
+`%esi` held the residual from `0x5d03f` and is what everything downstream
+reads: the second history ring at +0x2aa8, the leaky energy estimate at
++0xa240, and BOTH cancellers' error terms.  So in this mode the canceller
+adapts against the filtered signal rather than the raw one, which is a real
+difference in what the loop is minimising, not a detail of where a value is
+stored.
+
+Reconstructed first with the residual carried through all three paths.  Modes
+0 and 2 passed; mode 1 failed at the first byte of the +0x2aa8 ring, on every
+one of its four flag combinations and nowhere else.  A sweep that had only
+driven the default path -- which is the natural thing to write, since the
+Hilbert branch is the one the receiver normally takes -- would have passed.
+
+It is also not truncated to 16 bits: the register is used at full width for
+the products and only the queue store narrows it, so a loud enough sample
+feeds a value outside a short into the error terms.  Reproduced.
+
+The 60-tap filter's delay line is `echo1.coeff_frac` -- the same array
+finding 100 found DPSK.c using as its FSK delay line, and `V34EchoFilter`
+using as fractional coefficients.  One region, three readers, none of them
+live at the same time.

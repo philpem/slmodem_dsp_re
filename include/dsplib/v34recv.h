@@ -148,8 +148,17 @@ struct v34_receiver {
 	short           f25e;            /* +0x25e */
 	short           f260;            /* +0x260 */
 	unsigned char pad_262[0x27a - 0x262];
-	short           timing_out[64];  /* +0x27a rxtiming writes its metric here */
-	unsigned char pad_2fa[0x798 - 0x2fa];
+	/*
+	 * +0x27a.  The length is fixed by the POINTER that follows it at
+	 * +0x2a4, not by anything rxtiming does -- twenty-one entries.  In
+	 * practice V34SetupDemodulator sets f128 to 4, so only the first
+	 * four are ever written; the earlier [64] here was a guess that
+	 * would have overlapped f2a4.
+	 */
+	short           timing_out[21];  /* +0x27a rxtiming's metric */
+	const short *   f2a4;            /* +0x2a4 modem_serrint: the 60-tap
+					  * receive filter's coefficients */
+	unsigned char pad_2a8[0x798 - 0x2a8];
 	short           f798;            /* +0x798 */
 };
 
@@ -161,6 +170,8 @@ struct v34_receiver {
  * as "do not adapt yet".  One bit, three readers.
  */
 #define V34_RX_FLAG_DET_PENDING	0x0200
+/* Bit 11: modem_serrint runs the 60-tap FIR instead of the Hilbert pair. */
+#define V34_RX_FLAG_FIR		0x0800
 #define V34_RX_FLAG_AGC_FREEZE	V34_RX_FLAG_DET_PENDING
 
 #ifdef __cplusplus
