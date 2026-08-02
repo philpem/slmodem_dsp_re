@@ -29,6 +29,14 @@ extern "C" {
 
 #define V34_SHELL_SUBS		8	/* sub-indices per group          */
 
+/*
+ * decodeDepth's two tables.  See the notes in v34shell.c: kLookup is the
+ * quadrant group as a 4x4 Latin square, grid is a 529-entry map indexed by
+ * `(x + 0x408) >> 2`.
+ */
+extern const short kLookup[16];
+extern const short grid[529];
+
 /* The bit sink putFrame writes through: (context, value, bit count). */
 typedef void (*v34_putbits_fn)(void *shell, int value, int nbits);
 

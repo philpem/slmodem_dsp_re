@@ -8,6 +8,8 @@
 
 extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
+extern const short ref_kLookup[16];
+extern const short ref_grid[529];
 
 /*
  * putFrame writes through a pointer the object carries, so each side gets
@@ -212,6 +214,40 @@ main(void)
 					    ((long)(nb + 6) * 100 + wide * 10
 					     + a04) * 10000 + i);
 			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The two tables, byte for byte.  Emitted ahead of decodeDepth, which
+	 * is the only reader, precisely so they can be checked on their own:
+	 * a table transcribed wrong is indistinguishable from a decoder
+	 * written wrong once the two are compiled together.
+	 */
+	diff_begin("v34 mapper tables");
+	{
+		int i;
+
+		for (i = 0; i < 16; i++)
+			diff_eq_int("kLookup", kLookup[i], ref_kLookup[i], i);
+		for (i = 0; i < 529; i++)
+			diff_eq_int("grid", grid[i], ref_grid[i], i);
+
+		/* kLookup is a Latin square: every row and column a
+		 * permutation of 0..3.  A property the bytes alone do not
+		 * state, and the thing that would break first if the table
+		 * were ever regenerated rather than copied. */
+		for (i = 0; i < 4; i++) {
+			int rowseen = 0, colseen = 0, j;
+
+			for (j = 0; j < 4; j++) {
+				rowseen |= 1 << kLookup[i * 4 + j];
+				colseen |= 1 << kLookup[j * 4 + i];
+			}
+			diff_eq_int("kLookup row is a permutation",
+				    rowseen, 0xf, i);
+			diff_eq_int("kLookup column is a permutation",
+				    colseen, 0xf, i);
 		}
 	}
 	rc |= diff_end();

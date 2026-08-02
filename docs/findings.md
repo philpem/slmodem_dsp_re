@@ -7417,3 +7417,29 @@ there is comparable to `demapFrame` beside it.
 dispatch is a compare chain, so there is no jump table for it to find, and
 without the four targets named it reports the entire function as
 unreachable-by-any-case.
+
+### 132. `decodeDepth` is two identical halves, not one pass
+
+Beyond finding 131's four-preambles-one-engine result, the engine itself
+repeats.  `0x58a40..0x58c37` and `0x58c40..0x58e33` are the same ~500-byte
+block twice over, differing only in which stack slots they use:
+
+  - a six-tap dot product of the history at +0xa18 against two coefficient
+    rows, taken from the same base twelve bytes apart;
+  - each accumulator rounded toward zero (`test`/`lea 1(%r)`/`js`), shifted
+    down 14, masked against a value derived from `fa46`, compared, adjusted
+    and shifted down 7 again;
+  - a six-entry history shift at +0xa18, moving each short up one place;
+  - a `kLookup` index assembled from three separate pairs of bits.
+
+Two halves of four fields each is V.34's 8D frame seen as two 4D halves,
+which is also what `putFrame` emits (finding in its header: four groups of
+four).  So the reconstruction is one function called twice, not 2 KB of
+straight-line code -- the same shape the AGC and the dequeue prologue turned
+out to have.
+
+Recorded before writing it, because the two halves use different stack slots
+throughout and that is exactly the kind of difference that reads as
+significant and is not.  The measurement to make when writing it is whether
+the two blocks are bit-identical in behaviour or differ somewhere subtle, as
+`V34agc` and `V34demodulate` did over a single `+0x200`.
