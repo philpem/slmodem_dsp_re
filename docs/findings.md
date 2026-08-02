@@ -5379,3 +5379,57 @@ both are ever live at once is V34RX.c's question.
 output-history loop over `t+0x18`/`t+0x1e`. Until that is read the function
 cannot be written; what the tail gives is the certainty that the inline
 high-pass must be written out rather than delegated.
+
+## 103. `V34TimingFilter`, fully mapped — ready to write
+
+Fourth pass, reading 0x72560-0x72650. With findings 99, 101 and 102 this
+completes the function. It is **still not written or tested**; what follows is
+the structure a reconstruction should implement, and it should be checked
+against the disassembly rather than trusted from here.
+
+```
+  V34TimingFilter(struct v34_timing *t, int sample)   /* (im<<16)|re */
+
+  1. in1 = in0;  in0 = sample                      (two-deep, in0 newest)
+  2. scale both halves by 0x599a, round 0x8000, shift 15   -> gain 0.7
+
+  3. LOOP A, k = 0..2   over the shared INPUT histories t+0x00, t+0x06
+     against posHalfBaud_Bcoef_* and negHalfBaud_Bcoef_*, into four
+     accumulators (pos re/im, neg re/im).  Writes the scaled input into
+     both histories as it goes -- read-then-overwrite.
+
+  4. LOOP B, k = 1..2   over the POS output history t+0x0c, t+0x12
+     against posHalfBaud_Acoef_*, into two accumulators.
+  5. LOOP C, k = 1..2   over the NEG output history t+0x18, t+0x1e
+     against negHalfBaud_Acoef_*, into two accumulators.
+
+     Both start at 1, not 0: Acoef_Real[0] is 16384, the implicit Q14 one.
+
+  6. Subtract each A accumulator from its B accumulator (the feedback),
+     round 0x2000, shift 14, and store the four results into the [0] slots
+     of the four output histories.
+
+  7. Cross-multiply the pos and neg complex outputs and subtract, round
+     0x2000, shift 14 -> the timing discriminator.
+
+  8. Run that through 40 taps of V34TimingHPFilterCoeff over t+0x24,
+     rounding 0x4000 and shifting 15 -- TWICE the gain of the standalone
+     V34TimingHPFilter, which uses 0x8000 and 16 (finding 102).
+
+  9. Return that, sign-extended from 16 bits.
+```
+
+So the whole function is: two complex band-passes at ±baud/2, their cross
+product as a phase discriminator, and a high-pass on the result. That is a
+textbook V.34 timing recovery loop, and every constant in it has now been
+traced — the 0.7 input gain, the ±1/8-sample-rate poles
+(`docs/coefficients.md`), the implicit `a0`, and the doubled high-pass gain.
+
+**Three traps for whoever writes it**, all of which produce plausible output:
+
+  - starting loops B and C at 0 multiplies by 1.0 an extra time;
+  - delegating step 8 to `V34TimingHPFilter` halves the timing loop gain;
+  - the four output histories are shifted by loops B and C but their [0]
+    entries are written in step 6, *after* both loops have run — so a
+    reconstruction that stores the result inside the loop corrupts its own
+    feedback.
