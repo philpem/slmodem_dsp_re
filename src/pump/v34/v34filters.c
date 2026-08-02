@@ -1837,7 +1837,7 @@ V34F_ASSERT(dline,      struct v34_echo, dline,      0x04);
 V34F_ASSERT(coeff,      struct v34_echo, coeff,      0x08);
 V34F_ASSERT(coeff_frac, struct v34_echo, coeff_frac, 0x0c);
 V34F_ASSERT(hist,       struct v34_echo, hist,       0x10);
-V34F_ASSERT(unused14,   struct v34_echo, unused_14,  0x14);
+V34F_ASSERT(adaptcount, struct v34_echo, adapt_count, 0x14);
 V34F_ASSERT(dlen,       struct v34_echo, dlen,       0x18);
 V34F_ASSERT(taps,       struct v34_echo, taps,       0x1c);
 typedef char v34f_echo_size[(sizeof(struct v34_echo) == 0x20) ? 1 : -1];

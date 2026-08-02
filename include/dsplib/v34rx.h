@@ -186,6 +186,12 @@ int V34scrambler(unsigned *sr, short mode, short bits, short nbits);
  */
 void V34SetupDemodulator(void *obj, short baud, short carrier);
 
+/*
+ * One echo-canceller step: dequeue a transmit sample, filter, subtract, and
+ * adapt on a schedule.  Always returns zero.
+ */
+int adaptecho(void *obj);
+
 /* Reverse the low `nbits` bits of `v`. */
 int bitreverse(unsigned short v, short nbits);
 

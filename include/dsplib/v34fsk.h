@@ -110,7 +110,16 @@ struct v34_fskdelay {
  * say which; do not start a third.
  */
 struct v34_object {
-	unsigned char unmapped_0000[0x264];
+	unsigned char unmapped_0000[0x25c];
+	/*
+	 * adaptecho's three scalars, immediately before the receiver.
+	 * f25c is the base the echo filter's lag is measured from, f25e the
+	 * transmit sample it just dequeued, f260 the running residual.
+	 */
+	short f25c;					/* +0x25c */
+	short f25e;					/* +0x25e */
+	short f260;					/* +0x260 */
+	unsigned char unmapped_0262[0x264 - 0x262];
 	struct v34_queue rxq;				/* +0x264 */
 	int rxq_ring_tail[V34_RXQ_RING - 1];		/* to +0x370 */
 	unsigned char unmapped_0370[0x402 - 0x370];
@@ -147,10 +156,22 @@ struct v34_object {
 	short f25d4;					/* +0x25d4 tx scale  */
 	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
 	short f2aa4;					/* +0x2aa4 */
-	unsigned char unmapped_2aa6[0x3550 - 0x2aa6];
+	unsigned char unmapped_2aa6[0x354c - 0x2aa6];
+	/*
+	 * adaptecho's adaptation state.  f354c counts calls and gates the
+	 * whole slow path; f3550 is the LMS step (updateAlpha's alpha, and
+	 * the only short here); f3558 its decay; f355c a shift the step is
+	 * scaled by, which the ladder at 0x90 moves between 2, 4 and 5; and
+	 * f3560 the energy accumulated over the first 0x8f calls.
+	 */
+	int f354c;					/* +0x354c */
 	short f3550;					/* +0x3550 */
 	short f3552;					/* +0x3552 */
-	unsigned char unmapped_3554[0x35a8 - 0x3554];
+	int f3554;					/* +0x3554 */
+	int f3558;					/* +0x3558 */
+	int f355c;					/* +0x355c */
+	int f3560;					/* +0x3560 */
+	unsigned char unmapped_3564[0x35a8 - 0x3564];
 	/*
 	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
 	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
@@ -187,7 +208,14 @@ struct v34_object {
 	unsigned char gap_a088[0xa098 - 0xa088];
 	short echo1_coeff[V34_ECHO_TAPS];		/* +0xa098 */
 	short hilbert[V34_HILBERT_TAPS];		/* +0xa1b8 */
-	unsigned char unmapped_a238[0xaad0 - 0xa238];
+	unsigned char unmapped_a238[0xa23e - 0xa238];
+	/*
+	 * adaptecho reads this, adds it to the residual, and clears it -- so
+	 * it is a one-shot correction somebody upstream deposits.  Whoever
+	 * writes it has not been reconstructed yet.
+	 */
+	short fa23e;					/* +0xa23e */
+	unsigned char unmapped_a240[0xaad0 - 0xa240];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */

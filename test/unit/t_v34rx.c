@@ -30,6 +30,7 @@ extern void ref_rxtiming(void *obj);
 extern void ref_txrxdmainit(short *dst, const short *src);
 extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
 extern void ref_v34FreezeEcho(void *obj);
+extern int ref_adaptecho(void *obj);
 extern int ref_V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
@@ -1028,6 +1029,105 @@ main(void)
 			diff_eq_int("2 x half length",
 				    2 * (unsigned)r->f1ba, tab[i].len,
 				    tab[i].c);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * adaptecho: 200 calls, which crosses every schedule boundary --
+	 * the 0x8f energy-gathering burst, the one-shot measurement at 0x90,
+	 * and the every-tenth-call step recompute past f3554.  A shorter run
+	 * would exercise only the first and prove almost nothing.
+	 *
+	 * Run with the debug transcript captured too, since adaptecho reaches
+	 * three separate messages (updateAlpha's, the echo-energy report and
+	 * the negative-lag error) and finding 126 is what those cost when
+	 * nothing compares them.
+	 */
+	diff_begin("v34 adaptecho");
+	{
+		static struct v34_object oa, ob;
+		int lagbase, it;
+		unsigned b;
+
+		for (lagbase = 0; lagbase <= 3; lagbase++) {
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+
+			oa.f25c2 = ob.f25c2 = 0;
+			oa.f260  = ob.f260  = 0;
+			oa.fa23e = ob.fa23e = 0;
+			oa.f354c = ob.f354c = 0;
+			oa.f3550 = ob.f3550 = -0x2000;
+			oa.f3554 = ob.f3554 = 0x95;
+			oa.f3558 = ob.f3558 = 0x7000;
+			oa.f355c = ob.f355c = 6;
+			oa.f3560 = ob.f3560 = 0;
+			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
+
+			/*
+			 * lagbase 3 makes the lag go negative part-way, which
+			 * is the path that declines to adapt and prints.
+			 */
+			oa.f25c = ob.f25c = (short)(lagbase == 3 ? 8 : 0x40);
+
+			for (b = 0; b < V34_TXQ_RING; b++)
+				oa.txq.ring[b] = ob.txq.ring[b] =
+				    (int)(short)(b * 3571 - 15000);
+			oa.txq.count = ob.txq.count = 0x30;
+
+			dsplibs_debug_level = 2;
+			ref_dsplibs_debug_level = 2;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			for (it = 0; it < 200; it++) {
+				oa.fa23e = ob.fa23e = (short)(it * 37 - 900);
+				adaptecho(&oa);
+				ref_adaptecho(&ob);
+			}
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = 0;
+			ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("adaptecho transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, lagbase);
+
+			for (b = 0; b < sizeof(oa); b++) {
+				static const unsigned skip[][2] = {
+				  { 0x264 + 0x04, 8 },
+				  { 0x221c + 0x04, 8 },
+				  { 0x2074, 4 },
+				  { 0x2078, 4 },
+				  { 0x80b8, 0x14 },   /* ptrs, NOT +0x14 */
+				  { 0x80b8 + 0x16, 2 },
+				  { 0x9138, 0x14 },
+				  { 0x9138 + 0x16, 2 },
+				};
+				unsigned s2, hit = 0;
+
+				for (s2 = 0; s2 < sizeof(skip)
+					     / sizeof(skip[0]); s2++)
+					if (b >= skip[s2][0]
+					    && b < skip[s2][0] + skip[s2][1])
+						hit = 1;
+				if (!hit)
+					diff_eq_int("adaptecho at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)lagbase * 100000 + b);
+			}
+			diff_eq_int("adaptecho txq rd",
+				    (long)(oa.txq.rd - oa.txq.ring),
+				    (long)(ob.txq.rd - ob.txq.ring), lagbase);
+			diff_eq_int("adapt counter stepped",
+				    oa.echo0.adapt_count != 0, 1, lagbase);
 		}
 	}
 	rc |= diff_end();

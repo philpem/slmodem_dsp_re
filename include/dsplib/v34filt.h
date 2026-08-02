@@ -67,7 +67,15 @@ struct v34_echo {
 	 */
 	short *coeff_frac;
 	short *hist;		/* +0x10  tap history, `taps` shorts     */
-	void *unused_14;	/* +0x14  no reader or writer found      */
+	/*
+	 * +0x14.  Recorded here for a long time as having no reader or
+	 * writer; adaptecho has one.  It steps this as a SHORT, once per
+	 * call, and nothing else found so far touches it -- so the upper
+	 * half of the word stays whatever the allocation left, and the
+	 * counter wraps every 65536 symbols with no reader to care.
+	 */
+	short adapt_count;	/* +0x14                                 */
+	unsigned char pad_16[2];/* +0x16                                 */
 	unsigned dlen;		/* +0x18  delay line length, in shorts   */
 	unsigned taps;		/* +0x1c                                 */
 };

@@ -81,11 +81,11 @@ setup(unsigned taps, unsigned dlen)
 
 	a.e.dline = a.dline; a.e.cursor = a.dline;
 	a.e.coeff = a.coeff; a.e.coeff_frac = a.frac; a.e.hist = a.hist;
-	a.e.unused_14 = NULL; a.e.dlen = dlen; a.e.taps = taps;
+	a.e.adapt_count = 0; a.e.dlen = dlen; a.e.taps = taps;
 
 	b.e.dline = b.dline; b.e.cursor = b.dline;
 	b.e.coeff = b.coeff; b.e.coeff_frac = b.frac; b.e.hist = b.hist;
-	b.e.unused_14 = NULL; b.e.dlen = dlen; b.e.taps = taps;
+	b.e.adapt_count = 0; b.e.dlen = dlen; b.e.taps = taps;
 }
 
 /*

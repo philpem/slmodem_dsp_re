@@ -1124,3 +1124,143 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
 	default:   break;
 	}
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * adaptecho -- one echo-canceller step, and the schedule that tunes it.
+ *
+ * Always returns zero; the state is the output.
+ *
+ * Per call it dequeues one transmit sample, filters it through the near
+ * canceller at a lag derived from how full the transmit queue is, and
+ * subtracts the result from the residual.  Then, unless the canceller has
+ * been frozen, it adapts -- and that adaptation is on a schedule rather than
+ * every step:
+ *
+ *   calls 1..0x8f     accumulate energy, adapt with the current step
+ *   call  0x90        measure the delay line, pick a step-size shift from
+ *                     the energy, and recompute the LMS step
+ *   after 0x8f        recompute the step whenever the call count is a
+ *                     multiple of ten AND past f3554
+ *
+ * so it converges fast for the first 143 symbols and then only revisits its
+ * step occasionally.  The step itself is computed by `updateAlpha`, which
+ * the object inlines here; this calls it, because it is the same function
+ * and the AGC lesson applies -- a second hand-transcribed copy of a
+ * fixed-point chain is indistinguishable from a correct one until something
+ * disagrees.  Reconstructing this is what exposed finding 126.
+ */
+int
+adaptecho(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_queue *txq = &obj->txq;
+	short lag;
+	short acc;
+	int y;
+	int e;
+	int count;
+	int energy = 0;
+	int decay_now = 0;
+
+	/*
+	 * How far behind to tap, from the queue depth.  Read BEFORE the
+	 * count is decremented, so it describes the queue as the sample was
+	 * taken rather than after.
+	 */
+	lag = (short)((unsigned short)obj->f25c - (unsigned short)txq->count);
+	txq->count = (short)(txq->count - 1);
+
+	/* The residual carries a one-shot correction, which is consumed. */
+	acc = (short)((unsigned short)obj->f260 + (unsigned short)obj->fa23e);
+
+	obj->f25e = (short)*txq->rd;
+	txq->rd = q_next(txq, txq->rd + 1, V34_TXQ_END);
+	obj->fa23e = 0;
+
+	y = V34EchoFilter(&obj->echo0, lag);
+
+	/* Q14 in, Q16 out: the filter's output is scaled by 4 then rounded. */
+	e = (short)(acc + ((y * 4 + 0x8000) >> 16));
+	obj->f260 = (short)e;
+
+	if (obj->f25c2 & V34_EC_FROZEN)
+		return 0;
+
+	count = obj->f354c + 1;
+	obj->f354c = count;
+
+	if (count > 0x8f) {
+		/*
+		 * Past the initial burst.  The step is revisited only every
+		 * tenth call once `f3554` has been passed, and the delay
+		 * line is measured exactly once, on call 0x90.
+		 */
+		if (count > obj->f3554 && count == (count / 10) * 10)
+			decay_now = 1;
+
+		if (count == 0x90) {
+			energy = V34EchoEstimateDelayLineEnergy(&obj->echo0);
+
+			/*
+			 * Pick the step-size shift from the energy gathered
+			 * over the first 0x8f calls.  A loud echo gets a
+			 * smaller shift, i.e. a bigger step.
+			 */
+			if (obj->f355c > 4
+			    && (unsigned)obj->f3560 <= 0x26259f) {
+				obj->f355c = 4;
+				if ((unsigned)obj->f3560 > 0xc65d40)
+					obj->f355c = 2;
+			} else if (obj->f355c > 5
+				   && (unsigned)obj->f3560 > 0xa7d8c0) {
+				obj->f355c = 5;
+				if ((unsigned)obj->f3560 > 0xc65d40)
+					obj->f355c = 2;
+			} else if (obj->f355c > 2) {
+				if ((unsigned)obj->f3560 > 0xc65d40)
+					obj->f355c = 2;
+			}
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"Echo Energy = %d, BETA = %d\n",
+					obj->f3560, obj->f355c);
+		}
+
+		updateAlpha(&obj->f3550, energy, decay_now, 0x7999,
+			    obj->f3558, "NE");
+	} else {
+		/* Still gathering: the residual's energy, scaled by 1/64. */
+		obj->f3560 += ((int)acc * acc) >> 6;
+	}
+
+	/*
+	 * The echo descriptor's +0x14 word, which v34filt.h recorded as
+	 * having no reader or writer.  This is the writer: a 16-bit counter
+	 * stepped once per call, with nothing found that reads it.
+	 */
+	obj->echo0.adapt_count = (short)(obj->echo0.adapt_count + 1);
+
+	{
+		short err = (short)(((int)obj->f3550 * obj->f355c * e
+				     + 0x2000) >> 14);
+
+		/*
+		 * A negative lag means the queue ran past its base, so the
+		 * tap the filter used was not the one intended; the original
+		 * declines to adapt on it and says so.
+		 */
+		if (lag < 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90NEC, --------ERROR---"
+						     "------ occured in "
+						     "adaptecho\n");
+			return 0;
+		}
+
+		V34EchoAdapt(&obj->echo0, err);
+	}
+
+	return 0;
+}
