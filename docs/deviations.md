@@ -1497,26 +1497,35 @@ driving it.
 
 ---
 
-## D34 🐛 `rxinit` seeds the AGC integrator from a stale return register
+## D34 ~~`rxinit` seeds the AGC integrator from a stale return register~~ RETRACTED
 
-**Where:** `src/pump/v34/v34rx.c`, `rxinit` (not yet written).
+**Retracted.** There is no such defect. `rxinit` writes `agc_accum` from
+`%eax`, and `%eax` is cleared by `xor %eax,%eax` two instructions before the
+first of the three stores it participates in:
 
-**What the original does:** stores `%eax` into the receiver's `f138` right
-after calling `V34InitHilbertFilter`, which returns nothing. That function
-tail-calls `sysdep_memset`, so `%eax` holds the memset's destination —
-`obj + 0xa1b8` — and its low half becomes the AGC's error integrator.
+```
+   5ac09:  mov  $0x4000,%ecx
+   5ac0e:  mov  $0x4000,%edx
+   5ac13:  xor  %eax,%eax           <-- here
+   5ac15:  mov  %cx,0x218(%ebx)
+   5ac1c:  xor  %ecx,%ecx
+   5ac1e:  mov  %dx,0x1f2(%ebx)
+   5ac25:  xor  %edx,%edx
+   5ac27:  testb $0x8,0x122(%ebx)
+   5ac2e:  mov  %ax,0x138(%ebx)     <-- agc_accum = 0
+   5ac35:  mov  %cx,0x134(%ebx)     <-- agc_level = 0
+```
 
-**Reachable?** Every call. The value is whatever the object's address happens
-to be, so it varies per allocation.
+The claim was that `%eax` still held `V34InitHilbertFilter`'s tail-called
+`sysdep_memset` return.  It does not: the three registers are loaded, used
+once each, and zeroed, and I traced that correctly for `%ecx` and `%edx`
+while attributing `%eax` to the call.  The zeroing of `%eax` sits BEFORE the
+stores rather than between them, which is the only thing that made it look
+different from the other two.
 
-**Consequence:** small. `agcadapt` overwrites the integrator the first time
-its error leaves the deadband, and the deadband is 1200 wide, so the bad seed
-survives only until the first significant level error. But it is a genuine
-uninitialised-value bug of the same family as D30 and D32, and this is the
-third in V.34 — the pattern is a compiler reusing a register the author
-assumed was dead.
-
-**To be reproduced**, which requires declaring `V34InitHilbertFilter` to
-return its argument. It is the first V.34 field whose value legitimately
-differs between the blob and the reconstruction, because the two objects live
-at different addresses, so the test must skip it.
+Found by the `rxtiming` differential test, which drives `rxinit` from a
+different starting state and disagreed by exactly this field.  The `rxinit`
+test had not caught it because it *skipped* the byte and asserted the
+Hilbert-address theory instead of comparing against the blob -- see finding
+122.  This is the second retracted deviation after D28, and both were filed
+on a reading rather than a measurement.

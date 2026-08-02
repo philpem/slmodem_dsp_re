@@ -115,6 +115,17 @@ void rxtiminginit(void *obj);
 /* Reset the receive side: equaliser, Hilbert state, AGC and scalars. */
 void rxinit(void *obj);
 
+/* The timing IIR's poles, Q14: 1.4001 and -0.9801, just inside the circle. */
+#define V34_RXTIMING_IIR_A1	0x599b
+#define V34_RXTIMING_IIR_A2	(-0x3eba)
+
+/*
+ * Resample onto the recovered clock, producing f128 timing estimates.
+ * Takes the whole object: it reaches both the receiver and the timing
+ * filters at +0x50c.
+ */
+void rxtiming(void *obj);
+
 /* Modulate one symbol, enqueue it, pre-filter it, feed the echo cancellers. */
 void txmit(void *obj);
 

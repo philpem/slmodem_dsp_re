@@ -22,6 +22,7 @@ extern void ref_rxtiminginit(void *obj);
 extern void ref_rxinit(void *obj);
 extern void ref_txmit(void *obj);
 extern void ref_V34agc(void *rx);
+extern void ref_rxtiming(void *obj);
 extern void ref_V34SetupModulator(void *m, short b, short c, short p, int a,
 				  int r);
 
@@ -365,26 +366,23 @@ main(void)
 			for (b = 0; b < sizeof(oa); b++) {
 				unsigned rs = 0x264 + __builtin_offsetof(
 					struct v34_receiver, rx_samples);
-				/*
-				 * D34: seeded from the object's own address,
-				 * so the two sides differ legitimately.
-				 */
-				unsigned ac = 0x264 + __builtin_offsetof(
-					struct v34_receiver, agc_accum);
 
-				if ((b >= rs && b < rs + 4)
-				    || (b >= ac && b < ac + 2))
+				/*
+				 * agc_accum used to be skipped here, on the
+				 * theory that rxinit seeded it from the
+				 * object's own address (D34, now retracted).
+				 * It is compared like everything else: the
+				 * blob zeroes it.  A skip plus an assertion
+				 * of one's own reading is not a differential
+				 * test -- see finding 122.
+				 */
+				if (b >= rs && b < rs + 4)
 					continue;
 				diff_eq_int("rxinit at %ld",
 					    ((unsigned char *)&oa)[b],
 					    ((unsigned char *)&ob)[b],
 					    (long)fl * 100000 + b);
 			}
-			diff_eq_int("agc_accum is the hilbert address",
-				    ((struct v34_receiver *)
-				     ((char *)&oa + 0x264))->agc_accum,
-				    (short)(unsigned long)
-				    ((char *)&oa + 0xa1b8), fl);
 		}
 	}
 	rc |= diff_end();
@@ -567,6 +565,162 @@ main(void)
 					    (long)((char *)rb.rx_samples
 						   - (char *)&rb),
 					    tag);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * rxtiming + V34demodulate: the interpolator and everything under it.
+	 *
+	 * V34demodulate is a file-static in the object, so it has no ref_
+	 * alias and can only be reached through this caller.  That is why the
+	 * AGC inside it was proven separately via V34agc first -- otherwise
+	 * every AGC defect arrives here disguised as a loop-shape failure.
+	 *
+	 * The step sweep exists to reach all three paths.  Against a wrap of
+	 * 1024: 300 and 700 can only ever cross once (phase < 1024, so
+	 * phase+step < 2048); 1500 crosses twice for larger phases; and 2600
+	 * crosses twice on EVERY output and still leaves the phase above the
+	 * wrap, which is the case the object does not handle.  That last one
+	 * is included deliberately -- reproducing the unhandled case is the
+	 * only way to know we reproduce it.
+	 */
+	diff_begin("v34 rxtiming + V34demodulate");
+	{
+		static struct v34_object oa, ob;
+		static short carrier[256];
+		static const short steps[] = { 300, 700, 1023, 1500, 2600 };
+		unsigned sw, b;
+		int k, it;
+
+		for (b = 0; b < 256; b++)
+			carrier[b] = (short)(((int)b * 517) % 32768 - 16384);
+
+		for (sw = 0; sw < sizeof(steps) / sizeof(steps[0]); sw++) {
+			struct v34_receiver *ra, *rb;
+
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			/* txinit sets the RECEIVE queue's cursors. */
+			txinit(&oa); ref_txinit(&ob);
+			rxinit(&oa); ref_rxinit(&ob);
+			rxtiminginit(&oa); ref_rxtiminginit(&ob);
+
+			ra = (struct v34_receiver *)((char *)&oa + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob + 0x264);
+
+			/* Fill the ring, and say it is full. */
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)ra)->ring[b] =
+				((struct v34_queue *)rb)->ring[b] =
+				    (int)((unsigned)(unsigned short)
+					  (short)(b * 2731 - 12000)
+					  | ((unsigned)(unsigned short)
+					     (short)(b * 991 - 8000) << 16));
+			((struct v34_queue *)ra)->count =
+			((struct v34_queue *)rb)->count = V34_RXQ_RING;
+
+			ra->carrier = rb->carrier = carrier;
+			ra->f1b8 = rb->f1b8 = 3;
+			ra->f1ba = rb->f1ba = 64;
+			ra->f1bc = rb->f1bc = 5;
+
+			ra->f1ac = rb->f1ac = 17;
+			ra->f1ae = rb->f1ae = steps[sw];
+			ra->f1b0 = rb->f1b0 = 1024;
+			/*
+			 * THE BOUND, and it is far tighter than timing_out[]
+			 * suggests.  V34demodulate appends one gained sample
+			 * per pull starting at +0x10c, and the very next
+			 * fields are the receiver's own bookkeeping: f128 at
+			 * +0x128, f12a at +0x12a, the energy sum at +0x12c
+			 * and rx_samples itself at +0x130.  So there are
+			 * fourteen shorts of headroom, and the fifteenth pull
+			 * overwrites THIS LOOP'S OWN BOUND -- see finding 123.
+			 *
+			 * Six outputs at up to two pulls each is twelve,
+			 * which stays inside.  This is a bound on the caller,
+			 * not something to test past: driving it further
+			 * measures the overrun, not the interpolator.
+			 */
+			ra->f128 = rb->f128 = 6;
+			ra->agc_gain = rb->agc_gain = 0x400;
+			ra->agc_step = rb->agc_step = 0x3333;
+
+			for (it = 0; it < 4; it++) {
+				long tag = (long)sw * 10000000
+					 + (long)it * 100000;
+
+				rxtiming(&oa);
+				ref_rxtiming(&ob);
+
+				/* It must not have reached f128. */
+				if ((char *)ra->rx_samples
+				    > (char *)&ra->f128) {
+					printf("FIXTURE: the burst reached "
+					       "+0x128 -- lower f128\n");
+					return 1;
+				}
+
+				for (b = 0; b < sizeof(oa); b++) {
+					/*
+					 * Every pointer in the object: each
+					 * side holds its own addresses.  The
+					 * timing filter's two coefficient
+					 * pointers and the transmit queue's
+					 * cursors are here because leaving
+					 * them out is what this fixture got
+					 * wrong first -- twice now, counting
+					 * V34TimingFilter.
+					 */
+					static const unsigned skip[][2] = {
+					  { 0x264 + 0x04, 8 },   /* rxq rd/wr */
+					  { 0x264 + 0x130, 4 },  /* samples   */
+					  { 0x264 + 0x1b4, 4 },  /* carrier   */
+					  { 0x50c + __builtin_offsetof(
+					      struct v34_timing,
+					      prefilter_coeff), 8 },
+					  { 0x221c + __builtin_offsetof(
+					      struct v34_queue, rd), 8 },
+					  { 0x2074, 4 },
+					  { 0x2078 + __builtin_offsetof(
+					      struct v34_echo_prefilter,
+					      coeff), 4 },
+					  { 0x80b8, 0x20 },
+					  { 0x9138, 0x20 },
+					};
+					unsigned s2, hit = 0;
+
+					for (s2 = 0; s2 < sizeof(skip)
+						     / sizeof(skip[0]); s2++)
+						if (b >= skip[s2][0]
+						    && b < skip[s2][0]
+							   + skip[s2][1])
+							hit = 1;
+					if (hit)
+						continue;
+					diff_eq_int("rxtiming at %ld",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    tag + b);
+				}
+				diff_eq_int("rxtiming rd",
+				    (long)(((struct v34_queue *)ra)->rd
+					   - ((struct v34_queue *)ra)->ring),
+				    (long)(((struct v34_queue *)rb)->rd
+					   - ((struct v34_queue *)rb)->ring),
+				    tag);
+				diff_eq_int("rxtiming samples",
+				    (long)((char *)ra->rx_samples - (char *)ra),
+				    (long)((char *)rb->rx_samples - (char *)rb),
+				    tag);
+				for (k = 0; k < 6; k++)
+					diff_eq_int("timing out",
+						    ra->timing_out[k],
+						    rb->timing_out[k],
+						    tag + 90000 + k);
 			}
 		}
 	}

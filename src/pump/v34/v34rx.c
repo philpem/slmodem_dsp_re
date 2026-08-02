@@ -510,7 +510,6 @@ rxinit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
-	void *hilbert;
 
 	rx->agc_gain = 0x200;
 	rx->agc_step = 0x3333;
@@ -526,19 +525,25 @@ rxinit(void *objp)
 	sysdep_memset((char *)obj + 0x4ec, 0, 0xc);
 	sysdep_memset((char *)obj + 0x4f8, 0, 0x10);
 
-	hilbert = V34InitHilbertFilter((short *)((char *)obj + 0xa1b8));
+	V34InitHilbertFilter((short *)((char *)obj + 0xa1b8));
 
 	/*
-	 * 0x4000 goes to f218 and f1f2 ONLY.  The registers holding it are
-	 * zeroed immediately after each of those two stores, so agc_level and
-	 * f1f4 -- written from the same two registers a few instructions
-	 * later -- get zero.  Four stores, two values, and the pairing is not
-	 * the one the instruction order suggests at a glance.
+	 * 0x4000 goes to f218 and f1f2 ONLY.  THREE registers are loaded and
+	 * all three are zeroed before their second use:
+	 *
+	 *     mov $0x4000,%ecx ; mov $0x4000,%edx ; xor %eax,%eax
+	 *     mov %cx,0x218    ; xor %ecx,%ecx
+	 *     mov %dx,0x1f2    ; xor %edx,%edx
+	 *     mov %ax,0x138    ; mov %cx,0x134
+	 *
+	 * so agc_accum, agc_level and f1f4 all get zero.  Four stores, two
+	 * values, and the pairing is not the one the instruction order
+	 * suggests at a glance -- which is exactly how this was read wrong
+	 * the first time.  See finding 122.
 	 */
 	rx->f218 = 0x4000;
 	rx->f1f2 = 0x4000;
-	/* D34: seeded from V34InitHilbertFilter's leftover return register. */
-	rx->agc_accum = (short)(unsigned long)hilbert;
+	rx->agc_accum = 0;
 	rx->agc_level = 0;
 	rx->f1f4 = 0;
 
@@ -682,4 +687,219 @@ V34agc(struct v34_receiver *rx)
 
 	rx->energy.sum = sum;
 	agcadapt(rx);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34demodulate -- gain one sample pair, adapt, and mix it down to baseband.
+ *
+ * Called once per half-baud by rxtiming, and never by anything else: this is
+ * a file-static in the object and the interpolator is its only caller.
+ *
+ * The order is the whole of it, and it is not the order a fresh design would
+ * choose.  The gain applied to THIS pair is the one adapted on a PREVIOUS
+ * call -- the AGC runs after both samples have already been scaled -- so a
+ * correction always lands one pair late.  Writing it the other way round is
+ * self-consistent, passes a smoke test, and diverges from the object on the
+ * first sample that trips the loop.
+ */
+static void
+V34demodulate(struct v34_receiver *rx)
+{
+	struct v34_queue *q = (struct v34_queue *)rx;
+	static const char over[] = "V34demodulate, agc overflow = 0x%x,\n";
+	const short *in = (const short *)q->rd;
+	short *out = rx->rx_samples;
+	int s0 = in[0];
+	int s1 = in[1];
+	short idx;
+	short count;
+	int g0, g1;
+	int sum;
+	int cos_v, sin_v;
+	int phase, quarter, step;
+
+	/* One int off the ring, so one pair of shorts. */
+	q->count = (short)(q->count - 1);
+	q->rd = q_next(q, q->rd + 1, V34_RXQ_END);
+
+	/* Only the first of the pair joins the energy window, ungained. */
+	idx = rx->f19c;
+	rx->rms_buf[idx] = (short)s0;
+	rx->f19c = (short)(idx + 1);
+	if ((short)(idx + 1) > V34_AGC_RMS_TAPS - 1)
+		rx->f19c = 0;
+
+	/*
+	 * Both samples are gained; only the first is kept.  The second goes
+	 * straight into the mixer below -- `rx_samples` advances by one short
+	 * per call, not two.
+	 */
+	g0 = agc_gain_sample(rx, s0, 0x200, over);
+	rx->rx_samples = out + 1;
+	out[0] = (short)g0;
+	g1 = agc_gain_sample(rx, s1, 0x200, over);
+
+	/*
+	 * The AGC runs on every fourth pair.  `f12a` counts them and the
+	 * energy sum accumulates across them; both are cleared whenever the
+	 * loop is given a chance to adapt, whether or not it actually did.
+	 */
+	count = (short)((unsigned short)rx->f12a + 1);
+	sum = rx->energy.sum + g0 * g0;
+
+	if (count <= 3) {
+		rx->f12a = count;
+		rx->energy.sum = sum;
+	} else if (rx->flags & V34_RX_FLAG_AGC_FREEZE) {
+		rx->f12a = 0;
+		rx->energy.sum = 0;
+	} else {
+		rx->f12a = count;
+		if (agc_rms(rx->rms_buf) > V34_AGC_RMS_FLOOR) {
+			/* agcadapt's input is the high half of this. */
+			rx->energy.sum = sum;
+			agcadapt(rx);
+		}
+		rx->f12a = 0;
+		rx->energy.sum = 0;
+	}
+
+	/*
+	 * Down-mix.  One table holds both phases: the carrier is read at the
+	 * running index and again `f1ba` further on, which is a quarter cycle,
+	 * so the second read is the sine of the first.  The index wraps by
+	 * subtracting f1ba rather than masking.
+	 */
+	phase = (unsigned short)rx->f1bc;
+	quarter = (unsigned short)rx->f1ba;
+	step = (unsigned short)rx->f1b8;
+
+	cos_v = rx->carrier[(short)phase];
+	sin_v = rx->carrier[(short)phase + (short)quarter];
+
+	rx->f240 = (short)((g0 * sin_v + g1 * cos_v + 0x2000) >> 14);
+	rx->f242 = (short)((g1 * sin_v - g0 * cos_v + 0x2000) >> 14);
+
+	phase += step;
+	if ((short)quarter <= (short)phase)
+		phase -= quarter;
+	rx->f1bc = (short)phase;
+}
+
+/*
+ * The timing loop's resonator, run on the freshly demodulated pair.
+ *
+ * A second-order section whose input is scaled by 1/16 (`<< 10` against a
+ * Q14 accumulator) and whose poles sit just inside the unit circle --
+ * 1.4001 and -0.9801 -- so it rings at the baud rate rather than filtering.
+ * Its state doubles as the interpolator's endpoint: `f240`/`f242` are both
+ * the output and the next interpolation's far end.
+ *
+ * `store_prev` is the one difference between the object's two copies of
+ * this block.  See rxtiming.
+ */
+static void
+rx_iir(struct v34_receiver *rx, int store_prev)
+{
+	int acc;
+	short prev;
+
+	prev = rx->f208;
+	acc = (((int)rx->f240 << 10) + (int)prev * V34_RXTIMING_IIR_A1
+	       + (int)rx->dp.iir2.i * V34_RXTIMING_IIR_A2) >> 14;
+	rx->dp.iir2.i = prev;
+	rx->f240 = (short)acc;
+	rx->f208 = (short)acc;
+	if (store_prev)
+		rx->f244 = (short)acc;
+
+	prev = rx->f20a;
+	acc = (((int)rx->f242 << 10) + (int)prev * V34_RXTIMING_IIR_A1
+	       + (int)rx->dp.iir2.q * V34_RXTIMING_IIR_A2) >> 14;
+	rx->dp.iir2.q = prev;
+	rx->f242 = (short)acc;
+	rx->f20a = (short)acc;
+	if (store_prev)
+		rx->f246 = (short)acc;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * rxtiming -- resample the demodulated signal onto the recovered clock.
+ *
+ * Produces `f128` timing-error estimates into `timing_out[]`.  Each one is
+ * the magnitude of a point interpolated between the previous demodulated
+ * symbol (`f244`/`f246`) and the current one (`f240`/`f242`), at the
+ * fractional phase `f1ac`, passed through the timing high-pass.
+ *
+ * THE PART THAT TOOK SEVEN READINGS.  The phase advances by `f1ae` per
+ * output and wraps at `f1b0`; a wrap means the interpolator has run past the
+ * current symbol and must pull a new one.  The object handles exactly one or
+ * two wraps, on two distinct paths that converge:
+ *
+ *   - one wrap:  copy f240/f242 down to f244/f246 -- the old current symbol
+ *                becomes the new previous one -- then pull ONE symbol.
+ *   - two wraps: subtract twice and pull TWO, the first of which writes
+ *                f244/f246 from its own resonator output rather than from a
+ *                copy.  That is the `store_prev` argument to rx_iir.
+ *
+ * Three or more wraps are not handled: the phase would still exceed f1b0 on
+ * exit.  With f1ae < f1b0 that cannot arise, so it is a bound on the caller
+ * rather than a defect -- worth confirming when `receiver` is reconstructed.
+ *
+ * Both paths jump to the same second pull, which is why a control-flow
+ * partition reports one loop here and why reading it as a `while` is so
+ * tempting.  It is a loop in the graph and a two-way branch in the source.
+ */
+void
+rxtiming(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_timing *t = (struct v34_timing *)((char *)obj + 0x50c);
+	short i;
+
+	/* Set before the count is even tested, so it lands on an empty call. */
+	rx->rx_samples = (short *)((char *)obj + 0x370);
+
+	for (i = 0; i < rx->f128; i = (short)(i + 1)) {
+		int wa = (unsigned short)rx->f1ac;
+		int wb = (short)((unsigned short)rx->f1b0
+				 - (unsigned short)rx->f1ac);
+		int wrap = (short)rx->f1b0;
+		int I, Q, m, pos;
+
+		/* Linear interpolation between the two symbols, both axes. */
+		I = (short)((rx->f240 * wa + rx->f244 * wb + 0x2000) >> 14);
+		Q = (short)((rx->f242 * wa + rx->f246 * wb + 0x2000) >> 14);
+		m = (short)((I * I + Q * Q + 0x2000) >> 14);
+
+		rx->timing_out[i] = (short)V34TimingHPFilter(t, (short)m);
+
+		pos = (unsigned short)rx->f1ac + (unsigned short)rx->f1ae;
+
+		if ((int)(unsigned short)pos < wrap) {
+			rx->f1ac = (short)pos;
+			continue;
+		}
+
+		pos -= (unsigned short)rx->f1b0;
+
+		if ((int)(unsigned short)pos < wrap) {
+			/* One wrap: the current symbol becomes the previous. */
+			rx->f1ac = (short)pos;
+			rx->f244 = rx->f240;
+			rx->f246 = rx->f242;
+		} else {
+			/* Two: the first pull supplies the previous symbol. */
+			pos -= (unsigned short)rx->f1b0;
+			rx->f1ac = (short)pos;
+			V34demodulate(rx);
+			rx_iir(rx, 1);
+		}
+
+		V34demodulate(rx);
+		rx_iir(rx, 0);
+	}
 }

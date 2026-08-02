@@ -7102,3 +7102,81 @@ a defect — worth confirming when `receiver` is reconstructed.
 Sixth reading of this control flow. The tool said "one loop" and that was
 true of the graph; the source distinction is which of two entries into that
 loop is taken.
+
+### 122. A test that skips a byte and asserts your own reading is not a test
+
+`rxinit` writes `agc_accum` from `%ax`.  I read `%eax` as holding
+`V34InitHilbertFilter`'s return value, filed it as deviation D34 -- "seeds
+the AGC integrator from a stale return register" -- and then wrote the
+`rxinit` differential test to **skip that byte** and assert instead that the
+field equals the Hilbert buffer's address.
+
+The assertion passed, every run, for as long as it existed.  It could not
+have done anything else: it compared the reconstruction against the belief
+that produced the reconstruction.  The blob was not consulted at either end.
+
+What the blob actually does:
+
+```
+   5ac13:  xor  %eax,%eax           <-- before the stores, not between them
+   5ac15:  mov  %cx,0x218(%ebx)
+   5ac1c:  xor  %ecx,%ecx
+   5ac1e:  mov  %dx,0x1f2(%ebx)
+   5ac25:  xor  %edx,%edx
+   5ac2e:  mov  %ax,0x138(%ebx)     <-- agc_accum = 0
+```
+
+All three registers are loaded, used once, and cleared.  I traced that
+correctly for `%ecx` and `%edx` -- the source comment even said so -- and
+attributed `%eax` to the call, because its `xor` sits *before* the first
+store rather than between two of them.
+
+It was caught by the `rxtiming` test, which drives `rxinit` from a different
+starting state and disagreed by exactly this field, 29688 against 0.
+
+**The rule.** A differential test compares against the reference.  The moment
+a field is excluded from that comparison and replaced by an assertion about
+what it should be, it stops being evidence and becomes an echo.  There are
+legitimate exclusions -- pointers hold each side's own addresses -- but the
+test for one is "no comparison is *possible* here", not "I know what this
+should be".  Two of the three exclusions in that fixture were pointers; this
+one was a theory.
+
+Sibling of D28, which was also filed on a reading rather than a measurement,
+and is also retracted.  Both were bug *claims*, which is the category where
+this is most dangerous: a claimed defect that is really a reconstruction
+error will be faithfully preserved forever, because the deviations register
+exists to stop anyone "fixing" it.
+
+### 123. The receive burst has fourteen shorts of headroom, then eats the loop counter
+
+`rxtiming` points `rx_samples` at `+0x10c` and `V34demodulate` appends one
+gained sample per pull.  What follows `+0x10c` is not spare buffer -- it is
+the receiver's own bookkeeping:
+
+```
+   +0x10c   the burst grows from here
+   +0x128   f128        <-- rxtiming's own loop bound
+   +0x12a   f12a          the AGC's sample counter
+   +0x12c   energy.sum    the AGC's accumulator
+   +0x130   rx_samples    the cursor doing the writing
+```
+
+So there are fourteen shorts.  The fifteenth pull overwrites `f128` while
+`rxtiming` is looping on it, which lets the loop run longer, which pulls
+more, which reaches `rx_samples` at the nineteenth and corrupts the cursor's
+low half; the twentieth dereferences whatever that made.  A one-sample
+overrun escalates to a wild pointer within six more.
+
+This is the object's own layout, so the original has the same bound.  It
+holds because `f1ae < f1b0` keeps pulls to at most one per output in normal
+operation -- two only while the timing loop is slewing.  It is a constraint
+on the caller, and `receiver` should be checked against it.
+
+Found by driving the interpolator past it deliberately: the fixture used
+`f128 = 24`, which segfaulted.  Worth stating that the crash was the good
+outcome.  Had the burst been a few bytes shorter it would have scribbled
+only `f128` and `f12a`, identically on both sides, and the differential test
+would have passed while measuring nothing -- finding 116b's failure mode,
+which is silent.  The bound is now asserted in the fixture rather than
+assumed.
