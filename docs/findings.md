@@ -7180,3 +7180,59 @@ only `f128` and `f12a`, identically on both sides, and the differential test
 would have passed while measuring nothing -- finding 116b's failure mode,
 which is silent.  The bound is now asserted in the fixture rather than
 assumed.
+
+### 124. Auditing the other two register-liveness bug claims
+
+D34 was retracted for inferring a register's contents and getting it wrong
+(finding 122).  Its own text grouped it with D30 and D32 -- "the same family
+... a compiler reusing a register the author assumed was dead" -- so those
+two were re-checked the same way, from the disassembly rather than from the
+entry.  **Both stand.**  What separates them from D34 is worth recording,
+because it is the thing to check on the next such claim.
+
+**D32 stands.**  The claim is that `%ebp` still holds `sine[phase]` when
+`V34ModulatorProcess` pushes it into the symbol delay line.  Dumping the
+whole function and listing every write to `%ebp` -- not a mnemonic-filtered
+grep, per finding 115c -- gives thirteen sites.  The last before the shift
+loop at `0x735ae` is `movswl (%edi,%ebx,2),%ebp` at `0x734dc`.  There is a
+reload, `mov 0x54(%esp),%ebp` at `0x73580`, but it sits on the exit path:
+`0x73575`'s `jg 735ae` jumps over it.  So on the path that reaches the shift,
+the register genuinely is not reloaded.
+
+**D30 stands, and is a different kind of claim.**  It says
+`V34InitializeImplementationSpecific` reads `dline` into `cursor` before
+writing `dline`.  That is an argument about the order of three instructions
+at `0x71d85`, `0x71da3` and `0x71daf`, all quoted in the entry -- no
+inference about what a register survived.
+
+**The discriminator.**  D30 and D32 reason within a straight-line window and
+name every instruction in it.  D34 reasoned *across a call*, and the
+instruction that refuted it (`xor %eax,%eax`) sat outside the window,
+BEFORE the first store rather than between two of them.  A liveness claim
+that spans a call, or whose window is chosen by where the interesting stores
+are rather than where the register is written, is the one to distrust.
+
+**Their tests do compare the affected state**, which D34's did not:
+`t_v34ec` compares the echo cursor as an offset from `dline`, and the
+modulator's delay line at `+0x1450+0xcbc` is not among the skips in the
+`txmit` fixture.  Two fixtures were excluding all 0x20 bytes of
+`struct v34_echo` when only the first 0x18 are pointers; narrowed, which is
+16 more checks in `txinit` and 320 in `rxtiming`.
+
+### 125. `f19c`, the RMS index, is initialised two levels up
+
+Neither `rxinit` nor `rxtiminginit` writes it, and both `V34demodulate` and
+`V34agc` then index `rms_buf` with it unchecked -- so it looks like the same
+uninitialised-value family as D30 and D32.  It is not.  Six functions write
+`0x19c`: the four increment sites in `V34demodulate` and `V34agc`, and
+`dpskinit` (`0x5f542`) and `v34modeminit` (`0x5f892`), which both do
+`xor %ecx,%ecx` and store zero.
+
+So it is initialised, just further up the call chain than the two functions
+that look like they should do it.  No deviation.  Recorded because "the init
+function next to it doesn't set it" is not evidence of a bug, and answering
+it took one search rather than an argument.
+
+The `rxtiming` fixture now fills with `HARNESS_MALLOC_FILL` rather than
+zeroing, and sets `f19c` explicitly to stand in for those two callers -- a
+zeroed object would have hidden the question that fill exists to ask.

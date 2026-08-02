@@ -257,8 +257,13 @@ main(void)
 			  { __builtin_offsetof(struct v34_object, txq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
 			  { __builtin_offsetof(struct v34_object, p_2074), 4 },
-			  { __builtin_offsetof(struct v34_object, echo0), 0x20 },
-			  { __builtin_offsetof(struct v34_object, echo1), 0x20 },
+			  /*
+			   * The six POINTERS only.  dlen and taps at +0x18
+			   * are plain counts and get compared -- skipping
+			   * the whole 0x20 hid them for no reason.
+			   */
+			  { __builtin_offsetof(struct v34_object, echo0), 0x18 },
+			  { __builtin_offsetof(struct v34_object, echo1), 0x18 },
 			  { __builtin_offsetof(struct v34_object, prefilter)
 			    + __builtin_offsetof(struct v34_echo_prefilter,
 						 coeff), 4 },
@@ -600,7 +605,13 @@ main(void)
 		for (sw = 0; sw < sizeof(steps) / sizeof(steps[0]); sw++) {
 			struct v34_receiver *ra, *rb;
 
-			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			/*
+			 * The fill, not zero: a zeroed object would hide
+			 * anything rxinit and rxtiminginit fail to set, which
+			 * is the question task #23 added it to ask.
+			 */
+			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
 			V34InitializeImplementationSpecific(&oa);
 			ref_V34InitializeImplementationSpecific(&ob);
 			/* txinit sets the RECEIVE queue's cursors. */
@@ -626,6 +637,15 @@ main(void)
 			ra->f1b8 = rb->f1b8 = 3;
 			ra->f1ba = rb->f1ba = 64;
 			ra->f1bc = rb->f1bc = 5;
+
+			/*
+			 * The RMS index is NOT set by rxinit or
+			 * rxtiminginit -- dpskinit and v34modeminit zero it,
+			 * further up the call chain than anything here.  So
+			 * the fixture stands in for them; left at the fill it
+			 * would be -23131 and index 46 KB below rms_buf.
+			 */
+			ra->f19c = rb->f19c = 0;
 
 			ra->f1ac = rb->f1ac = 17;
 			ra->f1ae = rb->f1ae = steps[sw];
@@ -688,8 +708,8 @@ main(void)
 					  { 0x2078 + __builtin_offsetof(
 					      struct v34_echo_prefilter,
 					      coeff), 4 },
-					  { 0x80b8, 0x20 },
-					  { 0x9138, 0x20 },
+					  { 0x80b8, 0x18 },  /* echo0 ptrs */
+					  { 0x9138, 0x18 },  /* echo1 ptrs */
 					};
 					unsigned s2, hit = 0;
 
