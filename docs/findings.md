@@ -6562,3 +6562,39 @@ shape to the modulator's (finding 116) and to `V34SetupModulator`'s
 written is `rxtiming`'s own body (about 540 bytes, of which ~130 are read in
 finding 118), plus the struct fields: `f13c[36]`, `f19c`, `f1b4`, `f1b8`,
 `f1ba`, `f1bc`, `f240`, `f242` — several already present.
+
+## 121. `rxtiming`'s loop, and a third resonator at an eighth of the sample rate
+
+Read 0x5b46a-0x5b546, which with finding 118 covers the loop body.
+
+Per iteration: call `V34demodulate`, then run a **two-pole IIR** over each of
+its outputs:
+
+```
+   I' = ((f240 << 10) + f208 * 0x599b + f20c * -0x3eba) >> 14;
+   f20c = f208;   f240 = f208 = I';
+   Q' = ((f242 << 10) + f20a * 0x599b + f20e * -0x3eba) >> 14;
+   f20e = f20a;   f242 = f20a = Q';
+```
+
+so `f208`/`f20c` and `f20a`/`f20e` are the two state words of each filter,
+and the input is shifted left 10 before entering — a gain of 2^10 against a
+Q14 denominator, i.e. 1/16.
+
+**Its poles are at 45 degrees.** Normalising, the denominator is
+`1 - 1.4002 z^-1 + 0.9800 z^-2`: radius `0.98995`, angle `45.0` degrees —
+**an eighth of the sample rate**, exactly like the half-baud band-pass pair
+in `docs/coefficients.md`. That is the third structure in V.34 tuned to
+`baud/2` at four samples per symbol, after `posHalfBaud`/`negHalfBaud` and
+the fourth-order `V34TimingIIR` pair.
+
+`0x599b` here is one more than `V34TimingFilter`'s `0x599a` (finding 118
+flagged the near-match). With the pole angle now computed, the two are the
+same design at one LSB of difference — almost certainly independent roundings
+of the same real number, and **not** to be unified.
+
+The loop is bounded by `f128` and indexed by a counter, with a step derived
+from `f1b0 - f1ac` — the position pair finding 118 identified.
+
+**Remaining in `rxtiming`: the entry and exit blocks**, 0x5b546-0x5b62d,
+about 230 bytes.
