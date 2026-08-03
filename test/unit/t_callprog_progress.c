@@ -26,14 +26,28 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/callprog.h"
 #include "dsplib/callprog_state.h"
 #include "dsplib/pulse.h"
 #include "dsplib/modem_params.h"
+
+extern unsigned int ref_dsplibs_debug_level;
+
+/*
+ * Non-zero turns on transcript comparison for the CALLPROG_Progress calls
+ * only -- not Create/Dial/Delete, whose own call sites are not restored yet.
+ * The window is the loop in drive().
+ */
+static unsigned opt_level;
+
+/* Lines the REFERENCE printed across the whole transcript sweep. */
+static long transcript_lines;
 
 extern int ref_CALLPROG_Progress(struct callprog *cp, const short *in,
 				 short *out, int count);
@@ -261,6 +275,11 @@ drive(struct side *s, int ref, const char *dialstr, int seed, int calls)
 		s->cp.line_clear_count = 0;
 	}
 
+	if (opt_level) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = opt_level;
+		dsplib_debug_capture_on = 1;
+	}
+
 	for (n = 0; n < calls; n++) {
 		if (ref)
 			s->msg[n] = ref_CALLPROG_Progress(&s->cp, input[n],
@@ -271,6 +290,11 @@ drive(struct side *s, int ref, const char *dialstr, int seed, int calls)
 		s->state[n] = s->cp.state;
 		s->countdown[n] = s->cp.countdown;
 		s->calls = n + 1;
+	}
+
+	if (opt_level) {
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 	}
 
 	if (ref)
@@ -314,8 +338,43 @@ run(const char *label, const char *dialstr, int signal, int seed, int calls)
 	diff_begin(label);
 	fill_input(signal);
 
+	dsplib_debug_capture_reset();
 	drive(&side_a, 1, dialstr, seed, calls);
 	drive(&side_b, 0, dialstr, seed, calls);
+
+	if (opt_level) {
+		diff_eq_int("transcript matches",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)opt_level);
+		if (getenv("DBGDIFF")
+		    && strcmp(dsplib_debug_capture_text(0),
+			      dsplib_debug_capture_text(1)) != 0) {
+			const char *o = dsplib_debug_capture_text(0);
+			const char *r = dsplib_debug_capture_text(1);
+			int k = 0;
+			while (o[k] && o[k] == r[k]) k++;
+			while (k > 0 && o[k - 1] != '\n') k--;
+			printf("=== %s: first divergence at %d\n", label, k);
+			printf("--- ours: %.200s\n", o + k);
+			printf("--- ref : %.200s\n", r + k);
+		}
+		diff_eq_int("line counts match",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), (long)opt_level);
+		/*
+		 * Anti-vacuity is asserted once for the whole sweep, not per
+		 * run: state 7 is exempt from its own timeout, so that
+		 * scenario correctly prints nothing, and demanding output
+		 * from every run would only teach the test to lie about it.
+		 */
+		if (opt_level > 1)
+			transcript_lines += dsplib_debug_capture_lines(1);
+		else
+			diff_eq_int("reference silent below the threshold",
+				    (int)dsplib_debug_capture_lines(1), 0,
+				    (long)opt_level);
+	}
 
 	diff_eq_int("same number of calls", side_b.calls, side_a.calls, 0);
 
@@ -417,6 +476,59 @@ main(void)
 		rc |= run(label, "T5551234", SIG_SILENCE, i, 90);
 		seed_line_clear = 0;
 	}
+
+	/*
+	 * The same runs again with the transcripts compared, at three levels.
+	 *
+	 * These scenarios and not the others because a transcript captures
+	 * EVERYTHING the reference prints inside CALLPROG_Progress, including
+	 * what DialerProgress and cadence_progress print -- and neither has
+	 * had its call sites restored yet, so any run that dials or that runs
+	 * a cadence detector diverges for a reason that has nothing to do with
+	 * the sites under test.  Seeding a state and letting a timeout fire
+	 * reaches the transition machinery without touching either.
+	 *
+	 * What this therefore covers is request_state's eleven STATE sites,
+	 * "CALLPROG: Time out" and "CALLPROG: LINE CLEAR TIMEOUT".  The rest
+	 * of the 29 are placed but NOT yet verified; they unblock when the
+	 * dialer and cadence batches land.  Run with DBGDIFF=1 in the
+	 * environment to see where a transcript first parts company.
+	 *
+	 * Level 1 is below every gate in this object -- all 29 are `cmpl $0x1`
+	 * -- so the reference must print nothing there (finding 150).
+	 */
+	for (opt_level = 1; opt_level <= 3; opt_level++) {
+		for (i = 0; i < CALLPROG_STATES; i++) {
+			char label[80];
+
+			/*
+			 * State 2 is the dialling state, so every buffer goes
+			 * through DialerProgress -- 28 call sites we have not
+			 * restored, and the transcript would diverge on those
+			 * rather than on anything here.
+			 */
+			if (i == CPSTATE_DIALING)
+				continue;
+
+			seed_countdown = 200;
+			sprintf(label, "callprog: state %d timeout, transcript",
+				i);
+			rc |= run(label, "T5551234", SIG_SILENCE, i, 90);
+
+			seed_countdown = 0;
+			seed_line_clear = 3;
+			sprintf(label,
+				"callprog: state %d line clear, transcript", i);
+			rc |= run(label, "T5551234", SIG_SILENCE, i, 90);
+			seed_line_clear = 0;
+		}
+	}
+	opt_level = 0;
+
+	diff_begin("callprog: the transcript sweep was not vacuous");
+	diff_eq_int("reference printed %ld lines", transcript_lines > 0, 1,
+		    transcript_lines);
+	rc |= diff_end();
 
 	/*
 	 * The answered-at-last transition in state 8.  It needs 40000/160 =

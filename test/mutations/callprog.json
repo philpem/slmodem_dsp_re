@@ -1,0 +1,87 @@
+[
+ {
+  "label": "corrupt 'STATE:  %s --> %s\\\\n'",
+  "find": "\"STATE:  %s --> %s\\n\"",
+  "replace": "\"XXSTATE:  %s --> %s\\n\""
+ },
+ {
+  "label": "corrupt 'tone detected by cadence dial\\\\n'",
+  "find": "\"tone detected by cadence dial\\n\"",
+  "replace": "\"XXtone detected by cadence dial\\n\""
+ },
+ {
+  "label": "corrupt 'busy detected by cadence\\\\n'",
+  "find": "\"busy detected by cadence\\n\"",
+  "replace": "\"XXbusy detected by cadence\\n\""
+ },
+ {
+  "label": "corrupt 'no answer detected by cadence\\\\n'",
+  "find": "\"no answer detected by cadence\\n\"",
+  "replace": "\"XXno answer detected by cadence\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: Time out\\\\n'",
+  "find": "\"CALLPROG: Time out\\n\"",
+  "replace": "\"XXCALLPROG: Time out\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: LINE CLEAR TIMEOUT\\\\n'",
+  "find": "\"CALLPROG: LINE CLEAR TIMEOUT\\n\"",
+  "replace": "\"XXCALLPROG: LINE CLEAR TIMEOUT\\n\""
+ },
+ {
+  "label": "corrupt 'Invalid buffer length\\\\n'",
+  "find": "\"Invalid buffer length\\n\"",
+  "replace": "\"XXInvalid buffer length\\n\""
+ },
+ {
+  "label": "corrupt 'DIALER_ERROR_MSG encountered in '",
+  "find": "\"DIALER_ERROR_MSG encountered in \"",
+  "replace": "\"XXDIALER_ERROR_MSG encountered in \""
+ },
+ {
+  "label": "corrupt 'Found 2100\\\\n'",
+  "find": "\"Found 2100\\n\"",
+  "replace": "\"XXFound 2100\\n\""
+ },
+ {
+  "label": "corrupt 'Found 2250\\\\n'",
+  "find": "\"Found 2250\\n\"",
+  "replace": "\"XXFound 2250\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: 5 sec. silence was '",
+  "find": "\"CALLPROG: 5 sec. silence was \"",
+  "replace": "\"XXCALLPROG: 5 sec. silence was \""
+ },
+ {
+  "label": "corrupt 'CALLPROG: ^ encountered.\\\\n'",
+  "find": "\"CALLPROG: ^ encountered.\\n\"",
+  "replace": "\"XXCALLPROG: ^ encountered.\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: Wait dial '",
+  "find": "\"CALLPROG: Wait dial \"",
+  "replace": "\"XXCALLPROG: Wait dial \""
+ },
+ {
+  "label": "corrupt 'CALLPROG: @ encountered.\\\\n'",
+  "find": "\"CALLPROG: @ encountered.\\n\"",
+  "replace": "\"XXCALLPROG: @ encountered.\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: $ encountered.\\\\n'",
+  "find": "\"CALLPROG: $ encountered.\\n\"",
+  "replace": "\"XXCALLPROG: $ encountered.\\n\""
+ },
+ {
+  "label": "corrupt 'CALLPROG: Dialing '",
+  "find": "\"CALLPROG: Dialing \"",
+  "replace": "\"XXCALLPROG: Dialing \""
+ },
+ {
+  "label": "corrupt 'CALLPROG: Dialing string error.\\\\n'",
+  "find": "\"CALLPROG: Dialing string error.\\n\"",
+  "replace": "\"XXCALLPROG: Dialing string error.\\n\""
+ }
+]

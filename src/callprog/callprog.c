@@ -16,7 +16,9 @@
  * writes it.
  */
 
+#include "dsplib/callprog.h"
 #include "dsplib/callprog_state.h"
+#include "dsplib/debug.h"
 #include "dsplib/callprog.h"
 #include "dsplib/callprog_cfg.h"
 #include "dsplib/modem_params.h"
@@ -439,6 +441,18 @@ request_state(struct callprog *cp, int next)
 		return;
 	if (next == 0 || cp->last_state == next)
 		return;
+
+	/*
+	 * Eleven call sites in the object, all inlined here, all after both
+	 * guards and before the store -- so a refused transition is silent.
+	 * Eight of them had `next` folded to a constant and the table load
+	 * folded with it; three did not.  Same shape either way (finding 152).
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("STATE:  %s --> %s\n",
+				     callprog_state_names[cp->state],
+				     callprog_state_names[next]);
+
 	cp->pending_state = next;
 	cp->pending = 1;
 }
@@ -481,6 +495,10 @@ detect(struct callprog *cp, short sample, int event)
 			 * find dial tone, and once found it only colours what
 			 * follows.
 			 */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"tone detected by cadence dial\n");
+
 			cp->dialtone_seen = 1;
 			event = CPTD_DIAL_TONE;
 		}
@@ -490,6 +508,10 @@ detect(struct callprog *cp, short sample, int event)
 		int r = cadence_progress(cp->busy, sample);
 
 		if (r == 1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"busy detected by cadence\n");
+
 			event = CPTD_BUSY;
 		} else if (r == 7) {
 			/*
@@ -497,6 +519,10 @@ detect(struct callprog *cp, short sample, int event)
 			 * zeroed so that the state's own timeout fires on this
 			 * same sample rather than a moment later.
 			 */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"no answer detected by cadence\n");
+
 			cp->countdown = 0;
 			event = CPTD_BUSY_GIVE_UP;
 		}
@@ -532,6 +558,9 @@ run_timeouts(struct callprog *cp, int *message)
 		 */
 		if (cp->state != CPSTATE_DIALING
 		    && cp->state != CPSTATE_END_PARTIALLY_STATE) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("CALLPROG: Time out\n");
+
 			cp->countdown = -10;
 			*message = message_due_timeout[cp->state];
 			request_state(cp, next_state_due_timeout[cp->state]);
@@ -549,6 +578,9 @@ run_timeouts(struct callprog *cp, int *message)
 		return;
 	if (++cp->line_clear_count <= cp->line_clear_limit)
 		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG: LINE CLEAR TIMEOUT\n");
 
 	*message = message_due_line_clear_timeout[cp->state];
 	request_state(cp, next_state_due_line_clear_timeout[cp->state]);
@@ -572,8 +604,12 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 	 */
 	int event = CPTD_NONE;
 
-	if (count > CALLPROG_MAX_SAMPLES)
+	if (count > CALLPROG_MAX_SAMPLES) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Invalid buffer length\n");
+
 		return CALLPROG_ERROR;
+	}
 
 	sysdep_memcpy(work, in, count * 2);
 	cp->pending = 0;
@@ -591,6 +627,10 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		 * `pending` on entry.  Reproduced; it changes nothing, since
 		 * every later call takes this same branch.
 		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("DIALER_ERROR_MSG encountered in "
+					     "Callprog_progress.\n");
+
 		request_state(cp, CPSTATE_END);
 		return CALLPROG_ERROR;
 	}
@@ -612,10 +652,22 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		 */
 		int r = Dual_TONE_detect(cp->dtmf, in, count);
 
-		if (r == 3)
+		/*
+		 * The two messages callprog.h could not name.  These strings
+		 * name them: verdict 3 is 2100 Hz and verdict 5 is 2250 Hz.
+		 * Finding 153.
+		 */
+		if (r == 3) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Found 2100\n");
+
 			message = CALLPROG_DUALTONE_A;
-		else if (r == 5)
+		} else if (r == 5) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Found 2250\n");
+
 			message = CALLPROG_DUALTONE_B;
+		}
 	}
 
 	if (cp->state == CPSTATE_WFS_STATE && count != 0) {
@@ -625,8 +677,14 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		 */
 		if (answer_envelope(work, count) > ANSWER_THRESHOLD)
 			cp->quiet_count = 0;
-		else if (++cp->quiet_count == CALLPROG_ANSWER_SAMPLES / count)
+		else if (++cp->quiet_count == CALLPROG_ANSWER_SAMPLES / count) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"CALLPROG: 5 sec. silence was "
+					"detected.\n");
+
 			request_state(cp, CPSTATE_DIALING);
+		}
 	} else if (cp->state == CPSTATE_WAIT_RING) {
 		if (cp->calling_tone_armed != 0)
 			GenerateCallingTone(&cp->calling_tone, out, count);
@@ -643,10 +701,34 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		int rc = DialerProgress(&cp->dialer, out, &pos, count - 1);
 
 		if (rc == DIALER_CALLING_TONE) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"CALLPROG: ^ encountered.\n");
+
+			/*
+			 * Reported on opposite sides of the store: "Disabling"
+			 * after it (0x7a31d precedes the branch at 0x7a324),
+			 * "Enabling" before it (0x7a283 follows the block at
+			 * 0x7a52f).  Same asymmetry as the pulse dialler's
+			 * hook messages, finding 148.
+			 */
 			switch (cp->calling_tone_mode) {
-			case 0: case 1:	cp->calling_tone_armed = 0; break;
-			case 2: case 3:	cp->calling_tone_armed = 1; break;
-			default:	break;
+			case 0: case 1:
+				cp->calling_tone_armed = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"CALLPROG: ^ encountered. "
+						"Disabling Calling-Tone.\n");
+				break;
+			case 2: case 3:
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"CALLPROG: ^ encountered. "
+						"Enabling Calling-Tone.\n");
+				cp->calling_tone_armed = 1;
+				break;
+			default:
+				break;
 			}
 			continue;
 		}
@@ -663,16 +745,30 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 			break;
 		case DIALER_WAIT_DIALTONE:
 			request_state(cp, CPSTATE_WAIT_DIAL);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("CALLPROG: Wait dial "
+						     "tone, reset the "
+						     "cadence\n");
 			cadence_reset(cp->dial);
 			break;
 		case DIALER_WAIT_ANSWER:
 			request_state(cp, CPSTATE_WFS_STATE);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"CALLPROG: @ encountered.\n");
 			break;
 		case DIALER_WAIT_BONG:
 			request_state(cp, CPSTATE_BONGTONE_STATE);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"CALLPROG: $ encountered.\n");
 			break;
 		case DIALER_COMMAND:
 			request_state(cp, CPSTATE_END_PARTIALLY_STATE);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("CALLPROG: Dialing "
+						     "string partially "
+						     "ended.\n");
 			code = CALLPROG_END_DIALING_PARTIALLY;
 			break;
 		case DIALER_DONE:
@@ -681,6 +777,9 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 			break;
 		default:
 			request_state(cp, CPSTATE_END);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"CALLPROG: Dialing string error.\n");
 			code = CALLPROG_ERROR;
 			break;
 		}

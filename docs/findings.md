@@ -8279,3 +8279,55 @@ of them can be cited later.
 (GCC's folding is itself invisible to the transcript: a helper emits an
 indexed load where the object had a direct one, and both print the same
 pointer.  Not worth reproducing.)
+
+### 153. The two unnamed call-progress messages are 2100 Hz and 2250 Hz
+
+`callprog.h` carried this, for messages 16 and 17:
+
+    Two the object does not name: they are what the automode dual-tone
+    detector reports, for its verdicts 3 and 5.  Named after where they
+    come from, since the original's names for them were not recovered.
+
+`CALLPROG_Progress` names them after all, not in the status table but in its
+own diagnostics.  Verdict 3 prints `'Found 2100\n'` (gate 0x7a349, block
+0x7a4e8, returning to `mov $0x10,%ecx` -- 16) and verdict 5 prints
+`'Found 2250\n'` (gate 0x7a2e9, block 0x7a4f9, returning to `mov $0x11,%ebx`
+-- 17).  Index and store agree in both cases.
+
+So message 16 is 2100 Hz -- the V.25 answer tone, which is also what a fax or
+data answerer leads with -- and 17 is 2250 Hz.  The names stay
+`CALLPROG_DUALTONE_A`/`_B` because those are what the rest of the tree calls
+them, but the comment no longer has to say the meaning is unrecovered.
+
+This is the pattern finding 144 recorded from the other direction: the object's
+own diagnostic text outlives what it describes, and it routinely says things
+the code and the tables do not.
+
+### 154. 29 sites placed in CALLPROG_Progress, 3 of them actually verified
+
+All 29 are in, from the disassembly, and `make phase` is green.  That is a much
+weaker claim than it sounds, and the mutation run says exactly how much weaker.
+
+Seventeen distinct format strings, one mutation each: **3 caught, 14 not**.
+The three are the eleven STATE transitions (through `request_state`),
+`"CALLPROG: Time out"` and `"CALLPROG: LINE CLEAR TIMEOUT"`.  Everything else
+is placed but unchecked -- if the string, the arguments or the position is
+wrong, nothing here would say so.
+
+The reason is structural, not laziness.  A transcript captures everything the
+reference prints inside `CALLPROG_Progress`, and that includes `DialerProgress`
+(28 sites) and `cadence_progress` (7), neither restored.  Any scenario that
+dials or runs a cadence detector diverges on those, not on the sites under
+test -- 63 of 83 scenarios did.  What is left is seeding a state and letting a
+timeout fire, which reaches the transition machinery and nothing else.  So the
+14 unblock when the dialer and cadence batches land, and not before.
+
+Two smaller notes from the same run.  State 2 is skipped because it dials.
+State 7 is exempt from its own timeout, so that scenario correctly prints
+nothing -- which made the per-run "the reference printed something" assertion
+wrong, and it is now asserted once for the sweep instead.  A test that demands
+output from a run that should be silent teaches itself to lie.
+
+The honest headline for this batch is "29 placed, 3 verified", and it is worth
+writing that way round.  Placed and verified are different claims, and the
+count that matters when something breaks later is the second one.
