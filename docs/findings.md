@@ -8044,3 +8044,118 @@ would otherwise be rediscovered later.
 That closes the table sweep: six tables, five named by `nm`, and between them
 the state machines of V.8, V.32 and V.34's handshake plus the cadence types
 -- three of which belong to code this project has not written yet.
+
+### 146. The shell mapper's two halves meet, and the transmit context aliases the trellis
+
+`preinitdigital` and the four bit callbacks close the loop that finding 137
+opened.  The V.34 object carries two instances of `struct v34_shell`, and
+this is what each is *for*:
+
+```
+   receive  at +0        put_bits = descrambleGP*   sink
+   transmit at +0x1be0   get_bits = scrambleGP*     source
+```
+
+`preinitdigital` installs the pair, and the choice is one comparison:
+`f359c == 0x65` scrambles with GPC and descrambles with GPA, anything else
+the other way round.  That is V.34's convention -- each end scrambles with
+its own generator and descrambles with its partner's -- and it means one
+flag decides the station's role for the whole datapump, since the same
+`f359c` picks `setTimingStateParameters`' second table.
+
+**The two contexts are not the same struct after all**, in one window of
+twelve bytes.  Finding 137 checked twenty-three offsets against `getFrame`
+and found no exceptions; the callbacks supply the exception:
+
+```
+   receive     +0xe74,78,7c  three scrambler words
+               +0xe80        the bit POSITION, a short
+   transmit    +0xe74,78,7c  three scrambler words
+               +0xe80        a FOURTH word -- which is getFrame's bit buffer
+               +0xe84        the bit position
+```
+
+The fourth word and the bit buffer are deliberately the same store:
+`scrambleGP*` leaves its scrambled 32 bits there and `getFrame` reads them
+out, so the register's last word IS the window.  The receive side folds its
+three words down to sixteen bits and hands them off, so it has no fourth
+word and puts its position in the space instead.
+
+`preinitdigital` clears four ints and a position on one side and three ints
+and a position on the other, and sets the transmit position to 32 -- past
+the fifteen `getFrame` tests against, so the first call refills before it
+reads.  That asymmetry read as an oversight until the callbacks were read.
+It is two field sets.
+
+**And the transmit context aliases the receive one's trellis.**  In shell
+coordinates `modulatevector`'s eight-point output buffer is at +0xea0 and
+its index at +0xec2, which land inside `sub[]` and `cost[]`; its trellis
+would run to +0x2eac in object coordinates, where `hist_2aa8` already is.
+Neither is a contradiction: only the receive context decodes, so `sub`,
+`cost`, `trellis` and `state` exist only there -- which is exactly why
+`preinitdigital` memsets those three on the receive side and on neither
+other.  The object reuses the transmit context's unused tail for the
+modulator's buffer and `modem_serrint`'s history rings.
+
+### 147. `xyz` is derivable, and it stops where a signed int does
+
+`initG248` copies a block of `xyz` into `t3` and computes nothing.  The
+table is 945 ints carrying its own index header -- `xyz[0..19]` are offsets
+into itself, and block n is `[xyz[n], xyz[n+1])`.
+
+Block n is the cumulative count of the eight-fold convolution of a
+rectangular window of length n: entry k is how many eight-tuples drawn from
+0..n-1 sum to less than k.  So the length should be 8(n-1)+1 and the last
+entry n^8 - 1, and both hold exactly for n up to 14.
+
+From n=15 the blocks are SHORTER, and not arbitrarily: each ends on the last
+entry that still fits a signed 32-bit int.  69 entries for n=15 where 113
+would be needed, 58 for n=17, 56 for n=18 -- and in every case the next
+entry of the true sequence is the first past `INT_MAX`.  Checked by
+recomputing the convolution: every block is a prefix, and every cut is the
+overflow point.
+
+**The empty block is the caller's, not a hole.**  `xyz[16]` and `xyz[17]`
+are both 831, so a ring of 16 gets no table at all.  `MMaxTable` runs
+`... 14, 15, 17, 18` and `MMinTable` stops at 15, so 16 is the one size
+`initV34` cannot ask for.  The table and its only caller agree about which
+sizes exist, which is a stronger statement than either alone.
+
+**This answers what finding 129 left open for `t3`.**  That entry recorded
+three tables indexed with nothing bounding them, and said the caller-side
+invariant had not been measured because `demapFrame` was not reconstructed.
+For `t3`'s *initialiser* the invariant is now measured: the ring size can
+only come from `MMaxTable` or `MMinTable`, both indexed 0..31 by a loop that
+forces the range, so it is 1..18, and the longest block any of those selects
+is 105 entries against a table of 128.  `initG248` cannot overrun `t3`.  It
+says nothing about `shellDemapper`'s reads, which remain finding 129's.
+
+Recorded rather than turned into a generator: `docs/fastpass.md` defers
+coefficient derivation to task #47, and a byte-exact copy is what the
+differential test proves.  The derivation is here so #47 does not have to
+find it twice.
+
+### 148. A reciprocal multiply that everybody reads as a divide by 100
+
+`initV34` cost one debugging round, and the fault was a constant that is
+almost a reflex:
+
+```
+   mul  $0x51eb851f
+   shr  $0x3, %edx
+```
+
+`0x51eb851f` is the magic number for dividing by 100, and it is used here to
+divide by **25**.  The multiplier is shared -- what picks the divisor is the
+shift of the high half, and 100 needs `shr $5` (a total of 37) where this is
+`shr $3` (a total of 35).
+
+Written as `/100` the reconstruction agreed with the object on every bitrate
+up to 24 and on nothing above, which is the worst shape a bug can have: the
+smallest test case passes.  The differential sweep failed at `fa04` and
+`fa06`, two fields apart, which localised it in one run.
+
+Worth recording because the reading error is not in the disassembly, it is
+in the pattern-matching: `0x51eb851f` is recognisable enough that the shift
+stops being read.  Anywhere else this constant appears, the shift is the
+thing to check.
