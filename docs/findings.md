@@ -8219,3 +8219,56 @@ symbol.  Either it is inter-function padding that happens to decode as a
 two-byte relative jump landing exactly on the next function, or it is a tail
 call the symbol size excludes.  Writing `getbit` will settle it; recorded now
 because an unrecorded observation is not noticed twice.
+
+### 150. What `v34handshak` is still waiting for, partitioned
+
+Task #38 moved `v34handshak` from twenty-three unmet dependencies to
+seventeen — `V34GiveINFO0dBits`, `V34GiveINFO1aBits`, `V34GiveProbeResults`,
+`V34SetINFO0aBits`, `V34SetINFO0dBits` and `setfinalrate` all landed — and
+`v34handshakinit` from four to three.  The seventeen are not one queue:
+
+```
+   python3 tools/callgraph.py --blocked | grep v34handshak
+```
+
+**Writable and testable now — five, 4,520 bytes:**
+
+```
+      30  VPcmV34ReportStartOfEchoAdapt
+      30  VPcmV34ReportMiddleOfEchoAdapt
+     350  VPcmV34SetMohMessageBits
+     722  VPcmV34InterpretMohMessageBits
+    3388  modulatevector
+```
+
+**Ready by call graph and NOT testable — two.**  `getbit` (433) and
+`ApplyBulkDelay` (467) are file-local, so `objcopy` cannot alias them and
+their only callers are inside `v34handshak` itself.  Finding 149, and
+finding 117 before it.  `callgraph --ready` lists them because it models
+callees, not testability; **`--ready` is not a work list on its own.**
+
+**Blocked — ten.**  Two of them are one function away:
+
+```
+    6173  probeselect        needs chkForceBaudRate  (389, ready now)
+    2629  v34handshakinit    needs VPcmV34SetMohMessageBits (ready now),
+                                   preinitdigital (533, ready now),
+                                   v34modeminit (1356)
+```
+
+so `chkForceBaudRate` alone unblocks 6.2 KB, and three ready functions plus
+`v34modeminit` unblock another 2.6 KB.  The remaining eight —
+`settxlevel`, `initdigital`, `V34SetINFO1aBits`, `V34GiveINFO1dBits`,
+`VPcmV34GetMaxUpstreamRateIndex`, `indicateJaTransmission`,
+`k56FlexPhase34`, `v90Phase34` — all bottom out in C++ that is not
+reconstructed (`VPcmFloModem`, `K56FlexFloModem`, `V90ConstellationDesigner`)
+or in `edprintf`.  **`v34handshak` cannot be finished before some of
+`VPcmV34Main.cpp`'s C++ half exists**, whatever order the seven slices of
+#39–#45 are taken in.
+
+**Recorded because the obvious reading of the numbers is wrong.**  A summary
+written from this session's own work called `v34handshakinit`'s three
+remaining blockers "the shortest path", which they are not: it is one of
+seventeen, five of the seventeen are writable immediately, and the single
+largest reduction available is `chkForceBaudRate` — 389 bytes that release
+6,173.  The partition, not the count, is the useful figure.

@@ -46,3 +46,44 @@ pass, it is left out and the attempt is recorded. Two functions were reverted
 under exactly this rule during the first V.34 pass.
 
 Run `make phase`, not `make test`.
+
+## What the task numbers refer to
+
+**The numbering is used throughout this tree and defined nowhere in it** —
+not in `README.md`, not in the plan, not in any document here. Written down
+because three sessions share this history and `#39` has already been quoted
+in a hand-over summary by someone who could not look it up.
+
+Only what the repository itself settles is recorded. Everything below is
+sourced; nothing is inferred from adjacency of the numbers.
+
+| | what it is | where that comes from |
+|---|---|---|
+| #23 | removing the limit finding 70 puts on `t_v8create`'s comparison | finding 70 |
+| #33, #35–#45 | the V.34 fast pass | the line at the top of this file |
+| #36 | `V34RX.c`'s remaining functions | finding 117 lists what was left in it |
+| #38 | `V34hshak.c`'s support functions — that TU except `v34handshak` | this session's brief; findings 146–149 |
+| **#39–#45** | **`v34handshak` itself**, 61,541 bytes over 87 states, split seven ways | findings 117 and 144, `include/dsplib/v34hshak.h` |
+| #47 | the deferred work listed above | this file |
+| #49 | check whether `demapFrame` can produce an out-of-range group | finding 129 |
+
+`#34`, `#37`, `#40`–`#44`, `#46` and `#48` are named nowhere. `#34` is
+outside the fast pass's stated range; the rest fall inside a range and have
+no content recorded against them individually.
+
+### The state-to-task split for #39–#45 is unassigned
+
+Nothing records which of the eighty-seven states belong to `#39`, and it
+**cannot be read off the state list**. What a dispatch case owns has to come
+from the control-flow graph — that is the whole argument in
+`tools/cfgsplit.py`'s header, which exists because the obvious estimate
+(distance to the next jump-table target) produced three different 45–55 KB
+"states", none of which exist.
+
+`cfgsplit` has not been run on `v34handshak`. The recorded runs are
+`rxtiming` (finding 121k), `decodeDepth` (finding 131) and one that reported
+a whole function unreached. Pointing it at `v34handshak` needs its three jump
+tables located first, and `--entries` was needed for both of the functions it
+has been run on — so **locating the dispatch and running `cfgsplit` is the
+first job of #39, not a prerequisite for starting it.** Until that is done,
+"#39" names a share of the work and not a set of states.
