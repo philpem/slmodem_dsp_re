@@ -80,6 +80,15 @@ match_tolerance(struct cadence *c)
 static int
 match_fixed(struct cadence *c, int last, int tol)
 {
+	/*
+	 * Announced on entry, before anything is compared -- so at level 2 a
+	 * fixed-pattern detector emits this banner every cycle whether or not
+	 * anything matches.  "SERIRES" is the author's.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    " CADENCE SERIRES COMPARISON ========================>\n");
+
 	if (c->pattern_min_cycles > last)
 		return 0;
 	if (adiff(c->on[0], c->pattern[0]) > tol)
@@ -90,6 +99,12 @@ match_fixed(struct cadence *c, int last, int tol)
 		return 0;
 	if (adiff(c->off[2], c->pattern[3]) > tol)
 		return 0;
+
+	/* The verdict is a level-3 message; the banner above is level 2. */
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf(
+		    "CADENCE %s: CONDITION -- SERIES --- SATISFIED\n",
+		    c->name);
 	return 1;
 }
 
@@ -131,7 +146,12 @@ match_looped(struct cadence *c, int last, int tol)
 	if (adiff(c->on[last], c->on[first + 1]) >= tol)
 		return 0;
 
-	return ok == 1;
+	if (ok != 1)
+		return 0;
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf("CADENCE %s: CONDITION C SATISFIED\n",
+				     c->name);
+	return 1;
 }
 
 /*
@@ -184,7 +204,18 @@ match_unrolled(struct cadence *c, int last, int tol)
 	    && adiff(off_prev, c->off[last - 5]) < tol)
 		two_period = 1;
 
-	return (one_period | two_period) != 0;
+	if ((one_period | two_period) == 0)
+		return 0;
+	/*
+	 * The three success messages name the forms: this unrolled test is
+	 * the author's CONDITION B, the looped one CONDITION C, the fixed
+	 * pattern "-- SERIES --".  No CONDITION A message survives anywhere
+	 * in the object.
+	 */
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf("CADENCE %s: CONDITION B SATISFIED\n",
+				     c->name);
+	return 1;
 }
 
 static int

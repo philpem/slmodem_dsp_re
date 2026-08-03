@@ -8622,3 +8622,31 @@ Verification: 23/23 mutations caught by t_dialerprog's transcript comparison
 (after adding an out-of-table-character case -- the per-character trace's
 position relative to the range check is invisible without one), 2/2 by
 t_dialer's.  The dialer batch is complete.
+
+### 163. cadence_progress complete: the matcher forms have names
+
+The last four of cadence_progress's seven call sites are its match verdicts,
+and they name the three match forms:
+
+    match_unrolled  -> 'CADENCE %s: CONDITION B SATISFIED'          (level 3)
+    match_looped    -> 'CADENCE %s: CONDITION C SATISFIED'          (level 3)
+    match_fixed     -> 'CADENCE %s: CONDITION -- SERIES --- SATISFIED' (level 3)
+    match_fixed     -> ' CADENCE SERIRES COMPARISON ========================>'
+                                                                    (level 2)
+
+No CONDITION A message survives anywhere in the object -- either it was cut,
+or A was the toneiir level test that precedes all three.  "SERIRES" is the
+author's spelling.
+
+Two placement facts the transcripts now enforce:
+- The SERIRES banner prints on ENTRY to the fixed-pattern comparison, before
+  the cycle-count check -- so a fixed detector that has not yet accumulated
+  pattern_min_cycles announces a comparison it then declines to make.  Caught
+  only by a setup whose min_cycles exceeds what the run accumulates.
+- The three verdicts are the only `cmpl $0x2` gates outside cadence_create
+  (finding 155's second tier), and the banner is not one of them: level 2
+  shows the comparisons happening, level 3 says which ones succeeded.
+
+With these, the callprog batch's cadence half is done: cadence_create 17/17,
+cadence_progress 7/7, all mutation-tested (6/6) through t_cadence's new
+level-1..3 transcript sweep.

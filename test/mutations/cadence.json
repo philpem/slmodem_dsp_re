@@ -1,0 +1,32 @@
+[
+ {
+  "label": "swap CONDITION B onto the looped matcher",
+  "find": "dsplibs_debug_printf(\"CADENCE %s: CONDITION C SATISFIED\\n\",\n\t\t\t\t     c->name);",
+  "replace": "dsplibs_debug_printf(\"CADENCE %s: CONDITION B SATISFIED\\n\",\n\t\t\t\t     c->name);"
+ },
+ {
+  "label": "gate the SERIRES banner at level 3",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \" CADENCE SERIRES COMPARISON ========================>\\n\");",
+  "replace": "if (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\n\t\t    \" CADENCE SERIRES COMPARISON ========================>\\n\");"
+ },
+ {
+  "label": "gate CONDITION B at level 2",
+  "find": "if (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"CADENCE %s: CONDITION B SATISFIED\\n\",\n\t\t\t\t     c->name);",
+  "replace": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"CADENCE %s: CONDITION B SATISFIED\\n\",\n\t\t\t\t     c->name);"
+ },
+ {
+  "label": "move the SERIRES banner after the cycle-count check",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \" CADENCE SERIRES COMPARISON ========================>\\n\");\n\n\tif (c->pattern_min_cycles > last)\n\t\treturn 0;",
+  "replace": "if (c->pattern_min_cycles > last)\n\t\treturn 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \" CADENCE SERIRES COMPARISON ========================>\\n\");"
+ },
+ {
+  "label": "drop the SERIES SATISFIED verdict",
+  "find": "if (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\n\t\t    \"CADENCE %s: CONDITION -- SERIES --- SATISFIED\\n\",\n\t\t    c->name);",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "correct the author's spelling of SERIRES",
+  "find": "\" CADENCE SERIRES COMPARISON ========================>\\n\"",
+  "replace": "\" CADENCE SERIES COMPARISON ========================>\\n\""
+ }
+]

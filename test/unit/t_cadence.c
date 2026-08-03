@@ -19,10 +19,12 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/cadence.h"
 #include "dsplib/cpfiltrs.h"
 #include "dsplib/modem_params.h"
@@ -56,8 +58,19 @@ extern const short ref_Filter_350_500_scales[], ref_Filter_100_550_scales[],
  */
 #define CADENCE_TEST_AMPLITUDE 5000
 
+extern unsigned int ref_dsplibs_debug_level;
+
 /* How often each return code was seen, over the whole run. */
 static int code_seen[8];
+
+/*
+ * Debug level for both sides during a run; 0 leaves the diagnostics alone.
+ * The transcript sweep at the end of main() uses 1..3: four of
+ * cadence_progress's gates are `> 1` and three -- the match verdicts -- are
+ * `> 2`, the only second-tier gates outside cadence_create (finding 155).
+ */
+static unsigned opt_level;
+static long transcript_lines;
 
 /*
  * A detector configuration.  The fields are named for what cadence_create
@@ -187,6 +200,12 @@ run(const struct setup *s, int on_ms, int off_ms, int samples, int want_code)
 	build(&cb, &fb, s, 0);
 	phase = 0.0;
 
+	dsplib_debug_capture_reset();
+	if (opt_level) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = opt_level;
+		dsplib_debug_capture_on = 1;
+	}
+
 	for (i = 0; i < samples; i++) {
 		short v = tone_sample(i, on_ms, off_ms, CADENCE_TEST_AMPLITUDE);
 		int ra, rb;
@@ -207,6 +226,37 @@ run(const struct setup *s, int on_ms, int off_ms, int samples, int want_code)
 			code_seen[ra]++;
 		if (ra == want_code)
 			hits++;
+	}
+
+	if (opt_level) {
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("transcript matches (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)opt_level);
+		if (getenv("DBGDIFF")
+		    && strcmp(dsplib_debug_capture_text(0),
+			      dsplib_debug_capture_text(1)) != 0) {
+			const char *o = dsplib_debug_capture_text(0);
+			const char *r = dsplib_debug_capture_text(1);
+			int k = 0;
+			while (o[k] && o[k] == r[k]) k++;
+			while (k > 0 && o[k - 1] != '\n') k--;
+			printf("=== %s: first divergence at %d\n", s->name, k);
+			printf("--- ours: %.300s\n", o + k);
+			printf("--- ref : %.300s\n", r + k);
+		}
+		diff_eq_int("line counts match (level %ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1),
+			    (long)opt_level);
+		if (opt_level == 1)
+			diff_eq_int("reference silent below the threshold",
+				    (int)dsplib_debug_capture_lines(1), 0, 0);
+		else
+			transcript_lines += dsplib_debug_capture_lines(1);
 	}
 
 	if (want_code >= 0) {
@@ -593,6 +643,38 @@ main(void)
 		rc |= run(&dbl, 400, 900, 200000, -1);
 	}
 
+	/*
+	 * The transcript sweep: one setup per matcher form, plus the give-up
+	 * path, with both sides' diagnostics raised and compared.  The three
+	 * CONDITION verdicts only speak at level 3; the fixed form's SERIRES
+	 * banner and the counters speak at 2; level 1 asserts silence.
+	 */
+	{
+		static const struct setup dbg_fixed = {
+			"cadence dbg: fixed pattern", 4, 12, 4, 12, 3, 0, 40,
+			0, 1, { 8, 8, 8, 8 }, 1, 3
+		};
+		/*
+		 * pattern_min_cycles above what the run accumulates before
+		 * matching, so the cycle-count check rejects -- and the
+		 * SERIRES banner must print anyway, because the original
+		 * announces the comparison before making it.
+		 */
+		static const struct setup dbg_fixed_gate = {
+			"cadence dbg: fixed pattern, too few cycles", 4, 12,
+			4, 12, 3, 0, 40, 0, 1, { 8, 8, 8, 8 }, 9, 3
+		};
+
+		for (opt_level = 1; opt_level <= 3; opt_level++) {
+			rc |= run(&busy, 500, 500, 120000, -1);
+			rc |= run(&busy_loop, 500, 500, 120000, -1);
+			rc |= run(&dbg_fixed, 500, 500, 120000, -1);
+			rc |= run(&dbg_fixed_gate, 500, 500, 120000, -1);
+			rc |= run(&sparse, 300, 2000, 240000, -1);
+		}
+		opt_level = 0;
+	}
+
 	rc |= run_reset_and_delete();
 	rc |= run_filter_dispatch();
 	rc |= run_elliptic_tables();
@@ -647,6 +729,9 @@ main(void)
 	diff_eq_int("CADENCE_RESTART reached (%ld)",
 		    code_seen[CADENCE_RESTART] > 0, 1,
 		    code_seen[CADENCE_RESTART]);
+	/* Empty transcripts also compare equal (finding 149). */
+	diff_eq_int("diagnostics were captured (%ld lines)",
+		    transcript_lines > 20, 1, transcript_lines);
 	rc |= diff_end();
 
 	return rc;
