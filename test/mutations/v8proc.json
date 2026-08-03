@@ -1,0 +1,87 @@
+[
+ {
+  "label": "report the state change the other way round",
+  "find": "\t\t\t    v8StatusName[v->feb8], v8StatusName[status]);",
+  "replace": "\t\t\t    v8StatusName[status], v8StatusName[v->feb8]);"
+ },
+ {
+  "label": "report every status, not just the changes",
+  "find": "\tif (v->feb8 != status) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: State changed from %s to %s\\r\\n\",\n\t\t\t    v8StatusName[v->feb8], v8StatusName[status]);\n\t\tv->feb8 = status;\n\t}",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V8: State changed from %s to %s\\r\\n\",\n\t\t\t\t     v8StatusName[v->feb8], v8StatusName[status]);\n\tv->feb8 = status;"
+ },
+ {
+  "label": "announce the change after it is recorded",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: State changed from %s to %s\\r\\n\",\n\t\t\t    v8StatusName[v->feb8], v8StatusName[status]);\n\t\tv->feb8 = status;",
+  "replace": "\t\tv->feb8 = status;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: State changed from %s to %s\\r\\n\",\n\t\t\t    v8StatusName[v->feb8], v8StatusName[status]);"
+ },
+ {
+  "label": "swap the answering side's two timeout statuses",
+  "find": "\t\tif ((unsigned short)v->f9d6 == 4)\n\t\t\tstatus = V8_ANS_TIME_OUT_WAITING_FOR_CM;\n\t\telse if ((unsigned short)v->f9d6 == 5)\n\t\t\tstatus = V8_ANS_TIME_OUT_WAITING_FOR_CJ;",
+  "replace": "\t\tif ((unsigned short)v->f9d6 == 4)\n\t\t\tstatus = V8_ANS_TIME_OUT_WAITING_FOR_CJ;\n\t\telse if ((unsigned short)v->f9d6 == 5)\n\t\t\tstatus = V8_ANS_TIME_OUT_WAITING_FOR_CM;"
+ },
+ {
+  "label": "swap the calling side's two timeout statuses",
+  "find": "\t\telse if ((unsigned short)v->f9d6 == 0xb)\n\t\t\tstatus = V8_ORG_TIME_OUT_WAITING_FOR_ANSAM;\n\t\telse if ((unsigned short)v->f9d6 == 0xc)\n\t\t\tstatus = V8_ORG_TIME_OUT_WAITING_FOR_JM;",
+  "replace": "\t\telse if ((unsigned short)v->f9d6 == 0xb)\n\t\t\tstatus = V8_ORG_TIME_OUT_WAITING_FOR_JM;\n\t\telse if ((unsigned short)v->f9d6 == 0xc)\n\t\t\tstatus = V8_ORG_TIME_OUT_WAITING_FOR_ANSAM;"
+ },
+ {
+  "label": "drop the wrapper's status line",
+  "find": "\tif (st->f2c != rc) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[rc]);\n\t\tst->f2c = rc;\n\t}",
+  "replace": "\tif (st->f2c != rc)\n\t\tst->f2c = rc;"
+ },
+ {
+  "label": "name the previous status rather than the new one",
+  "find": "\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[rc]);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[st->f2c]);"
+ },
+ {
+  "label": "drop the timeout announcement",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: timeout.\\n\");\n\t\tret = DPSTAT_ERROR;",
+  "replace": "\t\tret = DPSTAT_ERROR;"
+ },
+ {
+  "label": "announce OK after the idle timer is consulted",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: OK.\\n\");",
+  "replace": "\t\tif (st->f20 != 0)\n\t\t\tbreak;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: OK.\\n\");"
+ },
+ {
+  "label": "renegotiate on every V8_OK",
+  "find": "\t\tif (st->f20 != 0)\n\t\t\tbreak;\n\t\tV8UpdateModemParameters(st->v8, st->cm);",
+  "replace": "\t\tV8UpdateModemParameters(st->v8, st->cm);"
+ },
+ {
+  "label": "announce quick connect for any accepted modulation",
+  "find": "\t\tif (st->cm->b2 & 0x10) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"v8: process: QC.\\n\");\n\t\t\targ = st->want;",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: QC.\\n\");\n\t\tif (st->cm->b2 & 0x10) {\n\t\t\targ = st->want;"
+ },
+ {
+  "label": "prefer V.32 over V.34",
+  "find": "\t\t} else if (st->cm->b0 & 0x20) {\n\t\t\targ = DP_V34;\n\t\t} else if (st->cm->b0 & 0x80) {\n\t\t\targ = DP_V32;",
+  "replace": "\t\t} else if (st->cm->b0 & 0x80) {\n\t\t\targ = DP_V32;\n\t\t} else if (st->cm->b0 & 0x20) {\n\t\t\targ = DP_V34;"
+ },
+ {
+  "label": "hand over to V.34 when V.90 was agreed",
+  "find": "\t\t} else if (st->cm->b0 & 0x08) {\n\t\t\targ = DP_V90;",
+  "replace": "\t\t} else if (st->cm->b0 & 0x08) {\n\t\t\targ = DP_V34;"
+ },
+ {
+  "label": "accept a negotiation that agreed on nothing",
+  "find": "\t\t} else {\n\t\t\tret = DPSTAT_ERROR;\n\t\t\tbreak;\n\t\t}\n\n\t\t/* Common to all four: what was agreed goes to the modem. */",
+  "replace": "\t\t} else {\n\t\t\targ = st->want;\n\t\t}\n\n\t\t/* Common to all four: what was agreed goes to the modem. */"
+ },
+ {
+  "label": "publish the agreement only on quick connect",
+  "find": "\t\t/* Common to all four: what was agreed goes to the modem. */\n\t\tst->dspinfo->f08 = (st->cm->b2 >> 6) & 1;\n\t\tst->dspinfo->f0c = st->cm->menu;\n\t\tbreak;",
+  "replace": "\t\tif (st->cm->b2 & 0x10) {\n\t\t\tst->dspinfo->f08 = (st->cm->b2 >> 6) & 1;\n\t\t\tst->dspinfo->f0c = st->cm->menu;\n\t\t}\n\t\tbreak;"
+ },
+ {
+  "label": "drop the idle timer announcement",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->f20);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "announce the idle timer before it is set",
+  "find": "\t\tst->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->f20);\n\t\tst->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (0)"
+ }
+]

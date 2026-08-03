@@ -1,0 +1,22 @@
+[
+ {
+  "label": "announce the create before the rate is checked",
+  "find": "\tif (srate != V8_DP_RATE)\n\t\treturn 0;\n\n\t/*\n\t * After the refusal, not before: a call at the wrong rate is turned\n\t * away silently.\n\t */\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"v8: create: caller %d, automode %d, dp id %d.\\n\",\n\t\t    caller, automode, id);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"v8: create: caller %d, automode %d, dp id %d.\\n\",\n\t\t    caller, automode, id);\n\n\tif (srate != V8_DP_RATE)\n\t\treturn 0;"
+ },
+ {
+  "label": "report the sample rate rather than the automode parameter",
+  "find": "\t\t    caller, automode, id);",
+  "replace": "\t\t    caller, srate, id);"
+ },
+ {
+  "label": "report the wanted id as the caller flag",
+  "find": "\t\t    \"v8: create: caller %d, automode %d, dp id %d.\\n\",\n\t\t    caller, automode, id);",
+  "replace": "\t\t    \"v8: create: caller %d, automode %d, dp id %d.\\n\",\n\t\t    id, automode, caller);"
+ },
+ {
+  "label": "drop the delete announcement",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"v8: delete...\\n\");\n\n\tV8Delete(st->v8);",
+  "replace": "\tV8Delete(st->v8);"
+ }
+]

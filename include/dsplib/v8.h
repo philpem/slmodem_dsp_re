@@ -764,6 +764,43 @@ void rebuildJMSequence(struct v8 *v);
  */
 int v8handshak(struct v8 *v);
 
+/*
+ * What V8Process returns, and what the object's own table calls each value.
+ *
+ * `v8StatusName` is a global at .rodata+0x53c0, nineteen pointers, indexed
+ * directly by the status -- so these are the author's names, not ours.  Read
+ * together with the handshake's diagnostics they settle several fields at
+ * once: `f9d6` of 4 is the state whose timeout prints "Time Out Waiting For
+ * CM" and whose status is named ..._WAITING_FOR_CM, and the same holds for
+ * CJ, ANSam and JM.  ORG is the calling side (mode 0), ANS the answering one.
+ *
+ * The last three are never produced by V8Process; they exist in the table and
+ * in the datapump's switch, and the enum ends with the author's own sentinel.
+ */
+enum v8_status {
+	V8_INIT				= 0,
+	V8_ANS_SEND_ANSAM		= 1,
+	V8_ANS_CM_DETECTED		= 2,
+	V8_ANS_SEND_JM			= 3,
+	V8_ANS_TIME_OUT_WAITING_FOR_CM	= 4,
+	V8_ANS_TIME_OUT_WAITING_FOR_CJ	= 5,
+	V8_ORG_WAITING_FOR_ANSAM	= 6,
+	V8_ORG_ANSAM_DETECTED_WAITING_TE = 7,
+	V8_ORG_SEND_CM			= 8,
+	V8_ORG_JM_DETECTED		= 9,
+	V8_ORG_SEND_CJ			= 10,
+	V8_ORG_TIME_OUT_WAITING_FOR_ANSAM = 11,
+	V8_ORG_TIME_OUT_WAITING_FOR_JM	= 12,
+	V8_OK				= 13,
+	V8_ORG_SEND_QC			= 14,
+	V8_ORG_WAITING_FOR_QCA1d	= 15,
+	V8_ORG_BAD_QCA1d_MESSAGE	= 16,
+	V8_ORG_TIME_OUT_WAITING_FOR_QCA1d = 17,
+	V8_LAST_ENUM			= 18
+};
+
+extern const char *const v8StatusName[V8_LAST_ENUM + 1];
+
 /* One buffer of samples through the handshake; returns a status. */
 int V8Process(struct v8 *v, const short *in, short *out, int count);
 

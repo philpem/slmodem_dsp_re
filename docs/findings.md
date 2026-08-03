@@ -8782,3 +8782,82 @@ The three V.90 conditions also had to be given different values from each
 other, or the line reporting all three reads the same in any order: 0x141
 withholds the modulation, 0x161 the digital connection, and 0x1c9 gives a
 pcmIndication of 2 rather than 1.  29/29 mutations caught.
+
+### 167. The V.8 handshake's ten messages, and v8StatusName
+
+`v8handshak`'s diagnostics settle two things the reconstruction had only
+guessed at.
+
+THE TIMEOUTS ARE ANNOUNCED ONCE.  Three of them -- ANSam, CM, and the JM/CJ
+message wait -- sit inside `if (fe64 == deadline)`, the conditional
+increment that reads as pointless until the call site is back.  It is a
+latch: the block where the counter reaches the deadline exactly announces
+the timeout and steps past it, and every later block returns the same
+failure silently.  Which message the third one names follows the side:
+
+    "V8: Timeout waiting for %s message...", v->mode == 1 ? "CJ" : "JM"
+
+and GCC left the ternary in both arms even though each arm knows the answer,
+because the answering arm reaches the same print through a jump.
+
+THE QCA1 BIT NUMBERS PIN THE WORD LAYOUT.  The three QCA1 lines report every
+field twice -- from word 1 and from its repeat in word 4 -- and number the
+bits over the whole received stream:
+
+    bits24,26-28 and bits54,56-58   -> word 1 bits 5,3,2,1 and word 4's
+    bit23 and bit53                 -> word 1 bit 6 and word 4's
+    bits27-28 and bits57-58         -> word 1 bits 1-2 and word 4's
+
+Every pair differs by thirty, which is three ten-bit characters, so word k
+occupies bits 10k+10 to 10k+19 most significant first and bits 0 to 9 are the
+character the hunt matched.  Since the acceptance test requires word 4 to
+equal word 1, the pairs always agree: the lines exist to show the redundancy
+survived.  One is labelled QCA1d and sits in the QCA1a arm, which the QCA1d
+arm cannot reach -- the author's slip, reproduced.
+
+And one message has no "V8: " and a bare \n: `V8 ANSAM Detected (CM ready)`,
+which is what names the tone the turn-round branch has just accepted.
+
+`v8StatusName` is the second exported table in V.8, .rodata+0x53c0, nineteen
+entries indexed by what V8Process returns and ending in the author's own
+`V8_LAST_ENUM`.  It names every status, and the names cross-check the
+messages exactly: `f9d6` of 4 is the state whose timeout prints "Time Out
+Waiting For CM" and whose status is V8_ANS_TIME_OUT_WAITING_FOR_CM, and the
+same holds for CJ, ANSam and JM.  It also confirms `seq[1]` is the CJ
+sequence (status V8_ORG_SEND_CJ is selected by `tx_seq == &seq[1]`) and that
+ORG/ANS is the mode-0/mode-1 split V8Create prints as Caller/Answer.  The
+five statuses the datapump treats as errors are exactly the five whose names
+end TIME_OUT_WAITING_FOR_something.
+
+### 168. v8_process was never differentially tested, and three things were
+### wrong in it
+
+Placing the wrapper's five sites meant reading it properly, and t_v8dp
+tested only create, delete and the registration -- `v8_process` itself had no
+differential test at all.  It had three defects:
+
+  * A second V8_OK re-ran the whole negotiation.  The object breaks out when
+    `f20` is non-zero: once a datapump change has been asked for, that field
+    is counting down to it.
+
+  * THE MODULATION BRANCHES WERE MISSING ENTIRELY.  Quick connect keeps the
+    id the call asked for, but otherwise the next datapump is chosen from
+    what survived the negotiation -- `b0` bit 3, bit 5, bit 7, the same three
+    V8Create prints as V90, V34 and V32 (finding 164) -- as 90, 34 and 32,
+    and nothing left is an error.  The reconstruction had only the quick
+    connect arm, so a V.8 call that agreed on V.34 or V.32 would have
+    negotiated correctly and then handed over to nothing.
+
+  * The two fields published to the modem are written on ALL four accepted
+    branches, not only the quick connect one.
+
+`v8_create`'s message names parameter 8 -- read, never used, and printed as
+`automode` -- and comes after the sample-rate check, so a call at a rate V.8
+does not serve is refused silently.  The reconstruction's comment had it
+backwards.
+
+17/17 mutations on v8proc.c, 4/4 on v8dp.c, 5/5 on v8handshak.c and 11/11 on
+v8hsrx.c.  Two mutations were dropped rather than left uncaught: a status
+V8Process cannot return, and moving the delete message past a call that
+prints nothing -- neither is observable, and a permanently uncaught mutation
+is noise in the metric.

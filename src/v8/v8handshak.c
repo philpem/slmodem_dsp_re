@@ -16,6 +16,7 @@
  * changed".
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
 /*
@@ -72,10 +73,21 @@ transmit(struct v8 *v, int *done)
 
 	case V8_TX_ANSAM:
 		if (v->deadline_a != -1 && v->fe64 >= v->deadline_a) {
-			/* The equal case counts this block, the past-it
-			 * case does not. */
-			if (v->fe64 == v->deadline_a)
+			/*
+			 * The equal case counts this block, the past-it case
+			 * does not -- and the announcement sits inside it, so
+			 * the timeout is reported exactly once however many
+			 * blocks arrive afterwards.  That is what the odd
+			 * count-once idiom is FOR; without the call site it
+			 * reads as a pointless conditional increment.
+			 */
+			if (v->fe64 == v->deadline_a) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: Time Out Waiting For "
+					    "CM...\r\n");
 				v->fe64++;
+			}
 			v->f9d6 = 4;
 			*done = 1;
 			return 1;
@@ -88,8 +100,20 @@ transmit(struct v8 *v, int *done)
 	case V8_TX_FSK_TIMED:
 		if (v->deadline_b != -1 && v->fe64 >= v->deadline_b) {
 			v->f9d6 = v->mode == 1 ? 5 : 0xc;
-			if (v->fe64 == v->deadline_b)
+			/*
+			 * Announced once, as above.  Which message was being
+			 * waited for follows the side: the answerer is waiting
+			 * for the caller's CJ, the caller for the answerer's
+			 * JM.
+			 */
+			if (v->fe64 == v->deadline_b) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: Timeout waiting for %s "
+					    "message...\r\n",
+					    v->mode == 1 ? "CJ" : "JM");
 				v->fe64++;
+			}
 			*done = 1;
 			return 1;
 		}

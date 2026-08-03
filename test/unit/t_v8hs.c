@@ -7,12 +7,16 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern int ref_v8handshak(struct v8 *v);
 extern int ref_v8_txinit(struct v8 *v);
@@ -152,6 +156,179 @@ compare(void)
 	for (i = 0; i < (int)sizeof(struct v8); i++)
 		diff_eq_int("byte at +%ld", ((unsigned char *)&obj_b)[i],
 			    ((unsigned char *)&obj_a)[i], (long)i);
+}
+
+/*
+ * The handshake's ten diagnostics, one scenario per exit.
+ *
+ * Three of them are timeouts, and each is announced on the single block where
+ * the counter reaches the deadline exactly -- so the scenario has to place it
+ * there rather than past it.  The rest are the QCA1 verdicts, which need a
+ * message in the spare buffer that will pass or fail the check on purpose.
+ */
+struct trace_case {
+	const char	*name;
+	short		f9d4, f9d6, f9d8;
+	short		deadline_a, deadline_b;
+	int		fe64;
+	int		mode;
+	int		qca1;		/* load the spare buffer with... */
+	short		qca1_w;		/* ...this in words 1 and 4 */
+	int		ansam;		/* set up the turn-round instead */
+};
+
+static const struct trace_case trace_cases[] = {
+	{ "CM timeout",      6, 0x28, 0x29, 40, 60, 40, 0, 0, 0,     0 },
+	{ "JM timeout",     23, 0x28, 0x29, 40, 60, 60, 0, 0, 0,     0 },
+	{ "CJ timeout",     23, 0x28, 0x29, 40, 60, 60, 1, 0, 0,     0 },
+	{ "ANSam timeout",   5, 0x19, 0x19, 40, 60, 40, 0, 0, 0,     0 },
+	/*
+	 * Once the ANSam wait times out the receive state moves on, so a
+	 * second block never re-enters it.  This one starts past the deadline
+	 * instead, which is the only way to see that the announcement does
+	 * NOT repeat.
+	 */
+	{ "ANSam timeout, past",  5, 0x19, 0x19, 40, 60, 45, 0, 0, 0, 0 },
+	{ "ANSam detected",  5, 0x19, 0x24, 40, 60,  0, 0, 0, 0,     1 },
+	/*
+	 * The two message words carry more than the shape bit, and the free
+	 * bits have to differ or the trace reads the same whichever way round
+	 * its arguments go: 0x0cb gives U_QTS the pattern 0101 and the LAPM
+	 * bit a 1, and 0x187 gives the ANSpcm index a 3 rather than a 1.
+	 */
+	{ "QCA1a accepted",  5, 0x28, 0x29, 40, 60,  0, 0, 1, 0x0cb, 0 },
+	{ "QCA1d accepted",  5, 0x28, 0x29, 40, 60,  0, 0, 1, 0x187, 0 },
+	{ "QCA1 refused",    5, 0x28, 0x29, 40, 60,  0, 0, 1, 0x000, 0 }
+};
+
+static void
+trace_setup(const struct trace_case *c, unsigned seed)
+{
+	setup(seed, 0x11, 0x40, 0x04);
+
+	obj_a.f9d4 = obj_b.f9d4 = c->f9d4;
+	obj_a.f9d6 = obj_b.f9d6 = c->f9d6;
+	obj_a.f9d8 = obj_b.f9d8 = c->f9d8;
+	obj_a.deadline_a = obj_b.deadline_a = c->deadline_a;
+	obj_a.deadline_b = obj_b.deadline_b = c->deadline_b;
+	obj_a.fe64 = obj_b.fe64 = c->fe64;
+	obj_a.mode = obj_b.mode = c->mode;
+	obj_a.f110 = obj_b.f110 = 40;
+	obj_a.fdc4 = obj_b.fdc4 = 0;
+	obj_a.fdd0 = obj_b.fdd0 = 0;
+	obj_a.fdb6 = obj_b.fdb6 = 0;
+	obj_a.v21_params.f06 = obj_b.v21_params.f06 = 0x20;
+	obj_a.v21_params.f16 = obj_b.v21_params.f16 = 0;
+	obj_a.v21_params.f24 = obj_b.v21_params.f24 = 5;
+	obj_a.v21_params.f26 = obj_b.v21_params.f26 = 5;
+
+	/*
+	 * The transmit loop runs only while the queue has room, so the cases
+	 * that want the receiver dispatched have to fill it first.
+	 */
+	if (c->f9d4 == 5) {
+		obj_a.f21c = obj_b.f21c = 0x60;
+		obj_a.fa3e = obj_b.fa3e = 0x60;
+	} else {
+		obj_a.f21c = obj_b.f21c = 0;
+		obj_a.fa3e = obj_b.fa3e = 0x60;
+	}
+
+	if (c->ansam) {
+		/*
+		 * Past the settling count, with enough energy to have heard
+		 * something and a JM to answer with.  The DFT is left switched
+		 * off so that the energy reading is the one set here.
+		 */
+		obj_a.fdb6 = obj_b.fdb6 = 0x960;
+		obj_a.fda0 = obj_b.fda0 = 0x200;
+		obj_a.fdbe = obj_b.fdbe = 1;
+		obj_a.rx.f8a = obj_b.rx.f8a = 0;
+	}
+
+	if (c->qca1) {
+		short w = c->qca1_w;
+
+		obj_a.f9d8 = obj_b.f9d8 = V8_HS_QCA1;
+		obj_a.fdbc = obj_b.fdbc = 5;
+		obj_a.seq_spare->word[1] = w;
+		obj_a.seq_spare->word[2] = 0x3ff;
+		obj_a.seq_spare->word[3] = 0x155;
+		obj_a.seq_spare->word[4] = w;
+		obj_a.seq_spare->word[5] = 0x3ff;
+		*obj_b.seq_spare = *obj_a.seq_spare;
+	}
+}
+
+static int
+t_hs_trace(void)
+{
+	unsigned n = sizeof(trace_cases) / sizeof(trace_cases[0]);
+	unsigned i, lvl;
+	long lines = 0;
+	int step;
+
+	diff_begin("v8handshak: the trace");
+
+	for (lvl = 1; lvl <= 3; lvl++) {
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+		dsplib_debug_capture_on = 1;
+
+		for (i = 0; i < n; i++) {
+			trace_setup(&trace_cases[i], 7000u + i);
+
+			for (step = 0; step < 2; step++) {
+				int ra, rb;
+
+				obj_a.v21_params.f18 =
+					obj_b.v21_params.f18 = 10;
+				obj_a.v21_params.f1a =
+					obj_b.v21_params.f1a = 0x3ff;
+
+				ra = ref_v8handshak(&obj_a);
+				rb = v8handshak(&obj_b);
+				diff_eq_int("return (case %ld)", rb, ra,
+					    (long)(lvl * 16 + i));
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("transcript matches (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)lvl);
+		if (getenv("DBGDIFF")
+		    && strcmp(dsplib_debug_capture_text(0),
+			      dsplib_debug_capture_text(1)) != 0) {
+			const char *o = dsplib_debug_capture_text(0);
+			const char *r = dsplib_debug_capture_text(1);
+			int j = 0;
+
+			while (o[j] && o[j] == r[j])
+				j++;
+			while (j > 0 && o[j - 1] != '\n')
+				j--;
+			printf("=== level %u: divergence at %d\n", lvl, j);
+			printf("--- ours: %.400s\n", o + j);
+			printf("--- ref : %.400s\n", r + j);
+		}
+		diff_eq_int("line counts match (level %ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), (long)lvl);
+		if (lvl == 1)
+			diff_eq_int("silent below the threshold",
+				    (int)dsplib_debug_capture_lines(1), 0, 0);
+		else
+			lines += dsplib_debug_capture_lines(1);
+	}
+
+	diff_eq_int("diagnostics were captured (%ld lines)", lines > 15, 1,
+		    lines);
+
+	return diff_end();
 }
 
 int
@@ -432,5 +609,7 @@ main(void)
 			    1, st2);
 	}
 	rc |= diff_end();
+
+	rc |= t_hs_trace();
 	return rc;
 }

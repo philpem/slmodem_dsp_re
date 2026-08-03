@@ -12,6 +12,7 @@
  * receive state, and each value gets its own function below.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
 /* How long each wait runs before it gives up. */
@@ -38,8 +39,14 @@ v8_handshak_agc(struct v8 *v)
 		 * first, and -1 means there is not one.
 		 */
 		if (v->deadline_a != -1 && v->fe64 >= v->deadline_a) {
-			if (v->fe64 == v->deadline_a)
+			/* Announced once, on the block that reaches it. */
+			if (v->fe64 == v->deadline_a) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: Time Out Waiting For "
+					    "ANSam...\r\n");
 				v->fe64++;
+			}
 			v->f9d6 = 0xb;
 			return 1;
 		}
@@ -88,7 +95,15 @@ v8_handshak_agc(struct v8 *v)
 		if (v->fdbe == 0)
 			return 0;
 
-		/* Turn round: answer on the other channel. */
+		/*
+		 * Turn round: answer on the other channel.  The one message
+		 * in the handshake with no "V8: " on the front and a bare \n
+		 * -- and it names what the wait was for, which is how the
+		 * tone this branch has just accepted is identified as ANSam.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V8 ANSAM Detected (CM ready)\n");
+
 		v8_V21_Init(v, 0, 1);
 		r->f20 = 0x800;
 		v->fa3c = 1;
@@ -314,6 +329,7 @@ v8_hs_qca1(struct v8 *v, int ch)
 	struct v8_tx_sequence *s = v->seq_spare;
 	int idx = (short)v->fdbc;
 	int w1;
+	int w4;
 	int is_d;
 	int ok;
 
@@ -323,6 +339,7 @@ v8_hs_qca1(struct v8 *v, int ch)
 		return 0;
 
 	w1 = (unsigned short)s->word[1];
+	w4 = (unsigned short)s->word[4];
 	is_d = (w1 & 0x3b9) == 0x181;
 
 	/*
@@ -333,11 +350,13 @@ v8_hs_qca1(struct v8 *v, int ch)
 	ok = (is_d || (w1 & 0x391) == 0x81)
 	     && (unsigned short)s->word[2] == 0x3ff
 	     && (unsigned short)s->word[3] == 0x155
-	     && (unsigned short)s->word[4] == (unsigned short)w1
+	     && w4 == w1
 	     && ((unsigned short)s->word[5] & 0x3f0) == 0x3f0;
 
 	if (!ok) {
-		/* "V8: reseting QCA1 detector..." */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: reseting QCA1 detector...\r\n");
 		v->f9d8 = V8_HS_HUNT;
 		return 0;
 	}
@@ -349,16 +368,53 @@ v8_hs_qca1(struct v8 *v, int ch)
 		/*
 		 * QCA1a.  Back to waiting for the answer tone, with the
 		 * detector told that one has already been through.
+		 *
+		 * Every field is reported from BOTH copies -- word 1 and its
+		 * repeat in word 4 -- and since the acceptance test above
+		 * requires the two to be equal, the pairs always agree.  That
+		 * is the point: the line shows the redundancy survived.
+		 *
+		 * The bit numbers are the author's, over the received stream
+		 * with word k occupying bits 10k+10 to 10k+19, most
+		 * significant first: word 1 is bits 20-29 and word 4 is bits
+		 * 50-59, which is why every number here differs by thirty.
 		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8:  QCA1a: Got Good QCA1a !!!!\r\n");
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8:  QCA1a: U_QTS: bits24,26-28 = %d%d%d%d, "
+			    "bits54,56-58 = %d%d%d%d\r\n",
+			    (w1 >> 5) & 1, (w1 >> 3) & 1, (w1 >> 2) & 1,
+			    (w1 >> 1) & 1, (w4 >> 5) & 1, (w4 >> 3) & 1,
+			    (w4 >> 2) & 1, (w4 >> 1) & 1);
+
 		v->f9d4 = 5;
 		v->f9d8 = 0x19;
 		v->f9d6 = 0x19;
 		v->fdd0 = 1;
+
+		/*
+		 * Labelled QCA1d, but it is in the QCA1a arm -- the QCA1d arm
+		 * below returns before it could ever be reached.  Reproduced
+		 * as it stands; the prefix is the author's slip, not ours.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8:  QCA1d: LAPM Indication: bit23 = %d, "
+			    "bit53 = %d\r\n", (w1 >> 6) & 1, (w4 >> 6) & 1);
 		return 0;
 	}
 
 	/* QCA1d, and that is the whole negotiation. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V8:  QCA1d: Got Good QCA1d !!!!\r\n");
 	v->fdcc = (w1 >> 1) & 3;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8:  QCA1d: ANSpcm level index: bits27-28 = %d, "
+		    "bits57-58 = %d\r\n", (w1 >> 1) & 3, (w4 >> 1) & 3);
 	v->f9d4 = 5;
 	v->f9d6 = 0x63;
 	return 2;

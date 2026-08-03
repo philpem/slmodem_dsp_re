@@ -237,6 +237,34 @@ selected_sequence(struct v8 *v, int which)
  * in all of V.8 -- so it is one here too.  V8SetMessage indexes it with the
  * selector for its entry banner.
  */
+/*
+ * And the status names, .rodata+0x53c0 -- also global, nineteen entries, and
+ * indexed directly by what V8Process returns.  The seventh is thirty-two
+ * characters and stops mid-word; that is what is in the object, so that is
+ * what is here.
+ */
+const char *const v8StatusName[V8_LAST_ENUM + 1] = {
+	"V8_INIT",
+	"V8_ANS_SEND_ANSAM",
+	"V8_ANS_CM_DETECTED",
+	"V8_ANS_SEND_JM",
+	"V8_ANS_TIME_OUT_WAITING_FOR_CM",
+	"V8_ANS_TIME_OUT_WAITING_FOR_CJ",
+	"V8_ORG_WAITING_FOR_ANSAM",
+	"V8_ORG_ANSAM_DETECTED_WAITING_TE",
+	"V8_ORG_SEND_CM",
+	"V8_ORG_JM_DETECTED",
+	"V8_ORG_SEND_CJ",
+	"V8_ORG_TIME_OUT_WAITING_FOR_ANSAM",
+	"V8_ORG_TIME_OUT_WAITING_FOR_JM",
+	"V8_OK",
+	"V8_ORG_SEND_QC",
+	"V8_ORG_WAITING_FOR_QCA1d",
+	"V8_ORG_BAD_QCA1d_MESSAGE",
+	"V8_ORG_TIME_OUT_WAITING_FOR_QCA1d",
+	"V8_LAST_ENUM"
+};
+
 const char *const v8SequenceName[4] = {
 	"V8_CM", "V8_JM", "V8_CJ", "V8_QC1A"
 };

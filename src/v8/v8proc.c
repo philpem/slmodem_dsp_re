@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/v8dp.h"
 #include "dsplib/dp.h"
 #include "dsplib/modem_params.h"
@@ -69,41 +70,49 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 	 */
 	if (v->mode == 0) {
 		if (v->f9d4 == 5 && v->f9d6 == 0x19 && v->f9d8 == 0x19)
-			status = 6;
+			status = V8_ORG_WAITING_FOR_ANSAM;
 		else if ((unsigned short)v->f9d8 == 0x24)
-			status = 7;
+			status = V8_ORG_ANSAM_DETECTED_WAITING_TE;
 		else if ((unsigned short)v->f9d4 == 0x17)
-			status = v->tx_seq == &v->seq[1] ? 0xa
-				 : 8 + (v->f9d8 == 0x32);
+			status = v->tx_seq == &v->seq[1]
+				 ? V8_ORG_SEND_CJ
+				 : V8_ORG_SEND_CM + (v->f9d8 == V8_HS_TAKEN_RX);
 		else if ((unsigned short)v->f9d4 == 0x2b)
-			status = 0xe;
+			status = V8_ORG_SEND_QC;
 		else if ((unsigned short)v->f9d6 == 0xb)
-			status = 0xb;
+			status = V8_ORG_TIME_OUT_WAITING_FOR_ANSAM;
 		else if ((unsigned short)v->f9d6 == 0xc)
-			status = 0xc;
+			status = V8_ORG_TIME_OUT_WAITING_FOR_JM;
 	} else {
 		if ((unsigned short)v->f9d4 == 6)
-			status = 1 + (v->f9d8 == 0x33);
+			status = V8_ANS_SEND_ANSAM
+				 + (v->f9d8 == V8_HS_TAKEN_TX);
 		else if ((unsigned short)v->f9d4 == 0x17)
-			status = 3;
+			status = V8_ANS_SEND_JM;
 
 		if ((unsigned short)v->f9d6 == 4)
-			status = 4;
+			status = V8_ANS_TIME_OUT_WAITING_FOR_CM;
 		else if ((unsigned short)v->f9d6 == 5)
-			status = 5;
+			status = V8_ANS_TIME_OUT_WAITING_FOR_CJ;
 	}
 
 	if (changed)
-		status = 0xd;
-	if (v->feb8 != status)
+		status = V8_OK;
+
+	/*
+	 * The conditional store is a change detector: this is the one place
+	 * the whole negotiation is narrated, and `feb8` exists to hold the
+	 * previous status so that it can be.
+	 */
+	if (v->feb8 != status) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: State changed from %s to %s\r\n",
+			    v8StatusName[v->feb8], v8StatusName[status]);
 		v->feb8 = status;
+	}
 	return status;
 }
-
-/* Which statuses mean what to the datapump layer. */
-#define V8_ST_FAILED_LO		4
-#define V8_ST_NEGOTIATED	13
-#define V8_ST_PCM		16
 
 int
 v8_process(struct dp *dp, void *in, void *out, int count)
@@ -114,24 +123,64 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	int arg = -1;
 
 	switch (rc) {
-	case 4: case 5: case 11: case 12: case 17:
+	/* Every status whose name ends TIME_OUT_WAITING_FOR_something. */
+	case V8_ANS_TIME_OUT_WAITING_FOR_CM:
+	case V8_ANS_TIME_OUT_WAITING_FOR_CJ:
+	case V8_ORG_TIME_OUT_WAITING_FOR_ANSAM:
+	case V8_ORG_TIME_OUT_WAITING_FOR_JM:
+	case V8_ORG_TIME_OUT_WAITING_FOR_QCA1d:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: process: timeout.\n");
 		ret = DPSTAT_ERROR;
 		break;
 
-	case V8_ST_NEGOTIATED:
+	case V8_OK:
 		/* Publish what was agreed, then ask for the change. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: process: OK.\n");
+		/*
+		 * ...but only while the idle timer is not already running.
+		 * Once a change has been asked for, `f20` is counting down to
+		 * it and a second V8_OK must not start over.
+		 */
+		if (st->f20 != 0)
+			break;
 		V8UpdateModemParameters(st->v8, st->cm);
+
+		/*
+		 * Which datapump comes next.  Quick connect keeps whatever the
+		 * call asked for; otherwise it is whichever modulation
+		 * survived the negotiation, most capable first -- the same
+		 * three bits of `b0` that V8Create prints as V90, V34 and V32
+		 * (finding 164), and the datapump ids are the standard
+		 * numbers.  Nothing left means nothing to change to.
+		 */
 		if (st->cm->b2 & 0x10) {
-			st->dspinfo->f08 = (st->cm->b2 >> 6) & 1;
-			st->dspinfo->f0c = st->cm->menu;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("v8: process: QC.\n");
 			arg = st->want;
+		} else if (st->cm->b0 & 0x08) {
+			arg = DP_V90;
+		} else if (st->cm->b0 & 0x20) {
+			arg = DP_V34;
+		} else if (st->cm->b0 & 0x80) {
+			arg = DP_V32;
+		} else {
+			ret = DPSTAT_ERROR;
+			break;
 		}
+
+		/* Common to all four: what was agreed goes to the modem. */
+		st->dspinfo->f08 = (st->cm->b2 >> 6) & 1;
+		st->dspinfo->f0c = st->cm->menu;
 		break;
 
-	case V8_ST_PCM:
+	case V8_ORG_BAD_QCA1d_MESSAGE:
 		/*
 		 * The far end offered PCM.  Only take it if this call asked
-		 * for V.90 or V.92, and only once.
+		 * for V.90 or V.92, and only once.  V8Process never returns
+		 * this status, so nothing here runs on a reconstructed path
+		 * either; it is in the object and it is reproduced.
 		 */
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;
@@ -149,10 +198,19 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		modem_set_param(dp->modem, 9, arg);
 		ret = DPSTAT_CHANGEDP;
 		st->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v8: Link established. Idle timer %d.\n",
+			    st->f20);
 	}
 
-	if (st->f2c != rc)
+	/* The same change detector as V8Process's, one layer up. */
+	if (st->f2c != rc) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: status (%d) %s\n", rc,
+					     v8StatusName[rc]);
 		st->f2c = rc;
+	}
 
 	if (st->f20 > 0) {
 		st->f20 -= count;

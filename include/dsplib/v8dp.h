@@ -15,6 +15,17 @@
 /* The id this datapump registers under. */
 #define DP_V8	8
 
+/*
+ * The datapump ids V.8 can hand over to.  Two of them are also ids a call can
+ * be STARTED with, meaning "this may end up as V.90 or V.92"; the other two
+ * are only ever arrived at, by winning the modulation negotiation.  They are
+ * the standard numbers, which is why 34 and 32 are what they are.
+ */
+#define DP_V32	32
+#define DP_V34	34
+#define DP_V90	90
+#define DP_V92	92
+
 /* The only rate the handshake runs at. */
 #define V8_DP_RATE	9600
 

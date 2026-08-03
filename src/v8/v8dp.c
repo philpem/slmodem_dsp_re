@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/v8dp.h"
 #include "dsplib/dp_param.h"
 #include "dsplib/modem_params.h"
@@ -18,12 +19,6 @@
 extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 
-/*
- * The two ids that mean "this call may end up as V.90 or V.92", which change
- * what the menu offers.  Only meaningful when we are the calling modem.
- */
-#define DP_V90	90
-#define DP_V92	92
 
 static struct dp *
 v8_create(void *modem, int id, int caller, int srate, int max_frag,
@@ -37,13 +32,22 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	(void)max_frag;
 
 	/*
-	 * Read once and discarded: the original fetches it only so its debug
-	 * output can name the rate it is about to refuse.
+	 * Parameter 8 is read but never acted on -- it exists in this function
+	 * only to be printed, and what it is printed as is its name: automode.
 	 */
-	(void)modem_get_param(modem, 8);
+	int automode = (int)modem_get_param(modem, 8);
 
 	if (srate != V8_DP_RATE)
 		return 0;
+
+	/*
+	 * After the refusal, not before: a call at the wrong rate is turned
+	 * away silently.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "v8: create: caller %d, automode %d, dp id %d.\n",
+		    caller, automode, id);
 
 	st = sysdep_malloc(sizeof(struct v8_dp));
 	if (st == 0)
@@ -95,6 +99,9 @@ static int
 v8_delete(struct dp *dp)
 {
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v8: delete...\n");
 
 	V8Delete(st->v8);
 	sysdep_free(st);
