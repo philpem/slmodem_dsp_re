@@ -38,6 +38,7 @@ extern void ref_V34SetINFO0aBits(void *obj, short *bits);
 extern void ref_V34SetINFO0dBits(void *obj, short *bits);
 extern void ref_V34GiveINFO0dBits(void *obj, const short *bits);
 extern int ref_V34GiveINFO1aBits(void *obj, const short *bits);
+extern void ref_VPcmV34SetMohMessageBits(void *obj, short *bits);
 
 /* --- the blocks, each with a guard band on the reference side ------------- */
 
@@ -275,6 +276,13 @@ poke_int(unsigned off, int v)
 {
 	memcpy((unsigned char *)&oa + off, &v, sizeof(v));
 	memcpy(ob + off, &v, sizeof(v));
+}
+
+static void
+poke_byte(unsigned off, unsigned char v)
+{
+	*((unsigned char *)&oa + off) = v;
+	ob[off] = v;
 }
 
 static void
@@ -539,6 +547,44 @@ main(void)
 		 * function.
 		 */
 		diff_eq_int("the sweep reached Uinfo 6", saw_uinfo6, 1, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 info: VPcmV34SetMohMessageBits");
+	{
+		/*
+		 * The selector is swept past its bound in BOTH directions:
+		 * the object's test is unsigned, so a negative value is out
+		 * of range too, and the out-of-range case must leave the
+		 * caller's buffer untouched rather than clearing it.
+		 */
+		static const int sel[] = { 0, 1, 2, 3, 4, 5, 6, 7, 100,
+					   -1, -1000, 0x7fffffff };
+		unsigned si, r, v;
+
+		for (si = 0; si < sizeof(sel) / sizeof(sel[0]); si++)
+		for (r = 0; r < 4; r++)
+		for (v = 0; v < 4; v++) {
+			static const unsigned char reasons[] = { 0, 1, 2,
+								 0xff };
+			static const short adds[] = { 0, 1, 0x0f,
+						      (short)0xffff };
+			long tag = (long)si * 100 + r * 10 + v;
+			short m[V34_INFO_MSG_SHORTS];
+			int j;
+
+			setup();
+			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+				m[j] = (short)(0x7000 + j);
+			set_msg(m);
+			poke_int(0xabf0, sel[si]);
+			poke_byte(0xabfa, reasons[r]);
+			poke_short(0xabe0, adds[v]);
+
+			VPcmV34SetMohMessageBits(&oa, msg_a);
+			ref_VPcmV34SetMohMessageBits(ob, msg_b);
+			compare_all("SetMohMessageBits", tag);
+		}
 	}
 	rc |= diff_end();
 

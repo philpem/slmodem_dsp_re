@@ -59,6 +59,12 @@ void V34GiveINFO0dBits(void *obj, const short *bits);
  */
 int V34GiveINFO1aBits(void *obj, const short *bits);
 
+/*
+ * Build the first short of one of V.92's six Modem-on-Hold messages, chosen
+ * by the object's `moh_message`.  A selector above 5 writes nothing at all.
+ */
+void VPcmV34SetMohMessageBits(void *obj, short *bits);
+
 #ifdef __cplusplus
 }
 #endif

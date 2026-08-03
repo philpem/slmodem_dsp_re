@@ -36,6 +36,7 @@
 extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_VPcmV34LogTimingOffset(void *obj, short offset);
+extern void ref_VPcmV34SetTxScale(void *obj);
 extern double *ref_V34XF_GetProbeResultsPtr(void *obj);
 extern int *ref_V34XF_GetInfo0BitsPtr(void *obj);
 extern short ref_V34XF_GetRTD(void *obj);
@@ -316,6 +317,38 @@ main(void)
 		 * testing the thing the note in v34pcmif.c is about.
 		 */
 		diff_eq_int("the sweep reached the wrap", saw_negative, 1, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 pcm interface: SetTxScale");
+	{
+		/*
+		 * Its diagnostic goes through `edprintf`, which gates itself
+		 * -- so unlike everything else here the call site is NOT
+		 * behind a level test, and the transcript has to be compared
+		 * with the level raised to see it at all.
+		 */
+		setup();
+		VPcmV34SetTxScale(&oa);
+		ref_VPcmV34SetTxScale(ob);
+		compare("SetTxScale", 800);
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		setup();
+		VPcmV34SetTxScale(&oa);
+		ref_VPcmV34SetTxScale(ob);
+		compare("SetTxScale, logging", 801);
+		diff_eq_int("SetTxScale transcript",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, 801);
+		diff_eq_int("and it said something",
+			    dsplib_debug_capture_text(1)[0] != 0, 1, 801);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

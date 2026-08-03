@@ -13,6 +13,12 @@ extern "C" {
 void VPcmV34LogTimingOffset(void *obj, short offset);
 
 /*
+ * Set the transmit scale to the one constant the object ever uses, and say
+ * so through `edprintf`.  No parameter: the value is built in.
+ */
+void VPcmV34SetTxScale(void *obj);
+
+/*
  * Where the V.34 object keeps the two arrays the PCM side fills in and reads
  * back.  Both return interior pointers and neither copies anything.
  */

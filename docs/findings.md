@@ -8400,3 +8400,59 @@ states: `StateName[4]` `RECEIVE`, `[35]` `WAIT`, `[41]` `DET_SYNC`, `[43]`
 That materially changes how the split in fastpass.md should be made.  Eighty-
 seven states over three concurrent machines is not seven slices of one
 machine, and `cfgsplit` should be pointed at it before anyone assumes it is.
+
+### 153. `--ready` models calls, not references — `preinitdigital` is not writable
+
+`tools/callgraph.py --ready` lists `preinitdigital` (533 bytes), and it
+cannot be written: it installs five things by ADDRESS that this tree does
+not have.
+
+```
+   597bc:  mov  $0x0,%eax        <== R_386_32 scrambleGPC
+   597cb:  movl $0x0,0x28(%edx)  <== R_386_32 Convolve16
+   5993f:  mov  $0x0,%eax        <== R_386_32 scrambleGPA
+   5994a:  mov  $0x0,%eax        <== R_386_32 descrambleGPC
+   5995f:  mov  $0x0,%eax        <== R_386_32 descrambleGPA
+```
+
+None of the four scramblers is reconstructed — all four are themselves in
+`--ready` — and `Convolve16` is a 128-byte `.rodata` table, not a function at
+all.  A build would not link.
+
+**The tool is right and the reading of it was wrong.**  `callgraph.py` builds
+a CALL graph: a function is ready when everything it *calls* exists.  Taking
+a function's address is not a call, and neither is naming a table.  So
+`--ready` is a lower bound on what is blocked, and its answer for any
+function that installs handlers or selects tables by pointer is unreliable in
+one direction.
+
+This is the second such caveat on the same output.  Finding 149 records the
+first: `--ready` also lists file-local functions that no test can reach, so
+it is not filtered by testability either.  Together:
+
+> **`--ready` means "its callees exist".  It does not mean writable, and it
+> does not mean testable.**  Check the relocations and the symbol binding
+> before scheduling anything from it.
+
+Both caveats bite hardest on exactly the code that is left, because
+installing a handler by pointer is what an initialisation function does.
+
+**What `preinitdigital` actually needs first:** `scrambleGPC` (146),
+`scrambleGPA` (180), `descrambleGPC` (225), `descrambleGPA` (232) and the
+`Convolve16` table — 783 bytes of code and 128 of data.  They are a coherent
+unit and worth doing as one: the four are the V.34 scrambler and descrambler
+for the two ends of the call.
+
+**And `preinitdigital` names which end this is.**  It reads `f359c`, already
+known from `setTimingStateParameters` as selecting one of two timing
+parameter tables, and uses it to choose between the two polynomials:
+
+```
+   if (obj->f359c == 0x65) { scramble = GPC; descramble = GPA; }
+   else                    { scramble = GPA; descramble = GPC; }
+```
+
+The two ends of a V.34 call must scramble with opposite polynomials, so
+**`f359c == 0x65` is the originate/answer flag** — which also explains why
+the timing ramp has two variants indexed by the same field.  One field,
+two uses, and neither of them had a name until they were put side by side.

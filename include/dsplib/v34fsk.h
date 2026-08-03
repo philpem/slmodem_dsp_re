@@ -371,7 +371,30 @@ struct v34_object {
 	short fabce;					/* +0xabce */
 	short fabd0;					/* +0xabd0 */
 	short fabd2;					/* +0xabd2 */
-	unsigned char unmapped_abd4[0xac02 - 0xabd4];
+	unsigned char unmapped_abd4[0xabe0 - 0xabd4];
+	/*
+	 * +0xabe0.  Added to 0x50 to make the MHack message's first short,
+	 * so it is what the acknowledgement CARRIES rather than a flag --
+	 * a granted hold time is the obvious reading and the object does not
+	 * say.  `VPcmV34SetMohMessageBits` is the only reader.
+	 */
+	short fabe0;					/* +0xabe0 */
+	unsigned char unmapped_abe2[0xabf0 - 0xabe2];
+	/*
+	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
+	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,
+	 * 3 MHcda, 4 MHack, 5 MHnack.  Anything above 5 builds nothing --
+	 * the test is unsigned, so a negative value falls there too.
+	 */
+	int moh_message;				/* +0xabf0 */
+	unsigned char unmapped_abf4[0xabfa - 0xabf4];
+	/*
+	 * +0xabfa.  A byte that picks between three MHclrd codes -- 0x95,
+	 * 0x96 and 0x9a for values 0, 1 and anything else.  V.92 gives
+	 * cleardown a reason code, which is what this will be.
+	 */
+	unsigned char fabfa;				/* +0xabfa */
+	unsigned char unmapped_abfb[0xac02 - 0xabfb];
 	/*
 	 * +0xac02.  `V34SetINFO0aBits` puts 20 here when it asks for a short
 	 * phase 2, and says what it is doing: "Setting prev bulk delay = %d".

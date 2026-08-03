@@ -1,5 +1,5 @@
 /*
- * v34info.c -- ITU-T V.34: the INFO0 and INFO1a message codecs.
+ * v34info.c -- ITU-T V.34: the INFO0, INFO1a and Modem-on-Hold codecs.
  *
  * THE SAME TRANSLATION UNIT AS v34pcmif.c, split by role rather than by
  * address: both files hold `extern "C"` exports of `VPcmV34Main.cpp`, which
@@ -560,6 +560,85 @@ out:
 
 /*
  * ---------------------------------------------------------------------------
+ * Modem on Hold.
+ */
+
+/*
+ * Build the first short of one of V.92's six MOH messages.
+ *
+ * A jump table on `moh_message`, and the six are named by the object's own
+ * strings rather than by anything this reconstruction supplies:
+ *
+ *     0  MHreq   0x33          3  MHcda   0xbb
+ *     1  MHfrr   0xdd          4  MHack   0x50 + fabe0
+ *     2  MHclrd  0x95/96/9a    5  MHnack  0x77
+ *
+ * OUT OF RANGE DOES NOTHING AT ALL -- not even the debug line -- and the
+ * caller's buffer is left exactly as it was.  The object bounds the selector
+ * with one unsigned compare, `cmp $0x5; ja`, so a negative value falls out
+ * there too; the switch below reaches the same place by enumerating the six
+ * and defaulting, which needs no cast to agree.
+ *
+ * TWO CASES STORE TWICE.  MHack writes 0x50 and then overwrites it with
+ * `0x50 + fabe0`; MHclrd writes 0x90 and then one of three values.  Both
+ * intermediate stores are to the same short and are immediately replaced, so
+ * only the final value is written here -- there is no observable difference
+ * and the object's own compiler would have been free to drop them too.
+ */
+void
+VPcmV34SetMohMessageBits(void *objp, short *bits)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	switch (obj->moh_message) {
+	case 0:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHreq message...\r\n");
+		bits[0] = 0x33;
+		break;
+	case 1:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHfrr message...\r\n");
+		bits[0] = (short)0xdd;
+		break;
+	case 2:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHclrd message...\r\n");
+		if (obj->fabfa == 0)
+			bits[0] = (short)0x95;
+		else if (obj->fabfa == 1)
+			bits[0] = (short)0x96;
+		else
+			bits[0] = (short)0x9a;
+		break;
+	case 3:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHcda message...\r\n");
+		bits[0] = (short)0xbb;
+		break;
+	case 4:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHack message...\r\n");
+		bits[0] = (short)((unsigned short)obj->fabe0 + 0x50);
+		break;
+	case 5:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
+					     "Building MHnack message...\r\n");
+		bits[0] = 0x77;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -579,6 +658,9 @@ V34INFO_ASSERT(isshrt, is_short,        0xabcc);
 V34INFO_ASSERT(abce,   fabce,           0xabce);
 V34INFO_ASSERT(abd0,   fabd0,           0xabd0);
 V34INFO_ASSERT(abd2,   fabd2,           0xabd2);
+V34INFO_ASSERT(mohv,   fabe0,           0xabe0);
+V34INFO_ASSERT(mohm,   moh_message,     0xabf0);
+V34INFO_ASSERT(mohr,   fabfa,           0xabfa);
 V34INFO_ASSERT(bulk,   prev_bulk_delay, 0xac02);
 V34INFO_ASSERT(pac18,  pac18,           0xac18);
 

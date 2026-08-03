@@ -29,6 +29,7 @@
  */
 
 #include "dsplib/debug.h"
+#include "dsplib/encode.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34pcmif.h"
 
@@ -38,6 +39,23 @@ VPcmV34LogTimingOffset(void *objp, short offset)
 	struct v34_object *obj = (struct v34_object *)objp;
 
 	obj->fac0c = offset;
+}
+
+/*
+ * Set the transmit scale.
+ *
+ * NO PARAMETER AND NO CHOICE: 0x16a1 is built in, stored, and then reported
+ * through `edprintf` -- which is not behind a debug-level test here, because
+ * `edprintf` applies its own.  Every other diagnostic in this file is gated
+ * at its call site; this one is not, and that difference is the object's.
+ */
+void
+VPcmV34SetTxScale(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->f25d4 = 0x16a1;
+	edprintf("VPcmV34SetTxScale: tx scale set to %d\r\n", 0x16a1);
 }
 
 /*
@@ -224,6 +242,7 @@ V34XF_IndicateK56FlexRateDetermined(void *objp)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
+V34PCMIF_ASSERT(txscale, f25d4,           0x25d4);
 V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
 V34PCMIF_ASSERT(f382,    f382,             0x0382);
