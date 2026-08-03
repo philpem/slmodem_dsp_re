@@ -8495,3 +8495,75 @@ next known field and got 128 "which is the reassuring answer".  This clears
 t1, t2 and t3 with the same `cmp $0x7f` bound, so 128 is measured now rather
 than inferred -- and t3 is filled with -1 where the other two get zero, which
 is what a cost table wants and zero is not.
+
+### 155. `v34handshakinit`'s shape, before it is reconstructed
+
+Everything it needs now exists, so this is the survey that should precede
+writing it rather than an obstacle report.
+
+**It takes a MODE and dispatches five ways.**  The second argument indexes a
+jump table at .rodata+0x2d44, and two of the five entries are the same
+address:
+
+```
+   5fb61:  cmp  $0x4,%ebp
+   5fb6b:  ja   5fd10                  ; out of range -> the common tail
+   5fb71:  jmp  *0x2d44(,%ebp,4)
+
+   0  -> 0x5ff90     3  -> 0x5fd40     (the same body as 2)
+   1  -> 0x5fed0     4  -> 0x5fb82
+   2  -> 0x5fd40
+```
+
+So there are four bodies, not five, and an out-of-range mode is not an error
+-- it runs the tail, which clears +0xaa3c and puts 0x10 in +0x2aa0.
+
+**THE THREE STATE MACHINES ARE THREE WORDS**, at +0x3592, +0x3594 and
++0x3596, and every one of the thirteen diagnostics is the same idiom:
+
+```c
+    if (state != NEW) {
+            if (DSPLIB_DEBUG_ON())
+                    trace(...);
+            state = NEW;
+    }
+```
+
+-- compare, print the transition, assign.  That is why finding 152 found the
+traces naming `rxstate`, `txstate` and `microstate` with each printing the
+other two: they are three words set by the same three-line pattern, and each
+trace shows the one changing plus the two that are not.
+
+**What each mode starts the machines at**, in `v34hshak.h`'s names:
+
+```
+   mode      +0x3596            +0x3594          +0x3592
+    0    SILENCEINFO (54)    RX_DPSK (43)          -
+    1    SILENCERETRAIN(74)      ...               -
+   2,3   SSEG (18)           RECEIVE (4)           -
+    4    SILENCERETRAIN(74)  WAIT (35)      MOH_TONE (79)
+```
+
+so mode 4 is the Modem-on-Hold entry, modes 2 and 3 share the data path, and
+mode 0 is the one that also calls `rxtiminginit`.  Which of the three words
+is `rxstate` and which is `txstate` is NOT settled here -- it needs the
+format string at each site read against its arguments, which is the first
+job of writing it.
+
+**What it calls:** `v34modeminit` (three of the four bodies),
+`rxtiminginit`, `VPcmV34SetMohMessageBits`, `detectorinit` with `c1200_` or
+`c2400_` on `f359c`, and `preinitdigital` transitively.  All of those now
+exist, which is what makes it writable at all.
+
+**What writing it needs that does not exist yet:** `StateName` itself, as 87
+string pointers.  The traces index it -- finding 152 -- so the table has to
+be emitted before a single diagnostic can be reproduced, and it is the
+table `include/dsplib/v34hshak.h` already carries the names of.
+
+**One thing to check first.**  The entry code reads +0x244 and +0x234 as a
+pair, subtracts them and compares against 0x176ff, and on overflow resets
+them to 0 and 0xfff15a00.  0x176ff is 95,999 and 0x69780 is 431,488, which
+is added to +0x234 to make +0x238.  Those look like sample counts at some
+rate -- 95,999 is 12 seconds at 8 kHz and 431,488 is not a round number of
+anything obvious -- so the pair is a timer and the constants are worth
+pinning before the states are.
