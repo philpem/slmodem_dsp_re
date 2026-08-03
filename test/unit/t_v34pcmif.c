@@ -23,15 +23,37 @@
  * invisible to every test in this tree unless the transcript itself is the
  * thing being compared.  So each sweep runs a second time with both debug
  * levels raised and the two transcripts diffed.
+ *
+ * AND THREE ENTRY POINTS THAT REACH OUT OF THE OBJECT.  `VPcmV34InitiateHangUp`
+ * and `VPcmV34InitiateRateRenegotiation` fork on `status`, and one arm walks
+ * `p3548 -> +0x175c -> +0x20c -> +0x8c` into memory this object does not own.
+ * Each side gets its OWN three-link chain, prefilled with a pattern, and the
+ * chains are compared to each other afterwards -- so "wrote the right code
+ * into the leaf" and "wrote nothing at all" are different results.  Comparing
+ * the leaf alone would not do: `VPcmV34InitiateHangUp` also sets a flag byte
+ * at `p3548 + 0x173e` and the renegotiation does not, and that byte is the
+ * only difference between the two functions' PCM arms.
+ *
+ * THE STATE WORDS ARE SEEDED IN RANGE ON EVERY CASE THAT REACHES THE
+ * HANDSHAKE.  `v34handshakinit` mode 2 runs three transitions, and each
+ * indexes `StateName` with the value it finds -- nothing bounds the index
+ * (D42), so a fill pattern there is an out-of-bounds read as soon as the
+ * debug level is up.  All three are seeded to DIFFERENT in-range values for
+ * the reason t_v34hshak.c gives: equal words make the three machines
+ * indistinguishable.
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "harness.h"
 #include "dsplib/debug.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
+#include "dsplib/v34scram.h"
+#include "dsplib/v34shell.h"
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -46,6 +68,17 @@ extern void ref_V34XF_IndicateDilReceived(void *obj, unsigned char constel);
 extern void ref_V34XF_IndicateTrn2dReceived(void *obj);
 extern void ref_V34XF_IndicateK56FlexRateDetermined(void *obj);
 
+extern void ref_VPcmV34InitiateHangUp(void *obj);
+extern void ref_VPcmV34InitiateRateRenegotiation(void *obj, int req);
+extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn_type,
+				       unsigned char constel_size);
+
+extern short ref_scrambleGPC(void *obj, short n);
+extern short ref_scrambleGPA(void *obj, short n);
+extern int ref_descrambleGPC(void *obj, unsigned short b, unsigned short n);
+extern int ref_descrambleGPA(void *obj, unsigned short b, unsigned short n);
+extern const short ref_Convolve16[64];
+
 /*
  * Ours is the mapped struct, the blob's is raw bytes of the same length.
  * Statics, not locals: 44 KB each and two of them would be a large stack
@@ -54,11 +87,64 @@ extern void ref_V34XF_IndicateK56FlexRateDetermined(void *obj);
 static struct v34_object oa;
 static unsigned char ob[sizeof(struct v34_object)];
 
+/*
+ * The pointer-sized fields the two Initiate entry points and
+ * `VPcmV34SetV90RateReneg` leave holding different addresses on the two
+ * sides: the session pointer this file seeds per side, and the four
+ * `preinitdigital` installs in the two shell contexts.  Each is a hole in the
+ * byte comparison, so each is checked by what it selects instead --
+ * `check_session_chain` and `check_shell_ptrs` below -- and `saw_ptr_skip`
+ * asserts every entry really was reached, so the list cannot go stale.
+ */
+static const unsigned ptr_skip[] = {
+	0x3548,					/* the session object       */
+	0x0a28, 0x0e48,				/* receive shell context    */
+	0x0a28 + V34_SHELL_TX, 0x0e48 + V34_SHELL_TX	/* transmit         */
+};
+#define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
+
+static int saw_ptr_written[NPTR];
+
+static int
+skipped(unsigned off)
+{
+	unsigned k;
+
+	for (k = 0; k < NPTR; k++)
+		if (off >= ptr_skip[k] && off < ptr_skip[k] + 4)
+			return 1;
+	return 0;
+}
+
+/*
+ * The per-side dummies every skipped pointer starts out holding.  Two reasons,
+ * and the second is the one that was learned the hard way: it makes "this arm
+ * left the field alone" visible, AND it means the content checks below read a
+ * buffer rather than a fill pattern.  A fixture that dereferences an unseeded
+ * pointer CRASHES on the first case that diverges instead of reporting it,
+ * which is a defect in the test and not a diagnosis -- `run_setupreceiver` had
+ * exactly this and it hid a real one.
+ *
+ * Long enough for the 64-short convolution table the checks read through them.
+ */
+#define DUMMY_LEN 128
+static short dummy_a[DUMMY_LEN], dummy_b[DUMMY_LEN];
+
 static void
 setup(void)
 {
+	void *pa = (void *)dummy_a;
+	void *pb = (void *)dummy_b;
+	unsigned k;
+
 	memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 	memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
+	for (k = 0; k < DUMMY_LEN; k++)
+		dummy_a[k] = dummy_b[k] = (short)(0x4b00 + k);
+	for (k = 0; k < NPTR; k++) {
+		memcpy((unsigned char *)&oa + ptr_skip[k], &pa, sizeof(pa));
+		memcpy(ob + ptr_skip[k], &pb, sizeof(pb));
+	}
 }
 
 /*
@@ -70,19 +156,35 @@ static void
 compare(const char *what, long tag)
 {
 	const unsigned char *p = (const unsigned char *)&oa;
-	unsigned i;
+	void *seed = (void *)dummy_a;
+	unsigned i, k;
+	int bad = 0;
 
-	for (i = 0; i < sizeof(oa); i++)
-		if (p[i] != ob[i])
+	/*
+	 * A skipped field has to earn its hole, and with the seeding above the
+	 * old test -- "the two sides differ" -- is true by construction and
+	 * proves nothing.  The one that still means something is that
+	 * SOMETHING wrote it: it no longer holds the dummy.
+	 */
+	for (k = 0; k < NPTR; k++)
+		if (memcmp(p + ptr_skip[k], &seed, 4) != 0)
+			saw_ptr_written[k] = 1;
+
+	for (i = 0; i < sizeof(oa); i++) {
+		if (p[i] == ob[i] || skipped(i))
+			continue;
+		bad++;
+		if (bad <= 8)
 			diff_eq_int(what, p[i], ob[i],
 				    (long)i * 1000 + tag);
+	}
 
 	/*
 	 * The loop above only reports differences, so an all-equal run
 	 * records no check at all.  Count one, or a comparison that silently
 	 * stopped comparing would look like a pass.
 	 */
-	diff_eq_int(what, memcmp(&oa, ob, sizeof(oa)) == 0, 1, tag);
+	diff_eq_int(what, bad, 0, tag);
 }
 
 /* Set the same field on both sides without going through a named accessor. */
@@ -240,6 +342,408 @@ sweep(int with_debug)
 			    1, base + 400);
 }
 
+/* --- the three request entry points --------------------------------------- */
+
+/*
+ * The session chain, per side.  Lengths are one page past the deepest offset
+ * each link is indexed at, so an out-of-bounds store lands inside the buffer
+ * and shows up in the comparison rather than corrupting something else.
+ */
+#define SESS_LEN	0x1800		/* indexed at +0x173e and +0x175c */
+#define DEMOD_LEN	0x0240		/* indexed at +0x20c              */
+#define LEAF_LEN	0x00c0		/* indexed at +0x8c               */
+
+#define SESS_PTR	0x175c
+#define SESS_FLAG	0x173e
+#define DEMOD_PTR	0x020c
+#define LEAF_REQ	0x008c
+
+#define CHAIN_FILL	0x3c
+
+static unsigned char sess_a[SESS_LEN], sess_b[SESS_LEN];
+static unsigned char demod_a[DEMOD_LEN], demod_b[DEMOD_LEN];
+static unsigned char leaf_a[LEAF_LEN], leaf_b[LEAF_LEN];
+
+static void
+put_ptr(void *base, unsigned off, void *v)
+{
+	memcpy((unsigned char *)base + off, &v, sizeof(v));
+}
+
+static void
+poke_ptr(unsigned off, void *pa, void *pb)
+{
+	memcpy((unsigned char *)&oa + off, &pa, sizeof(pa));
+	memcpy(ob + off, &pb, sizeof(pb));
+}
+
+static void
+seed_chain(void)
+{
+	memset(sess_a, CHAIN_FILL, sizeof(sess_a));
+	memset(sess_b, CHAIN_FILL, sizeof(sess_b));
+	memset(demod_a, CHAIN_FILL, sizeof(demod_a));
+	memset(demod_b, CHAIN_FILL, sizeof(demod_b));
+	memset(leaf_a, CHAIN_FILL, sizeof(leaf_a));
+	memset(leaf_b, CHAIN_FILL, sizeof(leaf_b));
+
+	put_ptr(sess_a, SESS_PTR, demod_a);
+	put_ptr(sess_b, SESS_PTR, demod_b);
+	put_ptr(demod_a, DEMOD_PTR, leaf_a);
+	put_ptr(demod_b, DEMOD_PTR, leaf_b);
+
+	poke_ptr(0x3548, sess_a, sess_b);
+}
+
+/*
+ * Compare two buffers with one pointer-sized hole in each -- the links are
+ * necessarily different addresses.  Everything else, including the flag byte
+ * and the request word, is compared.
+ */
+static void
+compare_link(const char *what, const unsigned char *a, const unsigned char *b,
+	     unsigned len, unsigned hole, long tag)
+{
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < len; i++) {
+		if (a[i] == b[i] || (hole != (unsigned)-1
+				     && i >= hole && i < hole + 4))
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, a[i], b[i], (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+}
+
+/*
+ * The whole chain, plus the two things it is FOR.  `want_req` is the code the
+ * leaf should be carrying and `want_flag` whether the session flag was set;
+ * both are -1 when this arm was not taken, and then the chain must be exactly
+ * as it was seeded -- which is the half that catches a fork gone the wrong
+ * way.
+ */
+static int saw_chain_walked;
+
+static void
+check_session_chain(const char *what, int taken, int want_req, int want_flag,
+		    long tag)
+{
+	compare_link(what, sess_a, sess_b, SESS_LEN, SESS_PTR, tag);
+	compare_link(what, demod_a, demod_b, DEMOD_LEN, DEMOD_PTR, tag);
+	compare_link(what, leaf_a, leaf_b, LEAF_LEN, (unsigned)-1, tag);
+
+	if (taken) {
+		int got;
+
+		saw_chain_walked = 1;
+		memcpy(&got, leaf_a + LEAF_REQ, sizeof(got));
+		diff_eq_int(what, got, want_req, tag);
+		diff_eq_int(what, sess_a[SESS_FLAG],
+			    want_flag ? 1 : CHAIN_FILL, tag);
+	} else {
+		unsigned i;
+		int touched = 0;
+
+		for (i = 0; i < SESS_LEN; i++)
+			if (sess_a[i] != CHAIN_FILL
+			    && (i < SESS_PTR || i >= SESS_PTR + 4))
+				touched = 1;
+		for (i = 0; i < LEAF_LEN; i++)
+			if (leaf_a[i] != CHAIN_FILL)
+				touched = 1;
+		diff_eq_int(what, touched, 0, tag);
+	}
+}
+
+static void *
+ptr_at(const void *base, unsigned off)
+{
+	void *p;
+
+	memcpy(&p, (const unsigned char *)base + off, sizeof(p));
+	return p;
+}
+
+/*
+ * The four pointers `preinitdigital` installs, checked the way t_v34digital.c
+ * checks them: by which function or table each side selected, which is the
+ * thing `f359c` decides and the thing an address comparison cannot see.
+ */
+static void
+check_shell_ptrs(short f359c, long tag)
+{
+	int orig = (f359c == 0x65);
+	const short *ca = ptr_at(&oa, 0x0a28);
+	const short *cb = ptr_at(ob, 0x0a28);
+	int k, diffs = 0;
+
+	diff_eq_int("tx scrambler",
+		    ptr_at(&oa, 0x0e48 + V34_SHELL_TX)
+		    == (void *)(orig ? scrambleGPC : scrambleGPA), 1, tag);
+	diff_eq_int("ref tx scrambler",
+		    ptr_at(ob, 0x0e48 + V34_SHELL_TX)
+		    == (void *)(orig ? ref_scrambleGPC : ref_scrambleGPA),
+		    1, tag);
+	diff_eq_int("rx descrambler",
+		    ptr_at(&oa, 0x0e48)
+		    == (void *)(orig ? descrambleGPA : descrambleGPC), 1, tag);
+	diff_eq_int("ref rx descrambler",
+		    ptr_at(ob, 0x0e48)
+		    == (void *)(orig ? ref_descrambleGPA : ref_descrambleGPC),
+		    1, tag);
+
+	for (k = 0; k < 64; k++)
+		if (ca[k] != cb[k])
+			diffs++;
+	diff_eq_int("convolve table", diffs, 0, tag);
+	diff_eq_int("and it is Convolve16",
+		    ca == Convolve16 && cb == ref_Convolve16, 1, tag);
+	diff_eq_int("and the transmit context has it too",
+		    ptr_at(&oa, 0x0a28 + V34_SHELL_TX) == (void *)Convolve16
+		    && ptr_at(ob, 0x0a28 + V34_SHELL_TX)
+		       == (void *)ref_Convolve16, 1, tag);
+}
+
+/*
+ * Every input the three functions read, one field per member.  Two inputs
+ * driven from one variable cannot be told apart -- findings 116b, 123 and 147
+ * -- so `rate_now`, `rate_min` and `rate_max` are separate even though the
+ * interesting cases are relations between them, and the three state words are
+ * separate from each other and from the two trace counters.
+ */
+struct req_case {
+	int		status;
+	int		rate_min;
+	int		rate_max;
+	int		rate_now;
+	int		rate_want;
+	short		rrn_local;
+	short		rrn_remote;
+	short		f359c;
+	short		mst;		/* +0x3592 */
+	short		rxst;		/* +0x3594 */
+	short		txst;		/* +0x3596 */
+	short		trace1;		/* +0x2aa2 */
+	short		trace2;		/* +0xaa78 */
+	unsigned short	txflags;	/* +0x25c2 */
+	unsigned short	rxflags;	/* receiver +0x122 */
+	int		v90_receiver;	/* +0x24c */
+	short		f382;
+};
+
+/*
+ * The default case: a V.34 connection, three DIFFERENT state values, two
+ * DIFFERENT trace counters, and a rate index in the middle of its range so
+ * that a step either way stores something.
+ */
+static const struct req_case req_base = {
+	3,			/* status: not 1 or 2, so the V.34 arm      */
+	4, 12, 8, 7,		/* rate min, max, now, want                 */
+	0x0033, 0x0044,		/* rrn local, remote                        */
+	0x65,			/* f359c                                    */
+	V34HS_PHASE1,		/* mst  = 33                                */
+	V34HS_PHASE2,		/* rxst = 34                                */
+	V34HS_TONE_AB,		/* txst = 60                                */
+	0x1111, 0x2222,		/* [1], [2]                                 */
+	0x0000, 0x0000,		/* txflags, rxflags                         */
+	6,			/* v90_receiver                             */
+	0x1234			/* f382                                     */
+};
+
+static void
+seed_object(const struct req_case *c)
+{
+	setup();
+	seed_chain();
+
+	poke_int(0x0000, c->status);
+	poke_int(0x0220, c->rate_min);
+	poke_int(0x0224, c->rate_max);
+	poke_int(0x0228, c->rate_now);
+	poke_int(0x022c, c->rate_want);
+	poke_int(0x024c, c->v90_receiver);
+	poke_short(0xac0e, c->rrn_local);
+	poke_short(0xac10, c->rrn_remote);
+	poke_short(0x359c, c->f359c);
+	poke_short(0x3592, c->mst);
+	poke_short(0x3594, c->rxst);
+	poke_short(0x3596, c->txst);
+	poke_short(0x2aa2, c->trace1);
+	poke_short(0xaa78, c->trace2);
+	poke_short(0x25c2, (short)c->txflags);
+	poke_short(0x264 + 0x122, (short)c->rxflags);
+	poke_short(0x0382, c->f382);
+}
+
+/* Did this case take the PCM arm? */
+static int
+pcm_arm(const struct req_case *c)
+{
+	return (unsigned)(c->status - 1) <= 1;
+}
+
+/* What the V.34 arm should leave in `rate_want`, given the request code. */
+static int
+want_after(const struct req_case *c, int req)
+{
+	if (req == 0 || req == 2 || req == 5)
+		return (c->rate_now - 1 >= c->rate_min) ? c->rate_now - 1
+						       : c->rate_want;
+	if (req == 3)
+		return (c->rate_now + 1 <= c->rate_max) ? c->rate_now + 1
+						       : c->rate_want;
+	return -1;
+}
+
+static void
+run_hangup(const struct req_case *c, long tag)
+{
+	seed_object(c);
+
+	VPcmV34InitiateHangUp(&oa);
+	ref_VPcmV34InitiateHangUp(ob);
+
+	compare("InitiateHangUp", tag);
+	check_session_chain("InitiateHangUp chain", pcm_arm(c), 2, 1, tag);
+	if (!pcm_arm(c)) {
+		check_shell_ptrs(c->f359c, tag);
+		/*
+		 * The three clears happen on both arms, and `rate_now` must
+		 * survive -- seeded non-zero so that a reconstruction which
+		 * cleared four words instead of three is visible.
+		 */
+		diff_eq_int("InitiateHangUp kept rate_now",
+			    oa.rate_now, c->rate_now, tag);
+		diff_eq_int("InitiateHangUp cleared rate_want",
+			    oa.rate_want, 0, tag);
+	}
+}
+
+static void
+run_reneg(const struct req_case *c, int req, long tag)
+{
+	seed_object(c);
+
+	VPcmV34InitiateRateRenegotiation(&oa, req);
+	ref_VPcmV34InitiateRateRenegotiation(ob, req);
+
+	compare("InitiateRateRenegotiation", tag);
+	check_session_chain("InitiateRateRenegotiation chain", pcm_arm(c),
+			    req, 0, tag);
+	if (!pcm_arm(c)) {
+		check_shell_ptrs(c->f359c, tag);
+		diff_eq_int("InitiateRateRenegotiation rate_want",
+			    oa.rate_want, want_after(c, req), tag);
+		diff_eq_int("InitiateRateRenegotiation counted",
+			    (int)oa.rrn_local,
+			    (int)(short)(c->rrn_local + 1), tag);
+		diff_eq_int("and left the remote counter",
+			    (int)oa.rrn_remote, (int)c->rrn_remote, tag);
+	}
+}
+
+static void
+run_setv90(const struct req_case *c, short rrn_type, unsigned char constel,
+	   long tag)
+{
+	seed_object(c);
+
+	VPcmV34SetV90RateReneg(&oa, rrn_type, constel);
+	ref_VPcmV34SetV90RateReneg(ob, rrn_type, constel);
+
+	compare("SetV90RateReneg", tag);
+	check_shell_ptrs(c->f359c, tag);
+	/*
+	 * The two polarities a plausible-but-wrong reconstruction gets
+	 * backwards, asserted against the value rather than only against the
+	 * blob: `rrn_type` is tested for ZERO and not for sign, and
+	 * `constel_size` is read unsigned.
+	 */
+	diff_eq_int("SetV90RateReneg v90_receiver",
+		    oa.v90_receiver, rrn_type != 0 ? 15 : 11, tag);
+	diff_eq_int("SetV90RateReneg f382",
+		    (int)(unsigned short)oa.f382,
+		    constel != 0 ? 0x89b0 : 0x8990, tag);
+	/* And it goes nowhere near the session object. */
+	check_session_chain("SetV90RateReneg chain", 0, 0, 0, tag);
+}
+
+/*
+ * One case with the transcripts captured and compared.  A mismatch otherwise
+ * reports as "got 0, reference 1" and nothing else, which over a sweep this
+ * size is not a diagnosis; `PCMIF_DUMP=1` prints both sides.
+ */
+static void
+traced(void (*fn)(const struct req_case *, int, long),
+       const struct req_case *c, int arg, long tag, const char *what)
+{
+	dsplib_debug_capture_reset();
+	fn(c, arg, tag);
+	if (getenv("PCMIF_DUMP")
+	    && strcmp(dsplib_debug_capture_text(0),
+		      dsplib_debug_capture_text(1)) != 0)
+		fprintf(stderr, "--- %s case %ld\n=== ours\n%s=== ref\n%s",
+			what, tag, dsplib_debug_capture_text(0),
+			dsplib_debug_capture_text(1));
+	diff_eq_int("transcript", strcmp(dsplib_debug_capture_text(0),
+					 dsplib_debug_capture_text(1)) == 0,
+		    1, tag);
+	diff_eq_int("transcript non-empty",
+		    dsplib_debug_capture_text(1)[0] != 0, 1, tag);
+}
+
+/* Adapters so the three can share `traced`. */
+static void
+hangup_thunk(const struct req_case *c, int unused, long tag)
+{
+	(void)unused;
+	run_hangup(c, tag);
+}
+
+static void
+reneg_thunk(const struct req_case *c, int req, long tag)
+{
+	run_reneg(c, req, tag);
+}
+
+/*
+ * The status values.  0 and everything below it are the ones that separate
+ * `(unsigned)(status - 1) <= 1` from a reconstruction written as `status <= 2`
+ * -- both agree on 1, 2 and 3, and differ on 0 and on negatives.
+ */
+static const int status_in[] = {
+	(-0x7fffffff - 1), -1, 0, 1, 2, 3, 10, 0x7fffffff
+};
+
+/*
+ * The request codes.  1 and 4 are there because they fall to the `-1` default
+ * between the values that do not, which is the easy thing to get wrong; 5 is
+ * there because it shares a body with 0 and 2 and a reconstruction can carry
+ * two of the three.
+ */
+static const int req_in[] = { -0x7fffffff - 1, -2, -1, 0, 1, 2, 3, 4, 5, 6 };
+
+/*
+ * The rate configurations, each a (min, max, now) triple placed at a boundary
+ * of one of the two clamps.  The clamps are `jl` and `jg`, so it is the
+ * boundary and its two neighbours that separate `<` from `<=`.
+ */
+static const int rate_in[][3] = {
+	{  4, 12,  8 },		/* mid range: both steps store              */
+	{  4, 12,  4 },		/* at the floor: down stores nothing        */
+	{  4, 12,  5 },		/* one above it: down stores exactly min    */
+	{  4, 12, 12 },		/* at the ceiling: up stores nothing        */
+	{  4, 12, 11 },		/* one below it: up stores exactly max      */
+	{  7,  7,  7 },		/* a range of one: neither step stores      */
+	{  4, 12,  0 },		/* below the floor: down stores nothing     */
+	{  4, 12, 20 },		/* above the ceiling: up stores nothing     */
+	{ 12,  4,  8 },		/* inverted bounds: neither step stores     */
+	{  0,  0,  0 }		/* all zero, where -1 and 0 are adjacent    */
+};
+
 int
 main(void)
 {
@@ -363,6 +867,257 @@ main(void)
 			ref_VPcmV34LogTimingOffset(ob, off[i]);
 			compare("LogTimingOffset", 700 + i);
 		}
+	}
+	rc |= diff_end();
+
+	/* --- InitiateHangUp --------------------------------------------- */
+
+	diff_begin("v34 pcm interface: InitiateHangUp, both arms of the fork");
+	{
+		unsigned s, r;
+
+		for (s = 0; s < sizeof(status_in) / sizeof(status_in[0]); s++)
+		for (r = 0; r < sizeof(rate_in) / sizeof(rate_in[0]); r++) {
+			struct req_case c = req_base;
+
+			c.status = status_in[s];
+			c.rate_min = rate_in[r][0];
+			c.rate_max = rate_in[r][1];
+			c.rate_now = rate_in[r][2];
+			run_hangup(&c, 1000 + (long)s * 100 + r);
+		}
+	}
+	rc |= diff_end();
+
+	/* --- InitiateRateRenegotiation ---------------------------------- */
+
+	diff_begin("v34 pcm interface: InitiateRateRenegotiation, "
+		   "every code against every boundary");
+	{
+		unsigned s, q, r;
+
+		for (s = 0; s < sizeof(status_in) / sizeof(status_in[0]); s++)
+		for (q = 0; q < sizeof(req_in) / sizeof(req_in[0]); q++)
+		for (r = 0; r < sizeof(rate_in) / sizeof(rate_in[0]); r++) {
+			struct req_case c = req_base;
+
+			c.status = status_in[s];
+			c.rate_min = rate_in[r][0];
+			c.rate_max = rate_in[r][1];
+			c.rate_now = rate_in[r][2];
+			/*
+			 * A DIFFERENT prior request each time, so the cases
+			 * where the step stores nothing are distinguishable
+			 * from the cases where it stores this value.
+			 */
+			c.rate_want = 30 + (int)r;
+			run_reneg(&c, req_in[q],
+				  2000 + (long)s * 1000 + (long)q * 100 + r);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * And the counter's 16-bit wrap, which no rate configuration reaches:
+	 * `rrn_local` is a short and the increment is done in 16 bits.
+	 */
+	diff_begin("v34 pcm interface: the local RRN counter wraps");
+	{
+		static const short pre[] = { 0, 1, -1, 0x7ffe, 0x7fff,
+					     (short)0x8000, (short)0xffff };
+
+		for (i = 0; i < sizeof(pre) / sizeof(pre[0]); i++) {
+			struct req_case c = req_base;
+
+			c.rrn_local = pre[i];
+			run_reneg(&c, 3, 3000 + i);
+		}
+	}
+	rc |= diff_end();
+
+	/* --- SetV90RateReneg -------------------------------------------- */
+
+	diff_begin("v34 pcm interface: SetV90RateReneg, both zero tests");
+	{
+		static const short rrn[] = { 0, 1, -1, 2, 0x7fff,
+					     (short)0x8000 };
+		static const unsigned char cst[] = { 0, 1, 2, 0x7f, 0x80,
+						     0xff };
+		static const short which[] = { 0x65, 0x66, 0, 0x64 };
+		unsigned a, b, w;
+
+		for (w = 0; w < sizeof(which) / sizeof(which[0]); w++)
+		for (a = 0; a < sizeof(rrn) / sizeof(rrn[0]); a++)
+		for (b = 0; b < sizeof(cst) / sizeof(cst[0]); b++) {
+			struct req_case c = req_base;
+
+			c.f359c = which[w];
+			/*
+			 * A different starting `txflags` per case: the mask
+			 * is `& ~0x4018 | 0x2000`, and a case whose flags
+			 * start at zero cannot show a bit being cleared.
+			 */
+			c.txflags = (unsigned short)(0xffff
+						     ^ (unsigned short)
+						       (a * 0x111 + b));
+			c.v90_receiver = 3 + (int)a;
+			run_setv90(&c, rrn[a], cst[b],
+				   4000 + (long)w * 100 + (long)a * 10 + b);
+		}
+	}
+	rc |= diff_end();
+
+	/* --- the same three, with the diagnostics live ------------------- */
+
+	diff_begin("v34 pcm interface: the three requests, transcripts too");
+	{
+		unsigned s, q;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (s = 0; s < sizeof(status_in) / sizeof(status_in[0]); s++) {
+			struct req_case c = req_base;
+
+			c.status = status_in[s];
+			traced(hangup_thunk, &c, 0, 5000 + (long)s,
+			       "InitiateHangUp");
+		}
+
+		/*
+		 * The renegotiation prints nothing of its own; what it has to
+		 * say comes from `v34handshakinit`'s three transitions, and
+		 * those index `StateName`.  So the state words are driven a
+		 * third of the table apart here as well as together -- the
+		 * two machines' argument slots are otherwise interchangeable.
+		 */
+		for (q = 0; q < sizeof(req_in) / sizeof(req_in[0]); q++) {
+			struct req_case c = req_base;
+			unsigned k;
+
+			for (k = 0; k < V34HS_STATE_COUNT; k += 7) {
+				c.mst = (short)k;
+				c.rxst = (short)((k + 29) % V34HS_STATE_COUNT);
+				c.txst = (short)((k + 58) % V34HS_STATE_COUNT);
+				diff_eq_int("three distinct states",
+					    c.mst != c.rxst && c.rxst != c.txst
+					    && c.mst != c.txst, 1,
+					    6000 + (long)q * 100 + k);
+				traced(reneg_thunk, &c, req_in[q],
+				       6000 + (long)q * 100 + k,
+				       "InitiateRateRenegotiation");
+			}
+		}
+
+		/*
+		 * And every one of the 87 names, reached by driving the three
+		 * words together -- which is what t_v34hshak.c's first sweep
+		 * does and what this one would otherwise miss, since the
+		 * offsets above never make all three equal.
+		 */
+		for (i = 0; i < V34HS_STATE_COUNT; i++) {
+			struct req_case c = req_base;
+
+			c.mst = c.rxst = c.txst = (short)i;
+			traced(reneg_thunk, &c, 3, 7000 + (long)i,
+			       "InitiateRateRenegotiation, one name");
+		}
+
+		for (i = 0; i < 4; i++) {
+			static const short rrn[] = { 0, 1, -1, 0x7fff };
+			static const unsigned char cst[] = { 0, 1, 0x80, 0xff };
+			struct req_case c = req_base;
+
+			dsplib_debug_capture_reset();
+			run_setv90(&c, rrn[i], cst[i], 8000 + (long)i);
+			diff_eq_int("SetV90RateReneg transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, 8000 + (long)i);
+			diff_eq_int("SetV90RateReneg said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    8000 + (long)i);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE GATE ITSELF, which every transcript comparison in this tree is
+	 * structurally blind to: they all raise the level first, so a call
+	 * site that lost its `if (DSPLIB_DEBUG_ON())` prints the same thing
+	 * and passes.  The capture is independent of the level, so turning it
+	 * on with the level left down tests the other half -- below the
+	 * threshold, these functions must say NOTHING.
+	 *
+	 * BOTH LEVELS BELOW IT, not just zero.  Every gate in the object is
+	 * `> 1`, so 1 is the only value that separates it from the `>= 1` a
+	 * reconstruction would write if it read the comparison as "on".
+	 */
+	diff_begin("v34 pcm interface: below the threshold, nothing is said");
+	{
+		unsigned lvl;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			struct req_case c = req_base;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			run_hangup(&c, 9000 + (long)lvl * 10);
+			run_reneg(&c, 3, 9001 + (long)lvl * 10);
+			run_setv90(&c, 1, 1, 9002 + (long)lvl * 10);
+
+			setup();
+			VPcmV34SetTxScale(&oa);
+			ref_VPcmV34SetTxScale(ob);
+			V34XF_IndicateJdReceived(&oa, 1, 0);
+			ref_V34XF_IndicateJdReceived(ob, 1, 0);
+			V34XF_IndicateDilReceived(&oa, 1);
+			ref_V34XF_IndicateDilReceived(ob, 1);
+			V34XF_IndicateTrn2dReceived(&oa);
+			ref_V34XF_IndicateTrn2dReceived(ob);
+			V34XF_IndicateK56FlexRateDetermined(&oa);
+			ref_V34XF_IndicateK56FlexRateDetermined(ob);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    9000 + (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    9000 + (long)lvl);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 pcm interface: every skipped pointer field earned it");
+	{
+		unsigned k;
+
+		/*
+		 * Four of the five are installed by the code under test, so
+		 * the check is that something really installed them -- they
+		 * no longer hold the seed.  The fifth, +0x3548, is the
+		 * fixture's own: the object never writes it, and what
+		 * justifies its hole is that the chain behind it was walked,
+		 * which is what `check_session_chain` asserts per case.
+		 */
+		for (k = 1; k < NPTR; k++)
+			diff_eq_int("pointer field was installed at least once",
+				    saw_ptr_written[k], 1, (long)ptr_skip[k]);
+		diff_eq_int("and the session chain was walked",
+			    saw_chain_walked, 1, (long)ptr_skip[0]);
 	}
 	rc |= diff_end();
 

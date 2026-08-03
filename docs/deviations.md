@@ -1848,3 +1848,32 @@ D28 was retracted. `unmeasured` — task #47.
 
 **How it was found:** by pinning the constants before the states, as the
 brief for `v34handshakinit` asked.
+
+## D44 ⚠ `VPcmV34SetV90RateReneg` winds `v90_receiver` backwards
+
+**Where:** `src/pump/v34/v34pcmif.c`, `VPcmV34SetV90RateReneg`.
+
+**What the original does:** assigns `+0x24c` unconditionally — 11 when
+`rrn_type` is zero and 15 otherwise — with `cmp $1; sbb; and; add`, which is
+the compiler's spelling of a two-way choice and not of a ratchet.
+
+**Why that is worth an entry:** every other writer of that field advances it.
+`V34XF_IndicateJdReceived` sets 3, `V34XF_IndicateDilReceived` 6, and
+`V34XF_IndicateTrn2dReceived` is explicitly a four-rung ratchet that never
+moves the value down — 10, 14, 18, 20. Its own diagnostic calls the field
+`v90Receiver` and the ladder reads as progress through phase 3. A rate
+renegotiation arriving after TRN2d has reached 18 or 20 therefore moves it
+*back* to 15, and after Jd has reached 3 it moves it *up* to 11 or 15 without
+the intervening messages having arrived.
+
+**What we do:** reproduce the assignment. The reading that makes it sensible
+is that a renegotiation genuinely restarts phase 3, so 11 and 15 are entry
+points into the ladder rather than violations of it — but nothing in the
+object says so, and `V34XF_IndicateTrn2dReceived` went to the trouble of a
+ratchet, which is what makes the plain assignment worth recording.
+
+**Reachability:** not measured. `unmeasured` — task #47.
+
+**How it was found:** by reading the three request entry points together;
+the field's own header comment in `v34fsk.h` describes a counter "the
+handshake's C++ side ratchets forward", and this writer does not.

@@ -30,8 +30,11 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
+#include "dsplib/v34digital.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
+#include "dsplib/v34recv.h"
 
 void
 VPcmV34LogTimingOffset(void *objp, short offset)
@@ -230,6 +233,211 @@ V34XF_IndicateK56FlexRateDetermined(void *objp)
 
 /*
  * ---------------------------------------------------------------------------
+ * The three entry points that ask for a change of state.  Two of them tear
+ * the V.34 handshake down and start it again; the third rebuilds the
+ * transmitter for a V.90 rate renegotiation without going near the handshake.
+ *
+ * ALL THREE FORK ON WHICH MODEM IS ACTUALLY RUNNING, and the test is the same
+ * one everywhere: `(unsigned)(status - 1) <= 1`.  Status 1 and 2 mean a PCM
+ * receiver has the line, and then the request is handed to the C++ side down
+ * a chain of three pointers instead of being acted on here.  The same test
+ * picks the `V90Demodulator` branch in `VPcmV34GetCurrentTxBitRate`, which is
+ * where the meaning of the two values comes from.
+ *
+ * WHAT THE CHAIN IS.  `p3548` is the session object; +0x175c of it is the
+ * demodulator -- `VPcmV34GetCurrentRxBitRate` passes exactly that field to
+ * `V90Demodulator::getBitRate` -- and +0x20c of the demodulator is a
+ * sub-object whose +0x8c takes the request code.  None of the three is
+ * reconstructed, so the offsets are spelled out rather than dressed in
+ * structs that would be guesses.
+ */
+
+/*
+ * Hang up.
+ *
+ * The V.34 arm clears the rate REQUEST and both bounds and leaves `rate_now`
+ * alone, which is the shape of "stop asking for anything" rather than "forget
+ * what we settled on".  Then mode 2 of `v34handshakinit` -- the same mode the
+ * renegotiation uses, because from the handshake's point of view a hang-up is
+ * a renegotiation that never completes -- and the three receiver scalars at
+ * +0x4bc, which are `struct v34_receiver`'s f258, f25a and f25c and not the
+ * object's own trio at +0x25c.
+ *
+ * The PCM arm is the only place in this file that writes the session flag at
+ * `p3548 + 0x173e`; the renegotiation below does not, and that byte is the
+ * only thing that distinguishes the two functions' PCM paths.
+ *
+ * THE THREE CLEARS HAPPEN ON BOTH ARMS, before the fork, and the diagnostic
+ * before them is not gated on which modem is running either.
+ */
+void
+VPcmV34InitiateHangUp(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: VPcmV34InitiateHangUp called !\r\n");
+
+	obj->rate_want = 0;
+	obj->rate_min = 0;
+	obj->rate_max = 0;
+
+	if ((unsigned)(obj->status - 1) <= 1) {
+		unsigned char *sess = (unsigned char *)obj->p3548;
+		unsigned char *demod;
+
+		sess[0x173e] = 1;
+		demod = *(unsigned char **)(sess + 0x175c);
+		*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = 2;
+		return;
+	}
+
+	v34handshakinit(obj, 2);
+
+	*(int *)(m + 0x04) = 6;
+	*(int *)(m + 0x2218) = 5;
+
+	rx->f258 = 0;
+	rx->f25a = 0;
+	rx->f25c = 0;
+}
+
+/*
+ * Ask for a different rate.
+ *
+ * `req` is the request code, and it is NOT the same enumeration on the two
+ * arms: the PCM arm forwards it verbatim to the demodulator's sub-object,
+ * while the V.34 arm reads only four of its values.
+ *
+ *      0, 2, 5   step DOWN one index, and do not go below `rate_min`
+ *      3         step UP one index, and do not go above `rate_max`
+ *      anything  ask for no particular rate: `rate_want` becomes -1,
+ *      else      which is the value `v34handshak` rejects with `js`
+ *
+ * A step that would leave the bounds writes NOTHING -- `rate_want` keeps
+ * whatever it held -- rather than clamping to the bound.  So a renegotiation
+ * asked for at the bottom of the range still tears the handshake down and
+ * still counts, it just carries the previous request.
+ *
+ * 0, 2 and 5 share a body because the compiler gave them one; the object
+ * tests all three separately and there is no arithmetic relating them.
+ */
+void
+VPcmV34InitiateRateRenegotiation(void *objp, int req)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	int want;
+
+	if ((unsigned)(obj->status - 1) <= 1) {
+		unsigned char *sess = (unsigned char *)obj->p3548;
+		unsigned char *demod = *(unsigned char **)(sess + 0x175c);
+
+		*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;
+		return;
+	}
+
+	switch (req) {
+	case 0:
+	case 2:
+	case 5:
+		want = obj->rate_now - 1;
+		if (want >= obj->rate_min)
+			obj->rate_want = want;
+		break;
+	case 3:
+		want = obj->rate_now + 1;
+		if (want <= obj->rate_max)
+			obj->rate_want = want;
+		break;
+	default:
+		obj->rate_want = -1;
+		break;
+	}
+
+	v34handshakinit(obj, 2);
+
+	*(int *)(m + 0x04) = 6;
+
+	rx->f258 = 0;
+	rx->f25a = 0;
+	rx->f25c = 0;
+
+	*(int *)(m + 0x2218) = 5;
+
+	/* The same event `VPcmV34IndicateLocalRRN` exists to count. */
+	obj->rrn_local = (short)(obj->rrn_local + 1);
+}
+
+/*
+ * Rebuild the transmitter for a V.90 rate renegotiation.
+ *
+ * NO HANDSHAKE: this is the one of the three that does not call
+ * `v34handshakinit`.  What it does instead is `v34handshakinit`'s mode 2
+ * block with the state machines left out -- the same four transmit-queue
+ * fields, the same mask on `f25c2`, the same `preinitdigital`, the same
+ * `f382` pair.  Two independent readings of one block, which is the
+ * corroboration that block was read right.
+ *
+ * IT ALSO WINDS `v90_receiver` BACKWARDS.  That field is documented as a
+ * ratchet the phase-3 indications only advance; here it is assigned, so a
+ * renegotiation can move it down.  See D44.
+ *
+ * `rrn_type` is tested against zero only, and `constel_size` likewise -- the
+ * two `f382` values differ by 32 and are the pair `V34XF_IndicateJdReceived`
+ * chooses between on its own constellation-size bit.  The parameter names are
+ * the object's, from the diagnostic below.
+ */
+void
+VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"setV90RateReneg called, rrn type = %d, "
+			"constel size = %d\r\n",
+			(int)rrn_type, (int)constel_size);
+
+	/*
+	 * UNSIGNED, and that is the whole content of the test: the object
+	 * compares with `cmp $1` and reads the borrow, so only zero takes the
+	 * low arm.  A negative `rrn_type` takes the high one.
+	 */
+	obj->v90_receiver = (rrn_type != 0) ? 15 : 11;
+
+	obj->f25c6 = 0;
+	obj->f25c0 = 0;
+	obj->f25cc = 0;
+	obj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);
+
+	preinitdigital(obj);
+
+	/* The `[1]` counter every handshake trace prints; see v34hshak.c. */
+	*(short *)(m + 0x2aa2) = 0;
+
+	*(int *)(m + 0x04) = 6;
+	*(int *)(m + 0x2218) = 5;
+
+	obj->f382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+
+	/*
+	 * The timer, reset: the same three fields and the same two constants
+	 * as `v34handshakinit`'s guard writes when it rejects the span, with
+	 * +0x244 left alone here and written there.
+	 */
+	*(int *)(m + 0x238) = 0;
+	*(int *)(m + 0x248) = (int)0xfff15a00;
+	*(int *)(m + 0x23c) = 0x69780;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Same argument as dpsk.c's block: these offsets sit in
  * regions that are otherwise padding, so a field that drifted would compile
  * silently.  Guarded to a 32-bit ABI because `struct v34_object` holds
@@ -251,6 +459,29 @@ V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
 V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
 V34PCMIF_ASSERT(rtd,     rtd,              0xaa7e);
 V34PCMIF_ASSERT(timeoff, fac0c,            0xac0c);
+V34PCMIF_ASSERT(f0004,   f0004,            0x0004);
+V34PCMIF_ASSERT(rmin,    rate_min,         0x0220);
+V34PCMIF_ASSERT(rmax,    rate_max,         0x0224);
+V34PCMIF_ASSERT(rnow,    rate_now,         0x0228);
+V34PCMIF_ASSERT(rwant,   rate_want,        0x022c);
+V34PCMIF_ASSERT(rrnloc,  rrn_local,        0xac0e);
+V34PCMIF_ASSERT(rrnrem,  rrn_remote,       0xac10);
+V34PCMIF_ASSERT(p3548,   p3548,            0x3548);
+
+/*
+ * And the three receiver scalars the two Initiate entry points clear, which
+ * they reach as `obj + 0x264 + 0x258`.  Asserted as a sum so that a change to
+ * either struct breaks here rather than moving the clear into the queue.
+ */
+#define V34PCMIF_RXASSERT(name, field, off) \
+	typedef char v34pcmif_rxoff_##name[ \
+		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		       + __builtin_offsetof(struct v34_receiver, field)) \
+		 == (off)) ? 1 : -1]
+
+V34PCMIF_RXASSERT(f258, f258, 0x4bc);
+V34PCMIF_RXASSERT(f25a, f25a, 0x4be);
+V34PCMIF_RXASSERT(f25c, f25c, 0x4c0);
 
 /*
  * The doubles are the first floating-point member the struct has ever had,

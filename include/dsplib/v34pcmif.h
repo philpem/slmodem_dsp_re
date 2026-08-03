@@ -42,6 +42,33 @@ void V34XF_IndicateDilReceived(void *obj, unsigned char constel);
 void V34XF_IndicateTrn2dReceived(void *obj);
 void V34XF_IndicateK56FlexRateDetermined(void *obj);
 
+/*
+ * The three requests the shell makes of a running connection.  Each forks on
+ * `status`: 1 and 2 mean a PCM receiver has the line and the request goes to
+ * the C++ side down a chain of three pointers instead.
+ */
+
+/* Tear the connection down.  Clears the rate request and both bounds. */
+void VPcmV34InitiateHangUp(void *obj);
+
+/*
+ * Ask for a different rate.  `req` is 0, 2 or 5 for one index down, 3 for one
+ * up and anything else for "no particular rate"; a step that would leave
+ * [rate_min, rate_max] leaves the request unchanged rather than clamping.
+ * On the PCM arm the code is forwarded verbatim and means something else.
+ */
+void VPcmV34InitiateRateRenegotiation(void *obj, int req);
+
+/*
+ * Rebuild the transmitter for a V.90 rate renegotiation -- the only one of
+ * the three that does not go through the handshake.  Both parameters are
+ * tested against zero only: `rrn_type` selects 15 or 11 for `v90_receiver`
+ * and `constel_size` selects 0x89b0 or 0x8990 for `f382`.  The names are the
+ * object's own, from the diagnostic this prints.
+ */
+void VPcmV34SetV90RateReneg(void *obj, short rrn_type,
+			    unsigned char constel_size);
+
 #ifdef __cplusplus
 }
 #endif
