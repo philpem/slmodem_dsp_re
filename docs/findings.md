@@ -8196,7 +8196,7 @@ reaches 8 does the mapping run, refilling all eight.  That is what
    index != 8, f25c2 bit 14 clear   copy the point, txmit
    index != 8, f25c2 bit 14 set     V34nlencoder the point, txmit
    index == 8, f25c2 bit  4 set     getFrame, then the mapping below
-   index == 8, f25c2 bit  4 clear   the path at 0x5a910, not yet read
+   index == 8, f25c2 bit  4 clear   the training counter, then the same
 ```
 
 **The mapping**, in the order it runs:
@@ -8243,16 +8243,17 @@ because it checks.  The decode side keeps the finding -- `demapFrame` is a
 different caller -- but the intended invariant is now stated by the object
 itself rather than assumed: every sub-index is below `count`.
 
-**What a fixture will need.**  `preinitV34` then `initV34` on the transmit
-context, in that order, before anything else.  The divisions in step 2 are
-`idiv` against `t1` and `t2` entries, which `preinitV34` zeroes -- so a
-fixture that fills the shell and calls straight in takes SIGFPE rather than
-failing a comparison, and `idiv` traps on quotient overflow too.  `getFrame`
-also needs a per-side bit source; `t_v34shell.c` already has `bitsrc_a` and
-`bitsrc_b` for exactly that, and one shared callback would interleave.
+**What a fixture will need -- SUPERSEDED**, and worth keeping only for what
+it got wrong.  The prediction was that a fixture calling straight in would
+take SIGFPE on the `idiv` against `t1` and `t2`, since `preinitV34` zeroes
+both.  The real fixture runs `preinitdigital` then `initV34` and so never
+tested it; the claim was never more than plausible and is recorded as
+unverified rather than as fact.  `quarter` and `smIndex` are emitted, and
+the `0x5a910` path this entry called unread is the training counter above.
 
-`quarter` and `smIndex` both need emitting and memcmp'ing against `ref_*`,
-the same as `xyz`.
+The fixture that exists is in `t_v34shell.c`, and the thing it turned out to
+need was not the divisions at all but TWO bit sources -- the real scramblers
+and a synthetic pair -- for the reason finding 150 gives.
 
 
 ### 150. `modulatevector` found a bug in `getFrame`, whose own test could not

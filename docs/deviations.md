@@ -1547,10 +1547,12 @@ entries.  Everything above that keeps `preinitV34`'s fill of -1.
 **Reachable?** The sizes are, and often: `MMaxTable` produces all three.
 Whether `shellDemapper` then INDEXES into the -1 region is **unmeasured** --
 it reads `t3[d1 + d2]` with nothing bounding the sum, which is finding 129.
-`modulatevector` relies on the -1s deliberately, since its search over `t3`
-compares unsigned and `0xffffffff` is what stops it (finding 149), so on the
-transmit side the fill is a sentinel rather than a gap.  Re-open with
-`demapFrame` driven at ring size 15 or above.
+On the TRANSMIT side this is settled and not a deviation at all:
+`modulatevector` is now reconstructed and passing, its search over `t3`
+compares unsigned, and `0xffffffff` is what stops it -- so the fill is a
+working sentinel there, demonstrated rather than predicted.  The entry stays
+open only for the receive side.  Re-open with `demapFrame` driven at ring
+size 15 or above.
 
 **Not fixed.** Extending the table would be invention, and on the transmit
 side it would break a sentinel the object depends on.
