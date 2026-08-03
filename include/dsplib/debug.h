@@ -43,10 +43,24 @@ int dsplibs_debug_printf(const char *fmt, ...);
 int modem_debug_log_data(void *m, unsigned id, const void *buf, int len);
 
 /*
- * Every gate in the object is this comparison, spelled out here so a module
- * does not have to remember that it is `> 1` and not `>= 1`.
+ * Almost every gate in the object is this comparison, spelled out here so a
+ * module does not have to remember that it is `> 1` and not `>= 1`.
  */
 #define DSPLIB_DEBUG_ON()	(dsplibs_debug_level > 1)
+
+/*
+ * ...but not every one.  `cadence_progress` gates three of its seven sites on
+ * `cmpl $0x2` rather than `cmpl $0x1`, so they need level 3, not 2 -- the
+ * three "CADENCE %s: CONDITION ... SATISFIED" messages, which fire once per
+ * matched cycle and would drown the rest.
+ *
+ * This is exactly what finding 150 warned could not be seen: a site at the
+ * wrong threshold produces a byte-identical transcript at level 2, and one
+ * macro for every gate quietly flattens the distinction.  Sweeping the level
+ * is what makes the two distinguishable, so any test that compares
+ * transcripts must run at 1, 2 AND 3.
+ */
+#define DSPLIB_DEBUG_VERBOSE()	(dsplibs_debug_level > 2)
 
 #ifdef __cplusplus
 }

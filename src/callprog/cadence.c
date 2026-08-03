@@ -14,6 +14,7 @@
  */
 
 #include "dsplib/cadence.h"
+#include "dsplib/debug.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/cpfiltrs.h"
@@ -256,8 +257,16 @@ cadence_progress(struct cadence *c, short sample)
 			 * with.  Counted as a failure: enough of them and the
 			 * detector concludes there is no tone here at all.
 			 */
-			if (last == 0)
+			if (last == 0) {
 				c->failures++;
+
+				/* After the increment: 0x7d087 stores, then
+				 * 0x7d08d branches to the print. */
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"CYCLES_COUNTER= %d\n",
+						c->failures);
+			}
 			else if (c->n >= c->cycles)
 				matched = match(c, c->n - 1);
 
@@ -267,6 +276,17 @@ cadence_progress(struct cadence *c, short sample)
 			c->state = CADENCE_IN_SILENCE;
 
 			if (matched) {
+				/*
+				 * "BUSY" regardless of which tone this
+				 * detector is for -- the string is fixed, not
+				 * `c->name`, unlike the three CONDITION
+				 * messages.  The author's, not a slip of
+				 * ours.
+				 */
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"BUSY cadence recognized\n");
+
 				toneiir_reset(c->filter);
 				c->state = CADENCE_IN_SILENCE;
 				c->run = 0;
@@ -277,6 +297,15 @@ cadence_progress(struct cadence *c, short sample)
 	}
 
 	if (c->failures > CADENCE_MAX_FAILURES) {
+		/*
+		 * "NO ANSWER" is the caller's word for it: CALLPROG_Progress
+		 * turns this verdict into CPTD_BUSY_GIVE_UP and prints "no
+		 * answer detected by cadence" (finding 154).  Two names for
+		 * one event, both the original author's.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("NO ANSWER state recognized\n");
+
 		toneiir_reset(c->filter);
 		c->state = CADENCE_IN_SILENCE;
 		c->run = 0;

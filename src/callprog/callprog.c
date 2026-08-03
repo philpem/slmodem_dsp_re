@@ -210,6 +210,14 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	int i;
 
 	/*
+	 * "<<" on the way in and ">>" for the nested create, which is the
+	 * opposite of the convention everywhere else here.  Read from the gate
+	 * order -- 0x79588 before 0x795e6 -- not from the arrows.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Create <<\n");
+
+	/*
 	 * The cadence detectors' descriptor, built once and reused for both.
 	 * cadence_create writes the tone back into it, so it must be reset
 	 * between the two calls -- which the original does by setting the
@@ -236,8 +244,22 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	 * so the country can turn it off on a line clean enough not to need
 	 * it.
 	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CallProgFP_Create >>\n");
+
 	cp->band_wanted = modem_get_param(cfg->modem,
 					  MustNoiseFilterBeApplied);
+
+	/*
+	 * After the parameter read, which the argument pins: it IS the read's
+	 * result.  The gate sits late in the body (0x79982), later than the
+	 * statement below would suggest, so the exact line is not certain --
+	 * the data dependency is, and so is the order against the get_param,
+	 * which the harness now marks.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("APPLY_FILTER = %d\n", cp->band_wanted);
+
 	if (cp->band_wanted != 0)
 		cp->band = _iir_filter_create(cp->band,
 					      IIR_FILTER_COEFF, IIR_FILTER_COEFF,
@@ -268,12 +290,31 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 void
 CALLPROG_Delete(struct callprog *cp)
 {
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Delete is entered\n");
+
 	DialerAbort(&cp->dialer);
 
-	if (cp->dial != 0)
+	/*
+	 * Which name goes with which object is read from the return targets,
+	 * not from the order they are written here: DIAL_OBJ's block returns
+	 * to 0x79493 and CADENCE_OBJ's to 0x7949a, so the dial detector is
+	 * announced first -- as it is deleted first.
+	 */
+	if (cp->dial != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("cadence_delete with "
+					     "CADENCE_DIAL_OBJ is invoked\n");
+
 		cadence_delete(cp->dial);
-	if (cp->busy != 0)
+	}
+	if (cp->busy != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("cadence_delete with "
+					     "CADENCE_OBJ is invoked\n");
+
 		cadence_delete(cp->busy);
+	}
 	if (cp->band_wanted != 0)
 		_iir_filter_delete(cp->band);
 
@@ -287,6 +328,10 @@ CALLPROG_Delete(struct callprog *cp)
 
 	if (cp->dtmf != 0)
 		Dual_TONE_delete(cp->dtmf);
+
+	/* A tail call in the object -- `jmp`, not `call`, at 0x794cd. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Delete is exited\n");
 }
 
 /*
@@ -307,8 +352,16 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	 * No S-register accessor means no way to find the calling tone's
 	 * level, and the function gives up rather than calling through null.
 	 */
-	if (cp->get_sreg == 0)
+	if (cp->get_sreg == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"sreg function is not defined!\n");
+
 		return;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Dialing %s\n", s);
 
 	flag = modem_get_param(cp->modem, GetCallingToneFlag);
 	cp->calling_tone_mode = flag;
@@ -341,6 +394,10 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	cp->timeout[4] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
 	cp->timeout[5] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
 
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("GetNoAnswerTimeOut. %d\n",
+				     cp->timeout[5]);
+
 	build_timeouts(cp);
 
 	if (cp->f1c != 0) {
@@ -352,6 +409,12 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 		 */
 		timeout_table[1] = modem_get_param(cp->modem,
 						   GetBlindDialPause);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"BlindCall: GetBlindDialPause = %d .\n",
+				timeout_table[1]);
+
 		next_state_due_timeout[1] = 2;
 		message_due_timeout[1] = CALLPROG_DIALING;
 		toneiir_dialtone_table[1] = 0;
@@ -373,6 +436,10 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 			extra = 2;
 		timeout_table[1] = wait + extra;
 
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("WAIT DIAL TIMEOUT = %d\n",
+					     timeout_table[1]);
+
 		next_state_due_timeout[1] = CALLPROG_STATE_END;
 		message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
 		toneiir_dialtone_table[1] = 1;
@@ -382,12 +449,20 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	}
 
 	/* State 7 dials again without going back to waiting. */
-	if (cp->state == 7)
+	if (cp->state == 7) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Set state to CALLPROG_DIALING_STATE\n");
+
 		cp->state = 2;
-	else
+	} else
 		cp->state = CALLPROG_STATE_START;
 
 	enter_state(cp);
+
+	/* A tail call in the object -- `jmp`, not `call`, at 0x7a868. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Dial was exited.\n");
 }
 
 /*

@@ -8331,3 +8331,71 @@ output from a run that should be silent teaches itself to lie.
 The honest headline for this batch is "29 placed, 3 verified", and it is worth
 writing that way round.  Placed and verified are different claims, and the
 count that matters when something breaks later is the second one.
+
+### 155. Not every gate is `> 1`: cadence_progress has a second threshold
+
+`debug.h` said "every gate in the object is this comparison", and
+`DSPLIB_DEBUG_ON()` has been spelled `dsplibs_debug_level > 1` everywhere on
+that basis.  It is not true.
+
+`cadence_progress` has seven call sites and they use TWO thresholds:
+
+    0x7cdc3  cmpl $0x1     'NO ANSWER state recognized'
+    0x7ceaf  cmpl $0x1     'BUSY cadence recognized'
+    0x7cfe1  cmpl $0x1     ' CADENCE SERIRES COMPARISON ====>'
+    0x7d080  cmpl $0x1     'CYCLES_COUNTER= %d'
+    0x7d054  cmpl $0x2     'CADENCE %s: CONDITION -- SERIES --- SATISFIED'
+    0x7d24f  cmpl $0x2     'CADENCE %s: CONDITION B SATISFIED'
+    0x7d39e  cmpl $0x2     'CADENCE %s: CONDITION C SATISFIED'
+
+The three at `$0x2` need level 3, not 2.  They are the per-matched-cycle
+messages, which at level 2 would bury everything else -- a deliberate second
+tier, not an accident.  `cadence_create` has one too ('Disable CONGESTION
+detector', 0x7dcd1).  `DSPLIB_DEBUG_VERBOSE()` now spells it.
+
+This is finding 150's prediction arriving, and it is worth being precise about
+what caught it.  The level sweep did NOT catch it -- the sweep only asserts the
+reference is silent at level 1, which these sites satisfy.  What caught it was
+reading the gates, because `debugaudit --sites` prints them all and flags
+anything that is not `cmpl $0x1`.  The sweep would have caught a wrong
+threshold in a site already restored; the tool caught one before it was written.
+Both were needed, and the cheaper one found it.
+
+The general point: "every X in the object is Y" is a claim about 1670 call
+sites, and it was made after looking at some of them.  It survived this long
+because the counter-example is invisible at the level everything is tested at.
+
+### 156. Callprog batch: 46 of 67 placed
+
+  CALLPROG_Progress   29  placed (3 verified -- finding 154)
+  CALLPROG_Dial        7  placed
+  CALLPROG_Delete      4  placed
+  CALLPROG_Create      3  placed
+  cadence_progress     7  4 placed, 3 left
+  cadence_create      17  left
+
+The three left in `cadence_progress` are the `CADENCE %s: CONDITION ...`
+messages, and they are left ON PURPOSE.  They sit inside `match_unrolled`'s
+branch structure, where "CONDITION B" and "CONDITION C" have to be attached to
+the one-period and two-period tests in the right order -- and the two blocks do
+not read the way the names suggest: 0x7d393 tests a flag that is already set
+rather than computing its own verdict.  Getting B and C the wrong way round is
+precisely findings 146 and 143, twice already, and both times the names
+suggested an ordering that the offsets contradicted.  Better left with a note
+than guessed.
+
+Placement notes worth keeping:
+
+  - `CALLPROG_Delete is exited` and `CALLPROG_Dial was exited.` are TAIL calls
+    in the object (`jmp` at 0x794cd and 0x7a868, not `call`).
+  - `CALLPROG Create <<` comes FIRST and `CallProgFP_Create >>` second, from
+    gate order 0x79588 < 0x795e6.  The arrows say the opposite; the gates win.
+  - `cadence_delete with CADENCE_DIAL_OBJ` is announced before `CADENCE_OBJ`,
+    from the return targets 0x79493 < 0x7949a -- matching the deletion order,
+    but read rather than assumed.
+  - `APPLY_FILTER = %d` prints the result of the `MustNoiseFilterBeApplied`
+    read, so it is after it; the gate sits later in the body than the statement
+    it was placed at, so the exact line is not pinned.  The order against the
+    get_param is, and the harness marks that now.
+  - `BUSY cadence recognized` is a fixed string, not `c->name`, even though the
+    three CONDITION messages next to it all use the name.  The author's.
