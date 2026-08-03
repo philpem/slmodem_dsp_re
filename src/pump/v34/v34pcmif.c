@@ -297,7 +297,7 @@ VPcmV34InitiateHangUp(void *objp)
 
 	v34handshakinit(obj, 2);
 
-	*(int *)(m + 0x04) = 6;
+	obj->f0004 = 6;
 	*(int *)(m + 0x2218) = 5;
 
 	rx->f258 = 0;
@@ -341,16 +341,34 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 		return;
 	}
 
+	/*
+	 * THE STEP WRAPS AND THE COMPARISON DOES NOT.  The object steps with
+	 * `dec` and `inc`, which wrap at the ends of the signed range; C's
+	 * `- 1` and `+ 1` on a signed int are UNDEFINED there, and an
+	 * optimiser is entitled to fold `rate_now + 1 <= rate_max` into
+	 * `rate_now < rate_max` on that basis.
+	 *
+	 * WRITTEN THIS WAY EVEN THOUGH THE TEST CANNOT TELL.  With the plain
+	 * `- 1` this file agrees with the blob byte for byte at both extremes
+	 * under the compiler and flags this tree builds with -- the mutation
+	 * survives.  That agreement is a property of the code generation and
+	 * not of the language, so it is not something the differential tier
+	 * can protect: the one case it would break is the one case it cannot
+	 * see.  The clamp stays signed, because the object's are `jl`/`jg`.
+	 *
+	 * A rate index is 0..14 in practice, so nothing here is reachable.
+	 * It is spelled correctly because it costs one cast.
+	 */
 	switch (req) {
 	case 0:
 	case 2:
 	case 5:
-		want = obj->rate_now - 1;
+		want = (int)((unsigned)obj->rate_now - 1u);
 		if (want >= obj->rate_min)
 			obj->rate_want = want;
 		break;
 	case 3:
-		want = obj->rate_now + 1;
+		want = (int)((unsigned)obj->rate_now + 1u);
 		if (want <= obj->rate_max)
 			obj->rate_want = want;
 		break;
@@ -361,7 +379,7 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 
 	v34handshakinit(obj, 2);
 
-	*(int *)(m + 0x04) = 6;
+	obj->f0004 = 6;
 
 	rx->f258 = 0;
 	rx->f25a = 0;
@@ -421,7 +439,7 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	/* The `[1]` counter every handshake trace prints; see v34hshak.c. */
 	*(short *)(m + 0x2aa2) = 0;
 
-	*(int *)(m + 0x04) = 6;
+	obj->f0004 = 6;
 	*(int *)(m + 0x2218) = 5;
 
 	obj->f382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
