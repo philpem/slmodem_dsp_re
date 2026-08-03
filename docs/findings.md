@@ -8138,3 +8138,84 @@ because it is the same shape as 116b and 123: the fixture, not the code.  A
 test that sweeps two inputs together cannot tell them apart, and two inputs
 that are read by the same-looking line in near-duplicate branches are exactly
 the ones to separate.
+
+### 148. `V34SetupModulator` was carrying an invented string, and it named two parameters
+
+`tools/debugaudit.py --strings V34SetupModulator` lists three format strings
+in the blob:
+
+```
+   V34SetupModulator: baudrate %ld, carrier %ld, preemp %ld, V90=%ld. fullReset=%1d
+   V34SetupModulator: invalid baudrate %ld
+   V34SetupModulator: invalid carrier %ld
+```
+
+The reconstruction had none of them.  What it had instead was
+
+```c
+    dsplibs_debug_printf("V34SetupModulator: carrier?\n");
+```
+
+**which appears nowhere in the object.**  Finding 126 is about a format
+string that was wrong; this is one that was invented, and it is worse in the
+same way finding 134 describes: nothing can see it, because the level ships
+at zero and every other check in the tree is of program state.
+
+**Restoring the entry diagnostic names two parameters.**  It prints five
+values, and the fourth and fifth are the ones this reconstruction had as
+`short phase` and `int arg4` — with `arg4` cast to void as unused.  The
+object calls them `preemp` and `V90`.  So the fourth is the pre-emphasis
+index, which the code below it already treats as one, and the fifth is a
+V.90 flag that this function only prints.  Both are renamed.
+
+A parameter that is read by nothing and printed by the one call site that
+was dropped is exactly the parameter whose name is unrecoverable any other
+way — and `V90` is a third pointer at the absent V.90 configuration D31 is
+about.
+
+**And 600 baud is a real case, not the default.**  The object compares
+against 0x258 and sends only the non-matching path to "invalid baudrate";
+both then share one body.  A comment in the reconstruction said the opposite
+— "Note it is the DEFAULT, not a match" — and restoring the diagnostic is
+what showed it was.
+
+**Both times the fixture had to be widened.**  The first sweep passed the
+same variable as `preemp_index` and `v90`, so a printf with those two
+arguments transposed passed; that is the third time in this session that two
+inputs read by near-identical code were driven from one variable (see
+finding 147).  It is the standing fixture defect of this project: **two
+inputs that a wrong reconstruction could confuse must be swept
+independently, or the test cannot tell them apart.**
+
+### 149. `getbit` and `ApplyBulkDelay` stay deferred, and one byte past `getbit` is a jump
+
+Task #38 left two of V34hshak.c's functions unwritten.  Both are file-local,
+so `tools/symmap.py` — which renames `--extern-only` symbols — cannot give
+them a `ref_` alias, and the project's answer for a local is to drive it
+through a reconstructed caller (docs/coverage.md, eight of them).  Every
+call site of both is inside `v34handshak`:
+
+```
+   5ec47:  call 5eaf0 <getbit>          ; getbit's own, recursive
+   6484c:  call 5eaf0 <getbit>
+   684bb:  call 5eaf0 <getbit>
+   706a9:  call 5eaf0 <getbit>
+   6639f:  call 5dd10 <ApplyBulkDelay>
+   66af5:  call 5dd10 <ApplyBulkDelay>
+```
+
+so finding 117's conclusion holds for `getbit` as well: a #39–#45
+dependency, not a #38 one.  `getbit` is also **recursive**, which the first
+of those call sites is, and which is worth knowing before writing it.
+
+**One byte past `getbit`'s declared end there is a jump into `setfinalrate`:**
+
+```
+   5eca1:  eb 0d    jmp  5ecb0 <setfinalrate>
+```
+
+`getbit` is 0x5eaf0 + 0x1b1 = 0x5eca1, so this instruction is *outside* the
+symbol.  Either it is inter-function padding that happens to decode as a
+two-byte relative jump landing exactly on the next function, or it is a tail
+call the symbol size excludes.  Writing `getbit` will settle it; recorded now
+because an unrecorded observation is not noticed twice.

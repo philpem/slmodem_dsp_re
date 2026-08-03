@@ -1139,7 +1139,9 @@ mod_carrier(struct v34_modulator *m, short carrier)
 	case 2400: m->sine = hsine2400; m->sine_len = 8;    break;
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34SetupModulator: carrier?\n");
+			dsplibs_debug_printf(
+				"V34SetupModulator: invalid carrier %ld\n",
+				(long)carrier);
 		m->sine = hsine1200;
 		m->sine_len = 8;
 		break;
@@ -1148,12 +1150,27 @@ mod_carrier(struct v34_modulator *m, short carrier)
 
 void
 V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
-		  short phase, int arg4, int reset)
+		  short preemp_index, int v90, int reset)
 {
 	const short *src;
 	const short *prem = NULL;
 
-	(void)arg4;
+	/*
+	 * THE LAST TWO PARAMETERS ARE NAMED BY THE OBJECT, not guessed: the
+	 * entry diagnostic below prints all five and calls the fourth
+	 * `preemp` and the fifth `V90`.  The fifth is read by nothing in
+	 * this function -- only printed -- so it is a flag the caller passes
+	 * for a V.90 path that either lives elsewhere or was removed; see
+	 * D31, which is about the same absent V.90 configuration.
+	 */
+	(void)v90;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34SetupModulator: baudrate %ld, carrier %ld, "
+			"preemp %ld, V90=%ld. fullReset=%1d\n",
+			(long)baud, (long)carrier, (long)preemp_index,
+			(long)v90, reset);
 
 	m->preemp = preemp0;
 
@@ -1244,8 +1261,21 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		src = txAllPass;
 		break;
 	default:
-		/* 600 baud -- V.34's INFO signalling rate -- and anything
-		 * unrecognised.  Note it is the DEFAULT, not a match. */
+		/*
+		 * 600 baud -- V.34's INFO signalling rate -- and anything
+		 * unrecognised, sharing one body.
+		 *
+		 * THEY ARE NOT ONE CASE.  The object compares against 0x258
+		 * and only the path that does NOT match prints "invalid
+		 * baudrate", so 600 is a real arm whose configuration
+		 * happens to be the fallback's.  An earlier note here said
+		 * it was the default and not a match; restoring the
+		 * diagnostic is what showed otherwise.
+		 */
+		if (baud != 600 && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"V34SetupModulator: invalid baudrate %ld\n",
+				(long)baud);
 		m->taps = 8; m->f04 = 1; m->rows = 0x10;
 		src = tx600c1;
 		prem = ec_prem_coef_B3429;
@@ -1256,11 +1286,11 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		m->ec_prem = prem;
 
 	/*
-	 * A non-zero `phase` replaces the flat pre-emphasis with one row of
+	 * A non-zero `preemp_index` replaces the flat pre-emphasis with a row of
 	 * the rate's p<baud> table, which is ten 16-short rows indexed FROM
 	 * ONE -- the original computes `p<baud> - 32 + phase * 32`.
 	 */
-	if (phase != 0) {
+	if (preemp_index != 0) {
 		const short *p = NULL;
 
 		switch (baud) {
@@ -1272,7 +1302,7 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		default: break;
 		}
 		if (p != NULL)
-			m->preemp = p + (phase - 1) * 16;
+			m->preemp = p + (preemp_index - 1) * 16;
 	}
 
 	mod_load(m, src);

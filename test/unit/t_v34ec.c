@@ -23,6 +23,9 @@
 #include "harness.h"
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"	/* struct v34_object owns the canceller storage */
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_V34EchoCleanUp(void *e);
 extern void ref_V34EchoUpdateDelayLine(void *e, short sample);
@@ -398,6 +401,73 @@ main(void)
 			for (k = 0; k < ma.rows * V34_MOD_ROW; k++)
 				diff_eq_int("shaped", sha[k], shb[k], k);
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The three diagnostics V34SetupModulator prints.
+	 *
+	 * Worth its own block because they had been reconstructed as ONE
+	 * INVENTED STRING -- "V34SetupModulator: carrier?" appears nowhere in
+	 * the blob -- with the three real ones missing.  Nothing could see
+	 * that: the level ships at zero, so a wrong string and a right one
+	 * behave identically under every other check here.  Finding 148.
+	 *
+	 * The sweep has to include an unrecognised baud rate AND an
+	 * unrecognised carrier, because two of the three sites are on those
+	 * arms, and 600 baud, because it shares its body with the invalid
+	 * arm and must NOT print.
+	 */
+	diff_begin("v34 setup modulator: the diagnostics");
+	{
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		static const short bauds[] = { 600, 2400, 3429, 1234, 4800 };
+		static const short carr[] = { 1200, 1829, 999 };
+		unsigned bi, ci;
+		int ph, v9;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		/*
+		 * `preemp_index` and `v90` get INDEPENDENT values.  They are
+		 * two of the five the entry diagnostic prints, and a sweep
+		 * that drove both from one variable would pass a printf with
+		 * the two arguments transposed -- which is exactly what the
+		 * first version of this block did.
+		 */
+		for (bi = 0; bi < sizeof(bauds) / sizeof(bauds[0]); bi++)
+		for (ci = 0; ci < sizeof(carr) / sizeof(carr[0]); ci++)
+		for (v9 = 0; v9 <= 2; v9 += 2)
+		for (ph = 0; ph <= 1; ph++) {
+			memset(&ma, HARNESS_MALLOC_FILL, sizeof(ma));
+			memset(&mb, HARNESS_MALLOC_FILL, sizeof(mb));
+			memset(sha, 0x5a, sizeof(sha));
+			memset(shb, 0x5a, sizeof(shb));
+			ma.shaped = sha; mb.shaped = shb;
+			ma.row = mb.row = 0;
+			ma.phase = mb.phase = 0;
+
+			dsplib_debug_capture_reset();
+			V34SetupModulator(&ma, bauds[bi], carr[ci],
+					  (short)ph, v9, 1);
+			ref_V34SetupModulator(&mb, bauds[bi], carr[ci],
+					      (short)ph, v9, 1);
+			diff_eq_int("setup modulator transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, bauds[bi] * 1000L + carr[ci] * 10
+				    + ph * 4 + v9);
+		}
+
+		diff_eq_int("transcript non-empty",
+			    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
