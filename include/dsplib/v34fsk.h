@@ -118,6 +118,28 @@ struct v34_fskdelay {
  * +0x386.  Extend one of the two when the next V.34 file needs a field, and
  * say which; do not start a third.
  */
+/*
+ * The scrambler and descrambler shift registers.
+ *
+ * BOTH ARE 128 BITS STEPPED SIXTEEN AT A TIME, held as words rather than as
+ * a bit array, and both polynomials are applied to a whole 16-bit step at
+ * once rather than bit by bit.  That is what makes `scrambleGPA` look
+ * unlike `scrambleGPC`: GPC's shorter tap is 18 bits back, further than one
+ * step, so one pass suffices; GPA's is 5 bits back, closer than one step, so
+ * its feedback has to be folded in four times to cover sixteen.
+ *
+ * `unsigned` because two of the four shift right logically.
+ */
+struct v34_scrambler {
+	unsigned w[4];		/* +0x00 */
+	short nbits;		/* +0x10  0x20 out of preinitdigital */
+};
+
+struct v34_descrambler {
+	unsigned w[3];		/* +0x00 */
+	short count;		/* +0x0c  bits held, flushed past 31 */
+};
+
 struct v34_object {
 	/*
 	 * +0x0000.  The datapump's own status word: `receiver` puts 10 in it
@@ -126,7 +148,30 @@ struct v34_object {
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x230 - 0x004];
+	unsigned char unmapped_0004[0x14 - 0x004];
+	/*
+	 * +0x14 to +0x21c.  THE SCRAMBLER'S TEST HARNESS, and the layout
+	 * tiles exactly, which is the evidence for it: 0x40 words of sink
+	 * from +0x14 end at +0x114 where the sink index is, 0x40 words of
+	 * source from +0x118 end at +0x218 where the source length is, and
+	 * the source index follows at +0x21c.  Nothing had to be guessed at
+	 * to make those four bounds meet.
+	 *
+	 * All of it is gated on `scram_capture` at +0x2214.  With that set,
+	 * the scramblers take their input word from `scram_src` instead of
+	 * the 0xffff they otherwise use, and the descramblers append each
+	 * output word to `scram_sink` until it is full.  So the object
+	 * carries a scripted-bits loopback for its own scrambler pair.
+	 *
+	 * The arrays are `int` and only the low short of each source entry
+	 * is read -- `movzwl 0x114(%edx,%eax,4)`.
+	 */
+	int scram_sink[0x40];				/* +0x0014 */
+	int scram_sink_n;				/* +0x0114 */
+	int scram_src[0x40];				/* +0x0118 */
+	int scram_src_len;				/* +0x0218 */
+	int scram_src_n;				/* +0x021c */
+	unsigned char unmapped_0220[0x230 - 0x220];
 	/*
 	 * The signal-energy floor `receiver` compares its 36-sample RMS
 	 * against before declaring the line dead.  An int, and the only field
@@ -188,7 +233,10 @@ struct v34_object {
 	 * switched off".  Nothing here sets it.
 	 */
 	short fsk_inhibit;				/* +0x402 */
-	unsigned char unmapped_0404[0x2074 - 0x404];
+	unsigned char unmapped_0404[0xe74 - 0x404];
+	/* The descrambler's shift register; see `struct v34_descrambler`. */
+	struct v34_descrambler descrambler;		/* +0x0e74 */
+	unsigned char unmapped_0e84[0x2074 - 0xe84];
 	/*
 	 * A pointer V34InitializeImplementationSpecific aims at +0x146c of
 	 * this same object.  What lives there is not yet known; the echo
@@ -201,7 +249,10 @@ struct v34_object {
 	unsigned char scratch_20e0[0x20];		/* +0x20e0 */
 	unsigned char unmapped_2100[0x210c - 0x2100];
 	unsigned char scratch_210c[0x100];		/* +0x210c */
-	unsigned char unmapped_220c[0x221c - 0x220c];
+	unsigned char unmapped_220c[0x2214 - 0x220c];
+	/* Non-zero runs the scrambler pair off `scram_src`/`scram_sink`. */
+	short scram_capture;				/* +0x2214 */
+	unsigned char unmapped_2216[0x221c - 0x2216];
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
@@ -213,7 +264,10 @@ struct v34_object {
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
 	short f25d4;					/* +0x25d4 tx scale  */
-	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
+	unsigned char unmapped_25d6[0x2a54 - 0x25d6];
+	/* The scrambler's shift register; see `struct v34_scrambler`. */
+	struct v34_scrambler scrambler;			/* +0x2a54 */
+	unsigned char unmapped_2a68[0x2aa4 - 0x2a68];
 	short f2aa4;					/* +0x2aa4 */
 	short f2aa6;					/* +0x2aa6 */
 	/*

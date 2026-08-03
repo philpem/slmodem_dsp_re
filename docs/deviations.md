@@ -1741,3 +1741,37 @@ mode prints the message instead, because `temp` holds it and it is at most
 **The alternative that changes nothing at all** is `tools/eddecode.py`, which
 decodes captured logs after the fact and is the only option for logs that
 came from the original binary.
+
+---
+
+## D41 ✅ The descramblers' refill shift is masked to five bits
+
+**Where:** `src/pump/v34/v34scram.c`, `descram_tail`.
+
+**What the original does:** after flushing a word it puts the caller's bits
+back at the top of the register with
+
+```
+   57e89:  sub  $0x10,%eax          ; count + nbits - 16
+   57e8f:  sub  %edi,%ecx           ; ... - nbits, i.e. the ORIGINAL count - 16
+   57e95:  shl  %cl,%ebp
+```
+
+and `shl %cl` masks the count to five bits on x86.  The subtraction is
+negative whenever a caller passes more than sixteen bits against a register
+holding fewer than sixteen — which is reachable for `nbits > 16`, since the
+flush only needs `count + nbits > 31`.
+
+**What we do:** mask with `& 31` explicitly.  On the 32-bit target the two
+are the same instruction and the same result; in C, shifting by a negative
+or over-wide count is undefined, and this reconstruction is meant to be
+64-bit-clean, where a compiler is entitled to do something else with it.
+
+**Bit-exact over the whole domain.**  Not a fix and not a behavioural
+difference: it spells out what the hardware was already doing.  It is here
+because a reader who removed the mask would not be able to tell from the
+disassembly that anything had changed.
+
+**Reachability of the negative case: unmeasured.**  Every caller is inside
+`v34handshak`, which is not reconstructed.  The differential test drives
+`nbits` from 1 to 16, where the shift cannot go negative.
