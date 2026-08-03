@@ -8323,10 +8323,11 @@ worth more than another round on the leaf.
 ### 151. `initdigital` is the rate negotiation, and its own strings name it
 
 `initdigital` (0x59980, 1206 bytes) became ready the moment `initV34` and
-`preinitdigital` landed, because it is the thing that calls them.  Not
-reconstructed; recorded because five surviving debug strings name most of
-what it computes, and because it independently confirms `initV34`'s
-signature from the caller's side.
+`preinitdigital` landed, because it is the thing that calls them.  Now
+reconstructed and passing; this entry was written first, from the five
+surviving debug strings that name most of what it computes and from the way
+it confirms `initV34`'s signature from the caller's side.  Everything below
+survived the differential test.
 
 **It calls `initV34` twice, once per context**, which is the shape finding
 146 predicted from the other direction:
@@ -8374,6 +8375,24 @@ same and called a zero there fatal: the code substitutes 1 and prints
 "ZERODIV expected!" rather than dividing.  Two independent readings, and the
 second is the author's own word.
 
-Worth noting against finding 134's policy: this function HAS diagnostic call
-sites and they are load-bearing annotation, so whoever writes it carries all
-five rather than dropping them.
+**All five diagnostic call sites are carried**, per finding 134's policy,
+and this is the first module in the tree whose test actually DRIVES them:
+the sweep runs once with `dsplibs_debug_level` at 0 and once at 2, so the
+gated branches and the register reloads inside them are compared rather than
+merely present.  Everywhere else the level ships at zero and the branch is
+never taken, which finding 134 notes is exactly why a missing call site
+could go unnoticed for so long.
+
+**Two things the reconstruction added to the map.**  The object is longer
+than `struct v34_object` claimed: the declared end at 0xac10 was the largest
+offset anything reconstructed had touched, and `initdigital` writes a byte
+at 0xac16, so the struct now runs to 0xac18 and that is still a floor.  And
+the rate config's `rx_baud` at +0xaa96 IS `faa96` -- one store, two
+readings, the same situation as the echo array that is also the FSK delay
+line (finding 100), declared in both places on purpose.
+
+**One finding-129-class read.**  The transmit divisor lookup
+`divtab[bits + 14*use_max - 1]` happens BEFORE the zero-rate test, so a zero
+rate in mode 0 reads one entry before the table.  Unclamped and reproduced;
+the fixture points the table at the middle of a scratch array so the read is
+defined and identical on both sides rather than left to whatever follows.

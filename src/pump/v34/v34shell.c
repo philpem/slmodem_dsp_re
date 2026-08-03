@@ -39,6 +39,7 @@
 #include "dsplib/sysdep.h"	/* sysdep_memset: preinitdigital clears three blocks */
 #include "dsplib/v34fsk.h"	/* struct v34_object: the scrambler callbacks take it */
 #include "dsplib/v34rx.h"	/* txmit and V34nlencoder: modulatevector ends in them */
+#include "dsplib/debug.h"	/* initdigital carries five diagnostic call sites */
 #include "dsplib/v34shell.h"
 
 
@@ -1720,6 +1721,263 @@ const short quarter[416] = {
 	-1747, 11769, -10767, -3627, -6875, 9701, 2349, 11529,
 };
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * initdigital -- V.34's rate negotiation, and what configures both shells.
+ *
+ * Runs once the INFO exchange is over.  It unpacks the negotiated bits into
+ * the rate config at +0xaa84, reconciles the two directions against what the
+ * line can actually carry, and then calls `initV34` TWICE -- once for the
+ * transmit shell context at +0x25e0 and once for the receive one at +0xa00.
+ * That pairing is finding 146 seen from the caller's side.
+ *
+ * FIVE DIAGNOSTIC CALL SITES, carried per debug.h's policy, and they are the
+ * reason most of the fields below have names rather than numbers: the author
+ * printed "txbitrate", "rxbitrate", "PTC" and "nofTxBits" himself.  See
+ * finding 151.
+ *
+ * THE ROLE SWAPS TWO NIBBLES.  `info_rates` carries one four-bit rate per
+ * direction, at bits 2..5 and 6..9, and which one is "ours" depends on
+ * `f359c` -- the same flag that picks the scrambler polynomial and the
+ * timing table.  Everything after the unpack is role-independent.
+ *
+ * RATES ARE COUNTS OF 2400 bps throughout, and only become bits per second
+ * where they are handed to `initV34` or published at the end.  That is why
+ * `initV34` divides by 25: 2400/25 is 96, so its quotient is bits per symbol
+ * group directly (finding 148).
+ */
+void
+initdigital(void *obj)
+{
+	struct v34_object *o = (struct v34_object *)obj;
+	struct v34_ratecfg *cfg =
+	    (struct v34_ratecfg *)((char *)obj + V34_RATECFG);
+	unsigned info = (unsigned short)o->info_rates;
+	int tx, rx, lim_tx, lim_rx;
+	int level;
+
+	/*
+	 * Unpack, with the two rate nibbles swapped by role.  `lim_tx` comes
+	 * out of `info_caps` BIT-REVERSED over four bits, which is how V.34
+	 * carries a capability list whose most significant bit is the lowest
+	 * rate.
+	 */
+	if (o->f359c == 0x65) {
+		cfg->txbits = (short)((info >> 2) & 0xf);
+		lim_rx = (int)((info >> 6) & 0xf);
+		lim_tx = bitreverse((unsigned short)
+				    (((unsigned)(unsigned short)o->info_caps
+				      >> 10) & 0xf), 4);
+	} else {
+		cfg->txbits = (short)((info >> 6) & 0xf);
+		lim_rx = (int)((info >> 2) & 0xf);
+		lim_tx = bitreverse((unsigned short)
+				    (((unsigned)(unsigned short)o->info_caps
+				      >> 6) & 0xf), 4);
+	}
+	lim_tx = (short)lim_tx;
+
+	/* Neither direction may exceed what the far end offered. */
+	tx = (unsigned short)cfg->txbits;
+	if ((short)tx > (short)lim_tx) {
+		cfg->txbits = (short)lim_tx;
+		tx = lim_tx;
+	}
+	rx = (unsigned short)cfg->rxbits;
+	if ((short)rx > (short)lim_rx) {
+		cfg->rxbits = (short)lim_rx;
+		rx = lim_rx;
+	}
+
+	level = (int)dsplibs_debug_level;
+	if (level > 1) {
+		dsplibs_debug_printf("V34DATARATE, preliminary txbitrate %d,"
+				     "rxbitrate %d\n",
+				     2400 * (short)tx, 2400 * (short)rx);
+		tx = (unsigned short)cfg->txbits;
+		rx = (unsigned short)cfg->rxbits;
+		level = (int)dsplibs_debug_level;
+	}
+
+	/*
+	 * Asymmetric rates need BOTH permissions -- the sign bit of the rate
+	 * mask and bit 0 of the capability flags.  Without them the two
+	 * directions are forced to the lower of the pair, which is what makes
+	 * a V.34 connection symmetric by default.
+	 */
+	if (o->rate_mask >= 0 || (o->caps_flags & 1) == 0) {
+		int m = ((short)tx <= (short)rx) ? (unsigned short)tx
+						 : (unsigned short)rx;
+
+		cfg->rxbits = (short)m;
+		cfg->txbits = (short)m;
+		tx = m;
+		rx = m;
+	}
+
+	/*
+	 * Walk each rate down until the bitmap says it is available.  Bit n-1
+	 * stands for rate n, so the shift tracks the decrement, and reaching
+	 * zero stops the search whether or not a bit was ever found.
+	 */
+	if ((short)tx != 0) {
+		unsigned mask = (unsigned short)(1u << (((short)tx - 1) & 31));
+
+		if (!((unsigned)(unsigned short)o->rate_mask & mask)) {
+			int v = tx;
+
+			for (;;) {
+				v = v - 1;
+				mask >>= 1;
+				cfg->txbits = (short)v;
+				if ((short)v == 0)
+					break;
+				if ((unsigned short)o->rate_mask & mask)
+					break;
+			}
+			tx = v;
+		}
+	}
+
+	if ((short)rx != 0) {
+		unsigned mask = (unsigned short)(1u << (((short)rx - 1) & 31));
+
+		if (!((unsigned)(unsigned short)o->rate_mask & mask)) {
+			int v = rx;
+
+			for (;;) {
+				v = v - 1;
+				mask >>= 1;
+				cfg->rxbits = (short)v;
+				if ((short)v == 0)
+					break;
+				if ((unsigned short)o->rate_mask & mask)
+					break;
+			}
+			rx = v;
+		}
+	}
+
+	/*
+	 * Nothing available at all.  2400 baud can always carry 2400 bps, so
+	 * only the faster symbol rates can fail here -- and the fallback is 2
+	 * units, i.e. 4800 bps, on BOTH directions regardless of which one ran
+	 * out.
+	 */
+	if ((short)tx == 0 && (unsigned short)cfg->rx_baud != 0x960) {
+		if (level > 1) {
+			dsplibs_debug_printf("--ERROR---, 2400bps is not "
+					     "possible at %d baud rate\n",
+					     (short)(unsigned short)
+					     cfg->rx_baud);
+			level = (int)dsplibs_debug_level;
+		}
+		cfg->txbits = 2;
+		cfg->rxbits = 2;
+	}
+
+	cfg->depth = (short)((info >> 11) & 3);
+	cfg->use_max = (short)((info >> 14) & 1);
+
+	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
+	if (info & 0x2000)
+		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x4000);
+	else
+		o->f25c2 = (short)((unsigned short)o->f25c2 & ~0x4000);
+
+	if (level > 1)
+		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d,"
+				     "rxbitrate %d\n",
+				     2400 * (short)cfg->txbits,
+				     2400 * (short)cfg->rxbits);
+
+	/* --- the transmit context --- */
+	{
+		int bits = (unsigned short)cfg->txbits;
+		int umax = (unsigned short)cfg->use_max;
+		int div;
+
+		/*
+		 * The divisor table is indexed by rate and mode together,
+		 * fourteen rates per mode, and READ BEFORE the zero-rate test
+		 * -- so a zero rate reads `divtab[14 * use_max - 1]`, which
+		 * for mode 0 is one entry BEFORE the table.  Unclamped, like
+		 * the three tables of finding 129, and reproduced.
+		 */
+		div = cfg->divtab[(short)bits + 14 * (short)umax - 1];
+
+		if ((short)bits != 0) {
+			o->nof_tx_bits =
+			    (int)(((short)bits * o->ptc) >> 6) + 6;
+		} else {
+			o->nof_tx_bits = 0;
+		}
+
+		if (level > 1) {
+			dsplibs_debug_printf("V34DATARATE, for tx data rate -"
+					     " %d, PTC - %d, setting nofTxBits"
+					     " to %d\r\n",
+					     (short)bits, o->ptc,
+					     o->nof_tx_bits);
+			bits = (unsigned short)cfg->txbits;
+			umax = (unsigned short)cfg->use_max;
+		}
+
+		initV34((char *)obj + V34_SHELL_TX + V34_SHELL_FIELDS,
+			(short)(unsigned short)cfg->baud,
+			(short)(unsigned short)(2400 * (short)bits),
+			(short)umax, (short)cfg->depth,
+			(const short *)((char *)obj + 0x2a68), (short)div);
+	}
+
+	/* --- the receive context --- */
+	{
+		int bits = (unsigned short)cfg->rxbits;
+		int umax = (unsigned short)cfg->rx_use_max;
+		int div;
+
+		/*
+		 * Same lookup, but HALVED and guarded: the author expected a
+		 * zero here to be impossible and said so rather than dividing
+		 * by it.  The transmit side above has neither the halving nor
+		 * the guard, which is the object's asymmetry and not a slip.
+		 */
+		div = cfg->rx_divtab[(short)bits + 14 * (short)umax - 1] >> 1;
+		if (div == 0) {
+			if (level > 1) {
+				dsplibs_debug_printf("FATAL ERROR(initdigital)"
+						     " - ZERODIV expected!");
+				bits = (unsigned short)cfg->rxbits;
+				umax = (unsigned short)cfg->rx_use_max;
+			}
+			div = 1;
+		}
+
+		initV34((char *)obj + V34_SHELL_FIELDS,
+			(short)(unsigned short)cfg->rx_baud,
+			(short)(unsigned short)(2400 * (short)bits),
+			(short)umax, 0,
+			(const short *)((char *)obj + 0xe84), (short)div);
+	}
+
+	/*
+	 * Publish the negotiated rates in bits per second, once.  The latch
+	 * and the two gates mean a renegotiation leaves the first answer
+	 * standing -- and note the transmit rate is stored even when the
+	 * gates block, so only the receive one and the latch are conditional.
+	 */
+	if (o->rates_latched != 0)
+		return;
+
+	o->tx_bps = 2400 * (short)cfg->txbits;
+	if (o->f24c != 0 || o->f250 != 0)
+		return;
+
+	o->rates_latched = 1;
+	o->rx_bps = 2400 * (short)cfg->rxbits;
+}
+
 /*
  * ---------------------------------------------------------------------------
  * modulatevector -- the forward shell mapper, and the transmit chain's front
@@ -2205,6 +2463,40 @@ V34OB_ASSERT(vect, 0x2a80);
 V34OB_ASSERT(vect_idx, 0x2aa2);
 V34OB_ASSERT(f25d0, 0x25d0);
 V34OB_ASSERT(f25c2, 0x25c2);
+/* initdigital's, including the two that grew the struct past 0xac10. */
+V34OB_ASSERT(ptc, 0x008);
+V34OB_ASSERT(nof_tx_bits, 0x010);
+V34OB_ASSERT(f24c, 0x24c);
+V34OB_ASSERT(f250, 0x250);
+V34OB_ASSERT(info_rates, 0xaa0c);
+V34OB_ASSERT(rate_mask, 0xaa0e);
+V34OB_ASSERT(info_caps, 0xaa3c);
+V34OB_ASSERT(caps_flags, 0xaa3e);
+V34OB_ASSERT(tx_bps, 0xac04);
+V34OB_ASSERT(rx_bps, 0xac08);
+V34OB_ASSERT(rates_latched, 0xac16);
+
+/*
+ * The rate config's own offsets, and the one that ties it to the object:
+ * `rx_baud` sits exactly on `faa96`, which is the same store seen twice.
+ */
+#define V34RC_ASSERT(field, off) \
+	typedef char v34rc_off_##field[ \
+		((int)__builtin_offsetof(struct v34_ratecfg, field) == (off)) \
+		? 1 : -1]
+
+V34RC_ASSERT(txbits, 0x04);
+V34RC_ASSERT(depth, 0x08);
+V34RC_ASSERT(use_max, 0x0a);
+V34RC_ASSERT(divtab, 0x0c);
+V34RC_ASSERT(rx_baud, 0x12);
+V34RC_ASSERT(rxbits, 0x14);
+V34RC_ASSERT(rx_use_max, 0x22);
+V34RC_ASSERT(rx_divtab, 0x28);
+
+typedef char v34rc_aliases_faa96[
+	((int)(V34_RATECFG + __builtin_offsetof(struct v34_ratecfg, rx_baud))
+	 == (int)__builtin_offsetof(struct v34_object, faa96)) ? 1 : -1];
 
 /* The three memsets' lengths are the object's own, so pin those too. */
 typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)

@@ -311,6 +311,13 @@ extern const short quarter[416];
 extern const short smIndex[16];
 
 /*
+ * V.34's rate negotiation: unpack the negotiated INFO bits into the rate
+ * config at +0xaa84, reconcile the two directions, and configure BOTH shell
+ * contexts through initV34.  Takes the object.
+ */
+void initdigital(void *obj);
+
+/*
  * Emit one modulated point, and refill all eight when the cursor wraps.
  *
  * The forward shell mapper: `shellDemapper` run backwards on the TRANSMIT

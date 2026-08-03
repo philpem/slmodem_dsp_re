@@ -117,7 +117,16 @@ struct v34_object {
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x014 - 0x004];
+	unsigned char unmapped_0004[0x008 - 0x004];
+	/*
+	 * +0x0008 and +0x0010, both named by initdigital's own debug string:
+	 * "for tx data rate - %d, PTC - %d, setting nofTxBits to %d".  `ptc`
+	 * is read and never written here; `nof_tx_bits` is
+	 * `((txbits * ptc) >> 6) + 6`, or zero when the rate is zero.
+	 */
+	int ptc;					/* +0x0008 */
+	unsigned char unmapped_000c[0x010 - 0x00c];
+	int nof_tx_bits;				/* +0x0010 */
 	/*
 	 * The datapump's two data buffers, of which the scrambler callbacks
 	 * in v34shell.c are so far the only reader and writer.
@@ -144,7 +153,14 @@ struct v34_object {
 	 * either V.34 core reads through `obj + 4` rather than `obj`.
 	 */
 	int rx_energy_floor;				/* +0x0230 */
-	unsigned char unmapped_0234[0x25c - 0x234];
+	unsigned char unmapped_0234[0x24c - 0x234];
+	/*
+	 * Two ints initdigital requires to be zero before it publishes the
+	 * negotiated rates.  What sets them is not reconstructed.
+	 */
+	int f24c;					/* +0x024c */
+	int f250;					/* +0x0250 */
+	unsigned char unmapped_0254[0x25c - 0x254];
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * f25c is the base the echo filter's lag is measured from, f25e the
@@ -316,7 +332,26 @@ struct v34_object {
 	short fa23e;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short fa240;					/* +0xa240 */
-	unsigned char unmapped_a242[0xaa74 - 0xa242];
+	unsigned char unmapped_a242[0xaa0c - 0xa242];
+	/*
+	 * The negotiated INFO bits, which initdigital unpacks into the rate
+	 * config at +0xaa84.
+	 *
+	 * `info_rates` carries two four-bit rate fields -- bits 2..5 and
+	 * 6..9, one per direction, and which is "ours" depends on the role --
+	 * plus the trellis depth at 11..12, a flag at 14, and the non-linear
+	 * encoder select at 13.  `rate_mask` is a bitmap of the rates that
+	 * are actually available, bit n-1 for rate n, and its SIGN BIT means
+	 * asymmetric rates are on the table.  `info_caps` holds two more
+	 * nibbles, at 6 and 10, which are bit-REVERSED before use.
+	 * `caps_flags` bit 0 is the other half of the asymmetric permission.
+	 */
+	short info_rates;				/* +0xaa0c */
+	short rate_mask;				/* +0xaa0e */
+	unsigned char unmapped_aa10[0xaa3c - 0xaa10];
+	short info_caps;				/* +0xaa3c */
+	short caps_flags;				/* +0xaa3e */
+	unsigned char unmapped_aa40[0xaa74 - 0xaa40];
 	/* An int preinitdigital clears and nothing read so far reads. */
 	int faa74;					/* +0xaa74 */
 	unsigned char unmapped_aa78[0xaa96 - 0xaa78];
@@ -330,11 +365,57 @@ struct v34_object {
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
-	unsigned char unmapped_aba0[0xac0c - 0xaba0];
+	unsigned char unmapped_aba0[0xac04 - 0xaba0];
+	/*
+	 * The negotiated rates in bits per second -- 2400 times the counts in
+	 * the rate config -- published once and latched, so a second
+	 * negotiation does not overwrite them.
+	 */
+	int tx_bps;					/* +0xac04 */
+	int rx_bps;					/* +0xac08 */
 	/* Where the V.90 side is told the recovered timing offset. */
 	short fac0c;					/* +0xac0c */
-	unsigned char unmapped_ac0e[0xac10 - 0xac0e];
+	unsigned char unmapped_ac0e[0xac16 - 0xac0e];
+	/*
+	 * +0xac16.  A BYTE, and past where this struct used to end: the
+	 * declared length of 0xac10 was the largest offset anything
+	 * reconstructed had touched, not a bound the object proves.
+	 * initdigital writes here, so the object is at least 0xac17 long and
+	 * the end below is still a floor rather than a fact.
+	 */
+	unsigned char rates_latched;			/* +0xac16 */
+	unsigned char unmapped_ac17[0xac18 - 0xac17];
 };
+
+/*
+ * The rate configuration initdigital fills, at +0xaa84 in the object.
+ *
+ * Two halves, transmit then receive, and the transmit one is what feeds
+ * initV34 for the context at +0x25e0 while the receive one feeds +0xa00.
+ * `bits` counts units of 2400 bps, so the bit rate is 2400 times it.
+ *
+ * `rx_baud` IS `faa96` above -- one store, two readings, the same situation
+ * as the echo array that is also the FSK delay line (finding 100).  It is
+ * declared in both places on purpose; there is no third field.
+ */
+struct v34_ratecfg {
+	short baud;			/* +0x00 transmit symbol rate    */
+	unsigned char pad_02[0x04 - 0x02];
+	short txbits;			/* +0x04 in units of 2400 bps    */
+	unsigned char pad_06[0x08 - 0x06];
+	short depth;			/* +0x08 trellis, initV34's arg  */
+	short use_max;			/* +0x0a picks MMaxTable         */
+	const short *divtab;		/* +0x0c the divisor table       */
+	unsigned char pad_10[0x12 - 0x10];
+	short rx_baud;			/* +0x12 receive symbol rate     */
+	short rxbits;			/* +0x14                         */
+	unsigned char pad_16[0x22 - 0x16];
+	short rx_use_max;		/* +0x22                         */
+	unsigned char pad_24[0x28 - 0x24];
+	const short *rx_divtab;		/* +0x28                         */
+};
+
+#define V34_RATECFG	0xaa84
 
 /*
  * Interpolate, discriminate and filter one block.

@@ -11,6 +11,9 @@
 #include "dsplib/v34rx.h"
 #include "dsplib/v34pcmif.h"
 extern void ref_modulatevector(void *obj);
+extern void ref_initdigital(void *obj);
+extern unsigned int ref_dsplibs_debug_level;
+#include "dsplib/debug.h"
 extern void ref_txinit(void *obj);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern void ref_V34SetupModulator(void *m, short, short, short, short, short);
@@ -1356,6 +1359,128 @@ main(void)
 						    shp_b[b], b);
 			}
 mv_next:		;
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initdigital -- the rate negotiation.
+	 *
+	 * Driven over both roles, both asymmetric permissions, the rate walk
+	 * finding a bit and running out, the 2400-baud fallback, and both
+	 * settings of the publish latch and its two gates.
+	 *
+	 * The divisor tables are pointed at the MIDDLE of a scratch array on
+	 * purpose.  The lookup is `divtab[bits + 14*use_max - 1]` and it
+	 * happens before the zero-rate test, so a zero rate with mode 0 reads
+	 * one entry BEFORE the table -- unclamped, like the three tables of
+	 * finding 129.  Giving it real storage on both sides makes that read
+	 * defined and identical rather than leaving it to whatever follows.
+	 */
+	diff_begin("v34 initdigital");
+	{
+		static struct v34_object oa, ob;
+		static short divstore[64], rxdivstore[64];
+		static const short bauds[4] = { 2400, 2743, 3200, 3429 };
+		unsigned c, k;
+		int dbg;
+
+		for (k = 0; k < 64; k++) {
+			divstore[k] = (short)(k * 37 - 300);
+			rxdivstore[k] = (short)(k * 53 - 400);
+		}
+
+		for (dbg = 0; dbg <= 1; dbg++)
+		for (c = 0; c < 512; c++) {
+			struct v34_ratecfg *ca, *cb;
+			unsigned info, caps, mask, flags;
+			unsigned b;
+
+			/* Spread the case index over the fields it drives. */
+			info = ((c & 7) << 2) | (((c >> 3) & 7) << 6)
+			       | (((c >> 6) & 3) << 11) | (((c >> 1) & 1) << 13)
+			       | (((c >> 2) & 1) << 14);
+			caps = (unsigned)(c * 2654u + 7u);
+			mask = (unsigned)((c & 0x1ff) | ((c & 1) << 15));
+			flags = (c >> 4) & 1;
+
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			ca = (struct v34_ratecfg *)((char *)&oa + V34_RATECFG);
+			cb = (struct v34_ratecfg *)((char *)&ob + V34_RATECFG);
+
+			oa.f359c = ob.f359c = (short)((c & 1) ? 0x65 : 0x12);
+			oa.info_rates = ob.info_rates = (short)info;
+			oa.info_caps  = ob.info_caps  = (short)caps;
+			oa.rate_mask  = ob.rate_mask  = (short)mask;
+			oa.caps_flags = ob.caps_flags = (short)flags;
+			oa.ptc = ob.ptc = (int)(c * 13 + 64);
+			oa.f24c = ob.f24c = (int)((c >> 7) & 1);
+			oa.f250 = ob.f250 = (int)((c >> 8) & 1);
+			oa.rates_latched = ob.rates_latched =
+				(unsigned char)((c >> 5) & 1);
+
+			ca->baud = cb->baud = bauds[c & 3];
+			ca->rx_baud = cb->rx_baud = bauds[(c >> 2) & 3];
+			ca->rxbits = cb->rxbits = (short)((c >> 3) & 0xf);
+			ca->rx_use_max = cb->rx_use_max = (short)((c >> 6) & 1);
+			ca->divtab = cb->divtab = &divstore[16];
+			ca->rx_divtab = cb->rx_divtab = &rxdivstore[16];
+
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)(dbg ? 2 : 0);
+
+			initdigital(&oa);
+			ref_initdigital(&ob);
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			for (b = 0; b < sizeof(oa); b++) {
+				/*
+				 * The four pointer fields.  `coeff` is the
+				 * one worth naming: initV34 stores obj+0xe84
+				 * and obj+0x2a68, which are addresses INSIDE
+				 * the object, so the two instances hold
+				 * genuinely different values and a byte
+				 * compare over them can only ever fail.  They
+				 * are asserted by identity below instead.
+				 */
+				if ((b >= 0xa24 && b < 0xa2c)
+				    || (b >= 0xe48 && b < 0xe4c)
+				    || (b >= 0x2604 && b < 0x260c)
+				    || (b >= 0x2a28 && b < 0x2a2c))
+					continue;
+				if (((unsigned char *)&oa)[b]
+				    != ((unsigned char *)&ob)[b]) {
+					printf("  (dbg %d case %u)\n", dbg, c);
+					diff_eq_int("initdigital byte at +0x%lx",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)b);
+					goto id_next;
+				}
+			}
+			diff_eq_int("initdigital object", 0, 0, (long)c);
+
+			/* Each side's coefficient blocks must be its own. */
+			diff_eq_int("rx coeff ours",
+				    ((struct v34_shell *)&oa)->coeff
+				    == (const short *)((char *)&oa + 0xe84),
+				    1, (long)c);
+			diff_eq_int("rx coeff theirs",
+				    ((struct v34_shell *)&ob)->coeff
+				    == (const short *)((char *)&ob + 0xe84),
+				    1, (long)c);
+			diff_eq_int("tx coeff ours",
+				    ((struct v34_shell *)((char *)&oa
+				     + V34_SHELL_TX))->coeff
+				    == (const short *)((char *)&oa + 0x2a68),
+				    1, (long)c);
+			diff_eq_int("tx coeff theirs",
+				    ((struct v34_shell *)((char *)&ob
+				     + V34_SHELL_TX))->coeff
+				    == (const short *)((char *)&ob + 0x2a68),
+				    1, (long)c);
+id_next:		;
 		}
 	}
 	rc |= diff_end();
