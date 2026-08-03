@@ -10190,3 +10190,40 @@ surviving mutant is itself the proof of, since swapping the mask and the call
 changes nothing in a whole-object comparison.  Four of the 48 were caught only
 after the fixture stopped crashing, and two only after the silence section
 existed; before those, both classes read as passes.
+
+### 190. The mutation score was measuring the harness, not the tests
+
+Running every mutation set after the merge produced numbers that did not
+match what had been reported when each set was written: callprog 3 of 17,
+v8hs 0 of 7, and five anchors across v8handshak and v8seq reading ANCHOR
+MATCHES 0 TIMES.  Checked against the pre-merge commit, the numbers were
+identical -- so nothing the merge did caused them, and the earlier reports
+of "fully caught" were wrong.  Three separate causes, and only one of them
+was a real gap:
+
+**The harness ran the binary but not the gate.**  `make test` depends on
+`strings`, which is the invented-string sweep; `mutate.py` ran only the test
+binary.  Fourteen of callprog's seventeen mutations corrupt a format string,
+and a corrupted string is exactly what a differential transcript CANNOT see
+unless the test raises the debug level over the site -- which is finding
+134's argument -- while the sweep rejects it immediately.  So the tree did
+catch all seventeen and the harness was reporting on itself.  Fixed by
+running `make strings` as part of the caught check.
+
+**The suite-to-binary pairing was tribal knowledge.**  v8hs.json is caught
+7 of 7 by `t_v8util` and 1 of 7 by `t_v8hs`, whose name it shares.
+dialer_grading.json belongs to dialer.c and `t_dialer`, not to dialercfg.c.
+Pointing a set at the wrong binary yields NOT CAUGHT for every mutation in
+it, which is indistinguishable from the set being genuinely untested.  Fixed
+with `test/mutations/suites.json` and `--suite`, so the pairing is stated
+once rather than remembered.
+
+**Five anchors were left behind by a rename.**  `v->mode` became `v->side`
+in the V.8 batch; one anchor was repaired at the time and five were not.
+An unusable mutation fails open -- it prints a line and is not counted as a
+failure -- so a rename can silently retire a check, which is the same
+failure mode as a dropped call site and deserves the same suspicion.
+
+`tools/mutate.py --all` now runs the lot: 152 mutations over 14 suites, all
+caught, nothing unusable.  That number is the one to compare against in
+future, and it is lower-bounded by a harness that no longer flatters itself.

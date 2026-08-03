@@ -22,7 +22,15 @@ second is worth writing down.
 
 USAGE
 
+    tools/mutate.py --suite v8jm            one set
+    tools/mutate.py --all                   every set, with the totals
     tools/mutate.py src/call/pulse.c build/test/t_pulse mutations.json
+
+PREFER --suite.  test/mutations/suites.json says which source each set
+belongs to and which binary is meant to catch it, because getting that pairing
+wrong produces NOT CAUGHT for every mutation in the set -- the same output an
+untested claim gives, and indistinguishable from it without looking.  Six sets
+were misread that way before the manifest existed.
 
 where mutations.json is a list of objects:
 
@@ -47,6 +55,7 @@ and passes: the first tells you nothing about the tests.
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -56,19 +65,75 @@ def build_and_run(target, test):
     if b.returncode != 0:
         return None, b.stderr
     r = subprocess.run([test], capture_output=True, text=True)
+    if r.returncode != 0:
+        return r.returncode, r.stdout
+    #
+    # `make test` gates on `strings` as well as on the binaries, so a mutation
+    # the invented-string sweep rejects is one the tests do catch -- and it is
+    # the ONLY thing that catches a corrupted format string, because a wrong
+    # string and a right one behave identically until someone raises the debug
+    # level.  Running the binary alone reported fourteen of callprog.json's
+    # seventeen as uncaught when the tree does in fact reject every one.
+    #
+    s = subprocess.run(["make", "strings"], capture_output=True, text=True)
+    if s.returncode != 0:
+        return s.returncode, s.stdout + s.stderr
     return r.returncode, r.stdout
+
+
+SUITES = "test/mutations/suites.json"
+
+
+def run_all():
+    """Every suite, with the totals -- so one command says where the tree is."""
+    suites = {k: v for k, v in json.load(open(SUITES)).items() if k != "_"}
+    tot = [0, 0, 0]
+    for name in sorted(suites):
+        r = subprocess.run([sys.executable, sys.argv[0], "--suite", name],
+                           capture_output=True, text=True)
+        last = [l for l in r.stdout.split("\n") if "mutations:" in l]
+        print("  %-16s %s" % (name, last[-1].strip() if last else "FAILED"))
+        if last:
+            n = [int(x) for x in re.findall(r"(\d+) (?:caught|NOT caught|"
+                                            r"unusable)", last[-1])]
+            for i, v in enumerate(n[:3]):
+                tot[i] += v
+    print("\n  %d caught, %d NOT caught, %d unusable, over %d suites"
+          % (tot[0], tot[1], tot[2], len(suites)))
+    return 1 if tot[1] or tot[2] else 0
 
 
 def main():
     ap = argparse.ArgumentParser(
         description="Apply mutations one at a time and report which the "
                     "tests catch.")
-    ap.add_argument("source")
-    ap.add_argument("test", help="test binary, e.g. build/test/t_pulse")
-    ap.add_argument("mutations", help="JSON list of {label, find, replace}")
+    ap.add_argument("source", nargs="?")
+    ap.add_argument("test", nargs="?",
+                    help="test binary, e.g. build/test/t_pulse")
+    ap.add_argument("mutations", nargs="?",
+                    help="JSON list of {label, find, replace}")
+    ap.add_argument("--suite", metavar="NAME",
+                    help="a set named in test/mutations/suites.json, which "
+                         "supplies its source and its test binary")
+    ap.add_argument("--all", action="store_true",
+                    help="every suite in test/mutations/suites.json")
     ap.add_argument("--verbose", action="store_true",
                     help="show the failing check for each caught mutation")
     args = ap.parse_args()
+
+    if args.all:
+        return run_all()
+    if args.suite:
+        suites = json.load(open(SUITES))
+        if args.suite not in suites:
+            sys.exit("no such suite: %s (have %s)"
+                     % (args.suite, ", ".join(sorted(k for k in suites
+                                                     if k != "_"))))
+        args.source, args.test = suites[args.suite]
+        args.mutations = "test/mutations/%s.json" % args.suite
+
+    if not (args.source and args.test and args.mutations):
+        sys.exit("give --suite NAME, --all, or source, test and mutations")
 
     muts = json.load(open(args.mutations))
     good = open(args.source).read()

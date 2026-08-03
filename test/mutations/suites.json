@@ -1,0 +1,25 @@
+{
+ "_": [
+  "Which source each mutation set belongs to, and which test binary is",
+  "supposed to catch it.  This is not decoration: run a set against the",
+  "wrong binary and every mutation reads NOT CAUGHT, which is the same",
+  "output a genuinely untested claim gives.  Six sets were misread that",
+  "way before this file existed.",
+  "",
+  "Use it:  tools/mutate.py --suite v8jm"
+ ],
+ "callprog":       ["src/callprog/callprog.c",   "build/test/t_callprog_progress"],
+ "cadence":        ["src/callprog/cadence.c",    "build/test/t_cadence"],
+ "dialer":         ["src/dialer/dialer.c",       "build/test/t_dialerprog"],
+ "dialer_grading": ["src/dialer/dialer.c",       "build/test/t_dialer"],
+ "pulse":          ["src/call/pulse.c",          "build/test/t_pulse"],
+ "v8agc":          ["src/v8/v8agc.c",            "build/test/t_v8sig"],
+ "v8dp":           ["src/v8/v8dp.c",             "build/test/t_v8dp"],
+ "v8handshak":     ["src/v8/v8handshak.c",       "build/test/t_v8hs"],
+ "v8hs":           ["src/v8/v8hs.c",             "build/test/t_v8util"],
+ "v8hsrx":         ["src/v8/v8hsrx.c",           "build/test/t_v8hs"],
+ "v8jm":           ["src/v8/v8jm.c",             "build/test/t_v8jm"],
+ "v8proc":         ["src/v8/v8proc.c",           "build/test/t_v8dp"],
+ "v8seq":          ["src/v8/v8seq.c",            "build/test/t_v8util"],
+ "v8sig":          ["src/v8/v8sig.c",            "build/test/t_v8sig"]
+}
