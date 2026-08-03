@@ -189,10 +189,25 @@ struct v34_object {
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
-	short f25c2;					/* +0x25c2 bit 9 gates the echo feed */
+	/*
+	 * +0x25c2.  Bit 9 gates the echo feed and bit 2 says both cancellers
+	 * are frozen; BIT 0 picks the scrambler generator -- set for the
+	 * calling station's, clear for the answering one.  txmitdibit and
+	 * txmitquadbit are what pin the last of those.
+	 */
+	short f25c2;					/* +0x25c2 */
 	unsigned char unmapped_25c4[0x25c6 - 0x25c4];
+	/*
+	 * The differentially-encoded quadrant, carried from one symbol to the
+	 * next: f25c6 is the previous one and f25c8 the current.  In the
+	 * dibit case the two end up equal; in the quadbit case f25c8 is set
+	 * first and f25c6 only catches up at the end, because the second
+	 * dibit indexes off the first one's quadrant.
+	 */
 	short f25c6;					/* +0x25c6 */
-	unsigned char unmapped_25c8[0x25cc - 0x25c8];
+	short f25c8;					/* +0x25c8 */
+	unsigned char unmapped_25ca[0x25cc - 0x25ca];
+	/* The transmit scrambler's shift register. */
 	int f25cc;					/* +0x25cc */
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
