@@ -178,9 +178,11 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	case V8_ORG_BAD_QCA1d_MESSAGE:
 		/*
 		 * The far end offered PCM.  Only take it if this call asked
-		 * for V.90 or V.92, and only once.  V8Process never returns
-		 * this status, so nothing here runs on a reconstructed path
-		 * either; it is in the object and it is reproduced.
+		 * for V.90 or V.92, and only once.  Nothing reaches it: the
+		 * object's OWN V8Process has no arm that produces 15, 16 or
+		 * 17 either -- its status chain at 0x74680 is the one above,
+		 * arm for arm -- so the three QCA1d statuses exist in the
+		 * table and in this switch and nowhere else.  Reproduced.
 		 */
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;

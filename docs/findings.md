@@ -8899,4 +8899,8 @@ offset assertions moved to match.
 
 13/13 mutations across v8sig.c and v8agc.c.  Two were dropped as
 unobservable: moving the overflow message across a store it does not read,
-and moving the delete message across a call that prints nothing.
+and moving the delete message across a call that prints nothing.  One
+mutation elsewhere is honest about what it does NOT show: "announce the LAPM
+indication from the QCA1d arm as well" is caught because it ADDS a line, not
+because the placement of the original is pinned -- nothing distinguishes a
+line that never fires in one arm from one that is absent.

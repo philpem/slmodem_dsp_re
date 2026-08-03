@@ -6,8 +6,8 @@
  },
  {
   "label": "swap Caller and Answer",
-  "find": "v->mode != 0 ? \"Answer\" : \"Caller\");",
-  "replace": "v->mode != 0 ? \"Caller\" : \"Answer\");"
+  "find": "v->side != 0 ? \"Answer\" : \"Caller\");",
+  "replace": "v->side != 0 ? \"Caller\" : \"Answer\");"
  },
  {
   "label": "read V90 from the wrong bit",

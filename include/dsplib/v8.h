@@ -418,10 +418,10 @@ struct v8 {
 	 * return having done only the common preamble.
 	 *
 	 * V8Create's configuration trace names four of these (finding 164):
-	 * `mode` is the SIDE ("Caller"/"Answer" -- 0 originates), `fa48` the
-	 * "Operation Mode", and the two timeouts are the signal-detect and
-	 * message-detect timeouts, in SECONDS.  Renames pending with the rest
-	 * of the v8 batch; `fa54` the trace does not mention.
+	 * `side` ("Caller"/"Answer" -- 0 originates) and `op_mode` (the
+	 * "Operation Mode") were `mode` and `fa48` before it named them, and
+	 * the two timeouts are the signal-detect and message-detect timeouts,
+	 * in SECONDS.  `fa54` the trace does not mention.
 	 */
 	int			side;		/* +0xa44  0 caller, 1 answerer */
 	int			op_mode;	/* +0xa48  the author's Operation
@@ -831,8 +831,8 @@ int v8_handshak_demod(struct v8 *v);
  * character stream is ignored from here.  Which one is set says which side
  * took it, and `V8Process` reports them as different statuses.
  */
-#define V8_HS_TAKEN_RX	0x32	/* mode != 1, fa48 == 1 */
-#define V8_HS_TAKEN_TX	0x33	/* mode == 1, fa48 == 1 */
+#define V8_HS_TAKEN_RX	0x32	/* side != 1, op_mode == 1 */
+#define V8_HS_TAKEN_TX	0x33	/* side == 1, op_mode == 1 */
 
 /*
  * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
