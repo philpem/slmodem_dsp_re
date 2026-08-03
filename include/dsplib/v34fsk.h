@@ -344,10 +344,55 @@ struct v34_object {
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
-	unsigned char unmapped_aba0[0xac0c - 0xaba0];
+	unsigned char unmapped_aba0[0xabc6 - 0xaba0];
+	/*
+	 * The V.92 short-phase-2 negotiation, four shorts, and the object
+	 * names all four itself -- `V34GiveINFO0dBits` prints
+	 * "localV92- %d, remoteV92- %d, localShort- %d, remoteShort- %d,
+	 * isShort- %d" from exactly these plus one INFO0 bit.
+	 *
+	 * The two `local_*` are inputs nothing reconstructed yet writes;
+	 * `remote_v92` and `is_short` are `V34GiveINFO0dBits`'s outputs.
+	 * There is no `remote_short` field: that value is read straight out
+	 * of the unpacked INFO0 and never stored.
+	 */
+	short local_v92;				/* +0xabc6 */
+	short remote_v92;				/* +0xabc8 */
+	short local_short;				/* +0xabca */
+	short is_short;					/* +0xabcc */
+	/*
+	 * Three two-bit fields `V34GiveINFO1aBits` takes out of the first
+	 * INFO1a short when the upstream baud index is 6, and immediately
+	 * copies on into the session object at +0x14, +0x15 and +0x16.  Each
+	 * pair is assembled with the higher-numbered bit as the LOW one --
+	 * bit7 + 2*bit6, bit5 + 2*bit4, bit3 + 2*bit2 -- and nothing here
+	 * names what the pairs mean.
+	 */
+	short fabce;					/* +0xabce */
+	short fabd0;					/* +0xabd0 */
+	short fabd2;					/* +0xabd2 */
+	unsigned char unmapped_abd4[0xac02 - 0xabd4];
+	/*
+	 * +0xac02.  `V34SetINFO0aBits` puts 20 here when it asks for a short
+	 * phase 2, and says what it is doing: "Setting prev bulk delay = %d".
+	 * Distinct from the bulk-delay ring at +0x35a8, which is the second
+	 * echo canceller's.
+	 */
+	short prev_bulk_delay;				/* +0xac02 */
+	unsigned char unmapped_ac04[0xac0c - 0xac04];
 	/* Where the V.90 side is told the recovered timing offset. */
 	short fac0c;					/* +0xac0c */
-	unsigned char unmapped_ac0e[0xac10 - 0xac0e];
+	unsigned char unmapped_ac0e[0xac18 - 0xac0e];
+	/*
+	 * +0xac18.  A second pointer into the C++ side, distinct from
+	 * `p3548`, and `V34GiveINFO1aBits` reads exactly one thing through
+	 * it: an int at +0xc, printed as the LOCAL PCM type in "K56Flex
+	 * enabled by remote, PCM type: local %d, remote %d (A=1, Mu=0)".
+	 *
+	 * It is also what says this struct's 0xac10 was never the object's
+	 * size.  The bound is now 0xac1c, and still a bound.
+	 */
+	void *pac18;					/* +0xac18 */
 };
 
 /*

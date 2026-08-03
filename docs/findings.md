@@ -8089,3 +8089,52 @@ The cost of the whole-object form is the pointer fields, which differ by
 construction.  `t_v34hshak` handles that with an explicit skip list plus an
 assertion that every entry on it was actually reached — so a stale entry,
 which would be a silent hole, fails the test rather than widening it.
+
+### 147. Two format strings were transposed, and only the transcript saw it
+
+`v34info.c` was written from the disassembly with two pairs of strings the
+wrong way round, and both survived every comparison of program state:
+
+**`V34SetINFO0aBits`** has four "setting..." strings on two independent
+tests.  The two that mention V.PCM were swapped:
+
+```
+   .rodata.str1.4+0xf4c  'setINFO0aBits - setting info0d (Digital) for V.PCM'
+   .rodata.str1.4+0xf80  'setINFO0aBits - setting info0a for V.PCM'
+```
+
+and 0xf80 is the one on the session-variant-non-zero branch.  Getting it
+backwards is invisible to state: the two branches print, and then do
+different things for other reasons, so every byte of every object agreed.
+
+**`V34GiveINFO1aBits`** computes a three-bit field and a seven-bit
+bit-reversed one.  The three-bit field is what the object prints as
+`upstream baud index` and the seven-bit one is what it prints as `Uinfo` --
+which is the opposite of what the widths suggest, and the opposite of what
+this reconstruction assumed.  Again invisible: both values were computed
+correctly and stored in the right places, and only the labels were exchanged.
+
+**What caught both** was the debug-transcript comparison
+(`dsplib_debug_capture_*`), driven with `dsplibs_debug_level` raised on both
+sides.  Finding 126 introduced that facility for a *wrong* format string and
+finding 134 argued for restoring the call sites; this is the first time the
+comparison has caught something in new code, and it caught two things in one
+run.
+
+**The general point is about which names to trust.**  The corrected reading
+of `Uinfo` is less natural than the wrong one -- a seven-bit "baud index" and
+a three-bit "Uinfo" is what anyone would guess -- and the naming in the
+reconstruction now follows the object's own words against that intuition.
+The same correction made the four `setINFO0aBits` strings fall on two clean
+axes rather than one clean and one arbitrary, which is a second, independent
+sign that the corrected assignment is the right one: `+0x6120` selects INFO0a
+against INFO0d, exactly as `giveINFO0%cBits`'s letter already said.
+
+**And one mutation survived the first fixture.**  `V34SetINFO0aBits` reads
+the remote V.92 capability from a session byte on one branch and from the
+object's own `local_v92` on the other; the sweep drove both from one
+variable, so a reconstruction that read the wrong one passed.  Recorded
+because it is the same shape as 116b and 123: the fixture, not the code.  A
+test that sweeps two inputs together cannot tell them apart, and two inputs
+that are read by the same-looking line in near-duplicate branches are exactly
+the ones to separate.
