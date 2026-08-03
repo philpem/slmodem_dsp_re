@@ -8689,11 +8689,11 @@ ever run that call tree with `dsplibs_debug_level` raised.  It surfaced only
 because modes 0, 1 and 4 reach it through `v34modeminit` -> `txinit`, and
 this is the first test to compare `v34modeminit`'s transcript at all.
 
-**That is a class, not an incident, so the class was swept.**  Every format
-string this tree hands `dsplibs_debug_printf` — 77 of them — was checked for
-presence anywhere in the object's `.rodata` or `.data`.  A string that is
-nowhere in the blob was written rather than read.  Three more turned up, all
-in `V34EchoReportCoeff`, and the object's own are
+**That is a class, not an incident, so the class was swept.**  Every string
+literal this tree carries — 241 of them — was checked for presence anywhere
+in the object's `.rodata` or `.data`.  A string that is nowhere in the blob
+was written rather than read.  Three more turned up, all in
+`V34EchoReportCoeff`, and the object's own are
 
 ```
    .rodata.str1.4+0xf878   ?======= Nothing to report =========
@@ -8706,11 +8706,35 @@ argument the paraphrase did not**: `%edx` at 0x72298 is still `n`, the tap
 count rounded down to a multiple of six.  So an invented string had also
 hidden a missing argument, which is the part that would have mattered.
 
-The sweep is now `debugaudit.py --invented`, and it self-tests: introduce a
-string and it reports; the committed tree reports 77 checked, 0 invented.
-It is a NECESSARY condition only — a string present in `.rodata` but
-belonging to a different function still passes — so it retires the "invented
-from thin air" failure mode and not the "attached to the wrong site" one.
+**EVERY literal, and the first attempt got that wrong.**  The obvious scan is
+of `dsplibs_debug_printf("...")` call sites, and it finds 77.  But a format
+reached through a VARIABLE has no literal at the call: `agc_gain_sample`
+takes `fmt` as a parameter, and `hs_setstate` — written in this very session
+— indexes a `fmt[]` table.  Both are invisible to a call-site scan, and the
+three `V34HSHAKE:` strings this finding's first half is about were among the
+invisible ones.  So the check scans every literal in `src/` instead;
+comments are stripped and preprocessor lines skipped, which removes the only
+legitimate non-blob literals in the tree (every one is an `#include` path).
+That takes it from 77 to 241 and picks up `StateName`'s 87 entries as well,
+which no call-site scan could ever have reached.
+
+The general shape is worth keeping: **a checker written around the construct
+you happen to have is blind to the construct you are about to write.**  The
+first version was authored in the same session as the first format table in
+the tree and could not see it.
+
+Two limits, both real and both in the tool's own docstring. It is a
+NECESSARY condition only — a string that is in `.rodata` but belongs to a
+different function still passes — so it retires "invented from thin air" and
+not "attached to the wrong site". And it says nothing about the ARGUMENTS,
+which is the half that actually bit in `V34EchoReportCoeff`; only a
+transcript comparison covers those.
+
+It runs as part of `make test`, beside the licence firewall and for the same
+reason: both are policies the differential tier is structurally blind to.
+It self-tests in both directions — introduce a string in a `fmt[]` table or
+in `StateName` and the build stops; the committed tree reports 241 checked,
+0 invented.
 
 **Why the strings were reachable but untested, and the stale comment that
 kept them so.**  `t_v34ec.c` said of `V34EchoReportCoeff` that raising the

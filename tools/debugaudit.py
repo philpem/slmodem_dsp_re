@@ -24,15 +24,27 @@ WHAT IT REPORTS
               routinely name fields and conditions the reconstruction is
               otherwise guessing at (finding 136 is an example).
   --invented  the opposite direction, and the one --missing cannot see: every
-              format string THIS TREE passes to dsplibs_debug_printf that does
-              not appear anywhere in the object's .rodata at all.  Such a
-              string was written from the function's name rather than read out
-              of the blob, and no test can catch it unless something compares
-              that function's transcript.  Four were found this way after
-              `V34EchoCleanUp` turned up printing its own name (finding 156);
-              the check is a necessary condition, not a sufficient one -- a
-              string present in .rodata but belonging to another function
-              still passes.
+              string literal THIS TREE carries that does not appear anywhere
+              in the object's .rodata or .data.  Such a string was written
+              rather than read -- usually from the function's own name -- and
+              no test catches it unless something compares that function's
+              transcript.  Four were found this way after `V34EchoCleanUp`
+              turned up printing its own name (finding 156).
+
+              EVERY literal, not just the ones at a printf call site.  A
+              format reached through a variable has no literal at the call:
+              `agc_gain_sample` takes `fmt` as a parameter and `hs_setstate`
+              indexes a `fmt[]` table, so a call-site scan silently skips
+              both -- and those are exactly the sites a reader would assume
+              were covered.  Scanning everything also covers name tables like
+              `StateName`, which no call-site scan could ever reach.
+
+              Two limits, both real.  It is a NECESSARY condition only: a
+              string that is in .rodata but belongs to a different function
+              still passes, so this retires "invented from thin air" and not
+              "attached to the wrong site".  And it says nothing about the
+              ARGUMENTS, which is the half that bit in V34EchoReportCoeff --
+              only a transcript comparison covers those.
   --stamps    the __DATE__/__TIME__ pairs.  Six translation units baked their
               build time into .rodata; the seconds are an independent check
               on TU boundaries that symbol ordering cannot give (finding 135).
@@ -142,33 +154,54 @@ def our_sites(paths):
     return counts, where
 
 
-def our_format_strings(paths):
-    """(path, line, string) for every literal this tree hands the logger.
+COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+RUN = re.compile(r'(?:"(?:[^"\\\n]|\\.)*"\s*)+')
+LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+ESC = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "a": "\a", "b": "\b",
+       "f": "\f", "v": "\v", '"': '"', "\\": "\\", "'": "'", "?": "?"}
 
-    Adjacent literals are glued the way the compiler does, and the standard
-    escapes are undone, so the result is the bytes that would land in .rodata.
+
+def unescape(raw):
+    out, i = [], 0
+    while i < len(raw):
+        if raw[i] == "\\" and i + 1 < len(raw):
+            out.append(ESC.get(raw[i + 1], raw[i + 1]))
+            i += 2
+        else:
+            out.append(raw[i])
+            i += 1
+    return "".join(out)
+
+
+def our_strings(paths):
+    """(path, line, string) for EVERY string literal this tree carries.
+
+    Not just the ones at a `dsplibs_debug_printf` call site.  A format reached
+    through a variable -- `agc_gain_sample`'s `fmt` parameter, `hs_setstate`'s
+    `fmt[]` table -- has no literal at the call, so a call-site scan cannot see
+    it, and those are exactly the sites a reader would assume were covered.
+    Scanning every literal also picks up name tables like `StateName`.
+
+    Comments are stripped and preprocessor lines skipped; the latter is the
+    only source of legitimate literals that are not the blob's, since every
+    one of them is an `#include` path.  Adjacent literals are glued the way
+    the compiler does, so a message split across source lines is checked as
+    the one string it becomes.
     """
-    call = re.compile(r'%s\s*\(\s*((?:"(?:[^"\\]|\\.)*"\s*)+)' % DBG)
-    lit = re.compile(r'"((?:[^"\\]|\\.)*)"')
-    esc = {"n": "\n", "r": "\r", "t": "\t", "0": "\0",
-           '"': '"', "\\": "\\", "'": "'"}
     out = []
     for p in sorted(paths):
         try:
             src = open(p).read()
         except OSError:
             continue
-        for m in call.finditer(src):
-            raw = "".join(lit.findall(m.group(1)))
-            s, i = [], 0
-            while i < len(raw):
-                if raw[i] == "\\" and i + 1 < len(raw):
-                    s.append(esc.get(raw[i + 1], raw[i + 1]))
-                    i += 2
-                else:
-                    s.append(raw[i])
-                    i += 1
-            out.append((p, src[:m.start()].count("\n") + 1, "".join(s)))
+        src = COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), src)
+        for n, line in enumerate(src.split("\n"), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            for m in RUN.finditer(line):
+                s = unescape("".join(LIT.findall(m.group(0))))
+                if s:
+                    out.append((p, n, s))
     return out
 
 
@@ -214,12 +247,12 @@ def main():
         haystack += subprocess.run(
             ["objcopy", "-O", "binary", "--only-section=.data",
              args.obj, "/dev/stdout"], capture_output=True).stdout
-        found = our_format_strings(args.src)
+        found = our_strings(args.src)
         bad = [(p, n, t) for p, n, t in found
                if t.encode("latin1") not in haystack]
-        print("Format strings this tree passes to %s that appear NOWHERE in "
-              "the\nobject's .rodata or .data -- so they were invented rather "
-              "than read.\nFinding 156.\n" % DBG)
+        print("String literals in this tree that appear NOWHERE in the "
+              "object's\n.rodata or .data -- so they were invented rather than "
+              "read.  Finding 156.\n")
         for p, n, t in bad:
             print("  INVENTED  %s:%d\n            %r" % (p, n, t))
         print("\n  %d checked, %d not present in the object"

@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall all test check64 docs clean interop capture coverage phase
+.PHONY: firewall strings all test check64 docs clean interop capture coverage phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -135,7 +135,7 @@ $(BUILD):
 
 # --- targets --------------------------------------------------------------
 
-test: firewall $(TESTBIN)
+test: firewall strings $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
 
 # The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
@@ -153,6 +153,22 @@ firewall:
 	    exit 1; \
 	fi
 	@echo "licence firewall: no SpanDSP include reachable from src/  OK"
+
+# No string in src/ that the object does not also hold.
+#
+# Same shape as the firewall above and here for the same reason: a policy the
+# differential tier is structurally blind to.  Four invented format strings
+# survived full differential tests because `dsplibs_debug_level` ships at zero,
+# so a wrong string and a right one behave identically (finding 156).  A check
+# nobody runs decays into a check that passes because it never ran, which is
+# finding 134's own argument, so it runs here rather than on request.
+strings:
+	@out=`$(PYTHON) tools/debugaudit.py --invented` || { \
+	    echo "$$out"; \
+	    echo "INVENTED STRING: the lines above are in src/ and not in the blob"; \
+	    exit 1; \
+	}; \
+	echo "$$out" | tail -1
 
 # Everything a phase boundary is supposed to check, in one target.
 #
