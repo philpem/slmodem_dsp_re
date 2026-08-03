@@ -47,25 +47,51 @@ extern int ref_V34GiveINFO1aBits(void *obj, const short *bits);
 #define SESSION_LEN	0x6140
 #define SUB_LEN		0x40
 
-static struct v34_object oa;
-static unsigned char oa_guard[GUARD];
-static unsigned char ob[sizeof(struct v34_object)];
-static unsigned char ob_guard[GUARD];
+/*
+ * EACH BLOCK AND ITS GUARD ARE ONE OBJECT, not two statics.  Nothing
+ * requires the linker to lay two statics out adjacently -- it may reorder
+ * them, align them apart, or separate them entirely -- and a guard band that
+ * did not follow the block it guards would pass unconditionally and quietly
+ * turn this whole mechanism into decoration.  A struct member's position is
+ * the language's problem instead of the linker's.
+ *
+ * The aliases below keep every use site reading as the plain array it is
+ * about; they are the only reason this is not written out longhand.
+ */
+static struct { struct v34_object o; unsigned char g[GUARD]; } oa_blk;
+static struct { unsigned char o[sizeof(struct v34_object)];
+		unsigned char g[GUARD]; } ob_blk;
+static struct { unsigned char o[SESSION_LEN]; unsigned char g[GUARD]; }
+	sess_a_blk, sess_b_blk;
+static struct { unsigned char o[SUB_LEN]; unsigned char g[GUARD]; }
+	caps_a_blk, caps_b_blk, up_a_blk, up_b_blk, pcm_a_blk, pcm_b_blk;
+static struct { short o[V34_INFO_MSG_SHORTS]; unsigned char g[GUARD]; }
+	msg_a_blk, msg_b_blk;
 
-static unsigned char sess_a[SESSION_LEN], sess_a_guard[GUARD];
-static unsigned char sess_b[SESSION_LEN], sess_b_guard[GUARD];
-
-static unsigned char caps_a[SUB_LEN], caps_a_guard[GUARD];
-static unsigned char caps_b[SUB_LEN], caps_b_guard[GUARD];
-static unsigned char up_a[SUB_LEN], up_a_guard[GUARD];
-static unsigned char up_b[SUB_LEN], up_b_guard[GUARD];
-static unsigned char pcm_a[SUB_LEN], pcm_a_guard[GUARD];
-static unsigned char pcm_b[SUB_LEN], pcm_b_guard[GUARD];
-
-static short msg_a[V34_INFO_MSG_SHORTS];
-static unsigned char msg_a_guard[GUARD];
-static short msg_b[V34_INFO_MSG_SHORTS];
-static unsigned char msg_b_guard[GUARD];
+#define oa		oa_blk.o
+#define oa_guard	oa_blk.g
+#define ob		ob_blk.o
+#define ob_guard	ob_blk.g
+#define sess_a		sess_a_blk.o
+#define sess_a_guard	sess_a_blk.g
+#define sess_b		sess_b_blk.o
+#define sess_b_guard	sess_b_blk.g
+#define caps_a		caps_a_blk.o
+#define caps_a_guard	caps_a_blk.g
+#define caps_b		caps_b_blk.o
+#define caps_b_guard	caps_b_blk.g
+#define up_a		up_a_blk.o
+#define up_a_guard	up_a_blk.g
+#define up_b		up_b_blk.o
+#define up_b_guard	up_b_blk.g
+#define pcm_a		pcm_a_blk.o
+#define pcm_a_guard	pcm_a_blk.g
+#define pcm_b		pcm_b_blk.o
+#define pcm_b_guard	pcm_b_blk.g
+#define msg_a		msg_a_blk.o
+#define msg_a_guard	msg_a_blk.g
+#define msg_b		msg_b_blk.o
+#define msg_b_guard	msg_b_blk.g
 
 /*
  * The probe source.  Read-only and therefore SHARED: one buffer means the
@@ -287,6 +313,29 @@ main(void)
 	unsigned i;
 	int rc = 0;
 	int v90, k56, variant, ls, lv, cap;
+
+	diff_begin("v34 info: the guard bands are where they claim to be");
+	{
+		/*
+		 * The struct declarations above make this true by
+		 * construction; asserted anyway, because the whole
+		 * over-run check rests on it and a silent pass here would
+		 * be indistinguishable from a silent pass everywhere else.
+		 */
+		diff_eq_int("object guard follows the object",
+			    (int)((unsigned char *)ob_guard
+				  - (unsigned char *)ob),
+			    (int)sizeof(ob), 0);
+		diff_eq_int("session guard follows the session",
+			    (int)(sess_b_guard - sess_b), SESSION_LEN, 0);
+		diff_eq_int("message guard follows the message",
+			    (int)((unsigned char *)msg_b_guard
+				  - (unsigned char *)msg_b),
+			    (int)sizeof(msg_b), 0);
+		diff_eq_int("caps guard follows the caps block",
+			    (int)(caps_b_guard - caps_b), SUB_LEN, 0);
+	}
+	rc |= diff_end();
 
 	diff_begin("v34 info: V34GiveProbeResults");
 	{

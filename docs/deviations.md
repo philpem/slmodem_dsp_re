@@ -1630,3 +1630,33 @@ argument against.  Task #47.
 
 **How it was found:** by reading the switch and noticing the fall-through
 target was the loop rather than a default arm.
+
+---
+
+## D38 ⚠ `V34GiveProbeResults` moves its doubles as bytes, not through the x87
+
+**Where:** `src/pump/v34/v34info.c`, `V34GiveProbeResults`.
+
+**What the original does:** copies each of the 25 doubles with `fldl` /
+`fstpl` — an x87 load and store.
+
+```
+   8c90:  fldl  (%edx)
+   8c95:  fstpl 0xa258(%ecx,%eax,8)
+```
+
+**What we do:** copy the eight bytes.  The source stride is 44, which is not
+a multiple of 8, so every other source double is only 4-byte aligned;
+`fldl` does not mind that and a `double *` in C is not allowed to be that
+lax, so the copy is written a byte at a time.
+
+**Where the two differ:** `fld` QUIETS A SIGNALLING NaN — it raises the
+invalid-operation exception and stores the quiet form — and a byte copy
+carries the payload through unchanged.  For every finite value, every
+infinity and every quiet NaN the two are identical, which is the whole
+domain a probe measurement can occupy.
+
+**Reachability: unmeasured.**  The source record is built by
+`VPcmV34Main.cpp`'s C++ half, which is not reconstructed, so whether a
+signalling NaN can reach it has not been established.  The differential test
+drives finite values only.  Task #47.
