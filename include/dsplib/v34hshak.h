@@ -117,6 +117,75 @@ extern "C" {
 
 #define V34HS_STATE_COUNT		87
 
+/*
+ * ---------------------------------------------------------------------------
+ * The handshake's support functions -- everything in V34hshak.c that is not
+ * `v34handshak` itself.  See src/pump/v34/v34hshak.c.
+ */
+
+#define V34_SCALE_ENTRIES	28	/* two rows of fourteen */
+#define V34_CARRIER_DESC	8	/* four zeroes and two coefficient pairs */
+#define V34_BPV22_TAPS		60
+
+/*
+ * The transmit power scales, indexed by pre-emphasis index; the receive
+ * carrier descriptors; and the phase-2 DPSK band-pass pair.  All fifteen are
+ * global in the object and referred to only from this translation unit.
+ *
+ * `bpv22high` and `bpv22low` are NOT const: they live in .data rather than
+ * .rodata, which is the original's own statement about their storage class.
+ */
+extern const short scale2400[V34_SCALE_ENTRIES];
+extern const short scale2800[V34_SCALE_ENTRIES];
+extern const short scale3000[V34_SCALE_ENTRIES];
+extern const short scale3200[V34_SCALE_ENTRIES];
+extern const short scale3429[V34_SCALE_ENTRIES];
+
+extern const short c1600[V34_CARRIER_DESC], c1680[V34_CARRIER_DESC];
+extern const short c1800_[V34_CARRIER_DESC], c1829[V34_CARRIER_DESC];
+extern const short c1867[V34_CARRIER_DESC], c1920[V34_CARRIER_DESC];
+extern const short c1959[V34_CARRIER_DESC], c2000[V34_CARRIER_DESC];
+
+extern short bpv22high[V34_BPV22_TAPS];
+extern short bpv22low[V34_BPV22_TAPS];
+
+/*
+ * Re-arm the FSK demodulator to look for INFO1.  Clears its working state
+ * and reloads the V.21-rate slicer configuration; touches nothing else.
+ */
+void dpskDetectInfo1Init(void *obj);
+
+/*
+ * Bring the phase-2 DPSK link up.  `mode` zero selects a 1200 Hz transmit
+ * carrier and anything else 2400; `high` non-zero selects the upper receive
+ * band.  The two are independent -- the directions occupy different bands.
+ */
+void dpskinit(void *obj, short mode, short high);
+
+/*
+ * Turn the negotiated MP bit-fields at +0xa9de..+0xa9e3 into transmit and
+ * receive symbol rates, carriers, power scales and a pre-emphasis index.
+ * Rate codes 1, 6 and 7 set nothing at all.
+ */
+void setfinalrate(void *obj);
+
+/*
+ * Configure the demodulator for the rate `setfinalrate` chose, and arm the
+ * tone detector on the carrier descriptor it selected.
+ */
+void setupreceiver(void *obj);
+
+/*
+ * How many multiplications by a per-rate ratio it takes for a per-rate
+ * measurement to pass a limit: the pre-emphasis index, 6..10.
+ *
+ * The object supplies no default arm, so a baud rate other than 2400, 2800,
+ * 3000, 3200 or 3429 runs the loop on uninitialised registers there and on
+ * zero here.  See D37.  What the first argument points at is not known --
+ * nothing in the object calls this -- so it stays a `void *`.
+ */
+short preempindex(void *obj, short baudrate);
+
 #ifdef __cplusplus
 }
 #endif

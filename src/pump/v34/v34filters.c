@@ -1157,6 +1157,20 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 
 	m->preemp = preemp0;
 
+	/*
+	 * UNCONDITIONAL, although the object stores it inside each arm of
+	 * the switch below -- seven separate `mov ..,0xc8c(..)` sites, which
+	 * is one arm's assignment duplicated by the compiler.  Every
+	 * reachable one writes 15; the single site that writes 14 is inside
+	 * the V.90 arm of the 3200 case, which D31 records as unreachable.
+	 *
+	 * Written as three per-rate assignments here until a whole-object
+	 * comparison in t_v34hshak found the other five rates leaving the
+	 * field alone.  The field-by-field check in t_v34ec could not see it;
+	 * `fc8c` was not one of the fields it named, and now is.
+	 */
+	m->fc8c = 0xf;
+
 	if (reset) {
 		m->row = 0;
 		m->phase = 0;
@@ -1192,7 +1206,6 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		break;
 	case 3000:
 		m->taps = 0x20; m->f04 = 5; m->rows = 0x10;
-		m->fc8c = 0xf;
 		src = tx3000c1;
 		prem = (carrier == 1800) ? ec_prem_coef_B3000
 					 : ec_prem_coef_B3000High;
@@ -1210,16 +1223,19 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		 * The V.90 arm -- 0x40 taps from tx3200c1_for_v90 with
 		 * V90EchoPrefilterCoeff -- is unreachable through this
 		 * function.  Registered as D31.
+		 *
+		 * It is also the only place in the object that puts 14 in
+		 * `fc8c` rather than 15, which is a second, independent sign
+		 * that it is a different configuration and not a variant of
+		 * this one.
 		 */
 		m->taps = 0x20;
-		m->fc8c = 0xf;
 		src = tx3200c1_for_v34;
 		prem = (carrier == 1829) ? ec_prem_coef_B3200
 					 : ec_prem_coef_B3200High;
 		break;
 	case 3429:
 		m->taps = 0x20; m->f04 = 5; m->rows = 0xe;
-		m->fc8c = 0xf;
 		src = tx3429c1;
 		prem = ec_prem_coef_B3429;
 		break;

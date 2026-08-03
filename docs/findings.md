@@ -8044,3 +8044,48 @@ would otherwise be rediscovered later.
 That closes the table sweep: six tables, five named by `nm`, and between them
 the state machines of V.8, V.32 and V.34's handshake plus the cadence types
 -- three of which belong to code this project has not written yet.
+
+### 146. `fc8c` was unconditional, and only a whole-object comparison could see it
+
+Task #38's `dpskinit` calls `V34SetupModulator(obj + 0x1450, 600, carrier,
+0, 0, 1)`, and its differential test compares the whole 44 KB V.34 object
+rather than a list of fields.  It disagreed at four bytes, +0x20dc, which is
+the modulator's `fc8c`:
+
+```
+   dpskinit: object byte at +0x20dc   got 165, reference 15
+```
+
+`V34SetupModulator` was reconstructed with `m->fc8c = 0xf` in three arms of
+its symbol-rate switch — 3000, 3200 and 3429 — because those are the three
+the disassembly shows storing it in the obvious place.  The object has
+**seven** such store sites, which is one assignment the compiler duplicated
+along seven paths, and driving the blob directly settles it:
+
+```
+   baud   600 1234 2400 2800 3000 3200 3429 4800
+   fc8c     f    f    f    f    f    f    f    f
+```
+
+for every carrier, every phase and both settings of `reset`.  So the store is
+unconditional and belongs before the switch, and the reconstruction was
+leaving five of the eight rates with the field untouched.
+
+**The one site that writes 14 is inside D31's unreachable V.90 arm** of the
+3200 case.  That is a second, independent confirmation of D31: a path that
+cannot be reached is also the only path that disagrees about this constant.
+
+**Why `t_v34ec` did not catch it.**  Its modulator test compares named fields
+— `taps`, `f04`, `rows`, `row`, `sine_len`, `phase`, `wpos`, `wstep` — plus
+the contents of every table a pointer selects.  `fc8c` was not one of the
+names, and a field-by-field comparison can only check the fields somebody
+thought of.  It now checks `fc8c` too, but the general lesson is the one
+finding 116b and this entry share: **compare the whole object, and exclude
+what has to be excluded, rather than listing what to include.**  The
+exclusion list is visible and can be argued with; an inclusion list is
+invisible and cannot.
+
+The cost of the whole-object form is the pointer fields, which differ by
+construction.  `t_v34hshak` handles that with an explicit skip list plus an
+assertion that every entry on it was actually reached — so a stale entry,
+which would be a silent hole, fails the test rather than widening it.

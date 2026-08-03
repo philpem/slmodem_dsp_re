@@ -354,6 +354,14 @@ main(void)
 			diff_eq_int("taps", ma.taps, mb.taps, bauds[bi]);
 			diff_eq_int("f04", ma.f04, mb.f04, bauds[bi]);
 			diff_eq_int("rows", ma.rows, mb.rows, bauds[bi]);
+			/*
+			 * fc8c is unconditional in the object and was
+			 * reconstructed as three per-rate assignments; this
+			 * check is what would have caught that, and did not
+			 * exist until t_v34hshak's whole-object comparison
+			 * caught it instead.
+			 */
+			diff_eq_int("fc8c", ma.fc8c, mb.fc8c, bauds[bi]);
 			diff_eq_int("row", ma.row, mb.row, bauds[bi]);
 			diff_eq_int("sine_len", ma.sine_len, mb.sine_len,
 				    carr[ci]);

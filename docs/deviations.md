@@ -1529,3 +1529,104 @@ test had not caught it because it *skipped* the byte and asserted the
 Hilbert-address theory instead of comparing against the blob -- see finding
 122.  This is the second retracted deviation after D28, and both were filed
 on a reading rather than a measurement.
+
+---
+
+## D35 ⚠ `setupreceiver` has a 2743-baud arm nothing can select
+
+**Where:** `src/pump/v34/v34hshak.c`, `setupreceiver`'s symbol-rate switch.
+
+**What the original does:** the switch has six arms — 2400, 2743, 2800, 3000,
+3200 and 3429 — reading the rate from +0xaa96 and installing four timing
+constants for it.  2743 baud is V.34's optional sixth symbol rate, and its
+constants (0x36b0 for the increment, 0x1f40 for the phase) are as specific as
+any of the others, so the arm is real code rather than a compiler artefact.
+
+**Nothing writes 2743 into +0xaa96.**  `setfinalrate` is the function that
+sets that field, and its own switch has five arms: 2400, 2800, 3000, 3200,
+3429.  There is no rate code for 2743 on either side of it.
+
+**What we do:** reproduce the arm, including its constants.
+
+**Why it is not filed as a defect:** the field is global state, and
+`v34handshak` and `probeselect` both write in that region; whether either can
+put 2743 there has not been measured, so "unreachable" would be a claim this
+project has not earned.  What is measured is that `setfinalrate` cannot.
+`unmeasured` — task #47, or whenever `probeselect` lands.
+
+**How it was found:** by writing the two functions in the same session and
+noticing the switches did not have the same arms.
+
+---
+
+## D36 🐛 `preempindex`'s "index is 0" branch cannot be taken
+
+**Where:** `src/pump/v34/v34hshak.c`, `preempindex`.
+
+**What the original does:** the search counter starts at 5 and is incremented
+at the TOP of the loop, before the multiply and before the limit test:
+
+```
+   60c30:  mov  $0x5,%ebx
+   60c40:  lea  0x1(%ebx),%eax       ; i++
+   60c43:  movswl %ax,%ebx
+   60c46:  mov  %edx,%eax
+   60c48:  imul %esi,%eax            ; x *= ratio
+   60c4b:  sar  $0xe,%eax
+   60c4e:  movswl %ax,%edx
+   60c51:  cmp  %di,%dx
+   60c54:  jg   60ccc                ; x > limit -> exit
+   60c56:  cmp  $0x9,%bx
+   60c5a:  jle  60c40
+   ...
+   60ccc:  cmp  $0x5,%bx             ; <- i is 6 or more, always
+   60cd0:  je   60cf4                ;    so never taken
+```
+
+so `%bx` is at least 6 wherever the `cmp $0x5` can be reached.  The branch it
+guards prints `V34PREEMPHASIS, - index is 0, baudrate= %d` and returns 0, and
+neither can happen.
+
+**What we do:** reproduce the branch, unreachable and all, so the control
+flow matches and the third debug string keeps its call site.
+
+**Consequence:** none — `preempindex` cannot return 0.  Its range is 6..10.
+
+**Reading:** an earlier version of the loop very likely tested before
+incrementing, which would have made `i == 5` mean "the first multiply already
+passed the limit".  Moving the increment to the top changed the meaning of
+every exit and the guard was not updated with it.
+
+**How it was found:** by writing the loop out and asking what value `i` could
+hold at each exit, which is the sort of question the three debug strings —
+"index is 0", "index is %d", "index is 10" — make worth asking.
+
+---
+
+## D37 ⚠ `preempindex` reads two uninitialised registers for an unknown rate
+
+**Where:** `src/pump/v34/v34hshak.c`, `preempindex`'s symbol-rate switch.
+
+**What the original does:** five arms — 2400, 2800, 3000, 3200, 3429 — each
+loading a starting measurement into `%edx` and a Q14 ratio into `%esi`.
+**There is no default arm.**  For any other baud rate control falls straight
+through to `mov $0x5,%ebx` and the loop runs on whatever the caller left in
+those two registers: `%esi` is callee-saved and still holds the caller's
+value, `%edx` is caller-saved and holds whatever was last in it.
+
+**What we do:** zero both, which makes the loop run to its ceiling and return
+10.  This is a **deliberate behavioural difference** and the only available
+one: there is no value that reproduces "whatever the caller had", and leaving
+a C variable uninitialised would be undefined behaviour rather than an
+imitation of the original's.
+
+**Where the boundary is:** exactly the five listed rates are identical; any
+other argument differs.  The differential test sweeps the five and does not
+sweep anything else, and says why.
+
+**Reachability: unmeasured.**  Nothing in the object calls `preempindex` —
+no relocation and no direct call — so there is no call site to check the
+argument against.  Task #47.
+
+**How it was found:** by reading the switch and noticing the fall-through
+target was the loop rather than a default arm.
