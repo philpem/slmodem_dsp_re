@@ -8159,3 +8159,80 @@ Worth recording because the reading error is not in the disassembly, it is
 in the pattern-matching: `0x51eb851f` is recognisable enough that the shift
 stops being read.  Anywhere else this constant appears, the shift is the
 thing to check.
+
+### 149. `modulatevector`'s shape, before it is reconstructed -- and it checks the bound `shellDemapper` does not
+
+`modulatevector` is 3388 bytes, more than the other eight of this pass put
+together, and it is NOT reconstructed.  Recorded the way findings 99, 103,
+111 and 133 recorded `V34TimingFilter`, `txinit` and `receiver`: planning
+against "the 3.4 KB one" and against the structure below are different
+exercises, and everything here cost only reading.
+
+**It is the forward shell mapper, and it works on the TRANSMIT context.**
+Every offset it uses lands on a `struct v34_shell` field once `V34_SHELL_TX`
+is subtracted, with no exceptions in twelve checked:
+
+```
+   0x25f2 -> 0xa12 count    0x2628 -> 0xa48 t1     0x2a30 -> 0xe50 frame[0]
+   0x25f4 -> 0xa14 fa14     0x2728 -> 0xb48 t2     0x2a34 -> 0xe54 frame[2]
+   0x25f8 -> 0xa18 hist     0x2828 -> 0xc48 t3     0x2a38 -> 0xe58 frame[4]
+   0x2604 -> 0xa24 coeff    0x2608 -> 0xa28 conv   0x2618 -> 0xa38 prev_k
+```
+
+So it is `shellDemapper` run backwards, against the same three tables, and
+`getFrame` is its bit source exactly as `putFrame` is the demapper's sink.
+
+**One call emits one point.**  The object carries eight complex points at
++0x2a80 and an index at +0x2aa2; a call with the index below 8 copies point
+`n` to +0x25d0, bumps the index and tail-calls `txmit`.  Only when the index
+reaches 8 does the mapping run, refilling all eight.  That is what
+`scaleVector` scales: sixteen shorts is those eight points.
+
+**Four top-level paths**, and a sweep that misses any of them proves little:
+
+```
+   index != 8, f25c2 bit 14 clear   copy the point, txmit
+   index != 8, f25c2 bit 14 set     V34nlencoder the point, txmit
+   index == 8, f25c2 bit  4 set     getFrame, then the mapping below
+   index == 8, f25c2 bit  4 clear   the path at 0x5a910, not yet read
+```
+
+**The mapping**, in the order it runs:
+
+1. A binary search over `t3` for the wide value `getFrame` left in
+   `frame[0]` -- seven halvings, and the comparison is `ja`, UNSIGNED.
+   That is why `preinitV34` fills `t3` with -1 rather than 0: `0xffffffff`
+   is above any frame value, so the -1s are what stops the search walking
+   into the part of `t3` that `initG248` did not fill.  The fill is
+   load-bearing, not leftover.
+2. Successive division and remainder against `t2` and then `t1` entries,
+   which is the inverse of the demapper's convolution sums, producing eight
+   sub-indices on the stack in pairs.
+3. Four iterations, each consuming one group of four shorts from `frame`
+   -- `frame[2+4i]` through `frame[5+4i]`, which is exactly the four groups
+   `putFrame` emits -- and each producing two of the eight points.
+4. Per point: a `quarter` lookup (416 shorts of packed byte pairs, the low
+   byte taken SIGNED), a six-tap precoder over `hist` with `coeff`'s two
+   rows of six, a shift-and-mask quantiser, the differential rotation
+   through `prev_k` as a four-case switch on `(-x) & 3`, and a trellis step
+   through `conv` and `smIndex` (16 shorts).
+
+**And it bounds its sub-indices, which is what finding 129 wanted.**  Each
+of the four is compared against `count` with `jae` and diverted to a fixup
+when it reaches it.  Finding 129 said of the demapper's three unclamped
+tables that "whether it can produce an out-of-range group is exactly what
+has not been measured".  For the ENCODE side it is now measured: it cannot,
+because it checks.  The decode side keeps the finding -- `demapFrame` is a
+different caller -- but the intended invariant is now stated by the object
+itself rather than assumed: every sub-index is below `count`.
+
+**What a fixture will need.**  `preinitV34` then `initV34` on the transmit
+context, in that order, before anything else.  The divisions in step 2 are
+`idiv` against `t1` and `t2` entries, which `preinitV34` zeroes -- so a
+fixture that fills the shell and calls straight in takes SIGFPE rather than
+failing a comparison, and `idiv` traps on quotient overflow too.  `getFrame`
+also needs a per-side bit source; `t_v34shell.c` already has `bitsrc_a` and
+`bitsrc_b` for exactly that, and one shared callback would interleave.
+
+`quarter` and `smIndex` both need emitting and memcmp'ing against `ref_*`,
+the same as `xyz`.
