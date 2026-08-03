@@ -8368,14 +8368,19 @@ because the counter-example is invisible at the level everything is tested at.
 ### 156. Callprog batch: 46 of 67 placed
 
   CALLPROG_Progress   29  placed (3 verified -- finding 154)
+  cadence_create      17  placed
   CALLPROG_Dial        7  placed
   CALLPROG_Delete      4  placed
   CALLPROG_Create      3  placed
-  cadence_progress     7  4 placed, 3 left
-  cadence_create      17  left
+  cadence_progress     7  3 placed, 4 left
 
-The three left in `cadence_progress` are the `CADENCE %s: CONDITION ...`
-messages, and they are left ON PURPOSE.  They sit inside `match_unrolled`'s
+63 of 67.  (An earlier draft of this said "4 placed, 3 left" for
+cadence_progress; it was 3 and 4.  `debugaudit --missing` says so and I did
+not.)
+
+The four left in `cadence_progress` are the three `CADENCE %s: CONDITION ...`
+messages and `' CADENCE SERIRES COMPARISON ====>'` (the author's spelling),
+and they are left ON PURPOSE.  They sit inside `match_unrolled`'s
 branch structure, where "CONDITION B" and "CONDITION C" have to be attached to
 the one-period and two-period tests in the right order -- and the two blocks do
 not read the way the names suggest: 0x7d393 tests a flag that is already set
@@ -8399,3 +8404,29 @@ Placement notes worth keeping:
     get_param is, and the harness marks that now.
   - `BUSY cadence recognized` is a fixed string, not `c->name`, even though the
     three CONDITION messages next to it all use the name.  The author's.
+
+### 157. "Ringback index" appears twice because it is in the congestion branch
+
+`cadence_create` prints the filter index once per tone, and the string is not
+the same each time:
+
+    busy         '============> %d\n'          before GetMaxBusyCadenceOnTime
+    congestion   'Ringback index====> %d\n'    before GetMaxCongestionCadenceOnTime
+    ringback     'Ringback index====> %d\n'    before GetMaxRingbackCadenceOnTime
+
+So `'Ringback index====> %d\n'` is in .rodata twice, once for each of two call
+sites, and one of them is in the CONGESTION branch, mislabelled.  The busy one
+is the same line again with the label rubbed out and the arrows left behind.
+A copy-paste, three ways, and the author's.
+
+Which of the two identical strings belongs where is not guessable from the
+text -- they are byte-identical.  It is read from the return targets: the
+blocks at 0x7dfb8 and 0x7dfcd jump back to 0x7dc12 and 0x7de94, which load
+parameter 53 (`GetMaxCongestionCadenceOnTime`) and 47
+(`GetMaxRingbackCadenceOnTime`).  That also pins the position -- after the
+filter-index read, before the windows -- which nothing in the string says.
+
+Nobody would notice this from the output; two identical lines print either
+way.  It matters because the next person to read
+"Ringback index====> 3" in a log while debugging congestion detection would
+lose an hour to it, and now the comment says so.

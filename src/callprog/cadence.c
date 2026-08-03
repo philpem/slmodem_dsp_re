@@ -470,8 +470,21 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	 */
 	(void)modem_get_param(modem, GetDialToneCallProgressFilterIndex);
 
-	c->threshold = Get_Detection_Threshold_Table(
-		(short)modem_get_param(modem, GetDialToneDetectionThreshold));
+	{
+		short level_fix = (short)modem_get_param(
+			modem, GetDialToneDetectionThreshold);
+
+		c->threshold = Get_Detection_Threshold_Table(level_fix);
+
+		/* Raw parameter first, table result second -- 0x4(%esp)
+		 * then 0x8(%esp) at 0x7d9a4.  Note the author's spelling
+		 * and the \r\n, which the rest of the file does not use. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Detection Thresholds: levle_fix=%d,"
+				"--> LEVEL_THRESHOLD=%d\r\n",
+				level_fix, c->threshold);
+	}
 
 	c->cycles = 100;
 	c->looped_match = 0;
@@ -479,6 +492,17 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	if (tone == CADENCE_TONE_BUSY) {
 		filter_index = modem_get_param(modem,
 					       GetBusyToneCallProgressFilterIndex);
+
+		/*
+		 * The same line as the two below with its label rubbed out.
+		 * Placed here because its block returns to the
+		 * GetMaxBusyCadenceOnTime read at 0x7da0a -- so it is after
+		 * the filter index and before the windows.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("============> %d\n",
+					     filter_index);
+
 		/*
 		 * Busy tolerates a shorter silence than the others before
 		 * dropping what it has measured -- three times the maximum
@@ -498,11 +522,30 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		c->cycles = modem_get_param(modem, GetBusyDetectionCyclesNumber);
 		c->looped_match = modem_get_param(modem,
 						  GetBusyToneLooseDetectionEnabled);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Cadence: Busy Tone loose "
+					     "detection is %d\r\n",
+					     c->looped_match);
+
 		if (!windows_are_set(c))
 			default_windows(c);
 	} else if (tone == CADENCE_TONE_CONG) {
 		filter_index = modem_get_param(modem,
 					       GetCongestionToneCallProgressFilterIndex);
+
+		/*
+		 * "Ringback" in the CONGESTION branch -- the author's
+		 * copy-paste, not ours, and the reason the string appears
+		 * twice in .rodata.  Which block is which is read from the
+		 * return targets: this one lands on the
+		 * GetMaxCongestionCadenceOnTime read at 0x7dc12, the other on
+		 * the ringback one at 0x7de94.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Ringback index====> %d\n",
+					     filter_index);
+
 		c->buflen = 160;
 		c->continuous = 0;
 		c->validation = 0;
@@ -513,12 +556,21 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		c->cycles = modem_get_param(modem,
 					    GetCongestionDetectionCyclesNumber);
 		if (!windows_are_set(c)) {
+			if (DSPLIB_DEBUG_VERBOSE())
+				dsplibs_debug_printf(
+					"Disable CONGESTION detector\n");
+
 			usable = 0;
 			default_windows(c);
 		}
 	} else if (tone == CADENCE_TONE_RING) {
 		filter_index = modem_get_param(modem,
 					       GetRingbackToneCallProgressFilterIndex);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Ringback index====> %d\n",
+					     filter_index);
+
 		c->buflen = 160;
 		c->continuous = 0;
 		c->validation = 0;
@@ -536,6 +588,10 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		 * the country table.
 		 */
 		if (!windows_are_set(c)) {
+			if (DSPLIB_DEBUG_VERBOSE())
+				dsplibs_debug_printf(
+					"Disable RINGBACK detector\n");
+
 			usable = 0;
 			default_windows(c);
 		}
@@ -546,8 +602,13 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		subindex = modem_get_param(modem, GetDialToneFilterSubindex);
 		c->buflen = modem_get_param(modem,
 					    GetCallProgressSamplesBufferLength);
-		if (c->buflen == 0)
+		if (c->buflen == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"BUFFER LENGTH is INVALID!\n");
+
 			c->buflen = 666;
+		}
 		c->continuous = 1;
 		c->validation = 100 * modem_get_param(modem,
 						      GetDialToneValidationTime);
@@ -601,6 +662,39 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		name = CADENCE_TONE_INVALID;
 	s->tone = name;
 	c->name = cadence_tone_names[name];
+
+	/*
+	 * Nine consecutive gated prints in the object (0x7d87e onward), the
+	 * whole configuration in one block.  It comes after the name is
+	 * resolved because the first line needs it, and after the window
+	 * conversion because every time it prints is in intervals, not in the
+	 * country table's units.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("TYPE %s\n", c->name);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Filter index %d\n", filter_index);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Filter SubIndex %d\n", subindex);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("MAX_ON_TIME %d Buffers     "
+				     "MIN_ON_TIME %d Buffers\n",
+				     c->max_on, c->min_on);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("MAX_OFF_TIME %d Buffers    "
+				     "MIN_OFF_TIME %d Buffers\n",
+				     c->max_off, c->min_off);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("OFF_TIME_THAT_RESETS_CYCLE %d\n",
+				     c->max_silence);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("BUFFER LENGTH %d samples.\n",
+				     c->buflen);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("INTEGRATION_LENGTH %d[ms]\n",
+				     c->validation);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("LEVEL %d\n", c->threshold);
 
 	cfg.a = c->sel_a;
 	cfg.b = c->sel_b;
