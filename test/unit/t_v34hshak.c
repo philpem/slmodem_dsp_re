@@ -1,9 +1,19 @@
 /*
  * t_v34hshak.c -- differential test of the V.34 handshake's support functions.
  *
- * Five functions, all of which write scattered fields of the 44 KB V.34
+ * Seven functions, all of which write scattered fields of the 44 KB V.34
  * object, so the comparison is the whole object byte for byte.  Anything
  * narrower would pass a store that landed in the wrong pad.
+ *
+ * AND ONE TABLE THAT CANNOT BE COMPARED DIRECTLY.  `StateName` is a LOCAL
+ * symbol, so `objcopy --redefine-syms` cannot produce a `ref_StateName` for
+ * the fifteen-table section below to copy.  The only thing that reaches its
+ * eighty-seven strings is what `v34handshakinit`'s thirteen traces print, so
+ * the transcript sweeps at the bottom of this file are not a supplement to a
+ * table comparison -- they ARE the comparison.  Two sweeps, and both are
+ * needed: one drives the three state words together, which reaches every one
+ * of the 87 names, and one drives them a third of the table apart, which is
+ * the only thing that can tell the three machines' argument slots apart.
  *
  * POINTERS ARE THE ONE EXCEPTION, and they are handled the way t_v34ec.c
  * established: the two sides hold different addresses by construction, so
@@ -29,6 +39,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "harness.h"
@@ -47,6 +58,7 @@ extern void ref_setfinalrate(void *obj);
 extern void ref_setupreceiver(void *obj);
 extern short ref_preempindex(void *obj, short baudrate);
 extern void ref_v34modeminit(void *obj);
+extern void ref_v34handshakinit(void *obj, int mode);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern const short ref_c1200_[8], ref_c2400_[8];
 
@@ -102,7 +114,22 @@ static const unsigned ptr_skip[] = {
 	0x80b8, 0x80bc, 0x80c0, 0x80c4, 0x80c8,	/* echo canceller 0    */
 	0x9138, 0x913c, 0x9140, 0x9144, 0x9148,	/* and 1               */
 	0x0a28, 0x0e48,			/* receive shell context       */
-	0x2608, 0x2a28			/* transmit shell context      */
+	0x2608, 0x2a28,			/* transmit shell context      */
+	/*
+	 * And `v34handshakinit`'s two, which are POINTERS INTO THE OBJECT
+	 * ITSELF -- +0xa97c and +0xa94c, two of the five 0x30-byte message
+	 * records.  So the two sides necessarily differ, and the content
+	 * check for them is not "the same bytes" (both records are nearly all
+	 * zero, so a swapped pair would pass that) but "the same offset from
+	 * its own object".  `check_self_ptr` below.
+	 */
+	0xaa6c, 0xaa70,
+	/*
+	 * And the timing filters' two coefficient pointers, which only mode 0
+	 * reaches -- it is the one body that calls `rxtiminginit`, and
+	 * `V34TimingFiltersInit` installs them.  t_v34rx.c skips the same two.
+	 */
+	0x0620, 0x0624			/* timing +0x114 and +0x118    */
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
 
@@ -155,6 +182,13 @@ poke_byte(unsigned off, unsigned char v)
 {
 	*((unsigned char *)&oa + off) = v;
 	ob[off] = v;
+}
+
+static void
+poke_int(unsigned off, int v)
+{
+	memcpy((unsigned char *)&oa + off, &v, sizeof(v));
+	memcpy(ob + off, &v, sizeof(v));
 }
 
 static void *
@@ -281,6 +315,13 @@ run_setupreceiver(short baud, short carrier, short gain, long tag)
 	/* The carrier table and its length, seeded so the default arm is
 	 * visible as "still the dummy" rather than as a wild pointer. */
 	poke_ptr(0x0418, dummy_a, dummy_b);
+	/*
+	 * AND THE DETECTOR'S, for the same reason -- it was not seeded, and
+	 * the comparison below dereferences it, so a reconstruction that took
+	 * a path not reaching `detectorinit` crashed this test instead of
+	 * failing it.  Found by mutating the baud switch's default arm.
+	 */
+	poke_ptr(0x3564, dummy_a, dummy_b);
 	poke_short(0x264 + 0x1ba, 8);
 	poke_ptr(0xaab0, dummy_a, dummy_b);
 	poke_short(0xaa96, baud);
@@ -328,6 +369,235 @@ run_preempindex(short limit, short meas, short baud, long tag)
 	got = preempindex(preemp_obj, baud);
 	want = ref_preempindex(preemp_obj, baud);
 	diff_eq_int("preempindex", got, want, tag);
+}
+
+/* --- v34handshakinit ------------------------------------------------------ */
+
+/*
+ * The three state words.  Named here as well as in v34hshak.c so that this
+ * file does not silently agree with a transposition it is meant to detect:
+ * every case below seeds all three to DIFFERENT values, and the transcript
+ * sweep drives them on three offset cycles for the same reason.
+ */
+#define HSI_MICROSTATE	0x3592
+#define HSI_RXSTATE	0x3594
+#define HSI_TXSTATE	0x3596
+
+/*
+ * Every input the five bodies read, one field per member, so that no two can
+ * be swept from one variable.  That is the fixture defect of findings 116b,
+ * 123 and 147, and it turned up three times in the previous session alone --
+ * two inputs driven together cannot be told apart, however thorough the
+ * sweep looks.
+ *
+ * `timer_base` and `timer_delta` are separate for exactly that reason: the
+ * guard subtracts one from the other and compares UNSIGNED, so a signed
+ * reconstruction differs only when the difference goes negative, which one
+ * variable driving both could never produce.
+ */
+struct hsi_case {
+	int		mode;
+	int		timer_base;	/* +0x238 */
+	int		timer_delta;	/* +0x248 */
+	short		f359c;		/* originate/answer, 0x65 vs 0x66 */
+	unsigned short	rxflags;	/* receiver +0x122 */
+	unsigned short	txflags;	/* +0x25c2 */
+	unsigned char	ac17;		/* mode 1's second branch input */
+	short		ac12;		/* mode 1's two counters */
+	short		ac14;
+	short		mst;		/* the three machines, in range */
+	short		rxst;
+	short		txst;
+	short		trace1;		/* +0x2aa2, printed as [1] */
+	short		trace2;		/* +0xaa78, printed as [2] */
+	short		f262;		/* the AGC's starting gain */
+	int		v90_receiver;	/* +0x24c, gates V34SetINFO0dBits */
+	int		moh_message;	/* +0xabf0 */
+};
+
+/*
+ * The default case.  Three DIFFERENT state values, two DIFFERENT trace
+ * counters, and a Modem-on-Hold selector out of range so the message builder
+ * writes nothing unless a case asks it to.
+ */
+static const struct hsi_case hsi_base = {
+	0,			/* mode                                     */
+	0, 0,			/* timer base, delta                        */
+	0x65,			/* f359c                                    */
+	0x0000, 0x0000,		/* rxflags, txflags                         */
+	0,			/* ac17                                     */
+	0x0111, 0x0222,		/* ac12, ac14                               */
+	V34HS_PHASE1,		/* mst  = 33                                */
+	V34HS_PHASE2,		/* rxst = 34                                */
+	V34HS_TONE_AB,		/* txst = 60                                */
+	0x1111, 0x2222,		/* [1], [2]                                 */
+	0x0600,			/* f262                                     */
+	0,			/* v90_receiver                             */
+	9			/* moh_message: above 5, builds nothing     */
+};
+
+/*
+ * A pointer the object aims at itself: compare the OFFSET, not the address
+ * and not the bytes.  `want` is where it should land, or the dummy when the
+ * mode in question leaves the field alone.
+ */
+static void
+check_self_ptr(const char *what, unsigned off, long want, long tag)
+{
+	long da = (long)((char *)get_ptr_a(off) - (char *)&oa);
+	long db = (long)((char *)get_ptr_b(off) - (char *)ob);
+
+	if (want < 0) {
+		/* Untouched: each side must still hold its own dummy. */
+		diff_eq_int(what, get_ptr_a(off) == (void *)dummy_a, 1, tag);
+		diff_eq_int(what, get_ptr_b(off) == (void *)dummy_b, 1, tag);
+		return;
+	}
+	diff_eq_int(what, (int)da, (int)db, tag);
+	diff_eq_int(what, (int)da, (int)want, tag);
+}
+
+static void
+run_handshakinit(const struct hsi_case *c, long tag)
+{
+	setup();
+
+	/*
+	 * Modes 0, 1 and 4 reach `txinit` through `v34modeminit`, which cleans
+	 * both echo cancellers through five pointers each.  Aiming them is
+	 * `V34InitializeImplementationSpecific`'s job and not v34handshakinit's,
+	 * and without it the first dereference faults -- the same reason the
+	 * v34modeminit case above calls it.
+	 */
+	V34InitializeImplementationSpecific(&oa);
+	ref_V34InitializeImplementationSpecific(ob);
+
+	/*
+	 * The two self-pointers, seeded per side so that "this mode left the
+	 * field alone" and "this mode aimed it somewhere" are distinguishable.
+	 */
+	poke_ptr(0xaa6c, dummy_a, dummy_b);
+	poke_ptr(0xaa70, dummy_a, dummy_b);
+	/* Likewise the two timing coefficients, so "mode 0 installed them"
+	 * and "every other mode left them" are both visible. */
+	poke_ptr(0x0620, dummy_a, dummy_b);
+	poke_ptr(0x0624, dummy_a, dummy_b);
+
+	poke_int(0x238, c->timer_base);
+	poke_int(0x248, c->timer_delta);
+	poke_int(0x24c, c->v90_receiver);
+	poke_int(0xabf0, c->moh_message);
+	poke_short(0x359c, c->f359c);
+	poke_short(0x264 + 0x122, (short)c->rxflags);
+	poke_short(0x25c2, (short)c->txflags);
+	poke_byte(0xac17, c->ac17);
+	poke_short(0xac12, c->ac12);
+	poke_short(0xac14, c->ac14);
+	poke_short(HSI_MICROSTATE, c->mst);
+	poke_short(HSI_RXSTATE, c->rxst);
+	poke_short(HSI_TXSTATE, c->txst);
+	poke_short(0x2aa2, c->trace1);
+	poke_short(0xaa78, c->trace2);
+	poke_short(0x264 + 0x262, c->f262);
+
+	v34handshakinit(&oa, c->mode);
+	ref_v34handshakinit(ob, c->mode);
+
+	compare("v34handshakinit", tag);
+
+	/*
+	 * Modes 0 and 4 aim +0xaa70 at the record at +0xa97c; only mode 4 also
+	 * aims +0xaa6c at +0xa94c.  Everything else must leave both alone,
+	 * which is the half of the check a byte comparison with a hole in it
+	 * cannot make.
+	 */
+	check_self_ptr("v34handshakinit +0xaa70", 0xaa70,
+		       (c->mode == 0 || c->mode == 4) ? 0xa97c : -1, tag);
+	check_self_ptr("v34handshakinit +0xaa6c", 0xaa6c,
+		       (c->mode == 4) ? 0xa94c : -1, tag);
+
+	/*
+	 * The timing filters' coefficients: mode 0 alone installs them, and
+	 * they point OUT of the object, so these two are compared by content
+	 * the ordinary way.
+	 */
+	if (c->mode == 0) {
+		compare_table("v34handshakinit prefilter coeff",
+			      (const short *)get_ptr_a(0x0620),
+			      (const short *)get_ptr_b(0x0620),
+			      V34_TIMING_PRE_TAPS, tag);
+		compare_table("v34handshakinit hp coeff",
+			      (const short *)get_ptr_a(0x0624),
+			      (const short *)get_ptr_b(0x0624),
+			      V34_TIMING_HP_TAPS, tag);
+	} else {
+		diff_eq_int("v34handshakinit left the prefilter coeff",
+			    get_ptr_a(0x0620) == (void *)dummy_a, 1, tag);
+		diff_eq_int("v34handshakinit left the hp coeff",
+			    get_ptr_a(0x0624) == (void *)dummy_a, 1, tag);
+	}
+
+	/*
+	 * Modes 0, 1 and 4 run v34modeminit, so its pointers have to be
+	 * checked by content here too -- the phase-2 carrier pair is the
+	 * mutation that survived the first fixture (hsine1200 and hsine2400
+	 * are the same length, so swapping them changes nothing a skipped
+	 * pointer can see).
+	 */
+	if (c->mode == 0 || c->mode == 1 || c->mode == 4) {
+		const struct v34_modulator *ma =
+			(const struct v34_modulator *)
+			((const char *)&oa + 0x1450);
+
+		compare_table("v34handshakinit band-pass",
+			      (const short *)get_ptr_a(0x0508),
+			      (const short *)get_ptr_b(0x0508),
+			      V34_BPV22_TAPS, tag);
+		compare_table("v34handshakinit carrier table",
+			      (const short *)get_ptr_a(0x1460),
+			      (const short *)get_ptr_b(0x1460),
+			      ma->sine_len * 2, tag);
+		compare_table("v34handshakinit detector coeff",
+			      (const short *)get_ptr_a(0x3564),
+			      (const short *)get_ptr_b(0x3564), 8, tag);
+	}
+	/*
+	 * And mode 4 arms the detector a SECOND time, with the pair the other
+	 * way round from v34modeminit's.  Checked by identity because the two
+	 * descriptors differ in only two of their eight shorts.
+	 */
+	if (c->mode == 4)
+		diff_eq_int("v34handshakinit MOH detector coeff",
+			    get_ptr_a(0x3564)
+			    == (void *)(c->f359c == 0x65 ? c2400_ : c1200_),
+			    1, tag);
+}
+
+/*
+ * One case with the transcripts captured and compared.
+ *
+ * A transcript mismatch otherwise reports as "got 0, reference 1" and nothing
+ * else, which over a 174-case sweep is not a diagnosis.  `HSI_DUMP=1` in the
+ * environment prints both sides of any case that differs; it paid for itself
+ * on the first run, where the difference was one line deep inside
+ * `v34modeminit`'s call tree and not in this function at all.
+ */
+static void
+run_handshakinit_traced(const struct hsi_case *c, long tag)
+{
+	dsplib_debug_capture_reset();
+	run_handshakinit(c, tag);
+	if (getenv("HSI_DUMP")
+	    && strcmp(dsplib_debug_capture_text(0),
+		      dsplib_debug_capture_text(1)) != 0)
+		fprintf(stderr, "--- case %ld mode %d\n=== ours\n%s=== ref\n%s",
+			tag, c->mode, dsplib_debug_capture_text(0),
+			dsplib_debug_capture_text(1));
+	diff_eq_int("v34handshakinit transcript",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("v34handshakinit transcript non-empty",
+		    dsplib_debug_capture_text(1)[0] != 0, 1, tag);
 }
 
 int
@@ -667,6 +937,319 @@ main(void)
 			ref_v34modeminit(ob);
 			compare("v34modeminit twice", 5100 + flags[fi]);
 		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit, five modes and the tail");
+	{
+		/*
+		 * Two of the five jump-table slots hold the same address, so
+		 * 2 and 3 must reach the same body; everything outside 0..4
+		 * must reach the tail, and that is a RANGE CHECK on an int,
+		 * so both ends of the range matter.
+		 */
+		static const int modes[] = { 0, 1, 2, 3, 4, 5, 6, -1, -2,
+					     0x7fffffff, (-0x7fffffff - 1) };
+		unsigned mi;
+
+		for (mi = 0; mi < sizeof(modes) / sizeof(modes[0]); mi++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = modes[mi];
+			run_handshakinit(&c, 1000 + (long)mi);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's timer guard, all three arms");
+	{
+		/*
+		 * `delta > 0` gates the block; the difference is then compared
+		 * UNSIGNED against 95,999.  So there are four cases and the
+		 * fourth is the one a signed reconstruction gets wrong: a base
+		 * BELOW the delta makes the difference negative, which is far
+		 * above the limit unsigned and takes the reset arm.
+		 *
+		 * +0x244 and +0x23c are written from the base AFTER the guard
+		 * has run, so each arm has to be exercised for those two to be
+		 * pinned as well.
+		 */
+		static const struct { int base, delta; } t[] = {
+			{	     0,	         0 },	/* delta 0: skipped   */
+			{	 50000,	   -100000 },	/* delta < 0: skipped */
+			{	100000,	     50000 },	/* diff 50000: kept   */
+			{	100000,	         1 },	/* diff 99999: reset  */
+			{    0x176ff,	         0 },	/* skipped, at limit  */
+			{	200000,	    104001 },	/* diff 95999: kept   */
+			{	200000,	    104000 },	/* diff 96000: reset  */
+			{	  1000,	     50000 },	/* negative: reset    */
+			{	     0,	         1 },	/* -1: reset          */
+			{	    -5,	         3 },	/* -8: reset          */
+			{ 0x7fffffff,	0x7fffffff },	/* 0: kept            */
+			{ -0x7fffffff,	0x7fffffff }	/* overflows: either  */
+		};
+		unsigned ti, mi;
+		static const int modes[] = { 0, 2, 4, 9 };
+
+		for (ti = 0; ti < sizeof(t) / sizeof(t[0]); ti++)
+		for (mi = 0; mi < sizeof(modes) / sizeof(modes[0]); mi++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = modes[mi];
+			c.timer_base = t[ti].base;
+			c.timer_delta = t[ti].delta;
+			run_handshakinit(&c, 2000 + (long)ti * 10 + mi);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's mode-1 branch, all four ways");
+	{
+		/*
+		 * `(rx->flags & 0x40) || obj[0xac17]` picks between two
+		 * counters, so the two inputs are swept INDEPENDENTLY -- they
+		 * are exactly the shape finding 147 warns about, and driving
+		 * them together would make `||` and `&&` indistinguishable.
+		 * The arms write different fields, so all four are visible.
+		 */
+		unsigned fi, ai;
+		static const unsigned short fl[] = { 0x0000, 0x0040, 0xffbf,
+						     0xffff };
+		static const unsigned char a17[] = { 0, 1, 0xff };
+
+		for (fi = 0; fi < sizeof(fl) / sizeof(fl[0]); fi++)
+		for (ai = 0; ai < sizeof(a17) / sizeof(a17[0]); ai++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = 1;
+			c.rxflags = fl[fi];
+			c.ac17 = a17[ai];
+			/* Distinct, and distinct from each other, so a
+			 * reconstruction that bumped the wrong counter shows
+			 * up in the value and not only in the offset. */
+			c.ac12 = (short)(0x0100 + fi);
+			c.ac14 = (short)(0x0200 + ai);
+			run_handshakinit(&c, 3000 + (long)fi * 10 + ai);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's f359c, three values");
+	{
+		/*
+		 * THREE, NOT TWO.  `v34modeminit` and mode 4 test `== 0x65`;
+		 * mode 0 tests `!= 0x66`.  A sweep of {0x65, anything else}
+		 * would pass a reconstruction that used 0x65 in mode 0.
+		 */
+		static const short f[] = { 0x65, 0x66, 0x00, 0x64, 0x67, -1 };
+		static const int modes[] = { 0, 1, 2, 4 };
+		unsigned si, mi, vi;
+		static const int v90[] = { 0, 1, -1 };
+
+		for (si = 0; si < sizeof(f) / sizeof(f[0]); si++)
+		for (mi = 0; mi < sizeof(modes) / sizeof(modes[0]); mi++)
+		for (vi = 0; vi < sizeof(v90) / sizeof(v90[0]); vi++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = modes[mi];
+			c.f359c = f[si];
+			/* Mode 0's V34SetINFO0dBits writes index 12 of the
+			 * same record mode 0 just wrote, so both arms of its
+			 * own gate change what lands there. */
+			c.v90_receiver = v90[vi];
+			run_handshakinit(&c, 4000 + (long)si * 100
+					 + (long)mi * 10 + vi);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's four flag-word masks");
+	{
+		/*
+		 * The prologue does `txflags &= 0x7fff`; mode 2/3 does
+		 * `txflags = (txflags & ~0x4018) | 0x2000`, `rxflags =
+		 * (rxflags & ~0x1d8) | 0x18` and then `rxflags &= ~0x2000`;
+		 * modes 0 and 1 do `rxflags |= 0x1000`.  All ones and all
+		 * zeroes miss a swapped mask, so a mixed pattern is swept too.
+		 */
+		static const unsigned short pat[] = {
+			0x0000, 0xffff, 0x5555, 0xaaaa, 0x4018, 0x21d8, 0x8000
+		};
+		/*
+		 * AN OUT-OF-RANGE MODE IS IN THE LIST, and it is the only case
+		 * that can see the prologue's `txflags &= 0x7fff` at all: every
+		 * body either overwrites +0x25c2 outright (0, 1 and 4, through
+		 * v34modeminit) or masks bit 14 off again (2 and 3).  Without
+		 * mode 7 here, widening that mask to 0x3fff passes.
+		 */
+		static const int modes[] = { 0, 1, 2, 3, 4, 7 };
+		unsigned pi, qi, mi;
+
+		for (pi = 0; pi < sizeof(pat) / sizeof(pat[0]); pi++)
+		for (qi = 0; qi < sizeof(pat) / sizeof(pat[0]); qi++)
+		for (mi = 0; mi < sizeof(modes) / sizeof(modes[0]); mi++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = modes[mi];
+			/* Swept SEPARATELY: one variable driving both would
+			 * not tell the two masks apart. */
+			c.rxflags = pat[pi];
+			c.txflags = pat[qi];
+			run_handshakinit(&c, 5000 + (long)pi * 100
+					 + (long)qi * 10 + mi);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit, MOH message and counters");
+	{
+		/*
+		 * Mode 4 hands +0xa94c to VPcmV34SetMohMessageBits and then
+		 * overwrites eleven of its fields, so the selector is swept
+		 * over all six messages plus one out of range: a reconstruction
+		 * that overwrote index 0 as well would pass at 9 and fail here.
+		 */
+		int sel;
+
+		for (sel = -1; sel <= 6; sel++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = 4;
+			c.moh_message = sel;
+			run_handshakinit(&c, 6000 + sel);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's transcript, all 87 names");
+	{
+		/*
+		 * THIS IS THE ONLY CHECK ON `StateName`.  The table is a LOCAL
+		 * symbol, so `objcopy --redefine-syms` cannot make a
+		 * `ref_StateName` for the fifteen-table comparison at the top
+		 * of this file to copy; the strings are reachable only through
+		 * what the traces print.  Finding 149's trap, and finding
+		 * 152's -- delete this section and nothing checks the eighty-
+		 * seven names at all.
+		 *
+		 * MODE 2 IS THE ONE THAT CAN SEE `[1]` AND `[2]`.  Modes 0, 1
+		 * and 4 run v34modeminit first, which zeroes both counters
+		 * before any trace fires; mode 2/3 clears them AFTER its three
+		 * transitions, so it is the only body whose traces print
+		 * anything else.
+		 *
+		 * The sweep stops at 86.  The object indexes StateName with no
+		 * bound (D42), so an out-of-range state word would read past
+		 * the table on both sides -- into different memory, which is
+		 * not a comparison of anything.
+		 */
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (i = 0; i < V34HS_STATE_COUNT; i++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = 2;
+			c.mst = c.rxst = c.txst = (short)i;
+			c.trace1 = (short)(0x1000 + i);
+			c.trace2 = (short)(-0x2000 - (int)i);
+			run_handshakinit_traced(&c, 7000 + (long)i);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's traces, three machines apart");
+	{
+		/*
+		 * THE SWEEP ABOVE CANNOT TELL THE THREE MACHINES APART.  With
+		 * all three words equal every `%s` carries the same string, so
+		 * a reconstruction that fed the `mst` slot from rxstate would
+		 * produce a byte-identical transcript.  That is the defect of
+		 * finding 147 applied to the one thing the brief for this work
+		 * said not to guess at, so the three are driven on three
+		 * offset cycles here and are never equal.
+		 *
+		 * 29 and 58 are 87/3 and 2*87/3, so the three cycles are the
+		 * three residues of i mod 87 spaced a third of the table
+		 * apart: never equal, and every one of the 87 names still
+		 * appears in each of the three slots across the sweep.  The
+		 * assertion below is that, checked rather than asserted in
+		 * prose.
+		 */
+		for (i = 0; i < V34HS_STATE_COUNT; i++) {
+			struct hsi_case c = hsi_base;
+			int distinct;
+
+			c.mode = 2;
+			c.txst = (short)i;
+			c.rxst = (short)((i + 29) % V34HS_STATE_COUNT);
+			c.mst  = (short)((i + 58) % V34HS_STATE_COUNT);
+			/* [1] and [2] likewise: distinct from each other, and
+			 * of opposite sign, so their order is visible too. */
+			c.trace1 = (short)(0x0100 + i);
+			c.trace2 = (short)(-0x0100 - (int)i);
+
+			distinct = c.txst != c.rxst && c.rxst != c.mst
+				   && c.txst != c.mst
+				   && c.trace1 != c.trace2;
+			diff_eq_int("the three machines were seeded apart",
+				    distinct, 1, 7200 + (long)i);
+
+			run_handshakinit_traced(&c, 7200 + (long)i);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34handshakinit's transcript, the other modes");
+	{
+		/*
+		 * The other four bodies' traces, their two un-gated printfs
+		 * ("initiating MOH negotiation" and the V34RNEG line, which
+		 * prints both flag words) and mode 0's "V90, setINFO0dBits".
+		 * Modes 0, 1 and 4 print [1] and [2] as zero whatever they
+		 * were seeded to; that is v34modeminit's doing and is what
+		 * makes mode 2 the only place the pair is testable.
+		 */
+		static const int modes[] = { 0, 1, 2, 3, 4, 7 };
+		static const short f[] = { 0x65, 0x66, 0x00 };
+		static const unsigned short fl[] = { 0x0000, 0x0040, 0xffff };
+		unsigned mi, si, fi;
+
+		for (mi = 0; mi < sizeof(modes) / sizeof(modes[0]); mi++)
+		for (si = 0; si < sizeof(f) / sizeof(f[0]); si++)
+		for (fi = 0; fi < sizeof(fl) / sizeof(fl[0]); fi++) {
+			struct hsi_case c = hsi_base;
+
+			c.mode = modes[mi];
+			c.f359c = f[si];
+			c.rxflags = fl[fi];
+			c.txflags = (unsigned short)(0x1234 + fi);
+			c.v90_receiver = (int)si;
+			c.moh_message = (int)si;
+			c.ac17 = (unsigned char)fi;
+			/*
+			 * Mode 7 reaches only the tail and prints nothing, so
+			 * it is compared without the non-empty assertion.
+			 */
+			if (modes[mi] > 4) {
+				dsplib_debug_capture_reset();
+				run_handshakinit(&c, 7400 + (long)mi * 100
+						 + (long)si * 10 + fi);
+				diff_eq_int("v34handshakinit tail transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, 7400 + (long)mi);
+			} else {
+				run_handshakinit_traced(&c,
+							7400 + (long)mi * 100
+							+ (long)si * 10 + fi);
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

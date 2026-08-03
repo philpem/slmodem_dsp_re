@@ -122,6 +122,40 @@ extern "C" {
 #define V34HS_STATE_COUNT		87
 
 /*
+ * THE STATE NAMES ARE NOT AN ENUM OVER ONE MACHINE.  `v34handshakinit`'s
+ * thirteen diagnostics name THREE concurrent machines, and the three words
+ * they live in are settled -- read off each format string against its
+ * arguments, not guessed:
+ *
+ *      obj + 0x3592    microstate
+ *      obj + 0x3594    rxstate
+ *      obj + 0x3596    txstate
+ *
+ * See src/pump/v34/v34hshak.c for the derivation.  It matters for #39-#45:
+ * eighty-seven states over three machines is not seven slices of one, and
+ * `tools/cfgsplit.py` should be pointed at `v34handshak` before that split is
+ * planned (docs/fastpass.md).
+ */
+
+/*
+ * Bring the handshake up.  `mode` selects one of five entries, and the names
+ * below are the CALL SITES' -- every caller passes a literal, so the modes
+ * are sourced rather than inferred:
+ *
+ *      0   VPcmV34Create                        cold start
+ *      1   VPcmV34InitiateRetrain, v34handshak  retrain
+ *      2   VPcmV34InitiateRateRenegotiation,    rate renegotiation
+ *          VPcmV34InitiateHangUp                and hang-up
+ *      3   -- no caller anywhere in the object; shares 2's jump-table body
+ *      4   VPcmV34InitMOH                       Modem-on-Hold
+ *
+ * Anything outside 0..4 is NOT an error: the range check jumps to the common
+ * tail, which every mode also falls into.  The tail clears +0xaa3c and puts
+ * 0x10 in +0x2aa0.
+ */
+void v34handshakinit(void *obj, int mode);
+
+/*
  * ---------------------------------------------------------------------------
  * The handshake's support functions -- everything in V34hshak.c that is not
  * `v34handshak` itself.  See src/pump/v34/v34hshak.c.

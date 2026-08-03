@@ -1775,3 +1775,67 @@ disassembly that anything had changed.
 **Reachability of the negative case: unmeasured.**  Every caller is inside
 `v34handshak`, which is not reconstructed.  The differential test drives
 `nbits` from 1 to 16, where the shift cannot go negative.
+
+---
+
+## D42 ⚠ `StateName` is indexed with nothing bounding the index
+
+**Where:** `src/pump/v34/v34hshak.c`, `hs_setstate`, and every one of
+`v34handshak`'s 533 uses of the same table.
+
+**What the original does:** loads `StateName[state]` with `mov
+0x6c00(,%eax,4),%esi` after a plain `movswl` of the state word. There is no
+comparison against 87 anywhere near any of the sites, in either function, and
+the index is sign-extended from a `short` — so a negative state word indexes
+*backwards* out of `.data`.
+
+**What we do:** reproduce it. The alternative is a bounds check the object
+does not have, which would change the control flow the debug level gates.
+
+**Why it is not filed as harmful:** every store to the three state words in
+this function is a literal in 0..86, and the sites are all gated on
+`dsplibs_debug_level > 1`, which ships at zero. Reaching a bad index needs
+`v34handshak` to have written one first, and that is 61 KB not yet
+reconstructed. Compare finding 129, which is the same shape in
+`demapFrame`. `unmeasured` — task #47, or #39–#45 when the writer lands.
+
+**What it costs the test.** The transcript sweep in `t_v34hshak.c` stops at
+86 for this reason: an out-of-range state word would have both sides read
+past their own copy of the table, into different memory, which compares
+nothing. So the sweep proves the 87 entries and says nothing about the
+89th — which is the honest limit and not an oversight.
+
+**How it was found:** by writing the sweep and having to choose its bound.
+
+---
+
+## D43 ⚠ `v34handshakinit`'s timer stride, 431,488, is not a round interval
+
+**Where:** `src/pump/v34/v34hshak.c`, `v34handshakinit`'s opening block.
+
+**What the original does:** four `int` fields reached through `obj + 4` —
++0x238, +0x23c, +0x244 and +0x248 of the object. A positive +0x248 is
+subtracted from +0x238 and the difference kept if it is at most **95,999**
+unsigned, otherwise the pair is reset to 0 and **-960,000**. +0x244 then
+takes a copy of the base and +0x23c takes the base plus **431,488**.
+`VPcmV34SetV90RateReneg` writes the same three fields with the same two
+constants through the same `obj + 4` base, which is what says they are one
+group.
+
+**Two of the three constants are round and one is not.** 95,999 is one short
+of 96,000, which is 12 s at 8 kHz or 10 s at 9600; -960,000 is ten times
+that. 431,488 is 53.9 s at 8 kHz and 44.9 s at 9600, and factors as
+2^7 × 3371 with 3371 prime — so it is not a round number of samples at any
+rate this modem uses, nor a power-of-two fraction of one.
+
+**What we do:** copy all three. No reading is offered.
+
+**Why it is recorded rather than solved:** the obvious move is to pick the
+sample rate that makes 431,488 come out round and then assert that rate.
+Nothing in the object supports one, and the two constants that ARE round
+already agree on 8 kHz/9600. Recorded so the next reader does not spend the
+same hour on it, and so that a later finding can retract this entry the way
+D28 was retracted. `unmeasured` — task #47.
+
+**How it was found:** by pinning the constants before the states, as the
+brief for `v34handshakinit` asked.

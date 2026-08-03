@@ -12,12 +12,13 @@
  * anchor is exact at the bottom; `v34handshak` ends at 0x71955 and
  * `datapumpv34` starts at 0x71960, which fixes the top.
  *
- * WHAT IS HERE, AND WHAT IS NOT.  Five functions, chosen by testability
- * rather than by theme -- see docs/fastpass.md, whose one unrelaxed rule is
- * that nothing commits without a differential test:
+ * WHAT IS HERE, AND WHAT IS NOT.  Seven functions and one table, chosen by
+ * testability rather than by theme -- see docs/fastpass.md, whose one
+ * unrelaxed rule is that nothing commits without a differential test:
  *
- *     dpskDetectInfo1Init   setfinalrate   setupreceiver
- *     dpskinit              preempindex
+ *     dpskDetectInfo1Init   setfinalrate   setupreceiver   v34modeminit
+ *     dpskinit              preempindex    v34handshakinit
+ *     StateName
  *
  * `getbit` is NOT here although it is unblocked, and `ApplyBulkDelay` is not
  * either.  Both are file-local, so `objcopy` cannot give them a `ref_` alias
@@ -32,6 +33,9 @@
  * `v34handshak`.  They are global, so they are testable regardless, but it
  * means their arguments have to be read out of the code rather than off a
  * call site.  Finding 89 recorded the same shape twice already.
+ *
+ * `v34handshakinit` is the exception and has six callers, which is where its
+ * mode numbers come from; see the declaration in `v34hshak.h`.
  */
 
 #include "dsplib/debug.h"
@@ -40,6 +44,7 @@
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
+#include "dsplib/v34info.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
@@ -805,6 +810,427 @@ preempindex(void *p, short baudrate)
 			"V34PREEMPHASIS, - index is 10, baudrate= %d \n",
 			baudrate);
 	return i;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The handshake's state names, and the three machines that use them.
+ */
+
+/*
+ * `StateName`, eighty-seven string pointers at .data+0x6c00.
+ *
+ * NOT `const` and not in .rodata: `nm` gives it a lowercase `d`, so the
+ * original declared an array of pointers to string literals in writable
+ * storage.  Same reading, and the same reason, as `bpv22high` above -- the
+ * storage class is what the object records, whatever the intent was.
+ *
+ * `static` because the symbol is LOCAL (`readelf` says so), which is also
+ * what makes it untestable the ordinary way: `objcopy --redefine-syms`
+ * renames a local symbol but cannot make it linkable, so there is no
+ * `ref_StateName` to compare against the way the fifteen rate tables at the
+ * top of this file are compared.  That is finding 149's trap a third time.
+ *
+ * SO THE TRANSCRIPT COMPARISON IS NOT A SUPPLEMENTARY CHECK ON THESE EIGHTY-
+ * SEVEN STRINGS -- IT IS THE ONLY ONE.  `t_v34hshak.c` sweeps the three state
+ * words over 0..86 with both debug levels raised so that every entry is
+ * printed by both sides and the two transcripts compared.  Delete that sweep
+ * and nothing in the tree checks this table at all.
+ *
+ * The names are the author's, gaps included: NOSTATE0, NOSTATE2, NOSTATE3 and
+ * NOSTATE36 are placeholders, so eighty-three of the eighty-seven are real.
+ * The indices are `include/dsplib/v34hshak.h`'s `V34HS_*`.
+ */
+static const char *StateName[V34HS_STATE_COUNT] = {
+	"NOSTATE0",	"TXRENEG",	"NOSTATE2",	"NOSTATE3",
+	"RECEIVE",	"SILENCE",	"ANSAM",	"TONE_2100",
+	"TONE2225",	"AA_TX",	"CC_TX",	"AC_TX",
+	"CA_TX",	"SXMIT",	"XMIT1",	"XMIT2",
+	"XMIT3",	"XMITV22",	"SSEG",		"SBARSEG",
+	"PPSEG",	"TRNSEG4",	"TRNSEG16",	"TX_JM_CM",
+	"TX_DPSK",	"DET_2100",	"DET_2250",	"DET_2400",
+	"DET_1200",	"DET_AC",	"DET_AC_RTN",	"DET_AC_END",
+	"DET_AA",	"PHASE1",	"PHASE2",	"WAIT",
+	"NOSTATE36",	"RECEIVE1",	"RECEIVE2",	"RECEIVEV22",
+	"DET_CM_JM",	"DET_SYNC",	"DET_CJ",	"RX_DPSK",
+	"DET_INFO",	"TONE_AB_ANS",	"TX_PHASE1_ANS","TX_PHASE2_ANS",
+	"TX_PHASE3_ANS","RX_PHASE1_ANS","RX_PHASE2_ANS","TX_L1",
+	"TX_L2",	"DET_AB",	"SILENCEINFO",	"TX_PHASE1_CALL",
+	"TX_PHASE2_CALL","TX_PHASE3_CALL","RX_PHASE1_CALL","RX_PHASE2_CALL",
+	"TONE_AB",	"TONE_AB_CALL",	"RX_PHASE3_CALL","INFODONE",
+	"JTXMIT",	"XMIT0",	"TRNSEG4A",	"XMITMP",
+	"J1TXMIT",	"EXMIT",	"DATAXMIT",	"TXLEVEL",
+	"RX_L1",	"RX_L2",	"SILENCERETRAIN","RX_RETRAIN_CALL",
+	"RX_RETRAIN_ANSWER","TX_RETRAIN_ANS","JaTXMIT","MOH_TONE",
+	"MOH_TONE_DROP","MOH_SILENCE",	"MOH_ON_HOLD",	"MOH_FRR",
+	"MOH_CLEARDOWN","K56JaTXMIT",	"TXMD"
+};
+
+/*
+ * The three state words, and WHICH IS WHICH.
+ *
+ * +0x3592, +0x3594 and +0x3596 are three concurrent machines, not one, and
+ * the assignment below is read off the format strings against their
+ * arguments rather than guessed -- finding 147 is what guessing costs.  At
+ * every one of the thirteen sites the slot holding a FIXED `StateName[k]`
+ * carries the same k the site then assigns, which pins the word that is
+ * changing; the two variable slots are then named by the format:
+ *
+ *   +0x3594 <- 4 at 0x5fd80, and 0x60118 prints "rxstate %s=>%s" with
+ *              StateName[4] as the new value          => rxstate
+ *   +0x3596 <- 18 at 0x5fd5a, and 0x60492 prints "txstate %s=>%s" with
+ *              StateName[18] as the new value         => txstate
+ *   +0x3592 <- 41 at 0x5fda6, and 0x6017b prints "microstate %s=>%s" with
+ *              StateName[41] as the new value         => microstate
+ *
+ * and the other two slots agree in all three directions: the rxstate trace's
+ * "tx %s" reads +0x3596, the txstate trace's "rx %s" reads +0x3594, and both
+ * "mst %s" read +0x3592.
+ *
+ * A FOURTH, INDEPENDENT SIGN, which is the same argument finding 147 used to
+ * settle `Uinfo`: +0x3596 only ever receives SSEG, SILENCEINFO and
+ * SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
+ * Transposed, the RECEIVE machine would be the one entering SSEG.  The
+ * table's own `TX_` and `RX_` prefixes say that is the wrong way round.
+ */
+#define HS_MICROSTATE	0x3592
+#define HS_RXSTATE	0x3594
+#define HS_TXSTATE	0x3596
+
+/*
+ * The two counters every trace prints as `[1]` and `[2]`.  `[1]` is the
+ * second short of the pair at +0x2aa0, whose first `v34modeminit` sets to 6
+ * and this function's tail sets to 0x10.
+ */
+#define HS_TRACE_1	0x2aa2
+#define HS_TRACE_2	0xaa78
+
+static short
+hs_get(const struct v34_object *obj, unsigned off)
+{
+	return *(const short *)((const char *)obj + off);
+}
+
+static void
+hs_put(struct v34_object *obj, unsigned off, short v)
+{
+	*(short *)((char *)obj + off) = v;
+}
+
+/*
+ * One state transition, with its diagnostic.
+ *
+ * All thirteen sites are this idiom -- compare, print, assign -- and each
+ * prints its own change plus the other two machines' current values, so the
+ * three format strings differ only in which word they call the subject.
+ *
+ * THE TWO CONTEXT SLOTS ARE NOT INTERCHANGEABLE and the order below is the
+ * object's: "rxstate" prints (tx, mst), "txstate" prints (rx, mst) and
+ * "microstate" prints (tx, rx).  Passing the right strings in the wrong
+ * order leaves every byte of the object identical, which is why the fixture
+ * sweeps the three words to three DIFFERENT values and not to one.
+ */
+static void
+hs_setstate(struct v34_object *obj, unsigned off, short next)
+{
+	static const char *const fmt[3] = {
+		/* HS_MICROSTATE */
+		"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
+		/* HS_RXSTATE */
+		"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
+		/* HS_TXSTATE */
+		"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n"
+	};
+	short now = hs_get(obj, off);
+
+	if (now == next)
+		return;
+
+	if (DSPLIB_DEBUG_ON()) {
+		const char *ctx1;
+		const char *ctx2;
+
+		if (off == HS_MICROSTATE) {
+			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
+			ctx2 = StateName[hs_get(obj, HS_RXSTATE)];
+		} else if (off == HS_RXSTATE) {
+			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
+			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+		} else {
+			ctx1 = StateName[hs_get(obj, HS_RXSTATE)];
+			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+		}
+
+		dsplibs_debug_printf(fmt[(off - HS_MICROSTATE) / 2],
+				     StateName[now], StateName[next],
+				     ctx1, ctx2,
+				     (long)hs_get(obj, HS_TRACE_1),
+				     (long)hs_get(obj, HS_TRACE_2));
+	}
+
+	hs_put(obj, off, next);
+}
+
+/*
+ * Bring the handshake up in one of five modes.
+ *
+ * WHAT THE MODES ARE comes from the call sites, not from this function; see
+ * the declaration in `v34hshak.h`.  The second argument indexes a jump table
+ * at .rodata+0x2d44 whose entries for 2 and 3 are the SAME address, so there
+ * are four bodies for five modes, and an out-of-range mode is not an error --
+ * `ja` skips straight to the tail, which every body also falls into.
+ *
+ * THE OPENING BLOCK IS A TIMER, and its three fields are reached through
+ * `obj + 4`: the object's code generation here is `lea 0x4(obj); mov
+ * 0x234(that)`, which is +0x238 of the object and not +0x234.  Finding 155
+ * quoted the register-relative offsets and is wrong by four; the fields are
+ *
+ *      +0x238   a running sample count
+ *      +0x23c   that plus 431,488
+ *      +0x244   a copy of it, taken after the guard has run
+ *      +0x248   a delta, and the thing the guard tests
+ *
+ * The guard runs only for a positive delta, subtracts it, and accepts the
+ * difference if it is at most 95,999 UNSIGNED -- so a base below the delta
+ * wraps to a huge value and takes the reset arm, which is a behaviour a
+ * signed comparison would get backwards.  95,999 is one short of 12 s at
+ * 8 kHz (or 10 s at 9600) and the reset value -960,000 is 120 s at 8 kHz.
+ * 431,488 is not a round interval at either rate and is left unexplained;
+ * see D43.
+ *
+ * `VPcmV34SetV90RateReneg` writes the same three fields with the same two
+ * constants through the same `obj + 4` base, which is the corroboration that
+ * they are one group and that the reset arm is a reset.
+ */
+void
+v34handshakinit(void *objp, int mode)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	unsigned char *m = (unsigned char *)obj;
+	int delta;
+	int base;
+
+	*(int *)(m + 0x2218) = 0;
+
+	delta = *(int *)(m + 0x248);
+	if (delta > 0) {
+		unsigned d = (unsigned)(*(int *)(m + 0x238) - delta);
+
+		if (d <= 0x176ff) {
+			*(int *)(m + 0x238) = (int)d;
+			*(int *)(m + 0x248) = 0;
+		} else {
+			*(int *)(m + 0x238) = 0;
+			*(int *)(m + 0x248) = (int)0xfff15a00;
+		}
+	}
+
+	base = *(int *)(m + 0x238);
+	*(int *)(m + 0x244) = base;
+	*(int *)(m + 0x23c) = base + 0x69780;
+
+	hs_put(obj, 0xabe6, 0);
+	m[0xabe8] = 0;
+	m[0xabf8] = 0;
+	hs_put(obj, 0xabe4, 0);
+	m[0xabfe] = 0;
+	m[0xabff] = 0;
+
+	/* txflags, which the V34RNEG diagnostic below names. */
+	obj->f25c2 = (short)(obj->f25c2 & 0x7fff);
+
+	switch (mode) {
+	case 0:
+		/*
+		 * VPcmV34Create's mode, and the only one that re-arms the
+		 * timing recovery.
+		 */
+		v34modeminit(obj);
+		rxtiminginit(obj);
+
+		hs_setstate(obj, HS_TXSTATE, V34HS_SILENCEINFO);
+		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+		rx->flags = (unsigned short)(rx->flags | 0x1000);
+		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
+		hs_put(obj, 0xa97c + 0x18, 0x11);
+		hs_put(obj, 0x25dc, 0);
+
+		/*
+		 * 0x66 and not 0x65: `f359c` is the originate/answer flag
+		 * `v34modeminit` and `preinitdigital` both test against 0x65,
+		 * and this one arm tests the other value.  Reproduced as
+		 * written -- a sweep of {0x65, something-else} would not have
+		 * told the two tests apart.
+		 */
+		if (obj->f359c == 0x66)
+			V34SetINFO0dBits(obj, (short *)(m + 0xa97c));
+		break;
+
+	case 1:
+		/*
+		 * The retrain entry, and the one place two independent inputs
+		 * pick between two counters: bit 6 of the receiver's flag word
+		 * OR the byte at +0xac17.  EITHER of them bumps +0xac14 and
+		 * clears the byte; only neither bumps +0xac12.  So the two
+		 * are counters of two kinds of retrain, and which kind is
+		 * which the object does not say.
+		 */
+		if ((rx->flags & 0x40) || m[0xac17] != 0) {
+			short n = (short)(*(unsigned short *)(m + 0xac14) + 1);
+
+			m[0xac17] = 0;
+			hs_put(obj, 0xac14, n);
+		} else {
+			hs_put(obj, 0xac12,
+			       (short)(*(unsigned short *)(m + 0xac12) + 1));
+		}
+
+		v34modeminit(obj);
+
+		hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);
+		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+		/* No microstate transition here; mode 1 is the only body
+		 * that leaves it alone. */
+
+		rx->flags = (unsigned short)(rx->flags | 0x1000);
+		rx->agc_gain = rx->f262;
+		hs_put(obj, 0x358a, 2);
+		hs_put(obj, 0x3588, 2);
+		break;
+
+	case 2:
+	case 3:
+		/*
+		 * The rate-renegotiation and hang-up entry.  Two jump-table
+		 * slots, ONE body -- 3 has no caller anywhere in the object.
+		 *
+		 * The only body that does not call `v34modeminit`, so it is
+		 * also the only one whose traces print [1] and [2] as anything
+		 * but zero: the two counters are cleared below, after the
+		 * three transitions rather than before them.
+		 */
+		hs_setstate(obj, HS_TXSTATE, V34HS_SSEG);
+		hs_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+		/*
+		 * The message record at +0xaa0c, blanked.  Same twelve fields
+		 * and the same 0x30-byte stride as the one `VPcmV34Set-
+		 * MohMessageBits` fills at +0xa94c, which is what says the
+		 * five records from +0xa94c to +0xaa3c are one array.
+		 */
+		{
+			unsigned char *r = m + 0xaa0c;
+
+			*(short *)(r + 0x14) = -1;
+			*(short *)(r + 0x16) = 0;
+			*(short *)(r + 0x18) = 0;
+			*(short *)(r + 0x1a) = 0;
+			*(short *)(r + 0x1c) = 0;
+			*(short *)(r + 0x1e) = 0;
+			*(short *)(r + 0x20) = 0;
+			*(short *)(r + 0x22) = 0;
+			*(int *)(r + 0x24) = 0;
+			*(short *)(r + 0x28) = 0;
+			*(short *)(r + 0x2a) = 0;
+			*(int *)(r + 0x2c) = 0;
+		}
+
+		obj->f25c0 = 0;
+		obj->f25c6 = 0;
+		obj->f25cc = 0;
+		obj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);
+
+		rx->f124 = 0x21e;
+		obj->f382 = (short)0x8990;
+		rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
+
+		hs_put(obj, HS_TRACE_1, 0);
+		hs_put(obj, HS_TRACE_2, 0);
+
+		preinitdigital(obj);
+
+		rx->f218 = 0x400;
+		rx->flags = (unsigned short)(rx->flags & ~0x2000);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"V34RNEG, initialize RNEG, tx->txflags= 0x%x,"
+				"rx->rxflgs= 0x%x\n",
+				(int)obj->f25c2, (int)rx->flags);
+		break;
+
+	case 4:
+		/*
+		 * Modem-on-Hold.  `VPcmV34InitMOH` is the only caller.
+		 */
+		m[0xabe8] = 1;
+		v34modeminit(obj);
+		rx->agc_gain = rx->f262;
+
+		hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);
+		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);
+
+		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
+		hs_put(obj, 0xa97c + 0x18, 8);
+		*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);
+
+		VPcmV34SetMohMessageBits(obj, (short *)(m + 0xa94c));
+
+		/*
+		 * RE-READ, not the pointer just stored: the object reloads
+		 * +0xaa6c after the call, so the source names the field and
+		 * not a local.  Nothing observable turns on it -- the callee
+		 * does not write +0xaa6c -- but reproducing the read costs
+		 * nothing and reproducing the wrong one might.
+		 */
+		{
+			unsigned char *r = (unsigned char *)
+					   *(short **)(m + 0xaa6c);
+
+			*(short *)(r + 0x14) = -1;
+			*(short *)(r + 0x16) = 1;
+			*(short *)(r + 0x18) = 8;
+			*(short *)(r + 0x1a) = 0;
+			*(short *)(r + 0x1c) = 8;
+			*(short *)(r + 0x1e) = 0;
+			*(short *)(r + 0x20) = 0;
+			*(short *)(r + 0x22) = 0;
+			*(int *)(r + 0x24) = 0xf72;
+			*(short *)(r + 0x28) = 0xc;
+			*(short *)(r + 0x2a) = 0xc;
+			*(int *)(r + 0x2c) = 0xf72;
+		}
+
+		hs_put(obj, 0x358c, 0);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"v34handshakinit: initiating MOH negotiation\n");
+
+		/*
+		 * The phase-2 signalling carrier the tone detector watches
+		 * for, the other way round from `v34modeminit`'s -- which is
+		 * consistent, since the two ends listen for each other.
+		 */
+		detectorinit((struct v34_detector *)(m + 0x3564),
+			     (obj->f359c == 0x65) ? c2400_ : c1200_,
+			     0, 0x64, 0x32, 0x800, 0);
+		hs_put(obj, 0x356a, 1);
+		hs_put(obj, 0x358a, 0);
+		break;
+
+	default:
+		/* Out of range runs the tail, and nothing else. */
+		break;
+	}
+
+	hs_put(obj, 0xaa3c, 0);
+	hs_put(obj, 0x2aa0, 0x10);
 }
 
 /*

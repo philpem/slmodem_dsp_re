@@ -80,6 +80,13 @@ from the control-flow graph — that is the whole argument in
 (distance to the next jump-table target) produced three different 45–55 KB
 "states", none of which exist.
 
+**What is now settled, and was not when this section was written.** The
+three state words are named — +0x3592 microstate, +0x3594 rxstate, +0x3596
+txstate (finding 156) — and `StateName` is emitted, so `cfgsplit`'s
+per-state byte counts can be read against the author's names rather than
+against indices. The three machines are concurrent, so a per-state split has
+to say which machine a state belongs to before it can say which task.
+
 `cfgsplit` has not been run on `v34handshak`. The recorded runs are
 `rxtiming` (finding 121k), `decodeDepth` (finding 131) and one that reported
 a whole function unreached. Pointing it at `v34handshak` needs its three jump

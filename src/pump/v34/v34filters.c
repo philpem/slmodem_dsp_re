@@ -774,8 +774,19 @@ V34EchoCleanUp(struct v34_echo *e)
 		e->hist[i] = 0;
 	}
 
+	/*
+	 * THE STRING IS THE OBJECT'S, and it is not this function's name.
+	 * .rodata.str1.4+0xf848 is "V34FLO: Echo running in Original
+	 * Integer...", referenced from here and nowhere else -- so the author
+	 * used the clean-up to announce which of two echo-canceller builds is
+	 * live, floating point or integer.  An invented "V34EchoCleanUp\n"
+	 * stood here until the handshake's transcript comparison ran over
+	 * this call tree for the first time; finding 148 is the same defect
+	 * in `V34SetupModulator`, and finding 134 is why it survived.
+	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34EchoCleanUp\n");
+		dsplibs_debug_printf(
+			"V34FLO: Echo running in Original Integer...\r\n");
 }
 
 void
