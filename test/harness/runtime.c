@@ -259,6 +259,32 @@ dbgcap_add(int side, const char *fmt, va_list ap)
 	}
 }
 
+/*
+ * Callback markers.
+ *
+ * Comparing the two transcripts catches a wrong format string and a wrong
+ * argument, but NOT where a call site sits relative to anything that does not
+ * print.  That gap is not theoretical: `IsPulseDialerReady` prints "hook on"
+ * BEFORE its modem_set_param and "hook off" AFTER, and moving either one past
+ * the call left every test passing (finding 147).  The order is not decoration
+ * -- it is what a host tracing the line sees.
+ *
+ * So each side's modem_* callback drops a marker into its own transcript.  The
+ * text is deliberately unlike a format string, and nothing emits it unless a
+ * test turns capture on, so the only cost is to tests that opted in.
+ */
+static void
+dbgcap_note(int side, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (!dsplib_debug_capture_on)
+		return;
+	va_start(ap, fmt);
+	dbgcap_add(side, fmt, ap);
+	va_end(ap);
+}
+
 int
 dsplibs_debug_printf(const char *fmt, ...)
 {
@@ -469,25 +495,49 @@ shim_set_param(struct modem_shim *s, unsigned name, int val)
 }
 
 int modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
-{ (void)m; (void)nbits; return shim_get_bits(&harness_modem_ours, buf, n); }
+{
+	(void)m; (void)nbits;
+	dbgcap_note(0, "<< get_bits %d >>\n", n);
+	return shim_get_bits(&harness_modem_ours, buf, n);
+}
 
 int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n)
-{ (void)m; (void)nbits; return shim_put_bits(&harness_modem_ours, buf, n); }
+{
+	(void)m; (void)nbits;
+	dbgcap_note(0, "<< put_bits %d >>\n", n);
+	return shim_put_bits(&harness_modem_ours, buf, n);
+}
 
 long modem_set_param(void *m, unsigned name, int val)
-{ (void)m; return (int)shim_set_param(&harness_modem_ours, name, val); }
+{
+	(void)m;
+	dbgcap_note(0, "<< set_param %u = %d >>\n", name, val);
+	return (int)shim_set_param(&harness_modem_ours, name, val);
+}
 
 int ref_modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
-{ (void)m; (void)nbits; return shim_get_bits(&harness_modem_ref, buf, n); }
+{
+	(void)m; (void)nbits;
+	dbgcap_note(1, "<< get_bits %d >>\n", n);
+	return shim_get_bits(&harness_modem_ref, buf, n);
+}
 
 int ref_modem_put_bits(void *m, int nbits, unsigned char *buf, int n)
-{ (void)m; (void)nbits; return shim_put_bits(&harness_modem_ref, buf, n); }
+{
+	(void)m; (void)nbits;
+	dbgcap_note(1, "<< put_bits %d >>\n", n);
+	return shim_put_bits(&harness_modem_ref, buf, n);
+}
 
 long ref_modem_get_param(void *m, unsigned param)
 { return ref_modem_get_param_impl(m, param); }
 
 long ref_modem_set_param(void *m, unsigned name, int val)
-{ (void)m; return shim_set_param(&harness_modem_ref, name, val); }
+{
+	(void)m;
+	dbgcap_note(1, "<< set_param %u = %d >>\n", name, val);
+	return shim_set_param(&harness_modem_ref, name, val);
+}
 
 /*
  * The S-registers.  One store for both sides: unlike the parameters, nothing

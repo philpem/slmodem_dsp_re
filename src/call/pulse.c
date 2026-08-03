@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/pulse.h"
 #include "dsplib/modem_params.h"
 
@@ -37,6 +38,11 @@ SetPulseMakeTime(void *modem, int ms)
 
 	if (c == 0)
 		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: SetPulseMakeTime %lu\n",
+				     (unsigned long)ms);
+
 	c->self->pulse_make = ms;
 }
 
@@ -47,6 +53,11 @@ SetPulseBreakTime(void *modem, int ms)
 
 	if (c == 0)
 		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: SetPulseBreakTime %lu\n",
+				     (unsigned long)ms);
+
 	c->self->pulse_break = ms;
 }
 
@@ -59,6 +70,9 @@ SetPulseBreakTime(void *modem, int ms)
 void
 LastPulseDigitDialed(void *modem)
 {
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: LastPulseDigitDialed...\n");
+
 	modem_set_param(modem, MDMPRM_PULSE_DIAL, 0);
 }
 
@@ -69,6 +83,11 @@ PulseDialDigit(void *modem, int digit)
 
 	if (c == 0)
 		return;
+
+	/* Reported BEFORE the zero-dials-ten fix-up, so a '0' prints as 0. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: PulseDialDigit %lu...\n",
+				     (unsigned long)digit);
 
 	/* Zero dials ten, which is how loop disconnect has always spelled it. */
 	if (digit == 0)
@@ -96,6 +115,17 @@ IsPulseDialerReady(void *modem)
 		return 1;
 
 	c = dp->self;
+
+	/*
+	 * Reported on entry, before the remaining==0 early out, so a caller
+	 * polling an idle dialler gets one line per tick.  Both arguments are
+	 * read straight from the object -- the locals below do not exist yet.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: IsPulseDialerReady !(%u) (count %d)\n",
+				     (unsigned)c->pulse_remaining,
+				     c->pulse_elapsed);
+
 	remaining = c->pulse_remaining;
 	if (remaining == 0)
 		return 1;
@@ -106,6 +136,20 @@ IsPulseDialerReady(void *modem)
 		if (c->pulse_off_hook == 0) {
 			/* Start of a pulse: interrupt the line. */
 			c->pulse_off_hook = 1;
+
+			/*
+			 * Reported after the flag is set but BEFORE the line
+			 * moves; the "hook off" case below is the other way
+			 * round.  Not symmetry for its own sake: the store to
+			 * pulse_off_hook is ahead of the call in the object
+			 * (0x3308, gate at 0x32fc), and a store cannot be
+			 * hoisted over dsplibs_debug_printf, so this order is
+			 * the source order.
+			 */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("call: %d: hook on...\n",
+						     remaining);
+
 			modem_set_param(dp->modem, MDMPRM_HOOK_ON, 1);
 			c->pulse_elapsed = elapsed + PULSE_TICK_MS;
 			return c->pulse_remaining == 0;
@@ -114,6 +158,11 @@ IsPulseDialerReady(void *modem)
 		/* Break time is up: restore the line. */
 		c->pulse_off_hook = 0;
 		modem_set_param(dp->modem, MDMPRM_HOOK_ON, 0);
+
+		/* After the line moves, unlike "hook on" above (0x33d8). */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("call: %d: hook off...\n",
+					     remaining);
 		c->pulse_elapsed = elapsed + PULSE_TICK_MS;
 		return c->pulse_remaining == 0;
 	}

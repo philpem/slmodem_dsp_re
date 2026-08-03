@@ -19,8 +19,11 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/pulse.h"
 #include "dsplib/modem_params.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_SetPulseMakeTime(void *modem, int ms);
 extern void ref_SetPulseBreakTime(void *modem, int ms);
@@ -222,6 +225,88 @@ run_digit(const char *label, int digit, int make, int brk, int ticks)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * The diagnostic paths.
+ *
+ * All eight call sites here are gated on `dsplibs_debug_level > 1`, which
+ * ships at zero, so everything above passes whether they are present, absent,
+ * or present with the wrong text and the wrong arguments.  Raising the level
+ * on both sides at once and comparing the two transcripts is the only thing
+ * that reads them (findings 134, 147).
+ *
+ * A digit is used rather than a single tick because the two hook messages sit
+ * on opposite sides of `modem_set_param` -- "hook on" before it, "hook off"
+ * after -- and only a run that actually pulses reaches either.  Ticks are kept
+ * modest: the capture buffer is 16 KB and the entry message alone is ~42 bytes
+ * a tick.
+ */
+static int
+run_transcript(const char *label, int digit, int make, int brk, int ticks)
+{
+	int i;
+
+	diff_begin(label);
+
+	reset_objects(make, brk);
+	dsplibs_debug_level = 2;
+	ref_dsplibs_debug_level = 2;
+	dsplib_debug_capture_on = 1;
+	dsplib_debug_capture_reset();
+
+	harness_param_reset();
+	point_at(&obj_a);
+	ref_SetPulseMakeTime((void *)0xAAAAu, make);
+	ref_SetPulseBreakTime((void *)0xAAAAu, brk);
+	ref_PulseDialDigit((void *)0xAAAAu, digit);
+
+	harness_param_reset();
+	point_at(&obj_b);
+	SetPulseMakeTime((void *)0xBBBBu, make);
+	SetPulseBreakTime((void *)0xBBBBu, brk);
+	PulseDialDigit((void *)0xBBBBu, digit);
+
+	for (i = 0; i < ticks; i++) {
+		harness_param_reset();
+		point_at(&obj_a);
+		(void)ref_IsPulseDialerReady((void *)0xAAAAu);
+
+		harness_param_reset();
+		point_at(&obj_b);
+		(void)IsPulseDialerReady((void *)0xBBBBu);
+	}
+
+	harness_param_reset();
+	ref_LastPulseDigitDialed((void *)0xAAAAu);
+	LastPulseDigitDialed((void *)0xBBBBu);
+
+	diff_eq_int("transcript matches",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, 0);
+	/*
+	 * Anti-vacuity, twice over: two empty transcripts also compare equal,
+	 * and a transcript missing only the hook lines is still thousands of
+	 * bytes long.  The reference side is the one measured, so this asserts
+	 * what the original says, not what we say it says.
+	 */
+	diff_eq_int("transcript non-empty",
+		    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
+	if (brk > 0) {
+		diff_eq_int("reference said 'hook on'",
+			    strstr(dsplib_debug_capture_text(1),
+				   ": hook on...") != 0, 1, 0);
+		diff_eq_int("reference said 'hook off'",
+			    strstr(dsplib_debug_capture_text(1),
+				   ": hook off...") != 0, 1, 0);
+	}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = 0;
+	ref_dsplibs_debug_level = 0;
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -249,6 +334,10 @@ main(void)
 	rc |= run_digit("pulse: zero make", 3, 0, 67, 120);
 	rc |= run_digit("pulse: both zero", 3, 0, 0, 40);
 	rc |= run_digit("pulse: one-tick times", 2, 5, 5, 40);
+
+	rc |= run_transcript("pulse: debug transcript", 3, 33, 67, 100);
+	rc |= run_transcript("pulse: debug transcript, zero break", 2, 33, 0,
+			     20);
 
 	/* Polling with nothing loaded, and with no datapump at all. */
 	diff_begin("pulse: idle and detached");

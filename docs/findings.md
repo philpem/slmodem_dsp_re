@@ -8108,3 +8108,60 @@ would have caught this" are different claims and only the second is worth
 anything to whoever reads this next.
 
 Sixteen down.  221 call sites remain across 52 functions.
+
+### 148. The pulse dialler says "hook on" before the line moves and "hook off" after
+
+`IsPulseDialerReady` carries three of the eight call sites in `call.c`'s pulse
+group.  Two of them are the interesting ones:
+
+    0x32fc  gate -> 0x3400   "call: %d: hook on...\n"    remaining
+    0x33d8  gate -> 0x33e5   "call: %d: hook off...\n"   remaining
+
+and they sit on OPPOSITE sides of their `modem_set_param`.  "hook on" prints
+between setting `pulse_off_hook` and interrupting the line; "hook off" prints
+after the line has been restored.
+
+That is not a reading of the schedule.  At 0x3308 the store to `pulse_off_hook`
+is ahead of the branch into the printing block, and a store cannot be hoisted
+over a call to `dsplibs_debug_printf` -- the compiler has no idea what an
+external function reads.  So the store precedes the print in the source, and by
+the same argument at 0x33b6 the `modem_set_param` precedes the print there.
+The asymmetry is the author's, and a host tracing the line sees it: the "on"
+message arrives before the event and the "off" message after it.
+
+The third is the entry message,
+
+    0x32c9  gate -> 0x3391   "call: IsPulseDialerReady !(%u) (count %d)\n"
+
+with `pulse_remaining` first and `pulse_elapsed` second -- read straight from
+the object, ahead of the `remaining == 0` early out, so polling an idle dialler
+still prints one line per tick.
+
+### 149. A transcript comparison cannot see where a call site sits
+
+Finding 147 said the transcript test was what caught two hand-written call
+sites being wrong.  It is worth being precise about what it does not catch.
+
+Six deliberate mutations were made to the three sites above.  Five were caught
+immediately: swapped arguments, a dropped call, a misspelt string, a wrong
+variable.  The sixth -- moving "hook off" to before its `modem_set_param` --
+passed everything.  Of course it did: `modem_set_param` prints nothing, so
+reordering a print around it changes no transcript.
+
+This matters well beyond one function.  Roughly 220 call sites remain, and a
+large share of them sit next to a callback; every claim about their position
+was, until now, untested.  The fix is three lines in the harness: each side's
+`modem_get_bits`, `modem_put_bits` and `modem_set_param` drops a marker into
+its own capture buffer,
+
+    << set_param 15 = 1 >>
+
+so position relative to a callback becomes ordinary transcript content.  With
+that in place all six mutations are caught, including the sixth.  Nothing is
+emitted unless a test turns capture on, so the cost falls only on tests that
+asked for it.
+
+The general lesson is the one that keeps recurring here: a passing test is
+evidence about the test until you have watched it fail.  Both times something
+was learned this week it came from breaking the code on purpose, not from
+running it.
