@@ -8239,3 +8239,43 @@ One genuine cross-check does survive, and it is a nice one: state 2 is spelled
 Two different enums, two different tables, one name.  `callprog.h` calls the
 state `CALLPROG_DIALING_STATE` to keep them apart; the collision is the
 original author's.
+
+CAVEAT, so the next reader does not overrate this.  The ten strings in
+`callprog_state_names[]` are TRANSCRIBED from the dump, not compared against
+it by anything that runs.  The object indexes the table inline, so there is no
+`ref_` entry point to difference against and no test touches it yet.  The
+moment the first `"STATE:  %s --> %s"` call site lands, the transcript
+comparison checks all ten for free -- until then they rest on my typing.
+
+### 152. All eleven STATE sites are one idiom, checked rather than assumed
+
+Eight of the eleven load a CONSTANT as the second argument -- GCC folded
+`names[NEXT]` for a literal next state -- and return to a `movl $N,0x38(%edi)`
+whose N matches the table index every time.  The other three (sites 1, 6, 16)
+index the table twice, `0x5d40(,%esi,4)` and `0x5d40(,%ebx,4)`, and return
+into the main body rather than to a constant store, which is a good reason to
+suspect a second shape: a table-driven transition writing `state` at +0x2c
+directly instead of the pending pair.
+
+They do not.  All three targets -- 0x79b36, 0x79bb8, 0x79c7e -- are
+`mov %ebx,0x38(%edi)` followed by `movl $0x1,0x3c(%edi)`.  Same pair, same
+order, `ebx` simply carrying a runtime `next` where the others carried a
+constant.  So one helper covers all eleven:
+
+    if (DSPLIB_DEBUG_ON())
+            dsplibs_debug_printf("STATE:  %s --> %s\n",
+                                 callprog_state_names[cp->state],
+                                 callprog_state_names[next]);
+    cp->pending_state = next;
+    cp->pending = 1;
+
+Worth writing down mainly for the shape of the check.  "Eleven sites share a
+string, so they share an idiom" is exactly the inference that produced findings
+146 and 147, and it was cheap to test: three addresses, one disassembly.  It
+happened to be right this time.  That is not a reason to have skipped it -- a
+guess that turns out right and a fact are still different things, and only one
+of them can be cited later.
+
+(GCC's folding is itself invisible to the transcript: a helper emits an
+indexed load where the object had a direct one, and both print the same
+pointer.  Not worth reproducing.)
