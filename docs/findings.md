@@ -8212,3 +8212,30 @@ mid-run and left a mutated tree behind.
 Seven down, 221 call sites remain across 51 functions.  The plan is to batch by
 test binary rather than by size -- callprog (67 sites), v8 (64), dialer (38) --
 so each batch is one test extension and one mutation run rather than six.
+
+### 151. Finding 142 was half right: the state table stops at ten
+
+Finding 142 pinned the ten `CALLPROG_*` state names from the table at
+`.rodata+0x5d40`, which `CALLPROG_Progress` indexes with the state itself when
+it logs `"STATE:  %s --> %s\n"`.  That part holds -- eleven of its 29 call
+sites are that message, and the index IS the enum value.
+
+It then said the table runs on past those ten into the sixteen MESSAGE names,
+in our order, and treated that as an independent confirmation of the message
+enum.  It does not.  Exactly ten `R_386_32` relocations fall in the range; word
+11 onward are unrelocated bytes that belong to something else and merely
+resolve to plausible-looking string addresses when you dereference them as
+pointers -- `': create...\n'`, `'ate...\n'`, `'en'`.  Reading a table by
+dereferencing past its end is how you get an answer that looks like the answer
+you wanted.  The relocation count is the length; nothing else is.
+
+The message names are a separate table at `.rodata+0x5dc0` in a different
+shape entirely: `{code, name}` pairs, searched rather than indexed, which
+`callprog_status.c` already reproduces.  So the message enum has one source of
+evidence, not two.
+
+One genuine cross-check does survive, and it is a nice one: state 2 is spelled
+`CALLPROG_DIALING` -- character for character the same string as MESSAGE 3.
+Two different enums, two different tables, one name.  `callprog.h` calls the
+state `CALLPROG_DIALING_STATE` to keep them apart; the collision is the
+original author's.

@@ -60,8 +60,12 @@
  * value.  The order guessed from emission order was right; this confirms it
  * rather than assuming it.  See finding 142.
  *
- * Note the table continues past these ten with the sixteen MESSAGE names
- * above, in our exact order -- an independent check on that enum too.
+ * Finding 142 also said the table runs on past these ten into the sixteen
+ * MESSAGE names, making it an independent check on that enum.  It does not.
+ * Exactly ten relocations apply to it; what follows is unrelated data that
+ * happens to disassemble as plausible pointers.  The message names are their
+ * own table at .rodata+0x5dc0, in a different shape ({code, name} pairs,
+ * searched rather than indexed).  See finding 151.
  */
 #define CALLPROG_NO_LEGAL_STATE		0
 #define CALLPROG_WAIT_DIAL		1
@@ -80,5 +84,14 @@
  * so a caller can print the result unconditionally.
  */
 const char *CALLPROG_Status_string(int status);
+
+/*
+ * Names of the ten states above, indexed by the state.  Indexed raw, exactly
+ * as the object does it, so the caller is responsible for the range -- see
+ * the comment on the table in callprog_status.c.
+ */
+#define CALLPROG_STATES_NAMED	10
+
+extern const char *const callprog_state_names[CALLPROG_STATES_NAMED];
 
 #endif /* DSPLIB_CALLPROG_H */
