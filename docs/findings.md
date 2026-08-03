@@ -8430,3 +8430,36 @@ Nobody would notice this from the output; two identical lines print either
 way.  It matters because the next person to read
 "Ringback index====> 3" in a log while debugging congestion detection would
 lose an hour to it, and now the comment says so.
+
+### 158. DialerProgress's state announcements, tied to their cases
+
+`dialer.h` records that two of the nine `DIALER_*_STATE` strings could not be
+tied to a case: "Named by the same strings but not yet tied to a case:
+DIALER_INITIAL_STATE and DIALER_END_STATE.  Cases 0 and 10 print no state
+name."  That is now resolved, and the reason they looked unaccounted for is
+better than a missing print.
+
+Each case announces itself, and `--sites` gives the return target of every
+announcement -- which is the case body it belongs to:
+
+    'DIALER_INITIAL_STATE\n'            -> 0x7b191  (+0x0b1)
+    'DIALER_END_PARTIALLY_STATE\n'      -> 0x7b122  (+0x042)
+    'DIALER_END_STATE\n'                -> 0x7b122  (+0x042)
+    'DIALER_WAIT_FOR_SILENCE_STATE\n'   -> 0x7b469  (+0x389)
+    'DIALER_WAIT_FOR_BONGTONE_STATE\n'  -> 0x7b488  (+0x3a8)
+    'DIALER_WAIT_FOR_DIALTONE_STATE\n'  -> 0x7b44a  (+0x36a)
+    'DIALER_CALLING_TONE_STATE\n'       -> 0x7b4a7  (+0x3c7)
+
+`DIALER_END_PARTIALLY_STATE` and `DIALER_END_STATE` return to the SAME address.
+They are two cases sharing one body -- both do nothing but return their code --
+so the compiler folded the bodies and left two announcements in front of one
+tail.  Nothing about the strings says that; the equal return targets do.  This
+is why the earlier pass concluded the two states "print no state name": it was
+looking for two distinct bodies and there is only one.
+
+`DIALER_INITIAL_STATE` returns to 0x7b191, well inside the function and not to
+the shared tail, so it is a case with a body of its own.
+
+Worth keeping as a technique: when two call sites carry different strings and
+the same return target, the cases are folded, and that is a fact about the
+control flow that no amount of reading the strings will give.
