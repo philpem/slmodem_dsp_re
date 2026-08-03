@@ -8272,3 +8272,54 @@ remaining blockers "the shortest path", which they are not: it is one of
 seventeen, five of the seventeen are writable immediately, and the single
 largest reduction available is `chkForceBaudRate` — 389 bytes that release
 6,173.  The partition, not the count, is the useful figure.
+
+### 151. `edprintf` is the object's biggest single blocker, and it is a cipher
+
+`tools/callgraph.py --blocked | grep -c edprintf` returns **145**.  Nothing
+else left in the object is depended on by so much: it is what almost the
+whole V.90/V.92 C++ half uses to say anything, and until it existed none of
+those 145 could be started.  It is 351 bytes of string handling.
+
+**It does not print its argument.**  It formats into a 256-byte scratch,
+then emits each byte of the result as TWO characters — high nibble then low
+— each with a rotating offset added, framed by `$!$ ` and `????`:
+
+```
+   edprintf("Hi")  ->  $!$ 8>8@????
+```
+
+The offsets come from `offsetarr`, ten ints at .data+0x94a0 holding
+`4 6 2 7 1 9 3 5 8 7`, and `iEncodeOffset` steps through them once per
+emitted character.  So the same byte encodes differently depending on where
+in the stream it falls, and the log is unreadable without the table.
+
+**This is a channel, not a log.**  The frame characters are what a decoder
+looks for, and the manufacturer's own tool is the intended reader.  It
+explains something that has been visible all along without being explained:
+the object contains two entirely separate diagnostic mechanisms — the plain
+`dsplibs_debug_printf` sites that findings 134 and 148 are about, which say
+things like "Near Echo Canceller report", and this one, which says nothing
+legible at all.  The V.34 and earlier code uses the first; the V.90/V.92
+code uses the second.
+
+**The counter is shared and survives across calls.**  `cEncodeChar`, the
+other function in the file, encodes one whole byte through the same
+`iEncodeOffset` — so the two interleave, and a `cEncodeChar` after N
+`edprintf` calls returns a different character than it would after N+1.  A
+successful `edprintf` zeroes the counter first and leaves it at
+`2 * strlen` mod 10; the too-long path leaves it exactly where it was.
+
+**All of that happens with diagnostics switched off.**  Only the final
+`dsplibs_debug_printf` is behind the level test.  That is what makes the
+function testable without reading a transcript, and `t_encode` uses it: it
+reads the counter back through `cEncodeChar` at level zero.  Two probes are
+needed, not one — `offsetarr` holds 7 at both index 3 and index 9, so a
+single character does not name a position, while all ten consecutive pairs
+do.  The test asserts that property rather than relying on it.
+
+**`encode.c` is the object's last C translation unit.**  Its `STT_FILE`
+entry is followed by `offsetarr`, `iEncodeOffset`, `temp.0` and
+`cEncodedTemp.1`, its two functions sit at .text+0xb09b0 and +0xb09f0, and
+the only `STT_FILE` after it is `pow.S`.  So this is a complete TU
+reconstructed whole rather than a slice, which is rare this late in the
+object.

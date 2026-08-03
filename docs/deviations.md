@@ -1660,3 +1660,44 @@ domain a probe measurement can occupy.
 `VPcmV34Main.cpp`'s C++ half, which is not reconstructed, so whether a
 signalling NaN can reach it has not been established.  The differential test
 drives finite values only.  Task #47.
+
+---
+
+## D39 🐛 `edprintf`'s length guard is one byte short of its buffer
+
+**Where:** `src/core/encode.c`, `edprintf`.
+
+**What the original does:** encodes into `cEncodedTemp`, which is 0x10e =
+270 bytes, and guards the length with
+
+```
+   b0a27:  lea  0x8(%eax,%eax,1),%eax    ; 2 * strlen(temp) + 8
+   b0a2b:  cmp  $0x10e,%eax
+   b0a30:  jbe  b0a5b                    ; <= 270 is accepted
+```
+
+The 8 is the four-byte prefix `$!$ ` plus the four-byte suffix `????`, and
+2 per source character is the encoding.  **It does not count the
+terminator.**  At the boundary — `strlen(temp) == 131`, giving exactly 270 —
+the prefix and 262 encoded characters end at index 266, `strcat` appends four
+more to 269, and the NUL it writes goes to index 270.  One past the end.
+
+**What is actually there.**  `cEncodedTemp.1` is at .bss+0xa00 and the next
+object, `iEncodeOffset`, is at .bss+0xb10 — so bytes 0xb0e and 0xb0f are
+alignment padding and the stray NUL lands in them.  The original overruns and
+gets away with it.
+
+**What we do:** size the array 271.  The guard is reproduced exactly, so
+every accepted length is accepted and every refused one refused, and every
+character of every string is at the same index; the only difference is that
+the terminator has somewhere legal to go.  Writing one byte past a C array
+is undefined however harmless it is in the object's own layout, and the
+alternative — shrinking the guard by one — would change which messages get
+encoded and which are replaced by "too long print string".
+
+**Reachability: measured.**  It needs a formatted message of exactly 131
+characters, which `vsnprintf`'s 0x100 cap admits.  `t_encode` drives
+`strlen` from 128 to 135 and both sides agree throughout, so the boundary is
+tested rather than avoided.  Whether any real caller emits exactly 131
+characters is not measured; 145 functions call `edprintf` and none of them
+is reconstructed.
