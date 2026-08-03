@@ -226,7 +226,7 @@ main(void)
 		 * The sink must actually have filled, or the capture path is
 		 * being compared empty on both sides.
 		 */
-		diff_eq_int("the sink filled", oa.scram_sink_n > 0, 1, 0);
+		diff_eq_int("the sink filled", oa.rx_n > 0, 1, 0);
 	}
 	rc |= diff_end();
 
@@ -244,7 +244,7 @@ main(void)
 			ref_descrambleGPC(ob, (unsigned short)(step * 37), 16);
 			compare("sink bound", step);
 		}
-		diff_eq_int("the sink stopped at 64", oa.scram_sink_n, 0x40, 0);
+		diff_eq_int("the sink stopped at 64", oa.rx_n, 0x40, 0);
 	}
 	rc |= diff_end();
 

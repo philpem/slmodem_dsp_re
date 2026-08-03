@@ -148,29 +148,37 @@ struct v34_object {
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x14 - 0x004];
+	unsigned char unmapped_0004[0x008 - 0x004];
 	/*
-	 * +0x14 to +0x21c.  THE SCRAMBLER'S TEST HARNESS, and the layout
-	 * tiles exactly, which is the evidence for it: 0x40 words of sink
-	 * from +0x14 end at +0x114 where the sink index is, 0x40 words of
-	 * source from +0x118 end at +0x218 where the source length is, and
-	 * the source index follows at +0x21c.  Nothing had to be guessed at
-	 * to make those four bounds meet.
+	 * +0x0008 and +0x0010, both named by initdigital's own debug string:
+	 * "for tx data rate - %d, PTC - %d, setting nofTxBits to %d".  `ptc`
+	 * is read and never written here; `nof_tx_bits` is
+	 * `((txbits * ptc) >> 6) + 6`, or zero when the rate is zero.
+	 */
+	int ptc;					/* +0x0008 */
+	unsigned char unmapped_000c[0x010 - 0x00c];
+	int nof_tx_bits;				/* +0x0010 */
+	/*
+	 * THE DATAPUMP'S TWO DATA BUFFERS, and the layout tiles exactly:
+	 * 0x14 + 64*4 is precisely 0x114 where the receive count lives, and
+	 * 0x118 + 64*4 precisely 0x218 where the transmit one does, so each
+	 * array ends where its counter begins and nothing had to be guessed
+	 * at to make the four bounds meet.
 	 *
-	 * All of it is gated on `scram_capture` at +0x2214.  With that set,
-	 * the scramblers take their input word from `scram_src` instead of
-	 * the 0xffff they otherwise use, and the descramblers append each
-	 * output word to `scram_sink` until it is full.  So the object
-	 * carries a scripted-bits loopback for its own scrambler pair.
+	 * descrambleGP* appends each sixteen recovered bits to `rx_data` and
+	 * stops at 64 entries; scrambleGP* takes its next sixteen out of
+	 * `tx_data` and, once `tx_rd` reaches `tx_n`, scrambles 0xffff
+	 * instead -- the all-ones idle V.34 sends with nothing to carry.
+	 * Both paths are gated on `data_enable` at +0x2214.
 	 *
-	 * The arrays are `int` and only the low short of each source entry
+	 * The arrays are `int` and only the low short of each transmit entry
 	 * is read -- `movzwl 0x114(%edx,%eax,4)`.
 	 */
-	int scram_sink[0x40];				/* +0x0014 */
-	int scram_sink_n;				/* +0x0114 */
-	int scram_src[0x40];				/* +0x0118 */
-	int scram_src_len;				/* +0x0218 */
-	int scram_src_n;				/* +0x021c */
+	int rx_data[64];				/* +0x0014 */
+	int rx_n;					/* +0x0114 */
+	int tx_data[64];				/* +0x0118 */
+	int tx_n;					/* +0x0218 */
+	int tx_rd;					/* +0x021c */
 	unsigned char unmapped_0220[0x230 - 0x220];
 	/*
 	 * The signal-energy floor `receiver` compares its 36-sample RMS
@@ -250,16 +258,39 @@ struct v34_object {
 	unsigned char unmapped_2100[0x210c - 0x2100];
 	unsigned char scratch_210c[0x100];		/* +0x210c */
 	unsigned char unmapped_220c[0x2214 - 0x220c];
-	/* Non-zero runs the scrambler pair off `scram_src`/`scram_sink`. */
-	short scram_capture;				/* +0x2214 */
+	/*
+	 * +0x2214.  Non-zero connects the scrambler callbacks to `tx_data`
+	 * and `rx_data`; zero leaves the transmitter scrambling idle ones and
+	 * the receiver throwing away what it recovers.  `preinitdigital`
+	 * clears it and `modulatevector` sets it when the training-to-data
+	 * symbol counter expires, which are the object's only two writers --
+	 * so this is the data path being switched on at the end of training,
+	 * not a facility something outside the core operates.
+	 */
+	short data_enable;				/* +0x2214 */
 	unsigned char unmapped_2216[0x221c - 0x2216];
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
-	short f25c2;					/* +0x25c2 bit 9 gates the echo feed */
+	/*
+	 * +0x25c2.  Bit 9 gates the echo feed and bit 2 says both cancellers
+	 * are frozen; BIT 0 picks the scrambler generator -- set for the
+	 * calling station's, clear for the answering one.  txmitdibit and
+	 * txmitquadbit are what pin the last of those.
+	 */
+	short f25c2;					/* +0x25c2 */
 	unsigned char unmapped_25c4[0x25c6 - 0x25c4];
+	/*
+	 * The differentially-encoded quadrant, carried from one symbol to the
+	 * next: f25c6 is the previous one and f25c8 the current.  In the
+	 * dibit case the two end up equal; in the quadbit case f25c8 is set
+	 * first and f25c6 only catches up at the end, because the second
+	 * dibit indexes off the first one's quadrant.
+	 */
 	short f25c6;					/* +0x25c6 */
-	unsigned char unmapped_25c8[0x25cc - 0x25c8];
+	short f25c8;					/* +0x25c8 */
+	unsigned char unmapped_25ca[0x25cc - 0x25ca];
+	/* The transmit scrambler's shift register. */
 	int f25cc;					/* +0x25cc */
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
@@ -267,7 +298,25 @@ struct v34_object {
 	unsigned char unmapped_25d6[0x2a54 - 0x25d6];
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
-	unsigned char unmapped_2a68[0x2aa4 - 0x2a68];
+	unsigned char unmapped_2a68[0x2a80 - 0x2a68];
+	/*
+	 * +0x2a80.  `modulatevector`'s output: eight complex points as
+	 * sixteen shorts, and the cursor into them.  One call emits point
+	 * `vect_idx` and bumps it; only when it reaches 8 does the mapping
+	 * run and refill all eight.  `scaleVector`'s sixteen shorts are
+	 * exactly this array.
+	 *
+	 * In transmit-shell coordinates these land at +0xea0 and +0xec2,
+	 * inside `sub[]` and `cost[]` -- which is not a contradiction but the
+	 * reason they are declared HERE.  Only the receive context decodes,
+	 * so the transmit one has no sub-indices, costs, trellis or states,
+	 * and the object reuses the space.  `preinitdigital` clearing those
+	 * three arrays on the receive side and on neither other says the same
+	 * thing from the other direction.  See finding 181.
+	 */
+	short vect[16];					/* +0x2a80 */
+	short f2aa0;					/* +0x2aa0 */
+	short vect_idx;					/* +0x2aa2 */
 	short f2aa4;					/* +0x2aa4 */
 	short f2aa6;					/* +0x2aa6 */
 	/*
@@ -380,7 +429,26 @@ struct v34_object {
 	 * then 8+8+8 from three message bytes and 5 from the fourth.
 	 */
 	int info0_bits[V34_INFO0_BITS];			/* +0xa8a4 */
-	unsigned char unmapped_a948[0xaa74 - 0xa948];
+	unsigned char unmapped_a948[0xaa0c - 0xa948];
+	/*
+	 * The negotiated INFO bits, which initdigital unpacks into the rate
+	 * config at +0xaa84.
+	 *
+	 * `info_rates` carries two four-bit rate fields -- bits 2..5 and
+	 * 6..9, one per direction, and which is "ours" depends on the role --
+	 * plus the trellis depth at 11..12, a flag at 14, and the non-linear
+	 * encoder select at 13.  `rate_mask` is a bitmap of the rates that
+	 * are actually available, bit n-1 for rate n, and its SIGN BIT means
+	 * asymmetric rates are on the table.  `info_caps` holds two more
+	 * nibbles, at 6 and 10, which are bit-REVERSED before use.
+	 * `caps_flags` bit 0 is the other half of the asymmetric permission.
+	 */
+	short info_rates;				/* +0xaa0c */
+	short rate_mask;				/* +0xaa0e */
+	unsigned char unmapped_aa10[0xaa3c - 0xaa10];
+	short info_caps;				/* +0xaa3c */
+	short caps_flags;				/* +0xaa3e */
+	unsigned char unmapped_aa40[0xaa74 - 0xaa40];
 	/* Cleared by preinitdigital; nothing reconstructed reads it. */
 	int faa74;					/* +0xaa74 */
 	unsigned char unmapped_aa78[0xaa7e - 0xaa78];
@@ -459,10 +527,24 @@ struct v34_object {
 	 * echo canceller's.
 	 */
 	short prev_bulk_delay;				/* +0xac02 */
-	unsigned char unmapped_ac04[0xac0c - 0xac04];
+	/*
+	 * The negotiated rates in bits per second -- 2400 times the counts in
+	 * the rate config -- published once and latched, so a second
+	 * negotiation does not overwrite them.
+	 */
+	int tx_bps;					/* +0xac04 */
+	int rx_bps;					/* +0xac08 */
 	/* Where the V.90 side is told the recovered timing offset. */
 	short fac0c;					/* +0xac0c */
-	unsigned char unmapped_ac0e[0xac18 - 0xac0e];
+	unsigned char unmapped_ac0e[0xac16 - 0xac0e];
+	/*
+	 * +0xac16.  A BYTE, and past where this struct used to end: the
+	 * declared length of 0xac10 was the largest offset anything
+	 * reconstructed had touched, not a bound the object proves.
+	 * initdigital writes here.
+	 */
+	unsigned char rates_latched;			/* +0xac16 */
+	unsigned char unmapped_ac17[0xac18 - 0xac17];
 	/*
 	 * +0xac18.  A second pointer into the C++ side, distinct from
 	 * `p3548`, and `V34GiveINFO1aBits` reads exactly one thing through
@@ -474,6 +556,36 @@ struct v34_object {
 	 */
 	void *pac18;					/* +0xac18 */
 };
+
+/*
+ * The rate configuration initdigital fills, at +0xaa84 in the object.
+ *
+ * Two halves, transmit then receive, and the transmit one is what feeds
+ * initV34 for the context at +0x25e0 while the receive one feeds +0xa00.
+ * `bits` counts units of 2400 bps, so the bit rate is 2400 times it.
+ *
+ * `rx_baud` IS `faa96` above -- one store, two readings, the same situation
+ * as the echo array that is also the FSK delay line (finding 100).  It is
+ * declared in both places on purpose; there is no third field.
+ */
+struct v34_ratecfg {
+	short baud;			/* +0x00 transmit symbol rate    */
+	unsigned char pad_02[0x04 - 0x02];
+	short txbits;			/* +0x04 in units of 2400 bps    */
+	unsigned char pad_06[0x08 - 0x06];
+	short depth;			/* +0x08 trellis, initV34's arg  */
+	short use_max;			/* +0x0a picks MMaxTable         */
+	const short *divtab;		/* +0x0c the divisor table       */
+	unsigned char pad_10[0x12 - 0x10];
+	short rx_baud;			/* +0x12 receive symbol rate     */
+	short rxbits;			/* +0x14                         */
+	unsigned char pad_16[0x22 - 0x16];
+	short rx_use_max;		/* +0x22                         */
+	unsigned char pad_24[0x28 - 0x24];
+	const short *rx_divtab;		/* +0x28                         */
+};
+
+#define V34_RATECFG	0xaa84
 
 /*
  * Interpolate, discriminate and filter one block.

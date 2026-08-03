@@ -32,9 +32,9 @@
  * Neither function derives its polynomial from anything; both are the
  * object's arithmetic transcribed.  Task #47 owns the derivation.
  *
- * THE SCRIPTED-BITS HARNESS.  With `scram_capture` set, the scramblers draw
- * their input word from `scram_src` rather than using 0xffff, and the
- * descramblers append each recovered word to `scram_sink` until 64 are in.
+ * THE SCRIPTED-BITS HARNESS.  With `data_enable` set, the scramblers draw
+ * their input word from `tx_data` rather than using 0xffff, and the
+ * descramblers append each recovered word to `rx_data` until 64 are in.
  * That is a loopback the original could drive its own scrambler pair
  * through, and it is the only path on which a descrambler's output is
  * visible at all: both return 0 unconditionally, so with capture off the
@@ -55,11 +55,11 @@
 static unsigned
 scram_input(struct v34_object *obj)
 {
-	if (obj->scram_capture != 0
-	    && (unsigned)obj->scram_src_n < (unsigned)obj->scram_src_len) {
-		unsigned v = (unsigned short)obj->scram_src[obj->scram_src_n];
+	if (obj->data_enable != 0
+	    && (unsigned)obj->tx_rd < (unsigned)obj->tx_n) {
+		unsigned v = (unsigned short)obj->tx_data[obj->tx_rd];
 
-		obj->scram_src_n++;
+		obj->tx_rd++;
 		return v;
 	}
 	return 0xffff;
@@ -75,9 +75,9 @@ scram_input(struct v34_object *obj)
 static void
 scram_output(struct v34_object *obj, unsigned word)
 {
-	if (obj->scram_capture != 0 && (unsigned)obj->scram_sink_n <= 0x3f) {
-		obj->scram_sink[obj->scram_sink_n] = (int)word;
-		obj->scram_sink_n++;
+	if (obj->data_enable != 0 && (unsigned)obj->rx_n <= 0x3f) {
+		obj->rx_data[obj->rx_n] = (int)word;
+		obj->rx_n++;
 	}
 }
 
@@ -271,13 +271,13 @@ descrambleGPA(void *objp, unsigned short bits, unsigned short nbits)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
-V34SCRAM_ASSERT(sink,    scram_sink,    0x0014);
-V34SCRAM_ASSERT(sink_n,  scram_sink_n,  0x0114);
-V34SCRAM_ASSERT(src,     scram_src,     0x0118);
-V34SCRAM_ASSERT(src_len, scram_src_len, 0x0218);
-V34SCRAM_ASSERT(src_n,   scram_src_n,   0x021c);
+V34SCRAM_ASSERT(sink,    rx_data,    0x0014);
+V34SCRAM_ASSERT(sink_n,  rx_n,  0x0114);
+V34SCRAM_ASSERT(src,     tx_data,     0x0118);
+V34SCRAM_ASSERT(src_len, tx_n, 0x0218);
+V34SCRAM_ASSERT(src_n,   tx_rd,   0x021c);
 V34SCRAM_ASSERT(dscr,    descrambler,   0x0e74);
-V34SCRAM_ASSERT(cap,     scram_capture, 0x2214);
+V34SCRAM_ASSERT(cap,     data_enable, 0x2214);
 V34SCRAM_ASSERT(scr,     scrambler,     0x2a54);
 
 /* The two capture arrays tile exactly onto their index words. */

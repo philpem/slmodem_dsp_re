@@ -5,6 +5,19 @@
 #include <string.h>
 #include "harness.h"
 #include "dsplib/v34shell.h"
+#include "dsplib/v34fsk.h"	/* struct v34_object: preinitdigital takes it */
+#include "dsplib/v34filt.h"
+#include "dsplib/v34recv.h"
+#include "dsplib/v34rx.h"
+#include "dsplib/v34pcmif.h"
+extern void ref_modulatevector(void *obj);
+extern void ref_initdigital(void *obj);
+extern unsigned int ref_dsplibs_debug_level;
+#include "dsplib/debug.h"
+extern void ref_txinit(void *obj);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
+extern void ref_V34SetupModulator(void *m, short, short, short, short, short);
+
 
 extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
@@ -109,6 +122,101 @@ sink_b(void *s, int value, int nbits)
 		log_b[nlog_b].nbits = nbits;
 	}
 	nlog_b++;
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * The initialisers, the tables they read, and the four bit callbacks.
+ */
+
+extern void ref_setScramble(void *fields, void *fn);
+extern void ref_scaleVector(short *v, short scale);
+extern void ref_preinitV34(void *fields);
+extern void ref_initG248(void *fields);
+extern int ref_initV34(void *fields, short baud, short bitrate, short use_max,
+		       short depth, const short *coeff, short divisor);
+extern void ref_preinitdigital(void *obj);
+extern int ref_scrambleGPC(void *obj, int pos);
+extern int ref_scrambleGPA(void *obj, int pos);
+extern void ref_descrambleGPC(void *obj, int value, int nbits);
+extern void ref_descrambleGPA(void *obj, int value, int nbits);
+
+extern const int ref_xyz[945];
+extern const short ref_Convolve16[64];
+extern const short ref_Convolve32[64];
+extern const short ref_Convolve64[64];
+extern const signed char ref_MMaxTable[32];
+extern const signed char ref_MMinTable[32];
+
+/*
+ * The two fields that hold POINTERS, and so can never match across the two
+ * sides: `conv` at +0xa28 and the bit callback at +0xe48.  One side's
+ * Convolve16 is at a different address from the other's, so a raw byte
+ * compare over them proves nothing and fails always.  They are skipped here
+ * and asserted by identity -- ours must be OUR table, theirs THEIR table --
+ * which is the stronger check anyway, since it says which table was chosen.
+ */
+static int
+shell_bytes_eq(const char *tag, const void *a, const void *b, long ctx)
+{
+	const unsigned char *pa = a, *pb = b;
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < sizeof(struct v34_shell); i++) {
+		if ((i >= 0xa28 && i < 0xa2c) || (i >= 0xe48 && i < 0xe4c))
+			continue;
+		if (pa[i] != pb[i] && bad++ < 8) {
+			printf("  (%s, case %ld)\n", tag, ctx);
+			diff_eq_int("shell byte at +0x%lx", pa[i], pb[i],
+				    (long)i);
+		}
+	}
+	return bad;
+}
+
+/*
+ * The reachable range of `count`.  initV34 indexes MMaxTable or MMinTable
+ * with a value the loop above it forces into 0..31, and neither table holds
+ * anything outside 1..18 -- so every t3 block initG248 can be asked for is
+ * one xyz actually has.  Asserted rather than assumed: finding 129 is about
+ * these three tables having no bounds check of their own, and this is the
+ * caller-side invariant it left open.
+ */
+#define V34_COUNT_MIN	1
+#define V34_COUNT_MAX	18
+
+static int
+check_count_bound(void)
+{
+	int i, bad = 0;
+
+	for (i = 0; i < 32; i++) {
+		if (MMaxTable[i] < V34_COUNT_MIN || MMaxTable[i] > V34_COUNT_MAX
+		    || MMinTable[i] < V34_COUNT_MIN
+		    || MMinTable[i] > V34_COUNT_MAX) {
+			printf("FIXTURE: ring table [%d] = %d/%d is outside "
+			       "%d..%d\n", i, MMaxTable[i], MMinTable[i],
+			       V34_COUNT_MIN, V34_COUNT_MAX);
+			bad = 1;
+		}
+	}
+	for (i = V34_COUNT_MIN; i <= V34_COUNT_MAX; i++) {
+		int len = xyz[i + 1] - xyz[i];
+
+		if (len < 0 || len > 0x80) {
+			printf("FIXTURE: xyz block %d is %d entries, and t3 "
+			       "holds 128\n", i, len);
+			bad = 1;
+		}
+		if (xyz[i] < 0 || xyz[i + 1] > 945) {
+			printf("FIXTURE: xyz block %d runs [%d,%d) outside "
+			       "the table\n", i, xyz[i], xyz[i + 1]);
+			bad = 1;
+		}
+	}
+	return bad;
 }
 
 int
@@ -661,7 +769,16 @@ main(void)
 		struct v34_shell *tx;
 		int nb, a04, k, g;
 
-		for (nb = 1; nb <= 16; nb++)
+		/*
+		 * `nb` runs PAST SIXTEEN, which is what makes this the only
+		 * test that drives getFrame's split path through a bit source
+		 * whose return differs from the position it stores.  The
+		 * differential test above drives the split path too, but with
+		 * a source that returns exactly what the refill loop stored,
+		 * so the two readings of the position are indistinguishable
+		 * there.  Neither covered both conditions until finding 185.
+		 */
+		for (nb = 1; nb <= 20; nb++)
 		for (a04 = 6; a04 <= 10; a04 += 2) {
 			int w = 3;
 			int small = 2;
@@ -676,9 +793,21 @@ main(void)
 			tx->fa00 = 10;		/* takes the fa0e branch */
 			tx->fa0e = tx->fa10 = (short)nb;
 
-			/* A frame whose every field is inside its width. */
-			tx->frame[0] = (short)(((1 << nb) - 1) & 0x5a5a);
-			tx->frame[1] = 0;
+			/*
+			 * A frame whose every field is inside its width.
+			 * Above sixteen bits the wide value spans frame[0]
+			 * and frame[1] as one 32-bit store, so it is written
+			 * that way rather than as a short and a zero.
+			 */
+			if (nb > 16)
+				*(int *)&tx->frame[0] =
+				    (int)((((unsigned)1 << nb) - 1)
+					  & 0x395a5au);
+			else {
+				tx->frame[0] =
+				    (short)(((1 << nb) - 1) & 0x5a5a);
+				tx->frame[1] = 0;
+			}
 			for (g = 0; g < 4; g++) {
 				short *p = &tx->frame[2 + g * 4];
 
@@ -704,12 +833,654 @@ main(void)
 			getFrame(obj);
 
 			for (k = 0; k < 18; k++) {
-				if (k == 1)
+				if (k == 1 && nb <= 16)
 					continue;	/* unused below 17 bits */
 				diff_eq_int("round trip frame[%ld]",
 					    tx->frame[k], rt_want[k],
 					    (long)nb * 1000 + a04 * 100 + k);
 			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The tables, against the object's own copies.  945 ints transcribed
+	 * by hand is exactly the kind of thing that goes wrong in the middle
+	 * and nowhere else, and a memcmp against ref_* costs nothing.
+	 */
+	diff_begin("v34 shell tables");
+	{
+		diff_eq_int("xyz", memcmp(xyz, ref_xyz, sizeof(xyz)), 0, 0);
+		diff_eq_int("Convolve16",
+			    memcmp(Convolve16, ref_Convolve16,
+				   sizeof(Convolve16)), 0, 0);
+		diff_eq_int("Convolve32",
+			    memcmp(Convolve32, ref_Convolve32,
+				   sizeof(Convolve32)), 0, 0);
+		diff_eq_int("Convolve64",
+			    memcmp(Convolve64, ref_Convolve64,
+				   sizeof(Convolve64)), 0, 0);
+		diff_eq_int("MMaxTable",
+			    memcmp(MMaxTable, ref_MMaxTable,
+				   sizeof(MMaxTable)), 0, 0);
+		diff_eq_int("MMinTable",
+			    memcmp(MMinTable, ref_MMinTable,
+				   sizeof(MMinTable)), 0, 0);
+		diff_eq_int("ring size stays in xyz", check_count_bound(), 0, 0);
+	}
+	rc |= diff_end();
+
+	/* setScramble and scaleVector: the two nothing in the object calls. */
+	diff_begin("v34 setScramble/scaleVector");
+	{
+		static struct v34_shell a, b;
+		short va[16], vb[16];
+		int k, sc;
+
+		memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+		memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+		setScramble((char *)&a + V34_SHELL_FIELDS,
+			    (void *)descrambleGPC);
+		ref_setScramble((char *)&b + V34_SHELL_FIELDS,
+				(void *)ref_descrambleGPC);
+		diff_eq_int("setScramble object", shell_bytes_eq("setScramble",
+			    &a, &b, 0), 0, 0);
+		diff_eq_int("setScramble stored ours",
+			    a.put_bits == descrambleGPC, 1, 0);
+		diff_eq_int("setScramble stored theirs",
+			    b.put_bits == (v34_putbits_fn)ref_descrambleGPC,
+			    1, 0);
+
+		for (sc = -300; sc <= 300; sc += 37) {
+			for (k = 0; k < 16; k++)
+				va[k] = vb[k] = (short)(k * 4001 - 20000);
+			scaleVector(va, (short)sc);
+			ref_scaleVector(vb, (short)sc);
+			for (k = 0; k < 16; k++)
+				diff_eq_int("scaleVector[%ld]", va[k], vb[k],
+					    (long)sc * 100 + k);
+		}
+	}
+	rc |= diff_end();
+
+	/* preinitV34, on both contexts' worth of offsets. */
+	diff_begin("v34 preinitV34");
+	{
+		static struct v34_shell a, b;
+		int pass;
+
+		for (pass = 0; pass < 2; pass++) {
+			memset(&a, pass ? 0 : HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, pass ? 0 : HARNESS_MALLOC_FILL, sizeof(b));
+
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+
+			diff_eq_int("preinitV34 object",
+				    shell_bytes_eq("preinitV34 byte", &a, &b,
+						   pass), 0, pass);
+			diff_eq_int("preinitV34 conv ours",
+				    a.conv == Convolve16, 1, pass);
+			diff_eq_int("preinitV34 conv theirs",
+				    b.conv == ref_Convolve16, 1, pass);
+			diff_eq_int("preinitV34 callback ours",
+				    a.get_bits == scrambleGPC, 1, pass);
+			diff_eq_int("preinitV34 callback theirs",
+				    b.get_bits ==
+				    (v34_getbits_fn)ref_scrambleGPC, 1, pass);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initG248, over every ring size initV34 can ask for and no others.
+	 * Sixteen is in the sweep on purpose: xyz has an EMPTY block for it,
+	 * because MMaxTable runs 15, 17, 18 and never produces a 16, so the
+	 * copy loop must do nothing at all and leave preinitV34's -1s showing.
+	 */
+	diff_begin("v34 initG248");
+	{
+		static struct v34_shell a, b;
+		int n;
+
+		for (n = V34_COUNT_MIN; n <= V34_COUNT_MAX; n++) {
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+			a.count = b.count = (short)n;
+
+			initG248((char *)&a + V34_SHELL_FIELDS);
+			ref_initG248((char *)&b + V34_SHELL_FIELDS);
+
+			diff_eq_int("initG248 object",
+				    shell_bytes_eq("initG248 byte", &a, &b, n),
+				    0, n);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initV34.  The six real V.34 symbol rates, both ring tables and all
+	 * three trellis depths.
+	 *
+	 * `bitrate` is swept over the whole 16-bit range rather than over the
+	 * data rates a modem would use, and that is deliberate: it is divided
+	 * by 100 and then by the group and the span, and a realistic rate only
+	 * ever reaches the bottom third of the ring-size table.  The wide
+	 * sweep is what makes counts up to 18 -- and so xyz's truncated
+	 * blocks, and its empty one -- reachable at all.  check_count_bound()
+	 * above proves the sweep cannot walk any of the three tables off its
+	 * end, which is the thing finding 129 warns about.
+	 */
+	diff_begin("v34 initV34");
+	{
+		static struct v34_shell a, b;
+		static const short rates[6] = { 2400, 2743, 2800, 3000,
+						3200, 3429 };
+		static const short coeffs[12] = { 1, -2, 3, -4, 5, -6,
+						  7, -8, 9, -10, 11, -12 };
+		int r, mx, dep, br, dv, ra, rb;
+		long ctx = 0;
+
+		for (r = 0; r < 6; r++)
+		for (mx = 0; mx < 2; mx++)
+		for (dep = 0; dep < 3; dep++)
+		for (br = 300; br < 65500; br += 1637)
+		for (dv = 0; dv < 4; dv++) {
+			short divisor = (short)(dv == 0 ? 0
+					      : dv == 1 ? 0x80
+					      : dv == 2 ? 0x81 : 30000);
+
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+
+			ra = initV34((char *)&a + V34_SHELL_FIELDS, rates[r],
+				     (short)br, (short)mx, (short)dep,
+				     coeffs, divisor);
+			rb = ref_initV34((char *)&b + V34_SHELL_FIELDS,
+					 rates[r], (short)br, (short)mx,
+					 (short)dep, coeffs, divisor);
+
+			ctx++;
+			diff_eq_int("initV34 return", ra, rb, ctx);
+			diff_eq_int("initV34 object",
+				    shell_bytes_eq("initV34 byte", &a, &b,
+						   ctx), 0, ctx);
+
+			/* The ring size it picked must be one xyz has. */
+			if (a.count < V34_COUNT_MIN
+			    || a.count > V34_COUNT_MAX) {
+				printf("FIXTURE: initV34 produced count %d "
+				       "at rate %d bitrate %d\n",
+				       a.count, rates[r], br);
+				return 1;
+			}
+
+			diff_eq_int("initV34 conv ours",
+				    a.conv == (dep == 0 ? Convolve16
+					     : dep == 1 ? Convolve32
+					     : Convolve64), 1, ctx);
+			diff_eq_int("initV34 conv theirs",
+				    b.conv == (dep == 0 ? ref_Convolve16
+					     : dep == 1 ? ref_Convolve32
+					     : ref_Convolve64), 1, ctx);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The four bit callbacks, driven through the object they belong to.
+	 *
+	 * Each side gets its own object, because both read and WRITE the data
+	 * buffers -- one shared object would have the second call see the
+	 * first's cursor.
+	 */
+	diff_begin("v34 scrambler callbacks");
+	{
+		static unsigned char oa[sizeof(struct v34_object)];
+		static unsigned char ob[sizeof(struct v34_object)];
+		struct v34_object *ja = (struct v34_object *)oa;
+		struct v34_object *jb = (struct v34_object *)ob;
+		struct v34_shell *ta = (struct v34_shell *)(oa + V34_SHELL_TX);
+		struct v34_shell *tb = (struct v34_shell *)(ob + V34_SHELL_TX);
+		struct v34_shell *ra = (struct v34_shell *)oa;
+		struct v34_shell *rb = (struct v34_shell *)ob;
+		int en, gpa, k, step;
+		long ctx = 0;
+
+		for (en = 0; en < 2; en++)
+		for (gpa = 0; gpa < 2; gpa++) {
+			memset(oa, 0, sizeof(oa));
+			memset(ob, 0, sizeof(ob));
+			ja->data_enable = jb->data_enable = (short)en;
+			ja->tx_n = jb->tx_n = 40;
+			for (k = 0; k < 64; k++)
+				ja->tx_data[k] = jb->tx_data[k] =
+					k * 2357 + 11;
+
+			/* The transmit side: sixteen bits per call. */
+			for (step = 0; step < 24; step++) {
+				int pa, pb;
+
+				if (gpa) {
+					pa = scrambleGPA(oa, 16 + step);
+					pb = ref_scrambleGPA(ob, 16 + step);
+				} else {
+					pa = scrambleGPC(oa, 16 + step);
+					pb = ref_scrambleGPC(ob, 16 + step);
+				}
+				ctx++;
+				diff_eq_int("scramble pos", pa, pb, ctx);
+				for (k = 0; k < 3; k++)
+					diff_eq_int("scramble scr[%ld]",
+						    ta->scr[k], tb->scr[k],
+						    ctx * 10 + k);
+				diff_eq_int("scramble bitbuf", ta->bitbuf,
+					    tb->bitbuf, ctx);
+				diff_eq_int("scramble tx_rd", ja->tx_rd,
+					    jb->tx_rd, ctx);
+			}
+
+			/* The receive side: a width at a time, crossing 32. */
+			for (step = 0; step < 60; step++) {
+				int val = (step * 7919) & 0xffff;
+				int nb = 1 + (step % 16);
+
+				if (gpa) {
+					descrambleGPA(oa, val, nb);
+					ref_descrambleGPA(ob, val, nb);
+				} else {
+					descrambleGPC(oa, val, nb);
+					ref_descrambleGPC(ob, val, nb);
+				}
+				ctx++;
+				for (k = 0; k < 3; k++)
+					diff_eq_int("descramble scr[%ld]",
+						    ra->scr[k], rb->scr[k],
+						    ctx * 10 + k);
+				diff_eq_int("descramble bitpos",
+					    ra->rx_bitpos, rb->rx_bitpos, ctx);
+				diff_eq_int("descramble rx_n", ja->rx_n,
+					    jb->rx_n, ctx);
+				for (k = 0; k < 64; k++)
+					diff_eq_int("descramble rx_data[%ld]",
+						    ja->rx_data[k],
+						    jb->rx_data[k],
+						    ctx * 100 + k);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * preinitdigital: both contexts at once, and the role branch.
+	 *
+	 * Compared over the WHOLE object, not just the two shells, because
+	 * the three memsets and the scalars past them are most of what it
+	 * does -- and because the transmit context's scrambler words are
+	 * cleared differently from the receive one's, which a shell-only
+	 * compare would show as a pass either way.
+	 */
+	diff_begin("v34 preinitdigital");
+	{
+		static unsigned char oa[sizeof(struct v34_object)];
+		static unsigned char ob[sizeof(struct v34_object)];
+		struct v34_object *ja = (struct v34_object *)oa;
+		struct v34_object *jb = (struct v34_object *)ob;
+		struct v34_shell *ta = (struct v34_shell *)(oa + V34_SHELL_TX);
+		struct v34_shell *tb = (struct v34_shell *)(ob + V34_SHELL_TX);
+		struct v34_shell *ra = (struct v34_shell *)oa;
+		struct v34_shell *rb = (struct v34_shell *)ob;
+		int role, i, bad;
+
+		for (role = 0; role < 2; role++) {
+			memset(oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ja->f359c = jb->f359c = (short)(role ? 0x65 : 0x12);
+
+			preinitdigital(oa);
+			ref_preinitdigital(ob);
+
+			bad = 0;
+			for (i = 0; i < (int)sizeof(oa); i++) {
+				/* The four pointer fields, as always. */
+				if ((i >= 0xa28 && i < 0xa2c)
+				    || (i >= 0xe48 && i < 0xe4c)
+				    || (i >= 0x2608 && i < 0x260c)
+				    || (i >= 0x2a28 && i < 0x2a2c))
+					continue;
+				if (oa[i] != ob[i] && bad++ < 8)
+					diff_eq_int("preinitdigital byte",
+						    oa[i], ob[i],
+						    (long)role * 0x100000 + i);
+			}
+			diff_eq_int("preinitdigital object", bad, 0, role);
+
+			diff_eq_int("preinitdigital tx conv",
+				    ta->conv == Convolve16, 1, role);
+			diff_eq_int("preinitdigital rx conv",
+				    ra->conv == Convolve16, 1, role);
+			diff_eq_int("preinitdigital tx conv theirs",
+				    tb->conv == ref_Convolve16, 1, role);
+			diff_eq_int("preinitdigital rx conv theirs",
+				    rb->conv == ref_Convolve16, 1, role);
+
+			diff_eq_int("preinitdigital scrambler",
+				    ta->get_bits == (role ? scrambleGPC
+							  : scrambleGPA),
+				    1, role);
+			diff_eq_int("preinitdigital descrambler",
+				    ra->put_bits == (role ? descrambleGPA
+							  : descrambleGPC),
+				    1, role);
+			diff_eq_int("preinitdigital scrambler theirs",
+				    tb->get_bits ==
+				    (v34_getbits_fn)(role ? ref_scrambleGPC
+							  : ref_scrambleGPA),
+				    1, role);
+			diff_eq_int("preinitdigital descrambler theirs",
+				    rb->put_bits ==
+				    (v34_putbits_fn)(role ? ref_descrambleGPA
+							  : ref_descrambleGPC),
+				    1, role);
+
+			/* The one place the two contexts genuinely differ. */
+			diff_eq_int("tx bitpos starts past 15",
+				    ta->bitpos, 32, role);
+			diff_eq_int("rx bitpos starts at zero",
+				    ra->rx_bitpos, 0, role);
+		}
+	}
+	rc |= diff_end();
+
+
+	/*
+	 * modulatevector -- the forward mapper, driven end to end.
+	 *
+	 * It tail-calls `txmit`, so the fixture is t_v34rx.c's txmit setup
+	 * (including the three arrays kept outside the object, finding 116b)
+	 * with the shell contexts initialised on top: preinitdigital for the
+	 * scrambler callbacks, then initV34 on the TRANSMIT context so the
+	 * three count tables exist.
+	 *
+	 * initV34 IS REQUIRED, not tidiness.  The mapper divides by `t1` and
+	 * `t2` entries, which preinitV34 zeroes -- a fixture that fills the
+	 * shell and calls straight in takes SIGFPE rather than failing a
+	 * comparison.
+	 */
+	diff_begin("v34 modulatevector");
+	{
+		static struct v34_object oa, ob;
+		static short shp_a[512], shp_b[512];
+		static short bra[64], brb[64];
+		static const short coeffs[12] = {
+			 1400, -600,  320, -180,   90,  -40,
+			 -520, 1100, -260,  140,  -70,   30,
+		};
+		/* Rate, bitrate: chosen so `count` lands mid-table. */
+		static const struct { short baud, rate, depth; } cases[] = {
+			{ 3200, 28800, 0 }, { 3200, 28800, 1 },
+			{ 3429, 31200, 2 }, { 2400, 14400, 0 },
+			{ 2800, 19200, 1 }, { 3000, 24000, 2 },
+		};
+		unsigned c, it, k;
+
+		for (c = 0; c < sizeof(cases) / sizeof(cases[0]); c++)
+		for (k = 0; k < 8; k++) {
+			int role = k & 1, nle = (k >> 1) & 1;
+			int synth = (k >> 2) & 1;
+			struct v34_shell *ta, *tb;
+
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			memset(shp_a, 0, sizeof(shp_a));
+			memset(shp_b, 0, sizeof(shp_b));
+			memset(bra, 0, sizeof(bra));
+			memset(brb, 0, sizeof(brb));
+
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			((struct v34_modulator *)((char *)&oa + 0x1450))->shaped
+				= shp_a;
+			((struct v34_modulator *)((char *)&ob + 0x1450))->shaped
+				= shp_b;
+			V34SetupModulator((struct v34_modulator *)
+					  ((char *)&oa + 0x1450), 2400, 1600,
+					  0, 0, 1);
+			ref_V34SetupModulator((char *)&ob + 0x1450, 2400,
+					      1600, 0, 0, 1);
+			oa.prefilter.coeff = ob.prefilter.coeff =
+				V34TimingPrefilterCoeff;
+			oa.prefilter.shift = ob.prefilter.shift = 14;
+			oa.f25d4 = ob.f25d4 = 0x4000;
+			oa.bulk_ring = bra;  ob.bulk_ring = brb;
+			oa.bulk_len  = ob.bulk_len = 64;
+
+			/* The role decides which scrambler drives getFrame. */
+			oa.f359c = ob.f359c = (short)(role ? 0x65 : 0x12);
+			preinitdigital(&oa); ref_preinitdigital(&ob);
+
+			ta = (struct v34_shell *)((char *)&oa + V34_SHELL_TX);
+			tb = (struct v34_shell *)((char *)&ob + V34_SHELL_TX);
+
+			initV34((char *)ta + V34_SHELL_FIELDS, cases[c].baud,
+				cases[c].rate, 1, cases[c].depth, coeffs,
+				0x80);
+			ref_initV34((char *)tb + V34_SHELL_FIELDS,
+				    cases[c].baud, cases[c].rate, 1,
+				    cases[c].depth, coeffs, 0x80);
+
+			/* Something for the scrambler to carry. */
+			oa.tx_n = ob.tx_n = 48;
+			for (it = 0; it < 64; it++)
+				oa.tx_data[it] = ob.tx_data[it] =
+					(int)(it * 5779 + 13);
+
+			/*
+			 * Bit 14 selects the non-linear encoder on the way
+			 * out; bit 4 clear makes the first calls run the
+			 * training counter instead of the data path, and
+			 * `latched` is what lets that counter run at all.
+			 */
+			oa.f25c2 = ob.f25c2 = (short)(nle ? 0x4000 : 0);
+			((struct v34_shell *)&oa)->latched = 1;
+			((struct v34_shell *)&ob)->latched = 1;
+
+			/* Force the first call to regenerate. */
+			oa.vect_idx = ob.vect_idx = 8;
+
+			/*
+			 * Two bit sources, because they stress different
+			 * things.  preinitdigital's own scramblers are the
+			 * realistic path and make the frame depend on the
+			 * whole scrambler state; the synthetic pair is
+			 * identical across the two sides by construction, so
+			 * a divergence under it is unambiguously getFrame's
+			 * or the mapper's rather than the scrambler's.  That
+			 * separation is what localised finding 185.
+			 */
+			if (synth) {
+				for (it = 0; it < 64; it++)
+					src_words_a[it] = src_words_b[it] =
+					    (unsigned)(it * 2654435761u
+						       + 12345u);
+				src_i_a = src_i_b = 0;
+				ta->get_bits = bitsrc_a;
+				tb->get_bits = bitsrc_b;
+			}
+
+			for (it = 0; it < 48; it++) {
+				unsigned b;
+
+				modulatevector(&oa);
+				ref_modulatevector(&ob);
+
+				for (b = 0; b < sizeof(oa); b++) {
+					/* Pointers, and the two callbacks. */
+					if ((b >= 0x268 && b < 0x270)
+					    || (b >= 0x2074 && b < 0x2078)
+					    || (b >= 0x20cc && b < 0x20d0)
+					    || (b >= 0x2220 && b < 0x2228)
+					    || (b >= 0x35b0 && b < 0x35b4)
+					    || (b >= 0x80b8 && b < 0x80d8)
+					    || (b >= 0x9138 && b < 0x9158)
+					    || (b >= 0xa28 && b < 0xa2c)
+					    || (b >= 0xe48 && b < 0xe4c)
+					    || (b >= 0x2604 && b < 0x260c)
+					    || (b >= 0x2a28 && b < 0x2a2c)
+					    || (b >= 0x1450 + 0x10
+						&& b < 0x1450 + 0x18)
+					    || (b >= 0x1450 + 0xc24
+						&& b < 0x1450 + 0xc28)
+					    || (b >= 0x1450 + 0xc7c
+						&& b < 0x1450 + 0xc80)
+					    || (b >= 0x1450 + 0xcb0
+						&& b < 0x1450 + 0xcb4))
+						continue;
+					if (((unsigned char *)&oa)[b]
+					    != ((unsigned char *)&ob)[b]) {
+						printf("  (case %u/%u it %u)\n",
+						       c, k, it);
+						diff_eq_int("mv byte at +0x%lx",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)b);
+						goto mv_next;
+					}
+				}
+				for (b = 0; b < 64; b++)
+					diff_eq_int("mv bulk ring", bra[b],
+						    brb[b], b);
+				for (b = 0; b < 512; b++)
+					diff_eq_int("mv shaped", shp_a[b],
+						    shp_b[b], b);
+			}
+mv_next:		;
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initdigital -- the rate negotiation.
+	 *
+	 * Driven over both roles, both asymmetric permissions, the rate walk
+	 * finding a bit and running out, the 2400-baud fallback, and both
+	 * settings of the publish latch and its two gates.
+	 *
+	 * The divisor tables are pointed at the MIDDLE of a scratch array on
+	 * purpose.  The lookup is `divtab[bits + 14*use_max - 1]` and it
+	 * happens before the zero-rate test, so a zero rate with mode 0 reads
+	 * one entry BEFORE the table -- unclamped, like the three tables of
+	 * finding 129.  Giving it real storage on both sides makes that read
+	 * defined and identical rather than leaving it to whatever follows.
+	 */
+	diff_begin("v34 initdigital");
+	{
+		static struct v34_object oa, ob;
+		static short divstore[64], rxdivstore[64];
+		static const short bauds[4] = { 2400, 2743, 3200, 3429 };
+		unsigned c, k;
+		int dbg;
+
+		for (k = 0; k < 64; k++) {
+			divstore[k] = (short)(k * 37 - 300);
+			rxdivstore[k] = (short)(k * 53 - 400);
+		}
+
+		for (dbg = 0; dbg <= 1; dbg++)
+		for (c = 0; c < 512; c++) {
+			struct v34_ratecfg *ca, *cb;
+			unsigned info, caps, mask, flags;
+			unsigned b;
+
+			/* Spread the case index over the fields it drives. */
+			info = ((c & 7) << 2) | (((c >> 3) & 7) << 6)
+			       | (((c >> 6) & 3) << 11) | (((c >> 1) & 1) << 13)
+			       | (((c >> 2) & 1) << 14);
+			caps = (unsigned)(c * 2654u + 7u);
+			mask = (unsigned)((c & 0x1ff) | ((c & 1) << 15));
+			flags = (c >> 4) & 1;
+
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			ca = (struct v34_ratecfg *)((char *)&oa + V34_RATECFG);
+			cb = (struct v34_ratecfg *)((char *)&ob + V34_RATECFG);
+
+			oa.f359c = ob.f359c = (short)((c & 1) ? 0x65 : 0x12);
+			oa.info_rates = ob.info_rates = (short)info;
+			oa.info_caps  = ob.info_caps  = (short)caps;
+			oa.rate_mask  = ob.rate_mask  = (short)mask;
+			oa.caps_flags = ob.caps_flags = (short)flags;
+			oa.ptc = ob.ptc = (int)(c * 13 + 64);
+			oa.v90_receiver = ob.v90_receiver = (int)((c >> 7) & 1);
+			oa.k56flex_receiver = ob.k56flex_receiver = (int)((c >> 8) & 1);
+			oa.rates_latched = ob.rates_latched =
+				(unsigned char)((c >> 5) & 1);
+
+			ca->baud = cb->baud = bauds[c & 3];
+			ca->rx_baud = cb->rx_baud = bauds[(c >> 2) & 3];
+			ca->rxbits = cb->rxbits = (short)((c >> 3) & 0xf);
+			ca->rx_use_max = cb->rx_use_max = (short)((c >> 6) & 1);
+			ca->divtab = cb->divtab = &divstore[16];
+			ca->rx_divtab = cb->rx_divtab = &rxdivstore[16];
+
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)(dbg ? 2 : 0);
+
+			initdigital(&oa);
+			ref_initdigital(&ob);
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			for (b = 0; b < sizeof(oa); b++) {
+				/*
+				 * The four pointer fields.  `coeff` is the
+				 * one worth naming: initV34 stores obj+0xe84
+				 * and obj+0x2a68, which are addresses INSIDE
+				 * the object, so the two instances hold
+				 * genuinely different values and a byte
+				 * compare over them can only ever fail.  They
+				 * are asserted by identity below instead.
+				 */
+				if ((b >= 0xa24 && b < 0xa2c)
+				    || (b >= 0xe48 && b < 0xe4c)
+				    || (b >= 0x2604 && b < 0x260c)
+				    || (b >= 0x2a28 && b < 0x2a2c))
+					continue;
+				if (((unsigned char *)&oa)[b]
+				    != ((unsigned char *)&ob)[b]) {
+					printf("  (dbg %d case %u)\n", dbg, c);
+					diff_eq_int("initdigital byte at +0x%lx",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)b);
+					goto id_next;
+				}
+			}
+			diff_eq_int("initdigital object", 0, 0, (long)c);
+
+			/* Each side's coefficient blocks must be its own. */
+			diff_eq_int("rx coeff ours",
+				    ((struct v34_shell *)&oa)->coeff
+				    == (const short *)((char *)&oa + 0xe84),
+				    1, (long)c);
+			diff_eq_int("rx coeff theirs",
+				    ((struct v34_shell *)&ob)->coeff
+				    == (const short *)((char *)&ob + 0xe84),
+				    1, (long)c);
+			diff_eq_int("tx coeff ours",
+				    ((struct v34_shell *)((char *)&oa
+				     + V34_SHELL_TX))->coeff
+				    == (const short *)((char *)&oa + 0x2a68),
+				    1, (long)c);
+			diff_eq_int("tx coeff theirs",
+				    ((struct v34_shell *)((char *)&ob
+				     + V34_SHELL_TX))->coeff
+				    == (const short *)((char *)&ob + 0x2a68),
+				    1, (long)c);
+id_next:		;
 		}
 	}
 	rc |= diff_end();

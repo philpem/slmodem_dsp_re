@@ -232,6 +232,29 @@ void setupreceiver(void *obj);
  */
 short preempindex(void *obj, short baudrate);
 
+/*
+ * ---------------------------------------------------------------------------
+ * The handshake's two symbol emitters, and the constellations they map onto.
+ *
+ * Both scramble the bits handed to them, encode the result differentially
+ * against the quadrant the object is carrying, and TAIL-CALL `txmit` -- so
+ * calling either of these transmits a symbol rather than merely computing
+ * one.  Everything they touch is in `struct v34_object`.
+ *
+ * Each table entry is a packed complex int, real part in the low half.
+ */
+extern const int vect4[4];
+extern const int vect16[16];
+
+/* Two bits -> one quadrant, differentially against the last. */
+void txmitdibit(void *obj, short bits);
+
+/*
+ * Four bits -> one of sixteen points.  The low dibit picks the quadrant,
+ * differentially; the high one selects within it and is not.
+ */
+void txmitquadbit(void *obj, short bits);
+
 #ifdef __cplusplus
 }
 #endif

@@ -32,48 +32,6 @@
 #include "dsplib/v34shell.h"
 
 /*
- * Clear one shell context and install the two pointers both of them get.
- *
- * The object emits this twice, once per context, with identical constants;
- * the only thing that differs afterwards is the codec pointer, which the
- * caller overwrites.  Both copies install `scrambleGPC` here -- even the
- * receive one, which is then given a descrambler a few instructions later --
- * so the value written here is a placeholder in one of the two cases and
- * that is the object's doing, not a simplification.
- */
-static void
-preinit_shell(struct v34_shell *sh)
-{
-	int i;
-
-	/*
-	 * The demapper's three tables.  t1 and t2 are cleared and t3 is set
-	 * to -1, which is the "no path" marker a cost table wants and zero
-	 * would not be.  All three are 128 entries, which is what finding
-	 * 129 had to infer from an adjacent field and this confirms.
-	 */
-	for (i = 0; i <= 0x7f; i++) {
-		sh->t1[i] = 0;
-		sh->t2[i] = 0;
-		sh->t3[i] = -1;
-	}
-
-	/* decodeDepth's delay line, and the six beside it. */
-	for (i = 0; i <= 5; i++) {
-		sh->fa2c[i] = 0;
-		sh->hist[i] = 0;
-	}
-
-	sh->fa16 = 0x18;
-	sh->scramble = scrambleGPC;
-	sh->convolve = Convolve16;
-	sh->fa3c = 0;
-	sh->prev_k = 0;
-	sh->latched = 0;
-	sh->fa08 = 0;
-}
-
-/*
  * Bring the digital half up.
  *
  * Everything here is a clear except the last four stores, and those are the
@@ -88,8 +46,13 @@ preinitdigital(void *objp)
 	struct v34_shell *tx = (struct v34_shell *)((char *)obj
 						    + V34_SHELL_TX);
 
-	preinit_shell(tx);
-	preinit_shell(rx);
+	/*
+	 * `preinitV34` is the object's own, exported and reconstructed in
+	 * v34shell.c.  It takes the shell's FIELDS pointer -- 0xa00 into the
+	 * context -- which is how every call site in the object spells it.
+	 */
+	preinitV34((char *)tx + V34_SHELL_FIELDS);
+	preinitV34((char *)rx + V34_SHELL_FIELDS);
 
 	/* The receive context's trellis machinery, cleared wholesale. */
 	sysdep_memset(rx->cost, 0, sizeof(rx->cost));
@@ -108,7 +71,7 @@ preinitdigital(void *objp)
 	obj->descrambler.count = 0;
 
 	rx->state_idx = 0;
-	obj->scram_capture = 0;
+	obj->data_enable = 0;
 	obj->faa74 = 0;
 
 	/*
@@ -140,7 +103,7 @@ preinitdigital(void *objp)
 V34DIG_ASSERT(fa08,  struct v34_shell,  fa08,       0x0a08);
 V34DIG_ASSERT(fa16,  struct v34_shell,  fa16,       0x0a16);
 V34DIG_ASSERT(hist,  struct v34_shell,  hist,       0x0a18);
-V34DIG_ASSERT(conv,  struct v34_shell,  convolve,   0x0a28);
+V34DIG_ASSERT(conv,  struct v34_shell,  conv,       0x0a28);
 V34DIG_ASSERT(fa2c,  struct v34_shell,  fa2c,       0x0a2c);
 V34DIG_ASSERT(prevk, struct v34_shell,  prev_k,     0x0a38);
 V34DIG_ASSERT(fa3c,  struct v34_shell,  fa3c,       0x0a3c);

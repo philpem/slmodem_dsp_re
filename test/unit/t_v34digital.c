@@ -30,7 +30,7 @@ extern const short ref_Convolve16[64];
 static struct v34_object oa;
 static unsigned char ob[sizeof(struct v34_object)];
 
-/* The five pointer fields: two per context, plus each context's convolve. */
+/* The five pointer fields: two per context, plus each context's conv. */
 static const unsigned ptr_skip[] = {
 	0x0a28, 0x0e48,				/* receive context  */
 	0x0a28 + V34_SHELL_TX, 0x0e48 + V34_SHELL_TX	/* transmit         */
@@ -125,7 +125,7 @@ main(void)
 						     : ref_descrambleGPC),
 				    1, v);
 
-			/* And both convolve pointers select the same table. */
+			/* And both conv pointers select the same table. */
 			{
 				const short *ca = ptr_at(&oa, 0x0a28);
 				const short *cb = ptr_at(ob, 0x0a28);
@@ -134,7 +134,7 @@ main(void)
 				for (k = 0; k < 64; k++)
 					if (ca[k] != cb[k])
 						diffs++;
-				diff_eq_int("convolve table", diffs, 0, v);
+				diff_eq_int("conv table", diffs, 0, v);
 				diff_eq_int("and it is Convolve16",
 					    ca == Convolve16
 					    && cb == ref_Convolve16, 1, v);

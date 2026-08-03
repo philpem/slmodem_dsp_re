@@ -1848,3 +1848,105 @@ D28 was retracted. `unmeasured` — task #47.
 
 **How it was found:** by pinning the constants before the states, as the
 brief for `v34handshakinit` asked.
+## D44 ⚠ `t3`'s tail stays at -1 for the three largest ring sizes
+
+**Where:** `src/pump/v34/v34shell.c`, `initG248` and `initV34`.
+
+**What the original does:** copies `xyz`'s block for the ring size into `t3`
+and stops.  For sizes 15, 17 and 18 the block is SHORTER than the
+8(n-1)+1 entries the sequence needs, because `xyz` stops where the
+cumulative count would pass `INT_MAX` (finding 182) -- 69, 58 and 56
+entries.  Everything above that keeps `preinitV34`'s fill of -1.
+
+**What we do:** the same.
+
+**Reachable?** The sizes are, and often: `MMaxTable` produces all three.
+Whether `shellDemapper` then INDEXES into the -1 region is **unmeasured** --
+it reads `t3[d1 + d2]` with nothing bounding the sum, which is finding 129.
+On the TRANSMIT side this is settled and not a deviation at all:
+`modulatevector` is now reconstructed and passing, its search over `t3`
+compares unsigned, and `0xffffffff` is what stops it -- so the fill is a
+working sentinel there, demonstrated rather than predicted.  The entry stays
+open only for the receive side.  Re-open with `demapFrame` driven at ring
+size 15 or above.
+
+**Not fixed.** Extending the table would be invention, and on the transmit
+side it would break a sentinel the object depends on.
+
+---
+
+## D45 ⚠ `scrambleGP*` ORs two fields that overlap
+
+**Where:** `src/pump/v34/v34shell.c`.
+
+**What the original does:** forms each new register word as
+`(bitbuf << 2) | (scr[n] >> 16)` and `(bitbuf << 7) | (scr[n] >> 16)`.  The
+shifted term keeps bits 2..31 (or 7..31) and the second is sixteen bits
+wide, so the two OVERLAP in bits 2..15 and 7..15.  A concatenation, which is
+what the shape suggests, would not.
+
+**What we do:** the same OR, in the same order.
+
+**Reachable?** The overlap is structural, so it happens on every call; what
+is **unmeasured** is whether a set bit ever lands in both terms at once, and
+therefore whether the OR is ever distinguishable from the concatenation the
+code reads as.  Deciding it needs the bit ordering these functions use,
+which is task #47's.
+
+**Not fixed.** It is reproduced exactly and the differential test passes over
+24 calls per generator, so if the overlap carries, it carries identically.
+
+---
+
+## D46 ⚠ `initG248` runs 2^32 times for a ring size of zero
+
+**Where:** `src/pump/v34/v34shell.c`.
+
+**What the original does:** computes `2 * (count - 1)` unsigned and uses it
+as the second loop's upper bound.  A `count` of zero makes that
+`0xfffffffe`, and the loop counts up to it.
+
+**What we do:** the same, with unsigned arithmetic so the wrap is defined
+rather than undefined.
+
+**Reachable?** Not from `initV34`, which is the only thing that sets `count`
+and takes it from `MMaxTable` or `MMinTable`, both of which bottom out at 1.
+But `initG248` is a global symbol with NO caller in the object, so nothing
+enforces the invariant at the boundary -- **unmeasured** for any future
+caller.  The fixture drives 1..18 and asserts the range.
+
+**Not fixed.** A guard the original does not have would be invention, and
+the reachable range is provably safe.
+
+---
+
+## D47 ~~`fa16` is 24 for the 16-state code and 32 and 64 for the others~~ RETRACTED
+
+**Filed** as an unexplained break in a pattern: +0xa16 is set alongside the
+convolutional code pointer -- 24 with `Convolve16`, then 32 with
+`Convolve32` and 64 with `Convolve64` -- and 24 is not 16, not `depth << 5`
+for any depth, and not a rounding of either.  The entry said "nothing
+reconstructed reads +0xa16 yet".
+
+**Retracted:** it is not a state count, so there is no pattern to break.
+`modulatevector` reads it, twice, and both readings say the same thing:
+
+```
+   state = (state ^ conv[idx] ^ ((state & 1) ? fa16 : 0)) >> 1
+```
+
+`fa16` is the convolutional encoder's FEEDBACK MASK -- the generator
+polynomial, XORed in when the bit shifted out is set.  32 and 64 are single
+bits because those two codes have one feedback tap; 24 is `0b11000` because
+the 16-state code has two.  The value tracks the code because it IS the
+code, and 24 is the only one of the three that shows it.
+
+`modulatevector`'s second reading is a direct comparison, `fa16 == 64`,
+which selects a hand-unrolled six-register form of the same recurrence over
+`fa2c[0..5]` instead of the shift-and-mask loop.  Two spellings of one
+encoder, and the 64-state one is the one worth unrolling.
+
+This is the third retraction after D28 and D34, and like both of those it
+was filed on a reading rather than a measurement -- here, on the absence of
+a reader.  "Nothing reads it yet" is a statement about the reconstruction,
+not about the object, and it expires the moment the next function lands.

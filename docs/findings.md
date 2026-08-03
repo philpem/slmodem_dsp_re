@@ -9642,3 +9642,429 @@ alias them):
 same timer group with the same two constants, so reconstructing it is also
 the second reading of D43's stride.  The other two are the callers that name
 modes 2 and 1.
+### 181. The shell mapper's two halves meet, and the transmit context aliases the trellis
+
+`preinitdigital` and the four bit callbacks close the loop that finding 137
+opened.  The V.34 object carries two instances of `struct v34_shell`, and
+this is what each is *for*:
+
+```
+   receive  at +0        put_bits = descrambleGP*   sink
+   transmit at +0x1be0   get_bits = scrambleGP*     source
+```
+
+`preinitdigital` installs the pair, and the choice is one comparison:
+`f359c == 0x65` scrambles with GPC and descrambles with GPA, anything else
+the other way round.  That is V.34's convention -- each end scrambles with
+its own generator and descrambles with its partner's -- and it means one
+flag decides the station's role for the whole datapump, since the same
+`f359c` picks `setTimingStateParameters`' second table.
+
+**The two contexts are not the same struct after all**, in one window of
+twelve bytes.  Finding 137 checked twenty-three offsets against `getFrame`
+and found no exceptions; the callbacks supply the exception:
+
+```
+   receive     +0xe74,78,7c  three scrambler words
+               +0xe80        the bit POSITION, a short
+   transmit    +0xe74,78,7c  three scrambler words
+               +0xe80        a FOURTH word -- which is getFrame's bit buffer
+               +0xe84        the bit position
+```
+
+The fourth word and the bit buffer are deliberately the same store:
+`scrambleGP*` leaves its scrambled 32 bits there and `getFrame` reads them
+out, so the register's last word IS the window.  The receive side folds its
+three words down to sixteen bits and hands them off, so it has no fourth
+word and puts its position in the space instead.
+
+`preinitdigital` clears four ints and a position on one side and three ints
+and a position on the other, and sets the transmit position to 32 -- past
+the fifteen `getFrame` tests against, so the first call refills before it
+reads.  That asymmetry read as an oversight until the callbacks were read.
+It is two field sets.
+
+**And the transmit context aliases the receive one's trellis.**  In shell
+coordinates `modulatevector`'s eight-point output buffer is at +0xea0 and
+its index at +0xec2, which land inside `sub[]` and `cost[]`; its trellis
+would run to +0x2eac in object coordinates, where `hist_2aa8` already is.
+Neither is a contradiction: only the receive context decodes, so `sub`,
+`cost`, `trellis` and `state` exist only there -- which is exactly why
+`preinitdigital` memsets those three on the receive side and on neither
+other.  The object reuses the transmit context's unused tail for the
+modulator's buffer and `modem_serrint`'s history rings.
+
+### 182. `xyz` is derivable, and it stops where a signed int does
+
+`initG248` copies a block of `xyz` into `t3` and computes nothing.  The
+table is 945 ints carrying its own index header -- `xyz[0..19]` are offsets
+into itself, and block n is `[xyz[n], xyz[n+1])`.
+
+Block n is the cumulative count of the eight-fold convolution of a
+rectangular window of length n: entry k is how many eight-tuples drawn from
+0..n-1 sum to less than k.  So the length should be 8(n-1)+1 and the last
+entry n^8 - 1, and both hold exactly for n up to 14.
+
+From n=15 the blocks are SHORTER, and not arbitrarily: each ends on the last
+entry that still fits a signed 32-bit int.  69 entries for n=15 where 113
+would be needed, 58 for n=17, 56 for n=18 -- and in every case the next
+entry of the true sequence is the first past `INT_MAX`.  Checked by
+recomputing the convolution: every block is a prefix, and every cut is the
+overflow point.
+
+**The empty block is the caller's, not a hole.**  `xyz[16]` and `xyz[17]`
+are both 831, so a ring of 16 gets no table at all.  `MMaxTable` runs
+`... 14, 15, 17, 18` and `MMinTable` stops at 15, so 16 is the one size
+`initV34` cannot ask for.  The table and its only caller agree about which
+sizes exist, which is a stronger statement than either alone.
+
+**This answers what finding 129 left open for `t3`.**  That entry recorded
+three tables indexed with nothing bounding them, and said the caller-side
+invariant had not been measured because `demapFrame` was not reconstructed.
+For `t3`'s *initialiser* the invariant is now measured: the ring size can
+only come from `MMaxTable` or `MMinTable`, both indexed 0..31 by a loop that
+forces the range, so it is 1..18, and the longest block any of those selects
+is 105 entries against a table of 128.  `initG248` cannot overrun `t3`.  It
+says nothing about `shellDemapper`'s reads, which remain finding 129's.
+
+Recorded rather than turned into a generator: `docs/fastpass.md` defers
+coefficient derivation to task #47, and a byte-exact copy is what the
+differential test proves.  The derivation is here so #47 does not have to
+find it twice.
+
+### 183. A reciprocal multiply that everybody reads as a divide by 100
+
+`initV34` cost one debugging round, and the fault was a constant that is
+almost a reflex:
+
+```
+   mul  $0x51eb851f
+   shr  $0x3, %edx
+```
+
+`0x51eb851f` is the magic number for dividing by 100, and it is used here to
+divide by **25**.  The multiplier is shared -- what picks the divisor is the
+shift of the high half, and 100 needs `shr $5` (a total of 37) where this is
+`shr $3` (a total of 35).
+
+Written as `/100` the reconstruction agreed with the object on every bitrate
+up to 24 and on nothing above, which is the worst shape a bug can have: the
+smallest test case passes.  The differential sweep failed at `fa04` and
+`fa06`, two fields apart, which localised it in one run.
+
+Worth recording because the reading error is not in the disassembly, it is
+in the pattern-matching: `0x51eb851f` is recognisable enough that the shift
+stops being read.  Anywhere else this constant appears, the shift is the
+thing to check.
+
+### 184. `modulatevector`'s shape -- and it checks the bound `shellDemapper` does not
+
+`modulatevector` is 3388 bytes, more than the other eight of this pass put
+together.  This entry was written BEFORE it was reconstructed, the way
+findings 99, 103, 111 and 133 recorded `V34TimingFilter`, `txinit` and
+`receiver`, because planning against "the 3.4 KB one" and against the
+structure below are different exercises.  It is now written and passing, and
+the entry is kept as filed: every claim in it survived contact with the
+differential test, which is the point of recording them in advance.
+
+**It is the forward shell mapper, and it works on the TRANSMIT context.**
+Every offset it uses lands on a `struct v34_shell` field once `V34_SHELL_TX`
+is subtracted, with no exceptions in twelve checked:
+
+```
+   0x25f2 -> 0xa12 count    0x2628 -> 0xa48 t1     0x2a30 -> 0xe50 frame[0]
+   0x25f4 -> 0xa14 fa14     0x2728 -> 0xb48 t2     0x2a34 -> 0xe54 frame[2]
+   0x25f8 -> 0xa18 hist     0x2828 -> 0xc48 t3     0x2a38 -> 0xe58 frame[4]
+   0x2604 -> 0xa24 coeff    0x2608 -> 0xa28 conv   0x2618 -> 0xa38 prev_k
+```
+
+So it is `shellDemapper` run backwards, against the same three tables, and
+`getFrame` is its bit source exactly as `putFrame` is the demapper's sink.
+
+**One call emits one point.**  The object carries eight complex points at
++0x2a80 and an index at +0x2aa2; a call with the index below 8 copies point
+`n` to +0x25d0, bumps the index and tail-calls `txmit`.  Only when the index
+reaches 8 does the mapping run, refilling all eight.  That is what
+`scaleVector` scales: sixteen shorts is those eight points.
+
+**Four top-level paths**, and a sweep that misses any of them proves little:
+
+```
+   index != 8, f25c2 bit 14 clear   copy the point, txmit
+   index != 8, f25c2 bit 14 set     V34nlencoder the point, txmit
+   index == 8, f25c2 bit  4 set     getFrame, then the mapping below
+   index == 8, f25c2 bit  4 clear   the training counter, then the same
+```
+
+**The mapping**, in the order it runs:
+
+1. A binary search over `t3` for the wide value `getFrame` left in
+   `frame[0]` -- seven halvings, and the comparison is `ja`, UNSIGNED.
+   That is why `preinitV34` fills `t3` with -1 rather than 0: `0xffffffff`
+   is above any frame value, so the -1s are what stops the search walking
+   into the part of `t3` that `initG248` did not fill.  The fill is
+   load-bearing, not leftover.
+2. Successive division and remainder against `t2` and then `t1` entries,
+   which is the inverse of the demapper's convolution sums, producing eight
+   sub-indices on the stack in pairs.
+3. Four iterations, each consuming one group of four shorts from `frame`
+   -- `frame[2+4i]` through `frame[5+4i]`, which is exactly the four groups
+   `putFrame` emits -- and each producing two of the eight points.
+4. Per point: a `quarter` lookup (416 shorts of packed byte pairs, the low
+   byte taken SIGNED), a six-tap precoder over `hist` with `coeff`'s two
+   rows of six, a shift-and-mask quantiser, the differential rotation
+   through `prev_k` as a four-case switch on `(-x) & 3`, and a trellis step
+   through `conv` and `smIndex` (16 shorts).
+
+**It names `fa16` and `faa74`, which were both blanks.**  `fa16` is the
+convolutional encoder's feedback mask -- `state = (state ^ conv[idx] ^
+((state & 1) ? fa16 : 0)) >> 1` -- so 24 is `0b11000`, a two-tap generator
+for the 16-state code, against one tap each for the other two.  That
+retracts D47, which had filed the 24 as an unexplained break in a pattern
+that turned out not to be a pattern.  A second reading, `fa16 == 64`,
+selects a hand-unrolled six-register form of the same recurrence over
+`fa2c[0..5]` -- which is also what `fa2c` is for.
+
+`faa74` is a symbol counter with a purpose: it is compared against `fa00`
+(the span J), and when it reaches it the object sets `data_enable` and
+`f25c2` bit 4 -- which is the transition out of training and into carrying
+data.  `preinitdigital` clears it, and this is the only thing that reads
+it.
+
+**And it bounds its sub-indices, which is what finding 129 wanted.**  Each
+of the four is compared against `count` with `jae` and diverted to a fixup
+when it reaches it.  Finding 129 said of the demapper's three unclamped
+tables that "whether it can produce an out-of-range group is exactly what
+has not been measured".  For the ENCODE side it is now measured: it cannot,
+because it checks.  The decode side keeps the finding -- `demapFrame` is a
+different caller -- but the intended invariant is now stated by the object
+itself rather than assumed: every sub-index is below `count`.
+
+**What a fixture will need -- SUPERSEDED**, and worth keeping only for what
+it got wrong.  The prediction was that a fixture calling straight in would
+take SIGFPE on the `idiv` against `t1` and `t2`, since `preinitV34` zeroes
+both.  The real fixture runs `preinitdigital` then `initV34` and so never
+tested it; the claim was never more than plausible and is recorded as
+unverified rather than as fact.  `quarter` and `smIndex` are emitted, and
+the `0x5a910` path this entry called unread is the training counter above.
+
+The fixture that exists is in `t_v34shell.c`, and the thing it turned out to
+need was not the divisions at all but TWO bit sources -- the real scramblers
+and a synthetic pair -- for the reason finding 185 gives.
+
+
+### 185. `modulatevector` found a bug in `getFrame`, whose own test could not
+
+`getFrame` was committed passing 1.6 million comparisons.  The first thing
+to drive it from a REAL caller disagreed on the second call.
+
+The fault is in the split path, the one taken when the wide field is more
+than sixteen bits:
+
+```
+   frame[0] = bitbuf >> pos
+   pos = get_bits(obj, 0)          <-- the reconstruction
+   (void)get_bits(obj, 0)          <-- the object
+   pos = bitpos                        re-read from the object
+   frame[1] = (bitbuf >> pos) & lsbMask[nb & 15]
+```
+
+The object throws the callback's return value away and re-reads `bitpos`
+from the field.  That is not the same thing, because the scrambler
+callbacks return `pos - 16` and never write the field: the position the
+second half shifts by is the one the refill loop left, unchanged, while only
+the buffer has moved on.  Taking the return shifts by a negative count
+masked to sixteen and reads a different field entirely.
+
+The refill loop is the other half of it -- the object stores `bitpos` back
+on EVERY pass, not once at the end, which is what makes the re-read
+meaningful.
+
+**Why the original tests could not see it, and this is the interesting
+part.**  Two conditions have to hold together: the wide field must exceed
+sixteen bits, and the callback's return must differ from the position the
+refill loop stored.  `getFrame` had TWO tests, and each covered one.
+
+```
+   differential test   nb runs -1..20   split path YES
+                       bitsrc returns 0, which is also what the loop
+                       stored, so the two readings agree      NO
+   round-trip test     nb runs 1..16    split path NO
+                       rt_source returns pos - 16, which differs YES
+```
+
+So neither fixture was careless: between them they covered both conditions,
+and the bug lives only where the two overlap.  That is a more uncomfortable
+result than a gap in one test, because both tests look thorough on their own
+and the coverage argument has to be made across them rather than within
+either.
+
+The round-trip sweep now runs to 20, which puts both conditions in one
+fixture and closes it permanently.
+
+**What found it.**  `modulatevector` is the first caller that runs
+`preinitdigital` and `initV34` and then drives `getFrame` through the
+scrambler `preinitdigital` installed -- so all three conditions arrive
+together for the first time.  Localised by swapping the synthetic bit source
+back in: with an identical deterministic source on both sides the buffers
+matched and only the POSITION diverged, which named the field.
+
+This is the same shape as finding 139, where `receiver` found a bug in
+`V34TimingFilter` that the filter's own test could not reach.  The lesson is
+the same one and slightly sharper here: a leaf test proves the leaf against
+the inputs someone imagined for it, and two leaf tests that each cover half
+a condition still prove nothing about their conjunction.  The caller is what
+supplies the combinations nobody enumerated.  Both times the caller was
+worth more than another round on the leaf.
+
+### 186. `initdigital` is the rate negotiation, and its own strings name it
+
+`initdigital` (0x59980, 1206 bytes) became ready the moment `initV34` and
+`preinitdigital` landed, because it is the thing that calls them.  Now
+reconstructed and passing; this entry was written first, from the five
+surviving debug strings that name most of what it computes and from the way
+it confirms `initV34`'s signature from the caller's side.  Everything below
+survived the differential test.
+
+**It calls `initV34` twice, once per context**, which is the shape finding
+181 predicted from the other direction:
+
+```
+   initV34(obj + 0x25e0, cfg[0x00], 2400 * cfg[0x04], ..., obj + 0x2a68, d)
+   initV34(obj + 0x0a00, cfg[0x12], 2400 * cfg[0x14], ..., obj + 0x0e84, d)
+```
+
+`obj + 0x25e0` is the transmit context's fields and `obj + 0xa00` the
+receive one's -- 0x1be0 apart, and each gets its own coefficient block.  The
+`bitrate` argument is a genuine bit rate in bps, formed as 2400 times a
+count, which is why `initV34` divides it by 25 rather than by anything
+rate-like (finding 183): 2400/25 is 96, so the quotient counts bits per
+symbol group directly.
+
+**The author's names**, from `.rodata.str1.4`:
+
+```
+   0xd7f4  "V34DATARATE, for tx data rate - %d, PTC - %d, setting
+            nofTxBits to %d\r\n"
+   0xd83c  "V34DATARATE, finally txbitrate %d,rxbitrate %d\n"
+   0xd86c  "V34DATARATE, preliminary txbitrate %d,rxbitrate %d\n"
+   0xd8a0  "FATAL ERROR(initdigital) - ZERODIV expected!"
+   0xd8d0  "--ERROR---, 2400bps is not possible at %d baud rate\n"
+```
+
+Matching them to the arguments pins four fields:
+
+```
+   cfg + 0x04   txbitrate, in units of 2400 bps
+   cfg + 0x14   rxbitrate, same units
+   obj + 0x08   PTC        (read)
+   obj + 0x10   nofTxBits  = ((txbitrate * PTC) >> 6) + 6
+```
+
+where `cfg` is `obj + 0xaa84`.  "preliminary" is printed before the two
+rates are clamped against each other and against a per-baud capability
+bitmap at `obj + 0xaa0e`; "finally" after.
+
+**ZERODIV confirms a field this tree already guessed.**  `v34shell.h` says
+of `divisor` at +0xa42 that "zero means one", which was inferred from
+`initV34` treating it as a width.  The string says the author thought the
+same and called a zero there fatal: the code substitutes 1 and prints
+"ZERODIV expected!" rather than dividing.  Two independent readings, and the
+second is the author's own word.
+
+**All five diagnostic call sites are carried**, per finding 134's policy,
+and this is the first module in the tree whose test actually DRIVES them:
+the sweep runs once with `dsplibs_debug_level` at 0 and once at 2, so the
+gated branches and the register reloads inside them are compared rather than
+merely present.  Everywhere else the level ships at zero and the branch is
+never taken, which finding 134 notes is exactly why a missing call site
+could go unnoticed for so long.
+
+**Two things the reconstruction added to the map.**  The object is longer
+than `struct v34_object` claimed: the declared end at 0xac10 was the largest
+offset anything reconstructed had touched, and `initdigital` writes a byte
+at 0xac16, so the struct now runs to 0xac18 and that is still a floor.  And
+the rate config's `rx_baud` at +0xaa96 IS `faa96` -- one store, two
+readings, the same situation as the echo array that is also the FSK delay
+line (finding 100), declared in both places on purpose.
+
+**One finding-129-class read.**  The transmit divisor lookup
+`divtab[bits + 14*use_max - 1]` happens BEFORE the zero-rate test, so a zero
+rate in mode 0 reads one entry before the table.  Unclamped and reproduced;
+the fixture points the table at the middle of a scratch array so the read is
+defined and identical on both sides rather than left to whatever follows.
+
+### 187. The +0x14 buffers are the data path, and only the merge could tell
+
+Two sessions named the same memory, and neither could have got it right
+alone.  The V.34 handshake session read +0x0014..+0x021c as `scram_sink`,
+`scram_src` and `scram_capture` -- "a scripted-bits loopback for the
+object's own scrambler pair", i.e. a test harness.  The transmit session
+read the identical five fields as `rx_data`, `tx_data`, `tx_rd`, `tx_n` and
+`data_enable` -- the datapump's own buffers.
+
+The two descriptions of the MECHANISM agree exactly: with the flag set the
+scramblers draw their sixteen bits from one array and the descramblers
+append to the other; with it clear the transmitter scrambles 0xffff and the
+receiver discards.  What they disagree about is what that is for, and the
+only evidence that separates them is who writes the flag:
+
+```
+   <scrambleGPC>:    cmpw   $0x0,0x2214(%eax)
+   <scrambleGPA>:    cmpw   $0x0,0x2214(%eax)
+   <descrambleGPC>:  cmpw   $0x0,0x2214(%esi)
+   <descrambleGPA>:  cmpw   $0x0,0x2214(%edi)
+   <preinitdigital>: mov    %ax,0x2214(%ebx)
+   <modulatevector>: mov    %bp,0x2214(%esi)
+```
+
+Six accesses in the whole object, four of them reads.  `preinitdigital`
+clears it; `modulatevector` SETS it, when the training-to-data symbol
+counter passes the span in `fa00`.  So the object turns this on itself, at
+the end of training -- which is the modem entering data mode, and settles it
+as the data path rather than a facility something outside operates.
+
+The handshake session saw only the clear, because `modulatevector` was the
+other session's work and was not in its tree.  A reading that is right about
+every instruction it can see can still be wrong about what the code is for,
+and the missing evidence was one function away in a branch that had not been
+merged yet.  Nothing about this was visible to either differential test:
+both drove the same five fields through the same four functions and both
+passed.
+
+### 188. Four functions reconstructed twice, and the object settles the signature
+
+The same merge found `scrambleGPC`, `scrambleGPA`, `descrambleGPC`,
+`descrambleGPA`, `preinitdigital` and `Convolve16` written twice -- once in
+`v34scram.c`/`v34digital.c` and once inside `v34shell.c`.  The two
+reconstructions of each agree instruction for instruction; they differ only
+in which base they measure from, the handshake session using the object
+(`obj->scrambler` at +0x2a54) and the transmit session the transmit shell
+context (`tx->scr[]`), which is the same memory 0x25e0 apart.
+
+`preinitV34` was written twice under two names: the transmit session
+reconstructed the object's own exported symbol, the handshake session an
+identical private `preinit_shell`.  They are the same function.
+
+WHAT THE OBJECT SETTLES.  `v34shell.h` had recorded the signature as open --
+"`scrambleGPC` takes and returns a short where `v34_getbits_fn` uses int ...
+which typedef is the original's is not settled".  It is settled:
+
+```
+   57860: sub    $0xc,%esp
+   57863: mov    0x10(%esp),%eax          ; arg 1, the object
+   57883: movswl 0x14(%esp),%edi          ; arg 2, SIGN-EXTENDED 16 bits
+   578d1: cwtl                            ; and the return widened the same way
+```
+
+A parameter the callee reads with `movswl` is declared `short`, so
+`short scrambleGPC(void *, short)` is the original's and `v34_getbits_fn`'s
+`int (*)(void *, int)` is not.  The union at +0xe48 keeps all three
+spellings, and the four callbacks are installed through the `scramble` one.
+
+Kept: the dedicated modules, which carry the derivations the inline copies
+do not -- GPA's four folds, and the observation that its `shr` could be
+`sar` without any test being able to tell.  The blob's symbol order puts all
+four between `getFrame` and `putFrame`, so `v34shell.c` is where the
+original had them; that deviation is recorded at the head of `v34scram.c`
+rather than acted on.
