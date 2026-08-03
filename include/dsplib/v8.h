@@ -634,10 +634,18 @@ int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
  * the message was longer than a buffer holds and only the first fifteen
  * octets went in, and -1 for an unknown selector or an empty message.
  */
+/*
+ * The names are the author's: V8SetMessage announces each through the
+ * exported v8SequenceName table, and the fourth selector is the V.92
+ * quick-connect QC1A sequence -- an earlier draft guessed "CI".
+ */
 #define V8_SET_CM	0
 #define V8_SET_JM	1
 #define V8_SET_CJ	2
-#define V8_SET_CI	3
+#define V8_SET_QC1A	3
+
+/* .rodata+0x53ac, a GLOBAL symbol in the object, so exported here too. */
+extern const char *const v8SequenceName[4];
 
 #define V8_SET_TRUNCATED	15
 #define V8_SET_REJECTED		(-1)

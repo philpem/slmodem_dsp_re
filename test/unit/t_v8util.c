@@ -1084,6 +1084,65 @@ t_setmessage(void)
 		diff_eq_int("round trip octet %ld", back[i], msg[i], i);
 
 	diff_eq_int("selectors were accepted (%ld)", ok > 0, 1, ok);
+
+	/*
+	 * The diagnostic paths: the v8SequenceName banner for every valid
+	 * selector and one complaint each for an illegal type, a zero
+	 * length and an oversize message.  A coarser grid than above so the
+	 * transcript stays well inside the capture buffer.
+	 */
+	{
+		unsigned lvl;
+		long lines = 0;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			dsplib_debug_capture_reset();
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+
+			for (which = -1; which <= 4; which++)
+				for (n = 0; n <= 20; n += 5) {
+					memset(&obj_a, 0x33, sizeof(obj_a));
+					memcpy(&obj_b, &obj_a, sizeof(obj_a));
+					ref_V8SetMessage(&obj_a, which, msg, n);
+					V8SetMessage(&obj_b, which, msg, n);
+				}
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("transcript matches (level %ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)lvl);
+			if (getenv("DBGDIFF")
+			    && strcmp(dsplib_debug_capture_text(0),
+				      dsplib_debug_capture_text(1)) != 0) {
+				const char *o = dsplib_debug_capture_text(0);
+				const char *r = dsplib_debug_capture_text(1);
+				int j = 0;
+				while (o[j] && o[j] == r[j]) j++;
+				while (j > 0 && o[j - 1] != '\n') j--;
+				printf("=== setmessage level %u: at %d\n",
+				       lvl, j);
+				printf("--- ours: %.400s\n", o + j);
+				printf("--- ref : %.400s\n", r + j);
+			}
+			diff_eq_int("line counts match (level %ld)",
+				    (int)dsplib_debug_capture_lines(0),
+				    (int)dsplib_debug_capture_lines(1),
+				    (long)lvl);
+			if (lvl == 1)
+				diff_eq_int("silent below the threshold",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, 0);
+			else
+				lines += dsplib_debug_capture_lines(1);
+		}
+		diff_eq_int("diagnostics were captured (%ld lines)",
+			    lines > 50, 1, lines);
+	}
+
 	return diff_end();
 }
 

@@ -8697,3 +8697,25 @@ Verified by transcript comparison at levels 1-3 in t_v8util over six menu
 variants (both call-function branches, both protocol branches, and each BUG
 path); 12/12 mutations caught.  Field renames (mode -> side, fa48 ->
 op_mode) deferred to travel with the rest of the v8 batch.
+
+### 165. v8SequenceName: the object's one exported data symbol in V.8
+
+V8SetMessage's entry banner indexes a GLOBAL table at .rodata+0x53ac:
+
+    const char *const v8SequenceName[4] = {
+        "V8_CM", "V8_JM", "V8_CJ", "V8_QC1A"
+    };
+
+Two things follow.  Selector 3 is the V.92 quick-connect QC1A sequence --
+the reconstruction had guessed "CI" -- which fits the same story
+ucodeForQts and quickConnectEnabled told in finding 164: the V.92
+quick-connect support threads through all of V.8.  And the symbol is
+exported, so the reconstruction now exports it too; it was invisible until
+its one consumer's call site was restored.
+
+V8SetMessage's four sites also mix line endings deliberately: the banner
+ends \r\n like the rest of V8's trace, the three complaints (illegal type,
+zero length, oversize) end in a bare \n.  The banner prints only AFTER the
+selector is validated -- an illegal type gets its complaint instead, never
+the banner -- and the oversize complaint reports the CALLER's length, not
+the truncated one.  9/9 mutations caught via t_v8util's transcript sweep.

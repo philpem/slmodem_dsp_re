@@ -227,10 +227,19 @@ selected_sequence(struct v8 *v, int which)
 	case V8_SET_CM:	return &v->seq[0];
 	case V8_SET_JM:	return &v->seq[2];
 	case V8_SET_CJ:	return &v->seq[1];
-	case V8_SET_CI:	return &v->seq[3];
+	case V8_SET_QC1A: return &v->seq[3];
 	default:	return 0;
 	}
 }
+
+/*
+ * .rodata+0x53ac.  A GLOBAL symbol in the object -- the only exported data
+ * in all of V.8 -- so it is one here too.  V8SetMessage indexes it with the
+ * selector for its entry banner.
+ */
+const char *const v8SequenceName[4] = {
+	"V8_CM", "V8_JM", "V8_CJ", "V8_QC1A"
+};
 
 int
 V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n)
@@ -239,12 +248,35 @@ V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n)
 	int rc = 0;
 	int i;
 
-	if (seq == 0)
+	/*
+	 * Note the line endings: the entry banner is \r\n like the rest of
+	 * V8's trace, but all three complaints below end in a bare \n.
+	 */
+	if (seq == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V8: Try to set message with "
+					     "illegal V.8 message type\n");
 		return V8_SET_REJECTED;
-	if (n == 0)
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: V8SetMessage called, message type is %s\r\n",
+		    v8SequenceName[which]);
+
+	if (n == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: Try to set message with 0 length\n");
 		return V8_SET_REJECTED;
+	}
 
 	if (n > V8_TX_SEQ_WORDS) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: Try to set message with size larger than "
+			    "maximal (max=%d, externalLength=%d)\n",
+			    V8_TX_SEQ_WORDS, n);
 		n = V8_TX_SEQ_WORDS;
 		rc = V8_SET_TRUNCATED;
 	}
