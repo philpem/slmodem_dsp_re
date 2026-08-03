@@ -8217,6 +8217,21 @@ reaches 8 does the mapping run, refilling all eight.  That is what
    through `prev_k` as a four-case switch on `(-x) & 3`, and a trellis step
    through `conv` and `smIndex` (16 shorts).
 
+**It names `fa16` and `faa74`, which were both blanks.**  `fa16` is the
+convolutional encoder's feedback mask -- `state = (state ^ conv[idx] ^
+((state & 1) ? fa16 : 0)) >> 1` -- so 24 is `0b11000`, a two-tap generator
+for the 16-state code, against one tap each for the other two.  That
+retracts D38, which had filed the 24 as an unexplained break in a pattern
+that turned out not to be a pattern.  A second reading, `fa16 == 64`,
+selects a hand-unrolled six-register form of the same recurrence over
+`fa2c[0..5]` -- which is also what `fa2c` is for.
+
+`faa74` is a symbol counter with a purpose: it is compared against `fa00`
+(the span J), and when it reaches it the object sets `data_enable` and
+`f25c2` bit 4 -- which is the transition out of training and into carrying
+data.  `preinitdigital` clears it, and this is the only thing that reads
+it.
+
 **And it bounds its sub-indices, which is what finding 129 wanted.**  Each
 of the four is compared against `count` with `jae` and diverted to a fixup
 when it reaches it.  Finding 129 said of the demapper's three unclamped

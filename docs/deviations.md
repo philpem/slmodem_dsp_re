@@ -1602,21 +1602,33 @@ the reachable range is provably safe.
 
 ---
 
-## D38 ⚠ `fa16` is 24 for the 16-state code and 32 and 64 for the others
+## D38 ~~`fa16` is 24 for the 16-state code and 32 and 64 for the others~~ RETRACTED
 
-**Where:** `src/pump/v34/v34shell.c`, `preinitV34` and `initV34`.
+**Filed** as an unexplained break in a pattern: +0xa16 is set alongside the
+convolutional code pointer -- 24 with `Convolve16`, then 32 with
+`Convolve32` and 64 with `Convolve64` -- and 24 is not 16, not `depth << 5`
+for any depth, and not a rounding of either.  The entry said "nothing
+reconstructed reads +0xa16 yet".
 
-**What the original does:** sets +0xa16 alongside the convolutional code
-pointer -- 24 with `Convolve16`, then `depth << 5` with `Convolve32` and
-`Convolve64`, i.e. 32 and 64.  Two of the three match their code's state
-count; the first does not, and 24 is not `16`, not `depth << 5` for any
-depth, and not a rounding of either.
+**Retracted:** it is not a state count, so there is no pattern to break.
+`modulatevector` reads it, twice, and both readings say the same thing:
 
-**What we do:** the same three values.
+```
+   state = (state ^ conv[idx] ^ ((state & 1) ? fa16 : 0)) >> 1
+```
 
-**Reachable?** The 24 is the default every context starts at, so always.
-What it MEANS is **unmeasured**: nothing reconstructed reads +0xa16 yet.
-`modulatevector` does not; whatever consumes it is further in.
+`fa16` is the convolutional encoder's FEEDBACK MASK -- the generator
+polynomial, XORed in when the bit shifted out is set.  32 and 64 are single
+bits because those two codes have one feedback tap; 24 is `0b11000` because
+the 16-state code has two.  The value tracks the code because it IS the
+code, and 24 is the only one of the three that shows it.
 
-**Not fixed.** Nothing is known to be wrong -- this is recorded because the
-pattern breaks and the break would otherwise be rediscovered.
+`modulatevector`'s second reading is a direct comparison, `fa16 == 64`,
+which selects a hand-unrolled six-register form of the same recurrence over
+`fa2c[0..5]` instead of the shift-and-mask loop.  Two spellings of one
+encoder, and the 64-state one is the one worth unrolling.
+
+This is the third retraction after D28 and D34, and like both of those it
+was filed on a reading rather than a measurement -- here, on the absence of
+a reader.  "Nothing reads it yet" is a statement about the reconstruction,
+not about the object, and it expires the moment the next function lands.
