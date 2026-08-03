@@ -7989,7 +7989,13 @@ hold six arrays of string pointers, and `nm` names five of them outright:
 ```
 
 **The V.34 handshake's eighty-seven states are all here**, in index order,
-and are now `include/dsplib/v34hshak.h`.  That is the 61 KB function tasks
+and are now `include/dsplib/v34hshak.h`.
+
+> **Corrected by finding 152.**  The claim below that nothing indexes
+> `StateName` is wrong: `v34handshakinit` and `v34handshak` index it 533
+> times over, through a relocation against the `.data` section symbol that a
+> search for the name cannot see.  The claim about the two V.8 tables
+> survives.  That is the 61 KB function tasks
 #39-#45 are about, and the difference between planning it against "state 47"
 and against `TX_PHASE3_ANS` is not small.  Four are placeholders --
 `NOSTATE0`, `NOSTATE2`, `NOSTATE3`, `NOSTATE36` -- so the enum has holes and
@@ -8335,3 +8341,62 @@ entry is followed by `offsetarr`, `iEncodeOffset`, `temp.0` and
 the only `STT_FILE` after it is `pow.S`.  So this is a complete TU
 reconstructed whole rather than a slice, which is rare this late in the
 object.
+
+### 152. `StateName` IS indexed — finding 144 was caught by the section-symbol trap
+
+Finding 144 says of `StateName`, the 87-entry table at .data+0x6c00: "Nothing
+in this object indexes it -- the debug call sites that printed it were
+compiled out or live elsewhere."  **That is wrong.**
+
+```
+   600d3:  mov  0x6c00(,%eax,4),%esi     ; v34handshakinit
+   600f8:  mov  0x6c00(,%ebp,4),%ecx
+   60140:  mov  0x6c10,%ecx              ; StateName[4], V34HS_RECEIVE
+```
+
+`v34handshakinit` indexes it throughout and `v34handshak` does so **533**
+times.  The table is not a survivor of deleted code; it is live, and it is
+live in the largest function in the object.
+
+**Why the search missed it, and why that is the third time.**  The reference
+is `R_386_32` against the **section symbol** `.data` with 0x6c00 as an inline
+addend, not against the symbol `StateName` — so a relocation search for the
+name returns nothing, and `readelf -r | grep StateName` returns only
+`V32StateName`, a function, matching as a substring.  `tools/dis.py`'s own
+header lists three earlier instances of exactly this trap: the toneiir
+pointers read as integers (finding 46), the `CP_*` tables read as
+unreferenced (retracted at D10), and `cadence_create`'s bank-3 fallback.
+This is the fourth, and the first to have been written into a finding.
+
+**`tools/relocscan.py` exists for this and was not used.**  Its docstring
+says so in as many words: "tabdump.py warns that a range contains
+relocations; relocscan.py resolves them to names, which is what you actually
+wanted."  The rule that follows is narrower and more useful than "use the
+tool": **"nothing references this" is a claim about addends, not about
+symbol names, and it cannot be made with `grep`.**
+
+**What is confirmed.**  Finding 144's other negative claim survives the same
+check: `v8ControlName` (.rodata+0x5380), `v8SequenceName` (+0x53ac) and
+`v8StatusName` (+0x53c0) really are referenced by nothing, in either form.
+`CadenceNames` and `statenames` are both indexed, which 144 and 145 already
+had.  So the general point 144 makes — a name table outlives the code that
+printed it — holds for the V.8 tables and not for this one.
+
+**What it buys for #39-#45.**  The thirteen diagnostics in `v34handshakinit`
+are state-transition traces, and they name THREE state machines, not one:
+
+```
+   V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)
+   V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)
+   V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)
+```
+
+so the handshake is a receive machine, a transmit machine and a "microstate"
+running together, each printing its own transition and the other two's
+current state.  The five entries loaded by fixed address are the initial
+states: `StateName[4]` `RECEIVE`, `[35]` `WAIT`, `[41]` `DET_SYNC`, `[43]`
+`RX_DPSK`, `[54]` `SILENCEINFO`.
+
+That materially changes how the split in fastpass.md should be made.  Eighty-
+seven states over three concurrent machines is not seven slices of one
+machine, and `cfgsplit` should be pointed at it before anyone assumes it is.

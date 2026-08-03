@@ -4,11 +4,15 @@
  * `v34handshak` is 61,541 bytes holding one state machine, and this is its
  * eighty-seven states in the AUTHOR'S names, in index order.
  *
- * They come from `StateName`, a table of string pointers at .data+0x6c00.
- * Nothing in this object indexes it -- the debug call sites that printed it
- * were compiled out or live elsewhere -- but the table survived, and a name
- * table survives a printf's removal because it is separately addressable
- * data.  See findings 134 and 144.
+ * They come from `StateName`, a table of string pointers at .data+0x6c00,
+ * and it is LIVE: `v34handshakinit` and `v34handshak` index it 533 times
+ * between them, to print state transitions.  An earlier note here said
+ * nothing indexed it, which was a relocation search missing an addend
+ * against a section symbol -- see findings 144 and 152.
+ *
+ * The transitions name THREE concurrent machines, not one: a receive state,
+ * a transmit state and a "microstate", each trace printing its own change
+ * and the other two's current value.
  *
  * Nothing here is reconstructed yet; tasks #39-#45 are.  The point of
  * writing them down first is that planning the reconstruction against
