@@ -8502,3 +8502,36 @@ something about structure that the stripped code could not (findings 136, 148,
 158).  The pattern is consistent enough to plan around: a dropped call site is
 not only a lost message, it is a lost constraint on the shape of the function
 that printed it.
+
+### 160. Where the return-target technique stops working
+
+Findings 158 and 159 both turned on the same move: when several call sites
+carry confusable strings, the address the block jumps BACK to says which
+branch it belongs to.  It resolved DialerProgress's nine state announcements
+and DialerAbort's three guards.
+
+It does not resolve `GetNextDigitAndReturnNextState`, and it is worth knowing
+that before spending an hour on it.  All six of its Tone/Pulse messages return
+to the SAME address:
+
+    0x7ae1b  gate -> 'Switching to Pulse'                        -> 0x7abd0
+    0x7ae66  gate -> 'Switching to Tone'                         -> 0x7abd0
+    0x7ae90  gate -> 'TONE_OR_PULSE_FLAG became TONE_DIALING'    -> 0x7abd0
+    0x7aebb  gate -> 'TONE_OR_PULSE_FLAG became PULSE_DIALING'   -> 0x7abd0
+    0x7aee9  gate -> 'Not permitted to switch to Tone'           -> 0x7abd0
+    0x7af07  gate -> 'Not permitted to switch to Pulse'          -> 0x7abd0
+
+0x7abd0 is the top of the parser loop.  Every one of these is a "note it and
+carry on" branch, so they all rejoin at the same place and the return target
+carries no information at all.
+
+What is left is the GATE addresses, which are distinct and ordered.  Each sits
+at its own point in the main body, so the discriminator is what PRECEDES each
+gate -- the character test that reached it -- not what follows.  That is a
+different and more expensive read, and it is the one this function needs.
+
+Recorded as a negative result on purpose.  Three Tone/Pulse pairs is exactly
+the shape that produced findings 143, 146 and 152, and the cheap technique
+that worked twice in a row does not work here.  Knowing which tool fails is
+worth as much as knowing which one works, and costs a lot less to write down
+than to rediscover.
