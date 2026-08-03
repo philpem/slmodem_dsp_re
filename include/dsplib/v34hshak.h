@@ -149,6 +149,7 @@ extern const short c1600[V34_CARRIER_DESC], c1680[V34_CARRIER_DESC];
 extern const short c1800_[V34_CARRIER_DESC], c1829[V34_CARRIER_DESC];
 extern const short c1867[V34_CARRIER_DESC], c1920[V34_CARRIER_DESC];
 extern const short c1959[V34_CARRIER_DESC], c2000[V34_CARRIER_DESC];
+extern const short c1200_[V34_CARRIER_DESC], c2400_[V34_CARRIER_DESC];
 
 extern short bpv22high[V34_BPV22_TAPS];
 extern short bpv22low[V34_BPV22_TAPS];
@@ -171,6 +172,13 @@ void dpskinit(void *obj, short mode, short high);
  * receive symbol rates, carriers, power scales and a pre-emphasis index.
  * Rate codes 1, 6 and 7 set nothing at all.
  */
+/*
+ * Set the whole object up for phase 2.  Two configurations in one function,
+ * chosen by `f359c == 0x65`: the originate end signals on 1200 Hz through
+ * the upper receive band, the answer end on 2400 through the lower.
+ */
+void v34modeminit(void *obj);
+
 void setfinalrate(void *obj);
 
 /*

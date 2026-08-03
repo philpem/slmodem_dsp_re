@@ -36,9 +36,11 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/v34det.h"
+#include "dsplib/v34digital.h"
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
+#include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
 
@@ -129,6 +131,17 @@ const short c1829[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -11763, 15735, -11685, 1573
 const short c1800_[V34_CARRIER_DESC] = { 0, 0, 0, 0, -12328, 15735, -12250, 15735 };
 const short c1680[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -14616, 15735, -14541, 15735 };
 const short c1600[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -16093, 15735, -16020, 15735 };
+
+/*
+ * And two more of the same shape for the phase-2 signalling carriers, which
+ * `v34modeminit` hands to the tone detector rather than storing.  Their
+ * second coefficient is 15993 where the eight above all use 15735, and
+ * `c2400_`'s first is zero -- a resonator at a quarter of the sample rate
+ * needs no rotation, which is what a zero there would mean.  The trailing
+ * underscores are the object's.
+ */
+const short c1200_[V34_CARRIER_DESC] = { 0, 0, 0, 0, -22892, 15993, -22892, 15993 };
+const short c2400_[V34_CARRIER_DESC] = { 0, 0, 0, 0,      0, 15993,      0, 15993 };
 
 /*
  * The phase-2 DPSK receive band-pass, one per channel, 60 symmetric taps.
@@ -300,6 +313,147 @@ dpskinit(void *objp, short mode, short high)
 	}
 	rx->f19c = 0;
 	rx->f19e = 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Bringing the modem up.
+ */
+
+/*
+ * Set the whole V.34 object up for phase 2.
+ *
+ * Long and almost entirely straight-line: three probe records, thirty-odd
+ * scalars, two calls into the modulator, and then the SAME BODY TWICE with
+ * four values changed.  `f359c == 0x65` -- the originate/answer flag
+ * `preinitdigital` also reads (finding 153) -- picks between them:
+ *
+ *                        originate (0x65)      answer
+ *      +0x25c2                   4                 5
+ *      receiver flags            0                 4
+ *      phase-2 carrier        1200              2400
+ *      receive band-pass  bpv22high          bpv22low
+ *      detector coeff        c2400_            c1200_
+ *
+ * and nothing else differs between the two, which is why the tail below is
+ * written once.  The object duplicates all of it; that is the compiler
+ * having no reason not to.
+ *
+ * THE FSK BLOCK IS `dpskinit`'S, INLINED.  Both arms clear the same hundred
+ * shorts and write the same eleven fields, so they call the same two helpers
+ * this file already has rather than a third and fourth copy.
+ *
+ * The modulator is set up TWICE: once at 2400 baud with `reset` clear, then
+ * again at 600 with it set.  The first leaves the shaping tables loaded for
+ * a rate phase 2 does not use, so it reads as preparing the data-mode
+ * configuration before overwriting the live one -- but nothing here proves
+ * that and the order is simply reproduced.
+ */
+void
+v34modeminit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_modulator *mod =
+		(struct v34_modulator *)((char *)obj + 0x1450);
+	int originate;
+	int i;
+
+	/*
+	 * Three records of 44 bytes at +0xa81c, ending exactly where the
+	 * int at +0xa8a0 and then `info0_bits` begin.  Each gets the same
+	 * two constants and its own value at +2: 0x600, 0x800, 0xa00.
+	 */
+	for (i = 0; i < 3; i++) {
+		unsigned char *r = m + 0xa81c + i * 0x2c;
+
+		*(short *)(r + 0x28) = 0x50;
+		*(short *)(r + 0x2a) = 3000;
+		*(short *)(r + 0x00) = 0;
+		*(int *)(r + 0x04) = 0;
+		*(int *)(r + 0x08) = 0;
+	}
+	*(short *)(m + 0xa81e) = 0x600;
+	*(short *)(m + 0xa84a) = 0x800;
+	*(short *)(m + 0xa876) = 0xa00;
+
+	*(short *)(m + 0xa24a) = 1;
+	*(int *)(m + 0xa24c) = 0;
+	*(short *)(m + 0xa250) = 0;
+	*(short *)(m + 0xa252) = 3;
+	*(short *)(m + 0xa254) = 9;
+	*(int *)(m + 0xa8a0) = 0;
+
+	rx->f25e = 0;
+	rx->f260 = 0;
+	obj->is_short = 0;
+	obj->f25c2 = 4;
+	obj->f354c = 0;
+	*(short *)(m + 0x3588) = 0;
+	*(short *)(m + 0x358a) = 0;
+	*(short *)(m + 0xaa78) = 0;
+	*(short *)(m + 0x2aa0) = 6;
+	*(short *)(m + 0x2aa2) = 0;
+	*(short *)(m + 0x25d6) = (short)0x8990;
+	*(short *)(m + 0x25d8) = 0;
+	*(short *)(m + 0x25da) = 0;
+
+	/* Twelve shorts each, in two unrelated places. */
+	for (i = 0; i <= 0xb; i++) {
+		*(short *)(m + 0xe84 + i * 2) = 0;
+		*(short *)(m + 0x2a68 + i * 2) = 0;
+	}
+
+	VPcmV34SetTxScale(obj);
+
+	/* Data-mode rate, and NOT a reset. */
+	V34SetupModulator(mod, 2400, 1800, 0, 0, 0);
+	rxinit(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34SetupDemodulator: baudrate %ld, carrier %ld\n",
+			(long)2400, (long)1800);
+
+	rx->f128 = 4;
+	rx->f1b0 = 0x3e80;
+	rx->f1be = 0x3e80;
+	rx->f1ae = 0x3e80;
+	rx->f1ac = 0x1f40;
+	rx->f1ba = 0x10;
+	rx->carrier = hsine1800;
+
+	originate = (obj->f359c == 0x65);
+
+	obj->f25c2 = (short)(originate ? 4 : 5);
+	rx->flags = (unsigned short)(originate ? 0 : 4);
+
+	fsk_clear(obj);
+	V34SetupModulator(mod, 600, (short)(originate ? 1200 : 2400), 0, 0, 1);
+	rx->f2a4 = originate ? bpv22high : bpv22low;
+	fsk_state_init(obj);
+
+	rx->agc_step = 0x199a;
+	rx->flags = (unsigned short)(rx->flags | 0xa00);
+	rx->agc_gain = rx->f262;
+
+	{
+		short *w = (short *)((char *)rx + 0x13c);
+
+		for (i = 0; i <= 0x2f; i++)
+			w[i] = 0;
+	}
+	rx->f19c = 0;
+	rx->f19e = 0;
+
+	preinitdigital(obj);
+	txinit(obj);
+
+	detectorinit((struct v34_detector *)((char *)obj + 0x3564),
+		     originate ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
+
+	rx->flags = (unsigned short)(rx->flags | 0x200);
 }
 
 /*

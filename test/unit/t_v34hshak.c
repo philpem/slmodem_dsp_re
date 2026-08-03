@@ -46,6 +46,9 @@ extern void ref_dpskinit(void *obj, short mode, short high);
 extern void ref_setfinalrate(void *obj);
 extern void ref_setupreceiver(void *obj);
 extern short ref_preempindex(void *obj, short baudrate);
+extern void ref_v34modeminit(void *obj);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
+extern const short ref_c1200_[8], ref_c2400_[8];
 
 extern const short ref_scale2400[28], ref_scale2800[28], ref_scale3000[28];
 extern const short ref_scale3200[28], ref_scale3429[28];
@@ -84,7 +87,22 @@ static const unsigned ptr_skip[] = {
 	0x3564,		/* detector +0x00 coeff       -- detectorinit       */
 	0xaa90,		/* tx power scale             -- setfinalrate       */
 	0xaaac,		/* rx power scale                                   */
-	0xaab0		/* rx carrier descriptor                            */
+	0xaab0,		/* rx carrier descriptor                            */
+	/*
+	 * And the ones `v34modeminit` reaches through its callees.  txinit
+	 * primes both sample queues with interior cursors; the two echo
+	 * cancellers get five pointers each from
+	 * V34InitializeImplementationSpecific; preinitdigital installs the
+	 * scrambler pair and the convolution table in both shell contexts.
+	 * Every one is an address, and every one is checked by what it
+	 * selects instead.
+	 */
+	0x0268, 0x026c,			/* rxq read and write cursors  */
+	0x2220, 0x2224,			/* txq                         */
+	0x80b8, 0x80bc, 0x80c0, 0x80c4, 0x80c8,	/* echo canceller 0    */
+	0x9138, 0x913c, 0x9140, 0x9144, 0x9148,	/* and 1               */
+	0x0a28, 0x0e48,			/* receive shell context       */
+	0x2608, 0x2a28			/* transmit shell context      */
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
 
@@ -559,6 +577,95 @@ main(void)
 			}
 			diff_eq_int("the sweep reached index 6", saw6, 1, 0);
 			diff_eq_int("the sweep reached index 10", saw10, 1, 0);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34modeminit, both ends of the call");
+	{
+		/*
+		 * 1356 bytes of straight-line stores over the whole object,
+		 * so the whole-object compare is the test.  Both values of
+		 * f359c, because the two configurations differ in five
+		 * places and nothing else -- a reconstruction that folded
+		 * them wrongly would be right for one end and wrong for the
+		 * other.
+		 *
+		 * Run twice per case as well: it calls rxinit and txinit,
+		 * neither of which is idempotent by construction, so a second
+		 * pass over an already-initialised object exercises paths the
+		 * first cannot.
+		 */
+		static const short flags[] = { 0x65, 0, 1, 0x64, 0x66, -1 };
+		unsigned fi;
+
+		for (fi = 0; fi < sizeof(flags) / sizeof(flags[0]); fi++) {
+			setup();
+			/*
+			 * NO `shaped` POKE HERE.  The initialiser below
+			 * aims +0x2074 into the object itself, which is
+			 * what the original does, so the modulator's
+			 * output lands where the byte compare can see it
+			 * rather than in a buffer the test owns.
+			 *
+			 * `v34modeminit` calls `txinit`, which cleans both
+			 * echo cancellers through five pointers each and
+			 * their two lengths.  None of that is v34modeminit's
+			 * to set: `V34InitializeImplementationSpecific` is
+			 * what aims them, and running it first is what a
+			 * real caller does rather than something the fixture
+			 * invents.  Without it the first dereference faults.
+			 */
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(ob);
+			poke_short(0x359c, flags[fi]);
+			poke_short(0x264 + 0x262, (short)(0x400 + fi));
+
+			v34modeminit(&oa);
+			ref_v34modeminit(ob);
+			compare("v34modeminit", 5000 + flags[fi]);
+
+			compare_table("v34modeminit band-pass",
+				      (const short *)get_ptr_a(0x0508),
+				      (const short *)get_ptr_b(0x0508),
+				      V34_BPV22_TAPS, 5000 + flags[fi]);
+			compare_table("v34modeminit detector coeff",
+				      (const short *)get_ptr_a(0x3564),
+				      (const short *)get_ptr_b(0x3564),
+				      8, 5000 + flags[fi]);
+			/*
+			 * THE CARRIER TABLE HAS TO BE COMPARED BY CONTENT.
+			 * hsine1200 and hsine2400 are both eight pairs long,
+			 * so swapping the two phase-2 carriers leaves every
+			 * scalar in the object identical and changes only
+			 * which table the pointer selects -- which is
+			 * exactly what a skipped pointer hides.  It did:
+			 * that mutation passed until this check existed.
+			 */
+			{
+				const struct v34_modulator *ma =
+					(const struct v34_modulator *)
+					((const char *)&oa + 0x1450);
+
+				compare_table("v34modeminit carrier table",
+					      (const short *)get_ptr_a(0x1460),
+					      (const short *)get_ptr_b(0x1460),
+					      ma->sine_len * 2,
+					      5000 + flags[fi]);
+			}
+			/*
+			 * And the detector really got the phase-2 pair, not
+			 * one of the eight data-mode descriptors.
+			 */
+			diff_eq_int("the detector coeff is c1200_/c2400_",
+				    get_ptr_a(0x3564)
+				    == (void *)(flags[fi] == 0x65 ? c2400_
+								  : c1200_),
+				    1, flags[fi]);
+
+			v34modeminit(&oa);
+			ref_v34modeminit(ob);
+			compare("v34modeminit twice", 5100 + flags[fi]);
 		}
 	}
 	rc |= diff_end();
