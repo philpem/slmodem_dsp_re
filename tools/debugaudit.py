@@ -132,6 +132,83 @@ def our_sites(paths):
     return counts, where
 
 
+def show_sites(obj, tabs, func, window):
+    """
+    Every diagnostic call site in one function, with its argument setup.
+
+    `--strings` resolves a format by walking back to the nearest .rodata
+    relocation, which is wrong wherever more than one string is pushed before
+    a single call -- `CALLPROG_Progress` has nine such sites and they come out
+    as <unresolved>.  This prints the instructions instead and resolves EVERY
+    string in the window, leaving the reading to a human.  That is the right
+    division of labour: which push is the format and which are arguments is a
+    calling-convention question, and cdecl pushes the format at (%esp).
+    """
+    out = run("objdump", "-dr", "--section=.text", obj)
+    lines = out.split("\n")
+
+    # The function's own lines, with each relocation folded into the
+    # instruction it belongs to -- objdump prints them separately, which makes
+    # every "the instruction before this one" question off by one.
+    body, cur = [], None
+    for line in lines:
+        m = re.match(r"^[0-9a-f]+ <([^>]+)>:", line)
+        if m:
+            cur = m.group(1)
+            continue
+        if cur != func or not line.strip():
+            continue
+        if re.match(r"^\s+[0-9a-f]+:\s+R_386", line) and body:
+            body[-1] = body[-1] + "   <== " + line.split(None, 1)[1].strip()
+        else:
+            body.append(line.rstrip())
+    if not body:
+        sys.exit("no such function in %s: %s" % (obj, func))
+
+    def annotate(line):
+        """Resolve every .rodata address in the line to its string."""
+        m = re.search(r"R_386_32\s+(\.rodata[^\s]*)", line)
+        if not m:
+            return line
+        im = re.search(r"\$0x([0-9a-f]+)", line)
+        if not im:
+            return line
+        s = string_at(tabs, m.group(1), int(im.group(1), 16))
+        return line if s is None else "%s\n        %r" % (line, s)
+
+    sites = [i for i, l in enumerate(body) if "R_386_PC32" in l and DBG in l]
+    print("%s -- %d diagnostic call site%s\n"
+          % (func, len(sites), "" if len(sites) == 1 else "s"))
+    for n, i in enumerate(sites):
+        start = max(0, i - window)
+        # Do not run back past the previous call: those are another site's
+        # arguments, not this one's.
+        for j in range(i - 1, start, -1):
+            if re.search(r"\bcall\b", body[j]):
+                start = j + 1
+                break
+        print("  --- site %d of %d ---" % (n + 1, len(sites)))
+        for line in body[start:i + 1]:
+            print("   %s" % annotate(line).rstrip())
+        # Where it goes next.  GCC moves these blocks out of line, so the
+        # jump AFTER the call is what says where the site sits in the source;
+        # without it every cold block looks like it belongs at the end.
+        for line in body[i + 1:i + 3]:
+            print("   %s" % line.rstrip())
+            if re.search(r"\bjmp\b|\bret\b", line):
+                break
+        print()
+
+    # The gates: every read of dsplibs_debug_level, with its branch.
+    gates = [l for l in body if "dsplibs_debug_level" in l]
+    print("  gates on dsplibs_debug_level (%d):" % len(gates))
+    for g in gates:
+        print("   %s" % g.rstrip())
+    print("\n  A gate is `cmpl $0x1` + `ja`/`jbe` where the site fires at 2 "
+          "and above.\n  Anything else is a threshold we do not reproduce -- "
+          "see finding 150.")
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Audit dsplibs.o's diagnostic call sites against this "
@@ -142,6 +219,11 @@ def main():
     ap.add_argument("--strings", metavar="FUNC", nargs="?", const="",
                     help="print format strings, optionally for one function")
     ap.add_argument("--stamps", action="store_true")
+    ap.add_argument("--sites", metavar="FUNC",
+                    help="one function's call sites in full: the gate, the "
+                         "argument setup, and every string resolved")
+    ap.add_argument("--window", type=int, default=14,
+                    help="instructions of argument setup to show (--sites)")
     args = ap.parse_args()
 
     tabs = rodata_strings(args.obj)
@@ -165,6 +247,10 @@ def main():
                                  blob):
                 print("   %-16s 0x%05x  %s"
                       % (sec, base + m.start(), m.group(0)[:-1].decode()))
+        return
+
+    if args.sites:
+        show_sites(args.obj, tabs, args.sites, args.window)
         return
 
     if args.strings is not None:
