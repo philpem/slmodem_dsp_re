@@ -1529,3 +1529,94 @@ test had not caught it because it *skipped* the byte and asserted the
 Hilbert-address theory instead of comparing against the blob -- see finding
 122.  This is the second retracted deviation after D28, and both were filed
 on a reading rather than a measurement.
+
+---
+
+## D35 ⚠ `t3`'s tail stays at -1 for the three largest ring sizes
+
+**Where:** `src/pump/v34/v34shell.c`, `initG248` and `initV34`.
+
+**What the original does:** copies `xyz`'s block for the ring size into `t3`
+and stops.  For sizes 15, 17 and 18 the block is SHORTER than the
+8(n-1)+1 entries the sequence needs, because `xyz` stops where the
+cumulative count would pass `INT_MAX` (finding 147) -- 69, 58 and 56
+entries.  Everything above that keeps `preinitV34`'s fill of -1.
+
+**What we do:** the same.
+
+**Reachable?** The sizes are, and often: `MMaxTable` produces all three.
+Whether `shellDemapper` then INDEXES into the -1 region is **unmeasured** --
+it reads `t3[d1 + d2]` with nothing bounding the sum, which is finding 129.
+`modulatevector` relies on the -1s deliberately, since its search over `t3`
+compares unsigned and `0xffffffff` is what stops it (finding 149), so on the
+transmit side the fill is a sentinel rather than a gap.  Re-open with
+`demapFrame` driven at ring size 15 or above.
+
+**Not fixed.** Extending the table would be invention, and on the transmit
+side it would break a sentinel the object depends on.
+
+---
+
+## D36 ⚠ `scrambleGP*` ORs two fields that overlap
+
+**Where:** `src/pump/v34/v34shell.c`.
+
+**What the original does:** forms each new register word as
+`(bitbuf << 2) | (scr[n] >> 16)` and `(bitbuf << 7) | (scr[n] >> 16)`.  The
+shifted term keeps bits 2..31 (or 7..31) and the second is sixteen bits
+wide, so the two OVERLAP in bits 2..15 and 7..15.  A concatenation, which is
+what the shape suggests, would not.
+
+**What we do:** the same OR, in the same order.
+
+**Reachable?** The overlap is structural, so it happens on every call; what
+is **unmeasured** is whether a set bit ever lands in both terms at once, and
+therefore whether the OR is ever distinguishable from the concatenation the
+code reads as.  Deciding it needs the bit ordering these functions use,
+which is task #47's.
+
+**Not fixed.** It is reproduced exactly and the differential test passes over
+24 calls per generator, so if the overlap carries, it carries identically.
+
+---
+
+## D37 ⚠ `initG248` runs 2^32 times for a ring size of zero
+
+**Where:** `src/pump/v34/v34shell.c`.
+
+**What the original does:** computes `2 * (count - 1)` unsigned and uses it
+as the second loop's upper bound.  A `count` of zero makes that
+`0xfffffffe`, and the loop counts up to it.
+
+**What we do:** the same, with unsigned arithmetic so the wrap is defined
+rather than undefined.
+
+**Reachable?** Not from `initV34`, which is the only thing that sets `count`
+and takes it from `MMaxTable` or `MMinTable`, both of which bottom out at 1.
+But `initG248` is a global symbol with NO caller in the object, so nothing
+enforces the invariant at the boundary -- **unmeasured** for any future
+caller.  The fixture drives 1..18 and asserts the range.
+
+**Not fixed.** A guard the original does not have would be invention, and
+the reachable range is provably safe.
+
+---
+
+## D38 ⚠ `fa16` is 24 for the 16-state code and 32 and 64 for the others
+
+**Where:** `src/pump/v34/v34shell.c`, `preinitV34` and `initV34`.
+
+**What the original does:** sets +0xa16 alongside the convolutional code
+pointer -- 24 with `Convolve16`, then `depth << 5` with `Convolve32` and
+`Convolve64`, i.e. 32 and 64.  Two of the three match their code's state
+count; the first does not, and 24 is not `16`, not `depth << 5` for any
+depth, and not a rounding of either.
+
+**What we do:** the same three values.
+
+**Reachable?** The 24 is the default every context starts at, so always.
+What it MEANS is **unmeasured**: nothing reconstructed reads +0xa16 yet.
+`modulatevector` does not; whatever consumes it is further in.
+
+**Not fixed.** Nothing is known to be wrong -- this is recorded because the
+pattern breaks and the break would otherwise be rediscovered.
