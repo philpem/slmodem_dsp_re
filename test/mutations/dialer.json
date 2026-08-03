@@ -1,0 +1,117 @@
+[
+ {
+  "label": "swap 'Switching to Tone' onto the pulse branch",
+  "find": "dsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Pulse\\n\");",
+  "replace": "dsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Tone\\n\");"
+ },
+ {
+  "label": "drop the per-character 'Digit is' site",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Digit is %c\\n\", c);",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "move 'Digit is' after the range check",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Digit is %c\\n\", c);\n\n\t\tif ((unsigned)((signed char)c - ' ') > 0x57)\n\t\t\tcontinue;",
+  "replace": "if ((unsigned)((signed char)c - ' ') > 0x57)\n\t\t\tcontinue;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Digit is %c\\n\", c);"
+ },
+ {
+  "label": "gate the per-character trace at level 3",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Digit is %c\\n\", c);",
+  "replace": "if (DSPLIB_DEBUG_VERBOSE())\n\t\t\tdsplibs_debug_printf(\"Digit is %c\\n\", c);"
+ },
+ {
+  "label": "announce 'became TONE_DIALING' for a mid-string switch too",
+  "find": "d->cfg.tone_or_pulse = DIALER_TONE_DIALING;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Tone\\n\");",
+  "replace": "d->cfg.tone_or_pulse = DIALER_TONE_DIALING;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Dialer.c: GetNextDigit... \"\n\t\t\t\t\t\t     \"TONE_OR_PULSE_FLAG became \"\n\t\t\t\t\t\t     \"TONE_DIALING\\n\");"
+ },
+ {
+  "label": "drop the 'Not permitted to switch to Pulse' site",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"Dialer.c: GetNextDigit... \"\n\t\t\t\t\t    \"Not permitted to switch to \"\n\t\t\t\t\t    \"Pulse\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "drop the 'Done Generating digit' announcement",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Done Generating digit\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "announce the pause the way the gap announces",
+  "find": "\"Done Generating Dial-Pause\\n\");",
+  "replace": "\"Done Generating silence \"\n\t\t\t\t\t    \"between digits\\n\");"
+ },
+ {
+  "label": "print the mapped count in 'Original digitToPulseDial'",
+  "find": "dsplibs_debug_printf(\"Original digitToPulseDial %d\",\n\t\t\t\t\t     n + 1);",
+  "replace": "dsplibs_debug_printf(\"Original digitToPulseDial %d\",\n\t\t\t\t\t     n + 1 > 9 ? n + 1 : 10 - (n + 1));"
+ },
+ {
+  "label": "give the New Zealand banner a newline",
+  "find": "dsplibs_debug_printf(\"Original digitToPulseDial %d\",",
+  "replace": "dsplibs_debug_printf(\"Original digitToPulseDial %d\\n\","
+ },
+ {
+  "label": "compute the pulse count on every poll again",
+  "find": "if (d->pulse_started == 0) {\n\t\tint count = pulse_count(d);\n\n\t\tif (!IsPulseDialerReady(d->modem)) {",
+  "replace": "int count = pulse_count(d);\n\n\tif (d->pulse_started == 0) {\n\t\tif (!IsPulseDialerReady(d->modem)) {"
+ },
+ {
+  "label": "announce END OF DIAL DIGIT before the dialler agrees",
+  "find": "\t/* Still making and breaking the line: silence, and no message. */\n\tif (!IsPulseDialerReady(d->modem)) {\n\t\temit_silence(buf, pos, limit);\n\t\treturn 0;\n\t}\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"=========>END OF DIAL DIGIT \"\n\t\t\t\t     \"DETECTED.\\n\");\n\treturn 1;",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"=========>END OF DIAL DIGIT \"\n\t\t\t\t     \"DETECTED.\\n\");\n\tif (!IsPulseDialerReady(d->modem)) {\n\t\temit_silence(buf, pos, limit);\n\t\treturn 0;\n\t}\n\treturn 1;"
+ },
+ {
+  "label": "announce DIALER_END_STATE from the partial end too",
+  "find": "dsplibs_debug_printf(\n\t\t\t\t    \"DIALER_END_PARTIALLY_STATE\\n\");",
+  "replace": "dsplibs_debug_printf(\n\t\t\t\t    \"DIALER_END_STATE\\n\");"
+ },
+ {
+  "label": "reset the state after announcing the end",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"DIALER_END_STATE\\n\");\n\t\t\treturn DIALER_DONE;",
+  "replace": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"DIALER_END_STATE\\n\");\n\t\t\td->progress_state = 0;\n\t\t\treturn DIALER_DONE;"
+ },
+ {
+  "label": "drop the DIALER_INITIAL_STATE announcement",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"DIALER_INITIAL_STATE\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "print 'Samples left' before the silence is set",
+  "find": "d->silence = d->cfg.dtmf_duration * 8;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Samples left = %d\\n\",\n\t\t\t\t\t\t     d->silence);",
+  "replace": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Samples left = %d\\n\",\n\t\t\t\t\t\t     d->silence);\n\t\t\td->silence = d->cfg.dtmf_duration * 8;"
+ },
+ {
+  "label": "print the uncapped total for a comma run",
+  "find": "dsplibs_debug_printf(\"Consequitive-Commas Dialing; \"\n\t\t\t\t\t     \"Number of samples is %d.\\n\",\n\t\t\t\t\t     d->silence);",
+  "replace": "dsplibs_debug_printf(\"Consequitive-Commas Dialing; \"\n\t\t\t\t\t     \"Number of samples is %d.\\n\",\n\t\t\t\t\t     d->repeat * d->cfg.pause * 8000);"
+ },
+ {
+  "label": "correct the author's spelling of Consequitive",
+  "find": "\"Consequitive-Commas Dialing; \"",
+  "replace": "\"Consecutive-Commas Dialing; \""
+ },
+ {
+  "label": "drop the flash 'Begin Dialing FLASH' banner",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"=========> Begin Dialing \"\n\t\t\t\t\t    \"FLASH.\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "announce 'Done Generating flash' before the timings are restored",
+  "find": "d->pulse_started = 0;\n\t\t\tSetPulseMakeTime(d->modem, d->cfg.pulse_make);\n\t\t\tSetPulseBreakTime(d->modem, d->cfg.pulse_break);\n\t\t\td->pulse_released = 0;\n\t\t\td->pulse_active = 1;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Done Generating flash\\n\");",
+  "replace": "d->pulse_started = 0;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Done Generating flash\\n\");\n\t\t\tSetPulseMakeTime(d->modem, d->cfg.pulse_make);\n\t\t\tSetPulseBreakTime(d->modem, d->cfg.pulse_break);\n\t\t\td->pulse_released = 0;\n\t\t\td->pulse_active = 1;"
+ },
+ {
+  "label": "drop the dial-string grading in DialerCreate",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Dial String Syntax is %s\\n\",\n\t\t\t\t     dialer_grade_name(d->grade));",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "drop the author's dated banner in AnalyseDialString",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"AnalyzeDialString: Updated 17 May 1999 00:50\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "spell Analyze with an s, as the symbol does",
+  "find": "\"AnalyzeDialString: LAST_DIALABLE_SYMBOL is %d\\n\"",
+  "replace": "\"AnalyseDialString: LAST_DIALABLE_SYMBOL is %d\\n\""
+ }
+]

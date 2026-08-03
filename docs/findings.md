@@ -8535,3 +8535,90 @@ the shape that produced findings 143, 146 and 152, and the cheap technique
 that worked twice in a row does not work here.  Knowing which tool fails is
 worth as much as knowing which one works, and costs a lot less to write down
 than to rediscover.
+
+### 161. The tone-or-pulse flag's values, named by the author
+
+Placing `GetNextDigitAndReturnNextState`'s call sites needed the read finding
+160 prescribed: all six Tone/Pulse messages rejoin the loop top, so each was
+tied to its branch by the character test that precedes its gate.  Reading the
+whole function (per the DialerAbort method note -- for a 900-byte function the
+whole read is cheaper than windows), the six resolve as:
+
+    'T' at position 0        -> store 1 -> 'TONE_OR_PULSE_FLAG became TONE_DIALING'
+    'P' at position 0        -> store 0 -> 'TONE_OR_PULSE_FLAG became PULSE_DIALING'
+    'T' later, mixed allowed -> store 1 -> 'Switching to Tone'
+    'P' later, mixed allowed -> store 0 -> 'Switching to Pulse'
+    'T' later, forbidden     -> no store -> 'Not permitted to switch to Tone'
+    'P' later, forbidden     -> no store -> 'Not permitted to switch to Pulse'
+
+In each storing case the store precedes the call, so the announcement is of a
+fact, not an intention.  The seventh site is a per-character trace, "Digit is
+%c\n", printed after the NUL check and BEFORE the range check -- so characters
+the parser only steps over are announced too, including ones past the jump
+table's ceiling.
+
+The strings also settle a naming question.  `dialercfg.c`'s config trace
+already called the field `toneOrPulseFlag` (finding 146); these six give its
+VALUES: 1 is TONE_DIALING, 0 is PULSE_DIALING.  Our field was named
+`pulse_dialing` -- under which `pulse_dialing == 1` meant tone.  Renamed
+`tone_or_pulse`, with `DIALER_TONE_DIALING`/`DIALER_PULSE_DIALING` for the
+values.  The inference-from-getter-name trap again (finding 146): the field is
+filled from `GetPulseDialingFlag`, and the getter's name describes the
+parameter, not the stored sense.
+
+### 162. DialerProgress's 28 call sites, and a correction to finding 158
+
+All of Dialer.c's diagnostics are now placed: DialerProgress's 28, the
+parser's 7, DialerAbort's 3, DialerCreate's 1, AnalyseDialString's 2 and
+IsDialStringInvalid's 2.  Three things the placement settled:
+
+FINDING 158 WAS WRONG about the two end states.  It read the equal return
+targets of 'DIALER_END_PARTIALLY_STATE' and 'DIALER_END_STATE' as two case
+bodies folded into one.  They return to 0x7b122 because that is the FUNCTION
+EPILOGUE -- shared by every case -- and the bodies are separate: each has its
+own pulse-release sequence, its own announcement, and its own return value
+(END_PARTIALLY returns DIALER_COMMAND, END returns DIALER_DONE).  Our
+reconstruction had them folded into a `case 9: case 10:` with a conditional
+return; correct behaviourally, but only until the announcements had to go
+somewhere.  Now unfolded.  The technique note in 158 stands, with a caveat it
+should have carried: a return target identifies a case body only when it is
+not also the epilogue.
+
+THE STATE NUMBERING IS NOW COMPLETE.  The jump table at .rodata+0x614c pins
+DIALER_INITIAL_STATE = 0 and DIALER_END_STATE = 10 -- the two finding 158
+could not place, because their announcements sit inside their cases (0 prints
+on every dispatch before asking the parser; 10 prints after its release
+sequence).  States 1-4 (digit, gap, flash, pause) never announce and keep
+descriptive numbers only.
+
+28 OBJECT SITES ARE 24 SOURCE SITES.  The compiler triplicated the parser
+dispatch (three GetNextDigitAndReturnNextState calls: state 0, states 2/4,
+and end-of-digit), and with it the two messages inside the NEXT_DIGIT and
+NEXT_PAUSE arms -- 'Samples left = %d' and 'Consequitive-Commas Dialing;
+Number of samples is %d.' appear three times each with one source line
+behind them.
+
+Smaller facts worth their line:
+- The pulse-count mapping runs on every poll BEFORE the digit starts and not
+  after -- visible only because pattern 3 (New Zealand) announces 'Original
+  digitToPulseDial %d' (no newline) inside the mapping.  Our pulse_count()
+  call moved inside the not-yet-started branch to match.
+- The gap state (2) and the pause state (4) both fill silence, but announce
+  completion differently ('Done Generating silence between digits' vs 'Done
+  Generating Dial-Pause') -- so they share a helper, not a case body.
+  Another structural fact recovered from diagnostics alone.
+- AnalyseDialString prints a dated banner on every analysis: "AnalyzeDialString:
+  Updated 17 May 1999 00:50" -- Analyze with a z, while the symbol is spelled
+  with an s.  The one timestamp anywhere in the blob's dialler.
+- The grade table at .rodata+0x613c (FATAL/INVALID/TOLERABLE/VALID, finding
+  56's names) exists FOR the debug output: 'Dial String Syntax is %s' in
+  DialerCreate and IsDialStringInvalid, with "ILLEGAL!" for a grade past
+  VALID, reachable by no caller.
+- Every gate in Dialer.c is `> 1`; the level sweep asserts silence at level 1
+  and byte-identical transcripts at 2 and 3.  Unlike cadence.c (finding 155),
+  there is no second tier here.
+
+Verification: 23/23 mutations caught by t_dialerprog's transcript comparison
+(after adding an out-of-table-character case -- the per-character trace's
+position relative to the range check is invisible without one), 2/2 by
+t_dialer's.  The dialer batch is complete.

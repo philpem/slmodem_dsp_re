@@ -34,6 +34,21 @@ lower(int grade, int to)
 	return grade > to ? to : grade;
 }
 
+/*
+ * The grade names, .rodata+0x613c, spelled as the object's debug output
+ * spells them.  The lookup is unsigned, so a negative grade would read
+ * "ILLEGAL!" too -- nothing produces one, or a grade past VALID.
+ */
+static const char *const dialer_grade_names[4] = {
+	"FATAL", "INVALID", "TOLERABLE", "VALID"
+};
+
+static const char *
+dialer_grade_name(int grade)
+{
+	return (unsigned)grade > 3 ? "ILLEGAL!" : dialer_grade_names[grade];
+}
+
 int
 AnalyseDialString(struct dialer *d, const char *s, int store)
 {
@@ -59,6 +74,15 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 	 */
 	if (sysdep_strlen(s) > DIALER_MAX_STRING)
 		return DIALER_FATAL;
+
+	/*
+	 * The author's own timestamp, printed on every analysis that gets
+	 * this far.  17 May 1999, and "Analyze" with a z -- the symbol is
+	 * spelled with an s.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "AnalyzeDialString: Updated 17 May 1999 00:50\n");
 
 	if (s[0] == 't' || s[0] == 'T')
 		tone = 1;
@@ -162,8 +186,13 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 		}
 	}
 
-	if (store)
+	if (store) {
 		d->last_digit = last_digit;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "AnalyzeDialString: LAST_DIALABLE_SYMBOL is %d\n",
+			    last_digit);
+	}
 
 	return grade;
 }
@@ -171,9 +200,21 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 int
 IsDialStringInvalid(struct dialer *d, const char *s)
 {
+	int grade;
+
 	GetDialerConfig(&d->cfg, d->modem);
 
-	return AnalyseDialString(d, s, 0) <= DIALER_INVALID;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("DIALER.C: IsDialStringInvalid(char * "
+				     "dialString )  got: %s\n", s);
+
+	grade = AnalyseDialString(d, s, 0);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Dial String Syntax is %s\n",
+				     dialer_grade_name(grade));
+
+	return grade <= DIALER_INVALID;
 }
 
 /*
@@ -225,6 +266,11 @@ DialerCreate(struct dialer *d, const char *s, void *modem)
 	 * position of the last dialable character.
 	 */
 	d->grade = AnalyseDialString(d, s, 1);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Dial String Syntax is %s\n",
+				     dialer_grade_name(d->grade));
+
 	if (d->grade <= DIALER_INVALID)
 		return DIALER_CREATE_REJECTED;
 
@@ -354,6 +400,13 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		if (c == '\0')
 			return NEXT_END;
 
+		/*
+		 * Announced before the range check, so junk the parser is
+		 * about to step over is announced too -- spaces included.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Digit is %c\n", c);
+
 		if ((unsigned)((signed char)c - ' ') > 0x57)
 			continue;
 
@@ -377,12 +430,12 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		 * to allow it.
 		 */
 		case '*':
-			if (d->cfg.pulse_dialing != 1)
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
 				continue;
 			d->row = 3; d->col = 0;
 			return NEXT_DIGIT;
 		case '#':
-			if (d->cfg.pulse_dialing != 1)
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
 				continue;
 			d->row = 3; d->col = 2;
 			return NEXT_DIGIT;
@@ -390,7 +443,7 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		case 'C': case 'c': case 'D': case 'd':
 			if (d->cfg.abcd_permitted != 0)
 				continue;
-			if (d->cfg.pulse_dialing != 1)
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
 				continue;
 			d->row = (c | 0x20) - 'a';
 			d->col = 3;
@@ -430,26 +483,54 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		 */
 		case 'T': case 't':
 			if (d->pos == 0) {
-				d->cfg.pulse_dialing = 1;
+				d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Dialer.c: GetNextDigit... "
+					    "TONE_OR_PULSE_FLAG became "
+					    "TONE_DIALING\n");
 				continue;
 			}
-			if (d->cfg.pulse_dialing != 0)
+			if (d->cfg.tone_or_pulse != DIALER_PULSE_DIALING)
 				continue;
-			if (d->cfg.mixed_permitted != 0)
+			if (d->cfg.mixed_permitted != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Dialer.c: GetNextDigit... "
+					    "Not permitted to switch to "
+					    "Tone\n");
 				continue;
-			d->cfg.pulse_dialing = 1;
+			}
+			d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..."
+						     " Switching to Tone\n");
 			continue;
 
 		case 'P': case 'p':
 			if (d->pos == 0) {
-				d->cfg.pulse_dialing = 0;
+				d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Dialer.c: GetNextDigit... "
+					    "TONE_OR_PULSE_FLAG became "
+					    "PULSE_DIALING\n");
 				continue;
 			}
-			if (d->cfg.pulse_dialing != 1)
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
 				continue;
-			if (d->cfg.mixed_permitted != 0)
+			if (d->cfg.mixed_permitted != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Dialer.c: GetNextDigit... "
+					    "Not permitted to switch to "
+					    "Pulse\n");
 				continue;
-			d->cfg.pulse_dialing = 0;
+			}
+			d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..."
+						     " Switching to Pulse\n");
 			continue;
 
 		default:
@@ -470,6 +551,13 @@ pulse_count(const struct dialer *d)
 	case 2:					/* Sweden */
 		return n == 10 ? 1 : n + 2;
 	case 3:					/* New Zealand */
+		/*
+		 * The only pattern that announces itself -- and with no
+		 * newline, so whatever is printed next continues the line.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Original digitToPulseDial %d",
+					     n + 1);
 		if (n + 1 == 11)
 			return 10;
 		return n + 1 > 9 ? n + 1 : 10 - (n + 1);
@@ -501,7 +589,7 @@ emit_silence(short *buf, int *pos, int end)
 static int
 dial_gap(const struct dialer *d)
 {
-	return (d->cfg.pulse_dialing == 1 ? d->cfg.dtmf_gap : d->cfg.pulse_gap)
+	return (d->cfg.tone_or_pulse == DIALER_TONE_DIALING ? d->cfg.dtmf_gap : d->cfg.pulse_gap)
 	       * 8;
 }
 
@@ -541,7 +629,7 @@ begin_next(struct dialer *d)
 
 	switch (next) {
 	case NEXT_DIGIT:
-		if (d->cfg.pulse_dialing == 1) {
+		if (d->cfg.tone_or_pulse == DIALER_TONE_DIALING) {
 			/*
 			 * Arm the two oscillators.  The high tone starts a
 			 * quarter cycle in (0x2000 of 0x4000), so the pair
@@ -549,6 +637,9 @@ begin_next(struct dialer *d)
 			 * large first sample.
 			 */
 			d->silence = d->cfg.dtmf_duration * 8;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Samples left = %d\n",
+						     d->silence);
 			d->phase_high = 0x2000;
 			d->phase_low = 0;
 			d->inc_low = (short)((dtmf_row_hz[d->row]
@@ -579,6 +670,10 @@ begin_next(struct dialer *d)
 		if (total > d->cfg.coma_pause_limit)
 			total = d->cfg.coma_pause_limit;
 		d->silence = total * 8000;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Consequitive-Commas Dialing; "
+					     "Number of samples is %d.\n",
+					     d->silence);
 		break;
 	}
 
@@ -599,6 +694,9 @@ begin_next(struct dialer *d)
 static void
 digit_finished(struct dialer *d)
 {
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Done Generating digit\n");
+
 	if (d->pos == d->last_digit) {
 		begin_next(d);
 		return;
@@ -610,7 +708,8 @@ digit_finished(struct dialer *d)
 /*
  * Emit silence until `d->silence` runs out.  Returns 1 once it has, 0 when the
  * buffer filled first.  Both the inter-digit gap (state 2) and the comma pause
- * (state 4) are this and nothing else, which is why they share a body.
+ * (state 4) are this -- but each announces its completion differently, which
+ * is why the cases share this helper and not a body.
  */
 static int
 emit_gap(struct dialer *d, short *buf, int *pos, int limit)
@@ -649,6 +748,10 @@ tone_burst(struct dialer *d, short *buf, int *pos, int limit)
 	 */
 	if (d->pulse_released == 0 && d->pulse_active != 0) {
 		LastPulseDigitDialed(d->modem);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(" **** Dialer.C: "
+					     "LastPulseDigitDialed was "
+					     "called\n");
 		d->pulse_active = 0;
 		d->pulse_released = 1;
 	}
@@ -682,23 +785,43 @@ tone_burst(struct dialer *d, short *buf, int *pos, int limit)
  * Hand the pulse dialler one digit and wait for it to finish.  Returns 1 when
  * it has, 0 when it is busy -- in which case the rest of the buffer is filled
  * with silence, since the line is being made and broken, not driven.
+ *
+ * The pulse count is computed here rather than by the caller because the
+ * original computes it before every readiness poll while the digit has not
+ * started, and NOT after it has -- visible only through pattern 3's debug
+ * output, which announces the digit on exactly those polls.
  */
 static int
-pulse_digit(struct dialer *d, int count, short *buf, int *pos, int limit)
+pulse_digit(struct dialer *d, short *buf, int *pos, int limit)
 {
 	if (d->pulse_started == 0) {
+		int count = pulse_count(d);
+
 		if (!IsPulseDialerReady(d->modem)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "=========> Waiting to "
+				    "PULSE_IS_DIALER_READY_PROC "
+				    "to become true.\n");
 			emit_silence(buf, pos, limit);
 			return 0;
 		}
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("=========> Calling "
+					     "PULSE_DIAL_DIGIT_PROC "
+					     "with %d.\n", count);
 		PulseDialDigit(d->modem, count);
 		d->pulse_started = 1;
 	}
 
+	/* Still making and breaking the line: silence, and no message. */
 	if (!IsPulseDialerReady(d->modem)) {
 		emit_silence(buf, pos, limit);
 		return 0;
 	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("=========>END OF DIAL DIGIT "
+				     "DETECTED.\n");
 	return 1;
 }
 
@@ -710,18 +833,20 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 			return DIALER_BUSY;
 
 		switch (d->progress_state) {
-		case 0:
+		case DIALER_INITIAL_STATE:
 			/* Nothing in flight: find the next thing to do. */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("DIALER_INITIAL_STATE\n");
 			begin_next(d);
 			continue;
 
 		case 1:
-			if (d->cfg.pulse_dialing == 1) {
+			if (d->cfg.tone_or_pulse == DIALER_TONE_DIALING) {
 				if (tone_burst(d, buf, pos, limit))
 					digit_finished(d);
 				continue;
 			}
-			if (d->cfg.pulse_dialing != 0) {
+			if (d->cfg.tone_or_pulse != DIALER_PULSE_DIALING) {
 				/*
 				 * Neither tone nor pulse.  The original spins
 				 * here forever; DialerCreate normalises the
@@ -729,7 +854,7 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				 */
 				continue;
 			}
-			if (!pulse_digit(d, pulse_count(d), buf, pos, limit))
+			if (!pulse_digit(d, buf, pos, limit))
 				continue;
 			d->pulse_started = 0;
 			d->pulse_released = 0;
@@ -738,9 +863,22 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 			continue;
 
 		case 2:
-		case 4:
-			if (emit_gap(d, buf, pos, limit))
+			if (emit_gap(d, buf, pos, limit)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Done Generating silence "
+					    "between digits\n");
 				begin_next(d);
+			}
+			continue;
+
+		case 4:
+			if (emit_gap(d, buf, pos, limit)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "Done Generating Dial-Pause\n");
+				begin_next(d);
+			}
 			continue;
 
 		case 3:
@@ -756,9 +894,18 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				SetPulseBreakTime(d->modem,
 						  d->cfg.hook_flash * 10);
 				if (!IsPulseDialerReady(d->modem)) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "=========> Waiting to "
+						    "PULSE_IS_DIALER_READY_"
+						    "PROC to become true.\n");
 					emit_silence(buf, pos, limit);
 					continue;
 				}
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "=========> Begin Dialing "
+					    "FLASH.\n");
 				PulseDialDigit(d->modem, 1);
 				d->pulse_started = 1;
 			}
@@ -766,42 +913,96 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				emit_silence(buf, pos, limit);
 				continue;
 			}
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "=========> End dialing Flash.\n");
 			d->pulse_started = 0;
 			SetPulseMakeTime(d->modem, d->cfg.pulse_make);
 			SetPulseBreakTime(d->modem, d->cfg.pulse_break);
 			d->pulse_released = 0;
 			d->pulse_active = 1;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Done Generating flash\n");
 			d->progress_state = 2;
 			d->silence = d->cfg.pulse_gap * 8;
 			continue;
 
 		/*
-		 * One state per modifier, each of which reports its code once
-		 * and hands control back to state 0 for whatever follows.
+		 * One state per modifier, each of which announces itself,
+		 * reports its code once, and hands control back to state 0
+		 * for whatever follows.
 		 */
-		case 5: d->progress_state = 0; return DIALER_WAIT_DIALTONE;
-		case 6: d->progress_state = 0; return DIALER_WAIT_ANSWER;
-		case 7: d->progress_state = 0; return DIALER_WAIT_BONG;
-		case 8: d->progress_state = 0; return DIALER_CALLING_TONE;
+		case DIALER_WAIT_FOR_DIALTONE_STATE:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "DIALER_WAIT_FOR_DIALTONE_STATE\n");
+			d->progress_state = 0;
+			return DIALER_WAIT_DIALTONE;
 
-		case 9:
-		case 10:
-			/*
-			 * The two ways of stopping: `;` and the end of the
-			 * string.  Neither resets the state, so once here the
-			 * same code is returned to every further call.  The
-			 * line is released first if pulse dialling still holds
-			 * it -- but `pulse_active` is left set, unlike the
-			 * release in tone_burst.
-			 */
+		case DIALER_WAIT_FOR_SILENCE_STATE:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "DIALER_WAIT_FOR_SILENCE_STATE\n");
+			d->progress_state = 0;
+			return DIALER_WAIT_ANSWER;
+
+		case DIALER_WAIT_FOR_BONGTONE_STATE:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "DIALER_WAIT_FOR_BONGTONE_STATE\n");
+			d->progress_state = 0;
+			return DIALER_WAIT_BONG;
+
+		case DIALER_CALLING_TONE_STATE:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "DIALER_CALLING_TONE_STATE\n");
+			d->progress_state = 0;
+			return DIALER_CALLING_TONE;
+
+		/*
+		 * The two ways of stopping: `;` and the end of the string.
+		 * Neither resets the state, so every further call announces
+		 * and returns the same thing again.  The line is released
+		 * first if pulse dialling still holds it -- but `pulse_active`
+		 * is left set, unlike the release in tone_burst.  The two
+		 * bodies are genuinely separate in the object, each with its
+		 * own release sequence and announcement -- see finding 162,
+		 * which corrects 158 on this point.
+		 */
+		case DIALER_END_PARTIALLY_STATE:
 			if (d->pulse_released == 0 && d->pulse_active != 0) {
 				LastPulseDigitDialed(d->modem);
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    " **** Dialer.C: "
+					    "LastPulseDigitDialed was "
+					    "called\n");
 				d->pulse_released = 1;
 			}
-			return d->progress_state == 9 ? DIALER_COMMAND
-						      : DIALER_DONE;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "DIALER_END_PARTIALLY_STATE\n");
+			return DIALER_COMMAND;
+
+		case DIALER_END_STATE:
+			if (d->pulse_released == 0 && d->pulse_active != 0) {
+				LastPulseDigitDialed(d->modem);
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    " **** Dialer.C: "
+					    "LastPulseDigitDialed was "
+					    "called\n");
+				d->pulse_released = 1;
+			}
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("DIALER_END_STATE\n");
+			return DIALER_DONE;
 
 		default:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "Dialer switch default case\n");
 			return DIALER_BAD_STATE;
 		}
 	}

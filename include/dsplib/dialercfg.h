@@ -36,6 +36,13 @@
 #define DIALER_DTMF_TWIST_DEFAULT	26029
 
 /*
+ * The two values of `tone_or_pulse`, in the author's own names -- the parser
+ * prints "TONE_OR_PULSE_FLAG became TONE_DIALING" as it stores 1.
+ */
+#define DIALER_PULSE_DIALING	0
+#define DIALER_TONE_DIALING	1
+
+/*
  * The author's own field names are given alongside ours, recovered from
  * GetDialerConfig's dropped debug output (findings 134, 143, 146).  Ours
  * were inferred from the modem_get_param name that fills each field.
@@ -67,8 +74,16 @@ struct dialer_cfg {
 	int	pause;			/* +0x18  author: dialPauseTime     */
 	int	hook_flash;		/* +0x1c  author: flashTime         */
 
-	/* Normalised to 0 or 1 by the original, unlike every other flag. */
-	int	pulse_dialing;		/* +0x20  author: toneOrPulseFlag   */
+	/*
+	 * Normalised to 0 or 1 by the original, unlike every other flag.
+	 *
+	 * The author's VALUES for it are recovered too: the parser announces
+	 * "TONE_OR_PULSE_FLAG became TONE_DIALING" when it stores 1 and
+	 * "... became PULSE_DIALING" when it stores 0.  An earlier draft
+	 * called this field `pulse_dialing`, under which 1 meant tone --
+	 * see finding 161.
+	 */
+	int	tone_or_pulse;		/* +0x20  author: toneOrPulseFlag   */
 
 	int	modifier_validation;	/* +0x24  author: dialModifierValidationFlag */
 	int	abcd_permitted;		/* +0x28  author: ABCD_PermittedFlag */

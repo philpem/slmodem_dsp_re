@@ -22,12 +22,16 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/dialer.h"
 #include "dsplib/callprog_state.h"
 #include "dsplib/modem_params.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern int ref_IsDialStringInvalid(struct dialer *d, const char *s);
 extern int ref_Dialer_IsDialStringInvalid(struct callprog *cp,
@@ -95,10 +99,18 @@ one(const char *s, int store, int abcd, int mixed, int validation, int ct)
 
 	/*
 	 * And our grade, which the differential cannot see.  Recorded so the
-	 * anti-vacuity guard can prove all four are reachable.
+	 * anti-vacuity guard can prove all four are reachable.  Run with the
+	 * diagnostics masked: this call has no reference twin, so anything it
+	 * printed would unbalance the transcript comparison below.
 	 */
-	setup(&g, abcd, mixed, validation, ct);
-	grade = AnalyseDialString(&g, s, 1);
+	{
+		unsigned saved = dsplibs_debug_level;
+
+		dsplibs_debug_level = 0;
+		setup(&g, abcd, mixed, validation, ct);
+		grade = AnalyseDialString(&g, s, 1);
+		dsplibs_debug_level = saved;
+	}
 	if (grade >= 0 && grade < 4)
 		grade_seen[grade]++;
 
@@ -371,6 +383,70 @@ run_abort(void)
 	return diff_end();
 }
 
+/*
+ * The diagnostic paths: IsDialStringInvalid announces the string it got and
+ * the grade it produced, both from level 2.  Comparing the two sides'
+ * transcripts is the only test these call sites have -- the verdict collapses
+ * the grade, but the transcript spells it out.
+ */
+static int
+run_debug(void)
+{
+	static const char *const strings[] = {
+		"T5551234",		/* VALID     */
+		"5551234",		/* INVALID   */
+		"T555%%%1",		/* TOLERABLE */
+		"T,,,555;", "TABCD", ""
+	};
+	unsigned lvl, k;
+	long lines = 0;
+
+	diff_begin("IsDialStringInvalid: transcripts");
+
+	for (lvl = 1; lvl <= 3; lvl++) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+
+		for (k = 0; k < sizeof(strings) / sizeof(strings[0]); k++)
+			one(strings[k], 0, 0, 0, 1, 1);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("transcript matches (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)lvl);
+		if (getenv("DBGDIFF")
+		    && strcmp(dsplib_debug_capture_text(0),
+			      dsplib_debug_capture_text(1)) != 0) {
+			const char *o = dsplib_debug_capture_text(0);
+			const char *r = dsplib_debug_capture_text(1);
+			int j = 0;
+			while (o[j] && o[j] == r[j]) j++;
+			while (j > 0 && o[j - 1] != '\n') j--;
+			printf("=== level %u: first divergence at %d\n", lvl, j);
+			printf("--- ours: %.300s\n", o + j);
+			printf("--- ref : %.300s\n", r + j);
+		}
+		diff_eq_int("line counts match (level %ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), (long)lvl);
+		if (lvl == 1)
+			diff_eq_int("reference silent below the threshold",
+				    (int)dsplib_debug_capture_lines(1), 0, 0);
+		else
+			lines += dsplib_debug_capture_lines(1);
+	}
+
+	/* Anti-vacuity: empty transcripts also compare equal (finding 149). */
+	diff_eq_int("diagnostics were captured (%ld lines)", lines > 20, 1,
+		    lines);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -382,6 +458,7 @@ main(void)
 	rc |= run_length();
 	rc |= run_create();
 	rc |= run_abort();
+	rc |= run_debug();
 
 	/*
 	 * The supervisor's thunk onto the same parser.  Two instructions in

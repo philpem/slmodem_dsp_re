@@ -1,0 +1,13 @@
+[
+ {
+  "label": "drop the 'got: %s' banner in IsDialStringInvalid",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"DIALER.C: IsDialStringInvalid(char * \"\n\t\t\t\t     \"dialString )  got: %s\\n\", s);",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "print the verdict instead of the grade name",
+  "find": "grade = AnalyseDialString(d, s, 0);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Dial String Syntax is %s\\n\",\n\t\t\t\t     dialer_grade_name(grade));",
+  "replace": "grade = AnalyseDialString(d, s, 0);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Dial String Syntax is %s\\n\",\n\t\t\t\t     grade <= DIALER_INVALID ? \"INVALID\"\n\t\t\t\t\t\t\t     : \"VALID\");"
+ }
+]
+

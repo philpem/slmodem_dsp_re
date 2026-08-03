@@ -160,19 +160,19 @@ void DialerAbort(struct dialer *d);
 
 /*
  * `progress_state` values, in the author's own names.  Confirmed by which
- * debug string each switch case prints; see finding 138.
+ * debug string each switch case prints (finding 138), and the last two --
+ * INITIAL and END -- by the jump table at .rodata+0x614c once their
+ * announcements were found inside cases 0 and 10 after all (finding 162).
+ * States 1-4 (digit, gap, flash, pause) never announce and have no
+ * recovered names.
  */
+#define DIALER_INITIAL_STATE		0
 #define DIALER_WAIT_FOR_DIALTONE_STATE	5	/* -> DIALER_WAIT_DIALTONE */
 #define DIALER_WAIT_FOR_SILENCE_STATE	6	/* -> DIALER_WAIT_ANSWER   */
 #define DIALER_WAIT_FOR_BONGTONE_STATE	7	/* -> DIALER_WAIT_BONG     */
 #define DIALER_CALLING_TONE_STATE	8	/* -> DIALER_CALLING_TONE  */
-#define DIALER_END_PARTIALLY_STATE	9
-
-/*
- * Named by the same strings but not yet tied to a case: DIALER_INITIAL_STATE
- * and DIALER_END_STATE.  Cases 0 and 10 print no state name, so placing
- * them needs the surrounding disassembly rather than a string lookup.
- */
+#define DIALER_END_PARTIALLY_STATE	9	/* -> DIALER_COMMAND       */
+#define DIALER_END_STATE		10	/* -> DIALER_DONE          */
 
 /*
  * Produce the next stretch of dialling audio.

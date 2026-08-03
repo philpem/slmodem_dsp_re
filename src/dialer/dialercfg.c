@@ -77,10 +77,10 @@ GetDialerConfig(struct dialer_cfg *cfg, void *modem)
 	 * as whatever the host returned, so a caller testing them for equality
 	 * with 1 rather than for non-zero would behave differently on this one.
 	 */
-	cfg->pulse_dialing = modem_get_param(modem, GetPulseDialingFlag) != 0;
+	cfg->tone_or_pulse = modem_get_param(modem, GetPulseDialingFlag) != 0;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("Configuration->toneOrPulseFlag %d\n",
-				     cfg->pulse_dialing);
+				     cfg->tone_or_pulse);
 
 	cfg->modifier_validation = modem_get_param(modem,
 						   GetDialModifierValidation);
