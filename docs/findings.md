@@ -8319,3 +8319,61 @@ the inputs someone imagined for it, and two leaf tests that each cover half
 a condition still prove nothing about their conjunction.  The caller is what
 supplies the combinations nobody enumerated.  Both times the caller was
 worth more than another round on the leaf.
+
+### 151. `initdigital` is the rate negotiation, and its own strings name it
+
+`initdigital` (0x59980, 1206 bytes) became ready the moment `initV34` and
+`preinitdigital` landed, because it is the thing that calls them.  Not
+reconstructed; recorded because five surviving debug strings name most of
+what it computes, and because it independently confirms `initV34`'s
+signature from the caller's side.
+
+**It calls `initV34` twice, once per context**, which is the shape finding
+146 predicted from the other direction:
+
+```
+   initV34(obj + 0x25e0, cfg[0x00], 2400 * cfg[0x04], ..., obj + 0x2a68, d)
+   initV34(obj + 0x0a00, cfg[0x12], 2400 * cfg[0x14], ..., obj + 0x0e84, d)
+```
+
+`obj + 0x25e0` is the transmit context's fields and `obj + 0xa00` the
+receive one's -- 0x1be0 apart, and each gets its own coefficient block.  The
+`bitrate` argument is a genuine bit rate in bps, formed as 2400 times a
+count, which is why `initV34` divides it by 25 rather than by anything
+rate-like (finding 148): 2400/25 is 96, so the quotient counts bits per
+symbol group directly.
+
+**The author's names**, from `.rodata.str1.4`:
+
+```
+   0xd7f4  "V34DATARATE, for tx data rate - %d, PTC - %d, setting
+            nofTxBits to %d\r\n"
+   0xd83c  "V34DATARATE, finally txbitrate %d,rxbitrate %d\n"
+   0xd86c  "V34DATARATE, preliminary txbitrate %d,rxbitrate %d\n"
+   0xd8a0  "FATAL ERROR(initdigital) - ZERODIV expected!"
+   0xd8d0  "--ERROR---, 2400bps is not possible at %d baud rate\n"
+```
+
+Matching them to the arguments pins four fields:
+
+```
+   cfg + 0x04   txbitrate, in units of 2400 bps
+   cfg + 0x14   rxbitrate, same units
+   obj + 0x08   PTC        (read)
+   obj + 0x10   nofTxBits  = ((txbitrate * PTC) >> 6) + 6
+```
+
+where `cfg` is `obj + 0xaa84`.  "preliminary" is printed before the two
+rates are clamped against each other and against a per-baud capability
+bitmap at `obj + 0xaa0e`; "finally" after.
+
+**ZERODIV confirms a field this tree already guessed.**  `v34shell.h` says
+of `divisor` at +0xa42 that "zero means one", which was inferred from
+`initV34` treating it as a width.  The string says the author thought the
+same and called a zero there fatal: the code substitutes 1 and prints
+"ZERODIV expected!" rather than dividing.  Two independent readings, and the
+second is the author's own word.
+
+Worth noting against finding 134's policy: this function HAS diagnostic call
+sites and they are load-bearing annotation, so whoever writes it carries all
+five rather than dropping them.
