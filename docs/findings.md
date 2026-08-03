@@ -8160,13 +8160,15 @@ in the pattern-matching: `0x51eb851f` is recognisable enough that the shift
 stops being read.  Anywhere else this constant appears, the shift is the
 thing to check.
 
-### 149. `modulatevector`'s shape, before it is reconstructed -- and it checks the bound `shellDemapper` does not
+### 149. `modulatevector`'s shape -- and it checks the bound `shellDemapper` does not
 
 `modulatevector` is 3388 bytes, more than the other eight of this pass put
-together, and it is NOT reconstructed.  Recorded the way findings 99, 103,
-111 and 133 recorded `V34TimingFilter`, `txinit` and `receiver`: planning
-against "the 3.4 KB one" and against the structure below are different
-exercises, and everything here cost only reading.
+together.  This entry was written BEFORE it was reconstructed, the way
+findings 99, 103, 111 and 133 recorded `V34TimingFilter`, `txinit` and
+`receiver`, because planning against "the 3.4 KB one" and against the
+structure below are different exercises.  It is now written and passing, and
+the entry is kept as filed: every claim in it survived contact with the
+differential test, which is the point of recording them in advance.
 
 **It is the forward shell mapper, and it works on the TRANSMIT context.**
 Every offset it uses lands on a `struct v34_shell` field once `V34_SHELL_TX`
@@ -8251,3 +8253,54 @@ also needs a per-side bit source; `t_v34shell.c` already has `bitsrc_a` and
 
 `quarter` and `smIndex` both need emitting and memcmp'ing against `ref_*`,
 the same as `xyz`.
+
+
+### 150. `modulatevector` found a bug in `getFrame`, whose own test could not
+
+`getFrame` was committed passing 1.6 million comparisons.  The first thing
+to drive it from a REAL caller disagreed on the second call.
+
+The fault is in the split path, the one taken when the wide field is more
+than sixteen bits:
+
+```
+   frame[0] = bitbuf >> pos
+   pos = get_bits(obj, 0)          <-- the reconstruction
+   (void)get_bits(obj, 0)          <-- the object
+   pos = bitpos                        re-read from the object
+   frame[1] = (bitbuf >> pos) & lsbMask[nb & 15]
+```
+
+The object throws the callback's return value away and re-reads `bitpos`
+from the field.  That is not the same thing, because the scrambler
+callbacks return `pos - 16` and never write the field: the position the
+second half shifts by is the one the refill loop left, unchanged, while only
+the buffer has moved on.  Taking the return shifts by a negative count
+masked to sixteen and reads a different field entirely.
+
+The refill loop is the other half of it -- the object stores `bitpos` back
+on EVERY pass, not once at the end, which is what makes the re-read
+meaningful.
+
+**Why the original test could not see it.**  Two conditions have to hold
+together.  The wide field must exceed sixteen bits, which needs `fa0e` or
+`fa10` above 16 -- and those come out of `initV34`, which did not exist when
+`getFrame` was written, so its test set them by hand and set them small.
+And the callback's return must differ from the stored position, which is
+true of the real scramblers and false of the synthetic source the test used,
+since that one returned 0 and 0 was also what the loop had stored.  The
+fixture was self-consistent and wrong in both directions at once.
+
+**What found it.**  `modulatevector` is the first caller that runs
+`preinitdigital` and `initV34` and then drives `getFrame` through the
+scrambler `preinitdigital` installed -- so all three conditions arrive
+together for the first time.  Localised by swapping the synthetic bit source
+back in: with an identical deterministic source on both sides the buffers
+matched and only the POSITION diverged, which named the field.
+
+This is the same shape as finding 139, where `receiver` found a bug in
+`V34TimingFilter` that the filter's own test could not reach, and the lesson
+is the same one: a leaf test proves the leaf against the inputs someone
+imagined for it.  The caller is what supplies the inputs the object actually
+produces.  Both times the caller was worth more than another round on the
+leaf.

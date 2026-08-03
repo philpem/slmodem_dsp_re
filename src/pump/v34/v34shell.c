@@ -38,6 +38,7 @@
 
 #include "dsplib/sysdep.h"	/* sysdep_memset: preinitdigital clears three blocks */
 #include "dsplib/v34fsk.h"	/* struct v34_object: the scrambler callbacks take it */
+#include "dsplib/v34rx.h"	/* txmit and V34nlencoder: modulatevector ends in them */
 #include "dsplib/v34shell.h"
 
 
@@ -845,21 +846,40 @@ getFrame(void *objp)
 
 	pos = (unsigned short)s->bitpos;
 
-	/* Refill before reading, and keep refilling while short. */
-	while (pos > 15)
+	/*
+	 * Refill before reading, and keep refilling while short.  The position
+	 * is written back to the object on EVERY pass, not merely at the end
+	 * -- which matters because the split below reads it back out.
+	 */
+	while (pos > 15) {
 		pos = s->get_bits(objp, (short)pos);
+		s->bitpos = (short)pos;
+	}
 
 	if (nb > 16) {
 		/*
 		 * Split, mirroring putFrame: sixteen bits, refill, then the
 		 * remainder.  The first half is stored narrow and the second
 		 * completes the 32-bit pair.
+		 *
+		 * THE REFILL'S RETURN VALUE IS DISCARDED HERE and the position
+		 * re-read from the object instead, which is not the same
+		 * thing.  The scrambler callbacks return `pos - 16` and never
+		 * write the field, so the position the second half shifts by
+		 * is the one the loop above left -- unchanged -- while only
+		 * the buffer has moved on.  Taking the return shifts by a
+		 * negative count masked to 16 and reads a different field.
+		 *
+		 * Found by modulatevector, whose fixture is the first thing in
+		 * this tree to drive `nb` above 16.  Finding 150.
 		 */
 		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
-		pos = s->get_bits(objp, 0);
+		(void)s->get_bits(objp, 0);
+		pos = (unsigned short)s->bitpos;
 		s->frame[1] = (short)(((unsigned)s->bitbuf >> (pos & 31))
 				      & lsbMask[nb & 15]);
 		pos += nb & 15;
+		s->bitpos = (short)pos;
 	} else if (nb > 0) {
 		*(int *)&s->frame[0] =
 		    (int)(((unsigned)s->bitbuf >> (pos & 31))
@@ -921,23 +941,35 @@ getFrame(void *objp)
  * `conv` points at one of them: preinitV34 installs the 16-state code and
  * initV34 swaps in a wider one when its `depth` argument asks.
  */
-const int Convolve16[32] = {
-	0, 131074, 0, 131074, 786446, 917516, 786446, 917516,
-	131074, 0, 131074, 0, 917516, 786446, 917516, 786446,
-	0, 131074, 0, 131074, 786446, 917516, 786446, 917516,
-	131074, 0, 131074, 0, 917516, 786446, 917516, 786446,
+const short Convolve16[64] = {
+	0, 0, 2, 2, 0, 0, 2, 2,
+	14, 12, 12, 14, 14, 12, 12, 14,
+	2, 2, 0, 0, 2, 2, 0, 0,
+	12, 14, 14, 12, 12, 14, 14, 12,
+	0, 0, 2, 2, 0, 0, 2, 2,
+	14, 12, 12, 14, 14, 12, 12, 14,
+	2, 2, 0, 0, 2, 2, 0, 0,
+	12, 14, 14, 12, 12, 14, 14, 12,
 };
-const int Convolve32[32] = {
-	0, 524296, 262148, 786444, 1179674, 1703954, 1441822, 1966102,
-	524296, 0, 786444, 262148, 1703954, 1179674, 1966102, 1441822,
-	262148, 786444, 0, 524296, 1441822, 1966102, 1179674, 1703954,
-	786444, 262148, 524296, 0, 1966102, 1441822, 1703954, 1179674,
+const short Convolve32[64] = {
+	0, 0, 8, 8, 4, 4, 12, 12,
+	26, 18, 18, 26, 30, 22, 22, 30,
+	8, 8, 0, 0, 12, 12, 4, 4,
+	18, 26, 26, 18, 22, 30, 30, 22,
+	4, 4, 12, 12, 0, 0, 8, 8,
+	30, 22, 22, 30, 26, 18, 18, 26,
+	12, 12, 4, 4, 8, 8, 0, 0,
+	22, 30, 30, 22, 18, 26, 26, 18,
 };
-const int Convolve64[32] = {
-	0, 65537, 524296, 589833, 131075, 196610, 655371, 720906,
-	327685, 262148, 851981, 786444, 458758, 393223, 983054, 917519,
-	524296, 589833, 0, 65537, 655371, 720906, 131075, 196610,
-	851981, 786444, 327685, 262148, 983054, 917519, 458758, 393223,
+const short Convolve64[64] = {
+	0, 0, 1, 1, 8, 8, 9, 9,
+	3, 2, 2, 3, 11, 10, 10, 11,
+	5, 5, 4, 4, 13, 13, 12, 12,
+	6, 7, 7, 6, 14, 15, 15, 14,
+	8, 8, 9, 9, 0, 0, 1, 1,
+	11, 10, 10, 11, 3, 2, 2, 3,
+	13, 13, 12, 12, 5, 5, 4, 4,
+	14, 15, 15, 14, 6, 7, 7, 6,
 };
 
 /*
@@ -1609,6 +1641,512 @@ preinitdigital(void *obj)
 	}
 }
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * modulatevector's two tables.
+ */
+
+/*
+ * smIndex -- sixteen entries, indexed by the two quantised coordinates
+ * reduced to `((v - 1) & 6) >> 1`, i.e. by which of four bands each lands in.
+ * As a 4x4 it is two Latin squares stacked, and the pair of lookups is
+ * combined as `smIndex[j] + 8 * smIndex[i]` to form the trellis index.
+ */
+const short smIndex[16] = {
+	0, 7, 4, 3, 5, 2, 1, 6,
+	4, 3, 0, 7, 1, 6, 5, 2,
+};
+
+/*
+ * quarter -- 416 shorts, each holding TWO SIGNED BYTES: the high byte is the
+ * coordinate offset and the low byte a second one, and the code takes the low
+ * one with an explicit sign test rather than an arithmetic shift.  Indexed by
+ * `(sub << fa14) + frame`, so the frame field selects within a group of
+ * `1 << fa14` and the sub-index selects the group.
+ */
+const short quarter[416] = {
+	257, -767, 509, -515, 261, 1281, -763, 1533,
+	1285, -1791, 505, -1539, -519, -1787, 1529, 265,
+	2305, -759, 2557, -1543, 1289, 2309, -2815, 501,
+	-1783, -2563, 2553, -523, -2811, 1525, 2313, 269,
+	3329, -2567, -1547, -755, 3581, 1293, 3333, -2807,
+	2549, -1779, 3577, -3839, 497, -3587, -527, -2571,
+	2317, 3337, -3835, 1521, -3591, -1551, 273, -2803,
+	4353, 3573, -751, 4605, -3831, 2545, 1297, 4357,
+	-1775, 3341, 4601, -3595, -2575, -4863, 493, 2321,
+	4361, -4611, -531, -4859, 1517, -3827, 3569, -2799,
+	-4615, 4597, -1555, 277, -4855, 5377, 2541, -747,
+	5629, -3599, 3345, 4365, 1301, 5381, -4619, -2579,
+	-1771, 5625, -3823, 4593, 2325, 5385, -4851, -5887,
+	3565, 489, -5635, -535, -5883, 1513, -2795, 5621,
+	4369, -5639, -1559, -4623, -3603, 3349, 5389, -5879,
+	2537, 281, 6401, -743, 6653, 1305, -4847, 6405,
+	-5643, 4589, -2583, -3819, 5617, -1767, 6649, -5875,
+	3561, 2329, 6409, -4627, 4373, 5393, -6911, 485,
+	-6659, -539, -2791, 6645, -6907, -5647, -3607, 1509,
+	-6663, -1563, 3353, 6413, -4843, 5613, -6903, 2533,
+	-5871, 4585, 285, 7425, -739, -3815, 7677, -6667,
+	6641, -2587, 1309, 7429, 5397, -1763, 7673, -5651,
+	-4631, -6899, 3557, 4377, 6417, 2333, 7433, -6671,
+	-3611, -2787, -7935, 7669, 481, -5867, -7683, 5609,
+	-543, -4839, -7931, 6637, 1505, 3357, 7437, -7687,
+	-1567, -6895, 4581, -7927, 2529, -5655, -3811, 5401,
+	6421, 7665, -7691, -2591, 289, 8449, -6675, -4635,
+	-735, 8701, 1313, 8453, 4381, 7441, -7923, 3553,
+	-1759, 8697, -5863, 6633, 2337, -6891, 8457, 5605,
+	-7695, -3615, -4835, 7661, -2783, 8693, -8959, 477,
+	-8707, -547, 6425, -7919, -8955, 4577, 1501, 3361,
+	8461, -6679, -5659, -8711, -1571, 5405, 7445, -8951,
+	2525, -3807, 8689, -7699, -4639, -8715, -2595, -6887,
+	6629, 293, -5859, 9473, 7657, -731, 4385, 8465,
+	9725, 1317, -8947, 9477, 3549, -7915, 5601, -1755,
+	9721, 2341, -4831, 9481, -8719, 8685, -3619, -6683,
+	6429, 7449, -2779, 9717, -7703, -5663, -8943, 4573,
+	-9983, 473, 5409, 8469, -9731, -551, 3365, 9485,
+	-9979, 1497, -6883, -9735, 7653, -1575, -7911, -8723,
+	6625, -4643, -3803, 9713, -9975, 2521, -5855, 8681,
+	-9739, -2599, 4389, 9489, -8939, 5597, 297, 7453,
+	10497, -727, -9971, 10749, -7707, -6687, 3545, 1321,
+	10501, 6433, 8473, -1751, -4827, 10745, 9709, -9743,
+	-3623, -8727, -5667, 2345, 10505, -2775, -7907, 10741,
+	7649, 5413, 9493, -9967, 4569, -6879, 8677, 3369,
+	-8935, 10509, -11007, 6621, 469, -10755, -555, -11003,
+	1493, -9747, -4647, -5851, -10759, 9705, -1579, -3799,
+	10737, -7711, 7457, 8477, -10999, 2517, -8731, -6691,
+	-9963, 5593, 4393, 10513, -10763, -2603, 6437, 9497,
+	-10995, 3541, 301, 11521, -723, 11773, -4823, 10733,
+	1325, -7903, 11525, -9751, 8673, -5671, -8931, 7645,
+	-1747, 11769, -10767, -3627, -6875, 9701, 2349, 11529,
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * modulatevector -- the forward shell mapper, and the transmit chain's front
+ * door.
+ *
+ * `shellDemapper` run backwards, against the same three tables and on the
+ * TRANSMIT context; `getFrame` is its bit source exactly as `putFrame` is the
+ * demapper's sink.
+ *
+ * ONE CALL EMITS ONE POINT.  The object carries eight complex points and a
+ * cursor; a call below eight copies point `n` out and tail-calls `txmit`.
+ * Only when the cursor reaches eight does the mapping run and refill all
+ * eight, and that call then emits the first of them.
+ *
+ * THE MAPPING:
+ *
+ *   1. A seven-step binary search over `t3` for the wide value `getFrame`
+ *      left in `frame[0]`.  The comparison is UNSIGNED, which is what makes
+ *      preinitV34's fill of -1 a sentinel rather than debris -- 0xffffffff is
+ *      above any frame value, so the -1s stop the search entering the part of
+ *      `t3` initG248 did not fill.  See D35 and findings 147 and 149.
+ *
+ *   2. Three passes of "peel off table steps until it goes negative", once
+ *      against `t2` and twice against `t1`, each followed by a divide and a
+ *      remainder.  That inverts the demapper's convolution sums and produces
+ *      eight sub-indices as four pairs.
+ *
+ *   3. Each pair's SUM is checked against `count` and clamped if it reaches
+ *      it, so the encoder cannot emit an out-of-range group.
+ *
+ *   4. Four groups of two points.  Per point: a `quarter` lookup, a six-tap
+ *      precoder over `hist`, a quantiser that folds modulo the constellation,
+ *      and a differential rotation.  Per GROUP: one trellis step, in one of
+ *      two spellings, and the sub-frame and frame counters.
+ *
+ * Finally the eight points are scaled by `divisor` -- which the object does
+ * inline and which is `scaleVector`, so that is what is called.
+ */
+
+/*
+ * Peel `d` off the running total in `tab` steps: subtract tab[0]*tab[d], then
+ * tab[1]*tab[d-1], and so on until it goes negative.  Returns how many steps
+ * were taken and leaves the last NON-NEGATIVE total in `*rem`.
+ *
+ * The object has this three times, inlined, once against t2 and twice against
+ * t1.  Unsigned throughout with an explicit sign-bit test, because a 16x16
+ * product can legitimately carry past INT_MAX and the object's `jns` reads
+ * the bit rather than the value.
+ */
+static unsigned
+shell_peel(const short *tab, unsigned d, unsigned *rem)
+{
+	unsigned r = *rem;
+	unsigned saved = r;
+	unsigned k = 0;
+
+	r -= (unsigned)(unsigned short)tab[0] * (unsigned)(unsigned short)tab[d];
+	while (!(r & 0x80000000u)) {
+		saved = r;
+		k++;
+		r -= (unsigned)(unsigned short)tab[k]
+		     * (unsigned)(unsigned short)tab[d - k];
+	}
+	*rem = saved;
+	return k;
+}
+
+/*
+ * One sub-index and one frame field into a packed pair of signed byte
+ * offsets: the entry's HIGH byte in the low half of the result, and its LOW
+ * byte -- sign-extended by an explicit test of bit 7 rather than by a shift,
+ * which is the same thing -- in the high half.
+ */
+static unsigned
+quarter_pair(int sub, unsigned shift, short field)
+{
+	int q = quarter[(sub << (shift & 31)) + (unsigned short)field];
+
+	return ((unsigned)(signed char)(q & 0xff) << 16)
+	       | (unsigned short)(q >> 8);
+}
+
+/*
+ * Rotate a packed pair by `r` quadrants.  The two halves swap every step,
+ * which is why each case is a shift by sixteen rather than an exchange.
+ */
+static unsigned
+quarter_rotate(unsigned v, unsigned r)
+{
+	unsigned hi = (unsigned)((int)v >> 16);
+	unsigned t;
+
+	switch (r) {
+	case 0:
+		return v;
+	case 1:
+		return (v << 16) | (unsigned short)(0u - hi);
+	case 2:
+		t = (unsigned short)v | ((0u - hi) << 16);
+		return (t & 0xffff0000u) | (unsigned short)(0u - t);
+	default:
+		return ((0u - v) << 16) | (unsigned short)hi;
+	}
+}
+
+/*
+ * The precoder's quantiser for one coordinate: shift the biased accumulator
+ * down by 14, fold it into the band `wrap` describes, and mask.  `*raw` keeps
+ * the unfolded value, which the point subtracts back off -- so what reaches
+ * the line is the residue and what the delay line keeps is the folded
+ * coordinate.  That is the precoder's whole content.
+ */
+static void
+precode_one(int acc, int wrap, short *quant, short *raw)
+{
+	int base = (short)(wrap << 7);
+	int neg2 = (short)(0 - 2 * wrap);
+	int mask = base | (int)0xffff80ff;
+	int a, t;
+
+	/* Round toward zero before the shift, which `shr` alone would not. */
+	a = (int)((unsigned)(acc < 0 ? acc + 1 : acc) >> 14);
+	*raw = (short)a;
+
+	if ((short)(a & mask) == (short)base)
+		t = (short)a;
+	else
+		t = (short)a + base;
+
+	*quant = (short)((int)((unsigned)t >> 7) & neg2);
+}
+
+/* Six taps of `coeff` over `hist`, biased, for both rows at once. */
+static void
+precode_taps(const struct v34_shell *tx, const short *coeff, int *re, int *im)
+{
+	int k, a = 0x1fff, b = 0x1fff;
+
+	for (k = 0; k <= 5; k++) {
+		int h = tx->hist[k];
+
+		a += coeff[k] * h;
+		b += coeff[k + 6] * h;
+	}
+	*re = a;
+	*im = b;
+}
+
+/* Shift the precoder's delay line by one complex tap and insert (re, im). */
+static void
+precode_push(struct v34_shell *tx, short re, short im)
+{
+	short h0 = tx->hist[0], h1 = tx->hist[1];
+	short h2 = tx->hist[2], h3 = tx->hist[3];
+
+	tx->hist[3] = h1;
+	tx->hist[5] = h3;
+	tx->hist[4] = h2;
+	tx->hist[2] = h0;
+	tx->hist[0] = re;
+	tx->hist[1] = im;
+}
+
+/* `((v - 1) & 6) >> 1` on each coordinate, combined as the object does. */
+static unsigned
+sm_index(int x, int y)
+{
+	return (unsigned)smIndex[(((x - 1) & 6) >> 1) + 2 * ((y - 1) & 6)];
+}
+
+/*
+ * One trellis step.  Two spellings of the same recurrence: the general one
+ * shifts the state down and XORs the feedback mask back in when the bit
+ * leaving is set, and the 64-state one is that unrolled over six one-bit
+ * registers in `fa2c`.  Which is used is decided by the mask being 64.
+ */
+static void
+trellis_step(struct v34_shell *tx, unsigned idx)
+{
+	unsigned mask = (unsigned short)tx->fa16;
+	int t;
+
+	if (mask == 0x40) {
+		short c0 = tx->fa2c[0], c1 = tx->fa2c[1], c2 = tx->fa2c[2];
+		short c3 = tx->fa2c[3], c4 = tx->fa2c[4], c5 = tx->fa2c[5];
+		int v = tx->conv[idx];
+		int b = (short)((v & 1) ^ (unsigned short)c4);
+		int e = (short)((unsigned short)c4 ^ (unsigned short)c5);
+
+		tx->fa2c[1] = c0;
+		tx->fa2c[5] = (short)(((v >> 3) ^ e) ^ (b & (unsigned short)c3));
+		tx->fa2c[3] = (short)(b ^ (unsigned short)c3);
+		tx->fa2c[2] = c3;
+		tx->fa2c[4] = (short)(((e ^ (unsigned short)c2) ^ (v >> 2))
+				      ^ ((v >> 1) & (unsigned short)c3));
+		tx->fa2c[0] = (short)((v >> 1)
+				      ^ ((unsigned short)c1 ^ (unsigned short)c3));
+	} else {
+		unsigned st = (unsigned short)tx->fa2c[0];
+
+		t = (short)((unsigned short)tx->conv[idx] ^ st);
+		t ^= (int)((st & 1) * mask);
+		tx->fa2c[0] = (short)((unsigned)t >> 1);
+	}
+
+	/*
+	 * The sub-frame counter, and the frame counter under it.  `invert` is
+	 * cleared on every step but the one that rolls the frame over, which
+	 * is where gInvertPat supplies it.
+	 */
+	{
+		int sf = (short)((unsigned short)tx->fa3c + 1);
+
+		if (sf < (int)(unsigned short)tx->fa02) {
+			tx->fa3c = (short)sf;
+			tx->invert = 0;
+		} else {
+			int fr = (short)((unsigned short)tx->fa3e + 1);
+
+			tx->fa3c = 0;
+			if (fr < (int)tx->fa40) {
+				tx->fa3e = (short)fr;
+				tx->invert = (short)(unsigned short)
+					gInvertPat[(short)fr];
+			} else {
+				tx->fa3e = 0;
+				tx->invert = 0;
+			}
+		}
+	}
+}
+
+void
+modulatevector(void *obj)
+{
+	struct v34_object *o = (struct v34_object *)obj;
+	struct v34_shell *tx = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+	struct v34_shell *rx = (struct v34_shell *)obj;
+	unsigned n = (unsigned short)o->vect_idx;
+
+	if (n == 8) {
+		unsigned flags = (unsigned short)o->f25c2;
+		unsigned count = (unsigned short)tx->count;
+		unsigned shift = (unsigned short)tx->fa14;
+		unsigned target, quad, lo, hi, mid, si, rem, d;
+		unsigned n1, n2, n3, q2, s2, s6, a, b, g;
+		const short *coeff;
+		short sub[V34_SHELL_SUBS];
+		int i;
+
+		/*
+		 * Training to data.  While bit 4 is clear the mapper still
+		 * runs, but a symbol counter is compared against the span;
+		 * when it arrives the data path is switched on and the bit
+		 * set, and nothing reads the counter again.
+		 */
+		if (!(flags & 0x10) && rx->latched != 0) {
+			int c = o->faa74;
+
+			o->faa74 = c + 1;
+			if (c >= (int)(unsigned short)tx->fa00) {
+				o->data_enable = 1;
+				o->f25c2 = (short)(flags | 0x10);
+			}
+		}
+
+		getFrame(obj);
+
+		target = (unsigned)*(int *)&tx->frame[0];
+		quad = (unsigned short)(short)tx->prev_k;
+
+		/* 1. Seven halvings over t3, unsigned. */
+		lo = 0;
+		mid = 0x40;
+		hi = 0x80;
+		for (i = 0; i <= 6; i++) {
+			if ((unsigned)tx->t3[mid] > target) {
+				hi = mid;
+				mid = (unsigned short)(short)((lo + hi) / 2);
+			} else {
+				lo = mid;
+				mid = (unsigned short)(short)((hi + mid) / 2);
+			}
+		}
+		lo = (unsigned short)lo;
+
+		/* 2. Peel against t2, then twice against t1. */
+		rem = target - (unsigned)tx->t3[lo];
+		n1 = shell_peel(tx->t2, lo, &rem);
+		q2 = rem / (unsigned short)tx->t2[n1];
+		rem = rem % (unsigned short)tx->t2[n1];
+
+		n2 = shell_peel(tx->t1, n1, &rem);
+		s2 = (unsigned short)(rem / (unsigned short)tx->t1[n2]);
+		a = (unsigned short)(rem % (unsigned short)tx->t1[n2]);
+
+		rem = q2;
+		d = (unsigned short)(lo - n1);
+		n3 = shell_peel(tx->t1, d, &rem);
+		s6 = (unsigned short)(rem / (unsigned short)tx->t1[n3]);
+		b = (unsigned short)(rem % (unsigned short)tx->t1[n3]);
+
+		/*
+		 * 3. Four pairs, each summing to a value checked against
+		 * `count`.  The clamp caps the SECOND element at
+		 * `count - first - 1` and gives the first whatever is left,
+		 * which is the object's shape and not the symmetrical one it
+		 * reads as.
+		 */
+		if ((unsigned short)n2 >= count) {
+			sub[1] = (short)(count - a - 1);
+			sub[0] = (short)(n2 - (unsigned short)sub[1]);
+		} else {
+			sub[0] = (short)a;
+			sub[1] = (short)(n2 - a);
+		}
+
+		d = (unsigned short)(n1 - n2);
+		if (d >= count) {
+			sub[3] = (short)(count - s2 - 1);
+			sub[2] = (short)(d - (unsigned short)sub[3]);
+		} else {
+			sub[2] = (short)s2;
+			sub[3] = (short)(d - s2);
+		}
+
+		if ((unsigned short)n3 >= count) {
+			sub[5] = (short)(count - b - 1);
+			sub[4] = (short)(n3 - (unsigned short)sub[5]);
+		} else {
+			sub[4] = (short)b;
+			sub[5] = (short)(n3 - b);
+		}
+
+		d = (unsigned short)(lo - n1 - n3);
+		if (d >= count) {
+			sub[7] = (short)(count - s6 - 1);
+			sub[6] = (short)(d - (unsigned short)sub[7]);
+		} else {
+			sub[6] = (short)s6;
+			sub[7] = (short)(d - s6);
+		}
+
+		/* 4. Four groups of two points. */
+		coeff = tx->coeff;
+		si = 0;
+
+		for (g = 0; g < 4; g++) {
+			unsigned v0, v1, parity, i0, i1;
+			short xq, xr, yq, yr;
+			int acc_re, acc_im, x0, y0, x1, y1, wrap;
+			short *out = &o->vect[4 * g];
+
+			/* --- the first of the pair --- */
+			v0 = quarter_pair(sub[si], shift, tx->frame[4 + 4 * g]);
+			wrap = (short)tx->wrap;
+			precode_taps(tx, coeff, &acc_re, &acc_im);
+			precode_one(acc_re, wrap, &xq, &xr);
+			precode_one(acc_im, wrap, &yq, &yr);
+			parity = (unsigned)(short)(xq ^ yq);
+
+			quad = (quad + (unsigned short)tx->frame[3 + 4 * g])
+			       & 3;
+			v0 = quarter_rotate(v0, (0u - quad) & 3);
+
+			x0 = (short)(xq + (int)v0);
+			y0 = (short)(yq + ((int)v0 >> 16));
+			i0 = sm_index(x0, y0);
+
+			precode_push(tx, (short)((x0 << 7) - (unsigned short)xr),
+				     (short)((y0 << 7) - (unsigned short)yr));
+			out[0] = tx->hist[0];
+			out[1] = tx->hist[1];
+
+			/* --- the second of the pair --- */
+			v1 = quarter_pair(sub[si + 1], shift,
+					  tx->frame[5 + 4 * g]);
+			wrap = (short)tx->wrap;
+			precode_taps(tx, coeff, &acc_re, &acc_im);
+			precode_one(acc_re, wrap, &xq, &xr);
+			precode_one(acc_im, wrap, &yq, &yr);
+
+			parity ^= (unsigned)(short)(xq ^ yq);
+			parity = (unsigned)((((int)parity >> 1)
+					     ^ (unsigned short)tx->fa2c[0]
+					     ^ (unsigned short)tx->invert) & 1);
+
+			/*
+			 * The second rotation does NOT advance the carried
+			 * quadrant -- it is `quad` plus this group's own two
+			 * fields, used and dropped.
+			 */
+			v1 = quarter_rotate(v1,
+				(0u - (quad
+				       + 2 * (unsigned)(short)
+					     tx->frame[2 + 4 * g]
+				       + parity)) & 3);
+
+			x1 = (short)(xq + (int)v1);
+			y1 = (short)(yq + ((int)v1 >> 16));
+			i1 = sm_index(x1, y1);
+
+			precode_push(tx, (short)((x1 << 7) - (unsigned short)xr),
+				     (short)((y1 << 7) - (unsigned short)yr));
+			out[2] = tx->hist[0];
+			out[3] = tx->hist[1];
+
+			trellis_step(tx, (unsigned short)(i1 + 8 * i0));
+			si += 2;
+		}
+
+		tx->prev_k = (short)quad;
+		scaleVector(o->vect, tx->divisor);
+
+		o->vect_idx = 0;
+		n = 0;
+	}
+
+	o->vect_idx = (short)(n + 1);
+	if (o->f25c2 & 0x4000)
+		V34nlencoder(&o->vect[2 * n], &o->f25d0);
+	else
+		*(int *)&o->f25d0 = *(int *)&o->vect[2 * n];
+
+	txmit(obj);
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Layout, pinned to what every function above reads.
@@ -1663,6 +2201,10 @@ V34OB_ASSERT(tx_n, 0x218);
 V34OB_ASSERT(tx_rd, 0x21c);
 V34OB_ASSERT(data_enable, 0x2214);
 V34OB_ASSERT(faa74, 0xaa74);
+V34OB_ASSERT(vect, 0x2a80);
+V34OB_ASSERT(vect_idx, 0x2aa2);
+V34OB_ASSERT(f25d0, 0x25d0);
+V34OB_ASSERT(f25c2, 0x25c2);
 
 /* The three memsets' lengths are the object's own, so pin those too. */
 typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)

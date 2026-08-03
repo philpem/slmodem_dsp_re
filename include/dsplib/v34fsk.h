@@ -212,7 +212,25 @@ struct v34_object {
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
 	short f25d4;					/* +0x25d4 tx scale  */
-	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
+	unsigned char unmapped_25d6[0x2a80 - 0x25d6];
+	/*
+	 * +0x2a80.  `modulatevector`'s output: eight complex points as
+	 * sixteen shorts, and the cursor into them.  One call emits point
+	 * `vect_idx` and bumps it; only when it reaches 8 does the mapping
+	 * run and refill all eight.  `scaleVector`'s sixteen shorts are
+	 * exactly this array.
+	 *
+	 * In transmit-shell coordinates these land at +0xea0 and +0xec2,
+	 * inside `sub[]` and `cost[]` -- which is not a contradiction but the
+	 * reason they are declared HERE.  Only the receive context decodes,
+	 * so the transmit one has no sub-indices, costs, trellis or states,
+	 * and the object reuses the space.  `preinitdigital` clearing those
+	 * three arrays on the receive side and on neither other says the same
+	 * thing from the other direction.  See finding 146.
+	 */
+	short vect[16];					/* +0x2a80 */
+	short f2aa0;					/* +0x2aa0 */
+	short vect_idx;					/* +0x2aa2 */
 	short f2aa4;					/* +0x2aa4 */
 	short f2aa6;					/* +0x2aa6 */
 	/*

@@ -6,6 +6,15 @@
 #include "harness.h"
 #include "dsplib/v34shell.h"
 #include "dsplib/v34fsk.h"	/* struct v34_object: preinitdigital takes it */
+#include "dsplib/v34filt.h"
+#include "dsplib/v34recv.h"
+#include "dsplib/v34rx.h"
+#include "dsplib/v34pcmif.h"
+extern void ref_modulatevector(void *obj);
+extern void ref_txinit(void *obj);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
+extern void ref_V34SetupModulator(void *m, short, short, short, short, short);
+
 
 extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
@@ -131,9 +140,9 @@ extern void ref_descrambleGPC(void *obj, int value, int nbits);
 extern void ref_descrambleGPA(void *obj, int value, int nbits);
 
 extern const int ref_xyz[945];
-extern const int ref_Convolve16[32];
-extern const int ref_Convolve32[32];
-extern const int ref_Convolve64[32];
+extern const short ref_Convolve16[64];
+extern const short ref_Convolve32[64];
+extern const short ref_Convolve64[64];
 extern const signed char ref_MMaxTable[32];
 extern const signed char ref_MMinTable[32];
 
@@ -1163,6 +1172,172 @@ main(void)
 	}
 	rc |= diff_end();
 
+
+	/*
+	 * modulatevector -- the forward mapper, driven end to end.
+	 *
+	 * It tail-calls `txmit`, so the fixture is t_v34rx.c's txmit setup
+	 * (including the three arrays kept outside the object, finding 116b)
+	 * with the shell contexts initialised on top: preinitdigital for the
+	 * scrambler callbacks, then initV34 on the TRANSMIT context so the
+	 * three count tables exist.
+	 *
+	 * initV34 IS REQUIRED, not tidiness.  The mapper divides by `t1` and
+	 * `t2` entries, which preinitV34 zeroes -- a fixture that fills the
+	 * shell and calls straight in takes SIGFPE rather than failing a
+	 * comparison.
+	 */
+	diff_begin("v34 modulatevector");
+	{
+		static struct v34_object oa, ob;
+		static short shp_a[512], shp_b[512];
+		static short bra[64], brb[64];
+		static const short coeffs[12] = {
+			 1400, -600,  320, -180,   90,  -40,
+			 -520, 1100, -260,  140,  -70,   30,
+		};
+		/* Rate, bitrate: chosen so `count` lands mid-table. */
+		static const struct { short baud, rate, depth; } cases[] = {
+			{ 3200, 28800, 0 }, { 3200, 28800, 1 },
+			{ 3429, 31200, 2 }, { 2400, 14400, 0 },
+			{ 2800, 19200, 1 }, { 3000, 24000, 2 },
+		};
+		unsigned c, it, k;
+
+		for (c = 0; c < sizeof(cases) / sizeof(cases[0]); c++)
+		for (k = 0; k < 8; k++) {
+			int role = k & 1, nle = (k >> 1) & 1;
+			int synth = (k >> 2) & 1;
+			struct v34_shell *ta, *tb;
+
+			memset(&oa, 0, sizeof(oa)); memset(&ob, 0, sizeof(ob));
+			memset(shp_a, 0, sizeof(shp_a));
+			memset(shp_b, 0, sizeof(shp_b));
+			memset(bra, 0, sizeof(bra));
+			memset(brb, 0, sizeof(brb));
+
+			V34InitializeImplementationSpecific(&oa);
+			ref_V34InitializeImplementationSpecific(&ob);
+			txinit(&oa); ref_txinit(&ob);
+			((struct v34_modulator *)((char *)&oa + 0x1450))->shaped
+				= shp_a;
+			((struct v34_modulator *)((char *)&ob + 0x1450))->shaped
+				= shp_b;
+			V34SetupModulator((struct v34_modulator *)
+					  ((char *)&oa + 0x1450), 2400, 1600,
+					  0, 0, 1);
+			ref_V34SetupModulator((char *)&ob + 0x1450, 2400,
+					      1600, 0, 0, 1);
+			oa.prefilter.coeff = ob.prefilter.coeff =
+				V34TimingPrefilterCoeff;
+			oa.prefilter.shift = ob.prefilter.shift = 14;
+			oa.f25d4 = ob.f25d4 = 0x4000;
+			oa.bulk_ring = bra;  ob.bulk_ring = brb;
+			oa.bulk_len  = ob.bulk_len = 64;
+
+			/* The role decides which scrambler drives getFrame. */
+			oa.f359c = ob.f359c = (short)(role ? 0x65 : 0x12);
+			preinitdigital(&oa); ref_preinitdigital(&ob);
+
+			ta = (struct v34_shell *)((char *)&oa + V34_SHELL_TX);
+			tb = (struct v34_shell *)((char *)&ob + V34_SHELL_TX);
+
+			initV34((char *)ta + V34_SHELL_FIELDS, cases[c].baud,
+				cases[c].rate, 1, cases[c].depth, coeffs,
+				0x80);
+			ref_initV34((char *)tb + V34_SHELL_FIELDS,
+				    cases[c].baud, cases[c].rate, 1,
+				    cases[c].depth, coeffs, 0x80);
+
+			/* Something for the scrambler to carry. */
+			oa.tx_n = ob.tx_n = 48;
+			for (it = 0; it < 64; it++)
+				oa.tx_data[it] = ob.tx_data[it] =
+					(int)(it * 5779 + 13);
+
+			/*
+			 * Bit 14 selects the non-linear encoder on the way
+			 * out; bit 4 clear makes the first calls run the
+			 * training counter instead of the data path, and
+			 * `latched` is what lets that counter run at all.
+			 */
+			oa.f25c2 = ob.f25c2 = (short)(nle ? 0x4000 : 0);
+			((struct v34_shell *)&oa)->latched = 1;
+			((struct v34_shell *)&ob)->latched = 1;
+
+			/* Force the first call to regenerate. */
+			oa.vect_idx = ob.vect_idx = 8;
+
+			/*
+			 * Two bit sources, because they stress different
+			 * things.  preinitdigital's own scramblers are the
+			 * realistic path and make the frame depend on the
+			 * whole scrambler state; the synthetic pair is
+			 * identical across the two sides by construction, so
+			 * a divergence under it is unambiguously getFrame's
+			 * or the mapper's rather than the scrambler's.  That
+			 * separation is what localised finding 150.
+			 */
+			if (synth) {
+				for (it = 0; it < 64; it++)
+					src_words_a[it] = src_words_b[it] =
+					    (unsigned)(it * 2654435761u
+						       + 12345u);
+				src_i_a = src_i_b = 0;
+				ta->get_bits = bitsrc_a;
+				tb->get_bits = bitsrc_b;
+			}
+
+			for (it = 0; it < 48; it++) {
+				unsigned b;
+
+				modulatevector(&oa);
+				ref_modulatevector(&ob);
+
+				for (b = 0; b < sizeof(oa); b++) {
+					/* Pointers, and the two callbacks. */
+					if ((b >= 0x268 && b < 0x270)
+					    || (b >= 0x2074 && b < 0x2078)
+					    || (b >= 0x20cc && b < 0x20d0)
+					    || (b >= 0x2220 && b < 0x2228)
+					    || (b >= 0x35b0 && b < 0x35b4)
+					    || (b >= 0x80b8 && b < 0x80d8)
+					    || (b >= 0x9138 && b < 0x9158)
+					    || (b >= 0xa28 && b < 0xa2c)
+					    || (b >= 0xe48 && b < 0xe4c)
+					    || (b >= 0x2604 && b < 0x260c)
+					    || (b >= 0x2a28 && b < 0x2a2c)
+					    || (b >= 0x1450 + 0x10
+						&& b < 0x1450 + 0x18)
+					    || (b >= 0x1450 + 0xc24
+						&& b < 0x1450 + 0xc28)
+					    || (b >= 0x1450 + 0xc7c
+						&& b < 0x1450 + 0xc80)
+					    || (b >= 0x1450 + 0xcb0
+						&& b < 0x1450 + 0xcb4))
+						continue;
+					if (((unsigned char *)&oa)[b]
+					    != ((unsigned char *)&ob)[b]) {
+						printf("  (case %u/%u it %u)\n",
+						       c, k, it);
+						diff_eq_int("mv byte at +0x%lx",
+						    ((unsigned char *)&oa)[b],
+						    ((unsigned char *)&ob)[b],
+						    (long)b);
+						goto mv_next;
+					}
+				}
+				for (b = 0; b < 64; b++)
+					diff_eq_int("mv bulk ring", bra[b],
+						    brb[b], b);
+				for (b = 0; b < 512; b++)
+					diff_eq_int("mv shaped", shp_a[b],
+						    shp_b[b], b);
+			}
+mv_next:		;
+		}
+	}
+	rc |= diff_end();
 
 	return rc;
 }

@@ -75,12 +75,14 @@ extern const unsigned short lsbMask[17];
 #define V34_SHELL_FIELDS	0xa00
 
 /*
- * V.34's three convolutional codes, 32 ints each, selected by initV34's
- * `depth` argument.  Named for their state counts by the original.
+ * V.34's three convolutional codes, 64 shorts each, selected by initV34's
+ * `depth` argument and named for their state counts by the original.
+ * modulatevector indexes them with exactly six bits, which is what pins the
+ * length at 64 rather than at 32 ints of the same bytes.
  */
-extern const int Convolve16[32];
-extern const int Convolve32[32];
-extern const int Convolve64[32];
+extern const short Convolve16[64];
+extern const short Convolve32[64];
+extern const short Convolve64[64];
 
 /*
  * The ring-count tables, as a ragged array with its own index header:
@@ -117,9 +119,13 @@ struct v34_shell {
 	short           count;			/* +0xa12 */
 	short           fa14;			/* +0xa14 the repeated width */
 	/*
-	 * +0xa16.  24 out of preinitV34, alongside the 16-state code; 32 and
-	 * 64 out of initV34, alongside the 32- and 64-state ones.  It tracks
-	 * `conv` but is not the state count, and what the 24 is remains open.
+	 * +0xa16.  The convolutional encoder's FEEDBACK MASK -- the generator
+	 * polynomial, XORed back in when the bit shifted out is set.  24 out
+	 * of preinitV34 for the 16-state code, then 32 and 64 out of initV34
+	 * for the other two: single bits for the codes with one feedback tap
+	 * and 0b11000 for the one with two.  It tracks `conv` because it IS
+	 * `conv`'s recurrence.  modulatevector also compares it against 64 to
+	 * pick a hand-unrolled form of the same step.  Retracted D38.
 	 */
 	short           fa16;			/* +0xa16 */
 	/*
@@ -134,10 +140,11 @@ struct v34_shell {
 	/*
 	 * +0xa28.  V.34's convolutional code, as a table rather than as a
 	 * function: preinitV34 installs the 16-state one and initV34 swaps in
-	 * the 32- or 64-state code when asked for it.  Each is 32 ints of two
-	 * packed 16-bit halves -- see the note on them in v34shell.c.
+	 * the 32- or 64-state code when asked for it.  Each is 64 shorts, and
+	 * modulatevector indexes them with a six-bit code -- see the note on
+	 * them in v34shell.c.
 	 */
-	const int *     conv;			/* +0xa28 */
+	const short *   conv;			/* +0xa28 */
 	/* Six shorts preinitV34 clears and nothing read so far touches. */
 	short           fa2c[6];		/* +0xa2c */
 	short           prev_k;			/* +0xa38 last quadrant   */
@@ -295,6 +302,22 @@ int scrambleGPC(void *obj, int pos);
 int scrambleGPA(void *obj, int pos);
 void descrambleGPC(void *shell, int value, int nbits);
 void descrambleGPA(void *shell, int value, int nbits);
+
+/*
+ * modulatevector's two tables: `quarter` is 416 shorts of packed signed byte
+ * pairs and `smIndex` sixteen, indexed by which band each coordinate is in.
+ */
+extern const short quarter[416];
+extern const short smIndex[16];
+
+/*
+ * Emit one modulated point, and refill all eight when the cursor wraps.
+ *
+ * The forward shell mapper: `shellDemapper` run backwards on the TRANSMIT
+ * context, with `getFrame` as its bit source.  Ends in a tail call to
+ * `txmit`, so this transmits rather than computes.  Takes the object.
+ */
+void modulatevector(void *obj);
 
 /*
  * Combine the eight sub-indices into one shell index.
