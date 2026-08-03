@@ -26,6 +26,9 @@
 #include <math.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 #include "dsplib/dialercfg.h"
 #include "dsplib/modem_params.h"
 
@@ -189,6 +192,43 @@ main(void)
 		snprintf(msg, sizeof(msg),
 			 "out-of-range twist falls back to %.2f dB", db);
 		diff_eq_int(msg, db > 1.94 && db < 2.06, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The sixteen restored diagnostic call sites (findings 134, 143, 146).
+	 * This is the only thing that actually checks them: with the level at
+	 * zero, a wrong string, a wrong field or a missing call all behave
+	 * identically.  Two of the sixteen were wrong when written by hand and
+	 * this is what said so.
+	 */
+	diff_begin("GetDialerConfig debug transcript");
+	{
+		static struct dialer_cfg a, b;
+		int n;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (n = 0; n < 6; n++) {
+			dsplib_debug_capture_reset();
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+			GetDialerConfig(&a, (void *)0xC0FFEEu);
+			ref_GetDialerConfig(&b, (void *)0xC0FFEEu);
+
+			diff_eq_int("cfg transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, n);
+			diff_eq_int("cfg transcript non-empty",
+				    dsplib_debug_capture_text(1)[0] != 0, 1, n);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

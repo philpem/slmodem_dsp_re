@@ -8078,3 +8078,33 @@ looks confirmed, and the confirmation is worth exactly as much as the two
 cases nobody checked.  Both errors here were in the pair where I had
 supplied a reason, which is the part that should have made me check rather
 than the part that made me confident.
+
+### 147. `GetDialerConfig`'s sixteen call sites restored, and what it took
+
+The first function in the #50 sweep whose call sites are actually back rather
+than just read.  Placement was unambiguous once the structure was clear: each
+gate sits immediately after the `modem_get_param` it reports, jumping
+out-of-line to a printf and back, so every string is tied to one fetch.
+
+Three details that a plausible reading would have got wrong:
+
+  - `pulse_BetweenDigitsInterval` reports the value AFTER the multiply by
+    ten, not the raw parameter.  The `lea`/`add` pair runs before the gate.
+  - the two gains print LAST, after everything else, and read back from the
+    struct rather than from the register that computed them -- so they are
+    sign-extended shorts where every other value is an int.
+  - `DTMF_Gain1` is the field at +0x08 and `Gain2` the one at +0x0a, which
+    is `dtmf_low` then `dtmf_high`.  The names invite the opposite reading.
+
+I wrote that last one backwards, which makes twice in one file after finding
+146.  Both times the error was in a pair where the names suggested an
+ordering and I took the suggestion instead of the offset.
+
+**On what the test proves.**  The transcript comparison passes, and swapping
+the gains deliberately does fail it -- so the check has teeth.  But it was
+written after the fix, so it is not what found the error; re-reading the
+offsets was.  Worth separating, because "the test passes" and "the test
+would have caught this" are different claims and only the second is worth
+anything to whoever reads this next.
+
+Sixteen down.  221 call sites remain across 52 functions.
