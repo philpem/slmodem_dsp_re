@@ -766,7 +766,16 @@ main(void)
 		struct v34_shell *tx;
 		int nb, a04, k, g;
 
-		for (nb = 1; nb <= 16; nb++)
+		/*
+		 * `nb` runs PAST SIXTEEN, which is what makes this the only
+		 * test that drives getFrame's split path through a bit source
+		 * whose return differs from the position it stores.  The
+		 * differential test above drives the split path too, but with
+		 * a source that returns exactly what the refill loop stored,
+		 * so the two readings of the position are indistinguishable
+		 * there.  Neither covered both conditions until finding 150.
+		 */
+		for (nb = 1; nb <= 20; nb++)
 		for (a04 = 6; a04 <= 10; a04 += 2) {
 			int w = 3;
 			int small = 2;
@@ -781,9 +790,21 @@ main(void)
 			tx->fa00 = 10;		/* takes the fa0e branch */
 			tx->fa0e = tx->fa10 = (short)nb;
 
-			/* A frame whose every field is inside its width. */
-			tx->frame[0] = (short)(((1 << nb) - 1) & 0x5a5a);
-			tx->frame[1] = 0;
+			/*
+			 * A frame whose every field is inside its width.
+			 * Above sixteen bits the wide value spans frame[0]
+			 * and frame[1] as one 32-bit store, so it is written
+			 * that way rather than as a short and a zero.
+			 */
+			if (nb > 16)
+				*(int *)&tx->frame[0] =
+				    (int)((((unsigned)1 << nb) - 1)
+					  & 0x395a5au);
+			else {
+				tx->frame[0] =
+				    (short)(((1 << nb) - 1) & 0x5a5a);
+				tx->frame[1] = 0;
+			}
 			for (g = 0; g < 4; g++) {
 				short *p = &tx->frame[2 + g * 4];
 
@@ -809,7 +830,7 @@ main(void)
 			getFrame(obj);
 
 			for (k = 0; k < 18; k++) {
-				if (k == 1)
+				if (k == 1 && nb <= 16)
 					continue;	/* unused below 17 bits */
 				diff_eq_int("round trip frame[%ld]",
 					    tx->frame[k], rt_want[k],

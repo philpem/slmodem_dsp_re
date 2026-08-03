@@ -8282,14 +8282,27 @@ The refill loop is the other half of it -- the object stores `bitpos` back
 on EVERY pass, not once at the end, which is what makes the re-read
 meaningful.
 
-**Why the original test could not see it.**  Two conditions have to hold
-together.  The wide field must exceed sixteen bits, which needs `fa0e` or
-`fa10` above 16 -- and those come out of `initV34`, which did not exist when
-`getFrame` was written, so its test set them by hand and set them small.
-And the callback's return must differ from the stored position, which is
-true of the real scramblers and false of the synthetic source the test used,
-since that one returned 0 and 0 was also what the loop had stored.  The
-fixture was self-consistent and wrong in both directions at once.
+**Why the original tests could not see it, and this is the interesting
+part.**  Two conditions have to hold together: the wide field must exceed
+sixteen bits, and the callback's return must differ from the position the
+refill loop stored.  `getFrame` had TWO tests, and each covered one.
+
+```
+   differential test   nb runs -1..20   split path YES
+                       bitsrc returns 0, which is also what the loop
+                       stored, so the two readings agree      NO
+   round-trip test     nb runs 1..16    split path NO
+                       rt_source returns pos - 16, which differs YES
+```
+
+So neither fixture was careless: between them they covered both conditions,
+and the bug lives only where the two overlap.  That is a more uncomfortable
+result than a gap in one test, because both tests look thorough on their own
+and the coverage argument has to be made across them rather than within
+either.
+
+The round-trip sweep now runs to 20, which puts both conditions in one
+fixture and closes it permanently.
 
 **What found it.**  `modulatevector` is the first caller that runs
 `preinitdigital` and `initV34` and then drives `getFrame` through the
@@ -8299,8 +8312,9 @@ back in: with an identical deterministic source on both sides the buffers
 matched and only the POSITION diverged, which named the field.
 
 This is the same shape as finding 139, where `receiver` found a bug in
-`V34TimingFilter` that the filter's own test could not reach, and the lesson
-is the same one: a leaf test proves the leaf against the inputs someone
-imagined for it.  The caller is what supplies the inputs the object actually
-produces.  Both times the caller was worth more than another round on the
-leaf.
+`V34TimingFilter` that the filter's own test could not reach.  The lesson is
+the same one and slightly sharper here: a leaf test proves the leaf against
+the inputs someone imagined for it, and two leaf tests that each cover half
+a condition still prove nothing about their conjunction.  The caller is what
+supplies the combinations nobody enumerated.  Both times the caller was
+worth more than another round on the leaf.
