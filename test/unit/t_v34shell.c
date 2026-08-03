@@ -5,6 +5,7 @@
 #include <string.h>
 #include "harness.h"
 #include "dsplib/v34shell.h"
+#include "dsplib/v34fsk.h"	/* struct v34_object: preinitdigital takes it */
 
 extern int ref_shellDemapper(void *s);
 extern void ref_putFrame(void *s);
@@ -109,6 +110,101 @@ sink_b(void *s, int value, int nbits)
 		log_b[nlog_b].nbits = nbits;
 	}
 	nlog_b++;
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * The initialisers, the tables they read, and the four bit callbacks.
+ */
+
+extern void ref_setScramble(void *fields, void *fn);
+extern void ref_scaleVector(short *v, short scale);
+extern void ref_preinitV34(void *fields);
+extern void ref_initG248(void *fields);
+extern int ref_initV34(void *fields, short baud, short bitrate, short use_max,
+		       short depth, const short *coeff, short divisor);
+extern void ref_preinitdigital(void *obj);
+extern int ref_scrambleGPC(void *obj, int pos);
+extern int ref_scrambleGPA(void *obj, int pos);
+extern void ref_descrambleGPC(void *obj, int value, int nbits);
+extern void ref_descrambleGPA(void *obj, int value, int nbits);
+
+extern const int ref_xyz[945];
+extern const int ref_Convolve16[32];
+extern const int ref_Convolve32[32];
+extern const int ref_Convolve64[32];
+extern const signed char ref_MMaxTable[32];
+extern const signed char ref_MMinTable[32];
+
+/*
+ * The two fields that hold POINTERS, and so can never match across the two
+ * sides: `conv` at +0xa28 and the bit callback at +0xe48.  One side's
+ * Convolve16 is at a different address from the other's, so a raw byte
+ * compare over them proves nothing and fails always.  They are skipped here
+ * and asserted by identity -- ours must be OUR table, theirs THEIR table --
+ * which is the stronger check anyway, since it says which table was chosen.
+ */
+static int
+shell_bytes_eq(const char *tag, const void *a, const void *b, long ctx)
+{
+	const unsigned char *pa = a, *pb = b;
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < sizeof(struct v34_shell); i++) {
+		if ((i >= 0xa28 && i < 0xa2c) || (i >= 0xe48 && i < 0xe4c))
+			continue;
+		if (pa[i] != pb[i] && bad++ < 8) {
+			printf("  (%s, case %ld)\n", tag, ctx);
+			diff_eq_int("shell byte at +0x%lx", pa[i], pb[i],
+				    (long)i);
+		}
+	}
+	return bad;
+}
+
+/*
+ * The reachable range of `count`.  initV34 indexes MMaxTable or MMinTable
+ * with a value the loop above it forces into 0..31, and neither table holds
+ * anything outside 1..18 -- so every t3 block initG248 can be asked for is
+ * one xyz actually has.  Asserted rather than assumed: finding 129 is about
+ * these three tables having no bounds check of their own, and this is the
+ * caller-side invariant it left open.
+ */
+#define V34_COUNT_MIN	1
+#define V34_COUNT_MAX	18
+
+static int
+check_count_bound(void)
+{
+	int i, bad = 0;
+
+	for (i = 0; i < 32; i++) {
+		if (MMaxTable[i] < V34_COUNT_MIN || MMaxTable[i] > V34_COUNT_MAX
+		    || MMinTable[i] < V34_COUNT_MIN
+		    || MMinTable[i] > V34_COUNT_MAX) {
+			printf("FIXTURE: ring table [%d] = %d/%d is outside "
+			       "%d..%d\n", i, MMaxTable[i], MMinTable[i],
+			       V34_COUNT_MIN, V34_COUNT_MAX);
+			bad = 1;
+		}
+	}
+	for (i = V34_COUNT_MIN; i <= V34_COUNT_MAX; i++) {
+		int len = xyz[i + 1] - xyz[i];
+
+		if (len < 0 || len > 0x80) {
+			printf("FIXTURE: xyz block %d is %d entries, and t3 "
+			       "holds 128\n", i, len);
+			bad = 1;
+		}
+		if (xyz[i] < 0 || xyz[i + 1] > 945) {
+			printf("FIXTURE: xyz block %d runs [%d,%d) outside "
+			       "the table\n", i, xyz[i], xyz[i + 1]);
+			bad = 1;
+		}
+	}
+	return bad;
 }
 
 int
@@ -713,6 +809,360 @@ main(void)
 		}
 	}
 	rc |= diff_end();
+
+	/*
+	 * The tables, against the object's own copies.  945 ints transcribed
+	 * by hand is exactly the kind of thing that goes wrong in the middle
+	 * and nowhere else, and a memcmp against ref_* costs nothing.
+	 */
+	diff_begin("v34 shell tables");
+	{
+		diff_eq_int("xyz", memcmp(xyz, ref_xyz, sizeof(xyz)), 0, 0);
+		diff_eq_int("Convolve16",
+			    memcmp(Convolve16, ref_Convolve16,
+				   sizeof(Convolve16)), 0, 0);
+		diff_eq_int("Convolve32",
+			    memcmp(Convolve32, ref_Convolve32,
+				   sizeof(Convolve32)), 0, 0);
+		diff_eq_int("Convolve64",
+			    memcmp(Convolve64, ref_Convolve64,
+				   sizeof(Convolve64)), 0, 0);
+		diff_eq_int("MMaxTable",
+			    memcmp(MMaxTable, ref_MMaxTable,
+				   sizeof(MMaxTable)), 0, 0);
+		diff_eq_int("MMinTable",
+			    memcmp(MMinTable, ref_MMinTable,
+				   sizeof(MMinTable)), 0, 0);
+		diff_eq_int("ring size stays in xyz", check_count_bound(), 0, 0);
+	}
+	rc |= diff_end();
+
+	/* setScramble and scaleVector: the two nothing in the object calls. */
+	diff_begin("v34 setScramble/scaleVector");
+	{
+		static struct v34_shell a, b;
+		short va[16], vb[16];
+		int k, sc;
+
+		memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+		memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+		setScramble((char *)&a + V34_SHELL_FIELDS,
+			    (void *)descrambleGPC);
+		ref_setScramble((char *)&b + V34_SHELL_FIELDS,
+				(void *)ref_descrambleGPC);
+		diff_eq_int("setScramble object", shell_bytes_eq("setScramble",
+			    &a, &b, 0), 0, 0);
+		diff_eq_int("setScramble stored ours",
+			    a.put_bits == descrambleGPC, 1, 0);
+		diff_eq_int("setScramble stored theirs",
+			    b.put_bits == (v34_putbits_fn)ref_descrambleGPC,
+			    1, 0);
+
+		for (sc = -300; sc <= 300; sc += 37) {
+			for (k = 0; k < 16; k++)
+				va[k] = vb[k] = (short)(k * 4001 - 20000);
+			scaleVector(va, (short)sc);
+			ref_scaleVector(vb, (short)sc);
+			for (k = 0; k < 16; k++)
+				diff_eq_int("scaleVector[%ld]", va[k], vb[k],
+					    (long)sc * 100 + k);
+		}
+	}
+	rc |= diff_end();
+
+	/* preinitV34, on both contexts' worth of offsets. */
+	diff_begin("v34 preinitV34");
+	{
+		static struct v34_shell a, b;
+		int pass;
+
+		for (pass = 0; pass < 2; pass++) {
+			memset(&a, pass ? 0 : HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, pass ? 0 : HARNESS_MALLOC_FILL, sizeof(b));
+
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+
+			diff_eq_int("preinitV34 object",
+				    shell_bytes_eq("preinitV34 byte", &a, &b,
+						   pass), 0, pass);
+			diff_eq_int("preinitV34 conv ours",
+				    a.conv == Convolve16, 1, pass);
+			diff_eq_int("preinitV34 conv theirs",
+				    b.conv == ref_Convolve16, 1, pass);
+			diff_eq_int("preinitV34 callback ours",
+				    a.get_bits == scrambleGPC, 1, pass);
+			diff_eq_int("preinitV34 callback theirs",
+				    b.get_bits ==
+				    (v34_getbits_fn)ref_scrambleGPC, 1, pass);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initG248, over every ring size initV34 can ask for and no others.
+	 * Sixteen is in the sweep on purpose: xyz has an EMPTY block for it,
+	 * because MMaxTable runs 15, 17, 18 and never produces a 16, so the
+	 * copy loop must do nothing at all and leave preinitV34's -1s showing.
+	 */
+	diff_begin("v34 initG248");
+	{
+		static struct v34_shell a, b;
+		int n;
+
+		for (n = V34_COUNT_MIN; n <= V34_COUNT_MAX; n++) {
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+			a.count = b.count = (short)n;
+
+			initG248((char *)&a + V34_SHELL_FIELDS);
+			ref_initG248((char *)&b + V34_SHELL_FIELDS);
+
+			diff_eq_int("initG248 object",
+				    shell_bytes_eq("initG248 byte", &a, &b, n),
+				    0, n);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * initV34.  The six real V.34 symbol rates, both ring tables and all
+	 * three trellis depths.
+	 *
+	 * `bitrate` is swept over the whole 16-bit range rather than over the
+	 * data rates a modem would use, and that is deliberate: it is divided
+	 * by 100 and then by the group and the span, and a realistic rate only
+	 * ever reaches the bottom third of the ring-size table.  The wide
+	 * sweep is what makes counts up to 18 -- and so xyz's truncated
+	 * blocks, and its empty one -- reachable at all.  check_count_bound()
+	 * above proves the sweep cannot walk any of the three tables off its
+	 * end, which is the thing finding 129 warns about.
+	 */
+	diff_begin("v34 initV34");
+	{
+		static struct v34_shell a, b;
+		static const short rates[6] = { 2400, 2743, 2800, 3000,
+						3200, 3429 };
+		static const short coeffs[12] = { 1, -2, 3, -4, 5, -6,
+						  7, -8, 9, -10, 11, -12 };
+		int r, mx, dep, br, dv, ra, rb;
+		long ctx = 0;
+
+		for (r = 0; r < 6; r++)
+		for (mx = 0; mx < 2; mx++)
+		for (dep = 0; dep < 3; dep++)
+		for (br = 300; br < 65500; br += 1637)
+		for (dv = 0; dv < 4; dv++) {
+			short divisor = (short)(dv == 0 ? 0
+					      : dv == 1 ? 0x80
+					      : dv == 2 ? 0x81 : 30000);
+
+			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
+			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
+			preinitV34((char *)&a + V34_SHELL_FIELDS);
+			ref_preinitV34((char *)&b + V34_SHELL_FIELDS);
+
+			ra = initV34((char *)&a + V34_SHELL_FIELDS, rates[r],
+				     (short)br, (short)mx, (short)dep,
+				     coeffs, divisor);
+			rb = ref_initV34((char *)&b + V34_SHELL_FIELDS,
+					 rates[r], (short)br, (short)mx,
+					 (short)dep, coeffs, divisor);
+
+			ctx++;
+			diff_eq_int("initV34 return", ra, rb, ctx);
+			diff_eq_int("initV34 object",
+				    shell_bytes_eq("initV34 byte", &a, &b,
+						   ctx), 0, ctx);
+
+			/* The ring size it picked must be one xyz has. */
+			if (a.count < V34_COUNT_MIN
+			    || a.count > V34_COUNT_MAX) {
+				printf("FIXTURE: initV34 produced count %d "
+				       "at rate %d bitrate %d\n",
+				       a.count, rates[r], br);
+				return 1;
+			}
+
+			diff_eq_int("initV34 conv ours",
+				    a.conv == (dep == 0 ? Convolve16
+					     : dep == 1 ? Convolve32
+					     : Convolve64), 1, ctx);
+			diff_eq_int("initV34 conv theirs",
+				    b.conv == (dep == 0 ? ref_Convolve16
+					     : dep == 1 ? ref_Convolve32
+					     : ref_Convolve64), 1, ctx);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The four bit callbacks, driven through the object they belong to.
+	 *
+	 * Each side gets its own object, because both read and WRITE the data
+	 * buffers -- one shared object would have the second call see the
+	 * first's cursor.
+	 */
+	diff_begin("v34 scrambler callbacks");
+	{
+		static unsigned char oa[sizeof(struct v34_object)];
+		static unsigned char ob[sizeof(struct v34_object)];
+		struct v34_object *ja = (struct v34_object *)oa;
+		struct v34_object *jb = (struct v34_object *)ob;
+		struct v34_shell *ta = (struct v34_shell *)(oa + V34_SHELL_TX);
+		struct v34_shell *tb = (struct v34_shell *)(ob + V34_SHELL_TX);
+		struct v34_shell *ra = (struct v34_shell *)oa;
+		struct v34_shell *rb = (struct v34_shell *)ob;
+		int en, gpa, k, step;
+		long ctx = 0;
+
+		for (en = 0; en < 2; en++)
+		for (gpa = 0; gpa < 2; gpa++) {
+			memset(oa, 0, sizeof(oa));
+			memset(ob, 0, sizeof(ob));
+			ja->data_enable = jb->data_enable = (short)en;
+			ja->tx_n = jb->tx_n = 40;
+			for (k = 0; k < 64; k++)
+				ja->tx_data[k] = jb->tx_data[k] =
+					k * 2357 + 11;
+
+			/* The transmit side: sixteen bits per call. */
+			for (step = 0; step < 24; step++) {
+				int pa, pb;
+
+				if (gpa) {
+					pa = scrambleGPA(oa, 16 + step);
+					pb = ref_scrambleGPA(ob, 16 + step);
+				} else {
+					pa = scrambleGPC(oa, 16 + step);
+					pb = ref_scrambleGPC(ob, 16 + step);
+				}
+				ctx++;
+				diff_eq_int("scramble pos", pa, pb, ctx);
+				for (k = 0; k < 3; k++)
+					diff_eq_int("scramble scr[%ld]",
+						    ta->scr[k], tb->scr[k],
+						    ctx * 10 + k);
+				diff_eq_int("scramble bitbuf", ta->bitbuf,
+					    tb->bitbuf, ctx);
+				diff_eq_int("scramble tx_rd", ja->tx_rd,
+					    jb->tx_rd, ctx);
+			}
+
+			/* The receive side: a width at a time, crossing 32. */
+			for (step = 0; step < 60; step++) {
+				int val = (step * 7919) & 0xffff;
+				int nb = 1 + (step % 16);
+
+				if (gpa) {
+					descrambleGPA(oa, val, nb);
+					ref_descrambleGPA(ob, val, nb);
+				} else {
+					descrambleGPC(oa, val, nb);
+					ref_descrambleGPC(ob, val, nb);
+				}
+				ctx++;
+				for (k = 0; k < 3; k++)
+					diff_eq_int("descramble scr[%ld]",
+						    ra->scr[k], rb->scr[k],
+						    ctx * 10 + k);
+				diff_eq_int("descramble bitpos",
+					    ra->rx_bitpos, rb->rx_bitpos, ctx);
+				diff_eq_int("descramble rx_n", ja->rx_n,
+					    jb->rx_n, ctx);
+				for (k = 0; k < 64; k++)
+					diff_eq_int("descramble rx_data[%ld]",
+						    ja->rx_data[k],
+						    jb->rx_data[k],
+						    ctx * 100 + k);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * preinitdigital: both contexts at once, and the role branch.
+	 *
+	 * Compared over the WHOLE object, not just the two shells, because
+	 * the three memsets and the scalars past them are most of what it
+	 * does -- and because the transmit context's scrambler words are
+	 * cleared differently from the receive one's, which a shell-only
+	 * compare would show as a pass either way.
+	 */
+	diff_begin("v34 preinitdigital");
+	{
+		static unsigned char oa[sizeof(struct v34_object)];
+		static unsigned char ob[sizeof(struct v34_object)];
+		struct v34_object *ja = (struct v34_object *)oa;
+		struct v34_object *jb = (struct v34_object *)ob;
+		struct v34_shell *ta = (struct v34_shell *)(oa + V34_SHELL_TX);
+		struct v34_shell *tb = (struct v34_shell *)(ob + V34_SHELL_TX);
+		struct v34_shell *ra = (struct v34_shell *)oa;
+		struct v34_shell *rb = (struct v34_shell *)ob;
+		int role, i, bad;
+
+		for (role = 0; role < 2; role++) {
+			memset(oa, HARNESS_MALLOC_FILL, sizeof(oa));
+			memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
+			ja->f359c = jb->f359c = (short)(role ? 0x65 : 0x12);
+
+			preinitdigital(oa);
+			ref_preinitdigital(ob);
+
+			bad = 0;
+			for (i = 0; i < (int)sizeof(oa); i++) {
+				/* The four pointer fields, as always. */
+				if ((i >= 0xa28 && i < 0xa2c)
+				    || (i >= 0xe48 && i < 0xe4c)
+				    || (i >= 0x2608 && i < 0x260c)
+				    || (i >= 0x2a28 && i < 0x2a2c))
+					continue;
+				if (oa[i] != ob[i] && bad++ < 8)
+					diff_eq_int("preinitdigital byte",
+						    oa[i], ob[i],
+						    (long)role * 0x100000 + i);
+			}
+			diff_eq_int("preinitdigital object", bad, 0, role);
+
+			diff_eq_int("preinitdigital tx conv",
+				    ta->conv == Convolve16, 1, role);
+			diff_eq_int("preinitdigital rx conv",
+				    ra->conv == Convolve16, 1, role);
+			diff_eq_int("preinitdigital tx conv theirs",
+				    tb->conv == ref_Convolve16, 1, role);
+			diff_eq_int("preinitdigital rx conv theirs",
+				    rb->conv == ref_Convolve16, 1, role);
+
+			diff_eq_int("preinitdigital scrambler",
+				    ta->get_bits == (role ? scrambleGPC
+							  : scrambleGPA),
+				    1, role);
+			diff_eq_int("preinitdigital descrambler",
+				    ra->put_bits == (role ? descrambleGPA
+							  : descrambleGPC),
+				    1, role);
+			diff_eq_int("preinitdigital scrambler theirs",
+				    tb->get_bits ==
+				    (v34_getbits_fn)(role ? ref_scrambleGPC
+							  : ref_scrambleGPA),
+				    1, role);
+			diff_eq_int("preinitdigital descrambler theirs",
+				    rb->put_bits ==
+				    (v34_putbits_fn)(role ? ref_descrambleGPA
+							  : ref_descrambleGPC),
+				    1, role);
+
+			/* The one place the two contexts genuinely differ. */
+			diff_eq_int("tx bitpos starts past 15",
+				    ta->bitpos, 32, role);
+			diff_eq_int("rx bitpos starts at zero",
+				    ra->rx_bitpos, 0, role);
+		}
+	}
+	rc |= diff_end();
+
 
 	return rc;
 }

@@ -61,6 +61,38 @@ typedef int (*v34_getbits_fn)(void *obj, int pos);
 /* lsbMask[n] == (1 << n) - 1, seventeen entries.  Emitted as data. */
 extern const unsigned short lsbMask[17];
 
+/*
+ * The three initialisers below are handed a pointer to the shell's OWN
+ * fields, not to the object: every offset they use is 0xa00 less than the
+ * matching one in `struct v34_shell`.  preinitdigital calls them with
+ * `obj + 0xa00` and `obj + 0x25e0`, which are the receive context's fields
+ * and the transmit context's -- the same 0x1be0 apart as everything else.
+ *
+ * The struct is left based on the object, because that is how every
+ * function already written reaches it; this is the one place the two
+ * spellings meet.
+ */
+#define V34_SHELL_FIELDS	0xa00
+
+/*
+ * V.34's three convolutional codes, 32 ints each, selected by initV34's
+ * `depth` argument.  Named for their state counts by the original.
+ */
+extern const int Convolve16[32];
+extern const int Convolve32[32];
+extern const int Convolve64[32];
+
+/*
+ * The ring-count tables, as a ragged array with its own index header:
+ * `xyz[0..19]` are offsets, and the block `[xyz[n], xyz[n+1])` is the
+ * cumulative shell count for a ring of n points.  See v34shell.c.
+ */
+extern const int xyz[945];
+
+/* The ring size initV34 picks, by index; MMax when told to, MMin when not. */
+extern const signed char MMaxTable[32];
+extern const signed char MMinTable[32];
+
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           fa00;			/* +0xa00 */
@@ -69,7 +101,12 @@ struct v34_shell {
 	short           fa06;			/* +0xa06 */
 	short           fa08;			/* +0xa08 an accumulator putFrame
 						 *  advances and folds back */
-	unsigned char pad_a0a[0xa0e - 0xa0a];
+	/*
+	 * +0xa0a.  initV34 sets it to 15 minus the group size -- 8 for the
+	 * two rates that use a group of 7, 7 for the five that use 8.
+	 */
+	short           fa0a;			/* +0xa0a */
+	unsigned char pad_a0c[0xa0e - 0xa0c];
 	short           fa0e;			/* +0xa0e width, one branch  */
 	short           fa10;			/* +0xa10 width, the other   */
 	/*
@@ -79,7 +116,12 @@ struct v34_shell {
 	 */
 	short           count;			/* +0xa12 */
 	short           fa14;			/* +0xa14 the repeated width */
-	unsigned char pad_a16[0xa18 - 0xa16];
+	/*
+	 * +0xa16.  24 out of preinitV34, alongside the 16-state code; 32 and
+	 * 64 out of initV34, alongside the 32- and 64-state ones.  It tracks
+	 * `conv` but is not the state count, and what the 24 is remains open.
+	 */
+	short           fa16;			/* +0xa16 */
 	/*
 	 * decodeDepth's delay line: three COMPLEX taps, shifted a pair at a
 	 * time.  hist[2..3] take hist[0..1] and hist[4..5] take hist[2..3];
@@ -89,7 +131,15 @@ struct v34_shell {
 	unsigned char pad_a24_[0xa24 - 0xa24];
 	/* Twelve coefficients as two rows of six, the second at +6. */
 	const short *   coeff;			/* +0xa24 */
-	unsigned char pad_a28[0xa38 - 0xa28];
+	/*
+	 * +0xa28.  V.34's convolutional code, as a table rather than as a
+	 * function: preinitV34 installs the 16-state one and initV34 swaps in
+	 * the 32- or 64-state code when asked for it.  Each is 32 ints of two
+	 * packed 16-bit halves -- see the note on them in v34shell.c.
+	 */
+	const int *     conv;			/* +0xa28 */
+	/* Six shorts preinitV34 clears and nothing read so far touches. */
+	short           fa2c[6];		/* +0xa2c */
 	short           prev_k;			/* +0xa38 last quadrant   */
 	short           invert;			/* +0xa3a picks kkInvert  */
 	short           fa3c;			/* +0xa3c sub-frame count */
@@ -126,14 +176,34 @@ struct v34_shell {
 	 * (1 bit, a small width, and two of `fa14`).
 	 */
 	short           frame[18];		/* +0xe50 */
-	unsigned char pad_e74[0xe80 - 0xe74];
 	/*
-	 * getFrame's bit window: a 32-bit buffer and the position within it.
-	 * Refilled through `bits.get` whenever the position passes 15.  The
-	 * receive context has no reader for either.
+	 * +0xe74.  The scrambler's shift register, three words wide, shared
+	 * by both contexts -- scrambleGP* drives it forwards and
+	 * descrambleGP* backwards over the same three offsets.
 	 */
-	int             bitbuf;			/* +0xe80 */
-	short           bitpos;			/* +0xe84 */
+	int             scr[3];			/* +0xe74 */
+	/*
+	 * +0xe80, AND THIS IS WHERE THE TWO CONTEXTS DIVERGE -- the one place
+	 * they do.  The transmit context has a FOURTH scrambler word here,
+	 * which is also getFrame's bit window: scrambleGP* leaves the
+	 * scrambled 32 bits in it and getFrame reads them out, so the buffer
+	 * and the register's last word are deliberately the same store.  Its
+	 * bit position then sits at +0xe84.
+	 *
+	 * The receive context has no fourth word -- descrambleGP* folds the
+	 * three down to sixteen bits and hands them off -- so it puts its bit
+	 * position HERE instead, as a short, and +0xe84 is unused.
+	 *
+	 * preinitdigital confirms it from the other side: it clears four ints
+	 * and sets a position at +0xe84 in the transmit context, and three
+	 * ints and a short at +0xe80 in the receive one.  That looked like an
+	 * asymmetry until the two callbacks were read; it is two field sets.
+	 */
+	union {
+		int	bitbuf;			/* transmit: getFrame's window */
+		short	rx_bitpos;		/* receive:  the bit position  */
+	};
+	short           bitpos;			/* +0xe84 transmit only */
 	unsigned char pad_e86[0xe9c - 0xe86];
 	/*
 	 * The eight sub-indices, read as two groups of four.  Alternate
@@ -164,6 +234,67 @@ struct v34_shell {
 	}               state[32];		/* +0x12cc */
 	short           state_idx;		/* +0x144c */
 };
+
+/*
+ * Point a context's bit callback somewhere.  Nothing in the object calls
+ * it -- the stores it would make are inlined at all four sites -- so it
+ * survives only as the out-of-line copy.  `fields`, not the object.
+ */
+void setScramble(void *fields, void *fn);
+
+/*
+ * Scale sixteen shorts -- eight complex points -- by `scale`/128, in place.
+ * Also uncalled; see setScramble.
+ */
+void scaleVector(short *v, short scale);
+
+/*
+ * Clear one shell context to its power-on state: the three count tables,
+ * the delay line, the 16-state code, and the scalars.  Leaves `count`
+ * alone, so initV34 or initG248 must follow before the tables mean
+ * anything.
+ */
+void preinitV34(void *fields);
+
+/*
+ * Rebuild the three count tables from `count` alone.
+ *
+ * t1 is the tent 1,2,..,count,..,2,1; t2 is t1 convolved with itself; and
+ * t3 is copied out of `xyz`, which holds the eight-fold convolution
+ * precomputed.  Uncalled -- initV34 carries the same three loops inline.
+ */
+void initG248(void *fields);
+
+/*
+ * Configure one shell context for a symbol rate and a trellis, and build
+ * its count tables.  Always returns zero.
+ *
+ * `baud` is the V.34 symbol rate in units of 1/100 baud (2400, 2743, 2800,
+ * 3000, 3200, 3429); `bitrate` the data rate; `use_max` picks MMaxTable
+ * over MMinTable; `depth` selects the convolutional code; `coeff` and
+ * `divisor` are stored as handed over.
+ */
+int initV34(void *fields, short baud, short bitrate, short use_max,
+	    short depth, const short *coeff, short divisor);
+
+/*
+ * Reset BOTH shell contexts and the trellis decoder between them, and
+ * install the pair of scrambler callbacks the station's role calls for.
+ *
+ * Takes the object.  The two contexts get the same treatment 0x1be0 apart,
+ * with two asymmetries that are the original's -- see v34shell.c.
+ */
+void preinitdigital(void *obj);
+
+/*
+ * The four bit callbacks preinitdigital installs: a scrambler for the
+ * transmit context's source and a descrambler for the receive context's
+ * sink, in the caller's polynomial (GPC) and the answerer's (GPA).
+ */
+int scrambleGPC(void *obj, int pos);
+int scrambleGPA(void *obj, int pos);
+void descrambleGPC(void *shell, int value, int nbits);
+void descrambleGPA(void *shell, int value, int nbits);
 
 /*
  * Combine the eight sub-indices into one shell index.

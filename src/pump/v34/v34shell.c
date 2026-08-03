@@ -36,6 +36,8 @@
  * sub-index has bit 15 set, so it is reproduced rather than tidied.
  */
 
+#include "dsplib/sysdep.h"	/* sysdep_memset: preinitdigital clears three blocks */
+#include "dsplib/v34fsk.h"	/* struct v34_object: the scrambler callbacks take it */
 #include "dsplib/v34shell.h"
 
 
@@ -905,9 +907,711 @@ getFrame(void *objp)
 	}
 }
 
+
 /*
  * ---------------------------------------------------------------------------
- * Layout, pinned to what the five functions above read.
+ * The initialisers' tables.
+ */
+
+/*
+ * V.34's three convolutional codes, one 128-byte table each and named for
+ * their state counts by the original.  Thirty-two ints of two packed 16-bit
+ * halves, every half in 0..15 -- a branch table, not coefficients.
+ *
+ * `conv` points at one of them: preinitV34 installs the 16-state code and
+ * initV34 swaps in a wider one when its `depth` argument asks.
+ */
+const int Convolve16[32] = {
+	0, 131074, 0, 131074, 786446, 917516, 786446, 917516,
+	131074, 0, 131074, 0, 917516, 786446, 917516, 786446,
+	0, 131074, 0, 131074, 786446, 917516, 786446, 917516,
+	131074, 0, 131074, 0, 917516, 786446, 917516, 786446,
+};
+const int Convolve32[32] = {
+	0, 524296, 262148, 786444, 1179674, 1703954, 1441822, 1966102,
+	524296, 0, 786444, 262148, 1703954, 1179674, 1966102, 1441822,
+	262148, 786444, 0, 524296, 1441822, 1966102, 1179674, 1703954,
+	786444, 262148, 524296, 0, 1966102, 1441822, 1703954, 1179674,
+};
+const int Convolve64[32] = {
+	0, 65537, 524296, 589833, 131075, 196610, 655371, 720906,
+	327685, 262148, 851981, 786444, 458758, 393223, 983054, 917519,
+	524296, 589833, 0, 65537, 655371, 720906, 131075, 196610,
+	851981, 786444, 327685, 262148, 983054, 917519, 458758, 393223,
+};
+
+/*
+ * xyz -- the shell counts, as a ragged array carrying its own index header.
+ *
+ * `xyz[0..19]` are offsets into xyz ITSELF, and the block between xyz[n] and
+ * xyz[n+1] is the table for a ring of n points.  initG248 copies that block
+ * straight into `t3`.
+ *
+ * WHAT THE BLOCKS ARE.  Block n is the cumulative count of the eight-fold
+ * convolution of a rectangular window of length n: entry k is the number of
+ * eight-tuples drawn from 0..n-1 whose sum is less than k.  That makes the
+ * full length 8(n-1)+1 and the last entry n^8 - 1, and both hold exactly for
+ * n up to 14.
+ *
+ * WHERE THEY STOP.  From n=15 on the block is SHORTER than 8(n-1)+1, and the
+ * cut is not arbitrary: each block ends on the last entry that still fits a
+ * signed 32-bit int.  69 entries for n=15, 58 for n=17, 56 for n=18 -- and
+ * the entry after each is the first past INT_MAX.  Checked against a
+ * recomputed convolution: every block is a prefix of the true sequence, and
+ * every truncation point is exactly the overflow point.
+ *
+ * WHY n=16 IS EMPTY.  xyz[16] and xyz[17] are both 831, so a ring of 16 gets
+ * no table at all.  That is not a hole: MMaxTable runs ... 14, 15, 17, 18 and
+ * MMinTable stops at 15, so 16 is the one value initV34 cannot produce.  The
+ * table and its only caller agree about which sizes exist.
+ *
+ * Emitted as reference bytes rather than as a generator, per docs/fastpass.md
+ * -- the derivation above is recorded so task #47 does not have to find it
+ * again, but a byte-exact copy is what the differential test proves.
+ */
+const int xyz[945] = {
+	0, 20, 21, 30, 47, 72, 105, 146,
+	195, 252, 317, 390, 471, 560, 657, 762,
+	831, 831, 889, 945, 0, 0, 1, 9,
+	37, 93, 163, 219, 247, 255, 0, 1,
+	9, 45, 157, 423, 927, 1711, 2727, 3834,
+	4850, 5634, 6138, 6404, 6516, 6552, 6560, 0,
+	1, 9, 45, 165, 487, 1215, 2643, 5115,
+	8938, 14266, 20994, 28722, 36814, 44542, 51270, 56598,
+	60421, 62893, 64321, 65049, 65371, 65491, 65527, 65535,
+	0, 1, 9, 45, 165, 495, 1279, 2931,
+	6075, 11550, 20350, 33490, 51810, 75750, 105150, 139150,
+	176230, 214395, 251475, 285475, 314875, 338815, 357135, 370275,
+	379075, 384550, 387694, 389346, 390130, 390460, 390580, 390616,
+	390624, 0, 1, 9, 45, 165, 495, 1287,
+	2995, 6363, 12510, 22990, 39798, 65286, 101974, 152262,
+	218070, 300454, 399267, 512955, 638543, 771831, 907785, 1041073,
+	1166661, 1280349, 1379162, 1461546, 1527354, 1577642, 1614330, 1639818,
+	1656626, 1667106, 1673253, 1676621, 1678329, 1679121, 1679451, 1679571,
+	1679607, 1679615, 0, 1, 9, 45, 165, 495,
+	1287, 3003, 6427, 12798, 23950, 42438, 71622, 115674,
+	179466, 268318, 387606, 542251, 736131, 971479, 1248351, 1564269,
+	1914109, 2290269, 2683117, 3081684, 3474532, 3850692, 4200532, 4516450,
+	4793322, 5028670, 5222550, 5377195, 5496483, 5585335, 5649127, 5693179,
+	5722363, 5740851, 5752003, 5758374, 5761798, 5763514, 5764306, 5764636,
+	5764756, 5764792, 5764800, 0, 1, 9, 45, 165,
+	495, 1287, 3003, 6435, 12862, 24238, 43398, 74262,
+	122010, 193194, 295746, 438834, 632539, 887347, 1213471, 1620039,
+	2114205, 2700261, 3378849, 4146393, 4994836, 5911732, 6880708, 7882276,
+	8894940, 9896508, 10865484, 11782380, 12630823, 13398367, 14076955, 14663011,
+	15157177, 15563745, 15889869, 16144677, 16338382, 16481470, 16584022, 16655206,
+	16702954, 16733818, 16752978, 16764354, 16770781, 16774213, 16775929, 16776721,
+	16777051, 16777171, 16777207, 16777215, 0, 1, 9, 45,
+	165, 495, 1287, 3003, 6435, 12870, 24302, 43686,
+	75222, 124650, 199530, 309474, 466290, 683991, 978615, 1367823,
+	1870263, 2504709, 3289005, 4238865, 5366601, 6679872, 8180568, 9863964,
+	11718244, 13724460, 15856956, 18084252, 20370348, 22676373, 24962469, 27189765,
+	29322261, 31328477, 33182757, 34866153, 36366849, 37680120, 38807856, 39757716,
+	40542012, 41176458, 41678898, 42068106, 42362730, 42580431, 42737247, 42847191,
+	42922071, 42971499, 43003035, 43022419, 43033851, 43040286, 43043718, 43045434,
+	43046226, 43046556, 43046676, 43046712, 43046720, 0, 1, 9,
+	45, 165, 495, 1287, 3003, 6435, 12870, 24310,
+	43750, 75510, 125610, 202170, 315810, 480018, 711447, 1030095,
+	1459315, 2025595, 2758069, 3687741, 4846425, 6265425, 7974000, 9997680,
+	12356520, 15063400, 18122500, 21528100, 25263820, 29302380, 33605925, 38126925,
+	42809625, 47591985, 52408015, 57190375, 61873075, 66394075, 70697620, 74736180,
+	78471900, 81877500, 84936600, 87643480, 90002320, 92026000, 93734575, 95153575,
+	96312259, 97241931, 97974405, 98540685, 98969905, 99288553, 99519982, 99684190,
+	99797830, 99874390, 99924490, 99956250, 99975690, 99987130, 99993565, 99996997,
+	99998713, 99999505, 99999835, 99999955, 99999991, 99999999, 0, 1,
+	9, 45, 165, 495, 1287, 3003, 6435, 12870,
+	24310, 43758, 75574, 125898, 203130, 318450, 486354, 725175,
+	1057551, 1510795, 2117115, 2913625, 3942081, 5248297, 6881217, 8891640,
+	11330616, 14247552, 17688088, 21691824, 26290000, 31503252, 37339588, 43792749,
+	50841085, 58447041, 66557313, 75103699, 84004635, 93167371, 102490707, 111868174,
+	121191510, 130354246, 139255182, 147801568, 155911840, 163517796, 170566132, 177019293,
+	182855629, 188068881, 192667057, 196670793, 200111329, 203028265, 205467241, 207477664,
+	209110584, 210416800, 211445256, 212241766, 212848086, 213301330, 213633706, 213872527,
+	214040431, 214155751, 214232983, 214283307, 214315123, 214334571, 214346011, 214352446,
+	214355878, 214357594, 214358386, 214358716, 214358836, 214358872, 214358880, 0,
+	1, 9, 45, 165, 495, 1287, 3003, 6435,
+	12870, 24310, 43758, 75582, 125962, 203418, 319410, 488994,
+	731511, 1071279, 1538251, 2168595, 3005145, 4097665, 5502861, 7284069,
+	9510568, 12256488, 15599304, 19617928, 24390432, 29991456, 36489376, 43943328,
+	52400205, 61891765, 72432009, 84015009, 96613331, 110177163, 124634223, 139890487,
+	155831742, 172325934, 189226246, 206374806, 223606890, 240755450, 257655762, 274149954,
+	290091209, 305347473, 319804533, 333368365, 345966687, 357549687, 368089931, 377581491,
+	386038368, 393492320, 399990240, 405591264, 410363768, 414382392, 417725208, 420471128,
+	422697627, 424478835, 425884031, 426976551, 427813101, 428443445, 428910417, 429250185,
+	429492702, 429662286, 429778278, 429855734, 429906114, 429937938, 429957386, 429968826,
+	429975261, 429978693, 429980409, 429981201, 429981531, 429981651, 429981687, 429981695,
+	0, 1, 9, 45, 165, 495, 1287, 3003,
+	6435, 12870, 24310, 43758, 75582, 125970, 203482, 319698,
+	489954, 734151, 1077615, 1551979, 2196051, 3056625, 4189185, 5658445,
+	7538661, 9913644, 12876396, 16528312, 20977912, 26339088, 32728872, 40264752,
+	49061584, 59228169, 70863585, 84053385, 98865793, 115348051, 133523091, 153386727,
+	174905527, 198015490, 222621618, 248598438, 275791494, 304019794, 333079162, 362746410,
+	392784210, 422946511, 452984311, 482651559, 511710927, 539939227, 567132283, 593109103,
+	617715231, 640825194, 662343994, 682207630, 700382670, 716864928, 731677336, 744867136,
+	756502552, 766669137, 775465969, 783001849, 789391633, 794752809, 799202409, 802854325,
+	805817077, 808192060, 810072276, 811541536, 812674096, 813534670, 814178742, 814653106,
+	814996570, 815240767, 815411023, 815527239, 815604751, 815655139, 815686963, 815706411,
+	815717851, 815724286, 815727718, 815729434, 815730226, 815730556, 815730676, 815730712,
+	815730720, 0, 1, 9, 45, 165, 495, 1287,
+	3003, 6435, 12870, 24310, 43758, 75582, 125970, 203490,
+	319762, 490242, 735111, 1080255, 1558315, 2209779, 3084081, 4240665,
+	5749965, 7694245, 10168236, 13279500, 17148444, 21907900, 27702208, 34685760,
+	43020984, 52875768, 64420345, 77823681, 93249429, 110851533, 130769587, 153124075,
+	178011639, 205500543, 235626522, 268389226, 303749434, 341627178, 381900882, 424407586,
+	468944290, 515270418, 563111367, 612163071, 662097475, 712568779, 763220277, 813691581,
+	863625985, 912677689, 960518638, 1006844766, 1051381470, 1093888174, 1134161878, 1172039622,
+	1207399830, 1240162534, 1270288513, 1297777417, 1322664981, 1345019469, 1364937523, 1382539627,
+	1397965375, 1411368711, 1422913288, 1432768072, 1441103296, 1448086848, 1453881156, 1458640612,
+	1462509556, 1465620820, 1468094811, 1470039091, 1471548391, 1472704975, 1473579277, 1474230741,
+	1474708801, 1475053945, 1475298814, 1475469294, 1475585566, 1475663086, 1475713474, 1475745298,
+	1475764746, 1475776186, 1475782621, 1475786053, 1475787769, 1475788561, 1475788891, 1475789011,
+	1475789047, 1475789055, 0, 1, 9, 45, 165, 495,
+	1287, 3003, 6435, 12870, 24310, 43758, 75582, 125970,
+	203490, 319770, 490306, 735399, 1081215, 1560955, 2216115, 3097809,
+	4268121, 5801445, 7785765, 10323820, 13534092, 17551548, 22528060, 28632420,
+	36049860, 44981008, 55640232, 68253345, 83054665, 100283445, 120179709, 142979551,
+	168909975, 198183375, 230991775, 267500970, 307844730, 352119250, 400378050, 452627550,
+	508823510, 568868490, 632610450, 699842575, 770304375, 843684075, 919622275, 997716825,
+	1077528825, 1158589625, 1240408665, 1322481960, 1404301000, 1485361800, 1565173800, 1643268350,
+	1719206550, 1792586250, 1863048050, 1930280175, 1994022135, 2054067115, 2110263075, 0,
+	1, 9, 45, 165, 495, 1287, 3003, 6435,
+	12870, 24310, 43758, 75582, 125970, 203490, 319770, 490314,
+	735471, 1081567, 1562203, 2219715, 3106785, 4288185, 5842629, 7864701,
+	10466820, 13781196, 17961724, 23185756, 29655684, 37600260, 47275572, 58965588,
+	72982173, 89664477, 109377613, 132510565, 159473287, 190692975, 226609515, 267670131,
+	314323278, 367011846, 426165762, 492194098, 565476814, 646356286, 735128790, 832036134,
+	937257651, 1050902787, 1173004539, 1303513963, 1442295937, 1589126329, 1743690685, 1905584517,
+	2074315236, 0, 1, 9, 45, 165, 495, 1287,
+	3003, 6435, 12870, 24310, 43758, 75582, 125970, 203490,
+	319770, 490314, 735471, 1081575, 1562267, 2220003, 3107745, 4290825,
+	5848965, 7878429, 10494276, 13832676, 18053244, 23341340, 29910276, 38003364,
+	47895732, 59895828, 74346525, 91625733, 112146417, 136355913, 164734455, 197792847,
+	236069235, 280124955, 330539454, 387904302, 452816334, 525869982, 607648878, 698716830,
+	799608294, 910818486, 1032793299, 1165919211, 1310513391, 1466814231, 1634972553, 1815043761,
+	2006981173,
+};
+
+/*
+ * The ring size, indexed by `fa0e`.  initV34 takes MMaxTable when its
+ * `use_max` argument is non-zero and MMinTable when it is not, and the index
+ * it uses is bounded to 0..31 by the loop that produces it -- so `count`
+ * lands in 1..18 and nothing else, which is what keeps xyz's header read in
+ * range.  Signed chars in the object, and read with a sign-extending load.
+ */
+const signed char MMaxTable[32] = {
+	1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5,
+	5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18,
+};
+const signed char MMinTable[32] = {
+	1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,
+	4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11, 12, 13, 14, 15,
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * The initialisers, and the four bit callbacks they install.
+ *
+ * These take a pointer to the shell's own fields rather than to the object --
+ * see V34_SHELL_FIELDS in v34shell.h -- so each starts by winding it back to
+ * the struct the rest of this file works in.  The two spellings meet here and
+ * nowhere else.
+ */
+static struct v34_shell *
+shell_of(void *fields)
+{
+	return (struct v34_shell *)((char *)fields - V34_SHELL_FIELDS);
+}
+
+/*
+ * Point a context's bit callback somewhere.
+ *
+ * NOTHING IN THE OBJECT CALLS THIS.  All four sites that set the callback --
+ * two in preinitV34's inlined copies and two in preinitdigital -- store it
+ * directly, so this survives only as the out-of-line copy the compiler had to
+ * emit for an extern function.  Same shape as finding 89; reconstructed
+ * because it is there, not because anything needs it.
+ */
+void
+setScramble(void *fields, void *fn)
+{
+	shell_of(fields)->put_bits = (v34_putbits_fn)fn;
+}
+
+/*
+ * Scale eight complex points -- sixteen shorts -- by `scale`/128, in place.
+ *
+ * The product is formed at 32 bits and shifted arithmetically before it is
+ * truncated, so a scale above 128 saturates by wrapping rather than by
+ * clipping.  Also uncalled; see setScramble.
+ */
+void
+scaleVector(short *v, short scale)
+{
+	short i;
+
+	for (i = 0; i <= 7; i++) {
+		v[0] = (short)((v[0] * scale) >> 7);
+		v[1] = (short)((v[1] * scale) >> 7);
+		v += 2;
+	}
+}
+
+/*
+ * Clear one shell context to its power-on state.
+ *
+ * The three count tables go to 0, 0 and -1 respectively -- t3's fill is the
+ * only one that is not zero, and initG248 overwrites however much of it the
+ * ring size calls for, so the -1s are what is left showing past the end.
+ *
+ * `count` is NOT set here, so the tables mean nothing until initV34 or
+ * initG248 has run.  The 16-state convolutional code and the caller's
+ * scrambler are the defaults; preinitdigital corrects the second of those for
+ * the receive context and for the answering role.
+ */
+void
+preinitV34(void *fields)
+{
+	struct v34_shell *s = shell_of(fields);
+	short i;
+
+	for (i = 0; i <= 0x7f; i++) {
+		s->t1[i] = 0;
+		s->t2[i] = 0;
+		s->t3[i] = -1;
+	}
+	for (i = 0; i <= 5; i++) {
+		s->fa2c[i] = 0;
+		s->hist[i] = 0;
+	}
+
+	s->fa16 = 0x18;
+	s->conv = Convolve16;
+	s->fa3c = 0;
+	s->prev_k = 0;
+	s->latched = 0;
+	s->fa08 = 0;
+	s->get_bits = scrambleGPC;
+}
+
+/*
+ * Rebuild the three count tables from `count` alone.
+ *
+ * t1 is the tent 1, 2, ... n, ... 2, 1 -- the number of ways one sub-index
+ * pair can reach each total -- written from both ends at once, which is why
+ * the loop stores twice per step.  t2 is t1 convolved with itself, mirrored
+ * the same way.  t3 is the eight-fold convolution, which is not computed at
+ * all: it is copied out of `xyz`, where it was precomputed.
+ *
+ * UNCALLED, like setScramble -- initV34 carries the identical three loops
+ * inline.  Reconstructed as its own function anyway, because the inline copy
+ * inside initV34 is then the same code and gets tested twice over.
+ *
+ * A `count` of zero would send the second loop round 2^32 times; nothing
+ * reaches that, since the only thing that sets `count` is initV34 and both
+ * of its tables bottom out at 1.
+ */
+void
+initG248(void *fields)
+{
+	struct v34_shell *s = shell_of(fields);
+	unsigned n = (unsigned short)s->count;
+	unsigned top = 2 * (n - 1);
+	unsigned i, j, k, cursor, len;
+
+	for (i = 0; i < n; i++) {
+		s->t1[top - i] = (short)(i + 1);
+		s->t1[i] = (short)(i + 1);
+	}
+
+	for (j = 0; j <= top; j++) {
+		const short *a = s->t1;
+		const short *b = s->t1 + j;
+		short cnt = (short)(j + 1);
+		int acc = 0;
+
+		while (cnt > 0) {
+			acc += (unsigned short)*b * (unsigned short)*a;
+			b--;
+			a++;
+			cnt = (short)(cnt - 1);
+		}
+		s->t2[2 * top - j] = (short)acc;
+		s->t2[j] = (short)acc;
+	}
+
+	cursor = (unsigned)xyz[n];
+	len = (unsigned)(xyz[n + 1] - xyz[n]);
+	for (k = 0; k < len; k++)
+		s->t3[k] = xyz[cursor++];
+}
+
+/*
+ * Configure one shell context for a symbol rate and a trellis, and build its
+ * count tables.  Always returns zero.
+ *
+ * `baud` is the V.34 symbol rate: 2400, 2743, 2800, 3000, 3200 or 3429.  Two
+ * things come off it, and they partition the six rates differently:
+ *
+ *   the GROUP  is 8 for 2743 and 3429 and 7 for the other four -- i.e. 8 for
+ *              the two rates whose baud is not a whole number of hundredths,
+ *              which are exactly the two V.34 defines as 2400*7/8*... ratios
+ *   the SPAN J is 12 below 2800, 14 at 2800, 16 at 3200 and 15 above 2800
+ *              otherwise -- five distinct rates mapping onto four values
+ *
+ * `bitrate` is then divided down to a per-symbol bit count against both, and
+ * `use_max` picks which of the two ring-size tables the result indexes.
+ * `depth` selects the convolutional code, `coeff` and `divisor` are stored as
+ * handed over, and the last of those sets a field width by binary search.
+ */
+int
+initV34(void *fields, short baud, short bitrate, short use_max,
+	short depth, const short *coeff, short divisor)
+{
+	struct v34_shell *s = shell_of(fields);
+	unsigned rate = (unsigned short)baud;
+	unsigned group = (unsigned short)(7 + (rate == 0xab7 || rate == 0xd65));
+	unsigned span, q, m, u, idx, w;
+	unsigned i, j, k, n, top, cursor, len;
+
+	if (rate > 0xaf0)
+		span = (unsigned short)(16 - (rate != 0xc80));
+	else if (rate == 0xaf0)
+		span = 14;
+	else
+		span = 12;
+
+	s->fa00 = (short)span;
+	s->fa02 = (short)(2 * span);
+	s->coeff = coeff;
+
+	/*
+	 * The wider codes come with a wider field: 32 and Convolve32 for a
+	 * depth of one, 64 and Convolve64 for anything above.  A depth of
+	 * zero leaves preinitV34's 24 and the 16-state code alone.
+	 */
+	if (depth != 0) {
+		s->fa16 = (short)(depth << 5);
+		s->conv = (depth == 1) ? Convolve32 : Convolve64;
+	}
+
+	s->fa40 = (short)(2 * group);
+	s->fa3e = (short)(2 * group - 2);
+	s->invert = (short)(unsigned short)gInvertPat[(short)(2 * group - 2)];
+
+	/*
+	 * Three divisions, each rounding differently: /25 truncating, then
+	 * /group truncating, then /span rounding UP.  `fa06` is what the
+	 * rounding up left over, so the last pair is a quotient and its
+	 * remainder spread across `fa04` groups.
+	 *
+	 * The 25 is worth pinning down, because the object does it as a
+	 * reciprocal multiply and the constant is the one everybody reads as
+	 * a divide by 100: `mul $0x51eb851f` then `shr $3`, i.e. >> 35, not
+	 * the >> 37 that would make it 100.  Written as /100 it agrees with
+	 * the object on nothing above 24.
+	 */
+	q = (unsigned)(unsigned short)bitrate / 25u;
+	m = (unsigned short)((int)(q * 7) / (int)group);
+	u = (unsigned)(int)((int)(m + span - 1) / (int)span);
+
+	s->fa04 = (short)u;
+	s->wrap = (short)(2 - ((unsigned short)u <= 0x37));
+	s->fa0a = (short)(15 - group);
+	s->fa06 = (short)(m - ((unsigned short)u - 1) * span);
+	s->fa14 = 0;
+
+	/*
+	 * Bring `u` down into 12..43 in steps of eight, and record how many
+	 * steps it took.  The two early exits are the same test unrolled: no
+	 * steps needed at all, then one subtraction's worth.
+	 */
+	if ((unsigned short)u <= 12) {
+		idx = 0;
+	} else if ((unsigned short)(u - 12) <= 0x1f) {
+		idx = u - 12;
+	} else {
+		j = 0;
+		do {
+			j++;
+			idx = u - 8 * (unsigned short)j - 12;
+		} while ((unsigned short)idx > 0x1f);
+		s->fa14 = (short)j;
+	}
+
+	s->fa0e = (short)idx;
+	s->fa10 = (short)(idx - 1);
+
+	/*
+	 * The ring size, and then initG248's three loops inline -- which is
+	 * how the object has it, and the reason initG248 has no caller.
+	 */
+	s->count = use_max ? MMaxTable[(unsigned short)idx]
+			   : MMinTable[(unsigned short)idx];
+
+	n = (unsigned short)s->count;
+	top = 2 * (n - 1);
+
+	for (i = 0; i < n; i++) {
+		s->t1[top - i] = (short)(i + 1);
+		s->t1[i] = (short)(i + 1);
+	}
+
+	for (j = 0; j <= top; j++) {
+		const short *a = s->t1;
+		const short *b = s->t1 + j;
+		short cnt = (short)(j + 1);
+		int acc = 0;
+
+		while (cnt > 0) {
+			acc += (unsigned short)*b * (unsigned short)*a;
+			b--;
+			a++;
+			cnt = (short)(cnt - 1);
+		}
+		s->t2[2 * top - j] = (short)acc;
+		s->t2[j] = (short)acc;
+	}
+
+	cursor = (unsigned)xyz[n];
+	len = (unsigned)(xyz[n + 1] - xyz[n]);
+	for (k = 0; k < len; k++)
+		s->t3[k] = xyz[cursor++];
+
+	/*
+	 * `fa44` is the field width `divisor` needs, found by walking powers
+	 * of two up from 128 -- and then one more, so it is a width and not
+	 * an exponent.  A divisor of 128 or less skips the search entirely
+	 * and takes the 7 the search would have returned.
+	 */
+	s->divisor = divisor;
+	s->fa44 = 7;
+	if ((int)(unsigned)(unsigned short)divisor > 0x80) {
+		w = 7;
+		do {
+			w++;
+		} while ((int)(1u << (w & 31))
+			 < (int)(unsigned)(unsigned short)divisor);
+		s->fa44 = (short)w;
+	}
+	s->fa44 = (short)((unsigned short)s->fa44 + 1);
+
+	return 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The four bit callbacks.
+ *
+ * V.34 gives the two ends opposite generators -- 1 + x^-5 + x^-23 for the
+ * calling station (GPC) and 1 + x^-18 + x^-23 for the answering one (GPA) --
+ * and each end scrambles with its own and descrambles with the other's.
+ * preinitdigital installs the pair, so the four appear only ever two at a
+ * time.
+ *
+ * All four work SIXTEEN BITS AT A TIME rather than one, which is why none of
+ * them looks like a shift register: the taps become shifts of a whole word
+ * and the history lives in three (transmit: four) parallel words.  Which
+ * shift stands for which tap is left to task #47; what is reproduced here is
+ * the word arithmetic exactly as the object has it, ORs and all -- note that
+ * `(w << 2) | half` genuinely overlaps in bits 2..15 and is not a
+ * concatenation.
+ *
+ * The transmit pair take the OBJECT and a bit position, and return the
+ * position moved back sixteen; the receive pair take the object, a value and
+ * a width, and return nothing.  Both reach the shell context they belong to
+ * from the object: the receive one is at +0, the transmit one at +0x1be0.
+ */
+
+/* The next sixteen bits to send: from `tx_data` if enabled, else idle ones. */
+static unsigned
+tx_bits(struct v34_object *o)
+{
+	if (o->data_enable != 0 && (unsigned)o->tx_rd < (unsigned)o->tx_n)
+		return (unsigned short)o->tx_data[o->tx_rd++];
+	return 0xffffu;
+}
+
+/* Hand sixteen recovered bits to `rx_data`, while there is room for them. */
+static void
+rx_bits(struct v34_object *o, unsigned bits)
+{
+	if (o->data_enable != 0 && (unsigned)o->rx_n <= 0x3f) {
+		o->rx_data[o->rx_n] = (int)bits;
+		o->rx_n++;
+	}
+}
+
+int
+scrambleGPC(void *obj, int pos)
+{
+	struct v34_shell *tx = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+	unsigned in = tx_bits((struct v34_object *)obj);
+	unsigned b = (unsigned)tx->bitbuf;
+	unsigned n0, n1, n2;
+
+	n0 = (in << 16) | ((unsigned)tx->scr[0] >> 16);
+	n1 = (b << 2)   | ((unsigned)tx->scr[1] >> 16);
+	n2 = (b << 7)   | ((unsigned)tx->scr[2] >> 16);
+
+	tx->scr[0] = (int)n0;
+	tx->scr[1] = (int)n1;
+	tx->scr[2] = (int)n2;
+	tx->bitbuf = (int)(n0 ^ n1 ^ n2);
+
+	return (short)(pos - 16);
+}
+
+int
+scrambleGPA(void *obj, int pos)
+{
+	struct v34_shell *tx = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+	unsigned in = tx_bits((struct v34_object *)obj);
+	unsigned b = (unsigned)tx->bitbuf;
+	unsigned h1 = (unsigned)tx->scr[1] >> 16;
+	unsigned n0, n2, t, a;
+
+	n0 = (in << 16) | ((unsigned)tx->scr[0] >> 16);
+	n2 = (b << 7)   | ((unsigned)tx->scr[2] >> 16);
+	tx->scr[0] = (int)n0;
+	tx->scr[2] = (int)n2;
+
+	/*
+	 * Four rounds of the same step rather than one, because this
+	 * generator's taps are close enough together that a sixteen-bit
+	 * block feeds back into itself: each round shifts five more bits in.
+	 */
+	t = n0 ^ n2;
+	a = ((b >> 11) | h1) ^ t;
+	a = ((a << 5) | h1) ^ t;
+	a = ((a << 5) | h1) ^ t;
+	a = ((a << 5) | h1) ^ t;
+
+	tx->bitbuf = (int)a;
+	tx->scr[1] = (int)(h1 | (a << 5));
+
+	return (short)(pos - 16);
+}
+
+void
+descrambleGPC(void *obj, int value, int nbits)
+{
+	struct v34_shell *rx = (struct v34_shell *)obj;
+	unsigned v = (unsigned short)value;
+	unsigned w = (unsigned short)nbits;
+	unsigned pos = (unsigned short)rx->rx_bitpos;
+	unsigned w0, w1, w2;
+
+	w0 = (v << ((short)pos & 31)) | (unsigned)rx->scr[0];
+	rx->scr[0] = (int)w0;
+
+	pos += w;
+	rx->rx_bitpos = (short)pos;
+	if ((short)pos <= 31)
+		return;
+
+	w1 = (unsigned)rx->scr[1];
+	w2 = (unsigned)rx->scr[2];
+	rx_bits((struct v34_object *)obj, (unsigned short)(w0 ^ w1 ^ w2));
+
+	rx->scr[1] = (int)((w0 << 2) | (w1 >> 16));
+	rx->scr[2] = (int)((w0 << 7) | (w2 >> 16));
+
+	pos = (unsigned short)rx->rx_bitpos - 16;
+	rx->rx_bitpos = (short)pos;
+	rx->scr[0] = (int)((v << (((short)pos - (int)w) & 31)) | (w0 >> 16));
+}
+
+void
+descrambleGPA(void *obj, int value, int nbits)
+{
+	struct v34_shell *rx = (struct v34_shell *)obj;
+	unsigned v = (unsigned short)value;
+	unsigned w = (unsigned short)nbits;
+	unsigned pos = (unsigned short)rx->rx_bitpos;
+	unsigned w0, t, w2;
+
+	w0 = (v << ((short)pos & 31)) | (unsigned)rx->scr[0];
+	rx->scr[0] = (int)w0;
+
+	pos += w;
+	rx->rx_bitpos = (short)pos;
+	if ((short)pos <= 31)
+		return;
+
+	t = (w0 << 5) | (unsigned)rx->scr[1];
+	w2 = (unsigned)rx->scr[2];
+	rx_bits((struct v34_object *)obj, (unsigned short)(w0 ^ t ^ w2));
+
+	rx->scr[1] = (int)(t >> 16);
+	rx->scr[2] = (int)((w0 << 7) | (w2 >> 16));
+
+	pos = (unsigned short)rx->rx_bitpos - 16;
+	rx->rx_bitpos = (short)pos;
+	rx->scr[0] = (int)((v << (((short)pos - (int)w) & 31)) | (w0 >> 16));
+}
+
+/*
+ * Reset both shell contexts and the trellis decoder between them, and install
+ * the pair of scrambler callbacks the station's role calls for.
+ *
+ * The two contexts get preinitV34 apiece -- inlined twice in the object, and
+ * called twice here, which is the same thing -- and then the receive one gets
+ * the trellis machinery cleared, because only it decodes.
+ *
+ * THE TWO SCRAMBLER STATES ARE CLEARED DIFFERENTLY, and that is not an
+ * oversight: the transmit context has a fourth register word where the
+ * receive one keeps its bit position, so there are four ints and a position
+ * on one side and three ints and a position on the other.  The note on the
+ * union in v34shell.h has the whole of it.  The transmit position starts at
+ * 32, which is past the fifteen getFrame checks against, so the first getFrame
+ * refills before it reads.
+ */
+void
+preinitdigital(void *obj)
+{
+	struct v34_object *o = (struct v34_object *)obj;
+	struct v34_shell *rx = (struct v34_shell *)obj;
+	struct v34_shell *tx = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+
+	preinitV34((char *)obj + V34_SHELL_TX + V34_SHELL_FIELDS);
+	preinitV34((char *)obj + V34_SHELL_FIELDS);
+
+	sysdep_memset(rx->cost, 0, sizeof rx->cost);
+	sysdep_memset(rx->trellis, 0, sizeof rx->trellis);
+	sysdep_memset(rx->state, 0, sizeof rx->state);
+
+	tx->scr[0] = 0;
+	tx->scr[1] = 0;
+	tx->scr[2] = 0;
+	tx->bitbuf = 0;
+	tx->bitpos = 32;
+
+	rx->scr[0] = 0;
+	rx->scr[1] = 0;
+	rx->scr[2] = 0;
+	rx->rx_bitpos = 0;
+	rx->state_idx = 0;
+
+	o->data_enable = 0;
+	o->faa74 = 0;
+
+	/*
+	 * Scramble with this station's generator and descramble with the
+	 * other's.  0x65 in f359c is the same flag that picks the second
+	 * timing-parameter table, so the role is carried in one place.
+	 */
+	if (o->f359c == 0x65) {
+		tx->get_bits = scrambleGPC;
+		rx->put_bits = descrambleGPA;
+	} else {
+		tx->get_bits = scrambleGPA;
+		rx->put_bits = descrambleGPC;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned to what every function above reads.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -927,5 +1631,45 @@ V34SH_ASSERT(bitpos, 0xe84);
 V34SH_ASSERT(frame, 0xe50);
 V34SH_ASSERT(fa00, 0xa00);
 V34SH_ASSERT(fa14, 0xa14);
+
+/* The fields the initialisers and the scrambler callbacks added. */
+V34SH_ASSERT(fa0a, 0xa0a);
+V34SH_ASSERT(fa16, 0xa16);
+V34SH_ASSERT(hist, 0xa18);
+V34SH_ASSERT(coeff, 0xa24);
+V34SH_ASSERT(conv, 0xa28);
+V34SH_ASSERT(fa2c, 0xa2c);
+V34SH_ASSERT(prev_k, 0xa38);
+V34SH_ASSERT(cost, 0xeac);
+V34SH_ASSERT(trellis, 0xecc);
+V34SH_ASSERT(state, 0x12cc);
+V34SH_ASSERT(state_idx, 0x144c);
+V34SH_ASSERT(scr, 0xe74);
+V34SH_ASSERT(rx_bitpos, 0xe80);
+
+/*
+ * And the object's, which preinitdigital and the two data buffers pin.
+ * `struct v34_object` is v34fsk.h's, so the macro above will not do.
+ */
+#define V34OB_ASSERT(field, off) \
+	typedef char v34ob_off_##field[ \
+		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34OB_ASSERT(rx_data, 0x014);
+V34OB_ASSERT(rx_n, 0x114);
+V34OB_ASSERT(tx_data, 0x118);
+V34OB_ASSERT(tx_n, 0x218);
+V34OB_ASSERT(tx_rd, 0x21c);
+V34OB_ASSERT(data_enable, 0x2214);
+V34OB_ASSERT(faa74, 0xaa74);
+
+/* The three memsets' lengths are the object's own, so pin those too. */
+typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)
+			     == 0x20) ? 1 : -1];
+typedef char v34sh_len_trellis[(sizeof(((struct v34_shell *)0)->trellis)
+				== 0x400) ? 1 : -1];
+typedef char v34sh_len_state[(sizeof(((struct v34_shell *)0)->state)
+			      == 0x180) ? 1 : -1];
 
 #endif

@@ -117,7 +117,27 @@ struct v34_object {
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x230 - 0x004];
+	unsigned char unmapped_0004[0x014 - 0x004];
+	/*
+	 * The datapump's two data buffers, of which the scrambler callbacks
+	 * in v34shell.c are so far the only reader and writer.
+	 *
+	 * descrambleGP* appends each sixteen recovered bits to `rx_data` and
+	 * stops at 64 entries; scrambleGP* takes its next sixteen out of
+	 * `tx_data` and, once `tx_rd` reaches `tx_n`, scrambles 0xffff
+	 * instead -- the all-ones idle V.34 sends with nothing to carry.
+	 * Both paths are gated on `data_enable` at +0x2214.
+	 *
+	 * The lengths are the code's own bounds, not a guess: 0x14 + 64*4 is
+	 * exactly 0x114 and 0x118 + 64*4 exactly 0x218, so each array ends
+	 * where its counter begins.
+	 */
+	int rx_data[64];				/* +0x0014 */
+	int rx_n;					/* +0x0114 */
+	int tx_data[64];				/* +0x0118 */
+	int tx_n;					/* +0x0218 */
+	int tx_rd;					/* +0x021c */
+	unsigned char unmapped_0220[0x230 - 0x220];
 	/*
 	 * The signal-energy floor `receiver` compares its 36-sample RMS
 	 * against before declaring the line dead.  An int, and the only field
@@ -156,7 +176,16 @@ struct v34_object {
 	unsigned char scratch_20e0[0x20];		/* +0x20e0 */
 	unsigned char unmapped_2100[0x210c - 0x2100];
 	unsigned char scratch_210c[0x100];		/* +0x210c */
-	unsigned char unmapped_220c[0x221c - 0x220c];
+	unsigned char unmapped_220c[0x2214 - 0x220c];
+	/*
+	 * +0x2214.  Non-zero connects the scrambler callbacks to `tx_data`
+	 * and `rx_data`; zero leaves the transmitter scrambling idle ones and
+	 * the receiver throwing away what it recovers.  preinitdigital clears
+	 * it, so the data path is switched on from outside the V.34 core once
+	 * the handshake is through.
+	 */
+	short data_enable;				/* +0x2214 */
+	unsigned char unmapped_2216[0x221c - 0x2216];
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
@@ -254,7 +283,10 @@ struct v34_object {
 	short fa23e;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short fa240;					/* +0xa240 */
-	unsigned char unmapped_a242[0xaa96 - 0xa242];
+	unsigned char unmapped_a242[0xaa74 - 0xa242];
+	/* An int preinitdigital clears and nothing read so far reads. */
+	int faa74;					/* +0xaa74 */
+	unsigned char unmapped_aa78[0xaa96 - 0xaa78];
 	/*
 	 * decoderv34 compares f124 against this and against half of it, and
 	 * sets f218 accordingly -- so it is a frame length in symbols and the
