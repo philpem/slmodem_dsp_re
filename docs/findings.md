@@ -8044,3 +8044,37 @@ would otherwise be rediscovered later.
 That closes the table sweep: six tables, five named by `nm`, and between them
 the state machines of V.8, V.32 and V.34's handshake plus the cadence types
 -- three of which belong to code this project has not written yet.
+
+### 146. Two of the sixteen names in finding 143 were mapped backwards
+
+Finding 143 paired `struct dialer_cfg`'s fields with the author's names by
+matching each field's `modem_get_param` getter against a plausibly
+corresponding string.  Fourteen were right.  Two were not:
+
+```
+   param 0x11  GetPulseDialMakeTime   ->  "pulse_OffHookTime"
+   param 0x12  GetPulseDialBreakTime  ->  "pulse_OnHookTime"
+```
+
+read directly out of `GetDialerConfig`, where each print is gated
+immediately after the fetch it describes, so the pairing is not a matter of
+judgement.  I had them the other way round, on the reasoning that "break" is
+when the loop current is interrupted and therefore off-hook.
+
+That reasoning is simply wrong about pulse dialling.  Off-hook is the
+handset lifted, which CLOSES the loop -- the make condition.  Break opens
+it, which is momentarily the on-hook condition.  The author's names are
+physically correct and mine inverted them.
+
+**What is worth taking from this.**  Finding 143 concluded that inferring
+names from getters "is sound and can be trusted elsewhere".  It is sound at
+roughly 14/16, which is a different claim, and the two it missed were the
+two where a domain fact -- not a naming convention -- decided the answer.
+The header now ties every field to a parameter ID taken from the
+disassembly instead.
+
+The general form: an inference that agrees with the evidence fourteen times
+looks confirmed, and the confirmation is worth exactly as much as the two
+cases nobody checked.  Both errors here were in the pair where I had
+supplied a reason, which is the part that should have made me check rather
+than the part that made me confident.
