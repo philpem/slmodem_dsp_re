@@ -15,6 +15,7 @@
  * them.  `nbits` being the character count times ten is the confirmation.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
 /*
@@ -62,8 +63,14 @@ initTxSequence(struct v8 *v)
 
 	/* The first extension, if the menu says there is one. */
 	if (cm->b2 & V8_CM_EXT1_PRESENT) {
-		if (emit_extension(seq, &n, cm->ext1) == 0)
+		if (emit_extension(seq, &n, cm->ext1) == 0) {
+			/* Complained about, then repaired -- in that order. */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: BUG - raw Call Function selected "
+				    "without valid data !!!\r\n");
 			cm->b2 &= (unsigned char)~V8_CM_EXT1_PRESENT;
+		}
 	}
 
 	/*
@@ -82,6 +89,10 @@ initTxSequence(struct v8 *v)
 		seq->word[n++] = V8_SEQ_FN_B2;
 	} else {
 		/* Nothing asked for, so ask for the default and remember it. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: BUG - no Call Function selected in bit "
+			    "fields - use data as default !!!\r\n");
 		cm->b1 |= 0x40;
 		seq->word[n++] = V8_SEQ_FN_DEFAULT;
 	}
@@ -107,8 +118,13 @@ initTxSequence(struct v8 *v)
 
 	/* The second extension, on the same terms as the first. */
 	if (cm->b2 & V8_CM_EXT2_PRESENT) {
-		if (emit_extension(seq, &n, cm->ext2) == 0)
+		if (emit_extension(seq, &n, cm->ext2) == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: BUG - raw Protocol selected "
+				    "without valid data !!!\r\n");
 			cm->b2 &= (unsigned char)~V8_CM_EXT2_PRESENT;
+		}
 	}
 
 	/*
@@ -128,6 +144,16 @@ initTxSequence(struct v8 *v)
 		seq->word[n + 2] = V8_SEQ_TAIL_D;
 		words = n + 3;
 	}
+
+	/*
+	 * "octets" is the author's word; `words` counts ten-bit characters.
+	 * The answering side's initial message is the JM, hence the name by
+	 * side rather than by buffer.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: Initial %s message length is %d octets\r\n",
+		    v->mode == 1 ? "JM" : "CM", words);
 
 	seq->crc = (short)0xffff;
 

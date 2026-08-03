@@ -8650,3 +8650,50 @@ Two placement facts the transcripts now enforce:
 With these, the callprog batch's cadence half is done: cadence_create 17/17,
 cadence_progress 7/7, all mutation-tested (6/6) through t_cadence's new
 level-1..3 transcript sweep.
+
+### 164. V8Create's configuration trace names the V.8 fields
+
+V8Create carries a seventeen-message configuration banner (sixteen call
+sites -- the two "Call Functions" variants share one cross-jumped printf),
+dated by its author: "V8: Create called, V8 version 23/09/03".  Every V8
+message ends \r\n, unlike the rest of the blob's diagnostics.
+
+What it names, none of which the reconstruction had:
+
+- `v8->mode` is the SIDE -- "\tSide = %s" prints Caller for 0, Answer
+  otherwise.  `fa48` is the "Operation Mode".  The two timeouts are the
+  signal-detect and message-detect timeouts, in seconds.
+- The LOCAL v8_cm's +0x0c is "ansPcmLevel" and +0x10 "ucodeForQts" -- the
+  same offsets V8UpdateModemParameters uses for what the far end offered and
+  the JM menu word, so the struct's field names cannot serve both instances
+  and the header now says so.
+- ext1[] is RAW CALL FUNCTION octets and ext2[] RAW PROTOCOL octets ("raw CF
+  specified", "raw Protocol specified"), correcting the header's guess of
+  country-code and vendor fields.  The presence bits are tested OUTSIDE the
+  debug gates: the branch structure is hot, only the printing is cold.
+- The modulation word, bit by bit: V90=(b0>>3)&1, V34=(b0>>5)&1,
+  V34HD=(b0>>6)&1, V32=b0>>7, V22=b1&1, V17=(b1>>1)&1, V29=(b1>>2)&1,
+  V27=(b1>>3)&1, V23=(b1>>4)&1, V21=(b1>>5)&1.  Call functions:
+  Data=(b1>>6)&1, CallRxFax=b1>>7, CallTxFax=b2&1, V.80=(b2>>1)&1.
+  b0 bit 1 is v8bisIndication, b2 bit 4 quickConnectEnabled, b2 bit 6
+  lapmIndication.
+
+initTxSequence's four sites came with it (they fire inside V8Create through
+v8handshakinit, so the transcript comparison needed both):
+
+- "V8: Initial %s message length is %d octets" -- JM when mode==1, and
+  "octets" counting ten-bit characters.
+- Three "V8: BUG -" messages: a raw call function or raw protocol declared
+  present but empty (announced, THEN the present bit is cleared -- the
+  repair follows the complaint), and no call function selected at all
+  (announced, then data is selected as the default).
+
+Sixteen banner messages re-test the level between each print rather than
+sharing one guard -- so they are seventeen independent `if` statements in
+source, not one guarded block; a single block would have compiled to one
+test and a run of calls.
+
+Verified by transcript comparison at levels 1-3 in t_v8util over six menu
+variants (both call-function branches, both protocol branches, and each BUG
+path); 12/12 mutations caught.  Field renames (mode -> side, fa48 ->
+op_mode) deferred to travel with the rest of the v8 batch.

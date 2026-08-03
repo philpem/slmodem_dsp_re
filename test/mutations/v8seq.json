@@ -1,0 +1,27 @@
+[
+ {
+  "label": "report the length in bits rather than characters",
+  "find": "\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->mode == 1 ? \"JM\" : \"CM\", words);",
+  "replace": "\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->mode == 1 ? \"JM\" : \"CM\", words * V8_SEQ_BITS_PER_WORD);"
+ },
+ {
+  "label": "swap JM and CM in the length banner",
+  "find": "v->mode == 1 ? \"JM\" : \"CM\", words);",
+  "replace": "v->mode == 1 ? \"CM\" : \"JM\", words);"
+ },
+ {
+  "label": "swap the two extension BUG messages",
+  "find": "\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - raw Call Function selected \"\n\t\t\t\t    \"without valid data !!!\\r\\n\");",
+  "replace": "\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - raw Protocol selected \"\n\t\t\t\t    \"without valid data !!!\\r\\n\");"
+ },
+ {
+  "label": "drop the no-call-function BUG message",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: BUG - no Call Function selected in bit \"\n\t\t\t    \"fields - use data as default !!!\\r\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "announce the length before the tail is counted",
+  "find": "\tif (cm->b0 & 0x08) {\n\t\tseq->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tseq->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}\n\n\t/*\n\t * \"octets\" is the author's word; `words` counts ten-bit characters.\n\t * The answering side's initial message is the JM, hence the name by\n\t * side rather than by buffer.\n\t */\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->mode == 1 ? \"JM\" : \"CM\", words);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->mode == 1 ? \"JM\" : \"CM\", words);\n\n\tif (cm->b0 & 0x08) {\n\t\tseq->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tseq->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}"
+ }
+]

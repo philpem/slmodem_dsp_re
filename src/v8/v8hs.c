@@ -14,6 +14,7 @@
  *   anything else  nothing beyond the preamble every shape shares.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 #include "dsplib/sysdep.h"
 
@@ -207,6 +208,87 @@ V8Create(const struct v8_cfg *cfg)
 	v->timeout_b = cfg->timeout_b;
 	v->fa54 = cfg->f10;
 	v->cm = cfg->cm;
+
+	/*
+	 * The configuration trace: seventeen messages, each behind its own
+	 * gate.  This is where the author dates the module (23/09/03) and
+	 * names what the fields mean -- `mode` is the SIDE, `fa48` the
+	 * operation mode, `offered` the ansPcmLevel, `menu` the ucodeForQts,
+	 * and the two CM extension fields are raw call-function and protocol
+	 * octets.  See finding 164.
+	 *
+	 * Every message ends \r\n -- all of V8's diagnostics do.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: Create called, V8 version 23/09/03 .\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("#################################"
+				     "###########################\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V8: local configuration : \r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tSide = %s\r\n",
+				     v->mode != 0 ? "Answer" : "Caller");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tOperation Mode = %d\r\n", v->fa48);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "\tModulations - V90=%d, V34=%d, V34HD=%d, V32=%d, "
+		    "V22=%d, V17=%d, V29=%d, V27=%d, V23=%d, V21=%d\r\n",
+		    (v->cm->b0 >> 3) & 1, (v->cm->b0 >> 5) & 1,
+		    (v->cm->b0 >> 6) & 1, v->cm->b0 >> 7,
+		    v->cm->b1 & 1, (v->cm->b1 >> 1) & 1,
+		    (v->cm->b1 >> 2) & 1, (v->cm->b1 >> 3) & 1,
+		    (v->cm->b1 >> 4) & 1, (v->cm->b1 >> 5) & 1);
+
+	/* The presence bits are tested outside the gates, not inside. */
+	if (v->cm->b2 & V8_CM_EXT1_PRESENT) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "\tCall Functions - raw CF specified: cf[0]=%d , "
+			    "cf[1]=%d , cf[2]=%d , cf[3]=%d\r\n",
+			    v->cm->ext1[0], v->cm->ext1[1],
+			    v->cm->ext1[2], v->cm->ext1[3]);
+	} else if (DSPLIB_DEBUG_ON()) {
+		dsplibs_debug_printf(
+		    "\tCall Functions - Data=%d, CallRxFax=%d, CallTxFax=%d, "
+		    "V.80=%d\r\n",
+		    (v->cm->b1 >> 6) & 1, v->cm->b1 >> 7,
+		    v->cm->b2 & 1, (v->cm->b2 >> 1) & 1);
+	}
+
+	if (v->cm->b2 & V8_CM_EXT2_PRESENT) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "\tProtocol - raw Protocol specified: prot[0]=%d "
+			    ", prot[1]=%d , prot[2]=%d , prot[3]=%d\r\n",
+			    v->cm->ext2[0], v->cm->ext2[1],
+			    v->cm->ext2[2], v->cm->ext2[3]);
+	} else if (DSPLIB_DEBUG_ON()) {
+		dsplibs_debug_printf("\tProtocol - LAPM V.42\r\n");
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tv8bisIndication - %d\r\n",
+				     (v->cm->b0 >> 1) & 1);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\ttimeouts - signal detect %d sec, "
+				     "message detect %d sec\r\n",
+				     v->timeout_a, v->timeout_b);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tquickConnectEnabled - %d\r\n",
+				     (v->cm->b2 >> 4) & 1);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tlapmIndication - %d\r\n",
+				     (v->cm->b2 >> 6) & 1);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tucodeForQts - %d\r\n", v->cm->menu);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\tansPcmLevel - %d\r\n", v->cm->offered);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("#################################"
+				     "###########################\r\n");
 
 	v->fa42 = 0x4000;
 	v8handshakinit(v);

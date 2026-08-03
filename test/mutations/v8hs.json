@@ -1,0 +1,37 @@
+[
+ {
+  "label": "drop the dated version banner",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Create called, V8 version 23/09/03 .\\r\\n\");",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "swap Caller and Answer",
+  "find": "v->mode != 0 ? \"Answer\" : \"Caller\");",
+  "replace": "v->mode != 0 ? \"Caller\" : \"Answer\");"
+ },
+ {
+  "label": "read V90 from the wrong bit",
+  "find": "\t\t    (v->cm->b0 >> 3) & 1, (v->cm->b0 >> 5) & 1,",
+  "replace": "\t\t    (v->cm->b0 >> 2) & 1, (v->cm->b0 >> 5) & 1,"
+ },
+ {
+  "label": "announce LAPM even when a raw protocol is given",
+  "find": "\tif (v->cm->b2 & V8_CM_EXT2_PRESENT) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"\\tProtocol - raw Protocol specified: prot[0]=%d \"\n\t\t\t    \", prot[1]=%d , prot[2]=%d , prot[3]=%d\\r\\n\",\n\t\t\t    v->cm->ext2[0], v->cm->ext2[1],\n\t\t\t    v->cm->ext2[2], v->cm->ext2[3]);\n\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"\\tProtocol - LAPM V.42\\r\\n\");\n\t}",
+  "replace": "\tif (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"\\tProtocol - LAPM V.42\\r\\n\");\n\t}"
+ },
+ {
+  "label": "swap ansPcmLevel and ucodeForQts",
+  "find": "dsplibs_debug_printf(\"\\tucodeForQts - %d\\r\\n\", v->cm->menu);\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"\\tansPcmLevel - %d\\r\\n\", v->cm->offered);",
+  "replace": "dsplibs_debug_printf(\"\\tucodeForQts - %d\\r\\n\", v->cm->offered);\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"\\tansPcmLevel - %d\\r\\n\", v->cm->menu);"
+ },
+ {
+  "label": "swap the two timeouts",
+  "find": "dsplibs_debug_printf(\"\\ttimeouts - signal detect %d sec, \"\n\t\t\t\t     \"message detect %d sec\\r\\n\",\n\t\t\t\t     v->timeout_a, v->timeout_b);",
+  "replace": "dsplibs_debug_printf(\"\\ttimeouts - signal detect %d sec, \"\n\t\t\t\t     \"message detect %d sec\\r\\n\",\n\t\t\t\t     v->timeout_b, v->timeout_a);"
+ },
+ {
+  "label": "end the banner lines with a bare newline",
+  "find": "dsplibs_debug_printf(\"V8: local configuration : \\r\\n\");",
+  "replace": "dsplibs_debug_printf(\"V8: local configuration : \\n\");"
+ }
+]

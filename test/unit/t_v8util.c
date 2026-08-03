@@ -10,10 +10,14 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern short ref_v8_mpyint(short a, short b);
 extern short ref_v8_absfn(short x);
@@ -828,6 +832,106 @@ t_v8create(void)
 	V8Delete(0);
 	ref_V8Delete(0);
 	diff_eq_int("V8Delete(NULL) survives", 1, 1, 0);
+
+	/*
+	 * The configuration trace -- seventeen messages in V8Create plus
+	 * initTxSequence's banner and BUG repairs.  Both sides' diagnostics
+	 * are raised and their transcripts compared; the variants walk both
+	 * call-function branches, both protocol branches, and the
+	 * declared-but-empty extension that trips the BUG message.
+	 */
+	{
+		static const struct {
+			unsigned char	b1, b2;
+			unsigned char	ext1_0, ext2_0;
+		} vars[] = {
+			{ 0x55, 0x50, 'G', 0 },	/* flags CF, LAPM         */
+			{ 0x55, 0x54, 'G', 0 },	/* raw CF, LAPM           */
+			{ 0x55, 0x58, 'G', 0 },	/* raw protocol EMPTY --
+						 * that BUG repair fires  */
+			{ 0x55, 0x1c, 'G', 2 },	/* raw CF and raw proto   */
+			{ 0x00, 0x04, 0,   0 },	/* raw CF EMPTY -- its
+						 * BUG, then (b1 clear)
+						 * the no-CF BUG too      */
+			{ 0x00, 0x00, 0,   0 }	/* nothing selected --
+						 * the no-CF BUG alone    */
+		};
+		unsigned lvl, k;
+		long lines = 0;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			dsplib_debug_capture_reset();
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+
+			for (k = 0; k < sizeof(vars) / sizeof(vars[0]); k++) {
+				memset(&cm_a, 0, sizeof(cm_a));
+				cm_a.b0 = 0xaa;
+				cm_a.b1 = vars[k].b1;
+				cm_a.b2 = vars[k].b2;
+				cm_a.offered = -12;
+				cm_a.menu = 3;
+				cm_a.ext1[0] = vars[k].ext1_0;
+				if (vars[k].ext2_0) {
+					cm_a.ext2[0] = vars[k].ext2_0;
+					cm_a.ext2[1] = 5;
+				}
+				memcpy(&cm_b, &cm_a, sizeof(cm_a));
+
+				cfg.mode = (int)(k & 1);
+				cfg.f04 = (int)k;
+				cfg.timeout_a = 12;
+				cfg.timeout_b = 3;
+				cfg.f10 = 9600;
+
+				cfg.cm = &cm_a;
+				b = ref_V8Create(&cfg);
+				cfg.cm = &cm_b;
+				a = V8Create(&cfg);
+				diff_eq_int("menus still agree (%ld)",
+					    memcmp(&cm_a, &cm_b,
+						   sizeof(cm_a)) == 0, 1,
+					    (long)(lvl * 8 + k));
+				V8Delete(a);
+				ref_V8Delete(b);
+			}
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("transcript matches (level %ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)lvl);
+			if (getenv("DBGDIFF")
+			    && strcmp(dsplib_debug_capture_text(0),
+				      dsplib_debug_capture_text(1)) != 0) {
+				const char *o = dsplib_debug_capture_text(0);
+				const char *r = dsplib_debug_capture_text(1);
+				int j = 0;
+				while (o[j] && o[j] == r[j]) j++;
+				while (j > 0 && o[j - 1] != '\n') j--;
+				printf("=== level %u: divergence at %d\n",
+				       lvl, j);
+				printf("--- ours: %.400s\n", o + j);
+				printf("--- ref : %.400s\n", r + j);
+			}
+			diff_eq_int("line counts match (level %ld)",
+				    (int)dsplib_debug_capture_lines(0),
+				    (int)dsplib_debug_capture_lines(1),
+				    (long)lvl);
+			if (lvl == 1)
+				diff_eq_int("silent below the threshold",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, 0);
+			else
+				lines += dsplib_debug_capture_lines(1);
+		}
+
+		/* Two empty captures also compare equal (finding 149). */
+		diff_eq_int("diagnostics were captured (%ld lines)",
+			    lines > 100, 1, lines);
+	}
 
 	return diff_end();
 }

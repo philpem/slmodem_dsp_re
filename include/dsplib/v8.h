@@ -209,13 +209,25 @@ struct v8_cm {
 	 * What the far end offered, copied straight out of the handshake by
 	 * V8UpdateModemParameters.  Distinct from `menu` below, which is what
 	 * the JM builder reads.
+	 *
+	 * V8Create's configuration trace prints this field of the LOCAL menu
+	 * as "ansPcmLevel" and `menu` as "ucodeForQts" (finding 164) -- the
+	 * same offsets carry different meanings depending on whose menu the
+	 * struct holds, so neither name can claim the field outright.
 	 */
-	int		offered;		/* +0x0c */
+	int		offered;		/* +0x0c  local: ansPcmLevel */
 	/* The modulation list, read as one word when the JM is built. */
-	int		menu;			/* +0x10 */
+	int		menu;			/* +0x10  local: ucodeForQts */
 	unsigned char	pad14[0x18 - 0x14];
-	unsigned char	ext1[4];		/* +0x18 */
-	unsigned char	ext2[4];		/* +0x1c */
+	/*
+	 * NOT country code and vendor fields, as an earlier draft guessed:
+	 * the trace announces ext1 as raw CALL FUNCTION octets and ext2 as
+	 * raw PROTOCOL octets ("raw CF specified", "raw Protocol specified"),
+	 * and initTxSequence substitutes them for the function and protocol
+	 * characters it would otherwise derive from the flag bits.
+	 */
+	unsigned char	ext1[4];		/* +0x18  raw call function */
+	unsigned char	ext2[4];		/* +0x1c  raw protocol      */
 	/*
 	 * Up to eight call-function octets this end will accept.  When the
 	 * received function is none of the four the flags name,
@@ -404,11 +416,18 @@ struct v8 {
 	 * `mode` picks between three whole shapes of handshake and is the
 	 * first thing looked at; anything but 0 or 1 makes the function
 	 * return having done only the common preamble.
+	 *
+	 * V8Create's configuration trace names four of these (finding 164):
+	 * `mode` is the SIDE ("Caller"/"Answer" -- 0 originates), `fa48` the
+	 * "Operation Mode", and the two timeouts are the signal-detect and
+	 * message-detect timeouts, in SECONDS.  Renames pending with the rest
+	 * of the v8 batch; `fa54` the trace does not mention.
 	 */
-	int			mode;		/* +0xa44 */
-	int			fa48;		/* +0xa48 */
-	int			timeout_a;	/* +0xa4c */
-	int			timeout_b;	/* +0xa50 */
+	int			mode;		/* +0xa44  author: Side      */
+	int			fa48;		/* +0xa48  author: Operation
+						 *         Mode              */
+	int			timeout_a;	/* +0xa4c  signal detect, s  */
+	int			timeout_b;	/* +0xa50  message detect, s */
 	int			fa54;		/* +0xa54 */
 
 	struct v8_cm		*cm;		/* +0xa58 */
