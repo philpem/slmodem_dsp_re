@@ -7989,7 +7989,13 @@ hold six arrays of string pointers, and `nm` names five of them outright:
 ```
 
 **The V.34 handshake's eighty-seven states are all here**, in index order,
-and are now `include/dsplib/v34hshak.h`.  That is the 61 KB function tasks
+and are now `include/dsplib/v34hshak.h`.
+
+> **Corrected by finding 152.**  The claim below that nothing indexes
+> `StateName` is wrong: `v34handshakinit` and `v34handshak` index it 533
+> times over, through a relocation against the `.data` section symbol that a
+> search for the name cannot see.  The claim about the two V.8 tables
+> survives.  That is the 61 KB function tasks
 #39-#45 are about, and the difference between planning it against "state 47"
 and against `TX_PHASE3_ANS` is not small.  Four are placeholders --
 `NOSTATE0`, `NOSTATE2`, `NOSTATE3`, `NOSTATE36` -- so the enum has holes and
@@ -8720,8 +8726,7 @@ selector is validated -- an illegal type gets its complaint instead, never
 the banner -- and the oversize complaint reports the CALLER's length, not
 the truncated one.  9/9 mutations caught via t_v8util's transcript sweep.
 
-### 166. v8jm's three functions: the trace names the V.90 conditions, and two
-### structural mistakes it exposes
+### 166. v8jm: the trace names the V.90 conditions, and two structural mistakes
 
 The 22 sites across `rebuildJMSequence`, `evaluateRxJMSequence` and
 `V8UpdateModemParameters` name the three anonymous flags the reconstruction
@@ -8829,8 +8834,7 @@ ORG/ANS is the mode-0/mode-1 split V8Create prints as Caller/Answer.  The
 five statuses the datapump treats as errors are exactly the five whose names
 end TIME_OUT_WAITING_FOR_something.
 
-### 168. v8_process was never differentially tested, and three things were
-### wrong in it
+### 168. v8_process was never differentially tested, and three things were wrong
 
 Placing the wrapper's five sites meant reading it properly, and t_v8dp
 tested only create, delete and the registration -- `v8_process` itself had no
@@ -8904,3 +8908,737 @@ mutation elsewhere is honest about what it does NOT show: "announce the LAPM
 indication from the QCA1d arm as well" is caught because it ADDS a line, not
 because the placement of the original is pinned -- nothing distinguishes a
 line that never fires in one arm from one that is absent.
+### 170. `fc8c` was unconditional, and only a whole-object comparison could see it
+
+Task #38's `dpskinit` calls `V34SetupModulator(obj + 0x1450, 600, carrier,
+0, 0, 1)`, and its differential test compares the whole 44 KB V.34 object
+rather than a list of fields.  It disagreed at four bytes, +0x20dc, which is
+the modulator's `fc8c`:
+
+```
+   dpskinit: object byte at +0x20dc   got 165, reference 15
+```
+
+`V34SetupModulator` was reconstructed with `m->fc8c = 0xf` in three arms of
+its symbol-rate switch — 3000, 3200 and 3429 — because those are the three
+the disassembly shows storing it in the obvious place.  The object has
+**seven** such store sites, which is one assignment the compiler duplicated
+along seven paths, and driving the blob directly settles it:
+
+```
+   baud   600 1234 2400 2800 3000 3200 3429 4800
+   fc8c     f    f    f    f    f    f    f    f
+```
+
+for every carrier, every phase and both settings of `reset`.  So the store is
+unconditional and belongs before the switch, and the reconstruction was
+leaving five of the eight rates with the field untouched.
+
+**The one site that writes 14 is inside D31's unreachable V.90 arm** of the
+3200 case.  That is a second, independent confirmation of D31: a path that
+cannot be reached is also the only path that disagrees about this constant.
+
+**Why `t_v34ec` did not catch it.**  Its modulator test compares named fields
+— `taps`, `f04`, `rows`, `row`, `sine_len`, `phase`, `wpos`, `wstep` — plus
+the contents of every table a pointer selects.  `fc8c` was not one of the
+names, and a field-by-field comparison can only check the fields somebody
+thought of.  It now checks `fc8c` too, but the general lesson is the one
+finding 116b and this entry share: **compare the whole object, and exclude
+what has to be excluded, rather than listing what to include.**  The
+exclusion list is visible and can be argued with; an inclusion list is
+invisible and cannot.
+
+The cost of the whole-object form is the pointer fields, which differ by
+construction.  `t_v34hshak` handles that with an explicit skip list plus an
+assertion that every entry on it was actually reached — so a stale entry,
+which would be a silent hole, fails the test rather than widening it.
+
+### 171. Two format strings were transposed, and only the transcript saw it
+
+`v34info.c` was written from the disassembly with two pairs of strings the
+wrong way round, and both survived every comparison of program state:
+
+**`V34SetINFO0aBits`** has four "setting..." strings on two independent
+tests.  The two that mention V.PCM were swapped:
+
+```
+   .rodata.str1.4+0xf4c  'setINFO0aBits - setting info0d (Digital) for V.PCM'
+   .rodata.str1.4+0xf80  'setINFO0aBits - setting info0a for V.PCM'
+```
+
+and 0xf80 is the one on the session-variant-non-zero branch.  Getting it
+backwards is invisible to state: the two branches print, and then do
+different things for other reasons, so every byte of every object agreed.
+
+**`V34GiveINFO1aBits`** computes a three-bit field and a seven-bit
+bit-reversed one.  The three-bit field is what the object prints as
+`upstream baud index` and the seven-bit one is what it prints as `Uinfo` --
+which is the opposite of what the widths suggest, and the opposite of what
+this reconstruction assumed.  Again invisible: both values were computed
+correctly and stored in the right places, and only the labels were exchanged.
+
+**What caught both** was the debug-transcript comparison
+(`dsplib_debug_capture_*`), driven with `dsplibs_debug_level` raised on both
+sides.  Finding 126 introduced that facility for a *wrong* format string and
+finding 134 argued for restoring the call sites; this is the first time the
+comparison has caught something in new code, and it caught two things in one
+run.
+
+**The general point is about which names to trust.**  The corrected reading
+of `Uinfo` is less natural than the wrong one -- a seven-bit "baud index" and
+a three-bit "Uinfo" is what anyone would guess -- and the naming in the
+reconstruction now follows the object's own words against that intuition.
+The same correction made the four `setINFO0aBits` strings fall on two clean
+axes rather than one clean and one arbitrary, which is a second, independent
+sign that the corrected assignment is the right one: `+0x6120` selects INFO0a
+against INFO0d, exactly as `giveINFO0%cBits`'s letter already said.
+
+**And one mutation survived the first fixture.**  `V34SetINFO0aBits` reads
+the remote V.92 capability from a session byte on one branch and from the
+object's own `local_v92` on the other; the sweep drove both from one
+variable, so a reconstruction that read the wrong one passed.  Recorded
+because it is the same shape as 116b and 123: the fixture, not the code.  A
+test that sweeps two inputs together cannot tell them apart, and two inputs
+that are read by the same-looking line in near-duplicate branches are exactly
+the ones to separate.
+
+### 172. `V34SetupModulator` was carrying an invented string, and it named two parameters
+
+`tools/debugaudit.py --strings V34SetupModulator` lists three format strings
+in the blob:
+
+```
+   V34SetupModulator: baudrate %ld, carrier %ld, preemp %ld, V90=%ld. fullReset=%1d
+   V34SetupModulator: invalid baudrate %ld
+   V34SetupModulator: invalid carrier %ld
+```
+
+The reconstruction had none of them.  What it had instead was
+
+```c
+    dsplibs_debug_printf("V34SetupModulator: carrier?\n");
+```
+
+**which appears nowhere in the object.**  Finding 126 is about a format
+string that was wrong; this is one that was invented, and it is worse in the
+same way finding 134 describes: nothing can see it, because the level ships
+at zero and every other check in the tree is of program state.
+
+**Restoring the entry diagnostic names two parameters.**  It prints five
+values, and the fourth and fifth are the ones this reconstruction had as
+`short phase` and `int arg4` — with `arg4` cast to void as unused.  The
+object calls them `preemp` and `V90`.  So the fourth is the pre-emphasis
+index, which the code below it already treats as one, and the fifth is a
+V.90 flag that this function only prints.  Both are renamed.
+
+A parameter that is read by nothing and printed by the one call site that
+was dropped is exactly the parameter whose name is unrecoverable any other
+way — and `V90` is a third pointer at the absent V.90 configuration D31 is
+about.
+
+**And 600 baud is a real case, not the default.**  The object compares
+against 0x258 and sends only the non-matching path to "invalid baudrate";
+both then share one body.  A comment in the reconstruction said the opposite
+— "Note it is the DEFAULT, not a match" — and restoring the diagnostic is
+what showed it was.
+
+**Both times the fixture had to be widened.**  The first sweep passed the
+same variable as `preemp_index` and `v90`, so a printf with those two
+arguments transposed passed; that is the third time in this session that two
+inputs read by near-identical code were driven from one variable (see
+finding 171).  It is the standing fixture defect of this project: **two
+inputs that a wrong reconstruction could confuse must be swept
+independently, or the test cannot tell them apart.**
+
+### 173. `getbit` and `ApplyBulkDelay` stay deferred, and one byte past `getbit` is a jump
+
+Task #38 left two of V34hshak.c's functions unwritten.  Both are file-local,
+so `tools/symmap.py` — which renames `--extern-only` symbols — cannot give
+them a `ref_` alias, and the project's answer for a local is to drive it
+through a reconstructed caller (docs/coverage.md, eight of them).  Every
+call site of both is inside `v34handshak`:
+
+```
+   5ec47:  call 5eaf0 <getbit>          ; getbit's own, recursive
+   6484c:  call 5eaf0 <getbit>
+   684bb:  call 5eaf0 <getbit>
+   706a9:  call 5eaf0 <getbit>
+   6639f:  call 5dd10 <ApplyBulkDelay>
+   66af5:  call 5dd10 <ApplyBulkDelay>
+```
+
+so finding 117's conclusion holds for `getbit` as well: a #39–#45
+dependency, not a #38 one.  `getbit` is also **recursive**, which the first
+of those call sites is, and which is worth knowing before writing it.
+
+**One byte past `getbit`'s declared end there is a jump into `setfinalrate`:**
+
+```
+   5eca1:  eb 0d    jmp  5ecb0 <setfinalrate>
+```
+
+`getbit` is 0x5eaf0 + 0x1b1 = 0x5eca1, so this instruction is *outside* the
+symbol.  Either it is inter-function padding that happens to decode as a
+two-byte relative jump landing exactly on the next function, or it is a tail
+call the symbol size excludes.  Writing `getbit` will settle it; recorded now
+because an unrecorded observation is not noticed twice.
+
+### 174. What `v34handshak` is still waiting for, partitioned
+
+Task #38 moved `v34handshak` from twenty-three unmet dependencies to
+seventeen — `V34GiveINFO0dBits`, `V34GiveINFO1aBits`, `V34GiveProbeResults`,
+`V34SetINFO0aBits`, `V34SetINFO0dBits` and `setfinalrate` all landed — and
+`v34handshakinit` from four to three.  The seventeen are not one queue:
+
+```
+   python3 tools/callgraph.py --blocked | grep v34handshak
+```
+
+**Writable and testable now — five, 4,520 bytes:**
+
+```
+      30  VPcmV34ReportStartOfEchoAdapt
+      30  VPcmV34ReportMiddleOfEchoAdapt
+     350  VPcmV34SetMohMessageBits
+     722  VPcmV34InterpretMohMessageBits
+    3388  modulatevector
+```
+
+**Ready by call graph and NOT testable — two.**  `getbit` (433) and
+`ApplyBulkDelay` (467) are file-local, so `objcopy` cannot alias them and
+their only callers are inside `v34handshak` itself.  Finding 173, and
+finding 117 before it.  `callgraph --ready` lists them because it models
+callees, not testability; **`--ready` is not a work list on its own.**
+
+**Blocked — ten.**  Two of them are one function away:
+
+```
+    6173  probeselect        needs chkForceBaudRate  (389, ready now)
+    2629  v34handshakinit    needs VPcmV34SetMohMessageBits (ready now),
+                                   preinitdigital (533, ready now),
+                                   v34modeminit (1356)
+```
+
+so `chkForceBaudRate` alone unblocks 6.2 KB, and three ready functions plus
+`v34modeminit` unblock another 2.6 KB.  The remaining eight —
+`settxlevel`, `initdigital`, `V34SetINFO1aBits`, `V34GiveINFO1dBits`,
+`VPcmV34GetMaxUpstreamRateIndex`, `indicateJaTransmission`,
+`k56FlexPhase34`, `v90Phase34` — all bottom out in C++ that is not
+reconstructed (`VPcmFloModem`, `K56FlexFloModem`, `V90ConstellationDesigner`)
+or in `edprintf`.  **`v34handshak` cannot be finished before some of
+`VPcmV34Main.cpp`'s C++ half exists**, whatever order the seven slices of
+#39–#45 are taken in.
+
+**Recorded because the obvious reading of the numbers is wrong.**  A summary
+written from this session's own work called `v34handshakinit`'s three
+remaining blockers "the shortest path", which they are not: it is one of
+seventeen, five of the seventeen are writable immediately, and the single
+largest reduction available is `chkForceBaudRate` — 389 bytes that release
+6,173.  The partition, not the count, is the useful figure.
+
+### 175. `edprintf` is the object's biggest single blocker, and it is a cipher
+
+`tools/callgraph.py --blocked | grep -c edprintf` returns **145**.  Nothing
+else left in the object is depended on by so much: it is what almost the
+whole V.90/V.92 C++ half uses to say anything, and until it existed none of
+those 145 could be started.  It is 351 bytes of string handling.
+
+**It does not print its argument.**  It formats into a 256-byte scratch,
+then emits each byte of the result as TWO characters — high nibble then low
+— each with a rotating offset added, framed by `$!$ ` and `????`:
+
+```
+   edprintf("Hi")  ->  $!$ 8>8@????
+```
+
+The offsets come from `offsetarr`, ten ints at .data+0x94a0 holding
+`4 6 2 7 1 9 3 5 8 7`, and `iEncodeOffset` steps through them once per
+emitted character.  So the same byte encodes differently depending on where
+in the stream it falls, and the log is unreadable without the table.
+
+**This is a channel, not a log.**  The frame characters are what a decoder
+looks for, and the manufacturer's own tool is the intended reader.  It
+explains something that has been visible all along without being explained:
+the object contains two entirely separate diagnostic mechanisms — the plain
+`dsplibs_debug_printf` sites that findings 134 and 172 are about, which say
+things like "Near Echo Canceller report", and this one, which says nothing
+legible at all.  The V.34 and earlier code uses the first; the V.90/V.92
+code uses the second.
+
+**The counter is shared and survives across calls.**  `cEncodeChar`, the
+other function in the file, encodes one whole byte through the same
+`iEncodeOffset` — so the two interleave, and a `cEncodeChar` after N
+`edprintf` calls returns a different character than it would after N+1.  A
+successful `edprintf` zeroes the counter first and leaves it at
+`2 * strlen` mod 10; the too-long path leaves it exactly where it was.
+
+**All of that happens with diagnostics switched off.**  Only the final
+`dsplibs_debug_printf` is behind the level test.  That is what makes the
+function testable without reading a transcript, and `t_encode` uses it: it
+reads the counter back through `cEncodeChar` at level zero.  Two probes are
+needed, not one — `offsetarr` holds 7 at both index 3 and index 9, so a
+single character does not name a position, while all ten consecutive pairs
+do.  The test asserts that property rather than relying on it.
+
+**The channel is now readable two ways.**  `tools/eddecode.py` decodes a
+captured log -- the only option for one that came from the original binary --
+and `dsplib_encode_plain` makes a build print plaintext instead (D40).  The
+decoder's parse is exact rather than heuristic: '?' does occur inside
+payloads, but `????` cannot.  A '?' at payload index i needs
+`nibble == 15 - offsetarr[i % 10]`, an even i is a high nibble limited to
+-8..7 by the arithmetic shift, and the only `offsetarr` entries of 8 or more
+are at indices 5 and 8 -- of which one is even.  So a high-nibble '?' can
+only fall at i congruent to 8 mod 10 and the longest possible run is THREE.
+A payload may therefore end in up to three '?' that merge with the suffix,
+which is why the terminator is the LAST `????` and not the first.
+
+**`encode.c` is the object's last C translation unit.**  Its `STT_FILE`
+entry is followed by `offsetarr`, `iEncodeOffset`, `temp.0` and
+`cEncodedTemp.1`, its two functions sit at .text+0xb09b0 and +0xb09f0, and
+the only `STT_FILE` after it is `pow.S`.  So this is a complete TU
+reconstructed whole rather than a slice, which is rare this late in the
+object.
+
+### 176. `StateName` IS indexed — finding 144 was caught by the section-symbol trap
+
+Finding 144 says of `StateName`, the 87-entry table at .data+0x6c00: "Nothing
+in this object indexes it -- the debug call sites that printed it were
+compiled out or live elsewhere."  **That is wrong.**
+
+```
+   600d3:  mov  0x6c00(,%eax,4),%esi     ; v34handshakinit
+   600f8:  mov  0x6c00(,%ebp,4),%ecx
+   60140:  mov  0x6c10,%ecx              ; StateName[4], V34HS_RECEIVE
+```
+
+`v34handshakinit` indexes it throughout and `v34handshak` does so **533**
+times.  The table is not a survivor of deleted code; it is live, and it is
+live in the largest function in the object.
+
+**Why the search missed it, and why that is the third time.**  The reference
+is `R_386_32` against the **section symbol** `.data` with 0x6c00 as an inline
+addend, not against the symbol `StateName` — so a relocation search for the
+name returns nothing, and `readelf -r | grep StateName` returns only
+`V32StateName`, a function, matching as a substring.  `tools/dis.py`'s own
+header lists three earlier instances of exactly this trap: the toneiir
+pointers read as integers (finding 46), the `CP_*` tables read as
+unreferenced (retracted at D10), and `cadence_create`'s bank-3 fallback.
+This is the fourth, and the first to have been written into a finding.
+
+**`tools/relocscan.py` exists for this and was not used.**  Its docstring
+says so in as many words: "tabdump.py warns that a range contains
+relocations; relocscan.py resolves them to names, which is what you actually
+wanted."  The rule that follows is narrower and more useful than "use the
+tool": **"nothing references this" is a claim about addends, not about
+symbol names, and it cannot be made with `grep`.**
+
+**What is confirmed.**  Finding 144's other negative claim survives the same
+check: `v8ControlName` (.rodata+0x5380), `v8SequenceName` (+0x53ac) and
+`v8StatusName` (+0x53c0) really are referenced by nothing, in either form.
+`CadenceNames` and `statenames` are both indexed, which 144 and 145 already
+had.  So the general point 144 makes — a name table outlives the code that
+printed it — holds for the V.8 tables and not for this one.
+
+**What it buys for #39-#45.**  The thirteen diagnostics in `v34handshakinit`
+are state-transition traces, and they name THREE state machines, not one:
+
+```
+   V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)
+   V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)
+   V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)
+```
+
+so the handshake is a receive machine, a transmit machine and a "microstate"
+running together, each printing its own transition and the other two's
+current state.  The five entries loaded by fixed address are the initial
+states: `StateName[4]` `RECEIVE`, `[35]` `WAIT`, `[41]` `DET_SYNC`, `[43]`
+`RX_DPSK`, `[54]` `SILENCEINFO`.
+
+That materially changes how the split in fastpass.md should be made.  Eighty-
+seven states over three concurrent machines is not seven slices of one
+machine, and `cfgsplit` should be pointed at it before anyone assumes it is.
+
+### 177. `--ready` models calls, not references — `preinitdigital` is not writable
+
+`tools/callgraph.py --ready` lists `preinitdigital` (533 bytes), and it
+cannot be written: it installs five things by ADDRESS that this tree does
+not have.
+
+```
+   597bc:  mov  $0x0,%eax        <== R_386_32 scrambleGPC
+   597cb:  movl $0x0,0x28(%edx)  <== R_386_32 Convolve16
+   5993f:  mov  $0x0,%eax        <== R_386_32 scrambleGPA
+   5994a:  mov  $0x0,%eax        <== R_386_32 descrambleGPC
+   5995f:  mov  $0x0,%eax        <== R_386_32 descrambleGPA
+```
+
+None of the four scramblers is reconstructed — all four are themselves in
+`--ready` — and `Convolve16` is a 128-byte `.rodata` table, not a function at
+all.  A build would not link.
+
+**The tool is right and the reading of it was wrong.**  `callgraph.py` builds
+a CALL graph: a function is ready when everything it *calls* exists.  Taking
+a function's address is not a call, and neither is naming a table.  So
+`--ready` is a lower bound on what is blocked, and its answer for any
+function that installs handlers or selects tables by pointer is unreliable in
+one direction.
+
+This is the second such caveat on the same output.  Finding 173 records the
+first: `--ready` also lists file-local functions that no test can reach, so
+it is not filtered by testability either.  Together:
+
+> **`--ready` means "its callees exist".  It does not mean writable, and it
+> does not mean testable.**  Check the relocations and the symbol binding
+> before scheduling anything from it.
+
+Both caveats bite hardest on exactly the code that is left, because
+installing a handler by pointer is what an initialisation function does.
+
+**What `preinitdigital` actually needs first:** `scrambleGPC` (146),
+`scrambleGPA` (180), `descrambleGPC` (225), `descrambleGPA` (232) and the
+`Convolve16` table — 783 bytes of code and 128 of data.  They are a coherent
+unit and worth doing as one: the four are the V.34 scrambler and descrambler
+for the two ends of the call.
+
+**And `preinitdigital` names which end this is.**  It reads `f359c`, already
+known from `setTimingStateParameters` as selecting one of two timing
+parameter tables, and uses it to choose between the two polynomials:
+
+```
+   if (obj->f359c == 0x65) { scramble = GPC; descramble = GPA; }
+   else                    { scramble = GPA; descramble = GPC; }
+```
+
+The two ends of a V.34 call must scramble with opposite polynomials, so
+**`f359c == 0x65` is the originate/answer flag** — which also explains why
+the timing ramp has two variants indexed by the same field.  One field,
+two uses, and neither of them had a name until they were put side by side.
+
+### 178. The shell's bit source and sink are the scrambler and descrambler
+
+`struct v34_shell` has a pointer at +0xe48 that finding 137 read as a
+callback: `getFrame` pulls bits through it in the transmit context and
+`putFrame` pushes them into it in the receive one, so it was mapped as a
+union of a source and a sink.  What fills it is `preinitdigital`:
+
+```
+   5993f:  mov  $scrambleGPA,%eax        ; -> obj+0x2a28, the TX context
+   5994a:  mov  $descrambleGPC,%eax      ; -> obj+0x0e48, the RX context
+```
+
+so **the shell's bit source IS the scrambler and its sink IS the
+descrambler.**  Two modules reconstructed months apart, joined by a third.
+
+It also explains two shapes that looked arbitrary when `v34scram.c` was
+written.  `scrambleGPC` returns `nbits - 16`, which is exactly what a source
+returns -- the new bit position after supplying sixteen.  Both descramblers
+return 0 unconditionally, which is what a sink's return is worth.  Neither
+made sense as a scrambler's interface and both are obvious as a callback's.
+
+**The widths do not match and the mismatch is not resolved.**  `v34scram.c`'s
+functions take and return `short`; `v34_getbits_fn` as inferred from
+`getFrame` uses `int`.  `getFrame` is not reconstructed, so which is the
+original's declaration cannot be settled here; the union carries both
+spellings rather than one being chosen.
+
+**And `preinitdigital` confirms V34_SHELL_TX independently.**  Its two
+identical blocks are at obj+0xa00 and obj+0x25e0, a difference of 0x1be0 --
+which finding 137 derived from `getFrame`'s offsets alone.  Two functions
+arriving at the same spacing from opposite directions is better evidence
+than either had.
+
+**One number it settles.**  Finding 129 had to infer t3's length from the
+next known field and got 128 "which is the reassuring answer".  This clears
+t1, t2 and t3 with the same `cmp $0x7f` bound, so 128 is measured now rather
+than inferred -- and t3 is filled with -1 where the other two get zero, which
+is what a cost table wants and zero is not.
+
+### 179. `v34handshakinit`'s shape, before it is reconstructed
+
+Everything it needs now exists, so this is the survey that should precede
+writing it rather than an obstacle report.
+
+**It takes a MODE and dispatches five ways.**  The second argument indexes a
+jump table at .rodata+0x2d44, and two of the five entries are the same
+address:
+
+```
+   5fb61:  cmp  $0x4,%ebp
+   5fb6b:  ja   5fd10                  ; out of range -> the common tail
+   5fb71:  jmp  *0x2d44(,%ebp,4)
+
+   0  -> 0x5ff90     3  -> 0x5fd40     (the same body as 2)
+   1  -> 0x5fed0     4  -> 0x5fb82
+   2  -> 0x5fd40
+```
+
+So there are four bodies, not five, and an out-of-range mode is not an error
+-- it runs the tail, which clears +0xaa3c and puts 0x10 in +0x2aa0.
+
+**THE THREE STATE MACHINES ARE THREE WORDS**, at +0x3592, +0x3594 and
++0x3596, and every one of the thirteen diagnostics is the same idiom:
+
+```c
+    if (state != NEW) {
+            if (DSPLIB_DEBUG_ON())
+                    trace(...);
+            state = NEW;
+    }
+```
+
+-- compare, print the transition, assign.  That is why finding 176 found the
+traces naming `rxstate`, `txstate` and `microstate` with each printing the
+other two: they are three words set by the same three-line pattern, and each
+trace shows the one changing plus the two that are not.
+
+**What each mode starts the machines at**, in `v34hshak.h`'s names:
+
+```
+   mode      +0x3596            +0x3594          +0x3592
+    0    SILENCEINFO (54)    RX_DPSK (43)          -
+    1    SILENCERETRAIN(74)      ...               -
+   2,3   SSEG (18)           RECEIVE (4)           -
+    4    SILENCERETRAIN(74)  WAIT (35)      MOH_TONE (79)
+```
+
+so mode 4 is the Modem-on-Hold entry, modes 2 and 3 share the data path, and
+mode 0 is the one that also calls `rxtiminginit`.  Which of the three words
+is `rxstate` and which is `txstate` is NOT settled here -- it needs the
+format string at each site read against its arguments, which is the first
+job of writing it.
+
+**What it calls:** `v34modeminit` (three of the four bodies),
+`rxtiminginit`, `VPcmV34SetMohMessageBits`, `detectorinit` with `c1200_` or
+`c2400_` on `f359c`, and `preinitdigital` transitively.  All of those now
+exist, which is what makes it writable at all.
+
+**What writing it needs that does not exist yet:** `StateName` itself, as 87
+string pointers.  The traces index it -- finding 176 -- so the table has to
+be emitted before a single diagnostic can be reproduced, and it is the
+table `include/dsplib/v34hshak.h` already carries the names of.
+
+**One thing to check first.**  The entry code reads +0x244 and +0x234 as a
+pair, subtracts them and compares against 0x176ff, and on overflow resets
+them to 0 and 0xfff15a00.  0x176ff is 95,999 and 0x69780 is 431,488, which
+is added to +0x234 to make +0x238.  Those look like sample counts at some
+rate -- 95,999 is 12 seconds at 8 kHz and 431,488 is not a round number of
+anything obvious -- so the pair is a timer and the constants are worth
+pinning before the states are.
+
+### 180. The three machines are settled, and `StateName` had no other check
+
+`v34handshakinit` is written, and the two things finding 179 left open are
+closed.  Both were closed by reading the object rather than by reasoning
+about it, which is the point of the entry.
+
+**WHICH WORD IS WHICH.**  +0x3592 is `microstate`, +0x3594 is `rxstate`,
++0x3596 is `txstate`.  Finding 179 explicitly refused to guess, and the
+method is finding 171's: at each of the thirteen sites one `%s` slot holds a
+FIXED `StateName[k]`, and that k is always the value the site then assigns —
+so the fixed slot names the word that is changing, and the two variable
+slots are then named by the format string.
+
+```
+   0x60118  "rxstate %s=>%s"     new = StateName[4]   +0x3594 <- 4  at 0x5fd80
+   0x60492  "txstate %s=>%s"     new = StateName[18]  +0x3596 <- 18 at 0x5fd5a
+   0x6017b  "microstate %s=>%s"  new = StateName[41]  +0x3592 <- 41 at 0x5fda6
+```
+
+and all three agree in the other direction too: the rxstate trace's `tx %s`
+reads +0x3596, the txstate trace's `rx %s` reads +0x3594, and both `mst %s`
+read +0x3592.
+
+**The second, independent sign** is the one finding 171 used to settle
+`Uinfo`, and it is worth having because it does not depend on the
+disassembly at all: +0x3596 only ever receives SSEG, SILENCEINFO and
+SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
+Transposed, the *receive* machine would be the one entering SSEG, and the
+table's own `TX_`/`RX_` prefixes say that is backwards.
+
+**FINDING 155'S OFFSETS ARE WRONG BY FOUR.**  It quotes "+0x234 and +0x244",
+which are the register-relative operands; the function does `lea 0x4(%ebx),
+%edx` first, so the object offsets are **+0x238, +0x23c, +0x244 and +0x248**.
+The same note applies to 155's mode table, which shows `-` for +0x3592 in
+mode 0: 0x5ffec sets it to DET_SYNC, and mode 1 is the only body that leaves
+the microstate alone.
+
+`include/dsplib/v34fsk.h` already warns about this exact base, in as many
+words: "`lea 0x4(obj); mov 0x248(that)` ... is an addressing artifact in all
+three and is not evidence of a sub-object at +4."  The warning was written
+down and finding 179 quoted the raw operands anyway, which is what makes the
+rule worth stating rather than assuming: **an offset read off an instruction
+is not an object offset until the base is checked.**
+
+**The timer group, corroborated.**  A positive +0x248 is subtracted from
++0x238 and the difference kept if it is at most 95,999 **unsigned**;
+otherwise the pair resets to 0 and -960,000.  `VPcmV34SetV90RateReneg`
+(0xa1f2, and its `lea 0x4(%esi),%edi` at 0xa159) writes those same three
+fields with those same two constants, which is what makes the group a group
+and the reset arm a reset.  95,999 is one short of 12 s at 8 kHz; 431,488,
+the stride added into +0x23c, is round at no rate this modem uses.  D43.
+
+**The comparison is unsigned and that is testable.**  A base below the delta
+makes the difference negative, which is far above the limit as an unsigned
+and takes the reset arm.  A signed reconstruction differs only there, so the
+fixture drives base and delta from separate variables — the two-inputs-one-
+variable defect of 116b, 123 and 147 — and includes four such cases.
+
+### `StateName` is a LOCAL symbol, so the transcript is its only check
+
+Finding 176 established that the table is live.  What it did not say, and
+what matters as much, is that **it cannot be compared directly**:
+
+```
+   304: 00006c00   348 OBJECT  LOCAL  DEFAULT  143 StateName
+```
+
+`objcopy --redefine-syms` renames a local symbol but cannot make it
+linkable, so there is no `ref_StateName` for `t_v34hshak.c`'s fifteen-table
+comparison to copy.  That is finding 173's trap — `--ready` models calls,
+not bindings — arriving for a *data* symbol rather than a function.
+
+So the only thing that reaches the eighty-seven strings is what the thirteen
+traces print, and the sweep that prints them is not a supplementary check.
+**It is the entire check.**  Two sweeps are needed and the second is the
+interesting one:
+
+- driving the three state words to the SAME value reaches all 87 names, but
+  makes the three machines indistinguishable — every `%s` carries the same
+  string, so feeding the `mst` slot from `rxstate` produces a byte-identical
+  transcript.  That is exactly the defect this finding's first half was
+  written to avoid, re-entering through the test.
+- driving them a third of the table apart — i, i+29, i+58 mod 87 — separates
+  the slots, and still reaches every name in every slot.
+
+Both were mutation-checked, and so was the rest of the function: twenty-eight
+mutations were applied and twenty-six were caught outright.  Four of them go
+at the shared helper rather than at the states, because `hs_setstate` derives
+its format string from the offset arithmetically and finding 130 is the
+standing warning about what a shared helper can get wrong: permuting the
+`fmt[]` entries WITHOUT touching the offsets is what actually pins the
+string-to-word binding, and permuting each branch's two context arguments in
+turn is what pins the slot order.  All four are caught; without the
+distinct-triple sweep none of them could be.  The two
+survivors are the useful part of the exercise.
+
+- `(x & ~0x1d8) | 0x18` narrowed to `(x & ~0x1c8) | 0x18` survives because
+  it is an EQUIVALENT MUTANT: the only bit the two masks differ in is inside
+  the OR that follows.  Widening to a bit outside the OR is caught.
+- the prologue's `txflags &= 0x7fff` narrowed to `0x3fff` survived because
+  every body either overwrites +0x25c2 outright or masks bit 14 off again,
+  so **only an out-of-range mode can observe the prologue at all** and the
+  sweep had none with the high bits set.  A real gap, in the test rather
+  than the code; mode 7 is in that sweep now and the mutation is caught.
+
+### And it found four invented strings in already-committed code
+
+`V34EchoCleanUp` was printing `"V34EchoCleanUp\n"`.  The object's string at
+.rodata.str1.4+0xf848, referenced from that one site and nowhere else, is
+
+```
+   V34FLO: Echo running in Original Integer...\r\n
+```
+
+— the author using the clean-up to announce which of two echo-canceller
+builds is live.  This is finding 172 exactly: a plausible string invented
+from the function's own name, which could not be caught because nothing had
+ever run that call tree with `dsplibs_debug_level` raised.  It surfaced only
+because modes 0, 1 and 4 reach it through `v34modeminit` -> `txinit`, and
+this is the first test to compare `v34modeminit`'s transcript at all.
+
+**That is a class, not an incident, so the class was swept.**  Every string
+literal this tree carries — 241 of them — was checked for presence anywhere
+in the object's `.rodata` or `.data`.  A string that is nowhere in the blob
+was written rather than read.  Three more turned up, all in
+`V34EchoReportCoeff`, and the object's own are
+
+```
+   .rodata.str1.4+0xf878   ?======= Nothing to report =========
+   .rodata.str1.1+0x2c84   ?%d %d %d %d %d %d
+   .rodata.str1.4+0xf8a0   ?======= Coefficients[1..%ld]=========
+```
+
+— leading `?` on all three, a literal 0x3f.  **And the header takes an
+argument the paraphrase did not**: `%edx` at 0x72298 is still `n`, the tap
+count rounded down to a multiple of six.  So an invented string had also
+hidden a missing argument, which is the part that would have mattered.
+
+**EVERY literal, and the first attempt got that wrong.**  The obvious scan is
+of `dsplibs_debug_printf("...")` call sites, and it finds 77.  But a format
+reached through a VARIABLE has no literal at the call: `agc_gain_sample`
+takes `fmt` as a parameter, and `hs_setstate` — written in this very session
+— indexes a `fmt[]` table.  Both are invisible to a call-site scan, and the
+three `V34HSHAKE:` strings this finding's first half is about were among the
+invisible ones.  So the check scans every literal in `src/` instead;
+comments are stripped and preprocessor lines skipped, which removes the only
+legitimate non-blob literals in the tree (every one is an `#include` path).
+That takes it from 77 to 241 and picks up `StateName`'s 87 entries as well,
+which no call-site scan could ever have reached.
+
+The general shape is worth keeping: **a checker written around the construct
+you happen to have is blind to the construct you are about to write.**  The
+first version was authored in the same session as the first format table in
+the tree and could not see it.
+
+Two limits, both real and both in the tool's own docstring. It is a
+NECESSARY condition only — a string that is in `.rodata` but belongs to a
+different function still passes — so it retires "invented from thin air" and
+not "attached to the wrong site". And it says nothing about the ARGUMENTS,
+which is the half that actually bit in `V34EchoReportCoeff`; only a
+transcript comparison covers those.
+
+It runs as part of `make test`, beside the licence firewall and for the same
+reason: both are policies the differential tier is structurally blind to.
+It self-tests in both directions — introduce a string in a `fmt[]` table or
+in `StateName` and the build stops; the committed tree reports 241 checked,
+0 invented.
+
+**Why the strings were reachable but untested, and the stale comment that
+kept them so.**  `t_v34ec.c` said of `V34EchoReportCoeff` that raising the
+level "would still compare nothing, because neither logger records
+anything".  That was true when it was written and stopped being true when
+finding 126 built the capture facility — which the same file already uses,
+forty lines earlier, for `V34SetupModulator`.  A comment that documents a
+limitation someone else has since removed is worse than no comment: it tells
+the next reader not to try.  Both functions now have their transcripts
+compared, over seven tap counts and three coefficient patterns, and all five
+mutations of the four strings and the one argument are caught.
+
+That fixture needed its own storage: `V34EchoReportCoeff` dumps a hardcoded
+144 coefficients whatever `taps` says (D28), which out of the shared 32-entry
+array runs 48 shorts past the end of the struct into whatever the linker put
+next — not the same on the two sides.  160-entry arrays keep the over-read
+inside memory both sides own and seed identically.
+
+**Where the debt sits.**  Finding 134 argued for restoring dropped call
+sites; 126 built the capture facility; 147 was the first time it caught
+something in new code.  This is the first time it has caught something in
+code that had already passed a full differential test and been committed.
+So the exposure is not "new modules might have wrong strings" — it is
+**every module whose transcript has never been compared**, and `--invented`
+narrows that but does not close it.
+
+**One fixture defect, found by mutation and fixed.**  `run_setupreceiver`
+dereferenced the detector's coefficient pointer at +0x3564 without seeding
+it, so a reconstruction taking a path that never reaches `detectorinit`
+CRASHED the test instead of failing it.  Seeded with the per-side dummies
+like every other such pointer.  Recorded because a test that segfaults on a
+wrong answer reports nothing, which is worse than a test that passes on one.
+
+### What `v34handshakinit` unblocks
+
+`callgraph.py --ready` now lists three functions whose only non-diagnostic
+callee was this one, and all three pass the binding check finding 173 says
+to make first (`readelf` gives `FUNC GLOBAL` for each, so `objcopy` can
+alias them):
+
+```
+     258 B  T   VPcmV34InitiateHangUp
+     259 B  T   VPcmV34InitiateRateRenegotiation
+     274 B  T   VPcmV34SetV90RateReneg
+```
+
+`VPcmV34SetV90RateReneg` is the interesting one of the three: it writes the
+same timer group with the same two constants, so reconstructing it is also
+the second reading of D43's stride.  The other two are the callers that name
+modes 2 and 1.

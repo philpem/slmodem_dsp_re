@@ -63,6 +63,26 @@
  * identity either, so the table is a relabelling of the group as well as
  * the operation.  Which relabelling is a question for task #47.
  */
+/*
+ * Convolve16 -- 64 shorts at .rodata+0x1ec0, installed into both shell
+ * contexts by `preinitdigital` and read by nothing reconstructed yet.
+ *
+ * Four values only -- 0, 2, 12 and 14 -- in a pattern of period 16 that
+ * repeats four times over the 64 entries, so there are really sixteen
+ * entries and the table is stated four times.  `Convolve32` and `Convolve64`
+ * sit beside it and are installed by nothing.
+ */
+const short Convolve16[64] = {
+	 0,  0,  2,  2,  0,  0,  2,  2,
+	14, 12, 12, 14, 14, 12, 12, 14,
+	 2,  2,  0,  0,  2,  2,  0,  0,
+	12, 14, 14, 12, 12, 14, 14, 12,
+	 0,  0,  2,  2,  0,  0,  2,  2,
+	14, 12, 12, 14, 14, 12, 12, 14,
+	 2,  2,  0,  0,  2,  2,  0,  0,
+	12, 14, 14, 12, 12, 14, 14, 12
+};
+
 const short kLookup[16] = {
 	    0,     1,     3,     2,     1,     0,     2,     3,
 	    2,     3,     1,     0,     3,     2,     0,     1,

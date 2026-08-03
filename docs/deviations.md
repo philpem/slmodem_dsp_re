@@ -1529,3 +1529,322 @@ test had not caught it because it *skipped* the byte and asserted the
 Hilbert-address theory instead of comparing against the blob -- see finding
 122.  This is the second retracted deviation after D28, and both were filed
 on a reading rather than a measurement.
+
+---
+
+## D35 ⚠ `setupreceiver` has a 2743-baud arm nothing can select
+
+**Where:** `src/pump/v34/v34hshak.c`, `setupreceiver`'s symbol-rate switch.
+
+**What the original does:** the switch has six arms — 2400, 2743, 2800, 3000,
+3200 and 3429 — reading the rate from +0xaa96 and installing four timing
+constants for it.  2743 baud is V.34's optional sixth symbol rate, and its
+constants (0x36b0 for the increment, 0x1f40 for the phase) are as specific as
+any of the others, so the arm is real code rather than a compiler artefact.
+
+**Nothing writes 2743 into +0xaa96.**  `setfinalrate` is the function that
+sets that field, and its own switch has five arms: 2400, 2800, 3000, 3200,
+3429.  There is no rate code for 2743 on either side of it.
+
+**What we do:** reproduce the arm, including its constants.
+
+**Why it is not filed as a defect:** the field is global state, and
+`v34handshak` and `probeselect` both write in that region; whether either can
+put 2743 there has not been measured, so "unreachable" would be a claim this
+project has not earned.  What is measured is that `setfinalrate` cannot.
+`unmeasured` — task #47, or whenever `probeselect` lands.
+
+**How it was found:** by writing the two functions in the same session and
+noticing the switches did not have the same arms.
+
+---
+
+## D36 🐛 `preempindex`'s "index is 0" branch cannot be taken
+
+**Where:** `src/pump/v34/v34hshak.c`, `preempindex`.
+
+**What the original does:** the search counter starts at 5 and is incremented
+at the TOP of the loop, before the multiply and before the limit test:
+
+```
+   60c30:  mov  $0x5,%ebx
+   60c40:  lea  0x1(%ebx),%eax       ; i++
+   60c43:  movswl %ax,%ebx
+   60c46:  mov  %edx,%eax
+   60c48:  imul %esi,%eax            ; x *= ratio
+   60c4b:  sar  $0xe,%eax
+   60c4e:  movswl %ax,%edx
+   60c51:  cmp  %di,%dx
+   60c54:  jg   60ccc                ; x > limit -> exit
+   60c56:  cmp  $0x9,%bx
+   60c5a:  jle  60c40
+   ...
+   60ccc:  cmp  $0x5,%bx             ; <- i is 6 or more, always
+   60cd0:  je   60cf4                ;    so never taken
+```
+
+so `%bx` is at least 6 wherever the `cmp $0x5` can be reached.  The branch it
+guards prints `V34PREEMPHASIS, - index is 0, baudrate= %d` and returns 0, and
+neither can happen.
+
+**What we do:** reproduce the branch, unreachable and all, so the control
+flow matches and the third debug string keeps its call site.
+
+**Consequence:** none — `preempindex` cannot return 0.  Its range is 6..10.
+
+**Reading:** an earlier version of the loop very likely tested before
+incrementing, which would have made `i == 5` mean "the first multiply already
+passed the limit".  Moving the increment to the top changed the meaning of
+every exit and the guard was not updated with it.
+
+**How it was found:** by writing the loop out and asking what value `i` could
+hold at each exit, which is the sort of question the three debug strings —
+"index is 0", "index is %d", "index is 10" — make worth asking.
+
+---
+
+## D37 ⚠ `preempindex` reads two uninitialised registers for an unknown rate
+
+**Where:** `src/pump/v34/v34hshak.c`, `preempindex`'s symbol-rate switch.
+
+**What the original does:** five arms — 2400, 2800, 3000, 3200, 3429 — each
+loading a starting measurement into `%edx` and a Q14 ratio into `%esi`.
+**There is no default arm.**  For any other baud rate control falls straight
+through to `mov $0x5,%ebx` and the loop runs on whatever the caller left in
+those two registers: `%esi` is callee-saved and still holds the caller's
+value, `%edx` is caller-saved and holds whatever was last in it.
+
+**What we do:** zero both, which makes the loop run to its ceiling and return
+10.  This is a **deliberate behavioural difference** and the only available
+one: there is no value that reproduces "whatever the caller had", and leaving
+a C variable uninitialised would be undefined behaviour rather than an
+imitation of the original's.
+
+**Where the boundary is:** exactly the five listed rates are identical; any
+other argument differs.  The differential test sweeps the five and does not
+sweep anything else, and says why.
+
+**Reachability: unmeasured.**  Nothing in the object calls `preempindex` —
+no relocation and no direct call — so there is no call site to check the
+argument against.  Task #47.
+
+**How it was found:** by reading the switch and noticing the fall-through
+target was the loop rather than a default arm.
+
+---
+
+## D38 ⚠ `V34GiveProbeResults` moves its doubles as bytes, not through the x87
+
+**Where:** `src/pump/v34/v34info.c`, `V34GiveProbeResults`.
+
+**What the original does:** copies each of the 25 doubles with `fldl` /
+`fstpl` — an x87 load and store.
+
+```
+   8c90:  fldl  (%edx)
+   8c95:  fstpl 0xa258(%ecx,%eax,8)
+```
+
+**What we do:** copy the eight bytes.  The source stride is 44, which is not
+a multiple of 8, so every other source double is only 4-byte aligned;
+`fldl` does not mind that and a `double *` in C is not allowed to be that
+lax, so the copy is written a byte at a time.
+
+**Where the two differ:** `fld` QUIETS A SIGNALLING NaN — it raises the
+invalid-operation exception and stores the quiet form — and a byte copy
+carries the payload through unchanged.  For every finite value, every
+infinity and every quiet NaN the two are identical, which is the whole
+domain a probe measurement can occupy.
+
+**Reachability: unmeasured.**  The source record is built by
+`VPcmV34Main.cpp`'s C++ half, which is not reconstructed, so whether a
+signalling NaN can reach it has not been established.  The differential test
+drives finite values only.  Task #47.
+
+---
+
+## D39 🐛 `edprintf`'s length guard is one byte short of its buffer
+
+**Where:** `src/core/encode.c`, `edprintf`.
+
+**What the original does:** encodes into `cEncodedTemp`, which is 0x10e =
+270 bytes, and guards the length with
+
+```
+   b0a27:  lea  0x8(%eax,%eax,1),%eax    ; 2 * strlen(temp) + 8
+   b0a2b:  cmp  $0x10e,%eax
+   b0a30:  jbe  b0a5b                    ; <= 270 is accepted
+```
+
+The 8 is the four-byte prefix `$!$ ` plus the four-byte suffix `????`, and
+2 per source character is the encoding.  **It does not count the
+terminator.**  At the boundary — `strlen(temp) == 131`, giving exactly 270 —
+the prefix and 262 encoded characters end at index 266, `strcat` appends four
+more to 269, and the NUL it writes goes to index 270.  One past the end.
+
+**What is actually there.**  `cEncodedTemp.1` is at .bss+0xa00 and the next
+object, `iEncodeOffset`, is at .bss+0xb10 — so bytes 0xb0e and 0xb0f are
+alignment padding and the stray NUL lands in them.  The original overruns and
+gets away with it.
+
+**What we do:** size the array 271.  The guard is reproduced exactly, so
+every accepted length is accepted and every refused one refused, and every
+character of every string is at the same index; the only difference is that
+the terminator has somewhere legal to go.  Writing one byte past a C array
+is undefined however harmless it is in the object's own layout, and the
+alternative — shrinking the guard by one — would change which messages get
+encoded and which are replaced by "too long print string".
+
+**Reachability: measured.**  It needs a formatted message of exactly 131
+characters, which `vsnprintf`'s 0x100 cap admits.  `t_encode` drives
+`strlen` from 128 to 135 and both sides agree throughout, so the boundary is
+tested rather than avoided.  Whether any real caller emits exactly 131
+characters is not measured; 145 functions call `edprintf` and none of them
+is reconstructed.
+
+---
+
+## D40 ⚠ `dsplib_encode_plain`: a switch the original does not have
+
+**Where:** `src/core/encode.c`, `edprintf`.
+
+**What it is:** an added global, zero by default, that makes `edprintf`
+print the readable message instead of the encoded one.  Finding 175 is why
+it exists: 145 functions report through this channel and none of what they
+say is legible, which makes the least-understood half of the object also the
+half whose diagnostics are useless.
+
+**This is an ADDED FEATURE, not a fix.**  The original is not wrong; it is
+doing what it was built to do.  So it is not behind `DSPLIB_REPRODUCE_BUGS`,
+which is for defects — and it does not need to be, for two reasons.
+
+**One: with diagnostics off it does not execute.**  The switch is read only
+inside the `dsplibs_debug_level > 1` gate, which is the last thing `edprintf`
+does.  `dsplibs_debug_level` ships at zero, so on a working modem the branch
+is never reached and the instruction stream is the object's.
+
+**Two: with the switch ON, only the printed string changes.**  The encoding
+still runs in full — `iEncodeOffset` is reset and advanced identically and
+`cEncodedTemp` is filled identically — so nothing downstream can tell.  In
+particular `cEncodeChar`, which shares that counter, returns the same
+characters either way.  `t_encode` asserts exactly this: each message is run
+with the switch off (compared against the blob) and again with it on, and the
+key position is read back after both and must agree with the blob's.  A
+version that short-circuited the encoder when plain mode was on — the obvious
+way to write it — fails that check.
+
+**One deliberate difference in plain mode.**  A message too long for the
+encoded buffer is replaced by "too long print string" in the channel; plain
+mode prints the message instead, because `temp` holds it and it is at most
+255 characters.  So plain mode shows messages the encoded channel drops.
+
+**The alternative that changes nothing at all** is `tools/eddecode.py`, which
+decodes captured logs after the fact and is the only option for logs that
+came from the original binary.
+
+---
+
+## D41 ✅ The descramblers' refill shift is masked to five bits
+
+**Where:** `src/pump/v34/v34scram.c`, `descram_tail`.
+
+**What the original does:** after flushing a word it puts the caller's bits
+back at the top of the register with
+
+```
+   57e89:  sub  $0x10,%eax          ; count + nbits - 16
+   57e8f:  sub  %edi,%ecx           ; ... - nbits, i.e. the ORIGINAL count - 16
+   57e95:  shl  %cl,%ebp
+```
+
+and `shl %cl` masks the count to five bits on x86.  The subtraction is
+negative whenever a caller passes more than sixteen bits against a register
+holding fewer than sixteen — which is reachable for `nbits > 16`, since the
+flush only needs `count + nbits > 31`.
+
+**What we do:** mask with `& 31` explicitly.  On the 32-bit target the two
+are the same instruction and the same result; in C, shifting by a negative
+or over-wide count is undefined, and this reconstruction is meant to be
+64-bit-clean, where a compiler is entitled to do something else with it.
+
+**Bit-exact over the whole domain.**  Not a fix and not a behavioural
+difference: it spells out what the hardware was already doing.  It is here
+because a reader who removed the mask would not be able to tell from the
+disassembly that anything had changed.
+
+**Reachability of the negative case: unmeasured.**  Every caller is inside
+`v34handshak`, which is not reconstructed.  The differential test drives
+`nbits` from 1 to 16, where the shift cannot go negative.
+
+---
+
+## D42 ⚠ `StateName` is indexed with nothing bounding the index
+
+**Where:** `src/pump/v34/v34hshak.c`, `hs_setstate`, and every one of
+`v34handshak`'s 533 uses of the same table.
+
+**What the original does:** loads `StateName[state]` with `mov
+0x6c00(,%eax,4),%esi` after a plain `movswl` of the state word. There is no
+comparison against 87 anywhere near any of the sites, in either function, and
+the index is sign-extended from a `short` — so a negative state word indexes
+*backwards* out of `.data`.
+
+**What we do:** reproduce it. The alternative is a bounds check the object
+does not have, which would change the control flow the debug level gates.
+
+**Why it is not filed as harmful:** every store to the three state words in
+this function is a literal in 0..86, and the sites are all gated on
+`dsplibs_debug_level > 1`, which ships at zero. Reaching a bad index needs
+`v34handshak` to have written one first, and that is 61 KB not yet
+reconstructed. Compare finding 129, which is the same shape in
+`demapFrame`. `unmeasured` — task #47, or #39–#45 when the writer lands.
+
+**What it costs the test.** The transcript sweep in `t_v34hshak.c` stops at
+86 for this reason: an out-of-range state word would have both sides read
+past their own copy of the table, into different memory, which compares
+nothing. So the sweep proves the 87 entries and says nothing about the
+89th — which is the honest limit and not an oversight.
+
+**How it was found:** by writing the sweep and having to choose its bound.
+
+---
+
+## D43 ⚠ `v34handshakinit`'s timer stride, 431,488, is not a round interval
+
+**Where:** `src/pump/v34/v34hshak.c`, `v34handshakinit`'s opening block.
+
+**What the original does:** four `int` fields reached through `obj + 4` —
++0x238, +0x23c, +0x244 and +0x248 of the object. A positive +0x248 is
+subtracted from +0x238 and the difference kept if it is at most **95,999**
+unsigned, otherwise the pair is reset to 0 and **-960,000**. +0x244 then
+takes a copy of the base and +0x23c takes the base plus **431,488**.
+`VPcmV34SetV90RateReneg` writes the same three fields with the same two
+constants through the same `obj + 4` base, which is what says they are one
+group.
+
+**Which sample rate to test them against is not a guess.**
+`docs/rate_assumptions.md` R-1 records that V.34/V.90/V.92 run at the HOST
+rate directly, and the host rate is 9600; the 8 kHz retarget is the other
+rate this tree will care about. Bell 103's 7200 (R-8) is that pump's FSK
+core and has nothing to do with V.34. So the list is 9600 and 8000, and the
+claim below is about those two and not about "any rate".
+
+**Two of the three constants are round at both, and one is round at
+neither.** 95,999 is one short of 96,000 — exactly 10 s at 9600, or 12 s at
+8000 — and -960,000 is ten times that, so 100 s and 120 s. At 9600, the rate
+V.34 actually runs at, the pair is a clean 10 s and 100 s. 431,488 is
+44.947 s at 9600 and 53.936 s at 8000, and factors as 2^7 × 3371 with 3371
+prime, so it is not a round number of samples at either, nor a power-of-two
+fraction of one.
+
+**What we do:** copy all three. No reading of the third is offered.
+
+**Why it is recorded rather than solved:** the obvious move is to hunt for a
+sample rate that makes 431,488 come out round and then assert that rate.
+That is backwards — the rate is already fixed by R-1, and the two constants
+that ARE round agree with it. Recorded so the next reader does not spend the
+same hour on it, and so that a later finding can retract this entry the way
+D28 was retracted. `unmeasured` — task #47.
+
+**How it was found:** by pinning the constants before the states, as the
+brief for `v34handshakinit` asked.

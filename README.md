@@ -111,6 +111,7 @@ third_party/spandsp/   test peer, LGPL, never linked into src/
 | `tools/symmap.py` | emit the `objcopy --redefine-syms` list for the harness |
 | `tools/tabdump.py` | extract a named coefficient table from the blob as C |
 | `tools/relocscan.py` | resolve relocations to the objects they point at |
+| `tools/eddecode.py` | decode the `$!$ `/`????` diagnostic channel in a log |
 
 ```sh
 python3 tools/tumap.py    ../slmodemd/dsplibs.o --md docs/modules.md

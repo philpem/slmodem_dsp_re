@@ -364,11 +364,15 @@ extern const short hsine2400[16];
  * Configure the modulator for one (baud, carrier) pair.
  *
  * `baud` selects the shaping filter and the three counts; `carrier` selects
- * the sine table AND the pre-emphasis variant; `phase` picks a row of the
- * p<baud> table when non-zero; `reset` non-zero clears the working state.
+ * the sine table AND the pre-emphasis variant; `preemp_index` picks a row of
+ * the p<baud> table when non-zero; `reset` non-zero clears the working state.
+ *
+ * `v90` is read by nothing -- only printed.  Both it and `preemp_index` are
+ * named by the entry diagnostic, which prints all five: "baudrate %ld,
+ * carrier %ld, preemp %ld, V90=%ld. fullReset=%1d".  See finding 172.
  */
 void V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
-		       short phase, int arg4, int reset);
+		       short preemp_index, int v90, int reset);
 
 /*
  * Modulate one complex symbol into `out`, returning how many samples it

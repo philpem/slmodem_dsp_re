@@ -4,11 +4,15 @@
  * `v34handshak` is 61,541 bytes holding one state machine, and this is its
  * eighty-seven states in the AUTHOR'S names, in index order.
  *
- * They come from `StateName`, a table of string pointers at .data+0x6c00.
- * Nothing in this object indexes it -- the debug call sites that printed it
- * were compiled out or live elsewhere -- but the table survived, and a name
- * table survives a printf's removal because it is separately addressable
- * data.  See findings 134 and 144.
+ * They come from `StateName`, a table of string pointers at .data+0x6c00,
+ * and it is LIVE: `v34handshakinit` and `v34handshak` index it 533 times
+ * between them, to print state transitions.  An earlier note here said
+ * nothing indexed it, which was a relocation search missing an addend
+ * against a section symbol -- see findings 144 and 152.
+ *
+ * The transitions name THREE concurrent machines, not one: a receive state,
+ * a transmit state and a "microstate", each trace printing its own change
+ * and the other two's current value.
  *
  * Nothing here is reconstructed yet; tasks #39-#45 are.  The point of
  * writing them down first is that planning the reconstruction against
@@ -116,6 +120,117 @@ extern "C" {
 #define V34HS_TXMD                   86
 
 #define V34HS_STATE_COUNT		87
+
+/*
+ * THE STATE NAMES ARE NOT AN ENUM OVER ONE MACHINE.  `v34handshakinit`'s
+ * thirteen diagnostics name THREE concurrent machines, and the three words
+ * they live in are settled -- read off each format string against its
+ * arguments, not guessed:
+ *
+ *      obj + 0x3592    microstate
+ *      obj + 0x3594    rxstate
+ *      obj + 0x3596    txstate
+ *
+ * See src/pump/v34/v34hshak.c for the derivation.  It matters for #39-#45:
+ * eighty-seven states over three machines is not seven slices of one, and
+ * `tools/cfgsplit.py` should be pointed at `v34handshak` before that split is
+ * planned (docs/fastpass.md).
+ */
+
+/*
+ * Bring the handshake up.  `mode` selects one of five entries, and the names
+ * below are the CALL SITES' -- every caller passes a literal, so the modes
+ * are sourced rather than inferred:
+ *
+ *      0   VPcmV34Create                        cold start
+ *      1   VPcmV34InitiateRetrain, v34handshak  retrain
+ *      2   VPcmV34InitiateRateRenegotiation,    rate renegotiation
+ *          VPcmV34InitiateHangUp                and hang-up
+ *      3   -- no caller anywhere in the object; shares 2's jump-table body
+ *      4   VPcmV34InitMOH                       Modem-on-Hold
+ *
+ * Anything outside 0..4 is NOT an error: the range check jumps to the common
+ * tail, which every mode also falls into.  The tail clears +0xaa3c and puts
+ * 0x10 in +0x2aa0.
+ */
+void v34handshakinit(void *obj, int mode);
+
+/*
+ * ---------------------------------------------------------------------------
+ * The handshake's support functions -- everything in V34hshak.c that is not
+ * `v34handshak` itself.  See src/pump/v34/v34hshak.c.
+ */
+
+#define V34_SCALE_ENTRIES	28	/* two rows of fourteen */
+#define V34_CARRIER_DESC	8	/* four zeroes and two coefficient pairs */
+#define V34_BPV22_TAPS		60
+
+/*
+ * The transmit power scales, indexed by pre-emphasis index; the receive
+ * carrier descriptors; and the phase-2 DPSK band-pass pair.  All fifteen are
+ * global in the object and referred to only from this translation unit.
+ *
+ * `bpv22high` and `bpv22low` are NOT const: they live in .data rather than
+ * .rodata, which is the original's own statement about their storage class.
+ */
+extern const short scale2400[V34_SCALE_ENTRIES];
+extern const short scale2800[V34_SCALE_ENTRIES];
+extern const short scale3000[V34_SCALE_ENTRIES];
+extern const short scale3200[V34_SCALE_ENTRIES];
+extern const short scale3429[V34_SCALE_ENTRIES];
+
+extern const short c1600[V34_CARRIER_DESC], c1680[V34_CARRIER_DESC];
+extern const short c1800_[V34_CARRIER_DESC], c1829[V34_CARRIER_DESC];
+extern const short c1867[V34_CARRIER_DESC], c1920[V34_CARRIER_DESC];
+extern const short c1959[V34_CARRIER_DESC], c2000[V34_CARRIER_DESC];
+extern const short c1200_[V34_CARRIER_DESC], c2400_[V34_CARRIER_DESC];
+
+extern short bpv22high[V34_BPV22_TAPS];
+extern short bpv22low[V34_BPV22_TAPS];
+
+/*
+ * Re-arm the FSK demodulator to look for INFO1.  Clears its working state
+ * and reloads the V.21-rate slicer configuration; touches nothing else.
+ */
+void dpskDetectInfo1Init(void *obj);
+
+/*
+ * Bring the phase-2 DPSK link up.  `mode` zero selects a 1200 Hz transmit
+ * carrier and anything else 2400; `high` non-zero selects the upper receive
+ * band.  The two are independent -- the directions occupy different bands.
+ */
+void dpskinit(void *obj, short mode, short high);
+
+/*
+ * Turn the negotiated MP bit-fields at +0xa9de..+0xa9e3 into transmit and
+ * receive symbol rates, carriers, power scales and a pre-emphasis index.
+ * Rate codes 1, 6 and 7 set nothing at all.
+ */
+/*
+ * Set the whole object up for phase 2.  Two configurations in one function,
+ * chosen by `f359c == 0x65`: the originate end signals on 1200 Hz through
+ * the upper receive band, the answer end on 2400 through the lower.
+ */
+void v34modeminit(void *obj);
+
+void setfinalrate(void *obj);
+
+/*
+ * Configure the demodulator for the rate `setfinalrate` chose, and arm the
+ * tone detector on the carrier descriptor it selected.
+ */
+void setupreceiver(void *obj);
+
+/*
+ * How many multiplications by a per-rate ratio it takes for a per-rate
+ * measurement to pass a limit: the pre-emphasis index, 6..10.
+ *
+ * The object supplies no default arm, so a baud rate other than 2400, 2800,
+ * 3000, 3200 or 3429 runs the loop on uninitialised registers there and on
+ * zero here.  See D37.  What the first argument points at is not known --
+ * nothing in the object calls this -- so it stays a `void *`.
+ */
+short preempindex(void *obj, short baudrate);
 
 #ifdef __cplusplus
 }

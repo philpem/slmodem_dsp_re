@@ -774,8 +774,19 @@ V34EchoCleanUp(struct v34_echo *e)
 		e->hist[i] = 0;
 	}
 
+	/*
+	 * THE STRING IS THE OBJECT'S, and it is not this function's name.
+	 * .rodata.str1.4+0xf848 is "V34FLO: Echo running in Original
+	 * Integer...", referenced from here and nowhere else -- so the author
+	 * used the clean-up to announce which of two echo-canceller builds is
+	 * live, floating point or integer.  An invented "V34EchoCleanUp\n"
+	 * stood here until the handshake's transcript comparison ran over
+	 * this call tree for the first time; finding 172 is the same defect
+	 * in `V34SetupModulator`, and finding 134 is why it survived.
+	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34EchoCleanUp\n");
+		dsplibs_debug_printf(
+			"V34FLO: Echo running in Original Integer...\r\n");
 }
 
 void
@@ -890,16 +901,32 @@ V34EchoReportCoeff(struct v34_echo *e)
 		if (e->coeff[k] != 0)
 			break;
 
+	/*
+	 * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a
+	 * literal 0x3f on all three, and all three are referenced from this
+	 * function and nowhere else:
+	 *
+	 *      .rodata.str1.4+0xf878  "?======= Nothing to report ========="
+	 *      .rodata.str1.1+0x2c84  "?%d %d %d %d %d %d"
+	 *      .rodata.str1.4+0xf8a0  "?======= Coefficients[1..%ld]========="
+	 *
+	 * Invented paraphrases stood here until the whole tree's format strings
+	 * were checked against .rodata; see finding 180.  The header takes an
+	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
+	 * `n`, the tap count rounded down to a multiple of six.
+	 */
 	if (k == n) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Echo coefficients all zero\n");
+			dsplibs_debug_printf(
+				"?======= Nothing to report =========\n");
 		return;
 	}
 
 	if (!DSPLIB_DEBUG_ON())
 		return;
 
-	dsplibs_debug_printf("Echo coefficients:\n");
+	dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
+			     (long)n);
 
 	/*
 	 * THE SCAN AND THE DUMP DISAGREE ABOUT HOW LONG THE ARRAY IS.  The
@@ -916,7 +943,7 @@ V34EchoReportCoeff(struct v34_echo *e)
 	     i += V34_ECHO_REPORT_COLS) {
 		if (!DSPLIB_DEBUG_ON())
 			return;
-		dsplibs_debug_printf("%d %d %d %d %d %d\n",
+		dsplibs_debug_printf("?%d %d %d %d %d %d\n",
 				     e->coeff[i], e->coeff[i + 1],
 				     e->coeff[i + 2], e->coeff[i + 3],
 				     e->coeff[i + 4], e->coeff[i + 5]);
@@ -1139,7 +1166,9 @@ mod_carrier(struct v34_modulator *m, short carrier)
 	case 2400: m->sine = hsine2400; m->sine_len = 8;    break;
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34SetupModulator: carrier?\n");
+			dsplibs_debug_printf(
+				"V34SetupModulator: invalid carrier %ld\n",
+				(long)carrier);
 		m->sine = hsine1200;
 		m->sine_len = 8;
 		break;
@@ -1148,14 +1177,43 @@ mod_carrier(struct v34_modulator *m, short carrier)
 
 void
 V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
-		  short phase, int arg4, int reset)
+		  short preemp_index, int v90, int reset)
 {
 	const short *src;
 	const short *prem = NULL;
 
-	(void)arg4;
+	/*
+	 * THE LAST TWO PARAMETERS ARE NAMED BY THE OBJECT, not guessed: the
+	 * entry diagnostic below prints all five and calls the fourth
+	 * `preemp` and the fifth `V90`.  The fifth is read by nothing in
+	 * this function -- only printed -- so it is a flag the caller passes
+	 * for a V.90 path that either lives elsewhere or was removed; see
+	 * D31, which is about the same absent V.90 configuration.
+	 */
+	(void)v90;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34SetupModulator: baudrate %ld, carrier %ld, "
+			"preemp %ld, V90=%ld. fullReset=%1d\n",
+			(long)baud, (long)carrier, (long)preemp_index,
+			(long)v90, reset);
 
 	m->preemp = preemp0;
+
+	/*
+	 * UNCONDITIONAL, although the object stores it inside each arm of
+	 * the switch below -- seven separate `mov ..,0xc8c(..)` sites, which
+	 * is one arm's assignment duplicated by the compiler.  Every
+	 * reachable one writes 15; the single site that writes 14 is inside
+	 * the V.90 arm of the 3200 case, which D31 records as unreachable.
+	 *
+	 * Written as three per-rate assignments here until a whole-object
+	 * comparison in t_v34hshak found the other five rates leaving the
+	 * field alone.  The field-by-field check in t_v34ec could not see it;
+	 * `fc8c` was not one of the fields it named, and now is.
+	 */
+	m->fc8c = 0xf;
 
 	if (reset) {
 		m->row = 0;
@@ -1192,7 +1250,6 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		break;
 	case 3000:
 		m->taps = 0x20; m->f04 = 5; m->rows = 0x10;
-		m->fc8c = 0xf;
 		src = tx3000c1;
 		prem = (carrier == 1800) ? ec_prem_coef_B3000
 					 : ec_prem_coef_B3000High;
@@ -1210,16 +1267,19 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		 * The V.90 arm -- 0x40 taps from tx3200c1_for_v90 with
 		 * V90EchoPrefilterCoeff -- is unreachable through this
 		 * function.  Registered as D31.
+		 *
+		 * It is also the only place in the object that puts 14 in
+		 * `fc8c` rather than 15, which is a second, independent sign
+		 * that it is a different configuration and not a variant of
+		 * this one.
 		 */
 		m->taps = 0x20;
-		m->fc8c = 0xf;
 		src = tx3200c1_for_v34;
 		prem = (carrier == 1829) ? ec_prem_coef_B3200
 					 : ec_prem_coef_B3200High;
 		break;
 	case 3429:
 		m->taps = 0x20; m->f04 = 5; m->rows = 0xe;
-		m->fc8c = 0xf;
 		src = tx3429c1;
 		prem = ec_prem_coef_B3429;
 		break;
@@ -1228,8 +1288,21 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		src = txAllPass;
 		break;
 	default:
-		/* 600 baud -- V.34's INFO signalling rate -- and anything
-		 * unrecognised.  Note it is the DEFAULT, not a match. */
+		/*
+		 * 600 baud -- V.34's INFO signalling rate -- and anything
+		 * unrecognised, sharing one body.
+		 *
+		 * THEY ARE NOT ONE CASE.  The object compares against 0x258
+		 * and only the path that does NOT match prints "invalid
+		 * baudrate", so 600 is a real arm whose configuration
+		 * happens to be the fallback's.  An earlier note here said
+		 * it was the default and not a match; restoring the
+		 * diagnostic is what showed otherwise.
+		 */
+		if (baud != 600 && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"V34SetupModulator: invalid baudrate %ld\n",
+				(long)baud);
 		m->taps = 8; m->f04 = 1; m->rows = 0x10;
 		src = tx600c1;
 		prem = ec_prem_coef_B3429;
@@ -1240,11 +1313,11 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		m->ec_prem = prem;
 
 	/*
-	 * A non-zero `phase` replaces the flat pre-emphasis with one row of
+	 * A non-zero `preemp_index` replaces the flat pre-emphasis with a row of
 	 * the rate's p<baud> table, which is ten 16-short rows indexed FROM
 	 * ONE -- the original computes `p<baud> - 32 + phase * 32`.
 	 */
-	if (phase != 0) {
+	if (preemp_index != 0) {
 		const short *p = NULL;
 
 		switch (baud) {
@@ -1256,7 +1329,7 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		default: break;
 		}
 		if (p != NULL)
-			m->preemp = p + (phase - 1) * 16;
+			m->preemp = p + (preemp_index - 1) * 16;
 	}
 
 	mod_load(m, src);

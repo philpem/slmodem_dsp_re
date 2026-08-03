@@ -37,6 +37,15 @@ extern "C" {
 #define V34_FSK_LPF_TAPS	80
 
 /*
+ * Two array bounds in the V.34 object that belong to the handshake's
+ * interface rather than to the FSK receiver, declared here because this is
+ * where `struct v34_object` is.  Both are the object's own loop bounds, not
+ * inferred sizes -- see the members.
+ */
+#define V34_PROBE_RESULTS	25	/* doubles at +0xa258 */
+#define V34_INFO0_BITS		41	/* one bit per int at +0xa8a4 */
+
+/*
  * The three interpolator phases, and the post-detection low-pass.
  *
  * All four are the original's own symbols.  intcoef1 and intcoef3 are exact
@@ -109,6 +118,28 @@ struct v34_fskdelay {
  * +0x386.  Extend one of the two when the next V.34 file needs a field, and
  * say which; do not start a third.
  */
+/*
+ * The scrambler and descrambler shift registers.
+ *
+ * BOTH ARE 128 BITS STEPPED SIXTEEN AT A TIME, held as words rather than as
+ * a bit array, and both polynomials are applied to a whole 16-bit step at
+ * once rather than bit by bit.  That is what makes `scrambleGPA` look
+ * unlike `scrambleGPC`: GPC's shorter tap is 18 bits back, further than one
+ * step, so one pass suffices; GPA's is 5 bits back, closer than one step, so
+ * its feedback has to be folded in four times to cover sixteen.
+ *
+ * `unsigned` because two of the four shift right logically.
+ */
+struct v34_scrambler {
+	unsigned w[4];		/* +0x00 */
+	short nbits;		/* +0x10  0x20 out of preinitdigital */
+};
+
+struct v34_descrambler {
+	unsigned w[3];		/* +0x00 */
+	short count;		/* +0x0c  bits held, flushed past 31 */
+};
+
 struct v34_object {
 	/*
 	 * +0x0000.  The datapump's own status word: `receiver` puts 10 in it
@@ -117,14 +148,58 @@ struct v34_object {
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x230 - 0x004];
+	unsigned char unmapped_0004[0x14 - 0x004];
+	/*
+	 * +0x14 to +0x21c.  THE SCRAMBLER'S TEST HARNESS, and the layout
+	 * tiles exactly, which is the evidence for it: 0x40 words of sink
+	 * from +0x14 end at +0x114 where the sink index is, 0x40 words of
+	 * source from +0x118 end at +0x218 where the source length is, and
+	 * the source index follows at +0x21c.  Nothing had to be guessed at
+	 * to make those four bounds meet.
+	 *
+	 * All of it is gated on `scram_capture` at +0x2214.  With that set,
+	 * the scramblers take their input word from `scram_src` instead of
+	 * the 0xffff they otherwise use, and the descramblers append each
+	 * output word to `scram_sink` until it is full.  So the object
+	 * carries a scripted-bits loopback for its own scrambler pair.
+	 *
+	 * The arrays are `int` and only the low short of each source entry
+	 * is read -- `movzwl 0x114(%edx,%eax,4)`.
+	 */
+	int scram_sink[0x40];				/* +0x0014 */
+	int scram_sink_n;				/* +0x0114 */
+	int scram_src[0x40];				/* +0x0118 */
+	int scram_src_len;				/* +0x0218 */
+	int scram_src_n;				/* +0x021c */
+	unsigned char unmapped_0220[0x230 - 0x220];
 	/*
 	 * The signal-energy floor `receiver` compares its 36-sample RMS
 	 * against before declaring the line dead.  An int, and the only field
 	 * either V.34 core reads through `obj + 4` rather than `obj`.
 	 */
 	int rx_energy_floor;				/* +0x0230 */
-	unsigned char unmapped_0234[0x25c - 0x234];
+	unsigned char unmapped_0234[0x24c - 0x234];
+	/*
+	 * How far the V.90 receiver has got through phase 3, as a number the
+	 * handshake's C++ side ratchets forward.  `V34XF_Indicate-
+	 * Trn2dReceived`'s own debug string names it -- "IndicateTrn2d-
+	 * Received called, v90Receiver = %d" -- and the Indicate entry points
+	 * between them set 3 (Jd), 6 (DIL) and 10/14/18/20 (TRN2d).
+	 *
+	 * ALSO REACHED THROUGH `obj + 4`, so the note above is now true of
+	 * three files rather than two: VPcmV34Main.cpp's code generation for
+	 * this field and the next is `lea 0x4(obj); mov 0x248(that)`.  It is
+	 * an addressing artifact in all three and is not evidence of a
+	 * sub-object at +4.
+	 */
+	int v90_receiver;				/* +0x024c */
+	/*
+	 * The same for K56Flex: `V34XF_IndicateK56FlexRateDetermined` sets 5
+	 * and nothing reconstructed yet reads it.  `V34GiveProbeResults`
+	 * treats the pair as one "is a PCM receiver running" test.
+	 */
+	int k56flex_receiver;				/* +0x0250 */
+	unsigned char unmapped_0254[0x25c - 0x254];
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * f25c is the base the echo filter's lag is measured from, f25e the
@@ -136,14 +211,32 @@ struct v34_object {
 	unsigned char unmapped_0262[0x264 - 0x262];
 	struct v34_queue rxq;				/* +0x264 */
 	int rxq_ring_tail[V34_RXQ_RING - 1];		/* to +0x370 */
-	unsigned char unmapped_0370[0x402 - 0x370];
+	unsigned char unmapped_0370[0x382 - 0x370];
+	/*
+	 * +0x0382.  WRITTEN SIX TIMES AND READ NOWHERE in this object -- the
+	 * only stores are VPcmV34Main.cpp's, four of them in the two Indicate
+	 * entry points reconstructed here.  So whatever consumes it lives in
+	 * the C++ half that is still to come, and the values are all this
+	 * says about it: 0 when a Jd arrives with the silence-scrambler flag
+	 * set, otherwise 0x89b0 or 0x8990 according to a constellation-size
+	 * flag.  The two differ by 32, which is the only structure visible.
+	 *
+	 * As a `struct v34_receiver` offset this is +0x11e, immediately below
+	 * that struct's `f120`/`flags` pair; named here rather than there
+	 * because every caller has the whole object in hand.
+	 */
+	short f382;					/* +0x0382 */
+	unsigned char unmapped_0384[0x402 - 0x384];
 	/*
 	 * Non-zero makes fskdemodulate return without doing anything -- not
 	 * even running the detector -- so it reads as "the FSK receiver is
 	 * switched off".  Nothing here sets it.
 	 */
 	short fsk_inhibit;				/* +0x402 */
-	unsigned char unmapped_0404[0x2074 - 0x404];
+	unsigned char unmapped_0404[0xe74 - 0x404];
+	/* The descrambler's shift register; see `struct v34_descrambler`. */
+	struct v34_descrambler descrambler;		/* +0x0e74 */
+	unsigned char unmapped_0e84[0x2074 - 0xe84];
 	/*
 	 * A pointer V34InitializeImplementationSpecific aims at +0x146c of
 	 * this same object.  What lives there is not yet known; the echo
@@ -156,7 +249,10 @@ struct v34_object {
 	unsigned char scratch_20e0[0x20];		/* +0x20e0 */
 	unsigned char unmapped_2100[0x210c - 0x2100];
 	unsigned char scratch_210c[0x100];		/* +0x210c */
-	unsigned char unmapped_220c[0x221c - 0x220c];
+	unsigned char unmapped_220c[0x2214 - 0x220c];
+	/* Non-zero runs the scrambler pair off `scram_src`/`scram_sink`. */
+	short scram_capture;				/* +0x2214 */
+	unsigned char unmapped_2216[0x221c - 0x2216];
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
 	short f25c0;					/* +0x25c0 */
@@ -168,7 +264,10 @@ struct v34_object {
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
 	short f25d4;					/* +0x25d4 tx scale  */
-	unsigned char unmapped_25d6[0x2aa4 - 0x25d6];
+	unsigned char unmapped_25d6[0x2a54 - 0x25d6];
+	/* The scrambler's shift register; see `struct v34_scrambler`. */
+	struct v34_scrambler scrambler;			/* +0x2a54 */
+	unsigned char unmapped_2a68[0x2aa4 - 0x2a68];
 	short f2aa4;					/* +0x2aa4 */
 	short f2aa6;					/* +0x2aa6 */
 	/*
@@ -179,7 +278,16 @@ struct v34_object {
 	 */
 	int hist_2aa8[0x12c];				/* +0x2aa8 */
 	short hist_2f58[0x258];				/* +0x2f58 */
-	unsigned char unmapped_3408[0x354c - 0x3408];
+	unsigned char unmapped_3408[0x3548 - 0x3408];
+	/*
+	 * +0x3548.  The session object VPcmV34Main.cpp hangs everything else
+	 * off: twenty-odd functions in that translation unit load it, and the
+	 * only field of it any of them reads is an int at +0x6120.  What it
+	 * points at is not reconstructed, so it is a `void *` here and the
+	 * +0x6120 read is spelled out at its one use rather than given a
+	 * struct that would be a guess.
+	 */
+	void *p3548;					/* +0x3548 */
 	/*
 	 * adaptecho's adaptation state.  f354c counts calls and gates the
 	 * whole slow path; f3550 is the LMS step (updateAlpha's alpha, and
@@ -254,7 +362,35 @@ struct v34_object {
 	short fa23e;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short fa240;					/* +0xa240 */
-	unsigned char unmapped_a242[0xaa96 - 0xa242];
+	unsigned char unmapped_a242[0xa258 - 0xa242];
+	/*
+	 * +0xa258.  Twenty-five doubles -- the only floating point anywhere
+	 * in this struct -- that `V34GiveProbeResults` copies in from a
+	 * 44-byte-stride record the C++ side owns.  The count is the object's
+	 * own: the loop's bound is `cmp $0x18,%ax`, so 0..24 inclusive.
+	 * `V34XF_GetProbeResultsPtr` hands the array out unchanged.
+	 */
+	double probe_results[V34_PROBE_RESULTS];	/* +0xa258 */
+	unsigned char unmapped_a320[0xa8a4 - 0xa320];
+	/*
+	 * +0xa8a4.  The received INFO0 message, ONE BIT PER INT.
+	 * `V34GiveINFO0dBits` unpacks it there MSB-first and every later
+	 * reader indexes it as a bit vector; `V34XF_GetInfo0BitsPtr` hands
+	 * out its address.  41 is what that unpacking writes -- 12 constant,
+	 * then 8+8+8 from three message bytes and 5 from the fourth.
+	 */
+	int info0_bits[V34_INFO0_BITS];			/* +0xa8a4 */
+	unsigned char unmapped_a948[0xaa74 - 0xa948];
+	/* Cleared by preinitdigital; nothing reconstructed reads it. */
+	int faa74;					/* +0xaa74 */
+	unsigned char unmapped_aa78[0xaa7e - 0xaa78];
+	/*
+	 * +0xaa7e.  Round-trip delay, in samples, which `v34handshak` both
+	 * measures and consumes.  `V34XF_GetRTD` is the C++ side's window
+	 * onto it and adds 480 -- 60 ms at 8 kHz -- before handing it over.
+	 */
+	short rtd;					/* +0xaa7e */
+	unsigned char unmapped_aa80[0xaa96 - 0xaa80];
 	/*
 	 * decoderv34 compares f124 against this and against half of it, and
 	 * sets f218 accordingly -- so it is a frame length in symbols and the
@@ -265,10 +401,78 @@ struct v34_object {
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
-	unsigned char unmapped_aba0[0xac0c - 0xaba0];
+	unsigned char unmapped_aba0[0xabc6 - 0xaba0];
+	/*
+	 * The V.92 short-phase-2 negotiation, four shorts, and the object
+	 * names all four itself -- `V34GiveINFO0dBits` prints
+	 * "localV92- %d, remoteV92- %d, localShort- %d, remoteShort- %d,
+	 * isShort- %d" from exactly these plus one INFO0 bit.
+	 *
+	 * The two `local_*` are inputs nothing reconstructed yet writes;
+	 * `remote_v92` and `is_short` are `V34GiveINFO0dBits`'s outputs.
+	 * There is no `remote_short` field: that value is read straight out
+	 * of the unpacked INFO0 and never stored.
+	 */
+	short local_v92;				/* +0xabc6 */
+	short remote_v92;				/* +0xabc8 */
+	short local_short;				/* +0xabca */
+	short is_short;					/* +0xabcc */
+	/*
+	 * Three two-bit fields `V34GiveINFO1aBits` takes out of the first
+	 * INFO1a short when the upstream baud index is 6, and immediately
+	 * copies on into the session object at +0x14, +0x15 and +0x16.  Each
+	 * pair is assembled with the higher-numbered bit as the LOW one --
+	 * bit7 + 2*bit6, bit5 + 2*bit4, bit3 + 2*bit2 -- and nothing here
+	 * names what the pairs mean.
+	 */
+	short fabce;					/* +0xabce */
+	short fabd0;					/* +0xabd0 */
+	short fabd2;					/* +0xabd2 */
+	unsigned char unmapped_abd4[0xabe0 - 0xabd4];
+	/*
+	 * +0xabe0.  Added to 0x50 to make the MHack message's first short,
+	 * so it is what the acknowledgement CARRIES rather than a flag --
+	 * a granted hold time is the obvious reading and the object does not
+	 * say.  `VPcmV34SetMohMessageBits` is the only reader.
+	 */
+	short fabe0;					/* +0xabe0 */
+	unsigned char unmapped_abe2[0xabf0 - 0xabe2];
+	/*
+	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
+	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,
+	 * 3 MHcda, 4 MHack, 5 MHnack.  Anything above 5 builds nothing --
+	 * the test is unsigned, so a negative value falls there too.
+	 */
+	int moh_message;				/* +0xabf0 */
+	unsigned char unmapped_abf4[0xabfa - 0xabf4];
+	/*
+	 * +0xabfa.  A byte that picks between three MHclrd codes -- 0x95,
+	 * 0x96 and 0x9a for values 0, 1 and anything else.  V.92 gives
+	 * cleardown a reason code, which is what this will be.
+	 */
+	unsigned char fabfa;				/* +0xabfa */
+	unsigned char unmapped_abfb[0xac02 - 0xabfb];
+	/*
+	 * +0xac02.  `V34SetINFO0aBits` puts 20 here when it asks for a short
+	 * phase 2, and says what it is doing: "Setting prev bulk delay = %d".
+	 * Distinct from the bulk-delay ring at +0x35a8, which is the second
+	 * echo canceller's.
+	 */
+	short prev_bulk_delay;				/* +0xac02 */
+	unsigned char unmapped_ac04[0xac0c - 0xac04];
 	/* Where the V.90 side is told the recovered timing offset. */
 	short fac0c;					/* +0xac0c */
-	unsigned char unmapped_ac0e[0xac10 - 0xac0e];
+	unsigned char unmapped_ac0e[0xac18 - 0xac0e];
+	/*
+	 * +0xac18.  A second pointer into the C++ side, distinct from
+	 * `p3548`, and `V34GiveINFO1aBits` reads exactly one thing through
+	 * it: an int at +0xc, printed as the LOCAL PCM type in "K56Flex
+	 * enabled by remote, PCM type: local %d, remote %d (A=1, Mu=0)".
+	 *
+	 * It is also what says this struct's 0xac10 was never the object's
+	 * size.  The bound is now 0xac1c, and still a bound.
+	 */
+	void *pac18;					/* +0xac18 */
 };
 
 /*

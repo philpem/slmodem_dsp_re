@@ -23,6 +23,9 @@
 #include "harness.h"
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"	/* struct v34_object owns the canceller storage */
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_V34EchoCleanUp(void *e);
 extern void ref_V34EchoUpdateDelayLine(void *e, short sample);
@@ -53,6 +56,10 @@ extern void ref_V34EchoHistoryBackwardClean(void *obj, unsigned n);
 extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
+/* Declared, not implicit: it was reached through an implicit `int f()`
+ * declaration, which happens to work for a one-pointer cdecl call and
+ * would not for anything else. */
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 
 #define DLEN	64
 #define TAPS	32
@@ -354,6 +361,14 @@ main(void)
 			diff_eq_int("taps", ma.taps, mb.taps, bauds[bi]);
 			diff_eq_int("f04", ma.f04, mb.f04, bauds[bi]);
 			diff_eq_int("rows", ma.rows, mb.rows, bauds[bi]);
+			/*
+			 * fc8c is unconditional in the object and was
+			 * reconstructed as three per-rate assignments; this
+			 * check is what would have caught that, and did not
+			 * exist until t_v34hshak's whole-object comparison
+			 * caught it instead.
+			 */
+			diff_eq_int("fc8c", ma.fc8c, mb.fc8c, bauds[bi]);
 			diff_eq_int("row", ma.row, mb.row, bauds[bi]);
 			diff_eq_int("sine_len", ma.sine_len, mb.sine_len,
 				    carr[ci]);
@@ -390,6 +405,73 @@ main(void)
 			for (k = 0; k < ma.rows * V34_MOD_ROW; k++)
 				diff_eq_int("shaped", sha[k], shb[k], k);
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The three diagnostics V34SetupModulator prints.
+	 *
+	 * Worth its own block because they had been reconstructed as ONE
+	 * INVENTED STRING -- "V34SetupModulator: carrier?" appears nowhere in
+	 * the blob -- with the three real ones missing.  Nothing could see
+	 * that: the level ships at zero, so a wrong string and a right one
+	 * behave identically under every other check here.  Finding 172.
+	 *
+	 * The sweep has to include an unrecognised baud rate AND an
+	 * unrecognised carrier, because two of the three sites are on those
+	 * arms, and 600 baud, because it shares its body with the invalid
+	 * arm and must NOT print.
+	 */
+	diff_begin("v34 setup modulator: the diagnostics");
+	{
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		static const short bauds[] = { 600, 2400, 3429, 1234, 4800 };
+		static const short carr[] = { 1200, 1829, 999 };
+		unsigned bi, ci;
+		int ph, v9;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		/*
+		 * `preemp_index` and `v90` get INDEPENDENT values.  They are
+		 * two of the five the entry diagnostic prints, and a sweep
+		 * that drove both from one variable would pass a printf with
+		 * the two arguments transposed -- which is exactly what the
+		 * first version of this block did.
+		 */
+		for (bi = 0; bi < sizeof(bauds) / sizeof(bauds[0]); bi++)
+		for (ci = 0; ci < sizeof(carr) / sizeof(carr[0]); ci++)
+		for (v9 = 0; v9 <= 2; v9 += 2)
+		for (ph = 0; ph <= 1; ph++) {
+			memset(&ma, HARNESS_MALLOC_FILL, sizeof(ma));
+			memset(&mb, HARNESS_MALLOC_FILL, sizeof(mb));
+			memset(sha, 0x5a, sizeof(sha));
+			memset(shb, 0x5a, sizeof(shb));
+			ma.shaped = sha; mb.shaped = shb;
+			ma.row = mb.row = 0;
+			ma.phase = mb.phase = 0;
+
+			dsplib_debug_capture_reset();
+			V34SetupModulator(&ma, bauds[bi], carr[ci],
+					  (short)ph, v9, 1);
+			ref_V34SetupModulator(&mb, bauds[bi], carr[ci],
+					      (short)ph, v9, 1);
+			diff_eq_int("setup modulator transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, bauds[bi] * 1000L + carr[ci] * 10
+				    + ph * 4 + v9);
+		}
+
+		diff_eq_int("transcript non-empty",
+			    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
@@ -705,12 +787,14 @@ main(void)
 
 	diff_begin("v34 echo: ReportCoeff with logging off");
 	/*
-	 * All this can establish is that the function changes nothing and
-	 * returns.  Its output goes to a logger both sides stub out, and the
-	 * path that would read past the coefficient array (D28) is gated on a
-	 * level slmodemd ships at zero.  Driving that path would mean raising
-	 * the level on both sides and would still compare nothing, because
-	 * neither logger records anything.
+	 * With the level at zero this can only establish that the function
+	 * changes nothing and returns.  THE SECTION BELOW DRIVES THE OTHER
+	 * HALF.  An earlier note here said raising the level "would still
+	 * compare nothing, because neither logger records anything" -- that
+	 * stopped being true when finding 126 built the capture facility,
+	 * which this same file already uses for `V34SetupModulator`.  Three
+	 * invented format strings survived in `V34EchoCleanUp` and
+	 * `V34EchoReportCoeff` behind that stale comment; see finding 180.
 	 */
 	setup(TAPS, DLEN);
 	V34EchoCleanUp(&a.e);
@@ -723,6 +807,97 @@ main(void)
 	V34EchoReportCoeff(&a.e);
 	ref_V34EchoReportCoeff(&b.e);
 	compare("after ReportCoeff on live coefficients", 1);
+	rc |= diff_end();
+
+	diff_begin("v34 echo: the clean-up and the report, transcripts compared");
+	{
+		/*
+		 * A FIXTURE OF ITS OWN, because `V34EchoReportCoeff` dumps a
+		 * hardcoded 144 coefficients whatever `taps` says (D28).  Out
+		 * of `struct side`'s 32-entry array that runs 48 shorts past
+		 * the end of the struct, into whatever the linker put after
+		 * `a` and `b` -- which is not the same on the two sides, so
+		 * the transcripts would differ for a reason that is the
+		 * fixture's and not the code's.  160-entry arrays keep the
+		 * over-read inside memory both sides own and both sides seed
+		 * identically, which is what makes the comparison mean
+		 * something.
+		 */
+		static struct v34_echo ea, eb;
+		static short ca[160], cb[160], fa[160], fb[160];
+		static short ha[160], hb[160], da[DLEN], db[DLEN];
+		static const unsigned taps[] = { 0, 5, 6, 7, 32, 143, 144 };
+		unsigned ti, j;
+		int live;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (ti = 0; ti < sizeof(taps) / sizeof(taps[0]); ti++)
+		for (live = 0; live <= 2; live++) {
+			memset(&ea, 0, sizeof(ea));
+			memset(&eb, 0, sizeof(eb));
+			for (j = 0; j < 160; j++) {
+				/*
+				 * `live` 0 leaves every coefficient zero, so
+				 * the scan falls out at k == n and the "nothing
+				 * to report" arm runs; 1 makes the FIRST one
+				 * non-zero and 2 only the last one the scan
+				 * covers, so both ends of the scan's exit are
+				 * driven.
+				 */
+				short v = 0;
+
+				if (live == 1 && j == 0)
+					v = 0x1234;
+				if (live == 2 && j + 1 == taps[ti])
+					v = -0x4321;
+				ca[j] = cb[j] = v;
+				fa[j] = fb[j] = (short)(j * 37 - 900);
+				ha[j] = hb[j] = (short)(j * 53 + 100);
+			}
+			for (j = 0; j < DLEN; j++)
+				da[j] = db[j] = (short)(j * 7 - 200);
+
+			ea.dline = da; ea.cursor = da; ea.coeff = ca;
+			ea.coeff_frac = fa; ea.hist = ha;
+			ea.dlen = DLEN; ea.taps = taps[ti];
+			eb.dline = db; eb.cursor = db; eb.coeff = cb;
+			eb.coeff_frac = fb; eb.hist = hb;
+			eb.dlen = DLEN; eb.taps = taps[ti];
+
+			dsplib_debug_capture_reset();
+			V34EchoReportCoeff(&ea);
+			ref_V34EchoReportCoeff(&eb);
+			diff_eq_int("ReportCoeff transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)taps[ti] * 10 + live);
+			diff_eq_int("ReportCoeff said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    (long)taps[ti] * 10 + live);
+
+			dsplib_debug_capture_reset();
+			V34EchoCleanUp(&ea);
+			ref_V34EchoCleanUp(&eb);
+			diff_eq_int("CleanUp transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)taps[ti] * 10 + live);
+			diff_eq_int("CleanUp said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    (long)taps[ti] * 10 + live);
+			for (j = 0; j < 160; j++)
+				diff_eq_int("CleanUp agreed on the arrays",
+					    ca[j] == cb[j] && fa[j] == fb[j]
+					    && ha[j] == hb[j], 1, (long)j);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
 	rc |= diff_end();
 
 	diff_begin("v34 Hilbert transformer");

@@ -68,7 +68,12 @@ struct v34_receiver {
 	short           rms_buf[36];     /* +0x13c V34demodulate: 36 samples for the RMS */
 	unsigned char pad_184[0x19c - 0x184];
 	short           f19c;            /* +0x19c its index */
-	unsigned char pad_19e[0x1a0 - 0x19e];
+	/*
+	 * +0x19e.  Cleared alongside f19c by `dpskinit`, which is the only
+	 * thing in the object that touches it -- so it is the RMS window's
+	 * second scalar and nothing yet reads it back.
+	 */
+	short           f19e;
 	int             f1a0;            /* +0x1a0 */
 	unsigned        scrambler_sr;    /* +0x1a4 */
 	unsigned char pad_1a8[0x1aa - 0x1a8];
@@ -208,7 +213,15 @@ struct v34_receiver {
 	short           f25c;            /* +0x25c */
 	short           f25e;            /* +0x25e */
 	short           f260;            /* +0x260 */
-	unsigned char pad_262[0x266 - 0x262];
+	/*
+	 * +0x262.  The AGC's STARTING GAIN, copied into `agc_gain` by both
+	 * `dpskinit` and `setupreceiver` -- the two functions that bring a
+	 * receiver up -- each of which then installs its own `agc_step`.
+	 * Whoever writes it has not been reconstructed; `rxinit` does not,
+	 * and puts a literal 0x200 in `agc_gain` instead.
+	 */
+	short           f262;            /* +0x262 */
+	unsigned char pad_264[0x266 - 0x264];
 	short           f266;            /* +0x266 demapFrame's sub-frame
 					  * counter, stepped by decoderv34 */
 	/*
