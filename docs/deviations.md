@@ -1701,3 +1701,43 @@ characters, which `vsnprintf`'s 0x100 cap admits.  `t_encode` drives
 tested rather than avoided.  Whether any real caller emits exactly 131
 characters is not measured; 145 functions call `edprintf` and none of them
 is reconstructed.
+
+---
+
+## D40 ⚠ `dsplib_encode_plain`: a switch the original does not have
+
+**Where:** `src/core/encode.c`, `edprintf`.
+
+**What it is:** an added global, zero by default, that makes `edprintf`
+print the readable message instead of the encoded one.  Finding 151 is why
+it exists: 145 functions report through this channel and none of what they
+say is legible, which makes the least-understood half of the object also the
+half whose diagnostics are useless.
+
+**This is an ADDED FEATURE, not a fix.**  The original is not wrong; it is
+doing what it was built to do.  So it is not behind `DSPLIB_REPRODUCE_BUGS`,
+which is for defects — and it does not need to be, for two reasons.
+
+**One: with diagnostics off it does not execute.**  The switch is read only
+inside the `dsplibs_debug_level > 1` gate, which is the last thing `edprintf`
+does.  `dsplibs_debug_level` ships at zero, so on a working modem the branch
+is never reached and the instruction stream is the object's.
+
+**Two: with the switch ON, only the printed string changes.**  The encoding
+still runs in full — `iEncodeOffset` is reset and advanced identically and
+`cEncodedTemp` is filled identically — so nothing downstream can tell.  In
+particular `cEncodeChar`, which shares that counter, returns the same
+characters either way.  `t_encode` asserts exactly this: each message is run
+with the switch off (compared against the blob) and again with it on, and the
+key position is read back after both and must agree with the blob's.  A
+version that short-circuited the encoder when plain mode was on — the obvious
+way to write it — fails that check.
+
+**One deliberate difference in plain mode.**  A message too long for the
+encoded buffer is replaced by "too long print string" in the channel; plain
+mode prints the message instead, because `temp` holds it and it is at most
+255 characters.  So plain mode shows messages the encoded channel drops.
+
+**The alternative that changes nothing at all** is `tools/eddecode.py`, which
+decodes captured logs after the fact and is the only option for logs that
+came from the original binary.

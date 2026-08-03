@@ -326,5 +326,102 @@ main(void)
 	}
 	rc |= diff_end();
 
+	diff_begin("encode: plain mode changes the text and nothing else");
+	{
+		/*
+		 * `dsplib_encode_plain` is ours, not the object's (D40), so
+		 * there is nothing to compare it against.  What CAN be
+		 * compared is the claim it rests on: that turning it on
+		 * changes only the string printed, and leaves the shared key
+		 * exactly where the encoded path would have left it.
+		 *
+		 * So each message is run twice on our side -- once with the
+		 * switch off, once on -- and the blob is run alongside the
+		 * OFF pass.  The key is read after each, and all three must
+		 * agree.
+		 */
+		static const char *const msgs[] = {
+			"Hi", "V34: rate 33600", "", "%d", "abcdefghij"
+		};
+		unsigned m;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (m = 0; m < sizeof(msgs) / sizeof(msgs[0]); m++) {
+			char encoded[512];
+			char plain[512];
+			int koff, kon, kref;
+			int a1, a2;
+
+			/* --- off: must still match the blob --- */
+			dsplib_encode_plain = 0;
+			dsplib_debug_capture_reset();
+			edprintf(msgs[m], 42);
+			ref_edprintf(msgs[m], 42);
+			diff_eq_int("plain off still matches the blob",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)m);
+			snprintf(encoded, sizeof(encoded), "%s",
+				 dsplib_debug_capture_text(0));
+
+			a1 = (unsigned char)cEncodeChar(0);
+			a2 = (unsigned char)cEncodeChar(0);
+			koff = key_pair_index(a1, a2);
+			a1 = (unsigned char)ref_cEncodeChar(0);
+			a2 = (unsigned char)ref_cEncodeChar(0);
+			kref = key_pair_index(a1, a2);
+
+			/* --- on --- */
+			dsplib_encode_plain = 1;
+			dsplib_debug_capture_reset();
+			edprintf(msgs[m], 42);
+			snprintf(plain, sizeof(plain), "%s",
+				 dsplib_debug_capture_text(0));
+			a1 = (unsigned char)cEncodeChar(0);
+			a2 = (unsigned char)cEncodeChar(0);
+			kon = key_pair_index(a1, a2);
+			dsplib_encode_plain = 0;
+
+			/*
+			 * The key must have moved identically -- that is what
+			 * "changes only the text" means, and it is the part a
+			 * caller could otherwise be perturbed by.
+			 */
+			diff_eq_int("the key moves the same either way",
+				    kon, koff, (long)m);
+			diff_eq_int("and the same as the blob's",
+				    koff, kref, (long)m);
+
+			/* The text is the message, framed by nothing. */
+			{
+				char want[512];
+
+				snprintf(want, sizeof(want), "%s\n", msgs[m]);
+				/* `%d` becomes "42" once formatted. */
+				if (strcmp(msgs[m], "%d") == 0)
+					snprintf(want, sizeof(want), "42\n");
+				diff_eq_int("plain mode prints the message",
+					    strcmp(plain, want) == 0, 1,
+					    (long)m);
+			}
+
+			/* And the encoded form was a frame, so the two differ. */
+			diff_eq_int("the two forms differ",
+				    strcmp(plain, encoded) != 0, 1, (long)m);
+			diff_eq_int("the encoded form is a frame",
+				    strncmp(encoded, "$!$ ", 4) == 0, 1,
+				    (long)m);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+		dsplib_encode_plain = 0;
+	}
+	rc |= diff_end();
+
 	return rc;
 }

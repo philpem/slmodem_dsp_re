@@ -73,6 +73,21 @@ static char temp[ENCODE_FMT_MAX];
 static char cEncodedTemp[ENCODE_OUT_MAX + 1];
 
 /*
+ * Non-zero prints the readable message instead of the encoded one.  NOT IN
+ * THE OBJECT; see D40.
+ *
+ * Zero by default, and read only from inside the debug-level gate, so a
+ * build with diagnostics off -- which is every shipping one -- executes
+ * exactly the instructions the object does.  When it is on, THE ENCODING
+ * STILL RUNS IN FULL: `iEncodeOffset` is reset and advanced the same way and
+ * `cEncodedTemp` is filled the same way, and the only thing that changes is
+ * which of the two buffers is handed to the hook.  So switching it cannot
+ * change anything else the modem does, including what `cEncodeChar` returns
+ * to a caller that interleaves with it.
+ */
+int dsplib_encode_plain;
+
+/*
  * One character through the key: add the current offset and '0', then step.
  *
  * THE ADDITION IS 8-BIT in both callers -- `add %al,%cl` in `cEncodeChar`
@@ -149,8 +164,14 @@ edprintf(const char *fmt, ...)
 	len = sysdep_strlen(temp);
 	if (2 * len + 8 > ENCODE_OUT_MAX) {
 		sysdep_strcpy(cEncodedTemp, "too long print string");
+		/*
+		 * Plain mode shows the message here that the channel drops:
+		 * it did not fit the ENCODED buffer, and `temp` holds at most
+		 * 255 characters, so there is always something to print.
+		 */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("%s\n", cEncodedTemp);
+			dsplibs_debug_printf("%s\n", dsplib_encode_plain
+					     ? temp : cEncodedTemp);
 		return;
 	}
 
@@ -176,5 +197,6 @@ edprintf(const char *fmt, ...)
 	sysdep_strcat(cEncodedTemp, "????");
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("%s\n", cEncodedTemp);
+		dsplibs_debug_printf("%s\n", dsplib_encode_plain
+				     ? temp : cEncodedTemp);
 }

@@ -43,6 +43,24 @@ char cEncodeChar(unsigned char c);
  */
 void edprintf(const char *fmt, ...);
 
+/*
+ * Set non-zero to print the readable message instead of the encoded one.
+ *
+ * NOT SOMETHING THE ORIGINAL HAS -- see docs/deviations.md, D40.  It is zero
+ * by default and read only from inside the debug-level gate, so a build with
+ * `dsplibs_debug_level` at zero, which is every shipping one, runs exactly
+ * the instructions the object runs.
+ *
+ * When it is on the encoding still runs in full and only the printed string
+ * changes, so turning it on cannot perturb anything else -- in particular
+ * `cEncodeChar`, which shares the counter, returns the same characters
+ * either way.
+ *
+ * For logs that have already been captured, or that came from the original
+ * binary, `tools/eddecode.py` decodes after the fact instead.
+ */
+extern int dsplib_encode_plain;
+
 #ifdef __cplusplus
 }
 #endif

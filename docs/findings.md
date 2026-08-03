@@ -8317,6 +8317,18 @@ needed, not one — `offsetarr` holds 7 at both index 3 and index 9, so a
 single character does not name a position, while all ten consecutive pairs
 do.  The test asserts that property rather than relying on it.
 
+**The channel is now readable two ways.**  `tools/eddecode.py` decodes a
+captured log -- the only option for one that came from the original binary --
+and `dsplib_encode_plain` makes a build print plaintext instead (D40).  The
+decoder's parse is exact rather than heuristic: '?' does occur inside
+payloads, but `????` cannot.  A '?' at payload index i needs
+`nibble == 15 - offsetarr[i % 10]`, an even i is a high nibble limited to
+-8..7 by the arithmetic shift, and the only `offsetarr` entries of 8 or more
+are at indices 5 and 8 -- of which one is even.  So a high-nibble '?' can
+only fall at i congruent to 8 mod 10 and the longest possible run is THREE.
+A payload may therefore end in up to three '?' that merge with the suffix,
+which is why the terminator is the LAST `????` and not the first.
+
 **`encode.c` is the object's last C translation unit.**  Its `STT_FILE`
 entry is followed by `offsetarr`, `iEncodeOffset`, `temp.0` and
 `cEncodedTemp.1`, its two functions sit at .text+0xb09b0 and +0xb09f0, and
