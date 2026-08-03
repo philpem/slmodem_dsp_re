@@ -1822,18 +1822,27 @@ takes a copy of the base and +0x23c takes the base plus **431,488**.
 constants through the same `obj + 4` base, which is what says they are one
 group.
 
-**Two of the three constants are round and one is not.** 95,999 is one short
-of 96,000, which is 12 s at 8 kHz or 10 s at 9600; -960,000 is ten times
-that. 431,488 is 53.9 s at 8 kHz and 44.9 s at 9600, and factors as
-2^7 × 3371 with 3371 prime — so it is not a round number of samples at any
-rate this modem uses, nor a power-of-two fraction of one.
+**Which sample rate to test them against is not a guess.**
+`docs/rate_assumptions.md` R-1 records that V.34/V.90/V.92 run at the HOST
+rate directly, and the host rate is 9600; the 8 kHz retarget is the other
+rate this tree will care about. Bell 103's 7200 (R-8) is that pump's FSK
+core and has nothing to do with V.34. So the list is 9600 and 8000, and the
+claim below is about those two and not about "any rate".
 
-**What we do:** copy all three. No reading is offered.
+**Two of the three constants are round at both, and one is round at
+neither.** 95,999 is one short of 96,000 — exactly 10 s at 9600, or 12 s at
+8000 — and -960,000 is ten times that, so 100 s and 120 s. At 9600, the rate
+V.34 actually runs at, the pair is a clean 10 s and 100 s. 431,488 is
+44.947 s at 9600 and 53.936 s at 8000, and factors as 2^7 × 3371 with 3371
+prime, so it is not a round number of samples at either, nor a power-of-two
+fraction of one.
 
-**Why it is recorded rather than solved:** the obvious move is to pick the
+**What we do:** copy all three. No reading of the third is offered.
+
+**Why it is recorded rather than solved:** the obvious move is to hunt for a
 sample rate that makes 431,488 come out round and then assert that rate.
-Nothing in the object supports one, and the two constants that ARE round
-already agree on 8 kHz/9600. Recorded so the next reader does not spend the
+That is backwards — the rate is already fixed by R-1, and the two constants
+that ARE round agree with it. Recorded so the next reader does not spend the
 same hour on it, and so that a later finding can retract this entry the way
 D28 was retracted. `unmeasured` — task #47.
 

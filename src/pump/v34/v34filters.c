@@ -901,16 +901,32 @@ V34EchoReportCoeff(struct v34_echo *e)
 		if (e->coeff[k] != 0)
 			break;
 
+	/*
+	 * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a
+	 * literal 0x3f on all three, and all three are referenced from this
+	 * function and nowhere else:
+	 *
+	 *      .rodata.str1.4+0xf878  "?======= Nothing to report ========="
+	 *      .rodata.str1.1+0x2c84  "?%d %d %d %d %d %d"
+	 *      .rodata.str1.4+0xf8a0  "?======= Coefficients[1..%ld]========="
+	 *
+	 * Invented paraphrases stood here until the whole tree's format strings
+	 * were checked against .rodata; see finding 156.  The header takes an
+	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
+	 * `n`, the tap count rounded down to a multiple of six.
+	 */
 	if (k == n) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Echo coefficients all zero\n");
+			dsplibs_debug_printf(
+				"?======= Nothing to report =========\n");
 		return;
 	}
 
 	if (!DSPLIB_DEBUG_ON())
 		return;
 
-	dsplibs_debug_printf("Echo coefficients:\n");
+	dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
+			     (long)n);
 
 	/*
 	 * THE SCAN AND THE DUMP DISAGREE ABOUT HOW LONG THE ARRAY IS.  The
@@ -927,7 +943,7 @@ V34EchoReportCoeff(struct v34_echo *e)
 	     i += V34_ECHO_REPORT_COLS) {
 		if (!DSPLIB_DEBUG_ON())
 			return;
-		dsplibs_debug_printf("%d %d %d %d %d %d\n",
+		dsplibs_debug_printf("?%d %d %d %d %d %d\n",
 				     e->coeff[i], e->coeff[i + 1],
 				     e->coeff[i + 2], e->coeff[i + 3],
 				     e->coeff[i + 4], e->coeff[i + 5]);

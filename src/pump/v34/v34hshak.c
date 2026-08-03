@@ -993,10 +993,10 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * The guard runs only for a positive delta, subtracts it, and accepts the
  * difference if it is at most 95,999 UNSIGNED -- so a base below the delta
  * wraps to a huge value and takes the reset arm, which is a behaviour a
- * signed comparison would get backwards.  95,999 is one short of 12 s at
- * 8 kHz (or 10 s at 9600) and the reset value -960,000 is 120 s at 8 kHz.
- * 431,488 is not a round interval at either rate and is left unexplained;
- * see D43.
+ * signed comparison would get backwards.  V.34 runs at the host rate, which
+ * is 9600 (`docs/rate_assumptions.md` R-1), so 95,999 is one short of ten
+ * seconds and the reset value -960,000 is a hundred.  431,488 is round at
+ * neither 9600 nor the 8 kHz retarget and is left unexplained; see D43.
  *
  * `VPcmV34SetV90RateReneg` writes the same three fields with the same two
  * constants through the same `obj + 4` base, which is the corroboration that

@@ -8653,8 +8653,15 @@ interesting one:
 - driving them a third of the table apart — i, i+29, i+58 mod 87 — separates
   the slots, and still reaches every name in every slot.
 
-Both were mutation-checked, and so was the rest of the function: twenty-four
-mutations were applied and twenty-two were caught outright.  The two
+Both were mutation-checked, and so was the rest of the function: twenty-eight
+mutations were applied and twenty-six were caught outright.  Four of them go
+at the shared helper rather than at the states, because `hs_setstate` derives
+its format string from the offset arithmetically and finding 130 is the
+standing warning about what a shared helper can get wrong: permuting the
+`fmt[]` entries WITHOUT touching the offsets is what actually pins the
+string-to-word binding, and permuting each branch's two context arguments in
+turn is what pins the slot order.  All four are caught; without the
+distinct-triple sweep none of them could be.  The two
 survivors are the useful part of the exercise.
 
 - `(x & ~0x1d8) | 0x18` narrowed to `(x & ~0x1c8) | 0x18` survives because
@@ -8666,7 +8673,7 @@ survivors are the useful part of the exercise.
   sweep had none with the high bits set.  A real gap, in the test rather
   than the code; mode 7 is in that sweep now and the mutation is caught.
 
-### And it found an invented string in already-committed code
+### And it found four invented strings in already-committed code
 
 `V34EchoCleanUp` was printing `"V34EchoCleanUp\n"`.  The object's string at
 .rodata.str1.4+0xf848, referenced from that one site and nowhere else, is
@@ -8676,21 +8683,59 @@ survivors are the useful part of the exercise.
 ```
 
 — the author using the clean-up to announce which of two echo-canceller
-builds is live.  This is finding 148 exactly: a reconstruction that invented
-a plausible string from the function's own name, and could not be caught
-because nothing had ever run that call tree with `dsplibs_debug_level`
-raised.  It was caught here only because modes 0, 1 and 4 reach it through
-`v34modeminit` -> `txinit`, and this is the first test to compare
-`v34modeminit`'s transcript at all.
+builds is live.  This is finding 148 exactly: a plausible string invented
+from the function's own name, which could not be caught because nothing had
+ever run that call tree with `dsplibs_debug_level` raised.  It surfaced only
+because modes 0, 1 and 4 reach it through `v34modeminit` -> `txinit`, and
+this is the first test to compare `v34modeminit`'s transcript at all.
 
-**The general point is about where the debt sits.**  Finding 134 argued for
-restoring dropped call sites; 126 built the capture facility; 147 was the
-first time it caught something in new code.  This is the first time it has
-caught something in code that had already passed a full differential test
-and been committed — so the exposure is not "new modules might have wrong
-strings", it is "every module whose transcript has never been compared
-might".  `tools/debugaudit.py` exists; pointing it at the committed tree is
-worth a task of its own.
+**That is a class, not an incident, so the class was swept.**  Every format
+string this tree hands `dsplibs_debug_printf` — 77 of them — was checked for
+presence anywhere in the object's `.rodata` or `.data`.  A string that is
+nowhere in the blob was written rather than read.  Three more turned up, all
+in `V34EchoReportCoeff`, and the object's own are
+
+```
+   .rodata.str1.4+0xf878   ?======= Nothing to report =========
+   .rodata.str1.1+0x2c84   ?%d %d %d %d %d %d
+   .rodata.str1.4+0xf8a0   ?======= Coefficients[1..%ld]=========
+```
+
+— leading `?` on all three, a literal 0x3f.  **And the header takes an
+argument the paraphrase did not**: `%edx` at 0x72298 is still `n`, the tap
+count rounded down to a multiple of six.  So an invented string had also
+hidden a missing argument, which is the part that would have mattered.
+
+The sweep is now `debugaudit.py --invented`, and it self-tests: introduce a
+string and it reports; the committed tree reports 77 checked, 0 invented.
+It is a NECESSARY condition only — a string present in `.rodata` but
+belonging to a different function still passes — so it retires the "invented
+from thin air" failure mode and not the "attached to the wrong site" one.
+
+**Why the strings were reachable but untested, and the stale comment that
+kept them so.**  `t_v34ec.c` said of `V34EchoReportCoeff` that raising the
+level "would still compare nothing, because neither logger records
+anything".  That was true when it was written and stopped being true when
+finding 126 built the capture facility — which the same file already uses,
+forty lines earlier, for `V34SetupModulator`.  A comment that documents a
+limitation someone else has since removed is worse than no comment: it tells
+the next reader not to try.  Both functions now have their transcripts
+compared, over seven tap counts and three coefficient patterns, and all five
+mutations of the four strings and the one argument are caught.
+
+That fixture needed its own storage: `V34EchoReportCoeff` dumps a hardcoded
+144 coefficients whatever `taps` says (D28), which out of the shared 32-entry
+array runs 48 shorts past the end of the struct into whatever the linker put
+next — not the same on the two sides.  160-entry arrays keep the over-read
+inside memory both sides own and seed identically.
+
+**Where the debt sits.**  Finding 134 argued for restoring dropped call
+sites; 126 built the capture facility; 147 was the first time it caught
+something in new code.  This is the first time it has caught something in
+code that had already passed a full differential test and been committed.
+So the exposure is not "new modules might have wrong strings" — it is
+**every module whose transcript has never been compared**, and `--invented`
+narrows that but does not close it.
 
 **One fixture defect, found by mutation and fixed.**  `run_setupreceiver`
 dereferenced the detector's coefficient pointer at +0x3564 without seeding

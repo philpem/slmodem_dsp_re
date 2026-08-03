@@ -23,6 +23,16 @@ WHAT IT REPORTS
               restoring anything: the strings are the annotation, and they
               routinely name fields and conditions the reconstruction is
               otherwise guessing at (finding 136 is an example).
+  --invented  the opposite direction, and the one --missing cannot see: every
+              format string THIS TREE passes to dsplibs_debug_printf that does
+              not appear anywhere in the object's .rodata at all.  Such a
+              string was written from the function's name rather than read out
+              of the blob, and no test can catch it unless something compares
+              that function's transcript.  Four were found this way after
+              `V34EchoCleanUp` turned up printing its own name (finding 156);
+              the check is a necessary condition, not a sufficient one -- a
+              string present in .rodata but belonging to another function
+              still passes.
   --stamps    the __DATE__/__TIME__ pairs.  Six translation units baked their
               build time into .rodata; the seconds are an independent check
               on TU boundaries that symbol ordering cannot give (finding 135).
@@ -132,6 +142,36 @@ def our_sites(paths):
     return counts, where
 
 
+def our_format_strings(paths):
+    """(path, line, string) for every literal this tree hands the logger.
+
+    Adjacent literals are glued the way the compiler does, and the standard
+    escapes are undone, so the result is the bytes that would land in .rodata.
+    """
+    call = re.compile(r'%s\s*\(\s*((?:"(?:[^"\\]|\\.)*"\s*)+)' % DBG)
+    lit = re.compile(r'"((?:[^"\\]|\\.)*)"')
+    esc = {"n": "\n", "r": "\r", "t": "\t", "0": "\0",
+           '"': '"', "\\": "\\", "'": "'"}
+    out = []
+    for p in sorted(paths):
+        try:
+            src = open(p).read()
+        except OSError:
+            continue
+        for m in call.finditer(src):
+            raw = "".join(lit.findall(m.group(1)))
+            s, i = [], 0
+            while i < len(raw):
+                if raw[i] == "\\" and i + 1 < len(raw):
+                    s.append(esc.get(raw[i + 1], raw[i + 1]))
+                    i += 2
+                else:
+                    s.append(raw[i])
+                    i += 1
+            out.append((p, src[:m.start()].count("\n") + 1, "".join(s)))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Audit dsplibs.o's diagnostic call sites against this "
@@ -142,6 +182,8 @@ def main():
     ap.add_argument("--strings", metavar="FUNC", nargs="?", const="",
                     help="print format strings, optionally for one function")
     ap.add_argument("--stamps", action="store_true")
+    ap.add_argument("--invented", action="store_true",
+                    help="our format strings that are not in the object")
     args = ap.parse_args()
 
     tabs = rodata_strings(args.obj)
@@ -166,6 +208,23 @@ def main():
                 print("   %-16s 0x%05x  %s"
                       % (sec, base + m.start(), m.group(0)[:-1].decode()))
         return
+
+    if args.invented:
+        haystack = b"".join(blob for _, blob in tabs.values())
+        haystack += subprocess.run(
+            ["objcopy", "-O", "binary", "--only-section=.data",
+             args.obj, "/dev/stdout"], capture_output=True).stdout
+        found = our_format_strings(args.src)
+        bad = [(p, n, t) for p, n, t in found
+               if t.encode("latin1") not in haystack]
+        print("Format strings this tree passes to %s that appear NOWHERE in "
+              "the\nobject's .rodata or .data -- so they were invented rather "
+              "than read.\nFinding 156.\n" % DBG)
+        for p, n, t in bad:
+            print("  INVENTED  %s:%d\n            %r" % (p, n, t))
+        print("\n  %d checked, %d not present in the object"
+              % (len(found), len(bad)))
+        return 1 if bad else 0
 
     if args.strings is not None:
         which = args.strings
@@ -201,4 +260,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

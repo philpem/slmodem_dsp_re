@@ -56,6 +56,10 @@ extern void ref_V34EchoHistoryBackwardClean(void *obj, unsigned n);
 extern int ref_V34TimingFilter(void *t, int sample);
 extern int ref_V34Filter2(short s, short *st, const short *c, unsigned taps);
 extern void ref_V34EchoPreFilter(short *buf, short n, void *p);
+/* Declared, not implicit: it was reached through an implicit `int f()`
+ * declaration, which happens to work for a one-pointer cdecl call and
+ * would not for anything else. */
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 
 #define DLEN	64
 #define TAPS	32
@@ -783,12 +787,14 @@ main(void)
 
 	diff_begin("v34 echo: ReportCoeff with logging off");
 	/*
-	 * All this can establish is that the function changes nothing and
-	 * returns.  Its output goes to a logger both sides stub out, and the
-	 * path that would read past the coefficient array (D28) is gated on a
-	 * level slmodemd ships at zero.  Driving that path would mean raising
-	 * the level on both sides and would still compare nothing, because
-	 * neither logger records anything.
+	 * With the level at zero this can only establish that the function
+	 * changes nothing and returns.  THE SECTION BELOW DRIVES THE OTHER
+	 * HALF.  An earlier note here said raising the level "would still
+	 * compare nothing, because neither logger records anything" -- that
+	 * stopped being true when finding 126 built the capture facility,
+	 * which this same file already uses for `V34SetupModulator`.  Three
+	 * invented format strings survived in `V34EchoCleanUp` and
+	 * `V34EchoReportCoeff` behind that stale comment; see finding 156.
 	 */
 	setup(TAPS, DLEN);
 	V34EchoCleanUp(&a.e);
@@ -801,6 +807,97 @@ main(void)
 	V34EchoReportCoeff(&a.e);
 	ref_V34EchoReportCoeff(&b.e);
 	compare("after ReportCoeff on live coefficients", 1);
+	rc |= diff_end();
+
+	diff_begin("v34 echo: the clean-up and the report, transcripts compared");
+	{
+		/*
+		 * A FIXTURE OF ITS OWN, because `V34EchoReportCoeff` dumps a
+		 * hardcoded 144 coefficients whatever `taps` says (D28).  Out
+		 * of `struct side`'s 32-entry array that runs 48 shorts past
+		 * the end of the struct, into whatever the linker put after
+		 * `a` and `b` -- which is not the same on the two sides, so
+		 * the transcripts would differ for a reason that is the
+		 * fixture's and not the code's.  160-entry arrays keep the
+		 * over-read inside memory both sides own and both sides seed
+		 * identically, which is what makes the comparison mean
+		 * something.
+		 */
+		static struct v34_echo ea, eb;
+		static short ca[160], cb[160], fa[160], fb[160];
+		static short ha[160], hb[160], da[DLEN], db[DLEN];
+		static const unsigned taps[] = { 0, 5, 6, 7, 32, 143, 144 };
+		unsigned ti, j;
+		int live;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (ti = 0; ti < sizeof(taps) / sizeof(taps[0]); ti++)
+		for (live = 0; live <= 2; live++) {
+			memset(&ea, 0, sizeof(ea));
+			memset(&eb, 0, sizeof(eb));
+			for (j = 0; j < 160; j++) {
+				/*
+				 * `live` 0 leaves every coefficient zero, so
+				 * the scan falls out at k == n and the "nothing
+				 * to report" arm runs; 1 makes the FIRST one
+				 * non-zero and 2 only the last one the scan
+				 * covers, so both ends of the scan's exit are
+				 * driven.
+				 */
+				short v = 0;
+
+				if (live == 1 && j == 0)
+					v = 0x1234;
+				if (live == 2 && j + 1 == taps[ti])
+					v = -0x4321;
+				ca[j] = cb[j] = v;
+				fa[j] = fb[j] = (short)(j * 37 - 900);
+				ha[j] = hb[j] = (short)(j * 53 + 100);
+			}
+			for (j = 0; j < DLEN; j++)
+				da[j] = db[j] = (short)(j * 7 - 200);
+
+			ea.dline = da; ea.cursor = da; ea.coeff = ca;
+			ea.coeff_frac = fa; ea.hist = ha;
+			ea.dlen = DLEN; ea.taps = taps[ti];
+			eb.dline = db; eb.cursor = db; eb.coeff = cb;
+			eb.coeff_frac = fb; eb.hist = hb;
+			eb.dlen = DLEN; eb.taps = taps[ti];
+
+			dsplib_debug_capture_reset();
+			V34EchoReportCoeff(&ea);
+			ref_V34EchoReportCoeff(&eb);
+			diff_eq_int("ReportCoeff transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)taps[ti] * 10 + live);
+			diff_eq_int("ReportCoeff said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    (long)taps[ti] * 10 + live);
+
+			dsplib_debug_capture_reset();
+			V34EchoCleanUp(&ea);
+			ref_V34EchoCleanUp(&eb);
+			diff_eq_int("CleanUp transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)taps[ti] * 10 + live);
+			diff_eq_int("CleanUp said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    (long)taps[ti] * 10 + live);
+			for (j = 0; j < 160; j++)
+				diff_eq_int("CleanUp agreed on the arrays",
+					    ca[j] == cb[j] && fa[j] == fb[j]
+					    && ha[j] == hb[j], 1, (long)j);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
 	rc |= diff_end();
 
 	diff_begin("v34 Hilbert transformer");
