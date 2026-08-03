@@ -146,9 +146,24 @@ struct v34_object {
 	 * on loss of signal, alongside the string "Signal Energy below
 	 * Threshold %d, initiate a disconnection".  What the other values
 	 * mean belongs to VPcmV34Main.cpp, which is not reconstructed.
+	 *
+	 * ONE OF THEM IS NOW SOURCED: 1 and 2 mean a PCM receiver is running.
+	 * `VPcmV34InitiateHangUp` and `VPcmV34InitiateRateRenegotiation` both
+	 * test `(unsigned)(status - 1) <= 1` and, when it holds, hand the
+	 * request to the V.90 side through `p3548` instead of to the V.34
+	 * handshake -- and `VPcmV34GetCurrentTxBitRate` takes the
+	 * `V90Demodulator` branch on exactly the same test.
 	 */
 	int status;					/* +0x0000 */
-	unsigned char unmapped_0004[0x008 - 0x004];
+	/*
+	 * +0x0004.  An int the shell polls: `VPcmV34InitiateHangUp`,
+	 * `VPcmV34InitiateRateRenegotiation` and `VPcmV34SetV90RateReneg` all
+	 * put 6 in it, `datapumpv34` puts 5 when the sample count at +0x238
+	 * has run 287,488 past the mark at +0x248, and `VPcmV34Create` puts
+	 * 10 and then 0.
+	 * Nothing reconstructed reads it, so the values are all this says.
+	 */
+	int f0004;					/* +0x0004 */
 	/*
 	 * +0x0008 and +0x0010, both named by initdigital's own debug string:
 	 * "for tx data rate - %d, PTC - %d, setting nofTxBits to %d".  `ptc`
@@ -179,13 +194,57 @@ struct v34_object {
 	int tx_data[64];				/* +0x0118 */
 	int tx_n;					/* +0x0218 */
 	int tx_rd;					/* +0x021c */
-	unsigned char unmapped_0220[0x230 - 0x220];
+	/*
+	 * +0x0220 to +0x022c.  THE RATE RENEGOTIATION'S FOUR WORDS, all
+	 * indices rather than bit rates -- `VPcmV34GetCurrentRxBitRate`
+	 * multiplies the same units by 2400 to answer in bits per second.
+	 *
+	 * Every one of the four names is read off a site, not inferred from
+	 * the group:
+	 *
+	 *   min, max   `VPcmV34SetMinMaxBitRates` divides a pair of rates by
+	 *              2400 into these two, caps both at 14, and then raises
+	 *              +0x224 to +0x220 if it is below it.  Which way round
+	 *              that fix-up goes is settled by
+	 *              `VPcmV34InitiateRateRenegotiation`, whose step down
+	 *              clamps at +0x220 and whose step up clamps at +0x224.
+	 *
+	 *   now        `v34handshak` at 0x63d03 stores the negotiated rate
+	 *              index -- a copy of +0xaa98, the field the getter
+	 *              multiplies -- into +0x228 and +0x22c together.
+	 *
+	 *   want       and at 0x63395 it reads +0x22c back, skips on `js`
+	 *              and then on equality with +0x228, and otherwise
+	 *              adopts it as +0xaa98.  So this is a REQUEST, and
+	 *              NEGATIVE MEANS "no target": `VPcmV34InitiateRate-
+	 *              Renegotiation` writes -1 for a renegotiation that
+	 *              names no rate, and `VPcmV34InitiateHangUp` clears the
+	 *              request and both bounds but leaves `rate_now` alone.
+	 */
+	int rate_min;					/* +0x0220 */
+	int rate_max;					/* +0x0224 */
+	int rate_now;					/* +0x0228 */
+	int rate_want;					/* +0x022c */
 	/*
 	 * The signal-energy floor `receiver` compares its 36-sample RMS
 	 * against before declaring the line dead.  An int, and the only field
 	 * either V.34 core reads through `obj + 4` rather than `obj`.
 	 */
 	int rx_energy_floor;				/* +0x0230 */
+	/*
+	 * +0x0234 to +0x024b holds the sample-clock timer -- +0x238 the
+	 * running count and +0x248 the instant a span is measured from,
+	 * with +0x23c and +0x244 written alongside them.  Left unnamed and
+	 * unmapped: every writer reaches the group through `obj + 4` and
+	 * spells the offsets out, which is what v34hshak.c's note explains,
+	 * and only two of the four have a reader to name them from.
+	 *
+	 * `datapumpv34` reads +0x238 and +0x248 at their TRUE offsets and
+	 * puts 5 in `f0004` when the difference passes 287,488; `v34handshak`
+	 * copies +0x238 into +0x248 to restart the span.  Between them those
+	 * are the second and third readings that settle finding 155's
+	 * register-relative offsets as four low.
+	 */
 	unsigned char unmapped_0234[0x24c - 0x234];
 	/*
 	 * How far the V.90 receiver has got through phase 3, as a number the
@@ -199,6 +258,10 @@ struct v34_object {
 	 * this field and the next is `lea 0x4(obj); mov 0x248(that)`.  It is
 	 * an addressing artifact in all three and is not evidence of a
 	 * sub-object at +4.
+	 *
+	 * IT IS NOT ONLY RATCHETED.  `VPcmV34SetV90RateReneg` assigns 11 or
+	 * 15 outright, so a renegotiation can move it down as well as up;
+	 * see D44.
 	 */
 	int v90_receiver;				/* +0x024c */
 	/*
@@ -330,11 +393,19 @@ struct v34_object {
 	unsigned char unmapped_3408[0x3548 - 0x3408];
 	/*
 	 * +0x3548.  The session object VPcmV34Main.cpp hangs everything else
-	 * off: twenty-odd functions in that translation unit load it, and the
-	 * only field of it any of them reads is an int at +0x6120.  What it
-	 * points at is not reconstructed, so it is a `void *` here and the
-	 * +0x6120 read is spelled out at its one use rather than given a
-	 * struct that would be a guess.
+	 * off: twenty-odd functions in that translation unit load it.  What
+	 * it points at is not reconstructed, so it is a `void *` here and
+	 * each field is spelled out at its use rather than given a struct
+	 * that would be a guess.
+	 *
+	 * An earlier note here said +0x6120 was the only field any of them
+	 * read.  That was true of the functions reconstructed at the time and
+	 * is not true of the object: +0x610c, +0x611c, +0x612c, +0x6bd0,
+	 * +0x1744 and +0x1760 are all read as well, and the two Initiate
+	 * entry points reach a chain -- a flag byte at +0x173e, and a pointer
+	 * at +0x175c that `VPcmV34GetCurrentRxBitRate` hands to
+	 * `V90Demodulator::getBitRate`, so the session object holds the
+	 * demodulator rather than being it.
 	 */
 	void *p3548;					/* +0x3548 */
 	/*
@@ -536,7 +607,22 @@ struct v34_object {
 	int rx_bps;					/* +0xac08 */
 	/* Where the V.90 side is told the recovered timing offset. */
 	short fac0c;					/* +0xac0c */
-	unsigned char unmapped_ac0e[0xac16 - 0xac0e];
+	/*
+	 * The two rate-renegotiation counters, and the only fields here whose
+	 * names come from a whole function rather than from a string:
+	 * `VPcmV34IndicateLocalRRN` is nothing but the increment of the first
+	 * and `VPcmV34IndicateRemoteRRN` nothing but the increment of the
+	 * second.  `VPcmV34InitiateRateRenegotiation` bumps `rrn_local`
+	 * inline, which is the same event counted at its source.
+	 *
+	 * Both wrap at 16 bits and `VPcmV34GetDiagnostics` reads `rrn_local`
+	 * back SIGNED, so a session past 32,767 local renegotiations reports
+	 * a negative count.  Not entered as a deviation: it takes a run no
+	 * real call would reach.
+	 */
+	short rrn_local;				/* +0xac0e */
+	short rrn_remote;				/* +0xac10 */
+	unsigned char unmapped_ac12[0xac16 - 0xac12];
 	/*
 	 * +0xac16.  A BYTE, and past where this struct used to end: the
 	 * declared length of 0xac10 was the largest offset anything

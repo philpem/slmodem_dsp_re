@@ -10068,3 +10068,125 @@ do not -- GPA's four folds, and the observation that its `shr` could be
 four between `getFrame` and `putFrame`, so `v34shell.c` is where the
 original had them; that deviation is recorded at the head of `v34scram.c`
 rather than acted on.
+
+All three are now written; finding 157 is what they turned out to say, and
+two claims in the paragraph above did not survive the reading.  **Both**
+Initiate entry points pass mode 2 — `v34hshak.h`'s mode table says so and
+this paragraph contradicted it.  And the timer group WAS corroborated, but by
+`datapumpv34` and `v34handshak`, not by `VPcmV34SetV90RateReneg`: it writes
+three of the four fields and leaves +0x244 alone.
+
+### 189. The rate group is named, and the request entry points do not agree on what a request is
+
+`VPcmV34InitiateHangUp` (258 B), `VPcmV34InitiateRateRenegotiation` (259 B)
+and `VPcmV34SetV90RateReneg` (274 B) are written.  Finding 180 listed them
+as the three that `v34handshakinit` unblocked; between them they name six
+object fields that were pads and settle two things about the shape of the
+V.34 object that the reconstruction had wrong.
+
+**THE RATE GROUP.**  +0x220, +0x224, +0x228 and +0x22c are four `int`
+INDICES — the same units +0xaa88 and +0xaa98 hold, which
+`VPcmV34GetCurrentRxBitRate` multiplies by 2400 to answer in bits per
+second.  Each name comes off a site:
+
+```
+  rate_min   +0x220   VPcmV34SetMinMaxBitRates divides a rate by 2400 into it
+  rate_max   +0x224   ... and the other of the pair into this one
+  rate_now   +0x228   v34handshak 0x63d03: both get (short)obj[0xaa98]
+  rate_want  +0x22c   v34handshak 0x63395: read back, `js` to skip, then
+                      compared with rate_now and adopted as obj[0xaa98]
+```
+
+Which way round min and max go is NOT settled by `VPcmV34SetMinMaxBitRates`,
+whose fix-up raises +0x224 to +0x220 and reads the same either way.  It is
+settled by the renegotiation: its step DOWN clamps at +0x220 and its step UP
+clamps at +0x224.  And the `js` at 0x63395 is what says a negative
+`rate_want` means "no target" rather than being an index — which is exactly
+what the renegotiation's default arm writes.
+
+**THE TWO RRN COUNTERS.**  +0xac0e and +0xac10.  These are the only fields in
+`v34fsk.h` whose names come from a whole function rather than from a string:
+`VPcmV34IndicateLocalRRN` is nothing but `+0xac0e++` and
+`VPcmV34IndicateRemoteRRN` is nothing but `+0xac10++`.
+`VPcmV34InitiateRateRenegotiation` does the first increment inline, which is
+the same event counted at its source.
+
+**"REQUEST" MEANS TWO DIFFERENT THINGS IN ONE FUNCTION.**  All three entry
+points fork on `(unsigned)(status - 1) <= 1` — 1 and 2 mean a PCM receiver
+has the line, the same test that picks the `V90Demodulator` branch in
+`VPcmV34GetCurrentTxBitRate`.  On that arm the renegotiation forwards its
+argument VERBATIM to `p3548 -> +0x175c -> +0x20c -> +0x8c`.  On the V.34
+arm it reads only four values out of it: 0, 2 and 5 step down, 3 steps up,
+anything else asks for nothing.  So the parameter is not one enumeration and
+the header does not name it as though it were.
+
+A step that would leave the bounds writes **nothing** rather than clamping —
+`rate_want` keeps whatever it held, so a renegotiation asked for at the
+bottom of the range still tears the handshake down and still counts, carrying
+the previous request.
+
+**THE SESSION OBJECT IS NOT WHAT `v34fsk.h` SAID.**  Its comment claimed
++0x6120 was "the only field of it any of them reads".  That was true of the
+functions reconstructed when it was written and is not true of the object:
++0x610c, +0x611c, +0x612c, +0x6bd0, +0x1744 and +0x1760 are read as well, and
+these two entry points walk a three-link chain through it.  +0x175c is the
+`V90Demodulator` — `VPcmV34GetCurrentRxBitRate` hands exactly that field to
+`V90Demodulator::getBitRate` — so the session object HOLDS the demodulator
+rather than being it.  Corrected in place.  Same shape as findings 144 and
+176: a negative claim about the object that was really a claim about what had
+been read so far.
+
+**Finding 179's +4 correction has two more witnesses.**  `datapumpv34` reads
++0x238 and +0x248 at their TRUE offsets (`mov 0x238(%ebx)` with `%ebx` the
+object) and puts 5 in +0x4 when the difference passes 287,488; `v34handshak`
+at 0x63cda copies +0x238 into +0x248 to restart the span.  Between them the
+group is confirmed from outside VPcmV34Main.cpp's addressing habit.  +0x4
+itself stays unnamed: three functions put 6 in it, `datapumpv34` puts 5 and
+`VPcmV34Create` puts 10 and then 0, and nothing reconstructed reads it.
+
+**`VPcmV34SetV90RateReneg` is `v34handshakinit`'s mode 2 with the state
+machines left out** — the same four transmit-queue fields, the same
+`& ~0x4018 | 0x2000`, the same `preinitdigital`, the same `f382` pair, the
+same timer reset.  Two independent readings of one block, which is the
+corroboration that the block was read right.  Its two parameters are both
+tested for ZERO only: `cmp $1; sbb %edx,%edx` reads the *borrow*, so only
+zero takes the low arm and a negative `rrn_type` takes the high one.  A
+reconstruction that wrote `rrn_type < 1` would agree everywhere except on
+negatives.  D48 records what it does to `v90_receiver`.
+
+**WHAT THE TEST HAD TO GROW.**
+
+*A three-link chain per side.*  The PCM arm reaches out of the object
+entirely, so each side gets its own session, demodulator and leaf buffer,
+prefilled with a pattern, and the chains are compared to each other
+afterwards.  Comparing the leaf alone would not do: hang-up also sets a flag
+byte at `p3548 + 0x173e` and the renegotiation does not, and that byte is the
+whole difference between the two functions' PCM arms.
+
+*Seeded pointers, for the reason last session learned the hard way.*  The
+first fixture dereferenced `+0x0a28` straight out of the object under test.
+Four mutants were "caught" by SEGFAULT rather than by a report — two of them
+because the fixture crashed on the first case that diverged, which is a
+defect in the test and not a diagnosis.  Seeding every skipped pointer with a
+per-side dummy turns all four into clean failures.  This is the third time
+that exact shape has appeared (`run_setupreceiver`, `check_self_ptr`, here),
+so: **a fixture must never dereference a pointer it read out of the object
+under test without seeding it first.**
+
+*And the check that closes a gap the whole tree has.*  Every transcript
+comparison in this tree raises the debug level first, so a call site that
+lost its `if (DSPLIB_DEBUG_ON())` prints the same thing and passes — the
+mutation survived.  The capture facility is independent of the level, so
+turning capture ON with the level left DOWN tests the other half: below the
+threshold these functions must say nothing.  Levels 0 **and 1**, because
+every gate in the object is `> 1` and 1 is the only value separating it from
+the `>= 1` a reader would write.  Both mutants are now caught.  The same
+section would be worth having in every test file that compares a transcript.
+
+**Mutation:** 50 applied, 48 caught.  Both survivors are reorderings that are
+equivalent: the flag byte at `p3548 + 0x173e` and the pointer load at +0x175c
+do not alias, and `preinitdigital` does not touch +0x25c2 -- which the
+surviving mutant is itself the proof of, since swapping the mask and the call
+changes nothing in a whole-object comparison.  Four of the 48 were caught only
+after the fixture stopped crashing, and two only after the silence section
+existed; before those, both classes read as passes.
