@@ -63,10 +63,10 @@ import sys
 def build_and_run(target, test):
     b = subprocess.run(["make", target], capture_output=True, text=True)
     if b.returncode != 0:
-        return None, b.stderr
+        return None, b.stderr, None
     r = subprocess.run([test], capture_output=True, text=True)
     if r.returncode != 0:
-        return r.returncode, r.stdout
+        return r.returncode, r.stdout, "test"
     #
     # `make test` gates on `strings` as well as on the binaries, so a mutation
     # the invented-string sweep rejects is one the tests do catch -- and it is
@@ -75,10 +75,17 @@ def build_and_run(target, test):
     # level.  Running the binary alone reported fourteen of callprog.json's
     # seventeen as uncaught when the tree does in fact reject every one.
     #
+    # WHICH GATE FIRED IS REPORTED SEPARATELY, because they are not the same
+    # strength of evidence.  The differential test says the site prints this,
+    # here, with these arguments.  The sweep says only that the literal exists
+    # in the blob -- nothing about placement, arguments, or whether the site is
+    # reachable at all.  A set caught entirely by `strings` is a set whose call
+    # sites are still undriven, which is the thing task #50 exists to fix.
+    #
     s = subprocess.run(["make", "strings"], capture_output=True, text=True)
     if s.returncode != 0:
-        return s.returncode, s.stdout + s.stderr
-    return r.returncode, r.stdout
+        return s.returncode, s.stdout + s.stderr, "strings"
+    return r.returncode, r.stdout, None
 
 
 SUITES = "test/mutations/suites.json"
@@ -87,20 +94,22 @@ SUITES = "test/mutations/suites.json"
 def run_all():
     """Every suite, with the totals -- so one command says where the tree is."""
     suites = {k: v for k, v in json.load(open(SUITES)).items() if k != "_"}
-    tot = [0, 0, 0]
+    tot = [0, 0, 0, 0, 0]
     for name in sorted(suites):
         r = subprocess.run([sys.executable, sys.argv[0], "--suite", name],
                            capture_output=True, text=True)
         last = [l for l in r.stdout.split("\n") if "mutations:" in l]
         print("  %-16s %s" % (name, last[-1].strip() if last else "FAILED"))
         if last:
-            n = [int(x) for x in re.findall(r"(\d+) (?:caught|NOT caught|"
-                                            r"unusable)", last[-1])]
-            for i, v in enumerate(n[:3]):
+            n = [int(x) for x in re.findall(r"(\d+) (?:caught|by test|"
+                                            r"by strings|NOT caught|unusable)",
+                                            last[-1])]
+            for i, v in enumerate(n[:5]):
                 tot[i] += v
-    print("\n  %d caught, %d NOT caught, %d unusable, over %d suites"
-          % (tot[0], tot[1], tot[2], len(suites)))
-    return 1 if tot[1] or tot[2] else 0
+    print("\n  %d caught -- %d by the differential tests, %d only by the "
+          "string sweep\n  %d NOT caught, %d unusable, over %d suites"
+          % (tot[0], tot[1], tot[2], tot[3], tot[4], len(suites)))
+    return 1 if tot[3] or tot[4] else 0
 
 
 def main():
@@ -142,8 +151,9 @@ def main():
     # Everything below runs against a mutated tree; the restore has to happen
     # even if the build dies or the user interrupts.
     uncaught, broken = [], []
+    by = {"test": 0, "strings": 0}
     try:
-        rc, out = build_and_run(target, args.test)
+        rc, out, _ = build_and_run(target, args.test)
         if rc != 0:
             sys.exit("baseline is not green -- fix that first:\n" +
                      (out or ""))
@@ -158,7 +168,7 @@ def main():
 
             open(args.source, "w").write(
                 good.replace(m["find"], m["replace"]))
-            rc, out = build_and_run(target, args.test)
+            rc, out, gate = build_and_run(target, args.test)
 
             if rc is None:
                 broken.append((m["label"], "does not compile"))
@@ -169,8 +179,9 @@ def main():
                 print("  ****  %-52s  NOT CAUGHT" % m["label"])
                 continue
 
+            by[gate] += 1
             fails = [l for l in out.split("\n") if l.startswith("FAIL")]
-            print("  ok    %-52s  caught" % m["label"])
+            print("  ok    %-52s  caught (%s)" % (m["label"], gate))
             if args.verbose:
                 for f in fails:
                     print("            %s" % f)
@@ -178,9 +189,10 @@ def main():
         open(args.source, "w").write(good)
         build_and_run(target, args.test)
 
-    print("\n  %d mutations: %d caught, %d NOT caught, %d unusable"
+    print("\n  %d mutations: %d caught (%d by test, %d by strings), "
+          "%d NOT caught, %d unusable"
           % (len(muts), len(muts) - len(uncaught) - len(broken),
-             len(uncaught), len(broken)))
+             by["test"], by["strings"], len(uncaught), len(broken)))
     if uncaught:
         print("\n  Uncaught -- these claims are currently untested:")
         for l in uncaught:

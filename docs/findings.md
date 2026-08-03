@@ -10225,5 +10225,39 @@ failure -- so a rename can silently retire a check, which is the same
 failure mode as a dropped call site and deserves the same suspicion.
 
 `tools/mutate.py --all` now runs the lot: 152 mutations over 14 suites, all
-caught, nothing unusable.  That number is the one to compare against in
-future, and it is lower-bounded by a harness that no longer flatters itself.
+caught, nothing unusable.
+
+AND IT REPORTS WHICH GATE FIRED, because a bare 152 of 152 would have made
+the same mistake in the other direction.  138 are caught by the differential
+tests -- this string, here, with these arguments.  14 are caught only by the
+string sweep, which proves the literal is in the blob and NOTHING about
+placement, arguments or whether the site ever fires.  All 14 are
+CALLPROG_Progress's, which is finding 154 saying the same thing from the
+other side: 29 sites placed there, 3 of them actually driven.  The two
+numbers agree, and they only agree because the score stopped rounding a weak
+check up to a strong one.
+
+### 191. A merge is the one edit nothing in the tree could check
+
+Every `/* +0xNNN */` in the headers is a claim about the object's layout, and
+the padding between fields is written as an ABSOLUTE span -- `unmapped_a948
+[0xaa0c - 0xa948]` -- so a wrong span slides every field after it and stops
+only at the next hand-written assert.  Both spellings compile.
+
+Interleaving two branches' fields into one struct means recomputing those
+spans by hand, four times in this merge.  The hand-written `V34OB_ASSERT`
+checks cover a few dozen fields, chosen next to the code that needed them:
+the highest one in `struct v34_object` was at +0xaad0, and the last merge
+spliced two field groups into the tail at +0xac0e, past everything asserted.
+A two-byte error there would have compiled, passed every test, and been
+inherited by whatever the next session built on it.
+
+`tools/offcheck.py` generates one `offsetof` assertion per annotation and
+compiles them: 864 of them, all matching, and `make offsets` now runs it as
+part of `make test`.  Backdating a two-byte error into one padding array
+fails 28 assertions, not 1 -- which is the propagation, made visible.
+
+The twelve annotations it skips are `struct v8_v21_params`, which annotates
+each field with where the STRUCT sits in the V.8 object rather than with the
+field's own offset.  That convention is legitimate and the tool names it
+rather than guessing.

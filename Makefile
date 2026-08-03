@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings all test check64 docs clean interop capture coverage phase
+.PHONY: firewall strings offsets all test check64 docs clean interop capture coverage phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -135,7 +135,7 @@ $(BUILD):
 
 # --- targets --------------------------------------------------------------
 
-test: firewall strings $(TESTBIN)
+test: firewall strings offsets $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
 
 # The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
@@ -169,6 +169,15 @@ strings:
 	    exit 1; \
 	}; \
 	echo "$$out" | tail -1
+
+# Every `/* +0xNNN */` in the headers, against what the compiler lays out.
+#
+# The paddings between fields are stated as absolute spans, so one wrong span
+# slides every field after it -- and both spellings compile.  A merge that
+# interleaves two branches' fields has to recompute those by hand, which is
+# exactly when nothing else in the tree can tell.  See tools/offcheck.py.
+offsets:
+	@$(PYTHON) tools/offcheck.py
 
 # Everything a phase boundary is supposed to check, in one target.
 #
