@@ -8719,3 +8719,66 @@ zero length, oversize) end in a bare \n.  The banner prints only AFTER the
 selector is validated -- an illegal type gets its complaint instead, never
 the banner -- and the oversize complaint reports the CALLER's length, not
 the truncated one.  9/9 mutations caught via t_v8util's transcript sweep.
+
+### 166. v8jm's three functions: the trace names the V.90 conditions, and two
+### structural mistakes it exposes
+
+The 22 sites across `rebuildJMSequence`, `evaluateRxJMSequence` and
+`V8UpdateModemParameters` name the three anonymous flags the reconstruction
+had been carrying as `flag_a`, `flag_b`, `flag_c`:
+
+    V8Report: remote V90: mod - %d, digital connection - %d, pcmIndication - %d
+    V8: on ANSWER: remote V90: mod - %d, ... , local - %d
+
+so they are `v90_mod`, `digital_connection` and `pcm_indication`, and the
+fourth value on the answering side is the local V.90 bit, `cm->b0` bit 3 --
+the same bit V8Create prints as `V90` (finding 164).  `V8UpdateModemParameters`
+closes with the same ten-bit modulation line V8Create opens with, so the two
+sit either side of the negotiation: what was asked for, and what was settled
+on.  `fdc4` is named by its own message, `V8Report: Finished with Quick
+Connect`.
+
+Cross-jumping merges the 0x107 and 0x109 announcements: both print
+`call function DATA indication`.  The discriminator is where the merge lands
+-- 0x109's test jumps to the `je` that precedes the gate, not to the store
+after the print -- so V.80 genuinely shares the data announcement rather than
+having none.  Both functions do this, so it is the author's choice, not one
+compiler accident.  Twelve source sites in rebuildJMSequence compile to
+eleven calls; the LAPM message shares the in-range message's call, and the
+audit reads -2 as a result, exactly as V8Create reads -1.
+
+TWO RECONSTRUCTION ERRORS FELL OUT, both in the second-extension scan, and
+both invisible until the sites forced the region to be read properly:
+
+  * The acceptance list was consulted before the filler, and a local
+    extension that failed to match abandoned the word.  The object tests
+    `ext_list[0]` BEFORE calling charFlip -- so the list-empty test cannot be
+    in_list's inlined early return, it is a branch of its own -- and a failed
+    local match falls through to the list rather than continuing.  Written the
+    old way, a non-empty list that did not match still accepted the filler,
+    and a configured extension that failed shut the list out.
+
+  * With V.90 on offer the scan is a different loop entirely: it walks every
+    marker word instead of stopping at the first, and it does not touch
+    `fec2`.  Nothing else runs -- no acceptance list, no filler, and with no
+    local field, nothing at all.
+
+A third, smaller one: a first extension that matches in full sets `febc`
+before breaking, which the reconstruction had left to the caller.
+
+WHY NONE OF THIS WAS CAUGHT.  t_v8jm built what arrives with the encoder,
+which cannot produce the inputs that discriminate: no encoded word carries
+the second-extension marker except the filler, no encoded word gives
+pcmIndication the value 1 that V.90 requires, an ext1 of 'G' is sent as
+0x1c5 which is a capability word and never a function one, and the two
+acceptance lists held characters (0x83, 0x54) that no encoded word can match
+-- they are the pre-image under the wrong direction of charFlip.  So four
+whole mechanisms were inert.  The hand-built table added in this commit
+drives them: 0xc1 matches the word 0x107, 0x2a matches the filler 0x0a9, and
+'*' and 'J' are the extension characters that land in the marker range.
+Each divergence was confirmed RED against the old source before the fix.
+
+The three V.90 conditions also had to be given different values from each
+other, or the line reporting all three reads the same in any order: 0x141
+withholds the modulation, 0x161 the digital connection, and 0x1c9 gives a
+pcmIndication of 2 rather than 1.  29/29 mutations caught.

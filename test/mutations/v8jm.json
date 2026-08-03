@@ -1,0 +1,147 @@
+[
+ {
+  "label": "announce the caller's side as the answerer's",
+  "find": "\t\t\t    \"V8: on CALLER: remote call function is: %X\\r\\n\", w);",
+  "replace": "\t\t\t    \"V8: on ANSWER: remote call function is: %X\\r\\n\", w);"
+ },
+ {
+  "label": "report the received call function in decimal",
+  "find": "\t\t\t    \"V8: on ANSWER: remote call function is: %X\\r\\n\", w);",
+  "replace": "\t\t\t    \"V8: on ANSWER: remote call function is: %d\\r\\n\", w);"
+ },
+ {
+  "label": "announce the call function after the extension is tried",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: on ANSWER: remote call function is: %X\\r\\n\", w);\n\n\t\tif (cm->b2 & V8_CM_EXT1_PRESENT) {\n\t\t\t/* An extension stands in for the function. */",
+  "replace": "\t\tif (cm->b2 & V8_CM_EXT1_PRESENT) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: on ANSWER: remote call function is: \"\n\t\t\t\t    \"%X\\r\\n\", w);\n\t\t\t/* An extension stands in for the function. */"
+ },
+ {
+  "label": "give V.80 an indication of its own on the answering side",
+  "find": "\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V8: call function DATA \"\n\t\t\t\t\t\t     \"indication...\\r\\n\");\n\t\t\taccept = 1;",
+  "replace": "\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V8: call function V.80 \"\n\t\t\t\t\t\t     \"indication...\\r\\n\");\n\t\t\taccept = 1;"
+ },
+ {
+  "label": "give V.80 an indication of its own on the calling side",
+  "find": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function DATA \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->febc = 1;",
+  "replace": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function V.80 \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->febc = 1;"
+ },
+ {
+  "label": "swap the two fax directions on the answering side",
+  "find": "\t\t} else if (w == 0x103 && (cm->b2 & 0x01)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: call function FAX TX from caller \"\n\t\t\t\t    \"indication...\\r\\n\");",
+  "replace": "\t\t} else if (w == 0x103 && (cm->b2 & 0x01)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: call function FAX RX to caller \"\n\t\t\t\t    \"indication...\\r\\n\");"
+ },
+ {
+  "label": "swap the two fax directions on the calling side",
+  "find": "\t\t\t} else if (w == 0x10b && (cm->b1 & 0x80)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function FAX RX to \"\n\t\t\t\t\t    \"caller indication...\\r\\n\");",
+  "replace": "\t\t\t} else if (w == 0x10b && (cm->b1 & 0x80)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function FAX TX from \"\n\t\t\t\t\t    \"caller indication...\\r\\n\");"
+ },
+ {
+  "label": "drop the in-range call function announcement",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Got Call Function Match (in call \"\n\t\t\t\t    \"function range) !!!\\r\\n\");\n\t\t\taccept = 1;",
+  "replace": "\t\t\taccept = 1;"
+ },
+ {
+  "label": "drop the no-call-function BUG message from the rebuild",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - no Call Function selected in \"\n\t\t\t\t    \"bit fields - use data as default !!!\\r\\n\");\n\t\t\tcm->b1 |= 0x40;",
+  "replace": "\t\t\tcm->b1 |= 0x40;"
+ },
+ {
+  "label": "announce the zeroing whether or not a function matched",
+  "find": "\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: NO Call Function Match !!! zeroing all \"\n\t\t\t    \"modulation capabilities...\\r\\n\");\n\t\tjm->word[n] = 0x141;",
+  "replace": "\t} else {\n\t\tjm->word[n] = 0x141;"
+ },
+ {
+  "label": "report the local V.90 bit from b0 bit 4",
+  "find": "\t\t\t    \"%d\\n\", v90_mod, digital_connection,\n\t\t\t    pcm_indication, (cm->b0 >> 3) & 1);",
+  "replace": "\t\t\t    \"%d\\n\", v90_mod, digital_connection,\n\t\t\t    pcm_indication, (cm->b0 >> 4) & 1);"
+ },
+ {
+  "label": "swap mod and pcmIndication in the answerer's report",
+  "find": "\t\t\t    \"%d\\n\", v90_mod, digital_connection,\n\t\t\t    pcm_indication, (cm->b0 >> 3) & 1);",
+  "replace": "\t\t\t    \"%d\\n\", pcm_indication, digital_connection,\n\t\t\t    v90_mod, (cm->b0 >> 3) & 1);"
+ },
+ {
+  "label": "announce the V.90 rebuild on the local bit alone",
+  "find": "\tif (all_flags) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8: on ANSWER: rebuilding JM \"\n\t\t\t\t\t     \"with V90 capabilities...\\r\\n\");\n\t\tjm->word[base] |= 8;\n\t}",
+  "replace": "\tif (cm->b0 & 8) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8: on ANSWER: rebuilding JM \"\n\t\t\t\t\t     \"with V90 capabilities...\\r\\n\");\n\t}\n\tif (all_flags)\n\t\tjm->word[base] |= 8;"
+ },
+ {
+  "label": "swap the two protocol match announcements",
+  "find": "\t\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t    \"V8: Got Default Protocol \"\n\t\t\t\t\t\t    \"Match (LAPM) !!!\\r\\n\");",
+  "replace": "\t\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t    \"V8: Got Protocol Match (in \"\n\t\t\t\t\t\t    \"protocol range) !!!\\r\\n\");"
+ },
+ {
+  "label": "report the JM length before the V.90 tail is counted",
+  "find": "\tif (all_flags) {\n\t\tjm->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tjm->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Final JM message length is %d octets\\r\\n\", words);\n\tif (all_flags) {\n\t\tjm->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tjm->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}"
+ },
+ {
+  "label": "report the JM length in bits",
+  "find": "\t\t    \"V8: Final JM message length is %d octets\\r\\n\", words);",
+  "replace": "\t\t    \"V8: Final JM message length is %d octets\\r\\n\",\n\t\t    words * V8_SEQ_BITS_PER_WORD);"
+ },
+ {
+  "label": "abandon the marker word when the local extension fails to match",
+  "find": "\t\t\t\tv->fec2 = 0;\n\t\t\t\t/*\n\t\t\t\t * Not a `continue`: a local field that failed\n\t\t\t\t * to match still gets the acceptance list\n\t\t\t\t * tried against the same word below.\n\t\t\t\t */",
+  "replace": "\t\t\t\tv->fec2 = 0;\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "accept the filler even when an acceptance list is configured",
+  "find": "\t\t\tif (!ext2_matched\n\t\t\t    && in_list(cm->ext_list,\n\t\t\t\t       charFlip((unsigned char)(w >> 1)))) {",
+  "replace": "\t\t\tif (!ext2_matched && w == V8_SEQ_TAIL_A)\n\t\t\t\text2_matched = 1;\n\t\t\tif (!ext2_matched\n\t\t\t    && in_list(cm->ext_list,\n\t\t\t\t       charFlip((unsigned char)(w >> 1)))) {"
+ },
+ {
+  "label": "let the V.90 extension scan remember what it matched",
+  "find": "\t\t\t\t\t\t   ext_expected(cm->ext2[k])) {\n\t\t\t\t\t\tjm->word[n++] = (short)got;\n\t\t\t\t\t\text2_matched = 1;\n\t\t\t\t\t\ti++;",
+  "replace": "\t\t\t\t\t\t   ext_expected(cm->ext2[k])) {\n\t\t\t\t\t\tjm->word[n++] = (short)got;\n\t\t\t\t\t\tv->fec2 = (short)got;\n\t\t\t\t\t\text2_matched = 1;\n\t\t\t\t\t\ti++;"
+ },
+ {
+  "label": "leave febc alone when the extension matches in full",
+  "find": "\t\t\tif ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)\n\t\t\t    && fn_matched) {\n\t\t\t\tv->febc = 1;\n\t\t\t\tbreak;\n\t\t\t}",
+  "replace": "\t\t\tif ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)\n\t\t\t    && fn_matched)\n\t\t\t\tbreak;"
+ },
+ {
+  "label": "return once the second field matches, skipping the verdict",
+  "find": "\t\tif (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {\n\t\t\tv->febe = 1;\n\t\t\tbreak;\n\t\t}",
+  "replace": "\t\tif (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {\n\t\t\tv->febe = 1;\n\t\t\treturn;\n\t\t}"
+ },
+ {
+  "label": "give the verdict on the second field instead of the first",
+  "find": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->febc != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->febc != 0 ? \"\"",
+  "replace": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->febe != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->febe != 0 ? \"\""
+ },
+ {
+  "label": "drop the gloss from the failed verdict",
+  "find": "\t\t\t\t     v->febc != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \"\n\t\t\t\t\t\"capabilities)!!\");",
+  "replace": "\t\t\t\t     v->febc != 0 ? \"\" : \"\");"
+ },
+ {
+  "label": "drop the quick connect announcement",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8Report: Finished with Quick Connect\\n\");\n\t\tout->b0 |= 9;",
+  "replace": "\t\tout->b0 |= 9;"
+ },
+ {
+  "label": "drop the no-call-function-match complaint from the report",
+  "find": "\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"V8Report: since no call function match, \"\n\t\t\t\t     \"not indicating any modulation \"\n\t\t\t\t     \"capability...\\r\\n\");\n\t}",
+  "replace": "\t}"
+ },
+ {
+  "label": "complain about the missing function for any unrecognised value",
+  "find": "\t\t} else if (fn == 0) {",
+  "replace": "\t\t} else if (fn == 0 || fn == 0x141) {"
+ },
+ {
+  "label": "swap digital connection and pcmIndication in the report",
+  "find": "\t\t\t    \"connection - %d, pcmIndication - %d\\n\",\n\t\t\t    v90_mod, digital_connection, pcm_indication);",
+  "replace": "\t\t\t    \"connection - %d, pcmIndication - %d\\n\",\n\t\t\t    v90_mod, pcm_indication, digital_connection);"
+ },
+ {
+  "label": "report the menu that was offered rather than the one settled on",
+  "find": "\t\t    (out->b0 >> 3) & 1, (out->b0 >> 5) & 1,\n\t\t    (out->b0 >> 6) & 1, out->b0 >> 7,",
+  "replace": "\t\t    (v->cm->b0 >> 3) & 1, (out->b0 >> 5) & 1,\n\t\t    (out->b0 >> 6) & 1, out->b0 >> 7,"
+ },
+ {
+  "label": "swap v23 and v21 in the settled menu",
+  "find": "\t\t    (out->b1 >> 3) & 1, (out->b1 >> 4) & 1,\n\t\t    (out->b1 >> 5) & 1);",
+  "replace": "\t\t    (out->b1 >> 3) & 1, (out->b1 >> 5) & 1,\n\t\t    (out->b1 >> 4) & 1);"
+ }
+]
