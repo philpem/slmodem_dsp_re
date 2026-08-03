@@ -212,7 +212,7 @@ trace_setup(const struct trace_case *c, unsigned seed)
 	obj_a.deadline_a = obj_b.deadline_a = c->deadline_a;
 	obj_a.deadline_b = obj_b.deadline_b = c->deadline_b;
 	obj_a.fe64 = obj_b.fe64 = c->fe64;
-	obj_a.mode = obj_b.mode = c->mode;
+	obj_a.side = obj_b.side = c->mode;
 	obj_a.f110 = obj_b.f110 = 40;
 	obj_a.fdc4 = obj_b.fdc4 = 0;
 	obj_a.fdd0 = obj_b.fdd0 = 0;
@@ -476,8 +476,8 @@ main(void)
 				 * receiver is not dispatched at all.
 				 */
 				obj_a.f110 = obj_b.f110 = 40;
-				obj_a.mode = obj_b.mode = (int)((c >> 2) & 1);
-				obj_a.fa48 = obj_b.fa48 = (int)((c >> 3) & 1);
+				obj_a.side = obj_b.side = (int)((c >> 2) & 1);
+				obj_a.op_mode = obj_b.op_mode = (int)((c >> 3) & 1);
 				obj_a.fdc4 = obj_b.fdc4 = 0;
 				obj_a.fdd0 = obj_b.fdd0 = 0;
 				obj_a.fdb6 = obj_b.fdb6 = fdb6;
@@ -567,7 +567,7 @@ main(void)
 				obj_a.f9d8 = obj_b.f9d8 =
 					(short)(r & 1 ? 0x19 : 0x24);
 				obj_a.fa3e = obj_b.fa3e = 0x60;
-				obj_a.mode = obj_b.mode = (int)(t & 1);
+				obj_a.side = obj_b.side = (int)(t & 1);
 				obj_a.deadline_a = obj_b.deadline_a = 40;
 				obj_a.deadline_b = obj_b.deadline_b = 60;
 				obj_a.fe64 = obj_b.fe64 = 0;

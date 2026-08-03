@@ -4,7 +4,7 @@
  * `V8Create` allocates the object and plants a handful of configuration
  * values in it; this is what reads them back and builds the machine to
  * match.  It is wide rather than deep -- sixty-five fields written -- and
- * almost all of the width is one of three shapes chosen by `v->mode`:
+ * almost all of the width is one of three shapes chosen by `v->side`:
  *
  *   0  the full handshake: tone detector, phase-reversal detector, a CM
  *      built by initTxSequence and a short fixed sequence hand-built beside
@@ -60,7 +60,7 @@ v8handshakinit(struct v8 *v)
 	v->fdc4 = 0;
 	v->fdd0 = 0;
 	v->fec2 = 0;
-	mode = v->mode;
+	mode = v->side;
 	v->fdc8 = 0;
 	v->fdcc = 0;
 	v->febc = 0;
@@ -107,7 +107,7 @@ v8handshakinit(struct v8 *v)
 		v->seq[1].shifter0 = 0;
 		v->seq[1].nleft0 = 0;
 
-		v->fdbe = (short)(v->fa48 == 0);
+		v->fdbe = (short)(v->op_mode == 0);
 		cm = v->cm;
 
 		if (cm->b2 & 0x10) {
@@ -202,8 +202,8 @@ V8Create(const struct v8_cfg *cfg)
 	if (v == 0)
 		return 0;
 
-	v->mode = cfg->mode;
-	v->fa48 = cfg->f04;
+	v->side = cfg->side;
+	v->op_mode = cfg->op_mode;
 	v->timeout_a = cfg->timeout_a;
 	v->timeout_b = cfg->timeout_b;
 	v->fa54 = cfg->f10;
@@ -212,7 +212,7 @@ V8Create(const struct v8_cfg *cfg)
 	/*
 	 * The configuration trace: seventeen messages, each behind its own
 	 * gate.  This is where the author dates the module (23/09/03) and
-	 * names what the fields mean -- `mode` is the SIDE, `fa48` the
+	 * names what the fields mean -- `side` and `op_mode` were called
 	 * operation mode, `offered` the ansPcmLevel, `menu` the ucodeForQts,
 	 * and the two CM extension fields are raw call-function and protocol
 	 * octets.  See finding 164.
@@ -229,9 +229,9 @@ V8Create(const struct v8_cfg *cfg)
 		dsplibs_debug_printf("V8: local configuration : \r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("\tSide = %s\r\n",
-				     v->mode != 0 ? "Answer" : "Caller");
+				     v->side != 0 ? "Answer" : "Caller");
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("\tOperation Mode = %d\r\n", v->fa48);
+		dsplibs_debug_printf("\tOperation Mode = %d\r\n", v->op_mode);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "\tModulations - V90=%d, V34=%d, V34HD=%d, V32=%d, "

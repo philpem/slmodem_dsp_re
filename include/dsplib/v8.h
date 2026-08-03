@@ -423,8 +423,8 @@ struct v8 {
 	 * message-detect timeouts, in SECONDS.  Renames pending with the rest
 	 * of the v8 batch; `fa54` the trace does not mention.
 	 */
-	int			mode;		/* +0xa44  author: Side      */
-	int			fa48;		/* +0xa48  author: Operation
+	int			side;		/* +0xa44  0 caller, 1 answerer */
+	int			op_mode;	/* +0xa48  the author's Operation
 						 *         Mode              */
 	int			timeout_a;	/* +0xa4c  signal detect, s  */
 	int			timeout_b;	/* +0xa50  message detect, s */
@@ -581,7 +581,7 @@ void initTxSequence(struct v8 *v);
 
 /*
  * Lay out the handshake from the configuration V8Create planted.  Reads
- * `v->mode` and builds one of three shapes.
+ * `v->side` and builds one of three shapes.
  */
 void v8handshakinit(struct v8 *v);
 
@@ -590,8 +590,8 @@ void v8handshakinit(struct v8 *v);
  * v8handshakinit onwards.
  */
 struct v8_cfg {
-	int		mode;			/* +0x00 -> v8.mode      */
-	int		f04;			/* +0x04 */
+	int		side;			/* +0x00 -> v8.side      */
+	int		op_mode;		/* +0x04 -> v8.op_mode  */
 	int		timeout_a;		/* +0x08 */
 	int		timeout_b;		/* +0x0c */
 	int		f10;			/* +0x10 */
@@ -850,10 +850,20 @@ void v8_ansamgenerate(struct v8 *v, short *out);
  * Nudge the handshake from outside.  Three requests, each valid only from one
  * state; returns 0 when it was accepted and -1 when it was not, including for
  * an unknown request.
+ *
+ * The names are the author's, from the table V8Control prints through
+ * (.rodata+0x5380, eleven entries).  Each says which message the request
+ * starts, and each matches what the arm does: START_JM puts the answerer into
+ * hunt-for-CJ and the transmitter into sending, which is what follows a JM.
+ * The eight beyond them are placeholders in the original too -- CTRL3 to
+ * CTRL10, named after their own indices -- and no arm accepts them.
  */
-#define V8_CONTROL_START	0
-#define V8_CONTROL_ANSWER	1
-#define V8_CONTROL_PROCEED	2
+#define V8CTRL_START_CM		0
+#define V8CTRL_START_CJ		1
+#define V8CTRL_START_JM		2
+#define V8CTRL_LAST		10
+
+extern const char *const v8ControlName[V8CTRL_LAST + 1];
 
 int V8Control(struct v8 *v, int what);
 

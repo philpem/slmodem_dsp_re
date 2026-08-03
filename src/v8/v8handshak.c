@@ -99,7 +99,7 @@ transmit(struct v8 *v, int *done)
 
 	case V8_TX_FSK_TIMED:
 		if (v->deadline_b != -1 && v->fe64 >= v->deadline_b) {
-			v->f9d6 = v->mode == 1 ? 5 : 0xc;
+			v->f9d6 = v->side == 1 ? 5 : 0xc;
 			/*
 			 * Announced once, as above.  Which message was being
 			 * waited for follows the side: the answerer is waiting
@@ -111,7 +111,7 @@ transmit(struct v8 *v, int *done)
 					dsplibs_debug_printf(
 					    "V8: Timeout waiting for %s "
 					    "message...\r\n",
-					    v->mode == 1 ? "CJ" : "JM");
+					    v->side == 1 ? "CJ" : "JM");
 				v->fe64++;
 			}
 			*done = 1;

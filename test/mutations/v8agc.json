@@ -1,0 +1,27 @@
+[
+ {
+  "label": "report the overflow in decimal",
+  "find": "\t\t\tdsplibs_debug_printf(\"V8AGC, overflow = 0x%x,\\n\",\n\t\t\t\t\t     scaled >> 16);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V8AGC, overflow = 0x%d,\\n\",\n\t\t\t\t\t     scaled >> 16);"
+ },
+ {
+  "label": "report the saturated sample rather than the overflow",
+  "find": "\t\t\t\t\t     scaled >> 16);",
+  "replace": "\t\t\t\t\t     v->rx_stage[i]);"
+ },
+ {
+  "label": "drop the overflow announcement",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8AGC, overflow = 0x%x,\\n\",\n\t\t\t\t\t     scaled >> 16);\n",
+  "replace": ""
+ },
+ {
+  "label": "drop the look-for-ANSam-again announcement",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8: Due to overflow, looking \"\n\t\t\t\t\t     \"for ANSam again...\\n\");\n",
+  "replace": ""
+ },
+ {
+  "label": "look for ANSam again whatever the handshake was doing",
+  "find": "\t\tif (v->f9d8 != 0x24)\n\t\t\tcontinue;",
+  "replace": "\t\tif (0)\n\t\t\tcontinue;"
+ }
+]

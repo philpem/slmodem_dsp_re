@@ -61,7 +61,7 @@ V8_ASSERT_OFFSET(v8, fdc4, 0xdc4);
 V8_ASSERT_OFFSET(v8, deadline_a, 0xe5c);
 V8_ASSERT_OFFSET(v8, agc_line, 0xe68);
 V8_ASSERT_OFFSET(v8, febc, 0xebc);
-V8_ASSERT_OFFSET(v8, mode, 0xa44);
+V8_ASSERT_OFFSET(v8, side, 0xa44);
 V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
 typedef char v8_pr_det[V8_OFFSET_OK == 0
 			|| offsetof(struct v8_phase_rev, detected) == 0xdc ? 1 : -1];

@@ -8861,3 +8861,42 @@ v8hsrx.c.  Two mutations were dropped rather than left uncaught: a status
 V8Process cannot return, and moving the delete message past a call that
 prints nothing -- neither is observable, and a permanently uncaught mutation
 is noise in the metric.
+
+### 169. v8ControlName, the last of V.8, and the deferred renames
+
+The third exported table, .rodata+0x5380, eleven entries indexed by
+V8Control's request:
+
+    V8CTRL_START_CM, V8CTRL_START_CJ, V8CTRL_START_JM,
+    V8CTRL_CTRL3 ... V8CTRL_CTRL10
+
+The last eight are placeholders in the original too, named after their own
+indices, and no arm accepts them.  The three that matter name themselves by
+the message they start, and each matches what its arm does -- START_JM puts
+the answering side into hunt-for-CJ and its transmitter into sending, which
+is exactly what follows a JM.  The request is announced whether it was
+accepted or refused; only the unknown-request complaint reports a number
+instead of a name, and only it ends \r\n.
+
+V8agc's two messages name the AGC's saturation behaviour: `V8AGC, overflow =
+0x%x,` (the author's trailing comma) once per clipped sample, and after ten
+consecutive clipping blocks `V8: Due to overflow, looking for ANSam again...`
+-- which is what the restart is FOR, and it fires only when the handshake was
+waiting on the tone.
+
+The phase detector's one message names the spacing it measures: `ANSAM phase
+reversals detected delay = %d`.  It had never fired in any test: real ANSam's
+reversals are far closer together than the window the detector accepts, which
+is why t_v8sig's sweep counted detections and then discarded the count.  The
+trace test places the run where four thousand steady samples would have left
+it instead.
+
+With these placed the V.8 module is complete -- 1670 blob sites, none left in
+src/v8 that is not an inlining artefact -- so the renames finding 164
+deferred have travelled with it: `mode` is now `side` and `fa48` `op_mode`,
+in struct v8, struct v8_cfg and their sixteen files of users, with the
+offset assertions moved to match.
+
+13/13 mutations across v8sig.c and v8agc.c.  Two were dropped as
+unobservable: moving the overflow message across a store it does not read,
+and moving the delete message across a call that prints nothing.

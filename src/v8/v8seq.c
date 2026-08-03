@@ -153,7 +153,7 @@ initTxSequence(struct v8 *v)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V8: Initial %s message length is %d octets\r\n",
-		    v->mode == 1 ? "JM" : "CM", words);
+		    v->side == 1 ? "JM" : "CM", words);
 
 	seq->crc = (short)0xffff;
 
@@ -181,7 +181,7 @@ rx_sequence(const struct v8 *v)
 {
 	if (v->fdc4 != 0)
 		return v->seq_spare;
-	if (v->mode != 0)
+	if (v->side != 0)
 		return &v->seq[0];
 	return &v->seq[2];
 }
@@ -263,6 +263,24 @@ const char *const v8StatusName[V8_LAST_ENUM + 1] = {
 	"V8_ORG_BAD_QCA1d_MESSAGE",
 	"V8_ORG_TIME_OUT_WAITING_FOR_QCA1d",
 	"V8_LAST_ENUM"
+};
+
+/*
+ * And the control-request names, .rodata+0x5380.  Eleven entries, of which
+ * the last eight are the original's own placeholders.
+ */
+const char *const v8ControlName[V8CTRL_LAST + 1] = {
+	"V8CTRL_START_CM",
+	"V8CTRL_START_CJ",
+	"V8CTRL_START_JM",
+	"V8CTRL_CTRL3",
+	"V8CTRL_CTRL4",
+	"V8CTRL_CTRL5",
+	"V8CTRL_CTRL6",
+	"V8CTRL_CTRL7",
+	"V8CTRL_CTRL8",
+	"V8CTRL_CTRL9",
+	"V8CTRL_CTRL10"
 };
 
 const char *const v8SequenceName[4] = {

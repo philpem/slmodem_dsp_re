@@ -9,6 +9,7 @@
 
 #include <string.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
 /*
@@ -292,30 +293,60 @@ v8_ansamgenerate(struct v8 *v, short *out)
 int
 V8Control(struct v8 *v, int what)
 {
+	int rc;
+
 	switch (what) {
-	case V8_CONTROL_START:
-		if (v->mode != 0 || v->f9d6 != 0x19 || v->fdbe != 0)
-			return -1;
-		v->fdbe = 1;
-		return 0;
+	case V8CTRL_START_CM:
+		if (v->side != 0 || v->f9d6 != 0x19 || v->fdbe != 0) {
+			rc = -1;
+		} else {
+			v->fdbe = 1;
+			rc = 0;
+		}
+		break;
 
-	case V8_CONTROL_ANSWER:
-		if (v->f9d8 != 0x32)
-			return -1;
-		v->f9d8 = 0x23;
-		return 0;
+	case V8CTRL_START_CJ:
+		if (v->f9d8 != V8_HS_TAKEN_RX) {
+			rc = -1;
+		} else {
+			v->f9d8 = V8_HS_DRAIN;
+			rc = 0;
+		}
+		break;
 
-	case V8_CONTROL_PROCEED:
-		if (v->f9d8 != 0x33)
-			return -1;
-		v->f9d8 = 0x2a;
-		v->fe64 = 0;
-		v->f9d4 = 0x17;
-		return 0;
+	case V8CTRL_START_JM:
+		if (v->f9d8 != V8_HS_TAKEN_TX) {
+			rc = -1;
+		} else {
+			v->f9d8 = V8_HS_CJ;
+			v->fe64 = 0;
+			v->f9d4 = 0x17;
+			rc = 0;
+		}
+		break;
 
 	default:
+		/*
+		 * The only exit that does not name the request: there is no
+		 * name to give it, so it reports the number instead -- and it
+		 * is the one message here that ends \r\n.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: V8Control called with currently not "
+			    "supported control type (type=%d)\r\n", what);
 		return -1;
 	}
+
+	/*
+	 * Announced whether it was accepted or refused -- the object has two
+	 * copies of this, one per return value, sharing the one call.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: V8Control called - control type is %s\n",
+		    v8ControlName[what]);
+	return rc;
 }
 
 /*
@@ -382,8 +413,17 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 		}
 
 		if ((unsigned)(spacing - V8_PHASE_REV_MIN) <= V8_PHASE_REV_SPAN
-		    && (short)pr->reversals > 1)
+		    && (short)pr->reversals > 1) {
+			/*
+			 * The author's word for the spacing is "delay", and
+			 * this is the only place it is named.
+			 */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "ANSAM phase reversals detected "
+				    "delay = %d\n", spacing);
 			pr->detected = 1;
+		}
 
 		pr->window[widx] = (short)x;
 	}

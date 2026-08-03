@@ -47,8 +47,8 @@ side_create(struct side *s, const struct v8_ops *ops, int mode,
 	init_menu(&s->cm, b0, b1);
 
 	memset(&cfg, 0, sizeof(cfg));
-	cfg.mode = mode;
-	cfg.f04 = 0;
+	cfg.side = mode;
+	cfg.op_mode = 0;
 	/*
 	 * Both deadlines in seconds.  They have to outlast the whole
 	 * exchange: expiring is how the handshake reports "the far end never

@@ -7,12 +7,16 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_v8_ansaminit(struct v8 *v);
 extern void ref_v8_TONEq_generate(struct v8 *v, short *out);
@@ -107,6 +111,159 @@ whole(long tag)
 	for (i = 0; i < sizeof(struct v8); i++)
 		diff_eq_int("byte at +%ld", b[i], a[i], (long)i);
 	(void)tag;
+}
+
+/*
+ * The five diagnostics in this file: V8Control's two, V8agc's two and the
+ * phase detector's one.  Small deliberate scenarios rather than the sweeps
+ * above, because a sweep at level 2 would fill the capture buffer and the
+ * comparison would then be between two truncations.
+ */
+static int
+t_sig_trace(void)
+{
+	static struct v8_phase_rev pa, pb;
+	static short air[4096];
+	unsigned lvl;
+	long lines = 0;
+	int k, what, blk, m;
+
+	diff_begin("v8sig: the trace");
+
+	for (lvl = 1; lvl <= 3; lvl++) {
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+		dsplib_debug_capture_on = 1;
+
+		/* Every request, accepted and refused, plus two unknown. */
+		for (k = 0; k < 4; k++) {
+			for (what = -1; what <= 3; what++) {
+				fill(&obj_a, sizeof(obj_a), 3100u + k);
+				memcpy(&obj_b, &obj_a, sizeof(obj_a));
+				obj_a.side = obj_b.side = k & 1;
+				obj_a.f9d6 = obj_b.f9d6 =
+					(short)(k & 2 ? 0x19 : 0x18);
+				obj_a.fdbe = obj_b.fdbe = 0;
+				obj_a.f9d8 = obj_b.f9d8 =
+					(short)(k & 1 ? V8_HS_TAKEN_RX
+						      : V8_HS_TAKEN_TX);
+				diff_eq_int("control returns (%ld)",
+					    V8Control(&obj_b, what),
+					    ref_V8Control(&obj_a, what),
+					    (long)(lvl * 16 + what));
+			}
+		}
+
+		/*
+		 * A gain far past saturation, with the handshake waiting on
+		 * the tone: every sample clips, and after ten blocks the run
+		 * of clipping sends it back to look for ANSam.
+		 */
+		for (k = 0; k < 2; k++) {
+			fill(&obj_a, sizeof(obj_a), 8800u + k);
+			memcpy(&obj_b, &obj_a, sizeof(obj_a));
+			ref_v8_txinit(&obj_a);
+			ref_v8_txinit(&obj_b);
+			ref_v8_rxinit(&obj_a);
+			ref_v8_rxinit(&obj_b);
+			obj_a.side = obj_b.side = 0;
+			obj_a.rx.f1c = obj_b.rx.f1c = 0x7000;
+			obj_a.rx.fac = obj_b.rx.fac = 0;
+			obj_a.rx.flags = obj_b.rx.flags = 0;
+			obj_a.f9d8 = obj_b.f9d8 = (short)(k == 0 ? 0x24
+								 : 0x19);
+
+			for (blk = 0; blk < 4; blk++) {
+				for (m = 0; m < V8_TX_SYMBOLS; m++) {
+					short x = (short)((m & 4) ? 30000
+								  : -30000);
+
+					obj_a.tx_symbols[m] = x;
+					obj_b.tx_symbols[m] = x;
+				}
+				diff_eq_int("agc returns (%ld)", V8agc(&obj_b),
+					    ref_V8agc(&obj_a),
+					    (long)(lvl * 16 + k * 4 + blk));
+				diff_eq_int("clip count (%ld)", obj_b.rx.fac,
+					    obj_a.rx.fac,
+					    (long)(lvl * 16 + k * 4 + blk));
+				diff_eq_int("sub-state (%ld)", obj_b.f9d8,
+					    obj_a.f9d8,
+					    (long)(lvl * 16 + k * 4 + blk));
+			}
+		}
+
+		/* And a stretch of ANSam, long enough for the reversals. */
+		fill(&obj_a, sizeof(obj_a), 5000u);
+		ref_v8_txinit(&obj_a);
+		ref_v8_ansaminit(&obj_a);
+		obj_a.tone.f08 = 6000;
+		obj_a.tone.f0e = 1;
+		obj_a.tone.f0a = 0x430;
+		for (blk = 0; blk < 1024; blk++)
+			ref_v8_ansamgenerate(&obj_a, air + blk * 4);
+
+		memset(&pa, 0, sizeof(pa));
+		memset(&pb, 0, sizeof(pb));
+		ref_v8_phase_rev_init(&pa);
+		ref_v8_phase_rev_init(&pb);
+		for (blk = 0; blk < 4096; blk += 64) {
+			/*
+			 * ANSam's own reversals come far too close together to
+			 * pass the spacing test -- the sweep above never sees
+			 * a detection at all, which is why it does not assert
+			 * one.  So the run is placed where a real ANSam would
+			 * have taken it after four thousand steady samples:
+			 * 4200 maps to a spacing of 437, inside the window,
+			 * and both sides are placed there alike.
+			 */
+			pa.run = pb.run = 4200;
+			pa.reversals = pb.reversals = 2;
+			pa.detected = pb.detected = 0;
+			ref_v8_phase_rev_detect(&pa, air + blk, 64);
+			v8_phase_rev_detect(&pb, air + blk, 64);
+			diff_eq_int("detected (%ld)", pb.detected, pa.detected,
+				    (long)(lvl * 64 + blk / 64));
+			diff_eq_int("run (%ld)", pb.run, pa.run,
+				    (long)(lvl * 64 + blk / 64));
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("transcript matches (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)lvl);
+		if (getenv("DBGDIFF")
+		    && strcmp(dsplib_debug_capture_text(0),
+			      dsplib_debug_capture_text(1)) != 0) {
+			const char *o = dsplib_debug_capture_text(0);
+			const char *r = dsplib_debug_capture_text(1);
+			int j = 0;
+
+			while (o[j] && o[j] == r[j])
+				j++;
+			while (j > 0 && o[j - 1] != '\n')
+				j--;
+			printf("=== level %u: divergence at %d\n", lvl, j);
+			printf("--- ours: %.400s\n", o + j);
+			printf("--- ref : %.400s\n", r + j);
+		}
+		diff_eq_int("line counts match (level %ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), (long)lvl);
+		if (lvl == 1)
+			diff_eq_int("silent below the threshold",
+				    (int)dsplib_debug_capture_lines(1), 0, 0);
+		else
+			lines += dsplib_debug_capture_lines(1);
+	}
+
+	diff_eq_int("diagnostics were captured (%ld lines)", lines > 40, 1,
+		    lines);
+
+	return diff_end();
 }
 
 int
@@ -348,7 +505,7 @@ main(void)
 				fill(&obj_a, sizeof(obj_a), 3100u + k);
 				memcpy(&obj_b, &obj_a, sizeof(obj_a));
 				/* Sweep the states each request needs. */
-				obj_a.mode = obj_b.mode = k & 1;
+				obj_a.side = obj_b.side = k & 1;
 				obj_a.f9d6 = obj_b.f9d6 =
 					(short)(k & 2 ? 0x19 : 0x18);
 				obj_a.fdbe = obj_b.fdbe = (short)(k & 4);
@@ -707,7 +864,7 @@ main(void)
 			ref_v8_txinit(&obj_b);
 			ref_v8_rxinit(&obj_a);
 			ref_v8_rxinit(&obj_b);
-			obj_a.mode = obj_b.mode = k & 1;
+			obj_a.side = obj_b.side = k & 1;
 			/* Sweep the gain across the saturating range. */
 			obj_a.rx.f1c = obj_b.rx.f1c = (short)(200 + k * 1300);
 			obj_a.rx.f1a = obj_b.rx.f1a = (short)(k * 900 - 8000);
@@ -805,5 +962,6 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= t_sig_trace();
 	return rc;
 }

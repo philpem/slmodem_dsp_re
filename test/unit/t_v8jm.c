@@ -602,7 +602,7 @@ main(void)
 					       obj_a.seq[2].word,
 					       sizeof(obj_a.seq[2].word));
 
-					obj_a.mode = obj_b.mode = ext & 1;
+					obj_a.side = obj_b.side = ext & 1;
 					obj_a.fdc4 = obj_b.fdc4 =
 						(ext == 3 ? 1 : 0);
 					obj_a.fdc8 = obj_b.fdc8 = b2 & 1;

@@ -79,8 +79,8 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 				 | (((caller != 0 && id == DP_V92) & 1) << 4));
 
 	sysdep_memset(&cfg, 0, sizeof(cfg));
-	cfg.mode = caller == 0;
-	cfg.f04 = 0;
+	cfg.side = caller == 0;
+	cfg.op_mode = 0;
 	cfg.timeout_a = 0x0c;
 	cfg.timeout_b = 0x07;
 	cfg.f10 = V8_DP_RATE;

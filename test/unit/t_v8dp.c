@@ -113,8 +113,8 @@ main(void)
 				diff_eq_int("handshake built (%ld)",
 					    db->v8 != 0, da->v8 != 0, id);
 				/* The handshake itself, where it is comparable. */
-				diff_eq_int("mode (%ld)", db->v8->mode,
-					    da->v8->mode, id);
+				diff_eq_int("mode (%ld)", db->v8->side,
+					    da->v8->side, id);
 				diff_eq_int("timeout_a (%ld)",
 					    db->v8->timeout_a,
 					    da->v8->timeout_a, id);
@@ -291,7 +291,7 @@ main(void)
 				da->v8->f9d4 = db->v8->f9d4 = states[si].f9d4;
 				da->v8->f9d6 = db->v8->f9d6 = states[si].f9d6;
 				da->v8->f9d8 = db->v8->f9d8 = states[si].f9d8;
-				da->v8->mode = db->v8->mode = states[si].mode;
+				da->v8->side = db->v8->side = states[si].mode;
 				/*
 				 * The state machine itself is not what is
 				 * under test here, and most of its paths

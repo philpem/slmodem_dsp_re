@@ -242,11 +242,11 @@ v8_hs_message_done(struct v8 *v)
 	struct v8_rx *r = &v->rx;
 	int rebuild = 1;
 
-	if (v->mode != 1) {
+	if (v->side != 1) {
 		evaluateRxJMSequence(v);
-		v->f9d8 = v->fa48 == 1 ? V8_HS_TAKEN_RX : V8_HS_DRAIN;
+		v->f9d8 = v->op_mode == 1 ? V8_HS_TAKEN_RX : V8_HS_DRAIN;
 		rebuild = 0;
-	} else if (v->fa48 == 1) {
+	} else if (v->op_mode == 1) {
 		v->f9d8 = V8_HS_TAKEN_TX;
 	} else {
 		v->f9d8 = V8_HS_CJ;

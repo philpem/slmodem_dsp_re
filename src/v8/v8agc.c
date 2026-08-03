@@ -12,6 +12,7 @@
  * field is a short of its own and not part of a wider one.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
 static const short agc_taps_answer[40] = {
@@ -70,7 +71,7 @@ int
 V8agc(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	const short *taps = v->mode != 0 ? agc_taps_caller : agc_taps_answer;
+	const short *taps = v->side != 0 ? agc_taps_caller : agc_taps_answer;
 	int energy = 0;
 	int gain = 0;
 	int i;
@@ -147,6 +148,9 @@ V8agc(struct v8 *v)
 			continue;
 		}
 		v->rx_stage[i] = (short)((scaled >> 16) > 0 ? 0x7f00 : 0x8100);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V8AGC, overflow = 0x%x,\n",
+					     scaled >> 16);
 
 		r->fac = (short)(r->fac + 1);
 		if (r->fac != V8_AGC_CLIP_LIMIT)
@@ -155,6 +159,9 @@ V8agc(struct v8 *v)
 		if (v->f9d8 != 0x24)
 			continue;
 		v->f9d8 = 0x19;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V8: Due to overflow, looking "
+					     "for ANSam again...\n");
 		v->detector.f08 = 0;
 		v->detector.f30 = 0;
 		r->fac = 0;

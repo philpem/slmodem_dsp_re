@@ -182,7 +182,7 @@ evaluateRxJMSequence(struct v8 *v)
 int
 V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 {
-	struct v8_tx_sequence *seq = v->mode != 0 ? &v->seq[0] : &v->seq[2];
+	struct v8_tx_sequence *seq = v->side != 0 ? &v->seq[0] : &v->seq[2];
 	int v90_mod = 0, digital_connection = 0, pcm_indication = 0;
 	int i;
 

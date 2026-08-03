@@ -699,11 +699,11 @@ t_handshakinit(void)
 				cm_a.ext2[0] = 'B';
 				memcpy(&cm_b, &cm_a, sizeof(cm_a));
 
-				obj_a.mode = mode;
-				obj_b.mode = mode;
+				obj_a.side = mode;
+				obj_b.side = mode;
 				obj_a.timeout_a = obj_b.timeout_a = t - 1;
 				obj_a.timeout_b = obj_b.timeout_b = t * 5;
-				obj_a.fa48 = obj_b.fa48 = (t == 1);
+				obj_a.op_mode = obj_b.op_mode = (t == 1);
 				obj_a.fa42 = obj_b.fa42 = (short)(1000 * t);
 				obj_a.cm = &cm_a;
 				obj_b.cm = &cm_b;
@@ -785,8 +785,8 @@ t_v8create(void)
 		cm_a.ext1[0] = 'G';
 		memcpy(&cm_b, &cm_a, sizeof(cm_a));
 
-		cfg.mode = mode;
-		cfg.f04 = 7;
+		cfg.side = mode;
+		cfg.op_mode = 7;
 		cfg.timeout_a = 12;
 		cfg.timeout_b = 3;
 		cfg.f10 = 9600;
@@ -800,8 +800,8 @@ t_v8create(void)
 		if (a == 0 || b == 0)
 			continue;
 
-		diff_eq_int("mode (%ld)", a->mode, b->mode, mode);
-		diff_eq_int("f04 (%ld)", a->fa48, b->fa48, mode);
+		diff_eq_int("mode (%ld)", a->side, b->side, mode);
+		diff_eq_int("f04 (%ld)", a->op_mode, b->op_mode, mode);
 		diff_eq_int("timeout_a (%ld)", a->timeout_a, b->timeout_a,
 			    mode);
 		diff_eq_int("timeout_b (%ld)", a->timeout_b, b->timeout_b,
@@ -878,8 +878,8 @@ t_v8create(void)
 				}
 				memcpy(&cm_b, &cm_a, sizeof(cm_a));
 
-				cfg.mode = (int)(k & 1);
-				cfg.f04 = (int)k;
+				cfg.side = (int)(k & 1);
+				cfg.op_mode = (int)k;
 				cfg.timeout_a = 12;
 				cfg.timeout_b = 3;
 				cfg.f10 = 9600;
@@ -981,7 +981,7 @@ t_getmessage(void)
 					 * Present it as received: mode picks
 					 * which buffer the reader looks in.
 					 */
-					obj_a.mode = obj_b.mode = (int)mode;
+					obj_a.side = obj_b.side = (int)mode;
 					sa = mode ? &obj_a.seq[0]
 						  : &obj_a.seq[2];
 					sb = mode ? &obj_b.seq[0]
@@ -1031,7 +1031,7 @@ t_getmessage(void)
 
 	/* Nothing received reads as empty, not as a zero-length message. */
 	memset(&obj_b, 0, sizeof(obj_b));
-	obj_b.mode = 1;
+	obj_b.side = 1;
 	cb = 32;
 	diff_eq_int("empty reads as empty", V8GetMessage(&obj_b, out_b, &cb),
 		    V8_GET_EMPTY, 0);
@@ -1073,7 +1073,7 @@ t_setmessage(void)
 	 * buffer the reader looks in.  What went in must come back out.
 	 */
 	memset(&obj_b, 0, sizeof(obj_b));
-	obj_b.mode = 1;
+	obj_b.side = 1;
 	V8SetMessage(&obj_b, V8_SET_CM, msg, 9);
 	obj_b.seq[0].wordidx = 9;
 	cnt = (int)sizeof(back);

@@ -1,0 +1,42 @@
+[
+ {
+  "label": "name the control request only when it is accepted",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what]);\n\treturn rc;",
+  "replace": "\tif (rc == 0 && DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what]);\n\treturn rc;"
+ },
+ {
+  "label": "name the request by number as well as by name",
+  "find": "\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what]);",
+  "replace": "\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what == 0 ? 1 : what]);"
+ },
+ {
+  "label": "drop the unsupported-request complaint",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: V8Control called with currently not \"\n\t\t\t    \"supported control type (type=%d)\\r\\n\", what);\n\t\treturn -1;",
+  "replace": "\t\treturn -1;"
+ },
+ {
+  "label": "give the unsupported-request complaint a bare newline",
+  "find": "\t\t\t    \"supported control type (type=%d)\\r\\n\", what);",
+  "replace": "\t\t\t    \"supported control type (type=%d)\\n\", what);"
+ },
+ {
+  "label": "swap START_CJ and START_JM in the name table",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what]);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8Control called - control type is %s\\n\",\n\t\t    v8ControlName[what == 1 ? 2 : what == 2 ? 1 : what]);"
+ },
+ {
+  "label": "report the phase-reversal delay after it is accepted",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \"\n\t\t\t\t    \"delay = %d\\n\", spacing);\n\t\t\tpr->detected = 1;",
+  "replace": "\t\t\tpr->detected = 1;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \"\n\t\t\t\t    \"delay = %d\\n\", pr->detected);"
+ },
+ {
+  "label": "drop the phase-reversal announcement",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \"\n\t\t\t\t    \"delay = %d\\n\", spacing);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "report the reversal count rather than the delay",
+  "find": "\t\t\t\t    \"delay = %d\\n\", spacing);",
+  "replace": "\t\t\t\t    \"delay = %d\\n\", pr->reversals);"
+ }
+]

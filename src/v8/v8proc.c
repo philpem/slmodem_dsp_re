@@ -68,7 +68,7 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 	 * handshake, and in the answering shape the receive state can
 	 * overwrite what the transmit state chose.
 	 */
-	if (v->mode == 0) {
+	if (v->side == 0) {
 		if (v->f9d4 == 5 && v->f9d6 == 0x19 && v->f9d8 == 0x19)
 			status = V8_ORG_WAITING_FOR_ANSAM;
 		else if ((unsigned short)v->f9d8 == 0x24)
