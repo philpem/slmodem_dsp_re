@@ -143,8 +143,8 @@ IsPulseDialerReady(void *modem)
 			 * round.  Not symmetry for its own sake: the store to
 			 * pulse_off_hook is ahead of the call in the object
 			 * (0x3308, gate at 0x32fc), and a store cannot be
-			 * hoisted over dsplibs_debug_printf, so this order is
-			 * the source order.
+			 * hoisted over an external call, so this order is the
+			 * source order.
 			 */
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("call: %d: hook on...\n",

@@ -242,15 +242,18 @@ run_digit(const char *label, int digit, int make, int brk, int ticks)
  * a tick.
  */
 static int
-run_transcript(const char *label, int digit, int make, int brk, int ticks)
+run_transcript(const char *label, int digit, int make, int brk, int ticks,
+	       unsigned level)
 {
+	char name[96];
 	int i;
 
-	diff_begin(label);
+	snprintf(name, sizeof(name), "%s, level %u", label, level);
+	diff_begin(name);
 
 	reset_objects(make, brk);
-	dsplibs_debug_level = 2;
-	ref_dsplibs_debug_level = 2;
+	dsplibs_debug_level = level;
+	ref_dsplibs_debug_level = level;
 	dsplib_debug_capture_on = 1;
 	dsplib_debug_capture_reset();
 
@@ -282,22 +285,43 @@ run_transcript(const char *label, int digit, int make, int brk, int ticks)
 
 	diff_eq_int("transcript matches",
 		    strcmp(dsplib_debug_capture_text(0),
-			   dsplib_debug_capture_text(1)) == 0, 1, 0);
-	/*
-	 * Anti-vacuity, twice over: two empty transcripts also compare equal,
-	 * and a transcript missing only the hook lines is still thousands of
-	 * bytes long.  The reference side is the one measured, so this asserts
-	 * what the original says, not what we say it says.
-	 */
-	diff_eq_int("transcript non-empty",
-		    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
-	if (brk > 0) {
-		diff_eq_int("reference said 'hook on'",
-			    strstr(dsplib_debug_capture_text(1),
-				   ": hook on...") != 0, 1, 0);
-		diff_eq_int("reference said 'hook off'",
-			    strstr(dsplib_debug_capture_text(1),
-				   ": hook off...") != 0, 1, 0);
+			   dsplib_debug_capture_text(1)) == 0, 1, (long)level);
+	/* The two sides must also have printed the same NUMBER of lines. */
+	diff_eq_int("line counts match", (int)dsplib_debug_capture_lines(0),
+		    (int)dsplib_debug_capture_lines(1), (long)level);
+
+	if (level > 1) {
+		/*
+		 * Anti-vacuity.  Two empty transcripts compare equal, and now
+		 * that the harness marks its own callbacks the buffer is never
+		 * empty anyway -- so this counts printed lines, not bytes
+		 * (finding 149).  The reference side is the one measured, so
+		 * it asserts what the original says, not what we say it says.
+		 */
+		diff_eq_int("reference printed something",
+			    dsplib_debug_capture_lines(1) > 0, 1, (long)level);
+		if (brk > 0) {
+			diff_eq_int("reference said 'hook on'",
+				    strstr(dsplib_debug_capture_text(1),
+					   ": hook on...") != 0, 1, (long)level);
+			diff_eq_int("reference said 'hook off'",
+				    strstr(dsplib_debug_capture_text(1),
+					   ": hook off...") != 0, 1,
+				    (long)level);
+		}
+	} else {
+		/*
+		 * Every gate in the object here is `cmpl $0x1` + `ja`, so it
+		 * fires at 2 and above and NOTHING should print at 1.  Worth
+		 * asserting because a site spelled `> 0` rather than `> 1`
+		 * produces a byte-identical transcript at level 2; level 1 is
+		 * the only place the threshold itself is visible, and one
+		 * shared DSPLIB_DEBUG_ON() macro cannot express a site that
+		 * disagrees.  If this ever fails, the object has a gate we
+		 * have flattened.
+		 */
+		diff_eq_int("reference silent below the threshold",
+			    (int)dsplib_debug_capture_lines(1), 0, (long)level);
 	}
 
 	dsplib_debug_capture_on = 0;
@@ -335,9 +359,20 @@ main(void)
 	rc |= run_digit("pulse: both zero", 3, 0, 0, 40);
 	rc |= run_digit("pulse: one-tick times", 2, 5, 5, 40);
 
-	rc |= run_transcript("pulse: debug transcript", 3, 33, 67, 100);
-	rc |= run_transcript("pulse: debug transcript, zero break", 2, 33, 0,
-			     20);
+	/*
+	 * Level 1 is below every gate, 2 is the first that fires, 3 is above
+	 * them all -- and all three must agree side for side.
+	 */
+	{
+		unsigned lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			rc |= run_transcript("pulse: transcript",
+					     3, 33, 67, 100, lvl);
+			rc |= run_transcript("pulse: transcript, zero break",
+					     2, 33, 0, 20, lvl);
+		}
+	}
 
 	/* Polling with nothing loaded, and with no datapump at all. */
 	diff_begin("pulse: idle and detached");

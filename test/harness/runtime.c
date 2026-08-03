@@ -228,11 +228,26 @@ int dsplib_debug_capture_on;
 static char dbgcap[2][DBGCAP_SIZE];
 static unsigned dbgcap_len[2];
 
+/*
+ * Counted separately from the text, and ONLY by the two printf entry points:
+ * the callback markers below also write into the buffer, so "the buffer is
+ * non-empty" stopped meaning "something printed" the moment they existed.
+ * Every anti-vacuity check in the transcript tests wants the second claim.
+ */
+static unsigned dbgcap_lines[2];
+
 void
 dsplib_debug_capture_reset(void)
 {
 	dbgcap_len[0] = dbgcap_len[1] = 0;
+	dbgcap_lines[0] = dbgcap_lines[1] = 0;
 	dbgcap[0][0] = dbgcap[1][0] = '\0';
+}
+
+unsigned
+dsplib_debug_capture_lines(int side)
+{
+	return dbgcap_lines[side & 1];
 }
 
 const char *
@@ -290,6 +305,7 @@ dsplibs_debug_printf(const char *fmt, ...)
 {
 	va_list ap;
 
+	dbgcap_lines[0]++;
 	va_start(ap, fmt);
 	dbgcap_add(0, fmt, ap);
 	va_end(ap);
@@ -299,7 +315,8 @@ dsplibs_debug_printf(const char *fmt, ...)
 int
 modem_debug_log_data(void *m, unsigned id, const void *buf, int len)
 {
-	(void)m; (void)id; (void)buf; (void)len;
+	(void)m; (void)buf;
+	dbgcap_note(0, "<< log_data %u, %d bytes >>\n", id, len);
 	return 0;
 }
 
@@ -322,6 +339,7 @@ ref_dsplibs_debug_printf(const char *fmt, ...)
 {
 	va_list ap;
 
+	dbgcap_lines[1]++;
 	va_start(ap, fmt);
 	dbgcap_add(1, fmt, ap);
 	va_end(ap);
@@ -331,7 +349,8 @@ ref_dsplibs_debug_printf(const char *fmt, ...)
 int
 ref_modem_debug_log_data(void *m, unsigned id, const void *buf, int len)
 {
-	(void)m; (void)id; (void)buf; (void)len;
+	(void)m; (void)buf;
+	dbgcap_note(1, "<< log_data %u, %d bytes >>\n", id, len);
 	return 0;			/* harmless: logging only */
 }
 
@@ -417,12 +436,14 @@ harness_param_reset(void)
 long
 modem_get_param(void *m, unsigned param)
 {
+	dbgcap_note(0, "<< get_param %u >>\n", param);
 	return param_get(&harness_param_ours, m, param);
 }
 
 long
 ref_modem_get_param_impl(void *m, unsigned param)
 {
+	dbgcap_note(1, "<< get_param %u >>\n", param);
 	return param_get(&harness_param_ref, m, param);
 }
 

@@ -223,7 +223,7 @@ main(void)
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, n);
 			diff_eq_int("cfg transcript non-empty",
-				    dsplib_debug_capture_text(1)[0] != 0, 1, n);
+				    dsplib_debug_capture_lines(1) > 0, 1, n);
 		}
 
 		dsplib_debug_capture_on = 0;

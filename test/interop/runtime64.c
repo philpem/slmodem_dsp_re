@@ -106,6 +106,7 @@ int dsplibs_debug_printf(const char *fmt, ...) { (void)fmt; return 0; }
 int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void) { }
 const char *dsplib_debug_capture_text(int side) { (void)side; return ""; }
+unsigned dsplib_debug_capture_lines(int side) { (void)side; return 0; }
 
 int modem_debug_log_data(void *m, unsigned id, const void *b, int l)
 { (void)m; (void)id; (void)b; (void)l; return 0; }

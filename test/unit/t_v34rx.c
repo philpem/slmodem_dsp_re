@@ -277,7 +277,7 @@ main(void)
 
 		/* And it must actually have printed something. */
 		diff_eq_int("transcript non-empty",
-			    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
+			    dsplib_debug_capture_lines(1) > 0, 1, 0);
 
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;
@@ -2093,7 +2093,7 @@ main(void)
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, tag);
-				if (dsplib_debug_capture_text(1)[0] != 0)
+				if (dsplib_debug_capture_lines(1) > 0)
 					saw = 1;
 				for (b = 0; b < sizeof(oa); b++) {
 					if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)

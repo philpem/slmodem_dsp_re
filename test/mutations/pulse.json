@@ -1,0 +1,47 @@
+[
+ {
+  "label": "swap the entry message's two arguments",
+  "find": "(unsigned)c->pulse_remaining,\n\t\t\t\t     c->pulse_elapsed);",
+  "replace": "(unsigned)c->pulse_elapsed,\n\t\t\t\t     c->pulse_remaining);"
+ },
+ {
+  "label": "drop the 'hook on' call site",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"call: %d: hook on...\\n\",\n\t\t\t\t\t\t     remaining);",
+  "replace": "/* deliberately removed */"
+ },
+ {
+  "label": "move 'hook on' to AFTER modem_set_param",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"call: %d: hook on...\\n\",\n\t\t\t\t\t\t     remaining);\n\n\t\t\tmodem_set_param(dp->modem, MDMPRM_HOOK_ON, 1);",
+  "replace": "modem_set_param(dp->modem, MDMPRM_HOOK_ON, 1);\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"call: %d: hook on...\\n\",\n\t\t\t\t\t\t     remaining);"
+ },
+ {
+  "label": "move 'hook off' to BEFORE modem_set_param",
+  "find": "modem_set_param(dp->modem, MDMPRM_HOOK_ON, 0);\n\n\t\t/* After the line moves, unlike \"hook on\" above (0x33d8). */\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"call: %d: hook off...\\n\",\n\t\t\t\t\t     remaining);",
+  "replace": "if (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"call: %d: hook off...\\n\",\n\t\t\t\t\t     remaining);\n\t\tmodem_set_param(dp->modem, MDMPRM_HOOK_ON, 0);"
+ },
+ {
+  "label": "misspell the 'hook off' text",
+  "find": "\"call: %d: hook off...\\n\"",
+  "replace": "\"call: %d: hook-off...\\n\""
+ },
+ {
+  "label": "print elapsed instead of remaining in 'hook on'",
+  "find": "dsplibs_debug_printf(\"call: %d: hook on...\\n\",\n\t\t\t\t\t\t     remaining);",
+  "replace": "dsplibs_debug_printf(\"call: %d: hook on...\\n\",\n\t\t\t\t\t\t     elapsed);"
+ },
+ {
+  "label": "gate the entry message at >0 instead of >1",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"call: IsPulseDialerReady",
+  "replace": "if (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"call: IsPulseDialerReady"
+ },
+ {
+  "label": "drop the entry message entirely",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"call: IsPulseDialerReady !(%u) (count %d)\\n\",\n\t\t\t\t     (unsigned)c->pulse_remaining,\n\t\t\t\t     c->pulse_elapsed);\n",
+  "replace": ""
+ },
+ {
+  "label": "report the wrong parameter to modem_set_param on hook-off",
+  "find": "modem_set_param(dp->modem, MDMPRM_HOOK_ON, 0);\n\n\t\t/* After the line moves",
+  "replace": "modem_set_param(dp->modem, MDMPRM_HOOK_ON, 2);\n\n\t\t/* After the line moves"
+ }
+]

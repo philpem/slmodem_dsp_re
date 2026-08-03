@@ -176,6 +176,13 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
 const char *dsplib_debug_capture_text(int side);
+/*
+ * How many lines that side PRINTED, not counting the callback markers the
+ * harness itself writes.  Anti-vacuity checks want this, not the text: a
+ * function that only touches modem_set_param fills the buffer without any
+ * call site firing (finding 149).
+ */
+unsigned dsplib_debug_capture_lines(int side);
 
 #ifdef __cplusplus
 }

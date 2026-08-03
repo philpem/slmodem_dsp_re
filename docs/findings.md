@@ -8111,8 +8111,10 @@ Sixteen down.  221 call sites remain across 52 functions.
 
 ### 148. The pulse dialler says "hook on" before the line moves and "hook off" after
 
-`IsPulseDialerReady` carries three of the eight call sites in `call.c`'s pulse
-group.  Two of them are the interesting ones:
+`IsPulseDialerReady` carries three of the seven call sites in `call.c`'s pulse
+group (seven, not eight: the earlier tally counted a comment that named
+`dsplibs_debug_printf` in prose -- `debugaudit.py` counts textually and so did
+I).  With these three, pulse.c is complete.  Two of them are the interesting ones:
 
     0x32fc  gate -> 0x3400   "call: %d: hook on...\n"    remaining
     0x33d8  gate -> 0x33e5   "call: %d: hook off...\n"   remaining
@@ -8165,3 +8167,48 @@ The general lesson is the one that keeps recurring here: a passing test is
 evidence about the test until you have watched it fail.  Both times something
 was learned this week it came from breaking the code on purpose, not from
 running it.
+
+### 150. Three ways the transcript test was still weaker than it looked
+
+Finding 149 closed the ordering gap.  Reviewing that change turned up three
+more, all of the same shape -- a check whose wording promised more than it
+delivered:
+
+**The anti-vacuity check stopped meaning anything.**  It read
+
+    dsplib_debug_capture_text(1)[0] != 0
+
+which meant "the reference printed something" right up until the markers were
+added, after which it meant "the reference printed something OR touched a
+callback".  Any function that calls `modem_set_param` now satisfies it with no
+call site firing at all.  The instrument had defeated its own control.  Fixed
+at cause: `dsplib_debug_capture_lines(side)` counts lines through the two
+printf entry points ONLY, never through `dbgcap_note`, and every anti-vacuity
+check now asks for that.  `t_v34rx.c` had the same idiom guarding its `saw`
+flag, and `t_dialercfg.c` in its non-empty assertion; both switched.
+
+**The markers were not uniform.**  `set_param`, `get_bits` and `put_bits` were
+marked; `get_param` and `modem_debug_log_data` were not.  `get_param` is the
+one that matters most -- every function in this library opens with `call_of()`,
+which is a `modem_get_param` -- so position relative to the single most common
+callback was still invisible.  Marked now, both sides, all five.
+
+**One level tests one threshold.**  The transcript ran at
+`dsplibs_debug_level = 2` on both sides.  Every gate in the object here is
+`cmpl $0x1` + `ja`, and we spell all of them with one `DSPLIB_DEBUG_ON()` macro
+that cannot express a site which disagrees -- so a site the original gated at
+`> 0` would produce a byte-identical transcript at level 2 and nobody would
+know.  The test now sweeps levels 1, 2 and 3, and at level 1 asserts the
+REFERENCE printed nothing.  That assertion is a real claim about the blob, and
+it is the only place a wrong threshold is visible.
+
+Nine mutations now run against pulse.c and all nine are caught, including
+"gate at > 0 instead of > 1", which only fails at level 1, and the two
+reordering ones, which only fail because of the markers.  The mutation runner
+is `tools/mutate.py` with the spec in `test/mutations/pulse.json`; it restores
+the source in a `finally`, because an earlier hand-rolled version aborted
+mid-run and left a mutated tree behind.
+
+Seven down, 221 call sites remain across 51 functions.  The plan is to batch by
+test binary rather than by size -- callprog (67 sites), v8 (64), dialer (38) --
+so each batch is one test extension and one mutation run rather than six.
