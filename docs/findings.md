@@ -8456,3 +8456,42 @@ The two ends of a V.34 call must scramble with opposite polynomials, so
 **`f359c == 0x65` is the originate/answer flag** — which also explains why
 the timing ramp has two variants indexed by the same field.  One field,
 two uses, and neither of them had a name until they were put side by side.
+
+### 154. The shell's bit source and sink are the scrambler and descrambler
+
+`struct v34_shell` has a pointer at +0xe48 that finding 137 read as a
+callback: `getFrame` pulls bits through it in the transmit context and
+`putFrame` pushes them into it in the receive one, so it was mapped as a
+union of a source and a sink.  What fills it is `preinitdigital`:
+
+```
+   5993f:  mov  $scrambleGPA,%eax        ; -> obj+0x2a28, the TX context
+   5994a:  mov  $descrambleGPC,%eax      ; -> obj+0x0e48, the RX context
+```
+
+so **the shell's bit source IS the scrambler and its sink IS the
+descrambler.**  Two modules reconstructed months apart, joined by a third.
+
+It also explains two shapes that looked arbitrary when `v34scram.c` was
+written.  `scrambleGPC` returns `nbits - 16`, which is exactly what a source
+returns -- the new bit position after supplying sixteen.  Both descramblers
+return 0 unconditionally, which is what a sink's return is worth.  Neither
+made sense as a scrambler's interface and both are obvious as a callback's.
+
+**The widths do not match and the mismatch is not resolved.**  `v34scram.c`'s
+functions take and return `short`; `v34_getbits_fn` as inferred from
+`getFrame` uses `int`.  `getFrame` is not reconstructed, so which is the
+original's declaration cannot be settled here; the union carries both
+spellings rather than one being chosen.
+
+**And `preinitdigital` confirms V34_SHELL_TX independently.**  Its two
+identical blocks are at obj+0xa00 and obj+0x25e0, a difference of 0x1be0 --
+which finding 137 derived from `getFrame`'s offsets alone.  Two functions
+arriving at the same spacing from opposite directions is better evidence
+than either had.
+
+**One number it settles.**  Finding 129 had to infer t3's length from the
+next known field and got 128 "which is the reassuring answer".  This clears
+t1, t2 and t3 with the same `cmp $0x7f` bound, so 128 is measured now rather
+than inferred -- and t3 is filled with -1 where the other two get zero, which
+is what a cost table wants and zero is not.

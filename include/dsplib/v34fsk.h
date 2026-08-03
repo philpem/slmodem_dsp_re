@@ -380,7 +380,10 @@ struct v34_object {
 	 * then 8+8+8 from three message bytes and 5 from the fourth.
 	 */
 	int info0_bits[V34_INFO0_BITS];			/* +0xa8a4 */
-	unsigned char unmapped_a948[0xaa7e - 0xa948];
+	unsigned char unmapped_a948[0xaa74 - 0xa948];
+	/* Cleared by preinitdigital; nothing reconstructed reads it. */
+	int faa74;					/* +0xaa74 */
+	unsigned char unmapped_aa78[0xaa7e - 0xaa78];
 	/*
 	 * +0xaa7e.  Round-trip delay, in samples, which `v34handshak` both
 	 * measures and consumes.  `V34XF_GetRTD` is the C++ side's window

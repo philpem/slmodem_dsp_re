@@ -52,6 +52,12 @@ typedef void (*v34_putbits_fn)(void *shell, int value, int nbits);
 typedef int (*v34_getbits_fn)(void *obj, int pos);
 
 /*
+ * The signature `preinitdigital` installs at the same offset: the scrambler
+ * pair.  See the union in `struct v34_shell`.
+ */
+typedef short (*v34_scramble_fn)(void *obj, short nbits);
+
+/*
  * The transmit shell context sits this far past the receive one.  Every
  * offset getFrame uses lands on a field of this struct once the difference
  * is subtracted -- see finding 137.
@@ -60,6 +66,15 @@ typedef int (*v34_getbits_fn)(void *obj, int pos);
 
 /* lsbMask[n] == (1 << n) - 1, seventeen entries.  Emitted as data. */
 extern const unsigned short lsbMask[17];
+
+/*
+ * The 64-entry table `preinitdigital` installs at `convolve`.  Global in the
+ * object, with `Convolve32` and `Convolve64` beside it that nothing installs.
+ * Sixteen distinct rows of four repeating with period 16, values only 0, 2,
+ * 12 and 14 -- a two-bit quantity scaled by two, at a guess, and the
+ * derivation is #47's.
+ */
+extern const short Convolve16[64];
 
 struct v34_shell {
 	unsigned char pad_000[0xa00];
@@ -79,7 +94,8 @@ struct v34_shell {
 	 */
 	short           count;			/* +0xa12 */
 	short           fa14;			/* +0xa14 the repeated width */
-	unsigned char pad_a16[0xa18 - 0xa16];
+	/* preinitdigital puts 0x18 here and nothing reconstructed reads it. */
+	short           fa16;			/* +0xa16 */
 	/*
 	 * decodeDepth's delay line: three COMPLEX taps, shifted a pair at a
 	 * time.  hist[2..3] take hist[0..1] and hist[4..5] take hist[2..3];
@@ -89,7 +105,15 @@ struct v34_shell {
 	unsigned char pad_a24_[0xa24 - 0xa24];
 	/* Twelve coefficients as two rows of six, the second at +6. */
 	const short *   coeff;			/* +0xa24 */
-	unsigned char pad_a28[0xa38 - 0xa28];
+	/*
+	 * +0xa28.  `preinitdigital` installs `Convolve16` here, in both
+	 * contexts; nothing reconstructed reads it yet.  The two siblings
+	 * `Convolve32` and `Convolve64` sit beside it in .rodata and are
+	 * installed by nothing at all so far.
+	 */
+	const short *   convolve;		/* +0xa28 */
+	short           fa2c[6];		/* +0xa2c cleared, six of them,
+						 * reaching exactly +0xa38 */
 	short           prev_k;			/* +0xa38 last quadrant   */
 	short           invert;			/* +0xa3a picks kkInvert  */
 	short           fa3c;			/* +0xa3c sub-frame count */
@@ -116,6 +140,21 @@ struct v34_shell {
 	union {
 		v34_putbits_fn	put_bits;	/* the receive context's sink */
 		v34_getbits_fn	get_bits;	/* the transmit one's source  */
+		/*
+		 * AND WHAT `preinitdigital` ACTUALLY INSTALLS HERE is a
+		 * scrambler in the transmit context and a descrambler in the
+		 * receive one -- see finding 154.  That is the same pairing
+		 * the two names above describe, which is the point: the
+		 * shell's bit source IS the scrambler and its sink IS the
+		 * descrambler.
+		 *
+		 * The widths do not match exactly -- `scrambleGPC` takes and
+		 * returns a short where `v34_getbits_fn` uses int -- and
+		 * `getFrame` is not reconstructed, so which typedef is the
+		 * original's is not settled.  Both spellings are kept rather
+		 * than one being chosen on a guess.
+		 */
+		v34_scramble_fn	scramble;
 	};					/* +0xe48, anonymous so both
 						 * spellings reach it directly
 						 * and no caller has to change */
