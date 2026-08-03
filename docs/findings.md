@@ -8463,3 +8463,42 @@ the shared tail, so it is a case with a body of its own.
 Worth keeping as a technique: when two call sites carry different strings and
 the same return target, the cases are folded, and that is a fact about the
 control flow that no amount of reading the strings will give.
+
+### 159. DialerAbort's three guards are not three of a kind
+
+Our `DialerAbort` was three early returns and an action:
+
+    if (d->progress_state > 10)  return;
+    if (d->pulse_released != 0)  return;
+    if (d->pulse_active == 0)    return;
+    LastPulseDigitDialed(d->modem);
+    d->pulse_released = 1;
+
+Behaviourally right, and it reads as three guards of a kind.  The object says
+otherwise.  Only the first returns:
+
+    0x7bdef  ja  0x7be16   progress_state > 10 -> "Dialer was aborted - error."
+                                                 -> RETURN
+    0x7bdf9  je  0x7be24   pulse_released == 0 ? test pulse_active
+    0x7be2c  je  0x7bdfb   pulse_active  == 0 -> the message
+    0x7be50  jmp 0x7bdfb   released -> the message
+
+Everything except the error path converges on 0x7bdfb, the gate in front of
+`"Dialer was aborted.\n"` -- so an abort with nothing to release still says it
+aborted.  Two guards skip the work; one guard is an error and skips the
+message too.  The shape only shows up once the diagnostics are back, because
+with them stripped all three branches genuinely are equivalent.
+
+The function is now one condition rather than two returns, which is the only
+way to place the message where the object has it.  No behaviour changed.
+
+Two smaller notes: `"Dialer was aborted.\n"` is a TAIL call (`jmp` at 0x7be11,
+not `call`), the third such in this sweep after CALLPROG_Delete and
+CALLPROG_Dial; and the `" **** Dialer.C: LastPulseDigitDialed was called"`
+message is printed AFTER the call it describes and BEFORE the flag is set.
+
+This is the fourth time in this sweep that restoring diagnostics has said
+something about structure that the stripped code could not (findings 136, 148,
+158).  The pattern is consistent enough to plan around: a dropped call site is
+not only a lost message, it is a lost constraint on the shape of the function
+that printed it.

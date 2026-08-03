@@ -20,6 +20,7 @@
  * of the flag they read -- see below.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/dialer.h"
 #include "dsplib/sysdep.h"
 
@@ -241,15 +242,40 @@ DialerCreate(struct dialer *d, const char *s, void *modem)
 void
 DialerAbort(struct dialer *d)
 {
-	if (d->progress_state > 10)
-		return;
-	if (d->pulse_released != 0)
-		return;
-	if (d->pulse_active == 0)
-		return;
+	/*
+	 * The one path that is an error, and the only one that does not reach
+	 * the message below.
+	 */
+	if (d->progress_state > 10) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Dialer was aborted - error. \n");
 
-	LastPulseDigitDialed(d->modem);
-	d->pulse_released = 1;
+		return;
+	}
+
+	/*
+	 * Written as one condition rather than two early returns, which is
+	 * what it was until the call sites were restored.  Behaviour is
+	 * identical -- both returns did nothing but return -- but the object
+	 * does not return there: 0x7be2c and 0x7bdf9 both fall into the same
+	 * gate at 0x7bdfb, so an abort with nothing to release still says so.
+	 * Three guards that look alike, and one of them is not like the others.
+	 */
+	if (d->pulse_released == 0 && d->pulse_active != 0) {
+		LastPulseDigitDialed(d->modem);
+
+		/* After the call, and before the flag is set (0x7be3c). */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(" **** Dialer.C: "
+					     "LastPulseDigitDialed was "
+					     "called\n");
+
+		d->pulse_released = 1;
+	}
+
+	/* A tail call in the object -- `jmp` at 0x7be11, not `call`. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Dialer was aborted.\n");
 }
 
 /*
