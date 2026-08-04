@@ -710,7 +710,7 @@ V34agc(struct v34_receiver *rx)
  * self-consistent, passes a smoke test, and diverges from the object on the
  * first sample that trips the loop.
  */
-static void
+void
 V34demodulate(struct v34_receiver *rx)
 {
 	struct v34_queue *q = (struct v34_queue *)rx;

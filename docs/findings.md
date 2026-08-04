@@ -12225,6 +12225,12 @@ fifteen are in that state -- `call_run`, `V34demodulate`, `v8_create`,
 here, static here, and counted as neither translated nor testable.  That is
 why the eight above are eight and not fifteen.
 
+All seven were exported in findings 223 and 224 and are counted now; the
+under-count was real when this was written and is not a standing limitation of
+the report.  What remains true is the shape of it: a function this tree keeps
+static is invisible here, and if a future one is added it will be invisible
+again.
+
 And "what is left, by translation-unit span" iterated the globals alone, which
 omitted the 47 file-local symbols nobody has reconstructed.  It now iterates
 both.  Neither of these moves the headline; both were the same habit of
@@ -12336,11 +12342,116 @@ It moves the coverage denominator, which is expected and should not be chased:
 `our_symbols()`, and `tested` 97.7% -> 99.7% as the tests landed.  Only
 `AnalyseDialString` is left in the "alias exists and NOT tested" list.
 
-#### `V34demodulate`, and what would be needed
+#### `V34demodulate`: this section was wrong, and how
 
-The fifteenth is static on our side too and not exported here.  It is inside
-the V.34 receiver rather than at a datapump boundary, so driving it means
-constructing a `struct v34_receiver` in a state it would accept, and the four
-tests above all had a constructor to lean on -- `x_create` builds the object
-and the test compares what it built.  There is no such constructor here.
-Recorded rather than attempted; see finding 221 for the list it belongs to.
+The first version of this finding said the fifteenth could not be driven
+because "the four tests above all had a constructor to lean on... there is no
+such constructor here", and recorded it as not attempted.
+
+That was written without checking, and it is false.  `rxinit` is global on
+both sides, `t_v34rx` already drives it, and it settles the AGC and the phase
+accumulator -- it is exactly the constructor to lean on.  `t_v34rx` also
+builds `struct v34_receiver` fixtures by hand in four places, and `harness.c`
+cites one of them as the loop `diff_eq_obj` was written to replace.  The
+evidence was in two files this session had already read.
+
+Finding 224 has the test.  What is recorded here is the mistake: **"recorded
+rather than attempted" is only honest when something was attempted.**  The
+standing rule is to record the attempt and what stopped it; a premise nobody
+checked is not an attempt, and writing one into the record is the failure mode
+this tree keeps naming -- 221's claim that objcopy could not rename a local
+symbol had sat in two docstrings for the same reason.
+
+### 224. The two that had to have their calling convention read first
+
+`AnalyseDialString` and `V34demodulate` are the last of finding 221's fifteen,
+and they are the two the alias alone was not enough for.  Both are the shape
+finding 51 warned about:
+
+> A `t` symbol is not a testing inconvenience, it is a signal that the calling
+> convention may not be the C one.  Check before writing the prototype, not
+> after the comparison fails.
+
+GCC picks its own convention for a static function whose callers it can all
+see, and both of these have exactly one caller inside their own translation
+unit.  So both were read out of the object before a prototype was written.
+
+`AnalyseDialString`, at 0x7a9f0:
+
+```
+   7a9f7:  mov    %edx,%ebx          <- the string, in edx
+   7aa04:  mov    %eax,%esi          <- the dialler, in eax
+   7aae9:  mov    0x20(%esp),%ebx    <- `store`, on the stack
+   7aab5:  ret                          caller cleans up
+```
+
+and from `IsDialStringInvalid`, the same statement from the other side:
+
+```
+   7af5b:  movl   $0x0,(%esp)        <- store
+   7af62:  mov    %ebx,%eax          <- d
+   7af64:  mov    %esi,%edx          <- s
+   7af66:  call   7a9f0 <AnalyseDialString>
+```
+
+Two in registers and the third on the stack: `regparm(2)`.
+
+`V34demodulate`, at 0x5af10, takes its one argument in `%eax` --
+`mov %eax,%edi` before the frame exists, then `mov 0x4(%eax),%ecx` for the
+queue's read cursor -- and `rxtiming` at 0x5b491 does `mov %esi,%eax` and
+calls with nothing pushed.  `regparm(1)`.
+
+Getting either wrong would not have failed to link.  It would have passed a
+stack slot as a pointer, and the failure would have been a crash if we were
+lucky.
+
+#### What each test can say that the old route could not
+
+`t_dialer` reaches `AnalyseDialString` through `IsDialStringInvalid`, which is
+`grade <= DIALER_INVALID` -- so it sees a boolean where the function returns
+one of four grades, and it never passes `store`.  Its own comment says the
+four grades are "asserted against our own implementation alone and marked as
+such: claims about what the disassembly says, not about what the blob does".
+`t_dialstring` calls it directly, so they are claims about the blob now: 34
+strings at 16 flag combinations at both values of `store`, then every byte
+value 1..255 in the dispatched position in both modes, with the whole
+`struct dialer` compared each time.  All four grades come back, which is the
+guard against a sweep that compared one answer with itself.
+
+`t_v34rx` says of `V34demodulate` that it "is a local symbol and can only be
+reached through the interpolator, so every AGC defect it had presented as a
+loop-shape failure".  `t_v34demod` drives it directly over 180 fixtures --
+the freeze flag, amplitudes from silence to clipping across the RMS floor at
+31, gains from unity to saturation, and four carrier steps -- 24 calls each,
+with the whole `struct v34_receiver` compared after every one.  4,320 object
+comparisons and no divergence.
+
+Both sides are pointed at ONE carrier table, declared in the test.  `rxinit`
+does not install one -- that is chosen by symbol rate elsewhere -- and a table
+per side would be two arithmetics on two inputs.  Which coefficients belong to
+which rate is a different test's subject.
+
+#### The receiver's three pointers are compared, not skipped
+
+`t_v34rx` skips `rx_samples` in four places, because "the two installed
+pointers differ by construction".  They do, but only in their base: `rxinit`
+sets it to `(char *)rx + 0x10c` and `V34demodulate` advances it by one short
+per call.  It, and the receive queue's `rd` and `wr`, are replaced by their
+byte offset from the receiver, which the two sides must agree on exactly.  A
+cursor left one short behind is the defect that shape of field has, and a skip
+cannot see it.  Same treatment as `struct v8`'s eight in finding 223, and with
+the same caveat: only a value that really lands inside the object is
+converted.
+
+#### Where this leaves the count
+
+```
+  translated  [######............................]  17.5%  127543 bytes, 297 symbols
+  tested      [##################################] 100.0%  127543 bytes, 297 of 297
+```
+
+Every symbol this tree has reconstructed that can be driven by name is driven
+by name.  100.0% is not a claim that the reconstruction is finished -- 17.5%
+is the honest half of that pair, and `translated` is what has to move next.
+It says the two numbers now measure what they say they measure, which is what
+findings 221 and 222 were about.
