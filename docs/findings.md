@@ -11113,11 +11113,14 @@ the hold counter is RESET whenever the other branch wins or the energy drops
 below `min_energy` -- so it is 1280 samples of UNBROKEN detection, not 1280
 samples of tone.
 
-**And B is not 2250 Hz.**  `energy_b` is measured through `notch_c` applied
-to `notch_b`'s output -- 1800 then 2250 chained -- so it is energy in a BAND
-between the two, which `dualtone.h` calls the FSK band.  A single sine at
-2250 goes into a notch AT 2250 and is removed, which is the opposite of what
-it needs.  Feeding one was never going to work.
+**And B is the FSK band, though a 2250 Hz tone does feed it.**  `energy_b`
+is `notch_energy(total, yc)` where `yc` is the signal with BOTH the 1800 and
+2250 notches applied -- so it measures what those two notches REMOVED, and a
+sine at either centre is removed and therefore counted.  An earlier revision
+of this entry said the opposite, that a 2250 tone "goes into a notch at 2250
+and is removed, which is the opposite of what it needs".  Being removed is
+what makes `energy_b` large; the correction is recorded rather than quietly
+edited because the wrong version was pushed.
 
 WHAT THE NEXT ATTEMPT NEEDS.  For 3: 2100 Hz held unbroken past 1280 samples,
 which the existing SIG_2100 source can do provided nothing resets the hold --
@@ -11125,3 +11128,32 @@ worth checking `min_energy` against the amplitude of 5000 first, since a
 single dip below the floor restarts the count.  For 5: an FSK-band signal,
 which is what the V.21 answer sequence is, not a tone at a notch centre.
 `t_v23tx` already generates the real thing and is the obvious source.
+
+### 208. Two causes eliminated for the dual-tone sites, and it is neither
+
+Finding 207 named amplitude and signal choice as what the dual-tone verdicts
+needed.  Both were tried and neither is the blocker.
+
+**Amplitude was wrong and is not the cause.**  The callprog test drove its
+tones at 5000 where `t_dualtone` measures the detector as answering at
+12000.  Raised.  Sites still dead.
+
+**The waveform was wrong and is not the cause either.**  The other signals in
+that test come from a 64-entry table, which at 2100 Hz is 3.8 samples per
+cycle -- harmonic-rich, and the notch removes the fundamental while the
+harmonics survive, so no branch can take the 88% of total energy it needs.
+Replaced with a real `sin()` at 12000, as `t_dualtone` does.  Sites still
+dead.
+
+Both changes are kept: they are right in themselves, they cost nothing, and
+they remove two explanations from the next attempt's list.
+
+**WHAT IS LEFT IS THE GATE, NOT THE SIGNAL.**  `Dual_TONE_detect` is called
+only where `automode_table[cp->state] == 1`, and this test seeds every state
+and still never reaches the call.  So either no state in this fixture's table
+has automode set -- which finding 19 is about, the detectors that never
+assert when configured through `CALLPROG_Create` -- or the states that do are
+not among the ones the seeding can hold.  That is a question about the table
+`build_state_machine` writes, not about what is fed to the line, and it
+should be answered by reading the table the fixture actually produces before
+any more signals are tried.

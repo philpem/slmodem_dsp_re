@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <math.h>
 #include <string.h>
 
 #include "harness.h"
@@ -159,11 +160,21 @@ fill_input(int signal)
 			case SIG_DIALTONE:
 				v = tone550(n);
 				break;
+			/*
+			 * A REAL SINE, not the 64-entry table the other
+			 * signals use.  At 2100 Hz that table has 3.8 samples
+			 * per cycle and what comes out is harmonic-rich; the
+			 * notch removes the fundamental and the harmonics
+			 * survive, so no branch ever takes the 88% it needs.
+			 * And 12000 rather than 5000, which is the amplitude
+			 * t_dualtone measured the detector as answering to.
+			 */
 			case SIG_2100:
-				v = tone_at(n, TONE_STEP_2100);
-				break;
 			case SIG_2250:
-				v = tone_at(n, TONE_STEP_2250);
+				v = (short)(12000.0 * sin(2.0 * 3.14159265358979
+							  * (signal == SIG_2100
+							     ? 2100.0 : 2250.0)
+							  * n / 8000.0));
 				break;
 			case SIG_BUSY:
 				/*
@@ -474,8 +485,8 @@ main(void)
 	busy_filter = 0;
 	rc |= run("callprog: noise", "T5551234", SIG_NOISE, -1, 120);
 	/* The two dual-tone frequencies down the default path as well. */
-	rc |= run("callprog: 2100 Hz", "T5551234", SIG_2100, -1, 200);
-	rc |= run("callprog: 2250 Hz", "T5551234", SIG_2250, -1, 200);
+	rc |= run("callprog: 2100 Hz", "T5551234", SIG_2100, -1, 300);
+	rc |= run("callprog: 2250 Hz", "T5551234", SIG_2250, -1, 300);
 	rc |= run("callprog: pulse dialling", "P5551234", SIG_SILENCE, -1, 200);
 
 	/*
