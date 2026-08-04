@@ -270,13 +270,27 @@ def our_strings(paths):
         except OSError:
             continue
         src = COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), src)
-        for n, line in enumerate(src.split("\n"), 1):
-            if line.lstrip().startswith("#"):
-                continue
-            for m in RUN.finditer(line):
-                s = unescape("".join(LIT.findall(m.group(0))))
-                if s:
-                    out.append((p, n, s))
+        #
+        # Preprocessor lines are emptied rather than skipped, because the
+        # scan below runs over the WHOLE file and cannot be told which line
+        # it is on.  Their content is the only source of literals that are
+        # legitimately not the blob's -- every one is an `#include` path.
+        #
+        src = "\n".join("" if l.lstrip().startswith("#") else l
+                        for l in src.split("\n"))
+        #
+        # ONE PASS OVER THE FILE, NOT ONE PER LINE.  `RUN` separates adjacent
+        # literals with `\s*`, which spans newlines -- but only if it is
+        # given them.  Scanned line by line, a message split across source
+        # lines came back as its fragments, and each fragment is a substring
+        # of the whole, so a TRUNCATED format string matched and passed.
+        # That is how the K56Flex mutation of finding 195 got past this
+        # sweep.  142 of 592 strings were fragments.
+        #
+        for m in RUN.finditer(src):
+            s = unescape("".join(LIT.findall(m.group(0))))
+            if s:
+                out.append((p, src.count("\n", 0, m.start()) + 1, s))
     return out
 
 
@@ -331,11 +345,24 @@ def main():
             ["objcopy", "-O", "binary", "--only-section=.data",
              args.obj, "/dev/stdout"], capture_output=True).stdout
         found = our_strings(args.src)
+        #
+        # NUL-ANCHORED, not a bare substring.  Every string in .rodata is
+        # terminated, so requiring the terminator demands that our literal be
+        # a WHOLE string of the object's rather than any run of bytes inside
+        # one.  A substring test accepts a TRUNCATION -- which is exactly what
+        # a mis-transcribed format string looks like -- and that is how the
+        # K56Flex mutation of finding 195 passed this sweep.
+        #
+        # It only became possible once `our_strings` glued literals across
+        # source lines: before that, every multi-line message arrived here as
+        # its fragments and the substring test was the only thing making them
+        # match.  The two halves of this check have to move together.
+        #
         bad = [(p, n, t) for p, n, t in found
-               if t.encode("latin1") not in haystack]
-        print("String literals in this tree that appear NOWHERE in the "
-              "object's\n.rodata or .data -- so they were invented rather than "
-              "read.  Finding 180.\n")
+               if t.encode("latin1") + b"\0" not in haystack]
+        print("String literals in this tree that are not WHOLE strings of "
+              "the object's\n.rodata or .data -- so they were invented, or "
+              "truncated.  Findings 180, 201.\n")
         for p, n, t in bad:
             print("  INVENTED  %s:%d\n            %r" % (p, n, t))
         print("\n  %d checked, %d not present in the object"

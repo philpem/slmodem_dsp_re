@@ -10822,3 +10822,58 @@ sample in 0x5f8..0x608. The quantity is `(dr*dr + di*di) >> 14` on the
 distance from a fixed constellation point, so it is quantised in a way that
 steps over the band. Reaching it wants the equaliser driven to a chosen
 output, not the input swept. Task #8.
+
+### 201. The invented-string sweep accepted a truncation, and one had got in
+
+`make strings` gates on `debugaudit.py --invented`, which asks whether each
+of our string literals appears in the object's `.rodata` or `.data`. It
+asked with a plain substring test, so any literal that is a PREFIX or
+fragment of a real one passed — and a truncation is exactly what a
+mis-transcribed format string looks like. Finding 195 caught it in the act:
+replacing
+
+```
+  "VPcmV34Main: K56Flex enabled by remote, PCM type: local %d, remote %d ..."
+```
+
+with the same message cut short at "remote" was rejected by neither tier —
+not by the differential test, whose fixture pinned the branch off, and not by
+this sweep, because the short version is a prefix of the long one.
+
+**THE SUBSTRING TEST WAS LOAD-BEARING, which is why it had survived.**
+`our_strings` scanned line by line. C glues adjacent literals, and this tree
+splits nearly every long message across source lines, so a message arrived
+here as its FRAGMENTS — 142 of 592 "strings" were pieces of other strings.
+Each fragment is a substring of the whole, so the loose test was the only
+thing making them match. Tightening the comparison without gluing first
+would have reported a hundred false positives; gluing without tightening
+would have changed nothing. The two halves only work together.
+
+`RUN` already separates adjacent literals with `\s*`, which spans newlines —
+it was simply never given any, because it was applied per line. Scanning the
+whole file instead (with preprocessor lines emptied rather than skipped, so
+line numbers survive) gives 463 whole strings where there were 592 pieces.
+The comparison is now `t + b"\0" in haystack`: our literal must be a whole
+string of the object's, not a run of bytes inside one.
+
+**AND IT FOUND ONE ON THE FIRST RUN.** `src/v8/v8dp.c` named its datapump
+`.name = "v8"`. The blob has no bare `v8\0` anywhere; it has `V8\0`, sitting
+immediately before `v8: delete...\n` in `.rodata.str1.1` — which is the
+string our lowercase version had been matching as a prefix all along. The
+other three pumps really are lower case:
+
+```
+  b103   standalone in the blob: yes
+  call   standalone in the blob: yes
+  v23    standalone in the blob: yes
+  v8     standalone in the blob: NO      V8: yes
+```
+
+So the original names three of its four datapumps in lower case and the V.8
+one in upper, and the reconstruction had regularised the odd one out. No
+differential test could have seen it: `.name` is a field nothing this tree
+drives ever prints.
+
+That is the second time a sweep over EVERY literal rather than every call
+site has paid for itself — finding 180 is the first — and the first time the
+strictness of the comparison, rather than its coverage, was what mattered.
