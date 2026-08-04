@@ -136,19 +136,43 @@ A running decode file — field offsets settled, cases done, what was tried and
 failed — written as the work proceeds turns a hard wall into a boundary. The
 task descriptions in #56–#61 were written this way deliberately.
 
-### 6. Needs a decision: a decompiler
+### 6. Ghidra, as scaffolding only — `tools/decompile.sh`
 
-None is installed. Ghidra headless or angr would give a first-cut C to correct
-rather than transcribe — a large lever on output volume, which is exactly what
-the measurement says the window is spent on.
+Available and now wired up. Measured against `chkForceBaudRate`, which this
+tree had already reconstructed and differentially verified by hand, Ghidra
+11.4.2 recovered the branch structure exactly, every constant and structure
+offset (`obj+0xac3c`, `cfg[0x50] >> 5`), the debug gate as
+`1 < _dsplibs_debug_level` — which is `DSPLIB_DEBUG_ON()` — and the calling
+convention including `__regparm2` where the object uses it.
 
-It cuts against `fastpass.md`'s standing rule, *read from the disassembly, not
-from a summary of it*, and decompiler output is exactly a summary — one that
-is confidently wrong about types, signedness and fixed-point scaling in the
-ways this object is full of. If used at all it should be scaffolding whose
-every line is then checked against the disassembly, with the differential test
-still the only thing that decides. That is a method change and belongs to
-whoever owns the method.
+It destroyed aggregates. `unsigned char allow[6]` came back as `local_2c`,
+`local_28` and `uStack_27`, written through as `local_2c._2_1_ = 1`. **An
+array is the thing it cannot see, and arrays are most of this object.** Types
+and signatures are gone too — `(int param_1, int param_2)` for what is
+`(void *obj, struct v34_dftbin *bins)` — though that is not recoverable from
+the object and so not a fault.
+
+So it is good at the half this project finds tedious and bad at the half its
+findings are actually about. That division is the whole value.
+
+**On "the decompilation may not match the assembly":** it does not have to,
+because it is never what ships and never what is trusted. The differential
+test is the arbiter, exactly as before. A mismatch surfaces as a failing test
+— the normal case the harness exists for. What *would* do damage is a Ghidra
+guess written into a comment or a finding as though it were derived, because
+the record is the deliverable. Hence the standing rules in the script header:
+every line goes through `tools/dis.py` before it goes into `src/`, and no
+name, comment or finding is ever written from decompiler output.
+
+A worked example of the upside: `preempindex` has defeated two attempts here,
+both needing its per-baud-rate multiplier table. One run returned it —
+`0xd65 -> 0x6626`, `0xc80 -> 0x639f`, `3000 -> 0x656f` — as plain branch
+constants.
+
+**Untested: x87.** The object is built `-mfpmath=387` and Ghidra's x87
+modelling is its known weak spot. The float-heavy modules are already done, so
+this has not been measured. Treat floating-point output as suspect until
+someone does.
 
 ## What this does not change
 

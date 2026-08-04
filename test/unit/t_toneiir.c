@@ -153,7 +153,6 @@ run_create(const char *label, int n_a, int n_b, const short *a, const short *b,
 	unsigned char bufa[sizeof(struct iir_filter)];
 	unsigned char bufb[sizeof(struct iir_filter)];
 	struct iir_filter *fa, *fb;
-	unsigned i;
 
 	diff_begin(label);
 
@@ -172,9 +171,7 @@ run_create(const char *label, int n_a, int n_b, const short *a, const short *b,
 	diff_eq_int("ref returns its argument", fa == (struct iir_filter *)bufa,
 		    1, 0);
 
-	for (i = 0; i < sizeof(struct iir_filter); i++)
-		diff_eq_int("byte %ld", ((unsigned char *)fb)[i],
-			    ((unsigned char *)fa)[i], (long)i);
+	diff_eq_obj("the whole filter", struct iir_filter, fb, fa, 0);
 
 	return diff_end();
 }

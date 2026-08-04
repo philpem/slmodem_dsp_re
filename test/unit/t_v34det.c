@@ -94,10 +94,8 @@ compare_obj(const char *what, const struct v34_detector *ours, const void *ref)
 {
 	const unsigned char *a = (const unsigned char *)ours;
 	const unsigned char *b = (const unsigned char *)ref;
-	unsigned i;
 
-	for (i = 0; i < sizeof(*ours); i++)
-		diff_eq_int(what, a[i], b[i], i);
+	diff_eq_obj(what, struct v34_detector, a, b, 0);
 }
 
 /*

@@ -128,7 +128,6 @@ static int
 run_create(void)
 {
 	struct dual_tone *a, *b;
-	unsigned i;
 
 	diff_begin("Dual_TONE_create");
 
@@ -149,9 +148,7 @@ run_create(void)
 	 * _iir_filter_create: this one memsets everything it allocated, so
 	 * there is no uninitialised slack to compare.
 	 */
-	for (i = 0; i < sizeof(struct dual_tone); i++)
-		diff_eq_int("byte %ld", ((unsigned char *)b)[i],
-			    ((unsigned char *)a)[i], (long)i);
+	diff_eq_obj("the whole object", struct dual_tone, b, a, 0);
 
 	diff_eq_int("ratio", b->ratio, 226, 0);
 	diff_eq_int("min_energy", b->min_energy, 1, 0);
