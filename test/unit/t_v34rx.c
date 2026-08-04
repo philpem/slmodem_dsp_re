@@ -1063,11 +1063,12 @@ main(void)
 	diff_begin("v34 adaptecho");
 	{
 		static struct v34_object oa, ob;
-		int lagbase, it;
+		int lagbase, it, beta;
 		unsigned b, lvl;
 
 		/* Level 1 too; see the receiver block for why 1 and not 0. */
 		for (lvl = 1; lvl <= 2; lvl++)
+		for (beta = 0; beta <= 1; beta++)
 		for (lagbase = 0; lagbase <= 3; lagbase++) {
 			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
@@ -1078,12 +1079,27 @@ main(void)
 			oa.f25c2 = ob.f25c2 = 0;
 			oa.f260  = ob.f260  = 0;
 			oa.fa23e = ob.fa23e = 0;
-			oa.f354c = ob.f354c = 0;
 			oa.f3550 = ob.f3550 = -0x2000;
 			oa.f3554 = ob.f3554 = 0x95;
 			oa.f3558 = ob.f3558 = 0x7000;
-			oa.f355c = ob.f355c = 6;
-			oa.f3560 = ob.f3560 = 0;
+			/*
+			 * THE THIRD ARM OF THE STEP-SIZE CHOICE, which
+			 * nothing reached.  It is picked when `f355c > 2` and
+			 * neither of the two arms above it applies, and all
+			 * three compare `f3560` UNSIGNED -- so the case that
+			 * tells the unsigned compare from a signed one is a
+			 * NEGATIVE energy, which as unsigned is above every
+			 * threshold and as signed is below all of them.
+			 *
+			 * `f355c` must be 5 or less or the second arm takes
+			 * it first, and `f354c` starts at 0x8f so the very
+			 * next call is 0x90 -- the one call that runs this
+			 * block -- with `f3560` still exactly as seeded
+			 * rather than 143 calls of accumulation on top.
+			 */
+			oa.f355c = ob.f355c = (short)(beta ? 5 : 6);
+			oa.f3560 = ob.f3560 = beta ? -1 : 0;
+			oa.f354c = ob.f354c = beta ? 0x8f : 0;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 
 			/*
@@ -1224,8 +1240,38 @@ main(void)
 			oa.fa240 = ob.fa240 = 0;
 			oa.f2aa4 = ob.f2aa4 = 0;
 			oa.f2aa6 = ob.f2aa6 = 0;
-			oa.f354c = ob.f354c =
-			    (int)(cnt == 0 ? 0 : cnt == 1 ? -1 : 0x464f);
+			/*
+			 * EACH SEED IS ONE COUNT BELOW A BOUNDARY, because
+			 * the function increments before it tests: `count =
+			 * f354c + 1`.  Seeding the boundary itself lands one
+			 * past it and proves nothing.
+			 *
+			 *   -1      count wraps to 0 -- the NEC start
+			 *   0x2bb   count 0x2bc, the FEC start announcement
+			 *   0x464e  count 0x464f, the last count the near
+			 *           canceller adapts on, and 0x4650 two
+			 *           calls later is the stop announcement
+			 *   2699    count 2700, where far_count is 2001 and
+			 *           2700 % 45 == 0, so the far step depends
+			 *           on the 0x2bb offset being exactly right
+			 */
+			static const int cnt_seed[3] = {
+				0, -1, 0x464e
+			};
+			/*
+			 * TWO MORE SEEDS BELONG HERE AND CANNOT GO IN YET:
+			 * 0x2bb, which puts count on the FEC start
+			 * announcement, and 2699, where far_count is 2001 and
+			 * the far step depends on the 0x2bb offset being
+			 * exactly right.  Both drive the FAR canceller past
+			 * count 0x2bc for the first time in this tree, and
+			 * both then diverge from the blob -- see finding 195.
+			 * The two mutations they would catch stay uncaught
+			 * until that is fixed; adding the seeds now would
+			 * only commit a red test.
+			 */
+
+			oa.f354c = ob.f354c = cnt_seed[cnt];
 			oa.f3550 = ob.f3550 = -0x1800;
 			oa.f3552 = ob.f3552 = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
@@ -2108,8 +2154,14 @@ main(void)
 	diff_begin("v34 receiver debug transcript");
 	{
 		static struct v34_object oa, ob;
+		/*
+		 * 0x7530 IS THE BOUNDARY, and it was missing: the equaliser
+		 * report is gated `f124 <= 0x7530` and the sweep ran 0x7531,
+		 * one past it, so tightening the test to `<` changed nothing
+		 * any case could see.
+		 */
 		static const short syms[] = { 0x11, 0x40, 0x69, 0x143, 0x153,
-					      0x333, 0x7531 };
+					      0x333, 0x7530, 0x7531 };
 		unsigned cs, b, lvl;
 		int it, saw;
 
@@ -2204,17 +2256,44 @@ main(void)
 			     : cs == 5 ? V34_RX_FLAG_PREDICT
 			     : V34_RX_FLAG_DATA);
 
+			/*
+			 * 32, not 28: the loop length is a multiple of the
+			 * symbol table's, so every entry gets the same number
+			 * of turns.  Adding 0x7530 to a 7-entry table without
+			 * this cost the S-S1 argument-swap catch, because the
+			 * counts each case reached quietly changed.
+			 */
 			saw = 0;
-			for (it = 0; it < 28; it++) {
+			for (it = 0; it < 32; it++) {
 				long tag = (long)cs * 1000 + it;
 
 				ra->f124 = rb->f124 =
 				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
 				if (cs == 1)
 					ra->f798 = rb->f798 = 0x8c;
-				if (cs == 2)
-					ra->f798 = rb->f798 =
-					    (short)((it & 1) ? -0x7c : -0x85);
+				if (cs == 2) {
+					/*
+					 * BOTH EDGES OF THE WINDOW.  It is
+					 * `n + 0x78 <= 0 && n + 0x84 > 0`,
+					 * so it admits -131..-120 and the
+					 * two values that decide it are the
+					 * ends: -120 leaves if the lower
+					 * bound moves by one, -132 enters if
+					 * the upper one does.  The sweep ran
+					 * -124 and -133, which are a clear
+					 * inside and a clear outside -- and
+					 * neither bound could be moved by
+					 * one without the test agreeing.
+					 */
+					static const short rrn[] = {
+						-0x78,	/* -120, the low edge */
+						-0x7c,	/* -124, inside       */
+						-0x84,	/* -132, the high edge*/
+						-0x85	/* -133, outside      */
+					};
+
+					ra->f798 = rb->f798 = rrn[it & 3];
+				}
 
 				dsplib_debug_capture_reset();
 				receiver(&oa);

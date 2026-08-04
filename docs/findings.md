@@ -10496,3 +10496,63 @@ arm, which D36 records as unreachable: `i` is 6 or more by the time the test
 runs, so no input drives it. `v34rx`'s is `setInitialPhase`'s second divide
 guard, which needs `polyValue(k2) + polyValue(k)` to come out zero — the
 sweep reaches the first guard and not that one.
+
+### 195. The far echo canceller diverges, and the counter that hid it
+
+Closing v34rx's uncaught mutations (finding 192) meant seeding `f354c` — the
+echo adaptation counter — near the boundaries the mutations move. That drove
+the FAR canceller past count 0x2bc for the first time in this tree, and it
+does not agree with the blob.
+
+**IT HAD NEVER RUN.** `modem_serrint` adapts `echo1` only once `f354c >
+0x2bc`, which is 700 calls. Its own section started the counter at 0 and ran
+300 iterations, so the branch was dead in every test that has ever passed.
+`echo0`'s equivalent starts at zero and was always covered; the two look
+alike in the source and only one of them was ever executed.
+
+**WHERE.** Seeding `f354c = 0x2bb` and running the section's 300 iterations,
+the objects agree for 143 calls and part at **iteration 144, `f354c` = 843,
+offset +0x3552**. That is `far_count == 0x90` exactly — the single call that
+computes
+
+```
+    if (far_count == 0x90 && obj->fa23c != 0)
+            far_energy = V34EchoEstimateDelayLineEnergy(&obj->echo1);
+```
+
+and feeds the result to `updateAlpha(&obj->f3552, far_energy, ...)`. The
+near-side twin, `count == 0x90` into `V34EchoEstimateDelayLineEnergy(&obj->
+echo0)`, is reached by the existing sweep and agrees. So the divergence is
+the far canceller's delay line holding something different from the blob's
+at that moment, and everything downstream — `f3552`, `far_err`, the adapted
+coefficients, and through `V34EchoFilter` the cancelled sample itself —
+follows from it. The visible symptom in the byte comparison is the low half
+of each receive-queue entry: our cleaned samples are not the object's.
+
+**IT IS THE FAR CANCELLER, NOT THE ECHO FEED.** Restricting the sweep to
+`feed = 0` still fails; restricting it to `far = 0` passes. So `V34_EC_FEED`
+is not the trigger, `fa23c` is.
+
+**A SUSPECT, NOT A DIAGNOSIS.** `echo1`'s arrays are aliased: `modem_serrint`
+uses `obj->echo1.coeff_frac` as the 60-tap FIR's delay line, which the source
+already notes as "one region, now three readings". If the delay line proper
+aliases something too, an adaptation that writes it would be writing another
+reading's state. Worth checking before anything else, because it explains
+why only the far side is wrong.
+
+**WHAT IS PARKED ON IT.** Two mutations stay uncaught: the FEC start
+announcement at `f354c == 0x2bc`, and the far step's `count - 0x2bb` offset,
+which needs count 2700 where `far_count` is 2001 and 2700 % 45 == 0. Both
+seeds are written into `t_v34rx.c` as a comment rather than as code, because
+adding them now would commit a red test rather than a caught mutation.
+
+**AND ONE THAT IS NOT.** The S-S1 threshold `(short)err > 0x600` is moved by
+one and nothing notices, because `err` never lands on 0x601. Instrumenting
+the site says it is reached 400-odd times across the whole test with values
+spanning 156..2406 — and a search over 400 ring offsets produced not one
+sample in 0x5f8..0x608. The quantity is `(dr*dr + di*di) >> 14` on the
+distance from a fixed constellation point, so it is quantised in a way that
+steps over the band. Reaching it wants the equaliser driven to a chosen
+output, not the input swept.
+
+The suite is 27 of 30 caught, from 17 when the set was written.
