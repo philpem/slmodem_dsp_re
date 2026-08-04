@@ -59,6 +59,8 @@ extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_VPcmV34LogTimingOffset(void *obj, short offset);
 extern void ref_VPcmV34SetTxScale(void *obj);
+extern void ref_VPcmV34ReportStartOfEchoAdapt(void *obj);
+extern void ref_VPcmV34ReportMiddleOfEchoAdapt(void *obj);
 extern double *ref_V34XF_GetProbeResultsPtr(void *obj);
 extern int *ref_V34XF_GetInfo0BitsPtr(void *obj);
 extern short ref_V34XF_GetRTD(void *obj);
@@ -883,6 +885,84 @@ main(void)
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;
 		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * The two echo-adapt reports.
+	 *
+	 * Nothing but the transcript: neither touches the object, so the byte
+	 * compare passes on an empty body and says nothing on its own.  All
+	 * three levels, and 1 is the one that matters -- every gate in the
+	 * object is `> 1`, so 1 is the single value at which it differs from
+	 * the `>= 1` a reader would write, and at 0 both spellings are
+	 * silent.
+	 *
+	 * The two strings differ in one word, so comparing each function's
+	 * transcript against the reference's catches a transposition.  The
+	 * two `saw_` flags catch the case that comparison cannot: both sides
+	 * silent, and the strcmp passing on two empty strings.
+	 */
+	diff_begin("v34 pcm interface: the two echo-adapt reports");
+	{
+		unsigned lvl;
+		int saw_start = 0, saw_middle = 0;
+
+		dsplib_debug_capture_on = 1;
+		for (lvl = 0; lvl <= 2; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			setup();
+			dsplib_debug_capture_reset();
+			VPcmV34ReportStartOfEchoAdapt(&oa);
+			ref_VPcmV34ReportStartOfEchoAdapt(ob);
+			compare("ReportStartOfEchoAdapt", 850 + (long)lvl);
+			diff_eq_int("start transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, 850 + (long)lvl);
+			if (lvl < 2) {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_lines(0), 0,
+					    850 + (long)lvl);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_lines(1), 0,
+					    850 + (long)lvl);
+			} else if (dsplib_debug_capture_lines(1) > 0) {
+				saw_start = 1;
+			}
+
+			setup();
+			dsplib_debug_capture_reset();
+			VPcmV34ReportMiddleOfEchoAdapt(&oa);
+			ref_VPcmV34ReportMiddleOfEchoAdapt(ob);
+			compare("ReportMiddleOfEchoAdapt", 860 + (long)lvl);
+			diff_eq_int("middle transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, 860 + (long)lvl);
+			if (lvl < 2) {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_lines(0), 0,
+					    860 + (long)lvl);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_lines(1), 0,
+					    860 + (long)lvl);
+			} else if (dsplib_debug_capture_lines(1) > 0) {
+				saw_middle = 1;
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("the start report said something", saw_start, 1, 0);
+		diff_eq_int("and so did the middle one", saw_middle, 1, 0);
 	}
 	rc |= diff_end();
 

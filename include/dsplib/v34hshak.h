@@ -14,8 +14,18 @@
  * a transmit state and a "microstate", each trace printing its own change
  * and the other two's current value.
  *
- * Nothing here is reconstructed yet; tasks #39-#45 are.  The point of
- * writing them down first is that planning the reconstruction against
+ * AND SO DOES THE DISPATCH.  The two jump tables at .rodata+0x2da0 and
+ * +0x2ee8 are fed by the transmit state, the one at +0x3000 by the
+ * microstate, and the receive state has no table at all -- it is dispatched
+ * by compare-and-branch chains.  So a state NUMBER means different things to
+ * different machines: 51 is `TX_L1` to both the transmit machine and the
+ * microstate machine and they run different code for it.  Finding 213, which
+ * retracts the part of finding 77 that read the three tables as one machine.
+ *
+ * `v34handshak` itself is not reconstructed; the split above is what its
+ * task list is organised around, because "the signal generator" and "the
+ * protocol engine" are driven by different things and tested by different
+ * means.  The point of writing the names down first is that planning against
  * "state 47" and against "TX_PHASE3_ANS" are very different exercises, and
  * cfgsplit's per-state byte counts become readable the moment the states
  * have names.
@@ -231,6 +241,70 @@ void setupreceiver(void *obj);
  * nothing in the object calls this -- so it stays a `void *`.
  */
 short preempindex(void *obj, short baudrate);
+
+/*
+ * ---------------------------------------------------------------------------
+ * Three DFT banks the handshake arms, and the detector it polls.
+ *
+ * All four work on `struct v34_dftbin` banks -- see v34det.h.  The three
+ * initialisers take the bank as an argument rather than finding it in the
+ * object, so where their caller keeps it is not recoverable: NOTHING IN THE
+ * OBJECT CALLS ANY OF THEM.  No relocation names them and no direct call
+ * reaches them, which is the shape `cosread` has and the shape four of the
+ * seven functions already in v34hshak.c have.  They are global, so they are
+ * testable regardless; it only means the bin counts and the argument have to
+ * be read out of the code rather than off a call site.
+ *
+ * The bin numbers below are in units of the phase step, and one unit is
+ * 150 Hz at V.34's 9600 Hz rate (docs/rate_assumptions.md R-1): 0x4000 of
+ * phase is a full turn and the step is `bin << 8`, so a bin repeats every
+ * 16384 / (bin * 256) = 64 / bin samples.
+ */
+
+struct v34_dftbin;
+
+/*
+ * Twenty-five bins, 150 Hz to 3750 Hz, which is the V.34 line probe's tone
+ * spacing.  Clears both accumulator pairs AND the double result; leaves
+ * `energy`, `shift` and the two thresholds alone.
+ */
+void dftfreqinit(struct v34_dftbin *bins);
+
+/*
+ * Four bins at 1050, 1350, 1950 and 2550 Hz, and four at 900, 1200, 1800 and
+ * 2400 Hz.  Each noise bin sits one 150 Hz step below its signal partner,
+ * which is what makes the pair a measurement rather than two frequencies.
+ *
+ * `nl` is the author's; V.34 phase 2 measures nonlinear distortion from the
+ * probe, and that is the obvious reading.  Which bank is the reference and
+ * which the product is NOT settled by anything in the object -- neither
+ * initialiser has a caller -- so nothing here reads across.
+ *
+ * Both clear only the integer accumulators, not the double pair
+ * `dftfreqinit` also clears.  That difference is the object's.
+ */
+void dftnlinitSignalBins(struct v34_dftbin *bins);
+void dftnlinitNoiseBins(struct v34_dftbin *bins);
+
+/*
+ * Arm the retrain-request detector: three bins at 900, 1200 and 1500 Hz in
+ * the object's own `retrain_bins`, both thresholds on each, and the five
+ * scalars at +0xa24a.  See `struct v34_object`.
+ */
+void dftRetrainDetInit(void *obj);
+
+/*
+ * Feed `nsamples` samples to that detector and answer whether the far end is
+ * asking for a retrain.
+ *
+ * Returns 1 only on the measurement that completes the second run; every
+ * other call returns 0, including the ones that merely accumulate.  `nbins`
+ * is the caller's and not the three the initialiser wrote, so a prefix of
+ * the bank can be polled, and the clear after each measurement covers
+ * exactly the bins the caller named.
+ */
+int detectRetrainReq(void *obj, short nbins, const short *samples,
+		     short nsamples);
 
 /*
  * ---------------------------------------------------------------------------

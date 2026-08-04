@@ -57,6 +57,12 @@ extern void ref_dpskinit(void *obj, short mode, short high);
 extern void ref_setfinalrate(void *obj);
 extern void ref_setupreceiver(void *obj);
 extern short ref_preempindex(void *obj, short baudrate);
+extern void ref_dftfreqinit(struct v34_dftbin *bins);
+extern void ref_dftnlinitSignalBins(struct v34_dftbin *bins);
+extern void ref_dftnlinitNoiseBins(struct v34_dftbin *bins);
+extern void ref_dftRetrainDetInit(void *obj);
+extern int ref_detectRetrainReq(void *obj, short nbins, const short *samples,
+				short nsamples);
 extern void ref_v34modeminit(void *obj);
 extern void ref_v34handshakinit(void *obj, int mode);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
@@ -857,6 +863,671 @@ main(void)
 			}
 			diff_eq_int("the sweep reached index 6", saw6, 1, 0);
 			diff_eq_int("the sweep reached index 10", saw10, 1, 0);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * The three DFT bank initialisers.
+	 *
+	 * Each takes the bank as an argument and nothing in the object calls
+	 * any of them, so the bank size is read out of the code and the test
+	 * has to check that reading rather than assume it: the arrays below
+	 * are LONGER than the largest bank and poisoned past it, so a
+	 * reconstruction that ran one bin too far writes into the tail and
+	 * the byte compare says so.  A bank sized to fit would hide it.
+	 */
+	diff_begin("v34 handshake: the three DFT bank initialisers");
+	{
+		enum { BANK = 32 };
+		static struct v34_dftbin bank_a[BANK], bank_b[BANK];
+		static const struct {
+			const char *what;
+			void (*ours)(struct v34_dftbin *);
+			void (*ref)(struct v34_dftbin *);
+			int bins;
+			short freq[4];
+		} banks[] = {
+			{ "dftfreqinit", dftfreqinit, ref_dftfreqinit, 25,
+			  { 0, 0, 0, 0 } },
+			{ "dftnlinitSignalBins", dftnlinitSignalBins,
+			  ref_dftnlinitSignalBins, 4, { 7, 9, 13, 17 } },
+			{ "dftnlinitNoiseBins", dftnlinitNoiseBins,
+			  ref_dftnlinitNoiseBins, 4, { 6, 8, 12, 16 } }
+		};
+		unsigned bi, fill;
+
+		/*
+		 * TWO FILLS, and not because one might be missed.  Only one
+		 * of the three clears the double accumulators, so with a
+		 * single poison "cleared" and "left alone" are told apart by
+		 * whether the poison survives -- but a poison of 0x00 makes
+		 * those two indistinguishable.  0xa5 and 0x00 together
+		 * distinguish them in one direction each.
+		 */
+		for (fill = 0; fill < 2; fill++)
+		for (bi = 0; bi < sizeof(banks) / sizeof(banks[0]); bi++) {
+			long tag = (long)fill * 100 + bi;
+			unsigned char pat = fill ? 0 : 0xa5;
+			unsigned b2;
+			int k;
+
+			memset(bank_a, pat, sizeof(bank_a));
+			memset(bank_b, pat, sizeof(bank_b));
+			banks[bi].ours(bank_a);
+			banks[bi].ref(bank_b);
+
+			for (b2 = 0; b2 < sizeof(bank_a); b2++)
+				diff_eq_int(banks[bi].what,
+					    ((unsigned char *)bank_a)[b2],
+					    ((unsigned char *)bank_b)[b2],
+					    tag * 10000 + b2);
+
+			/*
+			 * And the bank really is that long: the entry one
+			 * past the end still holds the poison.  The compare
+			 * above would catch a reconstruction that overran,
+			 * because the reference does not -- this catches the
+			 * two of them agreeing on a length the header's
+			 * comment disagrees with.
+			 */
+			for (k = 0; k < (int)sizeof(struct v34_dftbin); k++)
+				diff_eq_int("one past the end is untouched",
+					    ((unsigned char *)
+					     &bank_a[banks[bi].bins])[k],
+					    pat, tag * 10000 + 9000 + k);
+
+			/*
+			 * The frequencies the header names, in the units the
+			 * object writes.  Nothing else in the tree states
+			 * them, and a comment that drifts from the code is
+			 * worse than no comment.
+			 */
+			for (k = 0; k < 4 && banks[bi].freq[0]; k++)
+				diff_eq_int("the bin number the header names",
+					    bank_a[k].inc,
+					    (short)(banks[bi].freq[k] << 8),
+					    tag * 10000 + 8000 + k);
+		}
+
+		/* dftfreqinit's own: bin 1 first, bin 25 last, one-based. */
+		memset(bank_a, 0xa5, sizeof(bank_a));
+		dftfreqinit(bank_a);
+		diff_eq_int("dftfreqinit starts at bin 1", bank_a[0].inc,
+			    1 << 8, 0);
+		diff_eq_int("dftfreqinit ends at bin 25", bank_a[24].inc,
+			    25 << 8, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: dftRetrainDetInit");
+	{
+		/*
+		 * It writes into the object rather than taking a bank, so
+		 * the whole-object compare is the test -- three bins and
+		 * five scalars scattered 22 KB apart, and a store that
+		 * landed in the wrong one of them would still leave a
+		 * plausible detector.
+		 */
+		setup();
+		dftRetrainDetInit(&oa);
+		ref_dftRetrainDetInit(ob);
+		compare("dftRetrainDetInit", 30000);
+
+		diff_eq_int("armed in state 1", oa.retrain_state, 1, 0);
+		diff_eq_int("bin 0 is 900 Hz", oa.retrain_bins[0].inc,
+			    6 << 8, 0);
+		diff_eq_int("bin 1 is 1200 Hz", oa.retrain_bins[1].inc,
+			    8 << 8, 0);
+		diff_eq_int("bin 2 is 1500 Hz", oa.retrain_bins[2].inc,
+			    10 << 8, 0);
+
+		/* Twice, because it is not idempotent by construction. */
+		dftRetrainDetInit(&oa);
+		ref_dftRetrainDetInit(ob);
+		compare("dftRetrainDetInit twice", 30100);
+	}
+	rc |= diff_end();
+
+	/*
+	 * detectRetrainReq, driven through its whole cycle.
+	 *
+	 * The detector answers once every 128 samples and needs three quiet
+	 * measurements followed by nine loud ones, so nothing short of ~1700
+	 * samples reaches the answer at all.  Feeding it random noise would
+	 * never get there; the drive below is silence and then a full-scale
+	 * 1200 Hz tone, which is the middle bin's own frequency.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq, the whole cycle");
+	{
+		/* 1200 Hz at 9600 Hz is eight samples per period. */
+		static const short tone[8] = {
+			0, 22627, 32000, 22627, 0, -22627, -32000, -22627
+		};
+		static const short quiet[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		/*
+		 * Silence long enough to arm it, one loud window to end the
+		 * quiet run, nine to answer, then silence again to see the
+		 * reset.  The short run at the front is the case where the
+		 * run ends BEFORE the limit and the machine must stay put.
+		 */
+		static const struct { int loud; int windows; } drive[] = {
+			{ 0, 2 }, { 1, 1 },	/* run of 2 -- too short   */
+			{ 0, 4 }, { 1, 1 },	/* run of 4 -- state 2     */
+			{ 1, 9 },		/* nine loud -- the answer */
+			{ 0, 1 },		/* and back to state 1     */
+			{ 1, 3 }
+		};
+		int saw_state2 = 0, saw_reset = 0, saw_answer = 0;
+		int saw_short_run = 0, saw_between = 0;
+		short was;
+		unsigned d;
+		int w, c, ph = 0;
+
+		setup();
+		dftRetrainDetInit(&oa);
+		ref_dftRetrainDetInit(ob);
+		was = oa.retrain_state;
+
+		for (d = 0; d < sizeof(drive) / sizeof(drive[0]); d++)
+		for (w = 0; w < drive[d].windows; w++) {
+			long tag = (long)d * 1000 + w * 10;
+
+			/* 128 samples, four at a time, as the object is fed. */
+			for (c = 0; c < 32; c++) {
+				const short *src = drive[d].loud ? tone : quiet;
+				short in[4];
+				int k, ra, rb;
+
+				for (k = 0; k < 4; k++, ph++)
+					in[k] = src[ph & 7];
+
+				ra = detectRetrainReq(&oa, V34_RETRAIN_BINS,
+						      in, 4);
+				rb = ref_detectRetrainReq(ob, V34_RETRAIN_BINS,
+							  in, 4);
+				diff_eq_int("detectRetrainReq answered the "
+					    "same", ra, rb, tag + c);
+
+				if (ra)
+					saw_answer = 1;
+				if (was == 1 && oa.retrain_state == 2)
+					saw_state2 = 1;
+				if (was == 2 && oa.retrain_state == 1)
+					saw_reset = 1;
+				if (was == 1 && oa.retrain_state == 1
+				    && oa.retrain_runs == 0)
+					saw_short_run = 1;
+				if (oa.retrain_state == 2 && !ra
+				    && oa.retrain_runs > 0)
+					saw_between = 1;
+				was = oa.retrain_state;
+			}
+
+			/* The whole object, once per measurement. */
+			compare("detectRetrainReq", 31000 + tag);
+		}
+
+		/*
+		 * Five arms, and a sweep that reaches four of them proves
+		 * nothing about the fifth.  Every one of these was reached
+		 * by the drive above the first time it ran; if a change to
+		 * the thresholds or the tone makes one unreachable, this
+		 * fails rather than quietly testing less.
+		 */
+		diff_eq_int("the quiet run reached the limit", saw_state2, 1,
+			    0);
+		diff_eq_int("a short quiet run did NOT", saw_short_run, 1, 0);
+		diff_eq_int("state 2 counted without answering", saw_between,
+			    1, 0);
+		diff_eq_int("the detector answered", saw_answer, 1, 0);
+		diff_eq_int("and silence reset it", saw_reset, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The thresholds are read SIGNED and the energy UNSIGNED.
+	 *
+	 * The energy side is not reachable: `dftenergy` writes `(short)((int)e
+	 * >> 16)` and `e` is a sum of two squares of 16-bit values, so it
+	 * exceeds 2^31 -- the only way the short goes negative -- when both
+	 * halves are simultaneously at full scale, which no input found does.
+	 * A sweep of all 32767 amplitudes of a 1200 Hz sine produced none.
+	 *
+	 * The threshold side is reachable, and this is what reaches it: a
+	 * negative threshold read signed rejects every energy, read unsigned
+	 * accepts every energy, and the two answers are opposite on the very
+	 * first measurement.  `dftRetrainDetInit` never writes one -- 80 and
+	 * 3000 -- so nothing but a seeded field gets here.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq's thresholds, one bin at a "
+		   "time");
+	{
+		/*
+		 * ONE BIN AT A TIME, and the other two set to a value that
+		 * always passes.  Driving all three together looks more
+		 * thorough and tests less: the quiet arm is an AND over the
+		 * three bins, so with equal thresholds a change to bin 0's
+		 * comparison is masked by bin 1's still failing, and every
+		 * per-bin claim -- the `<`, the sign of the widening, which
+		 * bin's threshold each energy is read against -- passes
+		 * whatever the code does.  Seven mutants survived exactly
+		 * that way before this loop was written per-bin.
+		 *
+		 * `-32768` for the other two thresh_hi and `32767` for the
+		 * other two thresh_lo is what "always passes" means on each
+		 * arm: silence gives an energy of 0, and 0 is below one and
+		 * above the other.
+		 */
+		static const short thr[] = { -1, -32768, 0, 1, 2, 3000,
+					     32767 };
+		unsigned ti, bi;
+		int target, st;
+		int saw_state1_yes = 0, saw_state1_no = 0;
+		int saw_state2_yes = 0, saw_state2_no = 0;
+
+		for (target = 0; target < V34_RETRAIN_BINS; target++)
+		for (st = 1; st <= 2; st++)
+		for (ti = 0; ti < sizeof(thr) / sizeof(thr[0]); ti++) {
+			long tag = (long)target * 10000 + st * 1000
+				 + (long)ti * 100;
+			short in[4];
+			int c, was;
+
+			setup();
+			dftRetrainDetInit(&oa);
+			ref_dftRetrainDetInit(ob);
+			poke_short(__builtin_offsetof(struct v34_object,
+						      retrain_state),
+				   (short)st);
+
+			for (bi = 0; bi < V34_RETRAIN_BINS; bi++) {
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ bi * sizeof(struct v34_dftbin);
+				short lo = (bi == (unsigned)target)
+					 ? thr[ti] : 32767;
+				short hi = (bi == (unsigned)target)
+					 ? thr[ti] : -32768;
+
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_lo),
+					   lo);
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_hi),
+					   hi);
+			}
+
+			in[0] = in[1] = in[2] = in[3] = 0;
+			was = oa.retrain_runs;
+			for (c = 0; c < 32; c++) {
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("seeded threshold answer", ra, rb,
+					    tag + c);
+			}
+			compare("seeded threshold", 32000 + tag);
+
+			/*
+			 * One measurement happened, and the run either
+			 * advanced or did not.  Which one is the whole
+			 * discrimination, so both have to be seen in both
+			 * states or the sweep is testing one arm.
+			 */
+			if (st == 1 && oa.retrain_runs > was)
+				saw_state1_yes = 1;
+			if (st == 1 && oa.retrain_runs == 0)
+				saw_state1_no = 1;
+			if (st == 2 && oa.retrain_runs > was)
+				saw_state2_yes = 1;
+			if (st == 2 && oa.retrain_runs == 0)
+				saw_state2_no = 1;
+		}
+
+		diff_eq_int("state 1 counted silence as quiet", saw_state1_yes,
+			    1, 0);
+		diff_eq_int("and rejected it", saw_state1_no, 1, 0);
+		diff_eq_int("state 2 counted silence as a tone",
+			    saw_state2_yes, 1, 0);
+		diff_eq_int("and rejected it", saw_state2_no, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * And the energy is widened UNSIGNED.
+	 *
+	 * `dftenergy` writes `(short)((int)e >> 16)` where `e` is a sum of two
+	 * squares of 16-bit values, so the short goes negative only when `e`
+	 * reaches 2^31 -- both halves at full scale at once.  No sample
+	 * sequence tried reaches that: a sweep of all 32767 amplitudes of a
+	 * 1200 Hz sine gave none, because a pure tone puts almost all of its
+	 * correlation on one axis.
+	 *
+	 * The accumulators are object fields, though, and 0x04000000 in both
+	 * of them is exactly the corner: `<< 5` wraps to -2^31, `>> 16` gives
+	 * -32768, and the two squares sum to 2^31 on the nose.  Silence adds
+	 * nothing to an accumulator, so a seed placed before the last update
+	 * of the window survives into the measurement.
+	 *
+	 * With the threshold at 32767 the two widenings then disagree
+	 * outright: -32768 is below it and 32768 is not.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq's energy is widened "
+		   "unsigned");
+	{
+		unsigned target, bi;
+		int st;
+		int saw_negative = 0, saw_quiet = 0, saw_loud = 0;
+
+		for (st = 1; st <= 2; st++)
+		for (target = 0; target < V34_RETRAIN_BINS; target++) {
+			long tag = (long)st * 100 + target * 10;
+			short in[4];
+			int c;
+
+			setup();
+			dftRetrainDetInit(&oa);
+			ref_dftRetrainDetInit(ob);
+			poke_short(__builtin_offsetof(struct v34_object,
+						      retrain_state),
+				   (short)st);
+			for (bi = 0; bi < V34_RETRAIN_BINS; bi++) {
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ bi * sizeof(struct v34_dftbin);
+
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_lo),
+					   32767);
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_hi),
+					   (bi == 1) ? 0 : -32768);
+			}
+
+			in[0] = in[1] = in[2] = in[3] = 0;
+			for (c = 0; c < 31; c++) {
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("warm-up answer", ra, rb, tag + c);
+			}
+
+			{
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ target * sizeof(struct v34_dftbin);
+
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_re),
+					 0x04000000);
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_im),
+					 0x04000000);
+			}
+
+			{
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("the measurement answer", ra, rb,
+					    tag + 90);
+			}
+			compare("seeded accumulator", 36000 + tag);
+
+			/*
+			 * The seed did what it was supposed to -- if it ever
+			 * stops doing so this section is testing nothing and
+			 * says so rather than passing.
+			 */
+			if (oa.retrain_bins[target].energy < 0)
+				saw_negative = 1;
+			if (st == 1 && oa.retrain_runs == 0)
+				saw_quiet = 1;
+			if (st == 2 && oa.retrain_runs > 0)
+				saw_loud = 1;
+		}
+
+		diff_eq_int("the seeded accumulator gave a negative energy",
+			    saw_negative, 1, 0);
+		diff_eq_int("read unsigned, it is not below 32767", saw_quiet,
+			    1, 0);
+		diff_eq_int("read unsigned, it is above zero", saw_loud, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The measurement window is an equality, and it is 128.
+	 *
+	 * With the counter starting at zero and stepping by four it reaches
+	 * 128 exactly, so `!= 0x80` and `< 0x80` behave identically and the
+	 * difference between them is invisible.  Seeding the counter off the
+	 * grid is what separates them: at 0x7e the object steps to 0x82 and
+	 * never measures again, which is the behaviour the header records,
+	 * and a threshold test would measure on every call from then on.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq's window is an equality");
+	{
+		static const int seeds[] = { 0, 2, 4, 0x7c, 0x7e, 0x80, 0x82,
+					     0x84, -8, -4, 1 };
+		unsigned si;
+		int saw_measured = 0, saw_never = 0;
+
+		for (si = 0; si < sizeof(seeds) / sizeof(seeds[0]); si++) {
+			short in[4];
+			int c;
+
+			setup();
+			dftRetrainDetInit(&oa);
+			ref_dftRetrainDetInit(ob);
+			poke_int(__builtin_offsetof(struct v34_object,
+						    retrain_phase),
+				 seeds[si]);
+
+			in[0] = in[1] = in[2] = in[3] = 0;
+			for (c = 0; c < 64; c++) {
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("seeded counter answer", ra, rb,
+					    (long)si * 100 + c);
+			}
+			compare("seeded counter", 35000 + (long)si);
+
+			/*
+			 * `retrain_runs` moves only when a measurement
+			 * happened, so it is the witness for both cases.
+			 */
+			if (oa.retrain_runs > 0)
+				saw_measured = 1;
+			else
+				saw_never = 1;
+		}
+
+		diff_eq_int("an on-grid counter measured", saw_measured, 1, 0);
+		diff_eq_int("an off-grid one never did", saw_never, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The two run limits, seeded.
+	 *
+	 * `dftRetrainDetInit` writes 3 and 9, and with those two numbers the
+	 * shared tail at the bottom of the function is invisible: the arm
+	 * that gives up sets the run to zero and then falls into the same
+	 * `run == tone_limit` comparison as the arm that counted, and zero is
+	 * not nine either way.  Set the limit to zero and the two spellings
+	 * disagree on the very call that gives up -- which is the only thing
+	 * that can tell "one tail" from "return 0 here".
+	 *
+	 * Same for the quiet limit: at zero, the first run to end at all
+	 * advances the machine, including a run of length zero.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq's two run limits");
+	{
+		static const short tone[8] = {
+			0, 22627, 32000, 22627, 0, -22627, -32000, -22627
+		};
+		static const short limits[] = { 0, 1, 2, 3, 9, -1, 32767 };
+		unsigned li;
+		int loud;
+		int saw_zero_tail = 0, saw_instant = 0;
+
+		/*
+		 * BOTH INPUTS, because the two arms are reached by opposite
+		 * ones: state 1 advances when the quiet run ENDS, which
+		 * silence never does, and state 2's give-up arm is reached by
+		 * silence and not by a tone.  A single input tests one of
+		 * them and reports a clean run for the other.
+		 */
+		for (loud = 0; loud <= 1; loud++)
+		for (li = 0; li < sizeof(limits) / sizeof(limits[0]); li++) {
+			short in[4];
+			int c, st, ph = 0;
+
+			/*
+			 * 0 and 3 as well as the two real states: the
+			 * machine has no default arm and must do nothing at
+			 * all in a state it does not recognise, which is a
+			 * claim about the `!= 2` guard and not about either
+			 * arm.
+			 */
+			for (st = 0; st <= 3; st++) {
+				setup();
+				dftRetrainDetInit(&oa);
+				ref_dftRetrainDetInit(ob);
+				poke_short(__builtin_offsetof(
+						   struct v34_object,
+						   retrain_state),
+					   (short)st);
+				poke_short(__builtin_offsetof(
+						   struct v34_object,
+						   retrain_quiet_runs),
+					   limits[li]);
+				poke_short(__builtin_offsetof(
+						   struct v34_object,
+						   retrain_tone_runs),
+					   limits[li]);
+
+				for (c = 0; c < 64; c++) {
+					int ra, rb, k;
+
+					for (k = 0; k < 4; k++, ph++)
+						in[k] = loud ? tone[ph & 7] : 0;
+
+					ra = detectRetrainReq(
+						&oa, V34_RETRAIN_BINS, in, 4);
+					rb = ref_detectRetrainReq(
+						ob, V34_RETRAIN_BINS, in, 4);
+
+					diff_eq_int("seeded limit answer", ra,
+						    rb,
+						    (long)loud * 100000
+						    + (long)li * 1000
+						    + st * 100 + c);
+					if (ra && st == 2 && !loud
+					    && limits[li] == 0)
+						saw_zero_tail = 1;
+				}
+				compare("seeded limit",
+					33000 + (long)loud * 1000
+					+ (long)li * 10 + st);
+				if (st == 1 && loud && limits[li] == 0
+				    && oa.retrain_state == 2)
+					saw_instant = 1;
+			}
+		}
+
+		/*
+		 * Silence keeps state 2's run at zero, so a limit of zero is
+		 * the case where the give-up arm answers "retrain" -- and it
+		 * is the object's answer, not this fixture's opinion.
+		 */
+		diff_eq_int("a zero tone limit answers from the give-up arm",
+			    saw_zero_tail, 1, 0);
+		diff_eq_int("a zero quiet limit advances at once", saw_instant,
+			    1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * `nbins` is the caller's.
+	 *
+	 * Everything above passes three, which is what `dftRetrainDetInit`
+	 * arms, and with three the count is indistinguishable from a
+	 * constant: `dftupdate`, `dftenergy` and the clear loop would all
+	 * behave identically written as 3.  The decision arms still read all
+	 * three bins whatever is passed, so a short count leaves the tail of
+	 * the bank holding a stale energy and the machine acts on it -- which
+	 * is the object's behaviour and worth pinning rather than tidying.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq over a prefix of the bank");
+	{
+		static const short tone[8] = {
+			0, 22627, 32000, 22627, 0, -22627, -32000, -22627
+		};
+		short nb;
+		int loud;
+
+		for (loud = 0; loud <= 1; loud++)
+		for (nb = 0; nb <= V34_RETRAIN_BINS; nb++) {
+			short in[4];
+			int c, ph = 0;
+
+			unsigned bi;
+
+			setup();
+			dftRetrainDetInit(&oa);
+			ref_dftRetrainDetInit(ob);
+
+			/*
+			 * THE ACCUMULATORS ARE SEEDED, or the clear loop's
+			 * extent is unobservable: `dftupdate` only touches
+			 * the first `nb` bins, so on a freshly armed detector
+			 * the rest are already zero and clearing them anyway
+			 * changes nothing.  With a value in them, "cleared to
+			 * `nb`" and "cleared to three" are different objects.
+			 */
+			for (bi = 0; bi < V34_RETRAIN_BINS; bi++) {
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ bi * sizeof(struct v34_dftbin);
+
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, phase),
+					   (short)(0x1234 + bi));
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_re),
+					 0x5a5a00 + (int)bi);
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_im),
+					 -0x3c3c00 - (int)bi);
+			}
+
+			for (c = 0; c < 96; c++) {
+				int ra, rb, k;
+
+				for (k = 0; k < 4; k++, ph++)
+					in[k] = loud ? tone[ph & 7] : 0;
+
+				ra = detectRetrainReq(&oa, nb, in, 4);
+				rb = ref_detectRetrainReq(ob, nb, in, 4);
+				diff_eq_int("prefix answer", ra, rb,
+					    (long)loud * 10000 + nb * 100 + c);
+			}
+			compare("prefix", 34000 + (long)loud * 10 + nb);
 		}
 	}
 	rc |= diff_end();

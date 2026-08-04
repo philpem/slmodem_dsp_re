@@ -176,9 +176,19 @@ int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *st
  * It is reproduced because dropping it would change nothing observable and
  * hide something that might matter once V34hshak.c is translated.
  *
- * The four bytes at +0x28 are not touched by either function here.  They are
- * named `reserved` rather than removed because the stride between bins is
- * measured at 0x2c from the object, not assumed.
+ * THE FOUR BYTES AT +0x28 ARE TWO THRESHOLDS, and until V34hshak.c's
+ * `dftRetrainDetInit` and `detectRetrainReq` were read they were one `int
+ * reserved` with no writer and no reader.  Neither function here touches
+ * them, which is the point: they belong to whoever owns the bank, and the
+ * only owner reconstructed so far is the retrain detector, which writes 80
+ * into one and 3000 into the other and then compares `energy` against them
+ * on two different arms.  Finding 212.
+ *
+ * They are read back the way the object reads them, which is not the same
+ * way on both sides of the comparison: `energy` is widened UNSIGNED and the
+ * threshold SIGNED.  Both are observable and both are tested -- the energy
+ * one only from a seeded accumulator, since no sample sequence puts both
+ * halves of the correlation at full scale at once.  See `detectRetrainReq`.
  */
 struct v34_dftbin {
 	short phase;		/* +0x00  14-bit phase accumulator       */
@@ -190,7 +200,8 @@ struct v34_dftbin {
 	double sum_re;		/* +0x10                                 */
 	double sum_im;		/* +0x18                                 */
 	double denergy;		/* +0x20  written by dftenergy           */
-	int reserved;		/* +0x28  no reader or writer found      */
+	short thresh_lo;	/* +0x28  the bank's owner sets these    */
+	short thresh_hi;	/* +0x2a                                 */
 };
 
 /* The phase accumulator is 14 bits and the table has 256 entries. */
