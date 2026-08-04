@@ -1198,6 +1198,114 @@ main(void)
 	rc |= diff_end();
 
 	/*
+	 * And the energy is widened UNSIGNED.
+	 *
+	 * `dftenergy` writes `(short)((int)e >> 16)` where `e` is a sum of two
+	 * squares of 16-bit values, so the short goes negative only when `e`
+	 * reaches 2^31 -- both halves at full scale at once.  No sample
+	 * sequence tried reaches that: a sweep of all 32767 amplitudes of a
+	 * 1200 Hz sine gave none, because a pure tone puts almost all of its
+	 * correlation on one axis.
+	 *
+	 * The accumulators are object fields, though, and 0x04000000 in both
+	 * of them is exactly the corner: `<< 5` wraps to -2^31, `>> 16` gives
+	 * -32768, and the two squares sum to 2^31 on the nose.  Silence adds
+	 * nothing to an accumulator, so a seed placed before the last update
+	 * of the window survives into the measurement.
+	 *
+	 * With the threshold at 32767 the two widenings then disagree
+	 * outright: -32768 is below it and 32768 is not.
+	 */
+	diff_begin("v34 handshake: detectRetrainReq's energy is widened "
+		   "unsigned");
+	{
+		unsigned target, bi;
+		int st;
+		int saw_negative = 0, saw_quiet = 0, saw_loud = 0;
+
+		for (st = 1; st <= 2; st++)
+		for (target = 0; target < V34_RETRAIN_BINS; target++) {
+			long tag = (long)st * 100 + target * 10;
+			short in[4];
+			int c;
+
+			setup();
+			dftRetrainDetInit(&oa);
+			ref_dftRetrainDetInit(ob);
+			poke_short(__builtin_offsetof(struct v34_object,
+						      retrain_state),
+				   (short)st);
+			for (bi = 0; bi < V34_RETRAIN_BINS; bi++) {
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ bi * sizeof(struct v34_dftbin);
+
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_lo),
+					   32767);
+				poke_short(off + __builtin_offsetof(
+						struct v34_dftbin, thresh_hi),
+					   (bi == 1) ? 0 : -32768);
+			}
+
+			in[0] = in[1] = in[2] = in[3] = 0;
+			for (c = 0; c < 31; c++) {
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("warm-up answer", ra, rb, tag + c);
+			}
+
+			{
+				unsigned off = (unsigned)
+					__builtin_offsetof(struct v34_object,
+							   retrain_bins)
+					+ target * sizeof(struct v34_dftbin);
+
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_re),
+					 0x04000000);
+				poke_int(off + __builtin_offsetof(
+						struct v34_dftbin, acc_im),
+					 0x04000000);
+			}
+
+			{
+				int ra = detectRetrainReq(
+					&oa, V34_RETRAIN_BINS, in, 4);
+				int rb = ref_detectRetrainReq(
+					ob, V34_RETRAIN_BINS, in, 4);
+
+				diff_eq_int("the measurement answer", ra, rb,
+					    tag + 90);
+			}
+			compare("seeded accumulator", 36000 + tag);
+
+			/*
+			 * The seed did what it was supposed to -- if it ever
+			 * stops doing so this section is testing nothing and
+			 * says so rather than passing.
+			 */
+			if (oa.retrain_bins[target].energy < 0)
+				saw_negative = 1;
+			if (st == 1 && oa.retrain_runs == 0)
+				saw_quiet = 1;
+			if (st == 2 && oa.retrain_runs > 0)
+				saw_loud = 1;
+		}
+
+		diff_eq_int("the seeded accumulator gave a negative energy",
+			    saw_negative, 1, 0);
+		diff_eq_int("read unsigned, it is not below 32767", saw_quiet,
+			    1, 0);
+		diff_eq_int("read unsigned, it is above zero", saw_loud, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
 	 * The measurement window is an equality, and it is 128.
 	 *
 	 * With the counter starting at zero and stepping by four it reaches

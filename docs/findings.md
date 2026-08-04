@@ -11021,30 +11021,59 @@ the four sites is `movzwl` on the energy and `movswl` on the threshold:
    5e9f2:  cmp    %esi,%edx
 ```
 
-Only one of the two is reachable and the reconstruction says which. The
-energy side is not: `dftenergy` writes `(short)((int)e >> 16)` where `e` is
-a sum of two squares of 16-bit values, so the short goes negative only when
-both squares are simultaneously at full scale and `e` reaches 2^31. A sweep
-of all 32767 amplitudes of a 1200 Hz sine through the detector produced no
-negative energy at all. The threshold side is reachable from a seeded field
-and nothing else — `dftRetrainDetInit` writes 80 and 3000 — and
-`t_v34hshak.c` reaches it by seeding −1: read signed that rejects every
-energy, read unsigned it accepts every energy, and the two answers differ on
-the first measurement.
+Both sides are reachable, and getting to the energy one took two attempts.
 
-Recorded because the cast that *cannot* be exercised is the one a reader
-would delete. It is reproduced from the instruction encoding, and the
-comment says so rather than implying a test covers it.
+The threshold side is easy: `dftRetrainDetInit` writes 80 and 3000, so
+nothing but a seeded field is ever negative, and `t_v34hshak.c` seeds −1.
+Read signed that rejects every energy, read unsigned it accepts every
+energy, and the two answers differ on the first measurement.
 
-**AND THE FIVE ARE CALLED BY NOTHING.** No relocation names `dftfreqinit`,
-`dftnlinitSignalBins`, `dftnlinitNoiseBins`, `dftRetrainDetInit` or
-`detectRetrainReq`, and no direct call reaches them either — the check that
-matters, because a call to a symbol in the same section can be resolved by
-the assembler with no relocation left, which is how `getbit` and
-`ApplyBulkDelay` are reached from inside `v34handshak` with nothing in the
-relocation table to show for it. Same shape as `cosread` and as four of the
-seven functions already in v34hshak.c: global, testable, and with their
-arguments read out of the code because no call site states them.
+The energy side looked unreachable. `dftenergy` writes `(short)((int)e >>
+16)` where `e` is a sum of two squares of 16-bit values, so the short goes
+negative only when `e` reaches 2^31 — both halves at full scale at once —
+and a sweep of all 32767 amplitudes of a 1200 Hz sine gave no negative
+energy at all. **That sweep held the wrong thing fixed.** A pure tone puts
+almost all of its correlation on one axis, which is exactly the case that
+cannot reach the corner; the sweep varied the one parameter least likely to
+get there and the conclusion drawn from it — that the widening was
+unobservable, recorded as an equivalent mutant — was wrong.
+
+The accumulators are object fields. `0x04000000` in both of them is the
+corner precisely: `<< 5` wraps to −2^31, `>> 16` gives −32768, and the two
+squares sum to 2^31 on the nose. Silence adds nothing to an accumulator, so
+a seed placed before the last update of a window survives into the
+measurement, and with the threshold at 32767 the two widenings disagree
+outright — −32768 is below it and 32768 is not. Four mutants that had been
+filed as unable to fail are now caught.
+
+Recorded because "no input I tried distinguishes them" is not the same claim
+as "no input does", and the difference between the two was one fixed
+waveform.
+
+**AND THE FIVE ARE CALLED BY NOTHING.** Three scans, each with a positive
+control, because the first two have both been wrong before in this project:
+
+  - no relocation names `dftfreqinit`, `dftnlinitSignalBins`,
+    `dftnlinitNoiseBins`, `dftRetrainDetInit` or `detectRetrainReq`;
+  - no `call` **and no `jmp`** reaches any of them. The `jmp` half matters:
+    a tail call carries no `call`, and this object is full of them —
+    `VPcmV34ReportStartOfEchoAdapt` is nothing but one. The same scan finds
+    six hits for `getbit` and `ApplyBulkDelay`, which is the control;
+  - none of the five addresses appears as a little-endian word anywhere in
+    `.text`, `.data` or `.rodata`, so nothing takes their address either.
+    The control there is `0x629e0`, `v34handshak`'s default dispatch target,
+    which appears 57 times in `.rodata`.
+
+The second scan is the one that matters most, because a call to a symbol in
+the same section can be resolved by the assembler with no relocation left —
+which is how `getbit` and `ApplyBulkDelay` are reached from inside
+`v34handshak` with nothing in the relocation table to show for it. The third
+is findings 144 and 176 again: a section-symbol relocation with an addend
+does not answer to a grep for the name.
+
+Same shape as `cosread` and as four of the seven functions already in
+v34hshak.c: global, testable, and with their arguments and bank sizes read
+out of the code because no call site states them.
 
 The bin numbers are the object's own `bin << 8`, and one bin is 150 Hz at
 the 9600 Hz rate of R-1 — which is the V.34 line probe's tone spacing, and

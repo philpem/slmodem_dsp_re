@@ -94,3 +94,27 @@ tables located first, and `--entries` was needed for both of the functions it
 has been run on — so **locating the dispatch and running `cfgsplit` is the
 first job of #39, not a prerequisite for starting it.** Until that is done,
 "#39" names a share of the work and not a set of states.
+
+### And now it has been run, and the split is by machine
+
+`cfgsplit --func v34handshak` finds the three tables by itself, and finding
+205 says which machine feeds each: two of them are the transmit state and
+one is the microstate, while the receive state has no table at all. So the
+split is **by machine, not by state number** — a state *value* means
+different things to different machines, and 51 is `TX_L1` to two of them.
+
+```
+  table 1  +0x2da0  txstate, inside the per-sample loop   ~21.1 KB, 25 cases
+  table 2  +0x2ee8  txstate, once per block                ~0.3 KB, 16 cases
+  table 3  +0x3000  microstate, after fskdemodulate       ~27.6 KB, 16 cases
+  no table          rxstate, by compare chain             inside the 12,290
+                                                          cfgsplit calls shared
+```
+
+Three pieces, then, and not seven. The rest of "#39–#45" is the
+prerequisites: `v34handshak` reaches 68 functions this tree has not written,
+about 34 KB once its own 61.5 KB is set aside, and 16 KB of that is the C++
+half of `VPcmV34Main.cpp`. Every test links all of `$(OBJ)`, so **none of
+the three pieces can be committed until all of it exists** — which is the
+same answer this tree already gives for `CALLPROG_Progress`, `b103_process`
+and `FPM_iir_filt_block`, at sixty times the size.

@@ -186,7 +186,9 @@ int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *st
  *
  * They are read back the way the object reads them, which is not the same
  * way on both sides of the comparison: `energy` is widened UNSIGNED and the
- * threshold SIGNED.  See `detectRetrainReq`.
+ * threshold SIGNED.  Both are observable and both are tested -- the energy
+ * one only from a seeded accumulator, since no sample sequence puts both
+ * halves of the correlation at full scale at once.  See `detectRetrainReq`.
  */
 struct v34_dftbin {
 	short phase;		/* +0x00  14-bit phase accumulator       */

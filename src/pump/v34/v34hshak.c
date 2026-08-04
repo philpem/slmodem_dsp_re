@@ -31,13 +31,18 @@
  * against either name because a call to a local in the same section needs
  * none.  That is finding 117 exactly.
  *
- * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  No relocation and
- * no direct call reaches `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`,
- * `preempindex` or any of the five DFT routines -- only `setfinalrate` has a
- * caller, in `v34handshak`.  They are global, so they are testable
- * regardless, but it means their arguments and their bank sizes have to be
- * read out of the code rather than off a call site.  Finding 89 recorded the
- * same shape twice already, and finding 204 for the five.
+ * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  Nothing reaches
+ * `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`, `preempindex` or any
+ * of the five DFT routines -- no relocation, no `call`, no `jmp`, and no
+ * little-endian copy of their addresses in `.text`, `.data` or `.rodata`.
+ * Only `setfinalrate` has a caller, in `v34handshak`.  The `jmp` and the
+ * data scans are not belt and braces: this object tail-calls constantly, and
+ * a section-symbol relocation with an addend does not answer to a grep for a
+ * name.  Finding 204 gives the controls each scan was checked against.
+ *
+ * They are global, so they are testable regardless, but it means their
+ * arguments and their bank sizes have to be read out of the code rather than
+ * off a call site.  Finding 89 recorded the same shape twice already.
  *
  * `v34handshakinit` is the exception and has six callers, which is where its
  * mode numbers come from; see the declaration in `v34hshak.h`.
@@ -967,13 +972,18 @@ dftRetrainDetInit(void *objp)
  * four at a time, so 32 calls of four samples -- or any other split, since
  * the counter is samples and not calls -- produce one decision.
  *
- * THE ENERGY IS WIDENED UNSIGNED AND THE THRESHOLD SIGNED.  `energy` is a
- * `short` that `dftenergy` writes as `(short)((int)e >> 16)`, so it goes
- * negative for a loud enough bin; read unsigned, that becomes a large
- * positive number and the comparison against 3000 succeeds rather than
- * failing.  The object does `movzwl` on one side of every one of these
- * comparisons and `movswl` on the other, and getting that backwards would
- * make a loud line read as silent.  Neither cast is decoration.
+ * THE ENERGY IS WIDENED UNSIGNED AND THE THRESHOLD SIGNED.  The object does
+ * `movzwl` on one side of each of these four comparisons and `movswl` on the
+ * other, and neither cast is decoration -- both are observable and both are
+ * driven by t_v34hshak.c.
+ *
+ * `energy` is a `short` that `dftenergy` writes as `(short)((int)e >> 16)`,
+ * and it goes negative only when the two squares making up `e` are both at
+ * full scale.  No sample sequence reaches that -- a tone puts nearly all of
+ * its correlation on one axis -- but a seeded accumulator does: 0x04000000
+ * in both halves gives exactly -32768, which read unsigned is 32768, and the
+ * two spellings then disagree about every threshold between them.  Finding
+ * 204, which records the sweep that missed this and why it missed it.
  */
 int
 detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)

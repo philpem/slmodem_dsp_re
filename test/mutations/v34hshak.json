@@ -295,9 +295,7 @@
  {
   "label": "bin 0's energy is widened signed",
   "find": "\t\tif ((int)(unsigned short)bins[0].energy",
-  "replace": "\t\tif ((int)bins[0].energy",
-  "equivalent": true,
-  "why": "`energy` is `(short)((int)e >> 16)` where e is a sum of two squares of 16-bit values, so it is negative only when e reaches 2^31 -- both squares at full scale at once.  A sweep of all 32767 amplitudes of a 1200 Hz sine through the detector produced no negative energy, so no input distinguishes the two widenings.  Reproduced from the `movzwl` and recorded here rather than left to look tested.  Finding 204."
+  "replace": "\t\tif ((int)bins[0].energy"
  },
  {
   "label": "the quiet run test is > rather than >=",
@@ -338,5 +336,20 @@
   "label": "the answer is >= rather than ==",
   "find": "\treturn obj->retrain_runs == obj->retrain_tone_runs;",
   "replace": "\treturn obj->retrain_runs >= obj->retrain_tone_runs;"
+ },
+ {
+  "label": "bin 1's energy is widened signed",
+  "find": "\t\t    && (int)(unsigned short)bins[1].energy",
+  "replace": "\t\t    && (int)bins[1].energy"
+ },
+ {
+  "label": "bin 2's energy is widened signed",
+  "find": "\t\t    && (int)(unsigned short)bins[2].energy",
+  "replace": "\t\t    && (int)bins[2].energy"
+ },
+ {
+  "label": "the tone arm's energy is widened signed",
+  "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
+  "replace": "\tif ((int)bins[1].energy > (int)bins[1].thresh_hi) {"
  }
 ]
