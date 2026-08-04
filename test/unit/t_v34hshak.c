@@ -1311,6 +1311,21 @@ main(void)
 			 * gate cannot be driven from here or anywhere. */
 			run_preempindex(4000, 100, 3200, 9541 + (long)lvl);
 			run_preempindex(0, 0x7fff, 3429, 9542 + (long)lvl);
+			/*
+			 * Four more combinations, compared at every level.
+			 * They do NOT reach the function's other two
+			 * announcements: those need the loop to return an
+			 * index in 6..10, and every set tried here comes back
+			 * 0 or 5.  Picking values that land in that range
+			 * means reading what the loop multiplies by per rate,
+			 * which is still to do -- the cases are kept because
+			 * more argument combinations differentially checked
+			 * is worth having on its own.
+			 */
+			run_preempindex(100, 10, 2400, 9543 + (long)lvl);
+			run_preempindex(1000, 10, 2800, 9544 + (long)lvl);
+			run_preempindex(8000, 10, 3000, 9545 + (long)lvl);
+			run_preempindex(0x7fff, 1, 3429, 9546 + (long)lvl);
 
 			/*
 			 * EVERY MODE, because the gates are spread across
