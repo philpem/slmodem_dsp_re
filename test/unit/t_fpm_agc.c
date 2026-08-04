@@ -422,12 +422,29 @@ main(void)
 	{
 		static struct fpm_agc a, b;
 		int reset;
+		unsigned lvl;
 
-		dsplibs_debug_level = 2;
-		ref_dsplibs_debug_level = 2;
 		dsplib_debug_capture_on = 1;
 
+		/*
+		 * LEVEL 1 AS WELL AS 2, and level 1 is the one that earns its
+		 * keep.  Two transcripts captured at level 2 agreeing says
+		 * nothing about the GATE: a site that lost its
+		 * `if (DSPLIB_DEBUG_ON())` prints the same thing on both
+		 * sides and passes.
+		 *
+		 * The gate is `> 1`, so 1 is the single value that separates
+		 * it from the `>= 1` a reader would write -- at level 0 both
+		 * spellings are silent and both mutants live.  Sweeping the
+		 * same calls rather than adding a second block keeps both
+		 * claims pointed at one set of call sites.
+		 */
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (reset = 0; reset <= 1; reset++) {
+			long tag = (long)lvl * 10 + reset;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 			dsplib_debug_capture_reset();
 			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
 			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
@@ -442,15 +459,28 @@ main(void)
 			diff_eq_int("agc transcript",
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
-				    1, reset);
+				    1, tag);
+
+			if (lvl < 2) {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_text(0)[0], 0,
+					    tag);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_text(1)[0], 0,
+					    tag);
+				continue;
+			}
+
 			diff_eq_int("agc transcript non-empty",
 				    dsplib_debug_capture_text(1)[0] != 0, 1,
-				    reset);
+				    tag);
 			/* And it must carry the blob's build stamp. */
 			diff_eq_int("build stamp present",
 				    strstr(dsplib_debug_capture_text(1),
 					   "Sep 22 2005 15:48:18") != NULL,
-				    1, reset);
+				    1, tag);
 		}
 
 		dsplib_debug_capture_on = 0;

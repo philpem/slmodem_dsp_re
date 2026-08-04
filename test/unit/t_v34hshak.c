@@ -1263,6 +1263,81 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * The half every transcript block above leaves open.  All of them
+	 * raise the level to 2 before capturing, so a site that lost its
+	 * `if (DSPLIB_DEBUG_ON())` prints identically on both sides and
+	 * passes: all twenty mutants -- ten gates, `if (1)` and `>= 1` each
+	 * -- survived this file before this section existed.
+	 *
+	 * Level 1 is the one that matters.  Every gate in the object is
+	 * `> 1`, so 1 is the single value at which it disagrees with the
+	 * `>= 1` a reader would write; at 0 both spellings are silent and
+	 * both mutants live.  0 is swept as well because it is free.
+	 *
+	 * ALL FIVE FUNCTIONS THAT CARRY A GATE, which is why this drives so
+	 * much: `dpskinit` has one, `setfinalrate` one, `setupreceiver` two,
+	 * `preempindex` three and `hs_setstate` three.  Driving four of the
+	 * five would leave the fifth reading as covered.
+	 *
+	 * `run_handshakinit`, not `run_handshakinit_traced` -- the traced one
+	 * asserts the transcript is NON-empty, which is the opposite claim.
+	 */
+	diff_begin("v34 handshake: below the threshold, nothing is said");
+	{
+		unsigned lvl;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			struct hsi_case c = hsi_base;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			setup();
+			poke_ptr(0x2074, shaped_a, shaped_b);
+			poke_short(0x264 + 0x262, 0x1234);
+			dpskinit(&oa, 1, 1);
+			ref_dpskinit(ob, 1, 1);
+
+			run_setupreceiver(2743, 1829, 0x200, 9500 + (long)lvl);
+			run_setfinalrate(0x0004, 0x0000, 0x0080, 0x00,
+					 9520 + (long)lvl);
+
+			/* A middle index and the index-10 arm.  The
+			 * index-0 arm is unreachable -- see D36 -- so its
+			 * gate cannot be driven from here or anywhere. */
+			run_preempindex(4000, 100, 3200, 9541 + (long)lvl);
+			run_preempindex(0, 0x7fff, 3429, 9542 + (long)lvl);
+
+			/*
+			 * EVERY MODE, because the gates are spread across
+			 * them: `v34modeminit`'s is reached from 0, 1 and 4,
+			 * the MOH announcement only from 4, and `hs_setstate`
+			 * from all of them.  Running mode 2 alone -- which is
+			 * what this did first -- left three of the ten gates
+			 * undriven and reading as covered.
+			 */
+			for (c.mode = 0; c.mode <= 4; c.mode++)
+				run_handshakinit(&c, 9560 + (long)lvl * 10
+						 + c.mode);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    (long)lvl);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 handshake: every skipped pointer field was written");
 	{
 		/*

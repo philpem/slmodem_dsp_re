@@ -1994,16 +1994,30 @@ main(void)
 		static struct v34_object oa, ob;
 		static const short syms[] = { 0x11, 0x40, 0x69, 0x143, 0x153,
 					      0x333, 0x7531 };
-		unsigned cs, b;
+		unsigned cs, b, lvl;
 		int it, saw;
 
-		dsplibs_debug_level = 2;
-		ref_dsplibs_debug_level = 2;
 		dsplib_debug_capture_on = 1;
 
+		/*
+		 * LEVEL 1 AS WELL AS 2.  Comparing two transcripts taken at
+		 * level 2 says the sites agree and nothing about their gates:
+		 * ungate one and it prints the same line on both sides.  1 is
+		 * the level that separates `> 1` from the `>= 1` a reader
+		 * would write.
+		 *
+		 * The byte compare is skipped below the threshold -- it is
+		 * seven million comparisons per pass and it is already done at
+		 * level 2, where the object state is the same.  Only the
+		 * transcript claim is new here.
+		 */
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (cs = 0; cs < 6; cs++) {
 			struct v34_receiver *ra, *rb;
 			struct v34_equalizer *qa2, *qb2;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 
 			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
@@ -2095,6 +2109,17 @@ main(void)
 				    1, tag);
 				if (dsplib_debug_capture_lines(1) > 0)
 					saw = 1;
+				if (lvl < 2) {
+					diff_eq_int("below the threshold, "
+						    "ours said nothing",
+						    dsplib_debug_capture_text(0)
+						    [0], 0, tag);
+					diff_eq_int("below the threshold, nor "
+						    "did the reference",
+						    dsplib_debug_capture_text(1)
+						    [0], 0, tag);
+					continue;
+				}
 				for (b = 0; b < sizeof(oa); b++) {
 					if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)
 						continue;
@@ -2135,8 +2160,225 @@ main(void)
 			 * compares equal to an empty transcript, which is
 			 * finding 122's failure mode in another costume.
 			 */
-			diff_eq_int("receiver transcript non-empty",
-				    saw, 1, (long)cs);
+			diff_eq_int(lvl < 2 ? "silent below the threshold"
+					    : "receiver transcript non-empty",
+				    saw, lvl < 2 ? 0 : 1, (long)cs);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * The half both transcript blocks above leave open.  Each raises the
+	 * level to 2 before capturing, so a site that lost its
+	 * `if (DSPLIB_DEBUG_ON())` prints the same text on both sides and
+	 * passes: all THIRTY-EIGHT mutants -- nineteen gates, `if (1)` and
+	 * `>= 1` each -- survived this file before this section existed, the
+	 * worst score of any test in the tree.
+	 *
+	 * Level 1 is the one that does the work.  Every gate is `> 1`, so 1 is
+	 * the single value at which it disagrees with the `>= 1` a reader
+	 * would write; at 0 both spellings are silent and both mutants live.
+	 *
+	 * A SECTION OF ITS OWN RATHER THAN A LEVEL LOOP ROUND THE BLOCK ABOVE,
+	 * which would have been less code.  That block compares the whole
+	 * 44 KB object after every one of its 168 calls; sweeping two more
+	 * levels through it triples seven million byte comparisons to prove
+	 * something about strings.  Object agreement is already covered at
+	 * level 2 -- this only has to drive the call sites and read the
+	 * transcript.
+	 *
+	 * NINE FUNCTIONS CARRY THE NINETEEN GATES and each is called here,
+	 * because a function left out reads exactly like one that is covered.
+	 * `agc_gain_sample` and `rx_train_point` are internal, reached through
+	 * `V34agc` and `receiver` respectively.
+	 */
+	diff_begin("v34 receiver: below the threshold, nothing is said");
+	{
+		static struct v34_object oa2, ob2;
+		static struct v34_receiver ra2, rb2;
+		static short coeff2[64];
+		short aa, ab;
+		unsigned lvl, b;
+
+		for (b = 0; b < 64; b++)
+			coeff2[b] = (short)(b * 617 - 9000);
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			struct v34_receiver *ra, *rb;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			/* updateAlpha, whose format arrives as a parameter. */
+			aa = ab = 0x1234;
+			updateAlpha(&aa, 0x1000000, 1, 0x4000, 0x4000, "NE");
+			ref_updateAlpha(&ab, 0x1000000, 1, 0x4000, 0x4000,
+					"NE");
+
+			/* V34agc, for agc_gain_sample's gate. */
+			memset(&ra2, HARNESS_MALLOC_FILL, sizeof(ra2));
+			memset(&rb2, HARNESS_MALLOC_FILL, sizeof(rb2));
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)&ra2)->ring[b] =
+				((struct v34_queue *)&rb2)->ring[b] =
+				    (int)(b * 2731 - 12000);
+			((struct v34_queue *)&ra2)->count =
+			((struct v34_queue *)&rb2)->count = V34_RXQ_RING;
+			/*
+			 * BOTH CURSORS, seeded.  They are pointers into the
+			 * ring and the fill leaves them garbage; V34agc
+			 * follows them before it prints anything, so an
+			 * unseeded cursor faults rather than reporting.
+			 * Third time that shape has come up -- see finding
+			 * 189's note on the same defect in t_v34pcmif.
+			 */
+			((struct v34_queue *)&ra2)->rd =
+			    ((struct v34_queue *)&ra2)->ring;
+			((struct v34_queue *)&rb2)->rd =
+			    ((struct v34_queue *)&rb2)->ring;
+			((struct v34_queue *)&ra2)->wr =
+			    ((struct v34_queue *)&ra2)->ring;
+			((struct v34_queue *)&rb2)->wr =
+			    ((struct v34_queue *)&rb2)->ring;
+			ra2.flags = rb2.flags = 0;
+			ra2.agc_gain = rb2.agc_gain = 0x4000;
+			ra2.agc_level = rb2.agc_level = 0;
+			ra2.agc_accum = rb2.agc_accum = 0;
+			ra2.agc_step = rb2.agc_step = 0x3333;
+			ra2.f19c = rb2.f19c = 0;
+			ra2.energy.sum = rb2.energy.sum = 0;
+			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
+				ra2.rms_buf[b] = rb2.rms_buf[b] = 0;
+			V34agc(&ra2);
+			ref_V34agc(&rb2);
+
+			/* And the seven that take the whole object. */
+			memset(&oa2, HARNESS_MALLOC_FILL, sizeof(oa2));
+			memset(&ob2, HARNESS_MALLOC_FILL, sizeof(ob2));
+			V34InitializeImplementationSpecific(&oa2);
+			ref_V34InitializeImplementationSpecific(&ob2);
+			txinit(&oa2); ref_txinit(&ob2);
+			rxinit(&oa2); ref_rxinit(&ob2);
+			rxtiminginit(&oa2); ref_rxtiminginit(&ob2);
+
+			V34SetupDemodulator(&oa2, 3000, 1800);
+			ref_V34SetupDemodulator(&ob2, 3000, 1800);
+
+			ra = (struct v34_receiver *)((char *)&oa2 + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob2 + 0x264);
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)ra)->ring[b] =
+				((struct v34_queue *)rb)->ring[b] =
+				    (int)((unsigned)(unsigned short)
+					  (short)(b * 2731 - 12000)
+					  | ((unsigned)(unsigned short)
+					     (short)(b * 991 - 8000) << 16));
+			((struct v34_queue *)ra)->count =
+			((struct v34_queue *)rb)->count = V34_RXQ_RING;
+			ra->agc_gain = rb->agc_gain = 0x4000;
+			ra->agc_step = rb->agc_step = 0x3333;
+			ra->f1c0 = rb->f1c0 = 4;
+			ra->f19c = rb->f19c = 0;
+			ra->f232 = rb->f232 = -1;
+			ra->f234 = rb->f234 = 0x1000;
+			ra->f236 = rb->f236 = 0x0800;
+			ra->f1ec = rb->f1ec = 1;
+			ra->f1ee = rb->f1ee = 2;
+			ra->f798 = rb->f798 = 0;
+			ra->f21c = rb->f21c = 0x3fd;
+			ra->f124 = rb->f124 = 0x40;
+			ra->flags = rb->flags =
+			    (unsigned short)V34_RX_FLAG_DET_PENDING;
+			oa2.status = ob2.status = 0;
+			oa2.rx_energy_floor = ob2.rx_energy_floor = 900;
+
+			v34FreezeEcho(&oa2);
+			ref_v34FreezeEcho(&ob2);
+
+			/*
+			 * `adaptecho` and `modem_serrint` want the echo and
+			 * transmit state their own sections seed; the fill
+			 * leaves `f25c` -- the lag -- garbage, and it is used
+			 * as an index.
+			 */
+			ra->f2a4 = rb->f2a4 = coeff2;
+			oa2.f25c  = ob2.f25c  = 0x40;
+			oa2.f25c2 = ob2.f25c2 = V34_EC_FEED;
+			oa2.f260  = ob2.f260  = 1234;
+			oa2.fa23c = ob2.fa23c = 1;
+			oa2.fa23e = ob2.fa23e = 0;
+			oa2.fa240 = ob2.fa240 = 0;
+			oa2.f2aa4 = ob2.f2aa4 = 0;
+			oa2.f2aa6 = ob2.f2aa6 = 0;
+			oa2.f354c = ob2.f354c = 0;
+			oa2.f3550 = ob2.f3550 = -0x1800;
+			oa2.f3552 = ob2.f3552 = -0x1400;
+			oa2.f3554 = ob2.f3554 = 0x95;
+			oa2.f3558 = ob2.f3558 = 0x7000;
+			oa2.f355c = ob2.f355c = 6;
+			oa2.f3560 = ob2.f3560 = 0;
+			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
+			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
+			for (b = 0; b < 0x12c; b++)
+				oa2.hist_2aa8[b] = ob2.hist_2aa8[b] = 0;
+			for (b = 0; b < 0x258; b++)
+				oa2.hist_2f58[b] = ob2.hist_2f58[b] = 0;
+			for (b = 0; b < V34_TXQ_RING; b++)
+				oa2.txq.ring[b] = ob2.txq.ring[b] =
+				    (int)(short)(b * 2777 - 12000);
+			oa2.txq.count = ob2.txq.count = 0x30;
+
+			adaptecho(&oa2);
+			ref_adaptecho(&ob2);
+			modem_serrint(&oa2);
+			ref_modem_serrint(&ob2);
+
+			/*
+			 * The timing pair.  `timing_out` drives both, and the
+			 * ramp is the one setInitialPhase's own section uses
+			 * for a crossing it can find.
+			 */
+			for (b = 0; b < 21; b++)
+				ra->timing_out[b] = rb->timing_out[b] =
+				    (short)(b <= 2 ? 900 - (int)b * 40
+						   : -700 + (int)b * 30);
+			ra->f1ac = rb->f1ac = 700;
+			ra->f1ae = rb->f1ae = 0x3e80;
+			ra->f1b0 = rb->f1b0 = 0x3e80;
+			ra->f1be = rb->f1be = 0x3e80;
+			ra->f1c8 = rb->f1c8 = 0;
+			ra->f1cc = rb->f1cc = 0;
+			ra->f1ce = rb->f1ce = 0;
+			ra->f1d0 = rb->f1d0 = 0;
+			ra->f1d2 = rb->f1d2 = 40;
+			ra->f1d8 = rb->f1d8 = 0;
+			ra->f1e0 = rb->f1e0 = 0;
+			ra->f230 = rb->f230 = 0;
+			oa2.f359c = ob2.f359c = 0x65;
+			oa2.faa96 = ob2.faa96 = 400;
+			oa2.fac0c = ob2.fac0c = 0;
+
+			setInitialPhase(&oa2);
+			ref_setInitialPhase(&ob2);
+			TimingV34(&oa2);
+			ref_TimingV34(&ob2);
+
+			receiver(&oa2);
+			ref_receiver(&ob2);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    (long)lvl);
 		}
 
 		dsplib_debug_capture_on = 0;
