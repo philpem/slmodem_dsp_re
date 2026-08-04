@@ -175,7 +175,8 @@ getMPrecvdBits(struct tagV34Object *objp)
 	 * out through `getbit` -- that is the only reader of +0xaa6c.
 	 */
 	*(short *)(m + OB_CAPS) = (short)0x9dc3;
-	*(void **)(m + OB_CAPS_PTR) = m + OB_CAPS;
+	/* Spelled as `v34handshakinit` spells the same two fields. */
+	*(short **)(m + OB_CAPS_PTR) = (short *)(m + OB_CAPS);
 
 	rate = *(const int *)((const unsigned char *)obj->pac3c + CFG_RATE);
 

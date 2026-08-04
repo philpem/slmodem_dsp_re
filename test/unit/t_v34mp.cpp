@@ -232,6 +232,24 @@ setup(const struct mpcase *c)
 	poke_short(OB_INFO, c->info0);
 }
 
+/*
+ * The rate index back out of the capability word.
+ *
+ * The function puts four bits at positions 6..9 of +0xaa3c, REVERSED --
+ * `bitreverse(v, 4)` makes bit 3 of `v` the low bit -- so recovering the
+ * index is bit 9 first.  Written out one bit at a time rather than by calling
+ * `bitreverse` again, so this is an independent restatement and not the same
+ * routine checked against itself.
+ */
+static int
+caps_rate_index(const void *base)
+{
+	unsigned w = (unsigned short)get_short(base, OB_CAPS);
+
+	return (int)(((w >> 9) & 1) | (((w >> 8) & 1) << 1)
+		     | (((w >> 7) & 1) << 2) | (((w >> 6) & 1) << 3));
+}
+
 /* Anti-vacuity: every arm that the sweep is supposed to reach. */
 static int saw_v90_branch, saw_dma, saw_no_dma;
 static int saw_clamped, saw_rate_skip, saw_rate_written;
@@ -396,6 +414,60 @@ main(void)
 			    1, 0);
 		diff_eq_int("the caps pointer was installed",
 			    saw_ptr_written[2], 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * -------------------------------------------------------------------
+	 * THE CLAMP, READ OUT OF THE OBJECT INSTEAD OF OUT OF THE PREDICATE.
+	 *
+	 * `saw_clamped` above is the branch condition restated, so a misread
+	 * of that condition would satisfy the flag by the same misreading and
+	 * the differential test could not tell: both sides are fed the same
+	 * inputs, and the clamp only decides which of two rates reaches the
+	 * four-bit field.  Here the four bits are taken back OUT of +0xaa3c
+	 * and compared against the rate index the smaller of the two should
+	 * give, which is an observable rather than an assumption.
+	 *
+	 * Three cases, and the third is the one that makes the other two mean
+	 * something: with the sensitive arm shut off, the same pair of rates
+	 * must produce the LARGER index, so "the clamp happened" and "the
+	 * clamp is unconditional" are different results.
+	 */
+	diff_begin("getMPrecvdBits: the upstream rate that actually got used");
+	{
+		struct mpcase k;
+		static const struct {
+			int	sens;
+			int	cfg;
+			int	pcm;
+			int	want;	/* bits per second the field must show */
+		} clamp[] = {
+			{ 1, 28800,  5, 12000 },	/* cap below config  */
+			{ 1,  2400, 14,  2400 },	/* config below cap  */
+			{ 0, 28800,  5, 28800 },	/* no arm, no clamp  */
+			{ 1, 33599,  5, 12000 },
+			{ 1,  9600,  2,  4800 }
+		};
+		unsigned n;
+
+		for (n = 0; n < sizeof(clamp) / sizeof(clamp[0]); n++) {
+			int want = ((clamp[n].want * 7) >> 14) & 0xf;
+
+			k.v90 = 2;
+			k.gate = 1;
+			k.sens = clamp[n].sens;
+			k.pcm_rate = clamp[n].pcm;
+			k.cfg_rate = clamp[n].cfg;
+			k.seed = 0;
+			k.info0 = 0;
+			run(&k, 300000 + (long)n);
+
+			diff_eq_int("rate index in the caps word, ours",
+				    caps_rate_index(&oa), want, (long)n);
+			diff_eq_int("rate index in the caps word, blob's",
+				    caps_rate_index(ob), want, (long)n);
+		}
 	}
 	rc |= diff_end();
 

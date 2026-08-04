@@ -12642,7 +12642,17 @@ transcripts diffed -- because its TWO rejections print the SAME format
 string, and no byte comparison can tell a reconstruction that printed the
 wrong one.
 
-`getMPrecvdBits` gets 784 whole-object cases and 720 transcript cases.  Its
+`getMPrecvdBits` gets 784 whole-object cases, 720 transcript cases and five
+that read the CLAMP back out of the object.  That last block exists because
+the obvious anti-vacuity flag for a branch is the branch condition restated,
+and a flag satisfied by the same misreading that produced it proves nothing:
+both sides are fed the same inputs and the clamp only decides which of two
+rates reaches `bitreverse`.  So the four bits are taken back out of +0xaa3c,
+un-reversed by hand rather than by calling `bitreverse` again, and compared
+against the index the SMALLER of the configured rate and the PCM cap should
+give -- with one case that shuts the sensitive arm off and must therefore
+show the LARGER, so "the clamp happened" and "the clamp is unconditional"
+are different results.  Its
 +0xaa6c is a SELF-pointer, so it is checked against *this side's own*
 `m + 0xaa3c` rather than against the other side's value or against being
 non-null -- finding 224's rule.  Which of the two `edprintf` arms ran is
