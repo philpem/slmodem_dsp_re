@@ -10877,3 +10877,49 @@ drives ever prints.
 That is the second time a sweep over EVERY literal rather than every call
 site has paid for itself — finding 180 is the first — and the first time the
 strictness of the comparison, rather than its coverage, was what mattered.
+
+### 202. `--renumber` did the wrong thing on the case it was written for
+
+Finding 198 built `refcheck.py --renumber` because moving a finding by hand
+is what missed six references once and two the next time. It was never run
+on a collision — and a collision is the only reason to reach for it.
+
+Given two `### 195.` headings it moved the **first**, which is the
+established entry rather than the newly merged one, and rewrote **every**
+citation of 195 in the tree — including the ones inside the entry that kept
+the number, which then pointed at an entry about something else. Exit status
+0, one line of success. Measured on a reconstructed collision, not supposed.
+
+**THE AMBIGUITY IS REAL AND NOT THE TOOL'S TO GUESS.** With two entries
+answering to one number, a bare `finding 195` in some third file names both
+of them and no rule recovers which was meant. So `--renumber` now refuses a
+duplicated number outright, prints both titles, and says what to do instead.
+
+What it can do is move one of them by POSITION: `--nth -1` takes the last,
+which is where a merge appends, moves that heading, and rewrites only the
+citations inside **that entry's own section** — a new finding's
+self-references travel with it. Every other citation of the number is listed
+rather than touched, because each one is a judgement:
+
+```
+  195 -> 250: the heading and 1 citation(s) inside its own section.
+
+  Still naming 195 -- these belong to the entry that kept the number,
+  or cannot be told from it.  Place them by hand:
+      docs/findings.md:10674
+      tools/debugaudit.py:287
+      ...
+```
+
+It also refuses while conflict markers are present, since two sides of an
+unresolved hunk are not a state anything can rewrite. The workflow that does
+work — and the one this session used twice by hand — is: resolve taking
+**both** sides, then `--nth`.
+
+**AND THE TOOL BIT ME WHILE I FIXED IT.** Running `--renumber 195 250` on the
+real tree to test the guard renumbered the real finding 195, and one of the
+citations it rewrote was inside `refcheck.py`'s own docstring — which
+`git checkout` could not undo, because that file was the one being edited.
+A tool that rewrites the tree needs its guard before its capability, not
+after; this is the second lesson in this file about running a mutating tool
+against the working copy, `mutate.py`'s chdir being the first.
