@@ -7991,7 +7991,7 @@ hold six arrays of string pointers, and `nm` names five of them outright:
 **The V.34 handshake's eighty-seven states are all here**, in index order,
 and are now `include/dsplib/v34hshak.h`.
 
-> **Corrected by finding 152.**  The claim below that nothing indexes
+> **Corrected by finding 176.**  The claim below that nothing indexes
 > `StateName` is wrong: `v34handshakinit` and `v34handshak` index it 533
 > times over, through a relocation against the `.data` section symbol that a
 > search for the name cannot see.  The claim about the two V.8 tables
@@ -9455,7 +9455,7 @@ SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
 Transposed, the *receive* machine would be the one entering SSEG, and the
 table's own `TX_`/`RX_` prefixes say that is backwards.
 
-**FINDING 155'S OFFSETS ARE WRONG BY FOUR.**  It quotes "+0x234 and +0x244",
+**FINDING 179'S OFFSETS ARE WRONG BY FOUR.**  It quotes "+0x234 and +0x244",
 which are the register-relative operands; the function does `lea 0x4(%ebx),
 %edx` first, so the object offsets are **+0x238, +0x23c, +0x244 and +0x248**.
 The same note applies to 155's mode table, which shows `-` for +0x3592 in
@@ -10361,3 +10361,65 @@ renegotiation window is a two-sided test on a counter.  Task #6.
 tests and 15 by the string sweep alone; 13 not caught, 7 equivalent.  It was
 152 over 14 suites.  The 13 are the honest part of that number: they were
 untested before these sets existed too, and nothing said so.
+
+### 193. The cross-references check out, and two more of them did not
+
+Finding 191 said a merge is the one edit nothing in the tree could check, and
+fixed the half `offcheck.py` covers: the compiler now holds every `/* +0xNNN */`
+annotation. The other half is prose citing prose — `finding 171`, `see D48` —
+renumbered by hand whenever a merge makes room for two sessions' findings.
+`tools/refcheck.py` is that half. 732 references, and `make test` now fails
+on one that resolves to nothing.
+
+**THE CHEAP MODE IS NOT THE IMPORTANT ONE.**  A dangling reference is loud.
+The failure that actually happens is a missed renumber, which still resolves
+— to an entry about something else — and reads exactly like a correct
+citation. `--since REV` is that check: a reference that sits in the same
+sentence it did at REV, still citing the same number, whose number now has a
+different title.
+
+Run against the tree as it stood at merge 1088d6d, it reproduces the repair
+of 7202ba8 and finds **two more that the hand analysis missed**, both now
+fixed:
+
+```
+  findings.md:7994   "Corrected by finding 152"          -> 176
+  findings.md:9458   "FINDING 155'S OFFSETS ARE WRONG"   -> 179
+```
+
+The second is the sharper one. `v34fsk.h` cited the same claim and WAS
+repaired — 155 to 179, with a commit message noting it was "the timer
+offsets, not cadence's gates". The identical citation four thousand lines up
+in findings.md was not, because a hand sweep goes file by file and that file
+had already been visited.
+
+**TWO WAYS TO GET `--since` WRONG, both found by getting them wrong.**
+
+*Match on file and number and it reports eleven correct references.* Both
+sides of a merge append to `docs/findings.md`, so "this file cited 152 before
+and cites 152 now" is true of two unrelated sentences that arrived from
+opposite parents — and the one from the other parent gets judged against this
+parent's numbering. Keying on 48 characters of surrounding text separates
+them.
+
+*Then compare that context literally and you lose the ones that matter most.*
+"Finding 149's trap, and finding 152's" became "Finding 173's trap, and
+finding 152's". The 149 was corrected; correcting it changed the context and
+hid the 152 beside it, which was not. So numbers inside the window are
+blanked. Correcting one reference must not conceal its neighbour.
+
+**LINES ARE JOINED BEFORE MATCHING**, which is the difference between working
+and appearing to. References wrap across comment lines — `findings 116b,\n *
+123 and 171` — and a line-based scan reads `116b`, drops the rest, and
+reports clean. Comment leaders are stripped by extension: `#` is a leader in
+Python and a heading in markdown, and stripping it there would eat the
+targets this same file is scanned for.
+
+**WHAT IT DOES NOT COVER, AND WHY THAT IS A CHOICE.**  A citation with no
+keyword is invisible: "finding 162, which corrects 158" cites 158 and this
+sees 162. The 120a-121k narrative refers to its own sub-findings that way
+throughout — about twenty. Matching bare `\d+[a-z]` instead takes `1u`, `0f`,
+`02x`, `400s` and every printf width in the test suite; restricted to three
+digits and a letter it still takes `837k` out of `P(k) = -21k^2 + 837k - 354`
+in v34rx.c. This runs in `make test`, where a false positive is worse than a
+miss, so the keyword stays required. Write the word and it is covered.

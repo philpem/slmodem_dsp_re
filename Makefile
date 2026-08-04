@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets all test check64 docs clean interop capture coverage phase
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -135,7 +135,7 @@ $(BUILD):
 
 # --- targets --------------------------------------------------------------
 
-test: firewall strings offsets $(TESTBIN)
+test: firewall strings offsets refs $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
 
 # The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
@@ -178,6 +178,19 @@ strings:
 # exactly when nothing else in the tree can tell.  See tools/offcheck.py.
 offsets:
 	@$(PYTHON) tools/offcheck.py
+
+# The prose half of the same job.  `offsets` holds the compiler to the
+# /* +0xNNN */ annotations; nothing at all held the `finding N` and `DN`
+# citations, and those are renumbered BY HAND every time a merge makes
+# room for two sessions' findings.  Only the dangling check belongs here.
+# The mode that catches the failure that actually happens -- a reference
+# that still resolves, to the wrong entry -- needs a revision to compare
+# against, and the revision that matters is a merge parent:
+#
+#     git log --merges -1 --format=%%P | tr ' ' '\n' | \
+#         xargs -I{} tools/refcheck.py --since {}
+refs:
+	@$(PYTHON) tools/refcheck.py
 
 # Everything a phase boundary is supposed to check, in one target.
 #
