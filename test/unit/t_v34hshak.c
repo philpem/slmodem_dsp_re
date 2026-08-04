@@ -145,19 +145,31 @@ static const unsigned ptr_skip[] = {
 	 * +0x3548 to the PCM receiver.  Nothing here writes either field.
 	 * What justifies these two holes is that the memory BEHIND them is
 	 * compared instead, per case, in `run_settxlevel`.
+	 *
+	 * THEY ARE ONLY HOLES WHEN THE FIXTURE HAS SEEDED THEM.  Every other
+	 * block in this file leaves both fields at the fill pattern on both
+	 * sides, where they are comparable and a stray write to either would
+	 * show -- so `skipped()` opens these two only after `seed_pwr`, and
+	 * they must be LAST in the list for that test to be an index
+	 * comparison.  Without it the hole is open for `v34handshakinit` too,
+	 * which is 12 KB of stores nothing here seeds those fields for.
 	 */
 	0x3548, 0xac3c
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
+#define NPTR_ALWAYS (NPTR - 2)
 
 static int saw_ptr_skip[NPTR];
+
+/* Set by `seed_pwr`, cleared by `setup`: are the last two entries live? */
+static int pwr_seeded;
 
 static int
 skipped(unsigned off)
 {
 	unsigned k;
 
-	for (k = 0; k < NPTR; k++)
+	for (k = 0; k < (pwr_seeded ? NPTR : NPTR_ALWAYS); k++)
 		if (off >= ptr_skip[k] && off < ptr_skip[k] + 4)
 			return 1;
 	return 0;
@@ -166,6 +178,7 @@ skipped(unsigned off)
 static void
 setup(void)
 {
+	pwr_seeded = 0;
 	memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 	memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
 	memset(shaped_a, 0x5a, sizeof(shaped_a));
@@ -343,6 +356,7 @@ seed_pwr(short want, int sens, int gate, int flag54)
 
 	poke_ptr(0x3548, sess_a, sess_b);
 	poke_ptr(0xac3c, cfg_a, cfg_b);
+	pwr_seeded = 1;
 }
 
 /* Compare the two blocks, with the session's one pointer field excluded. */
@@ -2459,6 +2473,12 @@ main(void)
 		for (k = 0; k < NPTR; k++)
 			diff_eq_int("pointer field differed at least once",
 				    saw_ptr_skip[k], 1, (long)ptr_skip[k]);
+		/*
+		 * And the two the fixture owns are only holes after
+		 * `seed_pwr`; nothing must leave them open by accident.
+		 */
+		diff_eq_int("the fixture's two holes are closed by default",
+			    pwr_seeded, 0, 0);
 	}
 	rc |= diff_end();
 

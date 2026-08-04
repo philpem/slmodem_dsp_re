@@ -11625,3 +11625,100 @@ is the one this project keeps rediscovering — an argument driven from a
 constant is an argument not tested — and the specific one is narrower:
 **quoting a branch means quoting back to the last instruction that sets
 flags, not to the last instruction that looks relevant.**
+
+### 217. Ten of #59's seventeen are not available, and two different reasons say so
+
+Finding 215 says every one of the 64 prerequisites "has a `ref_` alias and is
+individually testable today", and the hand-over for #59 says "every one of
+these has a `ref_` alias and is individually differentially testable today.
+Nothing here is blocked." Neither is true of the whole list, and the two
+things that make it untrue are different from each other and from the
+scaffold question 215 settles.
+
+Seven of the seventeen are available, and they are the whole of what is:
+`chkForceBaudRate`, `GetVPcmMinimalTxPowerReduction`,
+`VPcmV34GetMaxUpstreamRateIndex`, `VPcmV34InterpretMohMessageBits`,
+`settxlevel`, `v34setuptxmit` and `probeselect`, about 8.7 KB of the 16.9.
+The other ten are below.
+
+#### Three are file-local, so `objcopy` cannot give them a `ref_` alias
+
+```
+$ nm ../slmodemd/dsplibs.o | grep -wE 'getbit|ApplyBulkDelay'
+0005dd10 t ApplyBulkDelay
+0005eaf0 t getbit
+$ nm ../slmodemd/dsplibs.o | grep getMPrecvdBits
+00009250 t _Z14getMPrecvdBitsP12tagV34Object
+```
+
+Lower-case `t` is a local symbol. `symmap.py` emits a rename for every
+symbol the blob *defines*, and `objcopy --redefine-syms` renames a local to
+another local — so there is no `ref_getbit` for a test to call, and the tier-1
+differential path does not exist for these three. `t_v34hshak.c`'s own header
+has said the same thing about `StateName` since it was written, and about
+`getbit` and `ApplyBulkDelay` in the paragraph beginning "`getbit` is NOT
+here although it is unblocked".
+
+**This is exactly the set 215's own correction paragraph names** — the three
+a relocation-walked closure misses, because a call to a local in the same
+section needs no relocation. The correction was right and the blanket claim
+one paragraph later was written from the old list.
+
+Total: 1,795 bytes with no tier-1 path under the current harness.
+
+**There is a route, and it is not the scaffold.** `objcopy
+--globalize-symbol=getbit` before `--redefine-syms` promotes the local, after
+which the existing rename produces `ref_getbit`. It ADDS an alias; it does
+not stop renaming anything, so the invariant 215 declines to spend — "the
+suite links" proves everything reachable from what we have written is
+written — is untouched. Each of the three names appears exactly once in the
+symbol table, so globalising cannot collide. **Not landed**: it is a harness
+change and those are the user's.
+
+#### Seven reach something unwritten, and the link fails for both sides
+
+```
+$ python3 tools/symmap.py ../slmodemd/dsplibs.o -o /tmp/sm.txt
+$ grep -E '_ZN12VPcmFloModem11enterPhase3Ev' /tmp/sm.txt
+_ZN12VPcmFloModem11enterPhase3Ev ref__ZN12VPcmFloModem11enterPhase3Ev
+```
+
+`indicateJaTransmission` is 57 bytes and is nothing but two tail calls, to
+`K56FlexFloModem::enterPhase3FullDuplex` and `VPcmFloModem::enterPhase3`.
+Both are renamed in the reference object, so a C file defining
+`indicateJaTransmission` leaves two undefined symbols and **all 62 test
+binaries fail to link**, not just the new one. That is finding 214's premise,
+and with 215 declining the scaffold it is the standing rule: a caller waits
+for its callees.
+
+| function | bytes | waits for |
+|---|--:|---|
+| `indicateJaTransmission` | 57 | `VPcmFloModem::enterPhase3`, `K56FlexFloModem::enterPhase3FullDuplex` |
+| `V34GiveINFO1dBits` | 436 | `VPcmV34InitiateRetrain` (below) |
+| `k56FlexPhase34` | 721 | `K56FlexFloModem::getK56FlexJaBits`, `::getK56FlexMpBits` |
+| `datapumpv34` | 1028 | `v34handshak` (#56–#58), `VPcmV34IndicateLocalRRN`, `IndicateRemoteRRN` |
+| `v90Phase34` | 1358 | `VPcmFloModem::getV90JaBits`, `::getV90CpBits` |
+| `V34SetINFO1aBits` | 1401 | `VPcmFloModem::getUinfoValue` |
+| `VPcmV34InitiateRetrain` | 1406 | four methods, incl. `V92EchoCanceller::setEchoDelay` |
+
+Six of the seven wait on `VPcmV34Main.cpp`'s C++ half, which is **#60**. So
+#60 is not merely "a scheduling question" as `fastpass.md` has it — it is a
+hard predecessor of six of #59's functions, and that ordering was recorded
+nowhere.
+
+`datapumpv34` is the odd one: it waits on `v34handshak` itself, so it comes
+after #56–#58 rather than after #60.
+
+#### The counts do not agree, and both commands are given
+
+215 says 14 C functions at 17,403 bytes. The list `callgraph.py` produces has
+seventeen C-linkage entries, counting `getMPrecvdBits` — which is C++ by
+mangling and C by everything else about it — and totals 16,889 bytes:
+
+```
+$ python3 tools/callgraph.py --order --of v34handshak
+```
+
+The three-byte-level difference is not chased here. What matters for
+scheduling is the split, which both agree on: about 8.7 KB was writable,
+1.8 KB needs a harness change, and 6.4 KB needs #60 or #56–#58 first.
