@@ -11639,7 +11639,8 @@ Seven of the seventeen are available, and they are the whole of what is:
 `chkForceBaudRate`, `GetVPcmMinimalTxPowerReduction`,
 `VPcmV34GetMaxUpstreamRateIndex`, `VPcmV34InterpretMohMessageBits`,
 `settxlevel`, `v34setuptxmit` and `probeselect`, about 8.7 KB of the 16.9.
-The other ten are below.
+Six of the seven are written; `probeselect` is 6,173 of those 8,687 bytes and
+is mapped in finding 218 rather than reconstructed. The other ten are below.
 
 #### Three are file-local, so `objcopy` cannot give them a `ref_` alias
 
@@ -11722,3 +11723,139 @@ $ python3 tools/callgraph.py --order --of v34handshak
 The three-byte-level difference is not chased here. What matters for
 scheduling is the split, which both agree on: about 8.7 KB was writable,
 1.8 KB needs a harness change, and 6.4 KB needs #60 or #56–#58 first.
+
+### 218. `probeselect`'s shape, before it is reconstructed
+
+6,173 bytes and the largest single thing in #59 — 71% of that task's available
+bytes. **Not reconstructed.** This is the map, written down because the next
+session should start from it and not from 1,354 lines of disassembly, and
+because two of the things below are claims that want a differential test
+rather than another reading.
+
+#### What it is
+
+The line probe's verdict. It takes the object alone — `probeselect(obj)`,
+one argument at `0x90(%esp)` after four pushes and `sub $0x7c` — and returns
+nothing. Four cursors are set up in the prologue and used throughout:
+
+```
+  [esp+0x78]  obj + 0xa9ac   the outgoing MP message, ten shorts
+  [esp+0x74]  obj + 0xaa84   the rate config  (V34_RATECFG)
+  [esp+0x70]  obj + 0x264    the receiver
+  edi         obj + 0xa320   the probe DFT bank, 25 bins
+```
+
+It opens by **zeroing ten shorts at `obj + 0xa9ac`** — the MP message it is
+about to build — and ends by having written the rate config and that message.
+
+#### It writes exactly the fields `setfinalrate` reads back
+
+Every store into `[esp+0x74]` lands on a field `setfinalrate` already names:
+
+| offset | absolute | `setfinalrate`'s name |
+|---|---|---|
+| +0x00 | 0xaa84 | `tx_baud` |
+| +0x06 | 0xaa8a | `tx_preemp` |
+| +0x0c | 0xaa90 | `tx_scale` |
+| +0x10 | 0xaa94 | `tx_carrier` |
+| +0x12 | 0xaa96 | `rx_baud` |
+| +0x24 | 0xaaa8 | `rx_carrier` |
+| +0x28 | 0xaaac | `rx_scale` |
+| +0x2c | 0xaab0 | `rx_cdesc` |
+
+and the MP bits it packs at `obj + 0xa9ac` are two bytes below `+0xa9de`,
+`+0xa9e0` and `+0xa9e2` — the three `setfinalrate` unpacks its rate fields
+out of. **So the two functions are an encode/decode pair over one message**,
+which is the `--pairs` shape `callgraph.py` looks for and the only oracle in
+V.34 so far that is independent of the blob. Whoever writes this should wire
+that round-trip up: `probeselect` then `setfinalrate` must land on the rate
+`probeselect` chose.
+
+#### The five per-rate arms are one arm five times
+
+Each recognised rate does the same nine things, differing only in constants:
+
+```
+  cfg->tx_baud    = <rate>
+  cfg->tx_scale   = scale<rate>
+  cfg->tx_carrier = <high or low, on one bit of the MP message>
+  cfg->tx_preemp  = bitreverse(<a nibble of the MP message>, 4)
+  cfg->rx_baud    = <rate>
+  cfg->rx_carrier, rx_scale, rx_cdesc
+  <OR some bits into the outgoing MP message>
+  <the pre-emphasis search, below>
+  cfg-><per-rate offset> = the index it found
+```
+
+with
+
+| rate | cfg offset | search constant | search bin |
+|---|---|---|---|
+| 2400 | +0x16 | 0x7da7 | 18 |
+| 2800 | +0x18 | 0x6789 | 18 |
+| 3000 | +0x1c | 0x656f | 19 |
+| 3200 | +0x1e | 0x639f | 20 |
+| 3429 | +0x20 | 0x6626 | 22 |
+
+#### The pre-emphasis search, and one branch that looks dead
+
+Every arm runs this, with `ref` always `bins[4].energy`:
+
+```
+	x = bins[N].energy;
+	i = 5;
+	do {
+		x = (short)((x * K) >> 14);
+		i++;
+	} while (x <= ref && i <= 9);
+```
+
+`i` is incremented **before** the comparison, at `lea 0x1(%ebx),%esi;
+movswl %si,%ebx` ahead of `cmp %cx,%dx`. So `i` is 6..10 when either exit is
+taken — and every arm's exit block then asks `cmp $0x5,%bx; je <index 0>`,
+which **cannot be true**. The string on that path is
+`V34PREEMPHASIS, - index is 0, baudrate= %d`, one of three; the other two,
+`index is 10` and `index is %d`, are both reachable.
+
+That is a reading, not a measurement, and it is exactly the shape D31 got
+wrong — a branch declared dead from the instructions around it. Do not enter
+it as a deviation until a differential test has driven the arm. If it holds
+it is a real one: a whole index of the pre-emphasis range is unreachable.
+
+#### Two guarded arms a zeroed fixture never reaches
+
+- `div %ebp` at 0x60de0 with `ebp = obj->0xaac4`, guarded by `test %ebp,%ebp;
+  je 60df0`. A zeroed object always skips it, so the SNR ratio it computes is
+  never exercised.
+- the bit scan over `obj->0xaac8` at 0x60db0, with a bounded early-out at
+  0x61a6f (`cmp $0x9,%bx; jle`) that takes a different division path.
+
+Both sides of both need driving.
+
+#### Both `chkForceBaudRate` call sites
+
+0x6117a and 0x614b8, and they are not interchangeable: each is preceded by
+its own loop over bins 16..23, one subtracting 2 from `shift` and one
+subtracting 1, chosen by how far the summed band-edge energies missed. The
+two say so — "so reducing band edge norm by 2" and "by 1". Reaching only one
+is the easy failure.
+
+#### The fifteen strings, which narrate the whole function
+
+```
+  V34PROBE, snr_L1=%d , snr_L2=%d , L2toL1ratio=%d  (all not in dB)
+  V34PROBE, agc gainestimate of L1 signal is %d
+  V34PROBE, dBcnt=%d , powerReductionReq=%d , gain=%d
+  V34PROBE, asking for a power reduction of %d
+  V34PROBE, not asking for power reduction
+  V34PROBE, agc gainestimate due to power reduction request is %d
+  V34PROBE, rx->gain=%d ,(obj->rxinfo0.data[1]&0x80)=%d
+  Sensitive RX Power Reduction mechanism enabled! / disabled!
+  V34PROBE, min = %d, i= %d, so reducing band edge norm by 2 / by 1
+  V34PROBE,0=%d,...,24=%d          (all 25 bins' `shift`, in one line)
+  V34PREEMPHASIS, - index is 0 / 10 / %d, baudrate= %d
+```
+
+`rx->gain` is the receiver's `agc_gain` at +0x136 and `obj->rxinfo0.data[1]`
+is `obj + 0xa97e`, so two more field names come out of this function when it
+is written.
