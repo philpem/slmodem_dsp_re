@@ -224,6 +224,103 @@ def read(path):
     return open(path, encoding="utf-8").read()
 
 
+def check_duplicates():
+    """Two entries sharing a number, which is what a merge produces.
+
+    THE COLLISION IS THE CAUSE AND DANGLING IS ONLY THE SYMPTOM.  Two sessions
+    branch from the same tip, both allocate from `max + 1`, and both are right
+    when they do it; the merge then puts two `### 192.` in one file and every
+    citation of 192 becomes ambiguous.  It has happened three times here --
+    146-156, 146-151, and 192-194.
+
+    Nothing caught any of them, and the reason is one line: `titles()` builds a
+    dict, so the second entry silently replaces the first and every reference
+    still resolves.  The tree reads as consistent while two different findings
+    answer to one number.
+    """
+    dupes = []
+    for path, head, label in ((FINDINGS, FINDING_HEAD, "finding"),
+                              (DEVIATIONS, DEV_HEAD, "D")):
+        seen, high = {}, 0
+        for num, title in head.findall(read(path)):
+            n = int(re.match(r"\d+", num).group(0))
+            #
+            # NUMBERED LISTS INSIDE A FINDING USE THE SAME MARKUP.  "### 1.
+            # What six LSB actually costs" sits inside finding 20-odd and is
+            # not finding 1; the heading level does not distinguish them,
+            # because real entries use both ## and ###.  What does is that
+            # the entries climb and a list restarts: anything far below the
+            # running high-water mark is a list item.  A genuine collision is
+            # a REPEAT OF A RECENT NUMBER -- the merge that caused all three
+            # of them appended 192, 193, 194 after 192, 193, 194 -- so it
+            # lands inside the window and a list at 1..9 does not.
+            #
+            if n < high - 20:
+                continue
+            high = max(high, n)
+            seen.setdefault(num, []).append(title.strip())
+        dupes += [(label, n, t) for n, t in sorted(seen.items()) if len(t) > 1]
+    for label, num, ts in dupes:
+        print("  DUPLICATE %s %s claimed by %d entries:" % (label, num, len(ts)))
+        for t in ts:
+            print("      %s" % t[:70])
+    if dupes:
+        print("\n  A merge allocated the same number twice.  Renumber the "
+              "later side:\n      tools/refcheck.py --renumber %s%s NEW\n"
+              "  which moves the heading and every citation together."
+              % ("D" if dupes[0][0] == "D" else "", dupes[0][1]))
+    return len(dupes)
+
+
+def renumber(old, new):
+    """Move one entry and every citation of it, in one pass.
+
+    Doing this by hand is what the six missed references in finding 196 were.
+    The heading and the citations have to move together or the tree is left in
+    the state that reads correct and is not.
+    """
+    kind = "D" if old.startswith("D") else "finding"
+    o = old[1:] if kind == "D" else old
+    n = new[1:] if new.startswith("D") else new
+    path, head = ((DEVIATIONS, DEV_HEAD) if kind == "D"
+                  else (FINDINGS, FINDING_HEAD))
+
+    have = {num for num, _ in head.findall(read(path))}
+    if o not in have:
+        sys.exit("no such entry: %s" % old)
+    if n in have:
+        sys.exit("%s%s already exists -- pick a free number (next is %s)"
+                 % ("D" if kind == "D" else "", n,
+                    max(int(re.match(r"\d+", x).group(0)) for x in have) + 1))
+
+    if kind == "D":
+        hpat = re.compile(r"(?m)^(## )D%s\b" % re.escape(o))
+        rpat = re.compile(r"\bD%s\b" % re.escape(o))
+        rrep = "D" + n
+    else:
+        hpat = re.compile(r"(?m)^(#{2,4} )%s\." % re.escape(o))
+        rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?(?:\s*(?:,|and)\s*)?)*?)"
+                          r"\b%s\b" % re.escape(o))
+        rrep = None
+
+    touched = 0
+    for f in tracked():
+        text = orig = read(f)
+        if f == path:
+            text = hpat.sub(lambda m: m.group(1) + (rrep if kind == "D"
+                                                    else n + "."), text, count=1)
+        if kind == "D":
+            text = rpat.sub(rrep, text)
+        else:
+            text = rpat.sub(lambda m: m.group(1) + n, text)
+        if text != orig:
+            open(f, "w", encoding="utf-8").write(text)
+            touched += 1
+    print("  %s -> %s across %d file(s).  Re-run to confirm, and check "
+          "`--since` against the merge parent." % (old, new, touched))
+    return 0
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
     bad = []
@@ -291,14 +388,24 @@ def main():
                     "resolves, and still means what it did.")
     ap.add_argument("--dangling", action="store_true",
                     help="every reference resolves to an entry (the default)")
+    ap.add_argument("--renumber", nargs=2, metavar=("OLD", "NEW"),
+                    help="move an entry and every citation of it together, "
+                         "e.g. --renumber 192 195, or --renumber D44 D48")
     ap.add_argument("--since", metavar="REV",
                     help="also: no reference kept its number while its "
                          "target changed title.  Use a merge parent.")
     args = ap.parse_args()
 
+    if args.renumber:
+        return renumber(*args.renumber)
     if args.since:
         return check_since(args.since)
-    return check_dangling()
+    #
+    # Duplicates first: a collision makes every citation of that number
+    # ambiguous, so reporting dangling references beside it would be noise
+    # about a tree whose numbering does not mean anything yet.
+    #
+    return check_duplicates() or check_dangling()
 
 
 if __name__ == "__main__":

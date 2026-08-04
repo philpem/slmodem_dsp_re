@@ -10693,3 +10693,38 @@ arm, which D36 records as unreachable: `i` is 6 or more by the time the test
 runs, so no input drives it. `v34rx`'s is `setInitialPhase`'s second divide
 guard, which needs `polyValue(k2) + polyValue(k)` to come out zero — the
 sweep reaches the first guard and not that one.
+
+### 198. The collision was invisible because the checker used a dict
+
+Findings collided at 146-156, at 146-151 and again at 192-194 -- three
+merges, one cause: two sessions branch from the same tip, both allocate from
+`max + 1`, both are right when they do it, and the merge puts two `### 192.`
+in one file.
+
+Nothing caught any of the three, and `refcheck.py` least of all, which is
+the interesting part because catching this is what it is for.  `titles()`
+built a dict keyed by number, so the second entry silently replaced the
+first and every citation still resolved.  The tree read as consistent while
+two different findings answered to one number -- the same shape as finding
+196's misdirection, one level up: not a reference pointing at the wrong
+entry, but a number owned by two.
+
+So the default run now reports duplicates before it reports dangling, and
+`make test` gates on it.  A collision cannot land quietly again; it goes red
+in the merge that creates it.
+
+TELLING A COLLISION FROM A LIST.  Numbered lists inside a finding use the
+same markup -- "### 1. What six LSB actually costs" sits inside a finding in
+the twenties and is not finding 1 -- and the heading level does not separate
+them, because real entries use both `##` and `###`.  What separates them is
+that entries climb and a list restarts: anything more than 20 below the
+running high-water mark is a list item.  A real collision is a repeat of a
+RECENT number, since the merge that causes it appends 192, 193, 194 after
+192, 193, 194, so it lands inside the window while a list at 1..9 does not.
+
+AND RESOLVING IT IS NOW ONE COMMAND.  `--renumber 192 195` moves the heading
+and every citation in the same pass, which is the part that went wrong by
+hand: six references were missed the first time and two the second.  It
+refuses a number that is taken and names the next free one.  What it does
+not do is decide WHICH side moves -- that is a judgement about which numbers
+are already published, and the tool should not guess it.
