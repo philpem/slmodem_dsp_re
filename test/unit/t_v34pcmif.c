@@ -93,8 +93,12 @@ static unsigned char ob[sizeof(struct v34_object)];
  * sides: the session pointer this file seeds per side, and the four
  * `preinitdigital` installs in the two shell contexts.  Each is a hole in the
  * byte comparison, so each is checked by what it selects instead --
- * `check_session_chain` and `check_shell_ptrs` below -- and `saw_ptr_skip`
- * asserts every entry really was reached, so the list cannot go stale.
+ * `check_session_chain` and `check_shell_ptrs` below.
+ *
+ * `compare()` IS SHARED WITH THE SIX SWEEPS ABOVE, which predate this list
+ * and lost no coverage to it: none of the four indications, the two handouts,
+ * `GetRTD`, `SetTxScale` or `LogTimingOffset` writes any of these five
+ * offsets, so the holes are holes in bytes those functions never touch.
  */
 static const unsigned ptr_skip[] = {
 	0x3548,					/* the session object       */
@@ -585,16 +589,33 @@ pcm_arm(const struct req_case *c)
 	return (unsigned)(c->status - 1) <= 1;
 }
 
-/* What the V.34 arm should leave in `rate_want`, given the request code. */
+/*
+ * What the V.34 arm should leave in `rate_want`, given the request code.
+ *
+ * The step is spelled unsigned here for the same reason it is in the source,
+ * and the two extreme rows of `rate_in` are why.  With a plain `+ 1` this
+ * function reported 41 where BOTH implementations produced INT_MAX: the
+ * optimiser folded `rate_now + 1 <= rate_max` into `rate_now < rate_max` on
+ * the strength of the overflow being undefined.
+ *
+ * So the failure those rows produced was the FIXTURE's, not the code's --
+ * an expectation computed by different rules from the thing it was checking.
+ * Worth stating, because an expectation helper that duplicates the logic it
+ * is checking is only useful while the duplication is exact.
+ */
 static int
 want_after(const struct req_case *c, int req)
 {
-	if (req == 0 || req == 2 || req == 5)
-		return (c->rate_now - 1 >= c->rate_min) ? c->rate_now - 1
-						       : c->rate_want;
-	if (req == 3)
-		return (c->rate_now + 1 <= c->rate_max) ? c->rate_now + 1
-						       : c->rate_want;
+	if (req == 0 || req == 2 || req == 5) {
+		int down = (int)((unsigned)c->rate_now - 1u);
+
+		return (down >= c->rate_min) ? down : c->rate_want;
+	}
+	if (req == 3) {
+		int up = (int)((unsigned)c->rate_now + 1u);
+
+		return (up <= c->rate_max) ? up : c->rate_want;
+	}
 	return -1;
 }
 
@@ -741,7 +762,16 @@ static const int rate_in[][3] = {
 	{  4, 12,  0 },		/* below the floor: down stores nothing     */
 	{  4, 12, 20 },		/* above the ceiling: up stores nothing     */
 	{ 12,  4,  8 },		/* inverted bounds: neither step stores     */
-	{  0,  0,  0 }		/* all zero, where -1 and 0 are adjacent    */
+	{  0,  0,  0 },		/* all zero, where -1 and 0 are adjacent    */
+	/*
+	 * And the two ends of the signed range.  The object steps with `dec`
+	 * and `inc`, which WRAP; C's `- 1` and `+ 1` on a signed int overflow
+	 * instead, and an optimiser is entitled to assume they cannot -- so
+	 * these two rows are the only place the reconstruction can legally
+	 * diverge from the instruction, and without them it does so silently.
+	 */
+	{ (-0x7fffffff - 1), 0x7fffffff, 0x7fffffff },
+	{ (-0x7fffffff - 1), 0x7fffffff, (-0x7fffffff - 1) }
 };
 
 int

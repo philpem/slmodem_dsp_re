@@ -10183,6 +10183,20 @@ every gate in the object is `> 1` and 1 is the only value separating it from
 the `>= 1` a reader would write.  Both mutants are now caught.  The same
 section would be worth having in every test file that compares a transcript.
 
+**One thing the differential tier structurally cannot check.**  The step is
+`dec`/`inc`, which wraps; C's signed `- 1` is undefined at the ends of the
+range, and an optimiser may fold `rate_now + 1 <= rate_max` into `rate_now <
+rate_max` on that basis.  Written as a plain `- 1` the file agrees with the
+blob byte for byte at both extremes under this tree's compiler and flags --
+the mutation SURVIVES -- so the agreement is a property of the code
+generation and not of the language, and the one case that would break it is
+the one case the test cannot see.  Spelled unsigned anyway; it costs a cast.
+
+Adding the two extreme rows found a real defect, but in the FIXTURE: the
+expectation helper had the same undefined `+ 1` and reported 41 where both
+implementations produced INT_MAX.  An expectation computed by different rules
+from the thing it is checking is only useful while the duplication is exact.
+
 **Mutation:** 50 applied, 48 caught.  Both survivors are reorderings that are
 equivalent: the flag byte at `p3548 + 0x173e` and the pointer load at +0x175c
 do not alias, and `preinitdigital` does not touch +0x25c2 -- which the
