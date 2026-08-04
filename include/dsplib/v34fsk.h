@@ -417,6 +417,17 @@ struct v34_object {
 	 * the only short here); f3558 its decay; f355c a shift the step is
 	 * scaled by, which the ladder at 0x90 moves between 2, 4 and 5; and
 	 * f3560 the energy accumulated over the first 0x8f calls.
+	 *
+	 * AND THREE OF THEM ARE NAMED BY THEIR OTHER WRITER.
+	 * `GetVPcmMinimalTxPowerReduction` sets f3554, f3558 and f355c
+	 * together and then prints what it set: "setting echo: decay start =
+	 * %d, decay fact = %d, beta = %d".  So f3554 is the call count decay
+	 * starts at -- which is exactly what `adaptecho` compares it against
+	 * -- f3558 is the decay factor and f355c is beta.
+	 *
+	 * The two writers do not agree on beta's range: `adaptecho`'s ladder
+	 * moves it between 2, 4 and 5, and the PCM side sets 2, 4 or 6.  Both
+	 * readings are the object's; nothing here reconciles them.
 	 */
 	int f354c;					/* +0x354c */
 	short f3550;					/* +0x3550 */

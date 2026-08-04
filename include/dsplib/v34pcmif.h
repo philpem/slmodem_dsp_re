@@ -97,6 +97,22 @@ void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
  */
 void chkForceBaudRate(void *obj, struct v34_dftbin *bins);
 
+/*
+ * The transmit power back-off in dB, clamped to [-10, +7].
+ *
+ * SHORT, and the caller says so: `settxlevel` does `movswl %ax` on the
+ * result.  It has the side effect of setting the echo canceller's three
+ * adaptation constants -- see v34pcmif.c.
+ */
+short GetVPcmMinimalTxPowerReduction(void *obj);
+
+/*
+ * The smaller of the configured upstream rate and the PCM receiver's own
+ * cap, in bits per second despite the name.  One caller, `v34handshak` at
+ * 0x63457, and it is the only thing that fixes the return type as an int.
+ */
+int VPcmV34GetMaxUpstreamRateIndex(void *obj);
+
 #ifdef __cplusplus
 }
 #endif

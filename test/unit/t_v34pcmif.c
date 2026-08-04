@@ -75,6 +75,8 @@ extern void ref_VPcmV34InitiateRateRenegotiation(void *obj, int req);
 extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 				       unsigned char constel_size);
 extern void ref_chkForceBaudRate(void *obj, struct v34_dftbin *bins);
+extern short ref_GetVPcmMinimalTxPowerReduction(void *obj);
+extern int ref_VPcmV34GetMaxUpstreamRateIndex(void *obj);
 
 extern short ref_scrambleGPC(void *obj, short n);
 extern short ref_scrambleGPA(void *obj, short n);
@@ -365,20 +367,33 @@ sweep(int with_debug)
  * each link is indexed at, so an out-of-bounds store lands inside the buffer
  * and shows up in the comparison rather than corrupting something else.
  */
-#define SESS_LEN	0x1800		/* indexed at +0x173e and +0x175c */
+#define SESS_LEN	0x6200		/* indexed at +0x610c ... +0x6120 */
 #define DEMOD_LEN	0x0240		/* indexed at +0x20c              */
 #define LEAF_LEN	0x00c0		/* indexed at +0x8c               */
+#define PCM_LEN		0x0520		/* indexed at +0x4f4 ... +0x4fc   */
 
 #define SESS_PTR	0x175c
 #define SESS_FLAG	0x173e
 #define DEMOD_PTR	0x020c
 #define LEAF_REQ	0x008c
 
+/*
+ * And the SECOND chain out of the session object, which the two questions
+ * below use and the three requests above do not: a pointer at +0x610c to
+ * whatever holds the PCM receiver's own limits, gated by an int at +0x6120.
+ */
+#define SESS_PCM	0x610c
+#define SESS_GATE	0x6120
+#define PCM_FLAG	0x04f4
+#define PCM_SENS	0x04f8
+#define PCM_CAP		0x04fc
+
 #define CHAIN_FILL	0x3c
 
 static unsigned char sess_a[SESS_LEN], sess_b[SESS_LEN];
 static unsigned char demod_a[DEMOD_LEN], demod_b[DEMOD_LEN];
 static unsigned char leaf_a[LEAF_LEN], leaf_b[LEAF_LEN];
+static unsigned char pcm_a[PCM_LEN], pcm_b[PCM_LEN];
 
 static void
 put_ptr(void *base, unsigned off, void *v)
@@ -402,19 +417,34 @@ seed_chain(void)
 	memset(demod_b, CHAIN_FILL, sizeof(demod_b));
 	memset(leaf_a, CHAIN_FILL, sizeof(leaf_a));
 	memset(leaf_b, CHAIN_FILL, sizeof(leaf_b));
+	memset(pcm_a, CHAIN_FILL, sizeof(pcm_a));
+	memset(pcm_b, CHAIN_FILL, sizeof(pcm_b));
 
 	put_ptr(sess_a, SESS_PTR, demod_a);
 	put_ptr(sess_b, SESS_PTR, demod_b);
 	put_ptr(demod_a, DEMOD_PTR, leaf_a);
 	put_ptr(demod_b, DEMOD_PTR, leaf_b);
+	put_ptr(sess_a, SESS_PCM, pcm_a);
+	put_ptr(sess_b, SESS_PCM, pcm_b);
 
 	poke_ptr(0x3548, sess_a, sess_b);
+}
+
+/* Is `i` inside one of the session's two pointer fields? */
+static int
+sess_hole(unsigned i)
+{
+	return (i >= SESS_PTR && i < SESS_PTR + 4)
+	    || (i >= SESS_PCM && i < SESS_PCM + 4);
 }
 
 /*
  * Compare two buffers with one pointer-sized hole in each -- the links are
  * necessarily different addresses.  Everything else, including the flag byte
  * and the request word, is compared.
+ *
+ * `hole` of -1 means none; the session has two and passes its own predicate
+ * instead, which is why the test is a function pointer rather than a range.
  */
 static void
 compare_link(const char *what, const unsigned char *a, const unsigned char *b,
@@ -434,6 +464,24 @@ compare_link(const char *what, const unsigned char *a, const unsigned char *b,
 	diff_eq_int(what, bad, 0, tag);
 }
 
+/* The same over the session, whose two pointer fields are both holes. */
+static void
+compare_sess(const char *what, long tag)
+{
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < SESS_LEN; i++) {
+		if (sess_a[i] == sess_b[i] || sess_hole(i))
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, sess_a[i], sess_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+}
+
 /*
  * The whole chain, plus the two things it is FOR.  `want_req` is the code the
  * leaf should be carrying and `want_flag` whether the session flag was set;
@@ -447,7 +495,7 @@ static void
 check_session_chain(const char *what, int taken, int want_req, int want_flag,
 		    long tag)
 {
-	compare_link(what, sess_a, sess_b, SESS_LEN, SESS_PTR, tag);
+	compare_sess(what, tag);
 	compare_link(what, demod_a, demod_b, DEMOD_LEN, DEMOD_PTR, tag);
 	compare_link(what, leaf_a, leaf_b, LEAF_LEN, (unsigned)-1, tag);
 
@@ -464,8 +512,7 @@ check_session_chain(const char *what, int taken, int want_req, int want_flag,
 		int touched = 0;
 
 		for (i = 0; i < SESS_LEN; i++)
-			if (sess_a[i] != CHAIN_FILL
-			    && (i < SESS_PTR || i >= SESS_PTR + 4))
+			if (sess_a[i] != CHAIN_FILL && !sess_hole(i))
 				touched = 1;
 		for (i = 0; i < LEAF_LEN; i++)
 			if (leaf_a[i] != CHAIN_FILL)
@@ -549,8 +596,7 @@ run_force(unsigned char cfgbyte, int v90, int k56, const unsigned char *allow,
 	compare("chkForceBaudRate", tag);
 
 	/* The session, which the V.90 arm writes and the other two must not. */
-	compare_link("chkForceBaudRate session", sess_a, sess_b, SESS_LEN,
-		     SESS_PTR, tag);
+	compare_sess("chkForceBaudRate session", tag);
 	if (memcmp(sess_a + ALLOW_OFF, want, ALLOW_LEN) != 0)
 		saw_force_session = 1;
 	else
@@ -572,6 +618,121 @@ run_force(unsigned char cfgbyte, int v90, int k56, const unsigned char *allow,
 			capped = 1;
 	if (capped)
 		saw_force_capped = 1;
+}
+
+/* --- the two questions asked of the PCM configuration --------------------- */
+
+/*
+ * Every input either of them reads, one field per member.  The three arm
+ * selectors are separate from each other because that is the only way to tell
+ * an `&&` from an `||` -- findings 116b, 123 and 171 -- and `sens` is separate
+ * from `v90` for the same reason: the object consults `+0x4f8` only after
+ * `v90_receiver`, and a reconstruction that or-ed them agrees on every case
+ * where both are set.
+ */
+struct pwr_case {
+	int	gate;		/* session +0x6120        */
+	int	v90;		/* object  +0x24c         */
+	int	k56;		/* object  +0x250         */
+	int	sens;		/* pcm     +0x4f8         */
+	int	cap;		/* pcm     +0x4fc         */
+	short	want;		/* config  +0x44          */
+	int	flag54;		/* config  +0x54          */
+	int	maxrate;	/* config  +0x3c          */
+};
+
+static const struct pwr_case pwr_base = {
+	1,		/* gate: a PCM modem exists                        */
+	4,		/* v90:  past 1, so both functions take the arm     */
+	0,		/* k56                                             */
+	1,		/* sens                                            */
+	14,		/* cap:  14 * 2400 = 33600                         */
+	3,		/* want: inside the clamp and positive             */
+	4,		/* flag54                                          */
+	31200		/* maxrate                                         */
+};
+
+static int saw_pwr_high, saw_pwr_low, saw_pwr_clamped;
+static int saw_rate_capped, saw_rate_plain;
+
+static void
+setup_pwr(const struct pwr_case *c)
+{
+	setup();
+	seed_chain();
+
+	memset(cfg_a, CFG_FILL, sizeof(cfg_a));
+	memset(cfg_b, CFG_FILL, sizeof(cfg_b));
+	memcpy(cfg_a + 0x3c, &c->maxrate, sizeof(c->maxrate));
+	memcpy(cfg_b + 0x3c, &c->maxrate, sizeof(c->maxrate));
+	memcpy(cfg_a + 0x44, &c->want, sizeof(c->want));
+	memcpy(cfg_b + 0x44, &c->want, sizeof(c->want));
+	memcpy(cfg_a + 0x54, &c->flag54, sizeof(c->flag54));
+	memcpy(cfg_b + 0x54, &c->flag54, sizeof(c->flag54));
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+
+	memcpy(sess_a + SESS_GATE, &c->gate, sizeof(c->gate));
+	memcpy(sess_b + SESS_GATE, &c->gate, sizeof(c->gate));
+	memcpy(pcm_a + PCM_SENS, &c->sens, sizeof(c->sens));
+	memcpy(pcm_b + PCM_SENS, &c->sens, sizeof(c->sens));
+	memcpy(pcm_a + PCM_CAP, &c->cap, sizeof(c->cap));
+	memcpy(pcm_b + PCM_CAP, &c->cap, sizeof(c->cap));
+
+	poke_int(0x24c, c->v90);
+	poke_int(0x250, c->k56);
+}
+
+static void
+run_pwr(const struct pwr_case *c, long tag)
+{
+	short ra, rb;
+	int flag;
+
+	setup_pwr(c);
+
+	ra = GetVPcmMinimalTxPowerReduction(&oa);
+	rb = ref_GetVPcmMinimalTxPowerReduction(ob);
+
+	diff_eq_int("GetVPcmMinimalTxPowerReduction", ra, rb, tag);
+	compare("GetVPcmMinimalTxPowerReduction", tag);
+	compare_sess("GetVPcmMinimalTxPowerReduction session", tag);
+	compare_link("GetVPcmMinimalTxPowerReduction pcm", pcm_a, pcm_b,
+		     PCM_LEN, (unsigned)-1, tag);
+
+	/*
+	 * The PCM flag is the thing this writes that the return value cannot
+	 * show, and its two values are the two arms -- so seeing both proves
+	 * the sweep reached both, which a byte comparison alone would not.
+	 */
+	memcpy(&flag, pcm_a + PCM_FLAG, sizeof(flag));
+	if (flag == 0)
+		saw_pwr_high = 1;
+	else if (flag == 1)
+		saw_pwr_low = 1;
+	if (ra != c->want && ra != 0)
+		saw_pwr_clamped = 1;
+}
+
+static void
+run_rate(const struct pwr_case *c, long tag)
+{
+	int ra, rb;
+
+	setup_pwr(c);
+
+	ra = VPcmV34GetMaxUpstreamRateIndex(&oa);
+	rb = ref_VPcmV34GetMaxUpstreamRateIndex(ob);
+
+	diff_eq_int("VPcmV34GetMaxUpstreamRateIndex", ra, rb, tag);
+	compare("VPcmV34GetMaxUpstreamRateIndex", tag);
+	compare_sess("VPcmV34GetMaxUpstreamRateIndex session", tag);
+	compare_link("VPcmV34GetMaxUpstreamRateIndex pcm", pcm_a, pcm_b,
+		     PCM_LEN, (unsigned)-1, tag);
+
+	if (ra == c->maxrate)
+		saw_rate_plain = 1;
+	else
+		saw_rate_capped = 1;
 }
 
 /*
@@ -1078,6 +1239,202 @@ main(void)
 			ref_VPcmV34LogTimingOffset(ob, off[i]);
 			compare("LogTimingOffset", 700 + i);
 		}
+	}
+	rc |= diff_end();
+
+	/* --- the two questions asked of the PCM configuration ------------ */
+
+	/*
+	 * THE FOUR SELECTORS ARE CROSSED, NOT SAMPLED.  Which arm either
+	 * function takes is decided by `+0x6120`, `v90_receiver`,
+	 * `k56flex_receiver` and the PCM object's `+0x4f8`, and the object
+	 * does not combine them with a single operator: the V.90 test SKIPS
+	 * the K56Flex one rather than being or-ed with it, and only the case
+	 * where V.90 is up, `+0x4f8` is clear and K56Flex is running tells an
+	 * `&&` from an `||`.  So all four are driven together, over values
+	 * that separate `!= 0` from `> 1` and from `== 1`.
+	 *
+	 * The reduction is swept across both edges of its clamp and both
+	 * sides of zero, because -10 and +7 are answers rather than
+	 * saturations and the sign is what picks the echo constants.
+	 */
+	diff_begin("v34 pcm interface: GetVPcmMinimalTxPowerReduction, "
+		   "every arm against every clamp edge");
+	{
+		static const int gate_in[] = { 0, 1, -1 };
+		static const int v90_in[] = { 0, 1, 2, -1, 0x7fffffff };
+		static const int k56_in[] = { 0, 1, -1 };
+		static const int sens_in[] = { 0, 1, -1 };
+		static const short want_in[] = {
+			(short)0x8000, -1000, -11, -10, -9, -1, 0, 1,
+			6, 7, 8, 1000, 0x7fff
+		};
+		static const int flag_in[] = { 0, 3, 4, 5, -4, 0x7fffffff };
+		unsigned g, v, k, s, w, f;
+		long tag = 30000;
+
+		for (g = 0; g < sizeof(gate_in) / sizeof(gate_in[0]); g++)
+		for (v = 0; v < sizeof(v90_in) / sizeof(v90_in[0]); v++)
+		for (k = 0; k < sizeof(k56_in) / sizeof(k56_in[0]); k++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++) {
+			struct pwr_case c = pwr_base;
+
+			c.gate = gate_in[g];
+			c.v90 = v90_in[v];
+			c.k56 = k56_in[k];
+			c.sens = sens_in[s];
+			c.want = want_in[w];
+			run_pwr(&c, tag++);
+		}
+
+		/* And +0x54, which only the negative arm consults. */
+		for (f = 0; f < sizeof(flag_in) / sizeof(flag_in[0]); f++)
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++) {
+			struct pwr_case c = pwr_base;
+
+			c.flag54 = flag_in[f];
+			c.want = want_in[w];
+			run_pwr(&c, tag++);
+		}
+
+		diff_eq_int("some case took the positive arm", saw_pwr_high,
+			    1, 0);
+		diff_eq_int("some case took the zero-or-negative arm",
+			    saw_pwr_low, 1, 0);
+		diff_eq_int("and some case was clamped", saw_pwr_clamped, 1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE SECOND REPORT PRINTS THE PCM FLAG, AND `sens` AND `k56` ARE
+	 * SWEPT UNDER IT FOR THAT REASON ALONE.  The flag is `red > 0 ? 0 :
+	 * 1` and `sens` is an input eight bytes further on, and in the
+	 * obvious cases they are EQUAL -- with K56Flex off, `sens` of 0 gives
+	 * a flag of 0 and `sens` of 1 gives a flag of 1.  A reconstruction
+	 * printing +0x4f8 instead of +0x4f4 survives all of those, and the
+	 * byte comparison cannot see it because the argument is not stored
+	 * anywhere.  What separates them is K56Flex running, or a `sens` that
+	 * is neither 0 nor 1.
+	 */
+	diff_begin("v34 pcm interface: GetVPcmMinimalTxPowerReduction "
+		   "names the echo constants it set");
+	{
+		static const short want_in[] = { -10, -1, 0, 1, 7 };
+		static const int flag_in[] = { 4, 5 };
+		static const int sens_in[] = { 0, 1, -1 };
+		static const int k56_in[] = { 0, 1 };
+		unsigned w, f, s, k;
+		long tag = 40000;
+		int saw_flag_unlike_sens = 0;
+
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++)
+		for (f = 0; f < sizeof(flag_in) / sizeof(flag_in[0]); f++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (k = 0; k < sizeof(k56_in) / sizeof(k56_in[0]); k++) {
+			struct pwr_case c = pwr_base;
+			int flag;
+
+			c.want = want_in[w];
+			c.flag54 = flag_in[f];
+			c.sens = sens_in[s];
+			c.k56 = k56_in[k];
+			dsplib_debug_capture_reset();
+			run_pwr(&c, tag);
+			diff_eq_int("MinimalTxPowerReduction transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    tag);
+			memcpy(&flag, pcm_a + PCM_FLAG, sizeof(flag));
+			if (flag != c.sens)
+				saw_flag_unlike_sens = 1;
+			tag++;
+		}
+
+		diff_eq_int("and some case told the flag from the ISP bit",
+			    saw_flag_unlike_sens, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE CAP IS SWEPT THROUGH ITS OWN OVERFLOW.  `+0x4fc` is multiplied
+	 * by 2400 in 32 bits with no widening, so 0x7fffffff wraps to a
+	 * negative cap and the `>` then takes it -- which is the object's
+	 * behaviour and not a case any real receiver reaches.  It is here
+	 * because a reconstruction using a long, or clamping, differs only
+	 * there.
+	 */
+	diff_begin("v34 pcm interface: VPcmV34GetMaxUpstreamRateIndex, "
+		   "both ISPs and the multiply that wraps");
+	{
+		static const int gate_in[] = { 0, 1, -1 };
+		static const int v90_in[] = { 0, 1, 2, -1, 0x7fffffff };
+		static const int sens_in[] = { 0, 1, -1 };
+		static const int cap_in[] = { 0, 1, 5, 13, 14, 15,
+					      0x7fffffff, -1 };
+		static const int rate_in2[] = { 0, 1, 2400, 31200, 33600,
+						56000, 0x7fffffff, -1 };
+		unsigned g, v, s, c2, r;
+		long tag = 50000;
+
+		for (g = 0; g < sizeof(gate_in) / sizeof(gate_in[0]); g++)
+		for (v = 0; v < sizeof(v90_in) / sizeof(v90_in[0]); v++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (c2 = 0; c2 < sizeof(cap_in) / sizeof(cap_in[0]); c2++)
+		for (r = 0; r < sizeof(rate_in2) / sizeof(rate_in2[0]); r++) {
+			struct pwr_case c = pwr_base;
+
+			c.gate = gate_in[g];
+			c.v90 = v90_in[v];
+			c.sens = sens_in[s];
+			c.cap = cap_in[c2];
+			c.maxrate = rate_in2[r];
+			run_rate(&c, tag++);
+		}
+
+		diff_eq_int("some case was capped", saw_rate_capped, 1, 0);
+		diff_eq_int("and some case was not", saw_rate_plain, 1, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 pcm interface: GetMaxUpstreamRateIndex names its ISP");
+	{
+		static const int sens_in[] = { 0, 1 };
+		unsigned s;
+
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++) {
+			struct pwr_case c = pwr_base;
+
+			c.sens = sens_in[s];
+			dsplib_debug_capture_reset();
+			run_rate(&c, 60000 + (long)s);
+			diff_eq_int("GetMaxUpstreamRateIndex transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, 60000 + (long)s);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    60000 + (long)s);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

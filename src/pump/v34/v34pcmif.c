@@ -88,6 +88,148 @@ VPcmV34SetTxScale(void *objp)
 
 /*
  * ---------------------------------------------------------------------------
+ * The two questions the transmitter asks the PCM configuration.
+ *
+ * Both reach through `pac3c` for what was asked for and through `p3548` for
+ * what the PCM receiver actually has, and both take the smaller.  They are
+ * next to each other in .text and they share the pattern; nothing else does.
+ *
+ * ONE FIELD OF THE SESSION GATES BOTH: `p3548 + 0x6120`, an int, tested
+ * against zero before either of them will look at the PCM side at all.  What
+ * it means is not in this translation unit -- it is read and never written
+ * here -- but it is always paired with `v90_receiver`, so it reads as "a PCM
+ * modem exists" against "and it has got somewhere".
+ */
+
+/*
+ * How far the transmit power must be backed off, in dB.
+ *
+ * THREE THINGS HAPPEN AND THE NAME MENTIONS ONE.  The return value is the
+ * configured reduction clamped to [-10, +7]; on the way there the function
+ * also sets the echo canceller's three adaptation constants and flips a flag
+ * in the PCM receiver.  Both diagnostics say so -- the first names the three
+ * constants it just wrote, and it is the object's own words that give
+ * `f3554`, `f3558` and `f355c` the names "decay start", "decay fact" and
+ * "beta", which nothing else in the tree could have supplied.
+ *
+ * THE CLAMP IS ASYMMETRIC and it is a clamp rather than a saturate-to-zero:
+ * -10 dB is a real answer and so is +7.  The comparisons are 16-bit and
+ * signed, so a configuration asking for -20 gets -10 rather than 236.
+ *
+ * WHICH ARM IS TAKEN IS NOT AN `||`, AND THE POLARITY OF +0x4f8 IS THE
+ * SURPRISE.  With V.90 up the K56Flex word is consulted only when the PCM
+ * object's +0x4f8 is SET; when it is clear the reduction stands on the V.90
+ * side alone.  +0x4f8 is the same field `VPcmV34GetMaxUpstreamRateIndex`
+ * calls a "sensitive ISP", so the reading is that a sensitive line will not
+ * take a V.90-only word for it -- and it is `je`, at 0x7bff, which this
+ * reconstruction got backwards first and the sweep caught on the first run.
+ *
+ * `red` is forced to zero when nothing has the line, which is what makes the
+ * sign test below a three-way decision spelled as two.
+ */
+short
+GetVPcmMinimalTxPowerReduction(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	unsigned char *pcm = *(unsigned char **)(sess + 0x610c);
+	short want = *(const short *)(cfg + 0x44);
+	short red;
+
+	if (want < -10)
+		red = -10;
+	else if (want > 7)
+		red = 7;
+	else
+		red = want;
+
+	if (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0
+	      && *(const int *)(pcm + 0x4f8) == 0)
+	    && obj->k56flex_receiver == 0)
+		red = 0;
+
+	if (red > 0) {
+		*(int *)(pcm + 0x4f4) = 0;
+		obj->f3554 = 0x7d0;
+		obj->f3558 = 0x7fdf;
+		obj->f355c = 2;
+	} else {
+		*(int *)(pcm + 0x4f4) = 1;
+		obj->f3554 = 0x7d0;
+		obj->f3558 = 0x7fcb;
+		/*
+		 * 4 when the configuration's +0x54 is exactly 4 and 6
+		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
+		 * a two-way choice and not arithmetic on the field.
+		 */
+		obj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
+	}
+
+	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
+		 "decay start = %d, decay fact = %d, beta = %d\r\n",
+		 (int)red, obj->f3554, obj->f3558, obj->f355c);
+
+	/*
+	 * The session pointer is RE-LOADED for the second report rather than
+	 * kept -- `mov 0x610c(%esi),%ebp` at 0x7b67, after the first call.
+	 * Reproduced by reading it again; nothing here can change it, so the
+	 * two spellings agree, and it is written this way because the object
+	 * is.
+	 */
+	edprintf("VPcmV34Main: Get Minimal power reduction - returning %d "
+		 "(cfg flag set to %d)\r\n",
+		 (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f4));
+
+	return red;
+}
+
+/*
+ * The upstream rate cap, in BITS PER SECOND despite the name.
+ *
+ * `pac3c + 0x3c` is what was configured and the PCM receiver's own limit is
+ * `p610c + 0x4fc` multiplied by 2400, so the second is an index and the
+ * first is not -- the function returns the smaller of the two and the units
+ * of the answer are the configured field's.  The two diagnostics are how the
+ * arms are told apart: "regular ISP" is the configuration unqualified and
+ * "sensitive ISP" is the one the receiver has capped.
+ *
+ * THE V.90 TEST IS `> 1`, NOT `!= 0`, which is the only place in this file
+ * that reads `v90_receiver` as a position on its ladder rather than as a
+ * flag.  1 is below every value the four Indicate entry points set, so what
+ * it excludes is a receiver that has been created and has received nothing.
+ */
+int
+VPcmV34GetMaxUpstreamRateIndex(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int rate = *(const int *)(cfg + 0x3c);
+
+	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
+		const unsigned char *pcm =
+			*(unsigned char *const *)(sess + 0x610c);
+
+		if (*(const int *)(pcm + 0x4f8) != 0) {
+			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+
+			if (rate > cap)
+				rate = cap;
+
+			edprintf("on get max upstream rate, on sensitive ISP, "
+				 "returning %d\r\n", rate);
+			return rate;
+		}
+	}
+
+	edprintf("on get max upstream rate, on regular ISP, returning %d\r\n",
+		 rate);
+	return rate;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Two address handouts and one scalar read.
  *
  * The first two are `return &obj->field` and nothing else -- no bounds, no
