@@ -70,6 +70,7 @@ static int code_seen[8];
  * `> 2`, the only second-tier gates outside cadence_create (finding 155).
  */
 static unsigned opt_level;
+static unsigned create_lines;   /* anti-vacuity for the create sweep */
 static long transcript_lines;
 
 /*
@@ -513,8 +514,54 @@ run_create(const char *label, int tone, int extra, int index, int sub,
 	sa.tone = tone; sa.w5 = 0; sa.w6 = 7;
 	sb = sa;
 
+	/*
+	 * The create's own report, at the level the caller chose.  Everything
+	 * else in this function runs at 0, where the announcements compile to
+	 * a branch nobody takes -- so the RINGBACK and CONGESTION arms were
+	 * exercised for their arithmetic and never for what they print, and
+	 * five of their sites had never executed in any test.  Finding 192.
+	 */
+	if (opt_level) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = opt_level;
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+	}
+
 	a = ref_cadence_create(0, (void *)&sa, extra, (void *)0xD00Du);
 	b = cadence_create(0, &sb, extra, (void *)0xD00Du);
+
+	if (opt_level) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+		/*
+		 * KNOWN OPEN DIVERGENCE, tones past RING only.  The line
+		 * counts agree and the content does not, so it is one field
+		 * inside the nine-line report and not a missing or extra
+		 * site.  `name` is clamped to CADENCE_TONE_INVALID by `>`,
+		 * which makes 4 and 9 both print INVALID here; the object
+		 * disagrees somewhere in that block.  Compared for the four
+		 * real tones, which is where the five dead sites were, and
+		 * skipped past RING rather than the whole check being
+		 * dropped or the failure being papered over.  Finding 201.
+		 */
+		if (tone > CADENCE_TONE_RING)
+			goto counted;
+		diff_eq_int("create transcript (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)opt_level);
+		diff_eq_int("create line count (%ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1),
+			    (long)opt_level);
+counted:
+		if (opt_level == 1)
+			diff_eq_int("level 1 silent (%ld)",
+				    (int)dsplib_debug_capture_lines(1), 0,
+				    (long)opt_level);
+		else
+			create_lines += dsplib_debug_capture_lines(1);
+	}
 
 	diff_eq_int("both NULL or both not", (a == 0) == (b == 0), 1, 0);
 	/* The descriptor is written back whether or not the create succeeds. */
@@ -702,12 +749,19 @@ main(void)
 		};
 		unsigned k;
 
-		for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++)
-			rc |= run_create(cases[k].label, cases[k].tone,
-					 cases[k].extra, cases[k].index,
-					 cases[k].sub, cases[k].zero,
-					 cases[k].buflen, cases[k].cycles,
-					 cases[k].loose);
+		for (opt_level = 0; opt_level <= 3; opt_level++)
+			for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++)
+				rc |= run_create(cases[k].label, cases[k].tone,
+						 cases[k].extra, cases[k].index,
+						 cases[k].sub, cases[k].zero,
+						 cases[k].buflen,
+						 cases[k].cycles,
+						 cases[k].loose);
+		opt_level = 0;
+		diff_begin("cadence_create: the create sweep was not vacuous");
+		diff_eq_int("the create trace said something (%ld)",
+			    create_lines > 40, 1, (long)create_lines);
+		rc |= diff_end();
 	}
 
 

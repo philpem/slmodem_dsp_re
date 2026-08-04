@@ -668,13 +668,6 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	/* Computed from the already-converted max_off. */
 	c->max_silence = silence_mult * c->max_off;
 
-	if (!usable) {
-		if (c->filter != 0)
-			toneiir_delete(c->filter);
-		sysdep_free(c);
-		return 0;
-	}
-
 	if (extra > 0)
 		c->continuous = 0;
 
@@ -723,6 +716,23 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 				     c->validation);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("LEVEL %d\n", c->threshold);
+
+	/*
+	 * THE REPORT COMES FIRST, then the refusal.  An unusable window is
+	 * announced in full -- type, filter, both cadence windows, buffer and
+	 * level -- and only then freed, which is the opposite of the order
+	 * this had.  The transcript is what says so: a zero-window RING
+	 * printed two lines where the object printed eleven, because we
+	 * returned before the report and it returns after.  Invisible to
+	 * every other check, since both sides return NULL either way.
+	 * Finding 201.
+	 */
+	if (!usable) {
+		if (c->filter != 0)
+			toneiir_delete(c->filter);
+		sysdep_free(c);
+		return 0;
+	}
 
 	cfg.a = c->sel_a;
 	cfg.b = c->sel_b;

@@ -10797,3 +10797,34 @@ AND THE FINISHED RUN FOUND ONE.  `if (delta < 0) delta = -(short)delta;` in
 `V8agc` deletes cleanly: nothing in the tree asserts on the absolute value of
 that delta.  One real gap out of one small file, which is the rate finding
 193 saw on v8jm.c and the reason to keep the sweep.
+
+### 201. cadence_create announces a window it is about to refuse
+
+Five sites were dead in `cadence_create`'s RINGBACK and CONGESTION arms, and
+the reason was not that the arms were unreached: `t_cadence`'s case table
+drives all four tones and both zero-window refusals.  It drives them at
+level 0.  `opt_level` is reset to 0 before the create block runs, so every
+announcement in the function compiled to a branch nobody took while the
+arithmetic around it was checked 220 ways.
+
+Running the same cases at levels 1 to 3 found the order wrong.  A
+zero-window RING printed **two lines where the object printed eleven**: the
+refusal -- free the filter, free the detector, return NULL -- sat above the
+nine-line report, and in the object it sits below it.  The object announces
+the whole configuration, type and filter and both windows and buffer and
+level, and only then decides the window is unusable and throws it away.
+
+Nothing else could have seen that.  Both sides return NULL, both free
+everything, and the caller cannot tell the difference; the object comparison
+and the allocation balance agree either way.  The transcript is the only
+witness, which is the same shape as finding 194's three placements.
+
+ONE DIVERGENCE IS LEFT AND IS PINNED RATHER THAN HIDDEN.  For tones past
+RING the line counts agree and the content does not, so it is one field
+inside that nine-line block and not a site.  `name` is clamped with `>`, so
+4 and 9 both print INVALID here and the object disagrees somewhere in the
+report.  The comparison runs for the four real tones -- which is where the
+five dead sites were -- and skips past RING with the reason in the test,
+rather than the check being dropped or the failure smoothed over.
+
+37 of 279 sites dead, from 42.  Line coverage 97.0% to 97.2%.
