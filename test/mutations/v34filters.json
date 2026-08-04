@@ -109,5 +109,53 @@
   "label": "the modulator trace loses the fullReset width",
   "find": "\"preemp %ld, V90=%ld. fullReset=%1d\\n\"",
   "replace": "\"preemp %ld, V90=%ld. fullReset=%d\\n\""
+ },
+ {
+  "note": "V34SetupModulator's 3200-baud V.90 arm, which D31 had as dead and finding 216 retracts.  Every entry here would have survived before t_v34ec's state sweep took `v90` as a dimension."
+ },
+ {
+  "label": "modulator: the V.90 arm is ignored, as D31 had it",
+  "find": "\t\tif (v90) {\n\t\t\tm->taps = 0x40;",
+  "replace": "\t\tif (0) {\n\t\t\tm->taps = 0x40;"
+ },
+ {
+  "label": "modulator: the V.90 arm is always taken",
+  "find": "\t\tif (v90) {\n\t\t\tm->taps = 0x40;",
+  "replace": "\t\tif (1) {\n\t\t\tm->taps = 0x40;"
+ },
+ {
+  "label": "modulator: the V.90 test compares with one",
+  "find": "\t\tif (v90) {\n\t\t\tm->taps = 0x40;",
+  "replace": "\t\tif (v90 == 1) {\n\t\t\tm->taps = 0x40;"
+ },
+ {
+  "label": "modulator: the V.90 arm keeps the V.34 tap count",
+  "find": "\t\t\tm->taps = 0x40;",
+  "replace": "\t\t\tm->taps = 0x20;"
+ },
+ {
+  "label": "modulator: the V.90 arm keeps fc8c at 15",
+  "find": "\t\t\tm->fc8c = 0xe;",
+  "replace": "\t\t\tm->fc8c = 0xf;"
+ },
+ {
+  "label": "modulator: the V.90 arm takes the V.34 shaping table",
+  "find": "\t\t\tsrc = tx3200c1_for_v90;",
+  "replace": "\t\t\tsrc = tx3200c1_for_v34;"
+ },
+ {
+  "label": "modulator: the V.90 arm takes the V.34 pre-filter",
+  "find": "\t\t\tprem = V90EchoPrefilterCoeff;",
+  "replace": "\t\t\tprem = (carrier == 1829) ? ec_prem_coef_B3200\n\t\t\t\t\t\t : ec_prem_coef_B3200High;"
+ },
+ {
+  "label": "modulator: the V.90 arm consults the carrier",
+  "find": "\t\t\tprem = V90EchoPrefilterCoeff;",
+  "replace": "\t\t\tprem = (carrier == 1829) ? V90EchoPrefilterCoeff\n\t\t\t\t\t\t : ec_prem_coef_B3200High;"
+ },
+ {
+  "label": "modulator: the two 3200 arms are transposed",
+  "find": "\t\tif (v90) {\n\t\t\tm->taps = 0x40;\n\t\t\tm->fc8c = 0xe;\n\t\t\tsrc = tx3200c1_for_v90;\n\t\t\tprem = V90EchoPrefilterCoeff;\n\t\t} else {",
+  "replace": "\t\tif (!v90) {\n\t\t\tm->taps = 0x40;\n\t\t\tm->fc8c = 0xe;\n\t\t\tsrc = tx3200c1_for_v90;\n\t\t\tprem = V90EchoPrefilterCoeff;\n\t\t} else {"
  }
 ]

@@ -1624,6 +1624,150 @@ txmitquadbit(void *obj, short bits)
 
 /*
  * ---------------------------------------------------------------------------
+ * Bringing the data-mode transmitter up.
+ */
+
+/*
+ * Apply the far end's requested power reduction to the transmit scale.
+ *
+ * `mp` points at the received MP message, which the object always reaches as
+ * `obj + 0xa9dc` -- two bytes below the three `setfinalrate` unpacks the rate
+ * fields out of.  Only its first short is read here, and it holds V.34's two
+ * power fields, both sent most significant bit first and so bit-reversed on
+ * the way in:
+ *
+ *     bits 7..5   power reduction, 0..7 dB
+ *     bits 4..2   additional power reduction, CLAMPED TO 3 dB
+ *
+ * The clamp is the object's `cmp $3; jle`, and it is applied AFTER the bit
+ * reversal -- so a field arriving as 7 becomes 7 and is then cut to 3, not
+ * cut first and reversed after.
+ *
+ * THE LOCAL PCM REQUIREMENT COMBINES TWO DIFFERENT WAYS.  With a V.90
+ * receiver running, `GetVPcmMinimalTxPowerReduction`'s answer is
+ *
+ *   - ADDED to the far end's request when it is negative, so a PCM modem
+ *     asking for more power cancels part of what the far end asked to lose;
+ *   - taken as a FLOOR when it is not, so the larger of the two wins.
+ *
+ * With no V.90 receiver neither happens and the far end's request stands.
+ *
+ * THE TWO SCALING LOOPS ARE NOT SYMMETRIC, and not only in their constant.
+ * 0x390a >> 14 is 0.8912, one dB down, and 0x47cf >> 14 is 1.1220, one dB up
+ * -- but the down loop keeps its accumulator at 32 bits and the up loop
+ * TRUNCATES IT TO A SHORT every iteration.  See D51.
+ *
+ * The final 0x4b4b (1.1765, about +1.4 dB) with 0x2000 for rounding is
+ * applied to whatever the loop produced and is not part of either dB step.
+ * The diagnostic calls the value BEFORE it "final txscale", so the object's
+ * own words do not account for it either.
+ */
+void
+settxlevel(void *objp, const short *mp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	short minpr = GetVPcmMinimalTxPowerReduction(obj);
+	unsigned w = (unsigned short)mp[0];
+	int scale = *(short *)(m + 0x25d4);
+	short extra;
+	short want;
+	short n;
+
+	obj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);
+
+	extra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);
+	if (extra > 3)
+		extra = 3;
+
+	obj->f25dc = (short)(extra + (unsigned short)obj->f25dc);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34TXSCALE, power reduction requested "
+				     "by remote modem is %d dB\n",
+				     (int)obj->f25dc);
+
+	if (obj->v90_receiver != 0) {
+		if (minpr < 0)
+			obj->f25dc = (short)(minpr
+					     + (unsigned short)obj->f25dc);
+		else if (obj->f25dc < minpr)
+			obj->f25dc = minpr;
+	}
+	want = obj->f25dc;
+
+	if (want < 0) {
+		for (n = want; n < 0; n = (short)(n + 1))
+			scale = (short)((scale * 0x47cf) >> 14);
+	} else {
+		for (n = 0; want > n; n = (short)(n + 1))
+			scale = (scale * 0x390a) >> 14;
+	}
+
+	/*
+	 * `f25d4` is RE-READ here rather than kept: this prints the scale as
+	 * it was on entry, and the store below is what changes it.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
+				     "reduced txscale is %d dB,"
+				     "final txscale is %d\n",
+				     (int)*(short *)(m + 0x25d4), (int)want,
+				     scale);
+
+	*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);
+}
+
+/*
+ * Configure the transmitter for the rate that has just been negotiated.
+ *
+ * Six steps and no decisions of its own: the power scale, the modulator, one
+ * receiver flag cleared, two state words moved, two transmit flags, and
+ * `txinit`.  Everything it feeds the modulator comes out of the rate config
+ * `setfinalrate` filled -- baud at +0xaa84, carrier at +0xaa94 and the
+ * pre-emphasis index at +0xaa8a -- reached as raw offsets because that is
+ * how `setfinalrate` writes them.
+ *
+ * `V34SetupModulator`'s `v90` argument is 1 when EITHER PCM receiver is
+ * running.  That argument is only printed, so what it selects is nothing; it
+ * is computed here because the object computes it.
+ *
+ * The two transitions are WAIT for the receive machine and SSEG for the
+ * transmit one, through the same compare-print-assign every other transition
+ * in this file uses -- so a run with diagnostics up prints two lines here, or
+ * fewer if a machine was already there.
+ *
+ * It TAIL-CALLS `txinit`, which is why nothing follows the flag stores.
+ */
+void
+v34setuptxmit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	int pcm;
+
+	settxlevel(obj, (const short *)(m + 0xa9dc));
+
+	pcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);
+
+	V34SetupModulator((struct v34_modulator *)(m + 0x1450),
+			  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),
+			  *(short *)(m + 0xaa8a), pcm, 1);
+
+	rx->flags = (unsigned short)(rx->flags & ~0x800);
+
+	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+	hs_setstate(obj, HS_TXSTATE, V34HS_SSEG);
+
+	obj->f25c0 = 0;
+	obj->f25c2 = (short)(obj->f25c2 | 0x200);
+
+	txinit(obj);
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Guarded to a 32-bit ABI: `struct v34_object` and
  * `struct v34_receiver` both hold pointers.
  */

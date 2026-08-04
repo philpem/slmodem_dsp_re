@@ -8944,6 +8944,14 @@ leaving five of the eight rates with the field untouched.
 3200 case.  That is a second, independent confirmation of D31: a path that
 cannot be reached is also the only path that disagrees about this constant.
 
+> **Superseded by finding 216.**  D31 is retracted: the arm is live and the
+> `v90` argument selects it, so 14 is a value `fc8c` really takes.  The table
+> above is still exactly what the blob produces — for every carrier, every
+> phase and both settings of `reset`, as it says — because the sweep that
+> produced it held `v90` at zero.  The "second, independent confirmation" was
+> the same blind spot twice, which is a sharper version of this entry's own
+> lesson: a sweep confirms only what it varies.
+
 **Why `t_v34ec` did not catch it.**  Its modulator test compares named fields
 — `taps`, `f04`, `rows`, `row`, `sine_len`, `phase`, `wpos`, `wstep` — plus
 the contents of every table a pointer selects.  `fc8c` was not one of the
@@ -9041,6 +9049,13 @@ A parameter that is read by nothing and printed by the one call site that
 was dropped is exactly the parameter whose name is unrecoverable any other
 way — and `V90` is a third pointer at the absent V.90 configuration D31 is
 about.
+
+> **Partly superseded by finding 216.**  `V90` is read: it selects the
+> 3200-baud V.90 configuration, and D31 is retracted.  The naming argument
+> stands — the diagnostic is still the only thing that gives the fourth and
+> fifth parameters their names — but "read by nothing" was wrong, and the
+> phrase that made it feel safe, "a third pointer at the absent V.90
+> configuration", is what an unread parameter and a live one look like alike.
 
 **And 600 baud is a real case, not the default.**  The object compares
 against 0x258 and sends only the non-matching path to "invalid baudrate";
@@ -11541,3 +11556,72 @@ from relocation targets misses file-local functions, whose calls relocate
 against `.text+offset` rather than a name: `ApplyBulkDelay`, `getbit` and
 `getMPrecvdBits` were absent from it and present in `callgraph`'s.  The
 counts here are `callgraph`'s, and 214's "65" is corrected to 64 in place.
+
+### 216. `V34SetupModulator`'s V.90 arm is live, and D31 quoted the wrong three instructions
+
+D31 said the 3200-baud case's V.90 configuration could not be reached, on
+this evidence:
+
+```
+   732f1:  ...                       ; entered via je from cmp $0xc80,%ebx
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; <- always taken
+```
+
+`movl` sets no flags, so the `je` inherits ZF from the compare that selected
+the case, which was equal — therefore always taken, therefore the arm is
+dead. Every step of that is sound. **The listing is missing a line.** What
+the object actually holds is
+
+```
+   732f1:  mov  0x40(%esp),%ecx
+   732f5:  test %edi,%edi            ; <-- and %edi is the `v90` argument
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; v90 == 0 -> the V.34 arm
+```
+
+`test` is the flag-setter and the two `movl`s were scheduled into the gap
+between it and the branch, which is exactly the instruction ordering that
+makes a `je` look orphaned. The prologue settles which parameter `%edi` is:
+`sub $0x2c,%esp` after four pushes puts the arguments at `+0x40` (`m`),
+`+0x44` (baud), `+0x48` (carrier), `+0x4c` (preemp index), `+0x50` (v90) and
+`+0x54` (reset), and `72d57: mov 0x50(%esp),%edi` is the fifth.
+
+So `v90` selects a whole configuration:
+
+| | v90 == 0 | v90 != 0 |
+|---|---|---|
+| `taps` | 0x20 | **0x40** |
+| shaping | `tx3200c1_for_v34` | **`tx3200c1_for_v90`** |
+| pre-filter | `ec_prem_coef_B3200`/`High` by carrier | **`V90EchoPrefilterCoeff`** |
+| `fc8c` | 15 | **14** |
+
+and the carrier is consulted only on the V.34 arm. Two other claims fall
+with it: `v34filters.c` said `v90` was "read by nothing in this function —
+only printed", and the note on `fc8c` said every reachable site writes 15.
+
+**Why no test caught it, which is the part worth keeping.** `t_v34ec.c` has
+two sweeps over `V34SetupModulator`. The one that compares the modulator's
+state drove `v90` at 0 for every case. The one that varies `v90` compares
+only the transcript — and `v90` is printed on entry, before the switch, so
+that comparison is identical on both arms by construction. Two sweeps, one
+input, and the input was live in the sweep that could not see it and dead in
+the sweep that could.
+
+It surfaced from `v34setuptxmit`, which computes `v90` as "either PCM
+receiver is running" and passes it straight in. Its own sweep crosses the
+rates with the two receiver words, so 3200 baud with `v90_receiver` set is
+an ordinary case there, and it failed on the first run.
+
+**What is now tested.** `t_v34ec.c`'s state sweep takes `v90` as a
+dimension, at 0, 1 and 2 — the object's test is `test %edi,%edi`, so 2
+separates "non-zero" from a reconstruction comparing `== 1`.
+
+Same shape as findings 130 and 171: two blocks that look alike, one input
+that distinguishes them, and a fixture that held it fixed. The general rule
+is the one this project keeps rediscovering — an argument driven from a
+constant is an argument not tested — and the specific one is narrower:
+**quoting a branch means quoting back to the last instruction that sets
+flags, not to the last instruction that looks relevant.**

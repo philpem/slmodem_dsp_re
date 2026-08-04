@@ -64,6 +64,8 @@ extern void ref_dftRetrainDetInit(void *obj);
 extern int ref_detectRetrainReq(void *obj, short nbins, const short *samples,
 				short nsamples);
 extern void ref_v34modeminit(void *obj);
+extern void ref_settxlevel(void *obj, const short *mp);
+extern void ref_v34setuptxmit(void *obj);
 extern void ref_v34handshakinit(void *obj, int mode);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern const short ref_c1200_[8], ref_c2400_[8];
@@ -135,7 +137,16 @@ static const unsigned ptr_skip[] = {
 	 * reaches -- it is the one body that calls `rxtiminginit`, and
 	 * `V34TimingFiltersInit` installs them.  t_v34rx.c skips the same two.
 	 */
-	0x0620, 0x0624			/* timing +0x114 and +0x118    */
+	0x0620, 0x0624,			/* timing +0x114 and +0x118    */
+	/*
+	 * And two the FIXTURE owns rather than the code under test, for
+	 * `settxlevel`: it calls `GetVPcmMinimalTxPowerReduction`, which
+	 * reads the configuration object at +0xac3c and walks the session at
+	 * +0x3548 to the PCM receiver.  Nothing here writes either field.
+	 * What justifies these two holes is that the memory BEHIND them is
+	 * compared instead, per case, in `run_settxlevel`.
+	 */
+	0x3548, 0xac3c
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
 
@@ -273,6 +284,107 @@ compare_table(const char *what, const short *a, const short *b, int n, long tag)
 	diff_eq_int(what, memcmp(a, b, (size_t)n * sizeof(short)) == 0, 1, tag);
 }
 
+/* --- settxlevel's and v34setuptxmit's inputs ------------------------------ */
+
+/*
+ * The two blocks `GetVPcmMinimalTxPowerReduction` reaches out to, per side.
+ * `settxlevel` calls it unconditionally, so every case here needs them --
+ * and it WRITES the PCM one, so the two copies are compared as well as read.
+ */
+#define SESS_LEN	0x6200		/* indexed at +0x610c and +0x6120 */
+#define PCM_LEN		0x0520		/* indexed at +0x4f4 and +0x4f8   */
+#define CFG_LEN		0x0080		/* indexed at +0x44 and +0x54     */
+#define BLOCK_FILL	0x3c
+
+#define SESS_PCM	0x610c
+#define SESS_GATE	0x6120
+#define PCM_FLAG	0x04f4
+#define PCM_SENS	0x04f8
+
+static unsigned char sess_a[SESS_LEN], sess_b[SESS_LEN];
+static unsigned char pcm_a[PCM_LEN], pcm_b[PCM_LEN];
+static unsigned char cfg_a[CFG_LEN], cfg_b[CFG_LEN];
+
+static int saw_pwr_high, saw_pwr_low;
+
+static void
+put_ptr(unsigned char *base, unsigned off, void *p)
+{
+	memcpy(base + off, &p, sizeof(p));
+}
+
+/*
+ * Seed the chain and the configuration.  `want` is the reduction the PCM
+ * configuration asks for and `sens` the ISP bit that decides whether the
+ * K56Flex word gets a say; both are `GetVPcmMinimalTxPowerReduction`'s
+ * inputs rather than `settxlevel`'s, and they are here because that call is
+ * what makes this function's answer depend on more than the MP message.
+ */
+static void
+seed_pwr(short want, int sens, int gate, int flag54)
+{
+	memset(sess_a, BLOCK_FILL, sizeof(sess_a));
+	memset(sess_b, BLOCK_FILL, sizeof(sess_b));
+	memset(pcm_a, BLOCK_FILL, sizeof(pcm_a));
+	memset(pcm_b, BLOCK_FILL, sizeof(pcm_b));
+	memset(cfg_a, BLOCK_FILL, sizeof(cfg_a));
+	memset(cfg_b, BLOCK_FILL, sizeof(cfg_b));
+
+	put_ptr(sess_a, SESS_PCM, pcm_a);
+	put_ptr(sess_b, SESS_PCM, pcm_b);
+	memcpy(sess_a + SESS_GATE, &gate, sizeof(gate));
+	memcpy(sess_b + SESS_GATE, &gate, sizeof(gate));
+	memcpy(pcm_a + PCM_SENS, &sens, sizeof(sens));
+	memcpy(pcm_b + PCM_SENS, &sens, sizeof(sens));
+	memcpy(cfg_a + 0x44, &want, sizeof(want));
+	memcpy(cfg_b + 0x44, &want, sizeof(want));
+	memcpy(cfg_a + 0x54, &flag54, sizeof(flag54));
+	memcpy(cfg_b + 0x54, &flag54, sizeof(flag54));
+
+	poke_ptr(0x3548, sess_a, sess_b);
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+}
+
+/* Compare the two blocks, with the session's one pointer field excluded. */
+static void
+compare_pwr_blocks(const char *what, long tag)
+{
+	unsigned i;
+	int bad = 0;
+	int f;
+
+	for (i = 0; i < SESS_LEN; i++) {
+		if (sess_a[i] == sess_b[i]
+		    || (i >= SESS_PCM && i < SESS_PCM + 4))
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, sess_a[i], sess_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+
+	bad = 0;
+	for (i = 0; i < PCM_LEN; i++) {
+		if (pcm_a[i] == pcm_b[i])
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, pcm_a[i], pcm_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+
+	/* The configuration is an input; neither side may write it. */
+	diff_eq_int(what, memcmp(cfg_a, cfg_b, CFG_LEN) == 0, 1, tag);
+
+	memcpy(&f, pcm_a + PCM_FLAG, sizeof(f));
+	if (f == 0)
+		saw_pwr_high = 1;
+	else if (f == 1)
+		saw_pwr_low = 1;
+}
+
 /* --- setfinalrate's inputs ------------------------------------------------ */
 
 static void
@@ -281,6 +393,87 @@ seed_rate_pointers(void)
 	poke_ptr(0xaa90, dummy_a, dummy_b);
 	poke_ptr(0xaaac, dummy_a, dummy_b);
 	poke_ptr(0xaab0, dummy_a, dummy_b);
+}
+
+/*
+ * One `settxlevel` case.  The MP short, the scale it starts from, and every
+ * input of the `GetVPcmMinimalTxPowerReduction` call it opens with -- driven
+ * separately, because the two combine three different ways and a fixture
+ * that tied them together could not tell the three apart.
+ */
+static void
+run_settxlevel(unsigned short mp, short scale, short want, int sens, int gate,
+	       int flag54, int v90, int k56, long tag)
+{
+	setup();
+	seed_pwr(want, sens, gate, flag54);
+	poke_short(0xa9dc, (short)mp);
+	poke_short(0x25d4, scale);
+	poke_int(0x24c, v90);
+	poke_int(0x250, k56);
+
+	settxlevel(&oa, (const short *)((const char *)&oa + 0xa9dc));
+	ref_settxlevel(ob, (const short *)(ob + 0xa9dc));
+
+	compare("settxlevel", tag);
+	compare_pwr_blocks("settxlevel blocks", tag);
+}
+
+/*
+ * One `v34setuptxmit` case.
+ *
+ * `V34InitializeImplementationSpecific` first, for the reason the
+ * `v34modeminit` block gives: `txinit` cleans both echo cancellers through
+ * five pointers each, and without the initialiser aiming them the first
+ * dereference faults.  That is what a real caller does, not something the
+ * fixture invents.
+ *
+ * The three state words are seeded in range and DIFFERENT from each other --
+ * the two transitions print the other two machines' names, and equal words
+ * make the three indistinguishable (D42 is why in-range matters at all).
+ */
+static void
+run_setuptxmit(short baud, short carrier, short preemp, int v90, int k56,
+	       short rxstate, short txstate, short mst, long tag)
+{
+	setup();
+	seed_pwr(3, 1, 1, 4);
+	V34InitializeImplementationSpecific(&oa);
+	ref_V34InitializeImplementationSpecific(ob);
+
+	poke_short(0xa9dc, (short)0x00e4);
+	poke_short(0x25d4, 0x16a1);
+	poke_short(0xaa84, baud);
+	poke_short(0xaa94, carrier);
+	poke_short(0xaa8a, preemp);
+	poke_int(0x24c, v90);
+	poke_int(0x250, k56);
+	poke_short(0x3592, mst);
+	poke_short(0x3594, rxstate);
+	poke_short(0x3596, txstate);
+	poke_short(0x2aa2, (short)0x1111);
+	poke_short(0xaa78, (short)0x2222);
+	poke_short(0x264 + 0x122, (short)0xffff);
+	poke_short(0x25c2, (short)0x1234);
+
+	v34setuptxmit(&oa);
+	ref_v34setuptxmit(ob);
+
+	compare("v34setuptxmit", tag);
+	compare_pwr_blocks("v34setuptxmit blocks", tag);
+
+	/*
+	 * The modulator's two tables, by CONTENT: `V34SetupModulator`
+	 * installs a shaping table and a pre-emphasis one by address, and an
+	 * address comparison cannot see which of them was chosen.  Same
+	 * argument as the carrier table in the `v34modeminit` block.
+	 */
+	compare_table("v34setuptxmit ec_prem",
+		      (const short *)get_ptr_a(0x20cc),
+		      (const short *)get_ptr_b(0x20cc), 16, tag);
+	compare_table("v34setuptxmit preemp",
+		      (const short *)get_ptr_a(0x2100),
+		      (const short *)get_ptr_b(0x2100), 16, tag);
 }
 
 static void
@@ -1529,6 +1722,237 @@ main(void)
 			}
 			compare("prefix", 34000 + (long)loud * 10 + nb);
 		}
+	}
+	rc |= diff_end();
+
+	/* --- settxlevel ------------------------------------------------- */
+
+	/*
+	 * EXHAUSTIVE OVER THE MP SHORT'S TWO FIELDS.  Six bits decide the
+	 * request -- three for the reduction and three for the addition --
+	 * so all sixty-four combinations are driven rather than sampled, and
+	 * the two other bit positions of the low byte are swept with them to
+	 * show they are discarded.  A reconstruction that reversed the two
+	 * three-bit fields, or clamped before reversing instead of after,
+	 * disagrees somewhere in that grid and nowhere outside it.
+	 *
+	 * THE STARTING SCALE IS SWEPT PAST WHERE A SHORT STOPS.  Both loops
+	 * multiply and shift, and the one that RAISES the scale truncates its
+	 * accumulator to a short every iteration while the one that lowers it
+	 * does not (D51).  A scale near 32767 with a negative reduction is
+	 * the only input that shows the difference, and it is here.
+	 */
+	diff_begin("v34 handshake: settxlevel, every power field the MP "
+		   "message can carry");
+	{
+		static const short scale_in[] = {
+			0, 1, 0x16a1, 100, 1000, 0x4000, 0x7fff, 0x7ffe,
+			-1, -1000, (short)0x8000
+		};
+		unsigned f, s;
+		long tag = 20000;
+
+		for (f = 0; f < 0x100; f++)
+		for (s = 0; s < sizeof(scale_in) / sizeof(scale_in[0]); s++)
+			run_settxlevel((unsigned short)f, scale_in[s],
+				       0, 0, 0, 4, 0, 0, tag++);
+
+		/* And the high byte, which is shifted out of both fields. */
+		for (f = 0; f < 8; f++)
+			run_settxlevel((unsigned short)(0xab00 | (f << 5)),
+				       0x16a1, 0, 0, 0, 4, 0, 0, tag++);
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE PCM SIDE, WHICH COMBINES TWO DIFFERENT WAYS.  A negative
+	 * minimum is ADDED to the far end's request; a non-negative one is a
+	 * FLOOR.  Both are reached only with a V.90 receiver running, so the
+	 * two receiver words are swept under every reduction -- and the
+	 * configured reduction is swept across its own clamp, since
+	 * `GetVPcmMinimalTxPowerReduction` is what produces the value being
+	 * combined here.
+	 */
+	diff_begin("v34 handshake: settxlevel against the local PCM minimum");
+	{
+		static const short want_in[] = {
+			(short)0x8000, -20, -11, -10, -9, -1, 0, 1, 3, 6, 7,
+			8, 100
+		};
+		static const unsigned char mp_in[] = {
+			0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0,
+			0x04, 0x1c, 0xfc
+		};
+		static const int recv_in[][2] = {
+			{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 },
+			{ -1, 0 }, { 0, -1 }
+		};
+		static const int sens_in[] = { 0, 1 };
+		static const int gate_in[] = { 0, 1 };
+		unsigned w, mi, r, s, g;
+		long tag = 30000;
+
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++)
+		for (mi = 0; mi < sizeof(mp_in) / sizeof(mp_in[0]); mi++)
+		for (r = 0; r < sizeof(recv_in) / sizeof(recv_in[0]); r++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (g = 0; g < sizeof(gate_in) / sizeof(gate_in[0]); g++)
+			run_settxlevel(mp_in[mi], 0x16a1, want_in[w],
+				       sens_in[s], gate_in[g], 4,
+				       recv_in[r][0], recv_in[r][1], tag++);
+
+		diff_eq_int("some case took the positive power arm",
+			    saw_pwr_high, 1, 0);
+		diff_eq_int("and some case took the other", saw_pwr_low, 1, 0);
+
+		/*
+		 * THE UP LOOP'S TRUNCATION, WHICH NEEDS BOTH HALVES AT ONCE.
+		 * It is reachable only with a V.90 receiver and a NEGATIVE
+		 * minimum -- that is the one path that makes the reduction
+		 * negative -- and observable only from a scale large enough
+		 * that one 1.122 step leaves a short.  The block above has
+		 * the first and the block before it has the second, and
+		 * neither has both; 0x16a1 survives four steps of gain, so
+		 * every case up to here agrees whatever width the
+		 * accumulator has.  D51.
+		 */
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++) {
+			static const short big[] = {
+				20000, 29000, 29200, 30000, 0x7fff, 0x7ffe,
+				-20000, -30000, (short)0x8000
+			};
+			unsigned b;
+
+			for (b = 0; b < sizeof(big) / sizeof(big[0]); b++)
+				run_settxlevel(0x00, big[b], want_in[w],
+					       0, 1, 4, 1, 0, tag++);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: settxlevel says what it did");
+	{
+		static const unsigned char mp_in[] = { 0x00, 0x20, 0xe0,
+						       0x1c, 0xfc };
+		static const short want_in[] = { -10, -1, 0, 3, 7 };
+		unsigned lvl, mi, w;
+		long tag = 40000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (mi = 0; mi < sizeof(mp_in) / sizeof(mp_in[0]);
+			     mi++)
+			for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]);
+			     w++) {
+				dsplib_debug_capture_reset();
+				run_settxlevel(mp_in[mi], 0x16a1, want_in[w],
+					       0, 1, 4, 1, 0, tag);
+				diff_eq_int("settxlevel transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/* --- v34setuptxmit ---------------------------------------------- */
+
+	/*
+	 * EVERY SYMBOL RATE WITH BOTH OF ITS CARRIERS, because the carrier is
+	 * what picks the echo pre-emphasis table inside `V34SetupModulator`
+	 * and the two tables of a pair are the same length -- so a swapped
+	 * pair leaves every scalar in the object identical and shows up only
+	 * in the CONTENT check on +0x20cc.  3429 has one carrier and 600 is
+	 * the signalling rate, and both are here for the same reason.
+	 *
+	 * The two state words are swept across the value each transition
+	 * moves them to, so the "already there" arm -- which prints nothing
+	 * and assigns nothing -- is driven as well as the moving one.
+	 */
+	diff_begin("v34 handshake: v34setuptxmit, every rate and carrier");
+	{
+		static const struct { short baud, carrier; } rate_in[] = {
+			{ 2400, 1600 }, { 2400, 1800 },
+			{ 2800, 1680 }, { 2800, 1867 },
+			{ 3000, 1800 }, { 3000, 2000 },
+			{ 3200, 1829 }, { 3200, 1920 },
+			{ 3429, 1959 }, { 600, 1200 }
+		};
+		static const short state_in[][3] = {
+			/* rxstate, txstate, microstate */
+			{ V34HS_PHASE1, V34HS_PHASE2, V34HS_DET_SYNC },
+			{ V34HS_WAIT,   V34HS_PHASE2, V34HS_DET_SYNC },
+			{ V34HS_PHASE1, V34HS_SSEG,   V34HS_DET_SYNC },
+			{ V34HS_WAIT,   V34HS_SSEG,   V34HS_DET_SYNC }
+		};
+		unsigned r, p, st, v;
+		long tag = 50000;
+
+		for (r = 0; r < sizeof(rate_in) / sizeof(rate_in[0]); r++)
+		for (p = 0; p < 3; p++)
+		for (st = 0; st < sizeof(state_in) / sizeof(state_in[0]); st++)
+		for (v = 0; v < 4; v++)
+			run_setuptxmit(rate_in[r].baud, rate_in[r].carrier,
+				       (short)(p * 4), (v & 1) ? 3 : 0,
+				       (v & 2) ? 5 : 0,
+				       state_in[st][0], state_in[st][1],
+				       state_in[st][2], tag++);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34setuptxmit's two transitions, logged");
+	{
+		unsigned lvl, k;
+		long tag = 60000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			/*
+			 * Every one of the 87 names, in all three slots: the
+			 * two transitions print the other machines' names as
+			 * context, and driving the words a third of the table
+			 * apart is what tells the two context slots apart.
+			 */
+			for (k = 0; k < V34HS_STATE_COUNT; k++) {
+				dsplib_debug_capture_reset();
+				run_setuptxmit(3000, 1800, 0, 3, 0,
+					       (short)k,
+					       (short)((k + 29)
+						       % V34HS_STATE_COUNT),
+					       (short)((k + 58)
+						       % V34HS_STATE_COUNT),
+					       tag);
+				diff_eq_int("v34setuptxmit transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

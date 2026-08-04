@@ -337,11 +337,25 @@ main(void)
 					      1867, 1920, 1959, 2000, 2400,
 					      999 };
 		unsigned bi, ci;
-		int ph, rst;
+		int ph, rst, v9;
 
+		/*
+		 * `v90` IS SWEPT HERE, and until finding 216 it was not: this
+		 * loop drove it at 0 for every case and the only block that
+		 * varied it compared transcripts alone.  It selects a whole
+		 * configuration at 3200 baud -- 0x40 taps, a different
+		 * shaping table, a different pre-filter and 14 in `fc8c` --
+		 * and a reconstruction that ignored it agreed on every state
+		 * check in this file and on every transcript.
+		 *
+		 * Values 0, 1 and 2: the object tests it with `test %edi,%edi`
+		 * so anything non-zero takes the arm, and 2 separates that
+		 * from a reconstruction comparing `== 1`.
+		 */
 		for (bi = 0; bi < sizeof(bauds) / sizeof(bauds[0]); bi++)
 		for (ci = 0; ci < sizeof(carr) / sizeof(carr[0]); ci++)
 		for (ph = 0; ph <= 3; ph++)
+		for (v9 = 0; v9 <= 2; v9++)
 		for (rst = 0; rst <= 1; rst++) {
 			memset(&ma, HARNESS_MALLOC_FILL, sizeof(ma));
 			memset(&mb, HARNESS_MALLOC_FILL, sizeof(mb));
@@ -353,9 +367,9 @@ main(void)
 			ma.phase = mb.phase = 6789;
 
 			V34SetupModulator(&ma, bauds[bi], carr[ci],
-					  (short)ph, 0, rst);
+					  (short)ph, v9, rst);
 			ref_V34SetupModulator(&mb, bauds[bi], carr[ci],
-					      (short)ph, 0, rst);
+					      (short)ph, v9, rst);
 
 			/* Scalars. */
 			diff_eq_int("taps", ma.taps, mb.taps, bauds[bi]);

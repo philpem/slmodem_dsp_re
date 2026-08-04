@@ -351,5 +351,229 @@
   "label": "the tone arm's energy is widened signed",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
   "replace": "\tif ((int)bins[1].energy > (int)bins[1].thresh_hi) {"
+ },
+ {
+  "note": "settxlevel and v34setuptxmit.  The power request is two bit-reversed three-bit fields, one clamped; the PCM minimum combines with it two different ways; and the two dB loops differ in their constant AND in their accumulator width."
+ },
+ {
+  "label": "txlevel: the reduction field is bits 4..6",
+  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);"
+ },
+ {
+  "label": "txlevel: the reduction field is four bits",
+  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);"
+ },
+ {
+  "label": "txlevel: the reduction field is not reversed",
+  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->f25dc = (short)((w >> 5) & 7);"
+ },
+ {
+  "label": "txlevel: the addition field is bits 1..3",
+  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
+  "replace": "\textra = (short)bitreverse((unsigned short)((w >> 1) & 7), 3);"
+ },
+ {
+  "label": "txlevel: the addition field is not reversed",
+  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
+  "replace": "\textra = (short)((w >> 2) & 7);"
+ },
+ {
+  "label": "txlevel: the two fields are swapped",
+  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);"
+ },
+ {
+  "label": "txlevel: the addition is clamped at 4",
+  "find": "\tif (extra > 3)\n\t\textra = 3;",
+  "replace": "\tif (extra > 4)\n\t\textra = 4;"
+ },
+ {
+  "label": "txlevel: the addition is clamped before the reversal",
+  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\tif (extra > 3)\n\t\textra = 3;",
+  "replace": "\t{\n\t\tshort raw = (short)((w >> 2) & 7);\n\n\t\tif (raw > 3)\n\t\t\traw = 3;\n\t\textra = (short)bitreverse((unsigned short)raw, 3);\n\t}"
+ },
+ {
+  "label": "txlevel: the addition is not added",
+  "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
+  "replace": "\tobj->f25dc = (short)(unsigned short)obj->f25dc;"
+ },
+ {
+  "label": "txlevel: the addition replaces the reduction",
+  "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
+  "replace": "\tobj->f25dc = extra;"
+ },
+ {
+  "label": "txlevel: the MP short is read from index 1",
+  "find": "\tunsigned w = (unsigned short)mp[0];",
+  "replace": "\tunsigned w = (unsigned short)mp[1];"
+ },
+ {
+  "label": "txlevel: the PCM minimum is ignored",
+  "find": "\tif (obj->v90_receiver != 0) {",
+  "replace": "\tif (0 && obj->v90_receiver != 0) {"
+ },
+ {
+  "label": "txlevel: the PCM minimum applies without a V.90 receiver",
+  "find": "\tif (obj->v90_receiver != 0) {",
+  "replace": "\tif (obj->v90_receiver != 0 || obj->k56flex_receiver != 0) {"
+ },
+ {
+  "label": "txlevel: a negative minimum is a floor like the rest",
+  "find": "\t\tif (minpr < 0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)",
+  "replace": "\t\tif (0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)"
+ },
+ {
+  "label": "txlevel: a non-negative minimum is added rather than floored",
+  "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
+  "replace": "\t\telse\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);"
+ },
+ {
+  "label": "txlevel: the floor is a ceiling",
+  "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
+  "replace": "\t\telse if (obj->f25dc > minpr)\n\t\t\tobj->f25dc = minpr;"
+ },
+ {
+  "label": "txlevel: the sign test on the minimum includes zero",
+  "find": "\t\tif (minpr < 0)",
+  "replace": "\t\tif (minpr <= 0)",
+  "equivalent": true,
+  "why": "At `minpr == 0` the two arms differ only when `f25dc` is negative, and it cannot be: it is the sum of two bit-reversals of three-bit fields, one of them clamped, so it is 0..10 when this test is reached.  The `< 0` versus `<= 0` distinction is real in the object and unobservable through this function's own inputs."
+ },
+ {
+  "label": "txlevel: the down step is the up step's constant",
+  "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
+  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;"
+ },
+ {
+  "label": "txlevel: the up step is the down step's constant",
+  "find": "\t\t\tscale = (short)((scale * 0x47cf) >> 14);",
+  "replace": "\t\t\tscale = (short)((scale * 0x390a) >> 14);"
+ },
+ {
+  "label": "txlevel: the up loop keeps 32 bits like the down one",
+  "find": "\t\t\tscale = (short)((scale * 0x47cf) >> 14);",
+  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;"
+ },
+ {
+  "label": "txlevel: the down loop truncates like the up one",
+  "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
+  "replace": "\t\t\tscale = (short)((scale * 0x390a) >> 14);",
+  "equivalent": true,
+  "why": "The down step multiplies by 0.8912, so a short in gives a short out and the truncation the up loop needs can never fire here.  The asymmetry is still worth reproducing -- see D51 -- but only one half of it is observable, and `the up loop keeps 32 bits like the down one` is the half that is."
+ },
+ {
+  "label": "txlevel: the down loop runs one step too many",
+  "find": "\t\tfor (n = 0; want > n; n = (short)(n + 1))",
+  "replace": "\t\tfor (n = 0; want >= n; n = (short)(n + 1))"
+ },
+ {
+  "label": "txlevel: the up loop runs one step too few",
+  "find": "\t\tfor (n = want; n < 0; n = (short)(n + 1))",
+  "replace": "\t\tfor (n = want + 1; n < 0; n = (short)(n + 1))"
+ },
+ {
+  "label": "txlevel: the shift is 13, not 14",
+  "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
+  "replace": "\t\t\tscale = (scale * 0x390a) >> 13;"
+ },
+ {
+  "label": "txlevel: the final multiply has no rounding term",
+  "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b) >> 14);"
+ },
+ {
+  "label": "txlevel: the final multiply's rounding term is 0x1000",
+  "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x1000) >> 14);"
+ },
+ {
+  "label": "txlevel: the final multiply is skipped",
+  "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+  "replace": "\t*(short *)(m + 0x25d4) = (short)scale;"
+ },
+ {
+  "label": "txlevel: the first report prints the clamped addition",
+  "find": "\t\t\t\t     (int)obj->f25dc);",
+  "replace": "\t\t\t\t     (int)extra);"
+ },
+ {
+  "label": "txlevel: the second report prints the scale it just computed",
+  "find": "\t\t\t\t     (int)*(short *)(m + 0x25d4), (int)want,",
+  "replace": "\t\t\t\t     (int)(short)((scale * 0x4b4b + 0x2000) >> 14),\n\t\t\t\t     (int)want,"
+ },
+ {
+  "label": "setuptxmit: the modulator gets the receive baud rate",
+  "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),",
+  "replace": "\t\t\t  *(short *)(m + 0xaa96), *(short *)(m + 0xaa94),"
+ },
+ {
+  "label": "setuptxmit: carrier and pre-emphasis are transposed",
+  "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
+  "replace": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa8a),\n\t\t\t  *(short *)(m + 0xaa94), pcm, 1);"
+ },
+ {
+  "label": "setuptxmit: the modulator is not fully reset",
+  "find": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
+  "replace": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 0);"
+ },
+ {
+  "label": "setuptxmit: the V.90 flag is V.90 only",
+  "find": "\tpcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);",
+  "replace": "\tpcm = (obj->v90_receiver != 0);"
+ },
+ {
+  "label": "setuptxmit: the V.90 flag is both receivers",
+  "find": "\tpcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);",
+  "replace": "\tpcm = (obj->v90_receiver != 0 && obj->k56flex_receiver != 0);"
+ },
+ {
+  "label": "setuptxmit: the receiver flag cleared is 0x400",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x800);",
+  "replace": "\trx->flags = (unsigned short)(rx->flags & ~0x400);"
+ },
+ {
+  "label": "setuptxmit: the receiver flag is set rather than cleared",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x800);",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x800);"
+ },
+ {
+  "label": "setuptxmit: the two states are transposed",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_SSEG);\n\ths_setstate(obj, HS_TXSTATE, V34HS_WAIT);"
+ },
+ {
+  "label": "setuptxmit: the receive state goes to RECEIVE, not WAIT",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;"
+ },
+ {
+  "label": "setuptxmit: the transmit state goes to SBARSEG, not SSEG",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->f25c0 = 0;"
+ },
+ {
+  "label": "setuptxmit: the transmit flag word is set, not or-ed",
+  "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
+  "replace": "\tobj->f25c2 = (short)0x200;"
+ },
+ {
+  "label": "setuptxmit: the transmit flag bit is 0x100",
+  "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
+  "replace": "\tobj->f25c2 = (short)(obj->f25c2 | 0x100);"
+ },
+ {
+  "label": "setuptxmit: f25c0 is left alone",
+  "find": "\tobj->f25c0 = 0;\n\tobj->f25c2",
+  "replace": "\tobj->f25c2",
+  "equivalent": true,
+  "why": "`txinit`, which this tail-calls, sets `f25c0` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field."
+ },
+ {
+  "label": "setuptxmit: the two transitions are printed before the modulator's line",
+  "find": "\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);"
  }
 ]

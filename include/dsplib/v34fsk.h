@@ -361,7 +361,25 @@ struct v34_object {
 	short f25d0;					/* +0x25d0 symbol re */
 	short f25d2;					/* +0x25d2 symbol im */
 	short f25d4;					/* +0x25d4 tx scale  */
-	unsigned char unmapped_25d6[0x2a54 - 0x25d6];
+	unsigned char unmapped_25d6[0x25dc - 0x25d6];
+	/*
+	 * +0x25dc.  The transmit power reduction in WHOLE dB, which
+	 * `settxlevel` assembles from the far end's MP message and then
+	 * applies to `f25d4` above -- so this is the request and that is the
+	 * result.  Its own diagnostic names it: "power reduction requested by
+	 * remote modem is %d dB".
+	 *
+	 * A SHORT, and `filds` at 0x7646 and 0x77d0 is the confirmation:
+	 * something in the V.90 half loads it as a 16-bit integer straight
+	 * onto the x87 stack, so it is neither an int nor a pair of bytes.
+	 *
+	 * It can be negative.  With a V.90 receiver running, a
+	 * `GetVPcmMinimalTxPowerReduction` below zero is ADDED to the
+	 * request rather than compared with it, and the result drives
+	 * `settxlevel`'s other loop -- the one that raises the scale.
+	 */
+	short f25dc;					/* +0x25dc */
+	unsigned char unmapped_25de[0x2a54 - 0x25de];
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
 	unsigned char unmapped_2a68[0x2a80 - 0x2a68];

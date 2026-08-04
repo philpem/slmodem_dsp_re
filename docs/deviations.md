@@ -1389,7 +1389,7 @@ fails rather than passes — the same shape of check as D26 and D29.
 
 ---
 
-## D31 🐛 `V34SetupModulator`'s V.90 arm is unreachable
+## D31 ~~`V34SetupModulator`'s V.90 arm is unreachable~~ RETRACTED
 
 **Where:** `src/pump/v34/v34filters.c`, the 3200-baud case.
 
@@ -1431,6 +1431,34 @@ filter a 3200-baud V.90 connection uses.
 carrier-based condition. The test disagreed at exactly one (baud, carrier)
 pair each time, which is what pointed at the branch rather than at the
 tables.
+
+### RETRACTED — the arm is live and `v90` selects it
+
+The listing above is missing its first line. The object has
+
+```
+   732f1:  mov  0x40(%esp),%ecx
+   732f5:  test %edi,%edi            ; %edi is the `v90` argument
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; v90 == 0 -> the V.34 arm
+```
+
+and `test` is the flag-setter. Everything after it here followed from the
+missing line: the reasoning about `movl` and inherited flags is correct and
+was applied to the wrong instruction. `72d57: mov 0x50(%esp),%edi` is what
+makes `%edi` the fifth argument; the prologue's frame layout is in finding
+216.
+
+Fixed in `v34filters.c`: `v90` now selects 0x40 taps, `tx3200c1_for_v90`,
+`V90EchoPrefilterCoeff` and 14 in `fc8c`. `t_v34ec.c`'s state sweep takes
+`v90` as a dimension, which is what would have caught this and did not exist
+— the only sweep that varied it compared transcripts, and `v90` is printed
+before the switch.
+
+This is the fourth retraction, after D28, D34 and D47, and the first of them
+that was a wrong reading of an instruction rather than a claim about
+reachability that later expired.
 
 ---
 
@@ -2041,3 +2069,44 @@ short above 0xff is not settled. `unmeasured` — task #47.
 
 **How it was found:** by writing the arms out and noticing that two of the
 seven used `%edx` (the masked copy) where five used `%ax`.
+
+## D51 ⚠ `settxlevel`'s two dB loops accumulate at different widths
+
+**Where:** `src/pump/v34/v34hshak.c`, `settxlevel`.
+
+**What the original does:** applies the power reduction one dB at a time, with
+one loop per direction. Reducing:
+
+```
+   62651:  imul $0x390a,%esi,%esi     ; x 0.8912
+   62659:  sar  $0xe,%esi             ; 32-bit throughout
+```
+
+Raising:
+
+```
+   626c2:  imul $0x47cf,%esi,%eax     ; x 1.1220
+   626ce:  sar  $0xe,%eax
+   626d4:  movswl %ax,%esi            ; TRUNCATED TO A SHORT
+```
+
+**Why that is worth an entry:** the loop that can make the accumulator grow is
+the one that discards its high half, and the loop that only ever shrinks it
+keeps thirty-two bits. A scale of 30000 with a reduction of −1 dB gives
+20549 rather than 33660: the product `30000 * 0x47cf >> 14` is 33660, which
+does not fit a signed short and wraps. The reduction is negative only when
+`GetVPcmMinimalTxPowerReduction` returns a negative value and a V.90 receiver
+is running, and the scale is whatever `VPcmV34SetTxScale` or a previous call
+left — 0x16a1 from the former, which is 5793 and survives four dB of gain
+before it wraps.
+
+**What we do:** reproduce both widths, with the cast written out. The sweep in
+`t_v34hshak.c` drives the starting scale to 0x7fff and 0x7ffe as well as to
+0x16a1, so the wrap is a tested case rather than an inferred one.
+
+**Reachability:** the arm is reachable — the sweep reaches it — but whether a
+real session presents a scale large enough to wrap it is not measured.
+`unmeasured` — task #47.
+
+**How it was found:** by reading the two loops side by side while writing
+them; the asymmetry is one instruction and neither loop is wrong on its own.

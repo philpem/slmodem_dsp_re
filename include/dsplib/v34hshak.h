@@ -329,6 +329,28 @@ void txmitdibit(void *obj, short bits);
  */
 void txmitquadbit(void *obj, short bits);
 
+/*
+ * ---------------------------------------------------------------------------
+ * Bringing the data-mode transmitter up.
+ */
+
+/*
+ * Apply the far end's requested power reduction to the transmit scale.
+ *
+ * `mp` is the received MP message; only its first short is read, and the one
+ * call site passes `obj + 0xa9dc`.  Writes `f25dc` with the reduction in dB
+ * and `f25d4` with the scale that comes out of it.
+ */
+void settxlevel(void *obj, const short *mp);
+
+/*
+ * Configure the transmitter for the negotiated rate: power scale, modulator,
+ * two state words to WAIT and SSEG, two transmit flags, then `txinit`.
+ * Takes nothing but the object -- everything else comes out of the rate
+ * config `setfinalrate` filled at +0xaa84.
+ */
+void v34setuptxmit(void *obj);
+
 #ifdef __cplusplus
 }
 #endif
