@@ -15,8 +15,10 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/fpm_mrf.h"
 
+extern unsigned int ref_dsplibs_debug_level;
 extern void ref_FPM_MRF_init(void *state, const void *cfg, int fresh);
 extern void ref_FPM_MRF_free(void *state);
 extern short ref_B103_MRF_FILT_TX[];
@@ -110,6 +112,62 @@ main(void)
 	/* A ratio with no remainder in taps/branches, and a degenerate 1:1. */
 	rc |= run("MRF 5:4", 5, 4, ref_B103_MRF_FILT_TX, 100);
 	rc |= run("MRF 1:1", 1, 1, ref_B103_MRF_FILT_RX, 32);
+
+	/*
+	 * The reallocate path, which is the one announcement in this file and
+	 * had never executed.  Every case above re-inits at the SAME size, so
+	 * the buffer is reused and the `history_len < per_phase` arm is never
+	 * taken.  Growing per_phase -- taps 40 over 4 branches after taps 20
+	 * over 4 -- takes it, and the message has no newline, unlike every
+	 * other one here.
+	 */
+	diff_begin("FPM_MRF_init: a bigger buffer says so");
+	{
+		struct fpm_mrf a, b;
+		struct fpm_mrf_cfg cfg;
+		unsigned lines = 0;
+		int lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			memset(&cfg, 0, sizeof(cfg));
+			cfg.branches = 4;
+			cfg.decimate = 3;
+			cfg.coeff = ref_B103_MRF_FILT_TX;
+			cfg.taps = 20;
+			memset(&a, 0, sizeof(a));
+			memset(&b, 0, sizeof(b));
+			ref_FPM_MRF_init(&a, &cfg, 1);
+			FPM_MRF_init(&b, &cfg, 1);
+
+			cfg.taps = 40;          /* per_phase 5 -> 10 */
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+			ref_FPM_MRF_init(&a, &cfg, 0);
+			FPM_MRF_init(&b, &cfg, 0);
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			dsplib_debug_capture_on = 0;
+
+			compare(&b, &a, "regrown");
+			diff_eq_int("history grew", b.history_len, 10, lvl);
+			diff_eq_int("transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, lvl);
+			if (lvl == 1)
+				diff_eq_int("level 1 silent",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, lvl);
+			else
+				lines += dsplib_debug_capture_lines(1);
+			ref_FPM_MRF_free(&a);
+			FPM_MRF_free(&b);
+		}
+		diff_eq_int("it said something (%ld)", lines > 0, 1,
+			    (long)lines);
+	}
+	rc |= diff_end();
 
 	return rc;
 }

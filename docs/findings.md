@@ -11215,3 +11215,32 @@ was a sentence that had stopped being true.
 Worth the habit: a skip carries the reason it was added, and the reason is
 the thing to re-test.  This one was cheap to check and had been wrong for
 several sessions.
+
+### 211. Both DSP singletons were re-init and error paths nothing asked for
+
+`fpm_div.c` and `fpm_mrf.c` had one dead site each, and both were the same
+kind: a path the tests had no reason to take.
+
+`FPM_div`'s is the divide-by-zero complaint.  Every caller in `t_fpm_div`
+passes a real denominator -- the exhaustive sweep runs 196,608 checks and
+not one of them is zero, because zero is not a divisor worth testing the
+arithmetic of.  It is worth testing the announcement of.
+
+`FPM_MRF_init`'s is the reallocate.  Every case in `t_fpm_mrf` re-inits at
+the SAME size, deliberately, because the check that matters there is that
+the buffer is REUSED rather than replaced.  Nothing grew `per_phase`
+between two inits, so `history_len < per_phase` was never true.  Taps 20
+then 40 over 4 branches takes it, and the object's message has no trailing
+newline where every other one in that file does -- which is now checked
+rather than merely commented.
+
+Both agreed with the object first try.  31 dead sites to 30, and the two
+files leave the list.
+
+WHAT THIS SAYS ABOUT THE REST.  A test written to check arithmetic drives
+the arguments arithmetic is interesting for, and a test written to check
+reuse drives the case where reuse happens.  Neither is wrong; both leave the
+complaint paths dark, and no amount of raising the debug level over the
+existing cases would have reached them.  The remaining thirty are mostly of
+that kind now -- inputs nobody had a reason to construct -- rather than the
+gate-closed kind that four files' worth of one-loop fixes cleared out.
