@@ -12,7 +12,7 @@
  * anchor is exact at the bottom; `v34handshak` ends at 0x71955 and
  * `datapumpv34` starts at 0x71960, which fixes the top.
  *
- * WHAT IS HERE, AND WHAT IS NOT.  Twelve functions and one table, chosen by
+ * WHAT IS HERE, AND WHAT IS NOT.  Fourteen functions and one table, chosen by
  * testability rather than by theme -- see docs/fastpass.md, whose one
  * unrelaxed rule is that nothing commits without a differential test:
  *
@@ -20,16 +20,26 @@
  *     dpskinit              preempindex    v34handshakinit
  *     dftfreqinit           dftnlinitSignalBins    dftnlinitNoiseBins
  *     dftRetrainDetInit     detectRetrainReq
+ *     getbit                ApplyBulkDelay
  *     StateName
  *
- * `getbit` is NOT here although it is unblocked, and `ApplyBulkDelay` is not
- * either.  Both are file-local, so `objcopy` cannot give them a `ref_` alias
- * and no tier-1 test can call the blob's copy; the project's answer for a
- * local is to drive it through a reconstructed caller, and both are reached
- * only from `v34handshak` -- 0x6484c, 0x684bb and 0x706a9 call `getbit`,
- * 0x6639f and 0x66af5 call `ApplyBulkDelay`, and there is not one relocation
- * against either name because a call to a local in the same section needs
- * none.  That is finding 117 exactly.
+ * WHAT CHANGED ABOUT THE LAST TWO.  This note used to say that `getbit` and
+ * `ApplyBulkDelay` could not be here at all: both are file-local, so
+ * `objcopy --redefine-syms` could not give them a `ref_` alias, and the
+ * project's answer for a local was to drive it through a reconstructed
+ * caller -- which for these two means `v34handshak`, 61 KB that is still
+ * unwritten.  0x6484c, 0x684bb and 0x706a9 call `getbit`; 0x6639f and
+ * 0x66af5 call `ApplyBulkDelay`; there is not one relocation against either
+ * name, because a call to a local in the same section needs none.  All of
+ * that is still true and none of it blocks them any more.
+ *
+ * The claim that failed was the one about `objcopy`.  A local can be
+ * PROMOTED first -- `--globalize-symbols` in one pass, `--redefine-syms` in a
+ * second -- and then it renames like any other global, so `ref_getbit` and
+ * `ref_ApplyBulkDelay` link and both are tested directly rather than through
+ * a caller.  Finding 221 is the general result and finding 226 is these two.
+ * Finding 117, which drew the original conclusion, stands as the reading of
+ * the call graph and is superseded only in what it says can be tested.
  *
  * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  Nothing reaches
  * `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`, `preempindex` or any
@@ -49,6 +59,7 @@
  */
 
 #include "dsplib/debug.h"
+#include "dsplib/sysdep.h"
 #include "dsplib/v34det.h"
 #include "dsplib/v34digital.h"
 #include "dsplib/v34filt.h"
@@ -2420,6 +2431,239 @@ v34setuptxmit(void *objp)
 	obj->f25c2 = (short)(obj->f25c2 | 0x200);
 
 	txinit(obj);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `getbit` -- one bit of a V.34 message, with its CRC on the end.
+ *
+ * The reader holds an accumulator (`acc`) and how many of its low bits are
+ * still unread (`avail`); every call hands back the top unread bit and drops
+ * `avail` by one.  When `avail` reaches zero it refills, and the refill is
+ * where the interesting cases are:
+ *
+ *   - a whole word, when `wordbits` or fewer bits of the message are still
+ *     to come: shift `acc` up by `wordbits`, OR the next word in, advance
+ *     `idx`;
+ *   - a PART word, when fewer than `wordbits` are left: shift up by only
+ *     what is left and OR THE WHOLE WORD IN ANYWAY, without advancing `idx`.
+ *     Both of those are the object's, and the second is why the tail of a
+ *     message is not simply its last few bits;
+ *   - nothing left and `crc_on` set: the 16-bit CRC becomes the next word,
+ *     which is how the sequence carries it;
+ *   - nothing left, no CRC, and `repeat` set: reload `acc` and `avail` from
+ *     `acc0`/`avail0`, zero `pos` and `idx`, re-arm the CRC to 0xffff, count
+ *     the repeat in `repeats` -- and CALL ITSELF for the first bit of it.
+ *     That recursion is the object's own; 0x5ec47 calls 0x5eaf0.
+ *   - nothing left, no CRC, no repeat: -1.
+ *
+ * AND ONE ARM THAT IS NOT ANY OF THOSE.  If the message is not merely
+ * exhausted but overrun by EXACTLY sixteen bits -- `nbits - pos` is -16 --
+ * the reader loads 0xf and four bits instead, so the next four calls return
+ * 1, 1, 1, 1.  Nothing else in the function tests a specific negative
+ * remainder.  Recorded as the code's, not explained: no caller reconstructed
+ * so far arranges it.
+ *
+ * The CRC is CRC-16-CCITT, polynomial 0x1021, MSB-first and unreflected --
+ * the same one `v8_crc` computes in src/v8/v8util.c -- folded one bit at a
+ * time over exactly the bits the refill just brought in, high bit first.
+ *
+ * `pos` is kept in a 16-bit slot: every update is `mov %ax,0x1a(%esi)` after
+ * a 32-bit add, so the carry out of bit 15 is dropped.  Hence the
+ * `unsigned short` here.
+ */
+short
+getbit(struct v34_bitsource *b)
+{
+	unsigned int acc;
+	unsigned short pos = 0;
+	int n = (unsigned short)b->avail;
+	int folded = 0;
+
+	if (n == 0) {
+		int left;
+
+		pos = (unsigned short)b->pos;
+		left = (short)((unsigned short)b->nbits - pos);
+
+		if (left <= 0) {
+			if (left != 0) {
+				if ((short)left == (short)0xfff0) {
+					/* Overrun by exactly one word. */
+					b->acc = 0xf;
+					b->avail = 4;
+					b->pos = (short)(pos + 4);
+					n = 4;
+					acc = 0xf;
+					goto emit;
+				}
+			} else if (b->crc_on != 0) {
+				/* The message is followed by its CRC. */
+				acc = (unsigned short)b->crc;
+				b->avail = 16;
+				b->pos = (short)(pos + 16);
+				b->acc = (int)acc;
+				n = 16;
+				goto emit;
+			}
+
+			if (b->repeat == 0)
+				return -1;
+
+			b->crc = (short)0xffff;
+			b->pos = 0;
+			b->repeats = (short)((unsigned short)b->repeats + 1);
+			b->idx = 0;
+			b->acc = b->acc0;
+			b->avail = (short)(unsigned short)b->avail0;
+
+			return (short)getbit(b);
+		}
+
+		if ((short)b->wordbits <= left) {
+			/* A whole word. */
+			int wb = (unsigned short)b->wordbits;
+			int idx = (unsigned short)b->idx;
+
+			b->avail = (short)wb;
+			acc = (unsigned int)b->acc << ((short)wb & 31);
+			acc |= (unsigned short)b->word[(short)idx];
+			b->idx = (short)(idx + 1);
+			b->pos = (short)(pos + wb);
+			b->acc = (int)acc;
+			folded = (short)wb;
+			n = wb;
+		} else if (left > 0) {
+			/*
+			 * The tail.  `idx` does not advance and the whole word
+			 * is ORed in, not just its top `left` bits.
+			 */
+			int idx = (short)b->idx;
+
+			b->avail = (short)left;
+			acc = (unsigned int)b->acc << (left & 31);
+			acc |= (unsigned short)b->word[idx];
+			b->pos = (short)(pos + left);
+			b->acc = (int)acc;
+			folded = left;
+			n = left;
+		}
+
+		if (b->crc_on != 0 && folded != 0) {
+			acc = (unsigned int)b->acc;
+			do {
+				unsigned int crc = (unsigned short)b->crc;
+				int bit = (int)(crc >> 15);
+
+				folded = (short)(folded - 1);
+				if ((acc >> (folded & 31)) & 1)
+					bit ^= 1;
+				crc += crc;
+				if (bit)
+					crc ^= 0x1021;
+				b->crc = (short)crc;
+			} while (folded != 0);
+			goto emit;
+		}
+	}
+
+	acc = (unsigned int)b->acc;
+
+emit:
+	n--;
+	b->avail = (short)n;
+	return (short)((acc >> (n & 31)) & 1);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `ApplyBulkDelay` -- point the second echo canceller at a round-trip delay.
+ *
+ * `delay` is `rtd`, the round-trip delay in samples that `v34handshak`
+ * measured; both call sites pass it straight out of +0xaa7e.  What comes back
+ * is `bulk_tail` -- the read cursor of the ring at +0x35b8 that feeds the far
+ * canceller -- with the ring itself cleared to that length and `bulk_head`
+ * put back to zero.
+ *
+ * TWO REJECTIONS SHARE ONE DIAGNOSTIC.  A delay at or below zero becomes 144,
+ * and a delay at or past `bulk_len` becomes zero, and both print "V34 bulk
+ * delay first estimation %d" with the delay they rejected.  So the two are
+ * distinguishable only by the number in the message and by what happens
+ * next -- 144 is then bounds-checked in its turn, and can itself be
+ * rejected.  The bound is an UNSIGNED comparison (`jb`, not `jl`), which is
+ * the wrong way round for safety: a NEGATIVE `bulk_len` is huge unsigned and
+ * accepts every delay, and the clear below then runs off the end of the ring.
+ * Nothing reconstructed writes `bulk_len`, so no call site is known to reach
+ * that; it is recorded rather than fixed, and the tests keep `bulk_len`
+ * positive because the overrun would be identical on both sides and prove
+ * nothing.
+ *
+ * THEN THE FAR CANCELLER.  With either PCM receiver running, or with the far
+ * canceller not armed to begin with, `fa23c` is simply cleared.  Otherwise a
+ * delay of 30 or more normalises it to 1 and leaves it on, and a delay below
+ * that turns it off AND pulls the DMA delay at +0x25c back by `delay + 15`,
+ * capped at 30 -- the object's own words, "RTD (%d) lower than min (%d),
+ * masking Far EC..." and "...Modifying dma delay from %d to %d".
+ *
+ * The ring is cleared at the LITERAL offset +0x35b8, not through `bulk_ring`
+ * at +0x35b0.  That is the object's: the pointer is never loaded here.
+ */
+void
+ApplyBulkDelay(void *objp, short delay)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	int d = delay;
+
+	if (d <= 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V34 bulk delay first estimation %d\n", d);
+		d = 0x90;
+	}
+
+	if ((unsigned int)d >= (unsigned int)obj->bulk_len) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V34 bulk delay first estimation %d\n", d);
+		d = 0;
+	}
+
+	obj->bulk_tail = d;
+	obj->bulk_head = 0;
+	sysdep_memset(m + 0x35b8, 0, (size_t)(d * 2));
+
+	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0
+	    && obj->fa23c != 0) {
+		if ((short)d > 0x1d) {
+			obj->fa23c = 1;
+		} else {
+			int back;
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "RTD (%d) lower than min (%d), "
+				    "masking Far EC...\r\n", d, 0x1e);
+
+			back = (short)(d + 15);
+			obj->fa23c = 0;
+			if ((short)back > 0x1e)
+				back = 0x1e;
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "...Modifying dma delay from %d to %d\r\n",
+				    obj->f25c, obj->f25c - back);
+
+			obj->f25c = (short)((unsigned short)obj->f25c - back);
+		}
+	} else {
+		obj->fa23c = 0;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34 bulk delay estimation %d (FAR=%d)\n",
+				     d, obj->fa23c);
 }
 
 /*

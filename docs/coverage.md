@@ -7,14 +7,14 @@ dsplibs.o reconstruction coverage
 
   .text                          728304 bytes, 1782 symbols
 
-  translated  [######............................]  17.5%    127543 bytes, 297 symbols
-  tested      [##################################] 100.0%    127543 bytes, 297 of 297 that can be
+  translated  [######............................]  17.6%    128443 bytes, 299 symbols
+  tested      [##################################] 100.0%    128443 bytes, 299 of 299 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 15 of ours (6192 bytes).
+  the file-local symbols too -- 17 of ours (7092 bytes).
 
   file-local and NOT aliasable, so reached through a caller if at
   all: each of these names is used by more than one translation
@@ -44,7 +44,7 @@ dsplibs.o reconstruction coverage
   what is left, by translation-unit span:
     VPcmV34Main.cpp +72                           313282 bytes   809 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
-    V34hshak.c +13                                 63469 bytes     4 symbols
+    V34hshak.c +13                                 62569 bytes     2 symbols
     V32mod.c +39                                   55694 bytes   119 symbols
     Dialer.c +18                                   16982 bytes    53 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
