@@ -24,6 +24,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * MANGLED `ref_` NAMES MUST BE DECLARED extern "C" FROM C++.
+ *
+ * Nothing here demangles.  symmap.py prepends the prefix to the raw symbol
+ * string, so the blob's `_ZN12VPcmFloModem11enterPhase3Ev` becomes
+ * `ref__ZN12VPcmFloModem11enterPhase3Ev` -- a valid C identifier that happens
+ * to have a mangled name inside it, and 886 of the aliases are this shape.
+ *
+ * From C it just works.  From C++ a plain declaration is mangled AGAIN, as an
+ * ordinary function whose name is that string:
+ *
+ *   extern int ref__ZN12VPcmFloModem11enterPhase3Ev(void *);
+ *       -> U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv     never resolves
+ *
+ *   extern "C" int ref__ZN12VPcmFloModem11enterPhase3Ev(void *);
+ *       -> U ref__ZN12VPcmFloModem11enterPhase3Ev           resolves
+ *
+ * The failure is a link error whose undefined symbol CONTAINS the name you
+ * wanted, so it reads as "the blob does not export this" rather than "my
+ * declaration was mangled".  Put every mangled `ref_` declaration inside the
+ * extern "C" block below, or write the test in C.
+ */
+
 /* Reconstructed C++ modules link against this too. */
 #ifdef __cplusplus
 extern "C" {

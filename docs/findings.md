@@ -12459,3 +12459,91 @@ by name.  100.0% is not a claim that the reconstruction is finished -- 17.5%
 is the honest half of that pair, and `translated` is what has to move next.
 It says the two numbers now measure what they say they measure, which is what
 findings 221 and 222 were about.
+
+### 225. Nothing demangles, and from C++ that is a link error that reads wrong
+
+`symmap.py` prepends the prefix to the raw symbol string.  The blob's
+`_ZN12VPcmFloModem11enterPhase3Ev` becomes
+`ref__ZN12VPcmFloModem11enterPhase3Ev` -- note the doubled underscore -- and
+886 of the aliases in `build/dsplibs_ref.o` are this shape.  `tuattrib.py`
+demangles through `c++filt` for translation-unit attribution, but nothing on
+the rename path does, and nothing needs to: a mangled name is already a valid
+C identifier.
+
+From C it works, verified:
+
+```
+extern int ref__ZN12VPcmFloModem11enterPhase3Ev(void *self);
+    -> links and resolves
+```
+
+**From C++ it does not, and the error misdirects.**  A plain declaration is
+mangled a second time, as an ordinary function whose *name* is that string:
+
+```
+extern int ref__ZN12VPcmFloModem11enterPhase3Ev(void *);
+    -> U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv
+
+extern "C" int ref__ZN20V90Phase3Demodulator5resetEv(void *);
+    -> U ref__ZN20V90Phase3Demodulator5resetEv
+```
+
+The undefined symbol in the first case *contains* the name that was wanted, so
+the link error reads as "the blob does not export this" rather than "my
+declaration was mangled".  That is the misreading worth guarding, and #60 is
+fifty opportunities to make it: `VPcmV34Main.cpp` is the C++ half, its
+reconstruction is C++, and every one of its `ref_` aliases is mangled.
+
+`harness.h` now says so at the top of its `extern "C"` block, which is where
+such declarations belong.
+
+#### The reconstruction writes real C++, and the mangling is a free type oracle
+
+The `ref_` prefix is a harness detail and does not reach `src/`.  What we write
+is ordinary C++ with the original's own class and method names, and the
+compiler reproduces the blob's symbol exactly.  `src/dsp/FloatIIR.cpp` is the
+working precedent:
+
+```
+blob   W _ZN10GenericIIRIfdE5resetEv        (.gnu.linkonce.t.*)
+ours   W _ZN10GenericIIRIfdE5resetEv
+```
+
+five aliases, driven by `test/unit/t_genericiir.cpp` -- a C++ test, so the
+pattern for #60 is established rather than new.  (The blob also has a separate
+concrete `_ZN8FloatIIR...` class, four symbols, not yet reconstructed;
+grepping the object for "FloatIIR" finds that one and it is easy to mistake
+for a mismatch.)
+
+**This means the mangled names are a type oracle, and the C half has nothing
+like it.**  For a C function the parameter types come out of the disassembly
+-- finding 51's regparm work, argument widths read from how each is used.  For
+C++ `c++filt` simply says:
+
+```
+$ c++filt _ZN20V90Phase3Demodulator5resetE7PcmTypeh22Phase3DemodulatorStatejP5V90JdP5V92JdP19tagV90DILdescriptorssfj
+V90Phase3Demodulator::reset(PcmType, unsigned char, Phase3DemodulatorState,
+    unsigned int, V90Jd*, V92Jd*, tagV90DILdescriptor*, short, short, float,
+    unsigned int)
+```
+
+Eleven parameters, in order, with the enum and struct names the author used.
+For #60's fifty symbols that is the whole signature problem solved before any
+disassembly is read.
+
+The obligation runs the other way too: **reproducing the mangling means
+reproducing the declaration exactly** -- class name, method name and every
+parameter type.  A tidier signature, a generalised template, an `int` where
+the original had `unsigned`, and the compiler emits a different symbol which
+links against nothing and is silently not the function.  The mangled name is
+the specification, not a decoration.
+
+#### Not fixed, and deliberately
+
+The alias could be `ref_` spliced *inside* the mangling, so that
+`_ZN12VPcmFloModem11enterPhase3Ev` became
+`_ZN12VPcmFloModem14ref_enterPhase3Ev` and demangled to something a C++ test
+could declare naturally.  That means teaching `symmap.py` to parse Itanium
+mangling, for a cosmetic gain over one `extern "C"` block, and a mangling
+parser that is subtly wrong renames a symbol to something that still links --
+the worst failure available here.  Left alone on purpose.
