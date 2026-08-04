@@ -10275,3 +10275,89 @@ The twelve annotations it skips are `struct v8_v21_params`, which annotates
 each field with where the STRUCT sits in the V.8 object rather than with the
 field's own offset.  That convention is legitimate and the tool names it
 rather than guessing.
+
+### 192. Six V.34 mutation sets, and what they said about the tests
+
+V.34 is about two thirds of the reconstructed bytes and had no mutation sets
+at all: every one of the fourteen was callprog, dialer, pulse or V.8.  The
+work had been done — three times — in throwaway shell scripts deleted after
+they printed their tallies, so finding 189's "50 applied, 48 caught" was a
+number nobody could reproduce, extend, or re-run against changed code.
+
+The scripts were still in the session scratchpad.  Recovering them made these
+sets the original runs rather than a fresh derivation, which matters: a
+different 50 would not have reproduced anything.
+
+```
+  v34pcmif   58   56 caught   2 equivalent   the three request entry points
+  v34hshak   31   30 caught   1 equivalent   v34handshakinit and the trace
+  v34filters 21   21 caught                  the echo canceller, the modulator
+  v34info    33   32 caught   1 equivalent   the INFO0/INFO1a codecs
+  v34shell   24   21 caught   3 equivalent   the rate negotiator
+  v34rx      30   17 caught                  13 NOT CAUGHT, see below
+```
+
+The counts are higher than the originals because `sed s///` replaces on every
+line it matches: one `s/rx->f258 = 0;//` hit both functions that clear it and
+`0x2218` all three.  Split per function, they are also better mutations —
+"hangup does not clear f258" and "reneg does not clear f258" are two claims.
+
+**A HARNESS THAT REPORTS ON A STALE BUILD.**  `prologue txflags 0x7fff ->
+0x3fff` was recorded SURVIVED and is caught.  The throwaway script restored
+its source with `cp` after a build that had already failed, so that mutation
+ran against the *previous* mutation's binary.  Finding 190 again, in the
+tool that is supposed to detect exactly this.
+
+**EQUIVALENT MUTANTS ARE NOW A KIND OF ENTRY.**  Seven of these provably
+cannot fail — two reorderings of stores that do not alias, a mask bit OR-ed
+straight back in, a four-bit mask on a value that only ever holds three, and
+three register reloads after a call whose inputs nothing has written.
+`"equivalent": true` runs them, expects the survival, and prints the argument
+from `"why"`; one that gets CAUGHT fails the run, because then either the
+argument is wrong or the code has moved out from under it.  Deleting them
+would have left "nobody thought of this" and "we thought of this and it
+cannot fail" looking identical in the file.
+
+**WHAT THE SETS FOUND.**  Twenty-two mutations were NOT CAUGHT on the first
+run.  Nine were fixed here and thirteen remain; none of the twenty-two was a
+defect in the code.
+
+*Three in v34filters* — ungating the empty coefficient report, dropping the
+early return before the header, weakening the clean-up's gate to `>= 1`.
+Every transcript comparison in `t_v34ec` raises the level first, so a lost
+gate prints the same thing on both sides.  The silence section from
+`t_v34pcmif` — capture ON, level DOWN, levels 0 and 1 — catches all three.
+This is task #5's shape and it is now in three files.
+
+*Three in v34info.*  One was the same missing silence section.  One was
+provably equivalent.  The third is the interesting one: swapping the two
+K56Flex announcements was caught by NEITHER tier.  Not by the test, because
+`m[3] = 0x88 | (k56 ? 2 : 0)` pinned bit 3 — K56Flex's *enable* — on for
+every iteration, so the "disabled by remote" arm never ran with the level up.
+And not by the invented-string sweep, because that is a substring test:
+**a truncation of a real string passes it.**  `debugaudit.py` says of itself
+that it is a necessary condition only; this is what that costs.  Bit 3 and
+bit 1 are now separate loop variables, as is the receiver state that was
+sharing `k56` with them.
+
+*Twelve in v34shell*, ten of them one cause: the test ran `initdigital` at
+level 2 and threw away everything it printed.  Comparing the transcript
+catches ten, including both rate reports with their arguments swapped.  The
+last two were unreachable branches, and both were unreachable for a reason
+the fixture chose: every entry of the divisor table was `k*53-400`, which is
+never zero, so the author's ZERODIV guard had no case; and the object was
+memset to zero, so the non-linear encoder's CLEAR arm had nothing to clear.
+One zeroed table entry and one seeded field.
+
+*Thirteen in v34rx, still open.*  Two classes.  `v34FreezeEcho` and
+`V34SetupDemodulator` have no transcript compared anywhere, so their strings
+and argument order are undriven — including the near/far echo report pair,
+which differ in one word and dump different cancellers.  The rest need the
+sweep to reach specific counts and thresholds: NEC adaptation stops at
+0x4650, FEC starts at 0x2bc, the steps are every 45th sample, and the
+renegotiation window is a two-sided test on a counter.  Task #6.
+
+**THE SCORE.**  329 caught over 20 suites, of which 314 by the differential
+tests and 15 by the string sweep alone; 13 not caught, 7 equivalent.  It was
+152 over 14 suites.  The 13 are the honest part of that number: they were
+untested before these sets existed too, and nothing said so.

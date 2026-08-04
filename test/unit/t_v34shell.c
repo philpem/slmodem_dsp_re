@@ -1384,14 +1384,32 @@ mv_next:		;
 		static const short bauds[4] = { 2400, 2743, 3200, 3429 };
 		unsigned c, k;
 		int dbg;
+		int saw_shell_said = 0, saw_shell_silent = 0;
 
 		for (k = 0; k < 64; k++) {
 			divstore[k] = (short)(k * 37 - 300);
 			rxdivstore[k] = (short)(k * 53 - 400);
 		}
+		/*
+		 * ONE ZERO IN THE RECEIVE TABLE, so the ZERODIV arm is
+		 * reachable.  Every entry was k*53-400, which is never zero,
+		 * so the guard the author wrote -- and its FATAL ERROR
+		 * diagnostic -- had no case at all: substituting 0 for its
+		 * `div = 1` was NOT CAUGHT, and so was weakening its gate.
+		 * The lookup is rx_divtab[bits + 14*use_max - 1] against
+		 * &rxdivstore[16], so index 30 is bits 15 with use_max 0 and
+		 * bits 1 with use_max 1 -- two of the swept cases.
+		 */
+		rxdivstore[30] = 0;
 
-		for (dbg = 0; dbg <= 1; dbg++)
-		for (c = 0; c < 512; c++) {
+		/*
+		 * THREE LEVELS, not two.  Every gate in this file is a local
+		 * `level > 1`, so 1 is the only value separating it from the
+		 * `>= 1` a reader would write -- and level 1 must be as
+		 * silent as level 0.
+		 */
+		for (dbg = 0; dbg <= 2; dbg++)
+		for (c = 0; c < 1024; c++) {
 			struct v34_ratecfg *ca, *cb;
 			unsigned info, caps, mask, flags;
 			unsigned b;
@@ -1418,6 +1436,18 @@ mv_next:		;
 			oa.k56flex_receiver = ob.k56flex_receiver = (int)((c >> 8) & 1);
 			oa.rates_latched = ob.rates_latched =
 				(unsigned char)((c >> 5) & 1);
+			/*
+			 * BIT 9, which nothing else here reads.  The
+			 * non-linear encoder flag is SET on one arm and
+			 * CLEARED on the other, and with the object memset to
+			 * zero the clear had nothing to clear -- deleting it
+			 * outright was NOT CAUGHT.  Every other bit of `c` is
+			 * already an input, so the sweep is twice as long
+			 * rather than this sharing one: two inputs driven
+			 * from one variable cannot be told apart.
+			 */
+			oa.f25c2 = ob.f25c2 =
+				(short)(((c >> 9) & 1) ? 0x4000 : 0);
 
 			ca->baud = cb->baud = bauds[c & 3];
 			ca->rx_baud = cb->rx_baud = bauds[(c >> 2) & 3];
@@ -1427,11 +1457,51 @@ mv_next:		;
 			ca->rx_divtab = cb->rx_divtab = &rxdivstore[16];
 
 			dsplibs_debug_level = ref_dsplibs_debug_level =
-				(unsigned)(dbg ? 2 : 0);
+				(unsigned)dbg;
+
+			/*
+			 * THE TRANSCRIPT, not just the object.  This loop
+			 * already ran `initdigital` at level 2 and threw
+			 * away everything it printed, so all five of its
+			 * diagnostics were undriven in the only sense that
+			 * matters: ten mutations -- both rate reports with
+			 * their arguments swapped, the nofTxBits report, the
+			 * two `>= 1` gates and the four re-reads after a
+			 * call -- were NOT CAUGHT while this test passed.
+			 *
+			 * The re-reads are the reason a byte compare could
+			 * not stand in for this.  Each site reloads the
+			 * variables it printed, because the call clobbers
+			 * the registers holding them; drop one and the
+			 * object is unchanged and the next line prints a
+			 * stale value.  Only the transcript can tell.
+			 */
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
 
 			initdigital(&oa);
 			ref_initdigital(&ob);
 
+			diff_eq_int("initdigital transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)dbg * 1000 + c);
+			if (dbg > 1) {
+				saw_shell_said +=
+					dsplib_debug_capture_text(1)[0] != 0;
+			} else {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_text(0)[0], 0,
+					    (long)dbg * 1000 + c);
+				diff_eq_int("below the threshold, neither did "
+					    "the reference",
+					    dsplib_debug_capture_text(1)[0], 0,
+					    (long)dbg * 1000 + c);
+				saw_shell_silent++;
+			}
+
+			dsplib_debug_capture_on = 0;
 			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
 			for (b = 0; b < sizeof(oa); b++) {
@@ -1482,6 +1552,17 @@ mv_next:		;
 				    1, (long)c);
 id_next:		;
 		}
+
+		/*
+		 * Both halves have to have happened: a capture facility that
+		 * silently stopped recording would make every silence check
+		 * above pass and every transcript comparison compare two
+		 * empty strings.
+		 */
+		diff_eq_int("the diagnostics spoke at level 2",
+			    saw_shell_said > 0, 1, saw_shell_said);
+		diff_eq_int("and were swept below the threshold too",
+			    saw_shell_silent > 0, 1, saw_shell_silent);
 	}
 	rc |= diff_end();
 

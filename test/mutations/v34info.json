@@ -1,0 +1,172 @@
+[
+ {
+  "note": "26 diagnostic call sites, the most of any V.34 source, and four blocks that print the SAME strings while setting DIFFERENT bits.  Most of what follows swaps something between two such blocks: a reconstruction that factored them would pass every one."
+ },
+ {
+  "label": "INFO0d: the v90 guard is inverted",
+  "find": "\tif (obj->v90_receiver == 0)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90, setINFO0dBits\\n\");",
+  "replace": "\tif (obj->v90_receiver != 0)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90, setINFO0dBits\\n\");"
+ },
+ {
+  "label": "INFO0d: index 12 becomes index 11",
+  "find": "\tbits[12] = 30;",
+  "replace": "\tbits[11] = 30;"
+ },
+ {
+  "label": "INFO0d: the constant 30 becomes 31",
+  "find": "\tbits[12] = 30;",
+  "replace": "\tbits[12] = 31;"
+ },
+ {
+  "label": "INFO0d: announcement ungated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90, setINFO0dBits\\n\");",
+  "replace": "\tdsplibs_debug_printf(\"V90, setINFO0dBits\\n\");"
+ },
+ {
+  "label": "INFO0a: the session variant test is inverted",
+  "find": "\tif (session_int(sess, SESSION_VARIANT) != 0) {",
+  "replace": "\tif (session_int(sess, SESSION_VARIANT) == 0) {"
+ },
+ {
+  "label": "INFO0a: 'for %s' and 'for V.PCM' swapped",
+  "find": "\t\t\t\t\t\"setINFO0aBits - setting info0a \"\n\t\t\t\t\t\"for %s\\n\", pcm_name(obj));",
+  "replace": "\t\t\t\t\t\"setINFO0aBits - setting info0a \"\n\t\t\t\t\t\"for V.PCM\\n\");"
+ },
+ {
+  "label": "INFO0a: the Caller arm claims to be the Digital one",
+  "find": "\t\t\tdsplibs_debug_printf(\"setINFO0aBits - setting info0 \"\n\t\t\t\t\t     \"(Caller) for %s\\n\",",
+  "replace": "\t\t\tdsplibs_debug_printf(\"setINFO0aBits - setting info0d \"\n\t\t\t\t\t     \"(Digital) for %s\\n\","
+ },
+ {
+  "label": "INFO0a: bits[1] base 0x84 becomes 0x8c in the V.PCM arm",
+  "find": "\t\t\t\t\"for V.PCM\\n\");\n\t\tbits[0] = (short)0xff;\n\t\tbits[1] = (short)0x84;",
+  "replace": "\t\t\t\t\"for V.PCM\\n\");\n\t\tbits[0] = (short)0xff;\n\t\tbits[1] = (short)0x8c;"
+ },
+ {
+  "label": "INFO0a: V.PCM arm's short-phase2 bit becomes 2, matching the other arm",
+  "find": "\t\t\tbits[1] = (short)(bits[1] | 1);\n\t\t\tobj->prev_bulk_delay = 0x14;",
+  "replace": "\t\t\tbits[1] = (short)(bits[1] | 2);\n\t\t\tobj->prev_bulk_delay = 0x14;"
+ },
+ {
+  "label": "INFO0a: V.PCM arm's V.92 bit becomes 1, matching the other arm",
+  "find": "\t\t\t\t\t\"...indicating V.92 \"\n\t\t\t\t\t\"capabilities...\\n\");\n\t\t\tbits[1] = (short)(bits[1] | 2);",
+  "replace": "\t\t\t\t\t\"...indicating V.92 \"\n\t\t\t\t\t\"capabilities...\\n\");\n\t\t\tbits[1] = (short)(bits[1] | 1);"
+ },
+ {
+  "label": "INFO0a: Digital arm's short-phase2 bit becomes 1",
+  "find": "\t\t\t\t\"...requesting short phase2...\\n\");\n\t\tbits[1] = (short)(bits[1] | 2);",
+  "replace": "\t\t\t\t\"...requesting short phase2...\\n\");\n\t\tbits[1] = (short)(bits[1] | 1);"
+ },
+ {
+  "label": "INFO0a: Digital arm's V.92 bit becomes 2",
+  "find": "\t\t\t\t\"...indicating V.92 capabilities...\\n\");\n\t\tbits[1] = (short)(bits[1] | 1);",
+  "replace": "\t\t\t\t\"...indicating V.92 capabilities...\\n\");\n\t\tbits[1] = (short)(bits[1] | 2);"
+ },
+ {
+  "label": "INFO0a: V.PCM arm reads local_v92 rather than the session's byte",
+  "find": "\t\tif (*((const char *)session_ptr(sess, SESSION_CAPS) + 0x11)\n\t\t    != 0) {",
+  "replace": "\t\tif (obj->local_v92 != 0) {"
+ },
+ {
+  "label": "INFO0a: the session capability byte is read at +0x10",
+  "find": "session_ptr(sess, SESSION_CAPS) + 0x11",
+  "replace": "session_ptr(sess, SESSION_CAPS) + 0x10"
+ },
+ {
+  "label": "INFO0a: prev_bulk_delay stored as 0x15",
+  "find": "obj->prev_bulk_delay = 0x14;",
+  "replace": "obj->prev_bulk_delay = 0x15;"
+ },
+ {
+  "label": "INFO0a: the delay is announced as a value it did not store",
+  "find": "\t\t\t\t\t\"Setting prev bulk delay = %d\\n\",\n\t\t\t\t\t0x14);",
+  "replace": "\t\t\t\t\t\"Setting prev bulk delay = %d\\n\",\n\t\t\t\t\t0x15);"
+ },
+ {
+  "label": "INFO0a: the upstream rate reversed over four bits",
+  "find": "\t\t\t\t   *((const unsigned char *)up + 9), 5);",
+  "replace": "\t\t\t\t   *((const unsigned char *)up + 9), 4);"
+ },
+ {
+  "label": "INFO0a: index 2 takes four bits of the reversed rate, not three",
+  "find": "bits[2] = (short)(((short)r >> 2 & 7) | (unsigned short)bits[2]);",
+  "replace": "bits[2] = (short)(((short)r >> 2 & 0xf) | (unsigned short)bits[2]);",
+  "equivalent": true,
+  "why": "`r` is bitreverse(byte, 5), so it holds five bits and `r >> 2` is 0..7; the fourth bit the wider mask would keep can never be set.  The mask is written as 7 because the object's is."
+ },
+ {
+  "label": "INFO0a: index 2's constant 0x30 becomes 0x20",
+  "find": "\tbits[2] = 0x30;",
+  "replace": "\tbits[2] = 0x20;"
+ },
+ {
+  "label": "INFO0a: the two index-3 flag bits swapped",
+  "find": "\t\t\tv |= 0x20;\n\t\tbits[3] = (short)v;\n\t\tif (*(const int *)up == 1)\n\t\t\tbits[3] = (short)(bits[3] | 0x10);",
+  "replace": "\t\t\tv |= 0x10;\n\t\tbits[3] = (short)v;\n\t\tif (*(const int *)up == 1)\n\t\t\tbits[3] = (short)(bits[3] | 0x20);"
+ },
+ {
+  "label": "INFO0a: index 3's unconditional bit becomes 4",
+  "find": "\t\tbits[3] = (short)(bits[3] | 8);",
+  "replace": "\t\tbits[3] = (short)(bits[3] | 4);"
+ },
+ {
+  "label": "giveINFO0: the variant letter is the other way round in the header",
+  "find": "\t\tdsplibs_debug_printf(\"VPcmV34Main, giveINFO0%cBits\\n\",\n\t\t\t\t     variant == 0 ? 'd' : 'a');",
+  "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Main, giveINFO0%cBits\\n\",\n\t\t\t\t     variant == 0 ? 'a' : 'd');"
+ },
+ {
+  "label": "giveINFO0: the variant letter is the other way round in the dump",
+  "find": "\t\tdsplibs_debug_printf(\"VPcmV34Main, rxinfo0%c = \",\n\t\t\t\t     variant == 0 ? 'd' : 'a');",
+  "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Main, rxinfo0%c = \",\n\t\t\t\t     variant == 0 ? 'a' : 'd');"
+ },
+ {
+  "label": "giveINFO0: the 0xf72 table walked from the other end",
+  "find": "\t\tv[i] = (0xf72 >> (11 - i)) & 1;",
+  "replace": "\t\tv[i] = (0xf72 >> i) & 1;"
+ },
+ {
+  "label": "giveINFO0: is_short drops the remote_short term",
+  "find": "\tobj->is_short = (obj->local_v92 != 0 && obj->remote_v92 != 0\n\t\t\t && obj->local_short != 0 && remote_short != 0)\n\t\t\t? 1 : 0;",
+  "replace": "\tobj->is_short = (obj->local_v92 != 0 && obj->remote_v92 != 0\n\t\t\t && obj->local_short != 0)\n\t\t\t? 1 : 0;"
+ },
+ {
+  "label": "giveINFO0: the five-way report has local and remote V.92 swapped",
+  "find": "\t\t\tobj->local_v92, obj->remote_v92, obj->local_short,\n\t\t\tremote_short, obj->is_short);",
+  "replace": "\t\t\tobj->remote_v92, obj->local_v92, obj->local_short,\n\t\t\tremote_short, obj->is_short);"
+ },
+ {
+  "label": "INFO1a: the K56Flex enable bit is 4 rather than 8",
+  "find": "\t\tif (((unsigned short)bits[3] & 8) != 0) {",
+  "replace": "\t\tif (((unsigned short)bits[3] & 4) != 0) {"
+ },
+ {
+  "label": "INFO1a: the reported remote PCM type is bit 0 rather than bit 1",
+  "find": "\t\t\t\t\t(unsigned short)bits[3] & 2);",
+  "replace": "\t\t\t\t\t(unsigned short)bits[3] & 1);"
+ },
+ {
+  "label": "INFO1a: K56Flex enabled leaves the receiver at 1",
+  "find": "\t\t\tobj->k56flex_receiver = 2;",
+  "replace": "\t\t\tobj->k56flex_receiver = 1;"
+ },
+ {
+  "label": "INFO1a: the two K56Flex announcements swapped",
+  "find": "\t\t\t\t\t\"VPcmV34Main: K56Flex disabled by \"\n\t\t\t\t\t\"remote\\r\\n\");",
+  "replace": "\t\t\t\t\t\"VPcmV34Main: K56Flex enabled by \"\n\t\t\t\t\t\"remote\\r\\n\");"
+ },
+ {
+  "label": "INFO1a: the baud index's two swapped bits un-swapped",
+  "find": "\tbaud_index = (((unsigned short)bits[2] & 2) >> 1)\n\t\t     + ((unsigned short)bits[2] & 1) * 2\n",
+  "replace": "\tbaud_index = ((unsigned short)bits[2] & 1)\n\t\t     + (((unsigned short)bits[2] & 2) >> 1) * 2\n"
+ },
+ {
+  "label": "INFO1a: the baud index's third bit lands in bit 3",
+  "find": "\t\t     + (((unsigned short)bits[3] & 0x80) >> 5);",
+  "replace": "\t\t     + (((unsigned short)bits[3] & 0x80) >> 4);"
+ },
+ {
+  "label": "INFO1a: the special baud index is 7 rather than 6",
+  "find": "\tif ((short)baud_index == 6) {",
+  "replace": "\tif ((short)baud_index == 7) {"
+ }
+]

@@ -1,0 +1,155 @@
+[
+ {
+  "note": "24 diagnostic call sites and the receiver's arithmetic.  Several of the printfs re-read `rx->flags` afterwards, which is not decoration: the call is a sequence point the object's register allocation depends on, so dropping one changes the value the next store writes."
+ },
+ {
+  "label": "updateAlpha reports the new value as the old one",
+  "find": "\t\t\t\t\"updateAlpha%s: updated %d => %d\\n\", tag,\n\t\t\t\t(int)was, (int)*alpha);",
+  "replace": "\t\t\t\t\"updateAlpha%s: updated %d => %d\\n\", tag,\n\t\t\t\t(int)*alpha, (int)was);"
+ },
+ {
+  "label": "updateAlpha loses the near/far tag",
+  "find": "\"updateAlpha%s: updated %d => %d\\n\", tag,",
+  "replace": "\"updateAlpha: updated %d => %d\\n\","
+ },
+ {
+  "label": "updateAlpha's near call is tagged FE",
+  "find": "\t\t\t    obj->f3558, \"NE\");",
+  "replace": "\t\t\t    obj->f3558, \"FE\");"
+ },
+ {
+  "label": "updateAlpha's overflow substitute becomes a clamp",
+  "find": "\t\tif (r < 0)\n\t\t\tr = 0x2000;",
+  "replace": "\t\tif (r < 0)\n\t\t\tr = 0;"
+ },
+ {
+  "label": "updateAlpha's rounding constant halved",
+  "find": "*alpha = (short)(-((r * gain + 0x2000) >> 15));",
+  "replace": "*alpha = (short)(-((r * gain + 0x1000) >> 15));"
+ },
+ {
+  "label": "updateAlpha's result is not negated",
+  "find": "*alpha = (short)(-((r * gain + 0x2000) >> 15));",
+  "replace": "*alpha = (short)(((r * gain + 0x2000) >> 15));"
+ },
+ {
+  "label": "updateAlpha's decay rounds by 0x2000",
+  "find": "*alpha = (short)((*alpha * decay + 0x4000) >> 15);",
+  "replace": "*alpha = (short)((*alpha * decay + 0x2000) >> 15);"
+ },
+ {
+  "label": "the near and far echo reports swapped",
+  "find": "\t\t\t\"==== Near Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);",
+  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
+ },
+ {
+  "label": "both echo reports dump the near canceller",
+  "find": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo1);",
+  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
+ },
+ {
+  "label": "freezing the echo clears the flag rather than setting it",
+  "find": "obj->f25c2 = (short)(obj->f25c2 | V34_EC_FROZEN);",
+  "replace": "obj->f25c2 = (short)(obj->f25c2 & ~V34_EC_FROZEN);"
+ },
+ {
+  "label": "the demodulator trace has baud and carrier swapped",
+  "find": "\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
+  "replace": "\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
+ },
+ {
+  "label": "the demodulator produces three outputs per call, not four",
+  "find": "\trx->f128 = 4;",
+  "replace": "\trx->f128 = 3;"
+ },
+ {
+  "label": "the echo energy report has energy and BETA swapped",
+  "find": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->f3560, obj->f355c);",
+  "replace": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->f355c, obj->f3560);"
+ },
+ {
+  "label": "the BETA threshold comparison is signed in the third arm",
+  "find": "\t\t\t} else if (obj->f355c > 2) {\n\t\t\t\tif ((unsigned)obj->f3560 > 0xc65d40)",
+  "replace": "\t\t\t} else if (obj->f355c > 2) {\n\t\t\t\tif (obj->f3560 > 0xc65d40)"
+ },
+ {
+  "label": "NEC adaptation starts at count 1 rather than 0",
+  "find": "\tif (count == 0) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34NEC, Start NEC Adaptation\\n\");",
+  "replace": "\tif (count == 1) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34NEC, Start NEC Adaptation\\n\");"
+ },
+ {
+  "label": "the NEC stop announcement fires one sample early",
+  "find": "\t} else if (obj->f354c == 0x4650) {",
+  "replace": "\t} else if (obj->f354c == 0x464f) {"
+ },
+ {
+  "label": "the NEC adapt bound is exclusive",
+  "find": "\tif (obj->f354c <= 0x464f) {",
+  "replace": "\tif (obj->f354c < 0x464f) {"
+ },
+ {
+  "label": "the FEC start announcement is gated on the wrong count",
+  "find": "\t\telse if (obj->f354c == 0x2bc && DSPLIB_DEBUG_ON())",
+  "replace": "\t\telse if (obj->f354c == 0x2bb && DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the far adaptation offset is 0x2bc rather than 0x2bb",
+  "find": "int far_count = (short)(count - 0x2bb);",
+  "replace": "int far_count = (short)(count - 0x2bc);"
+ },
+ {
+  "label": "the adaptation steps every 45th sample become every 44th",
+  "find": "int every45 = (count % 45) == 0;",
+  "replace": "int every45 = (count % 44) == 0;"
+ },
+ {
+  "label": "the retrain report prints the count before it is cleared",
+  "find": "\t\t\t\trx->f798 = 0;\n\t\t\t\trx->flags = (unsigned short)flags;",
+  "replace": "\t\t\t\trx->flags = (unsigned short)flags;"
+ },
+ {
+  "label": "the retrain threshold 0x8c becomes 0x8d",
+  "find": "\t\t\tif ((short)n <= 0x8c) {",
+  "replace": "\t\t\tif ((short)n <= 0x8d) {"
+ },
+ {
+  "label": "the renegotiation window's lower bound moves",
+  "find": "\t\t\tif (n + 0x78 <= 0 && n + 0x84 > 0) {",
+  "replace": "\t\t\tif (n + 0x79 <= 0 && n + 0x84 > 0) {"
+ },
+ {
+  "label": "the renegotiation window's upper bound moves",
+  "find": "\t\t\tif (n + 0x78 <= 0 && n + 0x84 > 0) {",
+  "replace": "\t\t\tif (n + 0x78 <= 0 && n + 0x85 > 0) {"
+ },
+ {
+  "label": "the retrain and renegotiation flags swapped",
+  "find": "\t\t\t\tflags |= V34_RX_FLAG_RETRAIN;",
+  "replace": "\t\t\t\tflags |= V34_RX_FLAG_RENEG;"
+ },
+ {
+  "label": "the AGC freeze report fires for any symbol count",
+  "find": "\t\tif (n == 0x40 && !(flags & V34_RX_FLAG_DET_PENDING)",
+  "replace": "\t\tif (n >= 0x40 && !(flags & V34_RX_FLAG_DET_PENDING)"
+ },
+ {
+  "label": "the S-S1 report has the symbol count and the PLL count swapped",
+  "find": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)n, (int)rx->f1c0,\n\t\t\t\t\t    (int)rx->agc_gain);",
+  "replace": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)rx->f1c0, (int)n,\n\t\t\t\t\t    (int)rx->agc_gain);"
+ },
+ {
+  "label": "the S-S1 threshold 0x600 becomes 0x601",
+  "find": "\t\t\tif ((short)err > 0x600) {",
+  "replace": "\t\t\tif ((short)err > 0x601) {"
+ },
+ {
+  "label": "the equaliser report has equerr and preerr swapped",
+  "find": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->f21a, (int)rx->f224);",
+  "replace": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->f224, (int)rx->f21a);"
+ },
+ {
+  "label": "the equaliser report's symbol bound is exclusive",
+  "find": "\t\t\tif (rx->f124 <= 0x7530 && DSPLIB_DEBUG_ON()) {",
+  "replace": "\t\t\tif (rx->f124 < 0x7530 && DSPLIB_DEBUG_ON()) {"
+ }
+]
