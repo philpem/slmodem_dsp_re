@@ -11188,3 +11188,30 @@ anything downstream of it show that it did".
 
 Ask what the code AFTER the site recorded before theorising about the input
 to it.  34 dead sites to 32.
+
+### 210. A skip that outlived its reason, and what it was and was not costing
+
+`t_callprog_progress`'s level sweep skipped `CPSTATE_DIALING` with a comment
+saying every buffer there goes through `DialerProgress`, "28 call sites we
+have not restored, and the transcript would diverge on those rather than on
+anything here".  True when written.  Finding 162 restored those 28, and the
+skip stayed.
+
+Removed, and the sweep passes: the dialling state's transcript now agrees
+with the object at levels 1, 2 and 3.
+
+WHAT IT WAS NOT COSTING.  Nothing in the dead-site count -- still 32, and
+coverage unmoved at 97.4%.  The state is driven at level 0 elsewhere in the
+same test, so every site inside it had already executed and `debugcov` was
+right to say so.  A skip in a transcript comparison hides an ASSERTION, not
+an execution, and the two tools see different things: `debugcov` counts what
+ran and cannot tell whether anything checked the result.
+
+WHAT IT WAS COSTING is the check itself.  Eleven states minus one is a
+comparison never made, on the busiest path in the file -- every dialled digit
+goes through it -- and the only thing standing between that and a silent gap
+was a sentence that had stopped being true.
+
+Worth the habit: a skip carries the reason it was added, and the reason is
+the thing to re-test.  This one was cheap to check and had been wrong for
+several sessions.

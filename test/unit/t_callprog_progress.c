@@ -590,14 +590,6 @@ main(void)
 		for (i = 0; i < CALLPROG_STATES; i++) {
 			char label[80];
 
-			/*
-			 * State 2 is the dialling state, so every buffer goes
-			 * through DialerProgress -- 28 call sites we have not
-			 * restored, and the transcript would diverge on those
-			 * rather than on anything here.
-			 */
-			if (i == CPSTATE_DIALING)
-				continue;
 
 			seed_countdown = 200;
 			sprintf(label, "callprog: state %d timeout, transcript",
