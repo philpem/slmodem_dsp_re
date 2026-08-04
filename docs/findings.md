@@ -11427,8 +11427,8 @@ sixty times the size.
 
 ### 214. The gate on `v34handshak` is in symmap.py, not in the object
 
-Finding 213 established that `v34handshak` reaches 65 functions this tree
-has not written — 33.8 KB of prerequisites, 16 KB of it C++ from
+Finding 213 established that `v34handshak` reaches 64 functions this tree
+has not written — 33,406 bytes of prerequisites, 16,003 of it C++ from
 `VPcmV34Main.cpp` — and concluded the function "cannot be committed in
 pieces ahead of its callees", since `Makefile:121` links all of `$(OBJ)`
 into every test binary and one undefined symbol breaks the whole suite,
@@ -11458,7 +11458,7 @@ the blob side's next read, invisibly, while still producing a plausible
 waveform.
 
 A leaf audit is not enough — the hazard is transitive, because
-`probeselect` calls things.  The closure of all 65 unwritten callees is
+`probeselect` calls things.  The closure of all 64 unwritten callees is
 **111 functions, containing no store to `.bss` or `.data`**.  The one
 flag is `edprintf` doing `movl $0x900,(%esp)` against `.bss`, which is
 the *address* of a scratch buffer being pushed as an argument, not a
@@ -11480,5 +11480,64 @@ of blob-supplied symbols as a **ratchet that only ever shrinks**, and
 besides "file-local in the object".
 
 It changes the **order**, not the total.  The finished tree still has all
-33.8 KB written.  What it removes is the sequencing rule that makes 16 KB
+33,406 bytes written.  What it removes is the sequencing rule that makes 16 KB
 of V.90/V.92 C++ a precondition for touching the V.34 handshake at all.
+
+### 215. The scaffold is not needed, and the closure is why
+
+Finding 214 built a working escape hatch from the rule that a caller cannot
+be committed ahead of its callees.  With V.90/V.92 confirmed as the project's
+end goal rather than an optional extra, it should **not** be landed.  Four
+reasons, in the order that decides it:
+
+**The prerequisite set is bounded and small.**  64 functions, 33,406 bytes —
+14 C at 17,403 and 50 C++ at 16,003 — and that is the *transitive* closure,
+not a direct-callee count.  It bottoms out there.  `VPcmV34Main.cpp` is
+312,776 bytes and this reaches 16,003 of them; the other 296 KB is not pulled
+in.  Comparable in size to what the V.34 pass has already delivered.
+
+**Nothing in it is a detour.**  The 16,003 C++ bytes *are* V.90/V.92 code —
+the destination, not a tax on the way to it.  The 17,403 C bytes are V.34
+handshake support.  Every byte is written in the end whichever order is
+chosen, so the scaffold buys sequence, not scope.
+
+**Each of the 64 is individually differentially testable today.**  They have
+`ref_` aliases; the gate is on the caller alone.  The C ones are ordinary.
+The C++ ones are methods, and the thing that could have made them
+untestable — a `this` in `%ecx` needing real C++ to call — is not how this
+object was built: `generateSymbol` passes `this` as the first *stack*
+argument (`mov %eax,(%esp)`; `call`), plain cdecl, callable from C like
+everything else here.  `reset` is a normal initialiser taking scalars and
+pointers to small objects (`V90Jd` 140 bytes, `V92Jd` 216).
+
+**The invariant is worth more as the tree fills, not less.**  Today "the
+suite links" proves everything reachable from what we have written *is*
+written.  Spending that at 15.9% translated, on a project whose goal is a
+replacement that behaves identically to the blob, is the wrong direction to
+be wrong in.
+
+#### The caveat, which is real
+
+Object sizes come from the largest `this`-relative displacement any method
+uses, and two classes reach a long way: `V90Phase3Demodulator` 43,336 bytes
+and `VPcmFloModem` 32,612.  Those are almost certainly reaching through into
+an enclosing session object rather than being that large themselves, but it
+means construction for those two may need the lifecycle
+(`reset` → `enterPhase3` → use) rather than a zeroed buffer.  `V90PreFilter`
+at 1,280 and `V90Phase3Modulator` at 916 are the tractable shape.
+
+**If a prerequisite turns out to be untestable in isolation, that is when the
+scaffold earns its cost.**  Branch `symmap-scaffold-spike` (`ea3b26d`) stays
+for exactly that case — not merged, not deleted.  Finding 214 records the
+mechanism and the safety audit, so nothing needs re-deriving.
+
+#### One correction to how 214 was reached
+
+214 presented the closure as though the direct-callee list might understate
+it.  It does not: `callgraph.py --order` was already computing the transitive
+closure, so re-deriving it found nothing new — it confirmed a number that was
+already right.  What the re-derivation *did* catch is that a closure walked
+from relocation targets misses file-local functions, whose calls relocate
+against `.text+offset` rather than a name: `ApplyBulkDelay`, `getbit` and
+`getMPrecvdBits` were absent from it and present in `callgraph`'s.  The
+counts here are `callgraph`'s, and 214's "65" is corrected to 64 in place.

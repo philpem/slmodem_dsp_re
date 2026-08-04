@@ -112,8 +112,10 @@ different things to different machines, and 51 is `TX_L1` to two of them.
 ```
 
 Three pieces, then, and not seven. The rest of "#39–#45" is the
-prerequisites: `v34handshak` reaches 65 functions this tree has not written,
-33.8 KB once its own 61.5 KB is set aside, and 16 KB of that is the C++ half
+prerequisites: `v34handshak` reaches 64 functions this tree has not written,
+33,406 bytes once its own 61,541 are set aside — 14 C at 17,403 and 50 C++ at
+16,003. That is the *transitive* closure, not a direct-callee count: it
+bottoms out there and does not pull in the rest of the C++ half
 of `VPcmV34Main.cpp`.
 
 It was written here that every test links all of `$(OBJ)`, so **none of the
@@ -127,7 +129,7 @@ real, but it comes from `symmap.py` renaming *every* defined blob symbol to
 functions. Rename only what we define and an unwritten callee resolves to
 the blob's own copy for both sides at once. Spiked on branch
 `symmap-scaffold-spike`: 62 of 62 binaries pass, and a caller of the
-unwritten `probeselect` links and runs. The closure of all 65 unwritten
+unwritten `probeselect` links and runs. The closure of all 64 unwritten
 callees is 111 functions with no store to `.bss` or `.data`, so sharing one
 physical copy carries nothing between the sides.
 
