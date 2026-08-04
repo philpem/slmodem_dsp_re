@@ -94,8 +94,8 @@
  },
  {
   "label": "the far adaptation offset is 0x2bc rather than 0x2bb",
-  "find": "int far_count = (short)(count - 0x2bb);",
-  "replace": "int far_count = (short)(count - 0x2bc);"
+  "find": "int far_count = (short)(prev - 0x2bb);",
+  "replace": "int far_count = (short)(prev - 0x2bc);"
  },
  {
   "label": "the adaptation steps every 45th sample become every 44th",
@@ -151,5 +151,10 @@
   "label": "the equaliser report's symbol bound is exclusive",
   "find": "\t\t\tif (rx->f124 <= 0x7530 && DSPLIB_DEBUG_ON()) {",
   "replace": "\t\t\tif (rx->f124 < 0x7530 && DSPLIB_DEBUG_ON()) {"
+ },
+ {
+  "label": "the far counter reads this call's count, not the previous one",
+  "find": "int far_count = (short)(prev - 0x2bb);",
+  "replace": "int far_count = (short)(count - 0x2bb);"
  }
 ]

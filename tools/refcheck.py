@@ -209,9 +209,24 @@ def titles(findings_text, deviations_text):
 
 
 def tracked():
+    #
+    # DEDUPED, because `git ls-files` lists an UNMERGED path once per stage.
+    # During a merge conflict -- which is the one situation this tool exists
+    # for -- a conflicted `docs/findings.md` comes back three times and every
+    # reference in it is counted three times with it.  Measured: 790 became
+    # 1437, which is 790 + 2 x 324, and two commit messages carry the
+    # inflated figure.  The verdict was right both times; the number was not,
+    # and a checker that miscounts in the case it was built for is one nobody
+    # should have to second-guess.
+    #
     out = subprocess.run(["git", "ls-files"], capture_output=True, text=True)
-    return [p for p in out.stdout.split("\n")
-            if p.endswith(SCAN_EXT) and os.path.exists(p)]
+    seen, paths = set(), []
+    for p in out.stdout.split("\n"):
+        if p in seen or not p.endswith(SCAN_EXT) or not os.path.exists(p):
+            continue
+        seen.add(p)
+        paths.append(p)
+    return paths
 
 
 def at_rev(rev, path):

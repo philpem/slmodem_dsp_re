@@ -1211,7 +1211,7 @@ main(void)
 		 * inputs swept from one variable cannot be told apart.
 		 */
 		for (lvl = 1; lvl <= 2; lvl++)
-		for (cnt = 0; cnt < 3; cnt++)
+		for (cnt = 0; cnt < 5; cnt++)
 		for (lag = 0; lag <= 1; lag++)
 		for (mode = 0; mode < 3; mode++)
 		for (feed = 0; feed <= 1; feed++)
@@ -1255,20 +1255,19 @@ main(void)
 			 *           2700 % 45 == 0, so the far step depends
 			 *           on the 0x2bb offset being exactly right
 			 */
-			static const int cnt_seed[3] = {
-				0, -1, 0x464e
+			static const int cnt_seed[5] = {
+				0, -1, 0x464e, 0x2bb, 2699
 			};
 			/*
-			 * TWO MORE SEEDS BELONG HERE AND CANNOT GO IN YET:
-			 * 0x2bb, which puts count on the FEC start
-			 * announcement, and 2699, where far_count is 2001 and
-			 * the far step depends on the 0x2bb offset being
-			 * exactly right.  Both drive the FAR canceller past
-			 * count 0x2bc for the first time in this tree, and
-			 * both then diverge from the blob -- see finding 200.
-			 * The two mutations they would catch stay uncaught
-			 * until that is fixed; adding the seeds now would
-			 * only commit a red test.
+			 * THE LAST TWO ARE THE FAR CANCELLER'S, and they are
+			 * what found finding 200: nothing in this tree had
+			 * ever driven `echo1`'s adaptation, because it starts
+			 * at count 0x2bc and this section started the counter
+			 * at 0 and ran 300 calls.  0x2bb puts the next call
+			 * on the FEC start announcement; 2699 puts it on
+			 * count 2700, where far_count is 2001 and 2700 % 45
+			 * is 0, so the far step depends on the offset being
+			 * exactly right.
 			 */
 
 			oa.f354c = ob.f354c = cnt_seed[cnt];
