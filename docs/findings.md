@@ -10874,3 +10874,225 @@ And v34rx's three are not this task's: the far echo canceller past count
 0x2bc is what the V34RX session is already working through, having found the
 `echo1` divergence at iteration 144 that its own finding records.  They will
 arrive with that work rather than being chased from here.
+### 203. The far echo canceller counted from the wrong call
+
+Closing v34rx's uncaught mutations (finding 195) meant seeding `f354c` — the
+echo adaptation counter — near the boundaries the mutations move. That drove
+the FAR canceller past count 0x2bc for the first time in this tree, and it
+did not agree with the blob. The cause was a genuine defect in
+`modem_serrint`, now fixed.
+
+**IT HAD NEVER RUN.** `modem_serrint` adapts `echo1` only once `f354c >
+0x2bc`, which is 700 calls. Its own section started the counter at 0 and ran
+300 iterations, so the branch was dead in every test that has ever passed.
+`echo0`'s equivalent starts at zero and was always covered; the two look
+alike in the source and only one of them was ever executed. Nothing about a
+green run said so.
+
+**THE DEFECT.** `far_count` was computed from `count`, the counter AFTER its
+increment. The object computes it from the value BEFORE:
+
+```
+    mov  0x354c(%ebx),%eax     ; %eax = f354c, the old count
+    lea  0x1(%eax),%ebx        ; %ebx = count = old + 1
+    mov  %ebx,0x354c(%edx)     ; f354c = count
+    sub  $0x2bb,%eax           ; far_count = OLD - 0x2bb
+```
+
+and then splits the two cleanly: `%ebx` drives every near milestone
+(`cmp $0x90,%ebx`, `cmp $0x7d0,%ebx`) and `%edi`, sign-extended from `%ax`,
+every far one. So the far counter runs one behind the near one and every far
+event lands one call later than the same near event would.
+
+**HOW IT SHOWED.** With `f354c` seeded to 0x2bb the two objects agree for
+143 calls and part at iteration 144, `f354c` = 843, offset +0x3552 — which
+is `far_count == 0x90` under our arithmetic and 0x91 under the object's. The
+tell was that `echo1_hist` was byte-identical on both sides throughout and
+`taps` matched, so `far_energy` could not differ; instrumenting both alphas
+showed ours reaching −179 at call 843 and the blob reaching the same −179 at
+844. Not a wrong value — the right value, one call early. Everything
+downstream followed: `f3552`, then `far_err`, then all 288 bytes of
+`echo1_coeff` and `echo1_frac` through `V34EchoAdapt`, and through
+`V34EchoFilter` the cancelled sample itself, which is why the visible symptom
+was the low half of every receive-queue entry.
+
+**WRITTEN AS THE OBJECT WRITES IT.** `prev - 0x2bb`, not `count - 0x2bc`.
+The two are the same number and the second hides which counter it came
+from, which is the only interesting thing about it. A mutation now asserts
+the distinction — swapping `prev` for `count` is the defect this finding is
+about, and it is caught.
+
+**WHAT IT UNBLOCKED.** The two mutations parked on it are caught: the FEC
+start announcement at `f354c == 0x2bc`, and the far step's offset. The suite
+is 30 of 31, from 17 when the set was written.
+
+**AND ONE STILL OPEN.** The S-S1 threshold `(short)err > 0x600` is moved by
+one and nothing notices, because `err` never lands on 0x601. Instrumenting
+the site says it is reached 400-odd times across the whole test with values
+spanning 156..2406 — and a search over 400 ring offsets produced not one
+sample in 0x5f8..0x608. The quantity is `(dr*dr + di*di) >> 14` on the
+distance from a fixed constellation point, so it is quantised in a way that
+steps over the band. Reaching it wants the equaliser driven to a chosen
+output, not the input swept. Task #8.
+
+### 204. The invented-string sweep accepted a truncation, and one had got in
+
+`make strings` gates on `debugaudit.py --invented`, which asks whether each
+of our string literals appears in the object's `.rodata` or `.data`. It
+asked with a plain substring test, so any literal that is a PREFIX or
+fragment of a real one passed — and a truncation is exactly what a
+mis-transcribed format string looks like. Finding 195 caught it in the act:
+replacing
+
+```
+  "VPcmV34Main: K56Flex enabled by remote, PCM type: local %d, remote %d ..."
+```
+
+with the same message cut short at "remote" was rejected by neither tier —
+not by the differential test, whose fixture pinned the branch off, and not by
+this sweep, because the short version is a prefix of the long one.
+
+**THE SUBSTRING TEST WAS LOAD-BEARING, which is why it had survived.**
+`our_strings` scanned line by line. C glues adjacent literals, and this tree
+splits nearly every long message across source lines, so a message arrived
+here as its FRAGMENTS — 142 of 592 "strings" were pieces of other strings.
+Each fragment is a substring of the whole, so the loose test was the only
+thing making them match. Tightening the comparison without gluing first
+would have reported a hundred false positives; gluing without tightening
+would have changed nothing. The two halves only work together.
+
+`RUN` already separates adjacent literals with `\s*`, which spans newlines —
+it was simply never given any, because it was applied per line. Scanning the
+whole file instead (with preprocessor lines emptied rather than skipped, so
+line numbers survive) gives 463 whole strings where there were 592 pieces.
+The comparison is now `t + b"\0" in haystack`: our literal must be a whole
+string of the object's, not a run of bytes inside one.
+
+**AND IT FOUND ONE ON THE FIRST RUN.** `src/v8/v8dp.c` named its datapump
+`.name = "v8"`. The blob has no bare `v8\0` anywhere; it has `V8\0`, sitting
+immediately before `v8: delete...\n` in `.rodata.str1.1` — which is the
+string our lowercase version had been matching as a prefix all along. The
+other three pumps really are lower case:
+
+```
+  b103   standalone in the blob: yes
+  call   standalone in the blob: yes
+  v23    standalone in the blob: yes
+  v8     standalone in the blob: NO      V8: yes
+```
+
+So the original names three of its four datapumps in lower case and the V.8
+one in upper, and the reconstruction had regularised the odd one out. No
+differential test could have seen it: `.name` is a field nothing this tree
+drives ever prints.
+
+That is the second time a sweep over EVERY literal rather than every call
+site has paid for itself — finding 180 is the first — and the first time the
+strictness of the comparison, rather than its coverage, was what mattered.
+
+### 205. `--renumber` did the wrong thing on the case it was written for
+
+Finding 198 built `refcheck.py --renumber` because moving a finding by hand
+is what missed six references once and two the next time. It was never run
+on a collision — and a collision is the only reason to reach for it.
+
+Given two `### 195.` headings it moved the **first**, which is the
+established entry rather than the newly merged one, and rewrote **every**
+citation of 195 in the tree — including the ones inside the entry that kept
+the number, which then pointed at an entry about something else. Exit status
+0, one line of success. Measured on a reconstructed collision, not supposed.
+
+**THE AMBIGUITY IS REAL AND NOT THE TOOL'S TO GUESS.** With two entries
+answering to one number, a bare `finding 195` in some third file names both
+of them and no rule recovers which was meant. So `--renumber` now refuses a
+duplicated number outright, prints both titles, and says what to do instead.
+
+What it can do is move one of them by POSITION: `--nth -1` takes the last,
+which is where a merge appends, moves that heading, and rewrites only the
+citations inside **that entry's own section** — a new finding's
+self-references travel with it. Every other citation of the number is listed
+rather than touched, because each one is a judgement:
+
+```
+  195 -> 250: the heading and 1 citation(s) inside its own section.
+
+  Still naming 195 -- these belong to the entry that kept the number,
+  or cannot be told from it.  Place them by hand:
+      docs/findings.md:10674
+      tools/debugaudit.py:287
+      ...
+```
+
+It also refuses while conflict markers are present, since two sides of an
+unresolved hunk are not a state anything can rewrite. The workflow that does
+work — and the one this session used twice by hand — is: resolve taking
+**both** sides, then `--nth`.
+
+**AND THE TOOL BIT ME WHILE I FIXED IT.** Running `--renumber 195 250` on the
+real tree to test the guard renumbered the real finding 195, and one of the
+citations it rewrote was inside `refcheck.py`'s own docstring — which
+`git checkout` could not undo, because that file was the one being edited.
+A tool that rewrites the tree needs its guard before its capability, not
+after; this is the second lesson in this file about running a mutating tool
+against the working copy, `mutate.py`'s chdir being the first.
+
+### 206. The last uncaught mutation, and why sweeping could never have found it
+
+`receiver` gives up on the equaliser and restarts when the slicing error
+passes a threshold — `if ((short)err > 0x600)` — and moving that bound by one
+was the tree's last uncaught mutation. It is observable only when `err` is
+exactly 0x601, and nothing had ever produced it: a search over 400 ring
+offsets returned not one sample anywhere in 0x5f8..0x608. Finding 203 left
+it open with the note that reaching it wanted the equaliser driven to a
+chosen output rather than the input swept. That turned out to be right, and
+three separate things stood in the way.
+
+**THE SITE WAS NEVER REACHED AT ALL.** It is the else-branch of data mode:
+
+```
+    if (flags & V34_RX_FLAG_DATA)  { ...data... }
+    else if (rx->f1c0 > 1)         { ...the reference generator, S-S1 here... }
+```
+
+Every attempt had `V34_RX_FLAG_DATA` set, because that is what the receiver's
+other cases use. With it clear and `f1c0 = 4` the site is reached on every
+call; with it set, never. Two whole sweeps measured nothing and reported
+"no sample in the band", which was true and meaningless.
+
+**THE INPUT IS NOT THE KNOB.** With the equaliser coefficients zero the
+output is zero whatever the queue holds, and err sits at 639 — the distance
+from the origin to the constellation point — for all 32767 ring amplitudes.
+The knob is the coefficients.
+
+**BUT NOT ALL OF THEM AT ONCE.** Driven together the 80 taps move `f208`
+about twenty counts per unit step, and err past the band in jumps of a
+dozen: 129..27714 with nothing inside. A single centre tap moves `f208` by a
+fraction of a count and err then walks through every value.
+
+**AND THE DELAY LINE HAS TO BE FULL.** `V34EqualizerUpdateDelayLine` runs on
+odd `i` of the `f128` loop, so one call pushes two of the eighty entries.
+On a fresh object the two land at taps 78 and 79 and the centre tap
+multiplies zero — which is why an early attempt with a full re-init per
+trial got err = 639 again and looked like a dead end. Forty calls fill the
+line, and the receive queue must be refilled before every one of them or it
+empties and the line fills with silence instead.
+
+With all four right, err is smooth and monotonic in the tap either side of a
+minimum at 2304, and the boundary is a measurement:
+
+```
+    tap 5891  ->  err 0x600     the bound is not crossed
+    tap 5892  ->  err 0x601     the first value that crosses it
+    tap 5894  ->  err 0x602
+```
+
+The test drives all three and asks the object, not the fixture, which way it
+went: `f124` is zeroed by the restart and by nothing else on that path. Two
+coverage assertions say the branch was taken for 0x601 and not for 0x600, so
+if the arithmetic ever moves out from under those constants the section
+fails rather than going quiet.
+
+**343 of 343.** Every mutation in every suite is caught, seven of them
+recorded as equivalent. The number is worth less than the four things above,
+each of which was a sweep reporting a clean result for a reason that had
+nothing to do with the code.

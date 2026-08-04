@@ -1324,7 +1324,7 @@ modem_serrint(void *objp)
 	int near_energy = 0, far_energy = 0;
 	int near_step = 0, far_step = 0;
 	short near_err, far_err = 0;
-	int count;
+	int count, prev;
 	short *wr;
 	short idx;
 
@@ -1424,14 +1424,37 @@ modem_serrint(void *objp)
 	obj->fa240 = (short)(((out * out) >> 10)
 			     + (((int)obj->fa240 * 0x3f48) >> 14));
 
-	count = obj->f354c + 1;
+	prev = obj->f354c;
+	count = prev + 1;
 	obj->f354c = count;
 
 	if (count == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34NEC, Start NEC Adaptation\n");
 	} else {
-		int far_count = (short)(count - 0x2bb);
+		/*
+		 * THE FAR COUNTER IS ONE BEHIND THE NEAR ONE, and that is the
+		 * object's doing rather than an accident here.  It loads
+		 * `f354c`, adds one, stores the sum back, and subtracts
+		 * 0x2bb from THE VALUE IT LOADED:
+		 *
+		 *      mov  0x354c(%ebx),%eax     ; the old count
+		 *      lea  0x1(%eax),%ebx        ; count = old + 1
+		 *      mov  %ebx,0x354c(%edx)
+		 *      sub  $0x2bb,%eax           ; far_count = old - 0x2bb
+		 *
+		 * Everything downstream then splits: `%ebx` drives the near
+		 * milestones and `%edi`, sign-extended from `%ax`, the far
+		 * ones.  So every far event -- the energy estimate at 0x90,
+		 * the 2000-call step -- happens one call LATER than the same
+		 * near event would.
+		 *
+		 * NOT written as `count - 0x2bc`.  That is the same number
+		 * and it hides which counter it came from, which is the only
+		 * interesting thing about it.  Taking it from `count` cost a
+		 * real divergence -- finding 200.
+		 */
+		int far_count = (short)(prev - 0x2bb);
 		int every45 = (count % 45) == 0;
 
 		near_step = every45 && count > 2000;

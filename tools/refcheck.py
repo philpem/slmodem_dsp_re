@@ -209,9 +209,24 @@ def titles(findings_text, deviations_text):
 
 
 def tracked():
+    #
+    # DEDUPED, because `git ls-files` lists an UNMERGED path once per stage.
+    # During a merge conflict -- which is the one situation this tool exists
+    # for -- a conflicted `docs/findings.md` comes back three times and every
+    # reference in it is counted three times with it.  Measured: 790 became
+    # 1437, which is 790 + 2 x 324, and two commit messages carry the
+    # inflated figure.  The verdict was right both times; the number was not,
+    # and a checker that miscounts in the case it was built for is one nobody
+    # should have to second-guess.
+    #
     out = subprocess.run(["git", "ls-files"], capture_output=True, text=True)
-    return [p for p in out.stdout.split("\n")
-            if p.endswith(SCAN_EXT) and os.path.exists(p)]
+    seen, paths = set(), []
+    for p in out.stdout.split("\n"):
+        if p in seen or not p.endswith(SCAN_EXT) or not os.path.exists(p):
+            continue
+        seen.add(p)
+        paths.append(p)
+    return paths
 
 
 def at_rev(rev, path):
@@ -272,12 +287,29 @@ def check_duplicates():
     return len(dupes)
 
 
-def renumber(old, new):
+CONFLICT = re.compile(r"(?m)^(<{7} |={7}$|>{7} )")
+
+
+def renumber(old, new, nth=None):
     """Move one entry and every citation of it, in one pass.
 
     Doing this by hand is what the six missed references in finding 196 were.
     The heading and the citations have to move together or the tree is left in
     the state that reads correct and is not.
+
+    IT REFUSES WHEN THE NUMBER IS CLAIMED TWICE, which is the case you reach
+    it from -- a merge collision.  It used to accept that and produce
+    something worse than the collision: with two `### 195.` headings it moved
+    the FIRST, which is the established entry rather than the new one, and
+    rewrote EVERY citation of 195 including the ones belonging to the entry
+    that kept the number.  Exit status 0.  Measured, not supposed.
+
+    The ambiguity is real and not the tool's to guess: with two entries
+    answering to one number, a bare `finding 195` in some third file names
+    both.  What it can do is move ONE of them by position -- `nth`, where -1
+    is the last, which is where a merge appends -- and rewrite only the
+    citations INSIDE that entry's own section, then list every other citation
+    of the number so the author can place them by hand.
     """
     kind = "D" if old.startswith("D") else "finding"
     o = old[1:] if kind == "D" else old
@@ -285,9 +317,29 @@ def renumber(old, new):
     path, head = ((DEVIATIONS, DEV_HEAD) if kind == "D"
                   else (FINDINGS, FINDING_HEAD))
 
-    have = {num for num, _ in head.findall(read(path))}
+    for f in (FINDINGS, DEVIATIONS):
+        if CONFLICT.search(read(f)):
+            sys.exit("%s still has conflict markers -- resolve the merge "
+                     "first, taking BOTH sides, then renumber." % f)
+
+    nums = [num for num, _ in head.findall(read(path))]
+    have = set(nums)
     if o not in have:
         sys.exit("no such entry: %s" % old)
+    if nums.count(o) > 1 and nth is None:
+        titles_ = [t for num, t in head.findall(read(path)) if num == o]
+        sys.exit(
+            "%s%s is claimed by %d entries:\n%s\n"
+            "Citations of it are ambiguous -- a bare `%s %s` names both -- so "
+            "moving\nthem all is wrong however it is done.  Say which entry "
+            "with --nth:\n"
+            "      tools/refcheck.py --renumber %s %s --nth -1\n"
+            "which moves the LAST (where a merge appends) and rewrites only "
+            "the\ncitations inside that entry's own section, then lists the "
+            "rest."
+            % ("D" if kind == "D" else "", o, nums.count(o),
+               "\n".join("      %s" % t[:70] for t in titles_),
+               kind, o, old, new))
     if n in have:
         sys.exit("%s%s already exists -- pick a free number (next is %s)"
                  % ("D" if kind == "D" else "", n,
@@ -303,16 +355,57 @@ def renumber(old, new):
                           r"\b%s\b" % re.escape(o))
         rrep = None
 
+    def move_refs(text):
+        return (rpat.sub(rrep, text) if kind == "D"
+                else rpat.sub(lambda m: m.group(1) + n, text))
+
+    #
+    # THE DISAMBIGUATED PATH.  One heading, chosen by position, and only the
+    # citations inside its own section -- everything else that names the
+    # number belongs to the entry that is staying, or cannot be told apart
+    # from it, and is listed rather than touched.
+    #
+    if nth is not None:
+        doc = read(path)
+        spans = [m.start() for m in head.finditer(doc)]
+        mine = [i for i, m in enumerate(head.finditer(doc))
+                if m.group(1) == o]
+        try:
+            at = mine[nth]
+        except IndexError:
+            sys.exit("--nth %d: %s%s has only %d entries"
+                     % (nth, "D" if kind == "D" else "", o, len(mine)))
+        start = spans[at]
+        end = spans[at + 1] if at + 1 < len(spans) else len(doc)
+
+        body = doc[start:end]
+        body = hpat.sub(lambda m: m.group(1) + (rrep if kind == "D"
+                                                else n + "."), body, count=1)
+        body = move_refs(body)
+        open(path, "w", encoding="utf-8").write(doc[:start] + body + doc[end:])
+
+        left = []
+        for f in tracked():
+            for k2, num, line, _ in refs_in(f, read(f)):
+                if k2 == kind and num == o:
+                    left.append((f, line))
+        print("  %s -> %s: the heading and %d citation(s) inside its own "
+              "section." % (old, new, len(list(rpat.finditer(doc[start:end])))))
+        if left:
+            print("\n  Still naming %s -- these belong to the entry that kept "
+                  "the number,\n  or cannot be told from it.  Place them by "
+                  "hand:" % old)
+            for f, line in left:
+                print("      %s:%d" % (f, line))
+        return 0
+
     touched = 0
     for f in tracked():
         text = orig = read(f)
         if f == path:
             text = hpat.sub(lambda m: m.group(1) + (rrep if kind == "D"
                                                     else n + "."), text, count=1)
-        if kind == "D":
-            text = rpat.sub(rrep, text)
-        else:
-            text = rpat.sub(lambda m: m.group(1) + n, text)
+        text = move_refs(text)
         if text != orig:
             open(f, "w", encoding="utf-8").write(text)
             touched += 1
@@ -388,6 +481,11 @@ def main():
                     "resolves, and still means what it did.")
     ap.add_argument("--dangling", action="store_true",
                     help="every reference resolves to an entry (the default)")
+    ap.add_argument("--nth", type=int, metavar="N",
+                    help="with --renumber, and only when the number is "
+                         "claimed twice: which entry to move, 0 for the "
+                         "first and -1 for the last, which is where a merge "
+                         "appends")
     ap.add_argument("--renumber", nargs=2, metavar=("OLD", "NEW"),
                     help="move an entry and every citation of it together, "
                          "e.g. --renumber 192 195, or --renumber D44 D48")
@@ -397,7 +495,9 @@ def main():
     args = ap.parse_args()
 
     if args.renumber:
-        return renumber(*args.renumber)
+        return renumber(*args.renumber, nth=args.nth)
+    if args.nth is not None:
+        sys.exit("--nth is only meaningful with --renumber")
     if args.since:
         return check_since(args.since)
     #

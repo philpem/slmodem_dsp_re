@@ -1063,11 +1063,12 @@ main(void)
 	diff_begin("v34 adaptecho");
 	{
 		static struct v34_object oa, ob;
-		int lagbase, it;
+		int lagbase, it, beta;
 		unsigned b, lvl;
 
 		/* Level 1 too; see the receiver block for why 1 and not 0. */
 		for (lvl = 1; lvl <= 2; lvl++)
+		for (beta = 0; beta <= 1; beta++)
 		for (lagbase = 0; lagbase <= 3; lagbase++) {
 			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
@@ -1078,12 +1079,27 @@ main(void)
 			oa.f25c2 = ob.f25c2 = 0;
 			oa.f260  = ob.f260  = 0;
 			oa.fa23e = ob.fa23e = 0;
-			oa.f354c = ob.f354c = 0;
 			oa.f3550 = ob.f3550 = -0x2000;
 			oa.f3554 = ob.f3554 = 0x95;
 			oa.f3558 = ob.f3558 = 0x7000;
-			oa.f355c = ob.f355c = 6;
-			oa.f3560 = ob.f3560 = 0;
+			/*
+			 * THE THIRD ARM OF THE STEP-SIZE CHOICE, which
+			 * nothing reached.  It is picked when `f355c > 2` and
+			 * neither of the two arms above it applies, and all
+			 * three compare `f3560` UNSIGNED -- so the case that
+			 * tells the unsigned compare from a signed one is a
+			 * NEGATIVE energy, which as unsigned is above every
+			 * threshold and as signed is below all of them.
+			 *
+			 * `f355c` must be 5 or less or the second arm takes
+			 * it first, and `f354c` starts at 0x8f so the very
+			 * next call is 0x90 -- the one call that runs this
+			 * block -- with `f3560` still exactly as seeded
+			 * rather than 143 calls of accumulation on top.
+			 */
+			oa.f355c = ob.f355c = (short)(beta ? 5 : 6);
+			oa.f3560 = ob.f3560 = beta ? -1 : 0;
+			oa.f354c = ob.f354c = beta ? 0x8f : 0;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 
 			/*
@@ -1195,7 +1211,7 @@ main(void)
 		 * inputs swept from one variable cannot be told apart.
 		 */
 		for (lvl = 1; lvl <= 2; lvl++)
-		for (cnt = 0; cnt < 3; cnt++)
+		for (cnt = 0; cnt < 5; cnt++)
 		for (lag = 0; lag <= 1; lag++)
 		for (mode = 0; mode < 3; mode++)
 		for (feed = 0; feed <= 1; feed++)
@@ -1224,8 +1240,37 @@ main(void)
 			oa.fa240 = ob.fa240 = 0;
 			oa.f2aa4 = ob.f2aa4 = 0;
 			oa.f2aa6 = ob.f2aa6 = 0;
-			oa.f354c = ob.f354c =
-			    (int)(cnt == 0 ? 0 : cnt == 1 ? -1 : 0x464f);
+			/*
+			 * EACH SEED IS ONE COUNT BELOW A BOUNDARY, because
+			 * the function increments before it tests: `count =
+			 * f354c + 1`.  Seeding the boundary itself lands one
+			 * past it and proves nothing.
+			 *
+			 *   -1      count wraps to 0 -- the NEC start
+			 *   0x2bb   count 0x2bc, the FEC start announcement
+			 *   0x464e  count 0x464f, the last count the near
+			 *           canceller adapts on, and 0x4650 two
+			 *           calls later is the stop announcement
+			 *   2699    count 2700, where far_count is 2001 and
+			 *           2700 % 45 == 0, so the far step depends
+			 *           on the 0x2bb offset being exactly right
+			 */
+			static const int cnt_seed[5] = {
+				0, -1, 0x464e, 0x2bb, 2699
+			};
+			/*
+			 * THE LAST TWO ARE THE FAR CANCELLER'S, and they are
+			 * what found finding 200: nothing in this tree had
+			 * ever driven `echo1`'s adaptation, because it starts
+			 * at count 0x2bc and this section started the counter
+			 * at 0 and ran 300 calls.  0x2bb puts the next call
+			 * on the FEC start announcement; 2699 puts it on
+			 * count 2700, where far_count is 2001 and 2700 % 45
+			 * is 0, so the far step depends on the offset being
+			 * exactly right.
+			 */
+
+			oa.f354c = ob.f354c = cnt_seed[cnt];
 			oa.f3550 = ob.f3550 = -0x1800;
 			oa.f3552 = ob.f3552 = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
@@ -2108,8 +2153,14 @@ main(void)
 	diff_begin("v34 receiver debug transcript");
 	{
 		static struct v34_object oa, ob;
+		/*
+		 * 0x7530 IS THE BOUNDARY, and it was missing: the equaliser
+		 * report is gated `f124 <= 0x7530` and the sweep ran 0x7531,
+		 * one past it, so tightening the test to `<` changed nothing
+		 * any case could see.
+		 */
 		static const short syms[] = { 0x11, 0x40, 0x69, 0x143, 0x153,
-					      0x333, 0x7531 };
+					      0x333, 0x7530, 0x7531 };
 		unsigned cs, b, lvl;
 		int it, saw;
 
@@ -2204,17 +2255,44 @@ main(void)
 			     : cs == 5 ? V34_RX_FLAG_PREDICT
 			     : V34_RX_FLAG_DATA);
 
+			/*
+			 * 32, not 28: the loop length is a multiple of the
+			 * symbol table's, so every entry gets the same number
+			 * of turns.  Adding 0x7530 to a 7-entry table without
+			 * this cost the S-S1 argument-swap catch, because the
+			 * counts each case reached quietly changed.
+			 */
 			saw = 0;
-			for (it = 0; it < 28; it++) {
+			for (it = 0; it < 32; it++) {
 				long tag = (long)cs * 1000 + it;
 
 				ra->f124 = rb->f124 =
 				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
 				if (cs == 1)
 					ra->f798 = rb->f798 = 0x8c;
-				if (cs == 2)
-					ra->f798 = rb->f798 =
-					    (short)((it & 1) ? -0x7c : -0x85);
+				if (cs == 2) {
+					/*
+					 * BOTH EDGES OF THE WINDOW.  It is
+					 * `n + 0x78 <= 0 && n + 0x84 > 0`,
+					 * so it admits -131..-120 and the
+					 * two values that decide it are the
+					 * ends: -120 leaves if the lower
+					 * bound moves by one, -132 enters if
+					 * the upper one does.  The sweep ran
+					 * -124 and -133, which are a clear
+					 * inside and a clear outside -- and
+					 * neither bound could be moved by
+					 * one without the test agreeing.
+					 */
+					static const short rrn[] = {
+						-0x78,	/* -120, the low edge */
+						-0x7c,	/* -124, inside       */
+						-0x84,	/* -132, the high edge*/
+						-0x85	/* -133, outside      */
+					};
+
+					ra->f798 = rb->f798 = rrn[it & 3];
+				}
 
 				dsplib_debug_capture_reset();
 				receiver(&oa);
@@ -2534,6 +2612,184 @@ main(void)
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;
 		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE S-S1 THRESHOLD, PLACED EXACTLY.  `receiver` gives up on the
+	 * equaliser and restarts when the slicing error passes 0x600:
+	 *
+	 *      if ((short)err > 0x600) { ... rx->f124 = 0; ... }
+	 *
+	 * and moving that bound by one is observable ONLY when err is 0x601.
+	 * Nothing in the sweeps above ever produced it -- err is
+	 * `(dr*dr + di*di) >> 14` on the distance from a fixed constellation
+	 * point, and the values the ring happens to generate step straight
+	 * over the band.  400 different ring offsets gave not one sample in
+	 * 0x5f8..0x608.
+	 *
+	 * SO THE ERROR IS CHOSEN RATHER THAN SWEPT FOR.  Three things make it
+	 * reachable, and each was learned by getting it wrong:
+	 *
+	 *   V34_RX_FLAG_DATA MUST BE CLEAR.  The site is the else-branch of
+	 *   data mode, taken when `f1c0 > 1`.  With DATA set it is never
+	 *   reached at all.
+	 *
+	 *   THE DELAY LINE HAS TO BE FULL.  `V34EqualizerUpdateDelayLine` runs
+	 *   on odd `i` of the `f128` loop, so a call pushes two of the 80
+	 *   entries and a fresh object needs forty calls before the middle
+	 *   taps multiply anything but zero.  The queue is refilled before
+	 *   every one of them, or it empties and the line fills with silence.
+	 *
+	 *   ONE TAP, NOT EIGHTY.  Driven together the taps move `f208` about
+	 *   twenty counts per step, which strides over the band; a single
+	 *   centre tap moves it by a fraction of one, and err then walks
+	 *   through every value.
+	 *
+	 * With that, err is monotonic in the tap either side of a minimum at
+	 * 2304, and the three values below sit on the bound and its two
+	 * neighbours.  They are constants found by measurement, so the
+	 * assertion that matters is the one that says so: `saw_ss1` proves
+	 * the branch was taken for 0x601 and not for 0x600, and if the
+	 * arithmetic ever moves under them it fails rather than going quiet.
+	 */
+	diff_begin("v34 receiver: the S-S1 threshold, both sides of it");
+	{
+		static struct v34_object oa4, ob4;
+		static const struct { short tap; int err; int cross; } ss1[] = {
+			{ 5891, 0x600, 0 },	/* not `> 0x600`: no restart  */
+			{ 5892, 0x601, 1 },	/* the first value that is    */
+			{ 5894, 0x602, 1 }
+		};
+		unsigned c, warm, z;
+		int saw_ss1 = 0, saw_quiet = 0;
+
+		for (c = 0; c < sizeof(ss1) / sizeof(ss1[0]); c++) {
+			struct v34_receiver *ra, *rb;
+			struct v34_equalizer *qa, *qb;
+			unsigned b;
+			int j;
+
+			memset(&oa4, HARNESS_MALLOC_FILL, sizeof(oa4));
+			memset(&ob4, HARNESS_MALLOC_FILL, sizeof(ob4));
+			V34InitializeImplementationSpecific(&oa4);
+			ref_V34InitializeImplementationSpecific(&ob4);
+			txinit(&oa4); ref_txinit(&ob4);
+			rxinit(&oa4); ref_rxinit(&ob4);
+			rxtiminginit(&oa4); ref_rxtiminginit(&ob4);
+			V34SetupDemodulator(&oa4, 3000, 1800);
+			ref_V34SetupDemodulator(&ob4, 3000, 1800);
+
+			ra = (struct v34_receiver *)((char *)&oa4 + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob4 + 0x264);
+			qa = (struct v34_equalizer *)((char *)ra
+						      + V34_RX_EQ_OFFSET);
+			qb = (struct v34_equalizer *)((char *)rb
+						      + V34_RX_EQ_OFFSET);
+			oa4.status = ob4.status = 0;
+			oa4.rx_energy_floor = ob4.rx_energy_floor = 900;
+
+			for (warm = 0; warm < 60; warm++) {
+				for (z = 0; z < V34_RXQ_RING; z++)
+					((struct v34_queue *)ra)->ring[z] =
+					((struct v34_queue *)rb)->ring[z] =
+					    (int)((unsigned)(unsigned short)
+						  (short)(z * 811 + 3000)
+						  | ((unsigned)(unsigned short)
+						     (short)(z * 277 - 900)
+						     << 16));
+				((struct v34_queue *)ra)->count =
+				((struct v34_queue *)rb)->count =
+				    V34_RXQ_RING;
+				((struct v34_queue *)ra)->rd =
+				    ((struct v34_queue *)ra)->ring;
+				((struct v34_queue *)rb)->rd =
+				    ((struct v34_queue *)rb)->ring;
+				((struct v34_queue *)ra)->wr =
+				    ((struct v34_queue *)ra)->ring;
+				((struct v34_queue *)rb)->wr =
+				    ((struct v34_queue *)rb)->ring;
+
+				ra->agc_gain = rb->agc_gain = 0x4000;
+				ra->agc_step = rb->agc_step = 0x3333;
+				ra->f124 = rb->f124 = 0x100;
+				ra->f1c0 = rb->f1c0 = 4;
+				ra->f1f2 = rb->f1f2 = 0x4000;
+				ra->f1f4 = rb->f1f4 = 0;
+				ra->f19c = rb->f19c = 0;
+				ra->f1ec = rb->f1ec = 1;
+				ra->f1ee = rb->f1ee = 2;
+				ra->f21c = rb->f21c = 0x3fd;
+				ra->flags = rb->flags =
+				    (unsigned short)V34_RX_FLAG_TRAINED;
+
+				/* The last call is the one that counts. */
+				if (warm + 1 == 60) {
+					for (j = 0; j < V34_EQ_TAPS; j++) {
+						qa->re[j] = qb->re[j] = 0;
+						qa->im[j] = qb->im[j] = 0;
+					}
+					qa->re[40] = qb->re[40] = ss1[c].tap;
+				}
+
+				receiver(&oa4);
+				ref_receiver(&ob4);
+			}
+
+			/*
+			 * `f124` is zeroed by the restart and by nothing else
+			 * on this path, so it says whether the bound was
+			 * crossed -- and it is the object's own answer, not
+			 * this fixture's arithmetic.
+			 */
+			diff_eq_int("the reference crossed the bound",
+				    ra->f124 == 0, ss1[c].cross,
+				    (long)ss1[c].err);
+			diff_eq_int("and so did ours", rb->f124 == 0,
+				    ss1[c].cross, (long)ss1[c].err);
+			if (ss1[c].cross)
+				saw_ss1 = 1;
+			else
+				saw_quiet = 1;
+
+			for (b = 0; b < sizeof(oa4); b++) {
+				if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)
+					continue;
+				if (b >= 0x264 + 0x130 && b < 0x264 + 0x134)
+					continue;
+				if (b >= 0x264 + 0x1b4 && b < 0x264 + 0x1b8)
+					continue;
+				if (b >= 0x264 + 0x2a4 && b < 0x264 + 0x2a8)
+					continue;
+				if (b >= 0x620 && b < 0x628)
+					continue;
+				if (b >= 0x221c + 4 && b < 0x221c + 0xc)
+					continue;
+				if (b >= 0x2074 && b < 0x2078)
+					continue;
+				if (b >= 0x2078 + __builtin_offsetof(
+					  struct v34_echo_prefilter, coeff)
+				    && b < 0x2078 + __builtin_offsetof(
+					  struct v34_echo_prefilter, coeff) + 4)
+					continue;
+				if (b >= 0x80b8 && b < 0x80b8 + 0x18)
+					continue;
+				if (b >= 0x9138 && b < 0x9138 + 0x18)
+					continue;
+				diff_eq_int("S-S1 object byte %ld",
+					    ((unsigned char *)&oa4)[b],
+					    ((unsigned char *)&ob4)[b],
+					    (long)ss1[c].err * 100000 + b);
+			}
+		}
+
+		/*
+		 * Both halves have to have happened, or the three constants
+		 * have drifted off the boundary and the section is asserting
+		 * nothing.
+		 */
+		diff_eq_int("the bound was crossed at 0x601", saw_ss1, 1, 0);
+		diff_eq_int("and not crossed at 0x600", saw_quiet, 1, 0);
 	}
 	rc |= diff_end();
 

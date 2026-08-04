@@ -109,7 +109,14 @@ v8_delete(struct dp *dp)
 }
 
 static struct dp_operations v8_op = {
-	.name = "v8",
+	/*
+	 * "V8", not "v8".  The other three datapumps name themselves in
+	 * lower case -- `b103`, `call`, `v23` are all standalone strings
+	 * in the blob -- and this one does not: the object carries `V8\0`
+	 * and no bare `v8\0` at all.  An asymmetry in the original, and
+	 * the reconstruction had quietly regularised it.  See finding 201.
+	 */
+	.name = "V8",
 	.use_count = 0,
 	.create = v8_create,
 	.destroy = v8_delete,
