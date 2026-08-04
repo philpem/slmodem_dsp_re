@@ -24,21 +24,41 @@ is structured, and the commands that prove each claim.
 
 ## Status
 
+**V.90 / V.92 is the end goal.** V.34 is being done first because it is the
+base V.90 builds on, not for its own sake.
+
 | phase | content | state |
 |--:|---|---|
-| 0 | tooling, TU map, differential harness | **done** (SpanDSP deferred) |
+| 0 | tooling, TU map, differential harness | **done** |
 | 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** |
-| 2 | Bell 103 / V.21 — *first real connection* | **complete** — connects and carries data at BER 0 |
-| 3 | call progress / dialler — *originate as well as answer* | — |
-| 4 | V.23 | — |
-| 5 | V.8 negotiation | — (also where `MEMORYC.c` gets identified — finding 37) |
-| 6 | V.22 / V.22bis / Bell 212 (rest of `fpm_*`) | — |
-| 7 | V.32 / V.32bis | — |
-| 8 | remaining services (CID, DTMF, ring detect, voice, beep) | — |
-| 9 | fax Class 1 (V.17 / V.27ter / V.29) | — |
-| 10 | V.34 | — |
-| 11 | V.90 / V.92 | — |
-| 12 | 8 kHz retarget | — |
+| 2 | Bell 103 / V.21 — *first real connection* | **done** — connects and carries data at BER 0 |
+| 3 | call progress / dialler — *originate as well as answer* | **done** — `src/callprog/`, `src/dialer/`, `src/call/`; one caveat below |
+| 4 | V.23 | **done** — all six modules at 1200/75 bps, interop against SpanDSP's `fsk.c` |
+| 5 | V.8 negotiation | **done** — negotiates against SpanDSP over a socket; `MEMORYC.c` identified here (finding 37) |
+| 6 | V.22 / V.22bis / Bell 212 | **not started.** The `fpm_*` fixed-point framework this row also covered was pulled forward into phase 2 and *is* done (finding 16) |
+| 7 | V.32 / V.32bis | **not started** |
+| 8 | remaining services (CID, DTMF, ring detect, voice, beep) | **not started** |
+| 9 | fax Class 1 (V.17 / V.27ter / V.29) | **not started** |
+| 10 | V.34 | **in progress** — the fast pass; see [docs/fastpass.md](docs/fastpass.md) |
+| 11 | V.90 / V.92 — *the end goal* | **not started**, beyond the 16,003 bytes of `VPcmV34Main.cpp` that `v34handshak` reaches (finding 215) |
+| 12 | 8 kHz retarget | **not started** |
+
+Run `make coverage` for the live figure rather than trusting a number written
+here; it reports translated bytes, what fraction of them a test drives against
+the blob, and what is left by translation-unit span.
+
+**Phase 3's caveat.** The phase's own milestone is met, but the `Dialer.c`
+span still holds unwritten bytes. That span brackets nineteen translation
+units, so what those bytes belong to is not attributed — some of it is
+probably phase 8 services sharing the range rather than dialler code.
+
+**Two numbering traps.** Task subjects `#33`–`#47` used to be labelled "Phase
+6a" through "Phase 6z" for what is V.34 work — phase **10** here, phase 6
+being V.22. They now read "Phase 10a" and so on, but older findings and
+hand-over notes still say "phase 6d", "phase 6g–6m" and the like, and those
+mean V.34. Separately, a second task store exists whose `#11`–`#22` are
+different tasks from this one's; `docs/fastpass.md` holds the mapping. Say
+which store you mean when quoting a task number.
 
 ### Phase 2 detail
 

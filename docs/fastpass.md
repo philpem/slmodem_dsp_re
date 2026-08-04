@@ -1,10 +1,17 @@
 # The V.34 fast pass
 
-**Applies to tasks #33 and #35–#45. Deferred work is task #47.**
+**Applies to tasks #33 and #35–#38, #47, and #56–#61. (#39–#45 are
+superseded — see the renumbering section below.)**
 
-Phase 6 is ~110 KB of code — `v34handshak` alone is 61 KB across 87 states.
-At the pace phases 1–5 were done it is many sessions. This is the agreed
-change of sequencing, decided after V.34's first 4.5 KB.
+V.34 is ~110 KB of code — `v34handshak` alone is 61 KB across 87 states. At
+the pace phases 1–5 were done it is many sessions. This is the agreed change
+of sequencing, decided after V.34's first 4.5 KB.
+
+V.34 is **phase 10** in the README's plan. Task subjects and older findings
+call this work "phase 6", which is wrong — phase 6 is V.22/V.22bis/Bell 212,
+not started. The task subjects have been corrected to "Phase 10a" and so on;
+findings are a record and are left as written, so read "phase 6d", "phase
+6g–6m" and the like in them as V.34.
 
 It is **sequencing, not a drop in quality**. Nothing that establishes
 correctness is skipped.
