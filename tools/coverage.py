@@ -41,14 +41,27 @@ File-local symbols (`t` in nm) are counted when we have reconstructed one of
 the same name -- several are, `AnalyseDialString` among them.  They used to be
 reported apart as impossible to test differentially, "because objcopy cannot
 rename them".  That was wrong: --globalize-symbols promotes them first and the
-rename map then applies, which the Makefile now does in two passes, so 241 of
-them DO have a `ref_` alias.  Ten names are used by more than one translation
-unit and still cannot be globalized.
+rename map then applies, which the Makefile now does in two passes.  So a
+file-local symbol whose name is unique in the object has a `ref_` alias, can
+be called by name, and counts in the `tested` denominator like anything else.
+Ten names occur in more than one translation unit and cannot be globalized --
+two statics of the same name are two different objects -- and those alone
+stay in the reached-through-a-caller bucket.
 
-THIS REPORT HAS NOT CAUGHT UP.  It still files all of them under "reached
-through a caller instead", so the `tested` denominator is smaller than the
-truth and the percentage flatters.  Fixing that is task #62; the bucket below
-is a to-do list now, not a limitation.
+Which is which is not re-derived from symmap.py's rules: the alias set is read
+out of build/dsplibs_ref.o, the object the tests actually link.  A symbol is
+drivable if and only if objcopy really made an alias for it.
+
+WHERE `ours` COMES FROM, AND WHY IT IS A WHITELIST
+
+Only build/src is walked.  This used to be all of build/ less `dsplibs_ref.o`
+by name -- and then the two-pass rename put a SECOND copy of the blob beside
+it, build/dsplibs_glob.o, with all 1782 of its symbols promoted to global.
+The walk took that for our own output and the report claimed 98.0% translated
+for a tree that has reconstructed 290 symbols.  Adding a second name to the
+blacklist would break again the next time the Makefile leaves an intermediate
+in build/; naming the one directory our compiler writes to cannot.  See
+finding 222.
 
 Usage:
     coverage.py [--obj ../slmodemd/dsplibs.o] [--build build] [--md FILE]
@@ -98,18 +111,37 @@ def blob_addresses(path):
 
 
 def our_symbols(build):
+    """Global text symbols our own compiler output defines.
+
+    build/src and nothing else -- the whitelist the docstring argues for.
+    """
     syms = set()
-    for root, _dirs, files in os.walk(build):
-        if "test" in root.split(os.sep):
-            continue
+    for root, _dirs, files in os.walk(os.path.join(build, "src")):
         for name in files:
-            if not name.endswith(".o") or name == "dsplibs_ref.o":
+            if not name.endswith(".o"):
                 continue
             for sym, (_size, kind) in nm_symbols(os.path.join(root,
                                                              name)).items():
                 if kind == "T":
                     syms.add(sym)
     return syms
+
+
+def aliased_symbols(build):
+    """Names reachable as `ref_NAME` in the object the tests link.
+
+    Read from the artifact, not from symmap.py's rules, so the two cannot
+    drift: whatever objcopy managed to alias is what a test can call.
+    """
+    ref = os.path.join(build, "dsplibs_ref.o")
+    if not os.path.exists(ref):
+        sys.exit("error: %s does not exist, so nothing can be said about "
+                 "which symbols have a ref_ alias.  Build it first:\n"
+                 "    make %s" % (ref, ref))
+    out = subprocess.run(["nm", "--defined-only", ref],
+                         capture_output=True, text=True).stdout
+    names = {line.split()[-1] for line in out.splitlines() if line.split()}
+    return {n[len("ref_"):] for n in names if n.startswith("ref_")}
 
 
 # Interop sources, which have no intermediate object to read.
@@ -201,6 +233,7 @@ def main():
     blob = nm_symbols(args.obj)
     ours = our_symbols(args.build)
     tested = tested_symbols(args.build)
+    aliased = aliased_symbols(args.build)
     addr = blob_addresses(args.obj)
     tus = load_tus(args.tumap)
 
@@ -210,7 +243,15 @@ def main():
 
     done_g = {n: s for n, s in gl.items() if n in ours}
     done_l = {n: s for n, s in lo.items() if n in ours}
-    done_t = {n: s for n, s in done_g.items() if n in tested}
+
+    # A file-local symbol that got a `ref_` alias can be called by name and so
+    # belongs in the denominator; one that did not, cannot and does not.
+    done_la = {n: s for n, s in done_l.items() if n in aliased}
+    done_ln = {n: s for n, s in done_l.items() if n not in aliased}
+
+    drivable = dict(done_g)
+    drivable.update(done_la)
+    done_t = {n: s for n, s in drivable.items() if n in tested}
 
     d_bytes = sum(done_g.values()) + sum(done_l.values())
     t_bytes = sum(done_t.values())
@@ -222,7 +263,7 @@ def main():
     add("  .text                        %8d bytes, %d symbols"
         % (total, len(blob)))
     add("")
-    g_bytes = sum(done_g.values())
+    g_bytes = sum(drivable.values())
     add("  translated  %s %5.1f%%  %8d bytes, %d symbols"
         % (bar(d_bytes / total if total else 0),
            100 * d_bytes / total if total else 0, d_bytes,
@@ -230,32 +271,39 @@ def main():
     add("  tested      %s %5.1f%%  %8d bytes, %d of %d that can be"
         % (bar(t_bytes / g_bytes if g_bytes else 0),
            100 * t_bytes / g_bytes if g_bytes else 0, t_bytes, len(done_t),
-           len(done_g)))
+           len(drivable)))
     add("")
     add("  `tested` is the share of what we have translated that some test"
         " drives")
     add("  against the blob itself, not a self-consistency check.  Its"
         " denominator")
-    add("  is what CAN be driven that way -- but see task #62.  241 file-local")
-    add("  symbols gained a `ref_` alias when the Makefile started globalizing")
-    add("  them, and this denominator has not caught up, so the figure flatters.")
+    add("  is what CAN be driven that way: everything with a `ref_` alias in")
+    add("  build/dsplibs_ref.o, which since the Makefile globalizes first"
+        " includes")
+    add("  the file-local symbols too -- %d of ours (%d bytes)."
+        % (len(done_la), sum(done_la.values())))
     add("")
 
-    untested = sorted(((s, n) for n, s in done_g.items() if n not in tested),
+    untested = sorted(((s, n) for n, s in drivable.items() if n not in tested),
                       reverse=True)
     if untested:
-        add("  translated, globally visible, and NOT tested:")
+        add("  translated, alias exists, and NOT tested:")
         for size, name in untested:
-            add("    %-44s %6d bytes" % (name, size))
+            add("    %-44s %6d bytes%s"
+                % (name, size, "   (file-local)" if name in done_la else ""))
         add("")
 
-    if done_l:
-        add("  file-local in the object, so reached through a caller"
-            " instead")
+    if done_ln:
+        add("  file-local AND named in more than one translation unit, so no")
+        add("  alias is possible -- reached through a caller instead")
         add("  (%d symbols, %d bytes -- outside the figure above):"
-            % (len(done_l), sum(done_l.values())))
-        for name in sorted(done_l):
-            add("    %-44s %6d bytes" % (name, done_l[name]))
+            % (len(done_ln), sum(done_ln.values())))
+        for name in sorted(done_ln):
+            add("    %-44s %6d bytes" % (name, done_ln[name]))
+        add("")
+    else:
+        add("  nothing we have reconstructed is stuck without an alias: every")
+        add("  file-local symbol of ours is drivable by name.")
         add("")
 
     strays = []
@@ -272,13 +320,16 @@ def main():
 
     if tus:
         rest = {}
-        for name, size in gl.items():
+        # Local symbols count here too.  Iterating the globals alone left the
+        # file-local ones out of "what is left" as well as out of the
+        # denominator, which understated both.
+        for name, (size, _kind) in blob.items():
             if name in ours:
                 continue
-            rest.setdefault(area_of(addr.get(name, -1), tus),
-                            [0, 0])
-            rest[area_of(addr.get(name, -1), tus)][0] += size
-            rest[area_of(addr.get(name, -1), tus)][1] += 1
+            area = area_of(addr.get(name, -1), tus)
+            rest.setdefault(area, [0, 0])
+            rest[area][0] += size
+            rest[area][1] += 1
         add("  what is left, by translation-unit span:")
         for label, (size, count) in sorted(rest.items(),
                                            key=lambda kv: -kv[1][0])[:12]:

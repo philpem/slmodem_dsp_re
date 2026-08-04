@@ -341,7 +341,11 @@ check64:
 # Two numbers, both from symbol tables rather than from grepping source:
 # how much of the blob has a same-named function in this tree, and how much
 # of that some test drives against the blob itself.
-coverage: $(BUILD)/tumap.json $(OBJ)
+# $(REF) is a prerequisite because coverage.py reads the alias set out of it:
+# which symbols have a `ref_` name is what decides the `tested` denominator,
+# and asking that question of an object that is not there gets an answer that
+# is plausible and wrong.
+coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
 
 $(BUILD)/tumap.json: tools/tumap.py $(BLOB) | $(BUILD)

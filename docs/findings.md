@@ -12140,3 +12140,102 @@ out of reach, and coverage.py's headline number was computed on that basis.
 Nobody had run the two-line experiment.  Compare finding 199 -- a fallback
 chosen to be harmless-if-wrong is a fallback that hides being wrong -- and
 finding 198, where a checker used a dict and so could not see a collision.
+
+### 222. The intermediate object was counted as ours, and coverage read 98%
+
+Finding 221's two-pass rename leaves an intermediate behind:
+
+```
+objcopy --globalize-symbols=globals.txt dsplibs.o dsplibs_glob.o
+objcopy --redefine-syms=symmap.txt      dsplibs_glob.o  dsplibs_ref.o
+```
+
+`build/dsplibs_glob.o` is the whole blob with every one of its file-local
+symbols promoted to global.  `coverage.py`'s `our_symbols()` walked all of
+`build/`, skipping only `dsplibs_ref.o`, **by name**:
+
+```python
+if not name.endswith(".o") or name == "dsplibs_ref.o":
+    continue
+```
+
+So it read the intermediate as our own compiler output and counted all 1,782
+of the blob's symbols as reconstructed.  The report, and the `docs/coverage.md`
+committed with d915b73, therefore said:
+
+```
+  translated  [#################################.]  98.0%    713824 bytes, 1782 symbols
+  tested      [######............................]  17.5%    121351 bytes, 282 of 1727 that can be
+```
+
+for a tree that has reconstructed 290 symbols and 124,247 bytes.  Both figures
+were wrong, in opposite directions and for the same reason: `translated` took
+the blob for ours, and `tested`'s denominator -- `sum(done_g)` -- became the
+blob's entire `.text` rather than what we have written.
+
+The honest numbers, with the walk restricted to `build/src`:
+
+```
+  translated  [######............................]  17.1%    124247 bytes, 290 symbols
+  tested      [#################################.]  97.7%    121351 bytes, 282 of 290 that can be
+```
+
+`translated` is unchanged from before d915b73 (17.1%, 124,247 bytes, 290
+symbols).  The 98.0% never described any work; nothing is being reverted.
+
+#### What 221 actually predicted, and what it looks like
+
+221 said the `tested` figure should FALL when the denominator caught up.  It
+does: 100.0% -> 97.7%.  The eight symbols that moved into the denominator are
+exactly the file-local functions this tree has reconstructed and can now call
+by name --
+
+```
+    v8_process       590    b103_process   582    v23_process   464
+    AnalyseDialString 436   b103_create    406    v23_create    274
+    v23_delete        72    b103_delete     72
+```
+
+-- 2,896 bytes that no test references a `ref_` alias of.  Task #62's tests are
+what close that gap.
+
+#### Whitelist, not a second blacklist entry
+
+The fix walks `build/src` and nothing else, rather than adding
+`dsplibs_glob.o` to the name test.  A blacklist has to be edited every time
+the Makefile leaves a new intermediate in `build/`, and the failure mode when
+it is not edited is this one: a number that is plausible, wrong, and committed.
+Naming the one directory our own compiler writes to has no such edit.
+
+The alias set is likewise read from `build/dsplibs_ref.o` rather than
+re-derived from `symmap.py`'s exclusion rules, so the report cannot disagree
+with the object the tests link; `make coverage` gained `$(REF)` as a
+prerequisite, and `coverage.py` exits rather than guessing if it is absent.
+`done_l` is still split into aliased and not -- the ten multi-TU names of
+finding 221 belong in the second bucket -- but it is empty today, because all
+ten are data symbols and `our_symbols()` collects text only.  The report says
+so in words rather than printing an empty heading.
+
+#### Two under-counts left standing, deliberately
+
+`our_symbols()` collects `T` and not `t`, so a function we have reconstructed
+*and also kept static* is invisible to the report.  Seven of finding 221's
+fifteen are in that state -- `call_run`, `V34demodulate`, `v8_create`,
+`v8_delete`, `call_create`, `call_delete`, `call_GetSRegister` -- reconstructed
+here, static here, and counted as neither translated nor testable.  That is
+why the eight above are eight and not fifteen.
+
+And "what is left, by translation-unit span" iterated the globals alone, which
+omitted the 47 file-local symbols nobody has reconstructed.  It now iterates
+both.  Neither of these moves the headline; both were the same habit of
+reaching for the globals because they were the easy half.
+
+#### The lesson, which is 221's own
+
+221's commit message is a story about a check that could not fail -- a
+duplicate count taken on a deduplicated set.  It shipped, in the same commit,
+a measurement that could not be right, because the thing it measured was
+defined by exclusion and the exclusion was a literal filename.  A tool that
+decides what counts as "ours" by listing what is not ours will be wrong the
+first time something new appears, and it will be wrong quietly.  Compare
+finding 198 and finding 199.
