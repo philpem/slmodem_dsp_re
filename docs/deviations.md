@@ -1979,3 +1979,35 @@ ratchet, which is what makes the plain assignment worth recording.
 **How it was found:** by reading the three request entry points together;
 the field's own header comment in `v34fsk.h` describes a counter "the
 handshake's C++ side ratchets forward", and this writer does not.
+
+## D49 ⚠ `chkForceBaudRate`'s V.90 arm writes a local it then abandons
+
+**Where:** `src/pump/v34/v34pcmif.c`, `chkForceBaudRate`.
+
+**What the original does:** all three arms of the fork store into the local
+six-byte array — `movb $0x1,0x25(%esp)` on the V.90 arm at 0xa4d1, `movb $0x0`
+on the K56Flex arm, `movb $0x1` on the third — but only the last two go on to
+use that array. The V.90 arm sets `edi` to `p3548 + 0x217` instead, so its
+store at index 5 is never read.
+
+**Why that is worth an entry:** the store is not a compiler artifact that can
+be argued away. The other two arms write the same byte for a reason, and the
+value the V.90 arm writes is the same one the "neither receiver" arm writes,
+which is what a hoisted `allow[5] = !k56flex_receiver` would produce — so the
+likeliest reading is that the source computed the flag before choosing the
+array and the choice made it dead. That is a guess about the source, and what
+the object states is the dead store.
+
+**What we do:** reproduce it, with a comment saying it is dead. It is filed as
+an equivalent mutation in `test/mutations/v34pcmif.json`: removing it survives
+the whole-object comparison, which is the evidence that nothing observes it,
+and the entry is what stops that survival reading as a gap in the tests.
+
+**Reachability:** the arm is reached — the sweep in `t_v34pcmif.c` drives all
+three — but the store's *effect* is unreachable by construction. `unmeasured`
+in the sense the other entries mean it: nothing measures whether a real call
+takes the V.90 arm.
+
+**How it was found:** reading the three arms against each other while writing
+the function; the mutation was added to check the reading and survived, which
+is the confirmation.

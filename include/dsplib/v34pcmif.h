@@ -5,6 +5,8 @@
 #ifndef DSPLIB_V34PCMIF_H
 #define DSPLIB_V34PCMIF_H
 
+#include "dsplib/v34det.h"	/* struct v34_dftbin: chkForceBaudRate's arg */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,6 +85,17 @@ void VPcmV34SetV90RateReneg(void *obj, short rrn_type,
  */
 void VPcmV34ReportStartOfEchoAdapt(void *obj);
 void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
+
+/*
+ * Cap the V.34 symbol rate the line probe is allowed to choose, by writing
+ * `shift` on the bins that stand for the rates the configuration bars.
+ *
+ * `bins` is always `obj->probe_bins` at both of `probeselect`'s call sites,
+ * but it is a parameter in the object and is kept one here.  Nothing is
+ * returned and the V.34 object is not written: the effect is entirely in the
+ * bank, and only `probeselect` looks at it afterwards.
+ */
+void chkForceBaudRate(void *obj, struct v34_dftbin *bins);
 
 #ifdef __cplusplus
 }

@@ -38,12 +38,13 @@ extern "C" {
 #define V34_FSK_LPF_TAPS	80
 
 /*
- * Two array bounds in the V.34 object that belong to the handshake's
+ * Four array bounds in the V.34 object that belong to the handshake's
  * interface rather than to the FSK receiver, declared here because this is
- * where `struct v34_object` is.  Both are the object's own loop bounds, not
+ * where `struct v34_object` is.  All are the object's own loop bounds, not
  * inferred sizes -- see the members.
  */
 #define V34_PROBE_RESULTS	25	/* doubles at +0xa258 */
+#define V34_PROBE_BINS		25	/* DFT bins at +0xa320 */
 #define V34_INFO0_BITS		41	/* one bit per int at +0xa8a4 */
 #define V34_RETRAIN_BINS	3	/* DFT bins at +0xa81c */
 
@@ -519,7 +520,24 @@ struct v34_object {
 	 * `V34XF_GetProbeResultsPtr` hands the array out unchanged.
 	 */
 	double probe_results[V34_PROBE_RESULTS];	/* +0xa258 */
-	unsigned char unmapped_a320[0xa81c - 0xa320];
+	/*
+	 * +0xa320.  The LINE PROBE's own DFT bank, twenty-five bins to match
+	 * the twenty-five doubles above, and the second bank in this object
+	 * after the retrain detector's three.
+	 *
+	 * The count is not inferred from the array above it: `v34handshak`
+	 * loads `obj + 0xa320` and passes it to `dftupdate` with `nbins` in
+	 * a register set to `$0x19` at 0x686ca, and to `dftenergy` at
+	 * 0x67da3.  Twenty-five bins one unit apart is 150 Hz to 3750 Hz at
+	 * the 9600 Hz rate V.34 runs at, which is the probe's tone spacing.
+	 *
+	 * `probeselect` reads `energy` and `shift` out of every one of them
+	 * and `chkForceBaudRate` writes `shift` on six, so the two fields
+	 * `dftenergy` produces are the whole interface -- nothing outside
+	 * DFTC.c touches the accumulators.
+	 */
+	struct v34_dftbin probe_bins[V34_PROBE_BINS];	/* +0xa320 */
+	unsigned char unmapped_a76c[0xa81c - 0xa76c];
 	/*
 	 * +0xa81c.  The retrain detector's three DFT bins, at 900, 1200 and
 	 * 1500 Hz -- `dftRetrainDetInit` gives them phase steps of 0x600,
@@ -674,9 +692,32 @@ struct v34_object {
 	 * enabled by remote, PCM type: local %d, remote %d (A=1, Mu=0)".
 	 *
 	 * It is also what says this struct's 0xac10 was never the object's
-	 * size.  The bound is now 0xac1c, and still a bound.
+	 * size.  The bound is now 0xac40, and still a bound.
 	 */
 	void *pac18;					/* +0xac18 */
+	unsigned char unmapped_ac1c[0xac3c - 0xac1c];
+	/*
+	 * +0xac3c.  A THIRD pointer into the C++ side, and the busiest of the
+	 * three: forty-odd loads of it between .text+0x6200 and +0x7c00, all
+	 * inside `VPcmV34Main.cpp`'s C exports.  Where `p3548` is the session
+	 * and `pac18` is the PCM type, this one is the negotiated
+	 * CONFIGURATION -- everything read through it is a limit somebody
+	 * asked for:
+	 *
+	 *   +0x3c  int    the maximum upstream rate, in bits per second;
+	 *                 `VPcmV34GetMaxUpstreamRateIndex` returns it
+	 *   +0x44  short  a transmit power reduction in dB, clamped to
+	 *                 [-10, +7] by `GetVPcmMinimalTxPowerReduction`
+	 *   +0x50  byte   bits 5..7 are the maximum V.34 BAUD RATE INDEX,
+	 *                 which is what `chkForceBaudRate` reads and its own
+	 *                 trace names: "max V34 baud rate index = %d"
+	 *   +0x54  int    compared against 4 by GetVPcmMinimalTxPowerReduction
+	 *
+	 * Reconstructed as a `void *` with each field spelled out at its use,
+	 * for the reason `p3548`'s note gives: a struct here would be a
+	 * guess, and the object never states one.
+	 */
+	void *pac3c;					/* +0xac3c */
 };
 
 /*

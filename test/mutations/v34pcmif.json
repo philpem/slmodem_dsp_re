@@ -323,5 +323,160 @@
   "label": "the middle report's gate is >= 1",
   "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");",
   "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
+ },
+ {
+  "note": "chkForceBaudRate.  Three claims to break: where the cap comes from (the byte, the shift), how it turns into cleared flags (the guard on zero and the five comparisons), and which bin each cleared flag spoils."
+ },
+ {
+  "label": "force: the cap is read from the wrong byte",
+  "find": "\tmaxidx = cfg[0x50] >> 5;",
+  "replace": "\tmaxidx = cfg[0x51] >> 5;"
+ },
+ {
+  "label": "force: the cap is shifted down by four, not five",
+  "find": "\tmaxidx = cfg[0x50] >> 5;",
+  "replace": "\tmaxidx = cfg[0x50] >> 4;"
+ },
+ {
+  "label": "force: the cap is shifted down by six, not five",
+  "find": "\tmaxidx = cfg[0x50] >> 5;",
+  "replace": "\tmaxidx = cfg[0x50] >> 6;"
+ },
+ {
+  "label": "force: the cap is read signed",
+  "find": "\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;",
+  "replace": "\tconst signed char *cfg = (const signed char *)obj->pac3c;"
+ },
+ {
+  "label": "force: index zero is no longer special-cased",
+  "find": "\tif (maxidx != 0) {\n\t\tif (maxidx <= 1)",
+  "replace": "\tif (maxidx != -1) {\n\t\tif (maxidx <= 1)"
+ },
+ {
+  "label": "force: rate 1 barred one index early",
+  "find": "\t\tif (maxidx <= 1)\n\t\t\tsel[1] = 0;",
+  "replace": "\t\tif (maxidx < 1)\n\t\t\tsel[1] = 0;"
+ },
+ {
+  "label": "force: rate 2 barred one index late",
+  "find": "\t\tif (maxidx <= 2)\n\t\t\tsel[2] = 0;",
+  "replace": "\t\tif (maxidx <= 3)\n\t\t\tsel[2] = 0;"
+ },
+ {
+  "label": "force: rate 3 barred one index early",
+  "find": "\t\tif (maxidx <= 3)\n\t\t\tsel[3] = 0;",
+  "replace": "\t\tif (maxidx < 3)\n\t\t\tsel[3] = 0;"
+ },
+ {
+  "label": "force: rate 4 barred one index early",
+  "find": "\t\tif (maxidx <= 4)\n\t\t\tsel[4] = 0;",
+  "replace": "\t\tif (maxidx < 4)\n\t\t\tsel[4] = 0;"
+ },
+ {
+  "label": "force: rate 5 barred one index early",
+  "find": "\t\tif (maxidx <= 5)\n\t\t\tsel[5] = 0;",
+  "replace": "\t\tif (maxidx < 5)\n\t\t\tsel[5] = 0;"
+ },
+ {
+  "label": "force: the V.90 test compares with one instead of zero",
+  "find": "\tif (obj->v90_receiver) {",
+  "replace": "\tif (obj->v90_receiver == 1) {"
+ },
+ {
+  "label": "force: the V.90 test reads a short",
+  "find": "\tif (obj->v90_receiver) {",
+  "replace": "\tif ((short)obj->v90_receiver) {"
+ },
+ {
+  "label": "force: the K56Flex test compares with one instead of zero",
+  "find": "\t} else if (obj->k56flex_receiver) {",
+  "replace": "\t} else if (obj->k56flex_receiver == 1) {"
+ },
+ {
+  "label": "force: the K56Flex arm allows the top rate",
+  "find": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 0;",
+  "replace": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 1;"
+ },
+ {
+  "label": "force: the neither arm bars the top rate",
+  "find": "\t} else {\n\t\tallow[5] = 1;\n\t\tsel = allow;\n\t}",
+  "replace": "\t} else {\n\t\tallow[5] = 0;\n\t\tsel = allow;\n\t}"
+ },
+ {
+  "label": "force: the session flags are one byte along",
+  "find": "\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
+  "replace": "\t\tsel = (unsigned char *)obj->p3548 + 0x218;"
+ },
+ {
+  "label": "force: the V.90 arm edits the local array instead of the session",
+  "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
+  "replace": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = allow;"
+ },
+ {
+  "label": "force: the local array starts out all barred",
+  "find": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 1;",
+  "replace": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 0;"
+ },
+ {
+  "label": "force: 3429 spoils the wrong bin",
+  "find": "\t\tbins[24].shift = 11;",
+  "replace": "\t\tbins[23].shift = 11;"
+ },
+ {
+  "label": "force: 3429 is spoiled by seven like the rest",
+  "find": "\t\tbins[24].shift = 11;",
+  "replace": "\t\tbins[24].shift = 7;"
+ },
+ {
+  "label": "force: 3200 spoils the wrong bin",
+  "find": "\t\tbins[22].shift = 7;",
+  "replace": "\t\tbins[21].shift = 7;"
+ },
+ {
+  "label": "force: 3000's low bin is the wrong one",
+  "find": "\t\tbins[2].shift = 7;",
+  "replace": "\t\tbins[3].shift = 7;"
+ },
+ {
+  "label": "force: 3000's high bin is the wrong one",
+  "find": "\t\tbins[2].shift = 7;\n\t\tbins[21].shift = 7;",
+  "replace": "\t\tbins[2].shift = 7;\n\t\tbins[20].shift = 7;"
+ },
+ {
+  "label": "force: 2800 spoils only one of its two bins",
+  "find": "\t\tbins[20].shift = 7;\n\t\tbins[19].shift = 7;",
+  "replace": "\t\tbins[20].shift = 7;"
+ },
+ {
+  "label": "force: the bin's energy is spoiled rather than its shift",
+  "find": "\t\tbins[22].shift = 7;",
+  "replace": "\t\tbins[22].energy = 7;"
+ },
+ {
+  "label": "force: the top rate's test has the wrong polarity",
+  "find": "\tif (sel[5] == 0)\n\t\tbins[24].shift = 11;",
+  "replace": "\tif (sel[5] != 0)\n\t\tbins[24].shift = 11;"
+ },
+ {
+  "label": "force: the flags are consulted one index along",
+  "find": "\tif (sel[4] == 0)\n\t\tbins[22].shift = 7;",
+  "replace": "\tif (sel[3] == 0)\n\t\tbins[22].shift = 7;"
+ },
+ {
+  "label": "force: the trace names the wrong module",
+  "find": "\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
+  "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Main: max V34 baud rate index \""
+ },
+ {
+  "label": "force: the trace is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
+  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \""
+ },
+ {
+  "label": "force: the dead store on the V.90 arm is dropped",
+  "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "`sel` is set to the session object on that arm and `allow` is never read again, so nothing can observe the store.  It is reproduced because the object performs it, not because it does anything; D49 records it.  A mutation of it being CAUGHT would mean the arm's `sel` had moved."
  }
 ]

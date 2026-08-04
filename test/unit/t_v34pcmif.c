@@ -74,6 +74,7 @@ extern void ref_VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateRateRenegotiation(void *obj, int req);
 extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 				       unsigned char constel_size);
+extern void ref_chkForceBaudRate(void *obj, struct v34_dftbin *bins);
 
 extern short ref_scrambleGPC(void *obj, short n);
 extern short ref_scrambleGPA(void *obj, short n);
@@ -104,10 +105,19 @@ static unsigned char ob[sizeof(struct v34_object)];
  */
 static const unsigned ptr_skip[] = {
 	0x3548,					/* the session object       */
+	0xac3c,					/* the configuration object */
 	0x0a28, 0x0e48,				/* receive shell context    */
 	0x0a28 + V34_SHELL_TX, 0x0e48 + V34_SHELL_TX	/* transmit         */
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
+
+/*
+ * The first two are the FIXTURE's -- nothing under test writes either, and
+ * what justifies their holes is that the memory behind them was reached,
+ * which is asserted per case.  The rest are installed by the code under test
+ * and the check at the bottom is that something really installed them.
+ */
+#define NFIXTURE_PTR 2
 
 static int saw_ptr_written[NPTR];
 
@@ -471,6 +481,97 @@ ptr_at(const void *base, unsigned off)
 
 	memcpy(&p, (const unsigned char *)base + off, sizeof(p));
 	return p;
+}
+
+/* --- chkForceBaudRate ----------------------------------------------------- */
+
+/*
+ * The configuration object, per side.  Only one byte of it is read, but the
+ * buffer is long enough that a reconstruction reading the wrong offset lands
+ * inside it and gets the fill rather than reading off the end -- which would
+ * crash the fixture instead of reporting the disagreement.
+ *
+ * The fill is NOT the byte under test, so "read +0x50" and "read anything
+ * else" produce different maximum indices: 0x71 >> 5 is 3, and the sweep
+ * below drives +0x50 through all eight.
+ */
+#define CFG_LEN		0x80
+#define CFG_FILL	0x71
+#define CFG_MAXBAUD	0x50		/* bits 5..7 are the index */
+
+static unsigned char cfg_a[CFG_LEN], cfg_b[CFG_LEN];
+
+/* Where the six per-rate flags live inside the session object. */
+#define ALLOW_OFF	0x217
+#define ALLOW_LEN	6
+
+/*
+ * Coverage flags.  A byte comparison passes when NEITHER side wrote
+ * anything, so each of the three things this function can do has to be seen
+ * happening at least once or the sweep proves nothing.
+ */
+static int saw_force_capped;		/* a bin's `shift` was written    */
+static int saw_force_session;		/* the V.90 arm edited the session */
+static int saw_force_local;		/* the local arm left it alone    */
+
+static void
+run_force(unsigned char cfgbyte, int v90, int k56, const unsigned char *allow,
+	  long tag)
+{
+	unsigned char want[ALLOW_LEN];
+	unsigned i;
+	int capped = 0;
+
+	setup();
+	seed_chain();
+
+	memset(cfg_a, CFG_FILL, sizeof(cfg_a));
+	memset(cfg_b, CFG_FILL, sizeof(cfg_b));
+	cfg_a[CFG_MAXBAUD] = cfg_b[CFG_MAXBAUD] = cfgbyte;
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+
+	memcpy(want, allow, ALLOW_LEN);
+	memcpy(sess_a + ALLOW_OFF, allow, ALLOW_LEN);
+	memcpy(sess_b + ALLOW_OFF, allow, ALLOW_LEN);
+
+	poke_int(0x24c, v90);
+	poke_int(0x250, k56);
+
+	chkForceBaudRate(&oa, oa.probe_bins);
+	ref_chkForceBaudRate(ob, (struct v34_dftbin *)(ob + 0xa320));
+
+	/*
+	 * The bank is inside the object, exactly as it is at both of
+	 * `probeselect`'s call sites, so the whole-object comparison covers
+	 * it -- and covers a write to the wrong bin, which a check on the six
+	 * bins the function is *about* would not.
+	 */
+	compare("chkForceBaudRate", tag);
+
+	/* The session, which the V.90 arm writes and the other two must not. */
+	compare_link("chkForceBaudRate session", sess_a, sess_b, SESS_LEN,
+		     SESS_PTR, tag);
+	if (memcmp(sess_a + ALLOW_OFF, want, ALLOW_LEN) != 0)
+		saw_force_session = 1;
+	else
+		saw_force_local = 1;
+
+	/* The configuration is an input; nothing may write it. */
+	for (i = 0; i < CFG_LEN; i++) {
+		unsigned char seed = (i == CFG_MAXBAUD) ? cfgbyte : CFG_FILL;
+
+		if (cfg_a[i] != seed || cfg_b[i] != seed) {
+			diff_eq_int("chkForceBaudRate wrote its configuration",
+				    0, 1, (long)i * 1000 + tag);
+			break;
+		}
+	}
+
+	for (i = 0; i < V34_PROBE_BINS; i++)
+		if (oa.probe_bins[i].shift == 7 || oa.probe_bins[i].shift == 11)
+			capped = 1;
+	if (capped)
+		saw_force_capped = 1;
 }
 
 /*
@@ -980,6 +1081,98 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* --- chkForceBaudRate ------------------------------------------- */
+
+	/*
+	 * EXHAUSTIVE OVER THE CAP, BECAUSE IT CAN BE.  The index is three
+	 * bits of one byte, so all eight values are reachable by
+	 * construction and there is no argument to make about which are
+	 * interesting: 0 clears nothing by a guard of its own, 1 through 5
+	 * each clear one more rate, and 6 and 7 fall out of the chain.
+	 *
+	 * The low five bits are swept with them.  They are shifted out, so a
+	 * reconstruction that read the byte as a whole -- or masked before
+	 * shifting instead of after -- agrees on every case where they are
+	 * zero and on none where they are not.
+	 *
+	 * THE TWO RECEIVER WORDS ARE DRIVEN SEPARATELY AND WITH VALUES THAT
+	 * ARE NOT 1.  The object tests both with `test`/`je`, so any non-zero
+	 * takes the arm; a reconstruction comparing `== 1` or `> 0` would
+	 * pass on 1 and fail on -1, and one reading a short would pass on
+	 * everything except 0x10000.
+	 *
+	 * AND THE SESSION'S FLAGS ARE SWEPT UNDER THEM.  On the V.90 arm the
+	 * six bytes this function edits are ALSO what it reads back, so what
+	 * they held before the call decides which bins get written.  The
+	 * local arm cannot see that -- its array is seeded 1,1,1,1,1,x every
+	 * time -- which is exactly why the two arms need different patterns
+	 * rather than one.
+	 */
+	diff_begin("v34 pcm interface: chkForceBaudRate, every cap "
+		   "against every arm");
+	{
+		static const int recv_in[][2] = {	/* v90, k56flex */
+			{ 0, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 },
+			{ 0, -1 }, { -1, 0 }, { 0, 0x10000 }, { 0x10000, 0 },
+			{ 0, 0x7fffffff }, { 0x7fffffff, 0 }
+		};
+		static const unsigned char allow_in[][ALLOW_LEN] = {
+			{ 0, 0, 0, 0, 0, 0 },
+			{ 1, 1, 1, 1, 1, 1 },
+			{ 1, 0, 1, 0, 1, 0 },
+			{ 0, 1, 0, 1, 0, 1 },
+			{ CHAIN_FILL, CHAIN_FILL, CHAIN_FILL,
+			  CHAIN_FILL, CHAIN_FILL, CHAIN_FILL }
+		};
+		unsigned idx, low, r, a;
+
+		for (idx = 0; idx < 8; idx++)
+		for (low = 0; low < 2; low++)
+		for (r = 0; r < sizeof(recv_in) / sizeof(recv_in[0]); r++)
+		for (a = 0; a < sizeof(allow_in) / sizeof(allow_in[0]); a++)
+			run_force((unsigned char)((idx << 5) | (low ? 0x1f : 0)),
+				  recv_in[r][0], recv_in[r][1], allow_in[a],
+				  10000 + (long)idx * 1000 + (long)low * 500
+				  + (long)r * 10 + a);
+
+		diff_eq_int("some case capped a rate", saw_force_capped, 1, 0);
+		diff_eq_int("some case edited the session",
+			    saw_force_session, 1, 0);
+		diff_eq_int("and some case left it alone",
+			    saw_force_local, 1, 0);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 pcm interface: chkForceBaudRate says what it capped");
+	{
+		unsigned idx;
+
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+
+		for (idx = 0; idx < 8; idx++) {
+			static const unsigned char none[ALLOW_LEN] =
+				{ 1, 1, 1, 1, 1, 1 };
+
+			dsplib_debug_capture_reset();
+			run_force((unsigned char)(idx << 5), 0, 0, none,
+			      20000 + (long)idx);
+			diff_eq_int("chkForceBaudRate transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, 20000 + (long)idx);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    20000 + (long)idx);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	/* --- InitiateHangUp --------------------------------------------- */
 
 	diff_begin("v34 pcm interface: InitiateHangUp, both arms of the fork");
@@ -1197,6 +1390,14 @@ main(void)
 			V34XF_IndicateK56FlexRateDetermined(&oa);
 			ref_V34XF_IndicateK56FlexRateDetermined(ob);
 
+			{
+				static const unsigned char none[ALLOW_LEN] =
+					{ 1, 1, 1, 1, 1, 1 };
+
+				run_force(0x20, 0, 0, none,
+					  9003 + (long)lvl * 10);
+			}
+
 			diff_eq_int("ours printed nothing",
 				    dsplib_debug_capture_text(0)[0], 0,
 				    9000 + (long)lvl);
@@ -1223,11 +1424,13 @@ main(void)
 		 * justifies its hole is that the chain behind it was walked,
 		 * which is what `check_session_chain` asserts per case.
 		 */
-		for (k = 1; k < NPTR; k++)
+		for (k = NFIXTURE_PTR; k < NPTR; k++)
 			diff_eq_int("pointer field was installed at least once",
 				    saw_ptr_written[k], 1, (long)ptr_skip[k]);
 		diff_eq_int("and the session chain was walked",
 			    saw_chain_walked, 1, (long)ptr_skip[0]);
+		diff_eq_int("and the configuration object was read",
+			    saw_force_capped, 1, (long)ptr_skip[1]);
 	}
 	rc |= diff_end();
 

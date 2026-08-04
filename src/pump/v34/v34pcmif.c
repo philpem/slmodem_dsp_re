@@ -481,6 +481,119 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 
 /*
  * ---------------------------------------------------------------------------
+ * Cap the V.34 symbol rate by doctoring the line probe.
+ *
+ * `chkForceBaudRate` is the one function in this file that does not touch the
+ * V.34 object at all -- it reads two of its fields and writes the DFT bank the
+ * caller hands it.  `probeselect` calls it twice, both times with
+ * `obj->probe_bins`, and then goes on to pick a symbol rate from the very
+ * energies and shifts this has just adjusted.  So the mechanism is indirect:
+ * there is no "forced rate" variable anywhere, only a probe measurement that
+ * has been made to look as though the high bins were never received.
+ *
+ * WHICH BIN STANDS FOR WHICH RATE.  The six entries of `allow` are the six
+ * V.34 symbol rates in the standard's order -- 2400, 2743, 2800, 3000, 3200
+ * and 3429 baud -- and the object maps the top four onto bins whose centres
+ * are the band edge each rate needs, one bin being 150 Hz:
+ *
+ *     allow[5]  3429 baud  ->  bins[24]   3750 Hz   shift := 11
+ *     allow[4]  3200 baud  ->  bins[22]   3450 Hz   shift :=  7
+ *     allow[3]  3000 baud  ->  bins[21]   3300 Hz   shift :=  7
+ *                               bins[ 2]   450 Hz   shift :=  7
+ *     allow[2]  2800 baud  ->  bins[20]   3150 Hz   shift :=  7
+ *                               bins[19]  3000 Hz   shift :=  7
+ *
+ * `allow[0]` and `allow[1]` are written and never read: the two lowest rates
+ * have no bin to spoil, because nothing about them is out at the edge.  The
+ * rate-to-bin assignment is the object's; the frequencies are this
+ * reconstruction's arithmetic on the 150 Hz spacing finding 212 establishes,
+ * and the pairing of two bins with 3000 and 2800 is not explained by it.
+ *
+ * WHERE THE LIMIT COMES FROM, AND WHERE IT IS APPLIED, ARE DIFFERENT PLACES.
+ * The limit is the top three bits of a configuration byte at `pac3c + 0x50`.
+ * What it is applied TO depends on which PCM receiver is running:
+ *
+ *   - V.90 active (`v90_receiver` set): the six flags live in the SESSION
+ *     object, at `p3548 + 0x217`, and this edits them in place -- so the
+ *     V.90 side's own idea of which rates are on the table both feeds this
+ *     decision and is narrowed by it.
+ *   - otherwise: a local array, seeded 1,1,1,1,1,x, so the cap is the only
+ *     thing that can clear anything and the decision is made afresh.
+ *
+ * The `x` is 0 when K56Flex is running and 1 when neither is, which is the
+ * only thing the K56Flex arm changes.
+ *
+ * `allow[5] = 1` on the V.90 arm is a DEAD STORE -- `sel` points at the
+ * session object there, and the local is not read again.  Reproduced because
+ * it is what the object does; see D49.
+ */
+void
+chkForceBaudRate(void *objp, struct v34_dftbin *bins)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	unsigned char allow[6] = { 0 };
+	unsigned char *sel;
+	int maxidx;
+
+	maxidx = cfg[0x50] >> 5;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VpcmV34Main: max V34 baud rate index "
+				     "= %d\r\n", maxidx);
+
+	allow[0] = 1;
+	allow[1] = 1;
+	allow[2] = 1;
+	allow[3] = 1;
+	allow[4] = 1;
+
+	if (obj->v90_receiver) {
+		allow[5] = 1;			/* dead -- see the note above */
+		sel = (unsigned char *)obj->p3548 + 0x217;
+	} else if (obj->k56flex_receiver) {
+		allow[5] = 0;
+		sel = allow;
+	} else {
+		allow[5] = 1;
+		sel = allow;
+	}
+
+	/*
+	 * Index 0 CLEARS NOTHING, and it is guarded separately rather than
+	 * falling out of the chain: with `maxidx` zero every comparison below
+	 * would hold and every rate would be barred.  So zero means "no cap
+	 * configured" and not "cap at the lowest rate".
+	 */
+	if (maxidx != 0) {
+		if (maxidx <= 1)
+			sel[1] = 0;
+		if (maxidx <= 2)
+			sel[2] = 0;
+		if (maxidx <= 3)
+			sel[3] = 0;
+		if (maxidx <= 4)
+			sel[4] = 0;
+		if (maxidx <= 5)
+			sel[5] = 0;
+	}
+
+	if (sel[5] == 0)
+		bins[24].shift = 11;
+	if (sel[4] == 0)
+		bins[22].shift = 7;
+	if (sel[3] == 0) {
+		bins[2].shift = 7;
+		bins[21].shift = 7;
+	}
+	if (sel[2] == 0) {
+		bins[20].shift = 7;
+		bins[19].shift = 7;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Same argument as dpsk.c's block: these offsets sit in
  * regions that are otherwise padding, so a field that drifted would compile
  * silently.  Guarded to a 32-bit ABI because `struct v34_object` holds
@@ -510,6 +623,8 @@ V34PCMIF_ASSERT(rwant,   rate_want,        0x022c);
 V34PCMIF_ASSERT(rrnloc,  rrn_local,        0xac0e);
 V34PCMIF_ASSERT(rrnrem,  rrn_remote,       0xac10);
 V34PCMIF_ASSERT(p3548,   p3548,            0x3548);
+V34PCMIF_ASSERT(pac3c,   pac3c,            0xac3c);
+V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
 
 /*
  * And the three receiver scalars the two Initiate entry points clear, which
