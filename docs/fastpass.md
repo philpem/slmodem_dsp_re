@@ -140,11 +140,20 @@ unwritten `probeselect` links and runs. The closure of all 64 unwritten
 callees is 111 functions with no store to `.bss` or `.data`, so sharing one
 physical copy carries nothing between the sides.
 
-Not landed, because it spends a free invariant — today "the suite links"
-proves everything reachable from what we have written *is* written. Whether
-to spend it, and what ratchet replaces it, is the open decision. What is
-settled is that the 16 KB of V.90/V.92 C++ is a **scheduling** question and
-not a precondition.
+Not landed, and finding 215 declines it: the prerequisite set is 33,406 bytes
+and bounded, every one of it individually testable, and all of it written in
+the end whichever order is chosen. The branch stays as a documented escape
+hatch, not as a plan.
+
+**The line that used to be here — that the 16 KB of V.90/V.92 C++ is "a
+scheduling question and not a precondition" — is wrong, and finding 217
+disproves it.** Six of #59's seventeen functions tail-call into
+`VPcmV34Main.cpp`'s C++ half, so a C file defining any of them leaves
+undefined symbols and *all 62 test binaries fail to link*. #60 is a hard
+predecessor of `indicateJaTransmission`, `k56FlexPhase34`, `v90Phase34`,
+`V34SetINFO1aBits`, `VPcmV34InitiateRetrain` and `V34GiveINFO1dBits`.
+`datapumpv34` is the odd one out — it waits on `v34handshak` itself, so it
+comes after #56–#58.
 
 ### The decision, and what it does to #59's ordering
 
