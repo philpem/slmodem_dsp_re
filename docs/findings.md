@@ -10423,3 +10423,76 @@ throughout — about twenty. Matching bare `\d+[a-z]` instead takes `1u`, `0f`,
 digits and a letter it still takes `837k` out of `P(k) = -21k^2 + 837k - 354`
 in v34rx.c. This runs in `make test`, where a false positive is worse than a
 miss, so the keyword stays required. Write the word and it is covered.
+
+### 194. The silence check, everywhere, and what it says about drivers
+
+Finding 189 built one section — capture ON, level DOWN — for `t_v34pcmif`,
+on the grounds that every transcript comparison in the tree raises the debug
+level before capturing, so a call site that lost its
+`if (DSPLIB_DEBUG_ON())` prints the same text on both sides and passes.
+This spreads it. Eleven files already had the check in another shape,
+usually a `lines(1) == 0` assertion inside a level sweep, which is
+equivalent and cheaper than a section of its own. Five did not, and every
+one of the five was completely undriven:
+
+```
+  t_fpm_agc      4 gates    8 of 8 mutants survived   ->  0
+  t_encode       2 gates    4 of 4                    ->  0
+  t_dialercfg   16 gates   32 of 32                   ->  0
+  t_v34hshak    10 gates   20 of 20                   ->  2
+  t_v34rx       19 gates   38 of 38                   ->  2
+```
+
+**LEVEL 1, NOT LEVEL 0.** Every gate in the object is `> 1`, so 1 is the
+single value at which it disagrees with the `>= 1` a reader would write. At
+0 both spellings are silent and both mutants live. Level 0 is swept anyway
+where it is free, but it is level 1 that does the work — and cadence's
+second threshold at `> 2` (finding 155) is why each file's gates are read
+before its levels are chosen rather than pasting one loop everywhere.
+
+**DRIVING THE FUNCTION IS NOT DRIVING THE SITE**, which is the finding here.
+The first attempt at `t_v34rx` was one new section calling each of the nine
+gate-bearing functions once. It reached six gates of nineteen. `adaptecho`,
+`modem_serrint`, `setInitialPhase`, `TimingV34` and `receiver` all print
+from behind counters and error paths that their own sections build up over
+120 to 200 iterations; a fresh call lands nowhere near them. What worked was
+adding the level as another dimension of the loop that already exists —
+reusing the setup instead of reproducing it — with the byte comparison
+skipped below the threshold, since seven million comparisons per pass prove
+nothing about strings that level 2 has not already proved.
+
+**AND THREE SITES NOTHING HAD EVER DRIVEN.** `setInitialPhase` and
+`TimingV34` never captured at all, so their diagnostics had never been
+compared. `modem_serrint`'s three were unreachable from its own sweep:
+`f354c` was pinned at 0 and `f25c` at 0x40, so the NEC start announcement —
+which needs `count = f354c + 1` to WRAP to zero — the stop announcement at
+0x4650, and the negative-lag error path were all out of reach. Two extra
+loop dimensions, kept separate because two inputs swept from one variable
+cannot be told apart, and all three are driven.
+
+The same mistake in the fixture, for the third time in three files: the new
+section seeded a receive queue's `count` and `ring` but not `rd`/`wr`, which
+are pointers into it. `V34agc` follows them before printing anything, so the
+whole test segfaulted rather than reporting. **A fixture must not
+dereference a pointer it has not seeded** — findings 189 and 192 say this
+about `t_v34pcmif` and `t_v34info`.
+
+**WHAT IT COST THE MUTATION SCORE, WITHOUT MEANING TO.** v34rx's suite was
+the tree's only red one at 13 uncaught (finding 192); it is now 8. Four fell
+out of the coverage above. The fifth needed its own fix and is worth
+recording: `v34FreezeEcho` reports the near canceller then the far one, and
+with both sets of coefficients equal — which is what init leaves — dumping
+`echo0` twice prints exactly what dumping `echo0` then `echo1` prints. Two
+patterns, and the transposition is visible.
+
+334 caught over 20 suites, 8 not caught, 7 equivalent. The 8 that remain are
+off-by-one mutations on thresholds — 0x600 becomes 0x601, `<= 0x464f`
+becomes `<`, the renegotiation window's two bounds — which need the sweep to
+reach exact counter values. That is task #6 and it is not silence work.
+
+The one gate left undriven in each of the two V.34 files is worth naming so
+neither reads as an oversight. `v34hshak`'s is `preempindex`'s "index is 0"
+arm, which D36 records as unreachable: `i` is 6 or more by the time the test
+runs, so no input drives it. `v34rx`'s is `setInitialPhase`'s second divide
+guard, which needs `polyValue(k2) + polyValue(k)` to come out zero — the
+sweep reaches the first guard and not that one.
