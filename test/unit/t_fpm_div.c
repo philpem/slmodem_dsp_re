@@ -9,8 +9,10 @@
  */
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 
+extern unsigned int ref_dsplibs_debug_level;
 extern int ref_FPM_div(unsigned short denom, unsigned short *recip,
 		       unsigned short *shift);
 
@@ -66,6 +68,44 @@ main(void)
 		    overrun, 255, 0);
 	diff_eq_int("the fixed table would return 16384 there (%ld)",
 		    FPM_div_table_generate(128), 16384, 0);
+	rc |= diff_end();
+
+	/*
+	 * The divide-by-zero complaint, which is the one path in this file
+	 * that announces anything and had never executed: every caller here
+	 * passes a real denominator, and at level 0 the announcement is a
+	 * branch nobody takes.  Level 1 must be silent -- the gate is `> 1`.
+	 */
+	diff_begin("FPM_div: division by zero says so");
+	{
+		unsigned short ra, sa, rb, sb;
+		unsigned lines = 0;
+		int lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+			ra = sa = rb = sb = 0x5a5a;
+			diff_eq_int("returns the same", FPM_div(0, &rb, &sb),
+				    ref_FPM_div(0, &ra, &sa), lvl);
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, lvl);
+			if (lvl == 1)
+				diff_eq_int("level 1 silent",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, lvl);
+			else
+				lines += dsplib_debug_capture_lines(1);
+		}
+		diff_eq_int("it said something (%ld)", lines > 0, 1,
+			    (long)lines);
+	}
 	rc |= diff_end();
 
 	return rc;
