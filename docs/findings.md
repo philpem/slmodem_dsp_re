@@ -10860,3 +10860,17 @@ verdicts and buffer conditions the drivers do not produce, `pulse_digit` and
 `DialerProgress`'s five want a pulse dial in flight, and v34rx's three want
 the far echo canceller past count 0x2bc.  Those are input problems, not
 level problems, and each will cost more than a loop.
+
+`pulse_digit`'s is diagnosed here, since the diagnosis is most of the work.
+Its site fires when `IsPulseDialerReady` answers NO, and that function
+returns 1 unconditionally when `call_of(modem)` is null.  Every dialler test
+sets `MDMPRM_DP_ADDR` to 0 -- deliberately, because `SetPulseMakeTime`
+dereferences whatever it returns -- so the dialler is always told the line is
+ready and the waiting branch cannot be reached at any debug level.  Driving
+it needs a real `struct call` with a pulse in flight, which is the fixture
+those tests were built to avoid.
+
+And v34rx's three are not this task's: the far echo canceller past count
+0x2bc is what the V34RX session is already working through, having found the
+`echo1` divergence at iteration 144 that its own finding records.  They will
+arrive with that work rather than being chased from here.
