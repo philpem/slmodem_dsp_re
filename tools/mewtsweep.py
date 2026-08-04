@@ -64,6 +64,25 @@ VERSION = "4.0.0"
 SHA256 = "0e30678a7d090d112b9cf4d2d620053ca9da7c458ed5c2d94010304edded728b"
 WORKTREE = "../mewt_sweep"          # beside the others: ../slmodemd must resolve
 
+#
+# SECONDS PER MUTANT, and the number that decides whether a sweep takes a
+# minute or an afternoon.
+#
+# A mutant is one recompile, one relink and one test run: 146 ms measured, and
+# mewt's own overhead brings it to about 115.  But some mutants do not
+# terminate -- `while (acc <= 0x1fffffff) acc += acc;` in v8agc's normaliser
+# becomes `!=`, `*=` or `%=` and spins forever -- and each of those costs the
+# WHOLE timeout.  At the 120 s this started with, three hangers in one small
+# file were 360 seconds against 46 of real work, which is why a smoke run
+# looked like a hang: it was 88% waiting.
+#
+# 10 s is 65x the real command and caps a hanger at a fifteenth of what it
+# cost before.  Nothing is lost by the shortening: a mutant that never
+# returns is a mutant the tests DETECT, and mewt records the timeout as its
+# own outcome rather than as an escape.
+#
+TIMEOUT = 10
+
 
 def find_mewt():
     m = os.environ.get("MEWT") or shutil.which("mewt")
@@ -132,7 +151,7 @@ def config(src, test, severities):
     return ('db = "mewt.sqlite"\n[log]\nlevel = "info"\n'
             '[targets]\ninclude = ["%s"]\n'
             '[test]\ncmd = "make -s %s >/dev/null 2>&1 && ./%s >/dev/null 2>&1"\n'
-            'timeout = 120\n' % (src, test, test))
+            'timeout = %d\n' % (src, test, test, TIMEOUT))
 
 
 def main():

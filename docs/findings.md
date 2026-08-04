@@ -10761,3 +10761,39 @@ minutes, where the manual spike did 1219 in five.  That is seconds per
 mutant against two tenths by hand, and the cold worktree explains the first
 build and not the rest.  Unmeasured, so unfixed, and the tool says so at the
 top: a full sweep is days at this rate rather than the hour it should be.
+
+### 200. It was not slow, it was waiting: 88% of the sweep was one timeout
+
+Finding 199 left the sweep "slower than it should be, and not yet measured".
+Measured, it was not slow at all.
+
+The numbers, in the order they settled it.  A test binary runs in 23 ms and
+a whole mutant cycle -- recompile, relink, run -- in **146 ms** by hand.
+Driving mewt directly over 32 mutants took **3690 ms wall for 33 command
+invocations**, one per mutant plus the baseline: **115 ms each**, FASTER than
+by hand and with no repeated work to find.  So neither the rebuild, nor the
+sqlite write, nor the process spawn was the problem, and all three suspects
+named in 199 were wrong.
+
+What settled it was running the tool's own worktree for two minutes and
+counting: **182 mutants tested before, 182 after**.  Not slow.  Stuck.
+
+`while (acc <= 0x1fffffff) acc += acc;` is v8agc's normaliser, and `COS`
+makes it `!=`, `AAOS` makes it `*=` and `%=`.  None of the three terminates.
+Each cost the whole `test.timeout`, which this tool had set to 120 seconds --
+so three hangers in one small file were 360 seconds against 46 of real work,
+and the run was 88% waiting.  More were coming: 130 of the 315 were still
+untested when the ten-minute cap killed it.
+
+The timeout is now 10 s, still 65x the real command.  The same file
+completes in **114 seconds** where it had not finished in 600.
+
+NOTHING IS LOST BY SHORTENING IT.  A mutant that never returns is a mutant
+the tests DETECT -- an infinite loop is a failure -- and mewt records the
+timeout as its own outcome rather than as an escape.  The only thing a long
+timeout buys is patience for a slow test, and the slowest here is 303 ms.
+
+AND THE FINISHED RUN FOUND ONE.  `if (delta < 0) delta = -(short)delta;` in
+`V8agc` deletes cleanly: nothing in the tree asserts on the absolute value of
+that delta.  One real gap out of one small file, which is the rate finding
+193 saw on v8jm.c and the reason to keep the sweep.
