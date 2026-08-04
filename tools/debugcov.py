@@ -49,6 +49,7 @@ See finding 192.  Worth re-checking if the flags ever change.
 
     tools/debugcov.py                 build, run, report
     tools/debugcov.py --no-build      reuse an existing build-cov tree
+    tools/debugcov.py --summary       the two counts only, for `make phase`
     tools/debugcov.py --lines         whole-file line coverage as well
 """
 
@@ -85,10 +86,18 @@ def run(targets):
     bad = [t for t in targets
            if subprocess.run([t], capture_output=True).returncode != 0]
     if bad:
-        # Not fatal: a failing test still leaves counts, and the point of this
-        # tool is the counts.  But it means the tree is red, so say so loudly.
-        print("  WARNING: %d instrumented test(s) FAILED: %s\n"
-              % (len(bad), " ".join(os.path.basename(b) for b in bad)))
+        #
+        # THIS one is fatal, and it is the only thing here that is.  A dead
+        # site is work still to do; a failing instrumented test means the
+        # counts below were gathered from a run that did not agree with the
+        # blob, so the number is not measuring what it says.  Finding 192 says
+        # instrumentation costs nothing under THESE flags -- if that stops
+        # being true, this is where it surfaces, rather than in a count that
+        # quietly drifts.
+        #
+        sys.exit("  %d instrumented test(s) FAILED: %s\n"
+                 "  The site counts would be meaningless -- see finding 192."
+                 % (len(bad), " ".join(os.path.basename(b) for b in bad)))
 
 
 def gcov_lines(src):
@@ -116,6 +125,8 @@ def main():
     else:
         run(sorted(glob.glob("%s/test/t_*" % BUILD)))
 
+    summary = "--summary" in sys.argv
+    worst = []
     sites = dead = ex = tot = 0
     for src in sorted(glob.glob("src/**/*.c", recursive=True)):
         rows = gcov_lines(src)
@@ -136,20 +147,33 @@ def main():
                     out.append((no, fn, text.strip()[:58]))
         if out:
             dead += len(out)
-            print("%s -- %d of the file's debug sites never execute"
-                  % (src, len(out)))
-            for no, f, text in out:
-                print("    %-5s %-24s %s" % (no, f or "?", text))
-            print()
-        if "--lines" in sys.argv:
+            if not summary:
+                print("%s -- %d of the file's debug sites never execute"
+                      % (src, len(out)))
+                for no, f, text in out:
+                    print("    %-5s %-24s %s" % (no, f or "?", text))
+                print()
+            else:
+                worst.append((len(out), src))
+        if "--lines" in sys.argv and not summary:
             l = sum(1 for c, _, _ in rows if c is not None)
             e = sum(1 for c, _, _ in rows if c not in (None, "#####", "====="))
             if l:
                 print("    lines %5.1f%%  %s (%d/%d)" % (100.0 * e / l, src, e, l))
 
-    print("  %d of %d dsplibs_debug_printf call sites never execute" % (dead, sites))
-    print("  suite line coverage over src/: %d of %d = %.1f%%"
-          % (ex, tot, 100.0 * ex / tot if tot else 0))
+    if summary:
+        # The count is the tracked number; the files are so a rise can be
+        # placed without re-running the whole thing.
+        print("debug sites: %d of %d never execute  (%s)"
+              % (dead, sites, ", ".join("%s %d" % (os.path.basename(s), n)
+                                        for n, s in sorted(worst, reverse=True))))
+        print("             suite line coverage over src/ %.1f%% (%d/%d)"
+              % (100.0 * ex / tot if tot else 0, ex, tot))
+    else:
+        print("  %d of %d dsplibs_debug_printf call sites never execute"
+              % (dead, sites))
+        print("  suite line coverage over src/: %d of %d = %.1f%%"
+              % (ex, tot, 100.0 * ex / tot if tot else 0))
     #
     # Deliberately does not exit non-zero on a dead site.  Task #50 is the work
     # of retiring these, and a gate that fails from the first run is a gate

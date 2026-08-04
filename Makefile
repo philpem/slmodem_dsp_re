@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets all test check64 docs clean interop capture coverage phase
+.PHONY: firewall strings offsets all test check64 docs clean interop capture coverage debugcov phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -179,6 +179,21 @@ strings:
 offsets:
 	@$(PYTHON) tools/offcheck.py
 
+# How many diagnostic call sites the suite never reaches.
+#
+# TRACKED, NOT GATED.  77 of 278 are dead today and retiring them is task #50;
+# a check that is red from its first run is a check somebody turns off.  What
+# this is for is the trend -- the number should fall at every phase boundary,
+# and a RISE means a batch of sites was placed without anything to drive them.
+#
+# It builds a second, instrumented tree in build-cov/ and runs all 62 binaries
+# there, which is why it is last: it doubles the wall clock of `make phase`.
+# The one thing it does fail on is an instrumented test disagreeing with the
+# blob, because then the count is not measuring what it claims -- see
+# finding 192 and tools/debugcov.py.
+debugcov:
+	@$(PYTHON) tools/debugcov.py --summary
+
 # Everything a phase boundary is supposed to check, in one target.
 #
 # This exists because `make test` and `make interop` link DIFFERENT runtimes,
@@ -188,9 +203,9 @@ offsets:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: test check64 interop coverage
+phase: test check64 interop coverage debugcov
 	@echo
-	@echo "phase boundary: differential, 64-bit, interop and coverage all OK"
+	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --
@@ -312,7 +327,7 @@ docs:
 		--json docs/attribution.json
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) build-cov
 	@rm -f a-*.d *.d
 
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds
