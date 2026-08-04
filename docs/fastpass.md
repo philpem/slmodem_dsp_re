@@ -171,6 +171,11 @@ callee has been renamed to `ref_*` leaves an undefined symbol that breaks all
 `getMPrecvdBits` are file-local, have no `ref_` alias, and are blocked on a
 harness change rather than on code.
 
+**That harness change happened, and those three are done** — finding 221's
+two-pass `objcopy` gave all three a `ref_` alias and finding 226 records the
+result. `getMPrecvdBits` still needed a `.cpp`, because its name is mangled,
+so it is also the tree's first C++ *source* outside `FloatIIR.cpp`.
+
 **#59 is therefore not one sitting.** About 8.7 KB of it is available and
 8.2 KB is not, and the hand-over that said "nothing here is blocked" was
 reading the same list finding 215's blanket claim was.

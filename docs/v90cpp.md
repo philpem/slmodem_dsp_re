@@ -55,7 +55,7 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 
 | # | batch | members | closed? |
 |---|-------|---------|---------|
-| 0 | warm-up (C, #59) | `getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have` | yes |
+| 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 226; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
 | 1 | `V90Jd` / `V92Jd` | `V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20 | all leaves |
 | 2 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, plus `FloatFIR::setCoefficients` 58 | yes, with FloatFIR |
 | 3 | `V90Phase3Modulator` | `generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11 | needs batch 1 |

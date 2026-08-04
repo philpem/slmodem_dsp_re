@@ -12508,9 +12508,163 @@ compiled as C++; the fix is to put `ref_` declarations inside that block, or
 in an `extern "C"` block of the test's own.  The header now says so at the
 point where it would be needed.
 
-### 226. Reserved — the #59 warm-up trio (`getbit`, `ApplyBulkDelay`, `getMPrecvdBits`)
+### 226. The #59 warm-up trio, and the byte past `getbit` settled
 
-Placeholder taken while the work is in progress on branch `v90cpp`, so that a
-parallel session does not claim 226.  Replaced by the real finding when the
-three land; if this text is still here, the attempt did not finish and
-nothing was committed under it.
+`getbit` (433 bytes, file-local, **recursive**), `ApplyBulkDelay` (467,
+file-local) and `_Z14getMPrecvdBitsP12tagV34Object` (895, file-local and
+C++-mangled) all landed, all three by direct differential test against the
+blob rather than through a caller.  Finding 221's two-pass `objcopy` is what
+made that possible; finding 117 and finding 173 had both concluded the
+opposite, correctly, from an `objcopy` invocation that could not promote a
+local.
+
+#### What the three do
+
+`getbit` is the object's bit reader for a V.34 handshake message.  An
+accumulator at +0x24 and a count of unread bits at +0x28; every call returns
+the top unread bit and drops the count.  A refill takes either a whole word
+or, when fewer than `wordbits` remain, a PART word -- and the part-word arm
+shifts by what is left and ORs the WHOLE word in anyway, without advancing
+the index.  `crc_on` at +0x16 appends CRC-16-CCITT (0x1021, MSB-first,
+unreflected, the same one `v8_crc` computes) as sixteen more bits once the
+message runs out, and `repeat` at +0x20 restarts the reader and **calls
+`getbit` again** for the first bit of the repeat.  Exhausted with neither, it
+returns -1.
+
+**And one arm that reads as arbitrary until you drive it.** If the remainder
+`nbits - pos` is EXACTLY -16, the reader loads 0xf and four bits instead of
+doing any of the above, so the next four calls return 1,1,1,1.  Nothing else
+in the function tests a particular negative remainder.  The test shows where
+it comes from: the CRC costs sixteen bits of `pos` that `nbits` does not
+cover, so the refill *after the CRC* sees precisely -16 every time.  It is
+the filler between a message and its repeat, not a special case.
+
+`ApplyBulkDelay` sizes the far echo canceller's ring from the measured
+round-trip delay: a delay at or below zero becomes 144, a delay at or past
+`bulk_len` becomes zero, the ring at +0x35b8 is cleared to the result and
+`bulk_head`/`bulk_tail` are reset.  Then, with neither PCM receiver running
+and the far canceller already armed, a delay under 30 disarms it and pulls
+the DMA delay at +0x25c back by `delay + 15` capped at 30.
+
+`getMPrecvdBits` copies the V.90 MP sequence out of the session -- six flag
+bytes and seven shorts at `p3548 + 0x1744` -- into the INFO record at
++0xaa0c, copies the four-bit rate nibble down over bits 2..5, and then
+rebuilds the capability word at +0xaa3c around the largest upstream rate the
+configuration allows, reversed into bits 6..9.
+
+#### FINDING 173's OPEN QUESTION, ANSWERED: it is alignment padding
+
+173 recorded that `getbit` ends at 0x5eaf0 + 0x1b1 = 0x5eca1 and that one
+byte past the symbol there is `eb 0d  jmp 5ecb0 <setfinalrate>` -- either
+padding that happens to decode as a jump landing exactly on the next
+function, or a tail call the symbol size excludes.  **It is padding.**  Three
+things settle it and none of them is the decode:
+
+  - `getbit`'s last instruction, at 0x5ec9c, is `e9 03 ff ff ff` -- an
+    UNCONDITIONAL jump, ending exactly at 0x5eca1.  Nothing falls through
+    into the byte in question.
+  - Nothing branches to it.  A disassembly of the whole 0x9c000-byte `.text`
+    contains the string `5eca1` exactly once, and that once is the
+    instruction itself.
+  - **51 inter-function gaps in this object are exactly 15 bytes, and every
+    one of the 51 is `eb 0d` followed by thirteen `nop`, with the jump
+    landing exactly on the next symbol.** 0x5eca1 is one of the 51.  The
+    other fills gas uses here are plain `nop` runs (835 gaps) and multi-byte
+    `lea` no-ops (637); the short jump is what it emits for a 15-byte gap.
+
+So the symbol size is right and excludes nothing, and `setfinalrate` is
+16-byte aligned.  173's alternative -- a tail call -- is refuted by the
+unconditional jump immediately before it: a tail call would have to be
+reachable.
+
+#### The V.34 object, for the V.90/V.92 batch
+
+  - **+0xaa3c is a `getbit` message, and +0xaa6c is the pointer to it.**
+    `getMPrecvdBits` writes `obj + 0xaa3c` into `obj + 0xaa6c`, and
+    `v34handshak` loads +0xaa6c thirty-six times and hands what it finds to
+    `getbit`.  So the bit reader's layout maps onto the object as
+    `word[10]` at +0xaa3c..+0xaa4f, `crc` at +0xaa50, and the rest of the
+    state through +0xaa6b -- which is `unmapped_aa40` in `v34fsk.h` today.
+    `struct v34_bitsource` is declared standalone rather than embedded
+    there, because +0xaa3c and +0xaa3e are already named `info_caps` and
+    `caps_flags` from the other direction and neither reading is more
+    correct than the other.  **The array length of ten is adjacency, not a
+    bound**: nothing in `getbit` checks the index.
+  - `getMPrecvdBits` and `ApplyBulkDelay` both reach `v90_receiver` and
+    `k56flex_receiver` through `obj + 4` with a 0x248/0x24c displacement,
+    which is the third and fourth file to do so.  `v34fsk.h` already says
+    this is an addressing artifact and not a sub-object; it now has four
+    witnesses.
+  - The session object gains three fields: `+0x1744` is an MP block of six
+    bytes and seven shorts, and the PCM receiver at `+0x610c` has an int at
+    `+0x4f8` (the "sensitive ISP" flag) and a rate index at `+0x4fc` that is
+    multiplied by 2400.  The configuration at `pac3c + 0x3c` is an upstream
+    rate in bits per second.
+  - Rate index from bits per second is `(bps * 7) >> 14`, not a divide by
+    2400: the constant is 1/2340.6, and 33600 still lands on 14 because the
+    input is capped at 0x833f = 33599 first.
+
+#### Two things the tests had to be built around
+
+**A duplicated call, which is the object's.** `getMPrecvdBits` tests bit 0 of
+`info_rates` and calls `txrxdmainit` inside the V.90 branch, then tests the
+same bit again after it and calls `txrxdmainit` a second time.  With a V.90
+receiver running and the bit set it runs twice over the same six shorts.  It
+is idempotent, so this is wasted work rather than a defect; it is recorded
+because a reconstruction that "tidied" it would still pass every byte
+comparison.
+
+**An unsigned bound that is the wrong way round.** `ApplyBulkDelay` compares
+the delay against `bulk_len` with `jb`, not `jl`.  A NEGATIVE `bulk_len` is
+huge unsigned, so it accepts every delay and the clear then runs off the end
+of the ring.  Nothing reconstructed writes `bulk_len`, so no call site is
+known to reach it, and the tests keep it positive deliberately: the overrun
+would be identical on both sides and would prove nothing while corrupting
+the object under comparison.
+
+#### How they were tested
+
+`getbit` and `ApplyBulkDelay` went into `test/unit/t_v34hshak.c`, the test
+for their own translation unit; `getMPrecvdBits` needed a new C++ test.
+
+`getbit` is the first recursive function this tree has driven against the
+blob, and a sweep that only ever took the base case would not be a test of
+it.  Fifteen seeds are driven past exhaustion, 2,358 calls, with the whole
+0x30-byte reader compared after every single one -- and **four anti-vacuity
+flags assert that the recursive arm ran, that the -1 return happened, that
+the CRC tail ran and that the four-bit filler ran.**  The struct is seeded
+whole rather than filled with `HARNESS_MALLOC_FILL`, because `idx` is an
+array subscript with nothing bounding it and 0xa5a5 is a wild read.
+
+`ApplyBulkDelay` gets 1,008 cases sweeping both sides of every boundary,
+whole-object each time, plus 448 with both debug levels at 2 and the
+transcripts diffed -- because its TWO rejections print the SAME format
+string, and no byte comparison can tell a reconstruction that printed the
+wrong one.
+
+`getMPrecvdBits` gets 784 whole-object cases and 720 transcript cases.  Its
++0xaa6c is a SELF-pointer, so it is checked against *this side's own*
+`m + 0xaa3c` rather than against the other side's value or against being
+non-null -- finding 224's rule.  Which of the two `edprintf` arms ran is
+**not legible in the transcript**: `edprintf` prints its message encoded, and
+the plain-text switch that would undo that is ours alone, so setting it would
+make the two sides differ for a reason unrelated to the modem.  The arm is
+named from the inputs instead, and what the transcript is asked is that the
+two arms do not print the same thing.
+
+#### AND TWO CHECKS THAT COULD NOT SEE C++ AT ALL
+
+`tools/debugaudit.py` -- the `strings` gate that catches an invented format
+string -- and `tools/debugcov.py` both globbed `src/**/*.c`, and `debugcov`
+built only `$(TESTS)`.  `FloatIIR.cpp` prints nothing and has no test outside
+`$(CXXTESTS)`, so nothing had ever exposed either gap.  `getMPrecvdBits`
+brought seven format strings in a `.cpp`: they would have gone unaudited, and
+their sites would have counted as dead because the only test that drives them
+is a `CXXTESTS` member the instrumented tree never built.
+
+Both tools now take `.cpp`, and `debugcov` builds both lists.  517 strings
+checked where it was 501, still 0 invented; 327 debug sites where it was 320,
+still 30 dead.  This is finding 134's argument arriving from a new direction:
+a check nobody can see failing is a check that reports clean because it
+cannot fail.  **The V.90/V.92 core is entirely C++, so both gaps would have
+widened with every task in #60 had this one not carried a diagnostic.**
