@@ -69,11 +69,49 @@ def main():
     ap.add_argument("obj")
     ap.add_argument("--prefix", default="ref_")
     ap.add_argument("-o", "--output")
+    ap.add_argument("--globals", metavar="FILE",
+                    help="also write the file-local symbols that must be "
+                         "globalized before the rename map can apply")
     args = ap.parse_args()
 
     defined = sorted({ln.split()[-1] for ln
                       in nm(args.obj, "--defined-only", "--extern-only")
                       if len(ln.split()) >= 3})
+
+    #
+    # FILE-LOCAL FUNCTIONS ARE ALIASABLE AFTER ALL.
+    #
+    # This tool, and coverage.py's report, said for a long time that a symbol
+    # the object keeps file-local "can never be differentially tested
+    # directly, because objcopy cannot rename it".  objcopy can: pass it
+    # through --globalize-symbols first and --redefine-syms in a second pass
+    # sees an ordinary global.  55 symbols and 18,566 bytes were written off
+    # on that basis, 15 of them (6,192 bytes) functions this tree has already
+    # reconstructed -- including `call_run`, `b103_process`, `v23_process`
+    # and `v8_process`, the top-level entry points of four datapumps, which
+    # were reachable only through a caller.
+    #
+    # Safe here because no local name occurs twice in this object; two static
+    # functions of the same name in different translation units would collide
+    # the moment both went global, so this checks rather than assumes.
+    #
+    raw = [ln.split()[-1] for ln in nm(args.obj, "--defined-only")
+           if len(ln.split()) >= 3 and ln.split()[-2] in "tdbr"]
+    raw = [s for s in raw if s not in defined]
+    # Count on the RAW list, before deduplication -- counting a set finds
+    # nothing, which is the shape of check that reports clean because it
+    # cannot fail.
+    seen = {}
+    for s in raw:
+        seen[s] = seen.get(s, 0) + 1
+    dupnames = [s for s, n in seen.items() if n > 1]
+    local = sorted(seen)
+    # A name used by two translation units cannot be globalized -- both would
+    # become the same global and the link would take one at random.  Those
+    # stay local and stay untestable-directly, which is the old situation for
+    # a few symbols rather than for all of them.
+    local = [s for s in local if s not in dupnames]
+    defined = sorted(set(defined) | set(local))
     undefined = sorted({ln.split()[-1] for ln in nm(args.obj, "-u")
                         if len(ln.split()) >= 2})
 
@@ -99,6 +137,14 @@ def main():
              % " ".join(sorted(SHARED_IMPORTS))]
     lines += ["%s %s%s" % (s, args.prefix, s) for s in rename]
     text = "\n".join(lines) + "\n"
+
+    if args.globals:
+        with open(args.globals, "w") as f:
+            f.write("".join(s + "\n" for s in local))
+        print("wrote %s: %d file-local symbols globalized%s"
+              % (args.globals, len(local),
+                 ("; %d left local, name used by more than one TU (%s)"
+                  % (len(dupnames), " ".join(sorted(dupnames)))) if dupnames else ""))
 
     if args.output:
         with open(args.output, "w") as f:

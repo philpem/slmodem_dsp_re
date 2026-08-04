@@ -38,10 +38,17 @@ object, so those few sources are still read by name; they are listed
 explicitly rather than swept up by a directory walk.
 
 File-local symbols (`t` in nm) are counted when we have reconstructed one of
-the same name -- several are, `AnalyseDialString` among them -- but they can
-never be *differentially* tested directly, because objcopy cannot rename them
-and there is nothing to link against.  They are reported apart for that
-reason, not left out.
+the same name -- several are, `AnalyseDialString` among them.  They used to be
+reported apart as impossible to test differentially, "because objcopy cannot
+rename them".  That was wrong: --globalize-symbols promotes them first and the
+rename map then applies, which the Makefile now does in two passes, so 241 of
+them DO have a `ref_` alias.  Ten names are used by more than one translation
+unit and still cannot be globalized.
+
+THIS REPORT HAS NOT CAUGHT UP.  It still files all of them under "reached
+through a caller instead", so the `tested` denominator is smaller than the
+truth and the percentage flatters.  Fixing that is task #62; the bucket below
+is a to-do list now, not a limitation.
 
 Usage:
     coverage.py [--obj ../slmodemd/dsplibs.o] [--build build] [--md FILE]
@@ -229,10 +236,9 @@ def main():
         " drives")
     add("  against the blob itself, not a self-consistency check.  Its"
         " denominator")
-    add("  is what CAN be driven that way: a function the object keeps"
-        " file-local")
-    add("  has no `ref_` alias to link against, because objcopy cannot"
-        " rename it.")
+    add("  is what CAN be driven that way -- but see task #62.  241 file-local")
+    add("  symbols gained a `ref_` alias when the Makefile started globalizing")
+    add("  them, and this denominator has not caught up, so the figure flatters.")
     add("")
 
     untested = sorted(((s, n) for n, s in done_g.items() if n not in tested),

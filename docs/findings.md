@@ -12083,3 +12083,60 @@ this case -- dies with `AttributeError: module 'dis' has no attribute
 responsible.  `whichfield.py` drops its own directory from `sys.path` before
 importing rather than renaming `dis.py`, whose name is right and which
 several findings cite.
+
+### 221. File-local symbols were aliasable all along
+
+`tools/symmap.py` and `tools/coverage.py` both stated, in their docstrings and
+in the report itself, that a symbol the object keeps file-local "can never be
+differentially tested directly, because objcopy cannot rename them and there
+is nothing to link against".
+
+objcopy can.  `--globalize-symbols` promotes them in one pass and
+`--redefine-syms` then sees ordinary globals in a second:
+
+```
+objcopy --globalize-symbols=globals.txt dsplibs.o glob.o
+objcopy --redefine-syms=symmap.txt       glob.o    dsplibs_ref.o
+```
+
+```
+$ nm build/dsplibs_ref.o | grep -E 'ref_(call_run|b103_process)$'
+00002e80 T ref_call_run
+000055f0 T ref_b103_process
+```
+
+**241 symbols, 18,566 bytes**, written off on a claim nobody had tested.
+Fifteen are functions this tree has already reconstructed -- 6,192 bytes --
+and four of those are `call_run`, `b103_process`, `v23_process` and
+`v8_process`, the top-level entry points of four datapumps.  Each has been
+verified only through whatever a caller happened to expose.
+
+Ten names resist, and the reason is worth keeping: `AGCv23_CFG`, `PROTOCOL`,
+`TONEv23_CFG`, `ToneLPF`, `V23_AGC_DEF_ALPHA`, `V23_AGC_DEF_BETA`,
+`rx_out_internal`, `sqrt_table`, `temp.0` and `tx_in_internal` each occur in
+more than one translation unit.  Two statics of the same name are two
+different objects; globalizing both makes one symbol and the link picks
+whichever it sees first.  `symmap.py` counts on the raw list rather than a
+deduplicated one -- counting a set finds nothing, which is the shape of check
+that reports clean because it cannot fail -- excludes them, and names them
+every run.
+
+`make phase` is green with the two-pass object, so nothing depended on those
+symbols staying local.
+
+#### What is still wrong, said out loud
+
+`coverage.py` has not caught up: it still files all 241 under "reached through
+a caller instead", so the `tested` denominator is smaller than the truth and
+the percentage flatters.  Task #62 covers that and the fifteen tests.  **The
+headline `tested` figure should FALL when it lands**, and that is the number
+becoming honest rather than a regression.
+
+#### The general lesson, which this tree keeps relearning
+
+The claim had been in two tools' docstrings long enough to read as settled,
+and it was load-bearing: it decided that 18.5 KB of the object was permanently
+out of reach, and coverage.py's headline number was computed on that basis.
+Nobody had run the two-line experiment.  Compare finding 199 -- a fallback
+chosen to be harmless-if-wrong is a fallback that hides being wrong -- and
+finding 198, where a checker used a dict and so could not see a collision.

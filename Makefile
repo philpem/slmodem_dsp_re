@@ -76,6 +76,7 @@ CXXTESTS   := t_genericiir
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
+GLOBALS    := $(BUILD)/globals.txt
 SYMMAP     := $(BUILD)/symmap.txt
 
 # dsplibs.o predates modern hardening defaults: it wants an executable stack
@@ -99,10 +100,21 @@ all: $(TESTBIN)
 # blob revision cannot silently gain a shared-state callback.
 
 $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
-	$(PYTHON) tools/symmap.py $(BLOB) -o $@
+	$(PYTHON) tools/symmap.py $(BLOB) --globals $(GLOBALS) -o $@
 
+#
+# TWO PASSES, because a symbol the object keeps file-local cannot be renamed
+# while it is local -- and this tree said for a long time that it therefore
+# could not be aliased at all.  It can: --globalize-symbols promotes them,
+# then --redefine-syms sees ordinary globals.  That is 241 symbols, 15 of
+# them functions already reconstructed here -- call_run, b103_process,
+# v23_process, v8_process among them -- which had no ref_ alias and were
+# reachable only through a caller.  Ten names are used by more than one
+# translation unit and stay local; symmap.py names them each run.
+#
 $(REF): $(SYMMAP) $(BLOB)
-	objcopy --redefine-syms=$(SYMMAP) $(BLOB) $@
+	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
+	objcopy --redefine-syms=$(SYMMAP) $(BUILD)/dsplibs_glob.o $@
 
 # --- compilation ----------------------------------------------------------
 
