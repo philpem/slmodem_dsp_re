@@ -45,6 +45,31 @@ VPcmV34LogTimingOffset(void *objp, short offset)
 }
 
 /*
+ * Two reports with no reader.
+ *
+ * `objp` is deliberately unused: the object writes the format pointer into
+ * the incoming argument slot and tail-jumps into `dsplibs_debug_printf`, so
+ * the parameter is the slot rather than an input.  Both are gated at the
+ * call site, unlike `VPcmV34SetTxScale` below, which lets `edprintf` do it.
+ * That inconsistency is the original's.
+ */
+void
+VPcmV34ReportStartOfEchoAdapt(void *objp)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt start "
+				     "reported...\r\n");
+}
+
+void
+VPcmV34ReportMiddleOfEchoAdapt(void *objp)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt middle "
+				     "reported...\r\n");
+}
+
+/*
  * Set the transmit scale.
  *
  * NO PARAMETER AND NO CHOICE: 0x16a1 is built in, stored, and then reported

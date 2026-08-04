@@ -295,5 +295,33 @@
   "label": "reneg: rrn counter saturates rather than wrapping",
   "find": "obj->rrn_local = (short)(obj->rrn_local + 1);",
   "replace": "obj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);"
+ },
+ {
+  "note": "The two echo-adapt reports.  Neither touches the object, so every one of these is invisible to a state comparison and visible only in the transcript -- which is why the section that drives them sweeps the level to 1 as well as 2."
+ },
+ {
+  "label": "the two echo-adapt strings transposed",
+  "find": "\"VPcmV34Main: Echo adapt start \"",
+  "replace": "\"VPcmV34Main: Echo adapt middle \""
+ },
+ {
+  "label": "the start report is ungated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
+ },
+ {
+  "label": "the start report's gate is >= 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
+ },
+ {
+  "label": "the middle report is ungated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
+ },
+ {
+  "label": "the middle report's gate is >= 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
  }
 ]

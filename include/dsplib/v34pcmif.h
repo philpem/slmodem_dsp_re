@@ -69,6 +69,21 @@ void VPcmV34InitiateRateRenegotiation(void *obj, int req);
 void VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 			    unsigned char constel_size);
 
+/*
+ * Two progress reports the handshake makes, and nothing acts on.
+ *
+ * Each is a debug gate and one string; neither touches the object or reads
+ * its argument.  The argument exists all the same: the object overwrites its
+ * own first argument slot with the format pointer and tail-jumps into
+ * `dsplibs_debug_printf`, which a function with no parameters would have no
+ * slot to do.  So the transcript is the whole observable behaviour, and a
+ * test that compared only state would pass on an empty body.
+ *
+ * `v34handshak` calls one of each and nothing else calls either.
+ */
+void VPcmV34ReportStartOfEchoAdapt(void *obj);
+void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
+
 #ifdef __cplusplus
 }
 #endif
