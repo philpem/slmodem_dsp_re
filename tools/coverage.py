@@ -127,6 +127,24 @@ def our_symbols(build):
     return syms
 
 
+def unaliasable(obj, aliased):
+    """File-local symbols the two-pass rename could NOT give a `ref_` name.
+
+    Derived the same way symmap.py derives its exclusion, and from the same
+    object, so the report and the rename map cannot drift: a name used by more
+    than one translation unit cannot be globalized, because two statics of the
+    same name are two different objects and promoting both would make one
+    symbol.  The membership test is against what objcopy actually produced,
+    not against a list of names written down here.
+    """
+    out = subprocess.run(["nm", "--defined-only", obj],
+                         capture_output=True, text=True).stdout
+    fields = [line.split() for line in out.splitlines()]
+    glob = {f[-1] for f in fields if len(f) >= 2 and f[-2] in "TDBRW"}
+    local = {f[-1] for f in fields if len(f) >= 2 and f[-2] in "tdbr"}
+    return sorted(local - glob - aliased)
+
+
 def aliased_symbols(build):
     """Names reachable as `ref_NAME` in the object the tests link.
 
@@ -293,17 +311,22 @@ def main():
                 % (name, size, "   (file-local)" if name in done_la else ""))
         add("")
 
-    if done_ln:
-        add("  file-local AND named in more than one translation unit, so no")
-        add("  alias is possible -- reached through a caller instead")
-        add("  (%d symbols, %d bytes -- outside the figure above):"
-            % (len(done_ln), sum(done_ln.values())))
-        for name in sorted(done_ln):
-            add("    %-44s %6d bytes" % (name, done_ln[name]))
-        add("")
-    else:
-        add("  nothing we have reconstructed is stuck without an alias: every")
-        add("  file-local symbol of ours is drivable by name.")
+    stuck = unaliasable(args.obj, aliased)
+    if stuck:
+        add("  file-local and NOT aliasable, so reached through a caller if at")
+        add("  all: each of these names is used by more than one translation")
+        add("  unit, and two statics of the same name are two different")
+        add("  objects -- globalizing both would make ONE symbol and the link")
+        add("  would take whichever it saw first.  symmap.py excludes them")
+        add("  every run.  Listed whether or not we have reconstructed one,")
+        add("  because what cannot be tested directly is worth naming.")
+        add("  (%d symbols; %d reconstructed here, and those %d are outside"
+            % (len(stuck), len(done_ln), len(done_ln)))
+        add("  the figures above):")
+        for name in stuck:
+            add(("    %-44s  reconstructed here, %d bytes"
+                 % (name, done_ln[name])) if name in done_ln
+                else ("    %s" % name))
         add("")
 
     strays = []

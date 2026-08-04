@@ -16,8 +16,25 @@ dsplibs.o reconstruction coverage
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 15 of ours (6192 bytes).
 
-  nothing we have reconstructed is stuck without an alias: every
-  file-local symbol of ours is drivable by name.
+  file-local and NOT aliasable, so reached through a caller if at
+  all: each of these names is used by more than one translation
+  unit, and two statics of the same name are two different
+  objects -- globalizing both would make ONE symbol and the link
+  would take whichever it saw first.  symmap.py excludes them
+  every run.  Listed whether or not we have reconstructed one,
+  because what cannot be tested directly is worth naming.
+  (10 symbols; 0 reconstructed here, and those 0 are outside
+  the figures above):
+    AGCv23_CFG
+    PROTOCOL
+    TONEv23_CFG
+    ToneLPF
+    V23_AGC_DEF_ALPHA
+    V23_AGC_DEF_BETA
+    rx_out_internal
+    sqrt_table
+    temp.0
+    tx_in_internal
 
   we define these and the object has no symbol of that name --
   either a helper split out of a larger function, or drift:

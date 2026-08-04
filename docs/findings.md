@@ -12211,10 +12211,14 @@ The alias set is likewise read from `build/dsplibs_ref.o` rather than
 re-derived from `symmap.py`'s exclusion rules, so the report cannot disagree
 with the object the tests link; `make coverage` gained `$(REF)` as a
 prerequisite, and `coverage.py` exits rather than guessing if it is absent.
-`done_l` is still split into aliased and not -- the ten multi-TU names of
-finding 221 belong in the second bucket -- but it is empty today, because all
-ten are data symbols and `our_symbols()` collects text only.  The report says
-so in words rather than printing an empty heading.
+`done_l` is still split into aliased and not, and the second half is empty
+today: all ten of finding 221's multi-TU names are data symbols and
+`our_symbols()` collects text only.  The bucket lists the ten anyway, derived
+from the object rather than written down -- every file-local name that has no
+`ref_` alias in `build/dsplibs_ref.o` -- because what cannot be tested
+directly is worth naming whether or not anyone has reconstructed it.  The list
+matches the one `symmap.py` prints on every run, which is the check that the
+two are computing the same thing.
 
 #### Two under-counts left standing, deliberately
 
