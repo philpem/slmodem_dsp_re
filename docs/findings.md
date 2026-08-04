@@ -10728,7 +10728,41 @@ hand: six references were missed the first time and two the second.  It
 refuses a number that is taken and names the next free one.  What it does
 not do is decide WHICH side moves -- that is a judgement about which numbers
 are already published, and the tool should not guess it.
-### 199. The far echo canceller diverges, and the counter that hid it
+
+### 199. mewt ignores its own per-target configuration
+
+`mewtsweep.py` paired each source with the one test binary that covers it,
+through the `[[per_target]]` array mewt's config template documents: a
+`glob` and a dotted `test.cmd`.  A smoke run on one small file was still
+going an hour later.
+
+`ps` said why -- `sh -c make -s test`, an hour in, which is the GLOBAL
+fallback and not any per-target rule.  Proved rather than inferred, because
+the baseline is expected to use the global command and that alone would not
+have settled it: with `[test] cmd = "true"` (always passes) and the
+per-target `test.cmd = "false"` (always fails), all 32 tested mutants came
+back UNCAUGHT.  The command that ran was the one that always passes.  mewt
+4.0.0 accepts the array, does not complain, and does not use it.
+
+THE TOOL'S OWN MISTAKE WAS WORSE THAN THE BUG.  The fallback was
+`make -s test` with a comment saying nothing should reach it.  Everything
+reached it: the whole 62-binary suite per mutant, ten seconds instead of two
+tenths.  A fallback chosen to be harmless-if-wrong is a fallback that hides
+being wrong; had it been `false`, the first run would have failed in a
+second and said so.  The same shape as finding 190, where a suite pointed at
+the wrong binary reported NOT CAUGHT for every mutation and looked exactly
+like an untested claim.
+
+Now one run per file: its own config, its own database, `[test] cmd` is that
+file's command, and there is nothing to fall back to.
+
+WHAT IS STILL WRONG.  Even so, v8agc.c's 315 mutants did not finish in ten
+minutes, where the manual spike did 1219 in five.  That is seconds per
+mutant against two tenths by hand, and the cold worktree explains the first
+build and not the rest.  Unmeasured, so unfixed, and the tool says so at the
+top: a full sweep is days at this rate rather than the hour it should be.
+
+### 200. The far echo canceller diverges, and the counter that hid it
 
 Closing v34rx's uncaught mutations (finding 195) meant seeding `f354c` — the
 echo adaptation counter — near the boundaries the mutations move. That drove
