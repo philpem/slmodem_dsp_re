@@ -1265,7 +1265,7 @@ main(void)
 			 * the far step depends on the 0x2bb offset being
 			 * exactly right.  Both drive the FAR canceller past
 			 * count 0x2bc for the first time in this tree, and
-			 * both then diverge from the blob -- see finding 195.
+			 * both then diverge from the blob -- see finding 199.
 			 * The two mutations they would catch stay uncaught
 			 * until that is fixed; adding the seeds now would
 			 * only commit a red test.

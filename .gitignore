@@ -4,6 +4,7 @@
 *.so
 *.d
 build/
+build-cov/
 test/harness/*_test
 test/harness/*_diff
 

@@ -45,6 +45,7 @@
  * full scale, but it is a property of the filter, not a guarantee.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/toneiir.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/fp_math.h"
@@ -296,6 +297,17 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 	 */
 	scale = GetFP_Value(8, st->cfg.interval);
 	st->need = ((int)scale * st->cfg.duration_ms) >> 14;
+
+	/*
+	 * "Buffers" is the same unit cadence_create announces its cadence
+	 * limits in -- an interval, not a sample.  The site sits between the
+	 * division and the two counters: the object's cold block returns to
+	 * 0x7c3f9, which is immediately before the pair of zero stores at
+	 * +0xa0 and +0xa4.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("INTEGRATION_TIME = %d Buffers.\n",
+				     st->need);
 
 	st->total = 0;
 	st->run = 0;

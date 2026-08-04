@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage phase
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -179,6 +179,22 @@ strings:
 offsets:
 	@$(PYTHON) tools/offcheck.py
 
+# How many diagnostic call sites the suite never reaches.
+#
+# TRACKED, NOT GATED.  53 of 279 are dead today and retiring them is task #50;
+# a check that is red from its first run is a check somebody turns off.  What
+# this is for is the trend -- the number should fall at every phase boundary,
+# and a RISE means a batch of sites was placed without anything to drive them.
+#
+# It builds a second, instrumented tree in build-cov/ and runs all 62 binaries
+# there, which is why it is last: it doubles the wall clock of `make phase`.
+# The one thing it does fail on is an instrumented test disagreeing with the
+# blob -- for the ordinary reason, since the goal is a replacement that behaves
+# identically and any disagreement is a hard failure whatever build it came
+# from.  See finding 192 and tools/debugcov.py.
+debugcov:
+	@$(PYTHON) tools/debugcov.py --summary
+
 # The prose half of the same job.  `offsets` holds the compiler to the
 # /* +0xNNN */ annotations; nothing at all held the `finding N` and `DN`
 # citations, and those are renumbered BY HAND every time a merge makes
@@ -201,9 +217,9 @@ refs:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: test check64 interop coverage
+phase: test check64 interop coverage debugcov
 	@echo
-	@echo "phase boundary: differential, 64-bit, interop and coverage all OK"
+	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --
@@ -325,7 +341,7 @@ docs:
 		--json docs/attribution.json
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) build-cov
 	@rm -f a-*.d *.d
 
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds

@@ -63,7 +63,15 @@ extern void ref_CALLPROG_Delete(struct callprog *cp);
 #define SIG_DIALTONE	1	/* a continuous 550 Hz tone            */
 #define SIG_BUSY	2	/* 550 Hz, half a second on, half off  */
 #define SIG_NOISE	3	/* deterministic, and loud             */
-#define SIG_COUNT	4
+/*
+ * The two tones the dual-tone detector answers 3 and 5 for, which are the
+ * only way to reach "Found 2100" and "Found 2250" -- neither is reachable
+ * from a state or a dial string, so the state sweep above cannot get there
+ * however long it runs.  Finding 153 named them; this drives them.
+ */
+#define SIG_2100	4
+#define SIG_2250	5
+#define SIG_COUNT	6
 
 /* Half a second at 8 kHz, which is what t_cadence uses to get a detection. */
 #define BUSY_ON_SAMPLES	4000
@@ -94,7 +102,9 @@ static short input[MAXCALLS][BUFSAMP];
  * obvious choice for a European busy tone -- produces no verdict at all,
  * which cost a while to work out.
  */
-#define TONE_STEP	9011		/* 550 * 64 * 2048 / 8000 */
+#define TONE_STEP	9011		/* 550 * 64 * 2048 / 8000  */
+#define TONE_STEP_2100	34406		/* 2100 * 64 * 2048 / 8000 */
+#define TONE_STEP_2250	36864		/* 2250 * 64 * 2048 / 8000 */
 
 static short
 tone550(long n)
@@ -111,6 +121,24 @@ tone550(long n)
 	};
 
 	return cycle[((n * TONE_STEP) >> 11) & 63];
+}
+
+/* The same table at an arbitrary step, for the two dual-tone frequencies. */
+static short
+tone_at(long n, long step)
+{
+	static const short cycle[64] = {
+	     0,    490,    975,   1451,   1913,   2357,   2778,   3172,
+	  3536,   3865,   4157,   4410,   4619,   4785,   4904,   4976,
+	  5000,   4976,   4904,   4785,   4619,   4410,   4157,   3865,
+	  3536,   3172,   2778,   2357,   1913,   1451,    975,    490,
+	     0,   -490,   -975,  -1451,  -1913,  -2357,  -2778,  -3172,
+	 -3536,  -3865,  -4157,  -4410,  -4619,  -4785,  -4904,  -4976,
+	 -5000,  -4976,  -4904,  -4785,  -4619,  -4410,  -4157,  -3865,
+	 -3536,  -3172,  -2778,  -2357,  -1913,  -1451,   -975,   -490,
+	};
+
+	return cycle[((n * step) >> 11) & 63];
 }
 
 static void
@@ -130,6 +158,12 @@ fill_input(int signal)
 				break;
 			case SIG_DIALTONE:
 				v = tone550(n);
+				break;
+			case SIG_2100:
+				v = tone_at(n, TONE_STEP_2100);
+				break;
+			case SIG_2250:
+				v = tone_at(n, TONE_STEP_2250);
 				break;
 			case SIG_BUSY:
 				/*
@@ -439,6 +473,9 @@ main(void)
 	}
 	busy_filter = 0;
 	rc |= run("callprog: noise", "T5551234", SIG_NOISE, -1, 120);
+	/* The two dual-tone frequencies down the default path as well. */
+	rc |= run("callprog: 2100 Hz", "T5551234", SIG_2100, -1, 200);
+	rc |= run("callprog: 2250 Hz", "T5551234", SIG_2250, -1, 200);
 	rc |= run("callprog: pulse dialling", "P5551234", SIG_SILENCE, -1, 200);
 
 	/*
@@ -455,6 +492,25 @@ main(void)
 		rc |= run(label, "T5551234", SIG_BUSY, i, 90);
 		sprintf(label, "callprog: seeded state %d, noise", i);
 		rc |= run(label, "T5551234", SIG_NOISE, i, 90);
+		/*
+		 * The dual-tone detector only runs where `automode_table`
+		 * says so, so its two verdicts are unreachable from the
+		 * default path however long it runs.  Seeding every state
+		 * reaches the detector; it does NOT yet reach verdicts 3 and
+		 * 5, so "Found 2100" and "Found 2250" are still two of the
+		 * dead sites debugcov counts.  A single sine at the notch
+		 * frequency is evidently not what the detector answers to --
+		 * the bandpass is centred on 2100 and the three notches sit
+		 * at 2100, 1800 and 2250, so the verdict is a comparison
+		 * BETWEEN branches and probably wants a level or a duration
+		 * this input does not have.  Left here because the signal
+		 * source and the seeding are the part that was missing; the
+		 * remaining work is choosing the waveform.
+		 */
+		sprintf(label, "callprog: seeded state %d, 2100 Hz", i);
+		rc |= run(label, "T5551234", SIG_2100, i, 90);
+		sprintf(label, "callprog: seeded state %d, 2250 Hz", i);
+		rc |= run(label, "T5551234", SIG_2250, i, 90);
 	}
 
 	/*

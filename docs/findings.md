@@ -10276,7 +10276,204 @@ each field with where the STRUCT sits in the V.8 object rather than with the
 field's own offset.  That convention is legitimate and the tool names it
 rather than guessing.
 
-### 192. Six V.34 mutation sets, and what they said about the tests
+### 192. gcov works here, and it names the 77 sites nothing runs
+
+Three checks already look at the diagnostic call sites and none of them
+answers whether a test ever REACHES one.  `--missing` counts sites in the
+blob against sites in our source.  `--invented` checks the literal is the
+original's.  `mutate.py` breaks a site and watches for red, but a mutation
+caught by the string sweep rather than by a differential test has told you
+the literal exists, which is the first check again.  Task #50 has been
+closing that gap by hand, one function at a time.
+
+`gcov` answers it directly, and the surprise is that it works at all.
+
+**Instrumentation does not perturb the differential tier.**  `--coverage`
+disables some optimisation, and with `-mfpmath=387` changed optimisation can
+move x87 spill points and so change the rounding of intermediate values --
+exactly what this tier exists to detect.  It does not happen: all 62 test
+binaries pass instrumented, `t_v34ec` and `t_v34rx` included.  That is a
+property of this tree's flags and worth re-checking if they change, not a
+general licence.  The link needs `--coverage` in LDFLAGS as well as CFLAGS;
+`build/dsplibs_ref.o` stays uninstrumented and does not care.
+
+**Every binary accumulates into one set of counts.**  They link the same
+objects and the .gcda path is baked in at compile time, so running all 62
+gives suite-wide coverage with nothing to merge.  The tests set
+`dsplibs_debug_level` per case and the transcript blocks already sweep 1 to
+3, so a plain run reaches every site any test drives at any level -- there is
+no level to configure and no second run to diff against.
+
+**77 of 278 sites never execute.**  By file:
+
+```
+   callprog.c   30 of 33      v34rx.c      12 of 24
+   cadence.c    17 of 24      v34info.c     4 of 26
+   dialer.c      9 of 39      v34hshak.c    2 of 10
+   fpm_div.c     1 of 1       v34shell.c    1 of 5
+   fpm_mrf.c     1 of 1
+```
+
+THE RECONCILIATION IS THE REASON TO TRUST IT.  Finding 154 worked out by
+hand, from the disassembly and from which mutations went red, that 3 of
+`CALLPROG_Progress`'s sites were verified and the other 26 were not.  This
+reports 3 live sites in callprog.c and 30 dead, having been told nothing
+about any of it, and names the three: `request_state`'s STATE line and
+`run_timeouts`' two timeouts.  Two methods with nothing in common agreeing
+on a number that small is the strongest evidence either has produced.
+
+It also confirms what the V.8 batch was for: src/v8 does not appear in the
+list at all.  Every site placed there is driven.
+
+**And it shows why line coverage alone would have been useless.**  The suite
+covers 96.7% of executable lines in src/ -- 8548 of 8843 -- while 28% of the
+diagnostic sites never run.  A gated call site is one or two lines out of
+thousands; a percentage cannot see it.  The number that matters is the one
+this counts, not the one the tool advertises.
+
+`tools/debugcov.py`, ten seconds end to end.  Deliberately not wired into
+`make phase` and deliberately not failing on a dead site: 77 of them exist
+today, and a gate that is red from its first run is a gate somebody turns
+off.  The number is there to be compared against the last one.
+
+### 193. mewt found fourteen gaps in a file the hand-written mutations called done
+
+`tools/mutate.py` was written here, and the question was whether to replace
+it with something standard.  Spiked against **mewt 4.0.0** (Trail of Bits),
+in a throwaway worktree.
+
+IT WORKS, WITH NO ADAPTATION.  mewt's language list says C++, and the
+tree-sitter C++ grammar parses this tree's C: `mewt mutate` on v8jm.c
+produced **1219 mutants** where the hand-written set has 29.  Its config
+model happens to be the same shape as `suites.json` -- a per-target glob with
+its own test command -- so `test.cmd` is one line of shell.
+
+IT IS ALSO CHEAP, which was the surprise.  One mutant costs a recompile of
+one file, a relink and a test run: **0.2 seconds**.  The whole 1219 ran in
+five minutes.  (mewt's own estimate said two days, having assumed a test
+suite rather than a single fast binary.)
+
+```
+   1197 tested    898 caught    299 uncaught    22 skipped
+   high 100.0%    medium 95.1%    low 65.9%
+```
+
+**High severity 100% is independent corroboration** of the hand-written work:
+nothing mechanical could break v8jm.c in a way this tree does not notice.
+
+**The 14 medium-severity survivors are real, and of two kinds.**  Eight are
+`initTxSequence`'s field clears -- `jm->bitpos = 0`, `wordidx`, `repeats`,
+`crc_enable`, `shifter`, `shifter0`, `nleft`, `nleft0` -- which delete
+cleanly because the fixture hands in a buffer that is already zero.  A
+statement whose whole job is to write a zero cannot be tested against a
+zeroed fixture, and that is a property of every fixture in the tree that does
+the same, not of this function.  The rest are unchecked outputs: `out->b0 |=
+1` at the end of `rebuildJMSequence`, `out->b1 &= 0x3f`, the `out->b2`
+bit-39 assembly, and `if (list[0] == 0) return 0` in the acceptance scan.
+Nothing asserts on those bits.
+
+WHY THIS IS NOT A MIGRATION.  The two tools answer different questions and
+only one of them is mutation testing in the usual sense.  mewt generates
+mechanically and finds gaps.  `mutate.py`'s entries are hand-authored CLAIMS
+carrying the reading they test -- "swap CJ and JM in the message timeout",
+"announce the caller's side as the answerer's" -- and each is tied to a
+finding.  No generator can produce those, because none of them is a syntactic
+transformation: they require knowing that this argument is the side and that
+"CJ" is what the answerer waits for.  They are also the only thing that
+exercises the `strings` gate and the by-test/by-strings split.  Deleting them
+to adopt a generator would trade documentation of intent for volume.
+
+So: keep both, and use mewt as a periodic sweep at `--severity high,medium`,
+triaging each survivor into either a fixture fix or a new hand-written entry.
+299 uncaught at low severity is more triage than it is worth on a schedule.
+
+TWO CAVEATS.  mewt is AGPL-3.0.  That does not reach this tree -- it is a
+tool run over the source, not linked into it, and the firewall in the
+Makefile is about SpanDSP headers reaching `src/` -- but it is a reason to
+keep it an external development dependency rather than vendoring it the way
+SpanDSP is.  And it is a prebuilt binary from a GitHub release, so pin the
+version and check the published sha256, which is what the spike did.
+
+**DOES IT IMPROVE ON THE HAND-WRITTEN SET?**  For finding gaps, yes -- the
+fourteen above.  For replacing them, no, and the operator list says why
+rather than an argument:
+
+```
+   AAOS AOS AS BAOS BL BOS COS CR DAS ER IF IT LC LOS MR NR RDV SAOS SOS VR WF
+```
+
+**There is no string-literal operator.**  Nothing in mewt can turn `"CJ"`
+into `"JM"`, `%x` into `%d`, or `"Got"` into `"Didn't get"`, and no operator
+MOVES a statement, so nothing can express "announce the overflow before the
+sample is clamped".  Those are most of what the hand-written entries are.
+The overlap is `CR` (drop the announcement) and `AS` (swap two printf
+arguments, and only if they are adjacent).  So the two sets are largely
+disjoint by construction, not by accident: mewt mutates syntax, and a
+reconstruction's claims about a debug transcript are claims about content and
+position.
+
+**DOES IT REPLACE THE DEBUG-PATH SWEEP?**  No.  Tested directly, since it is
+the sort of thing that sounds true: `CR` alone over callprog.c, where
+`debugcov` says 30 of 33 sites never execute.  184 mutants, 81 seconds, 85
+uncaught -- **13 of the 30 dead sites**, and no false catches among them.
+
+The 43% is structural, not a tuning problem.  `CR` replaces a STATEMENT, so
+where a site shares an enclosing block or sits inside a larger construct,
+one mutant covers several sites at once and the individual ones never get
+their own.  The thirteen it does find arrive as thirteen rows among
+eighty-five needing triage, with nothing marking them as the interesting
+kind.  `debugcov` names all thirty, exactly, in six seconds for the whole
+tree.
+
+They are answering different questions again.  Mutation testing asks whether
+a change would be noticed; coverage asks whether the line ran at all.  A dead
+call site happens to be visible to both, which is why the question is worth
+asking -- but the tool built for it is an order of magnitude faster and does
+not miss more than half.
+
+### 194. One transcript test drove 24 sites live, and found three placements wrong
+
+`debugcov` said 77 sites never execute and 30 of them were in callprog.c, in
+`CALLPROG_Create`, `_Delete` and `_Dial` -- functions two tests already CALL,
+at level 0, where every gated site is unreachable.  Adding one level-1..3
+transcript comparison to `t_callprog_create` took the tree from **77 dead
+sites to 53**, and the sites it lit up were not all where we had put them.
+
+**`CALLPROG Create <<` marks the EXIT.**  It was first in the function, on
+the reasoning that its gate is at 0x79588 and the other at 0x795e6.  That
+reasoning is wrong in general: GCC moves these blocks out of line, so the
+order of the GATES is not the order they execute in.  The object prints it
+immediately before `CALLPROG Dialing`, i.e. last.  The arrows meant what they
+said all along -- ">>" going in to the nested create, "<<" coming back out of
+this one -- and the source comment's unease about "the opposite of the
+convention everywhere else" was the tell.
+
+**`CALLPROG_Delete is entered` is printed after `DialerAbort`,** not before,
+which is again the opposite of what the wording suggests.  A store cannot
+cross a call, so store-vs-call order is readable from the object; a gated
+print can sit either side of one and nothing but the trace can say which.
+
+**`INTEGRATION_LENGTH` is announced before the interval is taken off.**  We
+printed 4900 where the object prints 5000: the `validation -= 100` sat above
+the report and belongs below it.  Invisible to every other check, because the
+value that reaches `cfg` is the same either way -- which is exactly the class
+of thing the whole-object comparison cannot see.
+
+**And it found a missing site by itself.**  `toneiir_create`'s
+`INTEGRATION_TIME = %d Buffers.` was on the audit's missing list and turned up
+as a line the blob printed and we did not, in the middle of the cadence
+report.  Placed between the division and the two counters, where the object's
+cold block returns.
+
+ONE THING ABOUT THE TEST ITSELF.  Comparing the raw capture failed for a
+reason that had nothing to do with the modem: `runtime.c` writes a
+`<< get_param N >>` marker into the transcript for every parameter read, and
+the two sides do not read parameters in lockstep -- the reconstruction holds
+some in a local where the object re-reads them.  `dsplib_debug_capture_lines`
+already excludes those markers, which is why the line counts agreed while the
+strings did not.  The comparison strips them; the object's own output is what
+is being checked.
+### 195. Six V.34 mutation sets, and what they said about the tests
 
 V.34 is about two thirds of the reconstructed bytes and had no mutation sets
 at all: every one of the fourteen was callprog, dialer, pulse or V.8.  The
@@ -10362,7 +10559,7 @@ tests and 15 by the string sweep alone; 13 not caught, 7 equivalent.  It was
 152 over 14 suites.  The 13 are the honest part of that number: they were
 untested before these sets existed too, and nothing said so.
 
-### 193. The cross-references check out, and two more of them did not
+### 196. The cross-references check out, and two more of them did not
 
 Finding 191 said a merge is the one edit nothing in the tree could check, and
 fixed the half `offcheck.py` covers: the compiler now holds every `/* +0xNNN */`
@@ -10424,7 +10621,7 @@ digits and a letter it still takes `837k` out of `P(k) = -21k^2 + 837k - 354`
 in v34rx.c. This runs in `make test`, where a false positive is worse than a
 miss, so the keyword stays required. Write the word and it is covered.
 
-### 194. The silence check, everywhere, and what it says about drivers
+### 197. The silence check, everywhere, and what it says about drivers
 
 Finding 189 built one section — capture ON, level DOWN — for `t_v34pcmif`,
 on the grounds that every transcript comparison in the tree raises the debug
@@ -10474,11 +10671,11 @@ The same mistake in the fixture, for the third time in three files: the new
 section seeded a receive queue's `count` and `ring` but not `rd`/`wr`, which
 are pointers into it. `V34agc` follows them before printing anything, so the
 whole test segfaulted rather than reporting. **A fixture must not
-dereference a pointer it has not seeded** — findings 189 and 192 say this
+dereference a pointer it has not seeded** — findings 189 and 195 say this
 about `t_v34pcmif` and `t_v34info`.
 
 **WHAT IT COST THE MUTATION SCORE, WITHOUT MEANING TO.** v34rx's suite was
-the tree's only red one at 13 uncaught (finding 192); it is now 8. Four fell
+the tree's only red one at 13 uncaught (finding 195); it is now 8. Four fell
 out of the coverage above. The fifth needed its own fix and is worth
 recording: `v34FreezeEcho` reports the near canceller then the far one, and
 with both sets of coefficients equal — which is what init leaves — dumping
@@ -10497,9 +10694,43 @@ runs, so no input drives it. `v34rx`'s is `setInitialPhase`'s second divide
 guard, which needs `polyValue(k2) + polyValue(k)` to come out zero — the
 sweep reaches the first guard and not that one.
 
-### 195. The far echo canceller diverges, and the counter that hid it
+### 198. The collision was invisible because the checker used a dict
 
-Closing v34rx's uncaught mutations (finding 192) meant seeding `f354c` — the
+Findings collided at 146-156, at 146-151 and again at 192-194 -- three
+merges, one cause: two sessions branch from the same tip, both allocate from
+`max + 1`, both are right when they do it, and the merge puts two `### 192.`
+in one file.
+
+Nothing caught any of the three, and `refcheck.py` least of all, which is
+the interesting part because catching this is what it is for.  `titles()`
+built a dict keyed by number, so the second entry silently replaced the
+first and every citation still resolved.  The tree read as consistent while
+two different findings answered to one number -- the same shape as finding
+196's misdirection, one level up: not a reference pointing at the wrong
+entry, but a number owned by two.
+
+So the default run now reports duplicates before it reports dangling, and
+`make test` gates on it.  A collision cannot land quietly again; it goes red
+in the merge that creates it.
+
+TELLING A COLLISION FROM A LIST.  Numbered lists inside a finding use the
+same markup -- "### 1. What six LSB actually costs" sits inside a finding in
+the twenties and is not finding 1 -- and the heading level does not separate
+them, because real entries use both `##` and `###`.  What separates them is
+that entries climb and a list restarts: anything more than 20 below the
+running high-water mark is a list item.  A real collision is a repeat of a
+RECENT number, since the merge that causes it appends 192, 193, 194 after
+192, 193, 194, so it lands inside the window while a list at 1..9 does not.
+
+AND RESOLVING IT IS NOW ONE COMMAND.  `--renumber 192 195` moves the heading
+and every citation in the same pass, which is the part that went wrong by
+hand: six references were missed the first time and two the second.  It
+refuses a number that is taken and names the next free one.  What it does
+not do is decide WHICH side moves -- that is a judgement about which numbers
+are already published, and the tool should not guess it.
+### 199. The far echo canceller diverges, and the counter that hid it
+
+Closing v34rx's uncaught mutations (finding 195) meant seeding `f354c` — the
 echo adaptation counter — near the boundaries the mutations move. That drove
 the FAR canceller past count 0x2bc for the first time in this tree, and it
 does not agree with the blob.
