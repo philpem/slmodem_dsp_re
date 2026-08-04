@@ -88,6 +88,22 @@ struct call_dp {
 };
 
 /* Register the datapump.  Called from prop_dp_init. */
+/*
+ * The three dp_operations entry points, and the S-register adaptor.
+ *
+ * File-static in the object -- the ops table is the only thing in call.c with
+ * external linkage there -- and static here too until finding 221 gave the
+ * object's copies `ref_` aliases.  Declared so a test can call both sides by
+ * name instead of reaching them through what `dp_call_init` registers.
+ * `call_run` is `.process`, with no dp_wrapper in between: this datapump does
+ * its own rate conversion.
+ */
+struct dp *call_create(void *modem, int id, int caller, int srate,
+		       int max_frag, struct dp_operations *op);
+int call_delete(struct dp *dp);
+int call_run(struct dp *dp, void *in, void *out, int count);
+long call_GetSRegister(void *modem, unsigned short num);
+
 void dp_call_init(void);
 
 #endif /* DSPLIB_CALL_H */

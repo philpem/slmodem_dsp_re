@@ -12239,3 +12239,108 @@ defined by exclusion and the exclusion was a literal filename.  A tool that
 decides what counts as "ours" by listing what is not ours will be wrong the
 first time something new appears, and it will be wrong quietly.  Compare
 finding 198 and finding 199.
+
+### 223. Fourteen of the fifteen, driven by name, with the objects compared
+
+Finding 221 gave `ref_` aliases to the fifteen file-local functions this tree
+had reconstructed.  Four new tests -- `t_b103direct`, `t_v23direct`,
+`t_v8direct`, `t_calldirect` -- call fourteen of them by name.  Only
+`V34demodulate` is left, for the reason at the bottom.
+
+Calling them by name is the smaller half.  Three of the four datapumps were
+already driven through their `dp_operations` table, and `b103_process` and
+`v23_process` were reached by reading the function pointer back out of the
+wrapper at `((struct dp_wrapper *)dp->dp_data)->process` -- indirect, and
+quietly dependent on that layout being right, but not untested.  Two of the
+fourteen genuinely had no route in at all: `call_GetSRegister`, which is not
+in the operations table and which `call_create` plants in the supervisor's
+configuration and nobody names again, and the direct entry to `v8_create` and
+`v8_delete`.
+
+**The half that matters is what is compared.**  The existing tests compare
+shortlists: twelve fields of `struct b103_dp` (840 bytes), seventeen of
+`struct v23_dp` (840), eight of `struct v8_dp` plus two of `struct v8`
+(3,780), eighteen of `struct call_dp` (1,480).  In every one of them the two
+bit buffers, the ring queues, the scratch areas and the whole embedded
+supervisor went unread.  The four new tests compare the objects, after create
+and after every block, with `diff_eq_obj`.
+
+```
+PASS b103_process: the whole object, per block   33607 checks
+PASS v23 host: whole object                      67212 checks
+PASS v8_process: the whole object, per block    159324 checks
+PASS call: S56=2, tone                           13684 checks
+```
+
+Everything passes.  That is worth stating plainly: 3,780 bytes of V.8
+handshake state, tracked block by block for 900 blocks through both of its
+timeouts, agree with the blob byte for byte.
+
+#### Normalising the pointers is where the mistakes are
+
+A pointer holds an address, the two sides never agree on one, and the copy
+that gets compared has to do something about that.  Three lessons, all of them
+paid for:
+
+**A pointer nobody has set holds the same fill on both sides.**  `struct v8`
+has eight pointers that aim inside the object itself, so replacing each with
+its byte offset from the base compares something real -- a pointer left aiming
+at the wrong element of `seq[]` is exactly the defect that shape of field has,
+and zeroing it would hide that.  But `seq_spare` is not written until a QCA1
+message is accepted, so on a fresh object it holds `HARNESS_MALLOC_FILL`,
+0xa5a5a5a5, and identically so on both sides.  Subtracting each side's own
+base from that turns two EQUAL values into two different ones:
+
+```
+t_v8direct.c:213: handshake object [input 0]: struct v8+3152..+3153
+    got a6 c4, reference b6 d3
+    which field: tools/whichfield.py struct v8 3152
+```
+
+-- the low halves of `0xa5a5a5a5 - base_ours` and `0xa5a5a5a5 - base_ref`,
+which is the distance between two allocations.  The conversion now applies
+only to a value that really lands inside the object; anything else is compared
+as it stands, which is what makes "neither side has set this yet" visible as
+agreement rather than as a divergence.
+
+**A function pointer can be checked against the right function, not merely for
+being set.**  `struct callprog`'s `get_sreg` is `call_GetSRegister` on our side
+and `ref_call_GetSRegister` on the blob's, so the two can never be equal.  The
+weak normalisation -- reduce it to 0/1 like the heap pointers -- would pass if
+a side planted the *other* side's callback, or any callback at all.  Each side
+is instead required to have planted its own, which is a statement about the
+wiring rather than about nullness, and it is the whole reason
+`call_GetSRegister` is reachable at all.
+
+**A motion guard has to scan, not compare the ends.**  Whole-object comparison
+introduces a vacuity mode the existing anti-vacuity checks do not cover: two
+objects agree when neither has moved.  Comparing the first block's state
+against the last does not establish motion -- with a dial string too long to
+prefix, `call_run`'s supervisor moves, finishes, and comes back to exactly
+where it started, and that form of the guard called a live run vacuous.  Every
+block is compared against the first.
+
+#### Six functions lost their `static`
+
+`v8_create`, `v8_delete`, `call_create`, `call_delete`, `call_run` and
+`call_GetSRegister` were static here as they are in the object, so there was
+nothing to call on OUR side either.  They are declared in the headers now.
+Three of this tree's four datapumps already exported what the blob keeps local
+-- `b103_process`, `v23_process` and `v8_process` among them -- so this is the
+existing practice rather than a new one, nothing in `make phase` asserts
+linkage parity, and a name that collided would fail at the link rather than
+quietly.  `make phase` is green.
+
+It moves the coverage denominator, which is expected and should not be chased:
+`translated` went 290 -> 296 symbols as the six became visible to
+`our_symbols()`, and `tested` 97.7% -> 99.7% as the tests landed.  Only
+`AnalyseDialString` is left in the "alias exists and NOT tested" list.
+
+#### `V34demodulate`, and what would be needed
+
+The fifteenth is static on our side too and not exported here.  It is inside
+the V.34 receiver rather than at a datapump boundary, so driving it means
+constructing a `struct v34_receiver` in a state it would accept, and the four
+tests above all had a constructor to lean on -- `x_create` builds the object
+and the test compares what it built.  There is no such constructor here.
+Recorded rather than attempted; see finding 221 for the list it belongs to.

@@ -20,7 +20,7 @@ extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 
 
-static struct dp *
+struct dp *
 v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	  struct dp_operations *op)
 {
@@ -95,7 +95,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	return (struct dp *)st;
 }
 
-static int
+int
 v8_delete(struct dp *dp)
 {
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;

@@ -61,6 +61,21 @@ struct v8_dp {
 };
 
 /*
+ * The three dp_operations entry points.
+ *
+ * All three are file-static in the object, and `v8_process` has always been
+ * declared here; the other two are declared now for the same reason.  Since
+ * finding 221 the object's copies carry `ref_` aliases, so a test can call
+ * both sides by name rather than taking `create` and `destroy` out of what
+ * `dp_v8_init` registers.  Nothing in `make phase` asserts that our linkage
+ * matches the original's, and three of this tree's four datapumps already
+ * export what the blob keeps local.
+ */
+struct dp *v8_create(void *modem, int id, int caller, int srate, int max_frag,
+		     struct dp_operations *op);
+int v8_delete(struct dp *dp);
+
+/*
  * One buffer through the handshake.  Returns a DPSTAT_* code, and when the
  * negotiation finishes it publishes the result and asks the modem to change
  * datapump.
