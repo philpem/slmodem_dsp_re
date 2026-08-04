@@ -565,6 +565,28 @@ main(void)
 	 * -- so the reference must print nothing there (finding 150).
 	 */
 	for (opt_level = 1; opt_level <= 3; opt_level++) {
+		/*
+		 * The two dual-tone verdicts, INSIDE the level sweep.  They
+		 * were driven above and driven at level 0, which is why
+		 * "Found 2100" and "Found 2250" stayed dead while the
+		 * messages they announce were produced 147 times between
+		 * them: the detector was reached and the announcement was
+		 * gated off.  Finding 209.
+		 *
+		 * automode_table is 1 for states 3, 4 and 5 only, so these
+		 * are seeded rather than run down the default path.
+		 */
+		for (i = 3; i <= 5; i++) {
+			char tl[80];
+
+			sprintf(tl, "callprog: state %d, 2100 Hz, level %u", i,
+				opt_level);
+			rc |= run(tl, "T5551234", SIG_2100, i, 120);
+			sprintf(tl, "callprog: state %d, 2250 Hz, level %u", i,
+				opt_level);
+			rc |= run(tl, "T5551234", SIG_2250, i, 120);
+		}
+
 		for (i = 0; i < CALLPROG_STATES; i++) {
 			char label[80];
 

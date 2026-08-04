@@ -11157,3 +11157,34 @@ not among the ones the seeding can hold.  That is a question about the table
 `build_state_machine` writes, not about what is fed to the line, and it
 should be answered by reading the table the fixture actually produces before
 any more signals are tried.
+
+### 209. The messages were produced 147 times while the announcements stayed dead
+
+`automode_table` is 1 for states 3, 4 and 5 and 0 everywhere else, so
+`Dual_TONE_detect` runs in three states out of eleven.  Reading that was
+supposed to explain why `Found 2100` and `Found 2250` never executed.  It
+explained nothing, because the test seeds all eleven.
+
+What settled it was already in the test's own output.  It counts every
+message either side produced, and the tally said **16:109 17:38** --
+`CALLPROG_DUALTONE_A` 109 times and `CALLPROG_DUALTONE_B` 38.  Those two
+messages are set in the same `if` bodies as the two announcements.  So the
+detector was reached, the verdicts fired, the messages flowed, and the
+`printf` two lines above each of them never ran.
+
+Which leaves one possibility, and it is the one from findings 194, 201 and
+202 for the fourth time: the runs that drive the tones sit ABOVE the level
+sweep and execute at level 0.  Moving three seeded states into the loop
+drives both sites, and the transcripts agree with the object first try.
+
+TWO ROUNDS WERE SPENT ON THE SIGNAL AND THE ANSWER WAS NEVER THERE.  Finding
+207 read the detector and concluded the verdicts needed holding and a
+different band; 208 raised the amplitude to 12000 and replaced a 3.8-sample
+table sine with a real one.  Both were true observations about the detector
+and neither mattered -- the tone had been detected all along.  The tell was
+sitting in the test's message tally through both rounds, and the cheaper
+question was never asked: not "why does the detector not fire" but "does
+anything downstream of it show that it did".
+
+Ask what the code AFTER the site recorded before theorising about the input
+to it.  34 dead sites to 32.
