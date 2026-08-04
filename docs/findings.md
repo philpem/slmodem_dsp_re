@@ -10275,3 +10275,63 @@ The twelve annotations it skips are `struct v8_v21_params`, which annotates
 each field with where the STRUCT sits in the V.8 object rather than with the
 field's own offset.  That convention is legitimate and the tool names it
 rather than guessing.
+
+### 192. gcov works here, and it names the 77 sites nothing runs
+
+Three checks already look at the diagnostic call sites and none of them
+answers whether a test ever REACHES one.  `--missing` counts sites in the
+blob against sites in our source.  `--invented` checks the literal is the
+original's.  `mutate.py` breaks a site and watches for red, but a mutation
+caught by the string sweep rather than by a differential test has told you
+the literal exists, which is the first check again.  Task #50 has been
+closing that gap by hand, one function at a time.
+
+`gcov` answers it directly, and the surprise is that it works at all.
+
+**Instrumentation does not perturb the differential tier.**  `--coverage`
+disables some optimisation, and with `-mfpmath=387` changed optimisation can
+move x87 spill points and so change the rounding of intermediate values --
+exactly what this tier exists to detect.  It does not happen: all 62 test
+binaries pass instrumented, `t_v34ec` and `t_v34rx` included.  That is a
+property of this tree's flags and worth re-checking if they change, not a
+general licence.  The link needs `--coverage` in LDFLAGS as well as CFLAGS;
+`build/dsplibs_ref.o` stays uninstrumented and does not care.
+
+**Every binary accumulates into one set of counts.**  They link the same
+objects and the .gcda path is baked in at compile time, so running all 62
+gives suite-wide coverage with nothing to merge.  The tests set
+`dsplibs_debug_level` per case and the transcript blocks already sweep 1 to
+3, so a plain run reaches every site any test drives at any level -- there is
+no level to configure and no second run to diff against.
+
+**77 of 278 sites never execute.**  By file:
+
+```
+   callprog.c   30 of 33      v34rx.c      12 of 24
+   cadence.c    17 of 24      v34info.c     4 of 26
+   dialer.c      9 of 39      v34hshak.c    2 of 10
+   fpm_div.c     1 of 1       v34shell.c    1 of 5
+   fpm_mrf.c     1 of 1
+```
+
+THE RECONCILIATION IS THE REASON TO TRUST IT.  Finding 154 worked out by
+hand, from the disassembly and from which mutations went red, that 3 of
+`CALLPROG_Progress`'s sites were verified and the other 26 were not.  This
+reports 3 live sites in callprog.c and 30 dead, having been told nothing
+about any of it, and names the three: `request_state`'s STATE line and
+`run_timeouts`' two timeouts.  Two methods with nothing in common agreeing
+on a number that small is the strongest evidence either has produced.
+
+It also confirms what the V.8 batch was for: src/v8 does not appear in the
+list at all.  Every site placed there is driven.
+
+**And it shows why line coverage alone would have been useless.**  The suite
+covers 96.7% of executable lines in src/ -- 8548 of 8843 -- while 28% of the
+diagnostic sites never run.  A gated call site is one or two lines out of
+thousands; a percentage cannot see it.  The number that matters is the one
+this counts, not the one the tool advertises.
+
+`tools/debugcov.py`, ten seconds end to end.  Deliberately not wired into
+`make phase` and deliberately not failing on a dead site: 77 of them exist
+today, and a gate that is red from its first run is a gate somebody turns
+off.  The number is there to be compared against the last one.
