@@ -11424,3 +11424,61 @@ standing answer to a caller whose callees are missing is to not write the
 caller — `CALLPROG_Progress`, `b103_process` and `FPM_iir_filt_block` are
 all declined for exactly that reason — and this is the same answer at
 sixty times the size.
+
+### 214. The gate on `v34handshak` is in symmap.py, not in the object
+
+Finding 213 established that `v34handshak` reaches 65 functions this tree
+has not written — 33.8 KB of prerequisites, 16 KB of it C++ from
+`VPcmV34Main.cpp` — and concluded the function "cannot be committed in
+pieces ahead of its callees", since `Makefile:121` links all of `$(OBJ)`
+into every test binary and one undefined symbol breaks the whole suite,
+not just the new test.
+
+The link constraint is real.  The conclusion does not follow from it.
+
+`symmap.py` renames **every** defined blob symbol to `ref_*`, so the blob
+half of each test binary is self-contained and our half must supply
+everything it calls.  That is a choice made when the harness was written
+for leaf functions, where it costs nothing.  Rename only the symbols we
+actually define, and the rest stay un-renamed — at which point an
+unwritten callee resolves to the blob's own copy, **for both sides at
+once**, and the caller links.
+
+Spiked on branch `symmap-scaffold-spike`, commit `ea3b26d`: 384 renamed,
+1966 left for the blob to supply, and **62 of 62 test binaries pass
+unchanged**.  A program calling `probeselect` — 6173 bytes, not written —
+links and runs.
+
+#### Why sharing one physical copy is safe here
+
+It is the `STATEFUL_IMPORTS` hazard one level down.  Both sides calling
+the same `probeselect` is fine if it carries nothing between calls, and
+catastrophic if it writes a blob global: our side's call would perturb
+the blob side's next read, invisibly, while still producing a plausible
+waveform.
+
+A leaf audit is not enough — the hazard is transitive, because
+`probeselect` calls things.  The closure of all 65 unwritten callees is
+**111 functions, containing no store to `.bss` or `.data`**.  The one
+flag is `edprintf` doing `movl $0x900,(%esp)` against `.bss`, which is
+the *address* of a scratch buffer being pushed as an argument, not a
+carried global.  This holds because V.34 state lives behind the
+`tagV34Object` pointer, not in file scope; it is a property of this
+object and would need re-checking against another.
+
+#### What it costs, which is why it is a branch and not a merge
+
+Today "the suite links" proves *everything reachable from what we have
+written is written*.  That invariant is free and this spends it.  Without
+a replacement, the tree can look far more finished than it is — against a
+standing goal of a replacement that behaves identically to the blob, that
+is the worst direction to be wrong in.
+
+Anything landing this needs, at minimum: `make phase` printing the count
+of blob-supplied symbols as a **ratchet that only ever shrinks**, and
+`coverage.py` taught that a missing `ref_` alias now has a second cause
+besides "file-local in the object".
+
+It changes the **order**, not the total.  The finished tree still has all
+33.8 KB written.  What it removes is the sequencing rule that makes 16 KB
+of V.90/V.92 C++ a precondition for touching the V.34 handshake at all.

@@ -98,7 +98,7 @@ first job of #39, not a prerequisite for starting it.** Until that is done,
 ### And now it has been run, and the split is by machine
 
 `cfgsplit --func v34handshak` finds the three tables by itself, and finding
-205 says which machine feeds each: two of them are the transmit state and
+213 says which machine feeds each: two of them are the transmit state and
 one is the microstate, while the receive state has no table at all. So the
 split is **by machine, not by state number** — a state *value* means
 different things to different machines, and 51 is `TX_L1` to two of them.
@@ -112,9 +112,55 @@ different things to different machines, and 51 is `TX_L1` to two of them.
 ```
 
 Three pieces, then, and not seven. The rest of "#39–#45" is the
-prerequisites: `v34handshak` reaches 68 functions this tree has not written,
-about 34 KB once its own 61.5 KB is set aside, and 16 KB of that is the C++
-half of `VPcmV34Main.cpp`. Every test links all of `$(OBJ)`, so **none of
-the three pieces can be committed until all of it exists** — which is the
-same answer this tree already gives for `CALLPROG_Progress`, `b103_process`
-and `FPM_iir_filt_block`, at sixty times the size.
+prerequisites: `v34handshak` reaches 65 functions this tree has not written,
+33.8 KB once its own 61.5 KB is set aside, and 16 KB of that is the C++ half
+of `VPcmV34Main.cpp`.
+
+It was written here that every test links all of `$(OBJ)`, so **none of the
+three pieces can be committed until all of it exists** — the same answer
+this tree gives for `CALLPROG_Progress`, `b103_process` and
+`FPM_iir_filt_block`, at sixty times the size.
+
+**That does not follow, and finding 214 is why.** The link constraint is
+real, but it comes from `symmap.py` renaming *every* defined blob symbol to
+`ref_*`, which is a choice made when the harness was built for leaf
+functions. Rename only what we define and an unwritten callee resolves to
+the blob's own copy for both sides at once. Spiked on branch
+`symmap-scaffold-spike`: 62 of 62 binaries pass, and a caller of the
+unwritten `probeselect` links and runs. The closure of all 65 unwritten
+callees is 111 functions with no store to `.bss` or `.data`, so sharing one
+physical copy carries nothing between the sides.
+
+Not landed, because it spends a free invariant — today "the suite links"
+proves everything reachable from what we have written *is* written. Whether
+to spend it, and what ratchet replaces it, is the open decision. What is
+settled is that the 16 KB of V.90/V.92 C++ is a **scheduling** question and
+not a precondition.
+
+### The renumbering, and the two task stores
+
+`#39`–`#45` named a seven-way split by state that finding 213 shows does not
+exist. They are superseded by a three-way split by machine plus the
+prerequisites:
+
+| old | new | what it is |
+|---|---|---|
+| #39 | **#56** | `v34handshak` part 1 — txstate, tables 1 and 2, ~21.4 KB |
+| #40–#44 | **#57** | `v34handshak` part 2 — microstate, table 3, ~27.6 KB |
+| #45 | **#58** | `v34handshak` part 3 — rxstate by compare chain, ~12.3 KB |
+| — | **#59** | the 17.8 KB of C prerequisites |
+| — | **#60** | the 16 KB of V.90/V.92 C++ from `VPcmV34Main.cpp` |
+| — | **#61** | the two-instance transcript oracle |
+
+`#45` was "V.92 modem-on-hold states" and does **not** map cleanly onto #58;
+the MOH states are dispatched from the microstate table, so most of #45 is
+inside #57. Nothing is lost, but a hand-over quoting "#45" should be read as
+"the MOH share of #57", not as #58.
+
+**A second task store exists.** The `v34hshak` session numbers its own work
+`#11`–`#22`, and those are different tasks from `#11`–`#22` here — this
+store's `#11` is the Bell 103 rate conversion. Any hand-over quoting a task
+number must say which store it means. This is the same collision that took
+`204` and `205` twice (finding 214's neighbours, 212 and 213, are the
+survivors), and the same fix applies: write the mapping down where three
+sessions can read it, which is here.

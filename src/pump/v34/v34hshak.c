@@ -983,7 +983,7 @@ dftRetrainDetInit(void *objp)
  * its correlation on one axis -- but a seeded accumulator does: 0x04000000
  * in both halves gives exactly -32768, which read unsigned is 32768, and the
  * two spellings then disagree about every threshold between them.  Finding
- * 204, which records the sweep that missed this and why it missed it.
+ * 212, which records the sweep that missed this and why it missed it.
  */
 int
 detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
