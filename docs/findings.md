@@ -11542,16 +11542,40 @@ against `.text+offset` rather than a name: `ApplyBulkDelay`, `getbit` and
 `getMPrecvdBits` were absent from it and present in `callgraph`'s.  The
 counts here are `callgraph`'s, and 214's "65" is corrected to 64 in place.
 
-### 216. Half the differential checks throw away the input that identifies them
+### 216. Context is cumulative output, so the wall is a turn count
 
 Functions over about 6 KB have repeatedly cost a whole session without being
 finished, and the obvious explanation -- the disassembly does not fit -- is
 wrong.  Measured: `probeselect` at 6,173 bytes is 1,523 instruction lines and
 about 14,500 tokens for one clean read, and `v34handshak`, the largest
-function in the object at 61,541 bytes, is about 131,000.  Both fit.
+function in the object at 61,541 bytes, is about 131,000.  Both fit a 1 M
+window.  Nor is it tool output: across one 1,826-turn session every
+disassembly tool together -- `dis.py`, `objdump`, `cfgsplit`, `relocscan`,
+`readelf`, `callgraph` -- produced 153 KB, 12% of all tool results.
 
-What does not fit is the **re-reading**, and the reason there is so much of it
-is this:
+The session transcripts record token usage, so this can be measured rather
+than argued.  Session `abff4cf1`, which reached the wall:
+
+| turn | context | cumulative output | ratio |
+|--:|--:|--:|--:|
+| 25 | 69,945 | 12,453 | 5.62 |
+| 100 | 143,961 | 86,842 | 1.66 |
+| 300 | 359,920 | 281,435 | 1.28 |
+| 508 | 623,348 | 579,161 | **1.08** |
+
+**The ratio converges to 1.**  Past the fixed cost of the first few turns,
+context growth *is* output growth.  Output runs 1,100-1,800 tokens per turn
+across every session measured, which puts the limit near 500-900 turns
+whatever the turns are about; the five sessions that reached it had 400-600
+turns, and the ones that finished had 10-25.  It is a turn count wall, not a
+size wall, which means the structural fix is a subagent -- its turns do not
+accumulate in the parent -- and everything else is a constant factor.
+
+#### The constant factor is still worth having
+
+I first wrote this finding claiming the cause was the following, which is a
+contributor and not the mechanism.  Recorded as written, because the
+measurement above is what should have come first:
 
 `diff_eq_int(fmt, got, want, input)` passes `input` to `fmt`.  Of the 1,667
 call sites in the suite, **819 give a format string with no conversion in
