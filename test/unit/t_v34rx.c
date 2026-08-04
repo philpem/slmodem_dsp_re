@@ -2615,5 +2615,183 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * THE S-S1 THRESHOLD, PLACED EXACTLY.  `receiver` gives up on the
+	 * equaliser and restarts when the slicing error passes 0x600:
+	 *
+	 *      if ((short)err > 0x600) { ... rx->f124 = 0; ... }
+	 *
+	 * and moving that bound by one is observable ONLY when err is 0x601.
+	 * Nothing in the sweeps above ever produced it -- err is
+	 * `(dr*dr + di*di) >> 14` on the distance from a fixed constellation
+	 * point, and the values the ring happens to generate step straight
+	 * over the band.  400 different ring offsets gave not one sample in
+	 * 0x5f8..0x608.
+	 *
+	 * SO THE ERROR IS CHOSEN RATHER THAN SWEPT FOR.  Three things make it
+	 * reachable, and each was learned by getting it wrong:
+	 *
+	 *   V34_RX_FLAG_DATA MUST BE CLEAR.  The site is the else-branch of
+	 *   data mode, taken when `f1c0 > 1`.  With DATA set it is never
+	 *   reached at all.
+	 *
+	 *   THE DELAY LINE HAS TO BE FULL.  `V34EqualizerUpdateDelayLine` runs
+	 *   on odd `i` of the `f128` loop, so a call pushes two of the 80
+	 *   entries and a fresh object needs forty calls before the middle
+	 *   taps multiply anything but zero.  The queue is refilled before
+	 *   every one of them, or it empties and the line fills with silence.
+	 *
+	 *   ONE TAP, NOT EIGHTY.  Driven together the taps move `f208` about
+	 *   twenty counts per step, which strides over the band; a single
+	 *   centre tap moves it by a fraction of one, and err then walks
+	 *   through every value.
+	 *
+	 * With that, err is monotonic in the tap either side of a minimum at
+	 * 2304, and the three values below sit on the bound and its two
+	 * neighbours.  They are constants found by measurement, so the
+	 * assertion that matters is the one that says so: `saw_ss1` proves
+	 * the branch was taken for 0x601 and not for 0x600, and if the
+	 * arithmetic ever moves under them it fails rather than going quiet.
+	 */
+	diff_begin("v34 receiver: the S-S1 threshold, both sides of it");
+	{
+		static struct v34_object oa4, ob4;
+		static const struct { short tap; int err; int cross; } ss1[] = {
+			{ 5891, 0x600, 0 },	/* not `> 0x600`: no restart  */
+			{ 5892, 0x601, 1 },	/* the first value that is    */
+			{ 5894, 0x602, 1 }
+		};
+		unsigned c, warm, z;
+		int saw_ss1 = 0, saw_quiet = 0;
+
+		for (c = 0; c < sizeof(ss1) / sizeof(ss1[0]); c++) {
+			struct v34_receiver *ra, *rb;
+			struct v34_equalizer *qa, *qb;
+			unsigned b;
+			int j;
+
+			memset(&oa4, HARNESS_MALLOC_FILL, sizeof(oa4));
+			memset(&ob4, HARNESS_MALLOC_FILL, sizeof(ob4));
+			V34InitializeImplementationSpecific(&oa4);
+			ref_V34InitializeImplementationSpecific(&ob4);
+			txinit(&oa4); ref_txinit(&ob4);
+			rxinit(&oa4); ref_rxinit(&ob4);
+			rxtiminginit(&oa4); ref_rxtiminginit(&ob4);
+			V34SetupDemodulator(&oa4, 3000, 1800);
+			ref_V34SetupDemodulator(&ob4, 3000, 1800);
+
+			ra = (struct v34_receiver *)((char *)&oa4 + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob4 + 0x264);
+			qa = (struct v34_equalizer *)((char *)ra
+						      + V34_RX_EQ_OFFSET);
+			qb = (struct v34_equalizer *)((char *)rb
+						      + V34_RX_EQ_OFFSET);
+			oa4.status = ob4.status = 0;
+			oa4.rx_energy_floor = ob4.rx_energy_floor = 900;
+
+			for (warm = 0; warm < 60; warm++) {
+				for (z = 0; z < V34_RXQ_RING; z++)
+					((struct v34_queue *)ra)->ring[z] =
+					((struct v34_queue *)rb)->ring[z] =
+					    (int)((unsigned)(unsigned short)
+						  (short)(z * 811 + 3000)
+						  | ((unsigned)(unsigned short)
+						     (short)(z * 277 - 900)
+						     << 16));
+				((struct v34_queue *)ra)->count =
+				((struct v34_queue *)rb)->count =
+				    V34_RXQ_RING;
+				((struct v34_queue *)ra)->rd =
+				    ((struct v34_queue *)ra)->ring;
+				((struct v34_queue *)rb)->rd =
+				    ((struct v34_queue *)rb)->ring;
+				((struct v34_queue *)ra)->wr =
+				    ((struct v34_queue *)ra)->ring;
+				((struct v34_queue *)rb)->wr =
+				    ((struct v34_queue *)rb)->ring;
+
+				ra->agc_gain = rb->agc_gain = 0x4000;
+				ra->agc_step = rb->agc_step = 0x3333;
+				ra->f124 = rb->f124 = 0x100;
+				ra->f1c0 = rb->f1c0 = 4;
+				ra->f1f2 = rb->f1f2 = 0x4000;
+				ra->f1f4 = rb->f1f4 = 0;
+				ra->f19c = rb->f19c = 0;
+				ra->f1ec = rb->f1ec = 1;
+				ra->f1ee = rb->f1ee = 2;
+				ra->f21c = rb->f21c = 0x3fd;
+				ra->flags = rb->flags =
+				    (unsigned short)V34_RX_FLAG_TRAINED;
+
+				/* The last call is the one that counts. */
+				if (warm + 1 == 60) {
+					for (j = 0; j < V34_EQ_TAPS; j++) {
+						qa->re[j] = qb->re[j] = 0;
+						qa->im[j] = qb->im[j] = 0;
+					}
+					qa->re[40] = qb->re[40] = ss1[c].tap;
+				}
+
+				receiver(&oa4);
+				ref_receiver(&ob4);
+			}
+
+			/*
+			 * `f124` is zeroed by the restart and by nothing else
+			 * on this path, so it says whether the bound was
+			 * crossed -- and it is the object's own answer, not
+			 * this fixture's arithmetic.
+			 */
+			diff_eq_int("the reference crossed the bound",
+				    ra->f124 == 0, ss1[c].cross,
+				    (long)ss1[c].err);
+			diff_eq_int("and so did ours", rb->f124 == 0,
+				    ss1[c].cross, (long)ss1[c].err);
+			if (ss1[c].cross)
+				saw_ss1 = 1;
+			else
+				saw_quiet = 1;
+
+			for (b = 0; b < sizeof(oa4); b++) {
+				if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)
+					continue;
+				if (b >= 0x264 + 0x130 && b < 0x264 + 0x134)
+					continue;
+				if (b >= 0x264 + 0x1b4 && b < 0x264 + 0x1b8)
+					continue;
+				if (b >= 0x264 + 0x2a4 && b < 0x264 + 0x2a8)
+					continue;
+				if (b >= 0x620 && b < 0x628)
+					continue;
+				if (b >= 0x221c + 4 && b < 0x221c + 0xc)
+					continue;
+				if (b >= 0x2074 && b < 0x2078)
+					continue;
+				if (b >= 0x2078 + __builtin_offsetof(
+					  struct v34_echo_prefilter, coeff)
+				    && b < 0x2078 + __builtin_offsetof(
+					  struct v34_echo_prefilter, coeff) + 4)
+					continue;
+				if (b >= 0x80b8 && b < 0x80b8 + 0x18)
+					continue;
+				if (b >= 0x9138 && b < 0x9138 + 0x18)
+					continue;
+				diff_eq_int("S-S1 object byte %ld",
+					    ((unsigned char *)&oa4)[b],
+					    ((unsigned char *)&ob4)[b],
+					    (long)ss1[c].err * 100000 + b);
+			}
+		}
+
+		/*
+		 * Both halves have to have happened, or the three constants
+		 * have drifted off the boundary and the section is asserting
+		 * nothing.
+		 */
+		diff_eq_int("the bound was crossed at 0x601", saw_ss1, 1, 0);
+		diff_eq_int("and not crossed at 0x600", saw_quiet, 1, 0);
+	}
+	rc |= diff_end();
+
 	return rc;
 }

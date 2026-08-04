@@ -10923,3 +10923,64 @@ citations it rewrote was inside `refcheck.py`'s own docstring — which
 A tool that rewrites the tree needs its guard before its capability, not
 after; this is the second lesson in this file about running a mutating tool
 against the working copy, `mutate.py`'s chdir being the first.
+
+### 203. The last uncaught mutation, and why sweeping could never have found it
+
+`receiver` gives up on the equaliser and restarts when the slicing error
+passes a threshold — `if ((short)err > 0x600)` — and moving that bound by one
+was the tree's last uncaught mutation. It is observable only when `err` is
+exactly 0x601, and nothing had ever produced it: a search over 400 ring
+offsets returned not one sample anywhere in 0x5f8..0x608. Finding 200 left
+it open with the note that reaching it wanted the equaliser driven to a
+chosen output rather than the input swept. That turned out to be right, and
+three separate things stood in the way.
+
+**THE SITE WAS NEVER REACHED AT ALL.** It is the else-branch of data mode:
+
+```
+    if (flags & V34_RX_FLAG_DATA)  { ...data... }
+    else if (rx->f1c0 > 1)         { ...the reference generator, S-S1 here... }
+```
+
+Every attempt had `V34_RX_FLAG_DATA` set, because that is what the receiver's
+other cases use. With it clear and `f1c0 = 4` the site is reached on every
+call; with it set, never. Two whole sweeps measured nothing and reported
+"no sample in the band", which was true and meaningless.
+
+**THE INPUT IS NOT THE KNOB.** With the equaliser coefficients zero the
+output is zero whatever the queue holds, and err sits at 639 — the distance
+from the origin to the constellation point — for all 32767 ring amplitudes.
+The knob is the coefficients.
+
+**BUT NOT ALL OF THEM AT ONCE.** Driven together the 80 taps move `f208`
+about twenty counts per unit step, and err past the band in jumps of a
+dozen: 129..27714 with nothing inside. A single centre tap moves `f208` by a
+fraction of a count and err then walks through every value.
+
+**AND THE DELAY LINE HAS TO BE FULL.** `V34EqualizerUpdateDelayLine` runs on
+odd `i` of the `f128` loop, so one call pushes two of the eighty entries.
+On a fresh object the two land at taps 78 and 79 and the centre tap
+multiplies zero — which is why an early attempt with a full re-init per
+trial got err = 639 again and looked like a dead end. Forty calls fill the
+line, and the receive queue must be refilled before every one of them or it
+empties and the line fills with silence instead.
+
+With all four right, err is smooth and monotonic in the tap either side of a
+minimum at 2304, and the boundary is a measurement:
+
+```
+    tap 5891  ->  err 0x600     the bound is not crossed
+    tap 5892  ->  err 0x601     the first value that crosses it
+    tap 5894  ->  err 0x602
+```
+
+The test drives all three and asks the object, not the fixture, which way it
+went: `f124` is zeroed by the restart and by nothing else on that path. Two
+coverage assertions say the branch was taken for 0x601 and not for 0x600, so
+if the arithmetic ever moves out from under those constants the section
+fails rather than going quiet.
+
+**343 of 343.** Every mutation in every suite is caught, seven of them
+recorded as equivalent. The number is worth less than the four things above,
+each of which was a sweep reporting a clean result for a reason that had
+nothing to do with the code.
