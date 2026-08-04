@@ -8,16 +8,13 @@ dsplibs.o reconstruction coverage
   .text                          728304 bytes, 1782 symbols
 
   translated  [######............................]  17.4%    126401 bytes, 296 symbols
-  tested      [##################################]  99.7%    125965 bytes, 295 of 296 that can be
+  tested      [##################################] 100.0%    126401 bytes, 296 of 296 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 14 of ours (5050 bytes).
-
-  translated, alias exists, and NOT tested:
-    AnalyseDialString                               436 bytes   (file-local)
 
   nothing we have reconstructed is stuck without an alias: every
   file-local symbol of ours is drivable by name.
