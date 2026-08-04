@@ -11096,3 +11096,32 @@ fails rather than going quiet.
 recorded as equivalent. The number is worth less than the four things above,
 each of which was a sweep reporting a clean result for a reason that had
 nothing to do with the code.
+
+### 207. The dual-tone verdicts are CONFIRMED ones, and B is not a 2250 Hz tone
+
+`Found 2100` and `Found 2250` are two of callprog's remaining dead sites, and
+finding 194's attempt at them added 2100 Hz and 2250 Hz signal sources and
+seeded them into every state.  Neither fired.  Reading `dualtone.c` says why,
+and the guess in that finding -- "a level or a duration this input does not
+have" -- was wrong twice over.
+
+**They are the CONFIRMED verdicts, not the plain ones.**  `CALLPROG_Progress`
+tests `r == 3` and `r == 5`, and those are `DUAL_TONE_A_CONFIRMED` and
+`DUAL_TONE_B_CONFIRMED`.  Verdicts 2 and 4 are the same tones NOT yet held.
+Confirmation needs `hold_a` to reach `DUAL_TONE_HOLD`, which is 0x500, and
+the hold counter is RESET whenever the other branch wins or the energy drops
+below `min_energy` -- so it is 1280 samples of UNBROKEN detection, not 1280
+samples of tone.
+
+**And B is not 2250 Hz.**  `energy_b` is measured through `notch_c` applied
+to `notch_b`'s output -- 1800 then 2250 chained -- so it is energy in a BAND
+between the two, which `dualtone.h` calls the FSK band.  A single sine at
+2250 goes into a notch AT 2250 and is removed, which is the opposite of what
+it needs.  Feeding one was never going to work.
+
+WHAT THE NEXT ATTEMPT NEEDS.  For 3: 2100 Hz held unbroken past 1280 samples,
+which the existing SIG_2100 source can do provided nothing resets the hold --
+worth checking `min_energy` against the amplitude of 5000 first, since a
+single dip below the floor restarts the count.  For 5: an FSK-band signal,
+which is what the V.21 answer sequence is, not a tone at a notch centre.
+`t_v23tx` already generates the real thing and is the obvious source.
