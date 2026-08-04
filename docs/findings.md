@@ -11541,3 +11541,74 @@ from relocation targets misses file-local functions, whose calls relocate
 against `.text+offset` rather than a name: `ApplyBulkDelay`, `getbit` and
 `getMPrecvdBits` were absent from it and present in `callgraph`'s.  The
 counts here are `callgraph`'s, and 214's "65" is corrected to 64 in place.
+
+### 216. Half the differential checks throw away the input that identifies them
+
+Functions over about 6 KB have repeatedly cost a whole session without being
+finished, and the obvious explanation -- the disassembly does not fit -- is
+wrong.  Measured: `probeselect` at 6,173 bytes is 1,523 instruction lines and
+about 14,500 tokens for one clean read, and `v34handshak`, the largest
+function in the object at 61,541 bytes, is about 131,000.  Both fit.
+
+What does not fit is the **re-reading**, and the reason there is so much of it
+is this:
+
+`diff_eq_int(fmt, got, want, input)` passes `input` to `fmt`.  Of the 1,667
+call sites in the suite, **819 give a format string with no conversion in
+it**, so the argument is formatted by nothing and silently discarded.  The
+commonest shape is the whole-object byte compare, open-coded in several
+tests:
+
+```c
+for (i = 0; i < (int)sizeof(da); i++)
+        diff_eq_int("decoder state", ((unsigned char *)&da)[i],
+                    ((unsigned char *)&db)[i], i);        /* t_v34rx.c:187 */
+```
+
+which computes the offset, hands it over, and prints `decoder state  got 68,
+reference 136` six times without once saying which byte.  The failure knew
+which field diverged and threw it away at the point of printing; the session
+then earns that back by re-reading the disassembly, which is the loop that
+consumes the context.
+
+Nothing was wrong with the checks themselves -- every one of those 819 is a
+real comparison that really passes.  The suite is not weaker than it looked.
+It is that a *failing* one says almost nothing, and the cost of that only
+appears on the large functions, where failures are many and the code to
+re-read is long.
+
+#### The fix is five lines and touches no call site
+
+```c
+if (strchr(fmt, '%') == NULL)
+        fprintf(stderr, " [input %ld]", input);
+```
+
+Appending the input when the format did not consume it repairs all 819 at
+once.  `make phase` is green with it.
+
+#### And the byte loop should not be open-coded at all
+
+`diff_eq_obj(what, type, a, b, input)` does what those loops do, and three
+things they do not: it coalesces differing bytes into runs (one wrong 32-bit
+accumulator is one report, not four), it counts one check per object rather
+than 1,948, and it reports the first difference first because everything
+after it is consequence.  `tools/whichfield.py` then turns the offset into a
+field path out of the DWARF our own objects already carry.
+
+Where the offset lands in a `pad_*` region, that is the answer: the
+divergence is somewhere the reconstruction has not modelled as fields yet.
+
+Spiked on branch `spike-objdiff`.  The ordered set of remedies, including the
+per-dispatch-case testing that would make `v34handshak`'s 16 microstate cases
+independently committable, is in `docs/largefunctions.md`.
+
+#### A trap found on the way
+
+`tools/dis.py` shadows the standard library's `dis`, which `inspect` imports.
+Any tool in `tools/` that reaches for something substantial -- pyelftools, in
+this case -- dies with `AttributeError: module 'dis' has no attribute
+'COMPILER_FLAG_NAMES'`, naming neither the directory nor the file
+responsible.  `whichfield.py` drops its own directory from `sys.path` before
+importing rather than renaming `dis.py`, whose name is right and which
+several findings cite.

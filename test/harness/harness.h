@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Reconstructed C++ modules link against this too. */
 #ifdef __cplusplus
@@ -165,6 +166,23 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
 #define diff_eq_int(fmt, got, want, input) \
 	diff_eq_int_(__FILE__, __LINE__, (fmt), (long)(got), (long)(want), \
 		     (long)(input))
+
+/*
+ * Compare two whole objects, reporting the first differing FIELD.
+ *
+ *   diff_eq_obj("after process", struct v34_decision, &da, &db, i);
+ *
+ * `type` is written unquoted and is stringified: it is the C type name that
+ * tools/whichfield.py looks up in our DWARF to turn an offset into a field
+ * path.  See harness.c for why this exists rather than a memcmp.
+ */
+void diff_eq_obj_(const char *file, int line, const char *what,
+		  const char *type, const void *got, const void *want,
+		  size_t n, long input);
+
+#define diff_eq_obj(what, type, got, want, input) \
+	diff_eq_obj_(__FILE__, __LINE__, (what), #type, (got), (want), \
+		     sizeof(type), (long)(input))
 
 /*
  * Debug capture: with this set, each side's dsplibs_debug_printf appends to
