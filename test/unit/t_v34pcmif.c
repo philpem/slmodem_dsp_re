@@ -513,7 +513,7 @@ check_shell_ptrs(short f359c, long tag)
 
 /*
  * Every input the three functions read, one field per member.  Two inputs
- * driven from one variable cannot be told apart -- findings 116b, 123 and 147
+ * driven from one variable cannot be told apart -- findings 116b, 123 and 171
  * -- so `rate_now`, `rate_min` and `rate_max` are separate even though the
  * interesting cases are relations between them, and the three state words are
  * separate from each other and from the two trace counters.

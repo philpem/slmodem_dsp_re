@@ -8,7 +8,7 @@
  * and it is LIVE: `v34handshakinit` and `v34handshak` index it 533 times
  * between them, to print state transitions.  An earlier note here said
  * nothing indexed it, which was a relocation search missing an addend
- * against a section symbol -- see findings 144 and 152.
+ * against a section symbol -- see findings 144 and 176.
  *
  * The transitions name THREE concurrent machines, not one: a receive state,
  * a transmit state and a "microstate", each trace printing its own change

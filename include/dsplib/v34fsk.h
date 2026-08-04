@@ -242,7 +242,7 @@ struct v34_object {
 	 * `datapumpv34` reads +0x238 and +0x248 at their TRUE offsets and
 	 * puts 5 in `f0004` when the difference passes 287,488; `v34handshak`
 	 * copies +0x238 into +0x248 to restart the span.  Between them those
-	 * are the second and third readings that settle finding 155's
+	 * are the second and third readings that settle finding 179's
 	 * register-relative offsets as four low.
 	 */
 	unsigned char unmapped_0234[0x24c - 0x234];
@@ -261,7 +261,7 @@ struct v34_object {
 	 *
 	 * IT IS NOT ONLY RATCHETED.  `VPcmV34SetV90RateReneg` assigns 11 or
 	 * 15 outright, so a renegotiation can move it down as well as up;
-	 * see D44.
+	 * see D48.
 	 */
 	int v90_receiver;				/* +0x024c */
 	/*

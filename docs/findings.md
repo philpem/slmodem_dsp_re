@@ -9481,7 +9481,7 @@ the stride added into +0x23c, is round at no rate this modem uses.  D43.
 makes the difference negative, which is far above the limit as an unsigned
 and takes the reset arm.  A signed reconstruction differs only there, so the
 fixture drives base and delta from separate variables — the two-inputs-one-
-variable defect of 116b, 123 and 147 — and includes four such cases.
+variable defect of 116b, 123 and 171 — and includes four such cases.
 
 ### `StateName` is a LOCAL symbol, so the transcript is its only check
 

@@ -386,7 +386,7 @@ run_preempindex(short limit, short meas, short baud, long tag)
 /*
  * Every input the five bodies read, one field per member, so that no two can
  * be swept from one variable.  That is the fixture defect of findings 116b,
- * 123 and 147, and it turned up three times in the previous session alone --
+ * 123 and 171, and it turned up three times in the previous session alone --
  * two inputs driven together cannot be told apart, however thorough the
  * sweep looks.
  *
@@ -1139,7 +1139,7 @@ main(void)
 		 * `ref_StateName` for the fifteen-table comparison at the top
 		 * of this file to copy; the strings are reachable only through
 		 * what the traces print.  Finding 173's trap, and finding
-		 * 152's -- delete this section and nothing checks the eighty-
+		 * 176's -- delete this section and nothing checks the eighty-
 		 * seven names at all.
 		 *
 		 * MODE 2 IS THE ONE THAT CAN SEE `[1]` AND `[2]`.  Modes 0, 1
