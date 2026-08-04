@@ -168,5 +168,172 @@
   "label": "INFO1a: the special baud index is 7 rather than 6",
   "find": "\tif ((short)baud_index == 6) {",
   "replace": "\tif ((short)baud_index == 7) {"
+ },
+ {
+  "note": "VPcmV34InterpretMohMessageBits.  Eleven arms over one short, two of them masked and five exact, and two pairs of arms that differ only in a string."
+ },
+ {
+  "label": "moh rx: MHreq's code is the sender's numbering",
+  "find": "\t\t\tdsplibs_debug_printf(\"MHreq message detected !\\r\\n\");\n\t\tobj->moh_recvd = 0;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"MHreq message detected !\\r\\n\");\n\t\tobj->moh_recvd = 1;"
+ },
+ {
+  "label": "moh rx: MHfrr and MHreq codes swapped",
+  "find": "\t\t\tdsplibs_debug_printf(\"MHfrr message detected !\\r\\n\");\n\t\tobj->moh_recvd = 1;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"MHfrr message detected !\\r\\n\");\n\t\tobj->moh_recvd = 0;"
+ },
+ {
+  "label": "moh rx: MHcda's code is 2",
+  "find": "\t\t\tdsplibs_debug_printf(\"MHcda message detected !\\r\\n\");\n\t\tobj->moh_recvd = 3;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"MHcda message detected !\\r\\n\");\n\t\tobj->moh_recvd = 2;"
+ },
+ {
+  "label": "moh rx: MHack's code is 5",
+  "find": "\t\tobj->moh_recvd = 4;",
+  "replace": "\t\tobj->moh_recvd = 5;"
+ },
+ {
+  "label": "moh rx: MHcld's code is 4",
+  "find": "\t\tobj->moh_recvd = 2;\n\t\treturn;\n\t}\n\tif (w == 0xbb) {",
+  "replace": "\t\tobj->moh_recvd = 4;\n\t\treturn;\n\t}\n\tif (w == 0xbb) {"
+ },
+ {
+  "label": "moh rx: the message is read signed",
+  "find": "\tunsigned w = (unsigned short)bits[0];",
+  "replace": "\tunsigned w = (unsigned)(int)bits[0];",
+  "equivalent": true,
+  "why": "Every use of `w` either compares it for equality with a constant below 0x100 or masks it with 0xf0 or 0xf, so only bits 0..7 ever matter and sign extension changes nothing but bits 16..31.  The one place the whole value is printed reads `bits[0]` again with an explicit zero extension rather than using `w`, which is what the object does at 0x8bb0 -- so that site is not covered by this mutation either; `the illegal message is printed signed` is."
+ },
+ {
+  "label": "moh rx: the message is read as a byte",
+  "find": "\tunsigned w = (unsigned short)bits[0];",
+  "replace": "\tunsigned w = (unsigned char)bits[0];"
+ },
+ {
+  "label": "moh rx: index 1 is read instead of index 0",
+  "find": "\tunsigned w = (unsigned short)bits[0];",
+  "replace": "\tunsigned w = (unsigned short)bits[1];"
+ },
+ {
+  "label": "moh rx: MHreq is matched by mask like MHack is",
+  "find": "\tif (w == 0x33) {",
+  "replace": "\tif ((w & 0xff) == 0x33) {"
+ },
+ {
+  "label": "moh rx: MHack is matched exactly rather than by mask",
+  "find": "\tif ((w & 0xf0) == 0x50) {",
+  "replace": "\tif ((w & 0xff) == 0x50) {"
+ },
+ {
+  "label": "moh rx: MHack's mask keeps the low nibble too",
+  "find": "\tif ((w & 0xf0) == 0x50) {",
+  "replace": "\tif ((w & 0xf8) == 0x50) {"
+ },
+ {
+  "label": "moh rx: MHcld's mask is the wrong nibble",
+  "find": "\tif ((w & 0xf0) == 0x90) {",
+  "replace": "\tif ((w & 0xf0) == 0x80) {"
+ },
+ {
+  "label": "moh rx: MHack's time-out code keeps five bits",
+  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
+  "replace": "\t\tobj->fabe0 = (short)(w & 0x1f);"
+ },
+ {
+  "label": "moh rx: MHack stores the whole message rather than its nibble",
+  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
+  "replace": "\t\tobj->fabe0 = (short)w;"
+ },
+ {
+  "label": "moh rx: MHack's nibble goes to the disconnect reason",
+  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
+  "replace": "\t\tobj->fabfa = (unsigned char)(w & 0xf);"
+ },
+ {
+  "label": "moh rx: MHack prints the whole message",
+  "find": "\t\t\t\t\t     (int)(w & 0xf));",
+  "replace": "\t\t\t\t\t     (int)w);"
+ },
+ {
+  "label": "moh rx: the two MHnacks are transposed",
+  "find": "\tif (w == 0x77) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MHnack message detected (modem \"\n\t\t\t\t\t     \"may init MOH in the future) \"",
+  "replace": "\tif (w == 0x77) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MHnack message detected (modem \"\n\t\t\t\t\t     \"may NOT init MOH in the future) \""
+ },
+ {
+  "label": "moh rx: the weak MHnack sets fabe2 as well",
+  "find": "\t\tobj->moh_recvd = 5;\n\t\treturn;\n\t}\n\tif (w == 0x75) {",
+  "replace": "\t\tobj->fabe2 = 3;\n\t\tobj->moh_recvd = 5;\n\t\treturn;\n\t}\n\tif (w == 0x75) {"
+ },
+ {
+  "label": "moh rx: the strong MHnack does not set fabe2",
+  "find": "\t\tobj->fabe2 = 3;\n\t\tobj->moh_recvd = 5;",
+  "replace": "\t\tobj->moh_recvd = 5;"
+ },
+ {
+  "label": "moh rx: fabe2 gets 1 rather than 3",
+  "find": "\t\tobj->fabe2 = 3;",
+  "replace": "\t\tobj->fabe2 = 1;"
+ },
+ {
+  "label": "moh rx: fabe2 is fabe0",
+  "find": "\t\tobj->fabe2 = 3;",
+  "replace": "\t\tobj->fabe0 = 3;"
+ },
+ {
+  "label": "moh rx: incoming and outgoing cleardown reasons swapped",
+  "find": "\t\tcase 5:\n\t\t\tobj->fabfa = 0;",
+  "replace": "\t\tcase 5:\n\t\t\tobj->fabfa = 1;"
+ },
+ {
+  "label": "moh rx: the outgoing cleardown code is 7",
+  "find": "\t\tcase 6:\n\t\t\tobj->fabfa = 1;",
+  "replace": "\t\tcase 7:\n\t\t\tobj->fabfa = 1;"
+ },
+ {
+  "label": "moh rx: the other-reason code is 0xb",
+  "find": "\t\tcase 0xa:\n\t\t\tobj->fabfa = 2;",
+  "replace": "\t\tcase 0xb:\n\t\t\tobj->fabfa = 2;"
+ },
+ {
+  "label": "moh rx: the reserved cleardown reason is 3, not 2",
+  "find": "\t\t\tobj->fabfa = 2;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \"",
+  "replace": "\t\t\tobj->fabfa = 3;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \""
+ },
+ {
+  "label": "moh rx: the reserved arm says other reason",
+  "find": "\t\t\t\t\t\"MHcld message detected ! , reserved \"\n\t\t\t\t\t\"disconnect reason (assume other \"\n\t\t\t\t\t\"reason)\\r\\n\");",
+  "replace": "\t\t\t\t\t\"MHcld message detected ! , disconnect \"\n\t\t\t\t\t\"reason is other reason\\r\\n\");"
+ },
+ {
+  "label": "moh rx: the illegal arm is not forced to MHnack",
+  "find": "\t\tdsplibs_debug_printf(\"forcing message type to MH NACK\\r\\n\");\n\tobj->moh_recvd = 5;",
+  "replace": "\t\tdsplibs_debug_printf(\"forcing message type to MH NACK\\r\\n\");\n\tobj->moh_recvd = 6;"
+ },
+ {
+  "label": "moh rx: the illegal arm prints one rule, not two",
+  "find": "\tobj->moh_recvd = 5;\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"=====================================\"\n\t\t\t\"====================================\\r\\n\");",
+  "replace": "\tobj->moh_recvd = 5;"
+ },
+ {
+  "label": "moh rx: the illegal message is printed signed",
+  "find": "\t\t\t\t     (int)(unsigned short)bits[0]);",
+  "replace": "\t\t\t\t     (int)bits[0]);"
+ },
+ {
+  "label": "moh rx: the illegal message prints the masked value",
+  "find": "\t\t\t\t     (int)(unsigned short)bits[0]);",
+  "replace": "\t\t\t\t     (int)(w & 0xff));"
+ },
+ {
+  "label": "moh rx: MHcda and MHfrr arms are ordered before the masked ones",
+  "find": "\tif (w == 0x33) {",
+  "replace": "\tif (w == 0xbb) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MHcda message detected !\\r\\n\");\n\t\tobj->moh_recvd = 3;\n\t\treturn;\n\t}\n\tif (w == 0x33) {",
+  "equivalent": true,
+  "why": "0xbb is matched by no earlier arm -- 0xbb & 0xf0 is 0xb0, which is neither 0x50 nor 0x90, and it equals none of 0x33, 0x77 or 0x75 -- so hoisting it above them cannot change which arm any value takes.  It is here because the ORDER of the seven tests is otherwise unobservable, and this says which part of it is: the masked arms must stay ahead of nothing in particular, but 0x0150 reaching MHack depends on no exact arm matching it first."
+ },
+ {
+  "label": "moh rx: the illegal arm's first rule is dropped",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"=====================================\"\n\t\t\t\"====================================\\r\\n\");\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Illegal MH message detected !!! \"",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Illegal MH message detected !!! \""
  }
 ]

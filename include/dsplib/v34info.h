@@ -65,6 +65,14 @@ int V34GiveINFO1aBits(void *obj, const short *bits);
  */
 void VPcmV34SetMohMessageBits(void *obj, short *bits);
 
+/*
+ * The other direction: decode the first short of an arriving MOH message
+ * into `moh_recvd`, and its payload nibble into whichever field that message
+ * carries one in.  Only index 0 is read.  A message matching nothing is
+ * forced to MHnack, with three lines of diagnostic saying so.
+ */
+void VPcmV34InterpretMohMessageBits(void *obj, const short *bits);
+
 #ifdef __cplusplus
 }
 #endif

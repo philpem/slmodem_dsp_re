@@ -638,6 +638,151 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
 }
 
 /*
+ * Decode the first short of an arriving MOH message.
+ *
+ * The mirror of the function above, and the two agree on their numbering
+ * even though they are different fields -- 0 MHreq, 1 MHfrr, 2 MHcld,
+ * 3 MHcda, 4 MHack, 5 MHnack.  What arrives goes in `moh_recvd` and what we
+ * are about to send is in `moh_message`, four bytes apart.
+ *
+ * THREE MESSAGES CARRY A NIBBLE AND THE OTHERS DO NOT:
+ *
+ *     0x5X  MHack   X is a time-out period code   -> fabe0
+ *     0x9X  MHcld   X is a disconnect reason      -> fabfa, recoded 0/1/2
+ *     0x75  MHnack  no nibble, but sets fabe2 = 3
+ *
+ * `0x75` and `0x77` are both MHnack and both decode to 5.  The difference is
+ * in the strings -- "may NOT init MOH in the future" against "may" -- and in
+ * `fabe2`, which only 0x75 writes.  The sending side has one MHnack and
+ * always builds 0x77, so this end can say the stronger thing and cannot
+ * hear itself say it.
+ *
+ * THE TWO KINDS OF ARM MATCH DIFFERENTLY.  0x33, 0x77, 0x75, 0xbb and 0xdd
+ * are compared as whole 16-bit values; the 0x5X and 0x9X arms mask with 0xf0
+ * and ignore everything above bit 7.  So 0x150 is an MHack and 0x133 is not
+ * an MHreq.  See D50.
+ *
+ * `MHclrd` in the builder and `MHcld` here are the object's own two
+ * spellings of one message; neither is this reconstruction's typo.
+ */
+void
+VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned w = (unsigned short)bits[0];
+
+	if (w == 0x33) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHreq message detected !\r\n");
+		obj->moh_recvd = 0;
+		return;
+	}
+	if ((w & 0xf0) == 0x50) {
+		obj->fabe0 = (short)(w & 0xf);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHack message detected ! , "
+					     "Time out period code = %d\r\n",
+					     (int)(w & 0xf));
+		obj->moh_recvd = 4;
+		return;
+	}
+	if (w == 0x77) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHnack message detected (modem "
+					     "may init MOH in the future) "
+					     "!\r\n");
+		obj->moh_recvd = 5;
+		return;
+	}
+	if (w == 0x75) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHnack message detected (modem "
+					     "may NOT init MOH in the future) "
+					     "!\r\n");
+		obj->fabe2 = 3;
+		obj->moh_recvd = 5;
+		return;
+	}
+	if ((w & 0xf0) == 0x90) {
+		switch (w & 0xf) {
+		case 5:
+			obj->fabfa = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"MHcld message detected ! , disconnect "
+					"reason is incoming call\r\n");
+			break;
+		case 6:
+			obj->fabfa = 1;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"MHcld message detected ! , disconnect "
+					"reason is outgoing call\r\n");
+			break;
+		case 0xa:
+			obj->fabfa = 2;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"MHcld message detected ! , disconnect "
+					"reason is other reason\r\n");
+			break;
+		default:
+			/*
+			 * The same 2 the "other reason" case sets, and the
+			 * string says why: a reserved code is assumed to mean
+			 * other.  Two arms, one value.
+			 */
+			obj->fabfa = 2;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"MHcld message detected ! , reserved "
+					"disconnect reason (assume other "
+					"reason)\r\n");
+			break;
+		}
+		obj->moh_recvd = 2;
+		return;
+	}
+	if (w == 0xbb) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHcda message detected !\r\n");
+		obj->moh_recvd = 3;
+		return;
+	}
+	if (w == 0xdd) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MHfrr message detected !\r\n");
+		obj->moh_recvd = 1;
+		return;
+	}
+
+	/*
+	 * Nothing matched.  Four lines rather than one, with a rule above and
+	 * below the other three -- so the transcript is the only place this
+	 * arm differs from a plain MHnack, `moh_recvd` being 5 either way.
+	 *
+	 * The message is RE-READ from the buffer for the `%X`, at 0x8bb0,
+	 * rather than kept in the register it is already in.  Nothing can
+	 * have changed it.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"====================================="
+			"====================================\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Illegal MH message detected !!! "
+				     "(rxsq[0] = %X)\r\n",
+				     (int)(unsigned short)bits[0]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("forcing message type to MH NACK\r\n");
+	obj->moh_recvd = 5;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"====================================="
+			"====================================\r\n");
+}
+
+/*
  * ---------------------------------------------------------------------------
  * Layout, pinned.
  */
@@ -660,6 +805,8 @@ V34INFO_ASSERT(abd0,   fabd0,           0xabd0);
 V34INFO_ASSERT(abd2,   fabd2,           0xabd2);
 V34INFO_ASSERT(mohv,   fabe0,           0xabe0);
 V34INFO_ASSERT(mohm,   moh_message,     0xabf0);
+V34INFO_ASSERT(mohrx,  moh_recvd,       0xabf4);
+V34INFO_ASSERT(abe2,   fabe2,           0xabe2);
 V34INFO_ASSERT(mohr,   fabfa,           0xabfa);
 V34INFO_ASSERT(bulk,   prev_bulk_delay, 0xac02);
 V34INFO_ASSERT(pac18,  pac18,           0xac18);

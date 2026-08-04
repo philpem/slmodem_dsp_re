@@ -635,12 +635,23 @@ struct v34_object {
 	unsigned char unmapped_abd4[0xabe0 - 0xabd4];
 	/*
 	 * +0xabe0.  Added to 0x50 to make the MHack message's first short,
-	 * so it is what the acknowledgement CARRIES rather than a flag --
-	 * a granted hold time is the obvious reading and the object does not
-	 * say.  `VPcmV34SetMohMessageBits` is the only reader.
+	 * so it is what the acknowledgement CARRIES rather than a flag.
+	 *
+	 * AND THE OBJECT NAMES IT.  `VPcmV34InterpretMohMessageBits` takes
+	 * the low nibble of an arriving MHack and puts it here, saying
+	 * "MHack message detected ! , Time out period code = %d" -- so it is
+	 * a hold-time code, and the field carries it in both directions: the
+	 * one we received and the one we will send back.
 	 */
 	short fabe0;					/* +0xabe0 */
-	unsigned char unmapped_abe2[0xabf0 - 0xabe2];
+	/*
+	 * +0xabe2.  Set to 3 by exactly one arriving message -- the 0x75
+	 * MHnack that says the far end may NOT initiate MOH later -- and
+	 * read by nothing this tree has reconstructed.  The 0x77 MHnack,
+	 * which says it may, does not write it.
+	 */
+	short fabe2;					/* +0xabe2 */
+	unsigned char unmapped_abe4[0xabf0 - 0xabe4];
 	/*
 	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
 	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,
@@ -648,11 +659,31 @@ struct v34_object {
 	 * the test is unsigned, so a negative value falls there too.
 	 */
 	int moh_message;				/* +0xabf0 */
-	unsigned char unmapped_abf4[0xabfa - 0xabf4];
+	/*
+	 * +0xabf4.  The message that ARRIVED, in the same six names but NOT
+	 * the same numbering as `moh_message` four bytes back:
+	 *
+	 *     0  MHreq   1  MHfrr   2  MHcld   3  MHcda   4  MHack
+	 *     5  MHnack, and also 5 for a message that is none of them
+	 *
+	 * against the sending side's 0 MHreq, 1 MHfrr, 2 MHclrd, 3 MHcda,
+	 * 4 MHack, 5 MHnack.  They agree, which is worth saying explicitly
+	 * because nothing forces them to and the two fields are written by
+	 * different translation units.  An unrecognised message is forced to
+	 * MHnack and says so -- "forcing message type to MH NACK".
+	 *
+	 * Written by `VPcmV34InterpretMohMessageBits` and read by nothing
+	 * reconstructed so far.
+	 */
+	int moh_recvd;					/* +0xabf4 */
+	unsigned char unmapped_abf8[0xabfa - 0xabf8];
 	/*
 	 * +0xabfa.  A byte that picks between three MHclrd codes -- 0x95,
-	 * 0x96 and 0x9a for values 0, 1 and anything else.  V.92 gives
-	 * cleardown a reason code, which is what this will be.
+	 * 0x96 and 0x9a for values 0, 1 and anything else -- and the same
+	 * byte the arriving MHcld's low nibble is decoded into: 5 incoming,
+	 * 6 outgoing, 0xa other, anything else "reserved (assume other)".
+	 * So 0 is incoming, 1 outgoing and 2 other, and the sending side's
+	 * three codes line up with the three the receiver recognises.
 	 */
 	unsigned char fabfa;				/* +0xabfa */
 	unsigned char unmapped_abfb[0xac02 - 0xabfb];

@@ -2011,3 +2011,33 @@ takes the V.90 arm.
 **How it was found:** reading the three arms against each other while writing
 the function; the mutation was added to check the reading and survived, which
 is the confirmation.
+
+## D50 ⚠ `VPcmV34InterpretMohMessageBits` matches five messages at 16 bits and two at 8
+
+**Where:** `src/pump/v34/v34info.c`, `VPcmV34InterpretMohMessageBits`.
+
+**What the original does:** loads the message's first short with `movzwl` and
+then tests it two different ways. MHreq, the two MHnacks, MHcda and MHfrr are
+`cmp $0x33,%ax` and friends — sixteen-bit equalities. MHack and MHcld are
+`and $0xf0,%edx; cmp $0x50,%edx` — a mask that keeps four bits and discards
+everything above bit 7 as well as the low nibble.
+
+**Why that is worth an entry:** the two kinds of arm disagree about the high
+byte. `0x0150` decodes as an MHack with a time-out code of 0 and `0x0133` does
+not decode as an MHreq — it falls through to "Illegal MH message detected"
+and is forced to MHnack. Nothing masks the value before the switch and nothing
+bounds it, so which behaviour a caller gets depends on whether the message
+type it received happens to be one of the masked pair.
+
+**What we do:** reproduce both spellings exactly, and sweep all 65,536 first
+shorts rather than the 256 a byte-wide reading would suggest. That sweep is
+the only thing that distinguishes this from a version that masked once at the
+top, which is what a reconstruction reading the arms in isolation would write.
+
+**Reachability:** the message arrives from the far end through the V.34
+handshake's receive path, and nothing between there and here narrows it to a
+byte in anything reconstructed so far. Whether a real peer can send a first
+short above 0xff is not settled. `unmeasured` — task #47.
+
+**How it was found:** by writing the arms out and noticing that two of the
+seven used `%edx` (the masked copy) where five used `%ax`.

@@ -39,6 +39,7 @@ extern void ref_V34SetINFO0dBits(void *obj, short *bits);
 extern void ref_V34GiveINFO0dBits(void *obj, const short *bits);
 extern int ref_V34GiveINFO1aBits(void *obj, const short *bits);
 extern void ref_VPcmV34SetMohMessageBits(void *obj, short *bits);
+extern void ref_VPcmV34InterpretMohMessageBits(void *obj, const short *bits);
 
 /* --- the blocks, each with a guard band on the reference side ------------- */
 
@@ -588,6 +589,168 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * EXHAUSTIVE OVER ALL 65,536 FIRST SHORTS, because the decision is a
+	 * function of that one value and nothing else.  There is no argument
+	 * to make about which values are interesting -- the arms are five
+	 * exact 16-bit comparisons and two masked ones, and only the whole
+	 * space shows that 0x0150 is an MHack while 0x0133 is not an MHreq.
+	 * That asymmetry is D50; sampling would have found neither half of
+	 * it.
+	 *
+	 * The other twelve shorts are filled with a pattern and compared
+	 * afterwards: this function reads index 0 and must write nothing at
+	 * all, and the guard bands say so past the end.
+	 */
+	diff_begin("v34 info: VPcmV34InterpretMohMessageBits, "
+		   "every first short there is");
+	{
+		int recvd_seen[8];
+		unsigned w;
+		int j, k;
+
+		for (j = 0; j < 8; j++)
+			recvd_seen[j] = 0;
+
+		for (w = 0; w <= 0xffff; w++) {
+			short m[V34_INFO_MSG_SHORTS];
+			int got;
+
+			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+				m[j] = (short)(0x5a00 + j * 7);
+			m[0] = (short)w;
+
+			setup();
+			set_msg(m);
+
+			VPcmV34InterpretMohMessageBits(&oa, msg_a);
+			ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
+			compare_all("InterpretMohMessageBits", (long)w);
+
+			memcpy(&got, (unsigned char *)&oa + 0xabf4,
+			       sizeof(got));
+			if (got >= 0 && got < 8)
+				recvd_seen[got] = 1;
+		}
+
+		/*
+		 * All six message types have to have been produced, or a
+		 * reconstruction that collapsed two arms would pass on the
+		 * strength of the four it kept.
+		 */
+		for (k = 0; k <= 5; k++)
+			diff_eq_int("every message type was decoded",
+				    recvd_seen[k], 1, 900000 + k);
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE TRANSCRIPT, over the whole low byte plus a high byte on
+	 * every arm.  Twelve strings between eleven arms, and two pairs of
+	 * them are near-duplicates -- "may" against "may NOT", "other
+	 * reason" against "reserved ... (assume other reason)" -- which are
+	 * the pairs a byte comparison cannot separate at all, since both of
+	 * each pair leaves exactly the same state behind.
+	 *
+	 * The unmatched arm prints FOUR lines with a rule top and bottom,
+	 * and that is the only thing distinguishing it from a plain MHnack.
+	 */
+	diff_begin("v34 info: InterpretMohMessageBits names what it decoded");
+	{
+		static const unsigned high[] = {
+			0x0000, 0x0100, 0x0133, 0x0150, 0x0175, 0x0177,
+			0x0190, 0x019a, 0x01bb, 0x01dd, 0x8033, 0x8050,
+			0xff33, 0xff50, 0xff90, 0xffff
+		};
+		unsigned lvl, w, h;
+		int j;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (w = 0; w <= 0xff + sizeof(high) / sizeof(high[0]);
+			     w++) {
+				short m[V34_INFO_MSG_SHORTS];
+				unsigned v;
+
+				v = (w <= 0xff) ? w : high[w - 0x100];
+
+				for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+					m[j] = (short)(0x5a00 + j * 7);
+				m[0] = (short)v;
+
+				setup();
+				set_msg(m);
+				dsplib_debug_capture_reset();
+
+				VPcmV34InterpretMohMessageBits(&oa, msg_a);
+				ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
+
+				compare_all("InterpretMohMessageBits, logging",
+					    (long)lvl * 100000 + v);
+				diff_eq_int("InterpretMohMessageBits "
+					    "transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1,
+					    (long)lvl * 100000 + v);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1,
+					    (long)lvl * 100000 + v);
+			}
+		}
+
+		/*
+		 * The unmatched arm prints four lines and every other arm
+		 * prints one.  Counting them is what makes the two rules
+		 * part of the comparison rather than incidental.
+		 */
+		{
+			short m[V34_INFO_MSG_SHORTS];
+
+			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+				m[j] = (short)(0x5a00 + j * 7);
+
+			dsplibs_debug_level = 2;
+			ref_dsplibs_debug_level = 2;
+
+			m[0] = 0x0044;			/* matches nothing */
+			setup();
+			set_msg(m);
+			dsplib_debug_capture_reset();
+			VPcmV34InterpretMohMessageBits(&oa, msg_a);
+			ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
+			diff_eq_int("the illegal arm printed four lines",
+				    (int)dsplib_debug_capture_lines(1), 4,
+				    910000);
+			diff_eq_int("and so did ours",
+				    (int)dsplib_debug_capture_lines(0), 4,
+				    910000);
+
+			m[0] = 0x0077;			/* a plain MHnack  */
+			setup();
+			set_msg(m);
+			dsplib_debug_capture_reset();
+			VPcmV34InterpretMohMessageBits(&oa, msg_a);
+			ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
+			diff_eq_int("and a real MHnack printed one",
+				    (int)dsplib_debug_capture_lines(1), 1,
+				    910001);
+			diff_eq_int("and so did ours",
+				    (int)dsplib_debug_capture_lines(0), 1,
+				    910001);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 info: the same, with the debug sites live");
 	{
 		short m[V34_INFO_MSG_SHORTS];
@@ -744,6 +907,19 @@ main(void)
 			ref_V34GiveINFO1aBits(ob, msg_b);
 			VPcmV34SetMohMessageBits(&oa, msg_a);
 			ref_VPcmV34SetMohMessageBits(ob, msg_b);
+			/*
+			 * Both an arm that matches and the one that does not,
+			 * since the latter is the only four-site arm in the
+			 * file and losing its gate is four lines rather than
+			 * one.
+			 */
+			set_msg(m);
+			msg_a[0] = msg_b[0] = 0x77;
+			VPcmV34InterpretMohMessageBits(&oa, msg_a);
+			ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
+			msg_a[0] = msg_b[0] = 0x44;
+			VPcmV34InterpretMohMessageBits(&oa, msg_a);
+			ref_VPcmV34InterpretMohMessageBits(ob, msg_b);
 
 			diff_eq_int("ours printed nothing",
 				    dsplib_debug_capture_text(0)[0], 0,
