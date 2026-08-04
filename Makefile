@@ -187,7 +187,7 @@ offsets:
 # that still resolves, to the wrong entry -- needs a revision to compare
 # against, and the revision that matters is a merge parent:
 #
-#     git log --merges -1 --format=%%P | tr ' ' '\n' | \
+#     git log --merges -1 --format=%P | tr ' ' '\n' | \
 #         xargs -I{} tools/refcheck.py --since {}
 refs:
 	@$(PYTHON) tools/refcheck.py

@@ -320,7 +320,7 @@ main(void)
 {
 	unsigned i;
 	int rc = 0;
-	int v90, k56, variant, ls, lv, cap, en;
+	int v90, k56, variant, ls, lv, cap, en, pt;
 
 	diff_begin("v34 info: the guard bands are where they claim to be");
 	{
@@ -603,9 +603,9 @@ main(void)
 		for (lv = 0; lv <= 1; lv++)
 		for (k56 = 0; k56 <= 1; k56++)
 		for (en = 0; en <= 1; en++)
-		for (cap = 0; cap <= 1; cap++) {
+		for (pt = 0; pt <= 1; pt++) {
 			long tag = ((((((variant * 2 + v90) * 2 + ls) * 2 + lv)
-				      * 2 + k56) * 2 + en) * 2 + cap);
+				      * 2 + k56) * 2 + en) * 2 + pt);
 
 			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
 				m[j] = (short)(0x1234 + j * 4919);
@@ -622,12 +622,14 @@ main(void)
 			 * string as a real one.
 			 *
 			 * The other two are the standing rule rather than a
-			 * failure observed: `en` is bit 3, `cap` is bit 1 --
+			 * failure observed: `en` is bit 3, `pt` is bit 1 --
 			 * the PCM type the enabled arm reports -- and `k56`
 			 * is now only the receiver's own state.  Three inputs
 			 * swept from one variable cannot be told apart.
+			 * (`cap` is taken: it is the session capability byte
+			 * two sections up, and means something else.)
 			 */
-			m[3] = (short)(0x80 | (en ? 8 : 0) | (cap ? 2 : 0));
+			m[3] = (short)(0x80 | (en ? 8 : 0) | (pt ? 2 : 0));
 
 			setup();
 			set_msg(m);
