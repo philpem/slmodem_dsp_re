@@ -11639,8 +11639,8 @@ Seven of the seventeen are available, and they are the whole of what is:
 `chkForceBaudRate`, `GetVPcmMinimalTxPowerReduction`,
 `VPcmV34GetMaxUpstreamRateIndex`, `VPcmV34InterpretMohMessageBits`,
 `settxlevel`, `v34setuptxmit` and `probeselect`, about 8.7 KB of the 16.9.
-Six of the seven are written; `probeselect` is 6,173 of those 8,687 bytes and
-is mapped in finding 218 rather than reconstructed. The other ten are below.
+**All seven are written** — `probeselect`, the largest at 6,173 bytes, in
+finding 219. The other ten are below.
 
 #### Three are file-local, so `objcopy` cannot give them a `ref_` alias
 
@@ -11726,8 +11726,12 @@ scheduling is the split, which both agree on: about 8.7 KB was writable,
 
 ### 218. `probeselect`'s shape, before it is reconstructed
 
+*Superseded by finding 219, which reconstructs it. This map is kept because
+219 records what it got right and wrong, and because everything below is still
+the fastest way to read the function.*
+
 6,173 bytes and the largest single thing in #59 — 71% of that task's available
-bytes. **Not reconstructed, and not blocked either.** It has a `ref_` alias,
+bytes. **Not reconstructed when this was written, and not blocked either.** It has a `ref_` alias,
 every callee it needs is written, and it is differentially testable today; it
 was left out of this session for budget and nothing else. That distinction
 matters, because everything else left out of #59 was left out for a reason
@@ -11884,3 +11888,99 @@ is the easy failure.
 `rx->gain` is the receiver's `agc_gain` at +0x136 and `obj->rxinfo0.data[1]`
 is `obj + 0xa97e`, so two more field names come out of this function when it
 is written.
+
+### 219. `probeselect` is written, and the mutations did all the work
+
+Finding 218 mapped `probeselect` without reconstructing it. It is now
+reconstructed and passing, and this records what the map got right, the one
+thing it got wrong, and — the part worth keeping — that **the differential
+test agreed with the blob at every stage while the tests were the thing that
+was weak**. A green run never once said the inputs were only touching one arm
+of a threshold.
+
+#### The map held, except for one register
+
+Every structural claim in 218 survived: the encode/decode pairing with
+`setfinalrate`, the five per-rate arms with their constants, the two guarded
+arms, both `chkForceBaudRate` call sites and the pre-emphasis search's shape.
+
+**The one error was a register's provenance.** 218 said the 2800 originating
+arm tests `bins[22]`; it tests `bins[20]`. The comparison is `cmp $0x5,%ax`
+at 0x61d24, and `%eax` was last loaded at 0x616cb — the top of the 2800
+band-edge test — not at 0x61643 where the 3000 arm's copy comes from. Two
+arms that read identically and read different bins.
+
+The differential test found it in one run at exactly one byte: `+0xa9b2`,
+which is `msg[3]`, bit 0. 336 of 28,185 checks failed and every one was that
+byte. A check on "the rate it chose" would have passed; the rate was right.
+
+#### Five sweeps, 18 survivors, then 0
+
+| run | caught | uncaught | what the survivors were |
+|---|--:|--:|---|
+| 1 | 186 | 18 | two hangs of my own making, then the fixture |
+| 2 | 198 | 5 | exact equalities |
+| 3 | 202 | 1 | solved for the wrong constraint |
+| 4 | 202 | 1 | same |
+| 5 | **203** | **0** | 6 equivalent, with reasons |
+
+**Round 1's real lesson was about the tool, not the code.** Two of the
+mutations turn a loop into an endless one, `mutate.py` had no timeout, and it
+prints nothing until it finishes — so a hung binary looked exactly like a slow
+build and sat for sixty-two minutes. Killing it made that worse: SIGTERM does
+not run Python's `finally`, so the restore never happened and the tree was
+left carrying a mutation forty lines from the function being examined. A clean
+rebuild hung the same way, which is what made it look environmental. Both are
+fixed in `tools/mutate.py`: every run is bounded, a timeout is reported as
+caught-but-by-the-clock, and SIGTERM is turned into an exception so the
+restore always runs.
+
+**Round 1's sixteen real survivors were one flaw.** `probe_next` yields 24
+bits, so a uniform draw is never negative and never small: `snr_l1 <= 0x1f3`
+had a chance of one in thirty thousand per case and `snr_l2 < 0` had none at
+all. That single fact killed every threshold in the power section, both
+sensitive-ISP arms, the bit scan's top half and the minimum search's starting
+value — which is exactly the shape of the survivor list. Fixed by drawing each
+scalar from a pool of its own boundaries three times in four.
+
+**Rounds 2 and 3 were equalities, which sampling cannot reach.** `x > ref`
+against `x >= ref`, and `t < ratio` against `t <= ratio`, are single points in
+a 32-bit space. Both are constructible:
+
+  - `ratio` is controllable. With `snr_l2` below 0x200000 the bit scan runs
+    out, the shift is ten, and the quotient reduces to `((snr_l2 << 10) +
+    (snr_l1 >> 1)) / snr_l1` — so `snr_l1 = 0x400` makes the ratio EQUAL
+    `snr_l2`. The sweep walks the dB ladder's own recurrence and drives the
+    ratio to each term and its neighbours.
+  - the search's pre-image is solvable: the step is `(x * k) >> 14`, so the
+    value landing exactly on a chosen reference is `(ref << 14) / k`.
+
+**Rounds 3 and 4 are the same survivor, and the interesting one.** The gain
+reciprocal's rounding term differs by ONE, and to be observable it has to
+survive `* dbcnt >> 14` AND the `req > 7` clamp four lines later. Those pull
+in opposite directions: the first wants a large `dbcnt`, the second a small
+`req`. I solved it at the `dbcnt` of 1000 the short-circuit produces, which is
+arithmetically correct and useless — every gain below 0x1000 then gives a
+`req` in the hundreds and both sides clamp flat to 7. Re-solving with the
+clamp in the search gives exactly nineteen gains below 0x1000 that work, each
+at one specific ladder step, and seven are now in the pool.
+
+**It is not enough to construct an input that makes a mutation arithmetically
+observable. It has to stay observable through everything downstream.** That is
+the sharper form of the rule and it cost two rounds.
+
+#### D53 is confirmed by the compiler
+
+218 flagged `cmp $0x5,%bx` as unsatisfiable and declined to file it, because
+that is the shape D31 got wrong. Two independent measurements now agree: the
+sweep asserts indices 6..10 were all returned and 0..5 never were, and `gcov`
+reports the `i == 5` test executed 6,938 times with its whole body marked NOT
+EXECUTABLE — GCC proved the same thing and folded it away.
+
+**A claim I nearly published and did not.** I expected the site to show up in
+`debugcov`'s dead list and drafted that as evidence. It does not: gcov marks
+an eliminated body non-executable rather than executed-zero-times, so that
+count says nothing here in either direction. The 30-to-31-and-back movement in
+`make phase` over this session was a different site entirely — the
+sensitive-ISP request, which the old fixture never reached and the fixed one
+does.

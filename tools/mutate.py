@@ -77,6 +77,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 
@@ -93,11 +94,60 @@ import sys
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+#
+# A MUTATION CAN HANG THE BINARY, and until one did there was no timeout here.
+#
+# `probe_preemph`'s counter is advanced before the test that leaves its loop.
+# Mutating the advance to below that test -- which is exactly the claim worth
+# breaking -- produces a loop with no exit, and the sweep then sat on one
+# `t_v34hshak` for sixty-two minutes with no output, because mutate.py prints
+# nothing until it finishes.  From the outside that is indistinguishable from
+# a slow build.
+#
+# So: every test run is bounded.  A mutation that times out is reported as
+# CAUGHT, and separately as a hang -- it IS caught, in the only sense that
+# matters (the tree does not silently accept it), but "the test failed" and
+# "the test never returned" are different results and a set full of the
+# second is a set worth looking at.
+#
+# The bound is per test binary and generous: the slowest in this tree is a
+# little over two seconds, and `t_v34hshak`'s constellation sweep alone is
+# fourteen million checks.  Finding 200 is the same lesson from the other
+# side -- 88% of a sweep spent inside one timeout nobody had noticed.
+#
+RUN_TIMEOUT = 120
+
+
+#
+# AND THE RESTORE HAS TO SURVIVE BEING KILLED.
+#
+# The source is restored in a `finally`, which covers an exception and a
+# Ctrl-C -- SIGINT raises KeyboardInterrupt -- and does NOT cover SIGTERM,
+# which terminates the interpreter outright.  So `kill` on a sweep that is
+# stuck leaves the tree carrying whichever mutation was live, and the next
+# thing anyone builds is a mutant.  That cost an hour: `t_v34hshak` hung, a
+# clean rebuild hung the same way, and the source looked right because the
+# mutation was forty lines from the function being examined.
+#
+# Turning SIGTERM into an exception is enough -- `finally` then runs and the
+# tree is clean whichever way the sweep ends.
+#
+def _term(signum, frame):
+    raise KeyboardInterrupt("killed by signal %d" % signum)
+
+
+signal.signal(signal.SIGTERM, _term)
+
+
 def build_and_run(target, test):
     b = subprocess.run(["make", target], capture_output=True, text=True)
     if b.returncode != 0:
         return None, b.stderr, None
-    r = subprocess.run([test], capture_output=True, text=True)
+    try:
+        r = subprocess.run([test], capture_output=True, text=True,
+                           timeout=RUN_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return 1, "TIMED OUT after %ds" % RUN_TIMEOUT, "hang"
     if r.returncode != 0:
         return r.returncode, r.stdout, "test"
     #
@@ -206,7 +256,7 @@ def main():
     # Everything below runs against a mutated tree; the restore has to happen
     # even if the build dies or the user interrupts.
     uncaught, broken, equivalent, surprises = [], [], [], []
-    by = {"test": 0, "strings": 0}
+    by = {"test": 0, "strings": 0, "hang": 0}
     try:
         rc, out, _ = build_and_run(target, args.test)
         if rc != 0:
@@ -264,6 +314,9 @@ def main():
              len(muts) - len(uncaught) - len(broken) - len(equivalent),
              by["test"], by["strings"], len(uncaught), len(broken),
              len(equivalent), len(surprises)))
+    if by["hang"]:
+        print("  %d of those never returned and were killed at %ds -- caught,"
+              " but by the clock" % (by["hang"], RUN_TIMEOUT))
     if uncaught:
         print("\n  Uncaught -- these claims are currently untested:")
         for l in uncaught:

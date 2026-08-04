@@ -159,6 +159,10 @@ harness change rather than on code.
 8.2 KB is not, and the hand-over that said "nothing here is blocked" was
 reading the same list finding 215's blanket claim was.
 
+**The available 8.7 KB is done** — all seven functions, with differential
+tests and mutation sets (findings 216 to 219). What is left of #59 is the
+8.2 KB that needs #60, #56–#58, or a harness change first.
+
 ### The renumbering, and the two task stores
 
 `#39`–`#45` named a seven-way split by state that finding 213 shows does not

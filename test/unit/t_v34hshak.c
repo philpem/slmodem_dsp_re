@@ -66,6 +66,7 @@ extern int ref_detectRetrainReq(void *obj, short nbins, const short *samples,
 extern void ref_v34modeminit(void *obj);
 extern void ref_settxlevel(void *obj, const short *mp);
 extern void ref_v34setuptxmit(void *obj);
+extern void ref_probeselect(void *obj);
 extern void ref_v34handshakinit(void *obj, int mode);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern const short ref_c1200_[8], ref_c2400_[8];
@@ -397,6 +398,295 @@ compare_pwr_blocks(const char *what, long tag)
 		saw_pwr_high = 1;
 	else if (f == 1)
 		saw_pwr_low = 1;
+}
+
+/* --- probeselect's inputs ------------------------------------------------- */
+
+static void seed_rate_pointers(void);
+
+/*
+ * `probeselect` is a decision tree over twenty-five bins crossed with a role
+ * flag, eight capability bytes and five scalars, and no hand-written case
+ * list covers it.  So the sweep is PSEUDO-RANDOM OVER EVERY DRIVING FIELD,
+ * from a fixed generator both sides are fed from -- the whole-object
+ * comparison is what turns a random input into a check, and the coverage
+ * counters below are what say the random inputs reached the arms.
+ *
+ * The generator is an LCG rather than `rand`, so the sweep is the same on
+ * every host and in every build: a differential test that drifts between runs
+ * cannot be bisected.
+ */
+static unsigned probe_rng;
+
+static unsigned
+probe_next(void)
+{
+	probe_rng = probe_rng * 1103515245u + 12345u;
+	return probe_rng >> 8;
+}
+
+/*
+ * RANDOM ALONE DOES NOT REACH A THRESHOLD AT 499.
+ *
+ * `probe_next` yields 24 bits, so a uniform draw is never negative and never
+ * small: `snr_l1 <= 0x1f3` has a chance of one in thirty thousand and
+ * `snr_l2 < 0` has none at all.  Sixteen mutations survived four thousand
+ * cases on exactly that -- every threshold in the power section, both
+ * sensitive arms, and the bit scan's top half.
+ *
+ * So each scalar is drawn from a pool of its own boundaries three times in
+ * four, and uniformly otherwise.  The pools are the constants the function
+ * compares against, one either side.
+ */
+static int
+probe_pick(const int *pool, unsigned n)
+{
+	if ((probe_next() & 3) != 0)
+		return pool[probe_next() % n];
+	return (int)probe_next() - 0x800000;
+}
+
+static const int probe_l1[] = {
+	0, 1, 0x1f2, 0x1f3, 0x1f4, 0x3e6, 0x3e7, 0x3e8, 0x1000,
+	0x18fff, 0x19000, 0x100000, -1, -0x1f3, 0x7fffffff
+};
+static const int probe_l2[] = {
+	0, 1, -1, 2, 0x100, 0x100000, 0x200000, 0x1fffff, 0x20000000,
+	0x40000000, 0x7fffffff, (-0x7fffffff - 1), 0x400, 0x4000
+};
+static const int probe_gain[] = {
+	0, 1, 0xffe, 0xfff, 0x1000, 0x1001, 0x7fff, -1, -0x1000, 0x4000
+};
+
+/* Which arm each side took, by what it left behind. */
+static int saw_rate[6];			/* 2400 2800 3000 3200 3429 none */
+static int saw_preemph[12];		/* every index a search returned */
+
+static void
+probe_note(void)
+{
+	const unsigned char *p = (const unsigned char *)&oa;
+	short baud;
+	int k;
+
+	memcpy(&baud, p + 0xaa84, sizeof(baud));
+	switch (baud) {
+	case 0x960: saw_rate[0] = 1; break;
+	case 0xaf0: saw_rate[1] = 1; break;
+	case 0xbb8: saw_rate[2] = 1; break;
+	case 0xc80: saw_rate[3] = 1; break;
+	case 0xd65: saw_rate[4] = 1; break;
+	default:    saw_rate[5] = 1; break;
+	}
+
+	for (k = 0; k < 5; k++) {
+		static const unsigned off[5] = { 0xaa9a, 0xaa9c, 0xaaa0,
+						 0xaaa2, 0xaaa4 };
+		short v;
+
+		memcpy(&v, p + off[k], sizeof(v));
+		if (v >= 0 && v < 12)
+			saw_preemph[v] = 1;
+	}
+}
+
+/*
+ * One case.  Everything the function reads is driven, and driven separately:
+ * the twenty-five shifts and the energies the pre-emphasis search uses are
+ * independent inputs, and so are the eight capability bytes, the role flag
+ * and the five scalars of the power section.
+ *
+ * `spread` narrows the shifts towards zero.  The ladder's thresholds are 5, 6
+ * and 10, so a uniform 16-bit shift takes the same arm every time and the
+ * interesting region is a handful of small integers -- which is also the
+ * shape the function's own normalisation leaves behind, since it subtracts
+ * the minimum before any of the tests.  One shift in thirty-two is left wide
+ * anyway, because the normalisation's signed/unsigned mismatch (D54) needs a
+ * negative one to show.
+ */
+static void
+run_probeselect(unsigned seed, int spread, long tag)
+{
+	unsigned i;
+	int high_bins;
+
+	probe_rng = seed;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr((short)((int)(probe_next() % 32) - 16),
+		 (int)(probe_next() & 1), (int)(probe_next() & 1), 4);
+	/* Likewise bit 4, which gates the sensitive-ISP arms entirely. */
+	cfg_a[0x50] = cfg_b[0x50] =
+		(unsigned char)(probe_next() | ((probe_next() & 1) ? 0x10 : 0));
+
+	/*
+	 * One case in eight puts every shift above 0x20, which is what the
+	 * minimum search starts from -- otherwise some bin is always smaller
+	 * and the starting value is never the answer.
+	 */
+	high_bins = (probe_next() & 7) == 0;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+		short sh = (short)(probe_next() % (unsigned)spread);
+
+		if (high_bins)
+			sh = (short)(0x21 + probe_next() % 16);
+		else if ((probe_next() & 0x1f) == 0)
+			sh = (short)probe_next();
+
+		poke_short(off + 0x0c, (short)probe_next());
+		poke_short(off + 0x0e, sh);
+	}
+
+	poke_int(0xaac4, probe_pick(probe_l1, sizeof(probe_l1)
+					       / sizeof(probe_l1[0])));
+	poke_int(0xaac8, probe_pick(probe_l2, sizeof(probe_l2)
+					       / sizeof(probe_l2[0])));
+	poke_short(0x264 + 0x136,
+		   (short)probe_pick(probe_gain, sizeof(probe_gain)
+						 / sizeof(probe_gain[0])));
+	poke_short(0x264 + 0x262, (short)probe_next());
+	/*
+	 * Bit 7 is the one the power section tests, so it is set half the
+	 * time rather than one time in two hundred and fifty-six.
+	 */
+	poke_byte(0xa97e, (unsigned char)(probe_next()
+					  | ((probe_next() & 1) ? 0x80 : 0)));
+
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, (unsigned char)probe_next());
+
+	poke_short(0x359a, (short)((probe_next() & 3) == 0 ? 1 : 0));
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect", tag);
+	compare_pwr_blocks("probeselect blocks", tag);
+
+	/*
+	 * The three table pointers, by CONTENT.  Each answering arm installs
+	 * a scale table and a carrier descriptor by address, and the two
+	 * candidates of every pair are the same length -- so swapping them
+	 * leaves every scalar in the object identical, which is exactly what
+	 * a skipped pointer hides.  Seeded with the per-side dummy, so "left
+	 * alone" is a comparable answer too.
+	 */
+	compare_table("probeselect tx scale",
+		      (const short *)get_ptr_a(0xaa90),
+		      (const short *)get_ptr_b(0xaa90), 28, tag);
+	compare_table("probeselect rx scale",
+		      (const short *)get_ptr_a(0xaaac),
+		      (const short *)get_ptr_b(0xaaac), 28, tag);
+	compare_table("probeselect rx carrier desc",
+		      (const short *)get_ptr_a(0xaab0),
+		      (const short *)get_ptr_b(0xaab0), 8, tag);
+
+	probe_note();
+}
+
+
+/*
+ * --- and the equalities, which random draws cannot reach -----------------
+ *
+ * Five mutations survived four thousand biased probes, and every one of them
+ * turns on an exact equality: `ratio` landing on a term of the dB ladder, or
+ * the scaled bin energy landing exactly on the reference.  Those are single
+ * points in a 32-bit space, so they are CONSTRUCTED rather than sampled.
+ *
+ * `ratio` is controllable.  With `snr_l2` small enough that the bit scan runs
+ * out -- anything below 0x200000 -- the shift is ten and the quotient is
+ * `((snr_l2 << 10) + (snr_l1 >> 1)) / snr_l1`, so `snr_l1 = 0x400` makes the
+ * ratio equal `snr_l2` exactly.  That turns "drive the dB loop to its own
+ * boundary" into one assignment.
+ */
+static void
+run_probe_ratio(unsigned want, short gain, long tag)
+{
+	unsigned i;
+
+	probe_rng = 0x5eed1234u;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr(3, 1, 1, 4);
+	cfg_a[0x50] = cfg_b[0x50] = 0x10;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+
+		poke_short(off + 0x0c, (short)probe_next());
+		poke_short(off + 0x0e, (short)(probe_next() % 9));
+	}
+
+	poke_int(0xaac4, 0x400);
+	poke_int(0xaac8, (int)want);
+	poke_short(0x264 + 0x136, gain);
+	poke_short(0x264 + 0x262, 0x100);
+	poke_byte(0xa97e, 0x80);
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, (unsigned char)probe_next());
+	poke_short(0x359a, 0);
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect ratio", tag);
+	compare_pwr_blocks("probeselect ratio blocks", tag);
+	probe_note();
+}
+
+/*
+ * The other equality is inside the pre-emphasis search: `x > ref` versus
+ * `x >= ref` differ only when one scaled step lands exactly on the reference.
+ * The step is `(x * k) >> 14`, so the pre-image of a chosen reference is
+ * `(ref << 14) / k`, and driving the candidate bin to that value and its
+ * neighbours puts the comparison on its own boundary for each of the five
+ * per-rate constants.
+ */
+static void
+run_probe_preemph_edge(unsigned bin, int k, short ref, int delta, long tag)
+{
+	unsigned i;
+	int pre = (int)(((long long)ref << 14) / k) + delta;
+
+	probe_rng = 0xc0ffee11u;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr(3, 1, 1, 4);
+	cfg_a[0x50] = cfg_b[0x50] = 0;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+
+		poke_short(off + 0x0c, 0);
+		poke_short(off + 0x0e, (short)(probe_next() % 7));
+	}
+	poke_short(0xa320 + 4 * sizeof(struct v34_dftbin) + 0x0c, ref);
+	poke_short(0xa320 + bin * sizeof(struct v34_dftbin) + 0x0c,
+		   (short)pre);
+
+	poke_int(0xaac4, 0);
+	poke_int(0xaac8, 0);
+	poke_short(0x264 + 0x136, 0x800);
+	poke_short(0x264 + 0x262, 0x100);
+	poke_byte(0xa97e, 0);
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, 0xff);
+	poke_short(0x359a, 0);
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect preemph edge", tag);
+	compare_pwr_blocks("probeselect preemph edge blocks", tag);
+	probe_note();
 }
 
 /* --- setfinalrate's inputs ------------------------------------------------ */
@@ -1736,6 +2026,184 @@ main(void)
 			}
 			compare("prefix", 34000 + (long)loud * 10 + nb);
 		}
+	}
+	rc |= diff_end();
+
+	/* --- probeselect ------------------------------------------------ */
+
+	/*
+	 * FOUR THOUSAND PSEUDO-RANDOM CASES, AT FOUR SPREADS.  The ladder is
+	 * fifteen comparisons over eleven bins crossed with a role flag and
+	 * eight capability bytes, and its arms are not independent: each
+	 * originating arm falls THROUGH into the next rate's test, so which
+	 * message bits end up set depends on the whole path and not on one
+	 * branch.  Enumerating that by hand would be a list of the cases I
+	 * happened to think of; the counters below say what was reached.
+	 *
+	 * The spread is what makes random inputs useful here.  Every
+	 * threshold in the ladder is 5, 6 or 10, so a uniform 16-bit shift
+	 * takes the same arm every time; narrowing towards zero puts the
+	 * inputs where the decisions are, and four spreads rather than one
+	 * because the tests are on DIFFERENT bins and a spread that makes one
+	 * comparison interesting saturates another.
+	 */
+	diff_begin("v34 handshake: probeselect, four thousand probes");
+	{
+		static const int spread[] = { 3, 8, 14, 40 };
+		unsigned s, n;
+		long tag = 70000;
+
+		for (s = 0; s < sizeof(spread) / sizeof(spread[0]); s++)
+		for (n = 0; n < 1000; n++)
+			run_probeselect(0x1234567u + n * 2654435761u + s,
+					spread[s], tag++);
+
+		/*
+		 * Every rate, and "no rate at all" -- which is a real outcome
+		 * on both sides: the originating arms never write the baud
+		 * rate, and the answering ladder runs off the bottom when the
+		 * far end offers nothing.
+		 */
+		for (n = 0; n < 6; n++)
+			diff_eq_int("every rate arm was reached", saw_rate[n],
+				    1, (long)n);
+
+		/*
+		 * And the pre-emphasis search's whole range.  6..10 are the
+		 * reachable ones; 0 is the arm D53 says cannot be taken, and
+		 * asserting it was NOT seen is what would catch that reading
+		 * being wrong.
+		 */
+		for (n = 6; n <= 10; n++)
+			diff_eq_int("every pre-emphasis index was returned",
+				    saw_preemph[n], 1, 100 + (long)n);
+		diff_eq_int("and index 0 was not", saw_preemph[0], 0, 200);
+		for (n = 1; n <= 5; n++)
+			diff_eq_int("nor anything below six", saw_preemph[n],
+				    0, 200 + (long)n);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE dB LADDER, ON ITS OWN TERMS.  The loop steps `t` by 1.2588 from
+	 * 0x47d and stops when it passes the ratio, so `<` against `<=`, and
+	 * the rounding term inside the step, are visible only when the ratio
+	 * IS one of the terms.  Walking the sequence and driving the ratio to
+	 * each term and its neighbours is the whole of that boundary, and
+	 * 0x18fff is included because the short-circuit above the loop has an
+	 * edge of its own.
+	 *
+	 * The gain is swept under it, because the reduction the ladder feeds
+	 * is `(0x640000 / gain) * dbcnt >> 14` and the rounding in that divide
+	 * only shows when the product crosses a multiple of 16384.
+	 */
+	diff_begin("v34 handshake: probeselect on the dB ladder's own terms");
+	{
+		/*
+		 * THE MIDDLE SEVEN ARE SOLVED FOR, AND THE CONSTRAINT IS THE
+		 * CLAMP.  The reciprocal `(gain / 2 + 0x640000) / gain`
+		 * differs from the unrounded divide for about half of all
+		 * gains, but the difference is ONE, and to be observable it
+		 * has to survive `* dbcnt >> 14` AND the `req > 7` clamp
+		 * immediately after.
+		 *
+		 * The first of those wants a large `dbcnt` and the second
+		 * wants a small `req`, which is why the obvious choice --
+		 * the 1000 the short-circuit produces -- shows nothing at
+		 * all: every gain below 0x1000 then gives a `req` in the
+		 * hundreds and both sides clamp to 7.  What is needed is a
+		 * gain and a ladder step where the product crosses a
+		 * multiple of 16384 while `req` is still under seven, and
+		 * there are nineteen such gains below 0x1000.  These are
+		 * seven of them, with the step each one needs:
+		 *
+		 *    560 at 7    600 at 3    900 at 9   960 at 12
+		 *   1000 at 5   1040 at 13  1360 at 17
+		 *
+		 * The ladder sweep below reaches every step from 0 to 19, so
+		 * naming the gains is enough.
+		 */
+		static const short gains[] = { 1, 2, 3, 7, 11, 13, 100,
+					       560, 600, 900, 960, 1000,
+					       1040, 1360,
+					       0x7ff, 0x800, 0xfff, 0x1000 };
+		unsigned t = 0x47d;
+		unsigned g;
+		long tag = 90000;
+
+		while (t < 0x19100) {
+			for (g = 0; g < sizeof(gains) / sizeof(gains[0]); g++) {
+				run_probe_ratio(t - 1, gains[g], tag++);
+				run_probe_ratio(t, gains[g], tag++);
+				run_probe_ratio(t + 1, gains[g], tag++);
+			}
+			t = (t * 0x509 + 0x200) >> 10;
+		}
+
+		for (g = 0; g < sizeof(gains) / sizeof(gains[0]); g++) {
+			run_probe_ratio(0x18ffe, gains[g], tag++);
+			run_probe_ratio(0x18fff, gains[g], tag++);
+			run_probe_ratio(0x19000, gains[g], tag++);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE SEARCH'S OWN EQUALITY.  Each rate's constant gets its
+	 * candidate bin driven to the exact pre-image of the reference, and to
+	 * the two values either side, so `x > ref` and `x >= ref` disagree on
+	 * one of the four.  Several references, because the pre-image is a
+	 * division and lands differently for each.
+	 */
+	diff_begin("v34 handshake: probeselect's pre-emphasis equality");
+	{
+		static const struct { unsigned bin; int k; } rate[] = {
+			{ 18, 0x7da7 }, { 18, 0x6789 }, { 19, 0x656f },
+			{ 20, 0x639f }, { 22, 0x6626 }
+		};
+		static const short refs[] = { 1, 2, 17, 100, 1000, 4096,
+					      0x4000, -1, -100 };
+		unsigned r, v;
+		int dd;
+		long tag = 95000;
+
+		for (r = 0; r < sizeof(rate) / sizeof(rate[0]); r++)
+		for (v = 0; v < sizeof(refs) / sizeof(refs[0]); v++)
+		for (dd = -2; dd <= 2; dd++)
+			run_probe_preemph_edge(rate[r].bin, rate[r].k,
+					       refs[v], dd, tag++);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: probeselect narrates every decision");
+	{
+		unsigned lvl, n;
+		long tag = 80000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (n = 0; n < 150; n++) {
+				dsplib_debug_capture_reset();
+				run_probeselect(0x9e3779b9u + n * 40503u,
+						(int)(3 + n % 12), tag);
+				diff_eq_int("probeselect transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 

@@ -330,6 +330,17 @@ void txmitdibit(void *obj, short bits);
 void txmitquadbit(void *obj, short bits);
 
 /*
+ * Turn the line probe's twenty-five bins into a power-reduction request, a
+ * set of offered symbol rates or one chosen one, and a pre-emphasis index
+ * per rate.  Writes the rate config at +0xaa84 and the outgoing message at
+ * +0xa9ac, and nothing else; takes no arguments beyond the object.
+ *
+ * `f359c == 0x65` -- the originating side -- offers every rate the probe
+ * allows.  Any other value picks one and fills the rate config in.
+ */
+void probeselect(void *obj);
+
+/*
  * ---------------------------------------------------------------------------
  * Bringing the data-mode transmitter up.
  */
