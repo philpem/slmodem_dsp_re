@@ -12,27 +12,32 @@
  * anchor is exact at the bottom; `v34handshak` ends at 0x71955 and
  * `datapumpv34` starts at 0x71960, which fixes the top.
  *
- * WHAT IS HERE, AND WHAT IS NOT.  Seven functions and one table, chosen by
+ * WHAT IS HERE, AND WHAT IS NOT.  Twelve functions and one table, chosen by
  * testability rather than by theme -- see docs/fastpass.md, whose one
  * unrelaxed rule is that nothing commits without a differential test:
  *
  *     dpskDetectInfo1Init   setfinalrate   setupreceiver   v34modeminit
  *     dpskinit              preempindex    v34handshakinit
+ *     dftfreqinit           dftnlinitSignalBins    dftnlinitNoiseBins
+ *     dftRetrainDetInit     detectRetrainReq
  *     StateName
  *
  * `getbit` is NOT here although it is unblocked, and `ApplyBulkDelay` is not
  * either.  Both are file-local, so `objcopy` cannot give them a `ref_` alias
  * and no tier-1 test can call the blob's copy; the project's answer for a
  * local is to drive it through a reconstructed caller, and both are reached
- * only from `v34handshak`.  That is finding 117 exactly, and the same
- * conclusion: they are a task #39-#45 dependency, not a #38 one.
+ * only from `v34handshak` -- 0x6484c, 0x684bb and 0x706a9 call `getbit`,
+ * 0x6639f and 0x66af5 call `ApplyBulkDelay`, and there is not one relocation
+ * against either name because a call to a local in the same section needs
+ * none.  That is finding 117 exactly.
  *
- * THE FOUR SMALL ONES ARE CALLED BY NOTHING IN THE OBJECT.  No relocation
- * and no direct call reaches `dpskDetectInfo1Init`, `dpskinit`,
- * `setupreceiver` or `preempindex` -- only `setfinalrate` has a caller, in
- * `v34handshak`.  They are global, so they are testable regardless, but it
- * means their arguments have to be read out of the code rather than off a
- * call site.  Finding 89 recorded the same shape twice already.
+ * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  No relocation and
+ * no direct call reaches `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`,
+ * `preempindex` or any of the five DFT routines -- only `setfinalrate` has a
+ * caller, in `v34handshak`.  They are global, so they are testable
+ * regardless, but it means their arguments and their bank sizes have to be
+ * read out of the code rather than off a call site.  Finding 89 recorded the
+ * same shape twice already, and finding 204 for the five.
  *
  * `v34handshakinit` is the exception and has six callers, which is where its
  * mode numbers come from; see the declaration in `v34hshak.h`.
@@ -810,6 +815,249 @@ preempindex(void *p, short baudrate)
 			"V34PREEMPHASIS, - index is 10, baudrate= %d \n",
 			baudrate);
 	return i;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The DFT banks, and the retrain-request detector.
+ *
+ * Five functions over `struct v34_dftbin`, and the reason they are grouped
+ * here rather than in dftc.c is link order: they sit between `V34scrambler`
+ * and `getbit`, inside V34hshak.c's extent, while `dftupdate` and
+ * `dftenergy` are in DFTC.c a hundred kilobytes further on.  The bank is
+ * DFTC.c's; deciding what a bank measures is the handshake's.
+ *
+ * WHAT ONE BIN UNIT IS.  A bin's `inc` is its phase step per sample, the
+ * accumulator is 14 bits, so bin `n` has period 16384/(n*256) = 64/n
+ * samples.  At the 9600 Hz rate V.34 runs at -- docs/rate_assumptions.md
+ * R-1, which the object does not state and this file does not depend on --
+ * that is n * 150 Hz, and 150 Hz is the V.34 line probe's tone spacing.
+ * Every bin number below is written as `<< 8` for that reason: the shift is
+ * the object's own encoding of "bin n", not a scale factor picked here.
+ */
+
+/* The bin numbers, as the object writes them: the step is the bin times 256. */
+#define DFT_BIN(n)	((short)((n) << 8))
+
+/*
+ * The line probe's twenty-five bins, 150 Hz to 3750 Hz.
+ *
+ * The only one of the three initialisers that clears the double
+ * accumulators as well as the integer pair.  Whether that is deliberate or
+ * an omission in the other two is not recoverable -- see the note in
+ * v34hshak.h -- but it is reproduced either way, because the difference is
+ * visible in memory and a test compares memory.
+ */
+void
+dftfreqinit(struct v34_dftbin *bins)
+{
+	short i;
+
+	/*
+	 * ONE-BASED, and twenty-five iterations rather than twenty-six: the
+	 * object starts the counter at 1, uses it as the bin number, and
+	 * tests the INCREMENTED value against 25.  So bins[0] gets bin 1 and
+	 * the last entry written is bins[24] with bin 25.  There is no bin 0
+	 * -- a step of zero is DC.
+	 */
+	for (i = 1; i <= 25; i++, bins++) {
+		bins->phase = 0;
+		bins->inc = DFT_BIN(i);
+		bins->acc_re = 0;
+		bins->acc_im = 0;
+		bins->sum_re = 0.0;
+		bins->sum_im = 0.0;
+		bins->denergy = 0.0;
+	}
+}
+
+/*
+ * The four bins the nonlinear-distortion measurement treats as signal:
+ * 1050, 1350, 1950 and 2550 Hz.
+ */
+void
+dftnlinitSignalBins(struct v34_dftbin *bins)
+{
+	short i;
+
+	/*
+	 * `inc` is cleared in the loop and then written again below.  That is
+	 * the object's -- the loop zeroes all four fields uniformly and the
+	 * frequencies are assigned afterwards -- and folding the two would
+	 * lose the fact that the loop is the same loop as the noise bank's.
+	 */
+	for (i = 0; i <= 3; i++) {
+		bins[i].phase = 0;
+		bins[i].inc = 0;
+		bins[i].acc_re = 0;
+		bins[i].acc_im = 0;
+	}
+
+	bins[0].inc = DFT_BIN(7);
+	bins[1].inc = DFT_BIN(9);
+	bins[2].inc = DFT_BIN(13);
+	bins[3].inc = DFT_BIN(17);
+}
+
+/*
+ * And the four it treats as noise: 900, 1200, 1800 and 2400 Hz, each one
+ * step below its partner above.
+ */
+void
+dftnlinitNoiseBins(struct v34_dftbin *bins)
+{
+	short i;
+
+	for (i = 0; i <= 3; i++) {
+		bins[i].phase = 0;
+		bins[i].inc = 0;
+		bins[i].acc_re = 0;
+		bins[i].acc_im = 0;
+	}
+
+	bins[0].inc = DFT_BIN(6);
+	bins[1].inc = DFT_BIN(8);
+	bins[2].inc = DFT_BIN(12);
+	bins[3].inc = DFT_BIN(16);
+}
+
+/*
+ * The retrain detector's two thresholds and three run limits.
+ *
+ * Both thresholds go on all three bins even though only bin 0's `thresh_lo`
+ * and bin 1's `thresh_hi` are ever compared against -- bins 1 and 2 also
+ * have their `thresh_lo` read, bin 2's `thresh_hi` never is.  Written on all
+ * three because that is what the object does; the loop does not know which
+ * arm will read which.
+ */
+#define RETRAIN_QUIET	0x50	/* +0x28: "this bin has gone silent"    */
+#define RETRAIN_TONE	0xbb8	/* +0x2a: "and now something is there"  */
+
+void
+dftRetrainDetInit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_dftbin *bins = obj->retrain_bins;
+	short i;
+
+	for (i = 0; i <= 2; i++) {
+		bins[i].thresh_lo = RETRAIN_QUIET;
+		bins[i].thresh_hi = RETRAIN_TONE;
+		bins[i].phase = 0;
+		bins[i].acc_re = 0;
+		bins[i].acc_im = 0;
+	}
+
+	/* 900, 1200 and 1500 Hz. */
+	bins[0].inc = DFT_BIN(6);
+	bins[1].inc = DFT_BIN(8);
+	bins[2].inc = DFT_BIN(10);
+
+	obj->retrain_state = 1;
+	obj->retrain_phase = 0;
+	obj->retrain_runs = 0;
+	obj->retrain_quiet_runs = 3;
+	obj->retrain_tone_runs = 9;
+}
+
+/*
+ * Poll it.
+ *
+ * The measurement is taken once every 128 samples and the counter advances
+ * four at a time, so 32 calls of four samples -- or any other split, since
+ * the counter is samples and not calls -- produce one decision.
+ *
+ * THE ENERGY IS WIDENED UNSIGNED AND THE THRESHOLD SIGNED.  `energy` is a
+ * `short` that `dftenergy` writes as `(short)((int)e >> 16)`, so it goes
+ * negative for a loud enough bin; read unsigned, that becomes a large
+ * positive number and the comparison against 3000 succeeds rather than
+ * failing.  The object does `movzwl` on one side of every one of these
+ * comparisons and `movswl` on the other, and getting that backwards would
+ * make a loud line read as silent.  Neither cast is decoration.
+ */
+int
+detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_dftbin *bins = obj->retrain_bins;
+	short runs;
+	short i;
+
+	dftupdate(bins, nbins, samples, nsamples);
+
+	/*
+	 * EQUALITY, not `>=`.  A caller that arrived with a sample count
+	 * indivisible by four would step past 128 and never measure again;
+	 * the object is written on the assumption that it does not, and the
+	 * receive queue is drained four at a time everywhere.
+	 */
+	obj->retrain_phase += 4;
+	if (obj->retrain_phase != 0x80)
+		return 0;
+	obj->retrain_phase = 0;
+
+	dftenergy(bins, nbins, 5);
+
+	/*
+	 * Clear for the next window -- the integer path only.  The two double
+	 * accumulators are NOT reset, so `denergy` integrates over the whole
+	 * life of the detector while `energy` is per window.  Nothing reads
+	 * `denergy`; see docs/findings.md.
+	 */
+	for (i = 0; i < nbins; i++) {
+		bins[i].phase = 0;
+		bins[i].acc_re = 0;
+		bins[i].acc_im = 0;
+	}
+
+	if (obj->retrain_state == 1) {
+		/*
+		 * Waiting for silence on all three bins at once.  Any one of
+		 * them still loud ends the run -- and if the run that just
+		 * ended was long enough, that is the transition to state 2.
+		 *
+		 * So the arm that ADVANCES the machine is the one where the
+		 * quiet test FAILS, which reads backwards until you notice
+		 * that the run has to end before its length can be judged.
+		 */
+		if ((int)(unsigned short)bins[0].energy
+					< (int)bins[0].thresh_lo
+		    && (int)(unsigned short)bins[1].energy
+					< (int)bins[1].thresh_lo
+		    && (int)(unsigned short)bins[2].energy
+					< (int)bins[2].thresh_lo) {
+			runs = (short)(obj->retrain_runs + 1);
+		} else {
+			if (obj->retrain_runs >= obj->retrain_quiet_runs)
+				obj->retrain_state = 2;
+			runs = 0;
+		}
+		obj->retrain_runs = runs;
+		return 0;
+	}
+
+	if (obj->retrain_state != 2)
+		return 0;
+
+	/*
+	 * Waiting for the middle bin -- 1200 Hz -- to come back.
+	 */
+	if ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {
+		obj->retrain_runs = (short)(obj->retrain_runs + 1);
+	} else {
+		obj->retrain_runs = 0;
+		obj->retrain_state = 1;
+	}
+
+	/*
+	 * ONE TAIL FOR BOTH ARMS, which matters: the reset arm falls into
+	 * this comparison too, so a `retrain_tone_runs` of zero would report
+	 * a retrain on the call that gave up.  It is 9, so it does not; the
+	 * shared tail is reproduced rather than tidied into the first arm
+	 * because that behaviour is the object's and a caller could change
+	 * the limit.
+	 */
+	return obj->retrain_runs == obj->retrain_tone_runs;
 }
 
 /*

@@ -22,7 +22,8 @@
 #ifndef DSPLIB_V34FSK_H
 #define DSPLIB_V34FSK_H
 
-#include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one */
+#include "dsplib/v34det.h"	/* struct v34_dftbin: the retrain detector's   */
+#include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one  */
 #include "dsplib/v34rx.h"	/* struct v34_queue: the object owns both      */
 
 #ifdef __cplusplus
@@ -44,6 +45,7 @@ extern "C" {
  */
 #define V34_PROBE_RESULTS	25	/* doubles at +0xa258 */
 #define V34_INFO0_BITS		41	/* one bit per int at +0xa8a4 */
+#define V34_RETRAIN_BINS	3	/* DFT bins at +0xa81c */
 
 /*
  * The three interpolator phases, and the post-detection low-pass.
@@ -482,7 +484,33 @@ struct v34_object {
 	short fa23e;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short fa240;					/* +0xa240 */
-	unsigned char unmapped_a242[0xa258 - 0xa242];
+	unsigned char unmapped_a242[0xa24a - 0xa242];
+	/*
+	 * The retrain-request detector's five scalars, all five written by
+	 * `dftRetrainDetInit` and all five read by `detectRetrainReq`, which
+	 * are the only two functions in the object that touch any of them.
+	 *
+	 * It is a two-state machine over the bank at `retrain_bins`: state 1
+	 * waits for every bin to fall below its `thresh_lo` for
+	 * `retrain_quiet_runs` consecutive measurements, state 2 then waits
+	 * for the middle bin to rise above its `thresh_hi` for
+	 * `retrain_tone_runs` of them, and reaching that is the "retrain
+	 * requested" answer.  `retrain_runs` is the run length in whichever
+	 * state is current, so the two limits share one counter.
+	 */
+	short retrain_state;				/* +0xa24a */
+	/*
+	 * Samples since the last measurement, advanced FOUR at a time and
+	 * compared for equality with 128 -- not `>=`.  The caller therefore
+	 * has to arrive in multiples of four or the detector never fires,
+	 * which is a fact about the call site rather than a defect: the
+	 * receive queue is drained four samples at a time everywhere.
+	 */
+	int retrain_phase;				/* +0xa24c */
+	short retrain_runs;				/* +0xa250 */
+	short retrain_quiet_runs;			/* +0xa252 */
+	short retrain_tone_runs;			/* +0xa254 */
+	unsigned char unmapped_a256[0xa258 - 0xa256];
 	/*
 	 * +0xa258.  Twenty-five doubles -- the only floating point anywhere
 	 * in this struct -- that `V34GiveProbeResults` copies in from a
@@ -491,7 +519,15 @@ struct v34_object {
 	 * `V34XF_GetProbeResultsPtr` hands the array out unchanged.
 	 */
 	double probe_results[V34_PROBE_RESULTS];	/* +0xa258 */
-	unsigned char unmapped_a320[0xa8a4 - 0xa320];
+	unsigned char unmapped_a320[0xa81c - 0xa320];
+	/*
+	 * +0xa81c.  The retrain detector's three DFT bins, at 900, 1200 and
+	 * 1500 Hz -- `dftRetrainDetInit` gives them phase steps of 0x600,
+	 * 0x800 and 0xa00, and one bin unit is 150 Hz at the 9600 Hz rate
+	 * V.34 runs at (docs/rate_assumptions.md R-1).
+	 */
+	struct v34_dftbin retrain_bins[V34_RETRAIN_BINS];/* +0xa81c */
+	unsigned char unmapped_a8a0[0xa8a4 - 0xa8a0];
 	/*
 	 * +0xa8a4.  The received INFO0 message, ONE BIT PER INT.
 	 * `V34GiveINFO0dBits` unpacks it there MSB-first and every later

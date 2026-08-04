@@ -158,5 +158,185 @@
   "label": "fmt[] microstate entry moved to the rxstate slot",
   "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
   "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\","
+ },
+ {
+  "note": "The five DFT leaves.  Three of them are pure table fills, where the only errors possible are a bin number, a bank length and which of the two `nl` banks is which -- and the last of those is invisible to anything but a differential compare, because both banks are the same shape.  detectRetrainReq is the state machine, and its two comparisons are widened differently on each side."
+ },
+ {
+  "label": "dftfreqinit fills 24 bins",
+  "find": "for (i = 1; i <= 25; i++, bins++) {",
+  "replace": "for (i = 1; i <= 24; i++, bins++) {"
+ },
+ {
+  "label": "dftfreqinit is zero-based",
+  "find": "for (i = 1; i <= 25; i++, bins++) {",
+  "replace": "for (i = 0; i <= 25; i++, bins++) {"
+ },
+ {
+  "label": "the bin number is shifted 7, not 8",
+  "find": "#define DFT_BIN(n)\t((short)((n) << 8))",
+  "replace": "#define DFT_BIN(n)\t((short)((n) << 7))"
+ },
+ {
+  "label": "dftfreqinit leaves denergy alone",
+  "find": "\t\tbins->denergy = 0.0;\n",
+  "replace": ""
+ },
+ {
+  "label": "dftfreqinit leaves the double accumulators alone",
+  "find": "\t\tbins->sum_re = 0.0;\n\t\tbins->sum_im = 0.0;\n",
+  "replace": ""
+ },
+ {
+  "label": "signal bins 7 and 9 transposed",
+  "find": "\tbins[0].inc = DFT_BIN(7);\n\tbins[1].inc = DFT_BIN(9);",
+  "replace": "\tbins[0].inc = DFT_BIN(9);\n\tbins[1].inc = DFT_BIN(7);"
+ },
+ {
+  "label": "signal bin 17 becomes 18",
+  "find": "\tbins[3].inc = DFT_BIN(17);",
+  "replace": "\tbins[3].inc = DFT_BIN(18);"
+ },
+ {
+  "label": "the signal bank clears three bins",
+  "find": "\t */\n\tfor (i = 0; i <= 3; i++) {",
+  "replace": "\t */\n\tfor (i = 0; i <= 2; i++) {"
+ },
+ {
+  "label": "noise bin 12 becomes 11",
+  "find": "\tbins[2].inc = DFT_BIN(12);\n\tbins[3].inc = DFT_BIN(16);",
+  "replace": "\tbins[2].inc = DFT_BIN(11);\n\tbins[3].inc = DFT_BIN(16);"
+ },
+ {
+  "label": "the noise bank clears three bins",
+  "find": "\tshort i;\n\n\tfor (i = 0; i <= 3; i++) {",
+  "replace": "\tshort i;\n\n\tfor (i = 0; i <= 2; i++) {"
+ },
+ {
+  "label": "the noise bank gets the signal bank's frequencies",
+  "find": "\tbins[0].inc = DFT_BIN(6);\n\tbins[1].inc = DFT_BIN(8);\n\tbins[2].inc = DFT_BIN(12);\n\tbins[3].inc = DFT_BIN(16);",
+  "replace": "\tbins[0].inc = DFT_BIN(7);\n\tbins[1].inc = DFT_BIN(9);\n\tbins[2].inc = DFT_BIN(13);\n\tbins[3].inc = DFT_BIN(17);"
+ },
+ {
+  "label": "the retrain thresholds transposed",
+  "find": "\t\tbins[i].thresh_lo = RETRAIN_QUIET;\n\t\tbins[i].thresh_hi = RETRAIN_TONE;",
+  "replace": "\t\tbins[i].thresh_lo = RETRAIN_TONE;\n\t\tbins[i].thresh_hi = RETRAIN_QUIET;"
+ },
+ {
+  "label": "the quiet threshold is 0x51",
+  "find": "#define RETRAIN_QUIET\t0x50",
+  "replace": "#define RETRAIN_QUIET\t0x51"
+ },
+ {
+  "label": "the tone threshold is 0xbb9",
+  "find": "#define RETRAIN_TONE\t0xbb8",
+  "replace": "#define RETRAIN_TONE\t0xbb9"
+ },
+ {
+  "label": "the retrain detector's top bin is 1800 Hz",
+  "find": "\tbins[2].inc = DFT_BIN(10);",
+  "replace": "\tbins[2].inc = DFT_BIN(12);"
+ },
+ {
+  "label": "dftRetrainDetInit arms two bins",
+  "find": "\tfor (i = 0; i <= 2; i++) {",
+  "replace": "\tfor (i = 0; i <= 1; i++) {"
+ },
+ {
+  "label": "the two run limits transposed",
+  "find": "\tobj->retrain_quiet_runs = 3;\n\tobj->retrain_tone_runs = 9;",
+  "replace": "\tobj->retrain_quiet_runs = 9;\n\tobj->retrain_tone_runs = 3;"
+ },
+ {
+  "label": "the detector arms in state 2",
+  "find": "\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;",
+  "replace": "\tobj->retrain_state = 2;\n\tobj->retrain_phase = 0;"
+ },
+ {
+  "label": "the sample counter steps by two",
+  "find": "\tobj->retrain_phase += 4;",
+  "replace": "\tobj->retrain_phase += 2;"
+ },
+ {
+  "label": "the window test is < rather than !=",
+  "find": "\tif (obj->retrain_phase != 0x80)",
+  "replace": "\tif (obj->retrain_phase < 0x80)"
+ },
+ {
+  "label": "dftenergy is given a scale of 4",
+  "find": "\tdftenergy(bins, nbins, 5);",
+  "replace": "\tdftenergy(bins, nbins, 4);"
+ },
+ {
+  "label": "the clear loop covers the whole bank, not the caller's prefix",
+  "find": "\tfor (i = 0; i < nbins; i++) {",
+  "replace": "\tfor (i = 0; i < V34_RETRAIN_BINS; i++) {"
+ },
+ {
+  "label": "the clear loop resets the double accumulators too",
+  "find": "\t\tbins[i].acc_im = 0;\n\t}\n\n\tif (obj->retrain_state == 1) {",
+  "replace": "\t\tbins[i].acc_im = 0;\n\t\tbins[i].sum_re = 0.0;\n\t\tbins[i].sum_im = 0.0;\n\t}\n\n\tif (obj->retrain_state == 1) {"
+ },
+ {
+  "label": "the quiet test on bin 0 is <=",
+  "find": "\t\t\t\t\t< (int)bins[0].thresh_lo",
+  "replace": "\t\t\t\t\t<= (int)bins[0].thresh_lo"
+ },
+ {
+  "label": "bin 2 is compared against bin 1's threshold",
+  "find": "\t\t\t\t\t< (int)bins[2].thresh_lo",
+  "replace": "\t\t\t\t\t< (int)bins[1].thresh_lo"
+ },
+ {
+  "label": "the quiet threshold is widened unsigned",
+  "find": "\t\t\t\t\t< (int)bins[0].thresh_lo",
+  "replace": "\t\t\t\t\t< (int)(unsigned short)bins[0].thresh_lo"
+ },
+ {
+  "label": "bin 0's energy is widened signed",
+  "find": "\t\tif ((int)(unsigned short)bins[0].energy",
+  "replace": "\t\tif ((int)bins[0].energy",
+  "equivalent": true,
+  "why": "`energy` is `(short)((int)e >> 16)` where e is a sum of two squares of 16-bit values, so it is negative only when e reaches 2^31 -- both squares at full scale at once.  A sweep of all 32767 amplitudes of a 1200 Hz sine through the detector produced no negative energy, so no input distinguishes the two widenings.  Reproduced from the `movzwl` and recorded here rather than left to look tested.  Finding 204."
+ },
+ {
+  "label": "the quiet run test is > rather than >=",
+  "find": "\t\t\tif (obj->retrain_runs >= obj->retrain_quiet_runs)",
+  "replace": "\t\t\tif (obj->retrain_runs > obj->retrain_quiet_runs)"
+ },
+ {
+  "label": "the state-2 guard tests 3",
+  "find": "\tif (obj->retrain_state != 2)",
+  "replace": "\tif (obj->retrain_state != 3)"
+ },
+ {
+  "label": "the tone test reads bin 0",
+  "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
+  "replace": "\tif ((int)(unsigned short)bins[0].energy > (int)bins[0].thresh_hi) {"
+ },
+ {
+  "label": "the tone test is >=",
+  "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
+  "replace": "\tif ((int)(unsigned short)bins[1].energy >= (int)bins[1].thresh_hi) {"
+ },
+ {
+  "label": "the tone threshold is widened unsigned",
+  "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
+  "replace": "\tif ((int)(unsigned short)bins[1].energy > (int)(unsigned short)bins[1].thresh_hi) {"
+ },
+ {
+  "label": "the give-up arm returns instead of sharing the tail",
+  "find": "\t} else {\n\t\tobj->retrain_runs = 0;\n\t\tobj->retrain_state = 1;\n\t}",
+  "replace": "\t} else {\n\t\tobj->retrain_runs = 0;\n\t\tobj->retrain_state = 1;\n\t\treturn 0;\n\t}"
+ },
+ {
+  "label": "the answer compares against the quiet limit",
+  "find": "\treturn obj->retrain_runs == obj->retrain_tone_runs;",
+  "replace": "\treturn obj->retrain_runs == obj->retrain_quiet_runs;"
+ },
+ {
+  "label": "the answer is >= rather than ==",
+  "find": "\treturn obj->retrain_runs == obj->retrain_tone_runs;",
+  "replace": "\treturn obj->retrain_runs >= obj->retrain_tone_runs;"
  }
 ]

@@ -4509,6 +4509,12 @@ first and at `0x65c47` from the third, which is what a transmit switch and a
 receive switch over the same state look like when the compiler has finished
 with them.
 
+> **RETRACTED, and it is the paragraph above only.**  The first two tables
+> are fed by +0x3596 and the third by +0x3592: two machines, not one, and
+> `rxstate` at +0x3594 has no table at all.  `TX_L1` twice is state *value*
+> 51 meaning different things to different machines.  The byte counts below
+> stand; what the 12,290 shared bytes ARE does not.  Finding 205.
+
 `V34hshak.c` also carries a `StateName` table -- 87 pointers at `.data+0x6c00`
 into `.rodata.str1.1`, one per state, left in the object by whatever debug
 build produced it.  So the state machine is not anonymous.  The names run
@@ -10984,3 +10990,141 @@ fails rather than going quiet.
 recorded as equivalent. The number is worth less than the four things above,
 each of which was a sweep reporting a clean result for a reason that had
 nothing to do with the code.
+
+### 204. The DFT bin's spare int is two thresholds, and only its owner knows
+
+`struct v34_dftbin` is 0x2c bytes and `dftupdate`/`dftenergy` touch 0x28 of
+them. The four at +0x28 were mapped as
+
+```c
+	int reserved;		/* +0x28  no reader or writer found      */
+```
+
+with the honest note that the field existed because the stride was measured
+and not assumed. Reading V34hshak.c's five DFT leaves settles it: they are
+two independent shorts, and the reason neither function in DFTC.c touches
+them is that they do not belong to the bank — they belong to whoever owns
+it.
+
+`dftRetrainDetInit` writes 80 into +0x28 and 3000 into +0x2a on each of
+three bins, and `detectRetrainReq` compares `energy` against +0x28 on one
+arm of its state machine and against +0x2a on the other. So one is "this bin
+has gone silent" and the other is "and now something is there", and the bank
+carries them because the bank is what the comparison is about.
+
+**THE TWO SIDES OF THAT COMPARISON ARE WIDENED DIFFERENTLY.** Every one of
+the four sites is `movzwl` on the energy and `movswl` on the threshold:
+
+```
+   5e9ea:  movzwl 0xc(%ebx),%edx     ; energy, UNSIGNED
+   5e9ee:  movswl 0x28(%ebx),%esi    ; threshold, SIGNED
+   5e9f2:  cmp    %esi,%edx
+```
+
+Only one of the two is reachable and the reconstruction says which. The
+energy side is not: `dftenergy` writes `(short)((int)e >> 16)` where `e` is
+a sum of two squares of 16-bit values, so the short goes negative only when
+both squares are simultaneously at full scale and `e` reaches 2^31. A sweep
+of all 32767 amplitudes of a 1200 Hz sine through the detector produced no
+negative energy at all. The threshold side is reachable from a seeded field
+and nothing else — `dftRetrainDetInit` writes 80 and 3000 — and
+`t_v34hshak.c` reaches it by seeding −1: read signed that rejects every
+energy, read unsigned it accepts every energy, and the two answers differ on
+the first measurement.
+
+Recorded because the cast that *cannot* be exercised is the one a reader
+would delete. It is reproduced from the instruction encoding, and the
+comment says so rather than implying a test covers it.
+
+**AND THE FIVE ARE CALLED BY NOTHING.** No relocation names `dftfreqinit`,
+`dftnlinitSignalBins`, `dftnlinitNoiseBins`, `dftRetrainDetInit` or
+`detectRetrainReq`, and no direct call reaches them either — the check that
+matters, because a call to a symbol in the same section can be resolved by
+the assembler with no relocation left, which is how `getbit` and
+`ApplyBulkDelay` are reached from inside `v34handshak` with nothing in the
+relocation table to show for it. Same shape as `cosread` and as four of the
+seven functions already in v34hshak.c: global, testable, and with their
+arguments read out of the code because no call site states them.
+
+The bin numbers are the object's own `bin << 8`, and one bin is 150 Hz at
+the 9600 Hz rate of R-1 — which is the V.34 line probe's tone spacing, and
+`dftfreqinit`'s twenty-five bins are 150 Hz to 3750 Hz. The two `nl` banks
+pair off exactly: signal at 1050, 1350, 1950, 2550 and noise at 900, 1200,
+1800, 2400, each noise bin one step below its partner. That pairing is what
+makes them a distortion measurement rather than eight frequencies. Which
+bank is reference and which is product is **not** settled by the object, and
+neither initialiser has a caller to settle it, so nothing here reads across.
+
+### 205. `v34handshak` dispatches three machines, and finding 77 says one
+
+Finding 77 read the three jump tables as "three tables over one state
+variable, not three separate machines", on the evidence that `TX_L1` is
+dispatched from two of them. The evidence is right and the conclusion is
+wrong. The instruction before each `jmp *` says which word feeds it:
+
+```
+  62957:  movswl 0x3596(%esi),%eax   ; txstate
+  62961:  cmp $0x51,%eax ; jmp *0x2da0(,%eax,4)    82 entries, cases  5..86
+
+  62aea:  movzwl 0x3596(%edi),%ecx   ; txstate again
+  62af7:  cmp $0x45,%eax ; jmp *0x2ee8(,%eax,4)    70 entries, cases  5..74
+
+  64abc:  movzwl 0x3592(%eax),%esi   ; MICROSTATE
+  64ac9:  cmp $0x27,%eax ; jmp *0x3000(,%eax,4)    40 entries, cases 41..80
+```
+
+Two tables over `txstate` and one over `microstate`. `rxstate` at +0x3594
+has no table at all: it is dispatched by compare-and-branch chains, which is
+why cfgsplit — which starts from dispatch targets — attributes every byte of
+it to "shared by two or more". **The 12,290-byte "shared engine" of finding
+77 is largely the receive machine**, and it is not shared machinery in the
+sense that reading implies.
+
+`TX_L1` appearing twice is then exactly what it looks like: state *value* 51
+means one thing to the transmit machine and another to the microstate
+machine, and `StateName` is one table indexed by all three.
+
+What the three tables actually are:
+
+```
+  table 1  +0x2da0  txstate, INSIDE the per-sample transmit loop
+                    25 real cases, 57 of 82 entries to the default
+                    ~21.1 KB exclusive -- the signal generator
+  table 2  +0x2ee8  txstate, once per block
+                    16 cases over 7 distinct targets, ~0.3 KB
+                    -- the transmit supervisor, deciding when to leave
+  table 3  +0x3000  microstate, after fskdemodulate
+                    16 real cases, ~27.6 KB exclusive
+                    -- the protocol engine: DET_INFO 6046, DET_SYNC 3945,
+                       TX_PHASE1_ANS 3198, RX_PHASE2_CALL 2385, ...
+```
+
+and the shape of the function around them, which the prologue gives in
+twenty instructions:
+
+```c
+	while ((short)obj->txq.count < obj->f2aa0)
+		switch (obj->txstate) { ... }		/* table 1 */
+	if ((short)obj->rxq.count > 5)
+		... rxstate, by compare chain, then table 3 ...
+	else
+		switch (obj->txstate) { ... }		/* table 2 */
+```
+
+**Why it matters for the plan.** "One machine with 87 states" and "three
+machines sharing one name table" are different reconstructions and different
+test strategies. The transmit generator can be driven by watching what lands
+on the transmit queue; the protocol engine can only be driven by feeding it
+a far end. Splitting the work by table rather than by state number is what
+that distinction buys, and it is the split the task list now uses.
+
+**The prerequisites, which are not optional.** Every test in this tree links
+all of `$(OBJ)`, so one undefined symbol breaks the whole suite, and
+`v34handshak` reaches 68 functions this tree has not written — about 34 KB
+once its own 61.5 KB is set aside, of which 16 KB is the C++ half of
+VPcmV34Main.cpp: `DILdescriptorPacker`, `V90Phase3Modulator`,
+`V90PreFilter`, `VPcmFloModem`. That C++ is the real gate. The tree's
+standing answer to a caller whose callees are missing is to not write the
+caller — `CALLPROG_Progress`, `b103_process` and `FPM_iir_filt_block` are
+all declined for exactly that reason — and this is the same answer at
+sixty times the size.
