@@ -1,0 +1,131 @@
+[
+ {
+  "note": "The rate negotiator.  Its five diagnostics are gated on a LOCAL copy of the level rather than on DSPLIB_DEBUG_ON(), and each one re-reads the variables it printed afterwards -- both are the object's register allocation showing through, and both are mutated below."
+ },
+ {
+  "label": "the cached level is read once and never refreshed",
+  "find": "\t\t\t\t     2400 * (short)tx, 2400 * (short)rx);\n\t\ttx = (unsigned short)cfg->txbits;\n\t\trx = (unsigned short)cfg->rxbits;\n\t\tlevel = (int)dsplibs_debug_level;",
+  "replace": "\t\t\t\t     2400 * (short)tx, 2400 * (short)rx);\n\t\ttx = (unsigned short)cfg->txbits;\n\t\trx = (unsigned short)cfg->rxbits;",
+  "equivalent": true,
+  "why": "nothing between the two reads writes `dsplibs_debug_level` -- `dsplibs_debug_printf` only consumes it -- so the reload cannot yield a different value.  Reproduced because the object emits it: the call clobbers the register the level was living in."
+ },
+ {
+  "label": "the preliminary report does not re-read the two rates",
+  "find": "\t\ttx = (unsigned short)cfg->txbits;\n\t\trx = (unsigned short)cfg->rxbits;\n\t\tlevel = (int)dsplibs_debug_level;",
+  "replace": "\t\tlevel = (int)dsplibs_debug_level;",
+  "equivalent": true,
+  "why": "`tx` and `rx` already equal `cfg->txbits` and `cfg->rxbits` here -- the clamps above assign the local and the field together -- so re-reading them cannot change either.  Same register reload as the level above."
+ },
+ {
+  "label": "the gate is level >= 1 rather than > 1",
+  "find": "\tlevel = (int)dsplibs_debug_level;\n\tif (level > 1) {",
+  "replace": "\tlevel = (int)dsplibs_debug_level;\n\tif (level >= 1) {"
+ },
+ {
+  "label": "the ZERODIV gate is level >= 1 rather than > 1",
+  "find": "\t\tif (div == 0) {\n\t\t\tif (level > 1) {",
+  "replace": "\t\tif (div == 0) {\n\t\t\tif (level >= 1) {"
+ },
+ {
+  "label": "the preliminary report has tx and rx swapped",
+  "find": "\t\t\t\t     2400 * (short)tx, 2400 * (short)rx);",
+  "replace": "\t\t\t\t     2400 * (short)rx, 2400 * (short)tx);"
+ },
+ {
+  "label": "the preliminary report gives rates in symbols, not bits",
+  "find": "\t\t\t\t     2400 * (short)tx, 2400 * (short)rx);",
+  "replace": "\t\t\t\t     (short)tx, (short)rx);"
+ },
+ {
+  "label": "the final report has tx and rx swapped",
+  "find": "\t\t\t\t     2400 * (short)cfg->txbits,\n\t\t\t\t     2400 * (short)cfg->rxbits);",
+  "replace": "\t\t\t\t     2400 * (short)cfg->rxbits,\n\t\t\t\t     2400 * (short)cfg->txbits);"
+ },
+ {
+  "label": "the final report reads the working copies rather than the config",
+  "find": "\t\t\t\t     2400 * (short)cfg->txbits,\n\t\t\t\t     2400 * (short)cfg->rxbits);",
+  "replace": "\t\t\t\t     2400 * (short)tx,\n\t\t\t\t     2400 * (short)rx);"
+ },
+ {
+  "label": "the nofTxBits report has the rate and the PTC swapped",
+  "find": "\t\t\t\t\t     (short)bits, o->ptc,\n\t\t\t\t\t     o->nof_tx_bits);",
+  "replace": "\t\t\t\t\t     o->ptc, (short)bits,\n\t\t\t\t\t     o->nof_tx_bits);"
+ },
+ {
+  "label": "the nofTxBits report does not re-read its two inputs",
+  "find": "\t\t\tbits = (unsigned short)cfg->txbits;\n\t\t\tumax = (unsigned short)cfg->use_max;\n\t\t}",
+  "replace": "\t\t}",
+  "equivalent": true,
+  "why": "`bits` and `umax` were read from those same two fields at the top of the block and nothing has written them since, so the reload is a no-op.  Worth reproducing even so: unlike the two above, these values ARE used afterwards, by the initV34 call below, so the reload is load-bearing in the object even though no test can see it here."
+ },
+ {
+  "label": "the 2400 bps fallback tests the transmit baud rate",
+  "find": "if ((short)tx == 0 && (unsigned short)cfg->rx_baud != 0x960) {",
+  "replace": "if ((short)tx == 0 && (unsigned short)cfg->baud != 0x960) {"
+ },
+ {
+  "label": "the 2400 bps fallback triggers at 2400 baud too",
+  "find": "if ((short)tx == 0 && (unsigned short)cfg->rx_baud != 0x960) {",
+  "replace": "if ((short)tx == 0) {"
+ },
+ {
+  "label": "the fallback sets one unit rather than two",
+  "find": "\t\tcfg->txbits = 2;\n\t\tcfg->rxbits = 2;",
+  "replace": "\t\tcfg->txbits = 1;\n\t\tcfg->rxbits = 1;"
+ },
+ {
+  "label": "the fallback leaves the receive direction alone",
+  "find": "\t\tcfg->txbits = 2;\n\t\tcfg->rxbits = 2;",
+  "replace": "\t\tcfg->txbits = 2;"
+ },
+ {
+  "label": "the interleave depth takes three bits",
+  "find": "cfg->depth = (short)((info >> 11) & 3);",
+  "replace": "cfg->depth = (short)((info >> 11) & 7);"
+ },
+ {
+  "label": "depth and use_max read each other's bits",
+  "find": "\tcfg->depth = (short)((info >> 11) & 3);\n\tcfg->use_max = (short)((info >> 14) & 1);",
+  "replace": "\tcfg->depth = (short)((info >> 14) & 3);\n\tcfg->use_max = (short)((info >> 11) & 1);"
+ },
+ {
+  "label": "the non-linear encoder bit is 12, not 13",
+  "find": "\tif (info & 0x2000)",
+  "replace": "\tif (info & 0x1000)"
+ },
+ {
+  "label": "the non-linear encoder sets the wrong flag bit",
+  "find": "o->f25c2 = (short)((unsigned short)o->f25c2 | 0x4000);",
+  "replace": "o->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000);"
+ },
+ {
+  "label": "the non-linear encoder is never cleared",
+  "find": "\telse\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~0x4000);",
+  "replace": ""
+ },
+ {
+  "label": "nofTxBits shifts by 5 rather than 6",
+  "find": "\t\t\t    (int)(((short)bits * o->ptc) >> 6) + 6;",
+  "replace": "\t\t\t    (int)(((short)bits * o->ptc) >> 5) + 6;"
+ },
+ {
+  "label": "nofTxBits adds 5 rather than 6",
+  "find": "\t\t\t    (int)(((short)bits * o->ptc) >> 6) + 6;",
+  "replace": "\t\t\t    (int)(((short)bits * o->ptc) >> 6) + 5;"
+ },
+ {
+  "label": "the receive divisor is not halved",
+  "find": "div = cfg->rx_divtab[(short)bits + 14 * (short)umax - 1] >> 1;",
+  "replace": "div = cfg->rx_divtab[(short)bits + 14 * (short)umax - 1];"
+ },
+ {
+  "label": "the receive divisor table is indexed without the use_max stride",
+  "find": "div = cfg->rx_divtab[(short)bits + 14 * (short)umax - 1] >> 1;",
+  "replace": "div = cfg->rx_divtab[(short)bits - 1] >> 1;"
+ },
+ {
+  "label": "the ZERODIV guard substitutes 0 rather than 1",
+  "find": "\t\t\tdiv = 1;",
+  "replace": "\t\t\tdiv = 0;"
+ }
+]

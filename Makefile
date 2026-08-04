@@ -84,7 +84,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets all test check64 docs clean interop capture coverage debugcov phase
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -135,7 +135,7 @@ $(BUILD):
 
 # --- targets --------------------------------------------------------------
 
-test: firewall strings offsets $(TESTBIN)
+test: firewall strings offsets refs $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc
 
 # The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
@@ -181,7 +181,7 @@ offsets:
 
 # How many diagnostic call sites the suite never reaches.
 #
-# TRACKED, NOT GATED.  77 of 278 are dead today and retiring them is task #50;
+# TRACKED, NOT GATED.  53 of 279 are dead today and retiring them is task #50;
 # a check that is red from its first run is a check somebody turns off.  What
 # this is for is the trend -- the number should fall at every phase boundary,
 # and a RISE means a batch of sites was placed without anything to drive them.
@@ -194,6 +194,19 @@ offsets:
 # from.  See finding 192 and tools/debugcov.py.
 debugcov:
 	@$(PYTHON) tools/debugcov.py --summary
+
+# The prose half of the same job.  `offsets` holds the compiler to the
+# /* +0xNNN */ annotations; nothing at all held the `finding N` and `DN`
+# citations, and those are renumbered BY HAND every time a merge makes
+# room for two sessions' findings.  Only the dangling check belongs here.
+# The mode that catches the failure that actually happens -- a reference
+# that still resolves, to the wrong entry -- needs a revision to compare
+# against, and the revision that matters is a merge parent:
+#
+#     git log --merges -1 --format=%P | tr ' ' '\n' | \
+#         xargs -I{} tools/refcheck.py --since {}
+refs:
+	@$(PYTHON) tools/refcheck.py
 
 # Everything a phase boundary is supposed to check, in one target.
 #

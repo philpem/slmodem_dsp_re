@@ -231,6 +231,55 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * The half the two blocks above cannot check.  Both raise the level to
+	 * 2 before capturing, so a print that lost its `if (DSPLIB_DEBUG_ON())`
+	 * emits the same text on both sides and passes: with only those blocks,
+	 * ungating either of encode.c's two sites SURVIVES.
+	 *
+	 * Level 1 rather than 0 is the point.  The gate is `> 1`, so 1 is the
+	 * one value at which `> 1` and the `>= 1` a reader would write disagree;
+	 * at 0 both are silent and both mutants live.  Both levels are swept
+	 * anyway, since the pass costs two calls.
+	 *
+	 * BOTH SITES, which needs both lengths: the short string takes the
+	 * normal path and the 300-character one takes the "too long" return,
+	 * and each has a gate of its own.
+	 */
+	diff_begin("encode: below the threshold, nothing is said");
+	{
+		static char big[400];
+		unsigned lvl;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			edprintf("Hi");
+			ref_edprintf("Hi");
+
+			memset(big, 'A', sizeof(big));
+			big[300] = '\0';
+			edprintf("%s", big);
+			ref_edprintf("%s", big);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    (long)lvl);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	diff_begin("encode: the key is shared, and moves with the level off");
 	{
 		/*

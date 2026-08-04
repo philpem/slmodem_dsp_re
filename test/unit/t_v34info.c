@@ -320,7 +320,7 @@ main(void)
 {
 	unsigned i;
 	int rc = 0;
-	int v90, k56, variant, ls, lv, cap;
+	int v90, k56, variant, ls, lv, cap, en, pt;
 
 	diff_begin("v34 info: the guard bands are where they claim to be");
 	{
@@ -601,13 +601,35 @@ main(void)
 		for (v90 = 0; v90 <= 1; v90++)
 		for (ls = 0; ls <= 1; ls++)
 		for (lv = 0; lv <= 1; lv++)
-		for (k56 = 0; k56 <= 1; k56++) {
-			long tag = ((((variant * 2 + v90) * 2 + ls) * 2 + lv)
-				    * 2 + k56);
+		for (k56 = 0; k56 <= 1; k56++)
+		for (en = 0; en <= 1; en++)
+		for (pt = 0; pt <= 1; pt++) {
+			long tag = ((((((variant * 2 + v90) * 2 + ls) * 2 + lv)
+				      * 2 + k56) * 2 + en) * 2 + pt);
 
 			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
 				m[j] = (short)(0x1234 + j * 4919);
-			m[3] = (short)(0x88 | (k56 ? 2 : 0));
+			/*
+			 * THREE LOOPS WHERE THERE WAS A CONSTANT AND ONE.
+			 * `m[3]` was `0x88 | (k56 ? 2 : 0)`, which pinned bit
+			 * 3 -- K56Flex's enable -- ON for every iteration, so
+			 * the "disabled by remote" arm never ran with the
+			 * level up and its string was never compared.
+			 * Swapping that string for the enabled one was NOT
+			 * CAUGHT: not by this test, and not by the
+			 * invented-string sweep either, which matches
+			 * substrings and so accepts a truncation of a real
+			 * string as a real one.
+			 *
+			 * The other two are the standing rule rather than a
+			 * failure observed: `en` is bit 3, `pt` is bit 1 --
+			 * the PCM type the enabled arm reports -- and `k56`
+			 * is now only the receiver's own state.  Three inputs
+			 * swept from one variable cannot be told apart.
+			 * (`cap` is taken: it is the session capability byte
+			 * two sections up, and means something else.)
+			 */
+			m[3] = (short)(0x80 | (en ? 8 : 0) | (pt ? 2 : 0));
 
 			setup();
 			set_msg(m);
@@ -663,6 +685,73 @@ main(void)
 			    dsplib_debug_capture_text(1)[0] != 0, 1, 0);
 		diff_eq_int("ours printed too",
 			    dsplib_debug_capture_text(0)[0] != 0, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * The other half of every transcript above: they all raise the level
+	 * to 2 first, so a site that lost its gate prints the same thing on
+	 * both sides and passes.  Ungating `V34SetINFO0dBits`'s announcement
+	 * was NOT CAUGHT until this section existed.  Levels 0 AND 1, since
+	 * every gate in the object is `> 1` and 1 is the only value that
+	 * separates it from the `>= 1` a reader would write.
+	 */
+	diff_begin("v34 info: below the threshold, nothing is said");
+	{
+		short m[V34_INFO_MSG_SHORTS];
+		unsigned lvl;
+		int j;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++)
+		for (variant = 0; variant <= 1; variant++)
+		for (v90 = 0; v90 <= 1; v90++)
+		for (en = 0; en <= 1; en++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+				m[j] = (short)(0x1234 + j * 4919);
+			m[3] = (short)(0x80 | (en ? 8 : 0) | 2);
+
+			setup();
+			set_msg(m);
+			poke_sess_int(0x6120, variant);
+			poke_int(0x24c, v90 ? 3 : 0);
+			poke_int(0x250, 5);
+			poke_short(0xabca, 1);
+			poke_short(0xabc6, 1);
+			poke_sub(caps_a, caps_b, 0x11, 1);
+			poke_sub(up_a, up_b, 9, 0x15);
+			poke_sub_int(up_a, up_b, 0x0c, 1);
+			poke_sub_int(up_a, up_b, 0x00, 1);
+			poke_sub_int(pcm_a, pcm_b, 0x0c, 1);
+
+			V34SetINFO0aBits(&oa, msg_a);
+			ref_V34SetINFO0aBits(ob, msg_b);
+			V34SetINFO0dBits(&oa, msg_a);
+			ref_V34SetINFO0dBits(ob, msg_b);
+			set_msg(m);
+			V34GiveINFO0dBits(&oa, msg_a);
+			ref_V34GiveINFO0dBits(ob, msg_b);
+			V34GiveINFO1aBits(&oa, msg_a);
+			ref_V34GiveINFO1aBits(ob, msg_b);
+			VPcmV34SetMohMessageBits(&oa, msg_a);
+			ref_VPcmV34SetMohMessageBits(ob, msg_b);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    (long)lvl * 100 + variant * 10 + v90);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    (long)lvl * 100 + variant * 10 + v90);
+		}
 
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;

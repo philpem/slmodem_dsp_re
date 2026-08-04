@@ -70,6 +70,9 @@ compare(const char *what, int tag)
 		    (char *)qb.q.wr - (char *)&qb, tag);
 }
 
+static int saw_sip_said, saw_sip_silent;
+static int saw_tv_said, saw_tv_silent;
+
 int
 main(void)
 {
@@ -1061,8 +1064,10 @@ main(void)
 	{
 		static struct v34_object oa, ob;
 		int lagbase, it;
-		unsigned b;
+		unsigned b, lvl;
 
+		/* Level 1 too; see the receiver block for why 1 and not 0. */
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (lagbase = 0; lagbase <= 3; lagbase++) {
 			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
@@ -1092,8 +1097,8 @@ main(void)
 				    (int)(short)(b * 3571 - 15000);
 			oa.txq.count = ob.txq.count = 0x30;
 
-			dsplibs_debug_level = 2;
-			ref_dsplibs_debug_level = 2;
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
 
@@ -1111,6 +1116,17 @@ main(void)
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, lagbase);
+			if (lvl < 2) {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_text(0)[0], 0,
+					    lagbase);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_text(1)[0], 0,
+					    lagbase);
+				continue;
+			}
 
 			for (b = 0; b < sizeof(oa); b++) {
 				static const unsigned skip[][2] = {
@@ -1160,12 +1176,27 @@ main(void)
 	{
 		static struct v34_object oa, ob;
 		static short coeff[64];
-		int mode, feed, far, it;
-		unsigned b;
+		int mode, feed, far, it, cnt, lag;
+		unsigned b, lvl;
 
 		for (b = 0; b < 64; b++)
 			coeff[b] = (short)(b * 617 - 9000);
 
+		/* Level 1 too; see the receiver block for why 1 and not 0. */
+		/*
+		 * `cnt` and `lag` are separate loops, and they are what
+		 * reaches three sites the sweep never touched: the NEC start
+		 * announcement needs the counter to WRAP to zero (`count =
+		 * f354c + 1`), the stop announcement fires exactly at 0x4650,
+		 * and the error path needs a negative lag.  With f354c pinned
+		 * at 0 and f25c at 0x40 none of the three was reachable, so
+		 * their strings had never been compared and their gates could
+		 * not be tested.  Two loops rather than one, because two
+		 * inputs swept from one variable cannot be told apart.
+		 */
+		for (lvl = 1; lvl <= 2; lvl++)
+		for (cnt = 0; cnt < 3; cnt++)
+		for (lag = 0; lag <= 1; lag++)
 		for (mode = 0; mode < 3; mode++)
 		for (feed = 0; feed <= 1; feed++)
 		for (far = 0; far <= 1; far++) {
@@ -1185,7 +1216,7 @@ main(void)
 			    (mode == 0 ? 0x8000 : mode == 1 ? 0x0800 : 0);
 			ra->f2a4 = rb->f2a4 = coeff;
 
-			oa.f25c  = ob.f25c  = 0x40;
+			oa.f25c  = ob.f25c  = (short)(lag ? 8 : 0x40);
 			oa.f25c2 = ob.f25c2 = (short)(feed ? V34_EC_FEED : 0);
 			oa.f260  = ob.f260  = 1234;
 			oa.fa23c = ob.fa23c = (short)(far ? 1 : 0);
@@ -1193,7 +1224,8 @@ main(void)
 			oa.fa240 = ob.fa240 = 0;
 			oa.f2aa4 = ob.f2aa4 = 0;
 			oa.f2aa6 = ob.f2aa6 = 0;
-			oa.f354c = ob.f354c = 0;
+			oa.f354c = ob.f354c =
+			    (int)(cnt == 0 ? 0 : cnt == 1 ? -1 : 0x464f);
 			oa.f3550 = ob.f3550 = -0x1800;
 			oa.f3552 = ob.f3552 = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
@@ -1211,8 +1243,8 @@ main(void)
 			for (b = 0; b < V34_RXQ_RING; b++)
 				oa.rxq.ring[b] = ob.rxq.ring[b] = 0;
 
-			dsplibs_debug_level = 2;
-			ref_dsplibs_debug_level = 2;
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
 
@@ -1229,6 +1261,19 @@ main(void)
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, (long)mode * 100 + feed * 10 + far);
+			if (lvl < 2) {
+				long t2 = (long)mode * 100 + feed * 10 + far;
+
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_text(0)[0], 0,
+					    t2);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_text(1)[0], 0,
+					    t2);
+				continue;
+			}
 
 			for (b = 0; b < sizeof(oa); b++) {
 				static const unsigned skip[][2] = {
@@ -1455,7 +1500,18 @@ main(void)
 	{
 		static struct v34_object oa, ob;
 		int pat, ph, wrap, k;
+		unsigned lvl;
 
+		/*
+		 * THIS SECTION NEVER CAPTURED AT ALL, so `setInitialPhase`'s
+		 * two divide-guard diagnostics had never been compared -- and
+		 * the sweep does reach both, since pat 7 is the give-up path
+		 * and pat 8..11 are the equal-and-opposite pairs.  Level 2
+		 * compares them; level 1 says they are gated.
+		 */
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (pat = 0; pat < 12; pat++)
 		for (ph = 0; ph < 4; ph++)
 		for (wrap = 1; wrap <= 2; wrap++) {
@@ -1494,17 +1550,42 @@ main(void)
 			ra->f1ec = rb->f1ec = 0;
 			ra->f1ee = rb->f1ee = 0;
 
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
 			setInitialPhase(&oa);
 			ref_setInitialPhase(&ob);
 
 			{
 				long tag = ((long)pat * 100 + ph * 10 + wrap);
 
+				diff_eq_int("setInitialPhase transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				if (lvl < 2) {
+					diff_eq_int("below the threshold, "
+						    "nothing is said",
+						    dsplib_debug_capture_text(1)
+						    [0], 0, tag);
+					saw_sip_silent = 1;
+				} else if (dsplib_debug_capture_text(1)[0]) {
+					saw_sip_said = 1;
+				}
 				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
 				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
 				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
 			}
 		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+		diff_eq_int("setInitialPhase spoke at level 2",
+			    saw_sip_said, 1, 0);
+		diff_eq_int("and was swept below the threshold",
+			    saw_sip_silent, 1, 0);
 	}
 	rc |= diff_end();
 
@@ -1564,7 +1645,17 @@ main(void)
 	{
 		static struct v34_object oa, ob;
 		int st, skip, var, it, k;
+		unsigned lvl;
 
+		/*
+		 * Never captured either, so `TimingV34`'s offset report had
+		 * never been compared.  Same two claims as everywhere else:
+		 * level 2 says the two sides print the same thing, level 1
+		 * says the site is gated.
+		 */
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (st = -1; st <= 8; st++)
 		for (skip = 0; skip <= 1; skip++)
 		for (var = 0; var <= 1; var++) {
@@ -1612,8 +1703,26 @@ main(void)
 				ra->timing_out[2] = rb->timing_out[2] =
 				    (short)(-600 + it * 5);
 
+				dsplibs_debug_level = lvl;
+				ref_dsplibs_debug_level = lvl;
+				dsplib_debug_capture_reset();
+
 				TimingV34(&oa);
 				ref_TimingV34(&ob);
+
+				diff_eq_int("TimingV34 transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				if (lvl < 2) {
+					diff_eq_int("below the threshold, "
+						    "nothing is said",
+						    dsplib_debug_capture_text(1)
+						    [0], 0, tag);
+					saw_tv_silent = 1;
+				} else if (dsplib_debug_capture_text(1)[0]) {
+					saw_tv_said = 1;
+				}
 
 				diff_eq_int("tv state", ra->f1c0, rb->f1c0, tag);
 				diff_eq_int("tv step",  ra->f1ae, rb->f1ae, tag);
@@ -1626,6 +1735,13 @@ main(void)
 				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
 			}
 		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+		diff_eq_int("TimingV34 spoke at level 2", saw_tv_said, 1, 0);
+		diff_eq_int("and was swept below the threshold",
+			    saw_tv_silent, 1, 0);
 	}
 	rc |= diff_end();
 
@@ -1994,16 +2110,30 @@ main(void)
 		static struct v34_object oa, ob;
 		static const short syms[] = { 0x11, 0x40, 0x69, 0x143, 0x153,
 					      0x333, 0x7531 };
-		unsigned cs, b;
+		unsigned cs, b, lvl;
 		int it, saw;
 
-		dsplibs_debug_level = 2;
-		ref_dsplibs_debug_level = 2;
 		dsplib_debug_capture_on = 1;
 
+		/*
+		 * LEVEL 1 AS WELL AS 2.  Comparing two transcripts taken at
+		 * level 2 says the sites agree and nothing about their gates:
+		 * ungate one and it prints the same line on both sides.  1 is
+		 * the level that separates `> 1` from the `>= 1` a reader
+		 * would write.
+		 *
+		 * The byte compare is skipped below the threshold -- it is
+		 * seven million comparisons per pass and it is already done at
+		 * level 2, where the object state is the same.  Only the
+		 * transcript claim is new here.
+		 */
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (cs = 0; cs < 6; cs++) {
 			struct v34_receiver *ra, *rb;
 			struct v34_equalizer *qa2, *qb2;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 
 			memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
@@ -2095,6 +2225,17 @@ main(void)
 				    1, tag);
 				if (dsplib_debug_capture_lines(1) > 0)
 					saw = 1;
+				if (lvl < 2) {
+					diff_eq_int("below the threshold, "
+						    "ours said nothing",
+						    dsplib_debug_capture_text(0)
+						    [0], 0, tag);
+					diff_eq_int("below the threshold, nor "
+						    "did the reference",
+						    dsplib_debug_capture_text(1)
+						    [0], 0, tag);
+					continue;
+				}
 				for (b = 0; b < sizeof(oa); b++) {
 					if (b >= 0x264 + 0x04 && b < 0x264 + 0x0c)
 						continue;
@@ -2135,8 +2276,259 @@ main(void)
 			 * compares equal to an empty transcript, which is
 			 * finding 122's failure mode in another costume.
 			 */
-			diff_eq_int("receiver transcript non-empty",
-				    saw, 1, (long)cs);
+			diff_eq_int(lvl < 2 ? "silent below the threshold"
+					    : "receiver transcript non-empty",
+				    saw, lvl < 2 ? 0 : 1, (long)cs);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * The half both transcript blocks above leave open.  Each raises the
+	 * level to 2 before capturing, so a site that lost its
+	 * `if (DSPLIB_DEBUG_ON())` prints the same text on both sides and
+	 * passes: all THIRTY-EIGHT mutants -- nineteen gates, `if (1)` and
+	 * `>= 1` each -- survived this file before this section existed, the
+	 * worst score of any test in the tree.
+	 *
+	 * Level 1 is the one that does the work.  Every gate is `> 1`, so 1 is
+	 * the single value at which it disagrees with the `>= 1` a reader
+	 * would write; at 0 both spellings are silent and both mutants live.
+	 *
+	 * A SECTION OF ITS OWN RATHER THAN A LEVEL LOOP ROUND THE BLOCK ABOVE,
+	 * which would have been less code.  That block compares the whole
+	 * 44 KB object after every one of its 168 calls; sweeping two more
+	 * levels through it triples seven million byte comparisons to prove
+	 * something about strings.  Object agreement is already covered at
+	 * level 2 -- this only has to drive the call sites and read the
+	 * transcript.
+	 *
+	 * NINE FUNCTIONS CARRY THE NINETEEN GATES and each is called here,
+	 * because a function left out reads exactly like one that is covered.
+	 * `agc_gain_sample` and `rx_train_point` are internal, reached through
+	 * `V34agc` and `receiver` respectively.
+	 */
+	diff_begin("v34 receiver: the odd corners, and below the threshold");
+	{
+		static struct v34_object oa2, ob2;
+		static struct v34_receiver ra2, rb2;
+		static short coeff2[64];
+		short aa, ab;
+		unsigned lvl, b;
+
+		for (b = 0; b < 64; b++)
+			coeff2[b] = (short)(b * 617 - 9000);
+
+		dsplib_debug_capture_on = 1;
+
+		/*
+		 * LEVEL 2 AS WELL, and comparing there is not an afterthought:
+		 * `v34FreezeEcho`'s near/far pair and `V34SetupDemodulator`'s
+		 * two arguments had no transcript compared ANYWHERE, so
+		 * swapping either survived.  The two strings differ in one
+		 * word and each is followed by a report of a different
+		 * canceller, which is exactly the shape a byte comparison
+		 * cannot see.
+		 */
+		for (lvl = 0; lvl <= 2; lvl++) {
+			struct v34_receiver *ra, *rb;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			/* updateAlpha, whose format arrives as a parameter. */
+			aa = ab = 0x1234;
+			updateAlpha(&aa, 0x1000000, 1, 0x4000, 0x4000, "NE");
+			ref_updateAlpha(&ab, 0x1000000, 1, 0x4000, 0x4000,
+					"NE");
+
+			/* V34agc, for agc_gain_sample's gate. */
+			memset(&ra2, HARNESS_MALLOC_FILL, sizeof(ra2));
+			memset(&rb2, HARNESS_MALLOC_FILL, sizeof(rb2));
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)&ra2)->ring[b] =
+				((struct v34_queue *)&rb2)->ring[b] =
+				    (int)(b * 2731 - 12000);
+			((struct v34_queue *)&ra2)->count =
+			((struct v34_queue *)&rb2)->count = V34_RXQ_RING;
+			/*
+			 * BOTH CURSORS, seeded.  They are pointers into the
+			 * ring and the fill leaves them garbage; V34agc
+			 * follows them before it prints anything, so an
+			 * unseeded cursor faults rather than reporting.
+			 * Third time that shape has come up -- see finding
+			 * 189's note on the same defect in t_v34pcmif.
+			 */
+			((struct v34_queue *)&ra2)->rd =
+			    ((struct v34_queue *)&ra2)->ring;
+			((struct v34_queue *)&rb2)->rd =
+			    ((struct v34_queue *)&rb2)->ring;
+			((struct v34_queue *)&ra2)->wr =
+			    ((struct v34_queue *)&ra2)->ring;
+			((struct v34_queue *)&rb2)->wr =
+			    ((struct v34_queue *)&rb2)->ring;
+			ra2.flags = rb2.flags = 0;
+			ra2.agc_gain = rb2.agc_gain = 0x4000;
+			ra2.agc_level = rb2.agc_level = 0;
+			ra2.agc_accum = rb2.agc_accum = 0;
+			ra2.agc_step = rb2.agc_step = 0x3333;
+			ra2.f19c = rb2.f19c = 0;
+			ra2.energy.sum = rb2.energy.sum = 0;
+			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
+				ra2.rms_buf[b] = rb2.rms_buf[b] = 0;
+			V34agc(&ra2);
+			ref_V34agc(&rb2);
+
+			/* And the seven that take the whole object. */
+			memset(&oa2, HARNESS_MALLOC_FILL, sizeof(oa2));
+			memset(&ob2, HARNESS_MALLOC_FILL, sizeof(ob2));
+			V34InitializeImplementationSpecific(&oa2);
+			ref_V34InitializeImplementationSpecific(&ob2);
+			txinit(&oa2); ref_txinit(&ob2);
+			rxinit(&oa2); ref_rxinit(&ob2);
+			rxtiminginit(&oa2); ref_rxtiminginit(&ob2);
+
+			V34SetupDemodulator(&oa2, 3000, 1800);
+			ref_V34SetupDemodulator(&ob2, 3000, 1800);
+
+			ra = (struct v34_receiver *)((char *)&oa2 + 0x264);
+			rb = (struct v34_receiver *)((char *)&ob2 + 0x264);
+			for (b = 0; b < V34_RXQ_RING; b++)
+				((struct v34_queue *)ra)->ring[b] =
+				((struct v34_queue *)rb)->ring[b] =
+				    (int)((unsigned)(unsigned short)
+					  (short)(b * 2731 - 12000)
+					  | ((unsigned)(unsigned short)
+					     (short)(b * 991 - 8000) << 16));
+			((struct v34_queue *)ra)->count =
+			((struct v34_queue *)rb)->count = V34_RXQ_RING;
+			ra->agc_gain = rb->agc_gain = 0x4000;
+			ra->agc_step = rb->agc_step = 0x3333;
+			ra->f1c0 = rb->f1c0 = 4;
+			ra->f19c = rb->f19c = 0;
+			ra->f232 = rb->f232 = -1;
+			ra->f234 = rb->f234 = 0x1000;
+			ra->f236 = rb->f236 = 0x0800;
+			ra->f1ec = rb->f1ec = 1;
+			ra->f1ee = rb->f1ee = 2;
+			ra->f798 = rb->f798 = 0;
+			ra->f21c = rb->f21c = 0x3fd;
+			ra->f124 = rb->f124 = 0x40;
+			ra->flags = rb->flags =
+			    (unsigned short)V34_RX_FLAG_DET_PENDING;
+			oa2.status = ob2.status = 0;
+			oa2.rx_energy_floor = ob2.rx_energy_floor = 900;
+
+			/*
+			 * THE TWO CANCELLERS MUST DIFFER.  v34FreezeEcho
+			 * reports near then far, and with both sets of
+			 * coefficients equal -- which is what init leaves --
+			 * dumping echo0 twice prints exactly what dumping
+			 * echo0 then echo1 prints.  The mutation that swaps
+			 * them was NOT CAUGHT until these two patterns did.
+			 */
+			for (b = 0; b < 144; b++) {
+				oa2.echo0.coeff[b] = ob2.echo0.coeff[b] =
+				    (short)(b * 37 - 900);
+				oa2.echo1.coeff[b] = ob2.echo1.coeff[b] =
+				    (short)(-b * 53 + 700);
+			}
+
+			v34FreezeEcho(&oa2);
+			ref_v34FreezeEcho(&ob2);
+
+			/*
+			 * `adaptecho` and `modem_serrint` want the echo and
+			 * transmit state their own sections seed; the fill
+			 * leaves `f25c` -- the lag -- garbage, and it is used
+			 * as an index.
+			 */
+			ra->f2a4 = rb->f2a4 = coeff2;
+			oa2.f25c  = ob2.f25c  = 0x40;
+			oa2.f25c2 = ob2.f25c2 = V34_EC_FEED;
+			oa2.f260  = ob2.f260  = 1234;
+			oa2.fa23c = ob2.fa23c = 1;
+			oa2.fa23e = ob2.fa23e = 0;
+			oa2.fa240 = ob2.fa240 = 0;
+			oa2.f2aa4 = ob2.f2aa4 = 0;
+			oa2.f2aa6 = ob2.f2aa6 = 0;
+			oa2.f354c = ob2.f354c = 0;
+			oa2.f3550 = ob2.f3550 = -0x1800;
+			oa2.f3552 = ob2.f3552 = -0x1400;
+			oa2.f3554 = ob2.f3554 = 0x95;
+			oa2.f3558 = ob2.f3558 = 0x7000;
+			oa2.f355c = ob2.f355c = 6;
+			oa2.f3560 = ob2.f3560 = 0;
+			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
+			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
+			for (b = 0; b < 0x12c; b++)
+				oa2.hist_2aa8[b] = ob2.hist_2aa8[b] = 0;
+			for (b = 0; b < 0x258; b++)
+				oa2.hist_2f58[b] = ob2.hist_2f58[b] = 0;
+			for (b = 0; b < V34_TXQ_RING; b++)
+				oa2.txq.ring[b] = ob2.txq.ring[b] =
+				    (int)(short)(b * 2777 - 12000);
+			oa2.txq.count = ob2.txq.count = 0x30;
+
+			adaptecho(&oa2);
+			ref_adaptecho(&ob2);
+			modem_serrint(&oa2);
+			ref_modem_serrint(&ob2);
+
+			/*
+			 * The timing pair.  `timing_out` drives both, and the
+			 * ramp is the one setInitialPhase's own section uses
+			 * for a crossing it can find.
+			 */
+			for (b = 0; b < 21; b++)
+				ra->timing_out[b] = rb->timing_out[b] =
+				    (short)(b <= 2 ? 900 - (int)b * 40
+						   : -700 + (int)b * 30);
+			ra->f1ac = rb->f1ac = 700;
+			ra->f1ae = rb->f1ae = 0x3e80;
+			ra->f1b0 = rb->f1b0 = 0x3e80;
+			ra->f1be = rb->f1be = 0x3e80;
+			ra->f1c8 = rb->f1c8 = 0;
+			ra->f1cc = rb->f1cc = 0;
+			ra->f1ce = rb->f1ce = 0;
+			ra->f1d0 = rb->f1d0 = 0;
+			ra->f1d2 = rb->f1d2 = 40;
+			ra->f1d8 = rb->f1d8 = 0;
+			ra->f1e0 = rb->f1e0 = 0;
+			ra->f230 = rb->f230 = 0;
+			oa2.f359c = ob2.f359c = 0x65;
+			oa2.faa96 = ob2.faa96 = 400;
+			oa2.fac0c = ob2.fac0c = 0;
+
+			setInitialPhase(&oa2);
+			ref_setInitialPhase(&ob2);
+			TimingV34(&oa2);
+			ref_TimingV34(&ob2);
+
+			receiver(&oa2);
+			ref_receiver(&ob2);
+
+			diff_eq_int("transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)lvl);
+			if (lvl < 2) {
+				diff_eq_int("ours printed nothing",
+					    dsplib_debug_capture_text(0)[0], 0,
+					    (long)lvl);
+				diff_eq_int("and neither did the reference",
+					    dsplib_debug_capture_text(1)[0], 0,
+					    (long)lvl);
+			} else {
+				diff_eq_int("and at level 2 it said something",
+					    dsplib_debug_capture_text(1)[0] != 0,
+					    1, (long)lvl);
+			}
 		}
 
 		dsplib_debug_capture_on = 0;

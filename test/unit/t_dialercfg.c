@@ -205,13 +205,30 @@ main(void)
 	diff_begin("GetDialerConfig debug transcript");
 	{
 		static struct dialer_cfg a, b;
+		unsigned lvl;
 		int n;
 
-		dsplibs_debug_level = 2;
-		ref_dsplibs_debug_level = 2;
 		dsplib_debug_capture_on = 1;
 
+		/*
+		 * SWEPT TO LEVEL 1 AS WELL, because comparing two transcripts
+		 * taken at level 2 says the sixteen sites AGREE and nothing
+		 * about whether they are gated: ungate any one of them and it
+		 * prints the same line on both sides, so the comparison above
+		 * passes.  All thirty-two mutants -- sixteen sites, `if (1)`
+		 * and `>= 1` each -- survived this block before the level 1
+		 * pass existed.
+		 *
+		 * 1 and not 0 is where the work is.  Every gate here is `> 1`,
+		 * so 1 is the single level at which it differs from the `>= 1`
+		 * a reader would write; at 0 both spellings are silent.
+		 */
+		for (lvl = 1; lvl <= 2; lvl++)
 		for (n = 0; n < 6; n++) {
+			long tag = (long)lvl * 10 + n;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
 			dsplib_debug_capture_reset();
 			memset(&a, HARNESS_MALLOC_FILL, sizeof(a));
 			memset(&b, HARNESS_MALLOC_FILL, sizeof(b));
@@ -221,9 +238,20 @@ main(void)
 			diff_eq_int("cfg transcript",
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
-				    1, n);
+				    1, tag);
+			if (lvl < 2) {
+				diff_eq_int("below the threshold, ours said "
+					    "nothing",
+					    dsplib_debug_capture_lines(0), 0,
+					    tag);
+				diff_eq_int("below the threshold, nor did the "
+					    "reference",
+					    dsplib_debug_capture_lines(1), 0,
+					    tag);
+				continue;
+			}
 			diff_eq_int("cfg transcript non-empty",
-				    dsplib_debug_capture_lines(1) > 0, 1, n);
+				    dsplib_debug_capture_lines(1) > 0, 1, tag);
 		}
 
 		dsplib_debug_capture_on = 0;

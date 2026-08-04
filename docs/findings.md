@@ -7991,7 +7991,7 @@ hold six arrays of string pointers, and `nm` names five of them outright:
 **The V.34 handshake's eighty-seven states are all here**, in index order,
 and are now `include/dsplib/v34hshak.h`.
 
-> **Corrected by finding 152.**  The claim below that nothing indexes
+> **Corrected by finding 176.**  The claim below that nothing indexes
 > `StateName` is wrong: `v34handshakinit` and `v34handshak` index it 533
 > times over, through a relocation against the `.data` section symbol that a
 > search for the name cannot see.  The claim about the two V.8 tables
@@ -9455,7 +9455,7 @@ SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
 Transposed, the *receive* machine would be the one entering SSEG, and the
 table's own `TX_`/`RX_` prefixes say that is backwards.
 
-**FINDING 155'S OFFSETS ARE WRONG BY FOUR.**  It quotes "+0x234 and +0x244",
+**FINDING 179'S OFFSETS ARE WRONG BY FOUR.**  It quotes "+0x234 and +0x244",
 which are the register-relative operands; the function does `lea 0x4(%ebx),
 %edx` first, so the object offsets are **+0x238, +0x23c, +0x244 and +0x248**.
 The same note applies to 155's mode table, which shows `-` for +0x3592 in
@@ -10473,3 +10473,223 @@ some in a local where the object re-reads them.  `dsplib_debug_capture_lines`
 already excludes those markers, which is why the line counts agreed while the
 strings did not.  The comparison strips them; the object's own output is what
 is being checked.
+### 195. Six V.34 mutation sets, and what they said about the tests
+
+V.34 is about two thirds of the reconstructed bytes and had no mutation sets
+at all: every one of the fourteen was callprog, dialer, pulse or V.8.  The
+work had been done — three times — in throwaway shell scripts deleted after
+they printed their tallies, so finding 189's "50 applied, 48 caught" was a
+number nobody could reproduce, extend, or re-run against changed code.
+
+The scripts were still in the session scratchpad.  Recovering them made these
+sets the original runs rather than a fresh derivation, which matters: a
+different 50 would not have reproduced anything.
+
+```
+  v34pcmif   58   56 caught   2 equivalent   the three request entry points
+  v34hshak   31   30 caught   1 equivalent   v34handshakinit and the trace
+  v34filters 21   21 caught                  the echo canceller, the modulator
+  v34info    33   32 caught   1 equivalent   the INFO0/INFO1a codecs
+  v34shell   24   21 caught   3 equivalent   the rate negotiator
+  v34rx      30   17 caught                  13 NOT CAUGHT, see below
+```
+
+The counts are higher than the originals because `sed s///` replaces on every
+line it matches: one `s/rx->f258 = 0;//` hit both functions that clear it and
+`0x2218` all three.  Split per function, they are also better mutations —
+"hangup does not clear f258" and "reneg does not clear f258" are two claims.
+
+**A HARNESS THAT REPORTS ON A STALE BUILD.**  `prologue txflags 0x7fff ->
+0x3fff` was recorded SURVIVED and is caught.  The throwaway script restored
+its source with `cp` after a build that had already failed, so that mutation
+ran against the *previous* mutation's binary.  Finding 190 again, in the
+tool that is supposed to detect exactly this.
+
+**EQUIVALENT MUTANTS ARE NOW A KIND OF ENTRY.**  Seven of these provably
+cannot fail — two reorderings of stores that do not alias, a mask bit OR-ed
+straight back in, a four-bit mask on a value that only ever holds three, and
+three register reloads after a call whose inputs nothing has written.
+`"equivalent": true` runs them, expects the survival, and prints the argument
+from `"why"`; one that gets CAUGHT fails the run, because then either the
+argument is wrong or the code has moved out from under it.  Deleting them
+would have left "nobody thought of this" and "we thought of this and it
+cannot fail" looking identical in the file.
+
+**WHAT THE SETS FOUND.**  Twenty-two mutations were NOT CAUGHT on the first
+run.  Nine were fixed here and thirteen remain; none of the twenty-two was a
+defect in the code.
+
+*Three in v34filters* — ungating the empty coefficient report, dropping the
+early return before the header, weakening the clean-up's gate to `>= 1`.
+Every transcript comparison in `t_v34ec` raises the level first, so a lost
+gate prints the same thing on both sides.  The silence section from
+`t_v34pcmif` — capture ON, level DOWN, levels 0 and 1 — catches all three.
+This is task #5's shape and it is now in three files.
+
+*Three in v34info.*  One was the same missing silence section.  One was
+provably equivalent.  The third is the interesting one: swapping the two
+K56Flex announcements was caught by NEITHER tier.  Not by the test, because
+`m[3] = 0x88 | (k56 ? 2 : 0)` pinned bit 3 — K56Flex's *enable* — on for
+every iteration, so the "disabled by remote" arm never ran with the level up.
+And not by the invented-string sweep, because that is a substring test:
+**a truncation of a real string passes it.**  `debugaudit.py` says of itself
+that it is a necessary condition only; this is what that costs.  Bit 3 and
+bit 1 are now separate loop variables, as is the receiver state that was
+sharing `k56` with them.
+
+*Twelve in v34shell*, ten of them one cause: the test ran `initdigital` at
+level 2 and threw away everything it printed.  Comparing the transcript
+catches ten, including both rate reports with their arguments swapped.  The
+last two were unreachable branches, and both were unreachable for a reason
+the fixture chose: every entry of the divisor table was `k*53-400`, which is
+never zero, so the author's ZERODIV guard had no case; and the object was
+memset to zero, so the non-linear encoder's CLEAR arm had nothing to clear.
+One zeroed table entry and one seeded field.
+
+*Thirteen in v34rx, still open.*  Two classes.  `v34FreezeEcho` and
+`V34SetupDemodulator` have no transcript compared anywhere, so their strings
+and argument order are undriven — including the near/far echo report pair,
+which differ in one word and dump different cancellers.  The rest need the
+sweep to reach specific counts and thresholds: NEC adaptation stops at
+0x4650, FEC starts at 0x2bc, the steps are every 45th sample, and the
+renegotiation window is a two-sided test on a counter.  Task #6.
+
+**THE SCORE.**  329 caught over 20 suites, of which 314 by the differential
+tests and 15 by the string sweep alone; 13 not caught, 7 equivalent.  It was
+152 over 14 suites.  The 13 are the honest part of that number: they were
+untested before these sets existed too, and nothing said so.
+
+### 196. The cross-references check out, and two more of them did not
+
+Finding 191 said a merge is the one edit nothing in the tree could check, and
+fixed the half `offcheck.py` covers: the compiler now holds every `/* +0xNNN */`
+annotation. The other half is prose citing prose — `finding 171`, `see D48` —
+renumbered by hand whenever a merge makes room for two sessions' findings.
+`tools/refcheck.py` is that half. 732 references, and `make test` now fails
+on one that resolves to nothing.
+
+**THE CHEAP MODE IS NOT THE IMPORTANT ONE.**  A dangling reference is loud.
+The failure that actually happens is a missed renumber, which still resolves
+— to an entry about something else — and reads exactly like a correct
+citation. `--since REV` is that check: a reference that sits in the same
+sentence it did at REV, still citing the same number, whose number now has a
+different title.
+
+Run against the tree as it stood at merge 1088d6d, it reproduces the repair
+of 7202ba8 and finds **two more that the hand analysis missed**, both now
+fixed:
+
+```
+  findings.md:7994   "Corrected by finding 152"          -> 176
+  findings.md:9458   "FINDING 155'S OFFSETS ARE WRONG"   -> 179
+```
+
+The second is the sharper one. `v34fsk.h` cited the same claim and WAS
+repaired — 155 to 179, with a commit message noting it was "the timer
+offsets, not cadence's gates". The identical citation four thousand lines up
+in findings.md was not, because a hand sweep goes file by file and that file
+had already been visited.
+
+**TWO WAYS TO GET `--since` WRONG, both found by getting them wrong.**
+
+*Match on file and number and it reports eleven correct references.* Both
+sides of a merge append to `docs/findings.md`, so "this file cited 152 before
+and cites 152 now" is true of two unrelated sentences that arrived from
+opposite parents — and the one from the other parent gets judged against this
+parent's numbering. Keying on 48 characters of surrounding text separates
+them.
+
+*Then compare that context literally and you lose the ones that matter most.*
+"Finding 149's trap, and finding 152's" became "Finding 173's trap, and
+finding 152's". The 149 was corrected; correcting it changed the context and
+hid the 152 beside it, which was not. So numbers inside the window are
+blanked. Correcting one reference must not conceal its neighbour.
+
+**LINES ARE JOINED BEFORE MATCHING**, which is the difference between working
+and appearing to. References wrap across comment lines — `findings 116b,\n *
+123 and 171` — and a line-based scan reads `116b`, drops the rest, and
+reports clean. Comment leaders are stripped by extension: `#` is a leader in
+Python and a heading in markdown, and stripping it there would eat the
+targets this same file is scanned for.
+
+**WHAT IT DOES NOT COVER, AND WHY THAT IS A CHOICE.**  A citation with no
+keyword is invisible: "finding 162, which corrects 158" cites 158 and this
+sees 162. The 120a-121k narrative refers to its own sub-findings that way
+throughout — about twenty. Matching bare `\d+[a-z]` instead takes `1u`, `0f`,
+`02x`, `400s` and every printf width in the test suite; restricted to three
+digits and a letter it still takes `837k` out of `P(k) = -21k^2 + 837k - 354`
+in v34rx.c. This runs in `make test`, where a false positive is worse than a
+miss, so the keyword stays required. Write the word and it is covered.
+
+### 197. The silence check, everywhere, and what it says about drivers
+
+Finding 189 built one section — capture ON, level DOWN — for `t_v34pcmif`,
+on the grounds that every transcript comparison in the tree raises the debug
+level before capturing, so a call site that lost its
+`if (DSPLIB_DEBUG_ON())` prints the same text on both sides and passes.
+This spreads it. Eleven files already had the check in another shape,
+usually a `lines(1) == 0` assertion inside a level sweep, which is
+equivalent and cheaper than a section of its own. Five did not, and every
+one of the five was completely undriven:
+
+```
+  t_fpm_agc      4 gates    8 of 8 mutants survived   ->  0
+  t_encode       2 gates    4 of 4                    ->  0
+  t_dialercfg   16 gates   32 of 32                   ->  0
+  t_v34hshak    10 gates   20 of 20                   ->  2
+  t_v34rx       19 gates   38 of 38                   ->  2
+```
+
+**LEVEL 1, NOT LEVEL 0.** Every gate in the object is `> 1`, so 1 is the
+single value at which it disagrees with the `>= 1` a reader would write. At
+0 both spellings are silent and both mutants live. Level 0 is swept anyway
+where it is free, but it is level 1 that does the work — and cadence's
+second threshold at `> 2` (finding 155) is why each file's gates are read
+before its levels are chosen rather than pasting one loop everywhere.
+
+**DRIVING THE FUNCTION IS NOT DRIVING THE SITE**, which is the finding here.
+The first attempt at `t_v34rx` was one new section calling each of the nine
+gate-bearing functions once. It reached six gates of nineteen. `adaptecho`,
+`modem_serrint`, `setInitialPhase`, `TimingV34` and `receiver` all print
+from behind counters and error paths that their own sections build up over
+120 to 200 iterations; a fresh call lands nowhere near them. What worked was
+adding the level as another dimension of the loop that already exists —
+reusing the setup instead of reproducing it — with the byte comparison
+skipped below the threshold, since seven million comparisons per pass prove
+nothing about strings that level 2 has not already proved.
+
+**AND THREE SITES NOTHING HAD EVER DRIVEN.** `setInitialPhase` and
+`TimingV34` never captured at all, so their diagnostics had never been
+compared. `modem_serrint`'s three were unreachable from its own sweep:
+`f354c` was pinned at 0 and `f25c` at 0x40, so the NEC start announcement —
+which needs `count = f354c + 1` to WRAP to zero — the stop announcement at
+0x4650, and the negative-lag error path were all out of reach. Two extra
+loop dimensions, kept separate because two inputs swept from one variable
+cannot be told apart, and all three are driven.
+
+The same mistake in the fixture, for the third time in three files: the new
+section seeded a receive queue's `count` and `ring` but not `rd`/`wr`, which
+are pointers into it. `V34agc` follows them before printing anything, so the
+whole test segfaulted rather than reporting. **A fixture must not
+dereference a pointer it has not seeded** — findings 189 and 195 say this
+about `t_v34pcmif` and `t_v34info`.
+
+**WHAT IT COST THE MUTATION SCORE, WITHOUT MEANING TO.** v34rx's suite was
+the tree's only red one at 13 uncaught (finding 195); it is now 8. Four fell
+out of the coverage above. The fifth needed its own fix and is worth
+recording: `v34FreezeEcho` reports the near canceller then the far one, and
+with both sets of coefficients equal — which is what init leaves — dumping
+`echo0` twice prints exactly what dumping `echo0` then `echo1` prints. Two
+patterns, and the transposition is visible.
+
+334 caught over 20 suites, 8 not caught, 7 equivalent. The 8 that remain are
+off-by-one mutations on thresholds — 0x600 becomes 0x601, `<= 0x464f`
+becomes `<`, the renegotiation window's two bounds — which need the sweep to
+reach exact counter values. That is task #6 and it is not silence work.
+
+The one gate left undriven in each of the two V.34 files is worth naming so
+neither reads as an oversight. `v34hshak`'s is `preempindex`'s "index is 0"
+arm, which D36 records as unreachable: `i` is 6 or more by the time the test
+runs, so no input drives it. `v34rx`'s is `setInitialPhase`'s second divide
+guard, which needs `polyValue(k2) + polyValue(k)` to come out zero — the
+sweep reaches the first guard and not that one.

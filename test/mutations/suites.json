@@ -24,5 +24,8 @@
  "v8sig":          ["src/v8/v8sig.c",            "build/test/t_v8sig"],
  "v34pcmif":       ["src/pump/v34/v34pcmif.c",   "build/test/t_v34pcmif"],
  "v34hshak":       ["src/pump/v34/v34hshak.c",   "build/test/t_v34hshak"],
- "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"]
+ "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"],
+ "v34info":        ["src/pump/v34/v34info.c",    "build/test/t_v34info"],
+ "v34rx":          ["src/pump/v34/v34rx.c",      "build/test/t_v34rx"],
+ "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"]
 }

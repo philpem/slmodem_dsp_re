@@ -127,24 +127,41 @@ SUITES = "test/mutations/suites.json"
 def run_all():
     """Every suite, with the totals -- so one command says where the tree is."""
     suites = {k: v for k, v in json.load(open(SUITES)).items() if k != "_"}
-    tot = [0, 0, 0, 0, 0, 0]
+    tot = [0, 0, 0, 0, 0, 0, 0]
     for name in sorted(suites):
-        r = subprocess.run([sys.executable, sys.argv[0], "--suite", name],
+        #
+        # __file__, not argv[0].  The chdir above has already happened, so a
+        # relative argv[0] -- `tools/mutate.py`, or `../other/tools/mutate.py`
+        # from another worktree -- would be resolved against the NEW cwd and
+        # either fail or, worse, find a different tree's copy.
+        #
+        r = subprocess.run([sys.executable, os.path.abspath(__file__),
+                            "--suite", name],
                            capture_output=True, text=True)
         last = [l for l in r.stdout.split("\n") if "mutations:" in l]
         print("  %-16s %s" % (name, last[-1].strip() if last else "FAILED"))
         if last:
             n = [int(x) for x in re.findall(r"(\d+) (?:caught|by test|"
                                             r"by strings|NOT caught|unusable|"
-                                            r"equivalent)",
+                                            r"equivalent|MIScounted)",
                                             last[-1])]
-            for i, v in enumerate(n[:6]):
+            for i, v in enumerate(n[:7]):
                 tot[i] += v
     print("\n  %d caught -- %d by the differential tests, %d only by the "
           "string sweep\n  %d NOT caught, %d unusable, %d equivalent, "
           "over %d suites"
           % (tot[0], tot[1], tot[2], tot[3], tot[4], tot[5], len(suites)))
-    return 1 if tot[3] or tot[4] else 0
+    #
+    # tot[6] is the count recorded as equivalent and CAUGHT anyway.  It has
+    # to be carried through the summary line and counted here, or the whole
+    # point of the "equivalent" key is lost: a suite whose recorded argument
+    # has gone stale is exactly the case the key exists to catch, and
+    # without this it reads green under --all while --suite fails.
+    #
+    if tot[6]:
+        print("  %d recorded as equivalent and caught anyway -- run the "
+              "suite for which" % tot[6])
+    return 1 if tot[3] or tot[4] or tot[6] else 0
 
 
 def main():
@@ -242,11 +259,11 @@ def main():
         build_and_run(target, args.test)
 
     print("\n  %d mutations: %d caught (%d by test, %d by strings), "
-          "%d NOT caught, %d unusable, %d equivalent"
+          "%d NOT caught, %d unusable, %d equivalent, %d MIScounted"
           % (len(muts),
              len(muts) - len(uncaught) - len(broken) - len(equivalent),
              by["test"], by["strings"], len(uncaught), len(broken),
-             len(equivalent)))
+             len(equivalent), len(surprises)))
     if uncaught:
         print("\n  Uncaught -- these claims are currently untested:")
         for l in uncaught:
