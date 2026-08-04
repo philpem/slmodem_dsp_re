@@ -202,6 +202,30 @@ const char *dsplib_debug_capture_text(int side);
  */
 unsigned dsplib_debug_capture_lines(int side);
 
+/*
+ * DECLARING A ref_ ALIAS FROM C++ REQUIRES extern "C", AND THE ERROR IF YOU
+ * FORGET SAYS THE OPPOSITE OF WHAT IS WRONG.
+ *
+ * Nothing in the aliasing path demangles.  tools/symmap.py prepends `ref_` to
+ * the raw symbol string, so the blob's V.90/V.92 methods are reachable under
+ * names that are themselves already mangled:
+ *
+ *     _ZN12VPcmFloModem11enterPhase3Ev  ->  ref__ZN12VPcmFloModem11enterPhase3Ev
+ *
+ * Declare that in C++ without extern "C" and the compiler mangles it a SECOND
+ * time, treating the whole string as an ordinary identifier:
+ *
+ *     void ref__ZN12VPcmFloModem11enterPhase3Ev(void *self);
+ *       emits  U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv
+ *
+ * which resolves against nothing.  The trap is in how that reads: the linker
+ * error CONTAINS the name you wanted, spelled correctly, in the middle of the
+ * one you did not, so it looks like the reference object does not export the
+ * method.  It does.  Put such declarations inside this block, or in an
+ * extern "C" block of the test's own.  A C test needs none of this -- C has
+ * no mangling to apply twice.  Finding 225.
+ */
+
 #ifdef __cplusplus
 }
 #endif

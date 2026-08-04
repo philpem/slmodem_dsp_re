@@ -12459,3 +12459,58 @@ by name.  100.0% is not a claim that the reconstruction is finished -- 17.5%
 is the honest half of that pair, and `translated` is what has to move next.
 It says the two numbers now measure what they say they measure, which is what
 findings 221 and 222 were about.
+
+### 225. A `ref_` alias declared from C++ is mangled twice, and the error names the symbol you wanted
+
+Nothing in the aliasing path demangles.  `tools/symmap.py` prepends `ref_` to
+the raw symbol string, so a V.90/V.92 method arrives under a name that is
+itself already mangled:
+
+```
+$ grep _ZN12VPcmFloModem11enterPhase3Ev build/symmap.txt
+_ZN12VPcmFloModem11enterPhase3Ev ref__ZN12VPcmFloModem11enterPhase3Ev
+$ nm build/dsplibs_ref.o | grep ref__ZN12VPcmFloModem11enterPhase3Ev
+0000f2a0 T ref__ZN12VPcmFloModem11enterPhase3Ev
+```
+
+That is the correct and only spelling.  The hazard is what a C++ test does
+with it.  Declared without `extern "C"`, the compiler sees an ordinary
+identifier and mangles the whole string a second time:
+
+```
+$ cat mangle.cpp
+void ref__ZN12VPcmFloModem11enterPhase3Ev(void *self);
+extern "C" void ref__ZN12VPcmFloModem11enterPhase3Ev_c(void *self);
+void a(void *p) { ref__ZN12VPcmFloModem11enterPhase3Ev(p); }
+void b(void *p) { ref__ZN12VPcmFloModem11enterPhase3Ev_c(p); }
+$ g++ -m32 -fno-exceptions -fno-rtti -c mangle.cpp && nm -u mangle.o
+U ref__ZN12VPcmFloModem11enterPhase3Ev_c
+U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv
+```
+
+`_Z36ref_...Pv` resolves against nothing, and `36` is just the length of the
+identifier it wrapped.
+
+**The reason this is worth a finding is how the failure reads.**  The linker
+error contains the name you wanted, spelled correctly, sitting in the middle
+of the name you did not want.  Scanning it, `ref__ZN12VPcmFloModem11enterPhase3Ev`
+is right there and undefined — so the natural conclusion is that the
+reference object does not export the method, and the next move is to go and
+check `symmap.py` or `--globalize-symbols` for a gap that is not there.  The
+prefix and suffix are the whole message.
+
+A C test never meets this: C has no mangling to apply a second time, which is
+why 62 tests' worth of `DIFF_REF()` has never needed the guard.  #60 is the
+first task to write C++ *tests*, so it is the first that can.
+
+`test/harness/harness.h` already wraps its declarations in `extern "C"` when
+compiled as C++; the fix is to put `ref_` declarations inside that block, or
+in an `extern "C"` block of the test's own.  The header now says so at the
+point where it would be needed.
+
+### 226. Reserved — the #59 warm-up trio (`getbit`, `ApplyBulkDelay`, `getMPrecvdBits`)
+
+Placeholder taken while the work is in progress on branch `v90cpp`, so that a
+parallel session does not claim 226.  Replaced by the real finding when the
+three land; if this text is still here, the attempt did not finish and
+nothing was committed under it.
