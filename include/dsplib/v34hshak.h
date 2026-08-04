@@ -329,6 +329,39 @@ void txmitdibit(void *obj, short bits);
  */
 void txmitquadbit(void *obj, short bits);
 
+/*
+ * Turn the line probe's twenty-five bins into a power-reduction request, a
+ * set of offered symbol rates or one chosen one, and a pre-emphasis index
+ * per rate.  Writes the rate config at +0xaa84 and the outgoing message at
+ * +0xa9ac, and nothing else; takes no arguments beyond the object.
+ *
+ * `f359c == 0x65` -- the originating side -- offers every rate the probe
+ * allows.  Any other value picks one and fills the rate config in.
+ */
+void probeselect(void *obj);
+
+/*
+ * ---------------------------------------------------------------------------
+ * Bringing the data-mode transmitter up.
+ */
+
+/*
+ * Apply the far end's requested power reduction to the transmit scale.
+ *
+ * `mp` is the received MP message; only its first short is read, and the one
+ * call site passes `obj + 0xa9dc`.  Writes `f25dc` with the reduction in dB
+ * and `f25d4` with the scale that comes out of it.
+ */
+void settxlevel(void *obj, const short *mp);
+
+/*
+ * Configure the transmitter for the negotiated rate: power scale, modulator,
+ * two state words to WAIT and SSEG, two transmit flags, then `txinit`.
+ * Takes nothing but the object -- everything else comes out of the rate
+ * config `setfinalrate` filled at +0xaa84.
+ */
+void v34setuptxmit(void *obj);
+
 #ifdef __cplusplus
 }
 #endif

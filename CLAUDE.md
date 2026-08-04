@@ -22,7 +22,7 @@ Run `make phase`, not `make test`.
 
 ## Budget your turns, not your reading
 
-Finding 216 measured this, so it is not a guess. **Context growth is
+Finding 220 measured this, so it is not a guess. **Context growth is
 cumulative output, converging to 1:1** — every token you generate stays in the
 window for the rest of the session. Output runs 1,100–1,800 tokens per turn,
 which puts the wall near 500–900 turns *whatever the turns are about*.
@@ -74,7 +74,7 @@ A loop is still right where some region must be skipped — two heap pointers
 hold two different addresses and always will. Those keep working: `diff_eq_int`
 now appends the input when the format string has no conversion for it, which
 repaired 819 call sites that were silently discarding the offset they computed
-(finding 216).
+(finding 220).
 
 ## Ghidra is scaffolding, never evidence
 

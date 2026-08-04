@@ -64,6 +64,9 @@ extern void ref_dftRetrainDetInit(void *obj);
 extern int ref_detectRetrainReq(void *obj, short nbins, const short *samples,
 				short nsamples);
 extern void ref_v34modeminit(void *obj);
+extern void ref_settxlevel(void *obj, const short *mp);
+extern void ref_v34setuptxmit(void *obj);
+extern void ref_probeselect(void *obj);
 extern void ref_v34handshakinit(void *obj, int mode);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern const short ref_c1200_[8], ref_c2400_[8];
@@ -135,18 +138,39 @@ static const unsigned ptr_skip[] = {
 	 * reaches -- it is the one body that calls `rxtiminginit`, and
 	 * `V34TimingFiltersInit` installs them.  t_v34rx.c skips the same two.
 	 */
-	0x0620, 0x0624			/* timing +0x114 and +0x118    */
+	0x0620, 0x0624,			/* timing +0x114 and +0x118    */
+	/*
+	 * And two the FIXTURE owns rather than the code under test, for
+	 * `settxlevel`: it calls `GetVPcmMinimalTxPowerReduction`, which
+	 * reads the configuration object at +0xac3c and walks the session at
+	 * +0x3548 to the PCM receiver.  Nothing here writes either field.
+	 * What justifies these two holes is that the memory BEHIND them is
+	 * compared instead, per case, in `run_settxlevel`.
+	 *
+	 * THEY ARE ONLY HOLES WHEN THE FIXTURE HAS SEEDED THEM.  Every other
+	 * block in this file leaves both fields at the fill pattern on both
+	 * sides, where they are comparable and a stray write to either would
+	 * show -- so `skipped()` opens these two only after `seed_pwr`, and
+	 * they must be LAST in the list for that test to be an index
+	 * comparison.  Without it the hole is open for `v34handshakinit` too,
+	 * which is 12 KB of stores nothing here seeds those fields for.
+	 */
+	0x3548, 0xac3c
 };
 #define NPTR (sizeof(ptr_skip) / sizeof(ptr_skip[0]))
+#define NPTR_ALWAYS (NPTR - 2)
 
 static int saw_ptr_skip[NPTR];
+
+/* Set by `seed_pwr`, cleared by `setup`: are the last two entries live? */
+static int pwr_seeded;
 
 static int
 skipped(unsigned off)
 {
 	unsigned k;
 
-	for (k = 0; k < NPTR; k++)
+	for (k = 0; k < (pwr_seeded ? NPTR : NPTR_ALWAYS); k++)
 		if (off >= ptr_skip[k] && off < ptr_skip[k] + 4)
 			return 1;
 	return 0;
@@ -155,6 +179,7 @@ skipped(unsigned off)
 static void
 setup(void)
 {
+	pwr_seeded = 0;
 	memset(&oa, HARNESS_MALLOC_FILL, sizeof(oa));
 	memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
 	memset(shaped_a, 0x5a, sizeof(shaped_a));
@@ -273,6 +298,397 @@ compare_table(const char *what, const short *a, const short *b, int n, long tag)
 	diff_eq_int(what, memcmp(a, b, (size_t)n * sizeof(short)) == 0, 1, tag);
 }
 
+/* --- settxlevel's and v34setuptxmit's inputs ------------------------------ */
+
+/*
+ * The two blocks `GetVPcmMinimalTxPowerReduction` reaches out to, per side.
+ * `settxlevel` calls it unconditionally, so every case here needs them --
+ * and it WRITES the PCM one, so the two copies are compared as well as read.
+ */
+#define SESS_LEN	0x6200		/* indexed at +0x610c and +0x6120 */
+#define PCM_LEN		0x0520		/* indexed at +0x4f4 and +0x4f8   */
+#define CFG_LEN		0x0080		/* indexed at +0x44 and +0x54     */
+#define BLOCK_FILL	0x3c
+
+#define SESS_PCM	0x610c
+#define SESS_GATE	0x6120
+#define PCM_FLAG	0x04f4
+#define PCM_SENS	0x04f8
+
+static unsigned char sess_a[SESS_LEN], sess_b[SESS_LEN];
+static unsigned char pcm_a[PCM_LEN], pcm_b[PCM_LEN];
+static unsigned char cfg_a[CFG_LEN], cfg_b[CFG_LEN];
+
+static int saw_pwr_high, saw_pwr_low;
+
+static void
+put_ptr(unsigned char *base, unsigned off, void *p)
+{
+	memcpy(base + off, &p, sizeof(p));
+}
+
+/*
+ * Seed the chain and the configuration.  `want` is the reduction the PCM
+ * configuration asks for and `sens` the ISP bit that decides whether the
+ * K56Flex word gets a say; both are `GetVPcmMinimalTxPowerReduction`'s
+ * inputs rather than `settxlevel`'s, and they are here because that call is
+ * what makes this function's answer depend on more than the MP message.
+ */
+static void
+seed_pwr(short want, int sens, int gate, int flag54)
+{
+	memset(sess_a, BLOCK_FILL, sizeof(sess_a));
+	memset(sess_b, BLOCK_FILL, sizeof(sess_b));
+	memset(pcm_a, BLOCK_FILL, sizeof(pcm_a));
+	memset(pcm_b, BLOCK_FILL, sizeof(pcm_b));
+	memset(cfg_a, BLOCK_FILL, sizeof(cfg_a));
+	memset(cfg_b, BLOCK_FILL, sizeof(cfg_b));
+
+	put_ptr(sess_a, SESS_PCM, pcm_a);
+	put_ptr(sess_b, SESS_PCM, pcm_b);
+	memcpy(sess_a + SESS_GATE, &gate, sizeof(gate));
+	memcpy(sess_b + SESS_GATE, &gate, sizeof(gate));
+	memcpy(pcm_a + PCM_SENS, &sens, sizeof(sens));
+	memcpy(pcm_b + PCM_SENS, &sens, sizeof(sens));
+	memcpy(cfg_a + 0x44, &want, sizeof(want));
+	memcpy(cfg_b + 0x44, &want, sizeof(want));
+	memcpy(cfg_a + 0x54, &flag54, sizeof(flag54));
+	memcpy(cfg_b + 0x54, &flag54, sizeof(flag54));
+
+	poke_ptr(0x3548, sess_a, sess_b);
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+	pwr_seeded = 1;
+}
+
+/* Compare the two blocks, with the session's one pointer field excluded. */
+static void
+compare_pwr_blocks(const char *what, long tag)
+{
+	unsigned i;
+	int bad = 0;
+	int f;
+
+	for (i = 0; i < SESS_LEN; i++) {
+		if (sess_a[i] == sess_b[i]
+		    || (i >= SESS_PCM && i < SESS_PCM + 4))
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, sess_a[i], sess_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+
+	bad = 0;
+	for (i = 0; i < PCM_LEN; i++) {
+		if (pcm_a[i] == pcm_b[i])
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, pcm_a[i], pcm_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+
+	/* The configuration is an input; neither side may write it. */
+	diff_eq_int(what, memcmp(cfg_a, cfg_b, CFG_LEN) == 0, 1, tag);
+
+	memcpy(&f, pcm_a + PCM_FLAG, sizeof(f));
+	if (f == 0)
+		saw_pwr_high = 1;
+	else if (f == 1)
+		saw_pwr_low = 1;
+}
+
+/* --- probeselect's inputs ------------------------------------------------- */
+
+static void seed_rate_pointers(void);
+
+/*
+ * `probeselect` is a decision tree over twenty-five bins crossed with a role
+ * flag, eight capability bytes and five scalars, and no hand-written case
+ * list covers it.  So the sweep is PSEUDO-RANDOM OVER EVERY DRIVING FIELD,
+ * from a fixed generator both sides are fed from -- the whole-object
+ * comparison is what turns a random input into a check, and the coverage
+ * counters below are what say the random inputs reached the arms.
+ *
+ * The generator is an LCG rather than `rand`, so the sweep is the same on
+ * every host and in every build: a differential test that drifts between runs
+ * cannot be bisected.
+ */
+static unsigned probe_rng;
+
+static unsigned
+probe_next(void)
+{
+	probe_rng = probe_rng * 1103515245u + 12345u;
+	return probe_rng >> 8;
+}
+
+/*
+ * RANDOM ALONE DOES NOT REACH A THRESHOLD AT 499.
+ *
+ * `probe_next` yields 24 bits, so a uniform draw is never negative and never
+ * small: `snr_l1 <= 0x1f3` has a chance of one in thirty thousand and
+ * `snr_l2 < 0` has none at all.  Sixteen mutations survived four thousand
+ * cases on exactly that -- every threshold in the power section, both
+ * sensitive arms, and the bit scan's top half.
+ *
+ * So each scalar is drawn from a pool of its own boundaries three times in
+ * four, and uniformly otherwise.  The pools are the constants the function
+ * compares against, one either side.
+ */
+static int
+probe_pick(const int *pool, unsigned n)
+{
+	if ((probe_next() & 3) != 0)
+		return pool[probe_next() % n];
+	return (int)probe_next() - 0x800000;
+}
+
+static const int probe_l1[] = {
+	0, 1, 0x1f2, 0x1f3, 0x1f4, 0x3e6, 0x3e7, 0x3e8, 0x1000,
+	0x18fff, 0x19000, 0x100000, -1, -0x1f3, 0x7fffffff
+};
+static const int probe_l2[] = {
+	0, 1, -1, 2, 0x100, 0x100000, 0x200000, 0x1fffff, 0x20000000,
+	0x40000000, 0x7fffffff, (-0x7fffffff - 1), 0x400, 0x4000
+};
+static const int probe_gain[] = {
+	0, 1, 0xffe, 0xfff, 0x1000, 0x1001, 0x7fff, -1, -0x1000, 0x4000
+};
+
+/* Which arm each side took, by what it left behind. */
+static int saw_rate[6];			/* 2400 2800 3000 3200 3429 none */
+static int saw_preemph[12];		/* every index a search returned */
+
+static void
+probe_note(void)
+{
+	const unsigned char *p = (const unsigned char *)&oa;
+	short baud;
+	int k;
+
+	memcpy(&baud, p + 0xaa84, sizeof(baud));
+	switch (baud) {
+	case 0x960: saw_rate[0] = 1; break;
+	case 0xaf0: saw_rate[1] = 1; break;
+	case 0xbb8: saw_rate[2] = 1; break;
+	case 0xc80: saw_rate[3] = 1; break;
+	case 0xd65: saw_rate[4] = 1; break;
+	default:    saw_rate[5] = 1; break;
+	}
+
+	for (k = 0; k < 5; k++) {
+		static const unsigned off[5] = { 0xaa9a, 0xaa9c, 0xaaa0,
+						 0xaaa2, 0xaaa4 };
+		short v;
+
+		memcpy(&v, p + off[k], sizeof(v));
+		if (v >= 0 && v < 12)
+			saw_preemph[v] = 1;
+	}
+}
+
+/*
+ * One case.  Everything the function reads is driven, and driven separately:
+ * the twenty-five shifts and the energies the pre-emphasis search uses are
+ * independent inputs, and so are the eight capability bytes, the role flag
+ * and the five scalars of the power section.
+ *
+ * `spread` narrows the shifts towards zero.  The ladder's thresholds are 5, 6
+ * and 10, so a uniform 16-bit shift takes the same arm every time and the
+ * interesting region is a handful of small integers -- which is also the
+ * shape the function's own normalisation leaves behind, since it subtracts
+ * the minimum before any of the tests.  One shift in thirty-two is left wide
+ * anyway, because the normalisation's signed/unsigned mismatch (D54) needs a
+ * negative one to show.
+ */
+static void
+run_probeselect(unsigned seed, int spread, long tag)
+{
+	unsigned i;
+	int high_bins;
+
+	probe_rng = seed;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr((short)((int)(probe_next() % 32) - 16),
+		 (int)(probe_next() & 1), (int)(probe_next() & 1), 4);
+	/* Likewise bit 4, which gates the sensitive-ISP arms entirely. */
+	cfg_a[0x50] = cfg_b[0x50] =
+		(unsigned char)(probe_next() | ((probe_next() & 1) ? 0x10 : 0));
+
+	/*
+	 * One case in eight puts every shift above 0x20, which is what the
+	 * minimum search starts from -- otherwise some bin is always smaller
+	 * and the starting value is never the answer.
+	 */
+	high_bins = (probe_next() & 7) == 0;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+		short sh = (short)(probe_next() % (unsigned)spread);
+
+		if (high_bins)
+			sh = (short)(0x21 + probe_next() % 16);
+		else if ((probe_next() & 0x1f) == 0)
+			sh = (short)probe_next();
+
+		poke_short(off + 0x0c, (short)probe_next());
+		poke_short(off + 0x0e, sh);
+	}
+
+	poke_int(0xaac4, probe_pick(probe_l1, sizeof(probe_l1)
+					       / sizeof(probe_l1[0])));
+	poke_int(0xaac8, probe_pick(probe_l2, sizeof(probe_l2)
+					       / sizeof(probe_l2[0])));
+	poke_short(0x264 + 0x136,
+		   (short)probe_pick(probe_gain, sizeof(probe_gain)
+						 / sizeof(probe_gain[0])));
+	poke_short(0x264 + 0x262, (short)probe_next());
+	/*
+	 * Bit 7 is the one the power section tests, so it is set half the
+	 * time rather than one time in two hundred and fifty-six.
+	 */
+	poke_byte(0xa97e, (unsigned char)(probe_next()
+					  | ((probe_next() & 1) ? 0x80 : 0)));
+
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, (unsigned char)probe_next());
+
+	poke_short(0x359a, (short)((probe_next() & 3) == 0 ? 1 : 0));
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect", tag);
+	compare_pwr_blocks("probeselect blocks", tag);
+
+	/*
+	 * The three table pointers, by CONTENT.  Each answering arm installs
+	 * a scale table and a carrier descriptor by address, and the two
+	 * candidates of every pair are the same length -- so swapping them
+	 * leaves every scalar in the object identical, which is exactly what
+	 * a skipped pointer hides.  Seeded with the per-side dummy, so "left
+	 * alone" is a comparable answer too.
+	 */
+	compare_table("probeselect tx scale",
+		      (const short *)get_ptr_a(0xaa90),
+		      (const short *)get_ptr_b(0xaa90), 28, tag);
+	compare_table("probeselect rx scale",
+		      (const short *)get_ptr_a(0xaaac),
+		      (const short *)get_ptr_b(0xaaac), 28, tag);
+	compare_table("probeselect rx carrier desc",
+		      (const short *)get_ptr_a(0xaab0),
+		      (const short *)get_ptr_b(0xaab0), 8, tag);
+
+	probe_note();
+}
+
+
+/*
+ * --- and the equalities, which random draws cannot reach -----------------
+ *
+ * Five mutations survived four thousand biased probes, and every one of them
+ * turns on an exact equality: `ratio` landing on a term of the dB ladder, or
+ * the scaled bin energy landing exactly on the reference.  Those are single
+ * points in a 32-bit space, so they are CONSTRUCTED rather than sampled.
+ *
+ * `ratio` is controllable.  With `snr_l2` small enough that the bit scan runs
+ * out -- anything below 0x200000 -- the shift is ten and the quotient is
+ * `((snr_l2 << 10) + (snr_l1 >> 1)) / snr_l1`, so `snr_l1 = 0x400` makes the
+ * ratio equal `snr_l2` exactly.  That turns "drive the dB loop to its own
+ * boundary" into one assignment.
+ */
+static void
+run_probe_ratio(unsigned want, short gain, long tag)
+{
+	unsigned i;
+
+	probe_rng = 0x5eed1234u;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr(3, 1, 1, 4);
+	cfg_a[0x50] = cfg_b[0x50] = 0x10;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+
+		poke_short(off + 0x0c, (short)probe_next());
+		poke_short(off + 0x0e, (short)(probe_next() % 9));
+	}
+
+	poke_int(0xaac4, 0x400);
+	poke_int(0xaac8, (int)want);
+	poke_short(0x264 + 0x136, gain);
+	poke_short(0x264 + 0x262, 0x100);
+	poke_byte(0xa97e, 0x80);
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, (unsigned char)probe_next());
+	poke_short(0x359a, 0);
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect ratio", tag);
+	compare_pwr_blocks("probeselect ratio blocks", tag);
+	probe_note();
+}
+
+/*
+ * The other equality is inside the pre-emphasis search: `x > ref` versus
+ * `x >= ref` differ only when one scaled step lands exactly on the reference.
+ * The step is `(x * k) >> 14`, so the pre-image of a chosen reference is
+ * `(ref << 14) / k`, and driving the candidate bin to that value and its
+ * neighbours puts the comparison on its own boundary for each of the five
+ * per-rate constants.
+ */
+static void
+run_probe_preemph_edge(unsigned bin, int k, short ref, int delta, long tag)
+{
+	unsigned i;
+	int pre = (int)(((long long)ref << 14) / k) + delta;
+
+	probe_rng = 0xc0ffee11u;
+
+	setup();
+	seed_rate_pointers();
+	seed_pwr(3, 1, 1, 4);
+	cfg_a[0x50] = cfg_b[0x50] = 0;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+
+		poke_short(off + 0x0c, 0);
+		poke_short(off + 0x0e, (short)(probe_next() % 7));
+	}
+	poke_short(0xa320 + 4 * sizeof(struct v34_dftbin) + 0x0c, ref);
+	poke_short(0xa320 + bin * sizeof(struct v34_dftbin) + 0x0c,
+		   (short)pre);
+
+	poke_int(0xaac4, 0);
+	poke_int(0xaac8, 0);
+	poke_short(0x264 + 0x136, 0x800);
+	poke_short(0x264 + 0x262, 0x100);
+	poke_byte(0xa97e, 0);
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, 0xff);
+	poke_short(0x359a, 0);
+	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect preemph edge", tag);
+	compare_pwr_blocks("probeselect preemph edge blocks", tag);
+	probe_note();
+}
+
 /* --- setfinalrate's inputs ------------------------------------------------ */
 
 static void
@@ -281,6 +697,87 @@ seed_rate_pointers(void)
 	poke_ptr(0xaa90, dummy_a, dummy_b);
 	poke_ptr(0xaaac, dummy_a, dummy_b);
 	poke_ptr(0xaab0, dummy_a, dummy_b);
+}
+
+/*
+ * One `settxlevel` case.  The MP short, the scale it starts from, and every
+ * input of the `GetVPcmMinimalTxPowerReduction` call it opens with -- driven
+ * separately, because the two combine three different ways and a fixture
+ * that tied them together could not tell the three apart.
+ */
+static void
+run_settxlevel(unsigned short mp, short scale, short want, int sens, int gate,
+	       int flag54, int v90, int k56, long tag)
+{
+	setup();
+	seed_pwr(want, sens, gate, flag54);
+	poke_short(0xa9dc, (short)mp);
+	poke_short(0x25d4, scale);
+	poke_int(0x24c, v90);
+	poke_int(0x250, k56);
+
+	settxlevel(&oa, (const short *)((const char *)&oa + 0xa9dc));
+	ref_settxlevel(ob, (const short *)(ob + 0xa9dc));
+
+	compare("settxlevel", tag);
+	compare_pwr_blocks("settxlevel blocks", tag);
+}
+
+/*
+ * One `v34setuptxmit` case.
+ *
+ * `V34InitializeImplementationSpecific` first, for the reason the
+ * `v34modeminit` block gives: `txinit` cleans both echo cancellers through
+ * five pointers each, and without the initialiser aiming them the first
+ * dereference faults.  That is what a real caller does, not something the
+ * fixture invents.
+ *
+ * The three state words are seeded in range and DIFFERENT from each other --
+ * the two transitions print the other two machines' names, and equal words
+ * make the three indistinguishable (D42 is why in-range matters at all).
+ */
+static void
+run_setuptxmit(short baud, short carrier, short preemp, int v90, int k56,
+	       short rxstate, short txstate, short mst, long tag)
+{
+	setup();
+	seed_pwr(3, 1, 1, 4);
+	V34InitializeImplementationSpecific(&oa);
+	ref_V34InitializeImplementationSpecific(ob);
+
+	poke_short(0xa9dc, (short)0x00e4);
+	poke_short(0x25d4, 0x16a1);
+	poke_short(0xaa84, baud);
+	poke_short(0xaa94, carrier);
+	poke_short(0xaa8a, preemp);
+	poke_int(0x24c, v90);
+	poke_int(0x250, k56);
+	poke_short(0x3592, mst);
+	poke_short(0x3594, rxstate);
+	poke_short(0x3596, txstate);
+	poke_short(0x2aa2, (short)0x1111);
+	poke_short(0xaa78, (short)0x2222);
+	poke_short(0x264 + 0x122, (short)0xffff);
+	poke_short(0x25c2, (short)0x1234);
+
+	v34setuptxmit(&oa);
+	ref_v34setuptxmit(ob);
+
+	compare("v34setuptxmit", tag);
+	compare_pwr_blocks("v34setuptxmit blocks", tag);
+
+	/*
+	 * The modulator's two tables, by CONTENT: `V34SetupModulator`
+	 * installs a shaping table and a pre-emphasis one by address, and an
+	 * address comparison cannot see which of them was chosen.  Same
+	 * argument as the carrier table in the `v34modeminit` block.
+	 */
+	compare_table("v34setuptxmit ec_prem",
+		      (const short *)get_ptr_a(0x20cc),
+		      (const short *)get_ptr_b(0x20cc), 16, tag);
+	compare_table("v34setuptxmit preemp",
+		      (const short *)get_ptr_a(0x2100),
+		      (const short *)get_ptr_b(0x2100), 16, tag);
 }
 
 static void
@@ -1532,6 +2029,415 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* --- probeselect ------------------------------------------------ */
+
+	/*
+	 * FOUR THOUSAND PSEUDO-RANDOM CASES, AT FOUR SPREADS.  The ladder is
+	 * fifteen comparisons over eleven bins crossed with a role flag and
+	 * eight capability bytes, and its arms are not independent: each
+	 * originating arm falls THROUGH into the next rate's test, so which
+	 * message bits end up set depends on the whole path and not on one
+	 * branch.  Enumerating that by hand would be a list of the cases I
+	 * happened to think of; the counters below say what was reached.
+	 *
+	 * The spread is what makes random inputs useful here.  Every
+	 * threshold in the ladder is 5, 6 or 10, so a uniform 16-bit shift
+	 * takes the same arm every time; narrowing towards zero puts the
+	 * inputs where the decisions are, and four spreads rather than one
+	 * because the tests are on DIFFERENT bins and a spread that makes one
+	 * comparison interesting saturates another.
+	 */
+	diff_begin("v34 handshake: probeselect, four thousand probes");
+	{
+		static const int spread[] = { 3, 8, 14, 40 };
+		unsigned s, n;
+		long tag = 70000;
+
+		for (s = 0; s < sizeof(spread) / sizeof(spread[0]); s++)
+		for (n = 0; n < 1000; n++)
+			run_probeselect(0x1234567u + n * 2654435761u + s,
+					spread[s], tag++);
+
+		/*
+		 * Every rate, and "no rate at all" -- which is a real outcome
+		 * on both sides: the originating arms never write the baud
+		 * rate, and the answering ladder runs off the bottom when the
+		 * far end offers nothing.
+		 */
+		for (n = 0; n < 6; n++)
+			diff_eq_int("every rate arm was reached", saw_rate[n],
+				    1, (long)n);
+
+		/*
+		 * And the pre-emphasis search's whole range.  6..10 are the
+		 * reachable ones; 0 is the arm D53 says cannot be taken, and
+		 * asserting it was NOT seen is what would catch that reading
+		 * being wrong.
+		 */
+		for (n = 6; n <= 10; n++)
+			diff_eq_int("every pre-emphasis index was returned",
+				    saw_preemph[n], 1, 100 + (long)n);
+		diff_eq_int("and index 0 was not", saw_preemph[0], 0, 200);
+		for (n = 1; n <= 5; n++)
+			diff_eq_int("nor anything below six", saw_preemph[n],
+				    0, 200 + (long)n);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE dB LADDER, ON ITS OWN TERMS.  The loop steps `t` by 1.2588 from
+	 * 0x47d and stops when it passes the ratio, so `<` against `<=`, and
+	 * the rounding term inside the step, are visible only when the ratio
+	 * IS one of the terms.  Walking the sequence and driving the ratio to
+	 * each term and its neighbours is the whole of that boundary, and
+	 * 0x18fff is included because the short-circuit above the loop has an
+	 * edge of its own.
+	 *
+	 * The gain is swept under it, because the reduction the ladder feeds
+	 * is `(0x640000 / gain) * dbcnt >> 14` and the rounding in that divide
+	 * only shows when the product crosses a multiple of 16384.
+	 */
+	diff_begin("v34 handshake: probeselect on the dB ladder's own terms");
+	{
+		/*
+		 * THE MIDDLE SEVEN ARE SOLVED FOR, AND THE CONSTRAINT IS THE
+		 * CLAMP.  The reciprocal `(gain / 2 + 0x640000) / gain`
+		 * differs from the unrounded divide for about half of all
+		 * gains, but the difference is ONE, and to be observable it
+		 * has to survive `* dbcnt >> 14` AND the `req > 7` clamp
+		 * immediately after.
+		 *
+		 * The first of those wants a large `dbcnt` and the second
+		 * wants a small `req`, which is why the obvious choice --
+		 * the 1000 the short-circuit produces -- shows nothing at
+		 * all: every gain below 0x1000 then gives a `req` in the
+		 * hundreds and both sides clamp to 7.  What is needed is a
+		 * gain and a ladder step where the product crosses a
+		 * multiple of 16384 while `req` is still under seven, and
+		 * there are nineteen such gains below 0x1000.  These are
+		 * seven of them, with the step each one needs:
+		 *
+		 *    560 at 7    600 at 3    900 at 9   960 at 12
+		 *   1000 at 5   1040 at 13  1360 at 17
+		 *
+		 * The ladder sweep below reaches every step from 0 to 19, so
+		 * naming the gains is enough.
+		 */
+		static const short gains[] = { 1, 2, 3, 7, 11, 13, 100,
+					       560, 600, 900, 960, 1000,
+					       1040, 1360,
+					       0x7ff, 0x800, 0xfff, 0x1000 };
+		unsigned t = 0x47d;
+		unsigned g;
+		long tag = 90000;
+
+		while (t < 0x19100) {
+			for (g = 0; g < sizeof(gains) / sizeof(gains[0]); g++) {
+				run_probe_ratio(t - 1, gains[g], tag++);
+				run_probe_ratio(t, gains[g], tag++);
+				run_probe_ratio(t + 1, gains[g], tag++);
+			}
+			t = (t * 0x509 + 0x200) >> 10;
+		}
+
+		for (g = 0; g < sizeof(gains) / sizeof(gains[0]); g++) {
+			run_probe_ratio(0x18ffe, gains[g], tag++);
+			run_probe_ratio(0x18fff, gains[g], tag++);
+			run_probe_ratio(0x19000, gains[g], tag++);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE SEARCH'S OWN EQUALITY.  Each rate's constant gets its
+	 * candidate bin driven to the exact pre-image of the reference, and to
+	 * the two values either side, so `x > ref` and `x >= ref` disagree on
+	 * one of the four.  Several references, because the pre-image is a
+	 * division and lands differently for each.
+	 */
+	diff_begin("v34 handshake: probeselect's pre-emphasis equality");
+	{
+		static const struct { unsigned bin; int k; } rate[] = {
+			{ 18, 0x7da7 }, { 18, 0x6789 }, { 19, 0x656f },
+			{ 20, 0x639f }, { 22, 0x6626 }
+		};
+		static const short refs[] = { 1, 2, 17, 100, 1000, 4096,
+					      0x4000, -1, -100 };
+		unsigned r, v;
+		int dd;
+		long tag = 95000;
+
+		for (r = 0; r < sizeof(rate) / sizeof(rate[0]); r++)
+		for (v = 0; v < sizeof(refs) / sizeof(refs[0]); v++)
+		for (dd = -2; dd <= 2; dd++)
+			run_probe_preemph_edge(rate[r].bin, rate[r].k,
+					       refs[v], dd, tag++);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: probeselect narrates every decision");
+	{
+		unsigned lvl, n;
+		long tag = 80000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (n = 0; n < 150; n++) {
+				dsplib_debug_capture_reset();
+				run_probeselect(0x9e3779b9u + n * 40503u,
+						(int)(3 + n % 12), tag);
+				diff_eq_int("probeselect transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/* --- settxlevel ------------------------------------------------- */
+
+	/*
+	 * EXHAUSTIVE OVER THE MP SHORT'S TWO FIELDS.  Six bits decide the
+	 * request -- three for the reduction and three for the addition --
+	 * so all sixty-four combinations are driven rather than sampled, and
+	 * the two other bit positions of the low byte are swept with them to
+	 * show they are discarded.  A reconstruction that reversed the two
+	 * three-bit fields, or clamped before reversing instead of after,
+	 * disagrees somewhere in that grid and nowhere outside it.
+	 *
+	 * THE STARTING SCALE IS SWEPT PAST WHERE A SHORT STOPS.  Both loops
+	 * multiply and shift, and the one that RAISES the scale truncates its
+	 * accumulator to a short every iteration while the one that lowers it
+	 * does not (D51).  A scale near 32767 with a negative reduction is
+	 * the only input that shows the difference, and it is here.
+	 */
+	diff_begin("v34 handshake: settxlevel, every power field the MP "
+		   "message can carry");
+	{
+		static const short scale_in[] = {
+			0, 1, 0x16a1, 100, 1000, 0x4000, 0x7fff, 0x7ffe,
+			-1, -1000, (short)0x8000
+		};
+		unsigned f, s;
+		long tag = 20000;
+
+		for (f = 0; f < 0x100; f++)
+		for (s = 0; s < sizeof(scale_in) / sizeof(scale_in[0]); s++)
+			run_settxlevel((unsigned short)f, scale_in[s],
+				       0, 0, 0, 4, 0, 0, tag++);
+
+		/* And the high byte, which is shifted out of both fields. */
+		for (f = 0; f < 8; f++)
+			run_settxlevel((unsigned short)(0xab00 | (f << 5)),
+				       0x16a1, 0, 0, 0, 4, 0, 0, tag++);
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE PCM SIDE, WHICH COMBINES TWO DIFFERENT WAYS.  A negative
+	 * minimum is ADDED to the far end's request; a non-negative one is a
+	 * FLOOR.  Both are reached only with a V.90 receiver running, so the
+	 * two receiver words are swept under every reduction -- and the
+	 * configured reduction is swept across its own clamp, since
+	 * `GetVPcmMinimalTxPowerReduction` is what produces the value being
+	 * combined here.
+	 */
+	diff_begin("v34 handshake: settxlevel against the local PCM minimum");
+	{
+		static const short want_in[] = {
+			(short)0x8000, -20, -11, -10, -9, -1, 0, 1, 3, 6, 7,
+			8, 100
+		};
+		static const unsigned char mp_in[] = {
+			0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0,
+			0x04, 0x1c, 0xfc
+		};
+		static const int recv_in[][2] = {
+			{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 },
+			{ -1, 0 }, { 0, -1 }
+		};
+		static const int sens_in[] = { 0, 1 };
+		static const int gate_in[] = { 0, 1 };
+		unsigned w, mi, r, s, g;
+		long tag = 30000;
+
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++)
+		for (mi = 0; mi < sizeof(mp_in) / sizeof(mp_in[0]); mi++)
+		for (r = 0; r < sizeof(recv_in) / sizeof(recv_in[0]); r++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (g = 0; g < sizeof(gate_in) / sizeof(gate_in[0]); g++)
+			run_settxlevel(mp_in[mi], 0x16a1, want_in[w],
+				       sens_in[s], gate_in[g], 4,
+				       recv_in[r][0], recv_in[r][1], tag++);
+
+		diff_eq_int("some case took the positive power arm",
+			    saw_pwr_high, 1, 0);
+		diff_eq_int("and some case took the other", saw_pwr_low, 1, 0);
+
+		/*
+		 * THE UP LOOP'S TRUNCATION, WHICH NEEDS BOTH HALVES AT ONCE.
+		 * It is reachable only with a V.90 receiver and a NEGATIVE
+		 * minimum -- that is the one path that makes the reduction
+		 * negative -- and observable only from a scale large enough
+		 * that one 1.122 step leaves a short.  The block above has
+		 * the first and the block before it has the second, and
+		 * neither has both; 0x16a1 survives four steps of gain, so
+		 * every case up to here agrees whatever width the
+		 * accumulator has.  D51.
+		 */
+		for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]); w++) {
+			static const short big[] = {
+				20000, 29000, 29200, 30000, 0x7fff, 0x7ffe,
+				-20000, -30000, (short)0x8000
+			};
+			unsigned b;
+
+			for (b = 0; b < sizeof(big) / sizeof(big[0]); b++)
+				run_settxlevel(0x00, big[b], want_in[w],
+					       0, 1, 4, 1, 0, tag++);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: settxlevel says what it did");
+	{
+		static const unsigned char mp_in[] = { 0x00, 0x20, 0xe0,
+						       0x1c, 0xfc };
+		static const short want_in[] = { -10, -1, 0, 3, 7 };
+		unsigned lvl, mi, w;
+		long tag = 40000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (mi = 0; mi < sizeof(mp_in) / sizeof(mp_in[0]);
+			     mi++)
+			for (w = 0; w < sizeof(want_in) / sizeof(want_in[0]);
+			     w++) {
+				dsplib_debug_capture_reset();
+				run_settxlevel(mp_in[mi], 0x16a1, want_in[w],
+					       0, 1, 4, 1, 0, tag);
+				diff_eq_int("settxlevel transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/* --- v34setuptxmit ---------------------------------------------- */
+
+	/*
+	 * EVERY SYMBOL RATE WITH BOTH OF ITS CARRIERS, because the carrier is
+	 * what picks the echo pre-emphasis table inside `V34SetupModulator`
+	 * and the two tables of a pair are the same length -- so a swapped
+	 * pair leaves every scalar in the object identical and shows up only
+	 * in the CONTENT check on +0x20cc.  3429 has one carrier and 600 is
+	 * the signalling rate, and both are here for the same reason.
+	 *
+	 * The two state words are swept across the value each transition
+	 * moves them to, so the "already there" arm -- which prints nothing
+	 * and assigns nothing -- is driven as well as the moving one.
+	 */
+	diff_begin("v34 handshake: v34setuptxmit, every rate and carrier");
+	{
+		static const struct { short baud, carrier; } rate_in[] = {
+			{ 2400, 1600 }, { 2400, 1800 },
+			{ 2800, 1680 }, { 2800, 1867 },
+			{ 3000, 1800 }, { 3000, 2000 },
+			{ 3200, 1829 }, { 3200, 1920 },
+			{ 3429, 1959 }, { 600, 1200 }
+		};
+		static const short state_in[][3] = {
+			/* rxstate, txstate, microstate */
+			{ V34HS_PHASE1, V34HS_PHASE2, V34HS_DET_SYNC },
+			{ V34HS_WAIT,   V34HS_PHASE2, V34HS_DET_SYNC },
+			{ V34HS_PHASE1, V34HS_SSEG,   V34HS_DET_SYNC },
+			{ V34HS_WAIT,   V34HS_SSEG,   V34HS_DET_SYNC }
+		};
+		unsigned r, p, st, v;
+		long tag = 50000;
+
+		for (r = 0; r < sizeof(rate_in) / sizeof(rate_in[0]); r++)
+		for (p = 0; p < 3; p++)
+		for (st = 0; st < sizeof(state_in) / sizeof(state_in[0]); st++)
+		for (v = 0; v < 4; v++)
+			run_setuptxmit(rate_in[r].baud, rate_in[r].carrier,
+				       (short)(p * 4), (v & 1) ? 3 : 0,
+				       (v & 2) ? 5 : 0,
+				       state_in[st][0], state_in[st][1],
+				       state_in[st][2], tag++);
+	}
+	rc |= diff_end();
+
+	diff_begin("v34 handshake: v34setuptxmit's two transitions, logged");
+	{
+		unsigned lvl, k;
+		long tag = 60000;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			/*
+			 * Every one of the 87 names, in all three slots: the
+			 * two transitions print the other machines' names as
+			 * context, and driving the words a third of the table
+			 * apart is what tells the two context slots apart.
+			 */
+			for (k = 0; k < V34HS_STATE_COUNT; k++) {
+				dsplib_debug_capture_reset();
+				run_setuptxmit(3000, 1800, 0, 3, 0,
+					       (short)k,
+					       (short)((k + 29)
+						       % V34HS_STATE_COUNT),
+					       (short)((k + 58)
+						       % V34HS_STATE_COUNT),
+					       tag);
+				diff_eq_int("v34setuptxmit transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("and it said something",
+					    dsplib_debug_capture_text(1)[0]
+					    != 0, 1, tag);
+				tag++;
+			}
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 handshake: v34modeminit, both ends of the call");
 	{
 		/*
@@ -2035,6 +2941,12 @@ main(void)
 		for (k = 0; k < NPTR; k++)
 			diff_eq_int("pointer field differed at least once",
 				    saw_ptr_skip[k], 1, (long)ptr_skip[k]);
+		/*
+		 * And the two the fixture owns are only holes after
+		 * `seed_pwr`; nothing must leave them open by accident.
+		 */
+		diff_eq_int("the fixture's two holes are closed by default",
+			    pwr_seeded, 0, 0);
 	}
 	rc |= diff_end();
 

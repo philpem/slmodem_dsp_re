@@ -1185,12 +1185,14 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	/*
 	 * THE LAST TWO PARAMETERS ARE NAMED BY THE OBJECT, not guessed: the
 	 * entry diagnostic below prints all five and calls the fourth
-	 * `preemp` and the fifth `V90`.  The fifth is read by nothing in
-	 * this function -- only printed -- so it is a flag the caller passes
-	 * for a V.90 path that either lives elsewhere or was removed; see
-	 * D31, which is about the same absent V.90 configuration.
+	 * `preemp` and the fifth `V90`.
+	 *
+	 * `v90` IS READ, at exactly one site -- the 3200-baud case, where it
+	 * picks the V.90 shaping filter and pre-filter.  It was recorded here
+	 * as printed and never read, and in D31 as selecting an arm that
+	 * could not be reached, and both were the same misreading of one
+	 * branch.  Finding 216.
 	 */
-	(void)v90;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -1204,9 +1206,9 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	/*
 	 * UNCONDITIONAL, although the object stores it inside each arm of
 	 * the switch below -- seven separate `mov ..,0xc8c(..)` sites, which
-	 * is one arm's assignment duplicated by the compiler.  Every
-	 * reachable one writes 15; the single site that writes 14 is inside
-	 * the V.90 arm of the 3200 case, which D31 records as unreachable.
+	 * is one arm's assignment duplicated by the compiler.  Every one
+	 * writes 15 except the V.90 arm of the 3200 case, which writes 14
+	 * and overrides this.
 	 *
 	 * Written as three per-rate assignments here until a whole-object
 	 * comparison in t_v34hshak found the other five rates leaving the
@@ -1257,26 +1259,40 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	case 3200:
 		m->f04 = 1; m->rows = 3;
 		/*
-		 * 3200 looks like it chooses between a V.34 and a V.90
-		 * configuration, and it does not.  The branch that would
-		 * select the V.90 one is a `je` at 0x73305 whose only
-		 * preceding instructions are `movl`s, which do not set
-		 * flags -- so it inherits ZF from the `cmp $0xc80` that
-		 * selected this case, and is therefore ALWAYS TAKEN.
+		 * THE ONE RATE THAT HAS A V.90 CONFIGURATION, and `v90` is
+		 * what selects it -- 0x40 taps from `tx3200c1_for_v90` with
+		 * `V90EchoPrefilterCoeff` and 14 in `fc8c`, against 0x20
+		 * taps from `tx3200c1_for_v34` with one of the ordinary
+		 * carrier pair and 15.
 		 *
-		 * The V.90 arm -- 0x40 taps from tx3200c1_for_v90 with
-		 * V90EchoPrefilterCoeff -- is unreachable through this
-		 * function.  Registered as D31.
+		 * D31 SAID THIS ARM WAS DEAD AND WAS WRONG.  The branch is
 		 *
-		 * It is also the only place in the object that puts 14 in
-		 * `fc8c` rather than 15, which is a second, independent sign
-		 * that it is a different configuration and not a variant of
-		 * this one.
+		 *     732f5:  test %edi,%edi        ; edi is the `v90` arg
+		 *     732f7:  movl $0x1,0x4(%ecx)
+		 *     732fe:  movl $0x3,0x8(%ecx)
+		 *     73305:  je   7333e            ; -> the V.34 arm
+		 *
+		 * and the reasoning that killed it -- `movl` sets no flags,
+		 * so the `je` inherits ZF from the `cmp $0xc80` that chose
+		 * this case and is always taken -- was right about the two
+		 * `movl`s and missed the `test` in front of them.  See
+		 * finding 216; `v90` was recorded as read by nothing on the
+		 * same evidence and is not.
+		 *
+		 * The carrier is consulted only on the V.34 arm.  The V.90
+		 * one has a single pre-filter for both carriers.
 		 */
-		m->taps = 0x20;
-		src = tx3200c1_for_v34;
-		prem = (carrier == 1829) ? ec_prem_coef_B3200
-					 : ec_prem_coef_B3200High;
+		if (v90) {
+			m->taps = 0x40;
+			m->fc8c = 0xe;
+			src = tx3200c1_for_v90;
+			prem = V90EchoPrefilterCoeff;
+		} else {
+			m->taps = 0x20;
+			src = tx3200c1_for_v34;
+			prem = (carrier == 1829) ? ec_prem_coef_B3200
+						 : ec_prem_coef_B3200High;
+		}
 		break;
 	case 3429:
 		m->taps = 0x20; m->f04 = 5; m->rows = 0xe;

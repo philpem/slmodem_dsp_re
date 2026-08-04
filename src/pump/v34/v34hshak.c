@@ -1624,6 +1624,806 @@ txmitquadbit(void *obj, short bits)
 
 /*
  * ---------------------------------------------------------------------------
+ * The line probe's verdict.
+ *
+ * `probeselect` reads the twenty-five probe bins and decides three things:
+ * how much transmit power to ask the far end for, which symbol rates to offer
+ * or to choose, and what pre-emphasis each of them wants.  It takes the
+ * object alone and returns nothing; everything it does lands in two places.
+ *
+ * THE TWO PLACES, AND WHY THEY MATTER TOGETHER.  The rate config at +0xaa84
+ * is the same eight fields `setfinalrate` reads back, and the message it
+ * builds at +0xa9ac is two shorts below the three `setfinalrate` unpacks its
+ * rate fields out of -- so the two are an encode/decode pair over one message
+ * and can be tested against each other rather than only against the blob.
+ *
+ * THE ROLE FLAG SPLITS IT IN TWO.  With `f359c == 0x65` this is the
+ * originating side, and it walks the whole ladder ACCUMULATING message bits:
+ * every rate the probe allows is offered, and each arm falls through into the
+ * next test.  Otherwise it is answering, and it takes the first rate that
+ * both the probe and the far end's capability bits allow, fills the rate
+ * config in and returns.  That is why the two halves of one rate look so
+ * different: one proposes and one decides.
+ *
+ * FIVE RATES, AND 2743 IS NOT ONE OF THEM.  The same gap `chkForceBaudRate`
+ * has, where `allow[0]` and `allow[1]` are written and never read.  Neither
+ * function says why.
+ */
+
+/* Which bin the pre-emphasis search measures everything against. */
+#define PROBE_REF_BIN	4
+
+/*
+ * How much pre-emphasis one rate wants.
+ *
+ * The candidate bin's energy is scaled down by a per-rate factor -- all five
+ * are just under 1.0 in Q14 -- until it falls below the reference bin's, and
+ * the number of steps that took is the index.  A band edge that started far
+ * above bin 4 needs more pre-emphasis, so this is a logarithm taken by
+ * repeated multiplication.
+ *
+ * THE COUNTER IS ADVANCED BEFORE THE TEST -- `lea 0x1(%ebx),%esi; movswl
+ * %si,%ebx` sits ahead of `cmp %cx,%dx` -- so it is 6..10 at either exit and
+ * the `i == 5` arm cannot be taken.  It is reproduced because the object has
+ * it, five times over, and D53 records that its string is unreachable.
+ *
+ * INDEX 10 IS REACHED BY BOTH EXITS AND REPORTED DIFFERENTLY: "index is %d"
+ * when the energy dropped on the tenth step, "index is 10" when it never
+ * dropped at all.  The rate config gets 10 either way, so nothing but the
+ * transcript tells them apart.
+ */
+static short
+probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
+{
+	short ref = bins[PROBE_REF_BIN].energy;
+	short x = bins[n].energy;
+	short i = 5;
+
+	for (;;) {
+		x = (short)(((int)x * k) >> 14);
+		i = (short)(i + 1);
+
+		if (x > ref) {
+			if (i == 5) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V34PREEMPHASIS, - index is 0, "
+					    "baudrate= %d\n", (int)baud);
+				return 0;
+			}
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V34PREEMPHASIS, - index is %d, "
+				    "baudrate= %d\n", (int)i, (int)baud);
+			return i;
+		}
+		if (i > 9) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V34PREEMPHASIS, - index is 10, "
+				    "baudrate= %d \n", (int)baud);
+			return i;
+		}
+	}
+}
+
+/* `msg[i] |= bits`, read back unsigned as the object reads it. */
+static void
+mp_or(short *msg, unsigned i, unsigned bits)
+{
+	msg[i] = (short)((unsigned)(unsigned short)msg[i] | bits);
+}
+
+/* The tail four of the five rates share: the index, reversed, split in two. */
+static void
+mp_put_preemph(short *msg, short idx)
+{
+	unsigned rev = (unsigned short)bitreverse((unsigned short)idx, 4);
+
+	mp_or(msg, 1, rev >> 2);
+	mp_or(msg, 2, (rev << 6) & 0xff);
+}
+
+/*
+ * Scale the AGC's starting gain up by one dB `n` times.
+ *
+ * TRUNCATED TO A SHORT EVERY ITERATION -- the object keeps the running value
+ * in a register and re-reads it with `movswl %cx,%edx` at the top of each
+ * pass -- and stored once at the end.
+ */
+static void
+probe_backoff(struct v34_receiver *rx, int n)
+{
+	short g = rx->f262;
+	int i;
+
+	for (i = 0; i < n; i++)
+		g = (short)(((int)g * 0x47cf + 0x2000) >> 14);
+
+	rx->f262 = g;
+}
+
+/*
+ * The two flat requests the "sensitive ISP" arms make.
+ *
+ * Neither consults the AGC or the computed reduction: a small enough `snr_l1`
+ * asks for the maximum and that is that.  `second` is -1 when the message
+ * carries only the first field.
+ */
+static void
+probe_ask(struct v34_receiver *rx, short *msg, int first, int second, int n)
+{
+	mp_or(msg, 0, (unsigned)(unsigned short)
+		      bitreverse((unsigned short)first, 3) << 5);
+	if (second >= 0)
+		mp_or(msg, 0, (unsigned)(unsigned short)
+			      bitreverse((unsigned short)second, 3) << 2);
+
+	probe_backoff(rx, n);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PROBE, asking for a power reduction "
+				     "of %d\n", n);
+}
+
+void
+probeselect(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_dftbin *bins = obj->probe_bins;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	short *msg = (short *)(m + 0xa9ac);
+	const unsigned char *pcfg = (const unsigned char *)obj->pac3c;
+
+	/*
+	 * The rate config, by the names `setfinalrate` gives the same eight
+	 * fields, plus the five per-rate pre-emphasis slots -- which are the
+	 * only thing here that function does not also write.
+	 */
+	short *tx_baud		= (short *)(m + 0xaa84);
+	short *tx_preemp	= (short *)(m + 0xaa8a);
+	const short **tx_scale	= (const short **)(m + 0xaa90);
+	short *tx_carrier	= (short *)(m + 0xaa94);
+	short *rx_baud		= (short *)(m + 0xaa96);
+	short *rx_carrier	= (short *)(m + 0xaaa8);
+	const short **rx_scale	= (const short **)(m + 0xaaac);
+	const short **rx_cdesc	= (const short **)(m + 0xaab0);
+	short *pe2400		= (short *)(m + 0xaa9a);
+	short *pe2800		= (short *)(m + 0xaa9c);
+	short *pe3000		= (short *)(m + 0xaaa0);
+	short *pe3200		= (short *)(m + 0xaaa2);
+	short *pe3429		= (short *)(m + 0xaaa4);
+
+	int snr_l1, snr_l2;
+	unsigned ratio = 0;
+	unsigned short gain;
+	short dbcnt, req;
+	short role, e22, e20;
+	int minshift;
+	short idx;
+	unsigned low, high;
+	int i;
+
+	for (i = 0; i <= 9; i++)
+		msg[i] = 0;
+
+	/*
+	 * --- the L2/L1 ratio ----------------------------------------------
+	 *
+	 * A fixed-point divide with the numerator pre-shifted as far left as
+	 * it will go: the loop finds the highest set bit of `snr_l2` among
+	 * bits 30..21, and the denominator is shifted down by the same amount,
+	 * so the quotient lands in the same place whatever the magnitudes
+	 * were.  Bit 31 set means no shift at all; nothing found in ten bits
+	 * means the full ten, and that case reaches the same expression by a
+	 * different path in the object.
+	 */
+	snr_l1 = *(int *)(m + 0xaac4);
+	snr_l2 = *(int *)(m + 0xaac8);
+
+	if (snr_l1 != 0) {
+		short b = 0;
+		unsigned den;
+
+		if (snr_l2 >= 0) {
+			do {
+				b = (short)(b + 1);
+			} while (((unsigned)snr_l2 & (0x80000000u >> b)) == 0
+				 && b <= 9);
+		}
+
+		den = (unsigned)snr_l1 >> (10 - b);
+		if (den != 0)
+			ratio = (((unsigned)snr_l2 << b)
+				 + ((unsigned)snr_l1 >> (11 - b))) / den;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PROBE, snr_L1=%d , snr_L2=%d , "
+				     "L2toL1ratio=%d  (all not in dB)\n",
+				     snr_l1, snr_l2, (int)ratio);
+
+	/*
+	 * --- and how many dB that is --------------------------------------
+	 *
+	 * 0x509 >> 10 is 1.2588, one dB of power, and the count is how many of
+	 * them it takes to pass the ratio.  Above 0x18fff the loop is not run
+	 * at all and the answer is 1000, which is the object's own bound
+	 * rather than a saturation of anything downstream.
+	 */
+	if (ratio > 0x18fff) {
+		dbcnt = 1000;
+	} else {
+		unsigned t = 0x47d;
+
+		dbcnt = 0;
+		while (t < ratio) {
+			t = (t * 0x509 + 0x200) >> 10;
+			dbcnt = (short)(dbcnt + 1);
+		}
+	}
+
+	/*
+	 * --- the reduction that many dB asks for --------------------------
+	 *
+	 * `0x640000 / gain` is the AGC gain's reciprocal in Q14, and
+	 * multiplying by the dB count turns "the far signal is N dB too
+	 * strong" into a request.  The clamp is UNSIGNED, so a negative gain
+	 * -- which the signed divide above can produce -- lands on the ceiling
+	 * rather than passing through as a huge reduction.
+	 */
+	gain = (unsigned short)rx->agc_gain;
+	req = 0;
+	if (gain != 0) {
+		int g = (short)gain;
+		int est = (g / 2 + 0x640000) / g;
+
+		if ((unsigned)est > 0x4000)
+			est = 0x4000;
+		req = (short)(((unsigned)est * (unsigned)(int)dbcnt) >> 14);
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PROBE, dBcnt=%d , "
+				     "powerReductionReq=%d , gain=%d\n",
+				     (int)dbcnt, (int)req, (int)(short)gain);
+
+	/*
+	 * --- and whether to ask for it ------------------------------------
+	 *
+	 * Three ways to end up asking and they do not agree on how much.  The
+	 * two "sensitive ISP" arms are flat -- a small enough `snr_l1` asks
+	 * for the maximum whatever the AGC says -- and the ordinary arm asks
+	 * for what was computed, capped at 7 dB and only while the AGC still
+	 * has room.
+	 *
+	 * BOTH FLAT ARMS FALL INTO THE "NO REDUCTION" TAIL, so a run that has
+	 * just asked for 7 or 9 dB then prints "not asking for power
+	 * reduction".  D52.
+	 */
+	if ((pcfg[0x50] & 0x10) == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Sensitive RX Power Reduction "
+					     "mechanism disabled!\r\n");
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Sensitive RX Power Reduction "
+					     "mechanism enabled!\r\n");
+
+		if ((unsigned)snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {
+			probe_ask(rx, msg, 7, 2, 9);
+			goto not_asking;
+		}
+		if ((unsigned)snr_l1 <= 0x3e7 && (m[0xa97e] & 0x80)) {
+			probe_ask(rx, msg, 7, -1, 7);
+			goto not_asking;
+		}
+	}
+
+	if ((m[0xa97e] & 0x80) == 0)
+		goto not_asking;
+	if (!(rx->agc_gain <= 0xfff && req != 0))
+		goto not_asking;
+
+	if (req > 7)
+		req = 7;
+
+	mp_or(msg, 0, (unsigned)(unsigned short)
+		      bitreverse((unsigned short)req, 3) << 5);
+
+	if (DSPLIB_DEBUG_ON()) {
+		dsplibs_debug_printf("V34PROBE, asking for a power reduction "
+				     "of %d\n", (int)req);
+		dsplibs_debug_printf("V34PROBE, agc gainestimate of L1 signal "
+				     "is %d\n", (int)rx->f262);
+	}
+
+	probe_backoff(rx, req);
+
+	if (rx->f262 > 0x1b58)
+		rx->f262 = 0x1b58;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PROBE, agc gainestimate due to power "
+				     "reduction request is %d\n",
+				     (int)rx->f262);
+	goto band_edges;
+
+not_asking:
+	if (DSPLIB_DEBUG_ON()) {
+		dsplibs_debug_printf("V34PROBE, not asking for power "
+				     "reduction\n");
+		dsplibs_debug_printf("V34PROBE, rx->gain=%d ,"
+				     "(obj->rxinfo0.data[1]&0x80)=%d\n",
+				     (int)rx->agc_gain,
+				     (int)(m[0xa97e] & 0x80));
+	}
+
+band_edges:
+	/*
+	 * --- normalise the bank -------------------------------------------
+	 *
+	 * Subtract the smallest `shift` from every one, so what is left is
+	 * each bin's level relative to the quietest.  THE MINIMUM IS COMPARED
+	 * SIGNED AND KEPT UNSIGNED -- `movswl` on one side and `movzwl` on the
+	 * assignment -- so a single negative shift makes the minimum a large
+	 * positive number and every subtraction after it runs the other way.
+	 * D54.
+	 */
+	minshift = 0x20;
+	for (i = 0; i <= 24; i++)
+		if ((int)bins[i].shift < minshift)
+			minshift = (unsigned short)bins[i].shift;
+	for (i = 0; i <= 24; i++)
+		bins[i].shift = (short)((unsigned)(unsigned short)bins[i].shift
+					- (unsigned)minshift);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V34PROBE,0=%d,%d,%d,%d,%d,5=%d,%d,%d,%d,%d,10=%d,%d,%d,"
+		    "%d,%d,%d,%d,%d,%d,%d,20=%d,%d,22=%d,%d,24=%d\n",
+		    (int)bins[0].shift, (int)bins[1].shift, (int)bins[2].shift,
+		    (int)bins[3].shift, (int)bins[4].shift, (int)bins[5].shift,
+		    (int)bins[6].shift, (int)bins[7].shift, (int)bins[8].shift,
+		    (int)bins[9].shift, (int)bins[10].shift,
+		    (int)bins[11].shift, (int)bins[12].shift,
+		    (int)bins[13].shift, (int)bins[14].shift,
+		    (int)bins[15].shift, (int)bins[16].shift,
+		    (int)bins[17].shift, (int)bins[18].shift,
+		    (int)bins[19].shift, (int)bins[20].shift,
+		    (int)bins[21].shift, (int)bins[22].shift,
+		    (int)bins[23].shift, (int)bins[24].shift);
+
+	/*
+	 * --- and pull the top of the band down if the edges are too strong -
+	 *
+	 * Four low bins against four high ones.  More than four times and the
+	 * upper octave loses two steps, more than twice and it loses one.  A
+	 * zero low sum is forced to one rather than skipping the test, so the
+	 * comparison is always against at least four.  Both sums are truncated
+	 * to sixteen bits before the comparison; each term was zero-extended.
+	 */
+	low = (unsigned short)(bins[2].shift + bins[3].shift
+			       + bins[4].shift + bins[6].shift);
+	high = (unsigned short)(bins[12].shift + bins[13].shift
+				+ bins[14].shift + bins[16].shift);
+	if (low == 0)
+		low = 1;
+
+	if ((int)high > (int)(low * 4)) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34PROBE, min = %d, i= %d, so "
+					     "reducing band edge norm by 2\n",
+					     (int)high, (int)low);
+		for (i = 16; i <= 23; i++)
+			if (bins[i].shift > 2)
+				bins[i].shift = (short)(bins[i].shift - 2);
+	} else if ((int)high > (int)(low * 2)) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34PROBE, min = %d, i= %d, so "
+					     "reducing band edge norm by 1\n",
+					     (int)high, (int)low);
+		for (i = 16; i <= 23; i++)
+			if (bins[i].shift > 1)
+				bins[i].shift = (short)(bins[i].shift - 1);
+	}
+
+	chkForceBaudRate(obj, bins);
+
+	/*
+	 * --- and now the ladder --------------------------------------------
+	 *
+	 * Written with the object's own labels rather than as nested `if`s.
+	 * The two are not the same shape: the originating arms FALL THROUGH
+	 * into the next rate's test and the answering arms return, and the
+	 * re-entry points differ between them -- 3200's originating arm comes
+	 * back below its first band-edge test and 3000's comes back above its
+	 * own.  Nesting that would have to duplicate a test.
+	 */
+	role = *(short *)(m + 0x359c);
+
+	if (*(short *)(m + 0x359a) != 0)
+		goto rate_2400;
+
+	if (bins[24].shift > 10)
+		goto rate_3200;
+	if (bins[23].shift > 6)
+		goto rate_3200;
+	if (bins[1].shift > 5)
+		goto rate_3200;
+
+	if (role == 0x65) {
+		mp_or(msg, 8, 0xe0);
+		idx = probe_preemph(bins, 22, 0x6626, 0xd65);
+		*pe3429 = idx;
+		mp_or(msg, 7, (unsigned)(unsigned short)
+			      bitreverse((unsigned short)idx, 4) << 1);
+		goto rate_3200;
+	}
+	if ((m[0xa9ea] & 1) == 0 && (m[0xa9ec] & 0xe0) == 0)
+		goto rate_3200;
+
+	*tx_baud = 0xd65;
+	*tx_carrier = 0x7a7;
+	*tx_scale = scale3429;
+	*tx_preemp = (short)bitreverse((unsigned short)
+				       ((*(unsigned short *)(m + 0xa9ea) >> 1)
+					& 0xf), 4);
+	*rx_scale = scale3429;
+	*rx_cdesc = c1959;
+	mp_or(msg, 2, 2);
+	mp_or(msg, 3, 0xd0);
+	*rx_baud = 0xd65;
+	*rx_carrier = 0x7a7;
+	mp_or(msg, 2, 0x24);
+	idx = probe_preemph(bins, 22, 0x6626, 0xd65);
+	*pe3429 = idx;
+	mp_put_preemph(msg, idx);
+	return;
+
+rate_3200:
+	e22 = bins[22].shift;
+	if (e22 > 6)
+		goto rate_3000;
+	if (bins[1].shift > 6)
+		goto rate_3200_alt;
+
+	if (role == 0x65) {
+		if (bins[23].shift <= 5)
+			mp_or(msg, 6, 0x40);
+		if (bins[23].shift > 7) {
+			mp_or(msg, 6, 3);
+			mp_or(msg, 7, 0x40);
+		} else {
+			mp_or(msg, 6, 2);
+			mp_or(msg, 7, 0xc0);
+		}
+		idx = probe_preemph(bins, 20, 0x639f, 0xc80);
+		*pe3200 = idx;
+		mp_or(msg, 6, (unsigned)(unsigned short)
+			      bitreverse((unsigned short)idx, 4) << 2);
+		goto rate_3200_alt;
+	}
+	if ((m[0xa9e8] & 3) != 0 || (m[0xa9ea] & 0xc0) != 0) {
+		*tx_baud = 0xc80;
+		*tx_scale = scale3200;
+		*tx_carrier = (short)((m[0xa9e8] & 0x40) ? 0x780 : 0x725);
+		*tx_preemp = (short)
+			bitreverse((unsigned short)
+				   ((*(unsigned short *)(m + 0xa9e8) >> 2)
+				    & 0xf), 4);
+		*rx_scale = scale3200;
+		mp_or(msg, 3, 0x90);
+		*rx_baud = 0xc80;
+		if (bins[23].shift > 5) {
+			*rx_carrier = 0x725;
+			*rx_cdesc = c1829;
+		} else {
+			mp_or(msg, 1, 4);
+			*rx_cdesc = c1920;
+			*rx_carrier = 0x780;
+		}
+		mp_or(msg, 2, 0x24);
+		idx = probe_preemph(bins, 20, 0x639f, 0xc80);
+		*pe3200 = idx;
+		mp_put_preemph(msg, idx);
+		return;
+	}
+
+rate_3200_alt:
+	e22 = bins[22].shift;
+	if (e22 > 6)
+		goto rate_3000;
+	if (bins[2].shift > 6)
+		goto rate_3000;
+	goto rate_3000_body;
+
+rate_3000:
+	if (bins[21].shift > 6)
+		goto rate_2800;
+	if (bins[1].shift > 6)
+		goto rate_2800;
+
+rate_3000_body:
+	if (role == 0x65) {
+		short e = bins[22].shift;
+
+		if (e <= 5 && bins[2].shift <= 5)
+			mp_or(msg, 5, 0x80);
+		if (e <= 7)
+			mp_or(msg, 5, (unsigned)((e <= 6) ? 1u : 2u));
+		else
+			mp_or(msg, 5, 4);
+		mp_or(msg, 6, 0x80);
+
+		idx = probe_preemph(bins, 19, 0x656f, 0xbb8);
+		*pe3000 = idx;
+		mp_or(msg, 5, (unsigned)(unsigned short)
+			      bitreverse((unsigned short)idx, 4) << 3);
+		goto rate_2800;
+	}
+	if ((m[0xa9e6] & 7) != 0 || (m[0xa9e8] & 0x80) != 0) {
+		*tx_baud = 0xbb8;
+		*tx_scale = scale3000;
+		*tx_carrier = (short)((m[0xa9e6] & 0x80) ? 0x7d0 : 0x708);
+		*tx_preemp = (short)
+			bitreverse((unsigned short)
+				   ((*(unsigned short *)(m + 0xa9e6) >> 3)
+				    & 0xf), 4);
+		*rx_scale = scale3000;
+		mp_or(msg, 2, 3);
+		mp_or(msg, 3, 0x60);
+		*rx_baud = 0xbb8;
+		if (bins[22].shift > 5 || bins[2].shift > 5) {
+			*rx_carrier = 0x708;
+			*rx_cdesc = c1800_;
+		} else {
+			*rx_cdesc = c2000;
+			*rx_carrier = 0x7d0;
+			mp_or(msg, 1, 4);
+		}
+		mp_or(msg, 2, 0x24);
+		idx = probe_preemph(bins, 19, 0x656f, 0xbb8);
+		*pe3000 = idx;
+		mp_put_preemph(msg, idx);
+		return;
+	}
+
+rate_2800:
+	e20 = bins[20].shift;
+	if (e20 > 6)
+		goto rate_2800_alt;
+	if (bins[2].shift > 6)
+		goto rate_2800_alt;
+	goto rate_2800_body;
+
+rate_2800_alt:
+	if (bins[19].shift > 6)
+		goto rate_2400;
+	if (bins[1].shift > 6)
+		goto rate_2400;
+
+rate_2800_body:
+	if (role == 0x65) {
+		/*
+		 * bins[20], not bins[22]: the register the object compares
+		 * here was last loaded at the top of this rate's band-edge
+		 * test, and the 3000 arm above -- which looks identical --
+		 * is the one that still holds bins[22].
+		 */
+		if (bins[20].shift <= 5 && bins[2].shift <= 5)
+			mp_or(msg, 3, 1);
+		mp_or(msg, 4, 0xd);
+		idx = probe_preemph(bins, 18, 0x6789, 0xaf0);
+		*pe2800 = idx;
+		mp_or(msg, 4,
+		      ((unsigned)(unsigned short)
+		       bitreverse((unsigned short)idx, 4) & 0xf) << 4);
+		goto rate_2400;
+	}
+	if ((m[0xa9e4] & 0xf) == 0)
+		goto rate_2400;
+
+	*tx_baud = 0xaf0;
+	*tx_scale = scale2800;
+	*tx_carrier = (short)((m[0xa9e2] & 1) ? 0x74b : 0x690);
+	*tx_preemp = (short)
+		bitreverse((unsigned short)
+			   ((*(unsigned short *)(m + 0xa9e4) >> 4) & 0xf), 4);
+	*rx_scale = scale2800;
+	mp_or(msg, 2, 1);
+	mp_or(msg, 3, 0x20);
+	*rx_baud = 0xaf0;
+	if (bins[20].shift > 5 || bins[2].shift > 5) {
+		*rx_carrier = 0x690;
+		*rx_cdesc = c1680;
+	} else {
+		mp_or(msg, 1, 4);
+		*rx_cdesc = c1867;
+		*rx_carrier = 0x74b;
+	}
+	mp_or(msg, 2, 0x24);
+	idx = probe_preemph(bins, 18, 0x6789, 0xaf0);
+	*pe2800 = idx;
+	mp_put_preemph(msg, idx);
+	return;
+
+rate_2400:
+	if (role == 0x65) {
+		mp_or(msg, 2, 0x24);
+		idx = probe_preemph(bins, 18, 0x7da7, 0x960);
+		*pe2400 = idx;
+		mp_put_preemph(msg, idx);
+		return;
+	}
+	if ((*(unsigned short *)(m + 0xa9e0) & 0x3c) == 0)
+		return;
+
+	*tx_baud = 0x960;
+	*tx_scale = scale2400;
+	*tx_carrier = (short)((m[0xa9de] & 4) ? 0x708 : 0x640);
+	*tx_preemp = (short)
+		bitreverse((unsigned short)
+			   (((*(unsigned short *)(m + 0xa9de) & 3) << 2)
+			    | ((*(unsigned short *)(m + 0xa9e0) & 0xc0) >> 6)),
+			   4);
+	*rx_baud = 0x960;
+	*rx_carrier = 0x640;
+	*rx_scale = scale2400;
+	*rx_cdesc = c1600;
+	mp_or(msg, 2, 0x24);
+	idx = probe_preemph(bins, 18, 0x7da7, 0x960);
+	*pe2400 = idx;
+	mp_put_preemph(msg, idx);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Bringing the data-mode transmitter up.
+ */
+
+/*
+ * Apply the far end's requested power reduction to the transmit scale.
+ *
+ * `mp` points at the received MP message, which the object always reaches as
+ * `obj + 0xa9dc` -- two bytes below the three `setfinalrate` unpacks the rate
+ * fields out of.  Only its first short is read here, and it holds V.34's two
+ * power fields, both sent most significant bit first and so bit-reversed on
+ * the way in:
+ *
+ *     bits 7..5   power reduction, 0..7 dB
+ *     bits 4..2   additional power reduction, CLAMPED TO 3 dB
+ *
+ * The clamp is the object's `cmp $3; jle`, and it is applied AFTER the bit
+ * reversal -- so a field arriving as 7 becomes 7 and is then cut to 3, not
+ * cut first and reversed after.
+ *
+ * THE LOCAL PCM REQUIREMENT COMBINES TWO DIFFERENT WAYS.  With a V.90
+ * receiver running, `GetVPcmMinimalTxPowerReduction`'s answer is
+ *
+ *   - ADDED to the far end's request when it is negative, so a PCM modem
+ *     asking for more power cancels part of what the far end asked to lose;
+ *   - taken as a FLOOR when it is not, so the larger of the two wins.
+ *
+ * With no V.90 receiver neither happens and the far end's request stands.
+ *
+ * THE TWO SCALING LOOPS ARE NOT SYMMETRIC, and not only in their constant.
+ * 0x390a >> 14 is 0.8912, one dB down, and 0x47cf >> 14 is 1.1220, one dB up
+ * -- but the down loop keeps its accumulator at 32 bits and the up loop
+ * TRUNCATES IT TO A SHORT every iteration.  See D51.
+ *
+ * The final 0x4b4b (1.1765, about +1.4 dB) with 0x2000 for rounding is
+ * applied to whatever the loop produced and is not part of either dB step.
+ * The diagnostic calls the value BEFORE it "final txscale", so the object's
+ * own words do not account for it either.
+ */
+void
+settxlevel(void *objp, const short *mp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	short minpr = GetVPcmMinimalTxPowerReduction(obj);
+	unsigned w = (unsigned short)mp[0];
+	int scale = *(short *)(m + 0x25d4);
+	short extra;
+	short want;
+	short n;
+
+	obj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);
+
+	extra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);
+	if (extra > 3)
+		extra = 3;
+
+	obj->f25dc = (short)(extra + (unsigned short)obj->f25dc);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34TXSCALE, power reduction requested "
+				     "by remote modem is %d dB\n",
+				     (int)obj->f25dc);
+
+	if (obj->v90_receiver != 0) {
+		if (minpr < 0)
+			obj->f25dc = (short)(minpr
+					     + (unsigned short)obj->f25dc);
+		else if (obj->f25dc < minpr)
+			obj->f25dc = minpr;
+	}
+	want = obj->f25dc;
+
+	if (want < 0) {
+		for (n = want; n < 0; n = (short)(n + 1))
+			scale = (short)((scale * 0x47cf) >> 14);
+	} else {
+		for (n = 0; want > n; n = (short)(n + 1))
+			scale = (scale * 0x390a) >> 14;
+	}
+
+	/*
+	 * `f25d4` is RE-READ here rather than kept: this prints the scale as
+	 * it was on entry, and the store below is what changes it.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
+				     "reduced txscale is %d dB,"
+				     "final txscale is %d\n",
+				     (int)*(short *)(m + 0x25d4), (int)want,
+				     scale);
+
+	*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);
+}
+
+/*
+ * Configure the transmitter for the rate that has just been negotiated.
+ *
+ * Six steps and no decisions of its own: the power scale, the modulator, one
+ * receiver flag cleared, two state words moved, two transmit flags, and
+ * `txinit`.  Everything it feeds the modulator comes out of the rate config
+ * `setfinalrate` filled -- baud at +0xaa84, carrier at +0xaa94 and the
+ * pre-emphasis index at +0xaa8a -- reached as raw offsets because that is
+ * how `setfinalrate` writes them.
+ *
+ * `V34SetupModulator`'s `v90` argument is 1 when EITHER PCM receiver is
+ * running.  That argument is only printed, so what it selects is nothing; it
+ * is computed here because the object computes it.
+ *
+ * The two transitions are WAIT for the receive machine and SSEG for the
+ * transmit one, through the same compare-print-assign every other transition
+ * in this file uses -- so a run with diagnostics up prints two lines here, or
+ * fewer if a machine was already there.
+ *
+ * It TAIL-CALLS `txinit`, which is why nothing follows the flag stores.
+ */
+void
+v34setuptxmit(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	int pcm;
+
+	settxlevel(obj, (const short *)(m + 0xa9dc));
+
+	pcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);
+
+	V34SetupModulator((struct v34_modulator *)(m + 0x1450),
+			  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),
+			  *(short *)(m + 0xaa8a), pcm, 1);
+
+	rx->flags = (unsigned short)(rx->flags & ~0x800);
+
+	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+	hs_setstate(obj, HS_TXSTATE, V34HS_SSEG);
+
+	obj->f25c0 = 0;
+	obj->f25c2 = (short)(obj->f25c2 | 0x200);
+
+	txinit(obj);
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Guarded to a 32-bit ABI: `struct v34_object` and
  * `struct v34_receiver` both hold pointers.
  */

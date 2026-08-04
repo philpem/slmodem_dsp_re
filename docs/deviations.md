@@ -1389,7 +1389,7 @@ fails rather than passes — the same shape of check as D26 and D29.
 
 ---
 
-## D31 🐛 `V34SetupModulator`'s V.90 arm is unreachable
+## D31 ~~`V34SetupModulator`'s V.90 arm is unreachable~~ RETRACTED
 
 **Where:** `src/pump/v34/v34filters.c`, the 3200-baud case.
 
@@ -1431,6 +1431,34 @@ filter a 3200-baud V.90 connection uses.
 carrier-based condition. The test disagreed at exactly one (baud, carrier)
 pair each time, which is what pointed at the branch rather than at the
 tables.
+
+### RETRACTED — the arm is live and `v90` selects it
+
+The listing above is missing its first line. The object has
+
+```
+   732f1:  mov  0x40(%esp),%ecx
+   732f5:  test %edi,%edi            ; %edi is the `v90` argument
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; v90 == 0 -> the V.34 arm
+```
+
+and `test` is the flag-setter. Everything after it here followed from the
+missing line: the reasoning about `movl` and inherited flags is correct and
+was applied to the wrong instruction. `72d57: mov 0x50(%esp),%edi` is what
+makes `%edi` the fifth argument; the prologue's frame layout is in finding
+216.
+
+Fixed in `v34filters.c`: `v90` now selects 0x40 taps, `tx3200c1_for_v90`,
+`V90EchoPrefilterCoeff` and 14 in `fc8c`. `t_v34ec.c`'s state sweep takes
+`v90` as a dimension, which is what would have caught this and did not exist
+— the only sweep that varied it compared transcripts, and `v90` is printed
+before the switch.
+
+This is the fourth retraction, after D28, D34 and D47, and the first of them
+that was a wrong reading of an instruction rather than a claim about
+reachability that later expired.
 
 ---
 
@@ -2041,3 +2069,171 @@ short above 0xff is not settled. `unmeasured` — task #47.
 
 **How it was found:** by writing the arms out and noticing that two of the
 seven used `%edx` (the masked copy) where five used `%ax`.
+
+## D51 ⚠ `settxlevel`'s two dB loops accumulate at different widths
+
+**Where:** `src/pump/v34/v34hshak.c`, `settxlevel`.
+
+**What the original does:** applies the power reduction one dB at a time, with
+one loop per direction. Reducing:
+
+```
+   62651:  imul $0x390a,%esi,%esi     ; x 0.8912
+   62659:  sar  $0xe,%esi             ; 32-bit throughout
+```
+
+Raising:
+
+```
+   626c2:  imul $0x47cf,%esi,%eax     ; x 1.1220
+   626ce:  sar  $0xe,%eax
+   626d4:  movswl %ax,%esi            ; TRUNCATED TO A SHORT
+```
+
+**Why that is worth an entry:** the loop that can make the accumulator grow is
+the one that discards its high half, and the loop that only ever shrinks it
+keeps thirty-two bits. A scale of 30000 with a reduction of −1 dB gives
+20549 rather than 33660: the product `30000 * 0x47cf >> 14` is 33660, which
+does not fit a signed short and wraps. The reduction is negative only when
+`GetVPcmMinimalTxPowerReduction` returns a negative value and a V.90 receiver
+is running, and the scale is whatever `VPcmV34SetTxScale` or a previous call
+left — 0x16a1 from the former, which is 5793 and survives four dB of gain
+before it wraps.
+
+**What we do:** reproduce both widths, with the cast written out. The sweep in
+`t_v34hshak.c` drives the starting scale to 0x7fff and 0x7ffe as well as to
+0x16a1, so the wrap is a tested case rather than an inferred one.
+
+**Reachability:** the arm is reachable — the sweep reaches it — but whether a
+real session presents a scale large enough to wrap it is not measured.
+`unmeasured` — task #47.
+
+**How it was found:** by reading the two loops side by side while writing
+them; the asymmetry is one instruction and neither loop is wrong on its own.
+
+## D52 ⚠ `probeselect`'s two flat power requests also say they are not asking
+
+**Where:** `src/pump/v34/v34hshak.c`, `probeselect`'s sensitive-ISP arms.
+
+**What the original does:** the two arms that a very small `snr_l1` selects —
+0x60fd3 asking for 7 dB and 0x613ba asking for 9 — each print "V34PROBE,
+asking for a power reduction of %d" and then fall through into 0x61051, which
+is the head of the arm that prints "V34PROBE, not asking for power reduction"
+and "V34PROBE, rx->gain=%d ,(obj->rxinfo0.data[1]&0x80)=%d".
+
+So a run at debug level 2 that has just asked the far end for 9 dB says, on
+the next line, that it is not asking for anything. The ORDINARY request path
+at 0x60f15 does not: it jumps past 0x61051 to the band-edge section, so only
+the two flat arms contradict themselves.
+
+**Why that is worth an entry:** the messages are the only externally visible
+difference between the arms, and a reconstruction that read the fall-through
+as "and then the not-asking arm" — rather than as a shared tail — would
+produce the same object state and a different transcript. It is also a real
+diagnostic defect: anyone reading the log for whether a reduction was
+requested gets both answers.
+
+**What we do:** reproduce it. Both flat arms `goto not_asking` and the
+ordinary one does not.
+
+**Reachability:** reached. `t_v34hshak.c`'s sweep drives `pcfg[0x50]` bit 4
+and `snr_l1` across both thresholds, and the transcript comparison covers the
+result at levels 2 and 3.
+
+**How it was found:** by following the jump at 0x6103a, which goes to a label
+whose first instruction is a debug gate rather than to the band-edge section
+the ordinary path uses.
+
+## D53 ⚠ `probeselect`'s "index is 0" is unreachable in all five rate arms
+
+**Where:** `src/pump/v34/v34hshak.c`, `probe_preemph`.
+
+**What the original does:** each rate's pre-emphasis search keeps its counter
+in `%ebx`, preset to 5, and advances it BEFORE the comparison that can leave
+the loop:
+
+```
+   6128a:  movswl %si,%ebx           ; ebx = ebx + 1
+   6128d:  sar    $0xe,%edi
+   61290:  movswl %di,%edx
+   61293:  cmp    %cx,%dx
+   61295:  jg     623a8              ; the early exit
+```
+
+so the counter is 6..10 at that exit and 10 at the other. Every arm's exit
+block then begins `cmp $0x5,%bx; je <index 0>`, which cannot hold. The string
+on that path, `V34PREEMPHASIS, - index is 0, baudrate= %d`, is one of three
+and is the only one nothing can print.
+
+**Why that is worth an entry:** it is the same shape as D31, which declared a
+branch dead from the instructions around it and was wrong. This one is
+recorded only after measurement, twice over.
+
+The sweep in `t_v34hshak.c` runs four thousand probes and asserts that indices
+6 through 10 were all returned and that 0 through 5 never were. If the reading
+is wrong, that assertion fails.
+
+**And the compiler agrees.** `gcov` over the instrumented tree reports the
+`i == 5` test executed 6,938 times and its whole body as NOT EXECUTABLE:
+
+```
+    19587: 1686:		if (x > ref) {
+     6938: 1687:			if (i == 5) {
+        -: 1688:				if (DSPLIB_DEBUG_ON())
+        -: 1689:					dsplibs_debug_printf(
+        -: 1690:					    "V34PREEMPHASIS, - index is 0, "
+```
+
+GCC proved the branch unsatisfiable and folded the body away, which is the
+same conclusion reached from the object's instruction order and reached
+mechanically. Note the consequence for the other checks: the site does not
+appear in `debugcov`'s dead-site list, because gcov marks it non-executable
+rather than executed-zero-times, so that count is NOT evidence here either
+way.
+
+**What we do:** reproduce the branch, because the object has it five times
+over and removing it would be a claim about the compiler rather than about
+the code.
+
+**Reachability:** the arms are reached — all five, per the sweep's counters —
+and this branch inside them is not.
+
+**How it was found:** by transcribing the loop and noticing that the
+increment sits above the exit test rather than below it.
+
+## D54 ⚠ `probeselect` finds the minimum shift signed and keeps it unsigned
+
+**Where:** `src/pump/v34/v34hshak.c`, `probeselect`'s band normalisation.
+
+**What the original does:**
+
+```
+   61076:  movzwl 0xe(%edi,%eax,4),%ecx
+   6107b:  movswl %cx,%ebp           ; SIGNED for the comparison
+   6107e:  cmp    %ebx,%ebp
+   61080:  jge    61085
+   61082:  movzwl %cx,%ebx           ; UNSIGNED for the assignment
+```
+
+so a bin whose `shift` is negative wins the comparison and is then stored as a
+number above 32767. Every bin is subsequently reduced by that, which with
+16-bit wrap-around adds rather than subtracts.
+
+**Why that is worth an entry:** the normalisation is supposed to leave each
+bin's level relative to the quietest, and one negative shift inverts it — the
+whole ladder below then reads a band that looks nothing like the one measured.
+`dftenergy` writes `shift`, and finding 212 established that the neighbouring
+`energy` genuinely does go negative from a seeded accumulator, so "a negative
+shift cannot happen" is not something this reconstruction can assert.
+
+**What we do:** reproduce both widths. The sweep leaves one shift in
+thirty-two wide open rather than narrowed towards zero, so negative ones occur
+and the comparison is tested.
+
+**Reachability:** reached in the sweep. Whether a real probe produces a
+negative `shift` is not measured — that is a question about `dftenergy`'s
+inputs. `unmeasured` — task #47.
+
+**How it was found:** by the two different widening instructions on the two
+sides of one comparison, which is the same thing finding 212 records for the
+DFT bin's thresholds.

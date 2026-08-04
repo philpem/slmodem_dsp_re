@@ -8944,6 +8944,14 @@ leaving five of the eight rates with the field untouched.
 3200 case.  That is a second, independent confirmation of D31: a path that
 cannot be reached is also the only path that disagrees about this constant.
 
+> **Superseded by finding 216.**  D31 is retracted: the arm is live and the
+> `v90` argument selects it, so 14 is a value `fc8c` really takes.  The table
+> above is still exactly what the blob produces — for every carrier, every
+> phase and both settings of `reset`, as it says — because the sweep that
+> produced it held `v90` at zero.  The "second, independent confirmation" was
+> the same blind spot twice, which is a sharper version of this entry's own
+> lesson: a sweep confirms only what it varies.
+
 **Why `t_v34ec` did not catch it.**  Its modulator test compares named fields
 — `taps`, `f04`, `rows`, `row`, `sine_len`, `phase`, `wpos`, `wstep` — plus
 the contents of every table a pointer selects.  `fc8c` was not one of the
@@ -9041,6 +9049,13 @@ A parameter that is read by nothing and printed by the one call site that
 was dropped is exactly the parameter whose name is unrecoverable any other
 way — and `V90` is a third pointer at the absent V.90 configuration D31 is
 about.
+
+> **Partly superseded by finding 216.**  `V90` is read: it selects the
+> 3200-baud V.90 configuration, and D31 is retracted.  The naming argument
+> stands — the diagnostic is still the only thing that gives the fourth and
+> fifth parameters their names — but "read by nothing" was wrong, and the
+> phrase that made it feel safe, "a third pointer at the absent V.90
+> configuration", is what an unread parameter and a live one look like alike.
 
 **And 600 baud is a real case, not the default.**  The object compares
 against 0x258 and sends only the non-matching path to "invalid baudrate";
@@ -11542,7 +11557,439 @@ against `.text+offset` rather than a name: `ApplyBulkDelay`, `getbit` and
 `getMPrecvdBits` were absent from it and present in `callgraph`'s.  The
 counts here are `callgraph`'s, and 214's "65" is corrected to 64 in place.
 
-### 216. Context is cumulative output, so the wall is a turn count
+### 216. `V34SetupModulator`'s V.90 arm is live, and D31 quoted the wrong three instructions
+
+D31 said the 3200-baud case's V.90 configuration could not be reached, on
+this evidence:
+
+```
+   732f1:  ...                       ; entered via je from cmp $0xc80,%ebx
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; <- always taken
+```
+
+`movl` sets no flags, so the `je` inherits ZF from the compare that selected
+the case, which was equal — therefore always taken, therefore the arm is
+dead. Every step of that is sound. **The listing is missing a line.** What
+the object actually holds is
+
+```
+   732f1:  mov  0x40(%esp),%ecx
+   732f5:  test %edi,%edi            ; <-- and %edi is the `v90` argument
+   732f7:  movl $0x1,0x4(%ecx)
+   732fe:  movl $0x3,0x8(%ecx)
+   73305:  je   7333e                ; v90 == 0 -> the V.34 arm
+```
+
+`test` is the flag-setter and the two `movl`s were scheduled into the gap
+between it and the branch, which is exactly the instruction ordering that
+makes a `je` look orphaned. The prologue settles which parameter `%edi` is:
+`sub $0x2c,%esp` after four pushes puts the arguments at `+0x40` (`m`),
+`+0x44` (baud), `+0x48` (carrier), `+0x4c` (preemp index), `+0x50` (v90) and
+`+0x54` (reset), and `72d57: mov 0x50(%esp),%edi` is the fifth.
+
+So `v90` selects a whole configuration:
+
+| | v90 == 0 | v90 != 0 |
+|---|---|---|
+| `taps` | 0x20 | **0x40** |
+| shaping | `tx3200c1_for_v34` | **`tx3200c1_for_v90`** |
+| pre-filter | `ec_prem_coef_B3200`/`High` by carrier | **`V90EchoPrefilterCoeff`** |
+| `fc8c` | 15 | **14** |
+
+and the carrier is consulted only on the V.34 arm. Two other claims fall
+with it: `v34filters.c` said `v90` was "read by nothing in this function —
+only printed", and the note on `fc8c` said every reachable site writes 15.
+
+**Why no test caught it, which is the part worth keeping.** `t_v34ec.c` has
+two sweeps over `V34SetupModulator`. The one that compares the modulator's
+state drove `v90` at 0 for every case. The one that varies `v90` compares
+only the transcript — and `v90` is printed on entry, before the switch, so
+that comparison is identical on both arms by construction. Two sweeps, one
+input, and the input was live in the sweep that could not see it and dead in
+the sweep that could.
+
+It surfaced from `v34setuptxmit`, which computes `v90` as "either PCM
+receiver is running" and passes it straight in. Its own sweep crosses the
+rates with the two receiver words, so 3200 baud with `v90_receiver` set is
+an ordinary case there, and it failed on the first run.
+
+**What is now tested.** `t_v34ec.c`'s state sweep takes `v90` as a
+dimension, at 0, 1 and 2 — the object's test is `test %edi,%edi`, so 2
+separates "non-zero" from a reconstruction comparing `== 1`.
+
+Same shape as findings 130 and 171: two blocks that look alike, one input
+that distinguishes them, and a fixture that held it fixed. The general rule
+is the one this project keeps rediscovering — an argument driven from a
+constant is an argument not tested — and the specific one is narrower:
+**quoting a branch means quoting back to the last instruction that sets
+flags, not to the last instruction that looks relevant.**
+
+### 217. Ten of #59's seventeen are not available, and two different reasons say so
+
+Finding 215 says every one of the 64 prerequisites "has a `ref_` alias and is
+individually testable today", and the hand-over for #59 says "every one of
+these has a `ref_` alias and is individually differentially testable today.
+Nothing here is blocked." Neither is true of the whole list, and the two
+things that make it untrue are different from each other and from the
+scaffold question 215 settles.
+
+Seven of the seventeen are available, and they are the whole of what is:
+`chkForceBaudRate`, `GetVPcmMinimalTxPowerReduction`,
+`VPcmV34GetMaxUpstreamRateIndex`, `VPcmV34InterpretMohMessageBits`,
+`settxlevel`, `v34setuptxmit` and `probeselect`, about 8.7 KB of the 16.9.
+**All seven are written** — `probeselect`, the largest at 6,173 bytes, in
+finding 219. The other ten are below.
+
+#### Three are file-local, so `objcopy` cannot give them a `ref_` alias
+
+```
+$ nm ../slmodemd/dsplibs.o | grep -wE 'getbit|ApplyBulkDelay'
+0005dd10 t ApplyBulkDelay
+0005eaf0 t getbit
+$ nm ../slmodemd/dsplibs.o | grep getMPrecvdBits
+00009250 t _Z14getMPrecvdBitsP12tagV34Object
+```
+
+Lower-case `t` is a local symbol. `symmap.py` emits a rename for every
+symbol the blob *defines*, and `objcopy --redefine-syms` renames a local to
+another local — so there is no `ref_getbit` for a test to call, and the tier-1
+differential path does not exist for these three. `t_v34hshak.c`'s own header
+has said the same thing about `StateName` since it was written, and about
+`getbit` and `ApplyBulkDelay` in the paragraph beginning "`getbit` is NOT
+here although it is unblocked".
+
+**This is exactly the set 215's own correction paragraph names** — the three
+a relocation-walked closure misses, because a call to a local in the same
+section needs no relocation. The correction was right and the blanket claim
+one paragraph later was written from the old list.
+
+Total: 1,795 bytes with no tier-1 path under the current harness.
+
+**There is a route, and it is not the scaffold.** `objcopy
+--globalize-symbol=getbit` before `--redefine-syms` promotes the local, after
+which the existing rename produces `ref_getbit`. It ADDS an alias; it does
+not stop renaming anything, so the invariant 215 declines to spend — "the
+suite links" proves everything reachable from what we have written is
+written — is untouched. Each of the three names appears exactly once in the
+symbol table, so globalising cannot collide. **Not landed**: it is a harness
+change and those are the user's.
+
+#### Seven reach something unwritten, and the link fails for both sides
+
+```
+$ python3 tools/symmap.py ../slmodemd/dsplibs.o -o /tmp/sm.txt
+$ grep -E '_ZN12VPcmFloModem11enterPhase3Ev' /tmp/sm.txt
+_ZN12VPcmFloModem11enterPhase3Ev ref__ZN12VPcmFloModem11enterPhase3Ev
+```
+
+`indicateJaTransmission` is 57 bytes and is nothing but two tail calls, to
+`K56FlexFloModem::enterPhase3FullDuplex` and `VPcmFloModem::enterPhase3`.
+Both are renamed in the reference object, so a C file defining
+`indicateJaTransmission` leaves two undefined symbols and **all 62 test
+binaries fail to link**, not just the new one. That is finding 214's premise,
+and with 215 declining the scaffold it is the standing rule: a caller waits
+for its callees.
+
+| function | bytes | waits for |
+|---|--:|---|
+| `indicateJaTransmission` | 57 | `VPcmFloModem::enterPhase3`, `K56FlexFloModem::enterPhase3FullDuplex` |
+| `V34GiveINFO1dBits` | 436 | `VPcmV34InitiateRetrain` (below) |
+| `k56FlexPhase34` | 721 | `K56FlexFloModem::getK56FlexJaBits`, `::getK56FlexMpBits` |
+| `datapumpv34` | 1028 | `v34handshak` (#56–#58), `VPcmV34IndicateLocalRRN`, `IndicateRemoteRRN` |
+| `v90Phase34` | 1358 | `VPcmFloModem::getV90JaBits`, `::getV90CpBits` |
+| `V34SetINFO1aBits` | 1401 | `VPcmFloModem::getUinfoValue` |
+| `VPcmV34InitiateRetrain` | 1406 | four methods, incl. `V92EchoCanceller::setEchoDelay` |
+
+Six of the seven wait on `VPcmV34Main.cpp`'s C++ half, which is **#60**. So
+#60 is not merely "a scheduling question" as `fastpass.md` has it — it is a
+hard predecessor of six of #59's functions, and that ordering was recorded
+nowhere.
+
+`datapumpv34` is the odd one: it waits on `v34handshak` itself, so it comes
+after #56–#58 rather than after #60.
+
+#### The counts do not agree, and both commands are given
+
+215 says 14 C functions at 17,403 bytes. The list `callgraph.py` produces has
+seventeen C-linkage entries, counting `getMPrecvdBits` — which is C++ by
+mangling and C by everything else about it — and totals 16,889 bytes:
+
+```
+$ python3 tools/callgraph.py --order --of v34handshak
+```
+
+The three-byte-level difference is not chased here. What matters for
+scheduling is the split, which both agree on: about 8.7 KB was writable,
+1.8 KB needs a harness change, and 6.4 KB needs #60 or #56–#58 first.
+
+### 218. `probeselect`'s shape, before it is reconstructed
+
+*Superseded by finding 219, which reconstructs it. This map is kept because
+219 records what it got right and wrong, and because everything below is still
+the fastest way to read the function.*
+
+6,173 bytes and the largest single thing in #59 — 71% of that task's available
+bytes. **Not reconstructed when this was written, and not blocked either.** It has a `ref_` alias,
+every callee it needs is written, and it is differentially testable today; it
+was left out of this session for budget and nothing else. That distinction
+matters, because everything else left out of #59 was left out for a reason
+that will not go away by itself (finding 217) and this one will.
+
+This is the map, written down so the next session starts from it and not from
+1,354 lines of disassembly, and because two of the things below are claims
+that want a differential test rather than another reading.
+
+#### What it is
+
+The line probe's verdict. It takes the object alone — `probeselect(obj)`,
+one argument at `0x90(%esp)` after four pushes and `sub $0x7c` — and returns
+nothing. Four cursors are set up in the prologue and used throughout:
+
+```
+  [esp+0x78]  obj + 0xa9ac   the outgoing MP message, ten shorts
+  [esp+0x74]  obj + 0xaa84   the rate config  (V34_RATECFG)
+  [esp+0x70]  obj + 0x264    the receiver
+  edi         obj + 0xa320   the probe DFT bank, 25 bins
+```
+
+It opens by **zeroing ten shorts at `obj + 0xa9ac`** — the MP message it is
+about to build — and ends by having written the rate config and that message.
+
+#### It writes exactly the fields `setfinalrate` reads back
+
+Every store into `[esp+0x74]` lands on a field `setfinalrate` already names:
+
+| offset | absolute | `setfinalrate`'s name |
+|---|---|---|
+| +0x00 | 0xaa84 | `tx_baud` |
+| +0x06 | 0xaa8a | `tx_preemp` |
+| +0x0c | 0xaa90 | `tx_scale` |
+| +0x10 | 0xaa94 | `tx_carrier` |
+| +0x12 | 0xaa96 | `rx_baud` |
+| +0x24 | 0xaaa8 | `rx_carrier` |
+| +0x28 | 0xaaac | `rx_scale` |
+| +0x2c | 0xaab0 | `rx_cdesc` |
+
+and the MP bits it packs at `obj + 0xa9ac` are two bytes below `+0xa9de`,
+`+0xa9e0` and `+0xa9e2` — the three `setfinalrate` unpacks its rate fields
+out of. **So the two functions are an encode/decode pair over one message**,
+which is the `--pairs` shape `callgraph.py` looks for and the only oracle in
+V.34 so far that is independent of the blob. Whoever writes this should wire
+that round-trip up: `probeselect` then `setfinalrate` must land on the rate
+`probeselect` chose.
+
+#### The five per-rate arms are one arm five times
+
+Each recognised rate does the same nine things, differing only in constants:
+
+```
+  cfg->tx_baud    = <rate>
+  cfg->tx_scale   = scale<rate>
+  cfg->tx_carrier = <high or low, on one bit of the MP message>
+  cfg->tx_preemp  = bitreverse(<a nibble of the MP message>, 4)
+  cfg->rx_baud    = <rate>
+  cfg->rx_carrier, rx_scale, rx_cdesc
+  <OR some bits into the outgoing MP message>
+  <the pre-emphasis search, below>
+  cfg-><per-rate offset> = the index it found
+```
+
+with
+
+| rate | cfg offset | search constant | search bin |
+|---|---|---|---|
+| 2400 | +0x16 | 0x7da7 | 18 |
+| 2800 | +0x18 | 0x6789 | 18 |
+| 3000 | +0x1c | 0x656f | 19 |
+| 3200 | +0x1e | 0x639f | 20 |
+| 3429 | +0x20 | 0x6626 | 22 |
+
+#### The pre-emphasis search, and one branch that looks dead
+
+Every arm runs this, with `ref` always `bins[4].energy`:
+
+```
+	x = bins[N].energy;
+	i = 5;
+	do {
+		x = (short)((x * K) >> 14);
+		i++;
+	} while (x <= ref && i <= 9);
+```
+
+`i` is incremented **before** the comparison, at `lea 0x1(%ebx),%esi;
+movswl %si,%ebx` ahead of `cmp %cx,%dx`. So `i` is 6..10 when either exit is
+taken — and every arm's exit block then asks `cmp $0x5,%bx; je <index 0>`,
+which **cannot be true**. The string on that path is
+`V34PREEMPHASIS, - index is 0, baudrate= %d`, one of three; the other two,
+`index is 10` and `index is %d`, are both reachable.
+
+That is a reading, not a measurement, and it is exactly the shape D31 got
+wrong — a branch declared dead from the instructions around it. Do not enter
+it as a deviation until a differential test has driven the arm. If it holds
+it is a real one: a whole index of the pre-emphasis range is unreachable.
+
+**Index 10 is reached by BOTH exits and they print different strings.** The
+`jg` taken on the iteration that makes `i` ten, and the `cmp $0x9`
+fall-through, both leave 10 in the rate config — but the first reports it as
+"index is %d" and the second as "index is 10". So the two are
+indistinguishable in state and distinguishable only in the transcript, which
+is findings 171 and 212's situation again, and the MOH decoder's two pairs of
+near-duplicate arms in finding 214's neighbourhood. Compare the transcript.
+
+**THE BINS MUST BE SEEDED NEGATIVE AS WELL AS POSITIVE.** Both `ref` and `x`
+are `movswl`, and finding 212 established that a bin's `energy` really does go
+negative — from a seeded accumulator, at `0x04000000` in both halves. A
+negative `x` RISES towards zero under a multiplier below one, so it crosses a
+negative `ref` from the other side entirely. A fixture with non-negative
+energies never runs that branch.
+
+**There is no 2743 arm.** Five rates are recognised and V.34's second lowest
+is not one of them — which is the same fact as `chkForceBaudRate`'s `allow[0]`
+and `allow[1]` being written and never read. Two functions, one gap, and
+neither says why.
+
+#### Two guarded arms a zeroed fixture never reaches
+
+- `div %ebp` at 0x60de0 with `ebp = obj->0xaac4`, guarded by `test %ebp,%ebp;
+  je 60df0`. A zeroed object always skips it, so the SNR ratio it computes is
+  never exercised.
+- the bit scan over `obj->0xaac8` at 0x60db0, with a bounded early-out at
+  0x61a6f (`cmp $0x9,%bx; jle`) that takes a different division path.
+
+Both sides of both need driving.
+
+#### Both `chkForceBaudRate` call sites
+
+0x6117a and 0x614b8, and they are not interchangeable: each is preceded by
+its own loop over bins 16..23, one subtracting 2 from `shift` and one
+subtracting 1, chosen by how far the summed band-edge energies missed. The
+two say so — "so reducing band edge norm by 2" and "by 1". Reaching only one
+is the easy failure.
+
+#### The fifteen strings, which narrate the whole function
+
+```
+  V34PROBE, snr_L1=%d , snr_L2=%d , L2toL1ratio=%d  (all not in dB)
+  V34PROBE, agc gainestimate of L1 signal is %d
+  V34PROBE, dBcnt=%d , powerReductionReq=%d , gain=%d
+  V34PROBE, asking for a power reduction of %d
+  V34PROBE, not asking for power reduction
+  V34PROBE, agc gainestimate due to power reduction request is %d
+  V34PROBE, rx->gain=%d ,(obj->rxinfo0.data[1]&0x80)=%d
+  Sensitive RX Power Reduction mechanism enabled! / disabled!
+  V34PROBE, min = %d, i= %d, so reducing band edge norm by 2 / by 1
+  V34PROBE,0=%d,...,24=%d          (all 25 bins' `shift`, in one line)
+  V34PREEMPHASIS, - index is 0 / 10 / %d, baudrate= %d
+```
+
+`rx->gain` is the receiver's `agc_gain` at +0x136 and `obj->rxinfo0.data[1]`
+is `obj + 0xa97e`, so two more field names come out of this function when it
+is written.
+
+### 219. `probeselect` is written, and the mutations did all the work
+
+Finding 218 mapped `probeselect` without reconstructing it. It is now
+reconstructed and passing, and this records what the map got right, the one
+thing it got wrong, and — the part worth keeping — that **the differential
+test agreed with the blob at every stage while the tests were the thing that
+was weak**. A green run never once said the inputs were only touching one arm
+of a threshold.
+
+#### The map held, except for one register
+
+Every structural claim in 218 survived: the encode/decode pairing with
+`setfinalrate`, the five per-rate arms with their constants, the two guarded
+arms, both `chkForceBaudRate` call sites and the pre-emphasis search's shape.
+
+**The one error was a register's provenance.** 218 said the 2800 originating
+arm tests `bins[22]`; it tests `bins[20]`. The comparison is `cmp $0x5,%ax`
+at 0x61d24, and `%eax` was last loaded at 0x616cb — the top of the 2800
+band-edge test — not at 0x61643 where the 3000 arm's copy comes from. Two
+arms that read identically and read different bins.
+
+The differential test found it in one run at exactly one byte: `+0xa9b2`,
+which is `msg[3]`, bit 0. 336 of 28,185 checks failed and every one was that
+byte. A check on "the rate it chose" would have passed; the rate was right.
+
+#### Five sweeps, 18 survivors, then 0
+
+| run | caught | uncaught | what the survivors were |
+|---|--:|--:|---|
+| 1 | 186 | 18 | two hangs of my own making, then the fixture |
+| 2 | 198 | 5 | exact equalities |
+| 3 | 202 | 1 | solved for the wrong constraint |
+| 4 | 202 | 1 | same |
+| 5 | **203** | **0** | 6 equivalent, with reasons |
+
+**Round 1's real lesson was about the tool, not the code.** Two of the
+mutations turn a loop into an endless one, `mutate.py` had no timeout, and it
+prints nothing until it finishes — so a hung binary looked exactly like a slow
+build and sat for sixty-two minutes. Killing it made that worse: SIGTERM does
+not run Python's `finally`, so the restore never happened and the tree was
+left carrying a mutation forty lines from the function being examined. A clean
+rebuild hung the same way, which is what made it look environmental. Both are
+fixed in `tools/mutate.py`: every run is bounded, a timeout is reported as
+caught-but-by-the-clock, and SIGTERM is turned into an exception so the
+restore always runs.
+
+**Round 1's sixteen real survivors were one flaw.** `probe_next` yields 24
+bits, so a uniform draw is never negative and never small: `snr_l1 <= 0x1f3`
+had a chance of one in thirty thousand per case and `snr_l2 < 0` had none at
+all. That single fact killed every threshold in the power section, both
+sensitive-ISP arms, the bit scan's top half and the minimum search's starting
+value — which is exactly the shape of the survivor list. Fixed by drawing each
+scalar from a pool of its own boundaries three times in four.
+
+**Rounds 2 and 3 were equalities, which sampling cannot reach.** `x > ref`
+against `x >= ref`, and `t < ratio` against `t <= ratio`, are single points in
+a 32-bit space. Both are constructible:
+
+  - `ratio` is controllable. With `snr_l2` below 0x200000 the bit scan runs
+    out, the shift is ten, and the quotient reduces to `((snr_l2 << 10) +
+    (snr_l1 >> 1)) / snr_l1` — so `snr_l1 = 0x400` makes the ratio EQUAL
+    `snr_l2`. The sweep walks the dB ladder's own recurrence and drives the
+    ratio to each term and its neighbours.
+  - the search's pre-image is solvable: the step is `(x * k) >> 14`, so the
+    value landing exactly on a chosen reference is `(ref << 14) / k`.
+
+**Rounds 3 and 4 are the same survivor, and the interesting one.** The gain
+reciprocal's rounding term differs by ONE, and to be observable it has to
+survive `* dbcnt >> 14` AND the `req > 7` clamp four lines later. Those pull
+in opposite directions: the first wants a large `dbcnt`, the second a small
+`req`. I solved it at the `dbcnt` of 1000 the short-circuit produces, which is
+arithmetically correct and useless — every gain below 0x1000 then gives a
+`req` in the hundreds and both sides clamp flat to 7. Re-solving with the
+clamp in the search gives exactly nineteen gains below 0x1000 that work, each
+at one specific ladder step, and seven are now in the pool.
+
+**It is not enough to construct an input that makes a mutation arithmetically
+observable. It has to stay observable through everything downstream.** That is
+the sharper form of the rule and it cost two rounds.
+
+#### D53 is confirmed by the compiler
+
+218 flagged `cmp $0x5,%bx` as unsatisfiable and declined to file it, because
+that is the shape D31 got wrong. Two independent measurements now agree: the
+sweep asserts indices 6..10 were all returned and 0..5 never were, and `gcov`
+reports the `i == 5` test executed 6,938 times with its whole body marked NOT
+EXECUTABLE — GCC proved the same thing and folded it away.
+
+**A claim I nearly published and did not.** I expected the site to show up in
+`debugcov`'s dead list and drafted that as evidence. It does not: gcov marks
+an eliminated body non-executable rather than executed-zero-times, so that
+count says nothing here in either direction. The 30-to-31-and-back movement in
+`make phase` over this session was a different site entirely — the
+sensitive-ISP request, which the old fixture never reached and the fixed one
+does.
+
+### 220. Context is cumulative output, so the wall is a turn count
+
+*Written as 216 and renumbered on merge: a parallel session took 216
+through 219 for the `V34SetupModulator` / `#59` chain.  Anything citing
+"finding 216" for the turn-count measurement means this one.*
 
 Functions over about 6 KB have repeatedly cost a whole session without being
 finished, and the obvious explanation -- the disassembly does not fit -- is

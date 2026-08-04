@@ -146,6 +146,30 @@ to spend it, and what ratchet replaces it, is the open decision. What is
 settled is that the 16 KB of V.90/V.92 C++ is a **scheduling** question and
 not a precondition.
 
+### The decision, and what it does to #59's ordering
+
+Finding 215 settles it: the scaffold is **not** landed, because V.90/V.92 is
+the project's end goal and the prerequisite set is bounded, so the ordering
+costs nothing that the invariant does not buy back.
+
+**With that decided, the C++ is a precondition again — for six of #59.**
+Finding 217 names them: `indicateJaTransmission`, `V34SetINFO1aBits`,
+`V34GiveINFO1dBits`, `VPcmV34InitiateRetrain`, `v90Phase34` and
+`k56FlexPhase34` each reach a `VPcmV34Main.cpp` method, and a caller whose
+callee has been renamed to `ref_*` leaves an undefined symbol that breaks all
+62 binaries, not just its own. So **#60 comes before those six**;
+`datapumpv34` comes after #56–#58; and `getbit`, `ApplyBulkDelay` and
+`getMPrecvdBits` are file-local, have no `ref_` alias, and are blocked on a
+harness change rather than on code.
+
+**#59 is therefore not one sitting.** About 8.7 KB of it is available and
+8.2 KB is not, and the hand-over that said "nothing here is blocked" was
+reading the same list finding 215's blanket claim was.
+
+**The available 8.7 KB is done** — all seven functions, with differential
+tests and mutation sets (findings 216 to 219). What is left of #59 is the
+8.2 KB that needs #60, #56–#58, or a harness change first.
+
 ### The renumbering, and the two task stores
 
 `#39`–`#45` named a seven-way split by state that finding 213 shows does not
