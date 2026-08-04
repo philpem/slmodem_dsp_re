@@ -900,6 +900,97 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * AND THE OTHER HALF OF EVERY TRANSCRIPT ABOVE.  Both blocks raise the
+	 * level to 2 before comparing, so a site that lost its
+	 * `if (DSPLIB_DEBUG_ON())` prints exactly the same thing on both sides
+	 * and passes.  Three mutations proved it: ungating the empty report,
+	 * dropping the early return before the header, and weakening the
+	 * clean-up's gate to `>= 1` were all NOT CAUGHT until this section
+	 * existed.
+	 *
+	 * Turning capture ON with the level left DOWN tests the claim the
+	 * comparisons cannot: below the threshold these functions say NOTHING.
+	 * Levels 0 AND 1 -- every gate in the object is `> 1`, so 1 is the
+	 * only value separating it from the `>= 1` a reader would write.
+	 */
+	diff_begin("v34 filters: below the threshold, nothing is said");
+	{
+		static struct v34_echo ea, eb;
+		static short ca[160], cb[160], fa[160], fb[160];
+		static short ha[160], hb[160], da[DLEN], db[DLEN];
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		unsigned lvl, j;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			/*
+			 * A non-zero coefficient first, so the report takes
+			 * the arm that prints the header and the rows, and
+			 * then all-zero for the "nothing to report" arm --
+			 * the two are gated separately and a mutation can
+			 * ungate either one alone.
+			 */
+			for (j = 0; j < 160; j++) {
+				ca[j] = cb[j] = (short)(j == 0 ? 0x1234 : 0);
+				fa[j] = fb[j] = (short)(j * 37 - 900);
+				ha[j] = hb[j] = (short)(j * 53 + 100);
+			}
+			for (j = 0; j < DLEN; j++)
+				da[j] = db[j] = (short)(j * 7 - 200);
+
+			memset(&ea, 0, sizeof(ea));
+			memset(&eb, 0, sizeof(eb));
+			ea.dline = da; ea.cursor = da; ea.coeff = ca;
+			ea.coeff_frac = fa; ea.hist = ha;
+			ea.dlen = DLEN; ea.taps = 144;
+			eb.dline = db; eb.cursor = db; eb.coeff = cb;
+			eb.coeff_frac = fb; eb.hist = hb;
+			eb.dlen = DLEN; eb.taps = 144;
+
+			V34EchoReportCoeff(&ea);
+			ref_V34EchoReportCoeff(&eb);
+			V34EchoCleanUp(&ea);
+			ref_V34EchoCleanUp(&eb);
+
+			for (j = 0; j < 160; j++)
+				ca[j] = cb[j] = 0;
+			V34EchoReportCoeff(&ea);
+			ref_V34EchoReportCoeff(&eb);
+
+			/* And the modulator, valid carrier and invalid. */
+			memset(&ma, HARNESS_MALLOC_FILL, sizeof(ma));
+			memset(&mb, HARNESS_MALLOC_FILL, sizeof(mb));
+			memset(sha, 0x5a, sizeof(sha));
+			memset(shb, 0x5a, sizeof(shb));
+			ma.shaped = sha; mb.shaped = shb;
+			ma.row = mb.row = 0;
+			ma.phase = mb.phase = 0;
+			V34SetupModulator(&ma, 2400, 1829, 1, 0, 1);
+			ref_V34SetupModulator(&mb, 2400, 1829, 1, 0, 1);
+			V34SetupModulator(&ma, 2400, 999, 1, 0, 1);
+			ref_V34SetupModulator(&mb, 2400, 999, 1, 0, 1);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    (long)lvl);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 Hilbert transformer");
 	memset(state_a, HARNESS_MALLOC_FILL, sizeof(state_a));
 	memset(state_b, HARNESS_MALLOC_FILL, sizeof(state_b));

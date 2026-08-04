@@ -1,0 +1,299 @@
+[
+ {
+  "note": "Recovered from the session that wrote these three functions; finding 189's tally is this set.  The two survivors are recorded as equivalent, not removed."
+ },
+ {
+  "label": "hangup: status fork <=1 becomes <=2",
+  "find": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {"
+ },
+ {
+  "label": "reneg: status fork <=1 becomes <=2",
+  "find": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {"
+ },
+ {
+  "label": "setv90: rrn_type polarity swapped",
+  "find": "(rrn_type != 0) ? 15 : 11",
+  "replace": "(rrn_type != 0) ? 11 : 15"
+ },
+ {
+  "label": "setv90: rrn_type tested for sign",
+  "find": "(rrn_type != 0) ? 15 : 11",
+  "replace": "(rrn_type > 0) ? 15 : 11"
+ },
+ {
+  "label": "setv90: constel polarity swapped",
+  "find": "constel_size != 0 ? 0x89b0 : 0x8990",
+  "replace": "constel_size != 0 ? 0x8990 : 0x89b0"
+ },
+ {
+  "label": "setv90: constel read signed",
+  "find": "constel_size != 0 ? 0x89b0 : 0x8990",
+  "replace": "(signed char)constel_size > 0 ? 0x89b0 : 0x8990"
+ },
+ {
+  "label": "setv90: v90_receiver not set",
+  "find": "\tobj->v90_receiver = (rrn_type != 0) ? 15 : 11;\n",
+  "replace": ""
+ },
+ {
+  "label": "reneg: case 5 no longer steps down",
+  "find": "\tcase 5:\n",
+  "replace": "\tcase 9:\n"
+ },
+ {
+  "label": "reneg: case 2 no longer steps down",
+  "find": "\tcase 2:\n",
+  "replace": "\tcase 9:\n"
+ },
+ {
+  "label": "reneg: case 0 no longer steps down",
+  "find": "\tcase 0:\n",
+  "replace": "\tcase 9:\n"
+ },
+ {
+  "label": "reneg: case 3 becomes case 4",
+  "find": "\tcase 3:\n",
+  "replace": "\tcase 4:\n"
+ },
+ {
+  "label": "reneg: down clamp >= becomes >",
+  "find": "want >= obj->rate_min",
+  "replace": "want > obj->rate_min"
+ },
+ {
+  "label": "reneg: up clamp <= becomes <",
+  "find": "want <= obj->rate_max",
+  "replace": "want < obj->rate_max"
+ },
+ {
+  "label": "reneg: down clamp bounded by rate_max",
+  "find": "want >= obj->rate_min",
+  "replace": "want >= obj->rate_max"
+ },
+ {
+  "label": "reneg: step reads rate_want not rate_now",
+  "find": "want = (int)((unsigned)obj->rate_now - 1u);",
+  "replace": "want = (int)((unsigned)obj->rate_want - 1u);"
+ },
+ {
+  "label": "reneg: up step reads rate_want not rate_now",
+  "find": "want = (int)((unsigned)obj->rate_now + 1u);",
+  "replace": "want = (int)((unsigned)obj->rate_want + 1u);"
+ },
+ {
+  "label": "reneg: default writes 0 rather than -1",
+  "find": "obj->rate_want = -1;",
+  "replace": "obj->rate_want = 0;"
+ },
+ {
+  "label": "hangup: session flag byte not written",
+  "find": "\t\tsess[0x173e] = 1;\n",
+  "replace": ""
+ },
+ {
+  "label": "hangup: session flag byte written as 2",
+  "find": "sess[0x173e] = 1;",
+  "replace": "sess[0x173e] = 2;"
+ },
+ {
+  "label": "hangup: leaf code 1 rather than 2",
+  "find": "+ 0x8c) = 2;",
+  "replace": "+ 0x8c) = 1;"
+ },
+ {
+  "label": "reneg: leaf gets a constant 2 rather than req",
+  "find": "+ 0x8c) = req;",
+  "replace": "+ 0x8c) = 2;"
+ },
+ {
+  "label": "reneg: PCM arm writes the flag byte too",
+  "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n",
+  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n\n\t\tsess[0x173e] = 1;\n"
+ },
+ {
+  "label": "reneg: PCM arm falls through instead of returning",
+  "find": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;\n\t\treturn;",
+  "replace": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;"
+ },
+ {
+  "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
+  "find": "\t\tsess[0x173e] = 1;\n\t\tdemod = *(unsigned char **)(sess + 0x175c);",
+  "replace": "\t\tdemod = *(unsigned char **)(sess + 0x175c);\n\t\tsess[0x173e] = 1;",
+  "equivalent": true,
+  "why": "`sess + 0x173e` is a byte in the session and `sess + 0x175c` is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
+ },
+ {
+  "label": "hangup: clears rate_now as well",
+  "find": "\tobj->rate_max = 0;\n",
+  "replace": "\tobj->rate_max = 0;\n\tobj->rate_now = 0;\n"
+ },
+ {
+  "label": "hangup: skips rate_min",
+  "find": "\tobj->rate_min = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "setv90: f25c2 mask ~0x4018 becomes ~0x4010",
+  "find": "~0x4018",
+  "replace": "~0x4010"
+ },
+ {
+  "label": "setv90: f25c2 mask ~0x4018 becomes ~0x0018",
+  "find": "~0x4018",
+  "replace": "~0x0018"
+ },
+ {
+  "label": "setv90: f25c2 OR 0x2000 becomes 0x4000",
+  "find": "| 0x2000)",
+  "replace": "| 0x4000)"
+ },
+ {
+  "label": "setv90: preinitdigital not called",
+  "find": "\tpreinitdigital(obj);\n",
+  "replace": ""
+ },
+ {
+  "label": "setv90: [1] counter not cleared",
+  "find": "\t*(short *)(m + 0x2aa2) = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "setv90: preinitdigital before the mask rather than after",
+  "find": "\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
+  "replace": "\tpreinitdigital(obj);\n\n\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);",
+  "equivalent": true,
+  "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for."
+ },
+ {
+  "label": "hangup: f0004 gets 5",
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
+  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;"
+ },
+ {
+  "label": "reneg: f0004 gets 5",
+  "find": "\tobj->f0004 = 6;\n\n\trx->f258 = 0;",
+  "replace": "\tobj->f0004 = 5;\n\n\trx->f258 = 0;"
+ },
+ {
+  "label": "setv90: f0004 gets 5",
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
+  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382"
+ },
+ {
+  "label": "hangup: 0x2218 gets 6",
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
+  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->f258 = 0;"
+ },
+ {
+  "label": "reneg: 0x2218 gets 6",
+  "find": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
+  "replace": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 6;"
+ },
+ {
+  "label": "setv90: 0x2218 gets 6",
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
+  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->f382"
+ },
+ {
+  "label": "hangup: rx f258 not cleared",
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
+  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for"
+ },
+ {
+  "label": "hangup: rx f25c not cleared",
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
+  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n}\n\n/*\n * Ask for"
+ },
+ {
+  "label": "reneg: rx f258 not cleared",
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)"
+ },
+ {
+  "label": "reneg: rx f25c not cleared",
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n\n\t*(int *)(m + 0x2218)"
+ },
+ {
+  "label": "hangup: handshakinit asked for mode 1",
+  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218)",
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218)"
+ },
+ {
+  "label": "reneg: handshakinit asked for mode 1",
+  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->f258"
+ },
+ {
+  "label": "setv90: timer stride constant off by 0x80",
+  "find": "= 0x69780;",
+  "replace": "= 0x69781;"
+ },
+ {
+  "label": "setv90: timer mark constant off by one",
+  "find": "(int)0xfff15a00;",
+  "replace": "(int)0xfff15a01;"
+ },
+ {
+  "label": "setv90: timer not cleared",
+  "find": "\t*(int *)(m + 0x238) = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "hangup: message loses a space before the bang",
+  "find": "VPcmV34InitiateHangUp called !",
+  "replace": "VPcmV34InitiateHangUp called!"
+ },
+ {
+  "label": "setv90: message loses a space after 'type'",
+  "find": "rrn type = %d",
+  "replace": "rrn type= %d"
+ },
+ {
+  "label": "setv90: the two arguments swapped",
+  "find": "(int)rrn_type, (int)constel_size",
+  "replace": "(int)constel_size, (int)rrn_type"
+ },
+ {
+  "label": "hangup: print ungated",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main",
+  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main"
+ },
+ {
+  "label": "setv90: print ungated",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg"
+ },
+ {
+  "label": "hangup: print never",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main",
+  "replace": "if (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main"
+ },
+ {
+  "label": "hangup: gate is >= 1 rather than > 1",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main",
+  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main"
+ },
+ {
+  "label": "setv90: gate is >= 1 rather than > 1",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg"
+ },
+ {
+  "label": "reneg: rrn counter not bumped",
+  "find": "\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
+  "replace": ""
+ },
+ {
+  "label": "reneg: rrn counter is the remote one",
+  "find": "obj->rrn_local = (short)(obj->rrn_local + 1);",
+  "replace": "obj->rrn_remote = (short)(obj->rrn_remote + 1);"
+ },
+ {
+  "label": "reneg: rrn counter saturates rather than wrapping",
+  "find": "obj->rrn_local = (short)(obj->rrn_local + 1);",
+  "replace": "obj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);"
+ }
+]

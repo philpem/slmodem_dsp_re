@@ -1,0 +1,162 @@
+[
+ {
+  "note": "Recovered from the session that reconstructed v34handshakinit and the state trace.  The three state words and the 87 StateName entries are what most of these attack: a transposition there reads correctly and is wrong everywhere."
+ },
+ {
+  "label": "rxstate and txstate offsets transposed",
+  "find": "#define HS_RXSTATE\t0x3594",
+  "replace": "#define HS_RXSTATE\t0x3596"
+ },
+ {
+  "label": "microstate context fed from rxstate twice",
+  "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
+  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];"
+ },
+ {
+  "label": "HS_RXSTATE branch ctx1/ctx2 swapped",
+  "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
+  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];"
+ },
+ {
+  "label": "HS_TXSTATE branch ctx1/ctx2 swapped",
+  "find": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
+  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];"
+ },
+ {
+  "label": "[1] and [2] counters swapped",
+  "find": "(long)hs_get(obj, HS_TRACE_1),",
+  "replace": "(long)hs_get(obj, HS_TRACE_2),"
+ },
+ {
+  "label": "StateName DET_SYNC and DET_CJ transposed",
+  "find": "\"DET_CM_JM\",\t\"DET_SYNC\",\t\"DET_CJ\",\t\"RX_DPSK\",",
+  "replace": "\"DET_CM_JM\",\t\"DET_CJ\",\t\"DET_SYNC\",\t\"RX_DPSK\","
+ },
+ {
+  "label": "timer guard signed rather than unsigned",
+  "find": "unsigned d = (unsigned)(*(int *)(m + 0x238) - delta);",
+  "replace": "int d = *(int *)(m + 0x238) - delta;"
+ },
+ {
+  "label": "timer limit 0x176ff becomes 0x17700",
+  "find": "if (d <= 0x176ff)",
+  "replace": "if (d <= 0x17700)"
+ },
+ {
+  "label": "mode 1's || becomes &&",
+  "find": "if ((rx->flags & 0x40) || m[0xac17] != 0) {",
+  "replace": "if ((rx->flags & 0x40) && m[0xac17] != 0) {"
+ },
+ {
+  "label": "mode 0 tests 0x65 rather than 0x66",
+  "find": "if (obj->f359c == 0x66)",
+  "replace": "if (obj->f359c == 0x65)"
+ },
+ {
+  "label": "mode 4 detector pair the other way round",
+  "find": "(obj->f359c == 0x65) ? c2400_ : c1200_,",
+  "replace": "(obj->f359c == 0x65) ? c1200_ : c2400_,"
+ },
+ {
+  "label": "mode 2 rxflags mask ~0x1d8 becomes ~0x1f8 (bit 5, outside the OR)",
+  "find": "(rx->flags & ~0x1d8) | 0x18",
+  "replace": "(rx->flags & ~0x1f8) | 0x18"
+ },
+ {
+  "label": "mode 2 rxflags mask ~0x1d8 becomes ~0x1c8",
+  "find": "(rx->flags & ~0x1d8) | 0x18",
+  "replace": "(rx->flags & ~0x1c8) | 0x18",
+  "equivalent": true,
+  "why": "0x1d8 and 0x1c8 differ only in bit 4, and 0x18 -- which contains bit 4 -- is OR-ed straight back in, so the cleared bit is restored in the same expression."
+ },
+ {
+  "label": "mode 2 txflags mask ~0x4018 becomes ~0x4010",
+  "find": "(obj->f25c2 & ~0x4018) | 0x2000",
+  "replace": "(obj->f25c2 & ~0x4010) | 0x2000"
+ },
+ {
+  "label": "prologue txflags mask dropped entirely",
+  "find": "obj->f25c2 = (short)(obj->f25c2 & 0x7fff);",
+  "replace": ""
+ },
+ {
+  "label": "prologue txflags 0x7fff becomes 0x3fff",
+  "find": "obj->f25c2 & 0x7fff",
+  "replace": "obj->f25c2 & 0x3fff"
+ },
+ {
+  "label": "out-of-range mode skips the tail",
+  "find": "\tdefault:\n\t\t/* Out of range runs the tail, and nothing else. */\n\t\tbreak;",
+  "replace": "\tdefault:\n\t\treturn;"
+ },
+ {
+  "label": "timer stride 0x69780 becomes 0x69700",
+  "find": "base + 0x69780",
+  "replace": "base + 0x69700"
+ },
+ {
+  "label": "timer mark reset to 0 rather than 0xfff15a00",
+  "find": "*(int *)(m + 0x248) = (int)0xfff15a00;",
+  "replace": "*(int *)(m + 0x248) = 0;"
+ },
+ {
+  "label": "mode 0 points 0xaa70 at the 0xa94c record",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x1000);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x1000);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);"
+ },
+ {
+  "label": "mode 0 record index 12 gets 8 rather than 0x11",
+  "find": "hs_put(obj, 0xa97c + 0x18, 0x11);",
+  "replace": "hs_put(obj, 0xa97c + 0x18, 8);"
+ },
+ {
+  "label": "mode 4 record index 12 gets 0x11 rather than 8",
+  "find": "hs_put(obj, 0xa97c + 0x18, 8);",
+  "replace": "hs_put(obj, 0xa97c + 0x18, 0x11);"
+ },
+ {
+  "label": "mode 4 points 0xaa6c at the 0xa97c record",
+  "find": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
+  "replace": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa97c);"
+ },
+ {
+  "label": "mode 4 record 0xa94c: +0x24 constant off by one",
+  "find": "*(int *)(r + 0x24) = 0xf72;",
+  "replace": "*(int *)(r + 0x24) = 0xf73;"
+ },
+ {
+  "label": "mode 1 bumps 0xac12 where it should bump 0xac14",
+  "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
+  "replace": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac12, n);"
+ },
+ {
+  "label": "mode 1 does not clear the 0xac17 byte",
+  "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
+  "replace": "\t\t\ths_put(obj, 0xac14, n);"
+ },
+ {
+  "label": "mode 1 transitions the microstate it should leave alone",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\t/* No microstate transition here; mode 1 is the only body\n\t\t * that leaves it alone. */",
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);"
+ },
+ {
+  "label": "tail: 0xaa3c and 0x2aa0 values swapped",
+  "find": "\ths_put(obj, 0xaa3c, 0);\n\ths_put(obj, 0x2aa0, 0x10);",
+  "replace": "\ths_put(obj, 0xaa3c, 0x10);\n\ths_put(obj, 0x2aa0, 0);"
+ },
+ {
+  "label": "tail: 0x2aa0 value 0x10 becomes 0x11",
+  "find": "hs_put(obj, 0x2aa0, 0x10);",
+  "replace": "hs_put(obj, 0x2aa0, 0x11);"
+ },
+ {
+  "label": "fmt[] rxstate and txstate entries permuted, offsets untouched",
+  "find": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
+  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\""
+ },
+ {
+  "label": "fmt[] microstate entry moved to the rxstate slot",
+  "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
+  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\","
+ }
+]

@@ -43,6 +43,26 @@ source restored -- in a `finally`, so an exception cannot leave a mutated tree
 behind.  Exit status is non-zero if any mutation went UNCAUGHT, which is the
 result worth failing on: an uncaught mutation is an untested claim.
 
+TWO OTHER KINDS OF ENTRY
+
+An object with no "find" is a NOTE: prose kept in the set, printed and
+otherwise ignored.  JSON has no comments and these files are arguments, not
+data.
+
+An object with "equivalent": true is a mutation that is EXPECTED TO SURVIVE,
+because the change provably cannot alter behaviour -- a reordering of two
+stores that do not alias, a mask bit that is OR-ed straight back in.  Such a
+mutation surviving is the recorded result and does not fail the run.
+
+They are here rather than deleted because "we tried this and it survived for a
+reason" is worth more than the absence of an entry, which reads as "nobody
+thought of it".  The reason goes in "why", and it has to be an argument about
+the code -- not "the test does not cover it", which is the opposite result and
+belongs in the uncaught list.
+
+An equivalent mutation that gets CAUGHT is reported and fails the run: either
+the reasoning was wrong or the code moved under it, and both want looking at.
+
 WHAT A "CAUGHT" RESULT MEANS
 
 Only that some check failed.  It does not mean the RIGHT check failed, and a
@@ -55,9 +75,22 @@ and passes: the first tells you nothing about the tests.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+
+#
+# OPERATE ON THIS SCRIPT'S OWN TREE, whatever the caller's directory is.
+#
+# Every path below is relative, `make` inherits the cwd, and the restore in
+# the `finally` writes back to a relative path too.  Several worktrees of this
+# repository exist side by side and are edited at the same time; run from the
+# wrong one and this mutates another tree's source and rebuilds another tree's
+# objects, with the restore landing there as well.  Nothing about the output
+# would say so.
+#
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def build_and_run(target, test):
@@ -94,7 +127,7 @@ SUITES = "test/mutations/suites.json"
 def run_all():
     """Every suite, with the totals -- so one command says where the tree is."""
     suites = {k: v for k, v in json.load(open(SUITES)).items() if k != "_"}
-    tot = [0, 0, 0, 0, 0]
+    tot = [0, 0, 0, 0, 0, 0]
     for name in sorted(suites):
         r = subprocess.run([sys.executable, sys.argv[0], "--suite", name],
                            capture_output=True, text=True)
@@ -102,13 +135,15 @@ def run_all():
         print("  %-16s %s" % (name, last[-1].strip() if last else "FAILED"))
         if last:
             n = [int(x) for x in re.findall(r"(\d+) (?:caught|by test|"
-                                            r"by strings|NOT caught|unusable)",
+                                            r"by strings|NOT caught|unusable|"
+                                            r"equivalent)",
                                             last[-1])]
-            for i, v in enumerate(n[:5]):
+            for i, v in enumerate(n[:6]):
                 tot[i] += v
     print("\n  %d caught -- %d by the differential tests, %d only by the "
-          "string sweep\n  %d NOT caught, %d unusable, over %d suites"
-          % (tot[0], tot[1], tot[2], tot[3], tot[4], len(suites)))
+          "string sweep\n  %d NOT caught, %d unusable, %d equivalent, "
+          "over %d suites"
+          % (tot[0], tot[1], tot[2], tot[3], tot[4], tot[5], len(suites)))
     return 1 if tot[3] or tot[4] else 0
 
 
@@ -144,13 +179,16 @@ def main():
     if not (args.source and args.test and args.mutations):
         sys.exit("give --suite NAME, --all, or source, test and mutations")
 
-    muts = json.load(open(args.mutations))
+    entries = json.load(open(args.mutations))
+    muts = [m for m in entries if "find" in m]
+    for note in [m for m in entries if "find" not in m]:
+        print("  note  %s" % note.get("note", ""))
     good = open(args.source).read()
     target = args.test
 
     # Everything below runs against a mutated tree; the restore has to happen
     # even if the build dies or the user interrupts.
-    uncaught, broken = [], []
+    uncaught, broken, equivalent, surprises = [], [], [], []
     by = {"test": 0, "strings": 0}
     try:
         rc, out, _ = build_and_run(target, args.test)
@@ -175,9 +213,23 @@ def main():
                 print("  ----  %-52s  did not compile" % m["label"])
                 continue
             if rc == 0:
-                uncaught.append(m["label"])
-                print("  ****  %-52s  NOT CAUGHT" % m["label"])
+                if m.get("equivalent"):
+                    equivalent.append((m["label"], m.get("why", "")))
+                    print("  ==    %-52s  survived, equivalent"
+                          % m["label"])
+                else:
+                    uncaught.append(m["label"])
+                    print("  ****  %-52s  NOT CAUGHT" % m["label"])
                 continue
+            if m.get("equivalent"):
+                #
+                # Recorded as behaviour-preserving and the tests disagree.
+                # The argument in "why" is about the code, so either it was
+                # wrong or the code has moved out from under it.
+                #
+                surprises.append(m["label"])
+                print("  !!    %-52s  CAUGHT, recorded as equivalent"
+                      % m["label"])
 
             by[gate] += 1
             fails = [l for l in out.split("\n") if l.startswith("FAIL")]
@@ -190,14 +242,25 @@ def main():
         build_and_run(target, args.test)
 
     print("\n  %d mutations: %d caught (%d by test, %d by strings), "
-          "%d NOT caught, %d unusable"
-          % (len(muts), len(muts) - len(uncaught) - len(broken),
-             by["test"], by["strings"], len(uncaught), len(broken)))
+          "%d NOT caught, %d unusable, %d equivalent"
+          % (len(muts),
+             len(muts) - len(uncaught) - len(broken) - len(equivalent),
+             by["test"], by["strings"], len(uncaught), len(broken),
+             len(equivalent)))
     if uncaught:
         print("\n  Uncaught -- these claims are currently untested:")
         for l in uncaught:
             print("    %s" % l)
-    return 1 if uncaught else 0
+    if equivalent:
+        print("\n  Equivalent -- survived, and recorded as unable to fail:")
+        for l, why in equivalent:
+            print("    %s\n      %s" % (l, why))
+    if surprises:
+        print("\n  RECORDED AS EQUIVALENT AND CAUGHT ANYWAY -- the argument")
+        print("  for these is wrong, or the code has moved under it:")
+        for l in surprises:
+            print("    %s" % l)
+    return 1 if uncaught or surprises else 0
 
 
 if __name__ == "__main__":

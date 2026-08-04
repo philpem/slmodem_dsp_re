@@ -21,5 +21,8 @@
  "v8jm":           ["src/v8/v8jm.c",             "build/test/t_v8jm"],
  "v8proc":         ["src/v8/v8proc.c",           "build/test/t_v8dp"],
  "v8seq":          ["src/v8/v8seq.c",            "build/test/t_v8util"],
- "v8sig":          ["src/v8/v8sig.c",            "build/test/t_v8sig"]
+ "v8sig":          ["src/v8/v8sig.c",            "build/test/t_v8sig"],
+ "v34pcmif":       ["src/pump/v34/v34pcmif.c",   "build/test/t_v34pcmif"],
+ "v34hshak":       ["src/pump/v34/v34hshak.c",   "build/test/t_v34hshak"],
+ "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"]
 }

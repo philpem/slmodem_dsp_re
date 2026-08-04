@@ -1,0 +1,113 @@
+[
+ {
+  "note": "The echo canceller and the modulator, both driven by t_v34ec.  The equaliser lives in this same source and is driven by t_v34eq, which is the v34filters_eq set -- point a mutation at the wrong one of the two and it reads NOT CAUGHT."
+ },
+ {
+  "note": "The three '?'-prefixed strings were invented paraphrases until the format sweep; the first three mutations below restore the paraphrases, so this set is also a regression test on finding 180."
+ },
+ {
+  "label": "the invented CleanUp string, back again",
+  "find": "\"V34FLO: Echo running in Original Integer...\\r\\n\");",
+  "replace": "\"V34EchoCleanUp\\n\");"
+ },
+ {
+  "label": "the invented 'Nothing to report' string, back again",
+  "find": "\"?======= Nothing to report =========\\n\");",
+  "replace": "\"Echo coefficients all zero\\n\");"
+ },
+ {
+  "label": "the invented header string, argument dropped",
+  "find": "\tdsplibs_debug_printf(\"?======= Coefficients[1..%ld]=========\\n\",\n\t\t\t     (long)n);",
+  "replace": "\tdsplibs_debug_printf(\"Echo coefficients:\\n\");"
+ },
+ {
+  "label": "the header's leading '?' dropped",
+  "find": "\"?======= Coefficients[1..%ld]=========\\n\"",
+  "replace": "\"======= Coefficients[1..%ld]=========\\n\""
+ },
+ {
+  "label": "the row format's leading '?' dropped",
+  "find": "\"?%d %d %d %d %d %d\\n\"",
+  "replace": "\"%d %d %d %d %d %d\\n\""
+ },
+ {
+  "label": "the header reports taps rather than the rounded count",
+  "find": "\t\t\t     (long)n);",
+  "replace": "\t\t\t     (long)e->taps);"
+ },
+ {
+  "label": "the scan rounds up rather than down",
+  "find": "unsigned n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;",
+  "replace": "unsigned n = ((e->taps + V34_ECHO_REPORT_COLS - 1)\n\t\t      / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;"
+ },
+ {
+  "label": "the all-zero test becomes a not-equal",
+  "find": "\tif (k == n) {",
+  "replace": "\tif (k != n) {"
+ },
+ {
+  "label": "the row loop runs to the rounded count rather than a fixed 144",
+  "find": "\tfor (i = 0; i <= V34_ECHO_REPORT_TAPS - V34_ECHO_REPORT_COLS;",
+  "replace": "\tfor (i = 0; i <= (int)n - V34_ECHO_REPORT_COLS;"
+ },
+ {
+  "label": "the row loop steps by one rather than by six",
+  "find": "\t     i += V34_ECHO_REPORT_COLS) {",
+  "replace": "\t     i += 1) {"
+ },
+ {
+  "label": "the row's last two columns swapped",
+  "find": "e->coeff[i + 4], e->coeff[i + 5]);",
+  "replace": "e->coeff[i + 5], e->coeff[i + 4]);"
+ },
+ {
+  "label": "the empty report is printed ungated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"?======= Nothing to report =========\\n\");",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"?======= Nothing to report =========\\n\");"
+ },
+ {
+  "label": "the report's early return is dropped, so the header always prints",
+  "find": "\tif (!DSPLIB_DEBUG_ON())\n\t\treturn;\n\n\tdsplibs_debug_printf(",
+  "replace": "\tdsplibs_debug_printf("
+ },
+ {
+  "label": "the CleanUp announcement's gate is >= 1 rather than > 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34FLO: Echo running in Original Integer...\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34FLO: Echo running in Original Integer...\\r\\n\");"
+ },
+ {
+  "label": "carrier 1600 and 1680 lengths swapped",
+  "find": "\tcase 1600: m->sine = hsine1600; m->sine_len = 6;    break;\n\tcase 1680: m->sine = hsine1680; m->sine_len = 0x28; break;",
+  "replace": "\tcase 1600: m->sine = hsine1600; m->sine_len = 0x28; break;\n\tcase 1680: m->sine = hsine1680; m->sine_len = 6;    break;"
+ },
+ {
+  "label": "carrier 1959 length 0x31 becomes 0x13",
+  "find": "m->sine_len = 0x31;",
+  "replace": "m->sine_len = 0x13;"
+ },
+ {
+  "label": "carrier 2000 takes the 2400 table",
+  "find": "\tcase 2000: m->sine = hsine2000;",
+  "replace": "\tcase 2000: m->sine = hsine2400;"
+ },
+ {
+  "label": "the unknown-carrier fallback uses the 2400 table",
+  "find": "\t\tm->sine = hsine1200;\n\t\tm->sine_len = 8;",
+  "replace": "\t\tm->sine = hsine2400;\n\t\tm->sine_len = 8;"
+ },
+ {
+  "label": "the invalid-carrier complaint reports the length, not the carrier",
+  "find": "\t\t\t\t\"V34SetupModulator: invalid carrier %ld\\n\",\n\t\t\t\t(long)carrier);",
+  "replace": "\t\t\t\t\"V34SetupModulator: invalid carrier %ld\\n\",\n\t\t\t\t(long)m->sine_len);"
+ },
+ {
+  "label": "the modulator trace reports v90 where it should report preemp",
+  "find": "\t\t\t(long)baud, (long)carrier, (long)preemp_index,\n\t\t\t(long)v90, reset);",
+  "replace": "\t\t\t(long)baud, (long)carrier, (long)v90,\n\t\t\t(long)preemp_index, reset);"
+ },
+ {
+  "label": "the modulator trace loses the fullReset width",
+  "find": "\"preemp %ld, V90=%ld. fullReset=%1d\\n\"",
+  "replace": "\"preemp %ld, V90=%ld. fullReset=%d\\n\""
+ }
+]
