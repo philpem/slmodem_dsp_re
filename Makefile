@@ -189,8 +189,9 @@ offsets:
 # It builds a second, instrumented tree in build-cov/ and runs all 62 binaries
 # there, which is why it is last: it doubles the wall clock of `make phase`.
 # The one thing it does fail on is an instrumented test disagreeing with the
-# blob, because then the count is not measuring what it claims -- see
-# finding 192 and tools/debugcov.py.
+# blob -- for the ordinary reason, since the goal is a replacement that behaves
+# identically and any disagreement is a hard failure whatever build it came
+# from.  See finding 192 and tools/debugcov.py.
 debugcov:
 	@$(PYTHON) tools/debugcov.py --summary
 

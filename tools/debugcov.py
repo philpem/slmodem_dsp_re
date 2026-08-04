@@ -87,16 +87,16 @@ def run(targets):
            if subprocess.run([t], capture_output=True).returncode != 0]
     if bad:
         #
-        # THIS one is fatal, and it is the only thing here that is.  A dead
-        # site is work still to do; a failing instrumented test means the
-        # counts below were gathered from a run that did not agree with the
-        # blob, so the number is not measuring what it says.  Finding 192 says
-        # instrumentation costs nothing under THESE flags -- if that stops
-        # being true, this is where it surfaces, rather than in a count that
-        # quietly drifts.
+        # THIS one is fatal, and it is the only thing here that is -- for the
+        # ordinary reason, not a special one: the goal is a replacement that
+        # behaves identically to the blob, so ANY test disagreeing with the
+        # blob is a hard failure whatever build it came from.  A dead site is
+        # work still to do; a disagreement is the thing this project exists to
+        # not have.  Finding 192 records that instrumentation costs nothing
+        # under these flags, and this is where that stops being true.
         #
-        sys.exit("  %d instrumented test(s) FAILED: %s\n"
-                 "  The site counts would be meaningless -- see finding 192."
+        sys.exit("  %d instrumented test(s) disagree with the blob: %s\n"
+                 "  See finding 192."
                  % (len(bad), " ".join(os.path.basename(b) for b in bad)))
 
 

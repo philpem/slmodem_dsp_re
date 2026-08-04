@@ -10335,3 +10335,98 @@ this counts, not the one the tool advertises.
 `make phase` and deliberately not failing on a dead site: 77 of them exist
 today, and a gate that is red from its first run is a gate somebody turns
 off.  The number is there to be compared against the last one.
+
+### 193. mewt found fourteen gaps in a file the hand-written mutations called done
+
+`tools/mutate.py` was written here, and the question was whether to replace
+it with something standard.  Spiked against **mewt 4.0.0** (Trail of Bits),
+in a throwaway worktree.
+
+IT WORKS, WITH NO ADAPTATION.  mewt's language list says C++, and the
+tree-sitter C++ grammar parses this tree's C: `mewt mutate` on v8jm.c
+produced **1219 mutants** where the hand-written set has 29.  Its config
+model happens to be the same shape as `suites.json` -- a per-target glob with
+its own test command -- so `test.cmd` is one line of shell.
+
+IT IS ALSO CHEAP, which was the surprise.  One mutant costs a recompile of
+one file, a relink and a test run: **0.2 seconds**.  The whole 1219 ran in
+five minutes.  (mewt's own estimate said two days, having assumed a test
+suite rather than a single fast binary.)
+
+```
+   1197 tested    898 caught    299 uncaught    22 skipped
+   high 100.0%    medium 95.1%    low 65.9%
+```
+
+**High severity 100% is independent corroboration** of the hand-written work:
+nothing mechanical could break v8jm.c in a way this tree does not notice.
+
+**The 14 medium-severity survivors are real, and of two kinds.**  Eight are
+`initTxSequence`'s field clears -- `jm->bitpos = 0`, `wordidx`, `repeats`,
+`crc_enable`, `shifter`, `shifter0`, `nleft`, `nleft0` -- which delete
+cleanly because the fixture hands in a buffer that is already zero.  A
+statement whose whole job is to write a zero cannot be tested against a
+zeroed fixture, and that is a property of every fixture in the tree that does
+the same, not of this function.  The rest are unchecked outputs: `out->b0 |=
+1` at the end of `rebuildJMSequence`, `out->b1 &= 0x3f`, the `out->b2`
+bit-39 assembly, and `if (list[0] == 0) return 0` in the acceptance scan.
+Nothing asserts on those bits.
+
+WHY THIS IS NOT A MIGRATION.  The two tools answer different questions and
+only one of them is mutation testing in the usual sense.  mewt generates
+mechanically and finds gaps.  `mutate.py`'s entries are hand-authored CLAIMS
+carrying the reading they test -- "swap CJ and JM in the message timeout",
+"announce the caller's side as the answerer's" -- and each is tied to a
+finding.  No generator can produce those, because none of them is a syntactic
+transformation: they require knowing that this argument is the side and that
+"CJ" is what the answerer waits for.  They are also the only thing that
+exercises the `strings` gate and the by-test/by-strings split.  Deleting them
+to adopt a generator would trade documentation of intent for volume.
+
+So: keep both, and use mewt as a periodic sweep at `--severity high,medium`,
+triaging each survivor into either a fixture fix or a new hand-written entry.
+299 uncaught at low severity is more triage than it is worth on a schedule.
+
+TWO CAVEATS.  mewt is AGPL-3.0.  That does not reach this tree -- it is a
+tool run over the source, not linked into it, and the firewall in the
+Makefile is about SpanDSP headers reaching `src/` -- but it is a reason to
+keep it an external development dependency rather than vendoring it the way
+SpanDSP is.  And it is a prebuilt binary from a GitHub release, so pin the
+version and check the published sha256, which is what the spike did.
+
+**DOES IT IMPROVE ON THE HAND-WRITTEN SET?**  For finding gaps, yes -- the
+fourteen above.  For replacing them, no, and the operator list says why
+rather than an argument:
+
+```
+   AAOS AOS AS BAOS BL BOS COS CR DAS ER IF IT LC LOS MR NR RDV SAOS SOS VR WF
+```
+
+**There is no string-literal operator.**  Nothing in mewt can turn `"CJ"`
+into `"JM"`, `%x` into `%d`, or `"Got"` into `"Didn't get"`, and no operator
+MOVES a statement, so nothing can express "announce the overflow before the
+sample is clamped".  Those are most of what the hand-written entries are.
+The overlap is `CR` (drop the announcement) and `AS` (swap two printf
+arguments, and only if they are adjacent).  So the two sets are largely
+disjoint by construction, not by accident: mewt mutates syntax, and a
+reconstruction's claims about a debug transcript are claims about content and
+position.
+
+**DOES IT REPLACE THE DEBUG-PATH SWEEP?**  No.  Tested directly, since it is
+the sort of thing that sounds true: `CR` alone over callprog.c, where
+`debugcov` says 30 of 33 sites never execute.  184 mutants, 81 seconds, 85
+uncaught -- **13 of the 30 dead sites**, and no false catches among them.
+
+The 43% is structural, not a tuning problem.  `CR` replaces a STATEMENT, so
+where a site shares an enclosing block or sits inside a larger construct,
+one mutant covers several sites at once and the individual ones never get
+their own.  The thirteen it does find arrive as thirteen rows among
+eighty-five needing triage, with nothing marking them as the interesting
+kind.  `debugcov` names all thirty, exactly, in six seconds for the whole
+tree.
+
+They are answering different questions again.  Mutation testing asks whether
+a change would be noticed; coverage asks whether the line ran at all.  A dead
+call site happens to be visible to both, which is why the question is worth
+asking -- but the tool built for it is an order of magnitude faster and does
+not miss more than half.
