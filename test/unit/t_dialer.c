@@ -333,10 +333,20 @@ run_create(void)
 static int
 run_abort(void)
 {
-	int state, active, released;
+	int state, active, released, lvl;
+	unsigned lines = 0;
 
 	diff_begin("DialerAbort");
 
+	/*
+	 * The sweep below reaches all sixteen combinations and reached them at
+	 * level 0, where the two announcements compile to a branch nobody
+	 * takes: the error return above state 10, and the one that says
+	 * LastPulseDigitDialed has been called.  Both were dead in every test
+	 * this tree has (finding 192).  The level moves with the sweep so each
+	 * combination is compared with the diagnostics on as well as off.
+	 */
+	for (lvl = 0; lvl <= 3; lvl++)
 	for (state = 0; state <= 12; state++)
 	 for (active = 0; active <= 1; active++)
 	  for (released = 0; released <= 1; released++) {
@@ -352,8 +362,28 @@ run_abort(void)
 
 		harness_param_reset();
 		harness_modem_reset(0, 0);
+		if (lvl) {
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+		}
 		ref_DialerAbort(&a);
 		DialerAbort(&b);
+		if (lvl) {
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("abort transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)(lvl * 100 + state));
+			if (lvl == 1)
+				diff_eq_int("level 1 silent",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, (long)state);
+			else
+				lines += dsplib_debug_capture_lines(1);
+		}
 
 		snprintf(msg, sizeof(msg),
 			 "state=%d active=%d released=%d", state, active,
@@ -379,6 +409,9 @@ run_abort(void)
 				    harness_modem_ref.nparams, 0, state);
 		}
 	}
+
+	diff_eq_int("the abort trace said something (%ld)", lines > 20, 1,
+		    (long)lines);
 
 	return diff_end();
 }

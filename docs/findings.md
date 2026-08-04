@@ -10828,3 +10828,35 @@ five dead sites were -- and skips past RING with the reason in the test,
 rather than the check being dropped or the failure smoothed over.
 
 37 of 279 sites dead, from 42.  Line coverage 97.0% to 97.2%.
+
+### 202. DialerAbort's two sites, and the pattern is now the whole finding
+
+`run_abort` already drove all sixteen combinations of the three fields
+`DialerAbort` reads -- and drove them at level 0, so its two announcements
+had never executed: the error return above progress state 10, and the one
+that reports `LastPulseDigitDialed`.  Moving the level with the sweep drives
+both, and this time the reconstruction agreed with the object first try.
+1041 checks, no divergence.  37 dead sites to 35.
+
+THE SHAPE HAS REPEATED FOUR TIMES NOW and is worth stating once rather than
+rediscovering: **the sites were never unreachable.  The tests already called
+the functions, with the right arguments, in the right states.  They called
+them with the diagnostics off.**
+
+  callprog.c  CALLPROG_Create/_Delete/_Dial, called by two tests   194
+  cadence.c   all four tones and both refusals, swept 220 ways     201
+  dialer.c    sixteen combinations of the three fields             here
+
+In each case the fix was one loop -- run the existing cases again with
+`dsplibs_debug_level` raised and the transcripts compared -- and in two of
+the three that loop found placements wrong that nothing else could see.  A
+gated call site is not tested by a test that reaches it; it is tested by a
+test that reaches it with the gate open, and the difference is invisible
+until something counts what executed.
+
+WHAT IS LEFT IS NOT THAT SHAPE.  The 35 that remain need states the tests do
+not reach at any level: `CALLPROG_Progress`'s 13 and `detect`'s 3 want tone
+verdicts and buffer conditions the drivers do not produce, `pulse_digit` and
+`DialerProgress`'s five want a pulse dial in flight, and v34rx's three want
+the far echo canceller past count 0x2bc.  Those are input problems, not
+level problems, and each will cost more than a loop.
