@@ -210,14 +210,6 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	int i;
 
 	/*
-	 * "<<" on the way in and ">>" for the nested create, which is the
-	 * opposite of the convention everywhere else here.  Read from the gate
-	 * order -- 0x79588 before 0x795e6 -- not from the arrows.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG Create <<\n");
-
-	/*
 	 * The cadence detectors' descriptor, built once and reused for both.
 	 * cadence_create writes the tone back into it, so it must be reset
 	 * between the two calls -- which the original does by setting the
@@ -285,15 +277,35 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	enter_state(cp);
 
 	cp->line_clear_limit = cp->timeout[4] * 8000;
+
+	/*
+	 * "<<" MARKS THE EXIT, not the entry, and the arrows mean what they
+	 * say after all: ">>" going in to the nested create at the top, "<<"
+	 * coming back out of this one at the bottom.  An earlier reading put
+	 * this first, on the ground that its gate is at 0x79588 and the other
+	 * at 0x795e6 -- but GCC moves these blocks out of line, so the order
+	 * of the GATES is not the order they run in, and the transcript says
+	 * the object prints this immediately before `CALLPROG Dialing`.
+	 * Finding 194.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Create <<\n");
 }
 
 void
 CALLPROG_Delete(struct callprog *cp)
 {
+	DialerAbort(&cp->dialer);
+
+	/*
+	 * AFTER the abort, not before it, which is the opposite of what
+	 * "is entered" suggests -- the transcript shows the object printing
+	 * "Dialer was aborted." first.  A store cannot cross a call, but a
+	 * gated print can sit either side of one and nothing but the trace can
+	 * say which.  Finding 194.
+	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("CALLPROG_Delete is entered\n");
-
-	DialerAbort(&cp->dialer);
 
 	/*
 	 * Which name goes with which object is read from the return targets,

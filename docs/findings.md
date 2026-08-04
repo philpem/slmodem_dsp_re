@@ -10430,3 +10430,46 @@ a change would be noticed; coverage asks whether the line ran at all.  A dead
 call site happens to be visible to both, which is why the question is worth
 asking -- but the tool built for it is an order of magnitude faster and does
 not miss more than half.
+
+### 194. One transcript test drove 24 sites live, and found three placements wrong
+
+`debugcov` said 77 sites never execute and 30 of them were in callprog.c, in
+`CALLPROG_Create`, `_Delete` and `_Dial` -- functions two tests already CALL,
+at level 0, where every gated site is unreachable.  Adding one level-1..3
+transcript comparison to `t_callprog_create` took the tree from **77 dead
+sites to 53**, and the sites it lit up were not all where we had put them.
+
+**`CALLPROG Create <<` marks the EXIT.**  It was first in the function, on
+the reasoning that its gate is at 0x79588 and the other at 0x795e6.  That
+reasoning is wrong in general: GCC moves these blocks out of line, so the
+order of the GATES is not the order they execute in.  The object prints it
+immediately before `CALLPROG Dialing`, i.e. last.  The arrows meant what they
+said all along -- ">>" going in to the nested create, "<<" coming back out of
+this one -- and the source comment's unease about "the opposite of the
+convention everywhere else" was the tell.
+
+**`CALLPROG_Delete is entered` is printed after `DialerAbort`,** not before,
+which is again the opposite of what the wording suggests.  A store cannot
+cross a call, so store-vs-call order is readable from the object; a gated
+print can sit either side of one and nothing but the trace can say which.
+
+**`INTEGRATION_LENGTH` is announced before the interval is taken off.**  We
+printed 4900 where the object prints 5000: the `validation -= 100` sat above
+the report and belongs below it.  Invisible to every other check, because the
+value that reaches `cfg` is the same either way -- which is exactly the class
+of thing the whole-object comparison cannot see.
+
+**And it found a missing site by itself.**  `toneiir_create`'s
+`INTEGRATION_TIME = %d Buffers.` was on the audit's missing list and turned up
+as a line the blob printed and we did not, in the middle of the cadence
+report.  Placed between the division and the two counters, where the object's
+cold block returns.
+
+ONE THING ABOUT THE TEST ITSELF.  Comparing the raw capture failed for a
+reason that had nothing to do with the modem: `runtime.c` writes a
+`<< get_param N >>` marker into the transcript for every parameter read, and
+the two sides do not read parameters in lockstep -- the reconstruction holds
+some in a local where the object re-reads them.  `dsplib_debug_capture_lines`
+already excludes those markers, which is why the line counts agreed while the
+strings did not.  The comparison strips them; the object's own output is what
+is being checked.

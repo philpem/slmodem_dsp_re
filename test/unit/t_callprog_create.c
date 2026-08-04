@@ -16,16 +16,21 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "harness.h"
 #include "dsplib/callprog_state.h"
 #include "dsplib/callprog.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/debug.h"
 
 extern void ref_CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
 extern void ref_CALLPROG_Delete(struct callprog *cp);
 extern void ref_CALLPROG_Dial(struct callprog *cp, const char *s);
+
+/* The reference side has its own level; the two must move together. */
+extern unsigned int ref_dsplibs_debug_level;
 
 /* The anchor.  .bss+0x188 in the object, whatever it lands at when linked. */
 extern unsigned char ref_SMCv32_CFG[];
@@ -329,6 +334,162 @@ run_dial_no_accessor(void)
 	return diff_end();
 }
 
+/*
+ * The transcript with the harness's own callback markers taken out.
+ *
+ * `runtime.c` writes a `<< get_param N >>` line into the capture for every
+ * parameter read, which is useful when reading a trace by eye and is not the
+ * object's output.  The two sides do not read parameters in lockstep -- the
+ * reconstruction reads some through a local while the object re-reads them --
+ * so comparing the raw text compares the harness's instrumentation as much as
+ * the modem's diagnostics.  `dsplib_debug_capture_lines` already excludes
+ * them, which is why the line counts agreed while the strings did not.
+ */
+static const char *
+printed_only(int side, char *buf, size_t n)
+{
+	const char *p = dsplib_debug_capture_text(side);
+	size_t out = 0;
+
+	while (*p != '\0' && out + 1 < n) {
+		const char *nl = strchr(p, '\n');
+		size_t len = nl != 0 ? (size_t)(nl - p) + 1 : strlen(p);
+
+		if (strncmp(p, "<< ", 3) != 0) {
+			if (out + len + 1 >= n)
+				break;
+			memcpy(buf + out, p, len);
+			out += len;
+		}
+		p += len;
+	}
+	buf[out] = '\0';
+	return buf;
+}
+
+/*
+ * The same three functions again, with the diagnostics turned on and the two
+ * transcripts compared.
+ *
+ * THIS IS A DIFFERENT CHECK, not a repeat.  Everything above runs at level 0,
+ * where a gated call site is unreachable: `dsplibs_debug_level` ships at zero
+ * and every announcement in this file compiles to a branch nobody takes.  So
+ * a wrong format string, a wrong argument, a site in the wrong arm and a site
+ * that was never restored at all are the same program, and none of the checks
+ * above can tell them apart.  Fourteen sites in `CALLPROG_Create`,
+ * `CALLPROG_Delete` and `CALLPROG_Dial` were in exactly that position --
+ * placed, and never once executed by anything (finding 192).
+ *
+ * Level 1 must be silent: the gates are `> 1`.  The sweep to 3 is what says
+ * so rather than the reading.
+ */
+static int
+run_trace(void)
+{
+	struct callprog a, b;
+	struct callprog_cfg ca, cb;
+	static char pa[65536], pb[65536];
+	unsigned lines = 0;
+	int lvl, blind, rc;
+
+	diff_begin("CALLPROG create/dial/delete: the transcripts agree");
+	for (lvl = 1; lvl <= 3; lvl++) {
+		for (blind = 0; blind <= 1; blind++) {
+			harness_param_reset();
+			harness_alloc_reset();
+			harness_param_set(MustNoiseFilterBeApplied, blind);
+			harness_param_set(GetDialToneCallProgressFilterIndex, 1);
+			harness_param_set(GetBusyToneCallProgressFilterIndex, 0);
+			harness_param_set(GetDialToneFilterSubindex, 0);
+			harness_param_set(GetCallProgressSamplesBufferLength,
+					  666);
+			harness_param_set(GetDialToneValidationTime, 50);
+			harness_param_set(GetDialToneDetectionThreshold, 40);
+			harness_param_set(GetMaxBusyCadenceOnTime, 55);
+			harness_param_set(GetMinBusyCadenceOnTime, 20);
+			harness_param_set(GetMinBusyCadenceOffTime, 20);
+			harness_param_set(GetMaxBusyCadenceOffTime, 55);
+			harness_param_set(GetBusyDetectionCyclesNumber, 3);
+			harness_param_set(GetBusyToneLooseDetectionEnabled,
+					  blind);
+			harness_param_set(GetCallingToneFlag, 2);
+			harness_param_set(GetNoAnswerTimeOut, 45);
+			harness_param_set(GetBlindDialPause, blind ? 6 : 0);
+			harness_param_set(GetDialToneWaitTime, 9);
+			harness_param_set(GetDialModifierValidation, 0);
+			harness_param_set(GetPulseDialMakeTime, 33);
+			harness_param_set(GetPulseDialBreakTime, 67);
+			harness_param_set(GetDTMFHighToneLevel, 9);
+			harness_param_set(GetDTMFHighAndLowToneLevelDifference,
+					  2);
+			/*
+			 * No datapump: CALLPROG_Dial reaches SetPulseMakeTime
+			 * through DialerCreate and that dereferences whatever
+			 * this returns, so the store's derived value is a wild
+			 * pointer.  Same reason as run_dial above.
+			 */
+			harness_param_set(MDMPRM_DP_ADDR, 0);
+
+			memset(&a, 0xA5, sizeof(a));
+			memset(&b, 0xA5, sizeof(b));
+			ca.w0 = 1;
+			ca.get_sreg = sreg_stub;
+			ca.modem = (void *)0xC0DEu;
+			ca.w3 = 0;
+			cb = ca;
+
+			/*
+			 * Both levels move together.  Raising only ours would
+			 * compare a transcript against silence, which passes
+			 * for the wrong reason the moment the reference is the
+			 * side that stops printing.
+			 */
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+				(unsigned)lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			ref_CALLPROG_Create(&a, &ca);
+			CALLPROG_Create(&b, &cb);
+			ref_CALLPROG_Dial(&a, "T5551234");
+			CALLPROG_Dial(&b, "T5551234");
+			ref_CALLPROG_Delete(&a);
+			CALLPROG_Delete(&b);
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			dsplib_debug_capture_on = 0;
+
+			rc = strcmp(printed_only(0, pa, sizeof(pa)),
+				    printed_only(1, pb, sizeof(pb)));
+			if (rc != 0 && getenv("DBGDIFF") != NULL) {
+				/* Side 0 is the reconstruction, 1 the blob. */
+				fprintf(stderr, "--- ours (level %d) ---\n%s"
+					"--- blob ---\n%s", lvl, pa, pb);
+			}
+			diff_eq_int("transcript (%ld)", rc == 0, 1,
+				    (long)(lvl * 2 + blind));
+			diff_eq_int("line count (%ld)",
+				    (long)dsplib_debug_capture_lines(1),
+				    (long)dsplib_debug_capture_lines(0),
+				    (long)(lvl * 2 + blind));
+			if (lvl == 1) {
+				/* The gates are `> 1`, so nothing may fire. */
+				diff_eq_int("level 1 is silent (%ld)",
+					    (long)dsplib_debug_capture_lines(0),
+					    0, (long)blind);
+			}
+			lines += dsplib_debug_capture_lines(0);
+		}
+	}
+	/*
+	 * Anti-vacuity.  Two identical empty strings compare equal, so without
+	 * this the whole block passes on a tree where every site was deleted.
+	 */
+	diff_eq_int("the trace said something (%ld)", lines > 20, 1,
+		    (long)lines);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -372,6 +533,12 @@ main(void)
 			    && !toneiir_dialtone_table[5], 1, 0);
 	}
 	rc |= diff_end();
+
+	/*
+	 * Last, because it rebuilds the tables from its own parameters and the
+	 * guards above read whatever the previous run left.
+	 */
+	rc |= run_trace();
 
 	return rc;
 }

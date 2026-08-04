@@ -668,9 +668,6 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	/* Computed from the already-converted max_off. */
 	c->max_silence = silence_mult * c->max_off;
 
-	if (c->validation > 100)
-		c->validation -= 100;
-
 	if (!usable) {
 		if (c->filter != 0)
 			toneiir_delete(c->filter);
@@ -733,6 +730,17 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	cfg.n_b = c->sel_n_b;
 	cfg.interval = (short)c->buflen;
 	cfg.threshold = (cfg.threshold & ~0xffff) | (unsigned short)c->threshold;
+	/*
+	 * AFTER the report above, which is how the transcript places it: the
+	 * object prints INTEGRATION_LENGTH as the full validation time and
+	 * only then takes the interval off.  Nothing else can see the
+	 * difference -- the value that reaches `cfg` is the same either way,
+	 * so the whole-object comparison agrees with the subtraction in either
+	 * position.  Finding 194.
+	 */
+	if (c->validation > 100)
+		c->validation -= 100;
+
 	cfg.duration_ms = (extra + 1) * c->validation;
 	cfg.keep_on_gap = c->continuous;
 	cfg.scales = c->sel_scales;
