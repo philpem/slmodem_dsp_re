@@ -117,4 +117,40 @@ int VPcmV34GetMaxUpstreamRateIndex(void *obj);
 }
 #endif
 
+/*
+ * ---------------------------------------------------------------------------
+ * The one entry point of VPcmV34Main.cpp reconstructed so far that is NOT one
+ * of its `extern "C"` exports, and so is C++ on both sides of the
+ * declaration.
+ *
+ * OUTSIDE the block above, deliberately.  Everything above is reachable from
+ * C because the object exports it unmangled; this is not, and putting it in
+ * an `extern "C"` block would emit `getMPrecvdBits` where the object has
+ * `_Z14getMPrecvdBitsP12tagV34Object`.  The mangling is the only thing that
+ * makes our definition a replacement for the blob's, so the declaration has
+ * to be C++ and the translation unit that defines it has to be a `.cpp`.
+ *
+ * `tagV34Object` IS THE OBJECT'S OWN NAME for what v34fsk.h calls
+ * `struct v34_object`; it survives only inside this symbol, which is where
+ * that header's note about the name comes from.  It stays INCOMPLETE here: a
+ * `typedef` to `v34_object` would mangle as `P11v34_object` and produce a
+ * different symbol, so the two names have to remain distinct types and the
+ * definition casts between them.
+ */
+#ifdef __cplusplus
+struct tagV34Object;
+
+/*
+ * Copy the V.90 MP sequence the session has received into the V.34 object's
+ * INFO fields, then rebuild the capability word at +0xaa3c around the maximum
+ * upstream rate the configuration allows.
+ *
+ * Reads the session at `p3548 + 0x1744` -- six flag bytes and seven shorts --
+ * and the configuration at `pac3c + 0x3c`; announces the rate it chose
+ * through `edprintf`, in one of two messages according to whether the PCM
+ * receiver's "sensitive ISP" word gets a say.
+ */
+void getMPrecvdBits(struct tagV34Object *obj);
+#endif
+
 #endif /* DSPLIB_V34PCMIF_H */

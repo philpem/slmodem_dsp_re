@@ -66,8 +66,21 @@ LD = "-no-pie -Wl,-z,noexecstack,-z,notext --coverage"
 
 
 def tests():
-    m = re.search(r"^TESTS\s*:=(.*)$", open("Makefile").read(), re.M)
-    return m.group(1).split()
+    #
+    # BOTH LISTS.  `CXXTESTS` is a separate variable in the Makefile because
+    # its members compile with $(CXX), and reading only `TESTS` here meant the
+    # instrumented tree never built or ran them -- so the sites a C++ test is
+    # the only driver for counted as dead, and the number this whole target
+    # exists to track would have RISEN for a batch of sites that are in fact
+    # driven.
+    #
+    src = open("Makefile").read()
+    out = []
+    for name in ("TESTS", "CXXTESTS"):
+        m = re.search(r"^%s\s*:=(.*)$" % name, src, re.M)
+        if m:
+            out += m.group(1).split()
+    return out
 
 
 def build():
@@ -103,7 +116,8 @@ def run(targets):
 def gcov_lines(src):
     """(count, lineno, text) per line, count None for non-executable."""
     objdir = os.path.join(BUILD, os.path.dirname(src))
-    if not glob.glob(os.path.join(objdir, os.path.basename(src)[:-2] + ".gcda")):
+    stem = os.path.splitext(os.path.basename(src))[0]
+    if not glob.glob(os.path.join(objdir, stem + ".gcda")):
         return None
     out = subprocess.run(["gcov", "-t", "-o", objdir, src],
                          capture_output=True, text=True).stdout
@@ -128,7 +142,13 @@ def main():
     summary = "--summary" in sys.argv
     worst = []
     sites = dead = ex = tot = 0
-    for src in sorted(glob.glob("src/**/*.c", recursive=True)):
+    #
+    # .cpp AS WELL AS .c, for the reason debugaudit.py's own glob now gives:
+    # a C++ translation unit's diagnostics were counted by neither tool, and
+    # FloatIIR.cpp printing nothing is what kept that invisible.
+    #
+    for src in sorted(glob.glob("src/**/*.c", recursive=True)
+                      + glob.glob("src/**/*.cpp", recursive=True)):
         rows = gcov_lines(src)
         if rows is None:
             continue

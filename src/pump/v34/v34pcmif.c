@@ -20,8 +20,15 @@
  * which is the choice the tree already made when `VPcmV34LogTimingOffset`
  * was written: nothing about these functions is C++, and splitting the two
  * halves of one TU by language would be a worse map than splitting it by
- * role.  The rest of `VPcmV34Main.cpp` -- the C++ half -- is not
- * reconstructed.
+ * role.
+ *
+ * THE C++ HALF HAS STARTED.  `src/pump/v34/v34pcmmain.cpp` holds
+ * `getMPrecvdBits`, the second of the two mangled names above, which cannot
+ * live here because a C translation unit cannot emit that symbol.  Its stem
+ * differs from this file's on purpose: the Makefile compiles `%.c` and
+ * `%.cpp` to the same `$(BUILD)/%.o`, so a `v34pcmif.cpp` beside
+ * `v34pcmif.c` would be two sources racing for one object.  The rest of
+ * `VPcmV34Main.cpp` is still to come.
  *
  * The `V34XF_` prefix is the object's, and marks the direction: these are
  * the functions the *V.34* code calls to tell the PCM side something, or to

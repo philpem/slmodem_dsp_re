@@ -317,7 +317,17 @@ def main():
     sites = blob_sites(args.obj, tabs)
 
     if args.src is None:
-        args.src = glob.glob("src/**/*.c", recursive=True)
+        #
+        # .cpp AS WELL AS .c.  The reconstruction has C++ translation units
+        # because the object has them -- FloatIIR.cpp, and VPcmV34Main.cpp's
+        # one mangled entry point in v34pcmmain.cpp -- and this check globbed
+        # only "*.c" from the day it was written.  FloatIIR.cpp prints
+        # nothing, so the gap was invisible until a C++ file arrived carrying
+        # seven format strings, which is finding 134's own argument about a
+        # check that reports clean because it cannot fail.
+        #
+        args.src = (glob.glob("src/**/*.c", recursive=True)
+                    + glob.glob("src/**/*.cpp", recursive=True))
     ours, where = our_sites(args.src)
 
     if args.stamps:
