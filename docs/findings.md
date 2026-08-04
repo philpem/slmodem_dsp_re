@@ -11727,10 +11727,15 @@ scheduling is the split, which both agree on: about 8.7 KB was writable,
 ### 218. `probeselect`'s shape, before it is reconstructed
 
 6,173 bytes and the largest single thing in #59 — 71% of that task's available
-bytes. **Not reconstructed.** This is the map, written down because the next
-session should start from it and not from 1,354 lines of disassembly, and
-because two of the things below are claims that want a differential test
-rather than another reading.
+bytes. **Not reconstructed, and not blocked either.** It has a `ref_` alias,
+every callee it needs is written, and it is differentially testable today; it
+was left out of this session for budget and nothing else. That distinction
+matters, because everything else left out of #59 was left out for a reason
+that will not go away by itself (finding 217) and this one will.
+
+This is the map, written down so the next session starts from it and not from
+1,354 lines of disassembly, and because two of the things below are claims
+that want a differential test rather than another reading.
 
 #### What it is
 
@@ -11821,6 +11826,26 @@ That is a reading, not a measurement, and it is exactly the shape D31 got
 wrong — a branch declared dead from the instructions around it. Do not enter
 it as a deviation until a differential test has driven the arm. If it holds
 it is a real one: a whole index of the pre-emphasis range is unreachable.
+
+**Index 10 is reached by BOTH exits and they print different strings.** The
+`jg` taken on the iteration that makes `i` ten, and the `cmp $0x9`
+fall-through, both leave 10 in the rate config — but the first reports it as
+"index is %d" and the second as "index is 10". So the two are
+indistinguishable in state and distinguishable only in the transcript, which
+is findings 171 and 212's situation again, and the MOH decoder's two pairs of
+near-duplicate arms in finding 214's neighbourhood. Compare the transcript.
+
+**THE BINS MUST BE SEEDED NEGATIVE AS WELL AS POSITIVE.** Both `ref` and `x`
+are `movswl`, and finding 212 established that a bin's `energy` really does go
+negative — from a seeded accumulator, at `0x04000000` in both halves. A
+negative `x` RISES towards zero under a multiplier below one, so it crosses a
+negative `ref` from the other side entirely. A fixture with non-negative
+energies never runs that branch.
+
+**There is no 2743 arm.** Five rates are recognised and V.34's second lowest
+is not one of them — which is the same fact as `chkForceBaudRate`'s `allow[0]`
+and `allow[1]` being written and never read. Two functions, one gap, and
+neither says why.
 
 #### Two guarded arms a zeroed fixture never reaches
 
