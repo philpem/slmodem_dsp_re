@@ -12547,3 +12547,65 @@ could declare naturally.  That means teaching `symmap.py` to parse Itanium
 mangling, for a cosmetic gain over one `extern "C"` block, and a mangling
 parser that is subtly wrong renames a symbol to something that still links --
 the worst failure available here.  Left alone on purpose.
+
+### 226. The C++ half's class structure is already written down, in the mangling
+
+886 of the blob's symbols are Itanium-mangled, across **73 classes and 55 free
+functions** -- essentially all of `VPcmV34Main.cpp` and the float DSP beneath
+it.  Every one encodes the class, the member, and each parameter type in
+order, with the author's own enum and struct names.  `tools/cppstruct.py`
+reads it out:
+
+```
+$ tools/cppstruct.py FloatFIR
+class FloatFIR {
+        ? process(float const*, float*, unsigned int);     // 287 bytes, NOT WRITTEN
+        ? process(float);                                  // 182 bytes, NOT WRITTEN
+        FloatFIR(unsigned int, float*, unsigned int);      // 105 bytes, C1,C2
+        ? reset();                                         //  61 bytes
+        ? setCoefficients(float*, unsigned int);           //  58 bytes
+        ~FloatFIR();                                       //  30 bytes, D1,D2
+};
+```
+
+For the C half every one of those argument lists costs a disassembly read.
+Here it is free, and it is the difference between starting #60 from a
+skeleton and starting it from a guess.
+
+**`?` is deliberate.** Itanium mangling omits return types for ordinary
+functions, so the tool emits a token that does not compile rather than `void`,
+which would let a skeleton be pasted in and built with every return silently
+wrong.  Also absent: member variables, base classes, access specifiers, and
+any member the compiler inlined everywhere.  Bound object sizes the way
+finding 215 did, from the largest `this`-relative displacement.
+
+#### Three things it found that were not known
+
+**`FloatIIR` and `FloatFIR` are unwritten, and are not what we thought.** The
+blob has a concrete `FloatIIR` (5 members, 575 bytes) *and* a
+`GenericIIR<float,double>` template instantiation (1,269 bytes, weak).
+`src/dsp/FloatIIR.cpp` reconstructs the *instantiation* -- correctly, matching
+the mangling, tested by `t_genericiir.cpp` -- so the file name names a class
+it does not implement, and grepping the object for "FloatIIR" finds the other
+one and reads as a mismatch.  `FloatFIR` (6 members, 723 bytes) is untouched
+and one of its members, `setCoefficients`, is inside #60's batch 2.
+
+**`V90PreFilter` is mostly coefficients.** Its code is about 2 KB, but it
+carries **nine static tables totalling ~21 KB** -- `preFilterCoefType1..3`,
+`refLoopsType1..7`, `dataBase`.  #60's brief called it a 1,280-byte object on
+the strength of its `this`-relative displacements, which measured the object
+and not the class.  Static members are `.data`, so they are outside #60's
+16,003 bytes of text and were invisible to every count made so far.
+
+**Data members were being read as functions.** A demangled name with no
+parenthesis is data, and the first version of this tool sent those to the
+free-function list, where `V90PreFilter::preFilterCoefType3` appeared as the
+second largest "function" in the object at 4,960 bytes.
+
+#### And two bugs in the tool worth the same note as finding 221's
+
+The constructor/destructor tag sits directly after the class *name*
+(`_ZN18V90Phase3ModulatorC1EP13V90Parametersj`), so it follows a letter.  Two
+versions anchored on the end of the symbol and on a preceding digit; both
+matched nothing and printed `None` for every constructor in the object,
+silently, because a missing annotation looks like an absent feature.
