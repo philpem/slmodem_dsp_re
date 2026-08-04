@@ -98,18 +98,41 @@ def mapping():
     return known, guessed, unmapped
 
 
-def config(targets, severities):
-    per = "".join(
-        '\n[[per_target]]\nglob = "%s"\ntest.cmd = '
-        '"make -s %s >/dev/null 2>&1 && ./%s >/dev/null 2>&1"\n'
-        'test.timeout = 120\n' % (src, tst, tst)
-        for src, tst in sorted(targets.items()))
+#
+# ONE RUN PER SOURCE FILE, and `[[per_target]]` is not used.
+#
+# mewt 4.0.0 SILENTLY IGNORES IT.  Its own config template documents the
+# array -- `glob` plus a dotted `test.cmd` -- and the shape below was exactly
+# that, and every mutant ran the global `[test] cmd` instead.  Proved rather
+# than guessed: with the global command `true` and the per-target one `false`,
+# all 32 tested mutants came back UNCAUGHT, so the command that ran was the
+# one that always passes.
+#
+# The first version of this tool left `make -s test` as the global fallback,
+# on the reasoning that nothing should ever reach it.  Everything reached it:
+# the whole 62-binary suite per mutant, ten seconds instead of two tenths,
+# and a smoke run on one small file was still going an hour later.  A
+# fallback that is merely slow rather than loud hides the bug it exists for.
+#
+# So each target gets its own config, its own database and its own run, and
+# `[test] cmd` is that target's command.  There is nothing left to fall back
+# to and nothing to get wrong.
+#
+# STILL SLOWER THAN IT SHOULD BE, and not yet measured.  The manual spike ran
+# 1219 mutants over v8jm.c in five minutes against a warm tree -- 0.2s each,
+# which is one recompile, one relink and one test run.  Through this tool
+# v8agc.c's 315 mutants had not finished in ten, so something costs seconds
+# per mutant that did not cost them by hand.  The cold worktree explains the
+# first build and not the rest.  Suspects, in order: mewt restoring the whole
+# file and make rebuilding more than the one object; the sqlite write per
+# mutant; the process spawn.  Do not run --guessed or a full sweep until that
+# is measured -- 49 files at this rate is days, not the hour it should be.
+#
+def config(src, test, severities):
     return ('db = "mewt.sqlite"\n[log]\nlevel = "info"\n'
-            '[targets]\ninclude = [%s]\n'
-            # A target with no per_target rule would fall back to this, which
-            # is correct but fifty times slower; nothing should reach it.
-            '[test]\ncmd = "make -s test >/dev/null 2>&1"\ntimeout = 600\n'
-            % ", ".join('"%s"' % s for s in sorted(targets))) + per
+            '[targets]\ninclude = ["%s"]\n'
+            '[test]\ncmd = "make -s %s >/dev/null 2>&1 && ./%s >/dev/null 2>&1"\n'
+            'timeout = 120\n' % (src, test, test))
 
 
 def main():
@@ -151,13 +174,26 @@ def main():
     if r.returncode != 0:
         sys.exit("could not make the worktree:\n" + r.stderr)
     try:
-        open(os.path.join(wt, "mewt.toml"), "w").write(
-            config(targets, args.severity))
         env = dict(os.environ)
-        for cmd in (["mutate"], ["run"]):
-            subprocess.run([mewt] + cmd, cwd=wt, env=env)
-        out = subprocess.run([mewt, "results", "--severity", args.severity],
-                             cwd=wt, env=env, capture_output=True, text=True)
+        report = []
+        for i, (src, test) in enumerate(sorted(targets.items()), 1):
+            print("  [%d/%d] %s" % (i, len(targets), src))
+            open(os.path.join(wt, "mewt.toml"), "w").write(
+                config(src, test, args.severity))
+            # A fresh database each time: the config names the same path, and
+            # a stale one would carry the previous target's mutants into this
+            # target's results.
+            db = os.path.join(wt, "mewt.sqlite")
+            if os.path.exists(db):
+                os.unlink(db)
+            for cmd in (["mutate"], ["run"]):
+                subprocess.run([mewt] + cmd, cwd=wt, env=env,
+                               capture_output=True)
+            r = subprocess.run([mewt, "results", "--severity", args.severity],
+                               cwd=wt, env=env, capture_output=True, text=True)
+            if r.stdout.strip():
+                report.append(r.stdout)
+        out = type("R", (), {"stdout": "\n".join(report)})()
         print(out.stdout)
         # Keep the report where it can be diffed against the last sweep.
         os.makedirs(os.path.join(root, "docs"), exist_ok=True)
