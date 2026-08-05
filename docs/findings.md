@@ -13110,6 +13110,20 @@ The restart is a third of the class and is invisible unless the test drives
 enough symbols to reach it; `t_v90p3mod.cpp` uses a 64-byte buffer and asserts
 the crossing happened.
 
+**The four are written as a header-defined template and emit no symbol.**
+`nm build/src/pump/v90/V90Phase3Modulator.o` lists no `_ZN9ScramblerIhiE*` at
+all: GCC inlines all four into the three callers, which satisfies the link and
+is the accepted resolution — an out-of-line definition is not required, and
+forcing one would only add a weak symbol nothing references.  They are proved
+directly against the `ref__ZN9ScramblerIhiE*` aliases instead of only through
+the modulator, which is what makes the claim about them testable.  Note that
+`tools/coverage.py` shares `callgraph.py`'s blind spot: the thirty-one weak
+symbols appear in neither the numerator nor the denominator of
+`docs/coverage.md`, so writing them moves no number there.
+
+`Descrambler<unsigned char, int>` in batch 5 is the same pattern and should be
+written the same way.
+
 #### The two enums, measured
 
 `PcmType` has exactly two values.  `V90Phase3Modulator::reset` stores the
@@ -13277,3 +13291,41 @@ signatures stay on the record in `docs/v90cpp.md`.  The offset assertions
 themselves sit behind `#if __SIZEOF_POINTER__ == 4`, because ten of them are
 pointers or follow one and `make phase` compiles every source for a 64-bit
 host (`src/v8/v8util.c` has the same guard for the same reason).
+
+### 233. The first x87 measurement in this tree: two timeouts, one of them exact
+
+CLAUDE.md says of the decompiler's floating point that "nobody has measured it
+here."  Batch 2 of #60 is the first work that had to, and the answer is
+narrow but useful: the object's x87 is not decoration, it changes an answer,
+and reproducing it literally in C is bit-exact under this tree's build.
+
+`V90Phase3Modulator` has two long timeouts and computes them differently.
+
+The DIL timeout is a plain 32-bit integer compare, `symbolCount ==
+timeoutBase + 40000`, wraparound and all.
+
+The Jd timeout is not.  Both counts go through `fildll` — the
+unsigned-to-floating conversion, high word zeroed — the constant arrives as
+`fadds` from a four-byte 24804.0f in `.rodata.cst4`, and the comparison is
+`fcompp`.  With no rounding between, the sum is exact in the register's
+64-bit mantissa, so the test is `symbolCount == timeoutBase + 24804` **over
+the integers and not modulo 2**32**.
+
+The two therefore disagree, and only across 2**32: with
+`timeoutBase = 0xfffffff0`, `+ 40000` wraps to 24788 and fires, while
+`+ 24804` does not fire at all.  `t_v90p3mod.cpp` drives exactly that, in both
+directions, and drives the counter's own wrap at 0xffffffff as well.
+
+Written as the object writes it — `(float)symbolCount == (float)timeoutBase +
+24804.0f` — rather than widened to 64-bit integers, because the object's
+arithmetic is the specification and because it is exactly reproducible: GCC 13
+at `-O2 -mfpmath=387` emits `fildq`/`faddp`/`fucomip` and keeps the excess
+precision, which is `FLT_EVAL_METHOD` 2 doing what the 2003 compiler did.
+There is one further asymmetry worth having on the record: V.92's JdPhase
+timeout uses the *absolute* constant 24804 with no `timeoutBase` term at all,
+where V.90's Jd timeout is relative to it.
+
+Fourteen x87 instructions across the two functions, and that is all of them.
+This says nothing about Ghidra's x87 modelling, which still has not been
+measured; it says that where the object uses the coprocessor for integer
+arithmetic, transcribing the coprocessor is both necessary and sufficient.
