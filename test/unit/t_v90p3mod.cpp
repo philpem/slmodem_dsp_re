@@ -684,7 +684,15 @@ prepare(int trial, int mode, unsigned int st)
 	ours.o.symbolCount = theirs.o.symbolCount = 0;
 	ours.o.timeoutBase = theirs.o.timeoutBase = 0;
 	ours.o.polarity = theirs.o.polarity = (unsigned)trial & 1u;
-	ours.o.eventCode = theirs.o.eventCode = 0;
+
+	/*
+	 * NOT zero.  Every arm of both functions writes `eventCode`, and a
+	 * dropped write is invisible if the field was already zero going in --
+	 * mutation showed it: "eventCode not cleared in the DIL arm" survived
+	 * until this line stopped clearing it.
+	 */
+	ours.o.eventCode = theirs.o.eventCode =
+	    0x5a5a0000u + (unsigned int)trial;
 }
 
 /*
@@ -1223,6 +1231,127 @@ run_sequence(int v92)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * The three GATED diagnostic sites, which no object comparison can reach.
+ *
+ * "Illegal state" separates the five quiet states from the illegal ones, and
+ * that is the ONLY thing separating them: both arms write `eventCode = 0` and
+ * return zero, so mutating state 13 from quiet to illegal under V.92 -- or
+ * the reverse under V.90 -- leaves the object identical and survives
+ * everything above.  The two "ERROR: Null ... @ end of TRN1d" sites are gated
+ * as well.
+ *
+ * The harness's debug capture reaches them.  It works HERE and not everywhere
+ * because the states driven below reach no `edprintf` site: `edprintf` is a
+ * defined symbol in the blob, so each side runs its own copy with its own
+ * encoder counter and the two produce different text for the same message.
+ * `dsplibs_debug_printf` is imported, so a gated site goes straight to the
+ * harness on both sides and the transcripts compare directly, text and all.
+ * ===========================================================================
+ */
+static int
+run_diagnostics(int v92)
+{
+	int trial, st, lvl, ours_printed = 0, theirs_printed = 0;
+
+	diff_begin(v92 ? "generateV92Symbol gated diagnostics"
+		       : "generateV90Symbol gated diagnostics");
+
+	dsplib_debug_capture_on = 1;
+
+	/*
+	 * THE LEVEL IS SWEPT 0 TO 3, not just raised.  The gate is `> 1`, so
+	 * 0 and 1 must produce nothing and 2 and 3 must produce the message;
+	 * a site with the gate dropped, or set at the wrong threshold, is
+	 * identical to the object at one level and differs at another.  That
+	 * is finding 150's point and it is what a single level misses --
+	 * mutation showed it, with "the illegal arm's gate dropped" surviving
+	 * a level-2-only sweep.
+	 */
+	for (lvl = 0; lvl < 4; lvl++) {
+		dsplibs_debug_level = ref_dsplibs_debug_level =
+		    (unsigned int)lvl;
+
+		/*
+		 * The states each protocol does not own, the five quiet ones,
+		 * and one out of range.  Every other state reaches an
+		 * `edprintf` site and is deliberately not driven here.
+		 */
+		for (st = 4; st < 17; st++) {
+			if (st > 7 && st < 11)
+				continue;
+			for (trial = 0; trial < 4; trial++) {
+				unsigned int s = (st < 16)
+				    ? (unsigned int)st
+				    : 0x51a70000u + (unsigned int)trial;
+
+				prepare(trial, trial % 4, s);
+				ours.o.symbolCount =
+				    theirs.o.symbolCount =
+				    (unsigned int)(trial * 7 + 1);
+				dsplib_debug_capture_reset();
+				drive(v92, (long)(400000 + lvl * 1000 +
+						  st * 10 + trial));
+
+				diff_eq_int("gated diagnostic lines "
+					    "(case %ld)",
+				    (long)dsplib_debug_capture_lines(0),
+				    (long)dsplib_debug_capture_lines(1),
+				    (long)(lvl * 100 + st));
+				diff_eq_int("gated diagnostic text (case %ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)(lvl * 100 + st));
+				ours_printed +=
+				    (int)dsplib_debug_capture_lines(0);
+				theirs_printed +=
+				    (int)dsplib_debug_capture_lines(1);
+			}
+		}
+
+		/* The null bit vector at the end of TRN1d, gated the same. */
+		for (trial = 0; trial < 4; trial++) {
+			prepare(trial, trial % 4, P3M_STATE_TRN1D);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    0x3e7cu - 1u;
+			if (v92)
+				ours.o.jdV92Bits = theirs.o.jdV92Bits = NULL;
+			else
+				ours.o.jdBits = theirs.o.jdBits = NULL;
+			dsplib_debug_capture_reset();
+			drive(v92, (long)(410000 + lvl * 100 + trial));
+
+			diff_eq_int("null bit vector diagnostic lines "
+				    "(case %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1),
+			    (long)(lvl * 100 + trial));
+			diff_eq_int("null bit vector diagnostic text "
+				    "(case %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    (long)(lvl * 100 + trial));
+			ours_printed += (int)dsplib_debug_capture_lines(0);
+			theirs_printed += (int)dsplib_debug_capture_lines(1);
+		}
+	}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	/*
+	 * Anti-vacuity: two empty captures agree about nothing at all, which
+	 * is the shape finding 149 warns about.
+	 */
+	diff_eq_int("our gated sites printed something", ours_printed > 0, 1,
+		    0);
+	diff_eq_int("the blob's gated sites printed something",
+		    theirs_printed > 0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1236,6 +1365,8 @@ main(void)
 	rc |= run_generate(1);
 	rc |= run_sequence(0);
 	rc |= run_sequence(1);
+	rc |= run_diagnostics(0);
+	rc |= run_diagnostics(1);
 
 	return rc;
 }
