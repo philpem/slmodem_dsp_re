@@ -699,3 +699,92 @@ V90Phase3Modulator::generateV92Symbol()
 
 	return sample;
 }
+
+/*
+ * Start a phase 3 transmission, and optionally run it forward.
+ *
+ * The order is the object's: the scrambler first, then the fields that do not
+ * depend on the law, then the three levels, then the bit vectors, then the
+ * DIL generator, and only then the symbols.  `resetDILGenerator` is called on
+ * both paths and with whatever descriptor came in, including null.
+ *
+ * THE TWO Jd PATHS ARE NOT SYMMETRIC.  `sessionFlag` decides between them,
+ * and each writes only its own pointers: the V.90 path writes `jdBits` and
+ * leaves the two V.92 pointers alone, and the V.92 path writes both V.92
+ * pointers and leaves `jdBits` alone.  Only the V.92 path has an else -- a
+ * null `V90Jd*` gives `jdBits` a null through the same store, while a null
+ * `V92Jd*` takes a separate arm that nulls both.
+ *
+ * The three levels are the same companding the DIL generator does: the code
+ * carries a seven-bit magnitude and the sign/company bits are supplied here,
+ * `(code & 0x7f) ^ 0xd5` for A-law and `(code & 0x7f) ^ 0xff` for mu-law.
+ * `codeLevelAlt` is the same for the code sixteen higher, added as a byte
+ * -- which the mask makes moot, but it is what the object does -- and
+ * `idleLevel` is the level of the code that is all sign bits, 0xd5 or 0xff.
+ *
+ * The law is read back out of `pcmType` for the second and third conversions
+ * rather than from the argument, which is why the object tests it three
+ * times for what is one decision.
+ *
+ * The trailing loop is the caller's warm-up: `nSymbols` symbols generated
+ * immediately, through whichever generator `sessionFlag` selects, and the
+ * flag is re-read on every iteration.
+ */
+void
+V90Phase3Modulator::reset(PcmType law, unsigned char code,
+			  Phase3ModulatorState st, unsigned int nSymbols,
+			  V90Jd *jd, V92Jd *jd92,
+			  const tagV90DILdescriptor *d, unsigned int base)
+{
+	unsigned int i;
+
+	scrambler.reset(0);
+
+	pcmType = law;
+	symbolCount = 0;
+	eventCode = 0;
+	timeoutBase = base;
+	state = st;
+
+	if (law != PCM_TYPE_MU_LAW)
+		codeLevel = (short)alaw2linear(
+		    (unsigned char)((code & 0x7f) ^ 0xd5));
+	else
+		codeLevel = (short)ulaw2linear(
+		    (unsigned char)((code & 0x7f) ^ 0xff));
+
+	code = (unsigned char)(code + 0x10);
+
+	if (pcmType != PCM_TYPE_MU_LAW)
+		codeLevelAlt = (short)alaw2linear(
+		    (unsigned char)((code & 0x7f) ^ 0xd5));
+	else
+		codeLevelAlt = (short)ulaw2linear(
+		    (unsigned char)((code & 0x7f) ^ 0xff));
+
+	if (pcmType != PCM_TYPE_MU_LAW)
+		idleLevel = (short)alaw2linear(0xd5);
+	else
+		idleLevel = (short)ulaw2linear(0xff);
+
+	polarity = 0;
+
+	if (sessionFlag == 0) {
+		jdBits = jd != NULL ? jd->getBitVector() : NULL;
+	} else if (jd92 != NULL) {
+		jdV92Bits = jd92->getJdBitVector();
+		jdV92PhaseBits = jd92->getJdPhaseBitVector();
+	} else {
+		jdV92Bits = NULL;
+		jdV92PhaseBits = NULL;
+	}
+
+	resetDILGenerator(d);
+
+	for (i = nSymbols; i != 0; i--) {
+		if (sessionFlag != 0)
+			generateV92Symbol();
+		else
+			generateV90Symbol();
+	}
+}

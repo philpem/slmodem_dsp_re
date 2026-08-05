@@ -51,6 +51,16 @@ void ref_resetDILGenerator(void *self, const void *d)
  */
 int ref_generateV90Symbol(void *self)
 	asm("ref__ZN18V90Phase3Modulator17generateV90SymbolEv");
+
+/*
+ * `reset` takes eight arguments after `this`, all by value on the stack.  The
+ * two enums are declared `int` here rather than by their own names because an
+ * `extern "C"` prototype only has to describe the ABI, and both are int-sized.
+ */
+void ref_reset(void *self, int law, unsigned char code, int st,
+	       unsigned int nSymbols, void *jd, void *jd92, const void *d,
+	       unsigned int base)
+	asm("ref__ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj");
 int ref_generateV92Symbol(void *self)
 	asm("ref__ZN18V90Phase3Modulator17generateV92SymbolEv");
 
@@ -1406,6 +1416,254 @@ run_diagnostics(int v92)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * reset
+ *
+ * The one method that touches every part of the object at once: it seeds the
+ * scrambler, converts three PCM codes, takes the bit vectors out of a V90Jd
+ * or a V92Jd, expands a DIL descriptor and then runs the generator forward.
+ *
+ * Three things the earlier sections did not need:
+ *
+ *   - REAL Jd OBJECTS.  `reset` calls `V90Jd::getBitVector()` or the two
+ *     `V92Jd` accessors, and each side must call its own on its own object,
+ *     so there are two of each, seeded identically and compared whole
+ *     afterwards -- `getBitVector` rewrites most of a V90Jd, and a reset that
+ *     called it on the wrong path would be invisible if only the modulator
+ *     were compared.
+ *
+ *   - THE THREE BIT-VECTOR POINTERS PRE-SET TO EACH SIDE'S OWN Jd.  Only one
+ *     path writes each, so the others must still be comparable afterwards.
+ *     Setting them to a fixed offset into each side's own object means an
+ *     untouched pointer compares as that offset on both sides and a written
+ *     one compares as the offset the accessor returned -- never a raw
+ *     address, and never merely "non-null" (finding 224).
+ *
+ *   - `sessionFlag` FORCED, because it chooses the Jd path AND the generator
+ *     in the warm-up loop, and `pcmType` forced for the reason the file
+ *     comment gives.  Both values of both, against every state.
+ * ===========================================================================
+ */
+
+#define JD90_SLOT	192
+#define JD92_SLOT	256
+
+static union { V90Jd o; unsigned char raw[JD90_SLOT]; } jd90_ours, jd90_theirs;
+static union { V92Jd o; unsigned char raw[JD92_SLOT]; } jd92_ours, jd92_theirs;
+
+/* Where the three pointers are parked before the call; see the comment. */
+#define PARK_JD90	40
+#define PARK_JD92	48
+#define PARK_JD92P	56
+
+static long
+own_offset(const unsigned char *p, const void *base)
+{
+	return p == NULL ? -1 : p - (const unsigned char *)base;
+}
+
+static void
+prepare_reset(int trial, int mode, unsigned int flag)
+{
+	unsigned int i;
+
+	seed(trial, mode);
+	seed_descriptor(trial, mode % 3);
+
+	/*
+	 * Nonzero lengths and a nonzero count: the object divides by nothing,
+	 * so zero is safe, but it makes the DIL states step nowhere and the
+	 * warm-up loop stops testing the thing it is there to test.
+	 */
+	desc.seq1Length = (unsigned char)(1 + trial % 97);
+	desc.seq2Length = (unsigned char)(1 + trial % 53);
+	desc.dilCount = (unsigned char)(1 + trial % 31);
+
+	ours.o.sessionFlag = theirs.o.sessionFlag = flag;
+
+	for (i = 0; i < JD90_SLOT; i++)
+		jd90_ours.raw[i] = jd90_theirs.raw[i] = next_byte();
+	for (i = 0; i < JD92_SLOT; i++)
+		jd92_ours.raw[i] = jd92_theirs.raw[i] = next_byte();
+
+	ours.o.jdBits = jd90_ours.raw + PARK_JD90;
+	theirs.o.jdBits = jd90_theirs.raw + PARK_JD90;
+	ours.o.jdV92Bits = jd92_ours.raw + PARK_JD92;
+	theirs.o.jdV92Bits = jd92_theirs.raw + PARK_JD92;
+	ours.o.jdV92PhaseBits = jd92_ours.raw + PARK_JD92P;
+	theirs.o.jdV92PhaseBits = jd92_theirs.raw + PARK_JD92P;
+
+	for (i = 0; i < SCR_BUF; i++)
+		scr_ours[i] = scr_theirs[i] =
+		    (unsigned char)(next_byte() & 1u);
+	scr_place(&ours.o.scrambler, scr_ours, (unsigned)trial % 41u);
+	scr_place(&theirs.o.scrambler, scr_theirs, (unsigned)trial % 41u);
+}
+
+static void
+compare_reset(long input)
+{
+	static union mod_slot ca, cb;
+
+	memcpy(&ca, &ours, sizeof(ca));
+	memcpy(&cb, &theirs, sizeof(cb));
+	memset(ca.raw + 0x20, 0, 0x1c);		/* the Scrambler's seven */
+	memset(cb.raw + 0x20, 0, 0x1c);
+	memset(ca.raw + 0x44, 0, 0x0c);		/* the three bit vectors  */
+	memset(cb.raw + 0x44, 0, 0x0c);
+	diff_eq_obj("after reset", V90Phase3Modulator, &ca.o, &cb.o, input);
+
+	scr_compare(&ours.o.scrambler, &theirs.o.scrambler, input);
+
+	diff_eq_int("jdBits offset (case %ld)",
+		    own_offset(ours.o.jdBits, &jd90_ours),
+		    own_offset(theirs.o.jdBits, &jd90_theirs), input);
+	diff_eq_int("jdV92Bits offset (case %ld)",
+		    own_offset(ours.o.jdV92Bits, &jd92_ours),
+		    own_offset(theirs.o.jdV92Bits, &jd92_theirs), input);
+	diff_eq_int("jdV92PhaseBits offset (case %ld)",
+		    own_offset(ours.o.jdV92PhaseBits, &jd92_ours),
+		    own_offset(theirs.o.jdV92PhaseBits, &jd92_theirs), input);
+
+	diff_eq_obj("the V90Jd after reset", V90Jd, &jd90_ours.o,
+		    &jd90_theirs.o, input);
+	diff_eq_obj("the V92Jd after reset", V92Jd, &jd92_ours.o,
+		    &jd92_theirs.o, input);
+	diff_eq_int("no store past the V90Jd (case %ld)",
+		    memcmp(jd90_ours.raw + sizeof(V90Jd),
+			   jd90_theirs.raw + sizeof(V90Jd),
+			   JD90_SLOT - sizeof(V90Jd)) == 0, 1, input);
+	diff_eq_int("no store past the V92Jd (case %ld)",
+		    memcmp(jd92_ours.raw + sizeof(V92Jd),
+			   jd92_theirs.raw + sizeof(V92Jd),
+			   JD92_SLOT - sizeof(V92Jd)) == 0, 1, input);
+	diff_eq_int("no store past the object (case %ld)", guard_equal(), 1,
+		    input);
+}
+
+static int
+run_reset(void)
+{
+	static const unsigned int nsym[3] = { 0, 1, 5 };
+	int st, flag, n, trial = 0;
+	int saw_jd90 = 0, saw_jd92 = 0, saw_park90 = 0, saw_park92 = 0;
+	int saw_generated = 0, saw_scr_filled = 0, saw_null = 0;
+
+	diff_begin("V90Phase3Modulator::reset");
+
+	/*
+	 * Seventeen states -- sixteen legal and one past the end, because the
+	 * object's bound is `cmp $0xf; ja` and `reset` stores whatever it is
+	 * given -- times both session flags, times three warm-up lengths.
+	 */
+	for (st = 0; st <= 16; st++) {
+		for (flag = 0; flag < 2; flag++) {
+			for (n = 0; n < 3; n++, trial++) {
+				long input = st * 1000L + flag * 100L + n;
+				PcmType law = (trial & 1) ? PCM_TYPE_A_LAW
+							  : PCM_TYPE_MU_LAW;
+				unsigned char code =
+				    (unsigned char)(trial * 37u + 5u);
+				unsigned int base = 0x40000000u
+				    + (unsigned int)trial;
+
+				prepare_reset(trial, trial % 4,
+					      (unsigned int)flag);
+
+				ours.o.reset(law, code,
+				    (Phase3ModulatorState)st, nsym[n],
+				    &jd90_ours.o, &jd92_ours.o, &desc, base);
+				ref_reset(&theirs.o, law, code, st, nsym[n],
+				    &jd90_theirs.o, &jd92_theirs.o, &desc,
+				    base);
+
+				compare_reset(input);
+
+				diff_eq_int("reset stored the state (case %ld)",
+					    (int)ours.o.state, st, input);
+				diff_eq_int("reset stored the base (case %ld)",
+					    ours.o.timeoutBase, (long)base,
+					    input);
+
+				if (flag == 0 && own_offset(ours.o.jdBits,
+				    &jd90_ours) == 2)
+					saw_jd90 = 1;
+				if (flag != 0 && own_offset(ours.o.jdV92Bits,
+				    &jd92_ours) == 2)
+					saw_jd92 = 1;
+				if (flag != 0 && own_offset(ours.o.jdBits,
+				    &jd90_ours) == PARK_JD90)
+					saw_park90 = 1;
+				if (flag == 0 && own_offset(ours.o.jdV92Bits,
+				    &jd92_ours) == PARK_JD92)
+					saw_park92 = 1;
+				if (nsym[n] != 0 && ours.o.symbolCount != 0)
+					saw_generated = 1;
+				if (ours.o.scrambler.pOut ==
+				    ours.o.scrambler.pInitOut)
+					saw_scr_filled = 1;
+			}
+		}
+	}
+
+	/*
+	 * Null Jd pointers, with no warm-up: the generator dereferences the
+	 * vectors without a null check in every state but TRN1d, so a null
+	 * here is a test of `reset`'s own two arms and nothing else.
+	 */
+	for (st = 0; st <= 15; st++) {
+		for (flag = 0; flag < 2; flag++, trial++) {
+			long input = 900000L + st * 10L + flag;
+
+			prepare_reset(trial, trial % 4, (unsigned int)flag);
+
+			ours.o.reset(PCM_TYPE_A_LAW, (unsigned char)st,
+			    (Phase3ModulatorState)st, 0, NULL, NULL, &desc,
+			    (unsigned int)trial);
+			ref_reset(&theirs.o, PCM_TYPE_A_LAW,
+			    (unsigned char)st, st, 0, NULL, NULL, &desc,
+			    (unsigned int)trial);
+
+			compare_reset(input);
+			if (flag == 0 ? ours.o.jdBits == NULL
+				      : ours.o.jdV92Bits == NULL)
+				saw_null = 1;
+		}
+	}
+
+	/* And a null descriptor, which resetDILGenerator turns into no DIL. */
+	for (flag = 0; flag < 2; flag++, trial++) {
+		prepare_reset(trial, trial % 4, (unsigned int)flag);
+		ours.o.reset(PCM_TYPE_MU_LAW, 0x2a, P3M_STATE_SD, 0,
+		    &jd90_ours.o, &jd92_ours.o, NULL, 0);
+		ref_reset(&theirs.o, PCM_TYPE_MU_LAW, 0x2a, 0, 0,
+		    &jd90_theirs.o, &jd92_theirs.o, NULL, 0);
+		compare_reset(950000L + flag);
+		diff_eq_int("reset(NULL descriptor) cleared dilCount",
+			    ours.o.dilCount, 0, flag);
+	}
+
+	/*
+	 * Anti-vacuity.  Each of these fails if `reset` took one arm where it
+	 * should have taken the other, and the first four are the asymmetry
+	 * itself: the V.90 path must write `jdBits` and leave the V.92 pair
+	 * parked, and the V.92 path the reverse.
+	 */
+	diff_eq_int("the V.90 path set jdBits from the V90Jd", saw_jd90, 1, 0);
+	diff_eq_int("the V.92 path set jdV92Bits from the V92Jd", saw_jd92, 1,
+		    0);
+	diff_eq_int("the V.92 path left jdBits parked", saw_park90, 1, 0);
+	diff_eq_int("the V.90 path left jdV92Bits parked", saw_park92, 1, 0);
+	diff_eq_int("a null Jd gave a null pointer", saw_null, 1, 0);
+	diff_eq_int("the warm-up loop generated symbols", saw_generated, 1, 0);
+	diff_eq_int("reset put the scrambler back to its start",
+		    saw_scr_filled, 1, 0);
+
+	return diff_end();
+}
+
+
 int
 main(void)
 {
@@ -1421,6 +1679,7 @@ main(void)
 	rc |= run_sequence(1);
 	rc |= run_diagnostics(0);
 	rc |= run_diagnostics(1);
+	rc |= run_reset();
 
 	return rc;
 }
