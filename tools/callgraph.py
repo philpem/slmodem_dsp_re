@@ -128,17 +128,37 @@ def call_edges(obj, syms):
     return edges, indirect
 
 
-def reconstructed(paths):
-    """Function names that already exist in this tree."""
+def reconstructed(paths=None):
+    """Function names that already exist in this tree, from the OBJECTS.
+
+    This used to grep `src/**/*.c` for `^(\w+)\s*\(` -- a name at column 0
+    followed by a parenthesis.  Two things were wrong with that, and the
+    second went unnoticed for the whole of the C++ work:
+
+      it counts a prototype, a comment or a K&R declaration as a definition,
+      which is the exact mistake coverage.py's docstring warns against;
+
+      it cannot see C++ AT ALL.  A member is written `Class::method(`, which
+      the regex does not match, and even if it did the blob's symbols are
+      mangled and the source spells them out.  So every C++ function this
+      tree has written counted as missing, and `--of v34handshak` went on
+      reporting 16,003 bytes of unwritten C++ after eight batches of it had
+      landed.
+
+    Read the built objects instead, as coverage.py and closure.py both do.
+    Requires a build; that is a fair price for an answer that is true.
+    """
+    import glob as _g
     have = set()
-    for p in paths:
-        try:
-            src = open(p).read()
-        except OSError:
-            continue
-        # A definition is a name at column 0 followed by '('.
-        for m in re.finditer(r"^(\w+)\s*\(", src, re.M):
-            have.add(m.group(1))
+    objs = paths if paths else _g.glob("build/src/**/*.o", recursive=True)
+    if not objs:
+        sys.stderr.write("callgraph: no objects under build/src -- run make "
+                         "first, or this will report everything as missing\n")
+    for o in objs:
+        for line in run("nm", "--defined-only", o).split("\n"):
+            f = line.split()
+            if len(f) >= 3:
+                have.add(f[-1])
     return have
 
 
@@ -190,9 +210,6 @@ def main():
     syms = symbols(args.obj)
     edges, indirect = call_edges(args.obj, syms)
 
-    if args.src is None:
-        import glob
-        args.src = glob.glob("src/**/*.c", recursive=True)
     have = reconstructed(args.src)
 
     keep = set(syms)
