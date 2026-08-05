@@ -100,6 +100,42 @@ Recomputed with the fixed tool. Nothing here is waiting on `v34handshak`;
 `k56FlexPhase34` is the one that unblocks earliest: four one-byte K56Flex stubs
 and it is free.
 
+## Owed once wave 1 is merged: delete the stub `V90Phase2Info`
+
+`include/dsplib/V90PreFilter.h` defines its own `class V90Phase2Info` -- an
+opaque `union { unsigned char b[0x1c]; int w[7]; float f[7]; }` sized by
+`V90PHASE2INFO_BOUND`, which is a bound from the one offset `autoSelection`
+reaches, not a measurement. The real class landed with finding 255 and is
+0x24 with named fields. Two definitions of one class is the drift risk the
+`#error` in `V90Phase2Info.h` currently guards; the guard is not the fix.
+
+The change is mechanical and every piece of it has been checked:
+
+1. `V90PreFilter.h`: delete the stub and `V90PHASE2INFO_BOUND`, `#include
+   "dsplib/V90Phase2Info.h"`. The stub `class V90Parameters` stays -- the real
+   header only forward-declares it, and a forward declaration coexists with a
+   definition.
+2. `V90Phase2Info.h`: drop the `#ifdef DSPLIB_V90PREFILTER_H` `#error`.
+3. `V90PreFilter.cpp:120`:
+   `*(const float *const *)&phase2->b[0x18]` becomes `phase2->L2`. The pun and
+   the named field agree -- the object loads a pointer from +0x18 and
+   dereferences six floats, which is what both spellings do.
+4. `t_v90prefilter.cpp`: `*(void **)&ph2[side][0x18]` becomes
+   `((V90Phase2Info *)ph2[side])->L2`; `snap_ph2` neutralises `L2` by name
+   rather than by `w[0x18 / 4]`; the three `V90PHASE2INFO_BOUND` uses become
+   `sizeof(V90Phase2Info)`, and `PH2SLOT` with them.
+
+**What it does NOT do is add coverage, and saying so matters.** The compare
+grows from 0x1c to 0x24, but `fill()` seeds both sides identically and none of
+the five `V90PreFilter` methods writes +0x1c..0x23, so the eight new bytes are
+memory neither side touches -- findings 223 and 224 exactly. The win is one
+definition instead of two, and named fields instead of `->b[0x18]`.
+
+The one thing to keep: `snap_ph2` replaces the pointer word with a boolean
+"does it still point at `meas[side]`", because the two sides hold two
+different addresses there and always will. `params` at +0x20 needs no such
+treatment -- `setup()` never writes it, so both sides keep the same fill.
+
 ## Still not started, and deliberately
 
 #56-#58 (`v34handshak`, 61,541 bytes). #63 comes first: a per-dispatch-case
