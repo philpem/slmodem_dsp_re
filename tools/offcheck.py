@@ -39,8 +39,17 @@ import sys
 # Structs whose annotations are object-relative rather than field-relative.
 OBJECT_RELATIVE = {"v8_v21_params"}
 
-# C++, so it cannot go into a C translation unit with the rest.
-SKIP_HEADERS = ("GenericIIR.h",)
+#
+# C++, so they cannot go into the C translation unit this builds -- and
+# `offsetof` could not reach their members anyway, which are private.
+#
+# Their layouts are not unchecked, they are checked harder: `t_genericiir`
+# and `t_floatiir` read our object through a plain struct of the intended
+# shape and compare it field by field against the blob's own object after
+# every operation.  A wrong offset shows up as a differential failure on
+# real data rather than as a compile-time assertion about our own header.
+#
+SKIP_HEADERS = ("GenericIIR.h", "FloatIIR.h")
 
 
 def headers():
