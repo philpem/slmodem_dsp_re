@@ -56,7 +56,7 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 | # | batch | members | closed? |
 |---|-------|---------|---------|
 | 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
-| 1 | `V90Jd` / `V92Jd` | `V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20 | all leaves |
+| 1 | `V90Jd` / `V92Jd` | ~~`V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20~~ **DONE** — findings 229 and 230; all eight, and the C++ class fixture the later batches copy | all leaves |
 | 2 | `V90Phase3Modulator` | `generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table | needs batch 1 |
 | 3 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, **all of `FloatFIR`** 723, **+ 10,532 B of tables** | yes, with FloatFIR |
 | 4 | the leaf remainder | the stubs and setters — see the table below | mostly leaves |
@@ -144,8 +144,16 @@ re-opening the link closure for what may be a twenty-one-byte setter.
 
 Bounded by the largest `this`-relative displacement each class uses
 (finding 215).  `V90Phase3Modulator` 916 and `V90PreFilter` 1,280 are the
-tractable shape: allocate a zeroed buffer, call `reset` on both sides,
-compare with `diff_eq_obj`.  `V90Jd` is 140 and `V92Jd` 216.
+tractable shape: allocate a buffer, call `reset` on both sides, compare with
+`diff_eq_obj` — but seed the buffer with varied bytes rather than zeroing it,
+which is finding 230's first rule and the reason batch 1's clear loops could
+be checked at all.
+
+**A DISPLACEMENT IS NOT A SIZE.**  Batch 1 measured this: `V90Jd`'s largest is
++0x8c and `V92Jd`'s +0xd8, and both are four-byte stores, so the objects are
+**144 and 220** bytes — not the 140 and 216 this document used to give.  Add
+the width of whatever sits at the bound before allocating anything; 916 and
+1,280 above are bounds and have not had that addition made.
 
 `V90Phase3Demodulator` reaches 43,336 and `VPcmFloModem` 32,612, which almost
 certainly means they index *through* `this` into an enclosing session object

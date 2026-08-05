@@ -12873,3 +12873,169 @@ though the build had checked it.
 The Makefile comment is corrected in place.  `CLAUDE.md` was checked and never
 carried the claim — the second copy was in the #60 brief, which is outside
 the repository and cannot be corrected from here.
+
+### 229. The Jd message is seventy-two bytes holding one bit each
+
+Task #60 batch 1: `V90Jd` and `V92Jd`, eight methods, all eight landed and all
+eight are covered by a differential test (`test/unit/t_v90jd.cpp`,
+`test/unit/t_v92jd.cpp`).  The first reconstructed C++ *classes* in the tree —
+finding 227's warm-up was a free function that merely had a mangled name.
+
+#### The object is a bit vector on a seventeen-byte stride
+
+`V90Jd::getBitVector()` returns `this + 2`, and the 72 bytes from there hold
+one bit each, 0 or 1 per byte.  The offsets the class touches — 0x2, 0x13,
+0x24, 0x35 — are 0x11 apart, and reading the vector as four groups of
+seventeen makes every other offset in the class fall into place:
+
+```
+    bits[ 0..16]   group 0: seventeen 1 bits
+    bits[17]       group 1's leading 0
+    bits[18..33]   rate mask, bits 0..15, least significant first
+    bits[34]       group 2's leading 0
+    bits[35..46]   rate mask, bits 16..27
+    bits[47..48]   constellation size
+    bits[49..50]   maximum lookahead
+    bits[51]       group 3's leading 0
+    bits[52..67]   the CRC, computed over groups 1 and 2
+    bits[68..71]   four trailing 0 bits
+```
+
+The map is out of the constructor and the accessors, not out of a protocol
+document.  `V90Jd::V90Jd(V90Parameters *)` shifts the parameter block's +0x2c
+word bit by bit into +0x14..+0x23 and +0x25..+0x30, copies its +0x34 and +0x38
+into +0x31 and +0x32, and its +0x30's two low bits into +0x33 and +0x34.
+`setRatesMask` writes +0x14 and +0x25; `setConstelSize` writes +0x31 and
++0x32; `setMaxLookahead` writes +0x33 and +0x34.  Every one of those is
+group 1 or group 2 with the leading marker skipped.
+
+The names are the author's own throughout — `Jd`, `packJdData`,
+`unPackJdPhaseReset`, `resetCrc`, `getMaxLookahead`, `getConstelationSize`
+(the original's spelling) — recovered from the mangling by
+`tools/cppstruct.py`, which is finding 226's point paying off.
+
+#### The CRC is sixteen ints holding sixteen bits
+
+`resetCrc()` names the array and writes +0x4c; `getBitVector` initialises all
+sixteen to 1 and shifts them down toward `crc[0]`, one shift per input bit:
+
+```
+    t         = <input byte> + crc[0]
+    crc[i]    = crc[i + 1]            for every i
+    crc[3]   ^= t ; crc[10] ^= t ; crc[15] = t
+```
+
+with each of those three masked to one bit afterwards.  The object spells the
+XOR as an `add` and masks after, which is why the input byte goes in unmasked:
+only its low bit can reach the answer.  A whole 32-bit int per bit is the
+original's choice, not a convenience of the reconstruction.
+
+The two passes are groups 1 and 2, sixteen bits each, skipping each group's
+leading 0 — the object walks a pointer from `this + 0x14` and adds the stride
+once.  The result goes into group 3, low bit first.
+
+#### `V92Jd` is `V90Jd` with one insertion, and two things do not follow
+
+A second 72-byte vector goes in at +0x4a and everything after it moves by
+exactly 0x48: the CRC register from +0x4c to +0x94, the two-byte alignment pad
+from +0x4a to +0x92.  Both vectors have the same geometry.  The parallel is
+real for the *geometry* and fails for two things that matter:
+
+  - **There is one CRC register, not two.**  `packJdData` and
+    `packJdPhaseData` both use +0x94, so whichever ran last owns it.  Nothing
+    reads it between packs, so it is scratch that happens to live in the
+    object — but a reconstruction that gave each pack its own register would
+    diverge on the second call, and `t_v92jd` runs them in both orders for
+    exactly that reason.
+
+  - **The bits each pack forces to zero are not parallel.**  Before computing
+    the CRC, `packJdData` clears group 2's positions 7..12 and 14;
+    `packJdPhaseData` clears group 2's positions 1..12 and 16.  Six and one
+    against twelve and one, from different starts.  `V90Jd::getBitVector`
+    clears neither.  Both were mutation-checked: swapping either mask for the
+    other's kills the test.
+
+The unpacker's two bytes at +0x00 and +0x01 are shared between the two
+directions and its word is not — `unPackJdReset` clears +0xd4,
+`unPackJdPhaseReset` clears +0xd8, and both clear the same two bytes.
+
+#### The sizes are one word larger than the displacements
+
+`docs/v90cpp.md` gave 140 and 216, which are the largest `this`-relative
+displacements each class uses (finding 215's method).  Both are four-byte
+stores, so `sizeof(V90Jd)` is **0x90 = 144** and `sizeof(V92Jd)` is
+**0xdc = 220**.  The bound is a displacement and the size is the bound plus
+the width of what sits there; the document has been corrected.  Batch 2's
+`V90Phase3Modulator` at 916 and `V90PreFilter` at 1,280 need the same
+addition before either is allocated.
+
+### 230. A C++ class is invisible to both of the tree's offset tools
+
+Batch 1 of #60 is the first work whose central claim is the layout of a C++
+*class*, and neither tool that exists to check a layout could see it.
+
+`tools/offcheck.py` holds the compiler to every `/* +0xNNN */` in the headers,
+and it does that by matching `^struct\s+(\w+)\s*\{` across `include/dsplib/*.h`
+and compiling the result as C.  A `class` matches nothing, and a C++ header
+dragged into that C translation unit would not compile — which is why
+`GenericIIR.h` was already in its skip list.  `V90Jd.h` and `V92Jd.h` join it,
+and the annotations they carry are checked instead by `__builtin_offsetof`
+assertions in the matching `.cpp`:
+
+```c
+    typedef char v92jd_off_crc[
+        ((int)__builtin_offsetof(V92Jd, crc) == 0x94) ? 1 : -1];
+```
+
+That is the pattern batches 2 and 3 should copy, and it is worth the four
+lines: an object right in size and wrong by four in every offset is exactly
+what finding 228 says a missed vptr produces, and a size check alone passes
+it.  Keeping every data member in one access section is what keeps the class
+POD and `offsetof` well defined; the original's access specifiers are not
+recoverable anyway (finding 226).
+
+`tools/whichfield.py` failed differently and is fixed rather than skipped.  It
+knew `DW_TAG_structure_type` and `DW_TAG_union_type`, so `whichfield.py V90Jd
+0x4c` reported "no DWARF for 'V90Jd'" — and since `diff_eq_obj` stringifies
+the bare type name, every offset a C++ class reports would have come back
+unresolvable.  It now accepts `DW_TAG_class_type` in both the lookup and the
+walk, and takes a `class ` keyword alongside `struct ` and `union `.
+
+#### The fixture, which is the deliverable batches 2 and 3 inherit
+
+Three things in `test/unit/t_v90jd.cpp` are load-bearing, and none is
+optional:
+
+  - **The objects are never zeroed.**  Both sides get the same varied
+    pseudorandom bytes, reseeded every trial, across four seed modes chosen by
+    what they do to *bit 0* of each byte — the only bit the CRC can see.  A
+    zero fill lets a clear loop that stops one byte short pass, because the
+    byte it failed to clear was already zero, and leaves the CRC driven by a
+    constant where a wrong feedback tap is invisible.  Findings 223 and 224
+    are the same lesson from the C half.
+
+  - **The object is compared whole, and so is a guard past its end.**
+    `diff_eq_obj` covers `sizeof`, and the bytes from there to the end of an
+    over-large slot are compared separately, so a store that overruns the
+    object is a failure rather than silence.  That check is what makes the
+    size claim above testable rather than assumed.
+
+  - **The returned pointer is checked against each side's own base.**  Both
+    `getBitVector` and `getJdBitVector` return `this + 2`; comparing the two
+    pointers directly would always fail and comparing them to non-null would
+    always pass, so what is compared is each one's offset from its own object
+    (finding 224).
+
+The `ref_` aliases are reached through `asm()` labels —
+`asm("ref__ZN5V90Jd12getBitVectorEv")` — rather than by spelling the alias as
+an identifier.  Both work; the label form sidesteps finding 225 entirely,
+because the compiler never sees a name it could mangle a second time.  Both
+classes' methods are `T` in the blob, so plain cdecl with `this` as the first
+stack argument and no `regparm` (finding 215), unlike finding 227's
+`getMPrecvdBits`.
+
+Ten mutations were injected across the two modules and all ten were killed: a
+feedback tap moved from `crc[11]` to `crc[10]` and to `crc[12]`, the group-0
+fill one byte short, a dropped trailing zero, a returned pointer off by one,
+each pack's zero mask replaced by the other's — count and position, in both
+directions — and `unPackJdPhaseReset` clearing the data word.
