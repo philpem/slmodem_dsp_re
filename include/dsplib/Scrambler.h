@@ -27,6 +27,14 @@
  * up to just above the restart point, so the taps still see the history they
  * would have seen had the buffer been unbounded.
  *
+ * ALL FOUR ARE NOW DIFFERENTIALLY TESTED, both through
+ * `V90Phase3Modulator::generate*Symbol`, which own the subobject at +0x20,
+ * and directly against the `ref__ZN9ScramblerIhiE*` aliases -- which exist:
+ * symmap.py renames weak symbols like everything else.  test/unit/t_v90p3mod
+ * drives them with a buffer small enough that `pOut` falls below `pLimit`,
+ * because the restart is a third of the class and is invisible otherwise.
+ * The reconstruction below needed no change to pass.
+ *
  * `reset(value)` fills that same history -- the bytes from `pInitOut + 1` up
  * to and including `pInitTap2` -- with `value & 1`, one bit per byte, which is
  * the same one-byte-per-bit convention V90Jd uses for its message.

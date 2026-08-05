@@ -1056,6 +1056,60 @@ run_generate(int v92)
 		}
 
 		/*
+		 * `polarity` IS FOUR BYTES WIDE, and everything else in this
+		 * fixture keeps it at 0 or 1 -- the bit vectors and the
+		 * scrambler buffer are seeded `& 1` on purpose, because a
+		 * permanently truthy polarity would cost the Jd states their
+		 * `-codeLevel` arm.  Here alone it is seeded high: TRN1d's
+		 * `polarity = (sample > 0)` has to clear the upper three
+		 * bytes, and the Jd states' `polarity ^= process(bit)` has to
+		 * keep them.
+		 */
+		for (k = 0; k < 3; k++) {
+			unsigned int s = (k == 0) ? P3M_STATE_TRN1D
+			    : (v92 ? P3M_STATE_JD : P3M_STATE_JD_END);
+
+			prepare(trial, mo, s);
+			ours.o.polarity = theirs.o.polarity =
+			    0x33440000u + (unsigned int)(trial * 16 + k);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    (k == 0) ? 0x3e7cu - 1u
+				     : 5u + (unsigned int)trial;
+			drive(v92, (long)(305000 + trial * 10 + k));
+		}
+
+		/*
+		 * The two sequence lengths at zero, and the cursors past the
+		 * end of their 128-byte arrays.  Neither is clamped by the
+		 * object: a length of zero never wraps its cursor, which then
+		 * runs to 255, and `seq1[200]` and `seq2[255]` read out of
+		 * their arrays and into `seq2` and `dilLevel` -- inside the
+		 * object either way, so both sides read the same seeded bytes
+		 * and the comparison stands.  Preserved, not corrected.
+		 */
+		for (k = 0; k < 4; k++) {
+			prepare(trial, mo, (k & 1) ? P3M_STATE_DIL_END
+						   : P3M_STATE_DIL);
+			if (k & 2) {
+				ours.o.seq1Length = theirs.o.seq1Length = 200;
+				ours.o.seq2Length = theirs.o.seq2Length = 200;
+			} else {
+				ours.o.seq1Length = theirs.o.seq1Length = 0;
+				ours.o.seq2Length = theirs.o.seq2Length = 0;
+			}
+			ours.o.seq1Index = theirs.o.seq1Index =
+			    (unsigned char)(199 + (trial & 1));
+			ours.o.seq2Index = theirs.o.seq2Index =
+			    (unsigned char)(255 - (trial & 1));
+			ours.o.segmentIndex = theirs.o.segmentIndex =
+			    (unsigned char)(trial % 8);
+			ours.o.segmentPos = theirs.o.segmentPos = 0;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    100u + (unsigned int)trial;
+			drive(v92, (long)(306000 + trial * 10 + k));
+		}
+
+		/*
 		 * The scrambler's restart, in every state that calls
 		 * `process`.  `pOut` is put on `pLimit`, so the single call
 		 * this symbol makes takes it below and the restart path --

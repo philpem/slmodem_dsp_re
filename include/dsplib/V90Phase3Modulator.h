@@ -13,11 +13,13 @@
  * displacement is not a size (finding 229's last section); the .cpp asserts
  * both the size and every offset below.
  *
- * Twenty-one members are declared and five are defined -- the five that make
- * up task #60's batch 2.  Everything else is declared for the record and
- * deliberately left undefined, because defining a method whose callees are
- * not written breaks the link for the entire test suite (docs/v90cpp.md).
- * Nothing defined here calls an undefined one.
+ * Twenty-one members are declared and FOUR are defined -- `setSessionFlag`,
+ * `resetDILGenerator`, `generateV90Symbol` and `generateV92Symbol`.  `reset`
+ * is the fifth member of task #60's batch 2 and is not written yet.
+ * Everything else is declared for the record and deliberately left undefined,
+ * because defining a method whose callees are not written breaks the link for
+ * the entire test suite (docs/v90cpp.md).  Nothing defined here calls an
+ * undefined one.
  *
  * THE SCRAMBLER IS A SUBOBJECT, NOT A POINTER.  `reset` takes the address of
  * `this + 0x20` and passes it to `Scrambler<unsigned char, int>::reset`, and
