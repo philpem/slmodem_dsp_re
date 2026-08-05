@@ -110,7 +110,8 @@ def find_type(want):
     """The DIE for `want`, which may be 'struct foo', 'foo', or a typedef."""
     tag = None
     for kw, t in (("struct ", "DW_TAG_structure_type"),
-                  ("union ", "DW_TAG_union_type")):
+                  ("union ", "DW_TAG_union_type"),
+                  ("class ", "DW_TAG_class_type")):
         if want.startswith(kw):
             tag, want = t, want[len(kw):]
     for die, cu in dies():
@@ -118,8 +119,12 @@ def find_type(want):
             continue
         if tag and die.tag == tag:
             return die, cu
+        # DW_TAG_class_type is here because the C++ half of the object is
+        # classes, and `diff_eq_obj(..., V90Jd, ...)` stringifies the bare
+        # name -- so the lookup has to answer to `V90Jd` with no keyword.
         if not tag and die.tag in ("DW_TAG_structure_type",
-                                   "DW_TAG_union_type", "DW_TAG_typedef"):
+                                   "DW_TAG_union_type", "DW_TAG_class_type",
+                                   "DW_TAG_typedef"):
             return die, cu
     return None, None
 
@@ -167,7 +172,8 @@ def walk(die, cu, off, path=""):
         es = size(elem, cu) or 1
         i, rem = off // es, off % es
         return walk(elem, cu, rem, "%s[%d]" % (path, i))
-    if d.tag not in ("DW_TAG_structure_type", "DW_TAG_union_type"):
+    if d.tag not in ("DW_TAG_structure_type", "DW_TAG_union_type",
+                     "DW_TAG_class_type"):
         return path, off, d
     for m in d.iter_children():
         if m.tag != "DW_TAG_member":
