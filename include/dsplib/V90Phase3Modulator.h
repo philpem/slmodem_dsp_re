@@ -55,28 +55,53 @@ enum PcmType {
  * The modulator's phase 3 state.  Sixteen values, 0 through 15: both
  * `generate*Symbol` bodies dispatch on the field at +0x14 and between them
  * assign every one of 1, 2, 3, 5, 8, 9, 11, 12, 13, 14 and 15 to it, with 0
- * reachable as the initial value `reset` copies in.  The enumerator names are
- * invented and offset-free on purpose -- what each state emits is legible in
- * `generateV90Symbol` and `generateV92Symbol`, and a name that claimed more
- * than that would be a guess.
+ * reachable as the initial value `reset` copies in.
+ *
+ * THE NAMES ARE THE OBJECT'S OWN, not invented.  Each generating state's body
+ * is inlined verbatim from one of the small `generate*` methods the mangling
+ * already names, and matching the two is a byte comparison rather than a
+ * guess:
+ *
+ *   0  `generateSd`      -- its six-entry .rodata jump table at 0x984 holds
+ *                           exactly the sequence generateV90Symbol's own
+ *                           table at 0x9f4 holds
+ *   1  `generateSdNot`   -- likewise 0x99c against 0xa0c, the inversion
+ *   2  `generateTRN1d`   -- process(1), sign selects +/- codeLevel
+ *   3  `generateJd` (V.90, jdBits) / `generateV92Jd` (V.92, jdV92Bits)
+ *   5  `generateJdPhase` -- jdV92PhaseBits; V.92 only
+ *   8  `generateJdNot`   -- process(0)
+ *   9  `generateDIL`
+ *
+ * and the four `exit*` methods name the rest.  `exitJd` moves state 3 to 7
+ * under V.90 and to 4 under V.92; `exitJdPhase` moves 5 to 6; `exitDIL` moves
+ * 9 to 10, or straight to 11 with the "Phase3 Terminated" message.  Those
+ * three "_END" states carry on emitting the same thing until the symbol count
+ * reaches a multiple of 72 -- the end of the current repetition -- and then
+ * hand on.  The four terminal states are named after the message that enters
+ * them: "Jd TimeOut", "V92JdPhase TimeOut", "DIL TimeOut", and the two
+ * "ERROR: Null ..." sites.
+ *
+ * V.90 and V.92 do not use the same subset.  4, 5, 6 and 13 belong to V.92
+ * and `generateV90Symbol` treats them as illegal; 7 belongs to V.90 and
+ * `generateV92Symbol` treats it as illegal.
  */
 enum Phase3ModulatorState {
-	P3M_STATE_0 = 0,
-	P3M_STATE_1 = 1,
-	P3M_STATE_2 = 2,
-	P3M_STATE_3 = 3,
-	P3M_STATE_4 = 4,
-	P3M_STATE_5 = 5,
-	P3M_STATE_6 = 6,
-	P3M_STATE_7 = 7,
-	P3M_STATE_8 = 8,
-	P3M_STATE_9 = 9,
-	P3M_STATE_10 = 10,
-	P3M_STATE_11 = 11,
-	P3M_STATE_12 = 12,
-	P3M_STATE_13 = 13,
-	P3M_STATE_14 = 14,
-	P3M_STATE_15 = 15
+	P3M_STATE_SD = 0,		/* six-symbol Sd pattern           */
+	P3M_STATE_SD_NOT = 1,		/* its inversion                   */
+	P3M_STATE_TRN1D = 2,		/* scrambled all-ones              */
+	P3M_STATE_JD = 3,		/* Jd / V92Jd, with a timeout      */
+	P3M_STATE_V92JD_END = 4,	/* V.92: V92Jd to the 72-boundary  */
+	P3M_STATE_JD_PHASE = 5,		/* V.92: JdPhase, with a timeout   */
+	P3M_STATE_JD_PHASE_END = 6,	/* V.92: JdPhase to the boundary   */
+	P3M_STATE_JD_END = 7,		/* V.90: Jd to the 72-boundary     */
+	P3M_STATE_JD_NOT = 8,		/* scrambled all-zeros             */
+	P3M_STATE_DIL = 9,		/* DIL, with a timeout             */
+	P3M_STATE_DIL_END = 10,		/* DIL to the end of its segment   */
+	P3M_STATE_TERMINATED = 11,	/* "Phase3 Terminated @ %d"        */
+	P3M_STATE_JD_TIMEOUT = 12,	/* "Jd TimeOut" / "V92Jd TimeOut"  */
+	P3M_STATE_JD_PHASE_TIMEOUT = 13,/* "V92JdPhase TimeOut"            */
+	P3M_STATE_DIL_TIMEOUT = 14,	/* "DIL TimeOut"                   */
+	P3M_STATE_ERROR = 15		/* the two "ERROR: Null ..." sites */
 };
 
 /*
@@ -111,8 +136,18 @@ public:
 	void reset(PcmType, unsigned char, Phase3ModulatorState, unsigned int,
 		   V90Jd *, V92Jd *, const tagV90DILdescriptor *,
 		   unsigned int);
-	void generateV90Symbol();
-	void generateV92Symbol();
+
+	/*
+	 * These two RETURN the symbol, as a linear level.  A return type is
+	 * not mangled, so it has to be measured, and `int` is what the object
+	 * says: every path ends `movswl %si,%esi; mov %esi,%eax`, and the
+	 * one-line `generateTRN1d` spells the same conversion as a bare
+	 * `cwtl` before its `ret`.  A `short` return would need neither.  The
+	 * value itself is a `short` throughout -- each negation is taken
+	 * modulo 2**16 before the widening.
+	 */
+	int generateV90Symbol();
+	int generateV92Symbol();
 
 	/*
 	 * Declared, not defined -- see the file comment.  A return type is not
@@ -153,16 +188,41 @@ public:
 
 	unsigned int sessionFlag;	/* +0x000 nonzero selects V.92     */
 	PcmType pcmType;		/* +0x004                          */
-	unsigned int word_08;		/* +0x008 reset's last argument    */
+
+	/*
+	 * The symbol count the two long timeouts are measured from: the Jd
+	 * state fires at `timeoutBase + 24804` and the DIL state at
+	 * `timeoutBase + 40000`, and it is used for nothing else.  Was
+	 * `word_08`.
+	 */
+	unsigned int timeoutBase;	/* +0x008 reset's last argument    */
+
 	short codeLevel;		/* +0x00c linear level of the code */
 	short codeLevelAlt;		/* +0x00e ... and of code + 0x10   */
 	unsigned char pad_10[2];	/* +0x010                          */
 	short idleLevel;		/* +0x012 linear level of silence  */
 	Phase3ModulatorState state;	/* +0x014                          */
 	unsigned int symbolCount;	/* +0x018 counts within a state    */
-	unsigned int word_1c;		/* +0x01c                          */
+
+	/*
+	 * Written on every path of both `generate*Symbol`, zero unless this
+	 * symbol was the last of a state: 1 entering TRN1d, 2 entering Jd, 3
+	 * entering JdPhase, 6 entering the terminated state -- which is also
+	 * the one `exitDIL` sets.  It is the caller's per-symbol notification
+	 * and nothing reads it here.  Was `word_1c`.
+	 */
+	unsigned int eventCode;		/* +0x01c                          */
+
 	Scrambler<unsigned char, int> scrambler;	/* +0x020 32 bytes */
-	unsigned int word_40;		/* +0x040                          */
+
+	/*
+	 * The differential encoder's running sign.  Every scrambled state
+	 * does `polarity ^= scrambler.process(bit)` and then emits
+	 * `polarity ? codeLevel : -codeLevel`; TRN1d seeds it from the sign
+	 * of the symbol it ends on.  Was `word_40`.
+	 */
+	unsigned int polarity;		/* +0x040                          */
+
 	unsigned char *jdBits;		/* +0x044 V90Jd::getBitVector()    */
 	unsigned char *jdV92Bits;	/* +0x048 V92Jd::getJdBitVector()  */
 	unsigned char *jdV92PhaseBits;	/* +0x04c ...getJdPhaseBitVector() */
@@ -179,15 +239,42 @@ public:
 	short segmentLevel[8];		/* +0x178                          */
 	short dilLevel[256];		/* +0x188                          */
 
-	unsigned char byte_388;		/* +0x388                          */
-	unsigned char byte_389;		/* +0x389                          */
-	unsigned char byte_38a;		/* +0x38a                          */
+	/*
+	 * The DIL generator's four cursors, all established by the two DIL
+	 * states.  `seq1Index` and `seq2Index` step through `seq1` and `seq2`
+	 * modulo their lengths -- seq1 chooses the sign of the level, seq2
+	 * chooses between the DIL level and the segment level.  `dilIndex`
+	 * steps through `dilLevel` modulo `dilCount`, one step per segment.
+	 * `segmentPos` counts symbols within the current segment and is
+	 * compared against `segmentLength[segmentIndex]`; reaching it clears
+	 * all four of the first three and advances `dilIndex`.  Were
+	 * `byte_388`, `byte_389`, `byte_38a` and `word_38c`.
+	 */
+	unsigned char seq1Index;	/* +0x388                          */
+	unsigned char seq2Index;	/* +0x389                          */
+	unsigned char dilIndex;		/* +0x38a                          */
 	unsigned char pad_38b[1];	/* +0x38b alignment                */
-	unsigned int word_38c;		/* +0x38c                          */
+	unsigned int segmentPos;	/* +0x38c                          */
+
 	unsigned char segmentIndex;	/* +0x390 row index into the table */
 	unsigned char pad_391[1];	/* +0x391 alignment                */
-	short short_392;		/* +0x392                          */
-	unsigned char byte_394;		/* +0x394                          */
+
+	/*
+	 * Whether this DIL symbol took its level from `segmentLevel` rather
+	 * than from `dilLevel` -- the same `seq2[seq2Index] == 0` test that
+	 * chose it, stored again as a short.  Was `short_392`.
+	 */
+	short usingSegmentLevel;	/* +0x392                          */
+
+	/*
+	 * The G.711 code of `dilLevel[dilIndex]`, companded by the law in
+	 * force and with the sign/company bits stripped the same way
+	 * `resetDILGenerator` supplies them -- `^ 0xd5` for A-law, `~` for
+	 * mu-law.  Written on every DIL symbol whatever level was emitted.
+	 * Was `byte_394`.
+	 */
+	unsigned char dilPcmCode;	/* +0x394                          */
+
 	unsigned char pad_395[3];	/* +0x395 tail padding to 0x398    */
 };
 

@@ -17,6 +17,8 @@
 
 extern "C" {
 #include "dsplib/pcm.h"
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
 }
 
 #include "dsplib/V90Phase3Modulator.h"
@@ -43,15 +45,15 @@ extern "C" {
 
 P3M_OFF(sessionFlag,	0x000, sessionflag);
 P3M_OFF(pcmType,	0x004, pcmtype);
-P3M_OFF(word_08,	0x008, word08);
+P3M_OFF(timeoutBase,	0x008, timeoutbase);
 P3M_OFF(codeLevel,	0x00c, codelevel);
 P3M_OFF(codeLevelAlt,	0x00e, codelevelalt);
 P3M_OFF(idleLevel,	0x012, idlelevel);
 P3M_OFF(state,		0x014, state);
 P3M_OFF(symbolCount,	0x018, symbolcount);
-P3M_OFF(word_1c,	0x01c, word1c);
+P3M_OFF(eventCode,	0x01c, eventcode);
 P3M_OFF(scrambler,	0x020, scrambler);
-P3M_OFF(word_40,	0x040, word40);
+P3M_OFF(polarity,	0x040, polarity);
 P3M_OFF(jdBits,		0x044, jdbits);
 P3M_OFF(jdV92Bits,	0x048, jdv92bits);
 P3M_OFF(jdV92PhaseBits,	0x04c, jdv92phasebits);
@@ -63,13 +65,13 @@ P3M_OFF(seq2,		0x0d7, seq2);
 P3M_OFF(segmentLength,	0x158, segmentlength);
 P3M_OFF(segmentLevel,	0x178, segmentlevel);
 P3M_OFF(dilLevel,	0x188, dillevel);
-P3M_OFF(byte_388,	0x388, byte388);
-P3M_OFF(byte_389,	0x389, byte389);
-P3M_OFF(byte_38a,	0x38a, byte38a);
-P3M_OFF(word_38c,	0x38c, word38c);
+P3M_OFF(seq1Index,	0x388, seq1index);
+P3M_OFF(seq2Index,	0x389, seq2index);
+P3M_OFF(dilIndex,	0x38a, dilindex);
+P3M_OFF(segmentPos,	0x38c, segmentpos);
 P3M_OFF(segmentIndex,	0x390, segmentindex);
-P3M_OFF(short_392,	0x392, short392);
-P3M_OFF(byte_394,	0x394, byte394);
+P3M_OFF(usingSegmentLevel, 0x392, usingsegmentlevel);
+P3M_OFF(dilPcmCode,	0x394, dilpcmcode);
 typedef char v90p3m_size[(sizeof(V90Phase3Modulator) == 0x398) ? 1 : -1];
 
 /* The scrambler subobject's own map, asserted for the same reason. */
@@ -181,10 +183,10 @@ V90Phase3Modulator::resetDILGenerator(const tagV90DILdescriptor *d)
 			    (unsigned char)((d->dilCode[i] & 0x7f) ^ 0xff));
 	}
 
-	byte_388 = 0;
-	byte_389 = 0;
-	byte_38a = 0;
-	word_38c = 0;
+	seq1Index = 0;
+	seq2Index = 0;
+	dilIndex = 0;
+	segmentPos = 0;
 
 	/*
 	 * Which G.711 segment the first DIL level falls in.  The level is read
@@ -200,4 +202,500 @@ V90Phase3Modulator::resetDILGenerator(const tagV90DILdescriptor *d)
 			break;
 	}
 	segmentIndex = (unsigned char)i;
+}
+
+/*
+ * ===========================================================================
+ * The pieces `generateV90Symbol` and `generateV92Symbol` inline.
+ *
+ * The object has every one of these as a method of its own -- `generateSd`,
+ * `generateSdNot`, `generateTRN1d`, `generateJd`, `generateJdNot`,
+ * `generateV92Jd`, `generateJdPhase`, `generateDIL`,
+ * `updateCodeSegmentPointer` -- and then inlines the bodies into the two
+ * symbol generators rather than calling them, which is why those two are 1790
+ * and 2044 bytes of otherwise repetitive code.  They are file-static
+ * functions here rather than the methods they correspond to for the reason
+ * docs/v90cpp.md gives: defining a method whose callers are not written yet
+ * re-opens the link closure for the whole test suite, and only the five
+ * methods of batch 2 may be defined.  Nothing outside this file needs them.
+ * ===========================================================================
+ */
+
+/*
+ * One symbol of the six-symbol Sd pattern, chosen by `(symbolCount - 1) % 6`
+ * through a jump table.  The six entries are the ones at .rodata:0x9f4;
+ * `generateSd`'s own table at 0x984 holds the identical sequence, which is
+ * what names the state.  The modulus is unsigned -- the object divides by six
+ * with the 0xaaaaaaab reciprocal and an unsigned shift.
+ */
+static short
+sdSymbol(const V90Phase3Modulator *m)
+{
+	switch ((m->symbolCount - 1u) % 6u) {
+	case 0:
+	case 2:
+		return m->codeLevelAlt;
+	case 1:
+		return m->idleLevel;
+	case 3:
+	case 5:
+		return (short)-m->codeLevelAlt;
+	case 4:
+		return (short)-m->idleLevel;
+	}
+	return 0;		/* unreachable: a remainder mod 6 is < 6 */
+}
+
+/* Its inversion, .rodata:0xa0c, matching `generateSdNot`'s table at 0x99c. */
+static short
+sdNotSymbol(const V90Phase3Modulator *m)
+{
+	switch ((m->symbolCount - 1u) % 6u) {
+	case 0:
+	case 2:
+		return (short)-m->codeLevelAlt;
+	case 1:
+		return (short)-m->idleLevel;
+	case 3:
+	case 5:
+		return m->codeLevelAlt;
+	case 4:
+		return m->idleLevel;
+	}
+	return 0;		/* unreachable, as above */
+}
+
+/*
+ * One scrambled, differentially encoded symbol -- the body `generateJd`,
+ * `generateJdNot`, `generateV92Jd` and `generateJdPhase` all share, differing
+ * only in the bit they feed the scrambler.  The scrambler's output is one
+ * byte, so the exclusive-or with `polarity` is the object's full 32-bit `xor`
+ * either way.
+ */
+static short
+scrambledSymbol(V90Phase3Modulator *m, unsigned char in)
+{
+	m->polarity ^= m->scrambler.process(in);
+	return m->polarity ? m->codeLevel : (short)-m->codeLevel;
+}
+
+/*
+ * The bit of a 72-entry vector this symbol carries.  `symbolCount` has
+ * already been incremented, so the first symbol of a repetition takes entry
+ * zero.  Unsigned again: the object divides by 72 with 0x38e38e39 and `shr`.
+ */
+static unsigned char
+vectorBit(const unsigned char *bits, unsigned int symbolCount)
+{
+	return bits[(symbolCount - 1u) % 72u];
+}
+
+/*
+ * `updateCodeSegmentPointer`, inlined: which G.711 segment the current DIL
+ * level falls in.  Identical to the search at the end of `resetDILGenerator`
+ * -- the level is read back as UNSIGNED sixteen bits and the index runs one
+ * past the end of the row when no boundary matches.
+ */
+static void
+updateCodeSegment(V90Phase3Modulator *m)
+{
+	unsigned int level =
+	    (unsigned int)(unsigned short)m->dilLevel[m->dilIndex];
+	unsigned int i;
+
+	for (i = 0; i <= 7; i++) {
+		if ((int)level <=
+		    V90Phase3Modulator::codeSegmentsBoundriesLookupTable
+			[(int)m->pcmType][i])
+			break;
+	}
+	m->segmentIndex = (unsigned char)i;
+}
+
+/*
+ * `generateDIL`, inlined: one symbol of the digital impairment learning
+ * sequence, and the four cursors it steps.
+ *
+ * `seq2` chooses the level -- a zero there means this symbol carries the
+ * segment's own boundary level rather than the DIL entry's -- and `seq1`
+ * chooses its sign.  The PCM CODE stored in `dilPcmCode` is the DIL entry's
+ * either way; it does not follow the level.  Both index bytes wrap at their
+ * sequence's length rather than at 256, and a length of zero therefore never
+ * wraps them, which is the object's behaviour and is preserved.
+ *
+ * Reaching `segmentLength[segmentIndex]` restarts the segment: all three
+ * cursors go to zero, `dilIndex` advances modulo `dilCount`, and the segment
+ * index is recomputed from the new level.  `segmentIndex` can be 8 -- one
+ * past the end of both eight-element arrays -- which is what the object's own
+ * search produces when no boundary matches; the reads that follow land inside
+ * the object either way and are reproduced rather than corrected.
+ */
+static short
+dilSymbol(V90Phase3Modulator *m)
+{
+	unsigned char i1 = m->seq1Index;
+	unsigned char i2 = m->seq2Index;
+	int fromSegment = (m->seq2[i2] == 0);
+	unsigned short code = (unsigned short)m->dilLevel[m->dilIndex];
+	unsigned char next1, next2;
+	unsigned int pos;
+	short level;
+
+	level = fromSegment ? m->segmentLevel[m->segmentIndex]
+			    : m->dilLevel[m->dilIndex];
+	m->usingSegmentLevel = (short)fromSegment;
+
+	if (m->pcmType != PCM_TYPE_MU_LAW)
+		m->dilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);
+	else
+		m->dilPcmCode = (unsigned char)~linear2ulaw((int)code);
+
+	next2 = (unsigned char)(i2 + 1);
+	if (next2 == m->seq2Length)
+		next2 = 0;
+
+	if (m->seq1[i1] == 0)
+		level = (short)-level;
+
+	next1 = (unsigned char)(i1 + 1);
+	if (next1 == m->seq1Length)
+		next1 = 0;
+
+	pos = m->segmentPos + 1u;
+	if (pos == m->segmentLength[m->segmentIndex]) {
+		m->segmentPos = 0;
+		m->seq2Index = 0;
+		m->seq1Index = 0;
+		m->dilIndex = (unsigned char)(m->dilIndex + 1);
+		if (m->dilIndex == m->dilCount)
+			m->dilIndex = 0;
+		updateCodeSegment(m);
+	} else {
+		m->seq1Index = next1;
+		m->segmentPos = pos;
+		m->seq2Index = next2;
+	}
+
+	return level;
+}
+
+/*
+ * THE Jd TIMEOUT IS COMPUTED IN THE x87, AND THE DIL TIMEOUT IS NOT.
+ *
+ * `symbolCount == timeoutBase + 40000` is a plain 32-bit integer compare in
+ * the object, wraparound and all.  This one is not: both counts go through
+ * `fildll` -- the unsigned-to-floating conversion, high word zeroed -- the
+ * constant arrives as `fadds` from a four-byte 24804.0, and the comparison is
+ * `fcompp`.  With -mfpmath=387 and no rounding between, the sum is exact in
+ * the register's 64-bit mantissa, so the test is `symbolCount == timeoutBase +
+ * 24804` over the INTEGERS and not modulo 2**32.  The two disagree only when
+ * the sum crosses 2**32, and the differential test drives exactly that case.
+ *
+ * Written as the object writes it rather than widened to 64-bit integers,
+ * because the object's arithmetic is the specification; GCC 13 at -O2 with
+ * -mfpmath=387 emits fildq/faddp/fucomip and keeps the excess precision.
+ */
+static int
+jdTimeoutReached(unsigned int symbolCount, unsigned int timeoutBase)
+{
+	return (float)symbolCount == (float)timeoutBase + 24804.0f;
+}
+
+/*
+ * One downstream symbol, V.90.
+ *
+ * `symbolCount` is incremented before anything else, so every count compared
+ * below is the count including this symbol.  The dispatch is a sixteen-entry
+ * jump table with an unsigned bound -- `cmp $0xf,%eax; ja` -- so a state
+ * outside 0..15 takes the illegal-state arm exactly as 4, 5, 6 and 13 do.
+ * Those four are the states V.92 owns; `generateV92Symbol` returns the
+ * compliment by treating 7 as illegal.
+ */
+int
+V90Phase3Modulator::generateV90Symbol()
+{
+	short sample = 0;
+
+	symbolCount++;
+
+	switch ((unsigned int)state) {
+	case P3M_STATE_SD:
+		eventCode = 0;
+		sample = sdSymbol(this);
+		if (symbolCount == 0x180) {
+			state = P3M_STATE_SD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_SD_NOT:
+		sample = sdNotSymbol(this);
+		if (symbolCount == 0x30) {
+			state = P3M_STATE_TRN1D;
+			eventCode = 1;
+			symbolCount = 0;
+			scrambler.reset(0);
+		} else {
+			eventCode = 0;
+		}
+		break;
+
+	case P3M_STATE_TRN1D:
+		eventCode = 0;
+		sample = scrambler.process(1) ? codeLevel
+					      : (short)-codeLevel;
+		if (symbolCount == 0x3e7c) {
+			if (jdBits != NULL) {
+				state = P3M_STATE_JD;
+				eventCode = 2;
+				polarity = (sample > 0);
+			} else {
+				state = P3M_STATE_ERROR;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase3Modulator: ERROR: Null "
+					    "JdBits @ end of TRN1d\r\n");
+			}
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_JD:
+		eventCode = 0;
+		sample = scrambledSymbol(this, vectorBit(jdBits, symbolCount));
+		if (jdTimeoutReached(symbolCount, timeoutBase)) {
+			state = P3M_STATE_JD_TIMEOUT;
+			symbolCount = 0;
+			edprintf("V90Phase3Modulator: Jd TimeOut\r\n");
+		}
+		break;
+
+	case P3M_STATE_JD_END:
+		eventCode = 0;
+		sample = scrambledSymbol(this, vectorBit(jdBits, symbolCount));
+		if (symbolCount % 72u == 0) {
+			state = P3M_STATE_JD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_JD_NOT:
+		eventCode = 0;
+		sample = scrambledSymbol(this, 0);
+		if (symbolCount == 12) {
+			if (dilCount != 0) {
+				state = P3M_STATE_DIL;
+			} else {
+				state = P3M_STATE_ERROR;
+				edprintf("V90Phase3Modulator: ERROR: Null DIL "
+					 "@ end of JdNOT\r\n");
+			}
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_DIL:
+		eventCode = 0;
+		sample = dilSymbol(this);
+		if (symbolCount == timeoutBase + 40000u) {
+			state = P3M_STATE_DIL_TIMEOUT;
+			symbolCount = 0;
+			edprintf("V90Phase3Modulator: DIL TimeOut\r\n");
+		}
+		break;
+
+	case P3M_STATE_DIL_END:
+		eventCode = 0;
+		sample = dilSymbol(this);
+		if (segmentPos == 0) {
+			edprintf("V90Phase3Modulator: Phase3 Terminated "
+				 "@ %d\r\n", (int)symbolCount);
+			state = P3M_STATE_TERMINATED;
+			symbolCount = 0;
+			eventCode = 6;
+		}
+		break;
+
+	case P3M_STATE_TERMINATED:
+	case P3M_STATE_JD_TIMEOUT:
+	case P3M_STATE_DIL_TIMEOUT:
+	case P3M_STATE_ERROR:
+		eventCode = 0;
+		sample = 0;
+		break;
+
+	default:
+		eventCode = 0;
+		sample = 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90Phase3Modulator: Illegal state\r\n");
+		break;
+	}
+
+	return sample;
+}
+
+/*
+ * One downstream symbol, V.92.
+ *
+ * The same machine with the V.92 message sequence in place of the V.90 one.
+ * Sd, SdNot, TRN1d, JdNot and both DIL states are identical; states 3 and 4
+ * carry `jdV92Bits` where V.90's 3 and 7 carry `jdBits`, and states 5 and 6
+ * carry `jdV92PhaseBits`, which V.90 has no state for at all.  Note that
+ * state 2's null check is on `jdV92Bits` here, and that nothing ever checks
+ * `jdV92PhaseBits` -- states 5 and 6 dereference it unconditionally.
+ *
+ * The JdPhase timeout is the one asymmetry worth naming: it is an ABSOLUTE
+ * 24804 symbols, `flds` then `fildll` then `fcompp`, with no `timeoutBase`
+ * added, where the Jd timeout two states earlier adds it.
+ */
+int
+V90Phase3Modulator::generateV92Symbol()
+{
+	short sample = 0;
+
+	symbolCount++;
+
+	switch ((unsigned int)state) {
+	case P3M_STATE_SD:
+		eventCode = 0;
+		sample = sdSymbol(this);
+		if (symbolCount == 0x180) {
+			state = P3M_STATE_SD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_SD_NOT:
+		sample = sdNotSymbol(this);
+		if (symbolCount == 0x30) {
+			state = P3M_STATE_TRN1D;
+			eventCode = 1;
+			symbolCount = 0;
+			scrambler.reset(0);
+		} else {
+			eventCode = 0;
+		}
+		break;
+
+	case P3M_STATE_TRN1D:
+		eventCode = 0;
+		sample = scrambler.process(1) ? codeLevel
+					      : (short)-codeLevel;
+		if (symbolCount == 0x3e7c) {
+			if (jdV92Bits != NULL) {
+				state = P3M_STATE_JD;
+				eventCode = 2;
+				polarity = (sample > 0);
+			} else {
+				state = P3M_STATE_ERROR;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase3Modulator: ERROR: Null "
+					    "v92JdBits @ end of TRN1d\r\n");
+			}
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_JD:
+		eventCode = 0;
+		sample = scrambledSymbol(this,
+		    vectorBit(jdV92Bits, symbolCount));
+		if (jdTimeoutReached(symbolCount, timeoutBase)) {
+			state = P3M_STATE_JD_TIMEOUT;
+			symbolCount = 0;
+			edprintf("V90Phase3Modulator: V92Jd TimeOut\r\n");
+		}
+		break;
+
+	case P3M_STATE_V92JD_END:
+		eventCode = 0;
+		sample = scrambledSymbol(this,
+		    vectorBit(jdV92Bits, symbolCount));
+		if (symbolCount % 72u == 0) {
+			state = P3M_STATE_JD_PHASE;
+			symbolCount = 0;
+			eventCode = 3;
+		}
+		break;
+
+	case P3M_STATE_JD_PHASE:
+		eventCode = 0;
+		sample = scrambledSymbol(this,
+		    vectorBit(jdV92PhaseBits, symbolCount));
+		if ((float)symbolCount == 24804.0f) {
+			state = P3M_STATE_JD_PHASE_TIMEOUT;
+			symbolCount = 0;
+			edprintf("V90Phase3Modulator: V92JdPhase TimeOut\r\n");
+		}
+		break;
+
+	case P3M_STATE_JD_PHASE_END:
+		eventCode = 0;
+		sample = scrambledSymbol(this,
+		    vectorBit(jdV92PhaseBits, symbolCount));
+		if (symbolCount % 72u == 0) {
+			state = P3M_STATE_JD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_JD_NOT:
+		eventCode = 0;
+		sample = scrambledSymbol(this, 0);
+		if (symbolCount == 12) {
+			if (dilCount != 0) {
+				state = P3M_STATE_DIL;
+			} else {
+				state = P3M_STATE_ERROR;
+				edprintf("V90Phase3Modulator: ERROR: Null DIL "
+					 "@ end of JdNOT\r\n");
+			}
+			symbolCount = 0;
+		}
+		break;
+
+	case P3M_STATE_DIL:
+		eventCode = 0;
+		sample = dilSymbol(this);
+		if (symbolCount == timeoutBase + 40000u) {
+			state = P3M_STATE_DIL_TIMEOUT;
+			symbolCount = 0;
+			edprintf("V90Phase3Modulator: DIL TimeOut\r\n");
+		}
+		break;
+
+	case P3M_STATE_DIL_END:
+		eventCode = 0;
+		sample = dilSymbol(this);
+		if (segmentPos == 0) {
+			edprintf("V90Phase3Modulator: Phase3 Terminated "
+				 "@ %d\r\n", (int)symbolCount);
+			state = P3M_STATE_TERMINATED;
+			symbolCount = 0;
+			eventCode = 6;
+		}
+		break;
+
+	case P3M_STATE_TERMINATED:
+	case P3M_STATE_JD_TIMEOUT:
+	case P3M_STATE_JD_PHASE_TIMEOUT:
+	case P3M_STATE_DIL_TIMEOUT:
+	case P3M_STATE_ERROR:
+		eventCode = 0;
+		sample = 0;
+		break;
+
+	default:
+		eventCode = 0;
+		sample = 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90Phase3Modulator: Illegal state\r\n");
+		break;
+	}
+
+	return sample;
 }

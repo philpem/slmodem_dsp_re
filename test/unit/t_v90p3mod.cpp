@@ -43,7 +43,38 @@ void ref_setSessionFlag(void *self, unsigned int flag)
 	asm("ref__ZN18V90Phase3Modulator14setSessionFlagEj");
 void ref_resetDILGenerator(void *self, const void *d)
 	asm("ref__ZN18V90Phase3Modulator17resetDILGeneratorEPK19tagV90DILdescriptor");
+
+/*
+ * The return type is not mangled and the header derives it as `int` from the
+ * object's own widening; declaring the alias `int` here is what makes the
+ * comparison cover all thirty-two bits rather than the low sixteen.
+ */
+int ref_generateV90Symbol(void *self)
+	asm("ref__ZN18V90Phase3Modulator17generateV90SymbolEv");
+int ref_generateV92Symbol(void *self)
+	asm("ref__ZN18V90Phase3Modulator17generateV92SymbolEv");
+
+/*
+ * The four weak Scrambler members.  They are `W` in the blob, not `T`, and
+ * symmap.py renames them anyway -- checked with
+ * `nm build/dsplibs_ref.o | grep ScramblerIhiE` -- so they can be driven
+ * directly rather than only through the modulator.  `process` is declared
+ * returning `int` for the same reason as above: the header says the return
+ * type is `T`, one byte, and that is a claim this test checks.
+ */
+int ref_scr_process(void *self, unsigned char in)
+	asm("ref__ZN9ScramblerIhiE7processEh");
+void ref_scr_reset(void *self, unsigned char v)
+	asm("ref__ZN9ScramblerIhiE5resetEh");
+void ref_scr_resetHistoryIndexes(void *self)
+	asm("ref__ZN9ScramblerIhiE19resetHistoryIndexesEv");
+void ref_scr_copyHistoryTail(void *self)
+	asm("ref__ZN9ScramblerIhiE15copyHistoryTailEv");
+
+extern unsigned int ref_dsplibs_debug_level;
 }
+
+#include "dsplib/debug.h"
 
 /* The object, plus room past its end to catch a store that overruns it. */
 #define SLOT 1024
@@ -360,6 +391,838 @@ run_table(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * Scrambler<unsigned char, int>
+ *
+ * Four weak template members that nothing had ever called.  They are a
+ * subobject of the modulator at +0x20 and both `generate*Symbol` drive them,
+ * so they could be checked only through those -- but driving them directly is
+ * sharper and costs one fixture, so it is done both ways.
+ *
+ * THE SEVEN POINTERS MUST BE VALID AND CONGRUENT.  They are dereferenced;
+ * random bytes there segfault.  Each side gets its own buffer of the same
+ * size with the same relative layout, so `pOut - buf` is comparable even
+ * though `pOut` never is.  The layout below is a 64-byte buffer with the
+ * output cursor starting 40 bytes above the limit and taps 5 and 23 bytes
+ * above the cursor: 41 symbols reach the restart, so a run of 100 crosses it
+ * twice and `copyHistoryTail` -- a third of the class, and invisible
+ * otherwise -- actually executes.
+ * ===========================================================================
+ */
+
+#define SCR_BUF		64u
+#define SCR_OUT		40u
+#define SCR_TAP1	45u
+#define SCR_TAP2	63u
+#define SCR_TAIL	23u
+
+typedef Scrambler<unsigned char, int> ScramblerHI;
+
+static unsigned char scr_ours[SCR_BUF], scr_theirs[SCR_BUF];
+
+static void
+scr_place(ScramblerHI *s, unsigned char *buf, unsigned int out)
+{
+	s->pLimit = buf;
+	s->pInitOut = buf + SCR_OUT;
+	s->pInitTap1 = buf + SCR_TAP1;
+	s->pInitTap2 = buf + SCR_TAP2;
+	s->pOut = buf + out;
+	s->pTap1 = buf + out + (SCR_TAP1 - SCR_OUT);
+	s->pTap2 = buf + out + (SCR_TAP2 - SCR_OUT);
+	s->tailLength = SCR_TAIL;
+}
+
+/*
+ * Every field of both objects, as each side's own offset into its own buffer,
+ * plus the buffers themselves.  The raw pointers are never compared and never
+ * merely checked non-null: two heap-free static arrays at two addresses would
+ * pass that and prove nothing (finding 224).
+ */
+static void
+scr_compare(const ScramblerHI *a, const ScramblerHI *b, long input)
+{
+	diff_eq_int("scrambler pLimit offset (case %ld)",
+		    a->pLimit - scr_ours, b->pLimit - scr_theirs, input);
+	diff_eq_int("scrambler pInitOut offset (case %ld)",
+		    a->pInitOut - scr_ours, b->pInitOut - scr_theirs, input);
+	diff_eq_int("scrambler pInitTap1 offset (case %ld)",
+		    a->pInitTap1 - scr_ours, b->pInitTap1 - scr_theirs, input);
+	diff_eq_int("scrambler pInitTap2 offset (case %ld)",
+		    a->pInitTap2 - scr_ours, b->pInitTap2 - scr_theirs, input);
+	diff_eq_int("scrambler pOut offset (case %ld)",
+		    a->pOut - scr_ours, b->pOut - scr_theirs, input);
+	diff_eq_int("scrambler pTap1 offset (case %ld)",
+		    a->pTap1 - scr_ours, b->pTap1 - scr_theirs, input);
+	diff_eq_int("scrambler pTap2 offset (case %ld)",
+		    a->pTap2 - scr_ours, b->pTap2 - scr_theirs, input);
+	diff_eq_int("scrambler tailLength (case %ld)",
+		    a->tailLength, b->tailLength, input);
+	diff_eq_int("scrambler buffer (case %ld)",
+		    memcmp(scr_ours, scr_theirs, SCR_BUF) == 0, 1, input);
+}
+
+static void
+scr_seed(int trial, int mode)
+{
+	unsigned int i;
+
+	lfsr_state = 0x7c1bu + 0x2545u * (unsigned)trial + (unsigned)mode;
+	for (i = 0; i < SCR_BUF; i++) {
+		unsigned char v;
+
+		switch (mode) {
+		case 0:  v = next_byte();			break;
+		case 1:  v = 0;					break;
+		case 2:  v = 1;					break;
+		default: v = (unsigned char)(next_byte() & 1u);	break;
+		}
+		scr_ours[i] = scr_theirs[i] = v;
+	}
+}
+
+static int
+run_scrambler(void)
+{
+	ScramblerHI a, b;
+	int trial, mode, i, restarts = 0, differed = 0, wide = 0;
+
+	diff_begin("Scrambler<unsigned char, int>");
+
+	/* process(), run long enough to cross the restart twice. */
+	for (mode = 0; mode < 4; mode++) {
+		for (trial = 0; trial < 8; trial++) {
+			unsigned int start = (unsigned)trial * 5u;
+
+			scr_seed(trial, mode);
+			scr_place(&a, scr_ours, start);
+			scr_place(&b, scr_theirs, start);
+
+			for (i = 0; i < 100; i++) {
+				unsigned char in = (unsigned char)next_byte();
+				unsigned char *before = a.pOut;
+				int ra, rb;
+
+				ra = a.process(in);
+				rb = ref_scr_process(&b, in);
+
+				diff_eq_int("process returned (case %ld)",
+					    ra, rb,
+					    (long)(mode * 10000 + trial * 100
+						   + i));
+				diff_eq_int("process returned a byte "
+					    "(case %ld)", (rb & ~0xff) == 0, 1,
+					    (long)(mode * 10000 + trial * 100
+						   + i));
+				scr_compare(&a, &b,
+				    (long)(mode * 10000 + trial * 100 + i));
+
+				if (before == scr_ours &&
+				    a.pOut == a.pInitOut)
+					restarts++;
+				if (ra != 0)
+					differed = 1;
+				if ((rb & ~0xff) != 0)
+					wide = 1;
+			}
+		}
+	}
+
+	/* reset(), whose masking of everything but bit 0 is the whole claim. */
+	for (mode = 0; mode < 4; mode++) {
+		for (trial = 0; trial < 256; trial++) {
+			scr_seed(trial, mode);
+			scr_place(&a, scr_ours, (unsigned)trial % 41u);
+			scr_place(&b, scr_theirs, (unsigned)trial % 41u);
+
+			a.reset((unsigned char)trial);
+			ref_scr_reset(&b, (unsigned char)trial);
+
+			scr_compare(&a, &b, (long)(mode * 1000 + trial));
+		}
+	}
+
+	/* The other two, called on their own so neither hides in the third. */
+	for (trial = 0; trial < 16; trial++) {
+		scr_seed(trial, trial % 4);
+		scr_place(&a, scr_ours, (unsigned)trial % 41u);
+		scr_place(&b, scr_theirs, (unsigned)trial % 41u);
+		a.resetHistoryIndexes();
+		ref_scr_resetHistoryIndexes(&b);
+		scr_compare(&a, &b, trial);
+
+		scr_seed(trial, trial % 4);
+		scr_place(&a, scr_ours, (unsigned)trial % 41u);
+		scr_place(&b, scr_theirs, (unsigned)trial % 41u);
+		a.tailLength = b.tailLength = (unsigned)trial;
+		a.copyHistoryTail();
+		ref_scr_copyHistoryTail(&b);
+		scr_compare(&a, &b, trial);
+	}
+
+	/*
+	 * Anti-vacuity.  Without the first, a `process` that never restarted
+	 * would pass and `copyHistoryTail` would be untested; without the
+	 * second, a `process` that always returned zero would pass.  The third
+	 * is the check that the return type really is one byte.
+	 */
+	diff_eq_int("process crossed the restart", restarts > 0, 1, 0);
+	diff_eq_int("process returned something nonzero", differed, 1, 0);
+	diff_eq_int("the reference process never returned past a byte",
+		    wide, 0, 0);
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * generateV90Symbol and generateV92Symbol
+ *
+ * The fixture the two need beyond `resetDILGenerator`'s:
+ *
+ *   - ten pointers, seven inside the Scrambler and three bit vectors, which
+ *     hold different addresses on the two sides and always will.  They are
+ *     blanked in a copy before the whole-object comparison and then compared
+ *     as each side's own offset into each side's own buffer.
+ *   - `jdBits`, `jdV92Bits` and `jdV92PhaseBits` overwritten on EVERY trial.
+ *     Five states dereference them with no null check, so the pseudorandom
+ *     fill would segfault.  Null is legitimate only in TRN1d, which tests it.
+ *   - `state` forced to the arm under test, and driven out of range as well:
+ *     the object's bound is `cmp $0xf; ja`, unsigned.
+ *   - `dsplibs_debug_level` and `ref_dsplibs_debug_level` pinned together,
+ *     at 0 and at 2, because both functions branch on it.
+ *
+ * `input` on every check below is `state * 10000 + trial`, or the loop's own
+ * case number where a loop drives several states.
+ * ===========================================================================
+ */
+
+#define JDBUF	96u
+
+static unsigned char jd_ours[3][JDBUF], jd_theirs[3][JDBUF];
+
+/* Coverage, all asserted at the end of run_generate(). */
+static int cov_state[16], cov_illegal;
+static int cov_exit[16], cov_stay[16];
+static int cov_trn1d_null, cov_jdnot_null;
+static int cov_dil_wrap, cov_dil_nowrap;
+static int cov_dil_segment, cov_dil_entry, cov_dil_negated;
+static int cov_seq1_wrap, cov_seq2_wrap, cov_dilindex_wrap;
+static int cov_segindex8, cov_scr_restart;
+static int cov_sample_neg, cov_sample_pos;
+
+static void
+prepare(int trial, int mode, unsigned int st)
+{
+	unsigned int i, j;
+
+	seed(trial, mode);
+
+	ours.o.pcmType = theirs.o.pcmType =
+	    (trial & 1) ? PCM_TYPE_A_LAW : PCM_TYPE_MU_LAW;
+	ours.o.state = theirs.o.state = (Phase3ModulatorState)st;
+
+	for (i = 0; i < 3; i++)
+		for (j = 0; j < JDBUF; j++)
+			jd_ours[i][j] = jd_theirs[i][j] =
+			    (unsigned char)(next_byte() & 1u);
+	ours.o.jdBits = jd_ours[0];
+	ours.o.jdV92Bits = jd_ours[1];
+	ours.o.jdV92PhaseBits = jd_ours[2];
+	theirs.o.jdBits = jd_theirs[0];
+	theirs.o.jdV92Bits = jd_theirs[1];
+	theirs.o.jdV92PhaseBits = jd_theirs[2];
+
+	for (i = 0; i < SCR_BUF; i++)
+		scr_ours[i] = scr_theirs[i] =
+		    (unsigned char)(next_byte() & 1u);
+	scr_place(&ours.o.scrambler, scr_ours, (unsigned)trial % 41u);
+	scr_place(&theirs.o.scrambler, scr_theirs, (unsigned)trial % 41u);
+
+	/*
+	 * The two byte sequences must contain zeros: `seq2[seq2Index] == 0`
+	 * is what makes a DIL symbol carry the segment level instead of the
+	 * entry level, and `seq1[seq1Index] == 0` is what negates it.  A
+	 * pseudorandom fill hits zero once in 256 and one of the seed modes
+	 * never does, so both are planted at a fixed density.
+	 */
+	for (i = 0; i < 128; i++) {
+		unsigned char v = next_byte();
+
+		if (((i + (unsigned)trial) % 3u) == 0u)
+			v = 0;
+		else if (v == 0)
+			v = 1;
+		ours.o.seq1[i] = theirs.o.seq1[i] = v;
+
+		v = next_byte();
+		if (((i + 2u * (unsigned)trial) % 4u) == 0u)
+			v = 0;
+		else if (v == 0)
+			v = 1;
+		ours.o.seq2[i] = theirs.o.seq2[i] = v;
+	}
+
+	/* The segment lengths the object's own resetDILGenerator produces. */
+	for (i = 0; i < 8; i++)
+		ours.o.segmentLength[i] = theirs.o.segmentLength[i] =
+		    6u * (i + 1u) + 6u;
+
+	ours.o.segmentIndex = theirs.o.segmentIndex =
+	    (unsigned char)(trial % 9);
+	ours.o.segmentPos = theirs.o.segmentPos = 0;
+	ours.o.dilCount = theirs.o.dilCount = (unsigned char)(1 + trial % 5);
+	ours.o.dilIndex = theirs.o.dilIndex = (unsigned char)(trial % 6);
+	ours.o.seq1Length = theirs.o.seq1Length =
+	    (unsigned char)(1 + trial % 7);
+	ours.o.seq2Length = theirs.o.seq2Length =
+	    (unsigned char)(1 + trial % 5);
+	ours.o.seq1Index = theirs.o.seq1Index = (unsigned char)(trial % 8);
+	ours.o.seq2Index = theirs.o.seq2Index = (unsigned char)(trial % 6);
+
+	ours.o.symbolCount = theirs.o.symbolCount = 0;
+	ours.o.timeoutBase = theirs.o.timeoutBase = 0;
+	ours.o.polarity = theirs.o.polarity = (unsigned)trial & 1u;
+	ours.o.eventCode = theirs.o.eventCode = 0;
+}
+
+/*
+ * One call on each side, everything compared, coverage recorded.  Returns
+ * nothing: what the test asserts about the outcome, it asserts from the
+ * object afterwards.
+ */
+static void
+drive(int v92, long input)
+{
+	static union mod_slot ca, cb;
+	unsigned int st = (unsigned int)ours.o.state;
+	const unsigned char *before = ours.o.scrambler.pOut;
+	unsigned int pos_before = ours.o.segmentPos;
+	unsigned char seq1i = ours.o.seq1Index, seq2i = ours.o.seq2Index;
+	unsigned char dili = ours.o.dilIndex;
+	int a, b;
+
+	a = v92 ? ours.o.generateV92Symbol() : ours.o.generateV90Symbol();
+	b = v92 ? ref_generateV92Symbol(&theirs.o)
+		: ref_generateV90Symbol(&theirs.o);
+
+	diff_eq_int("generateSymbol returned (case %ld)", a, b, input);
+
+	memcpy(&ca, &ours, sizeof(ca));
+	memcpy(&cb, &theirs, sizeof(cb));
+	memset(ca.raw + 0x20, 0, 0x1c);		/* the Scrambler's seven */
+	memset(cb.raw + 0x20, 0, 0x1c);
+	memset(ca.raw + 0x44, 0, 0x0c);		/* the three bit vectors  */
+	memset(cb.raw + 0x44, 0, 0x0c);
+	diff_eq_obj("after generateSymbol", V90Phase3Modulator,
+		    &ca.o, &cb.o, input);
+
+	scr_compare(&ours.o.scrambler, &theirs.o.scrambler, input);
+
+	diff_eq_int("jdBits offset (case %ld)",
+		    ours.o.jdBits ? ours.o.jdBits - jd_ours[0] : -1,
+		    theirs.o.jdBits ? theirs.o.jdBits - jd_theirs[0] : -1,
+		    input);
+	diff_eq_int("jdV92Bits offset (case %ld)",
+		    ours.o.jdV92Bits ? ours.o.jdV92Bits - jd_ours[1] : -1,
+		    theirs.o.jdV92Bits ? theirs.o.jdV92Bits - jd_theirs[1] : -1,
+		    input);
+	diff_eq_int("jdV92PhaseBits offset (case %ld)",
+		    ours.o.jdV92PhaseBits
+			? ours.o.jdV92PhaseBits - jd_ours[2] : -1,
+		    theirs.o.jdV92PhaseBits
+			? theirs.o.jdV92PhaseBits - jd_theirs[2] : -1,
+		    input);
+	diff_eq_int("the bit vectors are untouched (case %ld)",
+		    memcmp(jd_ours, jd_theirs, sizeof(jd_ours)) == 0, 1, input);
+	diff_eq_int("no store past the object (case %ld)", guard_equal(), 1,
+		    input);
+
+	if (st < 16) {
+		cov_state[st] = 1;
+		if ((unsigned int)ours.o.state != st)
+			cov_exit[st] = 1;
+		else
+			cov_stay[st] = 1;
+	} else {
+		cov_illegal = 1;
+	}
+	if (before == scr_ours &&
+	    ours.o.scrambler.pOut == ours.o.scrambler.pInitOut)
+		cov_scr_restart = 1;
+	if (st == P3M_STATE_DIL || st == P3M_STATE_DIL_END) {
+		int wrapped = (ours.o.segmentPos == 0 && pos_before + 1u != 0u);
+
+		if (wrapped)
+			cov_dil_wrap = 1;
+		else
+			cov_dil_nowrap = 1;
+		if (ours.o.usingSegmentLevel)
+			cov_dil_segment = 1;
+		else
+			cov_dil_entry = 1;
+		if (ours.o.seq1[seq1i] == 0)
+			cov_dil_negated = 1;
+		/*
+		 * The segment wrap zeroes all three cursors, so a cursor
+		 * wrapping ON ITS OWN LENGTH is only observable when the
+		 * segment did not end -- and `dilIndex` only ever moves when
+		 * it did.
+		 */
+		if (!wrapped && ours.o.seq1Index == 0 && seq1i != 0)
+			cov_seq1_wrap = 1;
+		if (!wrapped && ours.o.seq2Index == 0 && seq2i != 0)
+			cov_seq2_wrap = 1;
+		if (wrapped && ours.o.dilIndex == 0 && dili != 0)
+			cov_dilindex_wrap = 1;
+		if (ours.o.segmentIndex == 8)
+			cov_segindex8 = 1;
+	}
+	if (a < 0)
+		cov_sample_neg = 1;
+	if (a > 0)
+		cov_sample_pos = 1;
+}
+
+static void
+cov_reset(void)
+{
+	int i;
+
+	for (i = 0; i < 16; i++)
+		cov_state[i] = cov_exit[i] = cov_stay[i] = 0;
+	cov_illegal = cov_trn1d_null = cov_jdnot_null = 0;
+	cov_dil_wrap = cov_dil_nowrap = 0;
+	cov_dil_segment = cov_dil_entry = cov_dil_negated = 0;
+	cov_seq1_wrap = cov_seq2_wrap = cov_dilindex_wrap = 0;
+	cov_segindex8 = cov_scr_restart = 0;
+	cov_sample_neg = cov_sample_pos = 0;
+}
+
+static int
+run_generate(int v92)
+{
+	int st, trial, lvl, k;
+
+	diff_begin(v92 ? "V90Phase3Modulator::generateV92Symbol"
+		       : "V90Phase3Modulator::generateV90Symbol");
+	cov_reset();
+
+	/*
+	 * Every arm, every seed mode, both debug levels.  Nothing here forces
+	 * a transition; this is the sixteen states plus the out-of-range one
+	 * running in their steady state.
+	 */
+	for (lvl = 0; lvl < 2; lvl++) {
+		dsplibs_debug_level = ref_dsplibs_debug_level =
+		    lvl ? 2u : 0u;
+		for (st = 0; st < 17; st++) {
+			for (trial = 0; trial < 8; trial++) {
+				unsigned int s = (st < 16)
+				    ? (unsigned int)st
+				    : 0x51a70000u + (unsigned int)trial;
+
+				prepare(trial, trial % 4, s);
+				ours.o.symbolCount = theirs.o.symbolCount =
+				    (unsigned int)(trial * 7 + 1);
+				drive(v92, (long)(st * 10000 + trial));
+			}
+		}
+	}
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	/*
+	 * Every exit, forced.  Each is `symbolCount == K`, so random seeding
+	 * reaches none of them; each is driven at K and at K-1 so the
+	 * comparison sees the branch both ways.
+	 */
+	for (trial = 0; trial < 24; trial++) {
+		int mo = trial % 4;
+		unsigned int base = 0x1000u * (unsigned int)(trial % 3);
+
+		/* Sd, 384 symbols. */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, P3M_STATE_SD);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    0x180u - 1u - (unsigned int)k;
+			drive(v92, (long)(200000 + trial * 10 + k));
+		}
+
+		/* SdNot, 48 symbols, and the scrambler reset it ends on. */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, P3M_STATE_SD_NOT);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    0x30u - 1u - (unsigned int)k;
+			drive(v92, (long)(210000 + trial * 10 + k));
+		}
+
+		/* TRN1d, 0x3e7c symbols, with and without the bit vector. */
+		for (k = 0; k < 4; k++) {
+			prepare(trial, mo, P3M_STATE_TRN1D);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    0x3e7cu - 1u - (unsigned int)(k & 1);
+			if (k & 2) {
+				if (v92)
+					ours.o.jdV92Bits =
+					    theirs.o.jdV92Bits = NULL;
+				else
+					ours.o.jdBits = theirs.o.jdBits = NULL;
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+			    (k & 2) ? 2u : 0u;
+			drive(v92, (long)(220000 + trial * 10 + k));
+			if (k == 2 && ours.o.state == P3M_STATE_ERROR)
+				cov_trn1d_null = 1;
+		}
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		/*
+		 * Jd, at `timeoutBase + 24804` -- and the one input that
+		 * separates the object's x87 comparison from the integer one
+		 * it is NOT.  0xfffffff0 + 24804 wraps to 24788 in thirty-two
+		 * bits, so a reconstruction that added in integers would fire
+		 * here.  The object adds in the x87, where nothing wraps, and
+		 * does not.
+		 */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, P3M_STATE_JD);
+			ours.o.timeoutBase = theirs.o.timeoutBase = base;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    base + 24803u - (unsigned int)k;
+			drive(v92, (long)(230000 + trial * 10 + k));
+		}
+		prepare(trial, mo, P3M_STATE_JD);
+		ours.o.timeoutBase = theirs.o.timeoutBase = 0xfffffff0u;
+		ours.o.symbolCount = theirs.o.symbolCount = 24787u;
+		drive(v92, (long)(230100 + trial));
+		diff_eq_int("the Jd timeout does not wrap at 2**32 "
+			    "(trial %ld)", (long)ours.o.state,
+			    (long)P3M_STATE_JD, trial);
+
+		/* The 72-boundary states: 7 under V.90, 4 and 6 under V.92. */
+		for (k = 0; k < 4; k++) {
+			unsigned int s;
+
+			if (v92)
+				s = (k < 2) ? P3M_STATE_V92JD_END
+					    : P3M_STATE_JD_PHASE_END;
+			else
+				s = P3M_STATE_JD_END;
+
+			prepare(trial, mo, s);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    71u - (unsigned int)(k & 1);
+			drive(v92, (long)(240000 + trial * 10 + k));
+		}
+		/*
+		 * ... and the wrap of the counter itself: 0xffffffff
+		 * increments to 0, which IS a multiple of 72, so the exit
+		 * fires from the far end of the range.
+		 */
+		for (k = 0; k < 2; k++) {
+			unsigned int s = v92
+			    ? (k ? P3M_STATE_JD_PHASE_END : P3M_STATE_V92JD_END)
+			    : P3M_STATE_JD_END;
+
+			prepare(trial, mo, s);
+			ours.o.symbolCount = theirs.o.symbolCount = 0xffffffffu;
+			drive(v92, (long)(240100 + trial * 10 + k));
+		}
+
+		/*
+		 * JdPhase, V.92 only, and its timeout is an ABSOLUTE 24804
+		 * with no `timeoutBase` added -- which is only visible with
+		 * `timeoutBase` set to something.
+		 */
+		if (v92) {
+			for (k = 0; k < 2; k++) {
+				prepare(trial, mo, P3M_STATE_JD_PHASE);
+				ours.o.timeoutBase = theirs.o.timeoutBase =
+				    base + 0x40000u;
+				ours.o.symbolCount = theirs.o.symbolCount =
+				    24803u - (unsigned int)k;
+				drive(v92, (long)(250000 + trial * 10 + k));
+			}
+			diff_eq_int("the JdPhase timeout ignores timeoutBase "
+				    "(trial %ld)", (long)ours.o.state,
+				    (long)P3M_STATE_JD_PHASE, trial);
+			prepare(trial, mo, P3M_STATE_JD_PHASE);
+			ours.o.timeoutBase = theirs.o.timeoutBase =
+			    base + 0x40000u;
+			ours.o.symbolCount = theirs.o.symbolCount = 24803u;
+			drive(v92, (long)(250100 + trial));
+			diff_eq_int("the JdPhase timeout fires at 24804 "
+				    "(trial %ld)", (long)ours.o.state,
+				    (long)P3M_STATE_JD_PHASE_TIMEOUT, trial);
+		}
+
+		/* JdNot, 12 symbols, with and without a DIL sequence. */
+		for (k = 0; k < 4; k++) {
+			prepare(trial, mo, P3M_STATE_JD_NOT);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    12u - 1u - (unsigned int)(k & 1);
+			if (k & 2)
+				ours.o.dilCount = theirs.o.dilCount = 0;
+			drive(v92, (long)(260000 + trial * 10 + k));
+			if (k == 2 && ours.o.state == P3M_STATE_ERROR)
+				cov_jdnot_null = 1;
+		}
+
+		/*
+		 * DIL, at `timeoutBase + 40000` -- the mirror of the Jd case
+		 * above.  This one IS integer: 0xfffffff0 + 40000 wraps to
+		 * 39984 and the object fires there.
+		 */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, P3M_STATE_DIL);
+			ours.o.timeoutBase = theirs.o.timeoutBase = base;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    base + 39999u - (unsigned int)k;
+			drive(v92, (long)(270000 + trial * 10 + k));
+		}
+		prepare(trial, mo, P3M_STATE_DIL);
+		ours.o.timeoutBase = theirs.o.timeoutBase = 0xfffffff0u;
+		ours.o.symbolCount = theirs.o.symbolCount = 39983u;
+		drive(v92, (long)(270100 + trial));
+		diff_eq_int("the DIL timeout does wrap at 2**32 (trial %ld)",
+			    (long)ours.o.state, (long)P3M_STATE_DIL_TIMEOUT,
+			    trial);
+
+		/*
+		 * Both DIL states at the segment boundary, which clears three
+		 * cursors, advances `dilIndex` modulo `dilCount` and
+		 * recomputes `segmentIndex` -- and, in the DIL_END state, is
+		 * the whole of the terminating condition.
+		 */
+		for (k = 0; k < 4; k++) {
+			unsigned int s = (k & 2) ? P3M_STATE_DIL_END
+						 : P3M_STATE_DIL;
+
+			prepare(trial, mo, s);
+			ours.o.segmentIndex = theirs.o.segmentIndex =
+			    (unsigned char)(trial % 8);
+			ours.o.segmentPos = theirs.o.segmentPos =
+			    ours.o.segmentLength[ours.o.segmentIndex] - 1u -
+			    (unsigned int)(k & 1);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    100u + (unsigned int)trial;
+			drive(v92, (long)(280000 + trial * 10 + k));
+		}
+
+		/*
+		 * Both sequence cursors one step from wrapping on their own
+		 * length, with the segment deliberately NOT ending -- the
+		 * segment wrap zeroes all three anyway, so it would hide the
+		 * modulus.
+		 */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, k ? P3M_STATE_DIL_END
+					     : P3M_STATE_DIL);
+			ours.o.seq1Index = theirs.o.seq1Index =
+			    (unsigned char)(ours.o.seq1Length - 1);
+			ours.o.seq2Index = theirs.o.seq2Index =
+			    (unsigned char)(ours.o.seq2Length - 1);
+			ours.o.segmentIndex = theirs.o.segmentIndex =
+			    (unsigned char)(trial % 8);
+			ours.o.segmentPos = theirs.o.segmentPos = 0;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    100u + (unsigned int)trial;
+			drive(v92, (long)(290000 + trial * 10 + k));
+		}
+
+		/* ... and `dilIndex` one step from wrapping on `dilCount`,
+		 * which needs the segment to end in the same symbol. */
+		for (k = 0; k < 2; k++) {
+			prepare(trial, mo, k ? P3M_STATE_DIL_END
+					     : P3M_STATE_DIL);
+			ours.o.dilIndex = theirs.o.dilIndex =
+			    (unsigned char)(ours.o.dilCount - 1);
+			ours.o.segmentIndex = theirs.o.segmentIndex =
+			    (unsigned char)(trial % 8);
+			ours.o.segmentPos = theirs.o.segmentPos =
+			    ours.o.segmentLength[ours.o.segmentIndex] - 1u;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    100u + (unsigned int)trial;
+			drive(v92, (long)(295000 + trial * 10 + k));
+		}
+
+		/*
+		 * The scrambler's restart, in every state that calls
+		 * `process`.  `pOut` is put on `pLimit`, so the single call
+		 * this symbol makes takes it below and the restart path --
+		 * `resetHistoryIndexes` then `copyHistoryTail` -- runs.
+		 */
+		for (k = 0; k < 5; k++) {
+			static const unsigned int scr_states_v90[5] = {
+				P3M_STATE_TRN1D, P3M_STATE_JD,
+				P3M_STATE_JD_END, P3M_STATE_JD_NOT,
+				P3M_STATE_JD
+			};
+			static const unsigned int scr_states_v92[5] = {
+				P3M_STATE_TRN1D, P3M_STATE_JD,
+				P3M_STATE_V92JD_END, P3M_STATE_JD_PHASE,
+				P3M_STATE_JD_PHASE_END
+			};
+			unsigned int s = v92 ? scr_states_v92[k]
+					     : scr_states_v90[k];
+
+			prepare(trial, mo, s);
+			scr_place(&ours.o.scrambler, scr_ours, 0);
+			scr_place(&theirs.o.scrambler, scr_theirs, 0);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    3u + (unsigned int)trial;
+			drive(v92, (long)(300000 + trial * 10 + k));
+		}
+	}
+
+	/* -- anti-vacuity ------------------------------------------------ */
+	for (st = 0; st < 16; st++) {
+		int expected_exit = 1;
+
+		/*
+		 * The five terminal states and the three each protocol does
+		 * not own never leave; everything else must have been seen
+		 * both leaving and staying.
+		 */
+		if (st >= P3M_STATE_TERMINATED)
+			expected_exit = 0;
+		if (v92 && st == P3M_STATE_JD_END)
+			expected_exit = 0;
+		if (!v92 && (st == P3M_STATE_V92JD_END ||
+			     st == P3M_STATE_JD_PHASE ||
+			     st == P3M_STATE_JD_PHASE_END))
+			expected_exit = 0;
+
+		diff_eq_int("state %ld was driven", cov_state[st], 1,
+			    (long)st);
+		diff_eq_int("state %ld was seen not transitioning",
+			    cov_stay[st], 1, (long)st);
+		diff_eq_int("state %ld transitioned iff it can", cov_exit[st],
+			    expected_exit, (long)st);
+	}
+	diff_eq_int("an out-of-range state was driven", cov_illegal, 1, 0);
+	diff_eq_int("TRN1d saw a null bit vector", cov_trn1d_null, 1, 0);
+	diff_eq_int("JdNot saw an empty DIL sequence", cov_jdnot_null, 1, 0);
+	diff_eq_int("a DIL segment ended", cov_dil_wrap, 1, 0);
+	diff_eq_int("a DIL segment did not end", cov_dil_nowrap, 1, 0);
+	diff_eq_int("a DIL symbol took the segment level", cov_dil_segment,
+		    1, 0);
+	diff_eq_int("a DIL symbol took the entry level", cov_dil_entry, 1, 0);
+	diff_eq_int("a DIL symbol was negated by seq1", cov_dil_negated, 1, 0);
+	diff_eq_int("seq1Index wrapped", cov_seq1_wrap, 1, 0);
+	diff_eq_int("seq2Index wrapped", cov_seq2_wrap, 1, 0);
+	diff_eq_int("dilIndex wrapped", cov_dilindex_wrap, 1, 0);
+	diff_eq_int("the segment search reached index 8", cov_segindex8, 1, 0);
+	diff_eq_int("the scrambler restarted", cov_scr_restart, 1, 0);
+	diff_eq_int("a symbol came out negative", cov_sample_neg, 1, 0);
+	diff_eq_int("a symbol came out positive", cov_sample_pos, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * The whole machine, in sequence, from state 0.  Every loop above drives one
+ * symbol from a fabricated state; this one lets the object walk its own path
+ * and compares every symbol along it, which is the only thing that checks the
+ * states compose.  The three transitions the object does NOT make for itself
+ * -- Jd to its 72-boundary state, and DIL to its terminating one, which
+ * `exitJd`, `exitJdPhase` and `exitDIL` make and which are not in this batch
+ * -- are made here by writing the state on both sides, which is still a
+ * comparison because both sides are written identically.
+ */
+static long
+run_until(int v92, unsigned int st, int limit, long id)
+{
+	int i;
+
+	for (i = 0; i < limit && (unsigned int)ours.o.state == st; i++)
+		drive(v92, id++);
+	return id;
+}
+
+static int
+run_sequence(int v92)
+{
+	long id = 0;
+
+	diff_begin(v92 ? "V90Phase3Modulator::generateV92Symbol in sequence"
+		       : "V90Phase3Modulator::generateV90Symbol in sequence");
+
+	prepare(3, 0, P3M_STATE_SD);
+	ours.o.timeoutBase = theirs.o.timeoutBase = 0;
+
+	/* Sd for 384, then SdNot for 48, then into TRN1d.  Both natural. */
+	id = run_until(v92, P3M_STATE_SD, 500, id);
+	diff_eq_int("the sequence reached SdNot", (long)ours.o.state,
+		    (long)P3M_STATE_SD_NOT, 0);
+	id = run_until(v92, P3M_STATE_SD_NOT, 100, id);
+	diff_eq_int("the sequence reached TRN1d", (long)ours.o.state,
+		    (long)P3M_STATE_TRN1D, 0);
+
+	/* TRN1d ends at 0x3e7c; skip most of it and take the boundary. */
+	ours.o.symbolCount = theirs.o.symbolCount = 0x3e7cu - 20u;
+	id = run_until(v92, P3M_STATE_TRN1D, 40, id);
+	diff_eq_int("the sequence reached Jd", (long)ours.o.state,
+		    (long)P3M_STATE_JD, 0);
+	diff_eq_int("entering Jd was reported", (long)ours.o.eventCode, 2, 0);
+
+	id = run_until(v92, P3M_STATE_JD, 200, id);
+	diff_eq_int("Jd did not time out early", (long)ours.o.state,
+		    (long)P3M_STATE_JD, 0);
+
+	/* What exitJd does, spelled out: on to the 72-boundary state. */
+	ours.o.state = theirs.o.state =
+	    v92 ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;
+	id = run_until(v92, (unsigned int)ours.o.state, 100, id);
+
+	if (v92) {
+		diff_eq_int("the sequence reached JdPhase", (long)ours.o.state,
+			    (long)P3M_STATE_JD_PHASE, 0);
+		id = run_until(v92, P3M_STATE_JD_PHASE, 100, id);
+		/* ... and what exitJdPhase does. */
+		ours.o.state = theirs.o.state = P3M_STATE_JD_PHASE_END;
+		id = run_until(v92, P3M_STATE_JD_PHASE_END, 100, id);
+	}
+
+	diff_eq_int("the sequence reached JdNot", (long)ours.o.state,
+		    (long)P3M_STATE_JD_NOT, 0);
+	id = run_until(v92, P3M_STATE_JD_NOT, 40, id);
+	diff_eq_int("the sequence reached DIL", (long)ours.o.state,
+		    (long)P3M_STATE_DIL, 0);
+
+	id = run_until(v92, P3M_STATE_DIL, 400, id);
+	diff_eq_int("DIL did not time out early", (long)ours.o.state,
+		    (long)P3M_STATE_DIL, 0);
+
+	/*
+	 * What exitDIL does: on to the state that stops at a segment end.
+	 *
+	 * The segment search leaves `segmentIndex` at 8 when no boundary
+	 * matches, and `segmentLength[8]` is one past the array -- it reads
+	 * the first two `segmentLevel` entries as a 32-bit length, which the
+	 * seed makes enormous, so the segment would not end inside any
+	 * reasonable run.  That aliasing is the object's and is compared like
+	 * everything else above; here the cursor is simply put back inside the
+	 * table, on both sides, so the terminating path is reachable.
+	 */
+	if (ours.o.segmentIndex > 7) {
+		ours.o.segmentIndex = theirs.o.segmentIndex = 0;
+		ours.o.segmentPos = theirs.o.segmentPos = 0;
+	}
+	ours.o.state = theirs.o.state = P3M_STATE_DIL_END;
+	id = run_until(v92, P3M_STATE_DIL_END, 200, id);
+	diff_eq_int("the sequence terminated", (long)ours.o.state,
+		    (long)P3M_STATE_TERMINATED, 0);
+	diff_eq_int("termination reported itself", (long)ours.o.eventCode,
+		    6, 0);
+
+	id = run_until(v92, P3M_STATE_TERMINATED, 20, id);
+	diff_eq_int("the terminated state is quiet", id > 0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -368,6 +1231,11 @@ main(void)
 	rc |= run_table();
 	rc |= run_setsessionflag();
 	rc |= run_resetdilgenerator();
+	rc |= run_scrambler();
+	rc |= run_generate(0);
+	rc |= run_generate(1);
+	rc |= run_sequence(0);
+	rc |= run_sequence(1);
 
 	return rc;
 }
