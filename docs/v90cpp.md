@@ -57,10 +57,88 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 |---|-------|---------|---------|
 | 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
 | 1 | `V90Jd` / `V92Jd` | `V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20 | all leaves |
-| 2 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, plus `FloatFIR::setCoefficients` 58 | yes, with FloatFIR |
-| 3 | `V90Phase3Modulator` | `generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11 | needs batch 1 |
+| 2 | `V90Phase3Modulator` | `generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table | needs batch 1 |
+| 3 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, **all of `FloatFIR`** 723, **+ 10,532 B of tables** | yes, with FloatFIR |
 | 4 | the leaf remainder | the stubs and setters — see the table below | mostly leaves |
 | 5 | `VPcmFloModem`, `V90Phase3Demodulator` | the two whose objects reach through into an enclosing session | last |
+
+**`V90PreFilter` moved from 2 to 3.**  It first looked like the lightest batch
+and is in fact the heaviest of the three: ~2 KB of code, plus 10,532 B of
+static tables, plus the whole of `FloatFIR`.  The Jd family is the batch that
+proves the C++ fixture pattern with the fewest moving parts — eight leaf
+methods, objects of 140 and 216 bytes, no static data, no vtables — so it goes
+first, and `V90Phase3Modulator` follows because it needs Jd and carries only
+64 B of table.  Table extraction is a different kind of work and should not be
+entangled with proving the fixture.
+
+`FloatFIR` is taken whole (723 B unique across six members) rather than just
+the `setCoefficients` that `selectFilter` calls: the class must be declared
+either way, and leaving five members unwritten only re-opens the batch for
+whatever calls them next.  `nm` totals 858 because the constructor and
+destructor each appear twice — C1/C2 and D1/D2, byte-identical — which GCC
+emits automatically from one definition.
+
+## The OTHER closure: static data, which `callgraph.py` cannot see
+
+`callgraph.py` tracks calls.  The 50 also reference **static class data
+members**, which are ordinary defined data symbols in the blob, therefore
+renamed `ref_*`, therefore not satisfiable from the reference object — the
+same total link failure as an unwritten callee, and invisible to the tool that
+enumerates the closure.
+
+Measured by disassembling all 50 and collecting `R_386_*` targets that resolve
+to defined data symbols:
+
+```
+ 4960  D  V90PreFilter::preFilterCoefType3                       <- 1 fn
+ 2480  D  V90PreFilter::preFilterCoefType2                       <- 1 fn
+ 2480  D  V90PreFilter::preFilterCoefType1                       <- 1 fn
+  612  D  V90PreFilter::dataBase                                 <- 3 fn
+   64  D  V90Phase3Modulator::codeSegmentsBoundriesLookupTable   <- 3 fn
+-----
+10596  bytes across 5 symbols
+```
+
+**So #60's real payload is 16,003 + 10,596 = 26,599 bytes**, and every count
+that says 16,003 is counting text only.  It lands entirely on batches 2 and 3;
+every other batch is data-free.  `tools/tabdump.py` is the right tool, and
+`src/pump/b103/b103_tables.c`, `src/dsp/fpm_iir_coeffs.c` and
+`src/core/rc_coeffs.c` are the precedents.
+
+### `refLoopsType*` belongs to #59, not here
+
+`V90PreFilter` has **ten** static members totalling 23,860 B, not the nine at
+~21 KB an earlier estimate gave, and there is no `refLoopsType3`.  The split
+matters because it is clean.  Every one of the six `refLoopsType*` tables is
+referenced by exactly one function, and it is the same function every time:
+
+```
+#60 batch 3     preFilterCoefType1/2/3 + dataBase          10,532 B
+#59 retrain     refLoopsType1,2,4,5,6,7                    13,328 B
+                                                    total  23,860 B
+```
+
+`VPcmV34InitiateRetrain` is one of the six C functions blocked on #60, so
+those 13,328 B travel with it and are not batch 3's problem.  Derived from the
+relocation table, mapping each `R_386_*` offset back to its containing symbol.
+
+## Virtual classes: the vptr shifts every field by four
+
+The object has four vtables — `Resampler`, `V90Resampler`, `ResamplerTiming`,
+`ResamplerTimingOffset` — and `ResamplerTimingOffset::setTimingOffset` is one
+of the fifty.  Finding 228 has the detail.  What matters when sizing an object
+here: **the largest-displacement bound stays right, but the field map derived
+from it is shifted four bytes** for those four classes, and a struct correct in
+size and wrong by four in every offset passes a size check and fails
+everything after it.
+
+`tools/cppstruct.py <class>` answers "is this polymorphic" without going near a
+vtable: a destructor listed with a `D0` variant is a deleting destructor, which
+GCC emits only for a virtual one.  Check it before laying out any class.
+
+Do **not** declare real `virtual` members to model this.  GCC then emits a
+vtable, which needs every virtual method defined or a key function present,
+re-opening the link closure for what may be a twenty-one-byte setter.
 
 ## Object sizes
 
