@@ -13329,3 +13329,278 @@ Fourteen x87 instructions across the two functions, and that is all of them.
 This says nothing about Ghidra's x87 modelling, which still has not been
 measured; it says that where the object uses the coprocessor for integer
 arithmetic, transcribing the coprocessor is both necessary and sufficient.
+
+### 234. A fourth closure: data that points at data
+
+Task #60 batch 3: `V90PreFilter`'s five methods, all of `FloatFIR`, and all
+ten of `V90PreFilter`'s static data members.  Everything landed, and
+`test/unit/t_floatfir.cpp`, `test/unit/t_v90pftab.cpp` and
+`test/unit/t_v90prefilter.cpp` cover it.
+
+The batch was briefed as 2,742 bytes of code plus 10,532 bytes of table, with
+the six `refLoopsType*` tables (13,328 more) explicitly excluded: a scan of
+the relocations shows each of them referenced by exactly one function and it
+is `VPcmV34InitiateRetrain` every time, which is a #59 C function outside this
+task.  That scan is right about `.rel.text` and it is the wrong section to
+look in.
+
+`dataBase` is read by three of the five methods, so it has to be defined.
+Its **own** definition carries sixteen relocations, and every one of them
+points at `refLoopsType1`, `2`, `4`, `5`, `6` or `7`.  Data pointing at data:
+`objcopy` renames those six like everything else, `ref_` can never satisfy a
+reference from our side, and the whole seventy-binary suite fails to link with
+`make phase` stopping at `t_encode` — the same symptom finding 231 records for
+a weak template member, from a cause one level further out again.
+
+So a C++ batch's closure now has **four** parts, and `callgraph.py` sees one:
+
+```
+  1  calls                T symbols   callgraph.py --order --of
+  2  static data members   D symbols   R_386_* targets in .rel.text
+  3  template members      W symbols   .gnu.linkonce.t.*     (finding 231)
+  4  data referenced by data           R_386_* inside .rel.data
+```
+
+Part 4 is checked the same way as part 2 with the section changed:
+
+```
+readelf -r -W ../slmodemd/dsplibs.o     # then filter to .rel.data and to the
+                                        # address range of the symbol you are
+                                        # about to define
+```
+
+Batch 3's real payload is therefore **2,742 bytes of code and 23,860 of
+data**, and `docs/v90cpp.md`'s 10,596-byte figure for all of #60's static data
+is 23,924 once the six are counted.  Nothing else in #60 is affected: the
+three coefficient banks and all six loop tables were checked for outgoing
+relocations and have none.
+
+#### The object is forty bytes; 1,280 was a different object's displacement
+
+`docs/v90cpp.md` carried 1,280 for `sizeof(V90PreFilter)`, as a bound from the
+largest `this`-relative displacement.  It is not a `this` displacement.
+`setParamEia6` reads `this` at **exactly one offset**, +0x1c, and then does
+every one of its forty-eight stores inside the `V90Parameters` block that
+lives there, where it reaches +0x490; `isV90WithEia6` reads +0x500 of the same
+block.  Across all twenty-four members of the class the largest `this`
+displacement is +0x24 and the store there is four bytes.
+
+```
+    +0x00  FloatFIR       fir        20 bytes
+    +0x14  int            codecType  index into dataBase, 0..15
+    +0x18  V90Phase2Info *phase2     the constructor's second argument
+    +0x1c  V90Parameters *params     the constructor's third
+    +0x20  int            gain       "Filter Gain": the row within a bank
+    +0x24  int            refLoop    index into the loop array, -1 for none
+                                     sizeof = 0x28 = 40
+```
+
+`FloatFIR` is at offset zero and **might be a base class**: every call the
+object makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which is
+what a first member and a public base look like alike, and nothing in the blob
+distinguishes them.  Written as a member, because that keeps V90PreFilter
+standard-layout so `__builtin_offsetof` is well defined rather than merely
+conditionally supported.
+
+Only ten of those forty bytes are written by the five methods in this batch —
+`gain`, `refLoop`, and the FIR's five words — so the two pointers and
+`codecType` are settled by the constructor's stores rather than by anything
+tested here.  The class is small enough that nothing is left as `pad_*`.
+
+#### FloatFIR, and where its two accumulators come from
+
+Twenty bytes: a coefficient pointer, a `sysdep_malloc`'d history, the tap
+count, the buffer length and a write position.  The history **fills
+downward**: `index` is where the next input goes and it decreases, the
+convolution reads `history[index .. index + taps - 1]`, and when `index` would
+go negative the last `taps - 1` samples are copied to the top of the buffer and
+`index` restarts at `bufferLength - taps`.  `taps` is always the requested
+count rounded down to a multiple of four, because the inner loop is unrolled
+by four; the one-at-a-time tail the object still emits can therefore never run.
+
+Both `process` overloads accumulate into **two** x87 registers — even-indexed
+products into one, odd into the other, the dead tail into the even one — and
+sum and round once at the end.  Written as two `long double`s.  That is not
+decoration: see finding 236 for what the test had to do to prove it.
+
+#### What `dataBase` is
+
+Seventeen 36-byte records, `{ char name[32]; V90RefLoop *loops; }`, one per
+hardware codec, the seventeenth empty and acting as the terminator — the
+constructor counts them by walking until a name's first byte is zero and
+clamps its argument to count - 1, so `__tHardwareCodecTypes__` has sixteen
+values.  The names are the author's: `Unknown`, `AD1821`, `Lucent`, `Siemens`,
+`USB_STLC_7550`, `ALS300_AD1819`, `ALS300_AKM4542`, `ALS300_ICE`,
+`ALS300_WOLFSON`, `AMR_SILABS`, `SIL3052_INTERNAL`, `CodecType_SIL3054`,
+`Panther_AD1803`, `Squeezer_545A_ALC`, `Raptor_SL2800`, `Squeezer_545A_ITE`.
+
+Each `loops` pointer goes to one of the six `refLoopsType*` arrays, which are
+arrays of 68-byte `V90RefLoop`:
+
+```
+    +0x00  char  name[32]     a zero first byte ends the array
+    +0x20  float signature[6] what autoSelection matches the measurement to
+    +0x38  int   coefType     1, 2 or 3: which coefficient bank
+    +0x3c  int   gain         the row within it
+    +0x40  int   capability   2 means EIA-6
+```
+
+Every field's meaning is out of the code that reads it, and two of them are
+out of the format strings: `"Pre Filter Coeffs Type array %d, (filter length
+%d)"` names +0x38, and `"loop = %s (%d)"` says +0x00 is a string.  So the
+class is a per-codec catalogue of measured reference loops, and choosing a
+pre-filter is choosing the catalogue entry closest to what Phase 2 measured.
+
+The three coefficient banks are 31 rows of 20 taps, 31 more of 20, and 31 of
+40.  Bank 3 is addressed `base - 3200 + 160 * row`, so its row zero is at
+index 20 and the clamp that keeps it in range is 20..50 rather than 0..30.
+The negative displacement is in the instruction stream.
+
+#### `refLoopsType2` is terminated by the linker's padding
+
+Five of the six loop arrays end with an all-zero record inside the symbol.
+`refLoopsType2` is 2,244 bytes, exactly 33 records, and **not one of them has
+the zero first byte the counting loops stop on**.  What stops them is the 28
+bytes of `.data` alignment padding between the end of the symbol at 0x6124 and
+`refLoopsType1` at 0x6140, which happen to be zero.
+
+Our copy has no such padding to rely on, so it carries a 34th, all-zero
+record; the counted length is 33 either way and `t_v90pftab.cpp` asserts that
+on both sides.  A reconstruction that copied the symbol size faithfully and
+stopped there would walk off the end of the array.
+
+#### The two paths that do not clamp the row
+
+`selectFilter`'s ISDN and PBX arms take the row straight out of the registry
+and hand it to a bank with no bound applied at all, so a registry value of 100
+reads 80 bytes past the end of a 2,480-byte bank.  Reproduced literally.
+There is a third such path — the automatic arm skips its clamp when no
+reference loop was selected — and it is **unreachable through `selectFilter`**,
+which writes 0 to `refLoop` before calling `autoSelection`, and `autoSelection`
+never writes -1.  `getV90Capability`, which is not in this batch, calls
+`autoSelection` without that store and is presumably how it was meant to be
+reached.
+
+### 235. Comparing a table you cannot compare by address
+
+`t_v90pftab.cpp` checks 23,860 bytes of static data by comparing every one of
+them against the blob's own copy through its `ref_` alias.  That is the
+strongest check available for a table — the emitter is measured rather than
+trusted — and a one-ULP change to a single coefficient is caught.  It is also
+where a differential test stops working, because 16 of the 17 `dataBase`
+entries hold a *pointer*, and our loop tables and the blob's are at different
+addresses and always will be.
+
+The rule from finding 224 carries over from return values to data: each
+pointer is resolved against **that side's own** six table bases and compared as
+(which table, what offset into it).
+
+`t_v90prefilter.cpp` meets the same problem one level harder.
+`FloatFIR::coefficients` ends up pointing into one of three coefficient banks,
+and neither the pointer nor its distance from any single base is comparable —
+the blob's three banks are contiguous and 2,480 bytes apart, so bank 1 at row
+r + 31 is the very same address as bank 2 at row r, while ours are neither
+contiguous nor in that order.  Three things were tried:
+
+  - **Distance from one base.**  Wrong for any pointer that came from a
+    different base.
+  - **Containment: which bank's extent does it fall inside.**  Works for a row
+    inside a bank and fails for the two unclamped paths, whose row can be 100 —
+    outside every bank on our side and inside the *next* bank on the blob's.
+  - **Search every (bank, row) pair.**  Resolves the same address to different
+    pairs on the two sides, because of the 31-row coincidence above, and fails
+    a correct run.
+
+What works is enumerating the rows the object could have used — `gain`,
+`gain + 20`, and the two clamps of `gain` — and reporting the first that
+matches, on each side, against its own bases.  A pointer matching none of them
+reports as unresolved, which is itself a difference when the other side
+resolved.  A formula instead of an enumeration is what a first attempt writes,
+and it stops comparing the pointer *exactly* where the clamps are, which is
+where the interesting mutations live: with `row = gain + 20` assumed for the
+40-tap bank, the automatic path's clamp at 50 could be changed to 49 and no
+test noticed.
+
+### 236. Two unordered compares, and coefficients built to see an accumulator
+
+Batch 3's differential tests found one reconstruction error and could not,
+at first, see three claims about floating point at all.  Both halves are worth
+the record.
+
+#### `fcom` + `jae` is not `<`
+
+`autoSelection` keeps a running best distance and updates it on
+`fcom %st(2); fnstsw; sahf; jae`.  `jae` tests the carry flag alone, the carry
+came from C0, and **`fcom` sets C0 for an unordered result as well as for a
+less-than one**.  So a NaN distance takes the update arm, where C's `<` does
+not — and a NaN is reachable, because the measurement is whatever Phase 2 left
+in memory and the six differences are taken from it unchecked.  Written
+`!(acc >= best)`, which is the object's predicate.
+
+This was not spotted by reading; the test found it, in the arm where the
+measurement was left as seeded pseudorandom bytes rather than set to something
+plausible.  A fixture that had zeroed or "sensibly" initialised that block
+would have shipped the wrong comparison.
+
+`setParamEia6` has the same shape and the other polarity: `fcompp; sahf; jne`
+takes the zero flag from C3, which is set for equal **and** for unordered, so a
+NaN clock deviation takes the *zero* arm where C's `!=` would not.  Written
+`xf < 0.0f || xf > 0.0f`.  That difference is unreachable — the deviation is an
+int times 0.001f and cannot be a NaN — but the two are not the same test and
+only one of them is the object's.
+
+#### Three float claims that ordinary inputs cannot distinguish
+
+`FloatFIR::process` accumulates into two x87 registers and `autoSelection`
+into one, at 64 significant bits, rounding once at the end.  Forty products of
+similar magnitude summed in any order agree far past the 24 bits the result is
+rounded to, and a search whose only outputs are an integer index and an
+integer gain cannot see a difference of one part in 10**18.  So five coefficient
+and measurement sets were built specifically against the claims, and each kills
+a mutant that survives everything else:
+
+```
+  FloatFIR pairing     even taps +-2**70, odd taps 1, input exactly 1.0
+                       two accumulators give 20 for a 40-tap filter, one gives 1
+  FloatFIR precision   even taps +2**60, 1, -2**60, 1; odd taps 1
+                       64-bit mantissa gives 30, a double gives 25
+  autoSelection acc    two entries 1 and 1 + 2**-60 apart
+                       they reorder if the accumulator is only 53 bits
+  autoSelection target the measured difference needs 25 bits, so the pair ties
+                       when it is rounded to float and does not when it is not
+  autoSelection d      differences of 100 - 2**-30 and 100 - 2**-29, which
+                       both round to 100 and do not reorder if rounded
+```
+
+The last of those does **not** kill its mutant, and the reason is the
+compiler rather than the test.  GCC compiles C++ with
+`-fexcess-precision=fast` by default, under which assigning to a `float`
+local does not force a rounding; the value stays in the register.  So `float d`
+and `long double d` are the same program here, while `float target[6]` and
+`long double target[6]` are not — an *array* has to be stored to memory, and
+that store rounds.  The reconstruction keeps `long double` because that is what
+the object does; the alternative is indistinguishable under this compiler and
+is recorded as such rather than chased.
+
+#### The survivors, and why they are not gaps to close
+
+Eighty-six mutations across the three modules, eighty-one killed.  The five
+that lived:
+
+  - swapping which accumulator takes which parity in `FloatFIR` (addition
+    commutes), the tail into either accumulator, and `n > 3` against `n >= 3`
+    (the tail never runs, because `taps` is masked to a multiple of four
+    everywhere it is set)
+  - the block `process`'s final `index = i` against `index = next` (equal by
+    then), and the destructor freeing unconditionally (`sysdep_free(0)` is a
+    no-op here)
+  - `float d` above
+  - `setParamEia6`'s 10000 scale and its truncation of the whole part, both of
+    which reach nothing but an `edprintf` argument
+
+The last two are finding 232's limitation showing up again: `edprintf` is
+defined in the blob, our copy and `ref_edprintf` carry independent encoder
+state, and a test that captures both transcripts fails on a correct
+reconstruction.  Everything that only reaches a diagnostic is therefore
+untestable here, and the clock-deviation report — a sign, a truncated
+magnitude and four decimal places — is entirely inside that hole.

@@ -58,7 +58,7 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 | 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
 | 1 | `V90Jd` / `V92Jd` | ~~`V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20~~ **DONE** — findings 229 and 230; all eight, and the C++ class fixture the later batches copy | all leaves |
 | 2 | `V90Phase3Modulator` | ~~`generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table~~ **DONE** — findings 231 and 232; all six, **plus four weak `Scrambler<unsigned char,int>` members nothing counted** | it was not — see below |
-| 3 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, **all of `FloatFIR`** 723, **+ 10,532 B of tables** | yes, with FloatFIR |
+| 3 | `V90PreFilter` | ~~`selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, all of `FloatFIR` 723~~ **DONE** — findings 234, 235 and 236; **23,860 B of tables, not 10,532** | it was not — see below |
 | 4 | the leaf remainder | the stubs and setters — see the table below | mostly leaves |
 | 5 | `VPcmFloModem`, `V90Phase3Demodulator` | the two whose objects reach through into an enclosing session | last |
 
@@ -100,7 +100,11 @@ members reference.**  Get them from the relocations:
 python3 tools/dis.py ../slmodemd/dsplibs.o <symbol> | grep -o 'R_386_[A-Z0-9]* .*' | sort -u
 ```
 
-`FloatFIR` (batch 3) and `LowPassFIR<float>` are templates too.
+`FloatFIR` (batch 3) and `LowPassFIR<float>` are templates too.  **Neither
+turned out to be one in the blob**: `FloatFIR`'s six members are all `T`, and
+nothing batch 3 wrote reaches `LowPassFIR<float>` or any other weak symbol.
+Batch 3's relocation sweep over all eleven of its symbols found `edprintf`,
+`sysdep_malloc`, `sysdep_free`, the four static data symbols and nothing else.
 
 **And `tools/dis.py` mis-disassembles every one of the thirty-one**: `st_value`
 is 0, which it reads as a `.text` offset, and it prints unrelated bytes with
@@ -148,9 +152,13 @@ referenced by exactly one function, and it is the same function every time:
                                                     total  23,860 B
 ```
 
-`VPcmV34InitiateRetrain` is one of the six C functions blocked on #60, so
-those 13,328 B travel with it and are not batch 3's problem.  Derived from the
-relocation table, mapping each `R_386_*` offset back to its containing symbol.
+**THAT SPLIT IS WRONG, AND IT COST THE BATCH AN HOUR.**  It was derived from
+`.rel.text`, and the sixteen relocations that matter are in `.rel.data`:
+`dataBase` is read by three of batch 3's five methods and its own definition
+points at `refLoopsType1, 2, 4, 5, 6` and `7`.  Data referencing data is a
+FOURTH closure, invisible to `callgraph.py`, to a `.rel.text` sweep and to the
+weak-symbol check of finding 231.  All ten static members are batch 3's, and
+#60's static data is **23,924 B**, not 10,596.  Finding 234.
 
 ## Virtual classes: the vptr shifts every field by four
 
@@ -194,6 +202,12 @@ rather than being that large.  Those two may need the real lifecycle
 (`reset` -> `enterPhase3` -> use) before they can be driven, which is why they
 are last.
 
+`V90PreFilter` is **40 bytes**, and 1,280 was never a `this` displacement:
+`setParamEia6` touches `this` at exactly one offset, +0x1c, and reaches +0x490
+inside the `V90Parameters` block that lives there, while `isV90WithEia6` reads
+that block's +0x500.  The largest `this` displacement across all twenty-four
+members is +0x24.  Finding 234 has the field map.
+
 **A layout is not settled by a passing test alone.**  The harness fill makes
 untouched memory compare equal on both sides, so a field the function never
 writes proves nothing about where it lives (findings 223, 224).  Each class's
@@ -234,6 +248,14 @@ union the test fixture uses:
 | 98 | `setPcmSessionType(int)` | `_ZN12VPcmFloModem17setPcmSessionTypeEi` |
 
 ### V90PreFilter — 5 symbol(s), 2019 bytes
+
+All five are written, with all ten static data members (23,860 B) and the
+whole of `FloatFIR`.  Two signatures the header declares and deliberately does
+not define, because their callees are not written:
+
+    V90PreFilter(__tHardwareCodecTypes__, V90Phase2Info *, V90Parameters *)
+                                                        C1,C2   552 B
+    ~V90PreFilter()                                     D1,D2    19 B
 
 | 800 | `selectFilter()` | `_ZN12V90PreFilter12selectFilterEv` |
 | 790 | `setParamEia6()` | `_ZN12V90PreFilter12setParamEia6Ev` |
@@ -299,7 +321,17 @@ union the test fixture uses:
 
 ### FloatFIR — 1 symbol(s), 58 bytes
 
+Taken whole in batch 3: all six members, 723 bytes unique, 858 by `nm` because
+C1/C2 and D1/D2 are byte-identical copies of one definition.  Only
+`setCoefficients` is in the fifty, because it is the only one `v34handshak`
+reaches.
+
 | 58 | `setCoefficients(float*, unsigned int)` | `_ZN8FloatFIR15setCoefficientsEPfj` |
+| 287 | `process(float const*, float*, unsigned int)` | `_ZN8FloatFIR7processEPKfPfj` |
+| 182 | `process(float)` | `_ZN8FloatFIR7processEf` |
+| 105 | `FloatFIR(unsigned int, float*, unsigned int)` | `_ZN8FloatFIRC1EjPfj` |
+| 61 | `reset()` | `_ZN8FloatFIR5resetEv` |
+| 30 | `~FloatFIR()` | `_ZN8FloatFIRD1Ev` |
 
 ### V90SdDetector — 1 symbol(s), 52 bytes
 
