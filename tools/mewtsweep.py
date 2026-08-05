@@ -103,8 +103,9 @@ def mapping():
     """
     suites = {v[0]: v[1] for k, v in
               json.load(open("test/mutations/suites.json")).items() if k != "_"}
-    tests = set(re.search(r"^TESTS\s*:=(.*)$",
-                          open("Makefile").read(), re.M).group(1).split())
+    # Ask make rather than grepping: TESTS is a wildcard expression now.
+    tests = set(subprocess.run(["make", "-s", "print-TESTS", "print-CXXTESTS"],
+                               capture_output=True, text=True).stdout.split())
     known, guessed, unmapped = {}, {}, []
     for src in sorted(glob.glob("src/**/*.c", recursive=True)):
         base = os.path.basename(src)[:-2]

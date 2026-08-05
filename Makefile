@@ -8,7 +8,14 @@
 #
 ###########################################################################
 
-BLOB       := ../slmodemd/dsplibs.o
+#
+# OVERRIDABLE, so a worktree anywhere can build.  `git worktree add ../name`
+# puts the tree beside this one and the relative path resolves, which is why
+# sibling worktrees have always worked; a worktree somewhere else does not,
+# and one session serialised its whole run believing that ruled out parallel
+# trees entirely.  `make BLOB=/abs/path/dsplibs.o` now covers both.
+#
+BLOB       ?= ../slmodemd/dsplibs.o
 BUILD      := build
 
 # 32-bit is forced by the reference object, not by our own code -- the
@@ -50,14 +57,16 @@ PYTHON     := python3
 # change this without re-reading docs/findings.md section 8.
 FPFLAGS    := -mfpmath=387
 
-SRC        := src/core/encode.c src/service/pcm.c src/core/fixedrc.c src/core/rc_coeffs.c src/core/dp_param.c src/core/dp_wrapper.c src/pump/b103/b103.c src/dsp/fpm_sqrt.c src/dsp/fpm_phasor.c src/dsp/fpm_tone.c src/dsp/fpm_rms.c src/dsp/fpm_div.c src/dsp/fpm_mrf.c src/dsp/fpm_fsm.c src/dsp/fpm_tone_cfg.c src/dsp/fpm_fsd.c src/dsp/fpm_mtd.c src/dsp/fpm_mtd_cfg.c src/dsp/fpm_iir.c src/dsp/fpm_iir_coeffs.c src/dsp/fp_math.c src/dsp/fpm_agc.c src/pump/b103/b103_agc_cfg.c src/pump/b103/b103fp.c src/pump/b103/b103_cfg.c src/pump/b103/b103_tables.c src/callprog/callprog_status.c src/callprog/callprog_cfg.c src/callprog/callprog.c src/callprog/cpfiltrs.c src/callprog/toneiir.c src/callprog/dualtone.c src/callprog/callingtone.c src/callprog/cadence.c src/callprog/elliptic.c src/dialer/dialercfg.c src/dialer/dialer.c src/call/pulse.c src/call/call.c src/v8/v8util.c src/v8/v8v21.c src/v8/v8seq.c src/v8/v8hs.c src/v8/v8sig.c src/v8/v8agc.c src/v8/v8jm.c src/v8/v8dp.c src/v8/v8hsrx.c src/v8/v8handshak.c src/v8/v8proc.c src/pump/v23/v23filt.c src/pump/v23/v23tx.c src/pump/v23/v23rx.c src/pump/v23/bwchdem.c src/pump/v23/v23modem.c src/pump/v23/v23.c src/pump/v34/detector.c src/pump/v34/dftc.c src/pump/v34/dpsk.c src/pump/v34/v34filters.c src/pump/v34/v34rx.c src/pump/v34/v34shell.c src/pump/v34/v34pcmif.c src/pump/v34/v34hshak.c src/pump/v34/v34info.c src/pump/v34/v34scram.c src/pump/v34/v34digital.c
-CXXSRC     := src/dsp/FloatIIR.cpp src/dsp/FloatFIR.cpp \
-              src/pump/v34/v34pcmmain.cpp \
-              src/pump/v90/V90Jd.cpp src/pump/v90/V92Jd.cpp \
-              src/pump/v90/V90Phase3Modulator.cpp \
-              src/pump/v90/V90PreFilter_coeffs.cpp \
-              src/pump/v90/V90PreFilter_loops.cpp \
-              src/pump/v90/V90PreFilter.cpp
+#
+# WILDCARDED, all four, because each was a single line that every parallel
+# agent had to edit.  Two of them collided in one merge; the CXXTESTS line
+# alone was touched by eight batches in one session.  A directory listing
+# cannot collide.  Checked equal to the explicit lists they replace -- 67
+# sources, 9 C++ sources, 68 tests, 9 C++ tests -- so this is not a change
+# in what gets built, only in who has to remember to add to it.
+#
+SRC        := $(shell find src -name '*.c' | sort)
+CXXSRC     := $(shell find src -name '*.cpp' | sort)
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
 
@@ -77,8 +86,8 @@ HARNESS    := test/harness/harness.c test/harness/runtime.c \
               test/harness/fakedp.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
-TESTS      := t_encode t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp t_b103direct t_toneiir t_callprog t_callprog_create t_dualtone t_callingtone t_cadence t_dialercfg t_dialer t_dialerprog t_dialstring t_callprog_progress t_call t_calldirect t_v8util t_v8sig t_v8jm t_v8dp t_v8direct t_v8hs t_pulse t_v23filt t_v23tx t_v23rx t_v23bwch t_v23modem t_v23dp t_v23direct t_v34det t_v34dft t_v34fsk t_v34ec t_v34eq t_v34rx t_v34demod t_v34shell t_v34pcmif t_v34hshak t_v34info t_v34scram t_v34digital t_spandsp_replay
-CXXTESTS   := t_genericiir t_v34mp t_v90jd t_v92jd t_v90p3mod t_floatfir t_v90pftab t_v90prefilter t_floatiir
+TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
+CXXTESTS   := $(basename $(notdir $(wildcard test/unit/t_*.cpp)))
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
@@ -173,6 +182,39 @@ $(BUILD):
 	@mkdir -p $(BUILD)
 
 # --- targets --------------------------------------------------------------
+
+#
+# THE INNER LOOP.  `make phase` builds and runs 92 binaries; a batch that
+# touches three or four of them pays for the other 88 on every iteration, ten
+# to twenty times per function.  This builds and runs only what you name:
+#
+#     make one T=t_v90jd
+#     make one T="t_v90jd t_v92jd"
+#
+# It runs the cheap correctness gates too -- firewall, strings, offsets, refs
+# are seconds, and they are the ones that catch a licence leak or an invented
+# literal early.  It does NOT run check64, interop, coverage or debugcov.
+#
+# `make phase` before every commit regardless.  This is for the twenty runs
+# between commits, not the one that decides.
+#
+#
+# Ask make what a variable expands to, rather than having tools grep this
+# file for it.  debugcov.py and mewtsweep.py both did, with a regex for
+# `^TESTS\s*:=(.*)$`, and the moment TESTS became a wildcard expression they
+# got the expression as text and tried to build a target called
+# `$(basename`.  A tool that parses a Makefile is a tool that breaks when the
+# Makefile is edited.
+#
+#     make print-TESTS
+#
+print-%:
+	@echo '$($*)'
+
+one: firewall strings offsets refs
+	@test -n "$(T)" || { echo "usage: make one T=t_name [T=...]"; exit 1; }
+	@$(MAKE) --no-print-directory $(addprefix $(BUILD)/test/,$(T))
+	@rc=0; for t in $(T); do ./$(BUILD)/test/$$t || rc=1; done; exit $$rc
 
 test: firewall strings offsets refs $(TESTBIN)
 	@rc=0; for t in $(TESTBIN); do ./$$t || rc=1; done; exit $$rc

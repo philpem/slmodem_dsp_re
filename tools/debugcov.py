@@ -74,13 +74,12 @@ def tests():
     # exists to track would have RISEN for a batch of sites that are in fact
     # driven.
     #
-    src = open("Makefile").read()
-    out = []
-    for name in ("TESTS", "CXXTESTS"):
-        m = re.search(r"^%s\s*:=(.*)$" % name, src, re.M)
-        if m:
-            out += m.group(1).split()
-    return out
+    # ASK MAKE, do not grep the Makefile.  Both lists became wildcard
+    # expressions so that parallel agents stop colliding on one line, at
+    # which point a regex for `^TESTS\s*:=(.*)$` returns the expression as
+    # text and this tried to build a target named `$(basename`.
+    return subprocess.run(["make", "-s", "print-TESTS", "print-CXXTESTS"],
+                          capture_output=True, text=True).stdout.split()
 
 
 def build():
