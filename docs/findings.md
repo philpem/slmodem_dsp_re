@@ -13615,3 +13615,44 @@ state, and a test that captures both transcripts fails on a correct
 reconstruction.  Everything that only reaches a diagnostic is therefore
 untestable here, and the clock-deviation report — a sign, a truncated
 magnitude and four decimal places — is entirely inside that hole.
+
+### 234. The suite was serial for no reason, and `phase` is 2.8x faster
+
+`make test` ran a shell loop over 77 binaries, and nothing anywhere set `-j`.
+Every object, every test binary and every test RUN here is independent --
+each test links its own copy of the whole tree and touches no shared file --
+so there was nothing that wanted to be serial.  Measured from clean on 12
+cores:
+
+| | serial | -j12 |
+|---|--:|--:|
+| build the 77 binaries | 18.5 s | 3.3 s |
+| run them | 7.7 s | 3.0 s |
+| `make test` end to end | 27.7 s | 6.4 s |
+| **`make phase`** | **75.2 s** | **26.6 s** |
+
+`phase` is the number that matters: a session runs it ten to twenty times per
+function, so this is minutes per function rather than seconds, and one
+session's own report put an agent's `make phase` at 1m40s under contention.
+
+#### Three things had to be right
+
+**The runs had to become targets.** `-j` parallelises the build and does
+nothing for a shell loop, so each test is now its own phony target and `make
+-j` schedules the runs too.
+
+**No stamp files.** The obvious version records a `.ran` marker so a passing
+test is not re-run.  That turns `make test` into something that can report
+success without having executed anything, which is the failure this tree
+keeps finding in its own checks -- findings 198, 199 and 221 are all the same
+shape.  The targets are phony and always run.
+
+**Output has to be grouped.** 77 tests interleave their PASS lines into
+nonsense otherwise.  `--output-sync=target`, and the spelling matters:
+`recipe` is not a sync type and make rejects it outright, which cost a
+measurement that read as "the parallel run took 0.00 seconds" -- a make that
+refused to start, timed and believed.
+
+Both are now defaults in `MAKEFLAGS`, with `make J=1` for a serial run when a
+failure needs reading in order.  A speedup nobody has to remember to ask for
+is the only kind that gets used.
