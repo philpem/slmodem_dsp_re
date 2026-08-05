@@ -37,7 +37,7 @@
  * PROMOTED first -- `--globalize-symbols` in one pass, `--redefine-syms` in a
  * second -- and then it renames like any other global, so `ref_getbit` and
  * `ref_ApplyBulkDelay` link and both are tested directly rather than through
- * a caller.  Finding 221 is the general result and finding 226 is these two.
+ * a caller.  Finding 221 is the general result and finding 227 is these two.
  * Finding 117, which drew the original conclusion, stands as the reading of
  * the call graph and is superseded only in what it says can be tested.
  *

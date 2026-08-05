@@ -12460,55 +12460,163 @@ is the honest half of that pair, and `translated` is what has to move next.
 It says the two numbers now measure what they say they measure, which is what
 findings 221 and 222 were about.
 
-### 225. A `ref_` alias declared from C++ is mangled twice, and the error names the symbol you wanted
+### 225. Nothing demangles, and from C++ that is a link error that reads wrong
 
-Nothing in the aliasing path demangles.  `tools/symmap.py` prepends `ref_` to
-the raw symbol string, so a V.90/V.92 method arrives under a name that is
-itself already mangled:
+`symmap.py` prepends the prefix to the raw symbol string.  The blob's
+`_ZN12VPcmFloModem11enterPhase3Ev` becomes
+`ref__ZN12VPcmFloModem11enterPhase3Ev` -- note the doubled underscore -- and
+886 of the aliases in `build/dsplibs_ref.o` are this shape.  `tuattrib.py`
+demangles through `c++filt` for translation-unit attribution, but nothing on
+the rename path does, and nothing needs to: a mangled name is already a valid
+C identifier.
 
-```
-$ grep _ZN12VPcmFloModem11enterPhase3Ev build/symmap.txt
-_ZN12VPcmFloModem11enterPhase3Ev ref__ZN12VPcmFloModem11enterPhase3Ev
-$ nm build/dsplibs_ref.o | grep ref__ZN12VPcmFloModem11enterPhase3Ev
-0000f2a0 T ref__ZN12VPcmFloModem11enterPhase3Ev
-```
-
-That is the correct and only spelling.  The hazard is what a C++ test does
-with it.  Declared without `extern "C"`, the compiler sees an ordinary
-identifier and mangles the whole string a second time:
+From C it works, verified:
 
 ```
-$ cat mangle.cpp
-void ref__ZN12VPcmFloModem11enterPhase3Ev(void *self);
-extern "C" void ref__ZN12VPcmFloModem11enterPhase3Ev_c(void *self);
-void a(void *p) { ref__ZN12VPcmFloModem11enterPhase3Ev(p); }
-void b(void *p) { ref__ZN12VPcmFloModem11enterPhase3Ev_c(p); }
-$ g++ -m32 -fno-exceptions -fno-rtti -c mangle.cpp && nm -u mangle.o
-U ref__ZN12VPcmFloModem11enterPhase3Ev_c
-U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv
+extern int ref__ZN12VPcmFloModem11enterPhase3Ev(void *self);
+    -> links and resolves
 ```
 
-`_Z36ref_...Pv` resolves against nothing, and `36` is just the length of the
-identifier it wrapped.
+**From C++ it does not, and the error misdirects.**  A plain declaration is
+mangled a second time, as an ordinary function whose *name* is that string:
 
-**The reason this is worth a finding is how the failure reads.**  The linker
-error contains the name you wanted, spelled correctly, sitting in the middle
-of the name you did not want.  Scanning it, `ref__ZN12VPcmFloModem11enterPhase3Ev`
-is right there and undefined — so the natural conclusion is that the
-reference object does not export the method, and the next move is to go and
-check `symmap.py` or `--globalize-symbols` for a gap that is not there.  The
-prefix and suffix are the whole message.
+```
+extern int ref__ZN12VPcmFloModem11enterPhase3Ev(void *);
+    -> U _Z36ref__ZN12VPcmFloModem11enterPhase3EvPv
 
-A C test never meets this: C has no mangling to apply a second time, which is
-why 62 tests' worth of `DIFF_REF()` has never needed the guard.  #60 is the
-first task to write C++ *tests*, so it is the first that can.
+extern "C" int ref__ZN20V90Phase3Demodulator5resetEv(void *);
+    -> U ref__ZN20V90Phase3Demodulator5resetEv
+```
 
-`test/harness/harness.h` already wraps its declarations in `extern "C"` when
-compiled as C++; the fix is to put `ref_` declarations inside that block, or
-in an `extern "C"` block of the test's own.  The header now says so at the
-point where it would be needed.
+The undefined symbol in the first case *contains* the name that was wanted, so
+the link error reads as "the blob does not export this" rather than "my
+declaration was mangled".  That is the misreading worth guarding, and #60 is
+fifty opportunities to make it: `VPcmV34Main.cpp` is the C++ half, its
+reconstruction is C++, and every one of its `ref_` aliases is mangled.
 
-### 226. The #59 warm-up trio, and the byte past `getbit` settled
+`harness.h` now says so at the top of its `extern "C"` block, which is where
+such declarations belong.
+
+#### The reconstruction writes real C++, and the mangling is a free type oracle
+
+The `ref_` prefix is a harness detail and does not reach `src/`.  What we write
+is ordinary C++ with the original's own class and method names, and the
+compiler reproduces the blob's symbol exactly.  `src/dsp/FloatIIR.cpp` is the
+working precedent:
+
+```
+blob   W _ZN10GenericIIRIfdE5resetEv        (.gnu.linkonce.t.*)
+ours   W _ZN10GenericIIRIfdE5resetEv
+```
+
+five aliases, driven by `test/unit/t_genericiir.cpp` -- a C++ test, so the
+pattern for #60 is established rather than new.  (The blob also has a separate
+concrete `_ZN8FloatIIR...` class, four symbols, not yet reconstructed;
+grepping the object for "FloatIIR" finds that one and it is easy to mistake
+for a mismatch.)
+
+**This means the mangled names are a type oracle, and the C half has nothing
+like it.**  For a C function the parameter types come out of the disassembly
+-- finding 51's regparm work, argument widths read from how each is used.  For
+C++ `c++filt` simply says:
+
+```
+$ c++filt _ZN20V90Phase3Demodulator5resetE7PcmTypeh22Phase3DemodulatorStatejP5V90JdP5V92JdP19tagV90DILdescriptorssfj
+V90Phase3Demodulator::reset(PcmType, unsigned char, Phase3DemodulatorState,
+    unsigned int, V90Jd*, V92Jd*, tagV90DILdescriptor*, short, short, float,
+    unsigned int)
+```
+
+Eleven parameters, in order, with the enum and struct names the author used.
+For #60's fifty symbols that is the whole signature problem solved before any
+disassembly is read.
+
+The obligation runs the other way too: **reproducing the mangling means
+reproducing the declaration exactly** -- class name, method name and every
+parameter type.  A tidier signature, a generalised template, an `int` where
+the original had `unsigned`, and the compiler emits a different symbol which
+links against nothing and is silently not the function.  The mangled name is
+the specification, not a decoration.
+
+#### Not fixed, and deliberately
+
+The alias could be `ref_` spliced *inside* the mangling, so that
+`_ZN12VPcmFloModem11enterPhase3Ev` became
+`_ZN12VPcmFloModem14ref_enterPhase3Ev` and demangled to something a C++ test
+could declare naturally.  That means teaching `symmap.py` to parse Itanium
+mangling, for a cosmetic gain over one `extern "C"` block, and a mangling
+parser that is subtly wrong renames a symbol to something that still links --
+the worst failure available here.  Left alone on purpose.
+
+### 226. The C++ half's class structure is already written down, in the mangling
+
+886 of the blob's symbols are Itanium-mangled, across **73 classes and 55 free
+functions** -- essentially all of `VPcmV34Main.cpp` and the float DSP beneath
+it.  Every one encodes the class, the member, and each parameter type in
+order, with the author's own enum and struct names.  `tools/cppstruct.py`
+reads it out:
+
+```
+$ tools/cppstruct.py FloatFIR
+class FloatFIR {
+        ? process(float const*, float*, unsigned int);     // 287 bytes, NOT WRITTEN
+        ? process(float);                                  // 182 bytes, NOT WRITTEN
+        FloatFIR(unsigned int, float*, unsigned int);      // 105 bytes, C1,C2
+        ? reset();                                         //  61 bytes
+        ? setCoefficients(float*, unsigned int);           //  58 bytes
+        ~FloatFIR();                                       //  30 bytes, D1,D2
+};
+```
+
+For the C half every one of those argument lists costs a disassembly read.
+Here it is free, and it is the difference between starting #60 from a
+skeleton and starting it from a guess.
+
+**`?` is deliberate.** Itanium mangling omits return types for ordinary
+functions, so the tool emits a token that does not compile rather than `void`,
+which would let a skeleton be pasted in and built with every return silently
+wrong.  Also absent: member variables, base classes, access specifiers, and
+any member the compiler inlined everywhere.  Bound object sizes the way
+finding 215 did, from the largest `this`-relative displacement.
+
+#### Three things it found that were not known
+
+**`FloatIIR` and `FloatFIR` are unwritten, and are not what we thought.** The
+blob has a concrete `FloatIIR` (5 members, 575 bytes) *and* a
+`GenericIIR<float,double>` template instantiation (1,269 bytes, weak).
+`src/dsp/FloatIIR.cpp` reconstructs the *instantiation* -- correctly, matching
+the mangling, tested by `t_genericiir.cpp` -- so the file name names a class
+it does not implement, and grepping the object for "FloatIIR" finds the other
+one and reads as a mismatch.  `FloatFIR` (6 members, 723 bytes) is untouched
+and one of its members, `setCoefficients`, is inside #60's batch 2.
+
+**`V90PreFilter` is mostly coefficients.** Its code is about 2 KB, but it
+carries **nine static tables totalling ~21 KB** -- `preFilterCoefType1..3`,
+`refLoopsType1..7`, `dataBase`.  #60's brief called it a 1,280-byte object on
+the strength of its `this`-relative displacements, which measured the object
+and not the class.  Static members are `.data`, so they are outside #60's
+16,003 bytes of text and were invisible to every count made so far.
+
+**Data members were being read as functions.** A demangled name with no
+parenthesis is data, and the first version of this tool sent those to the
+free-function list, where `V90PreFilter::preFilterCoefType3` appeared as the
+second largest "function" in the object at 4,960 bytes.
+
+#### And two bugs in the tool worth the same note as finding 221's
+
+The constructor/destructor tag sits directly after the class *name*
+(`_ZN18V90Phase3ModulatorC1EP13V90Parametersj`), so it follows a letter.  Two
+versions anchored on the end of the symbol and on a preceding digit; both
+matched nothing and printed `None` for every constructor in the object,
+silently, because a missing annotation looks like an absent feature.
+### 227. The #59 warm-up trio, and the byte past `getbit` settled
+
+*(Numbered 226 on branch `v90cpp` while it was being written; renumbered to
+227 on merge, because master had meanwhile taken 226 for `cppstruct.py`.  If
+you find a reference to "finding 226" meaning the warm-up trio, it means
+this.  Master's 225 and this branch's 225 were the same discovery made twice
+independently -- master's wording is the one that survived, and the fact is
+unchanged.)*
 
 `getbit` (433 bytes, file-local, **recursive**), `ApplyBulkDelay` (467,
 file-local) and `_Z14getMPrecvdBitsP12tagV34Object` (895, file-local and
@@ -12678,3 +12786,90 @@ still 30 dead.  This is finding 134's argument arriving from a new direction:
 a check nobody can see failing is a check that reports clean because it
 cannot fail.  **The V.90/V.92 core is entirely C++, so both gaps would have
 widened with every task in #60 had this one not carried a diagnostic.**
+
+### 228. "No virtuals" was asserted in a build comment, repeated into a brief, and wrong
+
+The Makefile said the C++ was built "-fno-exceptions -fno-rtti with no
+virtuals and no new/delete, exactly as the original was built".  Three of
+those four are right.  The object has **four vtables**:
+
+```
+$ nm --print-size ../slmodemd/dsplibs.o | grep ' V '
+24 V  vtable for Resampler                28 V  vtable for V90Resampler
+28 V  vtable for ResamplerTiming          24 V  vtable for ResamplerTimingOffset
+```
+
+**The rest of the clause stands, and the absence of typeinfo is what proves
+it.**  Zero `_ZTI` and zero `_ZTS` alongside four vtables is precisely what
+`-fno-rtti` *with* virtual functions emits — had RTTI been on, each vtable
+would carry a typeinfo pointer to a real `_ZTI` object.  Also zero `__cxa_*`,
+`_Unwind_*`, `_Znw*`, `_Zdl*` and `_ZdaPv`.  So exceptions, RTTI and
+new/delete are all still correctly described, the link still needs no
+libstdc++, and a correction reading "the -fno-rtti claim was wrong too" would
+replace one error with a worse one.
+
+**The dispatch is live, not vestigial.**  `Resampler::timingCorrection(float)`
+is **one byte** — a bare `ret`, an empty base implementation — and it is the
+only `W` (weak) symbol of the group, while two derived classes replace it:
+
+```
+    1 W  Resampler::timingCorrection(float)
+  191 T  ResamplerTiming::timingCorrection(float)
+   14 T  ResamplerTimingOffset::timingCorrection(float)
+ 1039 T  Resampler::resample(float const*, unsigned int, float*, unsigned int&)
+  170 T  V90Resampler::resample(float const*, unsigned int, float*, unsigned int&)
+```
+
+#### Why it matters here, which is layout and not the build
+
+A virtual class carries a vptr at offset 0, so every member of those four sits
+four bytes further along than a non-virtual reading of the disassembly would
+put it.  That collides with the object-sizing method finding 215 established
+and #60 uses — bound the object by the largest `this`-relative displacement.
+The *bound* stays right; the *field map* derived from those displacements is
+shifted.  A struct correct in size and wrong by four in every offset passes a
+size check and fails everything downstream of it.
+
+`ResamplerTimingOffset::setTimingOffset(float)` is one of #60's fifty, so this
+is not hypothetical.  It happens to be safe — the whole function is
+
+```
+    35510: mov   0x4(%esp),%eax        ; this: first stack arg, cdecl (finding 215)
+    35514: flds  0x2c(%eax)
+    35517: fmuls 0x8(%esp)             ; the float parameter
+    3551b: fmuls 0x1f4  <R_386_32 .rodata.cst4>
+    35521: fstps 0x48(%eax)
+    35524: ret
+```
+
+which touches `+0x2c` and `+0x48` and never offset 0, so both sides leave the
+vptr slot alone and it compares equal whatever we model there.  **Declaring
+real `virtual` members is the branch to avoid**, and it is rejected rather
+than merely unchosen: GCC would then emit a vtable, which needs every virtual
+method defined or a key function present, reopening the link closure of
+finding 225's kind for a twenty-one-byte float setter.
+
+#### The cheap check, which already existed
+
+`tools/cppstruct.py <class>` answers "is this polymorphic" without going near
+a vtable symbol.  A destructor listed with a `D0` variant is a *deleting*
+destructor, which GCC emits only for a virtual one:
+
+```
+$ tools/cppstruct.py Resampler
+        ~Resampler();          // 85 bytes, D0,D1,D2, NOT WRITTEN
+```
+
+#### How it survived
+
+The claim was load-bearing for nothing.  The build works either way: our own
+C++ genuinely has no virtuals, so `-nostdinc++` and linking with `$(CC)`
+succeed whatever the original did.  Nothing could fail until someone had to
+lay out a polymorphic class, which is #60 and no earlier task.  It then got
+repeated verbatim into a task brief as settled fact, which is the mechanism
+worth noticing: an unchecked claim in a build comment is quoted onward as
+though the build had checked it.
+
+The Makefile comment is corrected in place.  `CLAUDE.md` was checked and never
+carried the claim — the second copy was in the #60 brief, which is outside
+the repository and cannot be corrected from here.

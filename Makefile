@@ -126,10 +126,31 @@ $(BUILD)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -c $< -o $@
 
-# Linked with $(CC), not $(CXX): the C++ here is -fno-exceptions -fno-rtti with
-# no virtuals and no new/delete, exactly as the original was built, so nothing
-# needs libstdc++ -- which is just as well, since the 32-bit one is often not
-# installed alongside a 64-bit toolchain.
+# Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
+# -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
+# which is just as well, since the 32-bit one is often not installed alongside
+# a 64-bit toolchain.
+#
+# This used to add "exactly as the original was built", and that clause was
+# wrong about virtuals.  The original has four vtables -- Resampler,
+# V90Resampler, ResamplerTiming, ResamplerTimingOffset -- and the dispatch is
+# live rather than vestigial: V90Resampler::resample overrides
+# Resampler::resample, and Resampler::timingCorrection is a one-byte `ret`,
+# an empty base implementation for derived classes to replace.
+#
+# The rest of the clause stands, and the absence of typeinfo is what proves
+# it: zero _ZTI/_ZTS alongside four vtables is exactly what -fno-rtti WITH
+# virtual functions emits.  Zero __cxa_*, _Unwind_*, _Znw*, _Zdl*, _ZdaPv too.
+# So exceptions, RTTI and new/delete are all still correctly described above,
+# and the link still needs no libstdc++.
+#
+# It matters for layout, not for the build: a virtual class carries a vptr at
+# offset 0, so every member of those four sits four bytes further along than a
+# non-virtual reading of the disassembly would put it.  A struct that is right
+# in size and wrong by four in every offset passes a size check and fails
+# everything else.  tools/cppstruct.py flags this without going near a vtable:
+# a destructor listed with a D0 variant is a deleting destructor, which GCC
+# emits only for a virtual one.  Finding 228.
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^ -lm
