@@ -2,10 +2,10 @@
  * V90Jd.h -- the V.90 Jd message, one byte per bit.
  *
  * Reconstructed from dsplibs.o V90Jd.cpp.  `V90Jd` is not polymorphic --
- * tools/cppstruct.py lists its destructor with D1 and D2 and no D0, and a D0
- * is what GCC emits for a deleting (therefore virtual) destructor -- so
- * offset 0 is a real member and there is no vptr.  Finding 228 is the four
- * classes where that is not true.
+ * tools/cppstruct.py lists its destructor with the two ordinary variants and
+ * not the deleting one, and GCC emits a deleting destructor only for a
+ * virtual one -- so offset 0 is a real member and there is no vptr.  Finding
+ * 228 is the four classes where that is not true.
  *
  * THE OBJECT IS MOSTLY A BIT VECTOR.  `getBitVector()` returns `this + 2`,
  * and everything from there to +0x49 is 72 bytes each holding 0 or 1.  Its

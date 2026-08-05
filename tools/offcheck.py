@@ -40,7 +40,7 @@ import sys
 OBJECT_RELATIVE = {"v8_v21_params"}
 
 # C++, so it cannot go into a C translation unit with the rest.
-SKIP_HEADERS = ("GenericIIR.h", "V90Jd.h")
+SKIP_HEADERS = ("GenericIIR.h", "V90Jd.h", "V92Jd.h")
 
 
 def headers():
