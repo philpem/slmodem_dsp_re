@@ -100,6 +100,29 @@ DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
 FINDING_REF = re.compile(
     r"\bfindings?\s+(\d+[a-z]?(?:\s*(?:,|and)\s*\d+[a-z]?)*)", re.I)
 DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
+
+#
+# Itanium ABI constructor and destructor variant tags, which collide with
+# deviation numbering.  `C1`/`C2` are the complete- and base-object
+# constructors and `D0`/`D1`/`D2` the deleting, complete and base destructors,
+# so a sentence about a virtual destructor contains all three of the strings
+# `D0`, `D1` and `D2` -- and the latter two are also real deviations
+# (FPM_sqrt's short table and its Q15 clamp).
+#
+# So the damage was not only the `D0` that dangled loudly.  `D1` and `D2`
+# RESOLVED, silently, to two unrelated deviations: exactly the failure this
+# checker cannot otherwise catch, and the reason CLAUDE.md says a reference
+# that still resolves is the dangerous kind.
+#
+# Two shapes are masked.  A run of two or more variant tags joined by `/` or
+# `,` is never prose about a deviation.  A single backticked tag is the way
+# this tree writes one in running text; real deviation references are written
+# bare (D4, D17, D31) and there is no backticked one anywhere else, so the
+# backticks are a reliable discriminator rather than a guess.
+#
+ABI_VARIANT = re.compile(
+    r"`[CD][012]`"
+    r"|`?\b[CD][012]\b`?(?:\s*[/,]\s*`?\b[CD][012]\b`?)+")
 NUM = re.compile(r"\d+[a-z]?")
 
 SCAN_EXT = (".c", ".h", ".md", ".py")
@@ -194,7 +217,10 @@ def refs_in(path, text):
             at = m.start(1) + nm.start()
             found.append(("finding", nm.group(0), lines[at],
                           ctx(m.start(), m.end())))
+    masked = [m.span() for m in ABI_VARIANT.finditer(flat)]
     for m in DEV_REF.finditer(flat):
+        if any(a <= m.start() < b for a, b in masked):
+            continue
         found.append(("D", m.group(1), lines[m.start()],
                       ctx(m.start(), m.end())))
     return found

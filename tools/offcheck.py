@@ -43,13 +43,13 @@ OBJECT_RELATIVE = {"v8_v21_params"}
 # C++, so they cannot go into the C translation unit this builds -- and
 # `offsetof` could not reach their members anyway, which are private.
 #
-# Their layouts are not unchecked, they are checked harder: `t_genericiir`
-# and `t_floatiir` read our object through a plain struct of the intended
-# shape and compare it field by field against the blob's own object after
-# every operation.  A wrong offset shows up as a differential failure on
+# Their layouts are not unchecked, they are checked harder: each has a
+# differential test that reads our object through a plain struct of the
+# intended shape and compares it field by field against the blob's own
+# object after every operation.  A wrong offset shows up as a failure on
 # real data rather than as a compile-time assertion about our own header.
 #
-SKIP_HEADERS = ("GenericIIR.h", "FloatIIR.h")
+SKIP_HEADERS = ("FloatFIR.h", "FloatIIR.h", "GenericIIR.h", "Scrambler.h", "V90Jd.h", "V90Phase3Modulator.h", "V90PreFilter.h", "V92Jd.h")
 
 
 def headers():

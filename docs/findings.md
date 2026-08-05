@@ -12609,3 +12609,1009 @@ The constructor/destructor tag sits directly after the class *name*
 versions anchored on the end of the symbol and on a preceding digit; both
 matched nothing and printed `None` for every constructor in the object,
 silently, because a missing annotation looks like an absent feature.
+### 227. The #59 warm-up trio, and the byte past `getbit` settled
+
+*(Numbered 226 on branch `v90cpp` while it was being written; renumbered to
+227 on merge, because master had meanwhile taken 226 for `cppstruct.py`.  If
+you find a reference to "finding 226" meaning the warm-up trio, it means
+this.  Master's 225 and this branch's 225 were the same discovery made twice
+independently -- master's wording is the one that survived, and the fact is
+unchanged.)*
+
+`getbit` (433 bytes, file-local, **recursive**), `ApplyBulkDelay` (467,
+file-local) and `_Z14getMPrecvdBitsP12tagV34Object` (895, file-local and
+C++-mangled) all landed, all three by direct differential test against the
+blob rather than through a caller.  Finding 221's two-pass `objcopy` is what
+made that possible; finding 117 and finding 173 had both concluded the
+opposite, correctly, from an `objcopy` invocation that could not promote a
+local.
+
+#### What the three do
+
+`getbit` is the object's bit reader for a V.34 handshake message.  An
+accumulator at +0x24 and a count of unread bits at +0x28; every call returns
+the top unread bit and drops the count.  A refill takes either a whole word
+or, when fewer than `wordbits` remain, a PART word -- and the part-word arm
+shifts by what is left and ORs the WHOLE word in anyway, without advancing
+the index.  `crc_on` at +0x16 appends CRC-16-CCITT (0x1021, MSB-first,
+unreflected, the same one `v8_crc` computes) as sixteen more bits once the
+message runs out, and `repeat` at +0x20 restarts the reader and **calls
+`getbit` again** for the first bit of the repeat.  Exhausted with neither, it
+returns -1.
+
+**And one arm that reads as arbitrary until you drive it.** If the remainder
+`nbits - pos` is EXACTLY -16, the reader loads 0xf and four bits instead of
+doing any of the above, so the next four calls return 1,1,1,1.  Nothing else
+in the function tests a particular negative remainder.  The test shows where
+it comes from: the CRC costs sixteen bits of `pos` that `nbits` does not
+cover, so the refill *after the CRC* sees precisely -16 every time.  It is
+the filler between a message and its repeat, not a special case.
+
+`ApplyBulkDelay` sizes the far echo canceller's ring from the measured
+round-trip delay: a delay at or below zero becomes 144, a delay at or past
+`bulk_len` becomes zero, the ring at +0x35b8 is cleared to the result and
+`bulk_head`/`bulk_tail` are reset.  Then, with neither PCM receiver running
+and the far canceller already armed, a delay under 30 disarms it and pulls
+the DMA delay at +0x25c back by `delay + 15` capped at 30.
+
+`getMPrecvdBits` copies the V.90 MP sequence out of the session -- six flag
+bytes and seven shorts at `p3548 + 0x1744` -- into the INFO record at
++0xaa0c, copies the four-bit rate nibble down over bits 2..5, and then
+rebuilds the capability word at +0xaa3c around the largest upstream rate the
+configuration allows, reversed into bits 6..9.
+
+#### FINDING 173's OPEN QUESTION, ANSWERED: it is alignment padding
+
+173 recorded that `getbit` ends at 0x5eaf0 + 0x1b1 = 0x5eca1 and that one
+byte past the symbol there is `eb 0d  jmp 5ecb0 <setfinalrate>` -- either
+padding that happens to decode as a jump landing exactly on the next
+function, or a tail call the symbol size excludes.  **It is padding.**  Three
+things settle it and none of them is the decode:
+
+  - `getbit`'s last instruction, at 0x5ec9c, is `e9 03 ff ff ff` -- an
+    UNCONDITIONAL jump, ending exactly at 0x5eca1.  Nothing falls through
+    into the byte in question.
+  - Nothing branches to it.  A disassembly of the whole 0x9c000-byte `.text`
+    contains the string `5eca1` exactly once, and that once is the
+    instruction itself.
+  - **51 inter-function gaps in this object are exactly 15 bytes, and every
+    one of the 51 is `eb 0d` followed by thirteen `nop`, with the jump
+    landing exactly on the next symbol.** 0x5eca1 is one of the 51.  The
+    other fills gas uses here are plain `nop` runs (835 gaps) and multi-byte
+    `lea` no-ops (637); the short jump is what it emits for a 15-byte gap.
+
+So the symbol size is right and excludes nothing, and `setfinalrate` is
+16-byte aligned.  173's alternative -- a tail call -- is refuted by the
+unconditional jump immediately before it: a tail call would have to be
+reachable.
+
+#### The V.34 object, for the V.90/V.92 batch
+
+  - **+0xaa3c is a `getbit` message, and +0xaa6c is the pointer to it.**
+    `getMPrecvdBits` writes `obj + 0xaa3c` into `obj + 0xaa6c`, and
+    `v34handshak` loads +0xaa6c thirty-six times and hands what it finds to
+    `getbit`.  So the bit reader's layout maps onto the object as
+    `word[10]` at +0xaa3c..+0xaa4f, `crc` at +0xaa50, and the rest of the
+    state through +0xaa6b -- which is `unmapped_aa40` in `v34fsk.h` today.
+    `struct v34_bitsource` is declared standalone rather than embedded
+    there, because +0xaa3c and +0xaa3e are already named `info_caps` and
+    `caps_flags` from the other direction and neither reading is more
+    correct than the other.  **The array length of ten is adjacency, not a
+    bound**: nothing in `getbit` checks the index.
+  - `getMPrecvdBits` and `ApplyBulkDelay` both reach `v90_receiver` and
+    `k56flex_receiver` through `obj + 4` with a 0x248/0x24c displacement,
+    which is the third and fourth file to do so.  `v34fsk.h` already says
+    this is an addressing artifact and not a sub-object; it now has four
+    witnesses.
+  - The session object gains three fields: `+0x1744` is an MP block of six
+    bytes and seven shorts, and the PCM receiver at `+0x610c` has an int at
+    `+0x4f8` (the "sensitive ISP" flag) and a rate index at `+0x4fc` that is
+    multiplied by 2400.  The configuration at `pac3c + 0x3c` is an upstream
+    rate in bits per second.
+  - Rate index from bits per second is `(bps * 7) >> 14`, not a divide by
+    2400: the constant is 1/2340.6, and 33600 still lands on 14 because the
+    input is capped at 0x833f = 33599 first.
+
+#### Two things the tests had to be built around
+
+**A duplicated call, which is the object's.** `getMPrecvdBits` tests bit 0 of
+`info_rates` and calls `txrxdmainit` inside the V.90 branch, then tests the
+same bit again after it and calls `txrxdmainit` a second time.  With a V.90
+receiver running and the bit set it runs twice over the same six shorts.  It
+is idempotent, so this is wasted work rather than a defect; it is recorded
+because a reconstruction that "tidied" it would still pass every byte
+comparison.
+
+**An unsigned bound that is the wrong way round.** `ApplyBulkDelay` compares
+the delay against `bulk_len` with `jb`, not `jl`.  A NEGATIVE `bulk_len` is
+huge unsigned, so it accepts every delay and the clear then runs off the end
+of the ring.  Nothing reconstructed writes `bulk_len`, so no call site is
+known to reach it, and the tests keep it positive deliberately: the overrun
+would be identical on both sides and would prove nothing while corrupting
+the object under comparison.
+
+#### How they were tested
+
+`getbit` and `ApplyBulkDelay` went into `test/unit/t_v34hshak.c`, the test
+for their own translation unit; `getMPrecvdBits` needed a new C++ test.
+
+`getbit` is the first recursive function this tree has driven against the
+blob, and a sweep that only ever took the base case would not be a test of
+it.  Fifteen seeds are driven past exhaustion, 2,358 calls, with the whole
+0x30-byte reader compared after every single one -- and **four anti-vacuity
+flags assert that the recursive arm ran, that the -1 return happened, that
+the CRC tail ran and that the four-bit filler ran.**  The struct is seeded
+whole rather than filled with `HARNESS_MALLOC_FILL`, because `idx` is an
+array subscript with nothing bounding it and 0xa5a5 is a wild read.
+
+`ApplyBulkDelay` gets 1,008 cases sweeping both sides of every boundary,
+whole-object each time, plus 448 with both debug levels at 2 and the
+transcripts diffed -- because its TWO rejections print the SAME format
+string, and no byte comparison can tell a reconstruction that printed the
+wrong one.
+
+`getMPrecvdBits` gets 784 whole-object cases, 720 transcript cases and five
+that read the CLAMP back out of the object.  That last block exists because
+the obvious anti-vacuity flag for a branch is the branch condition restated,
+and a flag satisfied by the same misreading that produced it proves nothing:
+both sides are fed the same inputs and the clamp only decides which of two
+rates reaches `bitreverse`.  So the four bits are taken back out of +0xaa3c,
+un-reversed by hand rather than by calling `bitreverse` again, and compared
+against the index the SMALLER of the configured rate and the PCM cap should
+give -- with one case that shuts the sensitive arm off and must therefore
+show the LARGER, so "the clamp happened" and "the clamp is unconditional"
+are different results.  Its
++0xaa6c is a SELF-pointer, so it is checked against *this side's own*
+`m + 0xaa3c` rather than against the other side's value or against being
+non-null -- finding 224's rule.  Which of the two `edprintf` arms ran is
+**not legible in the transcript**: `edprintf` prints its message encoded, and
+the plain-text switch that would undo that is ours alone, so setting it would
+make the two sides differ for a reason unrelated to the modem.  The arm is
+named from the inputs instead, and what the transcript is asked is that the
+two arms do not print the same thing.
+
+#### AND TWO CHECKS THAT COULD NOT SEE C++ AT ALL
+
+`tools/debugaudit.py` -- the `strings` gate that catches an invented format
+string -- and `tools/debugcov.py` both globbed `src/**/*.c`, and `debugcov`
+built only `$(TESTS)`.  `FloatIIR.cpp` prints nothing and has no test outside
+`$(CXXTESTS)`, so nothing had ever exposed either gap.  `getMPrecvdBits`
+brought seven format strings in a `.cpp`: they would have gone unaudited, and
+their sites would have counted as dead because the only test that drives them
+is a `CXXTESTS` member the instrumented tree never built.
+
+Both tools now take `.cpp`, and `debugcov` builds both lists.  517 strings
+checked where it was 501, still 0 invented; 327 debug sites where it was 320,
+still 30 dead.  This is finding 134's argument arriving from a new direction:
+a check nobody can see failing is a check that reports clean because it
+cannot fail.  **The V.90/V.92 core is entirely C++, so both gaps would have
+widened with every task in #60 had this one not carried a diagnostic.**
+
+### 228. "No virtuals" was asserted in a build comment, repeated into a brief, and wrong
+
+The Makefile said the C++ was built "-fno-exceptions -fno-rtti with no
+virtuals and no new/delete, exactly as the original was built".  Three of
+those four are right.  The object has **four vtables**:
+
+```
+$ nm --print-size ../slmodemd/dsplibs.o | grep ' V '
+24 V  vtable for Resampler                28 V  vtable for V90Resampler
+28 V  vtable for ResamplerTiming          24 V  vtable for ResamplerTimingOffset
+```
+
+**The rest of the clause stands, and the absence of typeinfo is what proves
+it.**  Zero `_ZTI` and zero `_ZTS` alongside four vtables is precisely what
+`-fno-rtti` *with* virtual functions emits — had RTTI been on, each vtable
+would carry a typeinfo pointer to a real `_ZTI` object.  Also zero `__cxa_*`,
+`_Unwind_*`, `_Znw*`, `_Zdl*` and `_ZdaPv`.  So exceptions, RTTI and
+new/delete are all still correctly described, the link still needs no
+libstdc++, and a correction reading "the -fno-rtti claim was wrong too" would
+replace one error with a worse one.
+
+**The dispatch is live, not vestigial.**  `Resampler::timingCorrection(float)`
+is **one byte** — a bare `ret`, an empty base implementation — and it is the
+only `W` (weak) symbol of the group, while two derived classes replace it:
+
+```
+    1 W  Resampler::timingCorrection(float)
+  191 T  ResamplerTiming::timingCorrection(float)
+   14 T  ResamplerTimingOffset::timingCorrection(float)
+ 1039 T  Resampler::resample(float const*, unsigned int, float*, unsigned int&)
+  170 T  V90Resampler::resample(float const*, unsigned int, float*, unsigned int&)
+```
+
+#### Why it matters here, which is layout and not the build
+
+A virtual class carries a vptr at offset 0, so every member of those four sits
+four bytes further along than a non-virtual reading of the disassembly would
+put it.  That collides with the object-sizing method finding 215 established
+and #60 uses — bound the object by the largest `this`-relative displacement.
+The *bound* stays right; the *field map* derived from those displacements is
+shifted.  A struct correct in size and wrong by four in every offset passes a
+size check and fails everything downstream of it.
+
+`ResamplerTimingOffset::setTimingOffset(float)` is one of #60's fifty, so this
+is not hypothetical.  It happens to be safe — the whole function is
+
+```
+    35510: mov   0x4(%esp),%eax        ; this: first stack arg, cdecl (finding 215)
+    35514: flds  0x2c(%eax)
+    35517: fmuls 0x8(%esp)             ; the float parameter
+    3551b: fmuls 0x1f4  <R_386_32 .rodata.cst4>
+    35521: fstps 0x48(%eax)
+    35524: ret
+```
+
+which touches `+0x2c` and `+0x48` and never offset 0, so both sides leave the
+vptr slot alone and it compares equal whatever we model there.  **Declaring
+real `virtual` members is the branch to avoid**, and it is rejected rather
+than merely unchosen: GCC would then emit a vtable, which needs every virtual
+method defined or a key function present, reopening the link closure of
+finding 225's kind for a twenty-one-byte float setter.
+
+#### The cheap check, which already existed
+
+`tools/cppstruct.py <class>` answers "is this polymorphic" without going near
+a vtable symbol.  A destructor listed with a `D0` variant is a *deleting*
+destructor, which GCC emits only for a virtual one:
+
+```
+$ tools/cppstruct.py Resampler
+        ~Resampler();          // 85 bytes, D0,D1,D2, NOT WRITTEN
+```
+
+#### How it survived
+
+The claim was load-bearing for nothing.  The build works either way: our own
+C++ genuinely has no virtuals, so `-nostdinc++` and linking with `$(CC)`
+succeed whatever the original did.  Nothing could fail until someone had to
+lay out a polymorphic class, which is #60 and no earlier task.  It then got
+repeated verbatim into a task brief as settled fact, which is the mechanism
+worth noticing: an unchecked claim in a build comment is quoted onward as
+though the build had checked it.
+
+The Makefile comment is corrected in place.  `CLAUDE.md` was checked and never
+carried the claim — the second copy was in the #60 brief, which is outside
+the repository and cannot be corrected from here.
+
+### 229. The Jd message is seventy-two bytes holding one bit each
+
+Task #60 batch 1: `V90Jd` and `V92Jd`, eight methods, all eight landed and all
+eight are covered by a differential test (`test/unit/t_v90jd.cpp`,
+`test/unit/t_v92jd.cpp`).  The first reconstructed C++ *classes* in the tree —
+finding 227's warm-up was a free function that merely had a mangled name.
+
+#### The object is a bit vector on a seventeen-byte stride
+
+`V90Jd::getBitVector()` returns `this + 2`, and the 72 bytes from there hold
+one bit each, 0 or 1 per byte.  The offsets the class touches — 0x2, 0x13,
+0x24, 0x35 — are 0x11 apart, and reading the vector as four groups of
+seventeen makes every other offset in the class fall into place:
+
+```
+    bits[ 0..16]   group 0: seventeen 1 bits
+    bits[17]       group 1's leading 0
+    bits[18..33]   rate mask, bits 0..15, least significant first
+    bits[34]       group 2's leading 0
+    bits[35..46]   rate mask, bits 16..27
+    bits[47..48]   constellation size
+    bits[49..50]   maximum lookahead
+    bits[51]       group 3's leading 0
+    bits[52..67]   the CRC, computed over groups 1 and 2
+    bits[68..71]   four trailing 0 bits
+```
+
+The map is out of the constructor and the accessors, not out of a protocol
+document.  `V90Jd::V90Jd(V90Parameters *)` shifts the parameter block's +0x2c
+word bit by bit into +0x14..+0x23 and +0x25..+0x30, copies its +0x34 and +0x38
+into +0x31 and +0x32, and its +0x30's two low bits into +0x33 and +0x34.
+`setRatesMask` writes +0x14 and +0x25; `setConstelSize` writes +0x31 and
++0x32; `setMaxLookahead` writes +0x33 and +0x34.  Every one of those is
+group 1 or group 2 with the leading marker skipped.
+
+The names are the author's own throughout — `Jd`, `packJdData`,
+`unPackJdPhaseReset`, `resetCrc`, `getMaxLookahead`, `getConstelationSize`
+(the original's spelling) — recovered from the mangling by
+`tools/cppstruct.py`, which is finding 226's point paying off.
+
+#### The CRC is sixteen ints holding sixteen bits
+
+`resetCrc()` names the array and writes +0x4c; `getBitVector` initialises all
+sixteen to 1 and shifts them down toward `crc[0]`, one shift per input bit:
+
+```
+    t         = <input byte> + crc[0]
+    crc[i]    = crc[i + 1]            for every i
+    crc[3]   ^= t ; crc[10] ^= t ; crc[15] = t
+```
+
+with each of those three masked to one bit afterwards.  The object spells the
+XOR as an `add` and masks after, which is why the input byte goes in unmasked:
+only its low bit can reach the answer.  A whole 32-bit int per bit is the
+original's choice, not a convenience of the reconstruction.
+
+The two passes are groups 1 and 2, sixteen bits each, skipping each group's
+leading 0 — the object walks a pointer from `this + 0x14` and adds the stride
+once.  The result goes into group 3, low bit first.
+
+#### `V92Jd` is `V90Jd` with one insertion, and two things do not follow
+
+A second 72-byte vector goes in at +0x4a and everything after it moves by
+exactly 0x48: the CRC register from +0x4c to +0x94, the two-byte alignment pad
+from +0x4a to +0x92.  Both vectors have the same geometry.  The parallel is
+real for the *geometry* and fails for two things that matter:
+
+  - **There is one CRC register, not two.**  `packJdData` and
+    `packJdPhaseData` both use +0x94, so whichever ran last owns it.  Nothing
+    reads it between packs, so it is scratch that happens to live in the
+    object — but a reconstruction that gave each pack its own register would
+    diverge on the second call, and `t_v92jd` runs them in both orders for
+    exactly that reason.
+
+  - **The bits each pack forces to zero are not parallel.**  Before computing
+    the CRC, `packJdData` clears group 2's positions 7..12 and 14;
+    `packJdPhaseData` clears group 2's positions 1..12 and 16.  Six and one
+    against twelve and one, from different starts.  `V90Jd::getBitVector`
+    clears neither.  Both were mutation-checked: swapping either mask for the
+    other's kills the test.
+
+The unpacker's two bytes at +0x00 and +0x01 are shared between the two
+directions and its word is not — `unPackJdReset` clears +0xd4,
+`unPackJdPhaseReset` clears +0xd8, and both clear the same two bytes.
+
+#### The sizes are one word larger than the displacements
+
+`docs/v90cpp.md` gave 140 and 216, which are the largest `this`-relative
+displacements each class uses (finding 215's method).  Both are four-byte
+stores, so `sizeof(V90Jd)` is **0x90 = 144** and `sizeof(V92Jd)` is
+**0xdc = 220**.  The bound is a displacement and the size is the bound plus
+the width of what sits there; the document has been corrected.  Batch 2's
+`V90Phase3Modulator` at 916 and `V90PreFilter` at 1,280 need the same
+addition before either is allocated.
+
+### 230. A C++ class is invisible to both of the tree's offset tools
+
+Batch 1 of #60 is the first work whose central claim is the layout of a C++
+*class*, and neither tool that exists to check a layout could see it.
+
+`tools/offcheck.py` holds the compiler to every `/* +0xNNN */` in the headers,
+and it does that by matching `^struct\s+(\w+)\s*\{` across `include/dsplib/*.h`
+and compiling the result as C.  A `class` matches nothing, and a C++ header
+dragged into that C translation unit would not compile — which is why
+`GenericIIR.h` was already in its skip list.  `V90Jd.h` and `V92Jd.h` join it,
+and the annotations they carry are checked instead by `__builtin_offsetof`
+assertions in the matching `.cpp`:
+
+```c
+    typedef char v92jd_off_crc[
+        ((int)__builtin_offsetof(V92Jd, crc) == 0x94) ? 1 : -1];
+```
+
+That is the pattern batches 2 and 3 should copy, and it is worth the four
+lines: an object right in size and wrong by four in every offset is exactly
+what finding 228 says a missed vptr produces, and a size check alone passes
+it.  Keeping every data member in one access section is what keeps the class
+POD and `offsetof` well defined; the original's access specifiers are not
+recoverable anyway (finding 226).
+
+`tools/whichfield.py` failed differently and is fixed rather than skipped.  It
+knew `DW_TAG_structure_type` and `DW_TAG_union_type`, so `whichfield.py V90Jd
+0x4c` reported "no DWARF for 'V90Jd'" — and since `diff_eq_obj` stringifies
+the bare type name, every offset a C++ class reports would have come back
+unresolvable.  It now accepts `DW_TAG_class_type` in both the lookup and the
+walk, and takes a `class ` keyword alongside `struct ` and `union `.
+
+#### The fixture, which is the deliverable batches 2 and 3 inherit
+
+Three things in `test/unit/t_v90jd.cpp` are load-bearing, and none is
+optional:
+
+  - **The objects are never zeroed.**  Both sides get the same varied
+    pseudorandom bytes, reseeded every trial, across four seed modes chosen by
+    what they do to *bit 0* of each byte — the only bit the CRC can see.  A
+    zero fill lets a clear loop that stops one byte short pass, because the
+    byte it failed to clear was already zero, and leaves the CRC driven by a
+    constant where a wrong feedback tap is invisible.  Findings 223 and 224
+    are the same lesson from the C half.
+
+  - **The object is compared whole, and so is a guard past its end.**
+    `diff_eq_obj` covers `sizeof`, and the bytes from there to the end of an
+    over-large slot are compared separately, so a store that overruns the
+    object is a failure rather than silence.  That check is what makes the
+    size claim above testable rather than assumed.
+
+  - **The returned pointer is checked against each side's own base.**  Both
+    `getBitVector` and `getJdBitVector` return `this + 2`; comparing the two
+    pointers directly would always fail and comparing them to non-null would
+    always pass, so what is compared is each one's offset from its own object
+    (finding 224).
+
+The `ref_` aliases are reached through `asm()` labels —
+`asm("ref__ZN5V90Jd12getBitVectorEv")` — rather than by spelling the alias as
+an identifier.  Both work; the label form sidesteps finding 225 entirely,
+because the compiler never sees a name it could mangle a second time.  Both
+classes' methods are `T` in the blob, so plain cdecl with `this` as the first
+stack argument and no `regparm` (finding 215), unlike finding 227's
+`getMPrecvdBits`.
+
+Ten mutations were injected across the two modules and all ten were killed: a
+feedback tap moved from `crc[11]` to `crc[10]` and to `crc[12]`, the group-0
+fill one byte short, a dropped trailing zero, a returned pointer off by one,
+each pack's zero mask replaced by the other's — count and position, in both
+directions — and `unPackJdPhaseReset` clearing the data word.
+
+### 231. The six were nine: `callgraph.py` cannot see a weak template member
+
+Task #60 batch 2: `V90Phase3Modulator`, five methods and a 64-byte static
+data member.  All six landed and all six are covered by
+`test/unit/t_v90p3mod.cpp`.  The batch was briefed as callee-closed and was
+not, and the reason is a hole in the tool that computes closures.
+
+#### `Scrambler<unsigned char, int>` is the fourth thing in the batch
+
+`V90Phase3Modulator::reset` calls `_ZN9ScramblerIhiE5resetEh` and both
+`generate*Symbol` call `_ZN9ScramblerIhiE7processEh` ten times between them;
+`process` in turn calls `resetHistoryIndexes` and `copyHistoryTail`.  Four
+functions, 216 bytes, none of which `python3 tools/callgraph.py --order --of`
+reports for any of the five.
+
+They are **weak** symbols — `W`, not `T` — each in its own
+`.gnu.linkonce.t.*` section, which is how GCC 3 emitted an implicitly
+instantiated template member.  `callgraph.py` enumerates `T`.  The blob has
+thirty-one such symbols across `Scrambler<h,h>`, `Scrambler<h,i>`,
+`Scrambler<i,h>`, `Descrambler<h,i>` and `Descrambler<i,i>`, and
+`objcopy --globalize-symbols` renames them like everything else, so
+`ref__ZN9ScramblerIhiE7processEh` exists and can never satisfy a reference
+from our side.  **A batch that leaves one unwritten fails the link for all
+seventy test binaries, with `make phase` stopping at `t_encode`** — exactly
+the symptom `docs/v90cpp.md` describes for an ordinary unwritten callee, from
+a cause that document does not mention and the tool cannot see.
+
+So the closure of a C++ batch is `callgraph.py`'s answer **plus** the weak
+symbols its members reference.  Batches 3, 4 and 5 need that check before they
+compute anything; `FloatFIR` and `LowPassFIR<float>` are templates too.
+
+`tools/dis.py` **mis-disassembles all thirty-one.**  A weak symbol in its own
+section has `st_value` 0, `dis.py` reads that as a `.text` offset, and what
+comes out is unrelated bytes with relocations from other sections interleaved
+inline — plausible-looking and entirely wrong.  Three separate garbage
+listings came out before the shape of it was obvious.  The fallback is
+`objdump -dr --section=.gnu.linkonce.t.<symbol>`, which is the one case where
+CLAUDE.md's "never raw objdump" gives way; the warning it is protecting
+against is trimming relocation lines out of the output, and these functions
+have one or two each.
+
+#### The scrambler runs backwards, and restarts by carrying its own tail
+
+Thirty-two bytes: seven pointers and a length.
+
+```
+    +0x00  pLimit      lowest address pOut may reach
+    +0x04  pInitOut    restart value for pOut
+    +0x08  pInitTap1   restart value for pTap1
+    +0x0c  pInitTap2   restart value for pTap2
+    +0x10  pOut        where the next output goes
+    +0x14  pTap1       the near tap
+    +0x18  pTap2       the far tap
+    +0x1c  tailLength  bytes carried on restart
+```
+
+`process(in)` computes `in ^ *pTap1 ^ *pTap2`, post-decrements both taps,
+stores the result at `pOut` and steps `pOut` down; it is the falling-address
+form of y[n] = x[n] ^ y[n-a] ^ y[n-b], one bit per byte.  When `pOut` falls
+below `pLimit` it calls `resetHistoryIndexes()` — the three init pointers back
+into the three running ones — and then `copyHistoryTail()`, which copies
+`tailLength` bytes from `pLimit` up to `pInitOut + 1`, so the taps see the
+history they would have seen had the buffer been unbounded.  `reset(v)` does
+`resetHistoryIndexes()` and fills `pInitOut + 1 .. pInitTap2` inclusive with
+`v & 1`.
+
+The restart is a third of the class and is invisible unless the test drives
+enough symbols to reach it; `t_v90p3mod.cpp` uses a 64-byte buffer and asserts
+the crossing happened.
+
+**The four are written as a header-defined template and emit no symbol.**
+`nm build/src/pump/v90/V90Phase3Modulator.o` lists no `_ZN9ScramblerIhiE*` at
+all: GCC inlines all four into the three callers, which satisfies the link and
+is the accepted resolution — an out-of-line definition is not required, and
+forcing one would only add a weak symbol nothing references.  They are proved
+directly against the `ref__ZN9ScramblerIhiE*` aliases instead of only through
+the modulator, which is what makes the claim about them testable.  Note that
+`tools/coverage.py` shares `callgraph.py`'s blind spot: the thirty-one weak
+symbols appear in neither the numerator nor the denominator of
+`docs/coverage.md`, so writing them moves no number there.
+
+`Descrambler<unsigned char, int>` in batch 5 is the same pattern and should be
+written the same way.
+
+#### The two enums, measured
+
+`PcmType` has exactly two values.  `V90Phase3Modulator::reset` stores the
+argument at +0x04 and every later test is `!= 0` selecting A-law;
+`calculateDilLength` indexes `codeSegmentsBoundriesLookupTable` at
+`8 * pcmType` into sixteen ints **and separately compares the argument against
+the literal 1**, which is what closes it:
+
+```
+    0   mu-law
+    1   A-law
+```
+
+`Phase3ModulatorState` has sixteen, 0..15, dispatched through jump tables in
+`.rodata`.  What each does is out of `generateV90Symbol` and
+`generateV92Symbol`, and the names below are the object's own — each arm is a
+`generate*` or `exit*` method of the class inlined verbatim, and
+`cppstruct.py` has the method names:
+
+```
+     0  Sd              six-symbol +-codeLevelAlt / +-idleLevel pattern, 384 symbols
+     1  SdNot           its inversion, 48 symbols, then the scrambler resets
+     2  TRN1d           scrambled all-ones, 0x3e7c symbols, seeds `polarity`
+     3  Jd              scrambled Jd bits until the timeout
+     4  V92JdEnd        V.92 only: to the next multiple of 72
+     5  JdPhase         V.92 only: the phase bits, absolute timeout 24804
+     6  JdPhaseEnd      V.92 only: to the next multiple of 72
+     7  JdEnd           V.90 only: to the next multiple of 72
+     8  JdNot           scrambled zeros, 12 symbols
+     9  DIL             one DIL symbol per call until timeoutBase + 40000
+    10  DILEnd          the same until the current segment ends
+    11  terminated      quiet
+    12  Jd timeout      quiet
+    13  JdPhase timeout quiet
+    14  DIL timeout     quiet
+    15  error           quiet
+```
+
+V.90 treats 4, 5, 6 and 13 as illegal; V.92 treats 7 as illegal; anything
+above 15 takes the same illegal arm, because the object's bound is
+`cmp $0xf; ja`.
+
+#### `tagV90DILdescriptor`, and the object it expands into
+
+The descriptor's layout is out of the displacements `resetDILGenerator` and
+`calculateDilLength` take off the pointer.  Every field is touched by one of
+them; only the last array's length is inferred, from the 512 bytes the
+modulator gives the array it fills.
+
+```
+    +0x000  unsigned char dilCount        entries in dilCode
+    +0x001  unsigned char seq1Length
+    +0x002  unsigned char seq2Length
+    +0x003  unsigned char seq1[128]
+    +0x083  unsigned char seq2[128]
+    +0x103  unsigned char segmentSize[8]  length code per segment
+    +0x10b  unsigned char segmentCode[8]  PCM code per segment
+    +0x113  unsigned char dilCode[256]    PCM code per DIL entry
+```
+
+`V90Phase3Modulator` is **920 bytes**, 0x398 — the largest displacement is
++0x394 and the store there is one byte, so 0x395 rounded up for the four-byte
+members before it.  It is not polymorphic (no `D0` destructor variant), so
+offset 0 is a real member:
+
+```
+    +0x000  unsigned int   sessionFlag       nonzero selects V.92
+    +0x004  PcmType        pcmType
+    +0x008  unsigned int   timeoutBase       the two long timeouts count from here
+    +0x00c  short          codeLevel         linear level of reset's code argument
+    +0x00e  short          codeLevelAlt      ... and of that code + 0x10
+    +0x010  (2 bytes unused by any of the six)
+    +0x012  short          idleLevel         level of the all-sign-bits code
+    +0x014  Phase3ModulatorState state
+    +0x018  unsigned int   symbolCount       symbols emitted in this state
+    +0x01c  unsigned int   eventCode         per-symbol notification to the caller
+    +0x020  Scrambler<unsigned char,int>     32 bytes, a SUBOBJECT not a pointer
+    +0x040  unsigned int   polarity          the differential encoder's running sign
+    +0x044  unsigned char *jdBits            V90Jd::getBitVector()
+    +0x048  unsigned char *jdV92Bits         V92Jd::getJdBitVector()
+    +0x04c  unsigned char *jdV92PhaseBits    V92Jd::getJdPhaseBitVector()
+    +0x050  (4 bytes unused by any of the six)
+    +0x054  unsigned char  dilCount
+    +0x055  unsigned char  seq1Length
+    +0x056  unsigned char  seq2Length
+    +0x057  unsigned char  seq1[128]
+    +0x0d7  unsigned char  seq2[128]
+    +0x158  unsigned int   segmentLength[8]  6 * segmentSize + 6
+    +0x178  short          segmentLevel[8]
+    +0x188  short          dilLevel[256]
+    +0x388  unsigned char  seq1Index         chooses the sign
+    +0x389  unsigned char  seq2Index         chooses segment level vs entry level
+    +0x38a  unsigned char  dilIndex          steps once per segment
+    +0x38c  unsigned int   segmentPos        symbols into the current segment
+    +0x390  unsigned char  segmentIndex      row index into the boundary table
+    +0x392  short          usingSegmentLevel
+    +0x394  unsigned char  dilPcmCode        the code of dilLevel[dilIndex]
+```
+
+Data member names are invented; the mangling never carries one (finding 226).
+Method and type names are the author's own.
+
+#### The table is two rows of eight, and it is data not a generator
+
+`codeSegmentsBoundriesLookupTable` is 64 bytes at `.data:0x000440` and both
+its users index it at `8 * pcmType + segment` with a four-byte scale, so it is
+`int[2][8]`: row 0 the mu-law endpoints 124 + 256 * (2**k - 1), row 1 the
+A-law endpoints 256 << k, both at the 16-bit scale this library's
+`ulaw2linear` and `alaw2linear` produce.  The last A-law entry is 32768, which
+does not fit a short, and the comparison against it is signed.  It is left
+non-`const` because the blob's symbol is `D`.  A second, byte-identical copy
+lives in `.rodata` at 0xb80 and `calculateDilLength` `rep movsl`s it onto the
+stack rather than referencing the class member — one table, two copies, in the
+original.
+
+### 232. Four ways a passing comparison of this class proved nothing
+
+Everything below was found by injecting a mutation, watching it survive, and
+fixing the *test*.  Fifty-eight mutations were injected across batch 2 and
+fifty-seven were killed; the fifty-eighth is equivalent and is the last item
+here.
+
+**The DIL levels can never be negative, so the zero-extension is invisible.**
+`resetDILGenerator` ends by finding which G.711 segment `dilLevel[0]` falls
+in, and the object reads that short back with `movzwl` — unsigned.  Every code
+the expansion produces has its top bit set, because the descriptor holds a
+seven-bit magnitude and the sign bits are supplied as `^ 0xd5` or `^ 0xff`,
+and this library's companding puts that half above zero.  So after any
+non-empty expansion `dilLevel[0]` is in 0..0x7fff and inside the first seven
+boundaries: the row's last entry is unreachable, the index one past the end of
+the row is unreachable, and reading the level signed instead of unsigned
+passes.  `dilCount` = 0 leaves the field unwritten, and *that* is the path
+where the search sees whatever was already there.  The test seeds it directly
+across the boundaries, both laws, and asserts it reached index 7, index 8 and
+a negative value.
+
+**A field that was already zero cannot show a dropped clear.**  `eventCode` is
+written on every arm of both `generate*Symbol`.  The mutation "eventCode not
+cleared in the DIL arm" survived until the fixture stopped setting it to zero
+before the call.  This is finding 223's lesson in a third place; the fixture
+now seeds it to `0x5a5a0000 + trial`.
+
+**Only `dsplibs_debug_printf` transcripts are comparable across sides.**
+`edprintf` is *defined* in the blob, so our copy and `ref_edprintf` carry
+independent encoder state and encode the same message differently.  A test
+that captures both and compares them fails on a correct reconstruction.  The
+diagnostics section drives only states that reach no `edprintf` site, and the
+debug level has to be *swept* 0..3 rather than raised to 2 — a dropped gate
+survives a single level.
+
+**An equivalent mutant is not a coverage gap.**  `reset` assigns
+`pcmType = law` and then reads `pcmType` back for its second and third
+companding decisions; writing `law` instead is a mutation with no input that
+distinguishes it.  Recorded rather than chased.  The other survivor in the
+batch is the same shape: comparing the seq2 cursor as an `int` rather than as
+a byte, where the byte can never exceed its own length.
+
+**And one trap that is about the fixture, not the object.**  Neither
+`V90Phase3Modulator` nor `Scrambler` declares a constructor or destructor,
+deliberately.  Declaring either makes the class non-trivial, which deletes the
+default members of the union the test uses to overlay the object on a byte
+array — `use of deleted function` naming the union, not the declaration that
+caused it — and makes `__builtin_offsetof` conditionally supported.  The
+signatures stay on the record in `docs/v90cpp.md`.  The offset assertions
+themselves sit behind `#if __SIZEOF_POINTER__ == 4`, because ten of them are
+pointers or follow one and `make phase` compiles every source for a 64-bit
+host (`src/v8/v8util.c` has the same guard for the same reason).
+
+### 233. The first x87 measurement in this tree: two timeouts, one of them exact
+
+CLAUDE.md says of the decompiler's floating point that "nobody has measured it
+here."  Batch 2 of #60 is the first work that had to, and the answer is
+narrow but useful: the object's x87 is not decoration, it changes an answer,
+and reproducing it literally in C is bit-exact under this tree's build.
+
+`V90Phase3Modulator` has two long timeouts and computes them differently.
+
+The DIL timeout is a plain 32-bit integer compare, `symbolCount ==
+timeoutBase + 40000`, wraparound and all.
+
+The Jd timeout is not.  Both counts go through `fildll` — the
+unsigned-to-floating conversion, high word zeroed — the constant arrives as
+`fadds` from a four-byte 24804.0f in `.rodata.cst4`, and the comparison is
+`fcompp`.  With no rounding between, the sum is exact in the register's
+64-bit mantissa, so the test is `symbolCount == timeoutBase + 24804` **over
+the integers and not modulo 2**32**.
+
+The two therefore disagree, and only across 2**32: with
+`timeoutBase = 0xfffffff0`, `+ 40000` wraps to 24788 and fires, while
+`+ 24804` does not fire at all.  `t_v90p3mod.cpp` drives exactly that, in both
+directions, and drives the counter's own wrap at 0xffffffff as well.
+
+Written as the object writes it — `(float)symbolCount == (float)timeoutBase +
+24804.0f` — rather than widened to 64-bit integers, because the object's
+arithmetic is the specification and because it is exactly reproducible: GCC 13
+at `-O2 -mfpmath=387` emits `fildq`/`faddp`/`fucomip` and keeps the excess
+precision, which is `FLT_EVAL_METHOD` 2 doing what the 2003 compiler did.
+There is one further asymmetry worth having on the record: V.92's JdPhase
+timeout uses the *absolute* constant 24804 with no `timeoutBase` term at all,
+where V.90's Jd timeout is relative to it.
+
+Fourteen x87 instructions across the two functions, and that is all of them.
+This says nothing about Ghidra's x87 modelling, which still has not been
+measured; it says that where the object uses the coprocessor for integer
+arithmetic, transcribing the coprocessor is both necessary and sufficient.
+
+### 234. A fourth closure: data that points at data
+
+Task #60 batch 3: `V90PreFilter`'s five methods, all of `FloatFIR`, and all
+ten of `V90PreFilter`'s static data members.  Everything landed, and
+`test/unit/t_floatfir.cpp`, `test/unit/t_v90pftab.cpp` and
+`test/unit/t_v90prefilter.cpp` cover it.
+
+The batch was briefed as 2,742 bytes of code plus 10,532 bytes of table, with
+the six `refLoopsType*` tables (13,328 more) explicitly excluded: a scan of
+the relocations shows each of them referenced by exactly one function and it
+is `VPcmV34InitiateRetrain` every time, which is a #59 C function outside this
+task.  That scan is right about `.rel.text` and it is the wrong section to
+look in.
+
+`dataBase` is read by three of the five methods, so it has to be defined.
+Its **own** definition carries sixteen relocations, and every one of them
+points at `refLoopsType1`, `2`, `4`, `5`, `6` or `7`.  Data pointing at data:
+`objcopy` renames those six like everything else, `ref_` can never satisfy a
+reference from our side, and the whole seventy-binary suite fails to link with
+`make phase` stopping at `t_encode` — the same symptom finding 231 records for
+a weak template member, from a cause one level further out again.
+
+So a C++ batch's closure now has **four** parts, and `callgraph.py` sees one:
+
+```
+  1  calls                T symbols   callgraph.py --order --of
+  2  static data members   D symbols   R_386_* targets in .rel.text
+  3  template members      W symbols   .gnu.linkonce.t.*     (finding 231)
+  4  data referenced by data           R_386_* inside .rel.data
+```
+
+Part 4 is checked the same way as part 2 with the section changed:
+
+```
+readelf -r -W ../slmodemd/dsplibs.o     # then filter to .rel.data and to the
+                                        # address range of the symbol you are
+                                        # about to define
+```
+
+Batch 3's real payload is therefore **2,742 bytes of code and 23,860 of
+data**, and `docs/v90cpp.md`'s 10,596-byte figure for all of #60's static data
+is 23,924 once the six are counted.  Nothing else in #60 is affected: the
+three coefficient banks and all six loop tables were checked for outgoing
+relocations and have none.
+
+#### The object is forty bytes; 1,280 was a different object's displacement
+
+`docs/v90cpp.md` carried 1,280 for `sizeof(V90PreFilter)`, as a bound from the
+largest `this`-relative displacement.  It is not a `this` displacement.
+`setParamEia6` reads `this` at **exactly one offset**, +0x1c, and then does
+every one of its forty-eight stores inside the `V90Parameters` block that
+lives there, where it reaches +0x490; `isV90WithEia6` reads +0x500 of the same
+block.  Across all twenty-four members of the class the largest `this`
+displacement is +0x24 and the store there is four bytes.
+
+```
+    +0x00  FloatFIR       fir        20 bytes
+    +0x14  int            codecType  index into dataBase, 0..15
+    +0x18  V90Phase2Info *phase2     the constructor's second argument
+    +0x1c  V90Parameters *params     the constructor's third
+    +0x20  int            gain       "Filter Gain": the row within a bank
+    +0x24  int            refLoop    index into the loop array, -1 for none
+                                     sizeof = 0x28 = 40
+```
+
+`FloatFIR` is at offset zero and **might be a base class**: every call the
+object makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which is
+what a first member and a public base look like alike, and nothing in the blob
+distinguishes them.  Written as a member, because that keeps V90PreFilter
+standard-layout so `__builtin_offsetof` is well defined rather than merely
+conditionally supported.
+
+Only ten of those forty bytes are written by the five methods in this batch —
+`gain`, `refLoop`, and the FIR's five words — so the two pointers and
+`codecType` are settled by the constructor's stores rather than by anything
+tested here.  The class is small enough that nothing is left as `pad_*`.
+
+#### FloatFIR, and where its two accumulators come from
+
+Twenty bytes: a coefficient pointer, a `sysdep_malloc`'d history, the tap
+count, the buffer length and a write position.  The history **fills
+downward**: `index` is where the next input goes and it decreases, the
+convolution reads `history[index .. index + taps - 1]`, and when `index` would
+go negative the last `taps - 1` samples are copied to the top of the buffer and
+`index` restarts at `bufferLength - taps`.  `taps` is always the requested
+count rounded down to a multiple of four, because the inner loop is unrolled
+by four; the one-at-a-time tail the object still emits can therefore never run.
+
+Both `process` overloads accumulate into **two** x87 registers — even-indexed
+products into one, odd into the other, the dead tail into the even one — and
+sum and round once at the end.  Written as two `long double`s.  That is not
+decoration: see finding 236 for what the test had to do to prove it.
+
+#### What `dataBase` is
+
+Seventeen 36-byte records, `{ char name[32]; V90RefLoop *loops; }`, one per
+hardware codec, the seventeenth empty and acting as the terminator — the
+constructor counts them by walking until a name's first byte is zero and
+clamps its argument to count - 1, so `__tHardwareCodecTypes__` has sixteen
+values.  The names are the author's: `Unknown`, `AD1821`, `Lucent`, `Siemens`,
+`USB_STLC_7550`, `ALS300_AD1819`, `ALS300_AKM4542`, `ALS300_ICE`,
+`ALS300_WOLFSON`, `AMR_SILABS`, `SIL3052_INTERNAL`, `CodecType_SIL3054`,
+`Panther_AD1803`, `Squeezer_545A_ALC`, `Raptor_SL2800`, `Squeezer_545A_ITE`.
+
+Each `loops` pointer goes to one of the six `refLoopsType*` arrays, which are
+arrays of 68-byte `V90RefLoop`:
+
+```
+    +0x00  char  name[32]     a zero first byte ends the array
+    +0x20  float signature[6] what autoSelection matches the measurement to
+    +0x38  int   coefType     1, 2 or 3: which coefficient bank
+    +0x3c  int   gain         the row within it
+    +0x40  int   capability   2 means EIA-6
+```
+
+Every field's meaning is out of the code that reads it, and two of them are
+out of the format strings: `"Pre Filter Coeffs Type array %d, (filter length
+%d)"` names +0x38, and `"loop = %s (%d)"` says +0x00 is a string.  So the
+class is a per-codec catalogue of measured reference loops, and choosing a
+pre-filter is choosing the catalogue entry closest to what Phase 2 measured.
+
+The three coefficient banks are 31 rows of 20 taps, 31 more of 20, and 31 of
+40.  Bank 3 is addressed `base - 3200 + 160 * row`, so its row zero is at
+index 20 and the clamp that keeps it in range is 20..50 rather than 0..30.
+The negative displacement is in the instruction stream.
+
+#### `refLoopsType2` is terminated by the linker's padding
+
+Five of the six loop arrays end with an all-zero record inside the symbol.
+`refLoopsType2` is 2,244 bytes, exactly 33 records, and **not one of them has
+the zero first byte the counting loops stop on**.  What stops them is the 28
+bytes of `.data` alignment padding between the end of the symbol at 0x6124 and
+`refLoopsType1` at 0x6140, which happen to be zero.
+
+Our copy has no such padding to rely on, so it carries a 34th, all-zero
+record; the counted length is 33 either way and `t_v90pftab.cpp` asserts that
+on both sides.  A reconstruction that copied the symbol size faithfully and
+stopped there would walk off the end of the array.
+
+#### The two paths that do not clamp the row
+
+`selectFilter`'s ISDN and PBX arms take the row straight out of the registry
+and hand it to a bank with no bound applied at all, so a registry value of 100
+reads 80 bytes past the end of a 2,480-byte bank.  Reproduced literally.
+There is a third such path — the automatic arm skips its clamp when no
+reference loop was selected — and it is **unreachable through `selectFilter`**,
+which writes 0 to `refLoop` before calling `autoSelection`, and `autoSelection`
+never writes -1.  `getV90Capability`, which is not in this batch, calls
+`autoSelection` without that store and is presumably how it was meant to be
+reached.
+
+### 235. Comparing a table you cannot compare by address
+
+`t_v90pftab.cpp` checks 23,860 bytes of static data by comparing every one of
+them against the blob's own copy through its `ref_` alias.  That is the
+strongest check available for a table — the emitter is measured rather than
+trusted — and a one-ULP change to a single coefficient is caught.  It is also
+where a differential test stops working, because 16 of the 17 `dataBase`
+entries hold a *pointer*, and our loop tables and the blob's are at different
+addresses and always will be.
+
+The rule from finding 224 carries over from return values to data: each
+pointer is resolved against **that side's own** six table bases and compared as
+(which table, what offset into it).
+
+`t_v90prefilter.cpp` meets the same problem one level harder.
+`FloatFIR::coefficients` ends up pointing into one of three coefficient banks,
+and neither the pointer nor its distance from any single base is comparable —
+the blob's three banks are contiguous and 2,480 bytes apart, so bank 1 at row
+r + 31 is the very same address as bank 2 at row r, while ours are neither
+contiguous nor in that order.  Three things were tried:
+
+  - **Distance from one base.**  Wrong for any pointer that came from a
+    different base.
+  - **Containment: which bank's extent does it fall inside.**  Works for a row
+    inside a bank and fails for the two unclamped paths, whose row can be 100 —
+    outside every bank on our side and inside the *next* bank on the blob's.
+  - **Search every (bank, row) pair.**  Resolves the same address to different
+    pairs on the two sides, because of the 31-row coincidence above, and fails
+    a correct run.
+
+What works is enumerating the rows the object could have used — `gain`,
+`gain + 20`, and the two clamps of `gain` — and reporting the first that
+matches, on each side, against its own bases.  A pointer matching none of them
+reports as unresolved, which is itself a difference when the other side
+resolved.  A formula instead of an enumeration is what a first attempt writes,
+and it stops comparing the pointer *exactly* where the clamps are, which is
+where the interesting mutations live: with `row = gain + 20` assumed for the
+40-tap bank, the automatic path's clamp at 50 could be changed to 49 and no
+test noticed.
+
+The first attempt also carried a reduced comparison for the iterations it
+could not resolve — four scalars and the parameter block, skipping the
+whole-object check, both guard regions and three of the four memory blocks.
+Once the enumeration replaced the formula it was dead, but only after one more
+fix: a `selectFilter` that takes the equal-gain early return never calls
+`setCoefficients` at all, so the pointer is still the constructor's null on
+both sides, which resolves perfectly well and had been lumped in with
+"unresolved".  A counter now asserts the reduced path is never taken, and it
+has been deleted.  A fallback that quietly tests less is worth an assertion
+that it is unreachable.
+
+### 236. Two unordered compares, and coefficients built to see an accumulator
+
+Batch 3's differential tests found one reconstruction error and could not,
+at first, see three claims about floating point at all.  Both halves are worth
+the record.
+
+#### `fcom` + `jae` is not `<`
+
+`autoSelection` keeps a running best distance and updates it on
+`fcom %st(2); fnstsw; sahf; jae`.  `jae` tests the carry flag alone, the carry
+came from C0, and **`fcom` sets C0 for an unordered result as well as for a
+less-than one**.  So a NaN distance takes the update arm, where C's `<` does
+not — and a NaN is reachable, because the measurement is whatever Phase 2 left
+in memory and the six differences are taken from it unchecked.  Written
+`!(acc >= best)`, which is the object's predicate.
+
+This was not spotted by reading; the test found it, in the arm where the
+measurement was left as seeded pseudorandom bytes rather than set to something
+plausible.  A fixture that had zeroed or "sensibly" initialised that block
+would have shipped the wrong comparison.
+
+`setParamEia6` has the same shape and the other polarity: `fcompp; sahf; jne`
+takes the zero flag from C3, which is set for equal **and** for unordered, so a
+NaN clock deviation takes the *zero* arm where C's `!=` would not.  Written
+`xf < 0.0f || xf > 0.0f`.  That difference is unreachable — the deviation is an
+int times 0.001f and cannot be a NaN — but the two are not the same test and
+only one of them is the object's.
+
+#### Three float claims that ordinary inputs cannot distinguish
+
+`FloatFIR::process` accumulates into two x87 registers and `autoSelection`
+into one, at 64 significant bits, rounding once at the end.  Forty products of
+similar magnitude summed in any order agree far past the 24 bits the result is
+rounded to, and a search whose only outputs are an integer index and an
+integer gain cannot see a difference of one part in 10**18.  So five coefficient
+and measurement sets were built specifically against the claims, and each kills
+a mutant that survives everything else:
+
+```
+  FloatFIR pairing     even taps +-2**70, odd taps 1, input exactly 1.0
+                       two accumulators give 20 for a 40-tap filter, one gives 1
+  FloatFIR precision   even taps +2**60, 1, -2**60, 1; odd taps 1
+                       64-bit mantissa gives 30, a double gives 25
+  autoSelection acc    two entries 1 and 1 + 2**-60 apart
+                       they reorder if the accumulator is only 53 bits
+  autoSelection target the measured difference needs 25 bits, so the pair ties
+                       when it is rounded to float and does not when it is not
+  autoSelection d      differences of 100 - 2**-30 and 100 - 2**-29, which
+                       both round to 100 and do not reorder if rounded
+```
+
+The last of those does **not** kill its mutant, and the reason is the
+compiler rather than the test.  GCC compiles C++ with
+`-fexcess-precision=fast` by default, under which assigning to a `float`
+local does not force a rounding; the value stays in the register.  So `float d`
+and `long double d` are the same program here, while `float target[6]` and
+`long double target[6]` are not — an *array* has to be stored to memory, and
+that store rounds.  The reconstruction keeps `long double` because that is what
+the object does; the alternative is indistinguishable under this compiler and
+is recorded as such rather than chased.
+
+#### The survivors, and why they are not gaps to close
+
+Eighty-six mutations across the three modules, eighty-one killed.  The five
+that lived:
+
+  - swapping which accumulator takes which parity in `FloatFIR` (addition
+    commutes), the tail into either accumulator, and `n > 3` against `n >= 3`
+    (the tail never runs, because `taps` is masked to a multiple of four
+    everywhere it is set)
+  - the block `process`'s final `index = i` against `index = next` (equal by
+    then), and the destructor freeing unconditionally (`sysdep_free(0)` is a
+    no-op here)
+  - `float d` above
+  - `setParamEia6`'s 10000 scale and its truncation of the whole part, both of
+    which reach nothing but an `edprintf` argument
+
+The last two are finding 232's limitation showing up again: `edprintf` is
+defined in the blob, our copy and `ref_edprintf` carry independent encoder
+state, and a test that captures both transcripts fails on a correct
+reconstruction.  Everything that only reaches a diagnostic is therefore
+untestable here, and the clock-deviation report — a sign, a truncated
+magnitude and four decimal places — is entirely inside that hole.

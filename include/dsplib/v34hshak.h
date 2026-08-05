@@ -362,6 +362,83 @@ void settxlevel(void *obj, const short *mp);
  */
 void v34setuptxmit(void *obj);
 
+/*
+ * ---------------------------------------------------------------------------
+ * The two routines the object keeps FILE-LOCAL, and the struct one of them
+ * walks.  Both are reachable only from `v34handshak` in the object; our
+ * copies have external linkage and the ordinary calling convention, and the
+ * blob's are reached as `ref_getbit` and `ref_ApplyBulkDelay` -- which needs
+ * `objcopy --globalize-symbols` first (finding 221).  Both take their
+ * arguments in registers there, so a declaration of the *reference* has to
+ * say `regparm`; see the tests.
+ */
+
+#define V34_BITSOURCE_WORDS	10
+
+/*
+ * A message being clocked out one bit at a time, MSB first, with the CRC-16
+ * the V.34 sequences carry appended once the message itself runs out.
+ *
+ * THE WORD ARRAY IS INLINE AT OFFSET ZERO and `getbit` indexes it with `idx`
+ * -- `movzwl (%esi,%ebp,2),%edx`.  ITS LENGTH IS NOT IN THE CODE: ten is
+ * what fits between offset 0 and `crc` at +0x14, and nothing in `getbit`
+ * bounds `idx` against it, so ten is adjacency rather than a bound.
+ *
+ * WHERE THE OBJECT KEEPS ONE.  `v34handshak` passes whatever `obj + 0xaa6c`
+ * holds, thirty-six times, and `getMPrecvdBits` is the writer that says what
+ * that is: it stores `obj + 0xaa3c` there.  The struct is declared standalone
+ * rather than embedded in `struct v34_object` at +0xaa3c because that region
+ * is already named from the other direction -- `info_caps` and `caps_flags`,
+ * the nibbles the handshake reads straight out of the same two words -- and
+ * neither reading is more correct than the other.
+ *
+ * The field names are the code's: `crc` is initialised to 0xffff and folded
+ * with 0x1021 MSB-first, `crc_on` gates both the folding and the 16-bit
+ * flush, `nbits` and `pos` bound the message, `wordbits` is how many bits
+ * come out of one word, `repeat` enables the restart and `repeats` counts
+ * them, and `avail0`/`acc0` are what the restart reloads `avail`/`acc` from.
+ */
+struct v34_bitsource {
+	short	word[V34_BITSOURCE_WORDS];	/* +0x00 */
+	short	crc;				/* +0x14 */
+	short	crc_on;				/* +0x16 */
+	short	nbits;				/* +0x18 */
+	short	pos;				/* +0x1a */
+	short	wordbits;			/* +0x1c */
+	short	idx;				/* +0x1e */
+	short	repeat;				/* +0x20 */
+	short	repeats;			/* +0x22 */
+	int	acc;				/* +0x24 */
+	short	avail;				/* +0x28 */
+	short	avail0;				/* +0x2a */
+	int	acc0;				/* +0x2c */
+};
+
+/*
+ * The next bit of `b`, as 0 or 1, or -1 when the message is exhausted and
+ * `repeat` is clear.  RECURSIVE: the restart arm reloads the whole reader
+ * and calls itself for the first bit of the repeat.
+ *
+ * `short`, not `int`, and all four call sites say so: every one of them --
+ * the recursion at 0x5ec47 and `v34handshak`'s three -- follows the `call`
+ * with `cwtl`, which is the sign extension of a 16-bit return.
+ */
+short getbit(struct v34_bitsource *b);
+
+/*
+ * Set the bulk-delay ring to `delay` samples and clear it, then decide
+ * whether the FAR echo canceller can run at that delay.
+ *
+ * `delay` at or below zero becomes 144, and `delay` at or past `bulk_len`
+ * -- compared UNSIGNED -- becomes zero.  Both announce themselves with the
+ * SAME diagnostic, which is why the transcript has to be compared rather
+ * than counted.  With
+ * neither PCM receiver running and the far canceller already armed, a delay
+ * of 29 or less disarms it and pulls the DMA delay back by `delay + 15`,
+ * capped at 30.
+ */
+void ApplyBulkDelay(void *obj, short delay);
+
 #ifdef __cplusplus
 }
 #endif

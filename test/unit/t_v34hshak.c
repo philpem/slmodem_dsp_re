@@ -1113,6 +1113,143 @@ extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern void ref_V34SetupModulator(void *m, short baud, short carrier,
 				  short a, short b, short c);
 
+/* --- the two the object keeps file-local --------------------------------- */
+
+/*
+ * THE CONVENTION, WHICH FINDING 51 SAYS TO CHECK BEFORE CALLING ANY `t`
+ * SYMBOL.  Both of these are local in the object, so GCC gave them the local
+ * calling convention -- arguments in registers -- and the blob's copies still
+ * want it even though `--globalize-symbols` has made them linkable
+ * (finding 221).  The disassembly says which:
+ *
+ *     5eaf0:  sub    $0x2c,%esp
+ *     5eaf7:  mov    %eax,%esi          <- getbit's only argument, in eax
+ *
+ *     5dd10:  sub    $0x1c,%esp
+ *     5dd17:  movswl %dx,%esi           <- ApplyBulkDelay's delay, in dx
+ *     5dd21:  mov    %eax,%ebx             and the object in eax
+ *
+ * and from the caller's side, at 0x66398:
+ *
+ *     movswl 0xaa7e(%edi),%edx ; call 5dd10
+ *
+ * -- so regparm(1) and regparm(2).  The attribute goes on the REFERENCE
+ * declaration only: our own copies have external linkage and the ordinary
+ * convention, which is the same split t_v34demod.c documents.
+ */
+extern short ref_getbit(struct v34_bitsource *b) __attribute__((regparm(1)));
+extern void ref_ApplyBulkDelay(void *obj, short delay)
+	__attribute__((regparm(2)));
+
+/*
+ * `getbit` -- both sides driven from one seed, compared after every call.
+ *
+ * The struct has no padding, so assigning the seed leaves nothing
+ * uninitialised and the whole 0x30 bytes are comparable.  The fill pattern is
+ * deliberately NOT used here and would be actively harmful: `idx` is an array
+ * subscript with nothing bounding it, and 0xa5a5 is a wild read.
+ *
+ * ANTI-VACUITY.  `saw_recursion` is set when a call increments `repeats`,
+ * which only the restart arm does -- and the restart arm is the one that
+ * calls `getbit` again.  A run in which no case ever restarted would exercise
+ * the function's straight line and none of its recursion, which is exactly
+ * the test the brief warns against, so main asserts the flag at the end.  The
+ * other three flags do the same job for the arms that are easy to miss: the
+ * -1 return, the CRC appended after the message, and the four-bit filler that
+ * follows the CRC.
+ */
+static int saw_recursion, saw_minus_one, saw_crc_tail, saw_filler;
+
+static void
+run_getbit(const char *what, long tag, const struct v34_bitsource *seed,
+	   int calls)
+{
+	struct v34_bitsource a, b;
+	int i;
+
+	a = *seed;
+	b = *seed;
+
+	for (i = 0; i < calls; i++) {
+		short before = a.repeats;
+		short pos_before = a.pos;
+		short ra, rb;
+
+		ra = getbit(&a);
+		rb = ref_getbit(&b);
+
+		if (a.repeats != before)
+			saw_recursion = 1;
+		if (ra == -1)
+			saw_minus_one = 1;
+		/*
+		 * The CRC tail moves `pos` sixteen bits at once and leaves
+		 * fifteen available; the filler moves it four and leaves
+		 * three.  Neither is reachable by the ordinary refill, whose
+		 * step is `wordbits`, so both are recognisable from `pos` and
+		 * `avail` without reaching into the function.
+		 */
+		if (a.crc_on != 0 && a.avail == 15
+		    && (short)(a.pos - pos_before) == 16)
+			saw_crc_tail = 1;
+		if (a.avail == 3 && (short)(a.pos - pos_before) == 4
+		    && a.acc == 0xf)
+			saw_filler = 1;
+
+		diff_eq_int(what, ra, rb, tag * 1000 + i);
+		diff_eq_obj(what, struct v34_bitsource, &a, &b,
+			    tag * 1000 + i);
+	}
+}
+
+/* A message of ten words, distinct and not symmetric under reversal. */
+static void
+seed_bits(struct v34_bitsource *b, short nbits, short wordbits, short crc_on,
+	  short repeat)
+{
+	int i;
+
+	memset(b, 0, sizeof(*b));
+	for (i = 0; i < V34_BITSOURCE_WORDS; i++)
+		b->word[i] = (short)(0x8d51 * (i + 1) + i * 7);
+	b->crc = (short)0xffff;
+	b->crc_on = crc_on;
+	b->nbits = nbits;
+	b->wordbits = wordbits;
+	b->repeat = repeat;
+}
+
+/*
+ * `ApplyBulkDelay` -- the whole object, both sides, per case.
+ *
+ * `bulk_len` is kept well inside the ring at +0x35b8: the clear is
+ * `delay * 2` bytes from there and +0x80b8 is the next mapped field, so a
+ * length of 0x400 leaves room for the largest delay it can pass.
+ */
+static void
+run_bulkdelay(short delay, int v90, int k56, short far_on, int bulk_len,
+	      short dma, long tag)
+{
+	unsigned k;
+
+	setup();
+	poke_int(0x024c, v90);
+	poke_int(0x0250, k56);
+	poke_int(0x35a8, 0x11111111);		/* head, to see it cleared  */
+	poke_int(0x35ac, 0x22222222);		/* tail, likewise           */
+	poke_int(0x35b4, bulk_len);
+	poke_short(0xa23c, far_on);
+	poke_short(0x025c, dma);
+
+	/* A pattern in the ring, so a clear of the wrong length shows. */
+	for (k = 0; k < 0x400; k++)
+		poke_short(0x35b8 + k * 2, (short)(0x3000 + k));
+
+	ApplyBulkDelay(&oa, delay);
+	ref_ApplyBulkDelay(ob, delay);
+	compare("ApplyBulkDelay", tag);
+}
+
 int
 main(void)
 {
@@ -3070,6 +3207,172 @@ main(void)
 						    shp_b[k], k);
 			}
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * -------------------------------------------------------------------
+	 * `getbit`, the object's own bit reader, and the first RECURSIVE
+	 * function this tree has driven against the blob.
+	 *
+	 * The cases are chosen so that every refill arm runs at least once and
+	 * the four flags at the bottom prove it, rather than the run merely
+	 * being long enough that one probably did.  `nbits` and `wordbits` are
+	 * always chosen so `idx` stays inside `word[]`: nothing in `getbit`
+	 * bounds it, and a case that ran off the end would be reading its own
+	 * struct's tail on both sides and comparing equal for the wrong
+	 * reason.
+	 */
+	diff_begin("v34 handshake: getbit");
+	{
+		struct v34_bitsource s;
+		long tag = 0;
+
+		/* Ten sixteen-bit words, nothing else.  Ends at -1. */
+		seed_bits(&s, 160, 16, 0, 0);
+		run_getbit("getbit plain", tag++, &s, 170);
+
+		/*
+		 * The same with the CRC on, which is how the -16 remainder
+		 * the function tests for is actually produced: the CRC costs
+		 * sixteen bits of `pos` that `nbits` does not cover, so the
+		 * refill after it sees exactly -16 and loads the four-bit
+		 * filler.  Nothing had to be contrived for that arm.
+		 */
+		seed_bits(&s, 160, 16, 1, 0);
+		run_getbit("getbit crc", tag++, &s, 200);
+
+		/* A message whose length is not a multiple of the word. */
+		seed_bits(&s, 150, 16, 1, 0);
+		run_getbit("getbit part word", tag++, &s, 200);
+
+		seed_bits(&s, 80, 8, 1, 0);
+		run_getbit("getbit 8-bit words", tag++, &s, 120);
+
+		seed_bits(&s, 40, 4, 1, 0);
+		run_getbit("getbit 4-bit words", tag++, &s, 80);
+
+		seed_bits(&s, 20, 1, 1, 0);
+		run_getbit("getbit 1-bit words", tag++, &s, 60);
+
+		/* THE RESTART, which is the recursion.  Four hundred calls
+		 * over a 160-bit message is at least two restarts. */
+		seed_bits(&s, 160, 16, 0, 1);
+		run_getbit("getbit repeat", tag++, &s, 400);
+
+		seed_bits(&s, 160, 16, 1, 1);
+		run_getbit("getbit repeat with crc", tag++, &s, 400);
+
+		/* A restart that reloads a non-empty accumulator, so the
+		 * recursive call returns without refilling at all. */
+		seed_bits(&s, 64, 16, 0, 1);
+		s.avail0 = 4;
+		s.acc0 = 0x5a;
+		s.repeats = 30000;		/* and the counter wraps */
+		run_getbit("getbit repeat preloaded", tag++, &s, 300);
+
+		/* Entered with bits already available. */
+		seed_bits(&s, 160, 16, 1, 0);
+		s.avail = 5;
+		s.acc = 0x1234;
+		s.pos = 32;
+		s.idx = 2;
+		run_getbit("getbit primed", tag++, &s, 200);
+
+		/* An empty message: exhausted on the first call. */
+		seed_bits(&s, 0, 16, 1, 0);
+		run_getbit("getbit empty", tag++, &s, 40);
+
+		seed_bits(&s, 0, 16, 0, 0);
+		run_getbit("getbit empty no crc", tag++, &s, 4);
+
+		/* `pos` already past `nbits` by exactly one word, which is
+		 * the filler arm reached without going through the CRC. */
+		seed_bits(&s, 0, 16, 0, 0);
+		s.pos = 16;
+		run_getbit("getbit overrun", tag++, &s, 40);
+
+		/* And past it by something else, which is not. */
+		seed_bits(&s, 0, 16, 0, 0);
+		s.pos = 17;
+		run_getbit("getbit overrun 17", tag++, &s, 4);
+
+		/* A CRC seeded to something other than 0xffff, so the fold
+		 * is being asked to carry state in rather than to build it. */
+		seed_bits(&s, 96, 16, 1, 0);
+		s.crc = 0x1234;
+		run_getbit("getbit crc seeded", tag++, &s, 140);
+
+		diff_eq_int("getbit: the recursive arm ran", saw_recursion,
+			    1, 0);
+		diff_eq_int("getbit: the exhausted arm ran", saw_minus_one,
+			    1, 0);
+		diff_eq_int("getbit: the CRC tail ran", saw_crc_tail, 1, 0);
+		diff_eq_int("getbit: the four-bit filler ran", saw_filler,
+			    1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * -------------------------------------------------------------------
+	 * `ApplyBulkDelay`.  Swept rather than sampled across every boundary
+	 * the function has: zero, `bulk_len`, the 144 default and its own
+	 * bounds check, and 29/30 -- and both sides of each.
+	 */
+	diff_begin("v34 handshake: ApplyBulkDelay");
+	{
+		static const short delays[] = {
+			-32768, -100, -1, 0, 1, 2, 29, 30, 31,
+			0x8f, 0x90, 0x91, 0x3fe, 0x3ff, 0x400, 32767
+		};
+		static const int pcm[][3] = {
+			{ 0, 0, 0 }, { 0, 0, 1 }, { 0, 0, -3 },
+			{ 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }, { 2, 0, 7 }
+		};
+		static const int lens[] = { 0, 1, 0x40, 0x400 };
+		static const short dmas[] = { 0, 100, -5 };
+		unsigned d, p, l, m;
+		long tag = 0;
+
+		for (d = 0; d < sizeof(delays) / sizeof(delays[0]); d++)
+		    for (p = 0; p < sizeof(pcm) / sizeof(pcm[0]); p++)
+			for (l = 0; l < sizeof(lens) / sizeof(lens[0]); l++)
+			    for (m = 0; m < sizeof(dmas) / sizeof(dmas[0]);
+				 m++)
+				run_bulkdelay(delays[d], pcm[p][0], pcm[p][1],
+					      (short)pcm[p][2], lens[l],
+					      dmas[m], tag++);
+
+		/*
+		 * And the transcripts, because the two rejections share one
+		 * format string: nothing in the byte comparison can tell a
+		 * reconstruction that printed the wrong one, or printed once
+		 * where the object printed twice.  Finding 134.
+		 */
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+		tag = 0;
+		for (d = 0; d < sizeof(delays) / sizeof(delays[0]); d++)
+		    for (p = 0; p < sizeof(pcm) / sizeof(pcm[0]); p++)
+			for (l = 0; l < sizeof(lens) / sizeof(lens[0]); l++) {
+				dsplib_debug_capture_reset();
+				run_bulkdelay(delays[d], pcm[p][0], pcm[p][1],
+					      (short)pcm[p][2], lens[l], 100,
+					      10000 + tag);
+				diff_eq_int("ApplyBulkDelay transcript",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("ApplyBulkDelay transcript "
+					    "non-empty",
+					    dsplib_debug_capture_lines(1) > 0,
+					    1, tag);
+				tag++;
+			}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
