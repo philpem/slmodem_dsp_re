@@ -139,14 +139,19 @@ every other batch is data-free.  `tools/tabdump.py` is the right tool, and
 `src/pump/b103/b103_tables.c`, `src/dsp/fpm_iir_coeffs.c` and
 `src/core/rc_coeffs.c` are the precedents.
 
-### `refLoopsType*` belongs to #59, not here
+### `refLoopsType*` is batch 3's after all — data referencing data is a fourth closure
 
 `V90PreFilter` has **ten** static members totalling 23,860 B, not the nine at
-~21 KB an earlier estimate gave, and there is no `refLoopsType3`.  The split
-matters because it is clean.  Every one of the six `refLoopsType*` tables is
-referenced by exactly one function, and it is the same function every time:
+~21 KB an earlier estimate gave, and there is no `refLoopsType3`.
+
+A first pass split them, and the split was wrong.  It is kept here because the
+*reasoning* is the trap and deleting it would let the next person repeat it —
+every one of the six `refLoopsType*` tables is referenced by exactly one
+function, and it is `VPcmV34InitiateRetrain` every time, which is a #59 C
+function outside this task:
 
 ```
+WRONG:
 #60 batch 3     preFilterCoefType1/2/3 + dataBase          10,532 B
 #59 retrain     refLoopsType1,2,4,5,6,7                    13,328 B
                                                     total  23,860 B
