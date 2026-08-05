@@ -1,0 +1,168 @@
+/*
+ * V90PreFilter.h -- the V.90 receive pre-filter: a FloatFIR that chooses its
+ * own coefficients from what Phase 2 measured about the line.
+ *
+ * Reconstructed from dsplibs.o V90PreFilter.cpp.  Twenty-four members in the
+ * blob; batch 3 of task #60 writes five of them (`selectFilter`,
+ * `setParamEia6`, `autoSelection`, `isV90WithEia6`, `displayParamEia6`) and
+ * all ten static data members, 23,860 bytes of them.  The rest are declared
+ * here and deliberately left undefined -- defining a method whose callees are
+ * not written breaks the link for the whole test suite (docs/v90cpp.md).
+ *
+ * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the two
+ * ordinary variants and not the deleting `D0`, so there is no vptr and offset
+ * 0 is a real member (finding 228).
+ *
+ * THE OBJECT IS FORTY BYTES, NOT 1,280.  docs/v90cpp.md carried 1,280 as a
+ * bound taken from the largest displacement any of these methods uses.  That
+ * displacement is not off `this`: `setParamEia6` touches `this` at exactly
+ * one offset, +0x1c, and then works entirely inside the V90Parameters block
+ * that lives there, where it reaches +0x490; `isV90WithEia6` reads +0x500 of
+ * the same block.  Across all twenty-four members the largest `this`
+ * displacement is +0x24, and the store there is four bytes, so the object is
+ * 0x28.  (Finding 234.)
+ *
+ * FloatFIR IS AT OFFSET ZERO AND MIGHT BE A BASE CLASS.  Every call the
+ * object makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which
+ * is what both a first member and a public base look like; nothing in the
+ * blob distinguishes them.  It is written as a member because that keeps
+ * V90PreFilter standard-layout, so `__builtin_offsetof` in the .cpp is well
+ * defined rather than merely supported.
+ */
+
+#ifndef DSPLIB_V90PREFILTER_H
+#define DSPLIB_V90PREFILTER_H
+
+#include "dsplib/FloatFIR.h"
+
+/*
+ * One reference loop: a name, the six-point signature Phase 2's measurement
+ * is matched against, and what to do when it wins.
+ *
+ * The shape is out of the code, not out of a document.  `autoSelection` steps
+ * the array 0x44 at a time, stops at a record whose first byte is zero, sums
+ * the squared differences of six floats at +0x20 against the measurement, and
+ * returns the int at +0x3c for the closest.  `selectFilter`, `setFilter` and
+ * `getFilterPointer` all switch on the int at +0x38 to pick which of the
+ * three coefficient banks to use -- and `edprintf` prints it as "Pre Filter
+ * Coeffs Type array %d", which is where the field's meaning comes from.
+ * `isV90WithEia6` and `getV90Capability` test the int at +0x40 against 2.
+ */
+struct V90RefLoop {
+	char name[32];		/* +0x00 zero-length ends the array         */
+	float signature[6];	/* +0x20 what autoSelection matches against */
+	int coefType;		/* +0x38 1, 2 or 3: which bank              */
+	int gain;		/* +0x3c the row within it                  */
+	int capability;		/* +0x40 2 means EIA-6                      */
+};
+
+/*
+ * One hardware codec: its name, and the reference loops measured for it.
+ * The constructor prints the name with "HardwareCodecType: %s" and counts the
+ * table by walking until a name's first byte is zero.
+ */
+struct V90CodecEntry {
+	char name[32];		/* +0x00 */
+	V90RefLoop *loops;	/* +0x20 */
+};
+
+/*
+ * NEITHER OF THE NEXT TWO IS MODELLED.  Both names are the original's, out of
+ * the constructor's mangling; what is inside them is not recovered here, and
+ * the numbers below are BOUNDS -- the furthest these five methods reach --
+ * rather than sizes.  A later batch that models either should replace the
+ * declaration rather than add a second one.
+ *
+ * They are word blocks because that is how the object treats them:
+ * `setParamEia6` is forty-odd whole-word copies between fixed offsets inside
+ * V90Parameters and one float store, and nothing here knows what any of them
+ * mean.  Keeping the offsets numeric is the honest spelling.
+ */
+#define V90PARAMETERS_BOUND 0x504	/* isV90WithEia6 reads +0x500 */
+#define V90PHASE2INFO_BOUND 0x1c	/* autoSelection reads +0x18  */
+
+class V90Parameters {
+public:
+	union {
+		unsigned char b[V90PARAMETERS_BOUND];
+		int w[V90PARAMETERS_BOUND / 4];
+		float f[V90PARAMETERS_BOUND / 4];
+	};
+};
+
+class V90Phase2Info {
+public:
+	union {
+		unsigned char b[V90PHASE2INFO_BOUND];
+		int w[V90PHASE2INFO_BOUND / 4];
+		float f[V90PHASE2INFO_BOUND / 4];
+	};
+};
+
+/* Named by the constructor's and setFilter's manglings; values not recovered. */
+enum __tHardwareCodecTypes__ : int;
+enum PreFilterCoefType : int;
+
+class V90PreFilter {
+public:
+	/* Written -- batch 3. */
+	void selectFilter();
+	void setParamEia6();
+	int autoSelection();
+	int isV90WithEia6() const;
+	void displayParamEia6();
+
+	/*
+	 * Declared, not defined.  The signatures are the mangling's, so this
+	 * is a specification and not a guess; return types are not mangled and
+	 * are therefore unknown for all of them.
+	 */
+	V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
+		     V90Parameters *params);
+	~V90PreFilter();
+	void reset();
+	void setFilter(unsigned int gain);
+	void setFilter(PreFilterCoefType type, unsigned int gain);
+	void getFilterPointer(unsigned int gain);
+	void getFilterLength(unsigned int gain);
+	void getV90Capability();
+	void getNofRefLoops() const;
+
+	/*
+	 * Data members are public because the original's access specifiers are
+	 * not recoverable, and because one access section keeps the class
+	 * standard-layout.  The names are invented; the mangling never carries
+	 * a data member's name.
+	 */
+	FloatFIR fir;			/* +0x00 20 bytes, see the note above */
+	int codecType;			/* +0x14 index into dataBase          */
+	V90Phase2Info *phase2;		/* +0x18 the constructor's 2nd argument */
+	V90Parameters *params;		/* +0x1c the constructor's 3rd argument */
+	int gain;			/* +0x20 "Filter Gain", the bank row  */
+	int refLoop;			/* +0x24 index into the loop array,
+					 *       -1 for none               */
+
+	/*
+	 * The ten static members.  All are `D` in the blob, so none is const,
+	 * and `float *` is what setCoefficients takes anyway.
+	 *
+	 * The six refLoopsType* tables are here rather than with #59's
+	 * `VPcmV34InitiateRetrain`, which is the only function that names them
+	 * in .text, because `dataBase` points at them: its definition carries
+	 * sixteen relocations into these six, so the batch that defines
+	 * `dataBase` defines them too (finding 234).  There is no
+	 * refLoopsType3.
+	 */
+	static float preFilterCoefType1[31][20];
+	static float preFilterCoefType2[31][20];
+	static float preFilterCoefType3[31][40];
+	static V90CodecEntry dataBase[17];
+	static V90RefLoop refLoopsType1[23];
+	static V90RefLoop refLoopsType2[34];
+	static V90RefLoop refLoopsType4[36];
+	static V90RefLoop refLoopsType5[36];
+	static V90RefLoop refLoopsType6[34];
+	static V90RefLoop refLoopsType7[34];
+};
+
+#endif /* DSPLIB_V90PREFILTER_H */

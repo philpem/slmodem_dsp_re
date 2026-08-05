@@ -54,7 +54,9 @@ SRC        := src/core/encode.c src/service/pcm.c src/core/fixedrc.c src/core/rc
 CXXSRC     := src/dsp/FloatIIR.cpp src/dsp/FloatFIR.cpp \
               src/pump/v34/v34pcmmain.cpp \
               src/pump/v90/V90Jd.cpp src/pump/v90/V92Jd.cpp \
-              src/pump/v90/V90Phase3Modulator.cpp
+              src/pump/v90/V90Phase3Modulator.cpp \
+              src/pump/v90/V90PreFilter_coeffs.cpp \
+              src/pump/v90/V90PreFilter_loops.cpp
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
 
@@ -75,7 +77,7 @@ HARNESS    := test/harness/harness.c test/harness/runtime.c \
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
 TESTS      := t_encode t_pcm t_fixedrc t_fpm_sqrt t_rcresample t_dp_param t_dp_wrapper t_b103_reg t_fpm_phasor t_fpm_tone t_fpm_rms t_fpm_div t_fpm_mrf t_fpm_mrf_filter t_fpm_fsm t_fpm_fsd t_fpm_mtd t_fpm_iir t_fp_math t_fpm_agc t_b103fp t_b103hdx t_b103link t_b103alloc t_b103create t_b103dp t_b103direct t_toneiir t_callprog t_callprog_create t_dualtone t_callingtone t_cadence t_dialercfg t_dialer t_dialerprog t_dialstring t_callprog_progress t_call t_calldirect t_v8util t_v8sig t_v8jm t_v8dp t_v8direct t_v8hs t_pulse t_v23filt t_v23tx t_v23rx t_v23bwch t_v23modem t_v23dp t_v23direct t_v34det t_v34dft t_v34fsk t_v34ec t_v34eq t_v34rx t_v34demod t_v34shell t_v34pcmif t_v34hshak t_v34info t_v34scram t_v34digital t_spandsp_replay
-CXXTESTS   := t_genericiir t_v34mp t_v90jd t_v92jd t_v90p3mod t_floatfir
+CXXTESTS   := t_genericiir t_v34mp t_v90jd t_v92jd t_v90p3mod t_floatfir t_v90pftab
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
 
 REF        := $(BUILD)/dsplibs_ref.o
