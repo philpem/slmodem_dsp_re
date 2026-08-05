@@ -334,21 +334,6 @@ compare(const char *what, int trial)
 }
 
 /* Compare everything except the coefficient pointer's resolution. */
-static void
-compare_nocoef(const char *what, int trial)
-{
-	unsigned char pa[V90PARAMETERS_BOUND], pb[V90PARAMETERS_BOUND];
-
-	diff_eq_int("gain (%ld)", P(0)->gain, P(1)->gain, trial);
-	diff_eq_int("refLoop (%ld)", P(0)->refLoop, P(1)->refLoop, trial);
-	diff_eq_int("taps (%ld)", P(0)->fir.taps, P(1)->fir.taps, trial);
-	diff_eq_int("index (%ld)", P(0)->fir.index, P(1)->fir.index, trial);
-	snap_parm(pa, 0);
-	snap_parm(pb, 1);
-	diff_eq_obj_(__FILE__, __LINE__, what, "V90Parameters", pa, pb,
-		     V90PARAMETERS_BOUND, (long)trial);
-}
-
 /* How many reference loops the codec at `c` has. */
 static int
 nloops(int c)
@@ -545,8 +530,7 @@ run_selectfilter_registry(void)
 			     i++) {
 				for (j = 0; j < (int)(sizeof(forced) /
 						      sizeof(forced[0])); j++) {
-					int inrange;
-
+		
 					setup(c * 64 + i * 8 + j, (i + j) % 4);
 					P(0)->codecType = P(1)->codecType = c;
 					set_int(0x0c, conn);
@@ -569,14 +553,8 @@ run_selectfilter_registry(void)
 					 * because it asks each side about its
 					 * own candidates.
 					 */
-					inrange = which_bank(0) > 0;
-					if (inrange)
-						compare("after selectFilter",
-							i * 8 + j);
-					else
-						compare_nocoef(
-						    "after selectFilter",
-						    i * 8 + j);
+					compare("after selectFilter",
+						i * 8 + j);
 					diff_eq_int("both sides resolved the"
 						    " bank the same way (%ld)",
 						    which_bank(0),
@@ -683,7 +661,6 @@ run_selectfilter_synthetic(void)
 	for (i = 0; i < (int)(sizeof(types) / sizeof(types[0])); i++) {
 		for (j = 0; j < (int)(sizeof(gains) / sizeof(gains[0])); j++) {
 		    for (conn = 0; conn <= 2; conn++) {
-			int inrange;
 			int ntypes = (int)(sizeof(types) / sizeof(types[0]));
 			int ngains = (int)(sizeof(gains) / sizeof(gains[0]));
 
@@ -717,13 +694,8 @@ run_selectfilter_synthetic(void)
 			P(0)->selectFilter();
 			ref_selectFilter(slot[1]);
 
-			inrange = which_bank(0) > 0;
-			if (inrange)
-				compare("after selectFilter (synthetic)",
-					i * 16 + j);
-			else
-				compare_nocoef("after selectFilter (synthetic)",
-					       i * 16 + j);
+			compare("after selectFilter (synthetic)",
+				i * 16 + j);
 			diff_eq_int("both sides resolved the bank the same way"
 				    " (%ld)", which_bank(0), which_bank(1),
 				    i * 16 + j);

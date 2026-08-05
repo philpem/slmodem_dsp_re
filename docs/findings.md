@@ -13521,6 +13521,17 @@ where the interesting mutations live: with `row = gain + 20` assumed for the
 40-tap bank, the automatic path's clamp at 50 could be changed to 49 and no
 test noticed.
 
+The first attempt also carried a reduced comparison for the iterations it
+could not resolve — four scalars and the parameter block, skipping the
+whole-object check, both guard regions and three of the four memory blocks.
+Once the enumeration replaced the formula it was dead, but only after one more
+fix: a `selectFilter` that takes the equal-gain early return never calls
+`setCoefficients` at all, so the pointer is still the constructor's null on
+both sides, which resolves perfectly well and had been lumped in with
+"unresolved".  A counter now asserts the reduced path is never taken, and it
+has been deleted.  A fallback that quietly tests less is worth an assertion
+that it is unreachable.
+
 ### 236. Two unordered compares, and coefficients built to see an accumulator
 
 Batch 3's differential tests found one reconstruction error and could not,
