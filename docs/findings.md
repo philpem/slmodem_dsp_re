@@ -13616,7 +13616,12 @@ reconstruction.  Everything that only reaches a diagnostic is therefore
 untestable here, and the clock-deviation report — a sign, a truncated
 magnitude and four decimal places — is entirely inside that hole.
 
-### 234. The suite was serial for no reason, and `phase` is 2.8x faster
+### 237. The suite was serial for no reason, and `phase` is 2.8x faster
+
+*Written as 234 and renumbered: `master` already had a 234, 235 and 236 from
+the V.90 branch when this landed.  Sixth number collision in this history,
+and the first one I caused while writing a hand-over telling the next
+session to take a block of numbers to avoid exactly this.*
 
 `make test` ran a shell loop over 77 binaries, and nothing anywhere set `-j`.
 Every object, every test binary and every test RUN here is independent --
