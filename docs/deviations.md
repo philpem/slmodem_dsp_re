@@ -2237,3 +2237,53 @@ inputs. `unmeasured` — task #47.
 **How it was found:** by the two different widening instructions on the two
 sides of one comparison, which is the same thing finding 212 records for the
 DFT bin's thresholds.
+
+## D55 `FloatIIR` reports nothing when its history allocation fails
+
+`FloatIIR::FloatIIR` calls `sysdep_malloc` for the history buffer and, on
+failure, completes anyway: `m_hist` stays null, `m_pos` is still set, and the
+constructor returns. The first `process` then dereferences null.
+
+`reset` and the destructor both guard on `m_hist`, so the author knew it could
+be null; only `process` does not. Reproduced, not fixed. `unmeasured` --
+whether an allocation of a few hundred bytes ever fails here is a question
+about the caller, not about this class.
+
+## D56 `~FloatIIR` frees the history without clearing the pointer
+
+`m_hist` is passed to `sysdep_free` and left as it was, so a second
+destruction double-frees. Harmless in the original's usage, which constructs
+these once, and reproduced. `unmeasured`.
+
+## D57 `FloatIIR`'s history compaction underflows when there are no taps
+
+The compaction loop is a do-while whose counter starts at `m_ncoeff - 1` with
+no entry guard, so `m_ncoeff == 0` gives `-1` as unsigned and 2^32 iterations
+walking backwards out of the buffer.
+
+`m_ncoeff` is `ncoeff & ~3`, so this needs a filter asked for fewer than four
+taps -- degenerate, but reachable through the constructor and through
+`setCoefficients`. Reproduced as written; `t_floatiir` deliberately does not
+drive it, and says so, rather than hanging the suite to prove a point.
+
+## D58 `FloatIIR`'s two accumulators are not observably two
+
+NOT A DEFECT -- an equivalent-mutant record, filed here because the tree has
+nowhere better for "this looks like it must matter and does not".
+
+`FloatIIR::process` splits its four-way unrolled dot product between two
+accumulators and adds them at the end. Floating-point addition is not
+associative, so a single-accumulator build should differ. It does not: that
+mutant passes all 289,028 checks in `t_floatiir`, including 262,144 samples
+through poles near the unit circle with inputs spanning two decades.
+
+Sixteen products of similar magnitude sum inside the x87's 64-bit significand
+without rounding, so both orders are exact and the single rounding to float at
+the end sees the same number. A standalone experiment did separate them, 3
+samples in 200,000, but only by letting two independent filters diverge with
+input magnitude growing without bound -- not this filter.
+
+**What was held fixed**, since an equivalent-mutant claim is worthless
+without it: bounded input, sixteen or fewer taps, coefficients of similar
+magnitude. A caller that violates any of those could see the difference, and
+the reconstruction is written the original's way regardless.

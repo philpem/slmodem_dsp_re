@@ -41,11 +41,13 @@ header.  Treat an unfilled return type as an open question, never as `void`.
 
 CONSTRUCTOR AND DESTRUCTOR VARIANTS
 
-`C1`/`C2` are the complete-object and base-object constructors, `D0`/`D1`/`D2`
-the deleting, complete and base destructors.  GCC emits more than one for the
+The Itanium ABI's `C<n>` tags are the complete-object and base-object
+constructors, and its `D<n>` tags the deleting, complete and base
+destructors.  GCC emits more than one for the
 same source declaration, which is why `nm` shows what looks like a duplicate
 at the same address and the same size.  They are folded here, and the variants
-seen are noted, because a class with a `D0` had a virtual destructor and this
+seen are noted, because a class with a deleting destructor had a virtual
+one, and this
 object is otherwise built `-fno-rtti -fno-exceptions`.
 
 USAGE
@@ -127,7 +129,7 @@ def parse(dem):
 
 
 def variant(mangled):
-    """C1/C2/D0/D1/D2 if this is a constructor or destructor symbol.
+    """The ABI ctor/dtor tag if this symbol is one, else None.
 
     The tag sits directly after the class NAME and before the parameter list
     -- `_ZN18V90Phase3ModulatorC1EP13V90Parametersj` -- so it follows a
@@ -173,7 +175,7 @@ def collect():
             continue
         cls, member, args, is_const = p
         rec.update(cls=cls, member=member, args=args, const=is_const)
-        # Fold C1/C2 and D0/D1/D2 onto one declaration.
+        # Fold the constructor and destructor variants onto one line.
         key = (member, args, is_const)
         if key in classes[cls]:
             classes[cls][key]["var"] = "%s,%s" % (classes[cls][key]["var"],

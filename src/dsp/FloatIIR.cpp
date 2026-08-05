@@ -177,3 +177,176 @@ GenericIIR<Sample, Coeff>::process(const Sample *in, Sample *out,
  * differential test to link against.
  */
 template class GenericIIR<float, double>;
+
+/*
+ * ---------------------------------------------------------------------------
+ * FloatIIR -- the concrete all-pole class that shares this translation unit.
+ *
+ * Nothing to do with the GenericIIR instantiation above beyond the file they
+ * were compiled into.  See include/dsplib/FloatIIR.h for the shape.
+ */
+
+#include "dsplib/FloatIIR.h"
+
+FloatIIR::FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize)
+{
+	m_ncoeff = ncoeff & ~3u;
+	m_coeff = coeff;
+	m_len = m_ncoeff + blockSize;
+	m_hist = (float *)sysdep_malloc(m_len * sizeof(float));
+
+	/*
+	 * A failed allocation leaves m_hist null and is NOT reported: the
+	 * constructor completes, and the first `process` faults.  Reproduced
+	 * rather than fixed -- D55.
+	 */
+	if (m_hist != 0) {
+		for (unsigned i = 0; i < m_len; i++)
+			m_hist[i] = 0.0f;
+	}
+	m_pos = (int)(m_len - m_ncoeff);
+}
+
+FloatIIR::~FloatIIR()
+{
+	/* m_hist is not nulled, so a second delete double-frees.  D56. */
+	if (m_hist != 0)
+		sysdep_free(m_hist);
+}
+
+void
+FloatIIR::reset()
+{
+	if (m_hist != 0) {
+		for (unsigned i = 0; i < m_len; i++)
+			m_hist[i] = 0.0f;
+	}
+	m_pos = (int)(m_len - m_ncoeff);
+}
+
+int
+FloatIIR::setCoefficients(float *coeff, unsigned ncoeff)
+{
+	unsigned n = ncoeff & ~3u;
+
+	/*
+	 * The check is against the WHOLE buffer, not the slack, so a tap
+	 * count equal to m_len is refused and one below it is accepted --
+	 * leaving a single sample of block room.
+	 */
+	if (m_len <= n)
+		return -1;
+
+	m_coeff = coeff;
+	if (m_ncoeff == n)
+		return 0;		/* pointer swapped, geometry unchanged */
+
+	m_ncoeff = n;
+
+	/*
+	 * The write position is clamped, not rewound: growing the tap count
+	 * shrinks the room above it, and a position already inside that room
+	 * is pulled down to the new limit.  A position below it is left alone,
+	 * so the history in flight survives the change.
+	 */
+	if (m_pos > (int)(m_len - n))
+		m_pos = (int)(m_len - n);
+	return 0;
+}
+
+void
+FloatIIR::process(const float *in, float *out, unsigned count)
+{
+	if (count == 0)
+		return;
+
+	while (count-- != 0) {
+		const float *h = m_hist + m_pos;
+		const float *c = m_coeff;
+		unsigned n = m_ncoeff;
+		int pos = m_pos - 1;
+
+		/*
+		 * TWO ACCUMULATORS, because the original has two -- and NOT
+		 * because anything here can tell the difference.
+		 *
+		 * The original interleaves its four-way unrolled body between
+		 * them, taps 0 and 2 into one and 1 and 3 into the other, then
+		 * adds them with the odd sum on the left.  That is a different
+		 * association order from a single accumulator, and floating
+		 * point addition is not associative, so it ought to be
+		 * observable.
+		 *
+		 * IT IS NOT, on anything tried.  A single-accumulator build
+		 * passes the whole of t_floatiir: six configurations of 512
+		 * samples, and a 262,144-sample stress run with poles near the
+		 * unit circle and inputs spanning two decades.  The reason is
+		 * that sixteen products of similar magnitude sum inside the
+		 * x87's 64-bit significand without rounding at all, so both
+		 * orders are exact and the single rounding to float at the end
+		 * sees the same number.
+		 *
+		 * A standalone experiment DID separate them -- 3 samples in
+		 * 200,000 -- but only by letting two independent filters run
+		 * until their histories diverged, with the input magnitude
+		 * growing without bound.  That is not this filter.
+		 *
+		 * So this is an equivalent mutant as far as the suite goes,
+		 * and what was held fixed is: bounded input, sixteen or fewer
+		 * taps, coefficients of similar magnitude.  Written the
+		 * original's way regardless, because matching the object is
+		 * the point and a reader should not have to rediscover that
+		 * the split was deliberate.
+		 *
+		 * Everything here stays in x87 registers at 80-bit extended
+		 * precision and rounds to float exactly once, where `y` is
+		 * assigned.  That is what the hardware does unaided; do not
+		 * build this file with -ffloat-store, which is the wrong fix
+		 * and is recorded as such in the GenericIIR note above.
+		 */
+		float even = 0.0f;
+		float odd = 0.0f;
+
+		for (; n > 3; n -= 4) {
+			even += h[0] * c[0];
+			odd  += h[1] * c[1];
+			even += h[2] * c[2];
+			odd  += h[3] * c[3];
+			h += 4;
+			c += 4;
+		}
+		/* The tail cannot happen while m_ncoeff is a multiple of
+		 * four, and the original still emits it. */
+		for (; n != 0; n--)
+			even += *h++ * *c++;
+
+		float y = (odd + even) + *in++;
+		*out = y;
+
+		if (pos < 0) {
+			/*
+			 * Out of room below.  Copy the newest m_ncoeff-1
+			 * samples to the top of the buffer and rewind.
+			 *
+			 * A do-while, exactly as the original: with m_ncoeff
+			 * zero the counter starts at -1 and this runs 2^32
+			 * times.  m_ncoeff is a multiple of four so that means
+			 * a zero-tap filter, which is degenerate anyway, but
+			 * the loop is reproduced as written.  D57.
+			 */
+			float *dst = m_hist + m_len - 1;
+			const float *src = m_hist + m_ncoeff - 2;
+			unsigned i = m_ncoeff - 1;
+
+			do {
+				*dst-- = *src--;
+			} while (--i != 0);
+
+			pos = (int)(m_len - m_ncoeff);
+		}
+
+		m_hist[pos] = y;
+		m_pos = pos;
+		out++;
+	}
+}
