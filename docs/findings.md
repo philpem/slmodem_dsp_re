@@ -13039,3 +13039,241 @@ feedback tap moved from `crc[11]` to `crc[10]` and to `crc[12]`, the group-0
 fill one byte short, a dropped trailing zero, a returned pointer off by one,
 each pack's zero mask replaced by the other's — count and position, in both
 directions — and `unPackJdPhaseReset` clearing the data word.
+
+### 231. The six were nine: `callgraph.py` cannot see a weak template member
+
+Task #60 batch 2: `V90Phase3Modulator`, five methods and a 64-byte static
+data member.  All six landed and all six are covered by
+`test/unit/t_v90p3mod.cpp`.  The batch was briefed as callee-closed and was
+not, and the reason is a hole in the tool that computes closures.
+
+#### `Scrambler<unsigned char, int>` is the fourth thing in the batch
+
+`V90Phase3Modulator::reset` calls `_ZN9ScramblerIhiE5resetEh` and both
+`generate*Symbol` call `_ZN9ScramblerIhiE7processEh` ten times between them;
+`process` in turn calls `resetHistoryIndexes` and `copyHistoryTail`.  Four
+functions, 216 bytes, none of which `python3 tools/callgraph.py --order --of`
+reports for any of the five.
+
+They are **weak** symbols — `W`, not `T` — each in its own
+`.gnu.linkonce.t.*` section, which is how GCC 3 emitted an implicitly
+instantiated template member.  `callgraph.py` enumerates `T`.  The blob has
+thirty-one such symbols across `Scrambler<h,h>`, `Scrambler<h,i>`,
+`Scrambler<i,h>`, `Descrambler<h,i>` and `Descrambler<i,i>`, and
+`objcopy --globalize-symbols` renames them like everything else, so
+`ref__ZN9ScramblerIhiE7processEh` exists and can never satisfy a reference
+from our side.  **A batch that leaves one unwritten fails the link for all
+seventy test binaries, with `make phase` stopping at `t_encode`** — exactly
+the symptom `docs/v90cpp.md` describes for an ordinary unwritten callee, from
+a cause that document does not mention and the tool cannot see.
+
+So the closure of a C++ batch is `callgraph.py`'s answer **plus** the weak
+symbols its members reference.  Batches 3, 4 and 5 need that check before they
+compute anything; `FloatFIR` and `LowPassFIR<float>` are templates too.
+
+`tools/dis.py` **mis-disassembles all thirty-one.**  A weak symbol in its own
+section has `st_value` 0, `dis.py` reads that as a `.text` offset, and what
+comes out is unrelated bytes with relocations from other sections interleaved
+inline — plausible-looking and entirely wrong.  Three separate garbage
+listings came out before the shape of it was obvious.  The fallback is
+`objdump -dr --section=.gnu.linkonce.t.<symbol>`, which is the one case where
+CLAUDE.md's "never raw objdump" gives way; the warning it is protecting
+against is trimming relocation lines out of the output, and these functions
+have one or two each.
+
+#### The scrambler runs backwards, and restarts by carrying its own tail
+
+Thirty-two bytes: seven pointers and a length.
+
+```
+    +0x00  pLimit      lowest address pOut may reach
+    +0x04  pInitOut    restart value for pOut
+    +0x08  pInitTap1   restart value for pTap1
+    +0x0c  pInitTap2   restart value for pTap2
+    +0x10  pOut        where the next output goes
+    +0x14  pTap1       the near tap
+    +0x18  pTap2       the far tap
+    +0x1c  tailLength  bytes carried on restart
+```
+
+`process(in)` computes `in ^ *pTap1 ^ *pTap2`, post-decrements both taps,
+stores the result at `pOut` and steps `pOut` down; it is the falling-address
+form of y[n] = x[n] ^ y[n-a] ^ y[n-b], one bit per byte.  When `pOut` falls
+below `pLimit` it calls `resetHistoryIndexes()` — the three init pointers back
+into the three running ones — and then `copyHistoryTail()`, which copies
+`tailLength` bytes from `pLimit` up to `pInitOut + 1`, so the taps see the
+history they would have seen had the buffer been unbounded.  `reset(v)` does
+`resetHistoryIndexes()` and fills `pInitOut + 1 .. pInitTap2` inclusive with
+`v & 1`.
+
+The restart is a third of the class and is invisible unless the test drives
+enough symbols to reach it; `t_v90p3mod.cpp` uses a 64-byte buffer and asserts
+the crossing happened.
+
+#### The two enums, measured
+
+`PcmType` has exactly two values.  `V90Phase3Modulator::reset` stores the
+argument at +0x04 and every later test is `!= 0` selecting A-law;
+`calculateDilLength` indexes `codeSegmentsBoundriesLookupTable` at
+`8 * pcmType` into sixteen ints **and separately compares the argument against
+the literal 1**, which is what closes it:
+
+```
+    0   mu-law
+    1   A-law
+```
+
+`Phase3ModulatorState` has sixteen, 0..15, dispatched through jump tables in
+`.rodata`.  What each does is out of `generateV90Symbol` and
+`generateV92Symbol`, and the names below are the object's own — each arm is a
+`generate*` or `exit*` method of the class inlined verbatim, and
+`cppstruct.py` has the method names:
+
+```
+     0  Sd              six-symbol +-codeLevelAlt / +-idleLevel pattern, 384 symbols
+     1  SdNot           its inversion, 48 symbols, then the scrambler resets
+     2  TRN1d           scrambled all-ones, 0x3e7c symbols, seeds `polarity`
+     3  Jd              scrambled Jd bits until the timeout
+     4  V92JdEnd        V.92 only: to the next multiple of 72
+     5  JdPhase         V.92 only: the phase bits, absolute timeout 24804
+     6  JdPhaseEnd      V.92 only: to the next multiple of 72
+     7  JdEnd           V.90 only: to the next multiple of 72
+     8  JdNot           scrambled zeros, 12 symbols
+     9  DIL             one DIL symbol per call until timeoutBase + 40000
+    10  DILEnd          the same until the current segment ends
+    11  terminated      quiet
+    12  Jd timeout      quiet
+    13  JdPhase timeout quiet
+    14  DIL timeout     quiet
+    15  error           quiet
+```
+
+V.90 treats 4, 5, 6 and 13 as illegal; V.92 treats 7 as illegal; anything
+above 15 takes the same illegal arm, because the object's bound is
+`cmp $0xf; ja`.
+
+#### `tagV90DILdescriptor`, and the object it expands into
+
+The descriptor's layout is out of the displacements `resetDILGenerator` and
+`calculateDilLength` take off the pointer.  Every field is touched by one of
+them; only the last array's length is inferred, from the 512 bytes the
+modulator gives the array it fills.
+
+```
+    +0x000  unsigned char dilCount        entries in dilCode
+    +0x001  unsigned char seq1Length
+    +0x002  unsigned char seq2Length
+    +0x003  unsigned char seq1[128]
+    +0x083  unsigned char seq2[128]
+    +0x103  unsigned char segmentSize[8]  length code per segment
+    +0x10b  unsigned char segmentCode[8]  PCM code per segment
+    +0x113  unsigned char dilCode[256]    PCM code per DIL entry
+```
+
+`V90Phase3Modulator` is **920 bytes**, 0x398 — the largest displacement is
++0x394 and the store there is one byte, so 0x395 rounded up for the four-byte
+members before it.  It is not polymorphic (no `D0` destructor variant), so
+offset 0 is a real member:
+
+```
+    +0x000  unsigned int   sessionFlag       nonzero selects V.92
+    +0x004  PcmType        pcmType
+    +0x008  unsigned int   timeoutBase       the two long timeouts count from here
+    +0x00c  short          codeLevel         linear level of reset's code argument
+    +0x00e  short          codeLevelAlt      ... and of that code + 0x10
+    +0x010  (2 bytes unused by any of the six)
+    +0x012  short          idleLevel         level of the all-sign-bits code
+    +0x014  Phase3ModulatorState state
+    +0x018  unsigned int   symbolCount       symbols emitted in this state
+    +0x01c  unsigned int   eventCode         per-symbol notification to the caller
+    +0x020  Scrambler<unsigned char,int>     32 bytes, a SUBOBJECT not a pointer
+    +0x040  unsigned int   polarity          the differential encoder's running sign
+    +0x044  unsigned char *jdBits            V90Jd::getBitVector()
+    +0x048  unsigned char *jdV92Bits         V92Jd::getJdBitVector()
+    +0x04c  unsigned char *jdV92PhaseBits    V92Jd::getJdPhaseBitVector()
+    +0x050  (4 bytes unused by any of the six)
+    +0x054  unsigned char  dilCount
+    +0x055  unsigned char  seq1Length
+    +0x056  unsigned char  seq2Length
+    +0x057  unsigned char  seq1[128]
+    +0x0d7  unsigned char  seq2[128]
+    +0x158  unsigned int   segmentLength[8]  6 * segmentSize + 6
+    +0x178  short          segmentLevel[8]
+    +0x188  short          dilLevel[256]
+    +0x388  unsigned char  seq1Index         chooses the sign
+    +0x389  unsigned char  seq2Index         chooses segment level vs entry level
+    +0x38a  unsigned char  dilIndex          steps once per segment
+    +0x38c  unsigned int   segmentPos        symbols into the current segment
+    +0x390  unsigned char  segmentIndex      row index into the boundary table
+    +0x392  short          usingSegmentLevel
+    +0x394  unsigned char  dilPcmCode        the code of dilLevel[dilIndex]
+```
+
+Data member names are invented; the mangling never carries one (finding 226).
+Method and type names are the author's own.
+
+#### The table is two rows of eight, and it is data not a generator
+
+`codeSegmentsBoundriesLookupTable` is 64 bytes at `.data:0x000440` and both
+its users index it at `8 * pcmType + segment` with a four-byte scale, so it is
+`int[2][8]`: row 0 the mu-law endpoints 124 + 256 * (2**k - 1), row 1 the
+A-law endpoints 256 << k, both at the 16-bit scale this library's
+`ulaw2linear` and `alaw2linear` produce.  The last A-law entry is 32768, which
+does not fit a short, and the comparison against it is signed.  It is left
+non-`const` because the blob's symbol is `D`.  A second, byte-identical copy
+lives in `.rodata` at 0xb80 and `calculateDilLength` `rep movsl`s it onto the
+stack rather than referencing the class member — one table, two copies, in the
+original.
+
+### 232. Four ways a passing comparison of this class proved nothing
+
+Everything below was found by injecting a mutation, watching it survive, and
+fixing the *test*.  Fifty-eight mutations were injected across batch 2 and
+fifty-seven were killed; the fifty-eighth is equivalent and is the last item
+here.
+
+**The DIL levels can never be negative, so the zero-extension is invisible.**
+`resetDILGenerator` ends by finding which G.711 segment `dilLevel[0]` falls
+in, and the object reads that short back with `movzwl` — unsigned.  Every code
+the expansion produces has its top bit set, because the descriptor holds a
+seven-bit magnitude and the sign bits are supplied as `^ 0xd5` or `^ 0xff`,
+and this library's companding puts that half above zero.  So after any
+non-empty expansion `dilLevel[0]` is in 0..0x7fff and inside the first seven
+boundaries: the row's last entry is unreachable, the index one past the end of
+the row is unreachable, and reading the level signed instead of unsigned
+passes.  `dilCount` = 0 leaves the field unwritten, and *that* is the path
+where the search sees whatever was already there.  The test seeds it directly
+across the boundaries, both laws, and asserts it reached index 7, index 8 and
+a negative value.
+
+**A field that was already zero cannot show a dropped clear.**  `eventCode` is
+written on every arm of both `generate*Symbol`.  The mutation "eventCode not
+cleared in the DIL arm" survived until the fixture stopped setting it to zero
+before the call.  This is finding 223's lesson in a third place; the fixture
+now seeds it to `0x5a5a0000 + trial`.
+
+**Only `dsplibs_debug_printf` transcripts are comparable across sides.**
+`edprintf` is *defined* in the blob, so our copy and `ref_edprintf` carry
+independent encoder state and encode the same message differently.  A test
+that captures both and compares them fails on a correct reconstruction.  The
+diagnostics section drives only states that reach no `edprintf` site, and the
+debug level has to be *swept* 0..3 rather than raised to 2 — a dropped gate
+survives a single level.
+
+**An equivalent mutant is not a coverage gap.**  `reset` assigns
+`pcmType = law` and then reads `pcmType` back for its second and third
+companding decisions; writing `law` instead is a mutation with no input that
+distinguishes it.  Recorded rather than chased.  The other survivor in the
+batch is the same shape: comparing the seq2 cursor as an `int` rather than as
+a byte, where the byte can never exceed its own length.
+
+**And one trap that is about the fixture, not the object.**  Neither
+`V90Phase3Modulator` nor `Scrambler` declares a constructor or destructor,
+deliberately.  Declaring either makes the class non-trivial, which deletes the
+default members of the union the test uses to overlay the object on a byte
+array — `use of deleted function` naming the union, not the declaration that
+caused it — and makes `__builtin_offsetof` conditionally supported.  The
+signatures stay on the record in `docs/v90cpp.md`.  The offset assertions
+themselves sit behind `#if __SIZEOF_POINTER__ == 4`, because ten of them are
+pointers or follow one and `make phase` compiles every source for a 64-bit
+host (`src/v8/v8util.c` has the same guard for the same reason).

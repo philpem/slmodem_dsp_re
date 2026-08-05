@@ -57,7 +57,7 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 |---|-------|---------|---------|
 | 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
 | 1 | `V90Jd` / `V92Jd` | ~~`V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20~~ **DONE** — findings 229 and 230; all eight, and the C++ class fixture the later batches copy | all leaves |
-| 2 | `V90Phase3Modulator` | `generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table | needs batch 1 |
+| 2 | `V90Phase3Modulator` | ~~`generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table~~ **DONE** — findings 231 and 232; all six, **plus four weak `Scrambler<unsigned char,int>` members nothing counted** | it was not — see below |
 | 3 | `V90PreFilter` | `selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, **all of `FloatFIR`** 723, **+ 10,532 B of tables** | yes, with FloatFIR |
 | 4 | the leaf remainder | the stubs and setters — see the table below | mostly leaves |
 | 5 | `VPcmFloModem`, `V90Phase3Demodulator` | the two whose objects reach through into an enclosing session | last |
@@ -77,6 +77,36 @@ either way, and leaving five members unwritten only re-opens the batch for
 whatever calls them next.  `nm` totals 858 because the constructor and
 destructor each appear twice — C1/C2 and D1/D2, byte-identical — which GCC
 emits automatically from one definition.
+
+## The THIRD closure: weak template members, which `callgraph.py` also cannot see
+
+Finding 231.  `callgraph.py` enumerates `T` symbols.  An implicitly
+instantiated C++ template member is `W`, in its own `.gnu.linkonce.t.*`
+section, and the blob has **thirty-one** of them across `Scrambler<h,h>`,
+`Scrambler<h,i>`, `Scrambler<i,h>`, `Descrambler<h,i>` and
+`Descrambler<i,i>`.  They are renamed `ref_*` like everything else, so one
+left unwritten fails the link for all seventy binaries with the same
+`t_encode` symptom as an ordinary unwritten callee.
+
+Batch 2 was briefed as closed and was not: `V90Phase3Modulator::reset` calls
+`Scrambler<unsigned char,int>::reset` and both `generate*Symbol` call
+`process`, which calls `resetHistoryIndexes` and `copyHistoryTail`.  Four
+functions, 216 bytes, invisible to the tool.
+
+**So a batch's closure is `callgraph.py`'s answer plus the `W` symbols its
+members reference.**  Get them from the relocations:
+
+```
+python3 tools/dis.py ../slmodemd/dsplibs.o <symbol> | grep -o 'R_386_[A-Z0-9]* .*' | sort -u
+```
+
+`FloatFIR` (batch 3) and `LowPassFIR<float>` are templates too.
+
+**And `tools/dis.py` mis-disassembles every one of the thirty-one**: `st_value`
+is 0, which it reads as a `.text` offset, and it prints unrelated bytes with
+relocations from other sections interleaved.  Use
+`objdump -dr --section=.gnu.linkonce.t.<symbol>` for those, and do not trim
+its output — the relocation lines are the point.
 
 ## The OTHER closure: static data, which `callgraph.py` cannot see
 
@@ -143,8 +173,8 @@ re-opening the link closure for what may be a twenty-one-byte setter.
 ## Object sizes
 
 Bounded by the largest `this`-relative displacement each class uses
-(finding 215).  `V90Phase3Modulator` 916 and `V90PreFilter` 1,280 are the
-tractable shape: allocate a buffer, call `reset` on both sides, compare with
+(finding 215).  `V90Phase3Modulator` is **920** measured (below) and
+`V90PreFilter` 1,280 is still a bound.  Both are the tractable shape: allocate a buffer, call `reset` on both sides, compare with
 `diff_eq_obj` — but seed the buffer with varied bytes rather than zeroing it,
 which is finding 230's first rule and the reason batch 1's clear loops could
 be checked at all.
@@ -153,7 +183,10 @@ be checked at all.
 +0x8c and `V92Jd`'s +0xd8, and both are four-byte stores, so the objects are
 **144 and 220** bytes — not the 140 and 216 this document used to give.  Add
 the width of whatever sits at the bound before allocating anything; 916 and
-1,280 above are bounds and have not had that addition made.
+1,280 above were bounds and had not had that addition made.
+`V90Phase3Modulator`'s +0x394 is a one-byte store, so the object is
+**0x398 = 920**; finding 231 has the full field map, which batches 3 and 5
+should read rather than re-derive.  1,280 is still a bound.
 
 `V90Phase3Demodulator` reaches 43,336 and `VPcmFloModem` 32,612, which almost
 certainly means they index *through* `this` into an enclosing session object
@@ -179,6 +212,17 @@ Sizes in bytes.  Method names are shown without the class prefix.
 | 479 | `reset(PcmType, unsigned char, Phase3ModulatorState, unsigned int, V90Jd*, V92Jd*, tagV90DILdescriptor const*, unsigned int)` | `_ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj` |
 | 410 | `resetDILGenerator(tagV90DILdescriptor const*)` | `_ZN18V90Phase3Modulator17resetDILGeneratorEPK19tagV90DILdescriptor` |
 | 11 | `setSessionFlag(unsigned int)` | `_ZN18V90Phase3Modulator14setSessionFlagEj` |
+
+All five are written, with the 64-byte static member and the four weak
+`Scrambler<unsigned char,int>` members the closure needed.  Two signatures the
+header deliberately does **not** declare, because declaring a constructor or
+destructor makes the class non-trivial and deletes the default members of the
+union the test fixture uses:
+
+    V90Phase3Modulator(V90Parameters *, unsigned int)   C1,C2   123 B
+    ~V90Phase3Modulator()                               D1,D2    22 B
+    Scrambler<unsigned char, int>(unsigned, unsigned, unsigned)  C1  102 B
+    ~Scrambler<unsigned char, int>()                            D1   29 B
 
 ### VPcmFloModem — 6 symbol(s), 2420 bytes
 
