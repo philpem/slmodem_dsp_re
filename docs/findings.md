@@ -13753,3 +13753,134 @@ the template and GCC inlines it, so `build/src/**/*.o` defines no
 `.gnu.linkonce.t.*` member is a real requirement *unless* a header in this
 tree defines the template it instantiates -- which is a question about our
 source, not about the blob, and the tool has no way to ask it.
+
+### 255. `V90Phase2Info` is 36 bytes, and its printer names its own fields
+
+`tools/cppstruct.py V90Phase2Info` gives three members and 610 bytes:
+`printInfo() const` (508), `V90Phase2Info(V90Parameters*)` (53, emitted as
+byte-identical C1 and C2) and `setToDefault()` (49). **No destructor of any
+kind is listed**, let alone the deleting `D0` variant GCC emits only for a
+virtual one, so offset 0 is a real member and there is no vptr -- this is not
+one of finding 228's four.
+
+`printInfo` is written and passes. The other two are recorded rather than
+written: both are single-expression copies out of `V90Parameters`, and writing
+them means modelling `V90Parameters`, which nothing in this tree does yet.
+
+**Thirty-six bytes, not thirty-two and not twenty-eight.** The largest
+`this`-relative displacement across all three members is +0x20, and both the
+constructor and `setToDefault` reach it with a four-byte access, so the object
+is 0x24. `printInfo` alone reaches only +0x1c; sizing from the member you
+happen to be writing is the mistake finding 215 is about, and the `V90Jd`
+0x8c -> 144 worked example in `docs/v90cpp.md` is the same shape.
+
+**The field names are the author's own**, recovered from the format strings
+`printInfo` hands to the diagnostic channel -- which is what makes a
+508-byte printer an unusually good type oracle:
+
+```
+V90Phase2Info: pcmType = %s                        +0x00  int
+V90Phase2Info: rtd = %d                            +0x04  int
+V90Phase2Info: Uinfo = %d                          +0x08  unsigned char (movzbl)
+V90Phase2Info: maxTxPower [dBm0]  = %c%d.%01d      +0x09  unsigned char (movzbl)
+V90Phase2Info: txPowerMeasurementPoint = %s        +0x0c  int
+V90Phase2Info: L2[%d] = %c%d.%03d                  +0x18  float *
+                                                   +0x20  V90Parameters *
+```
+
+`params` is the one invented name: a constructor's *argument* type is in the
+mangling, a data member's name never is. `+0x10..0x17` and `+0x1c..0x1f` are
+reached by none of the three members and stay `pad_*` -- a printer reaches
+nothing it does not print, and a passing test proves nothing about memory
+neither side writes (findings 223, 224).
+
+Two things the printer settles that a reader would guess wrong:
+
+- **`maxTxPower` is not a dBm0 value.** The label says dBm0 and the function
+  prints `(maxTxPower + 1) * -0.5`, so the field is a code in half-decibel
+  steps: 0 means -0.5 dBm0, 11 means -6.0. The unit is in the format string
+  and the arithmetic is in the function.
+- **Zero prints as negative.** `fldz; fcomps; fnstsw; sahf; sbb; and $-2; add
+  $0x2d` -- 0x2d is `-`, 0x2b is `+`, and the borrow is C0, which the compare
+  sets when the pushed zero is *below* the value. The test is `0 < v`, not
+  `v >= 0`. Reproduced rather than tidied.
+
+`L2` is a pointer reloaded on every iteration (`mov 0x18(%esi),%edx; flds
+(%edx,%ebx,4)`), not an array in the object. The loop is `inc %ebx; cmp
+$0x14,%ebx; jbe` -- unsigned, 0 through 20 inclusive -- which is a **lower
+bound** on the array and not its length; `V90PreFilter::autoSelection` reads
+the same offset as a `float *`.
+
+#### A collision this leaves loud rather than fixed
+
+`include/dsplib/V90PreFilter.h` carries its own stub `class V90Phase2Info`, a
+0x1c-byte union, flagged there as something "a later batch that models either
+should replace". This is that batch, but `V90PreFilter.h` was being merged
+against by parallel agents and is not edited here. No translation unit
+includes both today, so nothing breaks -- and `V90Phase2Info.h` now `#error`s
+if `DSPLIB_V90PREFILTER_H` is already defined, which turns what would
+otherwise be a page of redefinition diagnostics into one sentence naming the
+fix. **The merge that first brings them into one TU must delete the stub.**
+
+### 256. Two mutants that cannot be caught, and the measurement that says so
+
+Ten mutations against `t_v90p2info`; six caught, four not. Two of the four are
+equivalent mutants, and this records what was held fixed for each -- because
+"equivalent" asserted without that is indistinguishable from "untested".
+
+**`long double` versus `float` for the scaled fraction.** The natural argument
+is that the object computes on the x87 stack (`fsubp; fmuls; fistpl`), so the
+product is rounded once to 64 significand bits and only then truncated, while
+`float` would round to 24 bits first and a value just under an integer could
+cross it. *That argument does not apply on this target.* `-mfpmath=387` with
+GCC's default `-fexcess-precision=fast` keeps a `float` product in an 80-bit
+register until the `fistpl` too:
+
+```sh
+gcc -m32 -mfpmath=387 -O2 ...     # both spellings of frac_of(), swept
+# tried 2390535529 floats, 0 differ     (at scale 10.0f and 1000.0f)
+```
+
+Held fixed: `-mfpmath=387` and `-fexcess-precision=fast`. The `long double`
+spelling stays because it does not *depend* on the excess precision being
+there, not because a test can tell them apart -- and the source comment now
+says so instead of claiming the opposite.
+
+**The order of `(int)v - v`.** Reversing it negates the product, negates the
+truncation, and the `abs()` the object performs afterwards (`cltd; xor
+%edx,%eax; sub %edx,%eax`) cancels both. Same sweep, same result: zero
+disagreements over 2,390,535,529 floats at both scales. Held fixed: that
+`abs()`. The order in `src/` is the object's, from the disassembly.
+
+The other two uncaught mutations are gaps, and are named as gaps:
+
+- **Gating the `Uinfo` line.** `edprintf` gates itself, so wrapping its call in
+  `DSPLIB_DEBUG_ON()` changes nothing observable. Held fixed: `edprintf`'s own
+  gate -- which makes this equivalent too, but by construction rather than by
+  measurement, so it is listed here.
+- **Hoisting the debug gate out of the `L2` loop.** The object re-reads
+  `dsplibs_debug_level` once per iteration; that is a disassembly fact. It is
+  only *observable* if the level changes during a single call, and nothing in
+  the system changes it there. Catching this needs a harness hook that lowers
+  the level mid-transcript. Attempted, found unobservable without that hook,
+  and not written.
+
+### 257. A worktree without `third_party/spandsp` fails a test that names spandsp
+
+`third_party/spandsp` is gitignored and built in place, so a `git worktree
+add` produces a tree where `make phase` dies at `build/test/t_spandsp_b103`
+with `libspandsp.a not built -- see third_party/README.md`. The message is
+accurate and points at the wrong thing: the library *is* built, in the tree
+next door, and what is missing is this worktree's copy.
+
+It cost five parallel agents a confusing failure each, in the same session
+whose hand-over said "so fan out". A symlink to a sibling's built copy is
+enough -- the Makefile only reads `SPANDSP_LIB`:
+
+```sh
+ln -sfn /abs/path/to/other/third_party/spandsp third_party/spandsp
+```
+
+Recorded because the failure appears *after* every differential test has
+passed, in the interop tier, and reads as a broken dependency rather than as a
+missing symlink.
