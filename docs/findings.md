@@ -13661,3 +13661,95 @@ refused to start, timed and believed.
 Both are now defaults in `MAKEFLAGS`, with `make J=1` for a serial run when a
 failure needs reading in order.  A speedup nobody has to remember to ask for
 is the only kind that gets used.
+
+### 245. The addend was never in the relocation, and every closure paid for it
+
+*Numbers 238-244 are left unused: `master` is at 237 and a parallel session
+was told to take a block from 245, so this history has a gap in it rather
+than a seventh collision.*
+
+`tools/closure.py` resolves a relocation that names a *section* -- which is
+how the object refers to anything file-local -- by adding the relocation's
+addend to the section base and asking which symbol owns that address. This
+object is ELF32 **REL**, not RELA:
+
+```sh
+readelf -hW ../slmodemd/dsplibs.o | grep Type      # Type: REL (Relocatable file)
+```
+
+`Elf32_Rel` has no `r_addend` field. The addend is the value already stored
+at the relocation site, `readelf -rW` therefore prints no `+ 0x...` column
+for any relocation in the file, and the tool read the absent column as zero.
+
+**6,794 relocations name a section rather than a symbol**, and 3,044 of them
+name one of the four sections that has a symbol at offset 0:
+
+```sh
+readelf -rW ../slmodemd/dsplibs.o |
+  awk 'NF>=5 && $1 ~ /^[0-9a-f]+$/ && $5 ~ /^\./ {n++} END{print n}'
+```
+
+| | symbol at offset 0 | size | relocations naming the section |
+|---|---|--:|--:|
+| `.text` | `prop_dp_init` | 44 | 1,823 |
+| `.data` | `call_op` | | 723 |
+| `.bss` | `_ZZN5V92CP10bitsToInfoEhE5gamma` | 4 | 179 |
+| `.rodata` | `prop_dsp_version` | 7 | 319 |
+
+So every reference to a file-local string, constant or table resolved to one
+of those four, and `prop_dp_init` genuinely calls `dp_v22_init`,
+`dp_vpcm_init` and `dp_v32_init` -- which is why the phantom arrived six
+strong and looked like a real dependency cluster.
+
+**The control that makes it evidence rather than inference.**
+`V90PreFilter::setParamEia6` and `V90Phase3Modulator::reset` are both already
+written, and the whole suite links. Both reported the cluster as unwritten
+closure members. Anything a written-and-linking function is said to still
+need is a defect in the tool.
+
+#### The expensive half is the one nobody would have noticed
+
+The false alarm costs a confused half hour. The **silent miss** costs a
+batch: a static table genuinely referenced as `.data + 0x2da0` resolved to
+`call_op`, and the real table was never reached at all -- exactly the fourth
+closure this tool exists to find (finding 234).
+
+All 6,794 are `R_386_32`, so the stored value *is* the target offset within
+the section and no PC-relative correction arises. Reading it out of the
+section contents, and diffing the whole graph old against new:
+
+```
+old   4,139 edges over 1,162 sources
+new   4,198 edges over 1,134 sources
+4 distinct targets lost      prop_dsp_version (from 132 sources), call_op (51),
+                             ...gamma (20), prop_dp_init (17)
+223 distinct targets gained
+```
+
+`_ZN12V90PreFilter8dataBaseE -> refLoopsType1,2,4,5,6,7` is unchanged, so
+finding 234's result survives the fix that would have found it for free.
+
+#### The second half: the walk did not stop at what is already written
+
+`edprintf` is defined in `src/` and is the target of 645 relocations. The
+closure walked *through* the blob's `edprintf` into the blob's callees, and
+that single edge is how `call_op` and the `dp_*_init` family entered every
+closure computed here. A symbol `src/` already defines cannot leave anything
+undefined -- the tree builds, so its callees are satisfied, and the blob's
+copy is not the one that gets linked. The walk now stops there. Roots are
+still expanded, so asking about a function that is already written still
+works.
+
+Together: `V90PreFilter::setParamEia6` goes from 5 unwritten closure members
+to 0, and `V90Phase3Modulator::reset` from 10 to 2.
+
+#### What it still cannot know, stated narrowly
+
+Those remaining 2 are `Scrambler<unsigned char,int>::reset` and
+`::resetHistoryIndexes`, and they are **not** a defect. The blob emits them
+as `W` symbols in `.gnu.linkonce.t.*`; `include/dsplib/Scrambler.h` defines
+the template and GCC inlines it, so `build/src/**/*.o` defines no
+`ScramblerI*` symbol at all and the suite links anyway. A
+`.gnu.linkonce.t.*` member is a real requirement *unless* a header in this
+tree defines the template it instantiates -- which is a question about our
+source, not about the blob, and the tool has no way to ask it.
