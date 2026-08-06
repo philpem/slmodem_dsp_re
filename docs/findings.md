@@ -16586,7 +16586,7 @@ worktree.** Finding 290's note that #59's findings start at 291 still stands.
 txstates 65, 71, 78, 81, 85 and 86 of `.rodata+0x2da0` -- finding 323's six
 that write nothing below +0x234. All six are reconstructed in
 `src/pump/v34/v34hstx1.cpp` and all six compare byte for byte against the blob
-through `t_v34hstx1.c`, 1,294 checks. What each does, with the object's own
+through `t_v34hstx1.c`, 1,380 checks. What each does, with the object's own
 register convention applied (`0x4c(%esp)` is the object + 0x221c, so
 `0x3a6(%esi)` is +0x25c2 and not +0x3a6):
 
@@ -16642,7 +16642,7 @@ then the blob's tail logs to two channels while `text[0]` takes one. The
 transcript comparison would fail on every case that printed anything.
 
 That is a choice with a measured cost, and this is the measurement. Two of
-`test/mutations/v34hstx1.json`'s forty-one go uncaught:
+`test/mutations/v34hstx1.json`'s forty-three go uncaught:
 
 ```
   78/85: only the first echo canceller is reported
@@ -16785,7 +16785,7 @@ rebuild, was told not to mind, and considered the object current.
 The result is the exact output of a test that catches nothing:
 
 ```
-  41 mutations: 0 caught, 41 NOT caught, 0 unusable
+  40 mutations: 0 caught (0 by test, 0 by strings), 40 NOT caught, 0 unusable
 ```
 
 which findings 247, 262 and 295 say to read as "the check cannot fail" rather
@@ -16838,9 +16838,31 @@ PCM-receiver runs are the same call twice and the argument is untested while
 the suite looks green.
 
 **What is held fixed**, since finding 323's separations are properties of the
-fill as much as of the object: one object fill (`v34hs_setup(0)`), route
-TXSAMPLE with a budget of one sample, microstate PHASE1, rxstate SILENCE, the
-diagnostics off, and the blob's once-per-block tail on both sides.
+fill as much as of the object: route TXSAMPLE with a budget of one sample,
+microstate PHASE1, rxstate SILENCE, the diagnostics off, and the blob's
+once-per-block tail on both sides.
+
+**The fill is NOT among them, and that is measured rather than assumed.** The
+pokes pin the fields the guards read; everything else the arms touch -- the
+transmit queue, the modulator, the echo cancellers `V34EchoReportCoeff`
+scans, whatever `v90Phase34` and `k56FlexPhase34` reach -- still comes from
+the fixture's fill. Run at six of finding 322's twenty-four fills and at
+three of its layouts:
+
+```
+  V34HS_SEED=1,3,7,11,17,23     1,380 checks, PASS at every one
+  V34HS_SKEW=64                 PASS
+  V34HS_PADVARY=0               PASS
+  V34HS_LOOSEOBJ=1              PASS
+```
+
+The default sweep is the one in `make phase`; the others are the fixture's
+own knobs and cost one run each.
+
+**These are not finding 323's cold runs and do not replace them.** Every case
+here seeds companion fields deliberately, which is what makes the guards
+reachable; the cold baseline for all nineteen table-1 targets still lives in
+`t_v34hsstep.c`. The two tests are complementary.
 
 **Findings 340-345 are this worktree's block.** 346-349 of the 340-349
 allocation are unused.
