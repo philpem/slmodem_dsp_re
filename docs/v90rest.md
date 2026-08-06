@@ -81,7 +81,12 @@ costs one 270-byte method rather than the batch.
     279-284    k56FlexPhase34                            279-283 used
     285-290    the v34handshak step fixture              all used, + D59, D60
     291-296    V90Phase3Demodulator::reset               in flight
-    297-320    #59's remaining five
+    297-300    VPcmFloModem::enterPhase3, which finishes #60
+    301-306    v90Phase34
+    307-312    V34SetINFO1aBits
+    313-318    VPcmV34InitiateRetrain
+    319-324    the harness's table 1
+    325+       V34GiveINFO1dBits, indicateJaTransmission, and v34handshak
 
 VERIFY BEFORE TAKING A BLOCK, do not trust this table:
 
