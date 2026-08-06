@@ -17998,3 +17998,164 @@ Two things the first version got wrong, both worth keeping:
   behind a clean-looking summary line. The second time this session that
   truncating a tool's output concealed the thing the tool was saying;
   finding 339 is the first.
+
+
+### 380. `indicateJaTransmission`: two tail calls, and the boundary is `> 1` and signed
+
+57 bytes, the last of task #59 besides `v34handshak` itself, and after a build
+`tools/closure.py indicateJaTransmission --missing` is **zero symbols and zero
+bytes** -- the only batch in this task that was empty before it started, which
+is what `docs/v90rest.md` predicted when it put this one last. Test
+`test/unit/t_v34ja.cpp`, 6,601 checks; mutation suite `v34ja`, 13 mutations,
+12 caught and 1 recorded equivalent (finding 381). `make phase` green,
+coverage 21.2% -- 154,613 bytes, 370 symbols, 57 bytes and one symbol more
+than before.
+
+    void indicateJaTransmission(void *obj);
+
+**IT IS PURE DISPATCH.** Two loads, two compares, two tail jumps, and it
+stores nothing anywhere -- not in the V.34 object, not in either modem:
+
+    if (obj->v90_receiver > 1)          VPcmFloModem::enterPhase3
+    else if (obj->k56flex_receiver > 1) K56FlexFloModem::enterPhase3FullDuplex
+
+`p3548` supplies the first `this` and `pac18` the second, both loaded into
+registers before either compare because a tail jump needs its argument in hand
+-- register allocation, not a claim about ordering, and neither pointer is
+dereferenced here.
+
+**RETURNS NOTHING.** %eax is never set on the falling-through path and both
+callees are `void`. That is the whole of the evidence and the header says so.
+
+**THE BOUNDARY IS `> 1` AND IT IS SIGNED**, `cmpl $0x1,...; jg`. Both halves
+matter and both are separately mutated:
+
+- `> 1` and not `!= 0`, `>= 1` or `> 2`. A receiver at 1 does **not** enter
+  phase 3, and 1 is exactly what `VPcmV34InitiateRetrain` and `V34GiveINFO1aBits`
+  leave behind on four of their paths, so the difference is reachable state
+  rather than a corner. 0, 1, 2 and 3 are all in the sweep.
+- signed and not unsigned. **Without a negative value in the sweep,
+  `(unsigned)v > 1` passes everything**, and there is no other check in this
+  test that could notice. INT_MIN and -1 are both swept and both counted; the
+  mutation is caught only because they are.
+
+**THE `+ 4` IS AN ADDRESSING ARTIFACT, AND THIS IS THE THIRD FILE TO SAY SO.**
+`add $0x4,%eax; cmpl $0x1,0x248(%eax); cmpl $0x1,0x24c(%eax)` is `obj + 0x24c`
+and `obj + 0x250` -- `v90_receiver` and `k56flex_receiver` -- exactly as
+`v34fsk.h` records for `v90Phase34` and `VPcmV34SetV90RateReneg`. There is no
+sub-object at +4. The mutation that reads the two fields at the literal
+`0x248`/`0x24c` a naive reading would use is in the suite and is caught,
+so finding 179's "register-relative offsets are four low" now has a
+differential test behind it here as well as three readings.
+
+**PLACEMENT: finding 333's rule, applied a second time and without the
+detour.** It calls two C++ members, so the translation unit must be C++, so it
+goes in `src/pump/v34/v34pcmmain.cpp` -- `$(SRC)` is every `.c` under `src/`
+and the six interop binaries link exactly that with no C++ among them. The
+object agrees about the file: 0xa410 sits between `V34XF_IndicateTrn2dReceived`
+(0xa390) and `chkForceBaudRate` (0xa450), in the middle of VPcmV34Main.cpp's
+run. The declaration is in `include/dsplib/v34hshak.h` beside `v90Phase34` and
+`k56FlexPhase34` rather than in `v34pcmif.h`: those two are the precedent on
+all three axes -- defined in `v34pcmmain.cpp`, lowerCamel, and called only
+from `v34handshak`, which is where **both** relocations to this symbol are
+(.text+0x64e53 and +0x68004). It is not one of VPcmV34Main.cpp's `V34XF_`/
+`VPcmV34` interface exports and is not declared with them.
+
+**#59 IS NOW COMPLETE, MEASURED RATHER THAN INHERITED.** The empty closure
+above does not show this -- `k56FlexPhase34` and `V34SetINFO1aBits` are not in
+this function's closure, so a missing one would look identical -- and
+`docs/v90rest.md` is a hand-over, which that file itself says not to trust for
+a claim like this. What shows it is the built objects:
+
+    $ nm build/src/pump/v34/*.o build/src/pump/v90/*.o | grep -E \
+        ' T (k56FlexPhase34|v90Phase34|V34SetINFO1aBits|VPcmV34InitiateRetrain\
+    |V34GiveINFO1dBits|indicateJaTransmission)$'
+
+Six lines. The V.34/V.90 work left is `v34handshak` (61,541) and `datapumpv34`
+(1,028) behind it, and nothing else.
+
+The three other suites that map `v34pcmmain.cpp` were re-run afterwards and
+are unchanged -- `v34info1d` 42/41/1, `v90p34` 70/64/6, `v34retrain` 74/67/7,
+0 unusable in all three. Finding 325's silent shrinkage is the reason, and
+`grep '^#define' src/pump/v34/v34pcmmain.cpp | awk '{print $2}' | sort |
+uniq -d` is empty because this function adds no `#define` at all: the four
+offsets it touches (0x024c, 0x0250, 0x3548, 0xac18) are ALREADY pinned by that
+file's `V34PCMMAIN_ASSERT` block, so there was nothing to add and nothing to
+collide.
+
+
+### 381. The dead arm of `indicateJaTransmission` is its INTERIOR, not its position
+
+**`K56FlexFloModem::enterPhase3FullDuplex` is a bare `ret` at 0x101d0** -- one
+byte, no instruction touching `this`, and an empty body in
+`src/pump/v90/K56FlexFloModem.cpp`. Everything downstream of the second test
+is therefore invisible to any differential test that drives this function:
+
+- the `k56flex_receiver > 1` comparison and its boundary,
+- which field that arm reads,
+- which object it hands over,
+- and whether the arm is exclusive with the first (`else if` against two
+  independent `if`s).
+
+That is **one equivalence class, not four uncaught mutations**, and
+`test/mutations/v34ja.json` carries exactly one representative of it rather
+than padding the count with five entries that all survive for the same reason.
+
+**BUT THE ARM'S PRECEDENCE IS NOT IN THAT CLASS, AND THAT IS THE NEIGHBOURING
+MUTATION THAT CAN FAIL.** Putting the K56flex test FIRST --
+
+    if (obj->k56flex_receiver > 1)          k56->enterPhase3FullDuplex();
+    else if (obj->v90_receiver > 1)         sess->enterPhase3();
+
+-- is observable, because on a trial with BOTH receivers above 1 the object
+enters phase 3 and this does nothing. It is a different edit from "the two arms
+change places", which swaps the bodies and leaves the conditions where they
+were; this one swaps the whole arms. The sweep already covers it -- `bothIn`
+is one of the counters `run_dispatch` asserts non-zero -- and it is caught. So
+the honest statement is narrower and stronger than "the second arm is
+untestable": **the second arm's INTERIOR is dead and its POSITION is tested.**
+This is findings 256/260/269's pattern again -- where an equivalence is real,
+the better move is the neighbouring mutation that can fail.
+
+**WHAT IS HELD FIXED: that the callee stays empty.** The moment
+`K56FlexFloModem` gains a real `enterPhase3FullDuplex` -- it is declared with
+seventeen members and defined with four stubs, so that is a live possibility
+and not a hypothetical -- every claim in that arm's interior becomes testable
+and the equivalent entry must start failing. The `> 1` in the source is
+written from
+`cmpl $0x1,0x24c(%eax); jg` at .text+0xa42c and is **not** something this
+suite measured.
+
+**WHAT MADE THE LIVE ARM'S OBJECT PROVABLE, and it is reusable.** "Phase 3 was
+entered on `p3548`" needs a wrong answer to be visible, and the natural wrong
+answer -- `pac18` -- points at a `K56FlexFloModem`, a class with no data
+members at all, so handing it to `enterPhase3` is a segmentation fault rather
+than a difference. `t_v34ja.cpp` therefore shapes the block behind `pac18` as
+a **fully wired decoy `VPcmFloModem`**: its own `modem.demodulator`, its own
+legal DIL descriptor, seeded pairwise like everything else, and required to be
+byte-identical to its pre-call image on every one of the 252 trials. A
+mis-wire then corrupts it *quietly* and two checks fire -- the decoy changed
+and the real modem did not. The same shape catches "the demodulator is entered
+directly, skipping the modem's own twenty-one stores".
+
+**AND "THE TWO SIDES AGREE" IS SATISFIED BY BOTH SIDES DOING NOTHING**, which
+is the vacuity trap specific to a dispatcher. Two independent witnesses answer
+it, both read off the BLOB rather than off the reconstruction:
+
+- the modem slot is snapshotted before the call and required to have changed
+  **if and only if** `v90_receiver > 1`;
+- `enterPhase3`'s two diagnostics are both gated at `dsplibs_debug_level > 1`
+  and nothing else on any path prints, so a non-empty transcript is exactly
+  `level > 1 && entered`. That one cannot be carried by a seeded byte
+  coinciding with a stored constant, which is why it is there as well as the
+  object diff and not instead of it.
+
+`run_observable` then closes the loop the other way: two trials differing only
+in `v90_receiver` must leave DIFFERENT modems and DIFFERENT demodulators.
+Without it, "changed iff `v90 > 1`" would still hold if `enterPhase3` left no
+mark in this fixture at all, and the whole group would be an assertion that
+nothing ever changes.
+
+**Findings 380-389 are the block `docs/v90rest.md` allocated to this
+worktree; 380 and 381 are used.** Verified against `origin/master` (max 246)
+and the local maximum (337) before use, as that file instructs.

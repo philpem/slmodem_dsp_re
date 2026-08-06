@@ -1185,6 +1185,65 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 
 /*
  * ---------------------------------------------------------------------------
+ * indicateJaTransmission -- whichever PCM modem is past phase 2 enters phase 3.
+ *
+ * Fifty-seven bytes, two loads, two compares and TWO TAIL JUMPS.  It stores
+ * nothing, prints nothing and returns nothing: every path either falls into
+ * `ret` with %eax never set or `jmp`s into a callee whose own return type is
+ * `void`, so `void` is what the object supports and no more.
+ *
+ * THE TWO POINTERS ARE LOADED BEFORE EITHER TEST, into %edx and %ecx, and
+ * only one of them is ever used.  That is register allocation and not a
+ * claim: both loads are unconditional at the top because the tail jump needs
+ * its argument already in hand, and neither pointer is dereferenced here.
+ *
+ * THE `+ 4` IS AN ADDRESSING ARTIFACT, exactly as v34fsk.h says of these two
+ * fields and as `v90Phase34` in this file already shows: `add $0x4,%eax`
+ * followed by `cmpl $0x1,0x248(%eax)` and `cmpl $0x1,0x24c(%eax)` is
+ * `obj + 0x24c` and `obj + 0x250` -- `v90_receiver` and `k56flex_receiver`.
+ * There is no sub-object at +4 and this is the third file to spell it out.
+ *
+ * BOTH TESTS ARE SIGNED AND BOTH ARE `> 1`, not `!= 0` and not `>= 1`:
+ * `cmpl $0x1,...; jg`.  So a receiver that has been noticed but has not got
+ * past `1` does NOT enter phase 3 -- which is the state
+ * `VPcmV34InitiateRetrain` and `V34GiveINFO1aBits` leave behind when they
+ * write 1 rather than 2 -- and a negative value is below 1 rather than above
+ * it.  `v34pcmif.c`'s `VPcmV34GetMaxUpstreamRateIndex` and this file's
+ * `v90Phase34` read the same field with the same `> 1`.
+ *
+ * THE K56FLEX ARM'S INTERIOR IS UNOBSERVABLE, and this is said here rather
+ * than left for a reader to discover: `K56FlexFloModem::enterPhase3FullDuplex`
+ * is one byte of code in the object -- a bare `ret` at 0x101d0 -- so nothing
+ * downstream of the second test can be seen by any test that drives this
+ * function.  The second condition, the object it is given, and `else if`
+ * against two independent `if`s are one equivalence class for as long as that
+ * stays true.  Its POSITION is not in that class and is tested: putting the
+ * K56flex test first changes what happens when both receivers are above 1.
+ * Finding 381 is the record and test/mutations/v34ja.json carries both.
+ *
+ * WHY IT IS HERE.  It is inside VPcmV34Main.cpp's run in the object -- between
+ * `V34XF_IndicateTrn2dReceived` at 0xa390 and `chkForceBaudRate` at 0xa450 --
+ * and it calls two C++ members, so finding 333's rule puts it in this file
+ * rather than in `v34pcmif.c`: a `.c` may not call anything defined in a
+ * `.cpp`, because the six interop binaries link every `.c` under `src/` with
+ * no C++ object among them.  Its two callers are both inside `v34handshak`,
+ * which is why the declaration sits in `v34hshak.h` beside `v90Phase34`.
+ */
+extern "C" void
+indicateJaTransmission(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
+
+	if (obj->v90_receiver > 1)
+		sess->enterPhase3();
+	else if (obj->k56flex_receiver > 1)
+		k56->enterPhase3FullDuplex();
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Same argument as v34pcmif.c's block: the fields this file
  * reaches by offset sit in regions that are otherwise padding, so a field that
  * drifted would compile silently.  Only the fields v34fsk.h already NAMES are

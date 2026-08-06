@@ -66,5 +66,7 @@
  "v34retrain":     ["src/pump/v34/v34pcmmain.cpp",
                                                  "build/test/t_v34retrain"],
  "v34hstx1":       ["src/pump/v34/v34hstx1.cpp",
-                                                 "build/test/t_v34hstx1"]
+                                                 "build/test/t_v34hstx1"],
+ "v34ja":          ["src/pump/v34/v34pcmmain.cpp",
+                                                 "build/test/t_v34ja"]
 }

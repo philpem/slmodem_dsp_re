@@ -388,3 +388,40 @@ Two things it settles for the rest of #59:
 `indicateJaTransmission` (57 bytes) is what is left of #59 besides
 `v34handshak`, and finding 332 is its hand-over: its closure is everything
 above plus `DILdescriptorPacker`, all of which is now written.
+
+## `indicateJaTransmission` has landed, and #59 is done
+
+57 bytes, findings 380-381, mutation suite `v34ja` -- 13 mutations, 12 caught,
+1 recorded equivalent and no gaps. Test `test/unit/t_v34ja.cpp`, 6,601 checks.
+Coverage 21.2%, 154,613 bytes, 370 symbols. `make phase` green.
+
+It is the first batch in this task whose closure was **empty before it
+started**: after a build, `tools/closure.py indicateJaTransmission --missing`
+is zero symbols and zero bytes, which is what putting it last was for.
+
+    void indicateJaTransmission(void *obj);
+
+Pure dispatch: `VPcmFloModem::enterPhase3` when `obj->v90_receiver > 1`,
+otherwise `K56FlexFloModem::enterPhase3FullDuplex` when
+`obj->k56flex_receiver > 1`, otherwise nothing. Both tests are signed `> 1`,
+it stores nothing anywhere, and it returns nothing. In
+`src/pump/v34/v34pcmmain.cpp` by finding 333's rule -- two C++ callees, so the
+TU must be C++ -- with the declaration in `v34hshak.h` beside `v90Phase34` and
+`k56FlexPhase34`, because its only two callers are inside `v34handshak`.
+
+Two things it settles for whoever writes `v34handshak`:
+
+- **The second arm's INTERIOR is untestable and finding 381 says why**:
+  `K56FlexFloModem::enterPhase3FullDuplex` is one byte of code, so its
+  condition, its operand, its object and its exclusivity with the first arm
+  are one equivalence class. Held fixed: that the callee stays empty. Its
+  POSITION is a different matter and is tested -- trying the K56flex arm first
+  changes what happens when both receivers are up, and that mutation is caught.
+- **The `+ 4` is still an addressing artifact**, now with a differential test
+  behind it: the mutation that reads `v90_receiver` and `k56flex_receiver` at
+  the literal `obj + 0x248` / `obj + 0x24c` is caught.
+
+**#59's six are complete.** `k56FlexPhase34`, `v90Phase34`, `V34SetINFO1aBits`,
+`VPcmV34InitiateRetrain`, `V34GiveINFO1dBits`, `indicateJaTransmission`. With
+#60 already closed, the only V.34/V.90 work left is `v34handshak` itself
+(61,541 bytes, #56-#58) and `datapumpv34` (1,028) behind it.
