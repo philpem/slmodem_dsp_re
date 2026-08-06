@@ -36,8 +36,8 @@
  },
  {
   "label": "48 increments the counter as a signed halfword",
-  "find": "\tunsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);",
-  "replace": "\tshort n = (short)(T3M_I16(f, T3M_COUNTER) + 1);"
+  "find": "\tunsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);\n\n",
+  "replace": "\tshort n = (short)(T3M_I16(f, T3M_COUNTER) + 1);\n\n"
  },
  {
   "label": "48's toggle is a store rather than an inversion",
@@ -326,179 +326,179 @@
   "replace": "\tif ((f->obj->fsk.nbits & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {"
  },
  {
-  "label": "47's reset sets +0x3588 to 5",
-  "find": "\t\tT3M_I16(f, T3M_F3588) = 4;",
-  "replace": "\t\tT3M_I16(f, T3M_F3588) = 5;"
+  "label": "the shared reset (47, 49, 50) sets +0x3588 to 5",
+  "find": "\tT3M_I16(f, T3M_F3588) = 4;",
+  "replace": "\tT3M_I16(f, T3M_F3588) = 5;"
  },
  {
-  "label": "47's reset sets +0x358a to 0",
-  "find": "\t\tT3M_I16(f, T3M_F358A) = 1;",
-  "replace": "\t\tT3M_I16(f, T3M_F358A) = 0;"
+  "label": "the shared reset (47, 49, 50) sets +0x358a to 0",
+  "find": "\tT3M_I16(f, T3M_F358A) = 1;",
+  "replace": "\tT3M_I16(f, T3M_F358A) = 0;"
  },
  {
-  "label": "47's reset does not clear +0xabcc",
-  "find": "\t\tf->obj->is_short = 0;\n",
+  "label": "the shared reset (47, 49, 50) does not clear +0xabcc",
+  "find": "\tf->obj->is_short = 0;\n",
   "replace": ""
  },
  {
-  "label": "47's reset does not clear +0xabca",
-  "find": "\t\tf->obj->local_short = 0;\n",
+  "label": "the shared reset (47, 49, 50) does not clear +0xabca",
+  "find": "\tf->obj->local_short = 0;\n",
   "replace": ""
  },
  {
-  "label": "47's reset clears eleven shorts in the loop",
-  "find": "\t\tfor (k = 0; k <= 9; k++)",
-  "replace": "\t\tfor (k = 0; k <= 10; k++)",
+  "label": "the shared reset (47, 49, 50) clears eleven shorts in the loop",
+  "find": "\tfor (k = 0; k <= 9; k++)",
+  "replace": "\tfor (k = 0; k <= 10; k++)",
   "equivalent": true,
   "why": "T3M_FABAE + 2 * 10 is +0xabc2, which the line after the loop clears anyway, so the eleventh iteration writes the word the next statement writes.  The nine-iteration mutation IS caught, which is what says the loop bound is tested at all."
  },
  {
-  "label": "47's reset clears nine shorts in the loop",
-  "find": "\t\tfor (k = 0; k <= 9; k++)",
-  "replace": "\t\tfor (k = 0; k <= 8; k++)"
+  "label": "the shared reset (47, 49, 50) clears nine shorts in the loop",
+  "find": "\tfor (k = 0; k <= 9; k++)",
+  "replace": "\tfor (k = 0; k <= 8; k++)"
  },
  {
-  "label": "47's reset strides one byte through +0xabae",
-  "find": "\t\t\tT3M_I16(f, T3M_FABAE + 2 * k) = 0;",
-  "replace": "\t\t\tT3M_I16(f, T3M_FABAE + k) = 0;"
+  "label": "the shared reset (47, 49, 50) strides one byte through +0xabae",
+  "find": "\t\tT3M_I16(f, T3M_FABAE + 2 * k) = 0;",
+  "replace": "\t\tT3M_I16(f, T3M_FABAE + k) = 0;"
  },
  {
-  "label": "47's reset does not clear the eleventh short",
-  "find": "\t\tT3M_I16(f, T3M_FABC2) = 0;\n",
+  "label": "the shared reset (47, 49, 50) does not clear the eleventh short",
+  "find": "\tT3M_I16(f, T3M_FABC2) = 0;\n",
   "replace": ""
  },
  {
-  "label": "47's reset announces the microstate before the txstate",
-  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
-  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
+  "label": "the shared reset (47, 49, 50) announces the microstate before the txstate",
+  "find": "\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);\n\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
  },
  {
-  "label": "47's reset clears the counter before it announces",
+  "label": "the shared reset (47, 49, 50) clears the counter before it announces",
   "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
   "replace": "\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
  },
  {
-  "label": "47's reset moves the txstate to TX_JM_CM",
-  "find": "V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
-  "replace": "V34HS_TXSTATE_OFF, V34HS_TX_JM_CM);"
+  "label": "the shared reset (47, 49, 50) moves the txstate to TX_JM_CM",
+  "find": "\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_JM_CM);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);"
  },
  {
-  "label": "47's reset moves the microstate to DET_CJ",
-  "find": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
-  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_CJ);"
+  "label": "the shared reset (47, 49, 50) moves the microstate to DET_CJ",
+  "find": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_CJ);"
  },
  {
-  "label": "47's reset stores the two states without announcing them",
-  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
-  "replace": "\t\ths_put(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\t\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);"
+  "label": "the shared reset (47, 49, 50) stores the two states without announcing them",
+  "find": "\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
+  "replace": "\ths_put(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);"
  },
  {
-  "label": "47's reset leaves the shift register at 0",
-  "find": "\t\tf->obj->fsk.sr = -1;",
-  "replace": "\t\tf->obj->fsk.sr = 0;"
+  "label": "the shared reset (47, 49, 50) leaves the shift register at 0",
+  "find": "\tf->obj->fsk.sr = -1;",
+  "replace": "\tf->obj->fsk.sr = 0;"
  },
  {
-  "label": "47's reset does not clear the bit count",
-  "find": "\t\tf->obj->fsk.sr = -1;\n\t\tf->obj->fsk.nbits = 0;\n",
-  "replace": "\t\tf->obj->fsk.sr = -1;\n"
+  "label": "the shared reset (47, 49, 50) does not clear the bit count",
+  "find": "\tf->obj->fsk.sr = -1;\n\tf->obj->fsk.nbits = 0;\n",
+  "replace": "\tf->obj->fsk.sr = -1;\n"
  },
  {
-  "label": "47's record +0x14 is 0",
+  "label": "the shared reset's record (47, 49, 50) +0x14 is 0",
   "find": "\t\t*(short *)(r + 0x14) = -1;",
   "replace": "\t\t*(short *)(r + 0x14) = 0;"
  },
  {
-  "label": "47's record +0x16 is 0",
+  "label": "the shared reset's record (47, 49, 50) +0x16 is 0",
   "find": "\t\t*(short *)(r + 0x16) = 1;",
   "replace": "\t\t*(short *)(r + 0x16) = 0;"
  },
  {
-  "label": "47's record +0x18 ignores the V.90 receiver",
-  "find": "\t\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t\t(f->obj->f359c == 0x65)"
+  "label": "the shared reset's record (47, 49, 50) +0x18 ignores the V.90 receiver",
+  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->f359c == 0x65)"
  },
  {
-  "label": "47's record +0x18 reads the K56flex receiver",
-  "find": "\t\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t\t(f->obj->f359c == 0x65 && f->obj->k56flex_receiver != 0)"
+  "label": "the shared reset's record (47, 49, 50) +0x18 reads the K56flex receiver",
+  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->f359c == 0x65 && f->obj->k56flex_receiver != 0)"
  },
  {
-  "label": "47's record +0x18 takes 0x1e on the answer side",
-  "find": "\t\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t\t(f->obj->f359c == 0x66 && f->obj->v90_receiver != 0)"
+  "label": "the shared reset's record (47, 49, 50) +0x18 takes 0x1e on the answer side",
+  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->f359c == 0x66 && f->obj->v90_receiver != 0)"
  },
  {
-  "label": "47's record +0x18 has its two constants exchanged",
-  "find": "\t\t\t? 0x1e : 0x11;",
-  "replace": "\t\t\t? 0x11 : 0x1e;"
+  "label": "the shared reset's record (47, 49, 50) +0x18 has its two constants exchanged",
+  "find": "\t\t? 0x1e : 0x11;",
+  "replace": "\t\t? 0x11 : 0x1e;"
  },
  {
-  "label": "47's record +0x1a is 1",
+  "label": "the shared reset's record (47, 49, 50) +0x1a is 1",
   "find": "\t\t*(short *)(r + 0x1a) = 0;",
   "replace": "\t\t*(short *)(r + 0x1a) = 1;"
  },
  {
-  "label": "47's record +0x1c is 9",
+  "label": "the shared reset's record (47, 49, 50) +0x1c is 9",
   "find": "\t\t*(short *)(r + 0x1c) = 8;",
   "replace": "\t\t*(short *)(r + 0x1c) = 9;"
  },
  {
-  "label": "47's record +0x1e is 1",
+  "label": "the shared reset's record (47, 49, 50) +0x1e is 1",
   "find": "\t\t*(short *)(r + 0x1e) = 0;",
   "replace": "\t\t*(short *)(r + 0x1e) = 1;"
  },
  {
-  "label": "47's record +0x20 is 0",
-  "find": "\t\t*(short *)(r + 0x20) = 1;",
-  "replace": "\t\t*(short *)(r + 0x20) = 0;"
+  "label": "the shared reset's record (47, 49, 50) +0x20 is 0",
+  "find": "\t*(short *)(r + 0x20) = 1;",
+  "replace": "\t*(short *)(r + 0x20) = 0;"
  },
  {
-  "label": "47's record +0x22 is 1",
+  "label": "the shared reset's record (47, 49, 50) +0x22 is 1",
   "find": "\t\t*(short *)(r + 0x22) = 0;",
   "replace": "\t\t*(short *)(r + 0x22) = 1;"
  },
  {
-  "label": "47's record +0x24 is 0xf73",
-  "find": "\t\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t\t*(int *)(r + 0x24) = 0xf73;"
+  "label": "the shared reset's record (47, 49, 50) +0x24 is 0xf73",
+  "find": "\t*(int *)(r + 0x24) = 0xf72;",
+  "replace": "\t*(int *)(r + 0x24) = 0xf73;"
  },
  {
-  "label": "47's record +0x24 is a halfword",
-  "find": "\t\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t\t*(short *)(r + 0x24) = 0xf72;"
+  "label": "the shared reset's record (47, 49, 50) +0x24 is a halfword",
+  "find": "\t*(int *)(r + 0x24) = 0xf72;",
+  "replace": "\t*(short *)(r + 0x24) = 0xf72;"
  },
  {
-  "label": "47's record +0x28 is 0xd",
-  "find": "\t\t*(short *)(r + 0x28) = 0xc;",
-  "replace": "\t\t*(short *)(r + 0x28) = 0xd;"
+  "label": "the shared reset's record (47, 49, 50) +0x28 is 0xd",
+  "find": "\t*(short *)(r + 0x28) = 0xc;",
+  "replace": "\t*(short *)(r + 0x28) = 0xd;"
  },
  {
-  "label": "47's record +0x2a is 0xd",
-  "find": "\t\t*(short *)(r + 0x2a) = 0xc;",
-  "replace": "\t\t*(short *)(r + 0x2a) = 0xd;"
+  "label": "the shared reset's record (47, 49, 50) +0x2a is 0xd",
+  "find": "\t*(short *)(r + 0x2a) = 0xc;",
+  "replace": "\t*(short *)(r + 0x2a) = 0xd;"
  },
  {
-  "label": "47's record +0x2c is 0xf73",
-  "find": "\t\t*(int *)(r + 0x2c) = 0xf72;",
-  "replace": "\t\t*(int *)(r + 0x2c) = 0xf73;"
+  "label": "the shared reset's record (47, 49, 50) +0x2c is 0xf73",
+  "find": "\t*(int *)(r + 0x2c) = 0xf72;",
+  "replace": "\t*(int *)(r + 0x2c) = 0xf73;"
  },
  {
-  "label": "47's record +0x2c is a halfword",
-  "find": "\t\t*(int *)(r + 0x2c) = 0xf72;",
-  "replace": "\t\t*(short *)(r + 0x2c) = 0xf72;"
+  "label": "the shared reset's record (47, 49, 50) +0x2c is a halfword",
+  "find": "\t*(int *)(r + 0x2c) = 0xf72;",
+  "replace": "\t*(short *)(r + 0x2c) = 0xf72;"
  },
  {
-  "label": "47's record is at +0xa97c",
+  "label": "the shared reset's record (47, 49, 50) is at +0xa97c",
   "find": "#define T3M_MSGREC0\t\t0xa94c",
   "replace": "#define T3M_MSGREC0\t\t0xa97c"
  },
  {
-  "label": "47's reset does not announce itself",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Repeated info0 is detected, \"",
-  "replace": "\t\tif (0)\n\t\t\tdsplibs_debug_printf(\"Repeated info0 is detected, \""
+  "label": "the shared reset (47, 49, 50) does not announce itself",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Repeated info0 is detected, \"\n\t\t\t\t\t     \"errorrecovery is initialized in \"\n\t\t\t\t\t     \"TX_PHASE2_xxx\\n\");",
+  "replace": "\t\tif (0)\n\t\t\tdsplibs_debug_printf(\"Repeated info0 is detected, \"\n\t\t\t\t\t     \"errorrecovery is initialized in \"\n\t\t\t\t\t     \"TX_PHASE2_xxx\\n\");"
  },
  {
-  "label": "47's reset does not clear the counter at the end",
+  "label": "the shared reset (47, 49, 50) does not clear the counter at the end",
   "find": "\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t}\n\n\t/* 0x6684e. */",
   "replace": "\t}\n\n\t/* 0x6684e. */"
  },
@@ -554,13 +554,13 @@
  },
  {
   "label": "47's high arm moves the microstate to TX_L2",
-  "find": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);",
-  "replace": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L2);"
+  "find": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);",
+  "replace": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L2);"
  },
  {
   "label": "47's high arm stores the microstate without announcing it",
-  "find": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);",
-  "replace": "\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);"
+  "find": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);",
+  "replace": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);"
  },
  {
   "label": "47's high arm leaves through txstate 5",
@@ -728,5 +728,752 @@
   "replace": "\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\tif (tx != V34HS_SILENCE) {",
   "equivalent": true,
   "why": "The store that precedes it is `hs_setstate(TXSTATE, SILENCE)`, so +0x3596 already holds 5 when the value is passed.  This is the exit the batch went looking for, on the reasoning that 0x6d225 and 0x6dfbd load a literal 5 -- they do, but 0x6d200 has stored 5 into the object four instructions earlier.  Enumerated over all eleven exits of the two arms and all seven arms of table 2 plus the tail, none of which writes +0x3592, +0x3594 or +0x3596: the value handed to the transmit dispatch equals the object's txstate on every path either arm can take."
+ },
+ {
+  "label": "sep"
+ },
+ {
+  "label": "49's first threshold is at-least rather than above",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n >= 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's first threshold is 50's 0x32",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's reset window is filtdelay+0x50 wide",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x50\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's reset window is inclusive at the top",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n <= filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's reset window is a constant and not filtdelay-relative",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's shift-register mask is 0x7ff",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x7ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's shift-register mask is 0xfff",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's shift-register test is 0x373",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x373)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's shift-register test is 50's above-0x200",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200)\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "49's +0x3588 guard is inverted",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) != 0) {"
+ },
+ {
+  "label": "49 has no +0x3588 guard",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)) {"
+ },
+ {
+  "label": "49 reads filtdelay unsigned",
+  "find": "\tfilt = T3M_I16(f, T3M_FILTDELAY);\n\n\t/* 0x66a1c",
+  "replace": "\tfilt = T3M_U16(f, T3M_FILTDELAY);\n\n\t/* 0x66a1c"
+ },
+ {
+  "label": "49's second threshold is strictly below",
+  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) < filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74"
+ },
+ {
+  "label": "49's two thresholds are the same 0x4c",
+  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x4c) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74"
+ },
+ {
+  "label": "49's second threshold is 0x51",
+  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x51) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74"
+ },
+ {
+  "label": "49's second threshold is a constant",
+  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74"
+ },
+ {
+  "label": "49 re-reads the counter as unsigned",
+  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)T3M_U16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "equivalent": true,
+  "why": "every trial's counter is below 0x8000 at this point, so the two readings agree; the signedness is pinned by the first threshold's 0x7fff and 0xffff trials instead"
+ },
+ {
+  "label": "49 sets bit 0x400 rather than 0x200",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x400);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {"
+ },
+ {
+  "label": "49 sets the flag only after the shift-register guard",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tif ((f->obj->fsk.sr & 1) == 0) {"
+ },
+ {
+  "label": "49 tests bit 1 of the shift register",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 2) == 0) {"
+ },
+ {
+  "label": "49 tests the shift register the other way",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) != 0) {"
+ },
+ {
+  "label": "49's is_short selector is inverted",
+  "find": "\tif (f->obj->is_short != 0) {\n\t\t/* 0x6ce40. */",
+  "replace": "\tif (f->obj->is_short == 0) {\n\t\t/* 0x6ce40. */"
+ },
+ {
+  "label": "49 takes the bulk delay from +0xac04 rather than +0xac02",
+  "find": "\t\tf->obj->rtd = f->obj->prev_bulk_delay;",
+  "replace": "\t\tf->obj->rtd = (short)(f->obj->prev_bulk_delay + 2);"
+ },
+ {
+  "label": "49's computed delay subtracts 0x18d",
+  "find": "\t\tf->obj->rtd = (short)(d * 4u - 0x18cu);",
+  "replace": "\t\tf->obj->rtd = (short)(d * 4u - 0x18du);"
+ },
+ {
+  "label": "49's computed delay adds 0x18c",
+  "find": "\t\tf->obj->rtd = (short)(d * 4u - 0x18cu);",
+  "replace": "\t\tf->obj->rtd = (short)(d * 4u + 0x18cu);"
+ },
+ {
+  "label": "49's computed delay scales by two",
+  "find": "\t\tf->obj->rtd = (short)(d * 4u - 0x18cu);",
+  "replace": "\t\tf->obj->rtd = (short)(d * 2u - 0x18cu);"
+ },
+ {
+  "label": "49's computed delay is not truncated to a halfword",
+  "find": "\t\tf->obj->rtd = (short)(d * 4u - 0x18cu);",
+  "replace": "\t\tf->obj->rtd = (short)((int)d * 4 - 0x18c);",
+  "equivalent": true,
+  "why": "the store is to a short either way, and the low sixteen bits of the 32-bit expression are the same in both; the mutation is here to say which part of the derivation is NOT load-bearing"
+ },
+ {
+  "label": "49 subtracts the counter from filtdelay rather than the other way",
+  "find": "\t\tunsigned d = (unsigned)T3M_U16(f, T3M_COUNTER)\n\t\t\t   - (unsigned)T3M_U16(f, T3M_FILTDELAY);",
+  "replace": "\t\tunsigned d = (unsigned)T3M_U16(f, T3M_FILTDELAY)\n\t\t\t   - (unsigned)T3M_U16(f, T3M_COUNTER);"
+ },
+ {
+  "label": "49 clamps the delay below zero rather than at it",
+  "find": "\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 1;",
+  "replace": "\tif (f->obj->rtd < 0)\n\t\tf->obj->rtd = 1;"
+ },
+ {
+  "label": "49 clamps the delay to zero",
+  "find": "\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 1;",
+  "replace": "\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 0;"
+ },
+ {
+  "label": "49 clamps the delay on the unsigned reading",
+  "find": "\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 1;",
+  "replace": "\tif ((unsigned short)f->obj->rtd == 0)\n\t\tf->obj->rtd = 1;"
+ },
+ {
+  "label": "49 applies a bulk delay one larger",
+  "find": "\tApplyBulkDelay(f->obj, rtd);",
+  "replace": "\tApplyBulkDelay(f->obj, (short)(rtd + 1));"
+ },
+ {
+  "label": "49 does not apply the bulk delay at all",
+  "find": "\tApplyBulkDelay(f->obj, rtd);",
+  "replace": ""
+ },
+ {
+  "label": "49 clamps the delay after applying it",
+  "find": "\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 1;\n\n\trtd = f->obj->rtd;\n\tApplyBulkDelay(f->obj, rtd);",
+  "replace": "\trtd = f->obj->rtd;\n\tApplyBulkDelay(f->obj, rtd);\n\tif (f->obj->rtd <= 0)\n\t\tf->obj->rtd = 1;"
+ },
+ {
+  "label": "49 announces the transition BEFORE the counter takes filtdelay",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);",
+  "replace": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);\n\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);"
+ },
+ {
+  "label": "49 clears the counter rather than giving it filtdelay",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);",
+  "replace": "\tT3M_U16(f, T3M_COUNTER) = 0;\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);"
+ },
+ {
+  "label": "49 moves the microstate to TX_PHASE2_CALL",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);",
+  "replace": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_CALL);"
+ },
+ {
+  "label": "49 stores the microstate without announcing it",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);",
+  "replace": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);"
+ },
+ {
+  "label": "49 copies agc_level rather than agc_gain",
+  "find": "\t*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;",
+  "replace": "\t*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_level;"
+ },
+ {
+  "label": "49 does not copy the gain at all",
+  "find": "\t*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;\n",
+  "replace": ""
+ },
+ {
+  "label": "49 leaves through txstate 5 rather than the object's",
+  "find": "\t*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;\n\n\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));",
+  "replace": "\t*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;\n\n\tt3m_txblock(f, V34HS_SILENCE);"
+ },
+ {
+  "label": "49's diagnostic has bulkDelay and filtDelay exchanged",
+  "find": "\t\t\t\t     (int)f->obj->is_short, (int)f->obj->rtd,\n\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY));",
+  "replace": "\t\t\t\t     (int)f->obj->is_short,\n\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY),\n\t\t\t\t     (int)f->obj->rtd);"
+ },
+ {
+  "label": "49's diagnostic prints filtDelay unsigned",
+  "find": "\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY));",
+  "replace": "\t\t\t\t     (int)T3M_U16(f, T3M_FILTDELAY));"
+ },
+ {
+  "label": "49 names RX_PHASE2_ANS in its reset diagnostic",
+  "find": "\t\t\t\t\t     \"RX_PHASE1_ANS\\n\");",
+  "replace": "\t\t\t\t\t     \"RX_PHASE2_ANS\\n\");"
+ },
+ {
+  "label": "sep"
+ },
+ {
+  "label": "50's first threshold is at-least rather than above",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n >= 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's first threshold is 49's 0x28",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's reset window is filtdelay+0x50 wide",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x50\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's reset window is a constant and not filtdelay-relative",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's shift-register mask is 0x1ff",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x1ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's shift-register mask is 0xfff",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's shift-register test is at-least",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) >= 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's shift-register test is 49's equals-0x372",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's shift-register test is below rather than above",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) < 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {"
+ },
+ {
+  "label": "50's +0x3588 guard is inverted",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) != 0) {"
+ },
+ {
+  "label": "50 reads filtdelay unsigned",
+  "find": "\tfilt = T3M_I16(f, T3M_FILTDELAY);\n\n\t/* 0x664c7",
+  "replace": "\tfilt = T3M_U16(f, T3M_FILTDELAY);\n\n\t/* 0x664c7"
+ },
+ {
+  "label": "50's second threshold is strictly below",
+  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) < filt + 0x50) {"
+ },
+ {
+  "label": "50's two thresholds are the same 0x4c",
+  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x4c) {"
+ },
+ {
+  "label": "50's second threshold is a constant",
+  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= 0x50) {"
+ },
+ {
+  "label": "50 tests bit 1 of the shift register",
+  "find": "\tif ((f->obj->fsk.sr & 1) == 0) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66759",
+  "replace": "\tif ((f->obj->fsk.sr & 2) == 0) {\n\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66759"
+ },
+ {
+  "label": "50 sets +0x200 in the receiver's flags the way 49 does",
+  "find": "\t/* 0x66759, and it is stored before the demodulator's diagnostic. */\n\tT3M_U16(f, T3M_COUNTER) = 0x14;",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\tT3M_U16(f, T3M_COUNTER) = 0x14;"
+ },
+ {
+  "label": "50 leaves the counter at 0x15",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = 0x14;",
+  "replace": "\tT3M_U16(f, T3M_COUNTER) = 0x15;"
+ },
+ {
+  "label": "50 does not replace the counter",
+  "find": "\tT3M_U16(f, T3M_COUNTER) = 0x14;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "50 sets the demodulator up for 2743 baud",
+  "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);",
+  "replace": "\tV34SetupDemodulator(f->obj, 2743, 1800);"
+ },
+ {
+  "label": "50 sets the demodulator up for a 1829 Hz carrier",
+  "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);",
+  "replace": "\tV34SetupDemodulator(f->obj, 2400, 1829);"
+ },
+ {
+  "label": "50 takes the demodulator's rate out of the object",
+  "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);",
+  "replace": "\tV34SetupDemodulator(f->obj, T3M_I16(f, T3M_TXBAUD), 1800);"
+ },
+ {
+  "label": "50 runs rxtiminginit before the demodulator",
+  "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);\n\trxtiminginit(f->obj);",
+  "replace": "\trxtiminginit(f->obj);\n\tV34SetupDemodulator(f->obj, 2400, 1800);"
+ },
+ {
+  "label": "50 does not run rxtiminginit",
+  "find": "\trxtiminginit(f->obj);\n",
+  "replace": ""
+ },
+ {
+  "label": "50 moves the rxstate to DET_AB",
+  "find": "\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);",
+  "replace": "\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);"
+ },
+ {
+  "label": "50 stores the rxstate without announcing it",
+  "find": "\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);",
+  "replace": "\ths_put(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);"
+ },
+ {
+  "label": "50 moves the microstate as well",
+  "find": "\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);",
+  "replace": "\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);\n\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_RX_L1);"
+ },
+ {
+  "label": "50 clears only 0x200 of the receiver's flags",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0200);"
+ },
+ {
+  "label": "50 clears only 0x800 of the receiver's flags",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0800);"
+ },
+ {
+  "label": "50 sets rather than clears the two flag bits",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x0a00);"
+ },
+ {
+  "label": "50 quarters the gain rather than halving it",
+  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
+  "replace": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 2);"
+ },
+ {
+  "label": "50 halves the gain logically rather than arithmetically",
+  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
+  "replace": "\tf->rx->agc_gain = (short)((unsigned short)f->rx->agc_gain >> 1);"
+ },
+ {
+  "label": "50 halves agc_level rather than agc_gain",
+  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
+  "replace": "\tf->rx->agc_level = (short)((int)f->rx->agc_level >> 1);"
+ },
+ {
+  "label": "50 halves the gain before running rxtiminginit",
+  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);\n\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
+  "equivalent": true,
+  "why": "the two stores are to two fields and neither reads the other, so no comparison this fixture makes can order them; it is here to say that the order in the object was not proved"
+ },
+ {
+  "label": "sep"
+ },
+ {
+  "label": "51's threshold is 0x2b",
+  "find": "\tif (n != 0x2a) {",
+  "replace": "\tif (n != 0x2b) {"
+ },
+ {
+  "label": "51's threshold is at-least rather than equal",
+  "find": "\tif (n != 0x2a) {",
+  "replace": "\tif ((short)n < 0x2a) {"
+ },
+ {
+  "label": "51's threshold is 48's 0x78",
+  "find": "\tif (n != 0x2a) {",
+  "replace": "\tif (n != 0x78) {"
+ },
+ {
+  "label": "51's is_short selector is inverted",
+  "find": "\tif (f->obj->is_short == 0) {\n\t\t/* 0x6b5f5. */",
+  "replace": "\tif (f->obj->is_short != 0) {\n\t\t/* 0x6b5f5. */"
+ },
+ {
+  "label": "51's detector body announces the microstate first",
+  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
+  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;"
+ },
+ {
+  "label": "51's detector body moves the txstate to TX_L2",
+  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
+  "replace": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L2);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;"
+ },
+ {
+  "label": "51's detector body does not clear vect_idx",
+  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
+  "replace": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);"
+ },
+ {
+  "label": "51's detector body clears vect_idx before announcing",
+  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
+  "replace": "\t\tf->obj->vect_idx = 0;\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);"
+ },
+ {
+  "label": "51 exchanges the two carrier tables",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c1200_ : c2400_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);"
+ },
+ {
+  "label": "51 tests the role flag against 0x66",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x66 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);"
+ },
+ {
+  "label": "51's detector limit is 0x65",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x65, 0x32, 0x800, 0);"
+ },
+ {
+  "label": "51's detector warm-up is 0x33",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x33, 0x800, 0);"
+ },
+ {
+  "label": "51's detector threshold is 0x801",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x801, 0);"
+ },
+ {
+  "label": "51's detector polarity is 1",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0);"
+ },
+ {
+  "label": "51 runs the detector on the object rather than on +0x3564",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR + 4),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);"
+ },
+ {
+  "label": "51's detector body sets bit 0x400 in the receiver's flags",
+  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x400);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);"
+ },
+ {
+  "label": "51's detector body moves the rxstate to RX_L1",
+  "find": "\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+  "replace": "\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);"
+ },
+ {
+  "label": "51's detector body stores the rxstate without announcing it",
+  "find": "\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+  "replace": "\t\ths_put(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);"
+ },
+ {
+  "label": "51's info1a body announces the txstate first",
+  "find": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
+  "replace": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);"
+ },
+ {
+  "label": "51's info1a body moves the microstate to RX_PHASE3_CALL",
+  "find": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
+  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_RX_PHASE3_CALL);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
+ },
+ {
+  "label": "51's info1a body moves the txstate to SILENCE",
+  "find": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
+  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);"
+ },
+ {
+  "label": "51's info1a body clears its three words before announcing",
+  "find": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\n\t\t/* 0x6b9e3, and all three are cleared AFTER both lines are\n\t\t   printed -- vect_idx is `[1]` and the counter is `[2]`. */\n\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;",
+  "replace": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_INFODONE);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
+ },
+ {
+  "label": "51's info1a body does not clear the counter",
+  "find": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;",
+  "replace": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;"
+ },
+ {
+  "label": "51's info1a body does not clear +0x35a2",
+  "find": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;",
+  "replace": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;"
+ },
+ {
+  "label": "51's info1a body does not clear vect_idx",
+  "find": "\t\tf->obj->vect_idx = 0;\n\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;",
+  "replace": "\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\tT3M_I16(f, T3M_F35A2) = 0;"
+ },
+ {
+  "label": "51 aims +0xaa6c at the first message record and not the third",
+  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)(f->m + T3M_MSGREC0);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);"
+ },
+ {
+  "label": "51 does not aim +0xaa6c at all",
+  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\tV34SetINFO1aBits(f->obj, (short *)w);"
+ },
+ {
+  "label": "51 hands V34SetINFO1aBits the object's other record",
+  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)(f->m + T3M_MSGREC0));"
+ },
+ {
+  "label": "51 does not call V34SetINFO1aBits",
+  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n"
+ },
+ {
+  "label": "51's rate switch exchanges 2400 and 2800",
+  "find": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale2400;",
+  "replace": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale2800;"
+ },
+ {
+  "label": "51's rate switch matches 2400 one baud out",
+  "find": "\t\tcase 0x960:\t\t/* 2400 */",
+  "replace": "\t\tcase 0x961:\t\t/* 2400 */"
+ },
+ {
+  "label": "51's rate switch gives 3000 the 3200 scale",
+  "find": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3000;",
+  "replace": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3200;"
+ },
+ {
+  "label": "51's rate switch gives 3200 the 3429 scale",
+  "find": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3200;",
+  "replace": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3429;"
+ },
+ {
+  "label": "51's rate switch gives 3429 the 3000 scale",
+  "find": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3429;",
+  "replace": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale3000;"
+ },
+ {
+  "label": "51's rate switch gives 2800 the 2400 scale",
+  "find": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale2800;",
+  "replace": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale2400;"
+ },
+ {
+  "label": "51's rate switch has a default that writes the 2800 scale",
+  "find": "\t\tdefault:\n\t\t\tbreak;\n\t\t}",
+  "replace": "\t\tdefault:\n\t\t\t*(const short **)(f->m + T3M_TXSCALE) = scale2800;\n\t\t\tbreak;\n\t\t}"
+ },
+ {
+  "label": "51's 2743 arm exchanges its two carriers",
+  "find": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;",
+  "replace": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x690 : 0x74b;"
+ },
+ {
+  "label": "51's 2743 arm tests the carrier against 0x726",
+  "find": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;",
+  "replace": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x726\n\t\t\t\t\t  ? 0x74b : 0x690;"
+ },
+ {
+  "label": "51's 2743 arm reads the carrier after replacing it",
+  "find": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;\n\n\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xaf0;",
+  "replace": "\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xaf0;\n\n\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;"
+ },
+ {
+  "label": "51's 2743 arm leaves the baud rate at 2743",
+  "find": "\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xaf0;",
+  "replace": "\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xab7;"
+ },
+ {
+  "label": "51's 2743 arm does not announce the substitution",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34HSHAK: Illegal prev session baud \"",
+  "replace": "\t\t\tif (0)\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34HSHAK: Illegal prev session baud \""
+ },
+ {
+  "label": "51's record +0x18 is 0x25",
+  "find": "\t\t*(short *)(r + 0x18) = 0x26;",
+  "replace": "\t\t*(short *)(r + 0x18) = 0x25;"
+ },
+ {
+  "label": "51's record +0x18 is the shared reset's 0x11",
+  "find": "\t\t*(short *)(r + 0x18) = 0x26;",
+  "replace": "\t\t*(short *)(r + 0x18) = 0x11;"
+ },
+ {
+  "label": "51's record +0x20 is 1 rather than 0",
+  "find": "\t\t*(short *)(r + 0x20) = 0;",
+  "replace": "\t\t*(short *)(r + 0x20) = 1;"
+ },
+ {
+  "label": "51's record +0x24 is 0xf72",
+  "find": "\t\t*(int *)(r + 0x24) = 0xff72;",
+  "replace": "\t\t*(int *)(r + 0x24) = 0xf72;"
+ },
+ {
+  "label": "51's record +0x24 is a halfword",
+  "find": "\t\t*(int *)(r + 0x24) = 0xff72;",
+  "replace": "\t\t*(short *)(r + 0x24) = (short)0xff72;"
+ },
+ {
+  "label": "51's record +0x2c is 0xf72",
+  "find": "\t\t*(int *)(r + 0x2c) = 0xff72;",
+  "replace": "\t\t*(int *)(r + 0x2c) = 0xf72;"
+ },
+ {
+  "label": "51's record +0x28 is 0xc",
+  "find": "\t\t*(short *)(r + 0x28) = 0x10;",
+  "replace": "\t\t*(short *)(r + 0x28) = 0xc;"
+ },
+ {
+  "label": "51's record +0x2a is 0xc",
+  "find": "\t\t*(short *)(r + 0x2a) = 0x10;",
+  "replace": "\t\t*(short *)(r + 0x2a) = 0xc;"
+ },
+ {
+  "label": "51's record +0x1c is 0",
+  "find": "\t\t*(short *)(r + 0x1c) = 8;",
+  "replace": "\t\t*(short *)(r + 0x1c) = 0;"
+ },
+ {
+  "label": "51's record +0x14 is 0",
+  "find": "\t\t*(short *)(r + 0x14) = -1;",
+  "replace": "\t\t*(short *)(r + 0x14) = 0;"
+ },
+ {
+  "label": "51 reaches the record directly rather than through +0xaa6c",
+  "find": "\t\tr = *(unsigned char **)(f->m + T3M_SELFPTR);",
+  "replace": "\t\tr = (unsigned char *)w;",
+  "equivalent": true,
+  "why": "V34SetINFO1aBits does not write +0xaa6c, so the re-read gives back the address stored three lines above it; the object re-reads and so does this, but nothing here can tell the two apart"
+ },
+ {
+  "label": "51 does not clear +0x358c",
+  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "51 inverts +0x358c the way 47 and 48 do",
+  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;",
+  "replace": "\t\tT3M_U16(f, T3M_TOGGLE) ^= 1;"
+ },
+ {
+  "label": "51 copies the carrier into the receive baud rate",
+  "find": "\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXBAUD);",
+  "replace": "\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXCARRIER);"
+ },
+ {
+  "label": "51 copies the baud rate into the receive carrier",
+  "find": "\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "replace": "\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXBAUD);"
+ },
+ {
+  "label": "51 does not copy the power scale across",
+  "find": "\t\t*(const short **)(f->m + T3M_RXSCALE) =\n\t\t\t*(const short **)(f->m + T3M_TXSCALE);\n",
+  "replace": ""
+ },
+ {
+  "label": "51 copies the four fields before the rate switch",
+  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tT3M_U16(f, 0xaa96) = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);"
+ },
+ {
+  "label": "51's upper gain band is at-least",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain >= 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);"
+ },
+ {
+  "label": "51's lower gain band is at-least",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain >= 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);"
+ },
+ {
+  "label": "51's upper gain shift is three",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 3);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);"
+ },
+ {
+  "label": "51's two gain shifts are exchanged",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);"
+ },
+ {
+  "label": "51's gain bands are compared unsigned",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif ((unsigned short)gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse\n if ((unsigned short)gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);"
+ },
+ {
+  "label": "51's gain shifts are logical",
+  "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 1);"
+ },
+ {
+  "label": "51 does not clear +0x35a0",
+  "find": "\tT3M_I16(f, T3M_F35A0) = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "51's closing diagnostic has its two phrases exchanged",
+  "find": "\t\t\t\t     f->obj->is_short != 0\n\t\t\t\t     ? \"transmitting info1a\" : \"starting DET_AB\",",
+  "replace": "\t\t\t\t     f->obj->is_short != 0\n\t\t\t\t     ? \"starting DET_AB\" : \"transmitting info1a\","
+ },
+ {
+  "label": "51's closing diagnostic prints the gain unsigned",
+  "find": "\t\t\t\t     (int)f->rx->agc_gain);",
+  "replace": "\t\t\t\t     (int)(unsigned short)f->rx->agc_gain);"
+ },
+ {
+  "label": "51's closing diagnostic prints the flags before the gain",
+  "find": "\t\t\t\t     (unsigned)f->rx->flags,\n\t\t\t\t     (int)f->rx->agc_gain);",
+  "replace": "\t\t\t\t     (int)f->rx->agc_gain,\n\t\t\t\t     (unsigned)f->rx->flags);"
+ },
+ {
+  "label": "51 leaves through txstate 5",
+  "find": "\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));\n}\n\n/*\n * ---------------------------------------------------------------------------\n * 0x64ad2",
+  "replace": "\tt3m_txblock(f, V34HS_SILENCE);\n}\n\n/*\n * ---------------------------------------------------------------------------\n * 0x64ad2"
  }
 ]
