@@ -89,8 +89,43 @@ v34hs_side_a(void (*fn)(void *obj))
 	side_a_fn = fn;
 }
 
-/* Slot 0 whenever anything of ours ran on side A, whichever mechanism. */
-#define V34HS_LOG_SIDE_A	((use_ours || side_a_fn != NULL) ? 0 : 1)
+/*
+ * AND THE THIRD FORM: A DIFFERENT ENTRY POINT ALTOGETHER, ON BOTH SIDES.
+ *
+ * The three above all assume the function under test IS `v34handshak`, and
+ * they differ only in what side A runs instead of it.  `datapumpv34` is not
+ * `v34handshak`: it is the function that CALLS it, in the same translation
+ * unit and against the same object, and the fixture is worth reusing for it
+ * for exactly the reason findings 319-322 give -- what an object step depends
+ * on is the geometry of the five blocks the object points at, and building a
+ * second fixture would be building that geometry a second time.
+ *
+ * So this replaces the entry point on BOTH sides at once: ours on A, the
+ * blob's on B.  It is not a per-case mechanism and does not compose with the
+ * two above; a test uses it alone.  NULL restores `v34handshak`.
+ */
+static void (*entry_a)(void *obj);
+static void (*entry_b)(void *obj);
+static int entry_log_a;
+
+void
+v34hs_entry(void (*a)(void *obj), void (*b)(void *obj), int log_a)
+{
+	entry_a = a;
+	entry_b = b;
+	entry_log_a = log_a;
+}
+
+/*
+ * Slot 0 whenever anything of ours ran on side A, whichever mechanism -- and
+ * for `v34hs_entry` the caller says which, because a test that runs the BLOB
+ * on both sides as its control puts the blob's function on side A and the
+ * blob logs to slot 1.  Reading slot 0 there would compare an empty
+ * transcript against a full one and call the control a failure.
+ */
+#define V34HS_LOG_SIDE_A \
+	(entry_a != NULL ? entry_log_a \
+	 : ((use_ours || side_a_fn != NULL) ? 0 : 1))
 
 /* --- the two sides -------------------------------------------------------- */
 
@@ -977,7 +1012,9 @@ v34hs_step(void)
 	 */
 	if (step_arm)
 		step_arm_rc = step_arm(&obj_a);
-	if (side_a_fn != NULL)
+	if (entry_a != NULL)
+		entry_a(&obj_a);
+	else if (side_a_fn != NULL)
 		side_a_fn(&obj_a);
 	else
 		V34HS_CALL_A(&obj_a);
@@ -994,7 +1031,10 @@ v34hs_step(void)
 	probe_sw[1] = fpu_status();
 	probe_cw[1] = fpu_control();
 	alarm(5);
-	ref_v34handshak(obj_b);
+	if (entry_b != NULL)
+		entry_b(obj_b);
+	else
+		ref_v34handshak(obj_b);
 	alarm(0);
 	snprintf(text[1], sizeof(text[1]), "%s", dsplib_debug_capture_text(1));
 	observe(1, obj_b, snap_b, dsplib_debug_capture_lines(1));
@@ -1031,7 +1071,10 @@ v34hs_step(void)
 		probe_sw[2] = fpu_status();
 		probe_cw[2] = fpu_control();
 		alarm(5);
-		ref_v34handshak(obj_b);
+		if (entry_b != NULL)
+			entry_b(obj_b);
+		else
+			ref_v34handshak(obj_b);
 		alarm(0);
 		for (i = 0; i < OBJ_SIZE; i++)
 			if (obj_b[i] != probe_b2[i]) {

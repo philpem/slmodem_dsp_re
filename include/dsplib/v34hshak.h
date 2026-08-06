@@ -236,6 +236,21 @@ void v34handshakinit(void *obj, int mode);
 void v34handshak(void *obj);
 
 /*
+ * The datapump's per-block entry point, and the last function of V34hshak.c.
+ *
+ * The int at +0x2218 decides: above 1 it drives `v34handshak` until the
+ * transmit block is full and the receive queue drained, and does nothing
+ * else; at 0 or 1 it runs `modulatevector` and `receiver` instead, and then
+ * supervises the line -- retraining or renegotiating on the receiver's three
+ * consecutive-error counters at +0x258, +0x25a and +0x25c.
+ *
+ * IT INHERITS `v34handshak`'s PARTIALNESS on the first of those two paths:
+ * an arm nobody has written calls `abort`.  The second path does not reach
+ * `v34handshak` at all.
+ */
+void datapumpv34(void *obj);
+
+/*
  * ---------------------------------------------------------------------------
  * The handshake's support functions -- everything in V34hshak.c that is not
  * `v34handshak` itself.  See src/pump/v34/v34hshak.c.

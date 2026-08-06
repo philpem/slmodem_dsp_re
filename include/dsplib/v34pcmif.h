@@ -62,6 +62,15 @@ void VPcmV34InitiateHangUp(void *obj);
 void VPcmV34InitiateRateRenegotiation(void *obj, int req);
 
 /*
+ * Count a rate renegotiation, by which end asked for it.  Each is a wrapping
+ * 16-bit increment of one short and nothing else; `datapumpv34` is the only
+ * caller of either in the object.  `VPcmV34GetDiagnostics` reads the local
+ * one back signed.
+ */
+void VPcmV34IndicateLocalRRN(void *obj);
+void VPcmV34IndicateRemoteRRN(void *obj);
+
+/*
  * Rebuild the transmitter for a V.90 rate renegotiation -- the only one of
  * the three that does not go through the handshake.  Both parameters are
  * tested against zero only: `rrn_type` selects 15 or 11 for `v90_receiver`

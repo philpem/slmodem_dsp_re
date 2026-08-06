@@ -134,6 +134,28 @@ void v34hs_route(enum v34hs_route r, short samples);
  */
 void v34hs_side_a(void (*fn)(void *obj));
 
+/*
+ * REPLACE THE ENTRY POINT ON BOTH SIDES, for a function that is not
+ * `v34handshak` but shares its object.
+ *
+ * `v34hs_side_a` and `v34hs_step_case` both assume the thing being stepped is
+ * `v34handshak`, and differ only in what side A runs instead of it.
+ * `datapumpv34` is the function that CALLS `v34handshak`, in the same
+ * translation unit and against the same object, and what it needs from this
+ * fixture is the arena: findings 319-322 say an object step depends on the
+ * geometry of the five blocks the object points at, so a second fixture would
+ * mean building that geometry a second time and being wrong about it once.
+ *
+ * `a` runs on side A and `b` on side B -- ours and the blob's.  `log_a` is
+ * the capture channel side A writes: 0 for our code, 1 for the blob's, which
+ * a test running the blob on BOTH sides as its control needs, because
+ * comparing an empty slot 0 against a full slot 1 fails the control for a
+ * reason that is not about the object.  Not composable with the two per-case
+ * forms; a test uses this alone.  `v34hs_entry(NULL, NULL, 0)` puts
+ * `v34handshak` back.
+ */
+void v34hs_entry(void (*a)(void *obj), void (*b)(void *obj), int log_a);
+
 /* Write the three state halfwords on both sides. */
 void v34hs_state(short mst, short rxst, short txst);
 
