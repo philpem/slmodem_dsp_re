@@ -130,41 +130,23 @@ Three things wave 1 cost that the next batch should not pay again:
   like a broken reconstruction. Two of them did (findings 247, 262). Both were
   the test's arithmetic, not the function's.
 
-## Owed once wave 1 is merged: delete the stub `V90Phase2Info`
+## Done: the stub `V90Phase2Info` is gone
 
-`include/dsplib/V90PreFilter.h` defines its own `class V90Phase2Info` -- an
-opaque `union { unsigned char b[0x1c]; int w[7]; float f[7]; }` sized by
-`V90PHASE2INFO_BOUND`, which is a bound from the one offset `autoSelection`
-reaches, not a measurement. The real class landed with finding 255 and is
-0x24 with named fields. Two definitions of one class is the drift risk the
-`#error` in `V90Phase2Info.h` currently guards; the guard is not the fix.
+`V90PreFilter.h` includes the real header instead of declaring a 0x1c-byte
+union; `V90Phase2Info.h` has dropped its `#error`; `autoSelection` reads
+`phase2->L2` rather than punning `*(const float *const *)&phase2->b[0x18]`;
+`t_v90prefilter` has a `P2()` accessor and sizes its Phase 2 comparison with
+`sizeof(V90Phase2Info)`. The stub `class V90Parameters` stays -- that one is
+still unmodelled.
 
-The change is mechanical and every piece of it has been checked:
-
-1. `V90PreFilter.h`: delete the stub and `V90PHASE2INFO_BOUND`, `#include
-   "dsplib/V90Phase2Info.h"`. The stub `class V90Parameters` stays -- the real
-   header only forward-declares it, and a forward declaration coexists with a
-   definition.
-2. `V90Phase2Info.h`: drop the `#ifdef DSPLIB_V90PREFILTER_H` `#error`.
-3. `V90PreFilter.cpp:120`:
-   `*(const float *const *)&phase2->b[0x18]` becomes `phase2->L2`. The pun and
-   the named field agree -- the object loads a pointer from +0x18 and
-   dereferences six floats, which is what both spellings do.
-4. `t_v90prefilter.cpp`: `*(void **)&ph2[side][0x18]` becomes
-   `((V90Phase2Info *)ph2[side])->L2`; `snap_ph2` neutralises `L2` by name
-   rather than by `w[0x18 / 4]`; the three `V90PHASE2INFO_BOUND` uses become
-   `sizeof(V90Phase2Info)`, and `PH2SLOT` with them.
-
-**What it does NOT do is add coverage, and saying so matters.** The compare
-grows from 0x1c to 0x24, but `fill()` seeds both sides identically and none of
-the five `V90PreFilter` methods writes +0x1c..0x23, so the eight new bytes are
-memory neither side touches -- findings 223 and 224 exactly. The win is one
-definition instead of two, and named fields instead of `->b[0x18]`.
-
-The one thing to keep: `snap_ph2` replaces the pointer word with a boolean
-"does it still point at `meas[side]`", because the two sides hold two
-different addresses there and always will. `params` at +0x20 needs no such
-treatment -- `setup()` never writes it, so both sides keep the same fill.
+It bought hygiene, not coverage, and finding 264 says so: the comparison grew
+from 0x1c to 0x24 but the eight new bytes are memory neither side touches.
+What it did surface is a wrong sentence that two declarations of one class had
+kept alive -- `autoSelection` reads entry 14 and entries 15..20 of `L2`, not
+"its first six entries" -- and correcting it turns into evidence, because
+`printInfo` and `autoSelection` then independently stop at index 20 from two
+translation units. `test/mutations/v90prefilter.json` was added at the same
+time; all four of its mutations are caught.
 
 ## Still not started, and deliberately
 

@@ -40,5 +40,7 @@
  "v90rto":          ["src/pump/v90/ResamplerTimingOffset.cpp",
                                                  "build/test/t_v90leaves"],
  "v90cd":           ["src/pump/v90/V90ConstellationDesigner.cpp",
-                                                 "build/test/t_v90leaves"]
+                                                 "build/test/t_v90leaves"],
+ "v90prefilter":   ["src/pump/v90/V90PreFilter.cpp",
+                                                 "build/test/t_v90prefilter"]
 }

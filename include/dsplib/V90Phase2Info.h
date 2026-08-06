@@ -44,36 +44,35 @@
  * writing them would mean modelling V90Parameters, which nothing here does.
  *
  * ------------------------------------------------------------------------
- * KNOWN COLLISION.  include/dsplib/V90PreFilter.h carries its own stub
- * `class V90Phase2Info` -- a 0x1c-byte union, flagged there as "a later batch
- * that models either should replace the declaration rather than add a second
- * one".  This IS that batch, but V90PreFilter.h is being merged against by
- * parallel agents and is not edited here.  No translation unit includes both
- * today.  The merge that brings them together must delete the stub from
- * V90PreFilter.h and include this file instead; the `#error` below turns what
- * would otherwise be a page of redefinition diagnostics into that sentence.
+ * THE COLLISION IS RESOLVED.  include/dsplib/V90PreFilter.h used to carry its
+ * own stub `class V90Phase2Info`, a 0x1c-byte union, flagged there as
+ * something "a later batch that models either should replace".  It now
+ * includes this file instead, and the `#error` that stood here to make the
+ * first translation unit needing both say so in one sentence is gone with it.
+ * Finding 264.
  * ------------------------------------------------------------------------
  */
 
 #ifndef DSPLIB_V90PHASE2INFO_H
 #define DSPLIB_V90PHASE2INFO_H
 
-#ifdef DSPLIB_V90PREFILTER_H
-#error "V90PreFilter.h's stub V90Phase2Info clashes with the real one; \
-delete the stub from V90PreFilter.h and include dsplib/V90Phase2Info.h there."
-#endif
-
 /*
- * Declared, not defined.  A forward declaration coexists with the stub
- * definition in V90PreFilter.h, which is why this one is safe and the class
- * above is not.
+ * Declared, not defined.  `V90PreFilter.h` defines this class and includes
+ * this file before doing so; a declaration may precede a definition, and
+ * `params` below is only ever a pointer, so nothing here needs it complete.
  */
 class V90Parameters;
 
 /*
  * How many of `L2` `printInfo` prints: `inc %ebx; cmp $0x14,%ebx; jbe` is
- * 0 through 20 inclusive.  It is a LOWER BOUND on the array, not its length
- * -- V90PreFilter::autoSelection reads six floats from the same pointer.
+ * 0 through 20 inclusive.  It is a LOWER BOUND on the array, not its length.
+ *
+ * `V90PreFilter::autoSelection` is the second reader and it agrees: it takes
+ * entry 14 as a reference level and entries 15 through 20 as the six-point
+ * signature it matches against each reference loop.  Twenty is the highest
+ * index either function touches, from two different translation units, which
+ * is what makes 21 a bound rather than a guess -- and nothing establishes an
+ * upper one.
  */
 #define V90PHASE2INFO_L2	21
 
@@ -146,9 +145,11 @@ public:
 	 * +0x18  The line measurement, at least V90PHASE2INFO_L2 floats.
 	 * `mov 0x18(%esi),%edx; flds (%edx,%ebx,4)` -- a pointer that is
 	 * loaded again on every iteration, not an array in the object.
-	 * V90PreFilter::autoSelection reads the same offset as a `float *`
-	 * (src/pump/v90/V90PreFilter.cpp) and matches its first six entries
-	 * against each reference loop's signature.
+	 * `V90PreFilter::autoSelection` reads the same offset as a `float *`
+	 * (src/pump/v90/V90PreFilter.cpp), taking entry 14 as a reference level
+	 * and entries 15 through 20 as the six-point signature it matches
+	 * against each reference loop.  It reads through this field by name now
+	 * that the stub is gone; it used to pun a pointer out of `b[0x18]`.
 	 *
 	 * The pointee's constness is not recoverable; nothing in the blob
 	 * writes through it, and nothing here needs to.

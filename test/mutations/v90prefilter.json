@@ -1,0 +1,14 @@
+[
+ {"label": "L2 read from the object itself, not through the pointer",
+  "find": "\tconst float *measured = phase2->L2;",
+  "replace": "\tconst float *measured = (const float *)phase2;"},
+ {"label": "the reference level is entry 15, not 14",
+  "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
+  "replace": "\t\ttarget[i] = measured[0x3c / 4] - measured[0x3c / 4 + i];"},
+ {"label": "the signature starts one entry later",
+  "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
+  "replace": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x40 / 4 + i];"},
+ {"label": "the difference is the other way round",
+  "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
+  "replace": "\t\ttarget[i] = measured[0x3c / 4 + i] - measured[0x38 / 4];"}
+]

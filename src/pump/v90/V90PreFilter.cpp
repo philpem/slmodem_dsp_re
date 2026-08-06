@@ -117,7 +117,7 @@ V90PreFilter::isV90WithEia6() const
 int
 V90PreFilter::autoSelection()
 {
-	const float *measured = *(const float *const *)&phase2->b[0x18];
+	const float *measured = phase2->L2;
 	V90RefLoop *loops = dataBase[codecType].loops;
 	long double best = 1.0e10f;
 	float target[6];

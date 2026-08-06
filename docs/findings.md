@@ -14237,3 +14237,69 @@ which every commit here already goes through.
 
 The narrower lesson for the next scripted merge: resolve one conflict block
 at a time and assert the file has none left, rather than assuming the shape.
+
+### 264. Deleting the stub `V90Phase2Info`, and the drift it was already hiding
+
+`include/dsplib/V90PreFilter.h` carried its own `class V90Phase2Info` -- an
+opaque `union { unsigned char b[0x1c]; int w[7]; float f[7]; }` -- because
+batch 3 needed the type and nothing modelled it yet. The real class landed
+with finding 255. Both then existed, and **no gate in this tree would have
+noticed them disagreeing**: no translation unit included both, so the
+`#error` in `V90Phase2Info.h` was the only thing standing between the two and
+a page of redefinition diagnostics, and it could only fire once somebody
+brought them together.
+
+They already disagreed about the size. The stub's `0x1c` was the furthest
+`autoSelection` reaches; the object is `0x24`, because the constructor and
+`setToDefault` reach +0x20 and neither is a member of `V90PreFilter`. Sizing
+from the members you happen to be writing is finding 215's mistake, and it
+was short here by eight bytes.
+
+The replacement is four edits: `V90PreFilter.h` includes the real header
+instead of declaring a stub, `V90Phase2Info.h` drops the `#error`,
+`V90PreFilter::autoSelection` reads `phase2->L2` where it punned
+`*(const float *const *)&phase2->b[0x18]`, and `t_v90prefilter` gets a `P2()`
+accessor and sizes its Phase 2 comparison with `sizeof(V90Phase2Info)`. The
+stub `class V90Parameters` stays -- that one is still unmodelled, and
+`V90Phase2Info.h` forward-declares it, which is compatible with
+`V90PreFilter.h` defining it afterwards because `params` is only ever a
+pointer.
+
+#### What it does not buy, which is worth saying plainly
+
+The Phase 2 comparison grows from 0x1c to 0x24 bytes and **that is not more
+coverage**. `fill()` seeds both sides identically and none of the five
+`V90PreFilter` methods writes +0x1c..0x23, so the eight new bytes are memory
+neither side touches -- findings 223 and 224. The win is one definition
+instead of two, and named fields instead of `b[0x18]`.
+
+The `L2` pointer still has to be replaced by a boolean before the compare, in
+`snap_ph2`, because the two sides hold two different addresses there and
+always will. `params` at +0x20 needs no such treatment: `setup()` never writes
+it, so both sides keep the same fill.
+
+#### The drift it was hiding
+
+`V90Phase2Info.h` said `autoSelection` "matches its first six entries against
+each reference loop's signature". It does not. It takes **entry 14** as a
+reference level and **entries 15 through 20** as the six-point signature --
+`measured[0x38 / 4]` and `measured[0x3c / 4 + i]`, which is what the same
+file's own `+0x38` and `+0x3c` description says two paragraphs earlier. The
+sentence was written from one side of a class that had two declarations and
+was never read against the code on the other.
+
+Corrected, and it turns into evidence rather than an error: `printInfo`'s loop
+runs 0 through 20 inclusive and `autoSelection` reads index 20, so **two
+functions in two translation units independently stop at the same place.**
+That is what makes `V90PHASE2INFO_L2 == 21` a bound rather than a guess.
+Nothing establishes an upper one.
+
+#### The rewrite is still under test
+
+Rewriting a pointer access is exactly the kind of change that can be right
+for the wrong reason, so `test/mutations/v90prefilter.json` was added and all
+four of its mutations are caught: reading `L2` from the object itself rather
+than through the pointer, taking entry 15 as the reference level instead of
+14, starting the signature one entry later, and reversing the difference.
+`autoSelection`'s 38,322 differential checks were already there; this says
+they bite on the line that changed.
