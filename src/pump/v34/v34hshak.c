@@ -2998,6 +2998,295 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 }
 
 /*
+ * ---------------------------------------------------------------------------
+ * Microstate 44 `DET_INFO`, 0x668c0 -- the bit clock of the phase-2 INFO0
+ * exchange, and the largest arm in table 3 at 6,046 exclusive bytes.
+ *
+ * WHAT IT IS.  `fskdemodulate` has already run on this route and left its
+ * recovered bits in `obj->fsk` -- `nbits` counts them and `sr` is the shift
+ * register (docs are in v34fsk.h).  This arm consumes exactly ONE of them per
+ * call: it decrements `nbits`, feeds bit 0 of `sr` through a CRC-16 register
+ * living in the record at +0xaa70, steps the bit counter at +0xaa78, and
+ * every eighth bit copies the low byte of `sr` into that record's byte array.
+ * When the counter reaches the message length plus sixteen -- the sixteen
+ * being the CRC that follows the message -- it compares the register against
+ * the last sixteen bits received and either accepts the message or restarts
+ * the whole exchange.
+ *
+ * The polynomial pins itself: 0x1021 xored in when the register's top bit
+ * differs from the incoming bit is CRC-16-CCITT, and the arm's own diagnostic
+ * is "V34INFO, info0 CRC not received properly in DET_INFO".
+ *
+ * WHAT IS HERE AND WHAT HALTS.  The bit clock, all five of its exits, and the
+ * RESTART that a failed CRC takes.  What is NOT here is the accept path at
+ * 0x6e534, 4,744 bytes that decode the message itself; `t3c_unwritten` sits
+ * where it begins.  That path dispatches on the record's +0x18 -- the message
+ * length in bits, still in `%dx` from 0x66944 -- three ways plus a default:
+ *
+ *     0x4d (77 bits)  0x6f438        0x26 (38)  0x6ed17
+ *     0x08 ( 8 bits)  0x6ea38        else       0x6e552
+ *
+ * so whoever takes it starts from those four and not from the whole arm.
+ */
+
+/*
+ * Offsets microstate 44 reads or writes.  `T44_` because three batches are
+ * writing arms of this one function into this one translation unit at the
+ * same time, and finding 325 is what one collided macro cost.  Fields the
+ * struct already names -- `fsk`, `f359c`, `v90_receiver`, `local_short`,
+ * `is_short` -- are used by name instead.
+ */
+#define T44_BLK_A94C	0xa94c	/* the record the restart installs         */
+#define T44_PTR_AA6C	0xaa6c	/* where it installs it                    */
+#define T44_PTR_AA70	0xaa70	/* the record this arm's bit clock feeds   */
+#define T44_COUNT	0xaa78	/* short: bits taken, and HS_TRACE_2       */
+#define T44_FAA7A	0xaa7a	/* short: cleared on entry, every call     */
+#define T44_F3588	0x3588	/* short: bit 2 raised by the restart      */
+#define T44_F358A	0x358a	/* short: set to 1 by the restart          */
+#define T44_FABAE	0xabae	/* ten shorts the restart clears           */
+#define T44_FABC2	0xabc2	/* short: cleared with them, separately    */
+
+/*
+ * The record reached through +0xaa70, and the one the restart installs at
+ * +0xaa6c.  Both are inside the object, so the harness compares the two
+ * pointers by offset from their own base rather than as addresses.
+ */
+#define T44_R_BYTES	0x00	/* ten shorts, one per byte received       */
+#define T44_R_CRC	0x14	/* short: the CRC-16 register, poly 0x1021 */
+#define T44_R_F16	0x16
+#define T44_R_NBITS	0x18	/* short: message length in bits           */
+#define T44_R_F1A	0x1a
+#define T44_R_F1C	0x1c
+#define T44_R_F1E	0x1e
+#define T44_R_F20	0x20
+#define T44_R_F22	0x22
+#define T44_R_F24	0x24	/* int */
+#define T44_R_F28	0x28
+#define T44_R_F2A	0x2a
+#define T44_R_F2C	0x2c	/* int */
+
+static short *
+t44_record(const struct v34_object *obj, unsigned off)
+{
+	return *(short *const *)((const char *)obj + off);
+}
+
+static short
+t44_recget(const short *rec, unsigned off)
+{
+	return *(const short *)((const char *)rec + off);
+}
+
+static void
+t44_recput(short *rec, unsigned off, short v)
+{
+	*(short *)((char *)rec + off) = v;
+}
+
+static void
+t44_recputi(short *rec, unsigned off, int v)
+{
+	*(int *)((char *)rec + off) = v;
+}
+
+/*
+ * The restart at 0x6bda0: the message is complete and its CRC did not check
+ * out, so the exchange goes back to hunting for the synchronisation pattern.
+ *
+ * Entered with the counter already stepped.  It rejoins the bit clock's tail
+ * at 0x66956 rather than returning, so the eighth-bit store below still runs
+ * -- on the 0xffff this leaves in `sr`, which is what makes the two halves
+ * one function and not two.
+ *
+ * The record at +0xaa70 and the one installed at +0xaa6c are DIFFERENT
+ * records: 0x6bef0 reloads +0xaa70 into %eax and writes its +0x14, while
+ * every write from 0x6c0ca on goes through %ebx, which 0x6bf2a set to
+ * obj+0xa94c and which survives the intervening calls because it is callee
+ * saved.
+ */
+static void
+t44_det_info_restart(struct v34_object *obj)
+{
+	short *rec = t44_record(obj, T44_PTR_AA70);
+	short *blk = (short *)((char *)obj + T44_BLK_A94C);
+	short nbits;
+	int i;
+
+	/*
+	 * 0x6bda4 compares sixteen bits of `sr` against the register.  Equal
+	 * is the message ACCEPTED, which is 0x6e534 and 4,744 bytes nobody
+	 * has written; see the note above the offsets.
+	 */
+	if ((unsigned short)obj->fsk.sr
+	    == (unsigned short)t44_recget(rec, T44_R_CRC))
+		t3c_unwritten();			/* 0x6e534 */
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34INFO, info0 CRC not received "
+				     "properly in DET_INFO\n");
+
+	/*
+	 * RX_DPSK is the state this arm is only ever reached in, so this
+	 * transition is a no-op on every path a test can drive -- it is here
+	 * because the object writes it, and `hs_setstate` is what makes it
+	 * cost nothing when the state is already there.
+	 */
+	hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+	t44_recput(rec, T44_R_CRC, -1);
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
+
+	if (obj->f359c == 0x66) {
+		/*
+		 * 0x718fc, the answering side.  The store is BEFORE the
+		 * diagnostic check and unconditional; only the printf is
+		 * guarded.
+		 */
+		t44_recput(rec, T44_R_NBITS, 0x1e);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("SetINFO0dBits  \n");
+	}
+
+	/* 0x6bf18 */
+	hs_put(obj, T44_F358A, 1);
+	t3c_putp(obj, T44_PTR_AA6C, blk);
+	hs_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));
+	obj->is_short = 0;
+	obj->local_short = 0;
+
+	/*
+	 * TEN SHORTS FROM +0xabae, INDEXED FROM ZERO.  0x6bf1f loads 1 into
+	 * %eax for the +0x358a store above and 0x6bf3e zeroes it again before
+	 * the loop, so the loop runs 0..9 and not 1..9; the bound at 0x6bf71
+	 * is `cmp $9,%ax; jle`, tested after the increment.
+	 */
+	for (i = 0; i <= 9; i++)
+		hs_put(obj, T44_FABAE + 2u * (unsigned)i, 0);
+	hs_put(obj, T44_FABC2, 0);
+
+	/*
+	 * TX_DPSK is table 2's arm at 0x644c9, which is written -- so this
+	 * path can be driven at all.  Finding 354 is the same constraint on
+	 * microstate 79, and for the same reason.
+	 */
+	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
+	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
+
+	/*
+	 * The installed record's length: 0x11 bits, or 0x1e on the
+	 * ORIGINATING side (`f359c == 0x65`) when a V.90 receiver is there.
+	 * 0x71920 falls back into the 0x11 arm when it is not, so this is one
+	 * condition and not two arms.  Everything from +0x1c on is common.
+	 */
+	nbits = 0x11;					/* 0x6c0ca */
+	if (obj->f359c == 0x65 && obj->v90_receiver != 0)
+		nbits = 0x1e;				/* 0x71920 */
+
+	t44_recput(blk, T44_R_CRC, -1);
+	t44_recput(blk, T44_R_F1A, 0);
+	t44_recput(blk, T44_R_F1E, 0);
+	t44_recput(blk, T44_R_F22, 0);
+	t44_recput(blk, T44_R_NBITS, nbits);
+
+	t44_recput(blk, T44_R_F1C, 8);			/* 0x6c0e8 */
+	t44_recput(blk, T44_R_F16, 1);
+	t44_recputi(blk, T44_R_F24, 0xf72);
+	t44_recputi(blk, T44_R_F2C, 0xf72);
+	t44_recput(blk, T44_R_F28, 0xc);
+	t44_recput(blk, T44_R_F2A, 0xc);
+	t44_recput(blk, T44_R_F20, 1);
+}
+
+static void
+t44_micro_det_info(struct v34_object *obj)
+{
+	short *rec;
+	short nbits, count, next;
+	int idx;
+
+	hs_put(obj, T44_FAA7A, 0);
+
+	/* No bit waiting: the arm is over before it starts. */
+	nbits = obj->fsk.nbits;
+	if (nbits == 0) {
+		t3c_txblock(obj);			/* 0x6ab88 */
+		return;
+	}
+
+	/* 0x668e1 reads the record BEFORE 0x668e7 writes the count back. */
+	rec = t44_record(obj, T44_PTR_AA70);
+	obj->fsk.nbits = (short)(nbits - 1);
+
+	count = hs_get(obj, T44_COUNT);
+
+	/*
+	 * The message's own bits go through the register; the sixteen after
+	 * it are the CRC and do not.  One bit per call, MSB first:
+	 *
+	 *   668ff  movswl %ax,%edx / shr $0x1f,%edx    the register's bit 15
+	 *   66907  testb  $0x1,0xaae2(%edi)            the incoming bit
+	 *   66910  xor    $0x1,%edx                    so %edx is their XOR
+	 *   66922  xor    $0x1021,%eax                 taken only when it is 1
+	 */
+	if (count < t44_recget(rec, T44_R_NBITS)) {
+		unsigned crc = (unsigned short)t44_recget(rec, T44_R_CRC);
+		int fb = (int)(crc >> 15);
+
+		if ((obj->fsk.sr & 1) != 0)
+			fb ^= 1;
+		crc <<= 1;
+		if (fb != 0)
+			crc ^= 0x1021;			/* else 0x6c133 */
+		t44_recput(rec, T44_R_CRC, (short)crc);
+	}
+
+	next = (short)(count + 1);
+	hs_put(obj, T44_COUNT, next);
+
+	/* Sixteen CRC bits after the message: 0x66944 re-reads the length. */
+	if ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)
+		t44_det_info_restart(obj);		/* 0x6bda0 */
+
+	/* Only every eighth bit completes a byte. */
+	if ((next & 7) != 0) {
+		t3c_txblock(obj);			/* 0x6bd8d */
+		return;
+	}
+	if (next <= 0) {
+		t3c_txblock(obj);			/* 0x7186a */
+		return;
+	}
+
+	/*
+	 * Ten bytes and no more.  0x6697a re-signs the index through sixteen
+	 * bits before comparing, which cannot change it here -- `next` is
+	 * positive and a multiple of eight -- but the object does it, so the
+	 * cast stays where the compare is.
+	 */
+	idx = ((int)next >> 3) - 1;
+	if ((short)idx > 9) {
+		t3c_txblock(obj);			/* 0x71857 */
+		return;
+	}
+
+	/*
+	 * 0x6698e re-reads +0xaa70: the restart above may have run in
+	 * between, and it is the LOW BYTE of `sr` that is stored, widened to
+	 * a short.
+	 */
+	rec = t44_record(obj, T44_PTR_AA70);
+	t44_recput(rec, T44_R_BYTES + 2u * (unsigned)idx,
+		   (short)(unsigned char)obj->fsk.sr);
+
+	t3c_txblock(obj);
+}
+
+/*
  * The handshake, once per block.
  *
  * Four guards choose one of three dispatches, read off the prologue at
@@ -3050,6 +3339,9 @@ v34handshak(void *vobj)
 	}
 
 	switch (mst) {
+	case V34HS_DET_INFO:
+		t44_micro_det_info(obj);
+		return;
 	case V34HS_RX_PHASE3_CALL:
 		t3c_micro_rx_phase3_call(obj);
 		return;
