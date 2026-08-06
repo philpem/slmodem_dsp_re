@@ -14854,3 +14854,43 @@ frame pointers, argument pushes, PIC thunks. `-mtune` leaves no such mark, so
 it can only be found by search against a similarity metric. That is a second
 mode of evidence, weaker per observation but able to reach things the first
 cannot, and it is worth trying against any remaining flag question.
+
+### 353. A signedness error that 1,104 differential tests could not see
+
+The first defect found by the instruction-level comparison rather than by a
+test, and it is the kind the differential tier is structurally unable to catch.
+
+`TxHdxStartB103` differed from the object by exactly ONE instruction out of
+nine:
+
+    blob:  mov 0x50(%eax),%ecx ; movzwl (%ecx),%edx     zero-extend
+    ours:  mov 0x50(%eax),%edx ; movswl (%edx),%edx     sign-extend
+
+`movzwl` against `movswl` is the compiler telling us the field's SIGNEDNESS.
+`struct b103_hdx`'s `mode` was declared `short` here and is `unsigned short` in
+the original. It is the index into `B103NextState[]`, a table of function
+pointers.
+
+**Why no test could find it.** `mode` holds 0, 1 or 2 -- loopback, originate,
+answer -- and over that range the two loads produce identical values. A
+difference needs the field to reach 0x8000, at which point both readings index
+outside the table anyway, one backwards and one a long way forwards. So the
+divergence exists only where both are already faulty, which is precisely the
+region a differential test cannot compare (it is the same argument as the
+added-hardening entries in D62).
+
+That makes it invisible to the 1,104 tests, and visible in nine instructions to
+a comparison against the original's own code generation. Fixing it took the
+byte-identical count from 82 to 83 and made this function exact.
+
+**The wider point about what the two tiers see.** The differential tier decides
+CORRECTNESS over the reachable input domain and will always be the thing that
+decides. It is blind to everything that does not change an output: the declared
+signedness of a field whose values never go negative, the width of a counter
+that never overflows, an added guard on an input no caller produces. The
+instruction comparison sees exactly those, because the compiler had to commit
+to them. Neither tier subsumes the other, and this is the first case where the
+second one paid.
+
+Twenty-two same-size-different-instruction functions remain, listed by how many
+instructions differ; the top of that list is where the next such finding is.

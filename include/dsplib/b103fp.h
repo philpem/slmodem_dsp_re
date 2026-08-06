@@ -174,7 +174,15 @@ struct b103_dsp {
  * state machine's entry point, and the two tone objects the receiver uses.
  */
 struct b103_hdx {
-	short mode;		/* +0x00 index into B103NextState:
+	/*
+	 * UNSIGNED, and the object says so: `TxHdxStartB103` loads it with
+	 * `movzwl` where a signed `short` gives `movswl`.  Nothing observable
+	 * turns on it while the value stays in 0..0x7fff -- which is why 1,104
+	 * differential tests never saw it -- but it is the type the original
+	 * declared, and the instruction-level comparison found it.
+	 * Finding 353.
+	 */
+	unsigned short mode;	/* +0x00 index into B103NextState:
 				 *       0 loopback, 1 originate, 2 answer */
 	short tone_timeout;	/* +0x02 blocks to wait for the answer tone;
 				 *       cfg[0x0c]/20, floored at 700      */
