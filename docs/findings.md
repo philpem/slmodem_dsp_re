@@ -18343,3 +18343,279 @@ rather than assumed either way.
 24, 21 and 66, which are the nine largest.
 
 **Finding 421 is the only number this worktree took.**
+
+### 422. Table 1's 19 and 20, and one entry that is three arms
+
+txstates 19 `SBARSEG`, 20 `PPSEG`, and the entry 5 `SILENCE`, 54
+`SILENCEINFO` and 74 `SILENCERETRAIN` share -- 568, 602 and 719 bytes of
+level-0 body, three of the nine finding 421 left. All three are in
+`src/pump/v34/v34hstx1.cpp` and all three compare byte for byte against the
+blob through `t_v34hstx1.c`, which is now 6,618 checks over thirteen arms.
+The register convention is finding 421's, unchanged: `0x4c(%esp)` is the
+object + 0x221c, `0x74(%esp)` the receiver at +0x264, `0x78(%esp)` THE OBJECT
+PLUS FOUR.
+
+#### 5, 54 and 74 are ONE table entry and THREE behaviours
+
+`.rodata+0x2da0` gives indices 0, 49 and 69 the identical address, 0x640b4.
+Finding 323 lists only txstate 5 and does not say so, and #56's brief
+predicted that driving 54 and 74 would be "the same check under a different
+index". **It is not.** The shared prologue re-reads `txstate` and branches on
+it:
+
+```
+  640b4  four zero samples through `txwritequeue`, +0xaa7a cleared
+  640f4  movzwl 0x3596(%esi),%edx
+  640fb  cmp $0x4a,%dx ; je 66b87        74 -- the retrain
+  64105  cmp $0x36,%dx ; jne 6409a       54 -- the INFO0a countdown
+                                          5 -- the loop, prologue only
+```
+
+So it is one entry, one prologue and three tails, and a test that drove only
+the representative would have tested a third of the arm. It is written as ONE
+function with the read inside it -- a third shape beside the two this file
+already had, and the three are worth telling apart:
+
+```
+  78 / 85         TWO entries, one body, two tail calls   (finding 340)
+  81 82 83 84     ONE entry, one behaviour
+  5 / 54 / 74     ONE entry, THREE behaviours
+```
+
+`case_silence_entry` asserts the sharing against the blob's own `.rodata`
+rather than against a comment: the table is 0x1a0 bytes past `ref_probe`, and
+the three entries are compared for equality with each other AND against
+`ref_v34handshak + 0x17c4`. A later blob that gave 54 its own arm is a
+failure there rather than a silence.
+
+What each tail does:
+
+```
+  5   nothing beyond the prologue
+  54  count `vect_idx` to ten; then clear it, move txstate to TX_DPSK, aim
+      +0xaa6c at +0xa94c, hand that record to `V34SetINFO0aBits`, and write
+      eleven more of its fields -- of which ONE is conditional
+  74  count `vect_idx` to 0xb4 -- STORING it before the compare, where 19
+      stores only on the path that does not complete -- then restart the
+      handshake: microstate, rxstate and txstate all move, `vect_idx`,
+      +0x358c and +0xaa78 are cleared, +0xaae2 = -1 and +0xaae0 = 0
+```
+
+**54's one conditional store is a conjunction, and the second half is
+`v90_receiver` ALONE.** +0x18 of the record is 0x1e when `f359c == 0x65` AND
+`*(int *)(obj+0x24c)` is non-zero, and 0x11 otherwise; the two blocks
+(0x69fcf and 0x685eb) are otherwise the same twelve stores in the same order
+and rejoin at 0x68616. It is not the `+0x24c || +0x250` pair 86 computes, so
+the K56flex run that finding 345 needed for 86 is the wrong run here -- three
+runs instead: neither, `f359c` alone, and both.
+
+**74's microstate is chosen arithmetically and the object does not branch on
+`f359c` to do it.** +0xabe8 non-zero -- `v34handshakinit`'s Modem-on-Hold flag
+-- gives MOH_TONE; otherwise 0x68a99 computes
+
+```
+  sete %bl ; movzbl %bl,%eax ; dec %eax ; and $0xfffffff4,%eax
+  lea 0x3a(%eax),%ebx
+```
+
+from `f359c == 0x65`, which is 0x3a `RX_PHASE1_CALL` when it held and 0x2e
+`TX_PHASE1_ANS` when it did not.
+
+#### 19 and 20 share one piece of fixed-point arithmetic
+
+Both compute a sample count into +0xaa78 through the same
+`imul $0x1b4e81b5` / `sar $0xa` / `sub` sequence, which is signed division by
+**9600** truncating toward zero. They differ in the numerator and in one
+truncation:
+
+```
+  19  (0x5e8 - f25c) << 14,  quotient TRUNCATED TO A SHORT (movswl at
+      0x678e9), then * 0x960 >> 14, then + 0x96
+  20  (0x5e8 - f25c) * baud, quotient kept 32 bits, then + f25c0 + +0xaa7c
+      + 1, and + `rtd` again when `f359c == 0x65`
+```
+
+1512 and 9600 are sample counts at 9600 Hz. The truncation in 19 is
+reachable: the quotient leaves a short once `1512 - f25c` passes 19,200.
+
+**The divisor needed the widest span the field can hold to be testable at
+all.** Dividing by 9601 instead of 9600 gives the SAME stored counter at
++0x25c of 0x100, 5000, -20000 and 30000, because the quotient is truncated to
+a short and then scaled by 0x960/0x4000. Only at 0x7fff do the two part, and
+that run is in the test for no other reason.
+
+**19's modulator takes six literals, and finding 216 does not apply to it.**
+0x67890..0x678be pushes 4800 baud, 2400 carrier, no pre-emphasis, `v90` zero
+and no reset. #56's brief said to drive this arm at 3200 baud for finding
+216's reason; there is nothing to drive. 4800 is a real case in
+`V34SetupModulator` -- `txAllPass` at 0x20 taps -- and the one case that
+leaves `prem` NULL, so `m->ec_prem` is not written. Two mutations of those
+literals are equivalent for that reason and are recorded as equivalent rather
+than as gaps.
+
+**20's five scaled constants needed a large `rtd` for the same kind of
+reason.** +0xaa86 is set from `(v * m) >> 14` with `m` one of 0x1000 (as
+`>> 2`), 0x12ab, 0x1400, 0x1555 and 0x16dc -- 2400, 2800, 3000, 3200 and 3429
+over 9600 -- where `v` is `rtd + 0x90`. A one-count change in `m` moves the
+answer by `v / 16384`, which is zero at the fixture's first `rtd`. At 0x7000
+it is not.
+
+**And 20's one asymmetry is which paths bump f25c0.** The two that do not end
+the segment rejoin through 0x6430c, which increments it; the one that does
+leaves through 0x63da2, which writes nothing. 86 rejoins through 0x6430c as
+well (finding 340), so the block is shared and the choice of rejoin is part
+of the arm.
+
+#### `vectpp` -- 192 bytes this tree had and had never proved
+
+20 loads `.rodata+0x2c80` as FORTY-EIGHT FOUR-BYTE POINTS
+(`mov 0x0(,%esi,4),%edx`) where v34rx.c's `receiver` slices against the same
+bytes as ninety-six shorts. That is why the blob exports the symbol, and it
+was `static` here while this file was its only reader. It is now
+`const short vectpp[96]` declared in `v34rx.h`, and `t_v34hstx1.c` proves it
+against `ref_vectpp` the way finding 421 proved `probe`: the fifteen PPSEG
+runs read four of the forty-eight entries and the memcmp covers the rest.
+
+**The index is `movswl` and unmasked**, so the arm is only safe for
+`vect_idx` in 0..47. The object gets there by clearing the field every time it
+reaches 48 (0x66d76) and by leaving the state at 0x680ac; the test pins it for
+the reason finding 421 pins 70's.
+
+#### 196 mutations, 179 caught, 14 equivalent, and NO new uncaught
+
+`test/mutations/v34hstx1.json`, which is finding 421's suite plus 108:
+
+```
+  196 mutations: 179 caught (179 by test, 0 by strings), 3 NOT caught,
+                 0 unusable, 14 equivalent, 0 MIScounted
+```
+
+**All three uncaught are findings 341's and 343's, unchanged** -- the two
+`V34EchoReportCoeff` calls that only print, and the one transfer with no
+oracle past it. The 108 added here leave nothing untested that is not shown
+equal or named.
+
+Two of the fourteen equivalences are worth carrying, because both are facts
+about the object rather than about the test:
+
+```
+  19: f35a4 read signed for the 0x53 scale
+      the store is sixteen bits and the low sixteen bits of a product depend
+      only on the low sixteen bits of its operands, so `movzwl` and `movswl`
+      cannot differ HERE FOR ANY VALUE -- not just for the ones driven
+  74: the count stored after the compare rather than before
+      the object stores at 0x66b94 and branches at 0x66b9b, but the
+      completing path clears the same field at 0x66c56 before anything reads
+      it and the other path still stores.  No run can see it
+```
+
+And one is recorded as an equivalence while saying plainly that it is not
+one: **`20: the pass ends at or past forty-eight`**. Separating `== 0x30` from
+`>= 0x30` needs `vect_idx` at 0x30 on entry, and the arm's first act would
+then be `vectpp[0x30]`, four bytes past a 192-byte table -- the blob reads its
+own adjacent `.rodata` and we read ours, so the run fails for the fixture's
+reason. Within PPSEG the object cannot produce that state either. It is a
+state the fixture cannot reach, named rather than left silent.
+
+#### The mutation suite caught a vacuity the differential test could not
+
+**Every one of 54's and 74's twenty-nine mutations went uncaught in a run
+that reported 6,188 checks and PASS.** The cause was three characters: the
+four pokes a run varies were addressed as `NP(silence) - 4` through
+`NP(silence) - 1`, and a poke inserted in the middle of the array moved every
+one of them by one. `vect_idx` was therefore never poked, both countdowns
+never completed, and the two tails ran on no case at all -- while the shared
+prologue still wrote four samples, so `run_case`'s two anti-vacuity guards
+("the arm wrote something", "the cursor reached the limit") both passed.
+
+That is the failure mode findings 247, 262 and 295 are about, arriving in a
+fixture that already had two guards against it. **The guards are per-arm and
+the bug was per-path**: a prologue that writes is enough to satisfy them
+however little of the arm ran. The indices are now literals at the head of the
+array with the reason written beside them, and the general rule is the one the
+tree already has -- a mutation suite is not a formality, and a green
+differential test is not evidence that a case was driven.
+
+#### The session had to be aimed before `V34SetINFO0aBits` could be reached
+
+54's completion calls it, and with `v90_receiver` non-zero the callee reaches
+`*(session_ptr(sess, SESSION_CAPS) + 0x11)` (v34info.c:244) or the upstream
+block at +9. `v34hs_setup` fills the session with pseudorandom bytes and aims
+only its pointer to the PCM receiver, so both are wild and the run FAULTS
+rather than fails -- on both sides, since the blob runs the same code.
+
+The two runs that need `v90_receiver` therefore aim both fields at ONE SHARED
+STATIC, through a per-case hook that runs after the bring-up. A pointer into
+each side's own arena would make the two session blocks differ and the arena
+sweep would fail; one address in both sessions is the same four bytes in both,
+and the callee reads the same byte on each side. The variant word at +0x6120
+is pinned for the same reason a poke is preferred to a fill anywhere else.
+`fixup` is NULL for every other case in the file.
+
+#### Which checks are independent, and which are one check twice
+
+Independent, in the sense that each can fail while the others pass:
+
+- **5, 54 and 74 -- three, not one.** This is the correction: they are three
+  tails of one entry and each has its own guards.
+- 19's counting run, its run at eight, and its four completions (bit 13,
+  `f35a4 == 0`, bit 15, and the modulator path) -- six;
+- 19's four values of +0x25c, which separate a positive span, the division's
+  truncation toward zero, the quotient's truncation to a short, and both at
+  once -- and a fifth, 0x7fff, which is the only one that tests the divisor;
+- 20's three inside-a-pass runs, its two pass-end runs, its six baud runs
+  including the unrecognised one, its `f359c` run and its four span runs;
+- 54's counting, over-counting and four completion runs;
+- 74's counting, over-counting and three retrain runs.
+
+**Not independent, and named:**
+
+- 20's run at index 0 and its run at 0x2e produce different points but check
+  the same load; they are there to separate a four-byte index from a
+  two-byte one, which the run at 0x10 alone cannot do.
+- 74's fourth retrain run (+0xabe8 set, `f359c == 0x65`) must produce exactly
+  what the third produces. It separates "the flag is tested first" from "the
+  two are combined" and cannot fail while the third passes.
+- Driving 54 and 74 through the fixture exercises the shared prologue a
+  second and third time. The prologue itself is checked once, by 5.
+
+#### What is not reconstructed, and it is finding 341's gap
+
+Thirteen blocks in these three arms are entered only when
+`dsplibs_debug_level > 1`, and none is written:
+
+```
+  19        0x6907e  0x6a605  0x67916  0x69ef6  0x69f6c
+  20        0x69e5a  0x681ef
+  5/54/74   0x6a00a  0x6b008  0x6a29d  0x6a308  0x6aa1f  0x66c72
+```
+
+Every one of them is a diagnostic on the path where a state word moves. The
+arms are faithful at debug level 0, which is what the library ships and what
+`t_v34hstx1.c` tests at. One more store is not modelled and cannot be: 19
+spills 0x53 to `0x48(%esp)` at 0x6784d, a slot `v34handshak` reuses in
+nineteen other places and that nothing on this path reads again -- it is
+stack, so no comparison here can see it.
+
+#### None of the three needs a new exit
+
+19 rejoins at 0x629c8 and 0x63948, 20 at 0x6431f and 0x63da2, and 5/54/74 at
+0x6409a, 0x629cf, 0x640a1, 0x63da2 and 0x63941 -- every one a block that
+reloads the object and re-tests the loop condition. So finding 343's cost is
+not paid again and `enum v34tx1_exit` still has exactly the two values 81 and
+86 gave it.
+
+#### The fill is not held fixed
+
+```
+  V34HS_SEED=1,3,7,11,17,23     6,618 checks, PASS at every one
+  V34HS_SKEW=64                 PASS
+  V34HS_PADVARY=0               PASS
+  V34HS_LOOSEOBJ=1              PASS
+```
+
+**Thirteen of table 1's nineteen reachable targets are now written.** The six
+left are 69 `EXMIT` (0x63858), 64/68 (0x635cc), 67 `XMITMP` (0x6399b), 24
+`TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A` (0x62e28).
+
+**Finding 422 is the only number this batch took.**

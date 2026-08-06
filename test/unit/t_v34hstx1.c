@@ -606,6 +606,18 @@ case_sbarseg(void)
 		    "19 SBARSEG, complete -> TXMD, both at once", 1909);
 
 	/*
+	 * AND THE DIVISOR ITSELF, which needs the widest span the field can
+	 * hold.  The quotient is truncated to a short and then scaled down by
+	 * 0x960/0x4000, so dividing by 9601 instead of 9600 changes the stored
+	 * counter on almost no input: at +0x25c 0x100, 5000, -20000 and 30000
+	 * the two divisors give the SAME answer, and only at 0x7fff -- a span
+	 * of -31,255 -- do they part.  Measured rather than assumed; without
+	 * this run the constant is untested and the suite looks green.
+	 */
+	run_sbarseg(7, 0x0101, 0x1234, 0x7fff,
+		    "19 SBARSEG, complete -> TXMD, the widest span", 1911);
+
+	/*
 	 * The 0x53 scale, at a value whose product does not fit sixteen bits:
 	 * 0x1234 * 0x53 is 0x5e71c and the object stores 0xe71c.
 	 */
@@ -724,6 +736,22 @@ case_ppseg(void)
 		  "20 PPSEG, the segment ends, rtd negative at 3429", 2013);
 
 	/*
+	 * A LARGE `rtd`, and it is what makes the five scales separable at
+	 * all.  The scaled copy is `(v * m) >> 14`, so a one-count change in
+	 * `m` moves the answer by `v / 16384` -- at v = 0xa1 that is zero and
+	 * 0x12ab and 0x12ac give the same byte.  At 0x7000 they do not.
+	 */
+	run_ppseg(0x2f, 5, 0x7000, 2800, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 2800 baud, large rtd", 2016);
+	run_ppseg(0x2f, 5, 0x7000, 3429, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 3429 baud, large rtd", 2017);
+	run_ppseg(0x2f, 5, 0x7000, 3000, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 3000 baud, large rtd", 2018);
+	run_ppseg(0x2f, 5, -0x7000, 2800, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 2800 baud, rtd far negative",
+		  2019);
+
+	/*
 	 * And the counter's division, which is 19's with the baud in place of
 	 * the shift: 0x1388 makes `0x5e8 - f25c` negative and inexact, so the
 	 * object's truncation toward zero and a floor differ by one.
@@ -818,16 +846,33 @@ aim_session(void)
 	}
 }
 
+/*
+ * THE FOUR THINGS A RUN VARIES COME FIRST, at indices 0 to 3.  They were at
+ * the end, addressed as `NP(silence) - k`, and inserting one poke in the
+ * middle moved every one of them by one -- so `vect_idx` was never poked, the
+ * countdowns never completed, and both tails ran on no case at all.  The test
+ * still passed; the mutation suite is what said otherwise, with every one of
+ * 54's and 74's mutations uncaught in a run that reported green.
+ */
+#define SI_IDX	0
+#define SI_59C	1
+#define SI_V90	2
+#define SI_E8	3
+
 static struct tx1_poke silence[] = {
+	P16(TX1_VECTIDX, 3), P16(TX1_F359C, 0x64), P32(TX1_V90RX, 0),
+	P8(TX1_FABE8, 0),
 	A94C_SEED, RETRAIN_SEED,
 	P16(TX1_FAA7A, 0x3333), PSELF(TX1_PTR_AA6C, TX1_BLK_A97C),
-	P16(TX1_VECTIDX, 3), P16(TX1_F359C, 0x64), P32(TX1_V90RX, 0),
-	P8(TX1_FABE8, 0)
+	/*
+	 * +0xabe9 IS SEEDED NON-ZERO AND IS NOT DECORATION.  The object reads
+	 * the flag with `cmpb`, so the byte after it must hold something for a
+	 * halfword reading of the same field to be distinguishable at all --
+	 * left to the fill it is a coin toss and the check would depend on the
+	 * seed.
+	 */
+	P8(0xabe9, 0x5a)
 };
-#define SI_IDX	(NP(silence) - 4)
-#define SI_59C	(NP(silence) - 3)
-#define SI_V90	(NP(silence) - 2)
-#define SI_E8	(NP(silence) - 1)
 
 static void
 run_silence(short txst, int idx, int f359c, int v90, int abe8,
@@ -1118,7 +1163,7 @@ int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: ten per-sample transmit arms");
+	diff_begin("v34handshak table 1: thirteen per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
