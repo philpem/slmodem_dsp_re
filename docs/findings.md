@@ -16578,3 +16578,266 @@ Two consequences:
 **Findings 319-324 are the block `docs/v90rest.md` allocated to this
 worktree.** Finding 290's note that #59's findings start at 291 still stands.
 
+
+
+### 332. `V34GiveINFO1dBits`: one bit decides a PCM upstream, and refusing it means retraining
+
+436 bytes, and after a build `tools/closure.py V34GiveINFO1dBits --missing` is
+one symbol -- itself. Test `test/unit/t_v34info1d.c`, 84,738 checks; mutation
+suite `v34info1d`, 42 mutations, 41 caught and 1 proved equivalent. `make
+phase` green, coverage 21.2% (154,556 bytes, 369 symbols; 436 bytes and one
+symbol more than before).
+
+    int V34GiveINFO1dBits(void *obj, const short *bits);
+
+**ONE DECISION AND ONE CONSEQUENCE.** The decision is a three-way conjunction
+written into the session's `pcmSessionType` (+0x611c, finding 307):
+
+    caps->v92CapabilitiesLocal != 0      cmpb  $0x0,0x11(%eax)
+    obj->remote_v92 != 0                 cmpw  $0x0,0xabc8(%esi)
+    bits[7] & 0x20                       testb $0x20,0xe(%edi)
+
+-- three tests at three different WIDTHS, which is what the test's input
+columns are shaped around. The consequence is that if the answer is yes and
+the configuration bars it, the modem does not refuse: it calls
+`VPcmV34InitiateRetrain(obj, 90)` and says so -- "we got PCM upstream under
+V.92Lite (after Info1d), retraining to V.34 upstream...". V.90 is the
+recommendation with a V.34 upstream, so the string and the datapump code agree.
+
+**THE RETURN VALUE IS NOT THE FLAG, and that is the one thing a careless
+reconstruction gets wrong.** Its sibling `V34GiveINFO1aBits` really does
+`return *(short *)(sess + 0x611c)`; this one keeps `%ebp` at 0 from the
+prologue and raises it to 1 only after the retrain call. Two cases separate
+them and both are in the tables:
+
+- the retraining path returns 1 with the flag back at **0**, because
+  `VPcmV34InitiateRetrain`'s `DP_V90` arm calls `setPcmSessionType(0)`;
+- a wanted-but-barred upstream returns **0** with the flag left at 1.
+
+Mutating the return to `sess->pcmSessionType` is caught, and would not have
+been without those two.
+
+**THE FIRST STATEMENT IS UNCONDITIONAL**, exactly as in `V34GiveINFO1aBits`:
+`*(int *)(sess + 0x611c) = 0` is emitted before `v90_receiver` is even tested
+(`mov %edx,0x611c(%ebx)` sits between the `test %eax,%eax` and its `je`), so a
+call with no V.90 receiver still clears the flag. Sweeping the ENTRY value of
+that int is what makes the claim testable; with it at 0 the two placements
+agree everywhere.
+
+`v34handshak` at .text+0x6b4e1 tests +0xac00 against zero and at +0x6fb62
+clears it, so the byte this function sets is a message to the handshake. See
+finding 334.
+
+
+### 333. `$(SRC)` is every `.c` under `src/`, and the interop tier links it with no C++ in it
+
+**THE HAND-OVER'S FILE RULE IS NOT SUFFICIENT, and this is the counterexample.**
+Finding 312 told the next batch to check whether its function references a
+mangled symbol, and to put it in `v34info.c` if not. `V34GiveINFO1dBits`
+references none -- its only outward calls are `dsplibs_debug_printf` and
+`VPcmV34InitiateRetrain`, both unmangled. It went into `v34info.c`, every
+32-bit test passed, `make one` was green, and `make phase` then failed at
+
+    /usr/bin/ld: in function `V34GiveINFO1dBits':
+    src/pump/v34/v34info.c:568: undefined reference to `VPcmV34InitiateRetrain'
+    make: *** [Makefile:388: build/test/t_spandsp_v23] Error 1
+
+`VPcmV34InitiateRetrain` is `extern "C"` but is DEFINED in
+`src/pump/v34/v34pcmmain.cpp`, because four of its own calls are C++ members.
+The Makefile's `$(SRC)` is every `.c` under `src/`, and the six 64-bit interop
+binaries link exactly that list against SpanDSP with no C++ object anywhere.
+So the rule has a second half:
+
+**A `.c` may not call anything defined in a `.cpp`.** "Names no mangled
+symbol" decides whether C *can* compile the function; it does not decide
+whether the C file can LINK. Ask instead where the callees live. Here the
+answer moved the function to `v34pcmmain.cpp` as `extern "C"`, with the
+declaration left in `include/dsplib/v34info.h` beside its three siblings --
+the arrangement `V34SetINFO1aBits` already has, and the one `v34pcmif.h`
+already uses for `VPcmV34InitiateRetrain` itself.
+
+**AND THE OBJECT AGREED ALL ALONG.** All of `V34GiveINFO1dBits` (0x8380),
+`V34GiveINFO1aBits` (0x8540), `VPcmV34InitiateRetrain` (0x6640) and
+`v90Phase34` (0x9be0) are inside one contiguous `VPcmV34Main.cpp` run, and
+this function's four strings all begin "VPcmV34Main:". The tree splits that
+one TU across `v34info.c`, `v34pcmif.c` and `v34pcmmain.cpp` by role, so
+"which of our files" was never an object-level question -- but where the
+callee sits is a link-level one, and that is what decides.
+
+**`docs/coverage.md` disagrees, and it is the weaker witness.** `symmap.py`'s
+span heuristic books these 436 bytes against `b103.c +2` rather than
+`VPcmV34Main.cpp +72`, so the generated table moves them between two spans in
+this commit. The evidence above is independent of that heuristic and stronger
+than it: the address ordering in `readelf`, which puts this symbol between
+`V34GiveINFO0dBits` (0x8080) and `V34GiveINFO1aBits` (0x8540), and the four
+format strings. The label is noted here so a future reader does not read the
+generated file as drift.
+
+**A RELOCATION ON A CALL PROVES NOTHING ABOUT THE TRANSLATION UNIT.** The call
+to `VPcmV34InitiateRetrain` carries `R_386_PC32`; the call to
+`getMPrecvdBits` that finding 306 used carries none. The difference is
+binding, not distance: `getMPrecvdBits` is `LOCAL` in the symbol table, so
+`as` resolved it, and `VPcmV34InitiateRetrain` is `GLOBAL`, so it could not.
+Absence of a relocation still implies same-TU; presence implies nothing. The
+positive form of the inference is the only sound one.
+
+Being in `v34pcmmain.cpp` also let the function use the real types --
+`VPcmFloModem::pcmSessionType`, `::info0Layout` and
+`V92Phase2Info::v92CapabilitiesLocal` -- instead of `v34info.c`'s
+`session_int(sess, 0x611c)`. The byte at +0x11 that the object prints as
+"local cap" is the field `include/dsplib/V92Phase2Info.h` already calls
+`v92CapabilitiesLocal`, from `VPcmFloModem::setPhaseIIinfo`'s diagnostics and
+a different translation unit; two independent readings of one byte.
+
+
+### 334. Two bytes this function reaches that stay offset-named, and what is known about each
+
+Both are deliberately NOT given names in `include/dsplib/v34fsk.h`, and the
+reason is the same in each case: the only other reader is `v34handshak` or
+`VPcmV34Progress`, neither reconstructed, and four worktrees are inside
+`v34handshak` right now. A name in a shared header ahead of that evidence is a
+merge conflict with people who will have better evidence. `v34pcmmain.cpp`
+already spells both as file-local `#define`s and that is where they stay.
+
+**`obj + 0xac00` (`OB_FAC00`).** Four references in the whole object:
+
+    VPcmV34InitiateRetrain  +0x6b98   movb $0x1,0xac00(%esi)   (status == 2 only)
+    V34GiveINFO1dBits       +0x842e   movb $0x1,0xac00(%esi)
+    v34handshak             +0x6b4e1  cmpb $0x0,0xac00(%edi)
+    v34handshak             +0x6fb62  movb $0x0,0xac00(%ebx)
+
+Two writers, both storing 1 immediately after starting a retrain; one reader,
+which tests it and elsewhere clears it. That is the whole record and it is
+enough for whoever finishes `v34handshak` to name it.
+
+**`pac3c + 2` (`CFG_V92LITE`).** Two readers, and they read different bits of
+it:
+
+    V34GiveINFO1dBits  +0x8405  cmpb $0x0,0x2(%edi) ; js   -- bit 7
+    VPcmV34Progress    +0xba78  testb $0x20,0x2(%ebx)      -- bit 5
+
+so it is a flags byte and not a number, exactly like `pac3c + 0x50`, whose own
+note in v34fsk.h says the same thing for the same reason. Bit 7 SET bars the
+V.92Lite retrain; everything else permits it. Written here as
+`*(const signed char *)(cfg + CFG_V92LITE) < 0`, which is the instruction the
+object emits; `& 0x80` would be the same behaviour and a different
+instruction, and the mutation that replaces it with bit 5 is caught.
+
+
+### 335. Four widths no state comparison can see, and the three debug levels that find them
+
+`V34GiveINFO1dBits` changes at most one int, one byte and whatever the retrain
+changes. Everything else it does is diagnostics -- and every one of its four
+printed quantities is loaded at a width the value alone would not reveal:
+
+| printed | load | what a wrong cast prints |
+|---|---|---|
+| `bits[0..9]` | `movzwl` | `0xffff8001` for a short with bit 15 set |
+| `caps->v92CapabilitiesLocal` | `movzbl` | `-1` for 0xff |
+| `obj->remote_v92` | `movswl` | `65535` for -1 |
+| `bits[7] & 0x20` | masked value | `1` instead of `32` |
+
+None of the four alters a byte of state, so **the transcript comparison is the
+only tier that can see any of them**, and the tables drive bit 15 through every
+message index, a capability byte above 0x7f, a negative `remote_v92`, and index
+7 with the bit both set and clear under a zero and a non-zero high byte. All
+four mutations are caught and none would have been by a state-only test.
+
+**EVERY CASE RUNS AT LEVELS 0, 1 AND 2**, not the {0, 2} `t_v34retrain.c` uses.
+Every gate here is `> 1`; level 1 is what separates that from `>= 1` and level
+2 from `> 2`, and both mutations are in the suite and caught. Level 3 would add
+nothing -- there is no `DSPLIB_DEBUG_VERBOSE()` site in this function. The
+level-0 and level-1 runs additionally assert the capture is EMPTY, which is
+what makes "silent below 2" a measured claim rather than an absence.
+
+**AND `V34SetINFO1aBits`'S HIGH-BYTE WARNING DOES NOT TRANSFER.** Finding 312
+warns that its INFO1d arm clears index 7 with `and $0xdf` on a zero-extended
+short, so the high byte is live there. This function only READS index 7, and
+only through `testb $0x20` on the low byte -- so for the DECISION the high byte
+is inert, and for the PRINT it is not. The `bits7` column drives 0xff00, 0xff20
+and 0xffdf beside 0x0000, 0x0020 and 0x00df to establish that rather than
+inherit it: the two groups differ in the transcript and in nothing else.
+
+The fixture is `t_v34retrain.c`'s seven-block graph and its `ptr_skip` list,
+NOT `t_v34info1a.cpp`'s `VPcmFloModem` -- the hand-over pointed at the latter,
+but the reason that file needs a real 32 KB object is a C++ member call this
+function does not make. What it does make is `VPcmV34InitiateRetrain`, which
+walks the session, the demodulator, the constellation designer, the V.92 phase
+2 record, the K56flex object and the configuration; `t_v34info.c`'s single
+0x6140-byte session cannot carry it. Nine anti-vacuity counters guard the
+columns, and five of them were checked by neutering a column and confirming the
+run turns red (findings 247, 262, 295).
+
+
+### 336. Finding 311's destination is settled: both writers store to `obj + 0x254`. `f35a4` is still not named
+
+Finding 311 recorded `10000 + 336 * f35a4` in two unreconstructed functions and
+gave three reasons not to name `f35a4` from it. **One of the three is now
+gone, and it was wrong rather than merely unresolved.**
+
+311 says the two "store the result through DIFFERENT base registers (`esi +
+0x250` in one, `obj + 0x254` in the other), so it is not established that the
+destinations are even the same field". They are the same field.
+`V34XF_IndicateK56FlexJdReceived` does
+
+    a665:  lea    0x254(%ebx),%esi          <- esi is obj + 0x254, not obj
+    a66b:  movl   $0x0,0x4(%esi)            <- obj + 0x258
+    a678:  movw   $0x0,0x2(%esi)            <- obj + 0x256
+    a687:  mov    %cx,0x254(%ebx)           <- obj + 0x254, through obj
+
+-- the `lea` was read as if `esi` were the object. `VPcmV34InitiateRetrain`,
+which HAS since been reconstructed (`src/pump/v34/v34pcmmain.cpp`, finding
+315), writes the identical trio: `(short)(336 * f35a4 + 10000)` at +0x254,
+zero at +0x256 and zero at +0x258. Two functions, one destination, one
+expression.
+
+**IT IS STILL NOT ENOUGH TO NAME `f35a4`.** The remaining objection is 311's
+first, and it now attaches to the READERS rather than the writers: the only
+things in the object that read +0x254 are `v34handshak` (three sites) and
+`datapumpv34` (`cmp 0x254(%esi),%di`), and neither is reconstructed. A value
+of the form `336 * x + 10000` with no reader to say what it is compared
+against is a shape, not a meaning. `f35a4` and `f0254` both stay offset-named;
+what has changed is that the next batch to meet either one has a settled
+destination and one fewer thing to re-derive.
+
+
+### 337. The mutation suite, and the one thing about this function that cannot be observed
+
+`test/mutations/v34info1d.json`, run with `tools/mutate.py --suite v34info1d`
+against `build/test/t_v34info1d`: **42 mutations, 41 caught, 1 proved
+equivalent, 0 gaps.**
+
+`suites.json` now maps `src/pump/v34/v34pcmmain.cpp` to THREE binaries --
+`v34retrain`, `v90p34` and `v34info1d` -- and that is the file's own hazard,
+not a new one. **Adding 120 lines to a file three suites anchor into can make
+one of THEIR anchors match twice**, which `mutate.py` reports as `ANCHOR
+MATCHES n TIMES` and `make phase` cannot see at all; this set hit that three
+times on its own anchors before they were lengthened. Both siblings were
+re-run afterwards and are unchanged -- `v34retrain` 74 mutations, 67 caught, 7
+equivalent, 0 unusable; `v90p34` 70, 64, 6, 0 unusable. **Re-running the other
+suites that map your file is part of adding a function to a shared one.** Every anchor in the new set is an expression inside
+`V34GiveINFO1dBits`, and specifically **none of them edits a shared
+`#define`**: `DP_V90` and `OB_FAC00` are `VPcmV34InitiateRetrain`'s too, so
+"the retrain asks for V.92" mutates the CALL SITE and "the mark is the byte
+after" mutates the STORE, not the constant. A mutation that changed
+`#define DP_V90` would have been caught for the wrong function's reason. This
+is the same class of trap as finding 325's duplicate `CFG_FLAGS`, met from the
+other side -- and `grep '^#define' src/pump/v34/v34pcmmain.cpp | awk '{print
+$2}' | sort | uniq -d` was run after adding `CFG_V92LITE` and is empty.
+
+**The one equivalence: the mark is set before the retrain rather than after
+it.** Unobservable for any input, and the OBJECT is what proves it rather than
+the sweep. +0xac00 has exactly four references in `dsplibs.o` (finding 334);
+neither of `v34handshak`'s is inside the retrain's dynamic extent -- the
+retrain ends in `v34handshakinit`, a different symbol, which does not touch
+the byte -- so the only store to +0xac00 between the two statements is the
+retrain's own `if (status == 2) obj[0xac00] = 1`, writing the same value.
+Held fixed: nothing. The two orders cannot be told apart by any caller, which
+is why it is recorded as equivalent rather than as a gap. The neighbouring
+mutations that CAN fail are both in the suite and both caught: the mark set on
+the barred path, and the mark cleared rather than set. The `status` column
+exists so that the second writer is entered and left in the same run.
+
+**Findings 332-337 are the block `docs/v90rest.md` allocated to this
+worktree.** Verified against `origin/master` (237... 246) and against the
+local maximum (331) before use, as that file instructs.

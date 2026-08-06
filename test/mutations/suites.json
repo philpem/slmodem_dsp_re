@@ -29,6 +29,8 @@
  "v34info":        ["src/pump/v34/v34info.c",    "build/test/t_v34info"],
  "v34info1a":      ["src/pump/v34/v34info1a.cpp",
                                                  "build/test/t_v34info1a"],
+ "v34info1d":      ["src/pump/v34/v34pcmmain.cpp",
+                                                 "build/test/t_v34info1d"],
  "v34rx":          ["src/pump/v34/v34rx.c",      "build/test/t_v34rx"],
  "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"],
  "v90adid":        ["src/pump/v90/V90AutoDigitalImpDetector.cpp",

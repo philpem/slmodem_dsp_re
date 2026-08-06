@@ -1,0 +1,224 @@
+[
+ {
+  "label": "V34GiveINFO1dBits.  Run it with: tools/mutate.py --suite v34info1d.  Every entry below breaks one claim the reconstruction makes, and the claim is named rather than the edit.  EVERY MUTATION MUST LIE INSIDE V34GiveINFO1dBits: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34 and VPcmV34InitiateRetrain, and the `v34retrain` and `v90p34` suites already map this same file to their own binaries.  A mutation that landed in a sibling would read NOT CAUGHT here for the reason suites.json's header describes -- which is why nothing below edits a shared #define (DP_V90 and OB_FAC00 are both VPcmV34InitiateRetrain's too) and every anchor is an expression inside this function."
+ },
+
+ {
+  "label": "the session flag is cleared only when a V.90 receiver is running",
+  "find": "\tsess->pcmSessionType = 0;\n\n\tif (obj->v90_receiver == 0)\n\t\treturn 0;",
+  "replace": "\tif (obj->v90_receiver == 0)\n\t\treturn 0;\n\n\tsess->pcmSessionType = 0;"
+ },
+ {
+  "label": "the clear lands in the INFO0 layout selector next door",
+  "find": "\tsess->pcmSessionType = 0;\n\n\tif (obj->v90_receiver == 0)\n\t\treturn 0;",
+  "replace": "\tsess->info0Layout = 0;\n\n\tif (obj->v90_receiver == 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "a negative V.90 receiver counts as none",
+  "find": "\tif (obj->v90_receiver == 0)\n\t\treturn 0;",
+  "replace": "\tif (obj->v90_receiver <= 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "the receiver is read as a short",
+  "find": "\tif (obj->v90_receiver == 0)\n\t\treturn 0;",
+  "replace": "\tif ((short)obj->v90_receiver == 0)\n\t\treturn 0;"
+ },
+
+ {
+  "label": "the two announcements change places",
+  "find": "\t\tdsplibs_debug_printf(\"VPcmV34Main: giveINFO1dBits\\n\");\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: rxinfo1d = ",
+  "replace": "\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: rxinfo1d = 0x%x,0x%x,0x%x,0x%x,0x%x,\"\n\t\t\t\"0x%x,0x%x,0x%x,0x%x,0x%x\\n\",\n\t\t\t(unsigned short)bits[0], (unsigned short)bits[1],\n\t\t\t(unsigned short)bits[2], (unsigned short)bits[3],\n\t\t\t(unsigned short)bits[4], (unsigned short)bits[5],\n\t\t\t(unsigned short)bits[6], (unsigned short)bits[7],\n\t\t\t(unsigned short)bits[8], (unsigned short)bits[9]);\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: giveINFO1dBits\\n\");\n\tif (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: rxinfo1d = "
+ },
+ {
+  "label": "the announcement gate is >= 1 rather than > 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: giveINFO1dBits\\n\");",
+  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: giveINFO1dBits\\n\");"
+ },
+ {
+  "label": "the message dump is dropped",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: rxinfo1d = ",
+  "replace": "\tif (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: rxinfo1d = "
+ },
+ {
+  "label": "the message shorts are printed sign-extended",
+  "find": "\"0x%x,0x%x,0x%x,0x%x,0x%x\\n\",\n\t\t\t(unsigned short)bits[0], (unsigned short)bits[1],\n\t\t\t(unsigned short)bits[2], (unsigned short)bits[3],",
+  "replace": "\"0x%x,0x%x,0x%x,0x%x,0x%x\\n\",\n\t\t\tbits[0], bits[1],\n\t\t\tbits[2], bits[3],"
+ },
+ {
+  "label": "the dump starts at index 1",
+  "find": "\"0x%x,0x%x,0x%x,0x%x,0x%x\\n\",\n\t\t\t(unsigned short)bits[0], (unsigned short)bits[1],\n\t\t\t(unsigned short)bits[2], (unsigned short)bits[3],\n\t\t\t(unsigned short)bits[4], (unsigned short)bits[5],\n\t\t\t(unsigned short)bits[6], (unsigned short)bits[7],\n\t\t\t(unsigned short)bits[8], (unsigned short)bits[9]);",
+  "replace": "\"0x%x,0x%x,0x%x,0x%x,0x%x\\n\",\n\t\t\t(unsigned short)bits[1], (unsigned short)bits[2],\n\t\t\t(unsigned short)bits[3], (unsigned short)bits[4],\n\t\t\t(unsigned short)bits[5], (unsigned short)bits[6],\n\t\t\t(unsigned short)bits[7], (unsigned short)bits[8],\n\t\t\t(unsigned short)bits[9], (unsigned short)bits[10]);"
+ },
+
+ {
+  "label": "the three-way conjunction is a disjunction in its first term",
+  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    || obj->remote_v92 != 0"
+ },
+ {
+  "label": "the three-way conjunction is a disjunction in its last term",
+  "find": "\t    && obj->remote_v92 != 0\n\t    && ((unsigned short)bits[7] & 0x20) != 0)",
+  "replace": "\t    && obj->remote_v92 != 0\n\t    || ((unsigned short)bits[7] & 0x20) != 0)"
+ },
+ {
+  "label": "the local capability is the byte before it, ShortPhase2: local",
+  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92Phase2Info->shortPhase2Local != 0\n\t    && obj->remote_v92 != 0"
+ },
+ {
+  "label": "the local capability is the remote's, two bytes on",
+  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92Phase2Info->v92CapabilitiesRemote != 0\n\t    && obj->remote_v92 != 0"
+ },
+ {
+  "label": "the capability byte is tested by its low bit, not against zero",
+  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif ((sess->v92Phase2Info->v92CapabilitiesLocal & 1) != 0\n\t    && obj->remote_v92 != 0"
+ },
+ {
+  "label": "remote_v92 is tested a byte wide",
+  "find": "\t    && obj->remote_v92 != 0\n\t    && ((unsigned short)bits[7] & 0x20) != 0)",
+  "replace": "\t    && (obj->remote_v92 & 0xff) != 0\n\t    && ((unsigned short)bits[7] & 0x20) != 0)"
+ },
+ {
+  "label": "the requested-upstream bit is 6, not 5",
+  "find": "\t    && ((unsigned short)bits[7] & 0x20) != 0)\n\t\tispcm = 1;",
+  "replace": "\t    && ((unsigned short)bits[7] & 0x40) != 0)\n\t\tispcm = 1;"
+ },
+ {
+  "label": "the requested-upstream bit is read out of index 6",
+  "find": "\t    && ((unsigned short)bits[7] & 0x20) != 0)\n\t\tispcm = 1;",
+  "replace": "\t    && ((unsigned short)bits[6] & 0x20) != 0)\n\t\tispcm = 1;"
+ },
+ {
+  "label": "the flag is set to the masked bit rather than to 1",
+  "find": "\t\tispcm = 1;\n\n\tsess->pcmSessionType = ispcm;",
+  "replace": "\t\tispcm = 0x20;\n\n\tsess->pcmSessionType = ispcm;"
+ },
+ {
+  "label": "the flag is stored a short wide",
+  "find": "\tsess->pcmSessionType = ispcm;",
+  "replace": "\t*(short *)&sess->pcmSessionType = (short)ispcm;"
+ },
+ {
+  "label": "the flag is stored in the INFO0 layout selector instead",
+  "find": "\tsess->pcmSessionType = ispcm;",
+  "replace": "\tsess->info0Layout = ispcm;"
+ },
+
+ {
+  "label": "the selection line is dropped",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: upstream selection: ",
+  "replace": "\tif (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: upstream selection: "
+ },
+ {
+  "label": "the selection line's gate is > 2 rather than > 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: upstream selection: ",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: upstream selection: "
+ },
+ {
+  "label": "the local capability is printed signed",
+  "find": "\t\t\tsess->v92Phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,",
+  "replace": "\t\t\t(signed char)sess->v92Phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,"
+ },
+ {
+  "label": "remote_v92 is printed unsigned",
+  "find": "\t\t\tobj->remote_v92,\n\t\t\t(unsigned short)bits[7] & 0x20,",
+  "replace": "\t\t\t(unsigned short)obj->remote_v92,\n\t\t\t(unsigned short)bits[7] & 0x20,"
+ },
+ {
+  "label": "the requested-upstream bit is printed as 0 or 1",
+  "find": "\t\t\t(unsigned short)bits[7] & 0x20,\n\t\t\tsess->pcmSessionType);",
+  "replace": "\t\t\t((unsigned short)bits[7] & 0x20) != 0,\n\t\t\tsess->pcmSessionType);"
+ },
+ {
+  "label": "the selection line prints the local copy, not the stored flag",
+  "find": "\t\t\tsess->pcmSessionType);",
+  "replace": "\t\t\tispcm + 1);"
+ },
+
+ {
+  "label": "the retrain is decided by the INFO0 layout selector",
+  "find": "\tif (sess->pcmSessionType == 0)\n\t\treturn 0;",
+  "replace": "\tif (sess->info0Layout == 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "the configuration gate is bit 5, which is VPcmV34Progress's",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;",
+  "replace": "\tif ((cfg[CFG_V92LITE] & 0x20) != 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "the configuration gate is a short's sign, not a byte's",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;",
+  "replace": "\tif (*(const short *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "the configuration gate is inverted",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;",
+  "replace": "\tif (*(const signed char *)(cfg + CFG_V92LITE) >= 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "the configuration gate is the flags byte at +0",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;",
+  "replace": "\tif (*(const signed char *)(cfg + CFG_FLAGS) < 0)\n\t\treturn 0;"
+ },
+
+ {
+  "label": "the retrain notice is dropped",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: we got PCM upstream under V.92Lite \"",
+  "replace": "\tif (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: we got PCM upstream under V.92Lite \""
+ },
+ {
+  "label": "the retrain asks for V.92, the recommendation that has the upstream",
+  "find": "\tVPcmV34InitiateRetrain(obj, DP_V90);\n",
+  "replace": "\tVPcmV34InitiateRetrain(obj, DP_V92);\n"
+ },
+ {
+  "label": "the retrain asks for plain V.34",
+  "find": "\tVPcmV34InitiateRetrain(obj, DP_V90);\n",
+  "replace": "\tVPcmV34InitiateRetrain(obj, DP_V34);\n"
+ },
+ {
+  "label": "the mark is set before the retrain rather than after it",
+  "equivalent": true,
+  "why": "UNOBSERVABLE FOR ANY INPUT, and the object is what proves it rather than the sweep.  +0xac00 has exactly four references in dsplibs.o: this store, VPcmV34InitiateRetrain's, and two in v34handshak -- a `cmpb $0x0` and a `movb $0x0`.  Neither of v34handshak's is inside the retrain's dynamic extent (the retrain ends in v34handshakinit, a different symbol, which does not touch the byte), so the ONLY store to +0xac00 between the two statements is the retrain's own `if (status == 2) obj[0xac00] = 1` -- the same value this one writes.  Held fixed: nothing, which is the point; the two orders cannot be told apart by any caller.  The neighbouring mutations that CAN fail are in this suite and both are caught -- the mark set on the barred path, and the mark cleared rather than set.",
+  "find": "\tVPcmV34InitiateRetrain(obj, DP_V90);\n\t*((unsigned char *)obj + OB_FAC00) = 1;",
+  "replace": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\tVPcmV34InitiateRetrain(obj, DP_V90);"
+ },
+ {
+  "label": "the mark is set whether or not the configuration permitted the retrain",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;",
+  "replace": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0) {\n\t\t*((unsigned char *)obj + OB_FAC00) = 1;\n\t\treturn 0;\n\t}"
+ },
+ {
+  "label": "the mark is cleared rather than set",
+  "find": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn 1;",
+  "replace": "\t*((unsigned char *)obj + OB_FAC00) = 0;\n\n\treturn 1;"
+ },
+ {
+  "label": "the mark is the byte after the one the object writes",
+  "find": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn 1;",
+  "replace": "\t*((unsigned char *)obj + OB_FAC00 + 1) = 1;\n\n\treturn 1;"
+ },
+ {
+  "label": "the mark is a short, not a byte",
+  "find": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn 1;",
+  "replace": "\t*(short *)((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn 1;"
+ },
+
+ {
+  "label": "the return value is the session flag, the way V34GiveINFO1aBits's is",
+  "find": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn 1;",
+  "replace": "\t*((unsigned char *)obj + OB_FAC00) = 1;\n\n\treturn sess->pcmSessionType;"
+ },
+ {
+  "label": "the barred path returns the flag it left standing",
+  "find": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn 0;\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (*(const signed char *)(cfg + CFG_V92LITE) < 0)\n\t\treturn sess->pcmSessionType;\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the no-receiver path returns 1",
+  "find": "\tif (obj->v90_receiver == 0)\n\t\treturn 0;\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (obj->v90_receiver == 0)\n\t\treturn 1;\n\n\tif (DSPLIB_DEBUG_ON())"
+ }
+]
