@@ -44,5 +44,7 @@
  "v90prefilter":   ["src/pump/v90/V90PreFilter.cpp",
                                                  "build/test/t_v90prefilter"],
  "v90sessionflag": ["src/pump/v90/V90SessionFlag.cpp",
-                                                 "build/test/t_v90sessionflag"]
+                                                 "build/test/t_v90sessionflag"],
+ "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp",
+                                                 "build/test/t_v90p3dreset"]
 }

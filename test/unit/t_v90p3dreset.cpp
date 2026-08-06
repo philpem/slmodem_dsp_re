@@ -692,10 +692,24 @@ main(void)
 {
 	int bad = 0;
 
+	/*
+	 * The openings go BEFORE the argument sweep deliberately.  The sweep
+	 * feeds `reset`'s fourth argument values up to 0xffffffff, which is
+	 * harmless because only the TRN1dKnownData opening forwards it as the
+	 * modulator's symbol count -- but a reconstruction that forwarded it
+	 * from every opening would spin there for hours, and `mutate.py` would
+	 * report the mutation caught by its 120-second clock rather than by a
+	 * check.  Running the openings first means that mutation fails an
+	 * assertion with a name on it -- and the sweep is then skipped, because
+	 * once "WaitForSd ignores the symbol count" is false the sweep is no
+	 * longer a bounded computation.
+	 */
 	bad |= run_descrambler();
+	bad |= run_openings_differ();
+	if (bad)
+		return bad;			/* ...and it is a hard gate */
 	bad |= run_arguments();
 	bad |= run_states();
-	bad |= run_openings_differ();
 
 	return bad;
 }
