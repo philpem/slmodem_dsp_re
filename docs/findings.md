@@ -14894,3 +14894,71 @@ second one paid.
 
 Twenty-two same-size-different-instruction functions remain, listed by how many
 instructions differ; the top of that list is where the next such finding is.
+
+### 354. When a codegen difference is evidence, and when it is not
+
+Task #69 worked the 22 same-size near-misses. One genuine defect came out of it
+(finding 353, already fixed) and **five apparent ones were false positives of
+my own detector**, which is the more useful result because it produced two
+rules the next pass needs.
+
+**Rule one: an extension difference is only evidence if the 32-bit result is
+USED.**
+
+The detector flagged `movzwl` against our `movswl` at five sites: four fields
+in `biquad_filter` and one in `toneiir_reset`. All five are dead extensions:
+
+```
+        movzwl 0x96(%eax),%edx      load
+        mov    %cx,0x96(%eax)       store something else there
+        mov    %dx,0x98(%eax)       store the loaded value -- LOW 16 BITS ONLY
+```
+
+That is `f98 = f96`, a 16-bit field copy, and the three `biquad_filter` cases
+are the same shape -- `mov %cx,0x1a(%edi)`, `mov %bx,0x1c(%edi)`,
+`mov %bx,0x20(%edi)`, a filter history shifting along. The extended upper half
+is discarded, so `movzwl` and `movswl` are equally correct and the compiler's
+pick says NOTHING about the field's declared type. Changing four struct fields
+to `unsigned short` on that signal would have been wrong, and no test would
+have objected.
+
+The b103 case was real precisely because the loaded value was used at 32 bits:
+`call *0x0(,%edx,4)`, an index into a table of function pointers. That is the
+discriminator. **Flag an extension difference only when the destination is
+subsequently used as a 32-bit quantity; if only the low half is stored back,
+discard it.**
+
+**Rule two: a reordering is evidence, but weak evidence, and only the forbidden
+kind is strong.**
+
+I had written the reorderings off as "pure scheduling, not a defect", and that
+was wrong as stated. GCC is deterministic: identical source, flags and compiler
+give identical output, so a different instruction order means SOMETHING in the
+source differs. The dismissal was not earned.
+
+What makes it weak is that the map from source to schedule is many-to-one.
+Several spellings -- the order of two independent statements, whether a value
+goes through a named temporary, which of two equivalent expressions is written
+first -- produce the same instructions, and several others produce a different
+order with no behavioural difference at all. So a matching order confirms a
+candidate spelling; it never reveals one. Recovering source order means
+searching over spellings until the output matches, and that is fitting the
+compiler: the result matches but was not derived, which is the same failure
+mode as writing code to pass a test rather than to be right.
+
+The sharp version, and the one worth acting on: **a reorder permitted by both
+sources is noise; a reorder our source's data dependencies would FORBID is a
+defect.** If the object loads B before A and our source cannot legally emit
+that order because A produces B's address, we have the dependency wrong -- and
+that is a real difference in what the code computes, findable by inspection
+rather than by search.
+
+None of the 22 showed a forbidden reorder. `TxHdxDataB103` is the
+representative case: two independent argument loads, either order legal, the
+same call at the end.
+
+**Where that leaves the near-miss list.** Of 22: one real defect, five dead
+extensions, and the remainder ordering or register allocation with no forbidden
+dependency among them. The list is not exhausted as a source of evidence, but
+its yield per hour is now known to be low, and the next pass should apply rule
+one mechanically rather than eyeballing diffs.
