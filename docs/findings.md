@@ -20372,7 +20372,7 @@ substitution is a differing byte rather than a dead run. `--prefix T44_` is the
 wrong flag for a file where two suites' arms share the prefix; both repairs
 were made by hand against the disassembly.
 
-**The final position: 213 mutations, 204 caught, 0 unusable, 6 equivalent
+**The final position: 214 mutations, 204 caught, 0 unusable, 7 equivalent
 with their held-fixed conditions stated, 3 named gaps (finding 445).** Zero
 UNUSABLE is the number finding 347 says to read, and it is the number that was
 wrong four times before it was right.
