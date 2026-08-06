@@ -1,0 +1,217 @@
+[
+ {
+  "label": "65: the segment flag test is inverted",
+  "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
+  "replace": "\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {"
+ },
+ {
+  "label": "65: the segment flag is bit 4 rather than bit 3",
+  "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
+  "replace": "\tif (rx->flags & 0x10) {"
+ },
+ {
+  "label": "65: the segment bit raised in f25c2 is 0x1000",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x1000u);"
+ },
+ {
+  "label": "65: only the first half of the silent point is cleared",
+  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
+  "replace": "\to->f25d0 = 0;\n\ttxmit(o);"
+ },
+ {
+  "label": "65: the point is cleared after the symbol is sent",
+  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
+  "replace": "\ttxmit(o);\n\to->f25d0 = 0;\n\to->f25d2 = 0;"
+ },
+ {
+  "label": "65: f25cc is left alone when the segment is armed",
+  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "65: f25c6 is left alone when the segment is armed",
+  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "65: f25c0 is left alone when the segment is armed",
+  "find": "\t\to->f25c0 = 0;\n\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;",
+  "replace": "\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "65: the transmit machine is not moved to SSEG",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c6 = 0;",
+  "replace": "\t\to->f25c6 = 0;"
+ },
+ {
+  "label": "71/86: the generator select is inverted",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c != 0x65), 3, 2);"
+ },
+ {
+  "label": "71/86: the generator select compares against 0x64",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x64), 3, 2);"
+ },
+ {
+  "label": "71/86: one bit is scrambled rather than two",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 1);"
+ },
+ {
+  "label": "71/86: the scrambler is fed 1 rather than 3",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 1, 2);"
+ },
+ {
+  "label": "71: TXLEVEL sends the point the scrambler chose, as TXMD does",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->f25c8 = q71;\n\ttx1_put_point(o, vect4[q71]);"
+ },
+ {
+  "label": "71: the quadrant is not recorded in f25c8",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\t(void)tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);"
+ },
+ {
+  "label": "71: the register is not advanced at all",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\ttx1_put_point(o, vect4[0]);"
+ },
+ {
+  "label": "78/85: the counter is decremented even when it is already zero",
+  "find": "\tif (c == 0)\n\t\treturn 0;\n\n\tc = (unsigned short)(c - 1);",
+  "replace": "\tc = (unsigned short)(c - 1);"
+ },
+ {
+  "label": "78/85: the completion runs on every step, not only at zero",
+  "find": "\tif (c != 0)\n\t\treturn 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "78/85: the completion bit is 8 rather than 4",
+  "find": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);"
+ },
+ {
+  "label": "78/85: only the first echo canceller is reported",
+  "find": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);",
+  "replace": "\tV34EchoReportCoeff(&o->echo0);"
+ },
+ {
+  "label": "78/85: the second report is of the first canceller again",
+  "find": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);",
+  "replace": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);"
+ },
+ {
+  "label": "78: JaTXMIT hands the sample to the K56flex half",
+  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
+  "replace": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);"
+ },
+ {
+  "label": "85: K56JaTXMIT hands the sample to the V.90 half",
+  "find": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);",
+  "replace": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);"
+ },
+ {
+  "label": "78: the counter is not consulted at all",
+  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
+  "replace": "\tv90Phase34(o);"
+ },
+ {
+  "label": "81: the queue is fed a non-zero sample",
+  "find": "\tquiet[0] = 0;\n\tquiet[1] = 0;",
+  "replace": "\tquiet[0] = 1;\n\tquiet[1] = 0;"
+ },
+ {
+  "label": "81: the fourth sample is left uninitialised",
+  "find": "\tquiet[2] = 0;\n\tquiet[3] = 0;",
+  "replace": "\tquiet[2] = 0;\n\tquiet[3] = 1;"
+ },
+ {
+  "label": "81: the symbol counter is not advanced",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx == 0xc0u)"
+ },
+ {
+  "label": "81: the wrap is at 0xc1",
+  "find": "\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx == 0xc1u)"
+ },
+ {
+  "label": "81: the wrap is tested before the counter is stored",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)(o->vect_idx + 1) == 0xc0u)\n\t\treturn V34TX1_MOH_WRAP;\n\to->vect_idx = (short)(o->vect_idx + 1);\n\tif (0)"
+ },
+ {
+  "label": "86: TXMD sends vect4[0], as TXLEVEL does",
+  "find": "\ttx1_put_point(o, vect4[q]);",
+  "replace": "\ttx1_put_point(o, vect4[0]);"
+ },
+ {
+  "label": "86: the segment-complete test is missing",
+  "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))\n\t\treturn V34TX1_TXMD_DONE;\n",
+  "replace": ""
+ },
+ {
+  "label": "86: the reconfiguration point is +0xaa78 rather than +0x35a6",
+  "find": "\t    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {",
+  "replace": "\t    == (unsigned short)tx1_get(o, TX1_COUNT)) {"
+ },
+ {
+  "label": "86: the modulator is told 2400 baud whatever the rate config says",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  2400, cfg->carrier, cfg->f06, pcm, 0);"
+ },
+ {
+  "label": "86: the carrier and the pre-emphasis index are swapped",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->f06, cfg->carrier, pcm, 0);"
+ },
+ {
+  "label": "86: the PCM argument is always zero",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = 0;"
+ },
+ {
+  "label": "86: the PCM argument reads only the V.90 receiver",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = (o->v90_receiver != 0);"
+ },
+ {
+  "label": "86: the modulator's reset argument is one",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 1);"
+ },
+ {
+  "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8004u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8000u);"
+ },
+ {
+  "label": "86: f25c0 is not cleared before it is counted",
+  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25cc = 0;"
+ },
+ {
+  "label": "86: the shared block at 0x6430c does not count the symbol",
+  "find": "\t/* 0x6430c */\n\to->f25c0 = (short)(o->f25c0 + 1);",
+  "replace": "\t/* 0x6430c */"
+ },
+ {
+  "label": "86: the symbol counter is not advanced",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))",
+  "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))"
+ },
+ {
+  "label": "86: the PCM argument reads only the K56flex receiver",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = (o->k56flex_receiver != 0);"
+ },
+ {
+  "label": "86: the transmit machine is not moved to SSEG",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
+  "replace": "\t\to->f25c0 = 0;"
+ }
+]

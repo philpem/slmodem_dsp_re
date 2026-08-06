@@ -76,8 +76,14 @@
 #define TX1_COUNT	0xaa78		/* 78, 85 count down; 86 counts up */
 #define TX1_VECTIDX	0x2aa2		/* symbols emitted in this segment */
 #define TX1_RATECFG	0xaa84		/* struct v34_ratecfg              */
+#define TX1_F25C0	0x25c0		/* symbols in the current segment  */
+#define TX1_F25C2	0x25c2		/* the transmitter's flags word    */
+#define TX1_F25C6	0x25c6		/* the previous quadrant           */
+#define TX1_F25CC	0x25cc		/* the scrambler's shift register  */
 #define TX1_V90RX	0x024c		/* v90_receiver                    */
 #define TX1_K56RX	0x0250		/* k56flex_receiver                */
+
+#define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
 
 /* A companion field to set before the arm runs; `wide` selects a 32-bit one. */
 struct tx1_poke {
@@ -179,20 +185,31 @@ static void
 case_xmit0(void)
 {
 	short flags;
-	struct tx1_poke p[1];
+	struct tx1_poke p[4] = {
+		P16(TX1_RXFLAGS, 0),
+		/*
+		 * THE THREE COUNTERS ARE SEEDED NON-ZERO, and without that
+		 * the three clears below the `if` are invisible: the
+		 * bring-up leaves all three at zero, so clearing them writes
+		 * nothing and a reconstruction that skipped them would pass.
+		 * The same seeds run on the flag-CLEAR case too, where they
+		 * check the opposite -- that the clears do not happen.
+		 */
+		P16(TX1_F25C6, 0x5678),
+		P16(TX1_F25C0, 0x1234),
+		P32(TX1_F25CC, 0x11223344)
+	};
 
 	v34hs_setup(0);
 	flags = v34hs_peek_short(0, TX1_RXFLAGS);
 
-	p[0].off = TX1_RXFLAGS;
-	p[0].wide = 0;
 	p[0].val = (short)(flags & ~8);
 	run_case(V34HS_XMIT0, v34tx1_xmit0, V34TX1_LOOP,
-		 "65 XMIT0, segment flag clear", 6500, p, 1);
+		 "65 XMIT0, segment flag clear", 6500, p, NP(p));
 
 	p[0].val = (short)(flags | 8);
 	run_case(V34HS_XMIT0, v34tx1_xmit0, V34TX1_LOOP,
-		 "65 XMIT0, segment flag set", 6501, p, 1);
+		 "65 XMIT0, segment flag set", 6501, p, NP(p));
 }
 
 /* --- 71 TXLEVEL ----------------------------------------------------------- */
@@ -202,16 +219,29 @@ case_xmit0(void)
  * driven because the object carries the loop twice, and a reconstruction
  * using one tap for both would pass on whichever the fill happens to select.
  */
-static const struct tx1_poke gen_a[] = { P16(TX1_F359C, 0x64) };
-static const struct tx1_poke gen_b[] = { P16(TX1_F359C, 0x65) };
+/*
+ * +0x25cc IS SEEDED, and it decides whether the two generators can be told
+ * apart at all.  They differ in one tap -- bit 26 against bit 13 -- so a
+ * register in which those two agree gives both the same two bits and the
+ * select is untestable.  0x04000000 has bit 26 set and bit 13 clear, and the
+ * two then diverge on the first bit: q is 2 for generator A and 3 for B.
+ */
+#define TX1_SRSEED	0x04000000
+
+static const struct tx1_poke gen_a[] = {
+	P16(TX1_F359C, 0x64), P32(TX1_F25CC, TX1_SRSEED)
+};
+static const struct tx1_poke gen_b[] = {
+	P16(TX1_F359C, 0x65), P32(TX1_F25CC, TX1_SRSEED)
+};
 
 static void
 case_txlevel(void)
 {
 	run_case(V34HS_TXLEVEL, v34tx1_txlevel, V34TX1_LOOP,
-		 "71 TXLEVEL, generator A", 7100, gen_a, 1);
+		 "71 TXLEVEL, generator A", 7100, gen_a, NP(gen_a));
 	run_case(V34HS_TXLEVEL, v34tx1_txlevel, V34TX1_LOOP,
-		 "71 TXLEVEL, generator B", 7101, gen_b, 1);
+		 "71 TXLEVEL, generator B", 7101, gen_b, NP(gen_b));
 }
 
 /* --- 78 JaTXMIT and 85 K56JaTXMIT ----------------------------------------- */
@@ -224,7 +254,13 @@ case_txlevel(void)
 static void
 case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 {
-	struct tx1_poke p[1];
+	/*
+	 * `f25c2` is seeded with bit 2 CLEAR, which is what makes the
+	 * completion's one visible act visible: the bring-up leaves the bit
+	 * already set, and against that a reconstruction raising it on every
+	 * step rather than only at zero writes nothing and passes.
+	 */
+	struct tx1_poke p[2] = { P16(TX1_COUNT, 0), P16(TX1_F25C2, 0x1001) };
 	char what[96];
 	int k;
 	static const short counts[3] = { 0, 2, 1 };
@@ -232,12 +268,10 @@ case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 		"counter already zero", "counter 2 -> 1", "counter 1 -> 0"
 	};
 
-	p[0].off = TX1_COUNT;
-	p[0].wide = 0;
 	for (k = 0; k < 3; k++) {
 		p[0].val = counts[k];
 		snprintf(what, sizeof(what), "%s, %s", name, names[k]);
-		run_case(txst, arm, V34TX1_LOOP, what, tag + k, p, 1);
+		run_case(txst, arm, V34TX1_LOOP, what, tag + k, p, NP(p));
 	}
 }
 
@@ -275,34 +309,51 @@ case_moh_silence(void)
  */
 static const struct tx1_poke txmd_a[] = {
 	P16(TX1_VECTIDX, 0x10), P16(TX1_COUNT, 0x40),
-	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64)
+	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64),
+	P32(TX1_F25CC, TX1_SRSEED)
 };
 static const struct tx1_poke txmd_b[] = {
 	P16(TX1_VECTIDX, 0x10), P16(TX1_COUNT, 0x40),
-	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x65)
+	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x65),
+	P32(TX1_F25CC, TX1_SRSEED)
 };
 static const struct tx1_poke txmd_done[] = {
 	P16(TX1_VECTIDX, 0x3f), P16(TX1_COUNT, 0x40),
-	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64)
-};
-static const struct tx1_poke txmd_setup_nopcm[] = {
-	P16(TX1_VECTIDX, 0x4f), P16(TX1_COUNT, 0x40),
 	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64),
-	P16(TX1_RATECFG + 0x00, 2400),		/* baud            */
-	P16(TX1_RATECFG + 0x10, 1800),		/* carrier         */
-	P16(TX1_RATECFG + 0x06, 0),		/* pre-emphasis    */
-	P32(TX1_V90RX, 0), P32(TX1_K56RX, 0)
-};
-static const struct tx1_poke txmd_setup_pcm[] = {
-	P16(TX1_VECTIDX, 0x4f), P16(TX1_COUNT, 0x40),
-	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64),
-	P16(TX1_RATECFG + 0x00, 2400),
-	P16(TX1_RATECFG + 0x10, 1800),
-	P16(TX1_RATECFG + 0x06, 0),
-	P32(TX1_V90RX, 0), P32(TX1_K56RX, 1)
+	P32(TX1_F25CC, TX1_SRSEED)
 };
 
-#define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
+/*
+ * 3200 BAUD IS NOT A ROUND NUMBER PICKED FOR TIDINESS.  It is the one rate
+ * whose modulator setup reads the `v90` argument at all -- 0x40 taps from
+ * `tx3200c1_for_v90` against 0x20 from `tx3200c1_for_v34` -- so it is the
+ * only rate at which the two PCM-receiver runs below differ by anything.
+ * With 2400 baud they are the same call twice and the argument is untested;
+ * finding 216 and v34filters.c's 3200 case.
+ *
+ * `f25c0` and `f25c2` are seeded for the same reason as 65's counters: the
+ * reconfiguration clears one and raises 0x8004 in the other, and both are
+ * invisible against a zero and against a word that already holds bit 2.
+ */
+#define TXMD_SETUP							\
+	P16(TX1_VECTIDX, 0x4f), P16(TX1_COUNT, 0x40),			\
+	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64),			\
+	P32(TX1_F25CC, TX1_SRSEED),					\
+	P16(TX1_F25C0, 0x1234), P16(TX1_F25C2, 0x1001),			\
+	P16(TX1_RATECFG + 0x00, 3200),		/* baud            */	\
+	P16(TX1_RATECFG + 0x10, 1829),		/* carrier         */	\
+	P16(TX1_RATECFG + 0x06, 0)		/* pre-emphasis    */
+
+static const struct tx1_poke txmd_setup_nopcm[] = {
+	TXMD_SETUP, P32(TX1_V90RX, 0), P32(TX1_K56RX, 0)
+};
+static const struct tx1_poke txmd_setup_pcm[] = {
+	TXMD_SETUP, P32(TX1_V90RX, 0), P32(TX1_K56RX, 1)
+};
+/* The other half of the OR, so that neither receiver alone can stand in. */
+static const struct tx1_poke txmd_setup_v90[] = {
+	TXMD_SETUP, P32(TX1_V90RX, 1), P32(TX1_K56RX, 0)
+};
 
 static void
 case_txmd(void)
@@ -317,8 +368,11 @@ case_txmd(void)
 		 "86 TXMD, reconfigure, no PCM", 8603,
 		 txmd_setup_nopcm, NP(txmd_setup_nopcm));
 	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
-		 "86 TXMD, reconfigure, PCM", 8604,
+		 "86 TXMD, reconfigure, K56flex receiver", 8604,
 		 txmd_setup_pcm, NP(txmd_setup_pcm));
+	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+		 "86 TXMD, reconfigure, V.90 receiver", 8605,
+		 txmd_setup_v90, NP(txmd_setup_v90));
 }
 
 int

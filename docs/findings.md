@@ -16578,3 +16578,269 @@ Two consequences:
 **Findings 319-324 are the block `docs/v90rest.md` allocated to this
 worktree.** Finding 290's note that #59's findings start at 291 still stands.
 
+
+
+======================================================================
+### 340. Table 1's six small arms, and the two pairs that look like one arm and are not
+
+txstates 65, 71, 78, 81, 85 and 86 of `.rodata+0x2da0` -- finding 323's six
+that write nothing below +0x234. All six are reconstructed in
+`src/pump/v34/v34hstx1.cpp` and all six compare byte for byte against the blob
+through `t_v34hstx1.c`, 1,294 checks. What each does, with the object's own
+register convention applied (`0x4c(%esp)` is the object + 0x221c, so
+`0x3a6(%esi)` is +0x25c2 and not +0x3a6):
+
+```
+  65 XMIT0        0x62d83  clear the point, `txmit`, and if the receiver's
+                           flags bit 3 is set arm the segment: 0x2000 into
+                           f25c2, txstate to SSEG, clear f25c6/f25c0/f25cc
+  71 TXLEVEL      0x641d1  one scrambler step, f25c8 = q, and ALWAYS vect4[0]
+  78 JaTXMIT      0x64139  count +0xaa78 down; at zero raise bit 2 of f25c2
+                           and report both echo cancellers; then `v90Phase34`
+  81 MOH_SILENCE  0x63d58  four zero samples through `txwritequeue`, tick
+                           `vect_idx`, and leave at 0xc0.  81, 82, 83 and 84
+                           share this entry
+  85 K56JaTXMIT   0x63fb0  78's body exactly, then `k56FlexPhase34`
+  86 TXMD         0x63dae  one scrambler step, vect4[q], `txmit`, tick
+                           `vect_idx`; equal to +0xaa78 the segment ends,
+                           equal to +0x35a6 the modulator is reconfigured
+```
+
+**78 and 85 are one body and two tail calls.** Instruction for instruction --
+the same counter, the same flag, the same two `V34EchoReportCoeff(obj+0x80b8)`
+and `(obj+0x9138)` -- up to 0x641bd and 0x64034, where one calls `v90Phase34`
+and the other `k56FlexPhase34`. They are written here as one static body with
+two entry points so that the identity is a property of the file rather than a
+claim in a comment. They are still two behaviours and finding 323 measures
+them apart (65 bytes against 71), because the two callees are.
+
+**71 and 86 share the scrambler step and differ in what they send.** Both
+carry the two-tap loop twice and select with `f359c == 0x65`, which is
+`V34scrambler`'s `mode` over the register at +0x25cc with `bits` 3 and `nbits`
+2. 86 then sends `vect4[q]`; **71 sends `vect4[0]` whatever `q` is** -- the
+load at 0x64257 has no index register where 86's at 0x63e40 scales by four --
+so 71 advances the register and the quadrant while transmitting a fixed point.
+
+Two smaller facts worth carrying forward:
+
+- **The arms store `reg >> 29` unmasked where `V34scrambler` returns
+  `(reg >> 29) & 3`, and the two are always equal.** The loop's last act is
+  `reg >>= 1`, so bit 31 is clear on exit and `reg >> 29` is already 0..3.
+  That is what makes the published function usable here rather than a copy of
+  the inlined loop.
+- **0x6430c is shared and writes.** 86 rejoins the loop through it and it
+  increments f25c0; 65, 71, 78, 81 and 85 rejoin through 0x629c8 or 0x62d70,
+  which write nothing. An arm's rejoin point is part of the arm.
+
+
+======================================================================
+### 341. `V34EchoReportCoeff` only prints, so with the diagnostics off two mutations cannot fail
+
+`t_v34hstx1.c` runs with `v34hs_debug(0)`, and it has to: our code logs to
+capture channel 0 and the blob's to channel 1, so a side running our arm and
+then the blob's tail logs to two channels while `text[0]` takes one. The
+transcript comparison would fail on every case that printed anything.
+
+That is a choice with a measured cost, and this is the measurement. Two of
+`test/mutations/v34hstx1.json`'s forty-one go uncaught:
+
+```
+  78/85: only the first echo canceller is reported
+  78/85: the second report is of the first canceller again
+```
+
+`V34EchoReportCoeff` scans a coefficient array and prints; it stores nothing.
+With `dsplibs_debug_level` at zero both calls are no-ops in the object, so
+dropping one or aiming both at the same canceller is invisible to a byte
+comparison **by construction and not by omission**. The third mutation in
+that family -- "the completion runs on every step" -- IS caught, because it
+also raises bit 2 of f25c2 and the fixture seeds that bit clear.
+
+**And the traces themselves are not reconstructed.** Every arm here that
+changes `txstate` or reaches zero guards a diagnostic on
+`dsplibs_debug_level > 1` and prints through 0x655f0, 0x6821d, 0x68271,
+0x68282, 0x6824f, 0x68260 or 0x684c6. None of those is written, so the six
+arms are faithful at debug level 0 -- which is what the library ships -- and
+incomplete above it. It is one gap with two halves and it is recorded as one.
+
+**How to close it**, for whoever wants to: reconstruct the traces, then add a
+transcript-only check that does not go through `v34hs_compare` --
+
+```
+  apply(); v34hs_debug(1); dsplib_debug_capture_reset();
+  our_arm(side A);  save dsplib_debug_capture_text(0)
+  apply(); v34hs_step();                  /* the blob on BOTH sides */
+  compare the saved text against v34hs_text(1)
+```
+
+which works because the once-per-block tail prints nothing on any of these
+six, so side B's whole transcript is the arm's.
+
+
+======================================================================
+### 342. How one dispatch arm of `v34handshak` is compared while `v34handshak` does not exist
+
+`V34HS_OURS` is one `#ifdef` in one shared harness object, so defining it puts
+our `v34handshak` on side A for all forty-three of `t_v34hsstep.c`'s cases at
+once. That is the right switch for the end of #56-#58 and it is unusable for
+the first case landed: no case can be first if landing one requires all of
+them.
+
+The way through is the loop's own guard, off the prologue at 0x62933:
+
+```
+  62933  cmp %dx,0x221c(%ebx)     ; the queue count against the block's limit
+  6293e  jge 629ed                ; at or above: skip the per-sample loop
+```
+
+**With the count already at the limit, `ref_v34handshak` runs the
+once-per-block half and nothing else.** Every table-1 arm ends by rejoining
+the loop test with the count advanced, so an arm can be run FIRST on side A
+and the blob then contributes exactly the tail:
+
+```
+      side A   our arm         + the blob's tail
+      side B   the blob's arm  + the blob's tail
+```
+
+`v34hs_step_case(arm)` installs it inside the snapshot, the stack scrub, the
+alarm and the observation, which is what makes side A's `changed` and `hash`
+comparable with side B's. Calling the arm from the test before `v34hs_step`
+does NOT work: the snapshot is taken at the top of the step, so side A's
+observation would be measured over a different window and
+`v34hs_compare`'s "bytes written" and "step signature" fail on every case.
+Measured -- that was the first version of this test.
+
+**The vacuity it invites is the whole risk.** If an arm did nothing, side A's
+count would still be below the limit, side A's step would run THE BLOB'S COPY
+of the arm, and the comparison would pass having tested nothing. So every
+case is run twice: once with the arm alone, which is where the count reaching
+the limit and the arm having written anything can still be seen, and once
+through the fixture for the comparison. Both guards are asserted per case,
+and `tools/mutate.py --suite v34hstx1` is the empirical form of the same
+question -- an arm gutted to a `return` fails the standalone run, not the
+comparison.
+
+**One equivalent mutation, stated with what is held fixed.** 65's arm
+compares `txstate` against SSEG before assigning it. The arm is reached only
+through table 1 at `txstate == 65` and `txmit` does not write +0x3596
+(finding 285's sweep), so the guard is always true and deleting it changes
+nothing. It is written as the object writes it, and no mutation of it can
+fail while the entry is table 1's.
+
+
+======================================================================
+### 343. Two arms leave the dispatch for blocks that are not reconstructed, and they say so rather than guessing
+
+81 at `vect_idx == 0xc0` transfers to 0x66d85, and 86 at
+`vect_idx == *(short *)(obj+0xaa78)` transfers to 0x66fe9. Neither is a loop
+rejoin: 0x66d85 re-reads `txstate`, compares it against 0x51 and continues
+into 0x63941, and 0x66fe9 is a block of its own. Both are shared code that
+belongs to whoever takes the rest of table 1.
+
+`v34tx1_moh_silence` and `v34tx1_txmd` therefore RETURN the transfer --
+`V34TX1_MOH_WRAP` and `V34TX1_TXMD_DONE` -- and stop. Following them would
+mean writing code no differential test here can reach, which is the
+wrong-but-plausible thing the tree does not commit.
+
+**What that costs, named rather than implied.** Past the transfer there is no
+oracle: the blob's step runs on into the unmodelled block, so those two runs
+check the exit code and the fact that the arm wrote something, and nothing
+else. One mutation shows it concretely and is left in the suite for that
+reason:
+
+```
+  81: the wrap is tested before the counter is stored     NOT CAUGHT
+```
+
+The object stores `vect_idx` and then branches; a reconstruction that
+branched first and left the counter unstored is caught on no run, because the
+only run that reaches the branch is the one with nothing to compare against.
+The guard's constant IS covered -- moving the wrap to 0xc1 is caught by the
+exit code -- so what is untested is the ordering of the store against the
+test, on that path alone.
+
+
+======================================================================
+### 344. A `.c` file that names `v90Phase34` takes the interop binaries down, and a stale `.d` hid a whole mutation run
+
+Finding 217 measured this once for six of #59's functions and it is the same
+rule here: `src/pump/v34/v34hstx1` had to become a `.cpp`. 78 tail-calls
+`v90Phase34` and 85 `k56FlexPhase34`, both in the V.90/V.92 C++ half, and the
+five SpanDSP interop binaries link `$(SRC)` -- every `.c` under `src/` and no
+C++ at all. As a `.c` this file left both undefined and broke
+`t_spandsp_v23`, `t_spandsp_v8`, `t_spandsp_v8neg`, `t_spandsp_v8sock` and
+`v8peer`; `make phase` is what said so, and `make one` did not, because the
+tier-1 binaries link `$(OBJ)` and have the C++ in them.
+
+**And the rename hid the next twenty minutes' work.** After `v34hstx1.c`
+became `v34hstx1.cpp`, `make build/test/t_v34hstx1` reported
+`is up to date` and went on doing so through every mutation: the object from
+the `.c` compile was still there, and its `-MMD -MP` dependency file named
+`src/pump/v34/v34hstx1.c` as the source. `-MP` emits a phony rule for each
+prerequisite so that a deleted header does not break the build, and it does
+the same for a deleted *source* -- so make saw a prerequisite it could not
+rebuild, was told not to mind, and considered the object current.
+
+The result is the exact output of a test that catches nothing:
+
+```
+  41 mutations: 0 caught, 41 NOT caught, 0 unusable
+```
+
+which findings 247, 262 and 295 say to read as "the check cannot fail" rather
+than "the code is untested". Here it was neither: the binary under test had
+not been rebuilt since before the first mutation. `rm build/.../v34hstx1.[od]`
+fixes it, and a clean tree never sees it. **Anyone renaming a source file
+across languages should delete its object and its `.d` before believing a
+mutation run.**
+
+
+======================================================================
+### 345. The six arms' mutation suite: 38 of 41, and what was held fixed to get there
+
+`test/mutations/v34hstx1.json` against `build/test/t_v34hstx1`.
+
+```
+  43 mutations: 40 caught (40 by test), 3 NOT caught, 0 unusable, 0 equivalent
+```
+
+The three uncaught are findings 341 (two: `V34EchoReportCoeff` only prints)
+and 343 (one: no oracle past an unmodelled transfer). Neither is a defect in
+the arms and both are named where they arise.
+
+**Eleven of the forty were uncaught until the fixture was seeded, and
+that is the useful half of the run.** A cold object made five separate
+claims untestable, each for the same reason -- the field the arm writes
+already held the value it writes:
+
+```
+  65: f25c6/f25c0/f25cc are cleared      the bring-up leaves all three zero
+  78/85: bit 2 of f25c2 is raised        the bring-up leaves it already set
+  86: 0x8004 rather than 0x8000          same bit, same reason
+  86: f25c0 is cleared before counting   already zero
+  71/86: which scrambler generator       the fill's +0x25cc gives both the
+                                         same two bits
+  86: the `v90` argument to
+      V34SetupModulator                  read at 3200 baud and nowhere else
+```
+
+The last one needed a third run as well as a rate: with only "neither
+receiver" and "the K56flex one", a reconstruction reading `k56flex_receiver`
+alone computes the same argument on both. Three runs -- neither, K56flex,
+V.90 -- and neither half of the OR can stand in for the whole.
+
+So the test now seeds +0x25c0, +0x25c2, +0x25c6 and +0x25cc, and drives the
+modulator at **3200 baud** rather than at a round 2400, because 3200 is the
+one rate whose setup reads `v90` at all -- 0x40 taps from `tx3200c1_for_v90`
+against 0x20 from `tx3200c1_for_v34`, finding 216. At 2400 the two
+PCM-receiver runs are the same call twice and the argument is untested while
+the suite looks green.
+
+**What is held fixed**, since finding 323's separations are properties of the
+fill as much as of the object: one object fill (`v34hs_setup(0)`), route
+TXSAMPLE with a budget of one sample, microstate PHASE1, rxstate SILENCE, the
+diagnostics off, and the blob's once-per-block tail on both sides.
+
+**Findings 340-345 are this worktree's block.** 346-349 of the 340-349
+allocation are unused.
