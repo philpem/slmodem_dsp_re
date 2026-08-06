@@ -671,6 +671,182 @@ main(void)
 			printf(" %d:%d", i, message_seen[i]);
 	printf("\n");
 
+	/*
+	 * THE OVERSIZED BUFFER, which nothing else here can reach.
+	 *
+	 * `CALLPROG_Progress` refuses a count above CALLPROG_MAX_SAMPLES --
+	 * 160, a private define in callprog.c -- and returns CALLPROG_ERROR
+	 * before touching anything.  Every other case in this file passes
+	 * BUFSAMP, which IS 160, so the guard has never been entered and its
+	 * announcement was one of the file's seventeen dead sites.
+	 *
+	 * Driven at every level, both sides, with the transcript compared:
+	 * the return value alone would not distinguish "refused" from
+	 * "refused and said so".
+	 */
+	diff_begin("callprog: a buffer longer than the maximum is refused");
+	{
+		static struct callprog ca, cb;
+		static struct callprog_cfg cfg2;
+		static short big_in[512], big_out[512];
+		unsigned lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			int ra, rb;
+
+			memset(&ca, HARNESS_MALLOC_FILL, sizeof(ca));
+			memset(&cb, HARNESS_MALLOC_FILL, sizeof(cb));
+			memset(&cfg2, 0, sizeof(cfg2));
+			cfg2.get_sreg = sreg;
+			cfg2.modem = (void *)0xD1A1u;
+			params();
+			harness_param_set(MDMPRM_DP_ADDR, 0);
+			CALLPROG_Create(&ca, &cfg2);
+			ref_CALLPROG_Create(&cb, &cfg2);
+
+			memset(big_in, 0, sizeof(big_in));
+			memset(big_out, 0x5a, sizeof(big_out));
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			ra = CALLPROG_Progress(&ca, big_in, big_out, 161);
+			rb = ref_CALLPROG_Progress(&cb, big_in, big_out, 161);
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("161 samples refused, level %ld", ra, rb,
+				    (long)lvl);
+			/*
+			 * Byte by byte with four holes, not diff_eq_obj:
+			 * CALLPROG_Create allocates `dial`, `busy`, `band`
+			 * and `dtmf`, so the two sides hold four different
+			 * addresses there and always will.  Offsets from
+			 * tools/whichfield.py rather than counted by hand.
+			 */
+			{
+				static const unsigned skip[] = {100, 108,
+							        120, 132};
+				unsigned b, k;
+
+				for (b = 0; b < sizeof(ca); b++) {
+					int hole = 0;
+
+					for (k = 0; k < 4; k++)
+						if (b >= skip[k] &&
+						    b < skip[k] + 4)
+							hole = 1;
+					if (hole)
+						continue;
+					diff_eq_int("the object is untouched",
+						    ((unsigned char *)&ca)[b],
+						    ((unsigned char *)&cb)[b],
+						    (long)lvl * 10000 + b);
+				}
+			}
+			if (strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) != 0) {
+				diff_eq_int("transcripts agree, level %ld",
+					    0, 1, (long)lvl);
+				if (getenv("DBGDIFF"))
+					fprintf(stderr,
+						"ours:\n%s\nblob:\n%s\n",
+						dsplib_debug_capture_text(0),
+						dsplib_debug_capture_text(1));
+			} else {
+				diff_eq_int("transcripts agree, level %ld",
+					    1, 1, (long)lvl);
+			}
+			/*
+			 * Level 1 is below DSPLIB_DEBUG_ON's threshold, so
+			 * the guard must be silent there and speak above it.
+			 * Without this the check passes on two empty strings.
+			 */
+			diff_eq_int("level %ld says the right amount",
+				    dsplib_debug_capture_lines(1) > 0,
+				    lvl > 1, (long)lvl);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE DIALLER'S FATAL REPORT, which is a plain field.
+	 *
+	 * `CALLPROG_Progress` checks `cp->fatal == 7` -- DIALER_ERROR_MSG --
+	 * announces it, forces CPSTATE_END and returns CALLPROG_ERROR.  Every
+	 * other case here drives the dialler normally and it never errors, so
+	 * the branch was dead.  The field is ordinary state, so seeding it is
+	 * the same move the countdown and quiet_count seeds already make.
+	 */
+	diff_begin("callprog: a fatal dialler report ends the call");
+	{
+		static struct callprog ca, cb;
+		static struct callprog_cfg cfg2;
+		static short in2[BUFSAMP], out_a[BUFSAMP], out_b[BUFSAMP];
+		static const unsigned skip[] = {100, 108, 120, 132};
+		unsigned lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			int ra, rb, b, k;
+
+			memset(&ca, HARNESS_MALLOC_FILL, sizeof(ca));
+			memset(&cb, HARNESS_MALLOC_FILL, sizeof(cb));
+			memset(&cfg2, 0, sizeof(cfg2));
+			cfg2.get_sreg = sreg;
+			cfg2.modem = (void *)0xD1A1u;
+			params();
+			harness_param_set(MDMPRM_DP_ADDR, 0);
+			CALLPROG_Create(&ca, &cfg2);
+			ref_CALLPROG_Create(&cb, &cfg2);
+
+			ca.fatal = cb.fatal = 7;	/* DIALER_ERROR_MSG */
+
+			memset(in2, 0, sizeof(in2));
+			memset(out_a, 0x5a, sizeof(out_a));
+			memset(out_b, 0x5a, sizeof(out_b));
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			ra = CALLPROG_Progress(&ca, in2, out_a, BUFSAMP);
+			rb = ref_CALLPROG_Progress(&cb, in2, out_b, BUFSAMP);
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("returns, level %ld", ra, rb, (long)lvl);
+			diff_eq_int("state after, level %ld", ca.state, cb.state,
+				    (long)lvl);
+			for (b = 0; b < (int)sizeof(ca); b++) {
+				int hole = 0;
+
+				for (k = 0; k < 4; k++)
+					if (b >= (int)skip[k] &&
+					    b < (int)skip[k] + 4)
+						hole = 1;
+				if (!hole)
+					diff_eq_int("object after fatal",
+						    ((unsigned char *)&ca)[b],
+						    ((unsigned char *)&cb)[b],
+						    (long)lvl * 10000 + b);
+			}
+			for (b = 0; b < BUFSAMP; b++)
+				diff_eq_int("output after fatal", out_a[b],
+					    out_b[b], (long)lvl * 1000 + b);
+			diff_eq_int("transcripts agree, level %ld",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)lvl);
+			diff_eq_int("level %ld says the right amount",
+				    dsplib_debug_capture_lines(1) > 0,
+				    lvl > 1, (long)lvl);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("guards");
 	{
 		distinct = 0;
