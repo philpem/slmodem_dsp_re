@@ -16578,3 +16578,329 @@ Two consequences:
 **Findings 319-324 are the block `docs/v90rest.md` allocated to this
 worktree.** Finding 290's note that #59's findings start at 291 still stands.
 
+
+======================================================================
+### 360. Table 2's closure is closed, and that is the whole reason it could be taken as a batch
+
+`v34handshak` is 61,541 bytes and nobody takes it as a unit. What decides
+whether a *dispatch* of it can be taken as a unit is not the size of its arms
+but whether the arms branch anywhere that is not also an arm. Table 2's do
+not, and that was measured before anything was written.
+
+The table itself, `.rodata+0x2ee8`, read with its relocations attached --
+seventy slots, seventy `R_386_32` against `.text`, addend in the data, and
+the count of relocations asserted rather than eyeballed:
+
+```
+  index = txstate - 5, states 5..74
+
+  0x64480    1 entry    5                 SILENCE
+  0x64518    2          18 19             SSEG SBARSEG
+  0x64509    4          20 21 64 68       PPSEG TRNSEG4 JTXMIT J1TXMIT
+  0x644c9    5          24 51 54 60 74    TX_DPSK TX_L1 SILENCEINFO
+                                          TONE_AB SILENCERETRAIN
+  0x644fa    3          66 67 69          TRNSEG4A XMITMP EXMIT
+  0x644d8    1          70                DATAXMIT
+  0x62a40   54          the rest
+```
+
+**Finding 286 says fifty-three defaults and it is fifty-four.** 54 + 1 + 5 +
+1 + 3 + 4 + 2 = 70, and the sixteen non-default states are 5, 18, 19, 20, 21,
+24, 51, 54, 60, 64, 66, 67, 68, 69, 70 and 74. Corrected here rather than in
+286, which is not renumbered.
+
+**The five branches out, and where each goes back to.** This is the part that
+had to be checked:
+
+```
+  0x6778b   from arm 5 on microstate 63    -> arm 5's rxstate tests, or 0x62a40
+  0x655c9   from arm 5 on rxstate 4        -> arm 5's default, or 0x62a40
+  0x67d48   from arm 5 on rxstate 35       -> arm 5's default, or 0x6778b's body
+  0x6780f   from arm 18 on +0x359c         -> 0x62a40
+  0x64884   from the tail on txstate 74    -> the middle of the tail
+```
+
+Every one is between three and eight instructions. Nothing leaves the region,
+and **the whole closure -- seven arms, five branches out and the shared tail
+at 0x62a40 -- holds no `call` instruction at all**, which is what makes a
+reconstruction of it 200 lines rather than a dependency on half the object.
+
+Six of the seven arms decide one field, the int at +0x0004, and fall into the
+seventh, which is both the table's default target and the shared tail. So the
+dispatch writes at most twelve bytes: +0x0004, the tail's counter at +0x0234,
+and the receiver's +0x1d2 on the one path that reaches 0x62b45.
+
+`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 10,974 checks.
+This is the first tier-1 differential test of any part of `v34handshak`.
+
+**One thing noticed and not filed as a deviation.** The counter at +0x0234
+advances on every block whose level is below the floor and is cleared only by
+a block at or above it, and the tail's test against 0x257f is signed. A line
+that stayed below the floor for 2^31 blocks would wrap the counter negative
+and stop reporting it. That is 2^31 *calls*, not 2^31 iterations of a loop,
+which is why it is here rather than beside D46.
+
+
+======================================================================
+### 361. Three routes reach the once-per-block dispatch, not two, and they converge exactly
+
+`docs/v34handshak.md` gives two ways into table 2: the guard at 0x629f1 when
+the receiver's count is at most 5, and the fall-through of the rxstate compare
+chain. There is a third, and it is in the chain the second one does not
+reach:
+
+```
+  62a09  cmp $0x2b,%eax        ; rxstate 43 -> the microstate table
+  62a12  jg  62b71             ; ANYTHING ABOVE 43 leaves the chain here
+  62a18  cmp $0x04             ; -> 0x653e4
+  62a21  cmp $0x23             ; -> 0x6752c
+  62a2a  movzwl 0x3596(%edx),%ecx   ; else table 2
+
+  62b71  cmp $0x35,%eax        ; rxstate 53 -> 0x65473
+  62b7a  cmp $0x48,%eax        ; rxstate 72 -> 0x650c6
+  62b83  movzwl 0x3596(%esi),%ecx
+  62b91  jmp 62af1             ; else table 2, by the other door
+```
+
+So the three are: `[obj+0x264] <= 5`; `> 5` with rxstate below 43 and neither
+4 nor 35; and `> 5` with rxstate above 43 and neither 53 nor 72.
+
+All three arrive at 0x62af1 or 0x62b00 with %ecx holding the zero-extended
+txstate and nothing else live, so a reconstruction that starts at the txstate
+read cannot tell them apart -- which means the comparison is not a claim about
+our code. It is a claim about the blob's, and `t_v34hstbl2.c` makes it the
+same way everything else here is made: seventeen states driven through all
+three, and the whole object, its five blocks, the padding around them and both
+transcripts compared each time. **All seventeen agree through all three
+routes**, so the three doors really are one dispatch and the two rxstate
+routes are not a separate case for anybody to take.
+
+Driven with rxstate 5 for the low route and rxstate 44 for the high one. 44
+is above 43 and neither 53 nor 72, so it is the third door; there is nothing
+special about the value.
+
+
+======================================================================
+### 362. What table 2's evidence is, and the one axis of it that contributes nothing
+
+The harness compares four things: the object byte for byte with thirty-five
+pointer fields excluded and checked by offset instead, the rest of the arena
+including its seven padding regions, the count of bytes the step wrote, and
+both transcripts.
+
+**The transcript axis is vacuous here and is named as a gap rather than
+counted.** The closure holds no `call` and no diagnostic site, so every one of
+the 131 cases prints zero lines on both sides and `strcmp(text[0], text[1])`
+is true by construction. The test asserts `lines == 0` for every cold case so
+that an arm which ever grows a debug site becomes a failure rather than a
+silence, but that is a check on the *object*, not evidence for the
+reconstruction.
+
+What is left is bytes, and it is enough because the step writes so few of
+them: four at +0x0004, four at +0x0234, and two at the receiver's +0x1d2 on
+one path. A wrong constant in any arm is four wrong bytes at a named offset.
+
+**Two properties of the step that the probe measured rather than assumed**,
+over all 131 cases: `V34HS_PROBE=1` reports `step wrote 0 padding bytes` on
+every one, so nothing here writes outside the blocks the fixture models, and
+`B-vs-B differs in 0 bytes` on every one, so each side is individually
+reproducible.
+
+The route knobs, all green: 24 object fills (`V34HS_SEED=0..23`), 9
+placements (`V34HS_SKEW`), 5 object skews (`V34HS_OBJSKEW`), 8 neighbourhoods
+(`V34HS_PADVARY=0..7`), `V34HS_LOOSEOBJ=1`, `V34HS_NOSCRUB=1` and
+`V34HS_REFINIT=1`. `V34HS_EQPTR=1` fails 12 checks -- and fails exactly the
+same 12 on `t_v34hsstep` without any of this batch's changes, because forcing
+the twelve program-image pointers equal is precisely what makes
+`v34hs_holes_check` report them unexercised. Pre-existing, and not a property
+of table 2.
+
+
+======================================================================
+### 363. txstate 5's arm needs a round trip to reach one of its three branches out, and 0x65 and 0x66 are not the same constant
+
+Arm 0x64480 is the only one of the seven that reads another state machine,
+and it reads two: the microstate first, then the rxstate. All three of its
+branches out end in the same answer, `+0x0004 = 1`, and all three test the
+halfword at +0x359c -- but not against the same value.
+
+```
+  6448e  cmp $0x3f,%dx           microstate 63  -> 6778b
+  6778b  cmpw $0x66,0x359c(%edi)                -> 67799: +0x0004 = 1
+         jne 64498                              -> back to the rxstate tests
+
+  644a6  cmp $0x4,%ax            rxstate 4      -> 655c9
+  655c9  cmp $0x2c,%dx           microstate 44  and
+         cmpw $0x65,0x359c(%ebx)                -> +0x0004 = 1
+
+  644b0  cmp $0x23,%ax           rxstate 35     -> 67d48
+  67d48  cmp $0x3f,%dx           microstate 63  and
+         cmpw $0x65,0x359c(%ebx)                -> 67799
+```
+
+**0x67d48's body is reachable only by a round trip.** Its own test wants
+microstate 63, and microstate 63 sends the arm to 0x6778b *first*; 0x6778b
+returns to the rxstate tests only when +0x359c is not 0x66. So the single
+state that reaches it is microstate 63, rxstate 35 and +0x359c == 0x65 --
+out to 0x6778b, rejected there, back through 0x64498, out again to 0x67d48,
+and only then the answer.
+
+That is not a curiosity. A reconstruction that took 0x6778b's constant as
+0x65 -- the value the other two branches use -- passes every case in this file
+except the two that separate them, because with 0x65 everywhere the round trip
+short-circuits at 0x6778b and gives the same answer 1 by the wrong route. The
+mutation is in the suite and it is caught by exactly two cases.
+
+Both `agree`-style facts about this arm are asserted too: microstate 63 with
+rxstate 35 and +0x359c 0x66 answers 1 at 0x6778b without ever reaching
+0x67d48, and microstate 44 with rxstate 35 answers 0.
+
+
+======================================================================
+### 364. Table 2 is four behaviours cold, seven once the companions move, and one at seed 10
+
+Finding 290 measured **four distinct behaviours from table 2's seven
+targets** and asserted the three collisions as `agree` pairs, with the note
+that the count is a property of the fixture's seed as well as of the object.
+Both halves are now taken apart, and both are true in a sharper form.
+
+**The three collisions, and the one field each turns on.**
+
+```
+   5 and 24    both answer 0        arm 5 falls through all three of its
+                                    branches out; microstate 63 with
+                                    +0x359c == 0x66 makes it answer 1
+  18 and 20    both answer 2        arm 18 reads bit 3 of the receiver's
+                                    flags at +0x122; setting it makes 18
+                                    answer 3
+  66 and 70    both answer 3        arm 70 reads the halfword at +0xe4c,
+                                    which the bring-up leaves zero; any
+                                    non-zero value makes it answer 4
+```
+
+So **all seven targets are distinct**, and the cold four is a statement about
+what `v34handshakinit` and the fill leave in three fields, not about the
+dispatch. Both counts are asserted: four cold, and three `differ` pairs once
+the three fields move.
+
+**And the aliases within a target are the same check under a different
+index**, which is stated rather than left to be inferred. 24, 51, 54, 60 and
+74 share 0x644c9; 20, 21, 64 and 68 share 0x64509; 66, 67 and 69 share
+0x644fa; 18 and 19 share 0x64518. Those ten `agree` assertions are one check
+about the table's contents repeated, not ten checks about the object's
+behaviour. **The one alias that is not redundant is 74**: it shares 0x644c9,
+and then the tail singles it out at 0x62a70, so with the int at +0x2218 in
+{2, 3} it reaches 0x64884 and answers 0 or 7 where the other four still
+answer 0.
+
+**The tail can erase the whole separation, and at two of twenty-four fills it
+does.** Every arm falls into 0x62a40, and the tail overwrites +0x0004 on four
+conditions that no arm reads. At `V34HS_SEED=10` and 11 the object comes up
+with the counter at +0x0234 already near its limit, the tail writes 9 over
+every arm's answer, and all seven targets become one behaviour. The test
+therefore pins the tail's five inputs before every case that is not about the
+tail, which makes each arm's answer a property of the object at all
+twenty-four fills instead of of one. +0x0004 itself is pinned to -1 for a
+smaller version of the same reason: an arm writing the value already there
+would write no bytes and the signature would lose the case silently.
+
+The unpinned form is still driven -- seventeen states, differential
+comparison only, no oracle -- because the reconstruction has to be right on
+the fill it was not tuned for.
+
+
+======================================================================
+### 365. Landing one dispatch of a 61,541-byte function needs a different swap from V34HS_OURS, and the log slot is the trap in it
+
+`test/harness/v34hsstep.c` offered `V34HS_OURS`, which points side A at
+`v34handshak`. That is the whole-function swap and it cannot be what a
+per-case agent uses: `v34handshak` would have to exist and be right for every
+case in all three tables before any one case could be tested through it, which
+is the sitting the per-case split exists to avoid. Four agents are
+reconstructing cases of this function concurrently and none of them can define
+it.
+
+`v34hs_side_a(fn)` is the per-case form -- one function pointer, one branch at
+the call site, `V34HS_OURS` untouched. `t_v34hsstep.c` leaves it NULL and goes
+on proving the fixture; `t_v34hstbl2.c` installs `v34handshak_txblock` and
+drives only the states table 2 owns.
+
+**The trap is the capture slot.** Our code writes debug slot 0 and the blob
+writes slot 1, and the fixture selected side A's slot with a compile-time
+constant that follows `V34HS_OURS`. Installing a reconstruction at run time
+without moving that constant leaves side A reading the BLOB's transcript, so
+`strcmp(text[0], text[1]) == 0` is true by construction and the transcript
+axis goes silently vacuous. `v34hs_side_a` moves the slot with the function.
+
+It could not have been caught empirically on this dispatch: table 2 prints
+zero lines on both sides whatever the slot says (finding 362), so the vacuous
+version and the correct one give the same output on every case here. It is
+the shape finding 249 is about, found by reading rather than by failing.
+
+The reconstruction is `v34handshak_txblock` rather than `v34handshak`, and
+`tools/coverage.py` files it where `v8_handshak_agc` and `v8_handshak_demod`
+already are -- "a helper split out of a larger function". Until all four
+dispatches exist there is no honest `v34handshak` to define, and a
+`v34handshak` that silently did nothing for the other three would be exactly
+the wrong-but-plausible artefact CLAUDE.md forbids.
+
+
+======================================================================
+### 366. What table 2's mutation suite catches, and the two things it cannot
+
+`test/mutations/v34hstxblock.json`, 52 mutations against
+`build/test/t_v34hstbl2`: **50 caught, 0 not caught, 2 recorded as
+equivalent and both survived.**
+
+Almost every one is a constant, because that is what this dispatch is -- the
+arms hold no arithmetic beyond one multiply by three. What the set has to
+prove is therefore not that arithmetic is right but that each of the seven
+arms is separately driven, that all five branches out of the table's range are
+reached, and that the tail's three signedness decisions are the ones the
+object makes. Each of those is a mutation:
+
+```
+  +0x238 against +0x23c   compared signed rather than unsigned      caught
+  the receiver's level    compared unsigned rather than signed      caught
+  +0xe4c                  read signed rather than unsigned          caught
+  +0x2aa2 against 0x3c    read unsigned rather than signed          caught
+```
+
+Six mutations move a state from one arm to another or delete an alias, which
+is what proves the aliasing is tested and not assumed; all six are caught.
+
+**The two that survive, with what is held fixed.**
+
+- *The txstate reload at 0x62b5f, put back.* 0x62b45 re-reads +0x3596 before
+  rejoining the tail. Nothing between the dispatch and there writes that
+  halfword -- no arm of table 2 does, and finding 285's sweep names the eight
+  functions in the whole object that write any of the three state words -- so
+  the reload cannot change the value. Held fixed: the whole of table 2's
+  closure, which is all the code that runs between the read and the reload.
+
+- *txstate held zero-extended rather than sign-extended.* The object spells
+  the state two ways, `cmp $0x4a,%cx` at 0x62a70 and `movswl %cx,%eax` at
+  0x62ac5, and one `short` models both -- over all 65,536 halfwords, not
+  merely over the 0..86 the diagnostics allow. Every test the two spellings
+  feed is equality against a small positive constant, which agrees for every
+  value; the one inequality, `> 0x53`, only decides whether to test equality
+  with 0x54, which is false either way. Held fixed: nothing.
+
+**And one thing no mutation can express.** The object bounds the table index
+with `cmp $0x45; ja 0x62a40` and the reconstruction is a `switch` over the
+state values. Both sides of that bound reach 0x62a40 with the same txstate, so
+the bound is not separately observable and a mutation of it would be a
+mutation that cannot fail -- which reads exactly like a test gap (findings
+247, 262, 295). It is named here instead. What *is* driven is both sides of
+it: txstates 0, 4, 75, 81, 82, 83, 84, 85 and 86 all take the out-of-range
+path, and 82, 83 and 84 answer 0xd, 0xf and 0x10 there, so the default target
+is four behaviours rather than one.
+
+**The oracle is independent, and it proved so by being wrong.** Every case
+asserts what the BLOB must leave in +0x0004, written out of the disassembly by
+hand. On the first run three checks failed -- txstate 68, where the table
+says 2 and the hand-written table said 3. The differential comparison passed
+on that case; only the oracle failed. An oracle that never disagrees with the
+thing it is checking is not an oracle.
+
+**Findings 360-366 are this worktree's block; 367-369 are unused.**

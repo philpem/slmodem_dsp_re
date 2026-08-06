@@ -127,6 +127,25 @@ void v34hs_state(short mst, short rxst, short txst);
 void v34hs_step(void);
 
 /*
+ * PUT A RECONSTRUCTION ON SIDE A, for one dispatch case at a time.
+ *
+ * `V34HS_OURS` is the whole-function swap and it cannot be what a per-case
+ * agent uses: `v34handshak` would have to exist and be right for EVERY case
+ * before one case could be tested through it, which is the sitting the
+ * per-case split exists to avoid.  This is the per-case form.
+ * `t_v34hsstep.c` leaves it NULL and goes on proving the fixture; a test that
+ * has reconstructed one dispatch installs its own entry point and drives only
+ * the states that dispatch owns.
+ *
+ * It also moves side A's transcript to the capture slot OUR code writes.
+ * With the blob on both sides the two slots are 1 and 1; with a
+ * reconstruction on side A they are 0 and 1, and leaving that at 1 would
+ * compare the blob's transcript against itself, which passes by construction.
+ * NULL restores the blob and the slot together.
+ */
+void v34hs_side_a(void (*fn)(void *obj));
+
+/*
  * Compare the two sides: the whole object byte for byte with the pointer
  * fields excluded, the two self-pointers by offset-from-own-base, and both
  * transcripts.  This is the check that says the fixture is sound.
