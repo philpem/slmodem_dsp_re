@@ -14145,9 +14145,19 @@ one's own implementation too.
 Similarly `blackman`'s 4pi constant: perturbing it by one ulp still gives
 zero mismatches, so it is confirmed by reading `.rodata` and not by the test.
 
-### 247. A by-value float can hand the two sides of a differential test different numbers
+### 340. A by-value float can hand the two sides of a differential test different numbers
 
-Reserved block for this session: 247-250.
+Reserved block for this session: **340-349**.
+
+RENUMBERED, and this is the eighth collision.  These four were written as
+247-250 and lived under those numbers in two commits on `master`.  The V.90
+session had already claimed 247 through 331 across all seventeen of its
+branches, none of them merged here yet, so theirs is the numbering that stays
+and this block moved above it with margin.  If a citation of 247, 248, 249
+or 250 elsewhere seems to point at the wrong thing, that is why -- they moved
+to 340, 341, 342 and 343 respectively.  A renumbered reference still RESOLVES, so
+`refcheck.py` cannot catch this class of error -- which is exactly why it is
+written down here rather than merely fixed.
 
 `t_queue`'s signalling-NaN case failed, and the divergence was not in the
 object under test.  It took two fixes because there were two of them.
@@ -14209,7 +14219,7 @@ Two smaller traps found alongside, both mine:
   the phase advance moved inside the loop test (53,115 across all three
   blocks), and a `size_`-setting constructor in `DiffCoder` (1,042).
 
-### 248. Four weak class templates, and a drift decision taken once for all of them
+### 341. Four weak class templates, and a drift decision taken once for all of them
 
 `Queue<float>`, `SineWave<float,float>`, the four differential coders and
 `LowPassFIR<float>` are all weak symbols in `.gnu.linkonce.t.*`, invisible to
@@ -14255,7 +14265,7 @@ the parameter type is unrecoverable, and the header says so.  Likewise
 `sysdep_malloc(size)` against `sysdep_malloc(size * sizeof(T))`, which only one
 instantiation can distinguish.
 
-### 249. `LowPassFIR` designs a filter it cannot run, and the five-argument form is the primitive
+### 342. `LowPassFIR` designs a filter it cannot run, and the five-argument form is the primitive
 
 Four weak symbols, and the arrangement is the opposite way round from the
 obvious reading.  The FIVE-argument `design(nTaps, cutoff, gain, window,
@@ -14307,7 +14317,7 @@ the divide reversed, `cutoff < 0` in place of `!(cutoff >= 0)`, copying the
 window instead of adopting it, an extended-precision recurrence, and accepting
 a one-tap filter.
 
-### 250. An explicit class instantiation emits members the object does not have
+### 343. An explicit class instantiation emits members the object does not have
 
 `template class Queue<float>;` put `_ZNK5QueueIfE5countEv` in our object, and
 the blob has no such symbol: both of its call sites open-code the occupancy

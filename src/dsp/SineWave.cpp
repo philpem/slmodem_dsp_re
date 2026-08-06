@@ -34,7 +34,7 @@
  * cost 59 mismatches in t_sinewave's random-bit-pattern block before this was
  * put in, and nothing else in the test could see it.
  *
- * Same reason and same shape as `Queue`'s `copy1`; finding 247 has the general
+ * Same reason and same shape as `Queue`'s `copy1`; finding 340 has the general
  * statement.  A future reader who restores the member-init list will pass every
  * case except the one that matters.
  */

@@ -6,7 +6,7 @@
  * 4-byte integer argument occupy the same stack slot -- but which instruction
  * fills that slot is the caller's choice, and GCC has been observed choosing
  * `flds`/`fstps` for one side of a differential pair and a `push` of the memory
- * word for the other (finding 247, found in t_queue).  An x87 store quietens a
+ * word for the other (finding 340, found in t_queue).  An x87 store quietens a
  * signalling NaN, so with hostile bit patterns in the inputs -- which this test
  * has, deliberately -- that would hand the two constructors DIFFERENT NUMBERS
  * and report a difference the objects did not make.  Declaring the same entry

@@ -5,7 +5,7 @@
  * constructor take `cutoff` and `gain` by value, and which instruction fills a
  * by-value float's outgoing stack slot is the caller's choice -- GCC has been
  * seen making opposite choices for the two sides of one differential pair, so
- * the two callees would receive different numbers (finding 247).  With a NaN
+ * the two callees would receive different numbers (finding 340).  With a NaN
  * cutoff among the inputs, and the NaN path being one of the behaviours under
  * test, that is not a hypothetical.  Declaring the same entry points a second
  * time with `unsigned` parameters puts a byte-identical stack image in front of
