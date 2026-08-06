@@ -1253,6 +1253,158 @@ t3m_micro59(struct t3m_frame *f)
 }
 
 /*
+ * 0x66003 -- microstate 58 `RX_PHASE1_CALL`.
+ *
+ * FOUR BLOCKS IN SEQUENCE and only the first is exclusive of the rest, so a
+ * single step can run the head, cross the second threshold, take one reset and
+ * then leave -- the same shape as 59 and not the "one guard, one exit" shape
+ * the cold sweep put this arm's group in.
+ *
+ *   0  txstate == TX_DPSK  ->  the message record reached THROUGH +0xaa6c (and
+ *                              NOT the one at +0xa94c the resets below fill)
+ *                              has its +0x20 cleared, but only when +0x20 and
+ *                              +0x22 are BOTH non-zero.  0x6c3b7.
+ *
+ *      n = ++counter, stored back before anything is tested
+ *
+ *   1  n > 0x5f            ->  `rx->flags |= 0x200` UNCONDITIONALLY, and then
+ *                              only if `fsk.sr` is exactly 1:
+ *                              print, `+0x358a = 2`, counter = filtdelay,
+ *                              microstate -> TX_PHASE1_CALL, the receiver's
+ *                              +0x264 takes its gain, `rx->flags |= 0x200`
+ *                              again, and LEAVE.  0x6c2d0.
+ *
+ *      c = counter, RE-READ off the object rather than reused
+ *
+ *   2  c > 0x3bf AND +0x3588 has bit 1 AND +0x358a == 2 AND
+ *      (fsk.sr & 0x3ff) == 0x372
+ *                          ->  RESET D at 0x6d709: `v34handshakinit(obj, 0)`
+ *                              and +0xaa6c re-aimed at +0xa94c, but ONLY when
+ *                              +0x3588 is exactly 2; then `+0x3588 |= 1`, the
+ *                              shared reset, one line -- and it REJOINS block
+ *                              3 with the counter read a third time rather
+ *                              than leaving.
+ *
+ *   3  c > 0x4b0 AND +0x3588 == 0 AND fsk.sr != 0
+ *                          ->  RESET C at 0x660b9, which is `t3m_errrec_reset`
+ *                              unchanged, and then leave.
+ *
+ * BLOCK 2 AND BLOCK 3'S RESETS CANNOT BOTH RUN IN ONE STEP, and it is
+ * structural rather than a property of any seed: block 2 needs bit 1 of
+ * +0x3588 set and leaves bit 0 set as well, and block 3 needs the whole
+ * halfword to be zero.  So D never enables C, and C is unreachable in any step
+ * D ran.  Finding 372's disjoint windows, in the form this arm takes.
+ *
+ * `+0x3588` IS READ TWICE IN BLOCK 2 and the second read is what decides
+ * whether `v34handshakinit` runs.  The object holds the first read in `%dx`
+ * across the call's branch and re-reads it AFTER the call on the branch that
+ * makes it, which is the same care 59's second reset takes -- and it is why
+ * `t3m_errrec_arm` reading the field fresh is exact on both branches.
+ *
+ * FINDING 376 SAYS THIS ARM IS ON THE `= 4` SIDE OF FINDING 375'S SPLIT.  It
+ * has ONE OF EACH: 0x660b9 stores the constant 4 and 0x6d709 sets bit 0.  The
+ * nine-copy list above already had it right; the summary in 376 is the thing
+ * that is short.
+ */
+static void
+t3m_micro58(struct t3m_frame *f)
+{
+	unsigned short n;
+	short c;
+
+	/*
+	 * 0x6600a.  The record is reached through the self-pointer and the
+	 * resets below fill the one at +0xa94c by address, so the two are the
+	 * same record only when something has aimed it there -- which block 2
+	 * does and the entry does not.
+	 */
+	if ((short)T3M_U16(f, V34HS_TXSTATE_OFF) == V34HS_TX_DPSK) {
+		unsigned char *r = *(unsigned char **)(f->m + T3M_SELFPTR);
+
+		if (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)
+			*(short *)(r + 0x20) = 0;
+	}
+
+	/* 0x66018, and the store is before either threshold. */
+	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+	T3M_U16(f, T3M_COUNTER) = n;
+
+	if ((short)n > 0x5f) {
+		/* 0x66038, and it happens whether or not the test below does. */
+		f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+
+		/* 0x6604c, a full-width equality and not one of 49's, 50's or
+		   59's masked tests of the same register. */
+		if ((unsigned short)f->obj->fsk.sr == 1) {
+			/* 0x6e28d, printed before anything below is written. */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"V34RETRAIN, RX_PHASE1_CALL received, "
+					"count2=%d,rx->gain=0x%x,filtdelay=%d\n",
+					(int)T3M_I16(f, T3M_COUNTER),
+					(int)f->rx->agc_gain,
+					(int)T3M_I16(f, T3M_FILTDELAY));
+
+			/* 0x6c2dd.  The counter takes filtdelay BEFORE the
+			   transition, so the `[2]` the line prints is
+			   filtdelay and not the value that crossed 0x5f. */
+			T3M_I16(f, T3M_F358A) = 2;
+			T3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);
+			hs_setstate(f->obj, V34HS_MICROSTATE_OFF,
+				    V34HS_TX_PHASE1_CALL);
+
+			/* 0x6c37f, the copy before the flag. */
+			*(short *)((unsigned char *)f->rx + T3M_RX_F264) =
+				f->rx->agc_gain;
+			f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+
+			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			return;
+		}
+	}
+
+	/* 0x66061. */
+	c = (short)T3M_U16(f, T3M_COUNTER);
+
+	/* 0x66068, 0x66071, 0x6607d and 0x6d709. */
+	if (c > 0x3bf && (T3M_U16(f, T3M_F3588) & 2) != 0
+	    && T3M_U16(f, T3M_F358A) == 2
+	    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)) {
+		/*
+		 * 0x6d728.  Bit 1 alone is not enough for the call: the whole
+		 * halfword has to be 2, so a +0x3588 of 3 or 6 arms the
+		 * recovery without re-initialising anything.
+		 */
+		if (T3M_U16(f, T3M_F3588) == 2) {
+			v34handshakinit(f->obj, 0);
+			*(unsigned char **)(f->m + T3M_SELFPTR) =
+				f->m + T3M_MSGREC0;
+		}
+
+		t3m_errrec_arm(f);
+		t3m_errrec_core(f);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("errorrecovery for info0 is "
+					     "initialized in RX_PHASE1_CALL\n");
+
+		/* 0x6d94c and 0x6d9e6 -- the counter a THIRD time. */
+		c = (short)T3M_U16(f, T3M_COUNTER);
+	}
+
+	/* 0x6608b, 0x6609d and 0x660ab. */
+	if (c <= 0x4b0 || T3M_U16(f, T3M_F3588) != 0
+	    || (unsigned short)f->obj->fsk.sr == 0) {
+		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		return;
+	}
+
+	/* 0x660b9. */
+	t3m_errrec_reset(f);
+	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+}
+
+/*
  * ---------------------------------------------------------------------------
  * 0x64ad2 -- the microstate dispatch, .rodata+0x3000.
  */
@@ -1283,6 +1435,9 @@ t3m_table3(struct t3m_frame *f)
 		break;
 	case V34HS_TX_L1:		/* 51 */
 		t3m_micro51(f);
+		break;
+	case V34HS_RX_PHASE1_CALL:	/* 58 */
+		t3m_micro58(f);
 		break;
 	case V34HS_RX_PHASE2_CALL:	/* 59 */
 		t3m_micro59(f);
