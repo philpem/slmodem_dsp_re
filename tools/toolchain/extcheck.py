@@ -92,7 +92,7 @@ def extensions(insns):
         #
         low16 = LOW16.get(reg)
         if low16 and any(re.match(r"mov[sz][wb]l\s+%s," % re.escape(low16), n)
-                         for n in insns[i + 1:i + 4]):
+                         for n in insns[i + 1:i + 10]):
             continue
 
         live = False

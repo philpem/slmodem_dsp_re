@@ -15179,3 +15179,41 @@ exactly, arriving in a new place: a check nobody has seen fire is not a check.
 It now reports four candidates that are NOT yet investigated and are recorded
 as unverified: `FPM_FSD_demodulate` +0x10, `FPM_MTD_detect` +0x14,
 `FPM_TONE_generate` +0x4, `V8GetMessage` +0x28.
+
+### 359. Four candidates, four false positives, and each for a different reason
+
+Task #71 triaged `extcheck.py`'s four signedness candidates by hand. **All four
+are false positives**, and the interesting part is that no two failed the same
+way -- which is why a lookahead heuristic keeps mis-classifying them.
+
+| candidate | why it is not a defect |
+|---|---|
+| `FPM_TONE_generate` +0x4 | the object's use is `cmp %ax,%dx` -- a SIXTEEN-BIT compare. The extension never reaches the result. |
+| `V8GetMessage` +0x28 | `test %ax,%ax` then **`jle`** -- a SIGNED branch on a 16-bit test. The object treats the field as signed despite loading it zero-extended, so ours is right. |
+| `FPM_MTD_detect` +0x14 | ours feeds a 32-bit `sub` whose result is immediately narrowed: `tone = (short)(wideband - state->out_of_band)`. The upper bits are discarded by the cast. |
+| `FPM_FSD_demodulate` +0x10 | re-extension, six instructions later: `movzwl` for the raw bits, then `movswl %ax,%esi` and `movswl %bp,%edi` for the two uses that need the value. Ours doing what the object did in `fskdemodulate`. |
+
+Both fields the last two touch are already declared `short` in our headers. The
+zero-extending load was never the declaration -- it was the expression.
+
+**What that says about the tool.** The re-extension window went from three
+instructions to ten, which removes the `FPM_FSD_demodulate` class and leaves
+the known defect firing (validated both ways again). The other three survive,
+so precision is still poor: roughly one true positive for four reports on this
+sample.
+
+Fixing it properly is not another lookahead rule. It needs real dataflow --
+following the value to every use and asking whether ANY of them observes a bit
+above 15 -- because the three remaining failures are a 16-bit compare, a signed
+branch on a 16-bit test, and a 32-bit operation whose result is truncated.
+Lookahead cannot see truncation, which is the common thread.
+
+**The useful conclusion is the negative one.** The tree has no known
+signedness defect of this class: the one that existed was found and fixed
+(finding 353), and every subsequent candidate has been traced to ground. The
+detector stays in the tree as a triage aid with its precision recorded
+honestly, not as a gate -- a check with a 25% hit rate that nobody has
+calibrated is worse than no check, because its output gets believed.
+
+One candidate is newly surfaced by the wider window and is NOT investigated:
+`decodeDepth` +0xa38, object `movzwl`, ours `movswl`.
