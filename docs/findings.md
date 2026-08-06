@@ -20171,13 +20171,44 @@ Two further things this turned up:
   directions and picks the occurrence inside the function the label names,
   printing the line it chose for every one.
 
+#### Seven more, found by sweeping for it instead of tripping over it
+
+Finding the first two by accident is not a method, so every one of the suite's
+anchors was then located and the function containing it printed beside the arm
+its label names. The check is four lines on top of the function ranges the
+repair script already computed, and `src.count(find) == 1` cannot do it by
+construction.
+
+**Seven entries labelled `the shared reset (47, 49, 50) ...` were mutating arm
+51's record fill.** The two bodies share six lines exactly -- `+0x14 = -1`,
+`+0x16 = 1`, `+0x1a = 0`, `+0x1c = 8`, `+0x1e = 0`, `+0x22 = 0` -- and differ
+only in the fields either side of them; the shared reset's copy sits at one tab
+and arm 51's at two, and `mutate.py` matches a substring, so a one-tab anchor
+matches inside the two-tab line as well. At some earlier repair they had been
+made unique by *deepening* them, which moved all seven onto arm 51.
+
+Every one was CAUGHT, before and after -- by arm 51's tests, at a claim whose
+label names a different body. Nothing was failing; seven claims about the
+shared reset simply had no mutation behind them and looked as though they did.
+
+The repair is a **leading newline**, which is what stops a one-tab anchor
+matching inside a two-tab line, and it is finding 375's repair applied in the
+other direction. Arm 51 keeps its own entries for the same six fields, since
+the six values are identical in the two bodies and only a per-body mutation
+says both are tested.
+
 #### The rule
 
-**An anchor must sit inside the thing it is about.** "The last X in the file"
-and "the X before the next section comment" are anchors about the file's
-layout, and the file's layout is exactly what the next batch changes. Where an
-arm has no unique code line, the diagnostic string it prints is the one thing
-that is its own -- every arm here names its own state in its own message.
+**An anchor must sit inside the thing it is about**, and *check* that it does
+rather than assume it. "The last X in the file" and "the X before the next
+section comment" are anchors about the file's layout, and the file's layout is
+exactly what the next batch changes. Where an arm has no unique code line, the
+diagnostic string it prints is the one thing that is its own -- every arm here
+names its own state in its own message.
+
+And the check is cheap enough to be a tool: for each entry, find its match,
+report which function contains it, and read that against the label. Nine of
+this suite's entries were wrong by that test and none of them by any other.
 
 
 ======================================================================
@@ -20232,11 +20263,16 @@ otherwise look exactly like a guard that never took.
 
 ```
   t_v34hst3mid   42,303 checks (31,300 before this batch)
-  mutations      437: 416 caught, 0 NOT caught, 0 unusable, 21 equivalent,
+  mutations      443: 422 caught, 0 NOT caught, 0 unusable, 21 equivalent,
                  0 MIScounted
 ```
 
-Seventy-four are new. The ones worth naming are the ones that separate these
+`v34hst3mid` is the ONLY suite whose source is `v34hshak_t3mid.c` and the only
+one whose binary is `t_v34hst3mid`, so that unusable count is the whole of the
+"every suite over the file you touched" check and not a sample of it.
+
+Eighty are new -- seventy-four for the two arms and six that arm 51 turned out
+never to have had (finding 432). The ones worth naming are the ones that separate these
 two arms from the neighbours they were measured with:
 
 ```

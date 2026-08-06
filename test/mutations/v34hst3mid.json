@@ -377,9 +377,9 @@
   "replace": "\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);\n\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
  },
  {
-  "label": "the shared reset (47, 49, 50) clears the counter before it announces",
-  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
-  "replace": "\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
+  "label": "the shared reset (47, 49, 50) clears the counter before it announces the two states",
+  "find": "\n\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
+  "replace": "\n\tT3M_U16(f, T3M_COUNTER) = 0;\n\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
  },
  {
   "label": "the shared reset (47, 49, 50) moves the txstate to TX_JM_CM",
@@ -408,13 +408,13 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x14 is 0",
-  "find": "\t\t*(short *)(r + 0x14) = -1;",
-  "replace": "\t\t*(short *)(r + 0x14) = 0;"
+  "find": "\n\t*(short *)(r + 0x14) = -1;",
+  "replace": "\n\t*(short *)(r + 0x14) = 0;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x16 is 0",
-  "find": "\t\t*(short *)(r + 0x16) = 1;",
-  "replace": "\t\t*(short *)(r + 0x16) = 0;"
+  "find": "\n\t*(short *)(r + 0x16) = 1;",
+  "replace": "\n\t*(short *)(r + 0x16) = 0;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 ignores the V.90 receiver",
@@ -438,18 +438,18 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1a is 1",
-  "find": "\t\t*(short *)(r + 0x1a) = 0;",
-  "replace": "\t\t*(short *)(r + 0x1a) = 1;"
+  "find": "\n\t*(short *)(r + 0x1a) = 0;",
+  "replace": "\n\t*(short *)(r + 0x1a) = 1;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1c is 9",
-  "find": "\t\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t\t*(short *)(r + 0x1c) = 9;"
+  "find": "\n\t*(short *)(r + 0x1c) = 8;",
+  "replace": "\n\t*(short *)(r + 0x1c) = 9;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1e is 1",
-  "find": "\t\t*(short *)(r + 0x1e) = 0;",
-  "replace": "\t\t*(short *)(r + 0x1e) = 1;"
+  "find": "\n\t*(short *)(r + 0x1e) = 0;",
+  "replace": "\n\t*(short *)(r + 0x1e) = 1;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x20 is 0",
@@ -458,8 +458,8 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x22 is 1",
-  "find": "\t\t*(short *)(r + 0x22) = 0;",
-  "replace": "\t\t*(short *)(r + 0x22) = 1;"
+  "find": "\n\t*(short *)(r + 0x22) = 0;",
+  "replace": "\n\t*(short *)(r + 0x22) = 1;"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x24 is 0xf73",
@@ -2255,5 +2255,41 @@
   "label": "58's second block reads +0x3588 BEFORE the init rewrites it",
   "find": "\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_MSGREC0;\n\t\t}\n\n\t\tt3m_errrec_arm(f);",
   "replace": "\t\tt3m_errrec_arm(f);\n\n\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_MSGREC0;\n\t\t}"
+ },
+ {
+  "label": "sep"
+ },
+ {
+  "label": "-- 51's record, which seven `shared reset' labels were silently mutating (finding 432) --"
+ },
+ {
+  "label": "51's info1a body clears the counter before it announces the two states",
+  "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);",
+  "replace": "\t\tT3M_U16(f, T3M_COUNTER) = 0;\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);"
+ },
+ {
+  "label": "51's record +0x16 is 0",
+  "find": "\t\t*(short *)(r + 0x16) = 1;",
+  "replace": "\t\t*(short *)(r + 0x16) = 0;"
+ },
+ {
+  "label": "51's record +0x1a is 1",
+  "find": "\t\t*(short *)(r + 0x1a) = 0;",
+  "replace": "\t\t*(short *)(r + 0x1a) = 1;"
+ },
+ {
+  "label": "51's record +0x1c is 9",
+  "find": "\t\t*(short *)(r + 0x1c) = 8;",
+  "replace": "\t\t*(short *)(r + 0x1c) = 9;"
+ },
+ {
+  "label": "51's record +0x1e is 1",
+  "find": "\t\t*(short *)(r + 0x1e) = 0;",
+  "replace": "\t\t*(short *)(r + 0x1e) = 1;"
+ },
+ {
+  "label": "51's record +0x22 is 1",
+  "find": "\t\t*(short *)(r + 0x22) = 0;",
+  "replace": "\t\t*(short *)(r + 0x22) = 1;"
  }
 ]
