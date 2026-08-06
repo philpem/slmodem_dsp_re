@@ -4175,6 +4175,15 @@ t44_accept_len08(struct v34_object *obj, short *rec, short count2)
 				     (unsigned)(unsigned short)rec[0],
 				     (unsigned)(unsigned short)rec[1]);
 
+	/*
+	 * `rec` AND NOT A RE-READ, and here the object agrees.  0x6ea67
+	 * reloads +0xaa70 only on the path the diagnostic above took, and
+	 * with the diagnostics off 0x6ea6d passes the `%ecx` 0x668e1 left --
+	 * so the cached pointer is the object's own answer on the quiet path
+	 * and the reload is the register allocator putting it back after a
+	 * call clobbered it.  The 0x26 and 0x4d arms reload unconditionally
+	 * and are written that way; this one does not.
+	 */
 	VPcmV34InterpretMohMessageBits(obj, rec);
 
 	if (t3c_geti(obj, T44_FABF0) != 1) {
@@ -4334,7 +4343,15 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 
 	V34GiveProbeResults(obj, (const char *)obj + T44_PROBE);
 
-	if ((short)V34GiveINFO1aBits(obj, rec) != 0) {
+	/*
+	 * 0x6ed3e RE-READS +0xaa70 after the call above, exactly as 0x6f602
+	 * does in the 0x4d arm; `rec` is the cached pointer from 0x668e1 and
+	 * the two agree on every path that exists, because nothing in
+	 * `V34GiveProbeResults` writes +0xaa70.  Written as the object writes
+	 * it, and the mutation that caches instead is recorded as an
+	 * equivalence with that condition named.
+	 */
+	if ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {
 		/* 0x6ed59 */
 		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
 		hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);

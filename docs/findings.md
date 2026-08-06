@@ -20098,6 +20098,16 @@ takes `c2400_`. +0x3564 is one of the fixture's thirty-five skipped pointers
 and holds two addresses of two copies, so the comparison cannot see which
 table was chosen; the two cases name the table on side A explicitly instead.
 
+**The record pointer, three arms and three answers.** The 0x26 arm re-reads
++0xaa70 at 0x6ed3e after `V34GiveProbeResults`, and the 0x4d arm at 0x6f602
+after `probeselect`; both are written that way, and both are equivalences
+today because nothing between the two reads moves the pointer. The 8-bit arm
+is the one that does NOT: 0x6ea67 reloads only on the path the diagnostic
+above took, so with the diagnostics off 0x6ea6d passes the `%ecx` that 0x668e1
+left. Three arms, three spellings, and the reason to write each as the object
+writes it is finding 406, where a local shadowing a memory read across a call
+was wrong once already in this same function.
+
 **And `count2` is the stepped counter and not the re-read one.** The
 diagnostic prints the value still in `%ebx` from 0x6693a. This is the one arm
 of the four that never touches +0xaa78, so it is also the one place where a
@@ -20430,6 +20440,11 @@ Written as the object writes them and named here, which is finding 418's
 practice: an untestable branch that is a faithful transcription is better than
 a plausible one that is not there, and an argument about reachability is what
 a later change breaks silently.
+
+**One forward pointer, appended and not renumbered.** Finding 404's refinit
+measurement is superseded by 447 above; nothing in 404 is edited, and this
+sentence is the pointer CLAUDE.md asks for when a reference still resolves but
+no longer points at the current number.
 
 **Findings 440-449 are this worktree's block; 440-448 are used. 407-409 of the
 earlier batch's block remain free.** Checked against `docs/findings.md`'s

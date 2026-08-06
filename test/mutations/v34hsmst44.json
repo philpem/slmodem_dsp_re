@@ -776,17 +776,17 @@
  },
  {
   "label": "the INFO1a decoder's answer is inverted",
-  "find": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {",
-  "replace": "\tif ((short)V34GiveINFO1aBits(obj, rec) == 0) {"
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) == 0) {"
  },
  {
   "label": "the probe results are not given to the INFO1a arm",
-  "find": "\tV34GiveProbeResults(obj, (const char *)obj + T44_PROBE);\n\n\tif ((short)V34GiveINFO1aBits",
-  "replace": "\tif ((short)V34GiveINFO1aBits"
+  "find": "\tV34GiveProbeResults(obj, (const char *)obj + T44_PROBE);\n\n\t/*\n\t * 0x6ed3e RE-READS",
+  "replace": "\t/*\n\t * 0x6ed3e RE-READS"
  },
  {
   "label": "the INFO1a decoder is given the installed record",
-  "find": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
   "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0) {"
  },
  {
@@ -1097,5 +1097,12 @@
   "label": "the length's first field is one bit wide",
   "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
   "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 1) << 5)"
+ },
+ {
+  "label": "the INFO1a decoder is given the cached record pointer",
+  "equivalent": true,
+  "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding 406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding 401's third equivalence says of the restart.",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {"
  }
 ]
