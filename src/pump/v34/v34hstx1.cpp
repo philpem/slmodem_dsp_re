@@ -50,9 +50,16 @@
  * entries at two addresses -- 24's is 0x62b96 and 60's is 0x62d3d, and 60's
  * whole body is thirty-four bytes where 24's is 2,220 -- so the agreement is
  * a property of ONE object fill and of nothing else.  60 is written here; 24
- * is not, and this file says nothing about what it does.  `t_v34hstx1.c`
- * drives 60 with +0x358c odd, which finding 323's cold run never did, and the
- * point it sends there is `vect4[2]` rather than `vect4[0]`.
+ * is not, and this file says nothing about what it does.
+ *
+ * WHICH PATH 323 MEASURED, since 60 has two.  The default fill leaves
+ * +0x358c at 0xb7eb, which is ODD, so the cold run sent `vect4[2]`; and
+ * finding 323's 69 bytes for 60 is what `t_v34hstx1.c`'s odd case still
+ * writes, where its even case writes 65.  The collision was measured on one
+ * of the two paths and the fill decides which -- seed 1 leaves 0xb06e and
+ * would have measured the other.  So the agreement is narrower than the
+ * table entry, which is the reason both values are poked here rather than
+ * one of them being reached by luck.
  */
 
 #include <string.h>

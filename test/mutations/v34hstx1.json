@@ -447,6 +447,6 @@
   "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)",
   "replace": "\tif (!doubled)",
   "equivalent": true,
-  "why": "nothing between the two reads writes +0x3592 -- `txwritequeue` touches only the queue -- so the re-read is the object's spelling and not a second observation"
+  "why": "nothing between the two reads writes +0x3592: `txwritequeue` (v34rx.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation"
  }
 ]

@@ -322,11 +322,19 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-### Six of the nineteen have landed, and this is how a case is landed
+### Ten of the nineteen have landed, and this is how a case is landed
 
 txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
--- are in `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
-`test/unit/t_v34hstx1.c`. Findings 340-345.
+-- and then 60, 18, 70 and 51, the four smallest of what those left, are in
+`src/pump/v34/v34hstx1.cpp` and compare byte for byte through
+`test/unit/t_v34hstx1.c`. Findings 340-345 and 421.
+
+The nine still open are 19, 20, 5/54/74, 69, 64/68, 67, 24, 21 and 66, which
+are the nine largest. **51 needed a table extracted before it could be
+written at all**: `probe`, 64 signed shorts at `.rodata+0x2c00`, now beside
+`vect4` in `v34hshak.c`. Read finding 421 before estimating one of the nine
+-- an arm that reads a table this tree does not have is not the size its
+byte count says.
 
 **`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
 one shared harness object, so it demands all forty-three cases at once, and no

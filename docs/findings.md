@@ -18240,19 +18240,20 @@ is recorded because it is what a transcription error would break. The largest
 magnitude is 13,317, which is why the doubling in 51's second loop cannot
 overflow a short -- see the equivalences below.
 
-#### 88 mutations, 80 caught, 4 equivalent, 4 uncaught
+#### 88 mutations, 80 caught, 5 equivalent, and NO new uncaught
 
 `test/mutations/v34hstx1.json`, which is finding 345's suite plus 45:
 
 ```
-  88 mutations: 80 caught (80 by test, 0 by strings), 4 NOT caught,
-                0 unusable, 4 equivalent, 0 MIScounted
+  88 mutations: 80 caught (80 by test, 0 by strings), 3 NOT caught,
+                0 unusable, 5 equivalent, 0 MIScounted
 ```
 
-Three of the four uncaught are finding 345's and unchanged (341's two
-`V34EchoReportCoeff` calls, 343's one transfer with no oracle past it). The
-fourth is new and is now recorded as equivalent, which is the interesting
-one:
+**All three uncaught are finding 345's, unchanged** -- 341's two
+`V34EchoReportCoeff` calls and 343's one transfer with no oracle past it.
+The forty-five added here leave nothing untested that is not shown equal.
+One of them looked at first like a forty-sixth gap and is not, and it is the
+interesting one:
 
 **A logical shift and an arithmetic shift by 14 are INDISTINGUISHABLE here,
 and that is a fact about the object and not a gap in the test.** 51 closes
@@ -18263,7 +18264,7 @@ input, not for the ones tried. Checked over 200,000 random (sample, scale)
 pairs as well as reasoned. The shift's AMOUNT is tested: moving it to 15 is
 caught.
 
-The other three equivalences, each with what is held fixed:
+The other four equivalences, each with what is held fixed:
 
 ```
   60: +0x358c read as an int      the mask keeps bit 0 alone
@@ -18275,6 +18276,10 @@ The other three equivalences, each with what is held fixed:
                                   short.  A property of the TABLE'S VALUES,
                                   so a different table would make this
                                   mutation live
+  51: the microstate not re-read  `txwritequeue` (v34rx.c:58) writes
+     after the queue is written   q->count, four ring slots and q->wr and
+                                  nothing else, so the value at 0x62cf5 is
+                                  the value at 0x62c7f
 ```
 
 #### Which checks are independent, and which are one check twice
@@ -18323,10 +18328,15 @@ Finding 323's one collision is 24 `TX_DPSK` against 60 `TONE_AB`. They are
 two table entries at two addresses -- 0x62b96 and 0x62d3d -- and 60's whole
 body is thirty-four bytes where 24's is 2,220. **The agreement is a property
 of one object fill.** 60 is reconstructed here and 24 is not, and nothing in
-this file claims anything about what 24 does. `t_v34hstx1.c` drives 60 with
-+0x358c odd, which finding 323's cold run never did, and the point it sends
-there is `vect4[2]` rather than `vect4[0]`: evidence that the cold agreement
-is incomplete, not that it is identity.
+this file claims anything about what 24 does.
+
+**And it is narrower than "60", because 60 has two paths and the fill picks
+one.** The default fill leaves +0x358c at 0xb7eb, which is odd, so finding
+323's cold run for 60 sent `vect4[2]`; its 69 bytes is what `t_v34hstx1.c`'s
+odd case still writes, where the even case writes 65. `V34HS_SEED=1` leaves
+0xb06e and would have measured the other path. Both are poked here for that
+reason -- measured with `V34TX1_DUMP=1`, which prints what a fill left,
+rather than assumed either way.
 
 **Ten of table 1's nineteen reachable targets are now written** -- finding
 340's six and these four. The nine left are 19, 20, 5/54/74, 69, 64/68, 67,

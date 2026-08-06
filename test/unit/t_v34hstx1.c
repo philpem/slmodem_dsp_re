@@ -414,6 +414,20 @@ static struct tx1_poke tone_ab[] = {
 static void
 case_tone_ab(void)
 {
+	/*
+	 * WHAT THE FILL LEAVES AT +0x358c IS NOT ASSERTED, because it is the
+	 * fill's and every `V34HS_SEED` moves it: `v34handshakinit` clears
+	 * the field only on the Modem-on-Hold path (v34hshak.c:1480) and the
+	 * cases here are brought up in mode 0.  That is exactly why both
+	 * values are POKED rather than one of them being reached by luck.
+	 * `V34TX1_DUMP=1` prints what this fill happened to leave.
+	 */
+	if (dump) {
+		v34hs_setup(0);
+		printf("  +0x358c after the default bring-up: 0x%04x\n",
+		       (unsigned short)v34hs_peek_short(0, TX1_F358C));
+	}
+
 	tone_ab[0].val = 0x1234;
 	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
 		 "60 TONE_AB, +0x358c even", 6000, tone_ab, NP(tone_ab));
