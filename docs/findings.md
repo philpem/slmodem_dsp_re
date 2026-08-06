@@ -14390,3 +14390,59 @@ reproducible without a temporary, and here it is reproducible with one.
 Neither is a test gap, and neither is licence to stop writing the object's
 order: the source keeps it in both cases, because the disassembly is what the
 reconstruction is of.
+
+### 270. A ladder of eight, and the generator that gets seven of them
+
+`V34DisconnectThreshTable` is 32 bytes at `.data + 0xc0`, eight 32-bit
+entries, and file-local (`d` in `nm`) -- reachable for comparison only because
+the Makefile globalizes file-local symbols before renaming them:
+
+```
+71, 80, 90, 101, 113, 127, 142, 160
+```
+
+Three functions read it, all `VPcmV34*`: `VPcmV34SetMinimumSigLevel`,
+`VPcmV34InitiateRetrain` and `VPcmV34Create`. The first shows how it is
+indexed, and the interesting part is the fallback:
+
+```
+mov  0x60(%edx),%eax        ; a signed level out of the parameter block
+add  $0x30,%eax             ; bias it to an index
+cmp  $0x7,%eax
+jbe  ok
+mov  $0x3,%eax              ; out of range -> entry 3, which is 101
+ok: mov  0xc0(,%eax,4),%eax
+```
+
+`jbe` is unsigned, so one compare rejects negative indices as well -- they
+wrap large and take the same path. **The default is entry 3, not entry 0**, so
+this is a chosen fallback level and not a saturation, which is the kind of
+thing a `min`/`max` reconstruction would quietly get wrong.
+
+#### The generator, attempted and not found
+
+`tools/tabdump.py`'s own header says the maintainable form is a generator that
+reproduces the values from the table's design parameters. The ratios are
+close to a 1 dB ladder -- 10^(1/20) = 1.12202 -- and the obvious candidate
+gets seven of the eight:
+
+```
+ceil(71 * 10^(k/20)):  71  80  90 101 113 127 142 159
+the table:             71  80  90 101 113 127 142 160
+```
+
+It cannot be rescued by moving the base. Matching 160 at k=7 needs a base of
+at least 71.02, and matching 71 at k=0 under `ceil` needs at most 71. Fitting
+the ratio to the endpoints instead -- r = (160/71)^(1/7) = 1.1225 -- gets k=7
+right and then fails at k=6, where `ceil(71 * 1.1225^6)` is 143 and the table
+has 142.
+
+So the reference bytes ship, and this records that a generator was looked for
+rather than that one was not wanted. Shipping the seven-of-eight formula would
+have been exactly the wrong-but-plausible thing the differential rule exists
+to keep out -- and it would have passed every test that did not check entry 7.
+
+The test compares the bytes against `ref_V34DisconnectThreshTable`, asserts
+the size (a table one entry short compares equal on every entry it has), and
+separately asserts the ladder is strictly increasing -- which is what a
+transcription error in the middle would break without disturbing either end.
