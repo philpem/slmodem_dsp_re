@@ -13979,7 +13979,6 @@ ln -sfn /abs/path/to/other/third_party/spandsp third_party/spandsp
 Recorded because the failure appears *after* every differential test has
 passed, in the interop tier, and reads as a broken dependency rather than as a
 missing symlink.
-=======
 ### 262. The DIL bit stream, and a length that carries the consequence but not the branch
 
 `DILdescriptorPacker` (3,278 bytes, a leaf) turns a `tagV90DILdescriptor` into
@@ -14041,3 +14040,89 @@ filed as an untested line. It stays in `src/` because it is in the object.
 
 7 of the suite's 8 mutations are caught; this is the eighth.
 >>>>>>> w1e_dil
+=======
+### 258. The two 350-byte "setters" compute a base-2 exponent on the coprocessor
+
+`V90Equalizer::setLinearEquBeta(float)` and `::setDfeBeta(float)` are 350
+bytes each and byte-for-byte the same shape. Neither is storing a float. Each
+one:
+
+1. prints a fixed-point decimal if the new beta differs from the old --
+   three integer arguments, not a `%f`, the same trick `V90Phase2Info` uses;
+2. stores the beta with `fsts`, a store that does not pop;
+3. returns immediately unless the MMX path is on; and
+4. computes `shift = (int)(log10(|refLevel / (beta * 2^24)|) / log10(2))`,
+   which is a truncated base-2 logarithm, then scales the beta by
+   `1 << shift`.
+
+**The logarithm is `fldlg2; fxch; fyl2x`, and it is written as inline asm.**
+`fyl2x` computes `st(1) * log2(st(0))` and pops, so pushing `log10(2)` first
+turns it into `log10` in one instruction at the register's full 64-bit
+mantissa. A call to `log10()` is not the same function: libm's is correctly
+rounded to `double`, and the object never leaves the stack. The template and
+its `"=t"` constraint are the only inline asm in `src/`.
+
+Two comparisons in these functions are FCOM, not C:
+
+- The diagnostic guard is `fcomp; fnstsw; sahf; je`, and FCOM sets C3 for
+  equal **and** for unordered, so a NaN skips the print where C's `!=` would
+  take it. Written out as `if (a < b || a > b)`. Finding 236 is the same
+  shape in `setParamEia6`.
+- The MMX arm is entered on ZF for zero **and** for unordered, so
+  `beta == 0.0f` is not the object's test either.
+
+### 259. Inline asm is not a diagnostic, and the strings gate could not tell
+
+`make phase`'s `strings` gate rejected `src/pump/v90/V90Equalizer.cpp` with
+two INVENTED strings: the instruction template `fldlg2\n\tfxch %%st(1)\n\tfyl2x`
+and the constraint `=t`. Both are string literals; neither is data, and
+neither is in the blob's `.rodata` because there is nothing there to be.
+
+The gate exists (findings 180, 201) to catch an **invented diagnostic**: a
+format string that survives a full differential test because
+`dsplibs_debug_level` ships at zero, so a wrong string and a right one behave
+identically. An asm template has no such failure mode -- it is code, and the
+differential test judges it like any other code. `tools/debugaudit.py` now
+blanks asm statement bodies before the scan, the same way it already blanks
+comments and preprocessor lines, matching balanced parentheses so the operand
+lists go with the template.
+
+It still checks 758 literals and still reports 0 invented, so the gate was
+narrowed and not disabled.
+
+### 260. Both uncaught mutants are equivalent, and both were measured
+
+`tools/mutate.py --suite v90equ`: 4 mutations, 1 caught, 1 that does not
+compile, 2 uncaught. Replacing `fldlg2` with `fld1` -- log2 where the object
+computes log10 -- is caught. The other two are equivalent, and here is what
+was held fixed for each rather than an assertion that they are.
+
+**Masking the shift count to five bits.** `one_shifted_by` writes
+`1u << (n & 31)` where the object has `shl %cl,%edx`, because C leaves
+`1 << n` undefined outside 0..31 and `n` here is a truncated logarithm the
+caller can push far outside it -- a denormal beta is in the test's own input
+set. Removing the mask changes nothing:
+
+```
+shift mask: 0 of 141 counts differ        (n from -70 to 70, gcc -m32 -O2)
+```
+
+Held fixed: GCC compiles a variable shift to `shl`, which masks the count to
+five bits in hardware. The mask stays because it makes the program's meaning
+independent of that, not because a test can see it.
+
+**`double` rather than `long double` for the `"=t"` result.** Rounding the
+logarithm to 53 bits before the division never moves the truncation of the
+quotient:
+
+```
+log intermediate: tried 435780380 betas, 0 differ
+```
+
+-- betas drawn across the whole 32-bit float pattern space, run through the
+real expression `(int)(log10(|1/(beta * 2^24)|) / log10(2))`. Held fixed: the
+quotient is truncated to `int`, which is a far coarser operation than the
+difference between a 64-bit and a 53-bit mantissa. This is the same shape as
+finding 256, and the second x87 precision claim in this branch that turned
+out not to be observable on this target; both were settled by sweeping rather
+than by argument.
