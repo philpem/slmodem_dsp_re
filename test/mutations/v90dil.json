@@ -1,0 +1,77 @@
+[
+ {
+  "label": "use eight boundaries under A-law too",
+  "find": "\t\tunsigned int rowLength = pcmType == PCM_TYPE_A_LAW ? 7u : 8u;",
+  "replace": "\t\tunsigned int rowLength = 8u;"
+ },
+ {
+  "label": "use seven boundaries under mu-law too",
+  "find": "\t\tunsigned int rowLength = pcmType == PCM_TYPE_A_LAW ? 7u : 8u;",
+  "replace": "\t\tunsigned int rowLength = 7u;"
+ },
+ {
+  "label": "swap the two row lengths",
+  "find": "\t\tunsigned int rowLength = pcmType == PCM_TYPE_A_LAW ? 7u : 8u;",
+  "replace": "\t\tunsigned int rowLength = pcmType == PCM_TYPE_A_LAW ? 8u : 7u;"
+ },
+ {
+  "label": "make the boundary test strict",
+  "find": "\t\t\tif (codeSegmentsBoundries[pcmType][seg] >= (int)code)",
+  "replace": "\t\t\tif (codeSegmentsBoundries[pcmType][seg] > (int)code)"
+ },
+ {
+  "label": "always take the mu-law row",
+  "find": "\t\t\tif (codeSegmentsBoundries[pcmType][seg] >= (int)code)",
+  "replace": "\t\t\tif (codeSegmentsBoundries[0][seg] >= (int)code)"
+ },
+ {
+  "label": "always take the A-law row",
+  "find": "\t\t\tif (codeSegmentsBoundries[pcmType][seg] >= (int)code)",
+  "replace": "\t\t\tif (codeSegmentsBoundries[1][seg] >= (int)code)"
+ },
+ {
+  "label": "shift the first mu-law boundary up one segment",
+  "find": "\t\t\t{ 0x0f, 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x7f },",
+  "replace": "\t\t\t{ 0x1f, 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x7f },"
+ },
+ {
+  "label": "shift the last A-law boundary",
+  "find": "\t\t\t{ 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x7f, 0x00 }",
+  "replace": "\t\t\t{ 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x6f, 0x00 }"
+ },
+ {
+  "label": "drop the constant six from each term",
+  "find": "\t\tlength += 6u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + seg] + 6u;",
+  "replace": "\t\tlength += 6u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + seg];"
+ },
+ {
+  "label": "scale the length code by five",
+  "find": "\t\tlength += 6u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + seg] + 6u;",
+  "replace": "\t\tlength += 5u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + seg] + 6u;"
+ },
+ {
+  "label": "clamp the segment index into segmentSize",
+  "find": "\t\tlength += 6u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + seg] + 6u;",
+  "replace": "\t\tlength += 6u * ((const unsigned char *)dil)[\n\t\t    DIL_SEGMENT_SIZE_OFF + (seg > 7 ? 7 : seg)] + 6u;"
+ },
+ {
+  "label": "take the length code from segmentCode",
+  "find": "#define DIL_SEGMENT_SIZE_OFF \\\n\t((unsigned int)__builtin_offsetof(tagV90DILdescriptor, segmentSize))",
+  "replace": "#define DIL_SEGMENT_SIZE_OFF \\\n\t((unsigned int)__builtin_offsetof(tagV90DILdescriptor, segmentCode))"
+ },
+ {
+  "label": "run the outer loop one entry short",
+  "find": "\tfor (i = 0; i < count; i++) {",
+  "replace": "\tfor (i = 0; i + 1 < count; i++) {"
+ },
+ {
+  "label": "take the code from seq1 rather than dilCode",
+  "find": "\t\tunsigned int code = dil->dilCode[i];",
+  "replace": "\t\tunsigned int code = dil->seq1[i & 0x7f];"
+ },
+ {
+  "label": "treat the DIL code as signed",
+  "find": "\t\tunsigned int code = dil->dilCode[i];",
+  "replace": "\t\tunsigned int code = (unsigned int)(int)(signed char)dil->dilCode[i];"
+ }
+]

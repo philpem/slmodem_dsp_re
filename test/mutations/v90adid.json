@@ -1,0 +1,157 @@
+[
+ {
+  "label": "clear one code short in reset's inner loop",
+  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;",
+  "replace": "\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;"
+ },
+ {
+  "label": "clear one phase short in reset",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;"
+ },
+ {
+  "label": "clear the flag array rather than setting it",
+  "find": "\t\t\tbyte_0d00[phase][ci] = 1;",
+  "replace": "\t\t\tbyte_0d00[phase][ci] = 0;"
+ },
+ {
+  "label": "leave the short at +0x2800 alone",
+  "find": "\t\tshort_2800[phase] = 0;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave the byte at +0x280c alone",
+  "find": "\t\tbyte_280c[phase] = 0;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave the int at +0x9d30 alone",
+  "find": "\t\tint_9d30[phase] = 0;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave the float at +0x9d18 alone",
+  "find": "\t\tfloat_9d18[phase] = 0.0f;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave the int at +0x9100 alone",
+  "find": "\t\tint_9100[phase] = 0;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "use the mu-law xor mask under A-law",
+  "find": "\t\t    (unsigned char)((code & 0x7f) ^ 0xd5));",
+  "replace": "\t\t    (unsigned char)((code & 0x7f) ^ 0xff));"
+ },
+ {
+  "label": "drop the seven-bit mask on the reference code",
+  "find": "\t\tucodeLevel = (short)ulaw2linear(\n\t\t    (unsigned char)((code & 0x7f) ^ 0xff));",
+  "replace": "\t\tucodeLevel = (short)ulaw2linear((unsigned char)(code ^ 0xff));"
+ },
+ {
+  "label": "invert the companding-law test",
+  "find": "\tif (law != PCM_TYPE_MU_LAW)",
+  "replace": "\tif (law == PCM_TYPE_MU_LAW)"
+ },
+ {
+  "label": "store the raw code rather than the companded level",
+  "find": "\t\tucodeLevel = (short)alaw2linear(\n\t\t    (unsigned char)((code & 0x7f) ^ 0xd5));",
+  "replace": "\t\tucodeLevel = (short)code;"
+ },
+ {
+  "label": "leave the short at +0xa948 alone",
+  "find": "\tshort_a948 = 0;",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "seed the pad gain with zero rather than one",
+  "find": "\tfloat_a94c = 1.0f;",
+  "replace": "\tfloat_a94c = 0.0f;"
+ },
+ {
+  "label": "drop the third argument",
+  "find": "\tshort_a96e = altRbs;",
+  "replace": "\tshort_a96e = 0;"
+ },
+ {
+  "label": "swap the two +0xa970 constants",
+  "find": "\tfloat_a970 = short_a96e != 0 ? 5.0f : 1.5f;",
+  "replace": "\tfloat_a970 = short_a96e != 0 ? 1.5f : 5.0f;"
+ },
+ {
+  "label": "make +0xa974 follow the same test as +0xa970",
+  "find": "\tfloat_a974 = 5.0f;",
+  "replace": "\tfloat_a974 = short_a96e != 0 ? 5.0f : 1.5f;"
+ },
+ {
+  "label": "test the connection type against 1",
+  "find": "\tif (paramShort(params, V90PARAMETERS_CONNECTION_TYPE) == 2) {",
+  "replace": "\tif (paramShort(params, V90PARAMETERS_CONNECTION_TYPE) == 1) {"
+ },
+ {
+  "label": "read the connection type at +0x0e",
+  "find": "#define V90PARAMETERS_CONNECTION_TYPE 0x0c",
+  "replace": "#define V90PARAMETERS_CONNECTION_TYPE 0x0e"
+ },
+ {
+  "label": "read the connection type as a byte",
+  "find": "\treturn *(const short *)((const unsigned char *)p + off);",
+  "replace": "\treturn (short)*((const unsigned char *)p + off);"
+ },
+ {
+  "label": "swap the two +0xa97a constants",
+  "find": "\t\tshort_a97a = 88;",
+  "replace": "\t\tshort_a97a = 80;"
+ },
+ {
+  "label": "swap the two +0xa97c constants",
+  "find": "\t\tfloat_a97c = 0.35f;",
+  "replace": "\t\tfloat_a97c = 0.25f;"
+ },
+ {
+  "label": "swap the two +0xa980 constants",
+  "find": "\t\tfloat_a980 = 1.75f;",
+  "replace": "\t\tfloat_a980 = 1.5f;"
+ },
+ {
+  "label": "set the +0xa978 flag on the wrong branch",
+  "find": "\t\tshort_a978 = 1;",
+  "replace": "\t\tshort_a978 = 0;"
+ },
+ {
+  "label": "clear one entry short in resetLinearMapping",
+  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tlinMapp[phase][ci] = 0;",
+  "replace": "\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++) {\n\t\t\tlinMapp[phase][ci] = 0;"
+ },
+ {
+  "label": "clear one phase short in resetLinearMapping",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tlinMapp[phase][ci] = 0;",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tlinMapp[phase][ci] = 0;"
+ },
+ {
+  "label": "leave the alternate table unseeded",
+  "find": "\t\tlinMappAlt[phase][at] = level;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave the alternate table uncleared",
+  "find": "\t\t\tlinMappAlt[phase][ci] = 0;",
+  "replace": "\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "mask the reference code into the row",
+  "find": "\tunsigned char at = ucode;",
+  "replace": "\tunsigned char at = ucode & 0x7f;"
+ },
+ {
+  "label": "seed the mapping tables before clearing them",
+  "find": "\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}\n\n\t\tlinMapp[phase][at] = level;\n\t\tlinMappAlt[phase][at] = level;",
+  "replace": "\t\t\tlinMapp[phase][at] = level;\n\t\t\tlinMappAlt[phase][at] = level;\n\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}"
+ },
+ {
+  "label": "seed the tables with the level negated",
+  "find": "\tshort level = (short)ucodeLevel;",
+  "replace": "\tshort level = (short)-ucodeLevel;"
+ }
+]

@@ -1,0 +1,14 @@
+[
+ {"label": "log10 via libm rather than the coprocessor",
+  "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));\n\treturn r;",
+  "replace": "\t(void)r;\n\treturn (long double)log10((double)x);"},
+ {"label": "the shift count is not masked to five bits",
+  "find": "\treturn (int)(1u << ((unsigned int)n & 31u));",
+  "replace": "\treturn (int)(1u << (unsigned int)n);"},
+ {"label": "log2 instead of log10 (drop the fldlg2 scale)",
+  "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));",
+  "replace": "\t__asm__ (\"fld1\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));"},
+ {"label": "the intermediate is double, not long double",
+  "find": "static inline long double\nx87_log10(long double x)\n{\n\tlong double r;",
+  "replace": "static inline long double\nx87_log10(long double x)\n{\n\tdouble r;"}
+]

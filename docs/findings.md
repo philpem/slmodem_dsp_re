@@ -13753,3 +13753,376 @@ the template and GCC inlines it, so `build/src/**/*.o` defines no
 `.gnu.linkonce.t.*` member is a real requirement *unless* a header in this
 tree defines the template it instantiates -- which is a question about our
 source, not about the blob, and the tool has no way to ask it.
+
+<<<<<<< HEAD
+### 251. `V90AutoDigitalImpDetector` is 43,440 bytes, and it is eight tables
+
+The largest `this`-relative displacement any of the class's **thirty-two**
+members uses is +0xa9ae, a two-byte access -- `mov %ax,0xa9ae(%ebx)` in
+`resetStudyUrefHandler` and `filds 0xa9ae(%esi)` in `porcessFirstStudy`,
+whose prologues load `this` into those registers from the first stack
+argument. So the object ends at **0xa9b0 = 43,440**, which is already
+four-byte aligned. A displacement is not a size (finding 215).
+
+The bound had to be taken over all thirty-two, not over the two this batch
+writes: `reset` and `resetLinearMapping` between them reach only +0xa980 and
++0xa96c. Sizing a class from the members you happen to be writing would have
+been short by 44 bytes here, and it is the mistake finding 215 records for
+`V90Jd`, whose +0x8c displacement is a 144-byte object.
+
+Not polymorphic: `tools/cppstruct.py` lists the destructor with `D1` and `D2`
+and no `D0`, and GCC emits a deleting destructor only for a virtual one. So
+offset 0 is a real member and there is no vptr.
+
+**The object is mostly six-by-128 arrays.** Six is the number of RBS phases --
+every loop in the class runs a `short` index from 0 to 5 inclusive -- and 128
+is the seven-bit PCM code magnitude, which is why `reset` masks its `unsigned
+char` argument with 0x7f before companding it. They tile the object:
+
+```
++0x0000  short[6][128]   linMapp        cleared by resetLinearMapping
++0x0600  short[6][128]   linMappAlt     cleared by resetLinearMapping
++0x0d00  uchar[6][128]   set to 1 by reset
++0x1000  int[6][128]     cleared by reset
++0x1c00  int[6][128]     cleared by reset
++0x8b00  short[6][128]   cleared by reset
++0x9118  float[6][128]   cleared by reset
++0x9d48  float[6][128]   cleared by reset
+```
+
+plus five per-phase scalars at +0x2800, +0x280c, +0x9100, +0x9d18 and +0x9d30
+cleared alongside them. Everything between +0x2818 and +0x8b00 is 0x62e8
+bytes of `pad_` -- memory this batch did not model, not memory known to be
+unused.
+
+Only two of the thirty-two are defined. The other thirty are declared for the
+record and deliberately left undefined: defining a method whose callees are
+not written breaks the link for the whole suite, with `t_encode` as the
+symptom and nothing naming the cause (`docs/v90cpp.md`). Neither of the two
+calls an undefined one; between them they call only `alaw2linear` and
+`ulaw2linear`, which `src/service/pcm.c` already provides.
+
+### 252. `calculateDilLength` takes a non-const pointer, and that is not a slip
+
+Its mangling is `_Z18calculateDilLengthP19tagV90DILdescriptor7PcmType` -- no
+class component, so a free function, and `P` rather than `PK` where
+`V90Phase3Modulator::resetDILGenerator` says `PK19tagV90DILdescriptor` for
+the same struct. The function reads the descriptor and never writes it, so
+the missing `const` is the author's own and reproducing it is not optional: a
+`const` emits a different symbol, which links against nothing and is silently
+not the function.
+
+The return type is not mangled and had to be argued rather than read. The
+object leaves the sum in `%eax` and nothing distinguishes signed from
+unsigned -- the accumulation is `lea 0x6(%esi,%edx,2),%ecx` either way.
+`unsigned int` is chosen because every term is a non-negative product of an
+`unsigned char`: the worst case is 255 entries of `6 * 255 + 6`, which is
+391,680, so the sum can neither be negative nor overflow 32 bits.
+
+The value is the number of phase 3 symbols the DIL sequence occupies: the sum
+over `dilCount` entries of `6 * segmentSize[segment] + 6`, where `segment` is
+the G.711 segment the entry's code falls in. Zero for a null descriptor and
+for an empty one.
+
+### 253. Forty-six mutations, forty-six caught -- after the schedule was fixed
+
+`tools/mutate.py --suite v90adid` (31) and `--suite v90dil` (15), both
+registered in `test/mutations/suites.json`:
+
+```
+31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught
+15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught
+```
+
+It did not start there. The first schedule passed the differential test and
+**never paired a mu-law code >= 0x80 with the mu-law branch**, so `use the
+mu-law xor mask under A-law` and `invert the companding-law test` both
+survived: the test exercised one companding law's arithmetic and the other
+law's control flow, and never the combination where they disagree. That is
+the shape findings 223 and 224 are about, and it is invisible from a passing
+run -- only the mutation pass names it. The trial schedule now crosses both.
+
+Worth keeping in view for the classes still unwritten: a `reset` that clears
+tables is the easiest kind of function to test vacuously, because the harness
+fill already makes untouched memory compare equal on both sides. Every one of
+the 31 above names a specific store, offset or constant; `seed the pad gain
+with zero rather than one`, `clear one entry short in resetLinearMapping` and
+`leave the alternate table unseeded` are the three that a clear-loop test
+passes without.
+### 255. `V90Phase2Info` is 36 bytes, and its printer names its own fields
+
+`tools/cppstruct.py V90Phase2Info` gives three members and 610 bytes:
+`printInfo() const` (508), `V90Phase2Info(V90Parameters*)` (53, emitted as
+byte-identical C1 and C2) and `setToDefault()` (49). **No destructor of any
+kind is listed**, let alone the deleting `D0` variant GCC emits only for a
+virtual one, so offset 0 is a real member and there is no vptr -- this is not
+one of finding 228's four.
+
+`printInfo` is written and passes. The other two are recorded rather than
+written: both are single-expression copies out of `V90Parameters`, and writing
+them means modelling `V90Parameters`, which nothing in this tree does yet.
+
+**Thirty-six bytes, not thirty-two and not twenty-eight.** The largest
+`this`-relative displacement across all three members is +0x20, and both the
+constructor and `setToDefault` reach it with a four-byte access, so the object
+is 0x24. `printInfo` alone reaches only +0x1c; sizing from the member you
+happen to be writing is the mistake finding 215 is about, and the `V90Jd`
+0x8c -> 144 worked example in `docs/v90cpp.md` is the same shape.
+
+**The field names are the author's own**, recovered from the format strings
+`printInfo` hands to the diagnostic channel -- which is what makes a
+508-byte printer an unusually good type oracle:
+
+```
+V90Phase2Info: pcmType = %s                        +0x00  int
+V90Phase2Info: rtd = %d                            +0x04  int
+V90Phase2Info: Uinfo = %d                          +0x08  unsigned char (movzbl)
+V90Phase2Info: maxTxPower [dBm0]  = %c%d.%01d      +0x09  unsigned char (movzbl)
+V90Phase2Info: txPowerMeasurementPoint = %s        +0x0c  int
+V90Phase2Info: L2[%d] = %c%d.%03d                  +0x18  float *
+                                                   +0x20  V90Parameters *
+```
+
+`params` is the one invented name: a constructor's *argument* type is in the
+mangling, a data member's name never is. `+0x10..0x17` and `+0x1c..0x1f` are
+reached by none of the three members and stay `pad_*` -- a printer reaches
+nothing it does not print, and a passing test proves nothing about memory
+neither side writes (findings 223, 224).
+
+Two things the printer settles that a reader would guess wrong:
+
+- **`maxTxPower` is not a dBm0 value.** The label says dBm0 and the function
+  prints `(maxTxPower + 1) * -0.5`, so the field is a code in half-decibel
+  steps: 0 means -0.5 dBm0, 11 means -6.0. The unit is in the format string
+  and the arithmetic is in the function.
+- **Zero prints as negative.** `fldz; fcomps; fnstsw; sahf; sbb; and $-2; add
+  $0x2d` -- 0x2d is `-`, 0x2b is `+`, and the borrow is C0, which the compare
+  sets when the pushed zero is *below* the value. The test is `0 < v`, not
+  `v >= 0`. Reproduced rather than tidied.
+
+`L2` is a pointer reloaded on every iteration (`mov 0x18(%esi),%edx; flds
+(%edx,%ebx,4)`), not an array in the object. The loop is `inc %ebx; cmp
+$0x14,%ebx; jbe` -- unsigned, 0 through 20 inclusive -- which is a **lower
+bound** on the array and not its length; `V90PreFilter::autoSelection` reads
+the same offset as a `float *`.
+
+#### A collision this leaves loud rather than fixed
+
+`include/dsplib/V90PreFilter.h` carries its own stub `class V90Phase2Info`, a
+0x1c-byte union, flagged there as something "a later batch that models either
+should replace". This is that batch, but `V90PreFilter.h` was being merged
+against by parallel agents and is not edited here. No translation unit
+includes both today, so nothing breaks -- and `V90Phase2Info.h` now `#error`s
+if `DSPLIB_V90PREFILTER_H` is already defined, which turns what would
+otherwise be a page of redefinition diagnostics into one sentence naming the
+fix. **The merge that first brings them into one TU must delete the stub.**
+
+### 256. Two mutants that cannot be caught, and the measurement that says so
+
+Ten mutations against `t_v90p2info`; six caught, four not. Two of the four are
+equivalent mutants, and this records what was held fixed for each -- because
+"equivalent" asserted without that is indistinguishable from "untested".
+
+**`long double` versus `float` for the scaled fraction.** The natural argument
+is that the object computes on the x87 stack (`fsubp; fmuls; fistpl`), so the
+product is rounded once to 64 significand bits and only then truncated, while
+`float` would round to 24 bits first and a value just under an integer could
+cross it. *That argument does not apply on this target.* `-mfpmath=387` with
+GCC's default `-fexcess-precision=fast` keeps a `float` product in an 80-bit
+register until the `fistpl` too:
+
+```sh
+gcc -m32 -mfpmath=387 -O2 ...     # both spellings of frac_of(), swept
+# tried 2390535529 floats, 0 differ     (at scale 10.0f and 1000.0f)
+```
+
+Held fixed: `-mfpmath=387` and `-fexcess-precision=fast`. The `long double`
+spelling stays because it does not *depend* on the excess precision being
+there, not because a test can tell them apart -- and the source comment now
+says so instead of claiming the opposite.
+
+**The order of `(int)v - v`.** Reversing it negates the product, negates the
+truncation, and the `abs()` the object performs afterwards (`cltd; xor
+%edx,%eax; sub %edx,%eax`) cancels both. Same sweep, same result: zero
+disagreements over 2,390,535,529 floats at both scales. Held fixed: that
+`abs()`. The order in `src/` is the object's, from the disassembly.
+
+The other two uncaught mutations are gaps, and are named as gaps:
+
+- **Gating the `Uinfo` line.** `edprintf` gates itself, so wrapping its call in
+  `DSPLIB_DEBUG_ON()` changes nothing observable. Held fixed: `edprintf`'s own
+  gate -- which makes this equivalent too, but by construction rather than by
+  measurement, so it is listed here.
+- **Hoisting the debug gate out of the `L2` loop.** The object re-reads
+  `dsplibs_debug_level` once per iteration; that is a disassembly fact. It is
+  only *observable* if the level changes during a single call, and nothing in
+  the system changes it there. Catching this needs a harness hook that lowers
+  the level mid-transcript. Attempted, found unobservable without that hook,
+  and not written.
+
+### 257. A worktree without `third_party/spandsp` fails a test that names spandsp
+
+`third_party/spandsp` is gitignored and built in place, so a `git worktree
+add` produces a tree where `make phase` dies at `build/test/t_spandsp_b103`
+with `libspandsp.a not built -- see third_party/README.md`. The message is
+accurate and points at the wrong thing: the library *is* built, in the tree
+next door, and what is missing is this worktree's copy.
+
+It cost five parallel agents a confusing failure each, in the same session
+whose hand-over said "so fan out". A symlink to a sibling's built copy is
+enough -- the Makefile only reads `SPANDSP_LIB`:
+
+```sh
+ln -sfn /abs/path/to/other/third_party/spandsp third_party/spandsp
+```
+
+Recorded because the failure appears *after* every differential test has
+passed, in the interop tier, and reads as a broken dependency rather than as a
+missing symlink.
+### 262. The DIL bit stream, and a length that carries the consequence but not the branch
+
+`DILdescriptorPacker` (3,278 bytes, a leaf) turns a `tagV90DILdescriptor` into
+a stream of one-bit-per-`short` values and writes the count back through a
+`short *`. The frame is **seventeen** bits: sixteen data bits and a framing
+zero. `seq1` starts at bit 52; the sixteen segment fields occupy
+`8 * 17 = 136` bits, two to a frame as seven bits, a zero, seven bits, a zero;
+the DIL codes follow at two per frame; and the CRC occupies the frame after
+the last DIL frame. The register starts all ones and covers the data bits of
+every frame from 1 up to but not including its own -- frame 0 is not covered,
+and if there is nothing to cover the register stays all ones.
+
+The tail is the interesting part:
+
+```c
+bits[crcAt + 17] = 0;
+if (crcAt & 1) {
+        bits[crcAt + 18] = 0;
+        *nbits = (short)(crcAt + 19);
+} else {
+        *nbits = (short)(crcAt + 18);
+}
+```
+
+**The count is even either way, and that broke an anti-vacuity check.** The
+test asserted the count is even -- correctly -- and then tried to witness the
+two tails with `(len - 18) & 1`, which the first assertion proves is
+identically zero. So "a stream ending two 0s past the CRC was reached" could
+never be set, whatever the trials contained; it was a tautology that failed
+rather than a check that worked. `len` carries the branch's *consequence* and
+not the branch.
+
+Recomputing `crcAt` in the test would mean recomputing
+`segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilCeiling(dilCount, 0.5f)`, which
+is the packer's own arithmetic asserted against itself. The branch is proved
+the other way instead, by mutation: `test/mutations/dilpack.json` forces each
+tail unconditionally and inverts the test, and the differential test catches
+all three.
+
+### 263. A store the object makes that nothing can observe
+
+`bits[crcAt] = 0` -- the framing zero of the frame the CRC goes in -- survives
+`tools/mutate.py --suite dilpack` uncaught over 160 descriptors (5 modes x 32
+shapes, including `dilCount == 0`), against an output buffer seeded with
+`0x5a00 + lfsr` rather than zeroed, so an unwritten position is visible.
+
+It is an equivalent mutant, and the reason is arithmetic. `DIL_FRAME` is 17,
+so the last DIL frame's own framing zero, `bits[at + 16] = 0` with
+`at = segmentAt + DIL_SEGMENT_BITS + 17 * (dilFrames - 1)`, lands on
+`segmentAt + DIL_SEGMENT_BITS + 17 * dilFrames - 1`, which is `crcAt` exactly.
+When `dilFrames` is 0 the segment block's own last framing zero sits at
+`segmentAt + DIL_SEGMENT_BITS - 1`, which is `crcAt` again.
+
+**Held fixed:** that every section preceding the CRC frame ends by writing a
+framing zero at its own last bit. That is a property of the original's frame
+layout, not of our reconstruction, so the store is redundant in the blob too
+-- worth recording as evidence about how the original was written rather than
+filed as an untested line. It stays in `src/` because it is in the object.
+
+7 of the suite's 8 mutations are caught; this is the eighth.
+>>>>>>> w1e_dil
+=======
+### 258. The two 350-byte "setters" compute a base-2 exponent on the coprocessor
+
+`V90Equalizer::setLinearEquBeta(float)` and `::setDfeBeta(float)` are 350
+bytes each and byte-for-byte the same shape. Neither is storing a float. Each
+one:
+
+1. prints a fixed-point decimal if the new beta differs from the old --
+   three integer arguments, not a `%f`, the same trick `V90Phase2Info` uses;
+2. stores the beta with `fsts`, a store that does not pop;
+3. returns immediately unless the MMX path is on; and
+4. computes `shift = (int)(log10(|refLevel / (beta * 2^24)|) / log10(2))`,
+   which is a truncated base-2 logarithm, then scales the beta by
+   `1 << shift`.
+
+**The logarithm is `fldlg2; fxch; fyl2x`, and it is written as inline asm.**
+`fyl2x` computes `st(1) * log2(st(0))` and pops, so pushing `log10(2)` first
+turns it into `log10` in one instruction at the register's full 64-bit
+mantissa. A call to `log10()` is not the same function: libm's is correctly
+rounded to `double`, and the object never leaves the stack. The template and
+its `"=t"` constraint are the only inline asm in `src/`.
+
+Two comparisons in these functions are FCOM, not C:
+
+- The diagnostic guard is `fcomp; fnstsw; sahf; je`, and FCOM sets C3 for
+  equal **and** for unordered, so a NaN skips the print where C's `!=` would
+  take it. Written out as `if (a < b || a > b)`. Finding 236 is the same
+  shape in `setParamEia6`.
+- The MMX arm is entered on ZF for zero **and** for unordered, so
+  `beta == 0.0f` is not the object's test either.
+
+### 259. Inline asm is not a diagnostic, and the strings gate could not tell
+
+`make phase`'s `strings` gate rejected `src/pump/v90/V90Equalizer.cpp` with
+two INVENTED strings: the instruction template `fldlg2\n\tfxch %%st(1)\n\tfyl2x`
+and the constraint `=t`. Both are string literals; neither is data, and
+neither is in the blob's `.rodata` because there is nothing there to be.
+
+The gate exists (findings 180, 201) to catch an **invented diagnostic**: a
+format string that survives a full differential test because
+`dsplibs_debug_level` ships at zero, so a wrong string and a right one behave
+identically. An asm template has no such failure mode -- it is code, and the
+differential test judges it like any other code. `tools/debugaudit.py` now
+blanks asm statement bodies before the scan, the same way it already blanks
+comments and preprocessor lines, matching balanced parentheses so the operand
+lists go with the template.
+
+It still checks 758 literals and still reports 0 invented, so the gate was
+narrowed and not disabled.
+
+### 260. Both uncaught mutants are equivalent, and both were measured
+
+`tools/mutate.py --suite v90equ`: 4 mutations, 1 caught, 1 that does not
+compile, 2 uncaught. Replacing `fldlg2` with `fld1` -- log2 where the object
+computes log10 -- is caught. The other two are equivalent, and here is what
+was held fixed for each rather than an assertion that they are.
+
+**Masking the shift count to five bits.** `one_shifted_by` writes
+`1u << (n & 31)` where the object has `shl %cl,%edx`, because C leaves
+`1 << n` undefined outside 0..31 and `n` here is a truncated logarithm the
+caller can push far outside it -- a denormal beta is in the test's own input
+set. Removing the mask changes nothing:
+
+```
+shift mask: 0 of 141 counts differ        (n from -70 to 70, gcc -m32 -O2)
+```
+
+Held fixed: GCC compiles a variable shift to `shl`, which masks the count to
+five bits in hardware. The mask stays because it makes the program's meaning
+independent of that, not because a test can see it.
+
+**`double` rather than `long double` for the `"=t"` result.** Rounding the
+logarithm to 53 bits before the division never moves the truncation of the
+quotient:
+
+```
+log intermediate: tried 435780380 betas, 0 differ
+```
+
+-- betas drawn across the whole 32-bit float pattern space, run through the
+real expression `(int)(log10(|1/(beta * 2^24)|) / log10(2))`. Held fixed: the
+quotient is truncated to `int`, which is a far coarser operation than the
+difference between a 64-bit and a 53-bit mantissa. This is the same shape as
+finding 256, and the second x87 precision claim in this branch that turned
+out not to be observable on this target; both were settled by sweeping rather
+than by argument.
