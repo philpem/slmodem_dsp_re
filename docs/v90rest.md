@@ -251,3 +251,31 @@ reserve for #59's six.** The block table above has been rewritten to match
 what is actually in `docs/findings.md`: 291-296 went to
 `V90Phase3Demodulator::reset`, so **#59's remaining five start at 297**, not
 at 291.
+
+## Where `V34SetINFO1aBits` got to
+
+Landed. 1,401 bytes, and the batch really was one symbol: after a build,
+`tools/closure.py V34SetINFO1aBits --missing` is itself and nothing else.
+Findings 307-312, mutation suite `v34info1a` (44 mutations, 40 caught and 4
+proved equivalent, two of which had to be replaced by neighbouring mutations
+that can fail). Coverage 20.6% -> 20.7%.
+
+It is `src/pump/v34/v34info1a.cpp`, NOT `v34info.c`: it calls
+`VPcmFloModem::getUinfoValue`, so the translation unit has to be C++, exactly
+as `v34k56.cpp` had to be. The test is `test/unit/t_v34info1a.cpp` and it
+stands a whole 32 KB `VPcmFloModem` graph up beside a `struct v34_object`,
+with the pointer cycle wired both ways.
+
+Two things it settles for everyone else in #59:
+
+- **`obj->p3548` is a `VPcmFloModem *`** (finding 307). `v34info.c`'s
+  `SESSION_VARIANT` and `SESSION_UINFO6` are `info0Layout` and
+  `pcmSessionType`; +0x611c is one field meaning "PCM upstream / V.92
+  session", written by three functions in three translation units.
+- **`struct v34_ratecfg` gained `carrier` at +0x10** and `f06` at +0x06, and
+  `struct v34_object` gained `f35a4` at +0x35a4 (finding 311 says why that
+  one stays offset-named, and what `VPcmV34InitiateRetrain` should do about
+  it).
+
+`V34GiveINFO1dBits` is the next one in this corner; finding 312 is its
+hand-over.

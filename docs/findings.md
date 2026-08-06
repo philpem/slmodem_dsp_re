@@ -15386,3 +15386,222 @@ Mutation suites re-run after the merge to confirm nothing was weakened by the
 edits: `vpcmflomodem` 49 mutations, 48 caught and 1 measured-equivalent;
 `v90sessionflag` 16 mutations, 14 caught and the two orderings finding 269
 records as unobservable.
+
+### 307. `obj->p3548` is a `VPcmFloModem *`, and +0x611c is one field with three writers
+
+`v34info.c` reaches four things through `obj->p3548` and deliberately gives it
+no type, because none of its four functions does anything with the pointer
+that would say what it points at. `V34SetINFO1aBits` does. One register holds
+it from the prologue to the end:
+
+    mov 0x3548(%esi),%ebp     <- obj->p3548
+    mov 0x6120(%ebp),%eax     <- v34info.c's SESSION_VARIANT
+    mov 0x611c(%ebp),%esi     <- v34info.c's SESSION_UINFO6
+    mov %ebp,(%esp) ; call _ZN12VPcmFloModem13getUinfoValueEs
+
+with no load in between, and `this` is the first stack argument in this object
+(finding 215). So the same pointer is a `VPcmFloModem *` **and** the base of
+both session offsets, which `include/dsplib/VPcmFloModem.h` already calls
+`pcmSessionType` (+0x611c) and `info0Layout` (+0x6120) from a third
+translation unit. They are the same two fields. Two names in two files for one
+int is exactly the kind of drift `docs/attribution.md` cannot catch, and this
+is the evidence that closes it.
+
+**WHAT +0x611c MEANS.** Three writers and three readings, in three
+translation units, that all agree once "V.92 session" and "PCM upstream" are
+seen to be the same thing:
+
+| writer | what it does |
+|---|---|
+| `VPcmFloModem::setPcmSessionType` | stores `(arg != 0)`, prints "setting PCM session to V.9{0,2}" |
+| `V34GiveINFO1aBits` | stores 1 exactly when the RECEIVED upstream baud index is 6 |
+| `V34SetINFO1aBits` | clears it for a short phase 2; reads it to choose between two strings, and TRANSMITS baud index 6 on the non-zero side |
+
+V.92 is the recommendation that adds a PCM upstream, and INFO1a asks for one
+with upstream baud index 6. The two strings are the object's own -- "PCM
+Upstream is selected (info1)" against "V.34 Upstream is selected (info1)" --
+so the reading is not an interpretation laid over the offsets.
+
+`VPcmFloModem.h`'s "V.90 or V.92, as a 0/1 int" is still right and is now
+better: it is also *which upstream*, and `V34GiveINFO1aBits`'s
+`SESSION_UINFO6` name is the same field seen from the receive side. Neither
+comment is renamed here, because both are true and each is the shortest true
+thing its own file needs.
+
+### 308. The INFO1a bit layout, and the exact round trip with `V34GiveINFO1aBits`
+
+`V34SetINFO1aBits` builds the message and `V34GiveINFO1aBits` takes it apart,
+and the two were reconstructed from different disassemblies months apart. They
+agree bit for bit, which is the strongest cross-check either has.
+
+Fields, most significant bit first across ASCENDING indices, after a bit
+reversal in every case:
+
+    f35a4, seven bits    rev7 bits 6..5 -> bits[0] 1..0
+                         rev7 bits 4..0 -> bits[1] 7..3
+    Uinfo, seven bits    rev7 bits 6..4 -> bits[1] 2..0
+                         rev7 bits 3..0 -> bits[2] 7..4
+    upstream baud, three rev3 bits 2..1 -> bits[2] 1..0
+                         rev3 bit  0    -> bits[3] 7
+    a second three-bit field, ALWAYS the constant 6:
+                         rev3 bits 2..0 -> bits[3] 6..4
+
+and, on the PCM-upstream branch only, six flag bits in `bits[0]` 7..2 taken
+from `fabce`, `fabd0` and `fabd2` two at a time, HIGHER-NUMBERED BIT AS THE
+LOW ONE -- the same reversal `V34GiveINFO1aBits` undoes when it fills those
+three fields in. The object reads all three with `testb`, so nothing above
+bit 7 of any of them can reach the message.
+
+**THE BAUD INDEX IS DECODED THREE TIMES IN TWO FUNCTIONS AND THE EXPRESSIONS
+MATCH.** `V34GiveINFO1aBits` computes
+
+    ((bits[2] & 2) >> 1) + (bits[2] & 1) * 2 + ((bits[3] & 0x80) >> 5)
+
+and `V34SetINFO1aBits`, on the V.34-upstream branch with no short phase 2,
+recovers the index it is about to overwrite as
+
+    bitreverse(((bits[2] & 3) * 2) | ((bits[3] & 0x80) >> 7), 3)
+
+Expand the three-bit reversal and the second is the first, term for term. So
+the encoder and the decoder are inverse, and the encoder's own read-back
+agrees with the decoder as well.
+
+Indices touched: 0, 1, 2, 3, 4, 7, 8 and 9. `V34_INFO_MSG_SHORTS` (13) still
+bounds the buffer; nothing here reaches index 12.
+
+`bits[4]` is `0xfc` on the PCM-upstream branch, `0` on the V.34 branch and `1`
+there if a short phase 2 is on -- and the short-phase-2 flag is a SECOND read
+of `obj->is_short`, after `getUinfoValue` has run. Nothing in that call can
+reach +0xabcc of the V.34 object, so the reload cannot differ; it is
+transcribed as the object has it rather than folded into the earlier read.
+
+### 309. A short phase 2 hard-codes the rate configuration, and forecloses the PCM upstream
+
+Two things follow from one block of five stores, and neither is obvious from
+the block.
+
+**THE RATE CONFIGURATION IS WRITTEN HERE, NOT BY `setfinalrate`.** With
+`is_short` non-zero the function writes 0xc80 to +0xaa84 and 0x725 to +0xaa94
+and clears +0xaa8a and `f25dc`. 3200 baud with an 1829 Hz carrier is a legal
+V.34 pairing, and both offsets are named by the object's OWN getters:
+`VPcmV34GetCurrentTxBaudRate` reads +0xaa84 and `VPcmV34GetCurrentTxCarrier`
+reads +0xaa94. That is a fifth reading for `struct v34_ratecfg`, which already
+had four from the same family, and the four pair up:
+
+    TxBaudRate  +0x00      RxBaudRate  +0x12 (rx_baud, already declared)
+    TxBitRate   +0x04      RxCarrier   +0x24 (left inside pad_24)
+    TxCarrier   +0x10
+
+so `carrier` is now a member at +0x10 rather than two bytes of `pad_10`. The
++0x06 short the same block clears stays `f06`: `setfinalrate` writes it and
+`v34setuptxmit` reads it beside `baud` and `carrier`, and nothing names it.
+
+**ONLY THREE OF THE FOUR TAIL COMBINATIONS EXIST.** The same block sets
+`pcmSessionType = 0` BEFORE `getUinfoValue` is called; `getUinfoValue` ends in
+`setPhaseIIinfo`, which ends in `setPcmSessionType(pcmSessionType)`, which
+normalises the field to 0 or 1 and cannot turn a zero into a non-zero. So a
+short phase 2 always lands in the V.34-upstream branch and "short phase 2 with
+a PCM upstream" is not a state this function can produce. `t_v34info1a.cpp`
+drives all four combinations anyway and the fourth simply arrives somewhere
+else; the reachability argument is in the source so that a reader does not
+assume four free choices where there are three.
+
+### 310. Four mutations of `V34SetINFO1aBits` that cannot fail, and how each was proved
+
+`test/mutations/v34info1a.json` is 44 mutations, 40 caught. The four survivors
+are all provably equivalent, and two of them started as "NOT CAUGHT" and
+looked exactly like test gaps -- which is finding 295's warning arriving on
+schedule. What each rests on, with what is held fixed stated:
+
+**The object's own mask has a redundant bit.** The K56Flex answer arm is
+`bits[3] = (bits[3] & ~6) | (law ? 9 : 0xb)`. Widening the mask to `~0xe`
+additionally clears bit 3 -- which both 9 and 0xb put straight back. Nothing
+can distinguish them, for any input. `~6` is transcribed because
+`and $0xfffffff9` is the instruction, not because it is the minimum.
+
+**A gathered bit above what `bitreverse` reads.** The baud recovery gathers
+`((bits[2] & 3) * 2) | ((bits[3] & 0x80) >> 7)` and reverses three bits.
+Widening the first mask to `& 7` puts a bit at position 3, and
+`bitreverse(v, 3)` reads positions 0, 1 and 2 only (`src/pump/v34/v34rx.c`).
+Held fixed: bitreverse's loop bound, and nothing else.
+
+**Two shifts of a value that is known non-negative and seven bits wide.**
+`bitreverse(v, 7)` returns 0..127, so `(short)r >> 5` and `(unsigned)r >> 5`
+agree, and `(r >> 4) & 7` and `(r >> 4) & 0xf` agree. The object's `cwtl` and
+`sar` are transcribed anyway, for the same reason `v34info.c` keeps its: they
+stay true if a field ever widens.
+
+Each of the first two was replaced in the suite by a variant that CAN fail --
+`~6` to `~4`, and `* 2` to `* 4` and `& 3` to `& 2` -- and all three of those
+are caught. That is the pattern worth copying: when a mutation survives, first
+try to prove it equivalent, and if you can, add the neighbouring mutation that
+is not.
+
+### 311. `f35a4` stays offset-named, and the cross-reference that would have named it
+
+`struct v34_object + 0x35a4` is a short `VPcmV34Create` clears and three
+functions read, always with `movswl`. `V34SetINFO1aBits` sends its low seven
+bits, bit-reversed, as the leading field of an INFO1a, which is the only use
+this tree can test. The other two are `VPcmV34InitiateRetrain` and
+`V34XF_IndicateK56FlexJdReceived`, and both compute the same thing from it:
+
+    10000 + 336 * f35a4
+
+which looks exactly like a table index turning into a rate or a frequency, and
+is not written down as one. Three reasons, and any one of them would be
+enough: neither function is reconstructed; they store the result through
+DIFFERENT base registers (`esi + 0x250` in one, `obj + 0x254` in the other),
+so it is not established that the destinations are even the same field; and a
+name derived from arithmetic in an unreconstructed function is a Ghidra-grade
+guess wearing a derivation's clothes.
+
+The observation is recorded because the `VPcmV34InitiateRetrain` batch will
+meet the same expression from the other side and should not have to find it
+twice. **If that batch resolves the destination, `f35a4` can be named then.**
+
+### 312. `V34SetINFO1aBits` landed, and what its file split means for `V34GiveINFO1dBits`
+
+1,401 bytes, closure of one after a build (finding 271's warning, obeyed).
+Coverage 20.6% -> 20.7%, 149,685 -> 151,086 bytes, 364 -> 365 symbols.
+`make phase` green; `t_v34info1a` is 68,561 checks.
+
+**IT IS A NEW `.cpp`, NOT PART OF `v34info.c`, AND THAT IS FORCED.** The
+symbol is unmangled -- so it was `extern "C"` -- but it calls
+`_ZN12VPcmFloModem13getUinfoValueEs`, which a C translation unit cannot name.
+`src/pump/v34/v34k56.cpp` is the identical arrangement and states it at
+length. The stem is `v34info1a` and not `v34info` because the Makefile turns
+both `%.c` and `%.cpp` into `$(BUILD)/%.o`, so two sources would race for one
+object file. The declaration went into `include/dsplib/v34info.h`'s existing
+`extern "C"` block, which is one line and should not conflict with anything.
+
+**ONE THING NO DIFFERENTIAL TEST HERE COULD HAVE SEEN.** The object loads
+`obj->pac18` in the prologue and spills it, but dereferences `+0xc` at exactly
+two sites, one in each K56Flex arm. The first reconstruction hoisted the
+dereference to entry beside the pointer load -- so on every path with no
+K56Flex receiver it read memory the object never touches, and would fault on a
+caller that had not set that block up. `setup()` always installs a valid one,
+so the test agreed either way; the fix came from re-reading the disassembly
+against the source, and `V34GiveINFO1aBits` in `v34info.c` had already got the
+same field right by reading it inside its own branch. **A pointer loaded early
+and dereferenced late is a shape worth checking for on sight** -- the register
+allocator's placement is not the source's.
+
+**FOR THE `V34GiveINFO1dBits` AGENT**, four things:
+
+- check first whether it references any mangled symbol. If it does not, it
+  belongs in `v34info.c` beside its three siblings and none of the above
+  applies. If it does, put it in its own `.cpp` rather than in
+  `v34info1a.cpp`; one function per forced file is the precedent here.
+- `obj->p3548` is a `VPcmFloModem *` (finding 307). If INFO1d touches
+  +0x611c or +0x6120, they are `pcmSessionType` and `info0Layout` and the
+  class header already has them.
+- `V34SetINFO1aBits`'s INFO1d arm is the ONE-BIT one: `bits[7] |= 0x20` when
+  `pcmSessionType` is non-zero, and `bits[7] &= 0xdf` when it is not. Those
+  two are not each other's inverse -- the clear is `and $0xdf` on a
+  zero-extended short and takes the whole high byte with it -- and a test
+  whose message shorts never carry a high byte cannot tell the difference.
+- `test/unit/t_v34info1a.cpp` stands a whole `VPcmFloModem` object graph up
+  next to a `struct v34_object`, with the cycle wired both ways
+  (`v34->p3548` and `modem->v34Object`). If INFO1d needs the same fixture,
+  lift it from there rather than from `t_v34info.c`, whose session is a
+  0x6140-byte byte array and cannot call a member.
