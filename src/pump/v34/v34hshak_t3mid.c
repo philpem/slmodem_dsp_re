@@ -555,7 +555,7 @@ t3m_micro47(struct t3m_frame *f)
 	}
 
 	/* 0x6684e. */
-	n = T3M_U16(f, T3M_COUNTER);
+	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
 
 	if ((short)n <= 0x5f) {
 		/* 0x6aaf9. */

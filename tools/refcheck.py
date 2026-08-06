@@ -510,6 +510,55 @@ def check_suites():
     return bad
 
 
+#
+# A MUTATION RUN THAT DIES LEAVES ITS MUTANT IN THE SOURCE.
+#
+# `mutate.py` edits the file, builds, runs, and puts the file back.  Kill it
+# between the first and the last -- a timeout, a disconnect, a Ctrl-C -- and
+# the mutant stays.  `git add -A` then commits it, and if the commit's
+# `make phase` ran BEFORE the mutation run rather than after, nothing objects.
+#
+# That happened: merge commit 92e565e captured `47 tests the counter before
+# incrementing it` into src/pump/v34/v34hshak_t3mid.c.  The differential test
+# does catch it -- 84 of 31,328 checks -- so the tree was one `make phase`
+# away from noticing, and the ordering of two commands was the whole defect.
+#
+# Detection is exact rather than heuristic: for a correctly restored source
+# every mutation's `find` string is present.  If `find` is ABSENT and
+# `replace` is PRESENT, that mutation is live in the tree.  Finding 349.
+#
+def check_live_mutants():
+    reg_path = os.path.join("test", "mutations", "suites.json")
+    if not os.path.exists(reg_path):
+        return []
+    try:
+        reg = json.load(open(reg_path))
+    except ValueError:
+        return []                       # check_suites() reports this
+    live = []
+    for name, entry in sorted(reg.items()):
+        if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
+            continue
+        path = os.path.join("test", "mutations", name + ".json")
+        if not os.path.exists(path) or not os.path.exists(entry[0]):
+            continue
+        try:
+            muts = json.load(open(path))
+        except ValueError:
+            print("  MALFORMED  %s" % path)
+            live.append(path)
+            continue
+        text = open(entry[0]).read()
+        for m in muts:
+            if not isinstance(m, dict) or "find" not in m or "replace" not in m:
+                continue
+            if m["find"] not in text and m["replace"] in text:
+                print("  LIVE MUTANT  %s: %s"
+                      % (entry[0], m.get("label", "(unlabelled)")))
+                live.append(entry[0])
+    return live
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
     bad = []
@@ -524,11 +573,13 @@ def check_dangling():
               % (path, line, num if kind == "D" else "finding " + num))
     marks = check_conflict_markers()
     suites = check_suites()
-    print("\n  %d references checked, %d resolve to nothing%s%s"
+    live = check_live_mutants()
+    print("\n  %d references checked, %d resolve to nothing%s%s%s"
           % (total, len(bad),
              "" if not marks else ", %d conflict marker(s)" % len(marks),
-             "" if not suites else ", %d bad mutation suite(s)" % len(suites)))
-    return 1 if (bad or marks or suites) else 0
+             "" if not suites else ", %d bad mutation suite(s)" % len(suites),
+             "" if not live else ", %d LIVE MUTANT(S)" % len(live)))
+    return 1 if (bad or marks or suites or live) else 0
 
 
 def check_since(rev):

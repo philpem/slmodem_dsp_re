@@ -19948,3 +19948,56 @@ which is one of the three answers already. The other two are open.
 Until it is done, an arm added to one copy is not added to the other, and the
 `docs/v34handshak.md` per-target table has to say which copy each target lives
 in or it will send the next agent to the wrong file.
+
+### 349. A mutation run that dies leaves its mutant in the source, and I committed one
+
+`mutate.py` edits the file, builds, runs, and puts the file back. Kill it
+between the first step and the last -- a timeout, a dropped connection, a
+Ctrl-C -- and the mutant stays in the working tree.
+
+That happened here. A ten-minute timeout killed
+`mutate.py --suite v34hst3mid` partway through, and the next `git add -A`
+carried the mutant into merge commit `92e565e`:
+
+```
+-	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
++	n = T3M_U16(f, T3M_COUNTER);
+```
+
+Microstate 47 tests its counter *before* incrementing it instead of after --
+a wrong reconstruction, committed and pushed, in a tree whose whole rule is
+that nothing is committed that has not passed a differential test.
+
+**The test does catch it.** Re-applied deliberately: `t_v34hst3mid` fails
+**84 of 31,328 checks**. So the tree was one `make phase` away from noticing,
+and the entire defect is the ORDER of two commands. I ran `make phase` when I
+resolved the merge, then ran the mutation suites, then wrote a finding and
+committed. The last `make phase` before the commit predated the corruption.
+
+#### The rule, and why the rule is not enough
+
+"Run `make phase` immediately before committing, not merely before the commit"
+is the lesson, and it is too easy to get wrong to be left as a lesson.
+`refcheck.py` now detects it exactly rather than by heuristic:
+
+> For a correctly restored source, **every** mutation's `find` string is
+> present. If `find` is ABSENT and `replace` is PRESENT, that mutation is live
+> in the tree.
+
+No false positives across all forty-seven registered suites; it found this one
+and nothing else. It runs in `make phase`'s `refs` target, so the gate is in
+the boundary rather than available on request.
+
+This is the third gate `refcheck.py` has grown this session, and all three
+guard the same class of failure -- **something wrong in the tree that no test
+executes**: conflict markers in prose (finding 249), a mutation registry that
+does not parse (finding 346), and now a live mutant. `make phase` builds and
+runs eighty binaries and none of them reads a `.json`, a `.md`, or the
+question "is this source the source we meant".
+
+#### What it says about the mutation tier
+
+Nothing reassuring. A mutation run is the tree's own check that its tests can
+fail, and running it is *itself* a way to break the tree. The tier that exists
+to catch vacuous testing is the tier most likely to leave a wrong answer
+behind, because it is the only one that edits `src/` on purpose.
