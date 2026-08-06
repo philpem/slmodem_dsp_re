@@ -128,6 +128,60 @@ Mutation suites now registered: `v90adid`, `v90dil`, `dilpack`, `v90equ`,
 what is left of it is wave 2 (the `setSessionFlag` spine, 7 symbols, 1,523 B)
 and wave 3 (`VPcmFloModem`, 6 symbols, 2,420 B), both unblocked now.
 
+## Where wave 3 got to
+
+Five of `VPcmFloModem`'s six landed: `getUinfoValue` 773, `setPhaseIIinfo` 704,
+`getV90CpBits` 417, `getV90JaBits` 158, `setPcmSessionType` 98 -- 2,150 bytes,
+findings 273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
+equivalent and measured over 123 million values).
+
+`VPcmFloModem::enterPhase3` (270 B) is the sixth and is still outstanding.
+**It does call `DILdescriptorPacker`, exactly as this file said** -- that is
+in the object's own relocations and is not in doubt:
+
+    $ tools/dis.py ../slmodemd/dsplibs.o _ZN12VPcmFloModem11enterPhase3Ev \
+        | grep -o 'R_386_[A-Z0-9]* .*' | sort -u
+    R_386_PC32 DILdescriptorPacker
+    R_386_PC32 _ZN14V90Demodulator11enterPhase3Ev
+    R_386_PC32 edprintf
+    R_386_PC32 dsplibs_debug_printf
+    ...
+
+What has changed is that `DILdescriptorPacker` is written, so it is no longer
+a BLOCKER. `tools/closure.py --missing` reports 1,590 bytes still outstanding
+and every one of them belongs to wave 2 or to a weak symbol:
+
+    801  V90Phase3Demodulator::reset(PcmType, unsigned char, ...)
+    448  V90Demodulator::enterPhase3()
+    270  VPcmFloModem::enterPhase3()
+     48  Descrambler<int,int>::reset(int)              (weak, template)
+     23  Descrambler<int,int>::resetHistoryIndexes()   (weak, template)
+
+Only `V90Demodulator::enterPhase3` is a direct callee; the other four arrive
+through it. **`--missing` is not a call list** -- it filters out everything
+already written, so reading it as one is how "it needs DILdescriptorPacker"
+would have been contradicted on no evidence.
+
+So: it is sequenced behind **wave 2's two remaining symbols**, not behind the
+C prerequisite, and behind the two `Descrambler<int,int>` members that
+finding 231 and the note at the top of this file both warn `callgraph.py`
+cannot see and that nothing in `include/` defines yet. It is one 270-byte
+method behind 1,320 bytes of somebody else's class, so it goes with them
+rather than on its own.
+
+Whoever writes it should read finding 273 (the object
+is genuinely 32 KB, and the old "indexes through `this`" sentence in
+docs/v90cpp.md is corrected), finding 274 (a `V90Modem` is EMBEDDED at
++0x1758, and `sizeof(V90Modem) == 0x49c0` is asserted in VPcmFloModem.cpp for
+exactly that reason), and finding 275 (+0x1760 is a `V90Phase2Info` and
++0x612c a `V92Phase2Info`). `include/dsplib/VPcmFloModem.h` already carries the
+class; add fields to it rather than starting a new map, and put anything new
+in the mutation suite that is already registered.
+
+`v90Phase34` (1,358 B, #59) is unblocked by this: its two blockers were
+`getV90CpBits` and `getV90JaBits`. `V34SetINFO1aBits` (1,401 B) is unblocked
+too. `VPcmV34InitiateRetrain` still wants `V34DisconnectThreshTable`.
+
 Three things wave 1 cost that the next batch should not pay again:
 
 - a fresh worktree has no `third_party/spandsp`, and the failure names

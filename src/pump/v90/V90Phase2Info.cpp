@@ -70,7 +70,10 @@ V90P2I_OFF(rtd,				0x04, rtd);
 V90P2I_OFF(Uinfo,			0x08, uinfo);
 V90P2I_OFF(maxTxPower,			0x09, maxtxpower);
 V90P2I_OFF(txPowerMeasurementPoint,	0x0c, txpmp);
+V90P2I_OFF(array_10,			0x10, array10);
+V90P2I_OFF(array_14,			0x14, array14);
 V90P2I_OFF(L2,				0x18, l2);
+V90P2I_OFF(array_1c,			0x1c, array1c);
 V90P2I_OFF(params,			0x20, params);
 
 typedef char v90p2i_size[(sizeof(V90Phase2Info) == 0x24) ? 1 : -1];

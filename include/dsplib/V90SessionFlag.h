@@ -45,6 +45,7 @@
 #ifndef DSPLIB_V90SESSIONFLAG_H
 #define DSPLIB_V90SESSIONFLAG_H
 
+#include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
 
@@ -108,6 +109,19 @@ public:
 	unsigned char pad_34[0x1a8];		/* +0x34 not modelled     */
 	V90Phase3Demodulator *phase3Demodulator;	/* +0x1dc         */
 	V90Phase4Demodulator *phase4Demodulator;	/* +0x1e0         */
+
+	/*
+	 * +0x1e4..+0x20b is still nothing, and +0x20c IS A POINTER, added by
+	 * the VPcmFloModem batch.  `VPcmFloModem::getV90CpBits` loads the
+	 * demodulator out of the modem, loads this, and copies one word
+	 * inside what it points at (+0x78 to +0x7c) each time a CP sequence
+	 * finishes.  What it points at is not modelled anywhere; see
+	 * src/pump/v90/VPcmFloModem.cpp.
+	 *
+	 * The prefix grew from 0x1e4 to 0x210 and no offset moved.
+	 */
+	unsigned char pad_1e4[0x28];		/* +0x1e4 not modelled    */
+	void *ptr_20c;				/* +0x20c                 */
 };
 
 /*
@@ -127,7 +141,29 @@ public:
 
 	V90Modulator *modulator;		/* +0x0000 side == 0      */
 	V90Demodulator *demodulator;		/* +0x0004 side == 1      */
-	unsigned char pad_08[0x49b0];		/* +0x0008 not modelled   */
+
+	/*
+	 * +0x0008 and +0x49b4 were carved out of `pad_08` by the
+	 * VPcmFloModem batch, which reaches both through the V90Modem
+	 * EMBEDDED in a VPcmFloModem at +0x1758 -- so what that batch reads
+	 * as `this + 0x1760` and `this + 0x610c` is this object's +0x08 and
+	 * +0x49b4.  Neither is reached by anything in the setSessionFlag
+	 * chain; splitting them out moved no offset.
+	 *
+	 * `phase2Info` is a V90Phase2Info because
+	 * `VPcmFloModem::setPhaseIIinfo` fills the pointee's `pcmType`,
+	 * `rtd`, `maxTxPower`, `txPowerMeasurementPoint` and `L2` at
+	 * V90Phase2Info's own offsets for those five -- see
+	 * include/dsplib/V92Phase2Info.h for the rest of that argument.
+	 *
+	 * `ptr_49b4` is not typed: `VPcmFloModem::getUinfoValue` loads it and
+	 * reads a signed short at its +0x20, and nothing else in the blob
+	 * that this tree has read touches it.
+	 */
+	V90Phase2Info *phase2Info;		/* +0x0008                */
+	unsigned char pad_0c[0x49a8];		/* +0x000c not modelled   */
+	void *ptr_49b4;				/* +0x49b4                */
+
 	unsigned int sessionFlag;		/* +0x49b8                */
 	int side;				/* +0x49bc V90ModemSide   */
 };

@@ -45,5 +45,7 @@
  "v90prefilter":   ["src/pump/v90/V90PreFilter.cpp",
                                                  "build/test/t_v90prefilter"],
  "v90sessionflag": ["src/pump/v90/V90SessionFlag.cpp",
-                                                 "build/test/t_v90sessionflag"]
+                                                 "build/test/t_v90sessionflag"],
+ "vpcmflomodem":   ["src/pump/v90/VPcmFloModem.cpp",
+                                                 "build/test/t_vpcmflomodem"]
 }
