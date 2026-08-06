@@ -42,5 +42,7 @@
  "v90cd":           ["src/pump/v90/V90ConstellationDesigner.cpp",
                                                  "build/test/t_v90leaves"],
  "v90prefilter":   ["src/pump/v90/V90PreFilter.cpp",
-                                                 "build/test/t_v90prefilter"]
+                                                 "build/test/t_v90prefilter"],
+ "v90sessionflag": ["src/pump/v90/V90SessionFlag.cpp",
+                                                 "build/test/t_v90sessionflag"]
 }

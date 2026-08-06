@@ -14303,3 +14303,90 @@ than through the pointer, taking entry 15 as the reference level instead of
 14, starting the signature one entry later, and reversing the difference.
 `autoSelection`'s 38,322 differential checks were already there; this says
 they bite on the line that changed.
+
+### 267. The V.90 setSessionFlag chain: five classes, two of which embed
+
+`V90Modem::setSessionFlag` fans out to one of two halves, each of which fans
+out to its phase 3 and phase 4 parts. Five methods, 274 bytes, every one a
+store and a call -- and `tools/closure.py` reports the five together as
+CLOSED while any four of them are not, which is why they are one batch.
+
+```
+V90Modem            +0x49b8 flag; +0x49bc selects: 0 -> Modulator* at +0x00,
+                    1 -> Demodulator* at +0x04, anything else calls nothing
+V90Modulator        +0x28 flag; Phase3Modulator* at +0x38, Phase4Modulator* +0x3c
+V90Demodulator      edprintf FIRST, +0x30 flag; Phase3Demod* +0x1dc, Phase4Demod* +0x1e0
+V90Phase3Demodulator +0x08 flag; V90Phase3Modulator EMBEDDED at +0x34
+V90Phase4Demodulator +0x00 flag; V90Phase4Modulator EMBEDDED at +0x50
+```
+
+**The `add` before a tail call is the whole finding.** The two demodulators do
+`add $0x34,%eax` / `add $0x50,%eax` and jump; the modulator and demodulator do
+`mov 0x38(%esi),%edx` and pass what they loaded. One is a subobject, the other
+is a pointer, and the instruction that distinguishes them is the one that is
+absent -- there is no load. Both spellings compile to a call with a different
+first argument and only the differential test separates them; the mutation
+that swaps each for the other is caught.
+
+`V90Modem`'s selector is the constructor's `V90ModemSide` -- the mangling
+carries the type name, `V90Modem(V90ModemSide, ...)`. Which enumerator is 0
+and which is 1 it does not carry, so the field is spelled `int` and the values
+are named by what they do rather than an enum being invented (finding 226).
+The third case is real: `test`/`je`, `dec`/`je`, then fall through to `ret`,
+so any other value stores the flag and calls nothing.
+
+### 268. Four sizes that a displacement scan gets wrong
+
+Every other class in this task was sized from the largest `this`-relative
+displacement across all its members (finding 215). Run that scan over these
+five and it answers:
+
+```
+V90Phase3Demodulator  0xa948   cmpw $0x0,0xa948(%ecx)
+V90Phase4Demodulator  0xa95c   mov  0xa95c(%eax),%ecx
+V90Modulator          0x3ba8   mov  %ebx,0x3ba8(%eax)
+V90Demodulator        0x28230  lea  0x28230(%edx,%edx,4),%eax
+```
+
+**Not one of them is off `this`.** 0xa948 and 0xa95c are inside a
+`V90AutoDigitalImpDetector`, which is 0xa9b0 bytes (finding 251) and which
+both demodulators hold a pointer to; the two `lea`s have a scaled index and
+are table address computations, not member accesses.
+
+A scan that does not check the base register produces a number that looks
+exactly like a measurement and is not one. So no size is asserted for any of
+the five: the header models the prefix these methods touch, everything else is
+`pad_`, and the test compares the whole seeded slot instead of `sizeof`.
+
+That is not a weaker check. A size assertion only bounds where a store may
+land; comparing an identically-seeded slot catches a store **anywhere** in it,
+including past the last modelled field. The mutations that move each store to
+a neighbouring offset -- +0x00 for the phase 3 demodulator, +0x2c for the
+modulator and the demodulator, +0x49bc for the modem, +0x30 and +0x4c for the
+two embedded subobjects -- are all caught by exactly that comparison.
+
+### 269. Two uncaught mutations, both orderings that nothing can observe
+
+`tools/mutate.py --suite v90sessionflag`: 16 mutations, 14 caught. The two
+that survive are both about the order of two operations, and both are
+equivalent for a reason that can be stated rather than measured.
+
+**Printing before or after the store, in `V90Demodulator`.** The object emits
+its diagnostic at +0x17 and stores the flag at +0x23, so the field still holds
+the previous value while the line is printed. Moving the store first changes
+nothing, because the printed expression is the ARGUMENT and not the field.
+Held fixed: that it prints the argument -- and that is not assumed, it is the
+mutation `demodulator prints the field rather than the argument`, which IS
+caught. The pair is the point: one of them pins the value, and once it is
+pinned the order carries no information.
+
+**Reading `side` before or after storing `sessionFlag`, in `V90Modem`.**
++0x49b8 and +0x49bc are distinct members of one object, so a store to one
+cannot change the other, and the compiler knows it. Held fixed: that the two
+are distinct members. This is the same argument `V92EchoCanceller` records for
++0x2c and +0x38 (finding 246) -- there the object's own instruction order was
+reproducible without a temporary, and here it is reproducible with one.
+
+Neither is a test gap, and neither is licence to stop writing the object's
+order: the source keeps it in both cases, because the disassembly is what the
+reconstruction is of.
