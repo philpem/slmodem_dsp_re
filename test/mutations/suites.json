@@ -30,5 +30,7 @@
  "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"],
  "v90adid":        ["src/pump/v90/V90AutoDigitalImpDetector.cpp",
                                                  "build/test/t_v90adid"],
- "v90dil":         ["src/pump/v90/V90Dil.cpp",   "build/test/t_v90adid"]
+ "v90dil":         ["src/pump/v90/V90Dil.cpp",   "build/test/t_v90adid"],
+ "dilpack":        ["src/pump/v90/DILdescriptorPacker.cpp",
+                                                 "build/test/t_dilpack"]
 }

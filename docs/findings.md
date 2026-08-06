@@ -13754,6 +13754,7 @@ the template and GCC inlines it, so `build/src/**/*.o` defines no
 tree defines the template it instantiates -- which is a question about our
 source, not about the blob, and the tool has no way to ask it.
 
+<<<<<<< HEAD
 ### 251. `V90AutoDigitalImpDetector` is 43,440 bytes, and it is eight tables
 
 The largest `this`-relative displacement any of the class's **thirty-two**
@@ -13978,3 +13979,65 @@ ln -sfn /abs/path/to/other/third_party/spandsp third_party/spandsp
 Recorded because the failure appears *after* every differential test has
 passed, in the interop tier, and reads as a broken dependency rather than as a
 missing symlink.
+=======
+### 262. The DIL bit stream, and a length that carries the consequence but not the branch
+
+`DILdescriptorPacker` (3,278 bytes, a leaf) turns a `tagV90DILdescriptor` into
+a stream of one-bit-per-`short` values and writes the count back through a
+`short *`. The frame is **seventeen** bits: sixteen data bits and a framing
+zero. `seq1` starts at bit 52; the sixteen segment fields occupy
+`8 * 17 = 136` bits, two to a frame as seven bits, a zero, seven bits, a zero;
+the DIL codes follow at two per frame; and the CRC occupies the frame after
+the last DIL frame. The register starts all ones and covers the data bits of
+every frame from 1 up to but not including its own -- frame 0 is not covered,
+and if there is nothing to cover the register stays all ones.
+
+The tail is the interesting part:
+
+```c
+bits[crcAt + 17] = 0;
+if (crcAt & 1) {
+        bits[crcAt + 18] = 0;
+        *nbits = (short)(crcAt + 19);
+} else {
+        *nbits = (short)(crcAt + 18);
+}
+```
+
+**The count is even either way, and that broke an anti-vacuity check.** The
+test asserted the count is even -- correctly -- and then tried to witness the
+two tails with `(len - 18) & 1`, which the first assertion proves is
+identically zero. So "a stream ending two 0s past the CRC was reached" could
+never be set, whatever the trials contained; it was a tautology that failed
+rather than a check that worked. `len` carries the branch's *consequence* and
+not the branch.
+
+Recomputing `crcAt` in the test would mean recomputing
+`segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilCeiling(dilCount, 0.5f)`, which
+is the packer's own arithmetic asserted against itself. The branch is proved
+the other way instead, by mutation: `test/mutations/dilpack.json` forces each
+tail unconditionally and inverts the test, and the differential test catches
+all three.
+
+### 263. A store the object makes that nothing can observe
+
+`bits[crcAt] = 0` -- the framing zero of the frame the CRC goes in -- survives
+`tools/mutate.py --suite dilpack` uncaught over 160 descriptors (5 modes x 32
+shapes, including `dilCount == 0`), against an output buffer seeded with
+`0x5a00 + lfsr` rather than zeroed, so an unwritten position is visible.
+
+It is an equivalent mutant, and the reason is arithmetic. `DIL_FRAME` is 17,
+so the last DIL frame's own framing zero, `bits[at + 16] = 0` with
+`at = segmentAt + DIL_SEGMENT_BITS + 17 * (dilFrames - 1)`, lands on
+`segmentAt + DIL_SEGMENT_BITS + 17 * dilFrames - 1`, which is `crcAt` exactly.
+When `dilFrames` is 0 the segment block's own last framing zero sits at
+`segmentAt + DIL_SEGMENT_BITS - 1`, which is `crcAt` again.
+
+**Held fixed:** that every section preceding the CRC frame ends by writing a
+framing zero at its own last bit. That is a property of the original's frame
+layout, not of our reconstruction, so the store is redundant in the blob too
+-- worth recording as evidence about how the original was written rather than
+filed as an untested line. It stays in `src/` because it is in the object.
+
+7 of the suite's 8 mutations are caught; this is the eighth.
+>>>>>>> w1e_dil
