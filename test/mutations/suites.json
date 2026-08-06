@@ -27,5 +27,7 @@
  "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"],
  "v34info":        ["src/pump/v34/v34info.c",    "build/test/t_v34info"],
  "v34rx":          ["src/pump/v34/v34rx.c",      "build/test/t_v34rx"],
- "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"]
+ "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"],
+ "dilpack":        ["src/pump/v90/DILdescriptorPacker.cpp",
+                                                 "build/test/t_dilpack"]
 }
