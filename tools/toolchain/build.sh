@@ -19,6 +19,13 @@ SRC=$(MAKEFLAGS= make -s --no-print-directory print-SRC | sed 's/^SRC = //')
 CXXSRC=$(MAKEFLAGS= make -s --no-print-directory print-CXXSRC | sed 's/^CXXSRC = //')
 
 rm -rf "$OUT"; mkdir -p "$OUT"
+
+# Object name -> source path.  The names are the path with slashes turned into
+# underscores, which is NOT reversible: `src/core/dp_wrapper.c` and a directory
+# called `dp` produce the same string.  Record the mapping rather than guess it.
+for f in $SRC $CXXSRC; do
+    echo "$(echo "$f" | tr / _).o $f"
+done > "$OUT/../tc_manifest.txt"
 docker run --rm --platform linux/386 \
   -v "$PWD:/src" -v "$OUT:/out" -w /src dsplibs-tc sh -c "
     fail=0

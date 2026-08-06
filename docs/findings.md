@@ -14679,3 +14679,52 @@ printed its failure banner and exited 0, because `main()`'s return value was
 discarded at the bottom of the file. A gate whose exit code is always zero is
 decoration. Both directions are now asserted -- floor too high gives 1, floor
 at reality gives 0.
+
+### 350. The four biggest "undershoots" were all factoring, and one is worth keeping
+
+Task #68 took the four functions where our code generation falls furthest short
+of the object's and asked, for each, whether that is missing logic or merely a
+different shape. **None of the four is missing logic.** The interesting part is
+how three of them turned out to be the same measurement artefact as finding
+345, in a different tool.
+
+| function | per symbol | per file | verdict |
+|---|---|---|---|
+| `DialerProgress` | 1,865 / 3,321 | 4,233 / 4,320 | statics the original inlined; totals agree to 2% |
+| `probeselect` | 4,625 / 6,173 | 12,498 / 16,110 | same, 78% |
+| `v8handshak` | 824 / 4,243 | 3,247 / 4,243 | split across FILES -- `v8hsrx.c` holds the two long receive paths |
+| `RcFixed_Resample` | 454 / 2,640 | 970 / 3,896 | genuinely different, and verified equivalent -- below |
+
+`v8handshak` is the one that shows why a per-object rollup is not enough on its
+own. We put its two long receive paths in `v8hsrx.c`, a file whose functions
+have NO symbol in the blob at all, so nothing in either object says the two
+belong together. Per symbol it reads as 19% of the original; counted with its
+sibling it is 77%. `compare.py` now declares such splits in `TU_GROUPS`.
+
+**`RcFixed_Resample` is real and is not a defect.** The object's version is four
+times ours at file level and the difference is structural: it contains about
+thirteen separate copies of a two-loop convolution, each with its own scaling --
+`sar $0xd`, `$0xe`, `$0xf` and `$0x10` all appear, eight of them `>>15` -- where
+we have one generic loop that always shifts by 14 and gets its per-mode
+behaviour from tables. So the original specialised the inner product per rate
+combination and we did not.
+
+That is category "bit-exact, different structure", and it is verified as such
+rather than assumed: `t_rcresample` drives **all eighteen usable modes**
+sample-by-sample against the blob, plus ragged chunking, one-sample calls and
+the output-limit paths, and passes. Reproducing thirteen specialisations that
+compute the same numbers would make the source worse, not better.
+
+**What the tooling learned.** `compare.py` now prints a per-object rollup with
+the linkonce sections included -- the six weak-template files measured as zero
+against a real blob total until that was fixed, which would have read as six
+completely unreconstructed modules. The object-to-source mapping is recorded by
+`build.sh` rather than derived from the filename, because the encoding turns
+slashes into underscores and `src/core/dp_wrapper.c` came back as
+`src/core/dp/wrapper.c`.
+
+The honest summary of the exercise: the work-finder found no missing code among
+its top four, and its top four were mostly an artefact of how it counted. The
+per-object list it prints now is flatter and more trustworthy -- after
+`fixedrc.c` at 25%, everything is between 59% and 100%, which is the range
+different-but-equivalent factoring produces.

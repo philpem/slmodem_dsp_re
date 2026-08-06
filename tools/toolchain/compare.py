@@ -65,6 +65,24 @@ import sys
 RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "ratchet.json")
 
+#
+# TRANSLATION UNITS WE DELIBERATELY SPLIT, and the original did not.
+#
+# A per-symbol size comparison across an inlining boundary measures the
+# reconstruction's FACTORING, not its completeness -- the same trap
+# debugaudit.py fell into (finding 345).  Where we broke one of the original's
+# functions into static helpers, the helpers have no blob symbol, so their
+# bytes are counted against neither side and the blob's function shows the
+# whole difference as missing.  The per-object rollup below fixes that case on
+# its own.
+#
+# It cannot fix a split across FILES, because there is nothing in either object
+# to say the two belong together.  Those are declared here.  Finding 350.
+#
+TU_GROUPS = (
+    ("src/v8/v8handshak.c", "src/v8/v8hsrx.c"),
+)
+
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
 OURS = os.environ.get("TC_OUT", "/tmp/tc_out")
 
@@ -149,6 +167,61 @@ def main():
     print("\nWhere we emit the most:")
     for delta, b, o, k in rows[-5:]:
         print("  %+7d  blob %5d  ours %5d  %s" % (delta, b, o, k))
+
+    #
+    # PER OBJECT, which is the number to read before treating any single-symbol
+    # gap as missing code.
+    #
+    def obj_text(path):
+        """`.text` PLUS the linkonce sections -- the weak class templates put
+        every member in one of those and would otherwise measure as zero."""
+        out = subprocess.run(["size", "-A", path], capture_output=True,
+                             text=True).stdout
+        n = 0
+        for line in out.splitlines():
+            f = line.split()
+            if len(f) >= 2 and (f[0] == ".text"
+                                or f[0].startswith(".gnu.linkonce.t.")):
+                n += int(f[1])
+        return n
+
+    # build.sh records object -> source; the underscore encoding is not
+    # reversible (`dp_wrapper.c` would come back as `dp/wrapper.c`).
+    manifest = {}
+    try:
+        for line in open(os.path.join(OURS, "..", "tc_manifest.txt")):
+            o, s = line.split()
+            manifest[o] = s
+    except OSError:
+        pass
+
+    def srcname(path):
+        b = os.path.basename(path)
+        return manifest.get(b, b[:-2].replace("_", "/"))
+
+    # Every object, not only those with a symbol in common: a file we split out
+    # of one of the original's functions has NO symbol the blob shares, so
+    # keying on `common` would drop exactly the file that explains the gap.
+    per = {}
+    for path in sorted(glob.glob(os.path.join(OURS, "*.o"))):
+        b = sum(blob[k] for k in sizes(path) if k in blob)
+        per[srcname(path)] = [b, obj_text(path)]
+    for group in TU_GROUPS:
+        present = [g for g in group if g in per]
+        if len(present) > 1:
+            b = sum(per[g][0] for g in present)
+            o = sum(per[g][1] for g in present)
+            for g in present[1:]:
+                del per[g]
+            per[present[0] + " (+%d split out)" % (len(present) - 1)] = [b, o]
+            del per[present[0]]
+
+    rank = sorted(((100.0 * o / b, b, o, s) for s, (b, o) in per.items() if b))
+    print("\nPER OBJECT -- a helper the original inlined cannot hide here."
+          "\nRead this before treating a single-symbol gap as missing code:")
+    for pct, b, o, s in rank[:8]:
+        print("  ours %5.0f%% of the blob   blob %6d  ours %6d  %s"
+              % (pct, b, o, s))
 
     now = {"identical": len(identical), "same_size": len(samesize),
            "compared": len(common)}
