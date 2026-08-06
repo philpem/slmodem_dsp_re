@@ -100,12 +100,40 @@ closed.
 
 ### When you land a case
 
-Define `V34HS_OURS` and side A becomes `v34handshak` instead of
-`ref_v34handshak`. Every test written against the fixture becomes an ordinary
-tier-1 differential test with no other edit anywhere. Until then the harness
-is proving *itself*, which is the point: a per-case agent needs to know the
-fixture is deterministic, address independent and fully seeded before its own
-failures mean anything.
+Call `v34hs_ours(1)` in your test and side A becomes `v34handshak` instead of
+`ref_v34handshak`; your test is then an ordinary tier-1 differential test with
+no other edit anywhere. The default is off, which leaves the harness proving
+*itself* -- a per-case agent needs to know the fixture is deterministic,
+address independent and fully seeded before its own failures mean anything.
+
+**It is a run-time switch and not `-DV34HS_OURS`, and the reason is not
+style.** One `v34hsstep.o` is linked into every test binary, so the macro
+would move side A for `t_v34hsstep.c` too, whose whole claim is a
+blob-against-blob property over forty-three cases most of which have no
+reconstruction. Finding 356. `V34HS_OURS` still compiles and now sets the
+default.
+
+**`v34handshak` is partial and HALTS on an arm nobody has written.**
+`t3c_unwritten()` calls `abort`. So a test that turns the switch on must drive
+only states some batch has landed, which today are:
+
+```
+  table 3   the arm 24 states share (0x6590b) and the default (0x65329)
+            62 RX_PHASE3_CALL, 79 MOH_TONE, 80 MOH_TONE_DROP
+  table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
+            0x62a40 that every arm of that dispatch falls into
+  the rest  halts
+```
+
+**Pick your txstate for the tail you want.** Every table-3 arm ends in the
+transmit dispatch, so a microstate case is a microstate arm AND a transmit
+arm. txstates 75, 76, 77, 81, 85 and 86 are above table 2's window and select
+its default, which is written; anything in 5..74 needs that arm to exist.
+`t_v34hst3core.c` uses MOH_SILENCE (81) and says so.
+
+**Aim a pointer with `v34hs_poke_self_ptr`, never `v34hs_poke_int`.** The two
+objects are at different addresses, so one address written into both is
+precisely the asymmetry findings 319-322 are about.
 
 ### Three things the fixture already learned so you do not
 
@@ -144,11 +172,11 @@ when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 | 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D |
 | 63 `INFODONE` | 0x6591e | 1115 | group B |
 | 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces |
-| 79 `MOH_TONE` | 0x657ca | 848 | group G |
-| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G |
+| 79 `MOH_TONE` | 0x657ca | 848 | group G -- LANDED |
+| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G -- LANDED |
 | 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D |
-| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces |
-| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B |
+| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces -- LANDED |
+| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B -- LANDED |
 
 Seven distinct behaviours from seventeen representatives -- a property of the
 fixture's seed as well as of the object, so a different fill could separate
@@ -163,6 +191,11 @@ one more or one fewer. The groups:
   F  62                        }
   G  79, 80
 ```
+
+**Group D is six DIFFERENT arms, not one.** 48, 49, 50, 51, 55 and 58 have
+six distinct entries in `.rodata+0x3000` -- 0x65d30, 0x66a0d, 0x664b8,
+0x65c47, 0x65b72, 0x66003 -- and none of them is 0x6590b. Their agreeing cold
+is the fill's doing. Finding 351.
 
 **Group B and group D are the shape of the machine, not a harness defect.**
 The arm twenty-four states share is three instructions -- read txstate, jump to

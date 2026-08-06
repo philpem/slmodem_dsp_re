@@ -161,6 +161,12 @@ void *v34hs_object(int side);
 void v34hs_poke_short(unsigned off, short v);
 void v34hs_poke_int(unsigned off, int v);
 void v34hs_poke_byte(unsigned off, unsigned char v);
+/*
+ * Aim a pointer field inside the object at that side's own object plus
+ * `target`.  A raw address written into both sides would make the two
+ * geometries differ, which is the one thing this fixture exists to avoid.
+ */
+void v34hs_poke_self_ptr(unsigned off, unsigned target);
 short v34hs_peek_short(int side, unsigned off);
 
 /*
@@ -175,6 +181,16 @@ void v34hs_refinit(int on);
  * Turn the diagnostics on for both sides.  `v34handshak` indexes `StateName`
  * unbounded (D42), so every state word must stay in 0..86 while this is on.
  */
+/*
+ * Put THIS TREE'S `v34handshak` on side A instead of the blob's, for this
+ * binary only.  Off by default, which is the fixture proving itself.
+ *
+ * `v34handshak` is partial and halts on an arm nobody has written, so a test
+ * that turns this on must drive only states some batch has landed;
+ * docs/v34handshak.md says which.
+ */
+void v34hs_ours(int on);
+
 void v34hs_debug(int on);
 
 #ifdef __cplusplus

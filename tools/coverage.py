@@ -74,6 +74,23 @@ import re
 import subprocess
 import sys
 
+# Symbols we define only IN PART, and which therefore must not be counted.
+#
+# A symbol's whole `st_size` lands in `translated` the moment a definition of
+# that name exists, which is right for a function reconstructed in one go and
+# very wrong for one being landed a dispatch case at a time: `v34handshak` is
+# 61,541 bytes, 8.4% of .text, and defining a skeleton with four arms in it
+# moved this report from 21.2% to 29.6% for a few hundred bytes of work.
+#
+# So a partial symbol is excluded from BOTH figures and listed on its own.
+# An entry here is a promise to remove it: when the last arm lands, the line
+# goes and the bytes arrive.  Reported per name rather than per byte because
+# nobody can honestly say how many of the 61,541 are written.
+PARTIAL = {
+    "v34handshak": "landed one dispatch arm at a time (#56-#58); an arm "
+                   "nobody has written calls abort",
+}
+
 # Symbols we define that the object has no counterpart for, and why that is
 # expected rather than drift.  Anything not matching these is reported.
 BENIGN = (
@@ -262,6 +279,12 @@ def main():
     done_g = {n: s for n, s in gl.items() if n in ours}
     done_l = {n: s for n, s in lo.items() if n in ours}
 
+    # Partial ones out of both figures, and named below instead.
+    partial = {n: s for n, s in list(done_g.items()) + list(done_l.items())
+               if n in PARTIAL}
+    done_g = {n: s for n, s in done_g.items() if n not in PARTIAL}
+    done_l = {n: s for n, s in done_l.items() if n not in PARTIAL}
+
     # A file-local symbol that got a `ref_` alias can be called by name and so
     # belongs in the denominator; one that did not, cannot and does not.
     done_la = {n: s for n, s in done_l.items() if n in aliased}
@@ -301,6 +324,16 @@ def main():
     add("  the file-local symbols too -- %d of ours (%d bytes)."
         % (len(done_la), sum(done_la.values())))
     add("")
+
+    if partial:
+        add("  defined here only IN PART, and so counted in NEITHER figure")
+        add("  above -- the whole symbol size would land in `translated` the")
+        add("  moment a definition exists, which for a function being written")
+        add("  one dispatch case at a time is a claim nobody made:")
+        for name in sorted(partial):
+            add("    %-30s %6d bytes   %s"
+                % (name, partial[name], PARTIAL[name]))
+        add("")
 
     untested = sorted(((s, n) for n, s in drivable.items() if n not in tested),
                       reverse=True)
@@ -347,7 +380,10 @@ def main():
         # file-local ones out of "what is left" as well as out of the
         # denominator, which understated both.
         for name, (size, _kind) in blob.items():
-            if name in ours:
+            # A PARTIAL symbol is still work left, and dropping its whole
+            # translation unit out of this list because a skeleton exists
+            # would hide 62 KB of it.
+            if name in ours and name not in PARTIAL:
                 continue
             area = area_of(addr.get(name, -1), tus)
             rest.setdefault(area, [0, 0])
