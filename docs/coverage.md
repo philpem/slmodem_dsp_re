@@ -55,6 +55,9 @@ dsplibs.o reconstruction coverage
     v34tx1_jatxmit
     v34tx1_k56jatxmit
     v34tx1_moh_silence
+    v34tx1_ppseg
+    v34tx1_sbarseg
+    v34tx1_silence
     v34tx1_sseg
     v34tx1_tone_ab
     v34tx1_tx_l1

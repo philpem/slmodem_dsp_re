@@ -245,6 +245,19 @@ int bitreverse(unsigned short v, short nbits);
  */
 void receiver(void *obj);
 
+/*
+ * The PP sequence, `.rodata + 0x2c80`: forty-eight complex points packed
+ * (re, im), every one of magnitude 6476 at a multiple of 60 degrees.
+ *
+ * GLOBAL in the object because it has TWO readers with two different element
+ * widths -- `receiver` slices against it as ninety-six shorts, and table 1's
+ * 20 `PPSEG` (v34hstx1.cpp) transmits it as forty-eight four-byte points.
+ * Declared here, defined in v34rx.c, and proved against `ref_vectpp` in
+ * t_v34hstx1.c.
+ */
+#define V34_VECTPP_POINTS	48
+extern const short vectpp[2 * V34_VECTPP_POINTS];
+
 #ifdef __cplusplus
 }
 #endif

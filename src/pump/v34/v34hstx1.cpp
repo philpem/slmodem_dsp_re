@@ -1,5 +1,6 @@
 /*
- * v34hstx1.cpp -- ten arms of `v34handshak`'s per-sample transmit dispatch.
+ * v34hstx1.cpp -- thirteen arms of `v34handshak`'s per-sample transmit
+ * dispatch.
  *
  * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding 217's rule rather
  * than a choice.  78 `JaTXMIT` tail-calls `v90Phase34` and 85 `K56JaTXMIT`
@@ -68,6 +69,7 @@
 #include "dsplib/v34fsk.h"	/* struct v34_object, struct v34_ratecfg */
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
 #include "dsplib/v34hstx1.h"
+#include "dsplib/v34info.h"	/* V34SetINFO0aBits                       */
 #include "dsplib/v34recv.h"	/* struct v34_receiver                    */
 #include "dsplib/v34rx.h"	/* txmit, txwritequeue, V34scrambler      */
 #include "dsplib/v34shell.h"	/* modulatevector                         */
@@ -103,6 +105,9 @@
  */
 #define TX1_F358C	0x358c
 
+/* +0x3594, the RXSTATE (finding 213).  74's retrain is its only writer here. */
+#define TX1_RXSTATE	0x3594
+
 /*
  * +0x3592, the MICROSTATE (finding 213).  51 is the one arm here that reads
  * a state word belonging to another machine: it selects between two copies of
@@ -117,6 +122,56 @@
  * (v34hstxblock.c's `TB_F2218`); 70 is a writer of it.
  */
 #define TX1_F2218	0x2218
+
+/*
+ * +0x358e and +0x35a4, two more words of `unmapped_3564`.
+ *
+ * +0x358e is a SEGMENT COUNTER shared by 19 and 20: 20 counts it up to six
+ * and 19 clears it, both on the pass that changes `txstate`.  +0x35a4 is the
+ * length 19 scales by 0x53 into +0x35a6, and zero there is what sends 19 to
+ * PPSEG instead of TXMD.  Neither has another reader in this tree.
+ */
+#define TX1_F358E	0x358e
+#define TX1_F35A4	0x35a4
+
+/*
+ * +0xaa7a, +0xaa7c and +0xaa86, the three words of the `unmapped_aa78` /
+ * `unmapped_aa80` region these arms touch besides the counter at +0xaa78.
+ * 5/54/74 clears +0xaa7a before it writes the queue; 20 adds +0xaa7c into the
+ * counter and accumulates +0xaa86.  `rtd` at +0xaa7e is named in
+ * `struct v34_object` and is reached as a field.
+ */
+#define TX1_FAA7A	0xaa7a
+#define TX1_FAA7C	0xaa7c
+#define TX1_FAA86	0xaa86
+
+/*
+ * +0xaae0 and +0xaae2.  `struct v34_object` names them `fsk.nbits` and
+ * `fsk.sr` because the FSK demodulator reaches them that way; the handshake
+ * uses them as two words of its own -- v34hshak.c's table-3 core reaches them
+ * by offset as `T3C_FAAE0` and `T3C_FAAE2` for the same reason, and 74's
+ * retrain writes -1 and 0 into them.  Reached by offset here so that the
+ * name of the other reader is not asserted to be the meaning here.
+ */
+#define TX1_FAAE0	0xaae0
+#define TX1_FAAE2	0xaae2
+
+/*
+ * +0xabe8, a BYTE.  `v34handshakinit`'s Modem-on-Hold bring-up sets it to one
+ * (v34hshak.c:1441) and 74's retrain tests it to choose which microstate the
+ * handshake restarts in.  The object reads it with `cmpb`.
+ */
+#define TX1_FABE8	0xabe8
+
+/*
+ * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
+ * `v34handshakinit` aims the same pair on its mode-4 path (v34hshak.c:1451),
+ * and 54's completion aims it again before handing the record to
+ * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
+ * and checks it by offset instead (finding 324).
+ */
+#define TX1_PTR_AA6C	0xaa6c
+#define TX1_BLK_A94C	0xa94c
 
 /*
  * +0x238 and +0x248, two of the four words of the sample-clock timer in
@@ -629,4 +684,424 @@ v34tx1_tx_l1(void *objp)
 	/* 0x62d32 */
 	o->vect_idx = 0;
 	return V34TX1_LOOP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 19 `SBARSEG`, 0x6296d, with the segment's end at 0x671f0 and its four ways
+ * out at 0x67236, 0x68375, 0x69eca and 0x6783e.
+ *
+ * TWO SYMBOLS PER PASS, `vect4[2]` then `vect4[1]`, each with its own `txmit`
+ * -- 18 `SSEG`'s shape with a different pair.  `vect4` is (+,+) (+,-) (-,-)
+ * (-,+), so 18 sends (+,+) then (-,+) and 19 sends (-,-) then (+,-): the S
+ * segment and the S-bar segment are the same alternation with both points
+ * negated, which is what the bar in the name is.
+ *
+ * The segment is eight symbol PAIRS long, `f25c0` counting them, and the
+ * count is compared as sixteen bits BEFORE the store -- the object stores
+ * `%ax` only on the path that does not reach eight, and the completing path
+ * clears the field at 0x671f2 instead.  So a reconstruction that stored first
+ * and then compared would leave 8 behind where the object leaves 0.
+ *
+ * FOUR WAYS OUT OF THE COMPLETION, tested in this order and no other:
+ *
+ *   f25c2 & 0x2000      -> TRNSEG4A                          (0x67209)
+ *   f35a4 == 0          -> PPSEG                             (0x68375)
+ *   f25c2 & 0x8000      -> PPSEG, and f25c0 = f35a6 first    (0x69eca)
+ *   otherwise           -> TXMD, after f35a6 = f35a4 * 0x53,
+ *                          the modulator and the counter     (0x6783e)
+ *
+ * and all four converge on 0x67236, which zeroes `vect_idx` and +0x358e.
+ * The first test is `test $0x20,%dh` on the halfword loaded at 0x671f9, which
+ * is bit 13 and not bit 5; the third is `test %dx,%dx` / `js` on the SAME
+ * register, so it is bit 15 of `f25c2` read as a sign.
+ *
+ * THE MODULATOR'S SIX ARGUMENTS ARE ALL LITERALS -- 4800 baud, 2400 carrier,
+ * no pre-emphasis, `v90` zero, no reset (0x67890..0x678be).  There is no rate
+ * configuration to seed and finding 216's 3200-baud discipline has nothing to
+ * bite on here: `v90` is a constant zero, so the one rate that reads it is not
+ * the rate this arm asks for.  4800 is a real case in `V34SetupModulator` --
+ * `txAllPass` at 0x20 taps -- and it is the one case that leaves `prem` NULL,
+ * so `m->ec_prem` is not written.
+ *
+ * THE COUNTER AT +0xaa78 IS A TIME, and the object computes it in fixed point
+ * without touching the FPU:
+ *
+ *     67878..678db   esi = (0x5e8 - f25c) << 14
+ *     678dd..678e7   the 0x1b4e81b5 / `sar $0xa` / `sub` sequence, which is
+ *                    signed division by 9600 truncating toward zero
+ *     678e9          movswl %dx  -- the quotient is TRUNCATED TO A SHORT
+ *     678ec..67909   * 0x960, >> 14, + 0x96
+ *
+ * so it is `(1512 - f25c) * 2400 / 9600 + 150` carried through a sixteen-bit
+ * intermediate.  1512 and 9600 are sample counts at 9600 Hz; the truncation is
+ * reachable, because the quotient leaves a short once `1512 - f25c` passes
+ * 19,200, and `t_v34hstx1.c` drives it there.
+ *
+ * ONE STORE IS NOT MODELLED AND CANNOT BE.  0x6784d spills 0x53 to
+ * `0x48(%esp)`, a slot `v34handshak` reuses in nineteen other places and that
+ * nothing on this path reads again.  It is stack rather than object state, so
+ * no comparison here can see it.
+ */
+int
+v34tx1_sbarseg(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned short n;
+
+	tx1_put_point(o, vect4[2]);
+	txmit(o);
+	tx1_put_point(o, vect4[1]);
+	txmit(o);
+
+	n = (unsigned short)((unsigned short)o->f25c0 + 1);
+	if (n != 8) {
+		o->f25c0 = (short)n;
+		return V34TX1_LOOP;		/* 0x629c8 */
+	}
+
+	/* 0x671f0 */
+	o->f25c0 = 0;
+	if ((unsigned short)o->f25c2 & 0x2000u) {
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4A)
+			tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+	} else if (tx1_get(o, TX1_F35A4) == 0) {
+		/* 0x68375 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_PPSEG)
+			tx1_put(o, TX1_TXSTATE, V34HS_PPSEG);
+	} else if ((unsigned short)o->f25c2 & 0x8000u) {
+		/* 0x69eca */
+		o->f25c0 = tx1_get(o, TX1_SEGLEN);
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_PPSEG)
+			tx1_put(o, TX1_TXSTATE, V34HS_PPSEG);
+	} else {
+		/* 0x6783e */
+		int span;
+		short q;
+
+		tx1_put(o, TX1_SEGLEN,
+			(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_TXMD)
+			tx1_put(o, TX1_TXSTATE, V34HS_TXMD);
+
+		/* 0x67885 */
+		V34SetupModulator((struct v34_modulator *)
+				  ((char *)o + TX1_MODULATOR),
+				  4800, 2400, 0, 0, 0);
+
+		/*
+		 * `(0x5e8 - f25c) << 14` with the subtraction done in an int.
+		 * Spelled through `unsigned` because the left shift of a
+		 * negative int is undefined in C and the object's `shl` is
+		 * not; the bits are the same either way.
+		 */
+		span = (int)((unsigned)(0x5e8 - o->f25c) << 14);
+		q = (short)(span / 9600);
+		tx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));
+	}
+
+	/* 0x67236 */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_F358E, 0);
+	return V34TX1_LOOP;			/* 0x63948 */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 20 `PPSEG`, 0x642bf, continuing at 0x66d57 and 0x680ac.
+ *
+ * ONE POINT OF `vectpp` PER PASS, and the index is `vect_idx` itself rather
+ * than a mask: `movswl 0x2aa2(%ebp),%esi` then `mov 0x0(,%esi,4),%edx`, so the
+ * table is read as FORTY-EIGHT FOUR-BYTE ENTRIES where v34rx.c reads the same
+ * bytes as ninety-six shorts.  That is the same (re, im)-in-one-int packing
+ * `vect4` has, and it is why `vectpp` is global in the object.
+ *
+ * The index is SIGN-EXTENDED and not bounded, so the arm is only safe for
+ * `vect_idx` in 0..47; the object gets there by clearing the field at 0x66d76
+ * every time it reaches 48, and nothing else in table 1 leaves PPSEG entered
+ * with a larger one.
+ *
+ * THREE NESTED COUNTERS, and the innermost is the one the loop rejoins with:
+ *
+ *   vect_idx  0..0x30    one pass of the PP sequence
+ *   +0x358e   0..6       six passes make the segment
+ *   f25c0                bumped at 0x6430c on the two paths that do NOT end
+ *                        the segment, and NOT on the one that does
+ *
+ * That last asymmetry is the arm's shape.  0x6430c is the shared block 86
+ * also rejoins through (finding 340), and the segment's end leaves through
+ * 0x63da2 instead, which writes nothing -- so a reconstruction that bumped
+ * f25c0 on every path is wrong on exactly one of the three.
+ *
+ * WHAT THE SEGMENT'S END DOES, at 0x680ac.  `vect_idx` is reloaded from `rtd`
+ * plus 0x90 -- not cleared -- and then +0xaa86 is set from a SCALED COPY of
+ * that same value, chosen by the rate configuration's baud at +0xaa84:
+ *
+ *     2400  >> 2          3000  * 0x1400 >> 14      3429  * 0x16dc >> 14
+ *     2800  * 0x12ab >> 14        3200  * 0x1555 >> 14
+ *
+ * which are `baud / 9600` in Q14 to within a count: 0x1000, 0x12ab, 0x1400,
+ * 0x1555 and 0x16dc over 0x4000 are 0.25, 0.2917, 0.3125, 0.3333 and 0.3572
+ * against 2400, 2800, 3000, 3200 and 3429 over 9600.  Any other baud leaves
+ * +0xaa86 alone, and that is a real arm and not an oversight: the field is
+ * still read three instructions later.
+ *
+ * THE COUNTER AT +0xaa78 IS 19'S ARITHMETIC WITH THE BAUD IN PLACE OF THE
+ * SHIFT.  19 computes `(0x5e8 - f25c) << 14` and this computes
+ * `(0x5e8 - f25c) * baud`, both divided by 9600 through the same
+ * 0x1b4e81b5 / `sar $0xa` sequence -- signed, truncating toward zero.  Then
+ * three terms are added: f25c0, +0xaa7c, and a literal one, plus `rtd` again
+ * when `f359c == 0x65`.  The quotient is NOT truncated to a short here, where
+ * 19 truncates it; the object stores it through `%dx` but keeps the 32-bit
+ * value in `%edx` for the sum, which is the difference.
+ *
+ * ONE STORE IS OVERWRITTEN ON BOTH PATHS.  0x6818d puts the raw quotient in
+ * +0xaa78 and 0x681bf or 0x69277 replaces it before anything reads it.  It is
+ * written here as the object writes it and a mutation deleting it is
+ * equivalent, recorded as one.
+ */
+int
+v34tx1_ppseg(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	int i = o->vect_idx;			/* movswl 0x2aa2 */
+	int point;
+
+	memcpy(&point, &vectpp[2 * i], sizeof(point));
+	o->vect_idx = (short)(i + 1);
+	tx1_put_point(o, point);
+	txmit(o);
+
+	if ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {
+		/* 0x66d57 */
+		unsigned short n = (unsigned short)
+			((unsigned short)tx1_get(o, TX1_F358E) + 1);
+
+		if (n != 6) {
+			tx1_put(o, TX1_F358E, (short)n);
+			o->vect_idx = 0;
+		} else {
+			/* 0x680ac */
+			struct v34_ratecfg *cfg = (struct v34_ratecfg *)
+						  ((char *)o + V34_RATECFG);
+			short v = (short)((unsigned short)o->rtd + 0x90);
+			short baud = cfg->baud;
+			int span, q, acc;
+
+			o->vect_idx = v;
+			switch ((unsigned short)baud) {
+			case 2400:
+				tx1_put(o, TX1_FAA86, (short)(v >> 2));
+				break;
+			case 2800:
+				tx1_put(o, TX1_FAA86,
+					(short)(((int)v * 0x12ab) >> 14));
+				break;
+			case 3000:
+				tx1_put(o, TX1_FAA86,
+					(short)(((int)v * 0x1400) >> 14));
+				break;
+			case 3200:
+				tx1_put(o, TX1_FAA86,
+					(short)(((int)v * 0x1555) >> 14));
+				break;
+			case 3429:
+				tx1_put(o, TX1_FAA86,
+					(short)(((int)v * 0x16dc) >> 14));
+				break;
+			default:
+				break;
+			}
+
+			/* 0x680fd */
+			tx1_put(o, TX1_F358E, 0);
+			tx1_put(o, TX1_FAA86,
+				(short)((unsigned short)tx1_get(o, TX1_FAA86)
+					+ 0x120));
+			if (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4)
+				tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4);
+
+			/* 0x68154 */
+			span = (0x5e8 - o->f25c) * (int)baud;
+			q = span / 9600;
+			tx1_put(o, TX1_COUNT, (short)q);	/* 0x6818d */
+
+			acc = q + (unsigned short)tx1_get(o, TX1_FAA7C)
+				+ (unsigned short)o->f25c0 + 1;
+			if (o->f359c == 0x65)			/* 0x6926d */
+				acc += (unsigned short)o->rtd;
+			tx1_put(o, TX1_COUNT, (short)acc);
+
+			/* 0x681c6 */
+			tx1_put(o, TX1_FAA86,
+				(short)((unsigned short)tx1_get(o, TX1_FAA86)
+					+ (unsigned short)tx1_get(o, TX1_COUNT)));
+			return V34TX1_LOOP;		/* 0x63da2 */
+		}
+	}
+
+	/* 0x6430c */
+	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+	return V34TX1_LOOP;			/* 0x6431f */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 5 `SILENCE`, 54 `SILENCEINFO` and 74 `SILENCERETRAIN`, 0x640b4.
+ *
+ * ONE TABLE ENTRY AND THREE BEHAVIOURS, which is not what one entry usually
+ * means here.  `.rodata+0x2da0` gives indices 0, 49 and 69 -- txstates 5, 54
+ * and 74 -- the identical address, and the shared prologue then RE-READS
+ * `txstate` at 0x640f4 and branches on it:
+ *
+ *     0x4a  74  -> 0x66b87, the retrain
+ *     0x36  54  -> 0x6410b, the INFO0a countdown
+ *     else   5  -> 0x6409a, the loop, having done the prologue and no more
+ *
+ * So the three are one entry, one prologue and three tails, and a test that
+ * drove only one of them would be testing a third of the arm.  The shared
+ * prologue is four zero samples into the transmit queue and one clear of
+ * +0xaa7a -- 81 `MOH_SILENCE`'s shape, with the extra clear and without the
+ * `vect_idx` tick.
+ *
+ * They are written as one function with the read inside it, rather than as
+ * three entry points, because the read IS the object: 78 and 85 above are two
+ * entries with one body and this is one entry with one body, and the
+ * difference between those two shapes is worth keeping visible.
+ *
+ * ---------------------------------------------------------------------------
+ * 54, at 0x6410b.  `vect_idx` counts ten silent blocks and then, at 0x6858f:
+ * clear it, move the transmit machine to TX_DPSK, aim the self-pointer at
+ * +0xa94c, and hand that record to `V34SetINFO0aBits` -- which fills its
+ * first three shorts -- before writing eleven more fields of it directly.
+ *
+ * ONE OF THOSE ELEVEN IS CONDITIONAL and the rest are not: +0x18 is 0x1e when
+ * `f359c == 0x65` AND `v90_receiver` is non-zero (0x69fcf), and 0x11
+ * otherwise (0x685eb).  The two blocks are otherwise the same twelve stores
+ * in the same order and rejoin at 0x68616, which is why they are one body
+ * here.  `v90_receiver` is read as `*(int *)(obj+0x24c)` off `0x78(%esp)`,
+ * which is the OBJECT PLUS FOUR -- it is that field alone and not the
+ * `+0x24c || +0x250` pair 86 computes.
+ *
+ * ---------------------------------------------------------------------------
+ * 74, at 0x66b87.  `vect_idx` counts 0xb4 silent blocks -- and is STORED
+ * BEFORE the comparison, where 19's count is stored only on the path that
+ * does not complete -- and then restarts the handshake: microstate, rxstate
+ * and txstate all move, `vect_idx`, +0x358c and +0xaa78 are cleared, and
+ * +0xaae2 and +0xaae0 are set to -1 and 0.
+ *
+ * WHICH MICROSTATE IT RESTARTS IN IS THE ONE THREE-WAY CHOICE.  +0xabe8
+ * non-zero -- `v34handshakinit`'s Modem-on-Hold flag -- gives MOH_TONE;
+ * otherwise the object computes it arithmetically at 0x68a99:
+ *
+ *     sete %bl ; movzbl %bl,%eax ; dec %eax ; and $0xfffffff4,%eax
+ *     lea 0x3a(%eax),%ebx
+ *
+ * from `f359c == 0x65`, which is 0x3a when the compare held and 0x2e when it
+ * did not: RX_PHASE1_CALL for the originating side and TX_PHASE1_ANS for the
+ * answering one, which is the same `f359c` reading probeselect uses.
+ *
+ * THE txstate COMPARE AT 0x66c10 CANNOT BE FALSE and is written as the object
+ * writes it: it tests the value read at 0x640f4, which is 0x4a on this path
+ * by construction, against 0x3c.  Nothing between the two writes +0x3596, so
+ * comparing the saved value and re-reading the field are the same thing here;
+ * deleting the compare is an equivalent mutation and is recorded as one.
+ */
+int
+v34tx1_silence(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	short quiet[4];
+	short txst;
+	unsigned short n;
+
+	quiet[0] = 0;
+	quiet[1] = 0;
+	quiet[2] = 0;
+	quiet[3] = 0;
+	tx1_put(o, TX1_FAA7A, 0);
+	txwritequeue(&o->txq, quiet);
+
+	txst = tx1_get(o, TX1_TXSTATE);
+
+	if (txst == V34HS_SILENCERETRAIN) {
+		/* 0x66b87 */
+		short want;
+
+		n = (unsigned short)((unsigned short)o->vect_idx + 1);
+		o->vect_idx = (short)n;
+		if (n != 0xb4)
+			return V34TX1_LOOP;		/* 0x63da2 */
+
+		/* 0x66ba1 */
+		if (*((unsigned char *)o + TX1_FABE8) != 0)
+			want = V34HS_MOH_TONE;
+		else					/* 0x68a7c */
+			want = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL
+						: V34HS_TX_PHASE1_ANS;
+		if (tx1_get(o, TX1_MICROSTATE) != want)
+			tx1_put(o, TX1_MICROSTATE, want);
+
+		/* 0x66be0 */
+		if (tx1_get(o, TX1_RXSTATE) != V34HS_RX_DPSK)
+			tx1_put(o, TX1_RXSTATE, V34HS_RX_DPSK);
+		/* 0x66c10 */
+		if (txst != V34HS_TONE_AB)
+			tx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);
+
+		/* 0x66c32 */
+		tx1_put(o, TX1_F358C, 0);
+		o->vect_idx = 0;
+		tx1_put(o, TX1_COUNT, 0);
+		tx1_put(o, TX1_FAAE2, -1);
+		tx1_put(o, TX1_FAAE0, 0);
+		return V34TX1_LOOP;			/* 0x63941 */
+	}
+
+	if (txst != V34HS_SILENCEINFO)
+		return V34TX1_LOOP;			/* 0x6409a */
+
+	/* 0x6410b */
+	n = (unsigned short)((unsigned short)o->vect_idx + 1);
+	if (n != 0xa) {
+		o->vect_idx = (short)n;
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	/* 0x6858f */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);
+	*(short **)((char *)o + TX1_PTR_AA6C) =
+		(short *)((char *)o + TX1_BLK_A94C);
+	V34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));
+
+	{
+		/*
+		 * RE-READ, not the pointer just stored, because that is what
+		 * the object does at 0x685f2 and 0x69fe1 -- the same reading
+		 * v34hshak.c:1459 records for `v34handshakinit`'s copy of
+		 * this sequence.  `V34SetINFO0aBits` does not write +0xaa6c,
+		 * so nothing observable turns on it.
+		 */
+		char *r = (char *)*(short **)((char *)o + TX1_PTR_AA6C);
+		short lead = (o->f359c == 0x65 && o->v90_receiver != 0)
+			     ? 0x1e : 0x11;
+
+		*(short *)(r + 0x14) = -1;
+		*(short *)(r + 0x1a) = 0;
+		*(short *)(r + 0x1e) = 0;
+		*(short *)(r + 0x22) = 0;
+		*(short *)(r + 0x18) = lead;
+		/* 0x68616 */
+		*(short *)(r + 0x1c) = 8;
+		*(short *)(r + 0x16) = 1;
+		*(short *)(r + 0x28) = 0x10;
+		*(short *)(r + 0x2a) = 0x10;
+		*(short *)(r + 0x20) = 0;
+		*(int *)(r + 0x24) = 0xff72;
+		*(int *)(r + 0x2c) = 0xff72;
+	}
+
+	tx1_put(o, TX1_F358C, 0);
+	return V34TX1_LOOP;				/* 0x640a1 */
 }

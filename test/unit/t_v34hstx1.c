@@ -1,6 +1,6 @@
 /*
- * t_v34hstx1.c -- ten arms of `v34handshak`'s per-sample transmit dispatch,
- * each compared against the blob on its own.
+ * t_v34hstx1.c -- thirteen arms of `v34handshak`'s per-sample transmit
+ * dispatch, each compared against the blob on its own.
  *
  * ---------------------------------------------------------------------------
  * HOW ONE ARM IS COMPARED WHEN THE FUNCTION AROUND IT IS NOT WRITTEN.
@@ -92,21 +92,41 @@
 #define TX1_RATEIDX	0xaa98		/* short: the negotiated rate index*/
 #define TX1_RXF21C	0x0480		/* receiver +0x21c, short          */
 #define TX1_RXF220	0x0484		/* receiver +0x220, int            */
+#define TX1_F25C	0x025c		/* the echo filter's lag base      */
+#define TX1_F358E	0x358e		/* 19 clears it, 20 counts it to 6 */
+#define TX1_F35A4	0x35a4		/* 19 scales it by 0x53            */
+#define TX1_FAA7C	0xaa7c		/* 20 adds it into the counter     */
+#define TX1_RTD		0xaa7e		/* 20 reloads vect_idx from it     */
+#define TX1_FAA86	0xaa86		/* 20 accumulates into it          */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
 
-/* A companion field to set before the arm runs; `wide` selects a 32-bit one. */
+/*
+ * A companion field to set before the arm runs.  `kind` is 0 for a halfword,
+ * 1 for a 32-bit one and 2 for a POINTER, which has to be aimed per side --
+ * the two objects are at two addresses, so one address written into both is
+ * exactly the asymmetry findings 319-322 are about.
+ */
 struct tx1_poke {
 	unsigned	off;
 	int		val;
-	int		wide;
+	int		kind;
 };
 
 #define P16(o, v)	{ (o), (v), 0 }
 #define P32(o, v)	{ (o), (v), 1 }
+#define PSELF(o, t)	{ (o), (int)(t), 2 }
+#define P8(o, v)	{ (o), (v), 3 }
 
 static int dump;
 static unsigned char before[sizeof(struct v34_object)];
+
+/*
+ * A per-case fixup that runs after the bring-up and outside the object.
+ * Only 54's completion needs one; it is NULL for every other case and the
+ * ten arms that landed before this one never see it.  See `aim_session`.
+ */
+static void (*fixup)(void);
 
 static void
 apply(short txst, const struct tx1_poke *p, int np)
@@ -117,11 +137,17 @@ apply(short txst, const struct tx1_poke *p, int np)
 	v34hs_route(V34HS_ROUTE_TXSAMPLE, 1);
 	v34hs_state(V34HS_PHASE1, V34HS_SILENCE, txst);
 	for (i = 0; i < np; i++) {
-		if (p[i].wide)
+		if (p[i].kind == 3)
+			v34hs_poke_byte(p[i].off, (unsigned char)p[i].val);
+		else if (p[i].kind == 2)
+			v34hs_poke_self_ptr(p[i].off, (unsigned)p[i].val);
+		else if (p[i].kind)
 			v34hs_poke_int(p[i].off, p[i].val);
 		else
 			v34hs_poke_short(p[i].off, (short)p[i].val);
 	}
+	if (fixup != NULL)
+		fixup();
 }
 
 /*
@@ -476,6 +502,462 @@ case_sseg(void)
 		 "18 SSEG, counting past 0x40", 1802, sseg, NP(sseg));
 }
 
+/* --- 19 SBARSEG ----------------------------------------------------------- */
+
+/*
+ * Two symbols and one tick of the PAIR count, and then four ways out of the
+ * completion tested in the object's own order.  Everything the arm writes is
+ * seeded away from what it stores:
+ *
+ *   +0x25d0    to neither `vect4[2]` nor `vect4[1]`
+ *   f25c0      to 7 on the completing runs, so the clear at 0x671f2 shows,
+ *              and away from 7 on the counting ones
+ *   +0x35a6    to a value that is neither zero nor `f35a4 * 0x53`, which is
+ *              what makes the bit-15 run's `f25c0 = f35a6` visible AND the
+ *              TXMD run's recomputation visible
+ *   +0xaa78    to a value the counter arithmetic does not produce
+ *   `vect_idx` and +0x358e non-zero, because 0x67236 clears both
+ *
+ * `f25c2` carries the two guard bits and is seeded with a third bit set that
+ * neither path touches, so a reconstruction that assigned the word rather
+ * than testing it is caught by the byte comparison.
+ *
+ * THE MODULATOR NEEDS NO RATE POKED.  All six arguments are literals in the
+ * object -- 4800 baud, 2400 carrier, no pre-emphasis, `v90` zero -- so unlike
+ * 86 there is no configuration to drive and no `v90` argument to compute
+ * either way.  Finding 216's 3200-baud rule is about a rate this arm never
+ * asks for.
+ */
+#define SBARSEG_SEED							\
+	P32(TX1_F25D0, 0x11223344),	P16(TX1_SEGLEN, 0x0555),	\
+	P16(TX1_COUNT, 0x0777),		P16(TX1_VECTIDX, 0x0123),	\
+	P16(TX1_F358E, 0x0456)
+
+static struct tx1_poke sbarseg[] = {
+	SBARSEG_SEED, P16(TX1_F25C0, 0x10), P16(TX1_F25C2, 0x0101),
+	P16(TX1_F35A4, 0x1234), P16(TX1_F25C, 0x0100)
+};
+#define SB_C0	5
+#define SB_C2	6
+#define SB_A4	7
+#define SB_25C	8
+
+static void
+run_sbarseg(int c0, int c2, int a4, int f25c, const char *what, long tag)
+{
+	sbarseg[SB_C0].val = c0;
+	sbarseg[SB_C2].val = c2;
+	sbarseg[SB_A4].val = a4;
+	sbarseg[SB_25C].val = f25c;
+	run_case(V34HS_SBARSEG, v34tx1_sbarseg, V34TX1_LOOP, what, tag,
+		 sbarseg, NP(sbarseg));
+}
+
+static void
+case_sbarseg(void)
+{
+	/*
+	 * Counting.  The second run is at f25c0 == 8, which is the run that
+	 * tells the object's `== 8` after the increment from a `>= 8`: the
+	 * count goes to 9 and the segment does NOT end.
+	 */
+	run_sbarseg(0x10, 0x0101, 0x1234, 0x0100,
+		    "19 SBARSEG, counting", 1900);
+	run_sbarseg(8, 0x0101, 0x1234, 0x0100,
+		    "19 SBARSEG, counting past 8", 1901);
+
+	/*
+	 * The four completions, in the order the object tests them.  The
+	 * first is bit 13 of f25c2 -- `test $0x20,%dh`, which is bit 5 of the
+	 * HIGH byte -- and a reading of it as bit 5 of the word would take
+	 * the wrong branch on 0x0121 as well as on 0x2101.
+	 */
+	run_sbarseg(7, 0x2101, 0x1234, 0x0100,
+		    "19 SBARSEG, complete, f25c2 bit 13 -> TRNSEG4A", 1902);
+	run_sbarseg(7, 0x0121, 0x1234, 0x0100,
+		    "19 SBARSEG, complete, bit 13 clear with bit 5 set", 1903);
+	run_sbarseg(7, 0x0101, 0, 0x0100,
+		    "19 SBARSEG, complete, f35a4 zero -> PPSEG", 1904);
+	run_sbarseg(7, 0x8101, 0x1234, 0x0100,
+		    "19 SBARSEG, complete, f25c2 bit 15 -> PPSEG, f25c0 = f35a6",
+		    1905);
+
+	/*
+	 * And the fourth, which is the only path that reaches the modulator
+	 * and the counter.  Four values of +0x25c, because the counter is a
+	 * signed division and each one separates a different misreading:
+	 *
+	 *   0x0100   an ordinary positive span
+	 *   0x1388   1512 - 5000, NEGATIVE, and the quotient is not exact --
+	 *            the object truncates toward zero where a floor would
+	 *            give one less
+	 *   0xb1e0   -20000 as a short: 1512 - (-20000) leaves a quotient
+	 *            that does NOT fit a short, which is what the `movswl`
+	 *            at 0x678e9 is for
+	 *   0x7530   30000: negative span AND a quotient outside a short
+	 */
+	run_sbarseg(7, 0x0101, 0x1234, 0x0100,
+		    "19 SBARSEG, complete -> TXMD, positive span", 1906);
+	run_sbarseg(7, 0x0101, 0x1234, 5000,
+		    "19 SBARSEG, complete -> TXMD, negative span", 1907);
+	run_sbarseg(7, 0x0101, 0x1234, -20000,
+		    "19 SBARSEG, complete -> TXMD, quotient past a short", 1908);
+	run_sbarseg(7, 0x0101, 0x1234, 30000,
+		    "19 SBARSEG, complete -> TXMD, both at once", 1909);
+
+	/*
+	 * The 0x53 scale, at a value whose product does not fit sixteen bits:
+	 * 0x1234 * 0x53 is 0x5e71c and the object stores 0xe71c.
+	 */
+	run_sbarseg(7, 0x0101, 0x0203, 0x0100,
+		    "19 SBARSEG, complete -> TXMD, small f35a4", 1910);
+}
+
+/* --- 20 PPSEG ------------------------------------------------------------- */
+
+/*
+ * `vect_idx` IS PINNED INTO 0..47 ON EVERY RUN, and for the reason 70's is:
+ * the object indexes `vectpp` with a SIGN-EXTENDED `vect_idx` and no mask, so
+ * an unpinned run reads outside a 192-byte table.  That is a fault rather
+ * than a failure, and a fault has no offset in it.
+ *
+ * Everything the arm writes is seeded away from what it stores: the point at
+ * +0x25d0 to a word that is no entry of `vectpp`; f25c0, +0x358e, +0xaa78 and
+ * +0xaa86 to values none of the three paths produces.
+ *
+ * The three paths are told apart by f25c0 as much as by anything else -- the
+ * two that do not end the segment bump it at 0x6430c and the one that does
+ * leaves through 0x63da2, which writes nothing.
+ */
+#define PPSEG_SEED							\
+	P32(TX1_F25D0, 0x11223344),	P16(TX1_F25C0, 0x1234),		\
+	P16(TX1_COUNT, 0x0777),		P16(TX1_FAA86, 0x0555),		\
+	P16(TX1_FAA7C, 0x0037),		P16(TX1_F25C, 0x0100)
+
+static struct tx1_poke ppseg[] = {
+	PPSEG_SEED, P16(TX1_VECTIDX, 0x10), P16(TX1_F358E, 2),
+	P16(TX1_RTD, 0x0011), P16(TX1_RATECFG + 0x00, 3200),
+	P16(TX1_F359C, 0x64)
+};
+#define PP_IDX	6
+#define PP_58E	7
+#define PP_RTD	8
+#define PP_BAUD	9
+#define PP_59C	10
+
+static void
+run_ppseg(int idx, int f358e, int rtd, int baud, int f359c, int f25c,
+	  const char *what, long tag)
+{
+	ppseg[5].val = f25c;			/* the last of PPSEG_SEED */
+	ppseg[PP_IDX].val = idx;
+	ppseg[PP_58E].val = f358e;
+	ppseg[PP_RTD].val = rtd;
+	ppseg[PP_BAUD].val = baud;
+	ppseg[PP_59C].val = f359c;
+	run_case(V34HS_PPSEG, v34tx1_ppseg, V34TX1_LOOP, what, tag,
+		 ppseg, NP(ppseg));
+}
+
+static void
+case_ppseg(void)
+{
+	/*
+	 * Inside a pass.  Two indices, because one point tells nothing about
+	 * the scale: entry 0x10 is (-3238, 5609) and entry 0 is (6476, 0),
+	 * and a reconstruction indexing by shorts rather than by four-byte
+	 * points sends a different word for the first and the same for the
+	 * second.
+	 */
+	run_ppseg(0x10, 2, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, inside a pass", 2000);
+	run_ppseg(0, 2, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, the first point of the pass", 2001);
+	run_ppseg(0x2e, 2, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, one before the last point", 2002);
+
+	/*
+	 * The pass ends at 48.  +0x358e counts, `vect_idx` is cleared, and
+	 * f25c0 is still bumped.  The second run is at +0x358e == 6, which
+	 * separates the object's `== 6` after the increment from a `>= 6`.
+	 */
+	run_ppseg(0x2f, 2, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, the pass ends, +0x358e counts", 2003);
+	run_ppseg(0x2f, 6, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, the pass ends past six", 2004);
+
+	/*
+	 * The segment ends: one run per baud the object recognises, plus one
+	 * it does not.  The unrecognised run is NOT a filler -- it is the one
+	 * that says +0xaa86 keeps its own value through the switch and is
+	 * still read three instructions later.
+	 */
+	run_ppseg(0x2f, 5, 0x11, 2400, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 2400 baud", 2005);
+	run_ppseg(0x2f, 5, 0x11, 2800, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 2800 baud", 2006);
+	run_ppseg(0x2f, 5, 0x11, 3000, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 3000 baud", 2007);
+	run_ppseg(0x2f, 5, 0x11, 3200, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 3200 baud", 2008);
+	run_ppseg(0x2f, 5, 0x11, 3429, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at 3429 baud", 2009);
+	run_ppseg(0x2f, 5, 0x11, 1234, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends at an unknown baud", 2010);
+
+	/*
+	 * `f359c == 0x65` adds `rtd` into the counter a SECOND time, having
+	 * already put it into `vect_idx`, so a run at 0x65 with the same
+	 * `rtd` is what separates the two uses.
+	 */
+	run_ppseg(0x2f, 5, 0x11, 3200, 0x65, 0x0100,
+		  "20 PPSEG, the segment ends, f359c 0x65", 2011);
+
+	/*
+	 * `rtd + 0x90` NEGATIVE, which is the `cwtl` at 0x6928e and friends:
+	 * the scaled copy is an arithmetic shift of a sign-extended halfword,
+	 * and a `movzwl` reading of it agrees on every non-negative value.
+	 */
+	run_ppseg(0x2f, 5, -0x200, 2400, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends, rtd negative at 2400", 2012);
+	run_ppseg(0x2f, 5, -0x200, 3429, 0x64, 0x0100,
+		  "20 PPSEG, the segment ends, rtd negative at 3429", 2013);
+
+	/*
+	 * And the counter's division, which is 19's with the baud in place of
+	 * the shift: 0x1388 makes `0x5e8 - f25c` negative and inexact, so the
+	 * object's truncation toward zero and a floor differ by one.
+	 */
+	run_ppseg(0x2f, 5, 0x11, 3200, 0x64, 5000,
+		  "20 PPSEG, the segment ends, negative span", 2014);
+	run_ppseg(0x2f, 5, 0x11, 3429, 0x64, -20000,
+		  "20 PPSEG, the segment ends, large span", 2015);
+}
+
+/* --- 5 SILENCE, 54 SILENCEINFO, 74 SILENCERETRAIN ------------------------- */
+
+/*
+ * ONE TABLE ENTRY, THREE CASES, AND THEY ARE INDEPENDENT.  The brief this
+ * batch was written to expected 54 and 74 to be "the same check under a
+ * different index"; they are not.  `.rodata+0x2da0` gives indices 0, 49 and
+ * 69 the identical address, and the shared prologue then RE-READS +0x3596 and
+ * branches on it, so each of the three runs a different tail.  The entry's
+ * identity is asserted below in `case_silence_entry`; the three behaviours
+ * are asserted by driving them, and each of the three can fail while the
+ * other two pass.
+ */
+#define TX1_FAA7A	0xaa7a		/* cleared by the shared prologue  */
+#define TX1_FABE8	0xabe8		/* byte: the Modem-on-Hold flag    */
+#define TX1_PTR_AA6C	0xaa6c		/* the self-pointer 54 aims        */
+#define TX1_BLK_A94C	0xa94c		/* the record it is aimed at       */
+#define TX1_BLK_A97C	0xa97c		/* somewhere else to aim it first  */
+#define TX1_MSTATE	0x3592
+#define TX1_RXSTATE	0x3594
+
+/*
+ * The twelve fields of the record at +0xa94c that 54's completion writes
+ * directly, plus the three `V34SetINFO0aBits` fills.  Every one is seeded to
+ * something the arm does not store, which is finding 345's rule: eleven of
+ * task #16's mutations were uncatchable until the fixture stopped agreeing
+ * with the arm by accident.
+ */
+#define A94C_SEED							\
+	P16(TX1_BLK_A94C + 0x00, 0x0101), P16(TX1_BLK_A94C + 0x02, 0x0202), \
+	P16(TX1_BLK_A94C + 0x04, 0x0303),				\
+	P16(TX1_BLK_A94C + 0x14, 0x0404), P16(TX1_BLK_A94C + 0x16, 0x0505), \
+	P16(TX1_BLK_A94C + 0x18, 0x0606), P16(TX1_BLK_A94C + 0x1a, 0x0707), \
+	P16(TX1_BLK_A94C + 0x1c, 0x0808), P16(TX1_BLK_A94C + 0x1e, 0x0909), \
+	P16(TX1_BLK_A94C + 0x20, 0x0a0a), P16(TX1_BLK_A94C + 0x22, 0x0b0b), \
+	P32(TX1_BLK_A94C + 0x24, 0x0c0c0c0c),				\
+	P16(TX1_BLK_A94C + 0x28, 0x0d0d), P16(TX1_BLK_A94C + 0x2a, 0x0e0e), \
+	P32(TX1_BLK_A94C + 0x2c, 0x0f0f0f0f)
+
+/* What 74's retrain clears, moves or sets, all seeded away from it. */
+#define RETRAIN_SEED							\
+	P16(TX1_F358C, 0x1234), P16(TX1_COUNT, 0x0777),			\
+	P16(0xaae0, 0x1111), P16(0xaae2, 0x2222)
+
+/*
+ * THE SESSION, and it is here because `V34SetINFO0aBits` walks it.
+ *
+ * With `v90_receiver` non-zero the callee reaches
+ * `*(session_ptr(sess, SESSION_CAPS) + 0x11)` (v34info.c:244) or the upstream
+ * block at +9, and the fixture fills the session with pseudorandom bytes and
+ * aims only its pointer to the PCM receiver -- so those two fields are wild
+ * and the run would FAULT rather than fail, on both sides.  The two runs that
+ * drive `v90_receiver` non-zero therefore aim both at one shared static.
+ *
+ * THAT KEEPS THE TWO SIDES CONGRUENT, which is the property findings 319-322
+ * are about: a pointer into each side's own arena would make the session
+ * blocks differ and the arena sweep would fail.  One address in both sessions
+ * is the same four bytes in both, and the callee reads the same byte on each
+ * side.  The variant word is pinned for the same reason a poke is preferred
+ * to a fill anywhere else -- so the case does not depend on the seed.
+ */
+#define TX1_SESSPTR	0x3548
+#define SESS_VARIANT	0x6120
+#define SESS_CAPS	0x612c
+#define SESS_UPSTREAM	0x1760
+
+static unsigned char sess_stub[64];
+
+static void
+aim_session(void)
+{
+	int side;
+
+	for (side = 0; side < 2; side++) {
+		char *o = (char *)v34hs_object(side);
+		char *s;
+		const void *stub = sess_stub;
+
+		memcpy(&s, o + TX1_SESSPTR, sizeof(s));
+		memcpy(s + SESS_VARIANT, &(int){ 1 }, sizeof(int));
+		memcpy(s + SESS_CAPS, &stub, sizeof(stub));
+		memcpy(s + SESS_UPSTREAM, &stub, sizeof(stub));
+	}
+}
+
+static struct tx1_poke silence[] = {
+	A94C_SEED, RETRAIN_SEED,
+	P16(TX1_FAA7A, 0x3333), PSELF(TX1_PTR_AA6C, TX1_BLK_A97C),
+	P16(TX1_VECTIDX, 3), P16(TX1_F359C, 0x64), P32(TX1_V90RX, 0),
+	P8(TX1_FABE8, 0)
+};
+#define SI_IDX	(NP(silence) - 4)
+#define SI_59C	(NP(silence) - 3)
+#define SI_V90	(NP(silence) - 2)
+#define SI_E8	(NP(silence) - 1)
+
+static void
+run_silence(short txst, int idx, int f359c, int v90, int abe8,
+	    const char *what, long tag)
+{
+	silence[SI_IDX].val = idx;
+	silence[SI_59C].val = f359c;
+	silence[SI_V90].val = v90;
+	silence[SI_E8].val = abe8;
+	fixup = v90 != 0 ? aim_session : NULL;
+	run_case(txst, v34tx1_silence, V34TX1_LOOP, what, tag,
+		 silence, NP(silence));
+	fixup = NULL;
+}
+
+static void
+case_silence(void)
+{
+	/*
+	 * 5 SILENCE is the prologue and nothing else: four zero samples and
+	 * the clear of +0xaa7a, which is seeded non-zero so the clear shows.
+	 * It is the whole arm for that txstate, and driving 54 or 74 does not
+	 * test it -- their tails run on top of the same prologue but the
+	 * "wrote something" guard cannot separate the two contributions.
+	 */
+	run_silence(V34HS_SILENCE, 3, 0x64, 0, 0,
+		    "5 SILENCE, the prologue alone", 500);
+
+	/* 54: nine blocks of counting, then the tenth. */
+	run_silence(V34HS_SILENCEINFO, 3, 0x64, 0, 0,
+		    "54 SILENCEINFO, counting", 5400);
+	run_silence(V34HS_SILENCEINFO, 0xa, 0x64, 0, 0,
+		    "54 SILENCEINFO, counting past ten", 5401);
+	run_silence(V34HS_SILENCEINFO, 9, 0x64, 0, 0,
+		    "54 SILENCEINFO, the tenth block, f359c 0x64", 5402);
+	/*
+	 * The 0x1e store needs BOTH `f359c == 0x65` and `v90_receiver`
+	 * non-zero, so three more runs: neither half of the conjunction can
+	 * stand in for it.  It is `v90_receiver` ALONE and not the
+	 * `+0x24c || +0x250` pair 86 computes, which is why there is no
+	 * K56flex run here.
+	 */
+	run_silence(V34HS_SILENCEINFO, 9, 0x65, 0, 0,
+		    "54 SILENCEINFO, the tenth block, f359c 0x65, no V.90",
+		    5403);
+	run_silence(V34HS_SILENCEINFO, 9, 0x65, 1, 0,
+		    "54 SILENCEINFO, the tenth block, f359c 0x65 and V.90",
+		    5404);
+	run_silence(V34HS_SILENCEINFO, 9, 0x64, 1, 0,
+		    "54 SILENCEINFO, the tenth block, V.90 without f359c",
+		    5405);
+
+	/*
+	 * 74: 0xb3 blocks of counting, then the retrain.  +0xabe8 is read
+	 * with `cmpb`, so it is poked as a BYTE -- a halfword poke would set
+	 * +0xabe9 too and say nothing about the width the object reads.
+	 */
+	run_silence(V34HS_SILENCERETRAIN, 3, 0x64, 0, 0,
+		    "74 SILENCERETRAIN, counting", 7400);
+	run_silence(V34HS_SILENCERETRAIN, 0xb4, 0x64, 0, 0,
+		    "74 SILENCERETRAIN, counting past 0xb4", 7401);
+	run_silence(V34HS_SILENCERETRAIN, 0xb3, 0x64, 0, 0,
+		    "74 SILENCERETRAIN, retrain -> TX_PHASE1_ANS", 7402);
+	run_silence(V34HS_SILENCERETRAIN, 0xb3, 0x65, 0, 0,
+		    "74 SILENCERETRAIN, retrain -> RX_PHASE1_CALL", 7403);
+	run_silence(V34HS_SILENCERETRAIN, 0xb3, 0x64, 0, 1,
+		    "74 SILENCERETRAIN, retrain -> MOH_TONE", 7404);
+	/*
+	 * NOT A FIFTH BEHAVIOUR, and named rather than counted: +0xabe8
+	 * non-zero wins over `f359c`, so this run must produce exactly what
+	 * 7404 produces.  It separates "the flag is tested first" from "the
+	 * two are combined", and it cannot fail while 7404 passes.
+	 */
+	run_silence(V34HS_SILENCERETRAIN, 0xb3, 0x65, 0, 1,
+		    "74 SILENCERETRAIN, retrain, the flag beats f359c", 7405);
+}
+
+/*
+ * THE ENTRY IS SHARED, AND THAT IS A PROPERTY OF THE OBJECT AND NOT OF THIS
+ * FILE.  `.rodata+0x2da0` is 0x1a0 bytes past `probe`, which the blob exports
+ * at `.rodata+0x2c00`, and the three indices are `txstate - 5`.  Reading the
+ * table this way rather than trusting a comment is what makes a later change
+ * that gave 54 its own arm a FAILURE here rather than a silence.
+ *
+ * The entries are addresses inside `v34handshak`, so the second check pins
+ * the target as well as the sharing: 0x640b4 - 0x628f0.
+ */
+extern const short ref_probe[V34_PROBE_SAMPLES];
+extern void ref_v34handshak(void *obj);
+
+/*
+ * `volatile` so that the offset arithmetic below is done at run time.  With a
+ * plain `const char *` the compiler knows `ref_probe` is 64 shorts long and
+ * warns that 0x1a0 bytes past it is outside the array -- which is true and is
+ * the point: the anchor names a place in `.rodata`, not an object to index.
+ */
+static const char *volatile rodata_2c00 = (const char *)ref_probe;
+
+static void
+case_silence_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+
+	diff_eq_int("table 1: txstates 5 and 54 share one entry",
+		    t1[5 - 5] == t1[54 - 5], 1, 5490);
+	diff_eq_int("table 1: txstates 5 and 74 share one entry",
+		    t1[5 - 5] == t1[74 - 5], 1, 5491);
+	diff_eq_int("table 1: that entry is v34handshak + 0x17c4",
+		    (int)(t1[5 - 5] - base), 0x640b4 - 0x628f0, 5492);
+}
+
+/*
+ * `vectpp` IS DATA THIS TREE ALREADY HAD AND DID NOT PROVE.  It was static in
+ * v34rx.c, where `receiver` slices against it as ninety-six shorts; 20 PPSEG
+ * reads the same bytes as forty-eight four-byte points, which is why the blob
+ * exports it and why it is global now.  Proved against `ref_vectpp` the way
+ * `probe` and `vect4` are: the fifteen PPSEG runs read four of the
+ * forty-eight entries and the memcmp covers the other forty-four.
+ */
+extern const short ref_vectpp[2 * V34_VECTPP_POINTS];
+
+static void
+case_vectpp_table(void)
+{
+	diff_eq_int("vectpp, 96 shorts at .rodata+0x2c80",
+		    memcmp(vectpp, ref_vectpp, sizeof(vectpp)), 0, 2099);
+}
+
 /* --- 70 DATAXMIT ---------------------------------------------------------- */
 
 /*
@@ -625,8 +1107,6 @@ case_tx_l1(void)
  * 13,027 to 13,028 leaves every emitted sample identical and fails ONLY the
  * memcmp.  That was run rather than argued.
  */
-extern const short ref_probe[V34_PROBE_SAMPLES];
-
 static void
 case_probe_table(void)
 {
@@ -656,6 +1136,11 @@ main(void)
 
 	case_tone_ab();
 	case_sseg();
+	case_sbarseg();
+	case_ppseg();
+	case_vectpp_table();
+	case_silence_entry();
+	case_silence();
 	case_dataxmit();
 	case_probe_table();
 	case_tx_l1();
