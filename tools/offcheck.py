@@ -49,7 +49,7 @@ OBJECT_RELATIVE = {"v8_v21_params"}
 # object after every operation.  A wrong offset shows up as a failure on
 # real data rather than as a compile-time assertion about our own header.
 #
-SKIP_HEADERS = ("DiffCoder.h", "DspMath.h", "FloatFIR.h", "FloatIIR.h", "GenericIIR.h", "LowPassFIR.h", "Queue.h", "Scrambler.h", "SineWave.h", "V90Jd.h", "V90Phase3Modulator.h", "V90PreFilter.h", "V92Jd.h")
+SKIP_HEADERS = ("Agc.h", "DiffCoder.h", "DspMath.h", "FloatFIR.h", "FloatIIR.h", "GenericIIR.h", "LowPassFIR.h", "Queue.h", "Scrambler.h", "SineWave.h", "V90Jd.h", "V90Phase3Modulator.h", "V90PreFilter.h", "V92Jd.h")
 
 
 def headers():

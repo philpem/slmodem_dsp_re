@@ -14552,3 +14552,65 @@ compile the natural form with 3.4 and compare.
 That is the standing value of the container: not a second test tier, but an
 oracle for questions of the form "did the author write this, or did their
 compiler do it?", which the differential tier cannot answer even in principle.
+
+### 348. `Agc<float>`, and three readings that no ordinary input can separate
+
+Four weak symbols, 282 bytes, the last thing in the object with no
+reconstruction on any branch. A block AGC: it applies one gain to every sample
+and, once per `blockLen` samples, re-measures the block's mean square and
+nudges the gain towards what would bring it to `ref`.
+
+    gain <- alpha*gain + (1 - alpha)*sqrt(ref/level)
+
+`alpha == 1` makes that the identity, and the object also tests for it
+explicitly, so **1.0 is the frozen state** -- and it is what `reset` leaves
+behind, so a freshly reset AGC is frozen at unity gain until someone writes a
+real pole into the field. A NaN pole is frozen too: the compare is
+`fcom`/`fnstsw`/`sahf`/`jne` with no parity check, so unordered reads as "not
+equal". Writing the guard as `alpha != T(1)` instead costs 126,261 mismatches.
+
+`savedAlpha` is written by `freeze()` and **read by nothing in the entire
+object**. For an implicitly instantiated template member that means the
+matching `unfreeze()` was declared and never called: `V90Demodulator`
+reactivates by poking `alpha` from its parameter block directly. The absence of
+a destructor symbol says the same kind of thing -- an implicit destructor is
+only omitted when it is trivial, so nothing here is owned and nothing virtual.
+
+**Three readings that ordinary inputs cannot separate, and what it took.** The
+object divides by taking a reciprocal and multiplying, twice --
+`(1/blockLen)*acc` and `(1/lvl)*ref` -- which is the author's, not the
+optimiser's: no combination of `-ffast-math`, `-funsafe-math-optimizations` or
+`-freciprocal-math` performs that rewrite, because GCC's reciprocal pass wants
+several divisions by one divisor. The difference against a plain divide is
+about 2^-64 and vanishes in the rounding to `float` almost everywhere.
+
+- `acc/blockLen` **is** separated here, by four denormal witnesses found by
+  exhaustive search: with `blockLen == 500`, `acc = 0x000002ee` gives `level`
+  0x00000001 through the reciprocal and 0x00000002 through the divide. Only
+  non-power-of-two block lengths can do it -- a power of two divides exactly --
+  which is why the sweep's other lengths find nothing.
+- `ref/lvl` **is not separated by this suite.** The subagent's probe did
+  separate it, at 20 mismatches out of 6.4M, using a purpose-built
+  cancellation amplifier (`alpha = 2` with `gain` pre-set to `t/2`, so the two
+  terms nearly annihilate and a 2^-64 difference survives the rounding). That
+  case is not reproduced in `t_agc`, so the reading rests on the object's bytes
+  -- `de f2` is FDIVRP (finding 245) -- and on the probe, not on this tier.
+  Recorded rather than left looking verified, per finding 215.
+- The `lvl > 1e-10f` guard against `>=` needs `lvl` to land exactly on the
+  constant: `blockLen = 1`, `acc = 0x2edbe6ff`, no samples. Nine mismatches.
+
+The subagent's run was 6,466,255 comparisons with a 24-mutation table; `t_agc`
+re-verifies in-tree at 1,846,000 checks over seven blocks, and four mutations
+were run against it here. Two of the 24 were at zero kills until those cases
+were built for deliberately, which is the whole argument for the practice: had
+the probe stopped at "zero kills, presumably equivalent", three unproven
+readings would have shipped looking verified.
+
+**A defect in the caller, for whoever owns `V90Demodulator`.** Its `reset` (at
+`0x1c038`-`0x1c04c`) calls `agc.reset()` and only *then* writes `blockLen` from
+`params+0x64`. `reset` has already copied the OLD `blockLen` into `count`, so
+the counter is left out of step with the new block length: the first block after
+the first reset runs for the constructor's 500 samples rather than the
+configured length. It self-corrects on every later reset, since `params` is
+constant. Not fixed here -- `V90Demodulator` belongs to the V.90 work -- and
+recorded so that it is found rather than rediscovered.
