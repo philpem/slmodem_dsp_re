@@ -1521,6 +1521,90 @@ main(void)
 						     + (re + 12000) / 5100)
 						    * 100000 + b);
 			}
+
+			/*
+			 * THE RENEGOTIATION WINDOW, which this sweep misses by
+			 * three.
+			 *
+			 * decoderv34 sets the 0x100 flag whenever f798 is
+			 * below -64, and announces it only in the open window
+			 * -70 < f798 < -64.  The seed above is
+			 * `-60 - re / 3000`, and `re` stops at 8400, so f798
+			 * never goes below -62 -- close enough to look
+			 * deliberate and never inside the window.
+			 *
+			 * Five values: three inside, one on each side.  -64 is
+			 * the boundary the guard excludes, and -75 sets the
+			 * flag with no announcement, which is the case that
+			 * separates "the flag was set" from "the flag was
+			 * announced".
+			 */
+			{
+				static const short reneg[] = {
+					-64, -65, -67, -69, -75
+				};
+				unsigned q;
+
+				unsigned lv;
+
+				/*
+				 * WITH THE LEVEL UP.  This whole block runs at
+				 * level 0 otherwise, where the announcement is
+				 * gated off -- so driving the branch would
+				 * leave the site as dead as before.
+				 */
+				for (lv = 1; lv <= 2; lv++)
+				for (q = 0; q < sizeof(reneg) / sizeof(reneg[0]);
+				     q++) {
+					long tag = (((long)fl * 100
+						     + (re + 12000) / 5100)
+						    * 1000 + reneg[q] + 100)
+						   * 10 + lv;
+
+					ra->f798 = rb->f798 = reneg[q];
+					ra->flags = rb->flags = flags;
+
+					dsplibs_debug_level = lv;
+					ref_dsplibs_debug_level = lv;
+					dsplib_debug_capture_on = 1;
+					dsplib_debug_capture_reset();
+					decoderv34(&oa);
+					ref_decoderv34(&ob);
+					dsplib_debug_capture_on = 0;
+					dsplibs_debug_level = 0;
+					ref_dsplibs_debug_level = 0;
+
+					diff_eq_int("reneg flags", ra->flags,
+						    rb->flags, tag);
+					diff_eq_int("reneg f218", ra->f218,
+						    rb->f218, tag);
+					diff_eq_int("reneg f798", ra->f798,
+						    rb->f798, tag);
+					diff_eq_int("reneg transcripts agree",
+						    strcmp(
+						      dsplib_debug_capture_text(0),
+						      dsplib_debug_capture_text(1))
+						    == 0, 1, tag);
+					/*
+					 * Three conditions have to hold at
+					 * once, and leaving out the first is
+					 * what made this assertion fail: the
+					 * whole block sits inside
+					 * `(flags & 0x98) == 0x98`, which
+					 * only fl == 7 produces.  Then the
+					 * open window -70 < f798 < -64, which
+					 * -64 and -75 sit outside.  Then a
+					 * level above 1.
+					 */
+					diff_eq_int("only the window speaks",
+						    dsplib_debug_capture_lines(1)
+						    > 0,
+						    ((flags & 0x98) == 0x98
+						     && lv > 1
+						     && reneg[q] < -64
+						     && reneg[q] > -70), tag);
+				}
+			}
 		}
 	}
 	rc |= diff_end();

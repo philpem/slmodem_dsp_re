@@ -13868,3 +13868,53 @@ the wrong reason is invisible until something counts what it reached.**
 finding 239 blocks.  Every remaining one is a consequence of a reconstruction
 defect rather than of the fixture, so the sweep of this file is finished until
 that placement is settled.  The day's total: 30 dead sites to 10.
+
+### 242. One v34rx site was missed by three, the other cannot be reached at all
+
+`v34rx.c`'s two dead debug sites had different answers, and only measurement
+separated them.
+
+#### `decoderv34`'s renegotiation notice: missed by three
+
+The site is inside `(rx->flags & 0x98) == 0x98`, fires when `f798` is below
+-64, and announces only in the open window `-70 < f798 < -64`.  The sweep
+seeded
+
+    ra->f798 = (short)(-60 - (re / 3000));
+
+and `re` runs `-12000` to `8400` in steps of 5100, so `re / 3000` tops out at
+2 and `f798` never goes below **-62**.  Two short of the flag and five short
+of the window -- close enough to look deliberate, and never inside it.
+
+Driven now at -64, -65, -67, -69 and -75: three inside the window, one on the
+boundary the guard excludes, and one below -70 which sets the flag *silently*.
+That last is the case that separates "the flag was set" from "the flag was
+announced", and without it a test could pass on the flag alone.
+
+#### `setInitialPhase`'s divide guard: unreachable by construction
+
+    if (p1 + p0 == 0)   /* polyValue(i) + polyValue(i + 20) */
+
+`polyValue` reads nothing:
+
+    polyValue(k) = (short)(-21 * k * k + 837 * k - 354)
+
+so the twenty sums are fixed numbers, independent of the object, the input and
+the call.  Computed, they run from **7,632 at i = 0 to 11,772 at i = 10 and
+back to 8,316 at i = 19**.  None is zero, none is near zero, and no argument
+exists that makes one zero, because there are no arguments.
+
+**The guard is dead code in the original too.**  It is not a fixture gap and
+no test will ever retire it.  Left in place -- reproducing the original
+includes reproducing its unreachable defences -- and recorded here so the next
+sweep does not spend a session on it.
+
+#### Two more instances of the same trap, in one file
+
+The first attempt at the renegotiation case drove the branch with the debug
+level at 0, because the `decoderv34` block never raises it -- the third time
+today that a branch was reached and its announcement was not.  The second
+attempt asserted "only the window speaks" without requiring
+`(flags & 0x98) == 0x98`, so it demanded speech from seven of the eight flag
+combinations that never enter the block at all.  Both were caught by the
+count and by the assertion respectively, not by review.
