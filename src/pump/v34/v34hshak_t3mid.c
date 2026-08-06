@@ -362,31 +362,42 @@ t3m_txblock(struct t3m_frame *f, short tx)
  */
 
 /*
- * 0x6cc1b, 0x70d7f and 0x66517 -- ONE BODY IN THREE COPIES.
+ * 0x6cc1b, 0x70d7f, 0x66517, 0x660b9, 0x6c14a, 0x6fff7, 0x6bc0b, 0x70447 and
+ * 0x6d709 -- ONE BODY IN NINE COPIES.
  *
- * Arms 47, 49 and 50 each re-arm the error recovery when the FSK demodulator
- * has repeated an info0, and GCC emitted the same twenty-six stores three
- * times.  Compared instruction for instruction across the three: the same
- * fields in the same values, the same two transitions in the same order, the
- * same conditional 0x1e, the same twelve-field record.  One copy here.
+ * Arms 47, 49, 50, 55, 58 and 59 each re-arm the error recovery when the FSK
+ * demodulator has repeated an info0, and GCC emitted the same twenty-five
+ * stores nine times: 47, 49, 50 and 58 once apiece and 55 and 59 twice each.
+ * Compared instruction for instruction across the nine: the same fields in the
+ * same values, the same two transitions in the same order, the same
+ * conditional 0x1e, the same twelve-field record.  One copy here.
  *
- * WHAT IS NOT SHARED STAYS AT THE CALL SITE, and there are three such things:
+ * WHAT IS NOT SHARED STAYS AT THE CALL SITE, and there are four such things:
  *
  *   - the GUARD.  47 wants the shift register's low four bits all ones, 49
- *     wants `sr & 0x3ff` exactly 0x372, 50 wants it above 0x200.  Three
- *     different tests of the same register.
- *   - the DIAGNOSTIC.  Three strings that differ only in the state they name,
- *     and each is printed after the record is filled.
- *   - the COUNTER.  47 clears it and 49 and 50 do not.  Putting that in here
- *     would make a mutation deleting 47's clear unfalsifiable.
+ *     wants `sr & 0x3ff` exactly 0x372, 50 wants it above 0x200, 55 and 59
+ *     want its low THREE bits all ones.  Four different tests of the same
+ *     register.
+ *   - the DIAGNOSTIC.  Six strings that differ only in the state they name,
+ *     and 47's, 49's and 50's are printed after the record is filled while
+ *     55's and 59's are printed before it.
+ *   - the COUNTER.  47, 55 and 59 clear it and 49, 50 and 58 do not.  Putting
+ *     that in here would make a mutation deleting 47's clear unfalsifiable.
+ *   - `+0x3588`, which is why the body below starts one store later than 47's,
+ *     49's and 50's did.  The nine copies disagree on exactly that word: 47,
+ *     49, 50 and 58 store the constant 4 and the other five SET BIT 0 of
+ *     whatever is there.  A helper that wrote 4 unconditionally would be wrong
+ *     at five of the nine call sites, and one that took the value as an
+ *     argument would hide the difference behind a parameter.  So
+ *     `t3m_errrec_reset` is the `= 4` form and the callers that want `|= 1`
+ *     write it themselves and call `t3m_errrec_core`.
  */
 static void
-t3m_errrec_reset(struct t3m_frame *f)
+t3m_errrec_core(struct t3m_frame *f)
 {
 	unsigned char *r = f->m + T3M_MSGREC0;
 	int k;
 
-	T3M_I16(f, T3M_F3588) = 4;
 	f->obj->is_short = 0;
 	f->obj->local_short = 0;
 	T3M_I16(f, T3M_F358A) = 1;
@@ -429,6 +440,28 @@ t3m_errrec_reset(struct t3m_frame *f)
 	*(short *)(r + 0x28) = 0xc;
 	*(short *)(r + 0x2a) = 0xc;
 	*(int *)(r + 0x2c) = 0xf72;
+}
+
+/*
+ * 0x6cc1b, 0x70d7f, 0x66517 and 0x660b9 -- the four copies whose first store
+ * is the constant 4 rather than a set of bit 0.
+ */
+static void
+t3m_errrec_reset(struct t3m_frame *f)
+{
+	T3M_I16(f, T3M_F3588) = 4;
+	t3m_errrec_core(f);
+}
+
+/*
+ * 0x6c14a, 0x6bc0b, 0x6fff7, 0x70447 and 0x6d709 -- the five whose first store
+ * is `|= 1`, which is NOT the same thing: the reset can run with +0x3588
+ * already holding 2, and 4 would destroy that bit while 3 keeps it.
+ */
+static void
+t3m_errrec_arm(struct t3m_frame *f)
+{
+	T3M_I16(f, T3M_F3588) = (short)(T3M_U16(f, T3M_F3588) | 1);
 }
 
 /*
@@ -1017,6 +1050,209 @@ t3m_micro51(struct t3m_frame *f)
 }
 
 /*
+ * 0x662b0 -- microstate 59 `RX_PHASE2_CALL`.
+ *
+ * The one arm in this batch that has its own behaviour when the fixture drives
+ * it cold, and the reason is the FIRST guard: 55 and 58 read a companion field
+ * before they do anything, and this one increments the counter and then tests
+ * the shift register's low THREE bits, which the fixture's fill satisfies.  So
+ * a cold step re-arms the error recovery, writes 77 bytes and prints four
+ * lines, and the "group D" the sweep put the other two in is not where this
+ * one lives.  Finding 286's table.
+ *
+ * FIVE BLOCKS IN SEQUENCE, and they are not exclusive -- a single step can run
+ * the reset, the retrain check, the bulk-delay block and the second reset one
+ * after another:
+ *
+ *      n = ++counter, stored back before anything is tested
+ *
+ *   1  (fsk.sr & 7) == 7      -> print, `+0x3588 |= 1`, print the shift
+ *                               register, re-arm the error recovery, and
+ *                               CLEAR THE COUNTER.  0x6bc0b.
+ *
+ *      c = counter, RE-READ -- which is the whole reason the clear above is
+ *      visible: after the reset this arm leaves with 0 and 55's leaves with 1,
+ *      because 55's copy jumps back into the increment and this one does not.
+ *
+ *   2  c == 0x2a              -> txstate to SILENCE, announced.  0x6bbd5.
+ *
+ *   3  c > 0x125f AND the receiver's +0x19e is set AND `tone_detect` asserts
+ *                             -> print, set 0x40 in the receiver's flags,
+ *                                `v34handshakinit(obj, 1)` and LEAVE.  The
+ *                                only exit that skips everything below.
+ *                                Otherwise +0x19e is set to 1 and c re-read.
+ *
+ *   4  c > filtdelay + 0x5c AND fsk.sr is exactly 8 or exactly 0x18
+ *                             -> rtd = (c - filtdelay - 0x63) * 4, clamped up
+ *                                to 1, `ApplyBulkDelay`, counter = 0x14,
+ *                                `V34SetupDemodulator(obj, 2400, 1800)`,
+ *                                `rxtiminginit`, rxstate to RX_L1, the gain
+ *                                halved and 0x0a00 cleared, then one line.
+ *
+ *   5  the 32-bit word at +0x3588 is 0x20002 AND (fsk.sr & 0x3ff) == 0x372
+ *                             -> `v34handshakinit(obj, 0)`, +0xaa6c aimed at
+ *                                the first message record, `+0x3588 |= 1`,
+ *                                the error recovery re-armed again, one line.
+ *
+ * THE THIRD THRESHOLD IS `filtdelay + 0x5c` AND NOT 49'S 0x4c OR 0x50, and
+ * the shift-register test is a full-width equality against two values rather
+ * than either of the masked tests 49 and 50 use.  Those two facts are what
+ * separate this arm from the group-D six it was measured with.
+ *
+ * `tone_detect`'s window is the receiver's +0x10c -- `fskdemodulate`'s own
+ * input -- and its end is the receiver's sample pointer at +0x130, so the two
+ * arguments come from two different fields and not from one buffer.
+ *
+ * EVERY ONE OF THE FIVE EXITS RE-READS +0x3596.  None of them passes a
+ * literal, so the transmit dispatch always runs the arm for whatever the
+ * txstate is by then -- which block 2 above may have changed to SILENCE.
+ */
+static void
+t3m_micro59(struct t3m_frame *f)
+{
+	unsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+	short c, filt, rtd;
+
+	T3M_U16(f, T3M_COUNTER) = n;
+
+	/* 0x662c5 and 0x6bc0b.  Three bits, where 47's copy tests four. */
+	if ((f->obj->fsk.sr & 7) == 7) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Repeated info0 is detected, "
+					     "errorrecovery is initialized in "
+					     "RX_PHASE2_CALL\n");
+
+		t3m_errrec_arm(f);
+
+		/*
+		 * 0x717d8.  Printed AFTER +0x3588 is armed and BEFORE the body
+		 * below overwrites the shift register with -1, so what it shows
+		 * is the register that satisfied the guard.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V21RXBUF=0x%x\n",
+					     (unsigned)(unsigned short)
+					     f->obj->fsk.sr);
+
+		t3m_errrec_core(f);
+		T3M_U16(f, T3M_COUNTER) = 0;
+	}
+
+	/* 0x662e0. */
+	c = (short)T3M_U16(f, T3M_COUNTER);
+
+	/*
+	 * 0x662e7 and 0x6bbd5.  The object jumps straight past the next test on
+	 * the branch where the txstate was already 5, which it can do because
+	 * 0x2a is not above 0x125f either way; `hs_setstate` is that branch.
+	 */
+	if (c == 0x2a)
+		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
+
+	if (c > 0x125f) {
+		/* 0x662fc and 0x6bb57. */
+		if (f->rx->f19e != 0
+		    && tone_detect(f->rx,
+				   (struct v34_detector *)(f->m + T3M_DETECTOR),
+				   (const short *)((unsigned char *)f->rx
+						   + T3M_RX_FSKIN),
+				   f->rx->rx_samples)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V34RETRAIN, retrain is "
+						     "initiated in "
+						     "RX_PHASE2_CALL\n");
+
+			f->rx->flags = (unsigned short)(f->rx->flags | 0x40);
+			v34handshakinit(f->obj, 1);
+			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			return;
+		}
+
+		/* 0x6630a, reached whether +0x19e was set or the detector said
+		   no, and the counter is read again at 0x66321. */
+		f->rx->f19e = 1;
+		c = (short)T3M_U16(f, T3M_COUNTER);
+	}
+
+	/*
+	 * 0x66332.  The comparison sign-extends `filtdelay` and the subtraction
+	 * below zero-extends it, and both are truncated to sixteen bits before
+	 * anything is stored, so the two readings differ only in the compare.
+	 */
+	filt = T3M_I16(f, T3M_FILTDELAY);
+
+	if ((int)c > (int)filt + 0x5c
+	    && ((unsigned short)f->obj->fsk.sr == 0x08
+		|| (unsigned short)f->obj->fsk.sr == 0x18)) {
+		/*
+		 * 0x66371.  `sub $0x63` BEFORE the shift, which is 49's
+		 * `(n - filtdelay) * 4 - 0x18c` written the other way round --
+		 * the same halfword, since 0x18c is four times 0x63.  The
+		 * clamp is on the SHIFTED value and it is signed.
+		 */
+		rtd = (short)((unsigned)(unsigned short)c
+			      - (unsigned)(unsigned short)filt - 0x63u);
+		rtd = (short)((int)rtd * 4);
+		f->obj->rtd = rtd <= 0 ? 1 : rtd;
+
+		ApplyBulkDelay(f->obj, f->obj->rtd);
+
+		/* 0x663b0, and it is stored before the demodulator's line. */
+		T3M_U16(f, T3M_COUNTER) = 0x14;
+
+		/*
+		 * 0x663bd..0x66414 is `V34SetupDemodulator` inlined with two
+		 * literals, exactly as arm 50's 0x66766 is: `f128`, the four
+		 * 2400-baud words and the 1800-Hz carrier and its `f1ba`, in
+		 * that function's order.  The 0x960 and 0x708 at 0x717a4 are
+		 * the diagnostic's own arguments and not a read of any field.
+		 */
+		V34SetupDemodulator(f->obj, 2400, 1800);
+		rxtiminginit(f->obj);
+
+		hs_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);
+
+		/* 0x66477 then 0x66481, the gain before the flags. */
+		f->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);
+		f->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34AGC, rx->gain =0x%x,"
+					     "rx->slowcf=%d, at end of "
+					     "bulkdelay estimation\n",
+					     (int)f->rx->agc_gain,
+					     (int)f->rx->agc_step);
+	}
+
+	/*
+	 * 0x66495 and 0x70447.  ONE 32-BIT COMPARE OF TWO HALFWORDS: +0x3588
+	 * must be 2 and +0x358a must be 2, which is why this block cannot run
+	 * in the same step as the reset above unless the reset ran first and
+	 * left them 3 and 1 -- and 3 is not 2, so it cannot.
+	 */
+	if (T3M_I32(f, T3M_F3588) == 0x20002
+	    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)) {
+		v34handshakinit(f->obj, 0);
+
+		/*
+		 * 0x70475.  +0x3588 IS READ BACK AFTER THE CALL and not before
+		 * it: `v34handshakinit` writes that field, so a reading taken
+		 * first would set bit 0 of the wrong value.
+		 */
+		*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;
+		t3m_errrec_arm(f);
+		t3m_errrec_core(f);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34 In Retrain. errorrecovery for "
+					     "info0 is initialized in "
+					     "RX_PHASE2_CALL\n");
+	}
+
+	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+}
+
+/*
  * ---------------------------------------------------------------------------
  * 0x64ad2 -- the microstate dispatch, .rodata+0x3000.
  */
@@ -1047,6 +1283,9 @@ t3m_table3(struct t3m_frame *f)
 		break;
 	case V34HS_TX_L1:		/* 51 */
 		t3m_micro51(f);
+		break;
+	case V34HS_RX_PHASE2_CALL:	/* 59 */
+		t3m_micro59(f);
 		break;
 	case V34HS_INFODONE:		/* 63 */
 		t3m_micro63(f);

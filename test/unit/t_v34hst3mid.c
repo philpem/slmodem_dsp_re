@@ -54,6 +54,7 @@
 #include "harness.h"
 #include "v34hsstep.h"
 
+#include "dsplib/v34det.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 
@@ -217,9 +218,69 @@ struct seed {
 	int	set_isshort;	short	isshort;
 	int	set_prevbd;	short	prevbd;
 	int	set_gain;	short	gain;
+	/*
+	 * Arm 59's.  `f358a` is the OTHER half of the 32-bit word its last
+	 * block compares against 0x20002, so a suite that sets +0x3588 and
+	 * leaves +0x358a as the fixture filled it is a suite whose last block
+	 * fires or does not on one pseudorandom halfword.
+	 *
+	 * `f19e` gates whether the tone detector is consulted at all, and
+	 * `det` seeds the detector itself: without it `tone_detect` returns
+	 * whatever the fill happens to make it return, and "59 retrains when
+	 * the detector asserts" is a claim about an unknown.  Both answers are
+	 * driven -- finding 277's question, asked of a called function.
+	 */
+	int	set_f358a;	short	f358a;
+	int	set_f19e;	short	f19e;
+	int	set_det;	int	det_assert;
+	/*
+	 * `v34handshakinit`'s mode-1 body bumps one of two counters on
+	 * `(rx->flags & 0x40) || m[0xac17]`, so 59's `flags |= 0x40` is
+	 * invisible unless +0xac17 is zero and the flag was clear.  Both
+	 * counters are seeded too: an increment of a field holding a
+	 * pseudorandom value is a claim, but one nobody can read back.
+	 */
+	int	set_retrainq;	short	retrainq;
 };
 
+#define T3MT_RETRAINQ	0xac17		/* SIGNED byte, the other input     */
+#define T3MT_RETRAIN_A	0xac14		/* short, bumped when either is set */
+#define T3MT_RETRAIN_B	0xac12		/* short, bumped when neither is    */
+
 #define T3MT_FSKINHIBIT	0x0402
+
+/* Arm 59's, and the detector it hands `tone_detect`. */
+#define T3MT_RX_F19E	(0x0264 + 0x19e)	/* short, the retrain gate  */
+#define T3MT_RX_CARRIER	(0x0264 + 0x1b4)	/* const short *, the table
+						   V34SetupDemodulator picks */
+#define T3MT_DET	0x3564			/* struct v34_detector      */
+
+/*
+ * MAKE `tone_detect` ANSWER, rather than hoping.  Absence mode with both
+ * thresholds at 0x7fff counts every call and resets on none, so the answer is
+ * `count > limit` and the limit is the only thing that decides it -- whatever
+ * the filter did to the level, and whatever the fixture left in the taps.
+ * Detector layout is `struct v34_detector` in include/dsplib/v34det.h.
+ */
+static void
+det_seed(int assert_it)
+{
+	v34hs_poke_short(T3MT_DET + 0x04, 1);		/* polarity: absence */
+	v34hs_poke_short(T3MT_DET + 0x06, 0);		/* armed, unread here*/
+	v34hs_poke_short(T3MT_DET + 0x08, 0x64);	/* count             */
+	v34hs_poke_short(T3MT_DET + 0x0a,
+			 (short)(assert_it ? 0 : 0x7ff0));	/* limit     */
+	v34hs_poke_short(T3MT_DET + 0x0c, V34_DET_STATE_RUNNING);
+	v34hs_poke_short(T3MT_DET + 0x0e, 0x7fff);	/* thresh_hi         */
+	v34hs_poke_short(T3MT_DET + 0x10, 0x7fff);	/* thresh_lo         */
+	/*
+	 * And a level nothing else writes, so that "did the filter loop run at
+	 * all" is a reading rather than an assumption.  It is the only thing
+	 * that can make the WINDOW arguments testable: with an empty window
+	 * the two ends can be exchanged and no byte moves.
+	 */
+	v34hs_poke_short(T3MT_DET + 0x12, 0x1234);
+}
 
 static void
 apply(const struct seed *s)
@@ -281,6 +342,17 @@ apply(const struct seed *s)
 		v34hs_poke_short(T3MT_RX_GAIN, s->gain);
 	if (s->set_isshort)
 		v34hs_poke_short(T3MT_ISSHORT, s->isshort);
+	if (s->set_f358a)
+		v34hs_poke_short(T3MT_F358A, s->f358a);
+	if (s->set_f19e)
+		v34hs_poke_short(T3MT_RX_F19E, s->f19e);
+	if (s->set_det)
+		det_seed(s->det_assert);
+	if (s->set_retrainq) {
+		v34hs_poke_byte(T3MT_RETRAINQ, (unsigned char)s->retrainq);
+		v34hs_poke_short(T3MT_RETRAIN_A, 0x0111);
+		v34hs_poke_short(T3MT_RETRAIN_B, 0x0222);
+	}
 	if (s->set_fsk) {
 		int k;
 
@@ -306,7 +378,8 @@ apply(const struct seed *s)
 static const struct seed plain = { T3MT_TXSTATE, 0x0100, 0,0, 0,0,0,
 				   0,0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,
 				   0,0, 0,0, 0,0,0, 0,0, 0,0,0, 0,0,
-				   0,0,0,0, 0,0, 0,0, 0,0, 0,0 };
+				   0,0,0,0, 0,0, 0,0, 0,0, 0,0,
+				   0,0, 0,0, 0,0, 0,0 };
 
 /*
  * Did the BLOB print this?  Every claim below about a path having been taken
@@ -1099,6 +1172,472 @@ micro63(void)
 		diff_eq_int("63's setup clears +0x25c0",
 			    v34hs_peek_short(1, 0x25c0), 0, tag);
 		saw_63_setup = 1;
+	}
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * 0x662b0 -- microstate 59 `RX_PHASE2_CALL`.
+ *
+ * FIVE BLOCKS IN SEQUENCE AND THEY ARE NOT EXCLUSIVE, which is what makes this
+ * the one arm of the batch with its own behaviour cold: the first guard is the
+ * shift register and not a companion field, and the fixture's fill satisfies
+ * it.  Each family below holds the other four blocks OFF so that one is being
+ * measured at a time, and what holds them off is stated in each:
+ *
+ *   1  the reset               `+0xaa7c` high, so block 4 cannot fire, and
+ *                              `+0x358a` away from 2, so block 5 cannot
+ *   2  the 0x2a forcing        the same, and a counter far below 0x125f
+ *   3  the retrain gate        `+0xaa7c` high; the shift register is 0x155,
+ *                              which is neither 8 nor 0x18 nor `& 7 == 7`
+ *   4  the bulk delay          shift register 8 or 0x18 -- `& 7` is 0, so the
+ *                              reset cannot fire -- and a counter below 0x125f
+ *   5  the second reset        shift register 0x372, whose low three bits are
+ *                              2, and a counter below every other threshold
+ *
+ * `+0x3588` IS NOT A GUARD HERE, unlike 49's and 50's copies of the reset, and
+ * one case says so rather than leaving it to be assumed.
+ */
+static int saw_59_reset, saw_59_noreset, saw_59_silence, saw_59_already5;
+static int saw_59_deep, saw_59_shallow, saw_59_clamp;
+static int saw_59_gate, saw_59_retrain, saw_59_noretrain, saw_59_arm2;
+
+static void
+micro59(void)
+{
+	static const char reset_msg[] = "Repeated info0 is detected, "
+					"errorrecovery is initialized in "
+					"RX_PHASE2_CALL";
+	static const char arm2_msg[] = "V34 In Retrain. errorrecovery for info0 "
+				       "is initialized in RX_PHASE2_CALL";
+	static const char retrain_msg[] = "V34RETRAIN, retrain is initiated in "
+					  "RX_PHASE2_CALL";
+	/*
+	 * The first block.  The guard is the shift register's low THREE bits,
+	 * where 47's copy of the same reset wants four -- so 0x157 separates
+	 * this arm from that one, and 0x15f is the value both accept.
+	 */
+	static const struct {
+		short	counter, sr, f3588;
+		int	reset;
+		const char *why;
+	} rr[] = {
+	  { 0x0100, 0x0155, 2, 0, "0x155 has bit 1 clear" },
+	  { 0x0100, 0x0157, 2, 1, "0x157 has all three, and 47 would decline" },
+	  { 0x0100, 0x015f, 2, 1, "0x15f has 47's four as well" },
+	  { 0x0100, 0x0153, 2, 0, "0x153 has bit 2 clear" },
+	  { 0x0100, 0x0156, 2, 0, "0x156 has bit 0 clear" },
+	  { 0x0100, 0x0007, 2, 1, "and 0x0007 on its own" },
+	  { 0x0100, 0x0372, 2, 0, "49's 0x372 does not reset 59" },
+	  { 0x0100, 0x0157, 4, 1, "+0x3588 is not a guard here, unlike 49's" },
+	  { 0x0100, 0x0157, 0, 1, "nor when it is zero, which is 49's value" }
+	};
+	/* The second: an exact equality on the counter AFTER the increment. */
+	static const struct {
+		short	counter, txstate;
+		int	forced, lines;
+		const char *why;
+	} sc[] = {
+	  { 0x0029, T3MT_TXSTATE,  1, 1, "n == 0x2a forces SILENCE" },
+	  { 0x0029, V34HS_SILENCE, 1, 0, "and says nothing when it is 5" },
+	  { 0x0028, T3MT_TXSTATE,  0, 0, "n == 0x29 does not" },
+	  { 0x002a, T3MT_TXSTATE,  0, 0, "nor does n == 0x2b" }
+	};
+	/* The third. */
+	static const struct {
+		short	counter, f19e;
+		int	assertit, retrain, entered;
+		const char *why;
+	} tg[] = {
+	  { 0x125e, 0x33, 1, 0, 0, "n == 0x125f is not above 0x125f" },
+	  { 0x125f, 0x33, 1, 1, 1, "n == 0x1260 is, and the detector asserts" },
+	  { 0x125f, 0,    1, 0, 1, "+0x19e zero never consults the detector" },
+	  { 0x125f, 0x33, 0, 0, 1, "and a detector that says no falls through" },
+	  /* The compare is SIGNED, so a counter that steps to 0xffff is -1. */
+	  { (short)0xfffe, 0x33, 1, 0, 0, "0xffff steps to -1, which is not "
+					  "above 0x125f" }
+	};
+	/* The fourth. */
+	static const struct {
+		short	counter, filt, sr, gain, want;
+		int	deep, rtd;
+		const char *why;
+	} dc[] = {
+	  { 0x006b, 0x0010, 0x0008, 0x2346, 0x2346, 0, 0,
+	    "n == 0x6c is not above filtdelay+0x5c" },
+	  { 0x006c, 0x0010, 0x0008, 0x2346, 0x11a3, 1, 1, "n == 0x6d is" },
+	  { 0x006c, 0x0040, 0x0008, 0x2346, 0x2346, 0, 0,
+	    "and the same n at filtdelay 0x40 is not" },
+	  { 0x0087, 0x0010, 0x0008, 0x2346, 0x11a3, 1, 84,
+	    "(0x88 - 0x10 - 0x63) * 4" },
+	  { 0x0073, 0x0010, 0x0018, 0x2346, 0x11a3, 1, 4,
+	    "0x18 is the other shift register value the guard takes" },
+	  { 0x0072, 0x0010, 0x0008, 0x2346, 0x11a3, 1, 1,
+	    "a computed zero is clamped to one" },
+	  { 0x0087, 0x0010, 0x0408, 0x2346, 0x2346, 0, 0,
+	    "0x408 is not 8: the test is full width, not masked" },
+	  { 0x0087, 0x0010, 0x0009, 0x2346, 0x2346, 0, 0, "and 9 is not 8" },
+	  { 0x0087, 0x0010, 0x0372, 0x2346, 0x2346, 0, 0,
+	    "nor is 49's 0x372" },
+	  { 0x004c, (short)0xfff0, 0x0008, 0x2346, 0x11a3, 1, 1,
+	    "filtdelay is signed in the compare" },
+	  { 0x0087, 0x0010, 0x0008, (short)0xdcba, (short)0xee5d, 1, 84,
+	    "and the halving is arithmetic" }
+	};
+	/* The fifth: ONE 32-bit compare of two halfwords, then the mask. */
+	static const struct {
+		short	counter, sr, f3588, f358a;
+		int	armed;
+		const char *why;
+	} ar[] = {
+	  { 0x0100, 0x0372, 2, 2, 1, "+0x3588 2, +0x358a 2 and sr 0x372" },
+	  { 0x0100, 0x0372, 2, 3, 0, "+0x358a must be 2" },
+	  { 0x0100, 0x0372, 3, 2, 0, "and +0x3588 must be 2" },
+	  { 0x0100, 0x0371, 2, 2, 0, "0x371 is not 0x372" },
+	  { 0x0100, 0x0772, 2, 2, 1, "but 0x772 is, masked with 0x3ff" },
+	  { 0x0100, (short)0xfb72, 2, 2, 1, "and so is 0xfb72" },
+	  /* Bit 9 is inside the mask and inside the constant, so a narrower
+	     mask would take this one and the object does not. */
+	  { 0x0100, 0x0172, 2, 2, 0, "0x172 lacks bit 9" }
+	};
+	long tag = 6400;
+	int i;
+
+	for (i = 0; i < (int)(sizeof(rr) / sizeof(rr[0])); i++) {
+		struct seed s = plain;
+		char what[160];
+
+		s.counter = rr[i].counter;
+		s.set_sr = 1;		s.sr = rr[i].sr;
+		s.set_f3588 = 1;	s.f3588 = rr[i].f3588;
+		s.set_f358a = 1;	s.f358a = 5;	/* block 5 off */
+		s.set_filt = 1;		s.filt = 0x2000; /* block 4 off */
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "59's reset: %s", rr[i].why);
+		diff_eq_int(what, blob_said(reset_msg), rr[i].reset, tag);
+
+		/*
+		 * FOUR LINES OR NONE.  The reset prints its own phrase, then
+		 * the shift register, then announces two transitions -- and
+		 * the two strings come BEFORE the transitions, which is the
+		 * opposite of 47's, 49's and 50's copies.
+		 */
+		diff_eq_int("59's reset prints four lines or none",
+			    v34hs_observed(1)->lines, rr[i].reset ? 4 : 0, tag);
+		{
+			char line[40];
+
+			snprintf(line, sizeof(line), "V21RXBUF=0x%x",
+				 (unsigned)(unsigned short)rr[i].sr);
+			diff_eq_int("59's reset prints the shift register that "
+				    "satisfied its guard, before clearing it",
+				    blob_said(line), rr[i].reset, tag);
+		}
+		diff_eq_int("59's reset moves the microstate to DET_SYNC",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    rr[i].reset ? V34HS_DET_SYNC : V34HS_RX_PHASE2_CALL,
+			    tag);
+		diff_eq_int("59's reset moves the txstate to TX_DPSK",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    rr[i].reset ? V34HS_TX_DPSK : T3MT_TXSTATE, tag);
+		/*
+		 * AND IT SETS BIT 0 OF +0x3588 RATHER THAN STORING 4.  Three
+		 * seeds -- 2, 4 and 0 -- so that "or with 1" and "store 4"
+		 * and "store 1" are three different answers here.
+		 */
+		diff_eq_int("59's reset ORs bit 0 into +0x3588",
+			    v34hs_peek_short(1, T3MT_F3588),
+			    rr[i].reset ? (short)(rr[i].f3588 | 1)
+					: rr[i].f3588, tag);
+		/*
+		 * AND IT CLEARS THE COUNTER TO ZERO, not to one.  55's copy of
+		 * this same block jumps back INTO the increment and leaves
+		 * with 1; this one jumps past it.
+		 */
+		diff_eq_int("59's reset leaves the counter at zero",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    rr[i].reset
+			    ? 0 : (unsigned short)(rr[i].counter + 1), tag);
+
+		if (rr[i].reset)
+			saw_59_reset = 1;
+		else
+			saw_59_noreset = 1;
+	}
+
+	/*
+	 * AND THE COUNTER IS RE-READ AFTER THE RESET, NOT REMEMBERED.  Two
+	 * trials whose reset fires and whose seeded counter would take a later
+	 * branch if the incremented value were carried forward: the object
+	 * reads +0xaa78 again and gets the zero the reset just put there, so
+	 * neither branch is taken.  Nothing in the family above can say this --
+	 * every counter in it lands on no threshold either way.
+	 */
+	for (i = 0; i < 2; i++) {
+		struct seed s = plain;
+
+		s.counter = i ? 0x1300 : 0x0029;
+		s.set_sr = 1;		s.sr = 0x0157;	/* the reset fires */
+		s.set_f3588 = 1;	s.f3588 = 2;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_f19e = 1;		s.f19e = 0x33;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		diff_eq_int("59 re-reads the counter the reset cleared",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    0, tag);
+		diff_eq_int("so the reset's txstate survives the 0x2a test",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    V34HS_TX_DPSK, tag);
+		diff_eq_int("and the retrain block is not entered",
+			    v34hs_peek_short(1, T3MT_RX_F19E), 0x33, tag);
+	}
+
+	for (i = 0; i < (int)(sizeof(sc) / sizeof(sc[0])); i++) {
+		struct seed s = plain;
+		char what[160];
+
+		s.txstate = sc[i].txstate;
+		s.counter = sc[i].counter;
+		s.set_sr = 1;		s.sr = 0x0155;
+		s.set_f3588 = 1;	s.f3588 = 4;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "59 at 0x2a: %s", sc[i].why);
+		diff_eq_int(what, v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    sc[i].forced ? V34HS_SILENCE : sc[i].txstate, tag);
+		diff_eq_int("59's forcing is hs_setstate's compare-print-store",
+			    v34hs_observed(1)->lines, sc[i].lines, tag);
+		if (sc[i].lines)
+			/* 0x2a is 42, and it is the counter the line prints. */
+			diff_eq_int("59 announces the forcing with the counter "
+				    "that reached 0x2a", blob_said("[2]42)"), 1,
+				    tag);
+
+		if (sc[i].forced && sc[i].lines)
+			saw_59_silence = 1;
+		else if (sc[i].forced)
+			saw_59_already5 = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(tg) / sizeof(tg[0])); i++) {
+		struct seed s = plain;
+		char what[160];
+
+		s.counter = tg[i].counter;
+		s.set_sr = 1;		s.sr = 0x0155;
+		s.set_f3588 = 1;	s.f3588 = 4;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_f19e = 1;		s.f19e = tg[i].f19e;
+		s.set_det = 1;		s.det_assert = tg[i].assertit;
+		/*
+		 * NO 0x40 IN THE FLAGS AND NOTHING IN +0xac17, which is what
+		 * makes 59's `flags |= 0x40` readable: it is the bit
+		 * `v34handshakinit`'s mode-1 body dispatches on, and with
+		 * either input already set both answers are the same.
+		 * 0x115 and not 0x155: 0x40 IS bit 6 of 0x155.
+		 */
+		s.set_flags = 1;	s.flags = 0x0115;
+		s.set_retrainq = 1;	s.retrainq = 0;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "59's retrain gate: %s",
+			 tg[i].why);
+		diff_eq_int(what, blob_said(retrain_msg), tg[i].retrain, tag);
+
+		if (tg[i].entered && tg[i].f19e != 0)
+			/*
+			 * DID THE FILTER LOOP RUN?  `tone_detect`'s window is
+			 * the receiver's +0x10c to its sample pointer, and
+			 * nothing but that loop writes the detector's level.
+			 * If it never runs, the two ends of the window are
+			 * exchangeable and this suite cannot say which is
+			 * which.
+			 */
+			diff_eq_int("59's tone_detect window is not empty",
+				    v34hs_peek_short(1, T3MT_DET + 0x12)
+				    != 0x1234, 1, tag);
+
+		if (tg[i].retrain) {
+			/*
+			 * `v34handshakinit(obj, 1)` and not mode 0: the
+			 * retrain entry is the only mode that leaves 2 in
+			 * +0x3588, and mode 0 leaves 0.
+			 */
+			diff_eq_int("59's retrain runs v34handshakinit's mode 1",
+				    v34hs_peek_short(1, T3MT_F3588), 2, tag);
+			/*
+			 * AND 0x40 AND NOT SOME OTHER BIT: mode 1 bumps
+			 * +0xac14 when the flag is set and +0xac12 when it is
+			 * not, so which counter moved says which bit 59 wrote.
+			 */
+			diff_eq_int("59's retrain sets the bit mode 1 reads",
+				    v34hs_peek_short(1, T3MT_RETRAIN_A),
+				    0x0112, tag);
+			diff_eq_int("and mode 1's other counter stands still",
+				    v34hs_peek_short(1, T3MT_RETRAIN_B),
+				    0x0222, tag);
+			saw_59_retrain = 1;
+			continue;
+		}
+
+		/*
+		 * +0x19e IS SET TO 1 WHETHER THE DETECTOR WAS CONSULTED OR
+		 * NOT, and only inside the block -- so the counter threshold
+		 * and the gate are two separate readings.
+		 */
+		diff_eq_int("59 sets the receiver's +0x19e once it is past "
+			    "0x125f", v34hs_peek_short(1, T3MT_RX_F19E),
+			    tg[i].entered ? 1 : tg[i].f19e, tag);
+		if (tg[i].entered && tg[i].f19e == 0)
+			saw_59_gate = 1;
+		else if (tg[i].entered)
+			saw_59_noretrain = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(dc) / sizeof(dc[0])); i++) {
+		struct seed s = plain;
+		char what[160];
+
+		s.counter = dc[i].counter;
+		s.set_filt = 1;		s.filt = dc[i].filt;
+		s.set_sr = 1;		s.sr = dc[i].sr;
+		s.set_f3588 = 1;	s.f3588 = 4;
+		s.set_f358a = 1;	s.f358a = 5;
+		/* 0x200 and 0x800 must go and 0x155 must stay. */
+		s.set_flags = 1;	s.flags = 0x0b55;
+		s.set_gain = 1;		s.gain = dc[i].gain;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "59 past filtdelay+0x5c: %s",
+			 dc[i].why);
+		diff_eq_int(what, blob_said("V34SetupDemodulator: baudrate "
+					    "2400, carrier 1800"),
+			    dc[i].deep, tag);
+
+		if (!dc[i].deep) {
+			diff_eq_int("59 below the threshold prints nothing",
+				    v34hs_observed(1)->lines, 0, tag);
+			diff_eq_int("59 below the threshold leaves the gain",
+				    v34hs_peek_short(1, T3MT_RX_GAIN),
+				    dc[i].want, tag);
+			diff_eq_int("59 below the threshold leaves the rxstate",
+				    v34hs_peek_short(1, V34HS_RXSTATE_OFF),
+				    V34HS_RX_DPSK, tag);
+			saw_59_shallow = 1;
+			continue;
+		}
+
+		diff_eq_int("59 computes the bulk delay",
+			    v34hs_peek_short(1, T3MT_RTD), dc[i].rtd, tag);
+		diff_eq_int("59 replaces the counter with 0x14",
+			    v34hs_peek_short(1, T3MT_COUNTER), 0x14, tag);
+		diff_eq_int("59 moves the rxstate to RX_L1",
+			    v34hs_peek_short(1, V34HS_RXSTATE_OFF),
+			    V34HS_RX_L1, tag);
+		diff_eq_int("59 leaves the microstate alone",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    V34HS_RX_PHASE2_CALL, tag);
+		diff_eq_int("59 clears 0x200 and 0x800 and nothing else",
+			    (unsigned short)v34hs_peek_short(1, T3MT_RX_FLAGS),
+			    0x0155, tag);
+		diff_eq_int("59 halves the gain, arithmetically",
+			    v34hs_peek_short(1, T3MT_RX_GAIN), dc[i].want, tag);
+		diff_eq_int("59 sets the 2400-baud resampler word",
+			    (unsigned short)v34hs_peek_short(1, T3MT_RX_F1AE),
+			    0x3e80, tag);
+		diff_eq_int("59 sets the 1800-Hz carrier length",
+			    v34hs_peek_short(1, T3MT_RX_F1BA), 0x10, tag);
+		/*
+		 * AND THE CARRIER TABLE IT SELECTED, by what it points at:
+		 * side A holds ours and side B the blob's, so the addresses
+		 * differ for ever and only the contents are comparable
+		 * (finding 324).  `f1ba` shorts twice over is the whole table.
+		 */
+		same_table("59 selects the 1800-Hz carrier table",
+			   T3MT_RX_CARRIER, 2 * 0x10, tag);
+		diff_eq_int("59 then runs rxtiminginit",
+			    v34hs_peek_short(1, T3MT_RX_F1D2), 2400, tag);
+		diff_eq_int("59 closes with the bulk-delay line",
+			    blob_said("at end of bulkdelay estimation"), 1, tag);
+
+		saw_59_deep = 1;
+		if (dc[i].rtd == 1)
+			saw_59_clamp = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(ar) / sizeof(ar[0])); i++) {
+		struct seed s = plain;
+		char what[160];
+
+		s.counter = ar[i].counter;
+		s.set_sr = 1;		s.sr = ar[i].sr;
+		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
+		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "59's second reset: %s",
+			 ar[i].why);
+		diff_eq_int(what, blob_said(arm2_msg), ar[i].armed, tag);
+
+		diff_eq_int("59's second reset moves the microstate to DET_SYNC",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    ar[i].armed ? V34HS_DET_SYNC : V34HS_RX_PHASE2_CALL,
+			    tag);
+		diff_eq_int("59's second reset moves the txstate to TX_DPSK",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    ar[i].armed ? V34HS_TX_DPSK : T3MT_TXSTATE, tag);
+		/*
+		 * +0x3588 IS READ BACK AFTER `v34handshakinit(obj, 0)` AND NOT
+		 * BEFORE.  Mode 0 runs `v34modeminit`, which zeroes the word,
+		 * so the correct answer is 1 -- and a reading taken before the
+		 * call would leave the seeded 2 ORed with 1, which is 3.
+		 */
+		diff_eq_int("59's second reset ORs bit 0 into what "
+			    "v34handshakinit left, not into what it found",
+			    v34hs_peek_short(1, T3MT_F3588),
+			    ar[i].armed ? 1 : ar[i].f3588, tag);
+		diff_eq_int("59's second reset leaves 1 in +0x358a",
+			    v34hs_peek_short(1, T3MT_F358A),
+			    ar[i].armed ? 1 : ar[i].f358a, tag);
+		/*
+		 * THE COUNTER COMES BACK ZERO AND THAT IS NOT THE ARM'S DOING.
+		 * `v34handshakinit` clears +0xaa78 itself, so unlike the first
+		 * reset -- whose own clear IS visible, because nothing else on
+		 * that path touches the counter -- this reading cannot tell an
+		 * arm that clears it from one that does not.  It is recorded as
+		 * a measurement of the pair and not as a claim about the arm;
+		 * the matching mutation is marked equivalent for this reason.
+		 */
+		diff_eq_int("59's second reset comes back with a counter "
+			    "v34handshakinit zeroed",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    ar[i].armed
+			    ? 0 : (unsigned short)(ar[i].counter + 1), tag);
+		if (ar[i].armed) {
+			const char *o = (const char *)v34hs_object(1);
+
+			diff_eq_int("59's second reset aims +0xaa6c at the "
+				    "first message record",
+				    *(const char *const *)(o + 0xaa6c)
+				    == o + T3MT_MSGREC0, 1, tag);
+			saw_59_arm2 = 1;
+		}
 	}
 }
 
@@ -2094,6 +2633,7 @@ main(void)
 	micro49();
 	micro50();
 	micro51();
+	micro59();
 	micro63();
 	tail_paths();
 	txblock_paths();
@@ -2142,6 +2682,18 @@ main(void)
 	diff_eq_int("51 scaled a gain by four", saw_51_gain[0], 1, 0);
 	diff_eq_int("51 scaled a gain by two", saw_51_gain[1], 1, 0);
 	diff_eq_int("51 left a gain alone", saw_51_gain[2], 1, 0);
+	diff_eq_int("59's reset was taken", saw_59_reset, 1, 0);
+	diff_eq_int("59's reset was declined", saw_59_noreset, 1, 0);
+	diff_eq_int("59 forced the txstate to SILENCE", saw_59_silence, 1, 0);
+	diff_eq_int("59 found the txstate already SILENCE", saw_59_already5,
+		    1, 0);
+	diff_eq_int("59's retrain gate turned a step back", saw_59_gate, 1, 0);
+	diff_eq_int("59's detector said no", saw_59_noretrain, 1, 0);
+	diff_eq_int("59's retrain was taken", saw_59_retrain, 1, 0);
+	diff_eq_int("59's bulk-delay path was taken", saw_59_deep, 1, 0);
+	diff_eq_int("59 left below filtdelay+0x5c", saw_59_shallow, 1, 0);
+	diff_eq_int("59's clamp to one fired", saw_59_clamp, 1, 0);
+	diff_eq_int("59's second reset was taken", saw_59_arm2, 1, 0);
 
 	/*
 	 * And every pointer field `v34hs_compare` skips was exercised, so the
