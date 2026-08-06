@@ -49,8 +49,9 @@
  },
  {
   "label": "mode 0 tests 0x65 rather than 0x66",
-  "find": "if (obj->f359c == 0x66)",
-  "replace": "if (obj->f359c == 0x65)"
+  "find": "if (obj->f359c == 0x66)\n\t\t\tV34SetINFO0dBits",
+  "replace": "if (obj->f359c == 0x65)\n\t\t\tV34SetINFO0dBits",
+  "note": "Anchored on the call that follows as well.  Microstate 44's restart tests the same field against the same value, so the bare anchor matched twice and reported UNUSABLE -- finding 325's shape, which reads like a passing suite and not a failing one."
  },
  {
   "label": "mode 4 detector pair the other way round",

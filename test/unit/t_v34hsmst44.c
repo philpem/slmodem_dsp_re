@@ -330,6 +330,19 @@ main(void)
 	diff_eq_int("one bit: the counter stepped",
 		    v34hs_peek_short(0, T44T_COUNT), 1, 101);
 
+	/*
+	 * AND THE GATE IS `== 0`, NOT `<= 0`.  0x668d7 is `test %ax,%ax; je`,
+	 * so a negative `nbits` is not "nothing waiting": the arm takes its
+	 * bit and steps the count on down.  Nothing sane produces one, which
+	 * is exactly why the distinction needs a case of its own.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(-3, 0x1234, 0, 64, 0x0001);
+	step("a negative nbits is not empty", 102, 16, 0, V34HS_DET_INFO,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("nbits stepped on from -3",
+		    v34hs_peek_short(0, T44T_NBITS), -4, 102);
+
 	/* --- the CRC register: the feedback bit's whole truth table ------- */
 
 	/*
@@ -412,6 +425,20 @@ main(void)
 	     V34HS_MOH_SILENCE);
 	diff_eq_int("slot 0 untouched at nine bits",
 		    v34hs_peek_short(0, T44T_REC + 0), 0x0301, 121);
+
+	/*
+	 * AND THE MASK IS THREE BITS AND NOT TWO.  Every other case that
+	 * skips the store skips it under `& 3` as well, so a two-bit mask
+	 * reads exactly like a three-bit one everywhere above; a counter of 4
+	 * is the shape that separates them, because it is a multiple of four
+	 * and not of eight.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x12ab, 3, 200, 0x0001);
+	step("four bits is not a byte", 126, 17, 0, V34HS_DET_INFO,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("nothing stored at four bits",
+		    v34hs_peek_short(0, T44T_REC + 0), 0x0301, 126);
 
 	/*
 	 * THE TENTH BYTE AND THE ELEVENTH.  Slot 9 is the last: at 80 bits it
@@ -497,12 +524,36 @@ main(void)
 		    v34hs_peek_short(0, T44T_F358A), 0x7abc, 131);
 
 	/*
+	 * AND PAST IT, WHICH IS ALSO NO RESTART.  0x6694e is `cmp %ebp,%ebx;
+	 * je`, so the threshold is an equality and not "at or beyond": a
+	 * counter of 31 against a length of 8 is seven bits past the end of
+	 * the message and the arm is still an ordinary bit.  Every case above
+	 * reads the same under `>=` as under `==`; this one does not.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 30, 8, 0x4321);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	step("past the threshold", 137, 15, 0, V34HS_DET_INFO,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("past the threshold: +0x358a untouched",
+		    v34hs_peek_short(0, T44T_F358A), 0x7abc, 137);
+
+	/*
 	 * THE ANSWERING SIDE, `f359c == 0x66`.  One extra store -- the
 	 * record's length becomes 0x1e -- and one extra diagnostic line.
+	 *
+	 * AND NO V.90 RECEIVER, WHICH IS THE POINT OF THE CASE.  `v34info.c`'s
+	 * `V34SetINFO0dBits` writes 30 into index 12 of the SAME record and
+	 * `v34handshakinit` mode 0 calls it under the SAME `f359c == 0x66`
+	 * test -- but it returns early when `v90_receiver` is zero, and this
+	 * inlined copy at 0x718fc has no such guard: 0x71903's store sits
+	 * before the diagnostic check and is reached unconditionally.  The two
+	 * are not the same function and this case is what says so.
 	 */
 	begin(V34HS_MOH_SILENCE);
 	bits(5, 0x1234, 39, 24, 0x4321);
 	v34hs_poke_short(T44T_F359C, 0x0066);
+	v34hs_poke_int(T44T_V90RECV, 0);
 	step("restart, answering side", 132, 83, 4, V34HS_DET_SYNC,
 	     V34HS_TX_DPSK);
 	check_restart(132, 0x1e, 0x11);

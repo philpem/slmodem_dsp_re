@@ -18159,3 +18159,250 @@ nothing ever changes.
 **Findings 380-389 are the block `docs/v90rest.md` allocated to this
 worktree; 380 and 381 are used.** Verified against `origin/master` (max 246)
 and the local maximum (337) before use, as that file instructs.
+
+
+======================================================================
+
+### 400. Microstate 44 is a bit clock, and its message decoder is four fifths of it
+
+`DET_INFO` is table 3's largest arm -- 6,046 exclusive bytes of `v34handshak`
+by cfgsplit's count (finding 286), against 3,945 for 41 and 3,198 for 46. Read
+head first, it is much smaller than that number suggests, because the bulk of
+it is one branch.
+
+**What the arm is.** `fskdemodulate` has already run on this route and left
+the bits it recovered in `obj->fsk` -- `nbits` counts them and `sr` is the
+shift register, both named in `include/dsplib/v34fsk.h`. 44 consumes exactly
+ONE of them per call:
+
+```
+  668c9  +0xaa7a <- 0                        unconditional, every call
+  668d0  fsk.nbits == 0  ->  leave           0x6ab88, the transmit dispatch
+  668e0  fsk.nbits--
+  668ee  counter < record->f18 ?             one bit through the CRC register
+  66932  counter++
+  6694e  counter == record->f18 + 0x10  ->   the message is complete, 0x6bda0
+  66964  counter & 7      ->  leave          0x6bd8d
+  6696c  counter <= 0     ->  leave          0x7186a
+  6697d  (counter>>3)-1 > 9  ->  leave       0x71857
+  66994  record[(counter>>3)-1] <- (unsigned char)fsk.sr
+```
+
+so the record at +0xaa70 holds ten byte slots at +0x00..+0x12, a CRC register
+at +0x14 and the message length in BITS at +0x18. The +0x10 is the sixteen
+CRC bits that follow the message: the register accumulates the message's own
+bits and then the next sixteen are compared against it rather than folded in,
+which is what makes the two comparisons at 0x668f5 and 0x6694e different
+tests and not one.
+
+**The CRC is CRC-16-CCITT, and it is corroborated twice over.** 0x66905's
+`add %eax,%eax` with 0x1021 xored in when the register's bit 15 differs from
+the incoming bit is the same fold `getbit` already has in this file, derived
+independently from 0x5eaf0, and the same one `v8_crc` computes in
+`src/v8/v8util.c`. The arm's own diagnostic is "V34INFO, info0 CRC not
+received properly in DET_INFO".
+
+**Where the 6 KB goes.** The bit clock and its five exits are 308 bytes. The
+restart a failed CRC takes is about another 1,000. Everything else -- 4,744
+bytes, four fifths of the arm -- is the ACCEPT path at 0x6e534, and it is left
+calling `t3c_unwritten`. It dispatches on the record's +0x18, which is still
+in `%dx` from 0x66944 and never reloaded:
+
+```
+  0x4d (77 bits)  0x6f438        0x26 (38 bits)  0x6ed17
+  0x08 ( 8 bits)  0x6ea38        anything else   0x6e552
+```
+
+Four entries, and whoever takes it starts from them rather than from the whole
+arm. `docs/v34handshak.md`'s "44 writes 23 B cold" was the fixture's fill
+sending it out through 0x6bd8d on the first bit; every exit above is now
+driven deliberately.
+
+**Landed**: `src/pump/v34/v34hshak.c`, `test/unit/t_v34hsmst44.c`, 2,435
+checks, `v34hs_ours(1)` so side A is the reconstruction.
+
+
+======================================================================
+
+### 401. The restart, and the two companion fields that pick which of its three shapes runs
+
+0x6bda0 is where the message ends. The register at +0x14 is compared against
+sixteen bits of `fsk.sr`; equal is the accept path that halts, and unequal is
+the restart, which is what this batch landed. Its shape:
+
+```
+  print "info0 CRC not received properly"
+  rxstate    -> RX_DPSK           a no-op on every path that reaches here
+  microstate -> DET_SYNC
+  record->f14 <- 0xffff,  fsk.sr <- 0xffff,  fsk.nbits <- 0
+  if f359c == 0x66:  record->f18 <- 0x1e,  print "SetINFO0dBits  "
+  +0x358a <- 1        +0xaa6c <- obj+0xa94c       +0x3588 |= 4
+  is_short <- 0       local_short <- 0
+  ten shorts from +0xabae <- 0,  then +0xabc2 <- 0
+  txstate    -> TX_DPSK
+  microstate -> DET_SYNC          the second one, a no-op after the first
+  fsk.sr <- 0xffff,  fsk.nbits <- 0      again
+  the record at +0xa94c: f14 0xffff, f1a f1e f22 zero, f16 1, f1c 8, f20 1,
+                         f24 f2c 0xf72, f28 f2a 0xc, and f18 0x11 -- or 0x1e
+                         when f359c == 0x65 AND v90_receiver is non-zero
+  and then it FALLS BACK into the bit clock at 0x66956
+```
+
+Three things in that are worth having on their own.
+
+**It does not return; it rejoins.** 0x6c114 jumps to 0x66956, so a restart on
+a counter that is a multiple of eight is followed by the byte store -- on the
+0xffff the restart itself just put in `sr`, which is how the two halves are
+shown to be one arm and not two. The test drives both: a length of 24 puts
+the threshold at 40 and stores 0x00ff into slot 4, and a length of 17 puts it
+at 33 and stores nothing.
+
+**Two of the writes are made twice** and the second wins. `fsk.sr` and
+`fsk.nbits` are written at 0x6bf04/0x6bf0b and again at 0x6c0b6/0x6c0bd with
+nothing between reading either. Both first stores are therefore equivalent
+mutations, recorded as such rather than as gaps: nothing between them reads
++0xaae0 or +0xaae2, so no fixture can separate them, and the condition held
+fixed is that the accept path -- which does read `sr`, at 0x6bda4 -- halts.
+
+**The ten shorts start at index zero.** 0x6bf1f loads 1 into `%eax` for the
++0x358a store and 0x6bf3e zeroes it again before the loop, so +0xabae..+0xabc0
+are cleared and +0xabc2 separately at 0x6bf79. Reading that loop as running
+1..9 is the plausible mistake and the test asserts +0xabae directly for it.
+
+**The restart forces TX_DPSK**, which is table 2's arm at 0x644c9 -- the three
+instructions finding 354 put in for microstate 79. Without them this half
+could not have been driven at all, and this is the second batch to depend on
+them.
+
+
+======================================================================
+
+### 402. The arm's inlined `SetINFO0dBits` drops the guard the real one has
+
+`v34handshakinit` mode 0 already contains
+
+```c
+        if (obj->f359c == 0x66)
+                V34SetINFO0dBits(obj, (short *)(m + 0xa97c));
+```
+
+and `V34SetINFO0dBits` (src/pump/v34/v34info.c) returns immediately when
+`obj->v90_receiver` is zero, printing "V90, setINFO0dBits" and writing 30 into
+index 12 of the caller's buffer otherwise. Index 12 is +0x18; the buffer is
++0xa97c; 30 is 0x1e. That is the same field of the same record with the same
+value under the same test, which is the strongest corroboration in this batch
+that +0xaa70 points at +0xa97c and that its +0x18 is a bit count.
+
+**And the copy at 0x718fc is not that function.** It has no `v90_receiver`
+test -- 0x71903's `movw $0x1e,0x18(%eax)` sits before the diagnostic check at
+0x71909 and is reached unconditionally -- and its string is
+`"SetINFO0dBits  \n"`, two trailing spaces, not `"V90, setINFO0dBits\n"`. So
+the handshake's restart and the bring-up do NOT agree about when the answering
+side's record gets a length of 30.
+
+This is recorded rather than reconciled: both readings are off the object, the
+test drives the answering side with `v90_receiver` explicitly zero so the
+missing guard is pinned, and a mutation that adds the guard back is caught. A
+reconstruction that "tidied" this into a call to `V34SetINFO0dBits` would be
+exactly the wrong-but-plausible artefact CLAUDE.md forbids.
+
+The `f359c == 0x65` branch further down does consult `v90_receiver`, and it is
+the OTHER record's +0x18 that it moves -- +0xa94c's, not +0xa97c's. Two
+different records, two different tests; the test drives all four combinations.
+
+
+======================================================================
+
+### 403. Landing an arm broke two other batches' mutations, and it read as a pass
+
+Three agents are writing arms of `v34handshak` into one translation unit.
+Finding 325 says what one collided `#define` costs; this is the same hazard
+one level along, in the mutation registries, and it happened TWICE in this
+batch's single commit.
+
+```
+  v34hst3core  "79 sets the transmit state to SSEG"   ANCHOR MATCHES 2 TIMES
+  v34hshak     "mode 0 tests 0x65 rather than 0x66"   ANCHOR MATCHES 2 TIMES
+```
+
+Neither is a defect in the other batch. Both anchors were unique when they
+were written and stopped being so the moment microstate 44's restart -- which
+sets the same transmit state through the same helper, and tests the same
+`f359c` against the same constant -- appeared in the same file. `mutate.py`
+reports them as **unusable**, which is not a failure: the suite still says
+"0 NOT caught", and a reader checking that line alone would see two claims
+silently stop being tested.
+
+Both were repaired by extending the anchor with the line that follows it, with
+a note in each entry saying why. That is a two-line edit to two registries and
+no change to any arm or any test. **The rule that follows: an agent editing a
+shared file re-runs every suite registered against that file and reads the
+UNUSABLE count, not just the NOT-CAUGHT count.** The brief for this batch said
+to re-run them; this is what it was for, and it fired.
+
+
+======================================================================
+
+### 404. Which of microstate 44's checks are independent, and the three that cannot fail
+
+77 mutations in `test/mutations/v34hsmst44.json`, registered in `suites.json`
+against `build/test/t_v34hsmst44`. 74 caught by the test, none by the string
+sweep, none unusable, and three recorded as equivalent with the reason in the
+entry.
+
+Independent checks, in the sense that each fails on its own for its own
+reason:
+
+```
+  the entry clear of +0xaa7a                      1
+  the empty gate, == 0 and not <= 0               2  (nbits 0, and nbits -3)
+  one bit per call, not the queue                 1
+  the CRC feedback's truth table                  4  (bit15 x incoming bit)
+  the polynomial, and that it is conditional      2
+  the register stops AT the message length        2  (63 of 64, 64 of 64)
+  the restart threshold                           3  (39, 40 and 31 of 24+16)
+  the byte mask                                   3  (7 of 8, 8 of 9, 3 of 4)
+  the slot index and its bias                     2  (79 -> slot 9, 87 -> none)
+  the counter's sign test, <= and not <           2  (next 0, and next -8)
+  the byte stored is the low byte, zero extended  1
+  the restart's own writes                        1  (one case, many fields)
+  f359c: 0x66, 0x65, and neither                  3
+  v90_receiver, both ways, on the 0x65 branch     2
+  0x66 with no V.90 receiver -- finding 402       1
+  the restart rejoins the byte clock              2  (aligned, and not)
+  MOH_CLEARDOWN as the transmit state             1
+  downstream of a real `fskdemodulate`            1
+```
+
+**What is one check repeated**: the five restart cases each re-assert the
+whole of `check_restart`, twenty-two fields, and only the two lengths differ
+between them. They are kept because the collision is asserted -- if a later
+change made two of those cases differ, the test would fail rather than go
+quiet -- but the restart's body is one measurement made five times.
+
+**The three that cannot fail**, each with what is held fixed:
+
+- the first `fsk.sr <- 0xffff` and the first `fsk.nbits <- 0`: written again
+  before anything reads either (finding 401), so no fixture can separate them
+  while the accept path halts;
+- the reload of +0xaa70 after the restart: the restart writes +0xaa6c and
+  never +0xaa70, so the reloaded pointer is the cached one on every path that
+  exists today. It becomes testable the moment an arm that moves +0xaa70
+  lands, and 0x6e534 is where to look.
+
+**And one caught as an abort rather than as a differing byte**, which finding
+358 established as a real catch: inverting the guard at 0x6bda4 sends every
+driven restart into `t3c_unwritten`, and so does dropping microstate 44 from
+the dispatch. The converse -- DELETING the guard, so an accepted message
+returns quietly instead of halting -- is caught for the same reason, because
+the driven cases then take the restart they were arranged to take.
+
+**Swept**, to findings 319-322's standard, applied to the reconstruction
+rather than to the fixture: twelve object fills, four object skews, four arena
+placements, all eight neighbourhoods, side B's object outside its arena, and
+the stack unscrubbed. No differential failure at any of them. The only
+measurement that moves across fills is the absolute `changed` byte count,
+asserted at the default fill alone and for finding 359's reason.
+
+**Findings 400-409 are the block this worktree's brief allocated; 400-404 are
+used.**

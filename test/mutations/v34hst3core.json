@@ -69,8 +69,9 @@
  },
  {
   "label": "79 sets the transmit state to SSEG",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);"
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
+  "note": "Anchored on the line that FOLLOWS it as well.  Microstate 44's restart sets the same transmit state through the same helper, so the one-line anchor matched twice and reported UNUSABLE -- which is finding 325's shape, and reads like a passing suite rather than a failing one."
  },
  {
   "label": "79 moves the microstate to DET_INFO",
