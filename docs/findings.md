@@ -14834,6 +14834,20 @@ V.90, which is where the difference should show most clearly. The build stays
 at `-O2`; the number to beat is recorded above so that whoever settles it can
 see whether the gap moves the right way as V.90 lands.
 
+**READ THE SIZE RATIO WITH CARE -- it is the weaker of the two numbers.** "Our
+code is 89% of the blob's bytes" is not a match rate and cannot be treated as
+one. It improved partly by MECHANISM: at `-O3` our code grew from 103,694 to
+125,125 bytes, about 20% more, and since we were undershooting, emitting more
+closes the gap arithmetically whether or not any of it became more like the
+original. A build that inlined wildly could push the figure past 100% while
+matching nothing at all.
+
+The count of byte-identical functions cannot be gamed that way -- each one is a
+function where the period compiler, given our source, emitted what the original
+compiler emitted from theirs. In match-rate terms that is 82 of 365, about 22%,
+and 91 of 365 at `-O3`. Quote that one; quote the ratio only with this
+paragraph attached.
+
 **The methodological point.** Every flag before this one was read directly out
 of the instruction stream, and that worked because each left a mark there --
 frame pointers, argument pushes, PIC thunks. `-mtune` leaves no such mark, so

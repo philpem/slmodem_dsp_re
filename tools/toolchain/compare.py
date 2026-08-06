@@ -45,6 +45,13 @@ source is not the original's source, and a function we wrote as one loop that
 the original wrote as two will differ while behaving identically.  Read this as
 a similarity gradient, not a pass/fail.  The differential tests remain the only
 thing that decides correctness.
+
+THE TOTAL-BYTES PERCENTAGE IS THE WEAK NUMBER.  It moves when we emit more
+code, not only when we emit more of the RIGHT code -- we currently undershoot,
+so anything that inlines harder closes the gap arithmetically, and a build that
+inlined wildly could pass 100% while matching nothing.  The byte-identical
+count cannot be gamed that way.  Quote that; quote the percentage only
+alongside it.  Finding 352.
 """
 
 import argparse
