@@ -2287,3 +2287,62 @@ input magnitude growing without bound -- not this filter.
 without it: bounded input, sixteen or fewer taps, coefficients of similar
 magnitude. A caller that violates any of those could see the difference, and
 the reconstruction is written the original's way regardless.
+
+## D62 ⚠ Three self-allocating constructors check a `sysdep_malloc` the original does not
+
+**Modules** `src/dsp/fpm_mtd.c` (`FPM_MTD_create`), `src/dsp/fpm_tone.c`
+(`FPM_TONE_create`), `src/pump/b103/b103fp.c` (`B103FP_create`)
+
+The first **added hardening** entries in this register, found by auditing for
+them rather than by a test failing — which is the point, because a check the
+original does not have only diverges on an input the differential tier cannot
+drive.
+
+All three follow the library's "pass NULL and I will allocate" convention, and
+all three of ours do:
+
+```c
+if (state == NULL) {
+	state = (struct fpm_mtd *)sysdep_malloc(sizeof(*state));
+	if (state == NULL)
+		return NULL;		/* <-- ours; not the original's */
+	owned = 1;
+}
+```
+
+**The original does not test the result, and the disassembly is unambiguous
+about it.** Each of the three tests its object parameter at the top of the
+function, and the self-allocating branch rejoins the flow *after* that test:
+
+| function | tests the parameter at | allocation branch rejoins at | what it skips |
+|---|---|---|---|
+| `FPM_MTD_create` | `+0x0f` `test %ebx,%ebx` | `+0x17` | its own null test |
+| `FPM_TONE_create` | `+0x1d` `test %esi,%esi` | `+0x25` | its own null test |
+| `B103FP_create` | `+0x18` `test %esi,%esi` | `+0x20` | its own null test |
+
+`B103FP_create` settles it beyond argument: at `+0x827` it writes
+`movl $0x0,0x50(%eax)` and `movl $0x0,0x54(%eax)` **through the malloc result,
+before rejoining at all**. Those two stores are the original's and are
+reproduced; the null test that would have to precede them is not there.
+
+**Why this is hardening and not a fix.** The input is `sysdep_malloc` failing,
+and the original's behaviour on it is a null dereference. There is nothing to
+reproduce — a differential test cannot compare against a fault — so this is
+not behind `DSPLIB_REPRODUCE_BUGS`, per this file's own taxonomy. Callers that
+supply their own object never reach the branch at all.
+
+**Scope of the audit that found these, so the next reader knows what was NOT
+checked.** Every `sysdep_malloc`/`sysdep_calloc` site in `src/` was enumerated
+— 59 of them — and the twelve whose result our source tests were compared
+against the original function. Eight are the original's own checks and are
+correct. `LowPassFIR::design`'s four-argument form checks its own window
+allocation and that is also the original's, proved by a mutation. These three
+are the exceptions. Separately, all 33 null-ish guards outside
+create/init/delete were examined: most are integer value tests rather than
+pointer guards (`FPM_sqrt`'s `x == 0`, `FPM_div`'s `denom == 0`), and every one
+that really is a pointer guard — the six in `dialer.c` and `pulse.c`, and
+`V90Phase3Modulator::resetDILGenerator` — is the original's, each with a
+matching `test`/`je` in the first dozen instructions.
+
+`unmeasured` — whether an allocation of this size fails in service is a
+question about the host, not about these three functions.
