@@ -19182,3 +19182,298 @@ left are 24 `TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A`
 (0x62e28).
 
 **Finding 424 is the only number this batch took.**
+
+======================================================================
+
+### 425. Table 1's 24, which is `getbit` inlined TWICE and Modem-on-Hold's clear-down
+
+txstate 24 `TX_DPSK` of `.rodata+0x2da0` -- 2,220 bytes of level-0 body, the
+largest arm of this table and the last of the three finding 424 left.  It is in
+`src/pump/v34/v34hstx1.cpp` and it compares byte for byte against the blob
+through `t_v34hstx1.c`, which is now 15,937 checks over seventeen arms.  The
+register convention is finding 421's, unchanged: `0x4c(%esp)` is the object +
+0x221c, `0x74(%esp)` the receiver at +0x264, `0x78(%esp)` THE OBJECT PLUS FOUR.
+
+#### The 2,220 bytes are one library function, twice
+
+Finding 424's result at 67 for a second time, and it is why the arm is short.
+0x62bb5..0x62c64 with 0x649f1, 0x654a7, 0x67b95, 0x68480 and 0x6876a is the
+reader `v34hshak.c:2513` carries, arm for arm and field for field:
+
+```
+  62bc9   avail non-zero: no refill, emit
+  654a7   a WHOLE word: acc <<= wordbits, OR the word in, idx += 1
+  62bfc   a PART word: shift by what is left, OR the whole word in anyway,
+          and do NOT advance idx
+  62c35   the CRC-16-CCITT fold, 0x1021, MSB first
+  67ba8   nothing left and crc_on set: the CRC becomes the next sixteen bits
+  6876a   overrun by EXACTLY sixteen: load 0xf and four bits
+  68490   exhausted with repeat: reload the reader and CALL 0x5eaf0 -- the one
+          arm that does NOT inline, the same recursion 0x5ec47 makes
+  68485   exhausted without repeat: -1
+```
+
+and 0x67c4e..0x67d04 with 0x6887f, 0x69165, 0x69a49, 0x6a842, 0x6a94b,
+0x6c996, 0x6c9be and 0x70683 is **the same function again over a record the
+arm has just re-armed by hand**.  That second copy is `getbit`'s own restart
+arm WITH THE `repeat` TEST TAKEN OUT and the recursion inlined:
+
+```
+  b->repeats += 1; b->crc = 0xffff; b->pos = 0; b->idx = 0;
+  b->acc = b->acc0; b->avail = b->avail0;
+  bit = getbit(b);
+```
+
+The compiler SANK the `crc = 0xffff` store into each successor, which is why
+0x6a855 and 0x6c9c8 store it again and why 0x6a855 loads `acc` with the
+literal 0xffff where the first copy's flush at 0x67ba8 loads it from the
+field.  Reading those blocks as five separate refills rather than as one
+inlined call is the mistake the block list invites.
+
+So the arm is two calls, and it costs what 424's cost: no mutation in
+`test/mutations/v34hstx1.json` tests the reader, because `tools/mutate.py`
+anchors on source text and the reader's text is `t_v34hshak.c`'s suite.
+
+#### The shape, and the tone is 60 `TONE_AB`'s
+
+```
+  if (+0xabe8)  vect_idx += 1                     the Modem-on-Hold clock
+  bit = getbit(*(obj + 0xaa6c))
+  if (bit >= 0)      f358c ^= bit; vect4[2 * (f358c & 1)]; txmit
+  else if (!+0xabe8) txstate = 60 TONE_AB, and nothing else at all
+  else if (!+0xabf8) re-arm the reader by hand, take one more bit, send it,
+                     and fall into the hold tail at 0x64fec
+  else               the moh_message dispatch, then the hold tail
+```
+
+0x64a35 is `mov 0x0(,%reg,8)` over four-byte entries, which is 0x62d52's
+scaling exactly: the index selects `vect4[0]` or `vect4[2]`, the two ends of a
+diagonal.  What 24 adds is that the message bit is XORed INTO +0x358c before
+the mask, so the tone alternates on a one and holds on a zero.  **The bit
+reaches the XOR sign-extended** (`cwtl` at 0x64a05 and 0x67d0e), so the
+reader's -1 complements the whole halfword rather than flipping its low bit;
+only bit 0 is then read, so the tone is the same either way and the field is
+not, and one run has an exhausted reader for exactly that.
+
+#### FINDING 323'S ONE COLLISION IS AGREEMENT ON ONE PATH, NOT IDENTITY
+
+The brief said to assert whatever the agreement actually is, and this is what
+it is.  Cold, 24 and 60 write the same 69 bytes with the same signature
+(`914d715f` both), and the reason has three parts, each of which is now
+asserted in `case_dpsk_cold`:
+
+```
+  the fill leaves +0xabe8 clear          so there is no vect_idx tick
+  the reader hands back a ZERO bit       so the store into +0x358c writes the
+                                         value already there and the tone
+                                         selected is the one 60 selects
+  the message is NOT over                so txstate is not moved
+```
+
+and a fourth that is the fixture's rather than the object's: **the harness
+aims +0xaa6c at a block OUTSIDE the object**, and finding 323's byte count is
+computed over the object alone (`for i < OBJ_SIZE` in `v34hsstep.c`), so
+`getbit`'s own advance of `avail` and `acc` is not counted.  Move any one of
+the four and the two separate.  The last check runs BOTH arms from the
+identical cold object -- 60's reads no state word, so it can be dispatched at
+txstate 24 -- and requires the two objects to agree byte for byte through
+`diff_eq_obj`.  `case_tx_dpsk_entry` is the other half: 0x62b96 against
+0x62d3d, asserted unequal against the blob's own `.rodata`.
+
+**The reading this replaces, and why it had to be measured.** The other
+reading that fits finding 323 is that 24 cold is EXHAUSTED, sets txstate to
+60, and the loop then runs 60 -- "24 cold BECOMES 60".  It is ruled out
+arithmetically: the signature is a hash over every changed (offset, value)
+pair, and that path changes +0x3596 as well, so the two counts would differ
+by at least one byte.  They do not.
+
+#### `v34handshakinit` from inside the step was the predicted hazard and was not one
+
+Finding 424's `initdigital` run had to be left out; this one did not.  The arm
+reaches `v34handshakinit(obj, 1)` on four runs and all four compare clean at
+every seed and layout.  The difference is that mode 1 goes through
+`v34modeminit`, whose callees -- `rxinit`, `preinitdigital`, `txinit`,
+`detectorinit` -- aim library tables that `holes[]` ALREADY carries, where
+`initdigital`'s `initV34` stores interior self-pointers at +0x0a24 and +0x2604
+that it does not.  Finding 359 predicted this from 80's retrain and it holds
+here; **`V34HS_REFINIT=1` still cannot apply**, for 359's reason, and the
+ordinary sweep is what these runs rest on.
+
+**AND THE CALLEE RE-ARMS THE LOOP THAT DISPATCHED IT.**  `v34modeminit` sets
+the block's sample limit at +0x2aa0 to six and clears `vect_idx`, and mode 1
+moves the transmit machine to SILENCERETRAIN -- so the pass after this one is
+5/54/74's four silent samples and the loop ends on its own, two passes later
+than it would have.  Nothing depends on it; it is recorded because a callee
+rewriting the bound of the loop that called it is not what anyone expects.
+
+#### The queue guard does not fit an arm whose paths do not all transmit
+
+`run_case`'s second anti-vacuity guard is "the arm advanced the queue to the
+limit", which works because it makes the blob's own guard at 0x62933 skip the
+per-sample loop.  **24's message-over path and its whole message dispatch call
+neither `txmit` nor `txwritequeue`.**  `run_case` is now a one-line wrapper
+over `run_case_ex(..., guard)` and there are THREE forms; `run_case` passes
+the first, so the sixteen arms that landed before are untouched and no run of
+theirs moved to a weaker form silently.
+
+```
+  TX1_GUARD_QUEUE     the arm left the queue at the block limit
+                      -- the sixteen landed arms, and 17 of 24's 33 runs
+  TX1_GUARD_STATE     the arm moved the transmit machine           14 runs
+  TX1_GUARD_ONESHOT   the arm cleared the one-shot at +0xabf8       2 runs
+```
+
+**The third form asserts BOTH halves**, and the second is the guard: "+0xabf8
+is zero" is true of an arm that did nothing whenever the fixture seeded it
+zero, which is findings 247, 262 and 295's check that cannot fail.  What is
+asserted is `before != 0 && now == 0`.
+
+**The state form is the same claim by the other route.**  What the guard is
+FOR is that side A must not go on to run the blob's copy of the arm under test
+and supply what our arm left out; with the state moved the blob dispatches a
+DIFFERENT arm, and the two sides converge because side B's blob arm moved the
+state the same way.  Nothing else in table 1 shares 24's entry and
+`case_tx_dpsk_entry` asserts that against the blob's own `.rodata`.
+
+**The third form exists because `moh_message` outside 0..3 writes ONE BYTE.**
+The dispatch does nothing but clear its own one-shot, and below the threshold
+the hold tail leaves at 0x6431f, so neither of the other two guards holds --
+and the run is still worth having, because it is the ONLY place a clear-down
+that should not have happened is visible.  Past the threshold both of the
+tail's ways out leave exactly what a spurious clear-down leaves: the retrain's
+`v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and rewrites both state
+words, and the tail's clear-down IS the clear-down.  Two mutations --
+`the clear-down runs to moh_message four` and `the clear-down's range is
+signed` -- went uncaught until that run existed, and the temptation was to
+record them as a limit of the fixture.  They are not: they are a limit of a
+guard, and the guard was the thing to change.
+
+#### 525 mutations, 496 caught, 22 equivalent, and SIX ANCHORS THAT RE-POINTED
+
+```
+  525 mutations: 496 caught (496 by test, 0 by strings), 7 NOT caught,
+                 0 unusable, 22 equivalent, 0 MIScounted
+```
+
+96 of them are 24's and every one of those is caught or recorded equivalent.
+The seven uncaught are unchanged and none is this arm's: finding 341's four
+`V34EchoReportCoeff` calls that only print, finding 343's one transfer with no
+oracle past it, and finding 424's two `initdigital` lines.
+
+**One field was seeded BEFORE the run rather than after it**, and it is worth
+saying because it is the only one of finding 345's family here that did not
+have to be paid for twice: the reader's `idx` at +0x1e was seeded to 2 rather
+than left at 0, so `the re-arm leaves idx alone` -- the re-arm's one store of
+a value the bring-up would otherwise already hold -- was caught on the first
+pass rather than surviving it.
+
+**The first run reported 6 unusable and none of them was mine.**  This arm
+re-arms a message record with the same twelve stores 67's reload uses and aims
+the same self-pointer 54 aims, so six anchors that had matched once now matched
+twice -- `54: the self-pointer is aimed at +0xa97c`, `74: the txstate moves to
+TONE_AB_CALL` and four of 67's reload.  Each was given one line of context and
+re-pointed at the text it was written for.  **An anchor that starts matching
+twice is reported and skipped, so the claim goes silently untested**; it is
+worth re-reading the whole line and not only the caught count after adding an
+arm that resembles one already there.
+
+**AND THE OTHER HALF OF THAT IS NOT REPORTED AT ALL.**  `24: the new reader
+does not set repeat` came back NOT CAUGHT on the first pass and was not a gap:
+the generator that wrote it deleted `\tb->repeat = 0;\n` from a block whose
+last line has no trailing newline, so the replacement was the original text.
+**A mutation whose `replace` equals its `find` builds the unmutated binary and
+reports as NOT CAUGHT, which is indistinguishable from a real hole** -- where a
+doubled anchor at least prints `ANCHOR MATCHES 2 TIMES`.  Findings 247, 262 and
+295 are the same family and this is a third way in: read the uncaught list as a
+list of claims to re-derive, not as a list of gaps.
+
+**One new equivalence, proved over every input rather than over the runs.**
+`24: moh_recvd is compared signed`: 0x69033's `ja` and a signed `jg` can differ
+only for a negative `moh_recvd`, and there the two reach the same block --
+unsigned it is above four, is not five, and restarts the handshake; signed it
+is not above four, is not zero, and falls to the same restart.  And `24: the
+txstate compare at 0x654e4 is deleted` is finding 342's case for the fifth time
+in this file.
+
+**Six mutations survived the first run and each named a missing run rather
+than an equivalence**, which is finding 424's useful half repeating:
+
+```
+  the message's stamp is written
+      whatever +0xabe2 held          the run had +0xabf9 up, and the HOLD TAIL
+                                     stamps +0xabe2 four blocks later
+  the hold's threshold is 0x4b       every run was below 91 or above 1216
+  the hold's clock is read unsigned  no run had a negative `vect_idx`
+  the clear-down runs to
+      moh_message four               } the two the third guard form was
+  the clear-down's range is signed   } written for, above
+  the hold tail's message range
+      runs to four                   moving that run below the threshold to
+                                     guard it took the TAIL's boundary away
+                                     with it, so it is now two runs and not
+                                     one -- 2423 below the threshold and 2434
+                                     past it, and neither makes the other's
+                                     distinction
+```
+
+#### Which checks are independent, and which are one check twice
+
+Independent, in the sense that each can fail while the others pass:
+
+- the tone: a one bit, a zero bit, and a one bit against an ODD +0x358c, which
+  sends what the zero-bit run sends from the opposite pair -- three runs;
+- the entry tick, once as a halfword of its own and once DECIDING the hold's
+  threshold -- two;
+- the first reader through the arm's call: a refill with the CRC folded, a
+  restart, and exhaustion -- three;
+- the hand re-arm: a re-armed reader with bits in hand, one that is empty too
+  (which is the -1 that complements +0x358c), and one whose refill only works
+  because the re-arm cleared `pos` -- three;
+- the hold tail's threshold: below it, halfway (which separates 0x4b0 from
+  0x4b), negative `vect_idx` (which separates `movswl` from `movzwl`), negative
+  `rtd` (which separates `sar` from `shr`), and one tick either side -- five;
+- the tail's three ways out, and the two that a run can reach only after the
+  dispatch has already moved the machine -- four;
+- the message dispatch: `moh_message` 1, 2, 4 and negative, and `moh_recvd` 0,
+  1, 4, 5 and 6 -- nine, of which the two "wait" values reach one block through
+  TWO SEPARATE COMPARES (0x6902d and 0x6903b) and neither stands in for the
+  other, and of which `moh_message` 4 is TWO runs: 2423 below the hold's
+  threshold, which is the only run that can see a clear-down that should not
+  have happened, and 2434 past it, which is the only run that can see 0x65025's
+  range end at three;
+- the message built: +0xabf9 both ways, +0xabe2 already at three, and the run
+  that aims +0xaa6c elsewhere so the CALL and the twelve STORES land on two
+  different records -- four.
+
+**Not independent, and named:**
+
+- `moh_message` three is 0x64eb6's clear-down under a different index and the
+  SAME three stores that `moh_message` two drives; what it adds is the range,
+  since 0x65025 and 0x64ea6 are `sub $2 ; cmp $1 ; ja` and `cmp $3 ; ja` rather
+  than equality;
+- the six `V34HS_SEED` values are ONE check of the collision and not six.
+  `v34hsstep.c` fills the ARENA at a fixed 0x7ad10000 and only the OBJECT at
+  `0x5eed1234 + seed`, so the reader the cold run reads -- which lives in the
+  arena's dummy block -- is the same reader at every seed.  What the seeds do
+  vary is +0x358c, and finding 421's two values 0xb7eb and 0xb06e mean both
+  tone selections are exercised across the sweep.
+
+#### No new exit, and the fill is not held fixed
+
+Every path lands on 0x629c8, 0x629cf, 0x63948, 0x6431f, 0x64326 or 0x640a1 --
+each a block that reloads the object and re-tests the loop -- so
+`enum v34tx1_exit` still has exactly the two values 81 and 86 gave it and the
+oracle past this arm is the blob's own tail.  Finding 343's cost is not paid
+again.
+
+```
+  V34HS_SEED=1,3,7,11,17,23     15,937 checks, PASS at every one
+  V34HS_SKEW=64                 PASS
+  V34HS_PADVARY=0               PASS
+  V34HS_LOOSEOBJ=1              PASS
+```
+
+**Seventeen of table 1's nineteen reachable targets are now written.**  The two
+left are 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A` (0x62e28).
+
+**Finding 425 is the only number this batch took.**

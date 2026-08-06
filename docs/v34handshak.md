@@ -322,22 +322,36 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-### Fifteen of the nineteen have landed, and this is how a case is landed
+### Seventeen of the nineteen have landed, and this is how a case is landed
 
 txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
 -- then 60, 18, 70 and 51, the four smallest of what those left, then 19, 20
-and the entry 5, 54 and 74 share, and then 69 and the entry 64 and 68 share,
-are in `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
-`test/unit/t_v34hstx1.c`. Findings 340-345, 421, 422 and 423.
+and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, and
+then 67 and 24, the two largest, are in `src/pump/v34/v34hstx1.cpp` and compare
+byte for byte through `test/unit/t_v34hstx1.c`. Findings 340-345 and 421-425.
 
-The four still open are 67, 24, 21 and 66. **Two of the fifteen needed a table
+The two still open are 21 and 66. **Two of the seventeen needed a table
 before they could be written at all**: `probe`, 64 signed shorts at
 `.rodata+0x2c00`, which 51 reads and which this tree did not have (finding
 421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
 FOUR-byte points and which was `static` in v34rx.c (finding 422). Read both
-before estimating one of the four -- an arm that reads a table this tree does
+before estimating one of the two -- an arm that reads a table this tree does
 not have, or has under the wrong element width, is not the size its byte count
-says.
+says. **And read the body for an INLINED LIBRARY FUNCTION before estimating it
+at all**: 67's 2 KB was mostly `getbit` open-coded and 24's 2.2 KB was `getbit`
+open-coded twice, so both came out as calls (findings 424 and 425).
+
+**An arm whose paths do not all reach `txmit` needs a DIFFERENT anti-vacuity
+guard and not a weaker one.** `run_case`'s "the arm advanced the queue to the
+limit" is what makes the blob skip the per-sample loop on side A; 24 has two
+paths that move the transmit state instead and one that writes a single byte,
+and `t_v34hstx1.c` guards those on the state and on that byte. Finding 425.
+
+**AND ONE PAIR OF ENTRIES IS NOT ONE ARM EITHER.** 24 `TX_DPSK` and 60
+`TONE_AB` are finding 323's only collision, and it is agreement on one path
+rather than identity: it holds on three conditions of the object's and one of
+the fixture's, and finding 425 asserts each of the four rather than the
+agreement.
 
 **AND ONE TABLE ENTRY IS NOT ONE ARM, in three different ways.** 0x640b4 is
 the target for txstates 5, 54 and 74, and the shared prologue re-reads

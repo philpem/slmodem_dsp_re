@@ -860,8 +860,8 @@
  },
  {
   "label": "54: the self-pointer is aimed at +0xa97c",
-  "find": "\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
-  "replace": "\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
+  "find": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
+  "replace": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
  },
  {
   "label": "54: V34SetINFO0aBits is not called",
@@ -979,8 +979,8 @@
  },
  {
   "label": "74: the txstate moves to TONE_AB_CALL",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
+  "find": "\t\tif (txst != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\tif (txst != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
  },
  {
   "label": "74: f358c is not cleared by the retrain",
@@ -2054,23 +2054,23 @@
  },
  {
   "label": "67: the reload arms the CRC to zero",
-  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;",
-  "replace": "\tb->crc = 0;\n\tb->pos = 0;"
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = 0;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
  },
  {
   "label": "67: the reload does not arm the CRC",
-  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;",
-  "replace": "\tb->pos = 0;"
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
  },
  {
   "label": "67: the reload does not clear pos",
-  "find": "\tb->pos = 0;\n\tb->idx = 0;",
-  "replace": "\tb->idx = 0;"
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
  },
  {
   "label": "67: the reload does not clear idx",
-  "find": "\tb->idx = 0;\n\tb->repeats = 0;",
-  "replace": "\tb->repeats = 0;"
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
  },
  {
   "label": "67: the reload does not clear repeats",
@@ -2183,5 +2183,489 @@
   "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_EXMIT);",
   "equivalent": true,
   "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file"
+ },
+ {
+  "label": "24: the entry does not tick vect_idx",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": ""
+ },
+ {
+  "label": "24: the entry tick is unconditional",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+ },
+ {
+  "label": "24: the entry tick is by two",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+ },
+ {
+  "label": "24: the Modem-on-Hold flag is read as a halfword at the entry",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+ },
+ {
+  "label": "24: a zero bit counts as the message being over",
+  "find": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit >= 0) {",
+  "replace": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit > 0) {"
+ },
+ {
+  "label": "24: the reader is the record at +0xa94c rather than +0xaa6c's",
+  "find": "\tbit = getbit(tx1_bitsource(o));",
+  "replace": "\tbit = getbit((struct v34_bitsource *)((char *)o + TX1_BLK_A94C));"
+ },
+ {
+  "label": "24: the tone is sent after the sample is transmitted",
+  "find": "\t\ttx1_dpsk_tone(o, bit);\n\t\ttxmit(o);\t\t\t\t/* 0x64a42 */",
+  "replace": "\t\ttxmit(o);\t\t\t\t/* 0x64a42 */\n\t\ttx1_dpsk_tone(o, bit);"
+ },
+ {
+  "label": "24: the tone's flag is replaced by the bit rather than toggled",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = bit;\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the tone's flag is not stored back",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the tone is chosen before the bit is folded in",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put_point(o, vect4[2 * (tx1_get(o, TX1_F358C) & 1)]);\n\ttx1_put(o, TX1_F358C, sel);"
+ },
+ {
+  "label": "24: the tone's index is not scaled by two",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[sel & 1]);"
+ },
+ {
+  "label": "24: the tone is chosen on bit 1 of the flag",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * ((sel >> 1) & 1)]);"
+ },
+ {
+  "label": "24: the bit reaches the fold as a byte",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)(unsigned char)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the message-over flag test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) == 0) {\n",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0) {\n"
+ },
+ {
+  "label": "24: the message ends in TONE_AB_CALL",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB_CALL)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
+ },
+ {
+  "label": "24: the message over leaves the transmit machine alone",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+ },
+ {
+  "label": "24: the txstate compare at 0x654e4 is deleted",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "equivalent": true,
+  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file"
+ },
+ {
+  "label": "24: the one-shot test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF8) == 0) {",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF8) != 0) {"
+ },
+ {
+  "label": "24: on hold, the reader is not re-armed by hand",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": ""
+ },
+ {
+  "label": "24: on hold, the re-arm does not count the repeat",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves the CRC alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves pos alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves idx alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm does not reload the accumulator",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm does not reload avail",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm's CRC is zero",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = 0;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-armed reader is read before it is re-armed",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n\n\t\ttx1_dpsk_tone(o, getbit(b));",
+  "replace": "\t\ttx1_dpsk_tone(o, getbit(b));\n\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the tone is sent and the hold tail is not run",
+  "find": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn tx1_moh_hold(o);\t\t\t/* 0x64fec */",
+  "replace": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "24: moh_message one clears down rather than holding",
+  "find": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_on_hold(o);\t\t\t/* 0x689f6 */",
+  "replace": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_cleardown(o);"
+ },
+ {
+  "label": "24: moh_message one is not a case of its own",
+  "find": "\tif (o->moh_message == 1) {",
+  "replace": "\tif (0) {"
+ },
+ {
+  "label": "24: the clear-down is for moh_message two alone",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if (o->moh_message == 2) {"
+ },
+ {
+  "label": "24: the clear-down runs to moh_message four",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if ((unsigned)o->moh_message <= 4u) {"
+ },
+ {
+  "label": "24: the clear-down's range is signed",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if (o->moh_message <= 3) {"
+ },
+ {
+  "label": "24: moh_recvd four is not a wait",
+  "find": "\t\tif (got == 4)\n\t\t\ttx1_moh_on_hold(o);",
+  "replace": "\t\tif (0)\n\t\t\ttx1_moh_on_hold(o);"
+ },
+ {
+  "label": "24: moh_recvd zero is not a wait",
+  "find": "\t\t} else if (got == 0)\n\t\t\ttx1_moh_on_hold(o);",
+  "replace": "\t\t} else if (0)\n\t\t\ttx1_moh_on_hold(o);"
+ },
+ {
+  "label": "24: anything past four builds the message",
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */"
+ },
+ {
+  "label": "24: five restarts the handshake like anything else",
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */"
+ },
+ {
+  "label": "24: moh_recvd is compared signed",
+  "find": "\t\telse if ((unsigned)got > 4u) {",
+  "replace": "\t\telse if (got > 4) {",
+  "equivalent": true,
+  "why": "a proof over every input rather than over the ones driven.  0x69033's `ja` and a signed `jg` can differ only for a NEGATIVE `moh_recvd`, and there the two readings reach the same block: unsigned it is above four, is not five, and restarts the handshake; signed it is not above four, is not zero, and falls to the same restart.  Every other value answers alike by construction, so no run can separate them and the object's unsigned compare is what is written"
+ },
+ {
+  "label": "24: the one-shot is not cleared",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "replace": "\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */"
+ },
+ {
+  "label": "24: the one-shot is cleared as a halfword",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;",
+  "replace": "\t*(short *)((char *)o + TX1_FABF8) = 0;"
+ },
+ {
+  "label": "24: the message dispatch does not run the hold tail",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "replace": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "24: the clear-down leaves the transmit machine alone",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": ""
+ },
+ {
+  "label": "24: the clear-down moves to MOH_FRR",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_FRR)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_FRR);"
+ },
+ {
+  "label": "24: the clear-down leaves the receive machine alone",
+  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\ttx1_put(o, TX1_FABE4, 1);"
+ },
+ {
+  "label": "24: the clear-down's receive state is RECEIVE",
+  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
+ },
+ {
+  "label": "24: the clear-down does not raise +0xabe4",
+  "find": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n}"
+ },
+ {
+  "label": "24: the clear-down raises +0xabe4 to two",
+  "find": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
+ },
+ {
+  "label": "24: the hold moves to MOH_ON_HOLD",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_ON_HOLD)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "24: the hold leaves the transmit machine alone",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "replace": ""
+ },
+ {
+  "label": "24: the hold leaves the receive machine alone",
+  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;"
+ },
+ {
+  "label": "24: the hold does not clear +0xaa78",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\to->vect_idx = 0;"
+ },
+ {
+  "label": "24: the hold does not clear vect_idx",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);"
+ },
+ {
+  "label": "24: the hold clears vect_idx to one",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 1;"
+ },
+ {
+  "label": "24: the handshake is not restarted",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\ttx1_put(o, TX1_FABE6, 1);"
+ },
+ {
+  "label": "24: the handshake restarts in mode zero",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 0);\n\ttx1_put(o, TX1_FABE6, 1);"
+ },
+ {
+  "label": "24: the restart does not raise +0xabe6",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 1);"
+ },
+ {
+  "label": "24: the restart raises +0xabe6 to two",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 2);"
+ },
+ {
+  "label": "24: the message's stamp is written whatever +0xabe2 held",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\to->fabe2 = 1;"
+ },
+ {
+  "label": "24: the message's stamp is not written",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": ""
+ },
+ {
+  "label": "24: the message's stamp is three",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 3;"
+ },
+ {
+  "label": "24: the message's stamp guard is == 3",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\tif (o->fabe2 == 3)\n\t\to->fabe2 = 1;"
+ },
+ {
+  "label": "24: +0xabf9 picks the two messages the other way round",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 1;\t\t/* 0x6a415 */"
+ },
+ {
+  "label": "24: the message built is always MHfrr",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
+  "replace": "\to->moh_message = 1;"
+ },
+ {
+  "label": "24: the message is built into the record it installs",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
+  "replace": "\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));"
+ },
+ {
+  "label": "24: the message is not built at all",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n",
+  "replace": ""
+ },
+ {
+  "label": "24: the reader is not re-aimed at +0xa94c",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\n",
+  "replace": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\n"
+ },
+ {
+  "label": "24: the new reader does not set the CRC",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set pos",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set idx",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set the repeat count",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set nbits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set wordbits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set crc_on",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set the accumulator",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set acc0",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set avail",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set avail0",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set repeat",
+  "find": "\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->avail = 0xc;\n\tb->avail0 = 0xc;"
+ },
+ {
+  "label": "24: the new reader's message is 0x1f72",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0x1f72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader's message is sixteen bits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 0x10;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader holds eight bits rather than twelve",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 8;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader repeats",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 1;"
+ },
+ {
+  "label": "24: the hold's threshold ignores the round-trip delay",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < 0x4b0)"
+ },
+ {
+  "label": "24: the hold's round-trip delay is shifted logically",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)(unsigned short)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's round-trip delay is shifted by three",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)o->rtd >> 3) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's threshold is 0x4b",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b)"
+ },
+ {
+  "label": "24: the hold ends one tick early",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx <= ((int)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's clock is read unsigned",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)(unsigned short)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold tail's +0xabf9 test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\t/* 0x688b4 */"
+ },
+ {
+  "label": "24: the hold tail reads +0xabf9 as a halfword",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */"
+ },
+ {
+  "label": "24: the hold tail does not stamp +0xabe2",
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
+  "replace": "\t\ttx1_moh_cleardown(o);"
+ },
+ {
+  "label": "24: the hold tail stamps +0xabe2 with three",
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
+  "replace": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 3;"
+ },
+ {
+  "label": "24: the hold tail's message range is == 2",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif (o->moh_message != 2) {"
+ },
+ {
+  "label": "24: the hold tail's message range runs to four",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif ((unsigned)(o->moh_message - 2) > 2u) {"
+ },
+ {
+  "label": "24: the hold tail's message range starts at one",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif ((unsigned)(o->moh_message - 1) > 1u) {"
+ },
+ {
+  "label": "24: the hold tail restarts the handshake where it clears down",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_reinit(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
+  "replace": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o);"
  }
 ]

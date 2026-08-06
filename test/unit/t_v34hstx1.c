@@ -1,5 +1,5 @@
 /*
- * t_v34hstx1.c -- sixteen arms of `v34handshak`'s per-sample transmit
+ * t_v34hstx1.c -- seventeen arms of `v34handshak`'s per-sample transmit
  * dispatch, each compared against the blob on its own.
  *
  * ---------------------------------------------------------------------------
@@ -104,6 +104,12 @@
 #define TX1_F25D8	0x25d8		/* 64/68 counts one per pass       */
 #define TX1_F25DA	0x25da		/* 64 needs 2; 66ca8 needs non-zero*/
 #define TX1_F35A2	0x35a2		/* 66ca8's other companion         */
+#define TX1_FABF8	0x00abf8	/* byte: 24's message-dispatch     */
+					/* one-shot.  Up here rather than  */
+					/* with 24's other companions      */
+					/* because `run_case_ex` reads it   */
+#define TX1_FABF9	0x00abf9	/* byte: picks 24's message AND    */
+					/* its hold tail's first way out   */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
 
@@ -163,10 +169,45 @@ apply(short txst, const struct tx1_poke *p, int np)
  * `V34TX1_LOOP` the arm has left the dispatch for a block this reconstruction
  * does not model, there is nothing to compare it against, and only the first
  * run happens -- named as a gap in finding 343 rather than left silent.
+ *
+ * `guard` IS THE SECOND ANTI-VACUITY GUARD, AND IT HAS THREE FORMS BECAUSE
+ * ONE ARM HAS PATHS THAT DO NOT TRANSMIT.  What the guard is FOR is that side
+ * A's `ref_v34handshak` must not go on to run the blob's own copy of the arm
+ * we are checking and supply what our arm left out -- if it did, an arm that
+ * did nothing would be compared against itself and pass.  Sixteen of the
+ * seventeen arms stop that by leaving the queue's count at the block's limit,
+ * which makes the blob skip the per-sample loop outright (0x62933).
+ *
+ * 24 `TX_DPSK` has four paths and only two of them reach `txmit`.  The two
+ * that end the message move the TRANSMIT STATE instead, so the blob's loop
+ * re-dispatches -- to a DIFFERENT arm, and the two sides converge because
+ * side B's blob arm moved the state the same way.  `TX1_GUARD_STATE` is that,
+ * and it is the same claim by the other route: nothing else in table 1 shares
+ * 24's entry, and `case_tx_dpsk_entry` asserts that against the blob's own
+ * `.rodata`.
+ *
+ * AND ONE OF 24'S PATHS MOVES NEITHER, which is the third form.  With
+ * `moh_message` outside 0..3 the dispatch does NOTHING but clear its own
+ * one-shot at +0xabf8, and clearing it is what stops the re-dispatch being a
+ * repeat: the blob then takes the arm's OTHER branch (0x67c4e) rather than
+ * the message dispatch again.  `TX1_GUARD_ONESHOT` asserts the clear, and it
+ * is a real guard for the same reason the other two are -- an arm that did
+ * nothing fails it.  It is 24's alone and the offset is named at the head of
+ * this file for that reason.
+ *
+ * `run_case` passes `TX1_GUARD_QUEUE`, so the sixteen arms that landed before
+ * this one are unchanged and no run of theirs silently moved to a weaker
+ * form.
  */
+enum tx1_guard {
+	TX1_GUARD_QUEUE = 0,	/* the arm left the queue at the block limit */
+	TX1_GUARD_STATE,	/* the arm moved the transmit machine        */
+	TX1_GUARD_ONESHOT	/* 24 only: the arm cleared +0xabf8          */
+};
+
 static void
-run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
-	 const struct tx1_poke *p, int np)
+run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
+	    long tag, const struct tx1_poke *p, int np, int guard)
 {
 	const unsigned char *o;
 	char msg[192];
@@ -199,10 +240,29 @@ run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
 	 * the blob's own loop test must now be false on side A, or side A
 	 * runs the blob's copy of the arm we are trying to check.
 	 */
-	snprintf(msg, sizeof(msg),
-		 "%s: the arm advanced the queue to the limit", what);
-	diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXCURSOR)
-		    >= v34hs_peek_short(0, V34HS_TXLIMIT), 1, tag);
+	if (guard == TX1_GUARD_QUEUE) {
+		snprintf(msg, sizeof(msg),
+			 "%s: the arm advanced the queue to the limit", what);
+		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXCURSOR)
+			    >= v34hs_peek_short(0, V34HS_TXLIMIT), 1, tag);
+	} else if (guard == TX1_GUARD_STATE) {
+		snprintf(msg, sizeof(msg),
+			 "%s: the arm moved the transmit machine off %d",
+			 what, (int)txst);
+		diff_eq_int(msg,
+			    v34hs_peek_short(0, V34HS_TXSTATE) != txst, 1, tag);
+	} else {
+		/*
+		 * BOTH HALVES, and the second is the guard.  "+0xabf8 is
+		 * zero" is true of an arm that did nothing whenever the fixture
+		 * seeded it zero, which is a check that reads as a check and is
+		 * not; what has to be asserted is that the arm CLEARED it.
+		 */
+		snprintf(msg, sizeof(msg),
+			 "%s: the arm cleared the one-shot at +0xabf8", what);
+		diff_eq_int(msg,
+			    before[TX1_FABF8] != 0 && o[TX1_FABF8] == 0, 1, tag);
+	}
 
 	apply(txst, p, np);
 	rc = v34hs_step_case(arm);
@@ -213,6 +273,13 @@ run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
 	if (dump)
 		printf("  %-38s tx %2d  arm wrote %4u  step wrote %4u\n",
 		       what, txst, nd, v34hs_observed(0)->changed);
+}
+
+static void
+run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
+	 const struct tx1_poke *p, int np)
+{
+	run_case_ex(txst, arm, want, what, tag, p, np, TX1_GUARD_QUEUE);
 }
 
 /* --- 65 XMIT0 ------------------------------------------------------------- */
@@ -2151,11 +2218,614 @@ case_xmitmp_entry(void)
 		    6791);
 }
 
+/* --- 24 TX_DPSK ----------------------------------------------------------- */
+
+/*
+ * ONE BIT OF A MESSAGE PER PASS AND FOUR WAYS OUT, and only TWO of the four
+ * reach `txmit`.  The other two end the message and move the transmit machine
+ * instead, so they are driven through `run_case_ex(..., 0)` and guarded by
+ * the state rather than by the queue -- see the comment on `run_case_ex` for
+ * why that is the same claim and not a weaker one.
+ *
+ * WHERE THE READER LIVES IS A POKE, as it is for 67.  The fixture aims
+ * +0xaa6c at a block OUTSIDE the object, so left alone the reader's own
+ * advance would be invisible to the "wrote something" guard and to finding
+ * 323's byte count -- which is half of why 24 and 60 agree cold.  These runs
+ * put the record INSIDE the object, at +0xaa0c, which is one whole 0x30-byte
+ * slot of the five-record array (v34hshak.c's mode 2/3 blanks the same one)
+ * and does not overlap +0xaa78, +0xaa7e or the pointer itself.
+ *
+ * Every field the arm writes is seeded away from what it stores (finding
+ * 345): `vect_idx` non-zero against the hold's clear, +0xaa78 non-zero
+ * against it too, +0x25d0 to a word that is no `vect4` entry, +0xabe2,
+ * +0xabe4 and +0xabe6 away from one, +0xabf8 non-zero against the one-shot's
+ * clear, the reader's own fields away from what a refill leaves, and the
+ * record at +0xa94c away from all twelve of `tx1_moh_send`'s values through
+ * `A94C_SEED`.
+ *
+ * AND THE TWO BYTES AFTER THE THREE `cmpb` SITES ARE SEEDED, for the reason
+ * 74's +0xabe9 is: a halfword reading of a byte field must be distinguishable
+ * from a byte one, and left to the fill that is a coin toss.
+ */
+#define TX1_FABE2	0xabe2		/* short: the clear-down's stamp    */
+#define TX1_FABE4	0xabe4		/* short: raised by the clear-down  */
+#define TX1_FABE6	0xabe6		/* short: raised by the retrain     */
+#define TX1_MOHMSG	0xabf0		/* int: moh_message                 */
+#define TX1_MOHRCV	0xabf4		/* int: moh_recvd                   */
+/* +0xabf8 and +0xabf9 are at the head of this file; `run_case_ex` reads one. */
+
+/*
+ * TWO OF THE FIVE 0x30-BYTE MESSAGE RECORDS, chosen because nothing else in
+ * this tree names either.  The array runs +0xa94c, +0xa97c, +0xa9ac, +0xa9dc,
+ * +0xaa0c and +0xaa3c; `v34handshakinit` aims +0xaa70 at +0xa97c and +0xaa6c
+ * at +0xa94c, `getMPrecvdBits` uses +0xaa3c and `settxlevel` reads +0xa9dc as
+ * a transmit-level table (v34hshak.c's `v34setuptxmit`), which leaves +0xa9ac
+ * and +0xaa0c.
+ */
+#define DP_REC		0xaa0c		/* where these runs put the reader  */
+#define DP_ALT		0xa9ac		/* and somewhere else to put it     */
+
+/* The reader's nine words after word[0]; word[0] itself is varied. */
+#define DP_WORD_SEED(B)							\
+	P16((B) + 0x02, 0x1357), P16((B) + 0x04, 0x2466),		\
+	P16((B) + 0x06, 0x3575), P16((B) + 0x08, 0x4684),		\
+	P16((B) + 0x0a, 0x5793), P16((B) + 0x0c, 0x68a2),		\
+	P16((B) + 0x0e, 0x79b1), P16((B) + 0x10, 0x8ac0),		\
+	P16((B) + 0x12, 0x9bcf)
+
+#define DP_E8		0		/* +0xabe8, the Modem-on-Hold flag  */
+#define DP_F8		1		/* +0xabf8, the one-shot            */
+#define DP_F9		2		/* +0xabf9                          */
+#define DP_MSG		3		/* moh_message                      */
+#define DP_RCV		4		/* moh_recvd                        */
+#define DP_IDX		5		/* vect_idx                         */
+#define DP_RTD		6		/* rtd, which sets the threshold    */
+#define DP_358C		7		/* the tone's flag                  */
+#define DP_ACC		8		/* the reader's accumulator         */
+#define DP_AVAIL	9		/* and how much of it is left       */
+#define DP_NBITS	10
+#define DP_POS		11
+#define DP_CRCON	12
+#define DP_REPEAT	13
+#define DP_ACC0		14
+#define DP_AVAIL0	15
+#define DP_BASE		16		/* where +0xaa6c is aimed           */
+#define DP_E2		17		/* +0xabe2                          */
+#define DP_W0		18		/* the reader's word[0]             */
+
+static struct tx1_poke dpsk[] = {
+	P8(TX1_FABE8, 0),			/* DP_E8     */
+	P8(TX1_FABF8, 0x5a),			/* DP_F8     */
+	P8(TX1_FABF9, 0),			/* DP_F9     */
+	P32(TX1_MOHMSG, 7),			/* DP_MSG    */
+	P32(TX1_MOHRCV, 9),			/* DP_RCV    */
+	P16(TX1_VECTIDX, 0x0040),		/* DP_IDX    */
+	P16(TX1_RTD, 0x0100),			/* DP_RTD    */
+	P16(TX1_F358C, 0x1234),			/* DP_358C   */
+	P32(DP_REC + 0x24, 0x000000b0),		/* DP_ACC    */
+	P16(DP_REC + 0x28, 8),			/* DP_AVAIL  */
+	P16(DP_REC + 0x18, 0x0040),		/* DP_NBITS  */
+	P16(DP_REC + 0x1a, 0x0008),		/* DP_POS    */
+	P16(DP_REC + 0x16, 0),			/* DP_CRCON  */
+	P16(DP_REC + 0x20, 0),			/* DP_REPEAT */
+	P32(DP_REC + 0x2c, 0x00000030),		/* DP_ACC0   */
+	P16(DP_REC + 0x2a, 8),			/* DP_AVAIL0 */
+	PSELF(TX1_PTR_AA6C, DP_REC),		/* DP_BASE   */
+	P16(TX1_FABE2, 0x0f0f),			/* DP_E2     */
+	P16(DP_REC + 0x00, 0x2468),		/* DP_W0     */
+
+	/* The reader's fields no run varies, at both bases. */
+	P16(DP_REC + 0x14, 0x0123),	/* crc                              */
+	P16(DP_REC + 0x1c, 0x0008),	/* wordbits                         */
+	/*
+	 * `idx` IS SEEDED AWAY FROM ZERO and it is the re-arm's only visible
+	 * clear: with it at zero the hand re-arm's `b->idx = 0` writes the
+	 * value already there and 2413's refill reads `word[0]` either way.
+	 */
+	P16(DP_REC + 0x1e, 0x0002),	/* idx                              */
+	P16(DP_REC + 0x22, 0x0044),	/* repeats                          */
+	DP_WORD_SEED(DP_REC),
+	/*
+	 * The alternate record is EXHAUSTED where the main one is varied: the
+	 * one run that uses it is 2431, which needs the message to be over.
+	 * `word[0]` is away from 0xbb, which is the byte
+	 * `VPcmV34SetMohMessageBits` writes for `moh_message` three.
+	 */
+	P16(DP_ALT + 0x00, 0x1a2b), DP_WORD_SEED(DP_ALT),
+	P16(DP_ALT + 0x14, 0x0123), P16(DP_ALT + 0x16, 0),
+	P16(DP_ALT + 0x18, 0x0040), P16(DP_ALT + 0x1a, 0x0040),
+	P16(DP_ALT + 0x1c, 0x0008), P16(DP_ALT + 0x1e, 0x0000),
+	P16(DP_ALT + 0x20, 0), P16(DP_ALT + 0x22, 0x0044),
+	P32(DP_ALT + 0x24, 0x000000b0), P16(DP_ALT + 0x28, 0),
+	P16(DP_ALT + 0x2a, 8), P32(DP_ALT + 0x2c, 0x00000030),
+
+	/* What the arm writes, all away from what it stores. */
+	A94C_SEED,
+	P16(TX1_FABE4, 0x0e0e), P16(TX1_FABE6, 0x0d0d),
+	P16(TX1_COUNT, 0x0777), P32(TX1_F25D0, 0x11223344),
+	P8(0xabe9, 0x5a), P8(0xabfa, 0x5a)
+};
+
+static void
+dp_reset(void)
+{
+	dpsk[DP_E8].val = 0;
+	dpsk[DP_F8].val = 0x5a;
+	dpsk[DP_F9].val = 0;
+	dpsk[DP_MSG].val = 7;
+	dpsk[DP_RCV].val = 9;
+	dpsk[DP_IDX].val = 0x0040;
+	dpsk[DP_RTD].val = 0x0100;
+	dpsk[DP_358C].val = 0x1234;
+	dpsk[DP_ACC].val = 0x000000b0;
+	dpsk[DP_AVAIL].val = 8;
+	dpsk[DP_NBITS].val = 0x0040;
+	dpsk[DP_POS].val = 0x0008;
+	dpsk[DP_CRCON].val = 0;
+	dpsk[DP_REPEAT].val = 0;
+	dpsk[DP_ACC0].val = 0x00000030;
+	dpsk[DP_AVAIL0].val = 8;
+	dpsk[DP_BASE].val = DP_REC;
+	dpsk[DP_E2].val = 0x0f0f;
+	dpsk[DP_W0].val = 0x2468;
+}
+
+/* The message is over: `avail` gone, `pos` at `nbits`, no CRC and no repeat. */
+static void
+dp_exhaust(void)
+{
+	dpsk[DP_AVAIL].val = 0;
+	dpsk[DP_POS].val = 0x0040;
+	dpsk[DP_NBITS].val = 0x0040;
+	dpsk[DP_CRCON].val = 0;
+	dpsk[DP_REPEAT].val = 0;
+}
+
+static void
+run_dpsk(const char *what, long tag)
+{
+	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+		 dpsk, NP(dpsk));
+}
+
+/* The paths that do not transmit; the state is the guard instead. */
+static void
+run_dpsk_nq(const char *what, long tag)
+{
+	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+		    dpsk, NP(dpsk), TX1_GUARD_STATE);
+}
+
+/* And the one that moves neither: the one-shot is the guard. */
+static void
+run_dpsk_1s(const char *what, long tag)
+{
+	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+		    dpsk, NP(dpsk), TX1_GUARD_ONESHOT);
+}
+
+/*
+ * FINDING 323'S ONE COLLISION, MEASURED HERE RATHER THAN QUOTED, and it is
+ * AGREEMENT ON ONE PATH and not identity.
+ *
+ * Cold, 24 and 60 write the same 69 bytes with the same signature.  The
+ * reason has three parts and each is asserted: the fill leaves the
+ * Modem-on-Hold flag clear, so there is no `vect_idx` tick; the reader hands
+ * back a ZERO bit, so the store into +0x358c writes the value already there
+ * and selects the entry 60 selects; and the message is NOT over, so the arm
+ * does not move the transmit machine.  The last check runs both arms from the
+ * identical cold object -- 60's reads no state word, so it can be dispatched
+ * at txstate 24 -- and requires the two objects to agree byte for byte.
+ *
+ * `case_tx_dpsk_entry` is the other half: two entries at two addresses.  A
+ * later blob that folded them together, or a fill that moved any of the three
+ * conditions, is a failure here rather than a silence.
+ */
+static void
+case_dpsk_cold(void)
+{
+	const unsigned char *o;
+	short f358c;
+	int point;
+
+	apply(V34HS_TX_DPSK, NULL, 0);
+	o = (const unsigned char *)v34hs_object(0);
+	diff_eq_int("24 TX_DPSK cold: the fill leaves +0xabe8 clear",
+		    o[TX1_FABE8], 0, 2490);
+	memcpy(&f358c, o + TX1_F358C, sizeof(f358c));
+
+	(void)v34tx1_tx_dpsk(v34hs_object(0));
+	diff_eq_int("24 TX_DPSK cold: the message is not over",
+		    v34hs_peek_short(0, V34HS_TXSTATE), V34HS_TX_DPSK, 2491);
+	diff_eq_int("24 TX_DPSK cold: +0x358c is unchanged, so the bit was zero",
+		    v34hs_peek_short(0, TX1_F358C), f358c, 2492);
+	memcpy(&point, o + TX1_F25D0, sizeof(point));
+	diff_eq_int("24 TX_DPSK cold: the tone is 60 TONE_AB's",
+		    point, vect4[2 * (f358c & 1)], 2493);
+	memcpy(before, o, sizeof(before));
+
+	apply(V34HS_TX_DPSK, NULL, 0);
+	(void)v34tx1_tone_ab(v34hs_object(0));
+	diff_eq_obj("24 TX_DPSK and 60 TONE_AB leave the same object cold",
+		    struct v34_object, (const struct v34_object *)before,
+		    (const struct v34_object *)v34hs_object(0), 2494);
+
+	/* And the same thing against the blob, which is the real check. */
+	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP,
+		 "24 TX_DPSK, cold, no pokes at all", 2495, NULL, 0);
+}
+
+/*
+ * 24's entry, read out of the blob's own `.rodata` the way the other
+ * shared-entry checks are.  It is its own target, and 60's -- the arm it
+ * agrees with cold -- is a different one.
+ */
+static void
+case_tx_dpsk_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+
+	diff_eq_int("table 1: 24's entry is v34handshak + 0x22a6",
+		    (int)(t1[24 - 5] - base), 0x62b96 - 0x628f0, 2480);
+	diff_eq_int("table 1: 60's entry is v34handshak + 0x244d",
+		    (int)(t1[60 - 5] - base), 0x62d3d - 0x628f0, 2481);
+	diff_eq_int("table 1: 24 and 60 are two entries, not one",
+		    t1[24 - 5] != t1[60 - 5], 1, 2482);
+}
+
+static void
+case_tx_dpsk(void)
+{
+	/*
+	 * THE TONE, and the XOR is an XOR.  The reader's eight bits of 0xb0
+	 * come out 1, 0, 1, 1, so the first run takes a ONE and the second --
+	 * eight bits of 0x30 -- takes a ZERO.  The third pairs the one bit
+	 * with an ODD +0x358c, which sends the same point the zero-bit run
+	 * sends from the opposite pair: a reconstruction in which the bit
+	 * SELECTS the tone rather than toggling it passes exactly one of them.
+	 */
+	dp_reset();
+	run_dpsk("24 TX_DPSK, a one bit and an even flag", 2400);
+	dp_reset();
+	dpsk[DP_ACC].val = 0x00000030;
+	run_dpsk("24 TX_DPSK, a zero bit and an even flag", 2401);
+	dp_reset();
+	dpsk[DP_358C].val = 0x1235;
+	run_dpsk("24 TX_DPSK, a one bit and an odd flag", 2402);
+
+	/*
+	 * THE MODEM-ON-HOLD CLOCK AT THE ENTRY.  +0xabe8 set adds one tick of
+	 * `vect_idx` before anything else, and this run is otherwise 2400: the
+	 * two differ in that one halfword and in nothing else.
+	 */
+	dp_reset();
+	dpsk[DP_E8].val = 1;
+	run_dpsk("24 TX_DPSK, the Modem-on-Hold clock ticks", 2403);
+
+	/*
+	 * THE READER, three of its arms through the arm's first call.  The
+	 * refill folds the CRC as well, so the record moves in five fields
+	 * rather than one; the restart is the arm that does NOT inline in the
+	 * object (0x684bb is a real `call getbit`).  Exhaustion is 2410 below,
+	 * because it is also the arm that ends the message.
+	 */
+	dp_reset();
+	dpsk[DP_AVAIL].val = 0;
+	dpsk[DP_POS].val = 0;
+	dpsk[DP_CRCON].val = 1;
+	run_dpsk("24 TX_DPSK, the reader refills", 2404);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_REPEAT].val = 1;
+	run_dpsk("24 TX_DPSK, the reader restarts", 2405);
+
+	/*
+	 * THE MESSAGE IS OVER AND THE MODEM IS NOT ON HOLD: the transmit
+	 * machine goes to 60 TONE_AB and the arm does nothing else at all --
+	 * no tone, no `txmit`.  This is the first of the two runs the queue
+	 * guard cannot cover.
+	 */
+	dp_reset();
+	dp_exhaust();
+	run_dpsk_nq("24 TX_DPSK, the message is over", 2410);
+
+	/*
+	 * ON HOLD WITH THE ONE-SHOT DOWN, 0x67c4e: the reader is re-armed by
+	 * hand -- `getbit`'s restart arm with the `repeat` test taken out --
+	 * and read again, and the bit that comes out is sent like any other.
+	 *
+	 * Three runs for the three shapes the re-armed reader can take, and
+	 * the third is the one that says the re-arm CLEARS `pos`: the outer
+	 * read was exhausted because `pos` had reached `nbits`, so a
+	 * reconstruction that left `pos` alone is exhausted again and sends
+	 * -1 where the object refills and sends a real bit.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	run_dpsk("24 TX_DPSK, on hold, the reader is re-armed", 2411);
+	/*
+	 * TWO MORE OF THE SAME PATH THAT EXIST FOR THE THRESHOLD ALONE, and
+	 * both leave at 0x6431f like 2411 does.  2419's `vect_idx` is 512 --
+	 * short of 1216 and past a threshold of 0x4b, which is the only way to
+	 * tell the constant's three digits from its two.  2409's is -1 after
+	 * the entry tick, which is the only way to tell 0x64ffa's `movswl`
+	 * from a `movzwl`: unsigned it is 65,535 and the hold would be over.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0x0200;
+	run_dpsk("24 TX_DPSK, on hold, halfway to the threshold", 2419);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = -2;			/* -1 after the entry tick */
+	run_dpsk("24 TX_DPSK, on hold, the clock is negative", 2409);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_NBITS].val = 0;
+	dpsk[DP_POS].val = 0;
+	dpsk[DP_AVAIL0].val = 0;
+	run_dpsk("24 TX_DPSK, on hold, the re-armed reader is empty too", 2412);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_AVAIL0].val = 0;
+	run_dpsk("24 TX_DPSK, on hold, the re-armed reader refills", 2413);
+
+	/*
+	 * THE HOLD TAIL, 0x64fec, reached through that same path so that the
+	 * tone and the `txmit` keep the queue guard.  Its first test is a
+	 * TIME: `vect_idx` against `(rtd >> 4) + 1200`.  2411 is below it and
+	 * these four are at or above.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0x0500;		/* 1280, past 1216 */
+	dpsk[DP_F9].val = 0x33;
+	run_dpsk("24 TX_DPSK, the hold is over, +0xabf9 up", 2414);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0x0500;
+	dpsk[DP_MSG].val = 2;
+	run_dpsk("24 TX_DPSK, the hold is over, clearing down", 2415);
+	/*
+	 * moh_message 3 takes the same way out as 2, which is what says
+	 * 0x65025's `sub $2 ; cmp $1 ; ja` is a RANGE and not `== 2`.  It is
+	 * an independent check of the compare and the SAME check of the
+	 * clear-down that 2415 makes.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0x0500;
+	dpsk[DP_MSG].val = 3;
+	run_dpsk("24 TX_DPSK, the hold is over, message three", 2416);
+	/*
+	 * AND A NEGATIVE ROUND-TRIP DELAY, which is the only run that tells
+	 * 0x65001's arithmetic `sar $0x4` from a logical one: with `rtd`
+	 * positive the two agree on every value, and with it at -20000 the
+	 * threshold is -50 where a `shr` reading puts it past 268 million.
+	 * `vect_idx` is zero here, so the two answers are opposite.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0;
+	dpsk[DP_RTD].val = -20000;
+	dpsk[DP_MSG].val = 2;
+	run_dpsk("24 TX_DPSK, the hold is over, a negative round trip", 2417);
+	/*
+	 * The third way out of the tail: neither +0xabf9 nor a message in
+	 * 2..3, so the handshake is restarted.  `v34handshakinit(obj, 1)`
+	 * runs INSIDE the step, which is finding 359's case -- and it also
+	 * re-arms the loop that is dispatching this arm, setting +0x2aa0 to
+	 * six and clearing `vect_idx`.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_F8].val = 0;
+	dpsk[DP_IDX].val = 0x0500;
+	dpsk[DP_MSG].val = 7;
+	run_dpsk("24 TX_DPSK, the hold is over, the handshake restarts", 2418);
+
+	/*
+	 * ON HOLD WITH THE ONE-SHOT UP, 0x64e91: the message dispatch.  None
+	 * of these transmits, so all of them are guarded by the state -- and
+	 * every one of them is arranged so the state DOES move, which for the
+	 * three arms that write nothing of their own means the tail has to.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 1;
+	run_dpsk_nq("24 TX_DPSK, on hold, a message to send", 2420);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 2;
+	run_dpsk_nq("24 TX_DPSK, on hold, clearing down", 2421);
+	/*
+	 * moh_message 3 is 0x64eb6's compare under a different index and the
+	 * SAME clear-down; it is here because 0x64ea6's `cmp $3 ; ja` is what
+	 * separates 2 and 3 from 4, and 2422 with 2423 is that boundary.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 3;
+	run_dpsk_nq("24 TX_DPSK, on hold, message three", 2422);
+	/*
+	 * moh_message FOUR DOES NOTHING AT ALL, and the run has to prove a
+	 * negative -- which is the one thing neither of the other two guards
+	 * can carry.  The arm here writes ONE byte, the one-shot at +0xabf8,
+	 * and the hold tail leaves at 0x6431f, so the transmit machine does
+	 * not move and there is no queue to advance; `TX1_GUARD_ONESHOT` is
+	 * what says the arm ran.  It is not a weaker check of the DISPATCH: a
+	 * reconstruction that cleared down here leaves the transmit machine at
+	 * MOH_CLEARDOWN, side A's `ref_v34handshak` then sends four silent
+	 * samples where side B sends a tone, and the comparison says so.
+	 *
+	 * PUTTING THE TAIL PAST THE THRESHOLD WOULD HIDE IT, which is why this
+	 * run does not: every way the tail can move the machine leaves exactly
+	 * what a spurious clear-down leaves -- the retrain's own
+	 * `v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and rewrites both
+	 * state words, and the tail's clear-down IS the clear-down.
+	 *
+	 * 2433 is the same shape with a NEGATIVE moh_message, which is the only
+	 * value that separates 0x64ea6's unsigned `ja` from a signed compare.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 4;
+	run_dpsk_1s("24 TX_DPSK, on hold, message four does nothing", 2423);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = -1;
+	run_dpsk_1s("24 TX_DPSK, on hold, a negative message does nothing", 2433);
+	/*
+	 * AND THE SAME moh_message PAST THE THRESHOLD, which is a check of the
+	 * TAIL and not of the dispatch: four is one past 0x65025's range, so it
+	 * restarts the handshake where two and three clear down.  2423 cannot
+	 * make that distinction and this run cannot make 2423's.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 4;
+	dpsk[DP_IDX].val = 0x0500;
+	run_dpsk_nq("24 TX_DPSK, the hold is over, message four restarts", 2434);
+
+	/*
+	 * moh_message zero hands over to `moh_recvd`, and its two "wait"
+	 * values reach the same block through TWO SEPARATE COMPARES -- 0x6902d
+	 * and 0x6903b -- so neither run stands in for the other.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 0;
+	run_dpsk_nq("24 TX_DPSK, on hold, nothing received yet", 2424);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 4;
+	run_dpsk_nq("24 TX_DPSK, on hold, an acknowledgement received", 2425);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 1;
+	run_dpsk_nq("24 TX_DPSK, on hold, a message to answer", 2426);
+	/*
+	 * AND 0x6a3c6'S `cmp $5` IS EXACT: six takes the restart, five does
+	 * not.  Without this run "anything above four" builds the message.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 6;
+	run_dpsk_nq("24 TX_DPSK, on hold, an unknown message received", 2427);
+
+	/*
+	 * THE MESSAGE IS BUILT, 0x6a3cf.  +0xabf9 picks which one -- and, one
+	 * block later, which way the tail goes out -- so the two runs differ
+	 * in more than the message and the object couples them that way.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 5;
+	dpsk[DP_F9].val = 0x33;
+	dpsk[DP_IDX].val = 0x0500;
+	run_dpsk_nq("24 TX_DPSK, on hold, a refusal received", 2428);
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 5;
+	dpsk[DP_IDX].val = 0x0500;
+	run_dpsk_nq("24 TX_DPSK, on hold, a refusal, +0xabf9 down", 2429);
+	/*
+	 * +0xabe2 ALREADY AT THREE, which is the one guard in that block: the
+	 * stamp is NOT written, where every other run here writes one over the
+	 * seed.  IT IS 2429'S RUN AND NOT 2428'S, and that is not a detail:
+	 * with +0xabf9 up the HOLD TAIL stamps +0xabe2 with one four blocks
+	 * later, and against that a message block that stamped
+	 * unconditionally writes nothing of its own.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 5;
+	dpsk[DP_IDX].val = 0x0500;
+	dpsk[DP_E2].val = 3;
+	run_dpsk_nq("24 TX_DPSK, on hold, a refusal already refused", 2430);
+	/*
+	 * AND THE RUN THAT SEPARATES THE OLD READER FROM THE NEW ONE.
+	 * 0x6a42e reads +0xaa6c BEFORE the call and 0x6a448 writes it after,
+	 * so `VPcmV34SetMohMessageBits` fills `word[0]` of the record the
+	 * reader was on and the twelve stores re-arm +0xa94c.  In the object's
+	 * own configuration those are one record (v34hshak.c:1451) and no fill
+	 * or handshake can tell them apart; a poke is the only way.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 0;
+	dpsk[DP_RCV].val = 5;
+	dpsk[DP_F9].val = 0x33;
+	dpsk[DP_IDX].val = 0x0500;
+	dpsk[DP_BASE].val = DP_ALT;
+	run_dpsk_nq("24 TX_DPSK, on hold, the message goes to the old reader",
+		    2431);
+
+	/*
+	 * THE ENTRY TICK DECIDING A BRANCH.  Everywhere above, +0xabe8's
+	 * `vect_idx += 1` shows only as one halfword; here `vect_idx` starts
+	 * exactly one below the threshold, so the tick is what takes the hold
+	 * past it.  Without the tick the tail leaves at 0x6431f, the transmit
+	 * machine does not move, and the run's own guard fails -- which is the
+	 * point of putting it on a state-guarded run.
+	 */
+	dp_reset();
+	dp_exhaust();
+	dpsk[DP_E8].val = 1;
+	dpsk[DP_MSG].val = 4;
+	dpsk[DP_IDX].val = 0x04bf;		/* 1215, one below 1216 */
+	dpsk[DP_F9].val = 0x33;
+	run_dpsk_nq("24 TX_DPSK, the clock tick crosses the threshold", 2432);
+	dp_reset();
+}
+
 int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: sixteen per-sample transmit arms");
+	diff_begin("v34handshak table 1: seventeen per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
@@ -2189,6 +2859,10 @@ main(void)
 
 	case_xmitmp_entry();
 	case_xmitmp();
+
+	case_tx_dpsk_entry();
+	case_dpsk_cold();
+	case_tx_dpsk();
 
 	return diff_end();
 }

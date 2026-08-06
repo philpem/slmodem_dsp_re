@@ -1,5 +1,5 @@
 /*
- * v34hstx1.h -- sixteen arms of `v34handshak`'s per-sample transmit
+ * v34hstx1.h -- seventeen arms of `v34handshak`'s per-sample transmit
  * dispatch.
  *
  * `v34handshak` is 61,541 bytes and is not one unit.  Table 1, the jump table
@@ -19,10 +19,12 @@
  * And then 69 `EXMIT` and the entry 64 `JTXMIT` and 68 `J1TXMIT` share, at
  * 823 and 892 bytes.  And then 67 `XMITMP` at 2,024, which is the largest
  * arm of the table taken so far and the only one that clocks a MESSAGE out
- * rather than a fixed pattern.
+ * rather than a fixed pattern -- and then 24 `TX_DPSK` at 2,220, which
+ * clocks a different message out one bit at a time and carries the whole of
+ * Modem-on-Hold's clear-down behind it.
  *
- * SIXTEEN FUNCTIONS FOR TWENTY-TWO txstates, and the SHAPES ARE WORTH TELLING
- * APART because "one table entry" does not mean "one behaviour" here:
+ * SEVENTEEN FUNCTIONS FOR TWENTY-THREE txstates, and the SHAPES ARE WORTH
+ * TELLING APART because "one table entry" does not mean "one behaviour" here:
  *
  *     78 / 85          TWO entries, one body, two tail calls
  *     81 82 83 84      ONE entry, one behaviour
@@ -87,11 +89,12 @@ enum v34tx1_exit {
  * 70 at 0x6431f and 0x64326, 51 at 0x63941, 0x6409a and 0x62d70; 19 at 0x629c8
  * and 0x63948, 20 at 0x6431f and 0x63da2, and 5/54/74 at 0x6409a, 0x629cf,
  * 0x640a1, 0x63da2 and 0x63941; 69 at 0x63941 and 0x6409a, and 64/68 at
- * 0x629c8, 0x62d32, 0x63941, 0x63da2, 0x6409a, 0x640a1, 0x6431f and 0x64326
- * -- every one of them a block that reloads the object and re-tests the loop
- * condition.  So the oracle past them is the blob's own tail and nothing is
- * given up; the two values above remain the only places this file stops
- * short.
+ * 0x629c8, 0x62d32, 0x63941, 0x63da2, 0x6409a, 0x640a1, 0x6431f and 0x64326;
+ * 67 at 0x62d70 and 0x640a1, and 24 at 0x629c8, 0x629cf, 0x63948, 0x6431f,
+ * 0x64326 and 0x640a1 -- every one of them a block that reloads the object
+ * and re-tests the loop condition.  So the oracle past them is the blob's own
+ * tail and nothing is given up; the two values above remain the only places
+ * this file stops short.
  *
  * 0x62d32 IS PART OF 64/68 AND NOT OF ITS REJOIN, for the reason 0x6430c is
  * part of 20: it clears `vect_idx` before falling into 0x62d70, and only one
@@ -122,6 +125,17 @@ int v34tx1_silence(void *obj);
  * then becomes 68.  One function, with the read inside it.
  */
 int v34tx1_jtxmit(void *obj);
+/*
+ * 24 TX_DPSK      0x62b96, with the second reader at 0x67c4e, the message
+ * dispatch at 0x64e91 and the hold tail at 0x64fec.
+ *
+ * One bit of the Modem-on-Hold message per pass, XORed into +0x358c and sent
+ * as `vect4[0]` or `vect4[2]` -- 60 `TONE_AB`'s two points and 60's scaling,
+ * which is why the two AGREE COLD and are still not one arm.  When the
+ * message runs out the arm either hands the transmit machine to 60 or, on
+ * hold, re-arms the reader and works through the clear-down.
+ */
+int v34tx1_tx_dpsk(void *obj);
 /* 18 SSEG         0x64048, continuing at 0x66d11 */
 int v34tx1_sseg(void *obj);
 /* 19 SBARSEG      0x6296d, with the segment's end at 0x671f0 */

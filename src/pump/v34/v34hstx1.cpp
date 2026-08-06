@@ -1,5 +1,5 @@
 /*
- * v34hstx1.cpp -- sixteen arms of `v34handshak`'s per-sample transmit
+ * v34hstx1.cpp -- seventeen arms of `v34handshak`'s per-sample transmit
  * dispatch.
  *
  * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding 217's rule rather
@@ -50,8 +50,11 @@
  * bytes with the same progress code, the table's one collision.  They are two
  * entries at two addresses -- 24's is 0x62b96 and 60's is 0x62d3d, and 60's
  * whole body is thirty-four bytes where 24's is 2,220 -- so the agreement is
- * a property of ONE object fill and of nothing else.  60 is written here; 24
- * is not, and this file says nothing about what it does.
+ * a property of ONE object fill and of nothing else.  BOTH are written here
+ * now, and the agreement is stated where 24 is: cold, the reader hands 24 a
+ * zero bit and the Modem-on-Hold flag is clear, so 24 sends the tone 60
+ * sends and writes nothing else the object can see.  It is agreement on one
+ * path, not identity.
  *
  * WHICH PATH 323 MEASURED, since 60 has two.  The default fill leaves
  * +0x358c at 0xb7eb, which is ODD, so the cold run sent `vect4[2]`; and
@@ -1746,4 +1749,351 @@ v34tx1_xmitmp(void *objp)
 
 	txmit(o);				/* 0x62d5f and 0x64a42 */
 	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 24 `TX_DPSK`, 0x62b96 -- one bit of a message as one tone, and the whole of
+ * Modem-on-Hold's clear-down when the message runs out.
+ *
+ * THE 2,220 BYTES ARE `getbit` INLINED TWICE, which is finding 424's result
+ * at 67 for a second time and is why this arm is short.  0x62bb5..0x62c64
+ * with 0x649f1, 0x654a7, 0x67b95, 0x68480 and 0x6876a is the reader
+ * v34hshak.c:2513 carries, arm for arm and field for field: the "still have
+ * bits" short cut at 0x62bc9, the whole-word refill at 0x654a7, the PART-word
+ * refill at 0x62bfc that does not advance `idx`, the CRC-16 fold at 0x62c35,
+ * the flush at 0x67ba8, the "overrun by exactly sixteen" arm at 0x6876a, and
+ * the exhausted-with-`repeat` restart at 0x68490 -- which does not inline
+ * either: it CALLS `getbit` at 0x684bb for the first bit of the repeat, the
+ * same recursion 0x5ec47 makes.  0x67c4e..0x67d04 with 0x6887f, 0x69165,
+ * 0x69a49, 0x6a842, 0x6a94b, 0x6c996, 0x6c9be and 0x70683 is the SAME reader
+ * a second time, over a record the arm has just re-armed by hand.
+ *
+ * So the arm is two calls, the way 78 and 85 are written over
+ * `tx1_ja_common` and 67 over `getbit`.  What it costs, named rather than
+ * implied, is finding 424's cost unchanged: `tools/mutate.py` anchors on
+ * source text and the reader's text is in `v34hshak.c`, which is
+ * `t_v34hshak.c`'s suite.  What the runs here test is that each call is the
+ * right one on the right record and every branch the arm takes around them.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SHAPE.  One bit, one tone, and three ways for the message to end:
+ *
+ *     if (fabe8)  vect_idx += 1        the Modem-on-Hold clock
+ *     bit = getbit(*(obj + 0xaa6c))
+ *     if (bit >= 0)  {  f358c ^= bit; vect4[2 * (f358c & 1)]; txmit;  }
+ *     else if (!fabe8)      txstate = 60 TONE_AB and nothing else
+ *     else if (!fabf8)      re-arm the reader BY HAND, take one more bit,
+ *                           send it, and fall into the hold tail
+ *     else                  the moh_message dispatch, then the hold tail
+ *
+ * THE TONE IS 60 `TONE_AB`'s, THE SAME TABLE ENTRY SCALED THE SAME WAY --
+ * 0x64a35 here and 0x62d52 there, `mov 0x0(,%reg,8)` over four-byte entries,
+ * so it selects `vect4[0]` or `vect4[2]`, the two ends of a diagonal.  What
+ * 24 adds is that the message bit is XORed INTO +0x358c first, so the tone
+ * alternates on a one and holds on a zero.  That is differential phase-shift
+ * keying at one bit a symbol, which is the state's name.
+ *
+ * FINDING 323'S ONE COLLISION IS THIS, AND IT IS NOT IDENTITY.  Entered cold
+ * 24 and 60 write the same 69 bytes with the same signature, and the reason
+ * is narrow: the fixture's fill leaves +0xabe8 clear, so no `vect_idx` tick;
+ * the reader hands back a ZERO bit, so the store into +0x358c writes the
+ * value already there and the tone selected is the one 60 selects; and the
+ * reader's own advance lands OUTSIDE the object, where finding 323's byte
+ * count does not look.  Any one of those three moving separates them, and
+ * `t_v34hstx1.c` moves all three.  They are two entries at two addresses --
+ * 0x62b96 against 0x62d3d, 2,220 bytes against thirty-four -- and the file
+ * asserts that too.
+ *
+ * ---------------------------------------------------------------------------
+ * THE HOLD TAIL, 0x64fec, is where both Modem-on-Hold paths end, and its
+ * first test is a TIME rather than a state: `vect_idx` against
+ * `(rtd >> 4) + 1200`, both sign-extended from shorts and the shift
+ * arithmetic.  Below it the arm simply leaves; at or above it the hold is
+ * over and one of three things happens.
+ *
+ * WHAT IS NOT RECONSTRUCTED, and it is finding 341's gap again.  Fourteen
+ * blocks here are entered only when `dsplibs_debug_level > 1` -- 0x68704,
+ * 0x68b12, 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the seven
+ * `cmpl $0x1` sites that guard them -- and none is written.  Every one is a
+ * diagnostic on a state transition.
+ *
+ * AND ONE PATH THAT WRITES ONE BYTE.  `moh_message` OUTSIDE 0..3 makes the
+ * dispatch do NOTHING but clear its own one-shot at +0xabf8, and below the
+ * threshold the hold tail leaves at 0x6431f -- so that run neither transmits
+ * nor moves a state word, and `t_v34hstx1.c` guards it on the one-shot
+ * instead.  It has to be that run and not one past the threshold: it is the
+ * only place a clear-down that should not have happened is visible, because
+ * BOTH of the tail's ways out leave exactly what a spurious clear-down leaves
+ * -- the retrain's own `v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and
+ * rewrites both state words, and the tail's clear-down IS the clear-down.
+ */
+
+/* +0xabe4 and +0xabe6, two halfwords of `unmapped_abe4`; +0xabe8 is TX1_FABE8
+ * above and is the same region's Modem-on-Hold flag.  The clear-down raises
+ * +0xabe4 and the two `v34handshakinit` paths raise +0xabe6; no other site in
+ * this tree reads either. */
+#define TX1_FABE4	0xabe4
+#define TX1_FABE6	0xabe6
+
+/*
+ * +0xabf8 and +0xabf9, two BYTES of `unmapped_abf8`, read with `cmpb`.
+ *
+ * +0xabf8 is a one-shot: while it is up the arm runs the message dispatch and
+ * clears it, and once it is down the arm re-arms the reader instead.  +0xabf9
+ * chooses twice -- which message is built at 0x6a3f3, and which of the tail's
+ * three ways out is taken at 0x65012.  Neither has another reader here.
+ */
+#define TX1_FABF8	0xabf8
+#define TX1_FABF9	0xabf9
+
+/*
+ * 0x64a13 and 0x67d07, the same nine instructions twice.  The message bit is
+ * XORed into +0x358c as a 32-bit value and the field stored back as sixteen,
+ * then bit 0 of it selects `vect4[0]` or `vect4[2]`.
+ *
+ * THE BIT REACHES THE XOR SIGN-EXTENDED (`cwtl` at 0x64a05 and 0x67d0e), so
+ * the reader's -1 COMPLEMENTS the whole halfword rather than flipping its low
+ * bit.  Only the low bit is then read, so the tone is the same either way and
+ * the field is not: a run with an exhausted reader is what makes that
+ * visible, and `t_v34hstx1.c` has one.
+ */
+static void
+tx1_dpsk_tone(struct v34_object *o, short bit)
+{
+	short sel = (short)((unsigned short)tx1_get(o, TX1_F358C)
+			    ^ (unsigned short)bit);
+
+	tx1_put(o, TX1_F358C, sel);
+	tx1_put_point(o, vect4[2 * (sel & 1)]);
+}
+
+/*
+ * 0x64eaf, 0x65046 and 0x688b4 -- the clear-down, written three times in the
+ * object and once here.  All three are the same three compare-and-store
+ * pairs in the same order, and the third adds one store of its own.
+ *
+ * THE txstate COMPARE AT 0x64eb6 CANNOT BE FALSE, for finding 342's reason at
+ * 65: that site is reached only from the dispatch at `txstate == 24` and
+ * nothing between them writes +0x3596.  The OTHER TWO CAN, because the hold
+ * tail runs after the dispatch has already moved the machine -- which is why
+ * this is one function and not one inlined body.
+ */
+static void
+tx1_moh_cleardown(struct v34_object *o)
+{
+	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)
+		tx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
+	if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
+		tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_FABE4, 1);
+}
+
+/*
+ * 0x689f6 -- put the modem on hold: MOH_SILENCE, WAIT, and the two counters
+ * the silence arm at 0x63d58 then runs on.  `t_v34hstx1.c` drives it through
+ * both of its two entries, `moh_message == 1` and `moh_recvd` at 0 or 4.
+ */
+static void
+tx1_moh_on_hold(struct v34_object *o)
+{
+	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)
+		tx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
+	if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
+		tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_COUNT, 0);
+	o->vect_idx = 0;
+}
+
+/*
+ * 0x69041 and 0x6923d -- the retrain entry, twice over and identical.
+ *
+ * `v34handshakinit(obj, 1)` RE-ARMS THE LOOP THAT IS DISPATCHING THIS ARM:
+ * `v34modeminit` sets the block's sample limit at +0x2aa0 to six and clears
+ * `vect_idx`, and it moves the transmit machine to SILENCERETRAIN, so the
+ * pass after this one is 5/54/74's four silent samples and the loop then ends
+ * on its own.  Nothing here depends on that; it is recorded because a callee
+ * rewriting the bound of the loop that called it is not what anybody expects
+ * to find.
+ */
+static void
+tx1_moh_reinit(struct v34_object *o)
+{
+	v34handshakinit(o, 1);
+	tx1_put(o, TX1_FABE6, 1);
+}
+
+/*
+ * 0x6a3cf -- build the next Modem-on-Hold message and install a fresh reader
+ * for it.
+ *
+ * THE CALL TAKES THE OLD RECORD AND THE STORE INSTALLS THE NEW ONE.  0x6a42e
+ * reads +0xaa6c before the call and 0x6a448 writes it after, so
+ * `VPcmV34SetMohMessageBits` fills `word[0]` of WHATEVER THE READER WAS
+ * POINTING AT and the twelve stores below re-arm the record at +0xa94c.  In
+ * the object's own configuration those are the same record --
+ * `v34handshakinit`'s mode 4 aims +0xaa6c at +0xa94c (v34hshak.c:1451) -- so
+ * only a poke separates them, and `t_v34hstx1.c` aims the pointer elsewhere
+ * for exactly one run.
+ *
+ * The twelve stores are `v34handshakinit`'s mode-4 record, value for value:
+ * an eight-bit message with an eight-bit word, its CRC armed, twelve bits of
+ * 0xf72 in hand and no repeat.  They are written in the object's order here,
+ * which is not that one's.
+ */
+static void
+tx1_moh_send(struct v34_object *o)
+{
+	struct v34_bitsource *b;
+
+	if (o->fabe2 != 3)
+		o->fabe2 = 1;
+	if (*((unsigned char *)o + TX1_FABF9) == 0)
+		o->moh_message = 1;		/* 0x70430 */
+	else
+		o->moh_message = 3;		/* 0x6a415 */
+
+	/* 0x6a427 */
+	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
+	*(short **)((char *)o + TX1_PTR_AA6C) =
+		(short *)((char *)o + TX1_BLK_A94C);
+
+	/* 0x6a44e */
+	b = (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->nbits = 8;
+	b->wordbits = 8;
+	b->crc_on = 1;
+	b->acc = 0xf72;
+	b->acc0 = 0xf72;
+	b->avail = 0xc;
+	b->avail0 = 0xc;
+	b->repeat = 0;
+}
+
+/*
+ * 0x64fec -- the hold tail, which both Modem-on-Hold paths fall into.
+ *
+ * `rtd` is a short and reaches the compare through `movswl` and an ARITHMETIC
+ * `sar $0x4` (0x64ff3, 0x65001), so a negative round-trip delay pulls the
+ * threshold below zero rather than above four hundred million.  That is the
+ * one reading a positive `rtd` cannot tell apart, and `t_v34hstx1.c` drives
+ * it negative.
+ *
+ * The three ways out are tested in this order and no other: +0xabf9, then
+ * `moh_message` inside 2..3 as ONE unsigned compare of `moh_message - 2`
+ * against one (0x65025), then everything else.
+ */
+static int
+tx1_moh_hold(struct v34_object *o)
+{
+	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
+		return V34TX1_LOOP;			/* 0x6431f */
+
+	if (*((unsigned char *)o + TX1_FABF9) != 0) {
+		/* 0x688b4 */
+		tx1_moh_cleardown(o);
+		o->fabe2 = 1;
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	if ((unsigned)(o->moh_message - 2) > 1u) {
+		/* 0x6923d */
+		tx1_moh_reinit(o);
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	/* 0x65046 */
+	tx1_moh_cleardown(o);
+	return V34TX1_LOOP;				/* 0x64326 */
+}
+
+int
+v34tx1_tx_dpsk(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	short bit;
+
+	/* 0x62b9d */
+	if (*((unsigned char *)o + TX1_FABE8) != 0)
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+
+	/* 0x62bb5, and 0x684bb where it does not inline */
+	bit = getbit(tx1_bitsource(o));
+	if (bit >= 0) {
+		/* 0x64a13 */
+		tx1_dpsk_tone(o, bit);
+		txmit(o);				/* 0x64a42 */
+		return V34TX1_LOOP;			/* 0x640a1 */
+	}
+
+	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
+	if (*((unsigned char *)o + TX1_FABE8) == 0) {
+		/*
+		 * 0x654dd.  The compare against TONE_AB cannot be false, for
+		 * finding 342's reason at 65: the arm is reached only through
+		 * table 1 at `txstate == 24` and nothing between the dispatch
+		 * and here writes +0x3596 -- `getbit` does not.  It is
+		 * written as the object writes it.
+		 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)
+			tx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);
+		return V34TX1_LOOP;			/* 0x63948 */
+	}
+
+	if (*((unsigned char *)o + TX1_FABF8) == 0) {
+		/*
+		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
+		 * `getbit`'s own restart arm with the `repeat` test taken out,
+		 * so a reader that declines to repeat is restarted anyway.
+		 * The stores are the object's, in the object's order; the
+		 * compiler sank the rest of them into the successors, which is
+		 * why 0x6a855 and 0x6c9c8 store 0xffff into `crc` again.
+		 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		b->repeats = (short)((unsigned short)b->repeats + 1);
+		b->crc = (short)0xffff;
+		b->pos = 0;
+		b->idx = 0;
+		b->acc = b->acc0;
+		b->avail = b->avail0;
+
+		tx1_dpsk_tone(o, getbit(b));
+		txmit(o);				/* 0x67d3e */
+		return tx1_moh_hold(o);			/* 0x64fec */
+	}
+
+	/*
+	 * 0x64e91.  Both selectors are read as ints and compared UNSIGNED --
+	 * `cmp $0x1 ; je ; jb` picks zero alone and `cmp $0x3 ; ja` sends a
+	 * negative one to the same place a large one goes.
+	 */
+	if (o->moh_message == 1) {
+		tx1_moh_on_hold(o);			/* 0x689f6 */
+	} else if (o->moh_message == 0) {
+		int got = o->moh_recvd;			/* 0x6901d */
+
+		if (got == 4)
+			tx1_moh_on_hold(o);
+		else if ((unsigned)got > 4u) {
+			/* 0x6a3c6 */
+			if (got != 5)
+				tx1_moh_reinit(o);	/* 0x69041 */
+			else
+				tx1_moh_send(o);	/* 0x6a3cf */
+		} else if (got == 0)
+			tx1_moh_on_hold(o);
+		else
+			tx1_moh_reinit(o);		/* 0x69041 */
+	} else if ((unsigned)o->moh_message <= 3u) {
+		tx1_moh_cleardown(o);			/* 0x64eaf */
+	}
+
+	/* 0x64fde */
+	*((unsigned char *)o + TX1_FABF8) = 0;
+	return tx1_moh_hold(o);				/* 0x64fec */
 }
