@@ -18167,7 +18167,7 @@ and the local maximum (337) before use, as that file instructs.
 `.rodata+0x3000`'s entry for 41 is 0x669a4, 3,945 exclusive bytes and 161
 basic blocks -- the third largest arm of table 3 after 44's 6,046 and 46's
 3,198 (finding 286). `src/pump/v34/v34hshak.c`, `test/unit/t_v34hst3m41.c`,
-4,233 checks, and every leaf of the arm is driven: it contains no
+5,008 checks, and every leaf of the arm is driven: it contains no
 `t3c_unwritten` and no path that halts.
 
 The whole arm is one unconditional store and four guards in front of six
@@ -18354,7 +18354,7 @@ re-entry to DET_SYNC, which prints one line fewer than its twin.
 ======================================================================
 ### 393. What microstate 41's evidence is, and which of its checks are independent
 
-4,233 checks in `test/unit/t_v34hst3m41.c` over 47 cases, every one of them a
+5,008 checks in `test/unit/t_v34hst3m41.c` over 56 cases, every one of them a
 comparison of this tree's `v34handshak` against the blob's over the whole
 44,096-byte object with the thirty-five pointer fields checked by offset, the
 five blocks, the seven padding regions and both transcripts.
@@ -18389,7 +18389,21 @@ reason:
                                  and the +0x359c answer
   the tone body              6   silent, the record's bit 7, the two answers,
                                  and the copy length at -1, 0 and 3
+  the diagnostics off        9   one per body that prints, each asserted to
+                                 write the same bytes and print no lines
 ```
+
+**The diagnostics-off pass is nine independent checks and it was added
+because a mutation proved it had to be.** Every case above it runs with the
+diagnostics on, so the other half of each of the arm's nine
+`if (DSPLIB_DEBUG_ON())` blocks was undriven, and a store moved INSIDE one of
+those guards survived the whole file. That was applied by hand and measured,
+not argued. The nine quiet cases assert the same signature to the byte as
+their loud twins -- which holds, because no out-of-line debug block in this
+arm stores to the object -- and three mutations that hide a store behind a
+guard are now caught. Finding 358 established the axis for 62 in the same
+file family; this is the first time it caught something that was actually
+missing.
 
 Twenty-four signatures are recorded and asserted pairwise distinct, which is
 276 checks about the bodies rather than about the seeds -- the signature holds
@@ -18421,8 +18435,8 @@ under refinit.
 ======================================================================
 ### 394. What microstate 41's mutation suite catches, and the two it cannot
 
-`test/mutations/v34hst3m41.json`, 83 mutations against
-`build/test/t_v34hst3m41`: **81 caught, 0 not caught, 2 recorded as equivalent
+`test/mutations/v34hst3m41.json`, 86 mutations against
+`build/test/t_v34hst3m41`: **84 caught, 0 not caught, 2 recorded as equivalent
 and both survived.** Registered in `suites.json`, which finding 260 says is
 the thing that must not be got wrong.
 
@@ -18445,6 +18459,11 @@ Four of those six needed a case that did not exist when they were written --
 a block count of -1, an +0xabf0 of 0x10001, a negative AGC gain, and a
 negative round-trip delay. That is finding 345's shape and it is the reason
 the suite is worth running before the arm is called done rather than after.
+
+**And three that needed a whole axis.** A store moved inside an
+`if (DSPLIB_DEBUG_ON())` survived every case in the file, because every case
+ran with the diagnostics on. Nine quiet cases and three such mutations later
+they are caught; finding 393 has the shape of the fix.
 
 **The two that survive, with what is held fixed.**
 
@@ -18481,9 +18500,10 @@ silent in the same way.
   "\tv34handshakinit(obj, 1);"
 ```
 
-Both were unique in `src/pump/v34/v34hshak.c` when that suite was written.
-Microstate 41's arm contains two more of the first and one more of the second,
-so `tools/mutate.py` reported
+Both were unique in `src/pump/v34/v34hshak.c` when that suite was written,
+and that is counted rather than argued: `git show
+3799879:src/pump/v34/v34hshak.c | grep -c` gives 1 and 1, and the same grep
+after microstate 41 landed gives 3 and 2. So `tools/mutate.py` reported
 
 ```
   ????  79 sets the transmit state to SSEG      ANCHOR MATCHES 3 TIMES

@@ -420,5 +420,20 @@
   "label": "the tone-during-info1 answer does not clear the trace counter",
   "find": "\ths_put(obj, T41_COUNT, 0);\n\ths_put(obj, T41_TRACE_1, 0);\n\ths_put(obj, T41_F358C, 0);\n\ths_put(obj, T41_FAAE2, -1);",
   "replace": "\ths_put(obj, T41_COUNT, 0);\n\ths_put(obj, T41_F358C, 0);\n\ths_put(obj, T41_FAAE2, -1);"
+ },
+ {
+  "label": "the FRR flag is only set when the message is printed",
+  "find": "\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);"
+ },
+ {
+  "label": "the tone search's last store happens only with the diagnostics on",
+  "find": "\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C + 0x20, 1);"
+ },
+ {
+  "label": "the tone body lowers the pending flag only with the diagnostics on",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");"
  }
 ]

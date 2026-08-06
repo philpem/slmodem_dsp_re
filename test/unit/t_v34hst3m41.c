@@ -29,6 +29,13 @@
  * early-out at 0x6c862 and the `%si == 58` one at 0x6e044, both of which are
  * `hs_setstate`'s own "already there" guard on a cached copy of +0x3592;
  * they are not separate branches and are not written as any.
+ *
+ * BOTH SIDES OF EVERY DEBUG GUARD.  The cases run with the diagnostics on,
+ * which leaves the other half of each `if (DSPLIB_DEBUG_ON())` undriven and
+ * a store moved inside one of them undetectable -- measured, not reasoned:
+ * that mutation was applied by hand and this file passed.  So the last block
+ * of `main` re-drives every body that prints with `v34hs_debug(0)` and
+ * asserts the same bytes and no lines.
  */
 
 #include <stdio.h>
@@ -255,6 +262,8 @@ main(void)
 {
 	int i, j;
 	unsigned h_cold, h_wu11, h_step0, h_reset;
+	unsigned h_detinfo, h_search, h_frr, h_tone1, h_infodone;
+	unsigned h_info1a, h_retrain, h_tx1ans, h_rx1call;
 
 	dump = getenv("V34HS_DUMP") != NULL;
 	default_fill = getenv("V34HS_SEED") == NULL;
@@ -350,6 +359,7 @@ main(void)
 	detector(1);
 	step("tone search: detected, early", 113, 91, 2,
 	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+	h_search = last_hash;
 	h_wu11 = last_hash;
 
 	/*
@@ -407,6 +417,7 @@ main(void)
 	v34hs_poke_short(M41_RX_FLAGS, 0x0200);
 	step("aae2 0x0072 -> DET_INFO", 120, 19, 2,
 	     V34HS_DET_INFO, V34HS_MOH_SILENCE);
+	h_detinfo = last_hash;
 	record("to DET_INFO, flag cleared");
 
 	begin(V34HS_MOH_SILENCE);
@@ -531,6 +542,7 @@ main(void)
 	v34hs_poke_byte(M41_FABF8, 0);
 	step("frr nack: reported here", 143, 15, 1,
 	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	h_frr = last_hash;
 	record("frr nack reported");
 
 	/* --- 0x6ce8b, +0x358a == 2, the info marks ----------------------- */
@@ -680,6 +692,7 @@ main(void)
 	v34hs_poke_short(M41_FAAE2, 0);
 	step("marks: aae2 0, tone during info1", 160, 29, 3,
 	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
+	h_tone1 = last_hash;
 	record("marks answer: retrain silence");
 
 	/*
@@ -696,6 +709,7 @@ main(void)
 	v34hs_poke_short(M41_FAAE2, -1);
 	step("marks: aae2 -1, reinit Info1c", 161, 51, 3,
 	     V34HS_INFODONE, V34HS_TX_DPSK);
+	h_infodone = last_hash;
 	record("marks answer: INFODONE");
 
 	/* The same body with the transmit state already there. */
@@ -773,6 +787,7 @@ main(void)
 	v34hs_poke_short(M41_FA24A, 1);
 	step("late: retrain for info1c", 173, 34, 9,
 	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
+	h_retrain = last_hash;
 	record("late, retrain");
 
 	/*
@@ -793,6 +808,7 @@ main(void)
 	 */
 	step("late: 359c 0x65, search info1a", 174, 29, 3,
 	     V34HS_RX_PHASE1_CALL, V34HS_TONE_AB);
+	h_info1a = last_hash;
 	record("late, info1a");
 
 	/* --- 0x6da9c, +0x358a == 1, the tone --------------------------- */
@@ -833,6 +849,7 @@ main(void)
 	detector(1);
 	step("tone: to TX_PHASE1_ANS, copy 4", 182, 41, 4,
 	     V34HS_TX_PHASE1_ANS, V34HS_MOH_SILENCE);
+	h_tx1ans = last_hash;
 	record("tone, TX_PHASE1_ANS");
 
 	/* +0xabc2 negative copies nothing at all: `js`, not a zero test. */
@@ -871,6 +888,7 @@ main(void)
 	detector(1);
 	step("tone: to RX_PHASE1_CALL", 185, 39, 4,
 	     V34HS_RX_PHASE1_CALL, V34HS_MOH_SILENCE);
+	h_rx1call = last_hash;
 	record("tone, RX_PHASE1_CALL");
 
 	/* --- the behaviours are distinct -------------------------------- */
@@ -889,6 +907,138 @@ main(void)
 
 	if (dump)
 		printf("  %d distinct behaviours\n", nsig);
+
+	/* --- the diagnostics off ---------------------------------------- */
+
+	/*
+	 * EVERY CASE ABOVE RUNS WITH THE DIAGNOSTICS ON, so the other half of
+	 * each of this arm's nine `if (DSPLIB_DEBUG_ON())` blocks is not
+	 * driven by any of them -- and a store moved INSIDE one of those
+	 * guards would survive every check in this file.  Measured rather
+	 * than reasoned: that mutation was applied by hand before these cases
+	 * existed and the file passed.
+	 *
+	 * So each body that prints is re-driven with the diagnostics off, and
+	 * asserted to write the SAME BYTES and print none.  The byte counts
+	 * are the debug-on ones because no out-of-line debug block in this
+	 * arm stores to the object; a count that moved would be a finding and
+	 * not a fixture wobble.  Finding 358 is the model.
+	 */
+	v34hs_debug(0);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_FAAE2, 0x0072);
+	v34hs_poke_short(M41_RX_FLAGS, 0x0200);
+	step("quiet: aae2 0x72 -> DET_INFO", 220, 19, 0,
+	     V34HS_DET_INFO, V34HS_MOH_SILENCE);
+	diff_eq_int("quiet DET_INFO writes what the loud one did",
+		    last_hash, h_detinfo, 220);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_FAAE0, 101);
+	v34hs_poke_short(M41_F359C, 0);
+	detector(1);
+	step("quiet: tone search body", 221, 91, 0,
+	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+	diff_eq_int("quiet tone search writes what the loud one did",
+		    last_hash, h_search, 221);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_byte(M41_FABE8, 1);
+	v34hs_poke_int(M41_FABF0, 1);
+	v34hs_poke_short(M41_F35A0, 0x32);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_byte(M41_FABF8, 0);
+	step("quiet: frr nack reported", 222, 15, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	diff_eq_int("quiet FRR report writes what the loud one did",
+		    last_hash, h_frr, 222);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 426);
+	v34hs_poke_short(M41_F35A0, 0x40);
+	v34hs_poke_short(M41_FAAE2, 0);
+	step("quiet: tone during info1", 223, 29, 0,
+	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
+	diff_eq_int("quiet tone-during-info1 writes what the loud one did",
+		    last_hash, h_tone1, 223);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 426);
+	v34hs_poke_short(M41_F35A0, 0x40);
+	v34hs_poke_short(M41_FAAE2, -1);
+	step("quiet: reinit Info1c", 224, 51, 0,
+	     V34HS_INFODONE, V34HS_TX_DPSK);
+	diff_eq_int("quiet Info1c writes what the loud one did",
+		    last_hash, h_infodone, 224);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 515);
+	v34hs_poke_short(M41_F35A0, 0x10);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_short(M41_F359C, 0x65);
+	step("quiet: search info1a", 225, 29, 0,
+	     V34HS_RX_PHASE1_CALL, V34HS_TONE_AB);
+	diff_eq_int("quiet info1a writes what the loud one did",
+		    last_hash, h_info1a, 225);
+
+	/*
+	 * The retrain is the one whose loud twin printed nine lines, eight of
+	 * them `v34handshakinit`'s own, so it is also the strongest of these:
+	 * the bring-up runs inside the step either way.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 515);
+	v34hs_poke_short(M41_F35A0, 0x10);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_short(M41_F359C, 0);
+	v34hs_poke_short(M41_FA24A, 1);
+	step("quiet: retrain for info1c", 226, 34, 0,
+	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
+	diff_eq_int("quiet retrain writes what the loud one did",
+		    last_hash, h_retrain, 226);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 1);
+	v34hs_poke_byte(M41_REC_AA6C + 4, (unsigned char)0x80);
+	v34hs_poke_short(M41_F359C, 0);
+	v34hs_poke_short(M41_FABC2, 3);
+	v34hs_poke_short(M41_ABAE + 0, 0x1111);
+	v34hs_poke_short(M41_ABAE + 2, 0x2222);
+	v34hs_poke_short(M41_ABAE + 4, 0x3333);
+	v34hs_poke_short(M41_ABAE + 6, 0x4444);
+	detector(1);
+	step("quiet: to TX_PHASE1_ANS", 227, 41, 0,
+	     V34HS_TX_PHASE1_ANS, V34HS_MOH_SILENCE);
+	diff_eq_int("quiet TX_PHASE1_ANS writes what the loud one did",
+		    last_hash, h_tx1ans, 227);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 1);
+	v34hs_poke_byte(M41_REC_AA6C + 4, (unsigned char)0x80);
+	v34hs_poke_short(M41_F359C, 0x65);
+	v34hs_poke_short(M41_FABC2, 3);
+	detector(1);
+	step("quiet: to RX_PHASE1_CALL", 228, 39, 0,
+	     V34HS_RX_PHASE1_CALL, V34HS_MOH_SILENCE);
+	diff_eq_int("quiet RX_PHASE1_CALL writes what the loud one did",
+		    last_hash, h_rx1call, 228);
+
+	/*
+	 * The pairwise loop above is only as strong as the number of
+	 * signatures fed to it, and a `record()` deleted in an edit would
+	 * shrink it in silence -- which is finding 395's hazard turned on
+	 * this file.  Pinned.
+	 */
+	diff_eq_int("behaviours recorded", nsig, 24, 0);
 
 	v34hs_holes_check();
 	return diff_end();
