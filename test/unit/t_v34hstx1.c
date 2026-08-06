@@ -1,5 +1,5 @@
 /*
- * t_v34hstx1.c -- fifteen arms of `v34handshak`'s per-sample transmit
+ * t_v34hstx1.c -- sixteen arms of `v34handshak`'s per-sample transmit
  * dispatch, each compared against the blob on its own.
  *
  * ---------------------------------------------------------------------------
@@ -1612,11 +1612,550 @@ case_vect16_table(void)
 		    memcmp(vect16, ref_vect16, sizeof(vect16)), 0, 6999);
 }
 
+/* --- 67 XMITMP ------------------------------------------------------------ */
+
+/*
+ * THE ARM ALWAYS MAPS A SYMBOL, so `run_case`'s two guards -- "the arm wrote
+ * something" and "the cursor reached the limit" -- hold on EVERY run whatever
+ * else did or did not happen.  Neither of them can see whether the bit loop
+ * ran twice or four times, whether a checkpoint fired, whether the reader
+ * refilled, or whether `initdigital` was reached.  That is finding 422's
+ * per-arm/per-path gap at its widest in this file, and the only thing that
+ * says a run went where its name says is `tools/mutate.py`.  So every field
+ * that decides a path is poked, and every poke a run varies is at a LITERAL
+ * index at the head of the array.
+ *
+ * WHERE THE MESSAGE READER LIVES IS THE CASE'S OWN AXIS.  The object aims
+ * +0xaa6c at +0xaa3c (v34hshak.h, `getMPrecvdBits`) and 0x30 bytes of
+ * `struct v34_bitsource` fit exactly between the two -- so in the object's own
+ * configuration the halfword 0x645de tests at obj+0xaa3c and the one 0x647db
+ * tests at `*(+0xaa6c)` are the SAME two bytes, and a reconstruction using
+ * either for both passes every run.  The runs here aim the pointer at +0xa94c
+ * instead and drive the two bits apart; the run with the record back at
+ * +0xaa3c is a CONTROL and is named as one below.
+ *
+ * Everything the arm writes is seeded away from what it stores: `f25c8` to a
+ * word that is no quadrant (the arm clears it first, so a reconstruction that
+ * only ORed would keep the seed), `f25c6` non-zero and inside 0..3, `f25cc`
+ * to TX1_SRSEED, +0x25d0 to a word that is no `vect4` or `vect16` entry,
+ * +0x3590 away from 0x22, +0x3598 away from 1, +0x359e non-zero, and every
+ * one of the reader's thirteen fields away from what 0x64635 reloads it with.
+ */
+#define TX1_F3590	0x3590		/* the next stuff point            */
+#define TX1_F3598	0x3598		/* initdigital has run             */
+#define TX1_F359E	0x359e		/* sequences sent                  */
+
+#define MP_REC		0xa94c		/* where these runs aim +0xaa6c    */
+#define MP_ALT		0xaa3c		/* and where the object aims it    */
+
+/*
+ * The reader's fields the runs do NOT vary, at both bases.  Every one is away
+ * from what 0x64635 stores, which is what makes the reload visible at all.
+ */
+#define MP_TAIL_SEED(B)							\
+	P16((B) + 0x14, 0x0123),	/* crc, away from 0xffff       */ \
+	P16((B) + 0x1c, 0x0008),	/* wordbits, away from 0x10    */ \
+	P16((B) + 0x1e, 0x0001),	/* idx, away from zero         */ \
+	P16((B) + 0x22, 0x0044),	/* repeats, away from zero     */ \
+	P16((B) + 0x2a, 0x0009),	/* avail0, away from 0x12      */ \
+	P32((B) + 0x2c, 0x00012345)	/* acc0, away from 0x3fffe     */
+
+/* The nine words after word[0]; word[0] itself is varied. */
+#define MP_WORD_SEED(B)							\
+	P16((B) + 0x02, 0x1357), P16((B) + 0x04, 0x2466),		\
+	P16((B) + 0x06, 0x3575), P16((B) + 0x08, 0x4684),		\
+	P16((B) + 0x0a, 0x5793), P16((B) + 0x0c, 0x68a2),		\
+	P16((B) + 0x0e, 0x79b1), P16((B) + 0x10, 0x8ac0),		\
+	P16((B) + 0x12, 0x9bcf)
+
+/*
+ * And the six the runs DO vary, at the alternate base, held at the defaults:
+ * only the control run reads the record there, and it is a control.
+ */
+#define MP_ALT_SEED							\
+	P32(MP_ALT + 0x24, 0x000000b0), P16(MP_ALT + 0x28, 8),		\
+	P16(MP_ALT + 0x18, 0x0040), P16(MP_ALT + 0x1a, 0x0008),		\
+	P16(MP_ALT + 0x16, 0), P16(MP_ALT + 0x20, 3)
+
+#define XM_SEL		0
+#define XM_FLAGS	1
+#define XM_IDX		2
+#define XM_3590		3
+#define XM_359E		4
+#define XM_3598		5
+#define XM_AA3C		6
+#define XM_W0		7
+#define XM_BASE		8
+#define XM_ACC		9
+#define XM_AVAIL	10
+#define XM_NBITS	11
+#define XM_POS		12
+#define XM_CRCON	13
+#define XM_REPEAT	14
+#define XM_C2		15
+#define XM_C6		16
+
+static struct tx1_poke xmitmp[] = {
+	P16(TX1_F382, 0x1234),			/* XM_SEL    */
+	P16(TX1_RXFLAGS, 0x0141),		/* XM_FLAGS  */
+	P16(TX1_VECTIDX, 0x0010),		/* XM_IDX    */
+	P16(TX1_F3590, 0x0700),			/* XM_3590   */
+	P16(TX1_F359E, 5),			/* XM_359E   */
+	P16(TX1_F3598, 3),			/* XM_3598   */
+	P16(MP_ALT + 0x00, 0x5a5a),		/* XM_AA3C   */
+	P16(MP_REC + 0x00, 0x2468),		/* XM_W0     */
+	PSELF(TX1_PTR_AA6C, MP_REC),		/* XM_BASE   */
+	P32(MP_REC + 0x24, 0x000000b0),		/* XM_ACC    */
+	P16(MP_REC + 0x28, 8),			/* XM_AVAIL  */
+	P16(MP_REC + 0x18, 0x0040),		/* XM_NBITS  */
+	P16(MP_REC + 0x1a, 0x0008),		/* XM_POS    */
+	P16(MP_REC + 0x16, 0),			/* XM_CRCON  */
+	P16(MP_REC + 0x20, 3),			/* XM_REPEAT */
+	P16(TX1_F25C2, 0x1001),			/* XM_C2     */
+	P16(TX1_F25C6, 2),			/* XM_C6     */
+
+	MP_WORD_SEED(MP_REC), MP_TAIL_SEED(MP_REC),
+	MP_WORD_SEED(MP_ALT), MP_TAIL_SEED(MP_ALT), MP_ALT_SEED,
+
+	P32(TX1_F25CC, TX1_SRSEED), P16(TX1_F25C8, 0x0777),
+	P32(TX1_F25D0, 0x11223344)
+};
+
+/*
+ * The defaults: the four-point selector, bit 5 of the flags word CLEAR so the
+ * checkpoints are at 0xbb and 0xbc, an index far from all three of them, the
+ * reader holding eight bits of 0xb0 -- which are 1, 0, 1, 1 in the order they
+ * come out, so all four collected bits differ and neither dibit is the other.
+ */
+static void
+xm_reset(void)
+{
+	xmitmp[XM_SEL].val = 0x1234;
+	xmitmp[XM_FLAGS].val = 0x0141;
+	xmitmp[XM_IDX].val = 0x0010;
+	xmitmp[XM_3590].val = 0x0700;
+	xmitmp[XM_359E].val = 5;
+	xmitmp[XM_3598].val = 3;
+	xmitmp[XM_AA3C].val = 0x5a5a;
+	xmitmp[XM_W0].val = 0x2468;
+	xmitmp[XM_BASE].val = MP_REC;
+	xmitmp[XM_ACC].val = 0x000000b0;
+	xmitmp[XM_AVAIL].val = 8;
+	xmitmp[XM_NBITS].val = 0x0040;
+	xmitmp[XM_POS].val = 0x0008;
+	xmitmp[XM_CRCON].val = 0;
+	xmitmp[XM_REPEAT].val = 3;
+	xmitmp[XM_C2].val = 0x1001;
+	xmitmp[XM_C6].val = 2;
+}
+
+static void
+run_xmitmp(const char *what, long tag)
+{
+	run_case(V34HS_XMITMP, v34tx1_xmitmp, V34TX1_LOOP, what, tag,
+		 xmitmp, NP(xmitmp));
+}
+
+static void
+case_xmitmp(void)
+{
+	/*
+	 * The four-point half: two bits, one scrambler step, one differential
+	 * quadrant.  Two generators and two previous quadrants.
+	 */
+	xm_reset();
+	run_xmitmp("67 XMITMP, four points, generator A", 6700);
+	xm_reset();
+	xmitmp[XM_C2].val = 0x1000;
+	run_xmitmp("67 XMITMP, four points, generator B", 6701);
+	xm_reset();
+	xmitmp[XM_C6].val = 1;
+	run_xmitmp("67 XMITMP, four points, a different last quadrant", 6702);
+
+	/*
+	 * The sixteen-point half: FOUR bits, and the two dibits go to two
+	 * scrambler steps.  The seed makes them 1 and 3, so a reconstruction
+	 * passing the same dibit twice, or the wrong one first, sends a
+	 * different point.
+	 */
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b0;
+	run_xmitmp("67 XMITMP, sixteen points, generator A", 6703);
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b0;
+	xmitmp[XM_C2].val = 0x1000;
+	run_xmitmp("67 XMITMP, sixteen points, generator B", 6704);
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b0;
+	xmitmp[XM_C6].val = 1;
+	run_xmitmp("67 XMITMP, sixteen points, a different last quadrant", 6705);
+	/*
+	 * AND ONE WITH A HIGH DIBIT THAT IS NOT THREE, which is what the
+	 * default seed cannot give: 0xb0's four bits are 1, 0, 1, 1, so the
+	 * high dibit is 3 and passing the scrambler a literal three instead of
+	 * `src >> 2` computes the same answer on every other run here.  0x90's
+	 * are 1, 0, 0, 1 -- a low dibit of 1 and a high one of 2.
+	 */
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b0;
+	xmitmp[XM_ACC].val = 0x00000090;
+	run_xmitmp("67 XMITMP, sixteen points, a high dibit that is not three",
+		   6735);
+
+	/*
+	 * ONE COUNT OFF THE SELECTOR IS A CONTROL and must produce exactly
+	 * what 6700 produces; 0x12b0 is not, because it shares the constant's
+	 * low byte and is what says the compare is sixteen bits wide.  Both
+	 * are 69's runs under a second arm -- the same halfword against the
+	 * same constant.
+	 */
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b1;
+	run_xmitmp("67 XMITMP, one count off the selector", 6706);
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x12b0;
+	run_xmitmp("67 XMITMP, the selector's low byte alone", 6707);
+
+	/*
+	 * THE READER, three of its arms, through the arm's one call.  The
+	 * refill run folds the CRC as well, so the record moves in five
+	 * fields rather than one; the restart is the arm that does NOT inline
+	 * in the object (0x6484c is a real `call getbit`); and the exhausted
+	 * one returns -1, which is the only input that puts a value in `f25c8`
+	 * no successful pass produces -- every bit of it set, and the mapper
+	 * then reads a negative halfword.
+	 */
+	xm_reset();
+	xmitmp[XM_AVAIL].val = 0;
+	xmitmp[XM_CRCON].val = 1;
+	run_xmitmp("67 XMITMP, the reader refills", 6708);
+	xm_reset();
+	xmitmp[XM_AVAIL].val = 0;
+	xmitmp[XM_POS].val = 0x0040;
+	run_xmitmp("67 XMITMP, the reader restarts", 6709);
+	xm_reset();
+	xmitmp[XM_AVAIL].val = 0;
+	xmitmp[XM_POS].val = 0x0040;
+	xmitmp[XM_REPEAT].val = 0;
+	run_xmitmp("67 XMITMP, the reader is exhausted", 6710);
+	xm_reset();
+	xmitmp[XM_SEL].val = 0x89b0;
+	xmitmp[XM_AVAIL].val = 0;
+	xmitmp[XM_POS].val = 0x0040;
+	xmitmp[XM_REPEAT].val = 0;
+	run_xmitmp("67 XMITMP, sixteen points, the reader is exhausted", 6711);
+
+	/*
+	 * THE STUFF POINT, AND ITS TWO CONSTANTS ARE NOT ONE CONSTANT.  Bit 5
+	 * of the flags word picks 0x55 or 0xbb, and the two do DIFFERENT
+	 * things -- three bits pushed onto the reader or one (0x645a4 against
+	 * 0x64750).  The index is started two short of the point so the
+	 * checkpoint fires on the LAST bit of the pass and nothing else moves.
+	 */
+	xm_reset();
+	xmitmp[XM_IDX].val = 0xb9;
+	run_xmitmp("67 XMITMP, the stuff point at 0xbb", 6712);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0161;		/* bit 5 set */
+	xmitmp[XM_IDX].val = 0x53;
+	run_xmitmp("67 XMITMP, the stuff point at 0x55", 6713);
+	/*
+	 * And the two crossed, which is what says the pair is selected rather
+	 * than tested together: neither of these stuffs anything.
+	 */
+	xm_reset();
+	xmitmp[XM_IDX].val = 0x53;
+	run_xmitmp("67 XMITMP, 0x55 with bit 5 clear", 6714);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0161;
+	xmitmp[XM_IDX].val = 0xb9;
+	run_xmitmp("67 XMITMP, 0xbb with bit 5 set", 6715);
+
+	/*
+	 * +0x3590, the third checkpoint: one bit pushed and the point moved on
+	 * by 0x11.  The second run puts the stuff point AND +0x3590 on the
+	 * same index, which is the run that says 0x6459b jumps past the
+	 * +0x3590 test -- a reconstruction testing all three independently
+	 * advances +0x3590 here and the object does not.
+	 */
+	xm_reset();
+	xmitmp[XM_3590].val = 0x12;
+	run_xmitmp("67 XMITMP, the stuff point at +0x3590", 6716);
+	xm_reset();
+	xmitmp[XM_IDX].val = 0xb9;
+	xmitmp[XM_3590].val = 0xbb;
+	run_xmitmp("67 XMITMP, +0x3590 on the stuff point itself", 6717);
+	/*
+	 * AND ONE WITH +0x3590 ALREADY BEHIND THE INDEX, which is the only run
+	 * that tells the object's `==` from a `>=`.  Every other run here has
+	 * the stuff point ahead of `vect_idx`, so the two answer alike.
+	 */
+	xm_reset();
+	xmitmp[XM_3590].val = 0x0f;
+	run_xmitmp("67 XMITMP, +0x3590 already behind the index", 6736);
+
+	/*
+	 * THE STUFF'S PLACE IN THE PASS, and it needs a reader that is about to
+	 * run out.  Pushing zeros onto the END of the accumulator does not
+	 * change the bits already in it, so with eight bits in hand a stuff one
+	 * pass early is invisible -- the next bit is the same bit either way.
+	 * With ONE bit in hand it is not: the object refills on the next pass
+	 * and a reconstruction that stuffed early has three bits and does not.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0161;
+	xmitmp[XM_IDX].val = 0x53;
+	xmitmp[XM_AVAIL].val = 1;
+	run_xmitmp("67 XMITMP, the stuff point with the reader nearly empty",
+		   6737);
+
+	/*
+	 * THE SEQUENCE'S END, 0x645d0.  Bit 5 clear puts it at 0xbc, and the
+	 * index starts one short so it fires on the FIRST bit -- the pass then
+	 * collects its second bit out of the reader 0x64635 has just reloaded,
+	 * which is what makes the reload's twelve stores visible in the same
+	 * run that decides them.
+	 *
+	 * The first run has the flags word away from 0x10 in bits 3 and 4, so
+	 * it reloads and does nothing else.
+	 */
+	xm_reset();
+	xmitmp[XM_IDX].val = 0xbb;
+	run_xmitmp("67 XMITMP, the sequence ends, the reload alone", 6718);
+	/*
+	 * With bit 5 SET the message is 0x30 bits rather than 0x90, which is
+	 * the one field of the reload the flags word chooses.  The end is at
+	 * 0x58 for the same reason the stuff point moved.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0161;
+	xmitmp[XM_IDX].val = 0x57;
+	run_xmitmp("67 XMITMP, the sequence ends, bit 5 set", 6719);
+
+	/*
+	 * The stamp at 0x647d3, which needs `flags & 0x18 == 0x10` and +0x359e
+	 * past one.  Two runs for the record's own bit: clear, and +0x359e is
+	 * zeroed as well as the bit raised; set, and only the bit is written --
+	 * which writes nothing, so the run is what says +0x359e is NOT cleared
+	 * on it.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0151;		/* & 0x18 == 0x10 */
+	xmitmp[XM_IDX].val = 0xbb;
+	run_xmitmp("67 XMITMP, the sequence ends, the record is stamped", 6720);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0151;
+	xmitmp[XM_IDX].val = 0xbb;
+	xmitmp[XM_W0].val = 0x2469;		/* bit 0 already up */
+	run_xmitmp("67 XMITMP, the sequence ends, already stamped", 6721);
+	/*
+	 * And the boundary at 0x647cd, which is `> 1` and signed: +0x359e 0
+	 * counts to one and takes 0x649d9, which reloads and stamps nothing;
+	 * +0x359e 1 counts to two and does.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0151;
+	xmitmp[XM_IDX].val = 0xbb;
+	xmitmp[XM_359E].val = 0;
+	run_xmitmp("67 XMITMP, the sequence ends, the first sequence", 6722);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0151;
+	xmitmp[XM_IDX].val = 0xbb;
+	xmitmp[XM_359E].val = 1;
+	run_xmitmp("67 XMITMP, the sequence ends, +0x359e at one", 6723);
+
+	/*
+	 * THE EXIT AT 0x648bf, which is the only path that leaves the bit loop
+	 * early.  It needs bit 0 at obj+0xaa3c, `flags & 0x90 == 0x90` and a
+	 * fourth sequence; it moves the transmit machine to 69 EXMIT, clears
+	 * `vect_idx` and drops bit 5 of the flags word -- which is why bit 5
+	 * is SET on every run here.  The index starts two short of 0x58 so the
+	 * pass collects both its bits and then leaves.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;		/* 0x90, bit 5, & 0x18 = 0x10 */
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;		/* bit 0 up */
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, the sequence ends, initdigital already done",
+		   6724);
+	/*
+	 * AND THE SAME EXIT ON THE FIRST BIT OF THE PASS, which is the run that
+	 * says it LEAVES the loop.  On 6724 the exit falls on the last bit, so
+	 * a reconstruction that carried on would end the pass at the same place
+	 * anyway; here the object stops with one bit in `f25c8` and one that
+	 * carried on would collect a second out of the reader and advance
+	 * `vect_idx` past the zero the exit just wrote.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x57;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, the exit on the first bit of the pass", 6738);
+	/*
+	 * THE RUN WITH +0x3598 CLEAR -- the one that calls `initdigital` --
+	 * IS NOT HERE, AND THE REASON IS THE FIXTURE'S AND NOT THE ARM'S.
+	 *
+	 * It was written, run, and taken out again.  `initdigital` reaches
+	 * `initV34` twice and each call stores its `coeff` argument at
+	 * shell +0x24 -- and that argument is `obj + 0xe84` for the receive
+	 * context and `obj + 0x2a68` for the transmit one, so what lands at
+	 * +0x0a24 and +0x2604 is a pointer INTO EACH SIDE'S OWN OBJECT.  The
+	 * two sides then hold two addresses of the same offset, which is
+	 * exactly the class `holes[]` exists for and neither offset is in it,
+	 * so `v34hs_compare`'s byte sweep reports them and the step signature
+	 * differs with them.
+	 *
+	 * MEASURED, because it is worth having and it is not a claim this file
+	 * makes: those were the only two bytes that differed OF THE BYTES THAT
+	 * WERE COMPARED -- every shell field and the rate configuration both
+	 * `initV34` calls wrote agreed.  The four pointer holes at +0x0a28,
+	 * +0x0e48, +0x2608 and +0x2a28 were SKIPPED and not agreed: `initV34`
+	 * aims those at library tables, so side A holds ours and side B the
+	 * blob's, and neither the ordinary run nor `V34HS_REFINIT` can settle
+	 * two addresses of two copies (findings 324 and 359).  That hazard is
+	 * real here and is named rather than measured; it is just not what
+	 * made the run fail.  The run is recorded rather than committed
+	 * because closing it means adding two entries to a list three other
+	 * tests assert every entry of is exercised, and they do not reach
+	 * `initdigital`.
+	 *
+	 * WHAT IS THEREFORE UNTESTED IS TWO LINES, and finding 424 names
+	 * them: the call itself and the store of one into +0x3598.  Both are
+	 * in the suite as mutations and both go uncaught, which is finding
+	 * 343's way of making a gap concrete rather than leaving it silent.
+	 * 6724 still covers the guard, because it is the path where +0x3598
+	 * is already set.
+	 */
+
+	/*
+	 * The three ways of NOT taking that exit, one guard at a time.  Each
+	 * has the other two guards satisfied, or a mutation of the one being
+	 * tested falls through to the same answer as its neighbour.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0171;		/* 0x90 -> 0x10 */
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, the sequence ends, the flags word lacks 0x80",
+		   6726);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 2;		/* counts to three */
+	run_xmitmp("67 XMITMP, the sequence ends, only three sequences", 6727);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 3;		/* counts to four */
+	run_xmitmp("67 XMITMP, the sequence ends, the fourth sequence", 6728);
+	/*
+	 * 0x80 without 0x10, which is the other half of the mask: every run
+	 * above that has one has both, so a reconstruction testing either bit
+	 * alone answers the same on all of them.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01c1;
+	xmitmp[XM_IDX].val = 0xbb;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, the sequence ends, the flags word lacks 0x10",
+		   6733);
+	/*
+	 * And bits 3 AND 4, which is the run that says 0x647b5's compare is
+	 * `== 0x10` and not "bit 4 is set": the stamp does NOT happen here
+	 * where it does on 6720, and every other run leaves bit 3 clear.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x0159;
+	xmitmp[XM_IDX].val = 0xbb;
+	run_xmitmp("67 XMITMP, the sequence ends, bits 3 and 4 both set", 6732);
+	/*
+	 * THE OBJECT HAS TWO COPIES OF THAT COMPARE, 0x64614 and 0x647b5, one
+	 * per side of the +0xaa3c test, and 6732 reaches only the second.  This
+	 * is the same run through the first: +0xaa3c set, bits 3 and 4 set, and
+	 * three sequences so the exit above is not taken.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f9;
+	xmitmp[XM_IDX].val = 0x57;		/* bit 5 set: the end is 0x58 */
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 2;		/* counts to three            */
+	run_xmitmp("67 XMITMP, the sequence ends, bits 3 and 4 at 0x64614",
+		   6734);
+
+	/*
+	 * AND THE TWO RUNS THAT SEPARATE obj+0xaa3c FROM THE RECORD'S OWN
+	 * FIRST HALFWORD.  Everything else is 6724's, and the two bits are
+	 * driven opposite ways: the object exits on the first and reloads on
+	 * the second, and a reconstruction reading the record for 0x645de --
+	 * or the object for 0x647db -- gets both the wrong way round.  There
+	 * is no state a fill or a handshake produces in which they differ,
+	 * because `getMPrecvdBits` aims the pointer at the field; a poke is
+	 * the only way here.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5a;		/* clear */
+	xmitmp[XM_W0].val = 0x2469;		/* and the record's is set */
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, +0xaa3c clear where the record's word is set",
+		   6729);
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;		/* set */
+	xmitmp[XM_W0].val = 0x2468;		/* and the record's is clear */
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, +0xaa3c set where the record's word is clear",
+		   6730);
+
+	/*
+	 * THE RECORD AT +0xaa3c IS A CONTROL AND NOT A BEHAVIOUR.  It is the
+	 * one configuration the object's own writer produces, and there the
+	 * two halfwords above are the same two bytes -- so this run must agree
+	 * with 6730 and cannot fail while 6729 and 6730 pass.  It is here
+	 * because a reconstruction that had them the wrong way round would
+	 * still pass it, which is the point of saying so.
+	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_BASE].val = MP_ALT;
+	xmitmp[XM_359E].val = 4;
+	run_xmitmp("67 XMITMP, the record where the object puts it", 6731);
+}
+
+/*
+ * 67's entry, read out of the blob's own `.rodata` the way the other two
+ * shared-entry checks are.  It is its own target -- nothing else in table 1
+ * shares it -- and 69's, which it hands over to, is a different one.
+ */
+static void
+case_xmitmp_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+
+	diff_eq_int("table 1: 67's entry is v34handshak + 0x10ab",
+		    (int)(t1[67 - 5] - base), 0x6399b - 0x628f0, 6790);
+	diff_eq_int("table 1: txstate 67 has an entry of its own",
+		    t1[67 - 5] != t1[69 - 5] && t1[67 - 5] != t1[64 - 5], 1,
+		    6791);
+}
+
 int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: fifteen per-sample transmit arms");
+	diff_begin("v34handshak table 1: sixteen per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
@@ -1647,6 +2186,9 @@ main(void)
 	case_vect16_table();
 	case_exmit();
 	case_jtxmit();
+
+	case_xmitmp_entry();
+	case_xmitmp();
 
 	return diff_end();
 }

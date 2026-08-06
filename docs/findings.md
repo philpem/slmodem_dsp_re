@@ -18896,3 +18896,289 @@ left are 67 `XMITMP` (0x6399b), 24 `TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339)
 and 66 `TRNSEG4A` (0x62e28).
 
 **Finding 423 is the only number this batch took.**
+
+======================================================================
+### 424. Table 1's 67, which is `getbit` inlined and a message clocked out
+
+txstate 67 `XMITMP` of `.rodata+0x2da0` -- 2,024 bytes of level-0 body, the
+largest arm of this table taken so far and one of the four finding 423 left.
+It is in `src/pump/v34/v34hstx1.cpp` and it compares byte for byte against the
+blob through `t_v34hstx1.c`, which is now 13,123 checks over sixteen arms.
+The register convention is finding 421's, unchanged: `0x4c(%esp)` is the
+object + 0x221c, `0x74(%esp)` the receiver at +0x264, `0x78(%esp)` THE OBJECT
+PLUS FOUR.
+
+#### 0x639db..0x63aae IS `getbit` INLINED, and the arm is one call
+
+The 2,024 bytes are mostly one function this tree already has.  Every arm of
+the reader `v34hshak.c:2513` carries is in the block list, in the same order
+and on the same fields:
+
+```
+  64588   avail non-zero: no refill, emit
+  63a1d   a WHOLE word: acc <<= wordbits, OR the word in, idx += 1
+  646f6   a PART word: shift by what is left, OR the whole word in anyway,
+          and do NOT advance idx
+  63a70   the CRC-16-CCITT fold, 0x1021, MSB first, over the bits just brought
+  64781   nothing left and crc_on set: the CRC becomes the next sixteen bits
+  64857   overrun by EXACTLY sixteen: load 0xf and four bits
+  64811   exhausted with repeat: reload the reader and CALL 0x5eaf0 -- the one
+          arm that does NOT inline, and the same recursion 0x5ec47 makes
+  6481b   exhausted without repeat: -1
+```
+
+So the arm is written as `bit = getbit(b)`, the way 78 and 85 are written over
+`tx1_ja_common`.  **What that costs is that no mutation in
+`test/mutations/v34hstx1.json` tests the reader**: `tools/mutate.py` anchors on
+source text and the reader's text is in `v34hshak.c`, which is
+`t_v34hshak.c`'s suite.  What the runs here do test is that the call is the
+right one on the right record, and every branch the arm takes around it.
+
+#### The shape: two bits a symbol or four, and one symbol a pass
+
+```
+  f25c8 = 0                                              0x639ab
+  n = 0
+  while (n <= (receiver +0x11e == 0x89b0 ? 3 : 1)) {
+          f25c8 |= getbit(*(obj + 0xaa6c)) << n;         0x63ab1
+          vect_idx += 1;                                 0x63ad8
+          ... the three checkpoints ...
+          n += 1;
+  }
+  one symbol -- vect4 or vect16 -- then `txmit`
+```
+
+**THE CONSTELLATION SELECTOR IS 69 `EXMIT`'s, THE SAME HALFWORD AGAINST THE
+SAME CONSTANT** -- 0x639b9 here, 0x6385c there -- and the sixteen-point mapper
+at 0x63b62 is 69's block at 0x67031 instruction for instruction, with two
+differences and no others: the two `bits` arguments are the low and the high
+dibit of `f25c8` where 69 passes the literals 0xf and 3, and this one does not
+advance `vect_idx`, because the bit loop already did, once per bit.  It is
+written out again rather than shared with 69: sharing would have to rewrite
+69's body and the mutations already aimed at that text are what say 69 is
+right.  The four-point mapper at 0x64929 IS shared -- it is `tx1_dpsk4`.
+
+**`f25c8` is read `movswl` (0x63b83, 0x64938) and it cannot matter.**  0x639ab
+clears the field and the loop only ORs bits in, so the two readings differ only
+with bit 15 set -- which needs the reader's exhausted arm, whose -1 fills every
+bit.  Even then only bits 0 and 1 are consumed, and bits 2 and 3 after the
+arithmetic `sar $2`, and all four are ones either way.  A proof over every
+input, not a run.
+
+#### The three checkpoints, and BIT 5 OF THE RECEIVER'S FLAGS PICKS A PAIR
+
+After each bit, in this order and no other:
+
+```
+  vect_idx == 0x55 (bit 5 set) or 0xbb (clear)
+        push THREE zero bits onto the end of the reader's accumulator, or ONE
+        -- `acc <<= 3` with `avail += 3` at 0x645a4, `acc <<= 1` with
+        `avail += 1` at 0x64750.  The two are NOT the same width
+  vect_idx == 0x58 (set) or 0xbc (clear)     the sequence is over, 0x645d0
+  vect_idx == +0x3590                        push ONE bit and move the point
+                                             on by 0x11, 0x64727
+```
+
+The same bit picks the message's length at the reload: 0x30 bits with it set
+and 0x90 with it clear, computed at 0x64656 as `sbb`/`and $0x60`/`add $0x30`
+rather than branched.  `V34_RX_FLAG_RENEG` is the receiver's name for the bit
+and says nothing about what it means here.
+
+**PUSHING ZEROS ONTO THE END DOES NOT CHANGE THE BITS ALREADY IN HAND**, and
+that is why one of these needed a run of its own.  `acc <<= 3; avail += 3`
+leaves the next emitted bit at the same place -- position `avail-1` of `acc` is
+position `avail+2` of `acc << 3` -- so a stuff one pass early is INVISIBLE
+while the accumulator has bits left.  With one bit left it is not: the object
+refills on the next pass and a reconstruction that stuffed early does not.
+`the stuff point with bit 5 set is 0x54` went uncaught until that run existed.
+
+#### The sequence's end reads TWO halfwords that are usually the same two bytes
+
+0x645de tests bit 0 at `obj + 0xaa3c`; 0x647db tests bit 0 of `*(obj+0xaa6c)`
+and 0x647ef raises it there.  `getMPrecvdBits` stores `obj+0xaa3c` into
++0xaa6c (v34hshak.h), and `struct v34_bitsource` is 0x30 bytes, which is
+EXACTLY what fits between +0xaa3c and the self-pointer at +0xaa6c -- so in the
+object's own configuration the two sites are one halfword and a reconstruction
+using either for both passes every run a fill or a handshake can produce.
+
+`t_v34hstx1.c` therefore aims +0xaa6c at +0xa94c and drives the two bits
+opposite ways, in both directions, and keeps one run with the record back at
++0xaa3c as a CONTROL that cannot fail while those two pass.  The separating
+state is one only a poke reaches, and it is worth the two runs: without them
+two mutations are uncatchable.
+
+What the three ways out of 0x645d0 do:
+
+```
+  +0xaa3c bit 0 set, flags & 0x90 == 0x90, FOURTH sequence or later
+        `initdigital` once, guarded by +0x3598; then txstate to 69 EXMIT,
+        `vect_idx` cleared, bit 5 of the flags word dropped -- and it is the
+        one path that LEAVES the bit loop (0x648a7, 0x648bf)
+  flags & 0x18 == 0x10 and +0x359e past one
+        raise bit 0 of the record's first halfword, and clear +0x359e if it
+        was NOT already up (0x647be, 0x647d3)
+  otherwise
+        straight to the reload
+```
+
+The object has TWO copies of the `& 0x18 == 0x10` compare, 0x64614 and
+0x647b5, one per side of the +0xaa3c test, and each needs its own run: a
+reading of either as "bit 4 is set" survives every run that reaches only the
+other.
+
+#### `initdigital` CANNOT BE COMPARED BY THIS FIXTURE, and it is not finding 359
+
+The brief predicted finding 359's hazard -- a callee installing a library table
+so that one pointer holds two addresses of two copies, which the harness skips
+silently.  **It is something else and it is narrower.**  The run was written,
+run, and taken out again, and it failed loudly rather than passing vacuously:
+
+```
+  67 XMITMP, the sequence ends, initdigital runs: object byte at +0xa26
+  67 XMITMP, the sequence ends, initdigital runs: object byte at +0x2606
+  bad = 2
+```
+
+`initdigital` calls `initV34` twice and each call stores its `coeff` argument
+at shell +0x24 -- and that argument is `obj + 0xe84` for the receive context
+and `obj + 0x2a68` for the transmit one (v34shell.c:1733, :1763).  So +0x0a24
+and +0x2604 end up holding a pointer INTO EACH SIDE'S OWN OBJECT: two addresses
+of the same offset, which is precisely the class `holes[]` exists for, and
+neither offset is in it.
+
+**AND THOSE WERE THE ONLY TWO BYTES THAT DIFFERED**, of the bytes that were
+COMPARED: every shell field and the rate configuration `initdigital` and both
+`initV34` calls wrote agreed.  That is a measurement and not a claim this tree
+commits, since the run is not in the file.
+
+**AND FINDING 359'S HAZARD DOES APPLY HERE -- it is simply not what made the
+run fail.**  `initV34` also aims the four holes at +0x0a28, +0x0e48, +0x2608
+and +0x2a28 at library tables, side A gets ours and side B the blob's, and
+`v34hs_compare` SKIPS those four rather than agreeing on them: the byte sweep
+takes `in_hole(i)` out and `check_self_ptr` only asserts for that class under
+`ref_both`, which finding 359 says cannot apply to a step that installs a
+table.  So the four are an unchecked hole in this run and are named as one,
+not measured.
+
+Closing it means two more entries in `holes[]`, and `v34hs_holes_check`
+asserts that EVERY entry differed at least once in the run -- which
+`t_v34hsstep.c`, `t_v34hstbl2.c` and `t_v34hst3core.c` would then fail, because
+none of them reaches `initdigital`.  So the fixture's list is incomplete in a
+way no test has needed until now, and it is left for whoever wants the
+`initdigital` path rather than weakened here.
+
+**What that costs is exactly two lines**, and both are in the suite as
+mutations that go uncaught, which is finding 343's way of making a gap concrete
+rather than leaving it silent:
+
+```
+  67: initdigital is not called                            NOT CAUGHT
+  67: +0x3598 is not set                                   NOT CAUGHT
+```
+
+The guard around them IS covered: the run at +0x3598 already set takes the same
+exit without the call, so `initdigital runs on every sequence` and
+`the +0x3598 guard is inverted` both fail there.
+
+#### 429 mutations, 402 caught, 20 equivalent, and TWO new uncaught
+
+`test/mutations/v34hstx1.json`, which is finding 423's suite plus 145:
+
+```
+  429 mutations: 402 caught (402 by test, 0 by strings), 7 NOT caught,
+                 0 unusable, 20 equivalent, 0 MIScounted
+```
+
+The two new uncaught are the two above.  The other five are findings 341's four
+`V34EchoReportCoeff` calls that only print and finding 343's one transfer with
+no oracle past it, unchanged.
+
+**ONE new equivalence, and it is finding 342's case for the fourth time in this
+file**: `67: the txstate compare at 0x648cd is deleted`.  The arm is reached
+only at `txstate == 67` and nothing between the dispatch and 0x648cd writes
++0x3596 -- not `getbit`, not `initdigital`, and `txmit` runs after it -- so the
+compare against 0x45 can never be true and the store always happens.  It is
+written as the object writes it, as 65's, 18's, 69's and 64's are.
+
+**Four mutations survived the first run and each named a missing run rather
+than an equivalence**, which is the useful half of the exercise:
+
+```
+  the second dibit is a literal three   the seed's four bits were 1 0 1 1, so
+                                        the HIGH dibit was 3 and the literal
+                                        computed the same answer.  A second
+                                        wide run at 1 0 0 1 separates them
+  the stuff point with bit 5 set is 0x54  see above: a stuff one pass early is
+                                        invisible until the reader is nearly
+                                        empty
+  +0x3590 is tested at or past the index  every run had the point AHEAD of
+                                        `vect_idx`.  One run behind it
+  the exit does not leave the bit loop   the exit fell on the LAST bit of the
+                                        pass, where carrying on ends in the
+                                        same place.  One run with it on the
+                                        FIRST bit
+```
+
+#### Which checks are independent, and which are one check twice
+
+Independent, in the sense that each can fail while the others pass:
+
+- the four-point half and the sixteen-point half, and within each its two
+  generators and its two previous quadrants -- seven runs;
+- the reader's three arms through the one call: a refill with the CRC folded,
+  a restart, and exhaustion, plus exhaustion under the sixteen-point mapper --
+  four;
+- the two stuff points and their two widths, the two crossed runs that say the
+  pair is SELECTED by bit 5 rather than tested together, and the nearly-empty
+  reader -- five;
+- +0x3590's own checkpoint, the run where it coincides with the stuff point
+  (which says 0x6459b jumps past the third test), and the run where it is
+  already behind the index -- three;
+- the sequence's end: the reload alone, the reload at the other message
+  length, the stamp, the stamp with the flag already up, the boundary at one
+  sequence either side, and bits 3-and-4 through each of the two copies of the
+  compare -- nine;
+- the exit: on the last bit and on the first, the flags word lacking 0x80 and
+  lacking 0x10, three sequences against four, and the two runs that separate
+  obj+0xaa3c from the record's own halfword -- eight.
+
+**Not independent, and named:**
+
+- **the run with the record at +0xaa3c is a CONTROL.**  It is the one
+  configuration the object's own writer produces, and there the two halfwords
+  are the same two bytes, so it must agree with the run that has +0xaa3c set
+  and the record's word clear.  A reconstruction with the two the wrong way
+  round still passes it, which is the point of saying so;
+- `one count off the selector` (0x89b1) must produce what the four-point runs
+  produce -- it separates `== 0x89b0` from a mask or a range.  `the selector's
+  low byte alone` (0x12b0) is NOT a control: it shares the constant's low byte
+  and is what says the compare is sixteen bits.  Both are 69's runs under a
+  second arm reading the same halfword against the same constant.
+
+#### No new exit, and the two rejoins are the two shared `txmit` blocks
+
+Both mappers end in a `call txmit` and a loop rejoin -- 0x63ca3 into 0x62d5f
+and 0x649d7 into 0x64a42 -- so `enum v34tx1_exit` still has exactly the two
+values 81 and 86 gave it and the oracle past this arm is the blob's own tail.
+
+#### What is not reconstructed, and it is finding 341's gap again
+
+Three blocks are entered only when `dsplibs_debug_level > 1` and none is
+written: 0x646b5, 0x67254 and 0x6b410.  Every one is a diagnostic on a path
+where the reader is reloaded or the transmit machine moves.  The arm is
+faithful at debug level 0, which is what the library ships.
+
+#### The fill is not held fixed
+
+```
+  V34HS_SEED=1,3,7,11,17,23     13,123 checks, PASS at every one
+  V34HS_SKEW=64                 PASS
+  V34HS_PADVARY=0               PASS
+  V34HS_LOOSEOBJ=1              PASS
+```
+
+**Sixteen of table 1's nineteen reachable targets are now written.**  The three
+left are 24 `TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A`
+(0x62e28).
+
+**Finding 424 is the only number this batch took.**

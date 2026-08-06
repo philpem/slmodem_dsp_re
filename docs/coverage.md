@@ -66,6 +66,7 @@ dsplibs.o reconstruction coverage
     v34tx1_txlevel
     v34tx1_txmd
     v34tx1_xmit0
+    v34tx1_xmitmp
     v8_handshak_agc
     v8_handshak_demod
 

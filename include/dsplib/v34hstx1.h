@@ -1,5 +1,5 @@
 /*
- * v34hstx1.h -- fifteen arms of `v34handshak`'s per-sample transmit
+ * v34hstx1.h -- sixteen arms of `v34handshak`'s per-sample transmit
  * dispatch.
  *
  * `v34handshak` is 61,541 bytes and is not one unit.  Table 1, the jump table
@@ -17,9 +17,11 @@
  * 323's "six" is a statement about the first six and not about this file.  And
  * then 19, 20 and the entry 5, 54 and 74 share, at 568, 602 and 719 bytes.
  * And then 69 `EXMIT` and the entry 64 `JTXMIT` and 68 `J1TXMIT` share, at
- * 823 and 892 bytes.
+ * 823 and 892 bytes.  And then 67 `XMITMP` at 2,024, which is the largest
+ * arm of the table taken so far and the only one that clocks a MESSAGE out
+ * rather than a fixed pattern.
  *
- * FIFTEEN FUNCTIONS FOR TWENTY-ONE txstates, and the SHAPES ARE WORTH TELLING
+ * SIXTEEN FUNCTIONS FOR TWENTY-TWO txstates, and the SHAPES ARE WORTH TELLING
  * APART because "one table entry" does not mean "one behaviour" here:
  *
  *     78 / 85          TWO entries, one body, two tail calls
@@ -141,6 +143,17 @@ int v34tx1_xmit0(void *obj);
 int v34tx1_exmit(void *obj);
 /* 70 DATAXMIT     0x63ca8 */
 int v34tx1_dataxmit(void *obj);
+/*
+ * 67 XMITMP       0x6399b, with the sixteen-point mapper at 0x63b62, the
+ * four-point one at 0x64929 and the sequence's end at 0x645d0.
+ *
+ * Two bits per symbol or four, out of the message reader at +0xaa6c -- the
+ * whole of 0x639db..0x63aae is `getbit` INLINED and one arm of it, the
+ * restart, is a real call at 0x6484c.  The bits are collected into `f25c8`
+ * lowest first and then mapped through `vect4` or `vect16`, chosen by the
+ * same receiver halfword against the same constant that 69 uses.
+ */
+int v34tx1_xmitmp(void *obj);
 /* 71 TXLEVEL      0x641d1 */
 int v34tx1_txlevel(void *obj);
 /* 78 JaTXMIT      0x64139 */

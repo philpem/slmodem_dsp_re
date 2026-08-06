@@ -1,5 +1,5 @@
 /*
- * v34hstx1.cpp -- thirteen arms of `v34handshak`'s per-sample transmit
+ * v34hstx1.cpp -- sixteen arms of `v34handshak`'s per-sample transmit
  * dispatch.
  *
  * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding 217's rule rather
@@ -188,6 +188,36 @@
  */
 #define TX1_F35A2	0x35a2
 #define TX1_F382	0x382
+
+/*
+ * +0x3590, +0x3598 and +0x359e -- three halfwords 67 owns, and no other site
+ * in this tree reads any of them.
+ *
+ * +0x3590 is the NEXT STUFF POINT: 67 compares `vect_idx` against it and, when
+ * they meet, pushes one more bit into the reader and advances it by 0x11.
+ * +0x359e counts the sequences 67 has sent, and +0x3598 is the once-only flag
+ * that stops `initdigital` being called twice.  All three are inside
+ * `unmapped_3564` and `unmapped_359e`.
+ */
+#define TX1_F3590	0x3590
+#define TX1_F3598	0x3598
+#define TX1_F359E	0x359e
+
+/*
+ * +0xaa3c, read as a BYTE.  `struct v34_object` names the halfword there
+ * `info_caps` because the handshake reads the INFO capability nibbles out of
+ * it, and v34hshak.h records that `getMPrecvdBits` stores obj+0xaa3c into
+ * +0xaa6c -- so in the object's own configuration this byte and the reader's
+ * `word[0]` are the same two bytes, and 0x30 bytes of record fit exactly
+ * between +0xaa3c and the self-pointer at +0xaa6c.
+ *
+ * 67 READS BOTH SPELLINGS AND THEY ARE NOT THE SAME EXPRESSION.  0x645de
+ * tests bit 0 at obj+0xaa3c; 0x647db tests bit 0 of `*(+0xaa6c)` and 0x647ef
+ * sets it there.  Reached by offset here rather than as `info_caps` so that
+ * the other reader's name is not asserted to be the meaning, exactly as
+ * TX1_FAAE0 and TX1_FAAE2 are.
+ */
+#define TX1_FAA3C	0xaa3c
 
 /*
  * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
@@ -1386,4 +1416,334 @@ v34tx1_jtxmit(void *objp)
 		return V34TX1_LOOP;			/* 0x64326 */
 	}
 	return V34TX1_LOOP;				/* 0x629c8 */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 67 `XMITMP`, 0x6399b -- the message reader, and the two symbol mappers it
+ * feeds.
+ *
+ * THE WHOLE OF 0x639db..0x63aae IS `getbit` INLINED, and that is a
+ * measurement rather than a resemblance: every arm of the reader
+ * v34hshak.c:2513 carries is here, in the same order and on the same fields
+ * -- the "still have bits" short cut at 0x64588, the whole-word refill at
+ * 0x63a1d, the PART-word refill at 0x646f6 that does not advance `idx`, the
+ * CRC-16 flush at 0x64781, the "overrun by exactly sixteen" arm at 0x64857
+ * that loads four ones, and the exhausted-with-`repeat` restart at 0x64811 --
+ * which does not even inline: it reloads the reader and CALLS `getbit` at
+ * 0x6484c for the first bit of the repeat, the same recursion 0x5ec47 makes.
+ * So this arm is written as one call, the way 78 and 85 are written over
+ * `tx1_ja_common`.
+ *
+ * WHAT THAT COSTS, named rather than implied: no mutation in
+ * `test/mutations/v34hstx1.json` then tests the reader.  `tools/mutate.py`
+ * anchors on source text and the reader's text is in `v34hshak.c`, which is
+ * `t_v34hshak.c`'s suite and not this one.  What the runs here DO test is
+ * that the call is the right one on the right record, and every branch the
+ * arm takes around it.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SHAPE.  Two or four bits are collected into `f25c8`, lowest first, and
+ * then ONE symbol is mapped out of them:
+ *
+ *     f25c8 = 0
+ *     n = 0
+ *     while (n <= (receiver +0x11e == 0x89b0 ? 3 : 1)) {
+ *             f25c8 |= getbit(*(obj+0xaa6c)) << n;
+ *             vect_idx += 1;
+ *             ... the three checkpoints ...
+ *             n += 1;
+ *     }
+ *     one symbol, four points or sixteen, then `txmit`
+ *
+ * THE SELECTOR IS 69 `EXMIT`'s, THE SAME HALFWORD AGAINST THE SAME CONSTANT
+ * (0x639b9 here, 0x6385c there), and it does the same thing: sixteen points
+ * carry four bits a symbol and four points carry two.  It is RE-READ at the
+ * top of every pass (0x63b46) and again on the way out of 0x648bf (0x6490e);
+ * nothing this arm calls is known to write it, so the three readings agree,
+ * and the last one is the one the mapper uses.
+ *
+ * ---------------------------------------------------------------------------
+ * THE THREE CHECKPOINTS, after each bit, tested in this order and no other.
+ * Each is a pair of constants selected by bit 5 of the receiver's flags word
+ * -- `V34_RX_FLAG_RENEG` to the receiver, which says nothing about what it
+ * means here; the same bit picks the message's length below.
+ *
+ *   vect_idx == 0x55 (bit set) or 0xbb (clear)
+ *              push THREE zero bits onto the end of the reader's accumulator,
+ *              or ONE.  `acc <<= 3` with `avail += 3` leaves the bits already
+ *              in `acc` coming out in the same order and three zeros after
+ *              them, which is what a fill sequence is.  0x645a4 and 0x64750,
+ *              and they are NOT the same width;
+ *   vect_idx == 0x58 (bit set) or 0xbc (clear)
+ *              the sequence is over -- 0x645d0, below;
+ *   vect_idx == +0x3590
+ *              push ONE zero bit and move the stuff point on by 0x11.
+ *              0x64727.
+ *
+ * The first two are exclusive by construction and the object still tests them
+ * in series: 0x6459b jumps straight to the loop bottom, so a pass that stuffs
+ * neither ends the sequence nor reaches +0x3590.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT IS NOT RECONSTRUCTED, and it is finding 341's gap again.  Three blocks
+ * here are entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and
+ * 0x6b410 -- and none is written.  Every one is a diagnostic on the path where
+ * the reader is reloaded or the transmit machine moves.
+ */
+
+/*
+ * The message reader, at whatever +0xaa6c holds.  The object re-reads the
+ * pointer at every site (0x639e2, 0x645ab, 0x64757, 0x6472d, 0x647d5,
+ * 0x6462f) and nothing in this arm writes it, so the reads all give the same
+ * record; they are written out one per site anyway, because that is the
+ * object's shape and the equivalence stops being true the moment something
+ * aims it.
+ */
+static struct v34_bitsource *
+tx1_bitsource(struct v34_object *o)
+{
+	return *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);
+}
+
+/*
+ * 0x64635 -- re-arm the reader for the next sequence, and the counters with
+ * it.  `nbits` is the ONE field bit 5 of the flags word chooses: 0x30 with
+ * the bit set and 0x90 with it clear, computed in the object as
+ * `sbb`/`and $0x60`/`add $0x30` rather than branched (0x64656..0x6466c).
+ *
+ * `repeat` goes to zero, so the reader will return -1 rather than restart
+ * once this message runs out; `acc0`/`avail0` are still loaded, which is what
+ * makes that a decision of the caller's rather than of the reader's.
+ */
+static void
+tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
+	      unsigned short flags)
+{
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->wordbits = 0x10;
+	b->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);
+	b->crc_on = 1;
+	b->avail = 0x12;
+	b->avail0 = 0x12;
+	b->repeat = 0;
+	b->acc = 0x3fffe;
+	b->acc0 = 0x3fffe;
+
+	/* 0x646a1 */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_F3590, 0x22);
+}
+
+/*
+ * 0x645d0 -- the sequence is over.  Count it in +0x359e, and then one of
+ * three things.  Returns non-zero when the arm LEAVES the bit loop, which is
+ * the only exit that is not "collect the next bit".
+ *
+ * THE FIRST TEST IS AT obj+0xaa3c AND NOT AT THE RECORD, and the two are the
+ * same halfword only because `getMPrecvdBits` aims +0xaa6c at +0xaa3c.  The
+ * object reads the object-relative one here (0x645de) and the record-relative
+ * one twelve instructions later (0x647db), so a reconstruction using one for
+ * both is wrong wherever the pointer is aimed anywhere else.
+ *
+ * WHERE THE THREE GO:
+ *
+ *   +0xaa3c bit 0 set, flags & 0x90 == 0x90, and this the FOURTH sequence
+ *              or later: `initdigital` once (guarded by +0x3598), the
+ *              transmit machine to 69 EXMIT, `vect_idx` cleared and bit 5 of
+ *              the flags word dropped.  0x648a7 and 0x648bf, and it is the
+ *              one path that leaves the loop;
+ *   flags & 0x18 == 0x10 and +0x359e past one:
+ *              raise bit 0 of the record's own first halfword, and clear
+ *              +0x359e if it was NOT already up.  0x647be and 0x647d3;
+ *   otherwise  straight to the reload.
+ *
+ * THE COMPARE AT 0x648ab IS SIGNED (`jle`) and so is 0x647cd's, which is why
+ * both are spelled through `short`.
+ */
+static int
+tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
+{
+	unsigned short flags;
+	short seq;
+	int stamp;
+
+	seq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);
+	tx1_put(o, TX1_F359E, seq);
+
+	if ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {
+		flags = rx->flags;			/* 0x645f9 */
+		if ((flags & 0x90u) == 0x90u && seq > 3) {
+			/* 0x648b1 */
+			if (tx1_get(o, TX1_F3598) == 0) {
+				initdigital(o);
+				tx1_put(o, TX1_F3598, 1);
+			}
+			/* 0x648bf */
+			if (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)
+				tx1_put(o, TX1_TXSTATE, V34HS_EXMIT);
+			o->vect_idx = 0;
+			rx->flags = (unsigned short)(rx->flags & ~0x20u);
+			return 1;
+		}
+		stamp = (flags & 0x18u) == 0x10u;	/* 0x64614 */
+	} else {
+		flags = rx->flags;			/* 0x647a9 */
+		stamp = (flags & 0x18u) == 0x10u;	/* 0x647b0 */
+	}
+
+	/*
+	 * 0x647c5 RE-READS +0x359e rather than using the value just stored.
+	 * Nothing between the two writes it, so the two are the same number;
+	 * it is written as the object writes it.
+	 */
+	if (stamp && tx1_get(o, TX1_F359E) > 1) {
+		/* 0x647d3 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		if ((b->word[0] & 1) == 0)
+			tx1_put(o, TX1_F359E, 0);
+		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
+		flags = rx->flags;			/* 0x64805 */
+	}
+
+	tx1_mp_reload(o, tx1_bitsource(o), flags);
+	return 0;
+}
+
+/*
+ * 0x64929 -- two bits, one differential quadrant, one `vect4` point.  This is
+ * 69's four-point half with the scrambler's `bits` coming out of `f25c8`
+ * instead of a literal three, so `tx1_dpsk4` carries the rest of it.
+ */
+static void
+tx1_mp4(struct v34_object *o, short src)
+{
+	short pick = (short)((o->f25c2 & 1) == 0);
+	short q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);
+
+	(void)tx1_dpsk4(o, q);
+}
+
+/*
+ * 0x63b62 -- four bits, two scrambler steps, one `vect16` point.  Instruction
+ * for instruction this is 69's sixteen-point block at 0x67031 with two
+ * differences and no others: the two `bits` arguments are the low and the high
+ * dibit of `f25c8` where 69 passes the literals 0xf and 3, and this one does
+ * not advance `vect_idx` (the bit loop already did, once per bit).  It is
+ * written out rather than shared with 69 because sharing would have to rewrite
+ * 69's body, and the mutations already aimed at that text are what say 69 is
+ * right.
+ *
+ * `f25c8` IS READ SIGNED (`movswl`, 0x63b83) AND IT CANNOT MATTER.  0x639ab
+ * clears the field before the loop and the loop only ORs bits in, so the two
+ * readings can differ only when bit 15 is set -- which needs the reader's
+ * exhausted arm, whose -1 fills every bit.  Even then the scrambler consumes
+ * bits 0 and 1 alone, and after the arithmetic `sar $2` bits 2 and 3, and all
+ * four are ones under either reading.  So it is a proof and not a run.
+ *
+ * The second call takes the SAVED halfword shifted down by two, not the value
+ * `f25c8` now holds: 0x63c03 restores the register before 0x63c12 shifts it,
+ * and 0x63c05 has already overwritten the field with the first quadrant.
+ */
+static void
+tx1_mp16(struct v34_object *o, short src)
+{
+	short pick = (short)((o->f25c2 & 1) == 0);
+	short k, q;
+	int point;
+
+	q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);
+	o->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);
+
+	q = (short)V34scrambler((unsigned *)&o->f25cc, pick,
+				(short)(src >> 2), 2);
+	k = o->f25c8;					/* re-read, 0x63c72 */
+	o->f25c6 = k;
+	point = vect16[q + 4 * k];
+	tx1_put_point(o, point);
+}
+
+int
+v34tx1_xmitmp(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	int wide = 0;
+	int n = 0;
+
+	o->f25c8 = 0;					/* 0x639ab */
+
+	for (;;) {
+		struct v34_bitsource *b;
+		unsigned short flags;
+		short bit, idx;
+
+		wide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;
+		if (n > (wide ? 3 : 1))
+			break;
+
+		/* 0x639db, and 0x6484c where it does not inline */
+		b = tx1_bitsource(o);
+		bit = getbit(b);
+
+		/*
+		 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
+		 * bit reaches it sign-extended -- so the reader's -1 fills
+		 * `f25c8` from bit `n` up rather than setting one bit.
+		 */
+		o->f25c8 = (short)((unsigned short)o->f25c8
+				   | (unsigned short)
+				     ((unsigned)(int)bit
+				      << ((unsigned)(unsigned char)n & 31u)));
+
+		/* 0x63ad8 */
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+		idx = o->vect_idx;
+		flags = rx->flags;
+
+		if (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {
+			/* 0x6459b */
+			b = tx1_bitsource(o);
+			if (flags & 0x20u) {
+				b->acc = (int)((unsigned)b->acc << 3);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 3);
+			} else {
+				b->acc = (int)((unsigned)b->acc << 1);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 1);
+			}
+		} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {
+			if (tx1_mp_sequence_end(o, rx)) {
+				/* 0x6490e */
+				wide = (unsigned short)
+				       tx1_get(o, TX1_F382) == 0x89b0u;
+				break;
+			}
+		} else if ((unsigned short)o->vect_idx
+			   == (unsigned short)tx1_get(o, TX1_F3590)) {
+			/* 0x64727 */
+			b = tx1_bitsource(o);
+			b->acc = (int)((unsigned)b->acc << 1);
+			b->avail = (short)((unsigned short)b->avail + 1);
+			tx1_put(o, TX1_F3590,
+				(short)((unsigned short)
+					tx1_get(o, TX1_F3590) + 0x11));
+		}
+
+		n = (short)(n + 1);			/* 0x63b38 */
+	}
+
+	if (wide)
+		tx1_mp16(o, o->f25c8);
+	else
+		tx1_mp4(o, o->f25c8);
+
+	txmit(o);				/* 0x62d5f and 0x64a42 */
+	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
 }
