@@ -825,6 +825,46 @@ observe(int side, const unsigned char *now, const unsigned char *was,
 	memcpy(&o->progress, base(side) + V34HS_PROGRESS, sizeof(o->progress));
 }
 
+/*
+ * ONE RECONSTRUCTED DISPATCH ARM ON SIDE A, WHICH IS HOW A TABLE-1 CASE IS
+ * TESTED BEFORE `v34handshak` EXISTS.
+ *
+ * `V34HS_OURS` is one switch over one shared object file, so it cannot be
+ * defined until all forty-three cases are written -- and none of them can be
+ * written first if landing one requires it.  The way out is the loop's own
+ * guard at 0x62933: with the queue count already at the block's limit,
+ * `ref_v34handshak` skips the per-sample loop entirely and runs the
+ * once-per-block half and nothing else.  So an arm that leaves the count at
+ * the limit can be run FIRST on side A, and the blob then contributes exactly
+ * the tail:
+ *
+ *      side A   our arm  +  the blob's tail
+ *      side B   the blob's arm  +  the blob's tail
+ *
+ * which is a differential test of the arm.  It is installed here rather than
+ * called by the test before `v34hs_step` so that the snapshot, the stack
+ * scrub, the alarm and the observation all cover the arm as well -- side A's
+ * `changed` and `hash` mean the same thing as side B's, which is what
+ * `v34hs_compare` needs to be able to compare them.
+ *
+ * THE TRANSCRIPT IS THE ONE THING THIS DOES NOT COVER.  Our code logs to
+ * capture channel 0 and the blob's to channel 1, so a side running both logs
+ * to two channels while `text[0]` takes one.  A test using this must leave
+ * the diagnostics off, and t_v34hstx1.c says so.
+ */
+static int (*step_arm)(void *);
+static int step_arm_rc;
+
+int
+v34hs_step_case(int (*arm)(void *))
+{
+	step_arm = arm;
+	step_arm_rc = 0;
+	v34hs_step();
+	step_arm = NULL;
+	return step_arm_rc;
+}
+
 void
 v34hs_step(void)
 {
@@ -854,6 +894,8 @@ v34hs_step(void)
 	probe_sw[0] = fpu_status();
 	probe_cw[0] = fpu_control();
 	alarm(5);
+	if (step_arm)
+		step_arm_rc = step_arm(&obj_a);
 	V34HS_CALL_A(&obj_a);
 	alarm(0);
 	snprintf(text[0], sizeof(text[0]), "%s",

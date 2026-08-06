@@ -127,6 +127,24 @@ void v34hs_state(short mst, short rxst, short txst);
 void v34hs_step(void);
 
 /*
+ * The same step with one RECONSTRUCTED DISPATCH ARM on side A, run before the
+ * blob and inside the same snapshot, alarm and observation.  Returns whatever
+ * the arm returned.
+ *
+ * This is how a single case of `v34handshak` is compared while the function
+ * as a whole does not exist: an arm that leaves the transmit queue's count at
+ * the block's limit makes the blob's own guard at 0x62933 skip the per-sample
+ * loop, so side A gets our arm and the blob's tail where side B gets the
+ * blob's arm and the same tail.  See the comment on the definition, and
+ * test/unit/t_v34hstx1.c for the two guards a test using it needs against
+ * passing vacuously.
+ *
+ * The diagnostics must be OFF: our code and the blob's log to two different
+ * capture channels and only one of them reaches the transcript comparison.
+ */
+int v34hs_step_case(int (*arm)(void *));
+
+/*
  * Compare the two sides: the whole object byte for byte with the pointer
  * fields excluded, the two self-pointers by offset-from-own-base, and both
  * transcripts.  This is the check that says the fixture is sound.
