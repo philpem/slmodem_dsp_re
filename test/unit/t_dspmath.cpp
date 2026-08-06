@@ -26,6 +26,11 @@ float ref_Var(float *x, unsigned n)     asm("ref__Z3VarIfET_PS0_j");
 float ref_Std(float *x, unsigned n)     asm("ref__Z3StdIfET_PS0_j");
 float ref_sinc(float x)                 asm("ref__Z4sincIfET_S0_");
 void ref_boxcar(float *w, unsigned n)   asm("ref__Z6boxcarIfEvPT_j");
+void ref_hanning(float *w, unsigned n)  asm("ref__Z7hanningIfEvPT_j");
+void ref_hamming(float *w, unsigned n)  asm("ref__Z7hammingIfEvPT_j");
+void ref_blackman(float *w, unsigned n) asm("ref__Z8blackmanIfEvPT_j");
+void ref_designWindow(WindowType t, float *w, unsigned n)
+	asm("ref__Z12designWindowIfEv10WindowTypePT_j");
 }
 
 static long bits(float f)
@@ -129,6 +134,69 @@ main(void)
 		for (i = 0; i < 512; i++)
 			diff_eq_int("boxcar", bits(wa[i]), bits(wb[i]),
 				    (long)n * 1000 + i);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE THREE COSINE WINDOWS, over the whole buffer so that a version
+	 * writing one element too many is caught rather than passing.
+	 *
+	 * n == 1 is deliberately included and is not an edge case to be
+	 * skipped: `hamming` and `blackman` both divide by n-1, so it is a
+	 * division by zero and both write the x87 indefinite, 0xffc00000.
+	 * Compared as bits, which is the only way a NaN compares equal to
+	 * itself.
+	 */
+	diff_begin("dspmath: the cosine windows");
+	for (n = 0; n <= 300; n++) {
+		memset(wa, 0x5a, sizeof(wa));
+		memset(wb, 0x5a, sizeof(wb));
+		hanning(wa, n);
+		ref_hanning(wb, n);
+		for (i = 0; i < 512; i++)
+			diff_eq_int("hanning", bits(wa[i]), bits(wb[i]),
+				    (long)n * 1000 + i);
+
+		memset(wa, 0x5a, sizeof(wa));
+		memset(wb, 0x5a, sizeof(wb));
+		hamming(wa, n);
+		ref_hamming(wb, n);
+		for (i = 0; i < 512; i++)
+			diff_eq_int("hamming", bits(wa[i]), bits(wb[i]),
+				    (long)n * 1000 + i);
+
+		memset(wa, 0x5a, sizeof(wa));
+		memset(wb, 0x5a, sizeof(wb));
+		blackman(wa, n);
+		ref_blackman(wb, n);
+		for (i = 0; i < 512; i++)
+			diff_eq_int("blackman", bits(wa[i]), bits(wb[i]),
+				    (long)n * 1000 + i);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The selector, over every arm AND over values outside the enum: the
+	 * object sends 0, anything negative and anything above 3 to `boxcar`,
+	 * by two different routes that are the same behaviour.
+	 */
+	diff_begin("dspmath: designWindow selects the right one");
+	{
+		static const int types[] = { 0, 1, 2, 3, 4, 99, -1, -7 };
+		unsigned k;
+
+		for (k = 0; k < sizeof(types) / sizeof(types[0]); k++)
+			for (n = 0; n <= 40; n++) {
+				memset(wa, 0x5a, sizeof(wa));
+				memset(wb, 0x5a, sizeof(wb));
+				designWindow((WindowType)types[k], wa, n);
+				ref_designWindow((WindowType)types[k], wb, n);
+				for (i = 0; i < 512; i++)
+					diff_eq_int("designWindow",
+						    bits(wa[i]), bits(wb[i]),
+						    ((long)k * 100 + n) * 1000
+						    + i);
+			}
 	}
 	rc |= diff_end();
 
