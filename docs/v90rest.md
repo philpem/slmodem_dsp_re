@@ -94,8 +94,16 @@ costs one 270-byte method rather than the batch.
     350-359    v34handshak table 3's 62, 79, 80 + shared arm
     360-369    v34handshak table 2's seven targets
     370-379    v34handshak table 3's middle group
-    380+       indicateJaTransmission, the big three (41/44/46),
-               table 1's remaining thirteen, datapumpv34
+    380-389    indicateJaTransmission                    380-381 used
+    390-399    v34handshak microstate 41
+    400-409    v34handshak microstate 44
+    410-419    v34handshak microstate 46
+    420-429    v34handshak table 1's remaining thirteen
+    430+       datapumpv34, and whatever v34handshak still halts on
+
+TEN WIDE, NOT SIX, and all ten belong to the batch. 346 was taken out of the
+middle of a ten-block whose owner was still running and had used all ten;
+finding 346 records that, and it was made by the same person who wrote 330.
     291-296    V90Phase3Demodulator::reset               all used
     297-300    VPcmFloModem::enterPhase3                 all used
     301-320    #59's remaining five
