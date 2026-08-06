@@ -55,7 +55,7 @@ CXX        := g++
 # untidiness rather than breakage, but the fix is to not emit them.
 #
 DEPFLAGS   := -MMD -MP
-CFLAGS     := -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude $(DEPFLAGS)
+CFLAGS     := -fno-pie -fno-stack-protector -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude $(DEPFLAGS)
 
 # The same flags without the dependency generation, for syntax-only passes.
 SYNCFLAGS   = $(filter-out $(DEPFLAGS),$(CFLAGS))
@@ -361,7 +361,7 @@ capture: $(BUILD)/capture/spandsp_b103.pcm
 
 $(BUILD)/capture/spandsp_b103.pcm: test/interop/gen_spandsp_capture.c $(SPANDSP_LIB)
 	@mkdir -p $(BUILD)/capture
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $(BUILD)/gen_capture $< \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $(BUILD)/gen_capture $< \
 	    $(SPANDSP_LIB) -lm
 	@./$(BUILD)/gen_capture $(BUILD)/capture
 
@@ -383,7 +383,7 @@ $(BUILD)/test/t_spandsp_v23: test/interop/t_spandsp_v23.c \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v23.c \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v23.c \
 	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
 
 V8NEG_SRC  := test/interop/v8neg.c test/interop/v8spandsp.c \
@@ -395,7 +395,7 @@ $(BUILD)/test/t_spandsp_v8neg: test/interop/t_spandsp_v8neg.c \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -Itest/interop -o $@ \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -Itest/interop -o $@ \
 	    test/interop/t_spandsp_v8neg.c $(V8NEG_SRC) $(SRC) \
 	    $(SPANDSP_LIB) -lm
 
@@ -405,7 +405,7 @@ $(BUILD)/test/t_spandsp_v8sock: test/interop/t_spandsp_v8sock.c \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -Itest/interop -o $@ \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -Itest/interop -o $@ \
 	    test/interop/t_spandsp_v8sock.c $(V8NEG_SRC) $(SRC) \
 	    $(SPANDSP_LIB) -lm
 
@@ -413,7 +413,7 @@ $(BUILD)/test/t_spandsp_v8sock: test/interop/t_spandsp_v8sock.c \
 $(BUILD)/test/v8peer: test/interop/v8peer.c test/interop/v8neg.c \
         test/interop/runtime64.c $(SRC) | $(BUILD)
 	@mkdir -p $(BUILD)/test
-	$(CC) $(CFLAGS) -Itest/interop -o $@ test/interop/v8peer.c \
+	$(CC) $(CFLAGS) -no-pie -Itest/interop -o $@ test/interop/v8peer.c \
 	    test/interop/v8neg.c test/interop/runtime64.c $(SRC) -lm
 
 # ...and 32-bit against the blob, which is the only way SpanDSP can be made
@@ -432,7 +432,7 @@ $(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v8.c \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v8.c \
 	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
 
 $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
@@ -441,7 +441,7 @@ $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
 	  echo "(do NOT substitute the distro libspandsp: 0.0.6 has the"; \
 	  echo " Bell 103 channels swapped)"; exit 1; }
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(SPANDSP)/src -o $@ $(INTEROP_SRC) $(SRC) \
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ $(INTEROP_SRC) $(SRC) \
 	    $(SPANDSP_LIB) -lm
 
 # The reconstruction must not depend on 32-bit; only the reference does.

@@ -14450,3 +14450,45 @@ caveat -- "a call site moved between functions shows as one missing and one
 extra" -- understates it: when the destination function has no blob symbol at
 all, there is no compensating "extra" anywhere, so the gap looks one-sided and
 real. Read the per-file line first.
+
+### 346. The object names its own compiler, and we were building PIE against a non-PIE original
+
+`.comment` was never read. It holds 279 entries -- one per translation unit,
+which independently confirms the TU count -- and every one of them is the same
+string:
+
+```
+GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+```
+
+So the original was built with **GCC 3.4.2** as packaged by Gentoo, with the
+ProPolice (`ssp`) and PIE patchsets present in the compiler. The `__DATE__`
+stamps put the build at **22 September 2005, 15:48**, five TUs within nine
+seconds of each other.
+
+Four flags follow from the object itself, and three of them were wrong here:
+
+- **Not PIE.** There is not one `get_pc_thunk` in the object. Our build had
+  41: Ubuntu's GCC is `--enable-default-pie`, so every translation unit was
+  getting a PIC register setup the original never had, which changes register
+  allocation (`%ebx` is reserved) and inserts a call in every function that
+  touches a global. `-fno-pie` now, and `-no-pie` on the four link rules that
+  were not using `$(LDFLAGS)` and so had been linking PIE all along.
+- **No stack protector.** Gentoo's patchset is in the compiler, but no
+  `__stack_smash_handler` or `__guard` symbol appears, so it was off.
+  `-fno-stack-protector` now, explicitly, rather than by luck.
+- **Not i686.** No `cmov` and no `fcomi`/`fucomi` anywhere in 1.2 MB. GCC 3.4
+  emits both under `-march=i686`, and the object instead does float compares
+  the long way round with `fnstsw %ax` / `sahf` -- which is exactly what the
+  reconstruction found in `sinc` and in `LowPassFIR::design`. So the target is
+  the i386 default, and any future `-march=` above that would diverge.
+- `-mfpmath=387` was already right, and is now known to be a consequence of
+  the above rather than an assumption.
+
+The whole suite passes non-PIE: 1,097 tests, every gate. Nothing about the
+behaviour changed, which is the expected result -- what changed is that our
+object is now built the way the original's was, which is the precondition for
+comparing the two at the instruction level rather than only at the interface.
+
+`.comment` is worth reading first on any future blob. It cost one command and
+settles what a great deal of inference cannot.
