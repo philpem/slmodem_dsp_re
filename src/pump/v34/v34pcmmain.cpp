@@ -27,8 +27,12 @@
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
+#include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
+#include "dsplib/v34shell.h"
+#include "dsplib/VPcmFloModem.h"
 
 /*
  * The session object's MP block.  Six flag bytes and seven shorts, read as a
@@ -236,4 +240,365 @@ getMPrecvdBits(struct tagV34Object *objp)
 	*(short *)(m + 0xaa48) = 0;
 	*(short *)(m + 0xaa4a) = 0;
 	*(short *)(m + 0xaa4c) = 0;
+}
+
+/*
+ * ===========================================================================
+ * v90Phase34 -- one symbol of the V.90 phase 3/4 transmit sequence
+ * ===========================================================================
+ *
+ * WHY IT IS IN THIS FILE.  `v90Phase34` is unmangled, so it was declared
+ * `extern "C"`; but two of its calls are relocations against
+ *
+ *     _ZN12VPcmFloModem12getV90CpBitsEPs
+ *     _ZN12VPcmFloModem12getV90JaBitsEPs
+ *
+ * which a C translation unit cannot name.  So the translation unit is C++,
+ * and WHICH C++ translation unit is settled by the call at .text+0x9fea:
+ *
+ *     e8 61 f2 ff ff        call 9250 <_Z14getMPrecvdBitsP12tagV34Object>
+ *
+ * -- a resolved PC-relative displacement with NO relocation beside it, which
+ * in a non-PIC object happens only when the target is defined in the same
+ * section of the same translation unit.  That is `getMPrecvdBits` above, and
+ * the head of this file says why the file exists.  The debug string's
+ * "VPcmV34Main:" prefix agrees, but the missing relocation is the argument.
+ *
+ * ONE ARGUMENT, and it is the V.34 object: `sub $0x2c,%esp` then
+ * `mov 0x30(%esp),%ebp`, and nothing else is read from the incoming frame.
+ * IT RETURNS 0 at both `ret`s -- `xor %eax,%eax` reaches each of them, and
+ * its one caller discards the value, so "returns 0" is the whole of the
+ * evidence for the return type, exactly as for `k56FlexPhase34`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT IT DOES.  One call emits one or two handshake symbols, and which
+ * depends on where the V.90 phase 3/4 sequence has got to.  THREE things
+ * select the arm, where `k56FlexPhase34` has two: bit 10 of the receiver's
+ * flags word (`V34_RX_FLAG_DATA`), bit 4 of the same word, and the int at
+ * +0x24c that `v34fsk.h` calls `v90_receiver` -- NOT `k56flex_receiver` at
+ * +0x250, which is what the K56flex twin reads through the identical
+ * `obj + 4` base.  One int apart, and it is the whole difference between the
+ * two functions' state machines.
+ *
+ *     0x400 clear             transmit the next Ja dibit
+ *     0x400 set, 0x10 clear   transmit the zero point, then arm the machine
+ *     both set, +0x24c = 3    two symbols; count to 0x7f, then state 4
+ *                  = 4        two symbols; count to 0x10, then state 5
+ *                  = 5        one scrambled idle symbol
+ *                  = 6        two symbols; count to 0x7f, then state 7
+ *                  = 7        two symbols; count to 0x10, then state 8
+ *                  = 8        the next CP symbol; on the last, state 9
+ *                  = 9        a constant symbol
+ *                  = 10       the next CP symbol; on the last, hand over
+ *     both set, anything else do nothing
+ *
+ * BIT 4 OF THE FLAGS WORD IS WRITTEN HERE.  `v34recv.h` calls it
+ * `V34_RX_FLAG_TRN_WATCH` after its READER in `v34rx.c`; the macro is used
+ * below because it is the same bit of the same word, and for no stronger
+ * reason.  Nothing here is a claim about TRN2.
+ *
+ * ---------------------------------------------------------------------------
+ * THE IDLE SYMBOL IS NOT `txmitdibit` OR `txmitquadbit`, the same three ways
+ * `src/pump/v34/v34k56.cpp` sets out for the K56flex twin -- with one
+ * difference that matters, and it is in the FIRST of the three:
+ *
+ *   - `V34scrambler`'s mode argument is the LITERAL 0 here, where the
+ *     K56flex twin passes the literal 1.  Both emitters pass
+ *     `tx_scrambler_mode(o)`, which is bit 0 of `f25c2`; nothing in these
+ *     1,358 bytes loads +0x25c2 at all.  Mode 0 is the CALLING station's
+ *     polynomial (v34hshak.c), so a reconstruction that called an emitter
+ *     here agrees with the blob for every object whose `f25c2` bit 0 is
+ *     clear and disagrees for every one where it is set.
+ *   - there is NO differential encoding: the scrambler's two bits go
+ *     straight into `f25c8` and index the table.
+ *   - `f25c6` is not written, so the quadrant the handshake carries does not
+ *     advance across an idle symbol.
+ *
+ * AND THE CONSTELLATION DISCRIMINATOR IS READ THREE WAYS, NOT TWO.  Case 5
+ * tests `f382` against 0x89b0 AND against 0x8990 and has a third arm for
+ * everything else, which transmits the ZERO point.  The K56flex twin has two
+ * arms and privileges neither value; here 0x8990 is privileged, and a value
+ * that is neither reaches code no other arm does.  Cases 8, 9 and 10 test
+ * for 0x89b0 alone, so for them 0x8990 is not privileged.
+ *
+ * ---------------------------------------------------------------------------
+ * NEITHER `vect_idx` (+0x2aa2) NOR THE SHIFT REGISTER AT +0x25d6 APPEARS IN
+ * THIS FUNCTION.  The K56flex twin's case 3 shifts that word out two bits at
+ * a time and its Ja completion arm reloads it; the V.90 sequence carries its
+ * bits in the `VPcmFloModem` instead and counts symbols in `f25c0`.  So none
+ * of finding 282's shift-count masking applies here and no `& 31` is
+ * written: there is no variable shift.
+ */
+
+/* The receiver sub-object, whose flags word carries the two phase gates. */
+#define OB_RECEIVER		0x264
+
+/* The handshake's transmit state machine; see v34hshak.c. */
+#define OB_TXSTATE		0x3596
+
+/*
+ * +0xabfe.  A byte `v34handshakinit` clears and this sets, on the one path
+ * whose diagnostic names it: "tx buffer backward clear is enabled".  It is
+ * inside `unmapped_abfb` in `struct v34_object`, so it is reached by offset.
+ */
+#define OB_BACKWARD_CLEAR	0xabfe
+
+/*
+ * +0xaa86, printed as `period` beside `tx->symcnt` by case 3's diagnostic.
+ * That is `V34_RATECFG + 2`; see `struct v34_ratecfg`.
+ */
+#define OB_PERIOD		0xaa86
+
+/* The negotiated configuration at `pac3c`; see v34fsk.h. */
+#define CFG_FLAGS		0x50
+#define CFG_BACKWARD_CLEAR	0x04
+
+/*
+ * The constellation-size discriminator at +0x382, which
+ * `VPcmV34SetV90RateReneg` sets to 0x89b0 or 0x8990.
+ */
+#define OB_CONSTEL_16		((short)0x89b0)
+#define OB_CONSTEL_4		((short)0x8990)
+
+extern "C" int
+v90Phase34(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	unsigned short fl = rx->flags;
+	short n;
+
+	if (!(fl & V34_RX_FLAG_DATA)) {
+		/*
+		 * Ja.  The bit source writes the dibit into `f25c8` -- the
+		 * same field the emitters use as their quadrant register --
+		 * and returns non-zero on the symbol that ends the sequence.
+		 * The dibit is transmitted either way, so the last one is
+		 * sent and then acted on.
+		 *
+		 * `VPcmFloModem::getV90JaBits` is a REAL BODY, unlike the
+		 * K56flex twin's three-byte stub, so everything below here is
+		 * reachable and is tested.
+		 */
+		int done = (short)vp->getV90JaBits(&o->f25c8);
+
+		txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+
+		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DATA);
+		if (!(((const unsigned char *)o->pac3c)[CFG_FLAGS]
+		      & CFG_BACKWARD_CLEAR))
+			return 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34Main: tx buffer backward "
+					     "clear is enabled...\r\n");
+		m[OB_BACKWARD_CLEAR] = 1;
+		return 0;
+	}
+
+	if (!(fl & V34_RX_FLAG_TRN_WATCH)) {
+		/*
+		 * The sequence has bits but the machine has not been armed.
+		 * Transmit the ZERO point -- two 16-bit stores in the object,
+		 * where every other arm stores the whole packed complex at
+		 * once -- and arm it only once the state has moved past 2.
+		 */
+		o->f25d0 = 0;
+		o->f25d2 = 0;
+		txmit(o);
+		if (o->v90_receiver <= 2)
+			return 0;
+		rx->flags = (unsigned short)(rx->flags
+					     | V34_RX_FLAG_TRN_WATCH);
+		o->f25c0 = 0;
+		return 0;
+	}
+
+	switch (o->v90_receiver) {
+	/*
+	 * Cases 3 and 6 are the same two symbols and the same 0x7f count, and
+	 * differ only in the state they move to and in case 3's diagnostic.
+	 * Cases 4 and 7 are the same pair again with a different point pair
+	 * and a 0x10 count.  They are transcribed separately rather than
+	 * folded together, because that is how the object lays them out and
+	 * because folding would have to invent a conditional debug site.
+	 */
+	case 3:
+		*(int *)&o->f25d0 = vect4[0];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		*(int *)&o->f25d0 = vect4[3];
+		txmit(o);
+		/* Re-read: `txmit` is between the two counts. */
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n <= 0x7f) {
+			o->f25c0 = n;
+			return 0;
+		}
+		if (DSPLIB_DEBUG_ON()) {
+			/*
+			 * The object stores the count before printing it and
+			 * zeroes it again below; the store is unobservable
+			 * either way, and it is here because it is there.
+			 */
+			o->f25c0 = n;
+			dsplibs_debug_printf("Entered v34m->v90Receiver == "
+					     "V90RCV_P3_THIRD_S with "
+					     "tx->symcnt = %d period = %d\n",
+					     (int)n,
+					     (int)*(const short *)
+					     (m + OB_PERIOD));
+		}
+		o->v90_receiver = 4;
+		o->f25c0 = 0;
+		return 0;
+
+	case 6:
+		*(int *)&o->f25d0 = vect4[0];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		*(int *)&o->f25d0 = vect4[3];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n <= 0x7f) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 7;
+		o->f25c0 = 0;
+		return 0;
+
+	case 4:
+		*(int *)&o->f25d0 = vect4[2];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		*(int *)&o->f25d0 = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n != 0x10) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 5;
+		/* Reset the transmitter for the idle symbols that follow. */
+		o->f25c6 = 0;
+		o->f25c0 = 0;
+		o->f25cc = 0;
+		return 0;
+
+	case 7:
+		*(int *)&o->f25d0 = vect4[2];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		*(int *)&o->f25d0 = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n != 0x10) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 8;
+		o->f25c6 = 0;
+		o->f25c0 = 0;
+		o->f25cc = 0;
+		return 0;
+
+	case 5: {
+		/* The idle symbol.  See the note at the top of this block. */
+		short c = o->f382;
+		int q;
+
+		if (c == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			o->f25c8 = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			q = o->f25c8;
+			*(int *)&o->f25d0 = vect16[d + q * 4];
+		} else if (c == OB_CONSTEL_4) {
+			q = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			o->f25c8 = (short)q;
+			*(int *)&o->f25d0 = vect4[q];
+		} else {
+			o->f25d0 = 0;
+			o->f25d2 = 0;
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		return 0;
+	}
+
+	case 9:
+		/*
+		 * A constant symbol, and the one arm that uses the published
+		 * emitters with a literal: all four bits set for the sixteen-
+		 * point map, both bits set for the four-point one.  So it IS
+		 * scrambled with `f25c2`'s polynomial and IS differentially
+		 * encoded, unlike case 5.
+		 */
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		return 0;
+
+	case 8: {
+		/*
+		 * CP, and the only arms whose bits are the far end's message
+		 * rather than a fixed pattern -- so they go through the
+		 * emitters like the rest of the handshake.  The bit source
+		 * reports the end of the sequence, and the symbol carrying it
+		 * is transmitted before the state moves.
+		 */
+		int done = (short)vp->getV90CpBits(&o->f25c8);
+
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->f25c8);
+		else
+			txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+		o->v90_receiver = 9;
+		return 0;
+	}
+
+	case 10: {
+		int done = (short)vp->getV90CpBits(&o->f25c8);
+
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->f25c8);
+		else
+			txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+
+		/*
+		 * The end of phase 3/4: unpack what the far end sent, set the
+		 * data rates up and hand the handshake to its transmit state.
+		 *
+		 * The state store is a compare-then-store in the object and
+		 * is written as one here; it is indistinguishable from a
+		 * plain store by any test, since the value written is the
+		 * value compared against.
+		 */
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
+	}
+	}
+
+	return 0;
 }

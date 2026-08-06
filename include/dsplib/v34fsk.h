@@ -719,6 +719,12 @@ struct v34_object {
 	 * three codes line up with the three the receiver recognises.
 	 */
 	unsigned char fabfa;				/* +0xabfa */
+	/*
+	 * +0xabfe, inside the run below.  `v34handshakinit` clears it and
+	 * `v90Phase34` sets it to 1 on the one path whose own diagnostic
+	 * names it: "tx buffer backward clear is enabled".  Reached by offset
+	 * because nothing else in the run is mapped.
+	 */
 	unsigned char unmapped_abfb[0xac02 - 0xabfb];
 	/*
 	 * +0xac02.  `V34SetINFO0aBits` puts 20 here when it asks for a short
@@ -785,7 +791,12 @@ struct v34_object {
 	 *                 [-10, +7] by `GetVPcmMinimalTxPowerReduction`
 	 *   +0x50  byte   bits 5..7 are the maximum V.34 BAUD RATE INDEX,
 	 *                 which is what `chkForceBaudRate` reads and its own
-	 *                 trace names: "max V34 baud rate index = %d"
+	 *                 trace names: "max V34 baud rate index = %d".
+	 *                 BIT 2 IS A SECOND AND UNRELATED READER:
+	 *                 `v90Phase34` tests it once the Ja sequence has
+	 *                 finished, and its diagnostic names it -- "tx
+	 *                 buffer backward clear is enabled".  It gates the
+	 *                 byte at +0xabfe
 	 *   +0x54  int    compared against 4 by GetVPcmMinimalTxPowerReduction
 	 *
 	 * Reconstructed as a `void *` with each field spelled out at its use,
@@ -816,7 +827,14 @@ struct v34_object {
  */
 struct v34_ratecfg {
 	short baud;			/* +0x00 transmit symbol rate    */
-	unsigned char pad_02[0x04 - 0x02];
+	/*
+	 * +0x02.  `v90Phase34`'s case 3 prints it as `period`, beside
+	 * `tx->symcnt`, and that diagnostic is the only thing in the tree
+	 * that names it.  Note it is NOT `tx->period`: the string carries no
+	 * prefix on it and the load is from this record rather than from the
+	 * transmitter.  Nothing reconstructed writes it.
+	 */
+	short period;			/* +0x02                         */
 	short txbits;			/* +0x04 in units of 2400 bps    */
 	/*
 	 * +0x06.  `setfinalrate` writes it, `v34setuptxmit` and `v34handshak`

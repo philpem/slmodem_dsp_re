@@ -221,6 +221,29 @@ in the mutation suite that is already registered.
 `v90Phase34` (1,358 B, #59) is unblocked by this: its two blockers were
 `getV90CpBits` and `getV90JaBits`. `V34SetINFO1aBits` (1,401 B) is unblocked
 too. `VPcmV34InitiateRetrain` still wants `V34DisconnectThreshTable`.
+
+## `v90Phase34` has landed
+
+1,358 bytes, findings 301-306, mutation suite `v90p34` -- 70 mutations, 64
+caught, 6 recorded equivalent and **no gaps**, which is what separates it from
+its twin: `k56FlexPhase34` left eight uncaught in two arms nothing could
+enter, and every arm of this one is reachable because its two bit sources are
+real bodies rather than stubs.
+
+It is in `src/pump/v34/v34pcmmain.cpp`, not a file of its own: the call to
+`getMPrecvdBits` at .text+0x9fea carries no relocation, which in a non-PIC
+object means the same translation unit, and that file IS VPcmV34Main.cpp's
+C++ half. Test `test/unit/t_v90p34.cpp`; declaration beside
+`k56FlexPhase34`'s in `v34hshak.h`.
+
+Its two diagnostics named four fields the tree did not have -- `period` at
+`V34_RATECFG + 2`, bit 2 of `pac3c + 0x50`, the byte at +0xabfe, and
+`tx->symcnt` for `f25c0` -- and confirmed `v90_receiver` as the object's own
+name for +0x24c. All four are now in `v34fsk.h`; finding 302 is the record.
+
+#59's remaining four: `V34SetINFO1aBits` (1,401), `VPcmV34InitiateRetrain`
+(1,406, still wanting `V34DisconnectThreshTable`), `V34GiveINFO1dBits` (436)
+and `indicateJaTransmission` (57). Findings from 307.
 ## Where wave 2 got to
 
 All seven symbols. The `setSessionFlag` chain landed first (findings 267-269);
