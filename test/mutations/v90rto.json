@@ -1,0 +1,14 @@
+[
+ {"label": "1e-6 as a double, not a float",
+  "find": "\ttimingOffset = ppmScale * ppm * 1e-6f;",
+  "replace": "\ttimingOffset = ppmScale * ppm * 1e-6;"},
+ {"label": "round the intermediate product to float",
+  "find": "\ttimingOffset = ppmScale * ppm * 1e-6f;",
+  "replace": "\tfloat t = ppmScale * ppm;\n\ttimingOffset = t * 1e-6f;"},
+ {"label": "scale by 1e6 rather than 1e-6",
+  "find": "\ttimingOffset = ppmScale * ppm * 1e-6f;",
+  "replace": "\ttimingOffset = ppmScale * ppm * 1e6f;"},
+ {"label": "drop ppmScale",
+  "find": "\ttimingOffset = ppmScale * ppm * 1e-6f;",
+  "replace": "\ttimingOffset = ppm * 1e-6f;"}
+]

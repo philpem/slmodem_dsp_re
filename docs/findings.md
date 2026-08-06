@@ -13754,7 +13754,6 @@ the template and GCC inlines it, so `build/src/**/*.o` defines no
 tree defines the template it instantiates -- which is a question about our
 source, not about the blob, and the tool has no way to ask it.
 
-<<<<<<< HEAD
 ### 251. `V90AutoDigitalImpDetector` is 43,440 bytes, and it is eight tables
 
 The largest `this`-relative displacement any of the class's **thirty-two**
@@ -14039,8 +14038,7 @@ layout, not of our reconstruction, so the store is redundant in the blob too
 filed as an untested line. It stays in `src/` because it is in the object.
 
 7 of the suite's 8 mutations are caught; this is the eighth.
->>>>>>> w1e_dil
-=======
+
 ### 258. The two 350-byte "setters" compute a base-2 exponent on the coprocessor
 
 `V90Equalizer::setLinearEquBeta(float)` and `::setDfeBeta(float)` are 350
@@ -14126,3 +14124,116 @@ difference between a 64-bit and a 53-bit mantissa. This is the same shape as
 finding 256, and the second x87 precision claim in this branch that turned
 out not to be observable on this target; both were settled by sweeping rather
 than by argument.
+
+### 246. Ten leaf symbols, seven classes, 261 bytes -- and what each one settles
+
+Every one of these is closed standing alone, which is what made them a batch:
+`tools/closure.py <symbol> --missing` reaches nothing unwritten but itself.
+All ten reproduce the blob's mangled symbol exactly, checked with `nm` on the
+built object -- the mangling is the specification, and a tidier name or a
+dropped `const` emits a symbol that links against nothing.
+
+Three are worth more than their size.
+
+**`V92EchoCanceller::setEchoDelay` (37 B) reads the old delay before it
+overwrites it**, and that is the function's only ordering constraint. The
+object computes `newDelay - oldDelay` into `%ecx`, stores the new delay, and
+only then folds `%ecx` into the tap count at +0x2c. The two source spellings
+that produce this -- a temporary for the old value, or the `+=` written before
+the assignment -- are the same code, because +0x2c and +0x38 are distinct
+members of one object and GCC knows they cannot alias. The diagnostic is a
+tail call: `jmp edprintf`, which is what `edprintf` as the last statement of a
+`void` function compiles to.
+
+**`V90ConstellationDesigner::setMinMaxRates` (86 B) tests the debug gate
+twice.** The object compares `dsplibs_debug_level` before the first
+diagnostic and again before the second -- two separate `DSPLIB_DEBUG_ON()`
+sites, not one `if` around both -- and the second diagnostic RELOADS `maxRate`
+from the object rather than using the argument. Both follow from
+`dsplibs_debug_printf` being an external call the compiler must assume can
+change the level and clobber the argument registers.
+
+**`ResamplerTimingOffset::setTimingOffset` (21 B) is five instructions and one
+of finding 228's four polymorphic classes.** It does not dispatch through the
+vptr and does not reach the `Resampler` base, though `reset()` and the
+destructor beside it do. The vptr is modelled as a leading pointer-sized field
+rather than declared `virtual`, because a real `virtual` makes GCC emit a
+vtable, which needs every virtual method defined or a key function present --
+re-opening the link closure for a twenty-one-byte setter.
+
+`fmuls .rodata.cst4+0x1f4` loads `0x358637bd`, and **the `f` in `1e-6f` is
+load-bearing**: `fmuls` is a single-precision load, so the constant is the
+float nearest 1e-6 and not the double. Writing `1e-6` emits `fmull` against a
+different value. `tools/tabdump.py` reads the four bytes back as
+9.99999997e-07f, which is that float printed. The mutation that drops the `f`
+is caught.
+
+### 247. A trial schedule that could not satisfy its own check
+
+`t_v90leaves` asserted that `setEchoDelay` was called at least once with the
+delay unchanged -- the branch where the tap count moves by zero. It failed,
+and not because the trials were unlucky. The schedule drew
+`old = val[trial % 10]` and `nw = val[(trial * 7 + 3) % 10]`, so an unchanged
+delay needs `t == (7t + 3) mod 10`, which is `6t == 7 mod 10`, and `6t mod 10`
+is always even. **No number of trials could have satisfied it.**
+
+That is the second unsatisfiable anti-vacuity check in this branch; finding
+262's was the same shape on a different arithmetic. Both were written to prove
+a branch was reached, both were derived from a quantity that cannot witness
+it, and both failed loudly rather than passing vacuously -- which is the only
+reason either was found. Ten trials that set the new delay to the old one now
+follow the original forty, so the existing pairs are kept rather than
+displaced.
+
+### 248. Eleven mutations, ten caught, and one claim narrowed rather than closed
+
+`tools/mutate.py --suite v92ec` (4/4), `--suite v90cd` (3/3) and
+`--suite v90rto` (3/4). The caught ones include swapping the two rates,
+collapsing the two debug gates into one, folding the delay delta in after the
+store, printing the field instead of the argument, and dropping the `f` from
+`1e-6f`.
+
+The uncaught one is `ResamplerTimingOffset`'s **intermediate rounding**. The
+header claims `ppmScale * ppm` stays at 80-bit extended precision across both
+multiplications because the object multiplies twice on the x87 stack before a
+single `fstps`, and that the tree matches it by deliberately not passing
+`-ffloat-store`. Forcing the intermediate through a `float` was not caught:
+
+```
+tried 35724529 pairs, 0 differ      (gcc -m32 -mfpmath=387 -O2)
+```
+
+**This is weaker evidence than findings 256 and 260 and must not be read as
+the same thing.** Those swept a single float argument across the entire 32-bit
+pattern space and are equivalence measurements. This one has two float
+arguments, a 2^64 space, and 35.7 million sampled pairs is a sample. The
+honest statement is that if the rounding is observable it is rarer than one in
+3.6e7 of these pairs -- not that the mutant is equivalent. The claim stays in
+the header because it is read off the disassembly, and it stays listed here as
+untested.
+
+### 249. `docs/findings.md` reached `origin` with conflict markers in it
+
+Two merges in this branch were resolved by script -- append-only collisions in
+`findings.md`, `suites.json` and `offcheck.py`, where keeping both sides is
+always the answer. One of those scripts used a non-greedy regex on a file that
+had two conflict blocks, matched across the first, and left
+`<<<<<<< HEAD` and `>>>>>>> w1e_dil` in the committed text.
+
+**Every gate passed.** `make phase` builds and runs 77 binaries and does not
+read prose; `refcheck.py` walks every tracked file but only looks for
+`finding N` and `DN`; `offcheck`, `strings` and `firewall` look at `src/` and
+`include/`. A document with merge markers in it is a document that builds, and
+the record is the deliverable here, so that is as much a defect as a failing
+test.
+
+`refcheck.py` now also reports a line that begins with seven `<`, `=` or `>`
+in any tracked `.c`, `.h`, `.md` or `.py`, and exits non-zero for it. Proved
+to fire before it was committed -- a marker appended to `docs/glossary.md`
+gives `exit=1` and naming the file and line, and removing it gives `exit=0`.
+Finding 134's argument is that a check nobody runs decays into a check that
+passes because it never ran; this one runs in `make phase`'s `refs` target,
+which every commit here already goes through.
+
+The narrower lesson for the next scripted merge: resolve one conflict block
+at a time and assert the file has none left, rather than assuming the shape.

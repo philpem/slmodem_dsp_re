@@ -1,0 +1,12 @@
+[
+ {"label": "fold the delta in after the store (old delay lost)",
+  "find": "\techoLength += delay - echoDelay;\n\techoDelay = delay;",
+  "replace": "\techoDelay = delay;\n\techoLength += delay - echoDelay;"},
+ {"label": "the tap count follows the delay, not the change",
+  "find": "\techoLength += delay - echoDelay;", "replace": "\techoLength = delay;"},
+ {"label": "the delta is subtracted, not added",
+  "find": "\techoLength += delay - echoDelay;", "replace": "\techoLength -= delay - echoDelay;"},
+ {"label": "print the field rather than the argument",
+  "find": "\"V92EchoCanceller: echoDelay updated to: %d\\n\", delay);",
+  "replace": "\"V92EchoCanceller: echoDelay updated to: %d\\n\", echoLength);"}
+]
