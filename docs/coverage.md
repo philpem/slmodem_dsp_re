@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          728304 bytes, 1782 symbols
 
-  translated  [#######...........................]  20.0%    145565 bytes, 356 symbols
-  tested      [##################################] 100.0%    145557 bytes, 352 of 356 that can be
+  translated  [#######...........................]  20.1%    146366 bytes, 357 symbols
+  tested      [##################################] 100.0%    146358 bytes, 353 of 357 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -48,7 +48,7 @@ dsplibs.o reconstruction coverage
     v8_handshak_demod
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           296160 bytes   752 symbols
+    VPcmV34Main.cpp +72                           295359 bytes   751 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
     V34hshak.c +13                                 62569 bytes     2 symbols
     V32mod.c +39                                   55694 bytes   119 symbols

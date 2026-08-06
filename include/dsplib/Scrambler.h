@@ -150,4 +150,95 @@ public:
 	unsigned int tailLength;	/* +0x1c bytes carried on restart  */
 };
 
+/*
+ * `Descrambler<T, I>` -- a SEPARATE TEMPLATE, not a typedef of the above and
+ * not a base or derived class of it.  The blob carries `Descrambler<h,i>` and
+ * `Descrambler<i,i>` under their own mangled names in their own
+ * `.gnu.linkonce.t.*` sections, so spelling it any other way emits symbols
+ * that link against nothing.
+ *
+ * `V90Phase3Demodulator::reset` reaches two of its members and they are the
+ * only two DEFINED here:
+ *
+ *     _ZN11DescramblerIiiE5resetEi                48 B
+ *     _ZN11DescramblerIiiE19resetHistoryIndexesEv 23 B
+ *
+ * Both are differentially tested by test/unit/t_v90p3dreset.cpp -- through
+ * `V90Phase3Demodulator::reset`, which owns the `<int,int>` subobject at
+ * +0x3d0, and directly against the `ref__ZN11DescramblerIii*` aliases, which
+ * exist because symmap.py renames weak symbols like everything else.
+ *
+ * THE LAYOUT IS THE SAME EIGHT FIELDS AS `Scrambler`, IN THE SAME ORDER, and
+ * that is measured rather than assumed by analogy.  `resetHistoryIndexes`
+ * gives +0x04 -> +0x10, +0x08 -> +0x14 and +0x0c -> +0x18; `reset` gives
+ * +0x04 and +0x0c as the bounds of the fill; and the two members outside this
+ * batch pin the other two -- `copyHistoryTail` reads +0x00 as the source and
+ * +0x1c as the count, and `process` compares the stepped-down +0x10 against
+ * +0x00.  All four disassembled with
+ * `objdump -dr --section=.gnu.linkonce.t.<symbol>`, which is the only way to
+ * read a weak member here (tools/dis.py takes its zero `st_value` for a
+ * `.text` offset).
+ *
+ * WHERE IT DIFFERS FROM `Scrambler` IS `process`, WHICH IS NOT DEFINED HERE.
+ * The scrambler writes its OUTPUT at `pOut`; the descrambler writes its INPUT
+ * there, and returns `in ^ *pTap1 ^ *pTap2` -- which is what makes it the
+ * inverse.  Nothing in this batch calls it, so it stays declared, exactly as
+ * `Scrambler`'s bulk overloads do: defining a member no test drives would put
+ * an unverified body in the tree.
+ *
+ * The constructor is on the record and not declared, for the reason given
+ * above for `Scrambler`'s.  `V90Phase3Demodulator`'s constructor builds this
+ * one with (0x12, 0x17, 0x63), and the blob's body is:
+ *
+ *     tailLength = b;
+ *     pLimit     = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+ *     pInitOut   = pLimit + c;
+ *     pInitTap1  = pInitOut + a;
+ *     pInitTap2  = pInitOut + b;
+ *     reset(0);
+ *
+ * which is where t_v90p3dreset.cpp's hand-built subobject comes from.
+ */
+template <class T, class I>
+class Descrambler {
+public:
+	/* Three word copies, as in `Scrambler`. */
+	void resetHistoryIndexes()
+	{
+		pOut = pInitOut;
+		pTap1 = pInitTap1;
+		pTap2 = pInitTap2;
+	}
+
+	/*
+	 * Seed the history with one bit, repeated.  `value & 1` is masked
+	 * before the loop, so only the low bit of the argument reaches the
+	 * buffer, and the loop runs from `pInitOut + 1` up to and including
+	 * `pInitTap2`.
+	 */
+	void reset(T value)
+	{
+		T bit = (T)(value & 1);
+		T *p;
+
+		resetHistoryIndexes();
+		for (p = pInitOut + 1; p <= pInitTap2; p++)
+			*p = bit;
+	}
+
+	/* Declared, not defined -- see the file comment above. */
+	T process(T);
+	void process(const T *, I *, unsigned int);
+	void copyHistoryTail();
+
+	T *pLimit;		/* +0x00 lowest address `pOut` may reach   */
+	T *pInitOut;		/* +0x04 restart value for pOut            */
+	T *pInitTap1;		/* +0x08 restart value for pTap1           */
+	T *pInitTap2;		/* +0x0c restart value for pTap2           */
+	T *pOut;		/* +0x10 where the next input is stored    */
+	T *pTap1;		/* +0x14 the near tap                      */
+	T *pTap2;		/* +0x18 the far tap                       */
+	unsigned int tailLength;	/* +0x1c words carried on restart  */
+};
+
 #endif /* DSPLIB_SCRAMBLER_H */

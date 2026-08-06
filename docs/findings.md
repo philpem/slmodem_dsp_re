@@ -14390,3 +14390,86 @@ reproducible without a temporary, and here it is reproducible with one.
 Neither is a test gap, and neither is licence to stop writing the object's
 order: the source keeps it in both cases, because the disassembly is what the
 reconstruction is of.
+
+### 291. The allocation is the size oracle, and it settles both demodulators
+
+Finding 268 recorded that the largest-`this`-displacement scan (finding 215)
+lies about the five classes of the `setSessionFlag` chain: its answers, 0xa948
+and 0xa95c, are off a `V90AutoDigitalImpDetector*` reached through a pointer,
+and 0x28230 and 0x3ba8 are scaled indices into tables. It concluded that no
+size for those classes was settled. That conclusion was right about the scan
+and wrong about the classes, because there is a second oracle and it is exact.
+
+**Every one of these objects is built on the heap, and the `sysdep_malloc`
+immediately before the constructor call is `sizeof`.** GCC emits the size as a
+literal; there is nothing to infer.
+
+    V90Modem::V90Modem       movl $0x298,(%esp); call sysdep_malloc
+                             ...; call V90DemodulatorC1; mov %ebx,0x4(%esi)
+
+    V90Demodulator::V90Demodulator
+                             movl $0x42c,(%esp); call sysdep_malloc
+                             ...; call V90Phase3DemodulatorC1
+                             mov %esi,0x1dc(%ebx)
+
+so `sizeof(V90Demodulator)` is **0x298** and `sizeof(V90Phase3Demodulator)` is
+**0x42c**, and the store that follows each is into the field
+`V90SessionFlag.h` already had -- V90Modem+0x04 and V90Demodulator+0x1dc.
+
+Two independent facts agree with each, and neither was used to derive it. The
+largest displacement `V90Demodulator::enterPhase3` uses is the four-byte read
+at +0x294, ending at 0x298; the largest `V90Phase3Demodulator::reset` uses is
+the byte at +0x424, and the last field its constructor writes is the pointer
+at +0x428, ending at 0x42c.
+
+The same constructor pins four more sizes by where the next field starts:
+V90PreFilter (0x28) at +0x6c ends at +0x94, which is a subobject;
+`Descrambler<unsigned char,int>` (0x20) at +0x1e8 ends at +0x208, which is a
+field; `V90SpectralVerifier` (0x2c) at +0x210 ends at +0x23c, which is a
+field; and inside the phase 3 demodulator, `V90Phase3Modulator` (0x398) at
++0x34 ends at +0x3cc and `Descrambler<int,int>` (0x20) at +0x3d0 ends at
++0x3f0, both fields. Six boundaries, none of the six sizes derived here.
+
+**So the rule for the rest of #60 and for #59 is: before scanning
+displacements, look for the allocation.** A constructor is also a better field
+map than any single method -- `V90Demodulator`'s stores or builds every
+subobject in the class and hands each to a callee whose mangled name says what
+type it is, which is where V90Demodulator.h's pointer types come from.
+
+`V90Modem`, `V90Modulator` and `V90Phase4Demodulator` still have no settled
+size and still assert none. `V90Modem`'s constructor allocates 0x42d8 for
+something just before the 0x298 it hands the demodulator; nobody has checked
+what.
+
+### 292. Two of `V90Phase3Demodulator::reset`'s four openings differ only in a string
+
+`reset` selects one of four openings on its `Phase3DemodulatorState`
+argument, and the blob names three of them in the diagnostics it prints:
+
+    state       diagnostic          resetLinearMapping   modulator's 4th arg
+    0           WaitForSd           yes                  0
+    3           TRN1dKnownData      yes                  reset's 4th argument
+    26          WaitForQTS          NO                   0
+    anything    IRREGULAR (%d)      yes                  0
+
+**WaitForSd and IRREGULAR are the same code.** Same call, same eight arguments
+to `V90Phase3Modulator::reset`, same everything afterwards. The only
+observable difference between them is the text, so at `dsplibs_debug_level <=
+1` they are indistinguishable, and a differential test that does not compare
+transcripts cannot tell a reconstruction that folds one into the other from a
+correct one. `t_v90p3dreset.cpp` sweeps the level over 0, 2 and 3 for the
+state selector and compares the transcript at each; that is what makes the
+`state == 0` arm testable at all.
+
+**WaitForQTS differs from WaitForSd by one call**, the detector's
+`resetLinearMapping`. That is exactly the shape finding 253 caught one class
+down: if the detector were seeded so that `resetLinearMapping` wrote nothing
+distinguishable, the two would agree for the wrong reason. So the test runs
+one seed twice, as state 0 and as state 26, and REQUIRES the two detectors to
+differ. The check is satisfiable -- verified, not assumed, which is what
+findings 247 and 262 are about.
+
+**TRN1dKnownData differs by one argument**, and that argument is a loop bound:
+`V90Phase3Modulator::reset` generates that many symbols. So the state-3 trials
+must use a non-zero count or the branch is invisible, and a SMALL one or the
+test runs for hours. 1, 2 and 3 are what it uses.

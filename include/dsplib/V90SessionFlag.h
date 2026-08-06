@@ -8,16 +8,19 @@
  * set only together -- `tools/closure.py` on all five reports CLOSED, and on
  * any four of them does not.
  *
- * ONE HEADER, FIVE CLASSES, DELIBERATELY.  The tree's convention is one class
- * per header, and this batch breaks it because these five are mutually
- * recursive at the DECLARATION level, not just the call level: V90Modem needs
- * V90Modulator and V90Demodulator, and V90Demodulator needs
- * V90Phase3Demodulator and V90Phase4Demodulator, which embed the two
- * modulators.  Splitting them into five headers is five files each including
- * the next, and the first batch that gives any of these classes real weight
- * should do that split rather than grow this file.
+ * ONE HEADER, FIVE CLASSES, DELIBERATELY -- AND NOW THREE.  The tree's
+ * convention is one class per header, and this batch broke it because the
+ * five are mutually recursive at the DECLARATION level, not just the call
+ * level: V90Modem needs V90Modulator and V90Demodulator, and V90Demodulator
+ * needs V90Phase3Demodulator and V90Phase4Demodulator, which embed the two
+ * modulators.  This file said the first batch to give any of these classes
+ * real weight should split it rather than grow it.  Wave 2 did:
+ * `V90Phase3Demodulator` is now in V90Phase3Demodulator.h and
+ * `V90Demodulator` in V90Demodulator.h, both included below, both with their
+ * sizes settled and their field maps filled in.  Nothing recorded here was
+ * dropped in the move.
  *
- * NO SIZE IS ASSERTED FOR ANY OF THEM, AND THAT IS THE POINT.
+ * NO SIZE IS ASSERTED FOR THE THREE THAT REMAIN, AND THAT IS THE POINT.
  *
  * Every other class in this task was sized from the largest `this`-relative
  * displacement across all its members (finding 215).  Run that scan here and
@@ -37,6 +40,16 @@
  * stronger check than a size assertion would have been, because it catches a
  * store anywhere in the slot and not merely one inside a guessed bound.
  *
+ * WHAT DOES SETTLE A SIZE HERE IS THE ALLOCATION, not any scan: every one of
+ * these classes is built on the heap, and the `sysdep_malloc` immediately
+ * before the constructor call is the size (finding 291).  That is how
+ * V90Phase3Demodulator's 0x42c and V90Demodulator's 0x298 were obtained, and
+ * it is why those two now assert their sizes and the three below still do
+ * not -- nobody has yet found the allocation for V90Modulator, V90Modem or
+ * V90Phase4Demodulator.  V90Modem's constructor is the place to look; it
+ * allocates 0x42d8 for something just before the 0x298 it hands the
+ * demodulator.
+ *
  * Data member names are invented; the mangling never carries one (finding
  * 226).  `sessionFlag` is named for the method that writes it, as in
  * V90Phase3Modulator.h and V90Phase4Modulator.h.
@@ -45,24 +58,26 @@
 #ifndef DSPLIB_V90SESSIONFLAG_H
 #define DSPLIB_V90SESSIONFLAG_H
 
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
 
 /*
- * `mov %edx,0x8(%eax); add $0x34,%eax; jmp V90Phase3Modulator::setSessionFlag`
+ * `V90Phase3Demodulator` used to be declared here, as
  *
- * The `add` before the tail call is the whole finding: the phase 3 modulator
- * is EMBEDDED at +0x34, not pointed at.  A pointer would be a load.
+ *     pad_00[8]; sessionFlag; pad_0c[0x28]; V90Phase3Modulator at +0x34
+ *
+ * from `mov %edx,0x8(%eax); add $0x34,%eax; jmp
+ * V90Phase3Modulator::setSessionFlag`.  The `add` before the tail call was
+ * the finding: the phase 3 modulator is EMBEDDED at +0x34, not pointed at,
+ * because a pointer would be a load.  V90Phase3Demodulator.h keeps that
+ * sentence and fills the three `pad_` spans in.
+ *
+ * `V90Demodulator` likewise moved to V90Demodulator.h.  It was the one
+ * diagnostic in the chain -- emitted BEFORE the flag is stored, so the printed
+ * value is the argument and the field still holds the old one at that instant.
  */
-class V90Phase3Demodulator {
-public:
-	void setSessionFlag(unsigned int flag);
-
-	unsigned char pad_00[8];		/* +0x00 not modelled     */
-	unsigned int sessionFlag;		/* +0x08                  */
-	unsigned char pad_0c[0x28];		/* +0x0c not modelled     */
-	V90Phase3Modulator phase3Modulator;	/* +0x34 embedded, 0x398  */
-};
 
 /*
  * `mov %edx,(%eax); add $0x50,%eax; jmp V90Phase4Modulator::setSessionFlag`
@@ -92,22 +107,6 @@ public:
 	unsigned char pad_2c[0x0c];		/* +0x2c not modelled     */
 	V90Phase3Modulator *phase3Modulator;	/* +0x38                  */
 	V90Phase4Modulator *phase4Modulator;	/* +0x3c                  */
-};
-
-/*
- * Pointers again, and the ONE diagnostic in the chain -- which is emitted
- * BEFORE the flag is stored, so the printed value is the argument and the
- * field still holds the old one at that instant.  `edprintf` gates itself.
- */
-class V90Demodulator {
-public:
-	void setSessionFlag(unsigned int flag);
-
-	unsigned char pad_00[0x30];		/* +0x00 not modelled     */
-	unsigned int sessionFlag;		/* +0x30                  */
-	unsigned char pad_34[0x1a8];		/* +0x34 not modelled     */
-	V90Phase3Demodulator *phase3Demodulator;	/* +0x1dc         */
-	V90Phase4Demodulator *phase4Demodulator;	/* +0x1e0         */
 };
 
 /*
