@@ -15386,3 +15386,225 @@ Mutation suites re-run after the merge to confirm nothing was weakened by the
 edits: `vpcmflomodem` 49 mutations, 48 caught and 1 measured-equivalent;
 `v90sessionflag` 16 mutations, 14 caught and the two orderings finding 269
 records as unobservable.
+
+### 301. `v90Phase34`: which translation unit, and the call with no relocation
+
+1,358 bytes at .text+0x9be0, unmangled, and the second of task #59's six to
+come free -- its two blockers, `VPcmFloModem::getV90CpBits` and
+`::getV90JaBits`, landed earlier in the same session.
+`tools/closure.py v90Phase34 --missing` is one symbol, itself, once `build/`
+exists.
+
+The signature is `int v90Phase34(void *obj)`, and the derivation is the twin's
+(finding 279) line for line: `sub $0x2c,%esp` then `mov 0x30(%esp),%ebp` and
+nothing else read from the incoming frame; `xor %eax,%eax` before both `ret`s;
+one caller, which discards the value.
+
+WHERE IT WENT IS THE PART THAT IS NOT THE TWIN'S. It is `extern "C"` -- the
+symbol is unmangled -- but it calls two mangled `VPcmFloModem` members, which
+a C translation unit cannot name. That makes it C++; WHICH C++ file is settled
+by one instruction at 0x9fea:
+
+    e8 61 f2 ff ff        call 9250 <_Z14getMPrecvdBitsP12tagV34Object>
+
+A resolved PC-relative displacement with NO relocation beside it. In a
+non-PIC object that happens only when the target is defined in the same
+section of the same translation unit -- so `v90Phase34` is in the same TU as
+`getMPrecvdBits`, which is `src/pump/v34/v34pcmmain.cpp`, the C++ half of
+VPcmV34Main.cpp. The debug string's own "VPcmV34Main:" prefix agrees and
+`docs/attribution.md` puts 0x9be0 in the block that starts at 0x9250, but the
+missing relocation is the argument and the other two are corroboration.
+
+It uses the same three bases as the twin -- `obj+0x264` the receiver,
+`obj+0x221c` the transmitter, `obj+4` an addressing artifact -- and through the
+third it reads `v90_receiver` at +0x24c where the twin reads
+`k56flex_receiver` at +0x250. One int apart, exactly as finding 279 said.
+
+### 302. Two diagnostics that name four fields between them
+
+The twin has no `dsplibs_debug_printf` site. This has two, and they are worth
+more than the control flow they gate:
+
+    'VPcmV34Main: tx buffer backward clear is enabled...\r\n'
+    'Entered v34m->v90Receiver == V90RCV_P3_THIRD_S with tx->symcnt = %d
+     period = %d\n'
+
+From the second, three names the tree did not have:
+
+- **+0x24c is `v90Receiver`** in the original, which is what `v34fsk.h`
+  already calls `v90_receiver` -- so that name is now the object's own and not
+  a description.
+- **the transmitter's +0x3a4 (`f25c0`) is `tx->symcnt`**, a symbol counter.
+  Every arm of this function bumps it and three of them compare it.
+- **state 4 is `V90RCV_P3_THIRD_S`**, which the string names because the
+  message is printed on ENTERING it.
+
+And one field that was in a padding run: **+0xaa86 is `period`**. That is
+`V34_RATECFG + 2`, previously `pad_02` in `struct v34_ratecfg`, and it is now
+declared. Note it is NOT `tx->period`: the string carries no prefix on that
+argument and the load is from the rate record rather than from the
+transmitter, so the two arguments come from two different places despite
+reading like a pair.
+
+From the first, two more:
+
+- **bit 2 of `pac3c + 0x50`.** v34fsk.h had that byte down as "bits 5..7 are
+  the maximum V.34 baud rate index", which `chkForceBaudRate` reads. Bit 2 is
+  a second and unrelated reader, and it gates
+- **+0xabfe**, a byte inside `unmapped_abfb` that `v34handshakinit` clears
+  (v34hshak.c:1306) and this sets to 1.
+
+BOTH GATES ARE `cmpl $0x1` + `ja`, so both are `DSPLIB_DEBUG_ON()`. The test
+sweeps levels 0, 1 AND 2 for exactly the reason `t_v34shell.c` gives: level 1
+is the only value that separates `> 1` from the `>= 1` a reader would write,
+and both mutations that weaken a gate are caught only at that level.
+
+### 303. Case 5's dispatch is three-way, and 0x8990 IS privileged
+
+`k56FlexPhase34`'s idle symbol tests `f382` against 0x89b0 and takes the
+four-point map for everything else; `src/pump/v34/v34k56.cpp` says in as many
+words that "0x8990 is not privileged over any other value". THIS FUNCTION IS
+NOT LIKE THAT. Case 5 tests both constants and has a third arm:
+
+    f382 == 0x89b0   two scrambler requests, vect16[d + q * 4]
+    f382 == 0x8990   one scrambler request, vect4[q]
+    anything else    the ZERO point, and the scrambler is not called at all
+
+The third arm is reached by no other input and writes +0x25d0 and +0x25d2 as
+two 16-bit zeros. It is swept (`f382 == 0x1234`), it has its own
+counter, and the mutation that folds it into the four-point arm is caught.
+
+AND THE GENERATOR IS THE LITERAL 0, where the twin's is the literal 1
+(finding 280). Both emitters pass `tx_scrambler_mode(o)`, which is bit 0 of
+`f25c2`; nothing in these 1,358 bytes loads +0x25c2. Mode 0 is the calling
+station's polynomial, so substituting an emitter agrees with the blob for
+every object whose `f25c2` bit 0 is CLEAR and disagrees for every one where it
+is set -- which is why the sweep carries both and why `t_v90p34.cpp` also
+makes the our-side-only claim that flipping that bit must not move case 5's
+outputs at all.
+
+The other two of finding 280's three differences hold here unchanged: no
+differential add against `f25c6`, and `f25c6` is never written.
+
+**Finding 282 does not transfer.** Neither `vect_idx` (+0x2aa2) nor the shift
+register at +0x25d6 appears anywhere in this function -- the V.90 sequence
+carries its bits in the `VPcmFloModem` and counts symbols in `f25c0` -- so
+there is no variable shift and no `& 31`.
+
+### 304. Every arm is reachable, which is the opposite of the twin
+
+Finding 281 measured eight uncaught mutations in `k56FlexPhase34`, all in two
+completion arms that cannot be entered because `K56FlexFloModem`'s bit sources
+are three-byte stubs on both sides. **None of that carries over.**
+`VPcmFloModem::getV90JaBits` and `::getV90CpBits` are real bodies at 0x00d240
+and 0x00d2e0, so the three completion tails here -- Ja's, case 8's and case
+10's -- are driven, and `t_v90p34.cpp`'s anti-vacuity block is "this arm ran"
+for all twenty-five of its counters rather than the complement.
+
+ONE OF THOSE TWENTY-FIVE WAS VACUOUS WHEN FIRST WRITTEN, and it is recorded
+because that is the shape findings 247, 262 and 295 exist to catch. The
+witness for case 3's diagnostic was `n_s3_adv > 0` -- a FILE-SCOPE CUMULATIVE
+counter that the dispatch sweep three blocks earlier had already driven into
+the thousands. It reduced to the two loop indices and would have passed if
+the site had never fired. It is now a snapshot taken across the call, and it
+still fires; a mutation-caught claim is not a substitute for a witness that
+can fail, and here the substance was tested while the witness was not.
+
+Measured from the other end as well, which is how finding 281 stated its gap.
+`make phase`'s line coverage over `src/` was 10645/10899 when `v34k56.cpp`
+landed and is 11045/11299 now: 400 lines added, and **254 uncovered lines
+before and 254 after**, so nothing added since -- this function included -- is
+dead. The twin added seven that were, and all seven were in the two arms
+nothing could enter.
+
+`tools/mutate.py --suite v90p34`: **70 mutations, 64 caught, 6 recorded
+equivalent, 0 NOT CAUGHT.** In particular the two mutations finding 281 had to
+leave as gaps -- "the arm does not consult the bit source at all", replacing
+the call with a literal 0 -- are caught here for both sources and in all three
+arms, because a real body writes through the pointer it is handed and advances
+its own state.
+
+The six equivalents, each with what is held fixed:
+
+    the zero point as one 32-bit store rather than two 16-bit ones
+    case 5's quadbit arm using the first read of f25c8 rather than the second
+    case 10's compare-then-store becoming a plain store
+    case 3's diagnostic storing the count before printing it
+    case 3's diagnostic reading that count zero-extended
+    the bit sources' return not truncated to a short
+
+The last two are the interesting pair. Both are about a sign extension the
+object performs (`movswl`, `cwtl`) and both are equivalent only because of a
+gate somewhere else: the count is printed only when it is above 0x7f as a
+SIGNED comparison, so it is never negative at the call; and both bit sources
+return 0 or 1 and nothing else. Neither is equivalent as arithmetic -- they
+are equivalent given a claim that belongs to another file, which is why the
+claim is named.
+
+The suite deliberately mutates BOTH of each near-identical pair. Cases 3 and 6
+are the same two symbols and the same 0x7f count differing only in the next
+state and case 3's diagnostic; cases 4 and 7 the same again with a different
+point pair and a `!= 0x10` count. Swapping either member's next state, point
+pair or comparison for the other's is eight separate mutations and all eight
+are caught -- a suite that mutated one of each pair would have left the other
+reading as covered.
+
+### 305. The counts are signed 16-bit, and 0x7ffe is what says so
+
+Four arms increment `tx->symcnt` twice and compare the result. The object's
+code is
+
+    movzwl 0x3a4(%edi),%eax     ; ZERO-extended
+    inc    %eax
+    cmp    $0x7f,%ax            ; ...compared as a SIGNED 16-bit word
+    jle
+
+so the value is `(short)((unsigned short)f25c0 + 1)` and the test is a signed
+`<=`. Two inputs separate that from every other reading and they are both in
+the sweep:
+
+- **0x7ffe.** The second increment makes 0x8000, which as a signed short is
+  -32768 and therefore BELOW the threshold -- so the arm does not advance,
+  where an unsigned comparison would advance it. The mutation that compares
+  `(unsigned short)n` is caught, and only by this value.
+- **0xfffe.** The second increment wraps to 0 rather than to 0x10000, which is
+  what says the count is truncated to 16 bits before the comparison rather
+  than after.
+
+Cases 4 and 7 compare `!= 0x10` instead, where sign is irrelevant but
+EXACTNESS is not: a count that steps over 0x10 never advances at all, and
+0xd/0xe are swept on either side of it.
+
+### 306. The fixture's skip list grew four entries the function installs itself
+
+`t_v34k56.c` scans its pointer-skip list in `setup()` and asserts every entry
+holds two different addresses (finding 283). That scan cannot work here.
+
+Case 10's tail calls `initdigital`, which installs the two shell contexts'
+`coeff` and `conv` tables at +0xa24, +0x2604 and +0x2608 -- and those are
+CONST TABLES IN THE TWO BUILDS, so our side stores our address and the
+reference side stores the blob's. `getMPrecvdBits` then aims +0xaa6c at
++0xaa3c of its own object, which is a SELF-pointer and holds two addresses for
+the same reason the two objects do. All four are installed by the function
+under test, so a scan that ran before the call would see four slots holding
+identical garbage and mark them stale.
+
+So `ptr_seen` is scanned in `compare()` instead, on the live objects and after
+every call. All fourteen entries fire, which is the check that says the list
+is all still load-bearing.
+
+TWO OTHER THINGS THE FIXTURE HAD TO SEED, and both were crashes before they
+were tests:
+
+- **`p3548 + 0x610c`.** `getMPrecvdBits` follows it and reads two ints at
+  +0x4f8 and +0x4fc. Read-only on that path, so both sides get ONE block --
+  the same treatment `pac3c` gets, and for the same reason.
+- **`V34_RATECFG`.** `initdigital` reads `divtab[bits + 14 * use_max - 1]`
+  unclamped and before the zero-rate test, so a varied fill is a random
+  address indexed by a random 16-bit number. Both tables point at the middle
+  of one scratch array, exactly as `t_v34shell.c`'s own `initdigital` sweep
+  does, and `txbits`/`rxbits`/`use_max` are seeded small enough to bound the
+  index.
+
+`bulk_head`/`bulk_tail` still need seeding for the reason `t_v34k56.c` gives,
+and +0x20cc is still NOT in the skip list for the reason finding 283 gives.

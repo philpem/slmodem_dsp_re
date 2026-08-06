@@ -345,6 +345,18 @@ void txmitquadbit(void *obj, short bits);
 int k56FlexPhase34(void *obj);
 
 /*
+ * One symbol -- or, in four of its arms, two -- of the V.90 phase 3/4
+ * transmit sequence.  The twin of `k56FlexPhase34` above, and declared beside
+ * it for the same reason: it drives the two emitters and their two tables.
+ * Defined in `src/pump/v34/v34pcmmain.cpp`, which is where the object puts
+ * it; the head of that block gives the evidence, and sets out the ways this
+ * differs from the K56flex twin.
+ *
+ * ALWAYS RETURNS 0, at both `ret`s, and on the same evidence as above.
+ */
+int v90Phase34(void *obj);
+
+/*
  * Turn the line probe's twenty-five bins into a power-reduction request, a
  * set of offered symbol rates or one chosen one, and a pre-emphasis index
  * per rate.  Writes the rate config at +0xaa84 and the outgoing message at
