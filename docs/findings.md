@@ -15981,3 +15981,263 @@ were tests:
 
 `bulk_head`/`bulk_tail` still need seeding for the reason `t_v34k56.c` gives,
 and +0x20cc is still NOT in the skip list for the reason finding 283 gives.
+### 313. `VPcmV34InitiateRetrain` has two switches on one argument, and they mean opposite things
+
+1,406 bytes at `.text+0x6640`, reconstructed into
+`src/pump/v34/v34pcmmain.cpp` as
+
+```c
+extern "C" void VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
+```
+
+`unsigned char` and not `int`: the object loads the argument slot with
+`movzbl`, keeps the value in a one-byte stack slot at `0x1b(%esp)`, writes a
+byte back into it on three paths, and reloads it with `movzbl` twice more.
+
+It went into the `.cpp` half of `VPcmV34Main.cpp` rather than beside its
+siblings in `v34pcmif.c` because four of its calls are relocations against
+mangled member names -- `V90ConstellationDesigner::setMinMaxRates`,
+`K56FlexFloModem::setMinMaxRates`, `V92EchoCanceller::setEchoDelay` and
+`VPcmFloModem::setPcmSessionType`. Same arrangement, same reason, as
+`k56FlexPhase34` in `v34k56.cpp` (finding 279).
+
+**The shape that a reading of one switch gets wrong.** The five codes are the
+modulation numbers themselves -- 0, 34, 56, 90, 92 -- and the function tests
+them twice, with *different* default arms:
+
+    switch one   VALIDATES, and only runs when `v90_receiver == 0 && dp != 0`.
+                 Its default demotes an unknown code to 0 and says so.
+    switch two   DISPATCHES.  Its default clears BOTH receiver counters.
+
+So the same unknown code means opposite things according to a field the caller
+does not pass. Asked for with no V.90 receiver running it is demoted to 0,
+which is the arm that *keeps* a running receiver; asked for while one is up it
+is not validated, not complained about, and reaches the dispatch intact, where
+it tears both receivers down. 34 is accepted by the validation and then falls
+into the dispatch's default -- `fa23c` set, both counters cleared -- and the
+object shares that tail rather than duplicating it.
+
+Two smaller readings that a plausible reconstruction would have got wrong:
+
+- the `dp == 0` arm tests `v90_receiver > 0` (`jle`), not `!= 0`, so a
+  negative counter -- which `VPcmV34SetV90RateReneg` can produce, D48 -- is
+  left where it is rather than pulled up to 1;
+- the V.90 arm alone reads `status`, and singles out **2**. `v34pcmif.c` reads
+  1 and 2 together as "a PCM receiver has the line"; this site does not.
+
+### 314. The disconnect threshold is indexed exactly as finding 270 says, and lands in `rx_energy_floor`
+
+`VPcmV34InitiateRetrain` reads `V34DisconnectThreshTable` with the same five
+instructions finding 270 records for `VPcmV34SetMinimumSigLevel`: bias the
+configured level at `pac3c + 0x60` by 0x30, compare against 7 **unsigned** so
+that a negative level is out of range too, and fall back on **entry 3** rather
+than on either end of the table. Two independent sites, one indexing rule; a
+`min`/`max` reconstruction gives entry 0 or entry 7 and is wrong at both.
+
+What is new is the destination. The value goes to **`obj + 0x230`**, which
+`include/dsplib/v34fsk.h` describes -- from `receiver`, in a different
+translation unit, written before this function was read -- as
+
+> the signal-energy floor `receiver` compares its 36-sample RMS against before
+> declaring the line dead
+
+so "disconnect threshold" and that sentence are the same statement reached
+from two directions, and the table's name is now corroborated by its use
+rather than only by its symbol.
+
+The mutation suite drives all eight in-range levels plus both neighbours of
+each end and both extremes of `int`, and the three mutations that matter --
+fallback 0, fallback 7, and a signed range test -- are all caught.
+
+### 315. `p3548` is a `VPcmFloModem`, and this function is what proves it
+
+The V.34 object's `p3548` has been "the session object" since `v34info.c` was
+written, with no type. `VPcmV34InitiateRetrain` hands it straight to
+`VPcmFloModem::setPcmSessionType` as `this`, which settles it -- and every
+offset the two functions share then agrees with the map
+`include/dsplib/VPcmFloModem.h` was built from without either of them:
+
+| through `p3548` | VPcmFloModem.h calls it |
+|---|---|
+| `+0x175c` a demodulator pointer | `modem.demodulator` (V90Modem +0x04 at +0x1758) |
+| `+0x610c` the PCM receiver pointer | `modem.ptr_49b4` |
+| `+0x6120` gates the constellation-designer arm | `info0Layout` |
+
+Three confirmations of a map derived from five other members of the class.
+
+Two offsets this function adds, both inside that header's `pad_6130` and both
+spelled rather than named, because `w3_ep3` owns the header:
+
+- **`+0x6bd0` is an EMBEDDED `V92EchoCanceller`.** `lea 0x6bd0(%ebp),%eax`
+  before the call, not a load -- the same signature findings 268 and 274 use
+  for an embedded sub-object. `sizeof(V92EchoCanceller)` is 0x3c, so the
+  session must be at least 0x6c0c bytes, which is consistent with the 0x7f28
+  floor VPcmFloModem.h already has.
+- **`+0x6fb4` is an int, cleared** on every path and read by nothing this tree
+  has seen.
+
+And one offset in a class nobody has modelled: **`V90Demodulator + 0x208` is a
+`V90ConstellationDesigner *`**, from the mangling of the call target. The
+header already had it as `constellationDesigner` from the constructor's
+`sysdep_malloc(0x54)`; this is the independent reading.
+
+### 316. `K56FlexFloModem` has a data member after all, and its own header cannot declare it
+
+`include/dsplib/K56FlexFloModem.h` says, correctly, that the class's seventeen
+members contain forty bytes of code between them and that not one instruction
+touches `this` -- so no displacement bounds the object and no data member is
+declared. `VPcmV34InitiateRetrain` reads one anyway:
+
+```
+    mov  0xac18(%esi),%ecx      ; the K56flex modem
+    ...
+    cmpb $0x0,0x8(%ecx)         ; a gate byte
+    je   ...                    ; zero: this arm is not taken
+    ...
+    call _ZN15K56FlexFloModem14setMinMaxRatesEii
+```
+
+The same `%ecx` is the `this` of the call two instructions later, so `+0x8` is
+a member of that class and not of something else. **It is read through a cast
+here rather than added to the header**: the header's `sizeof` is 1 by C++'s
+rule for a class with no members, `w1a_leaves`' fixture puts the class in a
+union that relies on it, and one byte read by one outsider is not a reason to
+break that. `v34info.c` reads `pac18 + 0xc` the same way, so this is the
+second such site and the convention now has two.
+
+A later batch that models the class properly should collect both.
+
+### 317. Three fields this function names, and one it corroborates
+
+**`+0x359a` forces the lowest symbol rate.** `probeselect` opens with
+`if (*(short *)(m + 0x359a) != 0) goto rate_2400`, jumping over the entire
+symbol-rate ladder (`src/pump/v34/v34hshak.c`). `VPcmV34InitiateRetrain` is
+the only writer this tree has read, and it sets the flag in exactly one place:
+when the maximum bit-rate index came out as **1**, which is 2400 bit/s and
+which the lowest symbol rate is the only way to carry. Two sites, one meaning.
+
+**`+0xaa7c` is "V34 filtdelay"** and **`+0x25c` is "V34dmadelay"**, both from
+the object's own diagnostics. The second is the interesting one: `v34fsk.h`
+reached `+0x25c` from `adaptecho` and calls it "the base the echo filter's lag
+is measured from". The two agree rather than conflict -- the same configured
+`pac3c + 0x68` sets this field as `0x610 - delay` and, plus 0x68, the V.92
+echo canceller's own delay -- so the existing sentence stands and now has a
+name beside it. This is the opposite outcome to finding 293, and worth
+recording as such: a second reading that confirms is as much a result as one
+that corrects.
+
+**Both are printed back as SHORTS.** The object stores the 16-bit field and
+then does `cwtl` on it to print, so a configuration large enough to overflow
+prints the truncated number and not the arithmetic. A reconstruction that
+printed the `int` it computed agrees on every plausible input and diverges
+only where nobody looks; `t_v34retrain.c` drives 131,052 and -100,000 for
+exactly that reason, and both "print the arithmetic" mutations are caught.
+
+**`+0xac1c` is a 32-byte block this function clears**, with a three-short
+group at `+0xac28` that only the originate/answer flag at `+0x359c` decides:
+0x65 leaves the first two zero, 0x66 puts 0x5a82 and 0x55fc in them, and
+`+0xac2c` gets 0x39c3 on **both** arms and on neither of the others. 0x65 and
+0x66 are the same two values `v34modeminit`, `preinitdigital` and
+`v34handshakinit` test that field against, so this is not a new enumeration.
+
+`+0xac2e` is the **only** short in the block left alone on every path, and
+that is measured rather than read off: the mutation that adds a clear at
+`+0xac2e` is caught, and so is the one that narrows the `movl` at `+0xac24`
+to a `movw` -- which is what says `+0xac26` is written, as the upper half of
+that int rather than as a field of its own. The block is left unnamed:
+nothing in the object reads it back yet.
+
+### 318. Seven of `VPcmV34InitiateRetrain`'s mutations cannot fail, and one of them is the object's own dead store
+
+`test/mutations/v34retrain.json`: **74 mutations, 67 caught, 7 measured
+equivalent, none uncaught.** The set exists because this function is the
+easiest possible shape to test vacuously -- every path ends in
+`v34handshakinit(obj, 1)`, which runs `v34modeminit` and rewrites a large part
+of the object with the *same* code on both sides, so a pre-handshake store the
+handshake later repeats is invisible to any differential test whatever its
+sweep looks like. That is finding 253's trap with a bigger blast radius, and
+the suite breaks each pre-handshake store in turn to find out which ones the
+tier can actually see.
+
+One of them cannot be seen, and the reason is in the object rather than in the
+fixture:
+
+> **`obj->is_short = 0` at +0xabcc is dead.** `v34modeminit` clears the same
+> field unconditionally (`src/pump/v34/v34hshak.c:416`), mode 1 always calls
+> it, and nothing between the two reads the field. So no *caller* can observe
+> the store either -- it is not a test gap.
+>
+> **And that is measured, not read.** Delete `v34modeminit`'s clear, leave
+> everything else alone, and `t_v34retrain` still passes -- both sides still
+> reach zero, by the one remaining route. Re-run the mutation on top of that
+> and it flips to **caught**. So the masking is a property of the composed
+> program that the fixture would see the moment it stopped holding, which is
+> a different statement from "the sweep did not happen to reach it".
+>
+> The neighbour corroborates independently: `local_short` at `+0xabca` is
+> stored in the same breath, `v34modeminit` does **not** re-clear it, and the
+> matching mutation on it IS caught unmodified.
+
+The store stays in the reconstruction, because the blob makes it.
+
+The other six are ordinary arithmetic equivalences, each with an argument
+about the code rather than about the test:
+
+| mutation | why it cannot fail |
+|---|---|
+| `rate_min > 14` -> `>= 14` | the guarded statement writes 14 over 14 |
+| the two rate clamps reordered | the max is capped at 14 afterwards, which washes the difference out on every input |
+| `else if (rate_max == 1)` -> `if` | the cap writes 14, never 1 |
+| `+0x35a4` read unsigned | 336 * 65536 is zero modulo 2^16 and the result is stored through a `(short)` |
+| `+0x359c` read unsigned | it is compared only against 0x65 and 0x66, both below 0x8000 |
+| `K56FlexFloModem::setMinMaxRates` not called | it is a bare `ret` -- `include/dsplib/K56FlexFloModem.h` measures all four of that class's defined members; the mutation that changes *whether that arm is entered* IS caught |
+
+Every one of the six is written the object's way regardless, because the
+instruction is `movswl` or `jle` and the record is the deliverable.
+
+### 325. Two batches, one translation unit, one macro name, two different offsets
+
+`v90Phase34` and `VPcmV34InitiateRetrain` were written in parallel worktrees
+and both belong in `v34pcmmain.cpp` -- each proved it independently, from
+mangled callees a C translation unit cannot emit. Both landed. Both defined
+`CFG_FLAGS`.
+
+```
+line 123   #define CFG_FLAGS   0x00     /* retrain: bits 3 and 4 are the
+                                           V.90 and K56flex permissions */
+line 450   #define CFG_FLAGS   0x50     /* v90Phase34: what the other block
+                                           calls CFG_ISP */
+```
+
+The retrain function's body sits *after* line 450, so it read the permission
+word from `pac3c + 0x50` instead of `pac3c + 0x00`, and the V.90 and K56flex
+gates came out wrong. `t_v34retrain` reported **930 of 17,772 checks failed**,
+first at `+0x250` and `+0x24c` -- the two receiver counters the gates decide.
+
+**GCC warned and the build continued.** `warning: "CFG_FLAGS" redefined` with
+a `note:` pointing at the previous definition, in a build that already emits
+warnings and whose failure grep looks for `error:`. Nothing in `make phase`
+treats a redefinition as fatal. The differential test caught it, which is the
+system working -- but it caught it as 930 wrong bytes rather than as the
+two-line name clash it is.
+
+The same merge produced a second collision, `OB_RECEIVER`, and it was
+**harmless**: both definitions are `0x264`, because the two batches had
+measured the same field and agreed. That is the pair worth keeping in view --
+identical name, identical value, no consequence; identical name, different
+value, 930 failures -- because it is exactly the difference a warning does not
+draw and a reader skims past.
+
+Resolved by dropping the redundant `OB_RECEIVER` and prefixing the later
+block's two macros `P34_*`, with the reason written where the rename is. Both
+mutation suites were re-run afterwards, because a rename that a mutation's
+`find` string no longer matches becomes an "unusable" entry rather than a
+failure -- `v90p34` went to 2 unusable and back to 0 once its four affected
+fields were rewritten. **A mutation suite has to be re-run after any rename in
+the code it mutates**, or the coverage it claims is silently smaller.
+
+Neither agent did anything wrong. `CFG_FLAGS` is the obvious name for a flags
+word in a configuration block, and there are two configuration blocks. The
+lesson is for whoever holds the merge: when two batches write into one
+translation unit, `grep '^#define'` the result and look for repeats before
+trusting a green build, because the build will be green either way.

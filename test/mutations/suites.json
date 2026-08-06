@@ -57,5 +57,7 @@
  "v90demod":       ["src/pump/v90/V90Demodulator.cpp",
                                                  "build/test/t_v90demod"],
  "v90p34":         ["src/pump/v34/v34pcmmain.cpp",
-                                                 "build/test/t_v90p34"]
+                                                 "build/test/t_v90p34"],
+ "v34retrain":     ["src/pump/v34/v34pcmmain.cpp",
+                                                 "build/test/t_v34retrain"]
 }

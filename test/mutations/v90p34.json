@@ -36,13 +36,13 @@
  },
  {
   "label": "the Ja completion arm tests bit 3 of the configuration byte",
-  "find": "#define CFG_BACKWARD_CLEAR\t0x04",
-  "replace": "#define CFG_BACKWARD_CLEAR\t0x08"
+  "find": "#define P34_CFG_BACKWARD_CLEAR\t0x04",
+  "replace": "#define P34_CFG_BACKWARD_CLEAR\t0x08"
  },
  {
   "label": "the Ja completion arm reads the configuration byte at +0x54",
-  "find": "#define CFG_FLAGS\t\t0x50",
-  "replace": "#define CFG_FLAGS\t\t0x54"
+  "find": "#define P34_CFG_FLAGS\t\t0x50",
+  "replace": "#define P34_CFG_FLAGS\t\t0x54"
  },
  {
   "label": "the backward-clear byte is set to 2 rather than 1",
