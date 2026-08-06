@@ -104,6 +104,7 @@ static int ptr_seen[NPTR];
 
 static struct v34_object oa, ob, ca, cb, snap;
 static short shp_a[SHAPED_N], shp_b[SHAPED_N];
+static short snap_shp[SHAPED_N], snap_bra[RING_N];
 static short bra[RING_N], brb[RING_N];
 static unsigned char k56obj[64];
 
@@ -344,6 +345,8 @@ main(void)
 				int r, rr;
 
 				memcpy(&snap, &oa, sizeof(snap));
+				memcpy(snap_shp, shp_a, sizeof(snap_shp));
+				memcpy(snap_bra, bra, sizeof(snap_bra));
 				r  = k56FlexPhase34(&oa);
 				rr = ref_k56FlexPhase34(&ob);
 
@@ -417,11 +420,17 @@ main(void)
 						    memcmp(&oa, &snap,
 							   sizeof(oa)), 0,
 						    tag);
-					diff_eq_int("no arm leaves the "
+					diff_eq_int("no arm writes the "
 						    "shaped buffer %ld",
 						    first_diff_short(shp_a,
-								     shp_b,
+								     snap_shp,
 								     SHAPED_N),
+						    -1, tag);
+					diff_eq_int("no arm writes the bulk "
+						    "ring %ld",
+						    first_diff_short(bra,
+								     snap_bra,
+								     RING_N),
 						    -1, tag);
 					diff_eq_int("no arm leaves state %ld",
 						    oa.k56flex_receiver,

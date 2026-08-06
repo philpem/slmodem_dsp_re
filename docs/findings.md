@@ -14473,11 +14473,15 @@ of every call return 0 and neither side can enter either arm. This is a
 property of the object, not a shortfall in the sweep: no input to
 `k56FlexPhase34` can change it.
 
-130 of the 721 bytes are in those two arms.
+As the object lays them out those arms are a830-a87d and a9a6-a9da, 78 and
+57 bytes of the 721. In the reconstruction they are measured from the other
+end: `make phase`'s line coverage over `src/` went 10597/10844 to 10645/10899
+when this file landed -- 55 lines added and 48 of them covered, so SEVEN lines
+are never executed and they are all in these two arms.
 
 The consequence is stated as a count and not as prose. `tools/mutate.py
---suite v34k56`: **25 mutations, 15 caught, 2 equivalent, 8 NOT CAUGHT**, and
-all eight uncaught ones are inside the dead arms:
+--suite v34k56`: **28 mutations, 15 caught, 3 equivalent, 10 NOT CAUGHT**.
+Eight of the ten are inside the dead arms:
 
     the Ja arm sets state 4 rather than 3
     the Ja arm writes 0x8990 rather than 0x899f
@@ -14488,8 +14492,23 @@ all eight uncaught ones are inside the dead arms:
     the MP arm's compare-then-store becomes a plain store
     the MP arm skips initdigital
 
-They are recorded as UNCAUGHT and not as equivalent, which is the distinction
-`tools/mutate.py` draws and the right one: "the test does not cover it" is the
+THE OTHER TWO ARE IN REACHABLE CODE, and they are the more interesting ones:
+
+    the Ja arm does not consult the bit source at all
+    the MP arm does not consult the bit source at all
+
+Replacing either `k56->getK56Flex*Bits(&o->f25c8)` with a literal 0 survives,
+because the stub returns 0 and writes nothing through the pointer it is
+handed -- so the call itself has no observable effect and no test in this tree
+can see whether it happens. That claim, "this function calls the two symbols
+its closure says it calls", is the reason it was in this batch at all, and the
+only witness for it is not a test: `nm build/src/pump/v34/v34k56.o` shows
+`_ZN15K56FlexFloModem16getK56FlexJaBitsEPs` and `...MpBitsEPs` undefined, and
+`tools/closure.py` resolves both. A gap with non-test evidence beside it, and
+not a gap that was overlooked -- these two mutations exist to say so.
+
+The eight dead ones are recorded as UNCAUGHT and not as equivalent, which is
+the distinction `tools/mutate.py` draws and the right one: "the test does not cover it" is the
 opposite result from "the change cannot alter behaviour". The seventh is both
 -- a store of the value just compared against -- but it is listed with the
 gap, because being unreachable is the stronger reason and the one a reader
@@ -14533,6 +14552,17 @@ argue it.
 The same load is read TWICE with different extensions -- `movswl` for the
 shift count, `movzwl` for the increment -- and that asymmetry is the only
 reason the sweep can see anything at all.
+
+AND THE SECOND LOAD IS NOT LOAD-BEARING, which is the opposite of what it
+looks like. A call sits between the two reads, so the object re-reads and so
+does the reconstruction; but the only other writer of +0x2aa2 in the tree is
+`modulatevector`, and that function CALLS `txmit` rather than being reachable
+from it -- txmit's whole chain is `V34ModulatorProcess`, `V34EchoPreFilter`
+and `V34EchoUpdateDelayLine`. So the value cannot change across the call, and
+the mutation that increments the first read instead survives as equivalent
+with that call chain named. It was written as a suspected gap and came back as
+an equivalence; the source comment that claimed txmit reached
+`modulatevector` was wrong and is corrected.
 
 ### 283. A pointer-skip list copied from a neighbour had a duplicate in it
 

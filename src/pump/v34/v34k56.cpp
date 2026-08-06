@@ -143,10 +143,15 @@ k56FlexPhase34(void *objp)
 		 * Eight dibits out of one word, `vect_idx` counting them.
 		 *
 		 * The index is read TWICE and the second read is after
-		 * `txmitdibit`, which reaches `txmit` and thence
-		 * `modulatevector` -- the other writer of `vect_idx`.  So the
-		 * increment is applied to whatever the transmit chain left,
-		 * not to the value the shift used.
+		 * `txmitdibit`, because the object reads it twice: a call
+		 * sits between, and no compiler may assume a field survives
+		 * one.  It is written that way here for the same reason and
+		 * NOT because the value can change -- `modulatevector` is the
+		 * only other writer of +0x2aa2 in the tree and it CALLS
+		 * `txmit` rather than being reachable from it.  Using the
+		 * first read is therefore an equivalent mutation, and it is
+		 * recorded as one with that call chain named as what is held
+		 * fixed.
 		 *
 		 * The shift count comes from a SIGN-extended `vect_idx` and
 		 * the increment from a zero-extended one.  `& 31` is the x86

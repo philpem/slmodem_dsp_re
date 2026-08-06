@@ -89,6 +89,25 @@
   "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is v34rx.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit."
  },
  {
+  "label": "the Ja arm does not consult the bit source at all",
+  "find": "\t\tint done = (short)k56->getK56FlexJaBits(&o->f25c8);",
+  "replace": "\t\tint done = 0;",
+  "why_uncaught": "the stub returns 0 and writes nothing through the pointer, so the call has no observable effect; witnessed instead by the mangled undefined symbol in build/src/pump/v34/v34k56.o, not by any test"
+ },
+ {
+  "label": "the MP arm does not consult the bit source at all",
+  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->f25c8);",
+  "replace": "\t\tint done = 0;",
+  "why_uncaught": "as above, for getK56FlexMpBits"
+ },
+ {
+  "label": "case 3 increments the index it shifted with, not a re-read",
+  "find": "\t\tnidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;",
+  "replace": "\t\tnidx = ((unsigned)(unsigned short)idx + 1) & 7;",
+  "equivalent": true,
+  "why": "`vect_idx` at +0x2aa2 has exactly one other writer in the tree, `modulatevector`, and that function CALLS `txmit` -- it is not reachable from it.  txmit's whole chain is V34ModulatorProcess, V34EchoPreFilter and V34EchoUpdateDelayLine, none of which touches the field.  So the value cannot change across the call and the two reads are the same read.  HELD FIXED: that call chain, which is why the source keeps the object's second read rather than caching -- the object reads twice because a call sits between, and so does this."
+ },
+ {
   "label": "DEAD: the Ja completion arm sets state 4 rather than 3",
   "find": "\t\to->k56flex_receiver = 3;",
   "replace": "\t\to->k56flex_receiver = 4;"
