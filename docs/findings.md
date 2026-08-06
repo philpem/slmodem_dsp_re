@@ -13918,3 +13918,54 @@ attempt asserted "only the window speaks" without requiring
 `(flags & 0x98) == 0x98`, so it demanded speech from seven of the eight flag
 combinations that never enter the block at all.  Both were caught by the
 count and by the assertion respectively, not by review.
+
+### 243. Weak symbols were outside the measurement, on both sides at once
+
+`coverage.py` collected `T` and `t` from the blob and `T` from our build, and
+took its denominator from `.text`.  The blob has **79 weak text symbols,
+6,301 bytes**, which live in `.gnu.linkonce.t.*` sections rather than in
+`.text` -- template instantiations and inlines the compiler emitted out of
+line.  None of them appeared anywhere in the report.
+
+    Scrambler       1422    GenericIIR      1269    Descrambler      820
+    Queue            587    LowPassFIR       523    Agc              282
+    ParallelDifferentialDecoder 209  ...Encoder 206  SineWave        167
+    blackman         152    designWindow     116    hanning          108
+
+**It was not a wrong number.**  Both sides ignored them consistently -- the
+denominator came from `.text`, which excludes the linkonce sections, so the
+percentage was right about the ground it covered.  What was missing was that
+6.3 KB of the object had no visible state at all: work done there did not
+show, and work not done there was not listed as remaining.
+`src/dsp/FloatIIR.cpp` reconstructs `GenericIIR<float,double>`'s 1,269 bytes
+and `t_genericiir.cpp` drives them, and none of that counted.
+
+Nobody chose this.  It is what a rule written for `T` and `t` does when the
+compiler emits a third kind.
+
+#### What changed
+
+`W` counts with the globals, because it is not a special case for testing:
+`objcopy` renames weak symbols like anything else, so
+`ref__ZN10GenericIIRIfdE5resetEv` exists and they are differentially testable
+today.  `V` -- a weak OBJECT, the four vtables -- stays out, being data.
+
+The denominator becomes `.text` plus the 83 linkonce sections, 6,405 bytes;
+the excess over the symbols' 6,301 is alignment padding.
+
+    before   19.2%   139,646 bytes,  333 symbols
+    after    19.2%   140,915 bytes,  338 symbols
+
+The percentage does not move, which is the point: numerator and denominator
+grew together, so the old figure was not flattering, only narrower than it
+looked.  What is new is that the other 74 weak symbols now appear as
+remaining work instead of as nothing.
+
+#### And one honest label
+
+A linkonce symbol sits at offset 0 of its own section, so it has no `.text`
+address and the TU map -- built from `.text` spans -- cannot place it.  The
+first run put all 74 under `?`, which reads as a hole in the map.  They are
+now labelled `(weak/linkonce, no .text address to attribute)`, because a
+report that says "I do not know" and a report that says "this cannot be known
+by this method" are different claims.
