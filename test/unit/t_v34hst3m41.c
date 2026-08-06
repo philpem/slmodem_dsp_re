@@ -136,6 +136,12 @@ begin(short tx)
 	v34hs_poke_int(M41_LVL_COUNT, 0);
 
 	v34hs_poke_short(M41_FAA7A, 0x5a5a);
+	/*
+	 * The trace's `[1]`, seeded non-zero for the same reason as +0xaa7a:
+	 * two of the six bodies clear it, and the bring-up leaves it at zero,
+	 * so the store would be invisible and its mutation equivalent.
+	 */
+	v34hs_poke_short(M41_TRACE_1, 0x33);
 
 	/* The arm's four inputs, so that no case inherits one from the fill. */
 	v34hs_poke_short(M41_FAAE2, 0x1234);	/* low byte is not 0x72 */
@@ -248,7 +254,7 @@ int
 main(void)
 {
 	int i, j;
-	unsigned h_cold, h_wu11, h_step0;
+	unsigned h_cold, h_wu11, h_step0, h_reset;
 
 	dump = getenv("V34HS_DUMP") != NULL;
 	default_fill = getenv("V34HS_SEED") == NULL;
@@ -290,6 +296,17 @@ main(void)
 	v34hs_poke_short(M41_FAAE0, 100);
 	step("aae0 == 100, the boundary", 101, 14, 0,
 	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+
+	/*
+	 * The block count is SIGNED at this guard: 0xffff is -1 and stays,
+	 * where an unsigned read would make it 65,535 and go.  Nothing else
+	 * in the fixture distinguishes the two spellings.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_FAAE0, -1);
+	step("aae0 -1 is below the floor", 102, 14, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	diff_eq_int("aae0 -1 == the cold path", last_hash, h_cold, 102);
 
 	/* --- 0x709e1, the tone search ----------------------------------- */
 
@@ -411,6 +428,18 @@ main(void)
 	     V34HS_DET_INFO, V34HS_MOH_SILENCE);
 	record("to DET_INFO, flag kept");
 
+	/*
+	 * The message prints the AGC gain SIGN-extended (`movswl` at
+	 * 0x710be), so a negative gain is the only thing that separates the
+	 * two spellings and the fill does not supply one.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_FAAE2, 0x0072);
+	v34hs_poke_short(M41_RECEIVER + 0x136, -3);
+	step("aae2 0x72 with a negative gain", 123, 19, 2,
+	     V34HS_DET_INFO, V34HS_MOH_SILENCE);
+	record("to DET_INFO, negative gain");
+
 	/* --- 0x6ab33, the junction's two cheap exits --------------------- */
 
 	begin(V34HS_MOH_SILENCE);
@@ -434,6 +463,32 @@ main(void)
 	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
 	diff_eq_int("junction with abf0 not 1 == the cold path",
 		    last_hash, h_cold, 131);
+
+	/*
+	 * +0xabf0 is tested for EXACTLY 1 and it is an int.  Two cases: a
+	 * non-zero value that is not 1, and a value whose low halfword is 1
+	 * and whose upper half is not.  Both must decline, and the case just
+	 * below with the same three companions set must not.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_byte(M41_FABE8, 1);
+	v34hs_poke_int(M41_FABF0, 2);
+	v34hs_poke_short(M41_F35A0, 0x32);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_byte(M41_FABF8, 0);
+	step("abf0 2 is not 1", 132, 14, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	diff_eq_int("abf0 2 == the cold path", last_hash, h_cold, 132);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_byte(M41_FABE8, 1);
+	v34hs_poke_int(M41_FABF0, 0x00010001);
+	v34hs_poke_short(M41_F35A0, 0x32);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_byte(M41_FABF8, 0);
+	step("abf0 0x10001 is not 1", 133, 14, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	diff_eq_int("abf0 0x10001 == the cold path", last_hash, h_cold, 133);
 
 	/* --- 0x6dca7, the FRR NACK report -------------------------------- */
 
@@ -502,6 +557,7 @@ main(void)
 	step("marks: aae0 126, counter reset", 151, 15, 0,
 	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
 	record("marks, counter reset");
+	h_reset = last_hash;
 
 	/*
 	 * rtd negative, so the base is negative: at -400 the first floor is
@@ -578,6 +634,37 @@ main(void)
 	     V34HS_DET_SYNC, V34HS_TONE_AB);
 	record("marks, TONE_AB zeroes counter");
 
+	/*
+	 * The reset's own floor is `<=`, and 425 is the one block count that
+	 * separates it: the counter comes out at 1 rather than at 0x41.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 425);
+	v34hs_poke_short(M41_F35A0, 0x40);
+	v34hs_poke_short(M41_FAAE2, 0);
+	step("marks: aae0 425 still resets", 158, 15, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	diff_eq_int("aae0 425 resets the counter as 126 does",
+		    last_hash, h_reset, 158);
+
+	/*
+	 * The counter floor is `<=` too, and 0x31 is where it shows: the arm
+	 * takes the late half instead of answering.  0x30 stepped once is the
+	 * only value that reaches it, because the step is what makes 0x31.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(M41_F358A, 2);
+	v34hs_poke_short(M41_RTD, 400);
+	v34hs_poke_short(M41_FAAE0, 426);
+	v34hs_poke_short(M41_F35A0, 0x30);
+	v34hs_poke_short(M41_FAAE2, 0);
+	v34hs_poke_short(M41_F359C, 0);
+	step("marks: counter 0x31 takes the late half", 159, 15, 0,
+	     V34HS_DET_SYNC, V34HS_MOH_SILENCE);
+	record("marks, counter 0x31");
+
 	/* --- the info marks' three answers ------------------------------- */
 
 	/*
@@ -591,7 +678,7 @@ main(void)
 	v34hs_poke_short(M41_FAAE0, 426);
 	v34hs_poke_short(M41_F35A0, 0x40);
 	v34hs_poke_short(M41_FAAE2, 0);
-	step("marks: aae2 0, tone during info1", 160, 28, 3,
+	step("marks: aae2 0, tone during info1", 160, 29, 3,
 	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
 	record("marks answer: retrain silence");
 
@@ -684,7 +771,7 @@ main(void)
 	v34hs_poke_short(M41_FAAE2, 0);
 	v34hs_poke_short(M41_F359C, 0);
 	v34hs_poke_short(M41_FA24A, 1);
-	step("late: retrain for info1c", 173, 33, 9,
+	step("late: retrain for info1c", 173, 34, 9,
 	     V34HS_DET_SYNC, V34HS_SILENCERETRAIN);
 	record("late, retrain");
 
@@ -704,7 +791,7 @@ main(void)
 	 * is already RX_DPSK -- the route into table 3 requires it -- so
 	 * `hs_setstate` declines that one.
 	 */
-	step("late: 359c 0x65, search info1a", 174, 28, 3,
+	step("late: 359c 0x65, search info1a", 174, 29, 3,
 	     V34HS_RX_PHASE1_CALL, V34HS_TONE_AB);
 	record("late, info1a");
 
