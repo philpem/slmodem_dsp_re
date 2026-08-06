@@ -14492,3 +14492,63 @@ comparing the two at the instruction level rather than only at the interface.
 
 `.comment` is worth reading first on any future blob. It cost one command and
 settles what a great deal of inference cannot.
+
+### 347. Building with the original's compiler, and what it says about our workarounds
+
+Finding 346 identified the toolchain from `.comment`. This is what happened
+when it was actually used. `tools/toolchain/` has the Dockerfile, the build
+script and the comparator.
+
+**The container.** Debian sarge on `linux/386` -- gcc-3.4.3 and binutils 2.15,
+the right generation of both -- rather than a reconstructed 2005 Gentoo. The
+two Gentoo-specific patchsets named in the version string are `ssp` and `pie`,
+and the object shows both features OFF, so what they change when disabled is
+the spec file rather than the optimiser. **76 of our 81 translation units
+compile with it unmodified**; the five that do not are V.90 C++ files using
+constructs newer than 3.4.
+
+**Two more flags, read out of the object rather than guessed.** The first
+comparison run matched 6 functions of 361 on size and none on instructions,
+which was the useful kind of bad result:
+
+- `ulaw2alaw` showed our build opening with `push %ebp; mov %esp,%ebp` and the
+  object opening with `movzbl 0x4(%esp),%eax`. **`-fomit-frame-pointer`**, which
+  GCC 3.4 does NOT imply at `-O2`. Exact size matches went 6 -> 29, identical
+  instruction sequences 0 -> 18.
+- `BwChDem_Delete` then showed the object pre-allocating its outgoing argument
+  area and filling it with `mov %reg,(%esp)` where ours used `push`.
+  **`-maccumulate-outgoing-args`**. 29 -> 37 and 18 -> 26.
+
+So the original's command line, as far as the object can attest, is
+
+    gcc -O2 -march=i386 -mfpmath=387 -fomit-frame-pointer \
+        -maccumulate-outgoing-args        (no PIC, no SSP)
+
+with `-O2` the one assumption remaining.
+
+**Where that leaves us: 26 functions byte-for-byte.** Twenty-six of 361 shared
+symbols come out with an identical instruction sequence, and 11 more match on
+size. That is a different kind of evidence from a passing differential test: a
+function that reproduces the original's codegen says the expression shape and
+the operand order were recovered, not merely something equivalent to them.
+
+Our code totals 74.2% of the blob's bytes over the shared symbols. Some of that
+is the diagnostic sites finding 345 counted, and some is helpers the original
+inlined -- `RcFixed_Resample` is 2,640 bytes there against a few hundred here.
+A size mismatch is not a defect: our source is not the original's source.
+
+**The part that changes how the work is done.** Several places in this tree
+carry a load-bearing workaround whose only cause is the modern compiler.
+`Queue::copy1` and `SineWave`'s `store()` both use `__builtin_memcpy` plus an
+empty `asm` barrier to stop GCC 13 turning a float copy into `flds`/`fstps`,
+because that quietens a signalling NaN (finding 340). The `Agc<float>`
+reconstruction hit the identical trap independently, in `freeze`, and confirmed
+what this container implies: **GCC 3.4 lowers a plain `savedAlpha = alpha;` to
+`mov`/`mov`, and GCC 13 does not.** The original's source almost certainly said
+the natural thing. Our barriers reproduce the original's BEHAVIOUR at the cost
+of not reproducing its SOURCE, and now there is a way to tell the two apart --
+compile the natural form with 3.4 and compare.
+
+That is the standing value of the container: not a second test tier, but an
+oracle for questions of the form "did the author write this, or did their
+compiler do it?", which the differential tier cannot answer even in principle.
