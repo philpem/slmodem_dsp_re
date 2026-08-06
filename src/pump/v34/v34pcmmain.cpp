@@ -32,6 +32,7 @@
 #include "dsplib/encode.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
+#include "dsplib/v34info.h"
 #include "dsplib/v34pcm_tables.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
@@ -131,6 +132,15 @@
 #define CFG_FLAG_V90		0x08
 #define CFG_FLAG_FLEX		0x10
 #define CFG_ISP_SENSITIVE	0x08
+
+/*
+ * +0x02, and the same shape as +0x50 above: a bag of bits and not a number.
+ * `V34GiveINFO1dBits` tests it by its SIGN -- `cmpb $0x0; js` -- so bit 7 set
+ * bars the V.92Lite retrain and everything else permits it, while
+ * `VPcmV34Progress` tests bit 5 of the very same byte for something else.
+ * Offset-named for that reason; neither reader names the byte as a whole.
+ */
+#define CFG_V92LITE		0x02
 
 /*
  * The V.34 object's own fields, for the regions v34fsk.h leaves unmapped.
@@ -1054,6 +1064,123 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 			*(short *)(st + 0x10) = (short)0x39c3;
 		}
 	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34GiveINFO1dBits -- take apart a received INFO1d, and undo a PCM upstream
+ * the configuration does not allow.
+ *
+ * WHY IT IS HERE AND NOT IN v34info.c BESIDE ITS THREE SIBLINGS.  It names no
+ * mangled symbol, so C would have compiled it -- but it calls
+ * `VPcmV34InitiateRetrain`, which is `extern "C"` and lives in THIS file
+ * because four of ITS calls are C++ members.  `$(SRC)` is every `.c` under
+ * `src/`, and the interop tier links exactly that list into a 64-bit binary
+ * with no C++ in it; a `V34GiveINFO1dBits` in `v34info.c` therefore links in
+ * the 32-bit tests and fails `make phase` at `t_spandsp_v23` with an
+ * undefined reference.  The first version of this function did exactly that.
+ * Putting it beside its callee also matches the object, where all three of
+ * `V34GiveINFO1dBits`, `VPcmV34InitiateRetrain` and `v90Phase34` are inside
+ * one `VPcmV34Main.cpp` and this one prints "VPcmV34Main:" like the rest.
+ * The declaration stays in `v34info.h` with its three siblings, which is the
+ * arrangement `V34SetINFO1aBits` already has.
+ *
+ * ONE DECISION AND ONE CONSEQUENCE.  The decision is a three-way conjunction
+ * -- the local V.92 capability byte, the remote's V.92 flag and one bit of the
+ * arriving message -- written into `VPcmFloModem::pcmSessionType`, which is
+ * the same "PCM upstream is in play" flag `V34GiveINFO1aBits` sets from the
+ * received upstream baud index.  The consequence is that if the answer is yes
+ * and the configuration bars it, the modem RETRAINS rather than refusing:
+ * `VPcmV34InitiateRetrain(obj, DP_V90)`, whose own arm then puts the flag back
+ * to 0 through `setPcmSessionType`.  The object's string is the whole story --
+ * "we got PCM upstream under V.92Lite (after Info1d), retraining to V.34
+ * upstream...".
+ *
+ * SO THE RETURN VALUE IS NOT THE FLAG, and the difference is not cosmetic.
+ * `V34GiveINFO1aBits` really does return `pcmSessionType` read back; this one
+ * keeps a separate register at 0 and raises it to 1 only where it retrains.
+ * Two cases separate them: the retraining path returns 1 with the flag back at
+ * 0, and a wanted-but-barred upstream returns 0 with the flag left at 1.
+ *
+ * THE FIRST STATEMENT IS UNCONDITIONAL, exactly as in `V34GiveINFO1aBits`:
+ * the flag is cleared before `v90_receiver` is even looked at, so a call with
+ * no V.90 receiver still clears it.
+ *
+ * WIDTHS.  Each of the four printed quantities is loaded at a width its value
+ * alone would not show -- the ten message shorts `movzwl`, the capability byte
+ * `movzbl`, `remote_v92` `movswl`, and the message bit printed as the MASKED
+ * value, 32 and not 1.  None of the four changes a byte of state, so the
+ * transcript comparison is the only tier that can see any of them; finding 335
+ * is what test/unit/t_v34info1d.c does about that.
+ */
+extern "C" int
+V34GiveINFO1dBits(void *objp, const short *bits)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int ispcm;
+
+	sess->pcmSessionType = 0;
+
+	if (obj->v90_receiver == 0)
+		return 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: giveINFO1dBits\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: rxinfo1d = 0x%x,0x%x,0x%x,0x%x,0x%x,"
+			"0x%x,0x%x,0x%x,0x%x,0x%x\n",
+			(unsigned short)bits[0], (unsigned short)bits[1],
+			(unsigned short)bits[2], (unsigned short)bits[3],
+			(unsigned short)bits[4], (unsigned short)bits[5],
+			(unsigned short)bits[6], (unsigned short)bits[7],
+			(unsigned short)bits[8], (unsigned short)bits[9]);
+
+	/*
+	 * All three are tested, and at three different widths: the capability
+	 * byte with `cmpb $0`, `remote_v92` with `cmpw $0`, and the message
+	 * bit with `testb $0x20` on the LOW byte of index 7 -- so index 7's
+	 * high byte cannot reach this decision.  Measured, not assumed.
+	 */
+	ispcm = 0;
+	if (sess->v92Phase2Info->v92CapabilitiesLocal != 0
+	    && obj->remote_v92 != 0
+	    && ((unsigned short)bits[7] & 0x20) != 0)
+		ispcm = 1;
+
+	sess->pcmSessionType = ispcm;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: upstream selection: local cap - %d, "
+			"remote cap - %d, requested in info1 - %d, "
+			"isPCM - %d\r\n",
+			sess->v92Phase2Info->v92CapabilitiesLocal,
+			obj->remote_v92,
+			(unsigned short)bits[7] & 0x20,
+			sess->pcmSessionType);
+
+	/*
+	 * Read back out of the session rather than reused: the object loads
+	 * +0x611c a third time here, after the store and after the print.
+	 */
+	if (sess->pcmSessionType == 0)
+		return 0;
+
+	if (*(const signed char *)(cfg + CFG_V92LITE) < 0)
+		return 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: we got PCM upstream under V.92Lite "
+			"(after Info1d), retraining to V.34 upstream...\r\n");
+
+	VPcmV34InitiateRetrain(obj, DP_V90);
+	*((unsigned char *)obj + OB_FAC00) = 1;
+
+	return 1;
 }
 
 /*

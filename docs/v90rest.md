@@ -346,3 +346,37 @@ Two things it settles for everyone else in #59:
 
 `V34GiveINFO1dBits` is the next one in this corner; finding 312 is its
 hand-over.
+
+## `V34GiveINFO1dBits` has landed
+
+436 bytes, findings 332-337, mutation suite `v34info1d` -- 42 mutations, 41
+caught, 1 proved equivalent from the object rather than from the sweep, and no
+gaps. Test `test/unit/t_v34info1d.c`, 84,738 checks. Coverage 21.2%, 154,556
+bytes, 369 symbols. `make phase` green.
+
+**It is in `src/pump/v34/v34pcmmain.cpp`, and finding 312's rule is why that
+took two tries.** It names no mangled symbol, so C compiles it -- but it calls
+`VPcmV34InitiateRetrain`, which lives in the `.cpp`, and the Makefile's
+`$(SRC)` is every `.c` under `src/`, linked 64-bit with no C++ in it by the six
+interop binaries. A `v34info.c` version passed every 32-bit test and failed
+`make phase` at `t_spandsp_v23` with an undefined reference. **The rule has a
+second half: a `.c` may not call anything defined in a `.cpp`.** Finding 333.
+
+The declaration is in `include/dsplib/v34info.h` beside its three siblings all
+the same, which is what `V34SetINFO1aBits` already does.
+
+Two things it settles for the rest of #59:
+
+- **Finding 311's destination question is closed.** Both writers of
+  `10000 + 336 * f35a4` store to `obj + 0x254`; 311's "`esi + 0x250`" was a
+  `lea 0x254(%ebx),%esi` read as if `esi` were the object. `f35a4` is STILL
+  not named, because the remaining objection moved to the readers: only
+  `v34handshak` and `datapumpv34` read +0x254 and neither is reconstructed.
+  Finding 336.
+- **A relocation on a call proves nothing about the translation unit.** Its
+  ABSENCE does (finding 306's `getMPrecvdBits` is `LOCAL`); its presence is
+  just `GLOBAL` binding. Finding 333.
+
+`indicateJaTransmission` (57 bytes) is what is left of #59 besides
+`v34handshak`, and finding 332 is its hand-over: its closure is everything
+above plus `DILdescriptorPacker`, all of which is now written.
