@@ -78,6 +78,13 @@
 /* Arm 47's. */
 #define T3MT_FSK_SR	0xaae2		/* short, obj->fsk.sr; low 4 bits   */
 #define T3MT_FSK_NBITS	0xaae0		/* short, obj->fsk.nbits            */
+/* The rest of `struct v34_fsk` at +0xaad0, which only arm 55 has to drive. */
+#define T3MT_FSK_BITLO	0xaad4		/* short, shifted in for <= 0       */
+#define T3MT_FSK_BITHI	0xaad6		/* short, and for > 0               */
+#define T3MT_FSK_BITLEN	0xaad8		/* short, samples per bit           */
+#define T3MT_FSK_RESYNC	0xaada		/* short, what `next` restarts at   */
+#define T3MT_FSK_PHASE	0xaadc		/* short, the sample counter        */
+#define T3MT_FSK_NEXT	0xaade		/* short, the next sampling instant */
 #define T3MT_F3588	0x3588		/* short, the reset's second guard  */
 #define T3MT_F358A	0x358a		/* short                            */
 #define T3MT_FABC2	0xabc2		/* short, the eleventh cleared word */
@@ -103,7 +110,10 @@
 					   to `ApplyBulkDelay`             */
 #define T3MT_F35A0	0x35a0		/* short, 51 clears on both paths  */
 #define T3MT_F35A2	0x35a2		/* short, 51's is_short path only  */
-#define T3MT_INFOREC	0xa9ac		/* 51's message record             */
+#define T3MT_INFOREC	0xa9ac		/* 51's message record, and the one
+					   58's head is aimed at so that it is
+					   NOT the one its resets fill       */
+#define T3MT_SELFPTR	0xaa6c		/* 58's head reads through this     */
 #define T3MT_RXBAUD	0xaa96		/* short, 51 copies the tx baud    */
 #define T3MT_RXCARRIER	0xaaa8		/* short, and the tx carrier       */
 
@@ -241,6 +251,38 @@ struct seed {
 	 * pseudorandom value is a claim, but one nobody can read back.
 	 */
 	int	set_retrainq;	short	retrainq;
+	/*
+	 * Arm 58's head, which is the only guard in this file that reaches a
+	 * message record THROUGH the self-pointer at +0xaa6c rather than at a
+	 * fixed offset.  The fixture aims every pointer field at a dummy block
+	 * before anything runs, so a trial that wants the guard's clear to
+	 * land somewhere a comparison can read has to aim it into the object
+	 * itself -- `v34hs_poke_self_ptr` and never `v34hs_poke_int`, because
+	 * the two objects are at two addresses and one address written into
+	 * both is exactly the asymmetry findings 319-322 are about.
+	 *
+	 * The record at +0xa94c is seeded with sentinels FIRST and the aimed
+	 * one second, so `rec_at` may name either and a trial that aims
+	 * elsewhere can assert that +0xa94c did not move -- which is what
+	 * separates "read through the pointer" from "read at +0xa94c".
+	 */
+	int	set_rec;	unsigned rec_at;	short rec20, rec22;
+	/*
+	 * Arm 55's first guard, and it is the only guard in this file that is
+	 * not a field: it is `fsk.nbits` BEFORE `fskdemodulate` against
+	 * `fsk.nbits` after it (0x64a9e against 0x65b79).  So a trial has to
+	 * decide whether the demodulator samples a bit, and that is
+	 * `phase >= next` on the first of its three iterations.
+	 *
+	 * `bit_len` and `resync` at 0x400 with `next` at 0 and `phase` at
+	 * 0x100 sample EXACTLY ONE bit: the sample sets `next` to `bit_len`,
+	 * and the phase counter cannot reach it again in two more iterations
+	 * whether or not the input changes sign.  One bit is what makes the
+	 * shift register predictable -- `sr` becomes `(sr << 1) | bitval` --
+	 * so the `& 7 == 7` test can be probed one bit at a time.
+	 */
+	int	set_bitclk;	short	nbits, phase, next, bit_len, resync;
+	short	bitval;
 };
 
 #define T3MT_RETRAINQ	0xac17		/* SIGNED byte, the other input     */
@@ -353,6 +395,23 @@ apply(const struct seed *s)
 		v34hs_poke_short(T3MT_RETRAIN_A, 0x0111);
 		v34hs_poke_short(T3MT_RETRAIN_B, 0x0222);
 	}
+	if (s->set_rec) {
+		v34hs_poke_short(T3MT_MSGREC0 + 0x20, 0x7a11);
+		v34hs_poke_short(T3MT_MSGREC0 + 0x22, 0x7a22);
+		v34hs_poke_self_ptr(T3MT_SELFPTR, s->rec_at);
+		v34hs_poke_short(s->rec_at + 0x20, s->rec20);
+		v34hs_poke_short(s->rec_at + 0x22, s->rec22);
+	}
+	/* AFTER `set_errrec`, which also writes `fsk.nbits`. */
+	if (s->set_bitclk) {
+		v34hs_poke_short(T3MT_FSK_NBITS, s->nbits);
+		v34hs_poke_short(T3MT_FSK_BITLO, s->bitval);
+		v34hs_poke_short(T3MT_FSK_BITHI, s->bitval);
+		v34hs_poke_short(T3MT_FSK_BITLEN, s->bit_len);
+		v34hs_poke_short(T3MT_FSK_RESYNC, s->resync);
+		v34hs_poke_short(T3MT_FSK_PHASE, s->phase);
+		v34hs_poke_short(T3MT_FSK_NEXT, s->next);
+	}
 	if (s->set_fsk) {
 		int k;
 
@@ -379,7 +438,8 @@ static const struct seed plain = { T3MT_TXSTATE, 0x0100, 0,0, 0,0,0,
 				   0,0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,
 				   0,0, 0,0, 0,0,0, 0,0, 0,0,0, 0,0,
 				   0,0,0,0, 0,0, 0,0, 0,0, 0,0,
-				   0,0, 0,0, 0,0, 0,0 };
+				   0,0, 0,0, 0,0, 0,0,
+				   0,0,0,0, 0,0,0,0,0,0, 0 };
 
 /*
  * Did the BLOB print this?  Every claim below about a path having been taken
@@ -414,6 +474,21 @@ same_table(const char *what, unsigned off, unsigned shorts, long tag)
 	const short *b = *(const short **)((char *)v34hs_object(1) + off);
 
 	diff_eq_int(what, memcmp(a, b, shorts * sizeof(short)) == 0, 1, tag);
+}
+
+/*
+ * Where the self-pointer at +0xaa6c points, as an offset into its OWN object.
+ * `v34hs_compare` skips those four bytes because the two sides hold two
+ * different addresses, so the only thing a test can compare is the offset --
+ * which is also the only thing the object's own behaviour depends on.
+ */
+static long
+selfptr_offset(int side)
+{
+	const char *p = *(const char *const *)((char *)v34hs_object(side)
+					       + T3MT_SELFPTR);
+
+	return p - (const char *)v34hs_object(side);
 }
 
 static void
@@ -2424,6 +2499,750 @@ tail_paths(void)
 
 /*
  * --------------------------------------------------------------------------
+ * 0x65b72 -- microstate 55 `TX_PHASE1_CALL`.
+ *
+ * THE FIRST GUARD IS NOT A FIELD, and that is the whole difficulty of this
+ * arm: it asks whether `fskdemodulate` moved `fsk.nbits`, comparing the field
+ * against a copy taken before the call.  So a trial has to make the
+ * demodulator sample a bit, or not, on purpose -- which nothing else in this
+ * file has needed and which is why `set_bitclk` exists.
+ *
+ * Three families, and each says what holds the other two off:
+ *
+ *   A  the reset          the demodulator RUNS (`fsk_inhibit` cleared) and the
+ *                         bit clock is armed or not; `+0x358a` away from 2 so
+ *                         block C cannot fire, and the counter far below 0x5f
+ *   B  the 0x5f threshold the demodulator is INHIBITED, so `nbits` cannot move
+ *                         and the reset cannot fire whatever the shift
+ *                         register holds; `+0x3588` at 4
+ *   C  the 32-bit word    the demodulator is INHIBITED for the same reason,
+ *                         and the counter is 0x10 so block B stays on its
+ *                         quiet branch
+ *
+ * A AND C CANNOT BOTH RUN IN ONE STEP: A's reset leaves `+0x358a` at 1 and the
+ * shift register at -1, and C wants `+0x358a` at 2 and `(sr & 0x3ff)` at
+ * 0x372.  One trial says so on the value rather than by not being written.
+ */
+static int saw_55_reset, saw_55_nonbits, saw_55_nosr, saw_55_below;
+static int saw_55_over, saw_55_arm, saw_55_noarm, saw_55_exclusive;
+
+static void
+micro55(void)
+{
+	static const char reset_msg[] = "Repeated info0 is detected, "
+					"errorrecovery is initialized in "
+					"TX_PHASE1_CALL";
+	static const char arm_msg[] = "V34 In Retrain. errorrecovery for info0 "
+				      "is initialized in TX_PHASE1_CALL";
+	/*
+	 * The reset.  Exactly one bit is sampled when the clock is armed, so
+	 * the shift register after the demodulator is `(sr << 1) | bitval` and
+	 * the `& 7 == 7` test can be probed a bit at a time -- 0x03 with a 1
+	 * shifted in is 0x07 and each of the three neighbours is one bit out.
+	 */
+	static const struct {
+		short	sr, bitval, phase, next;
+		int	moved, reset;
+		const char *why;
+	} rr[] = {
+	  { 0x0003, 1, 0x0100, 0, 1, 1, "0x3 << 1 | 1 is 7" },
+	  { 0x0003, 0, 0x0100, 0, 1, 0, "0x3 << 1 | 0 is 6" },
+	  { 0x0001, 1, 0x0100, 0, 1, 0, "0x1 << 1 | 1 is 3" },
+	  { 0x0002, 1, 0x0100, 0, 1, 0, "0x2 << 1 | 1 is 5" },
+	  { 0x0007, 1, 0x0100, 0, 1, 1, "and 0xf has 47's four as well" },
+	  { 0x01fb, 1, 0x0100, 0, 1, 1, "the mask is three bits and not the "
+					"whole register" },
+	  { 0x01b9, 1, 0x0100, 0, 1, 0, "49's 0x372 does not reset 55" },
+	  /*
+	   * AND THE GUARD IS THE MOVE AND NOT THE REGISTER.  The demodulator
+	   * runs on this row too -- the same code, the same input -- but the
+	   * bit clock is not due, so `nbits` does not change and the reset
+	   * declines with a shift register that would otherwise take it.
+	   */
+	  { 0x0007, 1, 0, 0x7f00, 0, 0, "nbits did not move" },
+	  { 0x0003, 1, 0, 0x7f00, 0, 0, "nor here" }
+	};
+	/* The 0x5f threshold, with the demodulator inhibited throughout. */
+	static const struct {
+		short	counter;
+		int	over;
+		const char *why;
+	} th[] = {
+	  { 0x005e, 0, "n == 0x5f is not above 0x5f" },
+	  { 0x005f, 1, "n == 0x60 is" },
+	  { 0x0100, 1, "and so is 0x101" },
+	  { 0x7fff, 0, "0x8000 is -32768 and the compare is signed" },
+	  { (short)0xfffe, 0, "0xffff is -1" },
+	  { (short)0xffff, 0, "and 0x0000 is not above it either" }
+	};
+	/* The 32-bit word at +0x3588, and the mask on the shift register. */
+	static const struct {
+		short	f3588, f358a, sr;
+		int	armed;
+		const char *why;
+	} ar[] = {
+	  { 2, 2, 0x0372, 1, "+0x3588 2, +0x358a 2 and sr 0x372" },
+	  { 2, 3, 0x0372, 0, "+0x358a must be 2" },
+	  { 3, 2, 0x0372, 0, "and +0x3588 must be 2" },
+	  { 2, 2, 0x0371, 0, "0x371 is not 0x372" },
+	  { 2, 2, 0x0772, 1, "but 0x772 is, masked with 0x3ff" },
+	  { 2, 2, (short)0xfb72, 1, "and so is 0xfb72" },
+	  { 2, 2, 0x0172, 0, "0x172 lacks bit 9, which is inside both the "
+			     "mask and the constant" }
+	};
+	long tag = 7600;
+	short tog0;
+	int i;
+
+	/*
+	 * The fill is deterministic, so +0x358c holds the same halfword at
+	 * every trial below and the inversion can be read against it.  Taken
+	 * from a bring-up of its own rather than from a step, because after a
+	 * step both sides have already inverted it.
+	 */
+	v34hs_setup(0);
+	tog0 = v34hs_peek_short(1, T3MT_TOGGLE);
+
+	for (i = 0; i < (int)(sizeof(rr) / sizeof(rr[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+
+		s.counter = 0x0010;		/* far below 0x5f */
+		s.set_f3588 = 1;	s.f3588 = 4;	/* block C off */
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		s.set_fsk = 1;			/* the demodulator RUNS */
+		s.set_bitclk = 1;
+		s.nbits = 0x0040;	s.bitval = rr[i].bitval;
+		s.phase = rr[i].phase;	s.next = rr[i].next;
+		s.bit_len = 0x0400;	s.resync = 0x0400;
+		s.set_sr = 1;		s.sr = rr[i].sr;
+		both_seeded(V34HS_TX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		/*
+		 * WHAT THE DEMODULATOR DID, read off the blob.  Without this
+		 * the whole family rests on a model of `fskdemodulate` rather
+		 * than on a measurement, and a bit clock that never fired
+		 * would look like a guard that never took.
+		 */
+		diff_eq_int("55's bit clock sampled exactly one bit, or none",
+			    (int)v34hs_peek_short(1, T3MT_FSK_NBITS),
+			    rr[i].reset ? 0	/* the reset clears it */
+					: 0x0040 + rr[i].moved, tag);
+
+		snprintf(what, sizeof(what), "55's reset: %s", rr[i].why);
+		diff_eq_int(what, blob_said(reset_msg), rr[i].reset, tag);
+		/*
+		 * FOUR LINES OR NONE, and they are 59's four in 59's order:
+		 * the phrase, the shift register, and then the two
+		 * transitions -- which is the opposite of 47's, 49's and 50's
+		 * copies of the same body.
+		 *
+		 * THREE MORE ARE NOT THIS ARM'S.  Clearing `fsk_inhibit` also
+		 * means seeding the receive window, and `V34agc` then prints
+		 * `V34AGC, overflow = ...` three times before the microstate
+		 * is even read -- on every row of this family, reset or not.
+		 * Counted rather than filtered out, because a family that
+		 * subtracted an unknown would not notice the day it changed.
+		 */
+		diff_eq_int("55's reset prints four lines past the three "
+			    "`V34agc` prints the demodulator's own seed causes",
+			    v34hs_observed(1)->lines, rr[i].reset ? 7 : 3, tag);
+		if (rr[i].reset) {
+			char line[40];
+
+			snprintf(line, sizeof(line), "V21RXBUF=0x%x",
+				 (unsigned)(unsigned short)
+				 ((rr[i].sr << 1) | rr[i].bitval));
+			diff_eq_int("55's reset prints the register the "
+				    "demodulator left, before clearing it",
+				    blob_said(line), 1, tag);
+		}
+		diff_eq_int("55's reset moves the microstate to DET_SYNC",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    rr[i].reset ? V34HS_DET_SYNC
+					: V34HS_TX_PHASE1_CALL, tag);
+		diff_eq_int("55's reset ORs bit 0 into +0x3588, not 4",
+			    v34hs_peek_short(1, T3MT_F3588),
+			    rr[i].reset ? 5 : 4, tag);
+		/*
+		 * AND IT LEAVES THE COUNTER AT ONE, not at zero.  This copy
+		 * clears the counter and jumps back INTO the increment, where
+		 * 59's clears it and jumps past -- so the two arms' resets are
+		 * separated by exactly this halfword.
+		 */
+		diff_eq_int("55's reset leaves the counter at one",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    rr[i].reset ? 1 : 0x0011, tag);
+
+		if (rr[i].reset)
+			saw_55_reset = 1;
+		else if (rr[i].moved)
+			saw_55_nosr = 1;
+		else
+			saw_55_nonbits = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(th) / sizeof(th[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+		unsigned short n = (unsigned short)(th[i].counter + 1);
+
+		s.counter = th[i].counter;
+		s.set_sr = 1;		s.sr = 0x0157;	/* & 7 == 7, and the
+							   demodulator is off,
+							   so it cannot matter */
+		s.set_f3588 = 1;	s.f3588 = 4;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_TX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "55 at 0x5f: %s", th[i].why);
+		diff_eq_int(what, v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    th[i].over ? V34HS_RX_PHASE2_CALL
+				       : V34HS_TX_PHASE1_CALL, tag);
+		diff_eq_int("55 clears the counter past 0x5f and stores it "
+			    "below",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    th[i].over ? 0 : n, tag);
+		/*
+		 * BIT 0 OF +0x358c IS INVERTED AND NOT SET.  The seed comes
+		 * off the fixture's fill rather than from a poke, so the
+		 * inversion is read against whatever was there.
+		 */
+		diff_eq_int("55 inverts bit 0 of +0x358c past 0x5f",
+			    v34hs_peek_short(1, T3MT_TOGGLE),
+			    th[i].over ? (short)(tog0 ^ 1) : tog0, tag);
+		/*
+		 * TWO LINES OR NONE: the transition and the shift register,
+		 * and the register line is INSIDE the branch -- a step that
+		 * stayed below 0x5f prints nothing at all.
+		 */
+		diff_eq_int("55 prints two lines past 0x5f and none below",
+			    v34hs_observed(1)->lines, th[i].over ? 2 : 0, tag);
+		if (th[i].over) {
+			char line[40];
+
+			snprintf(line, sizeof(line), "V21RXBUF=0x%x", 0x157);
+			diff_eq_int("and the second is the shift register",
+				    blob_said(line), 1, tag);
+			saw_55_over = 1;
+		} else {
+			saw_55_below = 1;
+		}
+	}
+
+	for (i = 0; i < (int)(sizeof(ar) / sizeof(ar[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+
+		s.counter = 0x0010;
+		s.set_sr = 1;		s.sr = ar[i].sr;
+		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
+		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
+		s.rec20 = 0x1234;	s.rec22 = 0x5678;
+		both_seeded(V34HS_TX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "55's second reset: %s",
+			 ar[i].why);
+		diff_eq_int(what, blob_said(arm_msg), ar[i].armed, tag);
+		diff_eq_int("55's second reset moves the microstate to "
+			    "DET_SYNC",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    ar[i].armed ? V34HS_DET_SYNC
+					: V34HS_TX_PHASE1_CALL, tag);
+		diff_eq_int("55's second reset moves the txstate to TX_DPSK",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    ar[i].armed ? V34HS_TX_DPSK : T3MT_TXSTATE, tag);
+		diff_eq_int("55's second reset sets bit 0 of +0x3588 after "
+			    "the init has rewritten it",
+			    v34hs_peek_short(1, T3MT_F3588) & 1,
+			    ar[i].armed ? 1 : (ar[i].f3588 & 1), tag);
+		/*
+		 * `v34handshakinit` CLEARS THE COUNTER ITSELF (finding 375),
+		 * so a step whose second reset ran comes back with 0 where an
+		 * ordinary one comes back with the incremented value.
+		 */
+		diff_eq_int("55's second reset leaves the counter at zero",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    ar[i].armed ? 0 : 0x0011, tag);
+		diff_eq_int("55 re-aims +0xaa6c at the first record",
+			    (int)selfptr_offset(1),
+			    ar[i].armed ? T3MT_MSGREC0 : T3MT_INFOREC, tag);
+
+		if (ar[i].armed)
+			saw_55_arm = 1;
+		else
+			saw_55_noarm = 1;
+	}
+
+	/*
+	 * THE TWO RESETS CANNOT BOTH RUN, and this trial says so on the value.
+	 * The word at +0x3588 is seeded 0x20002, which is exactly what block C
+	 * wants -- and the reset above fires first, leaves 3 and 1 there, and
+	 * overwrites the shift register with -1, so block C declines twice
+	 * over.  A reading in which the reset stored 4 rather than setting bit
+	 * 0 would leave 4 here.
+	 */
+	{
+		struct seed s = plain;
+
+		s.counter = 0x0010;
+		s.set_f3588 = 1;	s.f3588 = 2;
+		s.set_f358a = 1;	s.f358a = 2;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		s.set_fsk = 1;
+		s.set_bitclk = 1;
+		s.nbits = 0x0040;	s.bitval = 1;
+		s.phase = 0x0100;	s.next = 0;
+		s.bit_len = 0x0400;	s.resync = 0x0400;
+		s.set_sr = 1;		s.sr = 0x0003;
+		both_seeded(V34HS_TX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		diff_eq_int("55's reset ran", blob_said(reset_msg), 1, tag);
+		diff_eq_int("and left +0x3588 at 3, not at 4",
+			    v34hs_peek_short(1, T3MT_F3588), 3, tag);
+		diff_eq_int("and +0x358a at 1, which is not the 2 the second "
+			    "reset wants",
+			    v34hs_peek_short(1, T3MT_F358A), 1, tag);
+		diff_eq_int("so the second reset declined",
+			    blob_said(arm_msg), 0, tag);
+		diff_eq_int("and the counter is one and not zero",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    1, tag);
+		saw_55_exclusive = 1;
+	}
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * 0x66003 -- microstate 58 `RX_PHASE1_CALL`.
+ *
+ * FOUR BLOCKS AND THREE THRESHOLDS ON ONE COUNTER -- 0x5f, 0x3bf and 0x4b0 --
+ * which a single step can cross all of.  Each family below holds the others
+ * off and says what holds them off:
+ *
+ *   head  the txstate, and it is TX_DPSK and not the SSEG every other case in
+ *         this file is driven with, so it is skipped unless a trial asks for
+ *         it.  `+0xaa6c` is aimed at +0xa9ac, which is NOT the record the two
+ *         resets fill, so "reached through the pointer" is a claim that can
+ *         fail.
+ *   0x5f  `+0x3588` at 4, which has bit 1 clear and is not zero, so neither
+ *         reset can fire whatever the counter does
+ *   0x3bf `+0x3588` at 2, 3 or 6 and `+0x358a` at 2, and a shift register of
+ *         0x372 -- which is not 1, so the deep path above cannot fire
+ *   0x4b0 `+0x3588` at 0, which is what block 3 needs and what stops block 2
+ *
+ * THE TWO RESETS CANNOT BOTH RUN, and one family says so rather than leaving
+ * it to be inferred: block 2 leaves bit 0 of +0x3588 set and block 3 needs the
+ * whole halfword zero.
+ *
+ * AND THE COUNTER IS READ THREE TIMES.  The third read is the one that can be
+ * seen: `v34handshakinit` zeroes +0xaa78 itself (finding 375), so a step whose
+ * block 2 takes the branch that calls it comes back with 0 and cannot reach
+ * block 3, while the branch that does not call it comes back with the value it
+ * went in with.
+ */
+static int saw_58_head, saw_58_nohead, saw_58_headtx;
+static int saw_58_deep, saw_58_shallow, saw_58_flag;
+static int saw_58_armed, saw_58_noarm, saw_58_init, saw_58_noinit;
+static int saw_58_reset, saw_58_noreset, saw_58_exclusive;
+
+static void
+micro58(void)
+{
+	static const char deep_msg[] = "V34RETRAIN, RX_PHASE1_CALL received,";
+	static const char arm_msg[] = "errorrecovery for info0 is initialized "
+				      "in RX_PHASE1_CALL";
+	/*
+	 * The head.  Two non-zero halfwords and a clear of the first, so every
+	 * one of the three ways to write it wrong is a different answer here:
+	 * dropping either condition takes a row it should not, and exchanging
+	 * +0x20 for +0x22 clears the wrong field.
+	 */
+	static const struct {
+		short	txstate, rec20, rec22;
+		int	cleared;
+		const char *why;
+	} hd[] = {
+	  { V34HS_TX_DPSK, 0x1234, 0x5678, 1, "both non-zero" },
+	  { V34HS_TX_DPSK, 0,      0x5678, 0, "+0x20 zero" },
+	  { V34HS_TX_DPSK, 0x1234, 0,      0, "+0x22 zero" },
+	  { V34HS_TX_DPSK, 0,      0,      0, "both zero" },
+	  { T3MT_TXSTATE,  0x1234, 0x5678, 0, "the txstate is SSEG and not 24" },
+	  { V34HS_SILENCE, 0x1234, 0x5678, 0, "nor is SILENCE" },
+	  { V34HS_TX_L1,   0x1234, 0x5678, 0, "nor TX_L1, which is 51 and not "
+					      "0x18" }
+	};
+	/*
+	 * The first threshold and the deep path.  `sr` is a FULL-WIDTH
+	 * equality against 1, so 0x101 and 0x201 -- which every masked reading
+	 * of the same register would accept -- must decline.
+	 */
+	static const struct {
+		short	counter, sr, filt, gain;
+		int	deep, flagged;
+		const char *why;
+	} dp[] = {
+	  { 0x005e, 0x0001, 0x0123, 0x2346, 0, 0, "n == 0x5f is not above" },
+	  { 0x005f, 0x0001, 0x0123, 0x2346, 1, 1, "n == 0x60 is" },
+	  { 0x005f, 0x0000, 0x0123, 0x2346, 0, 1, "the flag is set anyway" },
+	  { 0x005f, 0x0101, 0x0123, 0x2346, 0, 1, "0x101 is not 1" },
+	  { 0x005f, 0x0201, 0x0123, 0x2346, 0, 1, "nor is 0x201" },
+	  { 0x005f, 0x0007, 0x0123, 0x2346, 0, 1, "nor 59's 0x7" },
+	  { 0x005f, 0x0372, 0x0123, 0x2346, 0, 1, "nor 49's 0x372" },
+	  { 0x005f, 0x000f, 0x0123, 0x2346, 0, 1, "nor 47's 0xf" },
+	  /* The compare is SIGNED on the incremented halfword. */
+	  { (short)0xfffe, 0x0001, 0x0123, 0x2346, 0, 0, "0xffff is -1" },
+	  { 0x7fff, 0x0001, 0x0123, 0x2346, 0, 0, "and 0x8000 is -32768" },
+	  /* Both arguments of the diagnostic are SIGN-extended. */
+	  { 0x005f, 0x0001, (short)0xfff0, (short)0xdcba, 1, 1,
+	    "a negative filtdelay and a negative gain" }
+	};
+	/* Block 2, and the branch inside it that calls `v34handshakinit`. */
+	static const struct {
+		short	counter, f3588, f358a, sr;
+		int	armed, init;
+		const char *why;
+	} ar[] = {
+	  { 0x03bf, 2, 2, 0x0372, 1, 1, "+0x3588 exactly 2 calls the init" },
+	  { 0x03bf, 6, 2, 0x0372, 1, 0, "6 has bit 1 and does not" },
+	  { 0x03bf, 3, 2, 0x0372, 1, 0, "nor does 3" },
+	  { 0x03bf, 4, 2, 0x0372, 0, 0, "4 has bit 1 clear" },
+	  { 0x03bf, 0, 2, 0x0372, 0, 0, "and so has 0" },
+	  { 0x03bf, 2, 3, 0x0372, 0, 0, "+0x358a must be exactly 2" },
+	  { 0x03bf, 2, 0, 0x0372, 0, 0, "and zero is not 2 either" },
+	  { 0x03bf, 2, 2, 0x0371, 0, 0, "0x371 is not 0x372" },
+	  { 0x03bf, 2, 2, 0x0772, 1, 1, "but 0x772 is, masked with 0x3ff" },
+	  { 0x03bf, 2, 2, (short)0xfb72, 1, 1, "and so is 0xfb72" },
+	  { 0x03bf, 2, 2, 0x0172, 0, 0, "0x172 lacks bit 9, which is inside "
+					"both the mask and the constant" },
+	  { 0x03be, 2, 2, 0x0372, 0, 0, "n == 0x3bf is not above 0x3bf" }
+	};
+	/* Block 3, which is `t3m_errrec_reset` and stores the constant 4. */
+	static const struct {
+		short	counter, f3588, sr;
+		int	reset;
+		const char *why;
+	} rs[] = {
+	  { 0x04b0, 0, 0x0372, 1, "n == 0x4b1 is above 0x4b0" },
+	  { 0x04af, 0, 0x0372, 0, "n == 0x4b0 is not" },
+	  { 0x0500, 4, 0x0372, 0, "+0x3588 must be zero, and 4 is not" },
+	  { 0x0500, 2, 0x0372, 0, "nor is 2 -- and 2 is what block 2 wants" },
+	  { 0x0500, 0, 0x0000, 0, "the shift register must not be zero" },
+	  { 0x0500, 0, 0x0002, 1, "and 2 is enough: it is a test against "
+				  "zero and not a mask" },
+	  { 0x0500, 0, (short)0x8000, 1, "so is 0x8000" }
+	};
+	long tag = 7000;
+	int i;
+
+	for (i = 0; i < (int)(sizeof(hd) / sizeof(hd[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+
+		s.txstate = hd[i].txstate;
+		s.counter = 0x0100;		/* below every threshold */
+		s.set_sr = 1;		s.sr = 0x0155;
+		s.set_f3588 = 1;	s.f3588 = 4;	/* both resets off */
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
+		s.rec20 = hd[i].rec20;	s.rec22 = hd[i].rec22;
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "58's head: %s", hd[i].why);
+		diff_eq_int(what,
+			    v34hs_peek_short(1, T3MT_INFOREC + 0x20),
+			    hd[i].cleared ? 0 : hd[i].rec20, tag);
+		diff_eq_int("58's head leaves +0x22 alone",
+			    v34hs_peek_short(1, T3MT_INFOREC + 0x22),
+			    hd[i].rec22, tag);
+		/*
+		 * AND IT GOES THROUGH THE POINTER.  The record at +0xa94c is
+		 * the one both resets fill by address; neither reset runs
+		 * here, so it must still hold its sentinels.
+		 */
+		diff_eq_int("58's head does not touch the record at +0xa94c",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x20), 0x7a11,
+			    tag);
+		diff_eq_int("nor its +0x22",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x22), 0x7a22,
+			    tag);
+		diff_eq_int("and the head does not move the pointer",
+			    (int)selfptr_offset(1), T3MT_INFOREC, tag);
+
+		if (hd[i].cleared)
+			saw_58_head = 1;
+		else if (hd[i].txstate == V34HS_TX_DPSK)
+			saw_58_nohead = 1;
+		else
+			saw_58_headtx = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(dp) / sizeof(dp[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+		unsigned short n = (unsigned short)(dp[i].counter + 1);
+
+		s.counter = dp[i].counter;
+		s.set_sr = 1;		s.sr = dp[i].sr;
+		s.set_f3588 = 1;	s.f3588 = 4;	/* both resets off */
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = dp[i].filt;
+		s.set_gain = 1;		s.gain = dp[i].gain;
+		s.set_flags = 1;	s.flags = 0x0115;  /* 0x200 clear */
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "58's deep path: %s", dp[i].why);
+		diff_eq_int(what, v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    dp[i].deep ? V34HS_TX_PHASE1_CALL
+				       : V34HS_RX_PHASE1_CALL, tag);
+		/*
+		 * 0x200 IS SET BEFORE THE SHIFT-REGISTER TEST, so every trial
+		 * past 0x5f has it whether or not the body below ran.  Without
+		 * this the flag would look like part of the deep path.
+		 */
+		diff_eq_int("58 sets 0x200 in the receiver's flags on every "
+			    "step past 0x5f",
+			    (v34hs_peek_short(1, T3MT_RX_FLAGS) & 0x200) != 0,
+			    dp[i].flagged, tag);
+		diff_eq_int("58's deep path replaces the counter with filtdelay",
+			    v34hs_peek_short(1, T3MT_COUNTER),
+			    dp[i].deep ? dp[i].filt : (short)n, tag);
+		diff_eq_int("58's deep path sets +0x358a to 2",
+			    v34hs_peek_short(1, T3MT_F358A),
+			    dp[i].deep ? 2 : 5, tag);
+		diff_eq_int("58's deep path copies the gain to the receiver's "
+			    "+0x264",
+			    v34hs_peek_short(1, T3MT_RX_F264),
+			    dp[i].deep ? dp[i].gain
+				       : v34hs_peek_short(0, T3MT_RX_F264),
+			    tag);
+		diff_eq_int("58's deep path prints one line and nothing else "
+			    "does", blob_said(deep_msg), dp[i].deep, tag);
+
+		if (dp[i].deep) {
+			char line[192];
+
+			/*
+			 * THE LINE IS PRINTED BEFORE THE COUNTER IS REPLACED,
+			 * so `count2` is the value that crossed 0x5f and not
+			 * filtdelay -- and both of the other two are
+			 * sign-extended, which a negative seed is what says.
+			 */
+			snprintf(line, sizeof(line),
+				 "count2=%d,rx->gain=0x%x,filtdelay=%d",
+				 (int)(short)n, (unsigned)(int)dp[i].gain,
+				 (int)dp[i].filt);
+			diff_eq_int("58's line is printed before the counter "
+				    "moves, and sign-extends all three",
+				    blob_said(line), 1, tag);
+			saw_58_deep = 1;
+		} else {
+			saw_58_shallow = 1;
+		}
+		if (dp[i].flagged)
+			saw_58_flag = 1;
+	}
+
+	for (i = 0; i < (int)(sizeof(ar) / sizeof(ar[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+		unsigned short n = (unsigned short)(ar[i].counter + 1);
+
+		s.counter = ar[i].counter;
+		s.set_sr = 1;		s.sr = ar[i].sr;
+		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
+		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
+		s.rec20 = 0x1234;	s.rec22 = 0x5678;
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "58's second reset: %s",
+			 ar[i].why);
+		diff_eq_int(what, blob_said(arm_msg), ar[i].armed, tag);
+		diff_eq_int("58's second reset moves the microstate to "
+			    "DET_SYNC",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    ar[i].armed ? V34HS_DET_SYNC
+					: V34HS_RX_PHASE1_CALL, tag);
+		diff_eq_int("58's second reset moves the txstate to TX_DPSK",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    ar[i].armed ? V34HS_TX_DPSK : T3MT_TXSTATE, tag);
+		/*
+		 * IT SETS BIT 0 RATHER THAN STORING 4, and the two seeds that
+		 * arm without the call -- 3 and 6 -- are what say so exactly:
+		 * a store of 4 would give 4 and a store of 1 would give 1.
+		 * The seed of 2 cannot: `v34handshakinit` rewrites the field.
+		 */
+		if (ar[i].armed && !ar[i].init)
+			diff_eq_int("58's second reset ORs bit 0 into +0x3588",
+				    v34hs_peek_short(1, T3MT_F3588),
+				    (short)(ar[i].f3588 | 1), tag);
+		else if (ar[i].armed)
+			diff_eq_int("and bit 0 is set after the init too",
+				    v34hs_peek_short(1, T3MT_F3588) & 1, 1,
+				    tag);
+		else
+			diff_eq_int("and a declined reset leaves +0x3588",
+				    v34hs_peek_short(1, T3MT_F3588),
+				    ar[i].f3588, tag);
+		/*
+		 * THE COUNTER IS READ A THIRD TIME AFTER THE RESET.  On the
+		 * branch that calls `v34handshakinit` the counter comes back
+		 * zero, because that function clears it (finding 375), and
+		 * every threshold below is then out of reach; on the branch
+		 * that does not, it still holds the value it went in with.
+		 */
+		diff_eq_int("58 re-reads the counter after its second reset",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    ar[i].init ? 0 : n, tag);
+		/*
+		 * AND THE SELF-POINTER MOVES ONLY ON THAT BRANCH.  The trials
+		 * aim it at +0xa9ac, so "re-aimed at +0xa94c" is a change and
+		 * not the value it already had.
+		 */
+		diff_eq_int("58 re-aims +0xaa6c only when it calls the init",
+			    (int)selfptr_offset(1),
+			    ar[i].init ? T3MT_MSGREC0 : T3MT_INFOREC, tag);
+
+		if (ar[i].armed) {
+			saw_58_armed = 1;
+			if (ar[i].init)
+				saw_58_init = 1;
+			else
+				saw_58_noinit = 1;
+		} else {
+			saw_58_noarm = 1;
+		}
+	}
+
+	for (i = 0; i < (int)(sizeof(rs) / sizeof(rs[0])); i++) {
+		struct seed s = plain;
+		char what[192];
+		unsigned short n = (unsigned short)(rs[i].counter + 1);
+
+		s.counter = rs[i].counter;
+		s.set_sr = 1;		s.sr = rs[i].sr;
+		s.set_f3588 = 1;	s.f3588 = rs[i].f3588;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what), "58's first reset: %s", rs[i].why);
+		diff_eq_int(what, v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    rs[i].reset ? V34HS_DET_SYNC
+					: V34HS_RX_PHASE1_CALL, tag);
+		/*
+		 * AND IT STORES THE CONSTANT 4, which is the other half of
+		 * finding 375's split: +0x3588 is seeded ZERO on every row
+		 * that fires, so `|= 1` would leave 1 and this leaves 4.
+		 */
+		diff_eq_int("58's first reset stores 4 into +0x3588, not bit 0",
+			    v34hs_peek_short(1, T3MT_F3588),
+			    rs[i].reset ? 4 : rs[i].f3588, tag);
+		diff_eq_int("58's first reset does not clear the counter",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    n, tag);
+		diff_eq_int("58's first reset fills the record at +0xa94c",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x24),
+			    rs[i].reset ? 0x0f72
+					: v34hs_peek_short(0,
+							   T3MT_MSGREC0 + 0x24),
+			    tag);
+		/*
+		 * TWO LINES OR NONE: this reset prints no phrase of its own,
+		 * so what the transcript holds is exactly the two transitions
+		 * `t3m_errrec_core` announces.
+		 */
+		diff_eq_int("58's first reset prints two lines or none",
+			    v34hs_observed(1)->lines, rs[i].reset ? 2 : 0, tag);
+
+		if (rs[i].reset)
+			saw_58_reset = 1;
+		else
+			saw_58_noreset = 1;
+	}
+
+	/*
+	 * THE TWO RESETS CANNOT BOTH RUN IN ONE STEP, and this is the trial
+	 * that says it rather than the absence of a trial that shows it.  The
+	 * counter is past 0x4b0 and +0x3588 is 6, so block 2 fires without
+	 * calling the init and leaves 7 -- and block 3 wants zero, so it
+	 * declines.  A reading in which block 2 stored 4 would leave 4 here
+	 * and block 3 would still decline, so the assertion is on the value.
+	 */
+	{
+		struct seed s = plain;
+
+		s.counter = 0x0500;
+		s.set_sr = 1;		s.sr = 0x0372;
+		s.set_f3588 = 1;	s.f3588 = 6;
+		s.set_f358a = 1;	s.f358a = 2;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		diff_eq_int("58's second reset runs and leaves bit 0 set",
+			    v34hs_peek_short(1, T3MT_F3588), 7, tag);
+		diff_eq_int("so 58's first reset declines, though the counter "
+			    "is past 0x4b0",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    0x0501, tag);
+		diff_eq_int("and it printed its own phrase and nothing else's",
+			    blob_said(arm_msg), 1, tag);
+		saw_58_exclusive = 1;
+	}
+
+	/*
+	 * AND THE 0x1e RECORD.  `t3m_errrec_core`'s only conditional field
+	 * needs the originate flag AND a V.90 receiver, and both answers are
+	 * driven here through 58's first reset -- the other arms reach the
+	 * same body, but only through their own guards, so a trial here is
+	 * what says 58 reaches the conditional at all.
+	 */
+	for (i = 0; i < 3; i++) {
+		static const short ans[3] = { 0x65, 0x65, 0x66 };
+		static const int v90[3] = { 0x1234, 0, 0x1234 };
+		static const short want[3] = { 0x1e, 0x11, 0x11 };
+		struct seed s = plain;
+
+		s.counter = 0x0500;
+		s.set_sr = 1;		s.sr = 0x0372;
+		s.set_f3588 = 1;	s.f3588 = 0;
+		s.set_f358a = 1;	s.f358a = 5;
+		s.set_filt = 1;		s.filt = 0x2000;
+		s.set_errrec = 1;	s.errrec = 0x2f1d;
+		s.set_answer = 1;	s.answer = ans[i];
+		s.set_pcmrx = 1;	s.v90rx = v90[i];
+		s.k56rx = 0x5678;
+		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
+		tag += 2;
+
+		diff_eq_int("58's reset picks 0x1e only when this end "
+			    "originates and a V.90 receiver is running",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x18), want[i],
+			    tag);
+	}
+}
+
+/*
+ * --------------------------------------------------------------------------
  * .rodata+0x2ee8 -- the three transmit arms a table-3 arm can hand control to.
  *
  * These are not a reconstruction of table 2, which is #56's; they are here
@@ -2633,6 +3452,8 @@ main(void)
 	micro49();
 	micro50();
 	micro51();
+	micro55();
+	micro58();
 	micro59();
 	micro63();
 	tail_paths();
@@ -2694,6 +3515,34 @@ main(void)
 	diff_eq_int("59 left below filtdelay+0x5c", saw_59_shallow, 1, 0);
 	diff_eq_int("59's clamp to one fired", saw_59_clamp, 1, 0);
 	diff_eq_int("59's second reset was taken", saw_59_arm2, 1, 0);
+	diff_eq_int("55's reset was taken", saw_55_reset, 1, 0);
+	diff_eq_int("55's reset was declined on the shift register",
+		    saw_55_nosr, 1, 0);
+	diff_eq_int("55's reset was declined because nbits did not move",
+		    saw_55_nonbits, 1, 0);
+	diff_eq_int("55 stepped below 0x5f", saw_55_below, 1, 0);
+	diff_eq_int("55 stepped past 0x5f", saw_55_over, 1, 0);
+	diff_eq_int("55's second reset was taken", saw_55_arm, 1, 0);
+	diff_eq_int("55's second reset was declined", saw_55_noarm, 1, 0);
+	diff_eq_int("55's two resets were shown exclusive", saw_55_exclusive,
+		    1, 0);
+	diff_eq_int("58's head cleared a record field", saw_58_head, 1, 0);
+	diff_eq_int("58's head declined on a zero field", saw_58_nohead, 1, 0);
+	diff_eq_int("58's head was skipped on another txstate", saw_58_headtx,
+		    1, 0);
+	diff_eq_int("58's deep path was taken", saw_58_deep, 1, 0);
+	diff_eq_int("58's deep path was declined", saw_58_shallow, 1, 0);
+	diff_eq_int("58 set 0x200 past its first threshold", saw_58_flag, 1, 0);
+	diff_eq_int("58's second reset was taken", saw_58_armed, 1, 0);
+	diff_eq_int("58's second reset was declined", saw_58_noarm, 1, 0);
+	diff_eq_int("58's second reset called v34handshakinit", saw_58_init,
+		    1, 0);
+	diff_eq_int("58's second reset declined to call it", saw_58_noinit,
+		    1, 0);
+	diff_eq_int("58's first reset was taken", saw_58_reset, 1, 0);
+	diff_eq_int("58's first reset was declined", saw_58_noreset, 1, 0);
+	diff_eq_int("58's two resets were shown exclusive", saw_58_exclusive,
+		    1, 0);
 
 	/*
 	 * And every pointer field `v34hs_compare` skips was exercised, so the

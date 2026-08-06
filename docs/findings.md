@@ -20053,3 +20053,325 @@ a wrong answer.
 
 A warning that survives being checked should be *marked* as checked, or the
 next reader pays for it again.
+
+======================================================================
+
+
+### 430. The one guard in `v34handshak` that is not a field, and the frame that had to carry it
+
+Microstates 55 `TX_PHASE1_CALL` (0x65b72, 1,705 exclusive bytes) and 58
+`RX_PHASE1_CALL` (0x66003, 1,853) are the last two arms of table 3's middle
+group, and finding 376 left them saying nothing about either was known to be
+hard. One of them was, in a way the cold sweep could not have shown.
+
+**55's first guard compares a field with itself one call earlier.** 0x64a9e
+loads `obj->fsk.nbits` into `%ebx` -- callee-saved, so it survives -- *before*
+`fskdemodulate`, and 0x65b79 compares the field against it afterwards:
+
+```
+  64a9e  movswl 0xaae0(%ebp),%ebx      ; before the call
+  ...    call   fskdemodulate
+  65b79  cmp    %bx,0xaae0(%esi)       ; sixteen bits, in the arm
+  65b82  movzwl 0xaae2(%esi),%ecx      ; and only then the shift register
+  65b89  and    $0x7,%ecx
+```
+
+So the arm asks *did the demodulator collect a bit*, and no seeding of any
+object field can answer that question -- which is why 55 sat in "group D" with
+five arms it shares nothing else with (finding 288's table). `struct t3m_frame`
+now carries a `short nbits` for it, set between the `+0xa8a0` gate and the
+call. It is the only thing either arm needs that is not in the object.
+
+`%edi` at the same point is `rx + 0x10c`, `fskdemodulate`'s own input, and has
+the same shape; no arm written so far reads it, so it is not in the frame.
+
+#### What the two arms do
+
+```
+  55  nbits MOVED across the demodulator AND (fsk.sr & 7) == 7
+          -> print, +0x3588 |= 1, print the shift register, the shared reset,
+             CLEAR the counter, and FALL BACK INTO the increment
+      n = ++counter
+      n <= 0x5f            store it
+      otherwise            counter = 0, invert bit 0 of +0x358c, microstate to
+                           RX_PHASE2_CALL, print the shift register
+      +0x3588 == 0x20002 as ONE 32-bit word AND (sr & 0x3ff) == 0x372
+          -> v34handshakinit(obj, 0), +0xaa6c aimed at +0xa94c, +0x3588 |= 1,
+             the shared reset again, one line
+
+  58  txstate == TX_DPSK   -> the record reached THROUGH +0xaa6c has its +0x20
+                              cleared, but only if +0x20 and +0x22 are BOTH
+                              non-zero
+      n = ++counter, stored before anything is tested
+      n > 0x5f             -> rx->flags |= 0x200 UNCONDITIONALLY, and then if
+                              fsk.sr is exactly 1: print, +0x358a = 2,
+                              counter = filtdelay, microstate to
+                              TX_PHASE1_CALL, rx->+0x264 takes the gain,
+                              rx->flags |= 0x200 again, and LEAVE
+      c = counter, RE-READ
+      c > 0x3bf AND +0x3588 has bit 1 AND +0x358a == 2 AND (sr&0x3ff)==0x372
+          -> v34handshakinit(obj, 0) and +0xaa6c re-aimed, but ONLY when
+             +0x3588 is exactly 2; then +0x3588 |= 1, the shared reset, one
+             line -- and it REJOINS rather than leaving
+      c > 0x4b0 AND +0x3588 == 0 AND fsk.sr != 0
+          -> the shared reset with +0x3588 = 4, and leave
+```
+
+**The two arms name each other.** 55 moves the microstate to 59 and 58 moves it
+to 55, so a mutation exchanging one target for the other is a real confusion
+and not a straw man; both are in the suite and both are caught.
+
+**58's head is the only guard in this file that reaches a record through
+`+0xaa6c`** rather than at a fixed offset, and the record its own resets fill
+is a different one. The trials aim the self-pointer at +0xa9ac with
+`v34hs_poke_self_ptr` and seed +0xa94c with sentinels, so "through the pointer"
+is a claim that can fail rather than a description.
+
+
+======================================================================
+
+
+### 431. Finding 376 says 58 is on the `= 4` side. It has one of each
+
+Finding 375 split the twenty-five-store error-recovery reset three ways because
+its nine inlinings disagree on one word: four store the constant 4 into +0x3588
+and five set bit 0 of whatever is there. Finding 376's handover summarised that
+as "55 is on the `|= 1` side, 58 on the `= 4` side".
+
+**58 has both.** 0x660b9 stores 4 and 0x6d709 sets bit 0, and they are two
+different blocks of the same arm with two different endings -- the `= 4` one
+leaves, the `|= 1` one rejoins. `v34hshak_t3mid.c`'s own nine-copy comment
+already listed them correctly on the two sides; it is the one-line summary in
+376 that is short, and an agent working from 376 alone would have written 58
+with one reset instead of two.
+
+Recorded here rather than by editing 376, which is the rule (append, do not
+renumber) -- and because the interesting part is not the correction but that
+the *code* comment and the *finding* disagreed and only one of them was right.
+
+#### Both resets of both arms are structurally exclusive, and for two reasons
+
+Neither arm can run both of its copies in one step, and in each case it falls
+out of what the reset itself writes rather than out of any seed:
+
+- **55.** The reset leaves `+0x358a` at 1 and the shift register at -1. Its
+  second block wants the 32-bit word at +0x3588 to be exactly 0x20002 -- whose
+  high half is +0x358a -- and `(sr & 0x3ff) == 0x372`. It declines twice over.
+- **58.** The second block always ends with bit 0 of +0x3588 set, and the third
+  block needs the whole halfword to be zero.
+
+Both are asserted on the value and not by the absence of a trial:
+`t_v34hst3mid.c` drives a step whose first reset fires with +0x3588 seeded
+0x20002 and reads 3 and 1 back, and a step past 0x4b0 whose second reset leaves
+7 where a `= 4` reading would leave 4.
+
+**58's third read of the counter is dead, and that is the same fact.** 0x6d94c
+and 0x6d9e6 both re-read +0xaa78 after the second reset, and nothing can
+observe it: the third block leaves at once unless +0x3588 is zero, which the
+second block has just made impossible. It is in the source because the object
+does it, and it is in the suite marked equivalent with that argument, so it
+expires loudly if an arm ever lands that can reach the third block another way.
+
+
+======================================================================
+
+
+### 432. An anchor can stay UNIQUE and still silently re-point, and nothing here catches that
+
+Finding 347 is about mutation anchors that match TWICE once a second arm lands:
+they report UNUSABLE, UNUSABLE does not fail a run, and `tools/reanchor.py`
+exists to repair them. Landing 55 and 58 broke eighteen anchors that way and
+reanchor repaired all eighteen -- **and it is not the failure that mattered.**
+
+Two entries in `v34hst3mid.json` were anchored on
+
+```
+	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 0x64ad2
+```
+
+-- the last `t3m_txblock` before the microstate dispatch. When they were
+written that was **arm 59's exit**, because 59 was the last arm in the file.
+Arm 58 landed after it. The anchor still matches exactly once, `mutate.py`
+reports nothing, `reanchor.py` reports nothing, `refcheck.py` reports nothing
+-- and both mutations now mutate a different arm from the one their label
+names.
+
+They were noticed only because the run's NOT-CAUGHT count went from 0 to 4 and
+two of the four were labelled `51 ...` and `59 ...`: arm 58's exit happens to
+be one a literal 5 cannot separate, so the re-pointed mutations stopped being
+caught. **Had 58's exit been separable they would have gone on passing, at a
+claim nobody made.** That is the shape to watch for, and it is worse than
+UNUSABLE precisely because it is quiet.
+
+Two further things this turned up:
+
+- The two entries had **identical `find` and identical `replace`** and
+  differed only in their labels, so one of them had never tested anything the
+  other did not. Both are now anchored inside the arm they name -- 51's on its
+  own last diagnostic, 59's on the `"RX_PHASE2_CALL\n");` its last block ends
+  with -- and 55's and 58's have been added the same way.
+- **`reanchor.py` only grows anchors UPWARD**, and both of this batch's hardest
+  cases needed downward growth: 55's and 59's copies of the second reset are
+  identical for six lines and differ first at the state name in the diagnostic
+  *below* them. The eighteen were repaired with a script that tries both
+  directions and picks the occurrence inside the function the label names,
+  printing the line it chose for every one.
+
+#### Seven more, found by sweeping for it instead of tripping over it
+
+Finding the first two by accident is not a method, so every one of the suite's
+anchors was then located and the function containing it printed beside the arm
+its label names. The check is four lines on top of the function ranges the
+repair script already computed, and `src.count(find) == 1` cannot do it by
+construction.
+
+**Seven entries labelled `the shared reset (47, 49, 50) ...` were mutating arm
+51's record fill.** The two bodies share six lines exactly -- `+0x14 = -1`,
+`+0x16 = 1`, `+0x1a = 0`, `+0x1c = 8`, `+0x1e = 0`, `+0x22 = 0` -- and differ
+only in the fields either side of them; the shared reset's copy sits at one tab
+and arm 51's at two, and `mutate.py` matches a substring, so a one-tab anchor
+matches inside the two-tab line as well. At some earlier repair they had been
+made unique by *deepening* them, which moved all seven onto arm 51.
+
+Every one was CAUGHT, before and after -- by arm 51's tests, at a claim whose
+label names a different body. Nothing was failing; seven claims about the
+shared reset simply had no mutation behind them and looked as though they did.
+
+The repair is a **leading newline**, which is what stops a one-tab anchor
+matching inside a two-tab line, and it is finding 375's repair applied in the
+other direction. Arm 51 keeps its own entries for the same six fields, since
+the six values are identical in the two bodies and only a per-body mutation
+says both are tested.
+
+#### The rule
+
+**An anchor must sit inside the thing it is about**, and *check* that it does
+rather than assume it. "The last X in the file" and "the X before the next
+section comment" are anchors about the file's layout, and the file's layout is
+exactly what the next batch changes. Where an arm has no unique code line, the
+diagnostic string it prints is the one thing that is its own -- every arm here
+names its own state in its own message.
+
+And the check is cheap enough to be a tool: for each entry, find its match,
+report which function contains it, and read that against the label. Nine of
+this suite's entries were wrong by that test and none of them by any other.
+
+
+======================================================================
+
+
+### 433. 55's guard could not be tested without driving the bit clock by hand
+
+`t_v34hst3mid.c`'s trials seed object fields. 55's first guard is not a field
+(finding 430), so a trial has to make `fskdemodulate` sample a bit or not, on
+purpose, and no existing seed group could.
+
+`fskdemodulate` collects a bit when `phase >= next` on one of its three
+iterations, and then adds `bit_len` to `next`. So:
+
+```
+  bit_len = 0x400, resync_next = 0x400, phase = 0x100, next = 0
+      -> EXACTLY ONE bit, because the sample sets `next` to 0x400 and the
+         phase counter cannot reach it again in two more iterations whether
+         or not the input changes sign
+  bit_len = 0x400, resync_next = 0x400, phase = 0, next = 0x7f00
+      -> NONE, and the sign-change path restarts `next` at 0x400, which is
+         still out of reach
+```
+
+One bit is what makes the guard probeable: the shift register after the
+demodulator is `(sr << 1) | bit_hi` with `bit_hi == bit_lo`, so seeding `sr` at
+3 with a 1 shifted in gives 7 and each of 1, 2 and 3-with-a-0 is one bit short
+of it. The `& 7 == 7` test is then tested a bit at a time rather than as a
+whole.
+
+**And the count is read back off the blob.** Every row asserts `fsk.nbits`
+afterwards, so the family rests on a measurement of what the demodulator did
+and not on this reasoning about it -- a bit clock that never fired would
+otherwise look exactly like a guard that never took.
+
+#### Two things the family had to account for that are not the arm's
+
+- **Three `V34AGC, overflow = ...` lines.** Clearing `fsk_inhibit` means
+  seeding the receive window, and `V34agc` then prints three lines before the
+  microstate is even read. They are counted rather than filtered: a family that
+  subtracted an unknown would not notice the day it changed.
+- **The counter after 55's reset is ONE and not zero.** The reset clears it and
+  jumps back into the increment at 0x65b95; 59's copy clears it and jumps past.
+  That single halfword is the only thing separating the two arms' copies of a
+  body that is otherwise identical, and it is asserted directly.
+
+
+======================================================================
+
+
+### 434. The suite after 55 and 58: 437 mutations, one gap named, and the seed that made the head testable
+
+```
+  t_v34hst3mid   42,303 checks (31,300 before this batch)
+  mutations      443: 422 caught, 0 NOT caught, 0 unusable, 21 equivalent,
+                 0 MIScounted
+```
+
+`v34hst3mid` is the ONLY suite whose source is `v34hshak_t3mid.c` and the only
+one whose binary is `t_v34hst3mid`, so that unusable count is the whole of the
+"every suite over the file you touched" check and not a sample of it.
+
+Eighty are new -- seventy-four for the two arms and six that arm 51 turned out
+never to have had (finding 432). The ones worth naming are the ones that separate these
+two arms from the neighbours they were measured with:
+
+```
+  58's `sr == 1` exchanged for 59's `(sr & 7) == 7` and 49's masked 0x372
+  58's 0x3bf for 0x4b0 and 0x4b0 for 0x3bf
+  58's `counter = filtdelay` for 50's `counter = 0x14`
+  58's microstate target 55 for 55's target 59, and 55's for 58's
+  55's `(sr & 7) == 7` for 47's `(sr & 0xf) == 0xf`
+  55's reset leaving with the counter at 0 the way 59's does
+  both arms' `|= 1` resets rewritten as `= 4`, which is finding 375's whole
+    point and would have been for nothing had they survived
+```
+
+#### The two that had to be seeded before they could fail at all
+
+Finding 374 listed six of these for the previous batch; this batch has two, and
+both are finding 345's trap rather than finding 230's:
+
+- **The record behind +0xaa6c.** The fixture aims every pointer field at a
+  dummy block, so 58's head dereferences something safe but unreadable. Aimed
+  at +0xa9ac with `v34hs_poke_self_ptr` and with +0xa94c seeded with
+  sentinels, the head's clear lands where a comparison can see it AND the claim
+  "through the pointer, not at +0xa94c" becomes falsifiable. Both halves of its
+  two-condition guard then need a non-zero seed, or the clear is a store of the
+  value the field already holds.
+- **`fsk.phase` and `fsk.next`.** Finding 433.
+
+#### One new equivalence that is really a gap, and it is named as one
+
+**`58's head needs only +0x22`.** The object needs +0x20 and +0x22 both
+non-zero and then clears +0x20. The two readings differ only where +0x22 is
+non-zero and +0x20 is *zero* -- and there the mutant's clear writes the value
+the field already holds. **The absence of that half of the guard cannot be
+tested**; only the other half can, and `58's head needs only +0x20` IS caught
+because there the mutant clears a field the object leaves alone. Closing it
+needs an action that is not a clear, and the object does not have one.
+
+The other twenty are the previous batch's nineteen plus 58's dead third read of
+the counter (finding 431).
+
+#### And one that was uncaught until the mutant was made stronger
+
+`58 leaves through a literal txstate` with the literal 5 survives: that exit is
+only reachable after the `= 4` reset, which forces the microstate to DET_SYNC
+and the txstate to TX_DPSK, and table 2's txstate-5 arm reaches progress 1 only
+at microstate 0x3f or 0x2c while the tail's four txstate tests take neither 5
+nor 24. Rewritten to pass 0x53 -- past table 2's window, and a value the tail
+turns into progress 0x0f -- it is caught. **A mutation that survives is not
+always a claim that cannot be tested; sometimes it is a badly chosen mutant**,
+and the two are told apart by trying a second one before writing the word
+"equivalent".

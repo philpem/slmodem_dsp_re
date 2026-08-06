@@ -217,26 +217,32 @@ Sixteen targets over states 41..80, 27.6 KB, and it is what the per-case split
 was invented for. cfgsplit's exclusive byte counts, and what the harness sees
 when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 
-| microstate | target | bytes | cold behaviour |
-|---|---|--:|---|
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B -- LANDED |
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B -- PARTLY LANDED |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B |
-| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B |
-| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces |
-| 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D |
-| 51 `TX_L1` | 0x65c47 | 1735 | group D |
-| 55 `TX_PHASE1_CALL` | 0x65b72 | 1705 | group D |
-| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D |
-| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D |
-| 63 `INFODONE` | 0x6591e | 1115 | group B |
-| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces |
-| 79 `MOH_TONE` | 0x657ca | 848 | group G -- LANDED |
-| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G -- LANDED |
-| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D |
-| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces -- LANDED |
-| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B -- LANDED |
+**WHICH FILE AN ARM LIVES IN IS PART OF THE TABLE** (finding 348): two
+reconstructions of `v34handshak` exist, `v34hshak.c`'s `v34handshak` and
+`v34hshak_t3mid.c`'s `v34handshak_t3mid`, and an arm added to one is not added
+to the other. Task #25 unifies them; until it does, read the `where` column
+before writing anything.
+
+| microstate | target | bytes | cold behaviour | where |
+|---|---|--:|---|---|
+| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B | PARTLY, `v34hshak.c` |
+| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B | LANDED, `v34hshak.c` |
+| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B | open |
+| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces | LANDED, `_t3mid` |
+| 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D | LANDED, `_t3mid` |
+| 51 `TX_L1` | 0x65c47 | 1735 | group D | LANDED, `_t3mid` |
+| 55 `TX_PHASE1_CALL` | 0x65b72 | 1705 | group D | LANDED, `_t3mid` |
+| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D | LANDED, `_t3mid` |
+| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D | LANDED, `_t3mid` |
+| 63 `INFODONE` | 0x6591e | 1115 | group B | LANDED, `_t3mid` |
+| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces | LANDED, `_t3mid` |
+| 79 `MOH_TONE` | 0x657ca | 848 | group G | LANDED, `v34hshak.c` |
+| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G | LANDED, `v34hshak.c` |
+| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D | LANDED, `_t3mid` |
+| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces | LANDED, `v34hshak.c` |
+| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B | LANDED, `v34hshak.c` |
+
+**Only 44 and 46 are still open**, 9.2 KB between them, and 44 only in part.
 
 Seven distinct behaviours from seventeen representatives -- a property of the
 fixture's seed as well as of the object, so a different fill could separate
@@ -256,7 +262,11 @@ one more or one fewer. The groups:
 
 **Group D is six DIFFERENT arms, not one.** 48, 49, 50, 51, 55 and 58 have
 six distinct entries in `.rodata+0x3000` -- 0x65d30, 0x66a0d, 0x664b8,
-0x65c47, 0x65b72, 0x66003 -- and none of them is 0x6590b. Their agreeing cold
+0x65c47, 0x65b72, 0x66003 -- and none of them is 0x6590b. All six are now
+reconstructed, and what separates them is `filtdelay` at +0xaa7c (finding 372)
+for 49 and 50, and for 55 something that is not in the object at all: whether
+`fskdemodulate` moved `fsk.nbits`, read into `%ebx` at 0x64a9e before the call
+and compared at 0x65b79 (finding 430). Their agreeing cold
 is the fill's doing. Finding 351.
 
 **Group B and group D are the shape of the machine, not a harness defect.**
