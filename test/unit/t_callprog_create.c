@@ -389,6 +389,80 @@ run_dial_no_accessor(void)
 		}
 	}
 
+	/*
+	 * AND THE TWO PATHS A VALID ACCESSOR REACHES, which the block above
+	 * cannot: it refuses before either.
+	 *
+	 *   w0 == 0 takes the wait-for-dial-tone arm, whose "WAIT DIAL
+	 *   TIMEOUT" report is the one the blind arm's "BlindCall" report
+	 *   stands in for -- the suite only ever dialled blind.
+	 *
+	 *   state 7 dials again without going back to waiting, and says so.
+	 *   Nothing puts the supervisor in 7 before a dial, so it is seeded.
+	 */
+	{
+		static const struct { const char *what; int w0, state; } dcase[] = {
+			{ "wait for dial tone", 0, 4 },
+			{ "blind, from state 7", 1, 7 },
+			{ "wait for dial tone, from state 7", 0, 7 },
+		};
+		unsigned lvl, k;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			for (k = 0; k < sizeof(dcase) / sizeof(dcase[0]); k++) {
+				char pa[4096], pb[4096];
+				struct callprog c, d;
+				struct callprog_cfg cc, cd;
+				long tag = (long)lvl * 10 + k;
+
+				harness_param_reset();
+				harness_param_set(MustNoiseFilterBeApplied, 0);
+				harness_param_set(MDMPRM_DP_ADDR, 0);
+				harness_param_set(GetBlindDialPause, 6);
+				memset(&c, 0xA5, sizeof(c));
+				memset(&d, 0xA5, sizeof(d));
+				cc.w0 = dcase[k].w0;
+				cc.get_sreg = sreg_stub;
+				cc.modem = (void *)0xC0DEu;
+				cc.w3 = 0;
+				cd = cc;
+				ref_CALLPROG_Create(&c, &cc);
+				CALLPROG_Create(&d, &cd);
+				c.state = d.state = dcase[k].state;
+
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					lvl;
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+				ref_CALLPROG_Dial(&c, "T5551234");
+				CALLPROG_Dial(&d, "T5551234");
+				dsplib_debug_capture_on = 0;
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					0;
+
+				if (strcmp(printed_only(0, pa, sizeof(pa)),
+					   printed_only(1, pb, sizeof(pb))) != 0
+				    && getenv("DBGDIFF"))
+					fprintf(stderr, "=== %s, level %u ===\n"
+						"ours:\n%s\nblob:\n%s\n",
+						dcase[k].what, lvl,
+						printed_only(0, pa, sizeof(pa)),
+						printed_only(1, pb, sizeof(pb)));
+				diff_eq_int("dial transcripts agree",
+					    strcmp(printed_only(0, pa,
+								sizeof(pa)),
+						   printed_only(1, pb,
+								sizeof(pb)))
+					    == 0, 1, tag);
+				diff_eq_int("state after", d.state, c.state,
+					    tag);
+				compare_object(&d, &c, tag);
+				ref_CALLPROG_Delete(&c);
+				CALLPROG_Delete(&d);
+			}
+		}
+	}
+
 	ref_CALLPROG_Delete(&a);
 	CALLPROG_Delete(&b);
 
