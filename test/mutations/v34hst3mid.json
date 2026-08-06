@@ -1413,8 +1413,8 @@
  },
  {
   "label": "51 copies the carrier into the receive baud rate",
-  "find": "\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXBAUD);",
-  "replace": "\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXCARRIER);"
+  "find": "\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXBAUD);",
+  "replace": "\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXCARRIER);"
  },
  {
   "label": "51 copies the baud rate into the receive carrier",
@@ -1428,8 +1428,8 @@
  },
  {
   "label": "51 copies the four fields before the rate switch",
-  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tT3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
-  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tT3M_U16(f, 0xaa96) = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);"
+  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->faa96 = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);"
  },
  {
   "label": "51's upper gain band is at-least",

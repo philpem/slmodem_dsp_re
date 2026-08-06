@@ -973,7 +973,7 @@ t3m_micro51(struct t3m_frame *f)
 		/* 0x6bac3.  Four copies, and the rate they copy is the one the
 		   switch above may have replaced. */
 		T3M_I16(f, T3M_TOGGLE) = 0;
-		T3M_U16(f, 0xaa96) = T3M_U16(f, T3M_TXBAUD);
+		f->obj->faa96 = (short)T3M_U16(f, T3M_TXBAUD);
 		T3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);
 		*(const short **)(f->m + T3M_RXSCALE) =
 			*(const short **)(f->m + T3M_TXSCALE);

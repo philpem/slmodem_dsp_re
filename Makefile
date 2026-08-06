@@ -369,7 +369,7 @@ CXXOBJ64   := $(patsubst src/%.cpp,$(BUILD)/64/%.o,$(CXXSRC))
 
 $(BUILD)/64/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(SYNCXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
 SPANDSP     := third_party/spandsp
