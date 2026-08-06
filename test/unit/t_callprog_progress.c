@@ -602,6 +602,33 @@ main(void)
 				"callprog: state %d line clear, transcript", i);
 			rc |= run(label, "T5551234", SIG_SILENCE, i, 90);
 			seed_line_clear = 0;
+
+			/*
+			 * AND WITH A TONE, which this sweep did not have.
+			 * Every case above feeds SIG_SILENCE, so the two
+			 * cadence detectors ran in every state and never
+			 * asserted -- and their three verdict announcements
+			 * stayed dead while the level was up.  Finding 61
+			 * established that 550 Hz at the threshold of 40 does
+			 * make the machine come alive; this is that signal,
+			 * inside the level sweep, for long enough to validate
+			 * (the windows are 2 and 6 intervals of 20 ms).
+			 */
+			sprintf(label,
+				"callprog: state %d dial tone, transcript", i);
+			rc |= run(label, "T5551234", SIG_DIALTONE, i, 200);
+			/*
+			 * The busy cadence needs CYCLES, not samples: its
+			 * verdicts are "this is the busy pattern" (1) and
+			 * "give up, nobody answered" (7), and 200 buffers is
+			 * four seconds, which is four half-second cycles.
+			 * MAXCALLS is eight, which is the most this fixture's
+			 * arrays hold -- 900 segfaulted on them, which is a
+			 * bound worth respecting rather than raising blind.
+			 */
+			sprintf(label,
+				"callprog: state %d busy, transcript", i);
+			rc |= run(label, "T5551234", SIG_BUSY, i, MAXCALLS);
 		}
 	}
 	opt_level = 0;
@@ -1003,6 +1030,107 @@ main(void)
 					    dsplib_debug_capture_lines(1) > 0,
 					    lvl > 1, tag);
 			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * FIVE SECONDS OF SILENCE, which is how the supervisor decides the
+	 * far end answered -- there is no tone to detect, only the absence of
+	 * one.  `quiet_count` counts buffers below the envelope threshold and
+	 * the report fires on the buffer that reaches 40000/160 = 250 of
+	 * them.  Nothing in the suite sits in CPSTATE_WFS_STATE on silence
+	 * for 250 consecutive buffers, so it was dead; `quiet_count` is a
+	 * plain field, so the case seeds it one short and supplies the last
+	 * buffer itself.
+	 */
+	diff_begin("callprog: five seconds of silence is an answer");
+	{
+		static struct callprog ca, cb;
+		static struct callprog_cfg cfg2;
+		static struct call cla, clb;
+		static short in2[BUFSAMP], oa2[BUFSAMP], ob2[BUFSAMP];
+		static const unsigned skip[] = {100, 108, 120, 132};
+		unsigned lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			int ra, rb, b, k;
+
+			memset(&ca, HARNESS_MALLOC_FILL, sizeof(ca));
+			memset(&cb, HARNESS_MALLOC_FILL, sizeof(cb));
+			memset(&cla, 0, sizeof(cla));
+			memset(&clb, 0, sizeof(clb));
+			cla.self = &cla;
+			clb.self = &clb;
+			memset(&cfg2, 0, sizeof(cfg2));
+			cfg2.get_sreg = sreg;
+			cfg2.modem = (void *)0xD1A1u;
+			params();
+			harness_param_set(MDMPRM_DP_ADDR,
+					  (long)(intptr_t)&cla);
+			CALLPROG_Create(&ca, &cfg2);
+			harness_param_set(MDMPRM_DP_ADDR,
+					  (long)(intptr_t)&clb);
+			ref_CALLPROG_Create(&cb, &cfg2);
+
+			ca.fatal = cb.fatal = 0;
+			ca.state = cb.state = CPSTATE_WFS_STATE;
+			/* One short of 40000/160, so this buffer is the one. */
+			ca.quiet_count = cb.quiet_count = (40000 / BUFSAMP) - 1;
+
+			memset(in2, 0, sizeof(in2));	/* silence */
+			memset(oa2, 0x5a, sizeof(oa2));
+			memset(ob2, 0x5a, sizeof(ob2));
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			harness_param_set(MDMPRM_DP_ADDR,
+					  (long)(intptr_t)&cla);
+			ra = CALLPROG_Progress(&ca, in2, oa2, BUFSAMP);
+			harness_param_set(MDMPRM_DP_ADDR,
+					  (long)(intptr_t)&clb);
+			rb = ref_CALLPROG_Progress(&cb, in2, ob2, BUFSAMP);
+
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			diff_eq_int("message, level %ld", ra, rb, (long)lvl);
+			diff_eq_int("state after, level %ld", ca.state,
+				    cb.state, (long)lvl);
+			diff_eq_int("quiet_count after, level %ld",
+				    ca.quiet_count, cb.quiet_count, (long)lvl);
+			for (b = 0; b < (int)sizeof(ca); b++) {
+				int hole = 0;
+
+				for (k = 0; k < 4; k++)
+					if (b >= (int)skip[k] &&
+					    b < (int)skip[k] + 4)
+						hole = 1;
+				if (!hole)
+					diff_eq_int("supervisor after",
+						    ((unsigned char *)&ca)[b],
+						    ((unsigned char *)&cb)[b],
+						    (long)lvl * 100000 + b);
+			}
+			for (b = 0; b < BUFSAMP; b++)
+				diff_eq_int("output", oa2[b], ob2[b],
+					    (long)lvl * 1000 + b);
+			if (strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) != 0 &&
+			    getenv("DBGDIFF"))
+				fprintf(stderr, "=== silence, level %u ===\n"
+					"ours:\n%s\nblob:\n%s\n", lvl,
+					dsplib_debug_capture_text(0),
+					dsplib_debug_capture_text(1));
+			diff_eq_int("transcripts agree, level %ld",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, (long)lvl);
+			diff_eq_int("level %ld says the right amount",
+				    dsplib_debug_capture_lines(1) > 0,
+				    lvl > 1, (long)lvl);
 		}
 	}
 	rc |= diff_end();
