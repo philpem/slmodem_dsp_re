@@ -18169,7 +18169,7 @@ and the local maximum (337) before use, as that file instructs.
 bytes exclusive in twenty-five ranges scattered from 0x65d6d to 0x716f4 --
 the largest arm of table 3 after 44, 41 and the shared arm's twenty-four
 entries. It is `src/pump/v34/v34hshak.c`'s `t46_micro_tx_phase1_ans` and
-`test/unit/t_v34hst346.c`, 2,809 checks.
+`test/unit/t_v34hst346.c`, 3,375 checks.
 
 The answerer has sent its phase-1 INFO0 and is waiting for the caller's.
 Two transmit states are special-cased before anything else, then a chain on
@@ -18389,10 +18389,26 @@ eleven message shorts, all twelve record fields, +0xabca, +0xabcc, +0x358a,
 +0x358c and +0xaae0. Every "does not write" mutation is caught because of
 that and not otherwise.
 
-**What is NOT tested here and is not claimed**: nothing. Every block
-`cfgsplit` gives case 0x65d6d is driven, including the two the object
-reaches only through the tail calls at 0x6adbd and 0x6adc7 -- except the
-`+0x3588 == 0` arm of 0x6adc7, which finding 418 shows no body can reach.
+**EACH BODY HAS ITS OWN COPY OF TWO BLOCKS, and collapsing them is a claim
+that has to be driven.** The record's 0x1e variant appears four times --
+0x716b8, 0x6fed8, 0x71027, 0x6fb81 -- and so does the block that skips the
+transmit trace when the state is already TX_DPSK -- 0x6e4c3, 0x6feae,
+0x70c75, 0x6fbb6. `t46_init_record` and `hs_setstate` collapse all four of
+each, which is right because the four copies are the same instructions, but
+a collapse nothing exercises is an unasserted collision of exactly the kind
+findings 351 and 358 refuse. Five more cases drive the other three of each
+-- the eighth, 0x6fbb6, is unreachable (finding 418) -- so all twenty-five
+of `cfgsplit`'s ranges for 0x65d6d are driven, and `record_is_armed` asserts
+that they AGREE rather than the test merely passing. 3,375 checks.
+
+**And the mutation run is the anti-vacuity witness for `v34hs_ours(1)`.**
+Every mutation lands in `v34hshak.c`, which is OUR side; with side A left on
+the blob all 75 would report NOT CAUGHT whatever the test asserted. 74
+caught is proof that the reconstruction is the code that ran, and that is a
+stronger statement than the comment at the top of the test.
+
+**What is NOT tested here and is not claimed**: three branches, all of them
+unreachable rather than untried, and all three in finding 418.
 
 
 ======================================================================
@@ -18409,7 +18425,7 @@ evidence here. Microstate 46:
    5 neighbourhoods   V34HS_PADVARY=0,1,3,5,7                green
    1 loose object     V34HS_LOOSEOBJ=1                       green
    1 unscrubbed stack V34HS_NOSCRUB=1                        green
-   1 blob bring-up    V34HS_REFINIT=1                        green, 3,122
+   1 blob bring-up    V34HS_REFINIT=1                        green, 3,748
 ```
 
 **The last line is the one finding 359 had to record as inapplicable.**
@@ -18419,15 +18435,15 @@ then hold two addresses of two copies -- the case finding 324 says no address
 comparison can settle. 46 calls out of the step too, to `V34SetINFO0aBits`
 and `V34SetINFO0dBits`, and neither installs a table: they write the
 caller's short buffer, and 0aBits also `prev_bulk_delay`. So the refinit
-pass runs, and it adds 313 checks over the ordinary run -- the pointer
+pass runs, and it adds 373 checks over the ordinary run -- the pointer
 selections finding 324 built the mode for. **A microstate arm can be held to
 that knob whenever it does not call a bring-up function**, which is the rule
 the two batches together establish.
 
 **One measurement is fill-dependent and is stated as such**, the same way
 finding 359 states it: `changed` counts bytes that DIFFER from the fill, so
-it is asserted at the default fill alone (29 assertions, 2,809 checks against
-2,780). Nothing else moves over the twelve seeds -- not the comparison, not
+it is asserted at the default fill alone (34 assertions, 3,375 checks against
+3,341). Nothing else moves over the twelve seeds -- not the comparison, not
 a line count, not a state word, not a field the test reads back.
 
 **And one fixture choice this arm needed that no earlier one did.**
@@ -18495,7 +18511,7 @@ matched at two precisions rather than two flags.
 
 ======================================================================
 
-### 418. Two blocks the object emits that nothing can reach, written anyway
+### 418. Three branches the object emits that nothing can reach, written anyway
 
 0x6adc7 tests +0x3588 for zero and jumps to 0x65dcd when it is. It is
 reached from five places -- 0x6adbd falling through, and the four tails at
@@ -18508,6 +18524,14 @@ fall-through at 0x65d96 reaches 0x65dcd, and it does so directly.
 The same is true of the microstate compare inside the reset's second
 `hs_setstate`: the dispatch that got here read 46, so it can never equal
 DET_SYNC and the trace is never skipped.
+
+And of 0x6fbb6, body 0x6f90c's copy of the "transmit state already TX_DPSK"
+block. That body is entered only from `jne 6f90c` inside the `txstate ==
+TONE_AB` guard, and nothing between there and its compare at 0x6f9b7 writes
++0x3596 -- so the state is 60 whenever it is reached and the compare against
+24 cannot fire. The other three bodies' copies are all reachable and all
+driven; this one is not, and it is the only block of case 0x65d6d's
+twenty-five ranges that no case in `t_v34hst346.c` executes.
 
 **Both are written as the object writes them.** The alternative is to prove
 the reachability argument in the source, and an argument is what a later

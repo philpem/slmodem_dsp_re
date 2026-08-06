@@ -716,6 +716,82 @@ main(void)
 	diff_eq_int("body 0x6c459: +0x3588 stored as four",
 		    v34hs_peek_short(0, T46T_F3588), 4, 170);
 
+	/* --- the three blocks each body owns a copy of --------------------- */
+
+	/*
+	 * EACH BODY HAS ITS OWN COPY of the record's 0x1e variant (0x716b8,
+	 * 0x6fed8, 0x71027, 0x6fb81) and its own copy of the block that skips
+	 * the transmit trace when the state is already TX_DPSK (0x6e4c3,
+	 * 0x6feae, 0x70c75, 0x6fbb6).  `t46_init_record` and `hs_setstate`
+	 * collapse all four of each into one, which is right -- the four
+	 * copies are the same instructions -- but a collapse nothing drives
+	 * is an unasserted claim.  Body 0x65df4's two are cases 112 and 114;
+	 * these are the other five, and they are ASSERTED TO AGREE rather
+	 * than merely to pass.
+	 *
+	 * The eighth, 0x6fbb6, is unreachable: body 0x6f90c is entered only
+	 * from the TONE_AB guard and nothing between there and its compare
+	 * writes +0x3596, so the transmit state is always 60 there.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(T46T_COUNT, 200);
+	v34hs_poke_short(T46T_FAAE2, 0x0372);
+	v34hs_poke_short(T46T_F359C, 0x65);
+	v34hs_poke_int(T46T_V90RX, 7);
+	step("body 0x6abc1, +0x359c 0x65 with V.90", 180, 79, 3,
+	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+	record_is_armed("body 0x6abc1, 0x1e", 180, 0x1e);
+
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_short(T46T_F3588, 2);
+	v34hs_poke_short(T46T_COUNT, 200);
+	v34hs_poke_short(T46T_FAAE2, 0x0f72);
+	v34hs_poke_short(T46T_COUNT3, 12);
+	v34hs_poke_short(T46T_F359C, 0x65);
+	v34hs_poke_int(T46T_V90RX, 7);
+	step("body 0x6c459, +0x359c 0x65 with V.90", 181, 80, 4,
+	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+	record_is_armed("body 0x6c459, 0x1e", 181, 0x1e);
+
+	/*
+	 * And 0x6f90c's, which also re-separates its two tests on +0x359c:
+	 * 0x65 selects the record's +0x18 and leaves `V34SetINFO0dBits`
+	 * alone, where 0x66 in case 152 did the opposite.
+	 */
+	begin(V34HS_TONE_AB);
+	v34hs_poke_short(T46T_COUNT, 399);
+	v34hs_poke_byte(T46T_RETRAIN, 3);
+	v34hs_poke_int(T46T_V90RX, 5);
+	v34hs_poke_short(T46T_F359C, 0x65);
+	v34hs_poke_short(T46T_INFO0D + 24, 0x1234);
+	v34hs_poke_short(T46T_LOCAL_SH, 0);
+	poke_session_int(T46T_SESS_VARIANT, 1);
+	poke_session_caps();
+	step("body 0x6f90c, +0x359c 0x65 with V.90", 182, 85, 4,
+	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+	record_is_armed("body 0x6f90c, 0x1e", 182, 0x1e);
+	diff_eq_int("body 0x6f90c: 0x65 does not call INFO0d",
+		    v34hs_peek_short(0, T46T_INFO0D + 24), 0x1234, 182);
+
+	/* The other two bodies entered with the transmit state already there. */
+	begin(V34HS_TX_DPSK);
+	v34hs_poke_short(T46T_REC + 0x20, 0);
+	v34hs_poke_short(T46T_COUNT, 200);
+	v34hs_poke_short(T46T_FAAE2, 0x0372);
+	step("body 0x6abc1 entered at TX_DPSK", 183, 77, 2, V34HS_DET_SYNC,
+	     V34HS_TX_DPSK);
+	record_is_armed("body 0x6abc1 at TX_DPSK", 183, 0x11);
+
+	begin(V34HS_TX_DPSK);
+	v34hs_poke_short(T46T_REC + 0x20, 0);
+	v34hs_poke_short(T46T_F3588, 2);
+	v34hs_poke_short(T46T_COUNT, 200);
+	v34hs_poke_short(T46T_FAAE2, 0x0f72);
+	v34hs_poke_short(T46T_COUNT3, 12);
+	step("body 0x6c459 entered at TX_DPSK", 184, 78, 3, V34HS_DET_SYNC,
+	     V34HS_TX_DPSK);
+	record_is_armed("body 0x6c459 at TX_DPSK", 184, 0x11);
+
 	/*
 	 * THE POINTER HOLES.  `v34hs_compare` skips thirty-five pointer
 	 * fields and compares each by offset from its own base; this asserts
