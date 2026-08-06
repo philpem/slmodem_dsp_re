@@ -91,6 +91,37 @@ VPCM_OFF(modem.phase2Info,	0x1760, mdmp2i);
 VPCM_OFF(modem.ptr_49b4,	0x610c, mdm49b4);
 
 typedef char vpcm_modem_size[(sizeof(V90Modem) == 0x49c0) ? 1 : -1];
+
+/*
+ * V92Phase2Info's, because this is the only translation unit that uses the
+ * class and it has no .cpp of its own -- it is data-only, none of its three
+ * members in the blob is written here, and a header with no source file has
+ * nowhere else to put an assertion.  Without these, `pad_0a[2]` and
+ * `pad_14[3]` are load-bearing and unguarded.
+ *
+ * FOUR OF THESE ARE NOT PINNED BY THE DIFFERENTIAL TEST, and that is why they
+ * are worth asserting: nothing here reads `Uinfo`, `shortPhase2Local` or
+ * `v90UseHighCarrier`, and their offsets come from V92Phase2Info::printInfo's
+ * disassembly rather than from anything that runs.
+ */
+#define V92P2I_OFF(field, off, tag) \
+	typedef char v92p2i_off_##tag[ \
+	    ((int)__builtin_offsetof(V92Phase2Info, field) == (off)) ? 1 : -1]
+
+V92P2I_OFF(pcmType,			0x00, pcmtype);
+V92P2I_OFF(rtd,				0x04, rtd);
+V92P2I_OFF(Uinfo,			0x08, uinfo);
+V92P2I_OFF(maxTxPower,			0x09, maxtxpower);
+V92P2I_OFF(txPowerMeasurementPoint,	0x0c, txpmp);
+V92P2I_OFF(shortPhase2Local,		0x10, sp2local);
+V92P2I_OFF(v92CapabilitiesLocal,	0x11, v92local);
+V92P2I_OFF(shortPhase2Remote,		0x12, sp2remote);
+V92P2I_OFF(v92CapabilitiesRemote,	0x13, v92remote);
+V92P2I_OFF(v90UseHighCarrier,		0x17, highcarrier);
+V92P2I_OFF(array_18,			0x18, a18);
+V92P2I_OFF(array_1c,			0x1c, a1c);
+V92P2I_OFF(L2,				0x20, l2);
+V92P2I_OFF(array_24,			0x24, a24);
 #endif /* 32-bit host */
 
 /*

@@ -126,10 +126,20 @@ findings 273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
 equivalent and measured over 123 million values).
 
 `VPcmFloModem::enterPhase3` (270 B) is the sixth and is still outstanding.
-**Its closure is not what this file said it was.** Recomputed on this branch
-with `DILdescriptorPacker` present, `tools/closure.py
-_ZN12VPcmFloModem11enterPhase3Ev --missing` reports 1,590 bytes and no
-`DILdescriptorPacker` in them:
+**It does call `DILdescriptorPacker`, exactly as this file said** -- that is
+in the object's own relocations and is not in doubt:
+
+    $ tools/dis.py ../slmodemd/dsplibs.o _ZN12VPcmFloModem11enterPhase3Ev \
+        | grep -o 'R_386_[A-Z0-9]* .*' | sort -u
+    R_386_PC32 DILdescriptorPacker
+    R_386_PC32 _ZN14V90Demodulator11enterPhase3Ev
+    R_386_PC32 edprintf
+    R_386_PC32 dsplibs_debug_printf
+    ...
+
+What has changed is that `DILdescriptorPacker` is written, so it is no longer
+a BLOCKER. `tools/closure.py --missing` reports 1,590 bytes still outstanding
+and every one of them belongs to wave 2 or to a weak symbol:
 
     801  V90Phase3Demodulator::reset(PcmType, unsigned char, ...)
     448  V90Demodulator::enterPhase3()
@@ -137,11 +147,17 @@ _ZN12VPcmFloModem11enterPhase3Ev --missing` reports 1,590 bytes and no
      48  Descrambler<int,int>::reset(int)              (weak, template)
      23  Descrambler<int,int>::resetHistoryIndexes()   (weak, template)
 
-So it is blocked on **wave 2's two remaining symbols**, not on the C
-prerequisite -- and on the two `Descrambler<int,int>` members that finding 231
-and the note at the top of this file both warn `callgraph.py` cannot see and
-that nothing in `include/` defines yet. It is one 270-byte method behind two
-that total 1,249, so it goes with them rather than on its own.
+Only `V90Demodulator::enterPhase3` is a direct callee; the other four arrive
+through it. **`--missing` is not a call list** -- it filters out everything
+already written, so reading it as one is how "it needs DILdescriptorPacker"
+would have been contradicted on no evidence.
+
+So: it is sequenced behind **wave 2's two remaining symbols**, not behind the
+C prerequisite, and behind the two `Descrambler<int,int>` members that
+finding 231 and the note at the top of this file both warn `callgraph.py`
+cannot see and that nothing in `include/` defines yet. It is one 270-byte
+method behind 1,320 bytes of somebody else's class, so it goes with them
+rather than on its own.
 
 Whoever writes it should read finding 273 (the object
 is genuinely 32 KB, and the old "indexes through `this`" sentence in
