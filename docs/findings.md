@@ -14254,3 +14254,77 @@ the parameter type is unrecoverable, and the header says so.  Likewise
 `reset`'s return type (`int`/`unsigned`/`bool` compile identically) and
 `sysdep_malloc(size)` against `sysdep_malloc(size * sizeof(T))`, which only one
 instantiation can distinguish.
+
+### 249. `LowPassFIR` designs a filter it cannot run, and the five-argument form is the primitive
+
+Four weak symbols, and the arrangement is the opposite way round from the
+obvious reading.  The FIVE-argument `design(nTaps, cutoff, gain, window,
+adopt)` is the primitive; the FOUR-argument `design(nTaps, cutoff, type, gain)`
+is the convenience wrapper that builds a window and hands it over.  And the
+primitive does not call `designWindow` at all: on its one `window == 0` path
+the relocation names `_Z7hammingIfEvPT_j` directly.  There is no `designWindow`
+relocation in that section.
+
+The class owns a coefficient array and a tap count and nothing else -- no
+history, no `process`, no `reset`.  It designs; something else convolves.
+
+`adopt` is the part to be careful with.  Non-zero means the object STORES THE
+CALLER'S POINTER, writes the coefficients through it, and `sysdep_free`s it
+from the destructor -- so the `const T *window` in the mangling (`PKf`) is a
+lie the object casts away.  The four-argument form always passes 1, on a buffer
+it allocated for the purpose, and LEAKS that buffer whenever the primitive
+rejects the arguments -- a bad cutoff or fewer than two taps -- including for
+`nTaps == 0`, where it still calls `sysdep_malloc(0)` first.
+
+Behaviours reproduced because the object has them:
+
+- `!(cutoff >= 0)`, not `cutoff < 0`.  The object uses `fcoms`/`jb`, so an
+  unordered compare fails and a NaN cutoff is refused by the FIRST test.
+  Writing it the other way lets the NaN through and diverges.
+- The cutoff is normalised to Nyquist: 1.0 is accepted, the next float above
+  it is refused, and `-0.0f` compares equal to zero and is accepted.
+- `cutoff == 0` is accepted and produces garbage: every tap is zero, `sum` is
+  zero, `gain/0` is infinity, and the scaling loop writes `0*inf` -- the x87
+  indefinite -- into every tap.
+- The constructor initialises `coefficients` only, so a rejected design leaves
+  `taps` uninitialised, and the return code is discarded.
+- Neither `sysdep_malloc` in the primitive is checked.  Only the wrapper checks
+  its own.
+
+The precision is where the reconstruction earns its comments.  The running
+sinc argument is rounded to `float` EVERY iteration -- and not because of the
+`(T)` cast, which GCC discards under `-mfpmath=387 -fexcess-precision=fast`,
+but because `sinc(float)` is a real out-of-line call that needs a 4-byte
+argument slot.  That is a codegen dependency: if a future compiler spills the
+value as a 10-byte extended instead, the recurrence silently becomes a
+`long double` one and about one design in five diverges.  Everything else stays
+80-bit, and `gain / sum(...)` is never narrowed.  The divide is FDIVRP -- `de
+f1` prints as `fdivp` and is its own opposite (finding 245) -- so it is
+`gain/sum`, the only reading under which the routine normalises anything.
+
+Five mutations were run in-tree against `t_lowpassfir` and all five failed it:
+the divide reversed, `cutoff < 0` in place of `!(cutoff >= 0)`, copying the
+window instead of adopting it, an extended-precision recurrence, and accepting
+a one-tap filter.
+
+### 250. An explicit class instantiation emits members the object does not have
+
+`template class Queue<float>;` put `_ZNK5QueueIfE5countEv` in our object, and
+the blob has no such symbol: both of its call sites open-code the occupancy
+arithmetic, so `count()` exists in this reconstruction as a name for an
+expression and never as a function.  `coverage.py` reported it as a stray,
+correctly.
+
+`always_inline` does not fix it -- an explicit instantiation of the CLASS emits
+every member regardless.  Instantiating the six members the object actually
+contains, one line each, keeps the two symbol sets equal:
+
+```cpp
+template Queue<float>::Queue(unsigned);
+template int Queue<float>::write(float);
+...
+```
+
+Worth remembering for every weak class template that follows: the object's
+symbol list is a specification of which members were instantiated, not just of
+which exist.

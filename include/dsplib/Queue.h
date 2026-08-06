@@ -59,7 +59,13 @@ public:
 	int write(T *p, unsigned num);
 	int read(T *p, unsigned num);
 
-	unsigned count() const
+	/*
+	 * `always_inline` because the object has NO `count` symbol: both call
+	 * sites open-code it, and an out-of-line weak copy here would be a
+	 * symbol we define and the object does not.  GCC emits one for an
+	 * ordinary in-class definition even when every call is inlined.
+	 */
+	__attribute__((always_inline)) unsigned count() const
 	{
 		return (unsigned)((wr + size) - rd) % size;
 	}

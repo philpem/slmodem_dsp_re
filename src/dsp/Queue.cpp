@@ -156,4 +156,19 @@ int Queue<T>::read(T *p, unsigned num)
 	return 0;
 }
 
-template class Queue<float>;
+/*
+ * INSTANTIATED MEMBER BY MEMBER, not `template class Queue<float>;`.
+ *
+ * An explicit class instantiation emits EVERY member, and the object has no
+ * `count` symbol -- both of its call sites open-code the expression, so a weak
+ * out-of-line copy here would be a symbol we define and the original does not.
+ * Naming the six members the object actually contains keeps the symbol sets
+ * equal.  `always_inline` on `count` is not enough on its own; the explicit
+ * instantiation overrides it.
+ */
+template Queue<float>::Queue(unsigned);
+template Queue<float>::~Queue();
+template void Queue<float>::reset();
+template int Queue<float>::write(float);
+template int Queue<float>::write(float *, unsigned);
+template int Queue<float>::read(float *, unsigned);

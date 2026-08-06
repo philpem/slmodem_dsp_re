@@ -7,14 +7,17 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#######...........................]  19.3%    141680 bytes, 349 symbols
-  tested      [##################################] 100.0%    141680 bytes, 349 of 349 that can be
+  translated  [#######...........................]  19.5%    143422 bytes, 373 symbols
+  tested      [##################################] 100.0%    143409 bytes, 372 of 373 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 18 of ours (7987 bytes).
+
+  translated, alias exists, and NOT tested:
+    _ZN5QueueIfE5resetEv                             13 bytes
 
   file-local and NOT aliasable, so reached through a caller if at
   all: each of these names is used by more than one translation
@@ -40,8 +43,6 @@ dsplibs.o reconstruction coverage
   either a helper split out of a larger function, or drift:
     _ZN10GenericIIRIfdE10compactOutEv
     _ZN10GenericIIRIfdE9compactInEv
-    _ZN10GenericIIRIfdEC2EjjPdS1_j
-    _ZN10GenericIIRIfdED2Ev
     v8_handshak_agc
     v8_handshak_demod
 
@@ -56,6 +57,6 @@ dsplibs.o reconstruction coverage
     Beepgen.c +3                                    7791 bytes    31 symbols
     Fdspkrnl.c +13                                  7691 bytes    30 symbols
     class1.c                                        4626 bytes    14 symbols
-    (weak/linkonce, no .text address to attribute)    4267 bytes    63 symbols
     vpcm.c                                          2883 bytes     5 symbols
+    (weak/linkonce, no .text address to attribute)    2525 bytes    39 symbols
 ```
