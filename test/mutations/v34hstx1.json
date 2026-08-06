@@ -213,5 +213,240 @@
   "label": "86: the transmit machine is not moved to SSEG",
   "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
   "replace": "\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "60: the index is not scaled by two",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);",
+  "replace": "\ttx1_put_point(o, vect4[sel]);"
+ },
+ {
+  "label": "60: the selector is bit 1 of +0x358c",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = (tx1_get(o, TX1_F358C) >> 1) & 1;"
+ },
+ {
+  "label": "60: the selector is inverted",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = (tx1_get(o, TX1_F358C) & 1) ^ 1;"
+ },
+ {
+  "label": "60: the point is stored after the symbol is sent",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
+  "replace": "\ttxmit(o);\n\ttx1_put_point(o, vect4[2 * sel]);"
+ },
+ {
+  "label": "60: nothing is transmitted",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[2 * sel]);"
+ },
+ {
+  "label": "60: +0x358c is read as an int",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = tx1_get_int(o, TX1_F358C) & 1;",
+  "equivalent": true,
+  "why": "the mask keeps bit 0 alone and a short load and an int load agree on it"
+ },
+ {
+  "label": "18: the second symbol is vect4[1]",
+  "find": "\ttx1_put_point(o, vect4[3]);",
+  "replace": "\ttx1_put_point(o, vect4[1]);"
+ },
+ {
+  "label": "18: the second symbol is vect4[2]",
+  "find": "\ttx1_put_point(o, vect4[3]);",
+  "replace": "\ttx1_put_point(o, vect4[2]);"
+ },
+ {
+  "label": "18: the first symbol is vect4[3] as well",
+  "find": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[3]);"
+ },
+ {
+  "label": "18: only the first symbol is transmitted",
+  "find": "\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);\n",
+  "replace": ""
+ },
+ {
+  "label": "18: the segment ends at 0x41",
+  "find": "\tif (n == 0x40) {",
+  "replace": "\tif (n == 0x41) {"
+ },
+ {
+  "label": "18: the segment ends at or past 0x40",
+  "find": "\tif (n == 0x40) {",
+  "replace": "\tif (n >= 0x40) {"
+ },
+ {
+  "label": "18: the count is not advanced",
+  "find": "\tn = (unsigned short)((unsigned short)o->f25c0 + 1);\n\to->f25c0 = (short)n;",
+  "replace": "\tn = (unsigned short)o->f25c0;"
+ },
+ {
+  "label": "18: the count is not cleared when the segment ends",
+  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->f25c0 = 0;",
+  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);"
+ },
+ {
+  "label": "18: the transmit machine is not moved to SBARSEG",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);\n",
+  "replace": ""
+ },
+ {
+  "label": "18: the machine is moved to SSEG rather than SBARSEG",
+  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);"
+ },
+ {
+  "label": "18: the SBARSEG guard is deleted",
+  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "equivalent": true,
+  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65"
+ },
+ {
+  "label": "70: the data-path test is inverted",
+  "find": "\tif (!(o->f25c2 & 0x10))",
+  "replace": "\tif (o->f25c2 & 0x10)"
+ },
+ {
+  "label": "70: the data-path flag is bit 3",
+  "find": "\tif (!(o->f25c2 & 0x10))",
+  "replace": "\tif (!(o->f25c2 & 8))"
+ },
+ {
+  "label": "70: the receiver's +0x220 is left alone",
+  "find": "\trx->f220 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the receiver's +0x21c is left alone",
+  "find": "\trx->f21c = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the sample-clock copy goes the other way",
+  "find": "\ttx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));",
+  "replace": "\ttx1_put_int(o, TX1_TIMER, tx1_get_int(o, TX1_TIMER_MARK));"
+ },
+ {
+  "label": "70: the sample-clock mark is not restarted",
+  "find": "\ttx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the rate index is read unsigned",
+  "find": "\tidx = tx1_get(o, TX1_RATEIDX);",
+  "replace": "\tidx = (unsigned short)tx1_get(o, TX1_RATEIDX);"
+ },
+ {
+  "label": "70: rate_now is left alone",
+  "find": "\to->rate_now = idx;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: rate_want is left alone",
+  "find": "\to->rate_want = idx;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: +0x2218 is set to 2",
+  "find": "\ttx1_put_int(o, TX1_F2218, 1);",
+  "replace": "\ttx1_put_int(o, TX1_F2218, 2);"
+ },
+ {
+  "label": "70: +0x2218 is left alone",
+  "find": "\ttx1_put_int(o, TX1_F2218, 1);\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the vector is not modulated",
+  "find": "\tmodulatevector(o);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the loop select is inverted",
+  "find": "\tint doubled = tx1_get(o, TX1_MICROSTATE) == V34HS_TX_L1;",
+  "replace": "\tint doubled = tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1;"
+ },
+ {
+  "label": "51: the second copy of the loop does not double",
+  "find": "\t\tif (doubled)\n\t\t\tv = (short)(2 * v);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: three samples rather than four",
+  "find": "\tfor (i = 0; i < 4; i++) {",
+  "replace": "\tfor (i = 0; i < 3; i++) {"
+ },
+ {
+  "label": "51: the index is off by one",
+  "find": "\t\tint v = probe[idx & 0x3f];",
+  "replace": "\t\tint v = probe[(idx + 1) & 0x3f];"
+ },
+ {
+  "label": "51: the index is masked with 0x1f",
+  "find": "\t\tint v = probe[idx & 0x3f];",
+  "replace": "\t\tint v = probe[idx & 0x1f];"
+ },
+ {
+  "label": "51: the scale is read unsigned",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->f25d4) >> 14);"
+ },
+ {
+  "label": "51: the shift is logical rather than arithmetic",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((unsigned)(v * o->f25d4) >> 14);",
+  "equivalent": true,
+  "why": "only the low sixteen bits are stored, and a logical shift right by 14 exceeds an arithmetic one by exactly 2^18 on a negative product -- a multiple of 2^16, so the two are equal in a short for EVERY input.  The object's `sar $0xe` at 0x62cbe and 0x652c4 is therefore unobservable at the store; recorded as equivalent rather than as a gap"
+ },
+ {
+  "label": "51: the shift is by 15",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * o->f25d4) >> 15);"
+ },
+ {
+  "label": "51: vect_idx is not advanced inside the loop",
+  "find": "\t\to->vect_idx = (short)(idx + 1);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the segment's end is not guarded by the microstate",
+  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)\n\t\treturn V34TX1_LOOP;\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the segment ends at or past 0x600",
+  "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
+  "replace": "\tif ((unsigned short)o->vect_idx < 0x600u)"
+ },
+ {
+  "label": "51: the segment ends at 0x400",
+  "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
+  "replace": "\tif ((unsigned short)o->vect_idx != 0x400u)"
+ },
+ {
+  "label": "51: the microstate is moved to TX_L1 rather than TX_L2",
+  "find": "\ttx1_put(o, TX1_MICROSTATE, V34HS_TX_L2);",
+  "replace": "\ttx1_put(o, TX1_MICROSTATE, V34HS_TX_L1);"
+ },
+ {
+  "label": "51: vect_idx is not zeroed when the segment ends",
+  "find": "\t/* 0x62d32 */\n\to->vect_idx = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the doubling is not truncated to a short",
+  "find": "\t\t\tv = (short)(2 * v);",
+  "replace": "\t\t\tv = 2 * v;",
+  "equivalent": true,
+  "why": "the largest magnitude in `probe` is 13,317, so twice any sample still fits a short and the truncation cannot bite -- a property of the table's values, not of the code"
+ },
+ {
+  "label": "51: the microstate is not re-read after the queue is written",
+  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)",
+  "replace": "\tif (!doubled)",
+  "equivalent": true,
+  "why": "nothing between the two reads writes +0x3592 -- `txwritequeue` touches only the queue -- so the re-read is the object's spelling and not a second observation"
  }
 ]

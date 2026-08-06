@@ -1,5 +1,5 @@
 /*
- * v34hstx1.cpp -- six arms of `v34handshak`'s per-sample transmit dispatch.
+ * v34hstx1.cpp -- ten arms of `v34handshak`'s per-sample transmit dispatch.
  *
  * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding 217's rule rather
  * than a choice.  78 `JaTXMIT` tail-calls `v90Phase34` and 85 `K56JaTXMIT`
@@ -41,6 +41,18 @@
  * transmit: 71 always sends `vect4[0]` and 86 sends `vect4[q]`, the point the
  * scrambler just chose.  71 advances the register and throws the result away
  * except as `f25c8`.
+ *
+ * ---------------------------------------------------------------------------
+ * AND ONE PAIR THAT AGREES COLD AND IS STILL NOT ONE ARM.
+ *
+ * Finding 323 measured 24 `TX_DPSK` and 60 `TONE_AB` writing the same 69
+ * bytes with the same progress code, the table's one collision.  They are two
+ * entries at two addresses -- 24's is 0x62b96 and 60's is 0x62d3d, and 60's
+ * whole body is thirty-four bytes where 24's is 2,220 -- so the agreement is
+ * a property of ONE object fill and of nothing else.  60 is written here; 24
+ * is not, and this file says nothing about what it does.  `t_v34hstx1.c`
+ * drives 60 with +0x358c odd, which finding 323's cold run never did, and the
+ * point it sends there is `vect4[2]` rather than `vect4[0]`.
  */
 
 #include <string.h>
@@ -51,6 +63,7 @@
 #include "dsplib/v34hstx1.h"
 #include "dsplib/v34recv.h"	/* struct v34_receiver                    */
 #include "dsplib/v34rx.h"	/* txmit, txwritequeue, V34scrambler      */
+#include "dsplib/v34shell.h"	/* modulatevector                         */
 
 /* The receiver sub-object; `0x74(%esp)` above. */
 #define TX1_RECEIVER	0x264
@@ -77,6 +90,46 @@
 #define TX1_MODULATOR	0x1450
 
 /*
+ * +0x358c.  60 masks it with one to choose between two of `vect4`'s four
+ * points.  It is inside `unmapped_3564`; the only other site in the tree is
+ * v34hshak.c:1480, where `v34handshakinit` clears it.
+ */
+#define TX1_F358C	0x358c
+
+/*
+ * +0x3592, the MICROSTATE (finding 213).  51 is the one arm here that reads
+ * a state word belonging to another machine: it selects between two copies of
+ * its own loop on `microstate == TX_L1`, having been dispatched on
+ * `txstate == TX_L1`.  The two 51s are the same number in two machines and
+ * `StateName` is one table for all three (docs/v34handshak.md).
+ */
+#define TX1_MICROSTATE	0x3592
+
+/*
+ * +0x2218, an int.  Table 2's tail reads it to choose four of its arms
+ * (v34hstxblock.c's `TB_F2218`); 70 is a writer of it.
+ */
+#define TX1_F2218	0x2218
+
+/*
+ * +0x238 and +0x248, two of the four words of the sample-clock timer in
+ * `unmapped_0234`.  `datapumpv34` reads the running count at +0x238 against
+ * the mark at +0x248 and reports a stall when the span passes 287,488; 70
+ * copies one onto the other, which restarts the span.  v34fsk.h's note on
+ * that region is the other half of this reading.
+ */
+#define TX1_TIMER	0x238
+#define TX1_TIMER_MARK	0x248
+
+/*
+ * +0xaa98, a short: the negotiated rate INDEX rather than a bit rate --
+ * `VPcmV34GetCurrentRxBitRate` multiplies the same units by 2400.  70 copies
+ * it, sign-extended, into `rate_now` and `rate_want`; v34fsk.h names those
+ * two off this site and off 0x63395's read-back.
+ */
+#define TX1_RATEIDX	0xaa98
+
+/*
  * The transmitted point.  `f25d0` and `f25d2` are two shorts and every arm
  * that sends a constellation point writes them with ONE 32-bit store, which
  * is what `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it
@@ -100,6 +153,18 @@ static void
 tx1_put(void *objp, unsigned off, short v)
 {
 	*(short *)((char *)objp + off) = v;
+}
+
+static int
+tx1_get_int(const void *objp, unsigned off)
+{
+	return *(const int *)((const char *)objp + off);
+}
+
+static void
+tx1_put_int(void *objp, unsigned off, int v)
+{
+	*(int *)((char *)objp + off) = v;
 }
 
 /*
@@ -342,5 +407,219 @@ v34tx1_txmd(void *objp)
 
 	/* 0x6430c */
 	o->f25c0 = (short)(o->f25c0 + 1);
+	return V34TX1_LOOP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 60 `TONE_AB`, 0x62d3d.  Thirty-four bytes, and the smallest arm the table
+ * has: one point, and the shared `txmit` at 0x62d5f that it falls into.
+ *
+ * THE INDEX IS SCALED BY EIGHT OVER A TABLE OF FOUR-BYTE ENTRIES, so it
+ * selects entry 0 or entry 2 and not 0 or 1:
+ *
+ *     62d48  movswl 0x358c(%ebx),%edi
+ *     62d4f  and    $0x1,%edi
+ *     62d52  mov    0x0(,%edi,8),%edx      <== R_386_32 vect4
+ *
+ * `vect4` is in the order (+,+) (+,-) (-,-) (-,+) -- clockwise, v34hshak.c --
+ * so entries 0 and 2 are the two ENDS of a diagonal and the two points this
+ * sends are exact negations of one another.  A tone alternating between them
+ * is A or B depending on which the flag picks, which is the state's name.
+ *
+ * The load is `movswl` and the mask is one bit, so the sign extension cannot
+ * change the answer; reading it as `movzwl` is an equivalent mutation and is
+ * recorded as one.
+ */
+int
+v34tx1_tone_ab(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	int sel = tx1_get(o, TX1_F358C) & 1;
+
+	tx1_put_point(o, vect4[2 * sel]);
+	txmit(o);
+	return V34TX1_LOOP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 18 `SSEG`, 0x64048, continuing at 0x66d11.
+ *
+ * TWO symbols per pass of the loop, not one: `vect4[0]` then `vect4[3]`, each
+ * with its own `txmit`, which is the only arm in this file that transmits
+ * twice.  Then one tick of `f25c0`, the segment's symbol count, and at 0x40
+ * the segment is over.
+ *
+ * `vect4[3]` is the (-,+) point and `vect4[0]` is (+,+), so the pair is one
+ * step anticlockwise; alternating the two is a half-rate square wave on the
+ * imaginary axis, which is what the S segment is.
+ *
+ * THE COUNT IS COMPARED AS SIXTEEN BITS AFTER THE STORE.  The object loads it
+ * with `movzwl`, increments the 32-bit register, compares `%bp` against 0x40
+ * and stores `%bp` back, so the wrap is at 0x10000 and the comparison sees
+ * the stored value.
+ *
+ * THE `txstate != SBARSEG` COMPARE AT 0x66d1f CANNOT BE FALSE, for finding
+ * 342's reason at 65: this arm is reached only through table 1 at
+ * `txstate == 18`, and `txmit` does not write +0x3596 (finding 285's sweep).
+ * It is written as the object writes it and deleting it is an equivalent
+ * mutation.
+ *
+ * 0x66d11 IS NOT SHARED.  It is reached from 0x64094 and from nowhere else,
+ * and it rejoins the loop at 0x6409a like the counting path, so this arm has
+ * one exit and no transfer out.
+ */
+int
+v34tx1_sseg(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned short n;
+
+	tx1_put_point(o, vect4[0]);
+	txmit(o);
+	tx1_put_point(o, vect4[3]);
+	txmit(o);
+
+	n = (unsigned short)((unsigned short)o->f25c0 + 1);
+	o->f25c0 = (short)n;
+	if (n == 0x40) {
+		/* 0x66d11 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)
+			tx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);
+		o->f25c0 = 0;
+	}
+	return V34TX1_LOOP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 70 `DATAXMIT`, 0x63ca8.
+ *
+ * `modulatevector` does all of the transmitting -- it maps one point out of
+ * the vector it holds and tail-calls `txmit` -- and the rest of the arm is
+ * conditional on bit 4 of `f25c2`.
+ *
+ * That bit is the mapper's own "the data path is on" flag: v34shell.c raises
+ * it inside `modulatevector`, on the pass that regenerates the vector, when
+ * the training-to-data counter reaches the span the transmit shell carries.
+ * Nothing here lowers it, so the body below runs on every pass once it is up.
+ * The object does not need it to be one-shot: four of the five words it
+ * writes are idempotent and the fifth, +0x2218, is what the once-per-block
+ * half reads to move on.
+ *
+ * WHAT IT WRITES, with the register convention applied -- `0x74(%esp)` is the
+ * receiver at +0x264 and `0x78(%esp)` is the object PLUS FOUR, so `0x224(%ecx)`
+ * is +0x228 and not +0x224:
+ *
+ *   receiver +0x220 = 0, +0x21c = 0   the receiver's own two counters
+ *   +0x248 = +0x238                   restart the sample-clock span
+ *   rate_now = rate_want = +0xaa98    the negotiated rate index, SIGN
+ *                                     EXTENDED from a short into two ints
+ *   +0x2218 = 1
+ *
+ * The sign extension is the one thing here a fill can hide: +0xaa98 is a rate
+ * index and small, so a `movzwl` reading of it agrees on every non-negative
+ * value.  `t_v34hstx1.c` drives it negative for that reason.
+ *
+ * The int at +0x2218 is read at 0x63d01 as well as written, but only to skip
+ * the diagnostic at 0x63d1a: at `dsplibs_debug_level` 0 the whole block is
+ * dead and the store of 1 happens either way.  Finding 341's gap, again.
+ */
+int
+v34tx1_dataxmit(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	int idx;
+
+	modulatevector(o);
+
+	if (!(o->f25c2 & 0x10))
+		return V34TX1_LOOP;
+
+	rx->f220 = 0;
+	rx->f21c = 0;
+	tx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));
+
+	idx = tx1_get(o, TX1_RATEIDX);
+	o->rate_now = idx;
+	o->rate_want = idx;
+
+	tx1_put_int(o, TX1_F2218, 1);
+	return V34TX1_LOOP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 51 `TX_L1`, 0x62c69, with the second copy of its loop at 0x65290.
+ *
+ * Four samples of the line probe into the transmit queue, and then -- but
+ * only when the MICROSTATE is also 51 -- the end of the segment.
+ *
+ * THE OBJECT CARRIES ITS LOOP TWICE AND CHOOSES ON `microstate == TX_L1`,
+ * which is the same shape as 71 and 86's two scrambler generators.  The two
+ * copies differ in one instruction:
+ *
+ *     62cab  movswl probe[i],%eax          ; and then imul, sar
+ *     652ae  movswl probe[i],%eax
+ *     652be  add    %eax,%eax              ; L1 sends it at twice the level
+ *     652c0  cwtl                          ;  ... through a short
+ *
+ * so the second copy doubles the sample.  `cwtl` truncates the doubled value
+ * to sixteen bits before the multiply, and for THIS table it can never bite:
+ * the largest magnitude in `probe` is 13,317 and twice that is 26,634, which
+ * a short holds.  So `(short)(2 * v)` and `2 * v` are indistinguishable here
+ * and a mutation of the truncation is equivalent -- a property of the table's
+ * values, not of the code.  It is written as the object writes it.
+ *
+ * THE SCALE IS SIGNED AND THE SHIFT IS ARITHMETIC.  `f25d4` comes in through
+ * `movswl` and the product is closed with `sar $0xe`; `probe` is half
+ * negative, so both readings are exercised by any run at all -- which is why
+ * neither needs a case of its own and a `movzwl` or `shr` mutation dies on
+ * the first sample.
+ *
+ * `vect_idx` IS RE-READ FROM THE OBJECT EVERY ITERATION, incremented, and
+ * stored back before the next read.  Written that way rather than as a local
+ * because that is what the object does; nothing here aliases it, so the two
+ * are equivalent, and the equivalence is the sort of thing that stops being
+ * true when somebody puts a call inside the loop.
+ *
+ * AND THE SEGMENT'S END IS GUARDED TWICE.  The microstate is tested again
+ * after `txwritequeue` -- 0x62cf5, the identical compare -- so an arm that
+ * ran the un-doubled loop cannot reach the end at all.  The end itself is
+ * `vect_idx == 0x600` exactly, tested as sixteen bits after the four
+ * increments; it moves the microstate to `TX_L2` and zeroes `vect_idx`
+ * through 0x62d32, which is shared with other arms of this table.
+ */
+int
+v34tx1_tx_l1(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	int doubled = tx1_get(o, TX1_MICROSTATE) == V34HS_TX_L1;
+	short buf[4];
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		unsigned idx = (unsigned short)o->vect_idx;
+		int v = probe[idx & 0x3f];
+
+		if (doubled)
+			v = (short)(2 * v);
+		buf[i] = (short)((v * o->f25d4) >> 14);
+		o->vect_idx = (short)(idx + 1);
+	}
+
+	txwritequeue(&o->txq, buf);
+
+	if (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)
+		return V34TX1_LOOP;
+	if ((unsigned short)o->vect_idx != 0x600u)
+		return V34TX1_LOOP;
+
+	tx1_put(o, TX1_MICROSTATE, V34HS_TX_L2);
+	/* 0x62d32 */
+	o->vect_idx = 0;
 	return V34TX1_LOOP;
 }

@@ -1,5 +1,5 @@
 /*
- * t_v34hstx1.c -- six arms of `v34handshak`'s per-sample transmit dispatch,
+ * t_v34hstx1.c -- ten arms of `v34handshak`'s per-sample transmit dispatch,
  * each compared against the blob on its own.
  *
  * ---------------------------------------------------------------------------
@@ -82,6 +82,16 @@
 #define TX1_F25CC	0x25cc		/* the scrambler's shift register  */
 #define TX1_V90RX	0x024c		/* v90_receiver                    */
 #define TX1_K56RX	0x0250		/* k56flex_receiver                */
+#define TX1_F358C	0x358c		/* 60 masks it with one            */
+#define TX1_F25D0	0x25d0		/* the transmitted point, 32 bits  */
+#define TX1_RATENOW	0x0228		/* rate_now, int                   */
+#define TX1_RATEWANT	0x022c		/* rate_want, int                  */
+#define TX1_TIMER	0x0238		/* the sample clock's running count*/
+#define TX1_TIMERMARK	0x0248		/* where the span is measured from */
+#define TX1_F2218	0x2218		/* int: selects the tail's arms    */
+#define TX1_RATEIDX	0xaa98		/* short: the negotiated rate index*/
+#define TX1_RXF21C	0x0480		/* receiver +0x21c, short          */
+#define TX1_RXF220	0x0484		/* receiver +0x220, int            */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
 
@@ -375,11 +385,246 @@ case_txmd(void)
 		 txmd_setup_v90, NP(txmd_setup_v90));
 }
 
+/* --- 60 TONE_AB ----------------------------------------------------------- */
+
+/*
+ * One bit of +0x358c chooses between `vect4[0]` and `vect4[2]`, and the
+ * object gets there by scaling the masked bit by EIGHT over a table of
+ * four-byte entries.  Three runs:
+ *
+ *   0x1234  bit 0 clear                -> vect4[0]
+ *   0x1235  bit 0 set                  -> vect4[2]
+ *   0x1236  bit 0 clear, BIT 1 SET     -> vect4[0]
+ *
+ * The third is not a third behaviour; it is the second reading of the first
+ * one, and it is here to separate "bit 0" from "bit 1" and from "the whole
+ * low nibble".  A mask that admitted bit 1 would send vect4[2] on it.  The
+ * scale is separated by the second run alone: with a scale of four the odd
+ * case sends vect4[1], which is a different point.
+ *
+ * `f25d0` and `f25d2` are seeded together as one 32-bit word that is neither
+ * point, so the store is visible whichever branch runs.  The fill would
+ * otherwise leave whatever it left and one of the two cases could pass with
+ * no store at all.
+ */
+static struct tx1_poke tone_ab[] = {
+	P16(TX1_F358C, 0x1234), P32(TX1_F25D0, 0x11223344)
+};
+
+static void
+case_tone_ab(void)
+{
+	tone_ab[0].val = 0x1234;
+	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+		 "60 TONE_AB, +0x358c even", 6000, tone_ab, NP(tone_ab));
+	tone_ab[0].val = 0x1235;
+	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+		 "60 TONE_AB, +0x358c odd", 6001, tone_ab, NP(tone_ab));
+	tone_ab[0].val = 0x1236;
+	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+		 "60 TONE_AB, +0x358c even with bit 1 set", 6002,
+		 tone_ab, NP(tone_ab));
+}
+
+/* --- 18 SSEG -------------------------------------------------------------- */
+
+/*
+ * Two symbols and one tick.  `f25c0` is seeded away from both 0x3f and 0 so
+ * that the counting run's increment and the completing run's clear are both
+ * visible against what was there.
+ *
+ * The completing run is the one that moves `txstate` to SBARSEG, and it is
+ * the only path through 0x66d11.  There is nothing to hold fixed for it
+ * beyond the counter: the arm reads no other companion.
+ */
+static struct tx1_poke sseg[] = {
+	P16(TX1_F25C0, 0x10), P32(TX1_F25D0, 0x11223344)
+};
+
+static void
+case_sseg(void)
+{
+	sseg[0].val = 0x10;
+	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+		 "18 SSEG, counting", 1800, sseg, NP(sseg));
+	sseg[0].val = 0x3f;
+	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+		 "18 SSEG, segment complete at 0x40", 1801, sseg, NP(sseg));
+	/*
+	 * PAST 0x40, which the object never reaches by counting but which is
+	 * the only run that tells `== 0x40` from `>= 0x40`.  The count is
+	 * seeded, so the state is reachable in the fixture whether or not the
+	 * handshake can produce it, and the object's answer is that the
+	 * segment does NOT end -- it counts on to the sixteen-bit wrap.
+	 */
+	sseg[0].val = 0x50;
+	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+		 "18 SSEG, counting past 0x40", 1802, sseg, NP(sseg));
+}
+
+/* --- 70 DATAXMIT ---------------------------------------------------------- */
+
+/*
+ * `vect_idx` IS PINNED SMALL AND THAT IS NOT TIDINESS.  `modulatevector`
+ * regenerates its eight points when the index is exactly 8 and otherwise maps
+ * point `vect_idx` out of the vector it is holding; the fill leaves a
+ * pseudorandom halfword there, so an unpinned run reads past an eight-point
+ * array at most seeds and the case would be measuring the fill.  Three is a
+ * point the vector has.
+ *
+ * Everything the conditional body writes is seeded to something else:
+ *
+ *   receiver +0x21c, +0x220     cleared, so they are seeded non-zero
+ *   +0x248                      seeded apart from +0x238, or the copy is
+ *                               invisible
+ *   rate_now, rate_want         seeded apart from each other AND from the
+ *                               index, so neither store can stand in for
+ *                               the other
+ *   +0x2218                     seeded to 3, so the store of 1 shows
+ *
+ * THE RATE INDEX IS DRIVEN NEGATIVE in the third run.  The object
+ * sign-extends a short into two ints, and a rate index is small and positive
+ * in every run that a fill or a real handshake would produce -- so a `movzwl`
+ * reading of it agrees everywhere except here.
+ */
+#define DATAXMIT_SEED							\
+	P16(TX1_VECTIDX, 3),						\
+	P16(TX1_RXF21C, 0x5a5a),	P32(TX1_RXF220, 0x33445566),	\
+	P32(TX1_TIMER, 0x0a0b0c0d),	P32(TX1_TIMERMARK, 0x0e0f1011),	\
+	P32(TX1_RATENOW, 0x11111111),	P32(TX1_RATEWANT, 0x22222222),	\
+	P32(TX1_F2218, 3)
+
+static const struct tx1_poke dataxmit_off[] = {
+	DATAXMIT_SEED, P16(TX1_F25C2, 0x1001), P16(TX1_RATEIDX, 0x0c)
+};
+static const struct tx1_poke dataxmit_on[] = {
+	DATAXMIT_SEED, P16(TX1_F25C2, 0x1011), P16(TX1_RATEIDX, 0x0c)
+};
+static const struct tx1_poke dataxmit_neg[] = {
+	DATAXMIT_SEED, P16(TX1_F25C2, 0x1011), P16(TX1_RATEIDX, -3)
+};
+
+static void
+case_dataxmit(void)
+{
+	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+		 "70 DATAXMIT, data path off", 7000,
+		 dataxmit_off, NP(dataxmit_off));
+	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+		 "70 DATAXMIT, data path on", 7001,
+		 dataxmit_on, NP(dataxmit_on));
+	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+		 "70 DATAXMIT, negative rate index", 7002,
+		 dataxmit_neg, NP(dataxmit_neg));
+}
+
+/* --- 51 TX_L1 ------------------------------------------------------------- */
+
+/*
+ * The arm's own loop is selected by the MICROSTATE, which `apply()` sets to
+ * PHASE1 through `v34hs_state`; poking +0x3592 afterwards is what moves it,
+ * and both values are driven because the object carries the loop twice and a
+ * reconstruction with one copy would pass on whichever the fixture picked.
+ *
+ * `f25d4` is the transmit scale and it is poked rather than left to the fill,
+ * because the fill's value decides whether the doubling in the second copy is
+ * visible at all: at a scale of zero every sample comes out zero and the two
+ * copies agree.  0x16a1 is `v34pcmif.c`'s own value and is not a power of
+ * two, so the shift is exercised rather than folded into the multiply.  One
+ * run drives it NEGATIVE, which is the reading of `movswl` against `movzwl`.
+ * The arithmetic shift needs no run of its own: `probe` is half negative, so
+ * every run produces negative products.
+ *
+ * Six of the seven runs below are independent; the seventh is named where it
+ * is not.
+ */
+#define TX1_MST		0x3592		/* the microstate halfword         */
+#define TX1_F25D4	0x25d4		/* the transmit scale              */
+#define TX1_SCALE	0x16a1
+
+static struct tx1_poke tx_l1[] = {
+	P16(TX1_MST, V34HS_PHASE1), P16(TX1_VECTIDX, 0x10),
+	P16(TX1_F25D4, TX1_SCALE)
+};
+
+static void
+run_tx_l1(short mst, short vect, short scale, const char *what, long tag)
+{
+	tx_l1[0].val = mst;
+	tx_l1[1].val = vect;
+	tx_l1[2].val = scale;
+	run_case(V34HS_TX_L1, v34tx1_tx_l1, V34TX1_LOOP, what, tag,
+		 tx_l1, NP(tx_l1));
+}
+
+static void
+case_tx_l1(void)
+{
+	/* The two copies of the loop, on the same four indices. */
+	run_tx_l1(V34HS_PHASE1, 0x10, TX1_SCALE,
+		  "51 TX_L1, microstate elsewhere", 5100);
+	run_tx_l1(V34HS_TX_L1, 0x10, TX1_SCALE,
+		  "51 TX_L1, microstate TX_L1", 5101);
+
+	/*
+	 * The segment's end, and the two ways of missing it.  0x5fc reaches
+	 * 0x600 exactly; 0x5fd steps over it to 0x601, which is what tells
+	 * `== 0x600` from `>= 0x600`; and 0x5fc with the microstate elsewhere
+	 * is the run that says the SECOND microstate test at 0x62cf5 is not
+	 * decoration -- an arm that ended the segment unconditionally would
+	 * move a machine that is not in this state.
+	 */
+	run_tx_l1(V34HS_TX_L1, 0x5fc, TX1_SCALE,
+		  "51 TX_L1, segment ends at 0x600", 5102);
+	run_tx_l1(V34HS_TX_L1, 0x5fd, TX1_SCALE,
+		  "51 TX_L1, stepped over 0x600", 5103);
+	run_tx_l1(V34HS_PHASE1, 0x5fc, TX1_SCALE,
+		  "51 TX_L1, 0x600 with the microstate elsewhere", 5104);
+
+	/*
+	 * The mask.  0x3e..0x41 walks off the end of the table and back to
+	 * the start, so a reconstruction that indexed without masking, or
+	 * masked with 0x1f or 0x7f, reads four samples this run does not.
+	 */
+	run_tx_l1(V34HS_TX_L1, 0x3e, TX1_SCALE,
+		  "51 TX_L1, the index wraps at 64", 5105);
+
+	/* The scale's sign. */
+	run_tx_l1(V34HS_TX_L1, 0x10, -TX1_SCALE,
+		  "51 TX_L1, negative scale", 5106);
+}
+
+/*
+ * `probe` IS DATA THIS TREE NOW CARRIES, so it is proved the way `vect4` is
+ * -- against the blob's own copy, which `objcopy` renamed `ref_probe`.  This
+ * is the only check in the file that does not go through the fixture, and it
+ * is not redundant with the seven runs above, for two measured reasons.
+ *
+ * FIRST, THE RUNS READ TEN OF THE SIXTY-FOUR ENTRIES.  Four indices per run
+ * and four starting points -- 0x10, 0x3c, 0x3d and 0x3e -- reach 0x00, 0x01,
+ * 0x10 to 0x13 and 0x3c to 0x3f.  The other fifty-four are covered here and
+ * nowhere else.
+ *
+ * SECOND, A SMALL ERROR IN AN ENTRY THE RUNS DO READ CAN STILL BE INVISIBLE.
+ * Each sample is multiplied by 0x16a1 and shifted right by 14, so a
+ * transcription off by one survives the arithmetic: entry 0 changed from
+ * 13,027 to 13,028 leaves every emitted sample identical and fails ONLY the
+ * memcmp.  That was run rather than argued.
+ */
+extern const short ref_probe[V34_PROBE_SAMPLES];
+
+static void
+case_probe_table(void)
+{
+	diff_eq_int("probe, 64 shorts at .rodata+0x2c00",
+		    memcmp(probe, ref_probe, sizeof(probe)), 0, 5199);
+}
+
 int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: six per-sample transmit arms");
+	diff_begin("v34handshak table 1: ten per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
@@ -394,6 +639,12 @@ main(void)
 	case_ja(V34HS_K56JaTXMIT, v34tx1_k56jatxmit, "85 K56JaTXMIT", 8500);
 	case_moh_silence();
 	case_txmd();
+
+	case_tone_ab();
+	case_sseg();
+	case_dataxmit();
+	case_probe_table();
+	case_tx_l1();
 
 	return diff_end();
 }
