@@ -13969,3 +13969,61 @@ first run put all 74 under `?`, which reads as a hole in the map.  They are
 now labelled `(weak/linkonce, no .text address to attribute)`, because a
 report that says "I do not know" and a report that says "this cannot be known
 by this method" are different claims.
+
+### 244. Seven weak templates, and two things that had to be reproduced exactly
+
+The first of the 74 unwritten weak symbols finding 243 made visible: the float
+statistics chain and two leaves, 285 bytes across seven `.gnu.linkonce.t.*`
+sections.
+
+    sum     Sx                     mean    Sx / n
+    sqrSum  Sx^2 / n               Var     sqrSum - mean^2
+    Std     sqrt(Var)              sinc    sin(pi x) / (pi x)
+    boxcar  fill with 1.0
+
+**`sqrSum` is misnamed and it matters.**  It divides by `n` before returning,
+so it is a mean of squares, and `Var` is therefore the textbook
+E[x^2] - E[x]^2 rather than a sum of anything.  The name is the original's and
+is kept.
+
+`designWindow` and the three cosine windows are NOT in this batch:
+`designWindow` tail-calls all four, so it cannot land before them.  Its switch
+does settle their order, which is not the alphabetical guess -- **case 1 is
+`hanning` and case 2 is `hamming`**.
+
+#### The calls are load-bearing, so `noinline` is not a style choice
+
+`Var` calls `sqrSum` and then `mean`, and the object stores `sqrSum`'s result
+with `fstps` before the second call -- because the call would clobber st(0).
+That store rounds it to `float`.  The mean is NOT rounded, because nothing
+follows it, so the square is taken at extended precision.
+
+Written as ordinary templates, GCC inlines all three into one loop that never
+leaves the x87 registers, and `Var` comes out **one ulp different on about one
+input in seven** -- 382 of 2,600 checks.  `__attribute__((noinline))` on the
+five restores the call structure, and the call structure is what produces the
+rounding.
+
+That the asymmetry looks arbitrary is the point: it is an artefact of the
+register allocator, not a decision, and reproducing it means reproducing the
+shape that caused it.
+
+#### `fsin`, not `sin()`
+
+`sinc` diverged on **49 of 4,019 swept points, every one at or beside an
+integer** -- where `sin(pi x)` is near zero and relative error is all there
+is.  The object computes the sine with the x87 `fsin` instruction; libm's
+`sin` is a different function, and they agree to well within a float
+everywhere the answer is not almost zero.
+
+GCC emits `fsin` for `__builtin_sin` only under
+`-funsafe-math-optimizations`, which would change every other float in the
+file.  One line of inline asm is the smaller and more honest change.
+
+#### And the strings check had to learn what asm is
+
+`__asm__ ("fsin" : "=t" (s) : "0" (y))` carries three string literals -- the
+instruction and two operand constraints -- and `debugaudit --invented`
+reported two of them as invented, because none reaches `.rodata`.  It was
+asking the right question of the wrong text.  Inline asm is now emptied before
+the scan, the way preprocessor lines already were, and for the same reason.

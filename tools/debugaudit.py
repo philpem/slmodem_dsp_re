@@ -248,6 +248,16 @@ def unescape(raw):
     return "".join(out)
 
 
+#
+# `__asm__`/`asm` up to the closing parenthesis of its argument list.  Not a
+# parser: it stops at the first `)` followed by an optional `;`, which is
+# enough for the one-instruction forms this tree uses and would need
+# revisiting for an asm containing a parenthesised expression.
+#
+ASM = re.compile(r"\b(?:__asm__|asm)\s*(?:__volatile__|volatile)?\s*"
+                 r"\([^;]*?\)\s*;", re.S)
+
+
 def our_strings(paths):
     """(path, line, string) for EVERY string literal this tree carries.
 
@@ -278,6 +288,19 @@ def our_strings(paths):
         #
         src = "\n".join("" if l.lstrip().startswith("#") else l
                         for l in src.split("\n"))
+        #
+        # INLINE ASSEMBLY IS NOT DATA.  `__asm__ ("fsin" : "=t" (s) : "0" (y))`
+        # carries three string literals -- the instruction and two operand
+        # constraints -- and not one of them reaches .rodata, so requiring
+        # them to be in the blob is asking the wrong question.  They are
+        # emptied for the same reason preprocessor lines are: the scan runs
+        # over the whole file and cannot be told what kind of line it is on.
+        #
+        # Emptied rather than skipped so the line numbers in the report stay
+        # true, and newline-preserving so a multi-line asm does not shift
+        # everything after it.
+        #
+        src = ASM.sub(lambda m: "\n" * m.group(0).count("\n"), src)
         #
         # ONE PASS OVER THE FILE, NOT ONE PER LINE.  `RUN` separates adjacent
         # literals with `\s*`, which spans newlines -- but only if it is
