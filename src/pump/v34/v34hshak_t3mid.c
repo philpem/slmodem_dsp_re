@@ -68,6 +68,28 @@
 #define T3M_FSKGATE		0xa8a0	/* int, non-zero diverts at 0x64a87    */
 #define T3M_TOGGLE		0x358c	/* short, arm 48 inverts bit 0 of it   */
 
+/*
+ * The five fields arms 47 and 63 reach that nothing in this tree has named.
+ * `fNNNN` rather than a description, deliberately: what each is FOR is not
+ * something this batch measured, and a guessed name in the record is worse
+ * than an offset (docs/findings.md's rule about decompiler-shaped names).
+ * What IS measured is in the comment beside each use.
+ */
+#define T3M_F3588		0x3588	/* short, arm 47's second entry guard;
+					   `v34handshakinit` also writes it  */
+#define T3M_F358A		0x358a	/* short, set to 1 beside it           */
+#define T3M_FABAE		0xabae	/* ten shorts arm 47 clears            */
+#define T3M_FABC2		0xabc2	/* the eleventh, cleared separately    */
+#define T3M_FABFF		0xabff	/* SIGNED byte, arm 63's third guard   */
+#define T3M_F0240		0x0240	/* int, arm 63's fourth guard          */
+
+/*
+ * The first of the five message records `v34hshak.c` names at +0xa94c ..
+ * +0xaa3c -- twelve fields on a 0x30 stride, and `v34handshakinit`'s mode-2
+ * body blanks the +0xaa0c one field for field.  Arm 47 fills this one.
+ */
+#define T3M_MSGREC0		0xa94c
+
 /* Within the receiver. */
 #define T3M_RX_FSKIN		0x010c	/* `fskdemodulate`'s second argument   */
 
@@ -349,6 +371,204 @@ t3m_micro48(struct t3m_frame *f)
 }
 
 /*
+ * 0x66834 -- microstates 47 `TX_PHASE2_ANS` AND 56 `TX_PHASE2_CALL`.
+ *
+ * ONE ARM FOR TWO STATES.  .rodata+0x3000's entries 6 and 15 hold the same
+ * address, so the answer side and the originate side of phase 2 run the same
+ * code and the arm never looks at which of the two it was entered with.  The
+ * test asserts that rather than assuming it.
+ *
+ * The body is the counter shape of finding 288 with a reset in front of it:
+ *
+ *      the FSK shift register's low four bits are all ones AND +0x3588 is
+ *      still zero  ->  re-arm the error recovery, then fall into the counter
+ *      counter+1 <= 0x5f    store it and leave with the object's txstate
+ *      otherwise            clear the counter, invert bit 0 of +0x358c, move
+ *                           the microstate to TX_L1 and leave
+ *
+ * BOTH COMPARES ARE SIGNED 16-BIT (`cmp $0x5f,%ax` after a `movzwl`/`inc`),
+ * so a counter of 0x7fff steps to -32768 and takes the low arm, and one of
+ * 0xffff steps to 0 and takes it as well.
+ *
+ * THE RESET FALLS THROUGH rather than returning: it clears the counter as its
+ * last act and jumps back to 0x6684e, so a step that takes it always leaves
+ * with the counter at 1.  That is why the reset cannot be tested by the
+ * counter alone.
+ */
+static void
+t3m_micro47(struct t3m_frame *f)
+{
+	unsigned short n;
+
+	/*
+	 * 0x6683b and 0x6cc1b.  `obj->fsk.sr` is the demodulator's shift
+	 * register and `nbits` its bit count, and the two are reset together
+	 * below -- which is what "repeated info0" means here.  The second
+	 * test is what stops it running on every block: +0x3588 becomes 4.
+	 */
+	if ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {
+		unsigned char *r = f->m + T3M_MSGREC0;
+		int k;
+
+		T3M_I16(f, T3M_F3588) = 4;
+		f->obj->is_short = 0;
+		f->obj->local_short = 0;
+		T3M_I16(f, T3M_F358A) = 1;
+
+		/* 0x6cc55, ten shorts, and the eleventh is not in the loop. */
+		for (k = 0; k <= 9; k++)
+			T3M_I16(f, T3M_FABAE + 2 * k) = 0;
+		T3M_I16(f, T3M_FABC2) = 0;
+
+		/*
+		 * Both transitions, and they are announced BEFORE the counter
+		 * is cleared -- the counter is `[2]` in each of the two format
+		 * strings, so clearing it first would print two different
+		 * lines and change no byte of the object.
+		 */
+		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);
+		hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);
+
+		f->obj->fsk.sr = -1;
+		f->obj->fsk.nbits = 0;
+
+		/*
+		 * 0x6cdc4 and 0x7094b.  The record is filled with one constant
+		 * per field, and only +0x18 depends on anything: 0x1e when
+		 * this end originates AND a V.90 receiver is running, 0x11
+		 * otherwise.  The originate test alone is not enough -- with
+		 * no V.90 receiver the object jumps back into the 0x11 block.
+		 */
+		*(short *)(r + 0x14) = -1;
+		*(short *)(r + 0x16) = 1;
+		*(short *)(r + 0x18) =
+			(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)
+			? 0x1e : 0x11;
+		*(short *)(r + 0x1a) = 0;
+		*(short *)(r + 0x1c) = 8;
+		*(short *)(r + 0x1e) = 0;
+		*(short *)(r + 0x20) = 1;
+		*(short *)(r + 0x22) = 0;
+		*(int *)(r + 0x24) = 0xf72;
+		*(short *)(r + 0x28) = 0xc;
+		*(short *)(r + 0x2a) = 0xc;
+		*(int *)(r + 0x2c) = 0xf72;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Repeated info0 is detected, "
+					     "errorrecovery is initialized in "
+					     "TX_PHASE2_xxx\n");
+
+		T3M_U16(f, T3M_COUNTER) = 0;
+	}
+
+	/* 0x6684e. */
+	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+
+	if ((short)n <= 0x5f) {
+		/* 0x6aaf9. */
+		T3M_U16(f, T3M_COUNTER) = n;
+		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		return;
+	}
+
+	/*
+	 * 0x66867.  The counter is cleared FIRST, so the transition below
+	 * prints `[2]` as 0 and not as the value that crossed the threshold;
+	 * the object hands the printf a literal zero, which is how it shows.
+	 */
+	T3M_U16(f, T3M_COUNTER) = 0;
+	T3M_U16(f, T3M_TOGGLE) ^= 1;
+	hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);
+	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+}
+
+/*
+ * 0x6591e -- microstate 63 `INFODONE`.
+ *
+ * THE TXSTATE IS THE SELECTOR, not a companion: three bodies chosen by the
+ * object's own +0x3596, and every other txstate is the three-instruction
+ * shared arm -- read the txstate, jump to the transmit dispatch.  That is why
+ * this arm is indistinguishable from twenty-four others when it is entered
+ * cold at SSEG.
+ *
+ *      TONE_AB   a counter with one threshold, and two different endings on
+ *                the answer/originate flag
+ *      SILENCE   three more guards and then `v34setuptxmit`
+ *      anything  leave with it
+ */
+static void
+t3m_micro63(struct t3m_frame *f)
+{
+	short tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
+	unsigned short n;
+
+	if (tx == V34HS_TONE_AB) {			/* 0x6d160 */
+		n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+
+		if ((short)n <= 0x0f) {
+			/* 0x6d230, and %ecx still holds TONE_AB. */
+			T3M_U16(f, T3M_COUNTER) = n;
+			t3m_txblock(f, tx);
+			return;
+		}
+
+		/*
+		 * The incremented counter is stored before either ending, and
+		 * that is not bookkeeping: it is `[2]` in the txstate
+		 * transition printed next, and the originate ending keeps it.
+		 */
+		T3M_U16(f, T3M_COUNTER) = n;
+
+		if (f->obj->f359c == 0x65) {		/* 0x6de96 */
+			hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
+			hs_setstate(f->obj, V34HS_MICROSTATE_OFF,
+				    V34HS_DET_SYNC);
+			f->obj->fsk.nbits = 0;
+			t3m_txblock(f,
+				    (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			return;
+		}
+
+		/*
+		 * 0x6d187.  The answer side moves the txstate and REPLACES the
+		 * counter, with one of two constants on `ptc`; it does not
+		 * touch the microstate, so 63 is entered again next block.
+		 */
+		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
+		T3M_U16(f, T3M_COUNTER) =
+			f->obj->ptc == 0x30 ? 0x1e : 0x96;
+		t3m_txblock(f, V34HS_SILENCE);
+		return;
+	}
+
+	if (tx != V34HS_SILENCE) {			/* 0x6593a */
+		t3m_txblock(f, tx);
+		return;
+	}
+
+	/* 0x65947, a SIGNED byte, and 0x65958, a SIGNED int against 0x240. */
+	if ((signed char)f->m[T3M_FABFF] <= 0
+	    || T3M_I32(f, T3M_F0240) <= 0x240) {
+		t3m_txblock(f, tx);
+		return;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34Hshak: Setting up transmitter for "
+				     "phase3...\r\n");
+
+	/*
+	 * 0x6597d..0x65b6d is `v34setuptxmit` inlined -- the same six steps in
+	 * the same order, down to the two transitions and the tail call to
+	 * `txinit`.  Calling it keeps one copy of the sequence that
+	 * `t_v34hshak.c` already sweeps over every rate and carrier.
+	 */
+	v34setuptxmit(f->obj);
+	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+}
+
+/*
  * ---------------------------------------------------------------------------
  * 0x64ad2 -- the microstate dispatch, .rodata+0x3000.
  */
@@ -364,8 +584,15 @@ t3m_table3(struct t3m_frame *f)
 	}
 
 	switch ((int)f->mst) {
+	case V34HS_TX_PHASE2_ANS:	/* 47, and 56 is the same address */
+	case V34HS_TX_PHASE2_CALL:	/* 56 */
+		t3m_micro47(f);
+		break;
 	case V34HS_TX_PHASE3_ANS:	/* 48 */
 		t3m_micro48(f);
+		break;
+	case V34HS_INFODONE:		/* 63 */
+		t3m_micro63(f);
 		break;
 	default:
 		t3m_notwritten(T3M_UNWRITTEN_TBL3_ARM);

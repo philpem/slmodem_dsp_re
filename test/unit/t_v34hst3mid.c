@@ -38,6 +38,13 @@
  * against silence.  SSEG is the choice here, as in `t_v34hsstep.c`, and it is
  * also the choice that exercises both of arm 48's diagnostics -- its forcing
  * path prints only when the txstate it is replacing is not already 5.
+ *
+ * ARM 63 IS THE CASE WHERE THAT IS NOT A CHOICE AT ALL: the txstate is what
+ * SELECTS its body, so 60 TONE_AB and 5 SILENCE run two different pieces of
+ * code and SSEG runs neither.  Driven cold at SSEG it is indistinguishable
+ * from the twenty-four states that share the three-instruction arm, which is
+ * exactly what the fixture's sweep reported, and the cure is the txstate and
+ * not a companion field.
  */
 
 #include <stdio.h>
@@ -67,6 +74,19 @@
 #define T3MT_ANSWER	0x359c		/* short, 0x65 originate 0x66 answer*/
 #define T3MT_BAUD	0xaa96		/* short, the tail multiplies by 3  */
 #define T3MT_VECTIDX	0x2aa2		/* short, the tail's 0x4a arm reads */
+/* Arm 47's. */
+#define T3MT_FSK_SR	0xaae2		/* short, obj->fsk.sr; low 4 bits   */
+#define T3MT_FSK_NBITS	0xaae0		/* short, obj->fsk.nbits            */
+#define T3MT_F3588	0x3588		/* short, the reset's second guard  */
+#define T3MT_F358A	0x358a		/* short                            */
+#define T3MT_FABC2	0xabc2		/* short, the eleventh cleared word */
+#define T3MT_MSGREC0	0xa94c		/* the message record it fills      */
+#define T3MT_V90RX	0x024c		/* int, tested for non-zero only    */
+#define T3MT_K56RX	0x0250		/* int, which arm 47 does NOT read  */
+/* Arm 63's. */
+#define T3MT_PTC	0x0008		/* int, 0x30 picks 0x1e over 0x96   */
+#define T3MT_P3GATE	0xabff		/* SIGNED byte, must be > 0         */
+#define T3MT_P3COUNT	0x0240		/* int, must be > 0x240             */
 /* Inside the receiver, which is the object's +0x264. */
 #define T3MT_RX_FLAGS	(0x0264 + 0x122)	/* short */
 #define T3MT_RX_LEVEL	(0x0264 + 0x134)	/* short, agc_level */
@@ -129,6 +149,25 @@ struct seed {
 	 * receiver's +0x10c, a claim a test can fail.
 	 */
 	int	set_fsk;
+	/*
+	 * Arm 47's two entry guards and the two fields its record depends on,
+	 * and arm 63's three.  Each is a separate `set_` so that "left as the
+	 * fixture filled it" and "set to zero" are different trials --
+	 * finding 230 again, and arm 47's second guard is satisfied by ZERO,
+	 * so a trial that cannot tell the two apart proves nothing.
+	 */
+	int	set_sr;		short	sr;
+	int	set_f3588;	short	f3588;
+	int	set_pcmrx;	int	v90rx, k56rx;
+	int	set_ptc;	int	ptc;
+	int	set_p3;		int	p3gate;	int	p3count;
+	/*
+	 * The thirteen words arm 47's reset clears, filled with VARIED
+	 * non-zero values.  Without this the reset's clears are half untested:
+	 * `v34handshakinit` already leaves several of them zero, and a clear
+	 * of a word that is already zero is a claim no comparison can fail.
+	 */
+	int	set_errrec;	short	errrec;
 };
 
 #define T3MT_FSKINHIBIT	0x0402
@@ -156,6 +195,30 @@ apply(const struct seed *s)
 		v34hs_poke_short(T3MT_BAUD, s->baud);
 	if (s->set_vectidx)
 		v34hs_poke_short(T3MT_VECTIDX, s->vectidx);
+	if (s->set_sr)
+		v34hs_poke_short(T3MT_FSK_SR, s->sr);
+	if (s->set_f3588)
+		v34hs_poke_short(T3MT_F3588, s->f3588);
+	if (s->set_pcmrx) {
+		v34hs_poke_int(T3MT_V90RX, s->v90rx);
+		v34hs_poke_int(T3MT_K56RX, s->k56rx);
+	}
+	if (s->set_ptc)
+		v34hs_poke_int(T3MT_PTC, s->ptc);
+	if (s->set_p3) {
+		v34hs_poke_byte(T3MT_P3GATE, (unsigned char)s->p3gate);
+		v34hs_poke_int(T3MT_P3COUNT, s->p3count);
+	}
+	if (s->set_errrec) {
+		int k;
+
+		v34hs_poke_short(0xabca, (short)(s->errrec ^ 0x0011));
+		v34hs_poke_short(0xabcc, (short)(s->errrec ^ 0x0022));
+		for (k = 0; k <= 10; k++)
+			v34hs_poke_short((unsigned)(0xabae + 2 * k),
+					 (short)(s->errrec + 0x137 * k));
+		v34hs_poke_short(T3MT_FSK_NBITS, (short)(s->errrec ^ 0x0033));
+	}
 	if (s->set_fsk) {
 		int k;
 
@@ -179,7 +242,8 @@ apply(const struct seed *s)
 }
 
 static const struct seed plain = { T3MT_TXSTATE, 0x0100, 0,0, 0,0,0,
-				   0,0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0 };
+				   0,0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,
+				   0,0, 0,0, 0,0,0, 0,0, 0,0,0, 0,0 };
 
 static void
 trial_seeded(short mst, const struct seed *s, int ours, long tag)
@@ -351,6 +415,555 @@ micro48(void)
 	diff_eq_int("48 at 0xa3 does not take the 0xa2 arm",
 		    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
 		    0xa3, 0xa3);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * 0x66834 -- microstates 47 `TX_PHASE2_ANS` and 56 `TX_PHASE2_CALL`.
+ *
+ * A counter with ONE threshold and a reset in front of it.  The reset is what
+ * makes this arm different from 48's shape: it is guarded by the FSK shift
+ * register's low four bits and by +0x3588, it fills a twelve-field message
+ * record, announces two transitions and prints a third line of its own -- and
+ * then FALLS THROUGH into the counter, having cleared it, so a step that takes
+ * it always leaves with the counter at 1 and cannot be recognised by the
+ * counter alone.
+ *
+ * Four things every trial here has to pin down, and each has a trial on both
+ * sides of it:
+ *
+ *   - `(sr & 0xf) == 0xf` is a MASK, not an equality: 0x000f, 0x5aaf and
+ *     0xffff must all take it and 0x5aae must not.
+ *   - the second guard is satisfied by ZERO, which is the value a field
+ *     nothing has written also holds -- so it gets a non-zero trial.
+ *   - the record's +0x18 is 0x1e only when this end originates AND a V.90
+ *     receiver is running.  The K56flex one is set to a different non-zero
+ *     value throughout, because `v34setuptxmit` reads BOTH and this arm reads
+ *     only the first: a trial that set them together could not tell them
+ *     apart.
+ *   - the threshold is `<= 0x5f` on a SIGNED 16-bit value after an unsigned
+ *     increment, so 0x7fff and 0xffff take the low arm and 0x5f does not.
+ */
+static int saw_reset47, saw_txl1, saw_collide;
+
+static void
+micro47_counter(short mst, short counter, short after, int moved, long tag)
+{
+	struct seed s = plain;
+	char what[96];
+
+	s.counter = counter;
+	s.set_sr = 1;
+	s.sr = 0x5aae;			/* low nibble 0xe: no reset */
+	s.set_f3588 = 1;
+	s.f3588 = 0;			/* and the OTHER guard satisfied */
+	both_seeded(mst, &s, tag);
+
+	snprintf(what, sizeof(what), "47 at counter 0x%04x leaves 0x%04x",
+		 (unsigned)(unsigned short)counter,
+		 (unsigned)(unsigned short)after);
+	diff_eq_int(what, (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+		    (unsigned short)after, tag);
+
+	/*
+	 * And WHICH arm it was, which the counter alone cannot say: the high
+	 * arm is the only one that moves the microstate to TX_L1.
+	 */
+	snprintf(what, sizeof(what), "47 at counter 0x%04x %s TX_L1",
+		 (unsigned)(unsigned short)counter, moved ? "reaches" : "does not reach");
+	diff_eq_int(what, v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+		    moved ? V34HS_TX_L1 : mst, tag);
+}
+
+static void
+micro47(void)
+{
+	struct seed s;
+	long tag = 4600;
+	short toggle;
+	int i;
+
+	/*
+	 * The threshold, from both sides and at both wraps.  0x5e steps to
+	 * 0x5f and stays; 0x5f steps to 0x60 and takes the high arm; 0x7fff
+	 * steps to a NEGATIVE halfword and 0xffff steps to zero, and both of
+	 * those take the low arm -- which is what says the compare is signed
+	 * and sixteen bits wide rather than either one alone.
+	 */
+	micro47_counter(V34HS_TX_PHASE2_ANS, 0x005e, 0x005f, 0, 4600);
+	micro47_counter(V34HS_TX_PHASE2_ANS, 0x005f, 0x0000, 1, 4610);
+	saw_txl1 = 1;
+	micro47_counter(V34HS_TX_PHASE2_ANS, 0x7fff, (short)0x8000, 0, 4620);
+	micro47_counter(V34HS_TX_PHASE2_ANS, (short)0xffff, 0x0000, 0, 4630);
+	micro47_counter(V34HS_TX_PHASE2_ANS, 0x0100, 0x0000, 1, 4640);
+
+	/*
+	 * The high arm inverts bit 0 of +0x358c and NOTHING else in it, and it
+	 * prints exactly one line -- the microstate transition, whose `[2]` is
+	 * the counter it has just cleared and therefore zero.  Read off the
+	 * blob, so what is asserted is the blob's behaviour.
+	 */
+	v34hs_setup(0);
+	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
+	toggle = v34hs_peek_short(1, T3MT_TOGGLE);
+	micro47_counter(V34HS_TX_PHASE2_ANS, 0x005f, 0x0000, 1, 4650);
+	diff_eq_int("47's high arm inverts bit 0 of +0x358c",
+		    (unsigned short)(v34hs_peek_short(1, T3MT_TOGGLE) ^ toggle),
+		    1, 0x5f);
+	diff_eq_int("47's high arm prints one transition",
+		    v34hs_observed(1)->lines, 1, 0x5f);
+
+	/*
+	 * The reset.  Three trials for the record's +0x18 and two for each
+	 * guard, and the seeded counter is chosen so that the fall-through
+	 * cannot be confused with the high arm.
+	 */
+	for (i = 0; i < 6; i++) {
+		/*
+		 * 0x5aa7 is the trial that says the mask is FOUR bits: its low
+		 * three are all ones and its fourth is not, so a guard reading
+		 * `& 7` would take the reset here and the object does not.
+		 */
+		static const short sr[6] = { 0x5aaf, 0x000f, (short)0xffff,
+					     0x5aae, 0x5aaf, 0x5aa7 };
+		static const short g[6]  = { 0, 0, 0, 0, 0x0123, 0 };
+		static const short ans[6] = { 0x65, 0x65, 0x66, 0x65, 0x65, 0x65 };
+		static const int v90[6] = { 0x2f1d, 0, 0x2f1d, 0x2f1d, 0x2f1d,
+					    0x2f1d };
+		int reset = i < 3;
+		char what[96];
+
+		s = plain;
+		s.counter = 0x0033;
+		s.set_sr = 1;
+		s.sr = sr[i];
+		s.set_f3588 = 1;
+		s.f3588 = g[i];
+		s.set_answer = 1;
+		s.answer = ans[i];
+		s.set_errrec = 1;
+		s.errrec = 0x2f1d;
+		s.set_pcmrx = 1;
+		s.v90rx = v90[i];
+		s.k56rx = 0x4b1f;	/* non-zero throughout: NOT read here */
+		both_seeded(V34HS_TX_PHASE2_ANS, &s, tag);
+		tag += 2;
+
+		snprintf(what, sizeof(what),
+			 "47 with sr 0x%04x and +0x3588 0x%04x %s the reset",
+			 (unsigned)(unsigned short)sr[i],
+			 (unsigned)(unsigned short)g[i],
+			 reset ? "takes" : "skips");
+		diff_eq_int(what, v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    reset ? V34HS_DET_SYNC : V34HS_TX_PHASE2_ANS, tag);
+
+		if (!reset) {
+			diff_eq_int("47 without the reset prints nothing",
+				    v34hs_observed(1)->lines, 0, tag);
+			diff_eq_int("47 without the reset just bumps the counter",
+				    (unsigned short)v34hs_peek_short(1,
+								     T3MT_COUNTER),
+				    0x0034, tag);
+			continue;
+		}
+
+		/*
+		 * Every consequence of the reset, separately.  Any one of them
+		 * alone would be satisfied by a wrong arm that happened to
+		 * write that field.
+		 */
+		diff_eq_int("47's reset moves the txstate to TX_DPSK",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    V34HS_TX_DPSK, tag);
+		diff_eq_int("47's reset prints three lines",
+			    v34hs_observed(1)->lines, 3, tag);
+		diff_eq_int("47's reset sets +0x3588 to 4",
+			    v34hs_peek_short(1, T3MT_F3588), 4, tag);
+		diff_eq_int("47's reset sets +0x358a to 1",
+			    v34hs_peek_short(1, T3MT_F358A), 1, tag);
+		diff_eq_int("47's reset sets the shift register to -1",
+			    v34hs_peek_short(1, T3MT_FSK_SR), -1, tag);
+		diff_eq_int("47's reset clears the bit count",
+			    v34hs_peek_short(1, T3MT_FSK_NBITS), 0, tag);
+		diff_eq_int("47's reset clears +0xabc2",
+			    v34hs_peek_short(1, T3MT_FABC2), 0, tag);
+		diff_eq_int("47's reset clears +0xabca",
+			    v34hs_peek_short(1, 0xabca), 0, tag);
+		diff_eq_int("47's reset clears +0xabcc",
+			    v34hs_peek_short(1, 0xabcc), 0, tag);
+		{
+			int k, any = 0;
+
+			for (k = 0; k <= 9; k++)
+				any |= (unsigned short)v34hs_peek_short(1,
+					(unsigned)(0xabae + 2 * k));
+			diff_eq_int("47's reset clears the ten shorts at "
+				    "+0xabae", any, 0, tag);
+		}
+		diff_eq_int("47's reset falls through and leaves the counter 1",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    1, tag);
+
+		/* The record, field by field, including the one that varies. */
+		diff_eq_int("47's record +0x14",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x14), -1, tag);
+		diff_eq_int("47's record +0x16",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x16), 1, tag);
+		diff_eq_int("47's record +0x18 is 0x1e only when originating "
+			    "with a V.90 receiver",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x18),
+			    i == 0 ? 0x1e : 0x11, tag);
+		diff_eq_int("47's record +0x1a",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x1a), 0, tag);
+		diff_eq_int("47's record +0x1c",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x1c), 8, tag);
+		diff_eq_int("47's record +0x1e",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x1e), 0, tag);
+		diff_eq_int("47's record +0x20",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x20), 1, tag);
+		diff_eq_int("47's record +0x22",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x22), 0, tag);
+		diff_eq_int("47's record +0x24 low",
+			    (unsigned short)v34hs_peek_short(1,
+							     T3MT_MSGREC0 + 0x24),
+			    0xf72, tag);
+		diff_eq_int("47's record +0x26 high",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x26), 0, tag);
+		diff_eq_int("47's record +0x28",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x28), 0xc, tag);
+		diff_eq_int("47's record +0x2a",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x2a), 0xc, tag);
+		diff_eq_int("47's record +0x2c low",
+			    (unsigned short)v34hs_peek_short(1,
+							     T3MT_MSGREC0 + 0x2c),
+			    0xf72, tag);
+		diff_eq_int("47's record +0x2e high",
+			    v34hs_peek_short(1, T3MT_MSGREC0 + 0x2e), 0, tag);
+		saw_reset47 = 1;
+	}
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * 47 AND 56 ARE ONE ARM, and this is what says so rather than assuming it.
+ *
+ * .rodata+0x3000's entries 6 and 15 hold the same address, which is a fact
+ * about the table and not about the code that runs; the check is that the
+ * blob, driven with each of the two microstates and everything else identical,
+ * leaves the identical object and the identical signature.
+ *
+ * +0x3592 IS EXCLUDED FROM THE BYTE COMPARISON and nothing else is.  It holds
+ * the value the case was entered with on any path that does not overwrite it,
+ * so including it would call the two cases different for the one reason that
+ * cannot be evidence -- finding 290, which is also why `observe` hashes only
+ * bytes that CHANGED and hashes the byte's NEW value: 47 -> 41 and 56 -> 41
+ * contribute the same pair, so the signature is comparable as it stands.
+ *
+ * THE TRANSCRIPTS ARE NOT COMPARED, and that is not a weakening: the arm
+ * announces the microstate it is LEAVING, so the two runs necessarily print
+ * `TX_PHASE2_ANS` and `TX_PHASE2_CALL`.  What is compared is the line COUNT,
+ * which must agree.
+ */
+static void
+collide(const struct seed *s, const char *what, long tag)
+{
+	static unsigned char snap[2][sizeof(struct v34_object)];
+	unsigned changed, hash, lines, i, diffs = 0, first = ~0u;
+	char msg[128];
+
+	both_seeded(V34HS_TX_PHASE2_ANS, s, tag);
+	changed = v34hs_observed(1)->changed;
+	hash = v34hs_observed(1)->hash;
+	lines = v34hs_observed(1)->lines;
+	memcpy(snap[0], v34hs_object(1), sizeof(snap[0]));
+
+	both_seeded(V34HS_TX_PHASE2_CALL, s, tag + 2);
+	memcpy(snap[1], v34hs_object(1), sizeof(snap[1]));
+
+	snprintf(msg, sizeof(msg), "47 and 56 write the same bytes, %s", what);
+	diff_eq_int(msg, (int)v34hs_observed(1)->changed, (int)changed, tag);
+	snprintf(msg, sizeof(msg), "47 and 56 have one signature, %s", what);
+	diff_eq_int(msg, (int)v34hs_observed(1)->hash, (int)hash, tag);
+	snprintf(msg, sizeof(msg), "47 and 56 print the same count, %s", what);
+	diff_eq_int(msg, (int)v34hs_observed(1)->lines, (int)lines, tag);
+
+	for (i = 0; i < sizeof(snap[0]); i++) {
+		if (i == V34HS_MICROSTATE_OFF || i == V34HS_MICROSTATE_OFF + 1)
+			continue;
+		if (snap[0][i] == snap[1][i])
+			continue;
+		diffs++;
+		if (first == ~0u)
+			first = i;
+	}
+	snprintf(msg, sizeof(msg),
+		 "47 and 56 leave the identical object (+0x3592 aside), %s",
+		 what);
+	diff_eq_int(msg, (int)diffs, 0, (long)first);
+	saw_collide = 1;
+}
+
+static void
+micro47_56(void)
+{
+	struct seed s;
+
+	/* The low arm, where the microstate is not written at all. */
+	s = plain;
+	s.counter = 0x005e;
+	s.set_sr = 1;	s.sr = 0x5aae;
+	s.set_f3588 = 1; s.f3588 = 0;
+	collide(&s, "below the threshold", 4700);
+
+	/* The high arm, where it is overwritten with TX_L1 and announced. */
+	s.counter = 0x005f;
+	collide(&s, "at the threshold", 4710);
+
+	/* And the reset, which writes seventy-odd bytes and prints three. */
+	s.counter = 0x0033;
+	s.sr = 0x5aaf;
+	s.set_answer = 1;	s.answer = 0x65;
+	s.set_pcmrx = 1;	s.v90rx = 0x2f1d;	s.k56rx = 0x4b1f;
+	collide(&s, "through the reset", 4720);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * 0x6591e -- microstate 63 `INFODONE`.
+ *
+ * THE TXSTATE IS THE SELECTOR HERE and not a companion field: 60 TONE_AB and
+ * 5 SILENCE run two different bodies and every other txstate leaves at once,
+ * which is why this arm is indistinguishable from the twenty-four-state shared
+ * arm when the fixture drives it cold at SSEG.
+ */
+static int saw_63_leave, saw_63_tone, saw_63_orig, saw_63_ans, saw_63_setup;
+
+static void
+micro63(void)
+{
+	struct seed s;
+	long tag = 4750;
+	int i;
+
+	/*
+	 * Every txstate that is not 60 or 5 leaves with the object's own
+	 * txstate, prints nothing and moves nothing.  Three of them, because
+	 * one would not say the test is `!= 5` rather than `< 5` or `> 5`.
+	 */
+	for (i = 0; i < 3; i++) {
+		static const short tx[3] = { 4, V34HS_SSEG, 74 };
+
+		s = plain;
+		s.txstate = tx[i];
+		both_seeded(V34HS_INFODONE, &s, tag);
+		tag += 2;
+		diff_eq_int("63 at an uninteresting txstate moves nothing",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    V34HS_INFODONE, tag);
+		diff_eq_int("63 at an uninteresting txstate prints nothing",
+			    v34hs_observed(1)->lines, 0, tag);
+		saw_63_leave = 1;
+	}
+
+	/*
+	 * TONE_AB, below the threshold.  `<= 0xf` on the SIGNED halfword after
+	 * an unsigned increment, so 0xe stays, 0xf crosses, and 0x7fff and
+	 * 0xffff both stay because they step to a negative and to zero.
+	 */
+	for (i = 0; i < 3; i++) {
+		static const short cnt[3] = { 0x000e, 0x7fff, (short)0xffff };
+		static const short out[3] = { 0x000f, (short)0x8000, 0x0000 };
+
+		s = plain;
+		s.txstate = V34HS_TONE_AB;
+		s.counter = cnt[i];
+		both_seeded(V34HS_INFODONE, &s, tag);
+		tag += 2;
+		diff_eq_int("63 under the TONE_AB threshold stores the counter",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    (unsigned short)out[i], tag);
+		diff_eq_int("63 under the TONE_AB threshold leaves the txstate",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    V34HS_TONE_AB, tag);
+		diff_eq_int("63 under the TONE_AB threshold prints nothing",
+			    v34hs_observed(1)->lines, 0, tag);
+		saw_63_tone = 1;
+	}
+
+	/*
+	 * The same arm ANSWERING, with the tail's five ways of overwriting
+	 * progress seeded away.  This is the trial that says the value handed
+	 * to the transmit dispatch here is TONE_AB and not the SILENCE the two
+	 * endings above use: with the microstate still 63 and +0x359c at 0x66,
+	 * table 2's SILENCE arm reports progress 1 by its first route and its
+	 * TONE_AB arm reports 0, so the two are separable at last.
+	 */
+	s = plain;
+	s.txstate = V34HS_TONE_AB;
+	s.counter = 0x000e;
+	s.set_answer = 1;	s.answer = 0x66;
+	s.set_mode = 1;		s.mode = 0;
+	s.set_time = 1;		s.elapsed = 100;  s.deadline = 200;
+	s.set_level = 1;	s.level = 300;    s.floor = 100;
+	both_seeded(V34HS_INFODONE, &s, tag);
+	tag += 2;
+	diff_eq_int("63 under the threshold leaves through TONE_AB and not "
+		    "SILENCE", v34hs_observed(1)->progress, 0, tag);
+
+	/*
+	 * TONE_AB over the threshold, ANSWERING.  The txstate goes to SILENCE
+	 * and the counter is REPLACED with one of two constants on `ptc` --
+	 * both are driven, so the two cannot be exchanged.  The microstate is
+	 * NOT moved, which is what separates this ending from the other one.
+	 *
+	 * It is also the first trial in this file to reach table 2's SILENCE
+	 * arm by its FIRST route: the microstate is still 63 and +0x359c is
+	 * 0x66, which is exactly what 0x64480 tests for progress 1.  The
+	 * tail's five ways of overwriting progress are seeded away so that the
+	 * claim is about the transmit arm and not about the tail.
+	 */
+	for (i = 0; i < 3; i++) {
+		/*
+		 * 0x10030 is the trial that says `ptc` is compared as a WHOLE
+		 * INT: its low halfword is 0x30, so a halfword reading would
+		 * take the 0x1e arm and the object takes the 0x96 one.
+		 */
+		static const int p[3] = { 0x31, 0x30, 0x10030 };
+		static const int want[3] = { 0x96, 0x1e, 0x96 };
+
+		s = plain;
+		s.txstate = V34HS_TONE_AB;
+		s.counter = 0x000f;
+		s.set_answer = 1;	s.answer = 0x66;
+		s.set_ptc = 1;		s.ptc = p[i];
+		s.set_mode = 1;		s.mode = 0;
+		s.set_time = 1;		s.elapsed = 100;  s.deadline = 200;
+		s.set_level = 1;	s.level = 300;    s.floor = 100;
+		both_seeded(V34HS_INFODONE, &s, tag);
+		tag += 2;
+		diff_eq_int("63 answering forces the txstate to SILENCE",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    V34HS_SILENCE, tag);
+		diff_eq_int("63 answering leaves the microstate alone",
+			    v34hs_peek_short(1, V34HS_MICROSTATE_OFF),
+			    V34HS_INFODONE, tag);
+		diff_eq_int("63 answering replaces the counter on ptc",
+			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
+			    want[i], tag);
+		diff_eq_int("63 answering prints one transition",
+			    v34hs_observed(1)->lines, 1, tag);
+		diff_eq_int("63 answering reaches table 2's SILENCE arm by its "
+			    "microstate route",
+			    v34hs_observed(1)->progress, 1, tag);
+		saw_63_ans = 1;
+	}
+
+	/*
+	 * TONE_AB over the threshold, ORIGINATING.  A different ending: the
+	 * counter KEEPS the incremented value, the microstate moves to
+	 * DET_SYNC and +0xaae0 is cleared, and two transitions are printed.
+	 * Progress is 0 here and 1 above, from the same table 2 arm, so the
+	 * two endings are separated by five independent readings.
+	 */
+	s = plain;
+	s.txstate = V34HS_TONE_AB;
+	s.counter = 0x0044;
+	s.set_answer = 1;	s.answer = 0x65;
+	s.set_ptc = 1;		s.ptc = 0x30;
+	s.set_errrec = 1;	s.errrec = 0x2f1d;	/* +0xaae0 non-zero */
+	s.set_mode = 1;		s.mode = 0;
+	s.set_time = 1;		s.elapsed = 100;  s.deadline = 200;
+	s.set_level = 1;	s.level = 300;    s.floor = 100;
+	both_seeded(V34HS_INFODONE, &s, tag);
+	tag += 2;
+	diff_eq_int("63 originating forces the txstate to SILENCE",
+		    v34hs_peek_short(1, V34HS_TXSTATE_OFF), V34HS_SILENCE, tag);
+	diff_eq_int("63 originating moves the microstate to DET_SYNC",
+		    v34hs_peek_short(1, V34HS_MICROSTATE_OFF), V34HS_DET_SYNC,
+		    tag);
+	diff_eq_int("63 originating keeps the incremented counter",
+		    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER), 0x0045,
+		    tag);
+	diff_eq_int("63 originating clears +0xaae0",
+		    v34hs_peek_short(1, T3MT_FSK_NBITS), 0, tag);
+	diff_eq_int("63 originating prints two transitions",
+		    v34hs_observed(1)->lines, 2, tag);
+	diff_eq_int("63 originating does not take the SILENCE arm's route",
+		    v34hs_observed(1)->progress, 0, tag);
+	saw_63_orig = 1;
+
+	/*
+	 * SILENCE, and its two extra guards.  Both are straddled at the exact
+	 * boundary, and the first is a SIGNED byte -- so 0xff must fail it and
+	 * 0x01 must pass, which no unsigned reading can produce.
+	 */
+	for (i = 0; i < 6; i++) {
+		/*
+		 * -1 in the int guard is the trial that says it is SIGNED: an
+		 * unsigned reading makes it 0xffffffff and lets the set-up
+		 * through, and the object does not.
+		 */
+		static const int gate[6] = { 0, -1, 1, 1, 1, 1 };
+		static const int cnt[6]  = { 0x0400, 0x0400, 0x0240, 0x0241,
+					     0x0400, -1 };
+		static const int ok[6]   = { 0, 0, 0, 1, 1, 0 };
+		int go = ok[i];
+
+		s = plain;
+		s.txstate = V34HS_SILENCE;
+		s.set_p3 = 1;
+		s.p3gate = gate[i];
+		s.p3count = cnt[i];
+		both_seeded(V34HS_INFODONE, &s, tag);
+		tag += 2;
+
+		diff_eq_int(go ? "63 at SILENCE with both guards passed sets up"
+			       : "63 at SILENCE with a guard failed does not",
+			    v34hs_peek_short(1, V34HS_TXSTATE_OFF),
+			    go ? V34HS_SSEG : V34HS_SILENCE, tag);
+		if (!go) {
+			diff_eq_int("63 at SILENCE, guard failed, prints nothing",
+				    v34hs_observed(1)->lines, 0, tag);
+			diff_eq_int("63 at SILENCE, guard failed, moves no rxstate",
+				    v34hs_peek_short(1, V34HS_RXSTATE_OFF),
+				    V34HS_RX_DPSK, tag);
+			continue;
+		}
+
+		/*
+		 * `v34setuptxmit`'s six steps, seen from outside: the rxstate
+		 * is WAIT, +0x25c2 has bit 9 set, and the transcript carries
+		 * the arm's own announcement and both transitions.
+		 *
+		 * THE LINE COUNT IS NOT ASSERTED and the transcript is read
+		 * instead, deliberately: the path also runs `settxlevel`,
+		 * `V34SetupModulator` and `txinit`, each of which prints
+		 * diagnostics of its own whose number depends on the rate
+		 * config the fixture's fill happens to leave -- twelve lines
+		 * with this seed.  Three named phrases is the claim that
+		 * survives a different fill; the line-for-line comparison
+		 * `v34hs_compare` makes against the blob is what checks the
+		 * other nine.
+		 */
+		diff_eq_int("63's setup moves the rxstate to WAIT",
+			    v34hs_peek_short(1, V34HS_RXSTATE_OFF), V34HS_WAIT,
+			    tag);
+		diff_eq_int("63's setup announces itself",
+			    strstr(v34hs_text(1),
+				   "Setting up transmitter for phase3") != NULL,
+			    1, tag);
+		diff_eq_int("63's setup announces the rxstate transition",
+			    strstr(v34hs_text(1),
+				   "rxstate RX_DPSK=>WAIT") != NULL, 1, tag);
+		diff_eq_int("63's setup announces the txstate transition",
+			    strstr(v34hs_text(1),
+				   "txstate SILENCE=>SSEG") != NULL, 1, tag);
+		diff_eq_int("63's setup sets bit 9 of +0x25c2",
+			    (v34hs_peek_short(1, 0x25c2) >> 9) & 1, 1, tag);
+		diff_eq_int("63's setup clears +0x25c0",
+			    v34hs_peek_short(1, 0x25c0), 0, tag);
+		saw_63_setup = 1;
+	}
 }
 
 /*
@@ -673,7 +1286,10 @@ main(void)
 	 */
 	v34hs_debug(1);
 
+	micro47();
+	micro47_56();
 	micro48();
+	micro63();
 	tail_paths();
 	txblock_paths();
 	guards();
@@ -690,6 +1306,14 @@ main(void)
 	diff_eq_int("the 0xa2 arm was taken", saw_force, 1, 0);
 	diff_eq_int("a trial printed a transition", saw_trace, 1, 0);
 	diff_eq_int("a trial ran the demodulator", saw_fsk, 1, 0);
+	diff_eq_int("47's reset was taken", saw_reset47, 1, 0);
+	diff_eq_int("47's TX_L1 arm was taken", saw_txl1, 1, 0);
+	diff_eq_int("47 and 56 were compared", saw_collide, 1, 0);
+	diff_eq_int("63's leave-at-once arm was taken", saw_63_leave, 1, 0);
+	diff_eq_int("63's TONE_AB counter arm was taken", saw_63_tone, 1, 0);
+	diff_eq_int("63's answering ending was taken", saw_63_ans, 1, 0);
+	diff_eq_int("63's originating ending was taken", saw_63_orig, 1, 0);
+	diff_eq_int("63's v34setuptxmit path was taken", saw_63_setup, 1, 0);
 
 	/*
 	 * And every pointer field `v34hs_compare` skips was exercised, so the
