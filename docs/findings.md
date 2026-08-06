@@ -16985,3 +16985,127 @@ Worth listing because each names a way this batch could have been vacuous:
                                   demodulator
   two real baud rates             or V34SetupModulator takes its error arm
 ```
+
+
+======================================================================
+
+### 375. Nine copies of one reset that disagree in one word, and the arm that separated itself
+
+Microstate 59 `RX_PHASE2_CALL` at 0x662b0, 2,385 exclusive bytes and 445
+instructions, is the largest arm of this batch and one of only three in the
+whole of table 3 with its own behaviour when the fixture drives it cold. The
+reason is its **first** guard: 55 and 58 read a companion field before they do
+anything, and this one increments the counter and then tests the shift
+register's low three bits, which the fill happens to satisfy.
+
+#### Five blocks in sequence, and they are not exclusive
+
+A single step can run the reset, the retrain check, the bulk-delay block and
+the second reset one after another. That is the shape a per-case test has to
+be written against: each family of trials holds the other four off, and the
+test says what holds them off rather than relying on it.
+
+```
+  1  (fsk.sr & 7) == 7   print, +0x3588 |= 1, print the shift register,
+                         re-arm the error recovery, CLEAR THE COUNTER --
+                         and the counter is then RE-READ, which is what
+                         makes the clear visible at all
+  2  counter == 0x2a     txstate to SILENCE, announced
+  3  counter > 0x125f    `tone_detect` on the detector at +0x3564 over the
+                         receiver's +0x10c..rx_samples, but only if +0x19e
+                         is set; asserting means 0x40 into the receiver's
+                         flags, `v34handshakinit(obj, 1)` and LEAVE
+  4  counter > filtdelay + 0x5c, and fsk.sr exactly 8 or 0x18
+                         rtd = (counter - filtdelay - 0x63) * 4 clamped up
+                         to 1, `ApplyBulkDelay`, counter = 0x14,
+                         `V34SetupDemodulator(obj, 2400, 1800)`,
+                         `rxtiminginit`, rxstate to RX_L1, the gain halved
+                         and 0x0a00 cleared
+  5  the 32-bit word at +0x3588 == 0x20002 and (fsk.sr & 0x3ff) == 0x372
+                         `v34handshakinit(obj, 0)`, +0xaa6c aimed at the
+                         first message record, +0x3588 |= 1 READ BACK AFTER
+                         the call, the recovery re-armed
+```
+
+The third threshold is `filtdelay + 0x5c`, not 49's `+0x4c` or `+0x50`
+(finding 372), and the shift-register test is a full-width equality against
+two values rather than either of 49's and 50's masked tests. Those two facts
+are what separate this arm from the group-D six it was measured with, and a
+mutation exchanging either for 49's is caught.
+
+#### The reset is one body in NINE copies, and they disagree in one word
+
+Finding 372 factored a twenty-six-store block out of arms 47, 49 and 50. It is
+not three copies. It is **six arms and nine inlinings**, and they agree on
+everything but one word:
+
+```
+  47, 49, 50, 58     store 4 into +0x3588
+  55's two, 59's two SET BIT 0 of whatever is there
+```
+
+`t3m_errrec_reset` keeps the `= 4` form, `t3m_errrec_core` is the part they
+share and `t3m_errrec_arm` is the other head. **A helper taking the value as a
+parameter would have hidden the difference**, which is the same argument
+finding 372 made for keeping 47's counter clear at the call site, one level
+further in.
+
+And it is not a distinction without a case: 59's second reset can run with
++0x3588 holding 2, where storing 4 destroys a bit that setting bit 0 keeps.
+That is a real divergence on a reachable path, not a stylistic one.
+
+#### The suite, and what re-anchoring cost again
+
+```
+  t_v34hst3mid   31,300 checks
+  mutations      363: 344 caught, 0 NOT caught, 0 unusable, 19 equivalent
+```
+
+Fifteen of arm 50's existing mutation anchors matched **twice** once arm 59
+was in the file -- the same statements, one tab deeper -- and were re-anchored
+with a leading newline rather than reworded. That is the third time in this
+batch that a mutation suite needed re-running after the code under it moved
+(finding 325, then finding 372's twenty-nine), and the failure mode is always
+the same: an ambiguous `find` reads as `unusable`, which sits in the report
+next to `caught` and looks like noise rather than like a hole. **Check `find`
+uniqueness against the whole file, not against what you just added.**
+
+Two of the nineteen equivalents are 59's, and both name what is held fixed:
+`4 * (x mod 2^16) == (4x) mod 2^16` makes the 16-bit and the 32-bit forms of
+the bulk delay the same halfword; and `v34handshakinit` zeroes +0xaa78 itself,
+so an extra clear after the second reset changes nothing -- where the FIRST
+reset's clear IS caught, because nothing on that path zeroes it for the arm.
+The pair is the point: the same store is testable in one place and not in the
+other, and only the difference between them says which.
+
+
+======================================================================
+
+### 376. What table 3's middle group came to, and what 55 and 58 still need
+
+The batch's scope was microstates 47, 48, 49, 50, 51, 55, 58, 59 and 63.
+
+**Seven arms landed, covering eight microstates**: 47 (with 56, which shares
+its arm and was not in the brief), 48, 49, 50, 51, 59 and 63. Every one passed
+a differential comparison of the whole 44,096-byte object, its five blocks,
+seven filler regions and both transcripts, with our entry on side A and the
+blob on side B, and each case also run blob-against-blob as its own control.
+
+**55 `TX_PHASE1_CALL` and 58 `RX_PHASE1_CALL` did not land**, and the reason is
+budget rather than anything found in them: arm 59 alone took the last agent
+most of a session, and the two were not started. Nothing about them is known
+to be hard. What is known, and what whoever takes them starts with:
+
+- Both are group D (finding 288) and both will need **`filtdelay` at +0xaa7c**
+  seeded before their thresholds mean anything (finding 372), and two trial
+  families because the reset window and the deep path are disjoint.
+- Both call `v34handshakinit`, which is reconstructed and swept.
+- **Both inline the error-recovery reset, and both are on the `|= 1` side of
+  finding 375's split** -- 55 has two copies and so does 59; 58 is on the
+  `= 4` side. `t3m_errrec_core`, `t3m_errrec_reset` and `t3m_errrec_arm`
+  already exist for them.
+- 58 writes 0xf72 into two words of a message record on at least two exits,
+  the same constant arm 59's neighbours use.
+
+The three that were never this batch's -- 41, 44 and 46, 13.2 KB between them
+-- are still open, and `docs/v34handshak.md`'s table is still the map.
