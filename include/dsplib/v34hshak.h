@@ -357,6 +357,23 @@ int k56FlexPhase34(void *obj);
 int v90Phase34(void *obj);
 
 /*
+ * Send whichever PCM receiver is past phase 2 into phase 3, at the point in
+ * the handshake where the JA is about to go out.  Two tail calls and nothing
+ * else: `VPcmFloModem::enterPhase3` when `v90_receiver > 1`, otherwise
+ * `K56FlexFloModem::enterPhase3FullDuplex` when `k56flex_receiver > 1`, and
+ * otherwise nothing at all.  Both tests are signed and both are `> 1`.
+ *
+ * Declared here rather than in `v34pcmif.h` for the same reason as the two
+ * above: its only two callers are inside `v34handshak` and it is not one of
+ * VPcmV34Main.cpp's `V34XF_`/`VPcmV34` interface exports.  Defined in
+ * `src/pump/v34/v34pcmmain.cpp`, because both callees are C++ members.
+ *
+ * RETURNS NOTHING.  %eax is never set on the falling-through path and both
+ * callees are themselves `void`, which is as far as this is recoverable.
+ */
+void indicateJaTransmission(void *obj);
+
+/*
  * Turn the line probe's twenty-five bins into a power-reduction request, a
  * set of offered symbol rates or one chosen one, and a pre-emphasis index
  * per rate.  Writes the rate config at +0xaa84 and the outgoing message at
