@@ -15545,8 +15545,13 @@ group at `+0xac28` that only the originate/answer flag at `+0x359c` decides:
 `+0xac2c` gets 0x39c3 on **both** arms and on neither of the others. 0x65 and
 0x66 are the same two values `v34modeminit`, `preinitdigital` and
 `v34handshakinit` test that field against, so this is not a new enumeration.
-`+0xac26` and `+0xac2e` are left alone on every path. The block is left
-unnamed: nothing in the object reads it back yet.
+
+`+0xac2e` is the **only** short in the block left alone on every path, and
+that is measured rather than read off: the mutation that adds a clear at
+`+0xac2e` is caught, and so is the one that narrows the `movl` at `+0xac24`
+to a `movw` -- which is what says `+0xac26` is written, as the upper half of
+that int rather than as a field of its own. The block is left unnamed:
+nothing in the object reads it back yet.
 
 ### 318. Seven of `VPcmV34InitiateRetrain`'s mutations cannot fail, and one of them is the object's own dead store
 
@@ -15566,10 +15571,18 @@ fixture:
 > **`obj->is_short = 0` at +0xabcc is dead.** `v34modeminit` clears the same
 > field unconditionally (`src/pump/v34/v34hshak.c:416`), mode 1 always calls
 > it, and nothing between the two reads the field. So no *caller* can observe
-> the store either -- it is not a test gap. What holds the result up is the
-> neighbour: `local_short` at `+0xabca` is stored in the same breath,
-> `v34modeminit` does **not** re-clear it, and the matching mutation on it IS
-> caught. Without that pair the fixture could have been blind to both.
+> the store either -- it is not a test gap.
+>
+> **And that is measured, not read.** Delete `v34modeminit`'s clear, leave
+> everything else alone, and `t_v34retrain` still passes -- both sides still
+> reach zero, by the one remaining route. Re-run the mutation on top of that
+> and it flips to **caught**. So the masking is a property of the composed
+> program that the fixture would see the moment it stopped holding, which is
+> a different statement from "the sweep did not happen to reach it".
+>
+> The neighbour corroborates independently: `local_short` at `+0xabca` is
+> stored in the same breath, `v34modeminit` does **not** re-clear it, and the
+> matching mutation on it IS caught unmodified.
 
 The store stays in the reconstruction, because the blob makes it.
 

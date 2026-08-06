@@ -518,7 +518,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	}
 
 	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned int)(*(const int *)(cfg + CFG_EXT_DELAY) + 0x68));
+		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
 
 	/*
 	 * The sensitive-ISP notice.  Through `edprintf` and NOT through a
@@ -648,7 +648,10 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	/*
 	 * The 32 bytes at +0xac1c, cleared -- except for a three-short group
 	 * at +0xac28 that only the originate/answer flag at +0x359c decides,
-	 * and +0xac26 and +0xac2e, which are left alone on every path.
+	 * and +0xac2e, the ONE short in the block left alone on every path.
+	 * +0xac26 is not a second one: it is the upper half of the `movl` at
+	 * +0xac24 and is written with it, which the mutation that narrows
+	 * that store to a short measures rather than assumes.
 	 *
 	 * 0x65 and 0x66 are the two values `v34modeminit`, `preinitdigital`
 	 * and `v34handshakinit` all test +0x359c against, so this fork is the
