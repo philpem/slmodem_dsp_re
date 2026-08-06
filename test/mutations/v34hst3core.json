@@ -69,8 +69,8 @@
  },
  {
   "label": "79 sets the transmit state to SSEG",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);"
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)"
  },
  {
   "label": "79 moves the microstate to DET_INFO",
@@ -124,8 +124,8 @@
  },
  {
   "label": "80 retrains in mode 2",
-  "find": "\tv34handshakinit(obj, 1);",
-  "replace": "\tv34handshakinit(obj, 2);"
+  "find": "\tv34handshakinit(obj, 1);\n\ths_put(obj, T3C_FABE6, 1);",
+  "replace": "\tv34handshakinit(obj, 2);\n\ths_put(obj, T3C_FABE6, 1);"
  },
  {
   "label": "80 sets +0xabe6 to 2",
