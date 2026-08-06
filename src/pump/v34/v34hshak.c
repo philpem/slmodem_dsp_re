@@ -3527,6 +3527,346 @@ t41_micro_det_sync(struct v34_object *obj)
 }
 
 /*
+ * ---------------------------------------------------------------------------
+ * Microstate 46 `TX_PHASE1_ANS`, 0x65d6d -- 3,198 bytes exclusive to this one
+ * dispatch entry, in twenty-five ranges scattered over the function.
+ *
+ * WHAT THE ARM IS.  The answerer has sent its phase-1 INFO0 and is waiting to
+ * hear the caller's back.  Four things can happen and each has its own body,
+ * and the four bodies are the SAME reset with a different prelude and a
+ * different message -- they rearm the outbound record at +0xa94c, clear the
+ * message buffer at +0xabae, and hand the machine to TX_DPSK/DET_SYNC:
+ *
+ *     0x65df4   the counter is past 1200 with +0xaae2 non-zero
+ *     0x6abc1   the counter is past 199 and +0xaae2's low ten bits are 0x372
+ *     0x6c459   +0x3588 is 2, and +0xaa7a has counted past twelve
+ *     0x6f90c   the transmit state is TONE_AB and +0xac00 is set
+ *
+ * Only the last of the four builds a message: it aims +0xaa6c and +0xaa70 at
+ * the two records and calls `V34SetINFO0aBits`, and `V34SetINFO0dBits` too
+ * when +0x359c is 0x66.  The other three rearm and say so.
+ *
+ * `t46_reset_core` is that shared reset written once.  The four bodies write
+ * its fields in three different orders, which is immaterial -- they are
+ * distinct locations and no read is interleaved -- and the difference between
+ * them is entirely in the prelude and the message.  What is NOT shared is the
+ * `+0x3588` write: three bodies STORE 4 and 0x6f90c ORs it in.
+ *
+ * NOTE FOR WHOEVER MERGES THE OTHER MICROSTATE BATCHES.  `T3C_FAAE2` is
+ * commented as a byte because microstate 62 tests bit 0 of it; every one of
+ * this arm's five reads of +0xaae2 is sixteen bits wide, one of them a
+ * compare of the whole halfword against zero.  Left alone here rather than
+ * re-commented, because that macro is another batch's.
+ */
+
+#define T46_V90RX	0x024c	/* int:   `v90_receiver`, and the record's  */
+				/*        +0x18 depends on it              */
+#define T46_F3588	0x3588	/* short: which of the four bodies is due   */
+#define T46_F358A	0x358a	/* short: 1 from a body, 2 from 0x6b4ee    */
+#define T46_F358C	0x358c	/* short: bit 0 toggled at 0x6b50e         */
+#define T46_INFO0A	0xa94c	/* the record +0xaa6c is aimed at          */
+#define T46_INFO0D	0xa97c	/* the record +0xaa70 is aimed at          */
+#define T46_COUNT3	0xaa7a	/* short: the "count3" the trace prints    */
+#define T46_MSG		0xabae	/* ten shorts, cleared by every body       */
+#define T46_MSG_N	10
+#define T46_MSG_LAST	0xabc2	/* the eleventh, cleared on its own        */
+#define T46_RETRAIN	0xac00	/* byte:  picks 0x6f90c, and is cleared     */
+
+/* Where the two entry guards and the four bodies branch. */
+#define T46_CNT_LOW	0xc7	/* the counter, against 199                 */
+#define T46_CNT_HIGH	0x4b0	/* and against 1200                         */
+#define T46_TONE_LIMIT	0x18f	/* TONE_AB's own, against 399               */
+#define T46_COUNT3_LIM	0xc	/* +0xaa7a, against twelve                  */
+
+static void t46_chain_full(struct v34_object *obj);
+static void t46_chain_tail(struct v34_object *obj, short sub);
+static void t46_past_the_counter(struct v34_object *obj);
+
+/*
+ * The outbound record at +0xa94c, rearmed.
+ *
+ * Twelve stores, and the ONLY thing that varies is +0x18: 0x11 normally, 0x1e
+ * when +0x359c is 0x65 and a V.90 receiver is running.  All four bodies test
+ * that pair and all four reach the rest of the sequence through the same
+ * `+0x1c` store, so the variant is one field and not one body.
+ *
+ * The `v90_receiver` read is through the object's `obj + 4` base -- 0x248 of
+ * it, which is +0x24c of the object.  Finding 354's 0x644c9 writes the
+ * progress code through the same base, which is what pins it.
+ */
+static void
+t46_init_record(struct v34_object *obj)
+{
+	char *r = (char *)obj + T46_INFO0A;
+	short arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)
+		    ? 0x1e : 0x11;
+
+	*(short *)(r + 0x14) = -1;
+	*(short *)(r + 0x1a) = 0;
+	*(short *)(r + 0x1e) = 0;
+	*(short *)(r + 0x22) = 0;
+	*(short *)(r + 0x18) = arm;
+	*(short *)(r + 0x1c) = 8;
+	*(short *)(r + 0x16) = 1;
+	*(int *)(r + 0x24) = 0xf72;
+	*(int *)(r + 0x2c) = 0xf72;
+	*(short *)(r + 0x28) = 0xc;
+	*(short *)(r + 0x2a) = 0xc;
+	*(short *)(r + 0x20) = 1;
+}
+
+/*
+ * The reset all four bodies share: clear the message, move both machines on,
+ * and rearm the record.
+ *
+ * The two transitions are `hs_setstate`, traces and all -- 0x65e53 and
+ * 0x65ef1 are that idiom with the constant arguments folded, and so are the
+ * other three bodies' copies.  The microstate compare against DET_SYNC can
+ * never fire here (the dispatch that got us in read 46), and the txstate one
+ * fires whenever the arm was entered at TX_DPSK.
+ */
+static void
+t46_reset_core(struct v34_object *obj)
+{
+	int i;
+
+	obj->is_short = 0;
+	obj->local_short = 0;
+	hs_put(obj, T46_F358A, 1);
+
+	for (i = 0; i < T46_MSG_N; i++)
+		hs_put(obj, T46_MSG + 2 * i, 0);
+	hs_put(obj, T46_MSG_LAST, 0);
+
+	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
+	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+	hs_put(obj, T3C_FAAE2, -1);
+	hs_put(obj, T3C_FAAE0, 0);
+
+	t46_init_record(obj);
+}
+
+/* 0x65df4 -- the counter past 1200. */
+static void
+t46_body_repeated_late(struct v34_object *obj)
+{
+	hs_put(obj, T46_F3588, 4);
+	t46_reset_core(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Repeated info0 is detected (after 1200), "
+				     "errorrecovery is initialized in "
+				     "TX_PHASE1_ANS\n");
+
+	t3c_txblock(obj);
+}
+
+/* 0x6abc1 -- the counter past 199 with +0xaae2's low ten bits at 0x372. */
+static void
+t46_body_repeated(struct v34_object *obj)
+{
+	hs_put(obj, T46_F3588, 4);
+	t46_reset_core(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Repeated info0 is detected, errorrecovery "
+				     "is initialized in TX_PHASE1_ANS\n");
+
+	t46_chain_full(obj);			/* 0x6adbd */
+}
+
+/* 0x6c459 -- +0x3588 was 2 and +0xaa7a has run out. */
+static void
+t46_body_detected(struct v34_object *obj)
+{
+	hs_put(obj, T46_COUNT3, 0);
+	hs_put(obj, T46_F3588, 4);
+	t3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0A);
+	t46_reset_core(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("info0 is detected, info0 is initialized "
+				     "in TX_PHASE1_ANS\n");
+
+	t46_chain_tail(obj, hs_get(obj, T46_F3588));	/* 0x6adc7 */
+}
+
+/*
+ * 0x6f90c -- the transmit state is TONE_AB and +0xac00 says a retrain is due.
+ *
+ * The only body that builds a message rather than just rearming.  Both
+ * records are aimed first, `V34SetINFO0aBits` reads `local_short` BEFORE the
+ * reset clears it, and +0xaa70 is read back rather than reused.
+ */
+static void
+t46_body_retrain(struct v34_object *obj)
+{
+	t3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0A);
+	t3c_putp(obj, T3C_PTR_AA70, (char *)obj + T46_INFO0D);
+
+	V34SetINFO0aBits(obj, (short *)((char *)obj + T46_INFO0A));
+	if (obj->f359c == 0x66)
+		V34SetINFO0dBits(obj,
+				 *(short **)((char *)obj + T3C_PTR_AA70));
+
+	hs_put(obj, T46_F3588, (short)(hs_get(obj, T46_F3588) | 4));
+	t46_reset_core(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Repeated info0 is initialized on "
+				     "retrain\n");
+
+	t3c_putb(obj, T46_RETRAIN, 0);
+	t3c_txblock(obj);
+}
+
+/*
+ * 0x6c3f3 -- +0x3588 is 2: an INFO0 has been seen and is being counted.
+ *
+ * +0xaa7a is stepped once per block and the arm gives up after twelve; the
+ * trace prints the count BEFORE it is stepped.
+ */
+static void
+t46_info0_counting(struct v34_object *obj)
+{
+	short n;
+
+	if (hs_get(obj, T3C_COUNT) <= T46_CNT_LOW) {
+		t3c_txblock(obj);			/* 0x6add0 */
+		return;
+	}
+	if ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {
+		t3c_txblock(obj);			/* 0x6add0 */
+		return;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("TX_PHASE_ANS: count3 = %d \n",
+				     (int)hs_get(obj, T46_COUNT3));
+
+	n = (short)(hs_get(obj, T46_COUNT3) + 1);
+	if (n <= T46_COUNT3_LIM) {			/* 0x70c7f */
+		hs_put(obj, T46_COUNT3, n);
+		t46_chain_tail(obj, hs_get(obj, T46_F3588));
+		return;
+	}
+
+	t46_body_detected(obj);				/* 0x6c459 */
+}
+
+/*
+ * 0x65dcd -- the counter against 1200, and +0xaae2 against zero.
+ *
+ * Reached both from the head of the arm with +0x3588 clear and from 0x6adc7,
+ * and it re-reads the counter at both.
+ */
+static void
+t46_past_the_counter(struct v34_object *obj)
+{
+	if (hs_get(obj, T3C_COUNT) <= T46_CNT_HIGH) {
+		t3c_txblock(obj);			/* 0x6c120 */
+		return;
+	}
+	if (hs_get(obj, T3C_FAAE2) == 0) {
+		t3c_txblock(obj);			/* 0x6bd7a */
+		return;
+	}
+
+	t46_body_repeated_late(obj);			/* 0x65df4 */
+}
+
+/*
+ * 0x6adbd and 0x6adc7, the two doors into one chain on +0x3588.
+ *
+ * The bodies at 0x6abc1 and 0x6c459 leave through here rather than
+ * returning, and they leave +0x3588 at 4, so the chain then falls to
+ * 0x6add0 and the transmit dispatch.  `t46_chain_tail`'s `sub == 0` arm is
+ * unreachable from either of them for that reason and is written because the
+ * object writes it, not because anything drives it.
+ */
+static void
+t46_chain_full(struct v34_object *obj)
+{
+	short sub = hs_get(obj, T46_F3588);
+
+	if (sub == 2) {
+		t46_info0_counting(obj);		/* 0x6c3f3 */
+		return;
+	}
+	t46_chain_tail(obj, sub);
+}
+
+static void
+t46_chain_tail(struct v34_object *obj, short sub)
+{
+	if (sub == 0) {
+		t46_past_the_counter(obj);		/* 0x65dcd */
+		return;
+	}
+	t3c_txblock(obj);				/* 0x6add0 */
+}
+
+/*
+ * The head of the arm at 0x65d6d: two transmit states are special-cased
+ * before the chain on +0x3588 is entered at all.
+ *
+ * TX_DPSK looks through +0xaa6c at the record's +0x20 and +0x22 and, with
+ * both set, restarts the counter and clears +0x20.  It then rejoins at
+ * 0x65d85 -- the TONE_AB compare -- which cannot match, because the transmit
+ * state it re-reads is the one that got it here.
+ */
+static void
+t46_micro_tx_phase1_ans(struct v34_object *obj)
+{
+	short tx = hs_get(obj, HS_TXSTATE);
+
+	if (tx == V34HS_TX_DPSK) {			/* 0x6b5b0 */
+		short *r = *(short **)((char *)obj + T3C_PTR_AA6C);
+
+		if (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {
+			hs_put(obj, T3C_COUNT, 0);
+			r[0x20 / 2] = 0;
+		}
+	} else if (tx == V34HS_TONE_AB) {		/* 0x6b4ba */
+		short n = (short)(hs_get(obj, T3C_COUNT) + 1);
+
+		if (n <= T46_TONE_LIMIT) {
+			hs_put(obj, T3C_COUNT, n);	/* 0x6f8f9 */
+		} else if (hs_get(obj, T3C_FAAE2) != 0) {
+			hs_put(obj, T3C_COUNT, n);	/* 0x6fb6e */
+		} else if (t3c_getb(obj, T46_RETRAIN) != 0) {
+			hs_put(obj, T3C_COUNT, n);
+			t46_body_retrain(obj);		/* 0x6f90c */
+			return;
+		} else {				/* 0x6b4ee */
+			hs_put(obj, T3C_COUNT, 0);
+			hs_put(obj, T46_F358C,
+			       (short)(hs_get(obj, T46_F358C) ^ 1));
+			hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);
+			hs_put(obj, T46_F358A, 2);
+			t3c_txblock(obj);
+			return;
+		}
+	}
+
+	/* 0x65d8f */
+	if (hs_get(obj, T46_F3588) != 0) {
+		t46_chain_full(obj);			/* 0x6adbd */
+		return;
+	}
+
+	/* 0x65da6 */
+	if (hs_get(obj, T3C_COUNT) > T46_CNT_LOW
+	    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {
+		t46_body_repeated(obj);			/* 0x6abc1 */
+		return;
+	}
+
+	t46_past_the_counter(obj);			/* 0x65dcd */
+}
+
+/*
  * The handshake, once per block.
  *
  * Four guards choose one of three dispatches, read off the prologue at
@@ -3590,6 +3930,9 @@ v34handshak(void *vobj)
 		return;
 	case V34HS_MOH_TONE_DROP:
 		t3c_micro_moh_tone_drop(obj);
+		return;
+	case V34HS_TX_PHASE1_ANS:	/* 46, 0x65d6d */
+		t46_micro_tx_phase1_ans(obj);
 		return;
 
 	/*
