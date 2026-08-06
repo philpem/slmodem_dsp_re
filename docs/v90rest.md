@@ -150,8 +150,15 @@ time; all four of its mutations are caught.
 
 ## Still not started, and deliberately
 
-#56-#58 (`v34handshak`, 61,541 bytes). #63 comes first: a per-dispatch-case
-harness writing the state word directly (`obj+0x3592` microstate, `+0x3594`
-rxstate, `+0x3596` txstate) and stepping once, which turns 27.6 KB into 16
-independently committable units. Starting the machines without it repeats the
-shape finding 220 measured.
+#56-#58 (`v34handshak`, 61,541 bytes). #63 came first and is **done**: the
+per-dispatch-case harness writes the state word directly (`obj+0x3592`
+microstate, `+0x3594` rxstate, `+0x3596` txstate) and steps once.
+`docs/v34handshak.md` is its manual and findings 285-290 are the record.
+
+It unblocks #57, which is the 27.6 KB and the sixteen units. It does NOT
+unblock #56: the per-sample transmit route's result is not a function of the
+object (finding 289, D60), and finding out what it reads is that task's first
+job rather than the harness's.
+
+**Findings 285-290 were taken out of the 279-300 block reserved above for
+#59's six.** #59 should start at 291.

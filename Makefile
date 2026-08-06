@@ -105,8 +105,12 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # 32-bit libstdc++ headers are typically absent on a 64-bit host.
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++
 
+# v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
+# here rather than inside one test file because #56-#58 are sixteen tests over
+# the same object, and a fixture each of them copies is a fixture sixteen of
+# them will drift.  It costs every other binary some .bss and nothing else.
 HARNESS    := test/harness/harness.c test/harness/runtime.c \
-              test/harness/fakedp.c
+              test/harness/fakedp.c test/harness/v34hsstep.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
