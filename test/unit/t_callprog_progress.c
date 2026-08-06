@@ -57,7 +57,13 @@ extern void ref_CALLPROG_Dial(struct callprog *cp, const char *s);
 extern void ref_CALLPROG_Delete(struct callprog *cp);
 
 #define BUFSAMP		160
-#define MAXCALLS	400
+/*
+ * 1600 buffers is 32 seconds at 160 samples and 8 kHz, raised from 400 so the
+ * busy cadence has room to reach its verdicts -- eight seconds did not.  The
+ * cost is the fixture's arrays: `out` is [MAXCALLS][BUFSAMP] shorts per side
+ * and `input` is another, so this is about 1.6 MB of BSS rather than 400 KB.
+ */
+#define MAXCALLS	1600
 
 /* The shapes of input the supervisor is fed. */
 #define SIG_SILENCE	0
@@ -75,7 +81,17 @@ extern void ref_CALLPROG_Delete(struct callprog *cp);
 #define SIG_COUNT	6
 
 /* Half a second at 8 kHz, which is what t_cadence uses to get a detection. */
-#define BUSY_ON_SAMPLES	4000
+/*
+ * 80 ms at 8 kHz, which is 640 samples.
+ *
+ * This was 4000 -- half a second -- while the comment at SIG_BUSY said the
+ * cadence had to land inside the detector's 40..120 ms window and that "80 ms
+ * sits in the middle".  The constant and the sentence explaining it disagreed
+ * by a factor of six, so the signal never matched the busy pattern and the
+ * machine timed out to "no answer" instead.  That is why "busy detected by
+ * cadence" stayed dead while "no answer detected by cadence" did not.
+ */
+#define BUSY_ON_SAMPLES	640
 
 static long total_messages;
 static int message_seen[CALLPROG_MAX_MESSAGES];

@@ -13824,3 +13824,47 @@ branch at level 0 only.  Adding a level sweep to a block that already existed
 was the whole of the work.  **Reaching a branch is not the same as reaching
 its announcement**, and the gap between those two is where this defect lived
 for the whole of phase 3.
+
+### 241. The busy signal was six times too slow, and its own comment said so
+
+`t_callprog_progress.c` generates a busy tone by alternating 550 Hz on and off
+every `BUSY_ON_SAMPLES`, and the comment at the generator reads:
+
+> The cadence has to land inside the window the detector was built with, and
+> that window is in toneiir intervals: the table's 4..12 becomes 2..6 intervals
+> of 20 ms, so 40..120 ms.  **80 ms sits in the middle.**
+
+`BUSY_ON_SAMPLES` was **4000**, which at 8 kHz is 500 ms.  80 ms is 640.  The
+constant and the sentence written to explain it disagreed by a factor of six.
+
+#### What it cost
+
+`cadence_progress(cp->busy, ...)` has two verdicts and the suite could only
+ever reach one.  A half-second burst never matches a 40..120 ms window, so the
+machine ran to its limit and returned 7 -- "no answer" -- and returned 1,
+"busy detected", never.  Both announcements were dead sites; raising
+`MAXCALLS` from 400 to 1600 gave the machine enough time to reach the give-up
+verdict and retired one of them, which is what exposed the other as a
+different problem rather than the same one.
+
+At 640 both land.
+
+#### The shape of it
+
+This is not a wrong number in isolation -- somebody worked out the window,
+wrote 40..120 ms and "80 ms sits in the middle" into the file, and then wrote
+a constant that is neither.  The comment has been right and unread since it
+was written, and every reader since, including three passes over this file
+during the debug-site sweep, took the constant on trust.
+
+Nothing failed.  The test passed at 4000 exactly as it passes at 640; only the
+coverage count knew, and only once `MAXCALLS` was large enough for the other
+verdict to appear and make the asymmetry visible.  **A test that passes for
+the wrong reason is invisible until something counts what it reached.**
+
+#### Where callprog stands
+
+`callprog.c` is down to three dead sites, all of them the `^` block that
+finding 239 blocks.  Every remaining one is a consequence of a reconstruction
+defect rather than of the fixture, so the sweep of this file is finished until
+that placement is settled.  The day's total: 30 dead sites to 10.
