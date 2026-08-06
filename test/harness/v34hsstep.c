@@ -11,7 +11,6 @@
  * modelled, and the fixture has no opinion about what a case should do.
  */
 
-#include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,6 +115,14 @@ static const unsigned holes[] = {
 };
 #define NHOLES	((unsigned)(sizeof(holes) / sizeof(holes[0])))
 
+/*
+ * WAS EACH SKIP ENTRY ACTUALLY EXERCISED?  Accumulated across the whole run
+ * and asserted once, never per case: a per-case reset would only ever report
+ * the last one, which is a check that reads as a check and is not.  An entry
+ * that never differs is an entry the two sides agree on, and a hole nothing
+ * needs is a hole that has gone stale -- which is the failure this array
+ * exists to catch and did not, until it was read as well as written.
+ */
 static int saw_hole[NHOLES];
 
 static int
@@ -215,8 +222,6 @@ void
 v34hs_setup(int mode)
 {
 	unsigned i;
-
-	memset(saw_hole, 0, sizeof(saw_hole));
 
 	fill((unsigned char *)&obj_a, OBJ_SIZE, 0x5eed1234u);
 	memcpy(obj_b, &obj_a, OBJ_SIZE);
@@ -427,23 +432,33 @@ observe(int side, const unsigned char *now, const unsigned char *was,
 	o->lines = lines;
 
 	for (i = 0; i < OBJ_SIZE; i++) {
-		unsigned char v;
-
-		if (now[i] == was[i])
+		/*
+		 * THE POINTER FIELDS ARE OUT OF THE SIGNATURE ENTIRELY, value
+		 * AND fact-of-change.
+		 *
+		 * The first version hashed a marker for a changed pointer, on
+		 * the reasoning that a step which only re-aimed one would
+		 * otherwise signature as having done nothing.  That is
+		 * address-dependent and therefore wrong: writing a pointer
+		 * over a previous value changes however many BYTES the two
+		 * addresses happen to differ in, which is two on one side and
+		 * three on the other.  Every microstate case then differed by
+		 * exactly one byte -- but only in the instrumented build,
+		 * where the addresses move.  `make debugcov` caught it; the
+		 * ordinary build never would have.
+		 *
+		 * What replaces it is `check_self_ptr` over all thirty-five
+		 * holes, which compares OFFSETS and is address-independent by
+		 * construction.
+		 */
+		if (now[i] == was[i] || in_hole(i))
 			continue;
 		o->changed++;
 		if (o->first == ~0u)
 			o->first = i;
 		o->last = i;
-		/*
-		 * A pointer field holds a different address on each side by
-		 * construction, so the VALUE cannot go in the signature; the
-		 * fact that it changed can, and must, or a step that only
-		 * re-aimed a pointer would signature as having done nothing.
-		 */
-		v = in_hole(i) ? 0xffu : now[i];
 		o->hash = (o->hash ^ i) * 16777619u;
-		o->hash = (o->hash ^ v) * 16777619u;
+		o->hash = (o->hash ^ now[i]) * 16777619u;
 	}
 
 	o->mst = v34hs_peek_short(side, V34HS_MICROSTATE);
@@ -487,6 +502,20 @@ v34hs_step(void)
 	observe(1, obj_b, snap_b, dsplib_debug_capture_lines(1));
 
 	signal(SIGALRM, prev);
+}
+
+void
+v34hs_holes_check(void)
+{
+	unsigned k;
+	char msg[128];
+
+	for (k = 0; k < NHOLES; k++) {
+		snprintf(msg, sizeof(msg),
+			 "pointer skip +0x%04x was exercised", holes[k]);
+		diff_eq_int(msg, saw_hole[k], 1, (long)holes[k]);
+	}
+	diff_eq_int("pointer skips", NHOLES, V34HS_NHOLES, 0);
 }
 
 const struct v34hs_obs *

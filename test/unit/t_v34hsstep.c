@@ -307,6 +307,30 @@ main(void)
 	diff_begin("v34handshak per-dispatch-case harness");
 
 	/*
+	 * THE ALARM, PROVED TO FIRE.  Finding 287 says table 1's default arm
+	 * is the loop bottom and so does not terminate, and finding 249's
+	 * standard is that a guard is demonstrated before it is committed.
+	 * This cannot run inside the sweep -- it never returns -- so it is a
+	 * mode of its own:
+	 *
+	 *     V34HS_HANG=1 ./build/test/t_v34hsstep    -> exit 3, and says why
+	 *
+	 * txstate 6 ANSAM is one of the fifty-seven entries that are the
+	 * default; the cursor is below the limit, so the loop re-tests a
+	 * cursor nothing advances.
+	 */
+	if (getenv("V34HS_HANG")) {
+		printf("driving txstate 6, which has no case: "
+		       "the alarm should fire\n");
+		v34hs_setup(0);
+		v34hs_route(V34HS_ROUTE_TXSAMPLE, 1);
+		v34hs_state(V34HS_PHASE1, V34HS_SILENCE, V34HS_ANSAM);
+		v34hs_step();
+		printf("IT RETURNED -- finding 287 is wrong\n");
+		return 1;
+	}
+
+	/*
 	 * The diagnostics are on for every case below.  They are the cheapest
 	 * discriminator the object offers -- `v34handshak` and
 	 * `v34handshakinit` index `StateName` 533 times between them -- and
@@ -412,6 +436,13 @@ main(void)
 	agree("table 2", B(5), B(24));
 	agree("table 2", B(18), B(20));
 	agree("table 2", B(66), B(70));
+
+	/*
+	 * And every pointer the comparison skips was reached, so the
+	 * thirty-five offsets sixteen agents are going to trust cannot go
+	 * stale unnoticed.
+	 */
+	v34hs_holes_check();
 
 	if (dump)
 		printf("groups: microstate %d/%d, table 2 %d/%d\n",

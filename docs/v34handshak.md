@@ -67,8 +67,18 @@ makes the comparison a check rather than a tautology while both sides still
 call `ref_v34handshak` for the step itself.
 
 `v34hs_compare` compares the whole 44,096-byte object byte for byte with the
-thirty-four pointer fields excluded, every interior pointer by offset from its
+thirty-five pointer fields excluded, every interior pointer by offset from its
 own base, the four blocks the object points out of, and both transcripts.
+`v34hs_holes_check()` asserts once at the end of a run that every one of the
+thirty-five skips was exercised, so the list cannot go stale unnoticed.
+
+**What the comparison does not cover.** A pointer that lands *outside* the
+object is checked only for landing outside -- never for which table it
+selects. A case that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 gets a
+signature saying "these four bytes changed" and nothing about what they now
+point at, so a test for such a case will be green having proved less than it
+looks like. `t_v34hshak.c` closes this with a `compare_table` per pointer;
+copy that.
 
 ### When you land a case
 
@@ -117,7 +127,9 @@ when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 | 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces |
 | 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B |
 
-Seven distinct behaviours from seventeen representatives. The groups:
+Seven distinct behaviours from seventeen representatives -- a property of the
+fixture's seed as well as of the object, so a different fill could separate
+one more or one fewer. The groups:
 
 ```
   A  41, 44                    two real cases that agree cold
@@ -200,7 +212,8 @@ itself, so a txstate with no case of its own spins forever (finding 287, D59).
 Fifty-seven of the table's eighty-two entries are that default. `v34hs_step`
 arms a `SIGALRM` so this is a named case rather than a run that never returns;
 `v34hs_route(V34HS_ROUTE_TXSAMPLE, n)` takes the sample budget explicitly for
-the same reason.
+the same reason. Both halves are demonstrated: `V34HS_HANG=1
+./build/test/t_v34hsstep` drives txstate 6 and exits 3 naming the state.
 
 ## The environment knobs
 
@@ -210,6 +223,7 @@ the same reason.
   V34HS_REFINIT=1    bring side A up with the blob's initialisers too, which
                      separates "the fixture" from "our v34handshakinit"
   V34HS_TXSAMPLE=1   run the per-sample sweep that does not pass
+  V34HS_HANG=1       drive a state with no case, to see the alarm fire
 ```
 
 ## Reading the object

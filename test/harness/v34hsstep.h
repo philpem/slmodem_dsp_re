@@ -131,6 +131,20 @@ void v34hs_step(void);
  */
 void v34hs_compare(const char *what, long tag);
 
+/*
+ * How many pointer fields the comparison skips, and the assertion that every
+ * one of them was reached.  Call it ONCE, after the whole sweep.
+ *
+ * WHAT THE SKIPS DO NOT COVER: a pointer that lands OUTSIDE the object is
+ * checked only for landing outside, never for which table it selects.  A case
+ * that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 at a different table
+ * shows up in the signature as "these four bytes changed" and nothing more.
+ * t_v34hshak.c closes that with a `compare_table` per pointer; this fixture
+ * does not, and a case that installs a table has to.
+ */
+#define V34HS_NHOLES	35
+void v34hs_holes_check(void);
+
 const struct v34hs_obs *v34hs_observed(int side);
 const char *v34hs_text(int side);
 

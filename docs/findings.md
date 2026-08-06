@@ -14498,6 +14498,18 @@ reachable from a test that writes the state word, which is what the harness
 does. `v34hsstep.c` arms a `SIGALRM` around every step for exactly this, so
 the failure is a named case rather than a run that never returns.
 
+**Both halves are demonstrated, not argued.** `V34HS_HANG=1
+./build/test/t_v34hsstep` drives txstate 6 `ANSAM` -- one of the fifty-seven
+default entries -- with the cursor below the limit, and the run exits 3 with
+
+```
+v34hs_step: side 0 did not return with mst=33 rxstate=5 txstate=6 -- see finding 287
+```
+
+So the loop really does not terminate, and the guard really does fire.
+Finding 249's standard is that a check is proved before it is committed, and a
+guard nothing ever trips is the same thing one step further along.
+
 Recorded as D59.
 
 ### 288. The microstate machine is thin, and most of it chains into the transmit dispatch
@@ -14603,8 +14615,28 @@ anything. `V34HS_OURS` moves side A onto the reconstruction in one line.
   Half the pointer holes hold addresses into the object -- the two
   sample-queue cursor pairs, ten echo-canceller pointers, four shell contexts
   and two message records -- and a skipped pointer is a hole a wrong offset
-  walks through. t_v34hshak.c checks two of them this way; all thirty-four
-  are checked here.
+  walks through. t_v34hshak.c checks two of them this way; all thirty-five
+  are checked here, and `v34hs_holes_check` asserts once at the end of the run
+  that every one of the thirty-five was actually exercised.
+
+  That assertion is the third thing this fixture learned. The array recording
+  it was written, memset per case and **never read** -- so the header comment
+  promising the list could not go stale was false while the file compiled,
+  which is finding 249's shape sitting on the fixture's most delicate
+  artefact. A per-case reset would not have helped either: it can only ever
+  report the last case.
+
+**And one that only the instrumented build could see.** The signature first
+hashed a marker for a changed *pointer* field, on the reasoning that a step
+which only re-aimed one would otherwise look like a step that did nothing.
+That is address-dependent: writing a pointer over a previous value changes
+however many bytes the two addresses differ in, which is two on one side and
+three on the other. Every microstate case then differed by exactly one byte --
+in `build-cov/` only, where the addresses move. `make debugcov` failed and the
+ordinary build never would have, which is finding 192's whole argument arriving
+in a place nobody had aimed it. The pointer fields are now out of the signature
+entirely, and `check_self_ptr` over all thirty-five holes covers what they were
+there for, by OFFSET and so address-independently.
 
 **And one the test had to learn twice.** The signature a case is compared by
 must not contain the state word it was ENTERED with. It sits in the object,
@@ -14616,7 +14648,11 @@ of a change), how many diagnostic lines it printed, which of the three
 machines MOVED and where to, and the progress code at +0x04.
 
 Measured with that: **seven distinct behaviours from table 3's seventeen
-representatives, four from table 2's seven.** The gap is the useful half --
+representatives, four from table 2's seven.** Both counts are a property of
+this fixture's seed as well as of the object -- a case that reads a companion
+field the fill happens to satisfy would separate, and the same case might not
+under a different fill. They are asserted because they are reproducible, not
+because they are intrinsic. The gap is the useful half --
 a target that cannot be told from its neighbour cold is one whose case reads
 a companion field the fixture has not set, and `docs/v34handshak.md` lists
 which those are.
