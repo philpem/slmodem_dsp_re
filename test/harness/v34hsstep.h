@@ -120,6 +120,20 @@ void v34hs_setup(int mode);
 /* Set the guards so the named dispatch is the one that runs. */
 void v34hs_route(enum v34hs_route r, short samples);
 
+/*
+ * Put OUR reconstruction on side A, or NULL to put the blob back (the
+ * default).  This is what makes a per-case test an ordinary tier-1
+ * differential test while the rest of `v34handshak` does not exist: the
+ * compile-time `V34HS_OURS` swap replaces side A in EVERY binary that links
+ * this fixture, so it cannot be turned on until the whole 61,541 bytes are
+ * written, and four batches are landing arms in parallel under four names.
+ *
+ * A test that calls this should also run the same case with NULL, so that a
+ * pass says our arm agrees with the blob rather than that the fixture agrees
+ * with itself.
+ */
+void v34hs_side_a(void (*fn)(void *obj));
+
 /* Write the three state halfwords on both sides. */
 void v34hs_state(short mst, short rxst, short txst);
 
@@ -143,7 +157,6 @@ void v34hs_step(void);
  * compare the blob's transcript against itself, which passes by construction.
  * NULL restores the blob and the slot together.
  */
-void v34hs_side_a(void (*fn)(void *obj));
 
 /*
  * The same step with one RECONSTRUCTED DISPATCH ARM on side A, run before the
