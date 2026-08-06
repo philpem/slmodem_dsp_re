@@ -13662,11 +13662,22 @@ Both are now defaults in `MAKEFLAGS`, with `make J=1` for a serial run when a
 failure needs reading in order.  A speedup nobody has to remember to ask for
 is the only kind that gets used.
 
-### 245. The addend was never in the relocation, and every closure paid for it
+### 330. The addend was never in the relocation, and every closure paid for it
 
-*Numbers 238-244 are left unused: `master` is at 237 and a parallel session
-was told to take a block from 245, so this history has a gap in it rather
-than a seventh collision.*
+*Written as 245 and renumbered to 330. The paragraph that stood here said
+"238-244 are left unused: `master` is at 237 and a parallel session was told
+to take a block from 245, so this history has a gap in it rather than a
+seventh collision." It was the seventh collision. While this branch was out,
+`master` used 238 through 246 -- straight through the gap and two past it --
+so 245 and 246 were claimed twice. `master`'s 245 is objdump's FDIVP/FDIVRP
+swap and its 246 is the three cosine windows; those stayed, and this branch's
+two moved, because `master` is the trunk and had already merged them.*
+
+*The lesson is not "leave a bigger gap". A gap is a bet on how fast the other
+branch will move, and this one lost by two. What actually catches it is
+`refcheck.py --renumber`, run on the branch that has not merged yet, plus a
+comparison against `origin/master` BEFORE taking a block rather than against
+the number in the hand-over.*
 
 `tools/closure.py` resolves a relocation that names a *section* -- which is
 how the object refers to anything file-local -- by adding the relocation's
@@ -14125,7 +14136,10 @@ finding 256, and the second x87 precision claim in this branch that turned
 out not to be observable on this target; both were settled by sweeping rather
 than by argument.
 
-### 246. Ten leaf symbols, seven classes, 261 bytes -- and what each one settles
+### 331. Ten leaf symbols, seven classes, 261 bytes -- and what each one settles
+
+*Written as 246 and renumbered to 331, for the reason finding 330 records:
+`master` took 238-246 while this branch was out.*
 
 Every one of these is closed standing alone, which is what made them a batch:
 `tools/closure.py <symbol> --missing` reaches nothing unwritten but itself.
@@ -14384,7 +14398,7 @@ pinned the order carries no information.
 +0x49b8 and +0x49bc are distinct members of one object, so a store to one
 cannot change the other, and the compiler knows it. Held fixed: that the two
 are distinct members. This is the same argument `V92EchoCanceller` records for
-+0x2c and +0x38 (finding 246) -- there the object's own instruction order was
++0x2c and +0x38 (finding 331) -- there the object's own instruction order was
 reproducible without a temporary, and here it is reproducible with one.
 
 Neither is a test gap, and neither is licence to stop writing the object's
@@ -14467,7 +14481,7 @@ The signature is `int k56FlexPhase34(void *obj)`.
   4. Its one caller is inside `v34handshak` at 0x6403f and discards the value,
   so nothing distinguishes `int` from `short` or `unsigned`; "returns 0" is the
   whole of the evidence, exactly as for the `K56FlexFloModem` members it calls
-  (finding 246).
+  (finding 331).
 
 EVERYTHING ELSE IS ADDRESSED THROUGH THREE BASES, and naming them is what
 turns the disassembly readable:
@@ -14523,7 +14537,7 @@ not written into the code.
 completion arms -- the one that ends the Ja sequence and the one that ends the
 MP sequence -- and each runs only when a `K56FlexFloModem` bit source returns
 non-zero. Both of those members are three bytes of `xor %eax,%eax; ret`
-(finding 246 measured them), in the blob and in this tree alike. So BOTH SIDES
+(finding 331 measured them), in the blob and in this tree alike. So BOTH SIDES
 of every call return 0 and neither side can enter either arm. This is a
 property of the object, not a shortfall in the sweep: no input to
 `k56FlexPhase34` can change it.
@@ -14659,7 +14673,7 @@ earlier in the same session and were sitting in `src/` the whole time.
 
 The answer was not wrong so much as an answer to a different question, which
 is the harder kind to notice: it is internally consistent, it is pessimistic
-in the direction the tool is *supposed* to be pessimistic (finding 245's own
+in the direction the tool is *supposed* to be pessimistic (finding 330's own
 "deliberately pessimistic" caveat covers over-reporting), and a 9,187-byte
 batch looks like a scoping problem rather than a tooling one.
 
@@ -14723,7 +14737,7 @@ machines, so `51` appears twice and neither entry says which machine it
 belongs to. The tables themselves settle that, and they have to be read with
 relocations attached -- each entry is an `R_386_32` against `.text` whose
 addend is the target, and the addend is in the data rather than in
-`readelf -r`'s output (finding 245's mistake one level down).
+`readelf -r`'s output (finding 330's mistake one level down).
 
 ```
   table 1  .rodata+0x2da0   82 entries, index = txstate    - 5   default 0x629e0

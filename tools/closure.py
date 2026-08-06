@@ -137,7 +137,7 @@ def owner(by_sec, ndx, addr):
 # `_ZZN5V92CP10bitsToInfoEhE5gamma` for `.bss` and `prop_dsp_version` for
 # `.rodata`, which is why those three used to appear in every closure the
 # tool computed.  All 4,794 are R_386_32, so the stored value IS the target
-# offset within the section; no PC-relative correction arises.  Finding 245.
+# offset within the section; no PC-relative correction arises.  Finding 330.
 #
 def section_file_offsets(obj):
     """{section index: (file offset, size)} straight out of the ELF header."""
@@ -287,7 +287,7 @@ def kind_of(syms, sec, name):
 # is how one call to the tree's own `edprintf` used to drag `call_op` and the
 # `dp_*_init` family into every closure computed here.  Roots are always
 # expanded, so asking about a function that is already written still works.
-# Finding 245.
+# Finding 330.
 #
 def expand(roots, syms, edges, have=()):
     seen, stack = set(), list(roots)

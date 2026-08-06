@@ -5,7 +5,7 @@ the batch-0-to-3 record and is still right about everything it describes; this
 file is batches 4 and 5 and the six C functions behind them, re-planned against
 closure numbers that can be trusted.
 
-## Every closure below was computed after finding 245
+## Every closure below was computed after finding 330
 
 `tools/closure.py` used to read the addend of a section-relative relocation as
 zero, because ELF32 REL has no `r_addend` and `readelf -r` prints no column for
@@ -70,8 +70,9 @@ costs one 270-byte method rather than the batch.
 
 ## Findings numbers allocated
 
-    245        closure.py, the missing addend            landed
-    246-250    w1a_leaves                                246-249 used
+    330        closure.py, the missing addend            landed, was 245
+    331        w1a_leaves' ten leaf symbols              landed, was 246
+    247-250    w1a_leaves                                247-249 used
     251-254    w1b_adi                                   251-253 used
     255-257    w1c_p2info                                all used
     258-261    w1d_equ                                   258-260 used
@@ -91,7 +92,20 @@ costs one 270-byte method rather than the batch.
     297-300    VPcmFloModem::enterPhase3                 all used
     301-320    #59's remaining five
 
-VERIFY BEFORE TAKING A BLOCK, do not trust this table:
+**245 AND 246 WERE CLAIMED TWICE AND THIS BRANCH'S TWO MOVED.** `master`
+used 238 through 246 while this branch was out -- straight through the gap
+this file told the session to leave, and two past it. Finding 330 has the
+detail. So:
+
+VERIFY AGAINST `origin/master`, NOT AGAINST THIS TABLE AND NOT AGAINST A
+HAND-OVER:
+
+    git fetch origin
+    git show origin/master:docs/findings.md |
+        grep -oE '^### [0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1
+
+Then take a block above BOTH that and the local maximum below. A gap is a bet
+on how fast the trunk moves, and this one lost by two.
 
     grep -oE '^### [0-9]+\.' docs/findings.md | grep -oE '[0-9]+' | sort -n | tail -20
 
