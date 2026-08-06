@@ -18406,3 +18406,121 @@ asserted at the default fill alone and for finding 359's reason.
 
 **Findings 400-409 are the block this worktree's brief allocated; 400-404 are
 used.**
+
+
+======================================================================
+
+### 405. The accept path's default arm, and the two records it keeps apart
+
+Finding 400 left 0x6e534 -- the branch a message whose CRC checks out takes --
+as 4,744 unwritten bytes. Its DEFAULT arm at 0x6e552 is now written, which is
+about 1,250 of them; the three arms selected by a specific message length are
+still `t3c_unwritten`.
+
+The dispatch is on the record's +0x18, still in `%dx` from 0x66944 and never
+reloaded, so it is the length of the message that just arrived:
+
+```
+  0x4d (77 bits)  0x6f438      0x26 (38 bits)  0x6ed17
+  0x08 ( 8 bits)  0x6ea38      anything else   0x6e552   <- written
+```
+
+**The default arm has three exits and they are not variations of each other.**
+
+```
+  +0x358a != 1                       -> 0x6e745, straight to the second half
+  +0x358a == 1:
+      the record at +0xaa6c: if bit 7 of its +0x04 is clear, clear its +0x22
+                            and raise the bit
+      +0xabc2 <- how many BYTES arrived = count/8 rounded up
+      the object's +0xabae array <- the record's byte slots, that many
+      bit 7 of the record's OWN +0x04 clear -> 0x6e5fb: rxstate RX_DPSK,
+                            microstate DET_SYNC, register 0xffff, sr 0xffff,
+                            and LEAVE through the transmit dispatch
+                            without rejoining the byte clock
+      set                                  -> 0x6e745
+  0x6e745:  counter <- 0
+            V34GiveINFO0dBits(obj, obj+0xa97c)
+            print the ten slots
+            f359c == 0x65  -> microstate RX_PHASE1_CALL, and nothing else
+            else              sr <- 0xffff, and then
+                is_short != 0 -> microstate RX_PHASE1_ANS, counter <- +0xaa7c
+                is_short == 0 -> microstate TX_PHASE1_ANS
+            receiver flags &= ~V34_RX_FLAG_DET_PENDING
+            print "info0 received in DET_INFO", " Short Phase 2" or ""
+            and REJOIN the byte clock at 0x66956
+```
+
+**Two records, and the arm never confuses them.** +0xaa70 is the one being
+clocked and +0xaa6c the one the restart installs at obj+0xa94c (finding 401);
+0x6e571 raises bit 7 on the second and 0x6e5f1 tests it on the first, at the
+same +0x04, which is byte slot 2. A mutation that reads one where the object
+reads the other is caught on both.
+
+**And one call does not follow the pointer.** Everything in the arm reaches
+the record through +0xaa70 except 0x6e757, which is `lea 0xa97c(%ebx)`: the
+INFO0 decoder is handed the fixed address. With the two coincident -- which is
+where `v34handshakinit` mode 0 leaves them, and it hands `V34SetINFO0dBits`
+the same fixed address -- no test can tell. One case aims +0xaa70 at +0xa9c0
+and gives the object a V.90 receiver so the decoder really reads and prints
+its buffer; the two printouts then name two different records.
+
+**`is_short` is an output here, not an input.** `V34GiveINFO0dBits` writes it
+(v34info.c), and it returns before doing anything at all when `v90_receiver`
+is zero -- which is what lets most of these cases choose the branch rather
+than inherit it, and which is stated because it is a fixture choice and not a
+property of the arm.
+
+**0xf72 turns up on both sides of the same fence.** The restart writes it into
+the installed record's +0x24 and +0x2c, and `V34GiveINFO0dBits` rebuilds the
+same twelve bits as the INFO0 preamble. That is corroboration that the record
+is an INFO0 descriptor and not something else the arm happens to touch.
+
+
+======================================================================
+
+### 406. The byte clock re-reads its counter, and that is the only thing the blob disagreed with
+
+Every other claim in this arm went in and compared first time. This one did
+not, and it is worth recording because the mistake is invisible in the source
+and obvious in the object.
+
+0x6693d stores the stepped counter into +0xaa78 and the code then branches to
+the restart or the accept path. **0x6695d loads it back from memory**:
+
+```
+  66932  inc %eax  /  mov %ax,0xaa78(%esi)     the step
+  66950  je  6bda0                             the message is complete
+  6695d  movzwl 0xaa78(%edx),%eax              and this is NOT that value
+  66964  test $0x7,%al
+```
+
+The restart never writes +0xaa78, so on that path the two agree and a
+reconstruction carrying the count in a local passes. The accept path resets it
+to zero at 0x6e750 and may reload it from +0xaa7c at 0x6e8ac -- so **the call
+that accepts a message runs the whole byte clock on a counter of zero**,
+stores nothing, and leaves through 0x7186a.
+
+Held against the blob, the reconstruction wrote 0x00ff into the record's slot
+4 where the blob left the fixture's fill, and reported a counter of 40 where
+the blob reported 0. Five differing bytes, first at +0xa984, in a case whose
+every other assertion passed.
+
+Three things this is worth:
+
+- **A local that shadows a memory read is the shape to look for** when an arm
+  calls out and comes back. Nothing about the C says the value is stale; the
+  object says it by reloading.
+- **The case that proves the tail runs at all now exists.** With the counter
+  always zero or reloaded, the accept path stores a byte only when +0xaa7c
+  holds a positive multiple of eight, so one case sets it to 40 deliberately.
+  Without it, "the accept path rejoins the byte clock" would be asserted by a
+  path that reaches the first guard and stops -- which is finding 290's
+  distinction between reaching a case and exercising it.
+- **It is the answer to "was that the fixture?"** It was not, and the check
+  was cheap: the disagreement was the same at every seed, and it named an
+  offset inside the record the case had seeded rather than a byte of padding.
+  Findings 319-322's knobs are for a failure that MOVES; one that is constant
+  and lands on a field the case owns is the reconstruction.
+
+**Findings 400-409 are this worktree's block; 400-406 are used.**

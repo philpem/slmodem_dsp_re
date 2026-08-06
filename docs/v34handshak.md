@@ -146,8 +146,11 @@ only states some batch has landed, which today are:
 ```
   table 3   the arm 24 states share (0x6590b) and the default (0x65329)
             62 RX_PHASE3_CALL, 79 MOH_TONE, 80 MOH_TONE_DROP
-            44 DET_INFO IN PART -- the bit clock at 0x668c0 and the restart
-               at 0x6bda0; the accept path at 0x6e534 still halts (400-404)
+            44 DET_INFO IN PART -- the bit clock at 0x668c0, the restart at
+               0x6bda0, and the accept path's DEFAULT arm at 0x6e552; its
+               three sized arms 0x6f438, 0x6ed17 and 0x6ea38 still halt,
+               so a case here must not be driven with a message length of
+               0x4d, 0x26 or 0x08 (findings 400-406)
   table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
             0x62a40 that every arm of that dispatch falls into
   the rest  halts

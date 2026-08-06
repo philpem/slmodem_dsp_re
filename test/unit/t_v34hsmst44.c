@@ -67,6 +67,7 @@
 #define T44T_PTR_AA6C	0xaa6c
 #define T44T_PTR_AA70	0xaa70
 #define T44T_COUNT	0xaa78	/* short: bits taken so far                */
+#define T44T_COUNT_SRC	0xaa7c	/* short: reloaded on short phase 2        */
 #define T44T_FAA7A	0xaa7a	/* short: cleared on entry, every call     */
 #define T44T_NBITS	0xaae0	/* short: `fsk.nbits`                      */
 #define T44T_SR		0xaae2	/* short: `fsk.sr`                         */
@@ -74,6 +75,7 @@
 #define T44T_FABC2	0xabc2
 #define T44T_LOCALSHORT	0xabca
 #define T44T_ISSHORT	0xabcc
+#define T44T_RX_FLAGS	(0x0264 + 0x122)
 
 /*
  * The two records.  `v34handshakinit` mode 0 aims +0xaa70 at +0xa97c, and the
@@ -81,6 +83,7 @@
  * than assumed, because every offset this file seeds is relative to it.
  */
 #define T44T_REC	0xa97c
+#define T44T_REC_MOVED	0xa9c0	/* where one case re-aims +0xaa70          */
 #define T44T_BLK	0xa94c
 
 #define T44T_R_CRC	0x14
@@ -149,6 +152,7 @@ begin(short tx)
 		v34hs_poke_short(T44T_FABAE + 2 * i, (short)(0x2001 + 7 * i));
 
 	/* The record the restart installs and fills in. */
+	v34hs_poke_short(T44T_BLK + 0x04, 0x1200);
 	v34hs_poke_short(T44T_BLK + T44T_R_CRC, 0x1234);
 	v34hs_poke_short(T44T_BLK + T44T_R_F16, 0x2345);
 	v34hs_poke_short(T44T_BLK + T44T_R_NBITS, 0x3456);
@@ -608,6 +612,266 @@ main(void)
 	check_restart(136, 17, 0x11);
 	diff_eq_int("no byte stored on a 33-bit restart",
 		    v34hs_peek_short(0, T44T_REC + 0), 0x0301, 136);
+
+	/* --- the accept path's default arm, 0x6e552 ----------------------- */
+
+	/*
+	 * THE MESSAGE IS COMPLETE AND ITS CRC CHECKS OUT.  Same threshold as
+	 * the restart cases -- a length of 24 and a counter reaching 40 --
+	 * with the register and the sixteen bits that arrived made EQUAL
+	 * instead of different.  0x6e534 then dispatches on the length, and
+	 * 24 is none of the three that have bodies of their own, so this is
+	 * the default arm at 0x6e552.
+	 *
+	 * `v90_receiver` is zero throughout except where a case says
+	 * otherwise: `V34GiveINFO0dBits` returns before it prints or decides
+	 * anything when it is (v34info.c), which leaves `is_short` the test's
+	 * to set and the branch it picks the test's to name.
+	 *
+	 * +0x358a IS NOT 1 HERE, so the byte copy is skipped entirely and the
+	 * arm goes straight to 0x6e745.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_ISSHORT, 0);
+	step("accept, no byte copy", 160, 19, 3, V34HS_TX_PHASE1_ANS,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: the counter is reset",
+		    v34hs_peek_short(0, T44T_COUNT), 0, 160);
+	diff_eq_int("accept: sr is reset on the answering side",
+		    v34hs_peek_short(0, T44T_SR), -1, 160);
+	diff_eq_int("accept: the detector is disarmed",
+		    v34hs_peek_short(0, T44T_RX_FLAGS) & 0x200, 0, 160);
+	/*
+	 * AND THE BYTE CLOCK'S TAIL RUNS ON A COUNTER OF ZERO.  0x6695d
+	 * re-reads +0xaa78 rather than using the value 0x6693d stored, so
+	 * resetting it at 0x6e750 makes the whole tail a no-op: nothing is
+	 * stored, and slot 4 keeps what the fixture put there.  A
+	 * reconstruction that carried the stepped count in a local would
+	 * write 0x00ff here, and the blob does not.
+	 */
+	diff_eq_int("accept: a reset counter stores nothing",
+		    v34hs_peek_short(0, T44T_REC + 8),
+		    (short)(0x0301 + 0x111 * 4), 160);
+
+	/*
+	 * SHORT PHASE 2 TAKES A DIFFERENT STATE AND RELOADS THE COUNTER.
+	 * 0x6e8ac is reached by falling out of the `is_short` branch and is
+	 * skipped by both others, so this is the only case in which +0xaa7c
+	 * reaches +0xaa78.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_ISSHORT, 1);
+	v34hs_poke_short(T44T_COUNT_SRC, 40);
+	step("accept, short phase 2", 161, 21, 3, V34HS_RX_PHASE1_ANS,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: the counter came from +0xaa7c",
+		    v34hs_peek_short(0, T44T_COUNT), 40, 161);
+	/*
+	 * +0xaa7c IS 40 HERE ON PURPOSE.  It is a positive multiple of eight,
+	 * so the re-read tail finds a counter that DOES complete a byte, and
+	 * slot 4 is written from the reset `sr`.  That is the one case in
+	 * which the accept path is shown to rejoin the byte clock at all
+	 * rather than merely to reach its first guard and stop.
+	 */
+	diff_eq_int("accept: the reload feeds the byte clock",
+		    v34hs_peek_short(0, T44T_REC + 8), 0x00ff, 161);
+
+	/*
+	 * THE ORIGINATING SIDE SKIPS TWO STORES.  `f359c == 0x65` goes to its
+	 * own state and reaches neither 0x6e814's `sr` reset nor 0x6e8ac's
+	 * counter reload -- so the byte the clock then stores comes from the
+	 * sr the message arrived in, 0x1234, and not from 0xffff.  That one
+	 * byte is what separates this branch from the two above.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0065);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_ISSHORT, 1);
+	v34hs_poke_short(T44T_COUNT_SRC, 40);
+	step("accept, originating side", 162, 17, 3, V34HS_RX_PHASE1_CALL,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: sr is NOT reset on the originating side",
+		    v34hs_peek_short(0, T44T_SR), 0x1234, 162);
+	/*
+	 * SAME +0xaa7c AS THE CASE ABOVE, and it does not arrive: 0x6e8ac is
+	 * reached only by falling out of the short-phase-2 branch, so the
+	 * counter stays at the zero 0x6e750 left and the byte clock stores
+	 * nothing.  The two cases differ in `f359c` alone.
+	 */
+	diff_eq_int("accept: and the counter is NOT reloaded",
+		    v34hs_peek_short(0, T44T_COUNT), 0, 162);
+	diff_eq_int("accept: so no byte is stored either",
+		    v34hs_peek_short(0, T44T_REC + 8),
+		    (short)(0x0301 + 0x111 * 4), 162);
+
+	/*
+	 * +0x358a == 1 OPENS THE BYTE COPY.  The bits received are moved from
+	 * the record into the object's own array at +0xabae -- the same array
+	 * the restart clears -- and +0xabc2 gets how many BYTES that was.
+	 *
+	 * THE COUNT IT DIVIDES IS THE STEPPED ONE.  0x6e58d reads +0xaa78
+	 * after 0x6693d wrote it, so a message of 26 bits is counted at 42 and
+	 * not 41 -- five whole bytes and a remainder, so six.  A length of 24
+	 * would put it at 40, an exact multiple of eight, and the rounding-up
+	 * term could then be dropped without any case noticing.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 41, 26, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_F358A, 1);
+	v34hs_poke_self_ptr(T44T_PTR_AA6C, T44T_BLK);
+	v34hs_poke_short(T44T_BLK + 0x04, 0x1200);
+	step("accept, byte copy and out", 163, 36, 1, V34HS_DET_SYNC,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: six bytes arrived",
+		    v34hs_peek_short(0, T44T_FABC2), 6, 163);
+	diff_eq_int("accept: slot 0 copied", v34hs_peek_short(0, 0xabae),
+		    0x0301, 163);
+	diff_eq_int("accept: slot 5 copied", v34hs_peek_short(0, 0xabb8),
+		    (short)(0x0301 + 0x111 * 5), 163);
+	diff_eq_int("accept: slot 6 NOT copied", v34hs_peek_short(0, 0xabba),
+		    (short)(0x2001 + 7 * 6), 163);
+	diff_eq_int("accept: the other record's +0x04 gains bit 7",
+		    v34hs_peek_short(0, T44T_BLK + 0x04), 0x1280, 163);
+	diff_eq_int("accept: and its +0x22 is cleared",
+		    v34hs_peek_short(0, T44T_BLK + T44T_R_F22), 0, 163);
+	diff_eq_int("accept: the register is reset",
+		    v34hs_peek_short(0, T44T_REC + T44T_R_CRC), -1, 163);
+	diff_eq_int("accept: and it did NOT rejoin the byte clock",
+		    v34hs_peek_short(0, T44T_REC + 8),
+		    (short)(0x0301 + 0x111 * 4), 163);
+
+	/*
+	 * BIT 7 OF THE OTHER RECORD'S +0x04 ALREADY SET, so neither the
+	 * clear of its +0x22 nor the or happens.  Same copy, same exit.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_F358A, 1);
+	v34hs_poke_self_ptr(T44T_PTR_AA6C, T44T_BLK);
+	v34hs_poke_short(T44T_BLK + 0x04, 0x1280);
+	step("accept, the flag already set", 164, 31, 1, V34HS_DET_SYNC,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: +0x22 survives when the flag was set",
+		    v34hs_peek_short(0, T44T_BLK + T44T_R_F22), 0x1a2b, 164);
+
+	/*
+	 * AND THE RECORD'S OWN SLOT 2 WITH BIT 7 SET goes on to 0x6e745
+	 * instead, so the copy runs AND the handshake moves state.  That is
+	 * the third exit of this arm and the one that reaches both halves.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_ISSHORT, 0);
+	v34hs_poke_short(T44T_F358A, 1);
+	v34hs_poke_self_ptr(T44T_PTR_AA6C, T44T_BLK);
+	v34hs_poke_short(T44T_BLK + 0x04, 0x1280);
+	v34hs_poke_short(T44T_REC + 4, 0x05a3);
+	step("accept, copy then move on", 165, 30, 3, V34HS_TX_PHASE1_ANS,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("accept: five bytes arrived here too",
+		    v34hs_peek_short(0, T44T_FABC2), 5, 165);
+	diff_eq_int("accept: the copy ran and the counter is still reset",
+		    v34hs_peek_short(0, T44T_COUNT), 0, 165);
+
+	/*
+	 * WITH A V.90 RECEIVER, so `V34GiveINFO0dBits` really decodes rather
+	 * than returning at its first line.  `is_short` is then ITS output
+	 * and not the test's, which is the arrangement the object runs in;
+	 * the case is here so that the call is driven through rather than
+	 * around, and the branch it picks is read back rather than asserted.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 39, 24, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 2);
+	v34hs_poke_short(T44T_ISSHORT, 0x5e5e);
+	v34hs_step();
+	v34hs_compare("accept, with the INFO0 decoder", 166);
+	diff_eq_int("accept: the decoder wrote is_short",
+		    v34hs_peek_short(0, T44T_ISSHORT) == 0x5e5e, 0, 166);
+	diff_eq_int("accept: and the state followed it",
+		    v34hs_observed(0)->mst,
+		    v34hs_peek_short(0, T44T_ISSHORT) != 0
+			? V34HS_RX_PHASE1_ANS : V34HS_TX_PHASE1_ANS, 166);
+
+	/*
+	 * THE THREE LENGTHS THAT HAVE BODIES OF THEIR OWN, driven from ONE
+	 * AWAY.  0x6f438, 0x6ed17 and 0x6ea38 are 4,744 bytes nobody has
+	 * written and `t3c_unwritten` halts on all three, so no case can
+	 * drive them -- but a case driven at 0x4e, 0x27 or 0x09 pins each
+	 * constant from the other side: our dispatch must NOT claim it, and a
+	 * mutation that moves the constant by one kills the run instead of
+	 * changing a byte.  That is finding 358's abort-as-a-catch, used
+	 * deliberately.
+	 *
+	 * +0x358a is not 1, so the byte copy is out of the way and the case is
+	 * about the dispatch alone.
+	 */
+	{
+		static const short near_miss[3] = { 0x4e, 0x27, 0x09 };
+		static const unsigned wrote[3] = { 19, 19, 19 };
+		int k;
+
+		for (k = 0; k < 3; k++) {
+			char what[64];
+
+			snprintf(what, sizeof(what),
+				 "accept, length %d", near_miss[k]);
+			begin(V34HS_MOH_SILENCE);
+			bits(5, 0x1234, (short)(near_miss[k] + 0x0f),
+			     near_miss[k], 0x1234);
+			v34hs_poke_short(T44T_F359C, 0x0050);
+			v34hs_poke_int(T44T_V90RECV, 0);
+			v34hs_poke_short(T44T_ISSHORT, 0);
+			step(what, 170 + k, wrote[k], 3, V34HS_TX_PHASE1_ANS,
+			     V34HS_MOH_SILENCE);
+		}
+	}
+
+	/*
+	 * THE RECORD MOVES AND ONE CALL DOES NOT FOLLOW IT.  Everything in
+	 * this arm reaches the record through +0xaa70 -- except 0x6e757, which
+	 * is `lea 0xa97c(%ebx)` and hands `V34GiveINFO0dBits` the fixed
+	 * address whatever the pointer says.  With the two coincident, as the
+	 * bring-up leaves them, that distinction is invisible; this case aims
+	 * +0xaa70 somewhere else and gives the decoder a V.90 receiver so that
+	 * it really reads and prints its buffer.  The two printouts then name
+	 * two different records and the transcript separates them.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_self_ptr(T44T_PTR_AA70, T44T_REC_MOVED);
+	{
+		int k;
+
+		for (k = 0; k < 10; k++)
+			v34hs_poke_short(T44T_REC_MOVED + 2 * k,
+					 (short)(0x0702 + 0x131 * k));
+	}
+	v34hs_poke_short(T44T_REC_MOVED + T44T_R_NBITS, 24);
+	v34hs_poke_short(T44T_REC_MOVED + T44T_R_CRC, 0x1234);
+	v34hs_poke_short(T44T_NBITS, 5);
+	v34hs_poke_short(T44T_SR, 0x1234);
+	v34hs_poke_short(T44T_COUNT, 39);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 2);
+	v34hs_step();
+	v34hs_compare("accept, the record moved", 180);
+	diff_eq_int("accept: the moved record's register was reset",
+		    v34hs_peek_short(0, T44T_REC_MOVED + T44T_R_CRC),
+		    v34hs_peek_short(1, T44T_REC_MOVED + T44T_R_CRC), 180);
 
 	/* --- downstream of the real demodulator --------------------------- */
 

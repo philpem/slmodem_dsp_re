@@ -3017,16 +3017,17 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  * differs from the incoming bit is CRC-16-CCITT, and the arm's own diagnostic
  * is "V34INFO, info0 CRC not received properly in DET_INFO".
  *
- * WHAT IS HERE AND WHAT HALTS.  The bit clock, all five of its exits, and the
- * RESTART that a failed CRC takes.  What is NOT here is the accept path at
- * 0x6e534, 4,744 bytes that decode the message itself; `t3c_unwritten` sits
- * where it begins.  That path dispatches on the record's +0x18 -- the message
- * length in bits, still in `%dx` from 0x66944 -- three ways plus a default:
+ * WHAT IS HERE AND WHAT HALTS.  The bit clock and all five of its exits, the
+ * RESTART a failed CRC takes at 0x6bda0, and the DEFAULT arm of the accept
+ * path at 0x6e552.  The accept path dispatches on the record's +0x18 -- the
+ * message length in bits, still in `%dx` from 0x66944 and never reloaded --
+ * and three of its four arms are still `t3c_unwritten`:
  *
  *     0x4d (77 bits)  0x6f438        0x26 (38)  0x6ed17
- *     0x08 ( 8 bits)  0x6ea38        else       0x6e552
+ *     0x08 ( 8 bits)  0x6ea38        else       0x6e552   <- written
  *
- * so whoever takes it starts from those four and not from the whole arm.
+ * so whoever takes the rest starts from those three and not from the whole
+ * arm.
  */
 
 /*
@@ -3037,6 +3038,8 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  * `is_short` -- are used by name instead.
  */
 #define T44_BLK_A94C	0xa94c	/* the record the restart installs         */
+#define T44_REC_A97C	0xa97c	/* where the bring-up aims +0xaa70         */
+#define T44_COUNT_SRC	0xaa7c	/* short: reloaded into the counter        */
 #define T44_PTR_AA6C	0xaa6c	/* where it installs it                    */
 #define T44_PTR_AA70	0xaa70	/* the record this arm's bit clock feeds   */
 #define T44_COUNT	0xaa78	/* short: bits taken, and HS_TRACE_2       */
@@ -3111,15 +3114,6 @@ t44_det_info_restart(struct v34_object *obj)
 	short *blk = (short *)((char *)obj + T44_BLK_A94C);
 	short nbits;
 	int i;
-
-	/*
-	 * 0x6bda4 compares sixteen bits of `sr` against the register.  Equal
-	 * is the message ACCEPTED, which is 0x6e534 and 4,744 bytes nobody
-	 * has written; see the note above the offsets.
-	 */
-	if ((unsigned short)obj->fsk.sr
-	    == (unsigned short)t44_recget(rec, T44_R_CRC))
-		t3c_unwritten();			/* 0x6e534 */
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34INFO, info0 CRC not received "
@@ -3202,6 +3196,133 @@ t44_det_info_restart(struct v34_object *obj)
 	t44_recput(blk, T44_R_F20, 1);
 }
 
+/*
+ * The message is complete and its CRC checks out: 0x6e534.
+ *
+ * The dispatch is on the message length still in `%dx` from 0x66944 -- three
+ * lengths have bodies of their own and this writes only the fourth arm, the
+ * DEFAULT at 0x6e552.  Returns non-zero when it has already left through the
+ * transmit dispatch, and zero when the caller is to rejoin the bit clock at
+ * 0x66956, which two of its three exits do.
+ *
+ * `rec` is the record at +0xaa70, still in `%ecx` from 0x668e1 and not
+ * reloaded anywhere on this path.
+ */
+static int
+t44_det_info_accept(struct v34_object *obj, short *rec)
+{
+	struct v34_receiver *rx = T3C_RX(obj);
+	short len = t44_recget(rec, T44_R_NBITS);
+	short count;
+	int nbytes;
+	int i;
+
+	if (len == 0x4d)
+		t3c_unwritten();			/* 0x6f438 */
+	if (len == 0x26)
+		t3c_unwritten();			/* 0x6ed17 */
+	if (len == 0x08)
+		t3c_unwritten();			/* 0x6ea38 */
+
+	if (hs_get(obj, T44_F358A) == 1) {
+		short *blk = t44_record(obj, T44_PTR_AA6C);
+
+		/* 0x6e571, and it is the OTHER record's +0x04. */
+		if ((t44_recget(blk, 0x04) & 0x80) == 0) {
+			t44_recput(blk, 0x22, 0);
+			t44_recput(blk, 0x04,
+				   (short)(t44_recget(blk, 0x04) | 0x80));
+		}
+
+		/*
+		 * How many BYTES arrived: the bit count divided by eight
+		 * truncating toward zero, plus one if any bits are left over.
+		 * 0x6e59b's `lea 0x7(%edx)` before the `and` is how GCC spells
+		 * a truncating divide of a value that may be negative, and
+		 * 0x6e5b8 tests the low three bits of the SAME count.
+		 */
+		count = hs_get(obj, T44_COUNT);
+		nbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);
+		hs_put(obj, T44_FABC2, (short)nbytes);
+
+		/* Into the array the restart clears -- finding 401. */
+		for (i = 0; i < nbytes; i++)
+			hs_put(obj, T44_FABAE + 2u * (unsigned)i,
+			       t44_recget(rec, 2u * (unsigned)i));
+
+		if ((t44_recget(rec, 0x04) & 0x80) == 0) {
+			/*
+			 * 0x6e5fb.  This exit does NOT rejoin the bit clock:
+			 * 0x6e740 jumps straight to the transmit dispatch.
+			 */
+			hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+			hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+			t44_recput(t44_record(obj, T44_PTR_AA70),
+				   T44_R_CRC, -1);
+			obj->fsk.sr = -1;
+			t3c_txblock(obj);		/* 0x6e740 */
+			return 1;
+		}
+	}
+
+	/* 0x6e745 */
+	hs_put(obj, T44_COUNT, 0);
+
+	/*
+	 * The buffer is obj+0xa97c LITERALLY and not the +0xaa70 record --
+	 * 0x6e757 is `lea 0xa97c(%ebx)`.  `v34handshakinit` mode 0 hands
+	 * `V34SetINFO0dBits` the same fixed address.
+	 */
+	V34GiveINFO0dBits(obj, (const short *)((char *)obj + T44_REC_A97C));
+
+	if (DSPLIB_DEBUG_ON()) {
+		const short *r = t44_record(obj, T44_PTR_AA70);
+
+		dsplibs_debug_printf("%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
+				     "0x%x,0x%x,0x%x\n", "V34INFO, rxinfo0",
+				     (unsigned)(unsigned short)r[0],
+				     (unsigned)(unsigned short)r[1],
+				     (unsigned)(unsigned short)r[2],
+				     (unsigned)(unsigned short)r[3],
+				     (unsigned)(unsigned short)r[4],
+				     (unsigned)(unsigned short)r[5],
+				     (unsigned)(unsigned short)r[6],
+				     (unsigned)(unsigned short)r[7],
+				     (unsigned)(unsigned short)r[8],
+				     (unsigned)(unsigned short)r[9]);
+	}
+
+	/*
+	 * Where the handshake goes next, and `is_short` is `V34GiveINFO0dBits`'s
+	 * own output rather than an input (v34info.c).
+	 *
+	 * The originating side skips BOTH the `sr` reset at 0x6e814 and the
+	 * counter reload at 0x6e8ac; the answering side does the reset either
+	 * way and the reload only on the short-phase-2 branch.
+	 */
+	if (obj->f359c == 0x65) {
+		hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);
+	} else {
+		obj->fsk.sr = -1;			/* 0x6e814 */
+		if (obj->is_short != 0) {
+			hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);
+			hs_put(obj, T44_COUNT,		/* 0x6e8ac */
+			       hs_get(obj, T44_COUNT_SRC));
+		} else {
+			hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);
+		}
+	}
+
+	/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */
+	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34INFO,%s info0 received in DET_INFO\n",
+				     obj->is_short != 0 ? " Short Phase 2" : "");
+
+	return 0;					/* 0x6e90c */
+}
+
 static void
 t44_micro_det_info(struct v34_object *obj)
 {
@@ -3248,9 +3369,31 @@ t44_micro_det_info(struct v34_object *obj)
 	next = (short)(count + 1);
 	hs_put(obj, T44_COUNT, next);
 
-	/* Sixteen CRC bits after the message: 0x66944 re-reads the length. */
-	if ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)
-		t44_det_info_restart(obj);		/* 0x6bda0 */
+	/*
+	 * Sixteen CRC bits after the message: 0x66944 re-reads the length.
+	 * 0x6bda4 then compares the register against what arrived, sixteen
+	 * bits wide, and equal is the message accepted.
+	 */
+	if ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10) {
+		if ((unsigned short)obj->fsk.sr
+		    == (unsigned short)t44_recget(rec, T44_R_CRC)) {
+			if (t44_det_info_accept(obj, rec) != 0)
+				return;			/* 0x6e740 */
+		} else {
+			t44_det_info_restart(obj);	/* 0x6bdb1 */
+		}
+	}
+
+	/*
+	 * 0x6695d RE-READS THE COUNTER, and it is not the value stored at
+	 * 0x6693d.  The restart leaves +0xaa78 alone, so on that path the two
+	 * agree -- but the accept path resets it at 0x6e750 and may reload it
+	 * from +0xaa7c at 0x6e8ac, and everything below runs on what is in
+	 * memory.  A reset counter therefore makes the whole byte clock a
+	 * no-op on the call that accepted a message, which is not what a
+	 * cached local would do and is how the object was caught saying so.
+	 */
+	next = hs_get(obj, T44_COUNT);
 
 	/* Only every eighth bit completes a byte. */
 	if ((next & 7) != 0) {

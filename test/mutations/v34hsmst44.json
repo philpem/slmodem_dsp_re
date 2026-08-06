@@ -1,6 +1,6 @@
 [
  {
-  "note": "`v34handshak`'s microstate 44 `DET_INFO`: the bit clock at 0x668c0, the CRC-16 register it folds the incoming bits into, the byte store and its three exits, and the RESTART at 0x6bda0 a failed CRC takes.  Caught by build/test/t_v34hsmst44.  SOME ARE CAUGHT AS AN ABORT rather than as a differing byte -- an arm nobody has written calls `t3c_unwritten`, so a mutation that sends a driven case into one kills the run, and that is a real catch and what the halt is for.  WHAT IS NOT HERE: the accept path at 0x6e534, 4,744 bytes, which halts."
+  "note": "`v34handshak`'s microstate 44 `DET_INFO`: the bit clock at 0x668c0, the CRC-16 register it folds the incoming bits into, the byte store and its three exits, the RESTART at 0x6bda0 a failed CRC takes, and the DEFAULT arm of the accept path at 0x6e552.  Caught by build/test/t_v34hsmst44.  SOME ARE CAUGHT AS AN ABORT rather than as a differing byte -- an arm nobody has written calls `t3c_unwritten`, so a mutation that sends a driven case into one kills the run, and that is a real catch and what the halt is for; the three message lengths 0x4d, 0x26 and 0x08 are pinned that way, from one away.  WHAT IS NOT HERE: the accept path's three sized arms at 0x6f438, 0x6ed17 and 0x6ea38, which halt."
  },
  {
   "label": "+0xaa7a is not cleared on entry",
@@ -183,9 +183,9 @@
   "replace": "\tt44_recput(rec, T44_R_BYTES + 2u * (unsigned)idx + 2u,"
  },
  {
-  "label": "an accepted message no longer halts",
-  "find": "\t    == (unsigned short)t44_recget(rec, T44_R_CRC))\n\t\tt3c_unwritten();",
-  "replace": "\t    != (unsigned short)t44_recget(rec, T44_R_CRC))\n\t\tt3c_unwritten();"
+  "label": "an accepted message takes the restart",
+  "find": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    == (unsigned short)t44_recget(rec, T44_R_CRC)) {",
+  "replace": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    != (unsigned short)t44_recget(rec, T44_R_CRC)) {"
  },
  {
   "label": "the restart moves the microstate to DET_CJ",
@@ -378,8 +378,8 @@
  },
  {
   "label": "the restart does not fall back into the byte clock",
-  "find": "\t\tt44_det_info_restart(obj);\t\t/* 0x6bda0 */",
-  "replace": "\t\t{ t44_det_info_restart(obj); t3c_txblock(obj); return; }"
+  "find": "\t\t\tt44_det_info_restart(obj);\t/* 0x6bdb1 */",
+  "replace": "\t\t\tt44_det_info_restart(obj); return;"
  },
  {
   "label": "the record is not re-read after the restart",
@@ -392,5 +392,210 @@
   "label": "the answering side's store copies V34SetINFO0dBits's V.90 guard",
   "find": "\tif (obj->f359c == 0x66) {",
   "replace": "\tif (obj->f359c == 0x66 && obj->v90_receiver != 0) {"
+ },
+ {
+  "label": "the byte clock's tail uses the stepped count instead of re-reading it",
+  "find": "\tnext = hs_get(obj, T44_COUNT);\n\n\t/* Only every eighth bit completes a byte. */",
+  "replace": "\t/* Only every eighth bit completes a byte. */"
+ },
+ {
+  "label": "the accept dispatch lets the 77-bit message through",
+  "find": "\tif (len == 0x4d)\n\t\tt3c_unwritten();\t\t\t/* 0x6f438 */",
+  "replace": "\tif (len == 0x4e)\n\t\tt3c_unwritten();\t\t\t/* 0x6f438 */"
+ },
+ {
+  "label": "the accept dispatch lets the 38-bit message through",
+  "find": "\tif (len == 0x26)\n\t\tt3c_unwritten();\t\t\t/* 0x6ed17 */",
+  "replace": "\tif (len == 0x27)\n\t\tt3c_unwritten();\t\t\t/* 0x6ed17 */"
+ },
+ {
+  "label": "the accept dispatch lets the 8-bit message through",
+  "find": "\tif (len == 0x08)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */",
+  "replace": "\tif (len == 0x09)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */"
+ },
+ {
+  "label": "the accept dispatch claims the length this case is driven with",
+  "find": "\tif (len == 0x08)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */",
+  "replace": "\tif (len == 0x18)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */"
+ },
+ {
+  "label": "the byte copy runs whatever +0x358a holds",
+  "find": "\tif (hs_get(obj, T44_F358A) == 1) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "+0x358a is tested against zero",
+  "find": "\tif (hs_get(obj, T44_F358A) == 1) {",
+  "replace": "\tif (hs_get(obj, T44_F358A) == 0) {"
+ },
+ {
+  "label": "the other record's flag is bit 6",
+  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x40) == 0) {"
+ },
+ {
+  "label": "the other record's flag test is inverted",
+  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x80) != 0) {"
+ },
+ {
+  "label": "the other record's +0x22 is not cleared with the flag",
+  "find": "\t\t\tt44_recput(blk, 0x22, 0);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "the flag is assigned rather than ored in",
+  "find": "\t\t\tt44_recput(blk, 0x04,\n\t\t\t\t   (short)(t44_recget(blk, 0x04) | 0x80));",
+  "replace": "\t\t\tt44_recput(blk, 0x04, (short)0x80);"
+ },
+ {
+  "label": "the flag is set on the record being clocked, not the other one",
+  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {"
+ },
+ {
+  "label": "the byte count is not rounded up",
+  "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
+  "replace": "\t\tnbytes = count / 8;"
+ },
+ {
+  "label": "the byte count is always rounded up",
+  "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
+  "replace": "\t\tnbytes = count / 8 + 1;"
+ },
+ {
+  "label": "the byte count divides by sixteen",
+  "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
+  "replace": "\t\tnbytes = count / 16 + ((count & 15) != 0 ? 1 : 0);"
+ },
+ {
+  "label": "the byte count is not recorded",
+  "find": "\t\ths_put(obj, T44_FABC2, (short)nbytes);",
+  "replace": "\t\t(void)nbytes;"
+ },
+ {
+  "label": "the copy runs one slot too far",
+  "find": "\t\tfor (i = 0; i < nbytes; i++)",
+  "replace": "\t\tfor (i = 0; i <= nbytes; i++)"
+ },
+ {
+  "label": "the copy starts at slot one",
+  "find": "\t\tfor (i = 0; i < nbytes; i++)",
+  "replace": "\t\tfor (i = 1; i < nbytes; i++)"
+ },
+ {
+  "label": "the copy goes the other way",
+  "find": "\t\t\ths_put(obj, T44_FABAE + 2u * (unsigned)i,\n\t\t\t       t44_recget(rec, 2u * (unsigned)i));",
+  "replace": "\t\t\tt44_recput(rec, 2u * (unsigned)i,\n\t\t\t\t   hs_get(obj, T44_FABAE + 2u * (unsigned)i));"
+ },
+ {
+  "label": "the copy reads the other record",
+  "find": "\t\t\t       t44_recget(rec, 2u * (unsigned)i));",
+  "replace": "\t\t\t       t44_recget(blk, 2u * (unsigned)i));"
+ },
+ {
+  "label": "the record's own flag is bit 6",
+  "find": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x40) == 0) {"
+ },
+ {
+  "label": "the record's own flag test is inverted",
+  "find": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x80) != 0) {"
+ },
+ {
+  "label": "the early exit moves the microstate to DET_CJ",
+  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),",
+  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);\n\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),"
+ },
+ {
+  "label": "the early exit leaves the register alone",
+  "find": "\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),\n\t\t\t\t   T44_R_CRC, -1);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "the early exit leaves sr alone",
+  "find": "\t\t\tobj->fsk.sr = -1;\n\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */",
+  "replace": "\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */"
+ },
+ {
+  "label": "the early exit rejoins the byte clock",
+  "find": "\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */\n\t\t\treturn 1;",
+  "replace": "\t\t\treturn 0;"
+ },
+ {
+  "label": "the counter is not reset before the decoder",
+  "find": "\ths_put(obj, T44_COUNT, 0);\n\n\t/*\n\t * The buffer is obj+0xa97c LITERALLY",
+  "replace": "\t/*\n\t * The buffer is obj+0xa97c LITERALLY"
+ },
+ {
+  "label": "the decoder is handed the +0xaa70 record instead of the fixed address",
+  "find": "\tV34GiveINFO0dBits(obj, (const short *)((char *)obj + T44_REC_A97C));",
+  "replace": "\tV34GiveINFO0dBits(obj, t44_record(obj, T44_PTR_AA70));"
+ },
+ {
+  "label": "the decoder is not called",
+  "find": "\tV34GiveINFO0dBits(obj, (const short *)((char *)obj + T44_REC_A97C));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the originating side is 0x66 in the accept path",
+  "find": "\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\tif (obj->f359c == 0x66) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);"
+ },
+ {
+  "label": "the originating side goes to RX_PHASE2_CALL",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_CALL);"
+ },
+ {
+  "label": "the originating side resets sr too",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);\n\t} else {\n\t\tobj->fsk.sr = -1;",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);\n\t\tobj->fsk.sr = -1;\n\t} else {\n\t\tobj->fsk.sr = -1;"
+ },
+ {
+  "label": "short phase 2 is decided by local_short",
+  "find": "\t\tif (obj->is_short != 0) {",
+  "replace": "\t\tif (obj->local_short != 0) {"
+ },
+ {
+  "label": "short phase 2's test is inverted",
+  "find": "\t\tif (obj->is_short != 0) {",
+  "replace": "\t\tif (obj->is_short == 0) {"
+ },
+ {
+  "label": "short phase 2 goes to RX_PHASE2_ANS",
+  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
+  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);"
+ },
+ {
+  "label": "the long phase 2 goes to RX_PHASE1_ANS as well",
+  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);",
+  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);"
+ },
+ {
+  "label": "the counter reload is not conditional on short phase 2",
+  "find": "\t\t\ths_put(obj, T44_COUNT,\t\t/* 0x6e8ac */\n\t\t\t       hs_get(obj, T44_COUNT_SRC));\n\t\t} else {",
+  "replace": "\t\t} else {\n\t\t\ths_put(obj, T44_COUNT, hs_get(obj, T44_COUNT_SRC));"
+ },
+ {
+  "label": "the counter reload copies the counter onto itself",
+  "find": "\t\t\ths_put(obj, T44_COUNT,\t\t/* 0x6e8ac */\n\t\t\t       hs_get(obj, T44_COUNT_SRC));",
+  "replace": "\t\t\ths_put(obj, T44_COUNT, hs_get(obj, T44_COUNT));"
+ },
+ {
+  "label": "the detector's pending flag is raised rather than cleared",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);"
+ },
+ {
+  "label": "the detector is left armed",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
+  "replace": "\t(void)rx;"
+ },
+ {
+  "label": "the arrival trace names short phase 2 the wrong way round",
+  "find": "\t\t\t\t     obj->is_short != 0 ? \" Short Phase 2\" : \"\");",
+  "replace": "\t\t\t\t     obj->is_short == 0 ? \" Short Phase 2\" : \"\");"
  }
 ]
