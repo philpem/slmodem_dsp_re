@@ -49,8 +49,9 @@
  },
  {
   "label": "62 raises the wrong receiver flag",
-  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
-  "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);"
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tt3c_txblock(obj);",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);\n\tt3c_txblock(obj);",
+  "note": "Anchored on the statement that follows it as well: this line was unique when this suite was written and microstate 44's 0x26 arm (0x6ed17) now spells it twice more. Finding 347, and the third time it has happened in this file."
  },
  {
   "label": "the MOH counter is not stepped",

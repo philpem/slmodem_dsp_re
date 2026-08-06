@@ -151,7 +151,7 @@ only states some batch has landed, which today are:
                at 0x6bda0, and all four arms of the accept path: the
                default at 0x6e552, and 0x6f438 (INFO1c), 0x6ed17 (INFO1a)
                and 0x6ea38 (Modem-on-Hold), which are selected by a message
-               length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-447)
+               length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-448)
   table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
             0x62a40 that every arm of that dispatch falls into
   the rest  halts
@@ -217,26 +217,30 @@ Sixteen targets over states 41..80, 27.6 KB, and it is what the per-case split
 was invented for. cfgsplit's exclusive byte counts, and what the harness sees
 when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 
+**WHICH FILE a landed target is in is part of the table**, because there are
+two reconstructions of `v34handshak` and finding 348 says so: `v34hshak.c` is
+reached with `v34hs_ours(1)` and `v34hshak_t3mid.c` with
+`v34hs_side_a(v34handshak_t3mid)`, and an arm added to one is not added to
+the other.
+
 | microstate | target | bytes | cold behaviour |
 |---|---|--:|---|
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B -- LANDED |
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B -- PARTLY LANDED |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B |
-| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B |
-| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces |
+| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B -- LANDED, `v34hshak.c` |
+| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B -- LANDED, `v34hshak.c` |
+| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B -- LANDED, `v34hshak.c` |
+| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces -- LANDED, `v34hshak_t3mid.c` |
 | 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D |
-| 51 `TX_L1` | 0x65c47 | 1735 | group D |
+| 51 `TX_L1` | 0x65c47 | 1735 | group D -- LANDED, `v34hshak_t3mid.c` |
 | 55 `TX_PHASE1_CALL` | 0x65b72 | 1705 | group D |
-| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D |
-| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D |
-| 63 `INFODONE` | 0x6591e | 1115 | group B |
-| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces |
-| 79 `MOH_TONE` | 0x657ca | 848 | group G -- LANDED |
-| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G -- LANDED |
-| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D |
-| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces -- LANDED |
-| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B -- LANDED |
+| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D -- LANDED, `v34hshak_t3mid.c` |
+| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D -- LANDED, `v34hshak_t3mid.c` |
+| 63 `INFODONE` | 0x6591e | 1115 | group B -- LANDED, `v34hshak_t3mid.c` |
+| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces -- LANDED, `v34hshak_t3mid.c` |
+| 79 `MOH_TONE` | 0x657ca | 848 | group G -- LANDED, `v34hshak.c` |
+| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G -- LANDED, `v34hshak.c` |
+| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D -- LANDED, `v34hshak_t3mid.c` |
+| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces -- LANDED, `v34hshak.c` |
+| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B -- LANDED, `v34hshak.c` |
 
 Seven distinct behaviours from seventeen representatives -- a property of the
 fixture's seed as well as of the object, so a different fill could separate
