@@ -16928,3 +16928,55 @@ targets, 79's `+0xabf0 == 1` branch at 0x6d57c, 80's `+0xabf9 != 0` branch at
 0x6c8f8, the `microstate == 56` block at 0x65c95 that belongs to 47, and the
 0x64884 branch the tail takes when +0x2218 is 2 or 3 and the txstate is
 SILENCERETRAIN. Every one of them halts rather than guessing.
+
+
+======================================================================
+
+### 359. The layout sweep against a reconstruction, and the one knob that cannot apply to it
+
+Findings 319-322 made a sweep over the fixture's own knobs this tree's
+standard of evidence, because a green run at one layout is what the five
+edits before the retraction also gave. `t_v34hst3core` is the first
+reconstruction to be held to it rather than the fixture:
+
+```
+  12 object fills     V34HS_SEED=1..12                       green
+   4 object skews     V34HS_OBJSKEW=4,0x40,0x1000,0x4000     green
+   4 placements       V34HS_SKEW=4,64,0x400,0x1004           green
+   5 neighbourhoods   V34HS_PADVARY=0,1,3,5,7                green
+   1 loose object     V34HS_LOOSEOBJ=1                       green
+   1 unscrubbed stack V34HS_NOSCRUB=1                        green
+```
+
+Not one differential failure anywhere in that, including the two cases that
+write interior POINTERS -- 79's body aims +0xaa70 and +0xaa6c at two blocks
+inside the object -- which is the quantity finding 290 had to take out of the
+signature because it is address-dependent. Compared by offset from their own
+base, they are not.
+
+**One measurement in the test is fill-dependent and is now stated as such.**
+`changed` counts bytes that DIFFER from what the fill left, so a write of the
+value already there is not counted and a counter crossing a byte boundary is
+counted twice. Over the twelve seeds every case moves by one or two bytes --
+and NOTHING else moves: not the comparison, not a diagnostic line count, not
+a state word, not a progress code, not a field the test reads back. So the
+absolute byte counts are asserted at the default fill and everything else at
+every fill. The comparison itself is never relaxed at any knob.
+
+**`V34HS_REFINIT=1` does not apply to a test whose step installs a library
+table, and this is the first test where that matters.** Finding 324 built
+that mode to answer "which table does this pointer select": brought up by the
+same code, the two sides must select the identical address. Three cases here
+break the premise rather than the check. 80's retrain calls
+`v34handshakinit(obj, 1)` from inside the step, so side A installs OUR
+tables and side B the blob's whatever the bring-up did -- ten pointers, among
+them +0x0a28 and +0x2608, the two `Convolve32` holes finding 324 was written
+around, and +0x3564, the detector's coefficients.
+
+That is two copies of one table at two addresses, which is exactly the case
+finding 324 says no address comparison can settle. It is a limit of the mode
+and not a defect: the ordinary run classifies those ten as outside both
+object and arena and passes, `v34hs_holes_check` passes, and every other knob
+is green. `v34hs_holes_check` already carries the same caveat for the same
+reason. Any later arm that calls a bring-up function will hit this, so it is
+recorded rather than worked around.

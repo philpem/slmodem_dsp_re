@@ -135,6 +135,12 @@ its default, which is written; anything in 5..74 needs that arm to exist.
 objects are at different addresses, so one address written into both is
 precisely the asymmetry findings 319-322 are about.
 
+**And `V34HS_REFINIT=1` does not apply to a case whose arm installs a library
+table.** 80's retrain calls `v34handshakinit` from inside the step, so side A
+installs ours and side B the blob's, and ten pointers then hold two addresses
+of two copies -- the case finding 324 says no address comparison can settle.
+Same caveat, same reason, as `v34hs_holes_check`. Finding 359.
+
 ### Three things the fixture already learned so you do not
 
 - **Keep every state word in 0..86 while the diagnostics are on.** `StateName`

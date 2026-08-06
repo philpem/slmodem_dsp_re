@@ -34,6 +34,14 @@
  * INDEPENDENT checks of a different claim -- which states reach that arm --
  * because our dispatch is a switch and a state dropped from it falls to a
  * `default` that halts.  Both readings are asserted below, separately.
+ *
+ * SWEPT.  Twelve object fills (`V34HS_SEED=1..12`), five object skews, four
+ * arena placements, eight neighbourhoods, and side B's object outside its
+ * arena: no differential failure at any of them, and the only measurement
+ * that moves is the absolute byte count, which `step` therefore asserts at
+ * the default fill alone and says why.  That sweep is findings 319-322's
+ * standard of evidence, applied here to a reconstruction rather than to the
+ * fixture.
  */
 
 #include <stdio.h>
@@ -79,6 +87,24 @@
 #define T3T_DET_TLO	(T3T_DET + 0x10)
 
 static int dump;
+
+/*
+ * Whether the object fill is the default one.
+ *
+ * `V34HS_SEED=n` refills both objects, and one of the four measurements
+ * below is a property of that fill rather than of the arm: `changed` counts
+ * bytes that DIFFER from what the fill left, so a write of the same value
+ * the fill happened to hold is not counted and a counter that crosses a byte
+ * boundary is counted twice.  Swept over seeds 1..12, every one of these
+ * cases moves by one or two bytes and nothing else moves at all -- not the
+ * comparison, not a line count, not a state word, not a progress code.
+ *
+ * So that one assertion is made at the default fixture and the rest always.
+ * The differential comparison itself is made at every seed and is never
+ * relaxed: this is about what a signature MEANS, not about a tolerance.
+ * Finding 290 made the same distinction for the same reason.
+ */
+static int default_fill;
 
 /*
  * Open a case: both objects built and brought up, the rxstate chain routed
@@ -189,7 +215,9 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 	 * format has none (finding 220), and a `%s` in one would be handed a
 	 * long -- which segfaults rather than reporting.
 	 */
-	diff_eq_int("object bytes the step wrote", o->changed, changed, tag);
+	if (default_fill)
+		diff_eq_int("object bytes the step wrote", o->changed, changed,
+			    tag);
 	diff_eq_int("diagnostic lines printed", o->lines, lines, tag);
 	diff_eq_int("microstate afterwards", o->mst, mst, tag);
 	diff_eq_int("txstate afterwards", o->txst, txst, tag);
@@ -231,6 +259,7 @@ main(void)
 	unsigned base_changed = 0;
 
 	dump = getenv("V34HS_DUMP") != NULL;
+	default_fill = getenv("V34HS_SEED") == NULL;
 	diff_begin("v34handshak: table 3's shared arm, 62, 79 and 80");
 
 	/*
