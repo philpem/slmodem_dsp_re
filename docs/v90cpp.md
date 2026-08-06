@@ -308,6 +308,10 @@ not define, because their callees are not written:
 | 448 | `enterPhase3()` | `_ZN14V90Demodulator11enterPhase3Ev` |
 | 86 | `setSessionFlag(unsigned int)` | `_ZN14V90Demodulator14setSessionFlagEj` |
 
+Both are written.  The object is **0x298** and the class has its own header,
+whose field map comes from the 1,002-byte constructor rather than from either
+member; findings 291, 293 and 296.
+
 ### V90Phase2Info — 1 symbol(s), 508 bytes
 
 | 508 | `printInfo() const` | `_ZNK13V90Phase2Info9printInfoEv` |

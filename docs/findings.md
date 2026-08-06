@@ -14561,3 +14561,49 @@ real gap:
 
 A mutation that cannot fail is as useless as a check that cannot fail
 (findings 247, 262), and it reads the same way in the report.
+
+### 296. What wave 2 leaves for `VPcmFloModem`, and the V90Demodulator field map
+
+`V90Phase3Demodulator::reset` (801) and `V90Demodulator::enterPhase3` (448)
+both landed, so `tools/closure.py _ZN12VPcmFloModem11enterPhase3Ev --missing`
+is now **one symbol, 270 bytes: itself.** Nothing else in #60 blocks wave 3.
+
+The four things worth taking from here rather than re-deriving:
+
+**Sizes come from the allocation (finding 291).** Before scanning `this`
+displacements for `VPcmFloModem` or anything it owns, find the `sysdep_malloc`
+before its constructor call. The scan is wrong for these classes and the
+allocation is exact.
+
+**A constructor is a better field map than any method.** `V90Demodulator`'s
+1,002-byte constructor names the type of nearly every pointer in the class,
+because each is handed to a callee whose mangled name spells it out. What it
+gives, and which `include/dsplib/V90Demodulator.h` now carries in full:
+
+    +0x004 V90Phase2Info*        +0x1d8 V90Equalizer*            malloc 0x150
+    +0x008 V90Jd*                +0x1dc V90Phase3Demodulator*    malloc 0x42c
+    +0x00c V92Jd*                +0x1e0 V90Phase4Demodulator*    malloc 0x351c
+    +0x010 tagV90DILdescriptor*  +0x1e4 V90Demapper*             malloc 0x1eb8
+    +0x014 V90MappingParams*     +0x1e8 Descrambler<h,i>  embedded, 0x20
+    +0x018 V90MappingParams*     +0x208 V90ConstellationDesigner* malloc 0x54
+    +0x01c V90TRN2Designer*      +0x20c V90ConnectionEvaluator*   malloc 0xbc
+    +0x024 V90CP*                +0x210 V90SpectralVerifier embedded, 0x2c
+    +0x028 V90MP*                +0x23c V90AutoDigitalImpDetector*
+    +0x02c V90Parameters*        +0x04c Agc<float>         embedded
+    +0x030 sessionFlag           +0x06c V90PreFilter       embedded, 0x28
+    +0x034 the phase 3 latch     +0x094 V90Resampler       embedded, 0xb4
+                                 +0x148 V90ConstellationPower embedded, 0x90
+
+**A `V90Phase3Demodulator` is expensive to stand up and `t_v90p3dreset.cpp`
+does it.** Driving one needs a `V90AutoDigitalImpDetector` (0xa9b0) with a
+parameter block, a `V90SdDetector` with a history array, a
+`Descrambler<int,int>` placed as its constructor's (0x12, 0x17, 0x63) would
+place it, and the modulator's `Scrambler<unsigned char,int>` placed as
+`t_v90p3mod.cpp` places it. `t_v90demod.cpp` copies that fixture verbatim; a
+third copy is the point at which it should become shared.
+
+**Two float rules, both learned the expensive way (finding 294).** Seed
+everything except the fields an x87 callee reads, and set those to finite
+values; and neutralise per-side pointers by name in a scratch copy, including
+the ones in the middle of a block -- `V90Phase2Info::L2` at +0x18 and
+`V90AutoDigitalImpDetector::params` at +0x2814 are the two that bite.

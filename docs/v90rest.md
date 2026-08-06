@@ -118,6 +118,29 @@ Mutation suites now registered: `v90adid`, `v90dil`, `dilpack`, `v90equ`,
 what is left of it is wave 2 (the `setSessionFlag` spine, 7 symbols, 1,523 B)
 and wave 3 (`VPcmFloModem`, 6 symbols, 2,420 B), both unblocked now.
 
+## Where wave 2 got to
+
+All seven symbols. The `setSessionFlag` chain landed first (findings 267-269);
+`V90Phase3Demodulator::reset` (801) and `V90Demodulator::enterPhase3` (448)
+followed, with `Descrambler<int,int>` -- the one thing `closure.py` reported
+missing that really was -- added to `include/dsplib/Scrambler.h` beside the
+scrambler it inverts. Findings 291-296.
+
+`V90SessionFlag.h`'s five classes are now three: `V90Phase3Demodulator.h` and
+`V90Demodulator.h` carry the two the batch gave real weight to, which is the
+split that file asked for. **Both assert their size**, which it said could not
+be done -- the displacement scan finding 268 warned about is still wrong, and
+the `sysdep_malloc` before the constructor call is exact. 0x42c and 0x298.
+
+Mutation suites `v90p3dreset` (29, 28 caught) and `v90demod` (30, 28 caught);
+the three uncaught are all named with what is held fixed, and one of them
+corrected a wrong sentence in the source rather than exposing a test gap
+(finding 293).
+
+**`tools/closure.py _ZN12VPcmFloModem11enterPhase3Ev --missing` is now one
+symbol: itself.** Wave 3 is unblocked with nothing in front of it; finding 296
+is the hand-over.
+
 Three things wave 1 cost that the next batch should not pay again:
 
 - a fresh worktree has no `third_party/spandsp`, and the failure names
