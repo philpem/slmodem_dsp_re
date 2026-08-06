@@ -1,0 +1,382 @@
+[
+ {
+  "note": "`v34handshak`'s microstate 46, TX_PHASE1_ANS at 0x65d6d -- the two head guards, the chain on +0x3588, the four bodies and the reset all four share.  Caught by build/test/t_v34hst346.  A mutation that sends a driven case into a dispatch arm nobody has written is caught as an ABORT rather than as a differing byte, which is what `t3c_unwritten` exists to do.  Several `find` strings begin with a newline: `v34handshakinit` arms the SAME record at +0xa94c with the SAME twelve values, three tabs deep, so the leading newline-and-one-tab is what tells the two apart."
+ },
+ {
+  "label": "microstate 46 dispatched to the shared arm instead of its own",
+  "find": "\tcase V34HS_TX_PHASE1_ANS:\t/* 46, 0x65d6d */",
+  "replace": "\tcase V34HS_TXMD:\t/* 46, 0x65d6d */"
+ },
+ {
+  "label": "the head's first guard names TX_L1 rather than TX_DPSK",
+  "find": "\tif (tx == V34HS_TX_DPSK) {\t\t\t/* 0x6b5b0 */",
+  "replace": "\tif (tx == V34HS_TX_L1) {\t\t\t/* 0x6b5b0 */"
+ },
+ {
+  "label": "the head's second guard names TONE_AB_CALL rather than TONE_AB",
+  "find": "\t} else if (tx == V34HS_TONE_AB) {\t\t/* 0x6b4ba */",
+  "replace": "\t} else if (tx == V34HS_TONE_AB_CALL) {\t\t/* 0x6b4ba */"
+ },
+ {
+  "label": "the TX_DPSK guard needs only one of its two fields",
+  "find": "\t\tif (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {",
+  "replace": "\t\tif (r[0x20 / 2] != 0 || r[0x22 / 2] != 0) {"
+ },
+ {
+  "label": "the TX_DPSK guard reads +0x20 twice",
+  "find": "\t\tif (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {",
+  "replace": "\t\tif (r[0x20 / 2] != 0 && r[0x20 / 2] != 0) {"
+ },
+ {
+  "label": "the TX_DPSK guard clears +0x22 rather than +0x20",
+  "find": "\t\t\ths_put(obj, T3C_COUNT, 0);\n\t\t\tr[0x20 / 2] = 0;",
+  "replace": "\t\t\ths_put(obj, T3C_COUNT, 0);\n\t\t\tr[0x22 / 2] = 0;"
+ },
+ {
+  "label": "the TX_DPSK guard does not restart the counter",
+  "find": "\t\t\ths_put(obj, T3C_COUNT, 0);\n\t\t\tr[0x20 / 2] = 0;",
+  "replace": "\t\t\tr[0x20 / 2] = 0;"
+ },
+ {
+  "label": "the TX_DPSK guard reaches through +0xaa70 rather than +0xaa6c",
+  "find": "\t\tshort *r = *(short **)((char *)obj + T3C_PTR_AA6C);",
+  "replace": "\t\tshort *r = *(short **)((char *)obj + T3C_PTR_AA70);"
+ },
+ {
+  "label": "TONE_AB's limit is 400 rather than 399",
+  "find": "#define T46_TONE_LIMIT\t0x18f",
+  "replace": "#define T46_TONE_LIMIT\t0x190"
+ },
+ {
+  "label": "TONE_AB's compare is strict",
+  "find": "\t\tif (n <= T46_TONE_LIMIT) {",
+  "replace": "\t\tif (n < T46_TONE_LIMIT) {"
+ },
+ {
+  "label": "TONE_AB does not step the counter before comparing it",
+  "find": "\t\tshort n = (short)(hs_get(obj, T3C_COUNT) + 1);",
+  "replace": "\t\tshort n = (short)(hs_get(obj, T3C_COUNT));"
+ },
+ {
+  "label": "TONE_AB's +0xaae2 test is inverted",
+  "find": "\t\t} else if (hs_get(obj, T3C_FAAE2) != 0) {",
+  "replace": "\t\t} else if (hs_get(obj, T3C_FAAE2) == 0) {"
+ },
+ {
+  "label": "TONE_AB's +0xac00 test is inverted",
+  "find": "\t\t} else if (t3c_getb(obj, T46_RETRAIN) != 0) {",
+  "replace": "\t\t} else if (t3c_getb(obj, T46_RETRAIN) == 0) {"
+ },
+ {
+  "label": "the hand-over steps the counter rather than restarting it",
+  "find": "\t\t} else {\t\t\t\t/* 0x6b4ee */\n\t\t\ths_put(obj, T3C_COUNT, 0);",
+  "replace": "\t\t} else {\t\t\t\t/* 0x6b4ee */\n\t\t\ths_put(obj, T3C_COUNT, n);"
+ },
+ {
+  "label": "the hand-over sets bit 0 of +0x358c rather than toggling it",
+  "find": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));",
+  "replace": "\t\t\t       (short)(hs_get(obj, T46_F358C) | 1));"
+ },
+ {
+  "label": "the hand-over toggles bit 1 of +0x358c",
+  "find": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));",
+  "replace": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 2));"
+ },
+ {
+  "label": "the hand-over goes to RX_PHASE2_ANS",
+  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
+  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);"
+ },
+ {
+  "label": "the hand-over writes 1 into +0x358a like a body does",
+  "find": "\t\t\ths_put(obj, T46_F358A, 2);",
+  "replace": "\t\t\ths_put(obj, T46_F358A, 1);"
+ },
+ {
+  "label": "the head tests +0x3588 for zero rather than non-zero",
+  "find": "\tif (hs_get(obj, T46_F3588) != 0) {\n\t\tt46_chain_full(obj);",
+  "replace": "\tif (hs_get(obj, T46_F3588) == 0) {\n\t\tt46_chain_full(obj);"
+ },
+ {
+  "label": "the 199 compare is not strict",
+  "find": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n",
+  "replace": "\tif (hs_get(obj, T3C_COUNT) >= T46_CNT_LOW\n"
+ },
+ {
+  "label": "the ten-bit mask is twelve bits wide",
+  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
+  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0xfff) == 0x372) {"
+ },
+ {
+  "label": "the ten-bit mask is sixteen bits wide",
+  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
+  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0xffff) == 0x372) {"
+ },
+ {
+  "label": "the ten-bit test is for 0x373",
+  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
+  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x373) {"
+ },
+ {
+  "label": "the 199 guard and the 0x372 guard are either rather than both",
+  "find": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
+  "replace": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    || (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {"
+ },
+ {
+  "label": "the 1200 compare is strict",
+  "find": "\tif (hs_get(obj, T3C_COUNT) <= T46_CNT_HIGH) {",
+  "replace": "\tif (hs_get(obj, T3C_COUNT) < T46_CNT_HIGH) {"
+ },
+ {
+  "label": "the 1200 limit is 1201",
+  "find": "#define T46_CNT_HIGH\t0x4b0",
+  "replace": "#define T46_CNT_HIGH\t0x4b1"
+ },
+ {
+  "label": "0x65dcd's +0xaae2 test is inverted",
+  "find": "\tif (hs_get(obj, T3C_FAAE2) == 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
+  "replace": "\tif (hs_get(obj, T3C_FAAE2) != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */"
+ },
+ {
+  "label": "the chain's +0x3588 test is for 4 rather than 2",
+  "find": "\tif (sub == 2) {\n\t\tt46_info0_counting(obj);",
+  "replace": "\tif (sub == 4) {\n\t\tt46_info0_counting(obj);"
+ },
+ {
+  "label": "the chain's tail tests +0x3588 for non-zero",
+  "find": "\tif (sub == 0) {\n\t\tt46_past_the_counter(obj);",
+  "replace": "\tif (sub != 0) {\n\t\tt46_past_the_counter(obj);"
+ },
+ {
+  "label": "0x6c3f3's 199 compare is strict",
+  "find": "\tif (hs_get(obj, T3C_COUNT) <= T46_CNT_LOW) {",
+  "replace": "\tif (hs_get(obj, T3C_COUNT) < T46_CNT_LOW) {"
+ },
+ {
+  "label": "0x6c3f3's twelve-bit mask is sixteen bits wide",
+  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
+  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0xffff) != 0xf72) {"
+ },
+ {
+  "label": "0x6c3f3's twelve-bit mask is ten bits wide",
+  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
+  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0x3ff) != 0xf72) {"
+ },
+ {
+  "label": "0x6c3f3 tests +0xaae2 for 0xf73",
+  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
+  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf73) {"
+ },
+ {
+  "label": "the count3 trace prints the stepped value",
+  "find": "\t\tdsplibs_debug_printf(\"TX_PHASE_ANS: count3 = %d \\n\",\n\t\t\t\t     (int)hs_get(obj, T46_COUNT3));\n\n\tn = (short)(hs_get(obj, T46_COUNT3) + 1);",
+  "replace": "\t\tdsplibs_debug_printf(\"TX_PHASE_ANS: count3 = %d \\n\",\n\t\t\t\t     (int)hs_get(obj, T46_COUNT3) + 1);\n\n\tn = (short)(hs_get(obj, T46_COUNT3) + 1);"
+ },
+ {
+  "label": "+0xaa7a's limit is thirteen",
+  "find": "#define T46_COUNT3_LIM\t0xc",
+  "replace": "#define T46_COUNT3_LIM\t0xd"
+ },
+ {
+  "label": "+0xaa7a's compare is strict",
+  "find": "\tif (n <= T46_COUNT3_LIM) {",
+  "replace": "\tif (n < T46_COUNT3_LIM) {"
+ },
+ {
+  "label": "+0xaa7a is not stepped",
+  "find": "\tn = (short)(hs_get(obj, T46_COUNT3) + 1);",
+  "replace": "\tn = (short)(hs_get(obj, T46_COUNT3));"
+ },
+ {
+  "label": "0x65df4 stores 5 into +0x3588",
+  "find": "\ths_put(obj, T46_F3588, 4);\n\tt46_reset_core(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"",
+  "replace": "\ths_put(obj, T46_F3588, 5);\n\tt46_reset_core(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \""
+ },
+ {
+  "label": "0x65df4 and 0x6abc1 print each other's message",
+  "find": "\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"\n\t\t\t\t     \"errorrecovery is initialized in \"\n\t\t\t\t     \"TX_PHASE1_ANS\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"Repeated info0 is detected, errorrecovery \"\n\t\t\t\t     \"is initialized in TX_PHASE1_ANS\\n\");"
+ },
+ {
+  "label": "0x6c459 does not restart +0xaa7a",
+  "find": "\ths_put(obj, T46_COUNT3, 0);\n\ths_put(obj, T46_F3588, 4);",
+  "replace": "\ths_put(obj, T46_F3588, 4);"
+ },
+ {
+  "label": "0x6c459 aims +0xaa6c at the INFO0d record",
+  "find": "\tt3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0A);\n\tt46_reset_core(obj);",
+  "replace": "\tt3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0D);\n\tt46_reset_core(obj);"
+ },
+ {
+  "label": "0x6f90c swaps the two records it aims at",
+  "find": "\tt3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0A);\n\tt3c_putp(obj, T3C_PTR_AA70, (char *)obj + T46_INFO0D);",
+  "replace": "\tt3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T46_INFO0D);\n\tt3c_putp(obj, T3C_PTR_AA70, (char *)obj + T46_INFO0A);"
+ },
+ {
+  "label": "0x6f90c stores 4 into +0x3588 instead of or-ing it",
+  "find": "\ths_put(obj, T46_F3588, (short)(hs_get(obj, T46_F3588) | 4));",
+  "replace": "\ths_put(obj, T46_F3588, 4);"
+ },
+ {
+  "label": "0x6f90c calls the INFO0d builder on +0x359c == 0x65",
+  "find": "\tif (obj->f359c == 0x66)\n\t\tV34SetINFO0dBits(obj,",
+  "replace": "\tif (obj->f359c == 0x65)\n\t\tV34SetINFO0dBits(obj,"
+ },
+ {
+  "label": "0x6f90c calls the INFO0d builder unconditionally",
+  "find": "\tif (obj->f359c == 0x66)\n\t\tV34SetINFO0dBits(obj,",
+  "replace": "\tif (1)\n\t\tV34SetINFO0dBits(obj,"
+ },
+ {
+  "label": "0x6f90c hands the INFO0a record to the INFO0d builder",
+  "find": "\t\tV34SetINFO0dBits(obj,\n\t\t\t\t *(short **)((char *)obj + T3C_PTR_AA70));",
+  "replace": "\t\tV34SetINFO0dBits(obj,\n\t\t\t\t *(short **)((char *)obj + T3C_PTR_AA6C));"
+ },
+ {
+  "label": "0x6f90c does not clear +0xac00",
+  "find": "\tt3c_putb(obj, T46_RETRAIN, 0);\n\tt3c_txblock(obj);",
+  "replace": "\tt3c_txblock(obj);"
+ },
+ {
+  "label": "0x6f90c resets before it builds the message",
+  "find": "\tV34SetINFO0aBits(obj, (short *)((char *)obj + T46_INFO0A));",
+  "replace": "\tt46_reset_core(obj);\n\tV34SetINFO0aBits(obj, (short *)((char *)obj + T46_INFO0A));"
+ },
+ {
+  "label": "the reset clears nine message shorts, not ten",
+  "find": "#define T46_MSG_N\t10",
+  "replace": "#define T46_MSG_N\t9"
+ },
+ {
+  "label": "the reset's eleventh short is +0xabc4",
+  "find": "#define T46_MSG_LAST\t0xabc2",
+  "replace": "#define T46_MSG_LAST\t0xabc4"
+ },
+ {
+  "label": "the reset leaves +0xabcc alone",
+  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\tobj->local_short = 0;"
+ },
+ {
+  "label": "the reset leaves +0xabca alone",
+  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\tobj->is_short = 0;"
+ },
+ {
+  "label": "the reset writes 2 into +0x358a",
+  "find": "\ths_put(obj, T46_F358A, 1);\n\n\tfor (i = 0; i < T46_MSG_N; i++)",
+  "replace": "\ths_put(obj, T46_F358A, 2);\n\n\tfor (i = 0; i < T46_MSG_N; i++)"
+ },
+ {
+  "label": "the reset moves the transmit state to TX_L1",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);"
+ },
+ {
+  "label": "the reset moves the microstate to DET_CJ",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);"
+ },
+ {
+  "label": "the reset moves the microstate before the transmit state",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);"
+ },
+ {
+  "label": "the reset writes 1 into +0xaae2",
+  "find": "\ths_put(obj, T3C_FAAE2, -1);\n\ths_put(obj, T3C_FAAE0, 0);",
+  "replace": "\ths_put(obj, T3C_FAAE2, 1);\n\ths_put(obj, T3C_FAAE0, 0);"
+ },
+ {
+  "label": "the reset leaves +0xaae0 alone",
+  "find": "\ths_put(obj, T3C_FAAE2, -1);\n\ths_put(obj, T3C_FAAE0, 0);",
+  "replace": "\ths_put(obj, T3C_FAAE2, -1);"
+ },
+ {
+  "label": "the reset clears the message buffer after it traces",
+  "find": "\tfor (i = 0; i < T46_MSG_N; i++)\n\t\ths_put(obj, T46_MSG + 2 * i, 0);\n\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tfor (i = 0; i < T46_MSG_N; i++)\n\t\ths_put(obj, T46_MSG + 2 * i, 0);\n\ths_put(obj, T46_MSG_LAST, 0);",
+  "equivalent": true,
+  "why": "EQUIVALENT, not merely uncaught, and the fixture that would separate it does not exist.  The eleven shorts at +0xabae..+0xabc2 are written and never read inside this arm, and the two `hs_setstate` traces between them read only +0x2aa2, +0xaa78, the three state words and `StateName` -- none of which is in that range.  So the two orders leave identical memory and identical transcripts at every seed.  Held fixed: the arm as written, in which nothing between the clear and the traces reads the buffer.  A later arm that PRINTS the message would separate them, and this entry is here so that it would then be reported as CAUGHT rather than silently pass."
+ },
+ {
+  "label": "the record's +0x18 depends on 0x66 rather than 0x65",
+  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tshort arm = (obj->f359c == 0x66 && obj->v90_receiver != 0)"
+ },
+ {
+  "label": "the record's +0x18 ignores the V.90 receiver",
+  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tshort arm = (obj->f359c == 0x65)"
+ },
+ {
+  "label": "the record's +0x18 ignores +0x359c",
+  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tshort arm = (obj->v90_receiver != 0)"
+ },
+ {
+  "label": "the record's two +0x18 values are the wrong way round",
+  "find": "\t\t    ? 0x1e : 0x11;",
+  "replace": "\t\t    ? 0x11 : 0x1e;"
+ },
+ {
+  "label": "the record's +0x14 is cleared rather than set to -1",
+  "find": "\n\t*(short *)(r + 0x14) = -1;",
+  "replace": "\n\t*(short *)(r + 0x14) = 0;"
+ },
+ {
+  "label": "the record's +0x16 is cleared",
+  "find": "\n\t*(short *)(r + 0x16) = 1;",
+  "replace": "\n\t*(short *)(r + 0x16) = 0;"
+ },
+ {
+  "label": "the record's +0x1c takes 9",
+  "find": "\n\t*(short *)(r + 0x1c) = 8;",
+  "replace": "\n\t*(short *)(r + 0x1c) = 9;"
+ },
+ {
+  "label": "the record's +0x20 is cleared",
+  "find": "\n\t*(short *)(r + 0x20) = 1;",
+  "replace": "\n\t*(short *)(r + 0x20) = 0;"
+ },
+ {
+  "label": "the record's +0x22 is not cleared",
+  "find": "\n\t*(short *)(r + 0x22) = 0;\n\t*(short *)(r + 0x18) = arm;",
+  "replace": "\n\t*(short *)(r + 0x18) = arm;"
+ },
+ {
+  "label": "the record's +0x24 is a short rather than an int",
+  "find": "\n\t*(int *)(r + 0x24) = 0xf72;",
+  "replace": "\n\t*(short *)(r + 0x24) = 0xf72;"
+ },
+ {
+  "label": "the record's +0x2c is a short rather than an int",
+  "find": "\n\t*(int *)(r + 0x2c) = 0xf72;",
+  "replace": "\n\t*(short *)(r + 0x2c) = 0xf72;"
+ },
+ {
+  "label": "the record's +0x24 takes 0xf73",
+  "find": "\n\t*(int *)(r + 0x24) = 0xf72;",
+  "replace": "\n\t*(int *)(r + 0x24) = 0xf73;"
+ },
+ {
+  "label": "the record's +0x2a takes 13",
+  "find": "\n\t*(short *)(r + 0x2a) = 0xc;",
+  "replace": "\n\t*(short *)(r + 0x2a) = 0xd;"
+ },
+ {
+  "label": "the record's +0x28 takes 13",
+  "find": "\n\t*(short *)(r + 0x28) = 0xc;",
+  "replace": "\n\t*(short *)(r + 0x28) = 0xd;"
+ },
+ {
+  "label": "the record is at +0xa950",
+  "find": "#define T46_INFO0A\t0xa94c",
+  "replace": "#define T46_INFO0A\t0xa950"
+ },
+ {
+  "label": "the INFO0d record is at +0xa980",
+  "find": "#define T46_INFO0D\t0xa97c",
+  "replace": "#define T46_INFO0D\t0xa980"
+ }
+]
