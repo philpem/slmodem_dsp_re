@@ -70,15 +70,25 @@ costs one 270-byte method rather than the batch.
 
 ## Findings numbers allocated
 
-    245        closure.py, the missing addend            (landed)
-    246-250    w1a_leaves
-    251-254    w1b_adi
-    255-257    w1c_p2info
-    258-261    w1d_equ
-    262-266    w1e_dil
-    267-272    wave 2
-    273-278    wave 3
-    279-300    #59's six
+    245        closure.py, the missing addend            landed
+    246-250    w1a_leaves                                246-249 used
+    251-254    w1b_adi                                   251-253 used
+    255-257    w1c_p2info                                all used
+    258-261    w1d_equ                                   258-260 used
+    262-266    w1e_dil                                   262-264 used
+    267-272    the setSessionFlag chain                  267-271 used
+    273-278    VPcmFloModem                              in flight
+    279-284    k56FlexPhase34                            279-283 used
+    285-290    the v34handshak step fixture              all used, + D59, D60
+    291-296    V90Phase3Demodulator::reset               in flight
+    297-320    #59's remaining five
+
+VERIFY BEFORE TAKING A BLOCK, do not trust this table:
+
+    grep -oE '^### [0-9]+\.' docs/findings.md | grep -oE '[0-9]+' | sort -n | tail -20
+
+250, 254, 261, 265, 266, 272, 284 are gaps that will stay gaps. A gap is
+cheaper than a collision, and this history has had six of the latter.
 
 238-244 are deliberately unused: `master` was at 237 and a block from 245 was
 already promised elsewhere. A gap is cheaper than a seventh collision.
@@ -160,5 +170,8 @@ unblock #56: the per-sample transmit route's result is not a function of the
 object (finding 289, D60), and finding out what it reads is that task's first
 job rather than the harness's.
 
-**Findings 285-290 were taken out of the 279-300 block reserved above for
-#59's six.** #59 should start at 291.
+**Findings 285-290 were taken out of the 279-300 block this file used to
+reserve for #59's six.** The block table above has been rewritten to match
+what is actually in `docs/findings.md`: 291-296 went to
+`V90Phase3Demodulator::reset`, so **#59's remaining five start at 297**, not
+at 291.
