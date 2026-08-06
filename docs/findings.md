@@ -16578,3 +16578,98 @@ Two consequences:
 **Findings 319-324 are the block `docs/v90rest.md` allocated to this
 worktree.** Finding 290's note that #59's findings start at 291 still stands.
 
+
+
+======================================================================
+
+### 370. The first arm of `v34handshak` to land, and the three pieces of shared machinery it had to bring with it
+
+`v34handshak` is 61,541 bytes and had no reconstruction at all. Microstate
+48 `TX_PHASE3_ANS` is the first dispatch arm committed, and its 422 exclusive
+bytes are not what the commit is: **an arm cannot be compared on its own.**
+
+Every one of table 3's forty arms ends `jmp 62af1`, the once-per-block
+transmit dispatch, which ends in one of table 2's seven arms, all of which
+end at 0x62a40. So reproducing one arm's step means reproducing the prologue
+that reaches it and the two dispatches and the tail it leaves through. What
+that actually cost, measured rather than feared:
+
+```
+  the entry and its four guards, 0x628f0             ~20 instructions
+  the rxstate chain and the RX_DPSK arm at 0x64a64   ~12
+  arm 48 itself, 0x65d30                              77
+  table 2's arms for txstate 5, 18/19 and 24/...      51
+  the tail at 0x62a40                                 88
+```
+
+**The tail is 88 instructions and has no exit but its own four `ret`s.** That
+is the fact that makes the per-arm split work, and it was not obvious: a walk
+of the CFG from 0x62a40 with the stop set removed entirely reaches 88
+instructions and nothing else, so writing it once covers every arm of both
+tables. Had it chained on into the 12,290 bytes cfgsplit calls shared, this
+batch would have been a different shape.
+
+#### `v34handshak_t3mid`, and why not `v34handshak`
+
+The entry is not called `v34handshak`, and that is a measurement rather than
+taste. `tools/coverage.py` credits `translated` by the **blob symbol's whole
+size**, so a definition of that name would book all 61,541 bytes for nine
+arms. Confirmed by running it: with the entry under its own name `translated`
+stays at 21.2% and the three new symbols appear under "we define these and
+the object has no symbol of that name", which is what they are.
+
+The second reason is that four batches are landing arms in parallel and one
+symbol cannot hold four partial reconstructions. The file is
+`src/pump/v34/v34hshak_t3mid.c`, a split of `v34hshak.c`'s translation unit
+in the shape `V90PreFilter_loops.cpp` already uses, and everything file-local
+in it is `T3M_*`.
+
+**Every path not written records a code and returns.** Doing nothing is the
+one answer a differential test cannot tell from a wrong answer -- the object
+comes back unmodified and the comparison reports whatever the blob wrote --
+so `v34handshak_t3mid_unwritten()` names the first unwritten path taken and
+the test fails if any trial reached one. A code and not a string, because the
+strings firewall holds every literal in `src/` against the object's own
+`.rodata` (findings 180, 201) and it caught seven invented phrases on the
+first build.
+
+#### The swap the harness needed, and it is four lines
+
+`docs/v34handshak.md` said the first agent to land a case defines
+`V34HS_OURS`. It cannot: that replaces side A in **every** binary linking the
+fixture, so it only works once the whole function exists. `v34hs_side_a(fn)`
+sets side A at run time with the blob as the default, so `t_v34hsstep.c` goes
+on proving the fixture while a per-case test gets an ordinary tier-1
+comparison -- and each of the four batches can point it at its own entry.
+Every case in `t_v34hst3mid.c` is run twice, once with our entry and once
+with `NULL`, because a green ours-versus-blob run says nothing unless the
+same seed is green blob-versus-blob.
+
+`hs_setstate`, `hs_get` and `hs_put` lost their `static` in `v34hshak.c` for
+the reason finding 223's six did, only stronger: the arms print the same
+three transitions from the same three format strings, and the two context
+arguments each string takes are in a **different order per string**. A second
+copy next door is a second place for that to be wrong while every byte of the
+object still matches.
+
+#### What arm 48 does
+
+A counter and two thresholds, which finding 288 says is the shape of six of
+table 3's arms. `+0xaa78` is incremented as an unsigned halfword and stored
+back *before* either threshold is tested, and both are exact equalities:
+
+```
+  0x78    invert bit 0 of +0x358c; leave with the object's txstate
+  0xa2    txstate -> SILENCE and microstate -> RX_PHASE2_ANS, both announced,
+          then clear the counter and leave with 5 -- so the transmit dispatch
+          runs table 2's txstate-5 arm and not the one for the txstate the
+          case was driven with
+  else    leave with the object's txstate
+```
+
+`t_v34hst3mid.c` drives 0x0100, 0x0077, 0x0079, 0x00a1 and 0x00a2 so that
+each path is taken and neither threshold can be exchanged for the other, and
+reads the counter, `+0x358c`, both state words and the line count back off
+the **blob's** object afterwards -- so what is asserted is the blob's
+behaviour and not our arm's.
+

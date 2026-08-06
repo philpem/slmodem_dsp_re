@@ -59,5 +59,7 @@
  "v90p34":         ["src/pump/v34/v34pcmmain.cpp",
                                                  "build/test/t_v90p34"],
  "v34retrain":     ["src/pump/v34/v34pcmmain.cpp",
-                                                 "build/test/t_v34retrain"]
+                                                 "build/test/t_v34retrain"],
+ "v34hst3mid":     ["src/pump/v34/v34hshak_t3mid.c",
+                                                 "build/test/t_v34hst3mid"]
 }

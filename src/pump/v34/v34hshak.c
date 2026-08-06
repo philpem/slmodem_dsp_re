@@ -1174,13 +1174,13 @@ static const char *StateName[V34HS_STATE_COUNT] = {
 #define HS_TRACE_1	0x2aa2
 #define HS_TRACE_2	0xaa78
 
-static short
+short
 hs_get(const struct v34_object *obj, unsigned off)
 {
 	return *(const short *)((const char *)obj + off);
 }
 
-static void
+void
 hs_put(struct v34_object *obj, unsigned off, short v)
 {
 	*(short *)((char *)obj + off) = v;
@@ -1198,8 +1198,16 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * "microstate" prints (tx, rx).  Passing the right strings in the wrong
  * order leaves every byte of the object identical, which is why the fixture
  * sweeps the three words to three DIFFERENT values and not to one.
+ *
+ * NOT `static`, and neither are `hs_get` and `hs_put` above.  `v34handshak`
+ * belongs to this translation unit and is being reconstructed one dispatch
+ * arm at a time in files beside this one (v34hshak_t3mid.c is the first),
+ * and its arms emit the same three transitions from the same three format
+ * strings.  A second copy of this function next door is a second place for
+ * the argument order above to be got wrong.  Finding 223's six functions
+ * lost their `static` for the weaker reason that a test wanted to call them.
  */
-static void
+void
 hs_setstate(struct v34_object *obj, unsigned off, short next)
 {
 	static const char *const fmt[3] = {

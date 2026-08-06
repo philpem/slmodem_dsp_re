@@ -51,6 +51,33 @@ extern void v34handshak(void *obj);
 #define V34HS_LOG_A		1
 #endif
 
+/*
+ * AND THE SWAP THAT DOES NOT NEED A SECOND BUILD.
+ *
+ * The compile-time form above replaces side A in every binary that links this
+ * file, which is all of them -- so it can only be turned on once the WHOLE
+ * function exists, and until then it cannot be used at all.  While the
+ * function is being taken a dispatch arm at a time there is no such point:
+ * four batches are in flight, each with a reconstruction of a few arms under
+ * its own name, and each needs side A to be ITS entry for ITS test and the
+ * blob everywhere else.
+ *
+ * So side A is a function pointer with the blob as its default.  A per-case
+ * test calls `v34hs_side_a(our_entry)` and gets an ordinary tier-1
+ * differential comparison for the cases it drives; `t_v34hsstep.c` never
+ * calls it and keeps proving the fixture.  Passing NULL puts the blob back,
+ * which is how a test runs its own control.
+ */
+static void (*side_a_fn)(void *obj);
+static int side_a_log = V34HS_LOG_A;
+
+void
+v34hs_side_a(void (*fn)(void *obj))
+{
+	side_a_fn = fn;
+	side_a_log = fn ? 0 : V34HS_LOG_A;
+}
+
 /* --- the two sides -------------------------------------------------------- */
 
 #define OBJ_SIZE	((unsigned)sizeof(struct v34_object))
@@ -854,12 +881,15 @@ v34hs_step(void)
 	probe_sw[0] = fpu_status();
 	probe_cw[0] = fpu_control();
 	alarm(5);
-	V34HS_CALL_A(&obj_a);
+	if (side_a_fn)
+		side_a_fn(&obj_a);
+	else
+		V34HS_CALL_A(&obj_a);
 	alarm(0);
 	snprintf(text[0], sizeof(text[0]), "%s",
-		 dsplib_debug_capture_text(V34HS_LOG_A));
+		 dsplib_debug_capture_text(side_a_log));
 	observe(0, (const unsigned char *)&obj_a, snap_a,
-		dsplib_debug_capture_lines(V34HS_LOG_A));
+		dsplib_debug_capture_lines(side_a_log));
 
 	step_side = 1;
 	dsplib_debug_capture_reset();

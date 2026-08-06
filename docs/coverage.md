@@ -44,6 +44,12 @@ dsplibs.o reconstruction coverage
 
   we define these and the object has no symbol of that name --
   either a helper split out of a larger function, or drift:
+    hs_get
+    hs_put
+    hs_setstate
+    v34handshak_t3mid
+    v34handshak_t3mid_unwritten
+    v34handshak_t3mid_unwritten_reset
     v8_handshak_agc
     v8_handshak_demod
 

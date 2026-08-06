@@ -147,6 +147,64 @@ extern "C" {
  * planned (docs/fastpass.md).
  */
 
+#define V34HS_MICROSTATE_OFF	0x3592
+#define V34HS_RXSTATE_OFF	0x3594
+#define V34HS_TXSTATE_OFF	0x3596
+
+/*
+ * A halfword of the object by offset, and one state transition with the
+ * diagnostic the object prints for it.
+ *
+ * These are `v34hshak.c`'s and they are shared rather than copied because
+ * `v34handshak` is in the same translation unit and is being reconstructed
+ * one dispatch arm at a time in files beside it.  Its arms change the same
+ * three words through the same three format strings, and the two context
+ * arguments each string takes are in an order that differs per string -- so
+ * a second copy of `hs_setstate` is a second place to get that order wrong
+ * while every byte of the object still matches.  See the comment on the
+ * definition.
+ *
+ * `hs_setstate` prints only when the value CHANGES and only when
+ * `DSPLIB_DEBUG_ON()`, and it prints before it stores.  Both are the
+ * object's; an arm that needs the store without the compare uses `hs_put`.
+ */
+struct v34_object;
+short hs_get(const struct v34_object *obj, unsigned off);
+void hs_put(struct v34_object *obj, unsigned off, short v);
+void hs_setstate(struct v34_object *obj, unsigned off, short next);
+
+/*
+ * `v34handshak`, for the dispatch cases that have been written.
+ *
+ * NOT called `v34handshak`.  The blob's function is 61,541 bytes over forty
+ * microstates, twenty txstates and an rxstate chain, and it is being taken a
+ * few arms at a time; a definition of that name would tell `coverage.py` --
+ * which credits `translated` by the blob symbol's whole size -- that all of
+ * it exists, and would make four batches in flight collide on one symbol.
+ * When the arms are all in, the assembled function takes the name and this
+ * one goes away.
+ *
+ * Every path not yet written records itself and returns instead of doing
+ * something plausible; `v34handshak_t3mid_unwritten` returns the first such
+ * code since the last reset, or `T3M_WRITTEN`.  A test that reaches one is a
+ * test that proved nothing, so `t_v34hst3mid.c` checks it after every step.
+ * The codes are numbers rather than strings because the strings firewall
+ * rejects any literal in src/ that is not the object's own (findings 180 and
+ * 201); `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak_t3mid.c.
+ */
+#define T3M_WRITTEN			0
+#define T3M_UNWRITTEN_TBL1		1
+#define T3M_UNWRITTEN_RXIDLE		2
+#define T3M_UNWRITTEN_RXSTATE		3
+#define T3M_UNWRITTEN_FSKGATE		4
+#define T3M_UNWRITTEN_TBL3_DEFAULT	5
+#define T3M_UNWRITTEN_TBL3_ARM		6
+#define T3M_UNWRITTEN_TBL2_ARM		7
+
+void v34handshak_t3mid(void *obj);
+int v34handshak_t3mid_unwritten(void);
+void v34handshak_t3mid_unwritten_reset(void);
+
 /*
  * Bring the handshake up.  `mode` selects one of five entries, and the names
  * below are the CALL SITES' -- every caller passes a literal, so the modes
