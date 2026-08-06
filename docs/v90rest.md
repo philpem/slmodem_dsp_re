@@ -125,9 +125,25 @@ Five of `VPcmFloModem`'s six landed: `getUinfoValue` 773, `setPhaseIIinfo` 704,
 findings 273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
 equivalent and measured over 123 million values).
 
-`VPcmFloModem::enterPhase3` (270 B) is the sixth and is still outstanding; it
-is the only symbol in #60 that additionally needs `DILdescriptorPacker`, which
-is now on this branch. Whoever writes it should read finding 273 (the object
+`VPcmFloModem::enterPhase3` (270 B) is the sixth and is still outstanding.
+**Its closure is not what this file said it was.** Recomputed on this branch
+with `DILdescriptorPacker` present, `tools/closure.py
+_ZN12VPcmFloModem11enterPhase3Ev --missing` reports 1,590 bytes and no
+`DILdescriptorPacker` in them:
+
+    801  V90Phase3Demodulator::reset(PcmType, unsigned char, ...)
+    448  V90Demodulator::enterPhase3()
+    270  VPcmFloModem::enterPhase3()
+     48  Descrambler<int,int>::reset(int)              (weak, template)
+     23  Descrambler<int,int>::resetHistoryIndexes()   (weak, template)
+
+So it is blocked on **wave 2's two remaining symbols**, not on the C
+prerequisite -- and on the two `Descrambler<int,int>` members that finding 231
+and the note at the top of this file both warn `callgraph.py` cannot see and
+that nothing in `include/` defines yet. It is one 270-byte method behind two
+that total 1,249, so it goes with them rather than on its own.
+
+Whoever writes it should read finding 273 (the object
 is genuinely 32 KB, and the old "indexes through `this`" sentence in
 docs/v90cpp.md is corrected), finding 274 (a `V90Modem` is EMBEDDED at
 +0x1758, and `sizeof(V90Modem) == 0x49c0` is asserted in VPcmFloModem.cpp for
