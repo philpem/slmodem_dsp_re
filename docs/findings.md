@@ -14962,3 +14962,58 @@ extensions, and the remainder ordering or register allocation with no forbidden
 dependency among them. The list is not exhausted as a source of evidence, but
 its yield per hour is now known to be low, and the next pass should apply rule
 one mechanically rather than eyeballing diffs.
+
+### 355. Store order IS the author's statement order, and the metric was mislabelled
+
+Two things came out of asking whether matching the object's instruction order
+would make the reconstruction read better rather than merely score better. The
+answer is yes for one kind of difference and no for another, and the tooling
+was overstating itself.
+
+**The metric compares MNEMONICS, not bytes.** `compare.py` drops operands
+deliberately -- a relocated address and a differently-allocated register are
+noise against "are these the same instructions in the same order". But that
+means two functions storing the same constants to DIFFERENT OFFSETS in a
+DIFFERENT ORDER both read as `mov mov mov` and count as identical.
+`Agc<float>::reset` is exactly that case: it counts in the 83 and its stores
+were in a different order from the object's. The label said "byte-for-byte
+identical", which it is not, and both the output and this record now say
+mnemonics.
+
+**Store order survives the compiler, so it is recoverable source.** GCC 3.4
+preserves the order of independent stores -- our own stores come out in our own
+source order every time, which is the control. So where the object's store
+sequence differs from ours, the author's statements were in a different order
+from ours. Comparing the sequence of destination offsets across the
+near-misses:
+
+| function | ours | the object |
+|---|---|---|
+| `V34InitializeImplementationSpecific` | 15 offsets, **ascending** | not monotonic |
+| `dftfreqinit` | ascending | `0x8` written LAST |
+| `Agc<float>::reset` | `0x4 0x8 …` | `0x8 0x4 …` |
+| `toneiir_reset` | `0x96 0x94 0x98 0x2c …` | `0x96 0x2c 0x98 0x94 …` |
+| `Queue<float>::reset` | `0x8 0xc` | `0xc 0x8` |
+
+**Ours are sorted by offset. The object's are not.** We wrote these in
+struct-declaration order, which is a tidiness we imposed; the author wrote them
+in some other order, and an order that is not the mechanical one is carrying
+something. In `Agc::reset` it groups `alpha` and `gain` -- the two live values
+-- and then `savedAlpha`, the backup `freeze` writes, rather than listing
+fields as they happen to be declared. Reordered to match, the store sequence
+becomes exactly the object's.
+
+That is the case FOR doing this: not the score, but that a reconstruction whose
+deliverable is source should not silently replace the author's grouping with
+alphabetical-by-offset. A later comment pass (task #65) that says "initialise
+the filter state" over a sorted list is describing our sorting, not the
+original's structure.
+
+**The line between recovering and fitting.** Matching STORE ORDER recovers a
+statement order the compiler preserved -- a real source fact. Chasing REGISTER
+ALLOCATION does not: after the reorder, `Agc::reset` still differs because the
+object keeps the zero in `%ecx` and 1.0 in `%edx` while we reuse one register,
+and no reasonable source change expresses that. The first is worth doing, the
+second is fitting the compiler. Finding 354's rule for extensions has the same
+shape: act on what the compiler was FORCED to encode, ignore what it was free
+to choose.

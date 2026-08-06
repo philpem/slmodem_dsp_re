@@ -32,9 +32,17 @@ Agc<T>::Agc()
 template <class T>
 void Agc<T>::reset()
 {
+	/*
+	 * `gain` BEFORE `savedAlpha`, which is the object's order and not the
+	 * declaration's.  GCC 3.4 preserves the order of independent stores,
+	 * so the sequence in the object is the sequence in the author's source:
+	 * the two live values together, then the backup that `freeze` writes.
+	 * Ours was sorted by offset, which is a tidiness we imposed.
+	 * Finding 355.
+	 */
 	alpha = T(1);
-	savedAlpha = T(1);
 	gain = T(1);
+	savedAlpha = T(1);
 	level = T(0);
 	acc = T(0);
 	count = blockLen;

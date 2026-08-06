@@ -161,7 +161,7 @@ def main():
         rows.append((o - b, b, o, k))
 
     print("Comparing %d symbols the blob and this tree both have.\n" % len(common))
-    print("  byte-for-byte identical instruction sequences : %4d" % len(identical))
+    print("  identical instruction sequences (mnemonics)    : %4d" % len(identical))
     print("  same size, different instructions             : %4d" % len(samesize))
     print("  different size                                : %4d"
           % (len(common) - len(identical) - len(samesize)))
@@ -169,7 +169,10 @@ def main():
           % (tb, to, 100.0 * to / tb if tb else 0))
 
     if identical:
-        print("\nIDENTICAL (the reconstruction reproduces the original's codegen):")
+        print("\nIDENTICAL MNEMONIC SEQUENCES.  Operands are NOT compared -- two"
+              "\nfunctions storing the same constants to different offsets in a"
+              "\ndifferent order both read as `mov mov mov` and count here."
+              "\nStrong evidence, but not byte equality.  Finding 355:")
         for b, k in sorted(identical, reverse=True):
             print("  %5d  %s" % (b, k))
 
