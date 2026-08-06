@@ -18490,6 +18490,12 @@ the reason finding 421 pins 70's.
                  0 unusable, 14 equivalent, 0 MIScounted
 ```
 
+**THIRTEEN OF THE FOURTEEN EQUIVALENCES ARE PROOFS AND ONE IS NOT**, and the
+line above should not be read without that: `20: the pass ends at or past
+forty-eight` is a state the fixture cannot reach, recorded in the registry
+with a `why` that says so in its first three words.  "No new uncaught" is
+true only with that reclassification counted.
+
 **All three uncaught are findings 341's and 343's, unchanged** -- the two
 `V34EchoReportCoeff` calls that only print, and the one transfer with no
 oracle past it. The 108 added here leave nothing untested that is not shown
@@ -18570,9 +18576,13 @@ Independent, in the sense that each can fail while the others pass:
 
 **Not independent, and named:**
 
-- 20's run at index 0 and its run at 0x2e produce different points but check
-  the same load; they are there to separate a four-byte index from a
-  two-byte one, which the run at 0x10 alone cannot do.
+- 20's run at index 0 is a CONTROL and not a third behaviour, and it is the
+  right way round: point 0 is `vectpp` shorts 0 and 1, and so is *short* 0,
+  so index 0 is the one place where a four-byte reading of the table and a
+  two-byte one agree.  The runs at 0x10 and 0x2e are what separate them --
+  point 0x10 is shorts 32 and 33, (-3238, 5609), against short 0x10's
+  (6476, 0).  Index 0 is there to show the pair is not passing on a
+  coincidence, and it cannot fail while the other two pass.
 - 74's fourth retrain run (+0xabe8 set, `f359c == 0x65`) must produce exactly
   what the third produces. It separates "the flag is tested first" from "the
   two are combined" and cannot fail while the third passes.
