@@ -319,6 +319,30 @@ blob_said(const char *what)
 	return strstr(v34hs_text(1), what) != NULL;
 }
 
+/*
+ * DID THE TWO SIDES SELECT THE SAME LIBRARY TABLE?
+ *
+ * A pointer at one of the thirty-five skipped offsets that points OUTSIDE
+ * both arenas is a library table, and side A holds ours while side B holds
+ * the blob's -- two addresses of two copies, which no address comparison can
+ * tell from two different tables (finding 324).  `v34hs_compare` therefore
+ * cannot see an arm that picks `scale2800` where the object picks
+ * `scale2400`, and six such mutations survived until this existed.
+ *
+ * What CAN be compared is what the two addresses point AT.  The five power
+ * scales are pairwise distinct and so are the two carrier descriptors, so
+ * equal contents means the same table -- and it is still a comparison against
+ * the blob rather than against a constant this file chose.
+ */
+static void
+same_table(const char *what, unsigned off, unsigned shorts, long tag)
+{
+	const short *a = *(const short **)((char *)v34hs_object(0) + off);
+	const short *b = *(const short **)((char *)v34hs_object(1) + off);
+
+	diff_eq_int(what, memcmp(a, b, shorts * sizeof(short)) == 0, 1, tag);
+}
+
 static void
 trial_seeded(short mst, const struct seed *s, int ours, long tag)
 {
@@ -1404,16 +1428,27 @@ micro50(void)
 	  { 0x7fff, 0x40, 0x0201, 0, 0, "0x7fff steps to -32768" },
 	  { (short)0xffff, 0x40, 0x0201, 0, 0, "and 0xffff steps to 0" }
 	};
+	/*
+	 * `gain` is here so that ONE trial can carry a negative one: 50 halves
+	 * the gain with no band test in front of it, so the arithmetic shift
+	 * is a claim only a negative input can fail.
+	 */
 	static const struct {
-		short	counter, filt, sr;
+		short	counter, filt, sr, gain, want;
 		int	deep;
 		const char *why;
 	} dc[] = {
-	  { 0x005f, 0x10, 0x0155, 0, "n == 0x60 is not above filtdelay+0x50" },
-	  { 0x0060, 0x10, 0x0155, 1, "n == 0x61 is" },
-	  { 0x0060, 0x40, 0x0155, 0, "and the same n at 0x40 is not" },
-	  { 0x0060, 0x10, 0x0154, 0, "bit 0 of the shift register is needed" },
-	  { 0x0050, (short)0xfff0, 0x0155, 1, "filtdelay is signed" }
+	  { 0x005f, 0x10, 0x0155, 0x2346, 0x2346, 0,
+	    "n == 0x60 is not above filtdelay+0x50" },
+	  { 0x0060, 0x10, 0x0155, 0x2346, 0x11a3, 1, "n == 0x61 is" },
+	  { 0x0060, 0x40, 0x0155, 0x2346, 0x2346, 0,
+	    "and the same n at 0x40 is not" },
+	  { 0x0060, 0x10, 0x0154, 0x2346, 0x2346, 0,
+	    "bit 0 of the shift register is needed" },
+	  { 0x0050, (short)0xfff0, 0x0155, 0x2346, 0x11a3, 1,
+	    "filtdelay is signed" },
+	  { 0x0060, 0x10, 0x0155, (short)0xdcba, (short)0xee5d, 1,
+	    "and the halving is arithmetic" }
 	};
 	long tag = 5600;
 	int i;
@@ -1437,7 +1472,7 @@ micro50(void)
 		 * of ~0xfff would both be caught.
 		 */
 		s.set_flags = 1;	s.flags = 0x0b55;
-		s.set_gain = 1;		s.gain = 0x2346;
+		s.set_gain = 1;		s.gain = dc[i].gain;
 		both_seeded(V34HS_RX_PHASE2_ANS, &s, tag);
 		tag += 2;
 
@@ -1456,7 +1491,7 @@ micro50(void)
 					    T3MT_RX_FLAGS), 0x0b55, tag);
 			diff_eq_int("50 below the threshold leaves the gain "
 				    "alone", v34hs_peek_short(1, T3MT_RX_GAIN),
-				    0x2346, tag);
+				    dc[i].want, tag);
 			if (dc[i].sr == 0x0154)
 				saw_50_nofsk = 1;
 			else
@@ -1476,7 +1511,7 @@ micro50(void)
 			    (unsigned short)v34hs_peek_short(1, T3MT_RX_FLAGS),
 			    0x0155, tag);
 		diff_eq_int("50 halves the gain, arithmetically",
-			    v34hs_peek_short(1, T3MT_RX_GAIN), 0x11a3, tag);
+			    v34hs_peek_short(1, T3MT_RX_GAIN), dc[i].want, tag);
 		/*
 		 * THE DEMODULATOR IS SET UP FOR 2400/1800 AND THE TWO NUMBERS
 		 * ARE LITERALS AT THE CALL SITE, not a read of any rate field
@@ -1592,6 +1627,14 @@ micro51(void)
 			    blob_said("V34RETRAIN, starting DET_AB"), 1, tag);
 		diff_eq_int("51 prints three lines here",
 			    v34hs_observed(1)->lines, 3, tag);
+		/*
+		 * AND THE COEFFICIENT TABLE, by its contents.  `c1200_` and
+		 * `c2400_` differ, and the role flag is the only thing that
+		 * chooses between them, so this is what makes the two runs of
+		 * this loop two different claims rather than one repeated.
+		 */
+		same_table("51 hands detectorinit the table its role selects",
+			   0x3564, 8, tag);
 		saw_51_detect = 1;
 	}
 
@@ -1705,6 +1748,20 @@ micro51(void)
 			    tag);
 		diff_eq_int("51 prints the record it just filled",
 			    blob_said("V34PROBE, txinfo1a (QC)"), 1, tag);
+		/*
+		 * THE POWER SCALE, by its contents and not by its address.
+		 * All five scales differ from one another, so this is what
+		 * separates the switch's six arms; without it every one of
+		 * them writes a pointer the comparison skips and exchanging
+		 * any two cannot fail.  The default arm is excluded because
+		 * it writes nothing and both sides keep the fixture's dummy.
+		 */
+		if (baud[i] != 0x0123) {
+			same_table("51's rate switch picks the baud's own "
+				   "transmit power scale", 0xaa90, 28, tag);
+			same_table("51 copies that scale to the receive side",
+				   0xaaac, 28, tag);
+		}
 
 		if (baud[i] == 0x0ab7)
 			saw_51_2743 = 1;

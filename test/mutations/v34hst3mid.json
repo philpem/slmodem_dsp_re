@@ -37,7 +37,9 @@
  {
   "label": "48 increments the counter as a signed halfword",
   "find": "\tunsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);\n\n",
-  "replace": "\tshort n = (short)(T3M_I16(f, T3M_COUNTER) + 1);\n\n"
+  "replace": "\tshort n = (short)(T3M_I16(f, T3M_COUNTER) + 1);\n\n",
+  "equivalent": true,
+  "why": "both thresholds are positive constants below 0x8000 and the store keeps only the low sixteen bits, so a signed and an unsigned reading of the incremented halfword agree on every comparison the arm makes.  The signedness that IS load-bearing is 47's and 63's `<=`, and those are caught."
  },
  {
   "label": "48's toggle is a store rather than an inversion",
@@ -285,7 +287,9 @@
  {
   "label": "the entry reads the microstate before the demodulator runs",
   "find": "\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);\n\n\tframe.mst = hs_get(obj, V34HS_MICROSTATE_OFF);",
-  "replace": "\tframe.mst = hs_get(obj, V34HS_MICROSTATE_OFF);\n\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);"
+  "replace": "\tframe.mst = hs_get(obj, V34HS_MICROSTATE_OFF);\n\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
+  "equivalent": true,
+  "why": "finding 285 swept the whole of .text: neither `V34agc` nor `fskdemodulate` writes +0x3592, +0x3594 or +0x3596, which is the property that makes this per-arm harness possible at all.  So the read can be moved across the call and no byte changes.  It becomes catchable again the day either function is found to write a state word."
  },
  {
   "label": "the fsk gate admits a non-zero +0xa8a0",
@@ -1037,7 +1041,9 @@
  {
   "label": "50 sets +0x200 in the receiver's flags the way 49 does",
   "find": "\t/* 0x66759, and it is stored before the demodulator's diagnostic. */\n\tT3M_U16(f, T3M_COUNTER) = 0x14;",
-  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\tT3M_U16(f, T3M_COUNTER) = 0x14;"
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\tT3M_U16(f, T3M_COUNTER) = 0x14;",
+  "equivalent": true,
+  "why": "50's deep path ends with `flags &= ~0x0a00`, unconditionally and after everything else, so a set of 0x200 anywhere earlier on that path is erased before the step returns.  49's set of the same bit IS visible because 49 never clears it.  What this says is that the ABSENCE of a 0x200 set in 50 cannot be tested on the deep path -- only its presence in 49 can."
  },
  {
   "label": "50 leaves the counter at 0x15",
@@ -1067,7 +1073,9 @@
  {
   "label": "50 runs rxtiminginit before the demodulator",
   "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);\n\trxtiminginit(f->obj);",
-  "replace": "\trxtiminginit(f->obj);\n\tV34SetupDemodulator(f->obj, 2400, 1800);"
+  "replace": "\trxtiminginit(f->obj);\n\tV34SetupDemodulator(f->obj, 2400, 1800);",
+  "equivalent": true,
+  "why": "the two write disjoint sets of receiver fields -- `V34SetupDemodulator` writes f128, f1ac, f1ae, f1b0, f1ba, f1be and carrier, `rxtiminginit` writes f124, f1b8, f1bc..f1f0, rx_samples, f208, f20a, dp.point, f22e, f230, f244 and f246 -- and only the first prints, so nothing this fixture reads can order them.  The order in the object is 0x66766 before 0x667c7 and it is recorded, not proved."
  },
  {
   "label": "50 does not run rxtiminginit",
@@ -1152,7 +1160,9 @@
  {
   "label": "51's detector body announces the microstate first",
   "find": "\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
-  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;"
+  "replace": "\t\ths_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);\n\t\ths_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);\n\t\tf->obj->vect_idx = 0;",
+  "equivalent": true,
+  "why": "the microstate move in that body is TX_L1 to TX_L1 and `hs_setstate` compares before it prints or stores, so it is a no-op whichever side of the txstate move it sits on.  The order that IS testable is the info1a body's, where both moves are real and print in the opposite order -- and that mutation is caught."
  },
  {
   "label": "51's detector body moves the txstate to TX_L2",
@@ -1320,9 +1330,9 @@
   "replace": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x726\n\t\t\t\t\t  ? 0x74b : 0x690;"
  },
  {
-  "label": "51's 2743 arm reads the carrier after replacing it",
-  "find": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;\n\n\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xaf0;",
-  "replace": "\t\t\t\tT3M_U16(f, T3M_TXBAUD) = 0xaf0;\n\n\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725\n\t\t\t\t\t  ? 0x74b : 0x690;"
+  "label": "51's 2743 arm tests the baud rather than the carrier",
+  "find": "\t\t\t\tshort c = T3M_U16(f, T3M_TXCARRIER) == 0x725",
+  "replace": "\t\t\t\tshort c = T3M_U16(f, T3M_TXBAUD) == 0x725"
  },
  {
   "label": "51's 2743 arm leaves the baud rate at 2743",
@@ -1449,7 +1459,9 @@
  {
   "label": "51's gain shifts are logical",
   "find": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((int)gain >> 1);",
-  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 1);"
+  "replace": "\tgain = f->rx->agc_gain;\n\tif (gain > 0x2000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 2);\n\telse if (gain > 0x1000)\n\t\tf->rx->agc_gain = (short)((unsigned short)gain >> 1);",
+  "equivalent": true,
+  "why": "both bands are signed compares against positive constants, so only 0x1001..0x7fff ever reaches either shift and an arithmetic and a logical shift agree over that range.  50's halving has no band in front of it and IS separated, by the 0xdcba trial."
  },
  {
   "label": "51 does not clear +0x35a0",
