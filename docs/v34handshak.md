@@ -25,8 +25,14 @@ read off the prologue at 0x628f0:
                                   TABLE 3, .rodata+0x3000, on MICROSTATE
                      4 RECEIVE -> 0x653e4
                     35 WAIT    -> 0x6752c
-                    otherwise  -> falls into TABLE 2
+                    below 43   -> falls into TABLE 2
+                    above 43   -> a SECOND chain at 0x62b71:
+                                    53 -> 0x65473    72 -> 0x650c6
+                                    otherwise -> TABLE 2, by its other door
 ```
+
+So table 2 has three entrances and not two; all three converge exactly, and
+that is measured over seventeen states rather than assumed (finding 361).
 
 The three state words are plain halfwords in the object (finding 213):
 
@@ -63,8 +69,10 @@ has the eighty-seven names.
 LCG -- never zeroed, both sides identical (finding 230) -- aims every pointer
 field, and then runs `V34InitializeImplementationSpecific` and
 `v34handshakinit`. **Side A runs ours and side B the blob's**, which is what
-makes the comparison a check rather than a tautology while both sides still
-call `ref_v34handshak` for the step itself.
+makes the comparison a check rather than a tautology on a case where both
+sides still call `ref_v34handshak` for the step itself. On a case that has
+been reconstructed, `v34hs_side_a` puts the reconstruction on side A and the
+step is differential too -- see "When you land a case".
 
 `v34hs_setup` also gives each side ONE ARENA: the object and all five blocks
 it points at, at fixed offsets inside a single 64 KB-aligned block with 32 KB
@@ -213,7 +221,7 @@ case.
 
 ## Table 2, the transmit supervisor -- DONE
 
-`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 10,974 checks.
+`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks.
 The first tier-1 differential test of any part of `v34handshak`. Findings
 360-366.
 

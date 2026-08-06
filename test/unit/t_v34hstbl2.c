@@ -722,6 +722,32 @@ main(void)
 	}
 
 	/*
+	 * EVERY RECORD THE SEPARATION CLAIMS READ WAS ACTUALLY WRITTEN.
+	 *
+	 * `by_tx` returns `&cold[0]` for a state it cannot find, so a typo in a
+	 * `differ` or `agree` argument compares txstate 5 against itself and
+	 * reads as a passing check.  `used` is what stops that, and it is
+	 * asserted rather than only written: an array filled and never read,
+	 * under a comment promising it cannot go stale, is exactly what
+	 * finding 290 records this fixture doing to `saw_hole`.
+	 */
+	for (i = 0; i < NCOLD; i++) {
+		snprintf(msg, sizeof(msg), "record for txstate %d was filled",
+			 cold_tx[i]);
+		diff_eq_int(msg, cold[i].used, 1, cold_tx[i]);
+	}
+	diff_eq_int("the warm records were filled",
+		    warm5.used + warm24.used + warm18.used + warm20.used
+		    + warm66.used + warm70.used, 6, 0);
+	for (i = 0; i < NCOLD; i++) {
+		snprintf(msg, sizeof(msg),
+			 "both route records for txstate %d were filled",
+			 cold_tx[i]);
+		diff_eq_int(msg, chain[R_CHAIN_LOW][i].used
+			    + chain[R_CHAIN_HIGH][i].used, 2, cold_tx[i]);
+	}
+
+	/*
 	 * And every pointer the comparison skips was reached, so the
 	 * thirty-five offsets this fixture excludes cannot go stale unnoticed.
 	 */

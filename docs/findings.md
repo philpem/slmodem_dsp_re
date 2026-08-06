@@ -16624,13 +16624,15 @@ Every one is between three and eight instructions. Nothing leaves the region,
 and **the whole closure -- seven arms, five branches out and the shared tail
 at 0x62a40 -- holds no `call` instruction at all**, which is what makes a
 reconstruction of it 200 lines rather than a dependency on half the object.
+That last is counted rather than eyeballed: `tools/dis.py` over the eleven
+address ranges the closure occupies, 167 instructions, zero of them a call.
 
 Six of the seven arms decide one field, the int at +0x0004, and fall into the
 seventh, which is both the table's default target and the shared tail. So the
 dispatch writes at most twelve bytes: +0x0004, the tail's counter at +0x0234,
 and the receiver's +0x1d2 on the one path that reaches 0x62b45.
 
-`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 10,974 checks.
+`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks.
 This is the first tier-1 differential test of any part of `v34handshak`.
 
 **One thing noticed and not filed as a deviation.** The counter at +0x0234
@@ -16709,7 +16711,11 @@ reproducible.
 The route knobs, all green: 24 object fills (`V34HS_SEED=0..23`), 9
 placements (`V34HS_SKEW`), 5 object skews (`V34HS_OBJSKEW`), 8 neighbourhoods
 (`V34HS_PADVARY=0..7`), `V34HS_LOOSEOBJ=1`, `V34HS_NOSCRUB=1` and
-`V34HS_REFINIT=1`. `V34HS_EQPTR=1` fails 12 checks -- and fails exactly the
+`V34HS_REFINIT=1`. **All of those are one-off measurements**, like finding
+322's; what `make phase` re-runs is the ordinary layout, so a future change
+that broke only the refinit pass would not be caught here. `t_v34hsstep.c`
+does run its refinit sweep inside `make phase`, and it covers the same
+seventeen table-2 states, so the gap is narrower than it sounds. `V34HS_EQPTR=1` fails 12 checks -- and fails exactly the
 same 12 on `t_v34hsstep` without any of this batch's changes, because forcing
 the twelve program-image pointers equal is precisely what makes
 `v34hs_holes_check` report them unexercised. Pre-existing, and not a property
