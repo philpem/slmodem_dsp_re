@@ -15435,7 +15435,14 @@ one byte further on" dies there.
 ### 298. Two functions are needed to know that `flags_0217` is six bytes and not five
 
 `getUinfoValue` writes 1, 0, 1, 1, 1, **1** to +0x217..+0x21c.
-`enterPhase3` writes 1, 0, 1, 1, 1, **0** to the same six offsets.
+`enterPhase3` writes 1, 0, 1, 1, 1, **0** to the same six offsets.  Both runs
+are read out of the object rather than out of each other's headers, because
+the whole argument rests on the sixth store and on nothing else:
+
+    f1c8:  c6 83 1b 02 00 00 01   movb $0x1,0x21b(%ebx)   getUinfoValue
+    f1cf:  c6 83 1c 02 00 00 01   movb $0x1,0x21c(%ebx)
+    f2ed:  c6 83 1b 02 00 00 01   movb $0x1,0x21b(%ebx)   enterPhase3
+    f2f4:  c6 83 1c 02 00 00 00   movb $0x0,0x21c(%ebx)
 
 Either one alone is six consecutive `movb` and nothing more; from one of them
 "six flags" and "five flags and an unrelated neighbour that happens to be set
