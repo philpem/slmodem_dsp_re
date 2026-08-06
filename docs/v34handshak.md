@@ -277,6 +277,43 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
+### Six of the nineteen have landed, and this is how a case is landed
+
+txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
+-- are in `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
+`test/unit/t_v34hstx1.c`. Findings 340-345.
+
+**`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
+one shared harness object, so it demands all forty-three cases at once, and no
+case can be the first if landing one requires all of them. What replaces it,
+per case, is the loop's own guard at 0x62933: with the queue count already at
+the block's limit the blob skips the per-sample loop entirely, so an arm that
+leaves the count at the limit can run FIRST on side A and the blob then
+contributes exactly the tail.
+
+```c
+    v34hs_route(V34HS_ROUTE_TXSAMPLE, 1);   /* count 0, limit 1        */
+    v34hs_state(V34HS_PHASE1, V34HS_SILENCE, 65);
+    rc = v34hs_step_case(v34tx1_xmit0);     /* A: ours + tail          */
+    v34hs_compare("65 XMIT0", tag);         /* B: the blob's + tail    */
+```
+
+`v34hs_step_case` installs the arm inside the snapshot, the alarm and the
+observation; calling it from the test before `v34hs_step` does not work, and
+finding 342 says why. **Run the case twice** -- once with the arm alone, to
+see the count reach the limit and the arm write something, and once through
+the fixture -- because an arm that did nothing leaves side A's step to run the
+blob's copy of it and the comparison passes for free.
+
+**The diagnostics must be off** on such a test: our code logs to capture
+channel 0 and the blob's to channel 1, and a side running both reaches only
+one of them. That is finding 341's gap and it also costs two mutations.
+
+**Seed what the arm writes.** Eleven claims were untestable against a cold
+object simply because the field already held the value the arm stores --
+finding 345 lists them, and it is the first thing to check when a mutation
+goes uncaught.
+
 The txstate a table-1 case is driven with IS the case, so unlike #57 there is
 no companion-field problem to solve first. What there is instead:
 

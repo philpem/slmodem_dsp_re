@@ -1,0 +1,76 @@
+/*
+ * v34hstx1.h -- six arms of `v34handshak`'s per-sample transmit dispatch.
+ *
+ * `v34handshak` is 61,541 bytes and is not one unit.  Table 1, the jump table
+ * at `.rodata+0x2da0`, is read INSIDE the per-sample loop at 0x62950 and
+ * indexed by `txstate - 5`; nineteen of its eighty-two entries have a target
+ * of their own and fifty-seven are the loop bottom (finding 287).  Each arm
+ * is one dispatch case, and each is reconstructed and tested on its own --
+ * see docs/v34handshak.md for why the function is taken this way and
+ * test/unit/t_v34hstx1.c for how one arm is compared against the blob.
+ *
+ * These six are the ones that write nothing below +0x234 (finding 323).
+ *
+ * WHAT AN ARM IS.  The loop is
+ *
+ *     while (txq.count < f2aa0)
+ *             switch (txstate) { ... }
+ *
+ * and every one of these six ends by rejoining that test, so an arm is a
+ * function returning void-equivalent and the caller loops.  Two of them can
+ * instead leave the loop through a block that is NOT reconstructed, and they
+ * say so in their return value rather than doing something plausible: the
+ * eventual `v34handshak` must dispatch on it.
+ *
+ * WHAT IS NOT HERE, and it is a real gap rather than an omission.  Every arm
+ * below that changes `txstate`, and both counter arms, guard a diagnostic on
+ * `dsplibs_debug_level > 1` and print through the far blocks at 0x655f0,
+ * 0x6821d, 0x68271, 0x68282, 0x6824f, 0x68260 and 0x684c6.  None of those
+ * prints is reconstructed, so these functions are faithful at debug level 0
+ * -- which is what the library ships (`dsplibs_debug_level` is zero) and what
+ * `t_v34hstx1.c` tests at.  Finding 341.
+ */
+
+#ifndef DSPLIB_V34HSTX1_H
+#define DSPLIB_V34HSTX1_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * Where an arm left the dispatch.
+ *
+ * `V34TX1_LOOP` is "rejoined the loop bottom at 0x629e0" -- 0x629c8, 0x62d70
+ * and 0x6430c all reach it, and the difference between them is a write the
+ * arm that uses it performs for itself.
+ *
+ * The other two are transfers OUT of the arm into blocks this file does not
+ * model.  They are returned rather than followed because following them
+ * would mean writing code no differential test here can reach, which is
+ * exactly the wrong-but-plausible thing the tree does not commit.
+ */
+enum v34tx1_exit {
+	V34TX1_LOOP = 0,	/* back to the per-sample loop test  */
+	V34TX1_MOH_WRAP,	/* 81: `vect_idx` hit 0xc0 -> 0x66d85 */
+	V34TX1_TXMD_DONE	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
+};
+
+/* 65 XMIT0        0x62d83 */
+int v34tx1_xmit0(void *obj);
+/* 71 TXLEVEL      0x641d1 */
+int v34tx1_txlevel(void *obj);
+/* 78 JaTXMIT      0x64139 */
+int v34tx1_jatxmit(void *obj);
+/* 81 MOH_SILENCE  0x63d58, shared by txstates 81, 82, 83 and 84 */
+int v34tx1_moh_silence(void *obj);
+/* 85 K56JaTXMIT   0x63fb0 */
+int v34tx1_k56jatxmit(void *obj);
+/* 86 TXMD         0x63dae */
+int v34tx1_txmd(void *obj);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* DSPLIB_V34HSTX1_H */

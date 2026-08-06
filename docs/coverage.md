@@ -45,6 +45,12 @@ dsplibs.o reconstruction coverage
   we define these and the object has no symbol of that name --
   either a helper split out of a larger function, or drift:
     v34handshak_txblock
+    v34tx1_jatxmit
+    v34tx1_k56jatxmit
+    v34tx1_moh_silence
+    v34tx1_txlevel
+    v34tx1_txmd
+    v34tx1_xmit0
     v8_handshak_agc
     v8_handshak_demod
 
