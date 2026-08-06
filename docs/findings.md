@@ -16611,12 +16611,16 @@ batch would have been a different shape.
 
 #### `v34handshak_t3mid`, and why not `v34handshak`
 
-The entry is not called `v34handshak`, and that is a measurement rather than
-taste. `tools/coverage.py` credits `translated` by the **blob symbol's whole
-size**, so a definition of that name would book all 61,541 bytes for nine
-arms. Confirmed by running it: with the entry under its own name `translated`
-stays at 21.2% and the three new symbols appear under "we define these and
-the object has no symbol of that name", which is what they are.
+The entry is not called `v34handshak`. `tools/coverage.py` credits
+`translated` by the **blob symbol's whole size** -- that is the tool's own
+definition of the number rather than an inference about it -- so a definition
+of that name would book all 61,541 bytes for nine arms.
+
+**The half that was measured is the half that could be**: with the entry under
+its own name `translated` stays at 21.2% and the new symbols appear under "we
+define these and the object has no symbol of that name", which is what they
+are. The counterfactual is read out of the tool and not run, and this file's
+own standard (findings 223 and 249) is that those are different claims.
 
 The second reason is that four batches are landing arms in parallel and one
 symbol cannot hold four partial reconstructions. The file is
