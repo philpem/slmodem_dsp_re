@@ -2,10 +2,11 @@
  * VPcmFloModem.h -- the V.90/V.92 modem's face to the V.34 handshake.
  *
  * Reconstructed from dsplibs.o.  The class has twenty-six members in the blob
- * and this batch writes FIVE of them: `getUinfoValue`, `setPhaseIIinfo`,
- * `getV90CpBits`, `getV90JaBits` and `setPcmSessionType`.  Everything else is
- * left undeclared rather than declared-and-undefined, because nothing here
- * calls it and a declaration nobody needs is a claim nobody checked.
+ * and this tree writes SIX of them: `getUinfoValue`, `setPhaseIIinfo`,
+ * `getV90CpBits`, `getV90JaBits`, `setPcmSessionType` and `enterPhase3`.
+ * Everything else is left undeclared rather than declared-and-undefined,
+ * because nothing here calls it and a declaration nobody needs is a claim
+ * nobody checked.
  *
  * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the `D1` and
  * `D2` variants and no `D0`, and GCC emits a deleting destructor only for a
@@ -93,6 +94,7 @@
 #define DSPLIB_VPCMFLOMODEM_H
 
 #include "dsplib/V90SessionFlag.h"	/* V90Modem, and V90Phase2Info */
+#include "dsplib/V90Phase3Modulator.h"	/* tagV90DILdescriptor          */
 #include "dsplib/V92Phase2Info.h"
 
 /*
@@ -139,6 +141,18 @@ public:
 	/* Record V.90 (0) or V.92 (non-zero) and tell the modem. */
 	void setPcmSessionType(int sessionType);
 
+	/*
+	 * Clear the transmit bookkeeping, hand phase 3 to the demodulator,
+	 * and pack the DIL descriptor into `bitVector` as the JA vector.
+	 *
+	 * Twenty-one constant stores, two calls and two diagnostics; it reads
+	 * nothing but `modem.demodulator`, `dil` and the `nofBits` the packer
+	 * has just written.  The return type is not mangled and nothing here
+	 * establishes it: `void` is what the object supports, since every
+	 * path falls into the tail of `edprintf` and %eax is never set.
+	 */
+	void enterPhase3();
+
 	/* --- data members; see the file comment on the naming --- */
 
 	/*
@@ -149,11 +163,29 @@ public:
 	 */
 	void *v34Object;
 
-	unsigned char pad_0004[0x217 - 0x004];	/* +0x0004 not modelled */
+	/*
+	 * +0x0004  The DIL descriptor, EMBEDDED, and it is the JA vector's
+	 * source: `enterPhase3` ends
+	 *
+	 *     lea 0x4(%ebx),%eax   -> arg 1 of DILdescriptorPacker
+	 *     lea 0x21e(%ebx),%edx -> arg 2, `bitVector`
+	 *     lea 0x1736(%ebx),%ecx-> arg 3, `&nofBits`
+	 *
+	 * an ADD off `this` for the descriptor, not a load, so the block is
+	 * in the object.  Its TYPE is settled by two independent facts:
+	 * `DILdescriptorPacker` takes a `const tagV90DILdescriptor *`
+	 * (include/dsplib/DILdescriptorPacker.h), and
+	 * `sizeof(tagV90DILdescriptor)` is 0x213, which runs from +0x004 to
+	 * +0x216 and stops exactly where the next measured field, +0x217,
+	 * begins.  The span this replaced was 0x213 bytes of `pad_0004`.
+	 */
+	tagV90DILdescriptor dil;
 
 	/*
 	 * +0x0217  Six bytes `getUinfoValue` sets to 1, 0, 1, 1, 1, 1 when it
-	 * has no Uinfo to report.  Offset-named: nothing establishes what
+	 * has no Uinfo to report, and `enterPhase3` sets to 1, 0, 1, 1, 1, 0
+	 * -- the same pattern but for the last, which is why the array is
+	 * six long rather than five.  Offset-named: nothing establishes what
 	 * they select, and no other function this tree has read touches them.
 	 */
 	unsigned char flags_0217[6];
@@ -188,16 +220,28 @@ public:
 	 */
 	unsigned short bitPointer;
 
-	unsigned char pad_173a[3];		/* +0x173a not modelled */
+	/*
+	 * +0x173a  Three bytes `enterPhase3` clears, immediately before
+	 * `flag_173d` and `flag_173e`, which it clears in the same run of
+	 * five `movb $0x0`.  Offset-named: nothing reads them here.
+	 */
+	unsigned char flags_173a[3];
 
 	/*
 	 * +0x173d  A byte `getUinfoValue` tests: non-zero skips the lookup
 	 * through the modem entirely and takes the default-flags path.
+	 * `enterPhase3` clears it, so entering phase 3 restores the lookup.
 	 * Offset-named.
 	 */
 	unsigned char flag_173d;
 
-	unsigned char pad_173e[0x1758 - 0x173e];	/* +0x173e         */
+	/*
+	 * +0x173e  The fifth of `enterPhase3`'s run of five cleared bytes.
+	 * Offset-named; nothing else this tree has read touches it.
+	 */
+	unsigned char flag_173e;
+
+	unsigned char pad_173f[0x1758 - 0x173f];	/* +0x173f         */
 
 	/*
 	 * +0x1758  The V90Modem, EMBEDDED.  See the file comment for the
@@ -272,7 +316,7 @@ public:
 	/*
 	 * +0x7dd2  How many bits `getV90CpBits` packs into one output word.
 	 * `movzbl`, and the shift count is masked to five bits by the
-	 * hardware.  Descriptive and hedged.
+	 * hardware.  `enterPhase3` sets it to 2.  Descriptive and hedged.
 	 */
 	unsigned char nofBitsPerSymbol;
 
@@ -283,6 +327,8 @@ public:
 	 * must reach before CP can give way to CPnot.  Both `movzwl`, and the
 	 * comparison between them is unsigned.  `setMinNofTransmitSequences`
 	 * is a member of this class and takes an `unsigned short`.
+	 * `enterPhase3` sets the counter to 0 and the minimum to 1, so one
+	 * completed sequence is enough unless something raises it afterwards.
 	 */
 	unsigned short nofTransmitSequences;
 	unsigned short minNofTransmitSequences;

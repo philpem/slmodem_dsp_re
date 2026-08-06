@@ -15386,3 +15386,145 @@ Mutation suites re-run after the merge to confirm nothing was weakened by the
 edits: `vpcmflomodem` 49 mutations, 48 caught and 1 measured-equivalent;
 `v90sessionflag` 16 mutations, 14 caught and the two orderings finding 269
 records as unobservable.
+
+### 297. The DIL descriptor is EMBEDDED in `VPcmFloModem` at +0x004, and `bitVector` is exactly big enough for it
+
+`VPcmFloModem::enterPhase3` ends with three address computations and a call:
+
+    8d 8b 36 17 00 00   lea 0x1736(%ebx),%ecx    -> arg 3
+    8d 93 1e 02 00 00   lea 0x21e(%ebx),%edx     -> arg 2
+    8d 43 04            lea 0x4(%ebx),%eax       -> arg 1
+                        call DILdescriptorPacker
+
+Every one is a `lea` off `this`, not a load, so all three arguments are
+memory *inside* the object: the descriptor at +0x004, the bit vector at
++0x21e that `getV90JaBits` already reads, and the `nofBits` at +0x1736 that
+already counts it. `pad_0004` becomes `tagV90DILdescriptor dil`.
+
+The TYPE is settled twice over and neither argument is a guess:
+
+- `DILdescriptorPacker`'s first parameter is a `const tagV90DILdescriptor *`,
+  established by finding 262's reading of the function itself.
+- `sizeof(tagV90DILdescriptor)` is 0x213, and 0x004 + 0x213 = 0x217, which is
+  where `flags_0217` -- measured from two other members entirely -- begins.
+  The span it replaced was 0x213 bytes to the byte.
+
+A third number falls out and is worth recording because it corroborates a
+field nobody had reason to doubt. `bitVector` runs from +0x21e to `nofBits`
+at +0x1736, so (0x1736 - 0x21e) / 2 = **2,700 entries**; and
+`DILdescriptorPacker.h` bounds the largest descriptor the fields can describe
+at **2,654 bits**. The field is big enough for the worst case and only just.
+Had `nofBits` been anywhere earlier the object would overrun its own buffer on
+a descriptor it can represent, so two independently derived offsets agree
+about a bound neither was derived from.
+
+`src/pump/v90/VPcmFloModem.cpp` asserts `sizeof(tagV90DILdescriptor) == 0x213`
+beside its offsets, for the same reason it asserts `sizeof(V90Modem)`: a later
+batch that gives the descriptor another field must break the build here rather
+than silently shift every offset from +0x217 to +0x7f27.
+
+`t_vpcmep3.cpp` pins the address rather than trusting the arithmetic. It
+copies the descriptor the object holds into a standalone one, re-packs it into
+a copy of the bit vector as it stood *before* the call, and requires the
+object's own vector to be that -- all 2,700 entries, so a byte written past
+the packed length fails too. Starting from the pre-call contents is what makes
+comparing the whole array legitimate: a position the packer does not write
+must still hold what it held. The mutation "the packer is handed a descriptor
+one byte further on" dies there.
+
+### 298. Two functions are needed to know that `flags_0217` is six bytes and not five
+
+`getUinfoValue` writes 1, 0, 1, 1, 1, **1** to +0x217..+0x21c.
+`enterPhase3` writes 1, 0, 1, 1, 1, **0** to the same six offsets.  Both runs
+are read out of the object rather than out of each other's headers, because
+the whole argument rests on the sixth store and on nothing else:
+
+    f1c8:  c6 83 1b 02 00 00 01   movb $0x1,0x21b(%ebx)   getUinfoValue
+    f1cf:  c6 83 1c 02 00 00 01   movb $0x1,0x21c(%ebx)
+    f2ed:  c6 83 1b 02 00 00 01   movb $0x1,0x21b(%ebx)   enterPhase3
+    f2f4:  c6 83 1c 02 00 00 00   movb $0x0,0x21c(%ebx)
+
+Either one alone is six consecutive `movb` and nothing more; from one of them
+"six flags" and "five flags and an unrelated neighbour that happens to be set
+the same way" are the same observation. The two together settle it: the sixth
+byte is written by both, and to *different* values, so it belongs to whatever
+the other five belong to and is not a constant that could be folded into them.
+
+The same method settles a second run in the same object. `enterPhase3` clears
+five bytes at +0x173a..+0x173e, one of which -- +0x173d -- `getUinfoValue`
+tests as the flag that short-circuits its lookup through the modem. So
+`pad_173a[3]` becomes `flags_173a[3]` and the first byte of `pad_173e` becomes
+`flag_173e`; all five are offset-named, because knowing they are cleared
+together says nothing about what they select.
+
+The general shape, and it is the same one finding 272 records for field maps:
+**a run of stores is bounded by the union of its writers, never by one of
+them.** A single writer gives a lower bound on the run and no upper bound at
+all.
+
+### 299. A store the object makes that nothing can observe, and how to tell that from a test gap
+
+`enterPhase3`'s `mov %dx,0x1736(%ebx)` clears `nofBits`. It is DEAD:
+`DILdescriptorPacker` writes through its third argument on **both** of its
+exits --
+
+    if (crcAt & 1) { bits[crcAt + 18] = 0; *nbits = crcAt + 19; }
+    else                                   *nbits = crcAt + 18;
+
+-- and nothing between the store and the call reads the field. The disassembly
+supports the claim independently: there is one `call` and one `lea 0x1736` in
+the whole function, so no other path can reach the field.
+
+The mutation that deletes the store therefore **cannot fail**, and it is
+carried in `test/mutations/vpcmep3.json` as `"equivalent": true` rather than
+deleted. That distinction is the point. An entry that is absent reads as
+"nobody thought of it"; an entry that is present and NOT CAUGHT reads as an
+untested claim and should block a commit; an entry marked equivalent with the
+argument attached is the third thing, and the argument has to be about the
+code -- here, that the packer is the only writer -- and not about what the
+test happens to cover. Findings 247, 262 and 295 are the same shape.
+
+`t_vpcmep3.cpp` carries the twenty-one stores in a table with a width column,
+and the dead one has width 0: it is checked for having been written by
+*somebody* (`nofBits` comes back non-zero -- frame 0 alone is seventeen bits)
+and excluded from the by-name constant check and from the anti-vacuity sweep.
+The other twenty are each required to have been observably changed at least
+once across the sweep, which is what keeps "the constant is right" from being
+carried by a seeded byte that happened to already hold it.
+
+### 300. `test/harness/v90demfix.h`: the third copy of the demodulator fixture became a shared one
+
+Standing up a `V90Demodulator` is the most expensive fixture in this tree --
+sixteen blocks, seeded pairwise, wired per side, neutralised per side, and a
+`FloatFIR` constructed and destroyed by each side's own constructor because it
+allocates. `t_v90p3dreset.cpp` wrote the phase 3 half of it, `t_v90demod.cpp`
+copied that and added the rest, and `VPcmFloModem::enterPhase3` needed a third
+copy. Finding 296 said the third copy was the point at which it should become
+shared, and it now is: `test/harness/v90demfix.h`.
+
+`t_v90demod.cpp` and `t_vpcmep3.cpp` use it. `t_v90p3dreset.cpp` **does
+not, deliberately** -- it drives `V90Phase3Demodulator::reset` directly with
+eleven arguments, allocates its slot as a `union` so the class can be a member
+of one, and needs no demodulator at all. Folding it in would mean carrying two
+shapes in the header to save one copy of the smaller half. It is recorded as a
+candidate rather than done.
+
+**The refactor was verified, not assumed.** `t_v90demod`'s mutation suite was
+re-run afterwards and gives exactly what finding 295 recorded before it: 30
+mutations, 28 caught, the same two uncaught by name. A shared fixture that
+quietly weakened a landed batch's evidence would look identical to one that
+did not, and the mutation suite is the only thing that tells them apart.
+
+What a user must do, in order:
+
+    setup(trial, &args);     seed everything, wire it, construct both FIRs
+    ... drive both sides ...
+    teardown();              destroy both FIRs -- NOT optional, they malloc
+    compare_all(what, tag);  compare all sixteen blocks
+
+`setup` leaves `lfsr_state` running, so a caller with storage of its own fills
+it with `fill_pair` immediately afterwards and gets bytes that are pairwise
+identical and varied. `t_vpcmep3.cpp` fills a 32,616-byte `VPcmFloModem` slot
+that way and then overwrites exactly one field, `modem.demodulator`, which is
+also the only one its snapshot neutralises -- a per-side pointer in the middle
+of the block, which is finding 294's second rule.
