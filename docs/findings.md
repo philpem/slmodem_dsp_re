@@ -18951,3 +18951,48 @@ better than a plausible one that is not there.
 **Findings 410-419 are the block this worktree was allocated; 410-418 are
 used.** Checked against `docs/findings.md`'s existing maximum (397) and
 `tools/refcheck.py` before use.
+
+### 347. Every arm added to `v34handshak` breaks somebody else's mutation anchors
+
+Three batches have now hit the same thing independently and each reported it
+as a surprise, so it belongs somewhere findable.
+
+`mutate.py` matches a mutation's `find` string as a **substring of the whole
+file**. `v34handshak`'s arms are, by construction, near-identical at their
+edges: nearly every one ends by setting a transmit state and a microstate
+through `hs_setstate` and falling into the block dispatch. So the moment a
+second arm lands, a one- or two-line anchor written against the first matches
+twice.
+
+**A doubly-matching anchor reports `UNUSABLE`, and `UNUSABLE` does not fail a
+run.** The suite still prints `0 NOT caught`. Three suites have quietly lost
+mutations this way:
+
+```
+w6_mst41  broke two anchors in v34hst3core   (40 caught, 2 unusable)
+w6_mst46  broke three, in v34hshak and v34hst3core
+w6_mst44  broke two, in the same two files -- from its own commit
+merging 41 and 46 together broke four more, in their own two suites
+```
+
+Every one was repaired by extending the anchor upward or downward by one line
+into something the arm does not share -- `T41_FABC2`, `T46_MSG_LAST`,
+`T3C_FABF0` -- with a `note` on the entry saying why it carries that line.
+
+#### The rule this leaves
+
+**After adding an arm, re-run every suite over `v34hshak.c` and read the
+UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
+that does not fail.
+
+And when writing an anchor for an arm of a function like this, reach for a
+line with a macro name only your arm uses. The `T41_`/`T44_`/`T46_` prefixes
+were introduced to stop `#define` collisions (finding 325); they turn out to
+be just as useful as the thing that makes an anchor unique, because a shared
+`hs_setstate` line is exactly what every arm has and a prefixed offset name is
+exactly what only one has.
+
+`refcheck.py` cannot check this: the anchors are data, and whether one matches
+twice depends on a source file it would have to search. What it can and now
+does check is that the registry naming those files parses at all (finding
+346).

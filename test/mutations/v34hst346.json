@@ -269,18 +269,21 @@
  },
  {
   "label": "the reset moves the transmit state to TX_L1",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);"
+  "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm."
  },
  {
   "label": "the reset moves the microstate to DET_CJ",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);"
+  "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm."
  },
  {
   "label": "the reset moves the microstate before the transmit state",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);"
+  "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm."
  },
  {
   "label": "the reset writes 1 into +0xaae2",
