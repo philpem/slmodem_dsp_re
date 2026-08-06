@@ -223,11 +223,17 @@ reconstructions of `v34handshak` exist, `v34hshak.c`'s `v34handshak` and
 to the other. Task #25 unifies them; until it does, read the `where` column
 before writing anything.
 
+**AND WRITE THE COLUMN FROM THE TREE, NOT FROM YOUR OWN COPY.** The batch that
+added this column marked 46 `open` because 46 is not in `v34hshak_t3mid.c`,
+which was the file it was working in -- it is in `v34hshak.c`, landed and
+tested. One column, two files, and "open" meant "open here". Check with
+`grep -n 'case V34HS_' src/pump/v34/v34hshak*.c` before trusting a row.
+
 | microstate | target | bytes | cold behaviour | where |
 |---|---|--:|---|---|
 | 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B | PARTLY, `v34hshak.c` |
 | 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B | LANDED, `v34hshak.c` |
-| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B | open |
+| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B | LANDED, `v34hshak.c` |
 | 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces | LANDED, `_t3mid` |
 | 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D | LANDED, `_t3mid` |
 | 51 `TX_L1` | 0x65c47 | 1735 | group D | LANDED, `_t3mid` |
