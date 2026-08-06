@@ -377,6 +377,155 @@ main(void)
 	 * Anti-vacuity.  A generator stuck on one code would agree with itself
 	 * forever; the run must have produced several distinct ones.
 	 */
+	/*
+	 * THE STATES A DIAL STRING CANNOT REACH.
+	 *
+	 * `DialerProgress` switches on `d->progress_state`, and six paths are
+	 * unreachable from any dial string this file can write:
+	 * WAIT_FOR_SILENCE and WAIT_FOR_BONGTONE are entered only when the
+	 * SUPERVISOR puts them there after a '@' or '$', the pulse-release
+	 * arm needs a digit in flight, and the default arm needs a state
+	 * number no parser produces.
+	 *
+	 * `progress_state` is a plain int, so seeding it is the same move the
+	 * countdown seeds elsewhere make -- and it is what makes these four
+	 * announcements reachable at all.  Each is compared at every level
+	 * with the return code, the write position, the buffer, the whole
+	 * object and the transcript.
+	 */
+	diff_begin("dialer: the six paths a dial string cannot reach");
+	{
+		static const struct {
+			const char	*what;
+			int		state;
+			int		active, released;
+			int		remaining;	/* into the CALL   */
+		} seeded[] = {
+			{ "wait for silence",  DIALER_WAIT_FOR_SILENCE_STATE,
+			  0, 0, 0 },
+			{ "wait for bong",     DIALER_WAIT_FOR_BONGTONE_STATE,
+			  0, 0, 0 },
+			/*
+			 * END_PARTIALLY, not INITIAL: the release check lives
+			 * inside `case DIALER_END_PARTIALLY_STATE`, and the
+			 * first version of this seeded state 0 with the pulse
+			 * flags set, which reached nothing.  The call object
+			 * below is required, because this arm calls
+			 * LastPulseDigitDialed through it.
+			 */
+			{ "pulse still in flight",
+			  DIALER_END_PARTIALLY_STATE, 1, 0, 0 },
+			{ "a state no parser produces", 99, 0, 0, 0 },
+			/*
+			 * The two "waiting for the pulse dialler" reports.
+			 * `IsPulseDialerReady` answers 0 only while
+			 * `pulse_remaining` is non-zero in the CALL object,
+			 * which no dial string this file writes leaves set at
+			 * the moment either check runs -- so both were dead.
+			 * State 1 is the digit, which reaches `pulse_digit`;
+			 * state 3 is the hook flash, which has its own copy.
+			 */
+			{ "digit waiting for the pulse dialler",   1, 0, 0, 2 },
+			{ "flash waiting for the pulse dialler",   3, 0, 0, 2 },
+		};
+		static struct dialer da, db;
+		static struct call ca, cb;
+		static short ba[BUFSAMP], bb[BUFSAMP];
+		unsigned lvl, c;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			for (c = 0; c < sizeof(seeded) / sizeof(seeded[0]); c++) {
+				int pa = 0, pb = 0, ra, rb, i;
+				long tag = (long)lvl * 100 + c;
+
+				memset(&da, HARNESS_MALLOC_FILL, sizeof(da));
+				memset(&db, HARNESS_MALLOC_FILL, sizeof(db));
+				memset(ba, 0x5a, sizeof(ba));
+				memset(bb, 0x5a, sizeof(bb));
+				params(0, 0, 0, 0, 0);
+				memset(&ca, 0, sizeof(ca));
+				memset(&cb, 0, sizeof(cb));
+				ca.self = &ca;
+				cb.self = &cb;
+				ca.pulse_remaining = cb.pulse_remaining =
+					seeded[c].remaining;
+
+				/*
+				 * One call object per side, aimed the way
+				 * t_pulse.c does it: everything the pulse
+				 * dialler touches is reached through
+				 * MDMPRM_DP_ADDR, so the parameter is
+				 * re-pointed around each side's own call.
+				 */
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&ca);
+				DialerCreate(&da, "5551234", (void *)0xD1A1u);
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&cb);
+				ref_DialerCreate(&db, "5551234", (void *)0xD1A1u);
+
+				da.progress_state = db.progress_state =
+					seeded[c].state;
+				da.pulse_active = db.pulse_active =
+					seeded[c].active;
+				da.pulse_released = db.pulse_released =
+					seeded[c].released;
+
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					lvl;
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&ca);
+				ra = DialerProgress(&da, ba, &pa, BUFSAMP - 1);
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&cb);
+				rb = ref_DialerProgress(&db, bb, &pb,
+							BUFSAMP - 1);
+
+				dsplib_debug_capture_on = 0;
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					0;
+
+				diff_eq_int("%s: code", ra, rb, tag);
+				diff_eq_int("%s: position", pa, pb, tag);
+				for (i = 0; i < BUFSAMP; i++)
+					diff_eq_int("buffer", ba[i], bb[i],
+						    tag * 1000 + i);
+				diff_eq_obj("the dialler after", struct dialer,
+					    &da, &db, tag);
+				diff_eq_int("transcripts agree",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("level says the right amount",
+					    dsplib_debug_capture_lines(1) > 0,
+					    lvl > 1, tag);
+				/*
+				 * Not diff_eq_obj: `self` at +16 holds each
+				 * side's OWN address and necessarily differs.
+				 * Compared as an identity instead -- the same
+				 * shape t_v34hshak.c's check_self_ptr uses --
+				 * and the rest byte for byte.
+				 */
+				diff_eq_int("ours points at itself",
+					    ca.self == &ca, 1, tag);
+				diff_eq_int("the blob's points at itself",
+					    cb.self == &cb, 1, tag);
+				for (i = 0; i < (int)sizeof(ca); i++) {
+					if (i >= 16 && i < 20)
+						continue;
+					diff_eq_int("the call object after",
+						    ((unsigned char *)&ca)[i],
+						    ((unsigned char *)&cb)[i],
+						    tag * 100000 + i);
+				}
+			}
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("guards");
 	{
 		/*
