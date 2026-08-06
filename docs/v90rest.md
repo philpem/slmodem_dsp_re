@@ -87,7 +87,15 @@ costs one 270-byte method rather than the batch.
     307-312    V34SetINFO1aBits
     313-318    VPcmV34InitiateRetrain
     319-324    the harness's table 1
-    325+       V34GiveINFO1dBits, indicateJaTransmission, and v34handshak
+    325        the CFG_FLAGS macro collision              landed
+    330-331    renumbered out of master's way             landed
+    332-337    V34GiveINFO1dBits
+    340-349    v34handshak table 1's six small targets
+    350-359    v34handshak table 3's 62, 79, 80 + shared arm
+    360-369    v34handshak table 2's seven targets
+    370-379    v34handshak table 3's middle group
+    380+       indicateJaTransmission, the big three (41/44/46),
+               table 1's remaining thirteen, datapumpv34
     291-296    V90Phase3Demodulator::reset               all used
     297-300    VPcmFloModem::enterPhase3                 all used
     301-320    #59's remaining five
