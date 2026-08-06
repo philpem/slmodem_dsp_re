@@ -36,9 +36,16 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
     (no -fPIC/-fPIE)        not one get_pc_thunk in the object
     (no -fstack-protector)  no __guard, no __stack_smash_handler
 
-`-O2` is the one assumption left, and it is the only level that fits what the
-first four settled.  If a future round finds a systematic mismatch that a
-different level explains, this comment is the place to record it.
+    -frename-registers      a post-reload pass GCC 3.4 enables at -O3.  Found
+                            by bisecting Agc<float>::reset, which it makes
+                            byte-identical; tree-wide it accounts for ALL of
+                            -O3's advantage, 83 identical -> 92.  The rest of
+                            -O3 adds 17 KB of our code and no matches at all,
+                            so -O3 itself is disfavoured.  Finding 356.
+
+`-O2` is the level, on the evidence above.  What is still open is only whether
+the original passed `-frename-registers` explicitly or passed `-O3` and got it
+while the rest of -O3 happened not to bite on sources shaped like theirs.
 
 WHAT THE NUMBERS MEAN, and do not mean.  A size mismatch is not a defect: our
 source is not the original's source, and a function we wrote as one loop that

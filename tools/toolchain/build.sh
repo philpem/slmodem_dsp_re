@@ -10,7 +10,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 OUT=${TC_OUT:-/tmp/tc_out}
-FLAGS="-O2 -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude"
+FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude"
 
 # MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
 # make recipe, both leak `make[1]: Entering directory ...` and a jobserver

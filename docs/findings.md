@@ -15017,3 +15017,59 @@ and no reasonable source change expresses that. The first is worth doing, the
 second is fitting the compiler. Finding 354's rule for extensions has the same
 shape: act on what the compiler was FORCED to encode, ignore what it was free
 to choose.
+
+### 356. It was not `-O3`: one flag explains all of it, and the size ratio was misleading
+
+The register allocation left over after finding 355's reorder turned out to be
+a flag, and chasing it settles the `-O2`/`-O3` question that findings 351 and
+352 left open -- against `-O3`.
+
+**Bisecting one function.** `Agc<float>::reset` after the store-order fix still
+differed from the object in 7 instructions of 11: the object keeps 0 in `%ecx`
+and 1.0 in `%edx` live together, hoisting the zero ahead of the 1.0 stores,
+where we reuse one register. Compiling that one file every way:
+
+| flags | `Agc::reset` |
+|---|---|
+| `-O2` | differs, 7 of 11 |
+| `-O3` | **identical, operands and all** |
+| `-O2 -fschedule-insns` | differs, 9 of 11 |
+| `-O3 -fno-schedule-insns2` | differs, 7 of 11 |
+| `-Os` | differs, 7 of 11 |
+| **`-O2 -frename-registers`** | **identical** |
+| `-O3 -fno-rename-registers` | differs, 7 of 11 |
+
+`-frename-registers`, which GCC 3.4 enables at `-O3`. It is a post-reload pass
+that reuses different registers to break false dependencies, which is exactly
+the freedom the object's version is using.
+
+**Tree-wide, and this is the part that decides it:**
+
+| flags | identical | our bytes |
+|---|---|---|
+| `-O2` | 83 | 77.3% |
+| `-O2 -frename-registers` | **92** | 77.4% |
+| `-O3` | **92** | 89.0% |
+| `-O3 -fno-rename-registers` | 85 | 88.8% |
+
+**Every one of `-O3`'s nine extra matches comes from `-frename-registers`
+alone.** The remainder of `-O3` -- `-finline-functions`, `-funswitch-loops`,
+`-fpeel-loops` -- adds 17 KB of our code and NOT ONE additional match. If the
+original had been built at `-O3`, our `-O3` build should agree with it more
+often. It does not. So the better model is `-O2` with `-frename-registers`, and
+`-O3` is now actively disfavoured rather than merely unproven.
+
+**The size ratio was measuring the wrong thing, exactly as warned.** `-O3`
+moved it from 77.3% to 89.0% and that looked like strong evidence. It was the
+mechanism flagged in finding 352: we undershoot, `-O3` inlines harder, our code
+grows 17 KB, the gap closes arithmetically. Nothing became more like the
+original -- the match count is flat at 92 across that entire 12-point swing.
+Had the ratio been the deciding number, this would have been settled wrongly.
+
+Adopted: `-O2 -frename-registers -march=i386 -mtune=i686`. Ratchet 83 -> 92.
+
+The open question that remains is narrower and worth stating precisely: whether
+the original passed `-frename-registers` explicitly at `-O2`, or passed `-O3`
+and got it -- with the rest of `-O3`'s effect absent because the original's
+sources are shaped differently from ours. V.90 landing is still the thing most
+likely to separate those, since inlining differences show up in big functions.
