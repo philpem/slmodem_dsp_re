@@ -36,7 +36,13 @@ static inline void copy1(T *dst, const T *src)
 template <class T>
 __attribute__((noinline)) void Queue<T>::reset()
 {
-	wr = rd = buf;
+	/*
+	 * `rd = wr = buf`, not `wr = rd = buf`: the object stores `wr` first,
+	 * and written this way the function comes out full-text identical to
+	 * it, operands and all.  The two spellings are equivalent -- both set
+	 * both -- so this is the author's, recovered.  Finding 357.
+	 */
+	rd = wr = buf;
 }
 
 template <class T>

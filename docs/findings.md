@@ -15073,3 +15073,58 @@ the original passed `-frename-registers` explicitly at `-O2`, or passed `-O3`
 and got it -- with the rest of `-O3`'s effect absent because the original's
 sources are shaped differently from ours. V.90 landing is still the thing most
 likely to separate those, since inlining differences show up in big functions.
+
+### 357. Store order is a hint, not the author's order -- and full-text identity is the test
+
+Task #70 was scoped on a premise from finding 355: that GCC 3.4 preserves the
+order of independent stores, so the object's store sequence IS the author's
+statement order. **The premise is wrong**, and `toneiir_reset` is the
+counter-example that shows it.
+
+Our source there reads:
+
+```c
+short prev = st->env_band;   /* 0x96 */
+st->env_band = 0;            /* 0x96 */
+st->n = 0;                   /* 0x2c */
+st->env_prev = prev;         /* 0x98 */
+st->env_in = 0;              /* 0x94 */
+```
+
+which is `0x96 0x2c 0x98 0x94` -- **exactly the object's order**. GCC emits ours
+as `0x96 0x94 0x98 0x2c`, hoisting the short store and sinking the `int` one.
+Same compiler, same flags, and the source already agreed. So the compiler
+reorders, the map from source order to emitted order is not the identity, and
+the author's statement order cannot be read off the object.
+
+(The `movswl`/`movzwl` difference in the same function is NOT the cause:
+declaring `prev` as `unsigned short` produces the object's `movzwl` and leaves
+the store order exactly as it was.)
+
+**What survives, and it is worth having.** A store-order difference still means
+something upstream differs -- it is a usable HINT. What it is not is a
+conclusion, and the acceptance test for acting on it must be **full-text
+identity, operands included**, not agreement of the offset list. Two cases
+passed that test:
+
+- `Queue<float>::reset` -- `rd = wr = buf` in place of `wr = rd = buf`. The two
+  spellings are equivalent, both set both, and written the object's way the
+  function is identical instruction for instruction. The author's order,
+  recovered.
+- `Agc<float>::reset` -- the reorder in finding 355, which under
+  `-frename-registers` (finding 356) is now also full-text identical.
+
+Everything else on the 19-function list stays untouched. Where permuting our
+statements only shuffles the offset list without producing an exact match, it
+is noise, and changing source to chase it is fitting the compiler.
+
+**The pattern in my own errors this session is worth naming**, since it has now
+happened three times: a signal is observed (extension differences, size ratios,
+store order), a mechanism is assumed, and the assumption turns out to explain
+less than the evidence seemed to show. Findings 354, 356 and this one. In each
+case the fix was the same -- find the case that would distinguish the
+hypotheses and run it. The container makes that cheap, which is most of its
+value; it is faster to test a belief about the compiler than to argue about it.
+
+`tools/toolchain/storeorder.py` reports the 19 and says all of the above at the
+top, so the next reader starts from the corrected premise.
