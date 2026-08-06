@@ -85,6 +85,9 @@
 #define T3MT_K56RX	0x0250		/* int, which arm 47 does NOT read  */
 /* Arm 63's. */
 #define T3MT_PTC	0x0008		/* int, 0x30 picks 0x1e over 0x96   */
+#define T3MT_BAUDRATE	0xaa84		/* short, `v34setuptxmit`'s baud    */
+#define T3MT_CARRIER	0xaa94		/* short, and its carrier           */
+#define T3MT_PREEMP	0xaa8a		/* short, and its pre-emphasis idx  */
 #define T3MT_P3GATE	0xabff		/* SIGNED byte, must be > 0         */
 #define T3MT_P3COUNT	0x0240		/* int, must be > 0x240             */
 /* Inside the receiver, which is the object's +0x264. */
@@ -168,6 +171,16 @@ struct seed {
 	 * of a word that is already zero is a claim no comparison can fail.
 	 */
 	int	set_errrec;	short	errrec;
+	/*
+	 * The rate config arm 63 hands `V34SetupModulator` -- baud, carrier
+	 * and pre-emphasis index, which `setfinalrate` writes as raw offsets.
+	 * WITHOUT THIS THE SET-UP PATH TESTS THE ERROR ARMS: the fixture's
+	 * pseudorandom halfwords are not a V.34 rate, `V34SetupModulator`
+	 * prints "invalid baudrate" and returns, and "63 sets the transmitter
+	 * up" degrades to "63 reached a diagnostic".  Finding 277's question,
+	 * asked of the modulator rather than of a comparison.
+	 */
+	int	set_rate;	short	baudrate, carrier, preemp;
 };
 
 #define T3MT_FSKINHIBIT	0x0402
@@ -209,6 +222,11 @@ apply(const struct seed *s)
 		v34hs_poke_byte(T3MT_P3GATE, (unsigned char)s->p3gate);
 		v34hs_poke_int(T3MT_P3COUNT, s->p3count);
 	}
+	if (s->set_rate) {
+		v34hs_poke_short(T3MT_BAUDRATE, s->baudrate);
+		v34hs_poke_short(T3MT_CARRIER, s->carrier);
+		v34hs_poke_short(T3MT_PREEMP, s->preemp);
+	}
 	if (s->set_errrec) {
 		int k;
 
@@ -243,7 +261,8 @@ apply(const struct seed *s)
 
 static const struct seed plain = { T3MT_TXSTATE, 0x0100, 0,0, 0,0,0,
 				   0,0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,
-				   0,0, 0,0, 0,0,0, 0,0, 0,0,0, 0,0 };
+				   0,0, 0,0, 0,0,0, 0,0, 0,0,0, 0,0,
+				   0,0,0,0 };
 
 static void
 trial_seeded(short mst, const struct seed *s, int ours, long tag)
@@ -907,6 +926,11 @@ micro63(void)
 		static const int cnt[6]  = { 0x0400, 0x0400, 0x0240, 0x0241,
 					     0x0400, -1 };
 		static const int ok[6]   = { 0, 0, 0, 1, 1, 0 };
+		/* Two real rates, so the two fields cannot be exchanged. */
+		static const short bd[6] = { 2400, 2400, 2400, 2400, 3200,
+					     2400 };
+		static const short cr[6] = { 1800, 1800, 1800, 1800, 1920,
+					     1800 };
 		int go = ok[i];
 
 		s = plain;
@@ -914,6 +938,10 @@ micro63(void)
 		s.set_p3 = 1;
 		s.p3gate = gate[i];
 		s.p3count = cnt[i];
+		s.set_rate = 1;
+		s.baudrate = bd[i];
+		s.carrier = cr[i];
+		s.preemp = 0;
 		both_seeded(V34HS_INFODONE, &s, tag);
 		tag += 2;
 
@@ -958,6 +986,35 @@ micro63(void)
 		diff_eq_int("63's setup announces the txstate transition",
 			    strstr(v34hs_text(1),
 				   "txstate SILENCE=>SSEG") != NULL, 1, tag);
+		/*
+		 * AND IT IS A REAL RATE, which is the difference between
+		 * exercising `V34SetupModulator` and exercising its two error
+		 * arms.  The rate config the arm hands it -- baud at +0xaa84,
+		 * carrier at +0xaa94, pre-emphasis at +0xaa8a -- is seeded
+		 * above precisely so that this holds; with the fixture's own
+		 * pseudorandom halfwords it would not, and "63 sets the
+		 * transmitter up" would mean "63 reached a diagnostic".
+		 */
+		diff_eq_int("63's setup runs a rate rather than "
+			    "V34SetupModulator's error arms",
+			    strstr(v34hs_text(1), "invalid") == NULL, 1, tag);
+		{
+			char want[64];
+
+			/*
+			 * And it is THE SEEDED rate, in the right two fields:
+			 * the modulator prints baud and carrier in that order,
+			 * so a reconstruction that exchanged +0xaa84 and
+			 * +0xaa94 would print 1800 and 2400.
+			 */
+			snprintf(want, sizeof(want),
+				 "baudrate %d, carrier %d, preemp 0",
+				 (int)bd[i], (int)cr[i]);
+			diff_eq_int("63's setup hands the modulator +0xaa84 as "
+				    "the baud and +0xaa94 as the carrier",
+				    strstr(v34hs_text(1), want) != NULL, 1,
+				    tag);
+		}
 		diff_eq_int("63's setup sets bit 9 of +0x25c2",
 			    (v34hs_peek_short(1, 0x25c2) >> 9) & 1, 1, tag);
 		diff_eq_int("63's setup clears +0x25c0",
