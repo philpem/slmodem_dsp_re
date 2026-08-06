@@ -804,26 +804,55 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		int rc = DialerProgress(&cp->dialer, out, &pos, count - 1);
 
 		if (rc == DIALER_CALLING_TONE) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-					"CALLPROG: ^ encountered.\n");
-
 			/*
-			 * Reported on opposite sides of the store: "Disabling"
-			 * after it (0x7a31d precedes the branch at 0x7a324),
-			 * "Enabling" before it (0x7a283 follows the block at
-			 * 0x7a52f).  Same asymmetry as the pulse dialler's
-			 * hook messages, finding 148.
+			 * FOUR ARMS AND FOUR MESSAGES, one each.  The bare
+			 * "^ encountered." is not a preamble to the other
+			 * three -- it is what modes 0 and 2 say, and modes 1
+			 * and 3 do not say it at all.  A mode outside 0..3
+			 * says nothing and does not touch `calling_tone_armed`
+			 * either.
+			 *
+			 *   mode 0   armed = 0   "^ encountered."
+			 *   mode 1   armed = 0   "... Disabling Calling-Tone."
+			 *   mode 2   armed = 1   "^ encountered."
+			 *   mode 3   armed = 1   "... Enabling Calling-Tone."
+			 *
+			 * Mode 2 is what makes the shape hard to guess from
+			 * the source side: it stores `armed = 1` at 0x7a439
+			 * and then jumps BACK to 0x7a020, the debug gate that
+			 * belongs to mode 0, so it reaches the bare message by
+			 * sharing mode 0's tail rather than by having one of
+			 * its own.  Read as a switch, that looks like the
+			 * message is common to every arm.  It is not.
+			 *
+			 * The store and the message stay on opposite sides for
+			 * modes 1 and 3, as before: "Disabling" after the store
+			 * (0x7a31d precedes the branch at 0x7a324), "Enabling"
+			 * before it (0x7a283 follows the block at 0x7a52f).
+			 * Same asymmetry as the pulse dialler's hook messages,
+			 * finding 148.
 			 */
 			switch (cp->calling_tone_mode) {
-			case 0: case 1:
+			case 0:
+				cp->calling_tone_armed = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"CALLPROG: ^ encountered.\n");
+				break;
+			case 1:
 				cp->calling_tone_armed = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"CALLPROG: ^ encountered. "
 						"Disabling Calling-Tone.\n");
 				break;
-			case 2: case 3:
+			case 2:
+				cp->calling_tone_armed = 1;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"CALLPROG: ^ encountered.\n");
+				break;
+			case 3:
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"CALLPROG: ^ encountered. "

@@ -13776,6 +13776,10 @@ restore and when.
 Overall the day's sweep took the dead-site count from 30 to 17: dialer.c is
 finished at 0, callprog.c is at 10.
 
+**RESOLVED by finding 344.** The line was not missing a condition -- it was
+one arm's message being treated as every arm's preamble. The sixteen-site
+shortfall is real and separate.
+
 ### 240. `CALLPROG_Dial` announced the dial string one block too late
 
 Driving the no-accessor refusal with the debug level raised -- a branch the
@@ -14338,3 +14342,55 @@ template int Queue<float>::write(float);
 Worth remembering for every weak class template that follows: the object's
 symbol list is a specification of which members were instantiated, not just of
 which exist.
+
+### 344. The caret message belongs to two arms, not to all four
+
+Finding 239 left `CALLPROG_Progress`'s `^` handling as the one place the
+reconstruction was known to disagree with the object, and the four cases were
+taken out of `t_callprog_progress` rather than left passing while wrong. They
+are back, and the diagnosis in 239 -- "the line belongs to one of the sixteen
+call sites we have not reconstructed" -- was wrong. It belongs to a site we
+had; we had it in the wrong place.
+
+**The search that 239 could not make work.** 239 records searching objdump's
+output for `.rodata+0x141d6` and getting nothing, then catching the mistake by
+running the same search against two strings known to be used. The reason is
+that a string reference is an `R_386_32` against the SECTION symbol with the
+offset kept as an inline addend, so the string's own address never appears in
+the disassembly. `tools/relocscan.py --at` resolves exactly this and has since
+the tooling phase; nobody had pointed it at a string section:
+
+```
+$ relocscan.py ../slmodemd/dsplibs.o --at .rodata.str1.1:0x3272
+  .text+0x07a303 -> .rodata.str1.1:0x003272
+```
+
+One reference in the whole object, inside `CALLPROG_Progress` at `+0x8e3`.
+
+**What it actually does.** Four arms, four messages, one each:
+
+| `calling_tone_mode` | `calling_tone_armed` | message |
+|---|---|---|
+| 0 | 0 | `CALLPROG: ^ encountered.` |
+| 1 | 0 | `CALLPROG: ^ encountered. Disabling Calling-Tone.` |
+| 2 | 1 | `CALLPROG: ^ encountered.` |
+| 3 | 1 | `CALLPROG: ^ encountered. Enabling Calling-Tone.` |
+| anything else | untouched | nothing |
+
+The bare message is what modes 0 and 2 say. Modes 1 and 3 do not say it at
+all, and a mode outside 0..3 says nothing and does not even store `armed`.
+
+**Why it reads as a preamble, which is the part worth remembering.** Mode 2's
+arm is three instructions -- `movl $0x1,0x60(%edi)` at `+0x819` and then
+`jmp 0x7a020`, which is the debug gate belonging to MODE 0. It reaches the
+bare message by jumping into another arm's tail rather than by having a call
+site of its own. Written back out as C, that looks exactly like a message
+common to every arm, and that is how it was reconstructed. A switch whose arms
+share tails is not a switch whose arms share code: the shared tail here is one
+`printf` and the two arms that reach it are 0 and 2, not 0,1,2,3.
+
+Both readings were mutated in-tree against the restored cases: the old
+preamble shape fails 8 checks, and a mode 2 that says nothing fails 2.
+
+`callprog.c` now has **no dead debug sites** -- it had three -- and the tree's
+total goes from 9 to 6, all of them in V.34.

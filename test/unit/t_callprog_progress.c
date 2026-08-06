@@ -913,22 +913,19 @@ main(void)
 			int		tone_mode;
 		} arm[] = {
 			/*
-			 * THE FOUR `^` CASES ARE NOT HERE, and finding 239
-			 * says why: driving them shows our CALLPROG_Progress
-			 * printing "CALLPROG: ^ encountered." where the blob
-			 * prints nothing, for every calling_tone_mode from 0
-			 * to 4.  The string is in the object and
-			 * debugaudit --invented is clean, so it is a
-			 * PLACEMENT error, not an invented literal -- and
-			 * CALLPROG_Progress is 16 sites short of the blob's
-			 * 29, so the line belongs to some condition we have
-			 * not reconstructed rather than to this one.
+			 * THE FOUR `^` CASES ARE BACK, and finding 239's
+			 * placement error is resolved.
 			 *
-			 * Left out rather than skipped-with-a-reason: a
-			 * differential test that passes while disagreeing
-			 * with the blob is the thing this tier exists to not
-			 * have.  Restore these four when the placement is
-			 * settled.
+			 * The bare "CALLPROG: ^ encountered." is not a
+			 * preamble to the other three messages: it is what
+			 * modes 0 and 2 say, and modes 1 and 3 do not say it.
+			 * A mode outside 0..3 says nothing.  The reason it
+			 * reads as common to every arm is that mode 2's arm
+			 * jumps back into mode 0's tail to reach it.
+			 *
+			 * Mode 4 stays in the table.  It is the arm that
+			 * proves the "nothing at all" case, which is the one
+			 * our version used to get wrong most visibly.
 			 */
 			{ "wait for dial tone",
 			  DIALER_WAIT_FOR_DIALTONE_STATE, 0 },
@@ -940,6 +937,16 @@ main(void)
 			  DIALER_END_PARTIALLY_STATE, 0 },
 			{ "end of the dial string", DIALER_END_STATE, 0 },
 			{ "a code the switch does not name", 99, 0 },
+			{ "^ with the tone off",
+			  DIALER_CALLING_TONE_STATE, 0 },
+			{ "^ disabling the calling tone",
+			  DIALER_CALLING_TONE_STATE, 1 },
+			{ "^ with the tone on",
+			  DIALER_CALLING_TONE_STATE, 2 },
+			{ "^ enabling the calling tone",
+			  DIALER_CALLING_TONE_STATE, 3 },
+			{ "^ with a mode the switch does not name",
+			  DIALER_CALLING_TONE_STATE, 4 },
 		};
 		static struct callprog ca, cb;
 		static struct callprog_cfg cfg2;
