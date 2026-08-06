@@ -14642,3 +14642,40 @@ The `ptr_seen` assertion is what caught it, and it is cheap: one flag per
 entry, set in `setup`, checked once at the end. A skip list is the one part of
 a differential test that silently gets weaker as it grows, so it wants a check
 that it is all still load-bearing.
+
+### 271. In a fresh worktree, every closure is enormous and none of them is right
+
+`tools/closure.py` reports what a batch must define *that `src/` does not
+already*, and it learns what `src/` defines by reading `build/src/**/*.o`.
+A `git worktree add` produces a tree with no `build/` at all. The have-set is
+then empty, nothing counts as already written, and the closure of any symbol
+is very nearly the closure of the whole program.
+
+Measured: an agent working `k56FlexPhase34` in a fresh worktree was told by
+the tool that it needed **21 symbols and 9,187 bytes**. After one `make`, the
+same command reports **1 symbol -- itself**. Its two callees,
+`K56FlexFloModem::getK56FlexJaBits` and `::getK56FlexMpBits`, had landed
+earlier in the same session and were sitting in `src/` the whole time.
+
+The answer was not wrong so much as an answer to a different question, which
+is the harder kind to notice: it is internally consistent, it is pessimistic
+in the direction the tool is *supposed* to be pessimistic (finding 245's own
+"deliberately pessimistic" caveat covers over-reporting), and a 9,187-byte
+batch looks like a scoping problem rather than a tooling one.
+
+The tool now writes to stderr when the have-set is empty:
+
+```
+closure.py: build/src/**/*.o defines nothing, so NOTHING counts
+            as already written and this closure is meaningless.
+            Run `make` first.  (Finding 271.)
+```
+
+Proved to fire before it was committed, from an empty directory containing
+only `build/`.
+
+This is the fourth thing a fresh worktree needs and does not have, and the
+list is worth keeping in one place: `third_party/spandsp` symlinked (finding
+257), the new header in `SKIP_HEADERS`, `offsetof` blocks guarded on
+`__SIZEOF_POINTER__ == 4`, and now `make` run once before any closure is
+believed.

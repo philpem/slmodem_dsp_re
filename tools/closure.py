@@ -336,6 +336,22 @@ def main():
     syms, sec, edges = build_graph()
     have = ours()
 
+    #
+    # AN UNBUILT TREE MAKES EVERY CLOSURE LOOK ENORMOUS.
+    #
+    # `ours()` reads what src/ defines out of build/src/**/*.o, so in a fresh
+    # `git worktree add` -- where build/ does not exist yet -- the have-set is
+    # empty and everything this tree has already written is reported missing.
+    # One agent read 21 symbols and 9,187 bytes for a function whose real
+    # closure is itself.  The answer is not wrong so much as answering a
+    # different question, which is the worst kind.  Finding 271.
+    #
+    if not have:
+        sys.stderr.write(
+            "closure.py: build/src/**/*.o defines nothing, so NOTHING counts\n"
+            "            as already written and this closure is meaningless.\n"
+            "            Run `make` first.  (Finding 271.)\n")
+
     roots = []
     for spec in args.names:
         got = resolve(spec, syms)
