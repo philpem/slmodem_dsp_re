@@ -13661,3 +13661,58 @@ refused to start, timed and believed.
 Both are now defaults in `MAKEFLAGS`, with `make J=1` for a serial run when a
 failure needs reading in order.  A speedup nobody has to remember to ask for
 is the only kind that gets used.
+
+### 238. The per-case harness is feasible, and most of it is already written
+
+Task #63 -- entering one of `v34handshak`'s dispatch cases directly instead of
+driving the handshake to reach it -- was filed as though a fixture had to be
+built.  It does not: `t_v34hshak.c`'s `run_handshakinit` is that fixture, and
+what #63 needs is about five more lines on the end of it.
+
+#### What was established, and how
+
+**`v34handshak(void *obj)` takes one stack argument.**  From its call sites:
+`VPcmV34Progress` reaches it three times and `datapumpv34` once, each `mov
+<reg>,(%esp)` then `call`.
+
+**The three state words can be written before the call, and already are.**
+`t_v34hshak.c` defines `HSI_MICROSTATE`, `HSI_RXSTATE` and `HSI_TXSTATE` at
++0x3592, +0x3594 and +0x3596 and pokes all three per case before
+`v34handshakinit`.  Nothing about them is read-only or derived.
+
+**A raw object is not enough, and that is the part worth writing down.**
+Filling `struct v34_object` with the harness pattern, calling `v34modeminit`
+and then `v34handshakinit`, faults inside `v34handshakinit` -- in
+`V34SetupModulator`, before `v34handshak` is reached at all.  Seeding every
+pointer field that is still at the fill pattern afterwards does not help; it
+moves the fault 0xb0 bytes further into the same function.
+
+The recipe that works is `run_handshakinit`'s, and it is not guessable:
+
+    V34InitializeImplementationSpecific() first, per side, because it aims
+      the two echo cancellers' five pointers each and v34handshakinit
+      dereferences them;
+    the two self-pointers at +0xaa6c and +0xaa70, and the two timing
+      coefficients at +0x0620 and +0x0624, seeded per side so that "left
+      alone" and "aimed somewhere" stay distinguishable;
+    a dozen scalars -- timer base and delta, v90_receiver, moh_message, the
+      rx and tx flag words, three at +0xac12..+0xac17, and the two trace
+      counters.
+
+#### So #63 is smaller than it was filed as
+
+Extend `run_handshakinit`: after the two `v34handshakinit` calls and the
+comparison it already does, poke the microstate and call `v34handshak` on both
+sides, then compare again.  The case selection is one `poke_short` that is
+already there.
+
+#### The thing that is NOT established
+
+Whether a case entered cold does anything meaningful, or falls straight
+through a guard on state the real path would have set.  That is per case, it
+is the actual work of #63, and nothing here has measured it.  What is settled
+is that the call can be made at all, which was the open question.
+
+**Three turns of pointer-seeding produced nothing** and the fixture was in the
+file the whole time.  The general lesson is the tree's own: before building a
+fixture for a function, look at what already drives its neighbours.
