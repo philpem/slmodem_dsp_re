@@ -25,8 +25,14 @@ read off the prologue at 0x628f0:
                                   TABLE 3, .rodata+0x3000, on MICROSTATE
                      4 RECEIVE -> 0x653e4
                     35 WAIT    -> 0x6752c
-                    otherwise  -> falls into TABLE 2
+                    below 43   -> falls into TABLE 2
+                    above 43   -> a SECOND chain at 0x62b71:
+                                    53 -> 0x65473    72 -> 0x650c6
+                                    otherwise -> TABLE 2, by its other door
 ```
+
+So table 2 has three entrances and not two; all three converge exactly, and
+that is measured over seventeen states rather than assumed (finding 361).
 
 The three state words are plain halfwords in the object (finding 213):
 
@@ -63,8 +69,10 @@ has the eighty-seven names.
 LCG -- never zeroed, both sides identical (finding 230) -- aims every pointer
 field, and then runs `V34InitializeImplementationSpecific` and
 `v34handshakinit`. **Side A runs ours and side B the blob's**, which is what
-makes the comparison a check rather than a tautology while both sides still
-call `ref_v34handshak` for the step itself.
+makes the comparison a check rather than a tautology on a case where both
+sides still call `ref_v34handshak` for the step itself. On a case that has
+been reconstructed, `v34hs_side_a` puts the reconstruction on side A and the
+step is differential too -- see "When you land a case".
 
 `v34hs_setup` also gives each side ONE ARENA: the object and all five blocks
 it points at, at fixed offsets inside a single 64 KB-aligned block with 32 KB
@@ -100,12 +108,24 @@ closed.
 
 ### When you land a case
 
-Define `V34HS_OURS` and side A becomes `v34handshak` instead of
-`ref_v34handshak`. Every test written against the fixture becomes an ordinary
-tier-1 differential test with no other edit anywhere. Until then the harness
-is proving *itself*, which is the point: a per-case agent needs to know the
-fixture is deterministic, address independent and fully seeded before its own
-failures mean anything.
+**`v34hs_side_a(fn)`, not `V34HS_OURS`.** The define points side A at
+`v34handshak`, which cannot exist until all four dispatches do -- so it is the
+swap for the end of the work, not for a case. `v34hs_side_a` installs one
+function for one test: `t_v34hsstep.c` leaves it NULL and goes on proving the
+fixture, and `t_v34hstbl2.c` installs `v34handshak_txblock` and drives only
+the states table 2 owns. It moves side A's debug capture slot with the
+function, which matters: our code writes slot 0 and the blob slot 1, and
+leaving it at 1 compares the blob's transcript against itself. Finding 365.
+
+Name the reconstruction after the dispatch, not `v34handshak`.
+`tools/coverage.py` files a symbol the blob does not have under "a helper
+split out of a larger function", where `v8_handshak_agc` already is, and a
+`v34handshak` that silently did nothing for three of its four dispatches is
+exactly the wrong-but-plausible artefact CLAUDE.md forbids.
+
+Until a case lands the harness is proving *itself*, which is the point: a
+per-case agent needs to know the fixture is deterministic, address independent
+and fully seeded before its own failures mean anything.
 
 ### Three things the fixture already learned so you do not
 
@@ -199,23 +219,46 @@ happens to send it. `V34HS_DUMP=1 ./build/test/t_v34hsstep` prints the
 signature of every state driven, which is how to tell whether a seed moved the
 case.
 
-## Table 2, the transmit supervisor -- part of #56
+## Table 2, the transmit supervisor -- DONE
 
-Seven targets over txstates 5..74, about 0.3 KB, and the harness separates
-four behaviours from seven representatives:
+`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks.
+The first tier-1 differential test of any part of `v34handshak`. Findings
+360-366.
+
+Seven targets over txstates 5..74, about 0.3 KB:
 
 ```
-   5            0x64480      }  agree cold
-  24 51 54 60 74 0x644c9     }
-  18 19        0x64518       }  agree cold
-  20 21 64 68  0x64509       }
-  66 67 69     0x644fa       }  agree cold
+   5            0x64480      }  agree cold, separated by microstate 63 and
+  24 51 54 60 74 0x644c9     }  +0x359c == 0x66
+  18 19        0x64518       }  agree cold, separated by bit 3 of the
+  20 21 64 68  0x64509       }  receiver's flags at +0x122
+  66 67 69     0x644fa       }  agree cold, separated by +0xe4c != 0
   70           0x644d8       }
-   6 and 52 others           the default at 0x62a40, its own behaviour
+   6 and 53 others           the default at 0x62a40, which is also the tail
+                             every other arm falls into
 ```
+
+**Four behaviours cold and all seven distinct once three companion fields
+move**, so finding 290's count is about the fill and not about the object.
+Fifty-FOUR of the seventy entries are the default; finding 286 says
+fifty-three. Finding 364.
 
 Reach it with `v34hs_route(V34HS_ROUTE_TXBLOCK, 0)`, which sets the cursor at
-the limit and the receiver count to 5.
+the limit and the receiver count to 5 -- or with `V34HS_ROUTE_RXCHAIN` and an
+rxstate that is neither 43, 4, 35, 53 nor 72. **There are three doors, not
+two**: rxstate above 43 leaves the chain at 0x62a12 for a second chain at
+0x62b71 which reaches the same dispatch. All three converge exactly, measured
+over seventeen states (finding 361).
+
+Two things a per-case agent on table 1 or table 3 should take from it:
+
+- **The tail at 0x62a40 can erase what an arm decided**, on four conditions
+  no arm reads, and at `V34HS_SEED=10` the fill makes it do so on every case.
+  Pin the tail's five inputs -- +0x2218, +0x238, +0x23c, the receiver's
+  +0x134 and +0x230 -- and the arms' answers stop depending on the seed.
+- **The transcript axis is worth nothing here**: the whole closure holds no
+  `call` and no debug site, so both sides print zero lines and the transcript
+  comparison passes by construction (finding 362).
 
 ## Table 1, the per-sample transmit loop -- this is #56, and it is open
 

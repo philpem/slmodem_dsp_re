@@ -51,6 +51,22 @@ extern void v34handshak(void *obj);
 #define V34HS_LOG_A		1
 #endif
 
+/*
+ * AND THE PER-CASE FORM OF THE SAME SWAP.  See v34hsstep.h for why the define
+ * above cannot be what a per-case agent uses.  The log slot moves with the
+ * function: our code writes capture slot 0 and the blob writes slot 1, and
+ * comparing slot 1 against slot 1 is a transcript check that cannot fail.
+ */
+static void (*side_a_fn)(void *obj);
+static int side_a_log = V34HS_LOG_A;
+
+void
+v34hs_side_a(void (*fn)(void *obj))
+{
+	side_a_fn = fn;
+	side_a_log = fn != NULL ? 0 : V34HS_LOG_A;
+}
+
 /* --- the two sides -------------------------------------------------------- */
 
 #define OBJ_SIZE	((unsigned)sizeof(struct v34_object))
@@ -854,12 +870,15 @@ v34hs_step(void)
 	probe_sw[0] = fpu_status();
 	probe_cw[0] = fpu_control();
 	alarm(5);
-	V34HS_CALL_A(&obj_a);
+	if (side_a_fn != NULL)
+		side_a_fn(&obj_a);
+	else
+		V34HS_CALL_A(&obj_a);
 	alarm(0);
 	snprintf(text[0], sizeof(text[0]), "%s",
-		 dsplib_debug_capture_text(V34HS_LOG_A));
+		 dsplib_debug_capture_text(side_a_log));
 	observe(0, (const unsigned char *)&obj_a, snap_a,
-		dsplib_debug_capture_lines(V34HS_LOG_A));
+		dsplib_debug_capture_lines(side_a_log));
 
 	step_side = 1;
 	dsplib_debug_capture_reset();

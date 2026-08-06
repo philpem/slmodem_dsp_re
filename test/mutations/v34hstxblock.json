@@ -1,0 +1,269 @@
+[
+ {
+  "note": "`v34handshak`'s table-2 dispatch: seven arms deciding one int, and a tail that can overwrite what they decided.  Almost every mutation here is a constant, because that is what this dispatch is -- the arms hold no arithmetic.  What the set has to prove is that each of the seven arms is separately driven, that the five branches out of the table's own range are reached, and that the three signedness decisions in the tail are the ones the object makes."
+ },
+ {
+  "label": "txstate 5's microstate branch tests 0x65 rather than 0x66",
+  "find": "if (mst == 0x3f && obj->f359c == 0x66) {",
+  "replace": "if (mst == 0x3f && obj->f359c == 0x65) {"
+ },
+ {
+  "label": "txstate 5's rxstate-4 branch tests 0x66 rather than 0x65",
+  "find": "if (mst == 0x2c && obj->f359c == 0x65) {",
+  "replace": "if (mst == 0x2c && obj->f359c == 0x66) {"
+ },
+ {
+  "label": "txstate 5's rxstate-35 branch tests 0x66 rather than 0x65",
+  "find": "if (mst == 0x3f && obj->f359c == 0x65) {",
+  "replace": "if (mst == 0x3f && obj->f359c == 0x66) {"
+ },
+ {
+  "label": "txstate 5's rxstate-4 branch wants microstate 63 not 44",
+  "find": "if (mst == 0x2c && obj->f359c == 0x65) {",
+  "replace": "if (mst == 0x3f && obj->f359c == 0x65) {"
+ },
+ {
+  "label": "txstate 5's two rxstate values transposed",
+  "find": "\tif (rxst == 4) {",
+  "replace": "\tif (rxst == 0x23) {"
+ },
+ {
+  "label": "txstate 5's second rxstate value 0x23 becomes 0x24",
+  "find": "} else if (rxst == 0x23) {",
+  "replace": "} else if (rxst == 0x24) {"
+ },
+ {
+  "label": "txstate 5's microstate branch reads the rxstate word",
+  "find": "\tunsigned short mst = TB_USHORT(obj, TB_MICROSTATE);",
+  "replace": "\tunsigned short mst = TB_USHORT(obj, TB_RXSTATE);"
+ },
+ {
+  "label": "txstate 5's default answer is 1 rather than 0",
+  "find": "\tobj->f0004 = 0;\t\t\t\t/* 0x644ba */",
+  "replace": "\tobj->f0004 = 1;\t\t\t\t/* 0x644ba */"
+ },
+ {
+  "label": "txstate 18's branch out gives 3 rather than 2",
+  "find": "\t\tobj->f0004 = 2;\t\t\t/* 0x6780f */",
+  "replace": "\t\tobj->f0004 = 3;\t\t\t/* 0x6780f */"
+ },
+ {
+  "label": "txstate 18's branch out tests 0x66 rather than 0x65",
+  "find": "\tif (obj->f359c == 0x65) {",
+  "replace": "\tif (obj->f359c == 0x66) {"
+ },
+ {
+  "label": "txstate 18 reads bit 2 of the receiver's flags, not bit 3",
+  "find": "obj->f0004 = (rx->flags >> 3) & 1 ? 3 : 2;",
+  "replace": "obj->f0004 = (rx->flags >> 2) & 1 ? 3 : 2;"
+ },
+ {
+  "label": "txstate 18's two answers transposed",
+  "find": "obj->f0004 = (rx->flags >> 3) & 1 ? 3 : 2;",
+  "replace": "obj->f0004 = (rx->flags >> 3) & 1 ? 2 : 3;"
+ },
+ {
+  "label": "txstate 70's two answers transposed",
+  "find": "obj->f0004 = TB_USHORT(obj, TB_F0E4C) == 0 ? 3 : 4;",
+  "replace": "obj->f0004 = TB_USHORT(obj, TB_F0E4C) == 0 ? 4 : 3;"
+ },
+ {
+  "label": "txstate 70 reads +0xe4c as a signed short",
+  "find": "obj->f0004 = TB_USHORT(obj, TB_F0E4C) == 0 ? 3 : 4;",
+  "replace": "obj->f0004 = (short)TB_USHORT(obj, TB_F0E4C) <= 0 ? 3 : 4;"
+ },
+ {
+  "label": "txstate 70's companion field is one halfword out",
+  "find": "#define TB_F0E4C\t0x0e4c",
+  "replace": "#define TB_F0E4C\t0x0e4e"
+ },
+ {
+  "label": "the 20/21/64/68 arm answers 3",
+  "find": "\tcase 20: case 21: case 64: case 68:\t/* 0x64509 */\n\t\tobj->f0004 = 2;",
+  "replace": "\tcase 20: case 21: case 64: case 68:\t/* 0x64509 */\n\t\tobj->f0004 = 3;"
+ },
+ {
+  "label": "the 66/67/69 arm answers 2",
+  "find": "\tcase 66: case 67: case 69:\t\t/* 0x644fa */\n\t\tobj->f0004 = 3;",
+  "replace": "\tcase 66: case 67: case 69:\t\t/* 0x644fa */\n\t\tobj->f0004 = 2;"
+ },
+ {
+  "label": "the 24/51/54/60/74 arm answers 1",
+  "find": "\tcase 24: case 51: case 54: case 60: case 74:\t/* 0x644c9 */\n\t\tobj->f0004 = 0;",
+  "replace": "\tcase 24: case 51: case 54: case 60: case 74:\t/* 0x644c9 */\n\t\tobj->f0004 = 1;"
+ },
+ {
+  "label": "txstate 68 aliased to the 66/67/69 arm instead",
+  "find": "\tcase 20: case 21: case 64: case 68:\t/* 0x64509 */",
+  "replace": "\tcase 20: case 21: case 64:\t\t/* 0x64509 */"
+ },
+ {
+  "label": "txstate 74 aliased to the default arm instead",
+  "find": "\tcase 24: case 51: case 54: case 60: case 74:\t/* 0x644c9 */",
+  "replace": "\tcase 24: case 51: case 54: case 60:\t/* 0x644c9 */"
+ },
+ {
+  "label": "txstate 19 loses its arm",
+  "find": "\tcase 18: case 19:\t\t\t/* 0x64518 */",
+  "replace": "\tcase 18:\t\t\t\t/* 0x64518 */"
+ },
+ {
+  "label": "the dispatch reads the microstate word",
+  "find": "\tshort txstate = (short)TB_USHORT(obj, TB_TXSTATE);",
+  "replace": "\tshort txstate = (short)TB_USHORT(obj, TB_MICROSTATE);"
+ },
+ {
+  "label": "the default arm skips the shared tail",
+  "find": "\tdefault:\t\t\t\t/* 0x62a40, straight to the tail */\n\t\tbreak;\n\t}",
+  "replace": "\tdefault:\t\t\t\t/* 0x62a40, straight to the tail */\n\t\treturn;\n\t}"
+ },
+ {
+  "label": "the tail's +0x2218 arm triggers on 0 rather than 1",
+  "find": "\tif (sel == 1) {",
+  "replace": "\tif (sel == 0) {"
+ },
+ {
+  "label": "the tail doubles +0xaa96 rather than tripling it",
+  "find": "rx->f1d2 = (short)(3 * (int)obj->faa96);",
+  "replace": "rx->f1d2 = (short)(2 * (int)obj->faa96);"
+ },
+ {
+  "label": "the tail keeps the tripling at full width",
+  "find": "rx->f1d2 = (short)(3 * (int)obj->faa96);",
+  "replace": "*(int *)&rx->f1d2 = 3 * (int)obj->faa96;"
+ },
+ {
+  "label": "the tail's +0x2218 == 1 arm answers 5",
+  "find": "\t\tobj->f0004 = 4;\n\t}",
+  "replace": "\t\tobj->f0004 = 5;\n\t}"
+ },
+ {
+  "label": "the tail's {4,5} window becomes {4,5,6}",
+  "find": "if ((unsigned)(sel - 4) <= 1u)",
+  "replace": "if ((unsigned)(sel - 4) <= 2u)"
+ },
+ {
+  "label": "the tail's {4,5} window becomes {3,4}",
+  "find": "if ((unsigned)(sel - 4) <= 1u)",
+  "replace": "if ((unsigned)(sel - 3) <= 1u)"
+ },
+ {
+  "label": "the tail's {2,3} window becomes {3,4}",
+  "find": "if ((unsigned)(sel - 2) <= 1u && txstate == 0x4a)",
+  "replace": "if ((unsigned)(sel - 3) <= 1u && txstate == 0x4a)"
+ },
+ {
+  "label": "0x64884 is reached from txstate 75 rather than 74",
+  "find": "if ((unsigned)(sel - 2) <= 1u && txstate == 0x4a)",
+  "replace": "if ((unsigned)(sel - 2) <= 1u && txstate == 0x4b)"
+ },
+ {
+  "label": "0x64884's threshold is inclusive",
+  "find": "obj->f0004 = obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "obj->f0004 = obj->vect_idx >= 0x3c ? 0 : 7;"
+ },
+ {
+  "label": "0x64884's two answers transposed",
+  "find": "obj->f0004 = obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "obj->f0004 = obj->vect_idx > 0x3c ? 7 : 0;"
+ },
+ {
+  "label": "0x64884 reads +0x2aa2 unsigned",
+  "find": "obj->f0004 = obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "obj->f0004 = (unsigned short)obj->vect_idx > 0x3c ? 0 : 7;"
+ },
+ {
+  "label": "+0x238 against +0x23c compared signed",
+  "find": "\tif ((unsigned)TB_INT(obj, TB_F0238) > (unsigned)TB_INT(obj, TB_F023C))",
+  "replace": "\tif (TB_INT(obj, TB_F0238) > TB_INT(obj, TB_F023C))"
+ },
+ {
+  "label": "+0x238 against +0x23c made inclusive",
+  "find": "\tif ((unsigned)TB_INT(obj, TB_F0238) > (unsigned)TB_INT(obj, TB_F023C))",
+  "replace": "\tif ((unsigned)TB_INT(obj, TB_F0238) >= (unsigned)TB_INT(obj, TB_F023C))"
+ },
+ {
+  "label": "+0x238 and +0x23c transposed",
+  "find": "\tif ((unsigned)TB_INT(obj, TB_F0238) > (unsigned)TB_INT(obj, TB_F023C))",
+  "replace": "\tif ((unsigned)TB_INT(obj, TB_F023C) > (unsigned)TB_INT(obj, TB_F0238))"
+ },
+ {
+  "label": "the +0x238 arm answers 7 rather than 8",
+  "find": "\t\tobj->f0004 = 8;",
+  "replace": "\t\tobj->f0004 = 7;"
+ },
+ {
+  "label": "the level is compared to the floor unsigned",
+  "find": "\tif ((int)rx->agc_level >= obj->rx_energy_floor)",
+  "replace": "\tif ((unsigned short)rx->agc_level >= (unsigned)obj->rx_energy_floor)"
+ },
+ {
+  "label": "the level comparison excludes equality",
+  "find": "\tif ((int)rx->agc_level >= obj->rx_energy_floor)",
+  "replace": "\tif ((int)rx->agc_level > obj->rx_energy_floor)"
+ },
+ {
+  "label": "clear and advance transposed",
+  "find": "\t\tTB_INT(obj, TB_F0234) = 0;\n\telse\n\t\tTB_INT(obj, TB_F0234) += 1;",
+  "replace": "\t\tTB_INT(obj, TB_F0234) += 1;\n\telse\n\t\tTB_INT(obj, TB_F0234) = 0;"
+ },
+ {
+  "label": "the counter and the sample count are the same field",
+  "find": "#define TB_F0234\t0x0234",
+  "replace": "#define TB_F0234\t0x0238"
+ },
+ {
+  "label": "the counter limit is inclusive",
+  "find": "\tif (TB_INT(obj, TB_F0234) > 0x257f)",
+  "replace": "\tif (TB_INT(obj, TB_F0234) >= 0x257f)"
+ },
+ {
+  "label": "the counter limit is 0x2580",
+  "find": "\tif (TB_INT(obj, TB_F0234) > 0x257f)",
+  "replace": "\tif (TB_INT(obj, TB_F0234) > 0x2580)"
+ },
+ {
+  "label": "the counter overflow answers 8 rather than 9",
+  "find": "\t\tobj->f0004 = 9;",
+  "replace": "\t\tobj->f0004 = 8;"
+ },
+ {
+  "label": "txstate 83's answer 0xf becomes 0xe",
+  "find": "\t\tobj->f0004 = 0xf;",
+  "replace": "\t\tobj->f0004 = 0xe;"
+ },
+ {
+  "label": "txstate 84's answer 0x10 becomes 0xf",
+  "find": "\t\t\tobj->f0004 = 0x10;",
+  "replace": "\t\t\tobj->f0004 = 0xf;"
+ },
+ {
+  "label": "txstate 82's answer 0xd becomes 0xc",
+  "find": "\t\tobj->f0004 = 0xd;",
+  "replace": "\t\tobj->f0004 = 0xc;"
+ },
+ {
+  "label": "the 82/83/84 chain shifted one state up",
+  "find": "\tif (txstate == 0x53)",
+  "replace": "\tif (txstate == 0x54)"
+ },
+ {
+  "label": "the receiver is located four bytes late",
+  "find": "#define TB_RECEIVER\t0x0264",
+  "replace": "#define TB_RECEIVER\t0x0268"
+ },
+ {
+  "label": "the txstate reload at 0x62b5f, put back",
+  "equivalent": true,
+  "why": "0x62b45 reloads +0x3596 into %cx before rejoining the tail.  Nothing between the dispatch and there writes that halfword -- no arm of table 2 does, and finding 285's sweep names the eight functions in the object that write any of the three -- so the reload cannot change the value and modelling it or not is the same function.  Held fixed: the whole of table 2's closure, which is the only code that runs between the read and the reload.",
+  "find": "\t\tobj->f0004 = 4;\n\t}",
+  "replace": "\t\tobj->f0004 = 4;\n\t\ttxstate = (short)TB_USHORT(obj, TB_TXSTATE);\n\t}"
+ },
+ {
+  "label": "txstate held zero-extended rather than sign-extended",
+  "equivalent": true,
+  "why": "The object spells the state two ways -- `cmp $0x4a,%cx` zero-extended at 0x62a70 and `movswl %cx,%eax` sign-extended at 0x62ac5 -- and one `short` models both.  Every test the two spellings feed is equality against a small positive constant, which agrees for all 65,536 halfwords; the one inequality, `> 0x53` at 0x62acd, only decides whether to test equality with 0x54, which is false either way.  So this is equivalent over the WHOLE range and not merely over the 0..86 the diagnostics allow.  Held fixed: nothing.",
+  "find": "\tshort txstate = (short)TB_USHORT(obj, TB_TXSTATE);",
+  "replace": "\tint txstate = TB_USHORT(obj, TB_TXSTATE);"
+ }
+]
