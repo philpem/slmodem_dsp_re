@@ -69,8 +69,8 @@
  },
  {
   "label": "Cp: +0x20c is reached from the modem rather than the demodulator",
-  "find": "\tseen = (struct vpcm_dem_20c *)modem.demodulator->ptr_20c;",
-  "replace": "\tseen = (struct vpcm_dem_20c *)modem.ptr_49b4;"
+  "find": "\tseen = modem.demodulator->connectionEvaluator;",
+  "replace": "\tseen = (V90ConnectionEvaluator *)modem.ptr_49b4;"
  },
  {
   "label": "Cp: the termination path leaves the pointer where it was",

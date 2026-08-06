@@ -159,7 +159,8 @@ setup(int trial)
 		m->modem.side = 2;		/* neither half; see the head */
 		m->v92Phase2Info = P92(side);
 
-		((V90Demodulator *)dem[side])->ptr_20c = seen[side];
+		((V90Demodulator *)dem[side])->connectionEvaluator =
+		    (V90ConnectionEvaluator *)seen[side];
 
 		for (i = 0; i < V34_PROBE_RESULTS; i++)
 			v34[side].probe_results[i] =
@@ -247,8 +248,9 @@ snap_dem(unsigned char *dst, int side)
 
 	memcpy(dst, dem[side], DEM_SLOT);
 	s = (V90Demodulator *)dst;
-	s->ptr_20c = (void *)(long)
-	    (((V90Demodulator *)dem[side])->ptr_20c == seen[side]);
+	s->connectionEvaluator = (V90ConnectionEvaluator *)(long)
+	    (((V90Demodulator *)dem[side])->connectionEvaluator
+	     == (V90ConnectionEvaluator *)seen[side]);
 }
 
 /* Every block, compared whole. */

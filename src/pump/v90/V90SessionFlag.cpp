@@ -50,7 +50,7 @@ SF_OFF(V90Modulator,	     phase4Modulator,		0x003c, mod_p4);
 SF_OFF(V90Demodulator,	     sessionFlag,		0x0030, dem_flag);
 SF_OFF(V90Demodulator,	     phase3Demodulator,		0x01dc, dem_p3);
 SF_OFF(V90Demodulator,	     phase4Demodulator,		0x01e0, dem_p4);
-SF_OFF(V90Demodulator,	     ptr_20c,			0x020c, dem_20c);
+SF_OFF(V90Demodulator,	     connectionEvaluator,	0x020c, dem_20c);
 SF_OFF(V90Modem,	     modulator,			0x0000, mdm_mod);
 SF_OFF(V90Modem,	     demodulator,		0x0004, mdm_dem);
 SF_OFF(V90Modem,	     phase2Info,		0x0008, mdm_p2i);

@@ -125,18 +125,6 @@ V92P2I_OFF(array_24,			0x24, a24);
 #endif /* 32-bit host */
 
 /*
- * What V90Demodulator's +0x20c points at.  `getV90CpBits` is the only reader
- * this tree has, and all it does is copy one word to the word after it, so
- * only those two are modelled and only here -- putting an invented class into
- * include/dsplib for two `mov`s would be worse than the pun it replaces.
- */
-struct vpcm_dem_20c {
-	unsigned char pad_00[0x78];		/* +0x00 not modelled */
-	int word_78;				/* +0x78              */
-	int word_7c;				/* +0x7c              */
-};
-
-/*
  * log10() on the coprocessor, as the object computes it.
  *
  * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and `fyl2x`
@@ -233,7 +221,7 @@ VPcmFloModem::getV90JaBits(short *bits)
 int
 VPcmFloModem::getV90CpBits(short *bits)
 {
-	struct vpcm_dem_20c *seen;
+	V90ConnectionEvaluator *seen;
 	unsigned short n;
 	int done = 0;
 
@@ -252,7 +240,7 @@ VPcmFloModem::getV90CpBits(short *bits)
 
 	nofTransmitSequences++;
 
-	seen = (struct vpcm_dem_20c *)modem.demodulator->ptr_20c;
+	seen = modem.demodulator->connectionEvaluator;
 	seen->word_7c = seen->word_78;
 
 	if (DSPLIB_DEBUG_ON())

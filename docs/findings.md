@@ -15131,3 +15131,258 @@ of the logarithm.** Remove the one before it and the two diverge for 2.42% of
 inputs (finding 277) -- which is exactly the mutation that IS caught. The pair
 is the point, as in finding 269: one mutation pins the thing the other one's
 equivalence rests on.
+### 291. The allocation is the size oracle, and it settles both demodulators
+
+Finding 268 recorded that the largest-`this`-displacement scan (finding 215)
+lies about the five classes of the `setSessionFlag` chain: its answers, 0xa948
+and 0xa95c, are off a `V90AutoDigitalImpDetector*` reached through a pointer,
+and 0x28230 and 0x3ba8 are scaled indices into tables. It concluded that no
+size for those classes was settled. That conclusion was right about the scan
+and wrong about the classes, because there is a second oracle and it is exact.
+
+**Every one of these objects is built on the heap, and the `sysdep_malloc`
+immediately before the constructor call is `sizeof`.** GCC emits the size as a
+literal; there is nothing to infer.
+
+    V90Modem::V90Modem       movl $0x298,(%esp); call sysdep_malloc
+                             ...; call V90DemodulatorC1; mov %ebx,0x4(%esi)
+
+    V90Demodulator::V90Demodulator
+                             movl $0x42c,(%esp); call sysdep_malloc
+                             ...; call V90Phase3DemodulatorC1
+                             mov %esi,0x1dc(%ebx)
+
+so `sizeof(V90Demodulator)` is **0x298** and `sizeof(V90Phase3Demodulator)` is
+**0x42c**, and the store that follows each is into the field
+`V90SessionFlag.h` already had -- V90Modem+0x04 and V90Demodulator+0x1dc.
+
+Two independent facts agree with each, and neither was used to derive it. The
+largest displacement `V90Demodulator::enterPhase3` uses is the four-byte read
+at +0x294, ending at 0x298; the largest `V90Phase3Demodulator::reset` uses is
+the byte at +0x424, and the last field its constructor writes is the pointer
+at +0x428, ending at 0x42c.
+
+The same constructor pins four more sizes by where the next field starts:
+V90PreFilter (0x28) at +0x6c ends at +0x94, which is a subobject;
+`Descrambler<unsigned char,int>` (0x20) at +0x1e8 ends at +0x208, which is a
+field; `V90SpectralVerifier` (0x2c) at +0x210 ends at +0x23c, which is a
+field; and inside the phase 3 demodulator, `V90Phase3Modulator` (0x398) at
++0x34 ends at +0x3cc and `Descrambler<int,int>` (0x20) at +0x3d0 ends at
++0x3f0, both fields. Six boundaries, none of the six sizes derived here.
+
+**So the rule for the rest of #60 and for #59 is: before scanning
+displacements, look for the allocation.** A constructor is also a better field
+map than any single method -- `V90Demodulator`'s stores or builds every
+subobject in the class and hands each to a callee whose mangled name says what
+type it is, which is where V90Demodulator.h's pointer types come from.
+
+`V90Modem`, `V90Modulator` and `V90Phase4Demodulator` still have no settled
+size and still assert none. `V90Modem`'s constructor allocates 0x42d8 for
+something just before the 0x298 it hands the demodulator; nobody has checked
+what.
+
+### 292. Two of `V90Phase3Demodulator::reset`'s four openings differ only in a string
+
+`reset` selects one of four openings on its `Phase3DemodulatorState`
+argument, and the blob names three of them in the diagnostics it prints:
+
+    state       diagnostic          resetLinearMapping   modulator's 4th arg
+    0           WaitForSd           yes                  0
+    3           TRN1dKnownData      yes                  reset's 4th argument
+    26          WaitForQTS          NO                   0
+    anything    IRREGULAR (%d)      yes                  0
+
+**WaitForSd and IRREGULAR are the same code.** Same call, same eight arguments
+to `V90Phase3Modulator::reset`, same everything afterwards. The only
+observable difference between them is the text, so at `dsplibs_debug_level <=
+1` they are indistinguishable, and a differential test that does not compare
+transcripts cannot tell a reconstruction that folds one into the other from a
+correct one. `t_v90p3dreset.cpp` sweeps the level over 0, 2 and 3 for the
+state selector and compares the transcript at each; that is what makes the
+`state == 0` arm testable at all.
+
+**WaitForQTS differs from WaitForSd by one call**, the detector's
+`resetLinearMapping`. That is exactly the shape finding 253 caught one class
+down: if the detector were seeded so that `resetLinearMapping` wrote nothing
+distinguishable, the two would agree for the wrong reason. So the test runs
+one seed twice, as state 0 and as state 26, and REQUIRES the two detectors to
+differ. The check is satisfiable -- verified, not assumed, which is what
+findings 247 and 262 are about.
+
+**TRN1dKnownData differs by one argument**, and that argument is a loop bound:
+`V90Phase3Modulator::reset` generates that many symbols. So the state-3 trials
+must use a non-zero count or the branch is invisible, and a SMALL one or the
+test runs for hours. 1, 2 and 3 are what it uses.
+
+### 293. `enterPhase3` calls `isV90WithEia6` twice, and it cannot matter
+
+`V90Demodulator::enterPhase3` calls `V90PreFilter::isV90WithEia6()` twice: once
+to decide whether to take the EIA-6 arm, and again -- after the arm has run --
+to build the eighth argument of `V90Phase3Demodulator::reset`. The obvious
+reading is that the arm changes the answer, because it runs `setParamEia6()`,
+which writes the very parameter block `isV90WithEia6` reads.
+
+**It does not, and the mutation suite is what said so.** `the EIA-6 answer is
+cached across setParamEia6` was written expecting a catch and was not caught,
+which sent the claim back to the source:
+
+    isV90WithEia6() = (cap == 1) || (params->w[0x500 / 4] == 6)
+    cap             = dataBase[codecType].loops[refLoop].capability == 2
+
+and `setParamEia6` writes thirty words of the block, of which **none is
++0x500**, and touches neither `refLoop` nor `codecType`; `displayParamEia6` is
+one `ret`. So the second call returns the first call's value for every input,
+the mutation is equivalent, and `test/mutations/v90demod.json` carries it with
+the reason rather than dropping it.
+
+The reconstruction still makes both calls, because the blob makes both calls.
+Held fixed for the equivalence: `V90PreFilter::isV90WithEia6`'s and
+`::setParamEia6`'s bodies, which `t_v90prefilter.cpp` checks independently.
+
+The related claim in the same method IS unobservable for a different reason
+and is also uncaught: the second result is narrowed with `cwtl` before it
+becomes a `short` argument, and `isV90WithEia6` returns a boolean, so no input
+can give it a non-zero high half-word. The `(short)` stays because the
+instruction is there. Two uncaught mutations out of thirty, both named, and
+neither a test gap that more inputs would close.
+
+### 294. Three things a test of `enterPhase3` gets wrong before it gets them right
+
+All three cost a build here, and none of them is about the reconstruction.
+
+**A `V90Phase2Info` full of seeded bytes makes `printInfo` a float formatter
+for random bit patterns.** `printInfo` prints all 21 entries of `L2` as
+`%c%d.%03d`, and `V90PreFilter::autoSelection` matches six of them against
+every reference loop; a random 32-bit word is a NaN about one time in 250, and
+four trials out of 1,094 produced transcripts that differed between the two
+sides. Nothing was wrong with `enterPhase3`. The fix is to write finite
+measurements and leave the rest of the record seeded -- the same reasoning
+applies to `V90Equalizer`'s beta fields and to `ResamplerTimingOffset`'s
+`ppmScale`, which are also set rather than seeded here.
+
+**Neutralising the pointer at the head of a block is not enough.** The first
+attempt skipped `sizeof(void *)` at the front of the Phase 2 record and
+compared the rest; `L2` is at +0x18, and `V90AutoDigitalImpDetector::params`
+is at +0x2814. Both are per-side addresses in the middle of a block, and both
+have to be replaced by name in a scratch copy, exactly as
+`t_v90sessionflag.cpp` replaces the pointers in its five.
+
+**`isV90WithEia6` wants 6 at +0x500, not a non-zero value.** A test that drives
+that word to 2 never takes the EIA-6 arm, and everything still passes --
+because the arm not taken is a valid path. The anti-vacuity check `the EIA-6
+arm changes the parameter block` is what turned that into a failure with a
+name on it, which is the argument for writing such a check even when the
+differential comparisons look thorough.
+
+### 295. The four uncaught mutations of wave 2, and the two that were bugs in the suite
+
+Fifty-nine mutations across `V90Phase3Demodulator.cpp` (29) and
+`V90Demodulator.cpp` (30); 56 caught by a named check. Of the three uncaught,
+two are finding 293's and one is:
+
+**`the detector is handed the argument rather than the field`.**
+`V90Phase3Demodulator::reset` passes `pcmType`, the field, to
+`V90AutoDigitalImpDetector::reset`, having assigned it from `pcmTypeArg` forty
+instructions earlier with nothing between the two writes. The two expressions
+are the same value. Held fixed: that `pcmType = pcmTypeArg;` happens at all,
+which the whole-object comparison checks.
+
+Two more read NOT CAUGHT on the first run and were **defects in the mutation,
+not gaps in the test** -- worth recording because both look exactly like a
+real gap:
+
+- `+0x294 is copied before the reset that clears +0x410` INSERTED the early
+  copy and left the original in place, so the object ended up correct anyway.
+  A mutation that is meant to move a statement has to remove it as well.
+- `the early exit reads an unsigned byte` was spelled
+  `(int)(unsigned char)block[2] > 0x7f`, which is the same predicate as
+  `block[2] < 0` for a signed char. It was replaced with a mutation that reads
+  the pointer from +0x04 of the parameter block instead of +0x00.
+
+A mutation that cannot fail is as useless as a check that cannot fail
+(findings 247, 262), and it reads the same way in the report.
+
+### 296. What wave 2 leaves for `VPcmFloModem`, and the V90Demodulator field map
+
+`V90Phase3Demodulator::reset` (801) and `V90Demodulator::enterPhase3` (448)
+both landed, so `tools/closure.py _ZN12VPcmFloModem11enterPhase3Ev --missing`
+is now **one symbol, 270 bytes: itself.** Nothing else in #60 blocks wave 3.
+
+The four things worth taking from here rather than re-deriving:
+
+**Sizes come from the allocation (finding 291).** Before scanning `this`
+displacements for `VPcmFloModem` or anything it owns, find the `sysdep_malloc`
+before its constructor call. The scan is wrong for these classes and the
+allocation is exact.
+
+**A constructor is a better field map than any method.** `V90Demodulator`'s
+1,002-byte constructor names the type of nearly every pointer in the class,
+because each is handed to a callee whose mangled name spells it out. What it
+gives, and which `include/dsplib/V90Demodulator.h` now carries in full:
+
+    +0x004 V90Phase2Info*        +0x1d8 V90Equalizer*            malloc 0x150
+    +0x008 V90Jd*                +0x1dc V90Phase3Demodulator*    malloc 0x42c
+    +0x00c V92Jd*                +0x1e0 V90Phase4Demodulator*    malloc 0x351c
+    +0x010 tagV90DILdescriptor*  +0x1e4 V90Demapper*             malloc 0x1eb8
+    +0x014 V90MappingParams*     +0x1e8 Descrambler<h,i>  embedded, 0x20
+    +0x018 V90MappingParams*     +0x208 V90ConstellationDesigner* malloc 0x54
+    +0x01c V90TRN2Designer*      +0x20c V90ConnectionEvaluator*   malloc 0xbc
+    +0x024 V90CP*                +0x210 V90SpectralVerifier embedded, 0x2c
+    +0x028 V90MP*                +0x23c V90AutoDigitalImpDetector*
+    +0x02c V90Parameters*        +0x04c Agc<float>         embedded
+    +0x030 sessionFlag           +0x06c V90PreFilter       embedded, 0x28
+    +0x034 the phase 3 latch     +0x094 V90Resampler       embedded, 0xb4
+                                 +0x148 V90ConstellationPower embedded, 0x90
+
+**A `V90Phase3Demodulator` is expensive to stand up and `t_v90p3dreset.cpp`
+does it.** Driving one needs a `V90AutoDigitalImpDetector` (0xa9b0) with a
+parameter block, a `V90SdDetector` with a history array, a
+`Descrambler<int,int>` placed as its constructor's (0x12, 0x17, 0x63) would
+place it, and the modulator's `Scrambler<unsigned char,int>` placed as
+`t_v90p3mod.cpp` places it. `t_v90demod.cpp` copies that fixture verbatim; a
+third copy is the point at which it should become shared.
+
+**Two float rules, both learned the expensive way (finding 294).** Seed
+everything except the fields an x87 callee reads, and set those to finite
+values; and neutralise per-side pointers by name in a scratch copy, including
+the ones in the middle of a block -- `V90Phase2Info::L2` at +0x18 and
+`V90AutoDigitalImpDetector::params` at +0x2814 are the two that bite.
+
+### 272. Two batches, two functions, one object, and neither found both
+
+`V90Demodulator + 0x20c` was written twice in the same afternoon by two
+worktrees that could not see each other, and the merge is worth recording
+because the two answers were not in conflict -- they were complementary, and
+taking either one alone would have lost real information.
+
+`w2_p3dreset`, reading `V90Demodulator::enterPhase3` and the 1,002-byte
+constructor, found that +0x20c holds a `sysdep_malloc(0xbc)` and that
+`enterPhase3` clears four of its words -- +0x70, +0x74, +0x84 and +0x88 --
+leaving +0x78..+0x83 as `pad_78[0x0c]`. It named the class
+`V90ConnectionEvaluator` from the constructor's own mangling.
+
+`w2_vpcm`, reading `VPcmFloModem::getV90CpBits`, found that the same object's
+**+0x78 is copied to +0x7c** every time a CP sequence finishes. It had no name
+for the class -- the function it read never constructs one -- so it modelled
+two words as a local `struct vpcm_dem_20c` and said so, correctly, in a
+comment: putting an invented class into `include/dsplib` for two `mov`s would
+be worse than the pun it replaced.
+
+Merged, `pad_78[0x0c]` becomes `word_78`, `word_7c`, `pad_80[4]` and the local
+struct disappears. The name comes from one batch and two of the fields from
+the other.
+
+**The general shape:** a class's field map is a union over its readers, and
+parallel worktrees partition the readers. Neither agent was wrong and neither
+was complete, and the merge is where the two halves meet -- so a merge that
+resolves a header conflict by taking one side wholesale is throwing away
+measurements. This one was caught because `V90SessionFlag.cpp` and
+`t_vpcmflomodem.cpp` failed to compile against the surviving name, which is
+luck: had `w2_vpcm` spelled its access as a cast rather than a member, both
+versions would have compiled and the `word_78`/`word_7c` measurement would
+have been silently dropped.
+
+Mutation suites re-run after the merge to confirm nothing was weakened by the
+edits: `vpcmflomodem` 49 mutations, 48 caught and 1 measured-equivalent;
+`v90sessionflag` 16 mutations, 14 caught and the two orderings finding 269
+records as unobservable.

@@ -1,0 +1,149 @@
+[
+ {
+  "label": "the two companding constants are swapped",
+  "find": "\t\tucodeLevel = (short)ulaw2linear(\n\t\t    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));\n\telse\n\t\tucodeLevel = (short)alaw2linear(\n\t\t    (unsigned char)((ucodeArg & 0x7f) ^ 0xd5));",
+  "replace": "\t\tucodeLevel = (short)ulaw2linear(\n\t\t    (unsigned char)((ucodeArg & 0x7f) ^ 0xd5));\n\telse\n\t\tucodeLevel = (short)alaw2linear(\n\t\t    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));",
+  "note": "the arms keep their decoder and swap the complement"
+ },
+ {
+  "label": "the two decoders are swapped",
+  "find": "\tif (pcmTypeArg == PCM_TYPE_MU_LAW)\n\t\tucodeLevel = (short)ulaw2linear(",
+  "replace": "\tif (pcmTypeArg != PCM_TYPE_MU_LAW)\n\t\tucodeLevel = (short)ulaw2linear("
+ },
+ {
+  "label": "the code is not masked to seven bits",
+  "find": "(unsigned char)((ucodeArg & 0x7f) ^ 0xff));",
+  "replace": "(unsigned char)(ucodeArg ^ 0xff));"
+ },
+ {
+  "label": "the level lands at +0x18, over the code",
+  "find": "\tword_3cc = 0;\n\tucode = ucodeArg;",
+  "replace": "\t*(short *)((char *)this + 0x18) = ucodeLevel;\n\tword_3cc = 0;\n\tucode = ucodeArg;"
+ },
+ {
+  "label": "the descrambler is seeded from the code rather than with 0",
+  "find": "\tdescrambler.reset(0);",
+  "replace": "\tdescrambler.reset(ucodeArg);"
+ },
+ {
+  "label": "the descrambler is not reset at all",
+  "find": "\tdescrambler.reset(0);",
+  "replace": ""
+ },
+ {
+  "label": "the descrambler sits at +0x3d4",
+  "find": "\tdescrambler.reset(0);",
+  "replace": "\t((Descrambler<int, int> *)((char *)this + 0x3d4))->reset(0);"
+ },
+ {
+  "label": "only the Jd half of the V.92 message is unpacked",
+  "find": "\t\tjdV92Arg->unPackJdReset();",
+  "replace": "\t\tjdV92Arg->unPackJdReset();\n\t\tif (jdV92Arg == NULL)"
+ },
+ {
+  "label": "the V.90 Jd is reset even when null",
+  "find": "\tjd = jdArg;\n\tif (jdArg != NULL)\n\t\tjdArg->unPackReset();",
+  "replace": "\tjd = jdArg;\n\tif (jdArg != (V90Jd *)1)\n\t\tjd->unPackReset();"
+ },
+ {
+  "label": "the Sd detector is reached through +0x3f4",
+  "find": "\tword_404 = 0;\n\tsdDetector->reset();",
+  "replace": "\tword_404 = 0;\n\t(*(V90SdDetector **)((char *)this + 0x3f4))->reset();"
+ },
+ {
+  "label": "the detector is handed the level rather than the code",
+  "find": "\tautoDigitalImpDetector->reset(ucodeArg, pcmType, altRbs);",
+  "replace": "\tautoDigitalImpDetector->reset((unsigned char)ucodeLevel, pcmType,\n\t\t\t\t      altRbs);"
+ },
+ {
+  "label": "the detector is handed the ninth argument rather than the eighth",
+  "find": "\tautoDigitalImpDetector->reset(ucodeArg, pcmType, altRbs);",
+  "replace": "\tautoDigitalImpDetector->reset(ucodeArg, pcmType, short414Arg);"
+ },
+ {
+  "label": "WaitForQTS resets the linear mapping too",
+  "find": "\t\t\t\t\t     \"state set to WaitForQTS\\r\\n\");\n\t\tmodulatorWord = 0;",
+  "replace": "\t\t\t\t\t     \"state set to WaitForQTS\\r\\n\");\n\t\tautoDigitalImpDetector->resetLinearMapping();\n\t\tmodulatorWord = 0;"
+ },
+ {
+  "label": "WaitForSd is folded into the irregular opening",
+  "find": "\tcase P3D_STATE_WAIT_FOR_SD:\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Phase3Demodulator: initial \"\n\t\t\t\t\t     \"state set to WaitForSd\\r\\n\");\n\t\tautoDigitalImpDetector->resetLinearMapping();\n\t\tmodulatorWord = 0;\n\t\tbreak;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "TRN1dKnownData forwards 0 like the rest",
+  "find": "\t\tmodulatorWord = word2cArg;",
+  "replace": "\t\tmodulatorWord = 0;"
+ },
+ {
+  "label": "every opening forwards the fourth argument",
+  "find": "\t\tautoDigitalImpDetector->resetLinearMapping();\n\t\tmodulatorWord = 0;\n\t\tbreak;\n\n\tcase P3D_STATE_TRN1D_KNOWN_DATA:",
+  "replace": "\t\tautoDigitalImpDetector->resetLinearMapping();\n\t\tmodulatorWord = word2cArg;\n\t\tbreak;\n\n\tcase P3D_STATE_TRN1D_KNOWN_DATA:"
+ },
+ {
+  "label": "the modulator is started in the state reset was handed",
+  "find": "\tphase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,\n\t\t\t      modulatorWord, NULL, NULL, NULL, 0);",
+  "replace": "\tphase3Modulator.reset(pcmTypeArg, ucodeArg,\n\t\t\t      (Phase3ModulatorState)(int)stateArg,\n\t\t\t      modulatorWord, NULL, NULL, NULL, 0);"
+ },
+ {
+  "label": "the modulator is given the Jd pointers this method was handed",
+  "find": "\t\t\t      modulatorWord, NULL, NULL, NULL, 0);",
+  "replace": "\t\t\t      modulatorWord, jdArg, jdV92Arg, NULL, 0);"
+ },
+ {
+  "label": "the modulator is given the DIL descriptor",
+  "find": "\t\t\t      modulatorWord, NULL, NULL, NULL, 0);",
+  "replace": "\t\t\t      modulatorWord, NULL, NULL, dilArg, 0);"
+ },
+ {
+  "label": "the modulator sits at +0x30",
+  "find": "\tphase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,",
+  "replace": "\t((V90Phase3Modulator *)((char *)this + 0x30))->reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,"
+ },
+ {
+  "label": "the DIL length is computed before the modulator runs",
+  "find": "\tword_408 = 0;\n\tdilLength = calculateDilLength(dil, pcmType);\n\tword_410 = 0;",
+  "replace": "\tword_408 = 0;\n\tdilLength = 0;\n\tword_410 = 0;"
+ },
+ {
+  "label": "the DIL length and the word after it are swapped",
+  "find": "\tdilLength = calculateDilLength(dil, pcmType);\n\tword_410 = 0;",
+  "replace": "\tword_410 = calculateDilLength(dil, pcmType);\n\tdilLength = 0;"
+ },
+ {
+  "label": "the ninth argument lands where the eighth's neighbour is",
+  "find": "\tshort_414 = short414Arg;",
+  "replace": "\tshort_414 = altRbs;"
+ },
+ {
+  "label": "the last argument and the fourth are swapped",
+  "find": "\tword_14 = word14Arg;",
+  "replace": "\tword_14 = word2cArg;"
+ },
+ {
+  "label": "the float is converted rather than copied",
+  "find": "\tfloat_418 = float418Arg;",
+  "replace": "\tfloat_418 = (float)(int)float418Arg;"
+ },
+ {
+  "label": "the entry diagnostic prints an argument, not the field",
+  "find": "\t\t\t\t     \"sessionFlag = %d !\\r\\n\", sessionFlag);",
+  "replace": "\t\t\t\t     \"sessionFlag = %d !\\r\\n\", word14Arg);"
+ },
+ {
+  "label": "the entry diagnostic is gated one level too low",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Phase3Demodulator: Reset called, \"",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V90Phase3Demodulator: Reset called, \""
+ },
+ {
+  "label": "byte_424 is cleared at +0x3f9's offset",
+  "find": "\tbyte_424 = 0;\n\tshort_414 = short414Arg;",
+  "replace": "\t*((unsigned char *)this + 0x3f9) = 0;\n\tshort_414 = short414Arg;"
+ },
+ {
+  "label": "the detector is handed the argument rather than the field",
+  "find": "\tautoDigitalImpDetector->reset(ucodeArg, pcmType, altRbs);",
+  "replace": "\tautoDigitalImpDetector->reset(ucodeArg, pcmTypeArg, altRbs);",
+  "note": "EXPECTED UNCAUGHT: pcmType was assigned pcmTypeArg above and nothing between the two writes it, so the two expressions are the same value.  Held fixed: that `pcmType = pcmTypeArg;` is itself checked, which the whole-object comparison does."
+ }
+]

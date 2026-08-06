@@ -1,0 +1,287 @@
+/*
+ * V90Phase3Demodulator.h -- the receiver half of V.90 phase 3.
+ *
+ * Reconstructed from dsplibs.o.  The class was declared in V90SessionFlag.h
+ * as a four-field sketch, because the only member that batch wrote was the
+ * eleven-byte `setSessionFlag`; that header's own comment said the first
+ * batch to give the class real weight should split it out.  This is that
+ * split, and everything the sketch said is preserved below -- including that
+ * the phase 3 MODULATOR is embedded at +0x34 rather than pointed at.
+ *
+ * THE SIZE IS SETTLED, WHICH THE SKETCH SAID IT WAS NOT.
+ *
+ * Finding 268 is right that a `this`-relative displacement scan lies about
+ * this class: its largest hits, 0xa948 and 0xa95c, are off a
+ * V90AutoDigitalImpDetector* and not off `this`.  But the object is
+ * heap-allocated, and the allocation is the oracle -- `V90Demodulator`'s
+ * constructor reads
+ *
+ *     movl $0x42c,(%esp); call sysdep_malloc; ... ; call V90Phase3DemodulatorC1
+ *     mov  %esi,0x1dc(%ebx)
+ *
+ * so the object is 0x42c bytes.  Two independent facts agree with that and
+ * neither was used to derive it: the last field the constructor writes is the
+ * pointer at +0x428, which ends at 0x42c, and the largest displacement
+ * `reset` uses is the byte at +0x424.  Finding 291.
+ *
+ * THREE INTERIOR BOUNDARIES FALL OUT EXACTLY, which is the check that the
+ * subobjects below are subobjects and not coincidence:
+ *
+ *     +0x034 V90Phase3Modulator   0x398   ends 0x3cc, and +0x3cc is a field
+ *     +0x3d0 Descrambler<int,int> 0x020   ends 0x3f0, and +0x3f0 is a field
+ *
+ * Data member names are invented; the mangling never carries one (finding
+ * 226).  `sessionFlag` is the exception and is the author's own: `reset`
+ * prints +0x08 as "V90Phase3Demodulator: Reset called, sessionFlag = %d".
+ * Where nothing names a field it is `word_`/`short_`/`byte_` plus its offset,
+ * as in V90SpectralVerifier.h and V90AutoDigitalImpDetector.h -- a guessed
+ * name in the record is worse than no name.
+ *
+ * THE POINTER TYPES ARE NOT GUESSES.  They come from the constructor's
+ * mangling, `V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *,
+ * unsigned int, V90AutoDigitalImpDetector *)`, whose four arguments the
+ * constructor stores at +0x0c, (used, not stored), +0x08 and +0x00; and from
+ * the callee each field is passed to.
+ */
+
+#ifndef DSPLIB_V90PHASE3DEMODULATOR_H
+#define DSPLIB_V90PHASE3DEMODULATOR_H
+
+#include "dsplib/Scrambler.h"
+#include "dsplib/V90AutoDigitalImpDetector.h"
+#include "dsplib/V90Jd.h"
+#include "dsplib/V90Phase3Modulator.h"
+#include "dsplib/V90SdDetector.h"
+#include "dsplib/V92Jd.h"
+
+class V90Parameters;
+
+/*
+ * The state `reset` is told to start in.  The mangled name is
+ * `22Phase3DemodulatorState`, so the TYPE's name is the author's; the
+ * enumerators' are not, and only three of them are recoverable at all --
+ * `reset` names those three in the diagnostics it emits for them:
+ *
+ *     "initial state set to WaitForSd"           0
+ *     "initial state set to TRN1dKnownData"      3
+ *     "initial state set to WaitForQTS"          26
+ *
+ * and calls everything else IRREGULAR, printing the number.  So the gaps are
+ * real states this function does not distinguish, not missing enumerators.
+ *
+ * The underlying type is fixed so that every `int` value is representable and
+ * the differential test may sweep the irregular range without reaching for
+ * undefined behaviour.  It does not affect the mangling, which is by name.
+ */
+enum Phase3DemodulatorState : int {
+	P3D_STATE_WAIT_FOR_SD = 0,		/* the Sd detector runs      */
+	P3D_STATE_TRN1D_KNOWN_DATA = 3,		/* TRN1d, known data         */
+	P3D_STATE_WAIT_FOR_QTS = 26		/* V.92: wait for QTS        */
+};
+
+class V90Phase3Demodulator {
+public:
+	/*
+	 * Written -- wave 2.  The parameter list is the mangling's and not a
+	 * choice: an `int` where the original had `unsigned`, or a dropped
+	 * `const`, emits a different symbol that links against nothing.
+	 */
+	void setSessionFlag(unsigned int flag);
+	void reset(PcmType pcmType, unsigned char ucode,
+		   Phase3DemodulatorState state, unsigned int word2c,
+		   V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
+		   short altRbs, short short414, float float418,
+		   unsigned int word14);
+
+	/*
+	 * Declared for the record and deliberately not defined; their callees
+	 * are not written, and defining one re-opens the link closure.  The
+	 * constructor and destructor are not declared at all, for the reason
+	 * V90Phase3Modulator.h gives: declaring either makes the class
+	 * non-trivial, which deletes the default members of the union the test
+	 * fixture is, and makes `__builtin_offsetof` conditionally supported.
+	 *
+	 *     V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *,
+	 *                          unsigned int, V90AutoDigitalImpDetector *)
+	 *                                                  C1,C2   365 B
+	 *     ~V90Phase3Demodulator()                      D1,D2   165 B
+	 *
+	 * A return type is not mangled, so every one below is spelled `void`
+	 * for want of evidence rather than because the blob returns nothing.
+	 */
+	void getV90Decision(float);
+	void getV92Decision(float);
+	void getDecision(float);
+	void twoLevelDemod(float, int &);
+	void exitDIL();
+	void JdNotDetector(int);
+	void clearVerificationStatus();
+	void setDigitalImairmentsInfo();
+	void enterWaitForANSpcmDrop();
+	void incrementFramePosition();
+	void setAltRbsParams();
+	void resetJdNotDetector();
+	void getMaxUcode();
+
+	/* --- data members; see the file comment on the naming --- */
+
+	/*
+	 * +0x000  The constructor's fourth argument, and `reset` hands it to
+	 * `V90AutoDigitalImpDetector::reset` and `::resetLinearMapping`.
+	 */
+	V90AutoDigitalImpDetector *autoDigitalImpDetector;
+
+	/* +0x004  Zeroed by `reset`; nothing else in the batch reads it. */
+	unsigned int word_04;
+
+	/*
+	 * +0x008  The constructor's third argument and what `setSessionFlag`
+	 * stores.  `reset` prints it, which is where the name comes from.
+	 */
+	unsigned int sessionFlag;
+
+	/* +0x00c  The constructor's first argument.  `reset` never reads it. */
+	V90Parameters *params;
+
+	/*
+	 * +0x010  `reset`'s first argument, and it is re-read out of the
+	 * object rather than out of the argument for both the
+	 * `V90AutoDigitalImpDetector::reset` call and the
+	 * `calculateDilLength` call.
+	 */
+	PcmType pcmType;
+
+	/* +0x014  `reset`'s last argument.  Stored and not otherwise used. */
+	unsigned int word_14;
+
+	/*
+	 * +0x018  `reset`'s second argument, the u-law or A-law code the
+	 * detector is to study.  Named as in V90AutoDigitalImpDetector.h,
+	 * which is where `reset` passes it.
+	 */
+	unsigned char ucode;
+
+	unsigned char pad_19[1];	/* +0x019 alignment              */
+
+	/*
+	 * +0x01a  The linear level of `ucode`.  `reset` computes it as
+	 * `ulaw2linear((ucode & 0x7f) ^ 0xff)` for mu-law and
+	 * `alaw2linear((ucode & 0x7f) ^ 0xd5)` for A-law -- the same
+	 * complement-then-decode the rest of the object uses.
+	 */
+	short ucodeLevel;
+
+	/* +0x01c  `reset`'s seventh argument; `calculateDilLength` reads it. */
+	tagV90DILdescriptor *dil;
+
+	/* +0x020  `reset`'s fifth argument; `unPackReset`ed when non-null. */
+	V90Jd *jd;
+
+	/*
+	 * +0x024  `reset`'s sixth argument.  When non-null BOTH
+	 * `unPackJdReset` and `unPackJdPhaseReset` are called on it, and the
+	 * second call re-loads the pointer out of the object rather than
+	 * reusing the register.
+	 */
+	V92Jd *jdV92;
+
+	/* +0x028  `reset`'s third argument, the state selector. */
+	Phase3DemodulatorState state;
+
+	/*
+	 * +0x02c  `reset`'s fourth argument.  Stored here always, and passed
+	 * on to `V90Phase3Modulator::reset` only from the TRN1dKnownData
+	 * branch -- every other branch passes it 0.
+	 */
+	unsigned int word_2c;
+
+	/* +0x030  Zeroed by `reset`. */
+	unsigned int word_30;
+
+	/*
+	 * +0x034  EMBEDDED, not pointed at: `setSessionFlag` reaches it with
+	 * `add $0x34,%eax` before a tail call and `reset` with
+	 * `lea 0x34(%ebx),%ebp`, and both are address arithmetic rather than a
+	 * load.  0x398 bytes, ending exactly at the field below.
+	 */
+	V90Phase3Modulator phase3Modulator;
+
+	/* +0x3cc  Zeroed by the constructor; `reset` does not touch it. */
+	unsigned int word_3cc;
+
+	/*
+	 * +0x3d0  EMBEDDED, 0x20 bytes, ending exactly at the field below.
+	 * The constructor builds it with (0x12, 0x17, 0x63) and `reset` calls
+	 * `reset(0)` on it -- always 0, never a value derived from an
+	 * argument.
+	 */
+	Descrambler<int, int> descrambler;
+
+	/*
+	 * +0x3f0  Allocated by the constructor with `sysdep_malloc(0x1c)`,
+	 * which is exactly `sizeof(V90SdDetector)`.
+	 */
+	V90SdDetector *sdDetector;
+
+	unsigned char pad_3f4[5];	/* +0x3f4 nothing reaches it     */
+
+	/* +0x3f9  Zeroed by `reset`. */
+	unsigned char byte_3f9;
+
+	unsigned char pad_3fa[2];	/* +0x3fa alignment              */
+
+	unsigned int word_3fc;		/* +0x3fc zeroed by `reset`      */
+	short short_400;		/* +0x400 zeroed by `reset`      */
+	unsigned char pad_402[2];	/* +0x402 alignment              */
+	unsigned int word_404;		/* +0x404 zeroed by `reset`      */
+	unsigned int word_408;		/* +0x408 zeroed by `reset`      */
+
+	/*
+	 * +0x40c  `calculateDilLength(dil, pcmType)`, computed last of all and
+	 * from the two fields above rather than from the arguments.
+	 */
+	unsigned int dilLength;
+
+	/*
+	 * +0x410  Zeroed by `reset`, and then immediately overwritten by
+	 * `V90Demodulator::enterPhase3` with its own +0x294 -- which is the
+	 * one place in wave 2 where the caller's write ordering is observable.
+	 */
+	unsigned int word_410;
+
+	/* +0x414  `reset`'s ninth argument, stored as a 16-bit quantity. */
+	short short_414;
+
+	unsigned char pad_416[2];	/* +0x416 alignment              */
+
+	/*
+	 * +0x418  `reset`'s tenth argument.  Copied as a 32-bit word and
+	 * never loaded into the x87 stack, so the reconstruction must copy it
+	 * as a `float` and not convert it.
+	 */
+	float float_418;
+
+	unsigned char pad_41c[8];	/* +0x41c nothing reaches it     */
+
+	/* +0x424  Zeroed by `reset`, before anything else it does. */
+	unsigned char byte_424;
+
+	unsigned char pad_425[3];	/* +0x425 alignment              */
+
+	/*
+	 * +0x428  Allocated by the constructor with `sysdep_malloc(0x3c)` and
+	 * handed to `ANSamToneDetector(unsigned, unsigned, float, unsigned,
+	 * float, unsigned, unsigned, unsigned)`.  The class is not modelled;
+	 * the field is here because it is what makes the object 0x42c.
+	 */
+	void *ansamToneDetector;
+};
+
+/*
+ * `reset`'s eighth argument is a `short` and its caller narrows an `int` to
+ * reach it, so the width is load-bearing rather than cosmetic; see
+ * V90Demodulator.h.  It is stored nowhere -- `reset` forwards it to
+ * `V90AutoDigitalImpDetector::reset` and drops it.
+ */
+
+#endif /* DSPLIB_V90PHASE3DEMODULATOR_H */
