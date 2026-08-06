@@ -84,16 +84,33 @@ BENIGN = (
 )
 
 
+#
+# T, t AND W.
+#
+# `W` is a weak text symbol -- a template instantiation or an inline the
+# compiler emitted out of line -- and the blob has 79 of them, 6,301 bytes,
+# living in `.gnu.linkonce.t.*` sections rather than in `.text`.  They were
+# invisible to this report on BOTH sides for a long time, so `GenericIIR`'s
+# 1,269 bytes counted as neither translated nor remaining even though
+# src/dsp/FloatIIR.cpp reconstructs them and t_genericiir.cpp drives them.
+#
+# They are not a special case for testing: `objcopy` renames them like
+# anything else, so `ref__ZN10GenericIIRIfdE5resetEv` exists and they are
+# differentially testable.  Counted with the globals for that reason.
+#
+# NOT `V`, which is a weak OBJECT -- the four vtables.  Data, like D and R,
+# and outside what this measures.
+#
 def nm_symbols(path):
-    """{name: (size, kind)} for the T/t symbols a file defines."""
+    """{name: (size, kind)} for the T/t/W symbols a file defines."""
     out = subprocess.run(["nm", "-S", "--defined-only", path],
                          capture_output=True, text=True).stdout
     syms = {}
     for line in out.splitlines():
         f = line.split()
-        if len(f) == 4 and f[2] in "Tt":
+        if len(f) == 4 and f[2] in "TtW":
             syms[f[3]] = (int(f[1], 16), f[2])
-        elif len(f) == 3 and f[1] in "Tt":
+        elif len(f) == 3 and f[1] in "TtW":
             syms[f[2]] = (0, f[1])
     return syms
 
@@ -122,7 +139,7 @@ def our_symbols(build):
                 continue
             for sym, (_size, kind) in nm_symbols(os.path.join(root,
                                                              name)).items():
-                if kind == "T":
+                if kind in ("T", "W"):
                     syms.add(sym)
     return syms
 
@@ -195,14 +212,22 @@ def tested_symbols(build, extra_sources=INTEROP_BY_NAME):
     return found
 
 
+#
+# `.text` PLUS the linkonce sections, because the weak symbols counted above
+# live in those and a numerator without its denominator flatters.  83 sections,
+# 6,405 bytes -- slightly more than the 6,301 the symbols account for, the
+# difference being alignment padding.
+#
 def text_size(obj):
     out = subprocess.run(["size", "-A", obj], capture_output=True,
                          text=True).stdout
+    total = 0
     for line in out.splitlines():
         f = line.split()
-        if len(f) >= 2 and f[0] == ".text":
-            return int(f[1])
-    return 0
+        if len(f) >= 2 and (f[0] == ".text"
+                            or f[0].startswith(".gnu.linkonce.t.")):
+            total += int(f[1])
+    return total
 
 
 def load_tus(path):
@@ -226,7 +251,16 @@ def load_tus(path):
     return out
 
 
-def area_of(addr, tus):
+#
+# A weak/linkonce symbol has no address in `.text` -- it sits at offset 0 of
+# its own `.gnu.linkonce.t.<mangled>` section -- so the TU map, which is built
+# from `.text` address spans, cannot place it.  Say that rather than "?", or
+# 74 symbols and 5 KB look like a gap in the map instead of a property of how
+# the compiler emitted them.
+#
+def area_of(addr, tus, kind=None):
+    if kind == "W":
+        return "(weak/linkonce, no .text address to attribute)"
     for lo, hi, label in tus:
         if lo <= addr < hi:
             return label
@@ -256,7 +290,8 @@ def main():
     tus = load_tus(args.tumap)
 
     total = text_size(args.obj)
-    gl = {n: s for n, (s, k) in blob.items() if k == "T"}
+    # Weak counts as globally visible: it has a `ref_` alias and is drivable.
+    gl = {n: s for n, (s, k) in blob.items() if k in ("T", "W")}
     lo = {n: s for n, (s, k) in blob.items() if k == "t"}
 
     done_g = {n: s for n, s in gl.items() if n in ours}
@@ -346,10 +381,10 @@ def main():
         # Local symbols count here too.  Iterating the globals alone left the
         # file-local ones out of "what is left" as well as out of the
         # denominator, which understated both.
-        for name, (size, _kind) in blob.items():
+        for name, (size, kind) in blob.items():
             if name in ours:
                 continue
-            area = area_of(addr.get(name, -1), tus)
+            area = area_of(addr.get(name, -1), tus, kind)
             rest.setdefault(area, [0, 0])
             rest[area][0] += size
             rest[area][1] += 1
