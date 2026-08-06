@@ -20375,3 +20375,55 @@ turns into progress 0x0f -- it is caught. **A mutation that survives is not
 always a claim that cannot be tested; sometimes it is a badly chosen mutant**,
 and the two are told apart by trying a second one before writing the word
 "equivalent".
+
+### 351a. Checking WHERE an anchor lands, not whether it is unique
+
+Finding 432 is the worst thing found about the mutation tier: nine anchors
+that stayed **unique** and silently came to point at a different arm. All nine
+reported CAUGHT, at claims nobody made. `src.count(find) == 1` holds for every
+one, so uniqueness is not the property that matters -- placement is -- and
+neither `mutate.py`, `reanchor.py` nor `refcheck.py` can see it by
+construction. `reanchor.py` can *cause* it: it makes an anchor unique without
+asking whether it still points at the thing its label names.
+
+`tools/anchorcheck.py` checks placement. The dispatch binds each microstate to
+one arm function; labels in these suites name microstates ("58's head", "the
+shared reset (47, 49, 50)"). So an anchor that lands inside an arm function
+belonging to a microstate its label does not name is a re-pointing.
+
+Proved by planting exactly finding 432's case -- a statement unique to arm 51,
+labelled as 47/49/50's shared reset:
+
+```
+  RE-POINTED  v34hst3mid
+      label    the shared reset (47, 49, 50) clears the wrong word
+      names    [47, 49, 50]
+      lands in t3m_micro51, which is microstate 51
+```
+
+It runs in `make phase`'s `refs` target. The tree is clean: 0 across every
+registered suite, which is the previous batch's nine already repaired.
+
+#### Two things the first version got wrong, both worth keeping
+
+**The map came from a comment.** It read the microstate number out of the
+`/* 41, 0x669a4 */` beside each case label. Two arms carry no such comment and
+another switch in the file produced two phantom entries, so the map held four
+entries of which two were wrong and four arms were missing -- a check with a
+hole exactly where the file is busiest, which is worse than no check because
+it reports a clean run. `V34HS_DET_SYNC` is defined once, in `v34hshak.h`, and
+that is what the case label says; the map is derived from there now, and finds
+32 arms in one file and 10 in the other.
+
+**One function can own many microstates.** Twenty-four of the forty share a
+single arm, so `fn -> number` kept whichever won the dict race and would have
+called every anchor in that arm a re-pointing. `fn -> set`, and a label is
+wrong only if it names none of the set.
+
+#### What it does not check, stated plainly
+
+It is a heuristic over prose. A label with no microstate number in it is not
+checked; an anchor in a shared helper is deliberately allowed, because a label
+naming three arms and pointing into `t3m_errrec_core` is correct. **A clean
+run is not a proof.** It is the difference between checking nothing and
+checking the case that has already gone wrong nine times.

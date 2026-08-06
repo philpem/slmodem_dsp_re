@@ -338,6 +338,7 @@ debugcov:
 #         xargs -I{} tools/refcheck.py --since {}
 refs:
 	@$(PYTHON) tools/refcheck.py
+	@$(PYTHON) tools/anchorcheck.py
 
 # Everything a phase boundary is supposed to check, in one target.
 #
