@@ -33,39 +33,64 @@ extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern void V34InitializeImplementationSpecific(void *obj);
 
 /*
- * THE ONE-LINE SWAP.
+ * THE SWAP, AND WHY IT IS PER TEST RATHER THAN PER BUILD.
  *
- * `v34handshak` has no reconstruction, so side A runs the blob too and the
- * comparison proves the FIXTURE rather than a reconstruction.  The first
- * agent to land a dispatch case defines V34HS_OURS on the command line (or
- * here) and side A becomes the reconstruction, at which point every test
- * written against this fixture becomes an ordinary tier-1 differential test
- * with no other edit anywhere.
+ * This used to be `#ifdef V34HS_OURS`, on the reasoning that the first agent
+ * to land a dispatch case would turn it on and every test written against
+ * the fixture would become a tier-1 differential test at once.  It cannot
+ * be a compile-time switch: the Makefile builds ONE v34hsstep.o and links it
+ * into every test binary, so defining it would move side A for
+ * `t_v34hsstep.c` too -- whose whole claim is a blob-against-blob property
+ * over all forty-three cases, most of which have no reconstruction and would
+ * halt in `t3c_unwritten`.
+ *
+ * So the choice is a run-time one a test makes for itself.  `v34hs_ours(1)`
+ * puts the reconstruction on side A; the default is the blob, which leaves
+ * the fixture proving ITSELF exactly as before.  `V34HS_OURS` still works
+ * and now sets that default, so a build that wants the old behaviour has it.
  */
 #ifdef V34HS_OURS
-extern void v34handshak(void *obj);
-#define V34HS_CALL_A(o)		v34handshak(o)
-#define V34HS_LOG_A		0
+static int use_ours = 1;
 #else
-#define V34HS_CALL_A(o)		ref_v34handshak(o)
-#define V34HS_LOG_A		1
+static int use_ours;
 #endif
 
+void
+v34hs_ours(int on)
+{
+	use_ours = on;
+}
+
+#define V34HS_CALL_A(o)		(use_ours ? v34handshak(o) : ref_v34handshak(o))
+#define V34HS_LOG_A		(use_ours ? 0 : 1)
+
+
 /*
- * AND THE PER-CASE FORM OF THE SAME SWAP.  See v34hsstep.h for why the define
- * above cannot be what a per-case agent uses.  The log slot moves with the
- * function: our code writes capture slot 0 and the blob writes slot 1, and
- * comparing slot 1 against slot 1 is a transcript check that cannot fail.
+ * AND THE TWO PER-CASE FORMS, which `v34hs_ours` above does not replace.
+ *
+ * `v34hs_ours` is the honest swap and the one to use once `v34handshak`
+ * exists and handles the case: side A runs OUR function.  The other two exist
+ * because a case had to be tested BEFORE that was true, and both are still
+ * needed for the dispatches `v34handshak` does not yet cover.
+ *
+ * `side_a_fn` replaces the call with a stand-in -- table 2's block-level
+ * decision.  `step_arm` (below) runs an arm first and lets the blob run too,
+ * which only works where the blob's own guard will then decline to act.
+ *
+ * The log slot moves with whichever is in force: our code writes capture slot
+ * 0 and the blob writes slot 1, and comparing slot 1 against slot 1 is a
+ * transcript check that cannot fail.
  */
 static void (*side_a_fn)(void *obj);
-static int side_a_log = V34HS_LOG_A;
 
 void
 v34hs_side_a(void (*fn)(void *obj))
 {
 	side_a_fn = fn;
-	side_a_log = fn != NULL ? 0 : V34HS_LOG_A;
 }
+
+/* Slot 0 whenever anything of ours ran on side A, whichever mechanism. */
+#define V34HS_LOG_SIDE_A	((use_ours || side_a_fn != NULL) ? 0 : 1)
 
 /* --- the two sides -------------------------------------------------------- */
 
@@ -337,6 +362,24 @@ v34hs_poke_byte(unsigned off, unsigned char v)
 {
 	base(0)[off] = v;
 	base(1)[off] = v;
+}
+
+/*
+ * Aim a pointer field at each side's OWN object, at a chosen offset.
+ *
+ * `v34hs_poke_int` cannot do this and must not be used to try: the two
+ * objects are at different addresses, so writing one address into both is
+ * precisely the asymmetry findings 319-322 are about, and the failure it
+ * produces looks like a defect in whatever ran next.
+ */
+void
+v34hs_poke_self_ptr(unsigned off, unsigned target)
+{
+	void *pa = base(0) + target;
+	void *pb = base(1) + target;
+
+	memcpy(base(0) + off, &pa, sizeof(pa));
+	memcpy(base(1) + off, &pb, sizeof(pb));
 }
 
 short
@@ -940,9 +983,9 @@ v34hs_step(void)
 		V34HS_CALL_A(&obj_a);
 	alarm(0);
 	snprintf(text[0], sizeof(text[0]), "%s",
-		 dsplib_debug_capture_text(side_a_log));
+		 dsplib_debug_capture_text(V34HS_LOG_SIDE_A));
 	observe(0, (const unsigned char *)&obj_a, snap_a,
-		dsplib_debug_capture_lines(side_a_log));
+		dsplib_debug_capture_lines(V34HS_LOG_SIDE_A));
 
 	step_side = 1;
 	dsplib_debug_capture_reset();

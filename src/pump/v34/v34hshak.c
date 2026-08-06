@@ -58,6 +58,8 @@
  * mode numbers come from; see the declaration in `v34hshak.h`.
  */
 
+#include <stdlib.h>		/* abort, in t3c_unwritten below */
+
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v34det.h"
@@ -2664,6 +2666,438 @@ ApplyBulkDelay(void *objp, short delay)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34 bulk delay estimation %d (FAR=%d)\n",
 				     d, obj->fa23c);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `v34handshak`, four arms of it.
+ *
+ * The function is 61,541 bytes and three concurrent state machines behind
+ * four dispatches; docs/v34handshak.md is the map and
+ * test/harness/v34hsstep.c is the fixture that makes one arm a committable
+ * unit.  What is here is the microstate table's core -- the arm twenty-four
+ * of its forty states share, and the three states 62, 79 and 80 -- plus the
+ * infrastructure those arms cannot be reached or left through:
+ *
+ *     0x628f0  the prologue and the guards that choose a dispatch
+ *     0x64a64  the RX_DPSK route: V34agc, the +0xa8a0 gate, fskdemodulate
+ *     0x64ac3  the microstate dispatch, .rodata+0x3000
+ *     0x62af1  the once-per-block txstate dispatch, .rodata+0x2ee8
+ *     0x62a40  the tail every arm of that dispatch falls into
+ *
+ * EVERY OTHER ARM STOPS.  `t3c_unwritten` is called where an arm this batch
+ * did not write would begin, so an unwritten case is a halt and never an
+ * answer.  A `return` there would be a wrong result the differential test
+ * could only catch on a case some test happens to drive, which is the shape
+ * this tree refuses; see the rule in CLAUDE.md.
+ */
+
+/*
+ * Offsets this batch reads or writes.  Prefixed because four batches are
+ * writing arms of this function into this one translation unit at the same
+ * time and finding 325 is what one collided macro cost.
+ *
+ * They are offsets rather than struct members because most of them land in
+ * an `unmapped_*` pad today (tools/whichfield.py says which), and the two
+ * members that are mapped -- `rtd` and the receiver's `flags`, `agc_level`,
+ * `agc_gain`, `f1d2`, `rx_samples` -- are used by name below.
+ */
+#define T3C_PROGRESS	0x0004	/* int:   the code the caller reads back    */
+#define T3C_TIMER_LO	0x0238	/* int:   a running sample count            */
+#define T3C_TIMER_HI	0x023c	/* int:   that plus 431,488                 */
+#define T3C_LVL_LIMIT	0x0230	/* int:   compared against the AGC level    */
+#define T3C_LVL_COUNT	0x0234	/* int:   blocks below it, capped at 0x257f */
+#define T3C_RECEIVER	0x0264	/* struct v34_receiver, inside the object   */
+#define T3C_MODE	0x2218	/* int:   selects what the tail reports     */
+#define T3C_TXCURSOR	0x221c	/* short: samples emitted this block        */
+#define T3C_TXLIMIT	0x2aa0	/* short: how many the block wants          */
+#define T3C_DETECTOR	0x3564	/* struct v34_detector, inside the object   */
+#define T3C_F358C	0x358c	/* short: cleared by MOH_TONE's body        */
+#define T3C_FSKGATE	0xa8a0	/* int:   non-zero diverts at 0x64a87       */
+#define T3C_BLK_A94C	0xa94c	/* what +0xaa6c is aimed at                 */
+#define T3C_BLK_A97C	0xa97c	/* what +0xaa70 is aimed at                 */
+#define T3C_COUNT	0xaa78	/* short: the counter, and HS_TRACE_2       */
+#define T3C_COUNT_SRC	0xaa7c	/* short: RX_PHASE3_CALL copies it in       */
+#define T3C_PTR_AA6C	0xaa6c
+#define T3C_PTR_AA70	0xaa70
+#define T3C_FAA96	0xaa96	/* short: tripled into the receiver        */
+#define T3C_FAADC	0xaadc
+#define T3C_FAAE0	0xaae0
+#define T3C_FAAE2	0xaae2	/* byte:  bit 0 gates RX_PHASE3_CALL       */
+#define T3C_FABE6	0xabe6	/* short: set to 1 on the retrain path     */
+#define T3C_FABF0	0xabf0	/* int:   1 diverts MOH_TONE at 0x6d57c    */
+#define T3C_FABF8	0xabf8	/* byte:  "the drop has been reported"     */
+#define T3C_FABF9	0xabf9	/* byte:  non-zero diverts at 0x6c8f8      */
+#define T3C_FABFC	0xabfc	/* short: what the counter must reach      */
+#define T3C_RX_SAMPS	0x010c	/* receiver: where a detector reads from   */
+
+#define T3C_RX(obj)	((struct v34_receiver *)((char *)(obj) + T3C_RECEIVER))
+#define T3C_DET(obj)	((struct v34_detector *)((char *)(obj) + T3C_DETECTOR))
+
+/*
+ * A dispatch arm this reconstruction has not written.
+ *
+ * It has to stop rather than return.  `v34handshak` is being landed one arm
+ * at a time against test/harness/v34hsstep.c, so at any moment most of the
+ * table is missing, and an arm that returns quietly is indistinguishable
+ * from an arm that correctly did nothing -- the differential test would
+ * catch it only on a case some test happens to drive, and the whole point of
+ * the per-case split is that most cases are not driven yet.
+ */
+static void
+t3c_unwritten(void)
+{
+	abort();
+}
+
+static unsigned char
+t3c_getb(const struct v34_object *obj, unsigned off)
+{
+	return *((const unsigned char *)obj + off);
+}
+
+static void
+t3c_putb(struct v34_object *obj, unsigned off, unsigned char v)
+{
+	*((unsigned char *)obj + off) = v;
+}
+
+static int
+t3c_geti(const struct v34_object *obj, unsigned off)
+{
+	return *(const int *)((const char *)obj + off);
+}
+
+static void
+t3c_puti(struct v34_object *obj, unsigned off, int v)
+{
+	*(int *)((char *)obj + off) = v;
+}
+
+static void
+t3c_putp(struct v34_object *obj, unsigned off, void *p)
+{
+	*(void **)((char *)obj + off) = p;
+}
+
+/*
+ * The tail at 0x62a40, which every arm of the once-per-block dispatch falls
+ * into and which is also that dispatch's own default.
+ *
+ * `tx` is the transmit state the dispatch read, sign extended -- the last
+ * three comparisons are against it and not against the table index.
+ *
+ * The two unsigned range tests are the object's `lea -N(%edx); cmp $1; ja`,
+ * which is how GCC spells "one of these two values".
+ */
+static void
+t3c_block_tail(struct v34_object *obj, int tx)
+{
+	struct v34_receiver *rx = T3C_RX(obj);
+	int mode = t3c_geti(obj, T3C_MODE);
+
+	if (mode == 1) {
+		/* 0x62b45, and it rejoins below rather than returning. */
+		rx->f1d2 = (short)(3 * hs_get(obj, T3C_FAA96));
+		t3c_puti(obj, T3C_PROGRESS, 4);
+	}
+
+	if ((unsigned)(mode - 4) <= 1u)
+		t3c_puti(obj, T3C_PROGRESS, 6);
+
+	if ((unsigned)(mode - 2) <= 1u && tx == V34HS_SILENCERETRAIN)
+		t3c_unwritten();			/* 0x64884 */
+
+	/* Unsigned, so a wrapped count reads as enormous rather than as past. */
+	if ((unsigned)t3c_geti(obj, T3C_TIMER_LO)
+	    > (unsigned)t3c_geti(obj, T3C_TIMER_HI))
+		t3c_puti(obj, T3C_PROGRESS, 8);
+
+	if ((int)rx->agc_level >= t3c_geti(obj, T3C_LVL_LIMIT))
+		t3c_puti(obj, T3C_LVL_COUNT, 0);
+	else
+		t3c_puti(obj, T3C_LVL_COUNT,
+			 t3c_geti(obj, T3C_LVL_COUNT) + 1);
+
+	if (t3c_geti(obj, T3C_LVL_COUNT) > 0x257f)
+		t3c_puti(obj, T3C_PROGRESS, 9);
+
+	/*
+	 * The three Modem-on-Hold transmit states, and they are compared
+	 * against the STATE and not against the table index -- 0x62ac5
+	 * re-signs `%cx` rather than reusing the `-5` the dispatch made.
+	 */
+	if (tx == V34HS_MOH_FRR)
+		t3c_unwritten();			/* 0x62b2f */
+	else if (tx == V34HS_MOH_CLEARDOWN)
+		t3c_puti(obj, T3C_PROGRESS, 0x10);
+	else if (tx == V34HS_MOH_ON_HOLD)
+		t3c_unwritten();			/* 0x64a4f */
+}
+
+/*
+ * The once-per-block transmit dispatch at 0x62af1, table 2 at .rodata+0x2ee8.
+ *
+ * Every microstate arm below leaves through here: the microstate machine is
+ * a set of guards in front of the transmit machine rather than sixteen
+ * independent bodies (finding 288), so a microstate case cannot be landed
+ * without whichever transmit arm its own txstate selects.
+ *
+ * ONLY ONE OF TABLE 2'S SEVEN TARGETS IS WRITTEN HERE, and it belongs to
+ * #56's batch rather than to this one: 0x644c9 is three instructions, and
+ * without it microstate 79's body cannot be reached at all -- it sets
+ * txstate to TX_DPSK, and the retrain `v34handshakinit` on microstate 80's
+ * far path leaves SILENCERETRAIN, and both select 0x644c9.  Whoever merges
+ * #56 should expect to find it already here.
+ */
+static void
+t3c_txblock(struct v34_object *obj)
+{
+	int tx = hs_get(obj, HS_TXSTATE);
+
+	if ((unsigned)(tx - 5) <= 0x45u) {
+		switch (tx) {
+		case V34HS_TX_DPSK:		/* 0x644c9, with 51 54 60 74 */
+		case V34HS_TX_L1:
+		case V34HS_SILENCEINFO:
+		case V34HS_TONE_AB:
+		case V34HS_SILENCERETRAIN:
+			t3c_puti(obj, T3C_PROGRESS, 0);
+			break;
+		default:
+			t3c_unwritten();
+			break;
+		}
+	}
+
+	t3c_block_tail(obj, tx);
+}
+
+/*
+ * Microstate 62 `RX_PHASE3_CALL`, 0x65c7a.
+ *
+ * Bit 0 of +0xaae2 is the whole guard: clear, and the arm is the shared one.
+ * Set, and it copies +0xaa7c over the counter, moves the microstate on to
+ * TX_PHASE2_CALL and arms a detector by raising the receiver's pending flag.
+ *
+ * WHAT IS DELIBERATELY NOT HERE.  0x65c95 compares the entered microstate
+ * against 56 and 0x65ca0 jumps to 0x6c2c5 when it matches.  56 does not
+ * dispatch here -- .rodata+0x3000's entry for it is 0x66834, which is 47's
+ * arm -- so that block is tail-merged from 47/56 and is that case's, not
+ * this one's.
+ */
+static void
+t3c_micro_rx_phase3_call(struct v34_object *obj)
+{
+	struct v34_receiver *rx = T3C_RX(obj);
+
+	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
+		t3c_txblock(obj);			/* 0x6abae */
+		return;
+	}
+
+	/* Sixteen bits, and the trace below reads it back as [2]. */
+	hs_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT_SRC));
+
+	hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE2_CALL);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PHASE2, RX_PHASE3_CALL ,filtdelay = "
+				     "%d, rxflgs= 0x%x,rx->gain=0x%x\n",
+				     (int)hs_get(obj, T3C_COUNT_SRC),
+				     (unsigned)rx->flags,
+				     (unsigned)(int)rx->agc_gain);
+
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
+	t3c_txblock(obj);
+}
+
+/*
+ * Microstate 79 `MOH_TONE`, 0x657ca, and 80 `MOH_TONE_DROP`, 0x656e0.
+ *
+ * Both count one call, run the detector at +0x3564 over the receiver's input
+ * from +0x10c to `rx_samples`, and decide on the answer -- and then they
+ * diverge completely, which is what makes them two cases and not one.  The
+ * detector's result is tested sixteen bits wide in both (`test %ax,%ax`).
+ */
+static short
+t3c_moh_step_detector(struct v34_object *obj)
+{
+	struct v34_receiver *rx = T3C_RX(obj);
+
+	hs_put(obj, T3C_COUNT, (short)(hs_get(obj, T3C_COUNT) + 1));
+
+	return (short)tone_detect(rx, T3C_DET(obj),
+				  (const short *)((const char *)rx
+						  + T3C_RX_SAMPS),
+				  rx->rx_samples);
+}
+
+static void
+t3c_micro_moh_tone(struct v34_object *obj)
+{
+	if (t3c_moh_step_detector(obj) == 0) {
+		t3c_txblock(obj);			/* 0x6afc4 */
+		return;
+	}
+
+	if (hs_get(obj, T3C_COUNT) < hs_get(obj, T3C_FABFC)) {
+		t3c_txblock(obj);			/* 0x6c701 */
+		return;
+	}
+
+	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
+
+	if (t3c_geti(obj, T3C_FABF0) == 1)
+		t3c_unwritten();			/* 0x6d57c */
+
+	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+
+	hs_put(obj, T3C_FAADC, 0);
+	hs_put(obj, T3C_FAAE0, 0);
+	hs_put(obj, T3C_BLK_A97C + 0x14, -1);
+	hs_put(obj, T3C_BLK_A97C + 0x18, 8);
+	hs_put(obj, T3C_COUNT, 0);
+	t3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A97C);
+	t3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T3C_BLK_A94C);
+	hs_put(obj, T3C_F358C, 0);
+	hs_put(obj, HS_TRACE_1, 0);
+
+	t3c_txblock(obj);
+}
+
+static void
+t3c_micro_moh_tone_drop(struct v34_object *obj)
+{
+	if (t3c_moh_step_detector(obj) != 0
+	    && t3c_getb(obj, T3C_FABF8) == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34Handshake: Detected signal "
+					     "drop on FRR request, time to "
+					     "move to phase1...\r\n");
+		t3c_putb(obj, T3C_FABF8, 1);
+	}
+
+	/* The round-trip delay sets how long the drop has to persist. */
+	if ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c0) {
+		t3c_txblock(obj);			/* 0x6aae6 */
+		return;
+	}
+
+	if (t3c_getb(obj, T3C_FABF9) != 0)
+		t3c_unwritten();			/* 0x6c8f8 */
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("MOH: Timeout waiting for MH sequence "
+				     "under MHfrr, initiating retrain\r\n");
+
+	v34handshakinit(obj, 1);
+	hs_put(obj, T3C_FABE6, 1);
+
+	t3c_txblock(obj);
+}
+
+/*
+ * The handshake, once per block.
+ *
+ * Four guards choose one of three dispatches, read off the prologue at
+ * 0x628f0; the cursor/limit compare is signed and sixteen bits wide, and so
+ * is the receiver's own first halfword against 5.
+ */
+void
+v34handshak(void *vobj)
+{
+	struct v34_object *obj = (struct v34_object *)vobj;
+	struct v34_receiver *rx = T3C_RX(obj);
+	int mst;
+
+	if (hs_get(obj, T3C_TXCURSOR) < hs_get(obj, T3C_TXLIMIT))
+		t3c_unwritten();	/* table 1 at .rodata+0x2da0 -- #56 */
+
+	if (hs_get(obj, T3C_RECEIVER) <= 5) {
+		t3c_txblock(obj);
+		return;
+	}
+
+	if (hs_get(obj, HS_RXSTATE) != V34HS_RX_DPSK) {
+		/*
+		 * The compare chain at 0x62a02 -- RECEIVE at 0x653e4, WAIT at
+		 * 0x6752c, more above 43 at 0x62b71, and anything it does not
+		 * name falls into the transmit dispatch.  #58.
+		 */
+		t3c_unwritten();
+		return;
+	}
+
+	V34agc(rx);
+
+	if (t3c_geti(obj, T3C_FSKGATE) != 0)
+		t3c_unwritten();			/* 0x6754b */
+
+	fskdemodulate(obj, (const short *)((const char *)rx + T3C_RX_SAMPS),
+		      &obj->fsk);
+
+	/*
+	 * Only now is +0x3592 read: nothing on the way here writes any of the
+	 * three state words, which is finding 285 and is what makes a
+	 * poke-and-step fixture possible at all.
+	 */
+	mst = hs_get(obj, HS_MICROSTATE);
+
+	if ((unsigned)(mst - 41) > 0x27u) {
+		t3c_txblock(obj);			/* 0x65329 */
+		return;
+	}
+
+	switch (mst) {
+	case V34HS_RX_PHASE3_CALL:
+		t3c_micro_rx_phase3_call(obj);
+		return;
+	case V34HS_MOH_TONE:
+		t3c_micro_moh_tone(obj);
+		return;
+	case V34HS_MOH_TONE_DROP:
+		t3c_micro_moh_tone_drop(obj);
+		return;
+
+	/*
+	 * The arm twenty-four of the forty states share, 0x6590b: read the
+	 * transmit state and jump to the once-per-block dispatch.  These are
+	 * .rodata+0x3000's twenty-four entries holding 0x6590b, not a guess
+	 * at which states "do nothing" -- and the default above is the same
+	 * three instructions at a different address.
+	 */
+	case V34HS_DET_CJ:		/* 42 */
+	case V34HS_RX_DPSK:		/* 43 */
+	case V34HS_TONE_AB_ANS:		/* 45 */
+	case V34HS_TX_L2:		/* 52 */
+	case V34HS_DET_AB:		/* 53 */
+	case V34HS_SILENCEINFO:		/* 54 */
+	case V34HS_TX_PHASE3_CALL:	/* 57 */
+	case V34HS_TONE_AB:		/* 60 */
+	case V34HS_TONE_AB_CALL:	/* 61 */
+	case V34HS_JTXMIT:		/* 64 */
+	case V34HS_XMIT0:		/* 65 */
+	case V34HS_TRNSEG4A:		/* 66 */
+	case V34HS_XMITMP:		/* 67 */
+	case V34HS_J1TXMIT:		/* 68 */
+	case V34HS_EXMIT:		/* 69 */
+	case V34HS_DATAXMIT:		/* 70 */
+	case V34HS_TXLEVEL:		/* 71 */
+	case V34HS_RX_L1:		/* 72 */
+	case V34HS_RX_L2:		/* 73 */
+	case V34HS_SILENCERETRAIN:	/* 74 */
+	case V34HS_RX_RETRAIN_CALL:	/* 75 */
+	case V34HS_RX_RETRAIN_ANSWER:	/* 76 */
+	case V34HS_TX_RETRAIN_ANS:	/* 77 */
+	case V34HS_JaTXMIT:		/* 78 */
+		t3c_txblock(obj);
+		return;
+
+	default:
+		t3c_unwritten();
+		return;
+	}
 }
 
 /*

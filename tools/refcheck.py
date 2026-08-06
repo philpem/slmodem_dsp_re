@@ -78,6 +78,7 @@ and finding 152's" became "Finding 173's trap, and finding 152's": the 149
 was corrected, and correcting it hid the 152 next to it, which was not.
 """
 
+import json
 import argparse
 import os
 import re
@@ -466,6 +467,49 @@ def check_conflict_markers():
     return bad
 
 
+#
+# THE MUTATION REGISTRY IS JSON AND NOTHING PARSED IT.
+#
+# `test/mutations/suites.json` is the list every `mutate.py --suite` reads.
+# Merging two branches that each appended a line to it produces a trailing
+# comma about one time in three, and a malformed registry makes EVERY suite
+# unrunnable -- while `make phase` stays green, because nothing in the phase
+# boundary opens the file.  A test suite that cannot be run reports no
+# failures, which is finding 134's argument in its purest form.
+#
+# Checked here because this is the gate that already walks the tree, and
+# because the same merge that breaks it is the one that breaks references.
+# Finding 346.
+#
+def check_suites():
+    path = os.path.join("test", "mutations", "suites.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        reg = json.load(open(path))
+    except ValueError as e:
+        print("  MALFORMED  %s: %s" % (path, e))
+        return [path]
+    bad = []
+    for name, entry in sorted(reg.items()):
+        # `_` holds the file's own prose header, which is a list of strings
+        # and not a suite.  Any leading-underscore key is documentation.
+        if name.startswith("_"):
+            continue
+        if (not isinstance(entry, list) or len(entry) != 2
+                or not all(isinstance(x, str) for x in entry)):
+            print("  MALFORMED  %s: suite %r is not [source, binary]"
+                  % (path, name))
+            bad.append(name)
+            continue
+        src = entry[0]
+        if not os.path.exists(src):
+            print("  MISSING    %s: suite %r names %s, which does not exist"
+                  % (path, name, src))
+            bad.append(name)
+    return bad
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
     bad = []
@@ -479,10 +523,12 @@ def check_dangling():
         print("  DANGLING  %s:%d  %s"
               % (path, line, num if kind == "D" else "finding " + num))
     marks = check_conflict_markers()
-    print("\n  %d references checked, %d resolve to nothing%s"
+    suites = check_suites()
+    print("\n  %d references checked, %d resolve to nothing%s%s"
           % (total, len(bad),
-             "" if not marks else ", %d conflict marker(s)" % len(marks)))
-    return 1 if (bad or marks) else 0
+             "" if not marks else ", %d conflict marker(s)" % len(marks),
+             "" if not suites else ", %d bad mutation suite(s)" % len(suites)))
+    return 1 if (bad or marks or suites) else 0
 
 
 def check_since(rev):

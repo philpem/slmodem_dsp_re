@@ -16,6 +16,12 @@ dsplibs.o reconstruction coverage
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 18 of ours (7987 bytes).
 
+  defined here only IN PART, and so counted in NEITHER figure
+  above -- the whole symbol size would land in `translated` the
+  moment a definition exists, which for a function being written
+  one dispatch case at a time is a claim nobody made:
+    v34handshak                     61541 bytes   landed one dispatch arm at a time (#56-#58); an arm nobody has written calls abort
+
   translated, alias exists, and NOT tested:
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes

@@ -166,6 +166,18 @@ extern "C" {
 void v34handshakinit(void *obj, int mode);
 
 /*
+ * The handshake itself, one block at a time.
+ *
+ * PARTIAL, AND IT HALTS RATHER THAN GUESSING.  61,541 bytes over three
+ * dispatches are being landed one arm at a time against
+ * `test/harness/v34hsstep.c`; an arm nobody has written yet calls `abort`,
+ * so this is safe to call only for a state some test has landed.  Nothing in
+ * this tree calls it but that fixture.  docs/v34handshak.md has the map and
+ * says which arms exist.
+ */
+void v34handshak(void *obj);
+
+/*
  * ---------------------------------------------------------------------------
  * The handshake's support functions -- everything in V34hshak.c that is not
  * `v34handshak` itself.  See src/pump/v34/v34hshak.c.
