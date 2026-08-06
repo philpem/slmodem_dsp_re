@@ -14709,6 +14709,10 @@ we have one generic loop that always shifts by 14 and gets its per-mode
 behaviour from tables. So the original specialised the inner product per rate
 combination and we did not.
 
+**Superseded in part by finding 351**: the thirteen copies are the compiler
+inlining ONE helper, not thirteen hand-written loops -- though the source did
+have to hand it per-mode constants for that to happen.
+
 That is category "bit-exact, different structure", and it is verified as such
 rather than assumed: `t_rcresample` drives **all eighteen usable modes**
 sample-by-sample against the blob, plus ragged chunking, one-sample calls and
@@ -14728,3 +14732,54 @@ its top four, and its top four were mostly an artefact of how it counted. The
 per-object list it prints now is flatter and more trustworthy -- after
 `fixedrc.c` at 25%, everything is between 59% and 100%, which is the range
 different-but-equivalent factoring produces.
+
+### 351. The thirteen convolutions are the compiler's doing, but only because the source handed it constants
+
+A correction to finding 350, which said "the original specialised the inner
+product per rate combination and we did not". That is true of the SOURCE and
+wrong about the mechanism, and the difference matters.
+
+**The duplication is compiler-done, and here is the experiment.** A single
+static helper taking the tap count and the shift as parameters, called from a
+switch with six constant pairs, compiled by the period toolchain:
+
+| build | copies | shifts |
+|---|---|---|
+| `static`, `-O2` | 1 | none -- runtime shift, helper stays out of line |
+| `static inline`, `-O2` | 6 | `$0xd $0xe $0xf $0x10` |
+| `static`, `-O3` | 6 | `$0xd $0xe $0xf $0x10` |
+
+Those are the same four shift amounts the object uses, and the object's copies
+likewise compare their loop counters against literals -- `cmp $0xe,%ax`,
+`cmp $0x2,%ax`, `cmp $0x56,%ax`. So thirteen hand-written convolutions were
+never needed: one helper, marked `inline` or built at `-O3`, produces exactly
+this shape.
+
+**But the compiler could only do it because the source gave it constants.** Our
+`rc_output` reads `s->taps` out of the state struct, so there is nothing to
+fold and nothing to specialise -- and `-O3` bears that out, taking our
+`RcFixed_Resample` from 454 bytes to 463 rather than towards 2,640. For the
+compiler to specialise, the call sites must supply literals, which means the
+original's source dispatched per mode with the tap count and the Q shift
+written out. That IS a hand optimisation, just one expressed as constants at
+the call site rather than as duplicated loops: it buys a constant loop bound
+and a constant shift in the inner product of a real-time modem, on 2003
+hardware.
+
+So the correct reading is: the author wrote one convolution and a per-mode
+dispatch with literal parameters; the compiler did the rest. We wrote one
+convolution and a per-mode TABLE. Both are one convolution in the source.
+
+**On `-O2` against `-O3`, which this leaves open.** Rebuilding the whole tree
+at `-O3` moves the total from 74.2% of the blob's bytes to 85.6% -- a real
+narrowing -- but produces no additional byte-identical functions (30 either
+way) and only one more same-size match. Suggestive and not conclusive: the
+alternative is that the original's helpers carried `inline` and the build was
+`-O2` after all. The build stays at `-O2` on that evidence; if a later round
+wants to settle it, the discriminator is a function whose `-O3`-only transform
+(loop unswitching, say) either appears in the object or does not.
+
+The general lesson is worth more than the case: **"the object duplicates this
+and we do not" is a statement about the compiler until proven otherwise**, and
+with the period toolchain in tools/toolchain that is now a ten-minute
+experiment rather than an inference.
