@@ -46,5 +46,7 @@
  "v90sessionflag": ["src/pump/v90/V90SessionFlag.cpp",
                                                  "build/test/t_v90sessionflag"],
  "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp",
-                                                 "build/test/t_v90p3dreset"]
+                                                 "build/test/t_v90p3dreset"],
+ "v90demod":       ["src/pump/v90/V90Demodulator.cpp",
+                                                 "build/test/t_v90demod"]
 }

@@ -14473,3 +14473,91 @@ findings 247 and 262 are about.
 `V90Phase3Modulator::reset` generates that many symbols. So the state-3 trials
 must use a non-zero count or the branch is invisible, and a SMALL one or the
 test runs for hours. 1, 2 and 3 are what it uses.
+
+### 293. `enterPhase3` calls `isV90WithEia6` twice, and it cannot matter
+
+`V90Demodulator::enterPhase3` calls `V90PreFilter::isV90WithEia6()` twice: once
+to decide whether to take the EIA-6 arm, and again -- after the arm has run --
+to build the eighth argument of `V90Phase3Demodulator::reset`. The obvious
+reading is that the arm changes the answer, because it runs `setParamEia6()`,
+which writes the very parameter block `isV90WithEia6` reads.
+
+**It does not, and the mutation suite is what said so.** `the EIA-6 answer is
+cached across setParamEia6` was written expecting a catch and was not caught,
+which sent the claim back to the source:
+
+    isV90WithEia6() = (cap == 1) || (params->w[0x500 / 4] == 6)
+    cap             = dataBase[codecType].loops[refLoop].capability == 2
+
+and `setParamEia6` writes thirty words of the block, of which **none is
++0x500**, and touches neither `refLoop` nor `codecType`; `displayParamEia6` is
+one `ret`. So the second call returns the first call's value for every input,
+the mutation is equivalent, and `test/mutations/v90demod.json` carries it with
+the reason rather than dropping it.
+
+The reconstruction still makes both calls, because the blob makes both calls.
+Held fixed for the equivalence: `V90PreFilter::isV90WithEia6`'s and
+`::setParamEia6`'s bodies, which `t_v90prefilter.cpp` checks independently.
+
+The related claim in the same method IS unobservable for a different reason
+and is also uncaught: the second result is narrowed with `cwtl` before it
+becomes a `short` argument, and `isV90WithEia6` returns a boolean, so no input
+can give it a non-zero high half-word. The `(short)` stays because the
+instruction is there. Two uncaught mutations out of thirty, both named, and
+neither a test gap that more inputs would close.
+
+### 294. Three things a test of `enterPhase3` gets wrong before it gets them right
+
+All three cost a build here, and none of them is about the reconstruction.
+
+**A `V90Phase2Info` full of seeded bytes makes `printInfo` a float formatter
+for random bit patterns.** `printInfo` prints all 21 entries of `L2` as
+`%c%d.%03d`, and `V90PreFilter::autoSelection` matches six of them against
+every reference loop; a random 32-bit word is a NaN about one time in 250, and
+four trials out of 1,094 produced transcripts that differed between the two
+sides. Nothing was wrong with `enterPhase3`. The fix is to write finite
+measurements and leave the rest of the record seeded -- the same reasoning
+applies to `V90Equalizer`'s beta fields and to `ResamplerTimingOffset`'s
+`ppmScale`, which are also set rather than seeded here.
+
+**Neutralising the pointer at the head of a block is not enough.** The first
+attempt skipped `sizeof(void *)` at the front of the Phase 2 record and
+compared the rest; `L2` is at +0x18, and `V90AutoDigitalImpDetector::params`
+is at +0x2814. Both are per-side addresses in the middle of a block, and both
+have to be replaced by name in a scratch copy, exactly as
+`t_v90sessionflag.cpp` replaces the pointers in its five.
+
+**`isV90WithEia6` wants 6 at +0x500, not a non-zero value.** A test that drives
+that word to 2 never takes the EIA-6 arm, and everything still passes --
+because the arm not taken is a valid path. The anti-vacuity check `the EIA-6
+arm changes the parameter block` is what turned that into a failure with a
+name on it, which is the argument for writing such a check even when the
+differential comparisons look thorough.
+
+### 295. The four uncaught mutations of wave 2, and the two that were bugs in the suite
+
+Fifty-nine mutations across `V90Phase3Demodulator.cpp` (29) and
+`V90Demodulator.cpp` (30); 56 caught by a named check. Of the three uncaught,
+two are finding 293's and one is:
+
+**`the detector is handed the argument rather than the field`.**
+`V90Phase3Demodulator::reset` passes `pcmType`, the field, to
+`V90AutoDigitalImpDetector::reset`, having assigned it from `pcmTypeArg` forty
+instructions earlier with nothing between the two writes. The two expressions
+are the same value. Held fixed: that `pcmType = pcmTypeArg;` happens at all,
+which the whole-object comparison checks.
+
+Two more read NOT CAUGHT on the first run and were **defects in the mutation,
+not gaps in the test** -- worth recording because both look exactly like a
+real gap:
+
+- `+0x294 is copied before the reset that clears +0x410` INSERTED the early
+  copy and left the original in place, so the object ended up correct anyway.
+  A mutation that is meant to move a statement has to remove it as well.
+- `the early exit reads an unsigned byte` was spelled
+  `(int)(unsigned char)block[2] > 0x7f`, which is the same predicate as
+  `block[2] < 0` for a signed char. It was replaced with a mutation that reads
+  the pointer from +0x04 of the parameter block instead of +0x00.
+
+A mutation that cannot fail is as useless as a check that cannot fail
+(findings 247, 262), and it reads the same way in the report.

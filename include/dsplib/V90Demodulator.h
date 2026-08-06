@@ -68,8 +68,24 @@ class V90CP;
 class V90MP;
 class V90Demapper;
 class V90ConstellationDesigner;
-class V90ConnectionEvaluator;
 class V90Phase4Demodulator;
+
+/*
+ * Modelled only as far as `V90Demodulator::enterPhase3` reaches into it, which
+ * is four words it clears.  The SIZE is not a guess: the constructor allocates
+ * it with `sysdep_malloc(0xbc)` (finding 291).  Its own members are not in
+ * task #60 and nothing here declares them.
+ */
+class V90ConnectionEvaluator {
+public:
+	unsigned char pad_00[0x70];	/* +0x00 not modelled                */
+	unsigned int word_70;		/* +0x70 cleared by enterPhase3      */
+	unsigned int word_74;		/* +0x74 cleared by enterPhase3      */
+	unsigned char pad_78[0x0c];	/* +0x78 not modelled                */
+	unsigned int word_84;		/* +0x84 cleared by enterPhase3      */
+	unsigned int word_88;		/* +0x88 cleared by enterPhase3      */
+	unsigned char pad_8c[0x30];	/* +0x8c not modelled, to 0xbc       */
+};
 
 class V90Demodulator {
 public:
