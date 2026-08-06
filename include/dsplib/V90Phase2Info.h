@@ -135,11 +135,23 @@ public:
 	int txPowerMeasurementPoint;
 
 	/*
-	 * +0x10  Reached by none of the three members.  Eight bytes, not a
-	 * guess about their contents: a passing test proves nothing about
-	 * memory neither side writes (findings 223, 224).
+	 * +0x10, +0x14  Two more float arrays, living in the same object `L2`
+	 * points into and installed in the same breath.  These used to be
+	 * `pad_10[8]`, "reached by none of the three members" -- which was
+	 * true of the three members and stopped being the whole story the
+	 * moment a fourth function was read.  `VPcmFloModem::setPhaseIIinfo`
+	 * stores four `VPcmFloModem` arrays here in one run of four `lea`s,
+	 * at +0x10, +0x14, +0x18 and +0x1c, and
+	 * `VPcmFloModem::getUinfoValue` clears all four to V90PHASE2INFO_L2
+	 * entries in a single loop.
+	 *
+	 * ONLY THE THIRD HAS A NAME.  `printInfo` prints +0x18 as `L2[%d]`
+	 * and prints none of the other three, so those stay offset-named:
+	 * nothing establishes what they hold.  V92Phase2Info carries the same
+	 * four in the same order at +0x18..+0x24.
 	 */
-	unsigned char pad_10[8];
+	float *array_10;
+	float *array_14;
 
 	/*
 	 * +0x18  The line measurement, at least V90PHASE2INFO_L2 floats.
@@ -156,8 +168,8 @@ public:
 	 */
 	float *L2;
 
-	/* +0x1c  Reached by none of the three members. */
-	unsigned char pad_1c[4];
+	/* +0x1c  The fourth of the group above.  Was `pad_1c[4]`. */
+	float *array_1c;
 
 	/*
 	 * +0x20  The V90Parameters the constructor was handed.  Stored by
