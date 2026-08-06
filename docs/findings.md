@@ -20001,3 +20001,55 @@ Nothing reassuring. A mutation run is the tree's own check that its tests can
 fail, and running it is *itself* a way to break the tree. The tier that exists
 to catch vacuous testing is the tier most likely to leave a wrong answer
 behind, because it is the only one that edits `src/` on purpose.
+
+### 350a. The two tails agree, and finding 373's warning was a risk and not a defect
+
+Finding 373 named two places where the tree's two readings of `v34handshak`'s
+88-instruction tail at 0x62a40 could differ **silently** rather than at the
+link -- the kind of disagreement each copy's own tests cannot see, because
+each drives only the paths its own arms reach. Checked against the
+disassembly, both are already right and the two copies already agree.
+
+**The elapsed/deadline compare is unsigned in the object**, and in both:
+
+```
+62a7e:  mov    0x238(%esi),%ebx
+62a84:  cmp    %ebx,0x234(%esi)
+62a8a:  jbe    62a92                 <- JBE, unsigned
+62a8c:  movl   $0x8,(%esi)
+```
+
+`%esi` is the object plus four (finding 179), so `0x234(%esi)` is the object's
++0x238 and `0x238(%esi)` its +0x23c.
+
+```c
+v34hshak.c        if ((unsigned)t3c_geti(obj, T3C_TIMER_LO)
+                      > (unsigned)t3c_geti(obj, T3C_TIMER_HI))
+v34hshak_t3mid.c  if (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))
+```
+
+**And `%cx` is a parameter in both.** The tail compares `cmp $0x4a,%cx` at
+0x62a70 without loading `%cx`, so it is live from the dispatch, not re-read
+from +0x3596 -- and both copies take it as an argument:
+`t3c_block_tail(obj, int tx)` and `t3m_tail(f, short tx)`, against
+`V34HS_SILENCERETRAIN`, which is 74 = 0x4a. `int` versus `short` is not a
+difference: the dispatch sign-extends a halfword either way, and 0x4a is in
+range of both.
+
+#### Why this is worth a finding rather than a shrug
+
+Finding 373 was written by an agent describing what a merger **should check**,
+from a position where it could not see the other copy. That is the right thing
+to write and it cost nothing to check. But it was carried forward twice --
+into finding 348 and into task #25 -- as though it were an observed
+disagreement, and by the second retelling it had become "one of them may be a
+latent wrong answer that no current test can produce."
+
+It is not. What remains genuinely duplicated between the two copies is the
+prologue, the guard chain, the rxstate chain, the table-3 dispatch and three
+of table 2's arms -- and for those, finding 373's instruction to keep
+`w4_hs_t2`'s stands. Task #25 is a tidy-up of real duplication, not a hunt for
+a wrong answer.
+
+A warning that survives being checked should be *marked* as checked, or the
+next reader pays for it again.
