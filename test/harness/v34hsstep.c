@@ -12,6 +12,7 @@
  */
 
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,11 +55,6 @@ extern void v34handshak(void *obj);
 
 #define OBJ_SIZE	((unsigned)sizeof(struct v34_object))
 
-static struct v34_object obj_a;
-static unsigned char obj_b[sizeof(struct v34_object)];
-static unsigned char snap_a[sizeof(struct v34_object)];
-static unsigned char snap_b[sizeof(struct v34_object)];
-
 /*
  * The blocks the object points OUT of, per side.
  *
@@ -75,11 +71,167 @@ static unsigned char snap_b[sizeof(struct v34_object)];
 #define SESS_PCM	0x610c
 #define DUMMY_LEN	8192
 
-static short shaped_a[SHAPED_LEN], shaped_b[SHAPED_LEN];
-static unsigned char sess_a[SESS_LEN], sess_b[SESS_LEN];
-static unsigned char pcm_a[PCM_LEN], pcm_b[PCM_LEN];
-static unsigned char cfg_a[CFG_LEN], cfg_b[CFG_LEN];
-static short dummy_a[DUMMY_LEN], dummy_b[DUMMY_LEN];
+/*
+ * ---------------------------------------------------------------------------
+ * ONE ARENA PER SIDE, AND WHY THE TWO SIDES CANNOT JUST BE SEPARATE STATICS.
+ *
+ * The object and every block it points at live inside a single 64 KB-aligned
+ * arena, at fixed offsets, with 32 KB of padding between and around them; the
+ * whole of side B's arena is a byte copy of side A's.  So
+ *
+ *   - side B's arena is side A's arena plus a constant that is a multiple of
+ *     64 KB, which makes every INTER-BLOCK DISTANCE equal on the two sides
+ *     and every address's low sixteen bits equal too;
+ *   - a read that runs off the end of any block, or off the front of one,
+ *     lands on identical bytes rather than on whatever the linker happened to
+ *     put next to that side's static.
+ *
+ * That is findings 319 and 321.  Before it, `obj_a` was a `struct v34_object`
+ * and `obj_b` an `unsigned char[]` at two addresses the linker chose, with two
+ * unrelated sets of neighbours, and the per-sample transmit loop gave two
+ * different answers from two identical objects -- which D60 recorded as a
+ * property of the object and which was a property of this file.
+ *
+ * WHAT IS *NOT* CLAIMED: nobody has caught the loop reading a particular byte
+ * outside the object.  V34HS_PADVARY makes each padding region differ between
+ * the sides and the sweep still agrees, and the step writes no padding byte at
+ * all, so whatever the old layout fed it is not within 32 KB of any block.
+ * Finding 322 has the bounds.
+ *
+ * The arena is also why `v34hs_compare` can now check WHICH block a pointer
+ * out of the object selects: an offset within one's own arena is comparable
+ * where a raw address is not.
+ */
+#define ARENA_PAD	0x8000
+
+struct v34hs_arena {
+	unsigned char	head[ARENA_PAD];
+	struct v34_object obj;
+	unsigned char	gap1[ARENA_PAD];
+	short		shaped[SHAPED_LEN];
+	unsigned char	gap2[ARENA_PAD];
+	unsigned char	sess[SESS_LEN];
+	unsigned char	gap3[ARENA_PAD];
+	unsigned char	pcm[PCM_LEN];
+	unsigned char	gap4[ARENA_PAD];
+	unsigned char	cfg[CFG_LEN];
+	unsigned char	gap5[ARENA_PAD];
+	short		dummy[DUMMY_LEN];
+	unsigned char	tail[ARENA_PAD];
+};
+
+#define ARENA_SIZE	((unsigned)sizeof(struct v34hs_arena))
+#define ARENA_STRIDE	((ARENA_SIZE + 0xffffu) & ~0xffffu)
+
+/*
+ * BOTH ARENAS COME OUT OF ONE 64 KB-ALIGNED BUFFER, at a stride this fixture
+ * chooses rather than one the linker chooses.  `V34HS_SKEW=n` moves side B by
+ * n bytes, which is how the claim "the step does not depend on where the
+ * object is" is demonstrated instead of asserted: the sweep is run again at a
+ * skew that destroys the alignment agreement and has to give the same answer.
+ * Finding 322 is what that measured.
+ */
+static unsigned char arena_mem[2 * ARENA_STRIDE + 0x10000]
+	__attribute__((aligned(0x10000)));
+static struct v34hs_arena *pa_arena, *pb_arena;
+
+#define arena_a		(*pa_arena)
+#define arena_b		(*pb_arena)
+
+/*
+ * The object is reached through a pointer rather than as `arena.obj` directly
+ * so that `V34HS_OBJSKEW=n` can move side B's object n bytes further into its
+ * own arena.  That breaks the OBJECT-TO-BLOCK DISTANCES and nothing else --
+ * same contents, same neighbours, same alignment class -- which is the one
+ * property the arena supplies that the skew and padding sweeps do not test.
+ */
+static unsigned char *obj_ptr[2];
+static unsigned objskew, obj_seed;
+
+/*
+ * THE POSITIVE CONTROL.  `V34HS_LOOSEOBJ=1` puts side B's object HERE instead
+ * of in its arena: a standalone static at an address the linker chose, with
+ * the linker's neighbours and an unrelated distance to the five blocks it
+ * points at.  That is the one asymmetry of the pre-arena fixture that
+ * V34HS_SKEW, V34HS_OBJSKEW and V34HS_PADVARY between them cannot express, and
+ * a claim that the arena's congruence is what fixed table 1 is worth nothing
+ * without it.  Finding 319 reports what it did.
+ */
+static struct v34_object loose_obj;
+static int looseobj;
+
+#define obj_a		(*(struct v34_object *)obj_ptr[0])
+#define obj_b		(obj_ptr[1])
+#define OBJ_IN_ARENA	((unsigned)offsetof(struct v34hs_arena, obj))
+
+#define shaped_a	(arena_a.shaped)
+#define shaped_b	(arena_b.shaped)
+#define sess_a		(arena_a.sess)
+#define sess_b		(arena_b.sess)
+#define pcm_a		(arena_a.pcm)
+#define pcm_b		(arena_b.pcm)
+#define cfg_a		(arena_a.cfg)
+#define cfg_b		(arena_b.cfg)
+#define dummy_a		(arena_a.dummy)
+#define dummy_b		(arena_b.dummy)
+
+static unsigned char snap_a[sizeof(struct v34_object)];
+static unsigned char snap_b[sizeof(struct v34_object)];
+
+/*
+ * The arena's regions, so a differing byte can be named rather than reported
+ * as a bare offset.  `pad` marks the seven filler regions, which V34HS_PADVARY
+ * deliberately makes differ; the object itself is compared byte for byte by
+ * `v34hs_compare` and so is skipped here.
+ */
+#define AR_OFF(f)	((unsigned)offsetof(struct v34hs_arena, f))
+static const struct {
+	unsigned	off, len;
+	int		pad;
+	const char     *name;
+} regions[] = {
+	{ AR_OFF(head), ARENA_PAD, 1, "padding before the object" },
+	{ AR_OFF(obj), 0, 0, "the object" },
+	{ AR_OFF(gap1), ARENA_PAD, 1, "padding after the object" },
+	{ AR_OFF(shaped), SHAPED_LEN * 2, 0, "the shaping buffer" },
+	{ AR_OFF(gap2), ARENA_PAD, 1, "padding after the shaping buffer" },
+	{ AR_OFF(sess), SESS_LEN, 0, "the session block" },
+	{ AR_OFF(gap3), ARENA_PAD, 1, "padding after the session block" },
+	{ AR_OFF(pcm), PCM_LEN, 0, "the PCM receiver block" },
+	{ AR_OFF(gap4), ARENA_PAD, 1, "padding after the PCM block" },
+	{ AR_OFF(cfg), CFG_LEN, 0, "the configuration block" },
+	{ AR_OFF(gap5), ARENA_PAD, 1, "padding after the configuration" },
+	{ AR_OFF(dummy), DUMMY_LEN * 2, 0, "the seed tables" },
+	{ AR_OFF(tail), ARENA_PAD, 1, "padding after the seed tables" }
+};
+#define NREGIONS	((unsigned)(sizeof(regions) / sizeof(regions[0])))
+
+static int pad_varied, ref_both, noscrub, force_refinit;
+
+static const char *
+region_of(unsigned off)
+{
+	unsigned k;
+
+	for (k = 0; k < NREGIONS; k++)
+		if (off >= regions[k].off && off < regions[k].off
+					     + (k == 1 ? OBJ_SIZE
+						       : regions[k].len))
+			return regions[k].name;
+	return "outside every region";
+}
+
+static int
+in_padding(unsigned off)
+{
+	unsigned k;
+
+	for (k = 0; k < NREGIONS; k++)
+		if (regions[k].pad && off >= regions[k].off
+		    && off < regions[k].off + regions[k].len)
+			return 1;
+	return 0;
+}
 
 /*
  * Every pointer-sized field this fixture's bring-up leaves holding an
@@ -223,30 +375,96 @@ v34hs_setup(int mode)
 {
 	unsigned i;
 
-	fill((unsigned char *)&obj_a, OBJ_SIZE, 0x5eed1234u);
-	memcpy(obj_b, &obj_a, OBJ_SIZE);
+	if (pa_arena == NULL) {
+		const char *s = getenv("V34HS_SKEW");
+		unsigned long skew = s ? strtoul(s, NULL, 0) : 0;
 
-	fill((unsigned char *)shaped_a, sizeof(shaped_a), 0x11117777u);
-	memcpy(shaped_b, shaped_a, sizeof(shaped_a));
-	fill(sess_a, sizeof(sess_a), 0x22228888u);
-	memcpy(sess_b, sess_a, sizeof(sess_a));
-	fill(pcm_a, sizeof(pcm_a), 0x33339999u);
-	memcpy(pcm_b, pcm_a, sizeof(pcm_a));
-	fill(cfg_a, sizeof(cfg_a), 0x4444aaaau);
-	memcpy(cfg_b, cfg_a, sizeof(cfg_a));
+		skew &= 0xfffcu;	/* the object wants four-byte alignment */
+		pa_arena = (struct v34hs_arena *)arena_mem;
+		pb_arena = (struct v34hs_arena *)(arena_mem + ARENA_STRIDE
+						  + skew);
 
-	for (i = 0; i < DUMMY_LEN; i++)
-		dummy_a[i] = dummy_b[i] = (short)(0x4b00 + i);
+		s = getenv("V34HS_OBJSKEW");
+		objskew = (unsigned)(s ? strtoul(s, NULL, 0) : 0) & 0x7ffcu;
+		looseobj = getenv("V34HS_LOOSEOBJ") != NULL;
+		obj_ptr[0] = (unsigned char *)&pa_arena->obj;
+		obj_ptr[1] = looseobj
+			     ? (unsigned char *)&loose_obj
+			     : (unsigned char *)&pb_arena->obj + objskew;
+
+		/*
+		 * A different object, for the sweep that says the agreement is
+		 * a property of the object rather than of one lucky fill.  The
+		 * committed run leaves it at zero, because the separation
+		 * counts the test asserts are counts for THIS fill.
+		 */
+		s = getenv("V34HS_SEED");
+		obj_seed = (unsigned)(s ? strtoul(s, NULL, 0) : 0) * 2654435761u;
+	}
 
 	/*
-	 * The session's one pointer field, and the configuration byte
-	 * `GetVPcmMinimalTxPowerReduction` reads as a power reduction.  Left
-	 * at the fill they would be a wild pointer and an absurd reduction.
+	 * THE PADDING IS FILLED TOO, and side B's arena is a byte copy of
+	 * side A's whole arena rather than a block-by-block copy.  A read that
+	 * runs off the end of a block has to find the same bytes on both
+	 * sides, or the fixture measures the linker rather than the object.
+	 */
+	fill((unsigned char *)&arena_a, ARENA_SIZE, 0x7ad10000u);
+	fill((unsigned char *)&obj_a, OBJ_SIZE, 0x5eed1234u + obj_seed);
+	fill((unsigned char *)shaped_a, sizeof(shaped_a), 0x11117777u);
+	fill(sess_a, sizeof(sess_a), 0x22228888u);
+	fill(pcm_a, sizeof(pcm_a), 0x33339999u);
+	fill(cfg_a, sizeof(cfg_a), 0x4444aaaau);
+
+	for (i = 0; i < DUMMY_LEN; i++)
+		dummy_a[i] = (short)(0x4b00 + i);
+
+	/*
+	 * The configuration byte `GetVPcmMinimalTxPowerReduction` reads as a
+	 * power reduction; left at the fill it is an absurd reduction.
+	 */
+	memset(cfg_a + 0x40, 0, 0x20);
+
+	memcpy(&arena_b, &arena_a, ARENA_SIZE);
+
+	if (objskew || looseobj) {
+		memcpy(obj_b, (const unsigned char *)&obj_a, OBJ_SIZE);
+		pad_varied = 1;	/* B's object is no longer where the arena has it */
+	}
+
+	if (getenv("V34HS_PADVARY")) {
+		/*
+		 * THE EXPERIMENT THAT NAMES THE CAUSE.  Re-fill one of the
+		 * arena's seven padding regions on side B only, so the two
+		 * sides differ in nothing except what lies OUTSIDE the blocks
+		 * the object points at.  A step that then disagrees is a step
+		 * that read past the end of one of them.  Finding 321.
+		 */
+		static struct { void *p; unsigned n; const char *name; } pad[7];
+		int which = atoi(getenv("V34HS_PADVARY"));
+		unsigned k;
+
+		pad[0].p = arena_b.head; pad[0].name = "before the object";
+		pad[1].p = arena_b.gap1; pad[1].name = "after the object";
+		pad[2].p = arena_b.gap2; pad[2].name = "after shaped";
+		pad[3].p = arena_b.gap3; pad[3].name = "after the session";
+		pad[4].p = arena_b.gap4; pad[4].name = "after the PCM block";
+		pad[5].p = arena_b.gap5; pad[5].name = "after the config";
+		pad[6].p = arena_b.tail; pad[6].name = "after the seed tables";
+		pad_varied = 1;
+		for (k = 0; k < 7; k++) {
+			pad[k].n = ARENA_PAD;
+			if (which == 0 || which == (int)k + 1)
+				fill(pad[k].p, pad[k].n, 0xdead0000u + k);
+		}
+	}
+
+	/*
+	 * The session's one pointer field, which is the only byte of the arena
+	 * that legitimately differs between the sides.  `v34hs_compare` skips
+	 * exactly these four bytes and nothing else.
 	 */
 	memcpy(sess_a + SESS_PCM, &(void *){ pcm_a }, sizeof(void *));
 	memcpy(sess_b + SESS_PCM, &(void *){ pcm_b }, sizeof(void *));
-	memset(cfg_a + 0x40, 0, 0x20);
-	memset(cfg_b + 0x40, 0, 0x20);
 
 	/*
 	 * EVERY POINTER FIELD IS AIMED BEFORE ANY CODE RUNS.  The fill puts a
@@ -284,7 +502,9 @@ v34hs_setup(int mode)
 	 * itself differential -- which is what makes an agreeing step evidence
 	 * rather than a tautology.
 	 */
-	if (getenv("V34HS_REFINIT")) {
+	ref_both = force_refinit || getenv("V34HS_REFINIT") != NULL;
+	noscrub = getenv("V34HS_NOSCRUB") != NULL;
+	if (ref_both) {
 		ref_V34InitializeImplementationSpecific(&obj_a);
 		ref_v34handshakinit(&obj_a, mode);
 	} else {
@@ -293,6 +513,82 @@ v34hs_setup(int mode)
 	}
 	ref_V34InitializeImplementationSpecific(obj_b);
 	ref_v34handshakinit(obj_b, mode);
+
+	if (getenv("V34HS_EQPTR")) {
+		/*
+		 * Force every hole that points into the PROGRAM IMAGE -- neither
+		 * into the object nor into one of this fixture's blocks -- to
+		 * hold side B's value on both sides.  Those are the library
+		 * tables and functions the bring-up installs, and the fixture's
+		 * comparison skips them entirely.
+		 */
+		static const void *ba[6];
+		static const unsigned bl[6] = { sizeof(shaped_a), sizeof(sess_a),
+						sizeof(pcm_a), sizeof(cfg_a),
+						sizeof(dummy_a), OBJ_SIZE };
+		unsigned k, j;
+
+		ba[0] = shaped_a; ba[1] = sess_a; ba[2] = pcm_a;
+		ba[3] = cfg_a; ba[4] = dummy_a; ba[5] = &obj_a;
+		for (k = 0; k < NHOLES; k++) {
+			const char *pa = peek_ptr(0, holes[k]);
+			int owned = 0;
+
+			for (j = 0; j < 6; j++)
+				if (pa >= (const char *)ba[j]
+				    && pa < (const char *)ba[j] + bl[j])
+					owned = 1;
+			if (!owned) {
+				void *pb = peek_ptr(1, holes[k]);
+
+				memcpy(base(0) + holes[k], &pb, sizeof(pb));
+				if (getenv("V34HS_PROBE"))
+					printf("  PROBE eqptr +0x%04x -> %p\n",
+					       holes[k], pb);
+			}
+		}
+	}
+
+	if (getenv("V34HS_PROBE")) {
+		static int once;
+		unsigned nd = 0, first = ~0u;
+
+		for (i = 0; i < OBJ_SIZE; i++)
+			if (((const unsigned char *)&obj_a)[i] != obj_b[i]
+			    && !in_hole(i)) {
+				if (nd == 0)
+					first = i;
+				nd++;
+			}
+		printf("  PROBE after setup: %u object bytes differ", nd);
+		if (nd)
+			printf(", first +0x%04x", first);
+		nd = 0;
+		for (i = 0; i < ARENA_SIZE; i++)
+			if (in_padding(i)
+			    && ((const unsigned char *)&arena_a)[i]
+			       != ((const unsigned char *)&arena_b)[i])
+				nd++;
+		printf("; %u padding bytes differ\n", nd);
+		if (!once) {
+			once = 1;
+			printf("  PROBE obj_a=%p obj_b=%p  dummy_a=%p "
+			       "dummy_b=%p\n", (void *)&obj_a, (void *)obj_b,
+			       (void *)dummy_a, (void *)dummy_b);
+			for (i = 0; i < NHOLES; i++) {
+				long da = (char *)peek_ptr(0, holes[i])
+					  - (char *)&obj_a;
+				long db = (char *)peek_ptr(1, holes[i])
+					  - (char *)obj_b;
+
+				printf("  PROBE hole +0x%04x: A%+ld B%+ld%s%s\n",
+				       holes[i], da, db,
+				       da == db ? "" : "   <== DELTA DIFFERS",
+				       (da >= 0 && da < (long)OBJ_SIZE)
+				       ? "  (inside)" : "");
+			}
+		}
+	}
 
 	if (getenv("V34HS_DIAG")) {
 		static const unsigned tab[] = { 0x0418, 0x0508, 0x0620,
@@ -351,6 +647,21 @@ v34hs_state(short mst, short rxst, short txst)
 	v34hs_poke_short(V34HS_TXSTATE, txst);
 }
 
+/*
+ * Bring BOTH sides up with the blob's initialisers, which is what makes the
+ * third class of `check_self_ptr` checkable: with ours on side A and the
+ * blob's on side B the two hold two addresses of two copies of one library
+ * table and no address comparison can say anything, but with the blob on both
+ * they must select the IDENTICAL address.  `t_v34hsstep.c` runs the whole
+ * sweep a second time this way so that check is in `make phase` rather than
+ * behind an environment variable nothing sets.  Finding 324.
+ */
+void
+v34hs_refinit(int on)
+{
+	force_refinit = on;
+}
+
 void
 v34hs_debug(int on)
 {
@@ -396,18 +707,65 @@ step_alarm(int sig)
 /*
  * SCRUB THE STACK BEFORE EACH SIDE'S CALL.
  *
- * Without this the two sides disagree in the per-sample transmit route, and
- * WHICH txstates disagree changes when unrelated code in this file changes
- * -- because side A runs first and leaves residue that side B then reads.
- * The blob reads uninitialised stack there, which is D37's shape one level
- * up: the object supplies no default arm for a switch, so a rate it does not
- * recognise runs on whatever the caller happened to leave behind.
+ * This was added because the per-sample transmit route disagreed and the
+ * reasoning was that side A runs first and leaves residue side B then reads.
+ * THAT REASONING WAS WRONG -- finding 320's probe runs side B a second time
+ * at the same address, one place further along the sequence, with everything
+ * the first two calls left in the machine still there, and gets a
+ * byte-identical answer on all forty-three cases.  Nothing is carried.
  *
- * Handing both sides the same 64 KB of 0x5a makes the step a function of the
- * object again.  It does not make the read defined -- it makes it EQUAL, and
- * finding 289 records that the difference is real and what it costs.
+ * It stays for two reasons and neither is the one it was written for.  It
+ * costs a memset, and it removes a variable from a fixture whose whole job is
+ * to have none: `V34HS_NOSCRUB=1` turns it off and the sweep still passes, so
+ * that is measured rather than assumed.
  */
 static volatile unsigned scrub_sink;
+
+/*
+ * V34HS_PROBE -- the experiment that separates "address" from "carried state".
+ *
+ * D60 said the per-sample loop's result was not a function of the object, and
+ * finding 289's five exclusions all sat in the address/memory family.  What
+ * none of them touched is that side A ALWAYS runs before side B, so anything
+ * the first call leaves in the machine is read by the second.
+ *
+ * The probe holds the address constant and varies only the position in the
+ * call sequence: B, A, B, with B's object and every block it points at
+ * restored from the snapshot in between.  If the two B runs differ, the
+ * address is irrelevant and the cause is state carried across calls.  They do
+ * not differ, and the FPU status word is zero before all three calls, so it
+ * is neither the x87 nor a blob global.  Finding 320.
+ *
+ * It also reports whether the two sides were equal after `v34hs_setup` -- the
+ * fixture never used to check its own starting state -- and whether the step
+ * wrote any byte outside the blocks it models, which is how finding 322
+ * excludes an out-of-bounds write.
+ */
+static unsigned char probe_b2[sizeof(struct v34_object)];
+static short probe_shaped[SHAPED_LEN];
+static unsigned char probe_sess[SESS_LEN], probe_pcm[PCM_LEN];
+static unsigned char probe_cfg[CFG_LEN];
+static short probe_dummy[DUMMY_LEN];
+static unsigned short probe_sw[3], probe_cw[3];
+static unsigned char probe_pad[sizeof(struct v34hs_arena)];
+
+static unsigned short
+fpu_status(void)
+{
+	unsigned short w;
+
+	__asm__ __volatile__("fnstsw %0" : "=a"(w));
+	return w;
+}
+
+static unsigned short
+fpu_control(void)
+{
+	unsigned short w;
+
+	__asm__ __volatile__("fnstcw %0" : "=m"(w));
+	return w;
+}
 
 static void
 scrub_stack(void)
@@ -478,12 +836,23 @@ v34hs_step(void)
 
 	memcpy(snap_a, &obj_a, OBJ_SIZE);
 	memcpy(snap_b, obj_b, OBJ_SIZE);
+	if (getenv("V34HS_PROBE")) {
+		memcpy(probe_pad, &arena_a, ARENA_SIZE);
+		memcpy(probe_shaped, shaped_b, sizeof(shaped_b));
+		memcpy(probe_sess, sess_b, sizeof(sess_b));
+		memcpy(probe_pcm, pcm_b, sizeof(pcm_b));
+		memcpy(probe_cfg, cfg_b, sizeof(cfg_b));
+		memcpy(probe_dummy, dummy_b, sizeof(dummy_b));
+	}
 
 	prev = signal(SIGALRM, step_alarm);
 
 	step_side = 0;
 	dsplib_debug_capture_reset();
-	scrub_stack();
+	if (!noscrub)
+		scrub_stack();
+	probe_sw[0] = fpu_status();
+	probe_cw[0] = fpu_control();
 	alarm(5);
 	V34HS_CALL_A(&obj_a);
 	alarm(0);
@@ -494,12 +863,65 @@ v34hs_step(void)
 
 	step_side = 1;
 	dsplib_debug_capture_reset();
-	scrub_stack();
+	if (!noscrub)
+		scrub_stack();
+	probe_sw[1] = fpu_status();
+	probe_cw[1] = fpu_control();
 	alarm(5);
 	ref_v34handshak(obj_b);
 	alarm(0);
 	snprintf(text[1], sizeof(text[1]), "%s", dsplib_debug_capture_text(1));
 	observe(1, obj_b, snap_b, dsplib_debug_capture_lines(1));
+
+	if (getenv("V34HS_PROBE")) {
+		unsigned i, nd = 0, first = ~0u;
+
+		for (i = 0; i < ARENA_SIZE; i++)
+			if (in_padding(i)
+			    && ((const unsigned char *)&arena_a)[i]
+			       != probe_pad[i]) {
+				if (nd == 0)
+					first = i;
+				nd++;
+			}
+		printf("  PROBE step wrote %u padding bytes", nd);
+		if (nd)
+			printf(", first +0x%x (%s)", first, region_of(first));
+		printf("\n");
+		nd = 0;
+		first = ~0u;
+
+		memcpy(probe_b2, obj_b, OBJ_SIZE);
+		memcpy(obj_b, snap_b, OBJ_SIZE);
+		memcpy(shaped_b, probe_shaped, sizeof(shaped_b));
+		memcpy(sess_b, probe_sess, sizeof(sess_b));
+		memcpy(pcm_b, probe_pcm, sizeof(pcm_b));
+		memcpy(cfg_b, probe_cfg, sizeof(cfg_b));
+		memcpy(dummy_b, probe_dummy, sizeof(dummy_b));
+
+		step_side = 1;
+		dsplib_debug_capture_reset();
+		scrub_stack();
+		probe_sw[2] = fpu_status();
+		probe_cw[2] = fpu_control();
+		alarm(5);
+		ref_v34handshak(obj_b);
+		alarm(0);
+		for (i = 0; i < OBJ_SIZE; i++)
+			if (obj_b[i] != probe_b2[i]) {
+				if (nd == 0)
+					first = i;
+				nd++;
+			}
+		printf("  PROBE mst=%d rx=%d tx=%d  fpsw %04x/%04x/%04x "
+		       "fpcw %04x/%04x/%04x  B-vs-B differs in %u bytes",
+		       step_mst, step_rxst, step_txst,
+		       probe_sw[0], probe_sw[1], probe_sw[2],
+		       probe_cw[0], probe_cw[1], probe_cw[2], nd);
+		if (nd)
+			printf(" from +0x%04x", first);
+		printf("\n");
+	}
 
 	signal(SIGALRM, prev);
 }
@@ -510,11 +932,21 @@ v34hs_holes_check(void)
 	unsigned k;
 	char msg[128];
 
-	for (k = 0; k < NHOLES; k++) {
-		snprintf(msg, sizeof(msg),
-			 "pointer skip +0x%04x was exercised", holes[k]);
-		diff_eq_int(msg, saw_hole[k], 1, (long)holes[k]);
-	}
+	/*
+	 * Under V34HS_REFINIT both sides are brought up by the blob, and the
+	 * eleven pointers the bring-up aims at a LIBRARY TABLE then hold the
+	 * same address on both sides rather than ours and the blob's copy --
+	 * so eleven of the skips legitimately never differ and this assertion
+	 * does not apply to that run.  That agreement is itself a measurement:
+	 * finding 324.
+	 */
+	if (!ref_both)
+		for (k = 0; k < NHOLES; k++) {
+			snprintf(msg, sizeof(msg),
+				 "pointer skip +0x%04x was exercised",
+				 holes[k]);
+			diff_eq_int(msg, saw_hole[k], 1, (long)holes[k]);
+		}
 	diff_eq_int("pointer skips", NHOLES, V34HS_NHOLES, 0);
 }
 
@@ -542,26 +974,60 @@ v34hs_text(int side)
 static void
 check_self_ptr(const char *what, unsigned off, long tag)
 {
-	long da = (long)((char *)peek_ptr(0, off) - (char *)&obj_a);
-	long db = (long)((char *)peek_ptr(1, off) - (char *)obj_b);
-	int ina = da >= 0 && da < (long)OBJ_SIZE;
-	int inb = db >= 0 && db < (long)OBJ_SIZE;
-	char msg[160];
+	const char *pa = peek_ptr(0, off), *pb = peek_ptr(1, off);
+	long oa = pa - (const char *)&obj_a, ob = pb - (const char *)obj_b;
+	long aa = pa - (const char *)&arena_a, ab = pb - (const char *)&arena_b;
+	int ino_a = oa >= 0 && oa < (long)OBJ_SIZE;
+	int ino_b = ob >= 0 && ob < (long)OBJ_SIZE;
+	int ina = aa >= 0 && aa < (long)ARENA_SIZE;
+	int inb = ab >= 0 && ab < (long)ARENA_SIZE;
+	char msg[192];
 
-	/*
-	 * A pointer OUT of the object selects a table, and which table it
-	 * selects is a content question this comparison cannot answer -- the
-	 * two sides legitimately hold two addresses of two identical tables.
-	 * What must match is whether it points into the object at all, and
-	 * where, since that part is an offset and offsets are comparable.
-	 */
 	snprintf(msg, sizeof(msg), "%s +0x%04x: points into the object",
 		 what, off);
-	diff_eq_int(msg, ina, inb, tag);
-	if (!ina || !inb)
+	diff_eq_int(msg, ino_a, ino_b, tag);
+	if (ino_a && ino_b) {
+		snprintf(msg, sizeof(msg), "%s +0x%04x: offset within it",
+			 what, off);
+		diff_eq_int(msg, (int)oa, (int)ob, tag);
 		return;
-	snprintf(msg, sizeof(msg), "%s +0x%04x: offset within it", what, off);
-	diff_eq_int(msg, (int)da, (int)db, tag);
+	}
+
+	/*
+	 * WHICH BLOCK A POINTER OUT OF THE OBJECT SELECTS.  Before the arena
+	 * this could not be asked: the two sides held two addresses of two
+	 * separate statics and the only comparable fact was "outside".  Now
+	 * every block the object can point at lives at a fixed offset inside
+	 * its own side's arena, so the block AND the offset within it are one
+	 * subtraction and are address-independent.  That closes the gap
+	 * docs/v34handshak.md named as the harness's one unchecked hole.
+	 */
+	snprintf(msg, sizeof(msg),
+		 "%s +0x%04x: points into the fixture's own memory", what, off);
+	diff_eq_int(msg, ina, inb, tag);
+	if (ina && inb) {
+		snprintf(msg, sizeof(msg), "%s +0x%04x: selects %s, at the "
+			 "same offset in it", what, off,
+			 region_of((unsigned)aa));
+		diff_eq_int(msg, (int)aa, (int)ab, tag);
+		return;
+	}
+
+	/*
+	 * AND WHAT IS STILL NOT CHECKED, said plainly.  A pointer outside both
+	 * arenas is a library table or a function, and side A's bring-up
+	 * installs OURS where side B's installs the blob's -- two different
+	 * addresses of two copies, which no address comparison can tell from
+	 * two different tables.  `V34HS_REFINIT=1` brings both sides up with
+	 * the blob's initialisers, and then the two must select the identical
+	 * address; that run is the one that checks it, and it passes.
+	 */
+	if (ref_both) {
+		snprintf(msg, sizeof(msg),
+			 "%s +0x%04x: selects the same library table", what,
+			 off);
+		diff_eq_int(msg, pa == pb, 1, tag);
+	}
 }
 
 void
@@ -604,20 +1070,44 @@ v34hs_compare(const char *what, long tag)
 	for (k = 0; k < NHOLES; k++)
 		check_self_ptr("v34handshak interior pointer", holes[k], tag);
 
-	/* The blocks the object points out of are compared too, or a write
-	 * through one of the skipped pointers is invisible. */
-	snprintf(msg, sizeof(msg), "%s: shaping buffer", what);
-	diff_eq_int(msg, memcmp(shaped_a, shaped_b, sizeof(shaped_a)) == 0,
-		    1, tag);
-	snprintf(msg, sizeof(msg), "%s: PCM receiver block", what);
-	diff_eq_int(msg, memcmp(pcm_a, pcm_b, sizeof(pcm_a)) == 0, 1, tag);
-	snprintf(msg, sizeof(msg), "%s: configuration block", what);
-	diff_eq_int(msg, memcmp(cfg_a, cfg_b, sizeof(cfg_a)) == 0, 1, tag);
-	snprintf(msg, sizeof(msg), "%s: session block", what);
-	diff_eq_int(msg,
-		    memcmp(sess_a, sess_b, SESS_PCM) == 0
-		    && memcmp(sess_a + SESS_PCM + 4, sess_b + SESS_PCM + 4,
-			      SESS_LEN - SESS_PCM - 4) == 0, 1, tag);
+	/*
+	 * EVERYTHING ELSE IN THE ARENA, in one sweep: the shaping buffer, the
+	 * session, the PCM receiver, the configuration, the seed tables AND
+	 * the padding between and around them.
+	 *
+	 * The padding is the half that is new and the half that matters.  Four
+	 * named memcmps over the four blocks were what this used to be, and
+	 * they said nothing about a read or a write one element off the end of
+	 * one -- which is exactly what D60 turned out to be.  The seed tables
+	 * were not compared at all, though thirty of the thirty-five skipped
+	 * pointers aim at them.
+	 *
+	 * The only four bytes exempt are the session's pointer to the PCM
+	 * receiver, which is an address and so differs by construction.
+	 */
+	{
+		const unsigned char *pa = (const unsigned char *)&arena_a;
+		const unsigned char *pb = (const unsigned char *)&arena_b;
+		unsigned sp = AR_OFF(sess) + SESS_PCM;
+		unsigned nbad = 0, firstbad = 0;
+
+		for (i = 0; i < ARENA_SIZE; i++) {
+			if (i >= OBJ_IN_ARENA && i < OBJ_IN_ARENA + OBJ_SIZE)
+				continue;
+			if (i >= sp && i < sp + 4)
+				continue;
+			if (pad_varied && in_padding(i))
+				continue;
+			if (pa[i] == pb[i])
+				continue;
+			if (nbad++ == 0)
+				firstbad = i;
+		}
+		snprintf(msg, sizeof(msg), "%s: the arena outside the object "
+			 "(first differing byte in %s)", what,
+			 nbad ? region_of(firstbad) : "nothing");
+		diff_eq_int(msg, nbad, 0, tag);
+	}
 
 	/* And what each side observed, including the transcript. */
 	snprintf(msg, sizeof(msg), "%s: bytes written", what);

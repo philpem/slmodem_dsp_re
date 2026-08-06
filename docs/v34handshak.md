@@ -66,19 +66,37 @@ field, and then runs `V34InitializeImplementationSpecific` and
 makes the comparison a check rather than a tautology while both sides still
 call `ref_v34handshak` for the step itself.
 
-`v34hs_compare` compares the whole 44,096-byte object byte for byte with the
-thirty-five pointer fields excluded, every interior pointer by offset from its
-own base, the four blocks the object points out of, and both transcripts.
-`v34hs_holes_check()` asserts once at the end of a run that every one of the
-thirty-five skips was exercised, so the list cannot go stale unnoticed.
+`v34hs_setup` also gives each side ONE ARENA: the object and all five blocks
+it points at, at fixed offsets inside a single 64 KB-aligned block with 32 KB
+of filler between and around them, side B's arena a byte copy of side A's.
+That is not tidiness. With the two sides as ten separate statics at ten
+addresses the linker chose, the per-sample transmit route failed at 23 of 24
+object fills, and the harness spent a session concluding that the object was
+at fault (findings 319 and 320, D60 retracted). Bisected against the old
+fixture: it is the placement of the five BLOCKS that matters, not of the
+object -- wrapping the object alone changes nothing, and `V34HS_LOOSEOBJ=1`
+puts side B's object back outside its arena and the sweep still passes.
+**A fixture whose two sides differ in their geometry is measuring the
+linker.**
 
-**What the comparison does not cover.** A pointer that lands *outside* the
-object is checked only for landing outside -- never for which table it
-selects. A case that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 gets a
-signature saying "these four bytes changed" and nothing about what they now
-point at, so a test for such a case will be green having proved less than it
-looks like. `t_v34hshak.c` closes this with a `compare_table` per pointer;
-copy that.
+`v34hs_compare` compares the whole 44,096-byte object byte for byte with the
+thirty-five pointer fields excluded, every one of those thirty-five by offset
+from its own base, the rest of the arena -- five blocks, seven filler regions
+and the space around them -- and both transcripts. `v34hs_holes_check()`
+asserts once at the end of a run that every one of the thirty-five skips was
+exercised, so the list cannot go stale unnoticed.
+
+**Which block a pointer selects is checked now.** A pointer out of the object
+is classified three ways, not two: into its own object (offset compared), into
+its own arena (offset compared, which says which block and where in it), or
+outside both, which is a library table or function where side A holds ours and
+side B the blob's -- two addresses of two copies, which no address comparison
+can tell from two different tables. For that last class `t_v34hsstep.c` runs
+the whole sweep a SECOND time with the blob's bring-up on both sides, and then
+the two must select the identical address. All twelve that qualify do, and
+that pass is in `make phase`. Finding 324. This is the gap earlier versions of
+this file told you to close with `t_v34hshak.c`'s `compare_table`; it is
+closed.
 
 ### When you land a case
 
@@ -101,6 +119,11 @@ failures mean anything.
   the object, so a comparison including it calls every case distinct from every
   other -- seventeen microstate targets "separated" perfectly while six were
   doing the same thing. Finding 290.
+- **The two sides must be congruent in memory, not merely equal in it.**
+  Identical bytes at two addresses with two different sets of neighbours is
+  not enough, and the route that finds out is table 1. It is the blocks the
+  object points at that have to be congruent, not the object. Findings 319
+  and 322.
 
 ## Table 3, the microstate machine -- this is #57
 
@@ -194,26 +217,45 @@ four behaviours from seven representatives:
 Reach it with `v34hs_route(V34HS_ROUTE_TXBLOCK, 0)`, which sets the cursor at
 the limit and the receiver count to 5.
 
-## Table 1, the per-sample transmit loop -- BLOCKED, and #56 starts here
+## Table 1, the per-sample transmit loop -- this is #56, and it is open
 
-**The harness does not prove this route and the committed test does not run
-it.** Stepping one sample leaves the two sides differing in the modulator at
-+0x2078..+0x25d1 for three of nineteen txstates, and *which* three moves when
-code that runs after the step is edited. The result is not a function of the
-object. Finding 289 lists the five experiments that rule out our bring-up,
-stack residue, the shaping buffer's address, past-the-end reads of the seed
-tables, and a short `preemp0`; D60 records it.
+Twenty targets over txstates 5..86, in the loop at 0x62950. **It compares,
+and it is in the default sweep.** It used not to; findings 319-322 are what
+that took and D60 is the retraction. Nothing about the route is special any
+more except that it is the one the harness's geometry could break, so if a
+case here starts disagreeing, read D61 before reading your own code.
 
-`V34HS_TXSAMPLE=1` runs the sweep anyway, which is how to reproduce it.
-Finding what the loop reads is the first job of #56.
+Entered cold with microstate `PHASE1`, rxstate `SILENCE` and a budget of one
+sample, **eighteen of the nineteen reachable targets have their own
+behaviour** -- better than table 3's seven-from-seventeen or table 2's
+four-from-seven, because these arms run a modulator rather than setting a flag
+and leaving. The only pair that agrees cold is 24 `TX_DPSK` and 60 `TONE_AB`.
+Finding 323 has the per-target table of bytes written and progress code; read
+it before choosing what to take first, because the six that write nothing
+below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-And **the loop does not always terminate**: its default arm is the loop bottom
-itself, so a txstate with no case of its own spins forever (finding 287, D59).
-Fifty-seven of the table's eighty-two entries are that default. `v34hs_step`
-arms a `SIGALRM` so this is a named case rather than a run that never returns;
-`v34hs_route(V34HS_ROUTE_TXSAMPLE, n)` takes the sample budget explicitly for
-the same reason. Both halves are demonstrated: `V34HS_HANG=1
-./build/test/t_v34hsstep` drives txstate 6 and exits 3 naming the state.
+The txstate a table-1 case is driven with IS the case, so unlike #57 there is
+no companion-field problem to solve first. What there is instead:
+
+- **The loop does not always terminate.** Its default arm is the loop bottom
+  itself, so a txstate with no case of its own spins forever (finding 287,
+  D59). Fifty-seven of the table's eighty-two entries are that default.
+  `v34hs_step` arms a `SIGALRM` so this is a named case rather than a run that
+  never returns, and `v34hs_route(V34HS_ROUTE_TXSAMPLE, n)` takes the sample
+  budget explicitly for the same reason. Both halves are demonstrated:
+  `V34HS_HANG=1 ./build/test/t_v34hsstep` drives txstate 6 and exits 3 naming
+  the state.
+- **The transcript contributes nothing here.** Every table-1 case prints
+  zero diagnostic lines with the diagnostics on, so the separation above rests
+  entirely on bytes written, the signature and the progress code. If you want
+  a second axis, seed the counter the arm reads: 78's at 0x64139 traces only
+  when +0xaa78 decrements to zero, and that is also the path that reaches
+  `V34EchoReportCoeff`. Other arms will have their own.
+- **Several arms leave the function through another one.** 78 `JaTXMIT`
+  decrements the counter at +0xaa78, calls `V34EchoReportCoeff` twice if it
+  reaches zero, and then calls `v90Phase34` before rejoining at 0x62d70 --
+  so a reconstruction of 78 is mostly a call, and the interesting part is
+  elsewhere. Read the arm before estimating it.
 
 ## The environment knobs
 
@@ -221,10 +263,33 @@ the same reason. Both halves are demonstrated: `V34HS_HANG=1
   V34HS_DUMP=1       print every case's signature
   V34HS_DIAG=1       print every differing offset, and the seed tables
   V34HS_REFINIT=1    bring side A up with the blob's initialisers too, which
-                     separates "the fixture" from "our v34handshakinit"
-  V34HS_TXSAMPLE=1   run the per-sample sweep that does not pass
+                     separates "the fixture" from "our v34handshakinit" AND
+                     is the run that checks which library table a pointer
+                     out of the arena selects
   V34HS_HANG=1       drive a state with no case, to see the alarm fire
 ```
+
+And five that exist to make the fixture's own claims falsifiable rather than
+asserted. If a case of yours disagrees, run these before suspecting anything
+else: a case that passes at one layout and fails at another is a fixture
+problem, and a case that fails at all of them is yours.
+
+```
+  V34HS_SEED=n       a different object fill (0..23 were swept)
+  V34HS_SKEW=n       move side B's whole arena n bytes
+  V34HS_OBJSKEW=n    move side B's OBJECT n bytes inside its own arena
+  V34HS_PADVARY=k    make padding region k differ between the sides
+                     (1..7, or 0 for all seven)
+  V34HS_NOSCRUB=1    do not scrub 64 KB of stack before each call
+  V34HS_LOOSEOBJ=1   put side B's object OUTSIDE its arena, which is the
+                     positive control finding 319's bisect rests on
+  V34HS_PROBE=1      print the FPU status before each call, whether the two
+                     sides were equal after setup, whether the step wrote
+                     outside the blocks, and whether a second run of side B
+                     at the same address gives the same answer
+```
+
+`V34HS_TXSAMPLE` is gone: that route is in the default sweep.
 
 ## Reading the object
 
