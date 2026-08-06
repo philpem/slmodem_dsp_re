@@ -84,8 +84,9 @@
  },
  {
   "label": "the hand-over goes to RX_PHASE2_ANS",
-  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
-  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);"
+  "find": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
+  "replace": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
  },
  {
   "label": "the hand-over writes 1 into +0x358a like a body does",
@@ -254,13 +255,15 @@
  },
  {
   "label": "the reset leaves +0xabcc alone",
-  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
-  "replace": "\tobj->local_short = 0;"
+  "find": "\tint i;\n\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\tint i;\n\n\tobj->local_short = 0;",
+  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
  },
  {
   "label": "the reset leaves +0xabca alone",
-  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
-  "replace": "\tobj->is_short = 0;"
+  "find": "\tint i;\n\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\tint i;\n\n\tobj->is_short = 0;",
+  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
  },
  {
   "label": "the reset writes 2 into +0x358a",

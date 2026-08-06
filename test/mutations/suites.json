@@ -43,5 +43,6 @@
  "v34hstx1":       ["src/pump/v34/v34hstx1.cpp", "build/test/t_v34hstx1"],
  "v34ja":          ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34ja"],
  "v34hst3m41":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3m41"],
- "v34hst346":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hst346"]
+ "v34hst346":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hst346"],
+ "v34hsmst44":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hsmst44"]
 }

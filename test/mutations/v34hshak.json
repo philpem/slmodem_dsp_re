@@ -3,6 +3,15 @@
   "note": "Recovered from the session that reconstructed v34handshakinit and the state trace.  The three state words and the 87 StateName entries are what most of these attack: a transposition there reads correctly and is wrong everywhere."
  },
  {
+  "note": "The five DFT leaves.  Three of them are pure table fills, where the only errors possible are a bin number, a bank length and which of the two `nl` banks is which -- and the last of those is invisible to anything but a differential compare, because both banks are the same shape.  detectRetrainReq is the state machine, and its two comparisons are widened differently on each side."
+ },
+ {
+  "note": "settxlevel and v34setuptxmit.  The power request is two bit-reversed three-bit fields, one clamped; the PCM minimum combines with it two different ways; and the two dB loops differ in their constant AND in their accumulator width."
+ },
+ {
+  "note": "probeselect.  Three sections and they break differently: the power request is arithmetic, the normalisation is two widths of one comparison, and the ladder is fifteen thresholds over eleven bins that each originating arm falls through."
+ },
+ {
   "label": "rxstate and txstate offsets transposed",
   "find": "#define HS_RXSTATE\t0x3594",
   "replace": "#define HS_RXSTATE\t0x3596"
@@ -160,9 +169,6 @@
   "label": "fmt[] microstate entry moved to the rxstate slot",
   "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
   "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\","
- },
- {
-  "note": "The five DFT leaves.  Three of them are pure table fills, where the only errors possible are a bin number, a bank length and which of the two `nl` banks is which -- and the last of those is invisible to anything but a differential compare, because both banks are the same shape.  detectRetrainReq is the state machine, and its two comparisons are widened differently on each side."
  },
  {
   "label": "dftfreqinit fills 24 bins",
@@ -353,9 +359,6 @@
   "label": "the tone arm's energy is widened signed",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
   "replace": "\tif ((int)bins[1].energy > (int)bins[1].thresh_hi) {"
- },
- {
-  "note": "settxlevel and v34setuptxmit.  The power request is two bit-reversed three-bit fields, one clamped; the PCM minimum combines with it two different ways; and the two dB loops differ in their constant AND in their accumulator width."
  },
  {
   "label": "txlevel: the reduction field is bits 4..6",
@@ -577,9 +580,6 @@
   "label": "setuptxmit: the two transitions are printed before the modulator's line",
   "find": "\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
   "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);"
- },
- {
-  "note": "probeselect.  Three sections and they break differently: the power request is arithmetic, the normalisation is two widths of one comparison, and the ladder is fifteen thresholds over eleven bins that each originating arm falls through."
  },
  {
   "label": "probe: the bit scan stops one bit early",

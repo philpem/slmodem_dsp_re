@@ -146,6 +146,12 @@ only states some batch has landed, which today are:
 ```
   table 3   the arm 24 states share (0x6590b) and the default (0x65329)
             41 DET_SYNC, 62 RX_PHASE3_CALL, 79 MOH_TONE, 80 MOH_TONE_DROP
+            62 RX_PHASE3_CALL, 79 MOH_TONE, 80 MOH_TONE_DROP
+            44 DET_INFO IN PART -- the bit clock at 0x668c0, the restart at
+               0x6bda0, and the accept path's DEFAULT arm at 0x6e552; its
+               three sized arms 0x6f438, 0x6ed17 and 0x6ea38 still halt,
+               so a case here must not be driven with a message length of
+               0x4d, 0x26 or 0x08 (findings 400-406)
   table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
             0x62a40 that every arm of that dispatch falls into
   the rest  halts
@@ -195,6 +201,8 @@ when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 |---|---|--:|---|
 | 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B |
 | 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B -- LANDED |
+| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B -- PARTLY LANDED |
+| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B |
 | 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B |
 | 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces |
 | 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D |
