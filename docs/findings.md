@@ -14394,3 +14394,59 @@ preamble shape fails 8 checks, and a mode 2 that says nothing fails 2.
 
 `callprog.c` now has **no dead debug sites** -- it had three -- and the tree's
 total goes from 9 to 6, all of them in V.34.
+
+### 345. The fifteen missing callprog call sites were an inlining boundary, and one message
+
+Finding 239 reported `CALLPROG_Progress` as having 29 diagnostic call sites in
+the object against 13 in ours, and used the gap to argue that the misplaced
+`^` message "belongs to one of those sixteen conditions rather than to this
+one". Finding 344 disproved that. This is the rest of it: the shortfall is
+almost entirely a measurement artefact, and what remains is a single message.
+
+**Where the number came from.** `debugaudit.py --missing` counts per FUNCTION
+NAME. Our `callprog.c` is factored into five `static` helpers -- `enter_state`,
+`request_state`, `detect`, `apply_event`, `run_timeouts` -- and the object has
+no symbol for any of them: its `CALLPROG_Progress` is one function of 0xb71
+bytes with the lot inlined. So our sites in those helpers were counted against
+NEITHER side. They vanished from `ours`, and the blob's function carried the
+whole difference as missing. Six of the fifteen were sitting a few lines away
+in a helper.
+
+`debugaudit.py` now also reports per FILE, which has no such boundary to fall
+through. Per file, `callprog.c` is nine short, not fifteen.
+
+**What the nine are: one message, eleven times.** Enumerating every site in the
+four blob functions that map to `callprog.c` -- 43 in total -- and comparing
+the multiset of format strings against ours gives exactly one row that differs:
+
+    blob 11   ours 1   'STATE:  %s --> %s\n'
+
+Every other message the object says in this file, we say, the same number of
+times. The object emits the state-transition announcement from eleven inlined
+copies; we emit it from the single `request_state`. And `request_state` is
+called from **eleven places**, one for each. The correspondence is exact, and
+the remaining "-9" is that eleven-against-one plus the caret message, which we
+now say from two arms where the object shares one site between them (344).
+
+So there is no missing behaviour in `callprog.c`. The count was never a
+shopping list of unreconstructed conditions; that reading is what sent 239
+looking in the wrong place.
+
+**And the one site really is doing the work of the eleven.** Silencing
+`request_state`'s announcement fails **43 transcript blocks** in
+`t_callprog_progress` -- the transcript comparison drives the transitions and
+compares the emitted text, so the correspondence is not merely a count that
+happens to match. (Two earlier attempts at this mutation appeared to pass and
+did not: `make one` had failed at the `refs` target because this very finding
+was cited in `debugaudit.py` before it was written, so no test ran at all. A
+mutation run that reports no failures and also no PASS lines did not build --
+read the whole output, not the grep for FAIL.)
+
+**The method note, which is the transferable part.** A per-function site count
+across an inlining boundary measures the reconstruction's FACTORING, not its
+completeness. Any file where we split a function the original's compiler had
+already flattened will show the same false shortfall, and the tool's own
+caveat -- "a call site moved between functions shows as one missing and one
+extra" -- understates it: when the destination function has no blob symbol at
+all, there is no compensating "extra" anywhere, so the gap looks one-sided and
+real. Read the per-file line first.

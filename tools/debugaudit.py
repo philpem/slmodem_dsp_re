@@ -434,6 +434,43 @@ def main():
           % (len(rows), sum(r[0] for r in rows),
              sum(len(v) for v in sites.values())))
 
+    #
+    # THE SAME COUNTS PER FILE, which is the only comparison an inlining
+    # boundary cannot distort.
+    #
+    # The per-function table above compares a blob function against OUR
+    # function of the same name.  Where the reconstruction split one of the
+    # original's functions into static helpers -- because the original's
+    # compiler inlined a helper the source really had, or because the function
+    # was too big to read in one piece -- our sites sit in functions the blob
+    # has no symbol for.  They are then counted against neither side: they
+    # vanish from `ours`, and the blob's function shows the whole difference as
+    # missing.  `callprog.c` is the worked example: `CALLPROG_Progress` reads
+    # as 15 sites short, and every one of them is present a few lines away in
+    # `request_state`, `detect`, `apply_event` or `run_timeouts`.  A per-file
+    # total has no such boundary to fall through.  See finding 345.
+    #
+    by_file_blob, by_file_ours = {}, {}
+    for fn, lst in sites.items():
+        f = where.get(fn)
+        if f:
+            by_file_blob[f] = by_file_blob.get(f, 0) + len(lst)
+    for fn, n in ours.items():
+        f = where.get(fn)
+        if f:
+            by_file_ours[f] = by_file_ours.get(f, 0) + n
+    frows = []
+    for f in sorted(set(by_file_blob) | set(by_file_ours)):
+        b, o = by_file_blob.get(f, 0), by_file_ours.get(f, 0)
+        if b != o:
+            frows.append((b - o, b, o, f))
+    frows.sort(reverse=True)
+    print("\nPER FILE, where a helper the original inlined cannot hide a site:")
+    if not frows:
+        print("  every reconstructed file matches the blob's count exactly")
+    for gap, b, o, f in frows:
+        print("  %+4d  (blob %3d, ours %3d)  %s" % (-gap, b, o, f))
+
 
 if __name__ == "__main__":
     sys.exit(main() or 0)
