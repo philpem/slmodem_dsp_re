@@ -361,6 +361,25 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	int flag;
 
 	/*
+	 * ANNOUNCED BEFORE THE REFUSAL, not after.
+	 *
+	 * The object checks the debug level at function entry (0x7a5ab) and
+	 * jumps to an out-of-line block at 0x7a86d that prints this and
+	 * returns to 0x7a5bc -- which is the load of `get_sreg`.  So the
+	 * dial string is announced first and the refusal below second, and
+	 * a caller with no accessor sees both lines.
+	 *
+	 * This was the other way round here until the refusal path was
+	 * driven with the level raised, and the transcripts disagreed by
+	 * exactly this line.  Finding 240.  It is finding 194's warning
+	 * again: the cold block sits 0x2b0 bytes past the gate, so gate
+	 * ADDRESS order is not execution order and reading the two in
+	 * address order puts this print second.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Dialing %s\n", s);
+
+	/*
 	 * No S-register accessor means no way to find the calling tone's
 	 * level, and the function gives up rather than calling through null.
 	 */
@@ -371,9 +390,6 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 
 		return;
 	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG Dialing %s\n", s);
 
 	flag = modem_get_param(cp->modem, GetCallingToneFlag);
 	cp->calling_tone_mode = flag;

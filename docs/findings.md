@@ -13775,3 +13775,52 @@ restore and when.
 
 Overall the day's sweep took the dead-site count from 30 to 17: dialer.c is
 finished at 0, callprog.c is at 10.
+
+### 240. `CALLPROG_Dial` announced the dial string one block too late
+
+Driving the no-accessor refusal with the debug level raised -- a branch the
+suite already took, but only at level 0, where the gate is shut -- made the two
+transcripts disagree by one line:
+
+    ours:  sreg function is not defined!
+    blob:  CALLPROG Dialing T5551234
+           sreg function is not defined!
+
+The reconstruction had `"CALLPROG Dialing %s"` AFTER the `get_sreg == 0`
+block, so a caller with no accessor never saw it.  The object prints it
+first.
+
+#### The object says so plainly once the cold block is followed
+
+```
+7a5ab:  cmpl $0x1, dsplibs_debug_level
+7a5b6:  ja   7a86d              <-- out of line, 0x2b0 bytes ahead
+7a5bc:  mov  0x20(%ebx),%edi    <-- get_sreg
+7a5bf:  test %edi,%edi
+7a5c1:  jne  7a5e9
+...
+7a86d:  mov  %esi,0x4(%esp)                     <-- the dial string
+7a871:  movl $.rodata.str1.1+0x32bf,(%esp)      <-- "CALLPROG Dialing %s\n"
+7a878:  call dsplibs_debug_printf
+7a87d:  jmp  7a5bc                              <-- back to the get_sreg load
+```
+
+The level check is the FIRST thing the function does, and the block it jumps
+to returns to the instruction that loads `get_sreg`.  So the announcement
+precedes the refusal in the source.
+
+**This is finding 194's warning, and it caught us anyway.** 194 records that
+GCC's cross-jumping puts cold blocks out of line, so gate ADDRESS order is not
+execution order -- and here the announcement's gate is at 0x7a5ab while its
+body is at 0x7a86d, past the whole function.  Reading the two gates in address
+order puts the refusal first and this print second, which is exactly the
+mistake that was made.
+
+#### What found it
+
+Not a review, and not the mutation suite.  The site was one of callprog.c's
+dead debug sites, and it stayed dead because `run_dial_no_accessor` drove the
+branch at level 0 only.  Adding a level sweep to a block that already existed
+was the whole of the work.  **Reaching a branch is not the same as reaching
+its announcement**, and the gap between those two is where this defect lived
+for the whole of phase 3.

@@ -296,9 +296,13 @@ run_dial(const char *label, int blind, int calling_tone, int validate,
 /*
  * And the one path that does nothing: no S-register accessor.
  */
+/* Defined below; the level sweep inside run_dial_no_accessor uses it. */
+static const char *printed_only(int side, char *buf, size_t n);
+
 static int
 run_dial_no_accessor(void)
 {
+
 	struct callprog a, b;
 	struct callprog_cfg ca, cb;
 
@@ -327,6 +331,63 @@ run_dial_no_accessor(void)
 	diff_eq_int("state untouched", b.state, a.state, 0);
 	diff_eq_int("both left state 4", a.state, 4, 0);
 	compare_object(&b, &a, 0);
+
+	/*
+	 * AND AGAIN WITH THE LEVEL UP.  The refusal announces itself, and
+	 * this block drove the branch at level 0 where the gate is shut --
+	 * so the site was reached by nothing and counted as dead.  Reaching
+	 * a branch is not the same as reaching its announcement.
+	 */
+	{
+		unsigned lvl;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			char pa[4096], pb[4096];
+			struct callprog c, d;
+			struct callprog_cfg cc, cd;
+
+			harness_param_reset();
+			harness_param_set(MustNoiseFilterBeApplied, 0);
+			harness_param_set(MDMPRM_DP_ADDR, 0);
+			memset(&c, 0xA5, sizeof(c));
+			memset(&d, 0xA5, sizeof(d));
+			cc.w0 = 0;
+			cc.get_sreg = sreg_stub;
+			cc.modem = (void *)0xC0DEu;
+			cc.w3 = 0;
+			cd = cc;
+			ref_CALLPROG_Create(&c, &cc);
+			CALLPROG_Create(&d, &cd);
+			c.get_sreg = d.get_sreg = 0;
+			c.state = d.state = 4;
+
+			dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+			ref_CALLPROG_Dial(&c, "T5551234");
+			CALLPROG_Dial(&d, "T5551234");
+			dsplib_debug_capture_on = 0;
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+			if (strcmp(printed_only(0, pa, sizeof(pa)),
+				   printed_only(1, pb, sizeof(pb))) != 0 &&
+			    getenv("DBGDIFF"))
+				fprintf(stderr, "=== level %u ===\nours:\n%s"
+					"\nblob:\n%s\n", lvl,
+					printed_only(0, pa, sizeof(pa)),
+					printed_only(1, pb, sizeof(pb)));
+			diff_eq_int("refusal transcripts agree, level %ld",
+				    strcmp(printed_only(0, pa, sizeof(pa)),
+					   printed_only(1, pb, sizeof(pb)))
+				    == 0, 1, (long)lvl);
+			diff_eq_int("level %ld says the right amount",
+				    dsplib_debug_capture_lines(1) > 0,
+				    lvl > 1, (long)lvl);
+			compare_object(&d, &c, (long)lvl);
+			ref_CALLPROG_Delete(&c);
+			CALLPROG_Delete(&d);
+		}
+	}
 
 	ref_CALLPROG_Delete(&a);
 	CALLPROG_Delete(&b);
