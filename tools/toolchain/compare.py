@@ -18,7 +18,14 @@ finding 346):
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
 
     -march=i386             no cmov and no fcomi anywhere in 1.2 MB, and float
-                            compares go the long way with fnstsw/sahf
+                            compares go the long way with fnstsw/sahf.  This
+                            bounds the INSTRUCTION SET only
+    -mtune=i686             ...and the SCHEDULING is separately i686, which the
+                            object cannot show directly but the match rate can:
+                            i686 tuning takes byte-identical functions from 30
+                            to 82.  Every i686-family tune value (pentiumpro,
+                            pentium2, pentium3, and the period spelling
+                            `-mcpu=i686`) gives the identical result
     -mfpmath=387            follows from the above
     -fomit-frame-pointer    no push %ebp / mov %esp,%ebp in the object's
                             prologues.  GCC 3.4 does NOT imply this at -O2

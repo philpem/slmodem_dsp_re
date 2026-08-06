@@ -14783,3 +14783,60 @@ The general lesson is worth more than the case: **"the object duplicates this
 and we do not" is a statement about the compiler until proven otherwise**, and
 with the period toolchain in tools/toolchain that is now a ten-minute
 experiment rather than an inference.
+
+### 352. The instruction set is i386; the SCHEDULING is i686, and that nearly tripled the match
+
+Finding 346 said "the target is the i386 default, and any future `-march=`
+above that would diverge". The first half is right and the second half was
+wrong, because `-march` and `-mtune` are separate questions and only the first
+leaves a trace in the instruction stream.
+
+**What the object can and cannot show.** No `cmov` and no `fcomi` in 1.2 MB
+bounds the INSTRUCTION SET below i686 -- that much stands. It says nothing
+about scheduling: `-mtune` (spelled `-mcpu` in this era) reorders instructions
+and changes alignment for a target CPU without ever emitting an instruction
+that target does not have. So "no cmov" was never evidence for `-march=i386`
+alone; it is equally consistent with i386 code scheduled for a Pentium Pro,
+which is exactly what a driver shipped to unknown hardware would be built as.
+
+**Measured, across the whole tree, byte-identical functions:**
+
+| flags | cmov/fcomi | identical | our bytes |
+|---|---|---|---|
+| `-march=i386` | 0 | 30 | 74.2% |
+| `-march=i486` | 0 | 28 | 78.1% |
+| `-march=i586` | 0 | 26 | 76.7% |
+| `-march=i686` | **147** | 82 | 77.4% |
+| **`-march=i386 -mtune=i686`** | **0** | **82** | **77.3%** |
+
+`-march=i686` matches as well but emits 147 instructions the object does not
+contain anywhere, so it is excluded by the object itself. i386 code with i686
+scheduling gives the same 82 and stays consistent with every byte of it.
+`pentiumpro`, `pentium2`, `pentium3` and the period spelling `-mcpu=i686` all
+produce bit-identical output to `-mtune=i686`, so the family is settled and the
+member within it is not distinguishable and does not matter.
+
+Thirty to eighty-two out of 365. The single biggest step since the toolchain
+work began, and it came from questioning a claim in the record rather than from
+new code.
+
+**`-O2` against `-O3` is deliberately left open, and the evidence has moved.**
+Before the tuning was fixed, `-O3` gained no exact matches at all (30 either
+way), which is what kept `-O2` in place. With `-mtune=i686` it gains nine:
+
+    -O2 -march=i386 -mtune=i686    82 identical   77.3% of the blob's bytes
+    -O3 -march=i386 -mtune=i686    91 identical   89.0%
+
+That is now a real signal in both columns rather than size alone. It is still
+not decided here: `-O3` and an original whose helpers carried `inline` (finding
+351) predict much the same thing, and most of what remains unreconstructed is
+V.90, which is where the difference should show most clearly. The build stays
+at `-O2`; the number to beat is recorded above so that whoever settles it can
+see whether the gap moves the right way as V.90 lands.
+
+**The methodological point.** Every flag before this one was read directly out
+of the instruction stream, and that worked because each left a mark there --
+frame pointers, argument pushes, PIC thunks. `-mtune` leaves no such mark, so
+it can only be found by search against a similarity metric. That is a second
+mode of evidence, weaker per observation but able to reach things the first
+cannot, and it is worth trying against any remaining flag question.
