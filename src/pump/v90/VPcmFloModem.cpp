@@ -1,5 +1,5 @@
 /*
- * VPcmFloModem.cpp -- five of the twenty-six members of the PCM modem class.
+ * VPcmFloModem.cpp -- six of the twenty-six members of the PCM modem class.
  *
  * `include/dsplib/VPcmFloModem.h` carries the object map, the argument for
  * why the object really is 32 KB, and the three measurements that put a
@@ -22,6 +22,9 @@
  *                      object has inlined
  *   getUinfoValue      clear the four float arrays, turn 25 probe magnitudes
  *                      into 21 dB figures, then setPhaseIIinfo
+ *   enterPhase3        twenty-one constant stores, then the demodulator's own
+ *                      enterPhase3 and DILdescriptorPacker over the embedded
+ *                      descriptor at +0x004
  *
  * TWO DEAD THINGS ARE DELIBERATELY NOT REPRODUCED, and are recorded here so
  * that nobody "restores" them from the disassembly later:
@@ -38,6 +41,7 @@
  */
 
 #include "dsplib/debug.h"
+#include "dsplib/DILdescriptorPacker.h"
 #include "dsplib/encode.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/VPcmFloModem.h"
@@ -62,11 +66,14 @@
 	    ((int)__builtin_offsetof(VPcmFloModem, field) == (off)) ? 1 : -1]
 
 VPCM_OFF(v34Object,		0x0000, v34obj);
+VPCM_OFF(dil,			0x0004, dil);
 VPCM_OFF(flags_0217,		0x0217, flags217);
 VPCM_OFF(bitVector,		0x021e, bitvec);
 VPCM_OFF(nofBits,		0x1736, nofbits);
 VPCM_OFF(bitPointer,		0x1738, bitptr);
+VPCM_OFF(flags_173a,		0x173a, flags173a);
 VPCM_OFF(flag_173d,		0x173d, flag173d);
+VPCM_OFF(flag_173e,		0x173e, flag173e);
 VPCM_OFF(modem,			0x1758, modem);
 VPCM_OFF(pcmSessionType,	0x611c, sesstype);
 VPCM_OFF(info0Layout,		0x6120, layout);
@@ -91,6 +98,15 @@ VPCM_OFF(modem.phase2Info,	0x1760, mdmp2i);
 VPCM_OFF(modem.ptr_49b4,	0x610c, mdm49b4);
 
 typedef char vpcm_modem_size[(sizeof(V90Modem) == 0x49c0) ? 1 : -1];
+
+/*
+ * The embedded DIL descriptor's size, for the same reason: `dil` is placed at
+ * +0x004 and `flags_0217` at +0x217, and what makes those two consistent is
+ * that `tagV90DILdescriptor` is exactly 0x213 bytes.  If a later batch gives
+ * the descriptor another field, this fails here instead of silently shifting
+ * everything from +0x217 to +0x7f27.
+ */
+typedef char vpcm_dil_size[(sizeof(tagV90DILdescriptor) == 0x213) ? 1 : -1];
 
 /*
  * V92Phase2Info's, because this is the only translation unit that uses the
@@ -531,4 +547,77 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 	flags_0217[5] = 1;
 
 	return uinfo;
+}
+
+/*
+ * ===========================================================================
+ * enterPhase3 -- clear the transmit side, then build the JA vector
+ * ===========================================================================
+ *
+ * Twenty-one stores, every one of a CONSTANT, then two calls and two
+ * diagnostics.  Nothing it stores depends on anything it reads, so the only
+ * things a differential test can be about are which constant lands at which
+ * offset, which object the demodulator call gets, and what the packer is
+ * handed.
+ *
+ * THE SIX FLAGS ARE NOT getUinfoValue's SIX.  Both write +0x217..+0x21c;
+ * getUinfoValue writes 1, 0, 1, 1, 1, 1 and this writes 1, 0, 1, 1, 1, 0.
+ * The two agreeing about the first five and differing about the last is the
+ * evidence that the run really is six bytes and not five -- one function
+ * alone could not distinguish "six flags" from "five flags and a neighbour".
+ *
+ * THE PACKER IS HANDED THE OBJECT'S OWN DESCRIPTOR.  `lea 0x4(%ebx),%eax`
+ * before the call is an ADD, not a load, so +0x004 is a `tagV90DILdescriptor`
+ * inside this object rather than a pointer to one elsewhere; see the header.
+ * `nofBits` is passed by address and comes back holding the packed length,
+ * which is what the closing diagnostic prints -- so the read at the end is of
+ * the callee's output, not of the zero stored at the top.
+ *
+ * THE DIAGNOSTICS SIT AT TWO DIFFERENT LEVELS, deliberately: the opening one
+ * is `cmpl $0x1,dsplibs_debug_level; ja`, so level 2 and above, and the
+ * closing one goes through `edprintf`, which gates itself.  A test that only
+ * ran at one level could not tell them apart.
+ *
+ * ORDER.  The object interleaves the `cmpl` and the branch with the last four
+ * stores -- the compare is at 0xf327, between two of them, and the `ja` at
+ * 0xf34f after all of them.  That is scheduling, not semantics: the stores
+ * are to memory the gate does not read, and the branch is taken once they are
+ * all done.  Written here in the order the object performs them.
+ */
+void
+VPcmFloModem::enterPhase3()
+{
+	flags_173a[0] = 0;
+	flags_173a[1] = 0;
+	flags_173a[2] = 0;
+	flag_173d = 0;
+	flag_173e = 0;
+
+	flags_0217[0] = 1;
+	flags_0217[1] = 0;
+	flags_0217[2] = 1;
+	flags_0217[3] = 1;
+	flags_0217[4] = 1;
+	flags_0217[5] = 0;
+
+	terminateJa = 0;
+	terminateCp = 0;
+	terminateCpNot = 0;
+	cpNotLoaded = 0;
+	nofBitsPerSymbol = 2;
+
+	nofBits = 0;
+	cpNofBits = 0;
+	bitPointer = 0;
+	nofTransmitSequences = 0;
+	minNofTransmitSequences = 1;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmFloModem: enterPhase3 called.\r\n");
+
+	modem.demodulator->enterPhase3();
+
+	DILdescriptorPacker(&dil, bitVector, &nofBits);
+
+	edprintf("VPcmFloModem: enterPhase3: Ja length = %d\r\n", nofBits);
 }

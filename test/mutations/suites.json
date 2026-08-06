@@ -48,6 +48,8 @@
                                                  "build/test/t_v90sessionflag"],
  "vpcmflomodem":   ["src/pump/v90/VPcmFloModem.cpp",
                                                  "build/test/t_vpcmflomodem"],
+ "vpcmep3":        ["src/pump/v90/VPcmFloModem.cpp",
+                                                 "build/test/t_vpcmep3"],
  "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp",
                                                  "build/test/t_v90p3dreset"],
  "v90demod":       ["src/pump/v90/V90Demodulator.cpp",

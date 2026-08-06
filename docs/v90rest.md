@@ -80,8 +80,9 @@ costs one 270-byte method rather than the batch.
     273-278    VPcmFloModem                              in flight
     279-284    k56FlexPhase34                            279-283 used
     285-290    the v34handshak step fixture              all used, + D59, D60
-    291-296    V90Phase3Demodulator::reset               in flight
-    297-320    #59's remaining five
+    291-296    V90Phase3Demodulator::reset               all used
+    297-300    VPcmFloModem::enterPhase3                 all used
+    301-320    #59's remaining five
 
 VERIFY BEFORE TAKING A BLOCK, do not trust this table:
 
@@ -135,7 +136,25 @@ Five of `VPcmFloModem`'s six landed: `getUinfoValue` 773, `setPhaseIIinfo` 704,
 findings 273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
 equivalent and measured over 123 million values).
 
-`VPcmFloModem::enterPhase3` (270 B) is the sixth and is still outstanding.
+`VPcmFloModem::enterPhase3` (270 B) was the sixth and **has now landed**;
+findings 297-300, mutation suite `vpcmep3` (22 mutations, 21 caught, 1
+recorded equivalent and shown dead in the object as well as in the source).
+**That closes #60: 30 of 30 symbols, 6,310 bytes of C++.** What the batch
+settled beyond the method itself:
+
+- `pad_0004` is a `tagV90DILdescriptor` EMBEDDED at +0x004, from three `lea`s
+  off `this` before the packer call, and the type from
+  `sizeof(tagV90DILdescriptor) == 0x213` landing exactly on +0x217. Finding
+  297, and it also notes that `bitVector`'s 2,700 entries are exactly enough
+  for the packer's 2,654-bit worst case.
+- `pad_173a[3]` and the first byte of `pad_173e` are now `flags_173a[3]` and
+  `flag_173e`, and `flags_0217` is known to be six bytes rather than five
+  because the two writers disagree about the sixth. Finding 298.
+- `test/harness/v90demfix.h` is the shared demodulator fixture finding 296
+  asked for; `t_v90demod.cpp` was converted to it and its mutation suite
+  re-run unchanged (30, 28 caught, same two by name). `t_v90p3dreset.cpp` was
+  deliberately left alone. Finding 300.
+
 **It does call `DILdescriptorPacker`, exactly as this file said** -- that is
 in the object's own relocations and is not in doubt:
 

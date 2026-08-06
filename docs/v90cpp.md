@@ -255,16 +255,19 @@ union the test fixture uses:
 
 ### VPcmFloModem — 6 symbol(s), 2420 bytes
 
-**Five of the six are written** — 2,150 bytes, findings 273-278, mutation
-suite `vpcmflomodem`.  `enterPhase3` is the sixth and is outstanding; it is
-sequenced behind `V90Demodulator::enterPhase3` and `V90Phase3Demodulator::
-reset`, and `docs/v90rest.md` has its closure.
+**All six are written** — 2,420 bytes.  Five in findings 273-278 with
+mutation suite `vpcmflomodem`; `enterPhase3` in findings 297-300 with
+mutation suite `vpcmep3`.
 
 The class is 32,552 bytes at least and that is measured, not bounded away:
 see finding 273 and the correction above.  A whole `V90Modem` is embedded in
 it at +0x1758 (finding 274), and +0x1760 and +0x612c are a `V90Phase2Info` and
 a `V92Phase2Info` (finding 275).  `V92Phase2Info` is a class this tree had
 never declared and now has, data-only, in `include/dsplib/V92Phase2Info.h`.
+
+A `tagV90DILdescriptor` is embedded at +0x004 as well, and it fills the whole
+of what used to be `pad_0004`: 0x004 + 0x213 = 0x217, which is where
+`flags_0217` begins.  Finding 297.
 
 | 773 | `getUinfoValue(short)` | `_ZN12VPcmFloModem13getUinfoValueEs` |
 | 704 | `setPhaseIIinfo(int*, int)` | `_ZN12VPcmFloModem14setPhaseIIinfoEPii` |
