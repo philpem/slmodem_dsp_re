@@ -175,15 +175,17 @@ run_txblock(struct rec *r, short txst, long tag)
  * with no case of its own never advances the cursor and spins forever, so
  * only a state with a real target may be driven here.
  *
- * THIS ROUTE DOES NOT COMPARE EQUAL AND IS NOT RUN BY DEFAULT.  Finding 289
- * records the measurement: three of its nineteen targets leave the two sides
- * differing in the modulator at +0x2078..+0x25d1, the set of three MOVES when
- * unrelated code in the fixture changes, and neither an identical bring-up,
- * a scrubbed stack, a shared shaping buffer nor larger seed tables closes it.
- * So the per-sample transmit loop reads something that is not the object, and
- * finding out what is the first job of #56 rather than of this harness.
+ * THIS ROUTE USED NOT TO COMPARE EQUAL, and finding 289 and D60 recorded it
+ * as a property of the object: three of its nineteen targets left the two
+ * sides differing in the modulator at +0x2078..+0x25d1, and WHICH three moved
+ * when unrelated code in the fixture changed.
  *
- * `V34HS_TXSAMPLE=1` runs the sweep anyway, which is how that is reproduced.
+ * It was the fixture.  The two sides' memory images were not congruent -- two
+ * objects at unrelated addresses with unrelated neighbours -- and this loop is
+ * the one route that can tell.  One arena per side, laid out identically and
+ * copied byte for byte (finding 319), closes it: all nineteen compare, over
+ * twenty-four object fills, ten placements and eight neighbourhoods
+ * (finding 322).  The route is in the default sweep now.
  */
 static void
 run_txsample(struct rec *r, short txst, short samples, long tag)
@@ -250,7 +252,7 @@ static const short samp_reps[] = {
 };
 #define NSAMP	((int)(sizeof(samp_reps) / sizeof(samp_reps[0])))
 
-static struct rec micro[NMICRO], block[NBLOCK], samp[NSAMP];
+static struct rec micro[NMICRO], block[NBLOCK], samp[NSAMP], spare;
 
 /* A representative by its state value, so the assertions below read as the
  * state numbers the jump table is written in. */
@@ -267,6 +269,7 @@ by_state(const struct rec *tab, int n, short state)
 
 #define M(s)	by_state(micro, NMICRO, (s))
 #define B(s)	by_state(block, NBLOCK, (s))
+#define S(s)	by_state(samp, NSAMP, (s))
 
 static int
 groups(const struct rec *tab, int n)
@@ -358,15 +361,10 @@ main(void)
 
 	/* --- table 1, the per-sample transmit loop, on request only -------- */
 
-	if (getenv("V34HS_TXSAMPLE")) {
-		if (dump)
-			printf("table 1  txstate  .rodata+0x2da0  "
-			       "(one sample) -- NOT a passing comparison, "
-			       "see finding 289\n");
-		for (i = 0; i < NSAMP; i++)
-			run_txsample(&samp[i], samp_reps[i], 1,
-				     1000 + samp_reps[i]);
-	}
+	if (dump)
+		printf("table 1  txstate  .rodata+0x2da0  (one sample)\n");
+	for (i = 0; i < NSAMP; i++)
+		run_txsample(&samp[i], samp_reps[i], 1, 1000 + samp_reps[i]);
 
 	/*
 	 * ANTI-VACUITY.  A separation claim over cases that all did nothing
@@ -379,6 +377,9 @@ main(void)
 	diff_eq_int("table-2 cases that did something",
 		    did_something(block, NBLOCK) >= 5, 1,
 		    did_something(block, NBLOCK));
+	diff_eq_int("table-1 cases that did something",
+		    did_something(samp, NSAMP) >= 18, 1,
+		    did_something(samp, NSAMP));
 
 	/*
 	 * THE SEPARATION CLAIM, as a count and then as named pairs.  The
@@ -396,6 +397,15 @@ main(void)
 		    groups(micro, NMICRO), 7, NMICRO);
 	diff_eq_int("distinct table-2 behaviours",
 		    groups(block, NBLOCK), 4, NBLOCK);
+	/*
+	 * TABLE 1 IS THE ONE THAT SEPARATES.  Eighteen behaviours from
+	 * nineteen targets -- the per-sample loop runs a modulator, so almost
+	 * every arm leaves a different sample behind, where table 2's arms
+	 * mostly set a flag and leave.  The single collision is 24 and 60,
+	 * which the table gives two entries and which agree cold.
+	 */
+	diff_eq_int("distinct table-1 behaviours",
+		    groups(samp, NSAMP), 18, NSAMP);
 
 	/*
 	 * AND THE PAIRS, which is what fails informatively.  Every one of
@@ -429,6 +439,27 @@ main(void)
 	agree("microstate", M(42), M(63));
 	agree("microstate", M(42), M(33));
 
+	/*
+	 * TABLE 1'S NAMED PAIRS.  Each of these is a pair of the twenty
+	 * targets at .rodata+0x2da0 that the step tells apart by what it wrote
+	 * into the object -- which is the standard finding 290 held the
+	 * microstate targets to, and the thing #56 needs before a per-case
+	 * reconstruction of any of them can be believed.  `S(24)` and `S(60)`
+	 * are the one pair that agrees cold, and they are asserted equal so
+	 * that a future change separating them is a failure and not a silence.
+	 */
+	differ("table 1", S(5), S(18));
+	differ("table 1", S(18), S(19));
+	differ("table 1", S(20), S(21));
+	differ("table 1", S(21), S(24));
+	differ("table 1", S(51), S(65));
+	differ("table 1", S(66), S(67));
+	differ("table 1", S(69), S(70));
+	differ("table 1", S(71), S(78));
+	differ("table 1", S(81), S(85));
+	differ("table 1", S(85), S(86));
+	agree("table 1", S(24), S(60));
+
 	differ("table 2", B(5), B(18));
 	differ("table 2", B(18), B(66));
 	differ("table 2", B(5), B(6));
@@ -444,10 +475,38 @@ main(void)
 	 */
 	v34hs_holes_check();
 
+	/*
+	 * SECOND PASS, WITH THE BLOB'S BRING-UP ON BOTH SIDES.
+	 *
+	 * Twelve of the thirty-five skipped pointers land in the program image
+	 * -- a library table or a function -- and on the ordinary run side A
+	 * holds ours where side B holds the blob's, so which one each SELECTS
+	 * is not a question an address comparison can answer.  Brought up by
+	 * the same code, they must select the identical address, and this is
+	 * the pass in which `check_self_ptr` says so.  It is here rather than
+	 * behind `V34HS_REFINIT=1` because a check `make phase` never runs is
+	 * finding 249's shape.
+	 *
+	 * The separation assertions are not repeated: they are about the
+	 * object, not the bring-up, and `v34hs_holes_check` does not apply
+	 * here at all -- eleven of the skips legitimately never differ once
+	 * both sides install the same table.
+	 */
+	v34hs_refinit(1);
+	for (i = 0; i < NMICRO; i++)
+		run_micro(&spare, micro_reps[i], 4000 + micro_reps[i]);
+	for (i = 0; i < NBLOCK; i++)
+		run_txblock(&spare, block_reps[i], 5000 + block_reps[i]);
+	for (i = 0; i < NSAMP; i++)
+		run_txsample(&spare, samp_reps[i], 1, 6000 + samp_reps[i]);
+	v34hs_refinit(0);
+
 	if (dump)
-		printf("groups: microstate %d/%d, table 2 %d/%d\n",
+		printf("groups: microstate %d/%d, table 2 %d/%d, "
+		       "table 1 %d/%d\n",
 		       groups(micro, NMICRO), NMICRO,
-		       groups(block, NBLOCK), NBLOCK);
+		       groups(block, NBLOCK), NBLOCK,
+		       groups(samp, NSAMP), NSAMP);
 
 	return diff_end();
 }

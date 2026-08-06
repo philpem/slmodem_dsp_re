@@ -74,7 +74,9 @@ extern "C" {
 
 enum v34hs_route {
 	/*
-	 * Table 1, .rodata+0x2da0: txstate INSIDE the per-sample loop.
+	 * Table 1, .rodata+0x2da0: txstate INSIDE the per-sample loop.  This
+	 * is #56, it compares, and eighteen of its nineteen reachable targets
+	 * have their own behaviour cold (finding 323).
 	 *
 	 * DANGEROUS AND DELIBERATELY SO -- see finding 287.  The loop bottom
 	 * at 0x629e0 re-tests the cursor against the limit and jumps back to
@@ -135,12 +137,18 @@ void v34hs_compare(const char *what, long tag);
  * How many pointer fields the comparison skips, and the assertion that every
  * one of them was reached.  Call it ONCE, after the whole sweep.
  *
- * WHAT THE SKIPS DO NOT COVER: a pointer that lands OUTSIDE the object is
- * checked only for landing outside, never for which table it selects.  A case
- * that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 at a different table
- * shows up in the signature as "these four bytes changed" and nothing more.
- * t_v34hshak.c closes that with a `compare_table` per pointer; this fixture
- * does not, and a case that installs a table has to.
+ * WHICH TABLE A POINTER SELECTS IS CHECKED (finding 324).  Each of the
+ * thirty-five is classified three ways: into its own object, into its own
+ * arena -- where the offset says which block and where in it, and offsets are
+ * comparable where addresses are not -- or outside both, which is a library
+ * table or function.  For that last class side A holds ours and side B the
+ * blob's, so what checks it is a SECOND PASS with `v34hs_refinit(1)`: brought
+ * up by the same code the two must select the identical address, and all
+ * twelve that qualify do.  `t_v34hsstep.c` runs that pass, so the check is in
+ * `make phase` rather than behind an environment variable.
+ *
+ * `v34hs_holes_check` does not apply to a refinit pass: eleven of the skips
+ * legitimately never differ once both sides install the same table.
  */
 #define V34HS_NHOLES	35
 void v34hs_holes_check(void);
@@ -154,6 +162,14 @@ void v34hs_poke_short(unsigned off, short v);
 void v34hs_poke_int(unsigned off, int v);
 void v34hs_poke_byte(unsigned off, unsigned char v);
 short v34hs_peek_short(int side, unsigned off);
+
+/*
+ * Bring side A up with the blob's initialisers too, so both sides install the
+ * same library tables.  That is the run in which "which table does this
+ * pointer select" is a comparison rather than a shrug; `v34hs_holes_check`
+ * does not apply to it.  Finding 324.
+ */
+void v34hs_refinit(int on);
 
 /*
  * Turn the diagnostics on for both sides.  `v34handshak` indexes `StateName`

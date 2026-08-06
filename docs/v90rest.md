@@ -91,6 +91,8 @@ costs one 270-byte method rather than the batch.
     291-296    V90Phase3Demodulator::reset               all used
     297-300    VPcmFloModem::enterPhase3                 all used
     301-320    #59's remaining five
+    297-318    #59's remaining five
+    319-324    w3_tbl1, table 1 and the fixture's arena     all used, + D61
 
 **245 AND 246 WERE CLAIMED TWICE AND THIS BRANCH'S TWO MOVED.** `master`
 used 238 through 246 while this branch was out -- straight through the gap
@@ -304,10 +306,12 @@ per-dispatch-case harness writes the state word directly (`obj+0x3592`
 microstate, `+0x3594` rxstate, `+0x3596` txstate) and steps once.
 `docs/v34handshak.md` is its manual and findings 285-290 are the record.
 
-It unblocks #57, which is the 27.6 KB and the sixteen units. It does NOT
-unblock #56: the per-sample transmit route's result is not a function of the
-object (finding 289, D60), and finding out what it reads is that task's first
-job rather than the harness's.
+It unblocks #57, which is the 27.6 KB and the sixteen units. **It unblocks
+#56 too, since `w3_tbl1`.** The per-sample transmit route did not compare and
+finding 289 and D60 read that as a property of the object; it was the
+fixture's memory layout, and one arena per side closes it. All nineteen of
+table 1's reachable targets compare and eighteen of them separate cold.
+Findings 319-324, D60 retracted, D61 for the residual.
 
 **Findings 285-290 were taken out of the 279-300 block this file used to
 reserve for #59's six.** The block table above has been rewritten to match

@@ -16241,3 +16241,340 @@ word in a configuration block, and there are two configuration blocks. The
 lesson is for whoever holds the merge: when two batches write into one
 translation unit, `grep '^#define'` the result and look for repeats before
 trusting a green build, because the build will be green either way.
+
+======================================================================
+### 319. Table 1 compares. It was where the fixture put the blocks the object points at, not the object
+
+Finding 289 and D60 said the per-sample transmit route's result "is not a
+function of the object", on the strength of three of table 1's nineteen
+reachable targets leaving the two sides differing and of *which* three moving
+whenever unrelated code in the fixture changed. Both halves of that
+measurement were real. The conclusion drawn from them was wrong, and it was
+wrong in the direction that matters: the sensitivity was to something that
+differed between the two sides, and what differed between the two sides was
+this file.
+
+`test/harness/v34hsstep.c` built side A as `static struct v34_object obj_a`
+and side B as `static unsigned char obj_b[sizeof(struct v34_object)]`, and the
+five blocks the object points at as five more pairs of statics. Ten separate
+objects at ten addresses the linker chose, each with whatever neighbours the
+linker happened to give it, and no two of the pairs the same distance apart.
+Everything about the two sides was identical except their geometry.
+
+**The fix is one arena per side**: the object and all five blocks at fixed
+offsets inside a single 64 KB-aligned `struct v34hs_arena`, with 32 KB of
+filler between and around them, and side B's arena a byte copy of side A's
+whole arena rather than a block-by-block copy. Both come out of one aligned
+buffer at a stride the fixture picks. So the two sides differ by a constant,
+that constant is a multiple of 64 KB, and every distance, every low address
+bit and every byte of every neighbourhood agrees.
+
+With that, **all nineteen of table 1's reachable targets compare**, and the
+route is in the default sweep instead of behind `V34HS_TXSAMPLE=1`.
+
+**And it is the BLOCKS, not the object.** A before-and-after across an edit
+that adds 700 KB of BSS and moves every static in the binary is exactly the
+confound D60's own signature warns about, so the old fixture was rebuilt and
+taken apart one group at a time. **How to rebuild it**, since this is the
+strongest evidence in this block and the only part not in the tree:
+`git show 495151b:test/harness/v34hsstep.c` and the matching
+`test/unit/t_v34hsstep.c` into a scratch directory; add a seed offset to the
+one `fill((unsigned char *)&obj_a, OBJ_SIZE, 0x5eed1234u)` call; compile with
+the flags `make -Bn build/test/harness/v34hsstep.o` prints and link with the
+line `make -n build/test/t_v34hsstep` prints, with the tree's own
+`v34hsstep.o` dropped from it. A variant is then a wrapper struct
+`{ pad; the pair; pad }` around a chosen group, aligned to 64 KB, filled once
+and copied to its twin. Eight fills each, table 1 only:
+
+```
+  the old fixture, unchanged                     8 of 8 fills fail
+  + object pair in congruent padded wrappers     8 of 8 fills fail
+  + the five BLOCK pairs in congruent wrappers   0 of 8
+  + both                                         0 of 8
+  + shaped only / pcm only / cfg only / dummy    8 of 8 each
+  + sess only                                    5 of 8
+```
+
+Wrapping the object alone changes nothing. Wrapping the five blocks the
+object points at -- so that each pair sits at the same offset in two
+identically filled wrappers instead of being two adjacent statics -- closes it
+completely, and no single block does. The same conclusion from the other
+side: `V34HS_LOOSEOBJ=1` in the new fixture puts side B's OBJECT back outside
+its arena, at a linker-chosen address with linker-chosen neighbours and an
+unrelated distance to its blocks, and the sweep still passes.
+
+So the property is the placement of the five blocks, collectively. Which byte
+of it the loop is sensitive to is not named; D61 has what that is bounded by.
+
+The state of the divergence when this started, since the set moves: at
+495151b it was txstate 78 `JaTXMIT` alone, not 289's {18, 19, 78}. Every
+differing byte but three was an EXACT NEGATION -- `prefilter.state[0,2,4,6]`
+holding -14, +12, -7, +2 against +14, -12, +7, -2, the same in
+`scratch_20e0`, `scratch_210c`, five entries of `txq_ring_tail` and `f25d0` --
+so it was one sign decision going the other way and everything downstream of
+it, not noise. The three that were not negations are `f25c6`, `f25c8` and the
+top byte of `f25cc`.
+
+
+======================================================================
+### 320. The two experiments that stopped the search going the wrong way
+
+Finding 289 left "an x87 register, or memory this fixture does not model" as
+what was left. The first half was the more attractive: the object is
+`-mfpmath=387`, a function that reads a register it did not write gets
+whatever the previous call left, side A always runs before side B, and *that*
+would explain why editing code which runs after the step moves the failing
+set -- different code leaves different residue for the next case. It is
+wrong, and two measurements say so rather than one argument.
+
+**Sequence position, held against address.** `V34HS_PROBE=1` snapshots side
+B's object and every block it points at before the step, runs A then B as
+usual, restores all of it, and runs B a THIRD time. Same object, same
+address, same bytes, one place further along the sequence, with every global
+the blob owns already hot.
+
+```
+  PROBE mst=41 rx=43 tx=18  ...  B-vs-B differs in 0 bytes
+  ... 43 of 43 cases, including txstate 78, all zero
+```
+
+So each side is individually reproducible and nothing carried between calls
+matters. Not the x87, not a blob global, not the stack.
+
+**And the x87 directly.** `fnstsw`/`fnstcw` before each of the three calls --
+observed, not forced, because `fnstenv` masks every exception as a side effect
+and would have had to be undone:
+
+```
+  fpsw 0000/0000/0000   fpcw 037f/037f/037f
+```
+
+TOP is zero and the stack is empty before all three, on every case. There was
+never any residue to read.
+
+**A third, ruled out on the way.** `V34HS_EQPTR=1` forces every one of the
+thirty-five skipped pointers that lands in the PROGRAM IMAGE -- the library
+tables and functions the bring-up installs, where side A gets ours and side B
+the blob's -- to hold side B's value on both sides. Twelve of the thirty-five
+qualify. txstate 78 then failed with the identical signature, 1643655208
+against 1428516669. Which table a pointer selects was not it either.
+
+`V34HS_REFINIT=1` had already excluded our bring-up versus the blob's, and
+finding 289 excluded the scrubbed stack, a shared shaping buffer, larger seed
+tables and a short `preemp0`. What that leaves is the only thing the two
+sides still did not have in common, which is where they were.
+
+**And the scrub itself was never the thing.** `scrub_stack` was added on the
+same reasoning the probe demolishes, and its comment said so. `V34HS_NOSCRUB=1`
+turns it off: the sweep passes, at four fills as well as the default. It stays
+because it costs a memset and removes a variable, not because it is load-bearing,
+and the comment now says that instead.
+
+
+======================================================================
+### 321. The arena, and the four knobs that make its claims falsifiable
+
+```c
+struct v34hs_arena {
+        unsigned char     head[0x8000];
+        struct v34_object obj;
+        unsigned char     gap1[0x8000];
+        short             shaped[4096];
+        unsigned char     gap2[0x8000];
+        unsigned char     sess[0x6200];
+        unsigned char     gap3[0x8000];
+        unsigned char     pcm[0x520];
+        unsigned char     gap4[0x8000];
+        unsigned char     cfg[0x80];
+        unsigned char     gap5[0x8000];
+        short             dummy[8192];
+        unsigned char     tail[0x8000];
+};
+```
+
+Filled by one pass of the LCG over the WHOLE arena, then each block re-filled
+with the seed finding 230 gave it, then `memcpy(&arena_b, &arena_a,
+ARENA_SIZE)`. The only four bytes of the arena that differ between the sides
+afterwards are the session's pointer to the PCM receiver, which is an address.
+
+Three things follow that the old fixture could not do:
+
+- **The comparison covers the padding.** Four named `memcmp`s over the four
+  blocks were what `v34hs_compare` used to end with. They said nothing about
+  a byte one element off the end of one, and the seed tables -- which thirty
+  of the thirty-five skipped pointers aim at -- were not compared at all.
+  One sweep over the arena now covers every block, every filler region and
+  the space around them, and names the region a differing byte lands in.
+- **A pointer out of the object can be checked for WHICH block it selects**,
+  by offset within its own arena. Finding 324.
+- **A layout claim can be tested instead of asserted.** The two arenas come
+  out of one aligned buffer at a stride the fixture chooses, and the object is
+  reached through a pointer rather than as `arena.obj`, so both can be moved
+  at run time.
+
+```
+  V34HS_SKEW=n      move side B's whole arena n bytes
+  V34HS_OBJSKEW=n   move side B's OBJECT n bytes inside its own arena,
+                    which breaks the object-to-block distances alone
+  V34HS_PADVARY=k   re-fill padding region k (1..7, or 0 for all) on side B
+                    only, so the sides differ in nothing but what lies
+                    outside the blocks
+  V34HS_SEED=n      a different object fill
+```
+
+**A trap, since it cost a wrong result here.** The first `V34HS_OBJSKEW` run
+"passed" because the edit that introduced `#define obj_a (*(struct
+v34_object *)obj_ptr[0])` left the previous `#define obj_a (arena_a.obj)`
+below it. The later definition won, the knob was a no-op, and gcc's
+`"obj_a" redefined` warning was filtered out by a grep for `error`. Every
+result in finding 322 is from after that was fixed.
+
+
+======================================================================
+### 322. How far the agreement was pushed, and what is still not known
+
+A green sweep at one layout would be worth nothing here: the failing set moved
+every time the fixture was edited, so "it passes now" is what the last five
+edits also said. What is asserted is that it passes under every perturbation
+the fixture can apply.
+
+```
+  24 object fills     V34HS_SEED=0..23   ZERO differential failures
+  10 placements       V34HS_SKEW=0,4,8,16,64,256,0x400,0x1000,0x1004
+   5 object skews     V34HS_OBJSKEW=0,4,0x40,0x1000,0x4000
+   8 neighbourhoods   V34HS_PADVARY=0..7
+   1 loose object     V34HS_LOOSEOBJ=1   side B's object outside its arena
+```
+
+**And the same 24 fills against the OLD fixture, which is the control that
+makes this mean anything.** Rebuilt from 495151b in a scratch directory with
+nothing changed but a seed knob:
+
+```
+  the old fixture   23 of 24 fills fail table 1   (only seed 6 passes)
+  this one           0 of 24
+```
+
+The 24 fills are the strong one: 24 x 19 table-1 comparisons of a 44,096-byte
+object, its five blocks and both transcripts, and not one differing byte.
+Every failure in that sweep was a SEPARATION count -- "distinct microstate
+behaviours", "48 and 49 share one arm" -- which finding 290 already records as
+a property of the fill rather than of the object. Table 1's own separation
+assertions held at all 24, which the microstate ones do not.
+
+**What is NOT established, and it should not be quoted as if it were.**
+Nobody has caught the loop reading a particular byte outside the object.
+Three things are known about what it is not:
+
+- it is not within 32 KB of any block, in either direction -- `V34HS_PADVARY`
+  makes each padding region differ between the sides and the sweep still
+  agrees;
+- the step writes NO padding byte at all, on any of the 43 cases -- the probe
+  snapshots the arena before the step and compares after, so an out-of-bounds
+  write is excluded as well as an out-of-bounds read;
+- it is not the object-to-block geometry (`V34HS_OBJSKEW`), the absolute
+  address or the alignment (`V34HS_SKEW`), the object's own placement
+  (`V34HS_LOOSEOBJ`) or the object's contents (24 fills);
+- and it is not any ONE block's neighbourhood: wrapping `shaped`, `pcm`,
+  `cfg` or `dummy` alone in the old fixture leaves all eight fills failing,
+  and `sess` alone leaves five of eight.
+
+So what is established is WHERE the fixture was wrong -- the placement of the
+five blocks the object points at, collectively (finding 319's bisect) -- and
+not what the loop reads there. Those two are different claims and the second
+is not made. D61 records the residual.
+
+
+======================================================================
+### 323. Table 1 separates 18 of its 19 targets, which is better than either other table
+
+The map a #56 agent starts from. One representative per distinct target of
+`.rodata+0x2da0`, entered cold with microstate `PHASE1`, rxstate `SILENCE` and
+one sample of budget, measured by what the step wrote:
+
+| txstate | wrote | first | progress | note |
+|---|--:|---|--:|---|
+|  5 SILENCE     |  11 | +0x004 | 0 | |
+| 18 SSEG        | 115 | +0x004 | 2 | |
+| 19 SBARSEG     | 127 | +0x004 | 2 | |
+| 20 PPSEG       |  46 | +0x004 | 2 | |
+| 21 TRNSEG4     |  69 | +0x004 | 2 | |
+| 24 TX_DPSK     |  69 | +0x004 | 0 | shares its behaviour with 60 |
+| 51 TX_L1       |  18 | +0x004 | 0 | |
+| 60 TONE_AB      |  69 | +0x004 | 0 | shares its behaviour with 24 |
+| 64 JTXMIT       |  70 | +0x004 | 2 | |
+| 65 XMIT0        |  10 | +0x234 | -- | |
+| 66 TRNSEG4A     |  68 | +0x004 | 3 | |
+| 67 XMITMP       |  69 | +0x004 | 3 | |
+| 69 EXMIT        |  69 | +0x004 | 3 | |
+| 70 DATAXMIT    |  72 | +0x004 | 3 | |
+| 71 TXLEVEL      |  65 | +0x234 | -- | |
+| 78 JaTXMIT     |  65 | +0x234 | -- | calls `v90Phase34` |
+| 81 MOH_SILENCE  |   6 | +0x234 | -- | |
+| 85 K56JaTXMIT   |  71 | +0x234 | -- | |
+| 86 TXMD         |  65 | +0x234 | -- | |
+
+Eighteen distinct behaviours from nineteen representatives. The only
+collision is 24 and 60, and it is asserted as a collision so that a later
+change separating them is a failure rather than a silence.
+
+**Why this table separates where the others do not.** Table 3 gives seven
+behaviours from seventeen and table 2 four from seven, because most of their
+arms set a flag and jump to the next dispatch (finding 288). Table 1's arms
+are inside the per-sample loop and run a modulator, so nearly every one of
+them leaves a different sample behind. A per-case agent on #56 therefore does
+NOT have the "my case is indistinguishable from its neighbour cold" problem
+that #57 has -- with one exception, 24 and 60.
+
+The three groups the `progress` column shows are worth having: `progress` is
+the int at +0x04, 1828296186 -- shown as `--` above -- meaning the fill's
+value came back unchanged. Six of the nineteen do not touch it, and those six
+are exactly the six that write nothing below +0x234.
+
+
+======================================================================
+### 324. Which block a pointer selects is now checked, and closing it retired a bring-up asymmetry nobody had seen
+
+`docs/v34handshak.md` listed one hole in the harness: a pointer that lands
+outside the object was checked only for landing outside, never for what it
+now points at, so a case that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 got
+a signature saying "these four bytes changed" and nothing more. The reason it
+was left open is that a raw address is not comparable -- the two sides
+legitimately hold two addresses of two copies of one table.
+
+The arena makes two thirds of it a subtraction. `check_self_ptr` now
+classifies each of the thirty-five in three ways instead of two:
+
+- into its own OBJECT -- compare the offset, as before;
+- into its own ARENA -- compare the offset, which says which block and where
+  in it, address-independently;
+- outside both -- a library table or function, where side A holds ours and
+  side B the blob's.
+
+For the third, `V34HS_REFINIT=1` brings both sides up with the blob's
+initialisers, and then the two must select the IDENTICAL address. They do, on
+all twelve pointers that qualify, on every case. That run is the one that
+checks it.
+
+**And it did not use to.** Under `V34HS_REFINIT=1` in the pre-arena fixture,
+with two byte-identical objects and the same initialiser running on both, the
+bring-up left +0x0a28 and +0x2608 holding `ref_Convolve32` on side A and
+`ref_Convolve32 + 0x40` on side B -- the same table, sixty-four bytes in.
+Identical inputs, identical code, two answers. It is not a counter in the
+blob advancing between the two calls, because a counter would still advance
+now and the two pointers now agree exactly. It is the same address
+dependence as D60's, in `v34handshakinit` rather than in the per-sample loop,
+sitting inside a field the comparison skipped.
+
+Two consequences:
+
+- The old fixture's divergence was never confined to table 1. It reached the
+  bring-up, and the skip list hid it.
+- `v34hs_holes_check` does not apply to a `V34HS_REFINIT` run: eleven of the
+  thirty-five skips legitimately never differ there, because both sides now
+  select the same table. The assertion is made only on the ordinary run, and
+  says so.
+
+**Findings 319-324 are the block `docs/v90rest.md` allocated to this
+worktree.** Finding 290's note that #59's findings start at 291 still stands.
+
