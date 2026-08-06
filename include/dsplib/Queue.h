@@ -1,0 +1,75 @@
+/*
+ * Queue.h -- the object's single-producer ring buffer, as a class template.
+ *
+ * Six weak symbols in their own `.gnu.linkonce.t.*` sections, instantiated at
+ * `float` and nothing else.  20 bytes, no virtuals -- every call site is a
+ * direct relocation and there is no vtable slot at +0.
+ *
+ * `sizeof` is pinned from two sides: the 4-byte `size` at +0x10 puts a floor
+ * under it, and the caller at 0x152ee does `movl $0x14,(%esp); call
+ * sysdep_malloc` and hands the result straight to the constructor.
+ *
+ * ---------------------------------------------------------------------------
+ * ONE SLOT IS ALWAYS EMPTY, which is why the sizes look off by one
+ *
+ * `Queue(n)` allocates n+1 slots and can hold n items.  That is the ordinary
+ * way to tell a full ring from an empty one without a separate count: the
+ * write cursor is never allowed to catch the read cursor from behind.  So
+ * `Queue(0)` is legal, allocates one slot, holds nothing, and every write
+ * returns -1.
+ *
+ * `last` points at the LAST element, not one past it.  Every wrap test is
+ * against that, and the block paths check `== last + 1` rather than `> last`
+ * because the cursor can only ever land exactly there.
+ *
+ * ---------------------------------------------------------------------------
+ * `count()` is the original's, not an idiom invented here
+ *
+ * `V92Modulator::progress` open-codes the identical
+ * `lea (%eax,%ecx,4); sub; sar $2; xor %edx; div %ecx` against this object's
+ * +0x08, +0x0c and +0x10 at 0x14c88 and again at 0x14d6f.  The occupancy is
+ * computed as `(wr + size) - rd`, a POINTER add of `size` elements before the
+ * subtraction, not `(wr - rd) + size`; algebraically the same and that is the
+ * form the object uses.
+ *
+ * No `space()` is inlined anywhere, so its spelling is unknown.
+ */
+
+#ifndef DSPLIB_QUEUE_H
+#define DSPLIB_QUEUE_H
+
+template <class T>
+class Queue {
+public:
+	Queue(unsigned n);
+	~Queue();
+
+	void reset();
+
+	/*
+	 * 0 on success, -1 if there is not room for the whole request.  A
+	 * partial write never happens and `num == 0` succeeds trivially.
+	 *
+	 * BOTH CALL SITES DISCARD THE RETURN, at 0x14d44 and 0x14d5f, as does
+	 * the single-value form's at 0x153c0.  The type is `int` here because
+	 * the object returns 0 and -1; nothing in the blob distinguishes that
+	 * from `unsigned`, and no caller looks.
+	 */
+	int write(T v);
+	int write(T *p, unsigned num);
+	int read(T *p, unsigned num);
+
+	unsigned count() const
+	{
+		return (unsigned)((wr + size) - rd) % size;
+	}
+
+private:
+	T	*buf;		/* +0x00 owned                              */
+	T	*last;		/* +0x04 &buf[size - 1], NOT one past       */
+	T	*rd;		/* +0x08                                    */
+	T	*wr;		/* +0x0c                                    */
+	unsigned size;		/* +0x10 slots, which is the ctor's n + 1   */
+};
+
+#endif /* DSPLIB_QUEUE_H */

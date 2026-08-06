@@ -81,6 +81,15 @@ BENIGN = (
     (re.compile(r"_(entry|generate|size)$"), "test accessor"),
     (re.compile(r"^RcFixed_(State|UpFactor|DownFactor)$"), "test accessor"),
     (re.compile(r"^FP_Pow_coefficient$"), "test accessor"),
+    # C2/D2 are the BASE-OBJECT constructor and destructor.  For a class with
+    # no virtual base they are the same code as C1/D1, and which of the pair a
+    # compiler emits is a compiler-version detail, not a property of the
+    # source: the 2003 build put only C1/D1 in the object, and every g++ used
+    # here emits all four.  Nothing calls them -- there is no virtual base
+    # anywhere in the object -- so they are dead weight rather than drift, and
+    # listing them every run would bury the strays that matter.  Settled once
+    # for the whole weak-symbol batch; see finding 248.
+    (re.compile(r"^_Z.*[CD]2E"), "base-object ctor/dtor, no virtual bases"),
 )
 
 

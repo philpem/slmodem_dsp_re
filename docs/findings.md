@@ -14144,3 +14144,113 @@ one's own implementation too.
 
 Similarly `blackman`'s 4pi constant: perturbing it by one ulp still gives
 zero mismatches, so it is confirmed by reading `.rodata` and not by the test.
+
+### 247. A by-value float can hand the two sides of a differential test different numbers
+
+Reserved block for this session: 247-250.
+
+`t_queue`'s signalling-NaN case failed, and the divergence was not in the
+object under test.  It took two fixes because there were two of them.
+
+**The callee.** `Queue<float>::write(float)` stores its argument into the ring
+with `movl` -- the object's own bytes, at +0x36:
+
+```
+36:  mov 0x14(%esp),%esi
+3a:  mov %esi,(%ecx)
+```
+
+Modern GCC compiles the natural `*wr = v` under `-mfpmath=387` into
+`flds`/`fstps`, and an x87 load-store QUIETENS a signalling NaN: 0x7f800001
+goes in, 0x7fc00001 comes out.  Every ordinary value survives the round trip
+unchanged, so nothing but an SNaN can tell the two apart.  The fix is an
+integer copy, and `__builtin_memcpy` alone is NOT enough -- GCC folds a memcpy
+between two same-typed pointers straight back into an assignment.  An empty
+`__asm__("" : "+r" (tmp))` makes the value opaque and pins it in a general
+register, and generates no instruction.  `SineWave`'s constructor needed the
+same treatment: its four stores are all `mov` in the object, and the natural
+member-init list quietens all four.
+
+**The caller, which is the general trap.** With that fixed the case still
+failed, and the reason is worth stating on its own:
+
+> On i386 cdecl a `float` argument and a 4-byte integer argument occupy the
+> same stack slot, and WHICH INSTRUCTION FILLS IT IS THE CALLER'S CHOICE.
+
+In the same function, for two calls with the same argument, GCC emitted
+`flds`/`fstps 0x4(%esp)` for ours and `push -0x50(%ebp)` for the reference.
+So the two callees were handed different bits and the test reported a
+difference neither object made.  Any differential test that passes a float BY
+VALUE can do this: it can manufacture a mismatch, and it can equally well hide
+one by quietening both sides.
+
+The fix is to declare the same entry point a second time with `unsigned`
+parameters and call through that -- the ABI is identical and the stack image
+is then byte-identical for both sides.  Not a cast between function pointer
+types, which is a warning about exactly the thing that makes the test correct:
+
+```c
+int our_qwrite1_bits(void *self, unsigned b) asm("_ZN5QueueIfE5writeEf");
+int ref_qwrite1_bits(void *self, unsigned b) asm("ref__ZN5QueueIfE5writeEf");
+```
+
+Audited the rest of the tree: `ref_sinc` in `t_dspmath` is the only other
+by-value float `ref_` call, and its inputs are all ordinary finite values, for
+which an x87 round trip is exact.  Nothing else to fix.
+
+Two smaller traps found alongside, both mine:
+
+- Comparing the CONTENTS of freed memory after a destructor compares the two
+  allocators, not the two objects.  The stale pointer is worth comparing; what
+  it points at is not.
+- A mutation is only evidence if it is run.  Each of these four modules was
+  mutated back to its natural form in-tree and the tests failed: plain
+  assignment in `Queue` (52 checks), the member-init list in `SineWave` (59),
+  the phase advance moved inside the loop test (53,115 across all three
+  blocks), and a `size_`-setting constructor in `DiffCoder` (1,042).
+
+### 248. Four weak class templates, and a drift decision taken once for all of them
+
+`Queue<float>`, `SineWave<float,float>`, the four differential coders and
+`LowPassFIR<float>` are all weak symbols in `.gnu.linkonce.t.*`, invisible to
+the coverage measurement until finding 243.  This is the first batch to land
+since, which makes it the first time OUR extra weak symbols are visible too.
+
+**C2/D2 are not drift and are no longer reported as such.**  Every one of these
+classes emits four ctor/dtor symbols from a modern g++ (C1/C2, D1/D2) where the
+object has two (C1, D1).  C2 and D2 are the base-object variants; for a class
+with no virtual base they are the same code, nothing in the object has a
+virtual base, and nothing calls them.  Which of the pair a compiler emits is a
+compiler-version detail rather than a property of the source, so
+`tools/coverage.py` now treats `[CD]2E` as benign.  Listing eleven of them
+every run would bury the strays that matter.
+
+The serial coders are the opposite case and ARE reproduced: the object contains
+no `SerialDifferential*C1Ev` at all, so the classes have no user-declared
+constructor here.  A trivial class emits nothing, and an enclosing class that
+value-initialises the member gets the zeroing inlined -- which is exactly the
+`movb $0x0,0x18(%ebx)` in `V90SignBitsExtractor`'s constructor.  The absence of
+a symbol was the evidence.
+
+**Behaviours reproduced rather than tidied.**  Each is a place where the
+obvious source form is wrong, and each is now pinned by a test:
+
+- `Queue(n)` allocates n+1 slots and holds n; `last` points AT the last
+  element, not one past it.  The destructor does not null `buf`.
+- `SineWave::generate` advances the phase ONE MORE TIME than it emits samples
+  -- the advance sits between the `cmp` and the `jb` -- and wraps only at the
+  end, so a long call's accumulated angle drifts (1.86 rad over 96,000 samples
+  against 0.03 rad over 2,000 calls of 48).  `generate(out, 0)` is not a no-op:
+  it still rewrites `phase`.
+- The parallel coders' constructor does NOT call `reset`, so `size_` is 0 and a
+  freshly built coder processes nothing; `reset` fills only the new width, not
+  the capacity, and on refusal writes nothing at all.
+- The encoder's constructor has a dead `state_(0)` that the decoder's does not.
+  Unobservable, reproduced, and recorded here so it is not "fixed".
+
+**What no test here can decide.**  `SineWave`'s two template parameters: there
+is one instantiation, `<float,float>`, so which is the sample type and which
+the parameter type is unrecoverable, and the header says so.  Likewise
+`reset`'s return type (`int`/`unsigned`/`bool` compile identically) and
+`sysdep_malloc(size)` against `sysdep_malloc(size * sizeof(T))`, which only one
+instantiation can distinguish.
