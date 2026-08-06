@@ -14390,3 +14390,238 @@ reproducible without a temporary, and here it is reproducible with one.
 Neither is a test gap, and neither is licence to stop writing the object's
 order: the source keeps it in both cases, because the disassembly is what the
 reconstruction is of.
+
+### 285. `V34agc` and `fskdemodulate` do not touch the state words, so the microstate table can be reached by poking
+
+The microstate dispatch is not read at the top of `v34handshak`. The route to
+it runs `V34agc` and then `fskdemodulate` and reads +0x3592 **after** both:
+
+```
+  64a6b  call V34agc              ; on obj+0x264
+  64ab0  call fskdemodulate       ; (obj, obj+0x370, obj+0xaad0)
+  64abc  movzwl 0x3592(%eax),%esi ; only now
+  64ad2  jmp *0x3000(,%eax,4)
+```
+
+So a per-dispatch-case harness that writes +0x3592 and steps once is only
+possible if nothing on that path writes it back. Swept over the whole of
+`.text` -- every instruction with a `0x359[246](%reg)` operand, classified as
+read or write:
+
+```
+  v34handshak                      writes 140  reads 526
+  v34handshakinit                  writes  11  reads  33
+  v34setuptxmit                    writes   2  reads   6
+  v90RateRenegSilence              writes   1  reads   1
+  v90RateReneg                     writes   1  reads   1
+  v90Phase34                       writes   1  reads   1
+  V34XF_IndicateK56FlexJdReceived  writes   1  reads   1
+  k56FlexPhase34                   writes   1  reads   1
+```
+
+Eight functions in the object write any of the three, and neither `V34agc`
+nor `fskdemodulate` is one of them. A microstate written before the call is
+still there when the dispatch reads it, and the same holds for the two
+transmit tables, which are read before anything is called at all.
+
+This is the fact `docs/largefunctions.md` item 2 assumed without checking. It
+happens to be true; it did not have to be.
+
+### 286. The three jump tables, read with their relocations
+
+`tools/cfgsplit.py --func v34handshak` finds the three tables and reports what
+each case costs, but it reports the state values merged across all three
+machines, so `51` appears twice and neither entry says which machine it
+belongs to. The tables themselves settle that, and they have to be read with
+relocations attached -- each entry is an `R_386_32` against `.text` whose
+addend is the target, and the addend is in the data rather than in
+`readelf -r`'s output (finding 245's mistake one level down).
+
+```
+  table 1  .rodata+0x2da0   82 entries, index = txstate    - 5   default 0x629e0
+           20 distinct targets; 57 of the 82 are the default
+  table 2  .rodata+0x2ee8   70 entries, index = txstate    - 5   default 0x62a40
+            7 distinct targets; 53 of the 70 are the default
+  table 3  .rodata+0x3000   40 entries, index = microstate - 41  default 0x65329
+           16 distinct targets
+```
+
+Table 3 is #57 and it is the sixteen pieces. Its groups, with cfgsplit's
+exclusive byte counts:
+
+```
+  41 DET_SYNC        0x669a4  3945     50 RX_PHASE2_ANS   0x664b8  1182
+  44 DET_INFO        0x668c0  6046     51 TX_L1           0x65c47  1735
+  46 TX_PHASE1_ANS   0x65d6d  3198     55 TX_PHASE1_CALL  0x65b72  1705
+  47 TX_PHASE2_ANS   0x66834   896     58 RX_PHASE1_CALL  0x66003  1853
+     56 TX_PHASE2_CALL shares it       59 RX_PHASE2_CALL  0x662b0  2385
+  48 TX_PHASE3_ANS   0x65d30   422     62 RX_PHASE3_CALL  0x65c7a   310
+  49 RX_PHASE1_ANS   0x66a0d  1265     63 INFODONE        0x6591e  1115
+  79 MOH_TONE        0x657ca   848     80 MOH_TONE_DROP   0x656e0   669
+  42 43 45 52 53 54 57 60 61 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78
+                                       0x6590b    19 bytes, all twenty-four
+```
+
+The last line is not an error. Twenty-four of the forty microstates share one
+three-instruction arm, which is finding 288.
+
+Table 1's 20 targets are txstates 5/54/74 (0x640b4), 18, 19, 20, 21, 24, 51,
+60, 64/68, 65, 66, 67, 69, 70, 71, 78, 81/82/83/84, 85 and 86. Table 2's 7 are
+5, 18/19, 20/21/64/68, 24/51/54/60/74, 66/67/69, 70 and the default.
+
+### 287. Table 1's default arm is the loop bottom, so an unhandled txstate does not terminate
+
+The per-sample dispatch is inside a loop, and the loop's test is the same
+block the dispatch falls into when no case matches:
+
+```
+  62933  cmp  %dx,0x221c(%ebx)   ; cursor against limit (dx = [obj+0x2aa0])
+  6293e  jge  629ed              ; done: the once-per-block half
+  62957  movswl 0x3596(%esi),%eax
+  62961  cmp  $0x51,%eax
+  62964  ja   629e0              ; DEFAULT
+  62966  jmp  *0x2da0(,%eax,4)
+  ...
+  629e0  mov  0x4c(%esp),%eax    ; = obj+0x221c
+  629e4  cmp  %dx,(%eax)
+  629e7  jl   62950              ; back to the dispatch
+```
+
+`%dx` still holds the limit on the first iteration, nothing between 0x62950
+and 0x62964 clobbers it, and the default arm advances nothing. So a txstate
+with no case of its own and a cursor below the limit spins forever.
+
+Fifty-seven of table 1's eighty-two entries are that default. It is not
+reachable in a working modem -- the transmit machine only ever holds a state
+with a body while the cursor is below the limit -- but it is trivially
+reachable from a test that writes the state word, which is what the harness
+does. `v34hsstep.c` arms a `SIGALRM` around every step for exactly this, so
+the failure is a named case rather than a run that never returns.
+
+Recorded as D59.
+
+### 288. The microstate machine is thin, and most of it chains into the transmit dispatch
+
+Reading the heads of table 3's arms changes what "a microstate case" means.
+The three-instruction arm twenty-four states share is:
+
+```
+  6590b  mov    0xc0(%esp),%edi
+  65912  movzwl 0x3596(%edi),%ecx    ; txstate
+  65919  jmp    62af1                ; the once-per-block txstate dispatch
+```
+
+and so is the default arm at 0x65329. Six more -- 48, 49, 50, 51, 55, 58 --
+increment one counter at +0xaa78, compare it against one or two thresholds,
+and then jump to the same place; 46 compares txstate against 24 and does the
+same if it does not match. Measured cold, those six are indistinguishable
+from each other, and 42, 46, 63 and a state outside the window are
+indistinguishable from the default.
+
+So the microstate machine is not sixteen independent bodies over a shared
+engine. It is **a set of guards in front of the transmit machine**, and three
+of its sixteen targets carry nearly all the code: 44 `DET_INFO` at 6,046
+bytes, 41 `DET_SYNC` at 3,945 and 46 `TX_PHASE1_ANS` at 3,198 are 13.2 KB of
+the 27.6.
+
+Two consequences for #57, and both change how it should be planned:
+
+- **The txstate a microstate case is driven with is part of the fixture**,
+  not a don't-care. `t_v34hsstep.c` holds it at SSEG and says so.
+- **The per-case split is not sixteen equal pieces.** It is three large ones,
+  a dozen thin ones, and one arm shared by twenty-four states that is three
+  instructions long and could be written in an afternoon.
+
+### 289. The per-sample transmit route does not compare equal, and five explanations are ruled out
+
+The harness proves itself on table 2 and table 3. On table 1 it does not, and
+this is what was measured rather than what is suspected.
+
+Driving one sample through the per-sample loop, three of table 1's nineteen
+reachable targets leave the two sides differing. Every differing byte is in
+0x2078..0x25d1 -- `prefilter.state`, `prem_hist`, the transmit queue and the
+vector state at +0x25d0 -- and the values are frequently sign-flipped, which
+is one symbol's difference rather than noise.
+
+**Which three moves when unrelated code in the fixture changes.** Adding the
+interior-pointer checks to `v34hs_compare` -- which runs *after* the step --
+changed the failing set from {18, 19, 78} to {20, 21, 24, 60, 64, ...}. That
+is the diagnosis: the result is not a function of the object.
+
+Ruled out, each by an experiment rather than by argument:
+
+- **Our bring-up versus the blob's.** `V34HS_REFINIT=1` runs the blob's
+  `V34InitializeImplementationSpecific` and `v34handshakinit` on both sides.
+  The failures persist.
+- **Stack residue.** 64 KB of the stack below the call is scrubbed to 0x5a
+  before each side. No change. (The scrub stays in: it removes one variable
+  and costs a memset.)
+- **The shaping buffer's address.** Pointing both sides' +0x2074 at one
+  buffer. No change.
+- **A past-the-end read of a seed table.** The fixture's dummy tables were
+  64 shorts and are now 8,192. No change.
+- **A short coefficient table.** `preemp0` is 16 shorts in this tree and
+  `st_size` 32 in the blob, and the modulator's tap count at +0xc8c is 14 or
+  15, so it is not read past.
+
+What is left is that the loop reads something that is neither the object nor
+the stack below it -- an x87 register, or memory this fixture does not model.
+Finding out which is the first job of #56 and not of the harness, so the
+route is present in the API, excluded from the committed sweep, and run by
+`V34HS_TXSAMPLE=1`. Recorded as D60.
+
+The honest statement of the deliverable is therefore: **two of the three
+dispatches are proved, and the third is not.** Table 3 is the one #57 needs
+and it is the 27.6 KB.
+
+### 290. What the step harness proves, and what it cannot
+
+`test/harness/v34hsstep.c`, `test/unit/t_v34hsstep.c`, 1,493 checks.
+
+**The comparison is blob against blob and is still differential.** There is
+no reconstruction of `v34handshak` to put on side A, so both sides call
+`ref_v34handshak`. What makes that a check rather than a tautology is that
+the two objects are at different addresses and are brought up by *different
+code*: side A by this tree's `V34InitializeImplementationSpecific` and
+`v34handshakinit`, side B by the blob's. An agreeing step says the fixture is
+deterministic, address independent and fully seeded, which are the three
+things a per-case agent has to be able to assume before its own failures mean
+anything. `V34HS_OURS` moves side A onto the reconstruction in one line.
+
+**Three things the fixture had to learn.**
+
+- The three state words must be in 0..86 *before* `v34handshakinit` runs.
+  With the diagnostics on it announces each transition by printing the state
+  it is LEAVING, `StateName` is indexed unbounded (D42), and a pseudorandom
+  halfword at +0x3592 is a wild `char *` handed to `vsnprintf`. The fixture
+  faulted inside its own bring-up until it seeded them.
+- Every pointer field must be aimed before any code runs. A varied fill
+  (finding 230) puts a pseudorandom address in each, and the bring-up
+  dereferences several: a fixture that let one through faults rather than
+  fails, and a fault has no offset in it.
+- The interior pointers must be compared **by offset from their own base**.
+  Half the pointer holes hold addresses into the object -- the two
+  sample-queue cursor pairs, ten echo-canceller pointers, four shell contexts
+  and two message records -- and a skipped pointer is a hole a wrong offset
+  walks through. t_v34hshak.c checks two of them this way; all thirty-four
+  are checked here.
+
+**And one the test had to learn twice.** The signature a case is compared by
+must not contain the state word it was ENTERED with. It sits in the object,
+so including it makes every case distinct from every other by construction --
+seventeen microstate targets "separated" perfectly while six of them were
+doing the same thing. What the signature holds now is what the step wrote
+(FNV-1a over offset and byte, with pointer holes contributing only the fact
+of a change), how many diagnostic lines it printed, which of the three
+machines MOVED and where to, and the progress code at +0x04.
+
+Measured with that: **seven distinct behaviours from table 3's seventeen
+representatives, four from table 2's seven.** The gap is the useful half --
+a target that cannot be told from its neighbour cold is one whose case reads
+a companion field the fixture has not set, and `docs/v34handshak.md` lists
+which those are.
+
+**Findings 285-290 were carved out of the 279-300 block `docs/v90rest.md`
+reserves for "#59's six".** The brief for this worktree allocated them
+explicitly. Whoever writes #59's findings should start at 291, and
+`refcheck.py` will only catch the collision if it is literal.

@@ -2287,3 +2287,36 @@ input magnitude growing without bound -- not this filter.
 without it: bounded input, sixteen or fewer taps, coefficients of similar
 magnitude. A caller that violates any of those could see the difference, and
 the reconstruction is written the original's way regardless.
+
+## D59 ⚠ `v34handshak`'s per-sample dispatch does not terminate on an unhandled state
+
+`unmeasured` for reachability in a working modem.
+
+The transmit dispatch at 0x62966 is inside a loop whose test is the block its
+own default arm lands in (0x629e0), and the default advances nothing. So with
+the cursor at +0x221c below the limit at +0x2aa0 and a txstate outside the
+twenty-five the table has a body for, the function spins forever.
+
+Fifty-seven of the table's eighty-two entries are that default. Nothing in
+the object appears to put the transmit machine into one of them with the
+cursor low, so this is not believed to be reachable in service; it is
+trivially reachable from a test that writes the state word, which is why
+`test/harness/v34hsstep.c` arms a `SIGALRM` around every step. Finding 287.
+
+## D60 ⚠ The per-sample transmit loop's result is not a function of the object
+
+`unmeasured` for what it actually reads.
+
+Stepping one sample of the per-sample transmit loop from two objects holding
+identical bytes at different addresses leaves them differing in the modulator
+at +0x2078..+0x25d1, for three of the nineteen txstates that have a body --
+and WHICH three changes when code that runs after the step is edited.
+
+Ruled out by experiment: our bring-up versus the blob's, 64 KB of scrubbed
+stack, a shared shaping buffer, past-the-end reads of the fixture's seed
+tables, and a short `preemp0`. Finding 289 has the detail. Whatever is left
+is read by the object and is not in the object, so the loop's output is not
+reproducible from its input alone.
+
+This blocks differential testing of table 1, which is #56. It does not affect
+table 2 or the microstate table.
