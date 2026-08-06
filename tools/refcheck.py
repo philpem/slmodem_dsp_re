@@ -440,6 +440,32 @@ def renumber(old, new, nth=None):
     return 0
 
 
+#
+# A CONFLICT MARKER IS NOT A REFERENCE PROBLEM, AND IT BELONGS HERE ANYWAY.
+#
+# `docs/findings.md` reached `origin` with `<<<<<<< HEAD` and `>>>>>>> w1e_dil`
+# in it: a merge resolved by script, staged, and committed.  Every gate passed.
+# `make phase` compiles and runs, and neither it nor this tool reads prose, so
+# a document with markers in it is a document that builds.  The record is the
+# deliverable here, so a marker in it is as much a defect as a failing test --
+# and this is the one gate that already walks every tracked file.
+#
+CONFLICT_MARK = re.compile(r"^(?:<{7}|={7}|>{7})(?:\s|$)", re.M)
+
+
+def check_conflict_markers():
+    bad = []
+    for path in tracked():
+        if not path.endswith(SCAN_EXT):
+            continue
+        for m in CONFLICT_MARK.finditer(read(path) or ""):
+            line = (read(path) or "").count("\n", 0, m.start()) + 1
+            bad.append((path, line, m.group(0).strip()))
+    for path, line, mark in bad:
+        print("  CONFLICT  %s:%d  %s" % (path, line, mark))
+    return bad
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
     bad = []
@@ -452,8 +478,11 @@ def check_dangling():
     for path, line, kind, num in bad:
         print("  DANGLING  %s:%d  %s"
               % (path, line, num if kind == "D" else "finding " + num))
-    print("\n  %d references checked, %d resolve to nothing" % (total, len(bad)))
-    return 1 if bad else 0
+    marks = check_conflict_markers()
+    print("\n  %d references checked, %d resolve to nothing%s"
+          % (total, len(bad),
+             "" if not marks else ", %d conflict marker(s)" % len(marks)))
+    return 1 if (bad or marks) else 0
 
 
 def check_since(rev):

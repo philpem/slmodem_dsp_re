@@ -34,5 +34,11 @@
  "dilpack":        ["src/pump/v90/DILdescriptorPacker.cpp",
                                                  "build/test/t_dilpack"],
  "v90equ":         ["src/pump/v90/V90Equalizer.cpp",
-                                                 "build/test/t_v90equ"]
+                                                 "build/test/t_v90equ"],
+ "v92ec":           ["src/pump/v90/V92EchoCanceller.cpp",
+                                                 "build/test/t_v90leaves"],
+ "v90rto":          ["src/pump/v90/ResamplerTimingOffset.cpp",
+                                                 "build/test/t_v90leaves"],
+ "v90cd":           ["src/pump/v90/V90ConstellationDesigner.cpp",
+                                                 "build/test/t_v90leaves"]
 }

@@ -1,0 +1,10 @@
+[
+ {"label": "one gate around both diagnostics",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V90ConstellationDesigner: set min rate to %d\\r\\n\",\n\t\t    minRate);\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\n\t\t    \"V90ConstellationDesigner: set min rate to %d\\r\\n\",\n\t\t    minRate);\n\t}\n\tif (1)"},
+ {"label": "the two rates are swapped",
+  "find": "\tminRate = min;\n\tmaxRate = max;", "replace": "\tminRate = max;\n\tmaxRate = min;"},
+ {"label": "the second diagnostic prints minRate",
+  "find": "\t\t    \"V90ConstellationDesigner: set max rate to %d\\r\\n\",\n\t\t    maxRate);",
+  "replace": "\t\t    \"V90ConstellationDesigner: set max rate to %d\\r\\n\",\n\t\t    minRate);"}
+]
