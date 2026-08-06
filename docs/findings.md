@@ -13753,3 +13753,98 @@ the template and GCC inlines it, so `build/src/**/*.o` defines no
 `.gnu.linkonce.t.*` member is a real requirement *unless* a header in this
 tree defines the template it instantiates -- which is a question about our
 source, not about the blob, and the tool has no way to ask it.
+
+### 251. `V90AutoDigitalImpDetector` is 43,440 bytes, and it is eight tables
+
+The largest `this`-relative displacement any of the class's **thirty-two**
+members uses is +0xa9ae, a two-byte access -- `mov %ax,0xa9ae(%ebx)` in
+`resetStudyUrefHandler` and `filds 0xa9ae(%esi)` in `porcessFirstStudy`,
+whose prologues load `this` into those registers from the first stack
+argument. So the object ends at **0xa9b0 = 43,440**, which is already
+four-byte aligned. A displacement is not a size (finding 215).
+
+The bound had to be taken over all thirty-two, not over the two this batch
+writes: `reset` and `resetLinearMapping` between them reach only +0xa980 and
++0xa96c. Sizing a class from the members you happen to be writing would have
+been short by 44 bytes here, and it is the mistake finding 215 records for
+`V90Jd`, whose +0x8c displacement is a 144-byte object.
+
+Not polymorphic: `tools/cppstruct.py` lists the destructor with `D1` and `D2`
+and no `D0`, and GCC emits a deleting destructor only for a virtual one. So
+offset 0 is a real member and there is no vptr.
+
+**The object is mostly six-by-128 arrays.** Six is the number of RBS phases --
+every loop in the class runs a `short` index from 0 to 5 inclusive -- and 128
+is the seven-bit PCM code magnitude, which is why `reset` masks its `unsigned
+char` argument with 0x7f before companding it. They tile the object:
+
+```
++0x0000  short[6][128]   linMapp        cleared by resetLinearMapping
++0x0600  short[6][128]   linMappAlt     cleared by resetLinearMapping
++0x0d00  uchar[6][128]   set to 1 by reset
++0x1000  int[6][128]     cleared by reset
++0x1c00  int[6][128]     cleared by reset
++0x8b00  short[6][128]   cleared by reset
++0x9118  float[6][128]   cleared by reset
++0x9d48  float[6][128]   cleared by reset
+```
+
+plus five per-phase scalars at +0x2800, +0x280c, +0x9100, +0x9d18 and +0x9d30
+cleared alongside them. Everything between +0x2818 and +0x8b00 is 0x62e8
+bytes of `pad_` -- memory this batch did not model, not memory known to be
+unused.
+
+Only two of the thirty-two are defined. The other thirty are declared for the
+record and deliberately left undefined: defining a method whose callees are
+not written breaks the link for the whole suite, with `t_encode` as the
+symptom and nothing naming the cause (`docs/v90cpp.md`). Neither of the two
+calls an undefined one; between them they call only `alaw2linear` and
+`ulaw2linear`, which `src/service/pcm.c` already provides.
+
+### 252. `calculateDilLength` takes a non-const pointer, and that is not a slip
+
+Its mangling is `_Z18calculateDilLengthP19tagV90DILdescriptor7PcmType` -- no
+class component, so a free function, and `P` rather than `PK` where
+`V90Phase3Modulator::resetDILGenerator` says `PK19tagV90DILdescriptor` for
+the same struct. The function reads the descriptor and never writes it, so
+the missing `const` is the author's own and reproducing it is not optional: a
+`const` emits a different symbol, which links against nothing and is silently
+not the function.
+
+The return type is not mangled and had to be argued rather than read. The
+object leaves the sum in `%eax` and nothing distinguishes signed from
+unsigned -- the accumulation is `lea 0x6(%esi,%edx,2),%ecx` either way.
+`unsigned int` is chosen because every term is a non-negative product of an
+`unsigned char`: the worst case is 255 entries of `6 * 255 + 6`, which is
+391,680, so the sum can neither be negative nor overflow 32 bits.
+
+The value is the number of phase 3 symbols the DIL sequence occupies: the sum
+over `dilCount` entries of `6 * segmentSize[segment] + 6`, where `segment` is
+the G.711 segment the entry's code falls in. Zero for a null descriptor and
+for an empty one.
+
+### 253. Forty-six mutations, forty-six caught -- after the schedule was fixed
+
+`tools/mutate.py --suite v90adid` (31) and `--suite v90dil` (15), both
+registered in `test/mutations/suites.json`:
+
+```
+31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught
+15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught
+```
+
+It did not start there. The first schedule passed the differential test and
+**never paired a mu-law code >= 0x80 with the mu-law branch**, so `use the
+mu-law xor mask under A-law` and `invert the companding-law test` both
+survived: the test exercised one companding law's arithmetic and the other
+law's control flow, and never the combination where they disagree. That is
+the shape findings 223 and 224 are about, and it is invisible from a passing
+run -- only the mutation pass names it. The trial schedule now crosses both.
+
+Worth keeping in view for the classes still unwritten: a `reset` that clears
+tables is the easiest kind of function to test vacuously, because the harness
+fill already makes untouched memory compare equal on both sides. Every one of
+the 31 above names a specific store, offset or constant; `seed the pad gain
+with zero rather than one`, `clear one entry short in resetLinearMapping` and
+`leave the alternate table unseeded` are the three that a clear-loop test
+passes without.
