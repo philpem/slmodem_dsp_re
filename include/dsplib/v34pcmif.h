@@ -72,6 +72,35 @@ void VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 			    unsigned char constel_size);
 
 /*
+ * Tear the connection down and start the V.34 handshake again, having first
+ * re-read the configuration and -- if asked -- switched modulation.
+ *
+ * `requestedDp` is a datapump code and it is a BYTE: the object loads the
+ * argument slot with `movzbl`, keeps it in one and prints it as "%d".  The
+ * five values it acts on are the modulation numbers themselves --
+ *
+ *      0      keep whatever is running
+ *     34      V.34
+ *     56      K56Flex
+ *     90      V.90
+ *     92      V.92
+ *
+ * -- and anything else leaves neither PCM receiver running, which is the same
+ * state 34 ends in.  A request the configuration forbids is DEMOTED TO 0
+ * rather than refused, and 0 is not "leave everything alone" either: it winds
+ * a running V.90 receiver back to 1.  See the two switches in v34pcmmain.cpp.
+ *
+ * NOT gated on `status` the way the three requests above are: this one acts on
+ * the V.34 object whichever modem has the line, and it always ends in
+ * `v34handshakinit` mode 1.
+ *
+ * It lives in v34pcmmain.cpp rather than v34pcmif.c because four of its calls
+ * are C++ members; it is `extern "C"` on both sides, which is why it is
+ * declared here with the rest of the translation unit's exports.
+ */
+void VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
+
+/*
  * Two progress reports the handshake makes, and nothing acts on.
  *
  * Each is a debug gate and one string; neither touches the object or reads

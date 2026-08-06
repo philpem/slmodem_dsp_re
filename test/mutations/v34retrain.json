@@ -1,0 +1,386 @@
+[
+ {
+  "_": [
+   "VPcmV34InitiateRetrain.  Every entry below breaks one claim the",
+   "reconstruction makes, and the point of the set is the PRE-HANDSHAKE",
+   "stores: the function ends in `v34handshakinit(obj, 1)`, which rewrites",
+   "a large part of the object with the same code on both sides, so a store",
+   "the handshake later overwrites is invisible to the differential tier",
+   "however thorough its sweep is.  Finding 253 is that trap on a smaller",
+   "function.  An entry here surviving is therefore a result and not a",
+   "formality -- see finding 318."
+  ]
+ },
+ {
+  "label": "the argument is a signed char",
+  "find": "\tunsigned char dp = requestedDp;",
+  "replace": "\tsigned char dp = requestedDp;"
+ },
+ {
+  "label": "the retrain announcement is dropped",
+  "find": "\t\tdsplibs_debug_printf(\"VPcmV34Main: Initiating retrain, \"\n\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the V.90 arm is or-ed rather than and-ed",
+  "find": "\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {",
+  "replace": "\tif (obj->v90_receiver != 0 || *(const int *)(sess + SESS_GATE) != 0) {"
+ },
+ {
+  "label": "the K56flex arm is or-ed rather than and-ed",
+  "find": "\t} else if (obj->k56flex_receiver != 0\n\t\t   && ((const unsigned char *)obj->pac18)[K56_ENABLED] != 0) {",
+  "replace": "\t} else if (obj->k56flex_receiver != 0\n\t\t   || ((const unsigned char *)obj->pac18)[K56_ENABLED] != 0) {"
+ },
+ {
+  "label": "the K56flex gate byte is at +0xc rather than +0x8",
+  "find": "\t\t   && ((const unsigned char *)obj->pac18)[K56_ENABLED] != 0) {",
+  "replace": "\t\t   && ((const unsigned char *)obj->pac18)[0x0c] != 0) {"
+ },
+ {
+  "label": "the designer is not told",
+  "find": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\t(void)cd;"
+ },
+ {
+  "label": "the two rates reach the designer the other way round",
+  "find": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MAX_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MIN_RATE));"
+ },
+ {
+  "label": "the designer is reached at +0x20c rather than +0x208",
+  "find": "\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);",
+  "replace": "\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + 0x20c);"
+ },
+ {
+  "label": "the K56flex modem is not told",
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\t(void)cfg;",
+  "equivalent": true,
+  "why": "`K56FlexFloModem::setMinMaxRates` is ONE BYTE of code in this object -- a bare `ret` that never touches `this` (include/dsplib/K56FlexFloModem.h measures it, and the class is declared without a single defined data member for that reason). A call to it and no call at all leave identical memory and identical output, so no differential test on this side of the call can tell them apart.  What IS held fixed is that arm's selection: the mutation above that or-s the two K56flex inputs together is caught, so the arm is still shown to be entered when and only when the object enters it."
+ },
+ {
+  "label": "the rate division is signed",
+  "find": "\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);",
+  "replace": "\t\tobj->rate_min = *(const int *)(cfg + CFG_MIN_RATE) / 2400;"
+ },
+ {
+  "label": "the rate step is 2340",
+  "find": "\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);",
+  "replace": "\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / 2340u);"
+ },
+ {
+  "label": "the min clamp is >= rather than >",
+  "find": "\t\tif (obj->rate_min > RATE_INDEX_MAX)",
+  "replace": "\t\tif (obj->rate_min >= RATE_INDEX_MAX)"
+ },
+ {
+  "label": "the two clamps run in the other order",
+  "find": "\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
+  "replace": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;"
+ },
+ {
+  "label": "the max is pulled down to the min rather than up",
+  "find": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
+  "replace": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_min = obj->rate_max;"
+ },
+ {
+  "label": "the low-baud flag is not set",
+  "find": "\t\t\t*(short *)(m + OB_FORCE_LOW_BAUD) = 1;",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "the low-baud flag is set at index 2",
+  "find": "\t\telse if (obj->rate_max == 1)",
+  "replace": "\t\telse if (obj->rate_max == 2)"
+ },
+ {
+  "label": "the low-baud flag is set whatever the cap did",
+  "find": "\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)",
+  "replace": "\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\tif (obj->rate_max == 1)"
+ },
+ {
+  "label": "the threshold is not stored",
+  "find": "\t\tobj->rx_energy_floor = thresh;",
+  "replace": "\t\t(void)thresh;"
+ },
+ {
+  "label": "the out-of-range fallback is entry 0",
+  "find": "\t\t\tidx = 3u;",
+  "replace": "\t\t\tidx = 0u;"
+ },
+ {
+  "label": "the out-of-range fallback saturates at 7",
+  "find": "\t\t\tidx = 3u;",
+  "replace": "\t\t\tidx = 7u;"
+ },
+ {
+  "label": "the range test is signed, so a negative level indexes below the table",
+  "find": "\t\tif (idx > 7u)",
+  "replace": "\t\tif ((int)idx > 7)"
+ },
+ {
+  "label": "the bias is 0x2f",
+  "find": "\t\tunsigned idx = (unsigned)level + 0x30u;",
+  "replace": "\t\tunsigned idx = (unsigned)level + 0x2fu;"
+ },
+ {
+  "label": "the minLevel diagnostic is dropped",
+  "find": "\t\t\tdsplibs_debug_printf(\"VPcmV34Main: minLevel given is \"\n\t\t\t\t\t     \"%d , minSigLevel set to %d\\n\",\n\t\t\t\t\t     level, thresh);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "+0x234 is left alone",
+  "find": "\t*(int *)(m + OB_F0234) = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the filt delay offset is 0x21",
+  "find": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x21);"
+ },
+ {
+  "label": "the filt delay divides instead of shifting",
+  "find": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased / 4) + 0x22);"
+ },
+ {
+  "label": "the filt delay is not biased by 2",
+  "find": "\t\tint biased = (int)((unsigned)delay + 2u);",
+  "replace": "\t\tint biased = delay;"
+ },
+ {
+  "label": "the filtdelay diagnostic prints the arithmetic, not the field",
+  "find": "\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);",
+  "replace": "\t\t\t\t\t     (biased >> 2) + 0x22,\n\t\t\t\t\t     delay);"
+ },
+ {
+  "label": "the filtdelay diagnostic is dropped",
+  "find": "\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "the dma delay base is 0x600",
+  "find": "\t\tobj->f25c = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t\tobj->f25c = (short)(0x600u - (unsigned)ext);"
+ },
+ {
+  "label": "the dma delay is not stored",
+  "find": "\t\tobj->f25c = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t\t(void)ext;"
+ },
+ {
+  "label": "the dmadelay diagnostic prints the arithmetic, not the field",
+  "find": "\t\t\t\t\t     (int)obj->f25c, ext);",
+  "replace": "\t\t\t\t\t     0x610 - ext, ext);"
+ },
+ {
+  "label": "the echo delay is not offset by 0x68",
+  "find": "\t\t(unsigned int)(*(const int *)(cfg + CFG_EXT_DELAY) + 0x68));",
+  "replace": "\t\t(unsigned int)(*(const int *)(cfg + CFG_EXT_DELAY)));"
+ },
+ {
+  "label": "the echo canceller is not told",
+  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned int)(*(const int *)(cfg + CFG_EXT_DELAY) + 0x68));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the echo canceller is at +0x6bd4",
+  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(",
+  "replace": "\t((V92EchoCanceller *)(sess + 0x6bd4))->setEchoDelay("
+ },
+ {
+  "label": "the sensitive-ISP notice is dropped",
+  "find": "\t\tedprintf(\"VPcmV34Main: Notifying Sensitive ISP \"\n\t\t\t \"detected...\\r\\n\");",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the sensitive-ISP bit is not set",
+  "find": "\t\tcfg[CFG_ISP] = (unsigned char)(cfg[CFG_ISP]\n\t\t\t\t\t       | CFG_ISP_SENSITIVE);",
+  "replace": "\t\t(void)cfg;"
+ },
+ {
+  "label": "the sensitive-ISP bit replaces the byte rather than joining it",
+  "find": "\t\tcfg[CFG_ISP] = (unsigned char)(cfg[CFG_ISP]\n\t\t\t\t\t       | CFG_ISP_SENSITIVE);",
+  "replace": "\t\tcfg[CFG_ISP] = (unsigned char)CFG_ISP_SENSITIVE;"
+ },
+ {
+  "label": "the sensitivity word is read at +0x4fc",
+  "find": "\tif (*(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)\n\t\t\t   + PCM_SENS) != 0) {",
+  "replace": "\tif (*(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)\n\t\t\t   + 0x4fc) != 0) {"
+ },
+ {
+  "label": "is_short is left alone",
+  "find": "\tobj->is_short = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "local_short is left alone",
+  "find": "\tobj->local_short = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the session's +0x6fb4 is left alone",
+  "find": "\t*(int *)(sess + SESS_RETRAIN_FLAG) = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the validation runs whatever the V.90 receiver is doing",
+  "find": "\tif (obj->v90_receiver == 0 && dp != DP_KEEP) {",
+  "replace": "\tif (dp != DP_KEEP) {"
+ },
+ {
+  "label": "the validation runs on a zero request too",
+  "find": "\tif (obj->v90_receiver == 0 && dp != DP_KEEP) {",
+  "replace": "\tif (obj->v90_receiver == 0) {"
+ },
+ {
+  "label": "the two permission bits are swapped",
+  "find": "\t\t\tif ((cfg[CFG_FLAGS] & CFG_FLAG_FLEX) != 0)",
+  "replace": "\t\t\tif ((cfg[CFG_FLAGS] & CFG_FLAG_V90) != 0)"
+ },
+ {
+  "label": "a barred K56Flex is refused rather than demoted",
+  "find": "\t\t\t\t\t\"keeping same modulation!!!\\r\\n\");\n\t\t\tdp = DP_KEEP;\n\t\t\tbreak;\n\t\tcase DP_V90:",
+  "replace": "\t\t\t\t\t\"keeping same modulation!!!\\r\\n\");\n\t\t\tbreak;\n\t\tcase DP_V90:"
+ },
+ {
+  "label": "V.34 is validated as an unknown code",
+  "find": "\t\tcase DP_V34:\n\t\t\tbreak;\n\t\tcase DP_K56FLEX:",
+  "replace": "\t\tcase DP_K56FLEX:"
+ },
+ {
+  "label": "the keep arm tests non-zero rather than positive",
+  "find": "\t\tif (obj->v90_receiver > 0)",
+  "replace": "\t\tif (obj->v90_receiver != 0)"
+ },
+ {
+  "label": "the keep arm does nothing",
+  "find": "\t\tif (obj->v90_receiver > 0)\n\t\t\tobj->v90_receiver = 1;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "K56Flex leaves the counter at 2",
+  "find": "\t\tobj->k56flex_receiver = 1;\n\t\tobj->v90_receiver = 0;",
+  "replace": "\t\tobj->k56flex_receiver = 2;\n\t\tobj->v90_receiver = 0;"
+ },
+ {
+  "label": "K56Flex leaves the V.90 counter alone",
+  "find": "\t\tobj->k56flex_receiver = 1;\n\t\tobj->v90_receiver = 0;",
+  "replace": "\t\tobj->k56flex_receiver = 1;"
+ },
+ {
+  "label": "the V.90 arm asks for a V.92 session",
+  "find": "\t\t((VPcmFloModem *)sess)->setPcmSessionType(0);",
+  "replace": "\t\t((VPcmFloModem *)sess)->setPcmSessionType(1);"
+ },
+ {
+  "label": "the V.92 arm does not set the session type",
+  "find": "\t\t((VPcmFloModem *)sess)->setPcmSessionType(1);\n\t\tobj->v90_receiver = 1;\n\t\tbreak;",
+  "replace": "\t\tobj->v90_receiver = 1;\n\t\tbreak;"
+ },
+ {
+  "label": "+0xac00 is set for any non-zero status",
+  "find": "\t\tif (obj->status == 2)",
+  "replace": "\t\tif (obj->status != 0)"
+ },
+ {
+  "label": "+0xac00 is not set",
+  "find": "\t\tif (obj->status == 2)\n\t\t\tm[OB_FAC00] = 1;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "V.34 does not set +0xa23c",
+  "find": "\t\tobj->fa23c = 1;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "V.34 does not share the default arm's tail",
+  "find": "\t\tobj->fa23c = 1;\n\t\t/* FALLTHROUGH -- the object shares the default arm's tail. */\n\tdefault:",
+  "replace": "\t\tobj->fa23c = 1;\n\t\tbreak;\n\tdefault:"
+ },
+ {
+  "label": "the default arm leaves the K56flex counter alone",
+  "find": "\tdefault:\n\t\tobj->v90_receiver = 0;\n\t\tobj->k56flex_receiver = 0;",
+  "replace": "\tdefault:\n\t\tobj->v90_receiver = 0;"
+ },
+ {
+  "label": "the handshake is entered in mode 2",
+  "find": "\tv34handshakinit(obj, 1);",
+  "replace": "\tv34handshakinit(obj, 2);"
+ },
+ {
+  "label": "f0004 becomes 6",
+  "find": "\tobj->f0004 = 7;",
+  "replace": "\tobj->f0004 = 6;"
+ },
+ {
+  "label": "status is not cleared",
+  "find": "\tobj->status = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "+0x2218 becomes 5",
+  "find": "\t*(int *)(m + OB_F2218) = 2;",
+  "replace": "\t*(int *)(m + OB_F2218) = 5;"
+ },
+ {
+  "label": "the three receiver scalars are left alone",
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;",
+  "replace": "\t(void)rx;"
+ },
+ {
+  "label": "+0x254's scale is 335",
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t\t(short)(335 * (int)*(const short *)(m + OB_F35A4) + 10000);"
+ },
+ {
+  "label": "+0x254's offset is 10001",
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);"
+ },
+ {
+  "label": "+0x254's scale short is read unsigned",
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);"
+ },
+ {
+  "label": "+0x258 is cleared as a short rather than an int",
+  "find": "\t*(int *)(m + OB_F0254 + 4) = 0;",
+  "replace": "\t*(short *)(m + OB_F0254 + 4) = 0;"
+ },
+ {
+  "label": "+0xac24 is cleared as a short rather than an int",
+  "find": "\t\t*(int *)(st + 0x08) = 0;",
+  "replace": "\t\t*(short *)(st + 0x08) = 0;"
+ },
+ {
+  "label": "+0xac2e is cleared as well",
+  "find": "\t\t*(int *)(st + 0x1c) = 0;",
+  "replace": "\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
+ },
+ {
+  "label": "+0xac30 is left alone",
+  "find": "\t\t*(int *)(st + 0x14) = 0;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the two roles are swapped",
+  "find": "\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
+ },
+ {
+  "label": "0x39c3 goes in on the answering role only",
+  "find": "\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t\t} else if (role == 0x66) {"
+ },
+ {
+  "label": "the quadrature pair is swapped",
+  "find": "\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
+  "replace": "\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
+ },
+ {
+  "label": "the role is read unsigned",
+  "find": "\t\tshort role = obj->f359c;",
+  "replace": "\t\tint role = (unsigned short)obj->f359c;"
+ }
+]
