@@ -175,6 +175,158 @@ void boxcar(T *w, unsigned n)
 		w[i] = (T)1;
 }
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * The cosine windows.
+ *
+ * Both were decoded from their own `.gnu.linkonce.t.*` section and verified
+ * bit-exact against the blob over every n from 0 to 256 -- and out to
+ * 1,000,003 for `hamming` -- comparing the WHOLE buffer, so a version writing
+ * one element too many fails.
+ *
+ * THE TWO DENOMINATORS ARE DIFFERENT AND NEITHER IS THE TEXTBOOK ONE for the
+ * other:
+ *
+ *     hanning   over n + 1, and indexed from 1
+ *     hamming   over n - 1, and indexed from 0
+ *
+ * so `hanning` is the strict interior of an (n+2)-point Hann -- both zero
+ * endpoints excluded, which is why w[0] is never 0 -- while `hamming` is the
+ * ordinary symmetric form.  They are not two spellings of one loop and must
+ * not be merged into one.
+ */
+
+template <typename T>
+DSPMATH_STEP void hanning(T *w, unsigned n)
+{
+	if (n == 0)
+		return;
+
+	{
+		/*
+		 * `(n + 1u)` in 32 bits and THEN widened, so n == 0xffffffff
+		 * wraps to zero and divides by it, exactly as the object's
+		 * `lea 0x1(%esi)` does.  `(unsigned long long)n + 1` would
+		 * quietly not.
+		 */
+		long double inv = 1.0L / (long double)(unsigned long long)(n + 1u);
+		unsigned i;
+
+		for (i = 1; i <= n; i++) {
+			long double x = (long double)(unsigned long long)i;
+			long double c;
+
+			x = x * 6.283185307179586L;	/* .rodata.cst8+0x38 */
+			x = x * inv;
+			__asm__ ("fcos" : "=t" (c) : "0" (x));
+
+			/* .rodata.cst4+0x1dc is 0.5f, a FLOAT here. */
+			w[i - 1] = (T)((1.0L - c) * (long double)0.5f);
+		}
+	}
+}
+
+template <typename T>
+DSPMATH_STEP void hamming(T *w, unsigned n)
+{
+	if (n == 0)
+		return;
+
+	{
+		/*
+		 * n == 1 DIVIDES BY ZERO and the object really does it:
+		 * 1/(n-1) is +inf, 0 * inf is the x87 indefinite, and w[0]
+		 * comes out 0xffc00000.  Reproduced bit for bit.  A one-tap
+		 * window from this routine is garbage, and that is the
+		 * original's behaviour rather than an artefact here.
+		 */
+		long double d = 1.0L / (long double)(unsigned long long)(n - 1);
+		unsigned i;
+
+		for (i = 0; i < n; i++) {
+			long double x = (long double)(unsigned long long)i;
+			long double c;
+
+			x = x * 6.283185307179586L;	/* .rodata.cst8+0x40 */
+			x = x * d;			/* a reciprocal MULTIPLY */
+			__asm__ ("fcos" : "=t" (c) : "0" (x));
+
+			/* 0.54 and 0.46, .rodata.cst8+0x50 and +0x48. */
+			w[i] = (T)(0.54L - c * 0.46L);
+		}
+	}
+}
+
+
+template <typename T>
+DSPMATH_STEP void blackman(T *w, unsigned n)
+{
+	if (n == 0)
+		return;
+
+	{
+		/*
+		 * TWO cosine terms, at 2pi and 4pi, and the weights are not
+		 * all the same type: 0.42 and 0.08 are doubles in
+		 * .rodata.cst8 (+0x60, +0x70) and 0.5 is the object's ONLY
+		 * single-precision constant, .rodata.cst4+0x1e0, loaded with
+		 * `flds`.  Writing 0.5 rather than 0.5f changes the answer.
+		 *
+		 * n == 1 divides by zero and writes the x87 indefinite,
+		 * 0xffc00000, exactly as `hamming` does.  No guard: adding one
+		 * breaks the match.
+		 *
+		 * THE ENDPOINTS ARE NOT ZERO.  w[0] and w[n-1] come out
+		 * 0xa3800000, about -1.39e-17, because 0.42 + 0.08 is not
+		 * exactly 0.5 in binary.  An implementation that tidies them
+		 * to 0.0f fails.
+		 */
+		long double d = 1.0 / (float)(n - 1);
+		unsigned i;
+
+		for (i = 0; i < n; i++) {
+			long double x = (float)i;
+			long double a1 = x * 6.283185307179586 * d;
+			long double a2 = x * 12.566370614359172 * d;
+			long double c1, c2;
+
+			__asm__ ("fcos" : "=t" (c1) : "0" (a1));
+			__asm__ ("fcos" : "=t" (c2) : "0" (a2));
+
+			w[i] = (T)(0.42 - c1 * 0.5f + c2 * 0.08);
+		}
+	}
+}
+
+/*
+ * The selector, and its four arms are READ FROM THE SWITCH rather than
+ * assumed: case 1 is `hanning` and case 2 is `hamming`, which is the opposite
+ * way round from the alphabetical guess.
+ *
+ * The object reaches `boxcar` two ways -- case 0 tail-jumps to it and the
+ * default CALLs it and returns -- which is a layout artefact of the compiler's
+ * switch and not a behavioural difference.  One `default` covers both.
+ */
+template <typename T>
+void designWindow(WindowType type, T *w, unsigned n)
+{
+	switch (type) {
+	case WINDOW_HANNING:
+		hanning(w, n);
+		break;
+	case WINDOW_HAMMING:
+		hamming(w, n);
+		break;
+	case WINDOW_BLACKMAN:
+		blackman(w, n);
+		break;
+	default:
+		boxcar(w, n);
+		break;
+	}
+}
+
 /*
  * The original instantiates every one of these at `float` and at nothing
  * else, and emits them weak.  Naming them here is what makes the compiler
@@ -187,3 +339,7 @@ template float Var<float>(float *, unsigned);
 template float Std<float>(float *, unsigned);
 template float sinc<float>(float);
 template void boxcar<float>(float *, unsigned);
+template void hanning<float>(float *, unsigned);
+template void hamming<float>(float *, unsigned);
+template void blackman<float>(float *, unsigned);
+template void designWindow<float>(WindowType, float *, unsigned);

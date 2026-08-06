@@ -118,6 +118,10 @@ Task numbers are not safe across sessions either: two task stores exist whose
   `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,
   naming neither the directory nor the file. See the top of
   `tools/whichfield.py` for the fix.
+- **objdump swaps FDIVP/FDIVRP and FSUBP/FSUBRP.** The `DE` pop encodings
+  print as their own opposite: `de f1` reads `fdivp` and IS `FDIVRP`
+  (`ST(1) = ST(0)/ST(1)`). The `D8` register forms are fine. For any popping
+  divide or subtract, read the bytes, not the mnemonic — finding 245.
 - Use `tools/dis.py`, not raw `objdump`, for anything that might touch a
   table: objdump prints relocations on their own lines and every convenient
   way of trimming its output drops them, turning a table of pointers into a

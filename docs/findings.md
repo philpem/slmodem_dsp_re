@@ -14027,3 +14027,120 @@ instruction and two operand constraints -- and `debugaudit --invented`
 reported two of them as invented, because none reaches `.rodata`.  It was
 asking the right question of the wrong text.  Inline asm is now emptied before
 the scan, the way preprocessor lines already were, and for the same reason.
+
+### 245. objdump prints FDIVP where the encoding says FDIVRP
+
+Reading `hanning` turned up a disassembler trap that affects every x87
+reconstruction in this tree, and it is not a bug in objdump -- it is the
+documented AT&T rendering of the non-commutative x87 pop forms.
+
+Assembled from raw bytes and disassembled back:
+
+```
+    de f1    fdivp  %st,%st(1)      Intel: FDIVRP  ST(1) = ST(0)/ST(1)
+    de f9    fdivrp %st,%st(1)      Intel: FDIVP   ST(1) = ST(1)/ST(0)
+    de e1    fsubp  %st,%st(1)      Intel: FSUBRP  ST(1) = ST(0)-ST(1)
+    de e9    fsubrp %st,%st(1)      Intel: FSUBP   ST(1) = ST(1)-ST(0)
+
+    d8 f1    fdiv   %st(1),%st      correct, no swap
+    d8 f9    fdivr  %st(1),%st      correct
+    d8 e1    fsub   %st(1),%st      correct
+    d8 e9    fsubr  %st(1),%st      correct
+```
+
+**The swap is on the `DE` pop forms only.**  The `D8` register forms read as
+written.  So a divide or subtract that pops -- which is most of them, since
+that is how an x87 expression is consumed -- means the OPPOSITE of the
+mnemonic printed beside it.
+
+Found independently by two of the three window reconstructions, which is why
+it is recorded as a property of the tooling rather than as one function's
+quirk.
+
+#### It was already load-bearing, twice
+
+`mean` ends `de f9`, printed `fdivrp`, and returns `sum / n`.
+`sinc` ends `de f1`, printed `fdivp`, and returns `sin(y) / y`.
+
+Both reconstructions are right, and both were written before this was
+understood.  The operand order was worked out from what `mean` obviously had
+to compute -- a mean is a sum over a count -- and the same rule then applied
+to `sinc`.  That is the right answer from an argument that does not hold: a
+rule inferred from one example and confirmed by one passing test is not a
+rule, and it happened to survive because the two encodings are each other's
+opposite and `sinc` needed the opposite answer.  Neither finding 244 nor the
+source comments record the reasoning, so nothing had to be retracted -- but
+nothing had recorded WHY either, which is its own gap.  The encodings settle
+it.
+
+#### What to do about it
+
+Read the BYTES for any popping divide or subtract, not the mnemonic.
+`objdump -d` without `--no-show-raw-insn` prints them, which is a reason to
+leave them on when the arithmetic matters.  `tools/dis.py` suppresses nothing
+here; the raw bytes are in its output already.
+
+### 246. The three cosine windows, and three windows are not one loop
+
+`hanning`, `hamming`, `blackman` and the `designWindow` that selects between
+them, 480 bytes across four weak sections.  630,272 differential checks over
+every n from 0 to 300, the whole buffer each time so that writing one element
+too many fails rather than passes.
+
+Decoded in parallel, one function per subagent, each verifying against the
+blob in its own scratch directory before returning.  That is worth recording
+as much as the result: three independent x87 reads, and two of them found the
+`fdivp` trap of finding 245 without being told it existed.
+
+#### They are not the same loop with a different constant
+
+    hanning    denominator n + 1, indexed 1..n, written to w[i-1]
+    hamming    denominator n - 1, indexed 0..n-1
+    blackman   denominator n - 1, indexed 0..n-1, TWO cosine terms
+
+`hanning`'s `n + 1` makes it the strict interior of an (n+2)-point Hann --
+both zero endpoints excluded -- so `w[0]` is never 0.  It is neither the
+symmetric nor the periodic textbook form.  Merging the three into one
+parameterised loop would be wrong three different ways.
+
+#### `n == 1` divides by zero, and that is the original's behaviour
+
+`hamming` and `blackman` both compute `1 / (n - 1)`, which for n == 1 is
++infinity, and `0 * infinity` is the x87 indefinite.  Both write
+**0xffc00000** into `w[0]`.  There is no guard in the object and adding one
+breaks the match.  A one-tap window from either routine is garbage, and that
+is a live caller-facing fact rather than a curiosity.  The test drives n == 1
+deliberately and compares as bits, which is the only way a NaN compares equal
+to itself.
+
+#### `blackman`'s endpoints are not zero either
+
+`w[0]` and `w[n-1]` come out **0xa3800000**, about -1.39e-17, because
+`0.42 + 0.08` is not exactly `0.5` in binary.  An implementation that tidies
+the endpoints to `0.0f` fails.
+
+`blackman` also carries the object's only single-precision constant: `0.5f`
+at `.rodata.cst4+0x1e0`, loaded with `flds`, where `0.42` and `0.08` beside
+it are doubles.  Writing `0.5` instead of `0.5f` changes the answer.
+
+#### What the differential test does NOT arbitrate, said out loud
+
+`hamming`'s reconstruction was checked against its own alternatives, and four
+choices taken from the disassembly are invisible to the test: a direct divide
+instead of the reciprocal multiply, libm `cosl` instead of `fcos`, a
+`long double` 2pi literal instead of the double, and `double` instead of
+`long double` for the loop temporaries.  Every one gives zero mismatches out
+to n = 1,000,003, because rounding the result to `float` absorbs them.
+
+What the test DOES catch, measured: `float` intermediates (16,084
+mismatches), swapped 0.54/0.46 (32,768), reversed subtraction (32,895),
+a non-reciprocal denominator (32,386), an off-by-one bound (256).
+
+So the algebraic shape and the operand order are verified.  The four choices
+above are taken from the object because the object is the specification, and
+are recorded here as unverified rather than left to look verified.  Finding
+215's rule about equivalent mutants -- name what was held fixed -- applies to
+one's own implementation too.
+
+Similarly `blackman`'s 4pi constant: perturbing it by one ulp still gives
+zero mismatches, so it is confirmed by reading `.rodata` and not by the test.
