@@ -16673,3 +16673,226 @@ reads the counter, `+0x358c`, both state words and the line count back off
 the **blob's** object afterwards -- so what is asserted is the blob's
 behaviour and not our arm's.
 
+
+
+======================================================================
+
+### 371. 47 and 56 really are one arm, and 63 dispatches on the txstate it was entered with
+
+Two more of table 3's arms, and each says something the cold sweep could not.
+
+#### 47 `TX_PHASE2_ANS` at 0x66834, which 56 `TX_PHASE2_CALL` shares
+
+`.rodata+0x3000` entries 6 and 15 both hold 0x66834, read with the relocations
+attached. **The collision is asserted rather than left implied**, the way
+finding 323 asserts table 1's 24/60: `collide()` in `t_v34hst3mid.c` drives the
+blob with microstate 47 and with 56, everything else identical, on all three of
+the arm's paths, and requires the identical `changed`, `hash` and `lines` and
+the identical object with only +0x3592..+0x3593 skipped.
+
+**The transcripts are deliberately not compared, and that is the check working
+rather than a weakening of it.** `hs_setstate` prints the state being *left*,
+so the two runs necessarily print `TX_PHASE2_ANS` and `TX_PHASE2_CALL`. The
+signature is comparable as it stands because `observe` hashes (offset, NEW
+byte) over changed bytes only, and 47 -> 41 and 56 -> 41 contribute the same
+pair. That is finding 290's rule -- never put the state word you entered with
+into a signature -- paying off in the one place where a test wants two entries
+to be indistinguishable.
+
+The arm is finding 288's counter shape with a reset in front of it. The guard
+is `(obj->fsk.sr & 0xf) == 0xf` **and** `+0x3588 == 0`; the reset then writes
+twenty-six fields in a fixed order, announces the transmit machine to TX_DPSK
+and the microstate to DET_SYNC, blanks the first of the five message records at
++0xa94c, prints one line of its own, **clears the counter and falls through**
+into the counter block. Above 0x5f the counter is cleared, +0x358c is inverted
+in bit 0, and the microstate goes to TX_L1.
+
+One detail is visible only in the transcript: the counter is cleared *before*
+the transition is announced, and the counter is what every one of these format
+strings prints as `[2]`, so the object hands the printf a literal zero. A
+reconstruction that cleared it afterwards would write the identical object and
+a different line.
+
+#### 63 `INFODONE` at 0x6591e -- the txstate is the selector
+
+63 measured cold is indistinguishable from the twenty-four-state shared arm,
+and `docs/v34handshak.md` says of such a case "read the head of its arm and
+seed what it reads". What it reads is not a companion field. It is **the
+txstate**, and the arm is a switch on it:
+
+```
+  tx == 60 TONE_AB   a counter with a threshold of 0xf, and past it two
+                     endings chosen by +0x359c: the originating side goes to
+                     SILENCE and DET_SYNC and clears fsk.nbits, the answering
+                     side goes to SILENCE and reloads the counter with 0x1e
+                     or 0x96 according to the probe record
+  tx ==  5 SILENCE   two signed guards, then `v34setuptxmit` -- which the
+                     object inlines field for field and which is CALLED here
+  otherwise          leave with it, nothing written
+```
+
+That is a fourth reason a microstate case can look inert cold, alongside
+finding 288's three, and it is the one a companion-field search does not find:
+the fixture holds txstate at SSEG and this arm has nothing to say at SSEG.
+
+63's answering ending is also the first trial in this tree to reach table 2's
+SILENCE arm by its first route -- microstate still 0x3f and +0x359c 0x66 --
+which had been reachable in principle and unexercised in fact.
+
+#### The trap 63 walked into, and it is finding 277's shape
+
+63's set-up path first "passed" with three diagnostic lines. It should print
+twelve. With the fixture's pseudorandom rate fields at +0xaa84 and +0xaa94,
+`V34SetupModulator` printed **"invalid baudrate"** and returned, so the path
+that looked tested was testing an error arm. The differential comparison was
+perfectly valid throughout: both sides took the error arm and agreed.
+
+Fixed by seeding two real rates, 2400/1800 and 3200/1920 at pre-emphasis 0,
+and asserting that the transcript does **not** contain "invalid" and does
+contain the modulator's own `baudrate N, carrier M` line -- which is also what
+says the arm reads +0xaa84 as the baud and +0xaa94 as the carrier and not the
+reverse. Held fixed: two rates, both at pre-emphasis 0. The line count is not
+asserted, because it depends on the rate configuration; three named substrings
+are.
+
+**A varied fill is not a valid input.** Finding 230 says never seed with zeros
+and finding 277 says ask what set the inputs live in; this is the same lesson a
+third time, for a field whose valid set is five values out of 65,536.
+
+
+======================================================================
+
+### 372. `+0xaa7c` is `filtDelay`, and it is what group D's thresholds are measured against
+
+Arms 49 `RX_PHASE1_ANS`, 50 `RX_PHASE2_ANS` and 51 `TX_L1`. The first two are
+finding 288's group D -- six arms that bump the counter at +0xaa78 and were one
+behaviour with one signature under the fixture's fill -- and separating them
+needed a field nobody had named.
+
+**`+0xaa7c` is the filter delay**, and it is named from the object's own
+diagnostic at 0x709d7 rather than inferred:
+
+```
+  On RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d
+```
+
+Three of the four thresholds in each of 49 and 50 are that field plus a
+constant, not a constant. **A group-D arm driven without seeding it is a test
+against one arbitrary number**, which is why the whole group looked alike: the
+fill put filtDelay somewhere that sent all six the same way.
+
+**And the two windows are disjoint, structurally.** The reset guard is
+`counter < filtDelay + 0x4c` and the deep path needs `counter > filtDelay +
+0x50`, so no single step can reach both. That is not a property of the seed,
+and it forces two families of trials at two values of filtDelay rather than one
+sweep.
+
+With that seeded, `V34HS_DUMP=1` separates what the cold sweep could not: 18
+distinct (bytes written, signature) pairs for microstate 49, 14 for 50 and 15
+for 51, against one apiece before. And the mutations that matter are the five
+that exchange one arm's constants for a neighbour's -- 49's 0x28 for 50's 0x32,
+49's `sr == 0x372` for 50's `sr > 0x200`, 51's 0x2a for 48's 0x78 -- all of
+which now fail.
+
+#### One reset body, three call sites
+
+Arms 47, 49 and 50 share an identical twenty-six-store block, and it is one
+function, `t3m_errrec_reset`. **The guard, the diagnostic string and the
+counter clear stay at the call site**, and that is not tidiness: 47 clears the
+counter and 49 and 50 do not. Burying the clear in the shared body would make
+the mutation that deletes 47's clear unfalsifiable, which is finding 318's trap
+in a new place.
+
+Factoring it broke twenty-nine existing mutations, and all twenty-nine were
+repaired and relabelled rather than deleted, so they are now caught by three
+arms' tests instead of one. **A mutation suite has to be re-run after any
+rename or refactor in the code it mutates** (finding 325), and a `find` string
+that no longer matches reads as `unusable`, which looks like noise next to
+`caught` rather than like a hole.
+
+#### The six mutations that survived because a pointer is not a table
+
++0x3564, +0xaa90 and +0xaaac are three of `v34hs_compare`'s thirty-five skipped
+pointer fields. Exchanging `scale2400` for `scale2800` in arm 51, or `c1200_`
+for `c2400_` in its detector body, changed **nothing** -- side A holds our copy
+of the table and side B the blob's, and no address comparison can tell two
+copies of one table from two different tables. That is exactly finding 324's
+hole one level down: 324 closed it for *which block* a pointer selects, and
+this is *which table*.
+
+`same_table(what, off, shorts, tag)` compares what the two pointers point AT.
+It stays a comparison against the blob because the five power scales are
+pairwise distinct and so are the two carrier descriptors -- verified, not
+assumed, since a sweep over identical tables would pass either way. All six
+mutations became caught.
+
+#### What the three arms do
+
+49 and 50 are the same shape with different constants and different endings.
+Both compute `n = ++counter`, store it back before anything is tested, and
+compare it signed:
+
+```
+  49  reset if n > 0x28 and n < filt+0x4c and (sr & 0x3ff) == 0x372
+      and +0x3588 == 0                            counter NOT cleared
+      leave if n <= filt+0x50
+      then rx->flags |= 0x200 -- unconditional, before the last guard
+      leave if (fsk.sr & 1) == 0
+      the round-trip delay is the previous session's when `is_short`, and
+      ((counter - filt) * 4 - 0x18c) otherwise, both halfwords zero-extended
+      and the sum truncated on store; clamped up to 1; then ApplyBulkDelay
+      counter = filtDelay, THEN microstate -> TX_PHASE2_ANS
+
+  50  reset if n > 0x32 and n < filt+0x4c and (sr & 0x3ff) > 0x200
+      and +0x3588 == 0                            counter NOT cleared
+      leave if n <= filt+0x50; leave if (fsk.sr & 1) == 0 -- and 50 sets no
+      flag bit first, which is the difference from 49 that has no other
+      witness
+      counter = 0x14, V34SetupDemodulator(obj, 2400, 1800), rxtiminginit,
+      rxstate -> RX_L1, gain >>= 1 arithmetic, flags &= ~0x0a00
+```
+
+51 is an exact equality, `n == 0x2a`, and then `is_short` picks a whole body:
+one installs the detector for the answer side and moves the receive machine to
+DET_AB, the other builds the INFO1a record, selects a power scale from a
+five-way switch on the baud rate at +0xaa84, calls `V34SetINFO1aBits` and
+leaves with txstate 24.
+
+The two bodies announce their transitions **in opposite orders** -- the
+detector body does txstate then microstate, the info1a body microstate then
+txstate -- and only the second order is testable, because the first is a
+TX_L1 -> TX_L1 move that `hs_setstate`'s compare suppresses.
+
+51 also carries the one baud rate the object patches: 0xab7 (2743) prints
+`Illegal prev session baud (2743), select 2800 instead`, rewrites +0xaa84 to
+0xaf0, and then chooses the carrier by reading +0xaa94 **before** it writes it.
+
+
+======================================================================
+
+### 373. This batch wrote four function bodies that another batch also wrote, and three shared files
+
+Finding 325 cost 930 failing checks over one macro name defined twice with two
+values. **This batch duplicated four whole function bodies**, and it had no
+choice: a table-3 arm ends `jmp 62af1` and cannot be compared without the
+transmit dispatch and the tail it leaves through. Recorded here rather than in
+a source comment, because a comment inside `v34hshak_t3mid.c` is exactly where
+whoever holds the merge will not look.
+
+| what | who else has it | if the wrong copy wins |
+|---|---|---|
+| table 2's arms 0x64480 (txstate 5), 0x64518 (18/19) and 0x644c9 (24/51/54/60/74) | `w4_hs_t2` owns table 2 and will have all seven | **keep table 2's batch's.** Ours is verified only on the routes a table-3 arm can present: 0x64480's three routes to progress 1 all want a microstate or rxstate this route cannot reach, and only its fall-through and its first route are exercised here |
+| the tail at 0x62a40, 88 instructions | reached from BOTH tables, so `w4_hs_t2` and `w4_hs_t3core` may each have one | either, but **diff them before choosing**. Two readings differ silently rather than at the link: the `[0x238] > [0x23c]` compare is UNSIGNED, and `%cx` is a PARAMETER and not `obj->txstate` |
+| `hs_get`, `hs_put`, `hs_setstate` lost their `static` in `v34hshak.c`, declared in `v34hshak.h` | any batch whose arms print a transition | identical change, no conflict in substance; take it once |
+| `CXXOBJ64` in the `Makefile` | nobody yet | needed, and it is the tree's first `.c` -> `.cpp` reference: arm 51 calls `V34SetINFO1aBits` in `v34info1a.cpp` and the 64-bit interop link used `$(SRC)`, which is C only. The C++ half now builds to `build/64/*.o` -- objects, not sources, because `g++` would compile the `.c` half as C++ -- and is added to all six 64-bit links. Still no `-lstdc++` |
+
+**The tail is the dangerous one.** Nothing in `make phase` compares two
+batches' readings of it; a green build with the wrong copy is a silent wrong
+answer on the paths the other batch happened not to drive. Ours is exercised on
+seven of its branches, each on both sides of its condition, by
+`tail_paths()` in `t_v34hst3mid.c`.
+
+`t3m_*` and `T3M_*` prefixes are on everything file-local here, and
+`grep '^#define'` over `v34hshak_t3mid.c` and `t_v34hst3mid.c` is clean -- but
+that only protects against the collision finding 325 caught. It does nothing
+about four function bodies with different names and the same job.
