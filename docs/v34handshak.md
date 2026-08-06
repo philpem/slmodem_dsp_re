@@ -100,12 +100,26 @@ closed.
 
 ### When you land a case
 
-Define `V34HS_OURS` and side A becomes `v34handshak` instead of
-`ref_v34handshak`. Every test written against the fixture becomes an ordinary
-tier-1 differential test with no other edit anywhere. Until then the harness
-is proving *itself*, which is the point: a per-case agent needs to know the
-fixture is deterministic, address independent and fully seeded before its own
-failures mean anything.
+**`v34hs_side_a(fn)`, at run time, and NOT `V34HS_OURS`.** This section used
+to say "define `V34HS_OURS` and side A becomes `v34handshak`". That cannot be
+done: `V34HS_OURS` replaces side A in *every* binary that links this fixture,
+so it only works once the whole 61,541 bytes exist, and while the function is
+being taken an arm at a time there is no such point — four batches are in
+flight, each with a few arms under its own name. `v34hs_side_a` takes a
+function pointer, defaults to the blob, and `NULL` puts the blob back.
+
+So a per-case test drives each case **twice**, once with its own entry and
+once with `NULL`. That matters: a green ours-versus-blob run says nothing
+unless the same seed is green blob-versus-blob, because then the failure could
+be the fixture's. `t_v34hsstep.c` never calls it and goes on proving the
+fixture is deterministic, address independent and fully seeded — which is what
+a per-case agent has to be able to assume before its own failures mean
+anything.
+
+`t_v34hst3mid.c` and `src/pump/v34/v34hshak_t3mid.c` are the worked example:
+the entry is `v34handshak_t3mid`, every path not written records a code and
+returns rather than doing something plausible, and the test fails if a trial
+reached one. Findings 370-373.
 
 ### Three things the fixture already learned so you do not
 
