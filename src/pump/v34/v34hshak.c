@@ -3894,17 +3894,20 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
  * differs from the incoming bit is CRC-16-CCITT, and the arm's own diagnostic
  * is "V34INFO, info0 CRC not received properly in DET_INFO".
  *
- * WHAT IS HERE AND WHAT HALTS.  The bit clock and all five of its exits, the
- * RESTART a failed CRC takes at 0x6bda0, and the DEFAULT arm of the accept
- * path at 0x6e552.  The accept path dispatches on the record's +0x18 -- the
- * message length in bits, still in `%dx` from 0x66944 and never reloaded --
- * and three of its four arms are still `t3c_unwritten`:
+ * WHAT IS HERE.  All of it: the bit clock and its five exits, the RESTART a
+ * failed CRC takes at 0x6bda0, and all four arms of the accept path, which
+ * dispatches on the record's +0x18 -- the message length in bits, still in
+ * `%dx` from 0x66944 and never reloaded.
  *
- *     0x4d (77 bits)  0x6f438        0x26 (38)  0x6ed17
- *     0x08 ( 8 bits)  0x6ea38        else       0x6e552   <- written
+ *     0x4d (77 bits)  0x6f438  INFO1c        0x26 (38)  0x6ed17  INFO1a
+ *     0x08 ( 8 bits)  0x6ea38  MOH           else       0x6e552  the default
  *
- * so whoever takes the rest starts from those three and not from the whole
- * arm.
+ * THE THREE SIZED ARMS ARE THREE DIFFERENT MESSAGES, not three shapes of one:
+ * eight bits is a Modem-on-Hold byte, 0x26 is the answering modem's INFO1a
+ * and 0x4d is the caller's INFO1c.  Only the default arm copies the received
+ * bytes into +0xabae -- the sized arms reach the dispatch before that code --
+ * so the unbounded copy at 0x6e5c8 is the default's alone and no message
+ * length of 0x4d can drive it.
  */
 
 /*
@@ -3925,6 +3928,26 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 #define T44_F358A	0x358a	/* short: set to 1 by the restart          */
 #define T44_FABAE	0xabae	/* ten shorts the restart clears           */
 #define T44_FABC2	0xabc2	/* short: cleared with them, separately    */
+
+/*
+ * And what the three SIZED arms of the accept path reach.  A message of
+ * eight bits is Modem-on-Hold, one of 0x26 is INFO1a and one of 0x4d is
+ * INFO1c -- three different messages through one bit clock, so each arm ends
+ * somewhere else.
+ */
+#define T44_F356A	0x356a	/* short: the 8-bit arm sets it to 1       */
+#define T44_F358C	0x358c	/* short: the 0x4d arm clears it          */
+#define T44_F35A2	0x35a2	/* short: the message-descriptor length    */
+#define T44_PROBE	0xa320	/* the probe bins V34GiveProbeResults takes*/
+#define T44_REC_A9AC	0xa9ac	/* the INFO1a record the 0x4d arm installs */
+#define T44_REC_A9DC	0xa9dc	/* the INFO1a/1c record that arrived       */
+#define T44_TXBAUD	0xaa84	/* short: what probeselect chose to send   */
+#define T44_RXBAUD	0xaa96	/* short: and to receive                   */
+#define T44_CARRIER	0xaaa8	/* short: the receive carrier, in Hz       */
+#define T44_RXCARRDESC	0xaab0	/* the detector coefficients for it        */
+#define T44_FAA80	0xaa80	/* short: the 0x26 arm sets it to 1        */
+#define T44_FABF0	0xabf0	/* int:   1 sends the 8-bit arm to the tone*/
+#define T44_FABF8	0xabf8	/* byte:  raised by the 8-bit arm's other  */
 
 /*
  * The record reached through +0xaa70, and the one the restart installs at
@@ -4074,19 +4097,395 @@ t44_det_info_restart(struct v34_object *obj)
 }
 
 /*
+ * The ten byte slots of a record, printed.
+ *
+ * Three sites emit this and the default arm at 0x6e552 is a fourth; they
+ * differ only in the tag and in which record they read, and each pushes ten
+ * ZERO-EXTENDED halfwords, which is what `%x` prints and what a `movswl`
+ * would not.  The default arm's copy is left inline where it is: it belongs
+ * to another batch's commit and moving it would put that batch's mutation
+ * anchors on code no test of theirs drives.
+ */
+static void
+t44_print10(const char *tag, const short *rec)
+{
+	dsplibs_debug_printf("%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
+			     "0x%x,0x%x\n", tag,
+			     (unsigned)(unsigned short)rec[0],
+			     (unsigned)(unsigned short)rec[1],
+			     (unsigned)(unsigned short)rec[2],
+			     (unsigned)(unsigned short)rec[3],
+			     (unsigned)(unsigned short)rec[4],
+			     (unsigned)(unsigned short)rec[5],
+			     (unsigned)(unsigned short)rec[6],
+			     (unsigned)(unsigned short)rec[7],
+			     (unsigned)(unsigned short)rec[8],
+			     (unsigned)(unsigned short)rec[9]);
+}
+
+/*
+ * The message-descriptor length carried in the first two halfwords of the
+ * record at +0xa9dc, which the 0x26 arm and the 0x4d arm decode identically.
+ *
+ * Seven bits assembled from two halfwords -- the low two bits of the first
+ * shifted up five, the top five bits of the second shifted down three -- and
+ * then put through `bitreverse` over seven bits.  +0x35a2 is written TWICE,
+ * once before the reversal and once after, and the first store is what a
+ * reader who thought the reversal happened in place would drop.
+ */
+static short
+t44_mdlength(struct v34_object *obj)
+{
+	short raw;
+	int rev;
+
+	raw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)
+		      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf8) >> 3));
+	hs_put(obj, T44_F35A2, raw);
+
+	rev = bitreverse((unsigned short)raw, 7);
+	hs_put(obj, T44_F35A2, (short)rev);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("RX MDLENGTH = %d\n", (int)(short)rev);
+
+	return (short)rev;
+}
+
+/*
+ * A MESSAGE OF EIGHT BITS -- 0x6ea38, Modem-on-Hold.
+ *
+ * Eight bits is one byte of MOH message, and the arm hands the record
+ * straight to `VPcmV34InterpretMohMessageBits` and then asks +0xabf0 what
+ * that made of it.  Its two exits are not variations of each other: one goes
+ * back to hunting for the synchronisation pattern and the other arms the tone
+ * detector and moves to MOH_TONE_DROP.  Both rejoin the byte clock.
+ *
+ * `count2` is the STEPPED counter, still in `%ebx` from 0x6693a and not the
+ * value the tail will re-read.  This arm never touches +0xaa78, so here the
+ * two agree -- which is the exception finding 406 names rather than a
+ * contradiction of it.
+ */
+static int
+t44_accept_len08(struct v34_object *obj, short *rec, short count2)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Received MOH message ! (count2=%d, "
+				     "data0=%X, data1=%X)\r\n", (int)count2,
+				     (unsigned)(unsigned short)rec[0],
+				     (unsigned)(unsigned short)rec[1]);
+
+	VPcmV34InterpretMohMessageBits(obj, rec);
+
+	if (t3c_geti(obj, T44_FABF0) != 1) {
+		/*
+		 * 0x6ea8d.  The record is RE-READ from +0xaa70 at 0x6ebc7:
+		 * the decoder above is a call, so nothing may be assumed to
+		 * have survived it, and the object says so by reloading.
+		 */
+		t3c_putb(obj, T44_FABF8, 1);
+		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+		t44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);
+		obj->fsk.sr = -1;
+		return 0;				/* 0x6ebda */
+	}
+
+	/*
+	 * 0x6ebdf.  The tone detector at +0x3564, aimed with 2400 Hz's
+	 * coefficients when this end originated the call and 1200 Hz's when
+	 * it answered -- the same pairing `v34handshakinit` uses, and the
+	 * opposite way round from what "the tone I am listening for" would
+	 * suggest, because it is the OTHER end's carrier.  Polarity 1, so the
+	 * high threshold is the one that is read.
+	 */
+	detectorinit(T3C_DET(obj), obj->f359c == 0x65 ? c2400_ : c1200_,
+		     1, 0x64, 0x32, 0x800, 0x400);
+	hs_put(obj, T44_F356A, 1);			/* 0x6ec4a */
+	hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);
+	return 0;					/* 0x6ecd5 */
+}
+
+/*
+ * The receiver's four rate constants, chosen by the baud rate `probeselect`
+ * settled on: 0x6efc5's compare chain, which is GCC's binary search over six
+ * values and not a range test.
+ *
+ * A baud rate that is none of the six leaves all four fields alone, which is
+ * a real exit and not an oversight -- the carrier table below is reached
+ * either way.
+ */
+static void
+t44_setup_rate(struct v34_receiver *rx, short baud)
+{
+	switch (baud) {
+	case 0x960:					/* 2400, 0x6f31b */
+		rx->f1b0 = 0x3e80;
+		rx->f1ae = 0x3e80;
+		rx->f1be = 0x3e80;
+		rx->f1ac = 0x1f40;
+		break;
+	case 0xab7:					/* 2743, 0x6f2e2 */
+		rx->f1b0 = 0x3e80;
+		rx->f1ae = 0x36b0;
+		rx->f1be = 0x36b0;
+		rx->f1ac = 0x1f40;
+		break;
+	case 0xaf0:					/* 2800, 0x6f3a7 */
+		rx->f1b0 = 0x3e82;
+		rx->f1ae = 0x3594;
+		rx->f1be = 0x3594;
+		rx->f1ac = 0x1f41;
+		break;
+	case 0xbb8:					/* 3000, 0x6f36e */
+		rx->f1b0 = 0x3e80;
+		rx->f1ae = 0x3200;
+		rx->f1be = 0x3200;
+		rx->f1ac = 0x1f40;
+		break;
+	case 0xc80:					/* 3200, 0x6f412 */
+		rx->f1b0 = 0x3e80;
+		rx->f1ae = 0x2ee0;
+		rx->f1be = 0x2ee0;
+		rx->f1ac = 0x1f40;
+		break;
+	case 0xd65:					/* 3429, 0x6f3ec */
+		rx->f1b0 = 0x3e80;
+		rx->f1ae = 0x2bc0;
+		rx->f1be = 0x2bc0;
+		rx->f1ac = 0x1f40;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * And the half-sine window for the receive carrier: 0x6eff6's chain over
+ * eight carriers.
+ *
+ * EACH COUNT IS HALF ITS TABLE'S LENGTH -- 6 of `hsine1600[12]`, 40 of
+ * `hsine1680[80]`, 16 of `hsine1800[32]`, 21 of `hsine1829[42]`, 36 of
+ * `hsine1867[72]`, 5 of `hsine1920[10]`, 49 of `hsine1959[98]` and 24 of
+ * `hsine2000[48]`.  That is eight independent agreements between a constant
+ * in this arm and an array length `include/dsplib/v34filt.h` already had.
+ *
+ * A carrier that is none of the eight leaves the pointer and the count alone.
+ */
+static void
+t44_setup_carrier(struct v34_receiver *rx, short carrier)
+{
+	switch (carrier) {
+	case 0x640:					/* 1600, 0x6f022 */
+		rx->carrier = (short *)(unsigned long)hsine1600;
+		rx->f1ba = 6;
+		break;
+	case 0x690:					/* 1680, 0x6f202 */
+		rx->carrier = (short *)(unsigned long)hsine1680;
+		rx->f1ba = 0x28;
+		break;
+	case 0x708:					/* 1800, 0x6f1e2 */
+		rx->carrier = (short *)(unsigned long)hsine1800;
+		rx->f1ba = 0x10;
+		break;
+	case 0x725:					/* 1829, 0x6f25c */
+		rx->carrier = (short *)(unsigned long)hsine1829;
+		rx->f1ba = 0x15;
+		break;
+	case 0x74b:					/* 1867, 0x6f23c */
+		rx->carrier = (short *)(unsigned long)hsine1867;
+		rx->f1ba = 0x24;
+		break;
+	case 0x780:					/* 1920, 0x6f2b0 */
+		rx->carrier = (short *)(unsigned long)hsine1920;
+		rx->f1ba = 5;
+		break;
+	case 0x7a7:					/* 1959, 0x6f2c9 */
+		rx->carrier = (short *)(unsigned long)hsine1959;
+		rx->f1ba = 0x31;
+		break;
+	case 0x7d0:					/* 2000, 0x6f290 */
+		rx->carrier = (short *)(unsigned long)hsine2000;
+		rx->f1ba = 0x18;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * A MESSAGE OF 0x26 BITS -- 0x6ed17, INFO1a.
+ *
+ * The answering modem's INFO1a has arrived.  `V34GiveINFO1aBits` decodes it
+ * and its answer decides everything: NON-ZERO and the exchange is over for
+ * this phase -- WAIT and INFODONE and nothing else -- ZERO and the whole
+ * receiver is configured from what the message said and from the probe
+ * results that came with it.
+ *
+ * THE TEST IS SIXTEEN BITS WIDE.  0x6ed50 is `test %ax,%ax`, so a return
+ * value whose low halfword is zero takes the long branch whatever the high
+ * half holds.
+ */
+static int
+t44_accept_len26(struct v34_object *obj, short *rec)
+{
+	struct v34_receiver *rx = T3C_RX(obj);
+	short baud, carrier;
+
+	V34GiveProbeResults(obj, (const char *)obj + T44_PROBE);
+
+	if ((short)V34GiveINFO1aBits(obj, rec) != 0) {
+		/* 0x6ed59 */
+		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
+		return 0;				/* 0x6ee72 */
+	}
+
+	/* 0x6ee77 */
+	(void)t44_mdlength(obj);
+	setfinalrate(obj);
+	hs_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);
+	rxinit(obj);
+
+	baud = hs_get(obj, T44_RXBAUD);
+	carrier = hs_get(obj, T44_CARRIER);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34SetupDemodulator: baudrate %ld, "
+				     "carrier %ld\n", (long)baud, (long)carrier);
+
+	rx->f128 = 4;
+	t44_setup_rate(rx, baud);
+	t44_setup_carrier(rx, carrier);
+
+	/* 0x6f03d.  The gain is read BEFORE the step is stored beside it. */
+	rx->agc_gain = rx->f262;
+	rx->agc_step = 0x2000;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34AGC, setup receiver gain = 0x%x\n",
+				     (unsigned)(int)rx->agc_gain);
+
+	/*
+	 * TWO SET-UPS OVER ONE DETECTOR, and the second wins: same
+	 * coefficients, same polarity, same thresholds, and a warm-up of 0x78
+	 * where the first asked for 10.  Both are here because both are in
+	 * the object and nothing between them reads +0x3564.
+	 *
+	 * The flag word is cleared of its top nibble first and then has
+	 * DET_PENDING raised twice, once after each call.  The second raise
+	 * is on a value that already has the bit, so it changes nothing --
+	 * recorded as an equivalence rather than dropped as a duplicate.
+	 */
+	rx->flags = (unsigned short)(rx->flags & ~0x0f00u);
+	detectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),
+		     0, 8, 10, 0x600, 0);
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
+	detectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),
+		     0, 8, 0x78, 0x600, 0);
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
+
+	hs_put(obj, T44_COUNT, 0);			/* 0x6f146 */
+	hs_put(obj, T44_FAA80, 1);			/* 0x6f15c */
+
+	if (DSPLIB_DEBUG_ON())
+		t44_print10("V34PROBE, rxinfo1a",
+			    (const short *)((const char *)obj + T44_REC_A9DC));
+	return 0;					/* 0x6f1d1 */
+}
+
+/*
+ * A MESSAGE OF 0x4d BITS -- 0x6f438, INFO1c.
+ *
+ * The caller's INFO1c has arrived, carrying the probe results this end asked
+ * for; the answer to it is an INFO1a, which this arm builds in the record at
+ * +0xa9ac and hands to the bit clock by installing it at +0xaa6c.
+ *
+ * THE COUNTER AND ITS COMPANION ARE ZEROED BEFORE ANYTHING ELSE, at 0x6f443
+ * and 0x6f44a -- so the byte clock this returns into runs on a count of zero
+ * and stores nothing, which is finding 406's shape again and the reason the
+ * two stores are the first thing in the arm rather than the last.
+ */
+static int
+t44_accept_len4d(struct v34_object *obj)
+{
+	short *blk;
+
+	hs_put(obj, HS_TRACE_1, 0);			/* 0x6f443 */
+	hs_put(obj, T44_COUNT, 0);			/* 0x6f44a */
+	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
+
+	(void)t44_mdlength(obj);
+	probeselect(obj);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PROBESELECT, in ANSWER, txbaudrate = "
+				     "%d,rxbaudrate = %d,\n",
+				     (int)hs_get(obj, T44_TXBAUD),
+				     (int)hs_get(obj, T44_RXBAUD));
+	if (DSPLIB_DEBUG_ON())
+		t44_print10("V34PROBE, rxinfo1c",
+			    (const short *)((const char *)obj + T44_REC_A9DC));
+
+	/*
+	 * 0x6f60e installs the record BEFORE the decoder runs, and 0x6f651
+	 * reads it back afterwards rather than reusing the pointer it just
+	 * wrote -- the decoder is a call, so the object reloads.
+	 */
+	t3c_putp(obj, T44_PTR_AA6C, (char *)obj + T44_REC_A9AC);
+	if (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)
+		return 0;				/* 0x6f622 */
+
+	V34GiveProbeResults(obj, (const char *)obj + T44_PROBE);
+	V34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C));
+
+	/*
+	 * The INFO1a this end will send: 0x26 bits, which is the length the
+	 * 0x26 arm above answers to -- the two arms are the two ends of one
+	 * exchange, and that is what makes the constant checkable twice.
+	 *
+	 * 0xff72 and not the restart's 0xf72 (finding 401): the same twelve
+	 * bits of preamble with a thirteenth set above them, written as a
+	 * full int at +0x24 and at +0x2c.
+	 */
+	blk = t44_record(obj, T44_PTR_AA6C);
+	t44_recput(blk, T44_R_CRC, -1);
+	t44_recput(blk, T44_R_F1A, 0);
+	t44_recput(blk, T44_R_F1E, 0);
+	t44_recput(blk, T44_R_F22, 0);
+	t44_recput(blk, T44_R_NBITS, 0x26);
+	t44_recput(blk, T44_R_F1C, 8);
+	t44_recput(blk, T44_R_F16, 1);
+	t44_recput(blk, T44_R_F28, 0x10);
+	t44_recput(blk, T44_R_F2A, 0x10);
+	t44_recput(blk, T44_R_F20, 0);
+	t44_recputi(blk, T44_R_F24, 0xff72);
+	t44_recputi(blk, T44_R_F2C, 0xff72);
+
+	hs_put(obj, T44_F358C, 0);			/* 0x6f6ba */
+	hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
+
+	if (DSPLIB_DEBUG_ON())
+		t44_print10("V34PROBE, txinfo1a",
+			    (const short *)((const char *)obj + T44_REC_A9AC));
+	return 0;					/* 0x6f1d1 */
+}
+
+/*
  * The message is complete and its CRC checks out: 0x6e534.
  *
  * The dispatch is on the message length still in `%dx` from 0x66944 -- three
- * lengths have bodies of their own and this writes only the fourth arm, the
- * DEFAULT at 0x6e552.  Returns non-zero when it has already left through the
- * transmit dispatch, and zero when the caller is to rejoin the bit clock at
- * 0x66956, which two of its three exits do.
+ * lengths have bodies of their own, above, and the rest of this is the fourth
+ * arm, the DEFAULT at 0x6e552.  Returns non-zero when it has already left
+ * through the transmit dispatch, and zero when the caller is to rejoin the
+ * bit clock at 0x66956, which two of the default's three exits do and which
+ * every exit of all three sized arms does.
  *
  * `rec` is the record at +0xaa70, still in `%ecx` from 0x668e1 and not
- * reloaded anywhere on this path.
+ * reloaded anywhere on this path.  `count2` is the STEPPED counter, still in
+ * `%ebx` from 0x6693a -- the 8-bit arm's diagnostic prints it and nothing
+ * else in the accept path reads it.
  */
 static int
-t44_det_info_accept(struct v34_object *obj, short *rec)
+t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 {
 	struct v34_receiver *rx = T3C_RX(obj);
 	short len = t44_recget(rec, T44_R_NBITS);
@@ -4094,12 +4493,18 @@ t44_det_info_accept(struct v34_object *obj, short *rec)
 	int nbytes;
 	int i;
 
+	/*
+	 * THE ORDER IS THE OBJECT'S: 0x4d, then 0x26, then 0x08, and the
+	 * default is what falls out of all three.  The three constants are
+	 * pinned from both sides -- a case at each length drives its body and
+	 * a case one away drives the default.
+	 */
 	if (len == 0x4d)
-		t3c_unwritten();			/* 0x6f438 */
+		return t44_accept_len4d(obj);		/* 0x6f438 */
 	if (len == 0x26)
-		t3c_unwritten();			/* 0x6ed17 */
+		return t44_accept_len26(obj, rec);	/* 0x6ed17 */
 	if (len == 0x08)
-		t3c_unwritten();			/* 0x6ea38 */
+		return t44_accept_len08(obj, rec, count2);	/* 0x6ea38 */
 
 	if (hs_get(obj, T44_F358A) == 1) {
 		short *blk = t44_record(obj, T44_PTR_AA6C);
@@ -4254,7 +4659,7 @@ t44_micro_det_info(struct v34_object *obj)
 	if ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10) {
 		if ((unsigned short)obj->fsk.sr
 		    == (unsigned short)t44_recget(rec, T44_R_CRC)) {
-			if (t44_det_info_accept(obj, rec) != 0)
+			if (t44_det_info_accept(obj, rec, next) != 0)
 				return;			/* 0x6e740 */
 		} else {
 			t44_det_info_restart(obj);	/* 0x6bdb1 */
