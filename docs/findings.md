@@ -16900,3 +16900,88 @@ seven of its branches, each on both sides of its condition, by
 `grep '^#define'` over `v34hshak_t3mid.c` and `t_v34hst3mid.c` is clean -- but
 that only protects against the collision finding 325 caught. It does nothing
 about four function bodies with different names and the same job.
+
+
+======================================================================
+
+### 374. Of sixteen mutations that cannot fail here, thirteen are equivalences and three are gaps
+
+`tools/mutate.py --suite v34hst3mid`, after arms 47/56, 48, 49, 50, 51 and 63:
+**293 mutations, 273 caught, 0 uncaught, 16 measured equivalent, 0 unusable.**
+Zero uncaught is not the interesting number. The sixteen are, and the point of
+writing them here rather than leaving them in the suite's `why` fields is
+findings 256, 260 and 318's: the JSON is not where anyone reads them, and
+"equivalent" asserted without what was held fixed is indistinguishable from
+"untested".
+
+#### Three are gaps and should be called gaps
+
+- **`50 sets +0x200 in the receiver's flags the way 49 does`.** 49's deep path
+  sets bit 9 of the receiver's flags unconditionally and never clears it, so
+  its presence is visible. 50's deep path ends `flags &= ~0x0a00`,
+  unconditionally and after everything else, so a set of the same bit anywhere
+  earlier on that path is erased before the step returns. **The ABSENCE of the
+  set in 50 cannot be tested**, only its presence in 49 can. Closing it needs
+  a path through 50 that does not reach the clear, and there is not one.
+
+- **`50 runs rxtiminginit before the demodulator setup`** and **`50 halves the
+  gain before running rxtiminginit`.** Both are orderings nothing observes:
+  the field sets are disjoint -- `V34SetupDemodulator` writes `f128`, `f1ac`,
+  `f1ae`, `f1b0`, `f1ba`, `f1be` and the carrier, `rxtiminginit` writes `f124`,
+  `f1b8`, `f1bc..f1f0`, `rx_samples`, `f208`, `f20a`, `dp.point`, `f22e`,
+  `f230`, `f244` and `f246` -- and only one of the two prints. **The order in
+  the object is recorded, not proved.** This is finding 269's shape without
+  finding 269's escape: there the print's *value* was pinned by a paired
+  mutation that IS caught, and once pinned the order carried no information.
+  Here nothing pins anything, and the source keeps the object's order because
+  the disassembly is what the reconstruction is of.
+
+#### Thirteen are equivalences, and the biggest is one claim five times
+
+Five of the sixteen are the same statement: **the value an arm hands the
+transmit dispatch equals `obj->txstate` at that moment, on every path of every
+arm written here**, so modelling the tail's `%cx` as the field rather than as
+the parameter cannot change a byte.
+
+That was gone looking for and not assumed. Arm 63 has two exits that load a
+literal 5 into `%ecx` -- 0x6d225 and 0x6dfbd -- which is exactly the shape that
+would separate them; both have a store of 5 into +0x3596 four instructions
+earlier. Enumerated over all eleven exits of arms 47/56, 48 and 63, plus all
+seven arms of table 2 and the tail's eighty-eight instructions, **none of
+which writes any of +0x3592, +0x3594 or +0x3596**.
+
+**And the claim expires loudly.** `mutate.py` reports a mutation marked
+equivalent that IS caught as MIScounted, so the day an arm lands that passes a
+value the object does not hold, the suite says so rather than quietly
+tightening. The source keeps `%cx` as a parameter regardless, because that is
+what the object does.
+
+The other eight, each with what is held fixed:
+
+| mutation | held fixed |
+|---|---|
+| `48 increments the counter as a signed halfword` | both thresholds are positive constants below 0x8000 and the store keeps sixteen bits, so the two readings agree on every comparison the arm makes. The signedness that IS load-bearing is 47's and 63's `<=`, and those are caught |
+| `49 re-reads the counter as unsigned` | every trial's counter is below 0x8000 there; the signedness is pinned instead by the first threshold's 0x7fff and 0xffff trials |
+| `49's computed delay is not truncated to a halfword` | the store is to a `short` either way. It is in the suite to say which part of the derivation is *not* load-bearing |
+| `the entry reads the microstate before the demodulator runs` | finding 285's sweep of the whole of `.text`: neither `V34agc` nor `fskdemodulate` writes a state word, which is the property that makes this harness possible at all. It becomes catchable the day that stops being true |
+| `the shared reset clears eleven shorts in the loop` | +0xabc2 is what the statement after the loop clears anyway. The nine-iteration variant IS caught, which is what says the bound is tested |
+| `51 reaches the record directly rather than through +0xaa6c` | `V34SetINFO1aBits` does not write +0xaa6c, so the re-read returns the address stored three lines above |
+| `51's detector body announces the microstate first` | that move is TX_L1 to TX_L1 and `hs_setstate` compares before it prints or stores. The order that IS testable is the info1a body's, where both moves are real, and that mutation is caught |
+| `51's gain shifts are logical` | both bands are signed compares against positive constants, so only 0x1001..0x7fff reaches either shift. 50's halving has no band in front of it and IS separated, by a trial at 0xdcba |
+
+#### Six that only became catchable after something was seeded
+
+Worth listing because each names a way this batch could have been vacuous:
+
+```
+  filtDelay at +0xaa7c            three of four thresholds in 49 and 50
+  the thirteen reset words        several are left zero by v34handshakinit,
+                                  and clearing a zero is unfalsifiable
+  fsk.sr = 0x5aa7                 separates `& 0xf` from `& 7`
+  the probe record as an int      separates an int compare from a halfword one
+  a receive queue with content    without it fskdemodulate's input pointer is
+                                  four zeroes either way, and the whole
+                                  prologue was testing the CALL and not the
+                                  demodulator
+  two real baud rates             or V34SetupModulator takes its error arm
+```
