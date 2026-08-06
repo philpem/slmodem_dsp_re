@@ -1,0 +1,131 @@
+[
+ {
+  "label": "the idle generator follows f25c2 bit 0 (dibit arm)",
+  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];",
+  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];"
+ },
+ {
+  "label": "the idle generator follows f25c2 bit 0 (quadbit arm)",
+  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler",
+  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler"
+ },
+ {
+  "label": "the idle symbol encodes differentially against f25c6",
+  "find": "\t\t\t*(int *)&o->f25d0 = vect4[q];",
+  "replace": "\t\t\t*(int *)&o->f25d0 =\n\t\t\t\tvect4[(q + (unsigned short)o->f25c6) & 3];"
+ },
+ {
+  "label": "the idle symbol writes the quadrant back to f25c6",
+  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];",
+  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];"
+ },
+ {
+  "label": "the quadbit index is q + d * 4 rather than d + q * 4",
+  "find": "vect16[d + q * 4]",
+  "replace": "vect16[q + d * 4]"
+ },
+ {
+  "label": "the data flag test is inverted",
+  "find": "\tif (!(rx->flags & V34_RX_FLAG_DATA)) {",
+  "replace": "\tif ((rx->flags & V34_RX_FLAG_DATA)) {"
+ },
+ {
+  "label": "case 3 shifts by the index rather than by twice it",
+  "find": "\t\ttxmitdibit(o, (short)(w >> ((2 * idx) & 31)));",
+  "replace": "\t\ttxmitdibit(o, (short)(w >> (idx & 31)));"
+ },
+ {
+  "label": "case 3 wraps at sixteen dibits rather than eight",
+  "find": "\t\tnidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;",
+  "replace": "\t\tnidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 15;"
+ },
+ {
+  "label": "case 3 advances to state 5 rather than state 4",
+  "find": "\t\to->k56flex_receiver = 4;",
+  "replace": "\t\to->k56flex_receiver = 5;"
+ },
+ {
+  "label": "case 3's wrap leaves f25c6 alone",
+  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "the word at +0x25d6 is read signed",
+  "find": "\t\tunsigned short w = (unsigned short)*(short *)(m + OB_TXBITS);",
+  "replace": "\t\tint w = *(short *)(m + OB_TXBITS);"
+ },
+ {
+  "label": "case 4 does not bump f25c0",
+  "find": "\t\to->f25c0 = (short)((unsigned)(unsigned short)o->f25c0 + 1);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "case 5 picks the emitter the other way round",
+  "find": "\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);",
+  "replace": "\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitquadbit(o, o->f25c8);"
+ },
+ {
+  "label": "the Ja dibit comes from f25c6 rather than f25c8",
+  "find": "\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)",
+  "replace": "\t\ttxmitdibit(o, o->f25c6);\n\t\tif (done == 0)"
+ },
+ {
+  "label": "case 4's constellation test is inverted",
+  "find": "\t\tif (o->f382 == OB_CONSTEL_16) {\n\t\t\tint d;",
+  "replace": "\t\tif (o->f382 != OB_CONSTEL_16) {\n\t\t\tint d;"
+ },
+ {
+  "label": "the shift count is not masked to five bits",
+  "find": "(short)(w >> ((2 * idx) & 31))",
+  "replace": "(short)(w >> (2 * idx))",
+  "equivalent": true,
+  "why": "ia32's SAR masks its count operand to five bits, and GCC lowers a non-constant `>>` to exactly that instruction -- measured, not argued: compiling both forms and diffing the text shows the masked one costs one extra `and $0x1e,%ecx` and changes nothing else.  What is held fixed is the target and the lowering, over the WHOLE range of vect_idx and not a sample; the object itself has no `and`, so the mask is this reconstruction's, written so that an out-of-range index is defined C rather than undefined.  The sweep in t_v34k56.c drives vect_idx to 8, 15, 100, -1 and -9 and the blob agrees with the masked form at every one, which is what makes the mask right rather than merely safe."
+ },
+ {
+  "label": "vect4 is indexed masked",
+  "find": "vect4[q];",
+  "replace": "vect4[q & 3];",
+  "equivalent": true,
+  "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is v34rx.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit."
+ },
+ {
+  "label": "DEAD: the Ja completion arm sets state 4 rather than 3",
+  "find": "\t\to->k56flex_receiver = 3;",
+  "replace": "\t\to->k56flex_receiver = 4;"
+ },
+ {
+  "label": "DEAD: the Ja completion arm writes 0x8990 rather than 0x899f",
+  "find": "*(short *)(m + OB_TXBITS) = (short)0x899f;",
+  "replace": "*(short *)(m + OB_TXBITS) = (short)0x8990;"
+ },
+ {
+  "label": "DEAD: the Ja completion arm does not set the data flag",
+  "find": "\t\trx->flags |= V34_RX_FLAG_DATA;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "DEAD: the Ja completion arm does not reset vect_idx",
+  "find": "\t\to->vect_idx = 0;\n\t\to->k56flex_receiver = 3;",
+  "replace": "\t\to->k56flex_receiver = 3;"
+ },
+ {
+  "label": "DEAD: the MP completion arm sets state 6 rather than 2",
+  "find": "\t\to->k56flex_receiver = 2;",
+  "replace": "\t\to->k56flex_receiver = 6;"
+ },
+ {
+  "label": "DEAD: the MP completion arm writes the wrong txstate",
+  "find": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;"
+ },
+ {
+  "label": "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store",
+  "find": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;"
+ },
+ {
+  "label": "DEAD: the MP completion arm skips initdigital",
+  "find": "\t\tinitdigital(o);",
+  "replace": "\t\t(void)0;"
+ }
+]
