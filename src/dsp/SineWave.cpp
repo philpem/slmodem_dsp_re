@@ -10,6 +10,7 @@
  */
 
 #include "dsplib/SineWave.h"
+#include "dsplib/x87copy.h"
 
 /*
  * The two constants, from `.rodata.cst4` at +0x4c and +0x50.  They are the
@@ -22,43 +23,18 @@
 #define SW_INV_2PI	0x1.45f306p-3f	/* 0x3e22f983 = (float)(1/(2*M_PI))*/
 
 /*
- * THE CONSTRUCTOR'S FOUR STORES GO THROUGH INTEGERS, and that is not a style
- * choice.  The object's constructor is nine instructions, all `mov`:
- *
- *     mov 0x8(%esp),%ecx ; mov %ecx,(%edx)      ... and so on for all four
- *
- * so a signalling NaN handed to it lands in the member with its payload
- * intact.  The natural `: amplitude(a), frequency(f), ...` compiles under
- * `-mfpmath=387` to `flds`/`fstps`, and an x87 load-store QUIETENS a
- * signalling NaN -- 0x7f800001 goes in, 0x7fc00001 comes out.  Measured: it
- * cost 59 mismatches in t_sinewave's random-bit-pattern block before this was
- * put in, and nothing else in the test could see it.
- *
- * Same reason and same shape as `Queue`'s `copy1`; finding 340 has the general
- * statement.  A future reader who restores the member-init list will pass every
- * case except the one that matters.
+ * The four constructor stores.  The object's constructor is nine `mov`s and
+ * nothing else, so a signalling NaN handed to it lands in the member intact;
+ * `dsplib_assign` is the natural assignment plus what a modern compiler needs
+ * to produce that.  See dsplib/x87copy.h.
  */
-template <class T>
-static inline void store(T *dst, T v)
-{
-	if (sizeof(T) == sizeof(unsigned)) {
-		unsigned tmp;
-
-		__builtin_memcpy(&tmp, &v, sizeof(unsigned));
-		__asm__("" : "+r" (tmp));
-		__builtin_memcpy(dst, &tmp, sizeof(unsigned));
-	} else {
-		*dst = v;
-	}
-}
-
 template <class Tout, class Tparam>
 SineWave<Tout, Tparam>::SineWave(Tparam a, Tparam f, Tparam p, Tparam sr)
 {
-	store(&amplitude, a);
-	store(&frequency, f);
-	store(&phase, p);
-	store(&sampleRate, sr);
+	dsplib_assign(&amplitude, &a);
+	dsplib_assign(&frequency, &f);
+	dsplib_assign(&phase, &p);
+	dsplib_assign(&sampleRate, &sr);
 }
 
 /*

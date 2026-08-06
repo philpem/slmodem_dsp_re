@@ -11,51 +11,21 @@
  */
 
 #include "dsplib/Queue.h"
+#include "dsplib/x87copy.h"
 
 extern "C" void *sysdep_malloc(unsigned size);
 extern "C" void sysdep_free(void *p);
 
 /*
- * THE COPY GOES THROUGH AN INTEGER, and that is not tidiness -- it is the
- * only way to match.
- *
- * The object copies elements with `movl`.  Modern GCC compiles `*q++ = *p++`
- * on a `float` under `-mfpmath=387` into `flds`/`fstps`, and an x87 load-store
- * QUIETENS A SIGNALLING NaN: 0x7f800001 goes in and 0x7fc00001 comes out.
- * Measured here, not assumed.  The 2003 compiler emitted an integer move for
- * the same source, so the blob preserves the payload and a plain assignment
- * does not.
- *
- * The original's source was almost certainly the plain assignment; this is a
- * difference in what the compiler makes of it, twenty years apart.  Since the
- * goal is a replacement that behaves identically, the behaviour wins over the
- * likely source form -- and a future reader who "simplifies" this back to
- * `*q++ = *p++` will pass every test that does not feed a signalling NaN.
- * t_queue does feed them.
- *
- * THE `asm` BARRIER IS LOAD-BEARING and `__builtin_memcpy` alone is not enough.
- * GCC folds a memcpy between two same-typed pointers straight back into an
- * assignment, and in `write(T v)` -- where the source is a `float` PARAMETER
- * and its type is therefore in front of the compiler -- it did exactly that
- * and emitted `flds 0x10(%esp)` / `fstps (%esi)`.  The block paths happened to
- * come out as integer moves anyway, so the single-value path was the only one
- * that diverged, which is a good illustration of why this cannot be left to
- * luck.  The empty `"+r"` constraint makes the value opaque and pins it in a
- * general register, matching the object's `mov 0x14(%esp),%esi; mov %esi,(%ecx)`
- * at +0x36.  It generates no instructions of its own.
+ * The element copy.  `dsplib_assign` is the plain assignment the original's
+ * source said, plus the one thing a modern compiler needs to be held to it --
+ * see dsplib/x87copy.h, and finding 340 for what a signalling NaN does to the
+ * x87 form.  t_queue's third block is the case that tells them apart.
  */
 template <class T>
 static inline void copy1(T *dst, const T *src)
 {
-	if (sizeof(T) == sizeof(unsigned)) {
-		unsigned tmp;
-
-		__builtin_memcpy(&tmp, src, sizeof(unsigned));
-		__asm__("" : "+r" (tmp));
-		__builtin_memcpy(dst, &tmp, sizeof(unsigned));
-	} else {
-		__builtin_memcpy(dst, src, sizeof(T));
-	}
+	dsplib_assign(dst, src);
 }
 
 /*

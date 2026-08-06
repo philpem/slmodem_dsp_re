@@ -40,11 +40,30 @@ a similarity gradient, not a pass/fail.  The differential tests remain the only
 thing that decides correctness.
 """
 
+import argparse
 import glob
+import json
 import os
 import re
 import subprocess
 import sys
+
+#
+# THE RATCHET, and why it is a ratchet and not a gate.
+#
+# 100% is not the target and never will be: our source is not the original's
+# source, so a function we wrote as one loop where the author wrote two will
+# differ for ever while behaving identically.  A "must match" gate would fail
+# on every file in the tree and teach everyone to ignore it.
+#
+# What IS meaningful is the direction.  A number that only ever goes up turns
+# the comparison into a progress metric and, more usefully, catches the case
+# where a change makes the reconstruction LESS like the original while all the
+# differential tests still pass -- which is exactly the kind of regression this
+# project has no other way to see.
+#
+RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "ratchet.json")
 
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
 OURS = os.environ.get("TC_OUT", "/tmp/tc_out")
@@ -79,6 +98,13 @@ def mnemonics(path, sym):
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--ratchet", action="store_true",
+                    help="fail if fewer functions match than last time")
+    ap.add_argument("--update", action="store_true",
+                    help="record the current counts as the new floor")
+    args = ap.parse_args()
+
     blob = sizes(BLOB)
     ours = {}
     for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
@@ -124,6 +150,35 @@ def main():
     for delta, b, o, k in rows[-5:]:
         print("  %+7d  blob %5d  ours %5d  %s" % (delta, b, o, k))
 
+    now = {"identical": len(identical), "same_size": len(samesize),
+           "compared": len(common)}
+    if args.update:
+        with open(RATCHET, "w") as f:
+            json.dump(now, f, indent=2, sort_keys=True)
+            f.write("\n")
+        print("\nratchet updated: %s" % now)
+        return 0
+    if args.ratchet:
+        try:
+            was = json.load(open(RATCHET))
+        except (OSError, ValueError):
+            sys.exit("no %s -- run with --update to set the floor" % RATCHET)
+        bad = [k for k in ("identical", "same_size") if now[k] < was[k]]
+        if bad:
+            print("\nRATCHET FAILED -- the reconstruction moved AWAY from the"
+                  "\noriginal's code generation, and no differential test can"
+                  "\nsee that:")
+            for k in bad:
+                print("    %-10s was %d, now %d" % (k, was[k], now[k]))
+            print("\n  If the change was deliberate, re-bless with --update"
+                  "\n  and say in the commit message why fewer functions match.")
+            return 1
+        gained = [k for k in now if k in was and now[k] > was[k]]
+        print("\nratchet OK%s" % ("" if not gained else
+              " -- gained: " + ", ".join("%s %d->%d" % (k, was[k], now[k])
+                                         for k in sorted(gained))))
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

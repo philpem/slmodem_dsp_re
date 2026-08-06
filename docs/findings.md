@@ -14614,3 +14614,68 @@ the first reset runs for the constructor's 500 samples rather than the
 configured length. It self-corrects on every later reset, since `params` is
 constant. Not fixed here -- `V90Demodulator` belongs to the V.90 work -- and
 recorded so that it is found rather than rediscovered.
+
+### 349. The harness only linked because our compiler was not the original's
+
+Task #67. Making the period toolchain a real second build turned up a
+dependency nobody had noticed, and it would have blocked the whole idea.
+
+**`.gnu.linkonce.t.NAME` is name-based COMDAT: the linker keeps the first
+section of a given name and discards every later one.** GCC 3.4 puts each
+instantiated template member in exactly such a section, so `dsplibs_ref.o`
+inherits 79 of them -- and if our own objects are built by GCC 3.4 they have
+sections with the SAME names. Ours come first on the link line, the blob's copy
+is discarded whole, and every `ref_` alias inside it becomes undefined.
+Measured on `t_agc`: four aliases present in `dsplibs_ref.o`, all four
+undefined at link.
+
+Modern GCC emits `.text._ZN...` inside an ELF section group instead. Different
+names, both survive. **That accident -- our compiler being twenty years newer
+than the original's -- is the only reason the differential harness has ever
+linked**, and it would have failed the moment anyone tried the obvious thing.
+
+`tools/refrename.py` is a third `objcopy` pass on the ref object, moving those
+sections to `.text.ref_*`: ordinary sections, never duplicates of anything,
+always kept. The `ref_` in the name is what guarantees they cannot collide with
+ours whichever compiler built them. Nothing else reads those names --
+`coverage.py` measures sections on the BLOB, not on this object.
+
+With that in place, the library compiled by GCC 3.4 links against the modern
+harness and passes: `t_agc` 1,846,000 checks, `t_queue` and `t_sinewave` all
+blocks, against the blob. Five V.90 C++ files still will not compile with 3.4
+and are taken from the modern build, which is what a dual build looks like in
+practice.
+
+**The barriers are now conditional, and both branches are tested.**
+`dsplib_assign` in `include/dsplib/x87copy.h` is the plain `*dst = *src` the
+original's source said, plus -- under `__GNUC__ >= 4` only -- the integer round
+trip that holds a modern compiler to it. Compiled with GCC 3.4 and linked
+against the blob, the natural form passes `t_queue`, `t_sinewave` and `t_agc`
+including every signalling-NaN block. So the `#if` is not hedging: each branch
+was run against the object. Three call sites use it -- `Queue::write`'s element
+copy, `SineWave`'s four constructor stores, `Agc::freeze`.
+
+This matters beyond tidiness. The reconstruction's deliverable is the SOURCE,
+and until now three files said something the author did not write, for reasons
+a reader could only get from a comment. Now they say what he wrote.
+
+**The similarity ratchet, and why it is not a gate.** `make similarity` builds
+with the period toolchain and runs `compare.py --ratchet` against
+`tools/toolchain/ratchet.json`, currently 30 identical and 11 same-size out of
+365 compared. It fails only on a DECREASE.
+
+100% is not the target and never will be -- a function we wrote as one loop
+where the author wrote two differs for ever while behaving identically, so a
+"must match" gate would fail on everything and be ignored within a week. The
+direction is what carries information: a change that makes the reconstruction
+LESS like the original while every differential test still passes is a
+regression this project has no other way to see.
+
+It is deliberately NOT part of `make phase`: it needs docker and the toolchain
+image, and it answers a different question from correctness.
+
+One bug of mine on the way, worth naming because it is the classic: the ratchet
+printed its failure banner and exited 0, because `main()`'s return value was
+discarded at the bottom of the file. A gate whose exit code is always zero is
+decoration. Both directions are now asserted -- floor too high gives 1, floor
+at reality gives 0.

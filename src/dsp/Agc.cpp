@@ -9,6 +9,7 @@
  */
 
 #include "dsplib/Agc.h"
+#include "dsplib/x87copy.h"
 
 /*
  * `blockLen` is set BEFORE the tail call to `reset`, so `count` comes out of
@@ -40,20 +41,16 @@ void Agc<T>::reset()
 }
 
 /*
- * THE COPY IS AN INTEGER MOVE, for the third time in this batch and by now for
- * a well-understood reason.  The original's source is `savedAlpha = alpha;`
- * and GCC 3.4 lowered it to `mov`/`mov`; a modern GCC under `-mfpmath=387`
- * lowers the same statement to `flds`/`fstps`, and an x87 load-store quietens
- * a signalling NaN (0x7fa00000 -> 0x7fe00000).  51,200 mismatches before this
- * was put in.  Finding 340 has the general statement, 347 the reason the
- * natural source form is almost certainly what the author wrote.
+ * `savedAlpha = alpha` -- see dsplib/x87copy.h for why it is spelled through
+ * `dsplib_assign` and why that is the natural form rather than a workaround.
+ * 51,200 mismatches before it was there.
  *
  * The read comes FIRST: reordering the two statements costs 563,258.
  */
 template <class T>
 void Agc<T>::freeze()
 {
-	__builtin_memcpy(&savedAlpha, &alpha, sizeof(T));
+	dsplib_assign(&savedAlpha, &alpha);
 	alpha = T(1);
 }
 

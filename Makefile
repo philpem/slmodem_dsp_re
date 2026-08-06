@@ -153,6 +153,11 @@ $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
 $(REF): $(SYMMAP) $(BLOB)
 	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
 	objcopy --redefine-syms=$(SYMMAP) $(BUILD)/dsplibs_glob.o $@
+	@# The blob's linkonce sections carry the SAME names our objects would
+	@# use if built by the period compiler, and linkonce keeps only the
+	@# first of a name -- so ours would silently discard the blob's copy and
+	@# every ref_ alias inside it.  Finding 349.
+	python3 tools/refrename.py $@
 
 # --- compilation ----------------------------------------------------------
 
@@ -460,6 +465,14 @@ check64:
 # which symbols have a `ref_` name is what decides the `tested` denominator,
 # and asking that question of an object that is not there gets an answer that
 # is plausible and wrong.
+# The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
+# it needs docker and the tools/toolchain image, which not every checkout will
+# have, and it answers a different question from correctness -- see finding 349.
+.PHONY: similarity
+similarity:
+	tools/toolchain/build.sh
+	python3 tools/toolchain/compare.py --ratchet
+
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
 

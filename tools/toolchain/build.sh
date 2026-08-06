@@ -12,8 +12,11 @@ cd "$(dirname "$0")/../.."
 OUT=${TC_OUT:-/tmp/tc_out}
 FLAGS="-O2 -march=i386 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude"
 
-SRC=$(make print-SRC | sed 's/^SRC = //')
-CXXSRC=$(make print-CXXSRC | sed 's/^CXXSRC = //')
+# MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
+# make recipe, both leak `make[1]: Entering directory ...` and a jobserver
+# warning into the variable, and the container then tries to compile them.
+SRC=$(MAKEFLAGS= make -s --no-print-directory print-SRC | sed 's/^SRC = //')
+CXXSRC=$(MAKEFLAGS= make -s --no-print-directory print-CXXSRC | sed 's/^CXXSRC = //')
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 docker run --rm --platform linux/386 \
