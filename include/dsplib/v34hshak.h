@@ -330,6 +330,21 @@ void txmitdibit(void *obj, short bits);
 void txmitquadbit(void *obj, short bits);
 
 /*
+ * One symbol of the K56flex phase 3/4 transmit sequence.  Declared here
+ * rather than beside the other K56flex material because it drives the two
+ * emitters above and their two tables; it is defined in a .cpp -- see
+ * `src/pump/v34/v34k56.cpp` for why, and for the three ways its idle symbol
+ * is NOT one of those emitters.
+ *
+ * ALWAYS RETURNS 0, at all three `ret`s.  That is as far as the return type is
+ * recoverable: its one caller (inside `v34handshak`) discards it, so nothing
+ * distinguishes `int` from `short` or `unsigned` -- `xor %eax,%eax` before
+ * every `ret` is the whole of the evidence, exactly as for the
+ * `K56FlexFloModem` members it calls.
+ */
+int k56FlexPhase34(void *obj);
+
+/*
  * Turn the line probe's twenty-five bins into a power-reduction request, a
  * set of offered symbol rates or one chosen one, and a pre-emphasis index
  * per rate.  Writes the rate config at +0xaa84 and the outgoing message at

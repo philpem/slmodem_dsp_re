@@ -14446,3 +14446,199 @@ The test compares the bytes against `ref_V34DisconnectThreshTable`, asserts
 the size (a table one entry short compares equal on every entry it has), and
 separately asserts the ladder is strictly increasing -- which is what a
 transcription error in the middle would break without disturbing either end.
+### 279. `k56FlexPhase34`: one argument, three `ret`s, and three bases
+
+721 bytes at .text+0xa790, unmangled, and the first of task #59's six to come
+free. `tools/closure.py k56FlexPhase34 --missing` reports one symbol -- itself
+-- once `build/` exists; the "3 symbols" in `docs/v90rest.md` was computed
+against a worktree that had never been built, and an empty `have` set makes
+every callee look unwritten. **Build before you believe a closure.**
+
+The signature is `int k56FlexPhase34(void *obj)`.
+
+- ONE ARGUMENT. `sub $0x2c,%esp` then `mov 0x30(%esp),%esi`, and nothing else
+  is read from the incoming frame.
+- IT IS THE V.34 OBJECT, not a sub-object: `mov %esi,%eax; call
+  _Z14getMPrecvdBitsP12tagV34Object` passes it where that symbol's own
+  mangling says `tagV34Object *`, and `docs/v90cpp.md`'s note that
+  `tagV34Object` is the object's name for `struct v34_object` closes it.
+- IT RETURNS 0. Three `ret`s, and `xor %eax,%eax` reaches every one of them --
+  a7f2 for the shared exit, a862 for the Ja completion arm and a8dc for case
+  4. Its one caller is inside `v34handshak` at 0x6403f and discards the value,
+  so nothing distinguishes `int` from `short` or `unsigned`; "returns 0" is the
+  whole of the evidence, exactly as for the `K56FlexFloModem` members it calls
+  (finding 246).
+
+EVERYTHING ELSE IS ADDRESSED THROUGH THREE BASES, and naming them is what
+turns the disassembly readable:
+
+    lea 0x264(%esi),%ebx    struct v34_receiver *   -- +0x122 is `flags`
+    lea 0x221c(%esi),%edi   the transmitter        -- +0x3ac is obj +0x25c8
+    lea 0x4(%esi),%...      an addressing artifact -- +0x24c is obj +0x250
+
+The third is the one that misleads. `obj + 4` is not a sub-object; it is the
+same code generation `v34handshakinit` and `VPcmV34SetV90RateReneg` use, and
+`v34fsk.h` already says so. Through it this function reads and writes
+`k56flex_receiver` at +0x250 -- NOT `v90_receiver` at +0x24c, which is what
+`v90Phase34` reads through the identical base. One int apart, and it is the
+whole difference between the two functions' state machines.
+
+### 280. The K56flex idle symbol is not `txmitdibit`, in three ways
+
+Case 4 of `k56FlexPhase34` scrambles two bits, maps them onto `vect4` and
+tail-calls `txmit`. So does `txmitdibit`. They are not the same function, and
+a reconstruction that called the published emitter would compile, link, read
+correctly and be wrong:
+
+- **The generator is the literal 1.** `txmitdibit` passes
+  `tx_scrambler_mode(o)`, which is bit 0 of `f25c2`. Nothing in these 721
+  bytes loads +0x25c2 at all -- so the idle symbol does not follow the
+  calling/answering polarity the rest of the transmitter obeys.
+- **There is no differential encoding.** `txmitdibit` forms
+  `(d + f25c6) & 3`; this stores the scrambler's two bits straight into
+  `f25c8` and indexes `vect4` with them.
+- **`f25c6` is never written**, so the quadrant the handshake carries does not
+  advance across an idle symbol.
+
+The quadbit arm differs identically: two two-bit requests against the same
+register, the first into `f25c8`, and the index `d2 + q * 4`, which IS
+`txmitquadbit`'s expression -- with the same two omissions.
+
+The mutation suite makes each difference its own entry rather than one lump,
+and all three are caught. Two are caught by the blob; the third is caught by
+`t_v34k56.c` alone, which is deliberate: with `f25c2` bit 9 held clear and bit
+0 swept both ways, the idle symbol's outputs must be IDENTICAL, and that is a
+statement about our side that holds whatever the blob does. `check_idle` adds
+the complementary one -- `f25c8` is in 0..3 and the point is `vect4[f25c8]`
+exactly, not `vect4[(d + f25c6) & 3]`.
+
+The object indexes both tables UNMASKED. A `& 3` is equivalent while
+`V34scrambler`'s two-bit return contract holds -- which is v34rx.c's contract
+and not this function's, so the mask is recorded as a surviving mutation and
+not written into the code.
+
+### 281. Two arms no differential test can enter, and the eight mutations that measure it
+
+`k56FlexPhase34` has ten arms. Eight are reachable. The other two are the
+completion arms -- the one that ends the Ja sequence and the one that ends the
+MP sequence -- and each runs only when a `K56FlexFloModem` bit source returns
+non-zero. Both of those members are three bytes of `xor %eax,%eax; ret`
+(finding 246 measured them), in the blob and in this tree alike. So BOTH SIDES
+of every call return 0 and neither side can enter either arm. This is a
+property of the object, not a shortfall in the sweep: no input to
+`k56FlexPhase34` can change it.
+
+As the object lays them out those arms are a830-a87d and a9a6-a9da, 78 and
+57 bytes of the 721. In the reconstruction they are measured from the other
+end: `make phase`'s line coverage over `src/` went 10597/10844 to 10645/10899
+when this file landed -- 55 lines added and 48 of them covered, so SEVEN lines
+are never executed and they are all in these two arms.
+
+The consequence is stated as a count and not as prose. `tools/mutate.py
+--suite v34k56`: **28 mutations, 15 caught, 3 equivalent, 10 NOT CAUGHT**.
+Eight of the ten are inside the dead arms:
+
+    the Ja arm sets state 4 rather than 3
+    the Ja arm writes 0x8990 rather than 0x899f
+    the Ja arm does not set V34_RX_FLAG_DATA
+    the Ja arm does not reset vect_idx
+    the MP arm sets state 6 rather than 2
+    the MP arm writes V34HS_DATAXMIT rather than V34HS_EXMIT
+    the MP arm's compare-then-store becomes a plain store
+    the MP arm skips initdigital
+
+THE OTHER TWO ARE IN REACHABLE CODE, and they are the more interesting ones:
+
+    the Ja arm does not consult the bit source at all
+    the MP arm does not consult the bit source at all
+
+Replacing either `k56->getK56Flex*Bits(&o->f25c8)` with a literal 0 survives,
+because the stub returns 0 and writes nothing through the pointer it is
+handed -- so the call itself has no observable effect and no test in this tree
+can see whether it happens. That claim, "this function calls the two symbols
+its closure says it calls", is the reason it was in this batch at all, and the
+only witness for it is not a test: `nm build/src/pump/v34/v34k56.o` shows
+`_ZN15K56FlexFloModem16getK56FlexJaBitsEPs` and `...MpBitsEPs` undefined, and
+`tools/closure.py` resolves both. A gap with non-test evidence beside it, and
+not a gap that was overlooked -- these two mutations exist to say so.
+
+The eight dead ones are recorded as UNCAUGHT and not as equivalent, which is
+the distinction `tools/mutate.py` draws and the right one: "the test does not cover it" is the
+opposite result from "the change cannot alter behaviour". The seventh is both
+-- a store of the value just compared against -- but it is listed with the
+gap, because being unreachable is the stronger reason and the one a reader
+needs.
+
+THE ANTI-VACUITY CHECKS FOR THESE ARE THE COMPLEMENT, DELIBERATELY.
+`t_v34k56.c` asserts `n_ja_tail == 0` and `n_mp_tail == 0` -- "the flag was
+never set", "the state never left 5" -- and NOT "this arm ran at least once".
+The second form is unsatisfiable here by construction, which is exactly the
+shape that failed loudly in findings 247 and 262; writing it would have looked
+like a broken reconstruction and been a broken test. The eight reachable arms
+do get "ran at least once" counters, and all eight fire.
+
+### 282. `vect_idx` out of range, and what sweeping it measures
+
+Case 3 shifts the word at +0x25d6 right by `2 * vect_idx` and transmits the
+low dibit. The object's code is
+
+    movswl 0x2aa2(%esi),%ecx     ; SIGN-extended
+    add    %ecx,%ecx
+    sar    %cl,%eax
+
+with no mask, because ia32's SAR masks its count to five bits for free. The
+index is masked to 0..7 on the way OUT of case 3, so only a caller can present
+anything else -- and `v34handshakinit` and `modulatevector` both write the
+field, so "only a caller" is not hypothetical.
+
+The reconstruction writes `(2 * idx) & 31`, which is one extra
+`and $0x1e,%ecx` and defined C where a bare `>>` by 30 or by 200 is not. That
+mask is not an assumption: `t_v34k56.c` sweeps `vect_idx` over 0, 1, 2, 6, 7,
+8, 15, 100, -1 and -9 against the blob, and -1 (shift 30) and 100 (shift 8)
+are the two that would separate masking from anything else. The blob agrees at
+every one.
+
+Removing the mask therefore survives as an EQUIVALENT mutation, and the "why"
+says what is held fixed: the target and GCC's lowering of a non-constant `>>`,
+over the whole range of the field rather than over the sample the sweep hits.
+Both forms were compiled and their text diffed to check that claim rather than
+argue it.
+
+The same load is read TWICE with different extensions -- `movswl` for the
+shift count, `movzwl` for the increment -- and that asymmetry is the only
+reason the sweep can see anything at all.
+
+AND THE SECOND LOAD IS NOT LOAD-BEARING, which is the opposite of what it
+looks like. A call sits between the two reads, so the object re-reads and so
+does the reconstruction; but the only other writer of +0x2aa2 in the tree is
+`modulatevector`, and that function CALLS `txmit` rather than being reachable
+from it -- txmit's whole chain is `V34ModulatorProcess`, `V34EchoPreFilter`
+and `V34EchoUpdateDelayLine`. So the value cannot change across the call, and
+the mutation that increments the first read instead survives as equivalent
+with that call chain named. It was written as a suspected gap and came back as
+an equivalence; the source comment that claimed txmit reached
+`modulatevector` was wrong and is corrected.
+
+### 283. A pointer-skip list copied from a neighbour had a duplicate in it
+
+`t_v34k56.c` compares two 44 KB objects that hold different addresses by
+construction, so it blanks the pointer fields in a COPY of each and hands the
+copies to `diff_eq_obj` -- which keeps the field naming and the run
+coalescing that a hand-written byte loop with `continue`s throws away.
+
+The list started as `t_v34hshak.c`'s, and asserting that every entry really
+did hold two different addresses rejected two of the eleven immediately:
+
+    { 0x20cc, 0x20d0 }
+    { 0x1450 + 0xc7c, 0x1450 + 0xc80 }
+
+0x1450 + 0xc7c IS 0x20cc. One range, written twice, and it is
+`prefilter.coeff` -- which every fixture in this tree points at the same const
+table for both sides, so it is not a two-address field at all. Blanking it
+would have hidden a real difference there rather than tolerated an unavoidable
+one.
+
+The `ptr_seen` assertion is what caught it, and it is cheap: one flag per
+entry, set in `setup`, checked once at the end. A skip list is the one part of
+a differential test that silently gets weaker as it grows, so it wants a check
+that it is all still load-bearing.
