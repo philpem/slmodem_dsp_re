@@ -201,11 +201,21 @@ the width of whatever sits at the bound before allocating anything; 916 and
 **0x398 = 920**; finding 231 has the full field map, which batches 3 and 5
 should read rather than re-derive.  1,280 is still a bound.
 
-`V90Phase3Demodulator` reaches 43,336 and `VPcmFloModem` 32,612, which almost
-certainly means they index *through* `this` into an enclosing session object
-rather than being that large.  Those two may need the real lifecycle
-(`reset` -> `enterPhase3` -> use) before they can be driven, which is why they
-are last.
+`V90Phase3Demodulator` reaches 43,336 and `VPcmFloModem` 32,612.  This file
+used to say that both "almost certainly" indexed *through* `this` into an
+enclosing session object rather than being that large.  **That was a
+hypothesis, and for `VPcmFloModem` it is now measured and it is wrong**
+(finding 273): all five members of the wave 3 batch load `this` from their own
+stack slot and address +0x612c, +0x7dce, +0x7dd6 and +0x7ed4 straight off it,
+with no intervening load, so the object is at least 0x7f28 = 32,552 bytes.
+`V90Phase3Demodulator`'s 43,336 has NOT been checked and is still a
+hypothesis.  Either way the check is finding 268's -- trace the base register
+of every candidate back to the prologue -- and it is three lines of reading.
+
+`VPcmFloModem` also embeds a whole `V90Modem` at +0x1758 (finding 274), which
+is why it is that size.  Both classes may still need the real lifecycle
+(`reset` -> `enterPhase3` -> use) before the REST of their members can be
+driven; the five in wave 3 did not.
 
 `V90PreFilter` is **40 bytes**, and 1,280 was never a `this` displacement:
 `setParamEia6` touches `this` at exactly one offset, +0x1c, and reaches +0x490

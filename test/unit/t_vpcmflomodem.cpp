@@ -122,6 +122,13 @@ P92(int side)
  * entry selection mask by POSITION and not merely by how many ones it has:
  * swap two adjacent mask bits and two L2 entries change.  They are also all
  * strictly positive, so log10 stays in its domain -- see the note in main().
+ *
+ * AND THEY ARE DELIBERATELY NOT DYADIC.  They used to be 1000 + 137i + i*i/2,
+ * every one of them a multiple of a half -- so every one of them, divided by
+ * 16384, was EXACTLY a float, the first of the three roundings did nothing,
+ * and a mutation that skipped it went uncaught.  The irrational-looking term
+ * is what makes the rounding real: swept over 20 million magnitudes, dropping
+ * it changes the answer for 2.42% of them.
  */
 static void
 setup(int trial)
@@ -156,7 +163,8 @@ setup(int trial)
 
 		for (i = 0; i < V34_PROBE_RESULTS; i++)
 			v34[side].probe_results[i] =
-			    1000.0 + 137.0 * i + 0.5 * i * i;
+			    1013.0 + 137.0 * i + 0.5 * i * i
+			    + 0.00073156789 * (trial * 25 + i + 1);
 		for (i = 0; i < V34_INFO0_BITS; i++)
 			v34[side].info0_bits[i] = 0;
 		v34[side].rtd = 1234;

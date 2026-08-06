@@ -14390,3 +14390,186 @@ reproducible without a temporary, and here it is reproducible with one.
 Neither is a test gap, and neither is licence to stop writing the object's
 order: the source keeps it in both cases, because the disassembly is what the
 reconstruction is of.
+
+### 273. `VPcmFloModem` really is 32 KB, and finding 268's check is what says so
+
+`docs/v90cpp.md` recorded that `VPcmFloModem` "reaches +32,612, which almost
+certainly means it indexes *through* `this` into an enclosing session object
+rather than being that large". That sentence has been corrected: for this
+class it is wrong, and the thing that decides it is finding 268's own method
+run in the opposite direction.
+
+Finding 268 found four large displacements that were **not** off `this` -- two
+inside a `V90AutoDigitalImpDetector` reached through a pointer, two scaled-index
+table addresses -- and its rule is: check the base register of every candidate
+against the prologue before believing any of them. Here are all five of this
+batch's, checked:
+
+    getV90JaBits       mov 0xc(%esp),%ecx    ->  cmpb  $0x0,0x7dce(%ecx)
+    getV90CpBits       mov 0x20(%esp),%ebx   ->  movzwl 0x7dd6(%ebx),%esi
+    setPcmSessionType  mov 0x20(%esp),%esi   ->  mov   0x612c(%esi),%eax
+    setPhaseIIinfo     mov 0x40(%esp),%esi   ->  lea   0x7ed4(%esi),%eax
+    getUinfoValue      mov 0xd0(%esp),%ebx   ->  movl  $0x0,0x7ed4(%ebx,%edx,4)
+
+Every base register is loaded from that function's own `this` stack slot and
+there is no intervening load. The last of the four float arrays runs to
++0x7f27, so these five members alone put the object at **0x7f28 = 32,552 bytes
+at least**, and the 32,612 the whole class reaches is sixty bytes further on.
+
+**A floor is still not a size** and none is asserted: twenty-one of the
+twenty-six members have not been read. `src/pump/v90/VPcmFloModem.cpp` asserts
+offsets, and `test/unit/t_vpcmflomodem.cpp` allocates a slot larger than the
+floor and compares the whole slot, which is the shape finding 268 argued for
+and catches a store past the last modelled field as well as one inside it.
+
+The general lesson is not "268 was wrong" -- 268 was right about its four --
+it is that **"the number is too big to be an object" is a hypothesis and not a
+result**. Both times the answer came from the same three-line check.
+
+### 274. A `V90Modem` is embedded in `VPcmFloModem` at +0x1758
+
+Three independent measurements, which is what makes it a map rather than a
+guess:
+
+1. `setPcmSessionType` ends `lea 0x1758(%esi),%edi ... jmp
+   V90Modem::setSessionFlag`. An **add** before the call and not a load --
+   the same signature finding 268 used for `V90Phase3Demodulator`'s modulator
+   at +0x34 and `V90Phase4Demodulator`'s at +0x50.
+2. `getV90CpBits` reads +0x175c and passes it as a `V90Demodulator *`.
+   `V90Modem::demodulator` is at +0x04, and 0x1758 + 4 = 0x175c.
+3. `setPhaseIIinfo` reads +0x1760 as a `V90Phase2Info *`, which is
+   V90Modem +0x08; and V90Modem's declared prefix ends at 0x49c0, so
+   0x1758 + 0x49c0 = 0x6118 -- immediately before +0x611c, the first field
+   after it that anything here touches.
+
+The third is also the weak point, because `V90SessionFlag.h` deliberately
+asserts no size (finding 268), so the four bytes at +0x6118 could belong to
+either object. What holds the map together is that `VPcmFloModem.cpp` asserts
+`sizeof(V90Modem) == 0x49c0` next to its offsets: that is **not** a claim
+about the blob, it is the hook that turns a later batch giving V90Modem more
+prefix into a compile error here instead of a silent shift of every offset
+past +0x6118.
+
+Two fields were carved out of `V90Modem::pad_08` for this, and neither moved
+an offset: `phase2Info` at +0x08 and an untyped `ptr_49b4` at +0x49b4, which
+`getUinfoValue` reads and then reads a signed short at its +0x20. A third was
+carved out of `V90Demodulator`: `ptr_20c` at +0x20c, whose target has two
+words at +0x78 and +0x7c that `getV90CpBits` copies one to the other.
+
+### 275. +0x1760 and +0x612c are the two Phase 2 records, and that names four arrays
+
+`VPcmFloModem::setPhaseIIinfo` fills two objects through pointers, and both
+are identified rather than guessed.
+
+**The one at +0x1760 is a `V90Phase2Info`.** It writes +0x00, +0x04, +0x09 and
++0x0c, which are exactly that class's `pcmType`, `rtd`, `maxTxPower` and
+`txPowerMeasurementPoint` (finding 255), and its own diagnostics agree field
+for field with `V90Phase2Info::printInfo`'s -- "A_LAW or MU_LAW %d ( 0 = Mu,
+1 = A)" against `printInfo` comparing +0x00 with 1 and printing "A_LAW" or
+"MU_LAW"; "Max tx power = %d" against +0x09; "Tx power measurment point = %d
+( 0 = digital modem terminal, 1 = codec output)" against "CodecOutput" and
+"DigitalModemTerminal" at +0x0c.
+
+**The one at +0x612c is a `V92Phase2Info`**, a class the blob has and this
+tree had never declared. Same four fields copied straight across at the same
+offsets, and then the clincher: `setPhaseIIinfo` stores the SAME float array
+into V90Phase2Info +0x18 and into this one's +0x20, and
+`V92Phase2Info::printInfo` prints +0x20 as `L2[%d]` over indices 0..20 -- the
+identical loop bound `V90Phase2Info::printInfo` uses on its own +0x18. Its
+remaining field names are the author's own, out of "ShortPhase2: local=%d ,
+remote=%d", "v92Capabilities: local=%d , remote=%d" and "v90UseHighCarrier =
+%d".
+
+**And that makes `V90Phase2Info::pad_10[8]` and `pad_1c[4]` three more float
+pointers.** They were recorded as "reached by none of the three members",
+which was true of the three members and stopped being the whole story the
+moment a fourth function was read: +0x10, +0x14, +0x18 and +0x1c get four
+arrays out of the VPcmFloModem in one run of four `lea`s, and `getUinfoValue`
+clears all four to 21 entries in one loop. Only the third has a name, because
+only the third is printed. V92Phase2Info carries the same four in the same
+order at +0x18..+0x24 -- eight bytes further along, which is the whole
+difference between the two layouts in this region.
+
+This is the third time in this task a `pad_` has turned out to be fields
+(findings 234 and 264 are the others), and each time the trigger was the same:
+a function from a different translation unit reading the same object.
+
+### 276. `getUinfoValue`: L2 is 21 of 25 probe tones, and the mask's positions are the claim
+
+`L2[j] = 60 + 10 * log10(probe[i] / 16384)` over the 25 doubles
+`V34XF_GetProbeResultsPtr` hands out, where `j` advances only for the tones a
+25-entry selection mask admits:
+
+    1 1 1 1 1 0 1 0 1 1 1 0 1 1 1 0 1 1 1 1 1 1 1 1 1
+
+Twenty-one ones, and exactly 21 destination slots -- so the COUNT is a
+consistency check that falls out of the code. What pins the four zeros to
+indices 5, 7, 11 and 15 is that the probe magnitudes differ per index, and the
+test seeds 25 distinct ones for that reason; swap two adjacent mask bits and
+two L2 entries change. `tools/mutate.py` confirms it: "two adjacent mask
+positions are swapped" is caught.
+
+Four things about the arithmetic that a reconstruction has to get right and
+that no amount of "it looks like a dB conversion" would give:
+
+- **Three roundings to float, and only three.** `probe[i] * 2^-14` is rounded
+  (`fstps`/`flds`); its logarithm is rounded (`fstps`/`flds`); and
+  `10 * that + 60` is computed at the register's own precision with nothing in
+  the middle and rounded once when it is stored. Writing the third as two
+  `float` assignments inserts a fourth rounding that the object does not have.
+- **The logarithm is `fldlg2`/`fxch`/`fyl2x`**, the same sequence
+  `V90Equalizer` uses (its `x87_log10` is duplicated in VPcmFloModem.cpp
+  rather than hoisted, deliberately -- see the comment there).
+- **The report subtracts and never stores.** `L2[14] - L2[i]` for i in 15..20
+  lives in st(0) at extended precision through the sign test, the truncation
+  and the fractional part; a `float` temporary changes the printed digits.
+- **The report loop runs whatever the debug level is.** 15..20 is stepped
+  every time and the body is gated inside it.
+
++0x7e80's name is not invented: `setPhaseIIinfo` installs it in the slot both
+`printInfo` methods call `L2`, and this function prints it as "L2[%d]".
+
+### 277. The probe values were dyadic, and that made a rounding untestable
+
+`t_vpcmflomodem` passed on its first run and its mutation suite caught 47 of
+49. One of the two survivors was **"log10 sees the unrounded product"** -- the
+mutation that deletes the first of finding 276's three roundings.
+
+The reason was in the test fixture, not the reconstruction. The probe
+magnitudes were seeded `1000 + 137i + i*i/2`, every one of them a multiple of
+a half; divided by 16384 every one of them is **exactly** a float, so the
+`fstps`/`flds` pair rounded nothing and deleting it could not change an
+answer. This is finding 230's rule ("varied bytes, never zeros") in a form
+that a byte pattern does not cover: the values were varied, and they were
+still all in the one set where the operation under test is the identity.
+
+Fixed by adding an irrational-looking term. How much it mattered is measured
+rather than asserted: swept over 20 million magnitudes in [1, 14632], the
+rounded and unrounded chains give different floats for **2.42%** of them. With
+25 tones per trial and 200 trials the mutation is now caught, and the batch's
+score is 48 of 49.
+
+The general shape: **a fixture can be varied and still degenerate.** Ask what
+set the inputs live in, not just whether they differ from each other.
+
+### 278. `fyl2x` and glibc's `log10` are bit-identical here, over 123 million values
+
+The other survivor was "log10 comes from libm rather than the coprocessor",
+and it is recorded as `"equivalent": true` rather than as a gap, because the
+equivalence is measured over the whole argument space and not sampled --
+which is the distinction finding 260 drew.
+
+Both results are rounded to a float before anything else happens to them. A
+float ulp at these magnitudes is about 6e-8; `fyl2x` at the register's 64-bit
+mantissa and glibc's polynomial differ by about 1e-16. Swept over **every**
+float magnitude in 2^-20..2^21 at 3.3e-7 relative spacing -- 123 million
+values across 41 binades, which is the entire domain this chain can present to
+a logarithm -- the two give bit-identical results, 0 differences.
+
+So the inline asm is what the object does and not what the arithmetic needs.
+It stays, because the object is what the reconstruction is of, and because the
+equivalence is conditional: **held fixed is the float rounding on BOTH sides
+of the logarithm.** Remove the one before it and the two diverge for 2.42% of
+inputs (finding 277) -- which is exactly the mutation that IS caught. The pair
+is the point, as in finding 269: one mutation pins the thing the other one's
+equivalence rests on.

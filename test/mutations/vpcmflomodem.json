@@ -1,0 +1,258 @@
+[
+ {
+  "label": "VPcmFloModem, five members.  Run it with: tools/mutate.py --suite vpcmflomodem"
+ },
+ {
+  "label": "Ja: the two bits are packed the other way round",
+  "find": "\t\t*bits = bitVector[bitPointer++];\n\t\t*bits |= (short)(bitVector[bitPointer++] << 1);",
+  "replace": "\t\t*bits = (short)(bitVector[bitPointer++] << 1);\n\t\t*bits |= bitVector[bitPointer++];"
+ },
+ {
+  "label": "Ja: the pointer does not wrap at nofBits",
+  "find": "\t\tif (bitPointer == nofBits)\n\t\t\tbitPointer = 0;",
+  "replace": "\t\tif (bitPointer == (unsigned short)(nofBits + 1))\n\t\t\tbitPointer = 0;"
+ },
+ {
+  "label": "Ja: terminating does not reset the pointer",
+  "find": "\tif (terminateJa != 0) {\n\t\tbitPointer = 0;\n\t\tdone = 1;\n\t}",
+  "replace": "\tif (terminateJa != 0)\n\t\tdone = 1;"
+ },
+ {
+  "label": "Ja: the terminate flag is read from +0x7dcf, not +0x7dce",
+  "find": "\tif (terminateJa != 0) {",
+  "replace": "\tif (terminateCp != 0) {"
+ },
+ {
+  "label": "Ja: an empty vector still packs two bits",
+  "find": "\tif (nofBits != 0) {\n\t\t*bits = bitVector[bitPointer++];",
+  "replace": "\tif (nofBits != -1) {\n\t\t*bits = bitVector[bitPointer++];"
+ },
+ {
+  "label": "Cp: the shift count is masked to four bits, not five",
+  "find": "(short)(cpBitVector[bitPointer++] << (n & 31));",
+  "replace": "(short)(cpBitVector[bitPointer++] << (n & 15));"
+ },
+ {
+  "label": "Cp: the bits are packed most significant first",
+  "find": "(short)(cpBitVector[bitPointer++] << (n & 31));",
+  "replace": "(short)(cpBitVector[bitPointer++]\n\t\t\t\t << ((nofBitsPerSymbol - 1 - n) & 31));"
+ },
+ {
+  "label": "Cp: the two terminate flags are swapped",
+  "find": "\tif (terminateCpNot != 0) {\n\t\tdone = 1;",
+  "replace": "\tif (terminateCp != 0) {\n\t\tdone = 1;"
+ },
+ {
+  "label": "Cp: the CPnot load is not latched",
+  "find": "\tif (terminateCp != 0 && cpNotLoaded == 0 &&",
+  "replace": "\tif (terminateCp != 0 &&"
+ },
+ {
+  "label": "Cp: the sequence minimum is strict",
+  "find": "\t    nofTransmitSequences >= minNofTransmitSequences) {",
+  "replace": "\t    nofTransmitSequences > minNofTransmitSequences) {"
+ },
+ {
+  "label": "Cp: the CPnot load copies the wrong way",
+  "find": "\t\t\tcpBitVector[i] = bitVector[i];",
+  "replace": "\t\t\tbitVector[i] = cpBitVector[i];"
+ },
+ {
+  "label": "Cp: the CPnot load takes its length from cpNofBits",
+  "find": "\t\tshort live = nofBits;",
+  "replace": "\t\tshort live = cpNofBits;"
+ },
+ {
+  "label": "Cp: the +0x20c word is copied the other way",
+  "find": "\tseen->word_7c = seen->word_78;",
+  "replace": "\tseen->word_78 = seen->word_7c;"
+ },
+ {
+  "label": "Cp: +0x20c is reached from the modem rather than the demodulator",
+  "find": "\tseen = (struct vpcm_dem_20c *)modem.demodulator->ptr_20c;",
+  "replace": "\tseen = (struct vpcm_dem_20c *)modem.ptr_49b4;"
+ },
+ {
+  "label": "Cp: the termination path leaves the pointer where it was",
+  "find": "\t\tbitPointer = 0;\n\t\treturn done;\n\t}",
+  "replace": "\t\treturn done;\n\t}"
+ },
+ {
+  "label": "Cp: a mid-sequence call also resets the pointer",
+  "find": "\tif (bitPointer != cpNofBits)\n\t\treturn done;",
+  "replace": "\tif (bitPointer != cpNofBits) {\n\t\tbitPointer = 0;\n\t\treturn done;\n\t}"
+ },
+ {
+  "label": "Cp: the sequence counter is never bumped",
+  "find": "\tnofTransmitSequences++;\n\n\tseen =",
+  "replace": "\tseen ="
+ },
+ {
+  "label": "Session: the modem is told the field, not the argument",
+  "find": "\tmodem.setSessionFlag((unsigned int)sessionType);",
+  "replace": "\tmodem.setSessionFlag((unsigned int)pcmSessionType);"
+ },
+ {
+  "label": "Session: the V.92 record gets the 0/1 rather than the low byte",
+  "find": "\tp92->v92CapabilitiesLocal = (unsigned char)sessionType;",
+  "replace": "\tp92->v92CapabilitiesLocal = (unsigned char)pcmSessionType;"
+ },
+ {
+  "label": "Session: the message names the other protocol",
+  "find": "\t\t sessionType != 0 ? 92 : 90);",
+  "replace": "\t\t sessionType != 0 ? 90 : 92);"
+ },
+ {
+  "label": "Session: the embedded modem sits four bytes earlier",
+  "find": "\tmodem.setSessionFlag((unsigned int)sessionType);",
+  "replace": "\t((V90Modem *)((unsigned char *)this + 0x1754))->setSessionFlag((unsigned int)sessionType);"
+ },
+ {
+  "label": "PhaseII: the power weights are shifted by one",
+  "find": "\t\tpower += info0[33 + i] * weight[i];",
+  "replace": "\t\tpower += info0[33 + i] * weight[i + 1];"
+ },
+ {
+  "label": "PhaseII: the power sum runs over six bits",
+  "find": "\tfor (i = 0; i <= 4; i++)",
+  "replace": "\tfor (i = 0; i <= 5; i++)"
+ },
+ {
+  "label": "PhaseII: the power sum treats its inputs as bits",
+  "find": "\t\tpower += info0[33 + i] * weight[i];",
+  "replace": "\t\tpower += (info0[33 + i] != 0) * weight[i];"
+ },
+ {
+  "label": "PhaseII: bits 38 and 39 are swapped",
+  "find": "\t\tp90->txPowerMeasurementPoint = (info0[38] != 0);\n\t\tp90->pcmType = (info0[39] != 0);",
+  "replace": "\t\tp90->txPowerMeasurementPoint = (info0[39] != 0);\n\t\tp90->pcmType = (info0[38] != 0);"
+ },
+ {
+  "label": "PhaseII: the remote bytes are never swapped",
+  "find": "\t\tp92->shortPhase2Remote = (unsigned char)info0[27];\n\t\tp92->v92CapabilitiesRemote = (unsigned char)info0[26];",
+  "replace": "\t\tp92->shortPhase2Remote = (unsigned char)info0[26];\n\t\tp92->v92CapabilitiesRemote = (unsigned char)info0[27];"
+ },
+ {
+  "label": "PhaseII: the first two float arrays are installed swapped",
+  "find": "\tp90->array_10 = array_7dd8;\n\tp90->array_14 = array_7e2c;",
+  "replace": "\tp90->array_10 = array_7e2c;\n\tp90->array_14 = array_7dd8;"
+ },
+ {
+  "label": "PhaseII: the V.92 record's first array is L2",
+  "find": "\tp92->array_18 = array_7dd8;",
+  "replace": "\tp92->array_18 = L2;"
+ },
+ {
+  "label": "PhaseII: the round-trip delay reaches only the V.90 record",
+  "find": "\tp90->rtd = rtd;\n\tp92->rtd = rtd;",
+  "replace": "\tp90->rtd = rtd;"
+ },
+ {
+  "label": "PhaseII: the tx-power-point report prints the stored 0/1",
+  "find": "\"1 = codec output)\\r\\n\", info0[38]);",
+  "replace": "\"1 = codec output)\\r\\n\",\n\t\t\t\t     p90->txPowerMeasurementPoint);"
+ },
+ {
+  "label": "PhaseII: the session type is not re-applied",
+  "find": "\tsetPcmSessionType(pcmSessionType);",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "PhaseII: the V.92 record's max tx power comes from the wrong field",
+  "find": "\tp92->maxTxPower = p90->maxTxPower;",
+  "replace": "\tp92->maxTxPower = p90->Uinfo;"
+ },
+ {
+  "label": "Uinfo: two adjacent mask positions are swapped",
+  "find": "\t\t1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1,",
+  "replace": "\t\t1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1,"
+ },
+ {
+  "label": "Uinfo: the dB scale is 20 log rather than 10",
+  "find": "(float)((long double)decade * 10.0L\n\t\t\t\t\t\t  + 60.0L);",
+  "replace": "(float)((long double)decade * 20.0L\n\t\t\t\t\t\t  + 60.0L);"
+ },
+ {
+  "label": "Uinfo: the probe scale is 2^-13",
+  "find": "\t\t\t\t\t * 6.103515625e-05L);",
+  "replace": "\t\t\t\t\t * 1.220703125e-04L);"
+ },
+ {
+  "label": "Uinfo: log10 sees the unrounded product",
+  "find": "\t\t\tdecade = (float)x87_log10((long double)scaled);",
+  "replace": "\t\t\tdecade = (float)x87_log10((long double)probe[i]\n\t\t\t\t\t\t  * 6.103515625e-05L);"
+ },
+ {
+  "label": "Uinfo: log10 comes from libm rather than the coprocessor",
+  "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));\n\treturn r;",
+  "replace": "\tr = (long double)__builtin_log10((double)x);\n\treturn r;",
+  "equivalent": true,
+  "why": "MEASURED, not argued.  The coprocessor result and glibc's are both rounded to a float before anything else happens to them, and a float ulp near this magnitude is about 6e-8 while the two logarithms differ by about 1e-16.  Swept over EVERY float magnitude in 2^-20..2^21 at 3.3e-7 relative spacing -- 123 million values, 41 binades, which is the whole domain the chain can present -- the two give bit-identical results: 0 differences.  So the inline asm is what the object does and not what the arithmetic needs, and it stays because it is what the object does.  HELD FIXED: the float rounding on BOTH sides of the logarithm.  Remove either and this equivalence goes away, which is why the mutation that removes the one before it IS caught."
+ },
+ {
+  "label": "Uinfo: the offset is 60 dB in the wrong direction",
+  "find": "(float)((long double)decade * 10.0L\n\t\t\t\t\t\t  + 60.0L);",
+  "replace": "(float)((long double)decade * 10.0L\n\t\t\t\t\t\t  - 60.0L);"
+ },
+ {
+  "label": "Uinfo: only twenty entries are cleared",
+  "find": "\tfor (i = 0; i < VPCM_L2; i++) {",
+  "replace": "\tfor (i = 0; i < VPCM_L2 - 1; i++) {"
+ },
+ {
+  "label": "Uinfo: the report starts at entry 14",
+  "find": "\t\tfor (i = 15; i <= 20; i++) {",
+  "replace": "\t\tfor (i = 14; i <= 20; i++) {"
+ },
+ {
+  "label": "Uinfo: the report's reference entry is L2[15]",
+  "find": "\t\t\t\td = (long double)L2[14] - (long double)L2[i];",
+  "replace": "\t\t\t\td = (long double)L2[15] - (long double)L2[i];"
+ },
+ {
+  "label": "Uinfo: the reference is subtracted the other way",
+  "find": "\t\t\t\td = (long double)L2[14] - (long double)L2[i];",
+  "replace": "\t\t\t\td = (long double)L2[i] - (long double)L2[14];"
+ },
+ {
+  "label": "Uinfo: the fraction is printed to four places",
+  "find": "x86_abs((int)(frac * 100000.0L)));",
+  "replace": "x86_abs((int)(frac * 10000.0L)));"
+ },
+ {
+  "label": "Uinfo: the +0x173d gate is inverted",
+  "find": "\tif (flag_173d == 0) {",
+  "replace": "\tif (flag_173d != 0) {"
+ },
+ {
+  "label": "Uinfo: the second default flag is 1",
+  "find": "\tflags_0217[1] = 0;",
+  "replace": "\tflags_0217[1] = 1;"
+ },
+ {
+  "label": "Uinfo: the default flags are written whatever came back",
+  "find": "\t\tif (uinfo != 0)\n\t\t\treturn uinfo;",
+  "replace": "\t\tif (uinfo == 0x7fffffff)\n\t\t\treturn uinfo;"
+ },
+ {
+  "label": "Uinfo: the argument gates the probe the other way",
+  "find": "\tif (skipProbe == 0) {",
+  "replace": "\tif (skipProbe != 0) {"
+ },
+ {
+  "label": "Uinfo: the modem's short is read from +0x1e, not +0x20",
+  "find": "\t\tuinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x20);",
+  "replace": "\t\tuinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x1e);"
+ },
+ {
+  "label": "Uinfo: the round-trip delay is not passed on",
+  "find": "\tsetPhaseIIinfo(info0, rtd);",
+  "replace": "\tsetPhaseIIinfo(info0, 0);"
+ },
+ {
+  "label": "NOT A MUTATION, A STATED GAP.  Replacing `d > 0.0L` with `d >= 0.0L` in the L2 report's sign character is EQUIVALENT over everything this test can reach, and would read NOT CAUGHT if it were listed.  Held fixed: 25 distinct, strictly positive probe magnitudes, so L2[14] never equals L2[i] for i in 15..20 and `d` is never exactly zero.  The same holds for the object: the two differ unless two probe tones measured identically."
+ },
+ {
+  "label": "A SECOND STATED GAP.  A zero or negative probe magnitude takes log10 out of its domain, and the sign character then diverges by construction: `fcompp` reports an unordered comparison as `below`, so the object prints '+' for a NaN, and C's `>` is false for one, so this prints '-'.  The differential test holds every probe magnitude strictly positive and does not reach it."
+ }
+]
