@@ -27,6 +27,8 @@
  "v34k56":         ["src/pump/v34/v34k56.cpp", "build/test/t_v34k56"],
  "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"],
  "v34info":        ["src/pump/v34/v34info.c",    "build/test/t_v34info"],
+ "v34info1a":      ["src/pump/v34/v34info1a.cpp",
+                                                 "build/test/t_v34info1a"],
  "v34rx":          ["src/pump/v34/v34rx.c",      "build/test/t_v34rx"],
  "v34shell":       ["src/pump/v34/v34shell.c",   "build/test/t_v34shell"],
  "v90adid":        ["src/pump/v90/V90AutoDigitalImpDetector.cpp",

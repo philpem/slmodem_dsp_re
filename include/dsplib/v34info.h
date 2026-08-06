@@ -60,6 +60,20 @@ void V34GiveINFO0dBits(void *obj, const short *bits);
 int V34GiveINFO1aBits(void *obj, const short *bits);
 
 /*
+ * Assemble an outbound INFO1a, INFO1c or INFO1d -- which one depends on the
+ * two receiver flags, the role flag and the session's layout selector.  Also
+ * moves `v90_receiver` on to 2, or back to 0 if the modem has no Uinfo to
+ * report.
+ *
+ * ALWAYS RETURNS 0, and no caller in the object looks at it; the type is
+ * `int` because both epilogues clear `%eax` explicitly.  Defined in
+ * `src/pump/v34/v34info1a.cpp` rather than beside the rest of this header's
+ * functions, because it calls a C++ member and a C translation unit cannot
+ * name one.
+ */
+int V34SetINFO1aBits(void *obj, short *bits);
+
+/*
  * Build the first short of one of V.92's six Modem-on-Hold messages, chosen
  * by the object's `moh_message`.  A selector above 5 writes nothing at all.
  */
