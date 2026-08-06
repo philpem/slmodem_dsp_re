@@ -357,23 +357,19 @@ snap_dem(unsigned char *dst, int side)
 	 */
 	s->preFilter.fir.coefficients = NULL;
 	s->preFilter.fir.history = NULL;
-	s->resampler.vptr = NULL;
-	s->descrambler.pLimit = NULL;
-	s->descrambler.pInitOut = NULL;
-	s->descrambler.pInitTap1 = NULL;
-	s->descrambler.pInitTap2 = NULL;
-	s->descrambler.pOut = NULL;
-	s->descrambler.pTap1 = NULL;
-	s->descrambler.pTap2 = NULL;
-	s->mappingParams = NULL;
-	s->mappingParamsAlt = NULL;
-	s->trn2Designer = NULL;
-	s->cp = NULL;
-	s->mp = NULL;
-	s->phase4Demodulator = NULL;
-	s->demapper = NULL;
-	s->constellationDesigner = NULL;
-	s->autoDigitalImpDetector = NULL;
+	/*
+	 * NOTHING ELSE IS NEUTRALISED, DELIBERATELY.  Only a field this test
+	 * sets to a per-side address can differ for a reason that is not a
+	 * defect; every other word of the slot came out of fill_pair and is
+	 * byte-identical on the two sides, so nulling it would turn a compared
+	 * word into an ignored one.  The pointers this object holds but never
+	 * uses in wave 2 -- the two mapping parameter blocks, the TRN2
+	 * designer, the CP and MP records, the phase 4 demodulator, the
+	 * demapper, the constellation designer, the detector, the embedded
+	 * descrambler's seven and the resampler's vptr -- stay in the
+	 * comparison for exactly that reason: a store that lands on one of
+	 * them should fail this test.
+	 */
 }
 
 static void
@@ -391,8 +387,6 @@ snap_p3d(unsigned char *dst, int side)
 	s->dil = (tagV90DILdescriptor *)(long)(l->dil == &dilo[side]);
 	s->jd = (V90Jd *)(long)(l->jd == &jdo[side]);
 	s->jdV92 = (V92Jd *)(long)(l->jdV92 == &jd92o[side]);
-	s->params = NULL;
-	s->ansamToneDetector = NULL;
 
 	s->descrambler.pLimit = (int *)(l->descrambler.pLimit - dbuf[side]);
 	s->descrambler.pInitOut = (int *)(l->descrambler.pInitOut - dbuf[side]);
