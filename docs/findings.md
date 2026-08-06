@@ -15128,3 +15128,54 @@ value; it is faster to test a belief about the compiler than to argue about it.
 
 `tools/toolchain/storeorder.py` reports the 19 and says all of the above at the
 top, so the next reader starts from the corrected premise.
+
+### 358. A detector that could not find the defect it was written for
+
+`tools/toolchain/extcheck.py` looks for fields whose declared SIGNEDNESS
+differs from the original's, by comparing `movswl` against `movzwl`. That is
+the class finding 353 belongs to -- a defect no differential test can see,
+because the two readings agree over every value the field actually holds.
+
+It took five corrections, and the fifth was found only by testing the tool
+against the one defect already known. **The first four versions all reported
+confidently and none of them could find it.**
+
+The false-positive classes, in the order they were removed:
+
+1. **Dead extensions.** The loaded value stored straight back as 16 bits -- a
+   field copy, a filter history shifting along. The upper half is discarded and
+   the compiler was free either way. (Finding 354; five of the first six hits.)
+2. **Register operands.** `movzwl %ax,%eax` is a cast of a computed value, not
+   a field load; it reflects an intermediate expression's type.
+3. **Re-extension.** `movzwl 0x8(%ebx),%eax` followed by `movswl %ax,%edx`: the
+   object wanted the raw sixteen bits for one use and re-extended a copy the
+   way the type requires. Reading the FIRST instruction as the type gets it
+   exactly backwards. Four `fskdemodulate` "hits" were this.
+4. **Self-contradiction.** A field loaded both ways within one function is
+   ordinary; comparing the two sides as sets then manufactures a pair in each
+   direction. `demapFrame`'s 0x144c and `receiver`'s 0x210..0x216 each appeared
+   twice, in opposite directions, which was the tell.
+
+**And the one that mattered: the operands were matched as TEXT.** The base
+register is whatever the allocator picked and differs between the two builds
+constantly -- the known defect reads `movzwl (%ecx)` in the object and
+`movswl (%edx)` here. No text comparison ever pairs those. Keying on the
+DISPLACEMENT instead, with stack slots excluded because those are locals rather
+than fields, is what made the tool work.
+
+Two of my own bugs sat on top of that: the contradiction filter unioned the
+mnemonics of BOTH sides, so every genuine disagreement filtered itself out; and
+after switching the key to the displacement I left the memory/register split
+testing for a `(` that was no longer in the string, so everything landed in the
+register bucket.
+
+**The validation is the finding.** Reintroducing `struct b103_hdx.mode` as
+`short` makes the tool report `TxHdxStartB103 mem 0x0 object movzwl ours
+movswl`; restoring `unsigned short` makes it disappear. Both directions, on a
+known answer. Before that test the tool printed "(none)" and I had no way to
+tell a clean tree from a broken detector -- which is finding 134's argument
+exactly, arriving in a new place: a check nobody has seen fire is not a check.
+
+It now reports four candidates that are NOT yet investigated and are recorded
+as unverified: `FPM_FSD_demodulate` +0x10, `FPM_MTD_detect` +0x14,
+`FPM_TONE_generate` +0x4, `V8GetMessage` +0x28.
