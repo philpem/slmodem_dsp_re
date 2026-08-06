@@ -18629,3 +18629,270 @@ left are 69 `EXMIT` (0x63858), 64/68 (0x635cc), 67 `XMITMP` (0x6399b), 24
 `TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A` (0x62e28).
 
 **Finding 422 is the only number this batch took.**
+
+### 423. Table 1's 69 and the entry 64 and 68 share, which is one body and two tails
+
+txstates 69 `EXMIT` and the entry 64 `JTXMIT` and 68 `J1TXMIT` share -- 823
+and 892 bytes of level-0 body, two of the six finding 422 left. Both are in
+`src/pump/v34/v34hstx1.cpp` and both compare byte for byte against the blob
+through `t_v34hstx1.c`, which is now 9,891 checks over fifteen arms. The
+register convention is finding 421's, unchanged: `0x4c(%esp)` is the object +
+0x221c, `0x74(%esp)` the receiver at +0x264, `0x78(%esp)` THE OBJECT PLUS
+FOUR.
+
+#### 64 and 68 are ONE entry, ONE body and TWO tails -- a third shape
+
+`.rodata+0x2da0` gives indices 59 and 63 the identical address, 0x635cc, and
+the brief asked whether the body re-reads `txstate` the way 5/54/74's does.
+**It does, but not in the prologue.** The read is at 0x636ff and it is inside
+the pass on which `vect_idx` wraps to zero, which is one pass in eight:
+
+```
+  635cc  the countdown, the bits, the symbol, vect_idx = (v + 1) & 7
+  636ea  f359c == 0x66     -> 0x66ca8, from EITHER txstate
+  636f2  vect_idx != 0     -> the loop, which is seven passes in eight
+  636ff  txstate == 0x44   -> 0x65653, 68's tail
+         otherwise            0x6370d, 64's tail
+```
+
+So the three shapes this file now carries are worth stating together, because
+"one table entry" has meant three different things:
+
+```
+  78 / 85         TWO entries, one body, two tail calls   (finding 340)
+  81 82 83 84     ONE entry, one behaviour
+  5 / 54 / 74     ONE entry, THREE behaviours -- the prologue re-reads
+  64 / 68         ONE entry, ONE body, TWO tails -- the re-read is seven
+                  eighths of the way down and most passes never reach it
+```
+
+`case_jtxmit_entry` asserts the sharing against the blob's own `.rodata` the
+way `case_silence_entry` does, and it asserts the other half too: 69's entry
+must NOT equal 64's, so a later blob folding them together is a failure rather
+than a silence.
+
+**What each does.** 64 sends the J sequence and 68 the J' sequence, on one
+body:
+
+```
+  the countdown at +0xaa78 is `tx1_ja_common` EXACTLY -- 78 and 85's, reused
+    unchanged -- except that its completion block at 0x6533c falls back INTO
+    the body at 0x635f0 rather than tail-calling anything, so the return
+    value is discarded here
+  +0x25d8 counts one per pass
+  TWO BITS OUT OF +0x25d6, shifted right by TWICE `vect_idx`: the halfword is
+    eight dibits and one wrap sends all of them
+  the scrambler, then the differential quadrant, then one `vect4` point
+  vect_idx = (vect_idx + 1) & 7
+  68's tail   clear f25cc (a 32-bit store), f25c6 and f25c0, and move the
+              transmit machine to TRNSEG4A
+  64's tail   +0x25da must be 2 and +0x25d8 must be PAST 0x80; then +0x25d6 is
+              reloaded with 0x899f and the transmit machine becomes 68
+```
+
+**69 is the same differential quadrant over two constellations**, chosen by a
+halfword of the receiver:
+
+```
+  6385c  cmpw $0x89b0,0x11e(%ebp)      ; the receiver's +0x11e, obj+0x382
+  6386b  not equal   -> vect4, one point, vect_idx += 2
+  67031  equal       -> TWO scrambler calls, vect16[q2 + 4*q1'], vect_idx += 4
+  63933  vect_idx == 0x14 -> 0x66e01: vect_idx = 8, txstate = DATAXMIT
+```
+
+so the sixteen-point half carries four bits a symbol and the four-point half
+two, and the segment is 0x14 samples either way -- ten passes of one or five
+of the other.
+
+#### THE GENERATOR SELECT IS `f25c2 & 1`, NOT `f359c == 0x65`
+
+Both arms carry `V34scrambler`'s loop twice, as 71, 86 and 51 do, and both
+choose between the copies on **bit 0 of the transmitter's flags word** rather
+than on the state word 71 and 86 use -- and the sense is inverted: the bit SET
+takes the 0x04000000 tap, which is `V34scrambler`'s `mode` 0. Two mutations
+of it are in the suite for that reason: reading `f359c == 0x65` here passes
+every run at one fill and is wrong at every fill.
+
+#### The differential quadrant is one static and the two sites are identical
+
+0x638eb..0x6390d and 0x63697..0x636b9 are instruction for instruction the same
+-- `f25c8 = (q + f25c6) & 3`, the `vect4` load, `f25c6 = f25c8`, the point --
+so `tx1_dpsk4` is one function for two arms, the way `tx1_ja_common` is. That
+is a claim the file makes and the eight mutations of it test against both.
+
+**The scrambler's two bits are not what is transmitted.** They are ADDED to
+the quadrant last sent, modulo four, which is what makes the seeds matter:
+with `f25c6` at zero the sum is the scrambler's output and the differencing is
+invisible. Every run here seeds it inside 1..3.
+
+#### Two seeds decide whether half of each arm runs at all
+
+**+0x382 IS THE POKE WITHOUT WHICH 447 BYTES OF 69 NEVER EXECUTE.** The fill
+leaves a pseudorandom halfword at the receiver's +0x11e, so an unpoked run
+takes the four-point half every time and `run_case`'s two guards -- "the arm
+wrote something", "the cursor reached the limit" -- both pass, because the
+four-point half writes plenty. That is finding 422's failure mode with a
+different field, and the only thing that would have said so is the mutation
+suite.
+
+**And +0x25d6 has to be NEGATIVE at a shift of sixteen or more before the
+object's `movzwl` at 0x6360d is separable from a `movswl`.** Only two bits of
+the shifted value are consumed, so a sign extension is invisible until the
+shift pushes the sign INTO them; `vect_idx` at 8 is the smallest index that
+gives a count of sixteen. Unsigned the two bits are 0 and signed they are 3.
+One run, and without it the reading is untested while the suite looks green.
+
+Three more seeds that are not decoration:
+
+- **+0x25d8 is driven negative**, because 0x63728's `jle` is SIGNED: a
+  sixteen-bit counter that has wrapped does not end 64's segment, where an
+  unsigned reading says it does. Two runs, 0x8000 and 0x7fff -- the second
+  wraps negative on the increment itself.
+- **The `f359c == 0x66` run that uses the receiver's flag has BOTH companions
+  at zero.** With +0x35a2 and +0x25da holding what the block wants anyway, a
+  mutation reading the wrong flag bit falls through the other two tests and
+  arrives at the same place; it went uncaught until the run was narrowed.
+- **The run at +0x25da wrong has +0x25d8 PAST the end**, for the same reason:
+  two guards in series have to be separated one at a time or deleting the
+  first is invisible.
+
+#### 284 mutations, 260 caught, 19 equivalent, and TWO new uncaught
+
+`test/mutations/v34hstx1.json`, which is finding 422's suite plus 88:
+
+```
+  284 mutations: 260 caught (260 by test, 0 by strings), 5 NOT caught,
+                 0 unusable, 19 equivalent, 0 MIScounted
+```
+
+**The two new uncaught are `V34EchoReportCoeff` and nothing else**, which is
+finding 341 arriving a second time and was predicted before the work started:
+
+```
+  64: the segment's end reports only the first echo canceller     NOT CAUGHT
+  64: the segment's end reports the first canceller twice         NOT CAUGHT
+```
+
+64/68 has FOUR call sites in two pairs -- the countdown's completion at
+0x6533c and the segment's end at 0x63819/0x63840 -- and at
+`dsplibs_debug_level == 0` the callee scans an array and prints, storing
+nothing. So dropping one or aiming both at the same canceller is invisible by
+construction. **The gap is narrower than "four calls untested", and the
+narrower statement is the useful one**: the two pairs' OTHER acts are caught,
+because each raises bit 2 of `f25c2` (seeded clear) and the second also zeroes
++0xaa78. The first pair's two mutations are already in the suite under 78/85,
+since `tx1_ja_common` is shared. The other three uncaught are findings 341's
+and 343's, unchanged.
+
+**THE TWO PAIRS ARE MUTUALLY EXCLUSIVE ON ONE PASS.** At 0 neither runs; at 1
+the countdown reaches zero and the segment's end then finds the counter
+already zero and declines; at 2 the countdown does nothing and the segment's
+end is the only pair. Three paths -- and **only TWO observable states**, which
+is the correction to make before that is read as three checks: the counter at 1
+and at 2 both leave +0xaa78 zero and bit 2 of `f25c2` raised, by two different
+routes to the same bytes, and the two rejoins (0x64326 and 0x629c8) write
+nothing to tell them apart. Measured rather than argued: under
+`the second pair is guarded the other way` the ONLY case that fails is the
+counter-2 run. Both are kept, because the mutation value differs where the
+state does not.
+
+#### Two anchors of the existing suite had to be narrowed
+
+Adding these arms made two of finding 345's `find` strings match twice --
+`o->f25c6 = 0;\n\t\to->f25c0 = 0;` now appears in 65 and in 68's tail, and the
+`| 4u` on `f25c2` in `tx1_ja_common` and in 64's segment end. `tools/mutate.py`
+prints `ANCHOR MATCHES 2 TIMES` and counts them **unusable**, so they fail
+loudly rather than silently testing the wrong site. Both were extended by one
+line of context. **A mutation suite over a growing file has this failure mode
+and the tool already catches it**; a run reporting a non-zero `unusable` is
+never to be shipped.
+
+#### Which checks are independent, and which are one check twice
+
+Independent, in the sense that each can fail while the others pass:
+
+- 69's two halves -- four-point and sixteen-point -- and within each its two
+  generators, its two previous quadrants, its completion and its step over the
+  completion: ten runs;
+- 64/68's body: two generators, two previous quadrants, four dibits of
+  +0x25d6, and the negative bit source -- eight;
+- the countdown's three values, which are 78/85's three under a fourth arm;
+- 68's tail at the wrap, under two generators;
+- 64's tail: +0x25da wrong, the segment running on, the boundary at exactly
+  0x80, the end itself, and the two negative +0x25d8 runs -- six;
+- the segment's end at counter 0 against counter 2 -- two, and see below for
+  the third;
+- 0x66ca8's four ways through -- the flag alone, +0x35a2 zero, +0x25da zero,
+  and both companions set;
+- **68 at the wrap with `f359c == 0x66`**, which is the run that orders the two
+  decisions: 0x65653 and 0x66ca8 want different things and the object tests
+  `f359c` first. A reconstruction testing the wrap first passes every other
+  run in the file.
+
+**Not independent, and named:**
+
+- **`68 J1TXMIT, a pass, the same body` is 64's check under a different
+  index.** A pass that does not wrap never reaches 0x636ff, so it must produce
+  exactly what the 64 run produces and it cannot fail while that one passes.
+  It is there to make "one entry, one body" a measurement rather than a
+  reading. **68's WRAP runs are a different matter and are independent** --
+  that is the whole point of the shape.
+- **the segment's end at counter 1 is the counter-2 run's state under another
+  path.** Three counter values drive three paths through the two echo-report
+  pairs and leave only two distinct objects: 1 and 2 both end with the counter
+  zero and bit 2 of `f25c2` up. The run is kept for its mutation value and it
+  cannot fail while the counter-2 run passes.
+- 69's run at 0x89b1 is a CONTROL: one count off the constant, so it must
+  produce what the four-point runs produce. It separates "equal to 0x89b0"
+  from a mask or a range. The run at 0x12b0 is NOT a control -- it shares the
+  constant's low byte and is what says the compare is sixteen bits.
+
+#### Neither arm needs a new exit
+
+69 rejoins at 0x63941 and 0x6409a; 64/68 at 0x629c8, 0x62d32, 0x63941,
+0x63da2, 0x6409a, 0x640a1, 0x6431f and 0x64326 -- every one a block that
+reloads the object and re-tests the loop. So finding 343's cost is not paid
+again and `enum v34tx1_exit` still has exactly the two values 81 and 86 gave
+it. **0x62d32 is part of 64/68 and not of its rejoin**, for the reason 0x6430c
+is part of 20: it clears `vect_idx`, and only one of the arm's five exits goes
+through it.
+
+**And 69 does not fall into 0x671f0.** Its sixteen-point block ends at 0x671eb
+with `jmp 67121`; 0x671f0 is `f25c0 = 0`, which is 19's completion and is
+already written. The two are adjacent and unrelated.
+
+#### What is not reconstructed, and it is finding 341's gap again
+
+Eleven blocks in these two arms are entered only when
+`dsplibs_debug_level > 1` and none is written:
+
+```
+  69       0x68529  0x66e48
+  64/68    0x6c725  0x6c714  0x6c851  0x682d6  0x682c5  0x682b4  0x6910c
+           0x68b75  0x63757
+```
+
+Every one is a diagnostic on a path where a state word moves or a counter
+reaches zero. The arms are faithful at debug level 0, which is what the
+library ships and what `t_v34hstx1.c` tests at.
+
+#### The fill is not held fixed
+
+```
+  V34HS_SEED=1,3,7,11,17,23     9,891 checks, PASS at every one
+  V34HS_SKEW=64                 PASS
+  V34HS_PADVARY=0               PASS
+  V34HS_LOOSEOBJ=1              PASS
+```
+
+`vect16` is memcmp-proved against `ref_vect16` here as `probe` and `vectpp`
+are, and that is a FOURTH copy rather than an independent check -- t_v34hshak.c,
+t_v34k56.c and t_v90p34.cpp already prove it. It is in this file because a run
+reads one entry of sixteen and a transcription error in any other survives
+every run here.
+
+**Fifteen of table 1's nineteen reachable targets are now written.** The four
+left are 67 `XMITMP` (0x6399b), 24 `TX_DPSK` (0x62b96), 21 `TRNSEG4` (0x64339)
+and 66 `TRNSEG4A` (0x62e28).
+
+**Finding 423 is the only number this batch took.**

@@ -52,7 +52,9 @@ dsplibs.o reconstruction coverage
   either a helper split out of a larger function, or drift:
     v34handshak_txblock
     v34tx1_dataxmit
+    v34tx1_exmit
     v34tx1_jatxmit
+    v34tx1_jtxmit
     v34tx1_k56jatxmit
     v34tx1_moh_silence
     v34tx1_ppseg

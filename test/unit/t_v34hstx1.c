@@ -1,5 +1,5 @@
 /*
- * t_v34hstx1.c -- thirteen arms of `v34handshak`'s per-sample transmit
+ * t_v34hstx1.c -- fifteen arms of `v34handshak`'s per-sample transmit
  * dispatch, each compared against the blob on its own.
  *
  * ---------------------------------------------------------------------------
@@ -98,6 +98,12 @@
 #define TX1_FAA7C	0xaa7c		/* 20 adds it into the counter     */
 #define TX1_RTD		0xaa7e		/* 20 reloads vect_idx from it     */
 #define TX1_FAA86	0xaa86		/* 20 accumulates into it          */
+#define TX1_F25C8	0x25c8		/* the quadrant just chosen        */
+#define TX1_F382	0x0382		/* receiver +0x11e: 69's selector  */
+#define TX1_F25D6	0x25d6		/* 64/68's sixteen bits, two a pass*/
+#define TX1_F25D8	0x25d8		/* 64/68 counts one per pass       */
+#define TX1_F25DA	0x25da		/* 64 needs 2; 66ca8 needs non-zero*/
+#define TX1_F35A2	0x35a2		/* 66ca8's other companion         */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
 
@@ -1159,11 +1165,458 @@ case_probe_table(void)
 		    memcmp(probe, ref_probe, sizeof(probe)), 0, 5199);
 }
 
+/* --- 69 EXMIT ------------------------------------------------------------- */
+
+/*
+ * ONE HALFWORD OF THE RECEIVER DECIDES WHETHER HALF THE ARM RUNS AT ALL, and
+ * that is why it is the first poke rather than an afterthought.  0x63858's
+ * first instruction compares +0x11e against 0x89b0; the fixture's fill leaves
+ * a pseudorandom halfword there, so without this poke the sixteen-point
+ * continuation at 0x67031 -- 447 bytes, the `vect16` half, two scrambler
+ * calls -- is never entered on any run, and `run_case`'s two guards cannot
+ * see it because the four-point half writes plenty.  That is finding 422's
+ * failure mode exactly, and the mutation suite is what would say so.
+ *
+ * Everything the arm writes is seeded away from what it stores:
+ *
+ *   f25cc      TX1_SRSEED, which separates the two generators (see 71)
+ *   f25c6      NON-ZERO and inside 0..3, or `(q + f25c6) & 3` cannot be told
+ *              from `q & 3`; two values, so "add f25c6" is not "add two"
+ *   f25c8      to a word that is no quadrant, so the store shows
+ *   +0x25d0    to a word that is neither a `vect4` nor a `vect16` entry
+ *   vect_idx   set per run; the completion reloads it with 8
+ *
+ * `f25c2` carries the generator select in bit 0 -- NOT `f359c == 0x65`, which
+ * is 71 and 86's -- and is seeded with other bits set so a reconstruction
+ * that assigned the word rather than reading one bit of it is caught.
+ */
+#define EX_F382		0
+#define EX_C2		1
+#define EX_IDX		2
+#define EX_C6		3
+
+static struct tx1_poke exmit[] = {
+	P16(TX1_F382, 0x1234), P16(TX1_F25C2, 0x1001), P16(TX1_VECTIDX, 4),
+	P16(TX1_F25C6, 2),
+	P32(TX1_F25CC, TX1_SRSEED), P16(TX1_F25C8, 0x0777),
+	P32(TX1_F25D0, 0x11223344)
+};
+
+static void
+run_exmit(int f382, int c2, int idx, int c6, const char *what, long tag)
+{
+	exmit[EX_F382].val = f382;
+	exmit[EX_C2].val = c2;
+	exmit[EX_IDX].val = idx;
+	exmit[EX_C6].val = c6;
+	run_case(V34HS_EXMIT, v34tx1_exmit, V34TX1_LOOP, what, tag,
+		 exmit, NP(exmit));
+}
+
+static void
+case_exmit(void)
+{
+	/*
+	 * The four-point half: +0x11e is anything but 0x89b0.  Two generators
+	 * and two previous quadrants, on an index that does not complete.
+	 */
+	run_exmit(0x1234, 0x1001, 4, 2,
+		  "69 EXMIT, four points, generator A", 6900);
+	run_exmit(0x1234, 0x1000, 4, 2,
+		  "69 EXMIT, four points, generator B", 6901);
+	run_exmit(0x1234, 0x1001, 4, 1,
+		  "69 EXMIT, four points, a different last quadrant", 6902);
+
+	/*
+	 * The segment ends at `vect_idx == 0x14` exactly, tested after the
+	 * advance -- so 0x12 reaches it by two and 0x13 steps over it to
+	 * 0x15, which is what tells `== 0x14` from `>= 0x14`.
+	 */
+	run_exmit(0x1234, 0x1001, 0x12, 2,
+		  "69 EXMIT, four points, the segment ends at 0x14", 6903);
+	run_exmit(0x1234, 0x1001, 0x13, 2,
+		  "69 EXMIT, four points, stepping over 0x14", 6904);
+
+	/*
+	 * The sixteen-point half.  0x89b0 is a sixteen-bit compare and the
+	 * value is negative as a short, so it is poked as one word rather
+	 * than assembled from a fill.
+	 */
+	run_exmit(0x89b0, 0x1001, 4, 2,
+		  "69 EXMIT, sixteen points, generator A", 6905);
+	run_exmit(0x89b0, 0x1000, 4, 2,
+		  "69 EXMIT, sixteen points, generator B", 6906);
+	run_exmit(0x89b0, 0x1001, 4, 1,
+		  "69 EXMIT, sixteen points, a different last quadrant", 6907);
+
+	/* Four samples a pass, so 0x10 completes and 0x11 steps over. */
+	run_exmit(0x89b0, 0x1001, 0x10, 2,
+		  "69 EXMIT, sixteen points, the segment ends at 0x14", 6908);
+	run_exmit(0x89b0, 0x1001, 0x11, 2,
+		  "69 EXMIT, sixteen points, stepping over 0x14", 6909);
+
+	/*
+	 * AND ONE RUN THAT IS NOT A BEHAVIOUR: 0x89b1 is one count away from
+	 * the constant, so it must produce exactly what 6900 produces.  It
+	 * separates "equal to 0x89b0" from a mask or a range and cannot fail
+	 * while the four-point runs pass.
+	 */
+	run_exmit(0x89b1, 0x1001, 4, 2,
+		  "69 EXMIT, one count off the selector", 6910);
+	/*
+	 * AND 0x12b0, WHICH IS THE RUN THAT SAYS THE COMPARE IS SIXTEEN BITS.
+	 * Its low byte is the constant's, so a byte-wide reading of +0x11e
+	 * takes the sixteen-point half here where the object takes the
+	 * four-point one; 0x1234 and 0x89b1 both agree with a byte reading and
+	 * the mutation went uncaught until this run existed.
+	 */
+	run_exmit(0x12b0, 0x1001, 4, 2,
+		  "69 EXMIT, the selector's low byte alone", 6911);
+}
+
+/* --- 64 JTXMIT and 68 J1TXMIT --------------------------------------------- */
+
+/*
+ * ONE TABLE ENTRY, ONE BODY, TWO TAILS -- and unlike 5/54/74 the prologue does
+ * NOT re-read `txstate`.  The compare at 0x636ff is inside the pass on which
+ * `vect_idx` wraps to zero, so a run at 68 that does not wrap is 64's check
+ * under a different index and a run at 68 that does wrap is a behaviour of its
+ * own.  Both are here and each is labelled with which it is.
+ *
+ * THE FOUR THINGS EVERY RUN VARIES ARE AT LITERAL INDICES AT THE HEAD, which
+ * is finding 422's rule: addressing a poke as `NP(a) - k` breaks silently the
+ * moment one is inserted, and `run_case`'s guards do not notice because the
+ * body still writes.
+ *
+ * Everything the arm writes is seeded away from what it stores:
+ *
+ *   +0x25d8    away from what the increment produces, and per run
+ *   +0x25d6    0x1b4e, whose eight dibits are 2 3 0 1 3 2 1 0 -- all four
+ *              values, so the shift by twice `vect_idx` is live and a wrong
+ *              shift picks a different symbol.  0x899f is what the segment's
+ *              end stores, so the seed is away from that too
+ *   f25cc      TX1_SRSEED for the generators, and 68's tail clears it
+ *   f25c6      non-zero and inside 0..3, and 68's tail clears it
+ *   f25c8      to a word that is no quadrant
+ *   f25c0      non-zero, because only 68's tail clears it
+ *   +0x25d0    to a word that is no `vect4` entry
+ *   +0xaa78    per run: 0 is "no countdown", 1 completes it, 2 leaves it
+ *              running AND is what the segment's end needs to report
+ *   f25c2      bit 0 the generator, bit 2 CLEAR so both echo-report blocks'
+ *              one visible act is visible
+ */
+#define JT_IDX		0
+#define JT_C2		1
+#define JT_CNT		2
+#define JT_59C		3
+#define JT_D8		4
+#define JT_DA		5
+#define JT_A2		6
+#define JT_FLAGS	7
+#define JT_C6		8
+#define JT_D6		9
+
+static struct tx1_poke jtxmit[] = {
+	P16(TX1_VECTIDX, 3), P16(TX1_F25C2, 0x1001), P16(TX1_COUNT, 0),
+	P16(TX1_F359C, 0x64), P16(TX1_F25D8, 0x0070), P16(TX1_F25DA, 2),
+	P16(TX1_F35A2, 0x0033), P16(TX1_RXFLAGS, 0), P16(TX1_F25C6, 2),
+	P16(TX1_F25D6, 0x1b4e),
+	P32(TX1_F25CC, TX1_SRSEED), P16(TX1_F25C8, 0x0777),
+	P32(TX1_F25D0, 0x11223344),
+	P16(TX1_F25C0, 0x1234)
+};
+
+/*
+ * The defaults: a pass that does not wrap, no countdown, the generator with
+ * bit 0 set, `f359c` away from 0x66, and 64's two companions already holding
+ * what its tail wants so that a run reaching the wrap ends the segment unless
+ * it says otherwise.
+ */
+static void
+jt_reset(void)
+{
+	jtxmit[JT_IDX].val = 3;
+	jtxmit[JT_C2].val = 0x1001;
+	jtxmit[JT_CNT].val = 0;
+	jtxmit[JT_59C].val = 0x64;
+	jtxmit[JT_D8].val = 0x0070;
+	jtxmit[JT_DA].val = 2;
+	jtxmit[JT_A2].val = 0x0033;
+	jtxmit[JT_FLAGS].val = 0;
+	jtxmit[JT_C6].val = 2;
+	jtxmit[JT_D6].val = 0x1b4e;
+}
+
+static void
+run_jtxmit(short txst, const char *what, long tag)
+{
+	run_case(txst, v34tx1_jtxmit, V34TX1_LOOP, what, tag,
+		 jtxmit, NP(jtxmit));
+}
+
+static void
+case_jtxmit(void)
+{
+	/* The body: two generators, and the dibit the index selects. */
+	jt_reset();
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, a pass, generator A", 6400);
+	jt_reset();
+	jtxmit[JT_C2].val = 0x1000;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, a pass, generator B", 6401);
+	jt_reset();
+	jtxmit[JT_C6].val = 1;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, a different last quadrant", 6402);
+
+	/*
+	 * The shift is by TWICE `vect_idx`.  At +0x25d6 == 0x1b4e these four
+	 * indices -- 0, 1, 5 and 8 -- select dibits 2, 3, 2 and 0, so three
+	 * distinct symbols and not four; index 5 repeats index 0's.  Index 8 is
+	 * the one that shifts the halfword out entirely, a legal count of
+	 * sixteen whose answer is zero, and it is also THE ONLY ONE that
+	 * separates a shift by twice the index from a shift by the index: at
+	 * 0, 1 and 5 the halved count lands on the same dibit.  That is a fact
+	 * about this seed, so a different +0x25d6 would move it.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 0;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the first dibit", 6403);
+	jt_reset();
+	jtxmit[JT_IDX].val = 1;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the second dibit", 6404);
+	jt_reset();
+	jtxmit[JT_IDX].val = 5;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the sixth dibit", 6405);
+	jt_reset();
+	jtxmit[JT_IDX].val = 8;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the halfword shifted out", 6406);
+	/*
+	 * AND THE SAME INDEX WITH THE BIT SOURCE NEGATIVE, which is the ONLY
+	 * run that separates the object's `movzwl` at 0x6360d from a `movswl`.
+	 * Only two bits of the shifted value are consumed, so a sign extension
+	 * is invisible until the shift pushes the sign INTO them -- which needs
+	 * a count of at least sixteen, and index 8 is the smallest that gives
+	 * one.  Unsigned the two bits are 0 and signed they are 3, so the two
+	 * readings send different symbols.  0x899f is the value the segment's
+	 * end reloads, and it is negative as a short.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 8;
+	jtxmit[JT_D6].val = 0x899f;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the bit source negative", 6409);
+
+	/*
+	 * The countdown at the top, which is 78 and 85's `tx1_ja_common`: 0
+	 * does nothing (6400 above), 2 decrements and leaves, 1 decrements TO
+	 * zero and is the path that raises bit 2 of f25c2 and reports both
+	 * cancellers before falling back into the body.
+	 */
+	jt_reset();
+	jtxmit[JT_CNT].val = 2;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the counter 2 -> 1", 6407);
+	jt_reset();
+	jtxmit[JT_CNT].val = 1;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the counter 1 -> 0", 6408);
+
+	/*
+	 * NOT A BEHAVIOUR OF ITS OWN, and it is the point of the pair: a pass
+	 * that does not wrap never reaches 0x636ff, so 68 runs 64's body and
+	 * must produce exactly what 6400 produces.  It cannot fail while 6400
+	 * passes, and it is what makes "one entry, one body" a measurement.
+	 */
+	jt_reset();
+	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, a pass, the same body", 6800);
+
+	/*
+	 * 68's TAIL, and it is independent: at the wrap the arm clears f25cc,
+	 * f25c6 and f25c0 and moves the transmit machine to TRNSEG4A.  All
+	 * three are seeded non-zero; the second run is at the other generator
+	 * so the clear of f25cc is measured against two different registers.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, the wrap ends the segment", 6801);
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_C2].val = 0x1000;
+	run_jtxmit(V34HS_J1TXMIT,
+		   "68 J1TXMIT, the wrap, generator B", 6802);
+
+	/*
+	 * 64's TAIL.  +0x25da must hold 2 or the pass ends where it stands;
+	 * +0x25d8 must be PAST 0x80 after the increment, tested signed.
+	 */
+	/*
+	 * +0x25d8 IS PAST 0x80 ON THIS RUN AND THAT IS DELIBERATE: with it
+	 * short of the end the mutation that deletes the +0x25da test rejoins
+	 * where the object rejoins and goes uncaught.  The two guards have to
+	 * be separated one at a time.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_DA].val = 3;
+	jtxmit[JT_D8].val = 0x0080;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the wrap with +0x25da wrong", 6410);
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x0060;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the wrap, the segment runs on",
+		   6411);
+	/*
+	 * 0x7f increments to 0x80, which is NOT past it -- the object's `jle`
+	 * -- so this is the run that tells `> 0x80` from `>= 0x80`.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x007f;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the wrap at exactly 0x80", 6412);
+	/* And 0x80 increments to 0x81, which is. */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x0080;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the segment ends, no report", 6413);
+
+	/*
+	 * THE COMPARE IS SIGNED, and these two runs are the only ones that say
+	 * so.  0x8000 and 0x7fff both leave a NEGATIVE halfword after the
+	 * increment, which a `movzwl` reading calls larger than 0x80 and the
+	 * object does not -- so an unsigned reconstruction ends the segment on
+	 * both and the object ends it on neither.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x8000;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the wrap with +0x25d8 negative",
+		   6414);
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x7fff;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the wrap, +0x25d8 wraps negative",
+		   6415);
+
+	/*
+	 * The segment's end with the counter still running, which is the only
+	 * path to the SECOND pair of echo reports: it raises bit 2 of f25c2
+	 * and zeroes +0xaa78.  The two pairs are mutually exclusive on one
+	 * pass -- reaching zero at the top leaves nothing here to do -- so
+	 * 6416 is the second pair and 6417 is the first pair and no second.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x0080;
+	jtxmit[JT_CNT].val = 2;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the segment ends, counter 2",
+		   6416);
+	/*
+	 * AND 6417 IS NOT A THIRD OBSERVATION, which is worth saying because
+	 * three paths give only two states: at counter 1 the countdown reaches
+	 * zero and does the reporting, and the segment's end then finds the
+	 * counter already zero and declines -- so the object ends where the
+	 * counter-2 run ends it, +0xaa78 zero and bit 2 of f25c2 up, by the
+	 * other route.  It cannot fail while 6416 passes.  It is kept because
+	 * its MUTATION value differs: `the second pair is guarded the other
+	 * way` fails 6416 alone, and only running both says which.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_D8].val = 0x0080;
+	jtxmit[JT_CNT].val = 1;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, the segment ends, counter 1 -> 0",
+		   6417);
+
+	/*
+	 * `f359c == 0x66` -- 0x66ca8, reachable from either txstate and tested
+	 * BEFORE the wrap.  Four runs, because it is a three-test conjunction
+	 * whose first arm short-circuits the other two, and only the arm that
+	 * gets through writes: it moves the transmit machine to XMIT0 and
+	 * clears `vect_idx` through 0x62d32.  The index is 3 on all four, so
+	 * the body leaves 4 behind and the clear is visible.
+	 */
+	/*
+	 * THE FLAG RUN HAS BOTH COMPANIONS ZERO, and that is what makes it a
+	 * check: with them holding what 0x66ca8 wants anyway, a mutation
+	 * reading the wrong flag bit falls through the other two tests and
+	 * arrives at the same place.  Only the flag can get through here.
+	 */
+	jt_reset();
+	jtxmit[JT_59C].val = 0x66;
+	jtxmit[JT_FLAGS].val = 0x0400;		/* V34_RX_FLAG_DATA */
+	jtxmit[JT_A2].val = 0;
+	jtxmit[JT_DA].val = 0;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, the data flag", 6420);
+	jt_reset();
+	jtxmit[JT_59C].val = 0x66;
+	jtxmit[JT_A2].val = 0;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, +0x35a2 zero", 6421);
+	jt_reset();
+	jtxmit[JT_59C].val = 0x66;
+	jtxmit[JT_DA].val = 0;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, +0x25da zero", 6422);
+	jt_reset();
+	jtxmit[JT_59C].val = 0x66;
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, both companions set",
+		   6423);
+
+	/*
+	 * AND ONE THAT ORDERS THE TWO DECISIONS.  At txstate 68 with the index
+	 * at the wrap, 0x65653 and 0x66ca8 want two different things; the
+	 * object tests `f359c` first (0x636ea, before 0x636f0), so this run
+	 * must move the transmit machine to XMIT0 and NOT to TRNSEG4A.  It is
+	 * an independent check: a reconstruction testing the wrap first passes
+	 * every other run here.
+	 */
+	jt_reset();
+	jtxmit[JT_IDX].val = 7;
+	jtxmit[JT_59C].val = 0x66;
+	jtxmit[JT_FLAGS].val = 0x0400;
+	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, f359c 0x66 beats the wrap",
+		   6424);
+}
+
+/*
+ * THE TWO SHARED ENTRIES OF THIS BATCH, read out of the blob's own `.rodata`
+ * the way `case_silence_entry` reads 5, 54 and 74's.  64 and 68 hold one
+ * entry; 69 holds a different one, and that is asserted too so that a later
+ * blob folding the two together is a failure rather than a silence.
+ */
+static void
+case_jtxmit_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+
+	diff_eq_int("table 1: txstates 64 and 68 share one entry",
+		    t1[64 - 5] == t1[68 - 5], 1, 6490);
+	diff_eq_int("table 1: that entry is v34handshak + 0xcdc",
+		    (int)(t1[64 - 5] - base), 0x635cc - 0x628f0, 6491);
+	diff_eq_int("table 1: txstate 69 has an entry of its own",
+		    t1[69 - 5] != t1[64 - 5], 1, 6492);
+	diff_eq_int("table 1: 69's entry is v34handshak + 0xf68",
+		    (int)(t1[69 - 5] - base), 0x63858 - 0x628f0, 6493);
+}
+
+/*
+ * `vect16` IS THE ONE TABLE 69's SIXTEEN-POINT HALF READS, and this file is
+ * its first reader here.  It is already proved against `ref_vect16` in
+ * t_v34hshak.c, t_v34k56.c and t_v90p34.cpp, so this is a FOURTH copy and not
+ * an independent check -- it is here for the reason `probe` and `vectpp` are,
+ * that a run reads one entry of sixteen and a transcription error in any
+ * other survives every run in this file.
+ */
+extern const int ref_vect16[16];
+
+static void
+case_vect16_table(void)
+{
+	diff_eq_int("vect16, 16 points at .rodata",
+		    memcmp(vect16, ref_vect16, sizeof(vect16)), 0, 6999);
+}
+
 int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: thirteen per-sample transmit arms");
+	diff_begin("v34handshak table 1: fifteen per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
@@ -1189,6 +1642,11 @@ main(void)
 	case_dataxmit();
 	case_probe_table();
 	case_tx_l1();
+
+	case_jtxmit_entry();
+	case_vect16_table();
+	case_exmit();
+	case_jtxmit();
 
 	return diff_end();
 }

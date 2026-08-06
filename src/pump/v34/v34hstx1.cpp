@@ -164,6 +164,32 @@
 #define TX1_FABE8	0xabe8
 
 /*
+ * +0x25d6, +0x25d8 and +0x25da -- the three halfwords of `unmapped_25d6` that
+ * 64/68 owns, reached off `0x4c(%esp)` as 0x3ba, 0x3bc and 0x3be.
+ *
+ * +0x25d6 is the BIT SOURCE: 64/68 shifts it right by twice `vect_idx` and
+ * hands the bottom two bits to the scrambler, so it is sixteen bits read as
+ * eight dibits, and the end of 64's segment reloads it with 0x899f.  +0x25d8
+ * counts one per pass and ends the segment past 0x80.  +0x25da is a mode
+ * word: 64 goes no further unless it holds 2, and the `f359c == 0x66` path
+ * declines to move on when it holds 0.  No other site in this tree reads any
+ * of the three.
+ */
+#define TX1_F25D6	0x25d6
+#define TX1_F25D8	0x25d8
+#define TX1_F25DA	0x25da
+
+/*
+ * +0x35a2, one halfword of `unmapped_359e`, and +0x382, which is the
+ * RECEIVER's +0x11e -- `0x74(%esp)` plus 0x11e -- and lands in that
+ * structure's `pad_000`, so neither is a named field anywhere in this tree.
+ * 64/68 tests +0x35a2 against zero on its `f359c == 0x66` path and 69 tests
+ * +0x382 against 0x89b0 to choose between four points and sixteen.
+ */
+#define TX1_F35A2	0x35a2
+#define TX1_F382	0x382
+
+/*
  * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
  * `v34handshakinit` aims the same pair on its mode-4 path (v34hshak.c:1451),
  * and 54's completion aims it again before handing the record to
@@ -1104,4 +1130,260 @@ v34tx1_silence(void *objp)
 
 	tx1_put(o, TX1_F358C, 0);
 	return V34TX1_LOOP;				/* 0x640a1 */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The differential quadrant step 69 and 64/68 share, 0x638eb..0x6390d and
+ * 0x63697..0x636b9.
+ *
+ * The scrambler's two bits are not transmitted directly: they are ADDED to
+ * the quadrant last sent, modulo four, and the sum is both the point's index
+ * and the new "last".  `f25c8` is the quadrant chosen and `f25c6` the one
+ * carried forward, and the object writes them with two stores of the same
+ * register either side of the table load.
+ *
+ * The two sites are instruction for instruction the same -- the same three
+ * fields, the same mask, the same order -- so this is one static rather than
+ * two copies, for the reason 78 and 85 share `tx1_ja_common`.  `f25c6` is
+ * read with `movzwl` and the sum is masked to two bits, so a fixture value
+ * outside 0..3 cannot change the answer.
+ */
+static short
+tx1_dpsk4(struct v34_object *o, short q)
+{
+	short k = (short)((q + (unsigned short)o->f25c6) & 3);
+	int point = vect4[k];
+
+	o->f25c8 = k;
+	o->f25c6 = k;
+	tx1_put_point(o, point);
+	return k;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 69 `EXMIT`, 0x63858, with the sixteen-point half at 0x67031 and the
+ * segment's end at 0x66e01.
+ *
+ * ONE HALFWORD OF THE RECEIVER PICKS THE CONSTELLATION.  +0x11e against
+ * 0x89b0 -- a sixteen-bit compare, and the arm's first instruction -- sends
+ * the pass either through `vect4`, two samples of `vect_idx` at a time, or
+ * through `vect16`, four at a time.  Everything else about the two halves is
+ * the same shape: scramble, add to the quadrant last sent, transmit, count.
+ *
+ * THE GENERATOR SELECT IS `f25c2 & 1` AND NOT `f359c == 0x65`.  71 and 86
+ * choose their scrambler polynomial on the state word (finding 340); this arm
+ * chooses on bit 0 of the transmitter's flags, and the sense is inverted --
+ * the bit SET takes the 0x04000000 tap, which is `V34scrambler`'s `mode` 0.
+ * The object reads the flags word once (0x67048) and tests it twice on the
+ * sixteen-point path, so one `mode` for both calls is what it does.
+ *
+ * THE SIXTEEN-POINT HALF SCRAMBLES TWICE AND THE FIRST CALL IS PASSED 0xf
+ * WHERE THE SECOND IS PASSED 3 (0x67035 against 0x670c7).  For `nbits == 2`
+ * the two are the same argument: only bits 0 and 1 of `bits` are consumed and
+ * both are set either way.  It is written as the object writes it and the
+ * mutation that makes them equal is recorded as equivalent, with that proof.
+ *
+ * The first call's quadrant goes into `f25c8` and is READ BACK FROM THERE
+ * (0x67131) to index `vect16` as the row, with the second call's two bits as
+ * the column -- `vect16[q2 + 4 * k]`, the same packing v34k56.cpp and
+ * v34pcmmain.cpp use.  So the sixteen-point symbol carries four bits and the
+ * four-point one carries two, which is why one advances `vect_idx` by four
+ * and the other by two.
+ *
+ * THE SEGMENT ENDS AT `vect_idx == 0x14`, tested as sixteen bits after the
+ * advance and reached from either half -- ten passes of the four-point one or
+ * five of the sixteen-point one, both from zero.  0x66e01 then reloads
+ * `vect_idx` with 8 and moves the transmit machine to DATAXMIT.  Its compare
+ * against DATAXMIT cannot be false, for finding 342's reason at 65: the arm
+ * is reached only through table 1 at `txstate == 69` and `txmit` does not
+ * write +0x3596.
+ */
+int
+v34tx1_exmit(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	short mode = (short)((o->f25c2 & 1) == 0);
+	short q;
+
+	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+		/* 0x67031 */
+		short k;
+		int point;
+
+		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);
+		o->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);
+
+		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);
+		k = o->f25c8;			/* re-read, 0x67131 */
+		o->f25c6 = k;
+		point = vect16[q + 4 * k];
+		tx1_put_point(o, point);
+		txmit(o);
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 4);
+	} else {
+		/* 0x6386b */
+		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);
+		(void)tx1_dpsk4(o, q);
+		txmit(o);
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 2);
+	}
+
+	/* 0x6392c */
+	if ((unsigned short)o->vect_idx == 0x14u) {
+		/* 0x66e01 */
+		short txst = tx1_get(o, TX1_TXSTATE);
+
+		o->vect_idx = 8;
+		if (txst != V34HS_DATAXMIT)
+			tx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);
+		return V34TX1_LOOP;			/* 0x6409a */
+	}
+	return V34TX1_LOOP;				/* 0x63941 */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 64 `JTXMIT` and 68 `J1TXMIT`, 0x635cc, with 68's tail at 0x65653, 64's at
+ * 0x6372e and the `f359c == 0x66` path at 0x66ca8.
+ *
+ * ONE TABLE ENTRY, ONE BODY, TWO TAILS -- a third shape beside the file's
+ * other two.  `.rodata+0x2da0` gives indices 59 and 63 the identical address
+ * and, unlike 5/54/74, the prologue does NOT re-read `txstate`: the body runs
+ * the same for both txstates and only the pass on which `vect_idx` wraps to
+ * zero reaches the compare at 0x636ff.  So driving 68 through a pass that
+ * does not wrap is 64's check under a different index, and driving it through
+ * one that does is a behaviour of its own; `t_v34hstx1.c` says which is
+ * which.
+ *
+ * THE BODY, in the object's order:
+ *
+ *   - the countdown at +0xaa78, which is 78 and 85's exactly -- `tx1_ja_common`
+ *     -- except that its completion block at 0x6533c FALLS BACK INTO the body
+ *     at 0x635f0 rather than tail-calling anything.  The return value is
+ *     therefore ignored here, and that is the whole difference;
+ *   - +0x25d8 counts one per pass;
+ *   - TWO BITS OUT OF +0x25d6, selected by `vect_idx`: the halfword is loaded
+ *     zero-extended and shifted right by TWICE the index, so the field is
+ *     eight dibits and the eight passes of a wrap send all of them.  The
+ *     shift count is `%cl` and the hardware masks it to five bits, which is
+ *     why it is written `& 31` here;
+ *   - the scrambler, on `f25c2 & 1` as 69's is;
+ *   - the differential quadrant and one `vect4` point;
+ *   - `vect_idx = (vect_idx + 1) & 7`, stored before anything branches.
+ *
+ * THEN THREE WAYS OUT, tested in this order and no other:
+ *
+ *   f359c == 0x66       -> 0x66ca8, from EITHER txstate
+ *   vect_idx != 0       -> the loop, which is most passes
+ *   txstate == 68       -> 0x65653, the segment's end
+ *   otherwise (64)      -> 0x6370d, +0x25da and +0x25d8
+ *
+ * 0x66ca8 IS A THREE-TEST CONJUNCTION AND ONLY ITS LAST ARM WRITES.  The
+ * receiver's `V34_RX_FLAG_DATA` short-circuits the other two -- the object
+ * spells it `testb $0x4,0x123(%ebp)`, bit 2 of the flags word's high byte --
+ * and without it BOTH +0x35a2 and +0x25da must be non-zero.  The arm then
+ * moves the transmit machine to XMIT0 and clears `vect_idx` through 0x62d32,
+ * which 51 also rejoins.  The two declining exits leave `vect_idx` at the
+ * value the body stored, so the clear is the observable difference.
+ *
+ * 64's TAIL IS A SECOND COUNTER.  +0x25da must be 2 or the pass simply ends;
+ * +0x25d8 must be PAST 0x80, tested SIGNED (`jle`), so a sixteen-bit counter
+ * that has wrapped negative does not end the segment.  Past it, +0x25d6 is
+ * reloaded with 0x899f -- a fresh sixteen dibits -- and the transmit machine
+ * becomes 68, which is how 64 hands over.  The compare guarding that store
+ * cannot be TRUE: this path is reached only because 0x636ff found `txstate`
+ * was not 68 and nothing between the two writes it.
+ *
+ * AND THEN THE SECOND PAIR OF ECHO REPORTS.  If +0xaa78 is still non-zero the
+ * arm raises bit 2 of `f25c2`, reports both cancellers and ZEROES the counter
+ * -- the same two calls and the same flag as the countdown's own completion,
+ * on a different condition.  The two are mutually exclusive on one pass:
+ * reaching zero at the top leaves nothing for this to do.  `V34EchoReportCoeff`
+ * only prints (finding 341), so of the four call sites in this arm nothing is
+ * observable at debug level 0; the flag and the zeroing are.
+ *
+ * 68's TAIL, 0x65653, CLEARS RATHER THAN COUNTS: `f25cc` (a 32-bit store),
+ * `f25c6` and `f25c0` all go to zero and the transmit machine moves to
+ * TRNSEG4A.  IT DOES NOT COMPARE FIRST -- there is no `if (txstate != ...)`
+ * guard the way every other state change in this file has one -- and it is
+ * written that way because that is what the object does.
+ */
+int
+v34tx1_jtxmit(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	unsigned shift;
+	unsigned short idx;
+	short bits, mode, q;
+
+	/* 0x635cc, and the completion at 0x6533c falls back into 0x635f0 */
+	(void)tx1_ja_common(o);
+
+	/* 0x635f0 */
+	tx1_put(o, TX1_F25D8,
+		(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));
+
+	shift = (unsigned)(2 * (int)o->vect_idx) & 31u;
+	bits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);
+
+	mode = (short)((o->f25c2 & 1) == 0);
+	q = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);
+	(void)tx1_dpsk4(o, q);
+	txmit(o);
+
+	idx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);
+	o->vect_idx = (short)idx;
+
+	if (o->f359c == 0x66) {
+		/* 0x66ca8 */
+		if (!(rx->flags & V34_RX_FLAG_DATA)) {
+			if (tx1_get(o, TX1_F35A2) == 0)
+				return V34TX1_LOOP;	/* 0x629c8 */
+			if (tx1_get(o, TX1_F25DA) == 0)
+				return V34TX1_LOOP;	/* 0x63da2 */
+		}
+		/* 0x66cd1 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_XMIT0)
+			tx1_put(o, TX1_TXSTATE, V34HS_XMIT0);
+		o->vect_idx = 0;			/* 0x62d32 */
+		return V34TX1_LOOP;			/* 0x62d70 */
+	}
+
+	/* 0x636f0 */
+	if (idx != 0)
+		return V34TX1_LOOP;			/* 0x63941 */
+
+	if (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {
+		/* 0x65653 */
+		o->f25cc = 0;
+		tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		o->f25c6 = 0;
+		o->f25c0 = 0;
+		return V34TX1_LOOP;			/* 0x640a1 */
+	}
+
+	/* 0x6370d */
+	if (tx1_get(o, TX1_F25DA) != 2)
+		return V34TX1_LOOP;			/* 0x6409a */
+	if (tx1_get(o, TX1_F25D8) <= 0x80)
+		return V34TX1_LOOP;			/* 0x6431f */
+
+	/* 0x6372e */
+	tx1_put(o, TX1_F25D6, (short)0x899f);
+	if (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)
+		tx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);
+
+	/* 0x637c8 */
+	if (tx1_get(o, TX1_COUNT) != 0) {
+		o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
+		V34EchoReportCoeff(&o->echo0);
+		V34EchoReportCoeff(&o->echo1);
+		tx1_put(o, TX1_COUNT, 0);
+		return V34TX1_LOOP;			/* 0x64326 */
+	}
+	return V34TX1_LOOP;				/* 0x629c8 */
 }

@@ -322,28 +322,31 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-### Thirteen of the nineteen have landed, and this is how a case is landed
+### Fifteen of the nineteen have landed, and this is how a case is landed
 
 txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
--- then 60, 18, 70 and 51, the four smallest of what those left, and then 19,
-20 and the entry 5, 54 and 74 share, are in `src/pump/v34/v34hstx1.cpp` and
-compare byte for byte through `test/unit/t_v34hstx1.c`. Findings 340-345, 421
-and 422.
+-- then 60, 18, 70 and 51, the four smallest of what those left, then 19, 20
+and the entry 5, 54 and 74 share, and then 69 and the entry 64 and 68 share,
+are in `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
+`test/unit/t_v34hstx1.c`. Findings 340-345, 421, 422 and 423.
 
-The six still open are 69, 64/68, 67, 24, 21 and 66, which are the six
-largest. **Two of the thirteen needed a table before they could be written at
-all**: `probe`, 64 signed shorts at `.rodata+0x2c00`, which 51 reads and which
-this tree did not have (finding 421); and `vectpp`, 96 shorts at
-`.rodata+0x2c80`, which 20 reads as forty-eight FOUR-byte points and which was
-`static` in v34rx.c (finding 422). Read both before estimating one of the six
--- an arm that reads a table this tree does not have, or has under the wrong
-element width, is not the size its byte count says.
+The four still open are 67, 24, 21 and 66. **Two of the fifteen needed a table
+before they could be written at all**: `probe`, 64 signed shorts at
+`.rodata+0x2c00`, which 51 reads and which this tree did not have (finding
+421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
+FOUR-byte points and which was `static` in v34rx.c (finding 422). Read both
+before estimating one of the four -- an arm that reads a table this tree does
+not have, or has under the wrong element width, is not the size its byte count
+says.
 
-**AND ONE TABLE ENTRY IS NOT ONE ARM.** 0x640b4 is the target for txstates 5,
-54 and 74, and the shared prologue re-reads `txstate` at 0x640f4 and gives
-each of the three a different tail. 0x635cc, shared by 64 and 68, has not been
-read yet; do not assume it is one behaviour because finding 323 lists one
-representative. Finding 422.
+**AND ONE TABLE ENTRY IS NOT ONE ARM, in three different ways.** 0x640b4 is
+the target for txstates 5, 54 and 74, and the shared prologue re-reads
+`txstate` at 0x640f4 and gives each of the three a different tail (finding
+422). 0x635cc, shared by 64 and 68, re-reads it too -- but at 0x636ff, seven
+eighths of the way down and only on the pass where `vect_idx` wraps, so most
+passes are one body under two indices and the wrap is two behaviours (finding
+423). 0x63d58, shared by 81, 82, 83 and 84, really is one behaviour. Measure
+it; do not assume either way because finding 323 lists one representative.
 
 **`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
 one shared harness object, so it demands all forty-three cases at once, and no
