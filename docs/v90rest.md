@@ -100,6 +100,36 @@ Recomputed with the fixed tool. Nothing here is waiting on `v34handshak`;
 `k56FlexPhase34` is the one that unblocks earliest: four one-byte K56Flex stubs
 and it is free.
 
+## Where wave 1 got to
+
+All five landed and are merged into `v90rest`; `make phase` is green and
+coverage went 19.2% -> 19.9% (334 -> 351 symbols, 140,154 -> 145,291 bytes).
+
+| worktree | what landed | findings |
+|---|---|---|
+| `w1a_leaves` | all ten leaf symbols, seven classes | 246-249 |
+| `w1b_adi` | `V90AutoDigitalImpDetector` x2 + `calculateDilLength` | 251-253 |
+| `w1c_p2info` | `V90Phase2Info::printInfo` | 255-257 |
+| `w1d_equ` | `V90Equalizer` x3 | 258-260 |
+| `w1e_dil` | `DILdescriptorPacker` (the prerequisite) | 262-263 |
+
+Mutation suites now registered: `v90adid`, `v90dil`, `dilpack`, `v90equ`,
+`v92ec`, `v90rto`, `v90cd`. **#60 is 30 symbols short of done minus these**;
+what is left of it is wave 2 (the `setSessionFlag` spine, 7 symbols, 1,523 B)
+and wave 3 (`VPcmFloModem`, 6 symbols, 2,420 B), both unblocked now.
+
+Three things wave 1 cost that the next batch should not pay again:
+
+- a fresh worktree has no `third_party/spandsp`, and the failure names
+  spandsp rather than the worktree (finding 257);
+- a new C++ class header must go in `SKIP_HEADERS` in `tools/offcheck.py`, or
+  the offsets gate reports every annotation in the tree as wrong; and its
+  `offsetof` assertions must be guarded on
+  `__SIZEOF_POINTER__ == 4` or `check64` fails;
+- an anti-vacuity check derived from the wrong quantity fails loudly and looks
+  like a broken reconstruction. Two of them did (findings 247, 262). Both were
+  the test's arithmetic, not the function's.
+
 ## Owed once wave 1 is merged: delete the stub `V90Phase2Info`
 
 `include/dsplib/V90PreFilter.h` defines its own `class V90Phase2Info` -- an
