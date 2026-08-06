@@ -847,6 +847,166 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * THE DIALLING SWITCHES, both of them.
+	 *
+	 * `CALLPROG_Progress`'s CPSTATE_DIALING loop calls `DialerProgress`
+	 * and switches on what it returns; inside the `^` arm it switches
+	 * again on `calling_tone_mode`.  Nine announcements live in those two
+	 * switches and none had ever been reached, because a dial string that
+	 * walks the supervisor into each arm in turn does not exist -- the
+	 * codes come from states the SUPERVISOR is supposed to put the dialler
+	 * into, not from anything the parser produces.
+	 *
+	 * `dialer.progress_state` is a plain int and maps one-to-one onto the
+	 * return code (dialer.h names both sets), so seeding it selects the
+	 * arm directly.  Same fixture as t_dialerprog.c's, one level up.
+	 */
+	diff_begin("callprog: the dialling switches");
+	{
+		static const struct {
+			const char	*what;
+			int		pstate;		/* dialer.progress_state */
+			int		tone_mode;
+		} arm[] = {
+			/*
+			 * THE FOUR `^` CASES ARE NOT HERE, and finding 239
+			 * says why: driving them shows our CALLPROG_Progress
+			 * printing "CALLPROG: ^ encountered." where the blob
+			 * prints nothing, for every calling_tone_mode from 0
+			 * to 4.  The string is in the object and
+			 * debugaudit --invented is clean, so it is a
+			 * PLACEMENT error, not an invented literal -- and
+			 * CALLPROG_Progress is 16 sites short of the blob's
+			 * 29, so the line belongs to some condition we have
+			 * not reconstructed rather than to this one.
+			 *
+			 * Left out rather than skipped-with-a-reason: a
+			 * differential test that passes while disagreeing
+			 * with the blob is the thing this tier exists to not
+			 * have.  Restore these four when the placement is
+			 * settled.
+			 */
+			{ "wait for dial tone",
+			  DIALER_WAIT_FOR_DIALTONE_STATE, 0 },
+			{ "wait for answer",
+			  DIALER_WAIT_FOR_SILENCE_STATE, 0 },
+			{ "wait for the bong",
+			  DIALER_WAIT_FOR_BONGTONE_STATE, 0 },
+			{ "back to command mode",
+			  DIALER_END_PARTIALLY_STATE, 0 },
+			{ "end of the dial string", DIALER_END_STATE, 0 },
+			{ "a code the switch does not name", 99, 0 },
+		};
+		static struct callprog ca, cb;
+		static struct callprog_cfg cfg2;
+		static struct call cla, clb;
+		static short in2[BUFSAMP], oa2[BUFSAMP], ob2[BUFSAMP];
+		static const unsigned skip[] = {100, 108, 120, 132};
+		unsigned lvl, c;
+
+		for (lvl = 1; lvl <= 3; lvl++) {
+			for (c = 0; c < sizeof(arm) / sizeof(arm[0]); c++) {
+				int ra, rb, b, k;
+				long tag = (long)lvl * 100 + c;
+
+				memset(&ca, HARNESS_MALLOC_FILL, sizeof(ca));
+				memset(&cb, HARNESS_MALLOC_FILL, sizeof(cb));
+				memset(&cla, 0, sizeof(cla));
+				memset(&clb, 0, sizeof(clb));
+				cla.self = &cla;
+				clb.self = &clb;
+				memset(&cfg2, 0, sizeof(cfg2));
+				cfg2.get_sreg = sreg;
+				cfg2.modem = (void *)0xD1A1u;
+				params();
+
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&cla);
+				CALLPROG_Create(&ca, &cfg2);
+				CALLPROG_Dial(&ca, "5551234");
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&clb);
+				ref_CALLPROG_Create(&cb, &cfg2);
+				ref_CALLPROG_Dial(&cb, "5551234");
+
+				/*
+				 * CLEAR `fatal` FIRST.  CALLPROG_Dial leaves
+				 * it at 7 -- DIALER_ERROR_MSG -- in this
+				 * fixture, and Progress checks that BEFORE the
+				 * dialling loop and returns.  Without this
+				 * every case below took the fatal path, agreed
+				 * on both sides, and passed while reaching
+				 * none of the nine sites it exists for.  The
+				 * debugcov count not moving is what showed it.
+				 */
+				ca.fatal = cb.fatal = 0;
+				ca.state = cb.state = CPSTATE_DIALING;
+				ca.dialer.progress_state =
+					cb.dialer.progress_state = arm[c].pstate;
+				ca.calling_tone_mode = cb.calling_tone_mode =
+					arm[c].tone_mode;
+
+				memset(in2, 0, sizeof(in2));
+				memset(oa2, 0x5a, sizeof(oa2));
+				memset(ob2, 0x5a, sizeof(ob2));
+
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					lvl;
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&cla);
+				ra = CALLPROG_Progress(&ca, in2, oa2, BUFSAMP);
+				harness_param_set(MDMPRM_DP_ADDR,
+						  (long)(intptr_t)&clb);
+				rb = ref_CALLPROG_Progress(&cb, in2, ob2,
+							   BUFSAMP);
+
+				dsplib_debug_capture_on = 0;
+				dsplibs_debug_level = ref_dsplibs_debug_level =
+					0;
+
+				diff_eq_int("%s: message", ra, rb, tag);
+				diff_eq_int("%s: state after", ca.state,
+					    cb.state, tag);
+				for (b = 0; b < (int)sizeof(ca); b++) {
+					int hole = 0;
+
+					for (k = 0; k < 4; k++)
+						if (b >= (int)skip[k] &&
+						    b < (int)skip[k] + 4)
+							hole = 1;
+					if (!hole)
+						diff_eq_int("supervisor after",
+						    ((unsigned char *)&ca)[b],
+						    ((unsigned char *)&cb)[b],
+						    tag * 100000 + b);
+				}
+				for (b = 0; b < BUFSAMP; b++)
+					diff_eq_int("output", oa2[b], ob2[b],
+						    tag * 1000 + b);
+				if (strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) != 0 &&
+				    getenv("DBGDIFF"))
+					fprintf(stderr, "=== %s, level %u ===\n"
+						"ours:\n%s\nblob:\n%s\n",
+						arm[c].what, lvl,
+						dsplib_debug_capture_text(0),
+						dsplib_debug_capture_text(1));
+				diff_eq_int("transcripts agree",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("level says the right amount",
+					    dsplib_debug_capture_lines(1) > 0,
+					    lvl > 1, tag);
+			}
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("guards");
 	{
 		distinct = 0;

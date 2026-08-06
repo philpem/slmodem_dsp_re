@@ -13716,3 +13716,62 @@ is that the call can be made at all, which was the open question.
 **Three turns of pointer-seeding produced nothing** and the fixture was in the
 file the whole time.  The general lesson is the tree's own: before building a
 fixture for a function, look at what already drives its neighbours.
+
+### 239. Driving the dialling switches found a misplaced call site
+
+`CALLPROG_Progress`'s CPSTATE_DIALING loop switches on what `DialerProgress`
+returns, and inside the `^` arm switches again on `calling_tone_mode`.  Nine
+announcements live in those two switches and none had ever been reached: the
+codes come from states the SUPERVISOR is supposed to put the dialler into, not
+from anything a dial string produces.  Seeding `dialer.progress_state` --
+a plain int, one-to-one with the return code -- selects the arm directly.
+
+Five of the nine now execute and agree.  **The four `^` cases do not agree**,
+and that is the result worth having.
+
+#### What diverges
+
+With the dialler in `DIALER_CALLING_TONE_STATE` and `calling_tone_mode` any of
+0, 1, 2, 3 or 4:
+
+    ours:  CALLPROG: ^ encountered.
+           CALLPROG: ^ encountered. Disabling Calling-Tone.
+    blob:  CALLPROG: ^ encountered. Disabling Calling-Tone.
+
+We print a line the original does not, at every mode including one outside the
+switch's four named cases, where the blob prints nothing at all.
+
+#### It is a placement error, not an invented string
+
+`debugaudit.py --invented` is clean -- 755 literals checked, every one present
+in the object -- and `"CALLPROG: ^ encountered.\n"` is in `.rodata.str1.1` as
+its own string.  So the original has the message; our reconstruction calls it
+from the wrong place.
+
+`debugaudit.py --missing` says `CALLPROG_Progress` has **29 call sites in the
+blob and 13 in ours**.  We are sixteen short, so the line almost certainly
+belongs to one of those sixteen conditions rather than to this one.
+
+#### A wrong method, caught by its own control
+
+Trying to find which blob function references the string, I searched objdump's
+output for `.rodata+0x141d6` and got nothing -- and nearly reported "the blob
+never uses it".  Running the same search against two strings KNOWN to be used
+returned nothing either.  Two reasons: the strings live in `.rodata.str1.1`
+and `.rodata.str1.4`, not `.rodata`, and REL relocations keep the addend in
+the instruction's immediate rather than printing it.  `debugaudit.py` already
+handles both.
+
+The control is what saved it.  A search that returns nothing looks identical
+whether the thing is absent or the search is broken -- findings 198, 221 and
+226 are the same shape, and this is the fourth.
+
+#### What was done about it
+
+The four `^` cases are left OUT of `t_callprog_progress.c`, not skipped with a
+reason.  A differential test that passes while disagreeing with the blob is
+what this tier exists to not have.  The comment in their place says what to
+restore and when.
+
+Overall the day's sweep took the dead-site count from 30 to 17: dialer.c is
+finished at 0, callprog.c is at 10.
