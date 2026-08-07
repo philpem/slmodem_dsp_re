@@ -23086,6 +23086,17 @@ tree was missing, but a table whose *values* made the arm's arithmetic
 unobservable. **A pointer being aimed is not the same as a table being
 usable.**
 
+**And `dummy` is shared, so that write is not local to the ladder.** Every
+hole that is not the session, the configuration or `shaped` points at the same
+block -- the modulator's `preemp` and `ec_prem`, the receive carrier
+descriptor, the detector's coefficients -- so thirty-five shorts written for
+the rate ladder are thirty-five shorts several unrelated readers also see. It
+is safe here for two reasons, and an agent copying the pattern needs both:
+the two sides get the IDENTICAL write, so nothing about the comparison
+changes; and `run_case`'s queue guard held on all sixty-five runs, which is
+what would have said so had `V34ModulatorProcess` stopped producing samples
+on the altered coefficients.
+
 #### The mark the ladder reads is the one the arm has just written
 
 Two runs poked +0x250 to drive the ladder and the ladder never walked at all,
@@ -23121,6 +23132,18 @@ has a line of context now, added by hand rather than through
 `tools/reanchor.py`, because finding 455 is what that tool did to three
 anchors while reporting "0 left for a human". `tools/anchorcheck.py` is clean
 and every one of the batch's own entries carries `"fn"`.
+
+**AND THOSE FIVE ARE A MERGE HAZARD, because they are entries this batch
+EDITED rather than added.** 21 `TRNSEG4` is being written in a sibling
+worktree into the same `.cpp` and the same JSON. If 21's arm carries either
+line -- `tx1_put_point(o, vect4[q]);` or the 0x89b0 compare -- that batch
+meets the identical `ANCHOR MATCHES 2 TIMES` and disambiguates the same five
+entries its own way, and two independent context additions to one entry merge
+into something that looks clean and matches once with one arm present and
+twice with both. **After the merge, re-run the suite and read the UNUSABLE
+count**: the five reappear there if either resolution is wrong, and the
+NOT-CAUGHT count does not move to say so. Finding 420's trap firing a second
+time, at entries neither batch owns.
 
 **And the count to read is UNUSABLE, not NOT-CAUGHT.** The first run of the
 136 reported 46 uncaught and 5 unusable; the five were the number that
