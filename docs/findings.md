@@ -23639,3 +23639,98 @@ second and third, and the legend already says to write the column from the
 tree -- which is evidently not enough. The count in the test's own
 `diff_begin` was wrong on both sides too: base said seventeen, 21 left it,
 66 said eighteen, and the answer is nineteen.
+
+======================================================================
+### 540. `anchorcheck.py` could not see a C++ method, and a skipped suite was silent
+
+The next batch on this branch deletes `src/pump/v34/v34hshak_t3mid.c` -- the
+unify -- and **455 mutations are registered against that path**.  Asking what
+the gate does when a registered source stops existing turned up five holes,
+four of them the same shape as the three this tool has already had.
+
+#### The skip that reads as a pass
+
+Four `continue`s in `main` were silent: a suites.json entry that is not
+`[source, binary]`, a source path that does not exist, a registered suite with
+no `test/mutations/<name>.json`, and a per-suite file that will not parse.
+Any of them and the tool prints
+
+```
+  0 anchor(s) land in an arm their label does not name
+```
+
+and exits 0, having checked nothing.  `refcheck.py`'s `check_suites()` does
+catch the stale *source* path, so the tree was not defenceless -- but the
+missing mutation file is caught by nothing anywhere, and neither tool said
+how many suites it had actually looked at.  A count of what was checked is
+the difference between a clean tree and a dead detector, which is finding
+134's argument and the fourth time it has applied to this file.
+
+#### The regex found 45 functions in a file that has 8
+
+`DEFN` was `^([A-Za-z_][A-Za-z_0-9]*)\(`, and `[A-Za-z_0-9]` does not include
+`:`.  So **every qualified C++ method was invisible** -- and because a bare
+`^NAME(` also matches a MACRO INVOCATION at column 0, what the index filled
+up with instead was noise.  `VPcmFloModem.cpp` reported 45 definitions, all
+45 of them `VPCM_OFF(...)` and not one a function:
+
+```
+  before   45 defn(s): VPCM_OFF, VPCM_OFF, VPCM_OFF, VPCM_OFF, ...
+  after     8 defn(s): x87_log10, x86_abs, getV90JaBits, getV90CpBits, ...
+```
+
+Two consequences, and the second is worse than the first.  Rule 1's
+`enclosing()` returned a macro name for every anchor in every C++ file.  And
+Rule 2 -- the `"fn"` field, whose whole point is that it is exact -- would
+report `BAD fn` for any real method, while **accepting `"fn": "VPCM_OFF"`**,
+because a macro was in `defined`.  The one mechanism documented as having no
+false positives had them for a third of the suites.
+
+The rule is now structural rather than lexical: match the name, walk to the
+matching close paren, and require the next non-space character to be `{`.
+That is what separates a definition from a macro call and from a forward
+declaration, and it does not care what characters the name is spelled with.
+
+#### The anchor that had been unusable all along
+
+With the tool able to count, the tree had one:
+
+```
+  NOT UNIQUE  vpcmflomodem: Uinfo: the second default flag is 1   matches 2 time(s)
+```
+
+`flags_0217[0..3]` is written twice in `VPcmFloModem.cpp` in identical text,
+in `getUinfoValue` and in `enterPhase3`, whose copy belongs to a different
+suite.  `mutate.py` does print `ANCHOR MATCHES 2 TIMES`, but an unusable
+mutation does not fail a run (finding 347), so the suite went on reporting
+`0 NOT caught` without it.  The label says Uinfo, so it is `getUinfoValue`'s;
+repaired with three lines of context and an `"fn"`, **and it is CAUGHT** --
+49 mutations, 48 caught, 0 unusable.  Being unusable is not evidence of being
+equivalent, and this one was neither.
+
+#### Shown to fire
+
+Finding 134's rule, and the reason it is quoted here for the fourth time.
+Each defect was reintroduced and watched to appear:
+
+```
+  stale source path (the unify's failure mode)   exit=1  SKIPPED     v34hst3mid: source ... does not exist
+  registered suite with no mutation file         exit=1  SKIPPED     v34hst3mid: registered, but there is no ...
+  `fn` naming the wrong C++ method               exit=1  RE-POINTED  vpcmflomodem
+  `fn` naming a macro the old regex accepted     exit=1  BAD fn      'VPCM_OFF' names no function in ...
+  nothing wrong                                  exit=0  (nothing)
+```
+
+#### The measurement that prompted it, and where 356a is off
+
+Resolving every object-based offset macro in the two `v34handshak` files
+against `struct v34_object` gives **102 macros in use, 23 on a field the
+struct already names**.  356a says 95 and 23.  The 23 is exactly right and
+its list is what task #31 acts on; the total is not, and 356a also calls its
+eight-line excerpt "complete" when the excerpt is eight of the twenty-three.
+
+One thing the recount adds that changes the batching: **all 23 are in
+`v34hshak.c` and none in `v34hshak_t3mid.c`**.  Task #25's stated reason for
+unifying before renaming -- so the rename lands on one file instead of two --
+is therefore wrong.  The order is still right, but the reason is the shared
+anchors, not the file count.

@@ -87,17 +87,57 @@ CASE_NAME = re.compile(r"case\s+(V34HS_\w+):")
 # positives, and it protects exactly the entries whose author asked for it.
 #
 STATE_DEF = re.compile(r"^#define\s+(V34HS_\w+)\s+(\d+)\s*$", re.M)
+#
 # A definition in this tree's style: return type on its own line, name at
-# column 0.  UPPERCASE INITIALS TOO -- the first version required a lowercase
-# first letter, so every `VPcmV34*` and `V34*` function was invisible and
-# `v34pcmif.c` looked like a file with no functions in it at all.  That is the
-# same shape as the comment-derived arm map: a check with a silent hole.
-DEFN = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\(", re.M)
+# column 0.  Three versions of this regex have had silent holes, so the rule
+# is now structural rather than lexical.
+#
+#   1. It required a LOWERCASE first letter, so every `VPcmV34*` and `V34*`
+#      function was invisible and `v34pcmif.c` looked like a file with no
+#      functions in it.
+#   2. It stopped at `[A-Za-z_0-9]*`, which does not include `::`, so every
+#      QUALIFIED C++ METHOD was invisible too -- and because a bare
+#      `^NAME(` also matches a MACRO INVOCATION at column 0, what it found
+#      instead was noise.  `VPcmFloModem.cpp` reported 45 "definitions", all
+#      45 of them `VPCM_OFF(...)` and not one of them a function.  Rule 1's
+#      `enclosing()` therefore returned a macro name for every anchor in
+#      every C++ file, and Rule 2's `"fn"` could only ever report BAD fn.
+#
+# So: match the name, walk to the matching close paren, and require the next
+# non-space character to be `{`.  That is what separates a definition from a
+# macro call (`;`) and from a forward declaration (`;`).  The name recorded
+# is the trailing `::` component, because that is what a `"fn"` field spells.
+#
+DEFN = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*(?:::[A-Za-z_~][A-Za-z_0-9]*)*)\(",
+                  re.M)
 NUMS = re.compile(r"\b(\d{2})\b")
 
 
 def defn_index(src):
-    return sorted((m.start(), m.group(1)) for m in DEFN.finditer(src))
+    """Every function DEFINITION in `src`, as (offset, trailing name)."""
+    out = []
+    for m in DEFN.finditer(src):
+        i, depth = m.end() - 1, 0
+        while i < len(src):
+            if src[i] == "(":
+                depth += 1
+            elif src[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        else:
+            continue
+        j = i + 1
+        while j < len(src) and src[j] in " \t\r\n":
+            j += 1
+        if j < len(src) and src[j] == "{":      # a body, so a definition
+            out.append((m.start(), m.group(1).split("::")[-1]))
+    return sorted(out)
+
+
+def label_of(m):
+    return m.get("label", "(no label)")
 
 
 def enclosing(index, pos):
@@ -142,20 +182,40 @@ def main():
     reg = json.load(open(os.path.join("test", "mutations", "suites.json")))
     names = args.suite or [k for k in reg if not k.startswith("_")]
     suspect = 0
+    #
+    # A SKIP IS A DEFECT, NOT A NON-EVENT.
+    #
+    # Every `continue` below used to be silent, and the tree was about to run
+    # a batch that DELETES a registered source file (v34hshak_t3mid.c, which
+    # 455 mutations are pinned to).  With a silent skip that batch comes back
+    # `0 anchor(s) land in an arm their label does not name` and exit 0, with
+    # a third of the mutation coverage checked by nothing.  That is finding
+    # 134's argument -- a detector that cannot be told apart from a clean
+    # tree is not a detector -- and it is the same shape as `extcheck`
+    # printing "(none)" through four broken versions.
+    #
+    # So each skip is counted, named and fails the run.
+    #
+    skipped, checked, seen, nonuniq = [], 0, 0, []
     for name in sorted(names):
         entry = reg.get(name)
         if not entry or not isinstance(entry, list) or len(entry) != 2:
+            skipped.append((name, "suites.json entry is not [source, binary]"))
             continue
         source = entry[0]
         if not os.path.exists(source):
+            skipped.append((name, "source %s does not exist" % source))
             continue
         path = os.path.join("test", "mutations", name + ".json")
         if not os.path.exists(path):
+            skipped.append((name, "registered, but there is no %s" % path))
             continue
         try:
             muts = json.load(open(path))
-        except ValueError:
+        except ValueError as e:
+            skipped.append((name, "%s is malformed: %s" % (path, e)))
             continue
+        checked += 1
         src = open(source).read()
         idx, arms = defn_index(src), arm_map(src)
         defined = {n for _, n in idx}
@@ -171,10 +231,20 @@ def main():
         for m in muts:
             if not isinstance(m, dict) or "find" not in m:
                 continue
+            seen += 1
             hits = [i for i in range(len(src))
                     if src.startswith(m["find"], i)]
             if len(hits) != 1:
-                continue                      # reanchor.py's problem, not ours
+                #
+                # `reanchor.py` repairs these, but nothing FAILED on them:
+                # `mutate.py` prints ANCHOR MATCHES n TIMES and carries on,
+                # and an unusable mutation still leaves the suite reporting
+                # `0 NOT caught` (finding 347, four batches lost mutations
+                # that way).  Counting them here is what makes a lost anchor
+                # visible without running a suite that takes an hour.
+                #
+                nonuniq.append((name, label_of(m), len(hits)))
+                continue
             fn = enclosing(idx, hits[0])
             label = m.get("label", "")
 
@@ -210,8 +280,16 @@ def main():
                       % (fn, "" if len(here) == 1 else "s",
                          ", ".join(str(x) for x in sorted(here))))
                 suspect += 1
+    for name, why in skipped:
+        print("  SKIPPED     %s: %s" % (name, why))
+    for name, label, n in nonuniq:
+        print("  NOT UNIQUE  %s: %-46s matches %d time(s)"
+              % (name, label[:46], n))
+    print("\n  %d suite(s) checked, %d mutation(s), %d skipped"
+          % (checked, seen, len(skipped)))
+    print("  %d anchor(s) match other than exactly once" % len(nonuniq))
     print("  %d anchor(s) land in an arm their label does not name" % suspect)
-    return 1 if suspect else 0
+    return 1 if (suspect or skipped or nonuniq) else 0
 
 
 if __name__ == "__main__":
