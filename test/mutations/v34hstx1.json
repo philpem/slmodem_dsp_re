@@ -2367,13 +2367,15 @@
  },
  {
   "label": "24: anything past four builds the message",
-  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
-  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */"
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "fn": "v34tx1_tx_dpsk"
  },
  {
   "label": "24: five restarts the handshake like anything else",
-  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
-  "replace": "\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */"
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */",
+  "fn": "v34tx1_tx_dpsk"
  },
  {
   "label": "24: moh_recvd is compared signed",
@@ -2499,13 +2501,15 @@
  },
  {
   "label": "24: +0xabf9 picks the two messages the other way round",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 1;\t\t/* 0x6a415 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x6a415 */\n\t}",
+  "fn": "tx1_moh_send"
  },
  {
   "label": "24: the message built is always MHfrr",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
-  "replace": "\to->moh_message = 1;"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "replace": "\to->moh_message = 1;",
+  "fn": "tx1_moh_send"
  },
  {
   "label": "24: the message is built into the record it installs",
@@ -2634,13 +2638,15 @@
  },
  {
   "label": "24: the hold tail's +0xabf9 test is inverted",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\t/* 0x688b4 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "24: the hold tail reads +0xabf9 as a halfword",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
-  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "24: the hold tail does not stamp +0xabe2",
@@ -2669,8 +2675,9 @@
  },
  {
   "label": "24: the hold tail restarts the handshake where it clears down",
-  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_reinit(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
-  "replace": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o);"
+  "find": "\t\ttx1_moh_reinit(o,\n\t\t\t       \"MOH: Timeout waiting for MH sequence under\"\n\t\t\t       \" MHreq, initiating retrain\\r\\n\");\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x65031 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"MOH: Timeout waiting for MH sequence under\"\n\t\t\t\" cleardown, terminating connection without\"\n\t\t\t\" acknowledge\\r\\n\");\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
+  "replace": "\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x65031 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"MOH: Timeout waiting for MH sequence under\"\n\t\t\t\" cleardown, terminating connection without\"\n\t\t\t\" acknowledge\\r\\n\");\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o, MOH_ILLEGAL);",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "21: the quadrant is stored but the point is vect4[0]",

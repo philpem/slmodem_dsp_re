@@ -1984,6 +1984,13 @@ tx1_moh_cleardown(struct v34_object *o)
 }
 
 /*
+ * The two 0x69041 sites share one literal; it is named so that the
+ * sharing is visible in the source rather than only in the object.
+ */
+#define MOH_ILLEGAL	"MOH: Illegal MH sequence under MHreq,"	\
+			" initiating retrain\r\n"
+
+/*
  * 0x689f6 -- put the modem on hold: MOH_SILENCE, WAIT, and the two counters
  * the silence arm at 0x63d58 then runs on.  `t_v34hstx1.c` drives it through
  * both of its two entries, `moh_message == 1` and `moh_recvd` at 0 or 4.
@@ -2000,6 +2007,11 @@ tx1_moh_on_hold(struct v34_object *o)
 /*
  * 0x69041 and 0x6923d -- the retrain entry, twice over and identical.
  *
+ * THE MESSAGE IS THE CALLER'S, for tx1_ja_common's reason: 0x69041 and
+ * 0x69227 are two guards in front of two copies of these two stores, and
+ * the only difference between the copies is which literal they push.  The
+ * dispatch's TWO calls share one copy because they share one message.
+ *
  * `v34handshakinit(obj, 1)` RE-ARMS THE LOOP THAT IS DISPATCHING THIS ARM:
  * `v34modeminit` sets the block's sample limit at +0x2aa0 to six and clears
  * `vect_idx`, and it moves the transmit machine to SILENCERETRAIN, so the
@@ -2009,8 +2021,10 @@ tx1_moh_on_hold(struct v34_object *o)
  * to find.
  */
 static void
-tx1_moh_reinit(struct v34_object *o)
+tx1_moh_reinit(struct v34_object *o, const char *msg)
 {
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
 	v34handshakinit(o, 1);
 	tx1_put(o, TX1_FABE6, 1);
 }
@@ -2040,10 +2054,19 @@ tx1_moh_send(struct v34_object *o)
 
 	if (o->fabe2 != 3)
 		o->fabe2 = 1;
-	if (*((unsigned char *)o + TX1_FABF9) == 0)
+	if (*((unsigned char *)o + TX1_FABF9) == 0) {
+		if (dsplibs_debug_level > 1)	/* 0x7041b */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq,"
+				" sending MHfrr\r\n");
 		o->moh_message = 1;		/* 0x70430 */
-	else
+	} else {
+		if (dsplibs_debug_level > 1)	/* 0x6a400 */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq,"
+				" sending MHcda\r\n");
 		o->moh_message = 3;		/* 0x6a415 */
+	}
 
 	/* 0x6a427 */
 	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
@@ -2086,6 +2109,10 @@ tx1_moh_hold(struct v34_object *o)
 		return V34TX1_LOOP;			/* 0x6431f */
 
 	if (*((unsigned char *)o + TX1_FABF9) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6889f */
+			dsplibs_debug_printf(
+				"MOH: Timeout waiting for MH sequence under"
+				" MHreq, disconnecting...\r\n");
 		/* 0x688b4 */
 		tx1_moh_cleardown(o);
 		o->fabe2 = 1;
@@ -2094,9 +2121,17 @@ tx1_moh_hold(struct v34_object *o)
 
 	if ((unsigned)(o->moh_message - 2) > 1u) {
 		/* 0x6923d */
-		tx1_moh_reinit(o);
+		tx1_moh_reinit(o,
+			       "MOH: Timeout waiting for MH sequence under"
+			       " MHreq, initiating retrain\r\n");
 		return V34TX1_LOOP;			/* 0x629cf */
 	}
+
+	if (dsplibs_debug_level > 1)			/* 0x65031 */
+		dsplibs_debug_printf(
+			"MOH: Timeout waiting for MH sequence under"
+			" cleardown, terminating connection without"
+			" acknowledge\r\n");
 
 	/* 0x65046 */
 	tx1_moh_cleardown(o);
@@ -2134,6 +2169,13 @@ v34tx1_tx_dpsk(void *objp)
 		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
+
+	if (dsplibs_debug_level > 1)			/* 0x68704 */
+		dsplibs_debug_printf(
+			"End of current MOH msg: isterm=%d, count1(%d),"
+			" pktcount(%d)...\r\n",
+			*((signed char *)o + TX1_FABF8), o->vect_idx,
+			tx1_bitsource(o)->repeats);
 
 	if (*((unsigned char *)o + TX1_FABF8) == 0) {
 		/*
@@ -2173,13 +2215,13 @@ v34tx1_tx_dpsk(void *objp)
 		else if ((unsigned)got > 4u) {
 			/* 0x6a3c6 */
 			if (got != 5)
-				tx1_moh_reinit(o);	/* 0x69041 */
+				tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
 			else
 				tx1_moh_send(o);	/* 0x6a3cf */
 		} else if (got == 0)
 			tx1_moh_on_hold(o);
 		else
-			tx1_moh_reinit(o);		/* 0x69041 */
+			tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
 	} else if ((unsigned)o->moh_message <= 3u) {
 		tx1_moh_cleardown(o);			/* 0x64eaf */
 	}
