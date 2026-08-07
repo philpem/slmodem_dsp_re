@@ -13,14 +13,14 @@ detector that had checked nothing.
 
 Six instances, each found the hard way:
 
-| # | the defect | what it printed |
-|---|---|---|
-| 347 | an anchor matches twice | `UNUSABLE` — and the suite still says `0 NOT caught` |
-| 432 | an anchor stays unique and silently re-points | `CAUGHT`, at a claim nobody made |
-| 540 | a registered suite is skipped (four silent `continue`s) | `0 anchors wrong`, exit 0, having checked nothing |
-| 542 | a mutation whose `replace` equals its `find` | `survived, equivalent` — same as a real equivalent |
-| 618 | a signedness detector that cannot find its own defect | `(none)`, through four consecutive versions |
-| 134 | 242 diagnostic call sites dropped | nothing — the debug level ships at 0, every gate is `> 1` |
+| the defect | what it printed |
+|---|---|
+| an anchor matches twice (finding 347) | `UNUSABLE` — and the suite still says `0 NOT caught` |
+| an anchor stays unique and silently re-points (finding 432) | `CAUGHT`, at a claim nobody made |
+| a registered suite is skipped, four silent `continue`s (finding 540) | `0 anchors wrong`, exit 0, having checked nothing |
+| a mutation whose `replace` equals its `find` (finding 542) | `survived, equivalent` — same as a real equivalent |
+| a signedness detector that cannot find its own defect (finding 618) | `(none)`, through four consecutive versions |
+| 242 diagnostic call sites dropped (finding 134) | nothing — the debug level ships at 0, every gate is `> 1` |
 
 Two more of the same shape, from adjacent tools: a malformed mutation registry
 makes every suite unrunnable while the phase gate stays green, because nothing

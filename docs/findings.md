@@ -27342,11 +27342,29 @@ of the first pass.
 #### Two small things established on the way
 
 - **`refcheck.py` covers a new subdirectory of `docs/`.** It walks every
-  tracked file rather than a glob, so `git add docs/method` took the reference
-  count 2,178 -> 2,307 and all 129 new citations are checked. A method document
-  full of finding numbers that nothing verified would have been finding 540's
-  skipped suite in the deliverable itself; it is not one. Citations there are
-  written only in the forms the tool parses, per finding 543.
+  tracked file rather than a glob, so `git add docs/method` moved the reference
+  count by about 130 and every citation in the new files is checked. A method
+  document full of finding numbers that nothing verified would have been
+  finding 540's skipped suite in the deliverable itself; it is not one.
+- **And the first version of it broke finding 543's rule inside the table that
+  teaches finding 543's rule.** `gates.md`'s summary of the six
+  indistinguishable-from-success defects listed them by BARE NUMBER in a table
+  column -- `| 347 | an anchor matches twice |` -- and `FINDING_REF` does not
+  match that, because it requires the word. Six citations that a tenth
+  collision would rewrite everywhere else and leave pointing at strangers,
+  reading perfectly. Repaired by moving each citation into the cell text.
+
+  The audit that missed it is the part worth recording: it searched for
+  `finding[s]? N` and reported every hit resolving correctly, which is a
+  detector that cannot distinguish a clean file from a broken one -- finding
+  134's argument, arriving in my own tooling within the hour of writing it
+  down. The version that works matches **every** `\b\d{3}[a-z]?\b` and
+  subtracts the ones already carrying the word; what is left is read by hand,
+  which is the two-pass procedure finding 543 used and for the same reason.
+  What remains in `docs/method/` is all quantities or quoted data -- including
+  `1,670` debug call sites, which a bare-number rewrite of finding 670 would
+  corrupt, and the `340`/`348`/`361` coefficients finding 543 quotes as the
+  reason such a rewrite is unavailable.
 - **`tools/mutate.py`'s `MIN_PER_WORKER` comment disagrees with finding 541**
   by a little: the comment says `--jobs 4` over the three small suites took
   17.9 s against **11.2 s** serial, "60% SLOWER", and finding 541 says

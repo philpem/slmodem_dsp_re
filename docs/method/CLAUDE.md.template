@@ -97,7 +97,8 @@ So:
 ## The four oracles, and what each is blind to
 
 No single tier is sufficient and none subsumes another. Full argument in
-`docs/method/tiers.md`.
+`docs/method/tiers.md`. Tier 3 needs `<COMPILER>` — whatever `.comment` named
+— in a container before it can say anything at all.
 
 1. **Differential** — reconstruction and blob in one binary, one deterministic
    input, outputs compared. **The only thing that decides.** Blind to
@@ -242,7 +243,7 @@ function already verified by hand, it recovered branch structure, every
 constant and structure offset, and the calling convention — and **destroyed
 arrays**, which were most of this object.
 
-- Every line goes through the disassembler before it goes into `<LAYOUT>src/`.
+- Every line goes through the disassembler before it goes into `src/`.
 - **No name, comment or finding is ever written from decompiler output.** The
   record is the deliverable, and a decompiler guess recorded as a derivation
   corrupts it.
