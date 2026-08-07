@@ -68,6 +68,44 @@ gets ignored or switched off (finding 545). Fail on MISSING, ORPHANED and
 INCONSISTENT — the things that are unambiguously wrong. Report the thing that
 is merely out of date.
 
+#### The same sentence in a tier nobody had applied it to
+
+`make similarity` on a merged tree printed
+
+```
+  ratchet OK -- gained: compared 365->386, identical 92->105, same_size 15->16
+```
+
+and that was quoted as the session's codegen verdict, which it is. **But
+`--ratchet` does not write `ratchet.json`; `--update` does.** The floor stayed
+at the pre-merge 92, so for the next batch the tier could no longer detect a
+regression from 105 down to 93 — a twelve-symbol loss would have printed
+`ratchet OK -- gained` (finding 556). It was found from the other end: the
+next branch ran the ratchet expecting to see its own contribution, saw the
+same numbers its fork point already had, and said so instead of blessing a
+gain that was not its work.
+
+> **Reporting a measurement is not recording it.**
+
+Three tiers in this tree hold a recorded baseline — `ratchet.json`, the
+mutation snapshot (finding 545), and the deviation register — and each has
+that failure mode: the measurement gets taken, quoted in a commit message, and
+never written back, so the floor silently describes an older tree. Only the
+snapshot has a key that makes staleness visible without re-measuring; the
+ratchet's `gained:` line is the sole hint that its floor is behind
+(finding 556).
+
+#### A subset result must not be able to masquerade as a full one
+
+`17 mutations: 17 caught, 0 NOT caught` reads identically whether it covered
+the suite or a twentieth of it, and that number lands in a commit message as
+evidence. The fix is not a warning in the output. **The subset run does not
+print the string the snapshot recorder scans for**, so the recorder cannot
+record it even if asked; it prints `SUBSET: n of N mutations ... This is an
+iteration aid. It is NOT a suite result and cannot be a baseline` instead.
+Verified by grepping the subset output for what the parser looks for and
+getting zero matches (finding 555).
+
 ### 3. A detector nobody has seen fire is not a detector
 
 Finding 134's argument, and it has been quoted against four separate tools.
@@ -134,7 +172,7 @@ would report `BAD fn` for any real method while **accepting the macro's name**.
 
 ---
 
-## Two failure modes worth naming separately
+## Three failure modes worth naming separately
 
 **Uniqueness is not the property that matters — WHERE it lands is.** Nine
 mutation entries in one suite were mutating a different arm from the one their
@@ -167,6 +205,21 @@ count was itself wrong — it reported 399 calls, which was the count of
 functions containing a call — an error found by writing the tool to make the
 count repeatable. **That is a fair argument for making one-off measurements
 into tools.**
+
+**A baseline read once, from a cold cache, is a floor nobody can trust.** The
+period-toolchain container reports a *partial* object set on its first
+invocation — `identical was 92, now 48` — and 105 on every run after
+(finding 651). Blessing the ratchet from that single cold reading would have
+set the floor sixty symbols too low, and a floor set too low is a **permanent**
+false pass rather than a temporary one, because nothing ever reports that a
+ratchet is under-set: every subsequent run says `gained`. It was blessed only
+after two consecutive runs agreed, and then shown to fire per rule 3 — with the
+floor at 105, injecting a three-symbol regression exits 1 and says why fewer
+functions match (finding 556).
+
+> **Read a baseline twice before recording it.** What makes a recorded floor
+> worth having — that nothing re-derives it later — is exactly what makes a
+> bad one permanent.
 
 ---
 

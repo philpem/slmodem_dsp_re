@@ -52,6 +52,18 @@ The anti-vacuity tier. `--suite NAME`, `--all`, or a bare
 A dying shard aborts the run with exit 2 rather than reporting a confident
 partial total (finding 541).
 
+**`--only TEXT`.** Runs just the mutations whose label contains TEXT, which is
+the question a batch actually asks twenty times: *did the mutations I have
+just touched still fail?* One label against `v34hshak`'s whole suite is
+**4.17 s against 62 s at `--jobs 8`**; against `v34hstx1`, ~4 s against ~180 s
+at `--jobs 4` (finding 555). The speed is the smaller half. **A subset run's
+summary is otherwise indistinguishable from a full run's**, and that number
+lands in commit messages, so the subset line deliberately does not contain the
+string the snapshot recorder scans for — verified by grepping its output for
+that string and getting zero (finding 555, and `gates.md` rule 2). Adding the
+flag invalidated all 48 snapshot entries, because the runner is what decides
+what "caught" means.
+
 ## `tools/mutsnap.py` — the keyed snapshot
 
 Records what every suite last said **together with a hash of everything that
@@ -78,6 +90,26 @@ That is what removes the baseline pass every batch was paying twice for
 Port the cross-check too: it records per-mutation verdicts and the summary line
 from different code paths and compares them, and **both times it fired the tool
 was wrong, not the record** (finding 545).
+
+**What a day of using it costs, and it is the right trade.** The key is coarse,
+so almost any edit invalidates every entry: naming twelve struct fields touched
+`include/` and restaled all 48 (finding 638), and adding one flag to the
+mutation runner restaled all 48 again (finding 555) — on the same day.
+Re-running all 48 is 2,874 mutations:
+**12 minutes at `--jobs 8`** (finding 545), **15m 40s at `--jobs 4`** on a
+machine shared three ways (finding 638). The honest answer to invalidation is
+therefore **re-run, not re-key**, including — especially — when the edit
+obviously cannot move a verdict: that field-map re-run moved **not one verdict
+out of 2,874** (finding 638), and the run that did find something found it
+because `--verify` compares against the record **by name** rather than by
+count, catching one mutation that had gone CAUGHT → UNUSABLE while the phase
+gate stayed green (finding 637). A count would have seen one verdict move
+between two columns of a 209-mutation suite and had nothing to say about which
+mutation it was.
+
+If you size the batches, `--jobs 4` on a shared machine ran the four biggest
+suites — 749, 443, 214 and 209 mutations — in 7m 31s and the remaining 44 in
+8m 09s (finding 638).
 
 ## `tools/anchorcheck.py` — the structural definition-finder
 
@@ -195,3 +227,12 @@ is the part to copy: **it compares mnemonics, not bytes** — two functions
 storing the same constants to different offsets both read as `mov mov mov` —
 and its total-bytes percentage is the weak number that moves when you emit more
 code, not only more of the right code (finding 616, and `tiers.md`).
+
+Two things about its **ratchet** are portable and both cost a run here.
+`--ratchet` compares against the recorded floor and `--update` is what writes
+it, so a gain measured at a merge and reported rather than blessed leaves the
+floor behind, and a later regression prints `gained` (finding 556). And the
+period-toolchain container reports a partial object set on its **first**
+invocation — `identical ... now 48` against 105 on every run after — so a
+floor blessed from one cold reading is sixty symbols too low for ever
+(finding 651).

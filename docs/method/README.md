@@ -13,6 +13,7 @@ one.** Nothing here is about modems.
 | `gates.md` | the pattern behind every tooling defect this tree has found |
 | `agents.md` | parallel batches: briefs, shared data, numbering, merging |
 | `tools.md` | which tools are portable, and what each assumes about its host |
+| `recording.md` | how to write the record: naming, the scope of a quantity, correcting a pushed finding |
 
 ## The rule these were written under
 
@@ -28,8 +29,11 @@ is what makes them worth trusting.
 Numbers cite `docs/findings.md` **in this tree**. `CLAUDE.md.template` is the
 one file meant to be copied *out*, so its citations will not resolve in a new
 project — they are the provenance of each rule, not links, and they should be
-kept for that reason. The other five stay here and their references are checked
-by `tools/refcheck.py` like everything else.
+kept for that reason. The other six stay here and their references are checked
+by `tools/refcheck.py` like everything else — which only works because they are
+tracked files: the checker walks the index, so a new document that has not been
+`git add`ed is invisible to it (finding 670). `recording.md` is where the rest
+of that discipline lives.
 
 ## What is deliberately not here
 
