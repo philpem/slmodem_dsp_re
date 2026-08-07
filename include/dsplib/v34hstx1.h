@@ -80,7 +80,18 @@ extern "C" {
 enum v34tx1_exit {
 	V34TX1_LOOP = 0,	/* back to the per-sample loop test  */
 	V34TX1_MOH_WRAP,	/* 81: `vect_idx` hit 0xc0 -> 0x66d85 */
-	V34TX1_TXMD_DONE	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
+	V34TX1_TXMD_DONE,	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
+	/*
+	 * 66: the TRNSEG4A segment is over -> 0x62f22.
+	 *
+	 * UNLIKE THE TWO ABOVE THIS ONE IS A CHECKPOINT AND NOT A LIMIT.
+	 * 0x62f22 is reachable, has an oracle past it and is being written;
+	 * it is a separate value only so that the arm's three in-loop paths
+	 * could land and be tested before the 2.5 KB behind that block was.
+	 * It goes away when the completion lands, which is the one difference
+	 * between it and `V34TX1_MOH_WRAP`.
+	 */
+	V34TX1_TRNSEG4A_SEGEND
 };
 
 /*
@@ -178,6 +189,19 @@ int v34tx1_moh_silence(void *obj);
 int v34tx1_k56jatxmit(void *obj);
 /* 86 TXMD         0x63dae */
 int v34tx1_txmd(void *obj);
+/*
+ * 66 TRNSEG4A     0x62e28, with the sixteen-point half at 0x66e59 and the
+ * segment's completion at 0x62f22.
+ *
+ * The largest single run of straight-line code in the table -- 1,956 bytes
+ * from 0x62e28 to 0x635cc without a gap.  One symbol out of `vect4` or
+ * `vect16`, chosen by the receiver's +0x11e as 69 chooses it, with the
+ * generator chosen on `f359c` as 71 and 86 choose it; then `f25c0` is
+ * counted UP and tested against `baud + baud/2 + period` out of the rate
+ * configuration.  Three of the four exits are the loop; the fourth is the
+ * completion, which rebuilds the receive half of that configuration.
+ */
+int v34tx1_trnseg4a(void *obj);
 
 #ifdef __cplusplus
 }

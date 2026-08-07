@@ -100,6 +100,8 @@
 #define TX1_FAA86	0xaa86		/* 20 accumulates into it          */
 #define TX1_F25C8	0x25c8		/* the quadrant just chosen        */
 #define TX1_F382	0x0382		/* receiver +0x11e: 69's selector  */
+#define TX1_RXF21A	0x047e		/* receiver +0x21a, `equerr`       */
+#define TX1_RX250	0x04b4		/* receiver +0x250, in `pad_250`   */
 #define TX1_F25D6	0x25d6		/* 64/68's sixteen bits, two a pass*/
 #define TX1_F25D8	0x25d8		/* 64/68 counts one per pass       */
 #define TX1_F25DA	0x25da		/* 64 needs 2; 66ca8 needs non-zero*/
@@ -2821,11 +2823,215 @@ case_tx_dpsk(void)
 	dp_reset();
 }
 
+/* --- 66 TRNSEG4A ---------------------------------------------------------- */
+
+/*
+ * 66's entry is its own, read out of the blob's `.rodata` the way
+ * `case_jtxmit_entry` reads 64 and 68's -- and here the claim is the opposite
+ * one, that NOTHING else reaches 0x62e28.  Finding 354a is why it is asserted
+ * rather than assumed: a shared entry says nothing about how many behaviours
+ * are behind it, so an exclusive one has to be measured too.  The whole table
+ * is swept rather than the two neighbours, because a later blob giving 21 or
+ * 86 this arm would otherwise be a silence.
+ */
+static void
+case_trnseg4a_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+	int k, shared = 0;
+
+	diff_eq_int("table 1: 66's entry is v34handshak + 0x538",
+		    (int)(t1[66 - 5] - base), 0x62e28 - 0x628f0, 6690);
+	for (k = 5; k <= 86; k++)
+		if (k != 66 && t1[k - 5] == t1[66 - 5])
+			shared++;
+	diff_eq_int("table 1: no other txstate reaches 66's entry",
+		    shared, 0, 6691);
+}
+
+/*
+ * EVERY FIELD THAT DECIDES A PATH IS POKED, at a LITERAL index, which is
+ * finding 420's rule: a poke array addressed as `NP(a) - k` moved four pokes
+ * by one when an entry was inserted, and `run_case`'s two guards could not
+ * see it.
+ *
+ * The rate configuration's `baud` and `period` are poked because they are the
+ * segment's LENGTH here and the fill leaves them arbitrary: `lim` is
+ * `baud + (baud >> 1) + period`, so 100 and 20 make it 170 and the short
+ * threshold `baud + period` 120.  Both are then reached by moving `f25c0`
+ * alone.
+ */
+#define TS_11E		0	/* receiver +0x11e: four points or sixteen  */
+#define TS_59C		1	/* f359c, the generator select              */
+#define TS_SR		2	/* f25cc, the scrambler's shift register    */
+#define TS_C0		3	/* f25c0, the count this arm advances       */
+#define TS_BAUD		4	/* rate configuration +0x00                 */
+#define TS_PER		5	/* rate configuration +0x02                 */
+#define TS_2218		6	/* the int that gates both long exits       */
+#define TS_21A		7	/* receiver +0x21a, the equaliser error     */
+#define TS_250		8	/* receiver +0x250, the mark it is measured */
+#define TS_C6		9	/* f25c6, which no in-loop path writes      */
+
+static struct tx1_poke trnseg[10] = {
+	P16(TX1_F382, 0),
+	P16(TX1_F359C, 0),
+	P32(TX1_F25CC, 0x9e3b7d15),
+	P16(TX1_F25C0, 0),
+	P16(TX1_RATECFG + 0, 100),
+	P16(TX1_RATECFG + 2, 20),
+	P32(TX1_F2218, 0),
+	P16(TX1_RXF21A, 0),
+	P16(TX1_RX250, 0),
+	P16(TX1_F25C6, 0x1234)
+};
+
+static void
+ts_reset(void)
+{
+	trnseg[TS_11E].val = 0;
+	trnseg[TS_59C].val = 0;
+	trnseg[TS_SR].val = 0x9e3b7d15;
+	trnseg[TS_C0].val = 0;
+	trnseg[TS_BAUD].val = 100;
+	trnseg[TS_PER].val = 20;
+	trnseg[TS_2218].val = 0;
+	trnseg[TS_21A].val = 0;
+	trnseg[TS_250].val = 0;
+	trnseg[TS_C6].val = 0x1234;
+}
+
+static void
+run_trnseg(int want, const char *what, long tag)
+{
+	run_case(V34HS_TRNSEG4A, v34tx1_trnseg4a, want, what, tag,
+		 trnseg, NP(trnseg));
+}
+
+/*
+ * The symbol on all four of its combinations, and then the four ways out.
+ *
+ * THE SYMBOL RUNS ARE ALL DRIVEN AT `f2218 == 0`, so each leaves at 0x63941
+ * with the count at 1 and the differential comparison covers the whole
+ * object: the scrambler's register, `f25c8`, the point in `f25d0` and
+ * `f25c0`.  A run that ended the segment instead compares nothing past the
+ * exit code, which is why the constellation and the generator are varied on
+ * the short path and not on the long one.
+ */
+static void
+case_trnseg4a(void)
+{
+	ts_reset();
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, four points, generator 0", 6600);
+
+	ts_reset();
+	trnseg[TS_59C].val = 0x65;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, four points, generator 1", 6601);
+
+	ts_reset();
+	trnseg[TS_11E].val = (short)0x89b0;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, sixteen points, generator 0",
+		   6602);
+
+	ts_reset();
+	trnseg[TS_11E].val = (short)0x89b0;
+	trnseg[TS_59C].val = 0x65;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, sixteen points, generator 1",
+		   6603);
+
+	/*
+	 * A SECOND REGISTER, because two of the sixteen-point half's four
+	 * bits come from the first scramble and two from the second: a
+	 * reconstruction using one call for both would agree with the blob on
+	 * every seed where the two happen to match.
+	 */
+	ts_reset();
+	trnseg[TS_11E].val = (short)0x89b0;
+	trnseg[TS_SR].val = 0x4c81f2a7;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, sixteen points, second seed",
+		   6604);
+
+	/* 0x62f0d: f2218 at or below three leaves at once. */
+	ts_reset();
+	trnseg[TS_C0].val = 200;
+	trnseg[TS_2218].val = 3;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, past the length, f2218 low",
+		   6610);
+
+	/*
+	 * AND THAT COMPARE IS UNSIGNED (`cmpl $0x3 ; jbe`), so a negative
+	 * f2218 is a large one and this run takes the other branch.
+	 */
+	ts_reset();
+	trnseg[TS_C0].val = 200;
+	trnseg[TS_2218].val = -1;
+	run_trnseg(V34TX1_TRNSEG4A_SEGEND,
+		   "66 TRNSEG4A, past the length, f2218 negative", 6611);
+
+	/* 0x62f0b: the count reached the nominal length exactly. */
+	ts_reset();
+	trnseg[TS_C0].val = 169;
+	run_trnseg(V34TX1_TRNSEG4A_SEGEND,
+		   "66 TRNSEG4A, the nominal length, f2218 low", 6612);
+
+	/*
+	 * `baud >> 1` IS AN ARITHMETIC SHIFT.  With `baud` at -7 the shift
+	 * gives -4 and a divide -3, so the two readings put the length at -11
+	 * and -10; the count is -11 and `f2218` is low, so the shift ends the
+	 * segment where the divide leaves at 0x63941.  Two exit codes, which
+	 * is the only axis a SEGEND run has.
+	 */
+	ts_reset();
+	trnseg[TS_BAUD].val = -7;
+	trnseg[TS_PER].val = 0;
+	trnseg[TS_C0].val = -12;
+	run_trnseg(V34TX1_TRNSEG4A_SEGEND,
+		   "66 TRNSEG4A, the length is an arithmetic shift", 6613);
+
+	/* 0x6559c: below the short threshold, so 0x6409a. */
+	ts_reset();
+	trnseg[TS_C0].val = 50;
+	trnseg[TS_2218].val = 10;
+	run_trnseg(V34TX1_LOOP, "66 TRNSEG4A, below the short threshold",
+		   6614);
+
+	/* Past it, but the equaliser error is still more than ten out. */
+	ts_reset();
+	trnseg[TS_C0].val = 130;
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 100;
+	trnseg[TS_250].val = 50;
+	run_trnseg(V34TX1_LOOP,
+		   "66 TRNSEG4A, past the short threshold, error high", 6615);
+
+	/* Past it and settled, which finishes the segment early. */
+	ts_reset();
+	trnseg[TS_C0].val = 130;
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 55;
+	trnseg[TS_250].val = 50;
+	run_trnseg(V34TX1_TRNSEG4A_SEGEND,
+		   "66 TRNSEG4A, past the short threshold, error settled",
+		   6616);
+
+	/* And the boundary of that ten, which is `>` and not `>=`. */
+	ts_reset();
+	trnseg[TS_C0].val = 130;
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 60;
+	trnseg[TS_250].val = 50;
+	run_trnseg(V34TX1_TRNSEG4A_SEGEND,
+		   "66 TRNSEG4A, the error exactly ten out", 6617);
+
+	ts_reset();
+}
+
 int
 main(void)
 {
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: seventeen per-sample transmit arms");
+	diff_begin("v34handshak table 1: eighteen per-sample transmit arms");
 
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
@@ -2863,6 +3069,9 @@ main(void)
 	case_tx_dpsk_entry();
 	case_dpsk_cold();
 	case_tx_dpsk();
+
+	case_trnseg4a_entry();
+	case_trnseg4a();
 
 	return diff_end();
 }

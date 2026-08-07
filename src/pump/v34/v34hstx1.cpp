@@ -2097,3 +2097,120 @@ v34tx1_tx_dpsk(void *objp)
 	*((unsigned char *)o + TX1_FABF8) = 0;
 	return tx1_moh_hold(o);				/* 0x64fec */
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * 66 `TRNSEG4A`, 0x62e28, with the sixteen-point half at 0x66e59 and the
+ * segment's completion at 0x62f22.
+ *
+ * THE SYMBOL IS 71's AND 86's, NOT 69's.  The generator is chosen on
+ * `f359c == 0x65` -- the object carries the scrambler loop twice, at 0x62e70
+ * with the 0x04000000 tap and at 0x6358c with 0x00002000, and picks between
+ * the copies exactly as 71 and 86 do -- so `tx1_scramble2` is the same call
+ * here.  69 chooses on bit 0 of `f25c2` instead (finding 340 against 423);
+ * one halfword apart and it is the whole difference between the two shapes.
+ *
+ * THE CONSTELLATION IS 69's.  The receiver's +0x11e against 0x89b0 is the
+ * arm's first instruction, and the sixteen-point half scrambles TWICE: the
+ * first call's two bits go into `f25c8` and are READ BACK FROM THERE
+ * (0x66f4d) as `vect16`'s row, with the second call's as the column.  Where
+ * 69 differs is that neither half here differentially encodes and neither
+ * writes `f25c6` -- the quadrant this arm carries is the raw scrambler
+ * output, and `f25c6` is written once, at the completion, out of `f25c8`.
+ *
+ * AND NEITHER HALF ADVANCES `vect_idx`.  This arm counts in `f25c0`, and it
+ * counts BEFORE the segment-end compare rather than after it: 0x62edc reads
+ * +0x25c0, increments, stores, and the STORED value is what 0x62f09 tests.
+ * 86 increments last, at the shared 0x6430c; do not read the two as one
+ * shape.
+ *
+ * THE SEGMENT ENDS ON THREE CONDITIONS AND NOT ONE.  With `n` the count just
+ * stored and `lim` the length `baud + baud/2 + period` out of the rate
+ * configuration at +0xaa84:
+ *
+ *     n == lim                                        the segment is over
+ *     n  > lim  and  f2218 > 3                        likewise
+ *     n  < lim  and  f2218 > 3  and  n >= baud+period
+ *               and  rx->f21a <= rx+0x250 + 10        likewise (0x6559c)
+ *
+ * so a run that has passed the nominal length finishes at once, and a run
+ * that has passed the SHORTER threshold finishes early when the equaliser
+ * error at +0x21a has come down to within ten of the mark at +0x250.
+ * `f2218` is the same int table 2's tail reads and the compare is UNSIGNED
+ * (`cmpl $0x3 ; jbe`), so a negative value is a large one here.
+ *
+ * `baud >> 1` IS AN ARITHMETIC SHIFT (0x62f02 is `sar`), not a divide: with
+ * a negative `baud` the two differ, and the fixture's fill makes them differ.
+ *
+ * THE FOUR REJOINS ARE ALL THE SAME BLOCK.  0x63941, 0x6409a, 0x6431f and
+ * 0x62d70 each reload the object, re-test the queue count against +0x2aa0
+ * and jump to 0x629e7; the addresses are kept in the comments because the
+ * blocks are distinct in the object, not because the exits differ.
+ *
+ * WHAT IS NOT HERE YET.  The completion at 0x62f22 is 2.5 KB of its own --
+ * it rebuilds the receive half of the rate configuration, snapshots the
+ * receiver's predictor into the INFO record at +0xaa3c, and moves the
+ * transmit machine to 0x43.  It returns `V34TX1_TRNSEG4A_SEGEND` rather than
+ * doing something plausible, for the reason 81 and 86 return theirs
+ * (finding 343): a path that is not settled is a path that says so.
+ */
+
+/*
+ * +0x4b4, which is the RECEIVER's +0x250 -- `0x74(%esp)` plus 0x250 -- and
+ * lands in that structure's `pad_250`, so it is not a named field anywhere in
+ * this tree.  The completion writes it out of `f224` or `f21a`; the early
+ * finish above reads it as the mark the equaliser error is measured against.
+ */
+#define TX1_RX250	0x4b4
+
+int
+v34tx1_trnseg4a(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_ratecfg *cfg =
+		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	int n, lim, baud, period;
+
+	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+		/* 0x66e59 */
+		short k = tx1_scramble2(o);
+		short q;
+
+		o->f25c8 = k;
+		q = tx1_scramble2(o);
+		tx1_put_point(o, vect16[q + 4 * k]);
+	} else {
+		/* 0x62e3b */
+		short q = tx1_scramble2(o);
+
+		o->f25c8 = q;
+		tx1_put_point(o, vect4[q]);
+	}
+
+	/* 0x62ecd */
+	txmit(o);
+
+	/* 0x62edc */
+	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+	n = o->f25c0;
+	baud = cfg->baud;
+	period = cfg->period;
+	lim = baud + (baud >> 1) + period;
+
+	if (n != lim) {
+		if ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)
+			return V34TX1_LOOP;		/* 0x63941 */
+		if (n < lim) {
+			/* 0x6559c */
+			if (n < baud + period)
+				return V34TX1_LOOP;	/* 0x6409a */
+			if ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)
+				return V34TX1_LOOP;	/* 0x6431f */
+		}
+	}
+
+	/* 0x62f22 */
+	return V34TX1_TRNSEG4A_SEGEND;
+}
