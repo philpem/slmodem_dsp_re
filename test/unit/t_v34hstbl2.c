@@ -14,7 +14,7 @@
  * SIDE A USED TO BE A SECOND RECONSTRUCTION and is now the same dispatch
  * every microstate arm calls.  `src/pump/v34/v34hstxblock.c` held a third
  * reading of table 2 with all seven arms and a tail missing the reload at
- * 0x62b45; finding 591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
+ * 0x62b5f; finding 591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
  * the reading whose signature can hold both readings of the tail's `%cx`.
  * Every case below is unchanged by that, which is the point: this file's
  * claims are about the object and not about which file answers them.

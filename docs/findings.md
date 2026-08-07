@@ -24403,10 +24403,11 @@ set and its test now sit on `t3m_txblock`/`t3m_tail` in
 `src/pump/v34/v34hshak.c`.  There is one `v34handshak` and now one table 2.
 
 **The anchor arithmetic did not decide it, and it should not have.**  550
-priced the two directions at 40 anchors one way and 29 the other; done
-honestly the real numbers are 52 the way it went and 40 the other, which is
-close enough that the cheaper one is not an argument.  What decides is that
-one of the two CANNOT be made right:
+priced direction (b) -- collapse onto `v34handshak_txblock` -- at 40 anchors;
+its 29 row is a THIRD direction, onto the `t3c_txblock`/`t3c_block_tail` that
+the unify had already deleted, and was never on the table here.  Direction (a)
+done honestly is 52, so (b) is the cheaper of the two and was not taken.  What
+decides is that one of the two CANNOT be made right:
 
 ```
   void v34handshak_txblock(struct v34_object *obj)      <- the deleted one
@@ -24414,7 +24415,7 @@ one of the two CANNOT be made right:
 ```
 
 The tail's `%cx` is whatever arm jumped to 0x62a40 left in it; 0x62a70 and
-0x62ac5 read it, and 0x62b45 re-reads +0x3596 OVER it.  A dispatch whose only
+0x62ac5 read it, and 0x62b5f re-reads +0x3596 OVER it.  A dispatch whose only
 input is the object cannot represent "the passed txstate differs from
 +0x3596" -- the two are equal by construction -- so `txblock_tail`'s comment
 that "no arm writes +0x3596, so the reload cannot change it and is not
@@ -24510,36 +24511,78 @@ next edits `v34hstx1.cpp` should fix the sentence.
 
 ### 592. The one thing the surviving tail models that its predecessors did not is tested by nothing
 
-`t3m_tail` reloads the txstate at 0x62b45 and the two readings it replaced did
+`t3m_tail` reloads the txstate at 0x62b5f and the two readings it replaced did
 not.  Finding 550 called that the reason to keep it, and 591 kept it.  Before
-claiming the defect went away with the file, the reload was measured:
+claiming the defect went away with the file, the reload was measured.  The
+mutation is filed, so the measurement is one command over the filed entry
+rather than a heredoc that has to be kept in step with the source:
 
 ```
-$ cat > /tmp/reload.json <<'X'
-[{"label": "the txstate reload at 0x62b45 removed",
-  "find":    "\t\tf->rx->f1d2 = ...;\n\t\ttx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);\n\t\t*f->progress = 4;",
-  "replace": "\t\tf->rx->f1d2 = ...;\n\t\t*f->progress = 4;", "fn": "t3m_tail"}]
-X
+$ python3 -c "import json; \
+    ms=[m for m in json.load(open('test/mutations/v34hstxblock.json')) \
+        if 'reload' in m.get('label','')]; \
+    json.dump(ms, open('/tmp/reload.json','w'), indent=1)"
 $ for b in t_v34hst3mid t_v34hst3core t_v34hsmst44 t_v34hst346 \
            t_v34hst3m41 t_v34datapump t_v34hshak t_v34hstbl2; do
       python3 tools/mutate.py src/pump/v34/v34hshak.c build/test/$b /tmp/reload.json
   done
 ```
 
-**NOT CAUGHT by all eight.**  So the reload is right by the disassembly and
+The filed entry is `"equivalent": true`, so it prints `survived, equivalent`
+where a bare run prints `NOT CAUGHT`; both mean the same thing here, which is
+that no check moved.  **All eight.**
+
+**THE ADDRESS, RE-FIXED.**  550's table header says "reloads +0x3596 at
+0x62b45" and the deleted `txblock_tail`'s comment said 0x62b5f.  The comment
+was right and the header conflated the block with the instruction:
+
+```
+$ python3 tools/dis.py ../slmodemd/dsplibs.o 0x62b45 0x62b6c
+   62b45:  0f bf ab 96 aa 00 00   movswl 0xaa96(%ebx),%ebp
+   62b4c:  8b 4c 24 74            mov    0x74(%esp),%ecx
+   62b50:  8b 44 24 78            mov    0x78(%esp),%eax
+   62b54:  8d 7c 6d 00            lea    0x0(%ebp,%ebp,2),%edi
+   62b58:  66 89 b9 d2 01 00 00   mov    %di,0x1d2(%ecx)
+   62b5f:  0f b7 8b 96 35 00 00   movzwl 0x3596(%ebx),%ecx
+   62b66:  c7 00 04 00 00 00      movl   $0x4,(%eax)
+```
+
+0x62b45 is where the `mode == 1` branch lands and where `faa96` is read;
+**the reload is 0x62b5f** and it is ZERO-extended, which is the same spelling
+0x62a70's `cmp $0x4a,%cx` uses and is why one `short` still models both
+(the equivalent mutation next to this one).  Every use in `src/`, in
+`t_v34hstbl2.c` and in 591 now says 0x62b5f; `t_v34hstbl2.c:521` and
+`t_v34hst3core.c:372` say "the block at 0x62b45" and are right as they
+stand.  So the reload is right by the disassembly and
 free by every test in this tree, and the honest sentence is not "the defect is
 fixed" but "the two readings still cannot be told apart, and now at least the
 one that can hold the difference is the one that survived".
 
 **Why nothing catches it.**  It is observable only when the passed `tx`
 differs from +0x3596 AND one of the two is 0x4a, 0x52, 0x53 or 0x54 -- those
-are the only four values either reading feeds a comparison.  Every one of the
-forty-odd sites that reaches the dispatch either passes
-`T3M_U16(f, V34HS_TXSTATE_OFF)` outright, or -- arm 48's `n == 0xa2` path and
-arm 63's answer-side ending -- calls
-`hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE)` IMMEDIATELY BEFORE
-passing `V34HS_SILENCE`.  So passed and stored are equal everywhere in this
-tree, and no fixture can separate them without a new arm.
+are the only four values either reading feeds a comparison.  Enumerated rather
+than sampled: the forty-odd `t3c_txblock(obj)` sites all read +0x3596 through
+the shim, and of the 27 direct calls only eight do not spell
+`V34HS_TXSTATE_OFF` at the call:
+
+```
+$ grep -n 't3m_txblock(f,\|t3m_tail(f,' src/pump/v34/v34hshak.c \
+      | grep -v 'V34HS_TXSTATE_OFF'
+  3143:      t3m_tail(f, tx);                 t3m_txblock's own out-of-range branch
+  3217:      t3m_tail(f, tx);                 and its fall-through
+  3368:      t3m_txblock(f, V34HS_SILENCE);   arm 48, after hs_setstate(TXSTATE, 5)
+  3469:      t3m_txblock(f, tx);              arm 63, tx read at entry
+  3485:      t3m_txblock(f,                   a line wrap of the object read
+  3498:      t3m_txblock(f, V34HS_SILENCE);   arm 63, after hs_setstate(TXSTATE, 5)
+  3503:      t3m_txblock(f, tx);              arm 63, tx read at entry
+  3510:      t3m_txblock(f, tx);              arm 63, tx read at entry
+```
+
+Both forced sites store before passing.  Arm 63's three pass the `tx` it read
+from +0x3596 at entry, and the only thing written between is
+`T3M_U16(f, T3M_COUNTER)` at +0xaa78 -- not +0x3596.  So passed and stored are
+equal at every site in this tree, and no fixture can separate them without a
+new arm.
 
 **That is a correction to how 550 read finding 373.**  550 says arm 48's
 threshold path "is the one caller that stores 5 and passes 5 while 0x62b45

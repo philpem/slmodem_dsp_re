@@ -301,12 +301,12 @@
   "fn": "t3m_frame_init"
  },
  {
-  "label": "the txstate reload at 0x62b45, taken out",
+  "label": "the txstate reload at 0x62b5f, taken out",
   "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);\n\t\ttx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);\n\t\t*f->progress = 4;",
   "replace": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);\n\t\t*f->progress = 4;",
   "fn": "t3m_tail",
   "equivalent": true,
-  "why": "0x62b45 reloads +0x3596 into %cx before rejoining the tail, and `t3m_tail` models it -- which is the one thing the reconstruction this set was written against could not, its entry taking only the object.  Taking it out is still equivalent IN THIS TREE, and that is measured rather than argued: every one of the forty-odd sites that reaches the dispatch either passes the object's own +0x3596 or, in arms 48 and 63, stores the value into +0x3596 before passing it, so the reloaded and the passed txstate are equal everywhere.  Removing it was run against all eight suites that touch this file and NOT CAUGHT by any of them (591).  It stops being equivalent the first time an arm passes a value it did not store while +0x3596 holds 0x4a, 0x52, 0x53 or 0x54 -- which is why the parameter exists.  Held fixed: nothing."
+  "why": "0x62b5f reloads +0x3596 into %cx before rejoining the tail -- the block entered at 0x62b45, whose `movzwl 0x3596(%ebx),%ecx` is at 0x62b5f (592 re-fixes the address 550's table header moved), and `t3m_tail` models it -- which is the one thing the reconstruction this set was written against could not, its entry taking only the object.  Taking it out is still equivalent IN THIS TREE, and that is measured rather than argued: every one of the forty-odd sites that reaches the dispatch either passes the object's own +0x3596 or, in arms 48 and 63, stores the value into +0x3596 before passing it, so the reloaded and the passed txstate are equal everywhere.  Removing it was run against all eight suites that touch this file and NOT CAUGHT by any of them (591).  It stops being equivalent the first time an arm passes a value it did not store while +0x3596 holds 0x4a, 0x52, 0x53 or 0x54 -- which is why the parameter exists.  Held fixed: nothing."
  },
  {
   "label": "txstate held zero-extended rather than sign-extended",

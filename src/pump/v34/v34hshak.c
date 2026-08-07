@@ -3017,7 +3017,7 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
  * from whichever arm jumped here and two comparisons read it -- 0x62a70 and
  * 0x62ac5 -- while `obj + 0x3596` may hold something else entirely.  Arm 48's
  * threshold path is the case that separates them: it stores 5 into the object
- * and passes 5, but 0x62b45 below RE-READS the object into `%cx`, so the two
+ * and passes 5, but 0x62b5f below RE-READS the object into `%cx`, so the two
  * readings differ on one path out of four and modelling either one as the
  * other passes at txstate 18 and fails at txstate 5.
  */
@@ -3029,9 +3029,11 @@ t3m_tail(struct t3m_frame *f, short tx)
 
 	if (mode == 1) {
 		/*
-		 * 0x62b45.  `faa96` is the receive baud rate; the receiver's
-		 * +0x1d2 gets three times it, by `lea (%ebp,%ebp,2)` on the
-		 * sign-extended halfword and stored back as one.
+		 * The block at 0x62b45: `faa96` is the receive baud rate and
+		 * the receiver's +0x1d2 gets three times it, by
+		 * `lea (%ebp,%ebp,2)` on the sign-extended halfword, stored
+		 * back as one.  THE RELOAD IS THE NEXT INSTRUCTION, 0x62b5f
+		 * `movzwl 0x3596(%ebx),%ecx`, and 0x62b66 writes the 4.
 		 */
 		f->rx->f1d2 = (short)(3 * (int)f->obj->faa96);
 		tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
@@ -4447,7 +4449,7 @@ t3c_putp(struct v34_object *obj, unsigned off, void *p)
  * been `src/pump/v34/v34hstxblock.c`, by finding 591.  `t3m_txblock`/
  * `t3m_tail` is the survivor because it is the only one whose SIGNATURE can
  * hold the object's behaviour: the tail's `tx` is the value in `%cx` that
- * whichever arm jumped here left, and 0x62b45 re-reads +0x3596 over it, so a
+ * whichever arm jumped here left, and 0x62b5f re-reads +0x3596 over it, so a
  * dispatch that takes only the object cannot tell the two readings apart at
  * all.  It also writes 0x64884, 0x62b2f and 0x64a4f, which this side left
  * calling `t3c_unwritten`.
@@ -4478,7 +4480,7 @@ t3c_txblock(struct v34_object *obj)
  * reaches at 0x62af1 reads +0x3596 itself, so every route in leaves `%cx`
  * holding the object's own txstate; a test entry that took a txstate would be
  * testing a call the object never makes.  What that costs is recorded rather
- * than hidden: the reload at 0x62b45 cannot be reached with a `tx` that
+ * than hidden: the reload at 0x62b5f cannot be reached with a `tx` that
  * differs from +0x3596 through this entry, so the one thing `t3m_tail` models
  * that its predecessors did not is not tested from here.  Finding 591.
  */
