@@ -24391,3 +24391,255 @@ design** -- that failure IS the measurement -- so it is not in `make phase`,
 and unset the file behaves exactly as before.  Shown to fire in both
 directions: 0 without it and a passing run, 161 with it.  Whoever closes part
 of the gap should watch that number fall.
+
+### 571. Finding 570's second-largest family was 31 calls not made, and the fixture predicted the exact after-number
+
+Task #34 took finding 570's `V34TX1_TRACE` measurement -- 161 of 272 step
+cases whose transcript differs from the blob's, every difference a line we do
+not print -- and closed the two families 570 named as *calls not made* rather
+than as code not written.
+
+```
+$ make build/test/t_v34hstx1 && V34TX1_TRACE=1 ./build/test/t_v34hstx1 | grep -c '^=@= '
+161      before
+137      after
+```
+
+**137 was predicted before anything was edited, and it is not a target that
+was aimed at afterwards.** Grouping 570's 760 missing lines by case shows 24
+of the 161 cases whose ONLY missing families are the two being closed; the
+other 137 also miss a line from a family that needs code nobody has written.
+So 161 - 24 = 137 is the ceiling, and landing anywhere above it would have
+meant a family did not fully close. By family:
+
+```
+                before   after
+  V34DATARATE      402     402
+  V34HSHAKE:       183       0     <- hs_setstate,   this finding
+  V34INFO           51      51
+  other             47      47
+  MOH               42      42
+  FreezeEcho        21       0     <- v34FreezeEcho, finding 572
+  V34MP             14      14
+  ----------------------------
+  total            760     556
+  spurious (ours-only)     0       0
+```
+
+`v34hstx1.cpp` never called `hs_setstate`. It open-coded the idiom at
+**thirty-one** sites -- twenty-five in the plain two-line shape
+
+```c
+        if (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)
+                tx1_put(o, TX1_TXSTATE, V34HS_SSEG);
+```
+
+and six more where the compare is spelled differently: an unsigned-cast
+compare at 0x634a6, two against a `txst` cached earlier in the arm, and three
+where an enclosing guard has already established the value so the object
+stores unconditionally. All six are compare-then-assign with the compare
+hoisted or proved, and all six print in the blob, so all thirty-one became
+`hs_setstate`.
+
+**The zero in the `spurious` row is the load-bearing number, not the 137.**
+`grep -c '^=@= '` counts cases that differ, so a case that already failed and
+gains a line the blob does NOT print still counts as one and the total does
+not move. Lines we print that the blob does not is the detector for "wrong
+call site or wrong function", and it was 0 before, 4 in the middle -- finding
+573 -- and 0 after.
+
+Not one byte of the object changed: `hs_setstate` is the same compare and the
+same store with a diagnostic between them, and the plain (diagnostics-off) run
+passes all 23,295 checks exactly as before.
+
+**Why six batches did not see this.** The differential test cannot observe a
+missing diagnostic while the diagnostics are off, and the diagnostics were off
+because the suite is red with them on. That is finding 570's point; this is
+the first half of the repair.
+
+### 572. `v34FreezeEcho` was written, correct and dead, and folding it back cost 78 mutation anchors
+
+`v34FreezeEcho` (`src/pump/v34/v34rx.c:958`) is three stores and two calls:
+raise `V34_EC_FROZEN` in `f25c2`, print `V34HSHAK: Freeze EC`, then report the
+near and the far canceller under their own headers. It had **no caller
+anywhere in `src/`**. Three arms of `v34hstx1.cpp` inlined its body instead,
+verbatim:
+
+```c
+        o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
+        V34EchoReportCoeff(&o->echo0);
+        V34EchoReportCoeff(&o->echo1);
+```
+
+at `tx1_ja_common` (78 and 85), `v34tx1_jtxmit` (64) and `v34tx1_trnseg4`
+(21). `V34_EC_FROZEN` is `0x0004`, so `| 4u` is literally the same store.
+
+**The fold was verified per site before it was made, not inferred from the
+totals.** In all seven affected cases our transcript already printed the two
+`?======= Nothing to report =========` bodies and was missing exactly the
+three headers -- so the callee was running and only the wrapper was absent.
+The stronger argument is structural: `v34FreezeEcho` is in `v34rx.c`, the arms
+are in `v34hstx1.cpp`, and GCC 3.4.2 cannot inline across translation units,
+so a printed `Freeze EC` at a table-1 arm *proves* a call rather than an
+inlining. 21 lines, 7 cases, all closed, no byte change.
+
+#### The anchor cost was 78, and the brief's estimate of 6 was an undercount
+
+Folding moves text that mutation anchors are pinned to. The brief counted 14
+entries mentioning the cancellers, 6 of them at risk. The measured figure is
+**78 of the 749**, because *every* state-write mutation is anchored on the
+two-line compare-store idiom finding 571 replaced, not only the echo ones.
+A pre-flight script counted each entry's `find` in the post-edit text before
+`mutate.py` was run at all; it was validated by showing 0 anomalies against
+the pre-edit text, where all 749 are unique by construction.
+
+**Nothing was deleted and nothing was re-filed as equivalent.** 47 re-anchored
+mechanically -- the same transformation applied to `find` and `replace`
+reproduces the identical mutant program, which was checked by construction:
+`new.replace(T(find), T(replace)) == T(old.replace(find, replace))`. 31 needed
+a decision, and they fell into four kinds:
+
+- context-only, where a state site merely surrounded the real subject;
+- "moved to X rather than Y", which becomes the constant in `hs_setstate`;
+- **"the compare is deleted", which becomes `hs_put`** -- the header already
+  says an arm needing the store without the compare uses it; and
+- the eleven echo-body mutations, which now replace the `v34FreezeEcho(o)`
+  call with the inline variant they used to edit in place. **The mutant
+  program is byte-for-byte the one the entry produced before the fold**, so
+  the entry tests the same claim and its status cannot move for a reason that
+  is really about re-anchoring.
+
+That last choice is why `#include "dsplib/v34filt.h"` stays although nothing
+in the unmutated file calls `V34EchoReportCoeff` any more: nine mutants
+reintroduce the call, and a mutant that fails to compile is reported CAUGHT
+for the wrong reason. The include carries a comment saying so.
+
+#### The suite is unchanged, which is the result
+
+```
+before   749 mutations: 706 caught, 11 NOT caught, 0 unusable, 32 equivalent
+after    749 mutations: 706 caught, 11 NOT caught, 0 unusable, 32 equivalent
+```
+
+Run in four chunks of 200/200/200/149, summing 183+191+190+142 caught,
+3+4+4+0 uncaught and 14+5+6+7 equivalent. **The eleven uncaught are the same
+eleven by name**, exactly 570's list. One label changed, and only because the
+code under it changed shape: `54: the count is stored on the completing path
+too` is now `54: the completing path does not zero the count`, since after
+finding 573 the count IS stored on that path and the old label had become
+false. Same mutant, same status.
+
+#### The three "twice" variants: still uncaught here, and now covered elsewhere
+
+The brief asked whether the fold makes them catchable. **At this fixture it
+does not, and the reason is 570's**: the suite runs with the diagnostics off,
+so `V34EchoReportCoeff` prints nothing and reporting `echo0` twice is
+unobservable -- and even with them on, `v34hs_setup(0)` leaves both cancellers
+empty so both print the same "Nothing to report" line. They stay uncaught and
+stay named.
+
+What the fold does change is *where the claim lives*. Near-then-far order and
+the flag bit are now properties of `v34FreezeEcho` in `v34rx.c`, and the
+`v34rx` suite already asserts all three against a fixture that seeds the two
+cancellers with DIFFERENT coefficients (`t_v34rx.c:2506`, whose comment
+records that the swap "was NOT CAUGHT until these two patterns did"):
+
+```
+$ tools/mutate.py --suite v34rx
+  ok    the near and far echo reports swapped                    caught (test)
+  ok    both echo reports dump the near canceller                caught (test)
+  ok    freezing the echo clears the flag rather than setting it  caught (test)
+  31 mutations: 31 caught, 0 NOT caught, 0 unusable, 0 equivalent
+```
+
+So the honest statement is a dedup, not a win: **three per-arm copies of one
+claim collapse to one function-level mutation that is already caught**, and
+the per-arm entries remain as uncaught assertions about the arms' factoring.
+No `v34rx` entry was added and no `v34hstx1` entry was removed.
+
+#### One place the object's shape and the factoring disagree
+
+68's tail at 0x65653 moves the transmit machine to `TRNSEG4A` with **no**
+compare -- the reading recorded in `v34tx1_jtxmit`'s comment, and it stands.
+It is written as `hs_setstate` anyway because the enclosing
+`txstate == J1TXMIT` test has already established the value, so the compare is
+provably dead: same stores, same transcript, and one copy of the three format
+strings rather than two. The blob does print the `J1TXMIT=>TRNSEG4A` line, so
+the diagnostic is not optional even though the compare is. The comment now
+says both halves.
+
+### 573. Arm 54 stored its counter in the wrong order, and only the transcript could see it
+
+Restoring the `hs_setstate` calls took the count 161 -> 141 and left **four
+spurious lines** -- the one direction finding 570 had never seen in either
+build:
+
+```
+ours: V34HSHAKE: txstate SILENCEINFO=>TX_DPSK(rx SILENCE, mst PHASE1, [1]0,  [2]1911)
+blob: V34HSHAKE: txstate SILENCEINFO=>TX_DPSK(rx SILENCE, mst PHASE1, [1]10, [2]1911)
+```
+
+`[1]` is `obj->vect_idx` read at the moment of the print, and the blob prints
+**ten**. `n` is `vect_idx + 1` and the arm only gets here when `n == 0xa`, so
+`vect_idx` is 9 on entry and the blob has stored the increment before it
+changes state. This tree had:
+
+```c
+        n = (unsigned short)((unsigned short)o->vect_idx + 1);
+        if (n != 0xa) {
+                o->vect_idx = (short)n;         /* stored on ONE path */
+                return V34TX1_LOOP;
+        }
+        o->vect_idx = 0;                        /* zeroed BEFORE the state change */
+        hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
+```
+
+and the object stores the count unconditionally, branches, changes state, and
+*then* zeroes:
+
+```c
+        n = (unsigned short)((unsigned short)o->vect_idx + 1);
+        o->vect_idx = (short)n;
+        if (n != 0xa)
+                return V34TX1_LOOP;
+        hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
+        o->vect_idx = 0;
+```
+
+**Both orders leave the same bytes behind** -- the intermediate 10 is never
+read and the field ends at 0 either way -- so no byte comparison can separate
+them, and none did for six batches. Only `[1]` in a diagnostic can. That is
+the brief's "if restoring a call changes what you see, you have the wrong call
+site" arriving as a real defect rather than a false alarm, and it is why the
+spurious count matters more than the case count.
+
+Corroboration that the hoisted shape is the object's and not a convenience:
+**arm 74 is already written this way** at 0x66b94, and mutation 181, `74: the
+count is not stored before the comparison`, has asserted it since it landed.
+54 and 74 are the same idiom and 54 was the one written wrong.
+
+With the order fixed the count reaches **137, the predicted ceiling, with zero
+spurious lines in either direction.**
+
+### 574. What is left of finding 570's gap, and what each family needs
+
+556 of the original 760 missing lines survive, in five families, and **none of
+them is a call not made**. Every one needs code that has not been
+reconstructed; the format strings themselves are absent from `src/`, which was
+checked with adjacent string literals joined, because these are all split
+across source lines and a naive grep answers the wrong question.
+
+| lines | family | what it needs |
+|--:|---|---|
+| 402 | `V34DATARATE, ...` | the rate-selection body, mostly arm 66. Eight format strings -- thresholds, `ethresh`, `equerr`/`preerr`, the automatic min/max, the final choice with its three renegotiation thresholds, the MP bit dump and two `precoefs` forms. `v34shell.c` has three *different* `V34DATARATE` strings; none of the eight is among them. This is the largest single piece of unwritten V.34 in the fixture's reach. |
+| 51 | `V34INFO, V.34bis is not possible` | absent from `src/`; belongs with the INFO0a/INFO1a decision. |
+| 47 | fourteen one-offs | the largest is 15x `echo start wait time would be: NEC %d symbols, FEC %d symbols`, then 10x `On J TX start, would freeze EC after bulk delay`, 7x `Moving to TX MD`. These are the thirteen trace blocks `v34tx1_trnseg4`'s comment already lists by address. |
+| 42 | `MOH:` and `End of current MOH msg` | arm 24's Modem-on-Hold paths. Six distinct strings, **all absent**. `v34hshak.c` has one `Timeout waiting for MH sequence` but it is the `under MHfrr` variant; the missing ones are `under MHreq` (two) and `under cleardown`, and its function `t3c_micro_moh_tone_drop` is `static` in a file this branch does not own. |
+| 14 | `V34MP, ...` | three format strings around MP/MP' retransmission. |
+
+**The distinction worth keeping.** 570 said "most of it is calls not made".
+Measured, it was 204 of 760 -- 27%, both families, now closed. The remaining
+73% is not a call site anybody can find; it is arms that print more than this
+tree has written, and no amount of re-reading `v34hstx1.cpp` will produce it.
+Whoever takes `V34DATARATE` should expect to be writing the rate-selection
+arm, not restoring a call.
