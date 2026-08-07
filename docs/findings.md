@@ -19477,3 +19477,289 @@ again.
 left are 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A` (0x62e28).
 
 **Finding 425 is the only number this batch took.**
+
+### 420. Table 1's remaining thirteen: eleven landed, and the hand-over for 21 and 66
+
+*Written last, numbered first: 420 is the head of this batch's block 420-429
+and this is its index.  The per-arm records are findings 421 (60, 70, 18, 51),
+422 (19, 20, 5/54/74), 423 (69, 64/68), 424 (67) and 425 (24).  426-429 are
+unused and are the next agents' to take.*
+
+Task #16 took table 1's six small arms (findings 340-345).  This batch took
+eleven of the other thirteen targets.  **Two are left**, and everything below
+exists so that whoever takes them does not rediscover it.
+
+#### What table 1 actually is, target by target
+
+`.rodata+0x2da0`, 82 entries, index `txstate - 5`, read at 0x62966 inside the
+per-sample loop at 0x62950.  **Nineteen real targets over twenty-five
+txstates**; the other fifty-seven entries are the loop bottom at 0x629e0
+itself, which is why a txstate with no arm spins forever (finding 287).
+
+The size column is the arm's **level-0 body**: blocks exclusive to that target
+with every block that calls `dsplibs_debug_printf` deleted, because the tests
+run at `v34hs_debug(0)` and a trace block is not entered at level 0.  It is
+the number that predicts the work.  `tools/cfgsplit.py`'s exclusive-byte
+figure is two to four times larger on the big arms and is mostly traces --
+66 reads 4,097 there and 3,583 here, 24 reads 3,228 and 2,220.
+
+```
+  target   txstates                        level-0 B   status
+  0x62d3d  60 TONE_AB                            34    421
+  0x63ca8  70 DATAXMIT                          137    421
+  0x64048  18 SSEG                              152    421
+  0x64139  78 JaTXMIT                           152    340
+  0x63fb0  85 K56JaTXMIT                        152    340
+  0x62d83  65 XMIT0                             165    340
+  0x641d1  71 TXLEVEL                           237    340
+  0x63d58  81 82 83 84 MOH_SILENCE...           245    340
+  0x62c69  51 TX_L1                             285    421
+  0x6296d  19 SBARSEG                           568    422
+  0x63dae  86 TXMD                              594    340
+  0x642bf  20 PPSEG                             602    422
+  0x640b4  5 SILENCE, 54 SILENCEINFO,           719    422
+           74 SILENCERETRAIN
+  0x63858  69 EXMIT                             823    423
+  0x635cc  64 JTXMIT, 68 J1TXMIT                892    423
+  0x6399b  67 XMITMP                          2,024    424
+  0x62b96  24 TX_DPSK                         2,220    425
+  0x64339  21 TRNSEG4                         2,290    OPEN
+  0x62e28  66 TRNSEG4A                        3,583    OPEN
+```
+
+#### The four shapes an entry shared by several txstates can have
+
+This is the part that stops two agents writing one arm twice, and it is not
+one rule but four, all measured here:
+
+```
+  78 / 85          TWO entries, ONE body, two tail calls        finding 340
+  81 82 83 84      ONE entry, ONE behaviour                     finding 340
+  5 / 54 / 74      ONE entry, THREE behaviours -- the shared
+                   prologue re-reads txstate at 0x640f4         finding 422
+  64 / 68          ONE entry, ONE body, TWO tails -- the
+                   re-read is at 0x636ff, inside the pass
+                   where vect_idx wraps, one pass in eight      finding 423
+```
+
+**So a shared entry is never evidence of one behaviour.**  Both re-reads were
+found by reading the body, not by the fixture: 5, 54 and 74 agree on every run
+that does not complete, and so do 64 and 68.  Assert the sharing against the
+blob's own `.rodata` -- the landed tests do this in `case_silence_entry`,
+`case_jtxmit_entry`, `case_xmitmp_entry` and `case_tx_dpsk_entry` -- so that a
+later change separating two entries is a failure and not a silence.
+
+**Neither of the two open targets shares an entry with anything.**  0x64339 is
+reached only by txstate 21 and 0x62e28 only by 66.  They can be taken by two
+agents who will not meet.
+
+#### Finding 323's one collision is agreement on one path, not identity
+
+24 and 60 write the same 69 bytes cold for four reasons, all of them the
+fill's: +0xabe8 clear, the reader hands back a zero bit, the message is not
+over, and the fixture aims +0xaa6c outside the object.  Finding 421 further
+narrowed 60 itself -- its two paths are chosen by bit 0 of +0x358c, which the
+fill leaves odd, so 323 measured one of them.  Finding 425 has the arithmetic
+that rules out the competing reading.
+
+#### What the two open arms are, as far as they were read
+
+Read through `tools/dis.py`; block ranges are the level-0 sets described
+above, so a range in the list is code some path reaches with the diagnostics
+off.  Neither was disassembled instruction by instruction -- what follows is
+the map, not a derivation, and none of it may be written into `src/` without
+going through `tools/dis.py` first.
+
+**21 `TRNSEG4`, 0x64339, 2,290 B, fragmented into 23 pieces.**
+
+```
+  64339-6436d  6436e-6443a  64440-64480  64ad9-64e5c  67278-6729b
+  67613-67653  67734-67741  67f80-6800d  6801e-68091  683c9-6845e
+  6879b-687f4  68813-6881e  68ad0-68ae3  691f0-69228  6929e-692ca
+  69740-69785  69a10-69a49  69b4f-69b6f  69c34-69c7a  69de7-69dfa
+  6a81c-6a842  6aee5-6aefe  6b0cf-6b0e8
+  calls: indicateJaTransmission x2, V34EchoReportCoeff x2, txmit,
+         rxinit, detectorinit, VPcmV34ReportStartOfEchoAdapt,
+         VPcmV34ReportMiddleOfEchoAdapt
+  rejoins: 629c8, 62d70, 63948, 63da2, 640a1 -- all plain loop rejoins
+```
+
+The head 0x64339-0x64480 is about 325 bytes and 0x64ad9-0x64e5c is 899; the
+rest is short blocks.  It is entered from 20 `PPSEG`, whose segment end moves
+the transmit machine to TRNSEG4 (finding 422), so 20's test is the place to
+look for what state 21 is entered in.
+
+**66 `TRNSEG4A`, 0x62e28, 3,583 B, and 1,956 of them are one contiguous
+stretch** -- the largest single run of straight-line code in table 1.
+
+```
+  62e28-62e3a  62e3b-62e6f  62e70-62fde  62fdf-630ba  630bb-63197
+  63198-631c3  631c4-63204  63205-63423  63424-6346a  6346b-635cc
+    (the ten above are contiguous: 62e28-635cc, 1,956 B)
+  6559c-655c9  66e59-66e8d  66e8e-66efe  66eff-66fe9  6729b-672ff
+  67300-67367  67368-6752c  6768b-676f3  67741-6777e  67781-6778b
+  677a8-6780f  67936-67999  67c34-67c4e  68308-6833b  68362-68375
+  68739-68754  68c8a-68ca4  69100-6910c
+  calls: bitreverse x4, txmit, VPcmV34GetMaxUpstreamRateIndex, sysdep_memset
+  rejoins: 62d70, 63941, 6409a, 6431f -- all plain loop rejoins
+```
+
+Two entrances into it are already written and say what 66 is entered with:
+19 `SBARSEG`'s completion selects TRNSEG4A when `f25c2 & 0x2000` (finding
+422), and 68 `J1TXMIT`'s wrap selects it at 0x65653 after clearing f25cc,
+f25c6 and f25c0 (finding 423).
+
+**And 66's exclusive set ends at 0x66eff-0x66fe9, one byte below 0x66fe9 --
+which is exactly where 86 `TXMD` transfers when its segment completes**, the
+unmodelled block finding 343 pays a lost oracle for.  Whoever takes 66 should
+settle whether 0x66eff's block falls THROUGH into 0x66fe9 or branches
+elsewhere.  If it falls through, landing 66 reconstructs 86's transfer target
+as a side effect and may retire `86: the wrap is tested before the counter is
+stored` from the suite's uncaught seven; if it does not, saying so stops the
+next reader chasing it.
+
+**Both are worth checking for an inlined library function before writing
+anything long.**  67's 2 KB was `getbit` open-coded once and 24's 2.2 KB was
+the same function open-coded twice, with its recursion inlined and its `crc`
+store sunk into the successors; recognising that turned thirty block ranges
+into two calls.  66's four `bitreverse` calls and its `sysdep_memset` suggest
+the same shape.
+
+#### What had to be discovered about the fixture, beyond findings 340-345
+
+Six things, each of which cost a batch and none of which is in 340-345:
+
+- **A `.rodata` table the arm needs may not be in the tree, or may be
+  `static` where the blob's binding is global.**  51 needed `probe`
+  (`.rodata+0x2c00`, 64 signed shorts) which did not exist; 20 needed
+  `vectpp`, which existed but was `static` in v34rx.c and has two readers at
+  two element widths.  Both are now extracted and proved by `memcmp` against
+  the blob's copy -- and that memcmp is not redundant, because the runs read
+  ten of `probe`'s sixty-four entries and a one-count change in entry 0
+  leaves every emitted sample identical.
+- **`run_case`'s two anti-vacuity guards are per-arm, not per-path.**  Three
+  times a whole family of runs never reached the code it claimed to test
+  while the test reported PASS and both guards held, because one companion
+  field was left unpoked -- and each time only `tools/mutate.py` said so.
+  Once the cause was a poke array addressed as `NP(a) - k`, so inserting an
+  entry moved four pokes by one.  **Literal indices, never computed ones.**
+- **Not every arm transmits on every path**, so 425 generalised `run_case` to
+  `run_case_ex(..., guard)` with `TX1_GUARD_QUEUE` (the original, and what
+  the sixteen earlier arms still use), `TX1_GUARD_STATE` and
+  `TX1_GUARD_ONESHOT`.  Two mutations that looked like a limit of the fixture
+  were a limit of a guard.
+- **Two guards in series need each run narrowed**, or a mutation of the first
+  falls through to the same answer as the second.  Finding 423 has two.
+- **`V34SetINFO0aBits` faults unless the session's CAPS and UPSTREAM pointers
+  are aimed**; the fixture aims only its PCM pointer.  `t_v34hstx1.c` now has
+  a per-case `fixup` hook that aims both at one shared static, keeping the two
+  sessions byte-identical; it is NULL for every case that does not need it.
+- **A bring-up routine called from inside the step is not automatically
+  blocked** -- finding 359 is about which one.  `v34handshakinit(obj, 1)`
+  compares clean at every seed and layout (finding 425), because
+  `v34modeminit`'s callees aim library tables `holes[]` already carries.
+  `initdigital` does not: `initV34` stores **interior self-pointers** into
+  each shell context's `coeff` -- `obj+0xe84` into the receive context and
+  `obj+0x2a68` into the transmit one, v34shell.c:1733 and :1763.  **The field
+  is at +0x0a24 and +0x2604 and the bytes that differ are +0x0a26 and
+  +0x2606**, byte 2 of each four-byte pointer; findings 424 and 425 each
+  reported one of those two frames and both are right.  Neither field is in
+  `holes[]`.  Finding 424 left that one run out rather than widen the list,
+  and recorded the two untested lines as uncaught mutations.
+
+And one rule from the brief that is **false in general**: 3200 baud is the
+only rate whose modulator setup reads the `v90` argument (finding 216), but
+19's `V34SetupModulator` takes six literals at 0x67890 -- 4800 baud, 2400
+carrier, no pre-emphasis, `v90` zero, no reset -- so there is no rate to seed
+and no argument to compute.  Check the call site before seeding a rate.
+
+#### Finding 341's trace gap is NOT closed, and it is bigger than it was
+
+341 recorded two halves of one gap: `V34EchoReportCoeff` only prints, so two
+mutations cannot fail; and the traces themselves are not reconstructed.
+Neither half was closed here, and the second half grew.
+
+**The block list below is finding 422's arms only, and is the only part of
+this gap anyone has enumerated.**  The eight arms of findings 421, 423, 424
+and 425 have trace blocks of their own and none of them was written down, so
+the gap is larger than what follows -- this is a floor, not an inventory:
+
+```
+  19          6907e 6a605 67916 69ef6 69f6c
+  20          69e5a 681ef
+  5/54/74     6a00a 6b008 6a29d 6a308 6aa1f 66c72
+  plus one stack spill at 6784d that no comparison here can see
+```
+
+Whoever closes the gap can regenerate the whole list mechanically rather than
+by reading: take `tools/cfgsplit.py`'s block graph, mark every block that
+calls `dsplibs_debug_printf`, and the marked blocks plus what only they reach
+are exactly the code the level-0 sizes in the table above exclude.
+
+and 64/68 adds two more uncaught mutations of the same kind as 341's --
+`V34EchoReportCoeff` has four call sites in two pairs in that arm, and
+dropping one or aiming both at the same canceller is invisible at level 0 by
+construction.  Each pair's `f25c2 |= 4` and the second's `count = 0` **are**
+caught, which is the narrower and truer statement.
+
+Closing it still means what 341 says it means: reconstruct the traces, then
+add a transcript-only check that does not go through `v34hs_compare`.  That
+work touches **every** arm in `v34hstx1.cpp`, so it must come after 21 and 66
+rather than beside them.
+
+#### The mutation suite
+
+One suite, `v34hstx1`, source `src/pump/v34/v34hstx1.cpp`, binary
+`build/test/t_v34hstx1`.  No `suites.json` edit was needed for any of the
+eleven, because every arm went into the one file the suite already names --
+a registry that could not go stale, which is **not** the same thing as
+finding 325's rule.  It grew from 43 mutations to 525, re-run in full at the
+end of the batch:
+
+```
+  525 mutations: 496 caught (496 by test), 7 NOT caught, 0 unusable,
+                 22 equivalent, 0 MIScounted
+```
+
+The seven uncaught are: finding 341's four `V34EchoReportCoeff` calls that
+only print (two from task #16's arms, two from 64/68), finding 343's one
+transfer with no oracle past it, and finding 424's two `initdigital` lines.
+**No arm in this batch added an uncaught mutation of any other kind.**
+
+**Read the UNUSABLE count, not only the NOT-CAUGHT count.**  Two batches hit
+it: as the file grew, mutation anchors written against an earlier arm started
+matching a later arm's near-identical text, and `tools/mutate.py` reports
+`ANCHOR MATCHES 2 TIMES` and counts them unusable.  One run reported six, none
+of them belonging to the batch that ran it.  A line of context fixes each.
+And a mutation whose `replace` equals its `find` reports NOT CAUGHT while
+printing nothing -- that reads as a hole and is not one.
+
+#### Files outside `v34hstx1` that this batch touched
+
+`src/pump/v34/v34hshak.c` gained `probe` (+35 lines, beside `vect4`) and
+`src/pump/v34/v34rx.c` changed `vectpp` from `static` to the blob's own
+global binding; the two headers followed.  Both are additive, but v34hshak.c
+is the file three other batches are writing microstate arms in, so a merge
+should expect to meet them there.
+
+**Those two files are mutated by three suites this batch did not re-run in
+full** -- `v34hshak` (213), `v34hst3core` (43) and `v34rx` (32) -- which is
+finding 325's rule, and it is discharged only in part.  What was checked is
+the failure mode the edits could actually cause: a `find` anchor that no
+longer matches exactly once, which is what `mutate.py` counts **unusable**
+and which needs no build to detect.  All 288 anchors in those three suites
+match their source exactly once, so none was broken by `probe` landing beside
+`vect4` or by `vectpp` changing binding.  **That is not the same as running
+them**, and a full run of all three is still owed.
+
+#### How the remainder divides
+
+Two groups, one arm each, and they do not meet: **21 `TRNSEG4` (0x64339)** and
+**66 `TRNSEG4A` (0x62e28)**.  They have distinct entries, no shared body, no
+shared exclusive block, and each is exclusive to one txstate.  Both write
+into the same three files, so they must still be **serial or in separate
+worktrees**, not parallel in one tree.
+
+A third group has nothing in table 1 to take.  If one is available, finding
+341's trace reconstruction is the work -- but it touches every arm in the
+file, so it goes last.
