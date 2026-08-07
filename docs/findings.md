@@ -26254,6 +26254,12 @@ finding 352's evidence, not a file to copy.
 ======================================================================
 ### 570. The diagnostics-on experiment 358a asked for: the suite goes red, and only five of the eleven were ever reachable
 
+#### AMENDED BY 651: the suite is GREEN with the diagnostics on now, and
+#### EIGHT of the eleven flipped, not five. The side-A-against-side-A
+#### method below is sound but measures the text THIS TREE THEN PRINTED;
+#### finding 650 added 556 lines to it and three of the six called
+#### identical became separable.
+
 Task #32's brief was to prove or disprove finding 358a by turning the
 diagnostics on in `test/unit/t_v34hstx1.c` and re-running its 749 mutations.
 358a predicted the uncaught count would fall from eleven to one. **It does not
@@ -26842,6 +26848,11 @@ With the order fixed the count reaches **137, the predicted ceiling, with zero
 spurious lines in either direction.**
 
 ### 574. What is left of finding 570's gap, and what each family needs
+
+#### CLOSED, AND THE PREDICTION IN THE LAST PARAGRAPH IS WRONG. All 556
+#### lines are written; see finding 650. The arms were already there --
+#### what was missing was the diagnostics threaded through them, not the
+#### rate-selection body. No new field, header or foreign file was needed.
 
 556 of the original 760 missing lines survive, in five families, and **none of
 them is a call not made**. Every one needs code that has not been
@@ -27436,3 +27447,234 @@ counts as caught is its code -- so this four-line change **invalidates all 48
 recorded entries**. That is correct and it is not free: the answer is to
 re-run at the next merge, as 545 says, and not to re-key because the edit
 "obviously" cannot move a verdict. It moved the tool that decides.
+
+======================================================================
+======================================================================
+
+### 650. Finding 574's 556 lines are all written, and none of them needed a field, a file or a function this tree did not have
+
+Task #37, and the whole of what finding 570 measured.  `V34TX1_TRACE=1
+./build/test/t_v34hstx1 | grep -c '^=@= '` was **137** at the fork point and
+is **0**; with tasks #34's 204 lines before it, all 760 of 570's missing
+diagnostic lines are now printed.
+
+```
+  137  ->   83     arm 66, the rate-selection arm    453 lines
+   83  ->   25     arms 19 20 21 64 67 69 74 78 85 86  61 lines
+   25  ->    0     arm 24, Modem-on-Hold              42 lines
+```
+
+**Nothing else moved.**  Zero lines printed that the blob does not, in every
+intermediate state as well as the last one, and the object stays byte-identical
+in all 272 cases -- no `bytes written`, no `step signature`, no arena sweep
+check failed at any point.  Twenty-two mutation anchors were re-pointed onto
+the new text -- two, then thirteen, then seven -- and every one keeps the
+claim it made.
+
+#### 574 predicted the wrong kind of work, and the difference is worth having
+
+574's summary was "whoever takes `V34DATARATE` should expect to be writing the
+rate-selection arm, not restoring a call."  The arm was already there.
+`tx1_ts_rates` and `tx1_ts_snapshot` were reconstructed, byte-exact and
+mutation-tested; what was missing was **the diagnostics threaded through
+them**, eight `printf`s whose arguments are locals those functions already
+compute.  The same held for all five families.  So the honest statement is
+narrower and more useful than 574's: the gap was never unwritten
+*behaviour*, it was unwritten *reporting of* behaviour, and the placement of
+each line -- not its arguments, not the code around it -- was the whole job.
+
+That also settles 574's ownership worry.  It flagged arm 24's neighbour
+`t3c_micro_moh_tone_drop` as `static` in a file this branch does not own; the
+six Modem-on-Hold prints all land in `tx1_moh_hold`, `tx1_moh_send` and
+`v34tx1_tx_dpsk`, which are in `v34hstx1.cpp`.  No header, no
+`struct v34_object` field and no other translation unit was touched.
+
+#### THE PLACEMENT RULE, AND THE TWO PLACES THE MESSAGE TEXT DEFEATS IT
+
+**Act on the branch that reaches the cold block.  Never on what the message
+says.**  GCC moves every `if (dsplibs_debug_level > 1)` body out of line, so
+each print is a block somewhere in the 0x66000-0x70000 tail whose one entry
+is a `ja` from the arm; `relocscan.py --at .rodata.str1.4:0xNNNN` gives the
+`.text` address and the jump into it gives the statement.  Twice the message
+would have put the line somewhere else:
+
+- **`V34INFO, V.34bis is not possible` reads as the 3200/3429 arm's report,
+  and is not.**  It sits at 0x6834b, reached from 0x63028, which is inside
+  the `rate = 0xc` branch *as the object lays it out* -- but 0x6797e and
+  0x67994, the two exits of the 2400/2800/3000 block, both jump BACK to the
+  guard at 0x63025.  So every baud that enters `+0xa97e & 4 == 0` reports,
+  including the ones that changed no rate.  Placed in the branch it left four
+  cases short: 137 -> 87 rather than 137 -> 83.
+
+- **`on JTXMIT` has no digit; `on J1TXMIT` fifteen lines away in `.rodata`
+  does.**  0x0e7d4 is `V34Hshak: on JTXMIT - time to freeze echo` and 0x0ec9c
+  is `V34Hshak: on J1TXMIT - forced freeze echo (count2 = %d)`, two messages
+  of one arm.  Transcribing the digit onto both put the count at 27 with
+  **two missing lines and two spurious ones** -- and the two cancel in any
+  count of cases, so `grep -c` alone reads it as two cases short and says
+  nothing about why.
+
+The second is the argument for the spurious count as a separate number, made
+for the third time (573, 570, here).  A count of DIFFERING CASES cannot tell
+a line we do not print from a line we print wrongly; only counting both
+directions can, and only the direction that is always zero is worth watching.
+
+#### Three factorings the diagnostics changed, and one they did not
+
+A message that differs where the code does not is evidence about the source,
+and it broke two "one body, two entry points" claims this file already made:
+
+- **`tx1_ja_common` takes its message.**  0x6821d, 0x68282 and 0x682d6 are
+  three copies of one block differing only in which literal they push, which
+  is constant propagation into an inlined static.  The whole string is the
+  parameter -- not a name spliced into one format, because the object holds
+  three complete literals and pushes ONE argument.  It also named a third
+  caller: 64 `JTXMIT` shares this countdown at 0x635cc, completing at
+  0x6533c.
+- **`tx1_moh_reinit` takes its message**, the same shape: 0x69041 and 0x69227
+  guard two copies of the same two stores, and the dispatch's TWO calls share
+  one copy because they share one message.
+- **`tx1_moh_cleardown` does NOT.**  Three call sites, two messages and one
+  silent, so its two prints stay at the call sites in the hold tail.  The
+  asymmetry is the point: a parameter is what the object shows, not a habit.
+- **21 `TRNSEG4`'s if/else-if chain becomes nested.**  The guard at 0x64ba9
+  is reached by BOTH counter stores (0x68ade and 0x69df5) and not by the
+  `rtd <= 2` arm, which reports the freeze instead.  A three-arm chain cannot
+  carry a guard shared by two of its arms.
+
+#### One reading no test can see, recorded because the object encodes it
+
+`isterm` in `End of current MOH msg: isterm=%d, count1(%d), pktcount(%d)` is
+loaded by `movsbl` at 0x6871d -- a SIGNED byte at +0xabf8, which every other
+site in this file reads through `unsigned char`.  The two agree over 0 and 1
+and the field holds nothing else anywhere the fixture goes, so this is
+finding 613's shape at a `printf` argument: the differential tier cannot see
+it and it is written as the object encodes it.
+
+======================================================================
+
+### 651. The answer 358a asked for and 570 could not give: eleven uncaught becomes three, and TEN recorded-equivalent mutations were equivalent only to an oracle that has moved
+
+Finding 570 disproved 358a's prediction the only way available at the time:
+the suite could not be run with the diagnostics on at all, so there was no
+after-number.  Finding 650 closed the transcript gap, `t_v34hstx1.c` now calls
+`v34hs_debug(1)` unconditionally and `make phase` runs it.  This is the
+measurement that replaces 570's table.
+
+```
+  before (snapshot at a7f2232)
+    749 mutations: 706 caught, 11 NOT caught, 0 unusable, 32 equivalent
+  after
+    749 mutations: 724 caught,  3 NOT caught, 0 unusable, 22 equivalent
+
+  tools/mutsnap.py --verify v34hstx1     18 verdict(s) MOVED, all one way
+    10  equivalent -> caught
+     8  uncaught   -> caught
+  tools/mutsnap.py --verify v34shell     24 verdict(s), all unchanged
+```
+
+358a predicted eleven would fall to one.  570 predicted five of the eleven
+would flip and six never could.  **Eight flipped.**  Both predictions were
+wrong, in opposite directions, and the three that remain are named below.
+
+#### 570's method was right and its measurement was of a tree that has changed
+
+570 dumped side A's transcript under each uncaught mutation and diffed it
+against the unmutated dump, on the argument that side B never changes -- so a
+mutation whose side-A text is identical cannot be caught by any transcript
+comparison.  The argument holds.  What it measured was the text **that tree
+then printed**, and 650 added 556 lines to it.  Three of the six 570 called
+identical are separable now:
+
+```
+  64:    the segment's end reports the first echo canceller twice
+  78/85: the second report is of the first canceller again
+  21:    the boundary arm reports the first canceller twice
+```
+
+All three swap `echo1` for `echo0` where both cancellers print
+`?======= Nothing to report =========` under `v34hs_setup(0)`, which is why
+570 called them indistinguishable and was right about the transcript it had.
+So the correct form of 570's claim is **"not by the transcript this tree
+prints"**, and it needs re-measuring whenever the tree prints more -- which
+is a general caution about that method, not a defect in it.
+
+**THE THREE THAT REMAIN are the three 570's method also called identical for
+a reason that has nothing to do with printing**, and they are still uncaught:
+
+```
+  81: the wrap is tested before the counter is stored
+  67: initdigital is not called
+  67: +0x3598 is not set
+```
+
+The last is finding 343's transfer, which has no oracle here at all.
+
+#### TEN mutations were recorded `equivalent` and are now CAUGHT, and the tool was right to fail
+
+`mutate.py` prints `RECORDED AS EQUIVALENT AND CAUGHT ANYWAY -- the argument
+for these is wrong, or the code has moved under it` and fails the run.  Here
+neither is true and there is a third case its comment does not name: **the
+ORACLE moved.**  Every one of the ten arguments is still a correct statement
+about the object.
+
+Seven are `hs_setstate` -> `hs_put` at a compare that cannot be false, and
+one of them, `18: the SBARSEG guard is deleted`, had already written the
+condition into its own `why`: *"`hs_put` and `hs_setstate` are the same code
+at debug level 0 -- the print sits inside..."*.  At debug level 2 they are
+not, because `hs_setstate` prints the transition.  The other three:
+
+- `74: the count is not stored before the comparison` -- `hs_setstate` prints
+  `vect_idx` as its `[1]`, so a `vect_idx` the mutant leaves behind is now
+  read by something;
+- `19: the modulator's v90 argument is one` and `19: ... pre-emphasis index
+  is one` -- `V34SetupModulator` prints all five of its arguments
+  (v34filters.c:1197), so an argument that changes nothing the call DOES is
+  still an argument the call REPORTS.
+
+All ten lose `equivalent: true`; each keeps its argument, prefixed with what
+separated the two and why the argument is still true of the object.  A flag
+saying "this mutation cannot fail" is a claim about the whole harness, not
+about the object, and it does not survive the harness gaining an observable.
+
+**The general lesson, and it is finding 134's again.**  An equivalence
+argument is only ever equivalence *under the checks that exist*.  Ten claims
+in this suite were being checked by nothing while reading as deliberate, and
+the thing that exposed them was not a better argument but a new observable.
+Every `why` in every suite is a hostage to that; `--verify` is what makes the
+change visible when it happens, and here it named all eighteen.
+
+#### The codegen tier says the same thing from the other side, with a caveat
+
+`make similarity` (`tools/toolchain/compare.py --ratchet`, NOT `tools/`) is
+green after this and reports a GAIN:
+
+```
+  ratchet OK -- gained: compared 365->386, identical 92->105, same_size 15->16
+```
+
+**The gain is not this branch's and should not be claimed as one.**  The
+compared count moved by twenty-one symbols, and nothing here adds a symbol the
+blob has; `ratchet.json`'s 365/92/15 predates something already present at the
+fork point.  It is left un-blessed for that reason -- a re-bless would record
+numbers nobody can attribute.
+
+Two things about running it are worth writing down, because both cost a run:
+the first invocation against a cold container reported `identical was 92, now
+48` from a PARTIAL object set, and two consecutive runs afterwards both gave
+105; and twelve C++ translation units still fail to build under GCC 3.4.2
+(`period toolchain: 90 objects, 12 failed`), which is the state at the fork
+point and not something this branch moved.  `v34hstx1.cpp` is not among them.
+
+
+#### What it cost, and the debug-site count as the other half of the evidence
+
+`make phase` reports `debug sites: 5 of 460 never execute`, against six of
+**433** at the fork point -- 460 less this file's twenty-seven new sites,
+since it had none.  All twenty-seven execute,
+and one of `v34info.c`'s three now does too, because arm 24 reaches it.  Had
+the diagnostics been left off, the twenty-seven would have been dead code
+indistinguishable from a clean tree, which is the shape finding 134 named and
+542 counted four instances of.  Writing them and not running them would have
+been the fifth.
+

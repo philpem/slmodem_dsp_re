@@ -106,18 +106,21 @@
  },
  {
   "label": "78: JaTXMIT hands the sample to the K56flex half",
-  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
-  "replace": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
+  "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\t(void)k56FlexPhase34(o);",
+  "fn": "v34tx1_jatxmit"
  },
  {
   "label": "85: K56JaTXMIT hands the sample to the V.90 half",
-  "find": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);",
-  "replace": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\t(void)k56FlexPhase34(o);",
+  "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\tv90Phase34(o);",
+  "fn": "v34tx1_k56jatxmit"
  },
  {
   "label": "78: the counter is not consulted at all",
-  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
-  "replace": "\tv90Phase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
+  "replace": "\tv90Phase34(o);",
+  "fn": "v34tx1_jatxmit"
  },
  {
   "label": "81: the queue is fed a non-zero sample",
@@ -300,8 +303,8 @@
   "label": "18: the SBARSEG guard is deleted",
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
   "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
-  "equivalent": true,
-  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_sseg"
  },
  {
   "label": "70: the data-path test is inverted",
@@ -560,8 +563,8 @@
   "label": "19: the modulator's v90 argument is one",
   "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
   "replace": "\t\t\t\t  4800, 2400, 0, 1, 0);",
-  "equivalent": true,
-  "why": "`V34SetupModulator` reads `v90` at 3200 baud and nowhere else (finding 216), and this arm asks for 4800 with all six arguments as literals -- so the argument cannot change what the call does from THIS site.  It is written as the object passes it"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and V34SetupModulator's own line, which prints all five arguments separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  `V34SetupModulator` reads `v90` at 3200 baud and nowhere else (finding 216), and this arm asks for 4800 with all six arguments as literals -- so the argument cannot change what the call does from THIS site.  It is written as the object passes it",
+  "fn": "v34tx1_sbarseg"
  },
  {
   "label": "19: the modulator is reset",
@@ -572,8 +575,8 @@
   "label": "19: the modulator's pre-emphasis index is one",
   "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
   "replace": "\t\t\t\t  4800, 2400, 1, 0, 0);",
-  "equivalent": true,
-  "why": "a non-zero `preemp_index` picks a row of the rate's p<baud> table and 4800 has none, so `V34SetupModulator`'s inner switch falls to `default` and `m->preemp` keeps the value the unconditional store above it left"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and V34SetupModulator's own line, which prints all five arguments separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  a non-zero `preemp_index` picks a row of the rate's p<baud> table and 4800 has none, so `V34SetupModulator`'s inner switch falls to `default` and `m->preemp` keeps the value the unconditional store above it left",
+  "fn": "v34tx1_sbarseg"
  },
  {
   "label": "19: the span is measured from 0x5e9",
@@ -932,8 +935,8 @@
   "label": "74: the count is not stored before the comparison",
   "find": "\t\to->vect_idx = (short)n;\n\t\tif (n != 0xb4)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */",
   "replace": "\t\tif (n != 0xb4) {\n\t\t\to->vect_idx = (short)n;\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}",
-  "equivalent": true,
-  "why": "the object stores `vect_idx` at 0x66b94 and branches at 0x66b9b, so the store happens on both paths -- but the completing path clears the same field at 0x66c56 before anything reads it, and the other path is where the mutation still stores.  So no run can see the difference: measured, not argued, and the ordering at 0x66b94 is written as the object writes it"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's line, which prints `vect_idx` as its `[1]` separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the object stores `vect_idx` at 0x66b94 and branches at 0x66b9b, so the store happens on both paths -- but the completing path clears the same field at 0x66c56 before anything reads it, and the other path is where the mutation still stores.  So no run can see the difference: measured, not argued, and the ordering at 0x66b94 is written as the object writes it",
+  "fn": "v34tx1_silence"
  },
  {
   "label": "74: the Modem-on-Hold flag is read as a halfword",
@@ -974,8 +977,8 @@
   "label": "74: the txstate compare is deleted",
   "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
   "replace": "\t\t/* 0x66c10 */\n\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "equivalent": true,
-  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_silence"
  },
  {
   "label": "74: the txstate moves to TONE_AB_CALL",
@@ -1193,8 +1196,9 @@
  },
  {
   "label": "64/68: the countdown at +0xaa78 is not run",
-  "find": "\t(void)tx1_ja_common(o);\n\n\t/* 0x635f0 */",
-  "replace": "\t/* 0x635f0 */"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x682d6 */\n\n\t/* 0x635f0 */",
+  "replace": "\t/* 0x635f0 */",
+  "fn": "v34tx1_jtxmit"
  },
  {
   "label": "64/68: +0x25d8 is not counted",
@@ -1320,8 +1324,8 @@
   "label": "64/68: the txstate compare at 0x66cdf is deleted",
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
   "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_XMIT0);",
-  "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_jtxmit"
  },
  {
   "label": "64/68: the wrap test is inverted",
@@ -1362,8 +1366,8 @@
   "label": "68: the segment's end stores without comparing",
   "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "replace": "\t\to->f25cc = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "equivalent": true,
-  "why": "0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding 572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding 572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_jtxmit"
  },
  {
   "label": "64: +0x25da is compared against three",
@@ -1414,8 +1418,8 @@
   "label": "64: the txstate compare at 0x63748 is deleted",
   "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
   "replace": "\ths_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
-  "equivalent": true,
-  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_jtxmit"
  },
  {
   "label": "64: the second echo report pair runs whatever the counter holds",
@@ -2181,8 +2185,8 @@
   "label": "67: the txstate compare at 0x648cd is deleted",
   "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
   "replace": "\t\t\ths_put(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "tx1_mp_sequence_end"
  },
  {
   "label": "24: the entry does not tick vect_idx",
@@ -2268,8 +2272,8 @@
   "label": "24: the txstate compare at 0x654e4 is deleted",
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-  "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+  "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)",
+  "fn": "v34tx1_tx_dpsk"
  },
  {
   "label": "24: the one-shot test is inverted",
@@ -2363,13 +2367,15 @@
  },
  {
   "label": "24: anything past four builds the message",
-  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
-  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */"
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "fn": "v34tx1_tx_dpsk"
  },
  {
   "label": "24: five restarts the handshake like anything else",
-  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
-  "replace": "\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */"
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */",
+  "fn": "v34tx1_tx_dpsk"
  },
  {
   "label": "24: moh_recvd is compared signed",
@@ -2495,13 +2501,15 @@
  },
  {
   "label": "24: +0xabf9 picks the two messages the other way round",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 1;\t\t/* 0x6a415 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x6a415 */\n\t}",
+  "fn": "tx1_moh_send"
  },
  {
   "label": "24: the message built is always MHfrr",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
-  "replace": "\to->moh_message = 1;"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "replace": "\to->moh_message = 1;",
+  "fn": "tx1_moh_send"
  },
  {
   "label": "24: the message is built into the record it installs",
@@ -2630,13 +2638,15 @@
  },
  {
   "label": "24: the hold tail's +0xabf9 test is inverted",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\t/* 0x688b4 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "24: the hold tail reads +0xabf9 as a halfword",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
-  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */"
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "24: the hold tail does not stamp +0xabe2",
@@ -2665,8 +2675,9 @@
  },
  {
   "label": "24: the hold tail restarts the handshake where it clears down",
-  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_reinit(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
-  "replace": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o);"
+  "find": "\t\ttx1_moh_reinit(o,\n\t\t\t       \"MOH: Timeout waiting for MH sequence under\"\n\t\t\t       \" MHreq, initiating retrain\\r\\n\");\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x65031 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"MOH: Timeout waiting for MH sequence under\"\n\t\t\t\" cleardown, terminating connection without\"\n\t\t\t\" acknowledge\\r\\n\");\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
+  "replace": "\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x65031 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"MOH: Timeout waiting for MH sequence under\"\n\t\t\t\" cleardown, terminating connection without\"\n\t\t\t\" acknowledge\\r\\n\");\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o, MOH_ILLEGAL);",
+  "fn": "tx1_moh_hold"
  },
  {
   "label": "21: the quadrant is stored but the point is vect4[0]",
@@ -2924,20 +2935,20 @@
  },
  {
   "label": "21: the boundary arm does not raise bit 2 of f25c2",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm raises bit 3 of f25c2",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm does not clear the counter",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2954,38 +2965,38 @@
  },
  {
   "label": "21: the whole-counter arm needs BOTH receivers non-zero",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm looks only at the V.90 receiver",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->v90_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->v90_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm looks only at the K56flex receiver",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->k56flex_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->k56flex_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm tests the receivers above one",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if ((unsigned)o->v90_receiver > 1u\n\t\t   || (unsigned)o->k56flex_receiver > 1u) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif ((unsigned)o->v90_receiver > 1u\n\t\t    || (unsigned)o->k56flex_receiver > 1u) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the counter is halved on the receiver arm too",
-  "find": "\t\ttx1_put(o, TX1_COUNT, o->rtd);\n\t} else {",
-  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));\n\t} else {",
+  "find": "\t\t\ttx1_put(o, TX1_COUNT, o->rtd);\n\t\t} else {",
+  "replace": "\t\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));\n\t\t} else {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the counter is taken whole where it should be halved",
-  "find": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
-  "replace": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, o->rtd);",
+  "find": "\t\t\t/* 0x64b96 */\n\t\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
+  "replace": "\t\t\t/* 0x64b96 */\n\t\t\ttx1_put(o, TX1_COUNT, o->rtd);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3688,8 +3699,8 @@
  },
  {
   "label": "66: the ladder decrements before it tests",
-  "find": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;\n\t\trate = (short)(rate - 1);",
-  "replace": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\trate = (short)(rate - 1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
+  "find": "\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;\n\t\trate = (short)(rate - 1);",
+  "replace": "\t\trate = (short)(rate - 1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3718,8 +3729,8 @@
  },
  {
   "label": "66: a rate at or below +0x260 - 1 is left alone",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\telse if (rate < d + 1)",
-  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1)\n\t\t\t\trate = (short)(d - 1);\n\t\t} else if (rate < d + 1)",
+  "find": "\t\tif (rx->f25e == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
+  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
   "fn": "tx1_ts_rates"
  },
  {

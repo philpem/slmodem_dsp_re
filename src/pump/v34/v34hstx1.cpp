@@ -75,6 +75,7 @@
  * that fails to compile is reported CAUGHT for the wrong reason.  The
  * declaration stays for them.
  */
+#include "dsplib/debug.h"	/* dsplibs_debug_level, dsplibs_debug_printf */
 #include "dsplib/v34filt.h"	/* V34EchoReportCoeff, V34SetupModulator */
 #include "dsplib/v34fsk.h"	/* struct v34_object, struct v34_ratecfg */
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
@@ -426,13 +427,21 @@ v34tx1_txlevel(void *objp)
  * rather than a claim in a comment; finding 340 is the measurement that they
  * are still two behaviours, because the two callees are.
  *
+ * AND IN THE MESSAGE, which is a third caller's evidence rather than a
+ * qualification of that.  The completion block prints one line naming the
+ * txstate it completed in -- `JaTXMIT`, `K56JaTXMIT` and `J1TXMIT` at
+ * 0x6821d, 0x68282 and 0x682d6 -- and 64 shares this countdown too
+ * (0x635cc, whose completion at 0x6533c falls back into the body).  Three
+ * identical blocks with one string each is what a caller-supplied message
+ * looks like from the outside, so it is passed rather than branched on.
+ *
  * THE COUNTER IS SIXTEEN BITS.  The object loads it with `movzwl`, tests
  * `%ax`, and stores `%ax` back, so a negative `short` counts down through
  * 0x8000 rather than through zero.  Spelled with an `unsigned short` here
  * for that reason.
  */
 static int
-tx1_ja_common(struct v34_object *o)
+tx1_ja_common(struct v34_object *o, const char *msg)
 {
 	unsigned short c = (unsigned short)tx1_get(o, TX1_COUNT);
 
@@ -444,6 +453,14 @@ tx1_ja_common(struct v34_object *o)
 	if (c != 0)
 		return 0;
 
+	/*
+	 * The WHOLE message, not a name spliced into one format: the three
+	 * sites hold three complete literals in `.rodata.str1.4` and push one
+	 * argument each, which is what constant propagation into an inlined
+	 * static leaves behind and a `%s` would not.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
 	v34FreezeEcho(o);
 	return 1;
 }
@@ -453,7 +470,8 @@ v34tx1_jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on JaTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x6821d */
 	v90Phase34(o);
 	return V34TX1_LOOP;
 }
@@ -463,7 +481,8 @@ v34tx1_k56jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on K56JaTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x68282 */
 	(void)k56FlexPhase34(o);
 	return V34TX1_LOOP;
 }
@@ -543,6 +562,11 @@ v34tx1_txmd(void *objp)
 		struct v34_ratecfg *cfg =
 			(struct v34_ratecfg *)((char *)o + V34_RATECFG);
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
+
+		if (dsplibs_debug_level > 1)		/* 0x6800d */
+			dsplibs_debug_printf(
+				"TX: Done with MD, moving to S/Sbar"
+				" again...\r\n");
 
 		V34SetupModulator((struct v34_modulator *)
 				  ((char *)o + TX1_MODULATOR),
@@ -880,6 +904,12 @@ v34tx1_sbarseg(void *objp)
 		span = (int)((unsigned)(0x5e8 - o->f25c) << 14);
 		q = (short)(span / 9600);
 		tx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));
+		if (dsplibs_debug_level > 1)		/* 0x67916 */
+			dsplibs_debug_printf(
+				"Moving to TX MD, would take %d symbols ,"
+				" echo start delay is %d...\r\n",
+				tx1_get(o, TX1_SEGLEN),
+				tx1_get(o, TX1_COUNT));
 	}
 
 	/* 0x67236 */
@@ -1017,6 +1047,13 @@ v34tx1_ppseg(void *objp)
 			tx1_put(o, TX1_FAA86,
 				(short)((unsigned short)tx1_get(o, TX1_FAA86)
 					+ (unsigned short)tx1_get(o, TX1_COUNT)));
+			if (dsplibs_debug_level > 1)	/* 0x681ef */
+				dsplibs_debug_printf(
+					"V34Hshak: echo start wait time would"
+					" be: NEC %d symbols, FEC %d"
+					" symbols...\r\n",
+					tx1_get(o, TX1_COUNT),
+					tx1_get(o, TX1_FAA86));
 			return V34TX1_LOOP;		/* 0x63da2 */
 		}
 	}
@@ -1092,6 +1129,8 @@ int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1133,6 +1172,12 @@ v34tx1_silence(void *objp)
 		tx1_put(o, TX1_COUNT, 0);
 		tx1_put(o, TX1_FAAE2, -1);
 		tx1_put(o, TX1_FAAE0, 0);
+		if (dsplibs_debug_level > 1)		/* 0x66c72 */
+			dsplibs_debug_printf(
+				"V34RETRAIN, SILENCERETRAIN finished,"
+				" rx->rxflgs,=0x%x,rx->gain=0x%x,"
+				"gainestimate=0x%x\n",
+				rx->flags, rx->agc_gain, rx->f262);
 		return V34TX1_LOOP;			/* 0x63941 */
 	}
 
@@ -1298,7 +1343,9 @@ v34tx1_exmit(void *objp)
 
 		o->vect_idx = 8;
 		hs_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);
-		return V34TX1_LOOP;			/* 0x6409a */
+		if (dsplibs_debug_level > 1)		/* 0x66e48 */
+			dsplibs_debug_printf("V34MP- E transmit completed\n");
+		return V34TX1_LOOP;			/* 0x6409a, 0x6431f */
 	}
 	return V34TX1_LOOP;				/* 0x63941 */
 }
@@ -1388,7 +1435,8 @@ v34tx1_jtxmit(void *objp)
 	short bits, mode, q;
 
 	/* 0x635cc, and the completion at 0x6533c falls back into 0x635f0 */
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on JTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x682d6 */
 
 	/* 0x635f0 */
 	tx1_put(o, TX1_F25D8,
@@ -1444,6 +1492,11 @@ v34tx1_jtxmit(void *objp)
 
 	/* 0x637c8 */
 	if (tx1_get(o, TX1_COUNT) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6c725 */
+			dsplibs_debug_printf(
+				"V34Hshak: on J1TXMIT - forced freeze echo"
+				" (count2 = %d)...\r\n",
+				tx1_get(o, TX1_COUNT));
 		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
 		return V34TX1_LOOP;			/* 0x64326 */
@@ -1569,6 +1622,17 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 	/* 0x646a1 */
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3590, 0x22);
+
+	/*
+	 * 0x646b5.  `flags` IS the receiver's word and the object re-reads
+	 * it here rather than using the copy it was handed; nothing between
+	 * the two writes it, so the argument is the parameter.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+			"V34MP, Starting txmit MP again(%d),"
+			" rxflgs=0x%x,txflags=0x%x\n",
+			tx1_get(o, TX1_F359E), flags, o->f25c2);
 }
 
 /*
@@ -1639,6 +1703,9 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 		if ((b->word[0] & 1) == 0)
 			tx1_put(o, TX1_F359E, 0);
 		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
+		if (dsplibs_debug_level > 1)		/* 0x67254 */
+			dsplibs_debug_printf(
+				"V34MP, MP detected, starting MP' txmit");
 		flags = rx->flags;			/* 0x64805 */
 	}
 
@@ -1917,6 +1984,13 @@ tx1_moh_cleardown(struct v34_object *o)
 }
 
 /*
+ * The two 0x69041 sites share one literal; it is named so that the
+ * sharing is visible in the source rather than only in the object.
+ */
+#define MOH_ILLEGAL	"MOH: Illegal MH sequence under MHreq,"	\
+			" initiating retrain\r\n"
+
+/*
  * 0x689f6 -- put the modem on hold: MOH_SILENCE, WAIT, and the two counters
  * the silence arm at 0x63d58 then runs on.  `t_v34hstx1.c` drives it through
  * both of its two entries, `moh_message == 1` and `moh_recvd` at 0 or 4.
@@ -1933,6 +2007,11 @@ tx1_moh_on_hold(struct v34_object *o)
 /*
  * 0x69041 and 0x6923d -- the retrain entry, twice over and identical.
  *
+ * THE MESSAGE IS THE CALLER'S, for tx1_ja_common's reason: 0x69041 and
+ * 0x69227 are two guards in front of two copies of these two stores, and
+ * the only difference between the copies is which literal they push.  The
+ * dispatch's TWO calls share one copy because they share one message.
+ *
  * `v34handshakinit(obj, 1)` RE-ARMS THE LOOP THAT IS DISPATCHING THIS ARM:
  * `v34modeminit` sets the block's sample limit at +0x2aa0 to six and clears
  * `vect_idx`, and it moves the transmit machine to SILENCERETRAIN, so the
@@ -1942,8 +2021,10 @@ tx1_moh_on_hold(struct v34_object *o)
  * to find.
  */
 static void
-tx1_moh_reinit(struct v34_object *o)
+tx1_moh_reinit(struct v34_object *o, const char *msg)
 {
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
 	v34handshakinit(o, 1);
 	tx1_put(o, TX1_FABE6, 1);
 }
@@ -1973,10 +2054,19 @@ tx1_moh_send(struct v34_object *o)
 
 	if (o->fabe2 != 3)
 		o->fabe2 = 1;
-	if (*((unsigned char *)o + TX1_FABF9) == 0)
+	if (*((unsigned char *)o + TX1_FABF9) == 0) {
+		if (dsplibs_debug_level > 1)	/* 0x7041b */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq,"
+				" sending MHfrr\r\n");
 		o->moh_message = 1;		/* 0x70430 */
-	else
+	} else {
+		if (dsplibs_debug_level > 1)	/* 0x6a400 */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq,"
+				" sending MHcda\r\n");
 		o->moh_message = 3;		/* 0x6a415 */
+	}
 
 	/* 0x6a427 */
 	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
@@ -2019,6 +2109,10 @@ tx1_moh_hold(struct v34_object *o)
 		return V34TX1_LOOP;			/* 0x6431f */
 
 	if (*((unsigned char *)o + TX1_FABF9) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6889f */
+			dsplibs_debug_printf(
+				"MOH: Timeout waiting for MH sequence under"
+				" MHreq, disconnecting...\r\n");
 		/* 0x688b4 */
 		tx1_moh_cleardown(o);
 		o->fabe2 = 1;
@@ -2027,9 +2121,17 @@ tx1_moh_hold(struct v34_object *o)
 
 	if ((unsigned)(o->moh_message - 2) > 1u) {
 		/* 0x6923d */
-		tx1_moh_reinit(o);
+		tx1_moh_reinit(o,
+			       "MOH: Timeout waiting for MH sequence under"
+			       " MHreq, initiating retrain\r\n");
 		return V34TX1_LOOP;			/* 0x629cf */
 	}
+
+	if (dsplibs_debug_level > 1)			/* 0x65031 */
+		dsplibs_debug_printf(
+			"MOH: Timeout waiting for MH sequence under"
+			" cleardown, terminating connection without"
+			" acknowledge\r\n");
 
 	/* 0x65046 */
 	tx1_moh_cleardown(o);
@@ -2067,6 +2169,13 @@ v34tx1_tx_dpsk(void *objp)
 		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
+
+	if (dsplibs_debug_level > 1)			/* 0x68704 */
+		dsplibs_debug_printf(
+			"End of current MOH msg: isterm=%d, count1(%d),"
+			" pktcount(%d)...\r\n",
+			*((signed char *)o + TX1_FABF8), o->vect_idx,
+			tx1_bitsource(o)->repeats);
 
 	if (*((unsigned char *)o + TX1_FABF8) == 0) {
 		/*
@@ -2106,13 +2215,13 @@ v34tx1_tx_dpsk(void *objp)
 		else if ((unsigned)got > 4u) {
 			/* 0x6a3c6 */
 			if (got != 5)
-				tx1_moh_reinit(o);	/* 0x69041 */
+				tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
 			else
 				tx1_moh_send(o);	/* 0x6a3cf */
 		} else if (got == 0)
 			tx1_moh_on_hold(o);
 		else
-			tx1_moh_reinit(o);		/* 0x69041 */
+			tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
 	} else if ((unsigned)o->moh_message <= 3u) {
 		tx1_moh_cleardown(o);			/* 0x64eaf */
 	}
@@ -2311,6 +2420,16 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 	if (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff
 	    && rx->f224 < rx->f21a && sum <= 0x3fff) {
 		/* 0x6738c */
+		if (dsplibs_debug_level > 1)		/* 0x6adf6 */
+			dsplibs_debug_printf(
+				"V34DATARATE, precoefs [%d,%d,%d][%d,%d,%d]\n",
+				tx1_get(rx, TX1_RX_PRED + 0),
+				tx1_get(rx, TX1_RX_PRED + 2),
+				tx1_get(rx, TX1_RX_PRED + 4),
+				tx1_get(rx, TX1_RX_PRED + 6),
+				tx1_get(rx, TX1_RX_PRED + 8),
+				tx1_get(rx, TX1_RX_PRED + 10));
+
 		rec[2] = rx->pred_b[2];
 		rec[3] = rx->pred_a[2];
 		rec[4] = rx->pred_b[1];
@@ -2340,6 +2459,10 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		tx1_put(o, TX1_RX250, rx->f224);
 	} else {
 		/* 0x674e5 */
+		if (dsplibs_debug_level > 1)		/* 0x683b2 */
+			dsplibs_debug_printf(
+				"V34DATARATE, precoefs=0, 0, 0, 0, 0, 0\n");
+
 		rec[2] = 0;
 		rec[3] = 0;
 		rec[4] = 0;
@@ -2415,12 +2538,28 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			rate = 0xc;
 		else if (baud == 0x0bb8 || baud == 0x0af0)
 			rate = (short)(rate - 1);	/* 0x67984 */
+
+		/*
+		 * 0x63025, and NOT part of the 3200/3429 arm: 0x6797e and
+		 * 0x67994 both jump back to the guard, so every baud that
+		 * reaches this block reports, including the ones that changed
+		 * nothing.  Placing it inside the `rate = 0xc` branch left
+		 * four cases short -- 2400, 2800, 3000 and the ladder's
+		 * floor -- which is how the difference was found.
+		 */
+		if (dsplibs_debug_level > 1)		/* 0x6834b */
+			dsplibs_debug_printf(
+				"V34INFO, V.34bis is not possible \n");
 	}
 
 	/* 0x6302e */
 	cfg->txbits = (short)rate;
 	while ((short)rate > (short)ratemin) {
 		term = tx1_ts_scale(cfg, rate, -1);
+		if (dsplibs_debug_level > 1)		/* 0x66b61 */
+			dsplibs_debug_printf(
+				"V34DATARATE,threshold for data rate"
+				" %d = %d\n", rate, term);
 		if (tx1_get(o, TX1_RX250) < (short)term)
 			break;
 		rate = (short)(rate - 1);
@@ -2430,14 +2569,33 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (rx->f25e > 1) {
 		int d = rx->f260;
 
-		if (rx->f25e == 2 && rate > d - 1)
+		if (rx->f25e == 2 && rate > d - 1) {
 			rate = (short)(d - 1);		/* 0x68308 */
-		else if (rate < d + 1)
+			if (dsplibs_debug_level > 1)	/* 0x68334 */
+				dsplibs_debug_printf(
+					" TRNSEG4A : returning from local rrn"
+					" down => forcing rate down\n");
+		} else if (rate < d + 1) {
 			rate = (short)(d + 1);		/* 0x63120 */
+			if (dsplibs_debug_level > 1)	/* 0x69100 */
+				dsplibs_debug_printf(
+					" TRNSEG4A : returning from local rrn"
+					" up => forcing rate up\n");
+		}
 		term = tx1_ts_scale(cfg, rate, -1);	/* 0x63134 */
 	}
 
 	/* 0x63198 */
+	if (dsplibs_debug_level > 1)			/* 0x6759e */
+		dsplibs_debug_printf(
+			"V34DATARATE, ethresh data rate = %d,ethreh=%d,"
+			"rate2 = 0x%x,data=%d\n",
+			rate, tx1_get(o, TX1_RX250),
+			(unsigned short)tx1_get(o, TX1_F382), term);
+	if (dsplibs_debug_level > 1)			/* 0x675e6 */
+		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
+				     rx->f21a, rx->f224);
+
 	rx->f252 = (short)(2 * term);
 	if ((short)rate > (short)ratemin) {
 		rx->f254 = tx1_ts_scale(cfg, rate, -2);
@@ -2470,6 +2628,11 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x6332c */
 	cfg->rxbits = (short)rate;
+	if (dsplibs_debug_level > 1)			/* 0x67741 */
+		dsplibs_debug_printf(
+			"V34DATARATE, automatic: %d, min %d, max %d\n",
+			0x960 * rate, 0x960 * o->rate_min,
+			0x960 * o->rate_max);
 
 	/* 0x6334a */
 	v = cfg->rxbits;
@@ -2486,6 +2649,12 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
 	tx1_put(o, TX1_F358C,
 		(short)bitreverse((unsigned short)cfg->txbits, 4));
+	if (dsplibs_debug_level > 1)			/* 0x676f3 */
+		dsplibs_debug_printf(
+			"V34DATARATE, Final choice data rate = %d,"
+			" retrainThresh = %d, renegDownthresh = %d,"
+			" renegUpthresh = %d\n",
+			cfg->rxbits, rx->f252, rx->f254, rx->f256);
 
 	/* 0x6340f */
 	if (o->f359c == 0x65)
@@ -2537,6 +2706,12 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3598, 0);
 	tx1_put(o, TX1_F359E, 0);
+	if (dsplibs_debug_level > 1)			/* 0x67653 */
+		dsplibs_debug_printf(
+			"V34DATARATE, txmp bits 0x%x,0x%x,0x%x,0x%x,0x%x\n",
+			(unsigned short)rec[0], (unsigned short)rec[1],
+			(unsigned short)rec[2], (unsigned short)rec[3],
+			(unsigned short)rec[4]);
 
 	/* 0x63510 */
 	tx1_put_int(o, TX1_FAA60, 0x3fffe);
@@ -2765,12 +2940,28 @@ v34tx1_trnseg4(void *objp)
 		/* 0x6801e */
 		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
-	} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
-		/* 0x68ad0 and 0x69de7, two copies of one store */
-		tx1_put(o, TX1_COUNT, o->rtd);
 	} else {
-		/* 0x64b96 */
-		tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+		if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
+			/* 0x68ad0 and 0x69de7, two copies of one store */
+			tx1_put(o, TX1_COUNT, o->rtd);
+		} else {
+			/* 0x64b96 */
+			tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+		}
+
+		/*
+		 * 0x64ba9, and the nesting is what the object says: BOTH
+		 * stores jump here (0x68ade and 0x69df5) and the `rtd <= 2`
+		 * arm does not -- it reports the freeze instead.  An
+		 * else-if chain cannot express a guard shared by two of its
+		 * three arms.
+		 */
+		if (dsplibs_debug_level > 1)		/* 0x6917e */
+			dsplibs_debug_printf(
+				"V34Hshak: On J TX start, would freeze EC"
+				" after bulk delay (%d samples,"
+				" bulk=%d)\r\n",
+				tx1_get(o, TX1_COUNT), o->rtd);
 	}
 
 	/* 0x64bb2 */
