@@ -15157,7 +15157,7 @@ is noise, and changing source to chase it is fitting the compiler.
 **The pattern in my own errors this session is worth naming**, since it has now
 happened three times: a signal is observed (extension differences, size ratios,
 store order), a mechanism is assumed, and the assumption turns out to explain
-less than the evidence seemed to show. Findings 614, 356 and this one. In each
+less than the evidence seemed to show. Findings 614, 616 and this one. In each
 case the fix was the same -- find the case that would distinguish the
 hypotheses and run it. The container makes that cheap, which is most of its
 value; it is faster to test a belief about the compiler than to argue about it.
@@ -15633,3 +15633,79 @@ pattern is in CLAUDE.md.
 `unmeasured`. Not edited here because `docs/deviations.md` is shared with the
 V.90 session, which is adding entries to it, and an in-place edit conflicts
 where an append does not.
+
+======================================================================
+### 543. The ninth collision was twenty-three numbers, and the tool that checks references cannot see it
+
+`master` and `v90rest` both allocated **340 through 362** since their merge
+base, to entirely different findings. v90rest's 343 is "two arms leave the
+dispatch for blocks that are not reconstructed"; master's is "an explicit
+class instantiation emits members the object does not have". Twenty-three
+numbers, and the whole 340s were quoted freely on both sides all session.
+
+CLAUDE.md already says the important half: `refcheck.py` **cannot** catch
+this. Every reference still RESOLVES -- there IS a finding 343 after the merge
+-- it just points at somebody else's. A clean `refcheck` run after a merge
+like this proves nothing about it, which is exactly why the count of dangling
+references is the wrong instrument and nobody noticed for 158 commits.
+
+#### Which side moves, and why it is not the obvious one
+
+Master's, because it is the SMALLER side by references and not by findings:
+
+```
+  references to 340-362      113 in v90rest      25 in master
+```
+
+Renumbering is a text substitution over references, so its risk scales with
+how many references there are, not with which line "owns" the numbers or
+which is the mainline. Master's 340-362 became **600-622**, above v90rest's
+593, and each moved finding says what it used to be called -- the discipline
+CLAUDE.md sets out and which master's own 247-250 -> 340-343 note (the eighth
+collision) is the worked example of.
+
+#### The substitution that would have corrupted the tables
+
+**A bare-number rewrite is not available here**, and that is not a
+hypothetical worry. In master's tree, in exactly this range:
+
+```
+  src/core/rc_coeffs.c    17, 0, -36, 99, -197, 340, -541, 81
+                          -12, 7, 10, -46, 108, -206, 348, -546,
+                          -85, 99, -98, 70, 0, -133, 361, -744, 14
+  src/pump/b103/b103_tables.c     619, 355, 123, -67
+  src/dsp/fpm_tone_cfg.c          220, 286, 357, 434, 516
+  docs/v90cpp.md                  byte counts of 350 and 359
+  docs/largefunctions.md          359,920 and 623,348
+```
+
+Filter coefficients and byte counts, indistinguishable from a citation to
+anything that matches on digits alone. So the rewrite matched only explicit
+forms -- `finding N`, `findings N and M`, the `###` headings, and
+parentheticals in CLAUDE.md, which has no data tables -- 86 references across
+16 files. Every remaining occurrence in prose was then listed and read by
+hand, which is what caught `(350)` in CLAUDE.md line 199: a bare parenthetical
+citation the first pass missed because that pass worked from a hardcoded list
+of five.
+
+A second form got past the first pass and `refcheck.py` caught it: a
+COMMA-separated citation list. `Findings 354, 356 and this one` matched on its
+first number and not its second, leaving `356` pointing at nothing -- visible
+only because master no longer HAS a 356. Had the collision run the other way,
+that same miss would have left a reference that still resolved, at the wrong
+finding, with nothing able to detect it. The dangling check works here purely
+by luck of direction, which is worth knowing before trusting it next time.
+
+#### The order that makes the merge simple
+
+**Renumber first, merge second.** Done the other way the merge has to resolve
+twenty-three heading collisions inside an append-only file, which is a hunk
+resolution, and hunk-resolving `findings.md` is how content gets silently
+dropped. Renumbered first, the two sides no longer overlap at all and the
+merge is what it should have been: two appends.
+
+#### What is still owed to whoever reads this from a branch
+
+A branch cut before this merge quotes master's old numbers. Those references
+resolve and are wrong, and no tool here can tell. The note on each moved
+finding is the only signal, which is why they all carry one.
