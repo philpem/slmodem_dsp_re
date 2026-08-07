@@ -3472,7 +3472,17 @@ guards(void)
 	diff_eq_int("guard: a cursor below the limit runs table 1's loop",
 		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
-	/* The +0xa8a0 gate, which `v34hs_route` clears. */
+	/*
+	 * The +0xa8a0 gate, which `v34hs_route` clears.
+	 *
+	 * THIS TRIAL USED TO ASSERT `T3M_UNWRITTEN_FSKGATE` AND NOT COMPARE.
+	 * The arm at 0x6754b is written now, and it FALLS THROUGH -- all six
+	 * of its exits are `jmp 0x64a8f`, so a non-zero gate polls the retrain
+	 * detector and then runs exactly the code the cleared gate runs.  So
+	 * what this checks is no longer which guard fired but that the whole
+	 * step still agrees with the blob's, and `t_v34hsfsk.c` drives the arm
+	 * itself.  Finding 721.
+	 */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
@@ -3480,10 +3490,12 @@ guards(void)
 	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
+	v34hs_compare("guard: a non-zero +0xa8a0 polls the retrain detector",
+		      tag);
 	v34hs_ours(0);
-	diff_eq_int("guard: a non-zero +0xa8a0 diverts at 0x64a87",
-		    v34handshak_unwritten(), T3M_UNWRITTEN_FSKGATE,
-		    tag++);
+	diff_eq_int("guard: a non-zero +0xa8a0 polls the retrain detector "
+		    "and falls through",
+		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 }
 
 int

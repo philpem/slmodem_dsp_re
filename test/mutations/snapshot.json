@@ -242,6 +242,50 @@
     "the unknown-carrier fallback uses the 2400 table": "caught"
    }
   },
+  "v34hsfsk": {
+   "key": "c0a46a62c67a11334b515006a0c518b8354a9cf2cba93b8ca0915742711a55ad",
+   "summary": "38 mutations: 36 caught (36 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x3588 is not touched at all": "caught",
+    "+0x3588 is stored rather than or-ed": "caught",
+    "+0x3588 takes bit 0 rather than bit 1": "caught",
+    "+0x358c is cleared at 1 as well": "caught",
+    "+0x358c is cleared unconditionally": "caught",
+    "+0x358c is cleared whenever it is non-zero": "caught",
+    "+0x358c is compared signed": "caught",
+    "+0x358c is set to 1 rather than cleared": "caught",
+    "+0xaa78 is not cleared": "caught",
+    "fsk.nbits is not cleared": "caught",
+    "fsk.sr is cleared rather than set to -1": "caught",
+    "fsk.sr is not touched": "caught",
+    "nbits is read before the gate rather than after it": "equivalent",
+    "the action block does not clear the gate": "caught",
+    "the action block does not print what the object prints": "caught",
+    "the action block returns instead of falling through": "caught",
+    "the action block runs whenever the gate is set": "caught",
+    "the detector is handed eight samples and not four": "caught",
+    "the detector is handed the receiver rather than its samples": "caught",
+    "the detector is handed two samples and not four": "caught",
+    "the detector is not re-armed": "caught",
+    "the detector is polled over two bins and not three": "caught",
+    "the gate is cleared sixteen bits wide": "caught",
+    "the gate is inverted": "caught",
+    "the gate is not tested, so the detector is polled every step": "caught",
+    "the gate is read as a short, so 0x10000 reads clear": "caught",
+    "the gate returns instead of falling through": "caught",
+    "the microstate is moved to 47 and not 46": "caught",
+    "the microstate is not moved": "caught",
+    "the rxstate transition goes to 4 RECEIVE": "caught",
+    "the rxstate transition is dropped": "equivalent",
+    "the rxstate transition writes the microstate word": "caught",
+    "the samples come from the receiver's base": "caught",
+    "the two fsk fields are swapped": "caught",
+    "the txstate is moved to 61 and not 60": "caught",
+    "the txstate is not moved": "caught",
+    "the txstate transition is taken before the microstate one": "caught",
+    "vect_idx is not cleared": "caught"
+   }
+  },
   "v34hshak": {
    "key": "167ce949eb15a3abc54c4c581863dd42f8544f7b2ed1094fd86e71978b690d53",
    "summary": "209 mutations: 203 caught (203 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
@@ -773,7 +817,7 @@
    }
   },
   "v34hst3core": {
-   "key": "a9b0f9eab176960aa87e54787790dac0b19c474ac8ddd2f4a18deb32c4e8546f",
+   "key": "95543d5f5bc91605062853bf065578382dcfd78590d851e81268d25c0924c3f7",
    "summary": "42 mutations: 41 caught (41 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -913,7 +957,7 @@
    }
   },
   "v34hst3mid": {
-   "key": "4110b238e433e206ce7e245071e1fb8434ea30b079fb2a13a47c8adf80f65497",
+   "key": "8f348ce444210104fd57f038bdc782c611c78aeebd135010df476f6b1666d587",
    "summary": "443 mutations: 422 caught (422 by test, 0 by strings), 0 NOT caught, 0 unusable, 21 equivalent, 0 MIScounted",
    "verdicts": {
     "47 has no second guard": "caught",

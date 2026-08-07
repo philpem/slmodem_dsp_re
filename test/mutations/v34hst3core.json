@@ -240,14 +240,14 @@
  },
  {
   "label": "the fskdemodulate gate is inverted",
-  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0) {",
-  "replace": "\tif (T3M_I32(&frame, T3M_FSKGATE) == 0) {",
+  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
+  "replace": "\tif (T3M_I32(&frame, T3M_FSKGATE) == 0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
   "fn": "v34handshak"
  },
  {
   "label": "fskdemodulate reads two bytes into the receiver's buffer",
-  "find": "\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
-  "replace": "\t\t\t\t\t   + T3M_RX_FSKIN + 2), &obj->fsk);",
+  "find": "\tfskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN);",
+  "replace": "\tfskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN + 2);",
   "fn": "v34handshak"
  },
  {

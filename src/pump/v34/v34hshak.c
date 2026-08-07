@@ -2821,7 +2821,7 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3M_COUNTER		0xaa78	/* short, the counter six of these arms
 					   bump; it is the `[2]` every trace
 					   prints (v34hshak.c's HS_TRACE_2)  */
-#define T3M_FSKGATE		0xa8a0	/* int, non-zero diverts at 0x64a87    */
+#define T3M_FSKGATE		0xa8a0	/* int, non-zero adds the retrain poll */
 #define T3M_TOGGLE		0x358c	/* short, arm 48 inverts bit 0 of it   */
 
 /*
@@ -6420,6 +6420,7 @@ v34handshak(void *vobj)
 {
 	struct v34_object *obj = (struct v34_object *)vobj;
 	struct t3m_frame frame;
+	const short *fskin;
 	short rxst;
 
 	t3m_frame_init(&frame, obj);
@@ -6635,16 +6636,111 @@ v34handshak(void *vobj)
 	 */
 	V34agc(frame.rx);
 
-	if (T3M_I32(&frame, T3M_FSKGATE) != 0) {
-		t3m_notwritten(T3M_UNWRITTEN_FSKGATE);	/* 0x6754b, 0x64a87 */
-		return;
+	/*
+	 * 0x64a81, and it is computed BEFORE the gate is tested: the `lea
+	 * 0x10c(%ecx),%edi` sits between the load of +0xa8a0 and the `test`
+	 * at 0x64a87, and the SAME `%edi` is handed to the retrain detector
+	 * at 0x67551 and to `fskdemodulate` at 0x64aa9.  One pointer, two
+	 * readers.
+	 *
+	 * IT IS `V34agc`'s OUTPUT, not the receive queue.  The call above
+	 * writes the four samples at receiver + 0x10c (v34rx.h), so no
+	 * fixture can choose them by poking -- they are produced by the
+	 * neighbouring call on every step.  That is not finding 429's
+	 * write-then-read case; the field is written by a NEIGHBOUR.
+	 */
+	fskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN);
+
+	/*
+	 * 0x64a87, and 0x6754b: the FSK gate.
+	 *
+	 * `detectRetrainReq` INLINED, 1,089 bytes over five ranges --
+	 * 0x6754b-0x6759e, 0x692ca-0x69611, 0x6aa85-0x6aad3,
+	 * 0x6ca72-0x6ca93 and 0x6d2a6-0x6d2de.  It and `dftRetrainDetInit`
+	 * are both `T` globals with out-of-line copies at 0x5e8f0 and
+	 * 0x5ea60 and NO RELOCATION anywhere in the object, so every use is
+	 * inlined; both are reconstructed above and both come out as calls
+	 * here rather than a second copy of swept code.  Findings 719, 720.
+	 *
+	 * AND IT FALLS THROUGH.  Every one of the arm's six exits is `jmp
+	 * 0x64a8f` -- 0x67599, 0x69327, 0x69368, 0x6960c, 0x6aace and
+	 * 0x6d2d9 -- which is the instruction immediately below, the one the
+	 * ungated path reaches too.  There is no `ret` in the arm.  So the
+	 * gate is "poll the retrain detector as well", not "instead of":
+	 * `fskdemodulate` and the microstate dispatch run either way, and on
+	 * the fired path they run against the fields the action block has
+	 * just reset.  Finding 721.
+	 *
+	 * The counter is `retrain_phase`, +0xa24c: `add $0x4` then `cmp
+	 * $0x80` and `je`, EQUALITY and not `>=`, so its signedness is moot
+	 * and a caller arriving out of step with four would never measure.
+	 * Four is what the receive queue drains everywhere.
+	 */
+	if (T3M_I32(&frame, T3M_FSKGATE) != 0
+	    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {
+		/*
+		 * 0x6936e.  The action block: the far end asked for a
+		 * retrain while this end was still looking for INFO1.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("DET_SYNC : retrain request "
+					     "detected while searching for "
+					     "info1\n");
+
+		T3M_I32(&frame, T3M_FSKGATE) = 0;	/* 0x6938c, 32-bit */
+
+		/*
+		 * 0x69392-0x69425, and it is `dftRetrainDetInit` inlined:
+		 * thirteen store sites at identical offsets, widths and
+		 * constants against the standalone copy at 0x5ea60 --
+		 * +0x28/+0x2a/+0x00/+0x04/+0x08 over three bins at stride
+		 * 0x2c, the three phase steps 0x600/0x800/0xa00, and the
+		 * five scalars at +0xa24a.  +0xa24c is the only 32-bit store
+		 * on either side.  Finding 720.
+		 */
+		dftRetrainDetInit(obj);
+
+		/* 0x693fa/0x69411/0x69425, a 16-bit read-modify-write. */
+		T3M_I16(&frame, T3M_F3588) =
+			(short)(T3M_U16(&frame, T3M_F3588) | 2);
+
+		/*
+		 * Three transitions, 0x6941a, 0x694b6 and 0x69544, each the
+		 * compare-print-store idiom with the second `%s` folded to
+		 * its own `StateName` entry: .data+0x6cb8, +0x6cac and
+		 * +0x6cf0 are indices 46, 43 and 60.
+		 *
+		 * THE MIDDLE ONE CAN NEVER FIRE.  0x64a64 is reached only
+		 * through `cmp $0x2b,%eax; je 64a64` at 0x62a09 and 0x6754b
+		 * only from inside that, so the rxstate is 43 on every path
+		 * that gets here -- the object's `je 69536` at 0x694ba
+		 * always takes and 0x694bc-0x69535 is dead in the blob too.
+		 * It is written because it is what the object has.  Finding
+		 * 722.
+		 */
+		hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);	/* 46 */
+		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);		/* 43 */
+		hs_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);		/* 60 */
+
+		/* 0x695cb is `cmpw $0x1` then `jbe`, so UNSIGNED. */
+		if (T3M_U16(&frame, T3M_TOGGLE) > 1)
+			T3M_U16(&frame, T3M_TOGGLE) = 0;
+
+		/* 0x695f0..0x69605, in the object's order. */
+		obj->vect_idx = 0;			/* +0x2aa2 */
+		T3M_U16(&frame, T3M_COUNTER) = 0;	/* +0xaa78 */
+		obj->fsk.sr = -1;			/* +0xaae2 */
+		obj->fsk.nbits = 0;			/* +0xaae0 */
 	}
 
-	/* 0x64a9e, and it has to be read HERE: `fskdemodulate` writes it. */
+	/*
+	 * 0x64a9e, and it has to be read HERE: `fskdemodulate` writes it --
+	 * and so does the action block above, which zeroes it.  Both orders
+	 * are observable and this is the object's.
+	 */
 	frame.nbits = obj->fsk.nbits;
 
-	fskdemodulate(obj, (const short *)((unsigned char *)frame.rx
-					   + T3M_RX_FSKIN), &obj->fsk);
+	fskdemodulate(obj, fskin, &obj->fsk);
 
 	frame.mst = hs_get(obj, HS_MICROSTATE);
 

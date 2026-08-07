@@ -28606,7 +28606,8 @@ tested nothing. The suite is now 9 caught, 0 uncaught, 2 equivalent (714).
 
 `v34handshak`'s rxstate arm -- task #58 -- has been carried as "~12.3 KB" for
 several re-plans, inherited rather than measured. Measured, it is **11,429
-bytes** of code that is new, over five arms and not four.
+bytes** of code that is new, over five arms and not four. [**11,430**: the FSK
+gate's arm below is 1,089 and not 1,088; see 719.]
 
 `cfgsplit.py` cannot produce this number directly: it reports exclusive = 0
 for every chain target, because after the per-sample loop falls through at
@@ -28626,7 +28627,7 @@ disjoint: the per-target reach sums to the union byte for byte.
 | 0x653e4 | 4 RECEIVE | 4,875 | 165 | `receiver`, `rxinit`, `txinit`, `initdigital`, `detectorinit`x2, `V34SetupModulator`, `settxlevel`, `tone_detect`, `v34handshakinit`, `VPcmV34LogTimingOffset`x2 |
 | 0x650c6 | 72 | 3,806 | 95 | `V34agc`, `fskdemodulate`, `rxtiming`, `dftupdate`x9, `dftenergy`x6 |
 | 0x65473 | 53 | 1,629 | 41 | `V34agc`, `V34SetINFO1aBits`, `probeselect`, `tone_detect`, `v34handshakinit` |
-| 0x6754b | FSK gate body | 1,088 | 38 | `dftupdate`, `dftenergy` |
+| 0x6754b | FSK gate body | 1,088 [**1,089**; see 719] | 38 | `dftupdate`, `dftenergy` |
 | 0x6752c | 35 WAIT | 31 | 1 | `rxreadqueue` |
 | 0x64a87 | FSK gate test | 0 | -- | **already written**, v34hshak.c's `T3M_FSKGATE` |
 
@@ -28739,3 +28740,250 @@ And the honest limit is written into the entry: **if an arm is ever found that
 reads the receive queue, this becomes catchable and the flag must come off.**
 An equivalence that depends on the current tree has to say so, which is 714's
 distinction in a third instance.
+
+
+======================================================================
+### 719. The zero-relocation screen for an inlined-everywhere function is three for three, and this is the limit it has
+
+`v34handshak`'s FSK-gate arm at 0x6754b is 1,089 bytes over five ranges --
+0x6754b-0x6759e (83), 0x692ca-0x69611 (839), 0x6aa85-0x6aad3 (78),
+0x6ca72-0x6ca93 (33) and 0x6d2a6-0x6d2de (56).  Every earlier count in this
+tree said 1,088; the five ranges sum to 1,089 and `docs/v34handshak.md` said
+1,088 in two places.  Corrected there.
+
+**What the arm is, is two library functions inlined.**  The screen that says
+so before a byte of it is read:
+
+```
+$ readelf -sW ../slmodemd/dsplibs.o | grep -E 'detectRetrainReq|dftRetrainDetInit'
+  1018: 0005e8f0   367 FUNC  GLOBAL  detectRetrainReq
+  2196: 0005ea60   131 FUNC  GLOBAL  dftRetrainDetInit
+$ readelf -r ../slmodemd/dsplibs.o | grep -E 'detectRetrainReq|dftRetrainDetInit'
+$ echo $?
+1
+```
+
+A `T` global, an out-of-line body, and **not one relocation anywhere in a
+1.2 MB object**.  Nothing calls either by name, so either they are dead code
+the linker kept, or GCC 3.4 at `-O2` inlined every call.  Findings 424, 425
+and 426 are the same signal: 67's 2 KB was `getbit` open-coded, 24's 2.2 KB
+was `getbit` open-coded twice, and about a thousand bytes of 21 was
+`setupreceiver`.  With this pair the screen is three for three at spotting an
+arm whose size is mostly a function the tree already has.
+
+**And here is its limit, which matters as much.**  Zero relocations means
+inlined SOMEWHERE, not inlined HERE.  It narrows 1,089 bytes to "look for
+these two"; it cannot say the bytes in front of you are them.  Each candidate
+still needs positive store-for-store confirmation against the standalone
+copy, which is finding 720 for `dftRetrainDetInit` and the control-flow
+correspondence below for `detectRetrainReq`:
+
+```
+  0x6754b   dftupdate(bins, 3, samples, 4)          0x5e8f0's first act
+  0x67578   retrain_phase += 4; cmp $0x80; je       equality, not >=
+  0x692e7   dftenergy(bins, 3, 5)
+  0x692f0   clear phase/acc_re/acc_im, stride 0x2c, i < 3
+  0x69314   retrain_state: 1 -> 0x6aa85, 2 -> 0x6932d, else return 0
+  0x6aa85   three bins' energy against thresh_lo at +0x28/+0x54/+0x80
+  0x6d2a6   runs >= quiet_runs -> state 2; runs = 0
+  0x6932d   bin 1's energy against thresh_hi at +0x56
+  0x69353   return runs == tone_runs
+```
+
+which is `src/pump/v34/v34hshak.c`'s `detectRetrainReq` line for line.
+
+**The inlined copy also confirms that function's subtlest existing claim.**
+Its comment says the state-2 RESET arm falls into the shared `runs ==
+tone_runs` tail rather than returning, and that this is the object's and not
+a tidying.  Here the reset arm at 0x6ca72 ends `jmp 69353` -- into the tail --
+while both state-1 arms end `jmp 64a8f`, the caller's continuation, without
+it (0x6aace, 0x6d2d9).  Two independent codegen of one source agreeing on a
+control-flow detail is stronger evidence than either alone.
+
+
+======================================================================
+### 720. `dftRetrainDetInit` inlined, established store for store
+
+The action block at 0x69392-0x69425 is `dftRetrainDetInit` (0x5ea60) inlined.
+Thirteen store sites, and every one of them matches the standalone copy on
+offset, width and constant:
+
+```
+  0x69396  movw $0x50,0x28(%edx)      bins[i].thresh_lo = 0x50     }
+  0x6939e  movw $0xbb8,0x2a(%edx)     bins[i].thresh_hi = 0xbb8    } stride
+  0x693a4  movw $0x0,(%edx)           bins[i].phase     = 0        } 0x2c,
+  0x693a9  movl $0x0,0x4(%edx)        bins[i].acc_re    = 0        } i <= 2
+  0x693b0  movl $0x0,0x8(%edx)        bins[i].acc_im    = 0        }
+  0x693c0  movw $0x600,0x2(%ebx)      bins[0].inc =  900 Hz
+  0x693cf  movw $0x800,0x2e(%ebx)     bins[1].inc = 1200 Hz
+  0x693dc  movw $0xa00,0x5a(%ebx)     bins[2].inc = 1500 Hz
+  0x693ec  movw $1,0xa24a             retrain_state      = 1
+  0x693f3  movw $0,0xa250             retrain_runs       = 0
+  0x69408  movw $9,0xa254             retrain_tone_runs  = 9
+  0x69414  movl $0,0xa24c             retrain_phase      = 0
+  0x6941e  movw $3,0xa252             retrain_quiet_runs = 3
+```
+
+**+0xa24c is the only 32-bit store on either side**, which is the cheapest
+single discriminator: a bank of halfword stores with one `movl` in it is not
+a shape another initialiser would share by accident, and it is the same field
+the gate's own counter advances by four.
+
+The loop bound differs from `dftfreqinit`'s next door -- `cmp $0x2,%ax; jle`
+here against `cmp $0x3` there -- so three bins and not four, which is
+`V34_RETRAIN_BINS`.
+
+Emitted as a CALL and not open-coded, for finding 424's reason: this tree
+already has the function, it is already swept by `t_v34hshak.c`, and a second
+copy is a second place for one of thirteen constants to be wrong.
+
+
+======================================================================
+### 721. The FSK gate does not divert -- it polls and falls through, and the stub said otherwise
+
+`T3M_UNWRITTEN_FSKGATE`'s stub was
+
+```c
+	if (T3M_I32(&frame, T3M_FSKGATE) != 0) {
+		t3m_notwritten(T3M_UNWRITTEN_FSKGATE);
+		return;
+	}
+```
+
+and the `return` is wrong.  **The arm contains no `ret`.**  All six of its
+exits are the same instruction:
+
+```
+  0x67599  jmp 64a8f      the counter did not reach 128
+  0x69327  jmp 64a8f      retrain_state was neither 1 nor 2
+  0x69368  jmp 64a8f      runs != tone_runs
+  0x6960c  jmp 64a8f      the action block, having fired
+  0x6aace  jmp 64a8f      state 1, all three bins quiet
+  0x6d2d9  jmp 64a8f      state 1, some bin loud
+```
+
+and 0x64a8f is the instruction immediately after the gate's own test at
+0x64a87 -- the continuation the CLEARED gate reaches, four instructions
+before the call to `fskdemodulate`.  So a non-zero +0xa8a0 does not select a
+different route through the function.  It adds one poll of the retrain
+detector to the same route.
+
+**This is not a detail of one arm.**  Every gated step of `v34handshak` now
+runs `fskdemodulate` and the microstate dispatch where the stub returned
+before either, so the correction changes what the whole function does on
+every step with the gate set, not what it does in one case.  `t_v34hst3mid.c`
+had a trial asserting `T3M_UNWRITTEN_FSKGATE` and deliberately not comparing;
+it now compares the whole object and asserts `T3M_WRITTEN`.
+
+**And the fall-through is load-bearing rather than incidental.**  The action
+block's last two stores are `fsk.sr = -1` and `fsk.nbits = 0`, and 0x64a9e --
+seven instructions past the join -- reads `fsk.nbits` into the register
+`fskdemodulate`'s callers compare against afterwards.  Hoisting that read
+above the gate, which reads perfectly well and is what a reconstruction
+written from the cleared path alone would do, is caught by the mutation suite
+on the fired path.
+
+
+======================================================================
+### 722. One of the gate's three state transitions can never fire, in ours and in the blob
+
+The action block sets microstate 46, rxstate 43 and txstate 60 through the
+compare-print-store idiom.  **The middle one is dead code.**
+
+0x64a64 is reached only through `cmp $0x2b,%eax; je 64a64` at 0x62a09, and
+0x6754b only from inside that block; nothing between them writes +0x3594
+(finding 285 swept `V34agc` and `fskdemodulate` over the whole of `.text`,
+and the arm itself writes +0x3592, +0x3588, +0xa8a0, the bins and the five
+retrain scalars).  So the rxstate is 43 on every path that reaches 0x694af,
+and `cmp $0x2b,%dx; je 69536` at 0x694b6 always takes.
+
+The blob carries the untaken side anyway: 0x694bc-0x69535 is 122 bytes of
+debug test, 94-byte printf body and a `movw $0x2b,0x3594` that cannot
+execute.  GCC 3.4 inlined `hs_setstate` and could not see the caller's
+invariant, which is the ordinary reason an optimiser leaves unreachable code
+behind.  It is written here because it is what the object has.
+
+**What it costs the test is one mutation.**  Deleting the call is equivalent
+and recorded as such; changing its ARGUMENTS is not, because a different
+target state makes `now != next` and the store happens.  So the entry that
+survives is exactly "drop the line", and the two that would catch a
+transposition still fire.  Finding 718's distinction again: unreachable code
+rather than an untestable behaviour.
+
+
+======================================================================
+### 723. The FSK gate's test, and the four claims that were untestable until the seed moved
+
+`test/unit/t_v34hsfsk.c` is 3,586 checks over eight suites and it passed on
+its first run, which under `docs/method/gates.md` means nothing at all until
+something has been seen to fire. `test/mutations/v34hsfsk.json` is 38
+mutations: **36 caught, 0 uncaught, 2 recorded equivalent.**
+
+**Five survived the first pass and four of them were one mistake**, finding
+345's, in its second instance:
+
+```
+  ****  vect_idx is not cleared                      NOT CAUGHT
+  ****  +0xaa78 is not cleared                       NOT CAUGHT
+  ****  fsk.sr is not touched                        NOT CAUGHT
+  ****  fsk.nbits is not cleared                     NOT CAUGHT
+```
+
+`v34handshakinit` sets `vect_idx` and `fsk.nbits` to zero on the way in, so
+three of the action block's last four stores were storing zero over zero and
+the fourth over whatever the fill had left. Seeding the four to 5, 0x11, 3
+and 0x1234 before the step caught all four. **The check that these are safe
+to poke is that nothing reads them between `v34hs_setup` and the gate** --
+this is not finding 429's write-then-read, where 66 poked a field its own
+first half had already overwritten.
+
+**One is genuinely equivalent and the argument is the object's.** Moving the
+read of `fsk.nbits` from 0x64a9e to above the gate's test at 0x64a87 changes
+nothing on any path: the value goes into `%ebx`, callee-saved, and the only
+instruction in 61,541 bytes that consumes it is arm 55's guard at 0x65b79
+(finding 430) -- and the action block writes microstate 46 at 0x6949c, so a
+FIRED step reaches 0x65d6d and never 0x65b72, while an unfired one does not
+touch the field between the two candidate positions. **The limit is in the
+entry**: it becomes catchable the day the action block's target microstate
+changes or 46's arm is found to read the pre-demodulator count. Finding 714's
+third kind.
+
+**The other equivalence is finding 722's dead transition** and is the first
+kind: unreachable, in ours and in the blob.
+
+**THE ANTI-VACUITY WITNESS IS THE BLOB'S OWN TRANSCRIPT.** A trial that means
+to reach the action block asserts that SIDE B printed `DET_SYNC : retrain
+request detected while searching for info1` -- the blob's copy of
+`v34handshak`, not ours. Fifteen of the thirty-nine trials that go through
+`run` fire and twenty-four do not, each asserting which
+(`V34HS_DUMP=1 ./build/test/t_v34hsfsk | grep -c 'fired 1'` is the count),
+and the two control trials add one of each. A guard sourced from the side under
+test can be satisfied by a reconstruction that agrees with itself; this one
+cannot.
+
+That works only because `v34hs_ours(1)` moves side A's capture slot to 0 and
+leaves the blob's at 1 -- `V34HS_LOG_SIDE_A` in `test/harness/v34hsstep.c`.
+Table 1's tests run with the diagnostics OFF and pay two mutations for it
+(finding 341); this file can run with them ON because `v34hs_ours` replaces
+the whole function rather than splicing an arm in front of the blob's, so
+there is one writer per slot.
+
+**AND THE TRANSCRIPT AXIS WAS MADE TO FIRE, because otherwise that paragraph
+is a claim about a detector nobody has watched.** `blob_fired` reads slot 1
+only, so it says the BLOB reached the action block and nothing about ours;
+the only check that our side printed the line is `v34hs_compare`'s transcript
+comparison, and a fixture comparing slot 1 against slot 1 would pass every
+trial in this file. The thirty-eighth mutation deletes the whole
+`if (DSPLIB_DEBUG_ON()) dsplibs_debug_printf(...)` block and is CAUGHT, which
+is the difference between the two. Rule 3 of `docs/method/gates.md`, and it
+was added after the suite already read 0 NOT CAUGHT.
+
+**And repairing the five anchors was not optional bookkeeping.** Landing the
+arm changed three lines that five mutations in two other suites were anchored
+on, and `anchorcheck.py` reported all five as `NOT UNIQUE ... matches 0
+time(s)` -- which is what finding 347 says a dead mutation looks like, except
+that here the checker exits 1 and `make phase` stops. Four of the five moved
+to the new text; the fifth, `t_v34hst3core`'s "fskdemodulate reads two bytes
+into the receiver's buffer", now anchors on the single `fskin` assignment and
+so displaces the retrain detector's samples as well as the demodulator's,
+which is what the object does with one `lea` at 0x64a81 and two readers.

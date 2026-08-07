@@ -8,16 +8,17 @@ Read `docs/largefunctions.md` first for *why* the work is split this way, and
 `docs/fastpass.md` for how #56, #57 and #58 came to be three tasks rather than
 seven. This file is the operating manual.
 
-## The four guards, and what each covers TODAY
+## The guards, and what each covers TODAY
 
 Read this from the tree, not from here: `grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c`.
-As of the session that landed table 1's loop and the rxstate chain:
+As of the session that landed the FSK gate's arm, which retired one of the
+four:
 
 | guard | still covers | bytes |
 |---|---|--:|
 | `T3M_UNWRITTEN_TBL1` | **only** 81's wrap to 0x66d85 and 86's segment end to 0x66fe9. The loop and all nineteen arms are written | -- |
 | `T3M_UNWRITTEN_RXSTATE` | **only** rxstates 4 RECEIVE (0x653e4), 53 DET_AB (0x65473) and 72 RX_L1 (0x650c6). The chain, 35 WAIT and both transmit-dispatch doors are written | 10,310 |
-| `T3M_UNWRITTEN_FSKGATE` | **only** 0x6754b. 0x64a87 is the gate's TEST and has always been ours | 1,088 |
+| `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at three sites: 0x6d57c and 0x6c8f8, both inside microstate 44's Modem-on-Hold paths, and the table-3 `default:` | -- |
 
 **THE TABLE-3 `default:` IS NOT WORK AND NEVER GOES AWAY.** Its own comment
@@ -27,10 +28,12 @@ is kept because the range test and the label set are two statements of one
 fact. So "remove the `PARTIAL` line when the last guard goes" is the wrong
 criterion -- one guard is a permanent structural assertion. The criterion is
 **when no REACHABLE arm is unwritten**, which today means the three rxstate
-arms, the FSK gate's body, the two table-1 exits, and 44's two.
+arms, the two table-1 exits, and 44's two.
 
-`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 11,398 bytes of
-reachable arm are still guarded and the function is not complete.
+`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 10,310 bytes of
+reachable arm are still guarded and the function is not complete -- the three
+rxstate arms, and nothing else in this table. The number was 11,398 while the
+FSK gate's body counted against it.
 
 ## What the function is
 
@@ -58,9 +61,11 @@ read off the prologue at 0x628f0:
 So table 2 has three entrances and not two; all three converge exactly, and
 that is measured over seventeen states rather than assumed (finding 361).
 
-**THE rxstate CHAIN IS 11,429 BYTES OVER FIVE ARMS, MEASURED** -- not the
+**THE rxstate CHAIN IS 11,430 BYTES OVER FIVE ARMS, MEASURED** -- not the
 inherited "~12.3 KB", which counts the shared tail at 0x62a40 and the
-0x64a8f preamble against the arms (finding 716). `cfgsplit.py` cannot give
+0x64a8f preamble against the arms (finding 716, which says 11,429 in both its
+prose and its table because it gave the FSK gate's arm 1,088; the five ranges
+sum to 1,089, which is finding 719). `cfgsplit.py` cannot give
 this number unbarriered: after the per-sample loop falls through at 0x629ed
 every arm reaches every other and it reports exclusive = 0 for all of them.
 
@@ -68,8 +73,8 @@ every arm reaches every other and it reports exclusive = 0 for all of them.
     0x653e4   rxstate  4 RECEIVE       4,875 bytes, 165 blocks   LARGE
     0x650c6   rxstate 72               3,806 bytes,  95 blocks   MEDIUM-LARGE
     0x65473   rxstate 53               1,629 bytes,  41 blocks   SMALL-MEDIUM
-    0x6754b   the FSK gate's body      1,088 bytes,  38 blocks   SMALL
-    0x6752c   rxstate 35 WAIT             31 bytes,   1 block    TRIVIAL
+    0x6754b   the FSK gate's body      1,089 bytes,  38 blocks   DONE
+    0x6752c   rxstate 35 WAIT             31 bytes,   1 block    DONE
     0x64a87   the FSK gate's TEST      already written
 ```
 
