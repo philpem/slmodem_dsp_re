@@ -74,9 +74,11 @@ Run `<PHASE>`, not `<CHEAPER>`.
    measurement that earned it, and you cannot cite a measurement you did not
    write down. A record begun in month two has lost month one — not the
    conclusions, which survive in the code, but the *reasons*, which are what
-   stop the next session relitigating them. The tree this came from has 523
-   entries and quotes them constantly; several of the rules above exist only
-   because somebody had written down a failure nobody remembered.
+   stop the next session relitigating them. The tree this came from had 543
+   entries when this was written — `grep -c '^### ' docs/findings.md`, so you
+   can check it rather than believe it — and quotes them constantly; several
+   of the rules above exist only because somebody wrote down a failure nobody
+   remembered.
 
 ## Budget your turns, not your reading
 
