@@ -15217,3 +15217,113 @@ calibrated is worse than no check, because its output gets believed.
 
 One candidate is newly surfaced by the wider window and is NOT investigated:
 `decodeDepth` +0xa38, object `movzwl`, ours `movswl`.
+
+### 360. Two of task #47's deferred derivations, and one of them corrects a guess
+
+`docs/fastpass.md` deferred coefficient derivations to #47 on the grounds that
+a byte-exact copy is byte-exact and the differential test proves it without
+one. True, and the derivations still matter for the 8 kHz retarget, where the
+tables have to be regenerated rather than copied. Two are now done.
+
+#### The ten carrier descriptors are pairs of two-pole resonators
+
+`c2000`, `c1959`, `c1920`, `c1867`, `c1829`, `c1800_`, `c1680`, `c1600`,
+`c1200_`, `c2400_` -- eight bytes of preamble and then two coefficient pairs.
+The source comment guessed "a resonator's two coefficients, at a guess". It is
+exactly that, and the parameters come out clean:
+
+    pair = ( -2*r*cos(2*pi*f/9600), r^2 )   in Q14
+
+Solving each pair for `r` and `f` at a 9600 Hz sample rate:
+
+| table | r | pole 1 | pole 2 |
+|---|---|---|---|
+| `c2000` | 0.98 | 1998.0 | 2002.0 |
+| `c1959` | 0.98 | 1961.0 | 1957.0 |
+| `c1920` | 0.98 | 1918.0 | 1922.0 |
+| `c1867` | 0.98 | 1865.0 | 1869.0 |
+| `c1829` | 0.98 | 1827.0 | 1831.0 |
+| `c1800_` | 0.98 | 1798.0 | 1802.0 |
+| `c1680` | 0.98 | 1678.0 | 1682.0 |
+| `c1600` | 0.98 | 1598.0 | 1602.0 |
+| `c1200_` | 0.988 | 1200.0 | 1200.0 |
+| `c2400_` | 0.988 | 2400.0 | 2400.0 |
+
+Every carrier table is **two resonators two hertz either side of the carrier**,
+pole radius 0.98. Every frequency lands on a whole hertz and every midpoint is
+the table's own name. The two guard-tone tables are a single resonator
+duplicated, at a tighter radius of 0.988.
+
+`c2400_`'s leading zero, which the source noted as "a resonator at a quarter of
+the sample rate", falls straight out: `cos(2*pi*2400/9600) = cos(90 deg) = 0`.
+
+`c1959` is the one oddity worth recording: its poles are 1961 and 1957, high
+one first, where all seven others go low then high. The midpoint is still
+exactly 1959. A transcription slip in the original, and harmless -- the pair is
+summed, not ordered.
+
+#### The 2800 baud timing constants, and why the comment's reason was wrong
+
+The source said 0x3e82 "makes 2800's ratio a closer rational fit to 2800/9600".
+That is not it: `2800/9600` is `7/24` and the ratio in question is `0.857`.
+
+The real rule is that **`step/wrap` is exactly `2400/baud`** at every rate:
+
+| baud | step | wrap | step/wrap | 2400/baud |
+|---|---|---|---|---|
+| 2400 | 0x3e80 | 0x3e80 | 1 | 1 |
+| 2743 | 0x36b0 | 0x3e80 | 7/8 | 7/8 |
+| 2800 | 0x3594 | **0x3e82** | 6/7 | 6/7 |
+| 3000 | 0x3200 | 0x3e80 | 4/5 | 4/5 |
+| 3200 | 0x2ee0 | 0x3e80 | 3/4 | 3/4 |
+| 3429 | 0x2bc0 | 0x3e80 | 7/10 | 7/10 |
+
+2743 and 3429 are rounded display names for **19200/7** and **24000/7** --
+2742.857 and 3428.571 -- which is why their ratios are sevenths and why
+`2400/2743` does not look exact until the rate is written as a fraction.
+
+So the wrap is 16000 wherever the fraction is representable over it, and 2800
+is the single rate whose denominator needs a factor of seven: 16000 is not
+divisible by 7 and `13716/16000 = 3429/4000` is merely close, while
+`16002 = 7 * 2286` makes `13716/16002` exactly `6/7`. Two counts added to the
+wrap, one to the half-step initial phase, and the interpolator is exact instead
+of drifting one part in 6000.
+
+The source comments are NOT updated: `v34rx.c` and `v34hshak.c` are open in the
+V.90 session's worktrees. The cross-references belong there and are owed once
+`v34handshak` lands.
+
+#### The transmit power scales are NOT derived, and here is what it would take
+
+The third of #47's deferrals, the five `scaleNNNN` tables, is left open rather
+than guessed at. What is established:
+
+- Each row's entries decrease monotonically. At 2400 the ratio between
+  consecutive entries is 0.7071 to three places after the first step -- that is
+  `1/sqrt(2)`, a **3 dB ladder**, power halving per index.
+- The higher rates are NOT that ladder. The mean step is about -2.6 dB at 2800,
+  -2.4 dB at 3000, -2.3 dB at 3200 and -2.1 dB at 3429, and within each rate
+  the steps are irregular by a tenth of a dB or more. So it is not one
+  geometric series with a rate-dependent ratio either.
+- The count of non-zero entries grows with the symbol rate -- 9, 10, 11, 12,
+  13 -- which the source already reads as V.34's ten pre-emphasis
+  characteristics plus the flat one, truncated where a rate cannot use them
+  all.
+
+That pattern fits **the inverse RMS gain of each pre-emphasis characteristic
+over the symbol band**: the transmitter shapes the spectrum and then scales so
+the total power is unchanged, so the scale depends on both the characteristic
+and the bandwidth, which is exactly the two-dimensional dependence the tables
+show. The 2400 case reduces to a clean 3 dB ladder because the narrowest band
+sees close to a constant power ratio between successive characteristics.
+
+Confirming it needs V.34's pre-emphasis filter definitions integrated over each
+symbol rate's band -- ITU-T V.34 (02/98) is in `itu-specs/`, so the input
+exists. That is a genuine DSP derivation, not an afternoon's arithmetic, and
+guessing it would be worse than leaving it: an unverified closed form recorded
+as a derivation is the failure mode finding 215 exists to prevent.
+
+**Status of #47.** Two of three derivations done and verified; the third
+scoped, with its hypothesis and its route written down. The reachability
+measurement and file-header rationale that `fastpass.md` also deferred are
+untouched.
