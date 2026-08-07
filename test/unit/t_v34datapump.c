@@ -85,6 +85,8 @@ extern void ref_VPcmV34IndicateRemoteRRN(void *obj);
 #define O_BAD		(0x264 + 0x258)
 #define O_BAD_LONG	(0x264 + 0x25a)
 #define O_GOOD		(0x264 + 0x25c)
+#define O_F21C		(0x264 + 0x21c)	/* receiver: wraps at 0x400, and the
+					   wrap is what refreshes +0x21a    */
 #define O_WHY		(0x264 + 0x25e)	/* 1 remote, 2 down, 3 up           */
 #define O_RATE		(0x264 + 0x260)
 
@@ -125,6 +127,7 @@ static int debug_on;
 /* What each trial did, per diagnostics setting, for the claims at the end. */
 struct rec {
 	unsigned	changed, hash, lines;
+	int		err, blocks;
 	int		used;
 };
 
@@ -238,13 +241,21 @@ run(const char *name, const struct poke *pk, const struct oracle *ex, long tag)
 	seen[debug_on][trial_now].changed = o->changed;
 	seen[debug_on][trial_now].hash = o->hash;
 	seen[debug_on][trial_now].lines = o->lines;
+	seen[debug_on][trial_now].err = (int)v34hs_peek_short(1, O_ERR);
+	seen[debug_on][trial_now].blocks = (int)v34hs_peek_short(1, O_BLOCKS);
 	seen[debug_on][trial_now].used = 1;
 
 	if (dump)
 		printf("  %-46s wrote %5u B  sig %08x  lines %u  "
-		       "+0x2218 %d  +0x25e %d\n",
+		       "+0x2218 %d  +0x25e %d  +0x21a %d  "
+		       "+0x124 %d  +0x258/a/c %d/%d/%d\n",
 		       name, o->changed, o->hash, o->lines,
-		       peek_int(1, O_MODE), (int)v34hs_peek_short(1, O_WHY));
+		       peek_int(1, O_MODE), (int)v34hs_peek_short(1, O_WHY),
+		       (int)v34hs_peek_short(1, O_ERR),
+		       (int)v34hs_peek_short(1, O_BLOCKS),
+		       (int)v34hs_peek_short(1, O_BAD),
+		       (int)v34hs_peek_short(1, O_BAD_LONG),
+		       (int)v34hs_peek_short(1, O_GOOD));
 }
 
 
@@ -399,6 +410,17 @@ static const struct poke pk_rt_both[] = {
  * neither follows.  So the two cases differ in five oracles rather than in
  * the object alone.
  */
+/*
+ * A run EQUAL to half the block rate, with bit 6 doing the entry: the report
+ * is `<=` and not `<`, so this is the one value that separates 3 from 2 on a
+ * path where the run itself did not fire the retrain.
+ */
+static const struct poke pk_rt_report_edge[] = {
+	{ O_FLAGS,	2, 0x1ad5 },
+	{ O_BAD,	2, 50 },
+	PK_END
+};
+
 static const struct poke pk_rt_negshift[] = {
 	{ O_FAA96,	2, -3 },
 	{ O_BAD,	2, -1 },
@@ -437,6 +459,18 @@ static const struct poke pk_rrn_remote[] = {
 static const struct poke pk_rrn_both[] = {
 	{ O_FLAGS,	2, 0x1af5 },
 	{ O_BAD,	2, 0 },
+	PK_END
+};
+
+/*
+ * THE REMOTE BLOCK CLEARS +0x25c, and this is what says so: a good-block run
+ * already over eight times the block rate, with the long run left at zero so
+ * the step down cannot run in between.  Cleared, the step up does not follow;
+ * left alone, it does.
+ */
+static const struct poke pk_rrn_remote_good[] = {
+	{ O_FLAGS,	2, 0x1ab5 },
+	{ O_GOOD,	2, 801 },
 	PK_END
 };
 
@@ -622,6 +656,65 @@ static const struct poke pk_rx_clear[] = {
 	PK_END
 };
 
+/*
+ * THE TWO PLAIN-RUN THRESHOLDS ARE DIFFERENT FIELDS.  An error measure
+ * between +0x252 and +0x254 fails the first and passes the second, so the
+ * plain run bumps while the long run clears -- which is the only way to tell
+ * the two reads apart.
+ */
+static const struct poke pk_rx_thr_split[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_TIMER,	4, 0x00100000 + SPAN_MID + 1 },
+	{ O_MARK,	4, 0x00100000 },
+	{ O_THR_A,	2, 4000 },
+	{ O_THR_B,	2, 20000 },
+	{ O_BAD,	2, 11 },
+	{ O_BAD_LONG,	2, 13 },
+	PK_END
+};
+
+/* An error EQUAL to its threshold passes: the compare is `>` and not `>=`. */
+static const struct poke pk_rx_thr_equal[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_THR_A,	2, 0x2000 },
+	{ O_BAD,	2, 11 },
+	PK_END
+};
+
+/* And the long span's own boundary, which +0x25c is on the wrong side of. */
+static const struct poke pk_rx_span_exact[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_TIMER,	4, 0x00100000 + SPAN_LONG },
+	{ O_MARK,	4, 0x00100000 },
+	{ O_THR_C,	2, 30000 },
+	{ O_GOOD,	2, 9 },
+	PK_END
+};
+
+/*
+ * THE ONE THING THE FIXTURE'S `receiver` DOES NOT DO, seeded as hard as it
+ * can be from outside.
+ *
+ * `receiver` refreshes +0x21a only when the counter at +0x21c wraps through
+ * 0x400, and it writes +0x124 only on the decoder's two paths -- and it
+ * returns before either, because reaching them needs a symbol decision and
+ * this fixture's receive queue carries the arena's fill rather than a signal.
+ * So the two ORDERING claims about this loop -- read the measure after the
+ * call, bump the count before it -- are not testable here, and
+ * test/mutations/v34datapump.json carries both as named gaps.
+ *
+ * The case is kept, and the two fields are ASSERTED unchanged below, so that
+ * the gap is a checked property rather than an assumption: a fixture that
+ * later drives the decoder will fail this and say the mutations became
+ * catchable.
+ */
+static const struct poke pk_rx_equerr[] = {
+	{ O_RXCNT,	2, 12 },
+	{ O_F21C,	2, 0x3ff },
+	{ O_BAD,	2, 11 },
+	PK_END
+};
+
 /* --- the two RRN counters, on their own ----------------------------------- */
 
 /*
@@ -726,6 +819,8 @@ static const struct trial trials[] = {
     { 2, 0, 0, 0, KEEP }, 201 },
   { "a run of exactly 50 does not retrain", pk_rt_edge,
     { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 202 },
+  { "bit 6 with a run of exactly 50 reports 3", pk_rt_report_edge,
+    { 3, 0, 0, 0, KEEP }, 206 },
   { "bit 6 and a run of 51 report 2", pk_rt_both,
     { 2, 0, 0, 0, KEEP }, 203 },
   { "the halving is an arithmetic shift", pk_rt_negshift,
@@ -736,6 +831,8 @@ static const struct trial trials[] = {
   /* The remote renegotiation. */
   { "remote renegotiation on bit 5", pk_rrn_remote,
     { 4, 1, 0, 1, KEEP }, 300 },
+  { "the remote block clears +0x25c, so the step up cannot follow",
+    pk_rrn_remote_good, { 4, 1, 0, 1, KEEP }, 303 },
   { "a retrain resets the flags, so bit 5 cannot follow", pk_rrn_both,
     { 3, 0, 0, 0, KEEP }, 301 },
   { "bit 5 then both error blocks: three inits in one call",
@@ -786,7 +883,15 @@ static const struct trial trials[] = {
   { "an error over both thresholds and under the third", pk_rx_bump,
     { KEEP, BASE_WHY, 0, 0, 5 }, 606 },
   { "an error the other side of all three clears all three", pk_rx_clear,
-    { BASE_MODE, BASE_WHY, 0, 0, 5 }, 607 }
+    { BASE_MODE, BASE_WHY, 0, 0, 5 }, 607 },
+  { "+0x252 and +0x254 are different fields", pk_rx_thr_split,
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 608 },
+  { "an error equal to +0x252 clears the run", pk_rx_thr_equal,
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 609 },
+  { "a span of exactly 1152000 leaves +0x25c alone", pk_rx_span_exact,
+    { BASE_MODE, BASE_WHY, 0, 0, 5 }, 610 },
+  { "+0x21c seeded at its wrap: `receiver` still writes neither field",
+    pk_rx_equerr, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 611 }
 };
 
 #define NTRIALS	((int)(sizeof(trials) / sizeof(trials[0])))
@@ -914,8 +1019,23 @@ main(void)
 			if (seen[1][i].lines != 0)
 				traced++;
 		diff_eq_int("trials that printed with the diagnostics on",
-			    traced, 13, 0);
+			    traced, 15, 0);
 	}
+
+	/*
+	 * AND THE NAMED GAP, CHECKED.  Trial 611 seeds +0x21c at its wrap and
+	 * drives two passes of `receiver`; if the measure at +0x21a is still
+	 * the value the base poked and +0x124 has moved by exactly the two
+	 * bumps this function made, then `receiver` wrote neither, and the
+	 * two ordering mutations in the suite cannot be caught for that
+	 * reason and no other.  Written as an assertion so that a fixture
+	 * which later reaches the decoder fails here rather than leaving the
+	 * gap recorded and stale.
+	 */
+	diff_eq_int("the fixture's `receiver` leaves +0x21a alone",
+		    seen[0][index_of(611)].err, 0x2000, 611);
+	diff_eq_int("the fixture's `receiver` leaves +0x124 alone",
+		    seen[0][index_of(611)].blocks, 0x123 + 2, 611);
 
 	/* --- the separations, each one a claim some mutation would break --- */
 
