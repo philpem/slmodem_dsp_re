@@ -14,7 +14,7 @@
  * THREE THINGS EVERY CASE HERE HAS TO DO, and the first two are what stop it
  * being an expensive way of comparing the blob with itself:
  *
- *   1  RUN THE SAME CASE WITH THE BLOB ON BOTH SIDES.  `v34hs_side_a(NULL)`
+ *   1  RUN THE SAME CASE WITH THE BLOB ON BOTH SIDES.  `v34hs_ours(0)`
  *      puts it back.  A green ours-versus-blob run means nothing if the same
  *      seed is green blob-versus-blob for a reason of the fixture's, and this
  *      is finding 290's whole point about what the harness proves.
@@ -503,8 +503,8 @@ trial_seeded(short mst, const struct seed *s, int ours, long tag)
 	v34hs_poke_short(T3MT_COUNTER, s->counter);
 	apply(s);
 
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(ours ? v34handshak_t3mid : NULL);
+	v34handshak_unwritten_reset();
+	v34hs_ours(ours);
 	v34hs_step();
 
 	snprintf(what, sizeof(what),
@@ -514,7 +514,7 @@ trial_seeded(short mst, const struct seed *s, int ours, long tag)
 		 ours ? "ours" : "blob");
 	v34hs_compare(what, tag);
 
-	unwritten = ours ? v34handshak_t3mid_unwritten() : T3M_WRITTEN;
+	unwritten = ours ? v34handshak_unwritten() : T3M_WRITTEN;
 	diff_eq_int(unwritten_name(unwritten), unwritten, T3M_WRITTEN, tag);
 
 	if (dump) {
@@ -3303,11 +3303,15 @@ txblock_paths(void)
  * --------------------------------------------------------------------------
  * The four guards, and the two table bounds, checked by the path they select.
  *
- * These cannot be checked by comparing objects, because the answer is that
- * our entry does NOTHING: the path is one this batch has not written, and the
- * blob of course goes on and does the whole step.  What is compared instead
- * is WHICH unwritten path was selected, which is a claim about the guard
- * alone and is exactly what a range constant off by one changes.
+ * WHAT THIS USED TO CHECK AND WHY IT NOW CHECKS MORE.  When these arms lived
+ * in a file of their own, most of what a guard selects was unwritten, so the
+ * only observable was WHICH unwritten path ran -- comparing objects was
+ * pointless when our entry did nothing and the blob did the whole step.  The
+ * unify closed that: table 3's forty arms are all written, and so are both
+ * ends of the range test and the receiver-idle route.  So five of these
+ * trials now expect `T3M_WRITTEN` and are held by a full object comparison
+ * instead, and a range constant off by one moves the step to a different arm
+ * rather than to a different code.  Finding 551.
  *
  * Without this, `T3M_TBL3_COUNT`, `T3M_TBL3_FIRST`, `T3M_TBL2_COUNT`, the
  * cursor compare, the receiver-count compare and the +0xa8a0 gate are all
@@ -3324,14 +3328,16 @@ guard(short mst, const struct seed *s, short rxstate, int expect, long tag)
 	v34hs_poke_short(T3MT_COUNTER, s->counter);
 	apply(s);
 
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(v34handshak_t3mid);
+	v34handshak_unwritten_reset();
+	v34hs_ours(1);
 	v34hs_step();
-	v34hs_side_a(NULL);
-
 	snprintf(what, sizeof(what), "guard: microstate %d, rxstate %d -> %s",
 		 (int)mst, (int)rxstate, unwritten_name(expect));
-	diff_eq_int(what, v34handshak_t3mid_unwritten(), expect, tag);
+	if (expect == T3M_WRITTEN)
+		v34hs_compare(what, tag);
+	v34hs_ours(0);
+
+	diff_eq_int(what, v34handshak_unwritten(), expect, tag);
 }
 
 static void
@@ -3340,13 +3346,19 @@ guards(void)
 	struct seed s;
 	long tag = 5100;
 
-	/* Table 3's window is 41..80, and one past each end is the default
-	   arm at 0x65329 rather than an entry of the table. */
+	/*
+	 * Table 3's window is 41..80, and one past each end is the default
+	 * arm at 0x65329 -- the transmit dispatch -- rather than an entry of
+	 * the table.  All four are written now, so what separates them is the
+	 * object comparison `guard` makes: 40 and 81 take the block route and
+	 * 41 and 80 take an arm of their own, and a window off by one at
+	 * either end swaps one for the other.
+	 */
 	s = plain;
-	guard(40, &s, V34HS_RX_DPSK, T3M_UNWRITTEN_TBL3_DEFAULT, tag++);
-	guard(81, &s, V34HS_RX_DPSK, T3M_UNWRITTEN_TBL3_DEFAULT, tag++);
-	guard(41, &s, V34HS_RX_DPSK, T3M_UNWRITTEN_TBL3_ARM, tag++);
-	guard(80, &s, V34HS_RX_DPSK, T3M_UNWRITTEN_TBL3_ARM, tag++);
+	guard(40, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(81, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(41, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(80, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
 
 	/* Table 2's is 5..74, and 75 is past it -- which is how microstate
 	   48 driven with txstate 75 reaches the tail without an arm. */
@@ -3366,21 +3378,25 @@ guards(void)
 
 	/*
 	 * The receiver's first halfword.  `v34hs_route` leaves it at 6; at 5
-	 * the once-per-block dispatch runs instead, which is another batch's
-	 * route.  `<= 5` and `< 5` are the two readings and this is the trial
-	 * that separates them.
+	 * the once-per-block dispatch runs instead -- 0x629f1 is `jle 62ae3`
+	 * and 0x62ae3 reads the transmit state for 0x62af1, so this is the
+	 * BLOCK route and not an idle return (finding 549).  `<= 5` and `< 5`
+	 * are the two readings and this is the trial that separates them: at
+	 * 5 the step must do what the block dispatch does, and the object
+	 * comparison is what says it did.
 	 */
 	s = plain;
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x0264, 5);
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(v34handshak_t3mid);
+	v34handshak_unwritten_reset();
+	v34hs_ours(1);
 	v34hs_step();
-	v34hs_side_a(NULL);
+	v34hs_compare("a receiver count of 5 takes the block route", tag);
+	v34hs_ours(0);
 	diff_eq_int("guard: a receiver count of 5 takes the block route",
-		    v34handshak_t3mid_unwritten(), T3M_UNWRITTEN_RXIDLE,
+		    v34handshak_unwritten(), T3M_WRITTEN,
 		    tag++);
 
 	/*
@@ -3394,13 +3410,13 @@ guards(void)
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x221c, 5);
 	v34hs_poke_short(0x2aa0, 0);
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(v34handshak_t3mid);
+	v34handshak_unwritten_reset();
+	v34hs_ours(1);
 	v34hs_step();
 	v34hs_compare("cursor above the limit still reaches table 3", tag);
-	v34hs_side_a(NULL);
+	v34hs_ours(0);
 	diff_eq_int("guard: a cursor above the limit reaches table 3",
-		    v34handshak_t3mid_unwritten(), T3M_WRITTEN, tag++);
+		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
 	/* And below it, which is table 1 and #56's. */
 	v34hs_setup(0);
@@ -3408,26 +3424,26 @@ guards(void)
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x221c, 0);
 	v34hs_poke_short(0x2aa0, 5);
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(v34handshak_t3mid);
+	v34handshak_unwritten_reset();
+	v34hs_ours(1);
 	/* NOT stepped: table 1's default arm does not terminate (D59), and
 	   this is a claim about our guard, which needs no step at all. */
-	v34handshak_t3mid((void *)v34hs_object(0));
-	v34hs_side_a(NULL);
+	v34handshak((void *)v34hs_object(0));
+	v34hs_ours(0);
 	diff_eq_int("guard: a cursor below the limit is table 1",
-		    v34handshak_t3mid_unwritten(), T3M_UNWRITTEN_TBL1, tag++);
+		    v34handshak_unwritten(), T3M_UNWRITTEN_TBL1, tag++);
 
 	/* The +0xa8a0 gate, which `v34hs_route` clears. */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_int(0xa8a0, 1);
-	v34handshak_t3mid_unwritten_reset();
-	v34hs_side_a(v34handshak_t3mid);
+	v34handshak_unwritten_reset();
+	v34hs_ours(1);
 	v34hs_step();
-	v34hs_side_a(NULL);
+	v34hs_ours(0);
 	diff_eq_int("guard: a non-zero +0xa8a0 diverts at 0x64a87",
-		    v34handshak_t3mid_unwritten(), T3M_UNWRITTEN_FSKGATE,
+		    v34handshak_unwritten(), T3M_UNWRITTEN_FSKGATE,
 		    tag++);
 }
 
@@ -3550,6 +3566,6 @@ main(void)
 	 */
 	v34hs_holes_check();
 
-	v34hs_side_a(NULL);
+	v34hs_ours(0);
 	return diff_end();
 }

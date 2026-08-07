@@ -5,437 +5,523 @@
  {
   "label": "the unconditional store at +0xaa7a is dropped",
   "find": "\ths_put(obj, T41_FAA7A, 0);",
-  "replace": "\ths_put(obj, T41_FAA7A, hs_get(obj, T41_FAA7A));"
+  "replace": "\ths_put(obj, T41_FAA7A, hs_get(obj, T41_FAA7A));",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "the unconditional store lands on the trace counter",
   "find": "\ths_put(obj, T41_FAA7A, 0);",
-  "replace": "\ths_put(obj, T41_COUNT, 0);"
+  "replace": "\ths_put(obj, T41_COUNT, 0);",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "the first guard reads +0xaae2 sixteen bits wide",
   "find": "\tif ((unsigned char)aae2 == 0x72) {",
-  "replace": "\tif (aae2 == 0x72) {"
+  "replace": "\tif (aae2 == 0x72) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "the first guard's constant is 0x71",
   "find": "\tif ((unsigned char)aae2 == 0x72) {",
-  "replace": "\tif ((unsigned char)aae2 == 0x71) {"
+  "replace": "\tif ((unsigned char)aae2 == 0x71) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "the two doors into the junction are ORed, not ANDed",
   "find": "\tif (abe8 == 0 && f358a == 0) {",
-  "replace": "\tif (abe8 == 0 || f358a == 0) {"
+  "replace": "\tif (abe8 == 0 || f358a == 0) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "+0xaae0 against 100 is `>=` rather than `>`",
-  "find": "\t\tif (hs_get(obj, T41_FAAE0) > 0x64) {",
-  "replace": "\t\tif (hs_get(obj, T41_FAAE0) >= 0x64) {"
+  "find": "\t\tif (obj->fsk.nbits > 0x64) {",
+  "replace": "\t\tif (obj->fsk.nbits >= 0x64) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "+0xaae0 is compared against 101",
-  "find": "\t\tif (hs_get(obj, T41_FAAE0) > 0x64) {",
-  "replace": "\t\tif (hs_get(obj, T41_FAAE0) > 0x65) {"
+  "find": "\t\tif (obj->fsk.nbits > 0x64) {",
+  "replace": "\t\tif (obj->fsk.nbits > 0x65) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "+0xaae0 read unsigned at the entry guard",
-  "find": "\t\tif (hs_get(obj, T41_FAAE0) > 0x64) {",
-  "replace": "\t\tif ((unsigned short)hs_get(obj, T41_FAAE0) > 0x64) {"
+  "find": "\t\tif (obj->fsk.nbits > 0x64) {",
+  "replace": "\t\tif ((unsigned short)obj->fsk.nbits > 0x64) {",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "+0x358a's 1 and 2 select each other's body",
   "find": "\tif (f358a == 2) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (f358a == 1) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
-  "replace": "\tif (f358a == 1) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (f358a == 2) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */"
+  "replace": "\tif (f358a == 1) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (f358a == 2) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
+  "fn": "t41_micro_det_sync"
  },
  {
   "label": "the junction tests +0xabe8 the wrong way round",
   "find": "\tif (abe8 == 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x669fa */",
-  "replace": "\tif (abe8 != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x669fa */"
+  "replace": "\tif (abe8 != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x669fa */",
+  "fn": "t41_after_guards"
  },
  {
   "label": "+0xabf0 tested for non-zero rather than for 1",
-  "find": "\tif (t3c_geti(obj, T41_FABF0) == 1) {",
-  "replace": "\tif (t3c_geti(obj, T41_FABF0) != 0) {"
+  "find": "\tif (obj->moh_message == 1) {",
+  "replace": "\tif (obj->moh_message != 0) {",
+  "fn": "t41_after_guards"
  },
  {
   "label": "+0xabf0 read sixteen bits wide",
-  "find": "\tif (t3c_geti(obj, T41_FABF0) == 1) {",
-  "replace": "\tif (hs_get(obj, T41_FABF0) == 1) {"
+  "find": "\tif (obj->moh_message == 1) {",
+  "replace": "\tif (*(const short *)&obj->moh_message == 1) {",
+  "fn": "t41_after_guards"
  },
  {
   "label": "the FRR report's counter floor is `<` rather than `<=`",
   "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
-  "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */"
+  "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the FRR report's counter floor is 0x30",
   "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
-  "replace": "\tif (hs_get(obj, T41_F35A0) <= 0x30) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */"
+  "replace": "\tif (hs_get(obj, T41_F35A0) <= 0x30) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the FRR report reads +0xaae2 as a byte, as the entry guard does",
-  "find": "\tif (hs_get(obj, T41_FAAE2) != 0) {",
-  "replace": "\tif ((unsigned char)hs_get(obj, T41_FAAE2) != 0) {"
+  "find": "\tif (obj->fsk.sr != 0) {",
+  "replace": "\tif ((unsigned char)obj->fsk.sr != 0) {",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the FRR report fires only when it has already fired",
   "find": "\tif (t3c_getb(obj, T41_FABF8) != 0) {",
-  "replace": "\tif (t3c_getb(obj, T41_FABF8) == 0) {"
+  "replace": "\tif (t3c_getb(obj, T41_FABF8) == 0) {",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the FRR report does not record that it fired",
   "find": "\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);",
-  "replace": "\tt3c_putb(obj, T41_FABF8, t3c_getb(obj, T41_FABF8));\n\tt3c_txblock(obj);"
+  "replace": "\tt3c_putb(obj, T41_FABF8, t3c_getb(obj, T41_FABF8));\n\tt3c_txblock(obj);",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the 0x72 door moves the microstate to DET_CJ",
   "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);"
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door does not clear the block counter",
-  "find": "\t*(short *)((char *)rec + 0x14) = -1;\n\ths_put(obj, T41_FAAE0, 0);",
-  "replace": "\t*(short *)((char *)rec + 0x14) = -1;"
+  "find": "\t*(short *)((char *)rec + 0x14) = -1;\n\tobj->fsk.nbits = 0;",
+  "replace": "\t*(short *)((char *)rec + 0x14) = -1;",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door lowers the pending flag unconditionally",
   "find": "\tif (hs_get(obj, T41_F358A) == 0)\n\t\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);",
-  "replace": "\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);"
+  "replace": "\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door lowers the pending flag only when a sub-state runs",
   "find": "\tif (hs_get(obj, T41_F358A) == 0)\n\t\trx->flags",
-  "replace": "\tif (hs_get(obj, T41_F358A) != 0)\n\t\trx->flags"
+  "replace": "\tif (hs_get(obj, T41_F358A) != 0)\n\t\trx->flags",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door invalidates the record at +0xaa6c instead of +0xaa70",
   "find": "\tshort *rec = (short *)t41_getp(obj, T41_PTR_AA70);",
-  "replace": "\tshort *rec = (short *)t41_getp(obj, T41_PTR_AA6C);"
+  "replace": "\tshort *rec = (short *)t41_getp(obj, T41_PTR_AA6C);",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door invalidates the record's +0x16 rather than its +0x14",
   "find": "\t*(short *)((char *)rec + 0x14) = -1;",
-  "replace": "\t*(short *)((char *)rec + 0x16) = -1;"
+  "replace": "\t*(short *)((char *)rec + 0x16) = -1;",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the 0x72 door's message prints the gain zero-extended",
   "find": "\t\t    (int)rx->agc_gain);",
-  "replace": "\t\t    (int)(unsigned short)rx->agc_gain);"
+  "replace": "\t\t    (int)(unsigned short)rx->agc_gain);",
+  "fn": "t41_to_det_info"
  },
  {
   "label": "the tone search does not lower the pending flag",
   "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);\n\n\tdet = t41_detect(obj);",
-  "replace": "\tdet = t41_detect(obj);"
+  "replace": "\tdet = t41_detect(obj);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "a silent detector and a short count are ORed, not ANDed",
-  "find": "\tif (det == 0 && hs_get(obj, T41_FAAE0) <= 0x384) {",
-  "replace": "\tif (det == 0 || hs_get(obj, T41_FAAE0) <= 0x384) {"
+  "find": "\tif (det == 0 && obj->fsk.nbits <= 0x384) {",
+  "replace": "\tif (det == 0 || obj->fsk.nbits <= 0x384) {",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's second floor is 899",
-  "find": "\tif (det == 0 && hs_get(obj, T41_FAAE0) <= 0x384) {",
-  "replace": "\tif (det == 0 && hs_get(obj, T41_FAAE0) <= 0x383) {"
+  "find": "\tif (det == 0 && obj->fsk.nbits <= 0x384) {",
+  "replace": "\tif (det == 0 && obj->fsk.nbits <= 0x383) {",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's second floor is `<` rather than `<=`",
-  "find": "\tif (det == 0 && hs_get(obj, T41_FAAE0) <= 0x384) {",
-  "replace": "\tif (det == 0 && hs_get(obj, T41_FAAE0) < 0x384) {"
+  "find": "\tif (det == 0 && obj->fsk.nbits <= 0x384) {",
+  "replace": "\tif (det == 0 && obj->fsk.nbits < 0x384) {",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's body leaves the sub-state at 2",
   "find": "\ths_put(obj, T41_F358A, 1);",
-  "replace": "\ths_put(obj, T41_F358A, 2);"
+  "replace": "\ths_put(obj, T41_F358A, 2);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search sets bit 1 of +0x3588 rather than bit 0",
   "find": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 1));",
-  "replace": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));"
+  "replace": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the staged record is nine words, not ten",
   "find": "\tfor (i = 0; i <= 9; i++)\n\t\ths_put(obj, T41_ABAE + 2u * (unsigned)i, 0);",
-  "replace": "\tfor (i = 0; i < 9; i++)\n\t\ths_put(obj, T41_ABAE + 2u * (unsigned)i, 0);"
+  "replace": "\tfor (i = 0; i < 9; i++)\n\t\ths_put(obj, T41_ABAE + 2u * (unsigned)i, 0);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the staged record is eleven words",
   "find": "\tfor (i = 0; i <= 9; i++)\n\t\ths_put(obj, T41_ABAE + 2u * (unsigned)i, 0);",
   "replace": "\tfor (i = 0; i <= 10; i++)\n\t\ths_put(obj, T41_ABAE + 2u * (unsigned)i, 0);",
   "equivalent": true,
-  "why": "The eleventh word is +0xabae + 20, which IS +0xabc2 -- the staged length -- and the statement after the loop writes zero there anyway.  So an eleven-word clear and a ten-word clear leave the same bytes, and the mutation is equivalent rather than untested.  That is also the measurement that says the array is exactly ten shorts and that the length field abuts it.  Held fixed: nothing; the two spellings differ in one store of the value the next line stores."
+  "why": "The eleventh word is +0xabae + 20, which IS +0xabc2 -- the staged length -- and the statement after the loop writes zero there anyway.  So an eleven-word clear and a ten-word clear leave the same bytes, and the mutation is equivalent rather than untested.  That is also the measurement that says the array is exactly ten shorts and that the length field abuts it.  Held fixed: nothing; the two spellings differ in one store of the value the next line stores.",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search does not reset the staged length",
   "find": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);"
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search drops the transmit machine into TX_L1",
   "find": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm."
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search zeroes +0xaae2 instead of invalidating it",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\ths_put(obj, T41_FAAE2, -1);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\ths_put(obj, T41_FAAE2, 0);"
+  "find": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = -1;",
+  "replace": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = 0;",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the long and short warm-ups are the other way round",
   "find": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x1e);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70bdd */",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj, T41_BLK_A94C, 0x1e);\t/* 0x70bdd */"
+  "replace": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj, T41_BLK_A94C, 0x1e);\t/* 0x70bdd */",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the long warm-up needs only the marker",
-  "find": "\tif (hs_get(obj, T41_F359C) == 0x65 && t3c_geti(obj, T41_V90RX) != 0)",
-  "replace": "\tif (hs_get(obj, T41_F359C) == 0x65)"
+  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->f359c == 0x65)",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the long warm-up needs only the V.90 receiver",
-  "find": "\tif (hs_get(obj, T41_F359C) == 0x65 && t3c_geti(obj, T41_V90RX) != 0)",
-  "replace": "\tif (t3c_geti(obj, T41_V90RX) != 0)"
+  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->v90_receiver != 0)",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the marker is compared against 0x66",
-  "find": "\tif (hs_get(obj, T41_F359C) == 0x65 && t3c_geti(obj, T41_V90RX) != 0)",
-  "replace": "\tif (hs_get(obj, T41_F359C) == 0x66 && t3c_geti(obj, T41_V90RX) != 0)"
+  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->f359c == 0x66 && obj->v90_receiver != 0)",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the V.90 receiver is read at +0x248, not through obj+4",
-  "find": "#define T41_V90RX\t0x024c",
-  "replace": "#define T41_V90RX\t0x0248"
+  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->f359c == 0x65\n\t    && *(const int *)((const char *)obj + 0x248) != 0)",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record holds 0xf73",
   "find": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf72);",
-  "replace": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf73);"
+  "replace": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf73);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record holds 0xd at +0x28",
   "find": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xc);",
-  "replace": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xd);"
+  "replace": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xd);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record ends with a zero at +0x20",
   "find": "\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
-  "replace": "\ths_put(obj, T41_BLK_A94C + 0x20, 0);"
+  "replace": "\ths_put(obj, T41_BLK_A94C + 0x20, 0);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone search fills the record at +0xa9ac",
   "find": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70bdd */",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x11);\t/* 0x70bdd */"
+  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x11);\t/* 0x70bdd */",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone body runs on a silent detector",
   "find": "\tif (t41_detect(obj) == 0) {",
-  "replace": "\tif (t41_detect(obj) != 0) {"
+  "replace": "\tif (t41_detect(obj) != 0) {",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the record's gate is bit 6, not bit 7",
   "find": "\tif ((rec[4] & 0x80) == 0) {",
-  "replace": "\tif ((rec[4] & 0x40) == 0) {"
+  "replace": "\tif ((rec[4] & 0x40) == 0) {",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the record's gate is read through +0xaa70",
   "find": "\trec = (const unsigned char *)t41_getp(obj, T41_PTR_AA6C);",
-  "replace": "\trec = (const unsigned char *)t41_getp(obj, T41_PTR_AA70);"
+  "replace": "\trec = (const unsigned char *)t41_getp(obj, T41_PTR_AA70);",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the record's gate is its byte at +0x05",
   "find": "\tif ((rec[4] & 0x80) == 0) {",
-  "replace": "\tif ((rec[5] & 0x80) == 0) {"
+  "replace": "\tif ((rec[5] & 0x80) == 0) {",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "a staged length of zero copies nothing",
   "find": "\tif (hs_get(obj, T41_FABC2) >= 0) {",
-  "replace": "\tif (hs_get(obj, T41_FABC2) > 0) {"
+  "replace": "\tif (hs_get(obj, T41_FABC2) > 0) {",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the copy stops one word short",
   "find": "\t\tfor (i = 0; (short)i <= hs_get(obj, T41_FABC2); i++)",
-  "replace": "\t\tfor (i = 0; (short)i < hs_get(obj, T41_FABC2); i++)"
+  "replace": "\t\tfor (i = 0; (short)i < hs_get(obj, T41_FABC2); i++)",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the copy goes out through +0xaa6c",
   "find": "\t\tout = (short *)t41_getp(obj, T41_PTR_AA70);",
-  "replace": "\t\tout = (short *)t41_getp(obj, T41_PTR_AA6C);"
+  "replace": "\t\tout = (short *)t41_getp(obj, T41_PTR_AA6C);",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body's two answers are the other way round",
-  "find": "\tif (hs_get(obj, T41_F359C) == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\tif (hs_get(obj, T41_F359C) != 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);"
+  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c != 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body invalidates +0xaae2 on both answers",
-  "find": "\tif (hs_get(obj, T41_F359C) == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\ths_put(obj, T41_FAAE2, -1);\n\tif (hs_get(obj, T41_F359C) == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);"
+  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tobj->fsk.sr = -1;\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body does not clear its sub-state",
   "find": "\ths_put(obj, T41_F358A, 0);\n\n\t/*",
-  "replace": "\t/*"
+  "replace": "\t/*",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body's last message starts at the second word",
   "find": "\t\t    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],",
-  "replace": "\t\t    (unsigned)p[1], (unsigned)p[2], (unsigned)p[3],"
+  "replace": "\t\t    (unsigned)p[1], (unsigned)p[2], (unsigned)p[3],",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body does not lower the pending flag",
   "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");"
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");",
+  "fn": "t41_tone_ab"
  },
  {
   "label": "the third floor is (rtd >> 3) + 490",
   "find": "\tif ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1ea) {",
-  "replace": "\tif ((int)aae0 < (((int)obj->rtd) >> 3) + 0x1ea) {"
+  "replace": "\tif ((int)aae0 < (((int)obj->rtd) >> 3) + 0x1ea) {",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the third floor is 491",
   "find": "\tif ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1ea) {",
-  "replace": "\tif ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1eb) {"
+  "replace": "\tif ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1eb) {",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the third floor is `<=` rather than `<`",
   "find": "\tif ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1ea) {",
-  "replace": "\tif ((int)aae0 <= (((int)obj->rtd) >> 4) + 0x1ea) {"
+  "replace": "\tif ((int)aae0 <= (((int)obj->rtd) >> 4) + 0x1ea) {",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the retrain needs +0xa24a to be anything but 1",
-  "find": "\t\tif (hs_get(obj, T41_FA24A) != 1) {",
-  "replace": "\t\tif (hs_get(obj, T41_FA24A) == 1) {"
+  "find": "\t\tif (obj->retrain_state != 1) {",
+  "replace": "\t\tif (obj->retrain_state == 1) {",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the retrain is brought up in rate-renegotiation mode",
   "find": "\t\tv34handshakinit(obj, 1);\t\t/* 0x6e029 */",
-  "replace": "\t\tv34handshakinit(obj, 2);\t\t/* 0x6e029 */"
+  "replace": "\t\tv34handshakinit(obj, 2);\t\t/* 0x6e029 */",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the late half's two answers are the other way round",
-  "find": "\tif (hs_get(obj, T41_F359C) != 0x65) {\n\t\tif (hs_get(obj, T41_FA24A) != 1) {",
-  "replace": "\tif (hs_get(obj, T41_F359C) == 0x65) {\n\t\tif (hs_get(obj, T41_FA24A) != 1) {"
+  "find": "\tif (obj->f359c != 0x65) {\n\t\tif (obj->retrain_state != 1) {",
+  "replace": "\tif (obj->f359c == 0x65) {\n\t\tif (obj->retrain_state != 1) {",
+  "fn": "t41_marks_late"
  },
  {
   "label": "info1a leaves the receive machine at RECEIVE",
   "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);"
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);",
+  "fn": "t41_marks_late"
  },
  {
   "label": "info1a sets bit 0 of +0x3588",
   "find": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));\n\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 1));\n\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);"
+  "replace": "\ths_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 1));\n\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "fn": "t41_marks_late"
  },
  {
   "label": "the round-trip delay is shifted unsigned",
   "find": "\tint base = ((int)rtd) >> 4;",
-  "replace": "\tint base = ((int)(unsigned short)rtd) >> 4;"
+  "replace": "\tint base = ((int)(unsigned short)rtd) >> 4;",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the first floor is 101",
   "find": "\tif ((int)aae0 <= base + 100) {",
-  "replace": "\tif ((int)aae0 <= base + 101) {"
+  "replace": "\tif ((int)aae0 <= base + 101) {",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the first floor is `<` rather than `<=`",
   "find": "\tif ((int)aae0 <= base + 100) {",
-  "replace": "\tif ((int)aae0 < base + 100) {"
+  "replace": "\tif ((int)aae0 < base + 100) {",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the counter is reset up to the second floor exclusive",
   "find": "\tif ((int)aae0 <= base + 400)\n\t\ths_put(obj, T41_F35A0, 0);",
-  "replace": "\tif ((int)aae0 < base + 400)\n\t\ths_put(obj, T41_F35A0, 0);"
+  "replace": "\tif ((int)aae0 < base + 400)\n\t\ths_put(obj, T41_F35A0, 0);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the counter steps only on +0xaae2 == 0",
   "find": "\tif (aae2 == 0 || aae2 == 0xffff)",
-  "replace": "\tif (aae2 == 0)"
+  "replace": "\tif (aae2 == 0)",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the counter steps only on +0xaae2 == -1",
   "find": "\tif (aae2 == 0 || aae2 == 0xffff)",
-  "replace": "\tif (aae2 == 0xffff)"
+  "replace": "\tif (aae2 == 0xffff)",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the counter steps by two",
   "find": "\t\tnext = (short)((unsigned short)hs_get(obj, T41_F35A0) + 1);",
-  "replace": "\t\tnext = (short)((unsigned short)hs_get(obj, T41_F35A0) + 2);"
+  "replace": "\t\tnext = (short)((unsigned short)hs_get(obj, T41_F35A0) + 2);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the transmit state that zeroes the counter is TX_DPSK",
   "find": "\tif (tx == V34HS_TONE_AB)\n\t\ths_put(obj, T41_F35A0, 0);\t\t/* 0x6da8e */",
-  "replace": "\tif (tx == V34HS_TX_DPSK)\n\t\ths_put(obj, T41_F35A0, 0);\t\t/* 0x6da8e */"
+  "replace": "\tif (tx == V34HS_TX_DPSK)\n\t\ths_put(obj, T41_F35A0, 0);\t\t/* 0x6da8e */",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the second floor is `<=` rather than `<` on the way out",
   "find": "\tif ((int)aae0 < base + 400) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6cf39 */",
   "replace": "\tif ((int)aae0 <= base + 400) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6cf39 */",
   "equivalent": true,
-  "why": "At +0xaae0 exactly (rtd >> 4) + 400 the reset just above has ALREADY fired -- its own test is `<=` on the same value -- so the counter at +0x35a0 is 0 or 1 whatever it held before, and the only continuation past this test is the counter floor at 0x31, which 0 and 1 both take.  That leads to `t41_marks_late`, whose own floor is (rtd >> 4) + 490, ninety higher than this one, so it leaves too.  Both spellings therefore write +0x35a0 and nothing else at the one block count that separates them.  Held fixed: nothing -- the argument is over every value of +0x35a0, +0xaae2 and the transmit state, because the reset makes them all irrelevant."
+  "why": "At +0xaae0 exactly (rtd >> 4) + 400 the reset just above has ALREADY fired -- its own test is `<=` on the same value -- so the counter at +0x35a0 is 0 or 1 whatever it held before, and the only continuation past this test is the counter floor at 0x31, which 0 and 1 both take.  That leads to `t41_marks_late`, whose own floor is (rtd >> 4) + 490, ninety higher than this one, so it leaves too.  Both spellings therefore write +0x35a0 and nothing else at the one block count that separates them.  Held fixed: nothing -- the argument is over every value of +0x35a0, +0xaae2 and the transmit state, because the reset makes them all irrelevant.",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the counter's own floor is `<` rather than `<=`",
   "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
-  "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */"
+  "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
+  "fn": "t41_info_marks"
  },
  {
   "label": "INFODONE is chosen on +0xaae2 == 0 instead",
   "find": "\tif (aae2 == 0xffff) {\n\t\t/*",
-  "replace": "\tif (aae2 == 0) {\n\t\t/*"
+  "replace": "\tif (aae2 == 0) {\n\t\t/*",
+  "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record warms up for 0x4e",
   "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4e);"
+  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4e);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0x11 at +0x28",
   "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);"
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "Info1c aims +0xaa6c at the other record",
   "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
-  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);"
+  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0xff73",
   "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72);",
-  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);"
+  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "Info1c leaves the microstate at TX_PHASE1_ANS",
   "find": "\t\ths_put(obj, T41_F358C, 0);\n\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
   "replace": "\t\ths_put(obj, T41_F358C, 0);\n\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);",
-  "note": "Anchored on the +0x358c store above it as well: microstate 44's 0x26 arm (0x6ed17) reaches INFODONE too, and its 0x4d arm clears the same +0x358c one line before its own transition -- so both the statement and its neighbour had to come in.  Finding 347."
+  "note": "Anchored on the +0x358c store above it as well: microstate 44's 0x26 arm (0x6ed17) reaches INFODONE too, and its 0x4d arm clears the same +0x358c one line before its own transition -- so both the statement and its neighbour had to come in.  Finding 347.",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the tone-during-info1 answer leaves SILENCEINFO",
   "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCEINFO);\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);"
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCEINFO);\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the tone-during-info1 answer leaves the receive machine at RECEIVE",
   "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);\n\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);"
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);\n\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the tone-during-info1 answer does not clear the trace counter",
-  "find": "\ths_put(obj, T41_COUNT, 0);\n\ths_put(obj, T41_TRACE_1, 0);\n\ths_put(obj, T41_F358C, 0);\n\ths_put(obj, T41_FAAE2, -1);",
-  "replace": "\ths_put(obj, T41_COUNT, 0);\n\ths_put(obj, T41_F358C, 0);\n\ths_put(obj, T41_FAAE2, -1);"
+  "find": "\ths_put(obj, T41_COUNT, 0);\n\tobj->vect_idx = 0;\n\ths_put(obj, T41_F358C, 0);\n\tobj->fsk.sr = -1;",
+  "replace": "\ths_put(obj, T41_COUNT, 0);\n\ths_put(obj, T41_F358C, 0);\n\tobj->fsk.sr = -1;",
+  "fn": "t41_info_marks"
  },
  {
   "label": "the FRR flag is only set when the message is printed",
   "find": "\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);"
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tt3c_putb(obj, T41_FABF8, 1);\n\tt3c_txblock(obj);",
+  "fn": "t41_frr_nack"
  },
  {
   "label": "the tone search's last store happens only with the diagnostics on",
   "find": "\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C + 0x20, 1);"
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
+  "fn": "t41_tone_search"
  },
  {
   "label": "the tone body lowers the pending flag only with the diagnostics on",
   "find": "\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");"
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t\t     & ~V34_RX_FLAG_DET_PENDING);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34INFO, info0 received in DET_SYNC\\n\");",
+  "fn": "t41_tone_ab"
  }
 ]

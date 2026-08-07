@@ -23734,3 +23734,430 @@ One thing the recount adds that changes the batching: **all 23 are in
 unifying before renaming -- so the rename lands on one file instead of two --
 is therefore wrong.  The order is still right, but the reason is the shared
 anchors, not the file count.
+
+======================================================================
+
+### 546. What 0x62933 does when the cursor is below the limit: it FALLS THROUGH, into a loop this tree has not written
+
+Task #25 handed over two readings of one guard and asked which the object
+does.  The two:
+
+```c
+v34hshak.c       if (hs_get(obj, T3C_TXCURSOR) < hs_get(obj, T3C_TXLIMIT))
+                         t3c_unwritten();          /* and FALLS THROUGH */
+v34hshak_t3mid.c if (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {
+                         t3m_notwritten(T3M_UNWRITTEN_TBL1); return; }
+```
+
+The object:
+
+```
+   62925:  0f b7 93 a0 2a 00 00    movzwl 0x2aa0(%ebx),%edx      the limit
+   62933:  66 39 93 1c 22 00 00    cmp    %dx,0x221c(%ebx)       the cursor
+   6293a:  89 4c 24 78             mov    %ecx,0x78(%esp)
+   6293e:  0f 8d a9 00 00 00       jge    629ed                  at or above: skip
+   62950:  8b b4 24 c0 00 00 00    mov    0xc0(%esp),%esi        <- loop head
+   62957:  0f bf 86 96 35 00 00    movswl 0x3596(%esi),%eax      the txstate
+   6295e:  83 e8 05                sub    $0x5,%eax
+   62961:  83 f8 51                cmp    $0x51,%eax
+   62964:  77 7a                   ja     629e0
+   62966:  ff 24 85 a0 2d 00 00    jmp    *0x2da0(,%eax,4)       table 1
+   ...
+   629e0:  8b 44 24 4c             mov    0x4c(%esp),%eax        obj + 0x221c
+   629e4:  66 39 10                cmp    %dx,(%eax)
+   629e7:  0f 8c 63 ff ff ff       jl     62950                  <- loop back
+   629ed:  8b 5c 24 74             mov    0x74(%esp),%ebx        the receiver
+```
+
+So it is a DO-WHILE and not an `if`: below the limit the per-sample transmit
+dispatch runs, the cursor is re-tested at 0x629e0, and when it finally is not
+below the limit control **falls through at 0x629e7 to 0x629ed** -- the same
+instruction the guard at 0x6293e jumps to.  The compare is SIGNED (`jge` /
+`jl`) on two halfwords, which both readings already had.
+
+**Neither source is a wrong reading and the difference is a property of the
+STUB.**  `v34hshak.c`'s fall-through is unreachable in practice, because
+`t3c_unwritten` was `abort()`; `v34hshak_t3mid.c`'s `return` is what is left
+when the loop body does not exist, since there is no loop to fall out of.
+The unified `v34handshak` returns, and the comment beside it says the object
+falls through and why this cannot.  When table 1 lands (#56) the guard becomes
+a `do { } while` and the return goes.
+
+Recording the direction matters more than it looks: a reader who "fixes" the
+return into a fall-through without writing the loop gets a `v34handshak` that
+runs the receive chain on a block whose transmit buffer is not full, which is
+a state the object never reaches.
+
+======================================================================
+
+### 547. Two unwritten-path mechanisms, both right, and the one that had to replace them
+
+`v34hshak.c` and `v34hshak_t3mid.c` each answered "what does a path with no
+reconstruction do" and answered it differently:
+
+| | mechanism | argument |
+|---|---|---|
+| `v34hshak.c` | `t3c_unwritten()` -> `abort()` | an arm that returns quietly is indistinguishable from an arm that correctly did nothing, and most of the table is missing |
+| `v34hshak_t3mid.c` | `t3m_notwritten(code)`, records the first code and returns | a test that dies cannot then be asked WHICH path it reached, and `t_v34hst3mid.c` asks after every step |
+
+Both arguments hold, and the merge could keep neither unchanged: `abort()`
+breaks the 455-entry suite outright (`t_v34hst3mid.c` calls the entry directly
+at its table-1 guard trial and reads the code back), while record-and-return
+silently converts every one of the twelve `t3c_unwritten()` sites from "crash"
+into "return quietly", which is exactly how a CAUGHT mutation becomes NOT
+CAUGHT.
+
+So: **the code is always recorded, and the stop is what a test opts out of,
+by name.**  `v34handshak_unwritten_reset()` -- which only a test that intends
+to read the code back would call -- sets a file-static soft flag, and
+`t3m_notwritten` aborts unless it is set.  `t_v34hst3mid` is the one binary
+that calls it; the other six keep the abort they had.
+
+The measurement that says this is not merely plausible: all seven suites'
+caught / NOT-caught / unusable / equivalent splits are identical either side
+of the merge, including the seven pre-existing NOT CAUGHT by name.  Had the
+soft flag leaked into another binary, `v34hst3core`'s twelve guard mutations
+would have been the first to notice.
+
+`t3c_unwritten()` survives as the coarse form -- it records
+`T3M_UNWRITTEN_OTHER` -- because forty-odd call sites predate the codes and
+re-coding them one by one is a separate job with no test behind it.
+
+======================================================================
+
+### 548. The unify: what moved, what was chosen, and what was deliberately not touched
+
+Task #25.  `src/pump/v34/v34hshak_t3mid.c` is gone and its 1,645 lines are in
+`src/pump/v34/v34hshak.c`; there is one `v34handshak` with all fifteen written
+arms, the 24-state shared arm and the default.
+
+**What was moved verbatim, and why that was the whole strategy.**  443
+mutation anchors are written against that text character for character, so
+every `T3M_*` macro, `struct t3m_frame`, `t3m_tail`, `t3m_txblock`,
+`t3m_errrec_*` and the nine `t3m_micro*` bodies are byte-identical to what
+they were.  The `T3M_`/`t3m_` prefixes were NOT folded into this file's
+`T3C_`: a cosmetic rename is 443 anchors to repair for no measured gain.  Of
+the 443, 422 needed no repair at all.
+
+**The five things that did change, each forced:**
+
+1. the prologue and the four guards, merged into one (findings 546, 547, 549);
+2. `t3m_table3` **flattened** into `v34handshak`'s switch -- see below;
+3. `t3c_block_tail` and `t3c_txblock` deleted, `t3c_txblock` kept as a shim
+   round `t3m_txblock` (finding 550);
+4. the unwritten mechanism (547);
+5. `t_v34hst3mid.c`'s five guard trials, which asserted this file's own
+   incompleteness (551).
+
+**THE FLATTEN IS NOT COSMETIC.**  `tools/anchorcheck.py`'s Rule 1 reads a
+`case V34HS_*:` label straight to the function that label calls, and checks
+only anchors landing in a function that owns microstates.  Keeping the nine
+arms behind a nested `t3m_table3(&frame)` maps all nine microstates to
+`t3m_table3`; `t3m_micro47` and friends then own no microstate, every one of
+the 443 anchors hits `if fn not in owner: continue`, and Rule 1 coverage
+evaporates **without printing anything**.  Measured after the flatten rather
+than assumed:
+
+```
+$ arm_map(open('src/pump/v34/v34hshak.c').read())
+41 t41_micro_det_sync   47 t3m_micro47   55 t3m_micro55   63 t3m_micro63
+44 t44_micro_det_info   48 t3m_micro48   56 t3m_micro47   79 t3c_micro_moh_tone
+46 t46_micro_tx_phase1_ans ...           58 t3m_micro58   80 t3c_micro_moh_tone_drop
+                                          microstates mapped: 40
+```
+
+Forty of forty.  It is also what the object does: .rodata+0x3000 is one table
+of forty entries, not a table of ten and a subroutine.
+
+**Anchor repair, and the 432 hazard.**  48 anchors broke: 16 in `v34hst3core`
+and one in `v34hst3mid` matched ZERO times (their text was in the merged
+prologue, tail or table-2 arm), and 31 across `v34hst346` and `v34hst3mid`
+matched two or three times, because the two files held two copies of the
+error-recovery record fill and the merge put them in one file.
+
+The 31 were repaired MECHANICALLY and with provenance rather than by hand:
+for each, the enclosing function was read out of the **pre-merge** file, the
+one occurrence in the merged file inside a function of that name was located,
+and the anchor was deepened line by line until unique.  That is the property
+finding 432's nine silent re-pointings did not have -- they stayed unique and
+changed claim.  The 17 zero-match anchors were re-spelled by hand onto the
+surviving text, one claim at a time, each keeping its label.
+
+Then `"fn"` was put on **1,070 anchors** -- every one in all seven suites that
+lands inside a function body -- computed from each anchor's actual position,
+not inferred from its prose.  `anchorcheck.py` was shown to fire by giving one
+of them the wrong `fn` and watching `1 anchor(s) land in an arm their label
+does not name` appear (finding 134's rule).
+
+**What was deliberately NOT done**, so the next reader does not think it was
+missed: the `T3M_`/`t3m_` names stay; `src/pump/v34/v34hstxblock.c` stays as a
+third, separately tested reconstruction of table 2 (550); and the four table-2
+arms it has that the merged dispatch does not were not copied across, because
+nothing here drives them and an untested body in `src/` is worse than an
+honest `t3c_unwritten`.
+
+======================================================================
+
+### 549. A receiver count of five or fewer is the BLOCK route, not an idle return
+
+The second guard, and the two files disagreed about it in a way task #25 did
+not list.
+
+```c
+v34hshak.c       if (hs_get(obj, T3C_RECEIVER) <= 5) { t3c_txblock(obj); return; }
+v34hshak_t3mid.c if (*(short *)frame.rx <= 5) { t3m_notwritten(RXIDLE); return; }
+```
+
+```
+   629f1:  66 83 3b 05     cmpw   $0x5,(%ebx)
+   629f5:  0f 8e e8 00 00 00  jle 62ae3
+   ...
+   62ae3:  8b bc 24 c0 00 00 00  mov 0xc0(%esp),%edi
+   62aea:  0f b7 8f 96 35 00 00  movzwl 0x3596(%edi),%ecx     the txstate
+   62af1:  0f bf c1              movswl %cx,%eax              <- the once-per-block
+   62af4:  83 e8 05              sub    $0x5,%eax                transmit dispatch
+```
+
+0x62ae3 is three instructions above 0x62af1, which
+`v34hshak_t3mid.c`'s own header comment already names as "the once-per-block
+transmit dispatch".  So `jle` goes to the block route: **`v34hshak.c` is
+right and `T3M_UNWRITTEN_RXIDLE` was a stub for a route that batch chose not
+to write, not a reading of the object.**  The compare is signed and both had
+that.
+
+`RXIDLE` is now unreachable and `t_v34hst3mid.c`'s trial for it expects
+`T3M_WRITTEN` and a matching object instead (551).  The code is left defined:
+removing it renumbers the others for no gain.
+
+======================================================================
+
+### 550. Three reconstructions of table 2, and why "keep w4_hs_t2's" could not be obeyed as written
+
+Findings 373 and 350a both say: where the two `v34handshak` copies duplicate
+table 2's arms, keep `w4_hs_t2`'s.  `w4_hs_t2`'s landed as
+`src/pump/v34/v34hstxblock.c` -- `v34handshak_txblock`, all SEVEN of table 2's
+targets and its own copy of the tail, with its own suite and its own test.
+That is one more copy than either finding was counting: there were **three**.
+
+Reading the three tails against each other:
+
+| | 0x62b45 reloads +0x3596 into %cx | 0x64884 | 0x62b2f | 0x64a4f |
+|---|---|---|---|---|
+| `t3c_block_tail` | no | `t3c_unwritten` | `t3c_unwritten` | `t3c_unwritten` |
+| `t3m_tail` | **yes** | written | written | written |
+| `txblock_tail` | no, and says so | written | written | written |
+
+`txblock_tail`'s comment is explicit: *"no arm writes +0x3596, so the reload
+at 0x62b5f cannot change it and is not modelled"*.  That was true when it was
+written and is not true now -- finding 373 names arm 48's threshold path as
+the one caller that stores 5 into the object and passes 5 while 0x62b45
+re-reads, *"so the two readings differ on one path out of four and modelling
+either one as the other passes at txstate 18 and fails at txstate 5"*.  Arm 48
+is one of the nine this merge brought in.
+
+**So the most complete reading is `t3m_tail`, not `w4_hs_t2`'s**, and it is
+the one kept: `t3c_txblock` is now a four-line shim that builds a frame and
+calls `t3m_txblock`, and `t3c_block_tail` is deleted.  The instruction to keep
+`w4_hs_t2`'s was right about which of the two files task #25 was merging had
+the better table-2 ARMS; it did not survive the tail being measured against a
+caller that did not exist when it was written.
+
+**`v34hstxblock.c` is deliberately left alone.**  Collapsing it in as well
+means migrating 40 anchors from two suites onto a third source and fixing its
+tail first, which is a batch of its own; leaving it costs one duplicated
+reading that its own suite tests.  The cost of each direction, measured, so
+the next batch does not have to:
+
+```
+  collapse onto t3m_txblock/t3m_tail   11 anchors to migrate  <- done
+  collapse onto v34handshak_txblock    40 anchors, and a defect to fix first
+  collapse onto t3c_txblock/_tail      29 anchors, and loses three written arms
+```
+
+======================================================================
+
+### 551. Five trials that tested this tree's incompleteness, and what they test now
+
+`t_v34hst3mid.c`'s `guard()` compared WHICH unwritten path a guard selected,
+on the reasoning that comparing objects was pointless when our entry did
+nothing and the blob did the whole step.  Sound while nine arms of forty
+existed; false afterwards.  Five trials broke on exactly that, and all five
+were claims about the tree rather than about the object:
+
+```
+  microstate 40  -> table 3's default arm        now the block route, WRITTEN
+  microstate 81  -> table 3's default arm        now the block route, WRITTEN
+  microstate 41  -> a table 3 arm not written    now t41_micro_det_sync
+  microstate 80  -> a table 3 arm not written    now t3c_micro_moh_tone_drop
+  a receiver count of 5 -> RXIDLE                now the block route (549)
+```
+
+**The claim each trial makes had to be preserved, not the constant it
+asserted.**  Table 3's window is what trials one to four are for, and with
+both ends written the code no longer separates them -- so `guard()` now runs
+`v34hs_compare` whenever it expects `T3M_WRITTEN`, and a window off by one at
+either end moves the step to a DIFFERENT ARM, which the object comparison
+sees.  The evidence that this is not weaker: `v34hst3mid`'s two window
+mutations (`T3M_TBL3_FIRST` 42, `T3M_TBL3_COUNT` 41) and `v34hst3core`'s two
+are all still CAUGHT, and the suite's check count went 42,303 -> 42,795.
+
+CAUGHT on its own would be weak evidence here -- it means only that SOME
+check failed, and these four are the one place in the batch where the
+catching mechanism changed -- so the argument, not the result: with
+`T3M_TBL3_FIRST` at 42 the only microstate that leaves the window is 41, and
+with `T3M_TBL3_COUNT` at 41 the only one that enters it is 81.  `guards()` is
+the only trial in the file that drives 40, 41, 80 or 81; every arm trial
+dispatches at an interior microstate and is blind to both mutations.  So the
+check that fired is necessarily one of these four, and it is the object
+comparison.
+
+The general shape is worth keeping: a test that asserts a *code for
+unwritten* is asserting something about the reconstruction's progress, and
+every one of them is due to be re-read as an arm lands.  `unwritten_name`
+lists eight codes; three of them (`RXIDLE`, `TBL3_DEFAULT`, `TBL3_ARM`) are
+now unreachable, and that is the measure of what the unify closed.
+
+======================================================================
+
+### 552. The 23 offset macros, classified: sixteen exact, five dead, one base, one width mismatch
+
+Task #31, finding 356a as re-measured by 540.  `struct v34_object` names 159
+fields and the `v34handshak` arms reached 23 of them through an offset macro
+instead.  Reproduced with `tools/whichfield.py struct v34_object <offset>`
+before acting, and the 23 rows and their offsets are exactly as 540 had them.
+
+**It is not 23 uniform substitutions**, which is the thing worth recording:
+
+| class | n | what was done |
+|---|--:|---|
+| EXACT | 16 | `hs_get(obj, T41_F359C)` -> `obj->f359c`, and the macro deleted |
+| DEAD after the unify | 5 | zero uses left; the macro deleted outright |
+| BASE, not field | 1 | `T3C_RECEIVER` -> `&obj->rxq` |
+| WIDTH MISMATCH | 1 | `T3C_FAAE2` KEPT, for one byte-wide read (553) |
+
+**The sixteen exact.**  `DP_PROGRESS` `f0004`; `T41_V90RX` `v90_receiver`;
+`HS_TRACE_1` and `T41_TRACE_1` `vect_idx`; `T41_F359C` `f359c`; `T41_FA24A`
+`retrain_state`; `T44_RXBAUD` `faa96`; `T3C_FAADC` `fsk.phase`; `T3C_FAAE0`
+and `T41_FAAE0` `fsk.nbits`; `T41_FAAE2` `fsk.sr`; `T41_FABCA` `local_short`;
+`T41_FABCC` `is_short`; `T3C_FABF0`, `T41_FABF0` and `T44_FABF0`
+`moh_message`.  Three names for one field twice over, which is what the
+per-arm split cost.
+
+**The fsk trio are NOT bases, and that had to be checked rather than assumed.**
+`whichfield` reports the FIRST MEMBER of a nested aggregate, so an offset AT a
+sub-struct's base reads as a field name.  `struct v34_fsk fsk` starts at
++0xaad0, and +0xaadc, +0xaae0 and +0xaae2 are its +0x0c, +0x10 and +0x12 --
+interior, not the base -- so `fsk.phase`, `fsk.nbits` and `fsk.sr` are the
+real fields.  Every use is a bare 16-bit access and none is `MACRO + off`.
+
+`T3M_RECEIVER`, which the unify brought in as a second spelling of the same
+base, is gone with it: `t3m_frame_init` uses `T3C_RX(obj)`.  540 scoped the
+23 to the pre-unify `v34hshak.c` and so did not count it, but leaving two
+spellings of one base in one file after a batch whose whole purpose was
+removing them would have been worse than the widened scope.
+
+**The one that IS a base.**  `T3C_RECEIVER` +0x264 reads as `rxq.count`
+because `struct v34_queue rxq` is there and `count` is its first member -- but
+its two remaining uses are `T3C_RECEIVER + off` in `dp_rxget`/`dp_rxput` with
+`off` running to 0x260, far past a four-field queue: that view is
+`struct v34_receiver`, not the queue.  Both now spell the base
+(`(const char *)&obj->rxq + off`) and neither pretends to be the count.
+`T3C_RX(obj)` is `((struct v34_receiver *)&(obj)->rxq)` for the same reason.
+The object's own code generation says base too: 0x62915 stores `obj+0x264`
+into a stack slot and every later use indexes off it, while 0x629f1 reads
+`(%ebx)` as a short.
+
+**The five that were dead.**  `T3C_PROGRESS`, `T3C_LVL_LIMIT`,
+`T3C_TXCURSOR`, `T3C_TXLIMIT` and `T3C_FAA96` had no uses left: every one of
+them was reached through `t3c_block_tail`/`t3c_txblock`, which finding 550
+deleted an hour earlier.  Deleting a dead macro is the same end state as
+renaming it and is recorded here so the count reconciles -- 23 macros gone,
+17 substitutions made.  `T3M_TXCURSOR` inherited the one live use of +0x221c
+in the merged prologue and is now `obj->txq.count`, which whichfield confirms
+and `v34hstx1.h`'s `while (txq.count < f2aa0)` already said.
+
+**The 79 that were left alone** land in an `unmapped_`/`pad_` span, where an
+offset is the honest spelling.  Extending the struct by measurement is a
+different job (v90rest.md's item 3).
+
+**Anchors.**  46 anchors named one of the 23.  Every one had the SAME
+substitution applied to its `find` and its `replace`, mechanically, so the
+claim each makes is untouched -- and then the 16 that stopped being unique
+were deepened with provenance, and three that would have become no-ops or
+would not compile were re-spelled by hand:
+
+- `the V.90 receiver is read at +0x248, not through obj+4` mutated the
+  macro's own constant, which nothing would read after the rename; it now
+  mutates the field access into `*(const int *)((const char *)obj + 0x248)`.
+- `+0xabf0 read sixteen bits wide` (twice, two suites) named the deleted
+  macro in its `replace` and did not compile; the 16-bit reading is now
+  `*(const short *)&obj->moh_message`.
+
+**A mutation that survives a rename by becoming a no-op is the failure mode
+here**, and it is invisible: it reads CAUGHT-or-not exactly as before and
+nothing in `make phase` looks at whether `find` and `replace` still differ in
+substance.  The scan that catches it is two lines -- every anchor whose
+`find` equals its `replace`, and every anchor still naming a deleted macro --
+and both were run.
+
+All seven suites' splits are identical to the pre-unify baseline.
+
+======================================================================
+
+### 553. `+0xaae2` is `fsk.sr` and one of its seven readers must keep the offset
+
+The one classification in 552 that no differential test could have made.
+
+`T3C_FAAE2` is +0xaae2, which is `struct v34_fsk`'s `sr` -- a `short`.  Six of
+its seven uses read or write it sixteen bits wide and are now `obj->fsk.sr`.
+The seventh, microstate 62's entry guard at 0x65c8a, reads it a BYTE wide:
+
+```c
+	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
+```
+
+`obj->fsk.sr & 1` is identical in behaviour on a little-endian machine for
+every value the field can hold, so **every test in this tree passes either
+way and always will**.  What differs is the instruction: `movzbl` against
+`movzwl`.  CLAUDE.md's rule for reading a codegen difference puts a load's
+width in the FORCED column -- the compiler had no choice about it -- so
+widening this one would be a real regression that the differential tier
+cannot see, which is exactly the class of defect finding 353 was.
+
+So the offset stays for that read and the macro stays defined with a comment
+saying why.  The file already knew: `t46_reset_core`'s note says *"`T3C_FAAE2`
+is commented as a byte because microstate 62 tests bit 0 of it; every one of
+this arm's five reads of +0xaae2 is sixteen bits wide"* -- one macro, two
+widths, and the rename is what forced the two apart.
+
+`tools/compare.py --ratchet` is what would have confirmed the byte read is
+still a byte read.  It could not be run here; see 554.
+
+======================================================================
+
+### 554. The codegen ratchet cannot be run on this branch, and that is a gap and not a pass
+
+`tools/compare.py --ratchet` was part of this batch's acceptance criterion --
+run it before the rename and after, because a rename can turn a `movzbl` into
+a `movzwl` with every differential test still green (553).
+
+**It does not exist in `v90rest`'s history.**  The codegen tier --
+`tools/compare.py`, `tools/toolchain/`, `storeorder.py`, `extcheck.py` and the
+GCC 3.4.2 container -- landed on `master` (findings 346, 350, 352-359) and
+reached this line only through the `tmp-merge-master` worktree, which is not
+this branch's ancestor.  `git log` at c6e6e5a has no `tools/compare.py` in any
+commit.
+
+So the width rule in 552 and 553 was followed BY HAND: where an access width
+differs from the field width, the offset spelling was kept and the field name
+not used.  That is a weaker guarantee than the ratchet and is recorded as
+such rather than reported as a passing check.
+
+**What to do when the branches meet.**  Run `python3 tools/compare.py` on the
+merged tree and compare `v34handshak`'s per-symbol result against master's
+recorded number *before* attributing any change to this work: the unify moved
+1,645 lines into the symbol and the rename changed 41 accesses in it, so a
+movement there is expected and only its DIRECTION is informative.  Pulling
+`compare.py` back to this branch on its own would not help -- it needs the
+container and the whole `tools/toolchain/build.sh` flag set, which is
+finding 352's evidence, not a file to copy.

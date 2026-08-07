@@ -174,23 +174,24 @@ void hs_put(struct v34_object *obj, unsigned off, short v);
 void hs_setstate(struct v34_object *obj, unsigned off, short next);
 
 /*
- * `v34handshak`, for the dispatch cases that have been written.
+ * Which of `v34handshak`'s unwritten paths ran.
  *
- * NOT called `v34handshak`.  The blob's function is 61,541 bytes over forty
- * microstates, twenty txstates and an rxstate chain, and it is being taken a
- * few arms at a time; a definition of that name would tell `coverage.py` --
- * which credits `translated` by the blob symbol's whole size -- that all of
- * it exists, and would make four batches in flight collide on one symbol.
- * When the arms are all in, the assembled function takes the name and this
- * one goes away.
+ * The blob's function is 61,541 bytes over forty microstates, twenty
+ * txstates and an rxstate chain, and it is being taken a few arms at a time.
+ * Table 3's forty arms are all in; most of table 1 and four of table 2 are
+ * not, and a path with no reconstruction has to do something DEFINITE,
+ * because "nothing" is the one answer a differential test cannot tell from a
+ * wrong answer.
  *
- * Every path not yet written records itself and returns instead of doing
- * something plausible; `v34handshak_t3mid_unwritten` returns the first such
- * code since the last reset, or `T3M_WRITTEN`.  A test that reaches one is a
- * test that proved nothing, so `t_v34hst3mid.c` checks it after every step.
- * The codes are numbers rather than strings because the strings firewall
- * rejects any literal in src/ that is not the object's own (findings 180 and
- * 201); `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak_t3mid.c.
+ * So every such path records a code and then aborts -- unless the test has
+ * called `v34handshak_unwritten_reset`, which says "I am going to read the
+ * code afterwards" and turns the abort into a return.  `t_v34hst3mid.c` is
+ * that test and checks the code after every step.  The codes are numbers
+ * rather than strings because the strings firewall rejects any literal in
+ * src/ that is not the object's own (findings 180 and 201);
+ * `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak.c, and finding 547
+ * for why one mechanism had to serve both of the reconstructions that were
+ * merged into it.
  */
 #define T3M_WRITTEN			0
 #define T3M_UNWRITTEN_TBL1		1
@@ -200,10 +201,10 @@ void hs_setstate(struct v34_object *obj, unsigned off, short next);
 #define T3M_UNWRITTEN_TBL3_DEFAULT	5
 #define T3M_UNWRITTEN_TBL3_ARM		6
 #define T3M_UNWRITTEN_TBL2_ARM		7
+#define T3M_UNWRITTEN_OTHER		8
 
-void v34handshak_t3mid(void *obj);
-int v34handshak_t3mid_unwritten(void);
-void v34handshak_t3mid_unwritten_reset(void);
+int v34handshak_unwritten(void);
+void v34handshak_unwritten_reset(void);
 
 /*
  * Bring the handshake up.  `mode` selects one of five entries, and the names
