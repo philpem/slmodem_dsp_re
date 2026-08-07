@@ -2821,6 +2821,423 @@ case_tx_dpsk(void)
 	dp_reset();
 }
 
+/* --- 21 TRNSEG4 ----------------------------------------------------------- */
+
+/*
+ * 21's companions.  The eight that are new here are the segment length, the
+ * four fields the echo-adapt start clears, the halfword the completion sets
+ * to one, and the two the RECEIVE side of the rate configuration is read out
+ * of -- which are NOT `TX1_RATECFG`'s baud at +0xaa84 that the arm's third
+ * compare uses.  The arm reads both and they are seeded apart on purpose.
+ */
+#define TX1_FA244	0xa244		/* int: the segment's length       */
+#define TX1_F354C	0x354c		/* int: adaptecho's call counter   */
+#define TX1_F3550	0x3550		/* the LMS step                    */
+#define TX1_F3552	0x3552
+#define TX1_F3560	0x3560		/* int: the accumulated energy     */
+#define TX1_FAA80	0xaa80		/* the completion writes one here  */
+#define TX1_RXBAUD	0xaa96		/* setupreceiver's rate switch     */
+#define TX1_RXCARR	0xaaa8		/* setupreceiver's carrier switch  */
+#define TX1_INFOREC	0xaa0c		/* the record the completion blanks*/
+#define TX1_RXF1AC	0x0410		/* receiver +0x1ac, the rate switch */
+#define TX1_RXF1AE	0x0412		/* receiver +0x1ae                 */
+#define TX1_RXF1B0	0x0414		/* receiver +0x1b0                 */
+#define TX1_RXF1BE	0x0422		/* receiver +0x1be                 */
+
+/*
+ * THE FOUR COMPARES ARE HELD APART BY CONSTRUCTION, and that is what makes a
+ * mutation of one of them fail rather than fall through to the next one's
+ * answer.  With `n` the value of `f25c0` AFTER the arm's increment:
+ *
+ *     TRN_SPAN     0x100    so the middle point is 0x80 and the end 0x100
+ *     TRN_BAUD     3200     so the period point is 4800
+ *     TRN_N        0x10     which is none of the three
+ *
+ * The one run that does NOT hold them apart is the middle-point run, and it
+ * is deliberate: `VPcmV34ReportMiddleOfEchoAdapt` only prints, so at debug
+ * level 0 taking that arm and falling through it write the same object.  That
+ * run therefore makes the middle point and the PERIOD point the same number,
+ * so a reconstruction that dropped the middle test raises 0x400 in `f25c2`
+ * and fails.  Nothing else here can see the difference.
+ */
+#define TRN_SPAN	0x0100
+#define TRN_BAUD	3200
+#define TRN_N		0x0010
+
+enum {
+	T4_F359C = 0, T4_F25CC, T4_F25C0, T4_F25C2, T4_COUNT, T4_FAA86,
+	T4_A244, T4_BAUD, T4_RTD, T4_V90, T4_K56,
+	T4_F354C, T4_F3550, T4_F3552, T4_F3560,
+	T4_F25C6, T4_F25D6, T4_VECTIDX, T4_FAA80,
+	T4_RXBAUD, T4_RXCARR,
+	T4_F1AC, T4_F1AE, T4_F1B0, T4_F1BE, T4_N_POKE
+};
+
+/*
+ * LITERAL INDICES AND NO COMPUTED ONES, which is finding 420's rule: a poke
+ * array addressed as `NP(a) - k` moves every entry when one is inserted, and
+ * three families of runs once tested nothing while the test said PASS.
+ */
+static struct tx1_poke trn[T4_N_POKE] = {
+	P16(TX1_F359C, 0x64),			/* generator A            */
+	P32(TX1_F25CC, TX1_SRSEED),
+	P16(TX1_F25C0, TRN_N - 1),		/* the arm increments it  */
+	P16(TX1_F25C2, (short)0x8100),		/* bit 15 set, 8 set, 2 and 10 clear */
+	P16(TX1_COUNT, TRN_N + 1),		/* not the start point    */
+	P16(TX1_FAA86, TRN_N + 1),		/* not reached            */
+	P32(TX1_FA244, TRN_SPAN),
+	P16(TX1_RATECFG, TRN_BAUD),
+	P16(TX1_RTD, 8),
+	P32(TX1_V90RX, 0),
+	P32(TX1_K56RX, 0),
+
+	/* What the arm writes, all seeded away from what it stores. */
+	P32(TX1_F354C, 0x11223344),
+	P16(TX1_F3550, 0x1234),
+	P16(TX1_F3552, 0x5678),
+	P32(TX1_F3560, 0x0badf00d),
+	P16(TX1_F25C6, 0x4321),
+	P16(TX1_F25D6, 0x1111),
+	P16(TX1_VECTIDX, 0x0033),
+	P16(TX1_FAA80, 0x2222),
+
+	/*
+	 * A rate and a carrier `setupreceiver` recognises, so both switches
+	 * take a body rather than their (real) default -- and the rate is NOT
+	 * `TX1_RATECFG`'s 3200, because the arm reads both fields and a
+	 * reconstruction that took the period point off the wrong one is
+	 * invisible while they agree.
+	 */
+	P16(TX1_RXBAUD, 2400),
+	P16(TX1_RXCARR, 1800),
+
+	/*
+	 * THE FOUR TIMING CONSTANTS THE RATE SWITCH WRITES, SEEDED AWAY FROM
+	 * 3200's.  The bring-up has already run `setupreceiver` once, so
+	 * against a cold object all four already hold what the switch would
+	 * store and the whole rate arm is invisible -- the first version of
+	 * this case measured four bytes of difference between a recognised
+	 * rate and an unrecognised one, all four of them the carrier POINTER,
+	 * which is finding 345 exactly.
+	 */
+	P16(TX1_RXF1AC, 0x0111), P16(TX1_RXF1AE, 0x0222),
+	P16(TX1_RXF1B0, 0x0333), P16(TX1_RXF1BE, 0x0444)
+};
+
+static void
+trn_reset(void)
+{
+	trn[T4_F359C].val = 0x64;
+	trn[T4_F25CC].val = TX1_SRSEED;
+	trn[T4_F25C0].val = TRN_N - 1;
+	trn[T4_F25C2].val = (short)0x8100;
+	trn[T4_COUNT].val = TRN_N + 1;
+	trn[T4_FAA86].val = TRN_N + 1;
+	trn[T4_A244].val = TRN_SPAN;
+	trn[T4_BAUD].val = TRN_BAUD;
+	trn[T4_RTD].val = 8;
+	trn[T4_V90].val = 0;
+	trn[T4_K56].val = 0;
+	trn[T4_RXBAUD].val = 2400;
+	trn[T4_RXCARR].val = 1800;
+}
+
+/*
+ * THE V.90 Ja TAIL NEEDS A DEMODULATOR AND THE FIXTURE HAS NONE.
+ *
+ * `indicateJaTransmission` with `v90_receiver` above one calls
+ * `VPcmFloModem::enterPhase3`, which ends in `modem.demodulator->enterPhase3()`
+ * -- and the session's demodulator pointer is one the fixture never aims, so
+ * the run faults inside `V90Demodulator::enterPhase3` before any comparison
+ * happens.  The stub below is the smallest thing that makes the call safe
+ * WITHOUT inventing behaviour: `V90Demodulator::enterPhase3` returns at once
+ * when `inPhase3` is EXACTLY one (VPcmFloModem is the only caller and the
+ * object's test is `cmpl $0x1`), so a forty-byte block with one there is a
+ * demodulator already in phase 3 and the call writes nothing.
+ *
+ * ONE STUB FOR BOTH SIDES, and that is safe here for the reason `sess_stub`
+ * is: nothing writes to it.  What the call DOES write -- twenty-one constants
+ * and the packer's output -- lands in the session, which is inside the arena
+ * and is compared.
+ *
+ * The offsets are VPcmFloModem.h's and V90Demodulator.h's: the V90Modem is
+ * embedded at +0x1758 and its `demodulator` at +0x04.
+ */
+#define SESS_DEMOD	0x175c		/* VPcmFloModem + 0x1758 + 4       */
+#define DEMOD_INPHASE3	0x0034		/* V90Demodulator::inPhase3        */
+
+static unsigned char demod_stub[0x40];
+
+static void
+aim_demod(void)
+{
+	int side;
+
+	*(int *)(demod_stub + DEMOD_INPHASE3) = 1;
+	for (side = 0; side < 2; side++) {
+		char *o = (char *)v34hs_object(side);
+		char *s;
+		const void *d = demod_stub;
+
+		memcpy(&s, o + TX1_SESSPTR, sizeof(s));
+		memcpy(s + SESS_DEMOD, &d, sizeof(d));
+	}
+}
+
+/*
+ * THE +0xaa0c RECORD, SEEDED.  `v34handshakinit` blanks the same twelve
+ * fields on its Modem-on-Hold path, so against a cold object the arm's twelve
+ * stores would write the values already there and every one of them would be
+ * invisible -- finding 345's failure exactly.  Fourteen halfwords cover the
+ * twelve stores, two of which are 32-bit.
+ */
+static void
+seed_inforec(void)
+{
+	unsigned k;
+
+	for (k = 0x14; k < 0x30; k += 2)
+		v34hs_poke_short(TX1_INFOREC + k, (short)(0x4100 + k));
+	aim_demod();
+}
+
+static void
+run_trn(const char *what, long tag)
+{
+	run_case(V34HS_TRNSEG4, v34tx1_trnseg4, V34TX1_LOOP, what, tag,
+		 trn, NP(trn));
+}
+
+/*
+ * 21's entry, read out of the blob's own `.rodata`.  Here the claim is
+ * EXCLUSIVITY and not sharing -- finding 354a says a shared entry is never
+ * evidence of one behaviour, and the same argument run backwards says an
+ * entry believed to be one txstate's alone has to be measured too.  All
+ * eighty-two entries are swept.
+ */
+static void
+case_trnseg4_entry(void)
+{
+	const char *const *t1 = (const char *const *)
+				(rodata_2c00 + (0x2da0 - 0x2c00));
+	const char *base = (const char *)ref_v34handshak;
+	int i, shared = 0;
+
+	diff_eq_int("table 1: 21's entry is v34handshak + 0x1a49",
+		    (int)(t1[21 - 5] - base), 0x64339 - 0x628f0, 2190);
+	for (i = 0; i < 82; i++)
+		if (i != 21 - 5 && t1[i] == t1[21 - 5])
+			shared++;
+	diff_eq_int("table 1: 21's entry is reached by no other txstate",
+		    shared, 0, 2191);
+}
+
+static void
+case_trnseg4(void)
+{
+	fixup = seed_inforec;
+
+	/*
+	 * The head is 71's and 86's, so both scrambler generators are driven:
+	 * the object carries the loop twice and a reconstruction using one tap
+	 * for both passes on whichever the fill happens to select.
+	 */
+	trn_reset();
+	run_trn("21 TRNSEG4, generator A, counting", 2100);
+	trn_reset();
+	trn[T4_F359C].val = 0x65;
+	run_trn("21 TRNSEG4, generator B, counting", 2101);
+
+	/*
+	 * THE ECHO-ADAPT START IS NOT AN EXIT.  0x67613 clears four fields and
+	 * bit 2 of `f25c2` and then jumps BACK into the compare chain at
+	 * 0x643f8, so this run must still reach the same rejoin the two above
+	 * do.  `f25c2` carries bit 2 here and not in any other run.
+	 */
+	trn_reset();
+	trn[T4_COUNT].val = TRN_N;
+	trn[T4_F25C2].val = (short)0x8104;
+	run_trn("21 TRNSEG4, the echo-adapt start point", 2102);
+
+	/*
+	 * AND THE SAME START POINT WITH SOMETHING LEFT TO DO BELOW IT.  The
+	 * run above cannot tell an arm that rejoins the chain from one that
+	 * leaves it, because nothing further down fires; this one clears bit
+	 * 2 at 0x67613 and then raises bit 8 at 0x64429, and an arm that left
+	 * at 0x67613 stops short of the second.
+	 */
+	trn_reset();
+	trn[T4_COUNT].val = TRN_N;
+	trn[T4_F25C2].val = (short)0x8004;
+	trn[T4_FAA86].val = TRN_N;
+	run_trn("21 TRNSEG4, the start point, then the period flag", 2107);
+
+	/*
+	 * The period flag, both ways.  It is guarded on bit 8 being CLEAR as
+	 * well as on the count, so the runs above -- which hold bit 8 set --
+	 * never reach it and a mutation of either half is visible in exactly
+	 * one of these two.
+	 */
+	trn_reset();
+	trn[T4_F25C2].val = (short)0x8004;
+	trn[T4_FAA86].val = TRN_N;
+	run_trn("21 TRNSEG4, the period is reached", 2103);
+	trn_reset();
+	trn[T4_F25C2].val = (short)0x8004;
+	trn[T4_FAA86].val = TRN_N + 1;
+	run_trn("21 TRNSEG4, the period is one short", 2104);
+
+	/*
+	 * THE MIDDLE POINT, and it is the one run where the four compares are
+	 * deliberately NOT held apart.  300 / 2 is 150 and 100 + 100/2 is 150,
+	 * so if the middle test were dropped the period test below it would
+	 * fire and raise 0x400; taking the middle arm writes nothing at all.
+	 */
+	trn_reset();
+	trn[T4_A244].val = 300;
+	trn[T4_BAUD].val = 100;
+	trn[T4_F25C0].val = 149;
+	run_trn("21 TRNSEG4, the echo-adapt middle point", 2105);
+
+	/*
+	 * The period point, which clears bit 15 as well as raising bit 10 --
+	 * `and $0x7fff ; or $0x400`, two halves of one store and `f25c2` is
+	 * seeded with bit 15 set so both are visible.
+	 */
+	trn_reset();
+	trn[T4_A244].val = 0x1000;
+	trn[T4_F25C0].val = TRN_BAUD + TRN_BAUD / 2 - 1;
+	run_trn("21 TRNSEG4, the period point ends the segment", 2106);
+
+	/*
+	 * PAST THE END WITHOUT ENDING.  The segment's test is `!=` and not
+	 * `>=`: with +0xa244 at 0x20 and the count at 0x40 the arm counts on,
+	 * where an arm testing `<` would complete.
+	 */
+	trn_reset();
+	trn[T4_A244].val = 0x20;
+	trn[T4_F25C0].val = 0x3f;
+	run_trn("21 TRNSEG4, the count is past +0xa244 and does not end", 2108);
+
+	/*
+	 * +0xa244 IS AN INT.  Its low halfword is 0x100 and the count reaches
+	 * 0x100, so an arm reading it as a halfword ends the segment here and
+	 * one reading it as an int counts on.  The middle point of the int is
+	 * 0x08000080, which no `short` can reach.
+	 */
+	trn_reset();
+	trn[T4_A244].val = 0x10000100;
+	trn[T4_F25C0].val = 0xff;
+	run_trn("21 TRNSEG4, +0xa244's high half is part of the compare", 2109);
+
+	/*
+	 * ---------------------------------------------------------------
+	 * THE COMPLETION.  `f25c0` reaches +0xa244 exactly; the middle point
+	 * (0x80) and the period point (4800) are both away from it, so a
+	 * mutation of either of the two earlier compares takes a different
+	 * exit and fails here rather than agreeing by accident.
+	 *
+	 * `rtd` chooses the counter three ways and the two PCM receivers
+	 * choose the tail three more, and THE TWO TESTS ARE NOT THE SAME
+	 * TEST: the counter takes `rtd` whole when either receiver is
+	 * non-zero and the tail needs one of them ABOVE ONE.  The two runs at
+	 * exactly one are what separate them.
+	 */
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RTD].val = 2;
+	run_trn("21 TRNSEG4, the segment ends, rtd at the boundary", 2110);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RTD].val = -1;
+	run_trn("21 TRNSEG4, the segment ends, rtd negative", 2111);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RTD].val = 9;
+	run_trn("21 TRNSEG4, the segment ends, the counter is halved", 2112);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_V90].val = 1;
+	run_trn("21 TRNSEG4, v90 at one: whole counter, neither tail", 2113);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_K56].val = 1;
+	run_trn("21 TRNSEG4, k56 at one: whole counter, neither tail", 2114);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_V90].val = 2;
+	run_trn("21 TRNSEG4, the V.90 Ja tail", 2115);
+
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_K56].val = 2;
+	run_trn("21 TRNSEG4, the K56flex Ja tail", 2116);
+
+	/*
+	 * BOTH RECEIVERS ABOVE ONE, which is what says the two tests are an
+	 * `else if` and in this order rather than two independent ones.
+	 */
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_V90].val = 2;
+	trn[T4_K56].val = 2;
+	run_trn("21 TRNSEG4, both receivers: the V.90 tail wins", 2117);
+
+	/*
+	 * A NEGATIVE COUNT, which is where two sign questions meet.  `f25c0`
+	 * is `movswl`-sign-extended before the three compares (0x64aeb) and
+	 * compared SIGNED against +0xaa86 (0x64423), so at -2 against a
+	 * +0xaa86 of one the period flag stays down and the segment ends;
+	 * read either of them unsigned and the run takes a different exit.
+	 * -2 is chosen because +0xa244 >> 1 is then -1 and not -2, which keeps
+	 * the middle point out of the way.
+	 */
+	trn_reset();
+	trn[T4_A244].val = -2;
+	trn[T4_F25C0].val = -3;
+	trn[T4_F25C2].val = (short)0x8004;
+	trn[T4_FAA86].val = 1;
+	run_trn("21 TRNSEG4, the segment ends at a negative count", 2120);
+
+	/* rtd at three, one past the boundary the arm tests. */
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RTD].val = 3;
+	run_trn("21 TRNSEG4, the segment ends, rtd one past the boundary", 2121);
+
+	/*
+	 * The completion again with a rate and carrier `setupreceiver` does
+	 * NOT recognise, so both of its switches take their default and the
+	 * six timing constants and the carrier table are left alone.  That is
+	 * a real arm of the inlined function and not an oversight.
+	 */
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RXBAUD].val = 2599;
+	trn[T4_RXCARR].val = 1601;
+	run_trn("21 TRNSEG4, the segment ends, no rate and no carrier", 2118);
+
+	/*
+	 * And once at a DIFFERENT recognised rate and carrier, so the two
+	 * switches are shown to depend on what they read rather than to write
+	 * one set of constants whatever it is.  2743 is the rate finding D35
+	 * records as reachable only from outside `setfinalrate`.
+	 */
+	trn_reset();
+	trn[T4_F25C0].val = TRN_SPAN - 1;
+	trn[T4_RXBAUD].val = 2743;
+	trn[T4_RXCARR].val = 1959;
+	run_trn("21 TRNSEG4, the segment ends, a second rate", 2119);
+
+	trn_reset();
+	fixup = NULL;
+}
+
 int
 main(void)
 {
@@ -2859,6 +3276,9 @@ main(void)
 
 	case_xmitmp_entry();
 	case_xmitmp();
+
+	case_trnseg4_entry();
+	case_trnseg4();
 
 	case_tx_dpsk_entry();
 	case_dpsk_cold();

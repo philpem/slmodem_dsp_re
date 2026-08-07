@@ -158,6 +158,17 @@ int v34tx1_exmit(void *obj);
 /* 70 DATAXMIT     0x63ca8 */
 int v34tx1_dataxmit(void *obj);
 /*
+ * 21 TRNSEG4      0x64339, with the compare chain at 0x64ad9, the echo-adapt
+ *                 clear-down at 0x67613 and the completion at 0x64b24.
+ *
+ * One scrambled `vect4` point per pass -- 71 and 86's head -- and then
+ * `f25c0` against FOUR different fields, of which the first is not an exit
+ * and the other three are.  The segment's end is `setupreceiver` INLINED, a
+ * twelve-field blank of the +0xaa0c record, and one of three tails chosen by
+ * the two PCM receivers.
+ */
+int v34tx1_trnseg4(void *obj);
+/*
  * 67 XMITMP       0x6399b, with the sixteen-point mapper at 0x63b62, the
  * four-point one at 0x64929 and the sequence's end at 0x645d0.
  *
