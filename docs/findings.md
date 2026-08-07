@@ -28290,3 +28290,67 @@ the sequence is: measure correctly in a comment, record incorrectly in a
 finding, distil the finding into three documents, correct the finding, and
 leave the three documents saying the original wrong thing. Every step but the
 first was mine.
+
+======================================================================
+### 559. The scaffold spike: let the blob supply unwritten callees, and why 24 does not scale to 1,444
+
+`symmap-scaffold-spike` (`ea3b26d`, 2026-08-04) is deleted. It is recorded
+here in full because the idea is good and only the safety argument fails, and
+`docs/method/recording.md` says an attempt that failed is worth as much as one
+that succeeded.
+
+#### What it did
+
+Tier 1 links the blob beside the reconstruction, so one side must be renamed;
+`tools/symmap.py` renames every blob symbol to `ref_*`. The spike renamed
+**only the symbols we define**, leaving the rest un-renamed so that a function
+we have written could call, for real, a callee we have not:
+
+```
+-$(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
+-	$(PYTHON) tools/symmap.py $(BLOB) -o $@
++$(SYMMAP): tools/symmap.py $(BLOB) $(OBJ) | $(BUILD)
++	$(PYTHON) tools/symmap.py $(BLOB) --ours $(BUILD)/src -o $@
+```
+
+plus 26 lines collecting our defined symbols from `$(BUILD)/src/**/*.o`,
+unioning them with every `ref_X` any test names, and renaming only that set.
+
+**The problem it attacks is real and is getting worse, not better.** 417 of
+1,861 `.text` symbols are translated, 21.7%, so almost any new function has
+unwritten callees; `docs/coverage.md` says of the largest remaining symbol, at
+61,541 bytes, *"`v34handshak` — an arm nobody has written calls `abort`"*. A
+function that could be driven through real callees instead of a poked fixture
+would be tested on a path the object actually takes.
+
+#### Why it cannot go in as written
+
+`symmap.py`'s own header is the counter-argument, and it is emphatic. The
+blob's **24 imports** are split by hand into stateless and stateful, because
+
+> `modem_get_bits` hands out bits from one stream; if both sides draw from it,
+> each consumes the bits the other should have seen and every comparison
+> downstream is garbage — while still looking like a plausible waveform. This
+> is the single easiest way to get a confidently wrong test result.
+
+That is `gates.md`'s pattern named in a tool header before this session's
+vocabulary for it existed: **a result indistinguishable from success.** The
+tool takes it seriously enough to `sys.exit` on an unclassified import.
+
+The spike un-renames **1,444 symbols** — 1,861 less the 417 we define — and
+classifies none of them. It scales a question answered by hand for 24, behind
+a refuse-to-run gate, to a set sixty times larger where nobody has asked it,
+and its failure mode is silent by the same header's argument.
+
+It also no longer applies: 294 commits and three days behind, conflicting in
+both files it touches.
+
+#### The version that would be consistent
+
+Do per callee what `SHARED_IMPORTS` already does per import: **classify one
+specific blob-internal function as stateless, on evidence, rename everything
+else, and let that one through.** Same discipline, same gate, and it inherits
+the refusal instead of bypassing it. That is a real answer to the `abort` arm
+rather than a general loosening, and the cost is one classification per callee
+actually needed — which is the right cost, because it is one decision per
+thing being trusted.
