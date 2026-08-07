@@ -27243,3 +27243,61 @@ untested for months.
 Master's callprog and dialer work closed twenty-four of the sites v90rest
 could not reach, and v90rest's handshake work is what the other 432 measure
 against. Neither number was available on either branch.
+
+======================================================================
+### 545. The mutation snapshot, and the two bugs its own consistency check found in it
+
+`mutsnap.py` records what every suite last said, keyed by a hash of everything
+that can reach its test binary, so **staleness is detectable without
+re-measuring** -- which is the only way to remove the baseline pass that every
+batch was paying twice for. All 48 suites are now recorded: **2,874 mutations,
+12 minutes wall-clock at `--jobs 8`**, against roughly an hour serially.
+
+#### What it says about the tree, which nothing said before
+
+```
+  37 mutations NOT CAUGHT across 10 of the 48 suites; 1 unusable
+     v34hstx1 11   v34k56 10   v34datapump 4   v34hsmst44 3
+     v90equ 2 (+1 unusable)    v90demod 2   v90sessionflag 2
+     dilpack 1   v90p3dreset 1   v90rto 1
+```
+
+`v34k56` is the one to look at: 15 caught against 10 not, so 40% of what that
+suite claims to check is unchecked. Nobody could have known -- the number
+existed only in the scrollback of whichever session last ran it.
+
+#### The check that catches a hand-edited record caught the tool instead, twice
+
+The entry records per-mutation verdicts AND the summary line, from different
+code paths, and cross-checks them. Both times it fired, the tool was wrong:
+
+  1. **`%-52s` pads but does not truncate.** The label regexes capped at 52
+     characters, so all 21 of `v34hshak`'s longer labels matched nothing: 188
+     verdicts recorded under a summary saying 209.
+  2. **An unusable mutation DOES reach a verdict line.** The comparison added
+     `unusable` to `len(verdicts)` on the assumption those entries were
+     missing. It agreed with itself on 47 suites and flagged `v90equ` -- the
+     only suite in the tree with an unusable mutation. **Wrong by exactly the
+     number of cases that could distinguish it**, which is the shape of every
+     bug in this area.
+
+A tool that measures the same thing two ways and compares is worth the twenty
+lines. Neither bug was reachable any other way.
+
+#### Wiring it in cost a full re-measurement, and that is the point
+
+`--check` is in `refs`, so in `make test`, so in `make phase`: hashing only,
+**0.03 s** once the shared closure is hashed once rather than 48 times. It
+fails on MISSING, ORPHANED and INCONSISTENT and merely REPORTS staleness --
+see 542 for why a gate that is red by default is worse than none.
+
+Adding that one line to the Makefile **invalidated all 48 entries**, because
+the Makefile is in the closure. The honest response is to re-run, not to
+re-key, and it was re-run -- twelve more minutes. Re-keying "because the edit
+obviously cannot change a verdict" is precisely the reasoning that produces a
+false baseline with a hash vouching for it, and the coarse key is doing its
+job when it refuses to let me make that argument.
+
+`tools/mutate.py` is in the closure too: it is the runner, and what counts as
+caught or unusable is its code. Nothing else under `tools/` can move a
+verdict, so nothing else is there.

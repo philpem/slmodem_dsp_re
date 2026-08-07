@@ -344,6 +344,16 @@ debugcov:
 refs:
 	@$(PYTHON) tools/refcheck.py
 	@$(PYTHON) tools/anchorcheck.py
+#
+# The mutation snapshot: hashing only, 0.03 s, runs nothing.  It fails on
+# MISSING, ORPHANED and INCONSISTENT -- always defects -- and REPORTS
+# staleness without failing.  That is deliberate: this target is on the
+# path everybody takes, almost any src/ edit makes every entry stale, and a
+# gate that is red by default gets ignored while the cheapest way to clear
+# it (`--update`) would manufacture a baseline nobody examined.  `--strict`
+# adds staleness and is what a MERGE passes, where refreshing is honest.
+#
+	@$(PYTHON) tools/mutsnap.py --check
 
 # Everything a phase boundary is supposed to check, in one target.
 #

@@ -75,7 +75,14 @@ import sys
 
 SNAP = os.path.join("test", "mutations", "snapshot.json")
 SUITES = os.path.join("test", "mutations", "suites.json")
-CLOSURE = ("Makefile", "src", "include", os.path.join("test", "harness"))
+#
+# `tools/mutate.py` is IN the closure: it is the runner, and what counts as
+# caught, unusable or equivalent is its code.  Change it and these verdicts
+# describe a classification that no longer exists.  Nothing else under
+# `tools/` can move a verdict, so nothing else is here.
+#
+CLOSURE = ("Makefile", "src", "include", os.path.join("test", "harness"),
+           os.path.join("tools", "mutate.py"))
 
 HEADER = [
     "What every mutation suite last said, and the key saying what it",
@@ -100,12 +107,31 @@ def digest_path(h, path):
             h.update(open(p, "rb").read())
 
 
+#
+# THE SHARED CLOSURE IS HASHED ONCE, NOT ONCE PER SUITE.
+#
+# `--check` runs inside `make test` inside `make phase`, so it is on the path
+# everybody takes constantly and has to be cheap.  Hashing Makefile + src/ +
+# include/ + test/harness/ is ~8 MB; doing it for each of 48 suites is 384 MB
+# of pointless work for a value that is identical every time.
+#
+_CLOSURE_CACHE = []
+
+
+def closure_digest():
+    if not _CLOSURE_CACHE:
+        h = hashlib.sha256()
+        for p in CLOSURE:
+            if os.path.exists(p):
+                digest_path(h, p)
+        _CLOSURE_CACHE.append(h.hexdigest())
+    return _CLOSURE_CACHE[0]
+
+
 def suite_key(name, entry):
     """The one string that says which tree these verdicts describe."""
     h = hashlib.sha256()
-    for p in CLOSURE:
-        if os.path.exists(p):
-            digest_path(h, p)
+    h.update(closure_digest().encode())
     # the suite's own driver, e.g. build/test/t_v34hshak -> test/unit/t_v34hshak.c
     driver = os.path.join("test", "unit", os.path.basename(entry[1]) + ".c")
     if os.path.exists(driver):
@@ -283,12 +309,16 @@ def cmd_check(args):
                   sum(1 for x in v.values() if x == "unusable"),
                   sum(1 for x in v.values() if x == "equivalent"))
         #
-        # An unusable mutation never reaches a verdict line, so the recorded
-        # verdict map is short by exactly that many.  Compare on what is
-        # comparable rather than inventing a tolerance.
+        # An unusable mutation DOES reach a verdict line -- `mutate.py` prints
+        # `????` for it and the parser records it as `unusable` -- so the map
+        # is complete and `len(v)` is the total.  A first version added
+        # `unusable` on top, on the assumption that those entries were
+        # missing, and flagged the one suite in the tree that HAS an unusable
+        # mutation (`v90equ`, 1) while agreeing with itself everywhere else.
+        # Wrong by exactly the number of cases that could distinguish it,
+        # which is the shape of every bug this file exists to catch.
         #
-        if (actual[0] + unusable, actual[1], actual[3]) != (total, uncaught,
-                                                            equiv):
+        if (actual[0], actual[1], actual[3]) != (total, uncaught, equiv):
             bad.append((name, "summary says %s, verdicts say %s"
                         % (got, actual)))
     for n in stale:
