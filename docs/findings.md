@@ -28197,3 +28197,46 @@ noticed, and 554's substance is right, which is why nobody did.
 
 Both are corrected forward rather than rewritten, per `docs/method/recording.md`:
 the pushed text stays, and this is the entry that says what it should have said.
+
+### 700. `git checkout --ours` takes the whole file, not the conflicted hunk
+
+Reserved block for this session: **700-709**. 691-699 left as a gap; the
+highest number in use before this was 690.
+
+Merging `master` into the V.90 line hit seven conflicts. Two of them --
+`tools/coverage.py` and `tools/debugaudit.py` -- were in tools the other line
+had evolved through many commits while this one had made small additions, so
+the sensible resolution was "take theirs, re-apply mine on top". The obvious
+way to do the first half is:
+
+    git checkout --ours -- tools/coverage.py
+
+**That does not resolve the conflicted hunk. It replaces the ENTIRE FILE with
+HEAD's version**, discarding every other change the merge had already applied
+cleanly. Both of this line's additions -- a `BENIGN` entry in `coverage.py`, a
+per-file rollup in `debugaudit.py` -- were nowhere near the conflict markers,
+had merged without complaint, and vanished silently.
+
+Nothing fails. The file is valid Python, the merge completes, the suite passes,
+and the only symptom is a feature quietly absent. It was caught by grepping for
+the two additions afterwards:
+
+    grep -c 'base-object ctor/dtor' tools/coverage.py   ->  0
+    grep -c 'PER FILE'              tools/debugaudit.py ->  0
+
+both of which should have been 1.
+
+**The rule.** `--ours`/`--theirs` are whole-file operations and belong only
+where one side's version of the file is wanted ENTIRE -- a generated artefact
+like `docs/coverage.md`, say. Anywhere else, edit the conflict markers by hand,
+or use `git checkout --merge <file>` to restore them if a resolution has gone
+wrong. And whatever the route, **verify by content afterwards**: name a
+distinctive string from each side's contribution and grep for it. A merge that
+compiles is not a merge that kept everything.
+
+This is the same shape as finding 249's scripted resolution leaving conflict
+markers in `findings.md`: both are cases where the merge machinery reports
+success and the damage is only visible if somebody looks for the content. 249
+made `refcheck.py` fail on a stray marker, which catches the loud version. The
+quiet version -- content silently dropped -- has no such check, and the only
+defence is to look.

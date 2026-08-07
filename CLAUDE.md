@@ -211,6 +211,13 @@ Task numbers are not safe across sessions either: two task stores exist whose
   table: objdump prints relocations on their own lines and every convenient
   way of trimming its output drops them, turning a table of pointers into a
   table of plausible small integers. That mistake has been made three times.
+- **`git checkout --ours <file>` replaces the WHOLE FILE**, not the conflicted
+  hunk, so it silently discards every other change the merge had already
+  applied cleanly to it. Nothing fails and the suite still passes. Use it only
+  where one side's file is wanted entire (a generated artefact); otherwise edit
+  the markers by hand, and afterwards grep for a distinctive string from each
+  side's contribution. A merge that compiles is not a merge that kept
+  everything -- finding 700.
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
