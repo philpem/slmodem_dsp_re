@@ -128,14 +128,29 @@ def registered():
             if not k.startswith("_") and isinstance(v, list) and len(v) == 2}
 
 
+#
+# `%-52s` PADS BUT DOES NOT TRUNCATE.
+#
+# A first version capped the label at 52 characters, which is the field width
+# mutate.py formats with -- so every label LONGER than 52 printed in full and
+# matched nothing.  21 of v34hshak's 209 are that long, and the snapshot
+# recorded 188 verdicts while its own summary said 209.  The INCONSISTENT
+# check below caught it on the first run, which is the entire argument for
+# having a tool check itself against its own second measurement.
+#
+# The separator is what to anchor on: mutate.py writes two literal spaces
+# after the padded field, so there are always AT LEAST two.
+#
 VERDICT = [
-    (re.compile(r"^  ok    (.{1,52}?)\s*  caught \((\w+)\)$"), "caught"),
-    (re.compile(r"^  \*\*\*\*  (.{1,52}?)\s*  NOT CAUGHT$"), "uncaught"),
-    (re.compile(r"^  ==    (.{1,52}?)\s*  survived, equivalent$"), "equivalent"),
-    (re.compile(r"^  ----  (.{1,52}?)\s*  did not compile$"), "unusable"),
-    (re.compile(r"^  \?\?\?\?  (.{1,52}?)\s*  ANCHOR MATCHES \d+ TIMES$"),
+    (re.compile(r"^  ok    (.+?)\s{2,}caught \((\w+)\)$"), "caught"),
+    (re.compile(r"^  \*\*\*\*  (.+?)\s{2,}NOT CAUGHT$"), "uncaught"),
+    (re.compile(r"^  ==    (.+?)\s{2,}survived, equivalent$"), "equivalent"),
+    (re.compile(r"^  ----  (.+?)\s{2,}did not compile$"), "unusable"),
+    (re.compile(r"^  \?\?\?\?  (.+?)\s{2,}ANCHOR MATCHES \d+ TIMES$"),
      "unusable"),
-    (re.compile(r"^  !!    (.{1,52}?)\s*  CAUGHT, recorded as equivalent$"),
+    (re.compile(r"^  \?\?\?\?  (.+?)\s{2,}VACUOUS -- REPLACE == FIND$"),
+     "unusable"),
+    (re.compile(r"^  !!    (.+?)\s{2,}CAUGHT, recorded as equivalent$"),
      "surprise"),
 ]
 
@@ -196,11 +211,52 @@ def cmd_update(args):
     return 0
 
 
+#
+# WHAT FAILS, AND WHY STALE DOES NOT
+#
+# The obvious wiring is "fail if any entry is stale", and it is wrong.  This
+# runs inside `make test`, which runs inside `make phase`, which CLAUDE.md
+# tells everyone to run constantly.  Almost any edit to `src/` invalidates
+# almost every entry, so a strict gate here is RED from a batch's first edit
+# until it has re-run its suites -- which is most of a batch's life.
+#
+# Two things then happen, and the second is the dangerous one.  People learn
+# to ignore a red that is red by default.  And the cheapest way to clear it is
+# `mutsnap --update`, which would refresh the record with numbers nobody
+# examined -- manufacturing exactly the false baseline this file exists to
+# prevent, now with a key attached vouching for it.  A snapshot refreshed as a
+# chore is worse than no snapshot: `docs/findings.md`'s stale numbers at least
+# LOOK old.
+#
+# It is the same lesson as the `tag:` heuristic that was measured and deleted
+# (six flags, six false): a check that cries wolf is worse than no check.
+#
+# So staleness is REPORTED and does not fail -- it is the normal state during
+# work, and `--verify` and the STALE label already stop a stale entry being
+# quoted as a baseline.  What fails is what is always a defect:
+#
+#   MISSING       a registered suite that has never been recorded at all
+#   ORPHANED      a recorded suite no longer in suites.json
+#   INCONSISTENT  an entry whose summary line disagrees with its own
+#                 per-label verdicts -- i.e. one edited by hand
+#
+# `--strict` adds staleness, and is what a MERGE has to pass: at a merge the
+# work has just been verified, so refreshing the record is honest there and
+# nowhere else.
+#
+def summary_counts(text):
+    """(mutations, uncaught, unusable, equivalent) out of the summary line."""
+    n = re.findall(r"(\d+) mutations|(\d+) NOT caught|(\d+) unusable|"
+                   r"(\d+) equivalent", text)
+    got = [int(x) for grp in n for x in grp if x]
+    return got[:4] if len(got) >= 4 else None
+
+
 def cmd_check(args):
     snap = load(SNAP, {})
     reg = registered()
     have = snap.get("suites", {})
-    current, stale, missing = [], [], []
+    current, stale, missing, bad = [], [], [], []
     for name in sorted(reg):
         e = have.get(name)
         if not e:
@@ -209,16 +265,48 @@ def cmd_check(args):
             current.append(name)
         else:
             stale.append(name)
+    orphaned = sorted(set(have) - set(reg))
+    #
+    # The hand-editing check.  A key vouches for verdicts that were MEASURED;
+    # nothing stops someone typing a number into the summary, and that number
+    # is what gets quoted.  So the summary has to agree with the verdicts the
+    # same run recorded.
+    #
+    for name, e in sorted(have.items()):
+        got = summary_counts(e.get("summary", ""))
+        v = e.get("verdicts", {})
+        if not got or not v:
+            continue
+        total, uncaught, unusable, equiv = got
+        actual = (len(v),
+                  sum(1 for x in v.values() if x == "uncaught"),
+                  sum(1 for x in v.values() if x == "unusable"),
+                  sum(1 for x in v.values() if x == "equivalent"))
+        #
+        # An unusable mutation never reaches a verdict line, so the recorded
+        # verdict map is short by exactly that many.  Compare on what is
+        # comparable rather than inventing a tolerance.
+        #
+        if (actual[0] + unusable, actual[1], actual[3]) != (total, uncaught,
+                                                            equiv):
+            bad.append((name, "summary says %s, verdicts say %s"
+                        % (got, actual)))
     for n in stale:
-        print("  STALE    %-16s %s" % (n, have[n].get("summary", "")))
+        print("  stale    %-16s %s" % (n, have[n].get("summary", "")))
     for n in missing:
-        print("  MISSING  %-16s never recorded" % n)
-    print("\n  %d current, %d stale, %d never recorded, of %d registered"
-          % (len(current), len(stale), len(missing), len(reg)))
-    if stale or missing:
-        print("  A stale entry is not a baseline.  Re-run those suites and")
-        print("  `tools/mutsnap.py --update <suite>...` before quoting them.")
-    return 1 if (stale or missing) else 0
+        print("  MISSING  %-16s registered, never recorded" % n)
+    for n in orphaned:
+        print("  ORPHANED %-16s recorded, no longer in suites.json" % n)
+    for n, why in bad:
+        print("  INCONSISTENT %-16s %s" % (n, why))
+    print("\n  mutation snapshot: %d current, %d stale, %d never recorded, "
+          "of %d registered" % (len(current), len(stale), len(missing),
+                                len(reg)))
+    if stale:
+        print("  A stale entry is not a baseline -- re-run those suites "
+              "rather than quoting it.")
+    hard = missing or orphaned or bad
+    return 1 if (hard or (args.strict and stale)) else 0
 
 
 def cmd_verify(args):
@@ -263,6 +351,10 @@ def main():
                     help="run the suites and diff every label against the "
                          "record -- the mechanical form of 'the same seven "
                          "NOT CAUGHT, matched by name'")
+    ap.add_argument("--strict", action="store_true",
+                    help="also fail on a STALE entry.  What a MERGE has to "
+                         "pass; deliberately not what `make phase` runs, see "
+                         "the comment above cmd_check")
     ap.add_argument("--jobs", type=int, metavar="N",
                     help="passed through to mutate.py")
     ap.add_argument("suite", nargs="*", help="default: all of them")
