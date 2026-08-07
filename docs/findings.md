@@ -15430,3 +15430,55 @@ Two things to watch, because they are what would make it fail honestly:
 - The counts still do not fit eleven indices (9, 10, 11, 12, 13 non-zero, with
   a leading zero on all but 2400). Whatever indexes these is wider than the
   pre-emphasis index, and the arithmetic above will only cover part of a row.
+
+#### The integration was done. The hypothesis is DISPROVED.
+
+Both templates were integrated over `d/e +/- 0.45` for every index and every
+rate, and the reciprocal RMS compared against the tables. It does not
+reproduce, and the way it fails is decisive rather than marginal.
+
+**Index 6 settles it.** The predicted scale JUMPS BACK UP at the family
+boundary — for 2400 the prediction runs 4579, 3913, 3321, 2799, 2343, 1949 and
+then **4404** at index 6 — because Figure 2's templates are flat below x = 0.8
+and so have nearly unity gain over the band. The tables do no such thing:
+4579, 3527, 2512, 1767, 1248, 882, 626, 443 marches smoothly down across that
+boundary with no discontinuity anywhere. Whatever indexes these tables, **it is
+not the pre-emphasis index**, because the two index families have grossly
+different band gains and the data does not know the boundary exists.
+
+The predicted decay is also far too slow even within indices 0 to 5 — 3913
+against 3527, 3321 against 2512 — so it is not a scaling or normalisation
+mismatch that a constant would absorb.
+
+**A second hypothesis died on the way.** Two rows of fourteen, and Table 2/V.34
+gives two carriers per rate, so the obvious reading is one row per carrier.
+3429 refutes it: its low and high carriers are BOTH 1959, so its two rows would
+have to be identical, and they are not — 3400 against 3403, 2047 against 2146.
+
+**What the rows actually are, approximately.** Each is close to a geometric
+ladder. Fitting dB against index:
+
+| S | step | residuals |
+|---|---|---|
+| 2400 | -2.958 dB | < 0.47, mostly < 0.2 |
+| 2800 | -2.603 dB | < 0.13 |
+| 3000 | -2.398 dB | < 0.61 |
+| 3200 | -2.281 dB | < 0.64 |
+| 3429 | -2.115 dB | < 0.35 |
+
+and the step scales inversely with the symbol rate: `step * S` is 7099, 7288,
+7194, 7299, 7252 — near enough constant that `step_dB = 7200/S` predicts every
+one to within 0.04 dB. 7200 is not an arbitrary number in this object.
+
+That is a characterisation, NOT a derivation, and the distinction matters: the
+within-row residuals reach 0.6 dB, which is larger than the 0.04 dB the `7200/S`
+rule is wrong by, so the rows are not exactly geometric and something further
+is shaping them. Recording `step = 7200/S` as the closed form would be fitting
+five numbers with one and calling it physics.
+
+**Where #47 stands on these tables.** Two readings disproved — the source's
+per-index pre-emphasis reading and the per-carrier row reading — and the
+ladder structure established to about a fifth of a dB. The exact form, the
+meaning of the two rows, and why the row length reaches thirteen when V.34
+defines eleven indices are all still open, and are now open with the easy
+answers eliminated rather than untried.
