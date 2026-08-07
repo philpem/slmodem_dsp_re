@@ -436,117 +436,63 @@ Two things it settles for whoever writes `v34handshak`:
 
 ## What is still owed, in order — read this first if you are resuming
 
-Task numbers do not survive a session (`CLAUDE.md` says so, and two stores
-already disagree about `#11`-`#22`). This section is the durable copy. Every
-item below is measured, not planned.
+**Rewritten after the merge to `master`.** Everything the previous version of
+this section listed is done: table 1's txstates 21 and 66 landed, the unify and
+the offset-macro rename landed as one batch, the field map landed, and the
+trace gap it called an open gap is closed. Task numbers do not survive a
+session; this section is the durable copy, and every item below is measured,
+not planned.
 
-### 1. Two arms of table 1, in flight at the time of writing
+`v90rest` is fully contained in `master` as of `d019957` — `git log
+master..v90rest` is empty. Work on `master`.
 
-    21  TRNSEG4   0x64339  2,290 B
-    66  TRNSEG4A  0x62e28  3,583 B
+### 1. Named gaps, each with the measurement that says why it is a gap
 
-Finding 420 is their hand-over: addresses, level-0 block ranges, callees,
-rejoins, entry conditions. Neither shares a dispatch entry with anything, but
-both write `v34hstx1.cpp` and its two companions, so they need **separate
-worktrees and must not run parallel in one tree**.
+  - **Three uncaught mutations in `v34hstx1`**, down from eleven (finding 651).
+    `81: the wrap is tested before the counter is stored` is finding 343's
+    transfer with no oracle; `67: initdigital is not called` and
+    `67: +0x3598 is not set` print nothing at all, so they are unobservable
+    rather than merely untested.
+  - **The `0x62b5f` txstate reload is right by disassembly and tested by
+    nothing** (finding 592). Removing it is NOT CAUGHT by all eight suites,
+    because of the 27 direct calls only two force a value and both store it
+    first. Filed as `equivalent` carrying that enumeration, so it fails the day
+    an arm lands that passes a forced txstate without storing it.
+  - **`v34k56` is 15 caught against 10 NOT caught** — 40% of what that suite
+    claims to check is unchecked, and the tree-wide census that surfaced it is
+    finding 545. That census predates finding 651 and no finding records a
+    tree-wide total since.
+  - **Twelve C++ translation units still fail under the period compiler**
+    (finding 650), so the codegen tier cannot see them at all.
 
-66's exclusive set ends one byte below 0x66fe9, exactly where 86's
-`V34TX1_TXMD_DONE` transfers. If that block falls through, landing 66 may
-retire finding 343's "one transfer with no oracle" — one of `v34hstx1`'s seven
-uncaught mutations.
+### 2. The field map, continued
 
-### 2. THEN, AS ONE BATCH AND IN THIS ORDER: unify, then rename
+Twelve spans became named fields (findings 630-639) and the rest are still
+offsets. **The "N of 79 remaining" ratio is not quotable** and finding 639 says
+why: the denominator was scraped from macro blocks and at least five of its
+values are not object offsets. Take the next spans by measurement, the same
+way, and quote the numerator alone.
 
-**2a. Unify the two reconstructions of `v34handshak`** -- **DONE**, findings
-546-551.  `src/pump/v34/v34hshak_t3mid.c` is gone; there is one
-`v34handshak` with all fifteen written arms, the 24-state shared arm and the
-default, and `arm_map` reports forty of forty microstates bound to an arm.
-The `v34hst3mid` suite is re-registered against `src/pump/v34/v34hshak.c` and
-all seven suites' caught / NOT-caught / unusable / equivalent splits are
-identical either side of it:
+The busiest remaining case is the one the field map deliberately did not
+touch: `hs_get`, `hs_put` and `hs_setstate` take the offset as a **runtime
+argument**, so 59 of the busiest accesses have no field to name without
+changing a signature that exists precisely to serve all three machines
+(finding 632).
+
+### 3. The object, which is where the real work is
 
 ```
-  suite         entries  mutations  caught  NOTcaught  unusable  equivalent
-  v34hshak          213        209     203          0         0           6
-  v34hsmst44        215        214     204          3         0           7
-  v34hst3m41         87         86      84          0         0           2
-  v34datapump        79         78      72          4         0           2
-  v34hst346          76         75      74          0         0           1
-  v34hst3core        43         42      42          0         0           0
-  v34hst3mid        455        443     422          0         0          21
+  .text            734,605 bytes   1,861 symbols
+  translated       159,739 bytes     417 symbols     21.7%
+  tested           159,718 bytes     412 of 417 that can be
 ```
 
-The seven NOT CAUGHT are the same seven by name as before (three in
-`v34hsmst44`, four in `v34datapump`), all pre-existing.  1,070 anchors now
-carry an exact `"fn"`.
+By translation-unit span, largest first: `VPcmV34Main.cpp` 290,315 bytes over
+739 symbols; `class1tx.c` 89,322 over 332; `V34hshak.c` 61,541 in one symbol —
+`v34handshak` itself, still landing one dispatch arm at a time, with an arm
+nobody has written calling `abort`; `V32mod.c` 55,694 over 119.
 
-What the unify settled beyond the merge itself: 0x62933 FALLS THROUGH into a
-do-while and this returns because the loop is not written (546); one
-unwritten-path mechanism serves both of the two it replaced, recording always
-and aborting unless a test opted out (547); a receiver count at or below five
-is the BLOCK route and `T3M_UNWRITTEN_RXIDLE` was a stub (549); and there were
-**three** copies of table 2, not two, of which `w4_hs_t2`'s
-`src/pump/v34/v34hstxblock.c` is the one the hand-over said to keep and is the
-one that does NOT model the 0x62b45 reload arm 48 needs -- so `t3m_tail` was
-kept instead and `v34hstxblock.c` was left alone (550).
+### 4. Housekeeping, if it has not been done
 
-**And then collapsed too** -- **DONE**, finding 591.  `v34hstxblock.c` is
-gone: its three arms that the merged dispatch did not have (0x64509, 0x644fa,
-0x644d8) are in `t3m_txblock`, its in-range default reaches the tail instead
-of `t3m_notwritten`, and its 52 mutations were rewritten onto `v34hshak.c`
-with the counts unchanged.  What decided it was the SIGNATURE and not the
-anchor arithmetic: `v34handshak_txblock(obj)` cannot represent a `tx` that
-differs from +0x3596, so it cannot hold the tail's two readings at all.  ONE
-`v34handshak` now means one table 2 as well.
-
-**2b. Replace the 23 offset macros that bypass a named field** -- **DONE**,
-findings 552-554.  Not 23 uniform substitutions: **16 exact**, **5 dead**
-(their only uses were in the two functions the unify deleted), **1 base**
-(`T3C_RECEIVER`, which `dp_rxget`/`dp_rxput` use as a `struct v34_receiver`
-base and which is now `&obj->rxq`), and **1 width mismatch** (`T3C_FAAE2`,
-kept: +0xaae2 is `fsk.sr` but microstate 62 reads it a BYTE wide, and no
-differential test in this tree can tell `movzbl` from `movzwl` -- 553).  The
-79 that land in `unmapped_`/`pad_` are untouched; that is item 3 below.
-
-46 anchors named one of the 23 and every one had the same substitution
-applied to `find` and `replace` together, so no claim moved; 16 were then
-deepened and three re-spelled by hand because they would otherwise have become
-no-ops or stopped compiling.  All seven suites are still on the numbers above.
-
-**`tools/compare.py --ratchet` could not be run**: the codegen tier is on
-`master` and is not in this branch's history (554).  The width rule was
-followed by hand and that is a weaker guarantee, recorded as one.
-
-**WHY ONE BATCH.**  Both rewrite the same file and both break the same
-anchors, and anchor repair is what produced finding 432's nine silent
-re-pointings.  Unify first -- it moves code wholesale and breaks the anchors
-anyway -- then rename, then repair once:
-
-- `tools/anchorcheck.py` is already in `make phase`'s `refs` target;
-- put `"fn": "<function>"` on **every** touched mutation entry;
-- read `reanchor.py`'s printed line numbers against the labels rather than
-  trusting `0 left for a human` (finding 455 is three anchors it repaired
-  into the wrong function while saying exactly that).
-
-### 3. Larger, and a field-map job rather than a rename
-
-The **79** offsets that land in `unmapped_`/`pad_` are unmodelled because
-nobody has modelled them.  (**79, not the 72** finding 356a says: 540
-re-measured the total in use as 102 rather than 95, and 552 has just taken
-the 23.)  Turning them into fields means extending
-`struct v34_object` by measurement, with the same discipline as any other
-field map here — a displacement is not a size (finding 215), and a passing
-test proves nothing about memory neither side writes (223, 224).
-
-### 4. Open gaps that are named rather than fixed
-
-- **Finding 341/355a's trace gap**, still open after two batches were asked.
-  `V34EchoReportCoeff` only prints, and the table-1 mechanism requires
-  diagnostics off, so mutations inside it cannot be caught. Seven uncaught in
-  `v34hstx1`, all pre-existing and named. Its enumeration covers three arms of
-  eleven while reading as complete; finding 420 says so and gives the
-  mechanical way to regenerate it.
-- **D61**: what the pre-arena fixture layout was feeding the per-sample
-  transmit loop is still unnamed; `sess` is the only thread left to pull.
-- **`datapumpv34`'s handshake loop** cannot be iterated until an arm exists
-  that lowers +0x264 or raises +0x221c (finding 452).
+`symmap-scaffold-spike` is unmerged and old (its findings stop at 213). Decide
+whether it is wanted before it diverges further.
