@@ -22870,3 +22870,58 @@ letting the list read as complete, and gives the mechanical way to regenerate
 it. A list that looks exhaustive and is not is worse than one that admits its
 scope, which is the same shape as the `where` column that said microstate 46
 was open.
+
+### 356a. Twenty-three offsets that bypass a field the struct already names
+
+`struct v34_object` has 159 named fields and 41 unmodelled spans. The
+`v34handshak` reconstruction uses **95 object-based offset macros**, and
+resolving each against the struct splits them cleanly:
+
+```
+  72  land in unmapped_/pad_ -- there is no field, so an offset is honest
+  23  land on a field the struct ALREADY NAMES
+```
+
+The 23 are the defect, and they are not marginal:
+
+```
+T3C_FAAE0   +0xaae0   obj->fsk.nbits        T3C_RECEIVER  +0x264   obj->rxq.count
+T3C_FAAE2   +0xaae2   obj->fsk.sr           T3C_TXCURSOR  +0x221c  obj->txq.count
+T41_FABF0   +0xabf0   obj->moh_message      T41_FA24A     +0xa24a  obj->retrain_state
+T3C_LVL_LIMIT +0x230  obj->rx_energy_floor  T41_TRACE_1   +0x2aa2  obj->vect_idx
+```
+
+`+0xabf0` has **three** macros -- `T41_FABF0`, `T44_FABF0`, `T3C_FABF0` --
+none of which is `moh_message`, which is what it is. `+0xaae2` has two, and it
+is `fsk.sr`. So a reader of the arms sees `T3C_FAAE2` where the tree already
+knows the answer, and three arms invented three names for one field rather
+than finding the one that existed.
+
+#### How it happened, which matters for whether it recurs
+
+Every arm was written by an agent that had `v34handshak`'s disassembly in
+front of it and a per-arm macro prefix mandated (finding 325, to stop
+`#define` collisions between four batches in one file). The prefix rule made
+inventing a name the path of least resistance and looking one up the path of
+most, and nothing in any brief said "check `struct v34_object` first". The
+72 honest cases are the same reflex applied where it *is* correct, which is
+why it never looked wrong.
+
+#### Why this is not being fixed in the same breath as being found
+
+The change is mechanical but it rewrites text that **five mutation suites and
+roughly five hundred anchors** are pinned to. Re-anchoring at that scale is
+exactly the operation that produced finding 432's nine silent re-pointings --
+anchors that stayed unique, moved to a different claim, and went on reporting
+CAUGHT. `anchorcheck.py` now catches part of that and the `"fn"` field catches
+more, but only where somebody thinks to add it.
+
+So this is a dedicated batch with `anchorcheck.py` as a gate and `"fn"` added
+to every touched entry, not a tidy-up squeezed in beside other work. The list
+above is complete; the measurement is `tools/whichfield.py` against every
+macro actually used with the object as base.
+
+**The 72 are a different and larger question**: they are unmodelled because
+nobody has modelled them, and turning them into fields means extending
+`struct v34_object` by measurement, which is the same discipline as any other
+field map here and not a rename.
