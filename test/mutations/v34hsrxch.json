@@ -1,0 +1,46 @@
+[
+ {
+  "label": "the chain has no early branch for states above 43",
+  "find": "\t\tif (rxst > V34HS_RX_DPSK) {",
+  "replace": "\t\tif (0) {"
+ },
+ {
+  "label": "the branch above 43 admits 43 itself",
+  "find": "\t\tif (rxst > V34HS_RX_DPSK) {",
+  "replace": "\t\tif (rxst >= V34HS_RX_DPSK) {",
+  "equivalent": true,
+  "why": "EQUIVALENT BY CONSTRUCTION, and the object has the same shape. The test is inside `if (rxst != V34HS_RX_DPSK)`, so the only value at which `>` and `>=` differ -- 43 -- cannot reach it. The object is the same: 0x62a09 is `cmp $0x2b,%eax; je 64a64` and the `jg 62b71` at 0x62a12 is reached only when the `je` did not take, so its `greater` also cannot see 43. The mutation is unreachable code rather than a behaviour, and no fixture can make it fail. Finding 718."
+ },
+ {
+  "label": "53 DET_AB is not one of the second chain's two",
+  "find": "\t\t\tif (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {",
+  "replace": "\t\t\tif (rxst == V34HS_RX_L1) {"
+ },
+ {
+  "label": "72 RX_L1 is not one of the second chain's two",
+  "find": "\t\t\tif (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {",
+  "replace": "\t\t\tif (rxst == V34HS_DET_AB) {"
+ },
+ {
+  "label": "4 RECEIVE falls through to the transmit dispatch",
+  "find": "\t\tif (rxst == V34HS_RECEIVE) {\t\t/* 0x653e4, not written */\n\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);\n\t\t\treturn;\n\t\t}",
+  "replace": "\t\tif (rxst == V34HS_RECEIVE && rxst == 0x7fff) {\n\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);\n\t\t\treturn;\n\t\t}"
+ },
+ {
+  "label": "35 WAIT does not drain the receive queue",
+  "find": "\t\t\trxreadqueue((struct v34_queue *)frame.rx);\n\t\t\tt3c_txblock(obj);",
+  "replace": "\t\t\tt3c_txblock(obj);"
+ },
+ {
+  "label": "35 WAIT drains the queue after the transmit dispatch",
+  "find": "\t\t\trxreadqueue((struct v34_queue *)frame.rx);\n\t\t\tt3c_txblock(obj);",
+  "replace": "\t\t\tt3c_txblock(obj);\n\t\t\trxreadqueue((struct v34_queue *)frame.rx);",
+  "equivalent": true,
+  "why": "The object drains FIRST -- 0x67533 calls `rxreadqueue`, then 0x67546 jumps to the transmit dispatch -- and the order is kept for that reason. It cannot be observed, because the two do not touch. `rxreadqueue` writes exactly three things: `q->count`, `q->rd`, and the four shorts at q + V34_RXQ_END. `t3c_txblock`'s closure reads the microstate, +0x359c, the receiver's flags at +0x122, +0xe4c, +0x134 and +0x230, and the tail's +0x2218, +0x238 and +0x23c -- none of the three. MEASURED, not argued from the read set alone: `suite_wait_txsweep` drives rxstate 35 against ALL EIGHTY-SEVEN txstates with the whole object compared each time, so every table-2 arm has been given the chance to read what the drain wrote, and none does. If an arm is ever found that does, this becomes catchable and the flag must come off. Finding 718."
+ },
+ {
+  "label": "35 WAIT is not named and falls to the transmit dispatch",
+  "find": "\t\tif (rxst == V34HS_WAIT) {",
+  "replace": "\t\tif (rxst == V34HS_WAIT && rxst == 0x7fff) {"
+ }
+]

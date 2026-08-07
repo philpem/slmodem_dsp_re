@@ -28354,3 +28354,388 @@ the refusal instead of bypassing it. That is a real answer to the `abort` arm
 rather than a general loosening, and the cost is one classification per callee
 actually needed — which is the right cost, because it is one decision per
 thing being trusted.
+
+### 710. Both operands of the per-sample loop's test are re-read every pass, and only one of them could ever be seen to be
+
+`v34handshak`'s table-1 loop is entered at 0x62933 and re-tested at 0x629e0:
+
+```
+  62925  movzwl 0x2aa0(%ebx),%edx      ; the limit, ONCE, before the loop
+  62933  cmp    %dx,0x221c(%ebx)
+  6293e  jge    629ed                  ; cursor >= limit skips the loop
+  ...
+  629e0  mov    0x4c(%esp),%eax        ; obj + 0x221c
+  629e4  cmp    %dx,(%eax)
+  629e7  jl     62950                  ; still below -> go round again
+```
+
+Read on its own that says the limit is loaded once and cached in `%dx` for
+the whole loop, which would make our `while (obj->txq.count < obj->f2aa0)`
+wrong: ours re-reads both operands and the object would re-read one.
+
+**It does not, and every rejoin block says so.** `%dx` is caller-saved and the
+arms call `txmit`, `V34SetupModulator`, `v90Phase34` and more, so nothing
+could preserve it. Each block that re-enters the loop test reloads it first:
+
+```
+  629cf  movzwl 0x2aa0(%ecx),%edx
+  62d70  movzwl 0x2aa0(%ebx),%edx
+  63948  movzwl 0x2aa0(%esi),%edx
+  640a1  movzwl 0x2aa0(%edi),%edx
+  64326  movzwl 0x2aa0(%eax),%edx
+```
+
+Five for five, and they are every `0x2aa0` reference in the loop's whole span
+0x62950..0x64518 -- all reads, no writes. So the `while` over two fresh loads
+is the object's own shape and not a convenience.
+
+**And no test can tell.** Nothing writes +0x2aa0 while the loop runs:
+`v34hstx1.cpp` never assigns `f2aa0`, and the only write anywhere in `src/` is
+`v34handshakinit`'s `= 6` during bring-up. A cached limit and a re-read limit
+are therefore the same value on every pass, which is why
+`test/mutations/v34hstb1.json` carries "the limit is read once rather than
+every pass" as **equivalent** rather than as an uncaught claim. The form is
+kept because it is the object's; the argument for keeping it is recorded
+because no oracle defends it. See 714.
+
+### 711. The `.c` cannot call a `.cpp` trap has expired, and finding 333's rule now needs its date
+
+`CLAUDE.md` carries this as a live trap:
+
+> **A `.c` may not call anything defined in a `.cpp`.** It compiles, it links
+> 32-bit, `make one` passes -- and `make phase` fails at `t_spandsp_v23` with
+> an undefined reference, because the six interop binaries link only `$(SRC)`,
+> which is every `.c` under `src/`, with no C++ in the list.
+
+**That was true and is not.** The Makefile now builds a 64-bit copy of the C++
+half and puts it on every interop link line:
+
+```
+  CXXOBJ64 := $(patsubst src/%.cpp,$(BUILD)/64/%.o,$(CXXSRC))
+  $(BUILD)/test/t_spandsp_v23: ... $(SRC) $(CXXOBJ64) | $(BUILD)
+```
+
+and its own comment says why: *"THE 64-BIT LINK NEEDS THE C++ HALF OF src/
+TOO, since `v34handshak`'s microstate arm 51 calls `V34SetINFO1aBits` and that
+lives in a .cpp."*
+
+The proof is by existence rather than by reading the Makefile:
+`src/pump/v34/v34hshak.c` already calls `V34SetINFO1aBits` at line 3888 and
+`V34SetINFO0aBits` at 5397, and `make phase` is green. So the *reason*
+`v34hstx1.cpp` is a `.cpp` still stands -- 78 and 85 tail-call `v90Phase34`
+and `k56FlexPhase34` (finding 344) -- but the *consequence* nobody may call it
+from C does not.
+
+**What the trap should say instead**, and this is the part worth keeping: the
+constraint was never about the language, it was about what the interop link
+line contains. A new link target that omits `$(CXXOBJ64)` brings it straight
+back, and `make phase` remains the only thing that would say so -- `make test`
+and `make one` still cannot.
+
+**AND THE LINK LINE IS NECESSARY, NOT SUFFICIENT.** The callee must also be
+callable from C at all, which is two conditions this finding first stated only
+by implication:
+
+  - it must be declared `extern "C"`, or the definition is emitted under a
+    mangled name and the C translation unit's undefined reference to the plain
+    one matches nothing;
+  - it must be a FREE FUNCTION and not a member, because a member takes a
+    `this` and has no unmangled form to name even inside `extern "C"`.
+
+Both hold for everything crossed so far, and `nm` is how to check rather than
+reading the source:
+
+```
+  $ nm -g build/src/pump/v34/v34info1a.o | grep INFO1aBits
+  00000000 T V34SetINFO1aBits
+  $ nm -g build/src/pump/v34/v34hstx1.o | grep -c ' T v34tx1_'
+  19
+  $ nm -g build/src/pump/v34/v34hstx1.o | grep ' T ' | grep -c '_Z'
+  0
+```
+
+-- nineteen unmangled arms and no mangled global at all. That is not a
+coincidence of style: `v34hstx1.cpp` is a `.cpp` only because two of its arms
+tail-call into the C++ half, and everything it exports is a plain C function
+by construction. A `.cpp` holding real classes -- `VPcmFloModem`,
+`K56FlexFloModem` -- exports `_Z...` symbols and no `.c` can call into it
+whatever the link line says. `v34k56.cpp`'s own header records the same
+reasoning for `k56FlexPhase34`.
+
+So the rule has three conditions and the Makefile satisfies only the first.
+
+### 712. The table-1 guard was not an artefact of the file split, and closing it meant writing a loop nobody had written
+
+The brief asked whether `T3M_UNWRITTEN_TBL1` was dead now that table 1 is
+complete, "an artefact of the two-file split rather than real work". It was
+not, and the distinction matters for how the answer was reached.
+
+**Table 1's nineteen ARMS were complete. The loop that dispatches to them did
+not exist.** `grep 'v34tx1_' src/pump/v34/v34hshak.c` returned nothing before
+this session: `t_v34hstx1.c` called each arm directly, one at a time, and let
+the blob's own `v34handshak` supply the loop around it. What the guard covered
+was the loop -- the entry test at 0x62933, the `(short)txstate - 5` index, the
+range test at 0x62961, the re-test at 0x629e0, and the dispatch on an arm's
+exit code -- and none of that was written anywhere.
+
+So "is table 1 written" and "is the table-1 guard dead" are two questions, and
+the first had been answered for both. Reading status off the arms would have
+retired a guard that was doing its job.
+
+**The guard survives, with a smaller meaning.** Two arms leave the loop
+through blocks that are still not reconstructed -- 81 `MOH_SILENCE`'s wrap at
+0xc0 goes to 0x66d85 and 86 `TXMD`'s segment end to 0x66fe9 -- and
+`include/dsplib/v34hstx1.h` already had them returning `V34TX1_MOH_WRAP` and
+`V34TX1_TXMD_DONE` for exactly this, saying *"the eventual `v34handshak` must
+dispatch on it"*. It now does. `T3M_UNWRITTEN_TBL1` means those two transfers
+and nothing else.
+
+**And one existing test inverted.** `t_v34hst3mid.c` asserted that a cursor
+below the limit records `T3M_UNWRITTEN_TBL1`, and deliberately did not step,
+"because table 1's default arm does not terminate". With the loop written that
+trial reaches the loop, runs it out and goes on into the rest of the function,
+so it now steps and compares -- 82 checks that were a claim about a guard are
+a differential comparison instead.
+
+### 713. A test that passes the first time has not been shown to do anything, and this one was not
+
+`t_v34hstb1.c` passed 4,653 checks on its first run. Under `gates.md`'s rule 3
+that is not a result, so the loop was mutated five ways to watch the test
+fire. Four fired. **One did not, and it was the one the test had been built
+around.**
+
+```
+  while -> if  (the body runs once)          PASS 4653 checks   <- gap
+  <  ->  <=    (off-by-one on the entry)     detected (alarm)
+  drop the exit dispatch                     FAIL 2/4653
+  68 J1TXMIT -> the wrong arm                FAIL 48/4685
+```
+
+The test drove each arm at a budget of one sample and again at four,
+and the comment said four was "an arm emitting one sample a pass goes round
+four times". **It does not.** An arm transmits through `txwritequeue`, which
+puts FOUR entries on the queue per call, so a budget of four is reached in a
+single pass -- and a `while` degraded to an `if` produces an identical object.
+The second budget was testing nothing that the first did not.
+
+At sixteen the same mutation fails 46 checks.
+
+**What this cost, and why it is cheap.** The gap existed only because a number
+was chosen by reasoning about the loop rather than by measuring the queue. The
+mutation found it in one run. A test whose weakest trial is invisible is the
+normal case, not the exceptional one -- see 715, where the same test had a
+second such trial and the same tier found that one too.
+
+### 714. Two mutations of the loop are equivalent, and the arguments are of different kinds
+
+`test/mutations/v34hstb1.json` records two mutations expected to survive.
+They are worth separating because only one of them is about the object.
+
+**"The limit is read once rather than every pass" -- equivalent because
+nothing writes the limit.** The object genuinely re-reads it (710) and our
+`while` genuinely re-reads it, so the mutation makes our source differ from
+the object's behaviour in a way that is real. It cannot fail because no arm,
+no callee and nothing else in `src/` writes +0x2aa0 between the loop's entry
+and its exit. This is an argument about the *fixture and the object together*:
+a future arm that wrote the limit would make it fail, and that would be
+correct.
+
+**"The transmit state is read as unsigned rather than signed" -- equivalent
+over the whole domain.** 0x62957 is `movswl 0x3596(%esi),%eax`, and under
+`CLAUDE.md`'s FORCED/FREE rule the sign of a load whose 32-bit result is used
+is forced -- the compiler could have emitted `movzwl` and did not. But the
+range test is `sub $0x5,%eax; cmp $0x51,%eax; ja`, an UNSIGNED compare:
+
+  - for a state in 0..0x7fff the two extensions are the same integer;
+  - for a negative state the signed reading gives `s - 5`, whose unsigned
+    value is at least 0xffff7ffb, and the zero-extended reading gives
+    `0x10000 + s - 5`, at least 0x7ffb.
+
+Both are far above 0x51, so both take the loop bottom. **No differential test
+can separate them, ever.** What keeps our `movswl` is the declared type --
+`hs_get` returns `short` -- and the tier that would see it move is `make
+similarity`, not this one.
+
+The difference between the two: the first is equivalent because of a fact
+about the current tree, the second because of a fact about arithmetic. Only
+the first can stop being true.
+
+### 715. A hand-over the object cannot see is not a test of a hand-over, and the budget has to be measured too
+
+The loop re-reads `txstate` at the top of every pass (0x62957), which matters
+because arms move the transmit machine: a state hoisted out of the loop
+dispatches the second pass to the arm the first pass left behind. Closing that
+claim took **three** attempts, and the two failures are the finding.
+
+**First attempt: 65 XMIT0, which hands over to 18 SSEG.** With bit 3 of the
+receiver's flags set, 65 raises 0x2000 in `f25c2`, moves the machine to SSEG
+and clears three counters. The trial ran four passes and asserted the machine
+had moved -- and the assertion passed while the mutation still survived:
+
+```
+  correct   restate: cursor 16 txstate 18 changed 16
+  mutated   restate: cursor 16 txstate 18 changed 16
+```
+
+**65 and 18 wrote the same sixteen bytes.** The hand-over happened, was
+asserted, and was invisible. An arm transition is only a test if the two arms
+differ where the comparison looks.
+
+**Second attempt: 18 SSEG, which hands over to 19 SBARSEG** -- 991 bytes
+against SSEG's 251, and visibly different. Still not caught. Sweeping the
+budget and watching the cursor says why:
+
+```
+  budget  8 -> cursor 32      budget 32 -> cursor 32
+  budget 16 -> cursor 32      budget 40 -> cursor 64
+  budget 24 -> cursor 32      budget 48 -> cursor 64
+```
+
+SSEG calls `txmit` TWICE and the queue advances **thirty-two** per pass, not
+eight. Every budget from 8 to 32 is ONE pass, so there was no second dispatch
+for the hoisted state to get wrong. At 72 -- three passes, one of SSEG and two
+of SBARSEG -- the mutation fails.
+
+**The rule.** A trial that depends on the loop going round twice must have the
+number of passes MEASURED, not reasoned about, and a trial that depends on a
+state transition must show the two arms differ in the object. Both halves were
+asserted correctly here and both assertions were satisfied by a run that
+tested nothing. The suite is now 9 caught, 0 uncaught, 2 equivalent (714).
+
+### 716. What the rxstate chain actually costs, and the inherited estimate is high by about a kilobyte
+
+`v34handshak`'s rxstate arm -- task #58 -- has been carried as "~12.3 KB" for
+several re-plans, inherited rather than measured. Measured, it is **11,429
+bytes** of code that is new, over five arms and not four.
+
+`cfgsplit.py` cannot produce this number directly: it reports exclusive = 0
+for every chain target, because after the per-sample loop falls through at
+0x629ed every arm can reach every other arm and nothing is exclusive to
+anything. The walk was re-run with **barriers** at every dispatch target, at
+the structural blocks 0x629ed, 0x62a40, 0x62af1 and 0x62b71, and at every
+address below 0x62b96.
+
+**The barriered walk was validated before it was believed** -- it reproduces
+all sixteen of `docs/v34handshak.md`'s published table-3 exclusive byte counts
+exactly (6046, 3945, 3198, 2385, 1853, 1735, 1705, 1265, 1182, 1115, 896, 848,
+669, 422, 310, 19), and its leak check is empty. The five arms are mutually
+disjoint: the per-target reach sums to the union byte for byte.
+
+| target | rxstate | new bytes | blocks | calls out |
+|---|---|--:|--:|---|
+| 0x653e4 | 4 RECEIVE | 4,875 | 165 | `receiver`, `rxinit`, `txinit`, `initdigital`, `detectorinit`x2, `V34SetupModulator`, `settxlevel`, `tone_detect`, `v34handshakinit`, `VPcmV34LogTimingOffset`x2 |
+| 0x650c6 | 72 | 3,806 | 95 | `V34agc`, `fskdemodulate`, `rxtiming`, `dftupdate`x9, `dftenergy`x6 |
+| 0x65473 | 53 | 1,629 | 41 | `V34agc`, `V34SetINFO1aBits`, `probeselect`, `tone_detect`, `v34handshakinit` |
+| 0x6754b | FSK gate body | 1,088 | 38 | `dftupdate`, `dftenergy` |
+| 0x6752c | 35 WAIT | 31 | 1 | `rxreadqueue` |
+| 0x64a87 | FSK gate test | 0 | -- | **already written**, v34hshak.c's `T3M_FSKGATE` |
+
+Three things follow that the byte counts alone do not say:
+
+- **0x64a87 is not work.** It is `test %esi,%esi; jne 0x6754b` over the int at
+  +0xa8a0, and `v34hshak.c` already implements it. The guard named two
+  addresses and one of them is a branch we have.
+- **0x6752c is four instructions**: `rxreadqueue`, reload txstate, jump to the
+  transmit dispatch. It is the cheapest arm in the function.
+- **Every callee already exists in this tree.** All eighteen distinct targets
+  are defined, so no arm here is blocked on a missing function -- unlike table
+  1, where `probe` and `vectpp` had to be recovered first (findings 421, 422).
+
+**Where the inherited 12.3 KB came from** is almost certainly the unbarriered
+walk: it attributes the 345-byte shared tail at 0x62a40 and the 82-byte
+0x64a8f preamble to the arms. Counting those gives ~11,856, and counting the
+tail against each arm separately gives more still. A per-arm count across a
+convergence point measures the convergence, which is findings 345 and 350 in a
+third place.
+
+### 717. Most of the rxstate chain needed no new code, because both of its "anything else" doors were already written
+
+The rxstate chain was carried as one guarded arm -- `T3M_UNWRITTEN_RXSTATE`,
+"an rxstate other than RX_DPSK" -- so every state but 43 aborted. That reads
+as eighty-six states of missing work. It is four.
+
+The chain has **six** exits, not two:
+
+```
+  62a09  cmp $0x2b ; je 64a64      43 RX_DPSK   the microstate machine, WRITTEN
+  62a12  jg  62b71                 above 43     a second chain
+  62a18  cmp $0x04 ; je 653e4       4 RECEIVE   4,875 bytes, not written
+  62a21  cmp $0x23 ; je 6752c      35 WAIT      31 bytes
+  62a2a  (fall through)            below 43     the transmit dispatch
+  62b71  cmp $0x35 ; je 65473      53 DET_AB    1,629 bytes, not written
+  62b7a  cmp $0x48 ; je 650c6      72 RX_L1     3,806 bytes, not written
+  62b83  (reload txstate)          above 43     the transmit dispatch
+```
+
+and **both fall-through doors are 0x62af1**, the once-per-block transmit
+dispatch -- `t3c_txblock`, written since table 2 landed.
+
+**TWO COUNTS, AND THEY ARE NOT THE SAME NUMBER.** Of the eighty-seven names:
+
+  - **82** reach a written exit THROUGH ONE OF THE TWO DEFAULT DOORS -- every
+    rxstate except 4, 53 and 72, which are guarded, and except 43 and 35,
+    which have arms of their own. These cost the compare chain and nothing
+    else.
+  - **84** are written altogether: those 82, plus 43 (the microstate machine,
+    landed long ago) and 35 (the four-instruction WAIT arm, landed here).
+
+`t_v34hsrxch.c` asserts the second, because 84 is what its sweep drives.
+Three remain guarded.
+
+35 WAIT is the fourth thing that came free, at four instructions:
+
+```
+  6752c  mov 0x74(%esp),%ebp    ; the receiver, obj + 0x264
+  67533  call rxreadqueue
+  6753f  movzwl 0x3596(%edx),%ecx
+  67546  jmp 62af1
+```
+
+`test/unit/t_v34hsrxch.c` drives all eighty-seven rxstates and compares the
+whole object on each, and asserts the two counts -- 84 driven, 3 skipped --
+because a sweep that silently skipped its range reads exactly like one that
+passed (`gates.md` rule 1).
+
+**The lesson is about how a guard was read, not about the object.** One guard
+code covered a chain with six destinations, so its name said "not RX_DPSK"
+and its cost looked like "everything that is not RX_DPSK". What decides the
+work is the set of DESTINATIONS, and two of the six were already ours. The
+same shape is worth checking wherever one code covers a dispatch: the guard
+counts entrances and the work counts exits.
+
+Three arms remain guarded -- 4, 53 and 72, 10,310 bytes by 716's measure --
+and `T3M_UNWRITTEN_RXSTATE` now means exactly those.
+
+### 718. Two more equivalent mutations, and one of them is unreachable code rather than a behaviour
+
+`test/mutations/v34hsrxch.json` is 6 caught, 0 uncaught, 2 equivalent. Both
+equivalences are worth separating from 714's, because they fail to be
+testable for different reasons again.
+
+**"The branch above 43 admits 43 itself" -- unreachable, in ours AND in the
+object.** The mutation turns `if (rxst > V34HS_RX_DPSK)` into `>=`, and the
+only value where those differ is 43. But the test sits inside `if (rxst !=
+V34HS_RX_DPSK)`, so 43 never reaches it. The object is the same shape: 0x62a12
+is `jg 62b71`, reached only when the `je 64a64` at 0x62a0c did not take. This
+is not "no fixture separates them" -- it is "the mutated line cannot execute
+at the one input that would matter". Nothing could ever catch it, and a suite
+that reported it uncaught for ever would be reporting a fact about C, not
+about this reconstruction.
+
+**"35 WAIT drains the queue after the transmit dispatch" -- disjoint, and
+measured to be.** The object drains first, and the order is kept for that
+reason. `rxreadqueue` writes exactly three things -- `q->count`, `q->rd`, and
+the four shorts at `q + V34_RXQ_END` -- and `t3c_txblock`'s closure reads the
+microstate, +0x359c, the receiver's flags at +0x122, +0xe4c, +0x134 and
++0x230, and the tail's +0x2218, +0x238 and +0x23c. No overlap.
+
+**That argument was not trusted on its own.** A read set assembled by reading
+is exactly the sort of claim this tree gets wrong, so `suite_wait_txsweep`
+drives rxstate 35 against **all eighty-seven txstates** with the whole object
+compared each time -- every table-2 arm given its chance to read what the
+drain wrote. None does. The flag rests on the sweep; the read set explains it.
+
+And the honest limit is written into the entry: **if an arm is ever found that
+reads the receive queue, this becomes catchable and the flag must come off.**
+An equivalence that depends on the current tree has to say so, which is 714's
+distinction in a third instance.

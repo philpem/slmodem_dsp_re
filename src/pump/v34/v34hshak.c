@@ -67,6 +67,7 @@
 #include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
+#include "dsplib/v34hstx1.h"	/* table 1's nineteen arms, for the loop  */
 #include "dsplib/v34info.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
@@ -6419,25 +6420,137 @@ v34handshak(void *vobj)
 {
 	struct v34_object *obj = (struct v34_object *)vobj;
 	struct t3m_frame frame;
+	short rxst;
 
 	t3m_frame_init(&frame, obj);
 
 	/*
-	 * 0x62933.  The cursor against the limit, both signed halfwords.
+	 * 0x62933..0x629ed.  Table 1, the per-sample transmit loop.
 	 *
-	 * THE OBJECT FALLS THROUGH HERE AND THIS RETURNS, and that difference
-	 * is a property of the stub and not a reading of the object.  0x62933
-	 * is `cmp %dx,0x221c(%ebx)` then `jge 629ed`, so cursor >= limit
-	 * skips; below it is a DO-WHILE -- table 1's per-sample dispatch at
-	 * 0x62950, re-tested at 0x629e0 with `cmp %dx,(%eax); jl 62950` --
-	 * which falls out at 0x629ed, the same instruction the guard jumps
-	 * to.  Table 1 is #56's and is not written here, so there is no loop
-	 * to fall out of and nothing this side could do after it.  Finding
-	 * 546.
+	 * The cursor against the limit, both signed halfwords: 0x62933 is
+	 * `cmp %dx,0x221c(%ebx)` then `jge 629ed`, so cursor >= limit skips
+	 * the loop entirely and falls into the receiver's own test below.
+	 * Below it is a DO-WHILE -- the per-sample dispatch at 0x62950,
+	 * re-tested at 0x629e0 with `cmp %dx,(%eax); jl 62950` -- which falls
+	 * out at 0x629ed, the same instruction the skip jumps to.
+	 *
+	 * BOTH OPERANDS ARE RE-READ EVERY PASS, which is why this is a
+	 * `while` over two loads and not a loop over one cached limit.  The
+	 * object caches the limit in `%dx` across the arm body, but `%dx` is
+	 * caller-saved and every arm that calls anything would lose it, so
+	 * each rejoin block reloads it first: 0x629cf, 0x62d70, 0x640a1 and
+	 * 0x63948 are all `movzwl 0x2aa0(reg),%edx` immediately before the
+	 * compare.  Measured over all four; finding 710.
+	 *
+	 * The dispatch is `.rodata+0x2da0` read at 0x62966, indexed
+	 * `(short)txstate - 5` and range-checked `cmp $0x51,%eax; ja 629e0`,
+	 * so 5..86 and nothing else.  Eighty-two entries, twenty distinct
+	 * targets, all eighty-two carrying an `R_386_32` against `.text`:
+	 * nineteen arms and the loop bottom itself, which fifty-seven entries
+	 * hold.  Read out of the object, not off a doc line.
+	 *
+	 * THE DEFAULT DOES NOT TERMINATE, and that is the object's and not
+	 * ours: an entry that is the loop bottom leaves the cursor where it
+	 * was, so the test that sent us here is still true.  Fifty-seven of
+	 * the eighty-two spin (finding 287, D59), and `v34hs_step` arms a
+	 * SIGALRM so that is a named case rather than a run that never
+	 * returns.
+	 *
+	 * The arms are `src/pump/v34/v34hstx1.cpp`, which is a `.cpp` because
+	 * 78 and 85 tail-call into the V.90/V.92 C++ half (finding 344).
+	 * Calling them from this `.c` is sound: the interop link carries
+	 * `$(CXXOBJ64)` and this file already calls `V34SetINFO1aBits`.
+	 * Finding 711.
 	 */
-	if (obj->txq.count < obj->f2aa0) {
-		t3m_notwritten(T3M_UNWRITTEN_TBL1);
-		return;
+	while (obj->txq.count < obj->f2aa0) {
+		int left = V34TX1_LOOP;
+
+		switch ((int)hs_get(obj, HS_TXSTATE)) {
+		case V34HS_SILENCE:		/* 5  0x640b4, three tails */
+		case V34HS_SILENCEINFO:		/* 54 */
+		case V34HS_SILENCERETRAIN:	/* 74 */
+			left = v34tx1_silence(obj);
+			break;
+		case V34HS_SSEG:		/* 18 0x64048 */
+			left = v34tx1_sseg(obj);
+			break;
+		case V34HS_SBARSEG:		/* 19 0x6296d */
+			left = v34tx1_sbarseg(obj);
+			break;
+		case V34HS_PPSEG:		/* 20 0x642bf */
+			left = v34tx1_ppseg(obj);
+			break;
+		case V34HS_TRNSEG4:		/* 21 0x64339 */
+			left = v34tx1_trnseg4(obj);
+			break;
+		case V34HS_TX_DPSK:		/* 24 0x62b96 */
+			left = v34tx1_tx_dpsk(obj);
+			break;
+		case V34HS_TX_L1:		/* 51 0x62c69 */
+			left = v34tx1_tx_l1(obj);
+			break;
+		case V34HS_TONE_AB:		/* 60 0x62d3d */
+			left = v34tx1_tone_ab(obj);
+			break;
+		case V34HS_JTXMIT:		/* 64 0x635cc, one body two tails */
+		case V34HS_J1TXMIT:		/* 68 */
+			left = v34tx1_jtxmit(obj);
+			break;
+		case V34HS_XMIT0:		/* 65 0x62d83 */
+			left = v34tx1_xmit0(obj);
+			break;
+		case V34HS_TRNSEG4A:		/* 66 0x62e28 */
+			left = v34tx1_trnseg4a(obj);
+			break;
+		case V34HS_XMITMP:		/* 67 0x6399b */
+			left = v34tx1_xmitmp(obj);
+			break;
+		case V34HS_EXMIT:		/* 69 0x63858 */
+			left = v34tx1_exmit(obj);
+			break;
+		case V34HS_DATAXMIT:		/* 70 0x63ca8 */
+			left = v34tx1_dataxmit(obj);
+			break;
+		case V34HS_TXLEVEL:		/* 71 0x641d1 */
+			left = v34tx1_txlevel(obj);
+			break;
+		case V34HS_JaTXMIT:		/* 78 0x64139 */
+			left = v34tx1_jatxmit(obj);
+			break;
+		case V34HS_MOH_SILENCE:		/* 81 0x63d58, one behaviour */
+		case V34HS_MOH_ON_HOLD:		/* 82 */
+		case V34HS_MOH_FRR:		/* 83 */
+		case V34HS_MOH_CLEARDOWN:	/* 84 */
+			left = v34tx1_moh_silence(obj);
+			break;
+		case V34HS_K56JaTXMIT:		/* 85 0x63fb0 */
+			left = v34tx1_k56jatxmit(obj);
+			break;
+		case V34HS_TXMD:		/* 86 0x63dae */
+			left = v34tx1_txmd(obj);
+			break;
+		default:
+			/*
+			 * 0x629e0, the loop bottom.  Fifty-seven of the
+			 * eighty-two entries, plus every txstate the range
+			 * test rejects.
+			 */
+			break;
+		}
+
+		/*
+		 * Two arms can leave the loop through a block that is NOT
+		 * reconstructed -- 81's wrap at 0x66d85 and 86's segment end
+		 * at 0x66fe9 -- and they say so in their return value rather
+		 * than doing something plausible.  This is where that is
+		 * dispatched on, and it is the whole of what
+		 * `T3M_UNWRITTEN_TBL1` now means: the loop and its nineteen
+		 * arms are written, these two transfers out of it are not.
+		 */
+		if (left != V34TX1_LOOP) {
+			t3m_notwritten(T3M_UNWRITTEN_TBL1);
+			return;
+		}
 	}
 
 	/*
@@ -6452,12 +6565,65 @@ v34handshak(void *vobj)
 	}
 
 	/*
-	 * The compare chain at 0x62a02 -- RECEIVE at 0x653e4, WAIT at
-	 * 0x6752c, more above 43 at 0x62b71, and anything it does not name
-	 * falls into the transmit dispatch.  #58.  It has no table.
+	 * The compare chain at 0x62a02.  It has no table -- it is `cmp`/`je`
+	 * against the rxstate, sign-extended out of +0x3594:
+	 *
+	 *   62a09  cmp $0x2b,%eax ; je 64a64    43 RX_DPSK, below
+	 *   62a12  jg  62b71                    above 43, the SECOND chain
+	 *   62a18  cmp $0x04,%eax ; je 653e4     4 RECEIVE
+	 *   62a21  cmp $0x23,%eax ; je 6752c    35 WAIT
+	 *   62a2a  (fall through)               the transmit dispatch
+	 *
+	 * and the second chain is three compares more:
+	 *
+	 *   62b71  cmp $0x35,%eax ; je 65473    53 DET_AB
+	 *   62b7a  cmp $0x48,%eax ; je 650c6    72 RX_L1
+	 *   62b83  (reload txstate)             the transmit dispatch
+	 *
+	 * THE ORDER IS THE OBJECT'S AND NOT A TIDYING.  `jg` before the
+	 * compares against 4 and 35 means 53 and 72 are reached without ever
+	 * being tested against those two, and a chain rewritten as one flat
+	 * `switch` would compare the same values in a different order.  It
+	 * would behave identically; it is written this way because this is
+	 * what is there.
+	 *
+	 * TWO OF THE SIX EXITS NEED NO NEW CODE.  Both "anything else" arms
+	 * are the once-per-block transmit dispatch at 0x62af1, which is
+	 * `t3c_txblock` and has been written since table 2 landed -- so every
+	 * rxstate below 43 except 4, and every rxstate above 43 except 53 and
+	 * 72, is complete here rather than guarded.  That is most of the
+	 * eighty-seven.  Finding 717.
 	 */
-	if (hs_get(obj, HS_RXSTATE) != V34HS_RX_DPSK) {
-		t3m_notwritten(T3M_UNWRITTEN_RXSTATE);
+	rxst = hs_get(obj, HS_RXSTATE);
+
+	if (rxst != V34HS_RX_DPSK) {
+		if (rxst > V34HS_RX_DPSK) {
+			/* 0x62b71, and 53 and 72 are the two that are not written. */
+			if (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {
+				t3m_notwritten(T3M_UNWRITTEN_RXSTATE);
+				return;
+			}
+			t3c_txblock(obj);		/* 0x62b83 */
+			return;
+		}
+		if (rxst == V34HS_RECEIVE) {		/* 0x653e4, not written */
+			t3m_notwritten(T3M_UNWRITTEN_RXSTATE);
+			return;
+		}
+		if (rxst == V34HS_WAIT) {
+			/*
+			 * 0x6752c, and it is four instructions: drain four
+			 * entries off the receive queue and go to the
+			 * transmit dispatch.  The queue is the receiver's
+			 * first member, which is why the object passes
+			 * `0x74(%esp)` -- obj + 0x264 -- straight to
+			 * `rxreadqueue` with no displacement.
+			 */
+			rxreadqueue((struct v34_queue *)frame.rx);
+			t3c_txblock(obj);		/* 0x67546 -> 0x62af1 */
+			return;
+		}
+		t3c_txblock(obj);			/* 0x62a2a */
 		return;
 	}
 

@@ -228,8 +228,8 @@
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\tif (obj->txq.count < obj->f2aa0) {",
-  "replace": "\tif (obj->txq.count <= obj->f2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
+  "replace": "\twhile (obj->txq.count <= obj->f2aa0) {",
   "fn": "v34handshak"
  },
  {
