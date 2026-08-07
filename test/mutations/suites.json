@@ -50,5 +50,6 @@
  "v34hst3mid":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3mid"],
  "v34hstb1":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hstb1"],
  "v34hsrxch":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrxch"],
- "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"]
+ "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"],
+ "v34hsrx53":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx53"]
 }

@@ -11,13 +11,12 @@ seven. This file is the operating manual.
 ## The guards, and what each covers TODAY
 
 Read this from the tree, not from here: `grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c`.
-As of the session that landed the FSK gate's arm, which retired one of the
-four:
+As of the session that landed rxstate 53's arm:
 
 | guard | still covers | bytes |
 |---|---|--:|
 | `T3M_UNWRITTEN_TBL1` | **only** 81's wrap to 0x66d85 and 86's segment end to 0x66fe9. The loop and all nineteen arms are written | -- |
-| `T3M_UNWRITTEN_RXSTATE` | **only** rxstates 4 RECEIVE (0x653e4), 53 DET_AB (0x65473) and 72 RX_L1 (0x650c6). The chain, 35 WAIT and both transmit-dispatch doors are written | 10,310 |
+| `T3M_UNWRITTEN_RXSTATE` | **only** rxstates 4 RECEIVE (0x653e4) and 72 RX_L1 (0x650c6). The chain, 35 WAIT, 53 DET_AB and both transmit-dispatch doors are written | 8,678 |
 | `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at three sites: 0x6d57c and 0x6c8f8, both inside microstate 44's Modem-on-Hold paths, and the table-3 `default:` | -- |
 
@@ -27,13 +26,14 @@ labels over the forty values the range test admits, so it is unreachable and
 is kept because the range test and the label set are two statements of one
 fact. So "remove the `PARTIAL` line when the last guard goes" is the wrong
 criterion -- one guard is a permanent structural assertion. The criterion is
-**when no REACHABLE arm is unwritten**, which today means the three rxstate
+**when no REACHABLE arm is unwritten**, which today means the two rxstate
 arms, the two table-1 exits, and 44's two.
 
-`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 10,310 bytes of
-reachable arm are still guarded and the function is not complete -- the three
-rxstate arms, and nothing else in this table. The number was 11,398 while the
-FSK gate's body counted against it.
+`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 8,678 bytes of
+reachable arm are still guarded and the function is not complete -- the two
+remaining rxstate arms, and nothing else in this table. The number was 11,398
+while the FSK gate's body counted against it and 10,310 while 53's did
+(finding 725).
 
 ## What the function is
 
@@ -61,18 +61,19 @@ read off the prologue at 0x628f0:
 So table 2 has three entrances and not two; all three converge exactly, and
 that is measured over seventeen states rather than assumed (finding 361).
 
-**THE rxstate CHAIN IS 11,430 BYTES OVER FIVE ARMS, MEASURED** -- not the
+**THE rxstate CHAIN IS 11,433 BYTES OVER FIVE ARMS, MEASURED** -- not the
 inherited "~12.3 KB", which counts the shared tail at 0x62a40 and the
 0x64a8f preamble against the arms (finding 716, which says 11,429 in both its
-prose and its table because it gave the FSK gate's arm 1,088; the five ranges
-sum to 1,089, which is finding 719). `cfgsplit.py` cannot give
+prose and its table because it gave the FSK gate's arm 1,088 and rxstate 53's
+1,629; the five ranges sum to 1,089 and 1,632, which are findings 719 and
+727). `cfgsplit.py` cannot give
 this number unbarriered: after the per-sample loop falls through at 0x629ed
 every arm reaches every other and it reports exclusive = 0 for all of them.
 
 ```
     0x653e4   rxstate  4 RECEIVE       4,875 bytes, 165 blocks   LARGE
     0x650c6   rxstate 72               3,806 bytes,  95 blocks   MEDIUM-LARGE
-    0x65473   rxstate 53               1,629 bytes,  41 blocks   SMALL-MEDIUM
+    0x65473   rxstate 53               1,632 bytes,  41 blocks   DONE
     0x6754b   the FSK gate's body      1,089 bytes,  38 blocks   DONE
     0x6752c   rxstate 35 WAIT             31 bytes,   1 block    DONE
     0x64a87   the FSK gate's TEST      already written
@@ -202,6 +203,9 @@ only states some batch has landed, which today are:
                length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-448)
   table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
             0x62a40 that every arm of that dispatch falls into
+  the chain every rxstate but 4 RECEIVE and 72 RX_L1: 43 to table 3, 35
+            WAIT, 53 DET_AB (0x65473, findings 724-729) and the two
+            default doors into table 2
   the rest  halts
 ```
 

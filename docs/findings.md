@@ -28626,7 +28626,7 @@ disjoint: the per-target reach sums to the union byte for byte.
 |---|---|--:|--:|---|
 | 0x653e4 | 4 RECEIVE | 4,875 | 165 | `receiver`, `rxinit`, `txinit`, `initdigital`, `detectorinit`x2, `V34SetupModulator`, `settxlevel`, `tone_detect`, `v34handshakinit`, `VPcmV34LogTimingOffset`x2 |
 | 0x650c6 | 72 | 3,806 | 95 | `V34agc`, `fskdemodulate`, `rxtiming`, `dftupdate`x9, `dftenergy`x6 |
-| 0x65473 | 53 | 1,629 | 41 | `V34agc`, `V34SetINFO1aBits`, `probeselect`, `tone_detect`, `v34handshakinit` |
+| 0x65473 | 53 | 1,629 [**1,632** over TEN ranges, not thirteen; see 727] | 41 | `V34agc`, `V34SetINFO1aBits`, `probeselect`, `tone_detect`, `v34handshakinit` |
 | 0x6754b | FSK gate body | 1,088 [**1,089**; see 719] | 38 | `dftupdate`, `dftenergy` |
 | 0x6752c | 35 WAIT | 31 | 1 | `rxreadqueue` |
 | 0x64a87 | FSK gate test | 0 | -- | **already written**, v34hshak.c's `T3M_FSKGATE` |
@@ -28705,7 +28705,8 @@ same shape is worth checking wherever one code covers a dispatch: the guard
 counts entrances and the work counts exits.
 
 Three arms remain guarded -- 4, 53 and 72, 10,310 bytes by 716's measure --
-and `T3M_UNWRITTEN_RXSTATE` now means exactly those.
+and `T3M_UNWRITTEN_RXSTATE` now means exactly those. [**Two**: 53 landed and
+the guard is down to 4 and 72, 8,678 bytes; see 725.]
 
 ### 718. Two more equivalent mutations, and one of them is unreachable code rather than a behaviour
 
@@ -28987,3 +28988,251 @@ to the new text; the fifth, `t_v34hst3core`'s "fskdemodulate reads two bytes
 into the receiver's buffer", now anchors on the single `fskin` assignment and
 so displaces the retrain detector's samples as well as the demodulator's,
 which is what the object does with one `lea` at 0x64a81 and two readers.
+
+### 724. The retrain threshold at 0x6af24 is THIRTY-TWO bits wide, and no small value can see it
+
+rxstate 53's second decision is whether the vector index has run past the
+round-trip delay by 0x2418. Both operands are halfwords in the object and the
+sum is not:
+
+```
+  6af2b  movswl 0xaa7e(%esi),%ebx    ; rtd, SIGN-extended into 32 bits
+  6af32  movswl 0x2aa2(%esi),%edx    ; vect_idx, the same
+  6af39  add    $0x2418,%ebx         ; 32-bit add, no truncation back
+  6af3f  cmp    %ebx,%edx
+  6af41  jg     6b0e8                ; vect_idx > rtd + 9240: retrain
+```
+
+Contrast the guard two blocks above it, which IS sixteen bits:
+
+```
+  6845e  cmpw   $0x5db,0x2aa2(%edi)
+  68467  jg     69815
+```
+
+**The two spellings agree over every value a fixture would naturally pick.**
+`rtd + 9240` only leaves a short's range above 23,527, and every trial written
+for this arm before the point was noticed used rtd in the hundreds. So
+`if ((int)vect_idx <= (short)(rtd + 0x2418))` passes a suite that never goes
+there -- which is finding 613's shape in a second place: two readings that
+agree over every value the field is given.
+
+The trial that separates them is **rtd = 30,000, vect_idx = 1,600**:
+
+```
+  32 bits:  1600 > 39240   false  ->  0x6af47, eight bytes written, no lines
+  16 bits:  (short)39240 = -26296
+            1600 > -26296  true   ->  0x6b0e8, `v34handshakinit(obj, 1)`,
+                                      sixty bytes, nine lines, three state
+                                      words moved
+```
+
+Two signatures that could not be further apart, and `t_v34hsrx53.c`'s
+`suite_rtd` drives it. The mutation `the retrain threshold is computed
+sixteen bits wide` is CAUGHT only because of that one trial; with the suite's
+other six rtd trials alone it survives.
+
+**The delay is also SIGNED and that is separately driven.** rtd = -1 puts the
+threshold at 9,239, so vect_idx 9,240 retrains and 9,239 does not; read
+`movzwl` the threshold would be 74,775, which no short can reach, and the arm
+could never retrain at all. The mutation `the round-trip delay is read
+unsigned` is caught by that pair.
+
+**vect_idx's own signedness at this compare is NOT testable and is recorded
+equivalent**, with the argument from the object rather than from the fixture:
+0x6845e has already established `vect_idx > 0x5db` signed before 0x6af24 is
+reached, so the value arriving is in 1500..32767 and the two readings agree
+over every one of them. The same mutation on the delay beside it is caught,
+because nothing bounds that field. Finding 714's first kind -- unreachable
+rather than unobservable.
+
+### 725. rxstate 53 `DET_AB` is written, and `T3M_UNWRITTEN_RXSTATE` is down to two arms
+
+`v34handshak`'s second compare chain at 0x62b71 named two states that had no
+reconstruction. One of them now does: 0x65473 is `t53_rx_det_ab` in
+`src/pump/v34/v34hshak.c`, compared case by case against the blob through
+`test/unit/t_v34hsrx53.c` -- 2,743 checks, `v34hs_ours(1)`, the whole
+44,096-byte object plus the arena plus both transcripts on every case.
+
+The guard's coverage, and the chain's counts, move with it:
+
+| | before | after |
+|---|---|---|
+| `T3M_UNWRITTEN_RXSTATE` covers | 4 RECEIVE, 53 DET_AB, 72 RX_L1 | 4 RECEIVE, 72 RX_L1 |
+| guarded bytes | 10,310 | **8,678** |
+| rxstates with an arm of their own | 43, 35 | 43, 35, **53** |
+| rxstates reaching a written exit | 84 | **85** of 87 |
+
+`t_v34hsrxch.c`'s sweep asserts the last row and its `named[]` table asserts
+the third, so neither number is prose: the sweep now drives 85 states and
+skips 2, and it fails if either count moves.
+
+**Two of the file's own mutations had to be re-aimed rather than deleted.**
+`53 DET_AB is not one of the second chain's two` and its `72 RX_L1` twin were
+both anchored on `if (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1)`, which no
+longer exists -- the chain now gives 53 its own arm and tests 72 separately.
+`anchorcheck.py` reported both as `matches 0 time(s)` and exited 1, which is
+finding 347's dead mutation caught by a gate rather than by luck. Re-anchored
+on the new two-line forms, and `mutsnap.py --verify` says the suite's eight
+verdicts are label for label what they were.
+
+### 726. The object writes the INFO1c record THROUGH +0xaa6c and this reconstruction writes it by offset, and nothing can tell
+
+0x6b1e3 stores `obj + 0xa9ac` into +0xaa6c, 0x6b1f0 calls `V34SetINFO1aBits`
+with the same interior pointer as its second argument, and then:
+
+```
+  6b1f5  mov    0xaa6c(%esi),%ebp    ; RELOAD, though %ebx still holds it
+  6b1fb  movw   $0xffff,0x14(%ebp)
+  ...
+```
+
+`%ebx` is callee-saved and holds the identical value across the call. GCC does
+not reload what it holds, so the source dereferences `obj->paa6c` rather than a
+local -- that is FORCED, and it is what a codegen comparison would want.
+
+**This reconstruction writes the twelve stores by offset from `obj` anyway**,
+because those nine statements already exist in this file as microstate 41's
+(0x6d387, v34hshak.c) and reusing them is worth more than matching one
+instruction. The two spellings cannot differ:
+
+- the store two instructions earlier is what the reload reads;
+- `V34SetINFO1aBits` does not touch +0xaa6c -- v34info1a.cpp writes only
+  through its `bits` argument, and its own comment records that `bits` is
+  `obj + 0xa9ac` at all three of its call sites;
+- so `obj->paa6c == obj + 0xa9ac` at 0x6b1fb on every path, and the record
+  lands at the same address either way.
+
+Recorded rather than fixed, because CLAUDE.md's rule is that permuting source
+until the compiler's output matches is fitting the compiler. **And the object
+is not consistent about it in the first place**: the ten-halfword trace at
+0x6b3a2 reads the record through `%ebx` -- the raw `obj + 0xa9ac` -- and not
+through the pointer the same block has just aimed, so "everything goes through
++0xaa6c" is not even true of the arm.
+
+The differential tier is blind to the difference by construction. The thing
+that WOULD see it is `make similarity`, and it is not a gate.
+
+### 727. What rxstate 53's 1,632 bytes are, and three corrections to the inherited notes
+
+Ten ranges, not the thirteen an earlier count carried, and 1,632 bytes rather
+than 1,629:
+
+```
+  0x65473-0x654a7   52   the entry: V34agc, the microstate guard
+  0x6845e-0x68480   34   the vect_idx guard
+  0x69815-0x69995  384   tone_detect, the state-only body, the shared tail
+  0x6af24-0x6af5a   54   the retrain threshold
+  0x6b0e8-0x6b119   49   v34handshakinit
+  0x6b138-0x6b40f  727   the INFO1c body
+  0x6d95f-0x6d9c2   99   hs_setstate's txstate trace, out of line
+  0x6fcb5-0x6fd18   99   its rxstate trace
+  0x6fd34-0x6fda2  110   its microstate trace, and one two-instruction stub
+  0x7170a-0x71722   24   the retrain's message
+```
+
+**Only 861 bytes are live.** The other 771 -- 47.2% -- are the bodies of nine
+`if (DSPLIB_DEBUG_ON())`, and **six of the nine are `hs_setstate`'s own**: the
+`V34HSHAKE: <machine> %s=>%s(...)` idiom with `StateName[next]` constant-folded
+(`*0x6cf0` is [60], `*0x6cc0` is [48], `*0x6cac` is [43], `*0x6c60` is [24],
+`*0x6cfc` is [63]). Those cost nothing to reconstruct -- they fall out of
+calling `hs_setstate`. Only three literals are the arm's own: `.rodata.str1.4`
++0xead0 "V34RETRAIN, End of L2,rx->gain=0x%x,count1=%d", +0xf728 "V34RETRAIN,
+retrain is initiated in DET_AB", and +0xebc4's ten-`%x` dump with
+`.rodata.str1.1`+0x2b81 "V34PROBE, txinfo1c" as its first argument.
+
+All six exits reach 0x62af1. Nothing falls into another arm.
+
+Three corrections, each to something a working note had said:
+
+- **0x34 is 52 `TX_L2`, not `TX_PHASE3_ANS`.** The entry guard at 0x65486 is
+  `cmpw $0x34,0x3592`; 48 = 0x30 is `TX_PHASE3_ANS` and is what the
+  state-only body SETS at 0x698e4. Two different states, one digit apart in
+  hex, and a draft had them as one.
+- **+0x358c is the INFO1c body's, not the tail's.** It is stored at 0x6b24c,
+  inside the 0x6b138 block, so the state-only path leaves it alone. A note
+  listing the tail's stores had it among them; `t_v34hsrx53.c`'s `suite_tail`
+  asserts the state-only case leaves it at what it was seeded with.
+- **The record through +0xaa6c gets length 0x4d = INFO1c**, and the 0x26 that
+  is INFO1a's length goes to a SECOND record at +0xa9dc through +0xaa70
+  (0x6b396). `V34SetINFO1aBits` assembles INFO1a or INFO1c or INFO1d, so the
+  callee's name settles nothing; the length field and the object's own
+  "V34PROBE, txinfo1c" label do.
+
+**And `t41_detect` is a drop-in.** 0x6983a passes the receiver, `obj + 0x3564`,
+`rx + 0x10c` and the value at `rx + 0x130` -- which is `rx_samples`, the end
+pointer `V34agc` has just set -- and tests `%ax`, not `%eax`. That is the
+existing helper argument for argument, including the narrowing to `short`
+that all seven `tone_detect` sites in the object share though the function is
+declared `int` in `v34det.h`. The header was NOT changed on that evidence.
+
+### 728. Nine statements duplicated verbatim, made anchorable by writing the addresses beside them
+
+The INFO1c record's twelve stores are character for character microstate 41's
+at 0x6d387 -- deliberately, finding 726 -- and the tail's six are one line
+each. That made **fourteen** source lines ambiguous to `tools/mutate.py`,
+whose `find` must match exactly once in the whole file, and it broke six
+anchors that `v34hst3m41` already owned.
+
+Finding 432's repair for this was a **leading newline**, on the argument that
+the previous attempt -- deepening the indentation -- silently moved seven
+mutations onto the wrong arm. Neither applies here: the two blocks sit at the
+same depth, both are preceded by a blank line, and the shared run is six lines
+long, so every two-line window inside it is ambiguous too.
+
+What was done instead is to write the arm's own address after each store:
+
+```c
+        t41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */
+        hs_put(obj, T41_BLK_A9AC + 0x1c, 8);        /* 0x6b219 */
+        ...
+        obj->fsk.next = 6;                          /* 0x69974 */
+```
+
+Every line becomes unique **because it now says something true that the other
+copy cannot say**, rather than because it was moved or padded. The anchor sits
+inside the thing it is about and checks that it does, which is what
+`docs/method/gates.md`'s third failure mode asks for; and the alternative --
+seven-line `find` strings quoting the whole block -- would have been an anchor
+about the file's layout, which is the thing the next batch changes.
+
+The six `v34hst3m41` anchors that had gone ambiguous were re-anchored on
+function-local multi-line forms rather than on the addresses, so they do not
+depend on this file's comments at all. `mutsnap.py --verify v34hst3m41
+v34hsrxch` reports 86 and 8 verdicts, all unchanged.
+
+### 729. rxstate 53's mutation suite, the one survivor, and the seed that hid it
+
+62 mutations over the arm: **61 caught, 0 NOT caught, 1 equivalent** (finding
+724's, argued from the object).
+
+**One survived the first full pass, and the reason was the fixture's own
+anti-vacuity seeding.** `the tail assigns the flag rather than adding it` --
+`rx->flags = 0x200` in place of `rx->flags |= 0x200` -- was uncaught, because
+every case seeded the receiver's flags to ZERO so that the OR would be a
+visible change. Over that one seed the two spellings are the same function.
+
+That is finding 345's failure mode with the sign reversed: 345 is a field
+already holding what the store writes, and this is a field seeded to the one
+value at which two different stores agree. **Seeding to zero to make a store
+observable is exactly what makes an OR indistinguishable from an assignment.**
+The repair is one more trial entering with 0x4000 up -- a bit no
+`V34_RX_FLAG_*` in v34recv.h claims -- asserting 0x4200 afterwards.
+
+Two other classes of mutation are caught only through the TRANSCRIPT, which is
+worth recording because table 1's tests cannot use that axis at all (finding
+341):
+
+- **swapping two `hs_setstate` calls.** The object's state words end up
+  identical either way; what differs is the ORDER of two lines in the
+  transcript, and `v34hs_compare` compares them line for line. Both bodies
+  have such a mutation and both are caught.
+- **a transition that is DECLINED.** Entering the INFO1c body already at
+  TX_DPSK costs one line and two bytes, so a case driven at the arm's own
+  target is a different signature from one driven at 81 -- which is what
+  proves `hs_setstate`'s "already there" guard is reached at all.
+
+The suite runs every body twice, once with the diagnostics on and once off,
+and asserts the same bytes and no lines -- `t_v34hst3m41.c`'s measured
+argument, not a reasoned one: a store moved inside an `if (DSPLIB_DEBUG_ON())`
+was undetectable there until the quiet re-drive existed.

@@ -6409,6 +6409,215 @@ t44_micro_det_info(struct v34_object *obj)
 }
 
 /*
+ * ---------------------------------------------------------------------------
+ * rxstate 53 `DET_AB`, 0x65473 -- the end of L2, and the retrain that is not
+ * always one.
+ *
+ * 1,632 bytes over TEN ranges -- 0x65473, 0x6845e, 0x69815, 0x6af24,
+ * 0x6b0e8, 0x6b138, 0x6d95f, 0x6fcb5, 0x6fd34 and 0x7170a -- and only 861 of
+ * them are live.  The other 771, 47.2%, are the bodies of nine
+ * `if (DSPLIB_DEBUG_ON())`, six of which are `hs_setstate`'s own transition
+ * trace with `StateName[next]` constant-folded (`*0x6cf0` is [60], `*0x6cc0`
+ * is [48], `*0x6cac` is [43], `*0x6c60` is [24] and `*0x6cfc` is [63]).
+ * Only three of the nine are this arm's own literals.
+ *
+ * Every one of the exits is `jmp 0x62af1`, the once-per-block transmit
+ * dispatch: the arm decides and leaves, and nothing falls into another arm.
+ *
+ * TWO GUARDS, TWO WIDTHS, AND THE SECOND IS THE ONE THAT MATTERS.  0x6845e
+ * is `cmpw $0x5db` + `jg`, sixteen bits and signed.  0x6af24 is NOT
+ * sixteen-bit: it sign-extends BOTH halfwords into 32-bit registers with
+ * `movswl`, adds 0x2418 there, and compares `%ebx` against `%edx` -- because
+ * `rtd + 9240` does not fit a short.  Spelling that comparison sixteen bits
+ * wide is a defect no small-value test can see, so `t_v34hsrx53.c` drives it
+ * at rtd 30000, where the two readings disagree about whether the modem
+ * retrains at all.  Finding 724.
+ *
+ * THE DETECTOR IS `t41_detect`'s, argument for argument -- the receiver, the
+ * detector at +0x3564, the samples at receiver + 0x10c and `rx_samples` as
+ * the end pointer.  All seven `tone_detect` sites in the object test `%ax`
+ * and not `%eax` though the function is declared `int`, which is why that
+ * helper narrows to `short`; the header is not changed on that evidence
+ * (finding 727).
+ */
+static void
+t53_rx_det_ab(struct v34_object *obj)
+{
+	struct v34_receiver *rx = T41_RX(obj);
+
+	/*
+	 * 0x65473, and it runs before either guard -- so even the two exits
+	 * that do nothing else have run the gain control.
+	 */
+	V34agc(rx);
+
+	/* 0x65486, `cmpw $0x34`: 52 is TX_L2, not TX_PHASE3_ANS. */
+	if (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {
+		t3c_txblock(obj);			/* 0x65494 */
+		return;
+	}
+
+	/* 0x6845e, sixteen bits and signed. */
+	if (obj->vect_idx <= 0x5db) {
+		t3c_txblock(obj);			/* 0x6846d */
+		return;
+	}
+
+	if (t41_detect(obj) == 0) {
+		/*
+		 * 0x6af24, and the arithmetic is THIRTY-TWO bits wide.  See
+		 * the head of this function.
+		 */
+		if ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {
+			t3c_txblock(obj);		/* 0x6af47 */
+			return;
+		}
+
+		/*
+		 * 0x6b0f4.  This runs INSIDE the step, so a test driving it
+		 * is the case finding 359 says `V34HS_REFINIT=1` cannot be
+		 * used against: side A installs our library tables and side B
+		 * the blob's, and no address comparison can settle two copies
+		 * of one table.
+		 */
+		v34handshakinit(obj, 1);		/* 0x6b0f4 */
+
+		if (DSPLIB_DEBUG_ON())			/* 0x7170a */
+			dsplibs_debug_printf("V34RETRAIN, retrain is "
+					     "initiated in DET_AB\n");
+
+		t3c_txblock(obj);
+		return;
+	}
+
+	/*
+	 * 0x69851.  Both arguments are sign-extended halfwords: the gain is
+	 * the receiver's +0x136 and `count1` is the trace's `[1]`.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34RETRAIN, End of L2,rx->gain=0x%x,"
+				     "count1=%d\n",
+				     rx->agc_gain, obj->vect_idx);
+
+	if (obj->f359c == 0x65) {
+		/*
+		 * 0x6b138.  The originating end builds INFO1c and hands the
+		 * receive machine back to the FSK demodulator.
+		 *
+		 * IT IS INFO1c AND NOT INFO1a, and the length field is what
+		 * says so: +0x18 of this record gets 0x4d, which is INFO1c's,
+		 * and the 0x26 INFO1a length goes to a SECOND record at
+		 * +0xa9dc below.  `V34SetINFO1aBits` assembles INFO1a or
+		 * INFO1c or INFO1d (v34info.h), so the callee's name settles
+		 * nothing; the object's own label for the trace at the bottom
+		 * is "V34PROBE, txinfo1c".
+		 */
+		hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
+
+		probeselect(obj);			/* 0x6b1de */
+
+		/*
+		 * 0x6b1e3, and the store is BEFORE the call because the call
+		 * takes the same interior pointer as its second argument.
+		 *
+		 * THE OBJECT WRITES THE TWELVE STORES BELOW THROUGH +0xaa6c
+		 * AND THIS DOES NOT.  0x6b1f5 reloads the field into `%ebp`
+		 * although `%ebx` still holds the identical value, which is
+		 * what a source dereferencing the pointer rather than a local
+		 * compiles to.  The two spellings cannot differ: the store
+		 * two instructions earlier is what the reload reads, and
+		 * `V34SetINFO1aBits` does not touch +0xaa6c.  So the
+		 * differential tier cannot see the difference and these are
+		 * microstate 41's own statements verbatim rather than a
+		 * second reading of the same record.  Finding 726.
+		 */
+		t3c_putp(obj, T41_PTR_AA6C,		/* 0x6b1e3 */
+			 (char *)obj + T41_BLK_A9AC);
+		V34SetINFO1aBits(obj,			/* 0x6b1f0 */
+				 (short *)((char *)obj + T41_BLK_A9AC));
+
+		/*
+		 * EACH STORE CARRIES ITS ADDRESS, and that is not decoration:
+		 * these nine statements are character for character
+		 * microstate 41's at 0x6d387, so without the addresses no
+		 * mutation anchored on one of them could tell the two apart.
+		 * Finding 432's hazard, answered with information rather than
+		 * with indentation.
+		 */
+		t41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */
+		hs_put(obj, T41_BLK_A9AC + 0x1c, 8);	    /* 0x6b219 */
+		hs_put(obj, T41_BLK_A9AC + 0x16, 1);	    /* 0x6b21f */
+		hs_put(obj, T41_BLK_A9AC + 0x28, 0x10);	    /* 0x6b225 */
+		hs_put(obj, T41_BLK_A9AC + 0x2a, 0x10);	    /* 0x6b22b */
+		hs_put(obj, T41_BLK_A9AC + 0x20, 0);	    /* 0x6b231 */
+		/*
+		 * THIRTY-TWO BITS, both of them: `movl $0xff72` and not
+		 * `movw`, so the immediate is +65394 and the halfword above
+		 * each is zeroed too.
+		 */
+		t3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */
+		t3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */
+
+		hs_put(obj, T41_F358C, 0);		/* 0x6b24c */
+
+		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
+
+		/* 0x6b379: the SECOND record, and INFO1a's length. */
+		t3c_putp(obj, T41_PTR_AA70, (char *)obj + 0xa9dc);
+		hs_put(obj, 0xa9dc + 0x18, 0x26);
+
+		/*
+		 * 0x6b3a2, and it reads the record through `%ebx` -- obj +
+		 * 0xa9ac -- rather than through the pointer it has just
+		 * aimed, which is the other half of the note above.
+		 */
+		if (DSPLIB_DEBUG_ON()) {
+			const unsigned short *p =
+			    (const unsigned short *)((const char *)obj
+						     + T41_BLK_A9AC);
+
+			dsplibs_debug_printf(
+			    "%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
+			    "0x%x,0x%x\n",
+			    "V34PROBE, txinfo1c",
+			    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],
+			    (unsigned)p[3], (unsigned)p[4], (unsigned)p[5],
+			    (unsigned)p[6], (unsigned)p[7], (unsigned)p[8],
+			    (unsigned)p[9]);
+		}
+	} else {
+		/*
+		 * 0x69888.  The answering end moves three state words and
+		 * builds nothing.
+		 */
+		hs_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);
+		hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);
+		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
+	}
+
+	/*
+	 * 0x69924, the tail both halves reach.  The receiver's +0x136 is
+	 * restored from its +0x264 -- an unmodelled halfword this arm only
+	 * reads -- and the FSK demodulator's four scalars are re-armed for
+	 * the next message, `next` at 6 rather than 0.
+	 */
+	/* 0x69933 */
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
+	rx->agc_gain = (short)*(const unsigned short *)((const char *)rx
+							+ T3M_RX_F264);
+
+	obj->fsk.sr = 0;			/* 0x6995f */
+	obj->fsk.nbits = 0;			/* 0x69966 */
+	obj->fsk.phase = 0;			/* 0x6996d */
+	obj->fsk.next = 6;			/* 0x69974 */
+	obj->vect_idx = 0;			/* 0x6997b */
+	hs_put(obj, T41_COUNT, 0);		/* 0x69982 */
+
+	t3c_txblock(obj);				/* 0x69989 */
+}
+
+/*
  * The handshake, once per block.
  *
  * Four guards choose one of three dispatches, read off the prologue at
@@ -6599,8 +6808,12 @@ v34handshak(void *vobj)
 
 	if (rxst != V34HS_RX_DPSK) {
 		if (rxst > V34HS_RX_DPSK) {
-			/* 0x62b71, and 53 and 72 are the two that are not written. */
-			if (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {
+			/* 0x62b71, and 72 is the one that is not written. */
+			if (rxst == V34HS_DET_AB) {
+				t53_rx_det_ab(obj);	/* 0x65473 */
+				return;
+			}
+			if (rxst == V34HS_RX_L1) {
 				t3m_notwritten(T3M_UNWRITTEN_RXSTATE);
 				return;
 			}

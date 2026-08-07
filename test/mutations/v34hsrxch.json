@@ -13,13 +13,13 @@
  },
  {
   "label": "53 DET_AB is not one of the second chain's two",
-  "find": "\t\t\tif (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {",
-  "replace": "\t\t\tif (rxst == V34HS_RX_L1) {"
+  "find": "\t\t\tif (rxst == V34HS_DET_AB) {\n\t\t\t\tt53_rx_det_ab(obj);\t/* 0x65473 */",
+  "replace": "\t\t\tif (rxst == V34HS_RX_L2) {\n\t\t\t\tt53_rx_det_ab(obj);\t/* 0x65473 */"
  },
  {
   "label": "72 RX_L1 is not one of the second chain's two",
-  "find": "\t\t\tif (rxst == V34HS_DET_AB || rxst == V34HS_RX_L1) {",
-  "replace": "\t\t\tif (rxst == V34HS_DET_AB) {"
+  "find": "\t\t\tif (rxst == V34HS_RX_L1) {\n\t\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);",
+  "replace": "\t\t\tif (rxst == V34HS_RX_L2) {\n\t\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);"
  },
  {
   "label": "4 RECEIVE falls through to the transmit dispatch",

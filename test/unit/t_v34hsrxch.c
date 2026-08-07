@@ -7,16 +7,17 @@
  * -- for EVERYTHING ELSE, by two different doors -- the once-per-block
  * transmit dispatch at 0x62af1.
  *
- * WHAT THIS TEST IS FOR.  Three of those six are still unwritten, so the point
+ * WHAT THIS TEST IS FOR.  Two of those six are still unwritten, so the point
  * is not "the chain is finished": it is that the routing itself is now the
  * object's, and that the two "everything else" doors need no new code at all.
  * `t3c_txblock` has been written since table 2 landed, so every rxstate below
- * 43 except 4, and every rxstate above 43 except 53 and 72, is COMPLETE.
+ * 43 except 4, and every rxstate above 43 except 72, is COMPLETE.
  *
  * TWO COUNTS, AND THE SWEEP BELOW ASSERTS THE SECOND.  82 of the eighty-seven
- * reach a written exit through one of the two DEFAULT doors -- all but 4, 53
- * and 72, which are guarded, and all but 43 and 35, which have arms of their
- * own.  84 are written altogether, those 82 plus 43 and 35.  Finding 717.
+ * reach a written exit through one of the two DEFAULT doors -- all but 4 and
+ * 72, which are guarded, and all but 43, 35 and 53, which have arms of their
+ * own.  85 are written altogether, those 82 plus 43, 35 and 53.  Finding 717,
+ * and finding 725 for 53's move from the guarded column to the written one.
  *
  * THE `jg` IS WHY THIS IS A SWEEP AND NOT FIVE TRIALS.  0x62a12 branches to
  * the second chain before the compares against 4 and 35 are reached, so a
@@ -69,11 +70,16 @@ static const struct {
 	int		code;
 	unsigned	target;
 	const char	*name;
+	const char	*what;
 } named[] = {
-	{ V34HS_RX_DPSK, T3M_WRITTEN,		 0x64a64, "43 RX_DPSK"	},
-	{ V34HS_RECEIVE, T3M_UNWRITTEN_RXSTATE,	 0x653e4, "4 RECEIVE"	},
-	{ V34HS_DET_AB,	 T3M_UNWRITTEN_RXSTATE,	 0x65473, "53 DET_AB"	},
-	{ V34HS_RX_L1,	 T3M_UNWRITTEN_RXSTATE,	 0x650c6, "72 RX_L1"	}
+	{ V34HS_RX_DPSK, T3M_WRITTEN,		 0x64a64, "43 RX_DPSK",
+	  "reaches the microstate machine"	},
+	{ V34HS_RECEIVE, T3M_UNWRITTEN_RXSTATE,	 0x653e4, "4 RECEIVE",
+	  NULL					},
+	{ V34HS_DET_AB,	 T3M_WRITTEN,		 0x65473, "53 DET_AB",
+	  "runs the arm t_v34hsrx53.c owns"	},
+	{ V34HS_RX_L1,	 T3M_UNWRITTEN_RXSTATE,	 0x650c6, "72 RX_L1",
+	  NULL					}
 };
 
 #define NNAMED	((int)(sizeof(named) / sizeof(named[0])))
@@ -87,8 +93,7 @@ static const struct {
 static int
 unwritten(short rxst)
 {
-	return rxst == V34HS_RECEIVE || rxst == V34HS_DET_AB
-	    || rxst == V34HS_RX_L1;
+	return rxst == V34HS_RECEIVE || rxst == V34HS_RX_L1;
 }
 
 /*
@@ -135,9 +140,9 @@ suite_sweep(void)
 	 * gates.md's rule 1: make the tool count what it examined.
 	 */
 	diff_eq_int("the sweep drove every rxstate 0..86 that is written",
-		    written, 87 - 3, tag);
-	diff_eq_int("and skipped exactly the three that are not",
-		    guarded, 3, tag++);
+		    written, 87 - 2, tag);
+	diff_eq_int("and skipped exactly the two that are not",
+		    guarded, 2, tag++);
 
 	if (dump)
 		printf("  sweep: %d written, %d guarded\n", written, guarded);
@@ -163,9 +168,8 @@ suite_named(void)
 		if (named[i].code == T3M_WRITTEN) {
 			v34hs_step();
 			v34hs_ours(0);
-			snprintf(msg, sizeof(msg),
-				 "%s reaches the microstate machine",
-				 named[i].name);
+			snprintf(msg, sizeof(msg), "%s %s",
+				 named[i].name, named[i].what);
 			v34hs_compare(msg, tag);
 		} else {
 			/*
