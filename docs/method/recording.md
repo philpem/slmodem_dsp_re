@@ -152,6 +152,17 @@ perfectly all the while. The first version of `gates.md` listed six citations
 **by bare number in a table column** — inside the table that teaches the rule
 (finding 670).
 
+Two spellings look like citations and are not, and the second is worse because
+it looks *more* careful than the form that works:
+
+- a bare `(N)` — no word, so nothing to match (finding 670);
+- **the word present but separated from the digits.** The pattern is
+  `\bfindings?\s+(\d+…)`, so bolding or backticking the number — writing
+  `finding` followed by the digits wrapped in `**` or in a code span — reads
+  to the checker exactly like the bare parenthetical. One was caught by the
+  audit below, in this file set's own draft; `refcheck.py` reported zero
+  dangling either way (finding 690).
+
 The audit that missed them is the part worth copying. It searched for
 `finding[s]? N` and reported every hit resolving correctly: a detector that
 cannot distinguish a clean file from a broken one, which is finding 134's

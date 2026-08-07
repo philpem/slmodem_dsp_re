@@ -98,6 +98,11 @@ suites at once gave **37 mutations NOT CAUGHT across 10 of them**, plus one
 unusable — including `v34k56` at 15 caught against 10 not, so **40% of what
 that suite claims to check is unchecked**. Nobody could have known: the number
 existed only in the scrollback of whichever session last ran it (finding 545).
+**37 is the figure at findings 545 and 638, and it has since moved**: eight of
+`v34hstx1`'s eleven fell when the transcript tier gained its missing lines
+(finding 651). No finding records a tree-wide total after that, so this one
+does not either — which is the point of recording per-suite verdicts under a
+key rather than a total in prose.
 
 ### And what a recorded snapshot catches that a run cannot
 
@@ -337,9 +342,18 @@ what separated the two and why the argument is still true of the object.
 Of 760 missing lines, **204 (27%) were calls not made** — helpers that already
 existed and were already correct, whose bodies three arms had inlined verbatim
 instead of calling. One of them, `v34FreezeEcho`, was **written, correct and
-dead**: no caller anywhere in `src/` (finding 572). The other **73% was code
-nobody had written**, and no amount of re-reading the file produces it
-(finding 574).
+dead**: no caller anywhere in `src/` (finding 572).
+
+Finding 574 read the other 73% as *behaviour* nobody had written, and **that
+reading was wrong.** When the lines were finally written, not one of them
+needed a field, a header, a foreign file or a function this tree did not
+already have: the arms were reconstructed, byte-exact and mutation-tested, and
+what was missing was the reporting threaded through them (finding 650, which
+closes finding 574 and says so in its header). The honest statement is
+narrower and more useful than the prediction: **a trace gap is a gap in what
+is said, and it is not evidence of a gap in what is done** — the placement of
+each line, not its arguments and not the code around it, was the whole job.
+See *Make the measurement one command*, below, for what it took to zero.
 
 Two facts held together hid the defect for three batches: the diagnostics were
 off, and the reason recorded for their being off was a harness limitation. The
@@ -372,12 +386,9 @@ byte-identical in all 272 step cases throughout (finding 650). A number built
 as a measurement, and taken to zero, is the strongest argument available for
 building one.
 
-Taking it to zero also settled what the gap had been *made of*, and it was not
-what the previous finding predicted: **not one of the lines that remained
-needed a field, a header, a foreign file or a function this tree did not
-already have.** The arms were reconstructed and byte-exact; what was missing
-was the reporting threaded through them, and the **placement** of each line —
-not its arguments, not the code around it — was the whole job (finding 650).
+Taking it to zero is also what disproved finding 574's reading of the gap, two
+sections above. The placement of each line was the whole job, and placement is
+the part the message text will mislead you about:
 
 > **Place a diagnostic on the branch that reaches it, never on what the
 > message says.** Two of them would have gone elsewhere on their text: one

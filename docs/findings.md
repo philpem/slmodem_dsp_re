@@ -28119,7 +28119,7 @@ Citations audited by finding 670's two-pass method: every `\b\d{3}[a-z]?\b`
 in the seven files, less those already carrying the word `finding`, read by
 hand. The remainder is quantities -- and the one that needed care is the count
 of diagnostic lines that closed finding 574's gap, because that count is also a
-finding number cited three times in the same document set.
+finding number, cited six times across the same document set.
 
 **Three corrections to the brief this batch received**, recorded for the same
 reason finding 670 recorded its two:
@@ -28138,3 +28138,14 @@ reason finding 670 recorded its two:
      both measured figures and no count -- a count sourced from `git log`
      rather than from the record is exactly the unreproducible ratio finding
      639 corrected.
+
+#### One more thing `refcheck.py` cannot parse, found by the audit
+
+`FINDING_REF` is `\bfindings?\s+(\d+[a-z]?...)`, so **markdown emphasis or a
+code span between the word and the digits breaks it**: `finding **651**` is not
+a reference the checker sees, exactly as `(651)` is not. The first draft of
+this finding contained one, caught by the two-pass audit and not by
+`refcheck.py`, which reported zero dangling either way. Recorded in
+`docs/method/recording.md` beside finding 670's bare-number instance, because
+it is the same defect wearing different punctuation and neither is visible to
+the tool that exists to find them.
