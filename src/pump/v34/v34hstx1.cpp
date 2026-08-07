@@ -73,6 +73,7 @@
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
 #include "dsplib/v34hstx1.h"
 #include "dsplib/v34info.h"	/* V34SetINFO0aBits                       */
+#include "dsplib/v34pcmif.h"	/* VPcmV34Report*OfEchoAdapt              */
 #include "dsplib/v34recv.h"	/* struct v34_receiver                    */
 #include "dsplib/v34rx.h"	/* txmit, txwritequeue, V34scrambler      */
 #include "dsplib/v34shell.h"	/* modulatevector                         */
@@ -221,6 +222,28 @@
  * TX1_FAAE0 and TX1_FAAE2 are.
  */
 #define TX1_FAA3C	0xaa3c
+
+/*
+ * +0xa244, an INT, and +0xaa80, a halfword.
+ *
+ * 21 reads +0xa244 three ways in one compare chain -- against its half, its
+ * whole and nothing else -- and no other site in this tree reads it; it is
+ * inside `unmapped_a242`.  +0xaa80 is the first halfword of `unmapped_aa80`,
+ * the region whose +4 and +6 are the rate configuration's baud and 20's
+ * +0xaa86; 21 stores one into it and nothing here reads it back.
+ */
+#define TX1_FA244	0xa244
+#define TX1_FAA80	0xaa80
+
+/*
+ * +0xaa0c, the second of the five 0x30-byte message records that run from
+ * +0xa94c to +0xaa3c.  `struct v34_object` names its first halfword
+ * `info_rates`; v34hshak.c:1406 blanks the SAME twelve fields at +0x14
+ * through +0x2c that 21's completion blanks, which is what says the two are
+ * one record and not two overlapping readings of one region.  Reached by
+ * offset here for the reason TX1_FAAE0 and TX1_FAA3C are.
+ */
+#define TX1_INFOREC	0xaa0c
 
 /*
  * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
@@ -2096,4 +2119,214 @@ v34tx1_tx_dpsk(void *objp)
 	/* 0x64fde */
 	*((unsigned char *)o + TX1_FABF8) = 0;
 	return tx1_moh_hold(o);				/* 0x64fec */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 21 `TRNSEG4`, 0x64339, with the three-way compare at 0x64ad9, the
+ * echo-adapt clear-down at 0x67613, the counter's two forms at 0x6801e and
+ * 0x64b96, and the two Ja tails at 0x64de7 and 0x67f80.
+ *
+ * ONE SCRAMBLED SYMBOL PER PASS AND A COUNTER READ FOUR WAYS.  The head is
+ * 71 `TXLEVEL`'s and 86 `TXMD`'s: two bits of the literal 3 through the
+ * shift register at +0x25cc, the quadrant into `f25c8`, one `vect4` point
+ * out.  The object carries the loop twice -- 0x6436e with the 0x04000000 tap
+ * and 0x64440 with 0x00002000 -- and picks between the copies on
+ * `f359c == 0x65`, which is `V34scrambler`'s `mode` exactly, so it is the
+ * same `tx1_scramble2` the other two use.
+ *
+ * Then `f25c0` is incremented and compared against FOUR different things, in
+ * this order, and only the last of them ends the segment:
+ *
+ *     +0xaa78            the echo-adapt START point -- clear four fields
+ *                        and report, then CARRY ON down the chain
+ *     +0xaa86            the "period", which only raises a flag
+ *     +0xa244 / 2        the echo-adapt MIDDLE point -- report and leave
+ *     baud + baud/2      raise 0x400 and clear bit 15, and leave
+ *     +0xa244            the segment is over: the completion below
+ *
+ * THE FIRST IS NOT AN EXIT AND THE OTHER FOUR ARE, which is the shape a
+ * reconstruction can get wrong without any test noticing: 0x67613 ends in a
+ * `jmp 0x643f8`, back into the chain, where 0x67278 and 0x67734 end in loop
+ * rejoins.  `+0xa244` is read as an INT and `f25c0` is sign-extended before
+ * every one of the three compares against it, so the arithmetic is 32-bit
+ * even though both fields are written as halfwords.
+ *
+ * `baud + baud/2` IS THE RATE CONFIGURATION'S BAUD AT +0xaa84 and not the
+ * receive baud at +0xaa96 that the completion switches on.  They are two
+ * fields and this arm reads both, which is why they are seeded apart in the
+ * test rather than left to agree.
+ *
+ * ---------------------------------------------------------------------------
+ * THE COMPLETION IS `setupreceiver` INLINED, and recognising that is what
+ * turns 0x64c04..0x64d4a into one call.  Store for store it is that function:
+ * `rxinit`, `f128 = 4`, the six-way switch on +0xaa96 that sets f1b0, f1ae,
+ * f1be and f1ac, the eight-way switch on +0xaaa8 that sets `carrier` and
+ * f1ba, `agc_step = 0x2000`, `agc_gain = f262`, `flags &= 0xf0ff`,
+ * `detectorinit(obj+0x3564, *(obj+0xaab0), 0, 8, 10, 0x600, 0)` and
+ * `flags |= 0x200` -- the same literals, the same two diagnostics, and both
+ * switches without a default.  So the eight `hsine*` tables this arm reaches
+ * are reached through `setupreceiver` and no table had to be extracted for
+ * it; they are already global in v34filters.c.
+ *
+ * The +0xaa0c record is blanked next, and it is v34hshak.c:1406's TWELVE
+ * FIELDS in a different order -- +0x14 to -1 and the other eleven to zero.
+ * Two of them are 32-bit stores and ten are halfwords; written in the object's
+ * order here, which is not the record's.
+ *
+ * ---------------------------------------------------------------------------
+ * WHICH Ja TAIL, AND THE TWO TESTS ARE NOT THE SAME TEST.  The counter above
+ * takes `rtd` whole when EITHER PCM receiver is non-zero and halves it when
+ * neither is; the tail takes the V.90 side when +0x24c is above one and the
+ * K56flex side when +0x250 is.  So +0x24c == 1 is a real state: the counter
+ * is not halved and neither Ja tail is taken.
+ *
+ * AND THE ARM'S TESTS ARE UNSIGNED WHERE `indicateJaTransmission`'S ARE
+ * SIGNED.  0x64de1 and 0x67f8b are `cmpl $1 ; jbe`; the callee's two at
+ * 0xa3f2 and 0xa401 are `cmpl $1 ; jg` (v34pcmmain.cpp says so).  A negative
+ * `v90_receiver` therefore reaches `indicateJaTransmission` through this arm
+ * and does nothing when it gets there.  Reproduced, not smoothed over.
+ *
+ * ---------------------------------------------------------------------------
+ * FIVE COMPARES HERE CANNOT BE FALSE, for finding 342's reason at 65.  The
+ * arm is reached only through table 1 at `txstate == 21` and nothing between
+ * the dispatch and 0x64b32 writes +0x3596, so `txstate != 0x40` holds; and
+ * 0x64de7's `!= 0x4e`, 0x67f98's `!= 0x55` and 0x64e1b's `!= 0x23` test a
+ * word this arm has just written with a different value.  0x64bde's
+ * `rxstate != 4` is false only if the caller entered in RECEIVE, which the
+ * fixture cannot drive without changing which dispatch the tail takes.  All
+ * five are written as the object writes them and each is an equivalent
+ * mutation.
+ *
+ * WHAT IS NOT MODELLED, and it is finding 341's gap and not a new one: the
+ * thirteen trace blocks at 0x68d07, 0x68d6f, 0x687f4, 0x68754, 0x68ca4,
+ * 0x691b9, 0x691a8, 0x6916d, 0x6917e, 0x69dfa, 0x69b6f, 0x6a998 and 0x6a8e1,
+ * and the four calls that only print -- both `VPcmV34Report*OfEchoAdapt` and
+ * both `V34EchoReportCoeff`.
+ */
+int
+v34tx1_trnseg4(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_ratecfg *cfg =
+		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	short q;
+	int n, span, baud;
+
+	/* 0x64339: the scrambler, the quadrant and one sample. */
+	q = tx1_scramble2(o);
+	o->f25c8 = q;
+	tx1_put_point(o, vect4[q]);
+	txmit(o);
+
+	/* 0x643dc */
+	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+
+	if (tx1_get(o, TX1_COUNT) == o->f25c0) {
+		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
+		o->f354c = 0;
+		o->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);
+		o->f3550 = 0;
+		o->f3552 = 0;
+		o->f3560 = 0;
+		VPcmV34ReportStartOfEchoAdapt(o);
+	}
+
+	/* 0x643f8 */
+	if (((unsigned short)o->f25c2 & 0x100u) == 0
+	    && o->f25c0 >= tx1_get(o, TX1_FAA86))
+		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x100u);
+
+	/* 0x64ae4 */
+	n = o->f25c0;
+	span = tx1_get_int(o, TX1_FA244);
+
+	if (n == (span >> 1)) {
+		VPcmV34ReportMiddleOfEchoAdapt(o);	/* 0x67734 */
+		return V34TX1_LOOP;			/* 0x640a1 */
+	}
+
+	baud = cfg->baud;
+	if (n == baud + (baud >> 1)) {
+		/* 0x67278 */
+		o->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)
+				   | 0x400u);
+		return V34TX1_LOOP;			/* 0x63da2 */
+	}
+
+	if (n != span)
+		return V34TX1_LOOP;			/* 0x629c8 */
+
+	/* 0x64b24: the segment is over. */
+	if (tx1_get(o, TX1_TXSTATE) != V34HS_JTXMIT)
+		tx1_put(o, TX1_TXSTATE, V34HS_JTXMIT);
+
+	if (o->rtd <= 2) {
+		/* 0x6801e */
+		o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
+		V34EchoReportCoeff(&o->echo0);
+		V34EchoReportCoeff(&o->echo1);
+		tx1_put(o, TX1_COUNT, 0);
+	} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
+		/* 0x68ad0 and 0x69de7, two copies of one store */
+		tx1_put(o, TX1_COUNT, o->rtd);
+	} else {
+		/* 0x64b96 */
+		tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+	}
+
+	/* 0x64bb2 */
+	tx1_put(o, TX1_F25D6, (short)0x8990);
+	o->f25c6 = o->f25c8;
+	if (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)
+		tx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);
+	setupreceiver(o);				/* 0x64c04 */
+
+	/* 0x64d37: the +0xaa0c record, in the object's order */
+	{
+		unsigned char *r = (unsigned char *)objp + TX1_INFOREC;
+
+		*(int *)(r + 0x24) = 0;
+		*(int *)(r + 0x2c) = 0;
+		*(short *)(r + 0x14) = -1;
+		*(short *)(r + 0x1a) = 0;
+		*(short *)(r + 0x1e) = 0;
+		*(short *)(r + 0x22) = 0;
+		*(short *)(r + 0x18) = 0;
+		*(short *)(r + 0x1c) = 0;
+		*(short *)(r + 0x16) = 0;
+		*(short *)(r + 0x28) = 0;
+		*(short *)(r + 0x2a) = 0;
+		*(short *)(r + 0x20) = 0;
+	}
+
+	/* 0x64d8d */
+	if (tx1_get(o, TX1_MICROSTATE) != V34HS_DET_SYNC)
+		tx1_put(o, TX1_MICROSTATE, V34HS_DET_SYNC);
+
+	/* 0x64dba */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_FAA80, 1);
+
+	if ((unsigned)o->v90_receiver > 1u) {
+		/* 0x64de7 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)
+			tx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);
+		if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
+			tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+		indicateJaTransmission(o);
+		return V34TX1_LOOP;			/* 0x629c8 */
+	}
+
+	if ((unsigned)o->k56flex_receiver > 1u) {
+		/* 0x67f91 */
+		if (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)
+			tx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);
+		if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
+			tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+		indicateJaTransmission(o);
+		return V34TX1_LOOP;			/* 0x63948 */
+	}
+
+	return V34TX1_LOOP;				/* 0x63da2 */
 }

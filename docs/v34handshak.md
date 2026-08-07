@@ -405,24 +405,35 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-### Seventeen of the nineteen have landed, and this is how a case is landed
+### Eighteen of the nineteen have landed, and this is how a case is landed
 
 txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
 -- then 60, 18, 70 and 51, the four smallest of what those left, then 19, 20
-and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, and
-then 67 and 24, the two largest, are in `src/pump/v34/v34hstx1.cpp` and compare
-byte for byte through `test/unit/t_v34hstx1.c`. Findings 340-345 and 421-425.
+and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, then
+67 and 24, the two largest at the time, and then 21 `TRNSEG4`, are in
+`src/pump/v34/v34hstx1.cpp` and compare byte for byte through
+`test/unit/t_v34hstx1.c`. Findings 340-345, 421-425 and 426-427.
 
-The two still open are 21 and 66. **Two of the seventeen needed a table
+**The one still open is 66 `TRNSEG4A`** (0x62e28, 3,583 level-0 bytes);
+finding 420 has its block ranges, its callees and its two known entrances.
+
+**Two of the eighteen needed a table
 before they could be written at all**: `probe`, 64 signed shorts at
 `.rodata+0x2c00`, which 51 reads and which this tree did not have (finding
 421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
-FOUR-byte points and which was `static` in v34rx.c (finding 422). Read both
-before estimating one of the two -- an arm that reads a table this tree does
+FOUR-byte points and which was `static` in v34rx.c (finding 422). 21 needed
+neither, because the eight `hsine*` tables it reaches are reached through
+`setupreceiver` and are already global in `v34filters.c`. Read both
+before estimating what is left -- an arm that reads a table this tree does
 not have, or has under the wrong element width, is not the size its byte count
 says. **And read the body for an INLINED LIBRARY FUNCTION before estimating it
-at all**: 67's 2 KB was mostly `getbit` open-coded and 24's 2.2 KB was `getbit`
-open-coded twice, so both came out as calls (findings 424 and 425).
+at all**: 67's 2 KB was mostly `getbit` open-coded, 24's 2.2 KB was `getbit`
+open-coded twice, and about a thousand bytes of 21 -- twenty of its twenty-three
+block ranges -- is `setupreceiver` inlined, checked store for store against the
+standalone function at 0x5f040. All three came out as calls, so the rule is
+three for three: **read a long arm against the functions the tree already
+has.** 66's four `bitreverse` calls and its `sysdep_memset` are the same
+signal (findings 424, 425 and 426).
 
 **An arm whose paths do not all reach `txmit` needs a DIFFERENT anti-vacuity
 guard and not a weaker one.** `run_case`'s "the arm advanced the queue to the
