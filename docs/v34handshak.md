@@ -73,7 +73,7 @@ every arm reaches every other and it reports exclusive = 0 for all of them.
 ```
     0x653e4   rxstate  4 RECEIVE       4,875 bytes, 165 blocks   LARGE
     0x650c6   rxstate 72               3,806 bytes,  95 blocks   MEDIUM-LARGE
-    0x65473   rxstate 53               1,632 bytes,  41 blocks   DONE
+    0x65473   rxstate 53               1,632 bytes, 10 ranges   DONE
     0x6754b   the FSK gate's body      1,089 bytes,  38 blocks   DONE
     0x6752c   rxstate 35 WAIT             31 bytes,   1 block    DONE
     0x64a87   the FSK gate's TEST      already written

@@ -29236,3 +29236,38 @@ The suite runs every body twice, once with the diagnostics on and once off,
 and asserts the same bytes and no lines -- `t_v34hst3m41.c`'s measured
 argument, not a reasoned one: a store moved inside an `if (DSPLIB_DEBUG_ON())`
 was undetectable there until the quiet re-drive existed.
+
+### 730. Four more `hs_setstate` guards that can never fire, all in rxstate 53's arm
+
+Finding 722 recorded one transition in the FSK gate's arm whose "already
+there" side is unreachable, and 122 bytes of blob that cannot execute. rxstate
+53's arm has **four more**, and the same cause: GCC 3.4 inlined `hs_setstate`
+and could not see the caller's invariant.
+
+The arm is entered on exactly two conditions -- the chain's `cmp $0x35` at
+0x62b71 says rxstate is 53, and guard 1's `cmpw $0x34,0x3592` at 0x65486 says
+the microstate is 52 -- and neither word is written before any of these tests:
+
+| site | tests | still holds | so |
+|---|---|---|---|
+| 0x698ca | `cmp $0x30,%dx`, microstate vs 48 | 52 | the store at 0x698e9 always runs |
+| 0x698fe | `cmp $0x2b,%dx`, rxstate vs 43 | 53 | the store at 0x6991d always runs |
+| 0x6b253 | `cmp $0x2b,%cx`, rxstate vs 43 | 53 | `je 6fd34` never takes |
+| 0x6b2ec | `cmp $0x3f,%cx`, microstate vs 63 | 52 | the store at 0x6b372 always runs |
+
+The only writes to +0x3592 and +0x3594 anywhere in the arm are those very
+stores, and each is BELOW its own test; the txstate stores at 0x698b5 and
+0x6b1c3 do not touch either word.
+
+**One of the four leaves visible dead code.** 0x6fd34 is two instructions --
+`mov dsplibs_debug_level,%edx; jmp 6b2de` -- and is the taken side of
+0x6b257's `je`, so it is six bytes reachable from nowhere. It is in the arm's
+byte count (finding 727's ten ranges) because it is in the arm.
+
+**So `hs_setstate`'s declined-transition path is reachable on the TXSTATE
+only**, at 0x69896 and 0x6b13f, where the value is whatever the caller left.
+That is the one `t_v34hsrx53.c` drives, and finding 729's "declined
+transition costs exactly one line" is a claim about the transmit machine and
+about nothing else. Nothing in the reconstruction changes: it calls
+`hs_setstate`, which handles both sides, and writing the unreachable half out
+would be writing something the object does not have.

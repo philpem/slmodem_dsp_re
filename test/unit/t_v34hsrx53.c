@@ -267,8 +267,18 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 	 * bytes differing from what the fill left, which finding 359 measured
 	 * moving by a byte or two across seeds; and `lines` moves because
 	 * `probeselect` -- which the INFO1c body calls -- prints a number of
-	 * diagnostics that depends on the probe results, so five of this
-	 * file's cases print 13 lines at the default seed and 14 at seed 3.
+	 * diagnostics that depends on the probe results.
+	 *
+	 * WHICH CASES, MEASURED AND NOT REASONED.  Exactly the five that
+	 * reach the INFO1c body move: 13 lines at the default fill, 14 at
+	 * seeds 3 and 10, 15 at seed 7.  The state-only and retrain cases do
+	 * NOT move, which is what says the variation is `probeselect`'s and
+	 * not `v34handshakinit`'s -- the retrain runs the latter and its nine
+	 * lines are the same at every seed.  `V34SetINFO1aBits` is not a
+	 * candidate either: with both PCM receivers clear it returns at
+	 * v34info1a.cpp's `if (obj->v90_receiver == 0)` before reaching any
+	 * debug site, so it prints nothing on this path.
+	 *
 	 * The transcript itself is compared LINE FOR LINE at every seed by
 	 * `v34hs_compare` above; what is gated here is only the count.
 	 *
