@@ -10,82 +10,98 @@
  {
   "label": "reneg: status fork <=1 becomes <=2",
   "find": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
-  "replace": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {"
+  "replace": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "setv90: rrn_type polarity swapped",
   "find": "(rrn_type != 0) ? 15 : 11",
-  "replace": "(rrn_type != 0) ? 11 : 15"
+  "replace": "(rrn_type != 0) ? 11 : 15",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: rrn_type tested for sign",
   "find": "(rrn_type != 0) ? 15 : 11",
-  "replace": "(rrn_type > 0) ? 15 : 11"
+  "replace": "(rrn_type > 0) ? 15 : 11",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: constel polarity swapped",
   "find": "constel_size != 0 ? 0x89b0 : 0x8990",
-  "replace": "constel_size != 0 ? 0x8990 : 0x89b0"
+  "replace": "constel_size != 0 ? 0x8990 : 0x89b0",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: constel read signed",
   "find": "constel_size != 0 ? 0x89b0 : 0x8990",
-  "replace": "(signed char)constel_size > 0 ? 0x89b0 : 0x8990"
+  "replace": "(signed char)constel_size > 0 ? 0x89b0 : 0x8990",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: v90_receiver not set",
   "find": "\tobj->v90_receiver = (rrn_type != 0) ? 15 : 11;\n",
-  "replace": ""
+  "replace": "",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "reneg: case 5 no longer steps down",
   "find": "\tcase 5:\n",
-  "replace": "\tcase 9:\n"
+  "replace": "\tcase 9:\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: case 2 no longer steps down",
   "find": "\tcase 2:\n",
-  "replace": "\tcase 9:\n"
+  "replace": "\tcase 9:\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: case 0 no longer steps down",
   "find": "\tcase 0:\n",
-  "replace": "\tcase 9:\n"
+  "replace": "\tcase 9:\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: case 3 becomes case 4",
   "find": "\tcase 3:\n",
-  "replace": "\tcase 4:\n"
+  "replace": "\tcase 4:\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: down clamp >= becomes >",
   "find": "want >= obj->rate_min",
-  "replace": "want > obj->rate_min"
+  "replace": "want > obj->rate_min",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: up clamp <= becomes <",
   "find": "want <= obj->rate_max",
-  "replace": "want < obj->rate_max"
+  "replace": "want < obj->rate_max",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: down clamp bounded by rate_max",
   "find": "want >= obj->rate_min",
-  "replace": "want >= obj->rate_max"
+  "replace": "want >= obj->rate_max",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: step reads rate_want not rate_now",
   "find": "want = (int)((unsigned)obj->rate_now - 1u);",
-  "replace": "want = (int)((unsigned)obj->rate_want - 1u);"
+  "replace": "want = (int)((unsigned)obj->rate_want - 1u);",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: up step reads rate_want not rate_now",
   "find": "want = (int)((unsigned)obj->rate_now + 1u);",
-  "replace": "want = (int)((unsigned)obj->rate_want + 1u);"
+  "replace": "want = (int)((unsigned)obj->rate_want + 1u);",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: default writes 0 rather than -1",
   "find": "obj->rate_want = -1;",
-  "replace": "obj->rate_want = 0;"
+  "replace": "obj->rate_want = 0;",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "hangup: session flag byte not written",
@@ -105,17 +121,20 @@
  {
   "label": "reneg: leaf gets a constant 2 rather than req",
   "find": "+ 0x8c) = req;",
-  "replace": "+ 0x8c) = 2;"
+  "replace": "+ 0x8c) = 2;",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: PCM arm writes the flag byte too",
   "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n",
-  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n\n\t\tsess[0x173e] = 1;\n"
+  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n\n\t\tsess[0x173e] = 1;\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: PCM arm falls through instead of returning",
   "find": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;\n\t\treturn;",
-  "replace": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;"
+  "replace": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
@@ -137,34 +156,40 @@
  {
   "label": "setv90: f25c2 mask ~0x4018 becomes ~0x4010",
   "find": "~0x4018",
-  "replace": "~0x4010"
+  "replace": "~0x4010",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: f25c2 mask ~0x4018 becomes ~0x0018",
   "find": "~0x4018",
-  "replace": "~0x0018"
+  "replace": "~0x0018",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: f25c2 OR 0x2000 becomes 0x4000",
   "find": "| 0x2000)",
-  "replace": "| 0x4000)"
+  "replace": "| 0x4000)",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: preinitdigital not called",
   "find": "\tpreinitdigital(obj);\n",
-  "replace": ""
+  "replace": "",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: [1] counter not cleared",
   "find": "\t*(short *)(m + 0x2aa2) = 0;\n",
-  "replace": ""
+  "replace": "",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: preinitdigital before the mask rather than after",
   "find": "\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
   "replace": "\tpreinitdigital(obj);\n\n\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);",
   "equivalent": true,
-  "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for."
+  "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for.",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: f0004 gets 5",
@@ -174,12 +199,14 @@
  {
   "label": "reneg: f0004 gets 5",
   "find": "\tobj->f0004 = 6;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 5;\n\n\trx->f258 = 0;"
+  "replace": "\tobj->f0004 = 5;\n\n\trx->f258 = 0;",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "setv90: f0004 gets 5",
   "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
-  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382"
+  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: 0x2218 gets 6",
@@ -189,12 +216,14 @@
  {
   "label": "reneg: 0x2218 gets 6",
   "find": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
-  "replace": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 6;"
+  "replace": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "setv90: 0x2218 gets 6",
   "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
-  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->f382"
+  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->f382",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: rx f258 not cleared",
@@ -209,12 +238,14 @@
  {
   "label": "reneg: rx f258 not cleared",
   "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)"
+  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rx f25c not cleared",
   "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n\n\t*(int *)(m + 0x2218)"
+  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n\n\t*(int *)(m + 0x2218)",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "hangup: handshakinit asked for mode 1",
@@ -224,22 +255,26 @@
  {
   "label": "reneg: handshakinit asked for mode 1",
   "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->f258"
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "setv90: timer stride constant off by 0x80",
   "find": "= 0x69780;",
-  "replace": "= 0x69781;"
+  "replace": "= 0x69781;",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: timer mark constant off by one",
   "find": "(int)0xfff15a00;",
-  "replace": "(int)0xfff15a01;"
+  "replace": "(int)0xfff15a01;",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: timer not cleared",
   "find": "\t*(int *)(m + 0x238) = 0;\n",
-  "replace": ""
+  "replace": "",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: message loses a space before the bang",
@@ -249,12 +284,14 @@
  {
   "label": "setv90: message loses a space after 'type'",
   "find": "rrn type = %d",
-  "replace": "rrn type= %d"
+  "replace": "rrn type= %d",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "setv90: the two arguments swapped",
   "find": "(int)rrn_type, (int)constel_size",
-  "replace": "(int)constel_size, (int)rrn_type"
+  "replace": "(int)constel_size, (int)rrn_type",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: print ungated",
@@ -264,7 +301,8 @@
  {
   "label": "setv90: print ungated",
   "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg"
+  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: print never",
@@ -279,22 +317,29 @@
  {
   "label": "setv90: gate is >= 1 rather than > 1",
   "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg"
+  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+  "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "reneg: rrn counter not bumped",
-  "find": "\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
-  "replace": ""
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
+  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rrn counter is the remote one",
-  "find": "obj->rrn_local = (short)(obj->rrn_local + 1);",
-  "replace": "obj->rrn_remote = (short)(obj->rrn_remote + 1);"
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rrn counter saturates rather than wrapping",
-  "find": "obj->rrn_local = (short)(obj->rrn_local + 1);",
-  "replace": "obj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);"
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
+  "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "note": "The two echo-adapt reports.  Neither touches the object, so every one of these is invisible to a state comparison and visible only in the transcript -- which is why the section that drives them sweeps the level to 1 as well as 2."

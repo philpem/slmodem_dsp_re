@@ -1,0 +1,4035 @@
+[
+ {
+  "label": "65: the segment flag test is inverted",
+  "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
+  "replace": "\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {"
+ },
+ {
+  "label": "65: the segment flag is bit 4 rather than bit 3",
+  "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
+  "replace": "\tif (rx->flags & 0x10) {"
+ },
+ {
+  "label": "65: the segment bit raised in f25c2 is 0x1000",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x1000u);"
+ },
+ {
+  "label": "65: only the first half of the silent point is cleared",
+  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
+  "replace": "\to->f25d0 = 0;\n\ttxmit(o);"
+ },
+ {
+  "label": "65: the point is cleared after the symbol is sent",
+  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
+  "replace": "\ttxmit(o);\n\to->f25d0 = 0;\n\to->f25d2 = 0;"
+ },
+ {
+  "label": "65: f25cc is left alone when the segment is armed",
+  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "65: f25c6 is left alone when the segment is armed",
+  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\to->f25c0 = 0;\n\t\to->f25cc = 0;"
+ },
+ {
+  "label": "65: f25c0 is left alone when the segment is armed",
+  "find": "\t\to->f25c0 = 0;\n\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;",
+  "replace": "\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "65: the transmit machine is not moved to SSEG",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c6 = 0;",
+  "replace": "\t\to->f25c6 = 0;"
+ },
+ {
+  "label": "71/86: the generator select is inverted",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c != 0x65), 3, 2);"
+ },
+ {
+  "label": "71/86: the generator select compares against 0x64",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x64), 3, 2);"
+ },
+ {
+  "label": "71/86: one bit is scrambled rather than two",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 1);"
+ },
+ {
+  "label": "71/86: the scrambler is fed 1 rather than 3",
+  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 1, 2);"
+ },
+ {
+  "label": "71: TXLEVEL sends the point the scrambler chose, as TXMD does",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->f25c8 = q71;\n\ttx1_put_point(o, vect4[q71]);"
+ },
+ {
+  "label": "71: the quadrant is not recorded in f25c8",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\t(void)tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);"
+ },
+ {
+  "label": "71: the register is not advanced at all",
+  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\ttx1_put_point(o, vect4[0]);"
+ },
+ {
+  "label": "78/85: the counter is decremented even when it is already zero",
+  "find": "\tif (c == 0)\n\t\treturn 0;\n\n\tc = (unsigned short)(c - 1);",
+  "replace": "\tc = (unsigned short)(c - 1);"
+ },
+ {
+  "label": "78/85: the completion runs on every step, not only at zero",
+  "find": "\tif (c != 0)\n\t\treturn 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "78/85: the completion bit is 8 rather than 4",
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);\n\treturn 1;"
+ },
+ {
+  "label": "78/85: only the first echo canceller is reported",
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
+ },
+ {
+  "label": "78/85: the second report is of the first canceller again",
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
+ },
+ {
+  "label": "78: JaTXMIT hands the sample to the K56flex half",
+  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
+  "replace": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);"
+ },
+ {
+  "label": "85: K56JaTXMIT hands the sample to the V.90 half",
+  "find": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);",
+  "replace": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);"
+ },
+ {
+  "label": "78: the counter is not consulted at all",
+  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
+  "replace": "\tv90Phase34(o);"
+ },
+ {
+  "label": "81: the queue is fed a non-zero sample",
+  "find": "\tquiet[0] = 0;\n\tquiet[1] = 0;\n\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);",
+  "replace": "\tquiet[0] = 1;\n\tquiet[1] = 0;\n\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);"
+ },
+ {
+  "label": "81: the fourth sample is not silent",
+  "find": "\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);",
+  "replace": "\tquiet[2] = 0;\n\tquiet[3] = 1;\n\ttxwritequeue(&o->txq, quiet);"
+ },
+ {
+  "label": "81: the symbol counter is not advanced",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx == 0xc0u)"
+ },
+ {
+  "label": "81: the wrap is at 0xc1",
+  "find": "\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx == 0xc1u)"
+ },
+ {
+  "label": "81: the wrap is tested before the counter is stored",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
+  "replace": "\tif ((unsigned short)(o->vect_idx + 1) == 0xc0u)\n\t\treturn V34TX1_MOH_WRAP;\n\to->vect_idx = (short)(o->vect_idx + 1);\n\tif (0)"
+ },
+ {
+  "label": "86: TXMD sends vect4[0], as TXLEVEL does",
+  "find": "\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);\n\n\to->vect_idx = (short)(o->vect_idx + 1);",
+  "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\n\to->vect_idx = (short)(o->vect_idx + 1);"
+ },
+ {
+  "label": "86: the segment-complete test is missing",
+  "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))\n\t\treturn V34TX1_TXMD_DONE;\n",
+  "replace": ""
+ },
+ {
+  "label": "86: the reconfiguration point is +0xaa78 rather than +0x35a6",
+  "find": "\t    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {",
+  "replace": "\t    == (unsigned short)tx1_get(o, TX1_COUNT)) {"
+ },
+ {
+  "label": "86: the modulator is told 2400 baud whatever the rate config says",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  2400, cfg->carrier, cfg->f06, pcm, 0);"
+ },
+ {
+  "label": "86: the carrier and the pre-emphasis index are swapped",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->f06, cfg->carrier, pcm, 0);"
+ },
+ {
+  "label": "86: the PCM argument is always zero",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = 0;"
+ },
+ {
+  "label": "86: the PCM argument reads only the V.90 receiver",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = (o->v90_receiver != 0);"
+ },
+ {
+  "label": "86: the modulator's reset argument is one",
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 1);"
+ },
+ {
+  "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8004u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8000u);"
+ },
+ {
+  "label": "86: f25c0 is not cleared before it is counted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25cc = 0;"
+ },
+ {
+  "label": "86: the shared block at 0x6430c does not count the symbol",
+  "find": "\t/* 0x6430c */\n\to->f25c0 = (short)(o->f25c0 + 1);",
+  "replace": "\t/* 0x6430c */"
+ },
+ {
+  "label": "86: the symbol counter is not advanced",
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))",
+  "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))"
+ },
+ {
+  "label": "86: the PCM argument reads only the K56flex receiver",
+  "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
+  "replace": "\t\tint pcm = (o->k56flex_receiver != 0);"
+ },
+ {
+  "label": "86: the transmit machine is not moved to SSEG",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
+  "replace": "\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "60: the index is not scaled by two",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);",
+  "replace": "\ttx1_put_point(o, vect4[sel]);"
+ },
+ {
+  "label": "60: the selector is bit 1 of +0x358c",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = (tx1_get(o, TX1_F358C) >> 1) & 1;"
+ },
+ {
+  "label": "60: the selector is inverted",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = (tx1_get(o, TX1_F358C) & 1) ^ 1;"
+ },
+ {
+  "label": "60: the point is stored after the symbol is sent",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
+  "replace": "\ttxmit(o);\n\ttx1_put_point(o, vect4[2 * sel]);"
+ },
+ {
+  "label": "60: nothing is transmitted",
+  "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[2 * sel]);"
+ },
+ {
+  "label": "60: +0x358c is read as an int",
+  "find": "\tint sel = tx1_get(o, TX1_F358C) & 1;",
+  "replace": "\tint sel = tx1_get_int(o, TX1_F358C) & 1;",
+  "equivalent": true,
+  "why": "the mask keeps bit 0 alone and a short load and an int load agree on it"
+ },
+ {
+  "label": "18: the second symbol is vect4[1]",
+  "find": "\ttx1_put_point(o, vect4[3]);",
+  "replace": "\ttx1_put_point(o, vect4[1]);"
+ },
+ {
+  "label": "18: the second symbol is vect4[2]",
+  "find": "\ttx1_put_point(o, vect4[3]);",
+  "replace": "\ttx1_put_point(o, vect4[2]);"
+ },
+ {
+  "label": "18: the first symbol is vect4[3] as well",
+  "find": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[3]);"
+ },
+ {
+  "label": "18: only the first symbol is transmitted",
+  "find": "\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);\n",
+  "replace": ""
+ },
+ {
+  "label": "18: the segment ends at 0x41",
+  "find": "\tif (n == 0x40) {",
+  "replace": "\tif (n == 0x41) {"
+ },
+ {
+  "label": "18: the segment ends at or past 0x40",
+  "find": "\tif (n == 0x40) {",
+  "replace": "\tif (n >= 0x40) {"
+ },
+ {
+  "label": "18: the count is not advanced",
+  "find": "\tn = (unsigned short)((unsigned short)o->f25c0 + 1);\n\to->f25c0 = (short)n;",
+  "replace": "\tn = (unsigned short)o->f25c0;"
+ },
+ {
+  "label": "18: the count is not cleared when the segment ends",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);"
+ },
+ {
+  "label": "18: the transmit machine is not moved to SBARSEG",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n",
+  "replace": ""
+ },
+ {
+  "label": "18: the machine is moved to SSEG rather than SBARSEG",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);"
+ },
+ {
+  "label": "18: the SBARSEG guard is deleted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "equivalent": true,
+  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "70: the data-path test is inverted",
+  "find": "\tif (!(o->f25c2 & 0x10))",
+  "replace": "\tif (o->f25c2 & 0x10)"
+ },
+ {
+  "label": "70: the data-path flag is bit 3",
+  "find": "\tif (!(o->f25c2 & 0x10))",
+  "replace": "\tif (!(o->f25c2 & 8))"
+ },
+ {
+  "label": "70: the receiver's +0x220 is left alone",
+  "find": "\trx->f220 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the receiver's +0x21c is left alone",
+  "find": "\trx->f21c = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the sample-clock copy goes the other way",
+  "find": "\ttx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));",
+  "replace": "\ttx1_put_int(o, TX1_TIMER, tx1_get_int(o, TX1_TIMER_MARK));"
+ },
+ {
+  "label": "70: the sample-clock mark is not restarted",
+  "find": "\ttx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the rate index is read unsigned",
+  "find": "\tidx = tx1_get(o, TX1_RATEIDX);",
+  "replace": "\tidx = (unsigned short)tx1_get(o, TX1_RATEIDX);"
+ },
+ {
+  "label": "70: rate_now is left alone",
+  "find": "\to->rate_now = idx;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: rate_want is left alone",
+  "find": "\to->rate_want = idx;\n",
+  "replace": ""
+ },
+ {
+  "label": "70: +0x2218 is set to 2",
+  "find": "\ttx1_put_int(o, TX1_F2218, 1);",
+  "replace": "\ttx1_put_int(o, TX1_F2218, 2);"
+ },
+ {
+  "label": "70: +0x2218 is left alone",
+  "find": "\ttx1_put_int(o, TX1_F2218, 1);\n",
+  "replace": ""
+ },
+ {
+  "label": "70: the vector is not modulated",
+  "find": "\tmodulatevector(o);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the loop select is inverted",
+  "find": "\tint doubled = tx1_get(o, TX1_MICROSTATE) == V34HS_TX_L1;",
+  "replace": "\tint doubled = tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1;"
+ },
+ {
+  "label": "51: the second copy of the loop does not double",
+  "find": "\t\tif (doubled)\n\t\t\tv = (short)(2 * v);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: three samples rather than four",
+  "find": "\tfor (i = 0; i < 4; i++) {",
+  "replace": "\tfor (i = 0; i < 3; i++) {"
+ },
+ {
+  "label": "51: the index is off by one",
+  "find": "\t\tint v = probe[idx & 0x3f];",
+  "replace": "\t\tint v = probe[(idx + 1) & 0x3f];"
+ },
+ {
+  "label": "51: the index is masked with 0x1f",
+  "find": "\t\tint v = probe[idx & 0x3f];",
+  "replace": "\t\tint v = probe[idx & 0x1f];"
+ },
+ {
+  "label": "51: the scale is read unsigned",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->f25d4) >> 14);"
+ },
+ {
+  "label": "51: the shift is logical rather than arithmetic",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((unsigned)(v * o->f25d4) >> 14);",
+  "equivalent": true,
+  "why": "only the low sixteen bits are stored, and a logical shift right by 14 exceeds an arithmetic one by exactly 2^18 on a negative product -- a multiple of 2^16, so the two are equal in a short for EVERY input.  The object's `sar $0xe` at 0x62cbe and 0x652c4 is therefore unobservable at the store; recorded as equivalent rather than as a gap"
+ },
+ {
+  "label": "51: the shift is by 15",
+  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * o->f25d4) >> 15);"
+ },
+ {
+  "label": "51: vect_idx is not advanced inside the loop",
+  "find": "\t\to->vect_idx = (short)(idx + 1);\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the segment's end is not guarded by the microstate",
+  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)\n\t\treturn V34TX1_LOOP;\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the segment ends at or past 0x600",
+  "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
+  "replace": "\tif ((unsigned short)o->vect_idx < 0x600u)"
+ },
+ {
+  "label": "51: the segment ends at 0x400",
+  "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
+  "replace": "\tif ((unsigned short)o->vect_idx != 0x400u)"
+ },
+ {
+  "label": "51: the microstate is moved to TX_L1 rather than TX_L2",
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_TX_L2);",
+  "replace": "\ths_setstate(o, TX1_MICROSTATE, V34HS_TX_L1);"
+ },
+ {
+  "label": "51: vect_idx is not zeroed when the segment ends",
+  "find": "\t/* 0x62d32 */\n\to->vect_idx = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "51: the doubling is not truncated to a short",
+  "find": "\t\t\tv = (short)(2 * v);",
+  "replace": "\t\t\tv = 2 * v;",
+  "equivalent": true,
+  "why": "the largest magnitude in `probe` is 13,317, so twice any sample still fits a short and the truncation cannot bite -- a property of the table's values, not of the code"
+ },
+ {
+  "label": "51: the microstate is not re-read after the queue is written",
+  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)",
+  "replace": "\tif (!doubled)",
+  "equivalent": true,
+  "why": "nothing between the two reads writes +0x3592: `txwritequeue` (v34rx.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation"
+ },
+ {
+  "label": "19: the first symbol is vect4[0]",
+  "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);"
+ },
+ {
+  "label": "19: the second symbol is vect4[3]",
+  "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);"
+ },
+ {
+  "label": "19: the two symbols are sent in the other order",
+  "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);"
+ },
+ {
+  "label": "19: only the second symbol is sent",
+  "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+  "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);"
+ },
+ {
+  "label": "19: the segment is four pairs long",
+  "find": "\tif (n != 8) {\n\t\to->f25c0 = (short)n;",
+  "replace": "\tif (n != 4) {\n\t\to->f25c0 = (short)n;"
+ },
+ {
+  "label": "19: the segment ends at or past eight",
+  "find": "\tif (n != 8) {\n\t\to->f25c0 = (short)n;",
+  "replace": "\tif (n < 8) {\n\t\to->f25c0 = (short)n;"
+ },
+ {
+  "label": "19: the count is stored on the completing path too",
+  "find": "\t/* 0x671f0 */\n\to->f25c0 = 0;",
+  "replace": "\t/* 0x671f0 */\n\to->f25c0 = (short)n;"
+ },
+ {
+  "label": "19: the completion does not clear f25c0",
+  "find": "\t/* 0x671f0 */\n\to->f25c0 = 0;\n",
+  "replace": "\t/* 0x671f0 */\n"
+ },
+ {
+  "label": "19: the first guard is bit 5 of f25c2",
+  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {",
+  "replace": "\tif ((unsigned short)o->f25c2 & 0x0020u) {"
+ },
+ {
+  "label": "19: the first guard is inverted",
+  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {",
+  "replace": "\tif (!((unsigned short)o->f25c2 & 0x2000u)) {"
+ },
+ {
+  "label": "19: the sign guard is bit 14",
+  "find": "\t} else if ((unsigned short)o->f25c2 & 0x8000u) {",
+  "replace": "\t} else if ((unsigned short)o->f25c2 & 0x4000u) {"
+ },
+ {
+  "label": "19: f35a4 is tested for non-zero",
+  "find": "\t} else if (tx1_get(o, TX1_F35A4) == 0) {",
+  "replace": "\t} else if (tx1_get(o, TX1_F35A4) != 0) {"
+ },
+ {
+  "label": "19: the bit-13 path moves to TRNSEG4",
+  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+ },
+ {
+  "label": "19: the f35a4-zero path moves to TXMD",
+  "find": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_PPSEG);",
+  "replace": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TXMD);"
+ },
+ {
+  "label": "19: the sign path does not copy f35a6 into f25c0",
+  "find": "\t\t/* 0x69eca */\n\t\to->f25c0 = tx1_get(o, TX1_SEGLEN);\n",
+  "replace": "\t\t/* 0x69eca */\n"
+ },
+ {
+  "label": "19: the sign path copies f35a4 into f25c0",
+  "find": "\t\to->f25c0 = tx1_get(o, TX1_SEGLEN);",
+  "replace": "\t\to->f25c0 = tx1_get(o, TX1_F35A4);"
+ },
+ {
+  "label": "19: the segment length scales by 0x52",
+  "find": "\t\t\t(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));",
+  "replace": "\t\t\t(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x52));"
+ },
+ {
+  "label": "19: f35a4 is read signed for the scale",
+  "find": "\t\t\t(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));",
+  "replace": "\t\t\t(short)(tx1_get(o, TX1_F35A4) * 0x53));",
+  "equivalent": true,
+  "why": "the store is sixteen bits wide and the low sixteen bits of a product depend only on the low sixteen bits of its operands, so `movzwl` and `movswl` cannot differ here for ANY value of +0x35a4 -- not just for the ones driven"
+ },
+ {
+  "label": "19: the last path moves to SSEG rather than TXMD",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TXMD);\n\n\t\t/* 0x67885 */",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\n\t\t/* 0x67885 */"
+ },
+ {
+  "label": "19: the modulator is set up at 3200 baud",
+  "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
+  "replace": "\t\t\t\t  3200, 2400, 0, 0, 0);"
+ },
+ {
+  "label": "19: the modulator's carrier is 1800",
+  "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
+  "replace": "\t\t\t\t  4800, 1800, 0, 0, 0);"
+ },
+ {
+  "label": "19: the modulator's v90 argument is one",
+  "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
+  "replace": "\t\t\t\t  4800, 2400, 0, 1, 0);",
+  "equivalent": true,
+  "why": "`V34SetupModulator` reads `v90` at 3200 baud and nowhere else (finding 216), and this arm asks for 4800 with all six arguments as literals -- so the argument cannot change what the call does from THIS site.  It is written as the object passes it"
+ },
+ {
+  "label": "19: the modulator is reset",
+  "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
+  "replace": "\t\t\t\t  4800, 2400, 0, 0, 1);"
+ },
+ {
+  "label": "19: the modulator's pre-emphasis index is one",
+  "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
+  "replace": "\t\t\t\t  4800, 2400, 1, 0, 0);",
+  "equivalent": true,
+  "why": "a non-zero `preemp_index` picks a row of the rate's p<baud> table and 4800 has none, so `V34SetupModulator`'s inner switch falls to `default` and `m->preemp` keeps the value the unconditional store above it left"
+ },
+ {
+  "label": "19: the span is measured from 0x5e9",
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e9 - o->f25c) << 14);"
+ },
+ {
+  "label": "19: the span is shifted by thirteen",
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 13);"
+ },
+ {
+  "label": "19: +0x25c is read unsigned",
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - (unsigned short)o->f25c) << 14);"
+ },
+ {
+  "label": "19: the counter divides by 9601",
+  "find": "\t\tq = (short)(span / 9600);",
+  "replace": "\t\tq = (short)(span / 9601);"
+ },
+ {
+  "label": "19: the quotient is not truncated to a short",
+  "find": "\t\tq = (short)(span / 9600);\n\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));",
+  "replace": "\t\tq = 0;\n\t\t(void)q;\n\t\ttx1_put(o, TX1_COUNT,\n\t\t\t(short)((((span / 9600) * 0x960) >> 14) + 0x96));"
+ },
+ {
+  "label": "19: the counter's offset is 0x95",
+  "find": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x95));"
+ },
+ {
+  "label": "19: the counter scales by 0x961",
+  "find": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x961) >> 14) + 0x96));"
+ },
+ {
+  "label": "19: the counter's shift is fifteen",
+  "find": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 15) + 0x96));"
+ },
+ {
+  "label": "19: vect_idx is not cleared at the end",
+  "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\ttx1_put(o, TX1_F358E, 0);",
+  "replace": "\t/* 0x67236 */\n\ttx1_put(o, TX1_F358E, 0);"
+ },
+ {
+  "label": "19: +0x358e is not cleared at the end",
+  "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\ttx1_put(o, TX1_F358E, 0);",
+  "replace": "\t/* 0x67236 */\n\to->vect_idx = 0;"
+ },
+ {
+  "label": "19: the four ways out are all taken from the object",
+  "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\ttx1_put(o, TX1_F358E, 0);\n\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t/* 0x67236 */\n\ttx1_put(o, TX1_F358E, 0);\n\to->vect_idx = 1;\n\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+ },
+ {
+  "label": "20: vectpp is indexed as shorts rather than as points",
+  "find": "\tmemcpy(&point, &vectpp[2 * i], sizeof(point));",
+  "replace": "\tmemcpy(&point, &vectpp[i], sizeof(point));"
+ },
+ {
+  "label": "20: the point is taken from the NEXT entry",
+  "find": "\tmemcpy(&point, &vectpp[2 * i], sizeof(point));",
+  "replace": "\tmemcpy(&point, &vectpp[2 * i + 2], sizeof(point));"
+ },
+ {
+  "label": "20: vect_idx is not advanced",
+  "find": "\to->vect_idx = (short)(i + 1);\n\ttx1_put_point(o, point);",
+  "replace": "\ttx1_put_point(o, point);"
+ },
+ {
+  "label": "20: the point is sent before vect_idx is read",
+  "find": "\tint i = o->vect_idx;\t\t\t/* movswl 0x2aa2 */",
+  "replace": "\tint i = o->vect_idx + 1;\t\t/* movswl 0x2aa2 */"
+ },
+ {
+  "label": "20: the pass is forty-seven points long",
+  "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {",
+  "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)(V34_VECTPP_POINTS - 1)) {"
+ },
+ {
+  "label": "20: the pass ends at or past forty-eight",
+  "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {",
+  "replace": "\tif ((unsigned short)o->vect_idx >= (unsigned short)V34_VECTPP_POINTS) {",
+  "equivalent": true,
+  "why": "NOT an equivalence in the object -- it is a state the fixture cannot reach.  Separating `== 0x30` from `>= 0x30` needs `vect_idx` at 0x30 on entry, and the arm's first act is `vectpp[0x30]`, four bytes past a 192-byte table.  The blob would read its own adjacent `.rodata` and we would read ours, so the run would fail for the fixture's reason and not the arm's.  Within PPSEG the object cannot produce it either: 0x66d76 clears the field every time it reaches 48 and 0x680ac leaves the state.  Named here rather than left silent"
+ },
+ {
+  "label": "20: the segment is five passes long",
+  "find": "\t\tif (n != 6) {",
+  "replace": "\t\tif (n != 5) {"
+ },
+ {
+  "label": "20: the segment ends at or past six passes",
+  "find": "\t\tif (n != 6) {",
+  "replace": "\t\tif (n < 6) {"
+ },
+ {
+  "label": "20: vect_idx is not cleared when the pass ends",
+  "find": "\t\t\ttx1_put(o, TX1_F358E, (short)n);\n\t\t\to->vect_idx = 0;",
+  "replace": "\t\t\ttx1_put(o, TX1_F358E, (short)n);"
+ },
+ {
+  "label": "20: +0x358e is not stored when the pass ends",
+  "find": "\t\t\ttx1_put(o, TX1_F358E, (short)n);\n\t\t\to->vect_idx = 0;",
+  "replace": "\t\t\to->vect_idx = 0;"
+ },
+ {
+  "label": "20: f25c0 is bumped on the segment's end as well",
+  "find": "\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}",
+  "replace": "\t\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}"
+ },
+ {
+  "label": "20: f25c0 is not bumped on the counting paths",
+  "find": "\t/* 0x6430c */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */",
+  "replace": "\t/* 0x6430c */\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */"
+ },
+ {
+  "label": "20: vect_idx is cleared rather than reloaded from rtd",
+  "find": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x90);",
+  "replace": "\t\t\tshort v = 0;"
+ },
+ {
+  "label": "20: the rtd offset is 0x91",
+  "find": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x90);",
+  "replace": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x91);"
+ },
+ {
+  "label": "20: 2400 baud scales by three bits",
+  "find": "\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 2));",
+  "replace": "\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 3));"
+ },
+ {
+  "label": "20: 2400 baud shifts logically",
+  "find": "\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 2));",
+  "replace": "\t\t\t\ttx1_put(o, TX1_FAA86,\n\t\t\t\t\t(short)((unsigned short)v >> 2));"
+ },
+ {
+  "label": "20: 2800 baud scales by 0x12ac",
+  "find": "\t\t\t\t\t(short)(((int)v * 0x12ab) >> 14));",
+  "replace": "\t\t\t\t\t(short)(((int)v * 0x12ac) >> 14));"
+ },
+ {
+  "label": "20: 3000 baud takes 3200's scale",
+  "find": "\t\t\t\t\t(short)(((int)v * 0x1400) >> 14));",
+  "replace": "\t\t\t\t\t(short)(((int)v * 0x1555) >> 14));"
+ },
+ {
+  "label": "20: 3200 baud takes 3000's scale",
+  "find": "\t\t\t\t\t(short)(((int)v * 0x1555) >> 14));",
+  "replace": "\t\t\t\t\t(short)(((int)v * 0x1400) >> 14));"
+ },
+ {
+  "label": "20: 3429 baud scales by 0x16db",
+  "find": "\t\t\t\t\t(short)(((int)v * 0x16dc) >> 14));",
+  "replace": "\t\t\t\t\t(short)(((int)v * 0x16db) >> 14));"
+ },
+ {
+  "label": "20: an unrecognised baud falls to the 2400 scale",
+  "find": "\t\t\tdefault:\n\t\t\t\tbreak;\n\t\t\t}",
+  "replace": "\t\t\tdefault:\n\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 2));\n\t\t\t\tbreak;\n\t\t\t}"
+ },
+ {
+  "label": "20: +0xaa86 gains 0x121",
+  "find": "\t\t\t\t\t+ 0x120));",
+  "replace": "\t\t\t\t\t+ 0x121));"
+ },
+ {
+  "label": "20: +0x358e is not cleared when the segment ends",
+  "find": "\t\t\t/* 0x680fd */\n\t\t\ttx1_put(o, TX1_F358E, 0);",
+  "replace": "\t\t\t/* 0x680fd */"
+ },
+ {
+  "label": "20: the segment's end moves to TRNSEG4A",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);",
+  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+ },
+ {
+  "label": "20: the span is measured from 0x5e9",
+  "find": "\t\t\tspan = (0x5e8 - o->f25c) * (int)baud;",
+  "replace": "\t\t\tspan = (0x5e9 - o->f25c) * (int)baud;"
+ },
+ {
+  "label": "20: the baud is read unsigned for the span",
+  "find": "\t\t\tspan = (0x5e8 - o->f25c) * (int)baud;",
+  "replace": "\t\t\tspan = (0x5e8 - o->f25c) * (int)(unsigned short)baud;",
+  "equivalent": true,
+  "why": "every baud driven is 1234..3429, so the sign extension at 0x6815b cannot change the product.  A negative +0xaa84 would separate them and no run has one: the field is the rate configuration's baud, which the switch above has already compared against five positive constants"
+ },
+ {
+  "label": "20: the counter divides by 9601",
+  "find": "\t\t\tq = span / 9600;",
+  "replace": "\t\t\tq = span / 9601;"
+ },
+ {
+  "label": "20: the intermediate store of the raw quotient is dropped",
+  "find": "\t\t\ttx1_put(o, TX1_COUNT, (short)q);\t/* 0x6818d */\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "0x6818d's store is overwritten at 0x681bf on one path and at 0x69277 on the other, and nothing reads +0xaa78 in between -- the three addends come from +0xaa7c, +0x25c0 and a literal.  It is written because the object writes it"
+ },
+ {
+  "label": "20: the counter's literal one is dropped",
+  "find": "\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
+  "replace": "\t\t\t\t+ (unsigned short)o->f25c0;"
+ },
+ {
+  "label": "20: +0xaa7c is not added into the counter",
+  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
+  "replace": "\t\t\tacc = q + (unsigned short)o->f25c0 + 1;"
+ },
+ {
+  "label": "20: f25c0 is not added into the counter",
+  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
+  "replace": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C) + 1;"
+ },
+ {
+  "label": "20: rtd is added into the counter at f359c 0x64",
+  "find": "\t\t\tif (o->f359c == 0x65)\t\t\t/* 0x6926d */",
+  "replace": "\t\t\tif (o->f359c == 0x64)\t\t\t/* 0x6926d */"
+ },
+ {
+  "label": "20: rtd is always added into the counter",
+  "find": "\t\t\tif (o->f359c == 0x65)\t\t\t/* 0x6926d */\n\t\t\t\tacc += (unsigned short)o->rtd;",
+  "replace": "\t\t\tacc += (unsigned short)o->rtd;"
+ },
+ {
+  "label": "20: +0xaa86 is not accumulated with the counter",
+  "find": "\t\t\t/* 0x681c6 */\n\t\t\ttx1_put(o, TX1_FAA86,\n\t\t\t\t(short)((unsigned short)tx1_get(o, TX1_FAA86)\n\t\t\t\t\t+ (unsigned short)tx1_get(o, TX1_COUNT)));\n",
+  "replace": "\t\t\t/* 0x681c6 */\n"
+ },
+ {
+  "label": "5/54/74: +0xaa7a is not cleared",
+  "find": "\ttx1_put(o, TX1_FAA7A, 0);\n\ttxwritequeue(&o->txq, quiet);",
+  "replace": "\ttxwritequeue(&o->txq, quiet);"
+ },
+ {
+  "label": "5/54/74: the fourth silent sample is not silent",
+  "find": "\tquiet[3] = 0;\n\ttx1_put(o, TX1_FAA7A, 0);",
+  "replace": "\tquiet[3] = 1;\n\ttx1_put(o, TX1_FAA7A, 0);"
+ },
+ {
+  "label": "5/54/74: the prologue clears +0xaa7a after the queue is written",
+  "find": "\ttx1_put(o, TX1_FAA7A, 0);\n\ttxwritequeue(&o->txq, quiet);",
+  "replace": "\ttxwritequeue(&o->txq, quiet);\n\ttx1_put(o, TX1_FAA7A, 0);",
+  "equivalent": true,
+  "why": "`txwritequeue` (v34rx.c:58) writes q->count, four ring slots and q->wr, all inside +0x221c..+0x2668, and +0xaa7a is nowhere near it -- so the two stores commute.  The object does the clear first and it is written that way"
+ },
+ {
+  "label": "5/54/74: the arm dispatches on the microstate",
+  "find": "\ttxst = tx1_get(o, TX1_TXSTATE);",
+  "replace": "\ttxst = tx1_get(o, TX1_MICROSTATE);"
+ },
+ {
+  "label": "5/54/74: 5 and 54 are one behaviour",
+  "find": "\tif (txst != V34HS_SILENCEINFO)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6409a */\n",
+  "replace": ""
+ },
+ {
+  "label": "5/54/74: 74 takes 54's tail",
+  "find": "\tif (txst == V34HS_SILENCERETRAIN) {",
+  "replace": "\tif (txst == V34HS_SILENCE) {"
+ },
+ {
+  "label": "54: the countdown is nine blocks",
+  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
+  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 9)"
+ },
+ {
+  "label": "54: the countdown ends at or past ten",
+  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
+  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n < 0xa)"
+ },
+ {
+  "label": "54: the completing path does not zero the count",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);"
+ },
+ {
+  "label": "54: the transmit machine moves to TX_L1",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_L1);"
+ },
+ {
+  "label": "54: the self-pointer is aimed at +0xa97c",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
+ },
+ {
+  "label": "54: V34SetINFO0aBits is not called",
+  "find": "\tV34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));\n",
+  "replace": ""
+ },
+ {
+  "label": "54: the record's lead is 0x11 on the V.90 path",
+  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = 0x11;"
+ },
+ {
+  "label": "54: the lead turns on f359c alone",
+  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = o->f359c == 0x65 ? 0x1e : 0x11;"
+ },
+ {
+  "label": "54: the lead turns on v90_receiver alone",
+  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = o->v90_receiver != 0 ? 0x1e : 0x11;"
+ },
+ {
+  "label": "54: the lead reads the K56flex receiver too",
+  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = (o->f359c == 0x65\n\t\t\t      && (o->v90_receiver != 0\n\t\t\t\t  || o->k56flex_receiver != 0))\n\t\t\t     ? 0x1e : 0x11;"
+ },
+ {
+  "label": "54: the record's +0x14 is cleared rather than set to -1",
+  "find": "\t\t*(short *)(r + 0x14) = -1;\n\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1e) = 0;\n\t\t*(short *)(r + 0x22) = 0;\n\t\t*(short *)(r + 0x18) = lead;",
+  "replace": "\t\t*(short *)(r + 0x14) = 0;\n\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1e) = 0;\n\t\t*(short *)(r + 0x22) = 0;\n\t\t*(short *)(r + 0x18) = lead;"
+ },
+ {
+  "label": "54: the record's +0x1c is 0x10",
+  "find": "\t\t*(short *)(r + 0x1c) = 8;",
+  "replace": "\t\t*(short *)(r + 0x1c) = 0x10;"
+ },
+ {
+  "label": "54: the record's +0x16 is left alone",
+  "find": "\t\t*(short *)(r + 0x16) = 1;\n",
+  "replace": ""
+ },
+ {
+  "label": "54: the record's +0x2a is left alone",
+  "find": "\t\t*(short *)(r + 0x2a) = 0x10;\n",
+  "replace": ""
+ },
+ {
+  "label": "54: the record's two ints are 0xff73",
+  "find": "\t\t*(int *)(r + 0x24) = 0xff72;\n\t\t*(int *)(r + 0x2c) = 0xff72;",
+  "replace": "\t\t*(int *)(r + 0x24) = 0xff73;\n\t\t*(int *)(r + 0x2c) = 0xff73;"
+ },
+ {
+  "label": "54: the record's +0x2c is a short",
+  "find": "\t\t*(int *)(r + 0x2c) = 0xff72;",
+  "replace": "\t\t*(short *)(r + 0x2c) = (short)0xff72;"
+ },
+ {
+  "label": "54: f358c is not cleared",
+  "find": "\ttx1_put(o, TX1_F358C, 0);\n\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */",
+  "replace": "\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */"
+ },
+ {
+  "label": "74: the countdown is 0xb3 blocks",
+  "find": "\t\tif (n != 0xb4)",
+  "replace": "\t\tif (n != 0xb3)"
+ },
+ {
+  "label": "74: the count is not stored before the comparison",
+  "find": "\t\to->vect_idx = (short)n;\n\t\tif (n != 0xb4)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */",
+  "replace": "\t\tif (n != 0xb4) {\n\t\t\to->vect_idx = (short)n;\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}",
+  "equivalent": true,
+  "why": "the object stores `vect_idx` at 0x66b94 and branches at 0x66b9b, so the store happens on both paths -- but the completing path clears the same field at 0x66c56 before anything reads it, and the other path is where the mutation still stores.  So no run can see the difference: measured, not argued, and the ordering at 0x66b94 is written as the object writes it"
+ },
+ {
+  "label": "74: the Modem-on-Hold flag is read as a halfword",
+  "find": "\t\tif (*((unsigned char *)o + TX1_FABE8) != 0)",
+  "replace": "\t\tif (tx1_get(o, TX1_FABE8) != 0)"
+ },
+ {
+  "label": "74: the Modem-on-Hold flag is inverted",
+  "find": "\t\tif (*((unsigned char *)o + TX1_FABE8) != 0)",
+  "replace": "\t\tif (*((unsigned char *)o + TX1_FABE8) == 0)"
+ },
+ {
+  "label": "74: the flag chooses MOH_TONE_DROP",
+  "find": "\t\t\twant = V34HS_MOH_TONE;",
+  "replace": "\t\t\twant = V34HS_MOH_TONE_DROP;"
+ },
+ {
+  "label": "74: the two f359c microstates are swapped",
+  "find": "\t\t\twant = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
+  "replace": "\t\t\twant = o->f359c == 0x65 ? V34HS_TX_PHASE1_ANS\n\t\t\t\t\t\t: V34HS_RX_PHASE1_CALL;"
+ },
+ {
+  "label": "74: f359c is compared against 0x64",
+  "find": "\t\t\twant = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
+  "replace": "\t\t\twant = o->f359c == 0x64 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;"
+ },
+ {
+  "label": "74: the microstate is not moved",
+  "find": "\t\ths_setstate(o, TX1_MICROSTATE, want);\n",
+  "replace": "\t\t(void)want;\n"
+ },
+ {
+  "label": "74: the rxstate moves to RECEIVE",
+  "find": "\t\ths_setstate(o, TX1_RXSTATE, V34HS_RX_DPSK);",
+  "replace": "\t\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);"
+ },
+ {
+  "label": "74: the txstate compare is deleted",
+  "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\t/* 0x66c10 */\n\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "equivalent": true,
+  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "74: the txstate moves to TONE_AB_CALL",
+  "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
+ },
+ {
+  "label": "74: f358c is not cleared by the retrain",
+  "find": "\t\t/* 0x66c32 */\n\t\ttx1_put(o, TX1_F358C, 0);\n\t\to->vect_idx = 0;",
+  "replace": "\t\t/* 0x66c32 */\n\t\to->vect_idx = 0;"
+ },
+ {
+  "label": "74: vect_idx is not cleared by the retrain",
+  "find": "\t\t/* 0x66c32 */\n\t\ttx1_put(o, TX1_F358C, 0);\n\t\to->vect_idx = 0;",
+  "replace": "\t\t/* 0x66c32 */\n\t\ttx1_put(o, TX1_F358C, 0);"
+ },
+ {
+  "label": "74: +0xaa78 is not cleared by the retrain",
+  "find": "\t\ttx1_put(o, TX1_COUNT, 0);\n\t\ttx1_put(o, TX1_FAAE2, -1);",
+  "replace": "\t\ttx1_put(o, TX1_FAAE2, -1);"
+ },
+ {
+  "label": "74: +0xaae2 and +0xaae0 are swapped",
+  "find": "\t\ttx1_put(o, TX1_FAAE2, -1);\n\t\ttx1_put(o, TX1_FAAE0, 0);",
+  "replace": "\t\ttx1_put(o, TX1_FAAE2, 0);\n\t\ttx1_put(o, TX1_FAAE0, -1);"
+ },
+ {
+  "label": "74: +0xaae2 is set to 1 rather than -1",
+  "find": "\t\ttx1_put(o, TX1_FAAE2, -1);",
+  "replace": "\t\ttx1_put(o, TX1_FAAE2, 1);"
+ },
+ {
+  "label": "69/64: the quadrant is not added to the one last sent",
+  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tshort k = (short)(q & 3);"
+ },
+ {
+  "label": "69/64: the quadrant sum is masked with seven",
+  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 7);"
+ },
+ {
+  "label": "69/64: the quadrant sum is not masked",
+  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tshort k = (short)(q + (unsigned short)o->f25c6);"
+ },
+ {
+  "label": "69/64: the point is the scrambler's two bits, undifferenced",
+  "find": "\tint point = vect4[k];",
+  "replace": "\tint point = vect4[q & 3];"
+ },
+ {
+  "label": "69/64: the chosen quadrant is not carried forward",
+  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
+  "replace": "\to->f25c8 = k;"
+ },
+ {
+  "label": "69/64: the chosen quadrant is not stored in f25c8",
+  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
+  "replace": "\to->f25c6 = k;"
+ },
+ {
+  "label": "69/64: f25c6 keeps the scrambler's output rather than the sum",
+  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
+  "replace": "\to->f25c8 = k;\n\to->f25c6 = q;"
+ },
+ {
+  "label": "69/64: the point is not transmitted",
+  "find": "\to->f25c6 = k;\n\ttx1_put_point(o, point);",
+  "replace": "\to->f25c6 = k;"
+ },
+ {
+  "label": "69: the constellation selector is inverted",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x67031 */",
+  "replace": "\tif ((unsigned short)tx1_get(o, TX1_F382) != 0x89b0u) {\n\t\t/* 0x67031 */"
+ },
+ {
+  "label": "69: the constellation selector is one count out",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x67031 */",
+  "replace": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b1u) {\n\t\t/* 0x67031 */"
+ },
+ {
+  "label": "69: the constellation selector is the receiver's flags word",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x67031 */",
+  "replace": "\tif ((unsigned short)tx1_get(o, 0x386) == 0x89b0u) {\n\t\t/* 0x67031 */"
+ },
+ {
+  "label": "69: the constellation selector is compared as a byte",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x67031 */",
+  "replace": "\tif ((unsigned char)tx1_get(o, TX1_F382) == 0xb0u) {\n\t\t/* 0x67031 */"
+ },
+ {
+  "label": "69: the generator select is inverted",
+  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)((o->f25c2 & 1) != 0);\n\tshort q;"
+ },
+ {
+  "label": "69: the generator select is bit 1 of f25c2",
+  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)((o->f25c2 & 2) == 0);\n\tshort q;"
+ },
+ {
+  "label": "69: the generator select is f359c, as 71 and 86's is",
+  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)(o->f359c == 0x65);\n\tshort q;"
+ },
+ {
+  "label": "69: the sixteen-point half sends a vect4 point",
+  "find": "\t\tpoint = vect16[q + 4 * k];",
+  "replace": "\t\tpoint = vect4[(q + 4 * k) & 3];"
+ },
+ {
+  "label": "69: the vect16 row and column are swapped",
+  "find": "\t\tpoint = vect16[q + 4 * k];",
+  "replace": "\t\tpoint = vect16[k + 4 * q];"
+ },
+ {
+  "label": "69: the vect16 column is the row again",
+  "find": "\t\tpoint = vect16[q + 4 * k];",
+  "replace": "\t\tpoint = vect16[k + 4 * k];"
+ },
+ {
+  "label": "69: the vect16 index is not scaled by four",
+  "find": "\t\tpoint = vect16[q + 4 * k];",
+  "replace": "\t\tpoint = vect16[(q + k) & 15];"
+ },
+ {
+  "label": "69: the first scrambler's quadrant is not stored",
+  "find": "\t\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "69: the first scrambler's quadrant is not differenced",
+  "find": "\t\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\t\to->f25c8 = (short)(q & 3);"
+ },
+ {
+  "label": "69: the sixteen-point half re-reads f25c6 rather than f25c8",
+  "find": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */",
+  "replace": "\t\tk = o->f25c6;\t\t\t/* re-read, 0x67131 */"
+ },
+ {
+  "label": "69: the sixteen-point half does not carry the row forward",
+  "find": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */\n\t\to->f25c6 = k;",
+  "replace": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */"
+ },
+ {
+  "label": "69: the first scrambler is passed three rather than 0xf",
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);",
+  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);",
+  "equivalent": true,
+  "why": "`nbits` is two, so `V34scrambler` consumes bits 0 and 1 of `bits` and no others -- both are set in 3 and in 0xf, and the register advances identically.  A proof over every input rather than over the ones driven; the object's own 0xf is what is written"
+ },
+ {
+  "label": "69: the first scrambler scrambles one bit",
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);",
+  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 1);"
+ },
+ {
+  "label": "69: the sixteen-point half scrambles once",
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);\n\t\tk = o->f25c8;",
+  "replace": "\t\tk = o->f25c8;"
+ },
+ {
+  "label": "69: the sixteen-point half advances vect_idx by two",
+  "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 4);",
+  "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+ },
+ {
+  "label": "69: the four-point half advances vect_idx by four",
+  "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);",
+  "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 4);"
+ },
+ {
+  "label": "69: the segment ends at 0x15",
+  "find": "\tif ((unsigned short)o->vect_idx == 0x14u) {",
+  "replace": "\tif ((unsigned short)o->vect_idx == 0x15u) {"
+ },
+ {
+  "label": "69: the segment ends at or past 0x14",
+  "find": "\tif ((unsigned short)o->vect_idx == 0x14u) {",
+  "replace": "\tif ((unsigned short)o->vect_idx >= 0x14u) {"
+ },
+ {
+  "label": "69: the segment's end reloads vect_idx with four",
+  "find": "\t\to->vect_idx = 8;",
+  "replace": "\t\to->vect_idx = 4;"
+ },
+ {
+  "label": "69: the segment's end clears vect_idx",
+  "find": "\t\to->vect_idx = 8;",
+  "replace": "\t\to->vect_idx = 0;"
+ },
+ {
+  "label": "69: the segment's end leaves vect_idx alone",
+  "find": "\t\to->vect_idx = 8;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);"
+ },
+ {
+  "label": "69: the transmit machine moves to XMITMP",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);"
+ },
+ {
+  "label": "69: the transmit machine is not moved at the segment's end",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\t(void)txst;"
+ },
+ {
+  "label": "69: the txstate compare at 0x66e14 is deleted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\t(void)txst;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "equivalent": true,
+  "why": "the arm is reached only through table 1 at `txstate == 69` and `txmit` does not write +0x3596 (finding 285's sweep), so the compare is always true and the store always happens.  Finding 342's case at 65, exactly"
+ },
+ {
+  "label": "64/68: the countdown at +0xaa78 is not run",
+  "find": "\t(void)tx1_ja_common(o);\n\n\t/* 0x635f0 */",
+  "replace": "\t/* 0x635f0 */"
+ },
+ {
+  "label": "64/68: +0x25d8 is not counted",
+  "find": "\ttx1_put(o, TX1_F25D8,\n\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "64/68: +0x25d8 counts down",
+  "find": "\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));",
+  "replace": "\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) - 1));"
+ },
+ {
+  "label": "64/68: the bit source is shifted by vect_idx rather than twice it",
+  "find": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 31u;",
+  "replace": "\tshift = (unsigned)((int)o->vect_idx) & 31u;"
+ },
+ {
+  "label": "64/68: the shift count is masked with fifteen",
+  "find": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 31u;",
+  "replace": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 15u;"
+ },
+ {
+  "label": "64/68: the bit source is read signed",
+  "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
+  "replace": "\tbits = (short)((int)tx1_get(o, TX1_F25D6) >> shift);"
+ },
+ {
+  "label": "64/68: the bit source is +0x25d8",
+  "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
+  "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D8) >> shift);"
+ },
+ {
+  "label": "64/68: the bit source is shifted left",
+  "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
+  "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) << shift);"
+ },
+ {
+  "label": "64/68: the generator select is inverted",
+  "find": "\tmode = (short)((o->f25c2 & 1) == 0);",
+  "replace": "\tmode = (short)((o->f25c2 & 1) != 0);"
+ },
+ {
+  "label": "64/68: the generator select is f359c, as 71 and 86's is",
+  "find": "\tmode = (short)((o->f25c2 & 1) == 0);",
+  "replace": "\tmode = (short)(o->f359c == 0x65);"
+ },
+ {
+  "label": "64/68: three bits are scrambled rather than two",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 3);"
+ },
+ {
+  "label": "64/68: the scrambler is fed a literal three",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);"
+ },
+ {
+  "label": "64/68: vect_idx is masked with fifteen",
+  "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);",
+  "replace": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 15);"
+ },
+ {
+  "label": "64/68: vect_idx is masked before it is advanced",
+  "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);",
+  "replace": "\tidx = (unsigned short)((((unsigned short)o->vect_idx) & 7) + 1);"
+ },
+ {
+  "label": "64/68: vect_idx is not advanced",
+  "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);\n\to->vect_idx = (short)idx;",
+  "replace": "\tidx = (unsigned short)((unsigned short)o->vect_idx & 7);"
+ },
+ {
+  "label": "64/68: f359c is compared against 0x65",
+  "find": "\tif (o->f359c == 0x66) {",
+  "replace": "\tif (o->f359c == 0x65) {"
+ },
+ {
+  "label": "64/68: the wrap is tested before f359c",
+  "find": "\tif (o->f359c == 0x66) {",
+  "replace": "\tif (o->f359c == 0x66 && idx != 0) {"
+ },
+ {
+  "label": "64/68: 0x66ca8's flag is bit 3 of the receiver's flags",
+  "find": "\t\tif (!(rx->flags & V34_RX_FLAG_DATA)) {",
+  "replace": "\t\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {"
+ },
+ {
+  "label": "64/68: 0x66ca8's flag test is inverted",
+  "find": "\t\tif (!(rx->flags & V34_RX_FLAG_DATA)) {",
+  "replace": "\t\tif (rx->flags & V34_RX_FLAG_DATA) {"
+ },
+ {
+  "label": "64/68: 0x66ca8 does not test +0x35a2",
+  "find": "\t\t\tif (tx1_get(o, TX1_F35A2) == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */\n",
+  "replace": ""
+ },
+ {
+  "label": "64/68: 0x66ca8 does not test +0x25da",
+  "find": "\t\t\tif (tx1_get(o, TX1_F25DA) == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x63da2 */\n",
+  "replace": ""
+ },
+ {
+  "label": "64/68: 0x66ca8 tests +0x35a2 against two",
+  "find": "\t\t\tif (tx1_get(o, TX1_F35A2) == 0)",
+  "replace": "\t\t\tif (tx1_get(o, TX1_F35A2) == 2)"
+ },
+ {
+  "label": "64/68: 0x66ca8 moves the transmit machine to XMITMP",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);"
+ },
+ {
+  "label": "64/68: 0x66ca8 does not clear vect_idx",
+  "find": "\t\to->vect_idx = 0;\t\t\t/* 0x62d32 */",
+  "replace": "\t\t(void)0;\t\t\t\t/* 0x62d32 */"
+ },
+ {
+  "label": "64/68: 0x66ca8 clears vect_idx on every one of its three exits",
+  "find": "\t\t\tif (tx1_get(o, TX1_F35A2) == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */",
+  "replace": "\t\t\tif (tx1_get(o, TX1_F35A2) == 0) {\n\t\t\t\to->vect_idx = 0;\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */\n\t\t\t}"
+ },
+ {
+  "label": "64/68: the txstate compare at 0x66cdf is deleted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "equivalent": true,
+  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "64/68: the wrap test is inverted",
+  "find": "\tif (idx != 0)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
+  "replace": "\tif (idx == 0)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+ },
+ {
+  "label": "64/68: the tails are chosen by txstate 64 rather than 68",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {",
+  "replace": "\tif (tx1_get(o, TX1_TXSTATE) == V34HS_JTXMIT) {"
+ },
+ {
+  "label": "68: f25cc is not cleared at the segment's end",
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+ },
+ {
+  "label": "68: f25cc is cleared as a halfword",
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+ },
+ {
+  "label": "68: f25c6 is not cleared at the segment's end",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c0 = 0;"
+ },
+ {
+  "label": "68: f25c0 is not cleared at the segment's end",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;"
+ },
+ {
+  "label": "68: the transmit machine moves to TRNSEG4",
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+ },
+ {
+  "label": "68: the segment's end stores without comparing",
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->f25cc = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "equivalent": true,
+  "why": "0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding 572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "64: +0x25da is compared against three",
+  "find": "\tif (tx1_get(o, TX1_F25DA) != 2)",
+  "replace": "\tif (tx1_get(o, TX1_F25DA) != 3)"
+ },
+ {
+  "label": "64: the +0x25da test is deleted",
+  "find": "\tif (tx1_get(o, TX1_F25DA) != 2)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6409a */\n",
+  "replace": ""
+ },
+ {
+  "label": "64: the segment ends at or past 0x80",
+  "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)",
+  "replace": "\tif (tx1_get(o, TX1_F25D8) < 0x80)"
+ },
+ {
+  "label": "64: +0x25d8 is compared unsigned",
+  "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)",
+  "replace": "\tif ((unsigned short)tx1_get(o, TX1_F25D8) <= 0x80)"
+ },
+ {
+  "label": "64: the +0x25d8 test is deleted",
+  "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */\n",
+  "replace": ""
+ },
+ {
+  "label": "64: the bit source is reloaded with 0x8990",
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);",
+  "replace": "\ttx1_put(o, TX1_F25D6, (short)0x8990);"
+ },
+ {
+  "label": "64: the bit source is not reloaded",
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);\n\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);"
+ },
+ {
+  "label": "64: the transmit machine does not become 68",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "64: the transmit machine becomes TRNSEG4A rather than 68",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+ },
+ {
+  "label": "64: the txstate compare at 0x63748 is deleted",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "equivalent": true,
+  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "64: the second echo report pair runs whatever the counter holds",
+  "find": "\tif (tx1_get(o, TX1_COUNT) != 0) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "64: the second echo report pair is guarded the other way",
+  "find": "\tif (tx1_get(o, TX1_COUNT) != 0) {",
+  "replace": "\tif (tx1_get(o, TX1_COUNT) == 0) {"
+ },
+ {
+  "label": "64: bit 3 of f25c2 is raised at the segment's end",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "64: no flag is raised at the segment's end",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "64: the counter is not zeroed at the segment's end",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tv34FreezeEcho(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "64: the counter is set to one rather than zero",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "64: the segment's end reports only the first echo canceller",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "64: the segment's end reports the first echo canceller twice",
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+ },
+ {
+  "label": "67: the four-point half collects one bit",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > (wide ? 3 : 0))\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: the four-point half collects three bits",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > (wide ? 3 : 2))\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: the sixteen-point half collects three bits",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > (wide ? 2 : 1))\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: the sixteen-point half collects five bits",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > (wide ? 4 : 1))\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: the two bit counts are swapped",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > (wide ? 1 : 3))\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: the bit count does not depend on the constellation",
+  "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
+  "replace": "\t\tif (n > 3)\n\t\t\tbreak;"
+ },
+ {
+  "label": "67: f25c8 is not cleared before the loop",
+  "find": "\to->f25c8 = 0;\t\t\t\t\t/* 0x639ab */",
+  "replace": "\t/* 0x639ab, deleted */"
+ },
+ {
+  "label": "67: the bits are not accumulated",
+  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->f25c8 = (short)((unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));"
+ },
+ {
+  "label": "67: every bit lands in bit 0",
+  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)((unsigned)(int)bit));"
+ },
+ {
+  "label": "67: the bits are shifted one place too far",
+  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << (((unsigned)(unsigned char)n + 1u) & 31u)));"
+ },
+ {
+  "label": "67: the bits go in highest first",
+  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((3u - (unsigned)(unsigned char)n) & 31u)));"
+ },
+ {
+  "label": "67: the constellation selector is inverted",
+  "find": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;",
+  "replace": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) != 0x89b0u;"
+ },
+ {
+  "label": "67: the constellation selector is one count out",
+  "find": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;",
+  "replace": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b1u;"
+ },
+ {
+  "label": "67: the constellation selector is compared as a byte",
+  "find": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;",
+  "replace": "\t\twide = (unsigned char)tx1_get(o, TX1_F382) == 0xb0u;"
+ },
+ {
+  "label": "67: the constellation selector is the receiver's flags word",
+  "find": "\t\twide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;",
+  "replace": "\t\twide = (unsigned short)tx1_get(o, TX1_F382 + 4) == 0x89b0u;"
+ },
+ {
+  "label": "67: the two mappers are the other way round",
+  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c8);\n\telse\n\t\ttx1_mp4(o, o->f25c8);",
+  "replace": "\tif (wide)\n\t\ttx1_mp4(o, o->f25c8);\n\telse\n\t\ttx1_mp16(o, o->f25c8);"
+ },
+ {
+  "label": "67: the mapper is fed f25c6 rather than the collected bits",
+  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c8);\n\telse\n\t\ttx1_mp4(o, o->f25c8);",
+  "replace": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c6);\n\telse\n\t\ttx1_mp4(o, o->f25c6);"
+ },
+ {
+  "label": "67: the symbol is not transmitted",
+  "find": "\ttxmit(o);\t\t\t\t/* 0x62d5f and 0x64a42 */",
+  "replace": "\t/* txmit deleted */\t\t\t/* 0x62d5f and 0x64a42 */"
+ },
+ {
+  "label": "67: the four-point half is fed a literal three",
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, 3, 2);"
+ },
+ {
+  "label": "67: the four-point half scrambles one bit",
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 1);"
+ },
+ {
+  "label": "67: the four-point half scrambles three bits",
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 3);"
+ },
+ {
+  "label": "67: the four-point generator select is inverted",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)((o->f25c2 & 1) != 0);\n\tshort q = (short)V34scrambler"
+ },
+ {
+  "label": "67: the four-point generator select is f359c, as 71 and 86's is",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)(o->f359c == 0x65);\n\tshort q = (short)V34scrambler"
+ },
+ {
+  "label": "67: the four-point generator select is bit 1 of f25c2",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)((o->f25c2 & 2) == 0);\n\tshort q = (short)V34scrambler"
+ },
+ {
+  "label": "67: the sixteen-point generator select is inverted",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)((o->f25c2 & 1) != 0);\n\tshort k, q;"
+ },
+ {
+  "label": "67: the sixteen-point generator select is f359c",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)(o->f359c == 0x65);\n\tshort k, q;"
+ },
+ {
+  "label": "67: the sixteen-point generator select is bit 1 of f25c2",
+  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)((o->f25c2 & 2) == 0);\n\tshort k, q;"
+ },
+ {
+  "label": "67: the sixteen-point half's first dibit is a literal 0xf",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, 0xf, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);"
+ },
+ {
+  "label": "67: the sixteen-point half's first dibit is the high one",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);"
+ },
+ {
+  "label": "67: the first quadrant is not differenced",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)(q & 3);"
+ },
+ {
+  "label": "67: the first quadrant sum is not masked",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)(q + (unsigned short)o->f25c6);"
+ },
+ {
+  "label": "67: the first quadrant sum is masked with seven",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 7);"
+ },
+ {
+  "label": "67: the two dibits are the same one",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\tsrc, 2);"
+ },
+ {
+  "label": "67: the second dibit starts at bit 1",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 1), 2);"
+ },
+ {
+  "label": "67: the second dibit starts at bit 3",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 3), 2);"
+ },
+ {
+  "label": "67: the second dibit is a literal three",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t3, 2);"
+ },
+ {
+  "label": "67: the sixteen-point half scrambles once",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\t/* the second scrambler step deleted */"
+ },
+ {
+  "label": "67: the second scrambler step scrambles one bit",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 1);"
+ },
+ {
+  "label": "67: the sixteen-point half re-reads f25c6 rather than f25c8",
+  "find": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;",
+  "replace": "\tk = o->f25c6;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;"
+ },
+ {
+  "label": "67: the sixteen-point half does not carry the row forward",
+  "find": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;",
+  "replace": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */"
+ },
+ {
+  "label": "67: the vect16 row and column are swapped",
+  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->f25c6 = k;\n\tpoint = vect16[k + 4 * q];"
+ },
+ {
+  "label": "67: the vect16 index is not scaled by four",
+  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->f25c6 = k;\n\tpoint = vect16[q + k];"
+ },
+ {
+  "label": "67: the sixteen-point half sends a vect4 point",
+  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->f25c6 = k;\n\tpoint = vect4[k];"
+ },
+ {
+  "label": "67: the sixteen-point column is the row again",
+  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->f25c6 = k;\n\tpoint = vect16[k + 4 * k];"
+ },
+ {
+  "label": "67: the sixteen-point symbol is not stored",
+  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];\n\ttx1_put_point(o, point);",
+  "replace": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];\n\t(void)point;"
+ },
+ {
+  "label": "67: the stuff point with bit 5 set is 0x54",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x54 : 0xbb)) {"
+ },
+ {
+  "label": "67: the stuff point with bit 5 clear is 0xbc",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbc)) {"
+ },
+ {
+  "label": "67: the stuff points are not selected by bit 5",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx == 0xbb) {"
+ },
+ {
+  "label": "67: the stuff point is selected by bit 4",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx == ((flags & 0x10u) ? 0x55 : 0xbb)) {"
+ },
+ {
+  "label": "67: the two stuff points are the other way round",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx == ((flags & 0x20u) ? 0xbb : 0x55)) {"
+ },
+ {
+  "label": "67: the stuff point is at or past its index",
+  "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+  "replace": "\t\tif (idx >= ((flags & 0x20u) ? 0x55 : 0xbb)) {"
+ },
+ {
+  "label": "67: the two stuff widths are swapped",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}"
+ },
+ {
+  "label": "67: the stuff always pushes one bit",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the stuff always pushes three bits",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}"
+ },
+ {
+  "label": "67: the wide stuff pushes two bits",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 2);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 2);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the wide stuff advances the count but not the accumulator",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 0);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the wide stuff advances the accumulator but not the count",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the narrow stuff advances the accumulator but not the count",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t}"
+ },
+ {
+  "label": "67: the stuff shifts the accumulator right",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the stuff's width is chosen by bit 4",
+  "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+  "replace": "\t\t\tif (flags & 0x10u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the sequence's end with bit 5 set is 0x59",
+  "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+  "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x59 : 0xbc)) {"
+ },
+ {
+  "label": "67: the sequence's end with bit 5 clear is 0xbd",
+  "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+  "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbd)) {"
+ },
+ {
+  "label": "67: the sequence's end is not selected by bit 5",
+  "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+  "replace": "\t\t} else if (idx == 0xbc) {"
+ },
+ {
+  "label": "67: the sequence's end is at or past its index",
+  "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+  "replace": "\t\t} else if (idx >= ((flags & 0x20u) ? 0x58 : 0xbc)) {"
+ },
+ {
+  "label": "67: the sequence's end is selected by bit 4",
+  "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+  "replace": "\t\t} else if (idx == ((flags & 0x10u) ? 0x58 : 0xbc)) {"
+ },
+ {
+  "label": "67: +0x3590 is tested even on a pass that has stuffed",
+  "find": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)tx1_get(o, TX1_F3590)) {",
+  "replace": "\t\t}\n\t\tif ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)tx1_get(o, TX1_F3590)) {"
+ },
+ {
+  "label": "67: +0x3590 is tested at or past the index",
+  "find": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)tx1_get(o, TX1_F3590)) {",
+  "replace": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   >= (unsigned short)tx1_get(o, TX1_F3590)) {"
+ },
+ {
+  "label": "67: +0x3590 is advanced by 0x10",
+  "find": "\t\t\ttx1_put(o, TX1_F3590,\n\t\t\t\t(short)((unsigned short)\n\t\t\t\t\ttx1_get(o, TX1_F3590) + 0x11));",
+  "replace": "\t\t\ttx1_put(o, TX1_F3590,\n\t\t\t\t(short)((unsigned short)\n\t\t\t\t\ttx1_get(o, TX1_F3590) + 0x10));"
+ },
+ {
+  "label": "67: +0x3590 is not advanced",
+  "find": "\t\t\ttx1_put(o, TX1_F3590,\n\t\t\t\t(short)((unsigned short)\n\t\t\t\t\ttx1_get(o, TX1_F3590) + 0x11));",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "67: +0x3590 is reloaded from the index",
+  "find": "\t\t\ttx1_put(o, TX1_F3590,\n\t\t\t\t(short)((unsigned short)\n\t\t\t\t\ttx1_get(o, TX1_F3590) + 0x11));",
+  "replace": "\t\t\ttx1_put(o, TX1_F3590, o->vect_idx);"
+ },
+ {
+  "label": "67: +0x3590 pushes three bits",
+  "find": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 1);\n\t\t\ttx1_put(o, TX1_F3590,",
+  "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 3);\n\t\t\ttx1_put(o, TX1_F3590,"
+ },
+ {
+  "label": "67: +0x3590 pushes nothing into the reader",
+  "find": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 1);\n\t\t\ttx1_put(o, TX1_F3590,",
+  "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\t(void)b;\n\t\t\ttx1_put(o, TX1_F3590,"
+ },
+ {
+  "label": "67: vect_idx is not advanced",
+  "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
+  "replace": "\t\tidx = o->vect_idx;"
+ },
+ {
+  "label": "67: vect_idx advances by two",
+  "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
+  "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);\n\t\tidx = o->vect_idx;"
+ },
+ {
+  "label": "67: the checkpoints see the index before it is advanced",
+  "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
+  "replace": "\t\tidx = o->vect_idx;\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+ },
+ {
+  "label": "67: the checkpoints read the transmitter's flags",
+  "find": "\t\tflags = rx->flags;\n\n\t\tif (idx == ",
+  "replace": "\t\tflags = (unsigned short)o->f25c2;\n\n\t\tif (idx == "
+ },
+ {
+  "label": "67: the reader is the record at +0xaa3c rather than the pointer",
+  "find": "\treturn *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);",
+  "replace": "\treturn (struct v34_bitsource *)((char *)o + TX1_FAA3C);"
+ },
+ {
+  "label": "67: the reader is the record at +0xa94c",
+  "find": "\treturn *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);",
+  "replace": "\treturn (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);"
+ },
+ {
+  "label": "67: +0x359e is not counted",
+  "find": "\tseq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);\n\ttx1_put(o, TX1_F359E, seq);",
+  "replace": "\tseq = tx1_get(o, TX1_F359E);"
+ },
+ {
+  "label": "67: +0x359e counts down",
+  "find": "\tseq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);\n\ttx1_put(o, TX1_F359E, seq);",
+  "replace": "\tseq = (short)((unsigned short)tx1_get(o, TX1_F359E) - 1);\n\ttx1_put(o, TX1_F359E, seq);"
+ },
+ {
+  "label": "67: +0x359e is counted but not stored",
+  "find": "\tseq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);\n\ttx1_put(o, TX1_F359E, seq);",
+  "replace": "\tseq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);"
+ },
+ {
+  "label": "67: the first test is at the record rather than at obj+0xaa3c",
+  "find": "\tif ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {",
+  "replace": "\tif ((tx1_bitsource(o)->word[0] & 1) != 0) {"
+ },
+ {
+  "label": "67: the obj+0xaa3c test is inverted",
+  "find": "\tif ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {",
+  "replace": "\tif ((*((unsigned char *)o + TX1_FAA3C) & 1) == 0) {"
+ },
+ {
+  "label": "67: the obj+0xaa3c test is on bit 1",
+  "find": "\tif ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {",
+  "replace": "\tif ((*((unsigned char *)o + TX1_FAA3C) & 2) != 0) {"
+ },
+ {
+  "label": "67: the exit needs bit 4 alone",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x10u) != 0 && seq > 3) {"
+ },
+ {
+  "label": "67: the exit needs bit 7 alone",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x80u) != 0 && seq > 3) {"
+ },
+ {
+  "label": "67: the exit's mask test is not an equality",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x90u) != 0 && seq > 3) {"
+ },
+ {
+  "label": "67: the exit is at or past three sequences",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x90u) == 0x90u && seq >= 3) {"
+ },
+ {
+  "label": "67: the exit is past four sequences",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x90u) == 0x90u && seq > 4) {"
+ },
+ {
+  "label": "67: the exit does not count sequences",
+  "find": "\t\tif ((flags & 0x90u) == 0x90u && seq > 3) {",
+  "replace": "\t\tif ((flags & 0x90u) == 0x90u) {"
+ },
+ {
+  "label": "67: initdigital is not called",
+  "find": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}",
+  "replace": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: +0x3598 is not set",
+  "find": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}",
+  "replace": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t}"
+ },
+ {
+  "label": "67: initdigital runs on every sequence",
+  "find": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}",
+  "replace": "\t\t\tinitdigital(o);\n\t\t\ttx1_put(o, TX1_F3598, 1);"
+ },
+ {
+  "label": "67: the +0x3598 guard is inverted",
+  "find": "\t\t\tif (tx1_get(o, TX1_F3598) == 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}",
+  "replace": "\t\t\tif (tx1_get(o, TX1_F3598) != 0) {\n\t\t\t\tinitdigital(o);\n\t\t\t\ttx1_put(o, TX1_F3598, 1);\n\t\t\t}"
+ },
+ {
+  "label": "67: the exit moves the transmit machine to XMIT0",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);"
+ },
+ {
+  "label": "67: the exit does not move the transmit machine",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "67: the exit does not clear vect_idx",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "replace": "\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;"
+ },
+ {
+  "label": "67: the exit does not drop bit 5 of the flags word",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\treturn 1;"
+ },
+ {
+  "label": "67: the exit drops bit 4 of the flags word",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x10u);\n\t\t\treturn 1;"
+ },
+ {
+  "label": "67: the exit raises bit 5 rather than dropping it",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags | 0x20u);\n\t\t\treturn 1;"
+ },
+ {
+  "label": "67: the exit does not leave the bit loop",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 0;"
+ },
+ {
+  "label": "67: 0x64614's stamp test needs 0x18",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
+  "replace": "\t\tstamp = (flags & 0x18u) == 0x18u;\t/* 0x64614 */"
+ },
+ {
+  "label": "67: 0x64614's stamp test is bit 4 alone",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
+  "replace": "\t\tstamp = (flags & 0x10u) != 0;\t\t/* 0x64614 */"
+ },
+ {
+  "label": "67: 0x64614 never stamps",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
+  "replace": "\t\tstamp = 0;\t\t\t\t/* 0x64614 */"
+ },
+ {
+  "label": "67: 0x647b0's stamp test needs 0x18",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x647b0 */",
+  "replace": "\t\tstamp = (flags & 0x18u) == 0x18u;\t/* 0x647b0 */"
+ },
+ {
+  "label": "67: 0x647b0's stamp test is bit 4 alone",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x647b0 */",
+  "replace": "\t\tstamp = (flags & 0x10u) != 0;\t\t/* 0x647b0 */"
+ },
+ {
+  "label": "67: 0x647b0 never stamps",
+  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x647b0 */",
+  "replace": "\t\tstamp = 0;\t\t\t\t/* 0x647b0 */"
+ },
+ {
+  "label": "67: the stamp is at or past one sequence",
+  "find": "\tif (stamp && tx1_get(o, TX1_F359E) > 1) {",
+  "replace": "\tif (stamp && tx1_get(o, TX1_F359E) >= 1) {"
+ },
+ {
+  "label": "67: the stamp is past two sequences",
+  "find": "\tif (stamp && tx1_get(o, TX1_F359E) > 1) {",
+  "replace": "\tif (stamp && tx1_get(o, TX1_F359E) > 2) {"
+ },
+ {
+  "label": "67: the stamp does not test +0x359e",
+  "find": "\tif (stamp && tx1_get(o, TX1_F359E) > 1) {",
+  "replace": "\tif (stamp) {"
+ },
+ {
+  "label": "67: the stamp does not test the flags word",
+  "find": "\tif (stamp && tx1_get(o, TX1_F359E) > 1) {",
+  "replace": "\tif (tx1_get(o, TX1_F359E) > 1) {"
+ },
+ {
+  "label": "67: the second test is at obj+0xaa3c rather than at the record",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tif ((*((unsigned char *)o + TX1_FAA3C) & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);"
+ },
+ {
+  "label": "67: +0x359e is cleared whether or not the flag was up",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);"
+ },
+ {
+  "label": "67: +0x359e is cleared when the flag WAS up",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tif ((b->word[0] & 1) != 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);"
+ },
+ {
+  "label": "67: the record's flag is raised before it is tested",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);\n\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);"
+ },
+ {
+  "label": "67: the record's flag is not raised",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);"
+ },
+ {
+  "label": "67: the record's flag is bit 1",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tif ((b->word[0] & 2) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 2u);"
+ },
+ {
+  "label": "67: the record's flag is in its second word",
+  "find": "\t\tif ((b->word[0] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[0] = (short)((unsigned short)b->word[0] | 1u);",
+  "replace": "\t\tif ((b->word[1] & 1) == 0)\n\t\t\ttx1_put(o, TX1_F359E, 0);\n\t\tb->word[1] = (short)((unsigned short)b->word[1] | 1u);"
+ },
+ {
+  "label": "67: the reader is not reloaded at the sequence's end",
+  "find": "\ttx1_mp_reload(o, tx1_bitsource(o), flags);\n\treturn 0;",
+  "replace": "\treturn 0;"
+ },
+ {
+  "label": "67: the reload arms the CRC to zero",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = 0;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
+ },
+ {
+  "label": "67: the reload does not arm the CRC",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
+ },
+ {
+  "label": "67: the reload does not clear pos",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
+ },
+ {
+  "label": "67: the reload does not clear idx",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->repeats = 0;\n\tb->wordbits = 0x10;"
+ },
+ {
+  "label": "67: the reload does not clear repeats",
+  "find": "\tb->repeats = 0;\n\tb->wordbits = 0x10;",
+  "replace": "\tb->wordbits = 0x10;"
+ },
+ {
+  "label": "67: the reload sets wordbits to eight",
+  "find": "\tb->wordbits = 0x10;\n\tb->nbits",
+  "replace": "\tb->wordbits = 8;\n\tb->nbits"
+ },
+ {
+  "label": "67: the reload leaves wordbits alone",
+  "find": "\tb->wordbits = 0x10;\n\tb->nbits",
+  "replace": "\tb->nbits"
+ },
+ {
+  "label": "67: the two message lengths are swapped",
+  "find": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\tb->nbits = (short)((flags & 0x20u) ? 0x90 : 0x30);"
+ },
+ {
+  "label": "67: the message length does not depend on bit 5",
+  "find": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\tb->nbits = 0x90;"
+ },
+ {
+  "label": "67: the message length is chosen by bit 4",
+  "find": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\tb->nbits = (short)((flags & 0x10u) ? 0x30 : 0x90);"
+ },
+ {
+  "label": "67: the short message is 0x38 bits",
+  "find": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\tb->nbits = (short)((flags & 0x20u) ? 0x38 : 0x90);"
+ },
+ {
+  "label": "67: the long message is 0x80 bits",
+  "find": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\tb->nbits = (short)((flags & 0x20u) ? 0x30 : 0x80);"
+ },
+ {
+  "label": "67: the reload clears crc_on",
+  "find": "\tb->crc_on = 1;\n\tb->avail",
+  "replace": "\tb->crc_on = 0;\n\tb->avail"
+ },
+ {
+  "label": "67: the reload leaves crc_on alone",
+  "find": "\tb->crc_on = 1;\n\tb->avail",
+  "replace": "\tb->avail"
+ },
+ {
+  "label": "67: the reload sets avail to 0x10",
+  "find": "\tb->avail = 0x12;\n\tb->avail0 = 0x12;",
+  "replace": "\tb->avail = 0x10;\n\tb->avail0 = 0x12;"
+ },
+ {
+  "label": "67: the reload does not set avail0",
+  "find": "\tb->avail = 0x12;\n\tb->avail0 = 0x12;",
+  "replace": "\tb->avail = 0x12;"
+ },
+ {
+  "label": "67: the reload sets avail0 to 0x10",
+  "find": "\tb->avail = 0x12;\n\tb->avail0 = 0x12;",
+  "replace": "\tb->avail = 0x12;\n\tb->avail0 = 0x10;"
+ },
+ {
+  "label": "67: the reload leaves repeat alone",
+  "find": "\tb->repeat = 0;\n\tb->acc = 0x3fffe;",
+  "replace": "\tb->acc = 0x3fffe;"
+ },
+ {
+  "label": "67: the reload sets repeat",
+  "find": "\tb->repeat = 0;\n\tb->acc = 0x3fffe;",
+  "replace": "\tb->repeat = 1;\n\tb->acc = 0x3fffe;"
+ },
+ {
+  "label": "67: the reload's accumulator is 0x3ffff",
+  "find": "\tb->acc = 0x3fffe;\n\tb->acc0 = 0x3fffe;",
+  "replace": "\tb->acc = 0x3ffff;\n\tb->acc0 = 0x3fffe;"
+ },
+ {
+  "label": "67: the reload's accumulator is 0x1fffe",
+  "find": "\tb->acc = 0x3fffe;\n\tb->acc0 = 0x3fffe;",
+  "replace": "\tb->acc = 0x1fffe;\n\tb->acc0 = 0x3fffe;"
+ },
+ {
+  "label": "67: the reload does not set acc0",
+  "find": "\tb->acc = 0x3fffe;\n\tb->acc0 = 0x3fffe;",
+  "replace": "\tb->acc = 0x3fffe;"
+ },
+ {
+  "label": "67: the reload does not clear vect_idx",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_F3590, 0x22);",
+  "replace": "\ttx1_put(o, TX1_F3590, 0x22);"
+ },
+ {
+  "label": "67: the reload leaves +0x3590 alone",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_F3590, 0x22);",
+  "replace": "\to->vect_idx = 0;"
+ },
+ {
+  "label": "67: the reload sets +0x3590 to 0x11",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_F3590, 0x22);",
+  "replace": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_F3590, 0x11);"
+ },
+ {
+  "label": "67: the txstate compare at 0x648cd is deleted",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\ths_put(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "equivalent": true,
+  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "24: the entry does not tick vect_idx",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": ""
+ },
+ {
+  "label": "24: the entry tick is unconditional",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+ },
+ {
+  "label": "24: the entry tick is by two",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+ },
+ {
+  "label": "24: the Modem-on-Hold flag is read as a halfword at the entry",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+ },
+ {
+  "label": "24: a zero bit counts as the message being over",
+  "find": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit >= 0) {",
+  "replace": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit > 0) {"
+ },
+ {
+  "label": "24: the reader is the record at +0xa94c rather than +0xaa6c's",
+  "find": "\tbit = getbit(tx1_bitsource(o));",
+  "replace": "\tbit = getbit((struct v34_bitsource *)((char *)o + TX1_BLK_A94C));"
+ },
+ {
+  "label": "24: the tone is sent after the sample is transmitted",
+  "find": "\t\ttx1_dpsk_tone(o, bit);\n\t\ttxmit(o);\t\t\t\t/* 0x64a42 */",
+  "replace": "\t\ttxmit(o);\t\t\t\t/* 0x64a42 */\n\t\ttx1_dpsk_tone(o, bit);"
+ },
+ {
+  "label": "24: the tone's flag is replaced by the bit rather than toggled",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = bit;\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the tone's flag is not stored back",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the tone is chosen before the bit is folded in",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put_point(o, vect4[2 * (tx1_get(o, TX1_F358C) & 1)]);\n\ttx1_put(o, TX1_F358C, sel);"
+ },
+ {
+  "label": "24: the tone's index is not scaled by two",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[sel & 1]);"
+ },
+ {
+  "label": "24: the tone is chosen on bit 1 of the flag",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * ((sel >> 1) & 1)]);"
+ },
+ {
+  "label": "24: the bit reaches the fold as a byte",
+  "find": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);",
+  "replace": "\tshort sel = (short)((unsigned short)tx1_get(o, TX1_F358C)\n\t\t\t    ^ (unsigned short)(unsigned char)bit);\n\n\ttx1_put(o, TX1_F358C, sel);\n\ttx1_put_point(o, vect4[2 * (sel & 1)]);"
+ },
+ {
+  "label": "24: the message-over flag test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABE8) == 0) {\n",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0) {\n"
+ },
+ {
+  "label": "24: the message ends in TONE_AB_CALL",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+ },
+ {
+  "label": "24: the message over leaves the transmit machine alone",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+ },
+ {
+  "label": "24: the txstate compare at 0x654e4 is deleted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "equivalent": true,
+  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
+ },
+ {
+  "label": "24: the one-shot test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF8) == 0) {",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF8) != 0) {"
+ },
+ {
+  "label": "24: on hold, the reader is not re-armed by hand",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": ""
+ },
+ {
+  "label": "24: on hold, the re-arm does not count the repeat",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves the CRC alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves pos alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm leaves idx alone",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm does not reload the accumulator",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm does not reload avail",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n"
+ },
+ {
+  "label": "24: on hold, the re-arm's CRC is zero",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+  "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = 0;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the re-armed reader is read before it is re-armed",
+  "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n\n\t\ttx1_dpsk_tone(o, getbit(b));",
+  "replace": "\t\ttx1_dpsk_tone(o, getbit(b));\n\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+ },
+ {
+  "label": "24: on hold, the tone is sent and the hold tail is not run",
+  "find": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn tx1_moh_hold(o);\t\t\t/* 0x64fec */",
+  "replace": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "24: moh_message one clears down rather than holding",
+  "find": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_on_hold(o);\t\t\t/* 0x689f6 */",
+  "replace": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_cleardown(o);"
+ },
+ {
+  "label": "24: moh_message one is not a case of its own",
+  "find": "\tif (o->moh_message == 1) {",
+  "replace": "\tif (0) {"
+ },
+ {
+  "label": "24: the clear-down is for moh_message two alone",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if (o->moh_message == 2) {"
+ },
+ {
+  "label": "24: the clear-down runs to moh_message four",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if ((unsigned)o->moh_message <= 4u) {"
+ },
+ {
+  "label": "24: the clear-down's range is signed",
+  "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
+  "replace": "\t} else if (o->moh_message <= 3) {"
+ },
+ {
+  "label": "24: moh_recvd four is not a wait",
+  "find": "\t\tif (got == 4)\n\t\t\ttx1_moh_on_hold(o);",
+  "replace": "\t\tif (0)\n\t\t\ttx1_moh_on_hold(o);"
+ },
+ {
+  "label": "24: moh_recvd zero is not a wait",
+  "find": "\t\t} else if (got == 0)\n\t\t\ttx1_moh_on_hold(o);",
+  "replace": "\t\t} else if (0)\n\t\t\ttx1_moh_on_hold(o);"
+ },
+ {
+  "label": "24: anything past four builds the message",
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */"
+ },
+ {
+  "label": "24: five restarts the handshake like anything else",
+  "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
+  "replace": "\t\t\ttx1_moh_reinit(o);\t/* 0x69041 */"
+ },
+ {
+  "label": "24: moh_recvd is compared signed",
+  "find": "\t\telse if ((unsigned)got > 4u) {",
+  "replace": "\t\telse if (got > 4) {",
+  "equivalent": true,
+  "why": "a proof over every input rather than over the ones driven.  0x69033's `ja` and a signed `jg` can differ only for a NEGATIVE `moh_recvd`, and there the two readings reach the same block: unsigned it is above four, is not five, and restarts the handshake; signed it is not above four, is not zero, and falls to the same restart.  Every other value answers alike by construction, so no run can separate them and the object's unsigned compare is what is written"
+ },
+ {
+  "label": "24: the one-shot is not cleared",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "replace": "\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */"
+ },
+ {
+  "label": "24: the one-shot is cleared as a halfword",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;",
+  "replace": "\t*(short *)((char *)o + TX1_FABF8) = 0;"
+ },
+ {
+  "label": "24: the message dispatch does not run the hold tail",
+  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "replace": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn V34TX1_LOOP;"
+ },
+ {
+  "label": "24: the clear-down leaves the transmit machine alone",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": ""
+ },
+ {
+  "label": "24: the clear-down moves to MOH_FRR",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_FRR);"
+ },
+ {
+  "label": "24: the clear-down leaves the receive machine alone",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\ttx1_put(o, TX1_FABE4, 1);"
+ },
+ {
+  "label": "24: the clear-down's receive state is RECEIVE",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
+ },
+ {
+  "label": "24: the clear-down does not raise +0xabe4",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n}"
+ },
+ {
+  "label": "24: the clear-down raises +0xabe4 to two",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
+ },
+ {
+  "label": "24: the hold moves to MOH_ON_HOLD",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "24: the hold leaves the transmit machine alone",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "replace": ""
+ },
+ {
+  "label": "24: the hold leaves the receive machine alone",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;"
+ },
+ {
+  "label": "24: the hold does not clear +0xaa78",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\to->vect_idx = 0;"
+ },
+ {
+  "label": "24: the hold does not clear vect_idx",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);"
+ },
+ {
+  "label": "24: the hold clears vect_idx to one",
+  "find": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 1;"
+ },
+ {
+  "label": "24: the handshake is not restarted",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\ttx1_put(o, TX1_FABE6, 1);"
+ },
+ {
+  "label": "24: the handshake restarts in mode zero",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 0);\n\ttx1_put(o, TX1_FABE6, 1);"
+ },
+ {
+  "label": "24: the restart does not raise +0xabe6",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 1);"
+ },
+ {
+  "label": "24: the restart raises +0xabe6 to two",
+  "find": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 1);",
+  "replace": "\tv34handshakinit(o, 1);\n\ttx1_put(o, TX1_FABE6, 2);"
+ },
+ {
+  "label": "24: the message's stamp is written whatever +0xabe2 held",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\to->fabe2 = 1;"
+ },
+ {
+  "label": "24: the message's stamp is not written",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": ""
+ },
+ {
+  "label": "24: the message's stamp is three",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 3;"
+ },
+ {
+  "label": "24: the message's stamp guard is == 3",
+  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "replace": "\tif (o->fabe2 == 3)\n\t\to->fabe2 = 1;"
+ },
+ {
+  "label": "24: +0xabf9 picks the two messages the other way round",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 1;\t\t/* 0x6a415 */"
+ },
+ {
+  "label": "24: the message built is always MHfrr",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) == 0)\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\telse\n\t\to->moh_message = 3;\t\t/* 0x6a415 */",
+  "replace": "\to->moh_message = 1;"
+ },
+ {
+  "label": "24: the message is built into the record it installs",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
+  "replace": "\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));"
+ },
+ {
+  "label": "24: the message is not built at all",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n",
+  "replace": ""
+ },
+ {
+  "label": "24: the reader is not re-aimed at +0xa94c",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\n",
+  "replace": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\n"
+ },
+ {
+  "label": "24: the new reader does not set the CRC",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set pos",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set idx",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set the repeat count",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set nbits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set wordbits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set crc_on",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set the accumulator",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set acc0",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set avail",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set avail0",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader does not set repeat",
+  "find": "\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->avail = 0xc;\n\tb->avail0 = 0xc;"
+ },
+ {
+  "label": "24: the new reader's message is 0x1f72",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0x1f72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader's message is sixteen bits",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 0x10;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader holds eight bits rather than twelve",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 8;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;"
+ },
+ {
+  "label": "24: the new reader repeats",
+  "find": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 0;",
+  "replace": "\tb->crc = (short)0xffff;\n\tb->pos = 0;\n\tb->idx = 0;\n\tb->repeats = 0;\n\tb->nbits = 8;\n\tb->wordbits = 8;\n\tb->crc_on = 1;\n\tb->acc = 0xf72;\n\tb->acc0 = 0xf72;\n\tb->avail = 0xc;\n\tb->avail0 = 0xc;\n\tb->repeat = 1;"
+ },
+ {
+  "label": "24: the hold's threshold ignores the round-trip delay",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < 0x4b0)"
+ },
+ {
+  "label": "24: the hold's round-trip delay is shifted logically",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)(unsigned short)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's round-trip delay is shifted by three",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)o->rtd >> 3) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's threshold is 0x4b",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b)"
+ },
+ {
+  "label": "24: the hold ends one tick early",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)o->vect_idx <= ((int)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold's clock is read unsigned",
+  "find": "\tif ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)",
+  "replace": "\tif ((int)(unsigned short)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)"
+ },
+ {
+  "label": "24: the hold tail's +0xabf9 test is inverted",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
+  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\t/* 0x688b4 */"
+ },
+ {
+  "label": "24: the hold tail reads +0xabf9 as a halfword",
+  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */",
+  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\t/* 0x688b4 */"
+ },
+ {
+  "label": "24: the hold tail does not stamp +0xabe2",
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
+  "replace": "\t\ttx1_moh_cleardown(o);"
+ },
+ {
+  "label": "24: the hold tail stamps +0xabe2 with three",
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
+  "replace": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 3;"
+ },
+ {
+  "label": "24: the hold tail's message range is == 2",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif (o->moh_message != 2) {"
+ },
+ {
+  "label": "24: the hold tail's message range runs to four",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif ((unsigned)(o->moh_message - 2) > 2u) {"
+ },
+ {
+  "label": "24: the hold tail's message range starts at one",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {",
+  "replace": "\tif ((unsigned)(o->moh_message - 1) > 1u) {"
+ },
+ {
+  "label": "24: the hold tail restarts the handshake where it clears down",
+  "find": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_reinit(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_cleardown(o);",
+  "replace": "\tif ((unsigned)(o->moh_message - 2) > 1u) {\n\t\t/* 0x6923d */\n\t\ttx1_moh_cleardown(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629cf */\n\t}\n\n\t/* 0x65046 */\n\ttx1_moh_reinit(o);"
+ },
+ {
+  "label": "21: the quadrant is stored but the point is vect4[0]",
+  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[0]);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the quadrant is not stored in f25c8",
+  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "replace": "\tq = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[q]);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the quadrant goes to f25c6 rather than f25c8",
+  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->f25c6 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the sample is sent before the point is stored",
+  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttxmit(o);\n\ttx1_put_point(o, vect4[q]);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c0 is not incremented",
+  "find": "\t/* 0x643dc */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "replace": "\t/* 0x643dc */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c0 is incremented by two",
+  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "replace": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 2);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c0 is incremented after the count is compared",
+  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "replace": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start compares against +0xaa86 rather than +0xaa78",
+  "find": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "replace": "\tif (tx1_get(o, TX1_FAA86) == o->f25c0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start fires whenever the count is above f25c0",
+  "find": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "replace": "\tif (tx1_get(o, TX1_COUNT) >= o->f25c0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start leaves f354c alone",
+  "find": "\t\to->f354c = 0;\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start leaves f3550 alone",
+  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "replace": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start leaves f3552 alone",
+  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "replace": "\t\to->f3550 = 0;\n\t\to->f3560 = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start leaves f3560 alone",
+  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "replace": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start writes f3560 as a halfword",
+  "find": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "replace": "\t\to->f3552 = 0;\n\t\t*(short *)&o->f3560 = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start raises bit 2 of f25c2 rather than clearing it",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start clears bit 3 of f25c2",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~8u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start LEAVES the compare chain",
+  "find": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t}",
+  "replace": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t\treturn V34TX1_LOOP;\n\t}",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the echo-adapt start is not reported",
+  "find": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t}",
+  "replace": "\t}",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period flag is not guarded on bit 8 already being clear",
+  "find": "\tif (((unsigned short)o->f25c2 & 0x100u) == 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "replace": "\tif (o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "fn": "v34tx1_trnseg4",
+  "equivalent": true,
+  "why": "raising a bit that is already raised writes the value already there, so the guard at 0x643ff can change nothing the object holds -- it is a branch and no more.  It is written as the object writes it"
+ },
+ {
+  "label": "21: the period flag's guard is on bit 8 being SET",
+  "find": "\tif (((unsigned short)o->f25c2 & 0x100u) == 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "replace": "\tif (((unsigned short)o->f25c2 & 0x100u) != 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period flag needs f25c0 strictly above +0xaa86",
+  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && o->f25c0 > tx1_get(o, TX1_FAA86))",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period flag compares f25c0 unsigned",
+  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && (unsigned short)o->f25c0 >= (unsigned short)tx1_get(o, TX1_FAA86))",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period flag reads the counter rather than +0xaa86",
+  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && o->f25c0 >= tx1_get(o, TX1_COUNT))",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period flag is bit 9",
+  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x100u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x200u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the middle point is +0xa244 itself",
+  "find": "\tif (n == (span >> 1)) {",
+  "replace": "\tif (n == span) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the middle point is a quarter of +0xa244",
+  "find": "\tif (n == (span >> 1)) {",
+  "replace": "\tif (n == (span >> 2)) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: +0xa244 is read as a halfword",
+  "find": "\tspan = tx1_get_int(o, TX1_FA244);",
+  "replace": "\tspan = tx1_get(o, TX1_FA244);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c0 is compared zero-extended",
+  "find": "\tn = o->f25c0;\n\tspan = tx1_get_int(o, TX1_FA244);",
+  "replace": "\tn = (unsigned short)o->f25c0;\n\tspan = tx1_get_int(o, TX1_FA244);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the middle point is not reported",
+  "find": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */",
+  "replace": "\t\t(void)0;\t/* 0x67734 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the middle point falls through into the period test",
+  "find": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x640a1 */\n\t}",
+  "replace": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */\n\t}",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point is the baud alone",
+  "find": "\tif (n == baud + (baud >> 1)) {",
+  "replace": "\tif (n == baud) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point is twice the baud",
+  "find": "\tif (n == baud + (baud >> 1)) {",
+  "replace": "\tif (n == baud + baud) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point reads the receive baud at +0xaa96",
+  "find": "\tbaud = cfg->baud;\n\tif (n == baud + (baud >> 1)) {",
+  "replace": "\tbaud = tx1_get(o, 0xaa96);\n\tif (n == baud + (baud >> 1)) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point raises 0x400 without clearing bit 15",
+  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x400u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point clears bit 15 without raising 0x400",
+  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & 0x7fffu);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the period point raises 0x800",
+  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x800u);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the segment ends whenever f25c0 is at or past +0xa244",
+  "find": "\tif (n != span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
+  "replace": "\tif (n < span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion moves the transmit machine to 68 rather than 64",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion does not move the transmit machine to 64",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);",
+  "replace": "\t(void)0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: rtd is compared against three",
+  "find": "\tif (o->rtd <= 2) {",
+  "replace": "\tif (o->rtd <= 3) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: rtd is compared unsigned",
+  "find": "\tif (o->rtd <= 2) {",
+  "replace": "\tif ((unsigned short)o->rtd <= 2u) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: rtd below the boundary takes the other arm",
+  "find": "\tif (o->rtd <= 2) {",
+  "replace": "\tif (o->rtd > 2) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the boundary arm does not raise bit 2 of f25c2",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the boundary arm raises bit 3 of f25c2",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the boundary arm does not clear the counter",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else if (o->v90_receiver",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the boundary arm reports only the first canceller",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the boundary arm reports the first canceller twice",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the whole-counter arm needs BOTH receivers non-zero",
+  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t} else if (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the whole-counter arm looks only at the V.90 receiver",
+  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t} else if (o->v90_receiver != 0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the whole-counter arm looks only at the K56flex receiver",
+  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t} else if (o->k56flex_receiver != 0) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the whole-counter arm tests the receivers above one",
+  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t} else if ((unsigned)o->v90_receiver > 1u\n\t\t   || (unsigned)o->k56flex_receiver > 1u) {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the counter is halved on the receiver arm too",
+  "find": "\t\ttx1_put(o, TX1_COUNT, o->rtd);\n\t} else {",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));\n\t} else {",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the counter is taken whole where it should be halved",
+  "find": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
+  "replace": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, o->rtd);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the halved counter is shifted twice",
+  "find": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 2));",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the halved counter shifts an unsigned rtd",
+  "find": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
+  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)((unsigned short)o->rtd >> 1));",
+  "fn": "v34tx1_trnseg4",
+  "equivalent": true,
+  "why": "the halving arm is reached only when `rtd > 2` SIGNED, so `rtd` is positive there and an arithmetic and a logical shift agree on every value that can reach it.  The object's `movswl` is what is written"
+ },
+ {
+  "label": "21: +0x25d6 is reloaded with 64's 0x899f",
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);",
+  "replace": "\ttx1_put(o, TX1_F25D6, (short)0x899f);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: +0x25d6 is not reloaded",
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);\n\to->f25c6 = o->f25c8;",
+  "replace": "\to->f25c6 = o->f25c8;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c6 is cleared rather than taking the quadrant",
+  "find": "\to->f25c6 = o->f25c8;",
+  "replace": "\to->f25c6 = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: f25c8 takes f25c6 rather than the other way round",
+  "find": "\to->f25c6 = o->f25c8;",
+  "replace": "\to->f25c8 = o->f25c6;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the receiver is not moved to RECEIVE",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
+  "replace": "\tsetupreceiver(o);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the receiver is moved to WAIT rather than RECEIVE",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\tsetupreceiver(o);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion calls rxinit rather than setupreceiver",
+  "find": "\tsetupreceiver(o);\t\t\t\t/* 0x64c04 */",
+  "replace": "\trxinit(o);\t\t\t\t/* 0x64c04 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion does not set the receiver up",
+  "find": "\tsetupreceiver(o);\t\t\t\t/* 0x64c04 */",
+  "replace": "\t(void)0;\t\t\t\t/* 0x64c04 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x14 is cleared rather than set to -1",
+  "find": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(short *)(r + 0x14) = -1;",
+  "replace": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(short *)(r + 0x14) = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x14 is set to -1 as an int",
+  "find": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(short *)(r + 0x14) = -1;",
+  "replace": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(int *)(r + 0x14) = -1;",
+  "fn": "v34tx1_trnseg4",
+  "equivalent": true,
+  "why": "the upper half of a 32-bit -1 at r+0x14 lands on r+0x16, which the store seven lines later clears before anything reads it -- and the object writes 0x14 at 0x64d51 and 0x16 at 0x64d75, in that order, so the same is true of the blob"
+ },
+ {
+  "label": "21: the record's +0x24 is blanked as a halfword",
+  "find": "\t\t*(int *)(r + 0x24) = 0;",
+  "replace": "\t\t*(short *)(r + 0x24) = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x2c is blanked as a halfword",
+  "find": "\t\t*(int *)(r + 0x2c) = 0;",
+  "replace": "\t\t*(short *)(r + 0x2c) = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x16 is left alone",
+  "find": "\t\t*(short *)(r + 0x16) = 0;\n",
+  "replace": "",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x20 is left alone",
+  "find": "\t\t*(short *)(r + 0x2a) = 0;\n\t\t*(short *)(r + 0x20) = 0;\n",
+  "replace": "\t\t*(short *)(r + 0x2a) = 0;\n",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record's +0x2a is left alone",
+  "find": "\t\t*(short *)(r + 0x2a) = 0;\n",
+  "replace": "",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the record blanked is the one at +0xa94c",
+  "find": "\t\tunsigned char *r = (unsigned char *)objp + TX1_INFOREC;",
+  "replace": "\t\tunsigned char *r = (unsigned char *)objp + TX1_BLK_A94C;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion does not move the microstate to DET_SYNC",
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\t(void)0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion moves the microstate to DET_INFO",
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_INFO);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion does not clear vect_idx",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_FAA80, 1);",
+  "replace": "\ttx1_put(o, TX1_FAA80, 1);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the completion does not write one into +0xaa80",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_FAA80, 1);",
+  "replace": "\to->vect_idx = 0;",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: +0xaa80 takes zero rather than one",
+  "find": "\ttx1_put(o, TX1_FAA80, 1);",
+  "replace": "\ttx1_put(o, TX1_FAA80, 0);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: +0xaa80 is written where the counter is",
+  "find": "\ttx1_put(o, TX1_FAA80, 1);",
+  "replace": "\ttx1_put(o, TX1_COUNT, 1);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the V.90 Ja tail is taken on any non-zero receiver",
+  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
+  "replace": "\tif (o->v90_receiver != 0) {\n\t\t/* 0x64de7 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the V.90 Ja tail is taken at one as well",
+  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
+  "replace": "\tif ((unsigned)o->v90_receiver >= 1u) {\n\t\t/* 0x64de7 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the K56flex Ja tail is taken on any non-zero receiver",
+  "find": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x67f91 */",
+  "replace": "\tif (o->k56flex_receiver != 0) {\n\t\t/* 0x67f91 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the K56flex Ja tail is tested before the V.90 one",
+  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "replace": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the V.90 Ja tail moves the transmit machine to 85 rather than 78",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the K56flex Ja tail moves the transmit machine to 78 rather than 85",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the V.90 Ja tail leaves the receiver in RECEIVE",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);\n\t\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the K56flex Ja tail leaves the receiver in RECEIVE",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);\n\t\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the V.90 Ja tail does not announce the transmission",
+  "find": "\t\tindicateJaTransmission(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
+  "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "21: the K56flex Ja tail does not announce the transmission",
+  "find": "\t\tindicateJaTransmission(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "fn": "v34tx1_trnseg4",
+  "equivalent": true,
+  "why": "on this path `indicateJaTransmission` reaches `K56FlexFloModem::enterPhase3FullDuplex`, which is a bare `ret` at 0x101d0 (finding 381), so the call has no effect any test can see.  The V.90 tail's identical mutation IS caught, which is what says the call is reached and not that it is dead"
+ },
+ {
+  "label": "21: neither Ja tail is taken",
+  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
+  "replace": "\tif (0) {\n\t\t/* 0x64de7 */",
+  "fn": "v34tx1_trnseg4"
+ },
+ {
+  "label": "66: the constellation is chosen on 0x8990",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x66e59 */",
+  "replace": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x8990u) {\n\t\t/* 0x66e59 */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the constellation test is inverted",
+  "find": "\tif ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {\n\t\t/* 0x66e59 */",
+  "replace": "\tif ((unsigned short)tx1_get(o, TX1_F382) != 0x89b0u) {\n\t\t/* 0x66e59 */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the sixteen-point half scrambles once",
+  "find": "\t\to->f25c8 = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\to->f25c8 = k;\n\t\tq = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the sixteen-point row and column are swapped",
+  "find": "\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\ttx1_put_point(o, vect16[k + 4 * q]);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: f25c8 holds the SECOND dibit of the sixteen-point half",
+  "find": "\t\to->f25c8 = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the sixteen-point half also writes f25c6",
+  "find": "\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->f25c6 = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the four-point half sends vect4[0]",
+  "find": "\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[q]);",
+  "replace": "\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[0]);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the four-point half differentially encodes",
+  "find": "\t\tshort q = tx1_scramble2(o);\n\n\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[q]);",
+  "replace": "\t\tshort q = tx1_scramble2(o);\n\n\t\t(void)tx1_dpsk4(o, q);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the symbol is sent before txmit and the count after",
+  "find": "\ttxmit(o);\n\n\t/* 0x62edc */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "replace": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\ttxmit(o);\n\n\t/* 0x62edc */",
+  "fn": "v34tx1_trnseg4a",
+  "equivalent": true,
+  "why": "`txmit` (v34rx.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way"
+ },
+ {
+  "label": "66: the count is advanced after the segment test, as 86 advances it",
+  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\tn = o->f25c0;",
+  "replace": "\tn = (short)((unsigned short)o->f25c0 + 1);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the length halves baud with a divide",
+  "find": "\tlim = baud + (baud >> 1) + period;",
+  "replace": "\tlim = baud + baud / 2 + period;",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the length does not carry period",
+  "find": "\tlim = baud + (baud >> 1) + period;",
+  "replace": "\tlim = baud + (baud >> 1);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the length is baud + baud/4 + period",
+  "find": "\tlim = baud + (baud >> 1) + period;",
+  "replace": "\tlim = baud + (baud >> 2) + period;",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: f2218 is compared signed",
+  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "replace": "\t\tif (tx1_get_int(o, TX1_F2218) <= 3)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: f2218 is compared against two",
+  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "replace": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 2u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the short threshold is reached at or below the length",
+  "find": "\t\tif (n < lim) {\n\t\t\t/* 0x6559c */",
+  "replace": "\t\tif (n <= lim) {\n\t\t\t/* 0x6559c */",
+  "fn": "v34tx1_trnseg4a",
+  "equivalent": true,
+  "why": "the two readings differ only at `n == lim`, and that value never reaches this test: 0x62f0b has already sent it to the completion.  A state the arm cannot present, not an agreement over the ones driven"
+ },
+ {
+  "label": "66: the short threshold is baud alone",
+  "find": "\t\t\tif (n < baud + period)",
+  "replace": "\t\t\tif (n < baud)",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the short threshold is inclusive",
+  "find": "\t\t\tif (n < baud + period)",
+  "replace": "\t\t\tif (n <= baud + period)",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the settled error may equal the mark plus ten",
+  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->f21a >= (int)tx1_get(o, TX1_RX250) + 10)",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the settled error's window is eleven",
+  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 11)",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: f25c6 does not take f25c8 at the completion",
+  "find": "\to->f25c6 = (short)(unsigned short)o->f25c8;\n\tmemcpy",
+  "replace": "\tmemcpy",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the record pointer is left alone",
+  "find": "\tmemcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));\n",
+  "replace": "",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the snapshot branches on bit 4 of the flags",
+  "find": "\tif (rx->flags & 0x20u) {\n\t\t/* 0x62f5f */",
+  "replace": "\tif (rx->flags & 0x10u) {\n\t\t/* 0x62f5f */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the snapshot branch is inverted",
+  "find": "\tif (rx->flags & 0x20u) {\n\t\t/* 0x62f5f */",
+  "replace": "\tif (!(rx->flags & 0x20u)) {\n\t\t/* 0x62f5f */",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the short snapshot leaves the record's word 0",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "replace": "\t\trec[2] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the short snapshot leaves the record's word 2",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the short snapshot moves the mark to the predictor error",
+  "find": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f224);",
+  "fn": "v34tx1_trnseg4a"
+ },
+ {
+  "label": "66: the snapshot's word 0 is zero rather than 0x8000",
+  "find": "\trec[0] = (short)0x8000;\n\tfor (i = 0; i <= 5; i++) {",
+  "replace": "\trec[0] = 0;\n\tfor (i = 0; i <= 5; i++) {",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the magnitude sum runs over five coefficients",
+  "find": "\tfor (i = 0; i <= 5; i++) {\n\t\tint v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 2;",
+  "replace": "\tfor (i = 0; i <= 4; i++) {\n\t\tint v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 2;",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the magnitude sum halves rather than quarters",
+  "find": "\t\tint v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 2;",
+  "replace": "\t\tint v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 1;",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the magnitude sum does not take magnitudes",
+  "find": "\t\tsum += (v < 0) ? -v : v;",
+  "replace": "\t\tsum += v;",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the difference is taken signed",
+  "find": "\tt = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);",
+  "replace": "\tt = rx->f21a - rx->f224;",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: a difference of zero is kept",
+  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t < 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
+  "fn": "tx1_ts_snapshot",
+  "equivalent": true,
+  "why": "`t == 0` means the two errors are equal in sixteen bits, and the fourth condition below requires +0x224 STRICTLY below +0x21a -- so on every object where the substitution could matter the predictor is thrown away anyway, whatever the force does to the sum.  The two readings are separable in no object at all"
+ },
+ {
+  "label": "66: the substitute for a non-positive difference is the equaliser error",
+  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t <= 0)\n\t\tt = rx->f21a;\t\t\t\t/* 0x6874c */",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the threshold subtracts half the error rather than a quarter",
+  "find": "\tt = (short)(t - (rx->f21a >> 2));",
+  "replace": "\tt = (short)(t - (rx->f21a >> 1));",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the force fires at 0x1f40 exactly",
+  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "replace": "\tif (sum >= 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the force ignores the equaliser error",
+  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && t > 0)",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the force ignores the threshold",
+  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->f21a > 0xc8)",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the force's error test is at or above 0xc8",
+  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->f21a >= 0xc8 && t > 0)",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the force replaces the sum with 0x3000",
+  "find": "\t\tsum = 0x5000;",
+  "replace": "\t\tsum = 0x3000;",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the snapshot ignores +0x359a",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "replace": "\tif (rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the snapshot's error bound is exclusive",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "replace": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a < 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the predictor error may equal the equaliser error",
+  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "replace": "\t    && rx->f224 <= rx->f21a && sum <= 0x3fff) {",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the magnitude bound is exclusive",
+  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "replace": "\t    && rx->f224 < rx->f21a && sum < 0x3fff) {",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the record takes the predictor taps in ascending order",
+  "find": "\t\trec[2] = rx->pred_b[2];\n\t\trec[3] = rx->pred_a[2];\n\t\trec[4] = rx->pred_b[1];",
+  "replace": "\t\trec[2] = rx->pred_b[0];\n\t\trec[3] = rx->pred_a[0];\n\t\trec[4] = rx->pred_b[1];",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the record takes b where it takes a",
+  "find": "\t\trec[3] = rx->pred_a[2];",
+  "replace": "\t\trec[3] = rx->pred_b[2];",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the coefficient array's conjugate half is not negated",
+  "find": "\t\tco[1] = (short)-rec[3];",
+  "replace": "\t\tco[1] = rec[3];",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the coefficient array's second conjugate is not negated",
+  "find": "\t\tco[3] = (short)-rec[5];",
+  "replace": "\t\tco[3] = rec[5];",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the coefficient array's last entry is not written",
+  "find": "\t\tco[10] = rec[7];\n",
+  "replace": "",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the coefficient array's first entry is not written",
+  "find": "\t\tco[0] = rec[2];\n",
+  "replace": "",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the record's taps are reversed over fifteen bits",
+  "find": "\t\t\trec[2 + i] = (short)bitreverse(\n\t\t\t\t\t(unsigned short)rec[2 + i], 0x10);",
+  "replace": "\t\t\trec[2 + i] = (short)bitreverse(\n\t\t\t\t\t(unsigned short)rec[2 + i], 0xf);",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: only five of the record's taps are reversed",
+  "find": "\t\tfor (i = 0; i <= 5; i++)\n\t\t\trec[2 + i] = (short)bitreverse(",
+  "replace": "\t\tfor (i = 0; i <= 4; i++)\n\t\t\trec[2 + i] = (short)bitreverse(",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the reversal happens before the coefficient array is filled",
+  "find": "\t\tco[7] = rec[2];",
+  "replace": "\t\trec[2] = (short)bitreverse((unsigned short)rec[2], 0x10);\n\t\tco[7] = rec[2];",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the kept path raises bit 13 of the flags",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x4000u);",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x2000u);",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: only one of the predictor's two histories is cleared",
+  "find": "\t\tsysdep_memset(&rx->pred_i[0], 0, 0x10);",
+  "replace": "\t\tsysdep_memset(&rx->pred_i[0], 0, 8);",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the predictor's histories are left alone",
+  "find": "\t\tsysdep_memset(&rx->pred_i[0], 0, 0x10);\n",
+  "replace": "",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the kept path moves the mark to the equaliser error",
+  "find": "\t\ttx1_put(o, TX1_RX250, rx->f224);",
+  "replace": "\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the thrown-away path leaves the record's taps",
+  "find": "\t\trec[2] = 0;\n\t\trec[3] = 0;\n\t\trec[4] = 0;\n\t\trec[5] = 0;\n\t\trec[6] = 0;\n\t\trec[7] = 0;\n",
+  "replace": "\t\trec[2] = 0;\n\t\trec[3] = 0;\n\t\trec[4] = 0;\n\t\trec[5] = 0;\n\t\trec[6] = 0;\n",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: bit 12 comes down only on the kept path",
+  "find": "\t/* 0x674c8 */\n\trx->flags = (unsigned short)(rx->flags & ~0x1000u);",
+  "replace": "",
+  "fn": "tx1_ts_snapshot"
+ },
+ {
+  "label": "66: the ladder's term is not squared",
+  "find": "\tx >>= 5;\n\tx *= x;\n\tx = (short)x;",
+  "replace": "\tx >>= 5;\n\tx = (short)x;",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's term shifts by four",
+  "find": "\tx >>= 5;\n\tx *= x;",
+  "replace": "\tx >>= 4;\n\tx *= x;",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's square is not truncated to sixteen bits",
+  "find": "\tx *= x;\n\tx = (short)x;\n",
+  "replace": "\tx *= x;\n",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's multiplier turns over at 12 rather than 13",
+  "find": "\tx *= (rate >= 0xd) ? 0x4268 : 0x3a98;",
+  "replace": "\tx *= (rate >= 0xc) ? 0x4268 : 0x3a98;",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's two multipliers are swapped",
+  "find": "\tx *= (rate >= 0xd) ? 0x4268 : 0x3a98;",
+  "replace": "\tx *= (rate >= 0xd) ? 0x3a98 : 0x4268;",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's term is scaled by 2^13",
+  "find": "\treturn (short)(x >> 14);",
+  "replace": "\treturn (short)(x >> 13);",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: the ladder's index does not carry rx_use_max",
+  "find": "\tint x = cfg->rx_divtab[rate + 14 * (int)cfg->rx_use_max + off];",
+  "replace": "\tint x = cfg->rx_divtab[rate + 14 + off];",
+  "fn": "tx1_ts_scale",
+  "equivalent": true,
+  "why": "`cfg->rx_use_max` is set to the literal 1 at the top of this function (0x62f95) and nothing between writes it, so `14 * rx_use_max` and `14` are the same index here.  The object's multiply is what is written; the mutation that changes the 1 to a 2 IS caught, which is the same claim from the other side"
+ },
+ {
+  "label": "66: the ladder's index steps by thirteen",
+  "find": "\tint x = cfg->rx_divtab[rate + 14 * (int)cfg->rx_use_max + off];",
+  "replace": "\tint x = cfg->rx_divtab[rate + 13 * (int)cfg->rx_use_max + off];",
+  "fn": "tx1_ts_scale"
+ },
+ {
+  "label": "66: rx_use_max is set to two",
+  "find": "\tcfg->rx_use_max = 1;",
+  "replace": "\tcfg->rx_use_max = 2;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: 2400 baud starts at a floor of two",
+  "find": "\tcase 0x960: ratemin = 1; rate = 9;  break;",
+  "replace": "\tcase 0x960: ratemin = 2; rate = 9;  break;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: 3429 baud starts at 13",
+  "find": "\tcase 0xd65: ratemin = 2; rate = 14; break;",
+  "replace": "\tcase 0xd65: ratemin = 2; rate = 13; break;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: 2800 baud starts at 10",
+  "find": "\tcase 0xaf0: ratemin = 2; rate = 11; break;",
+  "replace": "\tcase 0xaf0: ratemin = 2; rate = 10; break;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the record's bit 1 is not raised",
+  "find": "\tif (cfg->rx_use_max != 0)\n\t\trec[0] = (short)((unsigned short)rec[0] | 2u);\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the rate adjustment is gated on bit 1 of +0xa97e",
+  "find": "\tif ((*((unsigned char *)o + TX1_FA97E) & 4) == 0) {",
+  "replace": "\tif ((*((unsigned char *)o + TX1_FA97E) & 2) == 0) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the rate adjustment's gate is inverted",
+  "find": "\tif ((*((unsigned char *)o + TX1_FA97E) & 4) == 0) {",
+  "replace": "\tif ((*((unsigned char *)o + TX1_FA97E) & 4) != 0) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the two top bauds are adjusted to 13",
+  "find": "\t\t\trate = 0xc;",
+  "replace": "\t\t\trate = 0xd;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: 3000 and 2800 baud are not adjusted",
+  "find": "\t\telse if (baud == 0x0bb8 || baud == 0x0af0)\n\t\t\trate = (short)(rate - 1);\t/* 0x67984 */\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: txbits is not published before the ladder",
+  "find": "\tcfg->txbits = (short)rate;\n\twhile ((short)rate > (short)ratemin) {",
+  "replace": "\twhile ((short)rate > (short)ratemin) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the ladder turns while the term is at or above the mark",
+  "find": "\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
+  "replace": "\t\tif (tx1_get(o, TX1_RX250) <= (short)term)\n\t\t\tbreak;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the ladder may reach its floor",
+  "find": "\twhile ((short)rate > (short)ratemin) {\n\t\tterm = tx1_ts_scale(cfg, rate, -1);",
+  "replace": "\twhile ((short)rate >= (short)ratemin) {\n\t\tterm = tx1_ts_scale(cfg, rate, -1);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the ladder decrements before it tests",
+  "find": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;\n\t\trate = (short)(rate - 1);",
+  "replace": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\trate = (short)(rate - 1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the clamps run at +0x25e of one",
+  "find": "\tif (rx->f25e > 1) {",
+  "replace": "\tif (rx->f25e >= 1) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the down clamp is selected by +0x25e of three",
+  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)",
+  "replace": "\t\tif (rx->f25e == 3 && rate > d - 1)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the down clamp lands on +0x260 itself",
+  "find": "\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */",
+  "replace": "\t\t\trate = (short)d;\t\t/* 0x68308 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the up clamp lands on +0x260 itself",
+  "find": "\t\t\trate = (short)(d + 1);\t\t/* 0x63120 */",
+  "replace": "\t\t\trate = (short)d;\t\t/* 0x63120 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: a rate at or below +0x260 - 1 is left alone",
+  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\telse if (rate < d + 1)",
+  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1)\n\t\t\t\trate = (short)(d - 1);\n\t\t} else if (rate < d + 1)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the clamp does not recompute the term",
+  "find": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\t/* 0x63134 */\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x252 takes the term unscaled",
+  "find": "\trx->f252 = (short)(2 * term);",
+  "replace": "\trx->f252 = (short)term;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x254 is not averaged with the term",
+  "find": "\t\trx->f254 = (short)((rx->f254 + term) >> 1);\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x254's other term is the ladder's own offset",
+  "find": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -2);",
+  "replace": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -1);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x254's fallback scales the mark by four",
+  "find": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);",
+  "replace": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 2);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x256 is computed when txbits equals the rate",
+  "find": "\tif ((short)cfg->txbits > (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\tif ((short)cfg->txbits >= (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x256's term is the ladder's",
+  "find": "\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\t\trx->f256 = tx1_ts_scale(cfg, rate, -1);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x258 is left alone",
+  "find": "\trx->f258 = 0;\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the record's word 1 is 0x7ffd",
+  "find": "\trec[1] = (short)0xfffd;",
+  "replace": "\trec[1] = (short)0x7ffd;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the clock span is compared signed",
+  "find": "\tif ((unsigned)tx1_get_int(o, TX1_TIMER)\n\t    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)",
+  "replace": "\tif (tx1_get_int(o, TX1_TIMER)\n\t    < tx1_get_int(o, TX1_TIMER_MARK) + 0x17700",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the clock span is 0x17000",
+  "find": "\t    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)",
+  "replace": "\t    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17000)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the fresh clock ignores f2218",
+  "find": "\t    && (unsigned)tx1_get_int(o, TX1_F2218) <= 3u) {",
+  "replace": "\t    ) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the fresh clock takes one off the rate",
+  "find": "\t\trate = (short)(rate - 2);",
+  "replace": "\t\trate = (short)(rate - 1);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the fresh clock's subtraction is not floored",
+  "find": "\t\tif ((short)rate < (short)ratemin)\n\t\t\trate = ratemin;\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the fresh clock does not republish txbits",
+  "find": "\t\tcfg->txbits = (short)rate;\n\t\trec[1] = (short)((unsigned short)rec[1] & ~1u);",
+  "replace": "\t\trec[1] = (short)((unsigned short)rec[1] & ~1u);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the fresh clock leaves bit 0 of the record's word 1",
+  "find": "\t\trec[1] = (short)((unsigned short)rec[1] & ~1u);\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: rate_min is a maximum",
+  "find": "\tif (v < o->rate_min) {",
+  "replace": "\tif (v > o->rate_min) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: rate_max is not applied",
+  "find": "\tif (v > o->rate_max)\n\t\tcfg->rxbits = (short)o->rate_max;\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: rate_want overrides even when it equals rate_now",
+  "find": "\tif (o->rate_want >= 0 && o->rate_want != o->rate_now)",
+  "replace": "\tif (o->rate_want >= 0)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: a negative rate_want overrides",
+  "find": "\tif (o->rate_want >= 0 && o->rate_want != o->rate_now)",
+  "replace": "\tif (o->rate_want != o->rate_now)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: rate_min does not feed the rate_max test",
+  "find": "\t\tcfg->rxbits = (short)o->rate_min;\n\t\tv = (short)o->rate_min;",
+  "replace": "\t\tcfg->rxbits = (short)o->rate_min;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the published rates are reversed over three bits",
+  "find": "\trate = (short)bitreverse((unsigned short)cfg->rxbits, 4);",
+  "replace": "\trate = (short)bitreverse((unsigned short)cfg->rxbits, 3);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: f358c takes the receive rate",
+  "find": "\t\t(short)bitreverse((unsigned short)cfg->txbits, 4));",
+  "replace": "\t\t(short)bitreverse((unsigned short)cfg->rxbits, 4));",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the two nibbles do not swap by role",
+  "find": "\tif (o->f359c == 0x65)\n\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)tx1_get(o, TX1_F358C) << 10)\n\t\t\t\t | ((unsigned)rate << 6));\n\telse {",
+  "replace": "\tif (0)\n\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)tx1_get(o, TX1_F358C) << 10)\n\t\t\t\t | ((unsigned)rate << 6));\n\telse {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the answer role's receive nibble is at bit 6",
+  "find": "\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)rate << 10));",
+  "replace": "\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)rate << 6));",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's nibble is read at bit 6 in the call role",
+  "find": "\t\tv = bitreverse((unsigned short)\n\t\t\t       (((unsigned)(unsigned short)rec[0] >> 10) & 0xf),\n\t\t\t       4);\n\t\tmask = ~0x400;",
+  "replace": "\t\tv = bitreverse((unsigned short)\n\t\t\t       (((unsigned)(unsigned short)rec[0] >> 6) & 0xf),\n\t\t\t       4);\n\t\tmask = ~0x400;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap rewrites the call role's low nibble",
+  "find": "\t\tmask = ~0x400;",
+  "replace": "\t\tmask = ~0x40;",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap rewrites the answer role's high nibble",
+  "find": "\t\tmask = ~0x40;\n\t}",
+  "replace": "\t\tmask = ~0x400;\n\t}",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap bites when the rates are equal",
+  "find": "\tif (v * 0x960 > cap) {",
+  "replace": "\tif (v * 0x960 >= cap) {",
+  "fn": "tx1_ts_rates",
+  "equivalent": true,
+  "why": "the two readings differ only where `v * 0x960 == cap`, and there the rewrite is provably a no-op: `rev` is `bitreverse((cap * 7) >> 14, 4)`, `(v * 2400 * 7) >> 14 == v` for every v in 0..15, and the nibble the four passes write into already holds `bitreverse(v, 4)` because that is what `v` was read from.  So the mutant writes back exactly what is there.  A proof over the sixteen values, not an agreement over the ones driven"
+ },
+ {
+  "label": "66: the cap's nibble is not scaled to bits per second",
+  "find": "\tif (v * 0x960 > cap) {",
+  "replace": "\tif (v > cap) {",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's index divides by 2^13",
+  "find": "\t\tint rev = (short)bitreverse((unsigned short)((cap * 7) >> 14),",
+  "replace": "\t\tint rev = (short)bitreverse((unsigned short)((cap * 7) >> 13),",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's index scales by six",
+  "find": "\t\tint rev = (short)bitreverse((unsigned short)((cap * 7) >> 14),",
+  "replace": "\t\tint rev = (short)bitreverse((unsigned short)((cap * 6) >> 14),",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap replaces three bits",
+  "find": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tunsigned short w = (unsigned short)rec[0];",
+  "replace": "\t\tfor (k = 0; k <= 2; k++) {\n\t\t\tunsigned short w = (unsigned short)rec[0];",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's bits go in most significant first",
+  "find": "\t\t\tif ((rev >> k) & 1)",
+  "replace": "\t\t\tif ((rev >> (3 - k)) & 1)",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's mask walks down rather than up",
+  "find": "\t\t\tmask = (short)(mask * 2 + 1);",
+  "replace": "\t\t\tmask = (short)(mask / 2);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the cap's mask is not truncated to sixteen bits",
+  "find": "\t\t\tmask = (short)(mask * 2 + 1);",
+  "replace": "\t\t\tmask = mask * 2 + 1;",
+  "fn": "tx1_ts_rates",
+  "equivalent": true,
+  "why": "the mask starts at ~0x40 or ~0x400 and turns four times; `mask * 2 + 1` on either sequence stays inside a short at every step (0xff7f, 0xfeff, 0xfdff and 0xf7ff, 0xefff, 0xdfff), so the truncation cannot bite in the only four iterations that run.  A proof over the loop rather than over the runs"
+ },
+ {
+  "label": "66: the record's word 8 is left alone",
+  "find": "\trec[8] = 0;\t\t\t\t\t/* +0xaa4c */\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the completion moves the machine to SSEG",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the completion leaves vect_idx",
+  "find": "\to->vect_idx = 0;\n\ttx1_put(o, TX1_F3598, 0);",
+  "replace": "\ttx1_put(o, TX1_F3598, 0);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the completion leaves +0x3598",
+  "find": "\ttx1_put(o, TX1_F3598, 0);\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: the completion leaves +0x359e",
+  "find": "\ttx1_put(o, TX1_F3598, 0);\n\ttx1_put(o, TX1_F359E, 0);\n",
+  "replace": "\ttx1_put(o, TX1_F3598, 0);\n",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa60 takes 0x3fffd",
+  "find": "\ttx1_put_int(o, TX1_FAA60, 0x3fffe);",
+  "replace": "\ttx1_put_int(o, TX1_FAA60, 0x3fffd);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa68 is written as sixteen bits",
+  "find": "\ttx1_put_int(o, TX1_FAA68, 0x3fffe);",
+  "replace": "\ttx1_put(o, TX1_FAA68, (short)0xfffe);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa50 takes zero",
+  "find": "\trec[10] = -1;\t\t\t\t\t/* +0xaa50 */",
+  "replace": "\trec[10] = 0;\t\t\t\t\t/* +0xaa50 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa58 takes 0x20",
+  "find": "\trec[14] = 0x10;\t\t\t\t\t/* +0xaa58 */",
+  "replace": "\trec[14] = 0x20;\t\t\t\t\t/* +0xaa58 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa54's two values are swapped",
+  "find": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x90 : 0x30);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa54 is chosen on bit 4 of the flags",
+  "find": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);",
+  "replace": "\trec[12] = (short)((rx->flags & 0x10u) ? 0x30 : 0x90);",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa52 takes zero",
+  "find": "\trec[11] = 1;\t\t\t\t\t/* +0xaa52 */",
+  "replace": "\trec[11] = 0;\t\t\t\t\t/* +0xaa52 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa66 takes 0x11",
+  "find": "\trec[21] = 0x12;\t\t\t\t\t/* +0xaa66 */",
+  "replace": "\trec[21] = 0x11;\t\t\t\t\t/* +0xaa66 */",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0xaa5c is left alone",
+  "find": "\trec[16] = 0;\t\t\t\t\t/* +0xaa5c */\n",
+  "replace": "",
+  "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "66: +0x3590 takes 0x21",
+  "find": "\ttx1_put(o, TX1_F3590, 0x22);\n\treturn V34TX1_LOOP;",
+  "replace": "\ttx1_put(o, TX1_F3590, 0x21);\n\treturn V34TX1_LOOP;",
+  "fn": "tx1_ts_rates"
+ }
+]

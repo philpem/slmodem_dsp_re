@@ -462,7 +462,22 @@ struct v34_object {
 	 * a different algorithm.
 	 */
 	short f359c;					/* +0x359c */
-	unsigned char unmapped_359e[0x35a8 - 0x359e];
+	unsigned char unmapped_359e[0x35a4 - 0x359e];
+	/*
+	 * A short `VPcmV34Create` clears and three functions read, always
+	 * with `movswl`, so it is signed.  `V34SetINFO1aBits` sends the low
+	 * seven bits of it, bit-reversed, as the leading field of an INFO1a;
+	 * `VPcmV34InitiateRetrain` and `V34XF_IndicateK56FlexJdReceived` both
+	 * compute `10000 + 336 * n` from it and store the result elsewhere.
+	 *
+	 * OFFSET-NAMED ON PURPOSE.  That arithmetic looks like a table index
+	 * turning into a rate or a frequency, and it is deliberately not
+	 * written down as one: neither of the two functions that does it is
+	 * reconstructed, they write through different base registers, and
+	 * nothing establishes that their destinations are the same field.
+	 */
+	short f35a4;					/* +0x35a4 */
+	unsigned char unmapped_35a6[0x35a8 - 0x35a6];
 	/*
 	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
 	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
@@ -704,6 +719,12 @@ struct v34_object {
 	 * three codes line up with the three the receiver recognises.
 	 */
 	unsigned char fabfa;				/* +0xabfa */
+	/*
+	 * +0xabfe, inside the run below.  `v34handshakinit` clears it and
+	 * `v90Phase34` sets it to 1 on the one path whose own diagnostic
+	 * names it: "tx buffer backward clear is enabled".  Reached by offset
+	 * because nothing else in the run is mapped.
+	 */
 	unsigned char unmapped_abfb[0xac02 - 0xabfb];
 	/*
 	 * +0xac02.  `V34SetINFO0aBits` puts 20 here when it asks for a short
@@ -770,7 +791,12 @@ struct v34_object {
 	 *                 [-10, +7] by `GetVPcmMinimalTxPowerReduction`
 	 *   +0x50  byte   bits 5..7 are the maximum V.34 BAUD RATE INDEX,
 	 *                 which is what `chkForceBaudRate` reads and its own
-	 *                 trace names: "max V34 baud rate index = %d"
+	 *                 trace names: "max V34 baud rate index = %d".
+	 *                 BIT 2 IS A SECOND AND UNRELATED READER:
+	 *                 `v90Phase34` tests it once the Ja sequence has
+	 *                 finished, and its diagnostic names it -- "tx
+	 *                 buffer backward clear is enabled".  It gates the
+	 *                 byte at +0xabfe
 	 *   +0x54  int    compared against 4 by GetVPcmMinimalTxPowerReduction
 	 *
 	 * Reconstructed as a `void *` with each field spelled out at its use,
@@ -790,16 +816,37 @@ struct v34_object {
  * `rx_baud` IS `faa96` above -- one store, two readings, the same situation
  * as the echo array that is also the FSK delay line (finding 100).  It is
  * declared in both places on purpose; there is no third field.
+ *
+ * THE FOUR "CURRENT" GETTERS NAME FOUR OF THESE, and they name them in
+ * transmit/receive pairs: `VPcmV34GetCurrentTxBaudRate` reads +0x00 and
+ * `...RxBaudRate` +0x12; `...TxBitRate` reads +0x04; `...TxCarrier` reads
+ * +0x10 and `...RxCarrier` +0x24.  `carrier` below is that fifth reading,
+ * and it is the only member of the struct whose name comes from a getter
+ * rather than from a use.  The receive carrier at +0x24 is inside `pad_24`
+ * and is left there: nothing reconstructed touches it.
  */
 struct v34_ratecfg {
 	short baud;			/* +0x00 transmit symbol rate    */
-	unsigned char pad_02[0x04 - 0x02];
+	/*
+	 * +0x02.  `v90Phase34`'s case 3 prints it as `period`, beside
+	 * `tx->symcnt`, and that diagnostic is the only thing in the tree
+	 * that names it.  Note it is NOT `tx->period`: the string carries no
+	 * prefix on it and the load is from this record rather than from the
+	 * transmitter.  Nothing reconstructed writes it.
+	 */
+	short period;			/* +0x02                         */
 	short txbits;			/* +0x04 in units of 2400 bps    */
-	unsigned char pad_06[0x08 - 0x06];
+	/*
+	 * +0x06.  `setfinalrate` writes it, `v34setuptxmit` and `v34handshak`
+	 * read it beside `baud` and `carrier`, and `V34SetINFO1aBits` clears
+	 * it when it hard-codes the other two for a short phase 2.  No getter
+	 * names it and nothing here says what it holds.
+	 */
+	short f06;			/* +0x06                         */
 	short depth;			/* +0x08 trellis, initV34's arg  */
 	short use_max;			/* +0x0a picks MMaxTable         */
 	const short *divtab;		/* +0x0c the divisor table       */
-	unsigned char pad_10[0x12 - 0x10];
+	short carrier;			/* +0x10 transmit carrier, Hz    */
 	short rx_baud;			/* +0x12 receive symbol rate     */
 	short rxbits;			/* +0x14                         */
 	unsigned char pad_16[0x22 - 0x16];

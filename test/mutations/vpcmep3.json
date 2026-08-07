@@ -1,0 +1,121 @@
+[
+ {
+  "label": "VPcmFloModem::enterPhase3.  Run it with: tools/mutate.py --suite vpcmep3"
+ },
+ {
+  "label": "NOTE: the source is shared with the vpcmflomodem set, which drives",
+  "why": "t_vpcmflomodem instead.  Two sets over one file, one binary each."
+ },
+ {
+  "label": "the sixth flag is getUinfoValue's 1, not enterPhase3's 0",
+  "find": "\tflags_0217[4] = 1;\n\tflags_0217[5] = 0;",
+  "replace": "\tflags_0217[4] = 1;\n\tflags_0217[5] = 1;"
+ },
+ {
+  "label": "the second flag is 1 like its four neighbours",
+  "find": "\tflags_0217[0] = 1;\n\tflags_0217[1] = 0;\n\tflags_0217[2] = 1;\n\tflags_0217[3] = 1;\n\tflags_0217[4] = 1;\n\tflags_0217[5] = 0;",
+  "replace": "\tflags_0217[0] = 1;\n\tflags_0217[1] = 1;\n\tflags_0217[2] = 1;\n\tflags_0217[3] = 1;\n\tflags_0217[4] = 1;\n\tflags_0217[5] = 0;"
+ },
+ {
+  "label": "the run of cleared bytes stops before +0x173e",
+  "find": "\tflag_173d = 0;\n\tflag_173e = 0;",
+  "replace": "\tflag_173d = 0;"
+ },
+ {
+  "label": "the run of cleared bytes starts at +0x173b",
+  "find": "\tflags_173a[0] = 0;\n\tflags_173a[1] = 0;",
+  "replace": "\tflags_173a[1] = 0;"
+ },
+ {
+  "label": "the Ja termination request is not cleared",
+  "find": "\tterminateJa = 0;\n\tterminateCp = 0;",
+  "replace": "\tterminateCp = 0;"
+ },
+ {
+  "label": "the CPnot one-shot latch is left as it was",
+  "find": "\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 2;",
+  "replace": "\tnofBitsPerSymbol = 2;"
+ },
+ {
+  "label": "one bit per CP symbol, not two",
+  "find": "\tnofBitsPerSymbol = 2;",
+  "replace": "\tnofBitsPerSymbol = 1;"
+ },
+ {
+  "label": "the 2 goes to +0x7dd1 and the 0 to +0x7dd2",
+  "find": "\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 2;",
+  "replace": "\tcpNotLoaded = 2;\n\tnofBitsPerSymbol = 0;"
+ },
+ {
+  "label": "no minimum: CP may give way immediately",
+  "find": "\tminNofTransmitSequences = 1;",
+  "replace": "\tminNofTransmitSequences = 0;"
+ },
+ {
+  "label": "the counter starts at 1 and the minimum at 0",
+  "find": "\tnofTransmitSequences = 0;\n\tminNofTransmitSequences = 1;",
+  "replace": "\tnofTransmitSequences = 1;\n\tminNofTransmitSequences = 0;"
+ },
+ {
+  "label": "the CP vector's length is left as it was",
+  "find": "\tcpNofBits = 0;\n\tbitPointer = 0;",
+  "replace": "\tbitPointer = 0;"
+ },
+ {
+  "label": "the bit pointer is left where the last phase left it",
+  "find": "\tcpNofBits = 0;\n\tbitPointer = 0;",
+  "replace": "\tcpNofBits = 0;"
+ },
+ {
+  "label": "the opening diagnostic needs level 3, not level 2",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmFloModem: enterPhase3 called.",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"VPcmFloModem: enterPhase3 called."
+ },
+ {
+  "label": "the opening diagnostic is not gated at all",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmFloModem: enterPhase3 called.",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmFloModem: enterPhase3 called."
+ },
+ {
+  "label": "the closing diagnostic prints the bit pointer, not the length",
+  "find": "\tedprintf(\"VPcmFloModem: enterPhase3: Ja length = %d\\r\\n\", nofBits);",
+  "replace": "\tedprintf(\"VPcmFloModem: enterPhase3: Ja length = %d\\r\\n\",\n\t\t bitPointer);"
+ },
+ {
+  "label": "the closing diagnostic is gated like the opening one",
+  "find": "\tedprintf(\"VPcmFloModem: enterPhase3: Ja length = %d\\r\\n\", nofBits);",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tedprintf(\"VPcmFloModem: enterPhase3: Ja length = %d\\r\\n\",\n\t\t\t nofBits);"
+ },
+ {
+  "label": "the demodulator is never told to enter phase 3",
+  "find": "\tmodem.demodulator->enterPhase3();\n",
+  "replace": ""
+ },
+ {
+  "label": "the packer is handed a descriptor one byte further on",
+  "find": "\tDILdescriptorPacker(&dil, bitVector, &nofBits);",
+  "replace": "\tDILdescriptorPacker((const tagV90DILdescriptor *)\n\t\t\t    ((unsigned char *)&dil + 1),\n\t\t\t    bitVector, &nofBits);"
+ },
+ {
+  "label": "the packer writes the CP vector instead of the Ja one",
+  "find": "\tDILdescriptorPacker(&dil, bitVector, &nofBits);",
+  "replace": "\tDILdescriptorPacker(&dil, cpBitVector, &nofBits);"
+ },
+ {
+  "label": "the packed length lands in cpNofBits",
+  "find": "\tDILdescriptorPacker(&dil, bitVector, &nofBits);",
+  "replace": "\tDILdescriptorPacker(&dil, bitVector, &cpNofBits);"
+ },
+ {
+  "label": "the descriptor is read from the demodulator's, not the modem's",
+  "find": "\tDILdescriptorPacker(&dil, bitVector, &nofBits);",
+  "replace": "\tDILdescriptorPacker(modem.demodulator->dil, bitVector, &nofBits);"
+ },
+ {
+  "label": "nofBits is not cleared before the packer runs",
+  "find": "\tnofBits = 0;\n\tcpNofBits = 0;",
+  "replace": "\tcpNofBits = 0;",
+  "equivalent": true,
+  "why": "DILdescriptorPacker writes through its third argument on BOTH of its exits -- `*nbits = crcAt + 19` on the odd path and `crcAt + 18` on the even one -- and nothing between the store and the call reads the field.  So the zero cannot survive to be observed, by this test or by any other, and the store is dead in the object as well as here.  Held fixed: that the packer is the only writer of nofBits in this method, which the disassembly's single call and single `lea 0x1736` show."
+ }
+]

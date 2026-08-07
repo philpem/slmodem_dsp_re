@@ -71,7 +71,7 @@ extern V90CodecEntry ref_dataBase[17] asm("ref__ZN12V90PreFilter8dataBaseE");
 
 #define SLOT 64
 #define PARMSLOT (V90PARAMETERS_BOUND + 64)
-#define PH2SLOT (V90PHASE2INFO_BOUND + 32)
+#define PH2SLOT (sizeof(V90Phase2Info) + 32)
 #define MEASSLOT 0x80
 #define BLKSLOT 0x80
 
@@ -95,6 +95,18 @@ static V90PreFilter *
 P(int side)
 {
 	return (V90PreFilter *)slot[side];
+}
+
+/*
+ * The Phase 2 block, as the class it now is.  It used to be an opaque union
+ * declared in V90PreFilter.h, so this test reached into it as `b[0x18]` and
+ * `w[0x18 / 4]`; the real V90Phase2Info landed with finding 255 and the stub
+ * is gone.
+ */
+static V90Phase2Info *
+P2(int side)
+{
+	return (V90Phase2Info *)ph2[side];
 }
 
 static unsigned lfsr_state;
@@ -159,7 +171,7 @@ setup(int trial, int mode)
 		P(side)->codecType = 0;
 		P(side)->gain = 0;
 		P(side)->refLoop = -1;
-		*(void **)&ph2[side][0x18] = meas[side];
+		P2(side)->L2 = (float *)meas[side];
 		*(void **)&parm[side][0] = blk[side];
 	}
 }
@@ -279,12 +291,18 @@ snap_parm(void *dst, int side)
 	    (*(void **)&parm[side][0] == (void *)blk[side]);
 }
 
+/*
+ * The measurement pointer holds a different address on each side and always
+ * will, so it is replaced by the only thing about it that the two sides can
+ * agree on: whether it still points where setup() put it.  Same idiom as
+ * snap_parm above.  Everything else is compared byte for byte.
+ */
 static void
 snap_ph2(void *dst, int side)
 {
-	memcpy(dst, ph2[side], V90PHASE2INFO_BOUND);
-	((V90Phase2Info *)dst)->w[0x18 / 4] =
-	    (*(void **)&ph2[side][0x18] == (void *)meas[side]);
+	memcpy(dst, ph2[side], sizeof(V90Phase2Info));
+	((V90Phase2Info *)dst)->L2 =
+	    (float *)(long)(P2(side)->L2 == (float *)meas[side]);
 }
 
 static void
@@ -292,7 +310,7 @@ compare(const char *what, int trial)
 {
 	unsigned char a[sizeof(V90PreFilter)], b[sizeof(V90PreFilter)];
 	unsigned char pa[V90PARAMETERS_BOUND], pb[V90PARAMETERS_BOUND];
-	unsigned char qa[V90PHASE2INFO_BOUND], qb[V90PHASE2INFO_BOUND];
+	unsigned char qa[sizeof(V90Phase2Info)], qb[sizeof(V90Phase2Info)];
 	struct pf_hist ha, hb;
 
 	snapshot(a, 0);
@@ -315,11 +333,11 @@ compare(const char *what, int trial)
 	snap_ph2(qa, 0);
 	snap_ph2(qb, 1);
 	diff_eq_obj_(__FILE__, __LINE__, what, "V90Phase2Info", qa, qb,
-		     V90PHASE2INFO_BOUND, (long)trial);
+		     sizeof(V90Phase2Info), (long)trial);
 	diff_eq_int("no store past V90Phase2Info (%ld)",
-		    memcmp(ph2[0] + V90PHASE2INFO_BOUND,
-			   ph2[1] + V90PHASE2INFO_BOUND,
-			   PH2SLOT - V90PHASE2INFO_BOUND) == 0, 1, trial);
+		    memcmp(ph2[0] + sizeof(V90Phase2Info),
+			   ph2[1] + sizeof(V90Phase2Info),
+			   PH2SLOT - sizeof(V90Phase2Info)) == 0, 1, trial);
 
 	diff_eq_obj(what, struct pf_meas, meas[0], meas[1], trial);
 	diff_eq_obj(what, struct pf_blk, blk[0], blk[1], trial);

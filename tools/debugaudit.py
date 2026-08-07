@@ -249,13 +249,41 @@ def unescape(raw):
 
 
 #
-# `__asm__`/`asm` up to the closing parenthesis of its argument list.  Not a
-# parser: it stops at the first `)` followed by an optional `;`, which is
-# enough for the one-instruction forms this tree uses and would need
-# revisiting for an asm containing a parenthesised expression.
+# AN ASM TEMPLATE IS NOT A DIAGNOSTIC STRING.
 #
-ASM = re.compile(r"\b(?:__asm__|asm)\s*(?:__volatile__|volatile)?\s*"
-                 r"\([^;]*?\)\s*;", re.S)
+# `__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x))` carries
+# two string literals -- the instruction template and the constraint -- and
+# neither is in the blob's .rodata, because neither is data.  This gate exists
+# to catch INVENTED DIAGNOSTICS (findings 180, 201): a format string that
+# behaves identically to the right one because `dsplibs_debug_level` ships at
+# zero.  An instruction template has no such failure mode; it is checked by
+# the differential test like any other code.  So asm statements are blanked
+# before the scan, exactly as comments and preprocessor lines already are.
+#
+ASM_HEAD = re.compile(r"\b(?:__asm__|asm)\b\s*(?:__volatile__|volatile)?\s*\(")
+
+
+def strip_asm(src):
+    """Blank the body of every asm statement, keeping the line count."""
+    out, i = [], 0
+    while True:
+        m = ASM_HEAD.search(src, i)
+        if not m:
+            out.append(src[i:])
+            return "".join(out)
+        out.append(src[i:m.start()])
+        depth, j = 0, m.end() - 1          # at the opening paren
+        while j < len(src):
+            if src[j] == "(":
+                depth += 1
+            elif src[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    j += 1
+                    break
+            j += 1
+        out.append("\n" * src.count("\n", m.start(), j))
+        i = j
 
 
 def our_strings(paths):
@@ -289,18 +317,9 @@ def our_strings(paths):
         src = "\n".join("" if l.lstrip().startswith("#") else l
                         for l in src.split("\n"))
         #
-        # INLINE ASSEMBLY IS NOT DATA.  `__asm__ ("fsin" : "=t" (s) : "0" (y))`
-        # carries three string literals -- the instruction and two operand
-        # constraints -- and not one of them reaches .rodata, so requiring
-        # them to be in the blob is asking the wrong question.  They are
-        # emptied for the same reason preprocessor lines are: the scan runs
-        # over the whole file and cannot be told what kind of line it is on.
+        # And the asm statements, for the reason above the helper.
         #
-        # Emptied rather than skipped so the line numbers in the report stay
-        # true, and newline-preserving so a multi-line asm does not shift
-        # everything after it.
-        #
-        src = ASM.sub(lambda m: "\n" * m.group(0).count("\n"), src)
+        src = strip_asm(src)
         #
         # ONE PASS OVER THE FILE, NOT ONE PER LINE.  `RUN` separates adjacent
         # literals with `\s*`, which spans newlines -- but only if it is

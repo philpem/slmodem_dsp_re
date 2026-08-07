@@ -1,0 +1,472 @@
+[
+ {
+  "note": "`datapumpv34`: three loops and four independent `if`s.  Almost every claim here is a constant or a comparison -- the function does no arithmetic beyond three thresholds and one halving -- so the set is mostly boundaries, signedness and widths.  What it has to prove is that the +0x2218 guard is driven both ways, that each of the four supervisor blocks is reached separately, that each block's ORDER of clears is what stops the next one firing, and that the two loops run rather than being skipped."
+ },
+ {
+  "label": "the stale-clock span is 287999 rather than 288000",
+  "find": "#define DP_TIMER_STALE\t288000u",
+  "replace": "#define DP_TIMER_STALE\t287999u"
+ },
+ {
+  "label": "the stale-clock span is 288001 rather than 288000",
+  "find": "#define DP_TIMER_STALE\t288000u",
+  "replace": "#define DP_TIMER_STALE\t288001u"
+ },
+ {
+  "label": "the stale-clock compare is >= rather than >",
+  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
+  "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the stale-clock compare is signed, so a mark ahead of the count is not stale",
+  "find": "\tif ((unsigned)t3c_geti(obj, DP_TIMER)\n\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
+  "replace": "\tif (t3c_geti(obj, DP_TIMER)\n\t    - t3c_geti(obj, DP_TIMER_MARK) > (int)DP_TIMER_STALE)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the stale clock reports 4 rather than 5",
+  "find": "\t\tobj->f0004 = 5;",
+  "replace": "\t\tobj->f0004 = 4;",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the stale clock measures from +0x23c rather than +0x248",
+  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
+  "replace": "\t    - (unsigned)t3c_geti(obj, 0x023c) > DP_TIMER_STALE)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake branch is taken at +0x2218 == 1 too",
+  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
+  "replace": "\tif ((unsigned)t3c_geti(obj, DP_MODE) >= 1u) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake branch wants +0x2218 above 2",
+  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
+  "replace": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 2u) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the +0x2218 guard is signed, so -1 takes the data path",
+  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
+  "replace": "\tif (t3c_geti(obj, DP_MODE) > 1) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake loop needs both conditions rather than either",
+  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count < obj->f2aa0 && obj->rxq.count > 5)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake loop runs while the cursor is at the limit",
+  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count <= obj->f2aa0 || obj->rxq.count > 5)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake loop runs while the queue is at five",
+  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count >= 5)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the handshake branch falls through into the data path",
+  "find": "\t\t\tv34handshak(obj);\n\t\treturn;\n\t}",
+  "replace": "\t\t\tv34handshak(obj);\n\t}",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the modulator loop runs one call too many",
+  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\twhile (obj->txq.count <= obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the modulator loop is a do-while, so it always runs once",
+  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\tdo\n\t\tmodulatevector(obj);\n\twhile (obj->txq.count < obj->f2aa0);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the modulator loop compares the cursor against the receive count",
+  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\twhile (obj->rxq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the receiver loop runs before the modulator loop",
+  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
+  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the receiver loop drains to four rather than five",
+  "find": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;",
+  "replace": "\twhile (obj->rxq.count > 4) {\n\t\tunsigned span;",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the receiver loop tests the transmit cursor rather than the queue",
+  "find": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;",
+  "replace": "\twhile (obj->txq.count > 5) {\n\t\tunsigned span;",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "+0x124 stops bumping one short of the cap",
+  "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)",
+  "replace": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) < DP_RX_BLOCK_CAP)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the +0x124 cap is 0x7530 rather than 0x752f",
+  "find": "#define DP_RX_BLOCK_CAP\t0x752f",
+  "replace": "#define DP_RX_BLOCK_CAP\t0x7530"
+ },
+ {
+  "label": "+0x124 is bumped after `receiver` rather than before it",
+  "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);",
+  "replace": "\t\treceiver(obj);\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "+0x124 is bumped unconditionally",
+  "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,",
+  "replace": "\t\tif (1)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the error measure is read before `receiver` rather than after it",
+  "find": "\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);",
+  "replace": "\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\treceiver(obj);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the plain run counts an error equal to its threshold as a failure",
+  "find": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));",
+  "replace": "\t\tdp_run(obj, DP_RX_BAD, err >= dp_rxget(obj, DP_RX_THR_A));",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the plain run reads +0x254 rather than +0x252",
+  "find": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));",
+  "replace": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_B));",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the run counter counts up when the measure PASSES",
+  "find": "\tdp_rxput(obj, counter,\n\t\t failed ? (short)(dp_rxget(obj, counter) + 1) : 0);",
+  "replace": "\tdp_rxput(obj, counter,\n\t\t failed ? 0 : (short)(dp_rxget(obj, counter) + 1));",
+  "fn": "dp_run"
+ },
+ {
+  "label": "the run counter is left alone rather than cleared when the measure passes",
+  "find": "\tdp_rxput(obj, counter,\n\t\t failed ? (short)(dp_rxget(obj, counter) + 1) : 0);",
+  "replace": "\tif (failed)\n\t\tdp_rxput(obj, counter, (short)(dp_rxget(obj, counter) + 1));",
+  "fn": "dp_run"
+ },
+ {
+  "label": "the middle span is 143999 rather than 144000",
+  "find": "#define DP_TIMER_MID\t144000u",
+  "replace": "#define DP_TIMER_MID\t143999u"
+ },
+ {
+  "label": "the middle span compares >= rather than >",
+  "find": "\t\tif (span > DP_TIMER_MID)",
+  "replace": "\t\tif (span >= DP_TIMER_MID)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the long span is 1152001 rather than 1152000",
+  "find": "#define DP_TIMER_LONG\t1152000u",
+  "replace": "#define DP_TIMER_LONG\t1152001u"
+ },
+ {
+  "label": "the long span compares >= rather than >",
+  "find": "\t\tif (span > DP_TIMER_LONG)",
+  "replace": "\t\tif (span >= DP_TIMER_LONG)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the good-block run counts errors ABOVE its threshold",
+  "find": "\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));",
+  "replace": "\t\t\t       err > dp_rxget(obj, DP_RX_THR_C));",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the span is measured signed, so it is never past either threshold",
+  "find": "\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);",
+  "replace": "\t\tspan = (unsigned)(t3c_geti(obj, DP_TIMER)\n\t\t     - t3c_geti(obj, DP_TIMER_MARK)) & 0x7fffu;",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain tests bit 5 rather than bit 6",
+  "find": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "replace": "\tif ((T3C_RX(obj)->flags & 0x20)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain wants the flag AND the run rather than either",
+  "find": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "replace": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    && dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain fires on a run EQUAL to half the block rate",
+  "find": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "replace": "\t    || dp_rxget(obj, DP_RX_BAD) >= (short)(obj->faa96 >> 1)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the halving is a division, so a negative block rate rounds the other way",
+  "find": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
+  "replace": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 / 2)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain reports 2 where the object reports 3",
+  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->faa96 >> 1)\n\t\t\t ? 3 : 2);",
+  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->faa96 >> 1)\n\t\t\t ? 2 : 3);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain's report compares < rather than <=",
+  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->faa96 >> 1)\n\t\t\t ? 3 : 2);",
+  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) < (short)(obj->faa96 >> 1)\n\t\t\t ? 3 : 2);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain's report is decided BEFORE v34handshakinit runs",
+  "equivalent": true,
+  "why": "`v34handshakinit` writes neither +0x258 nor +0xaa96 on any mode -- `setupreceiver`, which its retrain path reaches, assigns +0x122, +0x124 and +0x25e and not the run counters -- so the two orders read the same two fields.  The source keeps the object's order because the object has one, not because it is observable.",
+  "find": "\t\tv34handshakinit(obj, 1);\n\t\tt3c_puti(obj, DP_MODE,\n\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->faa96 >> 1)\n\t\t\t ? 3 : 2);",
+  "replace": "\t\t{\n\t\t\tint m = dp_rxget(obj, DP_RX_BAD)\n\t\t\t\t<= (short)(obj->faa96 >> 1) ? 3 : 2;\n\t\t\tv34handshakinit(obj, 1);\n\t\t\tt3c_puti(obj, DP_MODE, m);\n\t\t}",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain calls v34handshakinit mode 2 rather than mode 1",
+  "find": "\t\tv34handshakinit(obj, 1);\n\t\tt3c_puti(obj, DP_MODE,",
+  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE,",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain leaves the long-run counter alone",
+  "find": "\t\tdp_rxput(obj, DP_RX_BAD, 0);\n\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+  "replace": "\t\tdp_rxput(obj, DP_RX_BAD, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain's message is not the object's",
+  "find": "dsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+  "replace": "dsplibs_debug_printf(\"V34TIMING, Retrain started\\n\");",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the retrain's message is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block tests bit 6 rather than bit 5",
+  "find": "\tif (T3C_RX(obj)->flags & 0x20) {\n\t\tv34handshakinit(obj, 3);",
+  "replace": "\tif (T3C_RX(obj)->flags & 0x40) {\n\t\tv34handshakinit(obj, 3);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block reads the flags cached from before the retrain",
+  "find": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (T3C_RX(obj)->flags & 0x20) {",
+  "replace": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (0) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block calls v34handshakinit mode 1 rather than mode 3",
+  "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);",
+  "replace": "\t\tv34handshakinit(obj, 1);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block reports 5 rather than 4",
+  "find": "\t\tt3c_puti(obj, DP_MODE, 4);",
+  "replace": "\t\tt3c_puti(obj, DP_MODE, 5);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block records why 2 rather than why 1",
+  "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);",
+  "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block leaves the good-block run alone, so the step up can follow",
+  "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block counts a LOCAL renegotiation",
+  "find": "\t\tVPcmV34IndicateRemoteRRN(obj);",
+  "replace": "\t\tVPcmV34IndicateLocalRRN(obj);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block's message is not the object's",
+  "find": "\t\t\t\t\"V34RNEG, rate renegotiation detected \\n\");",
+  "replace": "\t\t\t\t\"V34RNEG, rate renegotiation detected\\n\");",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the remote block records +0xaa96 rather than +0xaa98 as the rate",
+  "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));",
+  "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->faa96);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down fires on a long run EQUAL to twice the block rate",
+  "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) >= 2 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down's threshold is the block rate rather than twice it",
+  "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down's threshold is computed in sixteen bits",
+  "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > (short)(2 * obj->faa96)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down reads the plain run rather than the long one",
+  "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_BAD) > 2 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down calls v34handshakinit mode 3 rather than mode 2",
+  "equivalent": true,
+  "why": "`v34handshakinit` is `case 2: case 3:` over one body, and v34hshak.h records that mode 3 has no caller anywhere in the object and shares 2's jump-table entry.  The two calls are the same call, and this stops holding the moment mode 3 grows a body of its own.",
+  "find": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 5);",
+  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tt3c_puti(obj, DP_MODE, 5);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down reports 4 rather than 5",
+  "find": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 5);",
+  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down records why 3 rather than why 2",
+  "find": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+  "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 3);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down leaves the good-block run alone, so the step up follows it",
+  "find": "\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+  "replace": "\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down counts a REMOTE renegotiation",
+  "find": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
+  "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down's message says UP",
+  "find": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \"",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to large \"",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up fires on a good run EQUAL to eight times the block rate",
+  "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) >= 8 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up's threshold is four times the block rate rather than eight",
+  "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) > 4 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up's threshold is computed in sixteen bits",
+  "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) > (short)(8 * obj->faa96)) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up reads the long run rather than the good one",
+  "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 8 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step down is an else of the remote block",
+  "find": "\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit",
+  "replace": "\t} else\n\n\t/*\n\t * Down, then up, and both compares are 32-bit",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up is an else of the step down",
+  "find": "\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "replace": "\t} else if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up records why 2 rather than why 3",
+  "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);",
+  "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up reports 4 rather than 5",
+  "find": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 5);",
+  "replace": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up records +0xaa96 rather than +0xaa98 as the rate",
+  "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));",
+  "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->faa96);",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up counts a REMOTE renegotiation",
+  "find": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+  "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n}",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up's message says DOWN",
+  "find": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to small \"",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to small \"",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the step up's message loses the trailing space",
+  "find": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error \\n\");",
+  "replace": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error\\n\");",
+  "fn": "datapumpv34"
+ },
+ {
+  "label": "the receiver base is +0x260 rather than +0x264",
+  "find": "\treturn *(const short *)((const char *)&obj->rxq + off);",
+  "replace": "\treturn *(const short *)((const char *)&obj->rxq - 4 + off);",
+  "fn": "dp_rxget"
+ },
+ {
+  "label": "the run counters are written four bytes low",
+  "find": "\t*(short *)((char *)&obj->rxq + off) = v;",
+  "replace": "\t*(short *)((char *)&obj->rxq - 4 + off) = v;",
+  "fn": "dp_rxput"
+ }
+]

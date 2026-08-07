@@ -60,6 +60,39 @@ void V34GiveINFO0dBits(void *obj, const short *bits);
 int V34GiveINFO1aBits(void *obj, const short *bits);
 
 /*
+ * Take apart a received INFO1d.  Settles whether a PCM upstream is in play --
+ * the same session flag `V34GiveINFO1aBits` writes -- and, if one is and the
+ * configuration bars it, RETRAINS the modem back to V.90.
+ *
+ * Returns 1 only when it retrained and 0 otherwise, which is NOT the session
+ * flag read back the way `V34GiveINFO1aBits`'s return value is: the retraining
+ * path clears the flag on its way out, so the two disagree on both of the
+ * cases that separate them.
+ *
+ * Defined in `src/pump/v34/v34pcmmain.cpp`, not beside its three siblings.  It
+ * names no mangled symbol, so C would have compiled it -- but it calls
+ * `VPcmV34InitiateRetrain`, which lives there, and the 64-bit interop tier
+ * links `$(SRC)` -- every `.c` under `src/` -- with no C++ in it.  See the
+ * comment above the definition.  `V34SetINFO1aBits` is declared here and
+ * defined elsewhere for a related reason.
+ */
+int V34GiveINFO1dBits(void *obj, const short *bits);
+
+/*
+ * Assemble an outbound INFO1a, INFO1c or INFO1d -- which one depends on the
+ * two receiver flags, the role flag and the session's layout selector.  Also
+ * moves `v90_receiver` on to 2, or back to 0 if the modem has no Uinfo to
+ * report.
+ *
+ * ALWAYS RETURNS 0, and no caller in the object looks at it; the type is
+ * `int` because both epilogues clear `%eax` explicitly.  Defined in
+ * `src/pump/v34/v34info1a.cpp` rather than beside the rest of this header's
+ * functions, because it calls a C++ member and a C translation unit cannot
+ * name one.
+ */
+int V34SetINFO1aBits(void *obj, short *bits);
+
+/*
  * Build the first short of one of V.92's six Modem-on-Hold messages, chosen
  * by the object's `moh_message`.  A selector above 5 writes nothing at all.
  */

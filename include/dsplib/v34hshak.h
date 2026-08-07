@@ -147,6 +147,65 @@ extern "C" {
  * planned (docs/fastpass.md).
  */
 
+#define V34HS_MICROSTATE_OFF	0x3592
+#define V34HS_RXSTATE_OFF	0x3594
+#define V34HS_TXSTATE_OFF	0x3596
+
+/*
+ * A halfword of the object by offset, and one state transition with the
+ * diagnostic the object prints for it.
+ *
+ * These are `v34hshak.c`'s and they are shared rather than copied because
+ * `v34handshak` is in the same translation unit and is being reconstructed
+ * one dispatch arm at a time in files beside it.  Its arms change the same
+ * three words through the same three format strings, and the two context
+ * arguments each string takes are in an order that differs per string -- so
+ * a second copy of `hs_setstate` is a second place to get that order wrong
+ * while every byte of the object still matches.  See the comment on the
+ * definition.
+ *
+ * `hs_setstate` prints only when the value CHANGES and only when
+ * `DSPLIB_DEBUG_ON()`, and it prints before it stores.  Both are the
+ * object's; an arm that needs the store without the compare uses `hs_put`.
+ */
+struct v34_object;
+short hs_get(const struct v34_object *obj, unsigned off);
+void hs_put(struct v34_object *obj, unsigned off, short v);
+void hs_setstate(struct v34_object *obj, unsigned off, short next);
+
+/*
+ * Which of `v34handshak`'s unwritten paths ran.
+ *
+ * The blob's function is 61,541 bytes over forty microstates, twenty
+ * txstates and an rxstate chain, and it is being taken a few arms at a time.
+ * Table 3's forty arms are all in; most of table 1 and four of table 2 are
+ * not, and a path with no reconstruction has to do something DEFINITE,
+ * because "nothing" is the one answer a differential test cannot tell from a
+ * wrong answer.
+ *
+ * So every such path records a code and then aborts -- unless the test has
+ * called `v34handshak_unwritten_reset`, which says "I am going to read the
+ * code afterwards" and turns the abort into a return.  `t_v34hst3mid.c` is
+ * that test and checks the code after every step.  The codes are numbers
+ * rather than strings because the strings firewall rejects any literal in
+ * src/ that is not the object's own (findings 180 and 201);
+ * `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak.c, and finding 547
+ * for why one mechanism had to serve both of the reconstructions that were
+ * merged into it.
+ */
+#define T3M_WRITTEN			0
+#define T3M_UNWRITTEN_TBL1		1
+#define T3M_UNWRITTEN_RXIDLE		2
+#define T3M_UNWRITTEN_RXSTATE		3
+#define T3M_UNWRITTEN_FSKGATE		4
+#define T3M_UNWRITTEN_TBL3_DEFAULT	5
+#define T3M_UNWRITTEN_TBL3_ARM		6
+#define T3M_UNWRITTEN_TBL2_ARM		7
+#define T3M_UNWRITTEN_OTHER		8
+
+int v34handshak_unwritten(void);
+void v34handshak_unwritten_reset(void);
+
 /*
  * Bring the handshake up.  `mode` selects one of five entries, and the names
  * below are the CALL SITES' -- every caller passes a literal, so the modes
@@ -164,6 +223,50 @@ extern "C" {
  * 0x10 in +0x2aa0.
  */
 void v34handshakinit(void *obj, int mode);
+
+/*
+ * The handshake itself, one block at a time.
+ *
+ * PARTIAL, AND IT HALTS RATHER THAN GUESSING.  61,541 bytes over three
+ * dispatches are being landed one arm at a time against
+ * `test/harness/v34hsstep.c`; an arm nobody has written yet calls `abort`,
+ * so this is safe to call only for a state some test has landed.  Nothing in
+ * this tree calls it but that fixture.  docs/v34handshak.md has the map and
+ * says which arms exist.
+ */
+void v34handshak(void *obj);
+
+/*
+ * `v34handshak`'s once-per-block transmit dispatch on its own -- the
+ * seventy-entry table at .rodata+0x2ee8 selected at 0x62af1, its seven
+ * targets, and the shared tail at 0x62a40 that every one of them falls into,
+ * down to the `ret`.
+ *
+ * FOR ONE TEST, AND SAID SO RATHER THAN IMPLIED.  `t_v34hstbl2.c` drives this
+ * against the whole blob function on an object the fixture has steered into
+ * this dispatch and no other; over that domain the two are the same function
+ * (finding 361).  It is not a second reconstruction -- it calls the same
+ * static dispatch every microstate arm calls.  Nothing in `src/` calls it.
+ * The txstate halfword at +0x3596 selects the arm, exactly as the object's
+ * own three routes in leave it.  Finding 591.
+ */
+struct v34_object;
+void v34handshak_txblock(struct v34_object *obj);
+
+/*
+ * The datapump's per-block entry point, and the last function of V34hshak.c.
+ *
+ * The int at +0x2218 decides: above 1 it drives `v34handshak` until the
+ * transmit block is full and the receive queue drained, and does nothing
+ * else; at 0 or 1 it runs `modulatevector` and `receiver` instead, and then
+ * supervises the line -- retraining or renegotiating on the receiver's three
+ * consecutive-error counters at +0x258, +0x25a and +0x25c.
+ *
+ * IT INHERITS `v34handshak`'s PARTIALNESS on the first of those two paths:
+ * an arm nobody has written calls `abort`.  The second path does not reach
+ * `v34handshak` at all.
+ */
+void datapumpv34(void *obj);
 
 /*
  * ---------------------------------------------------------------------------
@@ -320,6 +423,16 @@ int detectRetrainReq(void *obj, short nbins, const short *samples,
 extern const int vect4[4];
 extern const int vect16[16];
 
+/*
+ * The line probe's one period, 64 signed shorts at `.rodata + 0x2c00`, and
+ * NOT a constellation: `v34handshak`'s txstate 51 `TX_L1` indexes it with the
+ * low six bits of `vect_idx`, scales each sample by `f25d4` and hands four at
+ * a time to `txwritequeue`.  Sixty-four is what the mask `0x3f` admits; the
+ * object checks no length anywhere.
+ */
+#define V34_PROBE_SAMPLES	64
+extern const short probe[V34_PROBE_SAMPLES];
+
 /* Two bits -> one quadrant, differentially against the last. */
 void txmitdibit(void *obj, short bits);
 
@@ -328,6 +441,50 @@ void txmitdibit(void *obj, short bits);
  * differentially; the high one selects within it and is not.
  */
 void txmitquadbit(void *obj, short bits);
+
+/*
+ * One symbol of the K56flex phase 3/4 transmit sequence.  Declared here
+ * rather than beside the other K56flex material because it drives the two
+ * emitters above and their two tables; it is defined in a .cpp -- see
+ * `src/pump/v34/v34k56.cpp` for why, and for the three ways its idle symbol
+ * is NOT one of those emitters.
+ *
+ * ALWAYS RETURNS 0, at all three `ret`s.  That is as far as the return type is
+ * recoverable: its one caller (inside `v34handshak`) discards it, so nothing
+ * distinguishes `int` from `short` or `unsigned` -- `xor %eax,%eax` before
+ * every `ret` is the whole of the evidence, exactly as for the
+ * `K56FlexFloModem` members it calls.
+ */
+int k56FlexPhase34(void *obj);
+
+/*
+ * One symbol -- or, in four of its arms, two -- of the V.90 phase 3/4
+ * transmit sequence.  The twin of `k56FlexPhase34` above, and declared beside
+ * it for the same reason: it drives the two emitters and their two tables.
+ * Defined in `src/pump/v34/v34pcmmain.cpp`, which is where the object puts
+ * it; the head of that block gives the evidence, and sets out the ways this
+ * differs from the K56flex twin.
+ *
+ * ALWAYS RETURNS 0, at both `ret`s, and on the same evidence as above.
+ */
+int v90Phase34(void *obj);
+
+/*
+ * Send whichever PCM receiver is past phase 2 into phase 3, at the point in
+ * the handshake where the JA is about to go out.  Two tail calls and nothing
+ * else: `VPcmFloModem::enterPhase3` when `v90_receiver > 1`, otherwise
+ * `K56FlexFloModem::enterPhase3FullDuplex` when `k56flex_receiver > 1`, and
+ * otherwise nothing at all.  Both tests are signed and both are `> 1`.
+ *
+ * Declared here rather than in `v34pcmif.h` for the same reason as the two
+ * above: its only two callers are inside `v34handshak` and it is not one of
+ * VPcmV34Main.cpp's `V34XF_`/`VPcmV34` interface exports.  Defined in
+ * `src/pump/v34/v34pcmmain.cpp`, because both callees are C++ members.
+ *
+ * RETURNS NOTHING.  %eax is never set on the falling-through path and both
+ * callees are themselves `void`, which is as far as this is recoverable.
+ */
+void indicateJaTransmission(void *obj);
 
 /*
  * Turn the line probe's twenty-five bins into a power-reduction request, a

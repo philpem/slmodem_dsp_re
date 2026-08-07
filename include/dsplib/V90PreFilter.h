@@ -67,19 +67,34 @@ struct V90CodecEntry {
 };
 
 /*
- * NEITHER OF THE NEXT TWO IS MODELLED.  Both names are the original's, out of
- * the constructor's mangling; what is inside them is not recovered here, and
- * the numbers below are BOUNDS -- the furthest these five methods reach --
- * rather than sizes.  A later batch that models either should replace the
- * declaration rather than add a second one.
+ * V90Phase2Info WAS STUBBED HERE TOO, as an opaque 0x1c-byte block whose own
+ * comment asked the batch that modelled it to replace the declaration rather
+ * than add a second one.  Finding 255 modelled it; this is that replacement.
  *
- * They are word blocks because that is how the object treats them:
- * `setParamEia6` is forty-odd whole-word copies between fixed offsets inside
- * V90Parameters and one float store, and nothing here knows what any of them
- * mean.  Keeping the offsets numeric is the honest spelling.
+ * The 0x1c was the furthest `autoSelection` reaches.  The real object is 0x24:
+ * the constructor and `setToDefault` reach +0x20, and neither is a member of
+ * this class.  A bound taken from the members you happen to be writing is
+ * finding 215's mistake, and it is short here by eight bytes.
+ */
+#include "dsplib/V90Phase2Info.h"
+
+/*
+ * V90Parameters IS STILL NOT MODELLED.  The name is the original's, out of
+ * the constructor's mangling; what is inside it is not recovered here, and the
+ * number below is a BOUND -- the furthest these five methods reach -- rather
+ * than a size.  A later batch that models it should replace this declaration
+ * rather than add a second one.
+ *
+ * It is a word block because that is how the object treats it: `setParamEia6`
+ * is forty-odd whole-word copies between fixed offsets inside V90Parameters
+ * and one float store, and nothing here knows what any of them mean.  Keeping
+ * the offsets numeric is the honest spelling.
+ *
+ * `V90Phase2Info.h` forward-declares this class, which is why including it
+ * above and defining the class here are compatible: a declaration may precede
+ * a definition, and `V90Phase2Info::params` is only ever a pointer.
  */
 #define V90PARAMETERS_BOUND 0x504	/* isV90WithEia6 reads +0x500 */
-#define V90PHASE2INFO_BOUND 0x1c	/* autoSelection reads +0x18  */
 
 class V90Parameters {
 public:
@@ -87,15 +102,6 @@ public:
 		unsigned char b[V90PARAMETERS_BOUND];
 		int w[V90PARAMETERS_BOUND / 4];
 		float f[V90PARAMETERS_BOUND / 4];
-	};
-};
-
-class V90Phase2Info {
-public:
-	union {
-		unsigned char b[V90PHASE2INFO_BOUND];
-		int w[V90PHASE2INFO_BOUND / 4];
-		float f[V90PHASE2INFO_BOUND / 4];
 	};
 };
 

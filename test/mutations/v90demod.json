@@ -1,0 +1,154 @@
+[
+ {
+  "label": "the latch tests for non-zero rather than for exactly 1",
+  "find": "\tif (inPhase3 == 1)\n\t\treturn;",
+  "replace": "\tif (inPhase3 != 0)\n\t\treturn;"
+ },
+ {
+  "label": "the latch is never set",
+  "find": "\tinPhase3 = 1;\n\tword_44 = word_38;",
+  "replace": "\tword_44 = word_38;"
+ },
+ {
+  "label": "the saved word is taken after it is cleared",
+  "find": "\tword_44 = word_38;\n\tword_38 = 0;",
+  "replace": "\tword_38 = 0;\n\tword_44 = word_38;"
+ },
+ {
+  "label": "only two of the three words are cleared",
+  "find": "\tword_3c = 0;\n\tword_40 = 0;",
+  "replace": "\tword_3c = 0;"
+ },
+ {
+  "label": "the prefilter sits at +0x68",
+  "find": "\tpreFilter.selectFilter();",
+  "replace": "\t((V90PreFilter *)((char *)this + 0x68))->selectFilter();"
+ },
+ {
+  "label": "the EIA-6 answer is cached across setParamEia6",
+  "find": "\tif (preFilter.isV90WithEia6()) {",
+  "replace": "\tint eia6 = preFilter.isV90WithEia6();\n\n\tif (eia6) {",
+  "note": "EXPECTED UNCAUGHT, AND EQUIVALENT: isV90WithEia6 is `(cap == 1) || (params->w[0x500/4] == 6)` where `cap` comes from refLoop, codecType and the static dataBase.  Between the two calls the object runs setParamEia6, which writes thirty words of the parameter block and NONE of them is +0x500, and displayParamEia6, which is one `ret`.  Neither touches refLoop or codecType.  Held fixed: those bodies, which t_v90prefilter.cpp checks.  The second call stays because the blob makes it."
+ },
+ {
+  "label": "the resampler sits at +0x90",
+  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);",
+  "replace": "\t\t((ResamplerTimingOffset *)((char *)this + 0x90))\n\t\t    ->setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);"
+ },
+ {
+  "label": "the timing offset comes from +0x88 of the parameter block",
+  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);",
+  "replace": "\t\tresampler.setTimingOffset(params->f[0x088 / 4]);"
+ },
+ {
+  "label": "the timing offset is set whether or not EIA-6 is in force",
+  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);\n\t}",
+  "replace": "\t}\n\n\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);"
+ },
+ {
+  "label": "the spectral verifier sits at +0x214",
+  "find": "\tspectralVerifier.reset();",
+  "replace": "\t((V90SpectralVerifier *)((char *)this + 0x214))->reset();"
+ },
+ {
+  "label": "the phase 3 demodulator is handed maxTxPower, not Uinfo",
+  "find": "\t\t\t\t phase2Info->Uinfo,",
+  "replace": "\t\t\t\t phase2Info->maxTxPower,"
+ },
+ {
+  "label": "the phase 3 demodulator is started in state 1",
+  "find": "\t\t\t\t (Phase3DemodulatorState)0, 0,",
+  "replace": "\t\t\t\t (Phase3DemodulatorState)1, 0,"
+ },
+ {
+  "label": "the ninth argument is 0 rather than 1",
+  "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,",
+  "replace": "\t\t\t\t (short)preFilter.isV90WithEia6(), 0, 0.0f,"
+ },
+ {
+  "label": "the last argument is Uinfo rather than the round trip delay",
+  "find": "\t\t\t\t (unsigned int)phase2Info->rtd);",
+  "replace": "\t\t\t\t (unsigned int)phase2Info->Uinfo);"
+ },
+ {
+  "label": "the two Jd pointers are swapped",
+  "find": "\t\t\t\t jd, jdV92, dil,",
+  "replace": "\t\t\t\t (V90Jd *)jdV92, (V92Jd *)jd, dil,"
+ },
+ {
+  "label": "the DIL descriptor is not passed on",
+  "find": "\t\t\t\t jd, jdV92, dil,",
+  "replace": "\t\t\t\t jd, jdV92, NULL,"
+ },
+ {
+  "label": "+0x294 is copied before the reset that clears +0x410",
+  "find": "\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n\n\t/*\n\t * AFTER the reset, which has just zeroed this very field.  The order\n\t * is the whole content of the store.\n\t */\n\tphase3Demodulator->word_410 = word_294;\n",
+  "replace": "\tphase3Demodulator->word_410 = word_294;\n\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n"
+ },
+ {
+  "label": "the equaliser is not told about phase 3",
+  "find": "\tequalizer->enterPhase3();",
+  "replace": ""
+ },
+ {
+  "label": "the two words copied out of the parameter block are swapped",
+  "find": "\tword_288 = params->w[PARAMS_WORD_264];\n\tword_290 = params->w[PARAMS_WORD_278];",
+  "replace": "\tword_288 = params->w[PARAMS_WORD_278];\n\tword_290 = params->w[PARAMS_WORD_264];"
+ },
+ {
+  "label": "the evaluator's +0x84 is left alone",
+  "find": "\tconnectionEvaluator->word_84 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the evaluator is reached through +0x208",
+  "find": "\tconnectionEvaluator->word_70 = 0;",
+  "replace": "\t(*(V90ConnectionEvaluator **)((char *)this + 0x208))->word_70 = 0;"
+ },
+ {
+  "label": "+0x280 is cleared as a word",
+  "find": "\tbyte_280 = 0;",
+  "replace": "\t*(unsigned int *)((char *)this + 0x280) = 0;"
+ },
+ {
+  "label": "the early exit reads the third byte, not the second",
+  "find": "\tif (block[2] < 0)",
+  "replace": "\tif (block[3] < 0)"
+ },
+ {
+  "label": "the early exit takes its pointer from +0x04 of the block",
+  "find": "\tblock = *(const signed char *const *)&params->b[0];",
+  "replace": "\tblock = *(const signed char *const *)&params->b[4];"
+ },
+ {
+  "label": "the early exit does not exit",
+  "find": "\tif (block[2] < 0)\n\t\treturn;",
+  "replace": "\tif (block[2] < -0x100)\n\t\treturn;"
+ },
+ {
+  "label": "the retrain fires on a zero session flag",
+  "find": "\tif (sessionFlag != 0) {",
+  "replace": "\tif (sessionFlag == 0) {"
+ },
+ {
+  "label": "the retrain writes 0x2 rather than 0x20",
+  "find": "\t\tword_3c = 0x20;",
+  "replace": "\t\tword_3c = 0x2;"
+ },
+ {
+  "label": "the retrain writes to +0x40",
+  "find": "\t\tword_3c = 0x20;",
+  "replace": "\t\tword_40 = 0x20;"
+ },
+ {
+  "label": "the entry diagnostic is gated one level too low",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: enter Phase 3\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V90Demodulator: enter Phase 3\\r\\n\");"
+ },
+ {
+  "label": "the eighth argument is not narrowed to short",
+  "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,",
+  "replace": "\t\t\t\t (short)(int)preFilter.isV90WithEia6(), 1, 0.0f,",
+  "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (params->w[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
+ }
+]

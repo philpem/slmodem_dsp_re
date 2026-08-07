@@ -78,6 +78,7 @@ and finding 152's" became "Finding 173's trap, and finding 152's": the 149
 was corrected, and correcting it hid the 152 next to it, which was not.
 """
 
+import json
 import argparse
 import os
 import re
@@ -440,6 +441,124 @@ def renumber(old, new, nth=None):
     return 0
 
 
+#
+# A CONFLICT MARKER IS NOT A REFERENCE PROBLEM, AND IT BELONGS HERE ANYWAY.
+#
+# `docs/findings.md` reached `origin` with `<<<<<<< HEAD` and `>>>>>>> w1e_dil`
+# in it: a merge resolved by script, staged, and committed.  Every gate passed.
+# `make phase` compiles and runs, and neither it nor this tool reads prose, so
+# a document with markers in it is a document that builds.  The record is the
+# deliverable here, so a marker in it is as much a defect as a failing test --
+# and this is the one gate that already walks every tracked file.
+#
+CONFLICT_MARK = re.compile(r"^(?:<{7}|={7}|>{7})(?:\s|$)", re.M)
+
+
+def check_conflict_markers():
+    bad = []
+    for path in tracked():
+        if not path.endswith(SCAN_EXT):
+            continue
+        for m in CONFLICT_MARK.finditer(read(path) or ""):
+            line = (read(path) or "").count("\n", 0, m.start()) + 1
+            bad.append((path, line, m.group(0).strip()))
+    for path, line, mark in bad:
+        print("  CONFLICT  %s:%d  %s" % (path, line, mark))
+    return bad
+
+
+#
+# THE MUTATION REGISTRY IS JSON AND NOTHING PARSED IT.
+#
+# `test/mutations/suites.json` is the list every `mutate.py --suite` reads.
+# Merging two branches that each appended a line to it produces a trailing
+# comma about one time in three, and a malformed registry makes EVERY suite
+# unrunnable -- while `make phase` stays green, because nothing in the phase
+# boundary opens the file.  A test suite that cannot be run reports no
+# failures, which is finding 134's argument in its purest form.
+#
+# Checked here because this is the gate that already walks the tree, and
+# because the same merge that breaks it is the one that breaks references.
+# Finding 346.
+#
+def check_suites():
+    path = os.path.join("test", "mutations", "suites.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        reg = json.load(open(path))
+    except ValueError as e:
+        print("  MALFORMED  %s: %s" % (path, e))
+        return [path]
+    bad = []
+    for name, entry in sorted(reg.items()):
+        # `_` holds the file's own prose header, which is a list of strings
+        # and not a suite.  Any leading-underscore key is documentation.
+        if name.startswith("_"):
+            continue
+        if (not isinstance(entry, list) or len(entry) != 2
+                or not all(isinstance(x, str) for x in entry)):
+            print("  MALFORMED  %s: suite %r is not [source, binary]"
+                  % (path, name))
+            bad.append(name)
+            continue
+        src = entry[0]
+        if not os.path.exists(src):
+            print("  MISSING    %s: suite %r names %s, which does not exist"
+                  % (path, name, src))
+            bad.append(name)
+    return bad
+
+
+#
+# A MUTATION RUN THAT DIES LEAVES ITS MUTANT IN THE SOURCE.
+#
+# `mutate.py` edits the file, builds, runs, and puts the file back.  Kill it
+# between the first and the last -- a timeout, a disconnect, a Ctrl-C -- and
+# the mutant stays.  `git add -A` then commits it, and if the commit's
+# `make phase` ran BEFORE the mutation run rather than after, nothing objects.
+#
+# That happened: merge commit 92e565e captured `47 tests the counter before
+# incrementing it` into src/pump/v34/v34hshak_t3mid.c.  The differential test
+# does catch it -- 84 of 31,328 checks -- so the tree was one `make phase`
+# away from noticing, and the ordering of two commands was the whole defect.
+#
+# Detection is exact rather than heuristic: for a correctly restored source
+# every mutation's `find` string is present.  If `find` is ABSENT and
+# `replace` is PRESENT, that mutation is live in the tree.  Finding 349.
+#
+def check_live_mutants():
+    reg_path = os.path.join("test", "mutations", "suites.json")
+    if not os.path.exists(reg_path):
+        return []
+    try:
+        reg = json.load(open(reg_path))
+    except ValueError:
+        return []                       # check_suites() reports this
+    live = []
+    for name, entry in sorted(reg.items()):
+        if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
+            continue
+        path = os.path.join("test", "mutations", name + ".json")
+        if not os.path.exists(path) or not os.path.exists(entry[0]):
+            continue
+        try:
+            muts = json.load(open(path))
+        except ValueError:
+            print("  MALFORMED  %s" % path)
+            live.append(path)
+            continue
+        text = open(entry[0]).read()
+        for m in muts:
+            if not isinstance(m, dict) or "find" not in m or "replace" not in m:
+                continue
+            if m["find"] not in text and m["replace"] in text:
+                print("  LIVE MUTANT  %s: %s"
+                      % (entry[0], m.get("label", "(unlabelled)")))
+                live.append(entry[0])
+    return live
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
     bad = []
@@ -452,8 +571,15 @@ def check_dangling():
     for path, line, kind, num in bad:
         print("  DANGLING  %s:%d  %s"
               % (path, line, num if kind == "D" else "finding " + num))
-    print("\n  %d references checked, %d resolve to nothing" % (total, len(bad)))
-    return 1 if bad else 0
+    marks = check_conflict_markers()
+    suites = check_suites()
+    live = check_live_mutants()
+    print("\n  %d references checked, %d resolve to nothing%s%s%s"
+          % (total, len(bad),
+             "" if not marks else ", %d conflict marker(s)" % len(marks),
+             "" if not suites else ", %d bad mutation suite(s)" % len(suites),
+             "" if not live else ", %d LIVE MUTANT(S)" % len(live)))
+    return 1 if (bad or marks or suites or live) else 0
 
 
 def check_since(rev):

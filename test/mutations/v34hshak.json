@@ -3,6 +3,15 @@
   "note": "Recovered from the session that reconstructed v34handshakinit and the state trace.  The three state words and the 87 StateName entries are what most of these attack: a transposition there reads correctly and is wrong everywhere."
  },
  {
+  "note": "The five DFT leaves.  Three of them are pure table fills, where the only errors possible are a bin number, a bank length and which of the two `nl` banks is which -- and the last of those is invisible to anything but a differential compare, because both banks are the same shape.  detectRetrainReq is the state machine, and its two comparisons are widened differently on each side."
+ },
+ {
+  "note": "settxlevel and v34setuptxmit.  The power request is two bit-reversed three-bit fields, one clamped; the PCM minimum combines with it two different ways; and the two dB loops differ in their constant AND in their accumulator width."
+ },
+ {
+  "note": "probeselect.  Three sections and they break differently: the power request is arithmetic, the normalisation is two widths of one comparison, and the ladder is fifteen thresholds over eleven bins that each originating arm falls through."
+ },
+ {
   "label": "rxstate and txstate offsets transposed",
   "find": "#define HS_RXSTATE\t0x3594",
   "replace": "#define HS_RXSTATE\t0x3596"
@@ -10,22 +19,26 @@
  {
   "label": "microstate context fed from rxstate twice",
   "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
-  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];"
+  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "fn": "hs_setstate"
  },
  {
   "label": "HS_RXSTATE branch ctx1/ctx2 swapped",
   "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];"
+  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "fn": "hs_setstate"
  },
  {
   "label": "HS_TXSTATE branch ctx1/ctx2 swapped",
   "find": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];"
+  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
+  "fn": "hs_setstate"
  },
  {
   "label": "[1] and [2] counters swapped",
-  "find": "(long)hs_get(obj, HS_TRACE_1),",
-  "replace": "(long)hs_get(obj, HS_TRACE_2),"
+  "find": "(long)obj->vect_idx,",
+  "replace": "(long)hs_get(obj, HS_TRACE_2),",
+  "fn": "hs_setstate"
  },
  {
   "label": "StateName DET_SYNC and DET_CJ transposed",
@@ -35,142 +48,168 @@
  {
   "label": "timer guard signed rather than unsigned",
   "find": "unsigned d = (unsigned)(*(int *)(m + 0x238) - delta);",
-  "replace": "int d = *(int *)(m + 0x238) - delta;"
+  "replace": "int d = *(int *)(m + 0x238) - delta;",
+  "fn": "v34handshakinit"
  },
  {
   "label": "timer limit 0x176ff becomes 0x17700",
   "find": "if (d <= 0x176ff)",
-  "replace": "if (d <= 0x17700)"
+  "replace": "if (d <= 0x17700)",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 1's || becomes &&",
   "find": "if ((rx->flags & 0x40) || m[0xac17] != 0) {",
-  "replace": "if ((rx->flags & 0x40) && m[0xac17] != 0) {"
+  "replace": "if ((rx->flags & 0x40) && m[0xac17] != 0) {",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 0 tests 0x65 rather than 0x66",
-  "find": "if (obj->f359c == 0x66)",
-  "replace": "if (obj->f359c == 0x65)"
+  "find": "\t\tif (obj->f359c == 0x66)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
+  "replace": "\t\tif (obj->f359c == 0x65)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
+  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 detector pair the other way round",
   "find": "(obj->f359c == 0x65) ? c2400_ : c1200_,",
-  "replace": "(obj->f359c == 0x65) ? c1200_ : c2400_,"
+  "replace": "(obj->f359c == 0x65) ? c1200_ : c2400_,",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 2 rxflags mask ~0x1d8 becomes ~0x1f8 (bit 5, outside the OR)",
   "find": "(rx->flags & ~0x1d8) | 0x18",
-  "replace": "(rx->flags & ~0x1f8) | 0x18"
+  "replace": "(rx->flags & ~0x1f8) | 0x18",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 2 rxflags mask ~0x1d8 becomes ~0x1c8",
   "find": "(rx->flags & ~0x1d8) | 0x18",
   "replace": "(rx->flags & ~0x1c8) | 0x18",
   "equivalent": true,
-  "why": "0x1d8 and 0x1c8 differ only in bit 4, and 0x18 -- which contains bit 4 -- is OR-ed straight back in, so the cleared bit is restored in the same expression."
+  "why": "0x1d8 and 0x1c8 differ only in bit 4, and 0x18 -- which contains bit 4 -- is OR-ed straight back in, so the cleared bit is restored in the same expression.",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 2 txflags mask ~0x4018 becomes ~0x4010",
   "find": "(obj->f25c2 & ~0x4018) | 0x2000",
-  "replace": "(obj->f25c2 & ~0x4010) | 0x2000"
+  "replace": "(obj->f25c2 & ~0x4010) | 0x2000",
+  "fn": "v34handshakinit"
  },
  {
   "label": "prologue txflags mask dropped entirely",
   "find": "obj->f25c2 = (short)(obj->f25c2 & 0x7fff);",
-  "replace": ""
+  "replace": "",
+  "fn": "v34handshakinit"
  },
  {
   "label": "prologue txflags 0x7fff becomes 0x3fff",
   "find": "obj->f25c2 & 0x7fff",
-  "replace": "obj->f25c2 & 0x3fff"
+  "replace": "obj->f25c2 & 0x3fff",
+  "fn": "v34handshakinit"
  },
  {
   "label": "out-of-range mode skips the tail",
   "find": "\tdefault:\n\t\t/* Out of range runs the tail, and nothing else. */\n\t\tbreak;",
-  "replace": "\tdefault:\n\t\treturn;"
+  "replace": "\tdefault:\n\t\treturn;",
+  "fn": "v34handshakinit"
  },
  {
   "label": "timer stride 0x69780 becomes 0x69700",
   "find": "base + 0x69780",
-  "replace": "base + 0x69700"
+  "replace": "base + 0x69700",
+  "fn": "v34handshakinit"
  },
  {
   "label": "timer mark reset to 0 rather than 0xfff15a00",
   "find": "*(int *)(m + 0x248) = (int)0xfff15a00;",
-  "replace": "*(int *)(m + 0x248) = 0;"
+  "replace": "*(int *)(m + 0x248) = 0;",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 0 points 0xaa70 at the 0xa94c record",
   "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x1000);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);",
-  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x1000);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);"
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x1000);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 0 record index 12 gets 8 rather than 0x11",
   "find": "hs_put(obj, 0xa97c + 0x18, 0x11);",
-  "replace": "hs_put(obj, 0xa97c + 0x18, 8);"
+  "replace": "hs_put(obj, 0xa97c + 0x18, 8);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 record index 12 gets 0x11 rather than 8",
   "find": "hs_put(obj, 0xa97c + 0x18, 8);",
-  "replace": "hs_put(obj, 0xa97c + 0x18, 0x11);"
+  "replace": "hs_put(obj, 0xa97c + 0x18, 0x11);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 points 0xaa6c at the 0xa97c record",
   "find": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
-  "replace": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa97c);"
+  "replace": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa97c);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 record 0xa94c: +0x24 constant off by one",
-  "find": "*(int *)(r + 0x24) = 0xf72;",
-  "replace": "*(int *)(r + 0x24) = 0xf73;"
+  "find": "\n\t\t\t*(int *)(r + 0x24) = 0xf72;",
+  "replace": "\n\t\t\t*(int *)(r + 0x24) = 0xf73;",
+  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 1 bumps 0xac12 where it should bump 0xac14",
   "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
-  "replace": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac12, n);"
+  "replace": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac12, n);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 1 does not clear the 0xac17 byte",
   "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
-  "replace": "\t\t\ths_put(obj, 0xac14, n);"
+  "replace": "\t\t\ths_put(obj, 0xac14, n);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "mode 1 transitions the microstate it should leave alone",
   "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\t/* No microstate transition here; mode 1 is the only body\n\t\t * that leaves it alone. */",
-  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);"
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "tail: 0xaa3c and 0x2aa0 values swapped",
   "find": "\ths_put(obj, 0xaa3c, 0);\n\ths_put(obj, 0x2aa0, 0x10);",
-  "replace": "\ths_put(obj, 0xaa3c, 0x10);\n\ths_put(obj, 0x2aa0, 0);"
+  "replace": "\ths_put(obj, 0xaa3c, 0x10);\n\ths_put(obj, 0x2aa0, 0);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "tail: 0x2aa0 value 0x10 becomes 0x11",
   "find": "hs_put(obj, 0x2aa0, 0x10);",
-  "replace": "hs_put(obj, 0x2aa0, 0x11);"
+  "replace": "hs_put(obj, 0x2aa0, 0x11);",
+  "fn": "v34handshakinit"
  },
  {
   "label": "fmt[] rxstate and txstate entries permuted, offsets untouched",
   "find": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
-  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\""
+  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
+  "fn": "hs_setstate"
  },
  {
   "label": "fmt[] microstate entry moved to the rxstate slot",
   "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
-  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\","
- },
- {
-  "note": "The five DFT leaves.  Three of them are pure table fills, where the only errors possible are a bin number, a bank length and which of the two `nl` banks is which -- and the last of those is invisible to anything but a differential compare, because both banks are the same shape.  detectRetrainReq is the state machine, and its two comparisons are widened differently on each side."
+  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",",
+  "fn": "hs_setstate"
  },
  {
   "label": "dftfreqinit fills 24 bins",
   "find": "for (i = 1; i <= 25; i++, bins++) {",
-  "replace": "for (i = 1; i <= 24; i++, bins++) {"
+  "replace": "for (i = 1; i <= 24; i++, bins++) {",
+  "fn": "dftfreqinit"
  },
  {
   "label": "dftfreqinit is zero-based",
   "find": "for (i = 1; i <= 25; i++, bins++) {",
-  "replace": "for (i = 0; i <= 25; i++, bins++) {"
+  "replace": "for (i = 0; i <= 25; i++, bins++) {",
+  "fn": "dftfreqinit"
  },
  {
   "label": "the bin number is shifted 7, not 8",
@@ -180,47 +219,56 @@
  {
   "label": "dftfreqinit leaves denergy alone",
   "find": "\t\tbins->denergy = 0.0;\n",
-  "replace": ""
+  "replace": "",
+  "fn": "dftfreqinit"
  },
  {
   "label": "dftfreqinit leaves the double accumulators alone",
   "find": "\t\tbins->sum_re = 0.0;\n\t\tbins->sum_im = 0.0;\n",
-  "replace": ""
+  "replace": "",
+  "fn": "dftfreqinit"
  },
  {
   "label": "signal bins 7 and 9 transposed",
   "find": "\tbins[0].inc = DFT_BIN(7);\n\tbins[1].inc = DFT_BIN(9);",
-  "replace": "\tbins[0].inc = DFT_BIN(9);\n\tbins[1].inc = DFT_BIN(7);"
+  "replace": "\tbins[0].inc = DFT_BIN(9);\n\tbins[1].inc = DFT_BIN(7);",
+  "fn": "dftnlinitSignalBins"
  },
  {
   "label": "signal bin 17 becomes 18",
   "find": "\tbins[3].inc = DFT_BIN(17);",
-  "replace": "\tbins[3].inc = DFT_BIN(18);"
+  "replace": "\tbins[3].inc = DFT_BIN(18);",
+  "fn": "dftnlinitSignalBins"
  },
  {
   "label": "the signal bank clears three bins",
   "find": "\t */\n\tfor (i = 0; i <= 3; i++) {",
-  "replace": "\t */\n\tfor (i = 0; i <= 2; i++) {"
+  "replace": "\t */\n\tfor (i = 0; i <= 2; i++) {",
+  "fn": "dftnlinitSignalBins"
  },
  {
   "label": "noise bin 12 becomes 11",
   "find": "\tbins[2].inc = DFT_BIN(12);\n\tbins[3].inc = DFT_BIN(16);",
-  "replace": "\tbins[2].inc = DFT_BIN(11);\n\tbins[3].inc = DFT_BIN(16);"
+  "replace": "\tbins[2].inc = DFT_BIN(11);\n\tbins[3].inc = DFT_BIN(16);",
+  "fn": "dftnlinitNoiseBins"
  },
  {
   "label": "the noise bank clears three bins",
   "find": "\tshort i;\n\n\tfor (i = 0; i <= 3; i++) {",
-  "replace": "\tshort i;\n\n\tfor (i = 0; i <= 2; i++) {"
+  "replace": "\tshort i;\n\n\tfor (i = 0; i <= 2; i++) {",
+  "fn": "dftnlinitNoiseBins"
  },
  {
   "label": "the noise bank gets the signal bank's frequencies",
   "find": "\tbins[0].inc = DFT_BIN(6);\n\tbins[1].inc = DFT_BIN(8);\n\tbins[2].inc = DFT_BIN(12);\n\tbins[3].inc = DFT_BIN(16);",
-  "replace": "\tbins[0].inc = DFT_BIN(7);\n\tbins[1].inc = DFT_BIN(9);\n\tbins[2].inc = DFT_BIN(13);\n\tbins[3].inc = DFT_BIN(17);"
+  "replace": "\tbins[0].inc = DFT_BIN(7);\n\tbins[1].inc = DFT_BIN(9);\n\tbins[2].inc = DFT_BIN(13);\n\tbins[3].inc = DFT_BIN(17);",
+  "fn": "dftnlinitNoiseBins"
  },
  {
   "label": "the retrain thresholds transposed",
   "find": "\t\tbins[i].thresh_lo = RETRAIN_QUIET;\n\t\tbins[i].thresh_hi = RETRAIN_TONE;",
-  "replace": "\t\tbins[i].thresh_lo = RETRAIN_TONE;\n\t\tbins[i].thresh_hi = RETRAIN_QUIET;"
+  "replace": "\t\tbins[i].thresh_lo = RETRAIN_TONE;\n\t\tbins[i].thresh_hi = RETRAIN_QUIET;",
+  "fn": "dftRetrainDetInit"
  },
  {
   "label": "the quiet threshold is 0x51",
@@ -235,763 +283,906 @@
  {
   "label": "the retrain detector's top bin is 1800 Hz",
   "find": "\tbins[2].inc = DFT_BIN(10);",
-  "replace": "\tbins[2].inc = DFT_BIN(12);"
+  "replace": "\tbins[2].inc = DFT_BIN(12);",
+  "fn": "dftRetrainDetInit"
  },
  {
   "label": "dftRetrainDetInit arms two bins",
   "find": "\tfor (i = 0; i <= 2; i++) {",
-  "replace": "\tfor (i = 0; i <= 1; i++) {"
+  "replace": "\tfor (i = 0; i <= 1; i++) {",
+  "fn": "dftRetrainDetInit"
  },
  {
   "label": "the two run limits transposed",
   "find": "\tobj->retrain_quiet_runs = 3;\n\tobj->retrain_tone_runs = 9;",
-  "replace": "\tobj->retrain_quiet_runs = 9;\n\tobj->retrain_tone_runs = 3;"
+  "replace": "\tobj->retrain_quiet_runs = 9;\n\tobj->retrain_tone_runs = 3;",
+  "fn": "dftRetrainDetInit"
  },
  {
   "label": "the detector arms in state 2",
   "find": "\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;",
-  "replace": "\tobj->retrain_state = 2;\n\tobj->retrain_phase = 0;"
+  "replace": "\tobj->retrain_state = 2;\n\tobj->retrain_phase = 0;",
+  "fn": "dftRetrainDetInit"
  },
  {
   "label": "the sample counter steps by two",
   "find": "\tobj->retrain_phase += 4;",
-  "replace": "\tobj->retrain_phase += 2;"
+  "replace": "\tobj->retrain_phase += 2;",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the window test is < rather than !=",
   "find": "\tif (obj->retrain_phase != 0x80)",
-  "replace": "\tif (obj->retrain_phase < 0x80)"
+  "replace": "\tif (obj->retrain_phase < 0x80)",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "dftenergy is given a scale of 4",
   "find": "\tdftenergy(bins, nbins, 5);",
-  "replace": "\tdftenergy(bins, nbins, 4);"
+  "replace": "\tdftenergy(bins, nbins, 4);",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the clear loop covers the whole bank, not the caller's prefix",
   "find": "\tfor (i = 0; i < nbins; i++) {",
-  "replace": "\tfor (i = 0; i < V34_RETRAIN_BINS; i++) {"
+  "replace": "\tfor (i = 0; i < V34_RETRAIN_BINS; i++) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the clear loop resets the double accumulators too",
   "find": "\t\tbins[i].acc_im = 0;\n\t}\n\n\tif (obj->retrain_state == 1) {",
-  "replace": "\t\tbins[i].acc_im = 0;\n\t\tbins[i].sum_re = 0.0;\n\t\tbins[i].sum_im = 0.0;\n\t}\n\n\tif (obj->retrain_state == 1) {"
+  "replace": "\t\tbins[i].acc_im = 0;\n\t\tbins[i].sum_re = 0.0;\n\t\tbins[i].sum_im = 0.0;\n\t}\n\n\tif (obj->retrain_state == 1) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the quiet test on bin 0 is <=",
   "find": "\t\t\t\t\t< (int)bins[0].thresh_lo",
-  "replace": "\t\t\t\t\t<= (int)bins[0].thresh_lo"
+  "replace": "\t\t\t\t\t<= (int)bins[0].thresh_lo",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "bin 2 is compared against bin 1's threshold",
   "find": "\t\t\t\t\t< (int)bins[2].thresh_lo",
-  "replace": "\t\t\t\t\t< (int)bins[1].thresh_lo"
+  "replace": "\t\t\t\t\t< (int)bins[1].thresh_lo",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the quiet threshold is widened unsigned",
   "find": "\t\t\t\t\t< (int)bins[0].thresh_lo",
-  "replace": "\t\t\t\t\t< (int)(unsigned short)bins[0].thresh_lo"
+  "replace": "\t\t\t\t\t< (int)(unsigned short)bins[0].thresh_lo",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "bin 0's energy is widened signed",
   "find": "\t\tif ((int)(unsigned short)bins[0].energy",
-  "replace": "\t\tif ((int)bins[0].energy"
+  "replace": "\t\tif ((int)bins[0].energy",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the quiet run test is > rather than >=",
   "find": "\t\t\tif (obj->retrain_runs >= obj->retrain_quiet_runs)",
-  "replace": "\t\t\tif (obj->retrain_runs > obj->retrain_quiet_runs)"
+  "replace": "\t\t\tif (obj->retrain_runs > obj->retrain_quiet_runs)",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the state-2 guard tests 3",
   "find": "\tif (obj->retrain_state != 2)",
-  "replace": "\tif (obj->retrain_state != 3)"
+  "replace": "\tif (obj->retrain_state != 3)",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the tone test reads bin 0",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
-  "replace": "\tif ((int)(unsigned short)bins[0].energy > (int)bins[0].thresh_hi) {"
+  "replace": "\tif ((int)(unsigned short)bins[0].energy > (int)bins[0].thresh_hi) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the tone test is >=",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
-  "replace": "\tif ((int)(unsigned short)bins[1].energy >= (int)bins[1].thresh_hi) {"
+  "replace": "\tif ((int)(unsigned short)bins[1].energy >= (int)bins[1].thresh_hi) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the tone threshold is widened unsigned",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
-  "replace": "\tif ((int)(unsigned short)bins[1].energy > (int)(unsigned short)bins[1].thresh_hi) {"
+  "replace": "\tif ((int)(unsigned short)bins[1].energy > (int)(unsigned short)bins[1].thresh_hi) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the give-up arm returns instead of sharing the tail",
   "find": "\t} else {\n\t\tobj->retrain_runs = 0;\n\t\tobj->retrain_state = 1;\n\t}",
-  "replace": "\t} else {\n\t\tobj->retrain_runs = 0;\n\t\tobj->retrain_state = 1;\n\t\treturn 0;\n\t}"
+  "replace": "\t} else {\n\t\tobj->retrain_runs = 0;\n\t\tobj->retrain_state = 1;\n\t\treturn 0;\n\t}",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the answer compares against the quiet limit",
   "find": "\treturn obj->retrain_runs == obj->retrain_tone_runs;",
-  "replace": "\treturn obj->retrain_runs == obj->retrain_quiet_runs;"
+  "replace": "\treturn obj->retrain_runs == obj->retrain_quiet_runs;",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the answer is >= rather than ==",
   "find": "\treturn obj->retrain_runs == obj->retrain_tone_runs;",
-  "replace": "\treturn obj->retrain_runs >= obj->retrain_tone_runs;"
+  "replace": "\treturn obj->retrain_runs >= obj->retrain_tone_runs;",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "bin 1's energy is widened signed",
   "find": "\t\t    && (int)(unsigned short)bins[1].energy",
-  "replace": "\t\t    && (int)bins[1].energy"
+  "replace": "\t\t    && (int)bins[1].energy",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "bin 2's energy is widened signed",
   "find": "\t\t    && (int)(unsigned short)bins[2].energy",
-  "replace": "\t\t    && (int)bins[2].energy"
+  "replace": "\t\t    && (int)bins[2].energy",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "the tone arm's energy is widened signed",
   "find": "\tif ((int)(unsigned short)bins[1].energy > (int)bins[1].thresh_hi) {",
-  "replace": "\tif ((int)bins[1].energy > (int)bins[1].thresh_hi) {"
- },
- {
-  "note": "settxlevel and v34setuptxmit.  The power request is two bit-reversed three-bit fields, one clamped; the PCM minimum combines with it two different ways; and the two dB loops differ in their constant AND in their accumulator width."
+  "replace": "\tif ((int)bins[1].energy > (int)bins[1].thresh_hi) {",
+  "fn": "detectRetrainReq"
  },
  {
   "label": "txlevel: the reduction field is bits 4..6",
   "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);"
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is four bits",
   "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);"
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is not reversed",
   "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)((w >> 5) & 7);"
+  "replace": "\tobj->f25dc = (short)((w >> 5) & 7);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition field is bits 1..3",
   "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\textra = (short)bitreverse((unsigned short)((w >> 1) & 7), 3);"
+  "replace": "\textra = (short)bitreverse((unsigned short)((w >> 1) & 7), 3);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition field is not reversed",
   "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\textra = (short)((w >> 2) & 7);"
+  "replace": "\textra = (short)((w >> 2) & 7);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the two fields are swapped",
   "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);"
+  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition is clamped at 4",
   "find": "\tif (extra > 3)\n\t\textra = 3;",
-  "replace": "\tif (extra > 4)\n\t\textra = 4;"
+  "replace": "\tif (extra > 4)\n\t\textra = 4;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition is clamped before the reversal",
   "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\tif (extra > 3)\n\t\textra = 3;",
-  "replace": "\t{\n\t\tshort raw = (short)((w >> 2) & 7);\n\n\t\tif (raw > 3)\n\t\t\traw = 3;\n\t\textra = (short)bitreverse((unsigned short)raw, 3);\n\t}"
+  "replace": "\t{\n\t\tshort raw = (short)((w >> 2) & 7);\n\n\t\tif (raw > 3)\n\t\t\traw = 3;\n\t\textra = (short)bitreverse((unsigned short)raw, 3);\n\t}",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition is not added",
   "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
-  "replace": "\tobj->f25dc = (short)(unsigned short)obj->f25dc;"
+  "replace": "\tobj->f25dc = (short)(unsigned short)obj->f25dc;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition replaces the reduction",
   "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
-  "replace": "\tobj->f25dc = extra;"
+  "replace": "\tobj->f25dc = extra;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the MP short is read from index 1",
   "find": "\tunsigned w = (unsigned short)mp[0];",
-  "replace": "\tunsigned w = (unsigned short)mp[1];"
+  "replace": "\tunsigned w = (unsigned short)mp[1];",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the PCM minimum is ignored",
   "find": "\tif (obj->v90_receiver != 0) {",
-  "replace": "\tif (0 && obj->v90_receiver != 0) {"
+  "replace": "\tif (0 && obj->v90_receiver != 0) {",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the PCM minimum applies without a V.90 receiver",
   "find": "\tif (obj->v90_receiver != 0) {",
-  "replace": "\tif (obj->v90_receiver != 0 || obj->k56flex_receiver != 0) {"
+  "replace": "\tif (obj->v90_receiver != 0 || obj->k56flex_receiver != 0) {",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: a negative minimum is a floor like the rest",
   "find": "\t\tif (minpr < 0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)",
-  "replace": "\t\tif (0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)"
+  "replace": "\t\tif (0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: a non-negative minimum is added rather than floored",
   "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
-  "replace": "\t\telse\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);"
+  "replace": "\t\telse\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the floor is a ceiling",
   "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
-  "replace": "\t\telse if (obj->f25dc > minpr)\n\t\t\tobj->f25dc = minpr;"
+  "replace": "\t\telse if (obj->f25dc > minpr)\n\t\t\tobj->f25dc = minpr;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the sign test on the minimum includes zero",
   "find": "\t\tif (minpr < 0)",
   "replace": "\t\tif (minpr <= 0)",
   "equivalent": true,
-  "why": "At `minpr == 0` the two arms differ only when `f25dc` is negative, and it cannot be: it is the sum of two bit-reversals of three-bit fields, one of them clamped, so it is 0..10 when this test is reached.  The `< 0` versus `<= 0` distinction is real in the object and unobservable through this function's own inputs."
+  "why": "At `minpr == 0` the two arms differ only when `f25dc` is negative, and it cannot be: it is the sum of two bit-reversals of three-bit fields, one of them clamped, so it is 0..10 when this test is reached.  The `< 0` versus `<= 0` distinction is real in the object and unobservable through this function's own inputs.",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the down step is the up step's constant",
   "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
-  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;"
+  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the up step is the down step's constant",
   "find": "\t\t\tscale = (short)((scale * 0x47cf) >> 14);",
-  "replace": "\t\t\tscale = (short)((scale * 0x390a) >> 14);"
+  "replace": "\t\t\tscale = (short)((scale * 0x390a) >> 14);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the up loop keeps 32 bits like the down one",
   "find": "\t\t\tscale = (short)((scale * 0x47cf) >> 14);",
-  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;"
+  "replace": "\t\t\tscale = (scale * 0x47cf) >> 14;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the down loop truncates like the up one",
   "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
   "replace": "\t\t\tscale = (short)((scale * 0x390a) >> 14);",
   "equivalent": true,
-  "why": "The down step multiplies by 0.8912, so a short in gives a short out and the truncation the up loop needs can never fire here.  The asymmetry is still worth reproducing -- see D51 -- but only one half of it is observable, and `the up loop keeps 32 bits like the down one` is the half that is."
+  "why": "The down step multiplies by 0.8912, so a short in gives a short out and the truncation the up loop needs can never fire here.  The asymmetry is still worth reproducing -- see D51 -- but only one half of it is observable, and `the up loop keeps 32 bits like the down one` is the half that is.",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the down loop runs one step too many",
   "find": "\t\tfor (n = 0; want > n; n = (short)(n + 1))",
-  "replace": "\t\tfor (n = 0; want >= n; n = (short)(n + 1))"
+  "replace": "\t\tfor (n = 0; want >= n; n = (short)(n + 1))",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the up loop runs one step too few",
   "find": "\t\tfor (n = want; n < 0; n = (short)(n + 1))",
-  "replace": "\t\tfor (n = want + 1; n < 0; n = (short)(n + 1))"
+  "replace": "\t\tfor (n = want + 1; n < 0; n = (short)(n + 1))",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the shift is 13, not 14",
   "find": "\t\t\tscale = (scale * 0x390a) >> 14;",
-  "replace": "\t\t\tscale = (scale * 0x390a) >> 13;"
+  "replace": "\t\t\tscale = (scale * 0x390a) >> 13;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the final multiply has no rounding term",
   "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
-  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b) >> 14);"
+  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b) >> 14);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the final multiply's rounding term is 0x1000",
   "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
-  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x1000) >> 14);"
+  "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x1000) >> 14);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the final multiply is skipped",
   "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
-  "replace": "\t*(short *)(m + 0x25d4) = (short)scale;"
+  "replace": "\t*(short *)(m + 0x25d4) = (short)scale;",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the first report prints the clamped addition",
   "find": "\t\t\t\t     (int)obj->f25dc);",
-  "replace": "\t\t\t\t     (int)extra);"
+  "replace": "\t\t\t\t     (int)extra);",
+  "fn": "settxlevel"
  },
  {
   "label": "txlevel: the second report prints the scale it just computed",
   "find": "\t\t\t\t     (int)*(short *)(m + 0x25d4), (int)want,",
-  "replace": "\t\t\t\t     (int)(short)((scale * 0x4b4b + 0x2000) >> 14),\n\t\t\t\t     (int)want,"
+  "replace": "\t\t\t\t     (int)(short)((scale * 0x4b4b + 0x2000) >> 14),\n\t\t\t\t     (int)want,",
+  "fn": "settxlevel"
  },
  {
   "label": "setuptxmit: the modulator gets the receive baud rate",
   "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),",
-  "replace": "\t\t\t  *(short *)(m + 0xaa96), *(short *)(m + 0xaa94),"
+  "replace": "\t\t\t  *(short *)(m + 0xaa96), *(short *)(m + 0xaa94),",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: carrier and pre-emphasis are transposed",
   "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
-  "replace": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa8a),\n\t\t\t  *(short *)(m + 0xaa94), pcm, 1);"
+  "replace": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa8a),\n\t\t\t  *(short *)(m + 0xaa94), pcm, 1);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the modulator is not fully reset",
   "find": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
-  "replace": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 0);"
+  "replace": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 0);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the V.90 flag is V.90 only",
   "find": "\tpcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);",
-  "replace": "\tpcm = (obj->v90_receiver != 0);"
+  "replace": "\tpcm = (obj->v90_receiver != 0);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the V.90 flag is both receivers",
   "find": "\tpcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);",
-  "replace": "\tpcm = (obj->v90_receiver != 0 && obj->k56flex_receiver != 0);"
+  "replace": "\tpcm = (obj->v90_receiver != 0 && obj->k56flex_receiver != 0);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the receiver flag cleared is 0x400",
   "find": "\trx->flags = (unsigned short)(rx->flags & ~0x800);",
-  "replace": "\trx->flags = (unsigned short)(rx->flags & ~0x400);"
+  "replace": "\trx->flags = (unsigned short)(rx->flags & ~0x400);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the receiver flag is set rather than cleared",
   "find": "\trx->flags = (unsigned short)(rx->flags & ~0x800);",
-  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x800);"
+  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x800);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the two states are transposed",
   "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_SSEG);\n\ths_setstate(obj, HS_TXSTATE, V34HS_WAIT);"
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_SSEG);\n\ths_setstate(obj, HS_TXSTATE, V34HS_WAIT);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the receive state goes to RECEIVE, not WAIT",
   "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;"
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit state goes to SBARSEG, not SSEG",
   "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->f25c0 = 0;"
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->f25c0 = 0;",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit flag word is set, not or-ed",
   "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
-  "replace": "\tobj->f25c2 = (short)0x200;"
+  "replace": "\tobj->f25c2 = (short)0x200;",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit flag bit is 0x100",
   "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
-  "replace": "\tobj->f25c2 = (short)(obj->f25c2 | 0x100);"
+  "replace": "\tobj->f25c2 = (short)(obj->f25c2 | 0x100);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: f25c0 is left alone",
   "find": "\tobj->f25c0 = 0;\n\tobj->f25c2",
   "replace": "\tobj->f25c2",
   "equivalent": true,
-  "why": "`txinit`, which this tail-calls, sets `f25c0` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field."
+  "why": "`txinit`, which this tail-calls, sets `f25c0` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field.",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the two transitions are printed before the modulator's line",
   "find": "\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);"
- },
- {
-  "note": "probeselect.  Three sections and they break differently: the power request is arithmetic, the normalisation is two widths of one comparison, and the ladder is fifteen thresholds over eleven bins that each originating arm falls through."
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~0x800);",
+  "fn": "v34setuptxmit"
  },
  {
   "label": "probe: the bit scan stops one bit early",
   "find": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> b)) == 0\n\t\t\t\t && b <= 9);",
-  "replace": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> b)) == 0\n\t\t\t\t && b <= 8);"
+  "replace": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> b)) == 0\n\t\t\t\t && b <= 8);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the bit scan starts at bit 31",
   "find": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> b)) == 0\n\t\t\t\t && b <= 9);",
-  "replace": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> (b - 1)))\n\t\t\t\t == 0 && b <= 9);"
+  "replace": "\t\t\t} while (((unsigned)snr_l2 & (0x80000000u >> (b - 1)))\n\t\t\t\t == 0 && b <= 9);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: a negative snr_l2 is scanned like any other",
   "find": "\t\tif (snr_l2 >= 0) {",
-  "replace": "\t\tif (1) {"
+  "replace": "\t\tif (1) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the numerator's rounding term is the denominator",
   "find": "\t\t\tratio = (((unsigned)snr_l2 << b)\n\t\t\t\t + ((unsigned)snr_l1 >> (11 - b))) / den;",
-  "replace": "\t\t\tratio = (((unsigned)snr_l2 << b)\n\t\t\t\t + ((unsigned)snr_l1 >> (10 - b))) / den;"
+  "replace": "\t\t\tratio = (((unsigned)snr_l2 << b)\n\t\t\t\t + ((unsigned)snr_l1 >> (10 - b))) / den;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the denominator is shifted by one more",
   "find": "\t\tden = (unsigned)snr_l1 >> (10 - b);",
-  "replace": "\t\tden = (unsigned)snr_l1 >> (11 - b);"
+  "replace": "\t\tden = (unsigned)snr_l1 >> (11 - b);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the divide is signed",
   "find": "\t\t\tratio = (((unsigned)snr_l2 << b)\n\t\t\t\t + ((unsigned)snr_l1 >> (11 - b))) / den;",
-  "replace": "\t\t\tratio = (unsigned)((((int)((unsigned)snr_l2 << b)\n\t\t\t\t + (int)((unsigned)snr_l1 >> (11 - b)))) / (int)den);"
+  "replace": "\t\t\tratio = (unsigned)((((int)((unsigned)snr_l2 << b)\n\t\t\t\t + (int)((unsigned)snr_l1 >> (11 - b)))) / (int)den);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: a zero snr_l1 is not special-cased",
   "find": "\tif (snr_l1 != 0) {\n\t\tshort b = 0;",
-  "replace": "\tif (snr_l1 != -1) {\n\t\tshort b = 0;"
+  "replace": "\tif (snr_l1 != -1) {\n\t\tshort b = 0;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB short-circuit is one lower",
   "find": "\tif (ratio > 0x18fff) {",
-  "replace": "\tif (ratio > 0x18ffe) {"
+  "replace": "\tif (ratio > 0x18ffe) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB short-circuit answers 100, not 1000",
   "find": "\t\tdbcnt = 1000;",
-  "replace": "\t\tdbcnt = 100;"
+  "replace": "\t\tdbcnt = 100;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB step is 1.25 rather than 1.2588",
   "find": "\t\t\tt = (t * 0x509 + 0x200) >> 10;",
-  "replace": "\t\t\tt = (t * 0x500 + 0x200) >> 10;"
+  "replace": "\t\t\tt = (t * 0x500 + 0x200) >> 10;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB step has no rounding term",
   "find": "\t\t\tt = (t * 0x509 + 0x200) >> 10;",
-  "replace": "\t\t\tt = (t * 0x509) >> 10;"
+  "replace": "\t\t\tt = (t * 0x509) >> 10;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB count starts from unity",
   "find": "\t\tunsigned t = 0x47d;",
-  "replace": "\t\tunsigned t = 0x400;"
+  "replace": "\t\tunsigned t = 0x400;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the dB loop is <=, not <",
   "find": "\t\twhile (t < ratio) {",
-  "replace": "\t\twhile (t <= ratio) {"
+  "replace": "\t\twhile (t <= ratio) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the gain reciprocal's numerator is 0x64000",
   "find": "\t\tint est = (g / 2 + 0x640000) / g;",
-  "replace": "\t\tint est = (g / 2 + 0x64000) / g;"
+  "replace": "\t\tint est = (g / 2 + 0x64000) / g;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the gain reciprocal has no rounding term",
   "find": "\t\tint est = (g / 2 + 0x640000) / g;",
-  "replace": "\t\tint est = 0x640000 / g;"
+  "replace": "\t\tint est = 0x640000 / g;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the estimate's clamp is signed",
   "find": "\t\tif ((unsigned)est > 0x4000)",
-  "replace": "\t\tif (est > 0x4000)"
+  "replace": "\t\tif (est > 0x4000)",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the estimate's clamp is 0x8000",
   "find": "\t\tif ((unsigned)est > 0x4000)\n\t\t\test = 0x4000;",
-  "replace": "\t\tif ((unsigned)est > 0x8000)\n\t\t\test = 0x8000;"
+  "replace": "\t\tif ((unsigned)est > 0x8000)\n\t\t\test = 0x8000;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the request keeps 32 bits",
   "find": "\t\treq = (short)(((unsigned)est * (unsigned)(int)dbcnt) >> 14);",
-  "replace": "\t\treq = (short)(((unsigned)est * (unsigned)(int)dbcnt) >> 13);"
+  "replace": "\t\treq = (short)(((unsigned)est * (unsigned)(int)dbcnt) >> 13);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the gain is read signed for the zero test",
   "find": "\tif (gain != 0) {",
-  "replace": "\tif ((short)gain > 0) {"
+  "replace": "\tif ((short)gain > 0) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the sensitive mechanism's bit is 0x20",
   "find": "\tif ((pcfg[0x50] & 0x10) == 0) {",
-  "replace": "\tif ((pcfg[0x50] & 0x20) == 0) {"
+  "replace": "\tif ((pcfg[0x50] & 0x20) == 0) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the two sensitive messages are transposed",
   "find": "\t\t\tdsplibs_debug_printf(\"Sensitive RX Power Reduction \"\n\t\t\t\t\t     \"mechanism disabled!\\r\\n\");",
-  "replace": "\t\t\tdsplibs_debug_printf(\"Sensitive RX Power Reduction \"\n\t\t\t\t\t     \"mechanism enabled!\\r\\n\");"
+  "replace": "\t\t\tdsplibs_debug_printf(\"Sensitive RX Power Reduction \"\n\t\t\t\t\t     \"mechanism enabled!\\r\\n\");",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the first sensitive threshold is 0x1f4",
   "find": "\t\tif ((unsigned)snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {",
-  "replace": "\t\tif ((unsigned)snr_l1 <= 0x1f4 && (m[0xa97e] & 0x80)) {"
+  "replace": "\t\tif ((unsigned)snr_l1 <= 0x1f4 && (m[0xa97e] & 0x80)) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the first sensitive threshold is signed",
   "find": "\t\tif ((unsigned)snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {",
-  "replace": "\t\tif (snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {"
+  "replace": "\t\tif (snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the second sensitive threshold is 0x3e8",
   "find": "\t\tif ((unsigned)snr_l1 <= 0x3e7 && (m[0xa97e] & 0x80)) {",
-  "replace": "\t\tif ((unsigned)snr_l1 <= 0x3e8 && (m[0xa97e] & 0x80)) {"
+  "replace": "\t\tif ((unsigned)snr_l1 <= 0x3e8 && (m[0xa97e] & 0x80)) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the two sensitive arms ask for each other's amount",
   "find": "\t\t\tprobe_ask(rx, msg, 7, 2, 9);",
-  "replace": "\t\t\tprobe_ask(rx, msg, 7, 2, 7);"
+  "replace": "\t\t\tprobe_ask(rx, msg, 7, 2, 7);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the deeper sensitive arm carries one field",
   "find": "\t\t\tprobe_ask(rx, msg, 7, 2, 9);",
-  "replace": "\t\t\tprobe_ask(rx, msg, 7, -1, 9);"
+  "replace": "\t\t\tprobe_ask(rx, msg, 7, -1, 9);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the shallower sensitive arm carries two",
   "find": "\t\t\tprobe_ask(rx, msg, 7, -1, 7);",
-  "replace": "\t\t\tprobe_ask(rx, msg, 7, 2, 7);"
+  "replace": "\t\t\tprobe_ask(rx, msg, 7, 2, 7);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the sensitive arms do not fall into the not-asking tail",
   "find": "\t\t\tprobe_ask(rx, msg, 7, -1, 7);\n\t\t\tgoto not_asking;",
-  "replace": "\t\t\tprobe_ask(rx, msg, 7, -1, 7);\n\t\t\tgoto band_edges;"
+  "replace": "\t\t\tprobe_ask(rx, msg, 7, -1, 7);\n\t\t\tgoto band_edges;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the ordinary arm ignores the INFO0 bit",
   "find": "\tif ((m[0xa97e] & 0x80) == 0)\n\t\tgoto not_asking;",
-  "replace": "\tif (0)\n\t\tgoto not_asking;"
+  "replace": "\tif (0)\n\t\tgoto not_asking;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the AGC headroom test is 0x1000",
   "find": "\tif (!(rx->agc_gain <= 0xfff && req != 0))",
-  "replace": "\tif (!(rx->agc_gain <= 0x1000 && req != 0))"
+  "replace": "\tif (!(rx->agc_gain <= 0x1000 && req != 0))",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the AGC headroom test is unsigned",
   "find": "\tif (!(rx->agc_gain <= 0xfff && req != 0))",
-  "replace": "\tif (!((unsigned short)rx->agc_gain <= 0xfff && req != 0))"
+  "replace": "\tif (!((unsigned short)rx->agc_gain <= 0xfff && req != 0))",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the two conditions are or-ed",
   "find": "\tif (!(rx->agc_gain <= 0xfff && req != 0))",
-  "replace": "\tif (!(rx->agc_gain <= 0xfff || req != 0))"
+  "replace": "\tif (!(rx->agc_gain <= 0xfff || req != 0))",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the request is capped at 8",
   "find": "\tif (req > 7)\n\t\treq = 7;",
-  "replace": "\tif (req > 8)\n\t\treq = 8;"
+  "replace": "\tif (req > 8)\n\t\treq = 8;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the request lands in the second field",
   "find": "\tmp_or(msg, 0, (unsigned)(unsigned short)\n\t\t      bitreverse((unsigned short)req, 3) << 5);",
-  "replace": "\tmp_or(msg, 0, (unsigned)(unsigned short)\n\t\t      bitreverse((unsigned short)req, 3) << 2);"
+  "replace": "\tmp_or(msg, 0, (unsigned)(unsigned short)\n\t\t      bitreverse((unsigned short)req, 3) << 2);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the request is not bit-reversed",
   "find": "\tmp_or(msg, 0, (unsigned)(unsigned short)\n\t\t      bitreverse((unsigned short)req, 3) << 5);",
-  "replace": "\tmp_or(msg, 0, (unsigned)(unsigned short)req << 5);"
+  "replace": "\tmp_or(msg, 0, (unsigned)(unsigned short)req << 5);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the AGC ceiling is 0x1b57",
   "find": "\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;",
-  "replace": "\tif (rx->f262 > 0x1b57)\n\t\trx->f262 = 0x1b57;"
+  "replace": "\tif (rx->f262 > 0x1b57)\n\t\trx->f262 = 0x1b57;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the AGC ceiling applies to the sensitive arms too",
   "find": "\tprobe_backoff(rx, n);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
-  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);"
+  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
+  "fn": "probe_ask"
  },
  {
   "label": "probe: the backoff step is the reduction one",
   "find": "\t\tg = (short)(((int)g * 0x47cf + 0x2000) >> 14);",
-  "replace": "\t\tg = (short)(((int)g * 0x390a + 0x2000) >> 14);"
+  "replace": "\t\tg = (short)(((int)g * 0x390a + 0x2000) >> 14);",
+  "fn": "probe_backoff"
  },
  {
   "label": "probe: the backoff has no rounding term",
   "find": "\t\tg = (short)(((int)g * 0x47cf + 0x2000) >> 14);",
-  "replace": "\t\tg = (short)(((int)g * 0x47cf) >> 14);"
+  "replace": "\t\tg = (short)(((int)g * 0x47cf) >> 14);",
+  "fn": "probe_backoff"
  },
  {
   "label": "probe: the minimum is kept signed",
   "find": "\t\t\tminshift = (unsigned short)bins[i].shift;",
-  "replace": "\t\t\tminshift = bins[i].shift;"
+  "replace": "\t\t\tminshift = bins[i].shift;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the minimum is compared unsigned",
   "find": "\t\tif ((int)bins[i].shift < minshift)",
-  "replace": "\t\tif ((int)(unsigned short)bins[i].shift < minshift)"
+  "replace": "\t\tif ((int)(unsigned short)bins[i].shift < minshift)",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the minimum starts at 0x21",
   "find": "\tminshift = 0x20;",
-  "replace": "\tminshift = 0x21;"
+  "replace": "\tminshift = 0x21;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the normalisation stops one bin short",
   "find": "\tfor (i = 0; i <= 24; i++)\n\t\tbins[i].shift = (short)((unsigned)(unsigned short)bins[i].shift",
-  "replace": "\tfor (i = 0; i <= 23; i++)\n\t\tbins[i].shift = (short)((unsigned)(unsigned short)bins[i].shift"
+  "replace": "\tfor (i = 0; i <= 23; i++)\n\t\tbins[i].shift = (short)((unsigned)(unsigned short)bins[i].shift",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the low group takes bin 5, not bin 6",
   "find": "\tlow = (unsigned short)(bins[2].shift + bins[3].shift\n\t\t\t       + bins[4].shift + bins[6].shift);",
-  "replace": "\tlow = (unsigned short)(bins[2].shift + bins[3].shift\n\t\t\t       + bins[4].shift + bins[5].shift);"
+  "replace": "\tlow = (unsigned short)(bins[2].shift + bins[3].shift\n\t\t\t       + bins[4].shift + bins[5].shift);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the high group takes bin 15, not bin 16",
   "find": "\thigh = (unsigned short)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[16].shift);",
-  "replace": "\thigh = (unsigned short)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[15].shift);"
+  "replace": "\thigh = (unsigned short)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[15].shift);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the sums are not truncated to sixteen bits",
   "find": "\thigh = (unsigned short)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[16].shift);",
-  "replace": "\thigh = (unsigned)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[16].shift);"
+  "replace": "\thigh = (unsigned)(bins[12].shift + bins[13].shift\n\t\t\t\t+ bins[14].shift + bins[16].shift);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: a zero low sum skips the test rather than becoming one",
   "find": "\tif (low == 0)\n\t\tlow = 1;",
-  "replace": "\tif (low == 0)\n\t\tlow = 0;"
+  "replace": "\tif (low == 0)\n\t\tlow = 0;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the deep reduction triggers at three times",
   "find": "\tif ((int)high > (int)(low * 4)) {",
-  "replace": "\tif ((int)high > (int)(low * 3)) {"
+  "replace": "\tif ((int)high > (int)(low * 3)) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the shallow reduction triggers at three times",
   "find": "\t} else if ((int)high > (int)(low * 2)) {",
-  "replace": "\t} else if ((int)high > (int)(low * 3)) {"
+  "replace": "\t} else if ((int)high > (int)(low * 3)) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the two reduction messages are transposed",
   "find": "\t\t\tdsplibs_debug_printf(\"V34PROBE, min = %d, i= %d, so \"\n\t\t\t\t\t     \"reducing band edge norm by 2\\n\",",
-  "replace": "\t\t\tdsplibs_debug_printf(\"V34PROBE, min = %d, i= %d, so \"\n\t\t\t\t\t     \"reducing band edge norm by 1\\n\","
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34PROBE, min = %d, i= %d, so \"\n\t\t\t\t\t     \"reducing band edge norm by 1\\n\",",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the reduction runs to bin 24",
   "find": "\t\tfor (i = 16; i <= 23; i++)\n\t\t\tif (bins[i].shift > 2)",
-  "replace": "\t\tfor (i = 16; i <= 24; i++)\n\t\t\tif (bins[i].shift > 2)"
+  "replace": "\t\tfor (i = 16; i <= 24; i++)\n\t\t\tif (bins[i].shift > 2)",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the deep reduction has no floor",
   "find": "\t\t\tif (bins[i].shift > 2)\n\t\t\t\tbins[i].shift = (short)(bins[i].shift - 2);",
-  "replace": "\t\t\tbins[i].shift = (short)(bins[i].shift - 2);"
+  "replace": "\t\t\tbins[i].shift = (short)(bins[i].shift - 2);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the shallow reduction's floor is two",
   "find": "\t\t\tif (bins[i].shift > 1)\n\t\t\t\tbins[i].shift = (short)(bins[i].shift - 1);",
-  "replace": "\t\t\tif (bins[i].shift > 2)\n\t\t\t\tbins[i].shift = (short)(bins[i].shift - 1);"
+  "replace": "\t\t\tif (bins[i].shift > 2)\n\t\t\t\tbins[i].shift = (short)(bins[i].shift - 1);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the forced-2400 flag is ignored",
   "find": "\tif (*(short *)(m + 0x359a) != 0)\n\t\tgoto rate_2400;",
-  "replace": "\tif (0)\n\t\tgoto rate_2400;"
+  "replace": "\tif (0)\n\t\tgoto rate_2400;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the role flag is 0x64",
   "find": "\trole = *(short *)(m + 0x359c);",
-  "replace": "\trole = (short)(*(short *)(m + 0x359c) == 0x64 ? 0x65 : 0);"
+  "replace": "\trole = (short)(*(short *)(m + 0x359c) == 0x64 ? 0x65 : 0);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's top threshold is 9",
   "find": "\tif (bins[24].shift > 10)\n\t\tgoto rate_3200;",
-  "replace": "\tif (bins[24].shift > 9)\n\t\tgoto rate_3200;"
+  "replace": "\tif (bins[24].shift > 9)\n\t\tgoto rate_3200;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's second bin is 24, not 23",
   "find": "\tif (bins[23].shift > 6)\n\t\tgoto rate_3200;",
-  "replace": "\tif (bins[24].shift > 6)\n\t\tgoto rate_3200;"
+  "replace": "\tif (bins[24].shift > 6)\n\t\tgoto rate_3200;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's low-bin threshold is 6",
   "find": "\tif (bins[1].shift > 5)\n\t\tgoto rate_3200;",
-  "replace": "\tif (bins[1].shift > 6)\n\t\tgoto rate_3200;"
+  "replace": "\tif (bins[1].shift > 6)\n\t\tgoto rate_3200;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's capability test is and-ed",
   "find": "\tif ((m[0xa9ea] & 1) == 0 && (m[0xa9ec] & 0xe0) == 0)",
-  "replace": "\tif ((m[0xa9ea] & 1) == 0 || (m[0xa9ec] & 0xe0) == 0)"
+  "replace": "\tif ((m[0xa9ea] & 1) == 0 || (m[0xa9ec] & 0xe0) == 0)",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's carrier is 3200's",
   "find": "\t*tx_carrier = 0x7a7;",
-  "replace": "\t*tx_carrier = 0x780;"
+  "replace": "\t*tx_carrier = 0x780;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's preemphasis nibble is not shifted",
   "find": "\t*tx_preemp = (short)bitreverse((unsigned short)\n\t\t\t\t       ((*(unsigned short *)(m + 0xa9ea) >> 1)\n\t\t\t\t\t& 0xf), 4);",
-  "replace": "\t*tx_preemp = (short)bitreverse((unsigned short)\n\t\t\t\t       ((*(unsigned short *)(m + 0xa9ea) >> 2)\n\t\t\t\t\t& 0xf), 4);"
+  "replace": "\t*tx_preemp = (short)bitreverse((unsigned short)\n\t\t\t\t       ((*(unsigned short *)(m + 0xa9ea) >> 2)\n\t\t\t\t\t& 0xf), 4);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429's originating message bit is 0x60",
   "find": "\t\tmp_or(msg, 8, 0xe0);",
-  "replace": "\t\tmp_or(msg, 8, 0x60);"
+  "replace": "\t\tmp_or(msg, 8, 0x60);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3429 returns rather than falling through",
   "find": "\t\tmp_or(msg, 7, (unsigned)(unsigned short)\n\t\t\t      bitreverse((unsigned short)idx, 4) << 1);\n\t\tgoto rate_3200;",
-  "replace": "\t\tmp_or(msg, 7, (unsigned)(unsigned short)\n\t\t\t      bitreverse((unsigned short)idx, 4) << 1);\n\t\treturn;"
+  "replace": "\t\tmp_or(msg, 7, (unsigned)(unsigned short)\n\t\t\t      bitreverse((unsigned short)idx, 4) << 1);\n\t\treturn;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's band-edge bin is 21, not 22",
   "find": "rate_3200:\n\te22 = bins[22].shift;",
-  "replace": "rate_3200:\n\te22 = bins[21].shift;"
+  "replace": "rate_3200:\n\te22 = bins[21].shift;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's originating quality split is at 6",
   "find": "\t\tif (bins[23].shift > 7) {",
-  "replace": "\t\tif (bins[23].shift > 6) {"
+  "replace": "\t\tif (bins[23].shift > 6) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's originating flag is set below 6",
   "find": "\t\tif (bins[23].shift <= 5)\n\t\t\tmp_or(msg, 6, 0x40);",
-  "replace": "\t\tif (bins[23].shift <= 6)\n\t\t\tmp_or(msg, 6, 0x40);"
+  "replace": "\t\tif (bins[23].shift <= 6)\n\t\t\tmp_or(msg, 6, 0x40);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's carrier choice is inverted",
   "find": "\t\t*tx_carrier = (short)((m[0xa9e8] & 0x40) ? 0x780 : 0x725);",
-  "replace": "\t\t*tx_carrier = (short)((m[0xa9e8] & 0x40) ? 0x725 : 0x780);"
+  "replace": "\t\t*tx_carrier = (short)((m[0xa9e8] & 0x40) ? 0x725 : 0x780);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's receive carrier threshold is 6",
   "find": "\t\tif (bins[23].shift > 5) {\n\t\t\t*rx_carrier = 0x725;",
-  "replace": "\t\tif (bins[23].shift > 6) {\n\t\t\t*rx_carrier = 0x725;"
+  "replace": "\t\tif (bins[23].shift > 6) {\n\t\t\t*rx_carrier = 0x725;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3200's two carrier descriptors are transposed",
   "find": "\t\tif (bins[23].shift > 5) {\n\t\t\t*rx_carrier = 0x725;\n\t\t\t*rx_cdesc = c1829;",
-  "replace": "\t\tif (bins[23].shift > 5) {\n\t\t\t*rx_carrier = 0x725;\n\t\t\t*rx_cdesc = c1920;"
+  "replace": "\t\tif (bins[23].shift > 5) {\n\t\t\t*rx_carrier = 0x725;\n\t\t\t*rx_cdesc = c1920;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's band-edge bin is 22, not 21",
   "find": "rate_3000:\n\tif (bins[21].shift > 6)",
-  "replace": "rate_3000:\n\tif (bins[22].shift > 6)"
+  "replace": "rate_3000:\n\tif (bins[22].shift > 6)",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's originating codes are transposed",
   "find": "\t\t\tmp_or(msg, 5, (unsigned)((e <= 6) ? 1u : 2u));",
-  "replace": "\t\t\tmp_or(msg, 5, (unsigned)((e <= 6) ? 2u : 1u));"
+  "replace": "\t\t\tmp_or(msg, 5, (unsigned)((e <= 6) ? 2u : 1u));",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's originating extra flag needs only one test",
   "find": "\t\tif (e <= 5 && bins[2].shift <= 5)\n\t\t\tmp_or(msg, 5, 0x80);",
-  "replace": "\t\tif (e <= 5)\n\t\t\tmp_or(msg, 5, 0x80);"
+  "replace": "\t\tif (e <= 5)\n\t\t\tmp_or(msg, 5, 0x80);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's capability test uses 0x40",
   "find": "\tif ((m[0xa9e6] & 7) != 0 || (m[0xa9e8] & 0x80) != 0) {",
-  "replace": "\tif ((m[0xa9e6] & 7) != 0 || (m[0xa9e8] & 0x40) != 0) {"
+  "replace": "\tif ((m[0xa9e6] & 7) != 0 || (m[0xa9e8] & 0x40) != 0) {",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's receive carrier test is and-ed",
   "find": "\t\tif (bins[22].shift > 5 || bins[2].shift > 5) {\n\t\t\t*rx_carrier = 0x708;",
-  "replace": "\t\tif (bins[22].shift > 5 && bins[2].shift > 5) {\n\t\t\t*rx_carrier = 0x708;"
+  "replace": "\t\tif (bins[22].shift > 5 && bins[2].shift > 5) {\n\t\t\t*rx_carrier = 0x708;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2800's band-edge bin is 19, not 20",
   "find": "rate_2800:\n\te20 = bins[20].shift;",
-  "replace": "rate_2800:\n\te20 = bins[19].shift;"
+  "replace": "rate_2800:\n\te20 = bins[19].shift;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2800's originating flag tests bin 22",
   "find": "\t\tif (bins[20].shift <= 5 && bins[2].shift <= 5)\n\t\t\tmp_or(msg, 3, 1);",
-  "replace": "\t\tif (bins[22].shift <= 5 && bins[2].shift <= 5)\n\t\t\tmp_or(msg, 3, 1);"
+  "replace": "\t\tif (bins[22].shift <= 5 && bins[2].shift <= 5)\n\t\t\tmp_or(msg, 3, 1);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2800's originating index keeps five bits",
   "find": "\t\tmp_or(msg, 4,\n\t\t      ((unsigned)(unsigned short)\n\t\t       bitreverse((unsigned short)idx, 4) & 0xf) << 4);",
   "replace": "\t\tmp_or(msg, 4,\n\t\t      ((unsigned)(unsigned short)\n\t\t       bitreverse((unsigned short)idx, 4) & 0x1f) << 4);",
   "equivalent": true,
-  "why": "`bitreverse(v, 4)` takes bit 0 and then shifts three more times, so its result is 0..15 and the fifth bit the wider mask would keep can never be set.  The mask is written as 0xf because the object's is."
+  "why": "`bitreverse(v, 4)` takes bit 0 and then shifts three more times, so its result is 0..15 and the fifth bit the wider mask would keep can never be set.  The mask is written as 0xf because the object's is.",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2800's carrier is chosen from a9e4",
   "find": "\t*tx_carrier = (short)((m[0xa9e2] & 1) ? 0x74b : 0x690);",
-  "replace": "\t*tx_carrier = (short)((m[0xa9e4] & 1) ? 0x74b : 0x690);"
+  "replace": "\t*tx_carrier = (short)((m[0xa9e4] & 1) ? 0x74b : 0x690);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2800's preemphasis nibble is the low one",
   "find": "\t\tbitreverse((unsigned short)\n\t\t\t   ((*(unsigned short *)(m + 0xa9e4) >> 4) & 0xf), 4);",
-  "replace": "\t\tbitreverse((unsigned short)\n\t\t\t   (*(unsigned short *)(m + 0xa9e4) & 0xf), 4);"
+  "replace": "\t\tbitreverse((unsigned short)\n\t\t\t   (*(unsigned short *)(m + 0xa9e4) & 0xf), 4);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2400's carrier bit is 8",
   "find": "\t*tx_carrier = (short)((m[0xa9de] & 4) ? 0x708 : 0x640);",
-  "replace": "\t*tx_carrier = (short)((m[0xa9de] & 8) ? 0x708 : 0x640);"
+  "replace": "\t*tx_carrier = (short)((m[0xa9de] & 8) ? 0x708 : 0x640);",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2400's preemphasis takes three bits from a9de",
   "find": "\t\t\t   (((*(unsigned short *)(m + 0xa9de) & 3) << 2)\n\t\t\t    | ((*(unsigned short *)(m + 0xa9e0) & 0xc0) >> 6)),",
   "replace": "\t\t\t   (((*(unsigned short *)(m + 0xa9de) & 7) << 2)\n\t\t\t    | ((*(unsigned short *)(m + 0xa9e0) & 0xc0) >> 6)),",
   "equivalent": true,
-  "why": "The extra bit lands at bit 4 of the value handed to `bitreverse(v, 4)`, which reverses bits 0..3 and drops everything above them -- so widening the mask changes the argument and not the answer.  Same argument as the 2800 index above, from the other end of the call."
+  "why": "The extra bit lands at bit 4 of the value handed to `bitreverse(v, 4)`, which reverses bits 0..3 and drops everything above them -- so widening the mask changes the argument and not the answer.  Same argument as the 2800 index above, from the other end of the call.",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2400's capability mask is 0x3e",
   "find": "\tif ((*(unsigned short *)(m + 0xa9e0) & 0x3c) == 0)\n\t\treturn;",
-  "replace": "\tif ((*(unsigned short *)(m + 0xa9e0) & 0x3e) == 0)\n\t\treturn;"
+  "replace": "\tif ((*(unsigned short *)(m + 0xa9e0) & 0x3e) == 0)\n\t\treturn;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the search reference is bin 3",
@@ -1001,71 +1192,85 @@
  {
   "label": "probe: the search reads the bins' shift, not their energy",
   "find": "\tshort ref = bins[PROBE_REF_BIN].energy;\n\tshort x = bins[n].energy;",
-  "replace": "\tshort ref = bins[PROBE_REF_BIN].shift;\n\tshort x = bins[n].shift;"
+  "replace": "\tshort ref = bins[PROBE_REF_BIN].shift;\n\tshort x = bins[n].shift;",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the search keeps 32 bits",
   "find": "\t\tx = (short)(((int)x * k) >> 14);",
-  "replace": "\t\tx = (short)(((int)x * k) >> 13);"
+  "replace": "\t\tx = (short)(((int)x * k) >> 13);",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the search's comparison includes equality",
   "find": "\t\tif (x > ref) {",
-  "replace": "\t\tif (x >= ref) {"
+  "replace": "\t\tif (x >= ref) {",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the search runs one step further",
   "find": "\t\tif (i > 9) {",
-  "replace": "\t\tif (i > 10) {"
+  "replace": "\t\tif (i > 10) {",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the search starts from four",
   "find": "\tshort i = 5;",
-  "replace": "\tshort i = 4;"
+  "replace": "\tshort i = 4;",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the search's early exit reports the un-advanced counter",
   "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);\n\t\t\treturn i;",
-  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)(short)(i - 1),\n\t\t\t\t    (int)baud);\n\t\t\treturn (short)(i - 1);"
+  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)(short)(i - 1),\n\t\t\t\t    (int)baud);\n\t\t\treturn (short)(i - 1);",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: the two index-10 reports are the same string",
   "find": "\t\t\t\t    \"V34PREEMPHASIS, - index is 10, \"\n\t\t\t\t    \"baudrate= %d \\n\", (int)baud);",
-  "replace": "\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);"
+  "replace": "\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);",
+  "fn": "probe_preemph"
  },
  {
   "label": "probe: 3429's search constant is 3200's",
   "find": "\t\tidx = probe_preemph(bins, 22, 0x6626, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
-  "replace": "\t\tidx = probe_preemph(bins, 22, 0x639f, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,"
+  "replace": "\t\tidx = probe_preemph(bins, 22, 0x639f, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 3000's search bin is 20",
   "find": "\t\tidx = probe_preemph(bins, 19, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
-  "replace": "\t\tidx = probe_preemph(bins, 20, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,"
+  "replace": "\t\tidx = probe_preemph(bins, 20, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
+  "fn": "probeselect"
  },
  {
   "label": "probe: 2400's search constant is 2800's",
   "find": "\t\tidx = probe_preemph(bins, 18, 0x7da7, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemph(msg, idx);\n\t\treturn;",
-  "replace": "\t\tidx = probe_preemph(bins, 18, 0x6789, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemph(msg, idx);\n\t\treturn;"
+  "replace": "\t\tidx = probe_preemph(bins, 18, 0x6789, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemph(msg, idx);\n\t\treturn;",
+  "fn": "probeselect"
  },
  {
   "label": "probe: the shared tail's two halves are transposed",
   "find": "\tmp_or(msg, 1, rev >> 2);\n\tmp_or(msg, 2, (rev << 6) & 0xff);",
-  "replace": "\tmp_or(msg, 2, rev >> 2);\n\tmp_or(msg, 1, (rev << 6) & 0xff);"
+  "replace": "\tmp_or(msg, 2, rev >> 2);\n\tmp_or(msg, 1, (rev << 6) & 0xff);",
+  "fn": "mp_put_preemph"
  },
  {
   "label": "probe: the shared tail shifts by five",
   "find": "\tmp_or(msg, 2, (rev << 6) & 0xff);",
-  "replace": "\tmp_or(msg, 2, (rev << 5) & 0xff);"
+  "replace": "\tmp_or(msg, 2, (rev << 5) & 0xff);",
+  "fn": "mp_put_preemph"
  },
  {
   "label": "probe: the shared tail does not reverse",
   "find": "\tunsigned rev = (unsigned short)bitreverse((unsigned short)idx, 4);",
-  "replace": "\tunsigned rev = (unsigned short)idx;"
+  "replace": "\tunsigned rev = (unsigned short)idx;",
+  "fn": "mp_put_preemph"
  },
  {
   "label": "probe: the message is not cleared first",
   "find": "\tfor (i = 0; i <= 9; i++)\n\t\tmsg[i] = 0;",
-  "replace": "\tfor (i = 0; i <= 8; i++)\n\t\tmsg[i] = 0;"
+  "replace": "\tfor (i = 0; i <= 8; i++)\n\t\tmsg[i] = 0;",
+  "fn": "probeselect"
  }
 ]

@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#######...........................]  19.6%    143704 bytes, 377 symbols
-  tested      [##################################] 100.0%    143691 bytes, 376 of 377 that can be
+  translated  [#######...........................]  21.7%    159739 bytes, 417 symbols
+  tested      [##################################] 100.0%    159718 bytes, 412 of 417 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -16,8 +16,18 @@ dsplibs.o reconstruction coverage
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 18 of ours (7987 bytes).
 
+  defined here only IN PART, and so counted in NEITHER figure
+  above -- the whole symbol size would land in `translated` the
+  moment a definition exists, which for a function being written
+  one dispatch case at a time is a claim nobody made:
+    v34handshak                     61541 bytes   landed one dispatch arm at a time (#56-#58); an arm nobody has written calls abort
+
   translated, alias exists, and NOT tested:
     _ZN5QueueIfE5resetEv                             13 bytes
+    _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
+    _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
+    _ZN15K56FlexFloModem21enterPhase3FullDuplexEv      1 bytes
+    _ZN15K56FlexFloModem14setMinMaxRatesEii           1 bytes
 
   file-local and NOT aliasable, so reached through a caller if at
   all: each of these names is used by more than one translation
@@ -43,19 +53,44 @@ dsplibs.o reconstruction coverage
   either a helper split out of a larger function, or drift:
     _ZN10GenericIIRIfdE10compactOutEv
     _ZN10GenericIIRIfdE9compactInEv
+    hs_get
+    hs_put
+    hs_setstate
+    v34handshak_txblock
+    v34handshak_unwritten
+    v34handshak_unwritten_reset
+    v34tx1_dataxmit
+    v34tx1_exmit
+    v34tx1_jatxmit
+    v34tx1_jtxmit
+    v34tx1_k56jatxmit
+    v34tx1_moh_silence
+    v34tx1_ppseg
+    v34tx1_sbarseg
+    v34tx1_silence
+    v34tx1_sseg
+    v34tx1_tone_ab
+    v34tx1_trnseg4
+    v34tx1_trnseg4a
+    v34tx1_tx_dpsk
+    v34tx1_tx_l1
+    v34tx1_txlevel
+    v34tx1_txmd
+    v34tx1_xmit0
+    v34tx1_xmitmp
     v8_handshak_agc
     v8_handshak_demod
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           302079 bytes   775 symbols
+    VPcmV34Main.cpp +72                           290315 bytes   739 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
-    V34hshak.c +13                                 62569 bytes     2 symbols
+    V34hshak.c +13                                 61541 bytes     1 symbols
     V32mod.c +39                                   55694 bytes   119 symbols
     Dialer.c +18                                   16982 bytes    53 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
-    b103.c +2                                       8431 bytes    33 symbols
     Beepgen.c +3                                    7791 bytes    31 symbols
     Fdspkrnl.c +13                                  7691 bytes    30 symbols
+    b103.c +2                                       5188 bytes    30 symbols
     class1.c                                        4626 bytes    14 symbols
     vpcm.c                                          2883 bytes     5 symbols
     class1rx.c                                      2495 bytes     5 symbols

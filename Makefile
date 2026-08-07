@@ -105,8 +105,12 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # 32-bit libstdc++ headers are typically absent on a 64-bit host.
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++
 
+# v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
+# here rather than inside one test file because #56-#58 are sixteen tests over
+# the same object, and a fixture each of them copies is a fixture sixteen of
+# them will drift.  It costs every other binary some .bss and nothing else.
 HARNESS    := test/harness/harness.c test/harness/runtime.c \
-              test/harness/fakedp.c
+              test/harness/fakedp.c test/harness/v34hsstep.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
@@ -339,6 +343,7 @@ debugcov:
 #         xargs -I{} tools/refcheck.py --since {}
 refs:
 	@$(PYTHON) tools/refcheck.py
+	@$(PYTHON) tools/anchorcheck.py
 
 # Everything a phase boundary is supposed to check, in one target.
 #
@@ -357,6 +362,21 @@ phase: test check64 interop coverage debugcov
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --
 # this tier answers "is it a correct Bell 103 modem", which the blob cannot be
 # the judge of.  Needs libspandsp-dev.
+# THE 64-BIT LINK NEEDS THE C++ HALF OF src/ TOO, since `v34handshak`'s
+# microstate arm 51 calls `V34SetINFO1aBits` and that lives in a .cpp.  It is
+# the tree's first .c -> .cpp reference and it is the object's, not a choice
+# here: 0x6ba1a is a call and inlining the callee instead would put a second
+# copy of 1,401 bytes next to the one `t_v34info1a.c` already sweeps.
+#
+# Objects and not sources on the link line, because `g++` would compile the
+# .c half as C++.  No -lstdc++: CXXFLAGS is -fno-exceptions -fno-rtti
+# -nostdinc++ and the reconstruction uses no runtime.
+CXXOBJ64   := $(patsubst src/%.cpp,$(BUILD)/64/%.o,$(CXXSRC))
+
+$(BUILD)/64/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
 SPANDSP     := third_party/spandsp
 SPANDSP_LIB := $(SPANDSP)/src/.libs/libspandsp.a
@@ -383,43 +403,44 @@ interop: $(BUILD)/test/t_spandsp_b103 $(BUILD)/test/t_spandsp_v23 \
 # V.23, four directions: two channels each way.  Same 64-bit build as the
 # Bell 103 interop test and for the same reason.
 $(BUILD)/test/t_spandsp_v23: test/interop/t_spandsp_v23.c \
-        test/interop/runtime64.c $(SRC) | $(BUILD)
+        test/interop/runtime64.c $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v23.c \
-	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
+	    test/interop/runtime64.c $(SRC) $(CXXOBJ64) $(SPANDSP_LIB) -lm
 
 V8NEG_SRC  := test/interop/v8neg.c test/interop/v8spandsp.c \
               test/interop/runtime64.c
 
 $(BUILD)/test/t_spandsp_v8neg: test/interop/t_spandsp_v8neg.c \
-        $(V8NEG_SRC) $(SRC) | $(BUILD)
+        $(V8NEG_SRC) $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -Itest/interop -o $@ \
-	    test/interop/t_spandsp_v8neg.c $(V8NEG_SRC) $(SRC) \
+	    test/interop/t_spandsp_v8neg.c $(V8NEG_SRC) $(SRC) $(CXXOBJ64) \
 	    $(SPANDSP_LIB) -lm
 
 $(BUILD)/test/t_spandsp_v8sock: test/interop/t_spandsp_v8sock.c \
-        $(V8NEG_SRC) $(SRC) | $(BUILD)
+        $(V8NEG_SRC) $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -Itest/interop -o $@ \
-	    test/interop/t_spandsp_v8sock.c $(V8NEG_SRC) $(SRC) \
+	    test/interop/t_spandsp_v8sock.c $(V8NEG_SRC) $(SRC) $(CXXOBJ64) \
 	    $(SPANDSP_LIB) -lm
 
 # The peer, twice.  64-bit against the reconstruction...
 $(BUILD)/test/v8peer: test/interop/v8peer.c test/interop/v8neg.c \
-        test/interop/runtime64.c $(SRC) | $(BUILD)
+        test/interop/runtime64.c $(SRC) $(CXXOBJ64) | $(BUILD)
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -no-pie -Itest/interop -o $@ test/interop/v8peer.c \
-	    test/interop/v8neg.c test/interop/runtime64.c $(SRC) -lm
+	    test/interop/v8neg.c test/interop/runtime64.c $(SRC) \
+	    $(CXXOBJ64) -lm
 
 # ...and 32-bit against the blob, which is the only way SpanDSP can be made
 # to talk to the original: it is i386 and the SpanDSP here is amd64, so they
@@ -432,22 +453,22 @@ $(BUILD)/test/v8peer_ref: test/interop/v8peer.c test/interop/v8neg.c \
 	    test/interop/v8peer.c test/interop/v8neg.c \
 	    $(OBJ) $(HARNESS_OBJ) $(REF) -lm
 
-$(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c $(SRC) | $(BUILD)
+$(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
 	    exit 1; }
 	@mkdir -p $(BUILD)/test
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v8.c \
-	    test/interop/runtime64.c $(SRC) $(SPANDSP_LIB) -lm
+	    test/interop/runtime64.c $(SRC) $(CXXOBJ64) $(SPANDSP_LIB) -lm
 
-$(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) | $(BUILD)
+$(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	  echo "$(SPANDSP_LIB) not built -- see third_party/README.md"; \
 	  echo "(do NOT substitute the distro libspandsp: 0.0.6 has the"; \
 	  echo " Bell 103 channels swapped)"; exit 1; }
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ $(INTEROP_SRC) $(SRC) \
-	    $(SPANDSP_LIB) -lm
+	    $(CXXOBJ64) $(SPANDSP_LIB) -lm
 
 # The reconstruction must not depend on 32-bit; only the reference does.
 check64:

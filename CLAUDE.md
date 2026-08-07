@@ -178,6 +178,16 @@ Task numbers are not safe across sessions either: two task stores exist whose
 
 ## Traps
 
+- **A `.c` may not call anything defined in a `.cpp`.** It compiles, it links
+  32-bit, `make one` passes -- and `make phase` fails at `t_spandsp_v23` with
+  an undefined reference, because the six interop binaries link only `$(SRC)`,
+  which is every `.c` under `src/`, with no C++ in the list. So "no mangled
+  symbol in it, therefore C" decides whether a function can be *compiled* as
+  C, not which file it can live in. Finding 333.
+- **A relocation on a call proves nothing about the translation unit; its
+  ABSENCE does.** A resolved PC-relative displacement with no relocation means
+  the target is `LOCAL` and in the same TU. A relocation being present only
+  means the symbol is `GLOBAL`. Findings 306 and 333.
 - `tools/dis.py` shadows the standard library's `dis`, which `inspect`
   imports. A tool in `tools/` that reaches for pyelftools dies with
   `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,

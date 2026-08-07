@@ -56,8 +56,10 @@
  },
  {
   "label": "corrupt 'CALLPROG: ^ encountered.\\\\n'",
-  "find": "\"CALLPROG: ^ encountered.\\n\"",
-  "replace": "\"XXCALLPROG: ^ encountered.\\n\""
+  "find": "\t\t\tcase 0:\n\t\t\t\tcp->calling_tone_armed = 0;\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\"CALLPROG: ^ encountered.\\n\"",
+  "replace": "\t\t\tcase 0:\n\t\t\t\tcp->calling_tone_armed = 0;\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\"XXCALLPROG: ^ encountered.\\n\"",
+  "fn": "CALLPROG_Progress",
+  "note": "Anchor carries its `case 0:` and the four lines to the call.  Master's own commit f0831c0 put this message in TWO arms of the calling_tone_mode switch (case 0 and case 2) without re-anchoring, so it matched twice and was UNUSABLE -- which does not fail a run (finding 347).  Master's anchorcheck.py had no uniqueness check; finding 540's does, and caught it on contact at the merge."
  },
  {
   "label": "corrupt 'CALLPROG: Wait dial '",

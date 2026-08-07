@@ -52,6 +52,7 @@ import collections
 import glob
 import os
 import re
+import struct
 import subprocess
 import sys
 
@@ -124,6 +125,49 @@ def owner(by_sec, ndx, addr):
     return best
 
 
+#
+# THE ADDEND IS NOT IN THE RELOCATION.
+#
+# This object is ELF32 REL, not RELA: `r_addend` does not exist, and the
+# addend is the value already stored at the relocation site.  `readelf -r`
+# therefore prints no `+ 0x...` column for any of the 4,794 relocations here
+# that name a section rather than a symbol -- and reading the addend as zero
+# resolves every one of them to whatever symbol sits at offset 0 of that
+# section.  In this blob that is `prop_dp_init` for `.text`,
+# `_ZZN5V92CP10bitsToInfoEhE5gamma` for `.bss` and `prop_dsp_version` for
+# `.rodata`, which is why those three used to appear in every closure the
+# tool computed.  All 4,794 are R_386_32, so the stored value IS the target
+# offset within the section; no PC-relative correction arises.  Finding 330.
+#
+def section_file_offsets(obj):
+    """{section index: (file offset, size)} straight out of the ELF header."""
+    with open(obj, "rb") as f:
+        blob = f.read()
+    if blob[:4] != b"\x7fELF" or blob[4] != 1:
+        return {}, blob
+    shoff, shentsize, shnum = struct.unpack_from("<I", blob, 0x20)[0], \
+        struct.unpack_from("<H", blob, 0x2e)[0], \
+        struct.unpack_from("<H", blob, 0x30)[0]
+    out = {}
+    for i in range(shnum):
+        base = shoff + i * shentsize
+        sh_type, _fl, _ad, sh_off, sh_size = struct.unpack_from(
+            "<IIIII", blob, base + 4)
+        out[i] = (sh_off, sh_size, sh_type)
+    return out, blob
+
+
+def inplace_addend(shdrs, blob, ndx, off):
+    """The four bytes at `off` in section `ndx`, or None if unreadable."""
+    got = shdrs.get(ndx)
+    if not got:
+        return None
+    sh_off, sh_size, sh_type = got
+    if sh_type == 8 or off + 4 > sh_size:        # SHT_NOBITS, or past the end
+        return None
+    return struct.unpack_from("<i", blob, sh_off + off)[0]
+
+
 def relocations(obj, sec):
     """[(from_section_index, target_symbol_or_section, addend)] for the object.
 
@@ -163,6 +207,7 @@ def build_graph():
     syms = symbols(BLOB)
     by_sec = address_index(syms)
     name_to_ndx = {v[0]: k for k, v in sec.items()}
+    shdrs, raw = section_file_offsets(BLOB)
 
     # Which symbol each relocation sits INSIDE, so an edge has a source.
     # readelf gives the offset within the section, so the same address
@@ -183,7 +228,8 @@ def build_graph():
         f = line.split()
         if cur is None or len(f) < 5 or not re.match(r"^[0-9a-f]+$", f[0]):
             continue
-        src = owner(by_sec, cur, int(f[0], 16))
+        roff = int(f[0], 16)
+        src = owner(by_sec, cur, roff)
         if src is None:
             continue
         tgt, add = f[4], 0
@@ -194,6 +240,11 @@ def build_graph():
         if tgt in syms:
             edges[src].add(tgt)
         elif tgt in name_to_ndx:                 # a section, so resolve it
+            if not m:                            # REL: the addend is in place
+                got = inplace_addend(shdrs, raw, cur, roff)
+                if got is None:
+                    continue
+                add = got
             got = owner(by_sec, name_to_ndx[tgt], add)
             if got:
                 edges[src].add(got)
@@ -226,13 +277,27 @@ def kind_of(syms, sec, name):
     return typ.lower()
 
 
-def expand(roots, syms, edges):
+#
+# THE WALK STOPS AT WHAT IS ALREADY WRITTEN.
+#
+# A link closure asks what a batch will leave undefined.  A symbol `src/`
+# already defines cannot leave anything undefined -- the tree builds, so its
+# own callees are satisfied -- and the blob's version of it is not the one
+# that will be linked.  Walking through it imports the BLOB's callees, which
+# is how one call to the tree's own `edprintf` used to drag `call_op` and the
+# `dp_*_init` family into every closure computed here.  Roots are always
+# expanded, so asking about a function that is already written still works.
+# Finding 330.
+#
+def expand(roots, syms, edges, have=()):
     seen, stack = set(), list(roots)
     while stack:
         n = stack.pop()
         if n in seen or n not in syms:
             continue
         seen.add(n)
+        if n in have and n not in roots:
+            continue
         stack += [c for c in edges.get(n, ()) if c not in seen]
     return seen
 
@@ -271,6 +336,22 @@ def main():
     syms, sec, edges = build_graph()
     have = ours()
 
+    #
+    # AN UNBUILT TREE MAKES EVERY CLOSURE LOOK ENORMOUS.
+    #
+    # `ours()` reads what src/ defines out of build/src/**/*.o, so in a fresh
+    # `git worktree add` -- where build/ does not exist yet -- the have-set is
+    # empty and everything this tree has already written is reported missing.
+    # One agent read 21 symbols and 9,187 bytes for a function whose real
+    # closure is itself.  The answer is not wrong so much as answering a
+    # different question, which is the worst kind.  Finding 271.
+    #
+    if not have:
+        sys.stderr.write(
+            "closure.py: build/src/**/*.o defines nothing, so NOTHING counts\n"
+            "            as already written and this closure is meaningless.\n"
+            "            Run `make` first.  (Finding 271.)\n")
+
     roots = []
     for spec in args.names:
         got = resolve(spec, syms)
@@ -278,7 +359,7 @@ def main():
             sys.exit("no symbol or class matching %r in %s" % (spec, BLOB))
         roots += got
 
-    reached = expand(roots, syms, edges)
+    reached = expand(roots, syms, edges, have)
     missing = sorted(n for n in reached if n not in have)
 
     if args.batch:

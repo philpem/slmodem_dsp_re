@@ -2288,6 +2288,95 @@ without it: bounded input, sixteen or fewer taps, coefficients of similar
 magnitude. A caller that violates any of those could see the difference, and
 the reconstruction is written the original's way regardless.
 
+## D59 ⚠ `v34handshak`'s per-sample dispatch does not terminate on an unhandled state
+
+`unmeasured` for reachability in a working modem.
+
+The transmit dispatch at 0x62966 is inside a loop whose test is the block its
+own default arm lands in (0x629e0), and the default advances nothing. So with
+the cursor at +0x221c below the limit at +0x2aa0 and a txstate outside the
+twenty-five the table has a body for, the function spins forever.
+
+Fifty-seven of the table's eighty-two entries are that default. Nothing in
+the object appears to put the transmit machine into one of them with the
+cursor low, so this is not believed to be reachable in service; it is
+trivially reachable from a test that writes the state word, which is why
+`test/harness/v34hsstep.c` arms a `SIGALRM` around every step. Finding 287.
+
+## D60 ~~⚠ The per-sample transmit loop's result is not a function of the object~~ RETRACTED
+
+`unmeasured` for what it actually reads.
+
+Stepping one sample of the per-sample transmit loop from two objects holding
+identical bytes at different addresses leaves them differing in the modulator
+at +0x2078..+0x25d1, for three of the nineteen txstates that have a body --
+and WHICH three changes when code that runs after the step is edited.
+
+Ruled out by experiment: our bring-up versus the blob's, 64 KB of scrubbed
+stack, a shared shaping buffer, past-the-end reads of the fixture's seed
+tables, and a short `preemp0`. Finding 289 has the detail. Whatever is left
+is read by the object and is not in the object, so the loop's output is not
+reproducible from its input alone.
+
+This blocks differential testing of table 1, which is #56. It does not affect
+table 2 or the microstate table.
+
+### RETRACTED -- it was a function of the object, and of where the fixture put it
+
+`test/harness/v34hsstep.c` gave side A a `struct v34_object` and side B an
+`unsigned char[]`, and the five blocks each object points at five more pairs
+of statics, all at addresses the linker chose. Two sides identical in every
+byte and in nothing else. One arena per side -- object and blocks at fixed
+offsets in a 64 KB-aligned block, side B's a byte copy of side A's whole
+arena -- and all nineteen of table 1's reachable targets compare, over
+twenty-four object fills, ten placements, five object skews and eight
+neighbourhoods, against 23 of those 24 fills failing on the old fixture.
+Bisected: it is the placement of the five BLOCKS, not of the object.
+Findings 319 and 322.
+
+The two facts this entry rested on were both correct. "Which txstates
+diverge moves when code that runs after the step is edited" is exactly what a
+layout dependence looks like when the layout is the linker's, and it was read
+as evidence about the object. This is the fifth retraction after D28, D34,
+D47 and D31, and the first where the defect was in the fixture that was
+looking for it.
+
+What is left of it is D61, which is much smaller.
+
+
+## D61 ⚠ What the per-sample transmit loop reads outside the object has not been named
+
+`unmeasured` -- the sensitivity is gone, the datum is not identified.
+
+D60 is retracted: table 1 compares once the two sides have congruent memory
+images (finding 319). What that does not do is say what the old layout was
+feeding the loop. The bounds measured while closing it (finding 322):
+
+- not within 32 KB of any block in either direction -- `V34HS_PADVARY` makes
+  each padding region differ between the sides and the sweep still agrees;
+- not an out-of-bounds WRITE either -- the step writes zero padding bytes on
+  all 43 cases;
+- not the object-to-block geometry, the absolute address, the alignment, the
+  object's own placement or the object's contents;
+- and not any one block's neighbourhood -- wrapping `shaped`, `pcm`, `cfg` or
+  `dummy` alone in the old fixture leaves every fill failing. It takes all
+  five together.
+
+**`sess` is the thread to pull.** It is the one single-block wrap that moved
+anything: five of eight fills failing where the other four left all eight.
+That is not a fix and it is not proof of anything on its own -- moving one
+block moves the layout, and this defect moves with the layout -- but it is the
+only signal in the bisect pointing at a particular block, `sess` is the
+largest of the five at 0x6200, and it is the one the object reaches through
++0x3548 on the way to a PCM receiver and the configuration at +0xac3c. Anyone
+who takes this further should start there.
+
+So the half of the fixture responsible is named -- the placement of the five
+blocks the object points at -- and the datum it was feeding the loop is not.
+This does not block #56: the route compares, and every one of table 1's
+targets is testable through it. It is filed so that a case which starts
+disagreeing again is looked for here rather than in the reconstruction.
+
 ## D62 ⚠ Three self-allocating constructors check a `sysdep_malloc` the original does not
 
 **Modules** `src/dsp/fpm_mtd.c` (`FPM_MTD_create`), `src/dsp/fpm_tone.c`
@@ -2346,3 +2435,4 @@ matching `test`/`je` in the first dozen instructions.
 
 `unmeasured` — whether an allocation of this size fails in service is a
 question about the host, not about these three functions.
+

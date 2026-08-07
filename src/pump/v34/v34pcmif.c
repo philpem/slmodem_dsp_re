@@ -566,6 +566,39 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 }
 
 /*
+ * The two renegotiation counters, each an increment and nothing else.
+ *
+ * `datapumpv34` is the only caller of either in the object.  It calls the
+ * local one on both of the renegotiations it starts itself -- the step down
+ * at 0x71d12 and the step up at 0x71ba7 -- and the remote one at 0x71c95, on
+ * the branch the receiver's +0x122 bit 5 selects.  Which end ASKED is
+ * therefore what the two names distinguish; both are counted on this modem.
+ *
+ * The increment is 16-bit and wraps -- `movzwl`, `inc %eax`, `mov %ax` -- the
+ * same arithmetic `VPcmV34InitiateRateRenegotiation` does inline above, on
+ * the same field, because that entry point counts the same event where the
+ * request arrives from the shell rather than from the datapump.
+ *
+ * Neither reads the object for anything else and neither is gated on the
+ * diagnostics: the two `V34RNEG` messages belong to the caller.
+ */
+void
+VPcmV34IndicateLocalRRN(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->rrn_local = (short)(obj->rrn_local + 1);
+}
+
+void
+VPcmV34IndicateRemoteRRN(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->rrn_remote = (short)(obj->rrn_remote + 1);
+}
+
+/*
  * Rebuild the transmitter for a V.90 rate renegotiation.
  *
  * NO HANDSHAKE: this is the one of the three that does not call

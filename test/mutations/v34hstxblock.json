@@ -1,0 +1,319 @@
+[
+ {
+  "note": "`v34handshak`'s table-2 dispatch: seven arms deciding one int, and a tail that can overwrite what they decided.  Almost every mutation here is a constant, because that is what this dispatch is -- the arms hold no arithmetic.  What the set has to prove is that each of the seven arms is separately driven, that the five branches out of the table's own range are reached, and that the three signedness decisions in the tail are the ones the object makes.  IT NOW ANCHORS INTO `src/pump/v34/v34hshak.c`.  The set was written against `src/pump/v34/v34hstxblock.c`, the third of three reconstructions of this dispatch; finding 591 collapsed that file onto `t3m_txblock`/`t3m_tail` and every anchor was rewritten to the survivor's spelling -- `obj->f0004` to `*f->progress`, `TB_INT(obj, TB_F2218)` to `T3M_I32(f, T3M_MODE)`, and so on -- with the claim each makes unchanged.  Twenty-six of them share their find text with an anchor in `v34hst3mid` or `v34hst3core`; that is not a duplicate, because the binary is what a mutation set is tested by and `t_v34hstbl2` is the only one that drives table 2's arms directly."
+ },
+ {
+  "label": "txstate 5's microstate branch tests 0x65 rather than 0x66",
+  "find": "\t\t\tif (mst == 0x3f && f->obj->f359c == 0x66)",
+  "replace": "\t\t\tif (mst == 0x3f && f->obj->f359c == 0x65)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's rxstate-4 branch tests 0x66 rather than 0x65",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x66)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's rxstate-35 branch tests 0x66 rather than 0x65",
+  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x66)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's rxstate-4 branch wants microstate 63 not 44",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's two rxstate values transposed",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's second rxstate value 0x23 becomes 0x24",
+  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x24 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's microstate branch reads the rxstate word",
+  "find": "\t\t\tunsigned short mst = T3M_U16(f, V34HS_MICROSTATE_OFF);",
+  "replace": "\t\t\tunsigned short mst = T3M_U16(f, V34HS_RXSTATE_OFF);",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 5's default answer is 1 rather than 0",
+  "find": "\t\t\telse\n\t\t\t\t*f->progress = 0;",
+  "replace": "\t\t\telse\n\t\t\t\t*f->progress = 1;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 18's branch out gives 3 rather than 2",
+  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;",
+  "replace": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 3;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 18's branch out tests 0x66 rather than 0x65",
+  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;",
+  "replace": "\t\tif (f->obj->f359c == 0x66)\n\t\t\t*f->progress = 2;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 18 reads bit 2 of the receiver's flags, not bit 3",
+  "find": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
+  "replace": "\t\t\t*f->progress = (f->rx->flags >> 2) & 1 ? 3 : 2;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 18's two answers transposed",
+  "find": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
+  "replace": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 2 : 3;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 70's two answers transposed",
+  "find": "\t\t*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 3 : 4;",
+  "replace": "\t\t*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 4 : 3;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 70 reads +0xe4c as a signed short",
+  "find": "\t\t*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 3 : 4;",
+  "replace": "\t\t*f->progress = (short)T3M_U16(f, T3M_F0E4C) <= 0 ? 3 : 4;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 70's companion field is one halfword out",
+  "find": "#define T3M_F0E4C\t\t0x0e4c",
+  "replace": "#define T3M_F0E4C\t\t0x0e4e"
+ },
+ {
+  "label": "the 20/21/64/68 arm answers 3",
+  "find": "\tcase 20:\t\t\t/* 0x64509 PPSEG    */\n\tcase 21:\t\t\t/*         TRNSEG4  */\n\tcase 64:\t\t\t/*         JTXMIT   */\n\tcase 68:\t\t\t/*         J1TXMIT  */\n\t\t*f->progress = 2;",
+  "replace": "\tcase 20:\t\t\t/* 0x64509 PPSEG    */\n\tcase 21:\t\t\t/*         TRNSEG4  */\n\tcase 64:\t\t\t/*         JTXMIT   */\n\tcase 68:\t\t\t/*         J1TXMIT  */\n\t\t*f->progress = 3;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "the 66/67/69 arm answers 2",
+  "find": "\tcase 66:\t\t\t/* 0x644fa TRNSEG4A */\n\tcase 67:\t\t\t/*         XMITMP   */\n\tcase 69:\t\t\t/*         EXMIT    */\n\t\t*f->progress = 3;",
+  "replace": "\tcase 66:\t\t\t/* 0x644fa TRNSEG4A */\n\tcase 67:\t\t\t/*         XMITMP   */\n\tcase 69:\t\t\t/*         EXMIT    */\n\t\t*f->progress = 2;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "the 24/51/54/60/74 arm answers 1",
+  "find": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 0;",
+  "replace": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 1;",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 68 aliased to the 66/67/69 arm instead",
+  "find": "\tcase 68:\t\t\t/*         J1TXMIT  */\n",
+  "replace": "",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 74 aliased to the default arm instead",
+  "find": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n",
+  "replace": "",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "txstate 19 loses its arm",
+  "find": "\tcase 19:\t\t\t/*          SBARSEG */\n",
+  "replace": "",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "the dispatch reads the microstate word",
+  "find": "\tt3m_txblock(&f, hs_get(obj, HS_TXSTATE));",
+  "replace": "\tt3m_txblock(&f, hs_get(obj, HS_MICROSTATE));",
+  "fn": "t3c_txblock"
+ },
+ {
+  "label": "the default arm skips the shared tail",
+  "find": "\tdefault:\t\t\t/* 0x62a40, straight to the tail */\n\t\tbreak;\n\t}",
+  "replace": "\tdefault:\t\t\t/* 0x62a40, straight to the tail */\n\t\treturn;\n\t}",
+  "fn": "t3m_txblock"
+ },
+ {
+  "label": "the tail's +0x2218 arm triggers on 0 rather than 1",
+  "find": "\tif (mode == 1) {",
+  "replace": "\tif (mode == 0) {",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail doubles +0xaa96 rather than tripling it",
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);",
+  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->faa96);",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail keeps the tripling at full width",
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);",
+  "replace": "\t\t*(int *)&f->rx->f1d2 = 3 * (int)f->obj->faa96;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail's +0x2218 == 1 arm answers 5",
+  "find": "\t\t*f->progress = 4;\n\t}",
+  "replace": "\t\t*f->progress = 5;\n\t}",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail's {4,5} window becomes {4,5,6}",
+  "find": "\tif ((unsigned)(mode - 4) <= 1u)",
+  "replace": "\tif ((unsigned)(mode - 4) <= 2u)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail's {4,5} window becomes {3,4}",
+  "find": "\tif ((unsigned)(mode - 4) <= 1u)",
+  "replace": "\tif ((unsigned)(mode - 3) <= 1u)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the tail's {2,3} window becomes {3,4}",
+  "find": "\tif ((unsigned)(mode - 2) <= 1u && tx == 0x4a) {",
+  "replace": "\tif ((unsigned)(mode - 3) <= 1u && tx == 0x4a) {",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "0x64884 is reached from txstate 75 rather than 74",
+  "find": "\tif ((unsigned)(mode - 2) <= 1u && tx == 0x4a) {",
+  "replace": "\tif ((unsigned)(mode - 2) <= 1u && tx == 0x4b) {",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "0x64884's threshold is inclusive",
+  "find": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "\t\t*f->progress = f->obj->vect_idx >= 0x3c ? 0 : 7;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "0x64884's two answers transposed",
+  "find": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 7 : 0;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "0x64884 reads +0x2aa2 unsigned",
+  "find": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;",
+  "replace": "\t\t*f->progress = (unsigned short)f->obj->vect_idx > 0x3c ? 0 : 7;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "+0x238 against +0x23c compared signed",
+  "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
+  "replace": "\tif (T3M_I32(f, T3M_ELAPSED) > T3M_I32(f, T3M_DEADLINE))",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "+0x238 against +0x23c made inclusive",
+  "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
+  "replace": "\tif (T3M_U32(f, T3M_ELAPSED) >= T3M_U32(f, T3M_DEADLINE))",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "+0x238 and +0x23c transposed",
+  "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
+  "replace": "\tif (T3M_U32(f, T3M_DEADLINE) > T3M_U32(f, T3M_ELAPSED))",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the +0x238 arm answers 7 rather than 8",
+  "find": "\t\t*f->progress = 8;",
+  "replace": "\t\t*f->progress = 7;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the level is compared to the floor unsigned",
+  "find": "\tesi = f->rx->agc_level;\n\tif (esi >= f->obj->rx_energy_floor)",
+  "replace": "\tesi = (unsigned short)f->rx->agc_level;\n\tif ((unsigned)esi >= (unsigned)f->obj->rx_energy_floor)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the level comparison excludes equality",
+  "find": "\tif (esi >= f->obj->rx_energy_floor)",
+  "replace": "\tif (esi > f->obj->rx_energy_floor)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "clear and advance transposed",
+  "find": "\t\tT3M_I32(f, T3M_TICK) = 0;\n\telse\n\t\tT3M_I32(f, T3M_TICK)++;",
+  "replace": "\t\tT3M_I32(f, T3M_TICK)++;\n\telse\n\t\tT3M_I32(f, T3M_TICK) = 0;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the counter and the sample count are the same field",
+  "find": "#define T3M_TICK\t\t0x0234",
+  "replace": "#define T3M_TICK\t\t0x0238"
+ },
+ {
+  "label": "the counter limit is inclusive",
+  "find": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)",
+  "replace": "\tif (T3M_I32(f, T3M_TICK) >= 0x257f)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the counter limit is 0x2580",
+  "find": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)",
+  "replace": "\tif (T3M_I32(f, T3M_TICK) > 0x2580)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the counter overflow answers 8 rather than 9",
+  "find": "\t\t*f->progress = 9;",
+  "replace": "\t\t*f->progress = 8;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "txstate 83's answer 0xf becomes 0xe",
+  "find": "\t\t*f->progress = 0x0f;",
+  "replace": "\t\t*f->progress = 0x0e;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "txstate 84's answer 0x10 becomes 0xf",
+  "find": "\t\t\t*f->progress = 0x10;",
+  "replace": "\t\t\t*f->progress = 0x0f;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "txstate 82's answer 0xd becomes 0xc",
+  "find": "\t\t*f->progress = 0x0d;",
+  "replace": "\t\t*f->progress = 0x0c;",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the 82/83/84 chain shifted one state up",
+  "find": "\tif (tx == 0x53)",
+  "replace": "\tif (tx == 0x54)",
+  "fn": "t3m_tail"
+ },
+ {
+  "label": "the receiver is located four bytes late",
+  "find": "\tf->rx = T3C_RX(obj);",
+  "replace": "\tf->rx = (struct v34_receiver *)((char *)T3C_RX(obj) + 4);",
+  "fn": "t3m_frame_init"
+ },
+ {
+  "label": "the txstate reload at 0x62b5f, taken out",
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);\n\t\ttx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);\n\t\t*f->progress = 4;",
+  "replace": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);\n\t\t*f->progress = 4;",
+  "fn": "t3m_tail",
+  "equivalent": true,
+  "why": "0x62b5f reloads +0x3596 into %cx before rejoining the tail -- the block entered at 0x62b45, whose `movzwl 0x3596(%ebx),%ecx` is at 0x62b5f (592 re-fixes the address 550's table header moved), and `t3m_tail` models it -- which is the one thing the reconstruction this set was written against could not, its entry taking only the object.  Taking it out is still equivalent IN THIS TREE, and that is measured rather than argued: every one of the forty-odd sites that reaches the dispatch either passes the object's own +0x3596 or, in arms 48 and 63, stores the value into +0x3596 before passing it, so the reloaded and the passed txstate are equal everywhere.  Removing it was run against all eight suites that touch this file and NOT CAUGHT by any of them (591).  It stops being equivalent the first time an arm passes a value it did not store while +0x3596 holds 0x4a, 0x52, 0x53 or 0x54 -- which is why the parameter exists.  Held fixed: nothing."
+ },
+ {
+  "label": "txstate held zero-extended rather than sign-extended",
+  "find": "t3m_tail(struct t3m_frame *f, short tx)",
+  "replace": "t3m_tail(struct t3m_frame *f, unsigned short tx)",
+  "fn": "t3m_tail",
+  "equivalent": true,
+  "why": "The object spells the state two ways -- `cmp $0x4a,%cx` zero-extended at 0x62a70 and `movswl %cx,%eax` sign-extended at 0x62ac5 -- and one `short` models both.  Every test the two spellings feed is equality against a small positive constant, which agrees for all 65,536 halfwords; the one inequality, `> 0x53` at 0x62acd, only decides whether to test equality with 0x54, which is false either way -- unsigned it takes the `> 0x53` branch and fails `== 0x54`, signed it takes the `else` and fails `== 0x52`, and both leave +0x0004 alone.  So this is equivalent over the WHOLE range and not merely over the 0..86 the diagnostics allow.  The anchor is now the tail's parameter rather than the dispatch's local, which is the same claim about the same halfword.  Held fixed: nothing."
+ }
+]
