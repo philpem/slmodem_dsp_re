@@ -15533,3 +15533,57 @@ Forty-two of 59 entries name something under test. That is the necessary
 condition only, and turning it into the sufficient one -- does a test drive the
 DEVIANT PATH, not merely the function -- is the part `fastpass.md` was right to
 call expensive. It is not done here.
+
+### 362. Two of the three deviation gaps were not gaps
+
+Task #72 set out to close finding 361's three real gaps. Two dissolved on
+inspection, and the way they dissolved is a limitation of the audit worth
+recording next to the tool.
+
+**D6 is now measured, and the measurement had to bypass the alias.**
+`ref_AGC_DEF_ALPHA` exists at **six different addresses**: the name is
+file-static in six translation units and `objcopy` renamed all of them alike,
+so a test declaring `extern short ref_AGC_DEF_ALPHA[]` binds to whichever the
+linker happens to pick. That is worse than no test -- it would pass while
+comparing a pair nobody chose. The absence of such a test is correct.
+
+Read straight out of the object at the addresses D6 names:
+
+| object | beta[0..1] | alpha[0..1] | sums |
+|---|---|---|---|
+| `.data:0x780c` Bell 103 | 16384, 1638 | 16384, 32604 | 32768, **34242** |
+| `.data:0x7788` V.23 | 16384, 1638 | 16384, 32604 | 32768, **34242** |
+| `.rodata:0xa0fc` v21 | 16384, 164 | 16384, 32604 | 32768, 32768 |
+
+D6's claim is confirmed: the slow pair sums to 34242 rather than 32768 in the
+Bell 103 and V.23 copies, a DC gain of 1.045. And our four tables --
+`AGC_DEF_ALPHA/BETA` in `b103_agc_cfg.c` and `V23_AGC_DEF_ALPHA/BETA` in
+`v23rx.c` -- carry exactly those values, so the reproduction is faithful and
+the defect is the original's. That is what D6 wanted and it is done; what
+cannot be added is an automated guard, for the reason above.
+
+**D42 was never a gap.** Its own entry explains why the out-of-range case is
+not driven: past the end of `StateName` both sides read into different memory,
+so the comparison is meaningless -- the same argument that caught my
+freed-memory mistakes in `t_queue` and `t_lowpassfir`. And the in-range case IS
+driven: the transcript sweep in `t_v34hshak.c` walks all 87 states through
+`hs_setstate`, which reads the table. No test names `ref_StateName` because no
+test needs to.
+
+**So the audit's necessary condition has two blind spots**, both now in
+`devaudit.py`'s docstring: a table used INTERNALLY by a tested function is
+exercised without being named, and an ambiguous alias makes the absence of a
+test correct rather than missing. Of finding 361's five flagged entries, one
+was retracted, one names unreconstructed code, one is unreachable by this tier
+(D40, no alias at all), and the remaining two are these. **Zero of 59 entries
+turn out to need a test written.**
+
+That is a good outcome for the register and a poor one for the tool, and the
+tool's docstring now says "read a no as look at this entry, never as write a
+test". Fifth heuristic this session to over-report until checked by hand; the
+pattern is in CLAUDE.md.
+
+**Owed:** D6's entry should gain the measurement above -- it currently says
+`unmeasured`. Not edited here because `docs/deviations.md` is shared with the
+V.90 session, which is adding entries to it, and an in-place edit conflicts
+where an append does not.

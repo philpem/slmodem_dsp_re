@@ -16,6 +16,19 @@ the specific deviant path is, only that it could be.
 So a "no" here is conclusive and a "yes" is an invitation to look. That
 asymmetry is the point: it turns 59 entries into a short list worth reading.
 
+TWO WAYS A "NO" IS STILL WRONG, both met in practice (finding 362):
+
+  - A TABLE USED INTERNALLY by a tested function is exercised without any test
+    naming it.  D42's `StateName` is read by `hs_setstate`, which the transcript
+    sweep drives over all 87 states; no test mentions `ref_StateName` and the
+    table is thoroughly driven.
+  - AN AMBIGUOUS ALIAS.  `ref_AGC_DEF_ALPHA` exists at SIX addresses, because
+    the name is file-static in six translation units and objcopy renamed them
+    all alike.  A test declaring it binds to whichever the linker picks, so the
+    absence of such a test is a feature, not a gap.
+
+Read a "no" as "look at this entry", never as "write a test".
+
     tools/devaudit.py [--verbose]
 """
 
