@@ -1,6 +1,6 @@
 [
  {
-  "note": "`v34handshak`'s microstate 44 `DET_INFO`: the bit clock at 0x668c0, the CRC-16 register it folds the incoming bits into, the byte store and its three exits, the RESTART at 0x6bda0 a failed CRC takes, and the DEFAULT arm of the accept path at 0x6e552.  Caught by build/test/t_v34hsmst44.  SOME ARE CAUGHT AS AN ABORT rather than as a differing byte -- an arm nobody has written calls `t3c_unwritten`, so a mutation that sends a driven case into one kills the run, and that is a real catch and what the halt is for; the three message lengths 0x4d, 0x26 and 0x08 are pinned that way, from one away.  WHAT IS NOT HERE: the accept path's three sized arms at 0x6f438, 0x6ed17 and 0x6ea38, which halt."
+  "note": "`v34handshak`'s microstate 44 `DET_INFO`, COMPLETE: the bit clock at 0x668c0, the CRC-16 register it folds the incoming bits into, the byte store and its three exits, the RESTART at 0x6bda0 a failed CRC takes, and ALL FOUR arms of the accept path -- the default at 0x6e552 and the three selected by a message length, 0x6f438 (0x4d bits, INFO1c), 0x6ed17 (0x26, INFO1a) and 0x6ea38 (0x08, Modem-on-Hold).  Caught by build/test/t_v34hsmst44.  The three length constants are pinned from BOTH sides: a case at each length drives its body and a case one away drives the default, so a constant moved by one is caught twice.  It used to rest on `t3c_unwritten` aborting instead, which is what the halt is for while an arm is missing and is no longer needed here."
  },
  {
   "label": "+0xaa7a is not cleared on entry",
@@ -316,8 +316,9 @@
  },
  {
   "label": "the installed record's +0x16 is cleared",
-  "find": "\tt44_recput(blk, T44_R_F16, 1);",
-  "replace": "\tt44_recput(blk, T44_R_F16, 0);"
+  "find": "\tt44_recput(blk, T44_R_F16, 1);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
+  "replace": "\tt44_recput(blk, T44_R_F16, 0);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
+  "note": "RE-ANCHORED, finding 347: the 0x4d arm writes the same 1 to the same field of its own record.  The restart's copy is the one followed by the 0xf72 preamble."
  },
  {
   "label": "the installed record's +0x20 is cleared",
@@ -351,23 +352,27 @@
  },
  {
   "label": "the installed record's +0x1a is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F1A, 0);",
-  "replace": "\t(void)0;"
+  "find": "\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart."
  },
  {
   "label": "the installed record's +0x1e is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F1E, 0);",
-  "replace": "\t(void)0;"
+  "find": "\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart."
  },
  {
   "label": "the installed record's +0x22 is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F22, 0);",
-  "replace": "\t(void)0;"
+  "find": "\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart."
  },
  {
   "label": "the installed record's register is not reset",
-  "find": "\tt44_recput(blk, T44_R_CRC, -1);",
-  "replace": "\t(void)0;"
+  "find": "\tt44_recput(blk, T44_R_CRC, -1);\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart."
  },
  {
   "label": "microstate 44 runs microstate 41's arm",
@@ -404,23 +409,27 @@
  },
  {
   "label": "the accept dispatch lets the 77-bit message through",
-  "find": "\tif (len == 0x4d)\n\t\tt3c_unwritten();\t\t\t/* 0x6f438 */",
-  "replace": "\tif (len == 0x4e)\n\t\tt3c_unwritten();\t\t\t/* 0x6f438 */"
+  "find": "\tif (len == 0x4d)",
+  "replace": "\tif (len == 0x4e)",
+  "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run."
  },
  {
   "label": "the accept dispatch lets the 38-bit message through",
-  "find": "\tif (len == 0x26)\n\t\tt3c_unwritten();\t\t\t/* 0x6ed17 */",
-  "replace": "\tif (len == 0x27)\n\t\tt3c_unwritten();\t\t\t/* 0x6ed17 */"
+  "find": "\tif (len == 0x26)",
+  "replace": "\tif (len == 0x25)",
+  "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run."
  },
  {
   "label": "the accept dispatch lets the 8-bit message through",
-  "find": "\tif (len == 0x08)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */",
-  "replace": "\tif (len == 0x09)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */"
+  "find": "\tif (len == 0x08)",
+  "replace": "\tif (len == 0x07)",
+  "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run."
  },
  {
   "label": "the accept dispatch claims the length this case is driven with",
-  "find": "\tif (len == 0x08)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */",
-  "replace": "\tif (len == 0x18)\n\t\tt3c_unwritten();\t\t\t/* 0x6ea38 */"
+  "find": "\tif (len == 0x08)",
+  "replace": "\tif (len == 0x18)",
+  "note": "REWRITTEN with the arm in place: 0x18 is the length the default arm's own cases are driven with, so this sends them into the Modem-on-Hold body."
  },
  {
   "label": "the byte copy runs whatever +0x358a holds",
@@ -605,5 +614,495 @@
   "label": "the arrival trace names short phase 2 the wrong way round",
   "find": "\t\t\t\t     obj->is_short != 0 ? \" Short Phase 2\" : \"\");",
   "replace": "\t\t\t\t     obj->is_short == 0 ? \" Short Phase 2\" : \"\");"
+ },
+ {
+  "label": "the 0x4d arm is claimed at 0x4c",
+  "find": "\tif (len == 0x4d)",
+  "replace": "\tif (len == 0x4c)"
+ },
+ {
+  "label": "the 0x26 arm is claimed at 0x27",
+  "find": "\tif (len == 0x26)",
+  "replace": "\tif (len == 0x27)"
+ },
+ {
+  "label": "the 0x08 arm is claimed at 0x09",
+  "find": "\tif (len == 0x08)",
+  "replace": "\tif (len == 0x09)"
+ },
+ {
+  "label": "0x4d takes the INFO1a body",
+  "find": "\t\treturn t44_accept_len4d(obj);",
+  "replace": "\t\treturn t44_accept_len26(obj, rec);"
+ },
+ {
+  "label": "0x26 takes the MOH body",
+  "find": "\t\treturn t44_accept_len26(obj, rec);",
+  "replace": "\t\treturn t44_accept_len08(obj, rec, count2);"
+ },
+ {
+  "label": "the length's first field is three bits wide",
+  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
+  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 7) << 5)",
+  "equivalent": true,
+  "why": "EQUIVALENT, and it says where the field ends.  Bit 2 of +0xa9dc lands at bit 7 of the assembled value, and `bitreverse(v, 7)` reads only bits 0..6 (src/pump/v34/v34rx.c), so the widened mask can reach +0x35a2 only through the first store -- which the equivalence above shows is invisible.  The cases seed +0xa9dc with bit 2 SET so that this is measured rather than assumed.  HELD FIXED: the same two conditions as above."
+ },
+ {
+  "label": "the length's first field is shifted four",
+  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
+  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 4)"
+ },
+ {
+  "label": "the length's second field is a nibble",
+  "find": "\t\t      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf8) >> 3));",
+  "replace": "\t\t      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf0) >> 4));"
+ },
+ {
+  "label": "the length is reversed over six bits",
+  "find": "\trev = bitreverse((unsigned short)raw, 7);",
+  "replace": "\trev = bitreverse((unsigned short)raw, 6);"
+ },
+ {
+  "label": "the length is not reversed at all",
+  "find": "\ths_put(obj, T44_F35A2, (short)rev);",
+  "replace": "\ths_put(obj, T44_F35A2, raw);"
+ },
+ {
+  "label": "the length is stored only after the reversal",
+  "find": "\ths_put(obj, T44_F35A2, raw);\n\n\trev = bitreverse((unsigned short)raw, 7);",
+  "replace": "\trev = bitreverse((unsigned short)raw, 7);",
+  "equivalent": true,
+  "why": "EQUIVALENT.  0x6eea2 and 0x6f4f8 store the UNREVERSED value into +0x35a2 and 0x6eec3 and 0x6f519 store the reversed one over it four instructions later, with `bitreverse` -- which takes its argument in a register -- between.  Nothing reads +0x35a2 in between, so no fixture can see the first store.  HELD FIXED: that `bitreverse` reads nothing out of the object, which src/pump/v34/v34rx.c shows."
+ },
+ {
+  "label": "the record printer runs to eleven slots",
+  "find": "\t\t\t     (unsigned)(unsigned short)rec[9]);",
+  "replace": "\t\t\t     (unsigned)(unsigned short)rec[10]);"
+ },
+ {
+  "label": "the record printer reads the second slot twice",
+  "find": "\t\t\t     (unsigned)(unsigned short)rec[0],\n\t\t\t     (unsigned)(unsigned short)rec[1],",
+  "replace": "\t\t\t     (unsigned)(unsigned short)rec[1],\n\t\t\t     (unsigned)(unsigned short)rec[1],"
+ },
+ {
+  "label": "the MOH diagnostic prints the counter as zero",
+  "find": "\"data0=%X, data1=%X)\\r\\n\", (int)count2,",
+  "replace": "\"data0=%X, data1=%X)\\r\\n\", 0,"
+ },
+ {
+  "label": "the MOH diagnostic swaps its two data words",
+  "find": "\t\t\t\t     (unsigned)(unsigned short)rec[0],\n\t\t\t\t     (unsigned)(unsigned short)rec[1]);",
+  "replace": "\t\t\t\t     (unsigned)(unsigned short)rec[1],\n\t\t\t\t     (unsigned)(unsigned short)rec[0]);"
+ },
+ {
+  "label": "the MOH message is not decoded",
+  "find": "\tVPcmV34InterpretMohMessageBits(obj, rec);",
+  "replace": "\t(void)rec;"
+ },
+ {
+  "label": "the MOH decoder is given the installed record instead",
+  "find": "\tVPcmV34InterpretMohMessageBits(obj, rec);",
+  "replace": "\tVPcmV34InterpretMohMessageBits(obj, t44_record(obj, T44_PTR_AA6C));"
+ },
+ {
+  "label": "+0xabf0 selects the other exit",
+  "find": "\tif (t3c_geti(obj, T44_FABF0) != 1) {",
+  "replace": "\tif (t3c_geti(obj, T44_FABF0) == 1) {"
+ },
+ {
+  "label": "+0xabf0 is read sixteen bits wide",
+  "find": "\tif (t3c_geti(obj, T44_FABF0) != 1) {",
+  "replace": "\tif (hs_get(obj, T44_FABF0) != 1) {"
+ },
+ {
+  "label": "+0xabf8 is raised a halfword wide",
+  "find": "\t\tt3c_putb(obj, T44_FABF8, 1);",
+  "replace": "\t\ths_put(obj, T44_FABF8, 1);"
+ },
+ {
+  "label": "+0xabf8 is not raised",
+  "find": "\t\tt3c_putb(obj, T44_FABF8, 1);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the MOH resynchronise goes to DET_INFO",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);"
+ },
+ {
+  "label": "the MOH resynchronise leaves sr alone",
+  "find": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);\n\t\tobj->fsk.sr = -1;",
+  "replace": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);"
+ },
+ {
+  "label": "the MOH resynchronise leaves the register alone",
+  "find": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);\n\t\tobj->fsk.sr = -1;",
+  "replace": "\t\tobj->fsk.sr = -1;"
+ },
+ {
+  "label": "the tone detector's two carriers are swapped",
+  "find": "\tdetectorinit(T3C_DET(obj), obj->f359c == 0x65 ? c2400_ : c1200_,",
+  "replace": "\tdetectorinit(T3C_DET(obj), obj->f359c == 0x65 ? c1200_ : c2400_,"
+ },
+ {
+  "label": "the tone detector's polarity is zero",
+  "find": "\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "replace": "\t\t     0, 0x64, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "the tone detector's limit",
+  "find": "\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "replace": "\t\t     1, 0x65, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "the tone detector's warm-up",
+  "find": "\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "replace": "\t\t     1, 0x64, 0x33, 0x800, 0x400);"
+ },
+ {
+  "label": "the tone detector's two thresholds are swapped",
+  "find": "\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "replace": "\t\t     1, 0x64, 0x32, 0x400, 0x800);"
+ },
+ {
+  "label": "+0x356a is not set",
+  "find": "\ths_put(obj, T44_F356A, 1);\t\t\t/* 0x6ec4a */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6ec4a */"
+ },
+ {
+  "label": "the MOH tone exit goes to MOH_TONE",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);"
+ },
+ {
+  "label": "the INFO1a decoder's answer is inverted",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) == 0) {"
+ },
+ {
+  "label": "the probe results are not given to the INFO1a arm",
+  "find": "\tV34GiveProbeResults(obj, (const char *)obj + T44_PROBE);\n\n\t/*\n\t * 0x6ed3e RE-READS",
+  "replace": "\t/*\n\t * 0x6ed3e RE-READS"
+ },
+ {
+  "label": "the INFO1a decoder is given the installed record",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0) {"
+ },
+ {
+  "label": "the phase-over exit waits in RECEIVE rather than WAIT",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);"
+ },
+ {
+  "label": "the phase-over exit sets its two states in the other order",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);"
+ },
+ {
+  "label": "the INFO1a arm skips the message-descriptor length",
+  "find": "\t(void)t44_mdlength(obj);\n\tsetfinalrate(obj);",
+  "replace": "\tsetfinalrate(obj);"
+ },
+ {
+  "label": "the INFO1a arm does not settle the final rate",
+  "find": "\t(void)t44_mdlength(obj);\n\tsetfinalrate(obj);",
+  "replace": "\t(void)t44_mdlength(obj);"
+ },
+ {
+  "label": "the INFO1a arm does not re-initialise the receiver",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\trxinit(obj);",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);"
+ },
+ {
+  "label": "the rate tables read the transmit baud rate",
+  "find": "\tbaud = hs_get(obj, T44_RXBAUD);",
+  "replace": "\tbaud = hs_get(obj, T44_TXBAUD);"
+ },
+ {
+  "label": "the demodulator diagnostic swaps its two rates",
+  "find": "\t\t\t\t     \"carrier %ld\\n\", (long)baud, (long)carrier);",
+  "replace": "\t\t\t\t     \"carrier %ld\\n\", (long)carrier, (long)baud);"
+ },
+ {
+  "label": "+0x128 is set to five",
+  "find": "\trx->f128 = 4;\n\tt44_setup_rate(rx, baud);",
+  "replace": "\trx->f128 = 5;\n\tt44_setup_rate(rx, baud);"
+ },
+ {
+  "label": "+0x128 is not set",
+  "find": "\trx->f128 = 4;\n\tt44_setup_rate(rx, baud);",
+  "replace": "\tt44_setup_rate(rx, baud);"
+ },
+ {
+  "label": "the rate table is given the carrier",
+  "find": "\tt44_setup_rate(rx, baud);\n\tt44_setup_carrier(rx, carrier);",
+  "replace": "\tt44_setup_rate(rx, carrier);\n\tt44_setup_carrier(rx, carrier);"
+ },
+ {
+  "label": "the carrier table is given the baud rate",
+  "find": "\tt44_setup_rate(rx, baud);\n\tt44_setup_carrier(rx, carrier);",
+  "replace": "\tt44_setup_rate(rx, baud);\n\tt44_setup_carrier(rx, baud);"
+ },
+ {
+  "label": "the AGC gain is taken from the step it stores",
+  "find": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2000;",
+  "replace": "\trx->agc_step = 0x2000;\n\trx->agc_gain = rx->agc_step;"
+ },
+ {
+  "label": "the AGC step",
+  "find": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2000;",
+  "replace": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2001;"
+ },
+ {
+  "label": "the flag word's cleared nibble is one bit narrower",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x0f00u);",
+  "replace": "\trx->flags = (unsigned short)(rx->flags & ~0x0e00u);"
+ },
+ {
+  "label": "the flag word is not cleared at all",
+  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x0f00u);\n\tdetectorinit",
+  "replace": "\tdetectorinit"
+ },
+ {
+  "label": "neither detector set-up raises DET_PENDING",
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+  "replace": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);"
+ },
+ {
+  "label": "the FIRST detector set-up is dropped",
+  "find": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
+  "replace": "\t(void)0;",
+  "equivalent": true,
+  "why": "EQUIVALENT, and the strongest one in this batch.  `detectorinit` writes nine fields of the detector at +0x3564 and reads nothing (src/pump/v34/detector.c); the two calls at 0x6f0d1 and 0x6f125 differ only in the warm-up, so the second writes every field the first did.  The only statement between them is the receiver flag word's DET_PENDING, which is not in the detector.  HELD FIXED: that `detectorinit` has no effect outside the struct it is given.  The mutations of the SECOND call below are what check that from the other side."
+ },
+ {
+  "label": "the second detector set-up keeps the first's warm-up",
+  "find": "\t\t     0, 8, 0x78, 0x600, 0);",
+  "replace": "\t\t     0, 8, 10, 0x600, 0);"
+ },
+ {
+  "label": "the second detector set-up takes polarity one",
+  "find": "\t\t     0, 8, 0x78, 0x600, 0);",
+  "replace": "\t\t     1, 8, 0x78, 0x600, 0);"
+ },
+ {
+  "label": "the second detector set-up's limit",
+  "find": "\t\t     0, 8, 0x78, 0x600, 0);",
+  "replace": "\t\t     0, 9, 0x78, 0x600, 0);"
+ },
+ {
+  "label": "the detectors read the record being clocked",
+  "find": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+  "replace": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_PTR_AA70),\n\t\t     0, 8, 0x78, 0x600, 0);"
+ },
+ {
+  "label": "the INFO1a arm does not reset the counter",
+  "find": "\ths_put(obj, T44_COUNT, 0);\t\t\t/* 0x6f146 */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6f146 */"
+ },
+ {
+  "label": "+0xaa80 is not set",
+  "find": "\ths_put(obj, T44_FAA80, 1);\t\t\t/* 0x6f15c */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6f15c */"
+ },
+ {
+  "label": "the rxinfo1a printout reads the answer instead",
+  "find": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9DC));",
+  "replace": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9AC));"
+ },
+ {
+  "label": "2800 baud takes 3000's first constant",
+  "find": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->f1b0 = 0x3e82;",
+  "replace": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->f1b0 = 0x3e80;"
+ },
+ {
+  "label": "2800 baud is spelled 2801",
+  "find": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */",
+  "replace": "\tcase 0xaf1:\t\t\t\t\t/* 2800, 0x6f3a7 */"
+ },
+ {
+  "label": "3429 baud takes 3200's second constant",
+  "find": "\t\trx->f1ae = 0x2bc0;\n\t\trx->f1be = 0x2bc0;",
+  "replace": "\t\trx->f1ae = 0x2ee0;\n\t\trx->f1be = 0x2bc0;"
+ },
+ {
+  "label": "2743 baud is not in the table",
+  "find": "\tcase 0xab7:\t\t\t\t\t/* 2743, 0x6f2e2 */",
+  "replace": "\tcase 0xab6:\t\t\t\t\t/* 2743, 0x6f2e2 */"
+ },
+ {
+  "label": "2400 baud sets +0x1ac to 2800's value",
+  "find": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->f1b0 = 0x3e80;\n\t\trx->f1ae = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->f1ac = 0x1f40;",
+  "replace": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->f1b0 = 0x3e80;\n\t\trx->f1ae = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->f1ac = 0x1f41;"
+ },
+ {
+  "label": "an unknown baud rate is given a rate constant",
+  "find": "\tdefault:\n\t\tbreak;\n\t}\n}\n\n/*\n * And the half-sine window for the receive carrier",
+  "replace": "\tdefault:\n\t\trx->f1b0 = 0x3e80;\n\t\tbreak;\n\t}\n}\n\n/*\n * And the half-sine window for the receive carrier"
+ },
+ {
+  "label": "1800 and 1829 swap their half-sine windows",
+  "find": "\t\trx->carrier = (short *)(unsigned long)hsine1800;",
+  "replace": "\t\trx->carrier = (short *)(unsigned long)hsine1829;"
+ },
+ {
+  "label": "1600's half-sine count is one too many",
+  "find": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->f1ba = 6;",
+  "replace": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->f1ba = 7;"
+ },
+ {
+  "label": "1959's half-sine count is the whole table",
+  "find": "\t\trx->f1ba = 0x31;",
+  "replace": "\t\trx->f1ba = 0x62;"
+ },
+ {
+  "label": "1920 is spelled 1921",
+  "find": "\tcase 0x780:\t\t\t\t\t/* 1920, 0x6f2b0 */",
+  "replace": "\tcase 0x781:\t\t\t\t\t/* 1920, 0x6f2b0 */"
+ },
+ {
+  "label": "2000's window is not installed",
+  "find": "\t\trx->carrier = (short *)(unsigned long)hsine2000;\n\t\trx->f1ba = 0x18;",
+  "replace": "\t\trx->f1ba = 0x18;"
+ },
+ {
+  "label": "an unknown carrier is given a half-sine count",
+  "find": "\tdefault:\n\t\tbreak;\n\t}\n}\n\n/*\n * A MESSAGE OF 0x26 BITS",
+  "replace": "\tdefault:\n\t\trx->f1ba = 6;\n\t\tbreak;\n\t}\n}\n\n/*\n * A MESSAGE OF 0x26 BITS"
+ },
+ {
+  "label": "the INFO1c arm does not zero the first trace counter",
+  "find": "\ths_put(obj, HS_TRACE_1, 0);\t\t\t/* 0x6f443 */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6f443 */"
+ },
+ {
+  "label": "the INFO1c arm does not zero the counter",
+  "find": "\ths_put(obj, T44_COUNT, 0);\t\t\t/* 0x6f44a */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6f44a */"
+ },
+ {
+  "label": "the INFO1c arm resets the counter after the transition",
+  "find": "\ths_put(obj, T44_COUNT, 0);\t\t\t/* 0x6f44a */\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_put(obj, T44_COUNT, 0);"
+ },
+ {
+  "label": "the INFO1c arm transmits L1 rather than DPSK",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t(void)t44_mdlength(obj);\n\tprobeselect(obj);",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\n\t(void)t44_mdlength(obj);\n\tprobeselect(obj);"
+ },
+ {
+  "label": "the INFO1c arm does not select a probe",
+  "find": "\t(void)t44_mdlength(obj);\n\tprobeselect(obj);",
+  "replace": "\t(void)t44_mdlength(obj);"
+ },
+ {
+  "label": "the probeselect diagnostic swaps its two rates",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
+  "replace": "\t\t\t\t     (int)hs_get(obj, T44_RXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
+  "note": "NOT CAUGHT, and it is a gap.  `probeselect` settles both rates at 2400 on every case this file drives -- it is the bottom of its ladder and the fixture's probe bins do not admit anything higher -- so the two arguments are equal and the order between them is invisible.  The two mutations below check WHICH field each argument reads, which is the half that can be seen; a case that steered `probeselect` to two different rates would close the rest."
+ },
+ {
+  "label": "the answer is installed at the restart's record",
+  "find": "\tt3c_putp(obj, T44_PTR_AA6C, (char *)obj + T44_REC_A9AC);",
+  "replace": "\tt3c_putp(obj, T44_PTR_AA6C, (char *)obj + T44_BLK_A94C);"
+ },
+ {
+  "label": "the INFO1d answer is inverted",
+  "find": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)",
+  "replace": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) == 0)"
+ },
+ {
+  "label": "the INFO1d decoder is given the answer's record",
+  "note": "NOT CAUGHT, and it is a gap and not an equivalence.  `V34GiveINFO1dBits` returns before it reads its buffer when `v90_receiver` is zero (src/pump/v34/v34pcmmain.cpp), and zero is what every case here holds it at, because the V.90 path walks the session to a `VPcmFloModem` this fixture does not build -- the same wall the 0x26 arm's non-zero branch met and got past only by aiming two session pointers at buffers the test owns.  A case that builds a V.92 session would catch this and there is no such fixture in the tree.",
+  "find": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)",
+  "replace": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0)"
+ },
+ {
+  "label": "the INFO1c arm gives no probe results",
+  "find": "\tV34GiveProbeResults(obj, (const char *)obj + T44_PROBE);\n\tV34SetINFO1aBits",
+  "replace": "\tV34SetINFO1aBits"
+ },
+ {
+  "label": "the INFO1a answer is not built",
+  "find": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the INFO1a answer is built in the clocked record",
+  "find": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C));",
+  "replace": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA70));"
+ },
+ {
+  "label": "the answer's length is 0x27 bits",
+  "find": "\tt44_recput(blk, T44_R_NBITS, 0x26);",
+  "replace": "\tt44_recput(blk, T44_R_NBITS, 0x27);"
+ },
+ {
+  "label": "the answer's +0x1c is not the restart's 8",
+  "find": "\tt44_recput(blk, T44_R_F1C, 8);\n\tt44_recput(blk, T44_R_F16, 1);",
+  "replace": "\tt44_recput(blk, T44_R_F1C, 1);\n\tt44_recput(blk, T44_R_F16, 1);"
+ },
+ {
+  "label": "the answer's +0x28 is the restart's 0xc",
+  "find": "\tt44_recput(blk, T44_R_F28, 0x10);",
+  "replace": "\tt44_recput(blk, T44_R_F28, 0xc);"
+ },
+ {
+  "label": "the answer's +0x20 is the restart's 1",
+  "find": "\tt44_recput(blk, T44_R_F20, 0);\n\tt44_recputi(blk, T44_R_F24, 0xff72);",
+  "replace": "\tt44_recput(blk, T44_R_F20, 1);\n\tt44_recputi(blk, T44_R_F24, 0xff72);"
+ },
+ {
+  "label": "the preamble is the restart's 0xf72",
+  "find": "\tt44_recputi(blk, T44_R_F24, 0xff72);",
+  "replace": "\tt44_recputi(blk, T44_R_F24, 0xf72);"
+ },
+ {
+  "label": "the preamble at +0x2c is a halfword",
+  "find": "\tt44_recputi(blk, T44_R_F2C, 0xff72);",
+  "replace": "\tt44_recput(blk, T44_R_F2C, (short)0xff72);"
+ },
+ {
+  "label": "+0x358c is not cleared",
+  "find": "\ths_put(obj, T44_F358C, 0);\t\t\t/* 0x6f6ba */",
+  "replace": "\t(void)0;\t\t\t\t\t/* 0x6f6ba */"
+ },
+ {
+  "label": "the INFO1c arm ends in TX_PHASE1_ANS",
+  "find": "\ths_put(obj, T44_F358C, 0);\t\t\t/* 0x6f6ba */\n\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\ths_put(obj, T44_F358C, 0);\t\t\t/* 0x6f6ba */\n\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);"
+ },
+ {
+  "label": "the txinfo1a printout reads the record that arrived",
+  "find": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9AC));",
+  "replace": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9DC));"
+ },
+ {
+  "label": "the byte copy is bounded at ten slots",
+  "find": "\t\tfor (i = 0; i < nbytes; i++)\n\t\t\ths_put(obj, T44_FABAE + 2u * (unsigned)i,",
+  "replace": "\t\tfor (i = 0; i < nbytes && i < 10; i++)\n\t\t\ths_put(obj, T44_FABAE + 2u * (unsigned)i,"
+ },
+ {
+  "label": "the probeselect diagnostic prints the carrier as the transmit rate",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
+  "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));"
+ },
+ {
+  "label": "the probeselect diagnostic prints the carrier as the receive rate",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
+  "replace": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_CARRIER));"
+ },
+ {
+  "label": "the length's first field is one bit wide",
+  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
+  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 1) << 5)"
+ },
+ {
+  "label": "the INFO1a decoder is given the cached record pointer",
+  "equivalent": true,
+  "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding 406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding 401's third equivalence says of the restart.",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {"
  }
 ]

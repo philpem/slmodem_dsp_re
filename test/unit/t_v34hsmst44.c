@@ -23,10 +23,10 @@
  *     0x6bda0   the restart a failed CRC takes, and its three sub-branches
  *     0x718fc   f359c == 0x66, the answering side
  *     0x71920   f359c == 0x65 with a V.90 receiver
- *     0x6e534   NOT WRITTEN -- the accept path, 4,744 bytes.  `t3c_unwritten`
- *               halts there, so no case below may reach it and every case
- *               that could is arranged so that the register and the received
- *               bits DISAGREE.
+ *     0x6e534   the accept path, and all four of its arms: the default at
+ *               0x6e552 and the three selected by a message length --
+ *               0x6f438 (0x4d bits, INFO1c), 0x6ed17 (0x26, INFO1a) and
+ *               0x6ea38 (0x08, Modem-on-Hold)
  *
  * THE TXSTATE IS PART OF THE FIXTURE (finding 288).  Every arm of table 3
  * leaves through the once-per-block transmit dispatch, so a microstate case
@@ -50,6 +50,7 @@
 #include "harness.h"
 #include "v34hsstep.h"
 #include "dsplib/v34hshak.h"
+#include "dsplib/v34filt.h"	/* the eight half-sine windows, by name    */
 
 /* The tail's own inputs, pinned so that the arm is the only variable. */
 #define T44T_PROGRESS	0x0004
@@ -60,7 +61,36 @@
 #define T44T_MODE	0x2218
 
 #define T44T_V90RECV	0x024c	/* int:   `v90_receiver`                   */
+#define T44T_K56RECV	0x0250	/* int:   `k56flex_receiver`               */
 #define T44T_INHIBIT	0x0402	/* short: `fsk_inhibit`                    */
+#define T44T_F356A	0x356a
+#define T44T_F358C	0x358c
+#define T44T_F35A2	0x35a2	/* short: the message-descriptor length    */
+#define T44T_DETCOEF	0x3564	/* the detector's coefficient pointer      */
+#define T44T_REC_A9AC	0xa9ac	/* the INFO1a record the 0x4d arm installs */
+#define T44T_REC_A9DC	0xa9dc	/* the INFO1a/1c record that arrived       */
+#define T44T_TXBAUD	0xaa84
+#define T44T_RXBAUD	0xaa96
+#define T44T_RXCARRIER	0xaaa8
+#define T44T_FAA80	0xaa80
+#define T44T_FABE0	0xabe0	/* short: the MOH decoder's timeout code   */
+#define T44T_FABF0	0xabf0	/* int:   1 sends the 8-bit arm to the tone*/
+#define T44T_FABF4	0xabf4	/* int:   `moh_recvd`, the decoder's output*/
+#define T44T_FABF8	0xabf8	/* byte:  raised by the 8-bit arm's other  */
+
+/* The receiver, and the fields the 0x26 arm's two tables write. */
+#define T44T_RX		0x0264
+#define T44T_RX_FLAGS2	(T44T_RX + 0x122)
+#define T44T_RX_F128	(T44T_RX + 0x128)
+#define T44T_RX_GAIN	(T44T_RX + 0x136)
+#define T44T_RX_STEP	(T44T_RX + 0x13a)
+#define T44T_RX_F1AC	(T44T_RX + 0x1ac)
+#define T44T_RX_F1AE	(T44T_RX + 0x1ae)
+#define T44T_RX_F1B0	(T44T_RX + 0x1b0)
+#define T44T_RX_CARRIER	(T44T_RX + 0x1b4)
+#define T44T_RX_F1BA	(T44T_RX + 0x1ba)
+#define T44T_RX_F1BE	(T44T_RX + 0x1be)
+#define T44T_RX_F262	(T44T_RX + 0x262)
 #define T44T_F3588	0x3588
 #define T44T_F358A	0x358a
 #define T44T_F359C	0x359c	/* short: 0x65 originate, 0x66 answer      */
@@ -176,6 +206,97 @@ bits(short nbits, short sr, short count, short len, short crc)
 	v34hs_poke_short(T44T_COUNT, count);
 	v34hs_poke_short(T44T_REC + T44T_R_NBITS, len);
 	v34hs_poke_short(T44T_REC + T44T_R_CRC, crc);
+}
+
+/*
+ * A message of `len` bits whose CRC checks out, one bit short of complete.
+ *
+ * The counter is at len+15 and the register holds exactly what is about to
+ * arrive, so the step takes the last bit, finds the counter at len+16 and
+ * compares equal -- which is the accept path, and `len` is then what 0x6e534
+ * dispatches on.  Both receivers are off, which is what makes the three
+ * decoders below take their short exits and leaves the branch the test's.
+ */
+static void
+accept_at(short len)
+{
+	bits(5, 0x1234, (short)(len + 0x0f), len, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_int(T44T_K56RECV, 0);
+}
+
+/* A pointer field of side A's object, for the holes no byte compare sees. */
+static const void *
+peek_ptr_a(unsigned off)
+{
+	return *(const void *const *)((const char *)v34hs_object(0) + off);
+}
+
+/*
+ * THE SESSION'S TWO CAPABILITY POINTERS, AIMED AT A BUFFER PER SIDE.
+ *
+ * One branch of the 0x26 arm needs `V34GiveINFO1aBits` to answer non-zero,
+ * and the only way it can is the V.90 path -- which walks the session to two
+ * blocks of capability bytes at +0x612c and +0x1760 and writes four of them.
+ * `v34hs_setup` aims the object's thirty-five pointers and the session's one
+ * pointer to the PCM receiver; it does NOT build the session's interior, so
+ * those two fields hold the fill's pseudorandom address and the branch faults
+ * rather than failing.
+ *
+ * Two buffers, one per side, aimed before the step -- and the four bytes of
+ * each pointer put BACK before the comparison, because the two addresses
+ * differ and the arena is compared byte for byte with only the session's PCM
+ * pointer exempt.  The buffers are then compared to each other directly, so
+ * nothing is given up: what the decoder wrote is still checked side against
+ * side, and the arena's own claim is untouched.
+ */
+#define T44T_SESS	0x3548		/* the object's pointer to it       */
+#define T44T_SESS_CAPS	0x612c
+#define T44T_SESS_UP	0x1760
+
+static unsigned char caps_buf[2][64];
+static unsigned char caps_saved[2][2][4];
+
+static unsigned char *
+session_of(int side)
+{
+	return *(unsigned char *const *)
+		((const char *)v34hs_object(side) + T44T_SESS);
+}
+
+static void
+aim_session(void)
+{
+	int side, i;
+
+	for (side = 0; side < 2; side++) {
+		unsigned char *sess = session_of(side);
+		void *buf = caps_buf[side];
+
+		for (i = 0; i < 64; i++)
+			caps_buf[side][i] = (unsigned char)(0x40 + i);
+		memcpy(caps_saved[side][0], sess + T44T_SESS_CAPS, 4);
+		memcpy(caps_saved[side][1], sess + T44T_SESS_UP, 4);
+		memcpy(sess + T44T_SESS_CAPS, &buf, sizeof(buf));
+		memcpy(sess + T44T_SESS_UP, &buf, sizeof(buf));
+	}
+}
+
+static void
+restore_session(long tag)
+{
+	int side;
+
+	for (side = 0; side < 2; side++) {
+		unsigned char *sess = session_of(side);
+
+		memcpy(sess + T44T_SESS_CAPS, caps_saved[side][0], 4);
+		memcpy(sess + T44T_SESS_UP, caps_saved[side][1], 4);
+	}
+	diff_eq_int("the session capability bytes, side against side",
+		    memcmp(caps_buf[0], caps_buf[1], sizeof(caps_buf[0])), 0,
+		    tag);
 }
 
 /*
@@ -808,14 +929,107 @@ main(void)
 			? V34HS_RX_PHASE1_ANS : V34HS_TX_PHASE1_ANS, 166);
 
 	/*
+	 * THE BYTE COPY HAS NO BOUND, AND THIS IS WHAT THAT COSTS.
+	 *
+	 * `nbytes` is the stepped counter divided by eight and rounded up,
+	 * and the loop at 0x6e5c8 runs that many times into an array of TEN
+	 * shorts.  A message of 110 bits puts the counter at 126 and `nbytes`
+	 * at 16, so six iterations run off the end -- and the object does
+	 * them.  Where they land is not padding:
+	 *
+	 *     index 10  ->  +0xabc2, WHICH IS `nbytes` ITSELF, four
+	 *                   instructions after it was stored there
+	 *     index 14  ->  +0xabca, `local_short`
+	 *     index 15  ->  +0xabcc, `is_short` -- WHICH THE ARM THEN READS
+	 *                   at 0x6e824 to choose the next microstate
+	 *
+	 * and what they copy is the record's own tail: index 10 reads its CRC
+	 * register at +0x14, index 12 its length at +0x18, index 15 its +0x1e.
+	 * So a 110-bit message ends by choosing its successor state out of a
+	 * field of the message record that has nothing to do with the
+	 * question, and +0xabc2 does not hold the byte count it was just
+	 * given.  Both are asserted below.
+	 *
+	 * `v90_receiver` is zero, so `V34GiveINFO0dBits` returns before it
+	 * writes `is_short` and the value the branch reads is the one the
+	 * overrun left.  +0x1e is 3, and 3 is not a length, a count or a
+	 * flag -- it is whatever the copy found.
+	 *
+	 * REPRODUCED AND NOT REPAIRED.  The comparison is byte for byte
+	 * against the blob and it passes, which is the whole claim; the loop
+	 * is the default arm's and belongs to findings 400-406's commit, so
+	 * this case adds the measurement without touching the code.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 125, 110, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_F358A, 1);
+	v34hs_poke_self_ptr(T44T_PTR_AA6C, T44T_BLK);
+	v34hs_poke_short(T44T_REC + 4, 0x1280);		/* bit 7 set: 0x6e745 */
+	v34hs_poke_short(T44T_REC + T44T_R_F16, 0x0a0b);
+	v34hs_poke_short(T44T_REC + T44T_R_F1A, 0x0c0d);
+	v34hs_poke_short(T44T_REC + T44T_R_F1C, 0x0e0f);
+	v34hs_poke_short(T44T_REC + T44T_R_F1E, 3);
+	v34hs_poke_short(T44T_COUNT_SRC, 0);
+	v34hs_poke_short(0xabc4, 0x6161);
+	v34hs_poke_short(0xabc6, 0x6262);
+	v34hs_poke_short(0xabc8, 0x6363);
+	v34hs_step();
+	v34hs_compare("accept, the copy runs past ten slots", 185);
+	diff_eq_int("overrun: +0xabc2 holds the record's CRC, not the count",
+		    v34hs_peek_short(0, T44T_FABC2), 0x1234, 185);
+	diff_eq_int("overrun: +0xabc4 <- the record's +0x16",
+		    v34hs_peek_short(0, 0xabc4), 0x0a0b, 185);
+	diff_eq_int("overrun: +0xabc6 <- the record's LENGTH",
+		    v34hs_peek_short(0, 0xabc6), 110, 185);
+	diff_eq_int("overrun: +0xabc8 <- the record's +0x1a",
+		    v34hs_peek_short(0, 0xabc8), 0x0c0d, 185);
+	diff_eq_int("overrun: local_short <- the record's +0x1c",
+		    v34hs_peek_short(0, T44T_LOCALSHORT), 0x0e0f, 185);
+	diff_eq_int("overrun: is_short <- the record's +0x1e",
+		    v34hs_peek_short(0, T44T_ISSHORT), 3, 185);
+	diff_eq_int("overrun: and the arm believed it",
+		    v34hs_observed(0)->mst, V34HS_RX_PHASE1_ANS, 185);
+
+	/*
+	 * ONE BYTE SHORT OF THE OVERRUN, so the same arm with `nbytes` at ten
+	 * leaves +0xabc2 holding the count and `is_short` holding its seed --
+	 * which is what makes the case above a measurement of the loop bound
+	 * rather than of the arm.  A message of 64 bits puts the counter at
+	 * 80 and `nbytes` at exactly 10.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	bits(5, 0x1234, 79, 64, 0x1234);
+	v34hs_poke_short(T44T_F359C, 0x0050);
+	v34hs_poke_int(T44T_V90RECV, 0);
+	v34hs_poke_short(T44T_F358A, 1);
+	v34hs_poke_self_ptr(T44T_PTR_AA6C, T44T_BLK);
+	v34hs_poke_short(T44T_REC + 4, 0x1280);
+	v34hs_poke_short(T44T_ISSHORT, 0);
+	v34hs_poke_short(T44T_COUNT_SRC, 0);
+	v34hs_step();
+	v34hs_compare("accept, ten slots exactly", 186);
+	diff_eq_int("ten slots: +0xabc2 still holds the count",
+		    v34hs_peek_short(0, T44T_FABC2), 10, 186);
+	diff_eq_int("ten slots: local_short untouched",
+		    v34hs_peek_short(0, T44T_LOCALSHORT), 0x4d4d, 186);
+	diff_eq_int("ten slots: is_short untouched, so TX_PHASE1_ANS",
+		    v34hs_observed(0)->mst, V34HS_TX_PHASE1_ANS, 186);
+
+	/*
 	 * THE THREE LENGTHS THAT HAVE BODIES OF THEIR OWN, driven from ONE
-	 * AWAY.  0x6f438, 0x6ed17 and 0x6ea38 are 4,744 bytes nobody has
-	 * written and `t3c_unwritten` halts on all three, so no case can
-	 * drive them -- but a case driven at 0x4e, 0x27 or 0x09 pins each
-	 * constant from the other side: our dispatch must NOT claim it, and a
-	 * mutation that moves the constant by one kills the run instead of
-	 * changing a byte.  That is finding 358's abort-as-a-catch, used
-	 * deliberately.
+	 * AWAY.  Each of 0x4d, 0x26 and 0x08 now has an arm below, and these
+	 * three cases are the other half of each constant: at 0x4e, 0x27 and
+	 * 0x09 the dispatch must NOT claim the message, so a constant moved
+	 * by one is caught HERE by taking a body where the default belongs
+	 * and there by taking the default where a body belongs.  Two cases
+	 * per constant and neither can be dropped.
+	 *
+	 * (This used to rest on `t3c_unwritten` aborting -- finding 358's
+	 * abort-as-a-catch.  With the bodies written it rests on the bodies
+	 * disagreeing with the default instead, which is a byte difference
+	 * rather than a dead run.)
 	 *
 	 * +0x358a is not 1, so the byte copy is out of the way and the case is
 	 * about the dispatch alone.
@@ -840,6 +1054,446 @@ main(void)
 			     V34HS_MOH_SILENCE);
 		}
 	}
+
+	/* --- 0x08 bits: Modem-on-Hold, 0x6ea38 ---------------------------- */
+
+	/*
+	 * ONE BYTE OF MOH MESSAGE.  The arm hands the record to
+	 * `VPcmV34InterpretMohMessageBits` and then asks +0xabf0 what that
+	 * made of it; 0x57 is MHack with a timeout code of 7, which the
+	 * decoder turns into `moh_recvd` 4 and +0xabe0 7 -- so a step that
+	 * skipped the call leaves both seeds in place and is caught.
+	 *
+	 * +0xabf0 IS NOT 1 HERE, which is the exit that goes back to hunting
+	 * for the synchronisation pattern.  The arm does not touch +0xaa78,
+	 * so the byte clock it returns into finds the counter at 24 and
+	 * stores a byte -- from the 0xffff this arm has just put in `sr`.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(8);
+	v34hs_poke_short(T44T_REC + 0, 0x0057);
+	v34hs_poke_int(T44T_FABF0, 0x7777);
+	v34hs_poke_int(T44T_FABF4, 0x2222);
+	v34hs_poke_short(T44T_FABE0, 0x3333);
+	v34hs_poke_short(T44T_FABF8, 0x5a5a);
+	step("accept, 8 bits, resynchronise", 190, 27, 3, V34HS_DET_SYNC,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("8 bits: the MOH decoder ran",
+		    v34hs_peek_short(0, T44T_FABF4), 4, 190);
+	diff_eq_int("8 bits: on the record at +0xaa70",
+		    v34hs_peek_short(0, T44T_FABE0), 7, 190);
+	/*
+	 * A BYTE AND NOT A HALFWORD.  0x6ea9b is `movb $0x1,0xabf8`, so the
+	 * neighbour at +0xabf9 keeps its seed; a halfword store of 1 would
+	 * clear it and this reads both at once.
+	 */
+	diff_eq_int("8 bits: +0xabf8 raised, one byte wide",
+		    (unsigned short)v34hs_peek_short(0, T44T_FABF8), 0x5a01,
+		    190);
+	diff_eq_int("8 bits: the register is reset",
+		    v34hs_peek_short(0, T44T_REC + T44T_R_CRC), -1, 190);
+	diff_eq_int("8 bits: and `sr` with it",
+		    v34hs_peek_short(0, T44T_SR), -1, 190);
+	diff_eq_int("8 bits: the counter is NOT reset",
+		    v34hs_peek_short(0, T44T_COUNT), 24, 190);
+	diff_eq_int("8 bits: so the byte clock stored slot 2 from the reset sr",
+		    v34hs_peek_short(0, T44T_REC + 4), 0x00ff, 190);
+
+	/*
+	 * +0xabf0 == 1 IS THE OTHER EXIT: the tone detector is armed and the
+	 * microstate goes to MOH_TONE_DROP.  Nothing resets `sr` on this
+	 * path, so the byte the clock then stores is the low byte of the
+	 * message's own shift register -- which is what separates the two
+	 * exits by a byte as well as by a state.
+	 *
+	 * ORIGINATING, so the detector takes 2400 Hz's coefficients.  +0x3564
+	 * is one of the fixture's thirty-five skipped pointers and holds two
+	 * addresses of two copies, so the comparison cannot see it; this
+	 * names the table on side A explicitly.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(8);
+	v34hs_poke_short(T44T_F359C, 0x0065);
+	v34hs_poke_int(T44T_FABF0, 1);
+	v34hs_poke_short(T44T_F356A, 0x3c3c);
+	step("accept, 8 bits, tone, originating", 191, 28, 6,
+	     V34HS_MOH_TONE_DROP, V34HS_MOH_SILENCE);
+	diff_eq_int("8 bits: +0x356a set to 1",
+		    v34hs_peek_short(0, T44T_F356A), 1, 191);
+	diff_eq_int("8 bits: 2400 Hz's coefficients when this end originated",
+		    peek_ptr_a(T44T_DETCOEF) == (const void *)c2400_, 1, 191);
+	diff_eq_int("8 bits: `sr` is NOT reset on this exit",
+		    v34hs_peek_short(0, T44T_SR), 0x1234, 191);
+	diff_eq_int("8 bits: so the byte clock stored the message's own byte",
+		    v34hs_peek_short(0, T44T_REC + 4), 0x0034, 191);
+
+	/* ANSWERING, so 1200 Hz's.  The one field that differs is the table. */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(8);
+	v34hs_poke_short(T44T_F359C, 0x0066);
+	v34hs_poke_int(T44T_FABF0, 1);
+	v34hs_poke_short(T44T_F356A, 0x3c3c);
+	step("accept, 8 bits, tone, answering", 192, 28, 6,
+	     V34HS_MOH_TONE_DROP, V34HS_MOH_SILENCE);
+	diff_eq_int("8 bits: 1200 Hz's coefficients when this end answered",
+		    peek_ptr_a(T44T_DETCOEF) == (const void *)c1200_, 1, 192);
+
+	/*
+	 * +0xabf0 IS AN INT.  0x6ea80 is `cmpl $0x1`, so 0x10001 is NOT one
+	 * and the arm resynchronises; a halfword read would see a 1 and arm
+	 * the tone detector instead.  The two exits differ in the microstate,
+	 * in +0x356a and in the byte the clock then stores, so one seed
+	 * separates a width from a value.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(8);
+	v34hs_poke_int(T44T_FABF0, 0x10001);
+	v34hs_poke_short(T44T_FABF8, 0x5a5a);
+	step("accept, 8 bits, +0xabf0 is 0x10001", 194, 27, 6, V34HS_DET_SYNC,
+	     V34HS_MOH_SILENCE);
+	diff_eq_int("8 bits: 0x10001 is not one",
+		    (unsigned short)v34hs_peek_short(0, T44T_FABF8), 0x5a01,
+		    194);
+
+	/*
+	 * AND ONE GUARD IN THIS ARM CANNOT BE DRIVEN FROM BOTH SIDES, said
+	 * here rather than left to look like a gap.  Every microstate
+	 * transition in all three arms is reached with +0x3592 still holding
+	 * 44 -- that is what selected the arm -- so `hs_setstate`'s
+	 * already-there exit is unreachable for DET_SYNC, MOH_TONE_DROP and
+	 * INFODONE alike, and so is the rxstate one for RX_DPSK in the first
+	 * exit above, which is a no-op on every path a test can drive.  The
+	 * transmit state is the exception and case 231 below drives it.
+	 */
+
+	/* --- 0x26 bits: INFO1a, 0x6ed17 ----------------------------------- */
+
+	/*
+	 * THE DECODER'S ANSWER DECIDES EVERYTHING.  `V34GiveINFO1aBits`
+	 * returns the session's UINFO6 word, which it sets to one only when
+	 * there is a V.90 receiver AND the upstream baud index decodes to 6;
+	 * a non-zero answer ends the phase -- WAIT, INFODONE and nothing else
+	 * -- and a zero one configures the whole receiver.
+	 *
+	 * Index 2 bit 0 set and bit 1 clear, index 3 bit 7 set: 2 + 4 is the
+	 * six the decoder is looking for.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(0x26);
+	v34hs_poke_int(T44T_V90RECV, 2);
+	v34hs_poke_short(T44T_REC + 4, 0x0001);
+	v34hs_poke_short(T44T_REC + 6, 0x0080);
+	aim_session();
+	v34hs_step();
+	restore_session(195);
+	v34hs_compare("accept, 0x26 bits, the phase ends", 195);
+	diff_eq_int("0x26 bits: the microstate is INFODONE",
+		    v34hs_observed(0)->mst, V34HS_INFODONE, 195);
+	diff_eq_int("0x26 bits: and the counter is untouched",
+		    v34hs_peek_short(0, T44T_COUNT), 0x36, 195);
+
+	/*
+	 * AND THE ZERO ANSWER IS THE LONG PATH.  No V.90 and no K56flex
+	 * receiver, so the decoder leaves before it decides anything and the
+	 * arm goes on to `setfinalrate`, `rxinit` and the two rate tables.
+	 *
+	 * THE RATE CODE IS DELIBERATELY ONE `setfinalrate` DOES NOT KNOW.
+	 * +0xa9e0 bit 1 set with +0xa9e2 bit 7 clear makes its receive code 1,
+	 * which has no arm, so it leaves +0xaa96 and +0xaaa8 exactly as this
+	 * test poked them -- which is what lets the sweep below drive all six
+	 * baud rates and all eight carriers from the test rather than from a
+	 * message this arm would then also have to decode.  Two of the six
+	 * baud rates `setfinalrate` cannot produce at all.
+	 *
+	 * The descriptor's own two halfwords are 7 and 8, so the seven bit
+	 * length is 0x61 and its reversal is 0x43 -- asymmetric on purpose,
+	 * because a palindrome would let the reversal be dropped, and with
+	 * bit 1 of the first halfword set so that the two-bit mask is one bit
+	 * wider than a mask that would also pass.  Bit 2 is set as well and
+	 * cannot be seen: it lands at bit 7 of the assembled value, which is
+	 * outside the seven `bitreverse` reads.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(0x26);
+	v34hs_poke_short(T44T_REC_A9DC + 0, 7);
+	v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+	v34hs_poke_short(T44T_REC_A9DC + 4, 2);
+	v34hs_poke_short(T44T_REC_A9DC + 6, 0);
+	v34hs_poke_short(T44T_RXBAUD, 0x960);
+	v34hs_poke_short(T44T_RXCARRIER, 0x640);
+	v34hs_poke_short(T44T_F35A2, 0x1e1e);
+	v34hs_poke_short(T44T_FAA80, 0x2e2e);
+	v34hs_poke_short(T44T_RX_F128, 0x3333);
+	v34hs_poke_short(T44T_RX_FLAGS2, 0x0f55);
+	v34hs_step();
+	v34hs_compare("accept, 0x26 bits, the receiver configured", 196);
+	diff_eq_int("0x26 bits: the message-descriptor length, reversed",
+		    v34hs_peek_short(0, T44T_F35A2), 0x43, 196);
+	diff_eq_int("0x26 bits: the rxstate is RECEIVE",
+		    v34hs_observed(0)->rxst, V34HS_RECEIVE, 196);
+	diff_eq_int("0x26 bits: +0x128 is 4",
+		    v34hs_peek_short(0, T44T_RX_F128), 4, 196);
+	diff_eq_int("0x26 bits: the AGC step",
+		    v34hs_peek_short(0, T44T_RX_STEP), 0x2000, 196);
+	diff_eq_int("0x26 bits: the gain came from +0x262",
+		    v34hs_peek_short(0, T44T_RX_GAIN),
+		    v34hs_peek_short(0, T44T_RX_F262), 196);
+	/*
+	 * THE TOP NIBBLE OF THE FLAG WORD IS CLEARED AND THEN DET_PENDING IS
+	 * PUT BACK.  Seeded with all four bits set and the low byte at 0x55,
+	 * so a mask one bit wide either way shows.
+	 */
+	diff_eq_int("0x26 bits: the flag word",
+		    (unsigned short)v34hs_peek_short(0, T44T_RX_FLAGS2),
+		    0x0255, 196);
+	diff_eq_int("0x26 bits: the counter is reset",
+		    v34hs_peek_short(0, T44T_COUNT), 0, 196);
+	diff_eq_int("0x26 bits: +0xaa80 set to 1",
+		    v34hs_peek_short(0, T44T_FAA80), 1, 196);
+
+	/*
+	 * THE TWO RATE TABLES, every entry and both defaults.
+	 *
+	 * Six baud rates against four constants each and eight carriers
+	 * against a table and a count -- and the counts are half the table
+	 * lengths `include/dsplib/v34filt.h` declares, which is eight
+	 * agreements this file can assert directly rather than eight
+	 * constants taken on trust.  A baud rate or a carrier that is in
+	 * neither table leaves its fields alone, and both of those are driven
+	 * too.
+	 *
+	 * +0x1b4 is a skipped pointer -- two addresses of two copies -- so
+	 * the table is named on side A rather than compared.
+	 */
+	{
+		static const struct {
+			short baud;
+			short f1b0, f1ae, f1be, f1ac;
+		} rates[] = {
+			{ 0x960, 0x3e80, 0x3e80, 0x3e80, 0x1f40 },
+			{ 0xab7, 0x3e80, 0x36b0, 0x36b0, 0x1f40 },
+			{ 0xaf0, 0x3e82, 0x3594, 0x3594, 0x1f41 },
+			{ 0xbb8, 0x3e80, 0x3200, 0x3200, 0x1f40 },
+			{ 0xc80, 0x3e80, 0x2ee0, 0x2ee0, 0x1f40 },
+			{ 0xd65, 0x3e80, 0x2bc0, 0x2bc0, 0x1f40 },
+			{ 0x0961, 0x4141, 0x4242, 0x4343, 0x4444 }
+		};
+		static const struct {
+			short carrier;
+			const short *tbl;
+			short f1ba;
+			int taps;
+		} carriers[] = {
+			{ 0x640, hsine1600,  6, 12 },
+			{ 0x690, hsine1680, 40, 80 },
+			{ 0x708, hsine1800, 16, 32 },
+			{ 0x725, hsine1829, 21, 42 },
+			{ 0x74b, hsine1867, 36, 72 },
+			{ 0x780, hsine1920,  5, 10 },
+			{ 0x7a7, hsine1959, 49, 98 },
+			{ 0x7d0, hsine2000, 24, 48 },
+			{ 0x641, NULL,	   0x5555, 0 }
+		};
+		unsigned k;
+		char what[80];
+
+		for (k = 0; k < sizeof(rates) / sizeof(rates[0]); k++) {
+			begin(V34HS_MOH_SILENCE);
+			accept_at(0x26);
+			v34hs_poke_short(T44T_REC_A9DC + 0, 7);
+			v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+			v34hs_poke_short(T44T_REC_A9DC + 4, 2);
+			v34hs_poke_short(T44T_REC_A9DC + 6, 0);
+			v34hs_poke_short(T44T_RXBAUD, rates[k].baud);
+			v34hs_poke_short(T44T_RXCARRIER, 0x641);
+			v34hs_poke_short(T44T_RX_F1B0, 0x4141);
+			v34hs_poke_short(T44T_RX_F1AE, 0x4242);
+			v34hs_poke_short(T44T_RX_F1BE, 0x4343);
+			v34hs_poke_short(T44T_RX_F1AC, 0x4444);
+			snprintf(what, sizeof(what),
+				 "accept, 0x26 bits, baud %d", rates[k].baud);
+			v34hs_step();
+			v34hs_compare(what, 200 + (long)k);
+			diff_eq_int("0x26 bits: +0x1b0",
+				    v34hs_peek_short(0, T44T_RX_F1B0),
+				    rates[k].f1b0, 200 + (long)k);
+			diff_eq_int("0x26 bits: +0x1ae",
+				    v34hs_peek_short(0, T44T_RX_F1AE),
+				    rates[k].f1ae, 200 + (long)k);
+			diff_eq_int("0x26 bits: +0x1be",
+				    v34hs_peek_short(0, T44T_RX_F1BE),
+				    rates[k].f1be, 200 + (long)k);
+			diff_eq_int("0x26 bits: +0x1ac",
+				    v34hs_peek_short(0, T44T_RX_F1AC),
+				    rates[k].f1ac, 200 + (long)k);
+		}
+
+		for (k = 0; k < sizeof(carriers) / sizeof(carriers[0]); k++) {
+			begin(V34HS_MOH_SILENCE);
+			accept_at(0x26);
+			v34hs_poke_short(T44T_REC_A9DC + 0, 7);
+			v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+			v34hs_poke_short(T44T_REC_A9DC + 4, 2);
+			v34hs_poke_short(T44T_REC_A9DC + 6, 0);
+			v34hs_poke_short(T44T_RXBAUD, 0x0961);
+			v34hs_poke_short(T44T_RXCARRIER, carriers[k].carrier);
+			v34hs_poke_short(T44T_RX_F1BA, 0x5555);
+			snprintf(what, sizeof(what),
+				 "accept, 0x26 bits, carrier %d",
+				 carriers[k].carrier);
+			v34hs_step();
+			v34hs_compare(what, 210 + (long)k);
+			diff_eq_int("0x26 bits: the half-sine count",
+				    v34hs_peek_short(0, T44T_RX_F1BA),
+				    carriers[k].f1ba, 210 + (long)k);
+			if (carriers[k].tbl != NULL) {
+				diff_eq_int("0x26 bits: the half-sine table",
+					    peek_ptr_a(T44T_RX_CARRIER)
+					    == (const void *)carriers[k].tbl,
+					    1, 210 + (long)k);
+				diff_eq_int("0x26 bits: and its count is half "
+					    "the table's length",
+					    2 * (int)carriers[k].f1ba,
+					    carriers[k].taps, 210 + (long)k);
+			}
+		}
+	}
+
+	/* --- 0x4d bits: INFO1c, 0x6f438 ----------------------------------- */
+
+	/*
+	 * THE CALLER'S INFO1c, AND THE INFO1a THAT ANSWERS IT.  The arm
+	 * zeroes both trace counters before anything else, sets the transmit
+	 * state to TX_DPSK, decodes the same message-descriptor length the
+	 * 0x26 arm does, runs `probeselect`, and then builds a record at
+	 * +0xa9ac and installs it at +0xaa6c.
+	 *
+	 * NO V.90 RECEIVER, so `V34GiveINFO1dBits` returns before it decides
+	 * anything and the long path runs.
+	 *
+	 * THE COUNTER IS RESET AT THE TOP, so the byte clock this returns
+	 * into finds zero and stores nothing -- finding 406's shape, and the
+	 * seed at slot 3 is what shows it.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	accept_at(0x4d);
+	v34hs_poke_short(T44T_REC_A9DC + 0, 7);
+	v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+	v34hs_poke_short(T44T_F35A2, 0x1e1e);
+	v34hs_poke_short(T44T_F358C, 0x2f2f);
+	v34hs_poke_short(0x2aa2, 0x0123);
+	v34hs_poke_short(T44T_REC_A9AC + 0x04, 0x1200);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_CRC, 0x1234);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F16, 0x2345);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_NBITS, 0x3456);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F1A, 0x4567);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F1C, 0x5678);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F1E, 0x6789);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F20, 0x789a);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F22, 0x1a2b);
+	v34hs_poke_int(T44T_REC_A9AC + T44T_R_F24, 0x2b3c4d);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F28, 0x3c4d);
+	v34hs_poke_short(T44T_REC_A9AC + T44T_R_F2A, 0x4d5e);
+	v34hs_poke_int(T44T_REC_A9AC + T44T_R_F2C, 0x5e6f70);
+	v34hs_step();
+	v34hs_compare("accept, 0x4d bits, the INFO1a answer", 230);
+	base = (const char *)v34hs_object(0);
+	diff_eq_int("0x4d bits: the transmit state is TX_DPSK",
+		    v34hs_observed(0)->txst, V34HS_TX_DPSK, 230);
+	diff_eq_int("0x4d bits: the microstate is INFODONE",
+		    v34hs_observed(0)->mst, V34HS_INFODONE, 230);
+	diff_eq_int("0x4d bits: both trace counters are zeroed",
+		    v34hs_peek_short(0, 0x2aa2) | v34hs_peek_short(0, T44T_COUNT),
+		    0, 230);
+	diff_eq_int("0x4d bits: so the byte clock stored nothing",
+		    v34hs_peek_short(0, T44T_REC + 6),
+		    (short)(0x0301 + 0x111 * 3), 230);
+	diff_eq_int("0x4d bits: the message-descriptor length, reversed",
+		    v34hs_peek_short(0, T44T_F35A2), 0x43, 230);
+	diff_eq_int("0x4d bits: +0x358c cleared",
+		    v34hs_peek_short(0, T44T_F358C), 0, 230);
+	diff_eq_int("0x4d bits: +0xaa6c aimed at +0xa9ac",
+		    (int)(*(char *const *)(base + T44T_PTR_AA6C) - base),
+		    T44T_REC_A9AC, 230);
+	/*
+	 * THE RECORD IT BUILT, and its length is 0x26 -- the very length the
+	 * arm above answers to.  The two sized arms are the two ends of one
+	 * exchange and that is the constant checked twice.
+	 */
+	diff_eq_int("0x4d bits: the answer is 0x26 bits long",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_NBITS), 0x26,
+		    230);
+	diff_eq_int("0x4d bits: its register is reset",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_CRC), -1, 230);
+	diff_eq_int("0x4d bits: +0x16",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F16), 1, 230);
+	diff_eq_int("0x4d bits: +0x1a",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F1A), 0, 230);
+	diff_eq_int("0x4d bits: +0x1c",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F1C), 8, 230);
+	diff_eq_int("0x4d bits: +0x1e",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F1E), 0, 230);
+	diff_eq_int("0x4d bits: +0x20",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F20), 0, 230);
+	diff_eq_int("0x4d bits: +0x22",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F22), 0, 230);
+	diff_eq_int("0x4d bits: +0x28",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F28), 0x10, 230);
+	diff_eq_int("0x4d bits: +0x2a",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F2A), 0x10, 230);
+	/*
+	 * 0xff72 AND NOT THE RESTART'S 0xf72, at both +0x24 and +0x2c, and
+	 * both are full ints: the high halfword is read too, because a
+	 * halfword store would leave the seed's 0x2b and 0x5e up there.
+	 */
+	diff_eq_int("0x4d bits: +0x24 low",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F24), (short)0xff72,
+		    230);
+	diff_eq_int("0x4d bits: +0x24 high",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F24 + 2), 0, 230);
+	diff_eq_int("0x4d bits: +0x2c low",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F2C), (short)0xff72,
+		    230);
+	diff_eq_int("0x4d bits: +0x2c high",
+		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F2C + 2), 0, 230);
+
+	/*
+	 * ALREADY IN TX_DPSK, so that transition is a no-op and its
+	 * diagnostic is not printed -- the one guard of the three arms that
+	 * CAN be driven from both sides, because the microstate is 44 on
+	 * every entry and the rxstate 43.
+	 *
+	 * TX_DPSK is also table 2's arm at 0x644c9, so the tail this case
+	 * leaves through is a different one from every case above.
+	 */
+	begin(V34HS_TX_DPSK);
+	accept_at(0x4d);
+	v34hs_poke_short(T44T_REC_A9DC + 0, 7);
+	v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+	v34hs_step();
+	v34hs_compare("accept, 0x4d bits, the transmit state already there",
+		      231);
+	diff_eq_int("0x4d bits: still TX_DPSK", v34hs_observed(0)->txst,
+		    V34HS_TX_DPSK, 231);
+
+	/*
+	 * AND WHAT NO CASE HERE CAN DRIVE, named rather than left to look
+	 * like an oversight.  Both PCM receivers are zero on every 0x4d case
+	 * above, and neither can be turned on:
+	 *
+	 *   K56flex   sends `V34SetINFO1aBits` into a PCM configuration block
+	 *             through +0xac18, which the fixture does not build
+	 *   V.90      sends `V34GiveINFO1dBits` into a `VPcmFloModem` in the
+	 *             session, which it does not build either
+	 *
+	 * So in THIS arm `V34GiveProbeResults` returns before it copies
+	 * anything (v34info.c) and the record it is given cannot be checked,
+	 * and `V34GiveINFO1dBits` returns before it reads its buffer, so the
+	 * record IT is given cannot be checked.  Both calls are checked in
+	 * the 0x26 arm instead, at case 195, which gets a V.90 receiver by
+	 * aiming the session's two capability pointers -- and that trick does
+	 * not reach the PCM block.  Two mutations record the gap.
+	 */
 
 	/*
 	 * THE RECORD MOVES AND ONE CALL DOES NOT FOLLOW IT.  Everything in

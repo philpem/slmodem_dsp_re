@@ -20172,6 +20172,65 @@ second block has just made impossible. It is in the source because the object
 does it, and it is in the suite marked equivalent with that argument, so it
 expires loudly if an arm ever lands that can reach the third block another way.
 
+======================================================================
+
+### 440. Microstate 44's three sized arms are three different messages, not three shapes of one
+
+Findings 400-406 left the accept path at 0x6e534 with its default arm written
+and the three selected by a message length calling `t3c_unwritten`. This is
+those three. `tools/cfgsplit.py --entries` over the four targets:
+
+```
+    0x6f438   0x4d bits (77)   906 bytes exclusive, 50 blocks   INFO1c
+    0x6ed17   0x26 bits (38)  1808 bytes exclusive, 90 blocks   INFO1a
+    0x6ea38   0x08 bits ( 8)   734 bytes exclusive, 50 blocks   Modem-on-Hold
+    0x6e552   anything else   1249 bytes exclusive, 70 blocks   the default
+```
+
+with 497 bytes shared between them -- the block tail at 0x62a40, the transmit
+dispatch at 0x62af1, the byte clock's tail at 0x66956 and its two short exits.
+Each of the three is CONTIGUOUS: 0x6ea38..0x6ed17, 0x6ed17..0x6f438 and
+0x6f438..0x6f7c2, with one nine-instruction printf block at 0x6f1c5 shared
+between the 0x26 arm and the 0x4d arm.
+
+**What each is comes from the object's own strings and callees**, never from a
+decompilation:
+
+- 0x6ea38 calls `VPcmV34InterpretMohMessageBits` and prints "Received MOH
+  message ! (count2=%d, data0=%X, data1=%X)". Eight bits is one byte of
+  Modem-on-Hold message.
+- 0x6ed17 calls `V34GiveINFO1aBits` and prints "V34PROBE, rxinfo1a". 0x26 bits
+  is the answering modem's INFO1a.
+- 0x6f438 calls `V34GiveINFO1dBits` and `V34SetINFO1aBits` and prints
+  "V34PROBE, rxinfo1c" and "V34PROBE, txinfo1a". 0x4d bits is the caller's
+  INFO1c, and the answer to it is an INFO1a.
+
+**Every exit of all three rejoins the byte clock at 0x66956** -- there is no
+sized arm that leaves through the transmit dispatch the way the default's
++0x358a exit does at 0x6e740. So all three return zero to
+`t44_det_info_accept`'s caller and the existing two-code convention did not
+have to grow a third.
+
+**Two of the three zero +0xaa78 before doing anything else**, 0x6ed17 at
+0x6f146 and 0x6f438 at 0x6f443/0x6f44a, so the byte clock they return into
+re-reads a counter of zero and stores nothing. That is finding 406 a second
+and third time, and it is why 0x6f438's two zero stores are the first two
+instructions of the arm rather than the last two.
+
+**The record at +0xaa70 is one of FOUR consecutive 48-byte records.** +0xa94c
+is the one the restart installs (finding 401), +0xa97c the one the bring-up
+clocks, +0xa9ac the one the 0x4d arm builds its INFO1a answer in, and +0xa9dc
+the one both the 0x26 and the 0x4d arm decode the message-descriptor length
+out of. 0xa94c + 0x30 = 0xa97c, + 0x30 = 0xa9ac, + 0x30 = 0xa9dc: the stride
+is exactly the record whose fields findings 400-401 mapped, which is
+corroboration of the layout from four addresses rather than one.
+
+Landed in `src/pump/v34/v34hshak.c` -- the `v34hshak.c` reconstruction and not
+`v34hshak_t3mid.c`'s, finding 348 -- and `test/unit/t_v34hsmst44.c`, 5,640
+checks against 3,393 before. **Microstate 44 is complete**: no `t44_*`
+function contains a `t3c_unwritten` any more, which is a grep and not an
+inference.
+
 
 ======================================================================
 
@@ -20260,6 +20319,59 @@ names its own state in its own message.
 And the check is cheap enough to be a tool: for each entry, find its match,
 report which function contains it, and read that against the label. Nine of
 this suite's entries were wrong by that test and none of them by any other.
+### 441. The eight-bit arm, and a field whose width is the whole branch
+
+0x6ea38 hands the record straight to `VPcmV34InterpretMohMessageBits` and then
+asks +0xabf0 what it made of it. Two exits, and they are not variations:
+
+```
+  +0xabf0 != 1   0x6ea8d   +0xabf8 <- 1 (a BYTE), rxstate RX_DPSK,
+                           microstate DET_SYNC, the record's +0x14 <- 0xffff,
+                           sr <- 0xffff
+  +0xabf0 == 1   0x6ebdf   detectorinit(+0x3564, 2400 Hz's coefficients when
+                           this end ORIGINATED and 1200 Hz's when it answered,
+                           polarity 1, limit 0x64, warm-up 0x32, thresholds
+                           0x800 and 0x400), +0x356a <- 1,
+                           microstate MOH_TONE_DROP
+```
+
+**+0xabf0 is an int and the test is `cmpl $0x1`**, so 0x10001 is not one. One
+case drives it at exactly that: the two exits differ in the microstate, in
++0x356a and in the byte the clock then stores, so a halfword read is caught
+three ways by one seed.
+
+**+0xabf8 is a byte.** 0x6ea9b is `movb $0x1,0xabf8(%esi)` and +0xabf9 is
+another flag (`T3C_FABF9`, which microstate 79's arm reads). The case seeds
+the pair as 0x5a5a and asserts 0x5a01, so a halfword store of 1 is caught by
+the neighbour it would have cleared.
+
+**The two carriers are the OTHER end's**, which is the opposite of what
+"the tone I am listening for" would suggest and is the same pairing
+`v34handshakinit` uses at 0x6bd2b: `f359c == 0x65` -- this end originated --
+takes `c2400_`. +0x3564 is one of the fixture's thirty-five skipped pointers
+and holds two addresses of two copies, so the comparison cannot see which
+table was chosen; the two cases name the table on side A explicitly instead.
+
+**The record pointer, three arms and three answers.** The 0x26 arm re-reads
++0xaa70 at 0x6ed3e after `V34GiveProbeResults`, and the 0x4d arm at 0x6f602
+after `probeselect`; both are written that way, and both are equivalences
+today because nothing between the two reads moves the pointer. The 8-bit arm
+is the one that does NOT: 0x6ea67 reloads only on the path the diagnostic
+above took, so with the diagnostics off 0x6ea6d passes the `%ecx` that 0x668e1
+left. Three arms, three spellings, and the reason to write each as the object
+writes it is finding 406, where a local shadowing a memory read across a call
+was wrong once already in this same function.
+
+**And `count2` is the stepped counter and not the re-read one.** The
+diagnostic prints the value still in `%ebx` from 0x6693a. This is the one arm
+of the four that never touches +0xaa78, so it is also the one place where a
+cached count and a reloaded one agree -- an exception to finding 406 rather
+than a contradiction of it, and the reason the parameter had to be threaded
+through `t44_det_info_accept` at all.
+
+The counter surviving is what makes the arm's two exits separable by a byte:
+the clock finds 24, completes byte 2 and stores the low byte of `sr` -- 0xff
+on the exit that reset it and 0x34 on the exit that did not.
 
 
 ======================================================================
@@ -20305,6 +20417,63 @@ otherwise look exactly like a guard that never took.
   jumps back into the increment at 0x65b95; 59's copy clears it and jumps past.
   That single halfword is the only thing separating the two arms' copies of a
   body that is otherwise identical, and it is asserted directly.
+### 442. The INFO1a arm's two rate tables, and eight constants that are half an array length
+
+0x6ed17 calls `V34GiveProbeResults` and then `V34GiveINFO1aBits`, and that
+function's answer decides everything. **The test is sixteen bits wide** --
+0x6ed50 is `test %ax,%ax` -- and a non-zero answer ends the phase with WAIT
+and INFODONE and nothing else. Zero configures the whole receiver:
+
+```
+  the message-descriptor length out of +0xa9dc  (finding 443)
+  setfinalrate, rxstate <- RECEIVE, rxinit
+  +0x128 <- 4
+  a switch on the RECEIVE baud rate at +0xaa96 over six values
+  a switch on the RECEIVE carrier at +0xaaa8 over eight values
+  +0x136 <- +0x262, +0x13a <- 0x2000
+  flags &= ~0x0f00, detectorinit, flags |= DET_PENDING, detectorinit again,
+  flags |= DET_PENDING again
+  +0xaa78 <- 0, +0xaa80 <- 1
+```
+
+**THE EIGHT HALF-SINE COUNTS ARE HALF THEIR TABLES' DECLARED LENGTHS.** The
+carrier switch installs a pointer at the receiver's +0x1b4 and a count at
++0x1ba:
+
+```
+  1600 -> hsine1600, 6      1680 -> hsine1680, 40    1800 -> hsine1800, 16
+  1829 -> hsine1829, 21     1867 -> hsine1867, 36    1920 -> hsine1920, 5
+  1959 -> hsine1959, 49     2000 -> hsine2000, 24
+```
+
+and `include/dsplib/v34filt.h` -- written by another batch, from another part
+of the object -- declares those tables as 12, 80, 32, 42, 72, 10, 98 and 48
+shorts. Eight independent agreements between a constant in this arm and an
+array length nothing here contributed to. The test asserts each one as
+`2 * count == taps` rather than restating the constant, so the agreement is a
+check and not a comment.
+
+**The first of the two `detectorinit` calls cannot be observed at all.** They
+differ only in the warm-up (10 against 0x78), `detectorinit` writes nine
+fields and reads nothing (src/pump/v34/detector.c), and the only statement
+between them is the receiver's flag word. So the second overwrites everything
+the first wrote and dropping the first is behaviour-preserving. Recorded as an
+equivalence with that condition stated, not dropped: the object makes both
+calls. The mutations of the SECOND call's arguments are what check the
+argument from the other side, and they are caught.
+
+**The second `flags |= DET_PENDING` is equally invisible**, for the plainer
+reason that the first already set the bit. Both raises are in the object and
+both are here.
+
+**2743 baud is in the arm's table and `setfinalrate` cannot produce it.** That
+function's receive switch yields 2400, 2800, 3000, 3200 or 3429 and nothing
+else, so 0xab7 arrives only from somewhere else -- `probeselect` has the same
+five, so today nothing in this tree reaches it. It is driven anyway, by the
+same trick that drives all six: **`setfinalrate`'s codes 1, 6 and 7 have no
+arm and leave the previous rate in place** (its own comment says so), so a
+receive rate code of 1 makes +0xaa96 and +0xaaa8 the test's to choose. That is
+what turns a two-dimensional switch into sixteen one-line cases.
 
 
 ======================================================================
@@ -20427,3 +20596,312 @@ checked; an anchor in a shared helper is deliberately allowed, because a label
 naming three arms and pointing into `t3m_errrec_core` is correct. **A clean
 run is not a proof.** It is the difference between checking nothing and
 checking the case that has already gone wrong nine times.
+### 443. The INFO1c arm builds the answer the INFO1a arm reads, and a record layout transcribed twice
+
+0x6f438 is the caller's INFO1c. After zeroing both trace counters and setting
+the transmit state to TX_DPSK it decodes the message-descriptor length, runs
+`probeselect`, installs +0xa9ac at +0xaa6c, and -- if `V34GiveINFO1dBits`
+answers zero -- calls `V34GiveProbeResults` and `V34SetINFO1aBits` and then
+fills the installed record in:
+
+```
+  +0x14 0xffff   +0x16 1     +0x18 0x26   +0x1a 0
+  +0x1c 8        +0x1e 0     +0x20 0      +0x22 0
+  +0x24 0xff72 (int)         +0x28 0x10   +0x2a 0x10
+  +0x2c 0xff72 (int)
+```
+
+**+0x18 is 0x26, which is the length the arm above answers to.** The two sized
+arms are the two ends of one exchange, so that constant is pinned from both
+directions: 0x6ed17's dispatch entry and 0x6f681's store.
+
+**0xff72 and not the restart's 0xf72.** Finding 401 recorded 0xf72 at the same
+two offsets of the record the restart installs; this is the same twelve bits
+with a thirteenth set above them, and both are full `movl`s. The test reads
+the high halfword of each so that a halfword store is caught.
+
+**THE MESSAGE-DESCRIPTOR LENGTH IS SEVEN BITS AND IS WRITTEN TWICE.** Both
+sized arms do it identically -- 0x6ee77 and 0x6f4c7:
+
+```
+   raw = ((+0xa9dc & 3) << 5) | ((+0xa9de & 0xf8) >> 3)
+   +0x35a2 <- raw
+   +0x35a2 <- bitreverse(raw, 7)
+```
+
+Nothing reads +0x35a2 between the two stores, so the first is invisible to any
+fixture and is recorded as an equivalence rather than dropped. **That
+equivalence has a second consequence worth stating**: `bitreverse(v, 7)` reads
+only bits 0..6, and bit 2 of +0xa9dc lands at bit 7, so widening the first
+mask from 3 to 7 is ALSO unobservable. The cases seed +0xa9dc with bit 2 set
+so that this is measured and not assumed, and a mask narrowed to 1 -- which
+moves a bit the reversal does read -- is caught.
+
+**And the record-filling sequence exists TWICE in the object, at two
+addresses, and the two transcriptions agree.** Microstate 41's "reinitializing
+Info1c" path at 0x6ceba..0x6da8e writes 0xff72 into +0x24 and +0x2c of the
+same +0xa9ac, clears the same +0x358c and goes to the same INFODONE; this arm
+does it at 0x6f6ac..0x6f6ba. The two address ranges are disjoint, so
+`cfgsplit`'s 906 exclusive bytes for 0x6f438 and finding 396's "137 blocks,
+every one exclusive to 41" are both intact -- GCC emitted the sequence twice.
+Two reconstructions written by two batches from two addresses agreeing field
+for field is the strongest corroboration available for a record layout, and it
+is why finding 347's anchor collision here was worth the repair rather than a
+rename.
+
+
+======================================================================
+
+### 444. What the blob does when the byte copy runs past ten slots, measured
+
+The brief for this batch expected the unbounded copy at 0x6e5c8 to be met
+immediately at a message length of 0x4d. **It cannot be**: 0x6e534's dispatch
+is AHEAD of the copy, so a 77-bit message goes to 0x6f438 and never reaches
+it. The copy belongs to the default arm alone, and the lengths that reach it
+with more than ten bytes are those above 64 that are none of 0x4d, 0x26 and
+0x08.
+
+So the question was answered where it can be asked, by two cases added to the
+default arm's own coverage -- no code of that arm was touched.
+
+**A message of 110 bits.** The counter reaches 126, `nbytes` is 126/8 rounded
+up = 16, and the loop runs sixteen times into an array of ten shorts:
+
+```
+  index 10 -> +0xabc2, WHICH IS `nbytes` ITSELF, four instructions after it
+              was stored there -- and what it copies is the record's own CRC
+              register at +0x14
+  index 11 -> +0xabc4                index 12 -> +0xabc6, the record's LENGTH
+  index 13 -> +0xabc8                index 14 -> +0xabca, `local_short`
+  index 15 -> +0xabcc, `is_short` -- WHICH THE ARM THEN READS at 0x6e824 to
+              choose the microstate it leaves in
+```
+
+All of it is inside the object, so the differential comparison sees every byte
+of it, and it passes: the blob does exactly this. The case seeds the record's
++0x1e with 3, `v90_receiver` with zero so that `V34GiveINFO0dBits` returns
+before it writes `is_short`, and then asserts that the arm leaves in
+RX_PHASE1_ANS -- **the successor state chosen out of a field of the message
+record that has nothing to do with the question.**
+
+A second case at 64 bits puts `nbytes` at exactly ten and asserts +0xabc2
+still holds the count, `local_short` still holds its seed and the arm leaves in
+TX_PHASE1_ANS. Without it the first case would be a measurement of the arm
+rather than of the loop bound.
+
+**Reproduced and not repaired**, and a mutation that bounds the loop at ten is
+caught. Finding 394 already established that +0xabae is exactly ten shorts and
+that +0xabc2 abuts them; this is what that costs at run time.
+
+
+======================================================================
+
+### 445. What this fixture cannot reach, the one place it was got past, and the one it was not
+
+Three of the five callees in these arms return early when both PCM receivers
+are zero, and turning either on walks a pointer chain `v34hs_setup` does not
+build. That decided which branches could be driven and it is stated here
+because two mutations are uncaught for exactly this reason.
+
+**The 0x26 arm's non-zero branch WAS got past.** `V34GiveINFO1aBits` returns
+the session's UINFO6 word and can only make it non-zero on the V.90 path,
+which writes four capability bytes through two pointers at session +0x612c and
++0x1760. The fixture aims the object's thirty-five pointers and the session's
+one pointer to the PCM receiver; those two hold the fill's pseudorandom
+address, and the branch faulted.
+
+The way past keeps every claim the fixture makes: **a buffer per side, aimed
+before the step, and the four bytes of each pointer put back before the
+comparison.** The arena is compared byte for byte with only the session's PCM
+pointer exempt, so leaving two differing addresses in it would have failed;
+restoring them costs nothing, and the two buffers are then compared to each
+other directly. What the decoder wrote is still checked side against side.
+
+**The PCM configuration block was not got past.** With a K56flex receiver the
+0x4d arm's `V34SetINFO1aBits` dereferences +0xac18 and faults, and with a V.90
+receiver `V34GiveINFO1dBits` walks the session to a `VPcmFloModem`. So in
+that arm:
+
+- `V34GiveProbeResults` returns before it copies anything, and a mutation
+  removing the call is NOT CAUGHT. The same call in the 0x26 arm is driven
+  with a receiver on, so the claim is tested there.
+- `V34GiveINFO1dBits` returns before it reads its buffer, so a mutation
+  handing it the wrong record is NOT CAUGHT.
+
+Both are gaps and neither is an equivalence: a fixture that built a V.92
+session would catch them. They are named in the registry with this reason
+rather than left as bare uncaught entries.
+
+**And one that is neither.** `probeselect` settles both baud rates at 2400 on
+every case here -- it is the bottom of its ladder and the fixture's probe bins
+admit nothing higher -- so the two arguments of the "V34PROBESELECT, in
+ANSWER" diagnostic are equal and swapping them is invisible. Two mutations
+that change WHICH field each argument reads are caught, which is the half that
+can be seen.
+
+
+======================================================================
+
+### 446. Landing three arms broke two neighbouring suites' anchors, and this is the third time
+
+Finding 347's rule fired again, and in both directions at once.
+
+**Outward.** `tools/reanchor.py` over every suite registered against
+`src/pump/v34/v34hshak.c` found two entries that had been unique when they
+were written and were not any more:
+
+```
+  v34hst3core  "62 raises the wrong receiver flag"                 2 -> 3 sites
+  v34hst3m41   "Info1c leaves the microstate at TX_PHASE1_ANS"     1 -> 2 sites
+```
+
+The first is `rx->flags |= V34_RX_FLAG_DET_PENDING`, which the 0x26 arm now
+spells twice more; the second is `hs_setstate(obj, HS_MICROSTATE,
+V34HS_INFODONE)`, which both the 0x26 and the 0x4d arm now reach. Both
+repaired by extending the anchor with the neighbouring statement and a note
+saying why. **All four suites registered against this file were then re-run in
+full**, not merely re-anchored:
+
+```
+  v34hshak      209 mutations   203 caught   0 uncaught   0 unusable
+  v34hst3m41     86              84          0            0
+  v34hst346      75              74          0            0
+  v34hst3core    42              42          0            0
+```
+
+**Inward.** Five of microstate 44's OWN entries went ambiguous, because the
+0x4d arm builds a record with the same field names as the restart's:
+`T44_R_CRC`, `T44_R_F1A`, `T44_R_F1E`, `T44_R_F22` and `T44_R_F16`. Re-anchored
+on the length line, which is the one that differs -- `nbits` in the restart
+and 0x26 in the arm.
+
+**And four went stale rather than ambiguous.** The entries that pinned the
+three message lengths did it by moving the constant so that a driven case fell
+into `t3c_unwritten` and the run aborted -- finding 358's abort-as-a-catch.
+With the bodies written those anchors match nothing. Rewritten to move the
+constant the other way, so each length is now pinned from both sides: a case
+AT the length takes its body and a case one away takes the default, and either
+substitution is a differing byte rather than a dead run. `--prefix T44_` is the
+wrong flag for a file where two suites' arms share the prefix; both repairs
+were made by hand against the disassembly.
+
+**The final position: 214 mutations, 204 caught, 0 unusable, 7 equivalent
+with their held-fixed conditions stated, 3 named gaps (finding 445).** Zero
+UNUSABLE is the number finding 347 says to read, and it is the number that was
+wrong four times before it was right.
+
+
+======================================================================
+
+### 447. `V34HS_REFINIT=1` under these three arms, and a stale count in finding 404
+
+34 checks fail with `V34HS_REFINIT=1` and every one of them is the same class:
+a pointer the arm INSTALLS during the step, holding our copy of a library
+table on side A and the blob's on side B. Counted with the report cap raised:
+
+```
+  +0xaa90  19   setfinalrate's transmit scale table
+  +0x0418   9   the receiver's half-sine window
+  +0x3564   2   the tone detector's coefficients
+  +0xaaac   2   setfinalrate's receive scale table
+  +0xaab0   2   its receive carrier descriptor
+```
+
+**No byte of the object, no byte of the arena and no transcript line fails.**
+That is finding 359's caveat exactly -- refinit brings both sides up with the
+blob's initialisers, which does nothing for a pointer written by the step --
+and finding 324 says no address comparison can settle it. The three arms'
+own cases name the selected table on side A instead, which is a stronger check
+than refinit could have made: `c2400_` against `c1200_`, and each of the eight
+half-sine windows against its own symbol.
+
+**Finding 404's version of this measurement is stale and this replaces it.**
+It records "ten checks fail under refinit and all ten are on one case, the
+retrain at tag 173", naming the two `Convolve32` holes at +0x2608 and +0x2a28.
+`t_v34hsmst44.c` has no tag 173 today and neither hole appears in the run, so
+the case that measurement was made on is not in the file any more. 404 is not
+renumbered and not edited; this is the current number and 404 is the earlier
+one, which is the convention CLAUDE.md asks for when a measurement moves.
+
+
+======================================================================
+
+### 448. The guards of these arms that cannot be driven from both sides, and why that is structural
+
+Six `hs_setstate` calls across the three arms compare the current state
+against the one they are about to write and skip the diagnostic when they are
+equal. Five of the six can never be equal, and it is not the fixture's doing:
+
+- **every microstate transition** -- to DET_SYNC, MOH_TONE_DROP and INFODONE
+  -- is reached with +0x3592 still holding 44, because that is what selected
+  the arm. `fskdemodulate` does not write it (finding 285) and neither does
+  anything between the dispatch and the transition.
+- **the rxstate transitions** to RX_DPSK, WAIT and RECEIVE are reached with
+  +0x3594 still holding 43, because that is what selected table 3 in the
+  rxstate chain at 0x62a02.
+
+In particular the 8-bit arm's `rxstate <- RX_DPSK` at 0x6eaa2 is a no-op on
+every path that exists, exactly as the restart's is (finding 401), and for the
+same reason.
+
+**The transmit state is the exception**, because nothing upstream constrains
+it: 0x6f438's `txstate <- TX_DPSK` is driven both ways, once from
+MOH_SILENCE and once from TX_DPSK itself. That case is also the only one in
+this batch whose tail is table 2's arm at 0x644c9 rather than its default.
+
+Written as the object writes them and named here, which is finding 418's
+practice: an untestable branch that is a faithful transcription is better than
+a plausible one that is not there, and an argument about reachability is what
+a later change breaks silently.
+
+**One forward pointer, appended and not renumbered.** Finding 404's refinit
+measurement is superseded by 447 above; nothing in 404 is edited, and this
+sentence is the pointer CLAUDE.md asks for when a reference still resolves but
+no longer points at the current number.
+
+**Findings 440-449 are this worktree's block; 440-448 are used. 407-409 of the
+earlier batch's block remain free.** Checked against `docs/findings.md`'s
+existing maximum and `tools/refcheck.py` before use.
+
+### 352a. A brief that passed on an unchecked claim, and the agent that measured it instead
+
+The brief for microstate 44's three sized accept arms told the agent, on
+finding 406's authority, that the accept path's byte copy has no bound and
+that it would "meet it immediately at length 0x4d". That was handed on without
+being checked.
+
+**It is wrong, and the agent said so rather than working around it.** The
+dispatch at 0x6e534 sits *ahead* of the copy, so no sized arm reaches it: the
+unbounded copy belongs to the default arm alone. Having established that, it
+went and measured the overrun where it *can* be asked, adding two cases to the
+default arm's coverage without touching that arm's code:
+
+```
+110 bits -> nbytes = 16 into an array of ten shorts
+  index 10  lands on +0xabc2, the byte count itself, overwritten with the CRC
+  index 12  the record's length
+  index 14  local_short
+  index 15  is_short -- which the arm then READS at 0x6e824 to choose the
+            microstate it leaves in
+```
+
+So the successor state is selected out of memory the copy has just walked over,
+and the case proves it: the state comes from the record's +0x1e. A companion
+case at 64 bits, where `nbytes` is exactly 10, shows it is the loop's bound and
+not the arm's. All inside the object, compared byte for byte.
+
+The lesson is about the briefs, not the arm. A hand-over paragraph is written
+by an agent that has not driven the thing it is describing; passing it on as
+established fact gives the next agent a premise it will either trust or spend
+time disproving. Finding 376 had the same shape and was corrected the same way
+by the batch that inherited it -- it said microstate 58 was on the `= 4` side
+of the reset split, and 58 has one of each.
+
+**Mark inherited claims as inherited.** "The previous batch reports X" costs
+four words and is the difference between a lead and a fact.
+
+#### Microstate 44 is complete
+
+No `t44_*` function contains a `t3c_unwritten`, by grep, and the thirteen
+remaining halts in the file all belong to arms nobody has taken. 6,046 bytes,
+the largest arm in table 3, across four batches.
