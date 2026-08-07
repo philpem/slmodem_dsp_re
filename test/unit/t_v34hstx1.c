@@ -50,21 +50,25 @@
  *   - route TXSAMPLE with a budget of ONE sample;
  *   - microstate PHASE1 and rxstate SILENCE, so neither of the other two
  *     machines contributes to the tail;
- *   - THE DIAGNOSTICS ARE OFF, and finding 570 says which half of finding
- *     341's gap that is really about.  The channel-routing half is fixed --
- *     `v34hs_step_case` joins both capture channels in call order (358a) --
- *     and turning the diagnostics on anyway leaves 161 of the 272 step cases
- *     failing on transcript.  Every one of those is a line the BLOB prints
- *     and we do not; we print nothing the blob does not, and no case differs
- *     in a byte of the object.  So the arms are right about the machine and
- *     silent about the trace, and 204 of the 760 missing lines come from
- *     `hs_setstate` and `v34FreezeEcho`, which already exist in the tree and
- *     are simply not called from here.
+ *   - THE DIAGNOSTICS ARE ON, which is a REVERSAL and the reason the
+ *     transcript is worth comparing at all.  They were off because the
+ *     suite could not be run any other way: finding 570 measured 161 of
+ *     the 272 step cases failing on transcript, 760 lines the BLOB prints
+ *     and we did not, and zero in the other direction.  Tasks #34 and #37
+ *     closed all 760 -- 204 by calling `hs_setstate` and `v34FreezeEcho`,
+ *     which already existed, and 556 by reconstructing the diagnostics of
+ *     eleven arms that the blob prints and this tree had never written.
  *
- *     `V34TX1_TRACE=1` re-runs that measurement: diagnostics on, and every
- *     case whose two transcripts differ printed side by side.  It is a
- *     diagnostic mode and the binary FAILS under it by design, so it is not
- *     in `make phase`.
+ *     So `v34hs_debug(1)` is now unconditional and `make phase` runs it.
+ *     The transcript comparison is a LIVE check rather than a vacuous one,
+ *     and the 27 `dsplibs_debug_printf` sites in `v34hstx1.cpp` are driven
+ *     rather than dead code nothing can distinguish from a clean tree
+ *     (finding 134).
+ *
+ *     `V34TX1_TRACE=1` no longer turns anything on.  It only DUMPS both
+ *     transcripts for a case whose two differ, which is now no case at all;
+ *     it is how the gap was measured while it existed and how a regression
+ *     would be read.
  */
 
 #include <stdio.h>
@@ -4128,13 +4132,16 @@ main(void)
 	diff_begin("v34handshak table 1: nineteen per-sample transmit arms");
 
 	/*
-	 * The diagnostics stay OFF; see the head of this file.  It is stated
-	 * rather than left to the default because it is part of what the
-	 * comparison holds fixed -- and `V34TX1_TRACE` is the one way to lift
-	 * it, which is finding 570's measurement and not a passing run.
+	 * The diagnostics are ON, and unconditionally; see the head of this
+	 * file.  It is stated rather than left to the default because it is
+	 * part of what the comparison holds fixed, and because it was the
+	 * other way round until the transcript gap reached zero.
+	 *
+	 * `V34TX1_TRACE` no longer decides it -- it only asks for the two
+	 * transcripts of a differing case to be printed side by side.
 	 */
+	v34hs_debug(1);
 	trace = getenv("V34TX1_TRACE") != NULL;
-	v34hs_debug(trace);
 
 	case_xmit0();
 	case_txlevel();
