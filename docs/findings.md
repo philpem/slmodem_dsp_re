@@ -21143,3 +21143,65 @@ unusable.
 saying `0 left for a human` means it found a unique extension, not that it
 found the right one, and a re-pointed mutation that still passes is invisible
 to every gate this tree has. Read the lines it prints, against the labels.
+
+### 353a. The prose heuristic was measured and rejected; the exact one is opt-in
+
+Finding 455 is a hit on `tools/reanchor.py`, which I wrote one commit earlier:
+it repaired three anchors in the `v34pcmif` set, reported **"0 left for a
+human"**, and pointed all three at the wrong function -- a newly added one that
+happened to be nothing but the line they anchored on. They would still have
+read CAUGHT. Only the line number it prints said otherwise.
+
+`anchorcheck.py`'s rule 1 could not see it: `v34pcmif.c` has no `case V34HS_*`
+dispatch, so the arm map is empty and the whole suite was skipped.
+
+**The obvious generalisation does not work, and this is the measurement.**
+Those labels are written `tag: claim`, and the tag looks like an abbreviation
+of the function -- `reneg:` for `VPcmV34InitiateRateRenegotiation`. Requiring
+the enclosing function's name to contain the tag gives:
+
+```
+6 flags on the real tree, all 6 false, 0 true
+  `tail:`  means the tail of v34handshakinit's setup; substring-matches
+           t3c_block_tail
+  `probe:` means the probe sequence; substring-matches probeselect
+```
+
+A check that cries wolf is worse than no check, and it is the same lesson the
+comment-derived arm map taught one commit earlier. The heuristic is recorded
+here and **not** shipped.
+
+What ships instead is exact and opt-in. A mutation may carry
+
+```json
+"fn": "VPcmV34InitiateRateRenegotiation"
+```
+
+and the anchor must land in that function; a name that matches no function in
+the source is itself an error. No inference, no false positives, and it
+protects exactly the entries whose author asked for it. Forty-two `v34pcmif`
+entries carry it now -- the three finding 455 repaired by hand and their
+neighbours. Proved by pointing one at `VPcmV34IndicateLocalRRN`:
+
+```
+  RE-POINTED  v34pcmif
+      label    reneg: status fork <=1 becomes <=2
+      fn says  VPcmV34IndicateLocalRRN
+      lands in VPcmV34InitiateRateRenegotiation
+```
+
+#### A third silent hole, in the tool that finds silent holes
+
+`defn_index`'s regex was `^([a-z_][a-z_0-9]*)\(` -- **lowercase initial
+required**. Every `VPcmV34*` and `V34*` function was invisible to it, so
+`v34pcmif.c` indexed as a file with no functions at all and `enclosing()`
+returned `None` for every anchor in it. Rule 1 skipped that file for a second,
+independent reason on top of the empty arm map.
+
+Three versions of this tool, three silent holes: the arm map from a comment
+two arms do not carry, `fn -> number` collapsing twenty-four states onto one,
+and now a regex that could not see half the tree's function names. Each
+reported a clean run. **A checker's own clean run is the least trustworthy
+output in the tree**, because nothing checks the checker -- and the only
+defence that has actually worked is planting the failure and watching it fire,
+which is what every one of these was caught by.

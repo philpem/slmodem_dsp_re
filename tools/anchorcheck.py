@@ -62,9 +62,37 @@ CASE = re.compile(
     r"\s*(?:/\*(?:[^*]|\*(?!/))*\*/\s*)?"
     r"\s*([a-z_][a-z_0-9]*)\(", re.M)
 CASE_NAME = re.compile(r"case\s+(V34HS_\w+):")
+#
+# THE SECOND RULE IS OPT-IN, BECAUSE THE PROSE VERSION DID NOT WORK.
+#
+# Finding 455: `reanchor.py` repaired three anchors in the `v34pcmif` set,
+# reported "0 left for a human", and pointed all three at the WRONG FUNCTION.
+# They would still have read CAUGHT.  Rule 1 cannot see it -- `v34pcmif.c` has
+# no `case V34HS_*` dispatch, so the arm map is empty and the suite is skipped.
+#
+# The obvious generalisation was to read the label's `tag:` prefix -- `reneg:`
+# for VPcmV34InitiateRateRenegotiation -- and require the enclosing function's
+# name to contain it.  MEASURED ON THE TREE: six flags, all six false.  The
+# tags are topical, not abbreviations: `tail:` means the tail of
+# `v34handshakinit`'s setup and merely substring-matches `t3c_block_tail`;
+# `probe:` means the probe sequence and matches `probeselect`.  Zero true
+# positives.  A check that cries wolf is worse than no check, which is the
+# same lesson the comment-derived arm map taught one commit earlier.
+#
+# So the rule is exact and opt-in instead: a mutation may carry
+#
+#     "fn": "VPcmV34InitiateRateRenegotiation"
+#
+# and the anchor must land in that function.  No inference, no false
+# positives, and it protects exactly the entries whose author asked for it.
+#
 STATE_DEF = re.compile(r"^#define\s+(V34HS_\w+)\s+(\d+)\s*$", re.M)
-# a definition in this tree's style: return type on its own line, name at col 0
-DEFN = re.compile(r"^([a-z_][a-z_0-9]*)\(", re.M)
+# A definition in this tree's style: return type on its own line, name at
+# column 0.  UPPERCASE INITIALS TOO -- the first version required a lowercase
+# first letter, so every `VPcmV34*` and `V34*` function was invisible and
+# `v34pcmif.c` looked like a file with no functions in it at all.  That is the
+# same shape as the comment-derived arm map: a check with a silent hole.
+DEFN = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\(", re.M)
 NUMS = re.compile(r"\b(\d{2})\b")
 
 
@@ -130,8 +158,7 @@ def main():
             continue
         src = open(source).read()
         idx, arms = defn_index(src), arm_map(src)
-        if not arms:
-            continue
+        defined = {n for _, n in idx}
         #
         # ONE FUNCTION CAN OWN MANY MICROSTATES.  Twenty-four of the forty
         # share a single arm, so a fn -> number dict would keep whichever won
@@ -149,10 +176,30 @@ def main():
             if len(hits) != 1:
                 continue                      # reanchor.py's problem, not ours
             fn = enclosing(idx, hits[0])
+            label = m.get("label", "")
+
+            #
+            # RULE 2, opt-in: `"fn"` says which function the anchor belongs
+            # in, and is checked exactly.  Applies to every suite.
+            #
+            want = m.get("fn")
+            if want:
+                if want not in defined:
+                    print("  BAD fn      %s: %r names no function in %s"
+                          % (name, want, source))
+                    suspect += 1
+                    continue
+                if fn != want:
+                    print("  RE-POINTED  %s" % name)
+                    print("      label    %s" % label)
+                    print("      fn says  %s" % want)
+                    print("      lands in %s\n" % fn)
+                    suspect += 1
+                continue
+
             if fn not in owner:
                 continue                      # shared helper: legitimate
             here = owner[fn]
-            label = m.get("label", "")
             claimed = {int(x) for x in NUMS.findall(label)
                        if int(x) in arms}
             if claimed and not (claimed & here):
