@@ -433,3 +433,80 @@ Two things it settles for whoever writes `v34handshak`:
 `VPcmV34InitiateRetrain`, `V34GiveINFO1dBits`, `indicateJaTransmission`. With
 #60 already closed, the only V.34/V.90 work left is `v34handshak` itself
 (61,541 bytes, #56-#58) and `datapumpv34` (1,028) behind it.
+
+## What is still owed, in order — read this first if you are resuming
+
+Task numbers do not survive a session (`CLAUDE.md` says so, and two stores
+already disagree about `#11`-`#22`). This section is the durable copy. Every
+item below is measured, not planned.
+
+### 1. Two arms of table 1, in flight at the time of writing
+
+    21  TRNSEG4   0x64339  2,290 B
+    66  TRNSEG4A  0x62e28  3,583 B
+
+Finding 420 is their hand-over: addresses, level-0 block ranges, callees,
+rejoins, entry conditions. Neither shares a dispatch entry with anything, but
+both write `v34hstx1.cpp` and its two companions, so they need **separate
+worktrees and must not run parallel in one tree**.
+
+66's exclusive set ends one byte below 0x66fe9, exactly where 86's
+`V34TX1_TXMD_DONE` transfers. If that block falls through, landing 66 may
+retire finding 343's "one transfer with no oracle" — one of `v34hstx1`'s seven
+uncaught mutations.
+
+### 2. THEN, AS ONE BATCH AND IN THIS ORDER: unify, then rename
+
+**2a. Unify the two reconstructions of `v34handshak`** (finding 348).
+
+```
+v34hshak.c        v34handshak        41, 44, 46, 62, 79, 80, the 24-state arm
+v34hshak_t3mid.c  v34handshak_t3mid  47/56, 48, 49, 50, 51, 55, 58, 59, 63
+```
+
+Both are differentially tested by different routes, so neither is dead. The
+two tail readings have been **checked and agree** (finding 350a) — that
+concern is closed and should not be re-opened. What is genuinely duplicated:
+the prologue, the guard chain, the rxstate chain, the table-3 dispatch and
+three of table 2's arms. Finding 373 answers the last — keep `w4_hs_t2`'s.
+Choose each of the others **against the disassembly**, not by taking whichever
+copy is first.
+
+**2b. Replace the 23 offset macros that bypass a named field** (finding 356a).
+`struct v34_object` names 159 fields; 23 of the arms' 95 object-based offset
+macros land on one of them. `+0xabf0` has three macros and is `moh_message`;
+`+0xaae2` has two and is `fsk.sr`; `+0x264` is `rxq.count`. The full list is in
+356a. The other 72 land in `unmapped_`/`pad_` and are honest.
+
+**WHY ONE BATCH.** Both rewrite the same files and both break the same ~500
+anchors across five mutation suites. Separately that is two repair passes, and
+anchor repair is what produced finding 432's nine silent re-pointings. Unify
+first — it moves code wholesale and breaks the anchors anyway — then the
+rename touches ONE file instead of two, then repair once:
+
+- `tools/anchorcheck.py` is already in `make phase`'s `refs` target;
+- put `"fn": "<function>"` on **every** touched mutation entry;
+- read `reanchor.py`'s printed line numbers against the labels rather than
+  trusting `0 left for a human` (finding 455 is three anchors it repaired
+  into the wrong function while saying exactly that).
+
+### 3. Larger, and a field-map job rather than a rename
+
+The **72** offsets that land in `unmapped_`/`pad_` are unmodelled because
+nobody has modelled them. Turning them into fields means extending
+`struct v34_object` by measurement, with the same discipline as any other
+field map here — a displacement is not a size (finding 215), and a passing
+test proves nothing about memory neither side writes (223, 224).
+
+### 4. Open gaps that are named rather than fixed
+
+- **Finding 341/355a's trace gap**, still open after two batches were asked.
+  `V34EchoReportCoeff` only prints, and the table-1 mechanism requires
+  diagnostics off, so mutations inside it cannot be caught. Seven uncaught in
+  `v34hstx1`, all pre-existing and named. Its enumeration covers three arms of
+  eleven while reading as complete; finding 420 says so and gives the
+  mechanical way to regenerate it.
+- **D61**: what the pre-arena fixture layout was feeding the per-sample
+  transmit loop is still unnamed; `sess` is the only thread left to pull.
+- **`datapumpv34`'s handshake loop** cannot be iterated until an arm exists
+  that lowers +0x264 or raises +0x221c (finding 452).
