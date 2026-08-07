@@ -28414,3 +28414,59 @@ not. It and `CodecOutput` are the two values of `txPowerMeasurementPoint`, a
 V.90 Phase 2 INFO parameter saying where the modem measures its transmit
 power — the reconstruction's own comment says the object names the two VALUES
 and not the type. A suggestive string is not a capability.
+
+### 702. Costing the dead modulator branch: it IS the digital side, and it is 26 KB
+
+Finding 701 established that `V90Modulator` is real code the object never
+constructs. This costs it, and settles what it is.
+
+**It is the digital side's transmit chain.** `V90Modulator::progress` — 780
+bytes, the largest of its nineteen methods — calls, in order:
+
+    Scrambler<int, unsigned char>::process(int const*, unsigned char*, unsigned)
+    V90BitsToSymbol::process(unsigned char *, unsigned int &, short *)
+    V90Phase3Modulator::generateSymbol()  /  V90Phase4Modulator::generateSymbol()
+
+Scramble, then map BITS TO SYMBOLS, then generate. Bits-to-PCM-codewords is the
+sender's job; the analogue client does the inverse through `V90Demapper`. The
+closure confirms it from another direction: it pulls in `ModulusEncoder`
+(497 bytes) and `V90SpectralShaper`'s 512-byte `actionLookupTable`. Modulus
+encoding and spectral shaping are both things the DIGITAL modem does to the
+downstream signal. Nothing in the analogue receive path needs either.
+
+**It is completely orphaned.** Every call to a `V90Modulator` method comes from
+a `V90Modem` member — constructor, destructor, `reset`, `setSessionFlag`,
+`progress` — and nothing else in 1.2 MB touches it. `V90Modem` only ever gets
+side 1 (finding 701), so the whole chain is unreachable as shipped.
+
+**The cost, from `tools/closure.py`:**
+
+| | symbols | bytes |
+|---|--:|--:|
+| full closure of `V90Modulator` | 104 | 31,435 |
+| **still unwritten** | **90** | **26,334** |
+| — calls | 70 | 24,636 |
+| — templates | 18 | 1,166 |
+| — data | 2 | 532 |
+
+About 5 KB of the closure already exists, mostly `Scrambler` instantiations the
+V.90 work wrote for the receive path.
+
+**Proportion.** 26 KB against the 159,739 bytes reconstructed so far, and
+against `v34handshak`'s 61 KB. It is a large module, not a project.
+
+**The catch, restated because it is the thing that decides whether to do it.**
+This code has no tier-1 oracle. Every differential test here drives the blob
+and compares; a path the blob never enters cannot be driven, so nothing can
+show the reconstruction BEHAVES correctly — only that it is byte-faithful,
+which tier 3 can still do. And there is no way to tell from the object whether
+the branch was finished or abandoned half-written. The first real evidence
+either way would be interop against a live analogue client, which makes the
+hardware peer a prerequisite rather than a convenience.
+
+**What this does NOT cost.** Reaching the point where the 26 KB could be
+exercised needs the rest of the V.90 receive path first — the 290 KB
+`VPcmV34Main.cpp` span — because `V90Modem` is constructed by
+`VPcmFloModem`, which is constructed by `VPCMXF_Create`, all of which sits
+inside it. The modulator is the last 26 KB of a much longer road, not a
+shortcut onto it.
