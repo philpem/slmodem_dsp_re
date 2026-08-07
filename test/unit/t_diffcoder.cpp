@@ -6,7 +6,7 @@
  * that wrote past +12 would be caught rather than ignored.  Nothing here needs
  * the bits-taking treatment t_sinewave and t_queue use: every argument is an
  * integer or a pointer, so no value passes through an x87 register on its way
- * in (finding 340).
+ * in (finding 600).
  *
  * The two sides own SEPARATE allocations, so `state_` is never compared as an
  * address -- only whether it is null, and what it points at.

@@ -9,7 +9,7 @@ expression shape, the operand order and the control flow were recovered, not
 merely something equivalent to them.
 
 Build the objects first, with the period toolchain (see the Dockerfile here and
-finding 346):
+finding 606):
 
     docker build --platform linux/386 -t dsplibs-tc tools/toolchain
     tools/toolchain/build.sh            # writes /tmp/tc_out/*.o
@@ -41,7 +41,7 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
                             byte-identical; tree-wide it accounts for ALL of
                             -O3's advantage, 83 identical -> 92.  The rest of
                             -O3 adds 17 KB of our code and no matches at all,
-                            so -O3 itself is disfavoured.  Finding 356.
+                            so -O3 itself is disfavoured.  Finding 616.
 
 `-O2` is the level, on the evidence above.  What is still open is only whether
 the original passed `-frename-registers` explicitly or passed `-O3` and got it
@@ -58,7 +58,7 @@ code, not only when we emit more of the RIGHT code -- we currently undershoot,
 so anything that inlines harder closes the gap arithmetically, and a build that
 inlined wildly could pass 100% while matching nothing.  The byte-identical
 count cannot be gamed that way.  Quote that; quote the percentage only
-alongside it.  Finding 352.
+alongside it.  Finding 612.
 """
 
 import argparse
@@ -91,14 +91,14 @@ RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #
 # A per-symbol size comparison across an inlining boundary measures the
 # reconstruction's FACTORING, not its completeness -- the same trap
-# debugaudit.py fell into (finding 345).  Where we broke one of the original's
+# debugaudit.py fell into (finding 605).  Where we broke one of the original's
 # functions into static helpers, the helpers have no blob symbol, so their
 # bytes are counted against neither side and the blob's function shows the
 # whole difference as missing.  The per-object rollup below fixes that case on
 # its own.
 #
 # It cannot fix a split across FILES, because there is nothing in either object
-# to say the two belong together.  Those are declared here.  Finding 350.
+# to say the two belong together.  Those are declared here.  Finding 610.
 #
 TU_GROUPS = (
     ("src/v8/v8handshak.c", "src/v8/v8hsrx.c"),
@@ -179,7 +179,7 @@ def main():
         print("\nIDENTICAL MNEMONIC SEQUENCES.  Operands are NOT compared -- two"
               "\nfunctions storing the same constants to different offsets in a"
               "\ndifferent order both read as `mov mov mov` and count here."
-              "\nStrong evidence, but not byte equality.  Finding 355:")
+              "\nStrong evidence, but not byte equality.  Finding 615:")
         for b, k in sorted(identical, reverse=True):
             print("  %5d  %s" % (b, k))
 

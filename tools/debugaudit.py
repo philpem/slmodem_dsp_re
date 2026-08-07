@@ -448,7 +448,7 @@ def main():
     # missing.  `callprog.c` is the worked example: `CALLPROG_Progress` reads
     # as 15 sites short, and every one of them is present a few lines away in
     # `request_state`, `detect`, `apply_event` or `run_timeouts`.  A per-file
-    # total has no such boundary to fall through.  See finding 345.
+    # total has no such boundary to fall through.  See finding 605.
     #
     by_file_blob, by_file_ours = {}, {}
     for fn, lst in sites.items():

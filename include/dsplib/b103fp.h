@@ -180,7 +180,7 @@ struct b103_hdx {
 	 * turns on it while the value stays in 0..0x7fff -- which is why 1,104
 	 * differential tests never saw it -- but it is the type the original
 	 * declared, and the instruction-level comparison found it.
-	 * Finding 353.
+	 * Finding 613.
 	 */
 	unsigned short mode;	/* +0x00 index into B103NextState:
 				 *       0 loopback, 1 originate, 2 answer */

@@ -2,7 +2,7 @@
 """Where does our STATEMENT ORDER differ from the original's?
 
 A DIFFERENCE HERE IS A HINT, NOT A CONCLUSION, and the distinction cost a
-false premise once already (finding 357).  GCC does NOT simply preserve source
+false premise once already (finding 617).  GCC does NOT simply preserve source
 order: `toneiir_reset`'s source is already in the object's order and the
 compiler emits ours in a different one, hoisting a short store and sinking an
 int store.  So you cannot read the author's statement order off the object.
@@ -16,7 +16,7 @@ it only shuffles this list, it is noise and must be left alone.
 That is recoverable source, and worth recovering: ours are frequently sorted by
 struct offset, which is a tidiness we imposed, and it erases whatever grouping
 the author had.  A comment pass that writes "initialise the filter state" over
-a list we sorted is describing our sorting.  Findings 355 and 357.
+a list we sorted is describing our sorting.  Findings 615 and 617.
 
 Only stores through a register holding a pointer argument are considered, and
 only functions where the two SETS agree -- a different set is a different

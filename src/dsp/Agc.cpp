@@ -4,7 +4,7 @@
  * Verified against the object over 6,466,255 comparison points and a
  * 24-mutation kill table; re-verified in this tree by t_agc.  Three of those
  * mutations were at zero kills until a case was built specifically to separate
- * them, which is recorded in finding 348 because "0 kills, presumably
+ * them, which is recorded in finding 608 because "0 kills, presumably
  * equivalent" would have shipped three unproven readings looking verified.
  */
 
@@ -27,7 +27,7 @@ Agc<T>::Agc()
 /*
  * Leaves `alpha` at 1.0 -- FROZEN AT UNITY GAIN, not adapting.  `count` is
  * reloaded from whatever `blockLen` currently holds, which is what makes the
- * caller defect in finding 348 possible.
+ * caller defect in finding 608 possible.
  */
 template <class T>
 void Agc<T>::reset()
@@ -38,7 +38,7 @@ void Agc<T>::reset()
 	 * so the sequence in the object is the sequence in the author's source:
 	 * the two live values together, then the backup that `freeze` writes.
 	 * Ours was sorted by offset, which is a tidiness we imposed.
-	 * Finding 355.
+	 * Finding 615.
 	 */
 	alpha = T(1);
 	gain = T(1);
@@ -126,7 +126,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			 * is 1.0/blockLen and `de f2` is 1.0/lvl (finding 245).
 			 * Dividing the other way costs 24 and 20 mismatches
 			 * respectively -- tiny, and only reachable by the cases
-			 * built for them, which is the point of finding 348.
+			 * built for them, which is the point of finding 608.
 			 */
 			long double lvl = (1.0L / blockLen) * acc;
 
@@ -163,7 +163,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 /*
  * MEMBER BY MEMBER, not `template class Agc<float>;` -- the object contains
  * these four symbols and no destructor at all, and an explicit class
- * instantiation would emit one (finding 343).  Its absence is itself evidence:
+ * instantiation would emit one (finding 603).  Its absence is itself evidence:
  * an implicit destructor is only omitted when it is trivial, so nothing here is
  * owned and nothing is virtual.
  */

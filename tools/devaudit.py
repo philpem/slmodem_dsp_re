@@ -16,7 +16,7 @@ the specific deviant path is, only that it could be.
 So a "no" here is conclusive and a "yes" is an invitation to look. That
 asymmetry is the point: it turns 59 entries into a short list worth reading.
 
-TWO WAYS A "NO" IS STILL WRONG, both met in practice (finding 362):
+TWO WAYS A "NO" IS STILL WRONG, both met in practice (finding 622):
 
   - A TABLE USED INTERNALLY by a tested function is exercised without any test
     naming it.  D42's `StateName` is read by `hs_setstate`, which the transcript

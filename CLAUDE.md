@@ -79,7 +79,7 @@ repaired 819 call sites that were silently discarding the offset they computed
 ## The second tier: comparing code generation
 
 `.comment` names the original's compiler 279 times over — **GCC 3.4.2**, built
-22 September 2005 (finding 346). `tools/toolchain/` has a container with it,
+22 September 2005 (finding 606). `tools/toolchain/` has a container with it,
 and `make similarity` builds every translation unit with it and compares the
 result against the blob, function by function.
 
@@ -98,8 +98,8 @@ The flags were derived from the object, not guessed, and are in
 `-mtune=i686` is worth knowing about: `-march` and `-mtune` are separate
 questions and only the first leaves a trace, so "no cmov in 1.2 MB" bounds the
 instruction set and says nothing about scheduling. Finding it took the match
-from 30 to 82 (finding 352). `-frename-registers` took it to 92 and settled
-`-O2` against `-O3` (356).
+from 30 to 82 (finding 612). `-frename-registers` took it to 92 and settled
+`-O2` against `-O3` (616).
 
 ### The rule for reading a codegen difference
 
@@ -110,14 +110,14 @@ came from getting that backwards.
 - **Forced, so act on it:** the signedness of a load whose 32-bit result is
   used. `movzwl` where we emit `movswl` on a value that indexes a table means
   the declared type differs. That found a real defect no test could see
-  (353), because the two readings agree over every value the field holds.
+  (613), because the two readings agree over every value the field holds.
 - **Free, so ignore it:** register allocation. Instruction scheduling. The
   extension on a load whose upper half is discarded — a 16-bit field copy can
-  use either instruction (354). Chasing these means permuting source until the
+  use either instruction (614). Chasing these means permuting source until the
   output matches, which is fitting the compiler, not recovering the source.
 - **In between, and it needs the strong test:** statement order. GCC does NOT
   simply preserve it — `toneiir_reset`'s source is already in the object's
-  order and the compiler reorders ours (357). A store-order difference is a
+  order and the compiler reorders ours (617). A store-order difference is a
   hint; the acceptance test is FULL-TEXT identity, operands included. Two
   functions passed it, seventeen did not and were left alone.
 
@@ -131,7 +131,7 @@ came from getting that backwards.
   in `make phase`. 100% is not the target: different factoring differs for
   ever while behaving identically.
 - `storeorder.py`, `extcheck.py` — triage aids, not gates. `extcheck` runs
-  about one true positive in four (359) and every hit must be traced by hand.
+  about one true positive in four (619) and every hit must be traced by hand.
 
 **Any tool here must be shown to fire.** `extcheck` printed "(none)" through
 four broken versions and there was no way to tell a clean tree from a dead
@@ -191,12 +191,12 @@ Task numbers are not safe across sessions either: two task stores exist whose
   offset as an inline addend, so searching the disassembly for a string's
   address finds nothing and proves nothing. `tools/relocscan.py --at
   .rodata.str1.1:0xNNNN` is what answers "who references this string" —
-  finding 344, where not knowing that had a defect misdiagnosed for weeks.
+  finding 604, where not knowing that had a defect misdiagnosed for weeks.
 - A per-FUNCTION count across an inlining boundary measures our factoring, not
   our completeness: where we split one of the original's functions into static
   helpers, the helpers have no blob symbol and their bytes count against
   neither side. Read `debugaudit.py --missing`'s per-file rollup first
-  (finding 345), and `compare.py`'s per-object one (350).
+  (finding 605), and `compare.py`'s per-object one (610).
 - Use `tools/dis.py`, not raw `objdump`, for anything that might touch a
   table: objdump prints relocations on their own lines and every convenient
   way of trimming its output drops them, turning a table of pointers into a

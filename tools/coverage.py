@@ -88,7 +88,7 @@ BENIGN = (
     # here emits all four.  Nothing calls them -- there is no virtual base
     # anywhere in the object -- so they are dead weight rather than drift, and
     # listing them every run would bury the strays that matter.  Settled once
-    # for the whole weak-symbol batch; see finding 341.
+    # for the whole weak-symbol batch; see finding 601.
     (re.compile(r"^_Z.*[CD]2E"), "base-object ctor/dtor, no virtual bases"),
 )
 

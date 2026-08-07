@@ -5,11 +5,11 @@ A `movswl`/`movzwl` (or `movsbl`/`movzbl`) is the compiler stating the declared
 type of what it loaded.  Where the object sign-extends and we zero-extend, or
 the reverse, one of the two declarations is wrong -- and a differential test
 usually cannot tell, because the two agree over every value the field actually
-holds.  Finding 353 is the worked example: `struct b103_hdx.mode` was `short`
+holds.  Finding 613 is the worked example: `struct b103_hdx.mode` was `short`
 here and `unsigned short` in the original, it indexes a table of function
 pointers, and 1,104 tests never saw it.
 
-THE RULE THIS TOOL EXISTS TO APPLY (finding 354).  An extension difference is
+THE RULE THIS TOOL EXISTS TO APPLY (finding 614).  An extension difference is
 evidence ONLY IF THE 32-BIT RESULT IS USED.  Where the loaded value is stored
 straight back as 16 bits -- a field copy, a filter history shifting along --
 the upper half is discarded and the compiler was free to pick either
@@ -88,7 +88,7 @@ def extensions(insns):
         # something else and re-extended a copy the way the type actually
         # requires.  Reading the first instruction as the type gets it exactly
         # backwards, which is how `fskdemodulate`'s four "hits" arose.
-        # Finding 358.
+        # Finding 618.
         #
         low16 = LOW16.get(reg)
         if low16 and any(re.match(r"mov[sz][wb]l\s+%s," % re.escape(low16), n)
@@ -113,12 +113,12 @@ def extensions(insns):
         #
         # KEY ON THE DISPLACEMENT, NOT THE OPERAND TEXT.  The base register is
         # whatever the allocator picked, and it differs between the two builds
-        # far more often than not -- the defect in finding 353 reads
+        # far more often than not -- the defect in finding 613 reads
         # `movzwl (%ecx)` in the object and `movswl (%edx)` here.  Matching on
         # the full text never pairs those, which is why the first version of
         # this tool could not find the one defect it was written for.
         # Stack slots are excluded: those are locals, not fields.
-        # Finding 358.
+        # Finding 618.
         #
         m2 = re.match(r"(0x[0-9a-f]+)?\((%e[a-z][a-z])\)$", src)
         if m2 and m2.group(2) != "%esp":
@@ -151,7 +151,7 @@ def main():
         # and comparing the two sides as SETS then manufactures a pair in each
         # direction.  `demapFrame`'s 0x144c and `receiver`'s 0x210..0x216 each
         # appeared twice, in opposite directions, which is self-contradictory
-        # and was the tell.  Finding 358.
+        # and was the tell.  Finding 618.
         #
         # Per SIDE.  Unioning the two sides' mnemonics would make every genuine
         # disagreement filter itself out, which it did.

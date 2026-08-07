@@ -19,7 +19,7 @@ extern "C" void sysdep_free(void *p);
 /*
  * The element copy.  `dsplib_assign` is the plain assignment the original's
  * source said, plus the one thing a modern compiler needs to be held to it --
- * see dsplib/x87copy.h, and finding 340 for what a signalling NaN does to the
+ * see dsplib/x87copy.h, and finding 600 for what a signalling NaN does to the
  * x87 form.  t_queue's third block is the case that tells them apart.
  */
 template <class T>
@@ -40,7 +40,7 @@ __attribute__((noinline)) void Queue<T>::reset()
 	 * `rd = wr = buf`, not `wr = rd = buf`: the object stores `wr` first,
 	 * and written this way the function comes out full-text identical to
 	 * it, operands and all.  The two spellings are equivalent -- both set
-	 * both -- so this is the author's, recovered.  Finding 357.
+	 * both -- so this is the author's, recovered.  Finding 617.
 	 */
 	rd = wr = buf;
 }
