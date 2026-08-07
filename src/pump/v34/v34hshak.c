@@ -2929,10 +2929,25 @@ ApplyBulkDelay(void *objp, short delay)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
-/* The three state words, in all three of the spellings that reach them. */
-HS_OFF_ASSERT(microstate,  microstate, HS_MICROSTATE);
-HS_OFF_ASSERT(rxstate,     rxstate,    HS_RXSTATE);
-HS_OFF_ASSERT(txstate,     txstate,    HS_TXSTATE);
+/*
+ * The three state words -- BUT ONLY IN v34hshak.h's SPELLING, and the three
+ * `HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE` above are deliberately NOT here.
+ *
+ * They were, for one run.  `test/mutations/v34hshak.json` already carries
+ * "rxstate and txstate offsets transposed", which rewrites `#define
+ * HS_RXSTATE 0x3594` to 0x3596, and the recorded verdict is CAUGHT -- a
+ * differential test tells the two machines apart.  Asserting the same fact
+ * here turned that mutant into one that does not COMPILE, and the snapshot
+ * caught the change as `caught -> unusable`.
+ *
+ * An unusable mutation does not fail a run (finding 347) and is the silent
+ * loss `tools/mutsnap.py` exists to make visible, so trading a measured
+ * guarantee for a tautological one is a bad trade even when the tautology is
+ * checked earlier.  The split is therefore by who already covers what:
+ * v34hshak.c's own three macros are covered by that mutation, and
+ * v34hshak.h's three -- which every one of the fifty-nine call sites passes
+ * and which no mutation touches -- are covered here.  Finding 637.
+ */
 HS_OFF_ASSERT(hdr_micro,   microstate, V34HS_MICROSTATE_OFF);
 HS_OFF_ASSERT(hdr_rxstate, rxstate,    V34HS_RXSTATE_OFF);
 HS_OFF_ASSERT(hdr_txstate, txstate,    V34HS_TXSTATE_OFF);

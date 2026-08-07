@@ -27486,3 +27486,41 @@ width is measured but whose *span* is not, where naming one field would be a
 claim about where the next begins (215); and +0xaae2, which is `fsk.sr` and
 keeps its offset for the one byte-wide reader at 0x65c8a -- finding 553, and
 the reason this batch checked every reader's width before declaring anything.
+
+### 637. A compile-time check placed where a mutation already measured the same thing turned a CAUGHT mutation into an UNUSABLE one
+
+Finding 632 bound v34hshak.c's offset macros to the fields task #33 named,
+with the negative-array typedef v34shell.c already uses. The first version
+asserted all six spellings of the three state words -- v34hshak.c's own
+`HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE` and v34hshak.h's three
+`V34HS_*_OFF`. `make phase` passed. `tools/mutsnap.py --verify` did not:
+
+    v34hshak         1 verdict(s) MOVED
+        rxstate and txstate offsets transposed       caught -> unusable
+
+`test/mutations/v34hshak.json` has carried that mutation for a long time: it
+rewrites `#define HS_RXSTATE 0x3594` to `0x3596` and the recorded verdict is
+CAUGHT, so a differential test can tell the receive machine from the transmit
+one. Asserting the same fact at compile time turned that mutant into one
+that does not build.
+
+**That is a bad trade even though the compiler is the earlier check.** An
+unusable mutation does not fail a run (finding 347); it is the silent loss
+`mutsnap` was built to make visible (545), and the suite quietly stops
+measuring the thing it was written to measure. A tautology checked at
+compile time is not worth an empirical guarantee given up.
+
+So the asserts are split by who already covers what. v34hshak.c's own three
+macros are covered by that mutation and are NOT asserted. v34hshak.h's three
+-- which all fifty-nine call sites pass and which no mutation in the tree
+touches -- are asserted, along with the nine `T3M_*`/`T3C_*` macros for the
+other nine fields, none of which any mutation touches either (checked by
+grepping every `#define` any mutation rewrites: eleven, and only `HS_RXSTATE`
+collides). After the split, `v34hshak` is 209 verdicts, all unchanged.
+
+**The general shape.** Adding a static check to a file that has a mutation
+suite is not free, and `make phase` cannot see the cost -- it went green with
+the mutation broken. The check that caught it was one that compares against a
+record by NAME rather than counting, which is exactly the argument 545 makes
+for the snapshot existing at all. Grep the mutation files for anything you
+are about to assert.
