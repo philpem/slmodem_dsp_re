@@ -15327,3 +15327,53 @@ as a derivation is the failure mode finding 215 exists to prevent.
 scoped, with its hypothesis and its route written down. The reachability
 measurement and file-header rationale that `fastpass.md` also deferred are
 untouched.
+
+#### What the spec gave, and why the scale tables are still not derived
+
+Going to ITU-T V.34 (02/98) §5.4 for the pre-emphasis definitions advanced the
+problem without finishing it. Recording what came back, so the next attempt
+starts here.
+
+**The spec's parameters.** Eleven indices, 0 to 10. Indices 0-5 are one
+template family with a single parameter alpha = 0, 2, 4, 6, 8, 10 dB
+(Table 3/V.34); indices 6-10 are a second family with a pair, beta = 0.5, 1.0,
+1.5, 2.0, 2.5 dB and gamma = 1.0, 2.0, 3.0, 4.0, 5.0 dB (Table 4/V.34). The
+spectra are specified over the normalized band `d/e - 0.45` to `d/e + 0.45`.
+
+**And this is where it stops:** the templates themselves are Figures 1 and 2,
+which are IMAGES in the PDF. alpha, beta and gamma are the parameters OF a
+shape the text never states. Without the figure geometry there is no response
+to integrate, so the RMS-gain hypothesis cannot be tested from this source.
+
+**Two structural facts that contradict the source comment.** `v34hshak.c` reads
+the tables as "the ten pre-emphasis characteristics V.34 defines plus the flat
+one, truncated where the rate cannot use them all". The counts do not fit:
+
+| table | non-zero per row | leading zero |
+|---|---|---|
+| `scale2400` | 9 | no |
+| `scale2800` | 10 | yes |
+| `scale3000` | 11 | yes |
+| `scale3200` | 12 | yes |
+| `scale3429` | 13 | yes |
+
+Eleven indices cannot fill twelve or thirteen slots, so 3200 and 3429 are
+indexed by something wider than the pre-emphasis index alone. And every rate
+but 2400 begins with a zero, which the "truncated" reading does not predict
+either -- truncation removes entries from the END, as 2400's trailing zeros do.
+
+`preempindex` is consistent with the leading zero and not with the rest: it
+initialises `i = 5` and increments BEFORE its first test, so it can only ever
+return 6 or more (which is also why D36's "index is 0" arm is unreachable).
+Whatever selects entries 1 to 5, it is not that function.
+
+**One clue worth keeping.** `preempindex`'s per-rate ratio is exact for one
+rate only: `scale3000`'s `0x656f` is 25967, and `round(10^(4/20) * 16384)` is
+25967 -- **exactly 4 dB**. The other four are 5.86, 4.18, 3.84 and 4.06 dB and
+land on nothing clean, and they are not even monotonic in the symbol rate
+(3429's exceeds 3200's). A single exact value among five is either the anchor
+the others are derived from, or a coincidence at four significant figures.
+
+So: the parameters are captured, two readings in the source are shown to be
+wrong, and the derivation still needs the figure geometry -- from the figures
+themselves, or from a V.34 implementation that states the templates in text.
