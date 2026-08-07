@@ -2898,6 +2898,72 @@ ApplyBulkDelay(void *objp, short delay)
 
 /*
  * ---------------------------------------------------------------------------
+ * TWELVE OF THE OFFSETS ABOVE NOW NAME A FIELD, AND THE COMPILER HOLDS THE
+ * TWO SPELLINGS TOGETHER.
+ *
+ * Task #33 measured `struct v34_object` where these macros land and turned
+ * twelve spans into fields -- findings 630 to 636.  Not one use site changed,
+ * and that was the point: `hs_get`, `hs_put` and `hs_setstate` take the
+ * offset as a RUNTIME argument, because one function serving all three state
+ * machines is what keeps the three format strings' argument orders in one
+ * place (finding 632), so for the busiest fifty-nine of these there is no
+ * field for a field access to name.  The offsets stay.
+ *
+ * Two spellings of one fact is two places to drift, and NOTHING ELSE IN THE
+ * TREE COMPARES THEM.  `tools/offcheck.py` holds the header's per-field
+ * offset annotations against the compiler and `tools/refcheck.py` holds the
+ * prose, but a `#define` in a .c is invisible to both.
+ *
+ * The idiom is v34shell.c's `V34OB_ASSERT`, GUARD INCLUDED, and it is
+ * repeated here rather than shared because these macros are here.  The guard
+ * earns its keep twice: `make check64` compiles this file for a 64-bit target
+ * where `paa6c` is eight bytes and every offset past it would be wrong, and
+ * the period toolchain -- GCC 3.4.4, which is what `tools/toolchain` runs and
+ * what this file must keep compiling under -- has neither `_Static_assert`
+ * nor `__builtin_offsetof`, the latter arriving only in GCC 4.0.
+ * `__SIZEOF_POINTER__` is GCC 4.3's, so it excuses both.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define HS_OFF_ASSERT(tag, field, off) \
+	typedef char hs_off_##tag[ \
+		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+/* The three state words, in all three of the spellings that reach them. */
+HS_OFF_ASSERT(microstate,  microstate, HS_MICROSTATE);
+HS_OFF_ASSERT(rxstate,     rxstate,    HS_RXSTATE);
+HS_OFF_ASSERT(txstate,     txstate,    HS_TXSTATE);
+HS_OFF_ASSERT(hdr_micro,   microstate, V34HS_MICROSTATE_OFF);
+HS_OFF_ASSERT(hdr_rxstate, rxstate,    V34HS_RXSTATE_OFF);
+HS_OFF_ASSERT(hdr_txstate, txstate,    V34HS_TXSTATE_OFF);
+
+/* The counter every trace prints as `[2]`, under both of its names. */
+HS_OFF_ASSERT(trace2,      faa78,      HS_TRACE_2);
+HS_OFF_ASSERT(t3m_counter, faa78,      T3M_COUNTER);
+HS_OFF_ASSERT(t3c_count,   faa78,      T3C_COUNT);
+
+/* `filtdelay`, which the object's own diagnostic at 0x709d7 names. */
+HS_OFF_ASSERT(filtdelay,   filtdelay,  T3M_FILTDELAY);
+HS_OFF_ASSERT(count_src,   filtdelay,  T3C_COUNT_SRC);
+
+/* The pair at +0x3588 that two sites read 32 bits wide (finding 631). */
+HS_OFF_ASSERT(f3588,       f3588,      T3M_F3588);
+HS_OFF_ASSERT(f358a,       f358a,      T3M_F358A);
+
+/* The toggle, whose sign the table index at 0x62d48 forces. */
+HS_OFF_ASSERT(toggle,      f358c,      T3M_TOGGLE);
+HS_OFF_ASSERT(t3c_f358c,   f358c,      T3C_F358C);
+
+/* The two self-pointers, and the ten shorts arm 47 clears. */
+HS_OFF_ASSERT(ptr_aa6c,    paa6c,      T3C_PTR_AA6C);
+HS_OFF_ASSERT(selfptr,     paa6c,      T3M_SELFPTR);
+HS_OFF_ASSERT(ptr_aa70,    paa70,      T3C_PTR_AA70);
+HS_OFF_ASSERT(fabae,       fabae,      T3M_FABAE);
+HS_OFF_ASSERT(fabc2,       fabc2,      T3M_FABC2);
+#endif	/* 32-bit target with a compiler that has __builtin_offsetof */
+
+/*
+ * ---------------------------------------------------------------------------
  * The paths not written.
  *
  * Forty of table 3's forty arms are here and all seven of table 2's targets

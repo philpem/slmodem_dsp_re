@@ -454,7 +454,102 @@ struct v34_object {
 	int f3558;					/* +0x3558 */
 	int f355c;					/* +0x355c */
 	int f3560;					/* +0x3560 */
-	unsigned char unmapped_3564[0x359c - 0x3564];
+	/*
+	 * +0x3564 IS THE OBJECT'S OWN `struct v34_detector`, and the two
+	 * ends meet exactly: `sizeof(struct v34_detector)` is 0x24 and
+	 * 0x3564 + 0x24 is 0x3588, which is where the next field measured
+	 * below begins.  v34hshak.c reaches it there as `T3C_DETECTOR` /
+	 * `T3M_DETECTOR` and casts, and those arms are differentially
+	 * tested.
+	 *
+	 * IT IS NOT EMBEDDED HERE, and that is a deliberate under-claim.
+	 * Two things meeting is adjacency, not a bound -- finding 215's
+	 * rule -- and the 0x24 is OUR declaration's size rather than
+	 * anything the object states.  So the tiling is recorded as the
+	 * measurement it is and the span stays a pad.  Finding 630.
+	 */
+	unsigned char unmapped_3564[0x3588 - 0x3564];
+	/*
+	 * +0x3588 and +0x358a.  TWO 16-BIT FIELDS on 68 accesses -- 42 at
+	 * +0x3588 and 26 at +0x358a -- every one of them a halfword load, a
+	 * halfword store or a `cmpw`.  Nothing reads either at a byte width
+	 * and nothing reads an odd displacement inside them.
+	 *
+	 * AND TWO SITES READ THE PAIR 32 BITS WIDE.  0x65c24 and 0x66495
+	 * are `cmpl $0x20002,0x3588(%reg)`: the two halves against 2 and 2
+	 * in one instruction.  That is the ORIGINAL SOURCE's spelling and
+	 * not its compiler's -- GCC 3.4.2, with this object's own flags,
+	 * compiles `s->a == 2 && s->b == 2` on two adjacent shorts into two
+	 * separate `cmpw` and never fuses them (measured; finding 631).
+	 * v34hshak.c reads exactly those two sites through `T3M_I32` and
+	 * every other site through `T3M_I16`, which is why both readings
+	 * survive.
+	 *
+	 * So this span is finding 553's shape -- one region, two widths,
+	 * both the object's -- and the OFFSET SPELLING STAYS at every use
+	 * site.  The declaration here is the 16-bit reading because that is
+	 * what 68 of the 70 accesses say.
+	 *
+	 * SIGNEDNESS IS NOT SETTLED for either.  No access to either offset
+	 * sign-extends, and a `movzwl` whose upper half is discarded is a
+	 * free choice for the compiler (finding 614), so `short` here
+	 * matches the rest of this struct and is not a measurement.
+	 *
+	 * `fNNNN` and not a description: what they are FOR was not measured.
+	 * v34hshak.c knows them as `T3M_F3588` and `T3M_F358A` and records
+	 * what each use does.
+	 */
+	short f3588;					/* +0x3588 */
+	short f358a;					/* +0x358a */
+	/*
+	 * +0x358c.  SIGNED short, and the sign is FORCED: 0x62d48 loads it
+	 * `movswl`, masks bit 0 and indexes a table with scale 8, and
+	 * 0x6343d and 0x677da shift the sign-extended result left by 6 and
+	 * by 10 into a word being assembled.  A 32-bit result that is used
+	 * is CLAUDE.md's own case for acting on the extension.  Thirty
+	 * accesses, all sixteen bits wide.  `v34handshak`'s microstate 48
+	 * inverts bit 0 of it -- v34hshak.c's `T3M_TOGGLE` and `T3C_F358C`.
+	 */
+	short f358c;					/* +0x358c */
+	unsigned char unmapped_358e[0x3592 - 0x358e];
+	/*
+	 * THE THREE STATE WORDS.  `v34handshak` is not one state machine but
+	 * three concurrent ones, and these are their state variables:
+	 * finding 171 read each of `v34handshakinit`'s thirteen format
+	 * strings against its arguments and settled which offset is which.
+	 * v34hshak.h holds the eighty-seven state names they take, and
+	 * finding 213 the three dispatch tables they drive.
+	 *
+	 * 728 ACCESSES BETWEEN THEM -- 201, 187 and 340 -- AND EVERY ONE IS
+	 * SIXTEEN BITS WIDE.  There is no byte reader and no 32-bit reader
+	 * at any of the three offsets, and none at an odd displacement
+	 * inside them.  Nine functions besides `v34handshak` reach them.
+	 *
+	 * SIGNED, AND FORCED.  0x600e6 and 0x6012e load `txstate` and
+	 * `microstate` with `movswl` and index `StateName` -- the table of
+	 * eighty-seven string pointers at .data+0x6c00 -- with the
+	 * sign-extended result, `mov 0x6c00(,%ebp,4),%ecx`.  A load whose
+	 * 32-bit result indexes a table is precisely the case CLAUDE.md says
+	 * to act on, and it says `short` and not `unsigned short`.  The
+	 * `movzwl` loads elsewhere feed 16-bit compares and 16-bit stores,
+	 * where the extension is the compiler's free choice (finding 614).
+	 *
+	 * THE USE SITES KEEP THE OFFSET SPELLING, deliberately, and this is
+	 * not a half-done rename.  `hs_get`, `hs_put` and `hs_setstate` take
+	 * the offset as a RUNTIME argument, because one function serving all
+	 * three machines is the whole point of them -- the two context
+	 * arguments the three format strings take are in an order that
+	 * differs per string, and a second copy is a second place to get
+	 * that order wrong.  There is no field for a field access to name.
+	 * So v34hshak.h's `V34HS_MICROSTATE_OFF`, `_RXSTATE_OFF` and
+	 * `_TXSTATE_OFF` remain what every one of the 59 callers passes, and
+	 * v34hshak.c holds them against these three fields at compile time.
+	 * Finding 632.
+	 */
+	short microstate;				/* +0x3592 */
+	short rxstate;					/* +0x3594 */
+	short txstate;					/* +0x3596 */
+	unsigned char unmapped_3598[0x359c - 0x3598];
 	/*
 	 * 0x65 here selects setTimingStateParameters' second parameter
 	 * table.  The two differ only in states 5, 6 and 7 -- the fast part
@@ -617,10 +712,68 @@ struct v34_object {
 	unsigned char unmapped_aa10[0xaa3c - 0xaa10];
 	short info_caps;				/* +0xaa3c */
 	short caps_flags;				/* +0xaa3e */
-	unsigned char unmapped_aa40[0xaa74 - 0xaa40];
+	unsigned char unmapped_aa40[0xaa6c - 0xaa40];
+	/*
+	 * +0xaa6c and +0xaa70.  TWO POINTERS, and pointers rather than ints:
+	 * fifty-eight accesses between them and every one is a 32-bit `mov`,
+	 * the stores put an ADDRESS INSIDE THIS OBJECT in them, and the
+	 * loads are dereferenced.  0x9354 in `getMPrecvdBits` stores
+	 * `obj + 0xaa3c` into +0xaa6c; `v34handshakinit` aims +0xaa6c at
+	 * `obj + 0xa94c` and +0xaa70 at `obj + 0xa97c`; `v34handshak` moves
+	 * +0xaa6c on to `obj + 0xa9ac` and reads the record back through it.
+	 * 0x62bbc loads +0xaa6c and immediately reads +0x18, +0x1a and +0x28
+	 * off it -- `nbits`, `pos` and `avail` of `struct v34_bitsource`.
+	 *
+	 * `void *` AND NOT `struct v34_bitsource *`, which is the
+	 * under-claim `p3548` at +0x3548 already sets the precedent for.
+	 * The thirty-six sites that hand +0xaa6c to `getbit` are strong
+	 * evidence for that type, but the region it is aimed at has two
+	 * readings that this tree holds equally -- the five message records
+	 * from +0xa94c on a 0x30 stride, and `info_caps`/`caps_flags` at
+	 * +0xaa3c read straight out of the same words (see the note on
+	 * `struct v34_bitsource` in v34hshak.h) -- and v34hshak.c's use
+	 * sites cast to `unsigned short *`, `unsigned char *` and `short *`
+	 * at different arms.  A pointer type here would pick a winner the
+	 * object does not.  Finding 634.
+	 */
+	void *paa6c;					/* +0xaa6c */
+	void *paa70;					/* +0xaa70 */
 	/* Cleared by preinitdigital; nothing reconstructed reads it. */
 	int faa74;					/* +0xaa74 */
-	unsigned char unmapped_aa78[0xaa7e - 0xaa78];
+	/*
+	 * +0xaa78.  SIGNED short, and both halves of that are forced.
+	 *
+	 * 243 accesses, all sixteen bits wide -- the busiest field in the
+	 * handshake after the three state words, and the one six of
+	 * `v34handshak`'s microstate arms bump.  It is the `[2]` every state
+	 * transition prints (v34hshak.c's `HS_TRACE_2`), which is what
+	 * settles the sign: 0x60118 loads it `movswl` straight into a
+	 * `dsplibs_debug_printf` argument slot, and the varargs promotion of
+	 * an `unsigned short` would have been `movzwl`.  The `movzwl` loads
+	 * are the increment-and-compare sites (0x65c4e: load, `inc`, `cmp
+	 * $0x2a,%dx`, store back), where the upper half never survives.
+	 *
+	 * `faa78` and not `counter`: what it COUNTS differs per arm -- ticks
+	 * in one, symbols in another -- and a name that says "counter" would
+	 * read as measured when only the width and the sign are.
+	 * v34hshak.c knows it as `T3M_COUNTER` / `T3C_COUNT`.  Finding 633.
+	 */
+	short faa78;					/* +0xaa78 */
+	unsigned char unmapped_aa7a[0xaa7c - 0xaa7a];
+	/*
+	 * +0xaa7c.  THE NAME IS THE OBJECT'S OWN.  0x709d7 prints "On
+	 * RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d" and this
+	 * is the third thing it pushes -- 0x709af, `movswl 0xaa7c(%edi)`.
+	 *
+	 * SIGNED short: three of its twenty-one accesses are `movswl` and
+	 * all three push a `%d` argument, which is the varargs promotion of
+	 * a `short`.  The other eighteen are halfword loads, halfword stores
+	 * and `cmpw`; nothing reads it wider or narrower.  Three of
+	 * microstate 49's four thresholds and all of 50's are this plus a
+	 * constant, and `VPcmV34SetDelays`, `VPcmV34InitiateRetrain` and
+	 * `VPcmV34Create` are its other writers.  Finding 633.
+	 */
+	short filtdelay;				/* +0xaa7c */
 	/*
 	 * +0xaa7e.  Round-trip delay, in samples, which `v34handshak` both
 	 * measures and consumes.  `V34XF_GetRTD` is the C++ side's window
@@ -638,7 +791,30 @@ struct v34_object {
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
 	short fsk_lpf[V34_FSK_LPF_TAPS];		/* +0xab00 */
-	unsigned char unmapped_aba0[0xabc6 - 0xaba0];
+	unsigned char unmapped_aba0[0xabae - 0xaba0];
+	/*
+	 * +0xabae.  TEN SHORTS, AND THE ARRAY IS MEASURED RATHER THAN
+	 * INFERRED FROM ADJACENCY.  0x6cc5e is `mov %dx,0xabae(%ecx,%eax,2)`
+	 * with `%eax` running 0..9 (`inc`, `cwtl`, `cmp $0x9,%ax`, `jle`) --
+	 * an indexed halfword store over the span, which is what makes this
+	 * an array and not ten fields.  Nothing reaches +0xabb0..+0xabc0 by
+	 * a constant displacement anywhere in the object, which is the shape
+	 * an array reached only by index has.
+	 *
+	 * +0xabc2 IS DECLARED SEPARATELY because the object writes it
+	 * separately: 0x6cc72 stores it with its own instruction after the
+	 * loop has ended.  `short fabae[11]` with the loop stopping one
+	 * short would compile to the same code, so eleven is a reading the
+	 * object does not force; ten plus one is what it shows.
+	 *
+	 * Both are sixteen bits wide at every access and neither is ever
+	 * sign-extended, so the signedness is not settled -- `short` here is
+	 * the struct's convention, not a measurement.  v34hshak.c knows them
+	 * as `T3M_FABAE` and `T3M_FABC2`.  Finding 635.
+	 */
+	short fabae[10];				/* +0xabae */
+	short fabc2;					/* +0xabc2 */
+	unsigned char unmapped_abc4[0xabc6 - 0xabc4];
 	/*
 	 * The V.92 short-phase-2 negotiation, four shorts, and the object
 	 * names all four itself -- `V34GiveINFO0dBits` prints

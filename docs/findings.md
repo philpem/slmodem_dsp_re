@@ -27301,3 +27301,188 @@ job when it refuses to let me make that argument.
 `tools/mutate.py` is in the closure too: it is the runner, and what counts as
 caught or unusable is its code. Nothing else under `tools/` can move a
 verdict, so nothing else is there.
+
+### 630. The detector at +0x3564 tiles exactly to +0x3588, and that is adjacency and not a bound
+
+`v34hshak.c` has said for a while that a `struct v34_detector` lives inside
+`struct v34_object` at +0x3564 -- `T3C_DETECTOR`, `T3M_DETECTOR`, and the
+`T3C_DET(obj)` cast the microstate arms reach it through. Splitting the
+`unmapped_3564` pad needed a split point, so the size was measured rather
+than assumed:
+
+    sizeof(struct v34_detector) = 36 (0x24)
+    0x3564 + 0x24               = 0x3588
+
+and +0x3588 is exactly where the next measured field starts. Two independent
+readings meeting is worth writing down.
+
+**It is not a proof and the detector is NOT embedded.** The 0x24 is *our*
+declaration's size, not anything the object states, and finding 215's rule is
+that a displacement is not a size -- the largest offset reached does not end
+the field, and neither does the next one starting. Embedding it would turn a
+consistency check into a claim about 36 bytes nothing in this batch tested.
+So `unmapped_3564` was merely shortened to `[0x3588 - 0x3564]` and the tiling
+recorded here. `v34fsk.h` already includes `v34det.h`, so the dependency is
+not what stopped it; the evidence is.
+
+### 631. GCC 3.4.2 will not fuse two short compares, so the `cmpl $0x20002` at +0x3588 is the ORIGINAL'S SOURCE
+
++0x3588 and +0x358a take 68 accesses between them and every one is sixteen
+bits wide -- halfword load, halfword store or `cmpw`. Two sites are not:
+
+    65c24:  81 b9 88 35 00 00 02 00 02 00   cmpl $0x20002,0x3588(%ecx)
+    66495:  81 b8 88 35 00 00 02 00 02 00   cmpl $0x20002,0x3588(%eax)
+
+Both read the pair as one 32-bit word against 2 and 2. `v34hshak.c` already
+spells exactly those two sites `T3M_I32` and every other site `T3M_I16`, on
+the reading in the comment there; this settles *whose* spelling it is.
+
+The obvious suspicion is that the compiler fused `a == 2 && b == 2` on two
+adjacent shorts. **It did not, and that is measured rather than argued.**
+Built in `tools/toolchain`'s GCC 3.4.2 container with the object's own flags:
+
+    struct S { short a, b, c; };
+    int f(struct S *s){ return s->a == 2 && s->b == 2; }
+
+    cmpw $0x2,(%edx)  /  je  /  cmpw $0x2,0x2(%edx)
+
+Two `cmpw`, never a `cmpl`, in both the value-returning and the
+branch-to-different-code shapes. GCC did not grow store/compare merging until
+much later. So the original's source read those two sites 32 bits wide
+itself, and this is finding 553's shape exactly -- one region, two widths,
+both the object's. The offset spelling stays at every use site, and the
+struct declares the sixteen-bit reading because 68 of the 70 accesses say so.
+
+### 632. The three state words become fields, and the 59 use sites keep their offsets ON PURPOSE
+
+`v34handshak` runs three concurrent machines and finding 171 settled which
+word is which by reading each of `v34handshakinit`'s thirteen format strings
+against its arguments. The three had names, a header comment and 59 use
+sites, and were still `unmapped_3564[46]`, `[48]` and `[50]`. They are now
+`microstate`, `rxstate` and `txstate`.
+
+**728 accesses, and every single one is sixteen bits wide** -- 201 at +0x3592,
+187 at +0x3594, 340 at +0x3596. No byte reader, no 32-bit reader, and nothing
+at an odd displacement inside any of them. Nine functions besides
+`v34handshak` reach them, including five on the V.90/K56flex side.
+
+**Signed, and forced.** The decisive sites are the trace:
+
+    600e6:  movswl 0x3596(%ebx),%ebp
+    600f8:  mov    0x6c00(,%ebp,4),%ecx      <== R_386_32 .data   (StateName)
+
+A sign-extending load whose 32-bit result *indexes a table* is CLAUDE.md's own
+case for acting on the extension, and it says `short`, not `unsigned short`.
+The `movzwl` loads elsewhere feed 16-bit compares and 16-bit stores back,
+where the extension is the compiler's free choice (614).
+
+**The use sites keep `V34HS_MICROSTATE_OFF` and friends, and that is not a
+half-done rename.** `hs_get`, `hs_put` and `hs_setstate` take the offset as a
+RUNTIME argument, because one function serving all three machines is the whole
+point of them -- the two context arguments the three format strings take are
+in an order that differs per string, and a second copy of `hs_setstate` is a
+second place to get that order wrong while every byte of the object still
+matches. There is no field for a field access to name. Changing the signature
+to take a member pointer would change codegen to buy a spelling.
+
+So the field map and the macros are held together instead: `v34hshak.c`
+asserts `offsetof(struct v34_object, txstate) == V34HS_TXSTATE_OFF` and the
+other two at compile time, and `make offsets` holds the `/* +0x3596 */`
+annotation against the compiler independently.
+
+### 633. +0xaa78 and +0xaa7c: the handshake's busiest counter, and the one field the object names itself
+
++0xaa78 takes **243 accesses**, which is more than any field in the object
+except the three state words -- six of `v34handshak`'s microstate arms bump
+it, and it is the `[2]` every state transition prints. All 243 are sixteen
+bits wide. It is `short` and the sign is forced by the trace: 0x60118 loads
+it `movswl` straight into a `dsplibs_debug_printf` argument slot, and the
+varargs promotion of an `unsigned short` would have been `movzwl`. The
+`movzwl` loads are the increment-and-compare sites -- 0x65c4e is load, `inc`,
+`cmp $0x2a,%dx`, store back -- where the upper half never survives.
+
+**It is called `faa78` and not `counter`.** What it counts differs per arm,
+and a name that says "counter" reads as measured when only the width and the
+sign are.
+
++0xaa7c is the opposite case: the object names it. 0x709d7 prints
+
+    "On RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d"
+
+and 0x709af is the `movswl 0xaa7c(%edi)` that pushes the third of those. All
+three of its `movswl` sites push a `%d`; the other eighteen accesses are
+halfword loads, stores and `cmpw`. So `short filtdelay`, sourced and signed.
+
+### 634. The two pointers at +0xaa6c and +0xaa70 are pointers, and `void *` is the honest type
+
+Fifty-eight accesses between them and every one is a 32-bit `mov`. The stores
+put an address *inside this object* in them -- 0x9354 in `getMPrecvdBits`
+stores `obj + 0xaa3c` into +0xaa6c, `v34handshakinit` aims +0xaa6c at
+`obj + 0xa94c` and +0xaa70 at `obj + 0xa97c`, and `v34handshak` moves +0xaa6c
+on to `obj + 0xa9ac` -- and the loads are dereferenced: 0x62bbc loads +0xaa6c
+and immediately reads +0x18, +0x1a and +0x28 off it, which are `nbits`, `pos`
+and `avail` of `struct v34_bitsource`.
+
+That last is strong evidence for `struct v34_bitsource *`, and it was still
+not taken. The region these are aimed at has two readings this tree holds
+equally -- the five message records from +0xa94c on a 0x30 stride, and
+`info_caps`/`caps_flags` at +0xaa3c read straight out of the same two words
+(the note on `struct v34_bitsource` in `v34hshak.h` sets that out) -- and
+`v34hshak.c`'s own use sites cast to `unsigned short *`, `unsigned char *`
+and `short *` in different arms. A pointer type here picks a winner the
+object does not. `void *p3548` at +0x3548 is the precedent for an honestly
+under-claimed pointer and these follow it.
+
+### 635. The ten shorts at +0xabae are an ARRAY because the object indexes them, and the eleventh is separate
+
+`t3m_errrec_core` clears ten shorts at +0xabae and one more at +0xabc2, and
+"ten shorts" had been a statement about the source rather than the object.
+The object settles it:
+
+    6cc5e:  66 89 94 41 ae ab 00    mov  %dx,0xabae(%ecx,%eax,2)
+    6cc66:  inc %eax / cwtl / cmp $0x9,%ax / jle 6cc55
+    6cc72:  66 89 a9 c2 ab 00 00    mov  %bp,0xabc2(%ecx)
+
+An indexed halfword store over the span, with the index running 0..9, is what
+makes it an array rather than ten fields -- and nothing anywhere in the
+object reaches +0xabb0..+0xabc0 by a constant displacement, which is the shape
+an array reached only by index has.
+
+**+0xabc2 is declared separately because the object writes it separately.**
+`short fabae[11]` with a loop stopping one short early compiles to the same
+code, so eleven is a reading the object does not force; ten plus one is what
+it shows, and under-claiming is the rule. Neither is ever sign-extended, so
+the signedness is the struct's convention and not a measurement.
+
+### 636. What a field map costs when it is done as a field map: nothing, twice over
+
+Task #33's rule was that turning an offset into a field must not change one
+byte of the object. Twelve spans became fields -- `f3588`, `f358a`, `f358c`,
+`microstate`, `rxstate`, `txstate`, `paa6c`, `paa70`, `faa78`, `filtdelay`,
+`fabae[10]`, `fabc2` -- and **no source file outside `include/` changed at
+all**, because every use site reaches these through an offset macro with an
+explicit width cast. That was not tidiness; it is what makes the claim
+checkable:
+
+  - all **217 `.text` sections** of the tree's own build are byte-identical
+    before and after (the `.o` files themselves differ, because `-g` puts the
+    struct declaration in the DWARF);
+  - all **90 objects** the period GCC 3.4.2 toolchain builds are byte-identical
+    before and after, and those carry no debug info at all;
+  - `tools/toolchain/compare.py` reports the same 386 compared / 105 identical
+    / 16 same-size / 57.1% either side.
+
+`make offsets` then holds all twelve to their `/* +0xNNNN */` annotations --
+905 annotations, all matching -- which is the check that catches the failure
+this kind of edit actually has: a padding array is an ABSOLUTE SPAN, so one
+wrong `[0xB - 0xA]` slides every field after it and both spellings compile.
+`sizeof(struct v34_object)` is 44096 on both sides.
+
+**Sixty-one of the seventy-nine were left, deliberately.** The brief said to
+prefer fewer well-evidenced fields to a full sweep, and the ones left fall
+into three groups: offsets inside the receiver rather than the object, which
+`whichfield.py struct v34_object` cannot even be asked about; offsets whose
+width is measured but whose *span* is not, where naming one field would be a
+claim about where the next begins (215); and +0xaae2, which is `fsk.sr` and
+keeps its offset for the one byte-wide reader at 0x65c8a -- finding 553, and
+the reason this batch checked every reader's width before declaring anything.
