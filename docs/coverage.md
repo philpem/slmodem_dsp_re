@@ -68,6 +68,7 @@ dsplibs.o reconstruction coverage
     v34tx1_silence
     v34tx1_sseg
     v34tx1_tone_ab
+    v34tx1_trnseg4
     v34tx1_tx_dpsk
     v34tx1_tx_l1
     v34tx1_txlevel

@@ -23186,3 +23186,50 @@ not compared.  Two runs drive two different recognised carriers -- 1800 and
 1959 -- and a third drives 1601, which is not one, so the switch's default is
 driven too.  Said here so the next reader does not chase it.
 
+
+### 357a. Finding 341's trace gap is growing, and it is now the only kind left
+
+Txstate 21 added **four** uncaught mutations and every one is finding 341's
+shape: a function that prints and does nothing else, so a mutation inside it
+is invisible unless the test runs with diagnostics on — and the table-1
+mechanism (`v34hs_step_case`) requires them off, because our code and the blob
+log to different capture channels.
+
+```
+v34hstx1 uncaught, by cause
+   7  pre-existing:  4x V34EchoReportCoeff, 1 transfer with no oracle,
+                     2 initdigital lines
+   4  new from 21:   VPcmV34ReportStartOfEchoAdapt,
+                     VPcmV34ReportMiddleOfEchoAdapt, 2x V34EchoReportCoeff
+  --
+  11  of 613, and ten of the eleven are print-only
+```
+
+That is worth stating positively: across seventeen arms and 613 mutations,
+**no uncaught mutation of any other kind survives**. Every non-print survivor
+in the suite is recorded equivalent with a proof against the object. The one
+non-print exception is finding 343's transfer with no oracle, which 66 may
+retire.
+
+Three batches have now been asked to close this and none has, which is the
+signal that it is not a matter of trying harder. It needs the mechanism
+changed: either `v34hs_step_case` learns to route our capture channel the way
+`v34hs_side_a` does (which exists and does exactly that, for the other
+mechanism), or the print-only functions get a non-printing observable.
+
+**Until then the number will keep climbing, one or two per arm, and the count
+should be read as "print-only, expected" rather than as a quality trend.**
+Ten of eleven is not eleven near-misses; it is one unsolved mechanism problem
+counted eleven times.
+
+#### And a third instance of the rule that keeps paying
+
+21's completion is `setupreceiver` **inlined** — about 1,000 bytes and twenty
+of its twenty-three block ranges, verified store for store against the
+standalone function at 0x5f040. So no third `.rodata` table was needed: the
+eight `hsine*` tables are reached through it and were already global.
+
+Arm 67 was mostly `getbit` inlined; arm 24 was `getbit` inlined twice. **Read
+a long arm against the functions the tree already has before writing any of
+it** — three arms in a row have been mostly something already reconstructed,
+and the byte counts (2 KB, 2.2 KB, 1 KB of 2.3 KB) say what that is worth.
