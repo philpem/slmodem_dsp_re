@@ -3688,8 +3688,8 @@
  },
  {
   "label": "66: the ladder decrements before it tests",
-  "find": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;\n\t\trate = (short)(rate - 1);",
-  "replace": "\t\tterm = tx1_ts_scale(cfg, rate, -1);\n\t\trate = (short)(rate - 1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
+  "find": "\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;\n\t\trate = (short)(rate - 1);",
+  "replace": "\t\trate = (short)(rate - 1);\n\t\tif (tx1_get(o, TX1_RX250) < (short)term)\n\t\t\tbreak;",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3718,8 +3718,8 @@
  },
  {
   "label": "66: a rate at or below +0x260 - 1 is left alone",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\telse if (rate < d + 1)",
-  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1)\n\t\t\t\trate = (short)(d - 1);\n\t\t} else if (rate < d + 1)",
+  "find": "\t\tif (rx->f25e == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
+  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
   "fn": "tx1_ts_rates"
  },
  {

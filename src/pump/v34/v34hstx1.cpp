@@ -75,6 +75,7 @@
  * that fails to compile is reported CAUGHT for the wrong reason.  The
  * declaration stays for them.
  */
+#include "dsplib/debug.h"	/* dsplibs_debug_level, dsplibs_debug_printf */
 #include "dsplib/v34filt.h"	/* V34EchoReportCoeff, V34SetupModulator */
 #include "dsplib/v34fsk.h"	/* struct v34_object, struct v34_ratecfg */
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
@@ -2311,6 +2312,16 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 	if (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff
 	    && rx->f224 < rx->f21a && sum <= 0x3fff) {
 		/* 0x6738c */
+		if (dsplibs_debug_level > 1)		/* 0x6adf6 */
+			dsplibs_debug_printf(
+				"V34DATARATE, precoefs [%d,%d,%d][%d,%d,%d]\n",
+				tx1_get(rx, TX1_RX_PRED + 0),
+				tx1_get(rx, TX1_RX_PRED + 2),
+				tx1_get(rx, TX1_RX_PRED + 4),
+				tx1_get(rx, TX1_RX_PRED + 6),
+				tx1_get(rx, TX1_RX_PRED + 8),
+				tx1_get(rx, TX1_RX_PRED + 10));
+
 		rec[2] = rx->pred_b[2];
 		rec[3] = rx->pred_a[2];
 		rec[4] = rx->pred_b[1];
@@ -2340,6 +2351,10 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		tx1_put(o, TX1_RX250, rx->f224);
 	} else {
 		/* 0x674e5 */
+		if (dsplibs_debug_level > 1)		/* 0x683b2 */
+			dsplibs_debug_printf(
+				"V34DATARATE, precoefs=0, 0, 0, 0, 0, 0\n");
+
 		rec[2] = 0;
 		rec[3] = 0;
 		rec[4] = 0;
@@ -2415,12 +2430,28 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			rate = 0xc;
 		else if (baud == 0x0bb8 || baud == 0x0af0)
 			rate = (short)(rate - 1);	/* 0x67984 */
+
+		/*
+		 * 0x63025, and NOT part of the 3200/3429 arm: 0x6797e and
+		 * 0x67994 both jump back to the guard, so every baud that
+		 * reaches this block reports, including the ones that changed
+		 * nothing.  Placing it inside the `rate = 0xc` branch left
+		 * four cases short -- 2400, 2800, 3000 and the ladder's
+		 * floor -- which is how the difference was found.
+		 */
+		if (dsplibs_debug_level > 1)		/* 0x6834b */
+			dsplibs_debug_printf(
+				"V34INFO, V.34bis is not possible \n");
 	}
 
 	/* 0x6302e */
 	cfg->txbits = (short)rate;
 	while ((short)rate > (short)ratemin) {
 		term = tx1_ts_scale(cfg, rate, -1);
+		if (dsplibs_debug_level > 1)		/* 0x66b61 */
+			dsplibs_debug_printf(
+				"V34DATARATE,threshold for data rate"
+				" %d = %d\n", rate, term);
 		if (tx1_get(o, TX1_RX250) < (short)term)
 			break;
 		rate = (short)(rate - 1);
@@ -2430,14 +2461,33 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (rx->f25e > 1) {
 		int d = rx->f260;
 
-		if (rx->f25e == 2 && rate > d - 1)
+		if (rx->f25e == 2 && rate > d - 1) {
 			rate = (short)(d - 1);		/* 0x68308 */
-		else if (rate < d + 1)
+			if (dsplibs_debug_level > 1)	/* 0x68334 */
+				dsplibs_debug_printf(
+					" TRNSEG4A : returning from local rrn"
+					" down => forcing rate down\n");
+		} else if (rate < d + 1) {
 			rate = (short)(d + 1);		/* 0x63120 */
+			if (dsplibs_debug_level > 1)	/* 0x69100 */
+				dsplibs_debug_printf(
+					" TRNSEG4A : returning from local rrn"
+					" up => forcing rate up\n");
+		}
 		term = tx1_ts_scale(cfg, rate, -1);	/* 0x63134 */
 	}
 
 	/* 0x63198 */
+	if (dsplibs_debug_level > 1)			/* 0x6759e */
+		dsplibs_debug_printf(
+			"V34DATARATE, ethresh data rate = %d,ethreh=%d,"
+			"rate2 = 0x%x,data=%d\n",
+			rate, tx1_get(o, TX1_RX250),
+			(unsigned short)tx1_get(o, TX1_F382), term);
+	if (dsplibs_debug_level > 1)			/* 0x675e6 */
+		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
+				     rx->f21a, rx->f224);
+
 	rx->f252 = (short)(2 * term);
 	if ((short)rate > (short)ratemin) {
 		rx->f254 = tx1_ts_scale(cfg, rate, -2);
@@ -2470,6 +2520,11 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x6332c */
 	cfg->rxbits = (short)rate;
+	if (dsplibs_debug_level > 1)			/* 0x67741 */
+		dsplibs_debug_printf(
+			"V34DATARATE, automatic: %d, min %d, max %d\n",
+			0x960 * rate, 0x960 * o->rate_min,
+			0x960 * o->rate_max);
 
 	/* 0x6334a */
 	v = cfg->rxbits;
@@ -2486,6 +2541,12 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
 	tx1_put(o, TX1_F358C,
 		(short)bitreverse((unsigned short)cfg->txbits, 4));
+	if (dsplibs_debug_level > 1)			/* 0x676f3 */
+		dsplibs_debug_printf(
+			"V34DATARATE, Final choice data rate = %d,"
+			" retrainThresh = %d, renegDownthresh = %d,"
+			" renegUpthresh = %d\n",
+			cfg->rxbits, rx->f252, rx->f254, rx->f256);
 
 	/* 0x6340f */
 	if (o->f359c == 0x65)
@@ -2537,6 +2598,12 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3598, 0);
 	tx1_put(o, TX1_F359E, 0);
+	if (dsplibs_debug_level > 1)			/* 0x67653 */
+		dsplibs_debug_printf(
+			"V34DATARATE, txmp bits 0x%x,0x%x,0x%x,0x%x,0x%x\n",
+			(unsigned short)rec[0], (unsigned short)rec[1],
+			(unsigned short)rec[2], (unsigned short)rec[3],
+			(unsigned short)rec[4]);
 
 	/* 0x63510 */
 	tx1_put_int(o, TX1_FAA60, 0x3fffe);
