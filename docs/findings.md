@@ -24461,6 +24461,29 @@ only on the totals -- on `vpcmflomodem` (49) and on `v34hshak` (209, including
 all six recorded equivalents), the sorted per-mutation transcripts and the
 whole summary block both diff clean.
 
+#### A worker has to earn its setup, and the first version did not check
+
+`--all --jobs 8` is the command someone will reach for, and **thirty of the
+forty-eight suites have fewer than twenty mutations**.  Copying the tree and
+doing one cold build costs a second or two per worker, which is nothing on a
+big suite and is the entire run on a small one.  Measured over `cadence`,
+`pulse` and `dilpack` -- 6, 9 and 8 mutations:
+
+```
+  serial      10.9 s
+  --jobs 4    17.9 s      sharding made it 64% SLOWER
+```
+
+So the fan-out degrades itself: a worker gets at least `MIN_PER_WORKER` = 12
+mutations or it is not started, and one worker means the ordinary serial path.
+After that, on the same three suites, `--jobs 8` is 11.7 s against 10.9 s
+serial -- the residual is process startup and is not worth chasing -- while
+`v34hshak` still shards eight ways with its 209 verdicts unchanged.
+
+Same lesson as the tools in finding 540: the flag that looks obviously good is
+the one to measure, because nobody would have put a stopwatch on "parallel is
+faster".
+
 #### What this does not fix
 
 The suites were about half the wall-clock of a batch, so this takes maybe a

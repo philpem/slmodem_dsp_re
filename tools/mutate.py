@@ -237,6 +237,22 @@ def shard_of(muts, spec):
     return muts[i * per:(i + 1) * per]
 
 
+#
+# A WORKER HAS TO EARN ITS SETUP.
+#
+# Copying the tree and doing one cold build costs a second or two per worker.
+# On a big suite that is nothing; on a small one it is the whole run, and
+# MEASURED, --jobs 4 over `cadence`, `pulse` and `dilpack` (6, 9 and 8
+# mutations) took 17.9 s against 11.2 s serial -- sharding made it 60%
+# SLOWER.  That matters because `--all --jobs 8` is the command someone will
+# reach for, and thirty of the forty-eight suites are that small.
+#
+# So the fan-out degrades itself: a worker gets at least this many mutations
+# or it is not started, and one worker means the ordinary serial path.
+#
+MIN_PER_WORKER = 12
+
+
 def run_parallel(args, jobs):
     """Fan the suite out over `jobs` sibling trees and merge the verdicts."""
     import shutil
@@ -373,8 +389,11 @@ def main():
     if not (args.source and args.test and args.mutations):
         sys.exit("give --suite NAME, --all, or source, test and mutations")
 
-    if args.jobs and args.jobs > 1:
-        return run_parallel(args, args.jobs)
+    if args.jobs and args.jobs > 1 and not args.shard:
+        n = len([m for m in json.load(open(args.mutations)) if "find" in m])
+        want = max(1, min(args.jobs, n // MIN_PER_WORKER))
+        if want > 1:
+            return run_parallel(args, want)
 
     entries = json.load(open(args.mutations))
     muts = [m for m in entries if "find" in m]
