@@ -405,6 +405,16 @@ int detectRetrainReq(void *obj, short nbins, const short *samples,
 extern const int vect4[4];
 extern const int vect16[16];
 
+/*
+ * The line probe's one period, 64 signed shorts at `.rodata + 0x2c00`, and
+ * NOT a constellation: `v34handshak`'s txstate 51 `TX_L1` indexes it with the
+ * low six bits of `vect_idx`, scales each sample by `f25d4` and hands four at
+ * a time to `txwritequeue`.  Sixty-four is what the mask `0x3f` admits; the
+ * object checks no length anywhere.
+ */
+#define V34_PROBE_SAMPLES	64
+extern const short probe[V34_PROBE_SAMPLES];
+
 /* Two bits -> one quadrant, differentially against the last. */
 void txmitdibit(void *obj, short bits);
 

@@ -1576,6 +1576,41 @@ const int vect16[16] = {
 };
 
 /*
+ * probe -- 128 bytes at `.rodata + 0x2c00`, sixty-four signed shorts, and the
+ * only table in the object that either line-probe transmit state reads.
+ *
+ * `v34handshak`'s txstate 51 `TX_L1` indexes it with the LOW SIX BITS of
+ * `vect_idx`, scales each sample by `f25d4` and shifts right by 14 -- so it
+ * is one period of a waveform and the object plays it round and round.  Four
+ * samples go out per pass of the per-sample loop and the segment ends when
+ * `vect_idx` reaches 0x600 -- 1,536 samples, which is 384 passes and exactly
+ * twenty-four periods.  src/pump/v34/v34hstx1.cpp is where that is written
+ * and t_v34hstx1.c is where it compares.
+ *
+ * The values are a property of the object rather than a derivation.  They
+ * came out of `.rodata` BY TOOL, not read off a listing, and what proves the
+ * transcription is `t_v34hstx1.c`'s `memcmp` against `ref_probe` -- the same
+ * check `vect4` and `vect16` get.
+ *
+ * Two facts about the numbers, verified over all sixty-four rather than
+ * spotted: the array is EVEN about index 32 (`probe[32 + k] == probe[32 - k]`
+ * for every k in 1..31) and `probe[32] == -probe[0]`.  Nothing here reads
+ * anything into that; it is recorded because it is what a transcription error
+ * would most likely break.  The largest magnitude is 13,317, which is why
+ * TX_L1's second loop can double a sample without a short overflowing.
+ */
+const short probe[V34_PROBE_SAMPLES] = {
+	 13027,  13097,   7026,  -8421,  -2867,   3724, -12568,    251,
+	  4448,  -9900,   7173,   -752, -11389,   9409,   9436,  10147,
+	  5211,  -9736,   2748,  11799,   9862,   -547, -12548,   1980,
+	   763, -13317,   3205,  10584,  -6029, -11058,  -4471,  -7261,
+	-13027,  -7261,  -4471, -11058,  -6029,  10584,   3205, -13317,
+	   763,   1980, -12548,   -547,   9862,  11799,   2748,  -9736,
+	  5211,  10147,   9436,   9409, -11389,   -752,   7173,  -9900,
+	  4448,    251, -12568,   3724,  -2867,  -8421,   7026,  13097,
+};
+
+/*
  * The scrambler generator, from the flag the two share.  Bit 0 of f25c2 set
  * selects the calling station's polynomial, which is V34scrambler's mode 0 --
  * so the sense is inverted between the two, and that is the object's.

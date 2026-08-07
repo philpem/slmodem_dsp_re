@@ -1999,8 +1999,16 @@ TimingV34(void *objp)
  *
  * `receiver` halves both halves on the way out, so the constellation it
  * actually compares against has magnitude 3238.
+ *
+ * GLOBAL, which is the object's binding and not a convenience: the blob
+ * exports `vectpp` because `v34handshak` reads it as well.  Table 1's 20
+ * `PPSEG` (v34hstx1.cpp) loads it as forty-eight FOUR-BYTE entries, one
+ * (re, im) pair each, where this file reads the same bytes as ninety-six
+ * shorts.  It was static while this file was its only reader; the second
+ * reader is what made it global, and `t_v34hstx1.c` proves it against
+ * `ref_vectpp` the way `probe` and `vect4` are proved.
  */
-static const short vectpp[96] = {
+const short vectpp[96] = {
 	6476, 0, 6476, 0, 6476, 0, 6476, 0,
 	-3238, 5609, -5609, 3238, -6476, 0, -5609, -3238,
 	6476, 0, 3238, 5609, -3238, 5609, -6476, 0,
