@@ -941,10 +941,19 @@ observe(int side, const unsigned char *now, const unsigned char *was,
  * `changed` and `hash` mean the same thing as side B's, which is what
  * `v34hs_compare` needs to be able to compare them.
  *
- * THE TRANSCRIPT IS THE ONE THING THIS DOES NOT COVER.  Our code logs to
- * capture channel 0 and the blob's to channel 1, so a side running both logs
- * to two channels while `text[0]` takes one.  A test using this must leave
- * the diagnostics off, and t_v34hstx1.c says so.
+ * THE TRANSCRIPT IS COVERED NOW, and it took noticing that the two channels
+ * are already in the right order.  Our arm logs to capture channel 0 and the
+ * blob's tail to channel 1, and the arm runs FIRST -- so side A's transcript
+ * is channel 0 followed by channel 1, which is arm-then-tail.  Side B is the
+ * blob's arm and the blob's tail, both on channel 1, which is also
+ * arm-then-tail.  Concatenating in call order makes them comparable.
+ *
+ * That matters beyond tidiness.  Ten of `v34hstx1`'s eleven uncaught
+ * mutations were print-only functions -- `V34EchoReportCoeff`,
+ * `VPcmV34ReportStartOfEchoAdapt` -- invisible because a test using this
+ * mechanism had to run with the diagnostics OFF.  Finding 341 asked three
+ * batches to close that and none could, because it was never theirs to close.
+ * Finding 358a.
  */
 static int (*step_arm)(void *);
 static int step_arm_rc;
@@ -1019,10 +1028,26 @@ v34hs_step(void)
 	else
 		V34HS_CALL_A(&obj_a);
 	alarm(0);
-	snprintf(text[0], sizeof(text[0]), "%s",
-		 dsplib_debug_capture_text(V34HS_LOG_SIDE_A));
+	/*
+	 * Side A's transcript.  With `step_arm` in force our arm has written
+	 * channel 0 and the blob's tail channel 1, in that order, so side A's
+	 * transcript is the two joined; side B's is channel 1 alone, which
+	 * holds the blob's arm and the blob's tail in the same order.  Every
+	 * other mechanism leaves channel 0 empty, so the join is a no-op and
+	 * this is the same string it always was.
+	 */
+	if (step_arm != NULL)
+		snprintf(text[0], sizeof(text[0]), "%s%s",
+			 dsplib_debug_capture_text(0),
+			 dsplib_debug_capture_text(1));
+	else
+		snprintf(text[0], sizeof(text[0]), "%s",
+			 dsplib_debug_capture_text(V34HS_LOG_SIDE_A));
 	observe(0, (const unsigned char *)&obj_a, snap_a,
-		dsplib_debug_capture_lines(V34HS_LOG_SIDE_A));
+		step_arm != NULL
+		    ? dsplib_debug_capture_lines(0)
+		      + dsplib_debug_capture_lines(1)
+		    : dsplib_debug_capture_lines(V34HS_LOG_SIDE_A));
 
 	step_side = 1;
 	dsplib_debug_capture_reset();

@@ -23233,3 +23233,58 @@ Arm 67 was mostly `getbit` inlined; arm 24 was `getbit` inlined twice. **Read
 a long arm against the functions the tree already has before writing any of
 it** — three arms in a row have been mostly something already reconstructed,
 and the byte counts (2 KB, 2.2 KB, 1 KB of 2.3 KB) say what that is worth.
+
+### 358a. The trace gap was in the harness, not in the three batches asked to close it
+
+Finding 341 asked a batch to close the print-only mutation gap; 355a recorded
+that two more had been asked and none had; 357a counted it at ten of
+`v34hstx1`'s eleven uncaught. **None of them could have closed it**, because it
+was not in their files.
+
+`v34hs_step_case(arm)` runs our arm on side A and then lets the blob run too.
+Our code logs to capture channel 0 and the blob's to channel 1, so side A
+writes **both** channels while `text[0]` took one. A test using the mechanism
+therefore had to run with the diagnostics off, and every print-only function
+it touched was invisible by construction.
+
+The fix is one `if`, and it works because the two channels are already in the
+right order:
+
+```
+side A   our arm -> channel 0     then   the blob's tail -> channel 1
+side B   the blob's arm and the blob's tail, both -> channel 1
+```
+
+The arm runs first, so channel 0 followed by channel 1 is arm-then-tail, and
+side B's single channel is arm-then-tail as well. Concatenating side A's two
+in call order makes them comparable. Every other mechanism leaves channel 0
+empty, so the join is a no-op there and the string is what it always was --
+which is what `make phase` staying green demonstrates, and all it
+demonstrates.
+
+#### What is NOT yet proved, and what would prove it
+
+**No regression is not the same as a fix.** Nothing in the tree currently runs
+`v34hs_step_case` with the diagnostics on, so the joined path has not been
+exercised. The proof is specific and cheap: turn the diagnostics on for
+`t_v34hstx1.c`'s step-case runs and re-run its suite. If the mechanism is
+right, **ten of the eleven uncaught mutations become caught** -- the four
+`V34EchoReportCoeff` calls, `VPcmV34ReportStartOfEchoAdapt`,
+`VPcmV34ReportMiddleOfEchoAdapt` and the rest of 357a's list -- and the count
+falls to one, finding 343's transfer with no oracle.
+
+That file belongs to the batch writing txstate 66 as this is written, so the
+flip is queued rather than done. **If turning the diagnostics on does not move
+the count, this finding is wrong and the concatenation is not the whole
+story** -- say so rather than quietly widening something.
+
+#### The pattern worth taking away
+
+Three batches were each told to close a gap that none of them owned. Each did
+what it could -- named the uncaught mutations honestly, recorded them as gaps
+rather than dressing them as equivalences -- and each left the count higher
+than it found it, because every new arm adds print-only functions.
+
+A gap that survives three independent attempts is evidence about **where** it
+lives, not about how hard people tried. The question "whose file is this
+actually in?" should have been asked after the second.
