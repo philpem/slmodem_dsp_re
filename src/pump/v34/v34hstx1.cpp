@@ -427,13 +427,21 @@ v34tx1_txlevel(void *objp)
  * rather than a claim in a comment; finding 340 is the measurement that they
  * are still two behaviours, because the two callees are.
  *
+ * AND IN THE MESSAGE, which is a third caller's evidence rather than a
+ * qualification of that.  The completion block prints one line naming the
+ * txstate it completed in -- `JaTXMIT`, `K56JaTXMIT` and `J1TXMIT` at
+ * 0x6821d, 0x68282 and 0x682d6 -- and 64 shares this countdown too
+ * (0x635cc, whose completion at 0x6533c falls back into the body).  Three
+ * identical blocks with one string each is what a caller-supplied message
+ * looks like from the outside, so it is passed rather than branched on.
+ *
  * THE COUNTER IS SIXTEEN BITS.  The object loads it with `movzwl`, tests
  * `%ax`, and stores `%ax` back, so a negative `short` counts down through
  * 0x8000 rather than through zero.  Spelled with an `unsigned short` here
  * for that reason.
  */
 static int
-tx1_ja_common(struct v34_object *o)
+tx1_ja_common(struct v34_object *o, const char *msg)
 {
 	unsigned short c = (unsigned short)tx1_get(o, TX1_COUNT);
 
@@ -445,6 +453,14 @@ tx1_ja_common(struct v34_object *o)
 	if (c != 0)
 		return 0;
 
+	/*
+	 * The WHOLE message, not a name spliced into one format: the three
+	 * sites hold three complete literals in `.rodata.str1.4` and push one
+	 * argument each, which is what constant propagation into an inlined
+	 * static leaves behind and a `%s` would not.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
 	v34FreezeEcho(o);
 	return 1;
 }
@@ -454,7 +470,8 @@ v34tx1_jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on JaTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x6821d */
 	v90Phase34(o);
 	return V34TX1_LOOP;
 }
@@ -464,7 +481,8 @@ v34tx1_k56jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on K56JaTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x68282 */
 	(void)k56FlexPhase34(o);
 	return V34TX1_LOOP;
 }
@@ -544,6 +562,11 @@ v34tx1_txmd(void *objp)
 		struct v34_ratecfg *cfg =
 			(struct v34_ratecfg *)((char *)o + V34_RATECFG);
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
+
+		if (dsplibs_debug_level > 1)		/* 0x6800d */
+			dsplibs_debug_printf(
+				"TX: Done with MD, moving to S/Sbar"
+				" again...\r\n");
 
 		V34SetupModulator((struct v34_modulator *)
 				  ((char *)o + TX1_MODULATOR),
@@ -881,6 +904,12 @@ v34tx1_sbarseg(void *objp)
 		span = (int)((unsigned)(0x5e8 - o->f25c) << 14);
 		q = (short)(span / 9600);
 		tx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));
+		if (dsplibs_debug_level > 1)		/* 0x67916 */
+			dsplibs_debug_printf(
+				"Moving to TX MD, would take %d symbols ,"
+				" echo start delay is %d...\r\n",
+				tx1_get(o, TX1_SEGLEN),
+				tx1_get(o, TX1_COUNT));
 	}
 
 	/* 0x67236 */
@@ -1018,6 +1047,13 @@ v34tx1_ppseg(void *objp)
 			tx1_put(o, TX1_FAA86,
 				(short)((unsigned short)tx1_get(o, TX1_FAA86)
 					+ (unsigned short)tx1_get(o, TX1_COUNT)));
+			if (dsplibs_debug_level > 1)	/* 0x681ef */
+				dsplibs_debug_printf(
+					"V34Hshak: echo start wait time would"
+					" be: NEC %d symbols, FEC %d"
+					" symbols...\r\n",
+					tx1_get(o, TX1_COUNT),
+					tx1_get(o, TX1_FAA86));
 			return V34TX1_LOOP;		/* 0x63da2 */
 		}
 	}
@@ -1093,6 +1129,8 @@ int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1134,6 +1172,12 @@ v34tx1_silence(void *objp)
 		tx1_put(o, TX1_COUNT, 0);
 		tx1_put(o, TX1_FAAE2, -1);
 		tx1_put(o, TX1_FAAE0, 0);
+		if (dsplibs_debug_level > 1)		/* 0x66c72 */
+			dsplibs_debug_printf(
+				"V34RETRAIN, SILENCERETRAIN finished,"
+				" rx->rxflgs,=0x%x,rx->gain=0x%x,"
+				"gainestimate=0x%x\n",
+				rx->flags, rx->agc_gain, rx->f262);
 		return V34TX1_LOOP;			/* 0x63941 */
 	}
 
@@ -1299,7 +1343,9 @@ v34tx1_exmit(void *objp)
 
 		o->vect_idx = 8;
 		hs_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);
-		return V34TX1_LOOP;			/* 0x6409a */
+		if (dsplibs_debug_level > 1)		/* 0x66e48 */
+			dsplibs_debug_printf("V34MP- E transmit completed\n");
+		return V34TX1_LOOP;			/* 0x6409a, 0x6431f */
 	}
 	return V34TX1_LOOP;				/* 0x63941 */
 }
@@ -1389,7 +1435,8 @@ v34tx1_jtxmit(void *objp)
 	short bits, mode, q;
 
 	/* 0x635cc, and the completion at 0x6533c falls back into 0x635f0 */
-	(void)tx1_ja_common(o);
+	(void)tx1_ja_common(o, "V34Hshak: on JTXMIT - time to freeze"
+				   " echo...\r\n");		/* 0x682d6 */
 
 	/* 0x635f0 */
 	tx1_put(o, TX1_F25D8,
@@ -1445,6 +1492,11 @@ v34tx1_jtxmit(void *objp)
 
 	/* 0x637c8 */
 	if (tx1_get(o, TX1_COUNT) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6c725 */
+			dsplibs_debug_printf(
+				"V34Hshak: on J1TXMIT - forced freeze echo"
+				" (count2 = %d)...\r\n",
+				tx1_get(o, TX1_COUNT));
 		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
 		return V34TX1_LOOP;			/* 0x64326 */
@@ -1570,6 +1622,17 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 	/* 0x646a1 */
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3590, 0x22);
+
+	/*
+	 * 0x646b5.  `flags` IS the receiver's word and the object re-reads
+	 * it here rather than using the copy it was handed; nothing between
+	 * the two writes it, so the argument is the parameter.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+			"V34MP, Starting txmit MP again(%d),"
+			" rxflgs=0x%x,txflags=0x%x\n",
+			tx1_get(o, TX1_F359E), flags, o->f25c2);
 }
 
 /*
@@ -1640,6 +1703,9 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 		if ((b->word[0] & 1) == 0)
 			tx1_put(o, TX1_F359E, 0);
 		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
+		if (dsplibs_debug_level > 1)		/* 0x67254 */
+			dsplibs_debug_printf(
+				"V34MP, MP detected, starting MP' txmit");
 		flags = rx->flags;			/* 0x64805 */
 	}
 
@@ -2832,12 +2898,28 @@ v34tx1_trnseg4(void *objp)
 		/* 0x6801e */
 		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
-	} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
-		/* 0x68ad0 and 0x69de7, two copies of one store */
-		tx1_put(o, TX1_COUNT, o->rtd);
 	} else {
-		/* 0x64b96 */
-		tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+		if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
+			/* 0x68ad0 and 0x69de7, two copies of one store */
+			tx1_put(o, TX1_COUNT, o->rtd);
+		} else {
+			/* 0x64b96 */
+			tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+		}
+
+		/*
+		 * 0x64ba9, and the nesting is what the object says: BOTH
+		 * stores jump here (0x68ade and 0x69df5) and the `rtd <= 2`
+		 * arm does not -- it reports the freeze instead.  An
+		 * else-if chain cannot express a guard shared by two of its
+		 * three arms.
+		 */
+		if (dsplibs_debug_level > 1)		/* 0x6917e */
+			dsplibs_debug_printf(
+				"V34Hshak: On J TX start, would freeze EC"
+				" after bulk delay (%d samples,"
+				" bulk=%d)\r\n",
+				tx1_get(o, TX1_COUNT), o->rtd);
 	}
 
 	/* 0x64bb2 */

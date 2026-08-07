@@ -106,18 +106,21 @@
  },
  {
   "label": "78: JaTXMIT hands the sample to the K56flex half",
-  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
-  "replace": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
+  "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\t(void)k56FlexPhase34(o);",
+  "fn": "v34tx1_jatxmit"
  },
  {
   "label": "85: K56JaTXMIT hands the sample to the V.90 half",
-  "find": "\t(void)tx1_ja_common(o);\n\t(void)k56FlexPhase34(o);",
-  "replace": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\t(void)k56FlexPhase34(o);",
+  "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\tv90Phase34(o);",
+  "fn": "v34tx1_k56jatxmit"
  },
  {
   "label": "78: the counter is not consulted at all",
-  "find": "\t(void)tx1_ja_common(o);\n\tv90Phase34(o);",
-  "replace": "\tv90Phase34(o);"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
+  "replace": "\tv90Phase34(o);",
+  "fn": "v34tx1_jatxmit"
  },
  {
   "label": "81: the queue is fed a non-zero sample",
@@ -1193,8 +1196,9 @@
  },
  {
   "label": "64/68: the countdown at +0xaa78 is not run",
-  "find": "\t(void)tx1_ja_common(o);\n\n\t/* 0x635f0 */",
-  "replace": "\t/* 0x635f0 */"
+  "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x682d6 */\n\n\t/* 0x635f0 */",
+  "replace": "\t/* 0x635f0 */",
+  "fn": "v34tx1_jtxmit"
  },
  {
   "label": "64/68: +0x25d8 is not counted",
@@ -2924,20 +2928,20 @@
  },
  {
   "label": "21: the boundary arm does not raise bit 2 of f25c2",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm raises bit 3 of f25c2",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm does not clear the counter",
-  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2954,38 +2958,38 @@
  },
  {
   "label": "21: the whole-counter arm needs BOTH receivers non-zero",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm looks only at the V.90 receiver",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->v90_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->v90_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm looks only at the K56flex receiver",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if (o->k56flex_receiver != 0) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif (o->k56flex_receiver != 0) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the whole-counter arm tests the receivers above one",
-  "find": "\t} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
-  "replace": "\t} else if ((unsigned)o->v90_receiver > 1u\n\t\t   || (unsigned)o->k56flex_receiver > 1u) {",
+  "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
+  "replace": "\t\tif ((unsigned)o->v90_receiver > 1u\n\t\t    || (unsigned)o->k56flex_receiver > 1u) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the counter is halved on the receiver arm too",
-  "find": "\t\ttx1_put(o, TX1_COUNT, o->rtd);\n\t} else {",
-  "replace": "\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));\n\t} else {",
+  "find": "\t\t\ttx1_put(o, TX1_COUNT, o->rtd);\n\t\t} else {",
+  "replace": "\t\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));\n\t\t} else {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the counter is taken whole where it should be halved",
-  "find": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
-  "replace": "\t\t/* 0x64b96 */\n\t\ttx1_put(o, TX1_COUNT, o->rtd);",
+  "find": "\t\t\t/* 0x64b96 */\n\t\t\ttx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));",
+  "replace": "\t\t\t/* 0x64b96 */\n\t\t\ttx1_put(o, TX1_COUNT, o->rtd);",
   "fn": "v34tx1_trnseg4"
  },
  {
