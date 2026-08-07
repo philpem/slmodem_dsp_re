@@ -27678,3 +27678,43 @@ indistinguishable from a clean tree, which is the shape finding 134 named and
 542 counted four instances of.  Writing them and not running them would have
 been the fifth.
 
+
+======================================================================
+### 556. The ratchet was measured at the merge and never blessed, so its floor stayed where it was
+
+Running `make similarity` on the merged tree printed
+
+```
+  ratchet OK -- gained: compared 365->386, identical 92->105, same_size 15->16
+```
+
+and that was reported as the codegen tier's verdict on the session, which it
+is. **But `--ratchet` does not write `ratchet.json`; `--update` does.** So the
+floor stayed at the pre-merge `{compared: 365, identical: 92, same_size: 15}`
+set by finding 616, and for the next batch the tier could no longer detect a
+regression from 105 down to 93. A twelve-symbol loss would have printed
+`ratchet OK -- gained`.
+
+`w12_diag` found it, from the other end: it ran the ratchet expecting to see
+its own contribution, saw the same `92->105` its fork point already had, and
+said so instead of blessing a gain that was not its work. **Reporting a
+measurement is not recording it**, which is finding 542's sentence in a tier
+that was not being thought about when 542 was written.
+
+Now blessed at `{compared: 386, identical: 105, same_size: 16}` after
+confirming the number is stable -- two consecutive runs, because a COLD
+container reports a partial `identical ... now 48` on its first invocation and
+105 on every run after (650), so a single cold reading would have set the
+floor sixty symbols too low and locked in a permanent false pass.
+
+Shown to fire, per finding 134: with the floor at 105, injecting a
+three-symbol regression exits 1 and says why fewer functions match.
+
+#### The habit this is an instance of
+
+Three tiers now hold a recorded baseline -- `ratchet.json`, the mutation
+snapshot (545), and `docs/deviations.md`. Each has the same failure mode: the
+measurement gets taken, quoted in a commit message, and not written back, so
+the floor silently describes an older tree. The mutation snapshot has a key
+that makes staleness visible without re-measuring; the ratchet does not, and
+its `gained:` line is the only signal that the floor is behind.
