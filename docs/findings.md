@@ -27384,3 +27384,55 @@ larger finding. The ninth collision's renumber pass moved its ten codegen-tier
 citations to 604, 605, 606, 610, 612, 613, 614, 616, 617 and 619, and the file
 in this tree carries them. An older snapshot of it quoting 344-359 is a copy
 taken before commit `ae04e7d`, not the tree.
+
+======================================================================
+### 555. Iteration was paying for the whole suite, and the fix is four lines
+
+`mutate.py` offered `--suite` (all of it) and `--all` (all of everything).
+There was no way to ask the question a batch actually asks twenty times:
+**did the mutations I just touched still fail?**
+
+Measured on this tree, not supposed. One batch working on `v34hstx1` ran its
+749 mutations at 16:45, again at 16:51, and `mutsnap --update` ran them a
+third time at 16:55-16:59 -- roughly fourteen minutes of a task that had
+touched a handful of labels. The per-mutation cost is 0.67 s to rebuild and
+relink plus 0.73 s to run, so a full suite is unavoidable arithmetic once you
+ask for it; the defect was having no way not to.
+
+```
+  v34hshak, full suite, --jobs 8      62 s
+  v34hshak, --only "<one label>"    4.17 s      (baseline build + the mutant)
+  v34hstx1, full suite, --jobs 4    ~180 s
+  v34hstx1, --only "<one label>"      ~4 s
+```
+
+Parallelism (541) attacked the wrong axis for this case. Eight workers make a
+749-mutation answer arrive in 93 s instead of 15 minutes, which is worth
+having -- but the batch did not want a 749-mutation answer.
+
+#### The speed is the smaller half; the marking is the larger
+
+A subset run's summary is otherwise **indistinguishable from a full run's** --
+`17 mutations: 17 caught, 0 NOT caught` reads identically whether it covered
+the suite or a twentieth of it. That is findings 347, 432, 540 and 542 in a
+new place, and it would be a particularly bad one: the number would land in a
+commit message as evidence.
+
+So the subset run does not print the string `mutations:` at all, which is
+exactly what `mutsnap.py` scans for. It prints
+
+```
+  SUBSET: 1 of 209 mutations (--only '...') -- 1 caught, 0 NOT caught, ...
+  This is an iteration aid.  It is NOT a suite result and cannot be a baseline.
+```
+
+and `mutsnap --update` cannot record it even if asked. Verified by grepping
+the output for what the parser looks for: zero matches.
+
+#### The cost this carries, and it is the one 545 predicted
+
+`tools/mutate.py` is in the snapshot's closure -- it is the runner, and what
+counts as caught is its code -- so this four-line change **invalidates all 48
+recorded entries**. That is correct and it is not free: the answer is to
+re-run at the next merge, as 545 says, and not to re-key because the edit
+"obviously" cannot move a verdict. It moved the tool that decides.

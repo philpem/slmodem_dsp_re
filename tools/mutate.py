@@ -367,6 +367,11 @@ def main():
                     help="every suite in test/mutations/suites.json")
     ap.add_argument("--verbose", action="store_true",
                     help="show the failing check for each caught mutation")
+    ap.add_argument("--only", metavar="TEXT",
+                    help="run only mutations whose label contains TEXT.  For "
+                         "ITERATION: 1.4 s instead of a full suite.  The run "
+                         "is marked SUBSET and cannot be recorded as a "
+                         "baseline")
     ap.add_argument("--jobs", type=int, metavar="N",
                     help="run the suite over N sibling trees at once; each "
                          "costs about 15 MB of temporary disk and the "
@@ -397,6 +402,26 @@ def main():
 
     entries = json.load(open(args.mutations))
     muts = [m for m in entries if "find" in m]
+    #
+    # ITERATION IS THE COMMON CASE AND IT WAS PAYING FOR THE WHOLE SUITE.
+    #
+    # A batch changing one arm wants to know whether ITS mutations still fail,
+    # and had no way to ask: `--suite` runs all of them.  Measured on the tree
+    # today, one batch ran v34hstx1's 749 four times over fourteen minutes to
+    # check work that touched a handful of labels.  One mutation is 1.4 s.
+    #
+    # THE SUBSET RUN IS MARKED, and that matters more than the speed.  Its
+    # summary would otherwise be indistinguishable from a full run's -- the
+    # exact shape of findings 347, 432, 540 and 542 -- so it does not print
+    # the string `mutations:` at all, which is what `mutsnap.py` looks for.
+    # A subset can never be recorded as a baseline by accident.
+    #
+    subset = None
+    if args.only:
+        subset = len(muts)
+        muts = [m for m in muts if args.only in m.get("label", "")]
+        if not muts:
+            sys.exit("no mutation label contains %r" % args.only)
     if args.shard:
         muts = shard_of(muts, args.shard)
     else:
@@ -501,6 +526,16 @@ def main():
             "uncaught": uncaught, "broken": broken,
             "equivalent": equivalent, "surprises": surprises, "by": by}))
         return 0
+
+    if subset is not None:
+        print("\n  SUBSET: %d of %d mutations (--only %r) -- %d caught, "
+              "%d NOT caught, %d unusable, %d equivalent.\n"
+              "  This is an iteration aid.  It is NOT a suite result and "
+              "cannot be a baseline."
+              % (len(muts), subset, args.only,
+                 len(muts) - len(uncaught) - len(broken) - len(equivalent),
+                 len(uncaught), len(broken), len(equivalent)))
+        return 1 if uncaught or surprises else 0
 
     return report(len(muts), uncaught, broken, equivalent, surprises, by)
 
