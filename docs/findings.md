@@ -15482,3 +15482,54 @@ ladder structure established to about a fifth of a dB. The exact form, the
 meaning of the two rows, and why the row length reaches thirteen when V.34
 defines eleven indices are all still open, and are now open with the easy
 answers eliminated rather than untried.
+
+### 361. Which deviation-register claims have a test behind them
+
+`docs/fastpass.md` deferred "reachability measurement for deviations" to #47 on
+the grounds that the entry is cheap and measuring whether it fires is not. It
+is cheaper than it looked, at least for the necessary condition:
+`tools/devaudit.py` asks, for each of the 59 entries, whether any compiled test
+object references the `ref_` alias of what the entry names.
+
+A "no" is conclusive -- nothing drives that function, so the claim cannot have
+been measured. A "yes" only says the function is under test, not that the
+deviant path is. The asymmetry is the value: it turns 59 entries into five to
+read.
+
+**The five, hand-checked one at a time** -- because the tool needed two
+corrections before its output meant anything, and finding 358 is what happens
+when that step is skipped:
+
+| entry | our symbol | `ref_` alias | driven | verdict |
+|---|---|---|---|---|
+| D6 `AGC_DEF_ALPHA` | yes | yes | **no** | genuinely unmeasured |
+| D40 `dsplib_encode_plain` | yes | **none** | no | unmeasurable by this route |
+| D42 `StateName` | yes | yes | **no** | genuinely unmeasured |
+| D44 `t3` | no | no | no | names code not yet reconstructed |
+| D47 `fa16` | no | no | no | RETRACTED entry; no test owed |
+
+So three real gaps, not five, and only two of them are addressable today:
+
+- **D6** claims `AGC_DEF_ALPHA`'s slow pair is copy-pasted and breaks unity
+  gain. The table exists on both sides and nothing compares them. This is a
+  data-table diff and would be cheap.
+- **D42** claims `StateName` is indexed with nothing bounding the index. The
+  alias exists; no test drives it.
+- **D40** introduced a switch the original does not have, in a function with no
+  `ref_` alias at all -- so the differential tier cannot reach it however many
+  tests are written, and that is worth knowing about the entry rather than
+  worth fixing.
+
+**Two corrections the tool needed**, recorded because they are the same class
+of error twice over. Matching the backticked names in an entry's HEADING
+produces confident nonsense: D3's subject is `FixedRC`, whose symbols are all
+`RcFixed_*`, and D62's heading happens to contain `sysdep_malloc`, which is the
+harness's -- both read as unmeasured and both are driven. Using the `Module`
+line's source file and asking whether any symbol defined in it is under test is
+the same condition on firmer ground. And the regex wanted `Modules?`, because
+one entry names two files.
+
+Forty-two of 59 entries name something under test. That is the necessary
+condition only, and turning it into the sufficient one -- does a test drive the
+DEVIANT PATH, not merely the function -- is the part `fastpass.md` was right to
+call expensive. It is not done here.
