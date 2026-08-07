@@ -50,12 +50,21 @@
  *   - route TXSAMPLE with a budget of ONE sample;
  *   - microstate PHASE1 and rxstate SILENCE, so neither of the other two
  *     machines contributes to the tail;
- *   - THE DIAGNOSTICS ARE OFF.  Every table-1 arm prints zero lines cold
- *     (finding 323), but three of these six have a trace on the path where
- *     they change `txstate` or reach zero, and this fixture cannot compare
- *     it: our code and the blob's log to two different capture channels and
- *     a side running both would reach only one of them.  The traces are not
- *     reconstructed either; finding 341 records both halves as one gap.
+ *   - THE DIAGNOSTICS ARE OFF, and finding 570 says which half of finding
+ *     341's gap that is really about.  The channel-routing half is fixed --
+ *     `v34hs_step_case` joins both capture channels in call order (358a) --
+ *     and turning the diagnostics on anyway leaves 161 of the 272 step cases
+ *     failing on transcript.  Every one of those is a line the BLOB prints
+ *     and we do not; we print nothing the blob does not, and no case differs
+ *     in a byte of the object.  So the arms are right about the machine and
+ *     silent about the trace, and 204 of the 760 missing lines come from
+ *     `hs_setstate` and `v34FreezeEcho`, which already exist in the tree and
+ *     are simply not called from here.
+ *
+ *     `V34TX1_TRACE=1` re-runs that measurement: diagnostics on, and every
+ *     case whose two transcripts differ printed side by side.  It is a
+ *     diagnostic mode and the binary FAILS under it by design, so it is not
+ *     in `make phase`.
  */
 
 #include <stdio.h>
@@ -133,6 +142,7 @@ struct tx1_poke {
 #define P8(o, v)	{ (o), (v), 3 }
 
 static int dump;
+static int trace;			/* V34TX1_TRACE -- see finding 570 */
 static unsigned char before[sizeof(struct v34_object)];
 
 /*
@@ -271,6 +281,10 @@ run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 	snprintf(msg, sizeof(msg), "%s: exit code, differential run", what);
 	diff_eq_int(msg, rc, want, tag);
 	v34hs_compare(what, tag);
+
+	if (trace && strcmp(v34hs_text(0), v34hs_text(1)) != 0)
+		printf("=@= %s\n--- ours ---\n%s--- blob ---\n%s",
+		       what, v34hs_text(0), v34hs_text(1));
 
 	if (dump)
 		printf("  %-38s tx %2d  arm wrote %4u  step wrote %4u\n",
@@ -4116,9 +4130,11 @@ main(void)
 	/*
 	 * The diagnostics stay OFF; see the head of this file.  It is stated
 	 * rather than left to the default because it is part of what the
-	 * comparison holds fixed.
+	 * comparison holds fixed -- and `V34TX1_TRACE` is the one way to lift
+	 * it, which is finding 570's measurement and not a passing run.
 	 */
-	v34hs_debug(0);
+	trace = getenv("V34TX1_TRACE") != NULL;
+	v34hs_debug(trace);
 
 	case_xmit0();
 	case_txlevel();

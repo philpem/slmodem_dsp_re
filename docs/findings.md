@@ -23278,6 +23278,37 @@ flip is queued rather than done. **If turning the diagnostics on does not move
 the count, this finding is wrong and the concatenation is not the whole
 story** -- say so rather than quietly widening something.
 
+#### AMENDED: THE FLIP WAS DONE AND THIS FINDING IS WRONG. See finding 570.
+
+Task #32 ran the experiment above exactly as specified. The count did not move,
+because **the suite cannot run with the diagnostics on at all**: 161 of its
+272 step cases fail their transcript comparison, `mutate.py` refuses a baseline
+that is not green, and no mutation number exists to compare. Taking this
+finding's own instruction, it is recorded as wrong rather than widened.
+
+It is wrong twice over, and the two reasons are independent:
+
+- **The join is a rounding error, not the mechanism.** Disabling it and
+  re-running moves the failing check count from 322 to 328. Three cases of
+  161. The dominant term is that the arms never *call* the diagnostics --
+  760 lines from 37 distinct format strings are never printed -- and
+  `hs_setstate` and
+  `v34FreezeEcho`, which between them account for 204 of the 760, already
+  exist in the tree and are simply not called from `v34hstx1.cpp`. That is
+  the arms' own file, which is
+  exactly where the three batches were looking. The headline above -- "it was
+  not in their files" -- is false.
+- **Ten of eleven was never available.** Measuring side A against side A for
+  all eleven uncaught mutations (finding 570) puts **five** within reach of a
+  transcript comparison and six outside it for ever under this fill. Three of
+  the six swap `echo0` for `echo1`, and both cancellers print the identical
+  single line `?======= Nothing to report =========` under `v34hs_setup(0)`,
+  so no routing of any kind can tell them apart.
+
+What survives is the narrow mechanical claim: the join is correct, the two
+channels are in call order, and side A's channel-0 text does reach the
+comparison. It buys three cases.
+
 #### The pattern worth taking away
 
 Three batches were each told to close a gap that none of them owned. Each did
@@ -23734,3 +23765,202 @@ One thing the recount adds that changes the batching: **all 23 are in
 unifying before renaming -- so the rename lands on one file instead of two --
 is therefore wrong.  The order is still right, but the reason is the shared
 anchors, not the file count.
+
+======================================================================
+### 570. The diagnostics-on experiment 358a asked for: the suite goes red, and only five of the eleven were ever reachable
+
+Task #32's brief was to prove or disprove finding 358a by turning the
+diagnostics on in `test/unit/t_v34hstx1.c` and re-running its 749 mutations.
+358a predicted the uncaught count would fall from eleven to one. **It does not
+fall, because the suite cannot be run in that configuration at all**, and even
+if it could, six of the eleven are invisible to any transcript comparison.
+358a is amended to wrong; this is the measurement.
+
+#### The baseline, reproduced before anything was touched
+
+```
+749 mutations: 706 caught (706 by test, 0 by strings),
+               11 NOT caught, 0 unusable, 32 equivalent
+```
+
+exactly the external record at c6e6e5a.  Run in three chunks of 250/250/249
+against `src/pump/v34/v34hstx1.cpp` and `build/test/t_v34hstx1`; the chunks
+sum 231+240+235 caught, 3+4+4 uncaught, 16+6+10 equivalent.
+
+#### The experiment, and the first result
+
+`v34hs_debug(0)` -> `v34hs_debug(1)` in `main`, rebuild, run:
+
+```
+FAIL v34handshak table 1: nineteen per-sample transmit arms  322/23295 checks failed
+```
+
+`mutate.py` refuses a baseline that is not green -- correctly, since every
+mutation would report CAUGHT for a reason that has nothing to do with the
+mutation.  So **the count 358a asked about does not exist**.  There is no
+after-number, and that is the disproof rather than an obstacle to it.
+
+**The brief's "third outcome" cannot arise here and was ruled out by
+inspection, not assumed.**  `t_v34hstx1.c` calls `v34hs_step_case` and nothing
+else -- no `v34hs_ours`, no `v34hs_side_a`, no `v34hs_entry`.  Every run in the
+file is a step-case run, so turning the diagnostics on for `main` and turning
+them on "only around the step-case runs" are the same edit.  There was nothing
+to narrow.
+
+#### What fails, and what does not
+
+Of 322 failing checks, **161 are `diagnostic lines` and 161 are `transcript`.
+Not one is `bytes written`, `step signature`, or the arena byte sweep.** The
+object our arms leave behind is identical to the blob's, byte for byte, in
+every one of the 272 step cases.  The reconstruction is not wrong about the
+machine; it is silent about the trace.
+
+Dumping both transcripts and differencing them line by line:
+
+```
+161 of 272 cases differ
+  lines we print that the blob does not:    0
+  lines the blob prints that we do not:   760, from 37 distinct format strings
+```
+
+**Zero spurious prints in either direction is worth stating on its own.**
+Every difference is a missing line.  Nothing we emit is wrong, mis-ordered or
+duplicated -- which is why the diagnostics-off runs were never wrong, only
+blind.
+
+By arm, failing cases:
+
+```
+  66  54     24  26     67  17     20  15     21  12     19  10
+  64   6     54   4     74   4     86   3     68   3     69   2
+  65   1     78   1     85   1     18   1     51   1
+```
+
+and the largest missing families:
+
+```
+  402  V34DATARATE, ...                             8 format strings, mostly arm 66
+  183  V34HSHAKE: txstate/rxstate/microstate ...    3 formats, 37 state pairs
+                                                    -- hs_setstate
+   51  V34INFO, V.34bis is not possible
+   25  End of current MOH msg: isterm=%d, ...
+   21  V34HSHAK: Freeze EC + ==== Near/Far Echo Canceller report ==== -- v34FreezeEcho
+   14  V34MP, ...                                   3 format strings
+   11  MOH: Timeout ...                             3 format strings
+    4  V34RETRAIN, SILENCERETRAIN finished, ...
+   49  the rest -- 14 one-off messages, the largest 15x "echo start wait time"
+```
+
+Counted after normalising both decimal and hex literals away.  Normalising
+only the decimals splits one `%x` format into four and inflates every
+"distinct" figure here; the occurrence counts are unaffected.
+
+#### The part that makes this actionable: most of it is calls not made
+
+`hs_setstate` (`src/pump/v34/v34hshak.c`) emits every
+`V34HSHAKE: txstate/rxstate/microstate` line and `v34FreezeEcho`
+(`src/pump/v34/v34rx.c`) emits `Freeze EC` and both echo-canceller report
+headers.  **Both already exist in this tree, and both are already correct.**
+The table-1 arms in `v34hstx1.cpp` poke the state word and the
+`V34_EC_FROZEN` bit directly instead of calling them.  So the second-largest
+family is not code that has to be written; it is a call that has to be made,
+at a site the disassembly has to settle.
+
+That is not done here, for three reasons that are about ownership rather than
+effort: `v34hstx1.cpp` is live in other worktrees and finding 429 already
+names its anchors a merge hazard; replacing the arms' inline
+`V34EchoReportCoeff(&o->echo0/echo1)` pairs with a `v34FreezeEcho` call would
+**delete six mutation anchors** and fail `anchorcheck.py`, so it has to move
+those entries to a `v34rx` suite in the same change; and whether a given arm
+calls the helper or inlines it is a disassembly question for the arm's owner.
+
+#### The measurement that replaces the one 358a asked for
+
+The blocked question is "would a working transcript comparison have caught
+these ten?"  That does not need a green baseline, because side B never
+changes: it needs **side A against side A**.  Apply each uncaught mutation,
+dump side A's joined transcript for all 272 cases, and diff it against the
+unmutated dump.  If the text moves, a transcript comparison would catch it
+once the case is clean; if it does not, nothing in the harness can.
+
+```
+**  64: the segment's end reports only the first echo canceller   TEXT CHANGES
+..  64: the segment's end reports the first echo canceller twice  identical
+..  67: initdigital is not called                                 identical
+..  67: +0x3598 is not set                                        identical
+**  78/85: only the first echo canceller is reported              TEXT CHANGES
+..  78/85: the second report is of the first canceller again      identical
+..  81: the wrap is tested before the counter is stored           identical
+**  21: the echo-adapt start is not reported                      TEXT CHANGES
+**  21: the middle point is not reported                          TEXT CHANGES
+**  21: the boundary arm reports only the first canceller         TEXT CHANGES
+..  21: the boundary arm reports the first canceller twice        identical
+
+5 of 11
+```
+
+**No mutation changed status, and there is no list of names to give**, because
+there is no after-sweep to compare against: the count stays at eleven for as
+long as the suite cannot be run with the diagnostics on.  The table above is
+what replaces it, and it is a stronger statement than a flip would have been
+-- it says which five *would* flip once their cases are clean, and why the
+other six never will.
+
+**Five, not ten.**  And the six are six for two different reasons, neither of
+which is the harness:
+
+- **Three are indistinguishable under this fill.**  `V34EchoReportCoeff` prints
+  exactly one line per canceller, and under `v34hs_setup(0)` both cancellers
+  are empty, so both print `?======= Nothing to report =========`.  A mutation
+  that reports `echo0` twice instead of `echo0` then `echo1` produces a
+  byte-identical transcript.  No routing fixes that; **a fill in which the two
+  cancellers hold different coefficients would**, and that is the actual
+  request for whoever wants those three.
+- **Two are 67's, and print nothing at all.**  `initdigital` emits no line on
+  this path, so "not called" is invisible; `+0x3598` is its guard and equally
+  so.  357a counted these among the "print-only" ten; they are not print-only,
+  they are unobservable.
+- **One is finding 343's**, `81: the wrap is tested before the counter is
+  stored`, the transfer with no oracle.  Confirmed by name as expected, not
+  inferred from "one survived".  Of the six arms that carry an uncaught
+  mutation -- 21, 64, 67, 78, 81, 85 -- **81 is the only one with zero
+  transcript-dirty cases** -- five of the twenty-two txstates the suite
+  drives are clean, 5, 60, 70, 71 and 81.  So its survivor is the one that
+  cannot be blamed on
+  the trace gap at all, which is independent evidence that it is the genuine
+  gap finding 343 says it is.
+
+So 357a's "ten of eleven are print-only, expected" is itself an overcount.
+The honest reading is: five would be caught by a transcript comparison that
+could run, three need a different fixture fill, two need a non-printing
+observable, and one needs an oracle.
+
+#### What this cost, and the general point
+
+Two facts, held together, hid a defect for three batches: the diagnostics were
+off, and the reason recorded for their being off was a harness limitation.
+Both halves of finding 341's gap were real, and 358a assumed the one it could
+see was the whole of it.  The check that settled it -- disable the fix and
+count -- took one build.
+
+**When a fix is committed for a mechanism nobody has run, the first thing to
+measure is not whether it helps but how much of the gap it can possibly
+account for.**  322 against 328 would have been available the day the join
+landed, and it says "three cases of 161" without needing any of the rest.
+
+#### Reproducing it
+
+The measurement is now one command, because a gap that has to be re-derived
+from scratch is a gap nobody measures twice:
+
+```
+$ V34TX1_TRACE=1 ./build/test/t_v34hstx1 | grep -c '^=@= '
+161
+```
+
+`V34TX1_TRACE` turns the diagnostics on in `t_v34hstx1.c` and prints both
+transcripts for every case whose two differ.  **The binary fails under it by
+design** -- that failure IS the measurement -- so it is not in `make phase`,
+and unset the file behaves exactly as before.  Shown to fire in both
+directions: 0 without it and a passing run, 161 with it.  Whoever closes part
+of the gap should watch that number fall.
