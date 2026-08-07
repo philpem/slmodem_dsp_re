@@ -82,15 +82,15 @@
  },
  {
   "label": "79 sets the transmit state to SSEG",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (obj->moh_message == 1)",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (obj->moh_message == 1)",
   "note": "The anchor carries the line after it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325.",
   "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 moves the microstate to DET_INFO",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\ths_put(obj, T3C_FAADC, 0);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\n\ths_put(obj, T3C_FAADC, 0);",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.phase = 0;",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\n\tobj->fsk.phase = 0;",
   "fn": "t3c_micro_moh_tone"
  },
  {
@@ -227,8 +227,8 @@
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\tif (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {",
-  "replace": "\tif (T3M_I16(&frame, T3M_TXCURSOR) <= obj->f2aa0) {",
+  "find": "\tif (obj->txq.count < obj->f2aa0) {",
+  "replace": "\tif (obj->txq.count <= obj->f2aa0) {",
   "fn": "v34handshak"
  },
  {

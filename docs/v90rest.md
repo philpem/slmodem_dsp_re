@@ -490,13 +490,23 @@ is the BLOCK route and `T3M_UNWRITTEN_RXIDLE` was a stub (549); and there were
 one that does NOT model the 0x62b45 reload arm 48 needs -- so `t3m_tail` was
 kept instead and `v34hstxblock.c` is left alone (550).
 
-**2b. Replace the 23 offset macros that bypass a named field** (finding 356a,
-re-measured as 540).  `struct v34_object` names 159 fields; 23 of the arms'
-**102** object-based offset macros land on one of them.  `+0xabf0` has three
-macros and is `moh_message`; `+0xaae2` has two and is `fsk.sr`; `+0x264` is
-the base of `rxq` and only one of its three uses wants the count.  The other
-79 land in `unmapped_`/`pad_` and are honest.  All 23 are in `v34hshak.c`;
-finding 540 has the measured list and says where 356a is off.
+**2b. Replace the 23 offset macros that bypass a named field** -- **DONE**,
+findings 552-554.  Not 23 uniform substitutions: **16 exact**, **5 dead**
+(their only uses were in the two functions the unify deleted), **1 base**
+(`T3C_RECEIVER`, which `dp_rxget`/`dp_rxput` use as a `struct v34_receiver`
+base and which is now `&obj->rxq`), and **1 width mismatch** (`T3C_FAAE2`,
+kept: +0xaae2 is `fsk.sr` but microstate 62 reads it a BYTE wide, and no
+differential test in this tree can tell `movzbl` from `movzwl` -- 553).  The
+79 that land in `unmapped_`/`pad_` are untouched; that is item 3 below.
+
+46 anchors named one of the 23 and every one had the same substitution
+applied to `find` and `replace` together, so no claim moved; 16 were then
+deepened and three re-spelled by hand because they would otherwise have become
+no-ops or stopped compiling.  All seven suites are still on the numbers above.
+
+**`tools/compare.py --ratchet` could not be run**: the codegen tier is on
+`master` and is not in this branch's history (554).  The width rule was
+followed by hand and that is a weaker guarantee, recorded as one.
 
 **WHY ONE BATCH.**  Both rewrite the same file and both break the same
 anchors, and anchor repair is what produced finding 432's nine silent

@@ -313,8 +313,8 @@
  },
  {
   "label": "the entry compares the cursor against the limit the other way",
-  "find": "\tif (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {",
-  "replace": "\tif (T3M_I16(&frame, T3M_TXCURSOR) > obj->f2aa0) {",
+  "find": "\tif (obj->txq.count < obj->f2aa0) {",
+  "replace": "\tif (obj->txq.count > obj->f2aa0) {",
   "fn": "v34handshak"
  },
  {

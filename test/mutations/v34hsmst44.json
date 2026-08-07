@@ -341,20 +341,20 @@
  },
  {
   "label": "the originating side is 0x66",
-  "find": "\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\tif (obj->f359c == 0x66 && obj->v90_receiver != 0)",
+  "find": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x66 && obj->v90_receiver != 0)",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the V.90 receiver test is inverted",
-  "find": "\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\tif (obj->f359c == 0x65 && obj->v90_receiver == 0)",
+  "find": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x65 && obj->v90_receiver == 0)",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the V.90 receiver is not consulted",
-  "find": "\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\tif (obj->f359c == 0x65)",
+  "find": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tnbits = 0x11;\t\t\t\t\t/* 0x6c0ca */\n\tif (obj->f359c == 0x65)",
   "fn": "t44_det_info_restart"
  },
  {
@@ -659,14 +659,14 @@
  },
  {
   "label": "the originating side is 0x66 in the accept path",
-  "find": "\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\tif (obj->f359c == 0x66) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "find": "\t */\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\t */\n\tif (obj->f359c == 0x66) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the originating side goes to RX_PHASE2_CALL",
-  "find": "\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_CALL);",
+  "find": "\t */\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\t */\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_CALL);",
   "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
   "fn": "t44_det_info_accept"
  },
@@ -841,14 +841,14 @@
  },
  {
   "label": "+0xabf0 selects the other exit",
-  "find": "\tif (t3c_geti(obj, T44_FABF0) != 1) {",
-  "replace": "\tif (t3c_geti(obj, T44_FABF0) == 1) {",
+  "find": "\tif (obj->moh_message != 1) {",
+  "replace": "\tif (obj->moh_message == 1) {",
   "fn": "t44_accept_len08"
  },
  {
   "label": "+0xabf0 is read sixteen bits wide",
-  "find": "\tif (t3c_geti(obj, T44_FABF0) != 1) {",
-  "replace": "\tif (hs_get(obj, T44_FABF0) != 1) {",
+  "find": "\tif (obj->moh_message != 1) {",
+  "replace": "\tif (*(const short *)&obj->moh_message != 1) {",
   "fn": "t44_accept_len08"
  },
  {
@@ -973,7 +973,7 @@
  },
  {
   "label": "the rate tables read the transmit baud rate",
-  "find": "\tbaud = hs_get(obj, T44_RXBAUD);",
+  "find": "\tbaud = obj->faa96;",
   "replace": "\tbaud = hs_get(obj, T44_TXBAUD);",
   "fn": "t44_accept_len26"
  },
@@ -1159,7 +1159,7 @@
  },
  {
   "label": "the INFO1c arm does not zero the first trace counter",
-  "find": "\ths_put(obj, HS_TRACE_1, 0);\t\t\t/* 0x6f443 */",
+  "find": "\tobj->vect_idx = 0;\t\t\t/* 0x6f443 */",
   "replace": "\t(void)0;\t\t\t\t\t/* 0x6f443 */",
   "fn": "t44_accept_len4d"
  },
@@ -1189,8 +1189,8 @@
  },
  {
   "label": "the probeselect diagnostic swaps its two rates",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
-  "replace": "\t\t\t\t     (int)hs_get(obj, T44_RXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
+  "replace": "\t\t\t\t     (int)obj->faa96,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
   "note": "NOT CAUGHT, and it is a gap.  `probeselect` settles both rates at 2400 on every case this file drives -- it is the bottom of its ladder and the fixture's probe bins do not admit anything higher -- so the two arguments are equal and the order between them is invisible.  The two mutations below check WHICH field each argument reads, which is the half that can be seen; a case that steered `probeselect` to two different rates would close the rest.",
   "fn": "t44_accept_len4d"
  },
@@ -1293,13 +1293,13 @@
  },
  {
   "label": "the probeselect diagnostic prints the carrier as the transmit rate",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
-  "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
+  "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->faa96);",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the probeselect diagnostic prints the carrier as the receive rate",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_RXBAUD));",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
   "replace": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_CARRIER));",
   "fn": "t44_accept_len4d"
  },

@@ -24006,3 +24006,142 @@ unwritten* is asserting something about the reconstruction's progress, and
 every one of them is due to be re-read as an arm lands.  `unwritten_name`
 lists eight codes; three of them (`RXIDLE`, `TBL3_DEFAULT`, `TBL3_ARM`) are
 now unreachable, and that is the measure of what the unify closed.
+
+======================================================================
+
+### 552. The 23 offset macros, classified: sixteen exact, five dead, one base, one width mismatch
+
+Task #31, finding 356a as re-measured by 540.  `struct v34_object` names 159
+fields and the `v34handshak` arms reached 23 of them through an offset macro
+instead.  Reproduced with `tools/whichfield.py struct v34_object <offset>`
+before acting, and the 23 rows and their offsets are exactly as 540 had them.
+
+**It is not 23 uniform substitutions**, which is the thing worth recording:
+
+| class | n | what was done |
+|---|--:|---|
+| EXACT | 16 | `hs_get(obj, T41_F359C)` -> `obj->f359c`, and the macro deleted |
+| DEAD after the unify | 5 | zero uses left; the macro deleted outright |
+| BASE, not field | 1 | `T3C_RECEIVER` -> `&obj->rxq` |
+| WIDTH MISMATCH | 1 | `T3C_FAAE2` KEPT, for one byte-wide read (553) |
+
+**The sixteen exact.**  `DP_PROGRESS` `f0004`; `T41_V90RX` `v90_receiver`;
+`HS_TRACE_1` and `T41_TRACE_1` `vect_idx`; `T41_F359C` `f359c`; `T41_FA24A`
+`retrain_state`; `T44_RXBAUD` `faa96`; `T3C_FAADC` `fsk.phase`; `T3C_FAAE0`
+and `T41_FAAE0` `fsk.nbits`; `T41_FAAE2` `fsk.sr`; `T41_FABCA` `local_short`;
+`T41_FABCC` `is_short`; `T3C_FABF0`, `T41_FABF0` and `T44_FABF0`
+`moh_message`.  Three names for one field twice over, which is what the
+per-arm split cost.
+
+**The fsk trio are NOT bases, and that had to be checked rather than assumed.**
+`whichfield` reports the FIRST MEMBER of a nested aggregate, so an offset AT a
+sub-struct's base reads as a field name.  `struct v34_fsk fsk` starts at
++0xaad0, and +0xaadc, +0xaae0 and +0xaae2 are its +0x0c, +0x10 and +0x12 --
+interior, not the base -- so `fsk.phase`, `fsk.nbits` and `fsk.sr` are the
+real fields.  Every use is a bare 16-bit access and none is `MACRO + off`.
+
+**The one that IS a base.**  `T3C_RECEIVER` +0x264 reads as `rxq.count`
+because `struct v34_queue rxq` is there and `count` is its first member -- but
+its two remaining uses are `T3C_RECEIVER + off` in `dp_rxget`/`dp_rxput` with
+`off` running to 0x260, far past a four-field queue: that view is
+`struct v34_receiver`, not the queue.  Both now spell the base
+(`(const char *)&obj->rxq + off`) and neither pretends to be the count.
+`T3C_RX(obj)` is `((struct v34_receiver *)&(obj)->rxq)` for the same reason.
+The object's own code generation says base too: 0x62915 stores `obj+0x264`
+into a stack slot and every later use indexes off it, while 0x629f1 reads
+`(%ebx)` as a short.
+
+**The five that were dead.**  `T3C_PROGRESS`, `T3C_LVL_LIMIT`,
+`T3C_TXCURSOR`, `T3C_TXLIMIT` and `T3C_FAA96` had no uses left: every one of
+them was reached through `t3c_block_tail`/`t3c_txblock`, which finding 550
+deleted an hour earlier.  Deleting a dead macro is the same end state as
+renaming it and is recorded here so the count reconciles -- 23 macros gone,
+17 substitutions made.  `T3M_TXCURSOR` inherited the one live use of +0x221c
+in the merged prologue and is now `obj->txq.count`, which whichfield confirms
+and `v34hstx1.h`'s `while (txq.count < f2aa0)` already said.
+
+**The 79 that were left alone** land in an `unmapped_`/`pad_` span, where an
+offset is the honest spelling.  Extending the struct by measurement is a
+different job (v90rest.md's item 3).
+
+**Anchors.**  46 anchors named one of the 23.  Every one had the SAME
+substitution applied to its `find` and its `replace`, mechanically, so the
+claim each makes is untouched -- and then the 16 that stopped being unique
+were deepened with provenance, and three that would have become no-ops or
+would not compile were re-spelled by hand:
+
+- `the V.90 receiver is read at +0x248, not through obj+4` mutated the
+  macro's own constant, which nothing would read after the rename; it now
+  mutates the field access into `*(const int *)((const char *)obj + 0x248)`.
+- `+0xabf0 read sixteen bits wide` (twice, two suites) named the deleted
+  macro in its `replace` and did not compile; the 16-bit reading is now
+  `*(const short *)&obj->moh_message`.
+
+**A mutation that survives a rename by becoming a no-op is the failure mode
+here**, and it is invisible: it reads CAUGHT-or-not exactly as before and
+nothing in `make phase` looks at whether `find` and `replace` still differ in
+substance.  The scan that catches it is two lines -- every anchor whose
+`find` equals its `replace`, and every anchor still naming a deleted macro --
+and both were run.
+
+All seven suites' splits are identical to the pre-unify baseline.
+
+======================================================================
+
+### 553. `+0xaae2` is `fsk.sr` and one of its seven readers must keep the offset
+
+The one classification in 552 that no differential test could have made.
+
+`T3C_FAAE2` is +0xaae2, which is `struct v34_fsk`'s `sr` -- a `short`.  Six of
+its seven uses read or write it sixteen bits wide and are now `obj->fsk.sr`.
+The seventh, microstate 62's entry guard at 0x65c8a, reads it a BYTE wide:
+
+```c
+	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
+```
+
+`obj->fsk.sr & 1` is identical in behaviour on a little-endian machine for
+every value the field can hold, so **every test in this tree passes either
+way and always will**.  What differs is the instruction: `movzbl` against
+`movzwl`.  CLAUDE.md's rule for reading a codegen difference puts a load's
+width in the FORCED column -- the compiler had no choice about it -- so
+widening this one would be a real regression that the differential tier
+cannot see, which is exactly the class of defect finding 353 was.
+
+So the offset stays for that read and the macro stays defined with a comment
+saying why.  The file already knew: `t46_reset_core`'s note says *"`T3C_FAAE2`
+is commented as a byte because microstate 62 tests bit 0 of it; every one of
+this arm's five reads of +0xaae2 is sixteen bits wide"* -- one macro, two
+widths, and the rename is what forced the two apart.
+
+`tools/compare.py --ratchet` is what would have confirmed the byte read is
+still a byte read.  It could not be run here; see 554.
+
+======================================================================
+
+### 554. The codegen ratchet cannot be run on this branch, and that is a gap and not a pass
+
+`tools/compare.py --ratchet` was part of this batch's acceptance criterion --
+run it before the rename and after, because a rename can turn a `movzbl` into
+a `movzwl` with every differential test still green (553).
+
+**It does not exist in `v90rest`'s history.**  The codegen tier --
+`tools/compare.py`, `tools/toolchain/`, `storeorder.py`, `extcheck.py` and the
+GCC 3.4.2 container -- landed on `master` (findings 346, 350, 352-359) and
+reached this line only through the `tmp-merge-master` worktree, which is not
+this branch's ancestor.  `git log` at c6e6e5a has no `tools/compare.py` in any
+commit.
+
+So the width rule in 552 and 553 was followed BY HAND: where an access width
+differs from the field width, the offset spelling was kept and the field name
+not used.  That is a weaker guarantee than the ratchet and is recorded as
+such rather than reported as a passing check.
+
+**What to do when the branches meet.**  Run `python3 tools/compare.py` on the
+merged tree and compare `v34handshak`'s per-symbol result against master's
+recorded number *before* attributing any change to this work: the unify moved
+1,645 lines into the symbol and the rename changed 41 accesses in it, so a
+movement there is expected and only its DIRECTION is informative.  Pulling
+`compare.py` back to this branch on its own would not help -- it needs the
+container and the whole `tools/toolchain/build.sh` flag set, which is
+finding 352's evidence, not a file to copy.

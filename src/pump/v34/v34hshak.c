@@ -1174,7 +1174,6 @@ static const char *StateName[V34HS_STATE_COUNT] = {
  * second short of the pair at +0x2aa0, whose first `v34modeminit` sets to 6
  * and this function's tail sets to 0x10.
  */
-#define HS_TRACE_1	0x2aa2
 #define HS_TRACE_2	0xaa78
 
 short
@@ -1244,7 +1243,7 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
 		dsplibs_debug_printf(fmt[(off - HS_MICROSTATE) / 2],
 				     StateName[now], StateName[next],
 				     ctx1, ctx2,
-				     (long)hs_get(obj, HS_TRACE_1),
+				     (long)obj->vect_idx,
 				     (long)hs_get(obj, HS_TRACE_2));
 	}
 
@@ -1428,7 +1427,7 @@ v34handshakinit(void *objp, int mode)
 		obj->f382 = (short)0x8990;
 		rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
 
-		hs_put(obj, HS_TRACE_1, 0);
+		obj->vect_idx = 0;
 		hs_put(obj, HS_TRACE_2, 0);
 
 		preinitdigital(obj);
@@ -2746,15 +2745,10 @@ ApplyBulkDelay(void *objp, short delay)
  * members that are mapped -- `rtd` and the receiver's `flags`, `agc_level`,
  * `agc_gain`, `f1d2`, `rx_samples` -- are used by name below.
  */
-#define T3C_PROGRESS	0x0004	/* int:   the code the caller reads back    */
 #define T3C_TIMER_LO	0x0238	/* int:   a running sample count            */
 #define T3C_TIMER_HI	0x023c	/* int:   that plus 431,488                 */
-#define T3C_LVL_LIMIT	0x0230	/* int:   compared against the AGC level    */
 #define T3C_LVL_COUNT	0x0234	/* int:   blocks below it, capped at 0x257f */
-#define T3C_RECEIVER	0x0264	/* struct v34_receiver, inside the object   */
 #define T3C_MODE	0x2218	/* int:   selects what the tail reports     */
-#define T3C_TXCURSOR	0x221c	/* short: samples emitted this block        */
-#define T3C_TXLIMIT	0x2aa0	/* short: how many the block wants          */
 #define T3C_DETECTOR	0x3564	/* struct v34_detector, inside the object   */
 #define T3C_F358C	0x358c	/* short: cleared by MOH_TONE's body        */
 #define T3C_FSKGATE	0xa8a0	/* int:   non-zero diverts at 0x64a87       */
@@ -2764,18 +2758,24 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3C_COUNT_SRC	0xaa7c	/* short: RX_PHASE3_CALL copies it in       */
 #define T3C_PTR_AA6C	0xaa6c
 #define T3C_PTR_AA70	0xaa70
-#define T3C_FAA96	0xaa96	/* short: tripled into the receiver        */
-#define T3C_FAADC	0xaadc
-#define T3C_FAAE0	0xaae0
-#define T3C_FAAE2	0xaae2	/* byte:  bit 0 gates RX_PHASE3_CALL       */
+/*
+ * THE ONE OFFSET HERE THAT IS NOT A MISSING FIELD.  +0xaae2 IS `fsk.sr` and
+ * every other reader in this file now spells it that way -- but 0x65c8a reads
+ * it a BYTE wide (`movzbl`) to test bit 0, and `obj->fsk.sr & 1` is a
+ * `movzwl`.  The two agree on every value the field can hold, on a
+ * little-endian machine, so no differential test can tell them apart; a
+ * load's width is something the compiler was FORCED to encode, so widening
+ * it would be a codegen regression that nothing in this tree could catch.
+ * The offset stays for that one read.  Finding 553.
+ */
+#define T3C_FAAE2	0xaae2	/* THE LOW BYTE of `fsk.sr`; see above     */
 #define T3C_FABE6	0xabe6	/* short: set to 1 on the retrain path     */
-#define T3C_FABF0	0xabf0	/* int:   1 diverts MOH_TONE at 0x6d57c    */
 #define T3C_FABF8	0xabf8	/* byte:  "the drop has been reported"     */
 #define T3C_FABF9	0xabf9	/* byte:  non-zero diverts at 0x6c8f8      */
 #define T3C_FABFC	0xabfc	/* short: what the counter must reach      */
 #define T3C_RX_SAMPS	0x010c	/* receiver: where a detector reads from   */
 
-#define T3C_RX(obj)	((struct v34_receiver *)((char *)(obj) + T3C_RECEIVER))
+#define T3C_RX(obj)	((struct v34_receiver *)&(obj)->rxq)
 #define T3C_DET(obj)	((struct v34_detector *)((char *)(obj) + T3C_DETECTOR))
 
 /*
@@ -2820,7 +2820,6 @@ ApplyBulkDelay(void *objp, short delay)
 					   are compared UNSIGNED at 0x62a84  */
 #define T3M_MODE		0x2218	/* int, the value 0x62a47 dispatches
 					   the tail on                       */
-#define T3M_TXCURSOR		0x221c	/* short, samples emitted this block   */
 #define T3M_COUNTER		0xaa78	/* short, the counter six of these arms
 					   bump; it is the `[2]` every trace
 					   prints (v34hshak.c's HS_TRACE_2)  */
@@ -4473,20 +4472,20 @@ t3c_micro_moh_tone(struct v34_object *obj)
 
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 
-	if (t3c_geti(obj, T3C_FABF0) == 1)
+	if (obj->moh_message == 1)
 		t3c_unwritten();			/* 0x6d57c */
 
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 
-	hs_put(obj, T3C_FAADC, 0);
-	hs_put(obj, T3C_FAAE0, 0);
+	obj->fsk.phase = 0;
+	obj->fsk.nbits = 0;
 	hs_put(obj, T3C_BLK_A97C + 0x14, -1);
 	hs_put(obj, T3C_BLK_A97C + 0x18, 8);
 	hs_put(obj, T3C_COUNT, 0);
 	t3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A97C);
 	t3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T3C_BLK_A94C);
 	hs_put(obj, T3C_F358C, 0);
-	hs_put(obj, HS_TRACE_1, 0);
+	obj->vect_idx = 0;
 
 	t3c_txblock(obj);
 }
@@ -4559,15 +4558,11 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  * branches that could never be taken.
  */
 
-#define T41_TRACE_1	0x2aa2	/* short: the transition trace's [1]        */
-#define T41_V90RX	0x024c	/* int:   0x70d39 reads it through obj+4    */
 #define T41_DETECTOR	0x3564	/* struct v34_detector, inside the object   */
 #define T41_F3588	0x3588	/* short: bit 0 and bit 1, both set here    */
 #define T41_F358A	0x358a	/* short: the arm's own sub-state, 0/1/2    */
 #define T41_F358C	0x358c	/* short: cleared on three ways out         */
-#define T41_F359C	0x359c	/* short: 0x65 sends three paths elsewhere  */
 #define T41_F35A0	0x35a0	/* short: a counter this arm steps and caps */
-#define T41_FA24A	0xa24a	/* short: 1 allows the retrain at 0x6e016   */
 #define T41_BLK_A94C	0xa94c	/* the 0x30-byte record 0x70bdd fills       */
 #define T41_BLK_A9AC	0xa9ac	/* the one 0x6d387 fills, and aims +0xaa6c  */
 #define T41_PTR_AA6C	0xaa6c
@@ -4575,14 +4570,9 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 #define T41_COUNT	0xaa78	/* short: the counter, and the trace's [2]  */
 #define T41_FAA7A	0xaa7a	/* short: cleared unconditionally on entry  */
 #define T41_RTD		0xaa7e	/* short: the round-trip delay, >> 4 here   */
-#define T41_FAAE0	0xaae0	/* short: blocks in the state               */
-#define T41_FAAE2	0xaae2	/* short, and a BYTE at the entry test      */
 #define T41_ABAE	0xabae	/* short[10]: the info record staged here   */
 #define T41_FABC2	0xabc2	/* short: the last index of it to copy out  */
-#define T41_FABCA	0xabca
-#define T41_FABCC	0xabcc
 #define T41_FABE8	0xabe8	/* byte: non-zero takes the second door     */
-#define T41_FABF0	0xabf0	/* int:  1 arms the FRR-NACK report         */
 #define T41_FABF8	0xabf8	/* byte: "the drop has been reported"       */
 #define T41_RX_SAMPS	0x010c	/* receiver: where the detector reads from  */
 
@@ -4640,7 +4630,7 @@ t41_frr_nack(struct v34_object *obj)
 		t3c_txblock(obj);			/* 0x6dd19 */
 		return;
 	}
-	if (hs_get(obj, T41_FAAE2) != 0) {
+	if (obj->fsk.sr != 0) {
 		t3c_txblock(obj);			/* 0x6dd06 */
 		return;
 	}
@@ -4673,7 +4663,7 @@ t41_after_guards(struct v34_object *obj, unsigned char abe8)
 		t3c_txblock(obj);			/* 0x669fa */
 		return;
 	}
-	if (t3c_geti(obj, T41_FABF0) == 1) {
+	if (obj->moh_message == 1) {
 		t41_frr_nack(obj);			/* 0x6dca7 */
 		return;
 	}
@@ -4696,7 +4686,7 @@ t41_to_det_info(struct v34_object *obj)
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);
 
 	*(short *)((char *)rec + 0x14) = -1;
-	hs_put(obj, T41_FAAE0, 0);
+	obj->fsk.nbits = 0;
 
 	if (hs_get(obj, T41_F358A) == 0)
 		rx->flags = (unsigned short)(rx->flags
@@ -4732,13 +4722,13 @@ t41_tone_search(struct v34_object *obj)
 	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
 
 	det = t41_detect(obj);
-	if (det == 0 && hs_get(obj, T41_FAAE0) <= 0x384) {
+	if (det == 0 && obj->fsk.nbits <= 0x384) {
 		t3c_txblock(obj);			/* 0x70f8f */
 		return;
 	}
 
-	hs_put(obj, T41_FABCC, 0);
-	hs_put(obj, T41_FABCA, 0);
+	obj->is_short = 0;
+	obj->local_short = 0;
 	hs_put(obj, T41_F358A, 1);
 	hs_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 1));
 
@@ -4750,15 +4740,15 @@ t41_tone_search(struct v34_object *obj)
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 
-	hs_put(obj, T41_FAAE2, -1);
-	hs_put(obj, T41_FAAE0, 0);
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 
 	/*
 	 * 0x70d35.  The longer warm-up is taken only when the far end's
 	 * marker says 0x65 AND the V.90 receiver is present; the object reads
 	 * that int through `obj + 4`, so it is +0x24c and not +0x248.
 	 */
-	if (hs_get(obj, T41_F359C) == 0x65 && t3c_geti(obj, T41_V90RX) != 0)
+	if (obj->f359c == 0x65 && obj->v90_receiver != 0)
 		t41_record_head(obj, T41_BLK_A94C, 0x1e);	/* 0x70d47 */
 	else
 		t41_record_head(obj, T41_BLK_A94C, 0x11);	/* 0x70bdd */
@@ -4822,14 +4812,14 @@ t41_tone_ab(struct v34_object *obj)
 
 	hs_put(obj, T41_COUNT, 0);
 
-	if (hs_get(obj, T41_F359C) == 0x65) {
+	if (obj->f359c == 0x65) {
 		hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Tone AB detected ending "
 					     "errorrecovery. Switch to "
 					     "RX_PHASE1_CALL.\n");
 	} else {
-		hs_put(obj, T41_FAAE2, -1);
+		obj->fsk.sr = -1;
 		hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Tone AB detected ending "
@@ -4874,8 +4864,8 @@ t41_marks_late(struct v34_object *obj, short aae0)
 		return;
 	}
 
-	if (hs_get(obj, T41_F359C) != 0x65) {
-		if (hs_get(obj, T41_FA24A) != 1) {
+	if (obj->f359c != 0x65) {
+		if (obj->retrain_state != 1) {
 			t3c_txblock(obj);		/* 0x6dffb */
 			return;
 		}
@@ -4895,10 +4885,10 @@ t41_marks_late(struct v34_object *obj, short aae0)
 	hs_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);
 
 	hs_put(obj, T41_F358C, 0);
-	hs_put(obj, T41_TRACE_1, 0);
+	obj->vect_idx = 0;
 	hs_put(obj, T41_COUNT, 0);
-	hs_put(obj, T41_FAAE2, -1);
-	hs_put(obj, T41_FAAE0, 0);
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("DET_SYNC not detected, during search "
@@ -4920,7 +4910,7 @@ static void
 t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 {
 	short rtd = obj->rtd;
-	short aae0 = hs_get(obj, T41_FAAE0);
+	short aae0 = obj->fsk.nbits;
 	int base = ((int)rtd) >> 4;
 	short next;
 	short tx;
@@ -4993,10 +4983,10 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
 
 	hs_put(obj, T41_COUNT, 0);
-	hs_put(obj, T41_TRACE_1, 0);
+	obj->vect_idx = 0;
 	hs_put(obj, T41_F358C, 0);
-	hs_put(obj, T41_FAAE2, -1);
-	hs_put(obj, T41_FAAE0, 0);
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("DET_SYNC not detected, but Tone is "
@@ -5016,7 +5006,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 static void
 t41_micro_det_sync(struct v34_object *obj)
 {
-	unsigned short aae2 = (unsigned short)hs_get(obj, T41_FAAE2);
+	unsigned short aae2 = (unsigned short)obj->fsk.sr;
 	unsigned char abe8;
 	short f358a;
 
@@ -5031,7 +5021,7 @@ t41_micro_det_sync(struct v34_object *obj)
 	f358a = hs_get(obj, T41_F358A);
 
 	if (abe8 == 0 && f358a == 0) {
-		if (hs_get(obj, T41_FAAE0) > 0x64) {
+		if (obj->fsk.nbits > 0x64) {
 			t41_tone_search(obj);		/* 0x709e1 */
 			return;
 		}
@@ -5166,8 +5156,8 @@ t46_reset_core(struct v34_object *obj)
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 
-	hs_put(obj, T3C_FAAE2, -1);
-	hs_put(obj, T3C_FAAE0, 0);
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 
 	t46_init_record(obj);
 }
@@ -5261,7 +5251,7 @@ t46_info0_counting(struct v34_object *obj)
 		t3c_txblock(obj);			/* 0x6add0 */
 		return;
 	}
-	if ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {
+	if ((obj->fsk.sr & 0xfff) != 0xf72) {
 		t3c_txblock(obj);			/* 0x6add0 */
 		return;
 	}
@@ -5293,7 +5283,7 @@ t46_past_the_counter(struct v34_object *obj)
 		t3c_txblock(obj);			/* 0x6c120 */
 		return;
 	}
-	if (hs_get(obj, T3C_FAAE2) == 0) {
+	if (obj->fsk.sr == 0) {
 		t3c_txblock(obj);			/* 0x6bd7a */
 		return;
 	}
@@ -5358,7 +5348,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 
 		if (n <= T46_TONE_LIMIT) {
 			hs_put(obj, T3C_COUNT, n);	/* 0x6f8f9 */
-		} else if (hs_get(obj, T3C_FAAE2) != 0) {
+		} else if (obj->fsk.sr != 0) {
 			hs_put(obj, T3C_COUNT, n);	/* 0x6fb6e */
 		} else if (t3c_getb(obj, T46_RETRAIN) != 0) {
 			hs_put(obj, T3C_COUNT, n);
@@ -5383,7 +5373,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 
 	/* 0x65da6 */
 	if (hs_get(obj, T3C_COUNT) > T46_CNT_LOW
-	    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {
+	    && (obj->fsk.sr & 0x3ff) == 0x372) {
 		t46_body_repeated(obj);			/* 0x6abc1 */
 		return;
 	}
@@ -5459,11 +5449,9 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 #define T44_REC_A9AC	0xa9ac	/* the INFO1a record the 0x4d arm installs */
 #define T44_REC_A9DC	0xa9dc	/* the INFO1a/1c record that arrived       */
 #define T44_TXBAUD	0xaa84	/* short: what probeselect chose to send   */
-#define T44_RXBAUD	0xaa96	/* short: and to receive                   */
 #define T44_CARRIER	0xaaa8	/* short: the receive carrier, in Hz       */
 #define T44_RXCARRDESC	0xaab0	/* the detector coefficients for it        */
 #define T44_FAA80	0xaa80	/* short: the 0x26 arm sets it to 1        */
-#define T44_FABF0	0xabf0	/* int:   1 sends the 8-bit arm to the tone*/
 #define T44_FABF8	0xabf8	/* byte:  raised by the 8-bit arm's other  */
 
 /*
@@ -5703,7 +5691,7 @@ t44_accept_len08(struct v34_object *obj, short *rec, short count2)
 	 */
 	VPcmV34InterpretMohMessageBits(obj, rec);
 
-	if (t3c_geti(obj, T44_FABF0) != 1) {
+	if (obj->moh_message != 1) {
 		/*
 		 * 0x6ea8d.  The record is RE-READ from +0xaa70 at 0x6ebc7:
 		 * the decoder above is a call, so nothing may be assumed to
@@ -5881,7 +5869,7 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 	hs_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);
 	rxinit(obj);
 
-	baud = hs_get(obj, T44_RXBAUD);
+	baud = obj->faa96;
 	carrier = hs_get(obj, T44_CARRIER);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34SetupDemodulator: baudrate %ld, "
@@ -5943,7 +5931,7 @@ t44_accept_len4d(struct v34_object *obj)
 {
 	short *blk;
 
-	hs_put(obj, HS_TRACE_1, 0);			/* 0x6f443 */
+	obj->vect_idx = 0;			/* 0x6f443 */
 	hs_put(obj, T44_COUNT, 0);			/* 0x6f44a */
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 
@@ -5954,7 +5942,7 @@ t44_accept_len4d(struct v34_object *obj)
 		dsplibs_debug_printf("V34PROBESELECT, in ANSWER, txbaudrate = "
 				     "%d,rxbaudrate = %d,\n",
 				     (int)hs_get(obj, T44_TXBAUD),
-				     (int)hs_get(obj, T44_RXBAUD));
+				     (int)obj->faa96);
 	if (DSPLIB_DEBUG_ON())
 		t44_print10("V34PROBE, rxinfo1c",
 			    (const short *)((const char *)obj + T44_REC_A9DC));
@@ -6273,7 +6261,7 @@ v34handshak(void *vobj)
 	 * to fall out of and nothing this side could do after it.  Finding
 	 * 546.
 	 */
-	if (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {
+	if (obj->txq.count < obj->f2aa0) {
 		t3m_notwritten(T3M_UNWRITTEN_TBL1);
 		return;
 	}
@@ -6480,7 +6468,6 @@ v34handshak(void *vobj)
  * count reads as an enormous span rather than a negative one.
  */
 
-#define DP_PROGRESS	0x0004	/* int:   the shell's status word            */
 #define DP_TIMER	0x0238	/* int:   the running sample count           */
 #define DP_TIMER_MARK	0x0248	/* int:   the instant a span is measured from */
 #define DP_MODE		0x2218	/* int:   T3C_MODE, handshake above 1        */
@@ -6506,13 +6493,13 @@ v34handshak(void *vobj)
 static short
 dp_rxget(const struct v34_object *obj, unsigned off)
 {
-	return hs_get(obj, T3C_RECEIVER + off);
+	return *(const short *)((const char *)&obj->rxq + off);
 }
 
 static void
 dp_rxput(struct v34_object *obj, unsigned off, short v)
 {
-	hs_put(obj, T3C_RECEIVER + off, v);
+	*(short *)((char *)&obj->rxq + off) = v;
 }
 
 /*
@@ -6535,7 +6522,7 @@ datapumpv34(void *objp)
 
 	if ((unsigned)t3c_geti(obj, DP_TIMER)
 	    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)
-		t3c_puti(obj, DP_PROGRESS, 5);
+		obj->f0004 = 5;
 
 	/*
 	 * The handshake, and the only path that calls `v34handshak`.  Its own

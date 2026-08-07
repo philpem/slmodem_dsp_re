@@ -69,8 +69,8 @@
  },
  {
   "label": "TONE_AB's +0xaae2 test is inverted",
-  "find": "\t\t} else if (hs_get(obj, T3C_FAAE2) != 0) {",
-  "replace": "\t\t} else if (hs_get(obj, T3C_FAAE2) == 0) {",
+  "find": "\t\t} else if (obj->fsk.sr != 0) {",
+  "replace": "\t\t} else if (obj->fsk.sr == 0) {",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
@@ -124,26 +124,26 @@
  },
  {
   "label": "the ten-bit mask is twelve bits wide",
-  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
-  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0xfff) == 0x372) {",
+  "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
+  "replace": "\t    && (obj->fsk.sr & 0xfff) == 0x372) {",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
   "label": "the ten-bit mask is sixteen bits wide",
-  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
-  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0xffff) == 0x372) {",
+  "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
+  "replace": "\t    && (obj->fsk.sr & 0xffff) == 0x372) {",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
   "label": "the ten-bit test is for 0x373",
-  "find": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
-  "replace": "\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x373) {",
+  "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
+  "replace": "\t    && (obj->fsk.sr & 0x3ff) == 0x373) {",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
   "label": "the 199 guard and the 0x372 guard are either rather than both",
-  "find": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    && (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
-  "replace": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    || (hs_get(obj, T3C_FAAE2) & 0x3ff) == 0x372) {",
+  "find": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
+  "replace": "\tif (hs_get(obj, T3C_COUNT) > T46_CNT_LOW\n\t    || (obj->fsk.sr & 0x3ff) == 0x372) {",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
@@ -159,8 +159,8 @@
  },
  {
   "label": "0x65dcd's +0xaae2 test is inverted",
-  "find": "\tif (hs_get(obj, T3C_FAAE2) == 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
-  "replace": "\tif (hs_get(obj, T3C_FAAE2) != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
+  "find": "\tif (obj->fsk.sr == 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
+  "replace": "\tif (obj->fsk.sr != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
   "fn": "t46_past_the_counter"
  },
  {
@@ -183,20 +183,20 @@
  },
  {
   "label": "0x6c3f3's twelve-bit mask is sixteen bits wide",
-  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
-  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0xffff) != 0xf72) {",
+  "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
+  "replace": "\tif ((obj->fsk.sr & 0xffff) != 0xf72) {",
   "fn": "t46_info0_counting"
  },
  {
   "label": "0x6c3f3's twelve-bit mask is ten bits wide",
-  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
-  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0x3ff) != 0xf72) {",
+  "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
+  "replace": "\tif ((obj->fsk.sr & 0x3ff) != 0xf72) {",
   "fn": "t46_info0_counting"
  },
  {
   "label": "0x6c3f3 tests +0xaae2 for 0xf73",
-  "find": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf72) {",
-  "replace": "\tif ((hs_get(obj, T3C_FAAE2) & 0xfff) != 0xf73) {",
+  "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
+  "replace": "\tif ((obj->fsk.sr & 0xfff) != 0xf73) {",
   "fn": "t46_info0_counting"
  },
  {
@@ -341,14 +341,14 @@
  },
  {
   "label": "the reset writes 1 into +0xaae2",
-  "find": "\ths_put(obj, T3C_FAAE2, -1);\n\ths_put(obj, T3C_FAAE0, 0);",
-  "replace": "\ths_put(obj, T3C_FAAE2, 1);\n\ths_put(obj, T3C_FAAE0, 0);",
+  "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = -1;\n\tobj->fsk.nbits = 0;",
+  "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = 1;\n\tobj->fsk.nbits = 0;",
   "fn": "t46_reset_core"
  },
  {
   "label": "the reset leaves +0xaae0 alone",
-  "find": "\ths_put(obj, T3C_FAAE2, -1);\n\ths_put(obj, T3C_FAAE0, 0);",
-  "replace": "\ths_put(obj, T3C_FAAE2, -1);",
+  "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = -1;\n\tobj->fsk.nbits = 0;",
+  "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.sr = -1;",
   "fn": "t46_reset_core"
  },
  {

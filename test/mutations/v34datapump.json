@@ -14,8 +14,8 @@
  },
  {
   "label": "the stale-clock compare is >= rather than >",
-  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tt3c_puti(obj, DP_PROGRESS, 5);",
-  "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tt3c_puti(obj, DP_PROGRESS, 5);",
+  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
+  "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
   "fn": "datapumpv34"
  },
  {
@@ -26,8 +26,8 @@
  },
  {
   "label": "the stale clock reports 4 rather than 5",
-  "find": "\t\tt3c_puti(obj, DP_PROGRESS, 5);",
-  "replace": "\t\tt3c_puti(obj, DP_PROGRESS, 4);",
+  "find": "\t\tobj->f0004 = 5;",
+  "replace": "\t\tobj->f0004 = 4;",
   "fn": "datapumpv34"
  },
  {
@@ -459,14 +459,14 @@
  },
  {
   "label": "the receiver base is +0x260 rather than +0x264",
-  "find": "\treturn hs_get(obj, T3C_RECEIVER + off);",
-  "replace": "\treturn hs_get(obj, T3C_RECEIVER - 4 + off);",
+  "find": "\treturn *(const short *)((const char *)&obj->rxq + off);",
+  "replace": "\treturn *(const short *)((const char *)&obj->rxq - 4 + off);",
   "fn": "dp_rxget"
  },
  {
   "label": "the run counters are written four bytes low",
-  "find": "\ths_put(obj, T3C_RECEIVER + off, v);",
-  "replace": "\ths_put(obj, T3C_RECEIVER - 4 + off, v);",
+  "find": "\t*(short *)((char *)&obj->rxq + off) = v;",
+  "replace": "\t*(short *)((char *)&obj->rxq - 4 + off) = v;",
   "fn": "dp_rxput"
  }
 ]
