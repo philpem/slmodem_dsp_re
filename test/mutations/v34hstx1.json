@@ -41,7 +41,7 @@
  },
  {
   "label": "65: the transmit machine is not moved to SSEG",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c6 = 0;",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c6 = 0;",
   "replace": "\t\to->f25c6 = 0;"
  },
  {
@@ -91,18 +91,18 @@
  },
  {
   "label": "78/85: the completion bit is 8 rather than 4",
-  "find": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);",
-  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\tV34EchoReportCoeff(&o->echo0);"
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);\n\treturn 1;"
  },
  {
   "label": "78/85: only the first echo canceller is reported",
-  "find": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);",
-  "replace": "\tV34EchoReportCoeff(&o->echo0);"
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
  },
  {
   "label": "78/85: the second report is of the first canceller again",
-  "find": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);",
-  "replace": "\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);"
+  "find": "\tv34FreezeEcho(o);\n\treturn 1;",
+  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
  },
  {
   "label": "78: JaTXMIT hands the sample to the K56flex half",
@@ -191,8 +191,8 @@
  },
  {
   "label": "86: f25c0 is not cleared before it is counted",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25cc = 0;"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25cc = 0;"
  },
  {
   "label": "86: the shared block at 0x6430c does not count the symbol",
@@ -211,7 +211,7 @@
  },
  {
   "label": "86: the transmit machine is not moved to SSEG",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
   "replace": "\t\to->f25c0 = 0;"
  },
  {
@@ -283,25 +283,25 @@
  },
  {
   "label": "18: the count is not cleared when the segment ends",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->f25c0 = 0;",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);"
  },
  {
   "label": "18: the transmit machine is not moved to SBARSEG",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);\n",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n",
   "replace": ""
  },
  {
   "label": "18: the machine is moved to SSEG rather than SBARSEG",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);"
  },
  {
   "label": "18: the SBARSEG guard is deleted",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
   "equivalent": true,
-  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65"
+  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "70: the data-path test is inverted",
@@ -427,8 +427,8 @@
  },
  {
   "label": "51: the microstate is moved to TX_L1 rather than TX_L2",
-  "find": "\ttx1_put(o, TX1_MICROSTATE, V34HS_TX_L2);",
-  "replace": "\ttx1_put(o, TX1_MICROSTATE, V34HS_TX_L1);"
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_TX_L2);",
+  "replace": "\ths_setstate(o, TX1_MICROSTATE, V34HS_TX_L1);"
  },
  {
   "label": "51: vect_idx is not zeroed when the segment ends",
@@ -511,13 +511,13 @@
  },
  {
   "label": "19: the bit-13 path moves to TRNSEG4",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4A)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
   "label": "19: the f35a4-zero path moves to TXMD",
-  "find": "\t\t/* 0x68375 */\n\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_PPSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_PPSEG);",
-  "replace": "\t\t/* 0x68375 */\n\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TXMD)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TXMD);"
+  "find": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_PPSEG);",
+  "replace": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TXMD);"
  },
  {
   "label": "19: the sign path does not copy f35a6 into f25c0",
@@ -543,8 +543,8 @@
  },
  {
   "label": "19: the last path moves to SSEG rather than TXMD",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TXMD)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TXMD);\n\n\t\t/* 0x67885 */",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);\n\n\t\t/* 0x67885 */"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TXMD);\n\n\t\t/* 0x67885 */",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\n\t\t/* 0x67885 */"
  },
  {
   "label": "19: the modulator is set up at 3200 baud",
@@ -749,8 +749,8 @@
  },
  {
   "label": "20: the segment's end moves to TRNSEG4A",
-  "find": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4);",
-  "replace": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4A)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);",
+  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
   "label": "20: the span is measured from 0x5e9",
@@ -840,28 +840,28 @@
  },
  {
   "label": "54: the countdown is nine blocks",
-  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\tif (n != 0xa) {",
-  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\tif (n != 9) {"
+  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
+  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 9)"
  },
  {
   "label": "54: the countdown ends at or past ten",
-  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\tif (n != 0xa) {",
-  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\tif (n < 0xa) {"
+  "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
+  "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n < 0xa)"
  },
  {
-  "label": "54: the count is stored on the completing path too",
-  "find": "\t/* 0x6858f */\n\to->vect_idx = 0;",
-  "replace": "\t/* 0x6858f */\n\to->vect_idx = (short)n;"
+  "label": "54: the completing path does not zero the count",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);"
  },
  {
   "label": "54: the transmit machine moves to TX_L1",
-  "find": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);",
-  "replace": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_L1);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_L1);"
  },
  {
   "label": "54: the self-pointer is aimed at +0xa97c",
-  "find": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
-  "replace": "\ttx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
  },
  {
   "label": "54: V34SetINFO0aBits is not called",
@@ -962,25 +962,25 @@
  },
  {
   "label": "74: the microstate is not moved",
-  "find": "\t\tif (tx1_get(o, TX1_MICROSTATE) != want)\n\t\t\ttx1_put(o, TX1_MICROSTATE, want);\n",
+  "find": "\t\ths_setstate(o, TX1_MICROSTATE, want);\n",
   "replace": "\t\t(void)want;\n"
  },
  {
   "label": "74: the rxstate moves to RECEIVE",
-  "find": "\t\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RX_DPSK)\n\t\t\ttx1_put(o, TX1_RXSTATE, V34HS_RX_DPSK);",
-  "replace": "\t\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)\n\t\t\ttx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);"
+  "find": "\t\ths_setstate(o, TX1_RXSTATE, V34HS_RX_DPSK);",
+  "replace": "\t\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);"
  },
  {
   "label": "74: the txstate compare is deleted",
-  "find": "\t\tif (txst != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\t/* 0x66c10 */\n\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
   "equivalent": true,
-  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read"
+  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "74: the txstate moves to TONE_AB_CALL",
-  "find": "\t\tif (txst != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\t\tif (txst != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
+  "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "replace": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
  },
  {
   "label": "74: f358c is not cleared by the retrain",
@@ -1171,23 +1171,23 @@
  },
  {
   "label": "69: the segment's end leaves vect_idx alone",
-  "find": "\t\to->vect_idx = 8;\n\t\tif (txst != V34HS_DATAXMIT)",
-  "replace": "\t\tif (txst != V34HS_DATAXMIT)"
+  "find": "\t\to->vect_idx = 8;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);"
  },
  {
   "label": "69: the transmit machine moves to XMITMP",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMITMP);"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);"
  },
  {
   "label": "69: the transmit machine is not moved at the segment's end",
-  "find": "\t\tif (txst != V34HS_DATAXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
   "replace": "\t\t(void)txst;"
  },
  {
   "label": "69: the txstate compare at 0x66e14 is deleted",
-  "find": "\t\tif (txst != V34HS_DATAXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);",
-  "replace": "\t\t(void)txst;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
+  "replace": "\t\t(void)txst;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);",
   "equivalent": true,
   "why": "the arm is reached only through table 1 at `txstate == 69` and `txmit` does not write +0x3596 (finding 285's sweep), so the compare is always true and the store always happens.  Finding 342's case at 65, exactly"
  },
@@ -1303,8 +1303,8 @@
  },
  {
   "label": "64/68: 0x66ca8 moves the transmit machine to XMITMP",
-  "find": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMIT0);",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMITMP);"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);"
  },
  {
   "label": "64/68: 0x66ca8 does not clear vect_idx",
@@ -1318,10 +1318,10 @@
  },
  {
   "label": "64/68: the txstate compare at 0x66cdf is deleted",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_XMIT0)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMIT0);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_XMIT0);",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either"
+  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64/68: the wrap test is inverted",
@@ -1335,35 +1335,35 @@
  },
  {
   "label": "68: f25cc is not cleared at the segment's end",
-  "find": "\t\to->f25cc = 0;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
   "label": "68: f25cc is cleared as a halfword",
-  "find": "\t\to->f25cc = 0;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
   "label": "68: f25c6 is not cleared at the segment's end",
-  "find": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c0 = 0;"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c0 = 0;"
  },
  {
   "label": "68: f25c0 is not cleared at the segment's end",
-  "find": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;"
  },
  {
   "label": "68: the transmit machine moves to TRNSEG4",
-  "find": "\t\to->f25cc = 0;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\to->f25cc = 0;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
-  "label": "68: the segment's end is guarded by a txstate compare",
-  "find": "\t\to->f25cc = 0;\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\to->f25cc = 0;\n\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4A)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "label": "68: the segment's end stores without comparing",
+  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->f25cc = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "equivalent": true,
-  "why": "0x65653 has NO compare where every other state change in this arm has one, and adding one cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  Recorded so that the asymmetry is on the record rather than tidied away"
+  "why": "0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding 572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64: +0x25da is compared against three",
@@ -1397,25 +1397,25 @@
  },
  {
   "label": "64: the bit source is not reloaded",
-  "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);\n\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)",
-  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)"
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);\n\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);"
  },
  {
   "label": "64: the transmit machine does not become 68",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
   "replace": "\t(void)0;"
  },
  {
   "label": "64: the transmit machine becomes TRNSEG4A rather than 68",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
-  "replace": "\ttx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
   "label": "64: the txstate compare at 0x63748 is deleted",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
-  "replace": "\ttx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
   "equivalent": true,
-  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here"
+  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64: the second echo report pair runs whatever the counter holds",
@@ -1429,33 +1429,33 @@
  },
  {
   "label": "64: bit 3 of f25c2 is raised at the segment's end",
-  "find": "\tif (tx1_get(o, TX1_COUNT) != 0) {\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
-  "replace": "\tif (tx1_get(o, TX1_COUNT) != 0) {\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: no flag is raised at the segment's end",
-  "find": "\tif (tx1_get(o, TX1_COUNT) != 0) {\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
-  "replace": "\tif (tx1_get(o, TX1_COUNT) != 0) {\n\t\tV34EchoReportCoeff(&o->echo0);"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: the counter is not zeroed at the segment's end",
-  "find": "\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-  "replace": "\t\tV34EchoReportCoeff(&o->echo1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tv34FreezeEcho(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: the counter is set to one rather than zero",
-  "find": "\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-  "replace": "\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: the segment's end reports only the first echo canceller",
-  "find": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;",
-  "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: the segment's end reports the first echo canceller twice",
-  "find": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;",
-  "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;"
+  "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
+  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "67: the four-point half collects one bit",
@@ -1929,12 +1929,12 @@
  },
  {
   "label": "67: the exit moves the transmit machine to XMIT0",
-  "find": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "replace": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMIT0);"
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);"
  },
  {
   "label": "67: the exit does not move the transmit machine",
-  "find": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
   "replace": "\t\t\t(void)0;"
  },
  {
@@ -2179,10 +2179,10 @@
  },
  {
   "label": "67: the txstate compare at 0x648cd is deleted",
-  "find": "\t\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)\n\t\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "replace": "\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\ths_put(o, TX1_TXSTATE, V34HS_EXMIT);",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file"
+  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "24: the entry does not tick vect_idx",
@@ -2256,20 +2256,20 @@
  },
  {
   "label": "24: the message ends in TONE_AB_CALL",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB_CALL)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
  },
  {
   "label": "24: the message over leaves the transmit machine alone",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
  },
  {
   "label": "24: the txstate compare at 0x654e4 is deleted",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file"
+  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "24: the one-shot test is inverted",
@@ -2395,47 +2395,47 @@
  },
  {
   "label": "24: the clear-down leaves the transmit machine alone",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
   "replace": ""
  },
  {
   "label": "24: the clear-down moves to MOH_FRR",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
-  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_FRR)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_FRR);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_FRR);"
  },
  {
   "label": "24: the clear-down leaves the receive machine alone",
-  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
   "replace": "\ttx1_put(o, TX1_FABE4, 1);"
  },
  {
   "label": "24: the clear-down's receive state is RECEIVE",
-  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
-  "replace": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
  },
  {
   "label": "24: the clear-down does not raise +0xabe4",
-  "find": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
-  "replace": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n}"
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n}"
  },
  {
   "label": "24: the clear-down raises +0xabe4 to two",
-  "find": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
-  "replace": "\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
  },
  {
   "label": "24: the hold moves to MOH_ON_HOLD",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
-  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_ON_HOLD)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "24: the hold leaves the transmit machine alone",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
   "replace": ""
  },
  {
   "label": "24: the hold leaves the receive machine alone",
-  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
   "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;"
  },
  {
@@ -2894,13 +2894,13 @@
  },
  {
   "label": "21: the completion moves the transmit machine to 68 rather than 64",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JTXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_JTXMIT);",
-  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the completion does not move the transmit machine to 64",
-  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JTXMIT)\n\t\ttx1_put(o, TX1_TXSTATE, V34HS_JTXMIT);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);",
   "replace": "\t(void)0;",
   "fn": "v34tx1_trnseg4"
  },
@@ -2924,31 +2924,31 @@
  },
  {
   "label": "21: the boundary arm does not raise bit 2 of f25c2",
-  "find": "\tif (o->rtd <= 2) {\n\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
-  "replace": "\tif (o->rtd <= 2) {\n\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm raises bit 3 of f25c2",
-  "find": "\tif (o->rtd <= 2) {\n\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
-  "replace": "\tif (o->rtd <= 2) {\n\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm does not clear the counter",
-  "find": "\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
-  "replace": "\t\tV34EchoReportCoeff(&o->echo1);\n\t} else if (o->v90_receiver",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else if (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else if (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm reports only the first canceller",
-  "find": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
   "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm reports the first canceller twice",
-  "find": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);",
+  "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
   "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);",
   "fn": "v34tx1_trnseg4"
  },
@@ -3028,14 +3028,14 @@
  },
  {
   "label": "21: the receiver is not moved to RECEIVE",
-  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
   "replace": "\tsetupreceiver(o);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the receiver is moved to WAIT rather than RECEIVE",
-  "find": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
-  "replace": "\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);\n\tsetupreceiver(o);",
+  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\tsetupreceiver(o);",
+  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\tsetupreceiver(o);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3102,14 +3102,14 @@
  },
  {
   "label": "21: the completion does not move the microstate to DET_SYNC",
-  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_DET_SYNC)\n\t\ttx1_put(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\t(void)0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the completion moves the microstate to DET_INFO",
-  "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_DET_SYNC)\n\t\ttx1_put(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
-  "replace": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_DET_INFO)\n\t\ttx1_put(o, TX1_MICROSTATE, V34HS_DET_INFO);",
+  "find": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);",
+  "replace": "\ths_setstate(o, TX1_MICROSTATE, V34HS_DET_INFO);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3156,32 +3156,32 @@
  },
  {
   "label": "21: the K56flex Ja tail is tested before the V.90 one",
-  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);",
-  "replace": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "replace": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the V.90 Ja tail moves the transmit machine to 85 rather than 78",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the K56flex Ja tail moves the transmit machine to 78 rather than 85",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the V.90 Ja tail leaves the receiver in RECEIVE",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);\n\t\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);\n\t\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the K56flex Ja tail leaves the receiver in RECEIVE",
-  "find": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);\n\t\tif (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)\n\t\t\ttx1_put(o, TX1_RXSTATE, V34HS_WAIT);",
-  "replace": "\t\tif (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)\n\t\t\ttx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);\n\t\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3950,8 +3950,8 @@
  },
  {
   "label": "66: the completion moves the machine to SSEG",
-  "find": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_XMITMP);",
-  "replace": "\t\ttx1_put(o, TX1_TXSTATE, V34HS_SSEG);",
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_XMITMP);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);",
   "fn": "tx1_ts_rates"
  },
  {

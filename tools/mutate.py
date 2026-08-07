@@ -435,8 +435,29 @@ def main():
                       % (m["label"], n))
                 continue
 
-            open(args.source, "w").write(
-                good.replace(m["find"], m["replace"]))
+            #
+            # A mutation that does not change the file is not a mutation.
+            # It rebuilds the unmutated source, passes, and reports either
+            # NOT CAUGHT or -- if it carries "equivalent" -- `survived,
+            # equivalent`, which is indistinguishable from the real thing
+            # and keeps the totals steady while checking nothing.
+            #
+            # Not hypothetical: re-anchoring a suite after a refactor made
+            # five of these in one pass (finding 572).  The old `replace`
+            # was the bare store that the new factoring had turned into the
+            # unmutated text, so `find` and `replace` came out equal.  All
+            # five were `equivalent: true`, so the totals did not move and
+            # nothing else in the harness could see it.
+            #
+            mutated = good.replace(m["find"], m["replace"])
+            if mutated == good:
+                broken.append((m["label"],
+                               "replace leaves the source unchanged"))
+                print("  ????  %-52s  VACUOUS -- REPLACE == FIND"
+                      % m["label"])
+                continue
+
+            open(args.source, "w").write(mutated)
             rc, out, gate = build_and_run(target, args.test)
 
             if rc is None:

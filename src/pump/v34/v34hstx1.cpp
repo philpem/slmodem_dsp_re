@@ -33,8 +33,8 @@
  * TWO PAIRS THAT LOOK LIKE ONE ARM AND ARE NOT.
  *
  * 78 `JaTXMIT` and 85 `K56JaTXMIT` are instruction-for-instruction identical
- * -- the same counter, the same flag, the same two `V34EchoReportCoeff`
- * calls -- up to the tail call, which is `v90Phase34` for one and
+ * -- the same counter and the same `v34FreezeEcho` -- up to the tail call,
+ * which is `v90Phase34` for one and
  * `k56FlexPhase34` for the other.  They are two arms and the object gives
  * them two table entries; finding 340 measures them apart.
  *
@@ -68,6 +68,13 @@
 
 #include <string.h>
 
+/*
+ * `V34EchoReportCoeff` is no longer CALLED here -- `v34FreezeEcho` makes both
+ * of its calls (finding 572) -- but nine mutations in `v34hstx1.json` inline
+ * the freeze back out to ask whether the factoring is right, and a mutant
+ * that fails to compile is reported CAUGHT for the wrong reason.  The
+ * declaration stays for them.
+ */
 #include "dsplib/v34filt.h"	/* V34EchoReportCoeff, V34SetupModulator */
 #include "dsplib/v34fsk.h"	/* struct v34_object, struct v34_ratecfg */
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
@@ -350,8 +357,7 @@ v34tx1_xmit0(void *objp)
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
 		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000u);
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)
-			tx1_put(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
 		o->f25c6 = 0;
 		o->f25c0 = 0;
 		o->f25cc = 0;
@@ -438,9 +444,7 @@ tx1_ja_common(struct v34_object *o)
 	if (c != 0)
 		return 0;
 
-	o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
-	V34EchoReportCoeff(&o->echo0);
-	V34EchoReportCoeff(&o->echo1);
+	v34FreezeEcho(o);
 	return 1;
 }
 
@@ -544,8 +548,7 @@ v34tx1_txmd(void *objp)
 				  ((char *)o + TX1_MODULATOR),
 				  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);
 
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_SSEG)
-			tx1_put(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
 		o->f25c0 = 0;
 		o->f25cc = 0;
 		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x8004u);
@@ -631,8 +634,7 @@ v34tx1_sseg(void *objp)
 	o->f25c0 = (short)n;
 	if (n == 0x40) {
 		/* 0x66d11 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_SBARSEG)
-			tx1_put(o, TX1_TXSTATE, V34HS_SBARSEG);
+		hs_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);
 		o->f25c0 = 0;
 	}
 	return V34TX1_LOOP;
@@ -764,7 +766,7 @@ v34tx1_tx_l1(void *objp)
 	if ((unsigned short)o->vect_idx != 0x600u)
 		return V34TX1_LOOP;
 
-	tx1_put(o, TX1_MICROSTATE, V34HS_TX_L2);
+	hs_setstate(o, TX1_MICROSTATE, V34HS_TX_L2);
 	/* 0x62d32 */
 	o->vect_idx = 0;
 	return V34TX1_LOOP;
@@ -847,17 +849,14 @@ v34tx1_sbarseg(void *objp)
 	/* 0x671f0 */
 	o->f25c0 = 0;
 	if ((unsigned short)o->f25c2 & 0x2000u) {
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4A)
-			tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
 	} else if (tx1_get(o, TX1_F35A4) == 0) {
 		/* 0x68375 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_PPSEG)
-			tx1_put(o, TX1_TXSTATE, V34HS_PPSEG);
+		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
 	} else if ((unsigned short)o->f25c2 & 0x8000u) {
 		/* 0x69eca */
 		o->f25c0 = tx1_get(o, TX1_SEGLEN);
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_PPSEG)
-			tx1_put(o, TX1_TXSTATE, V34HS_PPSEG);
+		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
 		int span;
@@ -865,8 +864,7 @@ v34tx1_sbarseg(void *objp)
 
 		tx1_put(o, TX1_SEGLEN,
 			(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_TXMD)
-			tx1_put(o, TX1_TXSTATE, V34HS_TXMD);
+		hs_setstate(o, TX1_TXSTATE, V34HS_TXMD);
 
 		/* 0x67885 */
 		V34SetupModulator((struct v34_modulator *)
@@ -1002,8 +1000,7 @@ v34tx1_ppseg(void *objp)
 			tx1_put(o, TX1_FAA86,
 				(short)((unsigned short)tx1_get(o, TX1_FAA86)
 					+ 0x120));
-			if (tx1_get(o, TX1_TXSTATE) != V34HS_TRNSEG4)
-				tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4);
+			hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);
 
 			/* 0x68154 */
 			span = (0x5e8 - o->f25c) * (int)baud;
@@ -1123,15 +1120,12 @@ v34tx1_silence(void *objp)
 		else					/* 0x68a7c */
 			want = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL
 						: V34HS_TX_PHASE1_ANS;
-		if (tx1_get(o, TX1_MICROSTATE) != want)
-			tx1_put(o, TX1_MICROSTATE, want);
+		hs_setstate(o, TX1_MICROSTATE, want);
 
 		/* 0x66be0 */
-		if (tx1_get(o, TX1_RXSTATE) != V34HS_RX_DPSK)
-			tx1_put(o, TX1_RXSTATE, V34HS_RX_DPSK);
+		hs_setstate(o, TX1_RXSTATE, V34HS_RX_DPSK);
 		/* 0x66c10 */
-		if (txst != V34HS_TONE_AB)
-			tx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
 
 		/* 0x66c32 */
 		tx1_put(o, TX1_F358C, 0);
@@ -1145,16 +1139,25 @@ v34tx1_silence(void *objp)
 	if (txst != V34HS_SILENCEINFO)
 		return V34TX1_LOOP;			/* 0x6409a */
 
-	/* 0x6410b */
+	/*
+	 * 0x6410b.  THE COUNT IS STORED ON BOTH PATHS, and the transcript is
+	 * what says so: the blob's `SILENCEINFO=>TX_DPSK` line prints `[1]10`,
+	 * and `[1]` is `vect_idx` read at the moment of the print.  Zeroing
+	 * before the state change -- which is how this was written until
+	 * finding 573 -- prints `[1]0` instead.  Both orders leave the same
+	 * bytes behind, so no byte comparison can separate them and none did
+	 * for six batches; only turning the diagnostics on does.  74 stores
+	 * its count before its own comparison in exactly this shape, and
+	 * mutation 181 has asserted that since it landed.
+	 */
 	n = (unsigned short)((unsigned short)o->vect_idx + 1);
-	if (n != 0xa) {
-		o->vect_idx = (short)n;
+	o->vect_idx = (short)n;
+	if (n != 0xa)
 		return V34TX1_LOOP;			/* 0x629cf */
-	}
 
 	/* 0x6858f */
+	hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
 	o->vect_idx = 0;
-	tx1_put(o, TX1_TXSTATE, V34HS_TX_DPSK);
 	*(short **)((char *)o + TX1_PTR_AA6C) =
 		(short *)((char *)o + TX1_BLK_A94C);
 	V34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));
@@ -1294,8 +1297,7 @@ v34tx1_exmit(void *objp)
 		short txst = tx1_get(o, TX1_TXSTATE);
 
 		o->vect_idx = 8;
-		if (txst != V34HS_DATAXMIT)
-			tx1_put(o, TX1_TXSTATE, V34HS_DATAXMIT);
+		hs_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);
 		return V34TX1_LOOP;			/* 0x6409a */
 	}
 	return V34TX1_LOOP;				/* 0x63941 */
@@ -1354,19 +1356,26 @@ v34tx1_exmit(void *objp)
  * cannot be TRUE: this path is reached only because 0x636ff found `txstate`
  * was not 68 and nothing between the two writes it.
  *
- * AND THEN THE SECOND PAIR OF ECHO REPORTS.  If +0xaa78 is still non-zero the
- * arm raises bit 2 of `f25c2`, reports both cancellers and ZEROES the counter
- * -- the same two calls and the same flag as the countdown's own completion,
+ * AND THEN THE SECOND FREEZE.  If +0xaa78 is still non-zero the arm raises
+ * bit 2 of `f25c2`, reports both cancellers and ZEROES the counter -- the
+ * same flag and the same pair of reports as the countdown's own completion,
  * on a different condition.  The two are mutually exclusive on one pass:
- * reaching zero at the top leaves nothing for this to do.  `V34EchoReportCoeff`
- * only prints (finding 341), so of the four call sites in this arm nothing is
- * observable at debug level 0; the flag and the zeroing are.
+ * reaching zero at the top leaves nothing for this to do.  That flag-then-
+ * report-both triple IS `v34FreezeEcho`, and it is now called rather than
+ * spelled out; finding 572 is the transcript that proves the call, since the
+ * blob prints `V34HSHAK: Freeze EC` and both report headers here and this
+ * file emitted none of the three while it inlined the pair.
  *
  * 68's TAIL, 0x65653, CLEARS RATHER THAN COUNTS: `f25cc` (a 32-bit store),
  * `f25c6` and `f25c0` all go to zero and the transmit machine moves to
- * TRNSEG4A.  IT DOES NOT COMPARE FIRST -- there is no `if (txstate != ...)`
- * guard the way every other state change in this file has one -- and it is
- * written that way because that is what the object does.
+ * TRNSEG4A.  THE OBJECT DOES NOT COMPARE FIRST here -- there is no
+ * `if (txstate != ...)` guard the way every other state change in this file
+ * has one.  It is written as `hs_setstate` anyway, because the enclosing
+ * `txstate == J1TXMIT` test has already established the value and
+ * `hs_setstate`'s compare is therefore provably dead: same stores, same
+ * transcript, and one copy of the three format strings instead of two.  The
+ * blob does print the `J1TXMIT=>TRNSEG4A` line, so the diagnostic is not
+ * optional even though the compare is.
  */
 int
 v34tx1_jtxmit(void *objp)
@@ -1405,8 +1414,7 @@ v34tx1_jtxmit(void *objp)
 				return V34TX1_LOOP;	/* 0x63da2 */
 		}
 		/* 0x66cd1 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_XMIT0)
-			tx1_put(o, TX1_TXSTATE, V34HS_XMIT0);
+		hs_setstate(o, TX1_TXSTATE, V34HS_XMIT0);
 		o->vect_idx = 0;			/* 0x62d32 */
 		return V34TX1_LOOP;			/* 0x62d70 */
 	}
@@ -1418,7 +1426,7 @@ v34tx1_jtxmit(void *objp)
 	if (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {
 		/* 0x65653 */
 		o->f25cc = 0;
-		tx1_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
 		o->f25c6 = 0;
 		o->f25c0 = 0;
 		return V34TX1_LOOP;			/* 0x640a1 */
@@ -1432,14 +1440,11 @@ v34tx1_jtxmit(void *objp)
 
 	/* 0x6372e */
 	tx1_put(o, TX1_F25D6, (short)0x899f);
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_J1TXMIT)
-		tx1_put(o, TX1_TXSTATE, V34HS_J1TXMIT);
+	hs_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);
 
 	/* 0x637c8 */
 	if (tx1_get(o, TX1_COUNT) != 0) {
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
-		V34EchoReportCoeff(&o->echo0);
-		V34EchoReportCoeff(&o->echo1);
+		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
 		return V34TX1_LOOP;			/* 0x64326 */
 	}
@@ -1611,8 +1616,7 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 				tx1_put(o, TX1_F3598, 1);
 			}
 			/* 0x648bf */
-			if (tx1_get(o, TX1_TXSTATE) != V34HS_EXMIT)
-				tx1_put(o, TX1_TXSTATE, V34HS_EXMIT);
+			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
 			o->vect_idx = 0;
 			rx->flags = (unsigned short)(rx->flags & ~0x20u);
 			return 1;
@@ -1907,10 +1911,8 @@ tx1_dpsk_tone(struct v34_object *o, short bit)
 static void
 tx1_moh_cleardown(struct v34_object *o)
 {
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_CLEARDOWN)
-		tx1_put(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
-	if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
-		tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
 	tx1_put(o, TX1_FABE4, 1);
 }
 
@@ -1922,10 +1924,8 @@ tx1_moh_cleardown(struct v34_object *o)
 static void
 tx1_moh_on_hold(struct v34_object *o)
 {
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)
-		tx1_put(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
-	if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
-		tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
 	tx1_put(o, TX1_COUNT, 0);
 	o->vect_idx = 0;
 }
@@ -2064,8 +2064,7 @@ v34tx1_tx_dpsk(void *objp)
 		 * and here writes +0x3596 -- `getbit` does not.  It is
 		 * written as the object writes it.
 		 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_TONE_AB)
-			tx1_put(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
 
@@ -2534,9 +2533,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x634a6 */
 	rec[8] = 0;					/* +0xaa4c */
-	if ((unsigned short)tx1_get(o, TX1_TXSTATE)
-	    != (unsigned short)V34HS_XMITMP)
-		tx1_put(o, TX1_TXSTATE, V34HS_XMITMP);
+	hs_setstate(o, TX1_TXSTATE, V34HS_XMITMP);
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3598, 0);
 	tx1_put(o, TX1_F359E, 0);
@@ -2704,8 +2701,9 @@ v34tx1_trnseg4a(void *objp)
  * WHAT IS NOT MODELLED, and it is finding 341's gap and not a new one: the
  * thirteen trace blocks at 0x68d07, 0x68d6f, 0x687f4, 0x68754, 0x68ca4,
  * 0x691b9, 0x691a8, 0x6916d, 0x6917e, 0x69dfa, 0x69b6f, 0x6a998 and 0x6a8e1,
- * and the four calls that only print -- both `VPcmV34Report*OfEchoAdapt` and
- * both `V34EchoReportCoeff`.
+ * and the two `VPcmV34Report*OfEchoAdapt` calls that only print.  The boundary
+ * arm's own pair of echo reports IS modelled now: it is `v34FreezeEcho`, and
+ * finding 572 is the transcript that proves the call.
  */
 int
 v34tx1_trnseg4(void *objp)
@@ -2761,14 +2759,11 @@ v34tx1_trnseg4(void *objp)
 		return V34TX1_LOOP;			/* 0x629c8 */
 
 	/* 0x64b24: the segment is over. */
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_JTXMIT)
-		tx1_put(o, TX1_TXSTATE, V34HS_JTXMIT);
+	hs_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);
 
 	if (o->rtd <= 2) {
 		/* 0x6801e */
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 4u);
-		V34EchoReportCoeff(&o->echo0);
-		V34EchoReportCoeff(&o->echo1);
+		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
 	} else if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
 		/* 0x68ad0 and 0x69de7, two copies of one store */
@@ -2781,8 +2776,7 @@ v34tx1_trnseg4(void *objp)
 	/* 0x64bb2 */
 	tx1_put(o, TX1_F25D6, (short)0x8990);
 	o->f25c6 = o->f25c8;
-	if (tx1_get(o, TX1_RXSTATE) != V34HS_RECEIVE)
-		tx1_put(o, TX1_RXSTATE, V34HS_RECEIVE);
+	hs_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);
 	setupreceiver(o);				/* 0x64c04 */
 
 	/* 0x64d37: the +0xaa0c record, in the object's order */
@@ -2804,8 +2798,7 @@ v34tx1_trnseg4(void *objp)
 	}
 
 	/* 0x64d8d */
-	if (tx1_get(o, TX1_MICROSTATE) != V34HS_DET_SYNC)
-		tx1_put(o, TX1_MICROSTATE, V34HS_DET_SYNC);
+	hs_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);
 
 	/* 0x64dba */
 	o->vect_idx = 0;
@@ -2813,20 +2806,16 @@ v34tx1_trnseg4(void *objp)
 
 	if ((unsigned)o->v90_receiver > 1u) {
 		/* 0x64de7 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_JaTXMIT)
-			tx1_put(o, TX1_TXSTATE, V34HS_JaTXMIT);
-		if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
-			tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);
+		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x629c8 */
 	}
 
 	if ((unsigned)o->k56flex_receiver > 1u) {
 		/* 0x67f91 */
-		if (tx1_get(o, TX1_TXSTATE) != V34HS_K56JaTXMIT)
-			tx1_put(o, TX1_TXSTATE, V34HS_K56JaTXMIT);
-		if (tx1_get(o, TX1_RXSTATE) != V34HS_WAIT)
-			tx1_put(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);
+		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
