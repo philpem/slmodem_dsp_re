@@ -1,0 +1,197 @@
+# What is portable, and what each tool assumes about its host
+
+Every number cites `docs/findings.md` in this tree. Paths are relative to the
+reconstruction's root.
+
+Most tools here are about *this* blob and do not travel: the translation-unit
+mapper, the coefficient extractors, the offset checker. The five below are
+about **method** rather than about a modem, and each one exists because a
+specific failure happened. They are worth lifting into a new project on day
+one, with the host assumptions listed against each.
+
+---
+
+## `tools/mutate.py` — break the code on purpose
+
+The anti-vacuity tier. `--suite NAME`, `--all`, or a bare
+`source binary mutations.json` triple. A mutation set is JSON:
+
+```json
+[{"label": "swap the two arguments",
+  "find":  "...exact text, must appear exactly once...",
+  "replace": "..."}]
+```
+
+**Assumes:**
+
+- `make <target>` builds one test binary, and `make BUILD=<dir>` puts the
+  objects somewhere else. That one existing parameter is what made parallelism
+  cost no build-system change (finding 541).
+- `test/mutations/suites.json` maps each set to `[source, binary]`. **Use the
+  manifest, not the positional form** — getting the pairing wrong produces
+  NOT CAUGHT for every mutation in the set, which is the same output an
+  untested claim gives and indistinguishable from it without looking. Six sets
+  were misread that way before the manifest existed.
+- Verdicts are reproducible. 209 mutations were identical across a serial run
+  and two eight-way parallel runs (finding 541). The one classification that is
+  not reproducible in principle is `hang` — caught by a timeout rather than by
+  a check — because a loaded machine can move it.
+
+**`--jobs N`.** A tree per worker, not a lock: 209 mutations went 287.22 s →
+61.69 s, 4.7x (finding 541). Two host assumptions that will bite:
+
+- Workers are created as **siblings of the real tree**, not under `/tmp`,
+  because a relative symlink into a peer directory only resolves at the same
+  depth (finding 541). If your tree has no relative symlinks this is free; if
+  it does, keep it.
+- `MIN_PER_WORKER = 12`, because a worker must earn its setup. Below that
+  threshold sharding made three small suites 64% slower (finding 541). Retune
+  it against your own build time — the numbers behind it are a 0.67 s rebuild
+  and a 0.73 s run.
+
+A dying shard aborts the run with exit 2 rather than reporting a confident
+partial total (finding 541).
+
+## `tools/mutsnap.py` — the keyed snapshot
+
+Records what every suite last said **together with a hash of everything that
+can reach its test binary**, so staleness is detectable without re-measuring.
+That is what removes the baseline pass every batch was paying twice for
+(finding 545). `--update`, `--check`, `--verify`, `--strict`, `--jobs`.
+
+**Assumes:**
+
+- **You can name the link closure.** Here it is `Makefile`, `src/`, `include/`,
+  `test/harness/`, plus the suite's own driver, its mutation JSON, and
+  `tools/mutate.py` — the runner, because *what counts as caught is its code*.
+  Nothing else under `tools/` can move a verdict, so nothing else is in the key.
+- **The closure is coarse on purpose.** A first design keyed each suite on its
+  own source plus its own mutations. That is unsound when every test binary
+  links all of `src/` — editing one file can change another suite's verdicts
+  while both hashes still match. **If your binaries link narrowly, a narrower
+  key is sound; if they link everything, a per-file key is a precise lie**
+  (finding 545).
+- **It fails on MISSING / ORPHANED / INCONSISTENT and only reports staleness.**
+  Deliberate: a gate that is red by default is worse than none (finding 545,
+  and `gates.md` rule 2).
+
+Port the cross-check too: it records per-mutation verdicts and the summary line
+from different code paths and compares them, and **both times it fired the tool
+was wrong, not the record** (finding 545).
+
+## `tools/anchorcheck.py` — the structural definition-finder
+
+Answers "does each mutation still mutate the thing its label names". Two things
+in it are worth lifting even if you never adopt its heuristic:
+
+1. **The definition finder.** Match the name, walk to the matching close paren,
+   require the next non-space character to be `{`. The lexical version
+   (`^([A-Za-z_][A-Za-z_0-9]*)\(`) missed every qualified C++ method and filled
+   its index with macro invocations at column 0 — 45 "definitions" in a file
+   with 8 (finding 540). The structural test does not care what characters the
+   name is spelled with, and it separates a definition from both a macro call
+   and a forward declaration.
+2. **The vacuous-mutation gate.** A string compare over the same JSON, no build
+   and no suite, and **it exits 1** — so a mutation whose `replace` equals its
+   `find` cannot be committed. Milliseconds against 2,874 mutations
+   (finding 542).
+
+**Assumes** the labels in your mutation sets name something the source names
+too — here, a microstate that the dispatch binds to one function. That part is
+a heuristic over prose and a clean run is not a proof; it is deliberately quiet
+about an anchor in a shared helper and about a label with no identifier in it.
+**It is the difference between checking nothing and checking the case that has
+already gone wrong nine times** (finding 432).
+
+It also counts and reports how many suites it examined, and fails on a skip —
+which is the whole of finding 540.
+
+## `tools/reanchor.py` — repairing anchors after a neighbour lands
+
+When a second near-identical body lands, an anchor written against the first
+matches twice, reports UNUSABLE, and does not fail the run (finding 347). The
+repair is mechanical — grow the `find` string by whole lines until it matches
+once — but **which occurrence to grow from is not.** Growing from the wrong one
+silently re-points a mutation at a different claim, which is worse than leaving
+it unusable.
+
+**Assumes a per-batch naming prefix.** It picks the occurrence whose
+surrounding 1,200 characters mention the batch's own prefix most (`--prefix
+T44_`), **prints the line number it chose for every one** so the choice is
+auditable, and refuses where no prefix separates the candidates. The prefixes
+were introduced for a different reason — stopping `#define` collisions between
+parallel batches — and turned out to be exactly what makes an anchor unique
+(finding 347). If your project has no such convention, introduce one before you
+need this tool.
+
+**Known limitation, and it is not academic:** it only grows anchors **upward**,
+and two of one batch's hardest cases needed downward growth — six identical
+lines that first differ in the diagnostic *below* them (finding 432).
+
+## `tools/refcheck.py` — hold the tree to its own cross-references
+
+Every claim is argued once and cited everywhere else. `--dangling` (the default,
+cheap, in the phase gate) checks that every reference resolves. `--since REV`
+checks that each still *means* what it did at REV, and must be run against each
+parent after a merge:
+
+```sh
+git log --merges -1 --format=%P | tr ' ' '\n' | \
+    xargs -I{} tools/refcheck.py --since {}
+```
+
+**The cheap mode is not the important one. Misdirection is worse than
+dangling** — a dangling reference is loud, a missed renumber still resolves, to
+an entry about something else, and reads exactly like a correct citation. All
+six survivors of one earlier merge were of the second kind (`tools/refcheck.py`),
+and the ninth collision went unnoticed for 158 commits because every reference
+still resolved (finding 543).
+
+**Assumes** your citations are written in forms it parses — `finding N`,
+`findings N, M and K`, and a bare `DN`. Write them that way from day one: a
+comma-separated list once matched on its first number only, and a bare
+parenthetical `(350)` was missed by an automated renumber pass (finding 543).
+
+Two things it grew that have nothing to do with references, and both belong
+wherever your one tool already walks every tracked file:
+
+- **Conflict markers.** The record reached `origin` with `<<<<<<< HEAD` in it —
+  a merge resolved by script, staged, committed, every gate green, because
+  nothing else reads prose. The record is the deliverable, so a marker in it is
+  as much a defect as a failing test.
+- **The mutation registry parses.** Merging two branches that each appended a
+  line produces a trailing comma about one time in three, and a malformed
+  registry makes **every** suite unrunnable while the phase gate stays green
+  (finding 346).
+
+---
+
+## Two more that are method-shaped, if your blob carries diagnostics
+
+- **`tools/debugaudit.py`** — which diagnostic call sites are missing, what
+  they were going to say, and (`--invented`) every string literal *your tree*
+  carries that appears nowhere in the object. A string in that list was written
+  rather than read, usually from the function's own name, and no test catches it
+  unless something compares that function's transcript; four were found this way
+  (finding 180). It scans **every** literal, not only the ones at a call site,
+  because a format reached through a variable or indexed out of a table has no
+  literal at the call — and those are exactly the sites a reader assumes are
+  covered.
+- **`tools/devaudit.py`** — which entries in the deviation register have a test
+  behind them, by asking whether any compiled test object references the
+  function's blob alias. The test is a **necessary** condition, so **a "no" is
+  conclusive and a "yes" is an invitation to look**; that asymmetry is what
+  turns 59 entries into a short list worth reading. Two ways a "no" is still
+  wrong, both met in practice: a table read internally by a tested function, and
+  an alias that exists at six addresses because the name is file-static in six
+  translation units (finding 622).
+
+## What does not travel
+
+The disassembler wrapper, the TU mapper, the coefficient tools, the offset
+checker and the codegen comparator are all specific to an x86-32 ELF object
+built by GCC 3.4. The *comparator's* design is portable and its precision note
+is the part to copy: **it compares mnemonics, not bytes** — two functions
+storing the same constants to different offsets both read as `mov mov mov` —
+and its total-bytes percentage is the weak number that moves when you emit more
+code, not only more of the right code (finding 616, and `tiers.md`).
