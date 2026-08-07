@@ -27301,3 +27301,61 @@ job when it refuses to let me make that argument.
 `tools/mutate.py` is in the closure too: it is the runner, and what counts as
 caught or unusable is its code. Nothing else under `tools/` can move a
 verdict, so nothing else is there.
+
+
+### 670. The brief for the method documents relayed two wrong numbers, which is the sixth instance
+
+Task #39 asked for `docs/method/` -- the separable tier of this project's
+working rules, each claim carrying the finding that measured it. The brief
+listing the material to draw on carried two citations that do not survive
+being checked, and it said to verify each against the findings rather than
+trust the list, which is the only reason they were.
+
+1. **"finding 613 (arm 54) stored a counter in the wrong order with IDENTICAL
+   BYTES either way."** That is finding **573**. Finding 613 is the
+   `movzwl`/`movswl` signedness defect in `struct b103_hdx.mode` -- also a
+   defect no differential test could see, which is presumably how the two came
+   to be conflated, but by the opposite mechanism and in a different tier. 573
+   is the transcript tier's justification; 613 is the codegen tier's. Written
+   into `tiers.md` under both numbers, in their own sections.
+2. **"550's own 0x62b45 address which was actually 0x62b5f."** The correction
+   is finding **591**'s, not 550's. 550 quotes `0x62b45` in a column header and
+   in its argument about arm 48; 591 is where the bytes were read --
+   `0x62b45` is where the `mode == 1` branch lands and where `faa96` is read,
+   and **the reload is `0x62b5f`**. 550's own separate failure, an instruction
+   that could not be obeyed as written because a third copy existed, is
+   correctly cited and is a different lesson.
+
+Neither is a defect in the record: both findings say what they say and are
+right. The error is entirely in the relay. **That is the sixth occurrence of
+the shape findings 352a and 359a name** -- after 352a's overrun premise, 359a's
+lead that was wrong in both halves, 359a's `= 4` side, 550's instruction and
+591's address -- and it happened in the brief for the document set whose
+central rule is "mark inherited claims as inherited". Recorded because the
+best available evidence that a rule is needed is the rule being broken while
+writing it down.
+
+The receiving side did what 359a asks: checked every claim in the list against
+`docs/findings.md` before writing a line of it, and both wrong numbers fell out
+of the first pass.
+
+#### Two small things established on the way
+
+- **`refcheck.py` covers a new subdirectory of `docs/`.** It walks every
+  tracked file rather than a glob, so `git add docs/method` took the reference
+  count 2,178 -> 2,307 and all 129 new citations are checked. A method document
+  full of finding numbers that nothing verified would have been finding 540's
+  skipped suite in the deliverable itself; it is not one. Citations there are
+  written only in the forms the tool parses, per finding 543.
+- **`tools/mutate.py`'s `MIN_PER_WORKER` comment disagrees with finding 541**
+  by a little: the comment says `--jobs 4` over the three small suites took
+  17.9 s against **11.2 s** serial, "60% SLOWER", and finding 541 says
+  **10.9 s** and 64%. The 17.9 agrees. Not acted on -- it is one measurement
+  written down twice and the conclusion is identical either way -- but the
+  finding is the record, and `docs/method/efficiency.md` quotes the finding.
+
+**`CLAUDE.md` is not stale**, which was checked because it would have been the
+larger finding. The ninth collision's renumber pass moved its ten codegen-tier
+citations to 604, 605, 606, 610, 612, 613, 614, 616, 617 and 619, and the file
+in this tree carries them. An older snapshot of it quoting 344-359 is a copy
+taken before commit `ae04e7d`, not the tree.

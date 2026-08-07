@@ -1,0 +1,291 @@
+# Working in this tree
+
+<!--
+  TEMPLATE.  Copy to CLAUDE.md at the root of a new source-reconstruction
+  project and edit the six <PLACEHOLDER>s.  Nothing else needs changing to be
+  useful on day one.
+
+  EVERY NUMBER IN THIS FILE CITES `docs/findings.md` OF THE dsplibs
+  RECONSTRUCTION -- the project this was distilled from, whose method notes
+  are in that tree's `docs/method/`.  In YOUR tree those numbers resolve to
+  nothing.  Keep them anyway: they are the provenance of the rule, not links.
+  A rule without its measurement gets negotiated away on day three; a rule
+  with one does not.  Delete a rule only after you have measured your own
+  tree and found it does not apply -- then write down what you measured.
+
+  The six placeholders:
+    <BLOB>            the binary being reconstructed, and its size
+    <COMPILER>        what `.comment` says built it (see "Day one", below)
+    <PHASE>           the command that must pass before anything is committed
+    <LAYOUT>          src/ include/ test/ tools/ docs/ -- your directory map
+    <OFF_LIMITS>      any sibling directory this session must not read
+    <FINDINGS>        the path to your own record; `docs/findings.md` below
+-->
+
+A source reconstruction of `<BLOB>`. Read `README.md` for what the project is.
+This file is the part that is about *how to work here* rather than what the
+work is.
+
+## Out of scope, absolutely
+
+**Never read, search or reference `<OFF_LIMITS>`.** To you it does not exist.
+Scope any subagent prompt to exclude it.
+
+## The rule that is not relaxed
+
+**Nothing is committed that has not passed a differential test**, and nothing
+is committed that is wrong-but-plausible. If a function cannot be made to
+pass, leave it out and record the attempt. The goal is a replacement that
+behaves *identically* to the blob, so any test disagreeing with the blob is a
+hard failure whatever build it came from — never a tolerance to widen.
+
+Run `<PHASE>`.
+
+## Day one, in this order
+
+1. **Read `.comment`.** In the dsplibs blob it held 279 entries, one per
+   translation unit, every one the same string naming GCC 3.4.2 and its
+   distribution patchset, with `__DATE__` stamps putting the build at 22
+   September 2005 15:48 (finding 606). One command, and it settles what a
+   great deal of inference cannot — including that the original was **not**
+   PIE (zero `get_pc_thunk` in the blob against 41 in our build) and had no
+   stack protector.
+2. **Get that compiler into a container.** Debian sarge on `linux/386` gave
+   gcc-3.4.3 and binutils 2.15, and 76 of 81 translation units compiled with
+   it unmodified (finding 607). This is what makes "is my belief about the
+   compiler true" a ten-minute experiment instead of an argument
+   (finding 611).
+3. **Build the differential harness before the second function.** It is not
+   overhead: it is what makes writing fast. One function here took three
+   attempts and each fault was localised in one run.
+4. **Build the mutation runner early too.** "The test passes" and "the test
+   would have caught this being wrong" are different claims, and only the
+   second is worth writing down.
+
+## Budget your turns, not your reading
+
+Finding 220 measured this, so it is not a guess. **Context growth is
+cumulative output, converging to 1:1** — every token you generate stays in the
+window for the rest of the session. Measured over one session that hit the
+wall, the ratio of context to cumulative output fell 5.62 → 1.66 → 1.28 →
+1.08 across turns 25, 100, 300 and 508. Output runs 1,100–1,800 tokens per
+turn across every session measured, which puts the wall near 500–900 turns
+*whatever the turns are about*. **Sessions that finished took 10–25 turns;
+the five that ran out took 400–600.**
+
+The disassembly is not the problem. One clean read of the largest function in
+the dsplibs object — 61,541 bytes — is about 131,000 tokens against a 1 M
+window, and across one 1,826-turn session every disassembly tool combined
+produced 153 KB, 12% of all tool output (finding 220).
+
+So:
+
+- **Delegate a large function to a subagent.** Its turns do not accumulate in
+  your window — you pay for the prompt and the final report, not the two
+  hundred round trips between. This is the only change that alters the
+  exponent; everything else is a constant factor. Delegate whatever can run
+  `<PHASE>` and see its own work pass.
+- **Batch investigation.** One session made 760 Bash calls averaging 1.4 KB
+  of output. Ten greps whose answers are needed together is ten turns and ten
+  lots of reasoning; one script that prints all ten is one.
+- **Checkpoint as you go.** The limit is per session, so what it costs you is
+  the cost of *resuming*. Write field offsets settled, cases done, and what
+  was tried and failed into the task or a doc while you work.
+- **Do not re-read a file you just edited.** Edit fails loudly if it did not
+  apply.
+
+## The four oracles, and what each is blind to
+
+No single tier is sufficient and none subsumes another. Full argument in
+`docs/method/tiers.md`.
+
+1. **Differential** — reconstruction and blob in one binary, one deterministic
+   input, outputs compared. **The only thing that decides.** Blind to
+   everything that does not change an output: a field's declared signedness
+   over values it never takes (finding 613), a diagnostic call site that is
+   absent (finding 134), the order of two stores that leave the same bytes
+   (finding 573).
+2. **Mutation** — break the code on purpose and check the tests notice. It
+   answers "would the test have caught this being wrong", which a green run
+   does not. It cannot tell you the test is *right*.
+3. **Codegen against the period compiler** — did the same compiler, given our
+   source, emit what the original's emitted. **Act on what the compiler was
+   FORCED to encode; ignore what it was free to choose** (see below).
+4. **Transcript / diagnostics** — compare what the two sides *print*. It is
+   the only tier that can see a difference the bytes cannot: arm 54 stored a
+   counter in an order that leaves identical bytes either way, invisible by
+   construction to every byte comparison, and it hid for six batches
+   (finding 573).
+
+### The rule for reading a codegen difference
+
+- **Forced, so act on it:** the signedness of a load **whose 32-bit result is
+  used**. `movzwl` where we emit `movswl` on a value that indexes a table
+  found a real defect no test could see (finding 613) — one instruction in
+  nine, on a field holding only 0, 1 and 2, over which both loads produce
+  identical values, so all 1,104 differential tests agreed.
+- **Free, so ignore it:** register allocation; instruction scheduling; the
+  extension on a load whose upper half is discarded. Of 22 same-size
+  near-misses, one was a real defect and five were dead extensions — a 16-bit
+  field copy can legally use either instruction (finding 614). Chasing these
+  means permuting source until the output matches, which is fitting the
+  compiler, not recovering the source.
+- **In between, needs the strong test:** statement order. GCC does NOT simply
+  preserve it — one function's source was *already* in the object's order and
+  the compiler reordered ours (finding 617). A store-order difference is a
+  hint; the acceptance test is FULL-TEXT identity, operands included. Two
+  functions of nineteen passed it; seventeen were left alone.
+- **The sharp version of the reorder rule:** a reorder permitted by both
+  sources is noise; a reorder our source's data dependencies would *forbid*
+  is a real difference in what the code computes (finding 614).
+
+### The weak number and the strong one
+
+Count **byte-identical functions**, not the ratio of your bytes to the blob's.
+The ratio moved from 77.3% to 89.0% under `-O3` while the match count stayed
+flat at 92 across that entire 12-point swing — we undershoot, `-O3` inlines
+harder, our code grew 17 KB, and the gap closed arithmetically with nothing
+becoming more like the original (finding 616). A build that inlined wildly
+could push the ratio past 100% while matching nothing at all. Had the ratio
+been the deciding number, the flag question would have been settled wrongly.
+
+100% is not the target: different factoring differs for ever while behaving
+identically. Ratchet on a **decrease**.
+
+## Every tool must be shown to fire
+
+The pattern behind every tooling defect this method has found is **a result
+indistinguishable from success**. Four for four, and then a fifth:
+
+- an anchor matching twice reads `UNUSABLE`, and the suite still says
+  `0 NOT caught` (finding 347);
+- an anchor that stays unique but silently re-points reads `CAUGHT`, at a
+  claim nobody made (finding 432);
+- a skipped suite reads `0 anchors wrong, exit 0` (finding 540);
+- a mutation whose `replace` equals its `find` reads `survived, equivalent`
+  (finding 542);
+- a signedness detector that could not find the one defect it was written for
+  printed `(none)` through four broken versions (finding 618).
+
+The rules that follow, and they are not negotiable:
+
+- **Make the tool COUNT what it examined and FAIL on the difference.**
+- **Reporting is not gating.** If the run still exits 0, the report is a
+  comment (finding 542).
+- **A detector nobody has seen fire is not a detector.** Validate it by
+  reintroducing a known defect and watching it appear, in both directions
+  (finding 134, and finding 618 where four versions passed without it).
+- **Measure the flag that looks obviously good.** Sharding a mutation suite
+  four ways made three small suites 64% *slower* — nobody would have put a
+  stopwatch on "parallel is faster" (finding 541).
+
+Full pattern and the checklist: `docs/method/gates.md`.
+
+## Hand-overs: mark what is MEASURED and what is INHERITED
+
+In one session a relayed premise was wrong **five times**, and each time the
+receiving batch disproved it rather than working around it: an unbounded byte
+copy that the dispatch actually sits ahead of (finding 352a); a lead that was
+wrong in both halves (finding 359a); an instruction to keep one of two
+reconstructions when there turned out to be three (finding 550); and an
+address quoted as `0x62b45` when the instruction meant is at `0x62b5f`
+(finding 591).
+
+**"The previous batch reports X" is a lead. "I measured X" is a fact. A brief
+must say which it is passing on** (finding 352a), **and the receiver must
+check an inherited claim before acting on it** (finding 359a). Four words.
+
+The same applies to a status column: `docs/v34handshak.md` ended one merge
+saying in two different places that two *different* arms were the last one
+open. Both batches wrote their line from their own tree and each was right
+about what it could see (finding 359a).
+
+## Findings and numbering
+
+`<FINDINGS>` is the record. **Append; do not renumber history.**
+
+Numbers collide whenever two sessions run in parallel. The ninth collision
+here was **twenty-three numbers**, quoted freely on both sides all session
+(finding 543). Before claiming a block, check every branch, not just the
+mainline, and leave a gap.
+
+Run your reference checker before every commit — but know what it cannot do.
+**It cannot catch a reference that still resolves and now points at the wrong
+finding**, because every such reference still resolves. That is why a clean
+run after a merge proves nothing about it, and why nobody noticed for 158
+commits (finding 543). So:
+
+- **If you renumber, say in each moved finding what it used to be called.**
+  That note is the only signal a branch cut before the merge will ever get.
+- **Renumber first, merge second.** The other way round makes the merge a
+  hunk resolution inside an append-only file, which is how content gets
+  silently dropped (finding 543).
+- **Move the side with FEWER REFERENCES, not fewer findings** — the risk
+  scales with references. Here it was 113 against 25 (finding 543).
+- **A bare-number rewrite is not available.** In exactly the colliding range
+  this tree had filter coefficients `340`, `348`, `361` in `rc_coeffs.c` and
+  byte counts in two docs, indistinguishable from citations on digits alone.
+  Match explicit forms only, then read every remaining occurrence by hand —
+  which is what caught a bare `(350)` parenthetical the automated pass missed
+  (finding 543).
+- **Write citations in the forms your checker parses** (`finding N`,
+  `findings N, M and K`). A comma-separated list matched on its first number
+  and left the second dangling (finding 543).
+
+Task numbers are not safe across sessions either: two task stores existed here
+whose `#11`–`#22` were different work. Say which store you mean.
+
+## Decompilation is scaffolding, never evidence
+
+A decompiler gives you control flow and constants to read. Measured against a
+function already verified by hand, it recovered branch structure, every
+constant and structure offset, and the calling convention — and **destroyed
+arrays**, which were most of this object.
+
+- Every line goes through the disassembler before it goes into `<LAYOUT>src/`.
+- **No name, comment or finding is ever written from decompiler output.** The
+  record is the deliverable, and a decompiler guess recorded as a derivation
+  corrupts it.
+- The differential test remains the only thing that decides — which is also
+  why "the decompilation might not match the assembly" is not a risk: it never
+  ships and is never trusted, so a mismatch is just a failing test.
+
+## Traps that cost this project real time
+
+- **Your tool directory shadows the standard library.** `tools/dis.py` shadows
+  `dis`, which `inspect` imports; any tool reaching for a real library dies
+  with `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,
+  naming neither the directory nor the file (finding 220).
+- **objdump swaps FDIVP/FDIVRP and FSUBP/FSUBRP.** The `DE` pop encodings
+  print as their own opposite. For any popping divide or subtract, read the
+  bytes, not the mnemonic (finding 245).
+- **A string reference may not mention the string's address.** Here it is an
+  `R_386_32` against the SECTION symbol with the offset as an inline addend,
+  so searching the disassembly for the address finds nothing and proves
+  nothing. Not knowing that had a defect misdiagnosed for weeks (finding 604).
+- **Do not pipe raw `objdump` through anything that trims lines.** It prints
+  relocations on their own lines, and every convenient way of trimming drops
+  them, turning a table of pointers into a table of plausible small integers.
+  That mistake was made three times here.
+- **A per-FUNCTION completeness count lies across an inlining boundary.**
+  Where you split one of the original's functions into static helpers, the
+  helpers have no blob symbol and their bytes count against neither side. Read
+  the per-file rollup first (finding 605), and the per-object one (finding
+  610).
+- **Parallel workers must be siblings of the real tree, not under `/tmp`**, if
+  anything in it is a relative symlink (finding 541).
+- **A killed mutation run leaves its mutant in the source**, and one was
+  committed that way (finding 349). Check `git diff` before committing after a
+  run that did not finish.
+
+## Layout
+
+```
+<LAYOUT>
+```
+
+## The rest of the method
+
+`docs/method/tiers.md` the four oracles in full · `efficiency.md` token and
+wall-clock · `gates.md` the tooling-defect pattern · `agents.md` parallel
+batches and merging them · `tools.md` what is portable.
