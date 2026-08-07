@@ -2900,6 +2900,11 @@ case_trnseg4a_entry(void)
 #define TS_P3		28	/* +0x28e, pred_a[0]                        */
 #define TS_P4		29
 #define TS_P5		30
+#define TS_VIDX		31	/* vect_idx, which the completion clears   */
+#define TS_H0		32	/* receiver +0x294, pred_i[0]              */
+#define TS_H1		33	/* +0x298, pred_i[2]                       */
+#define TS_H2		34	/* +0x29c, pred_q[0] -- the SECOND half of */
+#define TS_H3		35	/* +0x2a0, pred_q[2]    the one memset     */
 
 #define TX1_RXF224	0x0488		/* receiver +0x224, `preerr`       */
 #define TX1_RXF25E	0x04c2		/* receiver +0x25e                 */
@@ -2908,11 +2913,13 @@ case_trnseg4a_entry(void)
 #define TX1_RATEMIN	0x0220
 #define TX1_RATEMAX	0x0224
 #define TX1_CFGPTR	0xac3c		/* the negotiated configuration    */
+#define TX1_DIVTAB	0xaaac		/* cfg->rx_divtab, the ladder's    */
+#define TX1_RXHIST	0x04f8		/* receiver +0x294, eight shorts   */
 #define TX1_INFOCAPS	0xaa3c		/* info_caps, the record's word 0  */
 #define TX1_FA97E	0xa97e		/* byte: gates the rate adjustment */
 #define TX1_F359A	0x359a		/* the snapshot's first condition  */
 
-static struct tx1_poke trnseg[31] = {
+static struct tx1_poke trnseg[36] = {
 	P16(TX1_F382, 0),
 	P16(TX1_F359C, 0),
 	P32(TX1_F25CC, 0x9e3b7d15),
@@ -2943,7 +2950,12 @@ static struct tx1_poke trnseg[31] = {
 	P16(TX1_RXPRED + 0x4, 0),
 	P16(TX1_RXPRED + 0x6, 0),
 	P16(TX1_RXPRED + 0x8, 0),
-	P16(TX1_RXPRED + 0xa, 0)
+	P16(TX1_RXPRED + 0xa, 0),
+	P16(TX1_VECTIDX, 0x0123),
+	P16(TX1_RXHIST + 0x0, 0x1111),
+	P16(TX1_RXHIST + 0x4, 0x2222),
+	P16(TX1_RXHIST + 0x8, 0x3333),
+	P16(TX1_RXHIST + 0xc, 0x4444)
 };
 
 /*
@@ -2963,17 +2975,36 @@ static short ts_flags_base;
  */
 static int ts_upstream;
 
+/*
+ * AND THE DIVISOR TABLE THE LADDER WALKS, for the reason `probe` and `vectpp`
+ * had to be extracted (finding 421): the fixture aims `cfg->rx_divtab` at its
+ * shared dummy block, whose entries are 0x4b00 + i -- so `entry >> 5` is 600
+ * for EVERY index the ladder can reach and every rate produces the same term.
+ * Nine claims about the index and about which term feeds which field are
+ * unfalsifiable against a table that flat, and `tools/mutate.py` is what said
+ * so.  Thirty-five entries are given a spread instead, written on BOTH sides
+ * so the two arenas stay byte-identical.
+ *
+ * `128 * (i - 8)` makes `entry >> 5` four times the index and the term about
+ * 14.6 times its square: 4,233 at index 25, which is the rate the default
+ * 3200-baud run starts at.  Runs that want the ladder to walk hold the mark
+ * above that and runs that want it to stop hold it below.
+ */
 static void
-aim_upstream(void)
+aim_case(void)
 {
-	int side;
+	int side, i;
 
 	for (side = 0; side < 2; side++) {
 		char *o = (char *)v34hs_object(side);
 		char *cfg;
+		short *tab;
 
 		memcpy(&cfg, o + TX1_CFGPTR, sizeof(cfg));
 		memcpy(cfg + 0x3c, &ts_upstream, sizeof(ts_upstream));
+		memcpy(&tab, o + TX1_DIVTAB, sizeof(tab));
+		for (i = 10; i <= 44; i++)
+			tab[i] = (short)(128 * (i - 8));
 	}
 }
 
@@ -3011,6 +3042,11 @@ ts_reset(void)
 	trnseg[TS_P3].val = 0;
 	trnseg[TS_P4].val = 0;
 	trnseg[TS_P5].val = 0;
+	trnseg[TS_VIDX].val = 0x0123;
+	trnseg[TS_H0].val = 0x1111;
+	trnseg[TS_H1].val = 0x2222;
+	trnseg[TS_H2].val = 0x3333;
+	trnseg[TS_H3].val = 0x4444;
 	ts_upstream = 0x40000000;
 }
 
@@ -3039,7 +3075,7 @@ ts_pred(int v0, int v1, int v2, int v3, int v4, int v5)
 static void
 run_trnseg(const char *what, long tag)
 {
-	fixup = aim_upstream;
+	fixup = aim_case;
 	run_case(V34HS_TRNSEG4A, v34tx1_trnseg4a, V34TX1_LOOP, what, tag,
 		 trnseg, NP(trnseg));
 	fixup = NULL;
@@ -3148,6 +3184,38 @@ case_trnseg4a(void)
 	trnseg[TS_250].val = 50;
 	run_trnseg("66 TRNSEG4A, the error exactly ten out", 6616);
 
+	/*
+	 * BETWEEN THE TWO THRESHOLDS, which is the only place `baud + period`
+	 * can be told from `baud`: the count is past one and short of the
+	 * other, and the equaliser error is settled, so the object leaves at
+	 * 0x6409a where a reading without `period` would complete the segment.
+	 */
+	ts_reset();
+	trnseg[TS_C0].val = 109;		/* +1 == 110, in [100, 120) */
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 55;
+	trnseg[TS_224].val = 20;
+	trnseg[TS_250].val = 50;
+	run_trnseg("66 TRNSEG4A, between the two thresholds", 6617);
+
+	/* And the short threshold's own boundary, which is `<` and not `<=`. */
+	ts_reset();
+	trnseg[TS_C0].val = 119;		/* +1 == 120 == baud + period */
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 55;
+	trnseg[TS_224].val = 20;
+	trnseg[TS_250].val = 50;
+	run_trnseg("66 TRNSEG4A, exactly at the short threshold", 6618);
+
+	/* The equaliser error one past the window, which is `>` and not `>=`. */
+	ts_reset();
+	trnseg[TS_C0].val = 130;
+	trnseg[TS_2218].val = 10;
+	trnseg[TS_21A].val = 61;
+	trnseg[TS_224].val = 20;
+	trnseg[TS_250].val = 50;
+	run_trnseg("66 TRNSEG4A, the error eleven out", 6619);
+
 	/* --- the completion, from 0x62f22 ---------------------------------- */
 
 	/*
@@ -3244,6 +3312,82 @@ case_trnseg4a(void)
 	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1560);
 	run_trnseg("66 TRNSEG4A, complete, the difference not positive", 6628);
 
+	/*
+	 * SIX NEGATIVE COEFFICIENTS.  Their magnitudes sum past 0x3fff and
+	 * their values sum to the same figure negated, so a reconstruction
+	 * that added the taps rather than their magnitudes KEEPS the predictor
+	 * where the object throws it away.  Nothing else here separates the
+	 * two: every other run's taps are positive or nearly balanced.
+	 */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 0xc0;
+	trnseg[TS_224].val = 0x40;
+	ts_pred(-0x7f00, -0x7f00, -0x7f00, -0x7f00, -0x7f00, -0x7f00);
+	run_trnseg("66 TRNSEG4A, complete, six negative taps", 6670);
+
+	/*
+	 * THE DIFFERENCE TRUNCATED TO SIXTEEN BITS.  With the predictor error
+	 * at -32268 the two errors are 32,768 apart, so the object's
+	 * `(short)(a - b)` is negative where an int subtraction is positive --
+	 * and the substitute the negative one selects, +0x224 itself, then
+	 * puts the threshold the other side of zero from what +0x21a would.
+	 * One run separates BOTH readings from the object's.
+	 */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 500;
+	trnseg[TS_224].val = -32268;
+	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1560);
+	run_trnseg("66 TRNSEG4A, complete, the difference wraps", 6671);
+
+	/* The threshold's quarter, with the difference either side of it. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 500;
+	trnseg[TS_224].val = 300;
+	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1560);
+	run_trnseg("66 TRNSEG4A, complete, the threshold just positive", 6672);
+
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 500;
+	trnseg[TS_224].val = 400;
+	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1560);
+	run_trnseg("66 TRNSEG4A, complete, the threshold just negative", 6673);
+
+	/* The force's error test at 0xc8 exactly, which is `>` and not `>=`. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 0xc8;
+	trnseg[TS_224].val = 50;
+	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1560);
+	run_trnseg("66 TRNSEG4A, complete, the error exactly 0xc8", 6674);
+
+	/* And the force's own bound at 0x1f40 exactly: six taps summing 8000. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 500;
+	trnseg[TS_224].val = 300;
+	ts_pred(0x1560, 0x1560, 0x1560, 0x1560, 0x1560, 0x1220);
+	run_trnseg("66 TRNSEG4A, complete, the sum exactly 0x1f40", 6675);
+
+	/* The equaliser error at 0x1ff exactly, which is `<=` and not `<`. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 0x1ff;
+	trnseg[TS_224].val = 100;
+	ts_pred(0x0400, -0x0200, 0x0100, -0x0080, 0x0040, -0x0020);
+	run_trnseg("66 TRNSEG4A, complete, the error exactly 0x1ff", 6676);
+
+	/* And the magnitude bound at 0x3fff exactly: six taps summing 16383. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 0xc8;
+	trnseg[TS_224].val = 50;
+	ts_pred(0x2aa8, 0x2aa8, 0x2aa8, 0x2aa8, 0x2aa8, 0x2ab4);
+	run_trnseg("66 TRNSEG4A, complete, the sum exactly 0x3fff", 6677);
+
 	/* --- the rate ladder ---------------------------------------------- */
 
 	/*
@@ -3295,11 +3439,33 @@ case_trnseg4a(void)
 	 * only run here that turns the loop more than once and the only one
 	 * that reaches `f254`'s averaging by the other door.
 	 */
+	/*
+	 * THE MARK THE LADDER READS IS THE ONE THE SNAPSHOT JUST WROTE, not
+	 * the one seeded: every path through `tx1_ts_snapshot` stores +0x250
+	 * before `tx1_ts_rates` reads it.  So these runs move the equaliser
+	 * error, which is where the thrown-away path takes it from, and a run
+	 * that poked +0x250 instead would drive the ladder with a zero it did
+	 * not choose.  Two of them did, and every ladder claim was
+	 * unfalsifiable until `tools/mutate.py` said so.
+	 */
 	ts_reset();
 	ts_complete();
-	trnseg[TS_250].val = 30000;
+	trnseg[TS_21A].val = 5000;
 	run_trnseg("66 TRNSEG4A, complete, the ladder walks to the floor",
 		   6636);
+
+	/* The term at the starting rate exactly, which is where `<` bites. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_21A].val = 4233;
+	run_trnseg("66 TRNSEG4A, complete, the mark is the term exactly", 6637);
+
+	/* 3429 baud with the adjustment gated off starts at 14, not 12. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_RXB].val = 0x0d65;
+	trnseg[TS_A97E].val = 4;
+	run_trnseg("66 TRNSEG4A, complete, 3429 baud, gated off", 6638);
 
 	/* --- the two clamps ----------------------------------------------- */
 
@@ -3334,7 +3500,7 @@ case_trnseg4a(void)
 	ts_reset();
 	ts_complete();
 	trnseg[TS_25E].val = 1;
-	trnseg[TS_260].val = 6;
+	trnseg[TS_260].val = 20;
 	run_trnseg("66 TRNSEG4A, complete, no clamp", 6643);
 
 	/* --- the sample clock, and the two rate limits --------------------- */
@@ -3361,7 +3527,7 @@ case_trnseg4a(void)
 	ts_reset();
 	ts_complete();
 	trnseg[TS_RXB].val = 0x0960;
-	trnseg[TS_250].val = 30000;
+	trnseg[TS_21A].val = 5000;
 	trnseg[TS_TMR].val = 0x100;
 	trnseg[TS_MARK].val = 0;
 	run_trnseg("66 TRNSEG4A, complete, two off but the floor holds", 6652);
@@ -3389,6 +3555,32 @@ case_trnseg4a(void)
 	trnseg[TS_RNOW].val = 9;
 	trnseg[TS_RWANT].val = 9;
 	run_trnseg("66 TRNSEG4A, complete, rate_want equals rate_now", 6656);
+
+	/*
+	 * rate_min FEEDS rate_max's TEST.  The object re-reads the value it
+	 * has just stored (0x63372's `movswl %cx`), so a floor ABOVE the
+	 * ceiling leaves the ceiling's value and not the floor's.  Nothing
+	 * else here can see that read.
+	 */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_RMIN].val = 20;
+	trnseg[TS_RMAX].val = 15;
+	run_trnseg("66 TRNSEG4A, complete, the floor above the ceiling", 6657);
+
+	/* The clock span, UNSIGNED: a mark near INT_MAX wraps the sum. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_TMR].val = 0x100;
+	trnseg[TS_MARK].val = 0x7ffffff0;
+	run_trnseg("66 TRNSEG4A, complete, the span wraps", 6658);
+
+	/* And its width, at 0x17300 -- inside 0x17700 and outside 0x17000. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_TMR].val = 0x17300;
+	trnseg[TS_MARK].val = 0;
+	run_trnseg("66 TRNSEG4A, complete, the span is 0x17300", 6659);
 
 	/* --- the capability word ------------------------------------------ */
 
@@ -3453,6 +3645,47 @@ case_trnseg4a(void)
 	trnseg[TS_CAPS].val = 0x1234;
 	ts_upstream = 0x40000000;
 	run_trnseg("66 TRNSEG4A, complete, the cap does not bite", 6665);
+
+	/*
+	 * WHICH NIBBLE THE CAP READS, and it is the TRANSMIT one in both
+	 * roles: the answer role writes the transmit rate at bit 6 and reads
+	 * bit 6, and the call role writes it at bit 10 and reads bit 10.  With
+	 * the two rates apart -- transmit 12, receive 9 -- and the cap between
+	 * their two products, the object's reading bites and the other does
+	 * not.
+	 */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_59C].val = 0x65;
+	trnseg[TS_RNOW].val = 3;
+	trnseg[TS_RWANT].val = 9;
+	trnseg[TS_CAPS].val = 0x1234;
+	ts_upstream = 24000;
+	run_trnseg("66 TRNSEG4A, complete, the cap reads the transmit nibble",
+		   6666);
+
+	/* The cap at the product exactly, which is `>` and not `>=`. */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_RNOW].val = 3;
+	trnseg[TS_RWANT].val = 12;
+	trnseg[TS_CAPS].val = 0x1234;
+	ts_upstream = 28800;
+	run_trnseg("66 TRNSEG4A, complete, the cap equals the rate", 6667);
+
+	/*
+	 * AND A CAP WHOSE INDEX HAS ITS TOP BIT SET.  3,000 gives one, which
+	 * reverses to eight, so the fourth pass through the mask loop is the
+	 * only one that RAISES a bit -- and it is the pass a loop of three
+	 * never reaches.
+	 */
+	ts_reset();
+	ts_complete();
+	trnseg[TS_RNOW].val = 3;
+	trnseg[TS_RWANT].val = 12;
+	trnseg[TS_CAPS].val = 0x1234;
+	ts_upstream = 3000;
+	run_trnseg("66 TRNSEG4A, complete, the cap's top bit", 6668);
 
 	ts_reset();
 }
