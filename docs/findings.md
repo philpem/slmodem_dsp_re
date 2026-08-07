@@ -27331,8 +27331,9 @@ diagnostic lines are now printed.
 **Nothing else moved.**  Zero lines printed that the blob does not, in every
 intermediate state as well as the last one, and the object stays byte-identical
 in all 272 cases -- no `bytes written`, no `step signature`, no arena sweep
-check failed at any point.  Twenty mutation anchors were re-pointed onto the
-new text and every one keeps the claim it made.
+check failed at any point.  Twenty-two mutation anchors were re-pointed onto
+the new text -- two, then thirteen, then seven -- and every one keeps the
+claim it made.
 
 #### 574 predicted the wrong kind of work, and the difference is worth having
 
@@ -27507,10 +27508,34 @@ the thing that exposed them was not a better argument but a new observable.
 Every `why` in every suite is a hostage to that; `--verify` is what makes the
 change visible when it happens, and here it named all eighteen.
 
+#### The codegen tier says the same thing from the other side, with a caveat
+
+`make similarity` (`tools/toolchain/compare.py --ratchet`, NOT `tools/`) is
+green after this and reports a GAIN:
+
+```
+  ratchet OK -- gained: compared 365->386, identical 92->105, same_size 15->16
+```
+
+**The gain is not this branch's and should not be claimed as one.**  The
+compared count moved by twenty-one symbols, and nothing here adds a symbol the
+blob has; `ratchet.json`'s 365/92/15 predates something already present at the
+fork point.  It is left un-blessed for that reason -- a re-bless would record
+numbers nobody can attribute.
+
+Two things about running it are worth writing down, because both cost a run:
+the first invocation against a cold container reported `identical was 92, now
+48` from a PARTIAL object set, and two consecutive runs afterwards both gave
+105; and twelve C++ translation units still fail to build under GCC 3.4.2
+(`period toolchain: 90 objects, 12 failed`), which is the state at the fork
+point and not something this branch moved.  `v34hstx1.cpp` is not among them.
+
+
 #### What it cost, and the debug-site count as the other half of the evidence
 
 `make phase` reports `debug sites: 5 of 460 never execute`, against six of
-444 at the fork point -- `v34hstx1.cpp`'s twenty-seven new sites all execute,
+**433** at the fork point -- 460 less this file's twenty-seven new sites,
+since it had none.  All twenty-seven execute,
 and one of `v34info.c`'s three now does too, because arm 24 reaches it.  Had
 the diagnostics been left off, the twenty-seven would have been dead code
 indistinguishable from a clean tree, which is the shape finding 134 named and
