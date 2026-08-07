@@ -84,6 +84,15 @@ enum v34tx1_exit {
 };
 
 /*
+ * AND 66's SEGMENT END IS NOT A THIRD ONE, which is worth stating because for
+ * one commit it was.  0x66eff's block, the last of 66's exclusive set, ends in
+ * an unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
+ * 0x66fe9, where 86's `V34TX1_TXMD_DONE` transfers, so landing 66 reconstructs
+ * nothing of 86's transfer target and retires none of finding 343's cost.
+ * 66's own completion at 0x62f22 rejoins the loop like every other arm here.
+ */
+
+/*
  * NO ARM ADDED SINCE NEEDS A NEW EXIT, and that is a result rather than the
  * absence of one.  60 rejoins at 0x62d70, 18 at 0x6409a on both of its paths,
  * 70 at 0x6431f and 0x64326, 51 at 0x63941, 0x6409a and 0x62d70; 19 at 0x629c8
@@ -189,6 +198,19 @@ int v34tx1_moh_silence(void *obj);
 int v34tx1_k56jatxmit(void *obj);
 /* 86 TXMD         0x63dae */
 int v34tx1_txmd(void *obj);
+/*
+ * 66 TRNSEG4A     0x62e28, with the sixteen-point half at 0x66e59 and the
+ * segment's completion at 0x62f22.
+ *
+ * The largest single run of straight-line code in the table -- 1,956 bytes
+ * from 0x62e28 to 0x635cc without a gap.  One symbol out of `vect4` or
+ * `vect16`, chosen by the receiver's +0x11e as 69 chooses it, with the
+ * generator chosen on `f359c` as 71 and 86 choose it; then `f25c0` is
+ * counted UP and tested against `baud + baud/2 + period` out of the rate
+ * configuration.  Three of the four exits are the loop; the fourth is the
+ * completion, which rebuilds the receive half of that configuration.
+ */
+int v34tx1_trnseg4a(void *obj);
 
 #ifdef __cplusplus
 }

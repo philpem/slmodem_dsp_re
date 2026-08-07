@@ -74,9 +74,11 @@
 #include "dsplib/v34hstx1.h"
 #include "dsplib/v34info.h"	/* V34SetINFO0aBits                       */
 #include "dsplib/v34pcmif.h"	/* VPcmV34Report*OfEchoAdapt              */
+#include "dsplib/v34pcmif.h"	/* VPcmV34GetMaxUpstreamRateIndex         */
 #include "dsplib/v34recv.h"	/* struct v34_receiver                    */
 #include "dsplib/v34rx.h"	/* txmit, txwritequeue, V34scrambler      */
 #include "dsplib/v34shell.h"	/* modulatevector                         */
+#include "dsplib/sysdep.h"	/* sysdep_memset                          */
 
 /* The receiver sub-object; `0x74(%esp)` above. */
 #define TX1_RECEIVER	0x264
@@ -2119,6 +2121,507 @@ v34tx1_tx_dpsk(void *objp)
 	/* 0x64fde */
 	*((unsigned char *)o + TX1_FABF8) = 0;
 	return tx1_moh_hold(o);				/* 0x64fec */
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * 66 `TRNSEG4A`, 0x62e28, with the sixteen-point half at 0x66e59 and the
+ * segment's completion at 0x62f22.
+ *
+ * THE SYMBOL IS 71's AND 86's, NOT 69's.  The generator is chosen on
+ * `f359c == 0x65` -- the object carries the scrambler loop twice, at 0x62e70
+ * with the 0x04000000 tap and at 0x6358c with 0x00002000, and picks between
+ * the copies exactly as 71 and 86 do -- so `tx1_scramble2` is the same call
+ * here.  69 chooses on bit 0 of `f25c2` instead (finding 340 against 423);
+ * one halfword apart and it is the whole difference between the two shapes.
+ *
+ * THE CONSTELLATION IS 69's.  The receiver's +0x11e against 0x89b0 is the
+ * arm's first instruction, and the sixteen-point half scrambles TWICE: the
+ * first call's two bits go into `f25c8` and are READ BACK FROM THERE
+ * (0x66f4d) as `vect16`'s row, with the second call's as the column.  Where
+ * 69 differs is that neither half here differentially encodes and neither
+ * writes `f25c6` -- the quadrant this arm carries is the raw scrambler
+ * output, and `f25c6` is written once, at the completion, out of `f25c8`.
+ *
+ * AND NEITHER HALF ADVANCES `vect_idx`.  This arm counts in `f25c0`, and it
+ * counts BEFORE the segment-end compare rather than after it: 0x62edc reads
+ * +0x25c0, increments, stores, and the STORED value is what 0x62f09 tests.
+ * 86 increments last, at the shared 0x6430c; do not read the two as one
+ * shape.
+ *
+ * THE SEGMENT ENDS ON THREE CONDITIONS AND NOT ONE.  With `n` the count just
+ * stored and `lim` the length `baud + baud/2 + period` out of the rate
+ * configuration at +0xaa84:
+ *
+ *     n == lim                                        the segment is over
+ *     n  > lim  and  f2218 > 3                        likewise
+ *     n  < lim  and  f2218 > 3  and  n >= baud+period
+ *               and  rx->f21a <= rx+0x250 + 10        likewise (0x6559c)
+ *
+ * so a run that has passed the nominal length finishes at once, and a run
+ * that has passed the SHORTER threshold finishes early when the equaliser
+ * error at +0x21a has come down to within ten of the mark at +0x250.
+ * `f2218` is the same int table 2's tail reads and the compare is UNSIGNED
+ * (`cmpl $0x3 ; jbe`), so a negative value is a large one here.
+ *
+ * `baud >> 1` IS AN ARITHMETIC SHIFT (0x62f02 is `sar`), not a divide: with
+ * a negative `baud` the two differ, and the fixture's fill makes them differ.
+ *
+ * THE FOUR REJOINS ARE ALL THE SAME BLOCK.  0x63941, 0x6409a, 0x6431f and
+ * 0x62d70 each reload the object, re-test the queue count against +0x2aa0
+ * and jump to 0x629e7; the addresses are kept in the comments because the
+ * blocks are distinct in the object, not because the exits differ.
+ *
+ * ---------------------------------------------------------------------------
+ * THE COMPLETION AT 0x62f22 IS TWO THIRDS OF THE ARM and it is one job: it
+ * settles the RECEIVE half of the rate configuration at +0xaa84 and publishes
+ * the answer in the INFO capability record at +0xaa3c.  `tx1_ts_snapshot` is
+ * its first half and `tx1_ts_rates` its second.
+ *
+ * `cfg->rx_divtab` IS `initdigital`'s TABLE, INDEXED `initdigital`'s WAY.
+ * v34shell.c:1751 reads `rx_divtab[(short)bits + 14 * (short)umax - 1]` and
+ * the four sites here read the same expression at -2, -1 and 0 -- so the
+ * ladder below walks the same per-rate divisor list the receive context is
+ * eventually brought up with, one rate at a time from the top.
+ *
+ * THE MULTIPLIER IS ONE PREDICATE WRITTEN TWO WAYS.  0x6308b and 0x6316f test
+ * `rate >= 0xd` with `setge`; 0x631f6 and 0x6327a test `rate <= 0xc` with
+ * `jle`.  They are the same question and `tx1_ts_scale` asks it once.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE ARM REQUIRES OF THE OBJECT, and it is not a style note.
+ *
+ * `cfg->rx_baud` MUST BE ONE OF 0x960, 0xaf0, 0xbb8, 0xc80 OR 0xd65.  The
+ * five-way at 0x62f9c is the ONLY writer of the two locals the whole
+ * completion then runs on -- the rate and its floor -- and it has no default:
+ * on any other baud the object falls into 0x62fce reading two uninitialised
+ * stack slots, and there is nothing in `v34handshak`'s prologue (0x628f0,
+ * which writes 0x74, 0x4c and 0x78 and no more) that ever set them.  So that
+ * is not a behaviour to reconstruct, it is a precondition the caller meets;
+ * `t_v34hstx1.c` pins the field on every run and says so.  A default written
+ * here would be a line no test could disagree with.
+ *
+ * AND THE FLOOR IS ALWAYS BELOW THE RATE, so the ladder always turns at least
+ * once: 9 against 1 and 10..13 against 2, whichever way 0xa97e bit 2 goes.
+ * That is what stops the term the ladder computes being read before it is
+ * written at 0x631a1, and it is a property of those five pairs rather than of
+ * the fixture.
+ */
+
+/*
+ * +0x4b4, which is the RECEIVER's +0x250 -- `0x74(%esp)` plus 0x250 -- and
+ * lands in that structure's `pad_250`, so it is not a named field anywhere in
+ * this tree.  The completion writes it out of `f224` or `f21a`; the early
+ * finish above reads it as the mark the equaliser error is measured against,
+ * and the ladder reads it as the level a rate has to stay under.
+ */
+#define TX1_RX250	0x4b4
+
+/*
+ * +0x359a, one more halfword of `unmapped_3564`.  v34pcmmain.cpp calls it
+ * `OB_FORCE_LOW_BAUD` after `probeselect`'s use of it; here it is the first
+ * of four conditions deciding whether the receiver's predictor is kept, and
+ * this arm neither writes it nor asserts that meaning.
+ */
+#define TX1_F359A	0x359a
+
+/*
+ * +0xa97e, read as a BYTE and tested for bit 2.  It gates the one adjustment
+ * the completion makes to the rate the baud implies.  Inside `unmapped_a948`;
+ * no other site in this tree reads it.
+ */
+#define TX1_FA97E	0xa97e
+
+/*
+ * +0xe84, twelve shorts of `unmapped_0e84`.  `initdigital` hands exactly this
+ * address to `initV34` as the RECEIVE context's coefficient array
+ * (v34shell.c:1767), and the snapshot below fills it from the receiver's
+ * predictor -- six taps as a conjugate pair and then straight, which is the
+ * complex product `(b + ja)` written out.  Finding 424 is the other reader:
+ * `initV34` stores an interior self-pointer to it at +0x0a24.
+ */
+#define TX1_RXCOEFF	0xe84
+
+/*
+ * The receiver's three-tap complex predictor at +0x288, read as ONE RUN OF
+ * SIX rather than as `pred_b[3]` and `pred_a[3]`: the sum at 0x672de indexes
+ * it with a single counter from zero to five across both halves, so the two
+ * arrays' adjacency is what that loop is written on.  Reached by offset for
+ * that reason -- `pred_b[4]` would be out of bounds and would be a claim the
+ * object does not make.
+ */
+#define TX1_RX_PRED	0x288
+
+/* Two 32-bit constants of the record, at +0xaa60 and +0xaa68. */
+#define TX1_FAA60	0xaa60
+#define TX1_FAA68	0xaa68
+
+static short
+tx1_ts_scale(const struct v34_ratecfg *cfg, int rate, int off)
+{
+	int x = cfg->rx_divtab[rate + 14 * (int)cfg->rx_use_max + off];
+
+	x >>= 5;
+	x *= x;
+	x = (short)x;
+	x *= (rate >= 0xd) ? 0x4268 : 0x3a98;
+	return (short)(x >> 14);
+}
+
+/*
+ * 0x672c7: what becomes of the receiver's predictor.  (0x62f5f, bit 5 of the
+ * flags word, is the short way out and is written in the arm itself.)
+ *
+ * FOUR CONDITIONS DECIDE WHETHER THE PREDICTOR IS KEPT, in this order and all
+ * of them 16-bit: +0x359a clear, the equaliser error at +0x21a no more than
+ * 0x1ff, the predictor error at +0x224 strictly below it, and the sum of the
+ * six coefficients' magnitudes no more than 0x3fff.  The sum is FORCED to
+ * 0x5000 first when it is already past 0x1f40 and the error is both large and
+ * improving, which is that last test's real trigger: the object computes a
+ * number and then replaces it with one that cannot pass.
+ *
+ * KEPT means three things -- the six coefficients go into the record at
+ * +0xaa40 in the order (b2, a2, b1, a1, b0, a0) and are then bit-reversed
+ * over SIXTEEN bits in place, the same six fill the receive context's
+ * coefficient array as a conjugate pair, and the predictor's two histories
+ * are cleared.  THROWN AWAY means those six record words go to zero.  Either
+ * way bit 12 of the flags comes down and the mark at +0x250 moves; only the
+ * kept path raises bit 14, and the two branches move the mark to two
+ * different fields.
+ */
+static void
+tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
+{
+	short *co = (short *)((char *)o + TX1_RXCOEFF);
+	int sum = 0, i, t;
+
+	rec[0] = (short)0x8000;
+	for (i = 0; i <= 5; i++) {
+		int v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 2;
+
+		sum += (v < 0) ? -v : v;
+	}
+
+	t = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);
+	if (t <= 0)
+		t = rx->f224;				/* 0x6874c */
+	t = (short)(t - (rx->f21a >> 2));
+	if (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)
+		sum = 0x5000;
+
+	if (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff
+	    && rx->f224 < rx->f21a && sum <= 0x3fff) {
+		/* 0x6738c */
+		rec[2] = rx->pred_b[2];
+		rec[3] = rx->pred_a[2];
+		rec[4] = rx->pred_b[1];
+		rec[5] = rx->pred_a[1];
+		rec[6] = rx->pred_b[0];
+		rec[7] = rx->pred_a[0];
+
+		co[7] = rec[2];
+		co[0] = rec[2];
+		co[1] = (short)-rec[3];
+		co[6] = rec[3];
+		co[9] = rec[4];
+		co[2] = rec[4];
+		co[3] = (short)-rec[5];
+		co[8] = rec[5];
+		co[11] = rec[6];
+		co[4] = rec[6];
+		co[5] = (short)-rec[7];
+		co[10] = rec[7];
+
+		for (i = 0; i <= 5; i++)
+			rec[2 + i] = (short)bitreverse(
+					(unsigned short)rec[2 + i], 0x10);
+
+		rx->flags = (unsigned short)(rx->flags | 0x4000u);
+		sysdep_memset(&rx->pred_i[0], 0, 0x10);
+		tx1_put(o, TX1_RX250, rx->f224);
+	} else {
+		/* 0x674e5 */
+		rec[2] = 0;
+		rec[3] = 0;
+		rec[4] = 0;
+		rec[5] = 0;
+		rec[6] = 0;
+		rec[7] = 0;
+		tx1_put(o, TX1_RX250, rx->f21a);
+	}
+
+	/* 0x674c8 */
+	rx->flags = (unsigned short)(rx->flags & ~0x1000u);
+}
+
+/*
+ * 0x62f82 to 0x63587: the receive rate, settled and published.
+ *
+ * The baud gives a starting rate and a floor.  The ladder then walks the rate
+ * DOWN while the divisor table's term for it is still no more than the mark
+ * at +0x250, so it stops at the highest rate the line is measured to carry;
+ * the receiver's +0x25e and +0x260 clamp it from either side, and a stale
+ * sample clock -- the running count at +0x238 within 96,000 of the mark at
+ * +0x248, with `f2218` low -- takes two more off it.  What comes out lands in
+ * `cfg->rxbits`, is clamped again to the object's own `rate_min` and
+ * `rate_max`, is overridden outright by `rate_want`, and is finally
+ * bit-reversed into the capability word beside the transmit rate.
+ *
+ * THE TWO NIBBLES SWAP BY ROLE, exactly as `initdigital` swaps them
+ * (v34shell.c:1568): `f359c == 0x65` puts the receive rate at bit 6 and the
+ * transmit rate at bit 10, and any other value the other way round.  The
+ * object open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a chain of
+ * shifts and adds; the two forms agree over all 65,536 inputs and the call is
+ * written here, which is finding 424's treatment of `getbit` at 67.
+ *
+ * AND THE UPSTREAM CAP IS APPLIED LAST.  If the nibble just written asks for
+ * more than `VPcmV34GetMaxUpstreamRateIndex` allows, the four bits are
+ * replaced one at a time -- `mask` walking 0x40, 0x80, 0x100, 0x200 or the
+ * same four shifted up by four -- from `(cap * 7) >> 14`, which is
+ * v34pcmmain.cpp:318's divide by 2340 rather than by 2400.
+ *
+ * `rec[k]` IS THE OBJECT'S OWN ADDRESSING: one base register at +0xaa3c and a
+ * byte displacement, so `rec[8]` is +0xaa4c and `rec[21]` is +0xaa66.
+ *
+ * THE TXSTATE COMPARE AT 0x634b3 CANNOT BE FALSE, for finding 342's reason at
+ * 65: the arm is reached only through table 1 at `txstate == 66`, and neither
+ * `txmit` nor anything else between the dispatch and here writes +0x3596.  It
+ * is written as the object writes it.
+ */
+static int
+tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
+	     struct v34_ratecfg *cfg, short *rec)
+{
+	int rate = 0, ratemin = 0, term = 0, cap, v, mask, k;
+	short baud;
+
+	/* 0x62f82 */
+	cfg->rx_use_max = 1;
+	baud = cfg->rx_baud;
+	switch ((unsigned short)baud) {
+	case 0x960: ratemin = 1; rate = 9;  break;
+	case 0xaf0: ratemin = 2; rate = 11; break;
+	case 0xbb8: ratemin = 2; rate = 12; break;
+	case 0xc80: ratemin = 2; rate = 13; break;
+	case 0xd65: ratemin = 2; rate = 14; break;
+	}
+
+	/* 0x62fce */
+	if (cfg->rx_use_max != 0)
+		rec[0] = (short)((unsigned short)rec[0] | 2u);
+
+	if ((*((unsigned char *)o + TX1_FA97E) & 4) == 0) {
+		/* 0x62ff8 */
+		if (baud == 0x0c80 || baud == 0x0d65)
+			rate = 0xc;
+		else if (baud == 0x0bb8 || baud == 0x0af0)
+			rate = (short)(rate - 1);	/* 0x67984 */
+	}
+
+	/* 0x6302e */
+	cfg->txbits = (short)rate;
+	while ((short)rate > (short)ratemin) {
+		term = tx1_ts_scale(cfg, rate, -1);
+		if (tx1_get(o, TX1_RX250) < (short)term)
+			break;
+		rate = (short)(rate - 1);
+	}
+
+	/* 0x630e9 */
+	if (rx->f25e > 1) {
+		int d = rx->f260;
+
+		if (rx->f25e == 2 && rate > d - 1)
+			rate = (short)(d - 1);		/* 0x68308 */
+		else if (rate < d + 1)
+			rate = (short)(d + 1);		/* 0x63120 */
+		term = tx1_ts_scale(cfg, rate, -1);	/* 0x63134 */
+	}
+
+	/* 0x63198 */
+	rx->f252 = (short)(2 * term);
+	if ((short)rate > (short)ratemin) {
+		rx->f254 = tx1_ts_scale(cfg, rate, -2);
+		rx->f254 = (short)((rx->f254 + term) >> 1);
+	} else {
+		/* 0x672ad */
+		rx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);
+	}
+
+	/* 0x63234 */
+	if ((short)cfg->txbits > (short)rate)
+		rx->f256 = tx1_ts_scale(cfg, rate, 0);
+	else
+		rx->f256 = 0;				/* 0x6729b */
+
+	/* 0x63299 */
+	rx->f25a = 0;
+	rx->f25c = 0;
+	rx->f258 = 0;
+	rec[1] = (short)0xfffd;
+	if ((unsigned)tx1_get_int(o, TX1_TIMER)
+	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
+	    && (unsigned)tx1_get_int(o, TX1_F2218) <= 3u) {
+		rate = (short)(rate - 2);
+		if ((short)rate < (short)ratemin)
+			rate = ratemin;
+		cfg->txbits = (short)rate;
+		rec[1] = (short)((unsigned short)rec[1] & ~1u);
+	}
+
+	/* 0x6332c */
+	cfg->rxbits = (short)rate;
+
+	/* 0x6334a */
+	v = cfg->rxbits;
+	if (v < o->rate_min) {
+		cfg->rxbits = (short)o->rate_min;
+		v = (short)o->rate_min;
+	}
+	if (v > o->rate_max)
+		cfg->rxbits = (short)o->rate_max;
+	if (o->rate_want >= 0 && o->rate_want != o->rate_now)
+		cfg->rxbits = (short)o->rate_want;
+
+	/* 0x633b5 */
+	rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
+	tx1_put(o, TX1_F358C,
+		(short)bitreverse((unsigned short)cfg->txbits, 4));
+
+	/* 0x6340f */
+	if (o->f359c == 0x65)
+		rec[0] = (short)((unsigned)(unsigned short)rec[0]
+				 | ((unsigned)tx1_get(o, TX1_F358C) << 10)
+				 | ((unsigned)rate << 6));
+	else {
+		rec[0] = (short)((unsigned)(unsigned short)rec[0]
+				 | ((unsigned)rate << 10));
+		rec[0] = (short)((unsigned)(unsigned short)rec[0]
+				 | ((unsigned)tx1_get(o, TX1_F358C) << 6));
+	}
+
+	/* 0x63453 */
+	cap = VPcmV34GetMaxUpstreamRateIndex(o);
+	if (o->f359c == 0x65) {
+		/* 0x677a8 */
+		v = bitreverse((unsigned short)
+			       (((unsigned)(unsigned short)rec[0] >> 10) & 0xf),
+			       4);
+		mask = ~0x400;
+	} else {
+		/* 0x6346b */
+		v = bitreverse((unsigned short)
+			       (((unsigned)(unsigned short)rec[0] >> 6) & 0xf),
+			       4);
+		mask = ~0x40;
+	}
+	if (v * 0x960 > cap) {
+		/* 0x6768b */
+		int rev = (short)bitreverse((unsigned short)((cap * 7) >> 14),
+					    4);
+
+		for (k = 0; k <= 3; k++) {
+			unsigned short w = (unsigned short)rec[0];
+
+			if ((rev >> k) & 1)
+				w = (unsigned short)(w | (unsigned)~mask);
+			else
+				w = (unsigned short)(w & (unsigned)mask);
+			rec[0] = (short)w;
+			mask = (short)(mask * 2 + 1);
+		}
+	}
+
+	/* 0x634a6 */
+	rec[8] = 0;					/* +0xaa4c */
+	if ((unsigned short)tx1_get(o, TX1_TXSTATE)
+	    != (unsigned short)V34HS_XMITMP)
+		tx1_put(o, TX1_TXSTATE, V34HS_XMITMP);
+	o->vect_idx = 0;
+	tx1_put(o, TX1_F3598, 0);
+	tx1_put(o, TX1_F359E, 0);
+
+	/* 0x63510 */
+	tx1_put_int(o, TX1_FAA60, 0x3fffe);
+	tx1_put_int(o, TX1_FAA68, 0x3fffe);
+	rec[10] = -1;					/* +0xaa50 */
+	rec[13] = 0;					/* +0xaa56 */
+	rec[15] = 0;					/* +0xaa5a */
+	rec[17] = 0;					/* +0xaa5e */
+	rec[14] = 0x10;					/* +0xaa58 */
+	rec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);
+	rec[11] = 1;					/* +0xaa52 */
+	rec[20] = 0x12;					/* +0xaa64 */
+	rec[21] = 0x12;					/* +0xaa66 */
+	rec[16] = 0;					/* +0xaa5c */
+	tx1_put(o, TX1_F3590, 0x22);
+	return V34TX1_LOOP;				/* 0x62d70 */
+}
+
+int
+v34tx1_trnseg4a(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_ratecfg *cfg =
+		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	int n, lim, baud, period;
+	short *rec;
+
+	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+		/* 0x66e59 */
+		short k = tx1_scramble2(o);
+		short q;
+
+		o->f25c8 = k;
+		q = tx1_scramble2(o);
+		tx1_put_point(o, vect16[q + 4 * k]);
+	} else {
+		/* 0x62e3b */
+		short q = tx1_scramble2(o);
+
+		o->f25c8 = q;
+		tx1_put_point(o, vect4[q]);
+	}
+
+	/* 0x62ecd */
+	txmit(o);
+
+	/* 0x62edc */
+	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+	n = o->f25c0;
+	baud = cfg->baud;
+	period = cfg->period;
+	lim = baud + (baud >> 1) + period;
+
+	if (n != lim) {
+		if ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)
+			return V34TX1_LOOP;		/* 0x63941 */
+		if (n < lim) {
+			/* 0x6559c */
+			if (n < baud + period)
+				return V34TX1_LOOP;	/* 0x6409a */
+			if ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)
+				return V34TX1_LOOP;	/* 0x6431f */
+		}
+	}
+
+	/* 0x62f22 */
+	rec = (short *)((char *)objp + TX1_FAA3C);
+	o->f25c6 = (short)(unsigned short)o->f25c8;
+	memcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));
+
+	if (rx->flags & 0x20u) {
+		/* 0x62f5f */
+		rec[2] = 0;
+		rec[0] = 0;
+		tx1_put(o, TX1_RX250, rx->f21a);
+	} else {
+		tx1_ts_snapshot(o, rx, rec);
+	}
+
+	return tx1_ts_rates(o, rx, cfg, rec);
 }
 
 /*

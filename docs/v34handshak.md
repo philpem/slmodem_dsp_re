@@ -414,8 +414,11 @@ and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, then
 `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
 `test/unit/t_v34hstx1.c`. Findings 340-345, 421-425 and 426-427.
 
-**The one still open is 66 `TRNSEG4A`** (0x62e28, 3,583 level-0 bytes);
-finding 420 has its block ranges, its callees and its two known entrances.
+**TABLE 1 IS COMPLETE.** All nineteen targets are written and differentially
+tested. The two sentences that used to sit here and below each said the OTHER
+arm was the last one left, because 21 and 66 were written in parallel and each
+batch wrote its `where` line from its own tree -- the third time that has
+happened in this file (microstate 46 was the first). Write it from the tree.
 
 **Two of the eighteen needed a table
 before they could be written at all**: `probe`, 64 signed shorts at
@@ -434,6 +437,31 @@ standalone function at 0x5f040. All three came out as calls, so the rule is
 three for three: **read a long arm against the functions the tree already
 has.** 66's four `bitreverse` calls and its `sysdep_memset` are the same
 signal (findings 424, 425 and 426).
+and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, and
+then 67 and 24, the two largest, and then 66, the largest of all, are in
+`src/pump/v34/v34hstx1.cpp` and compare byte for byte through
+`test/unit/t_v34hstx1.c`. Findings 340-345, 421-425 and 428-429.
+
+**Three of the nineteen needed a
+table before they could be written at all, and the third needed its VALUES**:
+`probe`, 64 signed shorts at `.rodata+0x2c00`, which 51 reads and which this
+tree did not have (finding 421); `vectpp`, 96 shorts at `.rodata+0x2c80`,
+which 20 reads as forty-eight FOUR-byte points and which was `static` in
+v34rx.c (finding 422); and `cfg->rx_divtab` at +0xaaac, which 66's rate ladder
+walks and which the fixture aims at its shared `dummy` block -- whose entries
+are so nearly equal that `entry >> 5` is 600 at every index the ladder
+reaches, and nine of 66's claims could not fail against it (finding 429). Read
+all three before estimating an arm -- one that reads a table this tree does
+not have, has under the wrong element width, or has under values too flat to
+separate its own arithmetic, is not the size its byte count says.
+
+**And a field an arm both writes and reads cannot be driven by a poke.** 66
+stores +0x250 in its first half and the rate ladder in its second half reads
+it, so two runs that poked it drove the ladder with a value the arm had
+already thrown away -- both anti-vacuity guards holding, the comparison green,
+and only `tools/mutate.py` saying so (finding 429). **And read the body for an INLINED LIBRARY FUNCTION before estimating it
+at all**: 67's 2 KB was mostly `getbit` open-coded and 24's 2.2 KB was `getbit`
+open-coded twice, so both came out as calls (findings 424 and 425).
 
 **An arm whose paths do not all reach `txmit` needs a DIFFERENT anti-vacuity
 guard and not a weaker one.** `run_case`'s "the arm advanced the queue to the
