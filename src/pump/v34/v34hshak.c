@@ -71,6 +71,7 @@
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
+#include "dsplib/v34shell.h"	/* modulatevector, for datapumpv34 below */
 
 /*
  * ---------------------------------------------------------------------------
@@ -4837,6 +4838,225 @@ v34handshak(void *vobj)
 	default:
 		t3c_unwritten();
 		return;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `datapumpv34`, 0x71960..0x71d64 -- the datapump's per-block entry point,
+ * and the last function of V34hshak.c.
+ *
+ * WHY IT IS IN THIS FILE.  It is the code between `v34handshak`, which ends
+ * at 0x71955, and `V34InitializeImplementationSpecific` at 0x71d70, which
+ * belongs to v34filters.c because it initialises that file's own object;
+ * this one calls `v34handshak`, `v34handshakinit`, `modulatevector` and
+ * `receiver` and none of those is v34filters.c's.  Finding 98 drew that
+ * conclusion before either function was written and this is where it lands.
+ *
+ * THREE THINGS HAPPEN HERE, and which of them happens is decided by the int
+ * at +0x2218 -- the same word `t3c_block_tail` above reports on and
+ * `VPcmV34InitiateRateRenegotiation` sets to 5:
+ *
+ *   > 1     the handshake.  Call `v34handshak` until the transmit block has
+ *           been filled AND the receive queue has been drained, then return.
+ *           NOTHING ELSE runs on this path: no modulator, no receiver, and
+ *           none of the supervision below.
+ *
+ *   <= 1    data.  Fill the transmit block a vector at a time, drain the
+ *           receive queue a burst at a time, and then supervise: retrain or
+ *           renegotiate if the receiver's error measure has been bad, or
+ *           good, for long enough.
+ *
+ * THE SUPERVISOR IS FOUR INDEPENDENT `if`s AND NOT A CHAIN.  Every one of
+ * the four falls into the next -- the retrain's tail re-reads +0x122 and
+ * rejoins at the second test, the remote-renegotiation block rejoins at the
+ * third, the step down rejoins at the fourth -- so a single block can
+ * retrain, notice a remote renegotiation and start one of its own, calling
+ * `v34handshakinit` three times.  Each block reads `+0xaa96` and the
+ * receiver's counters AFTER its `v34handshakinit` call, which is why the
+ * reads below are inside the blocks rather than hoisted: `v34handshakinit`
+ * is free to move them and the object gives it the chance.
+ *
+ * THE THREE COUNTERS are the receiver's +0x258, +0x25a and +0x25c, and they
+ * are consecutive-run counts rather than totals: each is bumped when this
+ * block's error measure at +0x21a fails its own threshold and RESET TO ZERO
+ * when it passes.  +0x258 has no timer condition, +0x25a starts once the
+ * span at +0x238 has run 144,000 past the mark at +0x248, and +0x25c once it
+ * has run 1,152,000 -- so the two renegotiation counters cannot fire in the
+ * first seconds of a connection whatever the line does.  +0x25c's compare is
+ * the other way round: it counts symbols whose error is SMALL, which is what
+ * makes it the step UP.
+ *
+ * The three timer spans -- 287,488 here, 144,000 and 1,152,000 in the loop --
+ * are all UNSIGNED compares of one int minus another, so a mark ahead of the
+ * count reads as an enormous span rather than a negative one.
+ */
+
+#define DP_PROGRESS	0x0004	/* int:   the shell's status word            */
+#define DP_TIMER	0x0238	/* int:   the running sample count           */
+#define DP_TIMER_MARK	0x0248	/* int:   the instant a span is measured from */
+#define DP_MODE		0x2218	/* int:   T3C_MODE, handshake above 1        */
+#define DP_FAA98	0xaa98	/* short: copied into the receiver's +0x260  */
+
+/* The receiver's own fields, none of which is mapped as a member yet. */
+#define DP_RX_ERR	0x021a	/* short: the block's error measure          */
+#define DP_RX_BLOCKS	0x0124	/* short: blocks received, capped at 30,000  */
+#define DP_RX_THR_A	0x0252	/* short: +0x258's threshold                 */
+#define DP_RX_THR_B	0x0254	/* short: +0x25a's                          */
+#define DP_RX_THR_C	0x0256	/* short: +0x25c's                          */
+#define DP_RX_BAD	0x0258	/* short: consecutive blocks over THR_A      */
+#define DP_RX_BAD_LONG	0x025a	/* short: consecutive blocks over THR_B      */
+#define DP_RX_GOOD	0x025c	/* short: consecutive blocks under THR_C     */
+#define DP_RX_WHY	0x025e	/* short: 1 remote, 2 down, 3 up            */
+#define DP_RX_RATE	0x0260	/* short: the rate index the change was at   */
+
+#define DP_TIMER_STALE	288000u		/* 0x46500, 36 s at 8 kHz  */
+#define DP_TIMER_MID	144000u		/* 0x23280, 18 s           */
+#define DP_TIMER_LONG	1152000u	/* 0x119400, 144 s         */
+#define DP_RX_BLOCK_CAP	0x752f		/* the last value that still bumps  */
+
+static short
+dp_rxget(const struct v34_object *obj, unsigned off)
+{
+	return hs_get(obj, T3C_RECEIVER + off);
+}
+
+static void
+dp_rxput(struct v34_object *obj, unsigned off, short v)
+{
+	hs_put(obj, T3C_RECEIVER + off, v);
+}
+
+/*
+ * One consecutive-run counter: bumped while the measure fails, cleared the
+ * moment it passes.  All three sites are this shape and the only difference
+ * between them is which way the compare runs, so the caller passes the
+ * verdict.  Sixteen-bit, and it wraps.
+ */
+static void
+dp_run(struct v34_object *obj, unsigned counter, int failed)
+{
+	dp_rxput(obj, counter,
+		 failed ? (short)(dp_rxget(obj, counter) + 1) : 0);
+}
+
+void
+datapumpv34(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if ((unsigned)t3c_geti(obj, DP_TIMER)
+	    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)
+		t3c_puti(obj, DP_PROGRESS, 5);
+
+	/*
+	 * The handshake, and the only path that calls `v34handshak`.  Its own
+	 * prologue reads the same two guards, so an iteration whose arm moves
+	 * neither the cursor nor the queue count repeats forever; that is the
+	 * object's shape and not a reading of it, and it is why the test can
+	 * drive this branch only with the loop already satisfied.
+	 */
+	if ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {
+		while (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)
+			v34handshak(obj);
+		return;
+	}
+
+	while (obj->txq.count < obj->f2aa0)
+		modulatevector(obj);
+
+	while (obj->rxq.count > 5) {
+		unsigned span;
+		short err;
+
+		if (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)
+			dp_rxput(obj, DP_RX_BLOCKS,
+				 (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));
+
+		receiver(obj);
+
+		err = dp_rxget(obj, DP_RX_ERR);
+		dp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));
+
+		span = (unsigned)t3c_geti(obj, DP_TIMER)
+		     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);
+
+		if (span > DP_TIMER_MID)
+			dp_run(obj, DP_RX_BAD_LONG,
+			       err > dp_rxget(obj, DP_RX_THR_B));
+		if (span > DP_TIMER_LONG)
+			dp_run(obj, DP_RX_GOOD,
+			       err < dp_rxget(obj, DP_RX_THR_C));
+	}
+
+	/*
+	 * Retrain: either the receiver asked with bit 6 of +0x122, or the
+	 * plain bad-block run has passed half the block rate at +0xaa96.
+	 * The mode it leaves behind distinguishes the two AFTER the fact --
+	 * the same test again, so a `v34handshakinit` that cleared the run
+	 * would report 3 where the entry condition was the flag.
+	 */
+	if ((T3C_RX(obj)->flags & 0x40)
+	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {
+		v34handshakinit(obj, 1);
+		t3c_puti(obj, DP_MODE,
+			 dp_rxget(obj, DP_RX_BAD) <= (short)(obj->faa96 >> 1)
+			 ? 3 : 2);
+		dp_rxput(obj, DP_RX_BAD, 0);
+		dp_rxput(obj, DP_RX_BAD_LONG, 0);
+		dp_rxput(obj, DP_RX_GOOD, 0);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34TIMING,Retrain started\n");
+	}
+
+	/* The far end asked, on bit 5 of the same word, re-read. */
+	if (T3C_RX(obj)->flags & 0x20) {
+		v34handshakinit(obj, 3);
+		dp_rxput(obj, DP_RX_GOOD, 0);
+		t3c_puti(obj, DP_MODE, 4);
+		dp_rxput(obj, DP_RX_BAD, 0);
+		dp_rxput(obj, DP_RX_BAD_LONG, 0);
+		dp_rxput(obj, DP_RX_WHY, 1);
+		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"V34RNEG, rate renegotiation detected \n");
+		VPcmV34IndicateRemoteRRN(obj);
+	}
+
+	/*
+	 * Down, then up, and both compares are 32-bit: the counter is
+	 * sign-extended and the block rate multiplied as an int, so a large
+	 * +0xaa96 does not wrap the threshold into range.
+	 */
+	if (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {
+		v34handshakinit(obj, 2);
+		t3c_puti(obj, DP_MODE, 5);
+		dp_rxput(obj, DP_RX_BAD, 0);
+		dp_rxput(obj, DP_RX_BAD_LONG, 0);
+		dp_rxput(obj, DP_RX_GOOD, 0);
+		dp_rxput(obj, DP_RX_WHY, 2);
+		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34RNEG, rate renegotiation "
+					     "DOWN initiated due to large "
+					     "error \n");
+		VPcmV34IndicateLocalRRN(obj);
+	}
+
+	if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {
+		v34handshakinit(obj, 2);
+		dp_rxput(obj, DP_RX_GOOD, 0);
+		t3c_puti(obj, DP_MODE, 5);
+		dp_rxput(obj, DP_RX_BAD, 0);
+		dp_rxput(obj, DP_RX_BAD_LONG, 0);
+		dp_rxput(obj, DP_RX_WHY, 3);
+		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34RNEG, rate renegotiation "
+					     "UP initiated due to small "
+					     "error \n");
+		VPcmV34IndicateLocalRRN(obj);
 	}
 }
 

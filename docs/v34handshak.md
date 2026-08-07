@@ -188,6 +188,19 @@ fixture is deterministic, address independent and fully seeded — which is what
 a per-case agent has to be able to assume before its own failures mean
 anything.
 
+### And one door that is not for a case at all
+
+`v34hs_entry(a, b, log_a)` replaces the entry point on **both** sides -- ours
+on A, the blob's on B -- for a function that is not `v34handshak` but shares
+its object. `datapumpv34` is the only user: it is the function that *calls*
+`v34handshak`, in the same translation unit, and what it needs from here is
+the arena rather than the dispatch. Reusing this fixture instead of building
+a second one is findings 319-322; `test/unit/t_v34datapump.c` is the example
+and finding 453 is why `log_a` is a parameter.
+
+It does not compose with the two per-case forms. A test uses it alone, and
+runs each case a second time with the blob on both sides as its control.
+
 `t_v34hst3mid.c` and `src/pump/v34/v34hshak_t3mid.c` are the worked example:
 the entry is `v34handshak_t3mid`, every path not written records a code and
 returns rather than doing something plausible, and the test fails if a trial

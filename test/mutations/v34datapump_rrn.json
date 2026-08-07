@@ -1,0 +1,45 @@
+[
+ {
+  "note": "The two rate-renegotiation counters in v34pcmif.c.  Twenty bytes each and a wrapping 16-bit increment apiece, so the only claims are WHICH field, WHICH direction, and that the arithmetic is sixteen bits wide.  The anchors carry each function's whole body because `VPcmV34InitiateRateRenegotiation` above bumps the same field with the same line, and an anchor that matched both would be reported UNUSABLE rather than failing (finding 347)."
+ },
+ {
+  "label": "IndicateLocalRRN bumps the remote counter",
+  "find": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n}",
+  "replace": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);\n}"
+ },
+ {
+  "label": "IndicateLocalRRN counts down",
+  "find": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n}",
+  "replace": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local - 1);\n}"
+ },
+ {
+  "label": "IndicateLocalRRN saturates rather than wrapping",
+  "find": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n}",
+  "replace": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t\t : obj->rrn_local + 1);\n}"
+ },
+ {
+  "label": "IndicateLocalRRN does nothing",
+  "find": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n}",
+  "replace": "VPcmV34IndicateLocalRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\t(void)obj;\n}"
+ },
+ {
+  "label": "IndicateRemoteRRN bumps the local counter",
+  "find": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);\n}",
+  "replace": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n}"
+ },
+ {
+  "label": "IndicateRemoteRRN counts down",
+  "find": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);\n}",
+  "replace": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote - 1);\n}"
+ },
+ {
+  "label": "IndicateRemoteRRN adds two",
+  "find": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);\n}",
+  "replace": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 2);\n}"
+ },
+ {
+  "label": "IndicateRemoteRRN does nothing",
+  "find": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);\n}",
+  "replace": "VPcmV34IndicateRemoteRRN(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\n\t(void)obj;\n}"
+ }
+]

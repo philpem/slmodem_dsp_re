@@ -20905,3 +20905,241 @@ four words and is the difference between a lead and a fact.
 No `t44_*` function contains a `t3c_unwritten`, by grep, and the thirteen
 remaining halts in the file all belong to arms nobody has taken. 6,046 bytes,
 the largest arm in table 3, across four batches.
+### 450. `datapumpv34` is four independent `if`s, and with a positive block rate only one of them can ever run
+
+The datapump's per-block entry point at 0x71960 is 1,028 bytes and does no
+arithmetic beyond three timer thresholds and one halving. The int at +0x2218
+splits it in two, and the split is total:
+
+```
+    +0x2218 > 1     call v34handshak until the transmit block is full and the
+                    receive queue drained, then RETURN.  No modulator, no
+                    receiver, and none of the supervision below.
+    +0x2218 <= 1    fill the block with modulatevector, drain the queue with
+                    receiver, then supervise.
+```
+
+The compare is unsigned, so a negative mode is the handshake.
+
+#### The supervisor, and the part that is not obvious from reading it
+
+Four blocks, each ending by falling into the NEXT one's test rather than into
+the function's exit:
+
+```
+    +0x122 bit 6, or +0x258 over (+0xaa96 >> 1)   retrain      v34handshakinit(1)
+    +0x122 bit 5                                  remote RRN   v34handshakinit(3)
+    +0x25a over 2 * +0xaa96                       step down    v34handshakinit(2)
+    +0x25c over 8 * +0xaa96                       step up      v34handshakinit(2)
+```
+
+So one block can retrain, notice a remote renegotiation and start one of its
+own -- three `v34handshakinit` calls in one call of this function. **In
+practice it cannot, and the reason is each block's own clears.** Every one of
+the four sets +0x258, +0x25a and +0x25c to zero on its way out, and with a
+POSITIVE +0xaa96 zero is below every remaining threshold. The retrain's exit
+also goes further than that: `v34handshakinit` mode 1 reaches `setupreceiver`,
+which ASSIGNS +0x122 rather than masking it, so bit 5 is gone before the
+second `if` reads it.
+
+The fall-through is therefore only visible with a **negative or zero** block
+rate, where zero is *above* 2 * +0xaa96 and 8 * +0xaa96. `t_v34datapump.c`
+drives it at +0xaa96 = -1 and gets all three, which is the only case in the
+test where +0xac0e moves twice.
+
+#### The three counters
+
++0x258, +0x25a and +0x25c are consecutive-run counts and not totals: each is
+bumped when the block's error measure at +0x21a fails its own threshold at
++0x252, +0x254 or +0x256, and **reset to zero the moment it passes**. The two
+renegotiation counters are also timed -- +0x25a only starts once +0x238 has
+run 144,000 samples past the mark at +0x248, +0x25c only past 1,152,000, so
+neither can fire in the first eighteen seconds of a connection whatever the
+line does. +0x25c's compare runs the other way (`err < +0x256`), which is what
+makes it the step UP.
+
+`+0x25e` records which of the three fired -- 1 remote, 2 down, 3 up -- and
+`+0x260` the rate index at +0xaa98 read AFTER the `v34handshakinit` call.
+
+#### And two small ones
+
++0x124 counts blocks received and is capped: `cmp $0x752f; jg` skips the
+increment, so it stops at 30,000. The halving of +0xaa96 is `sar $1` and not a
+division, which differs for a negative block rate and is the only place in
+this function where that distinction is observable.
+
+### 451. The stale-clock span was recorded as 287,488 and 0x46500 is 288,000
+
+`include/dsplib/v34fsk.h` has said since +0x0004 was named that `datapumpv34`
+puts 5 in it "when the sample count at +0x238 has run 287,488 past the mark at
++0x248". The instruction is
+
+```
+   71984:	3d 00 65 04 00       	cmp    $0x46500,%eax
+   71989:	76 07                	jbe    71992
+```
+
+and 0x46500 is **288,000**, which is thirty-six seconds at 8 kHz -- as
+0x23280 is eighteen and 0x119400 is a hundred and forty-four. 287,488 is
+0x462C0 and is not a round number of anything.
+
+The header was written from a reading of this function before it was
+reconstructed, and the differential test found the difference on its first
+run: ours wrote 5 where the blob did not. Corrected in both places it
+appeared. **A hexadecimal constant converted by hand is a claim like any
+other**, and this one sat in the record for the length of a header comment
+because nothing executed it.
+
+### 452. `datapumpv34`'s handshake loop cannot be driven at all, and the reason is not the loop
+
+`datapumpv34`'s +0x2218 > 1 branch is
+
+```c
+    while (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)
+        v34handshak(obj);
+```
+
+and `v34handshak`'s own prologue at 0x628f0 reads **the same two fields** to
+choose its dispatch. So an iteration is only reachable two ways, and this
+tree can take neither:
+
+| loop entered because | `v34handshak` dispatches | today |
+|---|---|---|
+| cursor < limit | table 1, the per-sample loop | its arms are in `v34hstx1.cpp` as separate entry points, not wired into `v34handshak`; `t3c_unwritten` halts |
+| cursor >= limit, count > 5 | the rxstate chain, then table 2 | reachable, but **no written arm lowers +0x264 or raises +0x221c**, so the loop re-tests the same two fields and spins |
+
+The second row is the interesting one. It is not a halt and not a defect: it
+is the loop's own termination condition being something only the dispatch's
+signal-path arms can produce, and none of those has landed. `SIGALRM` in the
+fixture would name it as a hang rather than a failure.
+
+So the branch is tested **with its loop condition already false** -- which is
+a real case, the one every completed block reaches -- and the test arms the
+supervisor's every trigger while doing it, so a reconstruction that took the
+wrong branch would retrain, renegotiate twice and print. Five oracles would
+move. What is NOT covered is the `||`: with both operands false, `&&` gives
+the same answer, and no seed can separate them until an arm that advances the
+transmit cursor is wired into `v34handshak`. That mutation is named as a gap
+in `test/mutations/v34datapump.json` rather than hidden.
+
+### 453. A third door into the `v34handshak` fixture, for the function that calls it
+
+`test/harness/v34hsstep.c` had two per-case mechanisms and both assume the
+thing being stepped IS `v34handshak`: `v34hs_side_a` replaces the call on side
+A, `v34hs_step_case` runs an arm before it. `datapumpv34` is neither -- it is
+the function that calls `v34handshak`, in the same translation unit and
+against the same object.
+
+`v34hs_entry(a, b, log_a)` replaces the entry point on **both** sides at once.
+Reusing the fixture rather than building a second one is findings 319-322:
+what an object step depends on is the geometry of the five blocks the object
+points at, and a second fixture is that geometry built a second time and
+wrong about it once.
+
+**`log_a` is a parameter and not a rule, and that is finding 365 met from the
+other side.** Our code logs to capture channel 0 and the blob's to channel 1,
+so every other mechanism can infer the slot from "is this ours". This one
+cannot: a test using it runs each case a second time with the BLOB ON BOTH
+SIDES as its control -- the analogue of `v34hs_side_a(NULL)` -- and side A is
+then the blob, writing slot 1. Inferring 0 there compares an empty transcript
+against a full one and fails the control for a reason that has nothing to do
+with the object. Found exactly that way.
+
+### 454. `datapumpv34`'s mutation gaps, and three of the ten are the object's shape
+
+76 mutations over `datapumpv34`, 65 caught, and 8 registered in
+`test/mutations/v34datapump_rrn.json` over the two RRN counters, all caught.
+The uncaught are named here because two of them cannot be closed from this
+tree and one is equivalent.
+
+**Cannot be closed** -- finding 452:
+
+- *the handshake loop needs both conditions rather than either*. The loop is
+  drivable only with both operands false, where `||` and `&&` agree.
+
+**Equivalent, with what is held fixed stated:**
+
+- *the step down calls `v34handshakinit` mode 3 rather than mode 2*.
+  `v34handshakinit` is `case 2: case 3:` over one body --
+  `include/dsplib/v34hshak.h` records that mode 3 has no caller anywhere in
+  the object and shares 2's jump-table entry -- so the two calls are the same
+  call. This holds for as long as that stays true and would stop holding if
+  mode 3 ever grew a body of its own.
+- *the retrain's report is decided before `v34handshakinit` runs*. The report
+  is `+0x258 <= (+0xaa96 >> 1)`, and `v34handshakinit` writes neither field on
+  any mode: `setupreceiver`, which its retrain path reaches, assigns +0x122,
+  +0x124 and +0x25e and not the run counters. The ORDER is preserved in the
+  source because the object's is, but it is not observable and the test does
+  not claim it is.
+
+**Named gaps, all three about the fixture's `receiver` and not about this
+function:**
+
+- *+0x124 is bumped after `receiver` rather than before it*,
+- *the error measure is read before `receiver` rather than after it*, and
+- *the receiver loop runs before the modulator loop*.
+
+`receiver` writes +0x124 only on the decoder's two paths and +0x21a only when
+the counter at +0x21c wraps through 0x400, and in this fixture it returns
+before either -- reaching them needs a symbol decision, and the receive queue
+carries the arena's fill rather than a signal. So the two ORDERS are the same
+program here. Trial 611 seeds +0x21c at its wrap, drives two passes, and
+**asserts that both fields are unmoved**, so the gap is a checked property: a
+fixture that later drives the decoder fails that assertion and says the two
+mutations became catchable, rather than leaving this paragraph stale.
+
+The third is a **measurement and not an assumption**, and it is worth
+separating from the other two. Trial 502 is the only one that enters both
+loops -- every other case leaves one of the two conditions already false --
+and it is asserted distinct from each loop driven alone, so both really run.
+With both running, swapping them leaves the object identical. That says
+`modulatevector` and `receiver` write disjoint regions **on this fixture**,
+where `receiver` returns early; it is not shown for a `receiver` that reaches
+the decoder, and it is recorded as a gap rather than as an equivalence for
+exactly that reason.
+
+Six more were closed by cases added after the first run -- the two plain-run
+threshold claims, the long span's boundary, the retrain report's `<=`, the
+remote block's clear of +0x25c, and *the step down is an `else` of the remote
+block*, which trial 302's negative block rate catches and which is the
+mutation carrying finding 450's headline claim. The first run caught 65 of
+76; the last, 72 of 78, with 4 gaps and 2 equivalents.
+
+### 455. `reanchor.py` picked the wrong occurrence, and only the line number it printed said so
+
+Adding `VPcmV34IndicateLocalRRN` to `src/pump/v34/v34pcmif.c` broke three
+anchors in the existing `v34pcmif` mutation set. That was expected -- the new
+function is nothing but `obj->rrn_local = (short)(obj->rrn_local + 1);`, which
+`VPcmV34InitiateRateRenegotiation` also spells, so three one-line anchors
+started matching twice and went UNUSABLE. Finding 347 exactly.
+
+`tools/reanchor.py` repaired all three, reported `0 left for a human`, and
+**anchored every one of them to the new function**:
+
+```
+  anchored reneg: rrn counter not bumped        to line 590 (+2 lines of context)
+```
+
+Line 590 is `VPcmV34IndicateLocalRRN`'s body. The mutations are labelled
+`reneg:` and belong to `VPcmV34InitiateRateRenegotiation`, three hundred lines
+of file away. Re-pointed, all three would still have been CAUGHT -- by
+`t_v34datapump`, which drives the new function -- and the claim they were
+written to test, that the renegotiation entry point counts the event at its
+source, would have quietly stopped being tested by anything.
+
+The tool's own header says this is the failure it is most worried about:
+"extending upward from the wrong occurrence would silently re-point a
+mutation at a different claim, which is worse than leaving it unusable", and
+that is why it prints the line. It has no way to choose here: its heuristic
+is the suite's macro prefix, and `v34pcmif.c` has none -- the two occurrences
+are lexically identical and three lines of context apart in shape.
+
+So the three were anchored **by hand**, on the two lines above the
+renegotiation's copy, which are `*(int *)(m + 0x2218) = 5;` and the comment
+naming the other function. All three are caught and the set is back to 0
+unusable.
+
+**`--write` without reading the line numbers is the hazard.** `reanchor.py`
+saying `0 left for a human` means it found a unique extension, not that it
+found the right one, and a re-pointed mutation that still passes is invisible
+to every gate this tree has. Read the lines it prints, against the labels.
