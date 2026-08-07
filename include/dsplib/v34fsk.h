@@ -478,9 +478,11 @@ struct v34_object {
 	 * AND TWO SITES READ THE PAIR 32 BITS WIDE.  0x65c24 and 0x66495
 	 * are `cmpl $0x20002,0x3588(%reg)`: the two halves against 2 and 2
 	 * in one instruction.  That is the ORIGINAL SOURCE's spelling and
-	 * not its compiler's -- GCC 3.4.2, with this object's own flags,
-	 * compiles `s->a == 2 && s->b == 2` on two adjacent shorts into two
-	 * separate `cmpw` and never fuses them (measured; finding 631).
+	 * not its compiler's -- GCC 3.4.4, which is what `tools/toolchain`
+	 * runs as the period compiler, compiles `s->a == 2 && s->b == 2` on
+	 * two adjacent shorts into two separate `cmpw` with this object's own
+	 * flags and never fuses them (measured; finding 631).  The blob's own
+	 * `.comment` says 3.4.2; the container is a stand-in for it.
 	 * v34hshak.c reads exactly those two sites through `T3M_I32` and
 	 * every other site through `T3M_I16`, which is why both readings
 	 * survive.
@@ -530,9 +532,26 @@ struct v34_object {
 	 * eighty-seven string pointers at .data+0x6c00 -- with the
 	 * sign-extended result, `mov 0x6c00(,%ebp,4),%ecx`.  A load whose
 	 * 32-bit result indexes a table is precisely the case CLAUDE.md says
-	 * to act on, and it says `short` and not `unsigned short`.  The
-	 * `movzwl` loads elsewhere feed 16-bit compares and 16-bit stores,
-	 * where the extension is the compiler's free choice (finding 614).
+	 * to act on, and it says `short` and not `unsigned short`.
+	 *
+	 * THE MICROSTATE DISPATCH AGREES, AND IT IS WORTH READING BECAUSE IT
+	 * LOOKS LIKE IT DOES NOT.  0x64abc loads `microstate` with `movzwl`
+	 * -- which is what the frame carries as its 16-bit copy -- and the
+	 * dispatch then RE-EXTENDS the halfword before using it:
+	 *
+	 *      64abc  movzwl 0x3592(%eax),%esi
+	 *      64ac3  movswl %si,%eax
+	 *      64ac6  sub    $0x29,%eax
+	 *      64acc  ja     65329
+	 *      64ad2  jmp    *0x3000(,%eax,4)          <== .rodata
+	 *
+	 * So the value that indexes the microstate table is sign-extended
+	 * here too, by a separate instruction.  A `movzwl` at an offset is
+	 * not by itself evidence of an unsigned field: what matters is the
+	 * extension on the value that is USED 32 bits wide, and both of the
+	 * two table indexes in this object are `movswl`.  The remaining
+	 * zero-extending loads feed 16-bit compares and 16-bit stores, where
+	 * the extension is the compiler's free choice (finding 614).
 	 *
 	 * THE USE SITES KEEP THE OFFSET SPELLING, deliberately, and this is
 	 * not a half-done rename.  `hs_get`, `hs_put` and `hs_setstate` take

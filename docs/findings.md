@@ -27325,7 +27325,7 @@ So `unmapped_3564` was merely shortened to `[0x3588 - 0x3564]` and the tiling
 recorded here. `v34fsk.h` already includes `v34det.h`, so the dependency is
 not what stopped it; the evidence is.
 
-### 631. GCC 3.4.2 will not fuse two short compares, so the `cmpl $0x20002` at +0x3588 is the ORIGINAL'S SOURCE
+### 631. GCC 3.4.4 will not fuse two short compares, so the `cmpl $0x20002` at +0x3588 is the ORIGINAL'S SOURCE
 
 +0x3588 and +0x358a take 68 accesses between them and every one is sixteen
 bits wide -- halfword load, halfword store or `cmpw`. Two sites are not:
@@ -27339,7 +27339,10 @@ the reading in the comment there; this settles *whose* spelling it is.
 
 The obvious suspicion is that the compiler fused `a == 2 && b == 2` on two
 adjacent shorts. **It did not, and that is measured rather than argued.**
-Built in `tools/toolchain`'s GCC 3.4.2 container with the object's own flags:
+Built in `tools/toolchain`'s container, which reports `gcc (GCC) 3.4.4
+20050314 (prerelease)` -- the blob's own `.comment` says 3.4.2 (finding 346)
+and the container is a stand-in for it, one point release later on the same
+branch. With the object's own flags:
 
     struct S { short a, b, c; };
     int f(struct S *s){ return s->a == 2 && s->b == 2; }
@@ -27373,8 +27376,23 @@ at an odd displacement inside any of them. Nine functions besides
 
 A sign-extending load whose 32-bit result *indexes a table* is CLAUDE.md's own
 case for acting on the extension, and it says `short`, not `unsigned short`.
-The `movzwl` loads elsewhere feed 16-bit compares and 16-bit stores back,
-where the extension is the compiler's free choice (614).
+THE MICROSTATE DISPATCH AGREES AND LOOKS LIKE IT DOES NOT, which is worth
+reading because a reader applying CLAUDE.md's rule to the first instruction
+alone would conclude the opposite:
+
+    64abc  movzwl 0x3592(%eax),%esi      ; the frame's 16-bit copy
+    64ac3  movswl %si,%eax               ; re-extended, and THIS is the index
+    64ac6  sub    $0x29,%eax
+    64acc  ja     65329
+    64ad2  jmp    *0x3000(,%eax,4)       <== .rodata, the 40-entry table
+
+The load is zero-extending and the value that indexes the table is
+sign-extended by a separate instruction. **A `movzwl` at an offset is not by
+itself evidence of an unsigned field**: what the rule is about is the
+extension on the value USED 32 bits wide, and both of this object's two table
+indexes off these three offsets are `movswl`. The remaining zero-extending
+loads feed 16-bit compares and 16-bit stores back, where the extension is the
+compiler's free choice (614).
 
 **The use sites keep `V34HS_MICROSTATE_OFF` and friends, and that is not a
 half-done rename.** `hs_get`, `hs_put` and `hs_setstate` take the offset as a
@@ -27478,14 +27496,26 @@ this kind of edit actually has: a padding array is an ABSOLUTE SPAN, so one
 wrong `[0xB - 0xA]` slides every field after it and both spellings compile.
 `sizeof(struct v34_object)` is 44096 on both sides.
 
-**Sixty-one of the seventy-nine were left, deliberately.** The brief said to
-prefer fewer well-evidenced fields to a full sweep, and the ones left fall
-into three groups: offsets inside the receiver rather than the object, which
-`whichfield.py struct v34_object` cannot even be asked about; offsets whose
-width is measured but whose *span* is not, where naming one field would be a
-claim about where the next begins (215); and +0xaae2, which is `fsk.sr` and
-keeps its offset for the one byte-wide reader at 0x65c8a -- finding 553, and
-the reason this batch checked every reader's width before declaring anything.
+**Most were left, deliberately, and the count of "most" is not quotable.**
+The brief said to prefer fewer well-evidenced fields to a full sweep. Trying
+to state the remainder as a ratio ran straight into a trap worth recording:
+scraping every `#define <PREFIX>_NAME 0xNNNN` out of `v34hshak.c` and
+`v34hstx1.cpp` and asking `whichfield.py struct v34_object` about each yields
+73 distinct values, 24 of which resolve to a named field after this batch --
+**and at least five of those 24 are not object offsets at all.** `T46_CNT_LOW`
+is 0xc7 and `T46_TONE_LIMIT` is 0x18f, which are the counter LIMITS 199 and
+399 that `hs_get(obj, T3C_COUNT)` is compared against; `T3C_RX_SAMPS`,
+`T3M_RX_F264` and `TX1_RX_PRED` are offsets into the RECEIVER, which
+`whichfield struct v34_object` will happily resolve to whatever `struct
+v34_object` has at 0x10c. So the denominator is noise and the honest figure
+is the numerator: **twelve spans became fields**, each listed above.
+
+What was left falls into three groups: offsets inside the receiver rather
+than the object; offsets whose width is measured but whose *span* is not,
+where naming one field would be a claim about where the next begins (215);
+and +0xaae2, which is `fsk.sr` and keeps its offset for the one byte-wide
+reader at 0x65c8a -- finding 553, and the reason this batch checked every
+reader's width before declaring anything.
 
 ### 637. A compile-time check placed where a mutation already measured the same thing turned a CAUGHT mutation into an UNUSABLE one
 
@@ -27539,9 +27569,14 @@ header edit made all 48 entries stale and re-running was the honest response
     every recorded verdict compared against the previous record BY NAME
     verdict changes: 0
 
-The seven that were NOT CAUGHT at the fork point are the same seven, matched
-by name rather than by count -- which is the whole reason `--verify` compares
-labels. The one verdict that DID move during the batch was 637's, and it
+The seven that were NOT CAUGHT at the fork point **across the suites pinned
+to `v34hshak.c`** are the same seven, matched by name rather than by count --
+which is the whole reason `--verify` compares labels. Tree-wide the figure is
+larger and always was: **37 across all 48 suites**, in ten of them --
+`v34hstx1` 11, `v34k56` 10, `v34datapump` 4, `v34hsmst44` 3, and one or two
+each in `v90demod`, `v90equ`, `v90sessionflag`, `dilpack`, `v90p3dreset` and
+`v90rto`. Neither number moved, and the pinned-suite subtotal is exactly the
+seven the brief named. The one verdict that DID move during the batch was 637's, and it
 moved because of the check being added rather than because of the field map;
 the split there put it back.
 
@@ -27551,3 +27586,44 @@ The four batches were sized to fit under a ten-minute cap, which is worth
 knowing before starting: `v34hstx1` (749), `v34hst3mid` (443), `v34hsmst44`
 (214) and `v34hshak` (209) together are 7m 31s, and the remaining 44 suites
 are 8m 09s.
+
+### 639. Four corrections to 631-638, and the one that would have misled a reader applying CLAUDE.md's own rule
+
+Written before commit 7afa8a9 and ffff122 were superseded rather than by
+amending them, because both are pushed. What each said and what is true:
+
+  1. **632 and `v34fsk.h` said the `movzwl` loads of the three state words
+     "feed 16-bit compares and 16-bit stores".** One does not: 0x64abc loads
+     `microstate` zero-extended and the microstate dispatch re-extends it
+     with `movswl %si,%eax` before indexing the 40-entry table at
+     `.rodata+0x3000`. The conclusion is unchanged and in fact stronger --
+     both table indexes off these offsets are `movswl`, so `short` is right
+     twice -- but as written, a reader applying CLAUDE.md's "act on the
+     extension of a load whose 32-bit result is used" to the first
+     instruction alone would have decided 632 was wrong. The corrected text
+     quotes all five instructions. **A `movzwl` at an offset is not by
+     itself evidence of anything; the extension that matters is the one on
+     the value used 32 bits wide, which may be a separate instruction.**
+
+  2. **631 and `v34fsk.h` called the period container GCC 3.4.2.** It reports
+     `gcc (GCC) 3.4.4 20050314 (prerelease)`. 3.4.2 is what the blob's own
+     `.comment` says (346); the container is a stand-in one point release
+     later, and the compare-fusion measurement is therefore an inference to
+     3.4.2 rather than a statement about it.
+
+  3. **636 said "sixty-one of the seventy-nine were left".** Both numbers
+     were wrong and the ratio should not have been quoted at all -- see the
+     corrected paragraph. The trap is worth the space: the offset-macro
+     blocks in `v34hshak.c` and `v34hstx1.cpp` also hold RECEIVER-relative
+     offsets and plain limit CONSTANTS, and `whichfield.py struct v34_object`
+     resolves both to whatever the object happens to have at that byte.
+     `T46_CNT_LOW` is 0xc7, which is the number 199.
+
+  4. **638's "the same seven NOT CAUGHT" read tree-wide.** Seven is the
+     subtotal over the suites pinned to `v34hshak.c`, which is what the
+     brief scoped it to; tree-wide it is 37, in ten suites.
+
+None of the four changes a field, a width or a sign. Three of them are the
+same failure -- a number quoted in a wider scope than it was measured in --
+which is what `docs/findings.md`'s own rule about renumbering is guarding
+against from the other direction.
