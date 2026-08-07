@@ -47,6 +47,39 @@ Run `make coverage` for the live figure rather than trusting a number written
 here; it reports translated bytes, what fraction of them a test drives against
 the blob, and what is left by translation-unit span.
 
+### The agreed order for what remains
+
+The phase table above is the *plan*; this is the **order the remaining phases
+are to be taken in**, and it is a decision rather than a derivation — it was
+settled deliberately in August 2026 and should be changed the same way.
+
+| | step | phase | why here |
+|--:|---|---|---|
+| 1 | finish V.34 | 10 | the base V.90 builds on |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | the acceptance test for V.34 *as a call*, not as a pile of passing units |
+| 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
+| 4 | V.92 | 11 | shares that span |
+| 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
+| 6 | V.90 **answer** side — terminate a call at 56k | 11 | last, on purpose |
+
+Two things about the shape of this.
+
+**Step 2 is a gate, not a formality.** Every test up to that point drives one
+function, or one dispatch case, and compares. None of them exercise the
+transitions *between* cases, the ordering, or the negotiated outcome of a whole
+call — and that is where a reconstruction assembled case by case is most
+likely to be wrong while every unit still passes.
+
+**Step 6 is last because it is the one part with no tier-1 oracle.** The blob
+is the *analogue client*: `VPCMXF_Create` derives its side from whether its
+first argument is null, its one caller passes null, and the answer is always
+side 1 (findings 701, 702). So the digital-side sender — `V90Modulator` and its
+26 KB of unwritten closure — is code the blob never enters, and a path the blob
+never enters cannot be driven differentially. Only the codegen tier applies,
+and the first real evidence it *works* is interop against live hardware.
+Deferring it to the end is what keeps the differential rule intact for
+everything before it.
+
 **Phase 3's caveat.** The phase's own milestone is met, but the `Dialer.c`
 span still holds unwritten bytes. That span brackets nineteen translation
 units, so what those bytes belong to is not attributed — some of it is
