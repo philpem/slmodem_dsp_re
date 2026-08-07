@@ -7,7 +7,7 @@ one.** Nothing here is about modems.
 
 | file | what it is |
 |---|---|
-| `CLAUDE.md.template` | the drop-in project instructions. Six `<PLACEHOLDER>`s. Start here. |
+| `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Start here. |
 | `tiers.md` | the four oracles and what each is structurally blind to |
 | `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
 | `gates.md` | the pattern behind every tooling defect this tree has found |
