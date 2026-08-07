@@ -15377,3 +15377,56 @@ the others are derived from, or a coincidence at four significant figures.
 So: the parameters are captured, two readings in the source are shown to be
 wrong, and the derivation still needs the figure geometry -- from the figures
 themselves, or from a V.34 implementation that states the templates in text.
+
+#### The templates, recovered — the scale-table derivation is no longer blocked
+
+The figures are VECTOR drawings, not raster: `pdfimages` extracts nothing and
+`pdftoppm -r 110 -png` renders them legibly. Both are simple shapes, and
+writing them down here is the point — an image read once is not a record.
+
+**Figure 1/V.34, indices 0 to 5.** A straight line in dB through the origin:
+
+    H_dB(x) = alpha * x          x = f/S, the normalized frequency
+
+0 dB at x = 0 rising to alpha at x = 1.0, with alpha from Table 3 —
+0, 2, 4, 6, 8, 10 dB. A linear tilt, nothing more.
+
+**Figure 2/V.34, indices 6 to 10.** Flat, then a step, then a ramp:
+
+    H_dB(x) = 0                                   0    <= x <= 0.8
+            = beta + gamma * (x - 0.8) / 0.4      0.8  <= x <= 1.2
+
+so it steps to beta at x = 0.8 and reaches beta + gamma at x = 1.2, with the
+pairs from Table 4 — (0.5, 1.0) through (2.5, 5.0) dB.
+
+**And Table 2/V.34 supplies the band centre**, which is the other half of what
+was missing. `d/e` is the carrier over the symbol rate, tabulated per rate and
+per low/high carrier:
+
+| S | low carrier | d/e | high carrier | d/e |
+|---|---|---|---|---|
+| 2400 | 1600 | 2/3 | 1800 | 3/4 |
+| 2743 | 1646 | 3/5 | 1829 | 2/3 |
+| 2800 | 1680 | 3/5 | 1867 | 2/3 |
+| 3000 | 1800 | 3/5 | 2000 | 2/3 |
+| 3200 | 1829 | 4/7 | 1920 | 3/5 |
+| 3429 | 1959 | 4/7 | 1959 | 4/7 |
+
+The integration band is `d/e - 0.45` to `d/e + 0.45`, 0.9 wide in normalized
+frequency.
+
+**So the remaining work is arithmetic, and it is falsifiable.** For each index
+and each rate, integrate `10^(H_dB(x)/10)` over the band, take the reciprocal
+of the RMS, and compare against the tables. If the hypothesis holds the ratios
+should reproduce; if it does not, it is disproved rather than left open, which
+is the useful outcome either way.
+
+Two things to watch, because they are what would make it fail honestly:
+
+- The scale tables are per RATE, but `d/e` differs between a rate's low and
+  high carrier. One table cannot compensate both unless the shape is taken
+  relative to the carrier, in which case the rate dependence has to come from
+  somewhere else — and that somewhere else is unexplained.
+- The counts still do not fit eleven indices (9, 10, 11, 12, 13 non-zero, with
+  a leading zero on all but 2400). Whatever indexes these is wider than the
+  pre-emphasis index, and the arithmetic above will only cover part of a row.
