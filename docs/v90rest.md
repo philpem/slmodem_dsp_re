@@ -457,32 +457,51 @@ uncaught mutations.
 
 ### 2. THEN, AS ONE BATCH AND IN THIS ORDER: unify, then rename
 
-**2a. Unify the two reconstructions of `v34handshak`** (finding 348).
+**2a. Unify the two reconstructions of `v34handshak`** -- **DONE**, findings
+546-551.  `src/pump/v34/v34hshak_t3mid.c` is gone; there is one
+`v34handshak` with all fifteen written arms, the 24-state shared arm and the
+default, and `arm_map` reports forty of forty microstates bound to an arm.
+The `v34hst3mid` suite is re-registered against `src/pump/v34/v34hshak.c` and
+all seven suites' caught / NOT-caught / unusable / equivalent splits are
+identical either side of it:
 
 ```
-v34hshak.c        v34handshak        41, 44, 46, 62, 79, 80, the 24-state arm
-v34hshak_t3mid.c  v34handshak_t3mid  47/56, 48, 49, 50, 51, 55, 58, 59, 63
+  suite         entries  mutations  caught  NOTcaught  unusable  equivalent
+  v34hshak          213        209     203          0         0           6
+  v34hsmst44        215        214     204          3         0           7
+  v34hst3m41         87         86      84          0         0           2
+  v34datapump        79         78      72          4         0           2
+  v34hst346          76         75      74          0         0           1
+  v34hst3core        43         42      42          0         0           0
+  v34hst3mid        455        443     422          0         0          21
 ```
 
-Both are differentially tested by different routes, so neither is dead. The
-two tail readings have been **checked and agree** (finding 350a) — that
-concern is closed and should not be re-opened. What is genuinely duplicated:
-the prologue, the guard chain, the rxstate chain, the table-3 dispatch and
-three of table 2's arms. Finding 373 answers the last — keep `w4_hs_t2`'s.
-Choose each of the others **against the disassembly**, not by taking whichever
-copy is first.
+The seven NOT CAUGHT are the same seven by name as before (three in
+`v34hsmst44`, four in `v34datapump`), all pre-existing.  1,070 anchors now
+carry an exact `"fn"`.
 
-**2b. Replace the 23 offset macros that bypass a named field** (finding 356a).
-`struct v34_object` names 159 fields; 23 of the arms' 95 object-based offset
-macros land on one of them. `+0xabf0` has three macros and is `moh_message`;
-`+0xaae2` has two and is `fsk.sr`; `+0x264` is `rxq.count`. The full list is in
-356a. The other 72 land in `unmapped_`/`pad_` and are honest.
+What the unify settled beyond the merge itself: 0x62933 FALLS THROUGH into a
+do-while and this returns because the loop is not written (546); one
+unwritten-path mechanism serves both of the two it replaced, recording always
+and aborting unless a test opted out (547); a receiver count at or below five
+is the BLOCK route and `T3M_UNWRITTEN_RXIDLE` was a stub (549); and there were
+**three** copies of table 2, not two, of which `w4_hs_t2`'s
+`src/pump/v34/v34hstxblock.c` is the one the hand-over said to keep and is the
+one that does NOT model the 0x62b45 reload arm 48 needs -- so `t3m_tail` was
+kept instead and `v34hstxblock.c` is left alone (550).
 
-**WHY ONE BATCH.** Both rewrite the same files and both break the same ~500
-anchors across five mutation suites. Separately that is two repair passes, and
-anchor repair is what produced finding 432's nine silent re-pointings. Unify
-first — it moves code wholesale and breaks the anchors anyway — then the
-rename touches ONE file instead of two, then repair once:
+**2b. Replace the 23 offset macros that bypass a named field** (finding 356a,
+re-measured as 540).  `struct v34_object` names 159 fields; 23 of the arms'
+**102** object-based offset macros land on one of them.  `+0xabf0` has three
+macros and is `moh_message`; `+0xaae2` has two and is `fsk.sr`; `+0x264` is
+the base of `rxq` and only one of its three uses wants the count.  The other
+79 land in `unmapped_`/`pad_` and are honest.  All 23 are in `v34hshak.c`;
+finding 540 has the measured list and says where 356a is off.
+
+**WHY ONE BATCH.**  Both rewrite the same file and both break the same
+anchors, and anchor repair is what produced finding 432's nine silent
+re-pointings.  Unify first -- it moves code wholesale and breaks the anchors
+anyway -- then rename, then repair once:
 
 - `tools/anchorcheck.py` is already in `make phase`'s `refs` target;
 - put `"fn": "<function>"` on **every** touched mutation entry;

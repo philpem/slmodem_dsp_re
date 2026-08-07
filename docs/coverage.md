@@ -57,6 +57,8 @@ dsplibs.o reconstruction coverage
     v34handshak_t3mid_unwritten
     v34handshak_t3mid_unwritten_reset
     v34handshak_txblock
+    v34handshak_unwritten
+    v34handshak_unwritten_reset
     v34tx1_dataxmit
     v34tx1_exmit
     v34tx1_jatxmit

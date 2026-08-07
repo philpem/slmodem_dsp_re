@@ -201,10 +201,11 @@ and finding 453 is why `log_a` is a parameter.
 It does not compose with the two per-case forms. A test uses it alone, and
 runs each case a second time with the blob on both sides as its control.
 
-`t_v34hst3mid.c` and `src/pump/v34/v34hshak_t3mid.c` are the worked example:
-the entry is `v34handshak_t3mid`, every path not written records a code and
-returns rather than doing something plausible, and the test fails if a trial
-reached one. Findings 370-373.
+`t_v34hst3mid.c` is the worked example: every path not written records a code
+and returns rather than doing something plausible, and the test fails if a
+trial reached one. Findings 370-373. Its arms were in a file of their own
+until the unify (546-551); the codes are now `v34handshak`'s own and the
+return-instead-of-abort is what `v34handshak_unwritten_reset` asks for.
 
 ### Three things the fixture already learned so you do not
 
@@ -230,62 +231,41 @@ Sixteen targets over states 41..80, 27.6 KB, and it is what the per-case split
 was invented for. cfgsplit's exclusive byte counts, and what the harness sees
 when each is entered cold with rxstate 43 and txstate 18 (SSEG):
 
-**WHICH FILE AN ARM LIVES IN IS PART OF THE TABLE** (finding 348): two
-reconstructions of `v34handshak` exist, `v34hshak.c`'s `v34handshak` and
-`v34hshak_t3mid.c`'s `v34handshak_t3mid`, and an arm added to one is not added
-to the other. Task #25 unifies them; until it does, read the `where` column
-before writing anything.
-
-**AND WRITE THE COLUMN FROM THE TREE, NOT FROM YOUR OWN COPY.** The batch that
-added this column marked 46 `open` because 46 is not in `v34hshak_t3mid.c`,
-which was the file it was working in -- it is in `v34hshak.c`, landed and
-tested. One column, two files, and "open" meant "open here". Check with
-`grep -n 'case V34HS_' src/pump/v34/v34hshak*.c` before trusting a row.
-
-| microstate | target | bytes | cold behaviour | where |
-|---|---|--:|---|---|
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B | PARTLY, `v34hshak.c` |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B | LANDED, `v34hshak.c` |
-| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B | LANDED, `v34hshak.c` |
-| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces | LANDED, `_t3mid` |
-| 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D | LANDED, `_t3mid` |
-| 51 `TX_L1` | 0x65c47 | 1735 | group D | LANDED, `_t3mid` |
-| 55 `TX_PHASE1_CALL` | 0x65b72 | 1705 | group D | LANDED, `_t3mid` |
-| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D | LANDED, `_t3mid` |
-| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D | LANDED, `_t3mid` |
-| 63 `INFODONE` | 0x6591e | 1115 | group B | LANDED, `_t3mid` |
-| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces | LANDED, `_t3mid` |
-| 79 `MOH_TONE` | 0x657ca | 848 | group G | LANDED, `v34hshak.c` |
-| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G | LANDED, `v34hshak.c` |
-| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D | LANDED, `_t3mid` |
-| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces | LANDED, `v34hshak.c` |
-| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B | LANDED, `v34hshak.c` |
-
-**Only 44 and 46 are still open**, 9.2 KB between them, and 44 only in part.
-**WHICH FILE a landed target is in is part of the table**, because there are
-two reconstructions of `v34handshak` and finding 348 says so: `v34hshak.c` is
-reached with `v34hs_ours(1)` and `v34hshak_t3mid.c` with
-`v34hs_side_a(v34handshak_t3mid)`, and an arm added to one is not added to
-the other.
+**THE `where` COLUMN IS GONE, AND IS NOT TO BE WRITTEN AGAIN.** Two
+reconstructions of `v34handshak` used to exist and an arm added to one was not
+added to the other, so the table carried a column saying which file each arm
+lived in. Three separate batches wrote that column from their own tree and
+each got it wrong in its own way -- 46 was marked `open` because it was not in
+the file that batch happened to be editing. Task #25 unified the two
+(findings 546-551) and `src/pump/v34/v34hshak_t3mid.c` no longer exists, so
+there is one file, one `v34handshak`, and nothing left for the column to say.
+Check a row with `grep -n 'case V34HS_' src/pump/v34/v34hshak.c`, or with
+`tools/anchorcheck.py`'s `arm_map`, which prints all forty microstates and the
+function each dispatches to.
 
 | microstate | target | bytes | cold behaviour |
 |---|---|--:|---|
-| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B -- LANDED, `v34hshak.c` |
-| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B -- LANDED, `v34hshak.c` |
-| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B -- LANDED, `v34hshak.c` |
-| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces -- LANDED, `v34hshak_t3mid.c` |
+| 44 `DET_INFO` | 0x668c0 | 6046 | group A -- writes 23 B |
+| 41 `DET_SYNC` | 0x669a4 | 3945 | group A -- writes 23 B |
+| 46 `TX_PHASE1_ANS` | 0x65d6d | 3198 | group B |
+| 59 `RX_PHASE2_CALL` | 0x662b0 | 2385 | **its own** -- 77 B, 4 traces |
 | 58 `RX_PHASE1_CALL` | 0x66003 | 1853 | group D |
-| 51 `TX_L1` | 0x65c47 | 1735 | group D -- LANDED, `v34hshak_t3mid.c` |
+| 51 `TX_L1` | 0x65c47 | 1735 | group D |
 | 55 `TX_PHASE1_CALL` | 0x65b72 | 1705 | group D |
-| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D -- LANDED, `v34hshak_t3mid.c` |
-| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D -- LANDED, `v34hshak_t3mid.c` |
-| 63 `INFODONE` | 0x6591e | 1115 | group B -- LANDED, `v34hshak_t3mid.c` |
-| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces -- LANDED, `v34hshak_t3mid.c` |
-| 79 `MOH_TONE` | 0x657ca | 848 | group G -- LANDED, `v34hshak.c` |
-| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G -- LANDED, `v34hshak.c` |
-| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D -- LANDED, `v34hshak_t3mid.c` |
-| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces -- LANDED, `v34hshak.c` |
-| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B -- LANDED, `v34hshak.c` |
+| 49 `RX_PHASE1_ANS` | 0x66a0d | 1265 | group D |
+| 50 `RX_PHASE2_ANS` | 0x664b8 | 1182 | group D |
+| 63 `INFODONE` | 0x6591e | 1115 | group B |
+| 47 `TX_PHASE2_ANS` (+56) | 0x66834 | 896 | **its own** -- 78 B, 3 traces |
+| 79 `MOH_TONE` | 0x657ca | 848 | group G |
+| 80 `MOH_TONE_DROP` | 0x656e0 | 669 | group G |
+| 48 `TX_PHASE3_ANS` | 0x65d30 | 422 | group D |
+| 62 `RX_PHASE3_CALL` | 0x65c7a | 310 | **its own** -- 24 B, 2 traces |
+| 42 43 45 52 53 54 57 60 61 64..78 | 0x6590b | 19 | group B |
+
+**ALL SIXTEEN TARGETS ARE LANDED**, and 44's is landed in part: `arm_map`
+reports forty of forty microstates bound to an arm, and the `default:` label
+in the dispatch is unreachable and says so. What is still open in table 3 is
+inside 44, not beside it.
 
 Seven distinct behaviours from seventeen representatives -- a property of the
 fixture's seed as well as of the object, so a different fill could separate

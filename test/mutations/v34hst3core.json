@@ -5,213 +5,254 @@
  {
   "label": "microstate 78 dropped from the shared arm's table entry",
   "find": "\tcase V34HS_JaTXMIT:\t\t/* 78 */",
-  "replace": "\tcase V34HS_TXMD:\t\t/* 78 */"
+  "replace": "\tcase V34HS_TXMD:\t\t/* 78 */",
+  "fn": "v34handshak"
  },
  {
   "label": "microstate 42 dropped from the shared arm's table entry",
   "find": "\tcase V34HS_DET_CJ:\t\t/* 42 */",
-  "replace": "\tcase V34HS_TXMD:\t\t/* 42 */"
+  "replace": "\tcase V34HS_TXMD:\t\t/* 42 */",
+  "fn": "v34handshak"
  },
  {
   "label": "table 3's window one entry too wide",
-  "find": "\tif ((unsigned)(mst - 41) > 0x27u) {",
-  "replace": "\tif ((unsigned)(mst - 41) > 0x28u) {"
+  "find": "\tif ((unsigned)((int)frame.mst - T3M_TBL3_FIRST) >= T3M_TBL3_COUNT) {",
+  "replace": "\tif ((unsigned)((int)frame.mst - T3M_TBL3_FIRST) > T3M_TBL3_COUNT) {",
+  "fn": "v34handshak"
  },
  {
   "label": "table 3 indexed from 40 instead of 41",
-  "find": "\tif ((unsigned)(mst - 41) > 0x27u) {",
-  "replace": "\tif ((unsigned)(mst - 40) > 0x27u) {"
+  "find": "#define T3M_TBL3_FIRST\t\t41",
+  "replace": "#define T3M_TBL3_FIRST\t\t40"
  },
  {
   "label": "62's guard reads bit 1 of +0xaae2",
   "find": "\tif ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {",
-  "replace": "\tif ((t3c_getb(obj, T3C_FAAE2) & 2) == 0) {"
+  "replace": "\tif ((t3c_getb(obj, T3C_FAAE2) & 2) == 0) {",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "62 copies the counter onto itself",
   "find": "\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT_SRC));",
-  "replace": "\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT));"
+  "replace": "\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT));",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "62 moves the microstate to TX_PHASE3_CALL",
   "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE2_CALL);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_CALL);"
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_CALL);",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "62 traces the transition before it updates the counter",
   "find": "\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT_SRC));\n\n\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE2_CALL);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE2_CALL);\n\n\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT_SRC));"
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE2_CALL);\n\n\ths_put(obj, T3C_COUNT, hs_get(obj, T3C_COUNT_SRC));",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "62's trace prints the flags it is about to raise",
   "find": "\t\t\t\t     (unsigned)rx->flags,",
-  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),"
+  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "62 raises the wrong receiver flag",
   "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tt3c_txblock(obj);",
   "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);\n\tt3c_txblock(obj);",
-  "note": "Anchored on the statement that follows it as well: this line was unique when this suite was written and microstate 44's 0x26 arm (0x6ed17) now spells it twice more. Finding 347, and the third time it has happened in this file."
+  "note": "Anchored on the statement that follows it as well: this line was unique when this suite was written and microstate 44's 0x26 arm (0x6ed17) now spells it twice more. Finding 347, and the third time it has happened in this file.",
+  "fn": "t3c_micro_rx_phase3_call"
  },
  {
   "label": "the MOH counter is not stepped",
   "find": "\ths_put(obj, T3C_COUNT, (short)(hs_get(obj, T3C_COUNT) + 1));",
-  "replace": "\ths_put(obj, T3C_COUNT, (short)(hs_get(obj, T3C_COUNT)));"
+  "replace": "\ths_put(obj, T3C_COUNT, (short)(hs_get(obj, T3C_COUNT)));",
+  "fn": "t3c_moh_step_detector"
  },
  {
   "label": "the detector's answer is inverted",
   "find": "\treturn (short)tone_detect(rx, T3C_DET(obj),",
-  "replace": "\treturn (short)!tone_detect(rx, T3C_DET(obj),"
+  "replace": "\treturn (short)!tone_detect(rx, T3C_DET(obj),",
+  "fn": "t3c_moh_step_detector"
  },
  {
   "label": "79 stops at the counter's threshold instead of going on",
   "find": "\tif (hs_get(obj, T3C_COUNT) < hs_get(obj, T3C_FABFC)) {",
-  "replace": "\tif (hs_get(obj, T3C_COUNT) <= hs_get(obj, T3C_FABFC)) {"
+  "replace": "\tif (hs_get(obj, T3C_COUNT) <= hs_get(obj, T3C_FABFC)) {",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 sets the transmit state to SSEG",
   "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
   "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (t3c_geti(obj, T3C_FABF0) == 1)",
-  "note": "The anchor carries the line after it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325."
+  "note": "The anchor carries the line after it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 moves the microstate to DET_INFO",
   "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\ths_put(obj, T3C_FAADC, 0);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\n\ths_put(obj, T3C_FAADC, 0);"
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\n\ths_put(obj, T3C_FAADC, 0);",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 writes -1 two bytes further along",
   "find": "\ths_put(obj, T3C_BLK_A97C + 0x14, -1);",
-  "replace": "\ths_put(obj, T3C_BLK_A97C + 0x16, -1);"
+  "replace": "\ths_put(obj, T3C_BLK_A97C + 0x16, -1);",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 aims +0xaa70 at the other block",
   "find": "\tt3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A97C);",
-  "replace": "\tt3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A94C);"
+  "replace": "\tt3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A94C);",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 leaves the counter where it was",
   "find": "\ths_put(obj, T3C_COUNT, 0);\n\tt3c_putp(obj, T3C_PTR_AA70,",
-  "replace": "\tt3c_putp(obj, T3C_PTR_AA70,"
+  "replace": "\tt3c_putp(obj, T3C_PTR_AA70,",
+  "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "80 shifts the round-trip delay by one",
   "find": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c0) {",
-  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 1) + 0x12c0) {"
+  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 1) + 0x12c0) {",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80 shifts the round-trip delay unsigned",
   "find": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c0) {",
-  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (int)(((unsigned)(unsigned short)obj->rtd) >> 2) + 0x12c0) {"
+  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (int)(((unsigned)(unsigned short)obj->rtd) >> 2) + 0x12c0) {",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80's threshold is one higher",
   "find": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c0) {",
-  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c1) {"
+  "replace": "\tif ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c1) {",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80 reports the drop with the wrong value",
   "find": "\t\tt3c_putb(obj, T3C_FABF8, 1);",
-  "replace": "\t\tt3c_putb(obj, T3C_FABF8, 2);"
+  "replace": "\t\tt3c_putb(obj, T3C_FABF8, 2);",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80 reports the drop every block",
   "find": "\tif (t3c_moh_step_detector(obj) != 0\n\t    && t3c_getb(obj, T3C_FABF8) == 0) {",
-  "replace": "\tif (t3c_moh_step_detector(obj) != 0) {"
+  "replace": "\tif (t3c_moh_step_detector(obj) != 0) {",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80's +0xabf9 guard is inverted",
   "find": "\tif (t3c_getb(obj, T3C_FABF9) != 0)",
-  "replace": "\tif (t3c_getb(obj, T3C_FABF9) == 0)"
+  "replace": "\tif (t3c_getb(obj, T3C_FABF9) == 0)",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80 retrains in mode 2",
   "find": "\tv34handshakinit(obj, 1);\n\ths_put(obj, T3C_FABE6, 1);",
-  "replace": "\tv34handshakinit(obj, 2);\n\ths_put(obj, T3C_FABE6, 1);"
+  "replace": "\tv34handshakinit(obj, 2);\n\ths_put(obj, T3C_FABE6, 1);",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "80 sets +0xabe6 to 2",
   "find": "\ths_put(obj, T3C_FABE6, 1);",
-  "replace": "\ths_put(obj, T3C_FABE6, 2);"
+  "replace": "\ths_put(obj, T3C_FABE6, 2);",
+  "fn": "t3c_micro_moh_tone_drop"
  },
  {
   "label": "the tail's first branch tests +0x2218 against 2",
-  "find": "\tif (mode == 1) {\n\t\t/* 0x62b45",
-  "replace": "\tif (mode == 2) {\n\t\t/* 0x62b45"
+  "find": "\tif (mode == 1) {",
+  "replace": "\tif (mode == 2) {",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail doubles +0xaa96 instead of tripling it",
-  "find": "\t\trx->f1d2 = (short)(3 * hs_get(obj, T3C_FAA96));",
-  "replace": "\t\trx->f1d2 = (short)(2 * hs_get(obj, T3C_FAA96));"
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);",
+  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->faa96);",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail's mode-1 progress code is 5",
-  "find": "\t\tt3c_puti(obj, T3C_PROGRESS, 4);",
-  "replace": "\t\tt3c_puti(obj, T3C_PROGRESS, 5);"
+  "find": "\t\t*f->progress = 4;",
+  "replace": "\t\t*f->progress = 5;",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail's {4,5} test admits only 4",
   "find": "\tif ((unsigned)(mode - 4) <= 1u)",
-  "replace": "\tif ((unsigned)(mode - 4) < 1u)"
+  "replace": "\tif ((unsigned)(mode - 4) < 1u)",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail compares the two timer words signed",
-  "find": "\tif ((unsigned)t3c_geti(obj, T3C_TIMER_LO)\n\t    > (unsigned)t3c_geti(obj, T3C_TIMER_HI))",
-  "replace": "\tif (t3c_geti(obj, T3C_TIMER_LO)\n\t    > t3c_geti(obj, T3C_TIMER_HI))"
+  "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
+  "replace": "\tif (T3M_I32(f, T3M_ELAPSED) > T3M_I32(f, T3M_DEADLINE))",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail counts rather than resets at the level limit",
-  "find": "\tif ((int)rx->agc_level >= t3c_geti(obj, T3C_LVL_LIMIT))",
-  "replace": "\tif ((int)rx->agc_level > t3c_geti(obj, T3C_LVL_LIMIT))"
+  "find": "\tif (esi >= f->obj->rx_energy_floor)",
+  "replace": "\tif (esi > f->obj->rx_energy_floor)",
+  "fn": "t3m_tail"
  },
  {
   "label": "the tail's level cap is one higher",
-  "find": "\tif (t3c_geti(obj, T3C_LVL_COUNT) > 0x257f)",
-  "replace": "\tif (t3c_geti(obj, T3C_LVL_COUNT) > 0x2580)"
+  "find": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)",
+  "replace": "\tif (T3M_I32(f, T3M_TICK) > 0x2580)",
+  "fn": "t3m_tail"
  },
  {
   "label": "MOH_CLEARDOWN's progress code is 0x11",
-  "find": "\t\tt3c_puti(obj, T3C_PROGRESS, 0x10);",
-  "replace": "\t\tt3c_puti(obj, T3C_PROGRESS, 0x11);"
+  "find": "\t\t\t*f->progress = 0x10;",
+  "replace": "\t\t\t*f->progress = 0x11;",
+  "fn": "t3m_tail"
  },
  {
   "label": "table 2's window one entry too wide",
-  "find": "\tif ((unsigned)(tx - 5) <= 0x45u) {",
-  "replace": "\tif ((unsigned)(tx - 5) <= 0x46u) {"
+  "find": "\tif (idx >= T3M_TBL2_COUNT) {",
+  "replace": "\tif (idx > T3M_TBL2_COUNT) {",
+  "fn": "t3m_txblock"
  },
  {
   "label": "SILENCERETRAIN dropped from table 2's 0x644c9 group",
-  "find": "\t\tcase V34HS_SILENCERETRAIN:\n\t\t\tt3c_puti(obj, T3C_PROGRESS, 0);",
-  "replace": "\t\t\tt3c_puti(obj, T3C_PROGRESS, 0);"
+  "find": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 0;",
+  "replace": "\t\t*f->progress = 0;",
+  "fn": "t3m_txblock"
  },
  {
   "label": "0x644c9 reports progress 1",
-  "find": "\t\t\tt3c_puti(obj, T3C_PROGRESS, 0);",
-  "replace": "\t\t\tt3c_puti(obj, T3C_PROGRESS, 1);"
+  "find": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 0;",
+  "replace": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 1;",
+  "fn": "t3m_txblock"
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\tif (hs_get(obj, T3C_TXCURSOR) < hs_get(obj, T3C_TXLIMIT))",
-  "replace": "\tif (hs_get(obj, T3C_TXCURSOR) <= hs_get(obj, T3C_TXLIMIT))"
+  "find": "\tif (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {",
+  "replace": "\tif (T3M_I16(&frame, T3M_TXCURSOR) <= obj->f2aa0) {",
+  "fn": "v34handshak"
  },
  {
   "label": "the receiver-count guard excludes 5",
-  "find": "\tif (hs_get(obj, T3C_RECEIVER) <= 5) {",
-  "replace": "\tif (hs_get(obj, T3C_RECEIVER) < 5) {"
+  "find": "\tif (*(short *)frame.rx <= 5) {",
+  "replace": "\tif (*(short *)frame.rx < 5) {",
+  "fn": "v34handshak"
  },
  {
   "label": "the fskdemodulate gate is inverted",
-  "find": "\tif (t3c_geti(obj, T3C_FSKGATE) != 0)",
-  "replace": "\tif (t3c_geti(obj, T3C_FSKGATE) == 0)"
+  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0) {",
+  "replace": "\tif (T3M_I32(&frame, T3M_FSKGATE) == 0) {",
+  "fn": "v34handshak"
  },
  {
   "label": "fskdemodulate reads two bytes into the receiver's buffer",
-  "find": "\tfskdemodulate(obj, (const short *)((const char *)rx + T3C_RX_SAMPS),",
-  "replace": "\tfskdemodulate(obj, (const short *)((const char *)rx + T3C_RX_SAMPS + 2),"
+  "find": "\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
+  "replace": "\t\t\t\t\t   + T3M_RX_FSKIN + 2), &obj->fsk);",
+  "fn": "v34handshak"
  },
  {
   "label": "the detector reads two bytes into the receiver's buffer",
   "find": "\t\t\t\t  (const short *)((const char *)rx\n\t\t\t\t\t\t  + T3C_RX_SAMPS),",
-  "replace": "\t\t\t\t  (const short *)((const char *)rx\n\t\t\t\t\t\t  + T3C_RX_SAMPS + 2),"
+  "replace": "\t\t\t\t  (const short *)((const char *)rx\n\t\t\t\t\t\t  + T3C_RX_SAMPS + 2),",
+  "fn": "t3c_moh_step_detector"
  }
 ]
