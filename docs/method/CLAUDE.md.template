@@ -13,12 +13,20 @@
   with one does not.  Delete a rule only after you have measured your own
   tree and found it does not apply -- then write down what you measured.
 
-  The six placeholders:
+  The seven placeholders:
     <BLOB>            the binary being reconstructed, and its size
     <COMPILER>        what `.comment` says built it (see "Day one", below)
     <PHASE>           the command that must pass before anything is committed
+    <CHEAPER>         the faster command people will run INSTEAD of <PHASE>.
+                      You have one. Naming it is the point: "run the full
+                      gate" is ignorable, "run X, not Y" is a rule, and the
+                      tree this came from needed that sentence because a
+                      module could pass every differential test while leaving
+                      a whole tier unbuildable.
     <LAYOUT>          src/ include/ test/ tools/ docs/ -- your directory map
-    <OFF_LIMITS>      any sibling directory this session must not read
+    <OFF_LIMITS>      any sibling directory this session must not read.
+                      Delete the section if there is none; an empty
+                      prohibition trains people to skim prohibitions.
     <FINDINGS>        the path to your own record; `docs/findings.md` below
 -->
 
@@ -39,7 +47,7 @@ pass, leave it out and record the attempt. The goal is a replacement that
 behaves *identically* to the blob, so any test disagreeing with the blob is a
 hard failure whatever build it came from — never a tolerance to widen.
 
-Run `<PHASE>`.
+Run `<PHASE>`, not `<CHEAPER>`.
 
 ## Day one, in this order
 
@@ -61,6 +69,14 @@ Run `<PHASE>`.
 4. **Build the mutation runner early too.** "The test passes" and "the test
    would have caught this being wrong" are different claims, and only the
    second is worth writing down.
+5. **Start `<FINDINGS>` on day one, with finding 1.** Everything else in this
+   file rests on it: a rule keeps its force only while it carries the
+   measurement that earned it, and you cannot cite a measurement you did not
+   write down. A record begun in month two has lost month one — not the
+   conclusions, which survive in the code, but the *reasons*, which are what
+   stop the next session relitigating them. The tree this came from has 523
+   entries and quotes them constantly; several of the rules above exist only
+   because somebody had written down a failure nobody remembered.
 
 ## Budget your turns, not your reading
 
