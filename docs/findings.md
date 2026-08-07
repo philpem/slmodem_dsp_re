@@ -27524,3 +27524,30 @@ the mutation broken. The check that caught it was one that compares against a
 record by NAME rather than counting, which is exactly the argument 545 makes
 for the snapshot existing at all. Grep the mutation files for anything you
 are about to assert.
+
+### 638. The after-pass task #33 owed: all 48 suites, 2874 mutations, and not one verdict moved
+
+The field map's claim was that naming twelve measured offsets changes no
+behaviour, and the byte-identical `.text` sections are only half of that: a
+mutation suite's verdicts are a property of the MUTATED builds, which the
+unmutated comparison cannot speak for. `tools/mutsnap.py`'s key covers
+`include/` -- correctly, since every test binary links every object -- so the
+header edit made all 48 entries stale and re-running was the honest response
+(545), not re-keying.
+
+    48 suites, 2874 mutations, re-run with --jobs 4
+    every recorded verdict compared against the previous record BY NAME
+    verdict changes: 0
+
+The seven that were NOT CAUGHT at the fork point are the same seven, matched
+by name rather than by count -- which is the whole reason `--verify` compares
+labels. The one verdict that DID move during the batch was 637's, and it
+moved because of the check being added rather than because of the field map;
+the split there put it back.
+
+Wall clock, `--jobs 4` on a machine shared three ways: 15m 40s for the lot,
+against the 12 minutes finding 545 measured for the same 48 suites unshared.
+The four batches were sized to fit under a ten-minute cap, which is worth
+knowing before starting: `v34hstx1` (749), `v34hst3mid` (443), `v34hsmst44`
+(214) and `v34hshak` (209) together are 7m 31s, and the remaining 44 suites
+are 8m 09s.
