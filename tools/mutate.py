@@ -173,6 +173,126 @@ def build_and_run(target, test):
 
 SUITES = "test/mutations/suites.json"
 
+#
+# RUNNING A SUITE IN PARALLEL, AND WHY IT NEEDS A TREE PER WORKER
+#
+# A mutation is: write the mutant over the source, build, run, put the source
+# back.  That is inherently serial IN ONE TREE -- two workers would be writing
+# the same file, which is finding 349's accident on purpose -- and it is why a
+# 749-mutation suite takes a quarter of an hour on a twelve-core machine that
+# is idle for all of it.  Measured: 0.67 s to rebuild and relink one
+# translation unit, 0.73 s to run the test.
+#
+# Mutations are INDEPENDENT of one another, so the fix is a tree per worker
+# rather than a lock.  The source tree without `.git` and the build
+# directories is 7.8 MB and a build directory for one test binary is 7.5 MB,
+# so eight workers cost about 120 MB of temporary disk and no cleverness.
+#
+# The workers are SIBLINGS of the real tree, not under /tmp, because
+# `third_party/spandsp` is a RELATIVE symlink (`../../claude_re/...`) that
+# only resolves at the same depth.  A worker under /tmp builds everything,
+# then dies naming spandsp -- the same trap a fresh worktree has.
+#
+# A shard runs the ordinary serial path below; the classification is not
+# duplicated or reimplemented, it just hands its four lists back as JSON.
+# That is deliberate.  This is the tier that decides whether a claim is
+# tested at all, and a second copy of "what counts as caught" is exactly the
+# kind of thing that drifts apart from the first.
+#
+SHARD_MARK = "##SHARD##"
+COPY_SKIP = (".git", "build*")
+
+
+def report(total, uncaught, broken, equivalent, surprises, by):
+    """The summary, in one place so a shard and a serial run cannot differ."""
+    print("\n  %d mutations: %d caught (%d by test, %d by strings), "
+          "%d NOT caught, %d unusable, %d equivalent, %d MIScounted"
+          % (total,
+             total - len(uncaught) - len(broken) - len(equivalent),
+             by["test"], by["strings"], len(uncaught), len(broken),
+             len(equivalent), len(surprises)))
+    if by["hang"]:
+        print("  %d of those never returned and were killed at %ds -- caught,"
+              " but by the clock" % (by["hang"], RUN_TIMEOUT))
+    if uncaught:
+        print("\n  Uncaught -- these claims are currently untested:")
+        for l in uncaught:
+            print("    %s" % l)
+    if equivalent:
+        print("\n  Equivalent -- survived, and recorded as unable to fail:")
+        for l, why in equivalent:
+            print("    %s\n      %s" % (l, why))
+    if surprises:
+        print("\n  RECORDED AS EQUIVALENT AND CAUGHT ANYWAY -- the argument")
+        print("  for these is wrong, or the code has moved under it:")
+        for l in surprises:
+            print("    %s" % l)
+    return 1 if uncaught or surprises else 0
+
+
+def shard_of(muts, spec):
+    """CONTIGUOUS chunks, not round-robin, so merged output keeps its order."""
+    i, n = (int(x) for x in spec.split("/"))
+    per = (len(muts) + n - 1) // n
+    return muts[i * per:(i + 1) * per]
+
+
+def run_parallel(args, jobs):
+    """Fan the suite out over `jobs` sibling trees and merge the verdicts."""
+    import shutil
+    here = os.getcwd()
+    root = os.path.dirname(here)
+    stamp = "%s-%d" % (os.path.basename(here), os.getpid())
+    trees, procs = [], []
+    try:
+        for i in range(jobs):
+            d = os.path.join(root, ".mutshard-%s-%d" % (stamp, i))
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.copytree(here, d, symlinks=True,
+                            ignore=shutil.ignore_patterns(*COPY_SKIP))
+            trees.append(d)
+        cmd = [sys.executable, "tools/mutate.py"]
+        cmd += (["--suite", args.suite] if args.suite
+                else [args.source, args.test, args.mutations])
+        for i, d in enumerate(trees):
+            procs.append(subprocess.Popen(
+                cmd + ["--shard", "%d/%d" % (i, jobs)], cwd=d,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
+        uncaught, broken, equivalent, surprises = [], [], [], []
+        by, total, failed = {"test": 0, "strings": 0, "hang": 0}, 0, []
+        for i, p in enumerate(procs):
+            out = p.communicate()[0]
+            blob = [l for l in out.split("\n") if l.startswith(SHARD_MARK)]
+            if not blob:
+                #
+                # A shard that dies is NOT a shard with nothing to report.
+                # Losing one silently would drop an eighth of the suite and
+                # still print a total, which is the failure mode findings 347
+                # and 540 are both about.
+                #
+                failed.append((i, out[-2000:]))
+                continue
+            r = json.loads(blob[-1][len(SHARD_MARK):])
+            print(r["text"], end="")
+            uncaught += r["uncaught"]
+            broken += [tuple(x) for x in r["broken"]]
+            equivalent += [tuple(x) for x in r["equivalent"]]
+            surprises += r["surprises"]
+            total += r["total"]
+            for k in by:
+                by[k] += r["by"][k]
+        if failed:
+            for i, tail in failed:
+                print("\n  SHARD %d DIED -- its mutations were NOT run:\n%s"
+                      % (i, tail))
+            print("\n  %d of %d shards died; this run is not a result."
+                  % (len(failed), jobs))
+            return 2
+        return report(total, uncaught, broken, equivalent, surprises, by)
+    finally:
+        for d in trees:
+            shutil.rmtree(d, ignore_errors=True)
+
 
 def run_all():
     """Every suite, with the totals -- so one command says where the tree is."""
@@ -230,6 +350,12 @@ def main():
                     help="every suite in test/mutations/suites.json")
     ap.add_argument("--verbose", action="store_true",
                     help="show the failing check for each caught mutation")
+    ap.add_argument("--jobs", type=int, metavar="N",
+                    help="run the suite over N sibling trees at once; each "
+                         "costs about 15 MB of temporary disk and the "
+                         "verdicts are identical to a serial run")
+    ap.add_argument("--shard", metavar="I/N",
+                    help=argparse.SUPPRESS)   # set by --jobs on its workers
     args = ap.parse_args()
 
     if args.all:
@@ -246,12 +372,30 @@ def main():
     if not (args.source and args.test and args.mutations):
         sys.exit("give --suite NAME, --all, or source, test and mutations")
 
+    if args.jobs and args.jobs > 1:
+        return run_parallel(args, args.jobs)
+
     entries = json.load(open(args.mutations))
     muts = [m for m in entries if "find" in m]
-    for note in [m for m in entries if "find" not in m]:
-        print("  note  %s" % note.get("note", ""))
+    if args.shard:
+        muts = shard_of(muts, args.shard)
+    else:
+        for note in [m for m in entries if "find" not in m]:
+            print("  note  %s" % note.get("note", ""))
     good = open(args.source).read()
     target = args.test
+
+    #
+    # A shard's per-mutation lines are held and handed to the parent rather
+    # than printed here, so that eight workers finishing out of order still
+    # produce one transcript in the suite's own order.
+    #
+    import contextlib
+    import io
+    held = io.StringIO()
+    stdout = contextlib.redirect_stdout(held) if args.shard else None
+    if stdout:
+        stdout.__enter__()
 
     # Everything below runs against a mutated tree; the restore has to happen
     # even if the build dies or the user interrupts.
@@ -307,30 +451,17 @@ def main():
     finally:
         open(args.source, "w").write(good)
         build_and_run(target, args.test)
+        if stdout:
+            stdout.__exit__(None, None, None)
 
-    print("\n  %d mutations: %d caught (%d by test, %d by strings), "
-          "%d NOT caught, %d unusable, %d equivalent, %d MIScounted"
-          % (len(muts),
-             len(muts) - len(uncaught) - len(broken) - len(equivalent),
-             by["test"], by["strings"], len(uncaught), len(broken),
-             len(equivalent), len(surprises)))
-    if by["hang"]:
-        print("  %d of those never returned and were killed at %ds -- caught,"
-              " but by the clock" % (by["hang"], RUN_TIMEOUT))
-    if uncaught:
-        print("\n  Uncaught -- these claims are currently untested:")
-        for l in uncaught:
-            print("    %s" % l)
-    if equivalent:
-        print("\n  Equivalent -- survived, and recorded as unable to fail:")
-        for l, why in equivalent:
-            print("    %s\n      %s" % (l, why))
-    if surprises:
-        print("\n  RECORDED AS EQUIVALENT AND CAUGHT ANYWAY -- the argument")
-        print("  for these is wrong, or the code has moved under it:")
-        for l in surprises:
-            print("    %s" % l)
-    return 1 if uncaught or surprises else 0
+    if args.shard:
+        print(SHARD_MARK + json.dumps({
+            "text": held.getvalue(), "total": len(muts),
+            "uncaught": uncaught, "broken": broken,
+            "equivalent": equivalent, "surprises": surprises, "by": by}))
+        return 0
+
+    return report(len(muts), uncaught, broken, equivalent, surprises, by)
 
 
 if __name__ == "__main__":

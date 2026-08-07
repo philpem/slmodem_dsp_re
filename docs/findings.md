@@ -24391,3 +24391,82 @@ design** -- that failure IS the measurement -- so it is not in `make phase`,
 and unset the file behaves exactly as before.  Shown to fire in both
 directions: 0 without it and a passing run, 161 with it.  Whoever closes part
 of the gap should watch that number fall.
+
+======================================================================
+### 541. A mutation suite is embarrassingly parallel, and was running on one core of twelve
+
+Every batch here runs its suites twice -- once for the baseline, once after --
+and that is the acceptance criterion, not a formality: `make phase` cannot see
+a lost mutation, because an UNUSABLE one does not fail a run (finding 347).
+The cost was being paid serially. `v34hshak`'s 209 mutations took **287
+seconds** on a twelve-core machine that was idle for 91% of it.
+
+#### Why it was serial, and why that was not actually necessary
+
+A mutation is: write the mutant over the source, build, run, put the source
+back. That is genuinely serial IN ONE TREE -- two workers would be writing the
+same file, which is finding 349's accident performed on purpose. But mutations
+are independent of *each other*, so the answer is a tree per worker rather
+than a lock.
+
+The numbers that make it easy, measured rather than assumed:
+
+```
+  source tree without .git and build*        7.8 MB
+  build directory for one test binary        7.5 MB
+  rebuild + relink of one translation unit   0.67 s
+  run of one test binary                     0.73 s
+```
+
+So eight workers cost about 120 MB of temporary disk, created and removed per
+run. `make BUILD=...` already parameterises the build directory (Makefile:42),
+so nothing in the build system had to change.
+
+```
+  v34hshak, 209 mutations   serial    287.22 s
+                            --jobs 8   61.69 s     4.7x
+```
+
+#### Two things that are deliberate
+
+**The shard runs the ORDINARY serial path.** The classification -- what counts
+as caught, unusable, equivalent, or recorded-equivalent-and-caught-anyway -- is
+not duplicated or reimplemented; a shard just hands its four lists back as
+JSON and the parent merges them through the same `report()`. This is the tier
+that decides whether a claim is tested at all, and a second copy of "what
+counts as caught" is precisely the kind of thing that drifts away from the
+first without anyone noticing.
+
+**The workers are siblings of the real tree, not under /tmp.**
+`third_party/spandsp` is a RELATIVE symlink (`../../claude_re/...`) and only
+resolves at the same depth. A worker under /tmp builds everything and then
+dies naming spandsp -- the same trap that catches every fresh worktree.
+
+#### Shown to fire, in both directions
+
+A shard that dies is NOT a shard with nothing to report. Losing one silently
+would drop an eighth of the suite and still print a confident total, which is
+the failure mode findings 347 and 540 are both about. So the parent refuses to
+report at all:
+
+```
+  injected a dying shard   ->  "SHARD 1 DIED -- its mutations were NOT run"
+                               "2 of 2 shards died; this run is not a result."
+                               exit 2
+  healthy run              ->  exit 0
+```
+
+And the verdicts are identical to a serial run, checked per mutation and not
+only on the totals -- on `vpcmflomodem` (49) and on `v34hshak` (209, including
+all six recorded equivalents), the sorted per-mutation transcripts and the
+whole summary block both diff clean.
+
+#### What this does not fix
+
+The suites were about half the wall-clock of a batch, so this takes maybe a
+quarter off. The rest is reading and editing. The other half of the waste is
+still there and is a process question rather than a tooling one: **nothing in
+the tree records the current per-suite numbers**, so every batch re-runs a
+baseline that the previous batch already knew. The numbers in this file are
+snapshots from whichever batch created each suite and have been stale for a
+long time -- `v34hsmst44` is recorded at 77 mutations and has 215.
