@@ -80,19 +80,17 @@ extern "C" {
 enum v34tx1_exit {
 	V34TX1_LOOP = 0,	/* back to the per-sample loop test  */
 	V34TX1_MOH_WRAP,	/* 81: `vect_idx` hit 0xc0 -> 0x66d85 */
-	V34TX1_TXMD_DONE,	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
-	/*
-	 * 66: the TRNSEG4A segment is over -> 0x62f22.
-	 *
-	 * UNLIKE THE TWO ABOVE THIS ONE IS A CHECKPOINT AND NOT A LIMIT.
-	 * 0x62f22 is reachable, has an oracle past it and is being written;
-	 * it is a separate value only so that the arm's three in-loop paths
-	 * could land and be tested before the 2.5 KB behind that block was.
-	 * It goes away when the completion lands, which is the one difference
-	 * between it and `V34TX1_MOH_WRAP`.
-	 */
-	V34TX1_TRNSEG4A_SEGEND
+	V34TX1_TXMD_DONE	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
 };
+
+/*
+ * AND 66's SEGMENT END IS NOT A THIRD ONE, which is worth stating because for
+ * one commit it was.  0x66eff's block, the last of 66's exclusive set, ends in
+ * an unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
+ * 0x66fe9, where 86's `V34TX1_TXMD_DONE` transfers, so landing 66 reconstructs
+ * nothing of 86's transfer target and retires none of finding 343's cost.
+ * 66's own completion at 0x62f22 rejoins the loop like every other arm here.
+ */
 
 /*
  * NO ARM ADDED SINCE NEEDS A NEW EXIT, and that is a result rather than the
