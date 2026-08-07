@@ -196,7 +196,7 @@ def main():
     #
     # So each skip is counted, named and fails the run.
     #
-    skipped, checked, seen, nonuniq = [], 0, 0, []
+    skipped, checked, seen, nonuniq, vacuous = [], 0, 0, [], []
     for name in sorted(names):
         entry = reg.get(name)
         if not entry or not isinstance(entry, list) or len(entry) != 2:
@@ -232,6 +232,22 @@ def main():
             if not isinstance(m, dict) or "find" not in m:
                 continue
             seen += 1
+            #
+            # A MUTATION THAT DOES NOT CHANGE THE FILE IS NOT A MUTATION.
+            #
+            # `mutate.py` now reports these (finding 572: re-anchoring a
+            # suite after a refactor made five of them in one pass, all
+            # carrying `equivalent: true`, so they printed `survived,
+            # equivalent` and the totals did not move).  But it reports them
+            # as UNUSABLE, and unusable DOES NOT FAIL A RUN -- which is the
+            # property that cost four batches their mutations (finding 347).
+            #
+            # This is the static half, and it is free: no build, no suite,
+            # just a string compare.  It fails.
+            #
+            if m.get("replace") == m["find"]:
+                vacuous.append((name, label_of(m)))
+                continue
             hits = [i for i in range(len(src))
                     if src.startswith(m["find"], i)]
             if len(hits) != 1:
@@ -285,11 +301,14 @@ def main():
     for name, label, n in nonuniq:
         print("  NOT UNIQUE  %s: %-46s matches %d time(s)"
               % (name, label[:46], n))
+    for name, label in vacuous:
+        print("  VACUOUS     %s: %-46s replace == find" % (name, label[:46]))
     print("\n  %d suite(s) checked, %d mutation(s), %d skipped"
           % (checked, seen, len(skipped)))
     print("  %d anchor(s) match other than exactly once" % len(nonuniq))
+    print("  %d mutation(s) whose replace equals their find" % len(vacuous))
     print("  %d anchor(s) land in an arm their label does not name" % suspect)
-    return 1 if (suspect or skipped or nonuniq) else 0
+    return 1 if (suspect or skipped or nonuniq or vacuous) else 0
 
 
 if __name__ == "__main__":

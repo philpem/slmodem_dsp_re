@@ -24798,3 +24798,51 @@ Measured, it was 204 of 760 -- 27%, both families, now closed. The remaining
 tree has written, and no amount of re-reading `v34hstx1.cpp` will produce it.
 Whoever takes `V34DATARATE` should expect to be writing the rate-selection
 arm, not restoring a call.
+
+======================================================================
+### 542. The vacuous mutation needed a gate that FAILS, not one that reports
+
+Finding 572 found five mutations whose `replace` equalled their `find`. They
+rebuild the unmutated source, pass, and -- because all five carried
+`equivalent: true` -- print `survived, equivalent`, which is exactly what a
+real equivalent mutation prints. The totals do not move. Five claims were
+being checked by nothing and every number in the suite agreed with itself.
+
+That batch fixed it in `mutate.py`, which now prints
+
+```
+  ????  INJECTED: replace equals find                     VACUOUS -- REPLACE == FIND
+```
+
+and counts it UNUSABLE. **That is not enough, and the reason is finding 347:
+an unusable mutation does not fail a run.** The suite still exits 0. So the
+repair converts a mutation that is invisible into a mutation that is visible
+in a log nobody re-reads, which is most of the distance but not the part that
+holds.
+
+The static half is free -- no build, no suite, a string compare over JSON that
+`anchorcheck.py` already parses -- and it FAILS:
+
+```
+  VACUOUS     cadence: INJECTED: replace equals find      replace == find
+  1 mutation(s) whose replace equals their find
+  exit 1
+```
+
+`anchorcheck.py` is in `make phase`, so a vacuous entry now cannot be
+committed at all, and the check costs milliseconds against 2,874 mutations.
+
+#### The pattern, which is now four for four
+
+Every mutation-tier defect this tree has found has the same shape: **a result
+that is indistinguishable from success.** An anchor matching twice reads as
+UNUSABLE and the suite still says `0 NOT caught` (347). An anchor that stays
+unique and re-points reads as CAUGHT, at a claim nobody made (432). A skipped
+suite reads as `0 anchors wrong, exit 0` (540). And now a mutation that
+changes nothing reads as `survived, equivalent`.
+
+In all four the fix is the same and it is not "look harder": make the tool
+COUNT what it examined and FAIL on the difference. A detector that cannot be
+told apart from a clean tree is not a detector (finding 134), and the corollary
+is that reporting is not gating -- if the run still exits 0, the report is a
+comment.
