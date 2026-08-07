@@ -488,7 +488,16 @@ is the BLOCK route and `T3M_UNWRITTEN_RXIDLE` was a stub (549); and there were
 **three** copies of table 2, not two, of which `w4_hs_t2`'s
 `src/pump/v34/v34hstxblock.c` is the one the hand-over said to keep and is the
 one that does NOT model the 0x62b45 reload arm 48 needs -- so `t3m_tail` was
-kept instead and `v34hstxblock.c` is left alone (550).
+kept instead and `v34hstxblock.c` was left alone (550).
+
+**And then collapsed too** -- **DONE**, finding 591.  `v34hstxblock.c` is
+gone: its three arms that the merged dispatch did not have (0x64509, 0x644fa,
+0x644d8) are in `t3m_txblock`, its in-range default reaches the tail instead
+of `t3m_notwritten`, and its 52 mutations were rewritten onto `v34hshak.c`
+with the counts unchanged.  What decided it was the SIGNATURE and not the
+anchor arithmetic: `v34handshak_txblock(obj)` cannot represent a `tx` that
+differs from +0x3596, so it cannot hold the tail's two readings at all.  ONE
+`v34handshak` now means one table 2 as well.
 
 **2b. Replace the 23 offset macros that bypass a named field** -- **DONE**,
 findings 552-554.  Not 23 uniform substitutions: **16 exact**, **5 dead**

@@ -208,10 +208,11 @@
   "fn": "t3m_tail"
  },
  {
-  "label": "table 2's window one entry too wide",
+  "label": "table 2's window one entry too narrow",
   "find": "\tif (idx >= T3M_TBL2_COUNT) {",
-  "replace": "\tif (idx > T3M_TBL2_COUNT) {",
-  "fn": "t3m_txblock"
+  "replace": "\tif (idx >= T3M_TBL2_COUNT - 1) {",
+  "fn": "t3m_txblock",
+  "why": "RETARGETED BY 591.  `>=` -> `>` moves only the txstate one past the top, which with every arm written reaches the same tail through the switch's default that it reached from outside the range test -- measured NOT CAUGHT by t_v34hst3core and t_v34hst3mid alike.  Narrowing it instead puts txstate 74, the table's last entry, outside the window and takes 0x644c9 away from it, which is the half of the bound the object does make observable."
  },
  {
   "label": "SILENCERETRAIN dropped from table 2's 0x644c9 group",

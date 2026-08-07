@@ -3313,6 +3313,11 @@ txblock_paths(void)
  * instead, and a range constant off by one moves the step to a different arm
  * rather than to a different code.  Finding 551.
  *
+ * Table 2's last arm landed the same way (591) and took the sixth trial with
+ * it: `T3M_UNWRITTEN_TBL2_ARM` is now unreachable, joining the three codes
+ * 551 named.  `unwritten_name` still lists it, because a code no path can
+ * reach is exactly what a test asserting a code has to be able to say.
+ *
  * Without this, `T3M_TBL3_COUNT`, `T3M_TBL3_FIRST`, `T3M_TBL2_COUNT`, the
  * cursor compare, the receiver-count compare and the +0xa8a0 gate are all
  * free: every trial above drives values that satisfy them either way.
@@ -3360,14 +3365,28 @@ guards(void)
 	guard(41, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
 	guard(80, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
 
-	/* Table 2's is 5..74, and 75 is past it -- which is how microstate
-	   48 driven with txstate 75 reaches the tail without an arm. */
+	/*
+	 * Table 2's window is 5..74, and all seven of its targets are written
+	 * now (591), so what separates the edge from the outside is the object
+	 * comparison rather than an unwritten code -- 551's rule, that the
+	 * CLAIM a trial made has to survive the path landing even though the
+	 * constant it asserted cannot.
+	 *
+	 * 74 is the table's last entry and takes 0x644c9; 75 is one past it
+	 * and reaches the tail with no arm at all; 20 is interior and takes
+	 * 0x64509.  A window one short at the top swaps 74's arm for the bare
+	 * tail, which is what makes `T3M_TBL2_COUNT` fail rather than free.
+	 * ONE PAST THE TOP IS NOT OBSERVABLE and deliberately not asserted
+	 * here: 75 inside the window would reach the switch's default and fall
+	 * into the same tail it reaches from outside, with the same txstate.
+	 */
 	s = plain;
 	s.txstate = 75;
 	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
-	s.txstate = 20;			/* 0x64509, which is not written */
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_UNWRITTEN_TBL2_ARM,
-	      tag++);
+	s.txstate = 74;			/* 0x644c9, the table's last entry */
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	s.txstate = 20;			/* 0x64509, interior */
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
 
 	/* The rxstate chain: only RX_DPSK reaches table 3. */
 	s = plain;

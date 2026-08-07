@@ -3,13 +3,21 @@
  * against the blob.
  *
  * This is the first tier-1 differential test of any part of `v34handshak`.
- * Side A runs `v34handshak_txblock` from src/pump/v34/v34hstxblock.c and side
+ * Side A runs `v34handshak_txblock` from src/pump/v34/v34hshak.c and side
  * B runs `ref_v34handshak`, the whole 61,541-byte blob function, on an
  * object the fixture has steered into this dispatch and no other.  Over that
  * domain the two are the same function: the guards read three halfwords and
  * branch, and nothing else in the blob's function runs.  See
- * docs/v34handshak.md for the fixture and include/dsplib/v34hstxblock.h for
+ * docs/v34handshak.md for the fixture and include/dsplib/v34hshak.h for
  * what the reconstruction claims.
+ *
+ * SIDE A USED TO BE A SECOND RECONSTRUCTION and is now the same dispatch
+ * every microstate arm calls.  `src/pump/v34/v34hstxblock.c` held a third
+ * reading of table 2 with all seven arms and a tail missing the reload at
+ * 0x62b5f; finding 591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
+ * the reading whose signature can hold both readings of the tail's `%cx`.
+ * Every case below is unchanged by that, which is the point: this file's
+ * claims are about the object and not about which file answers them.
  *
  * WHAT IS BEING SEPARATED, AND WHAT IS NOT.
  *
@@ -41,7 +49,6 @@
 
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
-#include "dsplib/v34hstxblock.h"
 
 static void
 call_ours(void *obj)

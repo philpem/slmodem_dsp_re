@@ -24846,3 +24846,270 @@ COUNT what it examined and FAIL on the difference. A detector that cannot be
 told apart from a clean tree is not a detector (finding 134), and the corollary
 is that reporting is not gating -- if the run still exits 0, the report is a
 comment.
+
+======================================================================
+
+### 591. The third reconstruction of table 2 is gone, and it was the SIGNATURE that chose the survivor
+
+Task #35, and the direction finding 550 left open.  `src/pump/v34/v34hstxblock.c`
+-- `v34handshak_txblock`, all seven of table 2's targets, its own copy of the
+tail, its own suite and its own test -- is deleted, and its arms, its mutation
+set and its test now sit on `t3m_txblock`/`t3m_tail` in
+`src/pump/v34/v34hshak.c`.  There is one `v34handshak` and now one table 2.
+
+**The anchor arithmetic did not decide it, and it should not have.**  550
+priced direction (b) -- collapse onto `v34handshak_txblock` -- at 40 anchors;
+its 29 row is a THIRD direction, onto the `t3c_txblock`/`t3c_block_tail` that
+the unify had already deleted, and was never on the table here.  Direction (a)
+done honestly is 52, so (b) is the cheaper of the two and was not taken.  What
+decides is that one of the two CANNOT be made right:
+
+```
+  void v34handshak_txblock(struct v34_object *obj)      <- the deleted one
+  static void t3m_txblock(struct t3m_frame *f, short tx)
+```
+
+The tail's `%cx` is whatever arm jumped to 0x62a40 left in it; 0x62a70 and
+0x62ac5 read it, and 0x62b5f re-reads +0x3596 OVER it.  A dispatch whose only
+input is the object cannot represent "the passed txstate differs from
++0x3596" -- the two are equal by construction -- so `txblock_tail`'s comment
+that "no arm writes +0x3596, so the reload cannot change it and is not
+modelled" was not a defect to be fixed in place.  Fixing it means changing the
+signature to `(obj, short tx)`, which IS `t3m_txblock` with a different frame
+type, and then moving 40 anchors onto the result.  Direction (b) collapses
+into direction (a) with extra steps.
+
+That `v34hstxblock.c` had no caller anywhere in `src/` -- only its own test --
+is true and is supporting evidence, not the reason.
+
+**THREE OR FOUR ARMS: both numbers are right, and counting the table is what
+reconciles them.**  The unify's hand-over said four and listed three
+addresses.  Read out of the object rather than out of either file --
+`.rel.rodata` gives a relocation on every one of the seventy words at
+`.rodata+0x2ee8`, and the inline addends are the targets:
+
+```
+  0x62a40  54 entries   6..17, 22, 23, 25..50, 52, 53, 55..59, 61..63, 65, 71..73
+  0x644c9   5           24 51 54 60 74
+  0x64509   4           20 21 64 68
+  0x644fa   3           66 67 69
+  0x64518   2           18 19
+  0x64480   1           5
+  0x644d8   1           70
+```
+
+Seven targets.  `t3m_txblock` had FOUR of them -- 0x64480, 0x64518, 0x644c9
+and 0x62a40 through the out-of-range branch -- so **three target addresses
+were unique to `v34hstxblock.c`** and **none was unique to `v34hshak.c`**.
+The fourth thing it was missing has no address of its own, which is exactly
+why listing addresses could not find it: the FIFTY-FOUR in-range entries that
+name 0x62a40.  `idx < T3M_TBL2_COUNT` sent them into the switch, `default:`
+called `t3m_notwritten(T3M_UNWRITTEN_TBL2_ARM)` and RETURNED, and the tail
+never ran -- while the blob runs it for every one of them.  So the honest
+statement is **three target addresses plus the in-range default path**, and
+the hand-over's "four" was counting behaviours.
+
+**Copying the three arms across is not the untested body the unify refused
+to copy.**  That rule -- an untested body in `src/` is worse than an honest
+`t3c_unwritten` -- holds, and these three pass it: `t_v34hstbl2.c` drives all
+eight of their txstates against `ref_v34handshak` with an oracle written off
+the disassembly per case, and it moved with them unchanged.  One `#include`
+line and two comment paragraphs; every case, every poke and all 11,009 checks
+are the same, which is the evidence that the claims were about the object and
+not about which file answered them.
+
+`T3M_UNWRITTEN_TBL2_ARM` is now unreachable -- the fourth code to join the
+three finding 551 named, and the measure of what this batch closed.
+`t_v34hst3mid.c`'s trial that asserted it is now `T3M_WRITTEN` and is held by
+the object comparison, which is 551's rule applied again: the CLAIM the trial
+made survives, the constant it asserted cannot.
+
+**What moved, and the numbers.**  Every suite that touches
+`src/pump/v34/v34hshak.c`, run before and after:
+
+```
+  suite          mutations  caught  NOT caught  unusable  equivalent
+  v34hstxblock       52       50         0          0         2
+  v34hshak          209      203         0          0         6
+  v34hsmst44        214      204         3          0         7
+  v34hst3mid        443      422         0          0        21
+  v34hst3m41         86       84         0          0         2
+  v34datapump        78       72         4          0         2
+  v34hst346          75       74         0          0         1
+  v34hst3core        42       42         0          0         0
+```
+
+Identical on both sides, and the seven NOT CAUGHT are the same seven by name
+(three in `v34hsmst44`, four in `v34datapump`), all pre-existing.  The 52
+anchors were rewritten, not re-pointed -- `obj->f0004` to `*f->progress`,
+`TB_INT(obj, TB_F2218)` to `T3M_I32(f, T3M_MODE)`, `rx->` to `f->rx->`, the
+early-return shape of `txblock_silence` to the `if`/`else if` chain of case 5
+-- and each carries a `"fn"`, except the three that anchor a `#define` and
+have no enclosing function, which is the convention the existing
+`T3M_TBL2_COUNT` anchors already use.
+
+**Twenty-six of the 52 now share their find text with an anchor in
+`v34hst3mid` or `v34hst3core`, and that is deliberate.**  A mutation set is
+defined by its BINARY as much as by its source: `t_v34hstbl2` is the only test
+that drives table 2's arms directly, with the tail's five inputs pinned and an
+oracle per case, so the same edit tested by it and by `t_v34hst3mid` is two
+claims and not one.  Dropping the overlap would have cost 26 of the strongest
+checks in the tree to make a count look tidier.
+
+**One stale reference is left on purpose.**  `src/pump/v34/v34hstx1.cpp:128`
+names "`v34hstxblock.c`'s `TB_F2218`" in a comment; a concurrent batch owns
+that file and this one did not touch it.  The offset is right and the file it
+credits is gone -- the live spelling is `T3M_MODE` in `v34hshak.c`.  Whoever
+next edits `v34hstx1.cpp` should fix the sentence.
+
+======================================================================
+
+### 592. The one thing the surviving tail models that its predecessors did not is tested by nothing
+
+`t3m_tail` reloads the txstate at 0x62b5f and the two readings it replaced did
+not.  Finding 550 called that the reason to keep it, and 591 kept it.  Before
+claiming the defect went away with the file, the reload was measured.  The
+mutation is filed, so the measurement is one command over the filed entry
+rather than a heredoc that has to be kept in step with the source:
+
+```
+$ python3 -c "import json; \
+    ms=[m for m in json.load(open('test/mutations/v34hstxblock.json')) \
+        if 'reload' in m.get('label','')]; \
+    json.dump(ms, open('/tmp/reload.json','w'), indent=1)"
+$ for b in t_v34hst3mid t_v34hst3core t_v34hsmst44 t_v34hst346 \
+           t_v34hst3m41 t_v34datapump t_v34hshak t_v34hstbl2; do
+      python3 tools/mutate.py src/pump/v34/v34hshak.c build/test/$b /tmp/reload.json
+  done
+```
+
+The filed entry is `"equivalent": true`, so it prints `survived, equivalent`
+where a bare run prints `NOT CAUGHT`; both mean the same thing here, which is
+that no check moved.  **All eight.**
+
+**THE ADDRESS, RE-FIXED.**  550's table header says "reloads +0x3596 at
+0x62b45" and the deleted `txblock_tail`'s comment said 0x62b5f.  The comment
+was right and the header conflated the block with the instruction:
+
+```
+$ python3 tools/dis.py ../slmodemd/dsplibs.o 0x62b45 0x62b6c
+   62b45:  0f bf ab 96 aa 00 00   movswl 0xaa96(%ebx),%ebp
+   62b4c:  8b 4c 24 74            mov    0x74(%esp),%ecx
+   62b50:  8b 44 24 78            mov    0x78(%esp),%eax
+   62b54:  8d 7c 6d 00            lea    0x0(%ebp,%ebp,2),%edi
+   62b58:  66 89 b9 d2 01 00 00   mov    %di,0x1d2(%ecx)
+   62b5f:  0f b7 8b 96 35 00 00   movzwl 0x3596(%ebx),%ecx
+   62b66:  c7 00 04 00 00 00      movl   $0x4,(%eax)
+```
+
+0x62b45 is where the `mode == 1` branch lands and where `faa96` is read;
+**the reload is 0x62b5f** and it is ZERO-extended, which is the same spelling
+0x62a70's `cmp $0x4a,%cx` uses and is why one `short` still models both
+(the equivalent mutation next to this one).  Every use in `src/`, in
+`t_v34hstbl2.c` and in 591 now says 0x62b5f; `t_v34hstbl2.c:521` and
+`t_v34hst3core.c:372` say "the block at 0x62b45" and are right as they
+stand.  So the reload is right by the disassembly and
+free by every test in this tree, and the honest sentence is not "the defect is
+fixed" but "the two readings still cannot be told apart, and now at least the
+one that can hold the difference is the one that survived".
+
+**Why nothing catches it.**  It is observable only when the passed `tx`
+differs from +0x3596 AND one of the two is 0x4a, 0x52, 0x53 or 0x54 -- those
+are the only four values either reading feeds a comparison.  Enumerated rather
+than sampled: the forty-odd `t3c_txblock(obj)` sites all read +0x3596 through
+the shim, and of the 27 direct calls only eight do not spell
+`V34HS_TXSTATE_OFF` at the call:
+
+```
+$ grep -n 't3m_txblock(f,\|t3m_tail(f,' src/pump/v34/v34hshak.c \
+      | grep -v 'V34HS_TXSTATE_OFF'
+  3143:      t3m_tail(f, tx);                 t3m_txblock's own out-of-range branch
+  3217:      t3m_tail(f, tx);                 and its fall-through
+  3368:      t3m_txblock(f, V34HS_SILENCE);   arm 48, after hs_setstate(TXSTATE, 5)
+  3469:      t3m_txblock(f, tx);              arm 63, tx read at entry
+  3485:      t3m_txblock(f,                   a line wrap of the object read
+  3498:      t3m_txblock(f, V34HS_SILENCE);   arm 63, after hs_setstate(TXSTATE, 5)
+  3503:      t3m_txblock(f, tx);              arm 63, tx read at entry
+  3510:      t3m_txblock(f, tx);              arm 63, tx read at entry
+```
+
+Both forced sites store before passing.  Arm 63's three pass the `tx` it read
+from +0x3596 at entry, and the only thing written between is
+`T3M_U16(f, T3M_COUNTER)` at +0xaa78 -- not +0x3596.  So passed and stored are
+equal at every site in this tree, and no fixture can separate them without a
+new arm.
+
+**That is a correction to how 550 read finding 373.**  550 says arm 48's
+threshold path "is the one caller that stores 5 and passes 5 while 0x62b45
+re-reads", and then treats it as the path on which the two readings differ.
+It is not: it is the path that PROVES the object re-reads, because the object
+would not need the reload if the value could not have moved.  On arm 48 itself
+the two readings agree.  Nothing in the tree makes them disagree yet.
+
+`t_v34hstbl2` cannot close this by construction -- `v34handshak_txblock` reads
++0x3596 and hands it on, which is what the object's three routes into 0x62af1
+do, so passed always equals stored through that entry.  Closing it needs an
+arm that passes a forced txstate WITHOUT storing it first, and none is
+written.  **Left undone, and the cost is that arm.**
+
+The mutation is filed rather than deleted: `v34hstxblock`'s
+"the txstate reload at 0x62b45, taken out" is `"equivalent": true` with the
+measurement above in its `why`.  The direction inverted with the migration --
+the old set put the reload BACK into a file that lacked it, this one takes it
+OUT of a file that has it -- so the label inverted with it, which is the one
+label this batch rewrote.  Filing it is the point: the day an arm lands that
+passes what it did not store, that equivalence claim is there to be re-run,
+and it should fail.
+
+======================================================================
+
+### 593. Table 2's window is observable only at its two edges, and writing the arms made two mutations free
+
+With all seven targets written, `t3m_txblock`'s range test and its switch
+default end in the same place:
+
+```c
+	if (idx >= T3M_TBL2_COUNT) { t3m_tail(f, tx); return; }
+	switch ((int)tx) { ...  default: break; }
+	t3m_tail(f, tx);
+```
+
+Both sides of the bound reach `t3m_tail` with the SAME `tx`, so the bound is
+behaviour only where a written arm sits on the edge -- txstate 5 at the bottom
+and 74 at the top.  That is the object's own property and not an artefact:
+0x62af1 tests `(unsigned)(txstate - 5) <= 0x45` and sends everything else to
+0x62a40, which is the block the table's own fifty-four default entries name.
+
+Measured, both binaries, after the arms landed:
+
+```
+                                            t_v34hst3mid   t_v34hst3core
+  T3M_TBL2_COUNT  70 -> 71                   NOT CAUGHT     NOT CAUGHT
+  T3M_TBL2_COUNT  70 -> 69                   caught         caught
+  T3M_TBL2_FIRST   5 -> 6                    caught         NOT CAUGHT
+  idx >= COUNT   ->  idx > COUNT             NOT CAUGHT     NOT CAUGHT
+  idx >= COUNT   ->  idx >= COUNT - 1        caught         caught
+```
+
+Two mutations asserted the outside of the top -- `v34hst3mid`'s "table 2
+covers 71 entries" and `v34hst3core`'s "table 2's window one entry too wide" --
+and both became free the moment `default:` stopped calling `t3m_notwritten`.
+**They were retargeted to the edge rather than demoted to `equivalent`:** the
+same constant, the same claim about the same window, and CAUGHT instead of
+free.  Both suites keep their count and their NOT CAUGHT names.
+
+And `t_v34hst3mid.c`'s `guards()` gained the trial that makes 70 -> 69 fail:
+txstate 74, the table's last entry, driven through microstate 48 and expecting
+`T3M_WRITTEN`, held by the full object comparison.  Before this batch nothing
+in the tree drove the table's last entry at all -- the pair either side of the
+bound was 75 and 20, both of which were on the same side of what was
+observable.
+
+**The shape worth keeping: a range test stops being testable the moment both
+sides of it do the same thing.**  Landing an arm can make a mutation free, and
+a mutation that has silently become equivalent reads exactly like a passing
+one (finding 347's failure mode, arrived at from the other direction).
+Whoever lands the remaining arms of tables 1 and 3 should re-run the window
+mutations of the table they touched, and should expect the honest answer to be
+"assert the edge", because that is the only half of a bound an out-of-range
+branch into the same code can ever expose.
