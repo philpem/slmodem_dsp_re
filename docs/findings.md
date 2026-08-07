@@ -28354,3 +28354,63 @@ the refusal instead of bypassing it. That is a real answer to the `abort` arm
 rather than a general loosening, and the cost is one classification per callee
 actually needed — which is the right cost, because it is one decision per
 thing being trusted.
+
+### 701. The PCM modem can be either side, and only one side is ever built
+
+Asked whether this object could terminate a 56k call — that is, be the DIGITAL
+side of V.90 sending PCM downstream, rather than the analogue side receiving
+it. The constructors answer it.
+
+**The side is computed, not hard-wired.** `VPCMXF_Create` opens:
+
+```
+  fcf1:  xor  %eax,%eax
+  fcf9:  mov  0x40(%esp),%ebx        first argument, a void *
+  fd05:  test %ebx,%ebx
+  fd07:  sete %al                    side = (arg0 == NULL)
+  fd0c:  mov  %eax,0x20(%esp)
+```
+
+That value becomes `VPcmFloModem`'s `V90ModemSide` argument, which the
+constructor passes straight through to `V90Modem`'s. And `V90Modem`'s own
+dispatch (`include/dsplib/V90SessionFlag.h`, finding 226's batch) establishes
+what the two values mean: **0 selects the modulator at +0x00, 1 the demodulator
+at +0x04.**
+
+**Only one value is ever produced.** `VPCMXF_Create` has exactly ONE call site
+in the whole object, in `vpcm_create`, and it passes a literal:
+
+```
+  3af2:  movl $0x0,(%esp)            arg0 = NULL
+```
+
+`NULL` gives side 1, the DEMODULATOR. So as shipped this is the analogue
+client: the receiver of 56k downstream, transmitting upstream under V.34. It
+cannot terminate a 56k call as built, and no configuration reaches the other
+branch — the selection is by a pointer nothing ever supplies.
+
+**But the modulator branch is real code that is never constructed.**
+`V90Modulator`, `V90Mapper`, `V90ConstellationDesigner` and `V90BitsToSymbol`
+are all in the object, and the plumbing that would select them is present and
+correct. It is dead as shipped, in the same category as D35's unreachable
+2743-baud arm and D53's unreachable index-0 case.
+
+**What that means for anyone costing the digital side.** It is plausibly a
+RECONSTRUCTION job rather than a from-spec implementation, which is much
+cheaper. Two cautions, and they are not small:
+
+- **A path the original never executed has no behavioural oracle.** Every gate
+  here compares against the blob DOING something. Tier 3 still applies — the
+  period compiler can show our source generates the original's instructions —
+  but tier 1 cannot, and correctness would rest entirely on interop against a
+  real client modem.
+- **Dead vendor branches are often unfinished.** Nothing in the object says
+  whether this one works. Before costing it, check whether `V90Modulator`'s
+  methods are reachable from anything at all, or whether they are as orphaned
+  as the constructor path suggests.
+
+Also settled in passing: `DigitalModemTerminal`, which looks like a mode and is
+not. It and `CodecOutput` are the two values of `txPowerMeasurementPoint`, a
+V.90 Phase 2 INFO parameter saying where the modem measures its transmit
+power — the reconstruction's own comment says the object names the two VALUES
+and not the type. A suggestive string is not a capability.
