@@ -20221,11 +20221,12 @@ tree and one is equivalent.
   source because the object's is, but it is not observable and the test does
   not claim it is.
 
-**Named gaps, both about the fixture's `receiver` and not about this
+**Named gaps, all three about the fixture's `receiver` and not about this
 function:**
 
-- *+0x124 is bumped after `receiver` rather than before it*, and
-- *the error measure is read before `receiver` rather than after it*.
+- *+0x124 is bumped after `receiver` rather than before it*,
+- *the error measure is read before `receiver` rather than after it*, and
+- *the receiver loop runs before the modulator loop*.
 
 `receiver` writes +0x124 only on the decoder's two paths and +0x21a only when
 the counter at +0x21c wraps through 0x400, and in this fixture it returns
@@ -20236,10 +20237,22 @@ program here. Trial 611 seeds +0x21c at its wrap, drives two passes, and
 fixture that later drives the decoder fails that assertion and says the two
 mutations became catchable, rather than leaving this paragraph stale.
 
-Five more were closed by cases added after the first run -- the two plain-run
-threshold claims, the long span's boundary, the retrain report's `<=`, and
-the remote block's clear of +0x25c. The first run caught 65 of 76; the second
-71, with 3 gaps and 2 equivalents.
+The third is a **measurement and not an assumption**, and it is worth
+separating from the other two. Trial 502 is the only one that enters both
+loops -- every other case leaves one of the two conditions already false --
+and it is asserted distinct from each loop driven alone, so both really run.
+With both running, swapping them leaves the object identical. That says
+`modulatevector` and `receiver` write disjoint regions **on this fixture**,
+where `receiver` returns early; it is not shown for a `receiver` that reaches
+the decoder, and it is recorded as a gap rather than as an equivalence for
+exactly that reason.
+
+Six more were closed by cases added after the first run -- the two plain-run
+threshold claims, the long span's boundary, the retrain report's `<=`, the
+remote block's clear of +0x25c, and *the step down is an `else` of the remote
+block*, which trial 302's negative block rate catches and which is the
+mutation carrying finding 450's headline claim. The first run caught 65 of
+76; the last, 72 of 78, with 4 gaps and 2 equivalents.
 
 ### 455. `reanchor.py` picked the wrong occurrence, and only the line number it printed said so
 

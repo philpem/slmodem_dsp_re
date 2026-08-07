@@ -44,6 +44,13 @@
  * two RRN counters at +0xac0e and +0xac10.  Two arms that both did nothing
  * would agree perfectly, so agreement alone is not evidence that the right
  * arm ran.
+ *
+ * THE ONE EXCEPTION IS WHERE THIS FUNCTION WRITES NOTHING AND
+ * `v34handshakinit` DOES.  The retrain block does not touch +0x25e or
+ * +0x122, and `setupreceiver` -- which mode 1 reaches -- assigns both, so
+ * three trials expect a value this function never wrote.  Those three were
+ * found by running the blob and then read back to `setupreceiver`, not read
+ * out of 0x71960, and each names that where it stands.
  */
 
 #include <stdio.h>
@@ -131,7 +138,8 @@ struct rec {
 	int		used;
 };
 
-static struct rec seen[2][64];
+#define MAXTRIALS	64
+static struct rec seen[2][MAXTRIALS];
 static int trial_now;
 
 static int
@@ -201,6 +209,12 @@ run(const char *name, const struct poke *pk, const struct oracle *ex, long tag)
 	const struct v34hs_obs *o;
 	int pre_loc, pre_rem;
 	char msg[192];
+
+	if (trial_now < 0 || trial_now >= MAXTRIALS) {
+		printf("FIXTURE: trial %d is past `seen`'s %d\n",
+		       trial_now, MAXTRIALS);
+		exit(1);
+	}
 
 	v34hs_setup(0);
 	apply(base);
@@ -570,6 +584,18 @@ static const struct poke pk_mod_one[] = {
 };
 
 /*
+ * BOTH LOOPS IN ONE CALL, which is what a real block does and what no other
+ * trial here does: every other case leaves one of the two conditions already
+ * false, so the ORDER of the two loops is not a claim any of them makes.
+ */
+static const struct poke pk_both_loops[] = {
+	{ O_TXCUR,	2, 0 },
+	{ O_TXLIM,	2, 12 },
+	{ O_RXCNT,	2, 12 },
+	PK_END
+};
+
+/*
  * `receiver` until the queue is down to five.  Each pass bumps +0x124 unless
  * it has reached the cap, refreshes the error measure at +0x21a, and moves
  * the three consecutive-run counters.
@@ -861,6 +887,8 @@ static const struct trial trials[] = {
     { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 500 },
   { "modulatevector to a limit of 12 from 8", pk_mod_one,
     { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 501 },
+  { "both loops in one call", pk_both_loops,
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 502 },
 
   /* The receiver loop. */
   { "receiver drains a queue of 12", pk_rx_loop,
@@ -1044,6 +1072,8 @@ main(void)
 	differ("a span past 144000 and one past 1152000", 604, 605);
 	differ("an error over the thresholds and under them", 606, 607);
 	differ("the modulator loop from 0 and from 8", 500, 501);
+	differ("the modulator loop alone and both loops", 500, 502);
+	differ("the receiver loop alone and both loops", 600, 502);
 	differ("the step down and the step up", 400, 402);
 	differ("the step down alone and both armed", 400, 404);
 	differ("the retrain reporting 3 and reporting 2", 200, 201);

@@ -2,7 +2,6 @@
  {
   "note": "`datapumpv34`: three loops and four independent `if`s.  Almost every claim here is a constant or a comparison -- the function does no arithmetic beyond three thresholds and one halving -- so the set is mostly boundaries, signedness and widths.  What it has to prove is that the +0x2218 guard is driven both ways, that each of the four supervisor blocks is reached separately, that each block's ORDER of clears is what stops the next one firing, and that the two loops run rather than being skipped."
  },
-
  {
   "label": "the stale-clock span is 287999 rather than 288000",
   "find": "#define DP_TIMER_STALE\t288000u",
@@ -33,7 +32,6 @@
   "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
   "replace": "\t    - (unsigned)t3c_geti(obj, 0x023c) > DP_TIMER_STALE)"
  },
-
  {
   "label": "the handshake branch is taken at +0x2218 == 1 too",
   "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
@@ -69,7 +67,6 @@
   "find": "\t\t\tv34handshak(obj);\n\t\treturn;\n\t}",
   "replace": "\t\t\tv34handshak(obj);\n\t}"
  },
-
  {
   "label": "the modulator loop runs one call too many",
   "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
@@ -85,7 +82,11 @@
   "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
   "replace": "\twhile (obj->rxq.count < obj->f2aa0)\n\t\tmodulatevector(obj);"
  },
-
+ {
+  "label": "the receiver loop runs before the modulator loop",
+  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
+  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n"
+ },
  {
   "label": "the receiver loop drains to four rather than five",
   "find": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;",
@@ -96,7 +97,6 @@
   "find": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;",
   "replace": "\twhile (obj->txq.count > 5) {\n\t\tunsigned span;"
  },
-
  {
   "label": "+0x124 stops bumping one short of the cap",
   "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)",
@@ -117,7 +117,6 @@
   "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,",
   "replace": "\t\tif (1)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,"
  },
-
  {
   "label": "the error measure is read before `receiver` rather than after it",
   "find": "\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);",
@@ -143,7 +142,6 @@
   "find": "\tdp_rxput(obj, counter,\n\t\t failed ? (short)(dp_rxget(obj, counter) + 1) : 0);",
   "replace": "\tif (failed)\n\t\tdp_rxput(obj, counter, (short)(dp_rxget(obj, counter) + 1));"
  },
-
  {
   "label": "the middle span is 143999 rather than 144000",
   "find": "#define DP_TIMER_MID\t144000u",
@@ -174,7 +172,6 @@
   "find": "\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);",
   "replace": "\t\tspan = (unsigned)(t3c_geti(obj, DP_TIMER)\n\t\t     - t3c_geti(obj, DP_TIMER_MARK)) & 0x7fffu;"
  },
-
  {
   "label": "the retrain tests bit 5 rather than bit 6",
   "find": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->faa96 >> 1)) {",
@@ -232,7 +229,6 @@
   "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
   "replace": "\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");"
  },
-
  {
   "label": "the remote block tests bit 6 rather than bit 5",
   "find": "\tif (T3C_RX(obj)->flags & 0x20) {\n\t\tv34handshakinit(obj, 3);",
@@ -278,7 +274,6 @@
   "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));",
   "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->faa96);"
  },
-
  {
   "label": "the step down fires on a long run EQUAL to twice the block rate",
   "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->faa96) {",
@@ -331,7 +326,6 @@
   "find": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \"",
   "replace": "\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to large \""
  },
-
  {
   "label": "the step up fires on a good run EQUAL to eight times the block rate",
   "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
@@ -351,6 +345,11 @@
   "label": "the step up reads the long run rather than the good one",
   "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->faa96) {",
   "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 8 * (int)obj->faa96) {"
+ },
+ {
+  "label": "the step down is an else of the remote block",
+  "find": "\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit",
+  "replace": "\t} else\n\n\t/*\n\t * Down, then up, and both compares are 32-bit"
  },
  {
   "label": "the step up is an else of the step down",
@@ -387,7 +386,6 @@
   "find": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error \\n\");",
   "replace": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error\\n\");"
  },
-
  {
   "label": "the receiver base is +0x260 rather than +0x264",
   "find": "\treturn hs_get(obj, T3C_RECEIVER + off);",
