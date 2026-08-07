@@ -179,6 +179,13 @@ The rules that follow, and they are not negotiable:
 - **Measure the flag that looks obviously good.** Sharding a mutation suite
   four ways made three small suites 64% *slower* — nobody would have put a
   stopwatch on "parallel is faster" (finding 541).
+- **Reporting a measurement is not recording it, and read a baseline twice
+  before you record it.** A codegen ratchet was run at a merge, printed
+  `ratchet OK -- gained ... identical 92->105`, and was never blessed, so its
+  floor stayed at 92 and a later regression to 93 would have printed the same
+  line (finding 556); and the first invocation against a cold container
+  reported sixty symbols low, which a single reading would have locked in for
+  ever (finding 651).
 
 Full pattern and the checklist: `docs/method/gates.md`.
 
@@ -289,4 +296,5 @@ arrays**, which were most of this object.
 
 `docs/method/tiers.md` the four oracles in full · `efficiency.md` token and
 wall-clock · `gates.md` the tooling-defect pattern · `agents.md` parallel
-batches and merging them · `tools.md` what is portable.
+batches and merging them · `tools.md` what is portable · `recording.md` how to
+write the record itself.

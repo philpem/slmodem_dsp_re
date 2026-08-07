@@ -64,6 +64,35 @@ Two corollaries the same sessions produced:
   nineteen (finding 359a). Saying "write this column from the tree" in the
   legend was not enough.
 
+### The relay does not get more reliable when the relayer assigns the work
+
+Three more instances landed across two days, and **every one was an error in
+the brief itself rather than something the brief had inherited from a source.**
+
+- The brief that commissioned *these documents* cited one finding for a
+  store-order defect that belongs to another — the two are both defects no
+  differential test can see, by opposite mechanisms and in different tiers,
+  which is presumably how they came to be conflated — and attributed an
+  address correction to the finding that carried the wrong address rather than
+  to the one that measured the right one. Both fell out of the receiving
+  batch's first pass against the record, a pass it made only because the brief
+  told it to check (finding 670). That was the sixth occurrence of the shape in
+  the table above, **in the brief for the document set whose central rule is
+  "mark inherited claims as inherited".**
+- The brief for the update to these documents named the codegen comparator
+  `tools/compare.py`. There is no such file and there never has been; it is
+  `tools/toolchain/compare.py`. **The wrong path is in the record too** — one
+  finding spells it that way twice, and that finding's substance is right, so
+  nothing around it looks wrong (finding 554; the spelling is corrected in
+  finding 651, "NOT `tools/`"). Same brief, same day: a citation relayed as
+  measured turned out to be the record's own miscitation, repeated
+  (finding 690).
+
+> **The author of a brief is not a more reliable source than the record, and
+> the record is not a more reliable source than the filesystem.** Check an
+> inherited claim even when it comes from whoever assigned the work. A path is
+> checkable in one second against the tree, and nobody had done it.
+
 ## 3. Shared data structures break across batch boundaries silently
 
 Mutation anchors are the worked example, and this happened **five times**

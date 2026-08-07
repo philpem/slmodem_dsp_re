@@ -135,6 +135,37 @@ shards eight ways with its verdicts unchanged (finding 541).
 **The general point: measure the flag that looks obviously good.** Nobody would
 have put a stopwatch on "parallel is faster".
 
+### The third axis: parallelism was attacking the wrong question
+
+Both sections above are about making a 749-mutation answer arrive sooner.
+**The batch did not want a 749-mutation answer.** `mutate.py` offered
+`--suite` (all of one) and `--all` (all of everything) and nothing between
+them, so a batch iterating on a handful of labels re-ran the whole suite each
+time it wanted to know whether its own change still failed (finding 555):
+
+```
+  v34hshak, full suite, --jobs 8      62 s
+  v34hshak, --only "<one label>"    4.17 s     (baseline build + the mutant)
+  v34hstx1, full suite, --jobs 4    ~180 s
+  v34hstx1, --only "<one label>"      ~4 s
+```
+
+One batch working on `v34hstx1` ran its 749 mutations at 16:45, again at
+16:51, and `mutsnap --update` ran them a third time at 16:55–16:59 — roughly
+fourteen minutes of a task that had touched a handful of labels. Eight workers
+make that full answer arrive in 93 s instead of fifteen minutes, which is
+worth having; four lines making the *question* smaller made it 4 s
+(finding 555).
+
+> **Measure what is being asked for, not only what is slow.** Parallelism is
+> the answer to "this measurement takes too long". It is not the answer to
+> "this is not the measurement I want".
+
+The per-mutation cost is arithmetic — 0.67 s to rebuild and relink plus 0.73 s
+to run — so a full suite is unavoidable once you ask for it. The defect was
+having no way not to ask for it. What a subset run must *not* be allowed to
+do is masquerade as a full one; that half is `gates.md` rule 2.
+
 ### Half the waste was not parallelism — it was re-measuring
 
 The suites were about half the wall-clock of a batch, so parallelism took
@@ -172,3 +203,16 @@ the closure. It was re-run: twelve more minutes. Re-keying "because the edit
 obviously cannot change a verdict" is exactly the reasoning that produces a
 false baseline with a hash vouching for it, and the coarse key is doing its job
 when it refuses to let you make that argument (finding 545).
+
+**That bill arrives again and again, and it is still the right trade.** A
+field-map batch edited `include/`, which is in the closure, so all 48 entries
+went stale for a header change that moved no `.text` byte at all: re-run
+rather than re-keyed, 2,874 mutations in **15m 40s at `--jobs 4`** on a
+machine shared three ways, and **not one verdict moved** (finding 638). Adding
+one flag to the mutation runner invalidated all 48 again, because the runner
+is what decides what "caught" means (finding 555). Both are the key doing its
+job. Budget for a full re-run at every merge rather than for a cleverer key.
+The re-runs that appear to buy nothing are what make the one that catches
+something believable: the same comparison, on a different day, found a
+mutation that had gone CAUGHT → UNUSABLE while the phase gate stayed green
+(finding 637, and `tiers.md` §2).

@@ -28045,3 +28045,96 @@ None of the four changes a field, a width or a sign. Three of them are the
 same failure -- a number quoted in a wider scope than it was measured in --
 which is what `docs/findings.md`'s own rule about renumbering is guarding
 against from the other direction.
+
+======================================================================
+### 690. A miscitation in the record, relayed onward as measured -- and the parenthetical form that made it invisible
+
+`docs/method/` was brought up to date with findings 555, 556, 630, 632, 633,
+634, 636, 637, 638, 639, 650 and 651. The brief listing that material said to
+verify each item against
+`docs/findings.md` rather than trust the list, which is finding 359a's rule and
+finding 670's lesson applied by the person who had just been burnt by it. Two
+items did not survive the check, and they are different shapes.
+
+1. **The cold-container measurement is finding 651's, and finding 556 cites it
+   as `650`.** Finding 556 says the ratchet was blessed only after two
+   consecutive runs agreed, "because a COLD container reports a partial
+   `identical ... now 48` on its first invocation and 105 on every run after
+   (650)". The reading is in finding 651, under *The codegen tier says the
+   same thing from the other side, with a caveat*; finding 650 is about the
+   diagnostic lines that closed finding 574's gap and says nothing about the
+   container. The brief relayed finding 556's number, so the error propagated
+   one step without anyone adding a mistake to it.
+
+   **And nothing could have reported it.** The citation is a bare `(650)`,
+   which is the form finding 543 established that `refcheck.py` does not parse:
+   it was never checked, it is not among the references that resolve, and a
+   renumber would leave it pointing wherever the digits happened to land. A
+   citation that is *wrong* and *unparsed* is the exact product of the two
+   failures findings 543 and 670 name, in one place. `docs/method/` cites
+   finding 651 for the measurement and finding 556 for the rule.
+
+2. **`tools/compare.py` does not exist and never has.** The brief named the
+   codegen comparator that way; it is `tools/toolchain/compare.py`, which is
+   where the file was added and where it still is. This is worth more than a
+   typo because **the wrong path is in the record**: finding 554 uses
+   `tools/compare.py` twice, and `docs/v90rest.md` once. Finding 554's
+   substance is right -- the whole codegen tier was absent from `v90rest`'s
+   history, which is why nobody ran it there and nobody noticed the spelling --
+   so there is nothing around the path that looks wrong. Finding 651 is where
+   it was corrected, parenthetically: "`tools/toolchain/compare.py --ratchet`,
+   NOT `tools/`".
+
+   Finding 554 and its `v90rest.md` line are left as they are: both are pushed,
+   both are historically accurate about what that branch could not run, and
+   correcting forward is the convention (finding 639). This is the forward
+   correction.
+
+**The general point, and it sharpens finding 670's.** Finding 670 concluded
+that a brief's author is not a more reliable source than the record. That is
+true and insufficient: **the record is not a more reliable source than the
+filesystem**, and both errors here would have been settled by a check cheaper
+than reading the finding -- `ls`, and reading the neighbouring heading.
+Checking an inherited claim means checking it against the cheapest authority
+that can settle it, which is not always the record.
+
+#### What this batch actually did
+
+`docs/method/` gains `recording.md` -- how to write the record: naming, the
+scope of a quantity, correcting a pushed finding, and the citation forms. The
+six existing files gain the day's material: finding 555 in `efficiency.md` and
+`gates.md`, finding 556 in `gates.md`, `tiers.md` and `tools.md`, finding 637
+in `tiers.md` section 2, findings 650 and 651 in `tiers.md` section 4, findings
+638 and 555 in `tools.md`, and findings 670 and this one in `agents.md`
+section 2.
+
+Two passages in `tiers.md` section 4 were **stale rather than wrong** and are
+marked as the state at finding 570: the transcript suite that "cannot be run at
+all" now runs in `make phase`, and the one-command trace measurement that was
+watched 161 -> 137 was watched to 0 (finding 650). Finding 570's own five/six
+table is left standing, because finding 651 says its method was right and only
+its subject moved.
+
+Citations audited by finding 670's two-pass method: every `\b\d{3}[a-z]?\b`
+in the seven files, less those already carrying the word `finding`, read by
+hand. The remainder is quantities -- and the one that needed care is the count
+of diagnostic lines that closed finding 574's gap, because that count is also a
+finding number cited three times in the same document set.
+
+**Three corrections to the brief this batch received**, recorded for the same
+reason finding 670 recorded its two:
+
+  1. It said the ratchet's cold-cache measurement was finding 650's. It is
+     finding 651's, via finding 556's miscitation, above.
+  2. It said the wrong comparator path had been "flagged independently by two
+     different batches". Only finding 651 flags it in the record; the second
+     occurrence is finding 554's own use of the wrong spelling, which is not a
+     flag but the source. One measured instance, not two.
+  3. It said the tree "regenerated all 48 suites three times in one day, 12
+     minutes each at `--jobs 8`". The commit log shows four full regenerations
+     that day and the two with recorded times took 15m 40s and 16m 38s at
+     `--jobs 4` on a shared machine (finding 638 for the first). The 12 minutes
+     at `--jobs 8` is finding 545's figure and not the day's. `tools.md` quotes
+     both measured figures and no count -- a count sourced from `git log`
+     rather than from the record is exactly the unreproducible ratio finding
+     639 corrected.

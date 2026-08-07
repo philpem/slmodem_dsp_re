@@ -86,12 +86,42 @@ prints nothing. The test could not see call-site *order* at all (finding 149).
   different arm from the one their label named, and **every one was reported
   CAUGHT** — at a claim nobody made (finding 432). `src.count(find) == 1`
   cannot detect this by construction.
+- **That its own equivalence arguments still hold.** A mutation marked
+  `equivalent` is a claim that nothing in the harness can observe it — a claim
+  about the harness, not about the object — and it expires the moment the
+  harness gains an observable. Ten of one suite's recorded equivalents became
+  CAUGHT when the diagnostics were turned on, with every argument still a
+  correct statement about the object (finding 651, and §4 below).
 
 **What it says when you finally write the numbers down.** Recording all 48
 suites at once gave **37 mutations NOT CAUGHT across 10 of them**, plus one
 unusable — including `v34k56` at 15 caught against 10 not, so **40% of what
 that suite claims to check is unchecked**. Nobody could have known: the number
 existed only in the scrollback of whichever session last ran it (finding 545).
+
+### And what a recorded snapshot catches that a run cannot
+
+A batch bound a file's offset macros to the fields they name with a
+compile-time assert. `make phase` passed. The assert made one mutant —
+`rxstate and txstate offsets transposed`, a mutation the suite had carried for
+a long time with a recorded verdict of CAUGHT — fail to *compile*, moving it
+CAUGHT → UNUSABLE; and an unusable mutation does not fail a run (finding 347),
+so the suite quietly stopped measuring the thing that mutation was written to
+measure. What caught it was the comparison against the record **by name**
+rather than by count, which is the whole argument for the snapshot existing
+(finding 637).
+
+> **Do not put a compile-time check where a mutation already measures the same
+> thing.** A tautology checked by the compiler is not worth an empirical
+> guarantee given up. Split by coverage instead: the macros some mutation
+> rewrites are left to the mutations, and the ones no mutation touches get the
+> assert. Grep the mutation files for anything you are about to assert — here
+> eleven macros are rewritten by some mutation and exactly one collided
+> (finding 637).
+
+The general shape is worse than the instance: **adding a static check to a
+file that has a mutation suite is not free, and the phase gate cannot see the
+cost.** It went green with the mutation broken.
 
 ---
 
@@ -174,6 +204,16 @@ arithmetically (finding 616). Every one of `-O3`'s extra matches came from
 Also: a mnemonic comparison is not a byte comparison. Two functions storing
 the same constants to different offsets both read as `mov mov mov`.
 
+### And the floor only exists if it is written back
+
+`--ratchet` compares against the recorded numbers; `--update` is what records
+them. A gain measured at a merge, reported in a commit message and never
+blessed leaves the floor where it was, and the next batch's twelve-symbol
+*regression* then prints `ratchet OK -- gained` (finding 556). Read the number
+twice before blessing it, too: a cold container reports a partial
+`identical ... now 48` on its first invocation and 105 on every run after
+(finding 651). Both halves are `gates.md` rule 2 and its third failure mode.
+
 ---
 
 ## 4. Transcript / diagnostics — not decoration
@@ -220,13 +260,64 @@ side's transcript against itself (finding 570). Of eleven uncaught mutations,
 - **One is a genuine oracle gap** — a transfer with no oracle, confirmed by
   name rather than inferred from "one survived" (finding 570).
 
+### That measurement was of a tree that has since changed
+
+Finding 570's method is sound: dump side A's transcript under each uncaught
+mutation and diff it against the unmutated dump, on the argument that side B
+never changes, so a mutation whose side-A text is identical cannot be caught by
+any transcript comparison. The argument holds. **What it measured was the text
+that tree then printed.** When the missing diagnostic lines were written, of
+the eleven uncaught mutations **eight flipped to caught, not five**, and three
+remain — because three of the six that finding 570 called identical are
+separable now, all three being swaps between two echo cancellers that had both
+printed `Nothing to report` under the fixture it had (finding 651). The
+prediction being tested said one would remain and finding 570 said six; both
+were wrong, in opposite directions.
+
+> **A measurement of what a system currently emits is not a property of the
+> system.** It is a property of the system *and* of what it emits today, and
+> it needs re-measuring whenever the second changes. Say that in the finding,
+> because on the page it reads as a permanent property and is not.
+
+The three that remain are the ones finding 570 called identical for reasons
+that have nothing to do with printing: a wrap tested before its counter is stored, a
+call not made on a path that prints nothing either way, and the transfer with
+no oracle (finding 651).
+
+### When the oracle moves, the equivalence flag is what is wrong
+
+Ten mutations in that suite were recorded `equivalent` — *this cannot fail* —
+and all ten came back CAUGHT. The runner prints `RECORDED AS EQUIVALENT AND
+CAUGHT ANYWAY -- the argument for these is wrong, or the code has moved under
+it` and fails the run. **Neither was true.** Every one of the ten arguments is
+still a correct statement about the object; what changed is that one function
+now prints its state transition and another prints all five of its arguments.
+Seven of the ten had swapped two functions that are the same code at debug
+level 0 and are not the same code at debug level 2; the other three changed a
+value the code does not *use* and the trace now *reports* (finding 651).
+
+There is a third case the message does not name: **the oracle moved.** The
+right response was to drop the flag and keep the argument, each prefixed with
+what separated the two and why the argument is still true of the object.
+
+> **An equivalence argument is only ever equivalence under the checks that
+> exist.** Ten claims in one suite were being checked by nothing while reading
+> as deliberate, and what exposed them was not a better argument but a new
+> observable (finding 651). Every `why` in every suite is a hostage to that;
+> a by-name comparison against a recorded snapshot is what makes the change
+> visible when it happens — here it named all eighteen moved verdicts.
+
 ### Two operational facts
 
 - **It needs a green baseline to run at all.** Turning the diagnostics on made
   the suite fail 322 of 23,295 checks, and the mutation runner correctly
   refuses a baseline that is not green — every mutation would report CAUGHT for
   a reason unrelated to the mutation. So the count the previous batch had asked
-  for *did not exist* (finding 570).
+  for *did not exist* (finding 570). **That was the state at finding 570 and is
+  no longer true** — the suite is green with the diagnostics on, the driver
+  enables them unconditionally and the phase gate runs it (finding 651). The
+  rule stands: a tier that cannot be run has no verdict, and "the suite goes
+  red" is a result rather than a postponement.
 - **The direction matters more than the count.** Of those 322 failures,
   **161 were `diagnostic lines` and 161 `transcript`, and not one was
   `bytes written`, `step signature` or the arena sweep.** 760 lines the blob
@@ -234,7 +325,12 @@ side's transcript against itself (finding 570). Of eleven uncaught mutations,
   object left behind was byte-identical in all 272 step cases. The
   reconstruction was not wrong about the machine; it was silent about the
   trace (finding 570). When the repair went in, spurious went 0 → 4 → 0, and
-  those four *were* the defect (findings 571 and 573).
+  those four *were* the defect (findings 571 and 573). The argument was made a
+  third time when a digit was transcribed onto the wrong one of two adjacent
+  messages of the same arm: **two missing lines and two spurious ones, which
+  cancel in any count of differing cases**, so a count alone read it as two
+  cases short and said nothing about why (finding 650). Count both directions;
+  the one that should always be zero is the one worth watching.
 
 ### What a trace gap is actually made of
 
@@ -268,3 +364,25 @@ passing run, 161 with it (finding 570). Whoever closes part of the gap watches
 that number fall; 161 → 137 was predicted before anything was edited, and
 landing anywhere above it would have meant a family did not fully close
 (finding 571).
+
+**It was watched all the way down.** From 137 at a later fork point: 83 after
+one arm's rate-selection lines, 25 after ten more arms, then **0** — with zero
+lines printed that the blob does not at any intermediate state, and the object
+byte-identical in all 272 step cases throughout (finding 650). A number built
+as a measurement, and taken to zero, is the strongest argument available for
+building one.
+
+Taking it to zero also settled what the gap had been *made of*, and it was not
+what the previous finding predicted: **not one of the lines that remained
+needed a field, a header, a foreign file or a function this tree did not
+already have.** The arms were reconstructed and byte-exact; what was missing
+was the reporting threaded through them, and the **placement** of each line —
+not its arguments, not the code around it — was the whole job (finding 650).
+
+> **Place a diagnostic on the branch that reaches it, never on what the
+> message says.** Two of them would have gone elsewhere on their text: one
+> reads as a particular arm's report and is reached from a guard that every
+> case falls back to, and placing it where it reads left the count four cases
+> short; another shares a name with a message fifteen lines away in `.rodata`
+> that carries one extra character, and transcribing that character onto both
+> produced **two missing lines and two spurious ones** (finding 650).
