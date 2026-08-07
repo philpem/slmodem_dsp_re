@@ -294,7 +294,7 @@ def run_parallel(args, jobs):
             shutil.rmtree(d, ignore_errors=True)
 
 
-def run_all():
+def run_all(jobs=None):
     """Every suite, with the totals -- so one command says where the tree is."""
     suites = {k: v for k, v in json.load(open(SUITES)).items() if k != "_"}
     tot = [0, 0, 0, 0, 0, 0, 0]
@@ -306,7 +306,8 @@ def run_all():
         # either fail or, worse, find a different tree's copy.
         #
         r = subprocess.run([sys.executable, os.path.abspath(__file__),
-                            "--suite", name],
+                            "--suite", name]
+                           + (["--jobs", str(jobs)] if jobs else []),
                            capture_output=True, text=True)
         last = [l for l in r.stdout.split("\n") if "mutations:" in l]
         print("  %-16s %s" % (name, last[-1].strip() if last else "FAILED"))
@@ -359,7 +360,7 @@ def main():
     args = ap.parse_args()
 
     if args.all:
-        return run_all()
+        return run_all(args.jobs)
     if args.suite:
         suites = json.load(open(SUITES))
         if args.suite not in suites:
