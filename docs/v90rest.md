@@ -521,8 +521,10 @@ anyway -- then rename, then repair once:
 
 ### 3. Larger, and a field-map job rather than a rename
 
-The **72** offsets that land in `unmapped_`/`pad_` are unmodelled because
-nobody has modelled them. Turning them into fields means extending
+The **79** offsets that land in `unmapped_`/`pad_` are unmodelled because
+nobody has modelled them.  (**79, not the 72** finding 356a says: 540
+re-measured the total in use as 102 rather than 95, and 552 has just taken
+the 23.)  Turning them into fields means extending
 `struct v34_object` by measurement, with the same discipline as any other
 field map here — a displacement is not a size (finding 215), and a passing
 test proves nothing about memory neither side writes (223, 224).

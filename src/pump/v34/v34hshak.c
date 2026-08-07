@@ -2808,9 +2808,6 @@ ApplyBulkDelay(void *objp, short delay)
  * practice (src/pump/v34/v34pcmmain.cpp, src/pump/v34/v34k56.cpp) and is
  * preferred to widening the struct from one arm's reading of it.
  */
-#define T3M_RECEIVER		0x0264	/* struct v34_receiver, and `V34agc`'s
-					   argument; the compare at 0x629f1
-					   reads its first halfword          */
 #define T3M_TICK		0x0234	/* int, and NOT `unmapped_0234` as a
 					   whole: 0x62aa9 increments this one
 					   32-bit word and 0x62ab3 compares it
@@ -2994,7 +2991,7 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 {
 	f->obj = obj;
 	f->m = (unsigned char *)obj;
-	f->rx = (struct v34_receiver *)((unsigned char *)obj + T3M_RECEIVER);
+	f->rx = T3C_RX(obj);
 	f->progress = &obj->f0004;
 	f->mst = 0;
 	f->nbits = 0;
@@ -5067,11 +5064,11 @@ t41_micro_det_sync(struct v34_object *obj)
  * them is entirely in the prelude and the message.  What is NOT shared is the
  * `+0x3588` write: three bodies STORE 4 and 0x6f90c ORs it in.
  *
- * NOTE FOR WHOEVER MERGES THE OTHER MICROSTATE BATCHES.  `T3C_FAAE2` is
- * commented as a byte because microstate 62 tests bit 0 of it; every one of
- * this arm's five reads of +0xaae2 is sixteen bits wide, one of them a
- * compare of the whole halfword against zero.  Left alone here rather than
- * re-commented, because that macro is another batch's.
+ * THE FIVE READS OF +0xaae2 HERE ARE SIXTEEN BITS WIDE, one of them a compare
+ * of the whole halfword against zero, and they are now `obj->fsk.sr` -- which
+ * is what +0xaae2 is.  `T3C_FAAE2` survives for the ONE reader that is a byte
+ * wide, microstate 62's guard at 0x65c8a, and finding 553 is why that one
+ * cannot be widened to match.
  */
 
 #define T46_V90RX	0x024c	/* int:   `v90_receiver`, and the record's  */

@@ -24001,6 +24001,16 @@ sees.  The evidence that this is not weaker: `v34hst3mid`'s two window
 mutations (`T3M_TBL3_FIRST` 42, `T3M_TBL3_COUNT` 41) and `v34hst3core`'s two
 are all still CAUGHT, and the suite's check count went 42,303 -> 42,795.
 
+CAUGHT on its own would be weak evidence here -- it means only that SOME
+check failed, and these four are the one place in the batch where the
+catching mechanism changed -- so the argument, not the result: with
+`T3M_TBL3_FIRST` at 42 the only microstate that leaves the window is 41, and
+with `T3M_TBL3_COUNT` at 41 the only one that enters it is 81.  `guards()` is
+the only trial in the file that drives 40, 41, 80 or 81; every arm trial
+dispatches at an interior microstate and is blind to both mutations.  So the
+check that fired is necessarily one of these four, and it is the object
+comparison.
+
 The general shape is worth keeping: a test that asserts a *code for
 unwritten* is asserting something about the reconstruction's progress, and
 every one of them is due to be re-read as an arm lands.  `unwritten_name`
@@ -24039,6 +24049,12 @@ sub-struct's base reads as a field name.  `struct v34_fsk fsk` starts at
 +0xaad0, and +0xaadc, +0xaae0 and +0xaae2 are its +0x0c, +0x10 and +0x12 --
 interior, not the base -- so `fsk.phase`, `fsk.nbits` and `fsk.sr` are the
 real fields.  Every use is a bare 16-bit access and none is `MACRO + off`.
+
+`T3M_RECEIVER`, which the unify brought in as a second spelling of the same
+base, is gone with it: `t3m_frame_init` uses `T3C_RX(obj)`.  540 scoped the
+23 to the pre-unify `v34hshak.c` and so did not count it, but leaving two
+spellings of one base in one file after a batch whose whole purpose was
+removing them would have been worse than the widened scope.
 
 **The one that IS a base.**  `T3C_RECEIVER` +0x264 reads as `rxq.count`
 because `struct v34_queue rxq` is there and `count` is its first member -- but
