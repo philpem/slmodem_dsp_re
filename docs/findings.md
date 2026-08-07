@@ -27171,3 +27171,75 @@ Whoever lands the remaining arms of tables 1 and 3 should re-run the window
 mutations of the table they touched, and should expect the honest answer to be
 "assert the edge", because that is the only half of a bound an out-of-range
 branch into the same code can ever expose.
+
+======================================================================
+### 544. Four of the six merge conflicts were COMBINATIONS, and taking a side would have lost work silently
+
+158 commits met 44. No `src/` file was touched by both lines, so the substance
+merged itself; the conflicts were all in shared tooling and docs. Of the seven
+conflicted files, **four could not be resolved by choosing a side** -- and in
+each case picking one would have compiled, passed, and quietly dropped the
+other line's work:
+
+```
+  Makefile          master added -no-pie   v90rest added $(CXXOBJ64)
+                    on the same six interop link lines.  BOTH are needed:
+                    -no-pie is how the original was built, and CXXOBJ64 is
+                    the C++ half the 64-bit link needs since v34handshak's
+                    arm 51 calls V34SetINFO1aBits.
+  tools/offcheck.py SKIP_HEADERS: 15 headers from master's weak-template
+                    work, 25 from v90rest's V90/V92 classes.  Union, 32.
+  docs/deviations.md  master's D62 against v90rest's D59-D61.  Union.
+  docs/findings.md    two append streams.  Both.
+```
+
+Only two were genuine supersessions -- `debugaudit.py`, where both lines
+independently wrote an asm-stripper and master's own comment admits its regex
+"would need revisiting for an asm containing a parenthesised expression"
+while v90rest's matches parens properly; and `coverage.py`'s PARTIAL
+exclusion.
+
+#### Taking the superset is not the same as merging it
+
+`coverage.py` is the warning. v90rest's hunk had renamed `kind` to `_kind`
+because in ITS version the variable was unused. Master's version uses `kind`
+eleven lines further down, outside the conflict. Taking v90rest's hunk whole
+produced
+
+```
+  NameError: name 'kind' is not defined. Did you mean: '_kind'?
+```
+
+which `make coverage` caught immediately -- but only because it is a Python
+name error in a script that runs. The same shape in C, or in a branch not
+exercised by `make phase`, is a silent merge defect. **A conflict hunk is a
+window, and the variable it renames may be read outside the window.**
+
+#### The gate found a live defect on master the moment they met
+
+```
+  NOT UNIQUE  callprog: corrupt 'CALLPROG: ^ encountered.\n'   matches 2 time(s)
+```
+
+Master's own commit `f0831c0` ("the caret message belongs to two arms, not to
+all four") put that message in `case 0` AND `case 2` of the
+`calling_tone_mode` switch and did not re-anchor the mutation pinned to it.
+It has matched twice ever since: reported UNUSABLE, and unusable does not fail
+a run (finding 347). Master's `anchorcheck.py` had no uniqueness check --
+finding 540's does, so the merge is the first moment anything looked.
+
+Re-anchored with its `case 0:` and an `"fn"`, and it is CAUGHT: callprog now
+runs 17 of 17, 0 unusable. **Second live instance that check has found in a
+day**, after `vpcmflomodem`'s `Uinfo` entry, and both had been silently
+untested for months.
+
+#### What the merge is worth, in the numbers neither side could produce alone
+
+```
+  debug sites never executed    30 of 431  ->   6 of 432
+  suite line coverage over src/     98.1%  ->    98.6%
+```
+
+Master's callprog and dialer work closed twenty-four of the sites v90rest
+could not reach, and v90rest's handshake work is what the other 432 measure
+against. Neither number was available on either branch.
