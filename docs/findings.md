@@ -26528,9 +26528,16 @@ big suite and is the entire run on a small one.  Measured over `cadence`,
 `pulse` and `dilpack` -- 6, 9 and 8 mutations:
 
 ```
-  serial      10.9 s
-  --jobs 4    17.9 s      sharding made it 64% SLOWER
+  before the threshold:   serial 11.2 s    --jobs 4  17.9 s    60% SLOWER
+  after it:               serial 10.9 s    --jobs 8  11.7 s
 ```
+
+*Corrected. This table first paired `--jobs 4  17.9 s` against `serial
+10.9 s` and called it 64% -- but 10.9 s was measured AFTER the threshold went
+in, in the run whose parallel figure is 11.7 s. Two runs, one table. The
+comment above `MIN_PER_WORKER` in `tools/mutate.py` had it right all along and
+was assumed to be the stale one when the two were found to disagree; see
+finding 670.*
 
 So the fan-out degrades itself: a worker gets at least `MIN_PER_WORKER` = 12
 mutations or it is not started, and one worker means the ordinary serial path.
