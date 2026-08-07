@@ -286,9 +286,10 @@
   "fn": "t3m_txblock"
  },
  {
-  "label": "table 2 covers 71 entries",
+  "label": "table 2 covers 69 entries",
   "find": "#define T3M_TBL2_COUNT\t\t70",
-  "replace": "#define T3M_TBL2_COUNT\t\t71"
+  "replace": "#define T3M_TBL2_COUNT\t\t69",
+  "why": "RETARGETED BY 591, and the constant it moves is the same one.  It used to read 70 -> 71 and that is now equivalent: with all seven of table 2's targets written, a txstate one past the top reaches the switch's default and falls into the same tail it reaches from outside the window, with the same txstate, so both sides of the bound do the same thing.  Measured, not assumed -- 70 -> 71 is NOT CAUGHT by t_v34hst3mid or t_v34hst3core.  69 asserts the edge instead: txstate 74 is the table's last entry and loses 0x644c9 if the window is one short."
  },
  {
   "label": "table 2 starts at txstate 6",

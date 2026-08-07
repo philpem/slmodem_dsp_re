@@ -16,7 +16,7 @@
  "v8sig":          ["src/v8/v8sig.c", "build/test/t_v8sig"],
  "v34pcmif":       ["src/pump/v34/v34pcmif.c", "build/test/t_v34pcmif"],
  "v34hshak":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hshak"],
- "v34hstxblock":   ["src/pump/v34/v34hstxblock.c", "build/test/t_v34hstbl2"],
+ "v34hstxblock":   ["src/pump/v34/v34hshak.c",      "build/test/t_v34hstbl2"],
  "v34hst3core":    ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3core"],
  "v34datapump":    ["src/pump/v34/v34hshak.c", "build/test/t_v34datapump"],
  "v34datapump_rrn":["src/pump/v34/v34pcmif.c", "build/test/t_v34datapump"],

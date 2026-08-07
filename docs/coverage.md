@@ -53,9 +53,6 @@ dsplibs.o reconstruction coverage
     hs_get
     hs_put
     hs_setstate
-    v34handshak_t3mid
-    v34handshak_t3mid_unwritten
-    v34handshak_t3mid_unwritten_reset
     v34handshak_txblock
     v34handshak_unwritten
     v34handshak_unwritten_reset

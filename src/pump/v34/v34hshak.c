@@ -2889,12 +2889,20 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3M_TBL2_COUNT		70
 
 /*
+ * Table 2's own companion field, and the only field it reads that nothing
+ * else in this file does.  +0xe4c lands in `struct v34_object`'s
+ * `unmapped_0404`, so an offset is the honest spelling -- finding 552's rule
+ * for the seventy-nine it left alone.
+ */
+#define T3M_F0E4C		0x0e4c	/* unsigned short, txstate 70's       */
+
+/*
  * ---------------------------------------------------------------------------
  * The paths not written.
  *
- * Forty of table 3's forty arms are here, but thirty-nine of table 1's
- * targets and four of table 2's are not, and "nothing" is the one answer a
- * differential test cannot tell from a wrong answer -- the object would
+ * Forty of table 3's forty arms are here and all seven of table 2's targets
+ * are, but thirty-nine of table 1's are not, and "nothing" is the one answer
+ * a differential test cannot tell from a wrong answer -- the object would
  * simply come back unmodified and the comparison would report whatever the
  * blob wrote.  So every unwritten path names itself here.
  *
@@ -3074,15 +3082,57 @@ t3m_tail(struct t3m_frame *f, short tx)
  * ---------------------------------------------------------------------------
  * .rodata+0x2ee8 -- the once-per-block transmit dispatch at 0x62af1.
  *
- * Seven targets over seventy entries, and the three written here are the
- * three the nine microstate arms can reach: an arm either passes the object's
- * own txstate through or forces 5.
+ * SEVEN TARGETS OVER SEVENTY ENTRIES, and all seven are here.  Read out of
+ * the object with their relocations attached (finding 360), the table's own
+ * partition of txstates 5..74 is:
  *
- * THIS IS NOT A RECONSTRUCTION OF TABLE 2, which is another batch's (#56).
- * What is here is the three arms the microstate arms hand control to, written
- * because an arm that ends in the transmit dispatch cannot be compared
- * without them.  Whoever assembles the whole function should expect these
- * three to exist twice and should keep the other batch's.
+ *        0x64480   5                       SILENCE
+ *        0x64518   18 19                   SSEG SBARSEG
+ *        0x64509   20 21 64 68             PPSEG TRNSEG4 JTXMIT J1TXMIT
+ *        0x644c9   24 51 54 60 74          TX_DPSK TX_L1 SILENCEINFO
+ *                                          TONE_AB SILENCERETRAIN
+ *        0x644fa   66 67 69                TRNSEG4A XMITMP EXMIT
+ *        0x644d8   70                      DATAXMIT
+ *        0x62a40   the other fifty-four, and every txstate outside 5..74
+ *
+ * Six of the seven set the int at +0x0004 and fall into the seventh, which is
+ * both the default arm and the shared tail.  So the tail runs on every path
+ * and the six arms are, between them, a decision about ONE field.
+ *
+ * WHAT +0x0004 IS.  `struct v34_object`'s own note calls it "an int the shell
+ * polls"; the shell's writers put 5, 6 and 10 in it.  This dispatch is the
+ * other writer, and the eleven values it can leave are 0, 1, 2, 3, 4, 6, 7,
+ * 8, 9, 0xd, 0xf and 0x10.  Nothing reconstructed reads it, so that is all
+ * this dispatch claims about it -- the names above are offsets, not meanings.
+ *
+ * THE DOMAIN IS CLOSED, which is what made table 2 a batch of its own before
+ * it was folded back in here.  The seven targets branch out of the table's
+ * own address range five times -- 0x6778b, 0x655c9, 0x67d48, 0x6780f and
+ * 0x64884 -- and every one of those five is a handful of instructions that
+ * returns to the table's arms or to the shared tail.  Nothing in the whole
+ * closure calls anything and nothing in it traces, which is why every
+ * table-2 case prints zero lines on both sides and why the transcript axis of
+ * the harness's comparison contributes nothing here.  Finding 362 records
+ * that as a gap in the evidence rather than as a passing check; finding 360
+ * is the closure.
+ *
+ * THREE ROUTES REACH IT and all three are the caller's business:
+ *
+ *      [obj+0x221c] >= [obj+0x2aa0]  and  [obj+0x264] <= 5      0x62ae3
+ *      ... and [obj+0x264] > 5, rxstate < 43 and not 4 or 35    0x62a2a
+ *      ... and rxstate > 43 and not 53 or 72                    0x62b83
+ *
+ * All three arrive at 0x62af1 with the same two registers holding the same
+ * two values, so the three are one entry point; finding 361 measures that
+ * rather than assuming it.
+ *
+ * THE BOUND IS NOT SEPARATELY OBSERVABLE ABOVE ITS TOP.  The object tests
+ * `(unsigned)(txstate - 5) <= 0x45` and sends everything else to the default
+ * arm, which is the same block the table's own fifty-four default entries
+ * name -- so both sides of the bound reach 0x62a40 with the same txstate and
+ * only the two EDGES, txstate 5 and txstate 74, can be told apart by their
+ * arms.  The range test is kept because the object encodes it; finding 591
+ * measures what that costs the mutation set.
  */
 static void
 t3m_txblock(struct t3m_frame *f, short tx)
@@ -3131,6 +3181,13 @@ t3m_txblock(struct t3m_frame *f, short tx)
 			*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;
 		break;
 
+	case 20:			/* 0x64509 PPSEG    */
+	case 21:			/*         TRNSEG4  */
+	case 64:			/*         JTXMIT   */
+	case 68:			/*         J1TXMIT  */
+		*f->progress = 2;
+		break;
+
 	case 24:			/* 0x644c9 TX_DPSK  */
 	case 51:			/*         TX_L1    */
 	case 54:			/*         SILENCEINFO */
@@ -3139,9 +3196,22 @@ t3m_txblock(struct t3m_frame *f, short tx)
 		*f->progress = 0;
 		break;
 
-	default:
-		t3m_notwritten(T3M_UNWRITTEN_TBL2_ARM);
-		return;
+	case 66:			/* 0x644fa TRNSEG4A */
+	case 67:			/*         XMITMP   */
+	case 69:			/*         EXMIT    */
+		*f->progress = 3;
+		break;
+
+	case 70:			/* 0x644d8 DATAXMIT */
+		/*
+		 * `cmp $0x1,%bp` then `sbb %eax,%eax` and `add $0x4,%eax`:
+		 * the borrow is set only when the halfword is zero.
+		 */
+		*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 3 : 4;
+		break;
+
+	default:			/* 0x62a40, straight to the tail */
+		break;
 	}
 
 	t3m_tail(f, tx);
@@ -4372,15 +4442,15 @@ t3c_putp(struct v34_object *obj, unsigned off, void *p)
  * without whichever transmit arm its own txstate selects.
  *
  * THIS IS NOW A SHIM ROUND `t3m_txblock`, and the reason is measured rather
- * than tidy.  Two readings of table 2 and its tail came into this file, and
- * `t3m_txblock`/`t3m_tail` is strictly the more complete of the two: it has
- * three of table 2's seven targets against this side's one, and it writes
- * 0x64884, 0x62b2f and 0x64a4f, which this side left calling
- * `t3c_unwritten`.  It also models the ONE thing the third reading in
- * `src/pump/v34/v34hstxblock.c` does not -- the reload of +0x3596 into %cx
- * at 0x62b45, which arm 48's threshold path is the only caller to exercise
- * (finding 373), and which is why the hand-over's "keep w4_hs_t2's" could
- * not simply be obeyed.  Finding 550.
+ * than tidy.  THREE readings of table 2 and its tail existed; the two that
+ * came into this file were collapsed by finding 550 and the third, which had
+ * been `src/pump/v34/v34hstxblock.c`, by finding 591.  `t3m_txblock`/
+ * `t3m_tail` is the survivor because it is the only one whose SIGNATURE can
+ * hold the object's behaviour: the tail's `tx` is the value in `%cx` that
+ * whichever arm jumped here left, and 0x62b45 re-reads +0x3596 over it, so a
+ * dispatch that takes only the object cannot tell the two readings apart at
+ * all.  It also writes 0x64884, 0x62b2f and 0x64a4f, which this side left
+ * calling `t3c_unwritten`.
  *
  * The `%cx` the object's `jmp 62af1` leaves is the object's own txstate at
  * every one of these call sites, so the shim reads it here.
@@ -4392,6 +4462,30 @@ t3c_txblock(struct v34_object *obj)
 
 	t3m_frame_init(&f, obj);
 	t3m_txblock(&f, hs_get(obj, HS_TXSTATE));
+}
+
+/*
+ * The dispatch on its own, for `t_v34hstbl2.c`.
+ *
+ * The harness in test/harness/v34hsstep.h can steer the object into this one
+ * dispatch and no other, and over that domain the dispatch IS the whole of
+ * `v34handshak` -- the guards read three halfwords and branch, and nothing
+ * else in the 61,541 bytes runs (finding 361).  That is what makes table 2
+ * comparable against the blob without the other three dispatches existing,
+ * and it is the only reason this name is external.
+ *
+ * IT IS `t3c_txblock` AND NOT A SECOND SPELLING OF IT.  The entry the object
+ * reaches at 0x62af1 reads +0x3596 itself, so every route in leaves `%cx`
+ * holding the object's own txstate; a test entry that took a txstate would be
+ * testing a call the object never makes.  What that costs is recorded rather
+ * than hidden: the reload at 0x62b45 cannot be reached with a `tx` that
+ * differs from +0x3596 through this entry, so the one thing `t3m_tail` models
+ * that its predecessors did not is not tested from here.  Finding 591.
+ */
+void
+v34handshak_txblock(struct v34_object *obj)
+{
+	t3c_txblock(obj);
 }
 
 /*

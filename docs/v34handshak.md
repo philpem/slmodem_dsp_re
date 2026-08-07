@@ -329,9 +329,11 @@ case.
 
 ## Table 2, the transmit supervisor -- DONE
 
-`src/pump/v34/v34hstxblock.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks.
-The first tier-1 differential test of any part of `v34handshak`. Findings
-360-366.
+`src/pump/v34/v34hshak.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks. The
+first tier-1 differential test of any part of `v34handshak`. Findings 360-366,
+and 591 for the collapse of the last of its three reconstructions onto
+`t3m_txblock`/`t3m_tail` -- the dispatch now lives in `v34handshak`'s own file
+and `v34handshak_txblock` is a named entry to it for this test alone.
 
 Seven targets over txstates 5..74, about 0.3 KB:
 

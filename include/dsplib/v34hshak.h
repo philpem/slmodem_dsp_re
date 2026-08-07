@@ -237,6 +237,23 @@ void v34handshakinit(void *obj, int mode);
 void v34handshak(void *obj);
 
 /*
+ * `v34handshak`'s once-per-block transmit dispatch on its own -- the
+ * seventy-entry table at .rodata+0x2ee8 selected at 0x62af1, its seven
+ * targets, and the shared tail at 0x62a40 that every one of them falls into,
+ * down to the `ret`.
+ *
+ * FOR ONE TEST, AND SAID SO RATHER THAN IMPLIED.  `t_v34hstbl2.c` drives this
+ * against the whole blob function on an object the fixture has steered into
+ * this dispatch and no other; over that domain the two are the same function
+ * (finding 361).  It is not a second reconstruction -- it calls the same
+ * static dispatch every microstate arm calls.  Nothing in `src/` calls it.
+ * The txstate halfword at +0x3596 selects the arm, exactly as the object's
+ * own three routes in leave it.  Finding 591.
+ */
+struct v34_object;
+void v34handshak_txblock(struct v34_object *obj);
+
+/*
  * The datapump's per-block entry point, and the last function of V34hshak.c.
  *
  * The int at +0x2218 decides: above 1 it drives `v34handshak` until the
