@@ -28149,3 +28149,51 @@ this finding contained one, caught by the two-pass audit and not by
 `docs/method/recording.md` beside finding 670's bare-number instance, because
 it is the same defect wearing different punctuation and neither is visible to
 the tool that exists to find them.
+
+======================================================================
+### 557. Markdown emphasis made a citation invisible to the checker that exists to find them
+
+`refcheck.py` matched `\bfindings?\s+(\d+)`. `\s+` cannot cross `**` or a
+backtick, so
+
+```
+  finding **651**      invisible
+  finding `651`        invisible
+  finding 651          seen
+```
+
+A probe file naming a number that does not exist, in all three forms, reported
+**one** dangling reference and not three. The word was right there and the
+checker never saw it.
+
+Widening the separator to allow the markup found **eight references that were
+already in the tree and had never been checked** -- 2,372 to 2,380 -- and the
+tree still passes, so none of the eight dangled. This time.
+
+#### Where it bites, which is the part worth remembering
+
+Emphasis lands exactly where prose is EXPLAINING a citation, so the blind spot
+is worst in the material most likely to be teaching the rule. `docs/method/`'s
+first draft broke finding 543's citation rule inside the table teaching it
+(670), and this is the same shape one level down: the tool that would have
+caught that could not see the corrected form either.
+
+A bare `(651)` is still invisible, and that stays deliberate: three digits in
+parentheses are a byte count or a table value far more often than a citation.
+Finding 543 lists the coefficient rows -- `340, -541`, `-546, 348`,
+`361, -744` -- that a digits-only rule would have corrupted.
+
+#### The two citation defects it was found by, both mine
+
+`w13_method2` was given a brief citing the cold-container measurement as
+finding 650. It is in **651**. The brief inherited that from **finding 556,
+which cites it as a bare `(650)`** -- wrong number AND a form the checker
+cannot parse, so nothing could ever have reported it.
+
+Separately, `docs/findings.md` finding 554 twice and `docs/v90rest.md` name
+`tools/compare.py`, a path that has never existed; it is
+`tools/toolchain/compare.py`. Two batches were sent after it before anyone
+noticed, and 554's substance is right, which is why nobody did.
+
+Both are corrected forward rather than rewritten, per `docs/method/recording.md`:
+the pushed text stays, and this is the entry that says what it should have said.

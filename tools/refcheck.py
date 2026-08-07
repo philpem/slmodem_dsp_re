@@ -98,8 +98,29 @@ DEVIATIONS = "docs/deviations.md"
 FINDING_HEAD = re.compile(r"^#{2,4} (\d+[a-z]?)\.\s*(.*)$", re.M)
 DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
 
+#
+# MARKDOWN EMPHASIS MADE A CITATION INVISIBLE.
+#
+# `\s+` cannot cross `**` or a backtick, so `finding **651**` and
+# `` finding `651` `` were as unreferenced as a bare `(651)` -- the word was
+# right there and the checker never saw it.  Measured by probe: a file
+# containing all three forms of a number that does not exist reported ONE
+# dangling reference, not three.
+#
+# That matters more in prose that is TEACHING the citation rule, which is
+# where emphasis naturally lands, and it is the same silent hole as finding
+# 540's: a gate that cannot be told apart from a clean tree.
+#
+# The separator now allows the markup that can legally sit between the word
+# and the number.  A bare `(651)` is still invisible and still deliberate:
+# three digits in parentheses are a byte count or a table value far more
+# often than a citation (finding 543 lists the coefficient rows that would
+# be corrupted by treating them as one).
+#
+_EM = r"[\s*_`]*"
 FINDING_REF = re.compile(
-    r"\bfindings?\s+(\d+[a-z]?(?:\s*(?:,|and)\s*\d+[a-z]?)*)", re.I)
+    r"\bfindings?" + _EM + r"\s" + _EM +
+    r"(\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"\d+[a-z]?)*)", re.I)
 DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
 
 #
