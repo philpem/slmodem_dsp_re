@@ -28240,3 +28240,53 @@ success and the damage is only visible if somebody looks for the content. 249
 made `refcheck.py` fail on a stray marker, which catches the loud version. The
 quiet version -- content silently dropped -- has no such check, and the only
 defence is to look.
+
+======================================================================
+### 558. A document distilled from the record inherits its errors and not its corrections
+
+`docs/method/efficiency.md` printed
+
+```
+  serial      10.9 s
+  --jobs 4    17.9 s      sharding made it 64% SLOWER
+```
+
+which is finding 541 **as first written**, and 541 had been corrected two
+commits before that document was merged. The two numbers come from different
+runs: 10.9 s is the serial time measured *after* the threshold went in, in the
+run whose parallel figure is 11.7 s, and the 17.9 s was measured against
+11.2 s. The real figure is 60%.
+
+The same stale number had propagated to two more files in the set —
+`tools.md` and `CLAUDE.md.template` — because all three were distilled from
+the record in one pass, before the correction.
+
+#### The mechanism, which is general and was not obvious
+
+A finding is amended in place with a note saying what it used to say
+(`recording.md`, correct forward). **A document distilled from it is not
+amended by that**, and nothing links the two: the distillation happened once,
+at a moment, and froze whatever the record said then. So
+
+> **new findings pull a derived document forward; corrections to old findings
+> do not.**
+
+Updating a method set when new material lands is the obvious job and was done
+twice. **Re-reading it against findings that have been AMENDED is the
+non-obvious one**, has no trigger, and nothing in the tree detects it:
+`refcheck.py` confirms the citation resolves, and it resolves — to a finding
+whose numbers have changed underneath it. That is finding 543's shape (a
+reference that resolves and is wrong) in a second place.
+
+Found by reading the document, which is the only method available for it.
+`recording.md` gains the rule; the three files are corrected.
+
+#### And the error was mine twice over
+
+541's table was wrong because I paired two runs' numbers in it, and
+`tools/mutate.py`'s comment had it right all along and was assumed to be the
+stale one when the two were found to disagree (finding 670 records that). So
+the sequence is: measure correctly in a comment, record incorrectly in a
+finding, distil the finding into three documents, correct the finding, and
+leave the three documents saying the original wrong thing. Every step but the
+first was mine.

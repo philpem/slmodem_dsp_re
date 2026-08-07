@@ -98,6 +98,23 @@ clothes — **a number quoted in a wider scope than it was measured in.** "The
 same seven NOT CAUGHT" was a subtotal over the suites pinned to one source
 file; tree-wide the figure is 37, in ten suites, and always was (finding 639).
 
+## Re-read a derived document when a finding it cites is AMENDED
+
+New findings pull a derived document forward: somebody notices the material is
+missing. **Corrections to old findings do not**, and nothing detects it. A
+distillation happens once, at a moment, and freezes whatever the record said
+then; amending the finding afterwards leaves the document saying the original
+wrong thing, with a citation that still resolves.
+
+This set printed a timing table taken from a finding that had been corrected
+two commits before the set was merged, and the same stale number had reached
+three of its files in one pass (finding 558). `refcheck.py` confirmed the
+citation resolved, because it did — to a finding whose numbers had changed
+underneath it. That is finding 543's shape in a second place.
+
+Updating for new material is the obvious job. Re-reading against amendments is
+the one with no trigger, and reading is the only method available for it.
+
 ## Correct forward; never rewrite the claim
 
 Two mechanisms, one rule.

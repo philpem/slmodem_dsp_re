@@ -2,8 +2,8 @@
 
 <!--
   TEMPLATE.  Copy to CLAUDE.md at the root of a new source-reconstruction
-  project and edit the six <PLACEHOLDER>s.  Nothing else needs changing to be
-  useful on day one.
+  project and edit the seven <PLACEHOLDER>s.  Nothing else needs changing to
+  be useful on day one.
 
   EVERY NUMBER IN THIS FILE CITES `docs/findings.md` OF THE dsplibs
   RECONSTRUCTION -- the project this was distilled from, whose method notes
@@ -195,7 +195,7 @@ The rules that follow, and they are not negotiable:
   reintroducing a known defect and watching it appear, in both directions
   (finding 134, and finding 618 where four versions passed without it).
 - **Measure the flag that looks obviously good.** Sharding a mutation suite
-  four ways made three small suites 64% *slower* — nobody would have put a
+  four ways made three small suites 60% *slower* — nobody would have put a
   stopwatch on "parallel is faster" (finding 541).
 - **Reporting a measurement is not recording it, and read a baseline twice
   before you record it.** A codegen ratchet was run at a merge, printed

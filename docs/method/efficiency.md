@@ -123,14 +123,22 @@ build is nothing on a big suite and is the entire run on a small one. Measured
 over three suites of 6, 9 and 8 mutations:
 
 ```
-  serial      10.9 s
-  --jobs 4    17.9 s      sharding made it 64% SLOWER
+  before the threshold:   serial 11.2 s    --jobs 4   17.9 s    60% SLOWER
+  after it:               serial 10.9 s    --jobs 8   11.7 s
 ```
 
 A threshold fixed it — a worker gets at least 12 mutations or it is not
-started, and one worker means the serial path. After that, the same three
-suites run 11.7 s at `--jobs 8` against 10.9 s serial, and the big suite still
-shards eight ways with its verdicts unchanged (finding 541).
+started, and one worker means the serial path. The big suite still shards
+eight ways with its verdicts unchanged (finding 541).
+
+> **Two runs, one table.** This document first printed `--jobs 4  17.9 s`
+> against `serial 10.9 s` and called it 64%, which is how finding 541 first
+> recorded it — but the 10.9 s is from the run *after* the threshold went in,
+> whose parallel figure is 11.7 s. The finding was corrected and this had
+> already been distilled from the uncorrected text. **A document distilled
+> from a record inherits that record's errors and does not inherit its
+> corrections**, so a set like this needs re-reading against the record
+> whenever a cited finding is amended, not only when new ones land.
 
 **The general point: measure the flag that looks obviously good.** Nobody would
 have put a stopwatch on "parallel is faster".

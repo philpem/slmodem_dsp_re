@@ -45,7 +45,7 @@ The anti-vacuity tier. `--suite NAME`, `--all`, or a bare
   depth (finding 541). If your tree has no relative symlinks this is free; if
   it does, keep it.
 - `MIN_PER_WORKER = 12`, because a worker must earn its setup. Below that
-  threshold sharding made three small suites 64% slower (finding 541). Retune
+  threshold sharding made three small suites 60% slower (finding 541). Retune
   it against your own build time — the numbers behind it are a 0.67 s rebuild
   and a 0.73 s run.
 
