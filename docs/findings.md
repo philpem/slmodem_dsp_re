@@ -24438,8 +24438,18 @@ and six more where the compare is spelled differently: an unsigned-cast
 compare at 0x634a6, two against a `txst` cached earlier in the arm, and three
 where an enclosing guard has already established the value so the object
 stores unconditionally. All six are compare-then-assign with the compare
-hoisted or proved, and all six print in the blob, so all thirty-one became
-`hs_setstate`.
+hoisted or proved, so all thirty-one became `hs_setstate`.
+
+**How much of that the fixture actually proves, stated exactly.** The blob's
+trace carries 27 distinct (word, destination) pairs and every one of the 31
+sites writes a destination among them, but the mapping is not one-to-one --
+two sites write `SSEG`, two `PPSEG`, two `TRNSEG4A`, two `TONE_AB` and four
+`rxstate WAIT` -- so a destination appearing does not by itself identify which
+site emitted it. The load-bearing statement is the pair of zeros: with
+`V34HSHAKE` at 0 and spurious at 0, **no site the fixture drives was converted
+that the blob does not print at**, in either direction. Sites the fixture does
+not drive are converted on the uniformity of the idiom and are not proven
+here.
 
 **The zero in the `spurious` row is the load-bearing number, not the 137.**
 `grep -c '^=@= '` counts cases that differ, so a case that already failed and
@@ -24522,12 +24532,54 @@ after    749 mutations: 706 caught, 11 NOT caught, 0 unusable, 32 equivalent
 ```
 
 Run in four chunks of 200/200/200/149, summing 183+191+190+142 caught,
-3+4+4+0 uncaught and 14+5+6+7 equivalent. **The eleven uncaught are the same
+3+4+4+0 uncaught and 14+5+6+7 equivalent, and re-run in full after the
+vacuous-mutation repair below to the same four figures. **The eleven uncaught are the same
 eleven by name**, exactly 570's list. One label changed, and only because the
 code under it changed shape: `54: the count is stored on the completing path
 too` is now `54: the completing path does not zero the count`, since after
 finding 573 the count IS stored on that path and the old label had become
 false. Same mutant, same status.
+
+#### Five of the re-anchored entries checked nothing, and the totals hid it
+
+The matching before/after totals above are necessary and were not sufficient.
+Re-anchoring rewrites `replace` as well as `find`, and for a "the compare is
+deleted" entry the old `replace` was the bare `tx1_put(...)` store -- which is
+exactly what finding 571 turned the *unmutated* text into. The transformation
+therefore produced `find == replace` for **five entries**: 59, 257, 265, 275
+and 428. Each rebuilt the unmutated source, passed, and -- because all five
+carry `equivalent: true` -- printed `survived, equivalent`, which is the same
+output the real thing gives. **The counts did not move, which is precisely why
+nothing in the harness could see it.**
+
+`mutate.py` now refuses them:
+
+```
+  ????  18: the SBARSEG guard is deleted     VACUOUS -- REPLACE == FIND
+  1 mutations: 0 caught, 0 NOT caught, 1 unusable, 0 equivalent
+```
+
+Shown to fire by feeding it one of the five with `replace` forced back to
+`find`, per finding 134; and shown quiet on the repaired set, which reports
+7 equivalent and 0 unusable.
+
+The repair is the one already chosen for 189 and 445: `hs_setstate` becomes
+**`hs_put`**, which is the honest "compare deleted" in the new factoring and
+does change the program. 265 is the one whose claim inverted -- it used to add
+a guard the object does not have, and the source now carries that guard (a
+provably dead one, see below), so it is relabelled `68: the segment's end
+stores without comparing` and removes it instead. Each `why` gained the clause
+that makes it exact: `hs_put` and `hs_setstate` are the same code at debug
+level 0 because the print sits inside `DSPLIB_DEBUG_ON()`, so the equivalence
+holds for the suite as run, while under `V34TX1_TRACE` the mutant would drop a
+line the blob prints.
+
+**The general shape.** A refactor that makes source text X into source text Y
+silently converts every mutation whose `replace` was Y into a no-op. Checking
+that `find` still matches once does not catch it, and neither does a stable
+caught/uncaught total -- an equivalent-marked vacuous mutation is invisible in
+both. `find != replace` is the assertion, and it belongs in the tool rather
+than in the re-anchoring script that happens to need it this time.
 
 #### The three "twice" variants: still uncaught here, and now covered elsewhere
 

@@ -299,9 +299,9 @@
  {
   "label": "18: the SBARSEG guard is deleted",
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_SBARSEG);",
   "equivalent": true,
-  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65"
+  "why": "the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding 342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "70: the data-path test is inverted",
@@ -975,7 +975,7 @@
   "find": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);",
   "replace": "\t\t/* 0x66c10 */\n\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);",
   "equivalent": true,
-  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read"
+  "why": "the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding 342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "74: the txstate moves to TONE_AB_CALL",
@@ -1319,9 +1319,9 @@
  {
   "label": "64/68: the txstate compare at 0x66cdf is deleted",
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);",
+  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_XMIT0);",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either"
+  "why": "the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding 285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64/68: the wrap test is inverted",
@@ -1359,11 +1359,11 @@
   "replace": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
-  "label": "68: the segment's end is guarded by a txstate compare",
+  "label": "68: the segment's end stores without comparing",
   "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->f25cc = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "equivalent": true,
-  "why": "0x65653 has NO compare where every other state change in this arm has one, and adding one cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  Recorded so that the asymmetry is on the record rather than tidied away"
+  "why": "0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding 572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64: +0x25da is compared against three",
@@ -1413,9 +1413,9 @@
  {
   "label": "64: the txstate compare at 0x63748 is deleted",
   "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);",
+  "replace": "\ths_put(o, TX1_TXSTATE, V34HS_J1TXMIT);",
   "equivalent": true,
-  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here"
+  "why": "this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "64: the second echo report pair runs whatever the counter holds",
@@ -2180,9 +2180,9 @@
  {
   "label": "67: the txstate compare at 0x648cd is deleted",
   "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "replace": "\t\t\ths_put(o, TX1_TXSTATE, V34HS_EXMIT);",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file"
+  "why": "the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding 285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding 342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "24: the entry does not tick vect_idx",
@@ -2269,7 +2269,7 @@
   "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "equivalent": true,
-  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file"
+  "why": "the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding 342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding 571)"
  },
  {
   "label": "24: the one-shot test is inverted",
