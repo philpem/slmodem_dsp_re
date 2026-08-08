@@ -210,7 +210,7 @@ void v34hs_compare(const char *what, long tag);
  * one of them was reached.  Call it ONCE, after the whole sweep.
  *
  * WHICH TABLE A POINTER SELECTS IS CHECKED (finding 324).  Each of the
- * thirty-five is classified three ways: into its own object, into its own
+ * thirty-seven is classified three ways: into its own object, into its own
  * arena -- where the offset says which block and where in it, and offsets are
  * comparable where addresses are not -- or outside both, which is a library
  * table or function.  For that last class side A holds ours and side B the
@@ -222,7 +222,7 @@ void v34hs_compare(const char *what, long tag);
  * `v34hs_holes_check` does not apply to a refinit pass: eleven of the skips
  * legitimately never differ once both sides install the same table.
  */
-#define V34HS_NHOLES	35
+#define V34HS_NHOLES	37
 void v34hs_holes_check(void);
 
 const struct v34hs_obs *v34hs_observed(int side);

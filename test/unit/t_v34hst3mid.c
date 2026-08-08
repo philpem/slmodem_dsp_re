@@ -3391,17 +3391,17 @@ guards(void)
 	/*
 	 * The rxstate chain: only RX_DPSK reaches table 3.
 	 *
-	 * 4 RECEIVE still leaves for 0x653e4, which is not written.  35 WAIT
-	 * USED TO ASSERT THE SAME AND NO LONGER CAN: its arm is 0x6752c, four
-	 * instructions, and it is written -- so it reaches the transmit
-	 * dispatch and records nothing.  It stays here as a `T3M_WRITTEN`
-	 * trial rather than being deleted, because "35 does not reach table 3"
-	 * is the claim this line was making and that claim is still true; what
-	 * changed is only where 35 goes instead.  Findings 717 and 549.
+	 * NEITHER OF THESE TWO RECORDS ANYTHING ANY MORE, and both stay.  35
+	 * WAIT was the first to change: its arm is 0x6752c, four instructions,
+	 * and writing it turned this trial from `T3M_UNWRITTEN_RXSTATE` into
+	 * `T3M_WRITTEN`.  4 RECEIVE is the second, for the same reason --
+	 * 0x653e4 is `t_v34hsrx4.c`'s arm now.  Both stay rather than being
+	 * deleted, because "this rxstate does not reach table 3" is the claim
+	 * the lines were making and that claim is still true; what changed is
+	 * only where each goes instead.  Findings 717, 549 and 731.
 	 */
 	s = plain;
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE,
-	      T3M_UNWRITTEN_RXSTATE, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE, T3M_WRITTEN, tag++);
 	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_WAIT, T3M_WRITTEN, tag++);
 
 	/*

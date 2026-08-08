@@ -318,6 +318,18 @@ in_padding(unsigned off)
  * The list is t_v34hshak.c's, which derived it from the code rather than from
  * watching a test fail, plus the four this fixture owns.  `saw_hole` asserts
  * every entry was reached, so it cannot quietly go stale.
+ *
+ * TWO OF THEM WERE MISSING UNTIL A CASE RAN `initdigital` INSIDE THE STEP.
+ * +0xa24 and +0x2604 are the two shell contexts' `coeff`, which `initV34`
+ * aims at object +0xe84 and +0x2a68 -- addresses INSIDE the object, so the
+ * two instances necessarily differ.  `t_v34shell.c`'s own `initdigital`
+ * comparison has excluded 0xa24..0xa2b and 0x2604..0x260b since it was
+ * written and says why; this list, derived from what the HANDSHAKE's bring-up
+ * writes, never had them because nothing had reached `initdigital` from
+ * inside a step.  rxstate 4's E path does, and reported them as two differing
+ * object bytes.  Every hole is aimed at `dummy_a`/`dummy_b` before anything
+ * runs, so adding an entry does not weaken `saw_hole`: both sides hold their
+ * own block's address from the first compare.
  */
 static const unsigned holes[] = {
 	0x0394,		/* receiver +0x130 rx_samples  -- rxinit, interior  */
@@ -336,8 +348,8 @@ static const unsigned holes[] = {
 	0x2220, 0x2224,	/* transmit sample queue cursors                    */
 	0x80b8, 0x80bc, 0x80c0, 0x80c4, 0x80c8,	/* echo canceller 0        */
 	0x9138, 0x913c, 0x9140, 0x9144, 0x9148,	/* and 1                   */
-	0x0a28, 0x0e48,	/* receive shell context                            */
-	0x2608, 0x2a28,	/* transmit shell context                           */
+	0x0a24, 0x0a28, 0x0e48,	/* receive shell context, `coeff` first     */
+	0x2604, 0x2608, 0x2a28,	/* transmit shell context, likewise         */
 	0xaa6c, 0xaa70,	/* the two SELF-pointers -- checked by offset       */
 	0x3548, 0xac3c	/* the session and the configuration -- ours        */
 };
@@ -899,7 +911,7 @@ observe(int side, const unsigned char *now, const unsigned char *was,
 		 * where the addresses move.  `make debugcov` caught it; the
 		 * ordinary build never would have.
 		 *
-		 * What replaces it is `check_self_ptr` over all thirty-five
+		 * What replaces it is `check_self_ptr` over all thirty-seven
 		 * holes, which compares OFFSETS and is address-independent by
 		 * construction.
 		 */
@@ -1273,7 +1285,7 @@ v34hs_compare(const char *what, long tag)
 	 * named memcmps over the four blocks were what this used to be, and
 	 * they said nothing about a read or a write one element off the end of
 	 * one -- which is exactly what D60 turned out to be.  The seed tables
-	 * were not compared at all, though thirty of the thirty-five skipped
+	 * were not compared at all, though thirty of the thirty-seven skipped
 	 * pointers aim at them.
 	 *
 	 * The only four bytes exempt are the session's pointer to the PCM

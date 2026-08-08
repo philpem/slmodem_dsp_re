@@ -29271,3 +29271,291 @@ transition costs exactly one line" is a claim about the transmit machine and
 about nothing else. Nothing in the reconstruction changes: it calls
 `hs_setstate`, which handles both sides, and writing the unreachable half out
 would be writing something the object does not have.
+
+### 731. rxstate 4 `RECEIVE` is written, and `T3M_UNWRITTEN_RXSTATE` is down to one arm
+
+`v34handshak`'s largest rxstate arm, 0x653e4, is in
+`src/pump/v34/v34hshak.c` as `t4_rx_receive` and compares against the blob
+through `test/unit/t_v34hsrx4.c` -- 7,641 checks over fifty cases, every one
+of them a whole-object, whole-arena, whole-transcript comparison with
+`v34hs_ours(1)` putting this tree's `v34handshak` on side A.
+
+**The guard now covers 72 `RX_L1` and nothing else**, 3,806 bytes where it
+covered 8,678.  `t_v34hsrxch.c`'s table and its sweep counts moved with it --
+one guarded rxstate, eighty-six written -- and `t_v34hst3mid.c`'s
+`V34HS_RX_RECEIVE` trial went from `T3M_UNWRITTEN_RXSTATE` to `T3M_WRITTEN`,
+which is the same change 35 `WAIT` made at finding 549 and for the same
+reason: the claim the line was making was "this rxstate does not reach table
+3", and that is still true.
+
+What the arm is, in the order the object does it:
+
+```
+  0x653e4  receiver(obj), then the retrain test
+  0x67999  the head: the MP packer OR the TRN2 shift registers, never both
+  0x67a1e  the far end's J -- v34setuptxmit INLINED -- and the baud counter
+  0x67a98  tone_detect, and what S detected means
+  0x6a090  the message descriptor running out -- setupreceiver INLINED
+  0x6d111  the round-trip measurement, scaled by the baud rate
+```
+
+**0x67a1e IS NOT A LOOP HEADER**, and that is what lets the whole thing be
+straight-line C rather than a state machine.  Everything that branches back
+to it -- 0x68bd8's packer, 0x6a377, 0x6b47a, 0x6cafd, 0x6cb70, 0x710e1,
+0x71264 -- is reached only from the head at 0x67999, which is above it, so
+the merge is taken at most once per call.  Checked over all twenty-eight
+ranges, not assumed.
+
+### 732. What rxstate 4's 4,881 bytes are, and three corrections to the inherited notes
+
+A barriered walk from 0x653e4 with 0x62af1 excluded gives **twenty-eight
+ranges totalling 4,881 bytes**, and `cfgsplit.py --entries rx4=0x653e4`
+independently gives 5,220 over 189 blocks with the barrier absent -- the
+difference being the shared transmit dispatch the walk stops at.  There is no
+indirect control flow anywhere in the arm, so the walk cannot have dropped a
+jump-table successor: the four-way baud switch at 0x6d111 is a compare chain.
+
+**THE INHERITED NOTES SAID TWENTY-SEVEN RANGES AND 4,883 BYTES**, and the
+range list is the part that matters rather than the two bytes: both agree
+that range 23 ends 0x70c75.
+
+**AND "BYTE-IDENTICAL" WAS THE WRONG WORD FOR FIVE OF THE SIX REUSE CLAIMS.**
+Compared as raw bytes, 0x6a0c8 against 0x6ef7c differs in 286 of 319; the
+`settxlevel` prologue differs in 64 of 70; the coefficient copy differs in
+102 of 113.  Only the two `hs_setstate` printf bodies really are byte for
+byte -- 0x713e1 == 0x66132 over 33 bytes and 0x712d3 == 0x6e87a over 26.  The
+rest are the SAME SOURCE at DIFFERENT REGISTER ALLOCATION, which a normalised
+comparison shows at once: strip the register names and the coefficient copy's
+two emissions agree on 94% of their instructions.  The distinction is not
+pedantry -- a byte compare is the natural way to check such a claim and it
+says "no" to a true one, which is how a reuse worth a thousand bytes gets
+missed.
+
+**AND THE INHERITED NOTES MISSED THE LARGER OF THE TWO INLINED FUNCTIONS.**
+0x68e50..0x68f73 is not a seventy-byte prologue: it is the whole of
+`v34setuptxmit` -- `settxlevel`, `V34SetupModulator`, one receiver flag
+cleared, two state transitions, two transmit flags and `txinit` -- which this
+file already reconstructs and which microstate 63's arm already inlines at
+0x6597d, as v34hshak.c's own comment there says.  It came out as a call, and
+with it the two transition printf bodies at 0x7135f and 0x713c1 that belong
+to those transitions.  That is 490 bytes rather than 70.
+
+So the arm's 4,881 bytes are, by what had to be written -- and these are
+summed from the range boundaries above rather than inherited:
+
+```
+   1,019   setupreceiver inlined  -> one call   0x6a0c8-0x6a225   349
+                                                0x6e477-0x6e4c3    76
+                                                0x7142b-0x71667   572
+                                                0x716f4-0x7170a    22
+     507   v34setuptxmit inlined  -> one call   0x68e50-0x68f75   293
+                                                0x69013-0x6901d    10
+                                                0x7135f-0x7142b   204
+   3,355   everything else, a large part of it diagnostics
+```
+
+**1,019 IS THE INHERITED FIGURE AND IT IS RIGHT**, which is worth saying
+because nothing else the brief supplied about this reuse was: the four pieces
+sum to exactly that.  **507 is not** -- the brief called `v34setuptxmit`'s
+inline a seventy-byte prologue.  The inherited "905 bytes of debug bodies" is
+NOT independent of these two and is deliberately not subtracted here: two of
+its sixteen belong to `setupreceiver` and two more are the transitions
+`v34setuptxmit` makes, so the four numbers would double-count.  Finding 730's
+rule -- do not put a re-derived number beside an inherited one without saying
+which is which.
+
+**Read a long arm against the functions the tree already has** -- finding
+426's rule, now four for four.
+
+### 733. Two claims in rxstate 4 that no ordinary value can test, and the trials for them
+
+**0x65427 IS A THIRTY-TWO-BIT SIGNED COMPARE.**  0x65417 sign-extends
++0xaa96, 0x6541e forms `7 *` with a `lea`/`sub` pair in a 32-bit register,
+and 0x65427 compares that against a sign-extended +0x124.  Every legal baud
+is inside a short -- 7 * 3429 is 23,853 -- so a sixteen-bit spelling agrees
+with the object on every input a fixture would pick.  `suite_entry` drives it
+at +0xaa96 = 20,000, where `7 * faa96` is 140,000 and its low halfword is
+8,928, so a counter of 10,000 stays in the body and a truncating reading
+retrains; and at -20,000, where the object retrains and BOTH a truncating and
+an unsigned reading decline.  Finding 724's shape in a second arm, and the
+second time a `7 *` or a `+ 0x2418` has hidden a width.
+
+**AND THE DIRECTION IS `jle`: less-or-equal goes to the BODY.**  The brief
+this batch was given had it inverted.
+
+**0x6cafd COMPARES WITH 0x7fff AND STORES WITHOUT IT.**  0x6cb04 masks the
+new word, 0x6cb0f masks the table entry, and 0x6cb2a stores `%di` -- the
+unmasked low half.  A reconstruction that stored the masked value agrees on
+every word whose bit 15 is clear, which is every word a fixture picks by
+accident.
+
+**AND THE TRIAL FOR IT HAS A TRAP OF ITS OWN.**  The obvious seeding -- a bit
+count of 15, so that two more bits make seventeen -- CANNOT WORK: 0x68c17
+masks the accumulator to its low `nbits` bits before OR-ing the new pair in,
+so a count of 15 destroys bit 15 and everything above it and the committed
+word can never have its top bit set.  The first version of this trial did
+exactly that, asserted 0xabcd and got 0x2bcd from BOTH sides, which reads as
+a defect in the reconstruction and is a defect in the fixture.  A count of 20
+keeps bits 0..19, puts the new pair at 20 and 21, and leaves bit 15 alone.
+
+Three more widths in the same arm needed their own value rather than an
+argument: +0x124 driven NEGATIVE (which fixes its sign at the entry compare
+AND at 0x67a3a's cap in one case), +0xaa96 driven negative (which fixes its
+sign in the message-descriptor multiply, and needs bit 7 of the flags to
+decline the retrain the negative product would otherwise force), and
++0xaa34 driven to 0x7ffe, where the next bit count is negative as a short and
+0x8000 as an unsigned.
+
+**AND ONE CONSTANT NEEDED A SWEEP.**  The gain estimate at 0x68f86 is
+`(g * 0x6666 + 0x4000) >> 15`, and 0x6666 against 0x6667 is invisible at
+almost every gain: 5,463 is the SMALLEST value at which the two round to
+different shorts, 4,370 against 4,371.  20,000 -- the obvious "big" seed --
+gives 16,000 for both.  The fixture drives 5,463 and says why.
+
+### 734. Two more pointer skips in the handshake fixture, found by the first case to run `initdigital` inside a step
+
+`test/harness/v34hsstep.c`'s hole list had thirty-five entries and needed
+thirty-seven.  +0xa24 and +0x2604 are the two shell contexts' `coeff`, which
+`initV34` aims at object +0xe84 and +0x2a68 -- addresses INSIDE the object,
+so the two instances necessarily hold different values and a byte comparison
+over them can only ever fail.
+
+**`t_v34shell.c` HAS EXCLUDED THOSE EXACT BYTES SINCE IT WAS WRITTEN** --
+`(b >= 0xa24 && b < 0xa2c) || (b >= 0x2604 && b < 0x260c)` -- and says why in
+its own comment.  The handshake fixture's list was derived from what the
+HANDSHAKE's bring-up writes, which is a different set, and no case had ever
+reached `initdigital` from inside a step.  rxstate 4's E path does, and
+reported them as two differing object bytes at +0xa26 and +0x2606 -- byte 2
+of a pointer, which is what a pointer difference looks like when only the
+differing bytes are named.
+
+Adding an entry does not weaken `saw_hole`: `v34hs_setup` aims EVERY hole at
+`dummy_a`/`dummy_b` before anything runs, so both new entries differ from the
+first compare in every test that links the fixture, and the assertion that
+every skip was exercised still holds.  `V34HS_NHOLES` is 37.
+
+**The lesson is the one finding 605 keeps teaching: two lists of the same
+thing in two files drift, and nothing compares them.**  The two lists are
+still two, because they are lists of different things -- one is "what does
+this bring-up leave holding an address", the other "what does `initdigital`
+leave holding an address" -- but the second was a strict superset of what the
+first needed the moment a handshake arm called `initdigital`.
+
+### 735. rxstate 4's mutation suite, its six equivalences, and the five anchors it broke
+
+`test/mutations/v34hsrx4.json`: **176 mutations, 170 caught, 0 NOT caught, 6
+equivalent**, over fifty-six cases that between them reach ALL FIFTEEN of the
+arm's exits.
+
+**TWO OF THE FIFTEEN EXIST ONLY WITH THE DIAGNOSTICS OFF**, and the first
+version of this file drove thirteen while claiming fifteen.  0x65453 tests
+`dsplibs_debug_level` and leaves through 0x690fb when it is up and through
+0x6546e when it is not; 0x6a4ba does the same for 0x6d28e and 0x6a4dc.  Every
+other suite here runs with the diagnostics ON, because the transcript is the
+only axis four of the exits have -- so the two quiet twins are unreachable
+from all of them.  `suite_quiet` drives those two and RECORDS NEITHER as a
+distinct behaviour: the object each writes is byte for byte its noisy twin's,
+since the only difference between the two exits is the lines nobody printed,
+and a signature that separated them would be a signature over something other
+than the object.  The first run caught 139 of 175, and the thirty-six survivors
+were closed by twenty new trials rather than by argument, except for the six
+below.
+
+The six recorded equivalent, all argued from the object:
+
+1. **The descriptor's signedness in the MD multiply.**  0x6a4c1 stores `%ax`,
+   so reading +0x35a2 signed instead of unsigned changes the multiplicand by
+   exactly 65,536 and 65,536 times any integer is zero modulo 65,536.  The
+   trace's `cwtl` sign-extends the same low halfword, so it cannot separate
+   them either.
+2. **Re-reading the flags after the detector.**  `tone_detect` touches
+   +0x122 once -- 0x73869 loads, 0x73870 ANDs with 0xfffffdff, 0x73875 stores,
+   and that is the only reference to +0x122 in the function.  **The extent is
+   `nm --print-size`'s and not a guess**: `tone_detect` is 0x1a4 bytes at
+   0x736e0, so it ends at 0x73884 and the scan covered all of it.  The cached
+   and reloaded values therefore differ in bit 9 and nothing else, and 0x67b69
+   clears bits 8 and 9 of whichever is used.
+3. **The MD-over trace's cached flags.**  `%esi` equals +0x122 on every path
+   that reaches 0x6a0c2; the packer, which is the one thing that could make
+   them differ, needs bit 10 and 0x67a4b leaves through it first.
+4. **The second `or $0x200` after the second `detectorinit`.**  The bit is
+   already up: `setupreceiver` ends with its own at 0x6a218 and nothing
+   between writes +0x122.  **`detectorinit` is checked from `src/` and not
+   from the brief**: `src/pump/v34/detector.c` writes `x`, `y`, `coeff`,
+   `polarity`, `armed`, `count`, `limit`, `state`, `thresh_hi`, `thresh_lo`
+   and `level`, every one of them a member of `struct v34_detector`, and it
+   takes no other pointer.  Microstate 44's arm has the identical duplicate at
+   0x6f0e9/0x6f146 and records it the same way.
+5. **The decoder's two bits read unsigned.**  Both spellings are `& 3`.
+6. **E's early report printing cached flags.**  0x6cb94's load and 0x710ff's
+   use have only object-field stores between them.
+
+**FIVE ANCHORS BROKE, THREE OF THEM IN OTHER SUITES**, which is what the last
+two arms saw as well.  `v34hsrxch`'s "4 RECEIVE falls through" anchored on the
+guard call this batch deleted and matched zero times; `v34hst3core`'s
+`(unsigned)rx->flags,` and `v34hst3m41`'s
+`hs_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);` each became a SUBSTRING of a
+line the new arm added, at deeper indentation, and matched twice.  That is
+finding 432's hazard in its purest form -- a one-statement anchor is about the
+file's layout and the file's layout is what the next batch changes.  The
+repairs are the two it prescribes: a leading newline where one tab is what
+distinguishes the two copies, and the enclosing statement where it is not.
+`mutsnap.py --verify` then showed all three suites label-for-label unchanged,
+with one verdict MOVED because a label was renamed and none changed value --
+which is the check the brief asks for instead of blessing them with
+`--update`.
+
+Two more broke inside the new suite itself and were caught by
+`anchorcheck.py` before the first run: `hs_setstate(obj, HS_MICROSTATE,
+V34HS_DET_SYNC);` appears three times in this one arm.
+
+### 736. Two fills at which the handshake fixture disagrees with ITSELF, and the one that faults
+
+`t_v34hsrx4.c` is the first test to call `receiver` through
+`test/harness/v34hsstep.c` -- rxstate 4 is the only dispatch case whose arm
+begins with it -- and running it across fills found two things the fixture
+had not been asked before.
+
+**AT `V34HS_SEED=3` IT SEGFAULTS, INSIDE THE BLOB, ON BOTH SIDES.**  E's path
+calls `initdigital`, whose 0x59c0f is
+`movswl -0x2(%edx,%ebp,2)` with `%edx` the rate configuration's `rx_divtab`
+at +0xaaac and `%ebp` computed as `rxbits + 14 * rx_use_max` from +0xaa98 and
++0xaaa6.  Both of those are plain halfwords the fill leaves pseudorandom, so
+the index runs miles off a table that is only 8,192 shorts long.
+`t_v34shell.c` constrains the same four for the same reason -- `rxbits` to
+0..15 and `rx_use_max` to 0 or 1 -- and says so; the handshake fixture never
+had to, because until now nothing reached `initdigital` from inside a step.
+`t_v34hsrx4.c`'s `begin` now pins all five rate fields and says why.  **A
+fault has no offset in it**, which is docs/v34handshak.md's own rule for
+aiming a pointer and is the same argument one level up.
+
+**AND AT SEEDS 7 AND 20 THE BLOB DISAGREES WITH ITSELF.**  With the pins in,
+the default fill and seeds 1, 3, 5, 10 and 12 are green; 7 and 20 fail
+identically, 715 checks over nearly every case -- and the CONTROL cases fail
+too, which is the blob on side A as well as side B.  So it is not this
+reconstruction.  What was measured:
+
+- the disagreement is confined to the receiver's +0x1ae and +0x1cc..+0x1e3,
+  and appears on cases whose only call is `receiver` itself;
+- `V34HS_PROBE` reports 0 object bytes and 0 padding bytes differing after
+  setup, and side B stepped twice at its own address differing in 0 bytes --
+  so the inputs are identical and each side is deterministic;
+- it survives `V34HS_REFINIT`, `V34HS_EQPTR`, `V34HS_SKEW`, `V34HS_NOSCRUB`
+  and `V34HS_PADVARY`, which between them cover the bring-up's tables, the
+  library-table selection, the arena's placement, the stack and the padding;
+- `t_v34hsstep.c` passes at seed 7, and it never drives rxstate 4.
+
+**THE CAUSE IS NOT ESTABLISHED.**  What the list above rules out is
+everything the fixture has a knob for, which leaves a read of memory outside
+the arena -- the one thing 32 KB of padding on each side cannot make
+congruent, and the thing finding 322 explicitly does NOT claim: "nobody has
+caught the loop reading a particular byte outside the object".  That was
+written about table 1's per-sample loop; this is the receive chain, and it is
+a different function with the same gap.
+
+`make phase` drives the default fill, where every claim in `t_v34hsrx4.c`
+holds and holds at five other fills as well.  The file says which seeds are
+green and which are not rather than leaving the next batch to find out, and
+this is recorded rather than repaired because repairing it means finding what
+the receive chain reads outside its object -- a task of its own, and one worth
+having a reproducer for.

@@ -16,7 +16,7 @@ As of the session that landed rxstate 53's arm:
 | guard | still covers | bytes |
 |---|---|--:|
 | `T3M_UNWRITTEN_TBL1` | **only** 81's wrap to 0x66d85 and 86's segment end to 0x66fe9. The loop and all nineteen arms are written | -- |
-| `T3M_UNWRITTEN_RXSTATE` | **only** rxstates 4 RECEIVE (0x653e4) and 72 RX_L1 (0x650c6). The chain, 35 WAIT, 53 DET_AB and both transmit-dispatch doors are written | 8,678 |
+| `T3M_UNWRITTEN_RXSTATE` | **only** rxstate 72 RX_L1 (0x650c6). The chain, 4 RECEIVE, 35 WAIT, 53 DET_AB and both transmit-dispatch doors are written | 3,806 |
 | `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at three sites: 0x6d57c and 0x6c8f8, both inside microstate 44's Modem-on-Hold paths, and the table-3 `default:` | -- |
 
@@ -26,14 +26,14 @@ labels over the forty values the range test admits, so it is unreachable and
 is kept because the range test and the label set are two statements of one
 fact. So "remove the `PARTIAL` line when the last guard goes" is the wrong
 criterion -- one guard is a permanent structural assertion. The criterion is
-**when no REACHABLE arm is unwritten**, which today means the two rxstate
-arms, the two table-1 exits, and 44's two.
+**when no REACHABLE arm is unwritten**, which today means one rxstate arm,
+the two table-1 exits, and 44's two.
 
-`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 8,678 bytes of
-reachable arm are still guarded and the function is not complete -- the two
-remaining rxstate arms, and nothing else in this table. The number was 11,398
-while the FSK gate's body counted against it and 10,310 while 53's did
-(finding 725).
+`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 3,806 bytes of
+reachable arm are still guarded and the function is not complete -- rxstate
+72 `RX_L1`, and nothing else in this table. The number was 11,398 while the
+FSK gate's body counted against it, 10,310 while 53's did (finding 725) and
+8,678 while 4 RECEIVE's did (finding 731).
 
 ## What the function is
 
@@ -71,7 +71,7 @@ this number unbarriered: after the per-sample loop falls through at 0x629ed
 every arm reaches every other and it reports exclusive = 0 for all of them.
 
 ```
-    0x653e4   rxstate  4 RECEIVE       4,875 bytes, 165 blocks   LARGE
+    0x653e4   rxstate  4 RECEIVE       4,881 bytes, 28 ranges   DONE
     0x650c6   rxstate 72               3,806 bytes,  95 blocks   MEDIUM-LARGE
     0x65473   rxstate 53               1,632 bytes, 10 ranges   DONE
     0x6754b   the FSK gate's body      1,089 bytes,  38 blocks   DONE
@@ -137,11 +137,14 @@ puts side B's object back outside its arena and the sweep still passes.
 linker.**
 
 `v34hs_compare` compares the whole 44,096-byte object byte for byte with the
-thirty-five pointer fields excluded, every one of those thirty-five by offset
-from its own base, the rest of the arena -- five blocks, seven filler regions
-and the space around them -- and both transcripts. `v34hs_holes_check()`
-asserts once at the end of a run that every one of the thirty-five skips was
-exercised, so the list cannot go stale unnoticed.
+thirty-seven pointer fields excluded, every one of those thirty-seven by
+offset from its own base, the rest of the arena -- five blocks, seven filler
+regions and the space around them -- and both transcripts.
+`v34hs_holes_check()` asserts once at the end of a run that every one of the
+thirty-seven skips was exercised, so the list cannot go stale unnoticed. The
+list was thirty-five until the first case ran `initdigital` inside a step and
+the two shell contexts' `coeff` pointers came back as differing object bytes;
+finding 734.
 
 **Which block a pointer selects is checked now.** A pointer out of the object
 is classified three ways, not two: into its own object (offset compared), into
@@ -201,11 +204,14 @@ only states some batch has landed, which today are:
                default at 0x6e552, and 0x6f438 (INFO1c), 0x6ed17 (INFO1a)
                and 0x6ea38 (Modem-on-Hold), which are selected by a message
                length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-448)
-  table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
-            0x62a40 that every arm of that dispatch falls into
-  the chain every rxstate but 4 RECEIVE and 72 RX_L1: 43 to table 3, 35
-            WAIT, 53 DET_AB (0x65473, findings 724-729) and the two
-            default doors into table 2
+  table 2   ALL SEVEN targets -- 0x64480, 0x644c9, 0x644d8, 0x644fa,
+            0x64509, 0x64518 and the default at 0x62a40, which is also the
+            tail every arm of that dispatch falls into. `t_v34hstbl2.c`
+            drives every one; the "0x644c9 only" this line used to say was
+            the FOURTH stale status line found in this file
+  the chain every rxstate but 72 RX_L1: 43 to table 3, 4 RECEIVE (0x653e4,
+            findings 731-735), 35 WAIT, 53 DET_AB (0x65473, findings
+            724-729) and the two default doors into table 2
   the rest  halts
 ```
 

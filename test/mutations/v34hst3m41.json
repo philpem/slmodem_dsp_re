@@ -106,8 +106,8 @@
  },
  {
   "label": "the 0x72 door moves the microstate to DET_CJ",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
+  "find": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
+  "replace": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
   "fn": "t41_to_det_info"
  },
  {

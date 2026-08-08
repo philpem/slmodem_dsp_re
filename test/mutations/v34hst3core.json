@@ -51,8 +51,8 @@
  },
  {
   "label": "62's trace prints the flags it is about to raise",
-  "find": "\t\t\t\t     (unsigned)rx->flags,",
-  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),",
+  "find": "\t\t\t\t     (unsigned)rx->flags,\n\t\t\t\t     (unsigned)(int)rx->agc_gain);",
+  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),\n\t\t\t\t     (unsigned)(int)rx->agc_gain);",
   "fn": "t3c_micro_rx_phase3_call"
  },
  {

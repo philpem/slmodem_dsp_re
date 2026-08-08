@@ -22,9 +22,9 @@
   "replace": "\t\t\tif (rxst == V34HS_RX_L2) {\n\t\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);"
  },
  {
-  "label": "4 RECEIVE falls through to the transmit dispatch",
-  "find": "\t\tif (rxst == V34HS_RECEIVE) {\t\t/* 0x653e4, not written */\n\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);\n\t\t\treturn;\n\t\t}",
-  "replace": "\t\tif (rxst == V34HS_RECEIVE && rxst == 0x7fff) {\n\t\t\tt3m_notwritten(T3M_UNWRITTEN_RXSTATE);\n\t\t\treturn;\n\t\t}"
+  "label": "4 RECEIVE falls through to the transmit dispatch (0x62a18)",
+  "find": "\t\tif (rxst == V34HS_RECEIVE) {\n\t\t\tt4_rx_receive(obj);\t\t/* 0x653e4 */",
+  "replace": "\t\tif (rxst == V34HS_RECEIVE && rxst == 0x7fff) {\n\t\t\tt4_rx_receive(obj);\t\t/* 0x653e4 */"
  },
  {
   "label": "35 WAIT does not drain the receive queue",

@@ -63,7 +63,8 @@ static int dump;
  * 43 is WRITTEN -- it is the microstate machine, which landed long ago -- and
  * is here so that the one state the chain treats specially and completely is
  * asserted to be complete, rather than being absent from the table and so
- * indistinguishable from an oversight.
+ * indistinguishable from an oversight.  4 RECEIVE and 53 DET_AB joined it
+ * when their arms landed; 72 RX_L1 is the last one left.
  */
 static const struct {
 	short		rxst;
@@ -74,8 +75,8 @@ static const struct {
 } named[] = {
 	{ V34HS_RX_DPSK, T3M_WRITTEN,		 0x64a64, "43 RX_DPSK",
 	  "reaches the microstate machine"	},
-	{ V34HS_RECEIVE, T3M_UNWRITTEN_RXSTATE,	 0x653e4, "4 RECEIVE",
-	  NULL					},
+	{ V34HS_RECEIVE, T3M_WRITTEN,		 0x653e4, "4 RECEIVE",
+	  "runs the arm t_v34hsrx4.c owns"	},
 	{ V34HS_DET_AB,	 T3M_WRITTEN,		 0x65473, "53 DET_AB",
 	  "runs the arm t_v34hsrx53.c owns"	},
 	{ V34HS_RX_L1,	 T3M_UNWRITTEN_RXSTATE,	 0x650c6, "72 RX_L1",
@@ -93,7 +94,7 @@ static const struct {
 static int
 unwritten(short rxst)
 {
-	return rxst == V34HS_RECEIVE || rxst == V34HS_RX_L1;
+	return rxst == V34HS_RX_L1;
 }
 
 /*
@@ -140,9 +141,9 @@ suite_sweep(void)
 	 * gates.md's rule 1: make the tool count what it examined.
 	 */
 	diff_eq_int("the sweep drove every rxstate 0..86 that is written",
-		    written, 87 - 2, tag);
-	diff_eq_int("and skipped exactly the two that are not",
-		    guarded, 2, tag++);
+		    written, 87 - 1, tag);
+	diff_eq_int("and skipped exactly the one that is not",
+		    guarded, 1, tag++);
 
 	if (dump)
 		printf("  sweep: %d written, %d guarded\n", written, guarded);
