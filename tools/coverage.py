@@ -86,9 +86,26 @@ import sys
 # An entry here is a promise to remove it: when the last arm lands, the line
 # goes and the bytes arrive.  Reported per name rather than per byte because
 # nobody can honestly say how many of the 61,541 are written.
+#
+# THE SET IS EMPTY, AND `v34handshak` IS WHAT CAME OUT OF IT.  It was here for
+# five tasks' worth of work -- 61,541 bytes landed a dispatch arm at a time --
+# and the criterion for taking it out was never "the last guard has gone", one
+# of which is a permanent structural assertion, but "no REACHABLE arm is
+# unwritten".  That is now checkable in one grep:
+#
+#     grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c
+#
+# which reports the two definitions, `t3c_unwritten`'s own call of
+# `t3m_notwritten`, and exactly one call site -- table 3's `default:`.  That
+# label is unreachable by construction: the fifteen written arms and the
+# twenty-four shared ones are forty labels over 41..80, which is every value
+# the range test at 0x64ac6 admits, and it stays because the range test and
+# the label set are two statements of one fact.  Findings 748 and 750, and
+# `docs/v34handshak.md` for the arm-by-arm record.
+#
+# Keep the machinery: it is how the next function of this size gets taken, and
+# it is cheaper to leave an empty dict than to re-derive the exclusion.
 PARTIAL = {
-    "v34handshak": "landed one dispatch arm at a time (#56-#58); an arm "
-                   "nobody has written calls abort",
 }
 
 # Symbols we define that the object has no counterpart for, and why that is

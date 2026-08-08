@@ -30003,3 +30003,214 @@ quoting 1,089 and 1,182 as if one of them followed from the other.
 > these five rows moved by exactly what 737 predicts and one did not, and the
 > way that was established was running the OLD code path on purpose --
 > gates.md rule 4, measure the same thing two ways and compare.
+
+### 748. The last four unwritten blocks of `v34handshak`, and neither pair is what the brief said
+
+The four sites that were left -- 0x66d85 and 0x66fe9 under `T3M_UNWRITTEN_TBL1`,
+0x6d57c and 0x6c8f8 under `T3M_UNWRITTEN_OTHER` -- are 1,203 bytes of the
+object and about 357 bytes of logic. All four are landed and differentially
+tested, and both guards' reachable call sites are gone.
+
+Two structural claims that were inherited turned out to be wrong, and both were
+wrong in the same direction: they described a transfer where the object has a
+fall-through.
+
+**0x66fe9 IS NOT A TRANSFER OUT OF 86 `TXMD`.** Its block ends `jmp 63e7f`, and
+0x63e7f is the fall-through of 0x63e2e -- the very block whose `je 66fe9` sent
+us there. So the object runs the echo-adaptation body and then the
+reconfiguration test, and the two are not exclusive: with +0xaa78 and +0x35a6
+holding the same value both bodies run in one pass. `v34tx1_txmd` used to
+`return V34TX1_TXMD_DONE` at that point, which made the second test unreachable
+whenever the first held -- a path no fixture could have driven, because the
+arm stopped before it.
+
+**0x66d85 IS NOT A TRANSFER OUT OF THE LOOP.** Both its exits, 0x63941 and
+0x63948, are the loop test at 0x629e7 with and without a reload of the object
+pointer -- the same tail 0x629c8 and 0x62d70 duplicate. So 81's wrap rejoins
+the loop like every other arm.
+
+Together those two retire the whole return-value dispatch. `enum v34tx1_exit`
+had three values and has one; `v34handshak`'s per-sample loop no longer tests
+what an arm returned; and `T3M_UNWRITTEN_TBL1` has no call site left, which
+puts it beside `T3M_UNWRITTEN_RXSTATE` and `T3M_UNWRITTEN_FSKGATE` in
+`v34hshak.h` as a constant nothing reaches.
+
+**And the two Modem-on-Hold sites are NOT in microstate 44**, which
+`docs/v34handshak.md` said in a table three separate sessions had read from.
+0x6d57c is reached only from 0x65865, inside microstate **79** `MOH_TONE`; and
+0x6c8f8 only from 0x65780, inside microstate **80** `MOH_TONE_DROP`. Both
+parent arms were landed already, so these were two holes inside written arms
+rather than an unwritten arm -- which is why they were guarded by
+`t3c_unwritten()` at a statement rather than at a dispatch label.
+
+The one call site `T3M_UNWRITTEN_OTHER` keeps is the table-3 `default:`, which
+is unreachable by construction and stays for the reason its own comment gives.
+
+### 749. Microstate 79's Modem-on-Hold detector is microstate 44's with ONE constant changed
+
+0x6d57c builds a tone detector and 0x6ebed builds one too, and the two calls are
+identical in six of their seven arguments:
+
+```
+    0x6d57c   detectorinit(obj+0x3564, f359c == 0x65 ? c2400_ : c1200_,
+                           1, 0xf0, 0x32, 0x800, 0x400)
+    0x6ebed   detectorinit(obj+0x3564, f359c == 0x65 ? c2400_ : c1200_,
+                           1, 0x64, 0x32, 0x800, 0x400)
+```
+
+Same base, same coefficients chosen by the same `cmpw $0x65,0x359c` (equal
+takes the `c2400_` arm at 0x6d66b and 0x6ecda respectively), same polarity,
+same warm-up, same thresholds. **`limit` is the only difference**, 0xf0 against
+0x64, so 79 waits about two and a half times as long before asserting. Both are
+followed by the same `+0x356a = 1` and the same move to microstate 80.
+
+The handover brief said the two differed in `limit` **and** in the carrier
+select. They do not: the select is the same expression and the same constant,
+and reading it as different came from 0x6d57c's `je` going forward to
+0x6d66b -- which loads `c2400_` -- while 0x6ebed's fall-through loads `c1200_`,
+so the two arms appear in the opposite textual order for the same test.
+
+**This is finding 426's method and not a byte comparison.** The two call sites
+share almost none of their bytes: 0x6d57c stages its arguments through
+`%esi %edx %ecx %eax %edi %ebp` and 0x6ebdf through `%eax %edx %esi %ecx %ebx
+%edi`, in a different order, and one reloads the object mid-block where the
+other does not. What is the same is the argument SET, the constants and the
+call shape. The mutation `79's detector limit is 0x64, as microstate 44's is`
+is the trial for the one thing that is not.
+
+### 750. Four txstates share 81's entry, and the WRAP is where they stop being one behaviour
+
+`docs/v34handshak.md` said of table 1's entry at 0x63d58 that it is "shared by
+81, 82, 83 and 84, [and] really is one behaviour", against 0x635cc which is
+"one body under two indices [where] the wrap is two behaviours" (finding 423).
+That is exactly backwards for the part of 0x63d58 nobody had written.
+
+Above the wrap it is true: four zero samples into the transmit queue and one
+tick of `vect_idx`, whatever the state. At `vect_idx == 0xc0` the arm reaches
+0x66d85, which begins
+
+```
+    66d85  mov    %edx,%ecx
+    66d87  movzwl 0x3596(%edx),%edx        ; re-read txstate
+    66d8e  cmp    $0x51,%dx
+    66d92  jne    63941                    ; the loop test
+```
+
+so 82, 83 and 84 reach the hundred-and-ninety-second sample and simply carry
+on, and only 81 decides anything. It is finding 423's shape exactly -- most
+passes are one body under four indices and the wrap is two behaviours -- and
+the guard that used to sit there made the three of them ABORT, which is a
+behaviour difference the arm-level test could not see because the arm reported
+the wrap rather than following it.
+
+What 81 decides is which Modem-on-Hold state to move to, and it reads two
+fields to decide:
+
+```
+    66dac  cmpl   $0x1,0xabec(%esi)   ; je 68ae3 -> 0x53 MOH_FRR
+    66db9  cmpl   $0x1,0xabf0(%esi)   ; je 68ae3 -> 0x53 MOH_FRR
+                                      ; otherwise  0x52 MOH_ON_HOLD
+```
+
+**+0xabec is new and it is an `int`**, `cmpl` on both sites that touch it, and
+the diagnostic in front of them names it: `"V34F MOH: After 192 silence, org =
+%d , act = %d"` prints +0xabec as `org` and `moh_message` as `act`. So it is
+the Modem-on-Hold message this end originally asked for against the one it is
+building now, in `moh_message`'s numbering where 1 is MHfrr. It splits
+`unmapped_abe4`, which was 0xabe4..0xabf0, into eight bytes and one `int`.
+
+**A trial CAN separate the two widths here**, unlike rxstate 72's 0x6881e
+(finding 613): the field is seeded 0x10001 rather than 1, so a sixteen-bit read
+sees 1 and a thirty-two-bit read does not, and the mutation `81: +0xabec is
+read sixteen bits wide` is caught. Deciding which of the two cases a compare is
+in before writing the trial is what finding 742 asked for.
+
+The two compares that ARE dead inside 0x66d85 -- `cmp $0x52,%dx` at 0x66dc6 and
+`cmp $0x53,%dx` at 0x68ae3 -- are `hs_setstate`'s own "already there" early
+return inlined, not state tests of the arm's: `jne 63941` has established that
+the halfword holds 0x51. Findings 722 and 730's shape.
+
+### 751. +0x356a is the detector's `armed`, and the object says so where the structure declines to
+
+Two sites write +0x356a immediately after handing +0x3564 to `detectorinit` --
+0x6ec4a in microstate 44 and 0x6d5db in microstate 79 -- and
+`struct v34_detector`'s third field, `armed`, sits at +6. 0x3564 + 6 is 0x356a.
+So both writers are arming the detector they have just built, and the tree's
+`T44_F356A` ("the 8-bit arm sets it to 1") had the offset without the meaning.
+
+**This is recorded and NOT acted on structurally.** `v34fsk.h` declines to
+embed the detector at +0x3564 on purpose: `sizeof(struct v34_detector)` is 0x24
+and 0x3564 + 0x24 is 0x3588, which is where the next measured field begins, and
+two things meeting is adjacency rather than a bound (findings 215 and 630). A
+cast through the offset from the far side would override that decision without
+adding evidence, so `T3C_F356A` is an offset like every other and the name is
+where the meaning lives.
+
+`detectorinit` writes `armed` itself, so the extra store is the caller raising
+what the initialiser cleared -- which is what the mutation `79 arms the
+detector's polarity word rather than +0x356a` is for: the two fields are four
+bytes apart and only the differential test says which.
+
+### 752. Two near-twins in one file, and the anchor damage they did before either was tested
+
+Both of this batch's table-1 sites are near-twins of code the SAME file already
+carried, and both broke existing anchors the moment they were written.
+
+**0x66fe9 against 0x67613.** 86's echo-adaptation block clears `f354c`, bit 2
+of `f25c2`, `f3550` and `f3552`. 21 `TRNSEG4`'s block at 0x67613 clears the same
+four in the same order, AND `f3560`, AND calls `VPcmV34ReportStartOfEchoAdapt`.
+Written out plainly the four lines are identical text at identical depth, so
+three of 21's mutations began matching twice. The repair is finding 432's:
+**the store's own address on the source line** -- `/* 0x6700e */`,
+`/* 0x67017 */`, `/* 0x6701e */`, `/* 0x67025 */` -- which is documentation the
+tree wanted anyway and makes each line its own. Factoring the two into a shared
+helper was considered and rejected: a mutation dropping `f3560 = 0` would then
+be caught by 21's test and say nothing about 86's.
+
+**0x6d57c against 0x6ebed** did the same to `v34hsmst44`'s "the MOH tone exit
+goes to MOH_TONE", whose anchor was one tab and
+`hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);`. 79's copy sits one tab
+deeper inside an `if`, so the shallow text is a SUBSTRING of the deep one and
+the anchor matched twice -- finding 432's seven-mutation case in miniature, and
+the repair is the same **leading newline**. Two of `v34hst3m41`'s went the same
+way on `if (obj->moh_message == 1) {`, repaired by carrying the next line.
+
+**Six anchors went to zero matches and two to four**, and none of that is
+visible from a passing suite: an anchor that matches twice is UNUSABLE and
+unusable does not fail a run (finding 347). `tools/anchorcheck.py` is what
+found all of them, before any suite was run, and it is the reason this batch
+could tell "my new code broke an old claim" from "the old claim still holds".
+
+### 753. What the four sites cost the mutation tier, and the one verdict that inverted
+
+Fifty-five mutations were added and every one is caught:
+
+```
+  v34hstx1     749 -> 776   724 -> 751 caught   3 -> 2 uncaught   22 -> 23 equiv
+  v34hst3core   42 ->  70    41 ->  69 caught   1 -> 1  uncaught   0 ->  0 equiv
+  v34hstb1      11 ->   9     9 ->   7 caught   0 -> 0  uncaught   2 ->  2 equiv
+  v34hsmst44   214            unchanged, re-anchored, verdicts label-for-label
+  v34hst3m41    86            unchanged, re-anchored, verdicts label-for-label
+```
+
+**`v34hstb1` LOST two mutations and that is the correct outcome.** "an arm
+leaving the loop for unwritten code is treated as normal" and "an arm leaving
+the loop carries on round it" were both claims about the loop's dispatch on the
+return value, and there is no such dispatch any more (finding 748). A mutation
+kept alive against code that no longer exists is the wrong-but-plausible
+artefact in the tier that is supposed to detect it. What replaces them is
+twenty-seven mutations inside the arms, where the two blocks now live.
+
+**And one uncaught verdict became an equivalence rather than a catch.** "81:
+the wrap is tested before the counter is stored" was NOT CAUGHT in the previous
+snapshot. It cannot be caught: the value tested is `o->vect_idx + 1` promoted
+to `int` and cast to `unsigned short`, the value stored is the same expression
+cast to `short`, and casting either back to `unsigned short` gives the same
+sixteen bits for every input. The object's order is store-then-test -- 0x63d8b
+then 0x63d90, on the same register -- so the claim is real and the trial does
+not exist. Finding 613's case, recorded with a `why` rather than left in a list
+of things nobody has looked at.
+
+The two that remain uncaught in `v34hstx1` ("67: initdigital is not called",
+"67: +0x3598 is not set") and the one in `v34hst3core` ("the receiver-count
+guard excludes 5") are inherited and untouched by this batch.

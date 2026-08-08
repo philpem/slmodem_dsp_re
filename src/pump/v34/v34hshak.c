@@ -2769,7 +2769,23 @@ ApplyBulkDelay(void *objp, short delay)
  * it would be a codegen regression that nothing in this tree could catch.
  * The offset stays for that one read.  Finding 553.
  */
+/*
+ * +0x356a IS THE DETECTOR'S OWN `armed`, AND THE OBJECT SAYS SO RATHER THAN
+ * THE STRUCTURE DOING.  +0x3564 is the base `detectorinit` is handed one
+ * statement earlier, `struct v34_detector`'s third field sits at +6, and
+ * 0x3564 + 6 is 0x356a -- so both writers of this offset (0x6d5db here and
+ * 0x6ec4a in microstate 44, which the tree already carries as `T44_F356A`)
+ * are arming the detector they have just built.
+ *
+ * IT IS STILL AN OFFSET AND NOT A FIELD ACCESS.  v34fsk.h declines to embed
+ * the detector at +0x3564 on purpose -- two things meeting is adjacency, not
+ * a bound (findings 215 and 630) -- and reaching through a cast here would
+ * override that decision from the far side.  The name records what it is;
+ * the access stays as the tree writes every other offset.  Finding 751.
+ */
+#define T3C_F356A	0x356a	/* short: the detector at +0x3564's `armed` */
 #define T3C_FAAE2	0xaae2	/* THE LOW BYTE of `fsk.sr`; see above     */
+#define T3C_FABE4	0xabe4	/* short: set to 1 on the disconnect path  */
 #define T3C_FABE6	0xabe6	/* short: set to 1 on the retrain path     */
 #define T3C_FABF8	0xabf8	/* byte:  "the drop has been reported"     */
 #define T3C_FABF9	0xabf9	/* byte:  non-zero diverts at 0x6c8f8      */
@@ -2990,6 +3006,20 @@ HS_OFF_ASSERT(selfptr,     paa6c,      T3M_SELFPTR);
 HS_OFF_ASSERT(ptr_aa70,    paa70,      T3C_PTR_AA70);
 HS_OFF_ASSERT(fabae,       fabae,      T3M_FABAE);
 HS_OFF_ASSERT(fabc2,       fabc2,      T3M_FABC2);
+
+/*
+ * The two Modem-on-Hold fields the disconnect at 0x6c8f8 and 81's wrap at
+ * 0x66d85 reach through a NAME rather than an offset.  `fabec` is new with
+ * that wrap and splits `unmapped_abe4`, so the assert is the thing that says
+ * the split landed where the `cmpl $0x1,0xabec` did; `fabe2` was already
+ * declared and is asserted beside it because the disconnect writes the two
+ * together and a shift in either would move both.
+ *
+ * +0xabe4's own store has no field to assert -- it is still inside
+ * `unmapped_abe4` -- and `T3C_FABE4` is an offset for that reason.
+ */
+HS_OFF_ASSERT(fabe2,       fabe2,      0xabe2);
+HS_OFF_ASSERT(fabec,       fabec,      0xabec);
 #endif	/* 32-bit target with a compiler that has __builtin_offsetof */
 
 /*
@@ -4661,10 +4691,31 @@ t3c_micro_moh_tone(struct v34_object *obj)
 
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 
-	if (obj->moh_message == 1)
-		t3c_unwritten();			/* 0x6d57c */
-
-	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+	/*
+	 * 0x6d57c.  THE GUARD IS 32 BITS WIDE (`cmpl $0x1,0xabf0`) and the
+	 * two sides of it choose a different NEXT MICROSTATE, not a different
+	 * amount of work: MHfrr re-aims the tone detector and waits for the
+	 * far end's carrier to DROP, anything else goes straight to DET_SYNC.
+	 * Both then run the block below, which 0x6d57c's own exit at 0x6589f
+	 * joins past the DET_SYNC store.
+	 *
+	 * AND THIS IS 0x6ebdf'S CALL WITH ONE CONSTANT CHANGED.  Microstate
+	 * 44's Modem-on-Hold accept arm builds the same detector -- same
+	 * coefficients, chosen the same way by `f359c`, same polarity, same
+	 * warm-up, same thresholds, and the same +0x356a store and
+	 * MOH_TONE_DROP after it.  The one difference is `limit`, 0xf0 here
+	 * against 0x64 there, so this end waits about two and a half times as
+	 * long before asserting.  Finding 749.
+	 */
+	if (obj->moh_message == 1) {
+		detectorinit(T3C_DET(obj),
+			     obj->f359c == 0x65 ? c2400_ : c1200_,
+			     1, 0xf0, 0x32, 0x800, 0x400);
+		hs_put(obj, T3C_F356A, 1);		/* 0x6d5db */
+		hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);
+	} else {
+		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
+	}
 
 	obj->fsk.phase = 0;
 	obj->fsk.nbits = 0;
@@ -4697,8 +4748,34 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 		return;
 	}
 
-	if (t3c_getb(obj, T3C_FABF9) != 0)
-		t3c_unwritten();			/* 0x6c8f8 */
+	/*
+	 * 0x6c8f8.  THE GUARD IS A BYTE (`cmpb $0x0,0xabf9`) and it is not
+	 * symmetrical with the one microstate 79 takes four fields away: this
+	 * one picks between giving up and retraining, and the fall-through --
+	 * which is the retrain -- is the case the byte being zero selects.
+	 *
+	 * GIVING UP IS FOUR STORES AND NO CALL.  The transmit machine goes to
+	 * MOH_CLEARDOWN and the receive machine to WAIT, +0xabe4 and +0xabe2
+	 * are both raised, and the arm leaves through the once-per-block
+	 * dispatch like every other path here -- no `v34handshakinit`, so
+	 * findings 359 and 324 do not apply to it and the library tables stay
+	 * where the bring-up put them.  Both state compares are LIVE, unlike
+	 * 81's: nothing on the way in constrains either word.
+	 */
+	if (t3c_getb(obj, T3C_FABF9) != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("MOH: Timeout waiting for MH "
+					     "sequence under MHfrr, "
+					     "disconnecting...\r\n");
+
+		hs_setstate(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);
+		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
+		hs_put(obj, T3C_FABE4, 1);		/* 0x6c983 */
+		obj->fabe2 = 1;				/* 0x6c98a */
+
+		t3c_txblock(obj);			/* 0x62af1 */
+		return;
+	}
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("MOH: Timeout waiting for MH sequence "
@@ -7709,71 +7786,69 @@ v34handshak(void *vobj)
 	 * Finding 711.
 	 */
 	while (obj->txq.count < obj->f2aa0) {
-		int left = V34TX1_LOOP;
-
 		switch ((int)hs_get(obj, HS_TXSTATE)) {
 		case V34HS_SILENCE:		/* 5  0x640b4, three tails */
 		case V34HS_SILENCEINFO:		/* 54 */
 		case V34HS_SILENCERETRAIN:	/* 74 */
-			left = v34tx1_silence(obj);
+			v34tx1_silence(obj);
 			break;
 		case V34HS_SSEG:		/* 18 0x64048 */
-			left = v34tx1_sseg(obj);
+			v34tx1_sseg(obj);
 			break;
 		case V34HS_SBARSEG:		/* 19 0x6296d */
-			left = v34tx1_sbarseg(obj);
+			v34tx1_sbarseg(obj);
 			break;
 		case V34HS_PPSEG:		/* 20 0x642bf */
-			left = v34tx1_ppseg(obj);
+			v34tx1_ppseg(obj);
 			break;
 		case V34HS_TRNSEG4:		/* 21 0x64339 */
-			left = v34tx1_trnseg4(obj);
+			v34tx1_trnseg4(obj);
 			break;
 		case V34HS_TX_DPSK:		/* 24 0x62b96 */
-			left = v34tx1_tx_dpsk(obj);
+			v34tx1_tx_dpsk(obj);
 			break;
 		case V34HS_TX_L1:		/* 51 0x62c69 */
-			left = v34tx1_tx_l1(obj);
+			v34tx1_tx_l1(obj);
 			break;
 		case V34HS_TONE_AB:		/* 60 0x62d3d */
-			left = v34tx1_tone_ab(obj);
+			v34tx1_tone_ab(obj);
 			break;
 		case V34HS_JTXMIT:		/* 64 0x635cc, one body two tails */
 		case V34HS_J1TXMIT:		/* 68 */
-			left = v34tx1_jtxmit(obj);
+			v34tx1_jtxmit(obj);
 			break;
 		case V34HS_XMIT0:		/* 65 0x62d83 */
-			left = v34tx1_xmit0(obj);
+			v34tx1_xmit0(obj);
 			break;
 		case V34HS_TRNSEG4A:		/* 66 0x62e28 */
-			left = v34tx1_trnseg4a(obj);
+			v34tx1_trnseg4a(obj);
 			break;
 		case V34HS_XMITMP:		/* 67 0x6399b */
-			left = v34tx1_xmitmp(obj);
+			v34tx1_xmitmp(obj);
 			break;
 		case V34HS_EXMIT:		/* 69 0x63858 */
-			left = v34tx1_exmit(obj);
+			v34tx1_exmit(obj);
 			break;
 		case V34HS_DATAXMIT:		/* 70 0x63ca8 */
-			left = v34tx1_dataxmit(obj);
+			v34tx1_dataxmit(obj);
 			break;
 		case V34HS_TXLEVEL:		/* 71 0x641d1 */
-			left = v34tx1_txlevel(obj);
+			v34tx1_txlevel(obj);
 			break;
 		case V34HS_JaTXMIT:		/* 78 0x64139 */
-			left = v34tx1_jatxmit(obj);
+			v34tx1_jatxmit(obj);
 			break;
 		case V34HS_MOH_SILENCE:		/* 81 0x63d58, one behaviour */
 		case V34HS_MOH_ON_HOLD:		/* 82 */
 		case V34HS_MOH_FRR:		/* 83 */
 		case V34HS_MOH_CLEARDOWN:	/* 84 */
-			left = v34tx1_moh_silence(obj);
+			v34tx1_moh_silence(obj);
 			break;
 		case V34HS_K56JaTXMIT:		/* 85 0x63fb0 */
-			left = v34tx1_k56jatxmit(obj);
+			v34tx1_k56jatxmit(obj);
 			break;
 		case V34HS_TXMD:		/* 86 0x63dae */
-			left = v34tx1_txmd(obj);
+			v34tx1_txmd(obj);
 			break;
 		default:
 			/*
@@ -7785,18 +7860,18 @@ v34handshak(void *vobj)
 		}
 
 		/*
-		 * Two arms can leave the loop through a block that is NOT
+		 * AND NOTHING IS DISPATCHED ON THE RETURN VALUE ANY MORE.
+		 * Two arms used to be able to leave for a block that was not
 		 * reconstructed -- 81's wrap at 0x66d85 and 86's segment end
-		 * at 0x66fe9 -- and they say so in their return value rather
-		 * than doing something plausible.  This is where that is
-		 * dispatched on, and it is the whole of what
-		 * `T3M_UNWRITTEN_TBL1` now means: the loop and its nineteen
-		 * arms are written, these two transfers out of it are not.
+		 * at 0x66fe9 -- and said so in their return value, which this
+		 * point tested and turned into `T3M_UNWRITTEN_TBL1`.  Both
+		 * blocks are written now, in the arms, and neither turned out
+		 * to be a transfer out of the loop at all: 0x66d85 ends at
+		 * 0x63941 or 0x63948 and 0x66fe9 at 0x63e7f, which are the
+		 * loop test and a fall-through inside 86's own body.  So the
+		 * dispatch is gone, `enum v34tx1_exit` has one value left,
+		 * and the guard has no call site.  Findings 748 and 750.
 		 */
-		if (left != V34TX1_LOOP) {
-			t3m_notwritten(T3M_UNWRITTEN_TBL1);
-			return;
-		}
 	}
 
 	/*

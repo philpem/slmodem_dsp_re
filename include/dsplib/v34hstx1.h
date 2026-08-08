@@ -72,24 +72,33 @@ extern "C" {
  * and 0x6430c all reach it, and the difference between them is a write the
  * arm that uses it performs for itself.
  *
- * The other two are transfers OUT of the arm into blocks this file does not
- * model.  They are returned rather than followed because following them
- * would mean writing code no differential test here can reach, which is
- * exactly the wrong-but-plausible thing the tree does not commit.
+ * IT IS NOW THE ONLY VALUE, and that is the result rather than a tidying.
+ * The enumeration used to carry two more -- `V34TX1_MOH_WRAP` for 81's
+ * transfer to 0x66d85 and `V34TX1_TXMD_DONE` for 86's to 0x66fe9 -- returned
+ * rather than followed because following them meant writing code no
+ * differential test here could reach.  Both blocks are written now, in the
+ * arms they belong to, and neither is a transfer out of its arm:
+ *
+ *   - 0x66d85 ends at 0x63941 or 0x63948, which are both the loop test; and
+ *   - 0x66fe9 ends at 0x63e7f, which is the fall-through of the block that
+ *     jumped to it, so it is not even an exit from the arm's own body.
+ *
+ * So every one of the nineteen arms rejoins the loop, on every path, and the
+ * caller's dispatch on the return value has gone with the two enumerators.
+ * The type is kept -- one value and an `int` return -- because it is what
+ * every arm's signature says and the reduction changes no behaviour.
  */
 enum v34tx1_exit {
-	V34TX1_LOOP = 0,	/* back to the per-sample loop test  */
-	V34TX1_MOH_WRAP,	/* 81: `vect_idx` hit 0xc0 -> 0x66d85 */
-	V34TX1_TXMD_DONE	/* 86: `vect_idx` hit +0xaa78 -> 0x66fe9 */
+	V34TX1_LOOP = 0		/* back to the per-sample loop test  */
 };
 
 /*
- * AND 66's SEGMENT END IS NOT A THIRD ONE, which is worth stating because for
- * one commit it was.  0x66eff's block, the last of 66's exclusive set, ends in
- * an unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
- * 0x66fe9, where 86's `V34TX1_TXMD_DONE` transfers, so landing 66 reconstructs
- * nothing of 86's transfer target and retires none of finding 343's cost.
- * 66's own completion at 0x62f22 rejoins the loop like every other arm here.
+ * AND 66's SEGMENT END IS NOT 86's, which is worth stating because for one
+ * commit it was.  0x66eff's block, the last of 66's exclusive set, ends in an
+ * unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
+ * 0x66fe9, which is 86's echo-adaptation block, so landing 66 reconstructed
+ * nothing of 86's and retired none of finding 343's cost.  66's own
+ * completion at 0x62f22 rejoins the loop like every other arm here.
  */
 
 /*

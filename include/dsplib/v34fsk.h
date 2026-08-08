@@ -897,9 +897,29 @@ struct v34_object {
 	 * MHnack that says the far end may NOT initiate MOH later -- and
 	 * read by nothing this tree has reconstructed.  The 0x77 MHnack,
 	 * which says it may, does not write it.
+	 *
+	 * AND SET TO 1 BY ONE PATH THAT IS NOT A MESSAGE AT ALL: microstate
+	 * 80's disconnect at 0x6c8f8, beside +0xabe4, when the far end never
+	 * sent its MH sequence under MHfrr.  Still read by nothing here.
 	 */
 	short fabe2;					/* +0xabe2 */
-	unsigned char unmapped_abe4[0xabf0 - 0xabe4];
+	unsigned char unmapped_abe4[0xabec - 0xabe4];
+	/*
+	 * +0xabec.  READ THIRTY-TWO BITS WIDE -- `cmpl $0x1,0xabec(%esi)` at
+	 * 0x66dac -- which is what makes it an `int` and not two more
+	 * halfwords of the region in front of it.
+	 *
+	 * AND THE OBJECT NAMES IT AGAINST `moh_message` FOUR BYTES ON.  81's
+	 * wrap prints the pair together -- "V34F MOH: After 192 silence, org
+	 * = %d , act = %d", this field as `org` and `moh_message` as `act`
+	 * -- and then goes to MOH_FRR rather than MOH_ON_HOLD when EITHER of
+	 * them is 1.  So it is the Modem-on-Hold message this end ORIGINALLY
+	 * asked for against the one it is building now, in `moh_message`'s
+	 * numbering where 1 is MHfrr.
+	 *
+	 * Nothing else this tree has reconstructed reads or writes it.
+	 */
+	int fabec;					/* +0xabec */
 	/*
 	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
 	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,

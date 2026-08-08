@@ -15,28 +15,27 @@ As of the session that landed rxstate 53's arm:
 
 | guard | still covers | bytes |
 |---|---|--:|
-| `T3M_UNWRITTEN_TBL1` | **only** 81's wrap to 0x66d85 and 86's segment end to 0x66fe9. The loop and all nineteen arms are written | -- |
+| `T3M_UNWRITTEN_TBL1` | **RETIRED.** 81's wrap at 0x66d85 and 86's segment end at 0x66fe9 are written, in the arms, and NEITHER turned out to be a transfer out of the loop -- so the loop's dispatch on an arm's return value has gone too, and with it two of `enum v34tx1_exit`'s three values. Finding 748 | -- |
 | `T3M_UNWRITTEN_RXSTATE` | **RETIRED.** rxstate 72 RX_L1 (0x650c6) is written and the guard has no call site left. All five arms of the chain and both transmit-dispatch doors are written; the constant is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
-| `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at three sites: 0x6d57c and 0x6c8f8, both inside microstate 44's Modem-on-Hold paths, and the table-3 `default:` | -- |
+| `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at ONE site: the table-3 `default:`, which is unreachable. 0x6d57c and 0x6c8f8 are written, and they were never microstate 44's -- finding 748 | -- |
 
 **THE TABLE-3 `default:` IS NOT WORK AND NEVER GOES AWAY.** Its own comment
 says so: the fifteen written arms and the twenty-four shared ones are forty
 labels over the forty values the range test admits, so it is unreachable and
 is kept because the range test and the label set are two statements of one
-fact. So "remove the `PARTIAL` line when the last guard goes" is the wrong
-criterion -- one guard is a permanent structural assertion. The criterion is
-**when no REACHABLE arm is unwritten**, which today means one rxstate arm,
-the two table-1 exits, and 44's two.
+fact. So "remove the `PARTIAL` line when the last guard goes" was always the
+wrong criterion -- one guard is a permanent structural assertion. The
+criterion is **when no REACHABLE arm is unwritten**.
 
-`tools/coverage.py`'s `PARTIAL` entry therefore STAYS, and what keeps it there
-is no longer in this table. **The rxstate chain is complete**: the number of
-guarded reachable bytes went 11,398 -> 10,310 (finding 725, 53 DET_AB) ->
-8,678 (731, 4 RECEIVE) -> 3,811 -> **zero** (738, 72 RX_L1). What is left of
-`v34handshak` is table 1's two transfers OUT of the per-sample loop -- 81's
-wrap to 0x66d85 and 86's segment end to 0x66fe9 -- and microstate 44's two
-`t3c_unwritten()` sites at 0x6d57c and 0x6c8f8. Read the guard table above
-from the tree before quoting any of this.
+**THAT CRITERION IS MET AND `tools/coverage.py`'s `PARTIAL` ENTRY HAS COME
+OUT.** `v34handshak`'s 61,541 bytes now count as translated and `make
+coverage` reads **30.1%** where it read 21.7%. The number of guarded reachable
+bytes went 11,398 -> 10,310 (finding 725, 53 DET_AB) -> 8,678 (731, 4 RECEIVE)
+-> 3,811 -> zero for the rxstate chain (738, 72 RX_L1), and then table 1's two
+and the two Modem-on-Hold sites went with findings 748-753. Read the guard
+table above from the tree before quoting any of this; the grep at the top of
+this section is the check, and one call site is the pass.
 
 ## What the function is
 
@@ -214,9 +213,12 @@ blob-against-blob property over forty-three cases most of which have no
 reconstruction. Finding 356. `V34HS_OURS` still compiles and now sets the
 default.
 
-**`v34handshak` is partial and HALTS on an arm nobody has written.**
-`t3c_unwritten()` calls `abort`. So a test that turns the switch on must drive
-only states some batch has landed, which today are:
+**`v34handshak` IS NO LONGER PARTIAL, and the list below is now a record of
+how it got there rather than a restriction on what a test may drive.**
+`t3c_unwritten()` still calls `abort`, and there is still exactly one call of
+it -- table 3's `default:`, which forty labels over the forty values the range
+test admits make unreachable. Every reachable arm of every dispatch is
+written:
 
 ```
   table 3   the arm 24 states share (0x6590b) and the default (0x65329)
@@ -236,8 +238,9 @@ only states some batch has landed, which today are:
             731-735), 35 WAIT, 53 DET_AB (0x65473, findings 724-729),
             72 RX_L1 (0x650c6, findings 738-745) and the two default
             doors into table 2.  `t_v34hsrxch.c` drives all eighty-seven
-  the rest  halts -- which today is table 1's two transfers out of the
-            per-sample loop and microstate 44's two Modem-on-Hold sites
+  the rest  NOTHING.  Every reachable arm of every dispatch is written,
+            and the only `t3c_unwritten()` left is table 3's `default:`,
+            which forty labels over forty values make unreachable
 ```
 
 **Pick your txstate for the tail you want.** Every table-3 arm ends in the
@@ -467,10 +470,13 @@ can be compared against the blob's copy of itself. Reading "table 1 is
 complete" off the arms retires a guard that is still doing its job; finding
 712.
 
-What is left of `T3M_UNWRITTEN_TBL1` is the two transfers OUT of the loop that
-are not reconstructed: 81's wrap at 0xc0 -> 0x66d85 and 86's segment end ->
-0x66fe9. The arms report them as `V34TX1_MOH_WRAP` and `V34TX1_TXMD_DONE` and
-the loop dispatches on the return value. **It compares,
+**`T3M_UNWRITTEN_TBL1` IS RETIRED.** What was left of it -- 81's wrap at
+0xc0 -> 0x66d85 and 86's segment end -> 0x66fe9 -- is written, inside
+`v34tx1_moh_silence` and `v34tx1_txmd`, because neither block is a transfer
+out of its arm: 0x66d85 ends at the loop test and 0x66fe9 at the fall-through
+of the block that jumped to it. `V34TX1_MOH_WRAP` and `V34TX1_TXMD_DONE` are
+gone, the loop no longer tests what an arm returned, and `enum v34tx1_exit`
+has one value. Findings 748 and 750. **It compares,
 and it is in the default sweep.** It used not to; findings 319-322 are what
 that took and D60 is the retraction. Nothing about the route is special any
 more except that it is the one the harness's geometry could break, so if a
@@ -561,8 +567,13 @@ the target for txstates 5, 54 and 74, and the shared prologue re-reads
 422). 0x635cc, shared by 64 and 68, re-reads it too -- but at 0x636ff, seven
 eighths of the way down and only on the pass where `vect_idx` wraps, so most
 passes are one body under two indices and the wrap is two behaviours (finding
-423). 0x63d58, shared by 81, 82, 83 and 84, really is one behaviour. Measure
-it; do not assume either way because finding 323 lists one representative.
+423). 0x63d58, shared by 81, 82, 83 and 84, IS ALSO TWO BEHAVIOURS AND THIS FILE
+SAID OTHERWISE. Above the wrap it is one body under four indices; at
+`vect_idx == 0xc0` it reaches 0x66d85, which re-reads +0x3596 and returns to
+the loop test for anything that is not 0x51 -- so 82, 83 and 84 decide nothing
+there and only 81 moves the transmit machine. That is 0x635cc's shape exactly
+(finding 423), and finding 750 is the correction. Measure it; do not assume
+either way because finding 323 lists one representative.
 
 **`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
 one shared harness object, so it demands all forty-three cases at once, and no

@@ -64,14 +64,15 @@
  },
  {
   "label": "+0xabf0 tested for non-zero rather than for 1",
-  "find": "\tif (obj->moh_message == 1) {",
-  "replace": "\tif (obj->moh_message != 0) {",
-  "fn": "t41_after_guards"
+  "find": "\tif (obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
+  "replace": "\tif (obj->moh_message != 0) {\n\t\tt41_frr_nack(obj);",
+  "fn": "t41_after_guards",
+  "note": "The anchor carries `t41_frr_nack` because microstate 79's 0x6d57c guard is the same 32-bit test of the same field and made the one-line form match twice."
  },
  {
   "label": "+0xabf0 read sixteen bits wide",
-  "find": "\tif (obj->moh_message == 1) {",
-  "replace": "\tif (*(const short *)&obj->moh_message == 1) {",
+  "find": "\tif (obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
+  "replace": "\tif (*(const short *)&obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
   "fn": "t41_after_guards"
  },
  {

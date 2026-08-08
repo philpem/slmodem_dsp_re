@@ -66,6 +66,9 @@
 #define T3T_COUNT_SRC	0xaa7c
 #define T3T_RTD		0xaa7e
 #define T3T_FAAE2	0xaae2
+#define T3T_F359C	0x359c
+#define T3T_FABE2	0xabe2
+#define T3T_FABE4	0xabe4
 #define T3T_FABE6	0xabe6
 #define T3T_FABF0	0xabf0
 #define T3T_FABF8	0xabf8
@@ -183,6 +186,24 @@ detector(int assert_it)
 		v34hs_poke_short(T3T_DET_COUNT, -1000);
 		v34hs_poke_short(T3T_DET_LIMIT, 0x7fff);
 	}
+}
+
+/*
+ * The detector's `coeff` pointer on one side, read as a pointer.
+ *
+ * NOT `v34hs_peek_short`: the field is a pointer and half of one is not an
+ * identity.  And not a COMPARISON BETWEEN THE SIDES either -- side A holds
+ * ours and side B the blob's copy of the same table, which is exactly the
+ * case finding 324 says no address comparison can settle.  What is checked
+ * with this is which of OUR OWN two descriptors the arm chose, which is an
+ * absolute answer and not a difference: two runs that merely differ would
+ * pass with the select inverted.
+ */
+static const short *
+det_coeff(int side)
+{
+	return *(const short *const *)((const char *)v34hs_object(side)
+				       + T3T_DET);
 }
 
 /*
@@ -562,6 +583,85 @@ main(void)
 	step("79, counter one short of +0xabfc", 604, 27, 0, V34HS_MOH_TONE,
 	     V34HS_MOH_SILENCE);
 
+	/*
+	 * 0x6d57c, THE OTHER SIDE OF 79's ONE 32-BIT GUARD.  With
+	 * `moh_message` at 1 MHfrr the body does not go to DET_SYNC: it
+	 * re-aims the tone detector at +0x3564 and goes to MOH_TONE_DROP to
+	 * wait for the far end's carrier to stop.  Everything below the guard
+	 * -- the FSK reset, the two self-pointers, the counter -- is shared,
+	 * and 0x6d57c's exit at 0x6589f joins it past the DET_SYNC store.
+	 *
+	 * THE DETECTOR IS ASSERTED FIELD BY FIELD AND NOT LEFT TO THE BYTE
+	 * COMPARISON.  `limit` is the ONE constant that separates this call
+	 * from microstate 44's at 0x6ebed -- 0xf0 here, 0x64 there, same
+	 * coefficients, same polarity, same warm-up, same thresholds -- so a
+	 * reconstruction that copied 44's line differs in two bytes of one
+	 * halfword and in nothing else.  `count` is -`warmup`, which is what
+	 * detectorinit does with it.
+	 *
+	 * AND THE CARRIER SELECT IS CHECKED BY DIFFERENCE, not by address.
+	 * `coeff` points at a library table, so side A holds ours and side B
+	 * the blob's and no address comparison can tell two copies from two
+	 * tables (finding 324).  What CAN be checked on one side is that
+	 * f359c 0x64 and f359c 0x65 select different tables at all -- which a
+	 * reconstruction that always picked one would fail.
+	 */
+	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
+	detector(1);
+	v34hs_poke_short(T3T_COUNT, 100);
+	v34hs_poke_short(T3T_FABFC, 50);
+	v34hs_poke_int(T3T_FABF0, 1);
+	v34hs_poke_short(T3T_F359C, 0x64);
+	step("79, MHfrr, answering", 605, 45, 2, V34HS_MOH_TONE_DROP,
+	     V34HS_TX_DPSK);
+	diff_eq_int("79, MHfrr: the detector's limit is 0xf0 and not 0x64",
+		    v34hs_peek_short(0, T3T_DET_LIMIT), 0xf0, 605);
+	diff_eq_int("79, MHfrr: polarity 1, so the high threshold is read",
+		    v34hs_peek_short(0, T3T_DET_POL), 1, 605);
+	diff_eq_int("79, MHfrr: the warm-up is 0x32 calls",
+		    v34hs_peek_short(0, T3T_DET_COUNT), -0x32, 605);
+	diff_eq_int("79, MHfrr: thresholds 0x800 low and 0x400 high",
+		    (v34hs_peek_short(0, T3T_DET_TLO) == 0x800
+		     && v34hs_peek_short(0, T3T_DET_THI) == 0x400), 1, 605);
+	diff_eq_int("79, MHfrr: the detector is armed at +0x356a",
+		    v34hs_peek_short(0, T3T_DET_ARMED), 1, 605);
+	diff_eq_int("79, MHfrr: f359c 0x64 selects the 1200 Hz descriptor",
+		    det_coeff(0) == c1200_, 1, 605);
+
+	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
+	detector(1);
+	v34hs_poke_short(T3T_COUNT, 100);
+	v34hs_poke_short(T3T_FABFC, 50);
+	v34hs_poke_int(T3T_FABF0, 1);
+	v34hs_poke_short(T3T_F359C, 0x65);
+	step("79, MHfrr, originating", 606, 45, 2, V34HS_MOH_TONE_DROP,
+	     V34HS_TX_DPSK);
+	diff_eq_int("79, MHfrr: f359c 0x65 selects the 2400 Hz descriptor",
+		    det_coeff(0) == c2400_, 1, 606);
+
+	/*
+	 * AND THE GUARD IS `== 1` AND THIRTY-TWO BITS WIDE.  `moh_message` at
+	 * 2 MHclrd takes the DET_SYNC side, which a test for non-zero would
+	 * not; at 0x10001 it does too, which a sixteen-bit read would not.
+	 * Both go to DET_SYNC, so they are 79's body case again with one
+	 * field moved -- which is the point: the field is what is on trial.
+	 */
+	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
+	detector(1);
+	v34hs_poke_short(T3T_COUNT, 100);
+	v34hs_poke_short(T3T_FABFC, 50);
+	v34hs_poke_int(T3T_FABF0, 2);
+	step("79, moh_message 2 is not MHfrr", 607, 37, 2, V34HS_DET_SYNC,
+	     V34HS_TX_DPSK);
+
+	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
+	detector(1);
+	v34hs_poke_short(T3T_COUNT, 100);
+	v34hs_poke_short(T3T_FABFC, 50);
+	v34hs_poke_int(T3T_FABF0, 0x10001);
+	step("79, moh_message 0x10001 is not MHfrr", 608, 37, 2,
+	     V34HS_DET_SYNC, V34HS_TX_DPSK);
+
 	/* --- 80 MOH_TONE_DROP, 0x656e0 ------------------------------------ */
 
 	/* Detector silent: the counter, and the drop is not reported. */
@@ -632,6 +732,60 @@ main(void)
 	     V34HS_SILENCERETRAIN);
 	diff_eq_int("80, retrain: +0xabe6 set",
 		    v34hs_peek_short(0, T3T_FABE6), 1, 704);
+
+	/*
+	 * 0x6c8f8, THE OTHER SIDE OF THAT BYTE.  +0xabf9 non-zero means the
+	 * far end never sent its MH sequence under MHfrr and the connection is
+	 * given up rather than retrained: no `v34handshakinit`, four stores
+	 * and one line.  The two paths are not symmetrical with 79's -- there
+	 * the guard is a 32-bit field and here it is a BYTE -- so the read
+	 * width is its own claim and gets its own trial below.
+	 *
+	 * THE FOUR STORES ARE SEEDED AWAY FIRST.  Two of them are state words
+	 * and `hs_setstate` does nothing when the word already holds the
+	 * value, so entering at MOH_CLEARDOWN or WAIT would make the stores
+	 * invisible and cost the diagnostic line as well; +0xabe4 and +0xabe2
+	 * are seeded non-one for finding 345's reason.
+	 *
+	 * AND THE BYTE IS SEEDED WITH ITS NEIGHBOUR CLEAR.  +0xabf9 is set to
+	 * 1 and +0xabfa -- a declared field, so a real neighbour and not a pad
+	 * -- to zero, and then to 0x100 with +0xabf9 clear.  A sixteen-bit
+	 * read at +0xabf9 sees the neighbour, so the second seed is the one
+	 * that separates `cmpb` from `cmpw`; a run with only the first cannot.
+	 */
+	begin(V34HS_MOH_TONE_DROP, V34HS_MOH_SILENCE);
+	detector(0);
+	v34hs_poke_short(T3T_RTD, 0);
+	v34hs_poke_short(T3T_COUNT, 0x12bf);
+	v34hs_poke_byte(T3T_FABF9, 1);
+	v34hs_poke_byte(T3T_FABF9 + 1, 0);
+	v34hs_poke_short(T3T_FABE4, 0x1234);
+	v34hs_poke_short(T3T_FABE2, 0x5678);
+	step("80, disconnect", 706, 37, 3, V34HS_MOH_TONE_DROP,
+	     V34HS_MOH_CLEARDOWN);
+	diff_eq_int("80, disconnect: +0xabe4 set",
+		    v34hs_peek_short(0, T3T_FABE4), 1, 706);
+	diff_eq_int("80, disconnect: +0xabe2 set",
+		    v34hs_peek_short(0, T3T_FABE2), 1, 706);
+	diff_eq_int("80, disconnect: the receive machine is at WAIT",
+		    v34hs_peek_short(0, V34HS_RXSTATE_OFF), V34HS_WAIT, 706);
+	diff_eq_int("80, disconnect: +0xabe6 is NOT the field it writes",
+		    v34hs_peek_short(0, T3T_FABE6) != 1, 1, 706);
+
+	/*
+	 * The neighbour non-zero and the byte clear: this must RETRAIN.  A
+	 * sixteen-bit read of +0xabf9 would see 0x100 and disconnect.
+	 */
+	begin(V34HS_MOH_TONE_DROP, V34HS_MOH_SILENCE);
+	detector(0);
+	v34hs_poke_short(T3T_RTD, 0);
+	v34hs_poke_short(T3T_COUNT, 0x12bf);
+	v34hs_poke_byte(T3T_FABF9, 0);
+	v34hs_poke_byte(T3T_FABF9 + 1, 1);
+	step("80, the byte clear and its neighbour set: retrain", 707, 50, 9,
+	     V34HS_MOH_TONE_DROP, V34HS_SILENCERETRAIN);
+	diff_eq_int("80, +0xabf9 is read as a byte: +0xabe6 set",
+		    v34hs_peek_short(0, T3T_FABE6), 1, 707);
 
 	/*
 	 * THE ROUND-TRIP DELAY MOVES THE THRESHOLD, and it moves it by

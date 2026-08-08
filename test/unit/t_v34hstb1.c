@@ -252,39 +252,41 @@ suite_range(void)
 }
 
 /*
- * The two transfers OUT of the loop that are not reconstructed -- 81's wrap
- * at 0x66d85 and 86's segment end at 0x66fe9 -- which the arms report in
- * their return value and the loop dispatches on.
+ * The two blocks the loop used to STOP at -- 81's wrap at 0x66d85 and 86's
+ * segment end at 0x66fe9 -- which are written now, in the arms that reach
+ * them.
  *
- * THIS IS THE WHOLE OF WHAT `T3M_UNWRITTEN_TBL1` MEANS NOW.  It used to mean
- * "the loop is not written"; the loop and its nineteen arms are written, and
- * what is left is these two.  Both must record the code rather than carrying
- * on round the loop as though the arm had returned normally, which is the
- * wrong-but-plausible thing available here.
+ * THIS SUITE'S CLAIM HAS INVERTED, and what it used to be is worth keeping
+ * because it is what the guard bought.  It was "our side recorded
+ * `T3M_UNWRITTEN_TBL1` and RETURNED", checked at two budgets: `t3m_notwritten`
+ * records and, under `v34handshak_unwritten_reset`, returns, so a loop that
+ * recorded the code and went round again recorded the SAME code and passed,
+ * and only the budget separated the two (finding 715).
+ *
+ * NEITHER BLOCK IS A TRANSFER OUT OF THE LOOP.  0x66d85 ends at 0x63941 or
+ * 0x63948, which are both the loop test, and 0x66fe9 at 0x63e7f, which is the
+ * fall-through of the block that jumped to it.  So there is nothing to stop,
+ * nothing to neutralise, and each seed below is an ordinary differential run
+ * of our whole function against the blob's.  Finding 748.
+ *
+ * BOTH BUDGETS ARE KEPT, for the opposite reason to the one that put them
+ * here: a budget of sixteen runs the loop PAST the wrap, so it is the only
+ * run in which what the wrap left behind -- a moved txstate and a `vect_idx`
+ * back at zero -- is read by a later pass.
+ *
+ * AND 82, 83 AND 84 ARE HERE BECAUSE THE WRAP IS WHERE FOUR TXSTATES STOP
+ * BEING ONE BEHAVIOUR.  They share 81's entry at 0x63d58, and 0x66d85 re-reads
+ * +0x3596 and returns to the loop test for anything that is not 0x51 -- so
+ * these three reach the hundred-and-ninety-second sample and decide nothing.
+ * Under the old guard every one of them aborted.  Finding 750.
  *
  * The pokes are `t_v34hstx1.c`'s, which is deliberate: they are the seeds
- * that file already proves reach these two exits, so a change that stopped
+ * that file already proves reach these two blocks, so a change that stopped
  * reaching them fails there as well as here.
- *
- * NOT STEPPED, and not compared.  Past the transfer there is no
- * reconstruction to compare against -- finding 343 -- so what is checked is
- * the code and the fact that our side stopped.
- *
- * AND "STOPPED" NEEDS ITS OWN CLAIM, because the code alone does not carry
- * it: `t3m_notwritten` records and, under `v34handshak_unwritten_reset`,
- * returns, so a loop that recorded the code and went round again records the
- * SAME code and passes.  The mutation tier said so (finding 715).  What
- * separates them is the budget: we return on the first non-`LOOP` exit
- * whatever the budget is, so the object must come out IDENTICAL from a run
- * with a budget of one and a run with a budget of sixteen.  A loop that
- * carried on diverges on the second.
  */
-static unsigned char exit_snap[sizeof(struct v34_object)];
-static unsigned char exit_now[sizeof(struct v34_object)];
-
 static void
-exit_case(short txst, void (*seed)(void), short budget, const char *what,
-	  long tag, int compare)
+wrap_case(short txst, void (*seed)(void), short budget, const char *what,
+	  long tag)
 {
 	char msg[192];
 
@@ -292,38 +294,51 @@ exit_case(short txst, void (*seed)(void), short budget, const char *what,
 	v34hs_route(V34HS_ROUTE_TXSAMPLE, budget);
 	v34hs_state(V34HS_PHASE1, V34HS_SILENCE, txst);
 	seed();
+
 	v34handshak_unwritten_reset();
 	v34hs_ours(1);
-	v34handshak(v34hs_object(0));
+	v34hs_step();
 	v34hs_ours(0);
 
 	snprintf(msg, sizeof(msg), "%s, budget %d", what, (int)budget);
-	diff_eq_int(msg, v34handshak_unwritten(), T3M_UNWRITTEN_TBL1, tag);
-
-	/*
-	 * THE BUDGET IS IN THE OBJECT, at +0x2aa0, so it is the one field that
-	 * must differ between the two runs and it is normalised out.  Nothing
-	 * else may move: the arm ran once and we returned, whatever room the
-	 * block had left.
-	 */
-	if (!compare) {
-		memcpy(exit_snap, v34hs_object(0), sizeof(exit_snap));
-		*(short *)(exit_snap + V34HS_TXLIMIT) = 0;
-		return;
-	}
-	memcpy(exit_now, v34hs_object(0), sizeof(exit_now));
-	*(short *)(exit_now + V34HS_TXLIMIT) = 0;
-
-	snprintf(msg, sizeof(msg),
-		 "%s: the loop stopped, so the budget cannot matter", what);
-	diff_eq_int(msg,
-		    memcmp(exit_snap, exit_now, sizeof(exit_now)) == 0, 1, tag);
+	v34hs_compare(msg, tag);
+	diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag);
 }
 
 static void
 seed_moh_wrap(void)
 {
 	v34hs_poke_short(0x2aa2, 0xbf);		/* TX1_VECTIDX */
+}
+
+/*
+ * The two 32-bit companions 0x66d85 reads, driven both ways.  `fabec` at
+ * +0xabec is set to 0x10001 and not to 1: the low half is one either way, so
+ * a 16-bit read of it agrees with a 32-bit read on the value 1 and cannot be
+ * told apart -- this is the seed that separates them.
+ */
+static void
+seed_moh_wrap_frr(void)
+{
+	v34hs_poke_short(0x2aa2, 0xbf);		/* TX1_VECTIDX */
+	v34hs_poke_int(0xabec, 1);
+	v34hs_poke_int(0xabf0, 0);		/* moh_message */
+}
+
+static void
+seed_moh_wrap_act(void)
+{
+	v34hs_poke_short(0x2aa2, 0xbf);		/* TX1_VECTIDX */
+	v34hs_poke_int(0xabec, 0x10001);
+	v34hs_poke_int(0xabf0, 1);		/* moh_message */
+}
+
+static void
+seed_moh_wrap_hold(void)
+{
+	v34hs_poke_short(0x2aa2, 0xbf);		/* TX1_VECTIDX */
+	v34hs_poke_int(0xabec, 0x10001);
+	v34hs_poke_int(0xabf0, 0);		/* moh_message */
 }
 
 static void
@@ -340,16 +355,35 @@ static void
 suite_exits(void)
 {
 	long tag = 980;
+	static const short shared[] = { V34HS_MOH_ON_HOLD, V34HS_MOH_FRR,
+					V34HS_MOH_CLEARDOWN };
+	int i;
 
-	exit_case(V34HS_MOH_SILENCE, seed_moh_wrap, 1,
-		  "81's wrap at 0xc0 leaves the loop for 0x66d85", tag, 0);
-	exit_case(V34HS_MOH_SILENCE, seed_moh_wrap, 16,
-		  "81's wrap at 0xc0 leaves the loop for 0x66d85", tag++, 1);
+	wrap_case(V34HS_MOH_SILENCE, seed_moh_wrap, 1,
+		  "81's wrap at 0xc0 runs 0x66d85", tag);
+	wrap_case(V34HS_MOH_SILENCE, seed_moh_wrap, 16,
+		  "81's wrap at 0xc0 runs 0x66d85", tag++);
 
-	exit_case(V34HS_TXMD, seed_txmd_done, 1,
-		  "86's segment end leaves the loop for 0x66fe9", tag, 0);
-	exit_case(V34HS_TXMD, seed_txmd_done, 16,
-		  "86's segment end leaves the loop for 0x66fe9", tag++, 1);
+	wrap_case(V34HS_MOH_SILENCE, seed_moh_wrap_frr, 16,
+		  "81's wrap, org MHfrr", tag++);
+	wrap_case(V34HS_MOH_SILENCE, seed_moh_wrap_act, 16,
+		  "81's wrap, act MHfrr", tag++);
+	wrap_case(V34HS_MOH_SILENCE, seed_moh_wrap_hold, 16,
+		  "81's wrap, neither MHfrr", tag++);
+
+	for (i = 0; i < 3; i++) {
+		char msg[96];
+
+		snprintf(msg, sizeof(msg),
+			 "txstate %d shares 81's entry and its wrap decides"
+			 " nothing", (int)shared[i]);
+		wrap_case(shared[i], seed_moh_wrap_frr, 16, msg, tag++);
+	}
+
+	wrap_case(V34HS_TXMD, seed_txmd_done, 1,
+		  "86's segment end runs 0x66fe9", tag);
+	wrap_case(V34HS_TXMD, seed_txmd_done, 16,
+		  "86's segment end runs 0x66fe9", tag++);
 }
 
 /*
