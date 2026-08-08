@@ -46,7 +46,17 @@
 # UNTESTED HERE: x87.  This object is built -mfpmath=387 and Ghidra's x87
 # modelling is its known weak spot.  The float-heavy modules are already
 # reconstructed, so this has not been measured -- treat any floating-point
-# output as suspect until someone does.
+# output as suspect until someone does.  Still true after the 12.2 trial
+# below: the function picked as an x87 probe, `V34EchoFilter`, turned out to
+# be fixed-point shorts.
+#
+# WHICH GHIDRA.  Pinned to 11.4.2, which is the version every claim above was
+# measured against.  `ghidra_12.1_DEV` and `ghidra_12.2_DEV` are also present
+# here and CANNOT RUN THIS SCRIPT as installed: Ghidra 12 hands `.py` to
+# PyGhidra instead of Jython, and PyGhidra needs `pip install`ing before any
+# `.py` post-script will load.  Nothing about 12.x's decompiler quality is
+# claimed either way -- the comparison did not get far enough to have an
+# opinion, and "newer" is not evidence.  Finding 703.
 #
 # USAGE
 #
@@ -61,11 +71,42 @@ BLOB=${BLOB:-../slmodemd/dsplibs.o}
 [ $# -ge 1 ] || { sed -n '2,/^set -eu/p' "$0" >&2; exit 1; }
 
 PROJ=$(mktemp -d)
-trap 'rm -rf "$PROJ"' EXIT
+LOG=$(mktemp)
+trap 'rm -rf "$PROJ" "$LOG"' EXIT
 WANT=$(echo "$@" | tr ' ' ',')
 export WANT
-# Ghidra is chatty on stderr and the analysis log is not the deliverable.
+
+#
+# THE EXIT STATUS OF analyzeHeadless SAYS NOTHING ABOUT THE SCRIPT.
+#
+# It reports on the IMPORT.  A post-script that throws is logged as an ERROR
+# and then `Import succeeded` is printed and 0 is returned.  So the failure
+# mode is silence: no output, no diagnostic, and a shell `&&` chain that
+# carries on as if the decompilation had happened.
+#
+# This bit, on Ghidra 12.2-DEV: `.py` is routed to PyGhidra rather than
+# Jython there, PyGhidra was not installed, and the run produced zero bytes
+# with status 0.  The message that explained it -- `Ghidra was not started
+# with PyGhidra. Python is not available` -- went to the `2>/dev/null` this
+# replaces.  Finding 703.
+#
+# So the log is CAPTURED rather than discarded, the extraction is checked,
+# and a failure prints the ERROR lines that name the cause.  Same argument as
+# gates.md: a tool nobody has seen fail is not a tool.
+#
 "$HEADLESS" "$PROJ" p -import "$BLOB" \
     -postScript decompile.py -scriptPath "$(dirname "$0")/ghidra" \
-    -deleteProject 2>/dev/null |
-  sed -n '/^=====BEGIN/,/^=====END=====$/p'
+    -deleteProject >"$LOG" 2>&1 || true
+
+sed -n '/^=====BEGIN/,/^=====END=====$/p' "$LOG" >"$LOG.out"
+if [ ! -s "$LOG.out" ]; then
+	echo "decompile.sh: $HEADLESS produced no decompilation." >&2
+	echo "  ghidra: $GHIDRA" >&2
+	echo "  wanted: $WANT" >&2
+	grep -i 'SCRIPT ERROR\|GhidraScriptLoadException\|Python is not available' \
+	    "$LOG" >&2 || echo "  (no script error in the log; ran the analysis but matched no function?)" >&2
+	rm -f "$LOG.out"
+	exit 1
+fi
+cat "$LOG.out"
+rm -f "$LOG.out"

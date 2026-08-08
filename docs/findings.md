@@ -28470,3 +28470,56 @@ exercised needs the rest of the V.90 receive path first — the 290 KB
 `VPcmFloModem`, which is constructed by `VPCMXF_Create`, all of which sits
 inside it. The modulator is the last 26 KB of a much longer road, not a
 shortcut onto it.
+
+### 703. `decompile.sh` exited 0 having produced nothing, and Ghidra 12 will not run our post-script
+
+Two separate things, found together because the second was invisible until the
+first was fixed.
+
+**`analyzeHeadless`'s exit status reports on the IMPORT, not on the script.**
+A post-script that throws is logged as `ERROR REPORT SCRIPT ERROR: ...`, after
+which the tool prints `Import succeeded` and returns 0. `decompile.sh` piped
+that through `sed -n '/^=====BEGIN/,...'` and sent stderr to `/dev/null`, so a
+total failure came out as: status 0, zero bytes, no diagnostic. Measured:
+
+    GHIDRA=~/ghidra/ghidra_12.2_DEV tools/decompile.sh chkForceBaudRate
+      before:  rc=0, 0 bytes on stdout, nothing on stderr
+      after:   rc=1, the ERROR line naming the cause
+
+This is `gates.md`'s argument arriving somewhere new. The tool had never been
+run against a Ghidra it could not drive, so nobody had seen it fail, and its
+failure mode turned out to be indistinguishable from "this function has no
+interesting output". Same shape as `extcheck` printing `(none)` through four
+broken versions (finding 134's argument, and 619's worked example).
+
+**Ghidra 12 routes `.py` to PyGhidra, not Jython.** `ghidra_12.1_DEV` and
+`ghidra_12.2_DEV` are installed alongside 11.4.2 and both refuse
+`tools/ghidra/decompile.py`:
+
+    ghidra.app.script.GhidraScriptLoadException:
+        Ghidra was not started with PyGhidra. Python is not available
+        at ghidra.pyghidra.PyGhidraScriptProvider.getScriptInstance
+
+Jython is still bundled in 12.2 (`Features/Jython/lib/jython-standalone-2.7.4.jar`)
+but no longer claims the extension, and `support/pyghidraRun` shows what the
+PyGhidra path needs that `support/analyzeHeadless` does not: it runs
+`python3 Ghidra/Features/PyGhidra/support/pyghidra_launcher.py` rather than
+`launch.sh`, so PyGhidra has to be pip-installed before headless will load a
+`.py` script at all. The wheels ship with Ghidra
+(`Features/PyGhidra/pypkg/dist/`, cp39–cp313; this machine is Python 3.12.3,
+so in range) — it is an install decision, not a blocker.
+
+**NOTHING IS CLAIMED ABOUT 12.x's DECOMPILER QUALITY.** The comparison never
+ran. `$GHIDRA` stays pinned to 11.4.2 because that is the version every claim
+in `decompile.sh`'s header was measured against, and a DEV snapshot is a poor
+thing to pin to regardless. If someone installs PyGhidra and retries, the bar
+is already written down: `chkForceBaudRate`'s `unsigned char allow[6]` must
+come back as an array and `sel` must stay one pointer, against the
+hand-verified ground truth at `src/pump/v34/v34pcmif.c:717`. 11.4.2's baseline,
+re-measured today, is unchanged from the header's account — three unrelated
+locals written through `local_2c._2_1_ = 1`.
+
+**Scope of what was compared:** two small leaf functions, `chkForceBaudRate`
+and `V34EchoFilter`, on arrays and control flow only. x87 remains unmeasured —
+`V34EchoFilter` was picked as the x87 probe and turned out to be fixed-point
+shorts, so the header's "UNTESTED HERE: x87" still stands.
