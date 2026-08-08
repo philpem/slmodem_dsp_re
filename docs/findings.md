@@ -29631,3 +29631,326 @@ entries repartitions blocks that were shared. Arms 4, 72 and 53 reproduce
 finding 716 exactly under both. **The entry set is part of the measurement
 and has to be quoted with the figure.** 719's five ranges remain the
 authority for that arm.
+
+### 738. rxstate 72 `RX_L1` is written, and `T3M_UNWRITTEN_RXSTATE` has no call site left
+
+The last arm of `v34handshak`'s rxstate chain, 0x650c6, is
+`t72_rx_l1`/`t72_ladder`/`t72_measure`/`t72_probe_done`/`t72_update_both`/
+`t72_nsamples` in `src/pump/v34/v34hshak.c`, and it compares against the blob
+through `test/unit/t_v34hsrx72.c` -- 5,826 checks over forty-nine cases, each
+one a whole-object, whole-arena, both-transcripts comparison with
+`v34hs_ours(1)`.
+
+**3,811 bytes over twenty-four ranges and ninety-five blocks**, every block
+exclusive to this arm. Reproduced independently of the analysis this session
+was handed: `cfgsplit.py`'s block graph, walked from 0x650c6 with barriers at
+0x62af1, 0x62a40, 0x629ed, 0x62a02 and 0x62b71, intersected against every
+other dispatch target, gives 3,811 / 24 / 95 exactly. The last three barriers
+are what the analysis did not say and are not optional: a table-1 arm falls
+out of the per-sample loop at 0x629ed and reaches the whole chain, so without
+them every block reports as shared and the answer is zero.
+
+`t_v34hsrxch.c`'s `named[]` table now has `T3M_WRITTEN` in every row and its
+sweep drives all eighty-seven rxstates rather than eighty-six.
+`T3M_UNWRITTEN_RXSTATE` joins `T3M_UNWRITTEN_FSKGATE`: the constant stays in
+`v34hshak.h` and nothing calls it.
+
+**`v34handshak` is still `PARTIAL` in `tools/coverage.py` and that is not an
+oversight.** What is left is table 1's two transfers out of the loop -- 81's
+wrap to 0x66d85 and 86's segment end to 0x66fe9 -- and microstate 44's two
+`t3c_unwritten()` sites at 0x6d57c and 0x6c8f8. The rxstate chain is complete;
+the function is not.
+
+### 739. obj+0xa76c is exactly four DFT bins, and rxstate 72's arm is the caller that says so
+
+`v34hshak.h` says of the two nonlinear-distortion initialisers: "Which bank is
+the reference and which the product is NOT settled by anything in the object
+-- neither initialiser has a caller -- so nothing here reads across." **That
+was true when it was written. This arm is their caller, twice each, and it
+reads across.**
+
+`dftnlinitSignalBins`' body is inlined at 0x6a54c and 0x6a760 on `obj +
+0xa320`; `dftnlinitNoiseBins`' at 0x6a5a1 and 0x6a7aa on `obj + 0xa76c`. Both
+are recognisable store for store -- the four-bin clear at stride 0x2c, then
+`inc` written at +0x2, +0x2e, +0x5a and +0x86 with 0x700/0x900/0xd00/0x1100
+for the signal bank and 0x600/0x800/0xc00/0x1000 for the noise bank.
+
+Two consequences, and the second is a struct change:
+
+- **The signal bank OVERLAYS `probe_bins[0..3]`.** 0xa320 is `probe_bins`,
+  asserted at that offset by `v34pcmif.c` already. So the same four bins are
+  the probe's first four and the nl measurement's signal half, and re-arming
+  one destroys the other -- which is exactly what the 0x40 and 0x180 rungs do
+  on purpose.
+- **The noise bank is `struct v34_dftbin nl_noise_bins[4]`**, replacing
+  `unmapped_a76c` in `struct v34_object`. 0xa320 + 25 * 0x2c = 0xa76c and
+  0xa76c + 4 * 0x2c = 0xa81c, which is `retrain_bins` -- so the region held
+  exactly four bins and no slack. `HS_OFF_ASSERT(nl_noise, ...)` pins it,
+  beside a new one for `probe_bins`, because what fixes 0xa76c is the count of
+  the bins before it and a change to `V34_PROBE_BINS` would slide the noise
+  bank onto the probe's tail with everything still compiling.
+
+And the direction of the ratio falls out of the averaging loops at 0x69d28 and
+0x6a70f: both read `energy` at +0xc of each bank and compute
+`round(256 * sum(0xa320) / sum(0xa76c))`, so **0xa320 is the numerator and
+0xa76c the denominator** -- the question `v34hshak.h` says the object does not
+settle. It does; it just needed this caller.
+
+### 740. What rxstate 72's 3,811 bytes are, and four corrections to the inherited analysis
+
+The budget, measured:
+
+```
+  ~857  five inlined library functions, all already in this tree     22.5%
+  ~1093 diagnostics, 894 of it hs_setstate's own eight sites         28.7%
+  ~530  the FSK-gated timeout subtree                                13.9%
+  ~1331 the arm's own logic
+```
+
+The five inlines, all of which come out as CALLS -- finding 426's rule for the
+fifth, sixth and seventh time:
+
+| helper | standalone | sites |
+|---|---|---|
+| `dftnlinitSignalBins` | 0x5e830 | 0x6a54c, 0x6a760 |
+| `dftnlinitNoiseBins` | 0x5e890 | 0x6a5a1, 0x6a7aa |
+| `dftfreqinit` | 0x5e7c0 | 0x69d78, 92 bytes |
+| `dpskDetectInfo1Init` | 0x5e720 | 0x67eb3, the clear and all eleven scalars |
+| `V34SetupDemodulator` | 0x5def0 | 0x67db5 and 0x69667, both `(obj, 0x960, 0)` |
+
+`V34SetupDemodulator`'s two sites schedule their stores differently -- 0x67de7
+writes +0x1ae before +0x1b0 and 0x69699 the other way -- which is two
+schedules of one source and is why an n-gram screen misses it. Its carrier
+switch has folded away completely because the argument is a literal zero;
+`case 0` is `default: break` and writes nothing.
+
+**Four corrections to the analysis this session was handed.**
+
+1. **`rx->f124`'s bump is the ONLY thing that separates the two counter
+   windows.** The analysis called 0x68dd2 and 0x69995 the same block. They are
+   the same two `dftupdate` calls and then 0x69995 increments the receiver's
+   +0x124; without that the two windows would be one rung with a hole in it.
+2. **0x69c7a and 0x6a668 are not "one block with two heads".** They are one
+   construct at two sets of offsets -- +0xaabc/+0xaac0/+0xaac8 against
+   +0xaab4/+0xaab8/+0xaac4 -- with two different re-arms after it
+   (`dftfreqinit` against the two `dftnlinit*`). One helper with the offsets
+   as parameters, not a shared prefix and two tails.
+3. **The 0x6551a ladder's sample count is ZERO unless `rx->f128` is.** The
+   analysis has `%esi = (short)((rx->rx_samples - &rx->buf[0x10c]) / 2)`,
+   which is right -- but `rxtiming` SETS `rx_samples` to the start of that
+   buffer and then advances it once per output, so the count is `rx->f128`
+   after the call and not before it. That is a fixture consequence, not a
+   reconstruction one, and it is what reaches the two "denominator is zero"
+   guards.
+4. **The FSK-gated subtree is reachable from a seed.** See finding 741.
+
+### 741. `fsk_inhibit` opens the FSK-gated subtree, which the analysis said needed a real signal
+
+The analysis's account of the 530 bytes behind 0x65145 was: `fsk.nbits` and
+`fsk.sr` are both written by `fskdemodulate` on the same step, from a burst
+`V34agc` has just rewritten, so the gate cannot be steered by a poke and the
+subtree needs a signal rather than a seed. Every path to 0x6881e does run
+`fskdemodulate` first, so that much is right.
+
+**But `obj->fsk_inhibit` at +0x402 makes `fskdemodulate` return without doing
+anything at all** -- not even running the detector -- which `v34fsk.h` has
+recorded since `dpsk.c` was written and `dpsk.c:210` implements. Nothing on
+this path writes it, `V34agc` does not touch it, and it is not one of the
+thirty-seven pointer skips. So setting it leaves both fields exactly as poked
+and the gate becomes an ordinary two-way choice.
+
+That is what makes 0x6881e, 0x6afd7, 0x6b120, 0x6c9f1, 0x7086b and 0x69723
+testable, and it is why **no part of this arm is guarded**. Without it the
+brief's own instruction -- retire the guard completely -- would have been
+impossible to satisfy under CLAUDE.md's rule, and the honest outcome would
+have been a narrower guard around 530 bytes.
+
+> **A field that switches a callee OFF is a fixture control.** The general
+> shape: when an output cannot be poked because a callee overwrites it, look
+> for the callee's own disable rather than for a way to drive the callee.
+
+### 742. Three 32-bit compares in rxstate 72 that NO trial can separate, and the ones that can
+
+0x6881e sign-extends the counter and the round-trip delay into 32-bit
+registers and compares there:
+
+```
+  68825  movswl 0xaa7e(%esi),%edx      ; rtd
+  6882c  movswl 0xaa78(%esi),%ecx      ; the counter
+  68833  sar    $0x2,%edx
+  68836  lea    0xf10(%edx),%edi ; cmp %edi,%ecx ; jle 69723
+  68844  lea    0xf14(%edx),%ebx ; cmp %ebx,%ecx ; je  6afd7
+  6885e  lea    0xf2c(%edx),%esi ; cmp %esi,%ecx ; je  6c9f1
+```
+
+The brief flagged these as rxstate 53's case -- an arithmetic that overflows a
+short, which finding 724 tested at `rtd = 30000`. **It is not.** `rtd` is a
+short, so `rtd >> 2` is bounded by +-8192 and the three sums span
+-4304..12048: inside a short at every value the field can hold. Unlike
+`rtd + 0x2418`, this cannot overflow, so a 16-bit spelling agrees with the
+object on every input and **no differential trial exists**. Hunting for one is
+the turn sink the brief was trying to prevent, aimed at the wrong target.
+
+That is finding 613's case rather than 724's: the `movswl` is FORCED ENCODING
+and settles the declared width even though the two readings agree everywhere.
+It is written 32 bits wide on the codegen evidence and the mutation is not
+offered, because a mutation nothing can catch is a mutation, not an
+equivalence.
+
+**What IS separable, and is tested:**
+
+- **The `rtd` load's signedness.** At `rtd = -4000` the arithmetic shift gives
+  -1000 and the middle threshold is 0xb2c; a `movzwl` reading gives +15,384
+  and the same counter is 15,000 below even the first threshold. `suite_fsk`
+  drives 0xb2c and asserts +0x358c toggled.
+- **The SHIFT, at the boundary.** `rtd = 3` shifts to nothing and `rtd = 4` to
+  one, so 0xf14 toggles at the first and misses at the second. That separates
+  `>> 2` from `>> 1` and `>> 3` at a value where a coarser trial would not.
+- **The counter's own signedness, at the ENTRY compare and nowhere else.**
+  0x650c6's `cmp $0x440,%di; jle` is signed sixteen bits, and a counter of -20
+  becomes -19: signed it stays on the ladder and matches no rung, unsigned it
+  reads as 65,517 and runs `V34agc` and one of the two end paths. The same
+  question cannot be asked at 0x6881e, because nothing negative reaches it --
+  the entry compare has already sent it to the ladder.
+
+### 743. A seeding that made twelve mutations untestable, and the arithmetic that explains it
+
+`t_v34hsrx72.c`'s first version seeded the two DFT banks' accumulators at
+`4000 * bin` to drive the two measurements. Every case compared, every
+anti-vacuity assertion held, and **twelve mutations survived**: both
+`dftenergy` shifts, the `<< 8` on the signal total, both bank crossings, the
+rounding term, the sixteen-bit store of a total, and the "never stored" pair.
+
+`dftenergy` computes `(acc << shift) >> 16`, squares that, and takes the top
+half of the square. So an accumulator below about 2^22 at shift 2 -- or 2^18
+at shift 6 -- reduces to an energy of **zero**. Every energy was zero, both
+totals were zero, the ratio took the zero-denominator guard, and every claim
+about how the totals are computed was being asserted against `0 == 0`.
+
+Two things follow that are not specific to this arm:
+
+- **A seed large enough to be visible in the object is not large enough to be
+  visible through a callee.** The accumulators showed up in the byte counts
+  (`changed` moved by 146 between seeded and silent), which is exactly the
+  reassurance that made the seeding look adequate.
+- **The rounding term needs BOTH sides of itself.** `+ noise/2` changes the
+  quotient only when the remainder is at least half the denominator, and
+  `+ noise` -- the other way to get it wrong -- changes it always. One seeding
+  cannot fail both mutations. The file now has two: `BANKS_UP` at 407,552 over
+  3,296 with the remainder past the half, and `BANKS_DOWN` at 178,176 over the
+  same denominator with a remainder of 192. Both were survivors before the
+  split; the constants were found by sweeping the last probe bin's accumulator
+  over twenty-four values and watching which rounded.
+
+### 744. rxstate 72's mutation suite, its one equivalence, and the two anchors it broke
+
+`test/mutations/v34hsrx72.json`, registered in `suites.json`:
+
+```
+  125 mutations: 124 caught (124 by test), 0 NOT caught, 0 unusable,
+                 1 equivalent, 0 MIScounted
+```
+
+**The one equivalence is argued from the dispatch order.** "The lower window
+ends at 0x180" cannot fail, because 0x180 has its own rung tested three
+compares EARLIER in the chain -- `cmp $0x180,%dx; je 6a668` at 0x65567, before
+the `lea -0x41(%edx); cmp $0x13e,%ax; jbe 69995` at 0x65572 -- so the value
+never reaches that window whatever its upper bound is. The bound itself is
+still pinned: 0x17e and 0x40 are both caught, and 0x13e is 0x17f - 0x41.
+
+**Two anchors in other suites broke, and one of them is a repeat of finding
+432.** `v34hsrx53`'s "the gain control does not run" was anchored on
+`\tV34agc(rx);`, which became a PREFIX of rxstate 72's `\tV34agc(rx);` plus
+its address comment the moment this arm landed -- so it matched twice, was
+reported UNUSABLE, and an unusable mutation does not fail a run (finding 347).
+The repair is the one that has worked before: put the address on the source
+line, 0x65473, and on the anchor. `v34hsrxch`'s "72 RX_L1 is not one of the
+second chain's two" was anchored on the `t3m_notwritten` call this arm
+replaced and matched zero times. Both suites were re-run afterwards and both
+report the summary they reported before, rather than being blessed with
+`--update`.
+
+**Nineteen mutations needed a case that did not exist yet**, and the pattern
+in them is worth naming: every one was a claim about a SINGLE VALUE at a
+boundary that a case in the middle of a run cannot see. 0x301 is the first
+value of the top rung, 0x2ff the last of the upper window, 0xf11 the first
+past the timeout's floor; `+0x358c` toggling DOWN needs the bit already set;
+the twelve-bit shift-register mask needs a value with a bit in 0x100..0xfff
+and none below; the 32-bit store at +0xa8a0 needs a seed with a non-zero upper
+half; `rx->flags |= 0x800` needs another bit already set or it is
+indistinguishable from a store.
+
+### 745. A signature cap that truncated instead of failing, in the file that copied it
+
+`t_v34hsrx53.c`'s `record()` -- the mechanism finding 290 asks for, which
+hashes each behaviour so that a change collapsing two of them fails -- is
+
+```c
+	if (nsig < NSIG) { sig[nsig] = last_hash; ...; nsig++; }
+```
+
+`t_v34hsrx72.c` was copied from it with twenty-six calls and `NSIG` left at
+20. It recorded twenty, compared twenty pairwise, passed, and **six behaviours
+were never looked at**. Nothing said so; the pairwise sweep's output is
+identical either way.
+
+This is gates.md's rule 1 in a test rather than in a tool -- make the thing
+count what it examined and FAIL on the difference. `record()` here exits 2
+naming the behaviour that overflowed, and the count is asserted against a
+literal so that a `record()` deleted in an edit shrinks the check loudly. It
+was found only because the literal was asserted: the run said `got 20,
+reference 19` when the expected count was corrected downward for an unrelated
+reason.
+
+`t_v34hsrx53.c` is not changed. Its twelve calls are under its cap of sixteen,
+so it is correct today -- but the hazard is in the idiom, not in the number,
+and this is the note for whoever copies it next.
+
+### 746. A fixture seed that made both sides read tens of thousands of shorts past the object, and the two knobs that saw it
+
+`t_v34hsrx72.c` seeds the FSK receiver's eleven scalars so that
+`dpskDetectInfo1Init`'s stores are observable -- finding 345's rule -- and the
+first version did it the cheap way, `0x7100 + offset` across the struct. Every
+value is different from what the initialiser writes, which is all that rule
+asks for.
+
+**But `fsk.delay` is the discriminator's lag IN TAPS into a 49-short delay
+line**, and 0x7100 is 28,928. The one case in the file that lets
+`fskdemodulate` actually run -- everything else sets `fsk_inhibit` -- then read
+tens of thousands of shorts past the end of the object.
+
+Both sides do it, so it compares perfectly:
+
+```
+  default            PASS  5914 checks
+  V34HS_SEED=3,7,20  PASS
+  V34HS_SKEW=64      PASS
+```
+
+and it is `V34HS_OBJSKEW=32` and `V34HS_PADVARY=0` -- the two knobs that make
+the two sides' PADDING differ rather than moving both arenas together -- that
+turn it red, at +0xaae4 (`fsk.prev`) and +0xab80..+0xab85 (three taps of
+`fsk_lpf`), with everything else in the object identical. The
+blob-on-both-sides control passes at the same knob, which is what says the
+reads are ours and not the object's.
+
+Three things worth keeping:
+
+- **"Different from what the callee writes" is not the whole of a seed's
+  job.** It also has to be a value the callee can be given. A struct filled
+  by a sweep satisfies the first and says nothing about the second, and the
+  fields most likely to be indices are exactly the ones a sweep fills with
+  large numbers.
+- **The knobs earned their keep.** `docs/v34handshak.md` describes
+  `V34HS_OBJSKEW` and `V34HS_PADVARY` as existing "to make the fixture's own
+  claims falsifiable"; here they falsified the TEST's claim instead, and they
+  are the only thing in the tree that could have. Every other layout, seed and
+  scrub setting was green.
+- **The failing offsets named the field.** +0xab80 is `fsk_lpf[64]`, and
+  `V34_FSK_LPF_TAPS - V34_FSK_BLOCK` is 64 -- the first tap `fskdetect` writes
+  from `work[]`. That is what pointed at the discriminator rather than at the
+  arm.
+
+The seeds are now eleven explicit pokes with the initialiser's value in a
+comment beside each, which also makes the "is this still a change?" question
+answerable by reading rather than by arithmetic.

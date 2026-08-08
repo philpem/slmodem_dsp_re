@@ -13,7 +13,7 @@
  },
  {
   "label": "the gain control does not run",
-  "find": "\tV34agc(rx);",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x65473 */",
   "replace": "\t(void)rx;",
   "fn": "t53_rx_det_ab"
  },

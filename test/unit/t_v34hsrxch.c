@@ -64,7 +64,11 @@ static int dump;
  * is here so that the one state the chain treats specially and completely is
  * asserted to be complete, rather than being absent from the table and so
  * indistinguishable from an oversight.  4 RECEIVE and 53 DET_AB joined it
- * when their arms landed; 72 RX_L1 is the last one left.
+ * when their arms landed, and 72 RX_L1 with them -- so ALL FOUR are now
+ * written and the `T3M_WRITTEN` column no longer has an entry that is not.
+ * The column is kept, and so is the `unwritten()` predicate below it, because
+ * the shape of this test is "what must the chain say about each named state"
+ * and a table where every answer is the same is still that question asked.
  */
 static const struct {
 	short		rxst;
@@ -79,8 +83,8 @@ static const struct {
 	  "runs the arm t_v34hsrx4.c owns"	},
 	{ V34HS_DET_AB,	 T3M_WRITTEN,		 0x65473, "53 DET_AB",
 	  "runs the arm t_v34hsrx53.c owns"	},
-	{ V34HS_RX_L1,	 T3M_UNWRITTEN_RXSTATE,	 0x650c6, "72 RX_L1",
-	  NULL					}
+	{ V34HS_RX_L1,	 T3M_WRITTEN,		 0x650c6, "72 RX_L1",
+	  "runs the arm t_v34hsrx72.c owns"	}
 };
 
 #define NNAMED	((int)(sizeof(named) / sizeof(named[0])))
@@ -88,13 +92,18 @@ static const struct {
 /*
  * Is this rxstate one the chain sends somewhere that is not written?
  *
- * 35 WAIT is NOT in this set: its arm is four instructions and is written
- * below, so it belongs in the differential sweep.
+ * NOTHING IS, ANY MORE.  35 WAIT never was -- its arm is four instructions
+ * and is written below -- and 72 RX_L1 was the last, until `t72_rx_l1`
+ * landed.  The predicate stays rather than being deleted with its last
+ * member, because it is what the sweep below consults and a sweep with no
+ * exclusion mechanism cannot be given one again cheaply; it now returns 0
+ * for everything, which is the claim.
  */
 static int
 unwritten(short rxst)
 {
-	return rxst == V34HS_RX_L1;
+	(void)rxst;
+	return 0;
 }
 
 /*
@@ -141,9 +150,9 @@ suite_sweep(void)
 	 * gates.md's rule 1: make the tool count what it examined.
 	 */
 	diff_eq_int("the sweep drove every rxstate 0..86 that is written",
-		    written, 87 - 1, tag);
-	diff_eq_int("and skipped exactly the one that is not",
-		    guarded, 1, tag++);
+		    written, 87, tag);
+	diff_eq_int("and skipped none, because none is unwritten",
+		    guarded, 0, tag++);
 
 	if (dump)
 		printf("  sweep: %d written, %d guarded\n", written, guarded);

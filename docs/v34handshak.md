@@ -16,7 +16,7 @@ As of the session that landed rxstate 53's arm:
 | guard | still covers | bytes |
 |---|---|--:|
 | `T3M_UNWRITTEN_TBL1` | **only** 81's wrap to 0x66d85 and 86's segment end to 0x66fe9. The loop and all nineteen arms are written | -- |
-| `T3M_UNWRITTEN_RXSTATE` | **only** rxstate 72 RX_L1 (0x650c6). The chain, 4 RECEIVE, 35 WAIT, 53 DET_AB and both transmit-dispatch doors are written | 3,806 |
+| `T3M_UNWRITTEN_RXSTATE` | **RETIRED.** rxstate 72 RX_L1 (0x650c6) is written and the guard has no call site left. All five arms of the chain and both transmit-dispatch doors are written; the constant is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at three sites: 0x6d57c and 0x6c8f8, both inside microstate 44's Modem-on-Hold paths, and the table-3 `default:` | -- |
 
@@ -29,11 +29,14 @@ criterion -- one guard is a permanent structural assertion. The criterion is
 **when no REACHABLE arm is unwritten**, which today means one rxstate arm,
 the two table-1 exits, and 44's two.
 
-`tools/coverage.py`'s `PARTIAL` entry therefore STAYS for now. 3,806 bytes of
-reachable arm are still guarded and the function is not complete -- rxstate
-72 `RX_L1`, and nothing else in this table. The number was 11,398 while the
-FSK gate's body counted against it, 10,310 while 53's did (finding 725) and
-8,678 while 4 RECEIVE's did (finding 731).
+`tools/coverage.py`'s `PARTIAL` entry therefore STAYS, and what keeps it there
+is no longer in this table. **The rxstate chain is complete**: the number of
+guarded reachable bytes went 11,398 -> 10,310 (finding 725, 53 DET_AB) ->
+8,678 (731, 4 RECEIVE) -> 3,811 -> **zero** (738, 72 RX_L1). What is left of
+`v34handshak` is table 1's two transfers OUT of the per-sample loop -- 81's
+wrap to 0x66d85 and 86's segment end to 0x66fe9 -- and microstate 44's two
+`t3c_unwritten()` sites at 0x6d57c and 0x6c8f8. Read the guard table above
+from the tree before quoting any of this.
 
 ## What the function is
 
@@ -61,23 +64,33 @@ read off the prologue at 0x628f0:
 So table 2 has three entrances and not two; all three converge exactly, and
 that is measured over seventeen states rather than assumed (finding 361).
 
-**THE rxstate CHAIN IS 11,433 BYTES OVER FIVE ARMS, MEASURED** -- not the
-inherited "~12.3 KB", which counts the shared tail at 0x62a40 and the
-0x64a8f preamble against the arms (finding 716, which says 11,429 in both its
-prose and its table because it gave the FSK gate's arm 1,088 and rxstate 53's
-1,629; the five ranges sum to 1,089 and 1,632, which are findings 719 and
-727). `cfgsplit.py` cannot give
-this number unbarriered: after the per-sample loop falls through at 0x629ed
-every arm reaches every other and it reports exclusive = 0 for all of them.
+**THE rxstate CHAIN IS 11,537 BYTES OVER FIVE ARMS, AND ALL FIVE ARE
+WRITTEN** -- not the inherited "~12.3 KB", which counts the shared tail at
+0x62a40 and the 0x64a8f preamble against the arms (finding 716). The number
+moved from 11,433 when `cfgsplit.py` stopped dropping 131 bytes of every walk
+(finding 737), so **every count in this section is a re-measurement and not a
+copy**, taken with barriers at 0x62af1, 0x62a40, 0x629ed, 0x62a02 and 0x62b71.
+The last three are not optional and the inherited note did not have them: a
+table-1 arm falls out of the per-sample loop at 0x629ed and reaches the whole
+chain, so without them every arm reaches every other and `cfgsplit.py` reports
+exclusive = 0 for all of them.
 
 ```
-    0x653e4   rxstate  4 RECEIVE       4,881 bytes, 28 ranges   DONE
-    0x650c6   rxstate 72               3,806 bytes,  95 blocks   MEDIUM-LARGE
-    0x65473   rxstate 53               1,632 bytes, 10 ranges   DONE
-    0x6754b   the FSK gate's body      1,089 bytes,  38 blocks   DONE
-    0x6752c   rxstate 35 WAIT             31 bytes,   1 block    DONE
+    0x653e4   rxstate  4 RECEIVE       4,881 bytes, 28 ranges, 165 blocks  DONE
+    0x650c6   rxstate 72 RX_L1         3,811 bytes, 24 ranges,  95 blocks  DONE
+    0x65473   rxstate 53 DET_AB        1,632 bytes, 10 ranges,  41 blocks  DONE
+    0x6754b   the FSK gate's body      1,182 bytes,  7 ranges,  39 blocks  DONE
+    0x6752c   rxstate 35 WAIT             31 bytes,  1 range,    1 block   DONE
     0x64a87   the FSK gate's TEST      already written
 ```
+
+**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING 719 AND HAS NOT BEEN CHASED.**
+719 says 1,089 bytes over 38 blocks and this walk says 1,182 over 39. The
+likely cause is finding 737 -- `cfgsplit.py` was under-counting every walk
+until this session -- but the barrier sets are not known to be the same, and
+nobody has re-derived 719's. It is written down rather than reconciled: that
+arm is landed and tested, so the disagreement is about accounting, not about
+code.
 
 Every callee all five need is already defined in this tree, so unlike table 1
 -- where `probe` and `vectpp` had to be recovered before an arm could be
@@ -209,10 +222,12 @@ only states some batch has landed, which today are:
             tail every arm of that dispatch falls into. `t_v34hstbl2.c`
             drives every one; the "0x644c9 only" this line used to say was
             the FOURTH stale status line found in this file
-  the chain every rxstate but 72 RX_L1: 43 to table 3, 4 RECEIVE (0x653e4,
-            findings 731-735), 35 WAIT, 53 DET_AB (0x65473, findings
-            724-729) and the two default doors into table 2
-  the rest  halts
+  the chain EVERY rxstate: 43 to table 3, 4 RECEIVE (0x653e4, findings
+            731-735), 35 WAIT, 53 DET_AB (0x65473, findings 724-729),
+            72 RX_L1 (0x650c6, findings 738-745) and the two default
+            doors into table 2.  `t_v34hsrxch.c` drives all eighty-seven
+  the rest  halts -- which today is table 1's two transfers out of the
+            per-sample loop and microstate 44's two Modem-on-Hold sites
 ```
 
 **Pick your txstate for the tail you want.** Every table-3 arm ends in the
