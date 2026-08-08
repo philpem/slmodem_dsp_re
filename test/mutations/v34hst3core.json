@@ -51,8 +51,8 @@
  },
  {
   "label": "62's trace prints the flags it is about to raise",
-  "find": "\t\t\t\t     (unsigned)rx->flags,",
-  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),",
+  "find": "\t\t\t\t     (unsigned)rx->flags,\n\t\t\t\t     (unsigned)(int)rx->agc_gain);",
+  "replace": "\t\t\t\t     (unsigned)(rx->flags | 0x200),\n\t\t\t\t     (unsigned)(int)rx->agc_gain);",
   "fn": "t3c_micro_rx_phase3_call"
  },
  {
@@ -82,15 +82,15 @@
  },
  {
   "label": "79 sets the transmit state to SSEG",
-  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\tif (obj->moh_message == 1)",
-  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tif (obj->moh_message == 1)",
-  "note": "The anchor carries the line after it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t/*\n\t * 0x6d57c.",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\t/*\n\t * 0x6d57c.",
+  "note": "The anchor carries the comment that follows it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325.",
   "fn": "t3c_micro_moh_tone"
  },
  {
   "label": "79 moves the microstate to DET_INFO",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tobj->fsk.phase = 0;",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\n\tobj->fsk.phase = 0;",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t}\n\n\tobj->fsk.phase = 0;",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\t}\n\n\tobj->fsk.phase = 0;",
   "fn": "t3c_micro_moh_tone"
  },
  {
@@ -228,8 +228,8 @@
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\tif (obj->txq.count < obj->f2aa0) {",
-  "replace": "\tif (obj->txq.count <= obj->f2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
+  "replace": "\twhile (obj->txq.count <= obj->f2aa0) {",
   "fn": "v34handshak"
  },
  {
@@ -240,14 +240,14 @@
  },
  {
   "label": "the fskdemodulate gate is inverted",
-  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0) {",
-  "replace": "\tif (T3M_I32(&frame, T3M_FSKGATE) == 0) {",
+  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
+  "replace": "\tif (T3M_I32(&frame, T3M_FSKGATE) == 0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
   "fn": "v34handshak"
  },
  {
   "label": "fskdemodulate reads two bytes into the receiver's buffer",
-  "find": "\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
-  "replace": "\t\t\t\t\t   + T3M_RX_FSKIN + 2), &obj->fsk);",
+  "find": "\tfskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN);",
+  "replace": "\tfskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN + 2);",
   "fn": "v34handshak"
  },
  {
@@ -255,5 +255,147 @@
   "find": "\t\t\t\t  (const short *)((const char *)rx\n\t\t\t\t\t\t  + T3C_RX_SAMPS),",
   "replace": "\t\t\t\t  (const short *)((const char *)rx\n\t\t\t\t\t\t  + T3C_RX_SAMPS + 2),",
   "fn": "t3c_moh_step_detector"
+ },
+ {
+  "label": "79's MOH guard tests moh_message for non-zero",
+  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\tif (obj->moh_message != 0) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "79's MOH guard reads moh_message sixteen bits wide",
+  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\tif (*(const short *)&obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "79's detector limit is 0x64, as microstate 44's is",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "note": "The one constant that separates 0x6d57c's call from 0x6ebed's."
+ },
+ {
+  "label": "79's detector carrier select is inverted",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c1200_ : c2400_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "79's detector carrier select tests f359c against 0x66",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x66 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "79's detector polarity is zero",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0xf0, 0x32, 0x800, 0x400);"
+ },
+ {
+  "label": "79's detector warm-up is 0x64",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x64, 0x800, 0x400);"
+ },
+ {
+  "label": "79's detector thresholds are exchanged",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x400, 0x800);"
+ },
+ {
+  "label": "79 does not arm the detector at +0x356a",
+  "find": "\t\ths_put(obj, T3C_F356A, 1);\t\t/* 0x6d5db */\n",
+  "replace": ""
+ },
+ {
+  "label": "79 clears +0x356a rather than setting it",
+  "find": "\t\ths_put(obj, T3C_F356A, 1);\t\t/* 0x6d5db */",
+  "replace": "\t\ths_put(obj, T3C_F356A, 0);\t\t/* 0x6d5db */"
+ },
+ {
+  "label": "79 arms the detector's polarity word rather than +0x356a",
+  "find": "\t\ths_put(obj, T3C_F356A, 1);\t\t/* 0x6d5db */",
+  "replace": "\t\ths_put(obj, T3C_DETECTOR + 4, 1);\t/* 0x6d5db */"
+ },
+ {
+  "label": "79's MOH path goes to DET_SYNC like the other one",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);\n\t} else {",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t} else {"
+ },
+ {
+  "label": "79's MOH path runs the DET_SYNC store as well",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);\n\t} else {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t}",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);\n\t}\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);"
+ },
+ {
+  "label": "79's MOH path stores the microstate without the trace",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);\n\t} else {",
+  "replace": "\t\ths_put(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);\n\t} else {"
+ },
+ {
+  "label": "80's disconnect guard reads +0xabf9 sixteen bits wide",
+  "find": "\tif (t3c_getb(obj, T3C_FABF9) != 0) {",
+  "replace": "\tif (hs_get(obj, T3C_FABF9) != 0) {"
+ },
+ {
+  "label": "80's disconnect guard reads +0xabf8",
+  "find": "\tif (t3c_getb(obj, T3C_FABF9) != 0) {",
+  "replace": "\tif (t3c_getb(obj, T3C_FABF8) != 0) {"
+ },
+ {
+  "label": "80 disconnects when +0xabf9 is clear",
+  "find": "\tif (t3c_getb(obj, T3C_FABF9) != 0) {",
+  "replace": "\tif (t3c_getb(obj, T3C_FABF9) == 0) {"
+ },
+ {
+  "label": "80's disconnect diagnostic is dropped",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MOH: Timeout waiting for MH \"\n\t\t\t\t\t     \"sequence under MHfrr, \"\n\t\t\t\t\t     \"disconnecting...\\r\\n\");\n\n",
+  "replace": ""
+ },
+ {
+  "label": "80's disconnect sets the transmit state to MOH_FRR",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_MOH_FRR);"
+ },
+ {
+  "label": "80's disconnect stores the transmit state without the trace",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "replace": "\t\ths_put(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);"
+ },
+ {
+  "label": "80's disconnect does not move the receive machine",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_put(obj, T3C_FABE4, 1);",
+  "replace": "\t\ths_put(obj, T3C_FABE4, 1);",
+  "note": "Two tabs and the store after it: `hs_setstate(obj, HS_RXSTATE, V34HS_WAIT)` appears at one tab elsewhere in this file and the shallower text is a substring of the deeper one.  Finding 432."
+ },
+ {
+  "label": "80's disconnect moves the receive machine to RX_DPSK",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_put(obj, T3C_FABE4, 1);",
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\ths_put(obj, T3C_FABE4, 1);"
+ },
+ {
+  "label": "80's disconnect writes +0xabe6 rather than +0xabe4",
+  "find": "\t\ths_put(obj, T3C_FABE4, 1);\t\t/* 0x6c983 */",
+  "replace": "\t\ths_put(obj, T3C_FABE6, 1);\t\t/* 0x6c983 */"
+ },
+ {
+  "label": "80's disconnect clears +0xabe4 rather than setting it",
+  "find": "\t\ths_put(obj, T3C_FABE4, 1);\t\t/* 0x6c983 */",
+  "replace": "\t\ths_put(obj, T3C_FABE4, 0);\t\t/* 0x6c983 */"
+ },
+ {
+  "label": "80's disconnect leaves +0xabe2 alone",
+  "find": "\t\tobj->fabe2 = 1;\t\t\t\t/* 0x6c98a */\n",
+  "replace": ""
+ },
+ {
+  "label": "80's disconnect sets +0xabe2 to 3",
+  "find": "\t\tobj->fabe2 = 1;\t\t\t\t/* 0x6c98a */",
+  "replace": "\t\tobj->fabe2 = 3;\t\t\t\t/* 0x6c98a */"
+ },
+ {
+  "label": "80 retrains as well as disconnecting",
+  "find": "\t\tt3c_txblock(obj);\t\t\t/* 0x62af1 */\n\t\treturn;\n\t}",
+  "replace": "\t\tv34handshakinit(obj, 1);\n\t\tt3c_txblock(obj);\t\t\t/* 0x62af1 */\n\t\treturn;\n\t}"
+ },
+ {
+  "label": "80's disconnect falls into the retrain instead of returning",
+  "find": "\t\tt3c_txblock(obj);\t\t\t/* 0x62af1 */\n\t\treturn;\n\t}",
+  "replace": "\t}"
  }
 ]

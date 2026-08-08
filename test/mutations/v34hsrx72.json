@@ -1,0 +1,768 @@
+[
+ {
+  "note": "`v34handshak`'s rxstate 72 RX_L1 arm at 0x650c6, caught by build/test/t_v34hsrx72.  The arm is a counter, a six-rung ladder over it, two DFT measurements, two ways out of the line probe and an FSK gate with a three-threshold timeout behind it.  What the set has to prove is that every rung's constant and every rung's BOUNDARY is the object's, that the two measurements write their own three offsets and not each other's, and that the two banks -- which OVERLAP, the signal bank being probe_bins[0..3] -- are never crossed.  Several claims are caught only through the transcript: eight of the thirteen debug sites are `hs_setstate`'s, whose whole observable effect on a word already at its target is one missing line."
+ },
+ {
+  "note": "THE ANCHORS CARRY ADDRESSES because the source lines repeat.  `t72_update_both(obj, rx, n);` is four separate rungs' statement, `dftnlinitSignalBins(obj->probe_bins);` is two, and `hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);` is three -- so the object address in the trailing comment, or the line above, is what makes each anchor sit inside the thing it is about.  Finding 432's hazard, answered with information rather than with indentation."
+ },
+
+ {
+  "label": "the chain does not send 72 to its own arm",
+  "find": "\t\t\t\tt72_rx_l1(obj);\t\t/* 0x650c6 */",
+  "replace": "\t\t\t\tt3c_txblock(obj);\t/* 0x650c6 */",
+  "fn": "v34handshak"
+ },
+
+ {
+  "label": "the counter is not incremented at all",
+  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);",
+  "replace": "\tobj->faa78 = (short)(obj->faa78 + 0);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the counter is incremented by two",
+  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);",
+  "replace": "\tobj->faa78 = (short)(obj->faa78 + 2);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the branch is taken on the value BEFORE the store",
+  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);\n\n\tif (obj->faa78 <= 0x440) {",
+  "replace": "\tif ((short)(obj->faa78 + 1) <= 0x440) {\n\t\tobj->faa78 = (short)(obj->faa78 + 1);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the ladder guard is `<` rather than `<=`",
+  "find": "\tif (obj->faa78 <= 0x440) {",
+  "replace": "\tif (obj->faa78 < 0x440) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the ladder guard's constant is 0x441",
+  "find": "\tif (obj->faa78 <= 0x440) {",
+  "replace": "\tif (obj->faa78 <= 0x441) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the entry compare reads the counter UNSIGNED",
+  "find": "\tif (obj->faa78 <= 0x440) {",
+  "replace": "\tif ((unsigned short)obj->faa78 <= 0x440) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the gain control does not run above the ladder",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */",
+  "replace": "\t(void)rx;\t\t\t\t\t/* 0x650ee */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originate/answer test is inverted",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x65) {",
+  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c == 0x65) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originate/answer flag is 0x66",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x65) {",
+  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x66) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the one extra block is at 0x440 rather than 0x441",
+  "find": "\tif (obj->faa78 == 0x441) {",
+  "replace": "\tif (obj->faa78 == 0x440) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the FSK demodulator is given the wrong buffer",
+  "find": "\t\t      (const short *)((const char *)rx + T72_RX_SAMPS),\n\t\t      &obj->fsk);",
+  "replace": "\t\t      (const short *)((const char *)rx + T72_RX_SAMPS + 2),\n\t\t      &obj->fsk);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the bit-count gate is `<` rather than `<=`",
+  "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
+  "replace": "\tif (obj->fsk.nbits < 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the bit-count gate wants 0x15 bits",
+  "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
+  "replace": "\tif (obj->fsk.nbits <= 0x15 || (obj->fsk.sr & 0xfff) != 0) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the shift-register mask is eight bits, not twelve",
+  "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
+  "replace": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xff) != 0) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the two halves of the gate are ANDed",
+  "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
+  "replace": "\tif (obj->fsk.nbits <= 0x14 && (obj->fsk.sr & 0xfff) != 0) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the round-trip delay is shifted by one, not two",
+  "find": "\t\tint limit = obj->rtd >> 2;",
+  "replace": "\t\tint limit = obj->rtd >> 1;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the round-trip delay is shifted by three",
+  "find": "\t\tint limit = obj->rtd >> 2;",
+  "replace": "\t\tint limit = obj->rtd >> 3;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the round-trip delay is widened UNSIGNED",
+  "find": "\t\tint limit = obj->rtd >> 2;",
+  "replace": "\t\tint limit = (unsigned short)obj->rtd >> 2;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the first threshold is `>=` rather than `>`",
+  "find": "\t\tif (count > 0xf10 + limit) {",
+  "replace": "\t\tif (count >= 0xf10 + limit) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the first threshold's constant is 0xf11",
+  "find": "\t\tif (count > 0xf10 + limit) {",
+  "replace": "\t\tif (count > 0xf11 + limit) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the first threshold ignores the round-trip delay",
+  "find": "\t\tif (count > 0xf10 + limit) {",
+  "replace": "\t\tif (count > 0xf10) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the shift register is cleared to zero, not all ones",
+  "find": "\t\t\tobj->fsk.sr = -1;\t\t/* 0x68851 */",
+  "replace": "\t\t\tobj->fsk.sr = 0;\t\t/* 0x68851 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the shift register is not cleared past the first threshold",
+  "find": "\t\t\tobj->fsk.sr = -1;\t\t/* 0x68851 */",
+  "replace": "\t\t\t/* 0x68851 */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the tone-A wait is at 0xf15",
+  "find": "\t\t\tif (count == 0xf14 + limit) {",
+  "replace": "\t\t\tif (count == 0xf15 + limit) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the tone-A wait ignores the round-trip delay",
+  "find": "\t\t\tif (count == 0xf14 + limit) {",
+  "replace": "\t\t\tif (count == 0xf14) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "+0x358c is SET rather than toggled",
+  "find": "\t\t\t\tobj->f358c ^= 1;\t/* 0x6afe8 */",
+  "replace": "\t\t\t\tobj->f358c |= 1;\t/* 0x6afe8 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "+0x358c's toggle is of bit 1",
+  "find": "\t\t\t\tobj->f358c ^= 1;\t/* 0x6afe8 */",
+  "replace": "\t\t\t\tobj->f358c ^= 2;\t/* 0x6afe8 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the tone-A wait says nothing",
+  "find": "\t\t\t\t\t    \"V34RETRAIN, waiting for tone A \"\n\t\t\t\t\t    \"at the end of RX_L2\\n\");",
+  "replace": "\t\t\t\t\t    \"V34RETRAIN, waiting for tone B \"\n\t\t\t\t\t    \"at the end of RX_L2\\n\");",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the give-up threshold is at 0xf2d",
+  "find": "\t\t\t} else if (count == 0xf2c + limit) {",
+  "replace": "\t\t\t} else if (count == 0xf2d + limit) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the give-up threshold ignores the round-trip delay",
+  "find": "\t\t\t} else if (count == 0xf2c + limit) {",
+  "replace": "\t\t\t} else if (count == 0xf2c) {",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "giving up does not restart the counter",
+  "find": "\t\t\t\tobj->faa78 = 0;\t\t/* 0x6c9fa */",
+  "replace": "\t\t\t\t/* 0x6c9fa */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "giving up goes to microstate 52, not 51",
+  "find": "\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_L1);",
+  "replace": "\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_L2);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "giving up does not move the receive state",
+  "find": "\t\t\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_L1);",
+  "replace": "\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_L1);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "tone A moves the microstate to 63, not 62",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE3_CALL);\t/* 0x651e9 */",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);\t/* 0x651e9 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "tone A does not move the receive state",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\t\t/* 0x65162 */",
+  "replace": "\t/* 0x65162 */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "tone A moves the TRANSMIT state instead",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\t\t/* 0x65162 */",
+  "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_RX_DPSK);\t\t/* 0x65162 */",
+  "fn": "t72_rx_l1"
+ },
+
+ {
+  "label": "the answering end goes to microstate 42, not 41",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC); /* 0x67e7f */",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ); /* 0x67e7f */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the answering end goes to txstate 24, not 60",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\t /* 0x67e4b */",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\t /* 0x67e4b */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the answering end does not re-arm the FSK receiver",
+  "find": "\t\tdpskDetectInfo1Init(obj);\t\t\t /* 0x67eb3 */",
+  "replace": "\t\t(void)obj;\t\t\t\t\t /* 0x67eb3 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the record length is INFO1a's 0x26, not INFO1c's 0x4d",
+  "find": "\t\ths_put(obj, T72_BLK_A9DC + 0x18, 0x4d);\t\t /* 0x67f54 */",
+  "replace": "\t\ths_put(obj, T72_BLK_A9DC + 0x18, 0x26);\t\t /* 0x67f54 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the record length goes to +0x1a of the record",
+  "find": "\t\ths_put(obj, T72_BLK_A9DC + 0x18, 0x4d);\t\t /* 0x67f54 */",
+  "replace": "\t\ths_put(obj, T72_BLK_A9DC + 0x1a, 0x4d);\t\t /* 0x67f54 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the trace companion is not cleared",
+  "find": "\t\tobj->vect_idx = 0;\t\t\t\t /* 0x67f5a */",
+  "replace": "\t\t/* 0x67f5a */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the FSK gate at +0xa8a0 is left shut",
+  "find": "\t\tt3c_puti(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
+  "replace": "\t\tt3c_puti(obj, T72_FSKGATE, 0);\t\t\t /* 0x67f68 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the FSK gate is written sixteen bits wide",
+  "find": "\t\tt3c_puti(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
+  "replace": "\t\ths_put(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "+0xaa70 is aimed at the OTHER record",
+  "find": "\t\t\t (char *)obj + T72_BLK_A9DC);",
+  "replace": "\t\t\t (char *)obj + T72_BLK_A9DC - 0x30);",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the answering end does not restart the counter",
+  "find": "\t\tobj->faa78 = 0;\t\t\t\t\t /* 0x67f74 */",
+  "replace": "\t\t/* 0x67f74 */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originating end does not move the transmit state",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\t/* 0x696d0 */",
+  "replace": "\t\t/* 0x696d0 */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originating end clears the shift register to zero",
+  "find": "\t\tobj->fsk.sr = -1;\t\t\t\t/* 0x69710 */",
+  "replace": "\t\tobj->fsk.sr = 0;\t\t\t\t/* 0x69710 */",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originating end leaves the bit count alone",
+  "find": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */",
+  "replace": "\t\t/* 0x69717 */;",
+  "fn": "t72_rx_l1"
+ },
+ {
+  "label": "the originating end also re-arms the FSK receiver",
+  "find": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */",
+  "replace": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */\n\t\tdpskDetectInfo1Init(obj);",
+  "fn": "t72_rx_l1"
+ },
+
+ {
+  "label": "the sample count is one short",
+  "find": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS));",
+  "replace": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS) - 1);",
+  "fn": "t72_nsamples"
+ },
+ {
+  "label": "the sample count is measured from the wrong buffer",
+  "find": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS));",
+  "replace": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS - 4));",
+  "fn": "t72_nsamples"
+ },
+
+ {
+  "label": "the probe bank is correlated over five bins",
+  "find": "\tdftupdate(obj->probe_bins, V34_NL_BINS, in, n);\t\t/* 0x68dfd */",
+  "replace": "\tdftupdate(obj->probe_bins, V34_NL_BINS + 1, in, n);\t/* 0x68dfd */",
+  "fn": "t72_update_both"
+ },
+ {
+  "label": "the noise bank is correlated over five bins",
+  "find": "\tdftupdate(obj->nl_noise_bins, V34_NL_BINS, in, n);\t/* 0x68e23 */",
+  "replace": "\tdftupdate(obj->nl_noise_bins, V34_NL_BINS + 1, in, n);\t/* 0x68e23 */",
+  "fn": "t72_update_both"
+ },
+ {
+  "label": "both correlations are of the PROBE bank",
+  "find": "\tdftupdate(obj->nl_noise_bins, V34_NL_BINS, in, n);\t/* 0x68e23 */",
+  "replace": "\tdftupdate(obj->probe_bins, V34_NL_BINS, in, n);\t\t/* 0x68e23 */",
+  "fn": "t72_update_both"
+ },
+ {
+  "label": "the noise bank is the four bins BEFORE the probe's end",
+  "find": "\tdftupdate(obj->nl_noise_bins, V34_NL_BINS, in, n);\t/* 0x68e23 */",
+  "replace": "\tdftupdate(obj->probe_bins + 21, V34_NL_BINS, in, n);\t/* 0x68e23 */",
+  "fn": "t72_update_both"
+ },
+
+ {
+  "label": "the noise bank is reduced at the probe's shift",
+  "find": "\tdftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);\t/* 0x69cec */",
+  "replace": "\tdftenergy(obj->nl_noise_bins, V34_NL_BINS, 2);\t/* 0x69cec */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the probe bank is reduced at the noise bank's shift",
+  "find": "\tdftenergy(obj->probe_bins, V34_NL_BINS, 2);\t/* 0x69d03 */",
+  "replace": "\tdftenergy(obj->probe_bins, V34_NL_BINS, 6);\t/* 0x69d03 */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "only the probe bank is reduced",
+  "find": "\tdftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);\t/* 0x69cec */",
+  "replace": "\t/* 0x69cec */;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the totals are accumulated over three bins",
+  "find": "\tfor (i = 0; i <= 3; i++) {\t\t\t/* 0x69d28 */",
+  "replace": "\tfor (i = 0; i <= 2; i++) {\t\t\t/* 0x69d28 */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the totals are accumulated over five bins",
+  "find": "\tfor (i = 0; i <= 3; i++) {\t\t\t/* 0x69d28 */",
+  "replace": "\tfor (i = 0; i <= 4; i++) {\t\t\t/* 0x69d28 */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the noise total is taken from the probe bank",
+  "find": "\t\tnoise += (unsigned short)obj->nl_noise_bins[i].energy;",
+  "replace": "\t\tnoise += (unsigned short)obj->probe_bins[i].energy;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the noise total is taken from `shift` and not `energy`",
+  "find": "\t\tnoise += (unsigned short)obj->nl_noise_bins[i].energy;",
+  "replace": "\t\tnoise += (unsigned short)obj->nl_noise_bins[i].shift;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the signal total is not scaled by 256",
+  "find": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->probe_bins[i].energy << 8;",
+  "replace": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->probe_bins[i].energy;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the signal total is scaled by 16",
+  "find": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->probe_bins[i].energy << 8;",
+  "replace": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->probe_bins[i].energy << 4;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the signal total is taken from the noise bank",
+  "find": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->probe_bins[i].energy << 8;",
+  "replace": "\t\tsignal += (unsigned int)\n\t\t\t  (unsigned short)obj->nl_noise_bins[i].energy << 8;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the two totals are stored to each other's offsets",
+  "find": "\tt3c_puti(obj, signal_off, signal);\t\t/* 0x69d55 */\n\tt3c_puti(obj, noise_off, noise);\t\t/* 0x69d5b */",
+  "replace": "\tt3c_puti(obj, noise_off, signal);\t\t/* 0x69d55 */\n\tt3c_puti(obj, signal_off, noise);\t\t/* 0x69d5b */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the noise total is never stored",
+  "find": "\tt3c_puti(obj, noise_off, noise);\t\t/* 0x69d5b */",
+  "replace": "\t/* 0x69d5b */;",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the totals are stored sixteen bits wide",
+  "find": "\tt3c_puti(obj, signal_off, signal);\t\t/* 0x69d55 */",
+  "replace": "\ths_put(obj, signal_off, (short)signal);\t\t/* 0x69d55 */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the zero-denominator guard leaves the ratio alone",
+  "find": "\tif (noise == 0)\n\t\tt3c_puti(obj, ratio_off, 0);\t\t/* 0x6aa0b, 0x6c9aa */",
+  "replace": "\tif (noise == 0)\n\t\t;\t\t\t\t\t/* 0x6aa0b, 0x6c9aa */",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the ratio has no rounding term",
+  "find": "\t\t\t (signal + noise / 2) / noise);",
+  "replace": "\t\t\t signal / noise);",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the rounding term is the whole denominator",
+  "find": "\t\t\t (signal + noise / 2) / noise);",
+  "replace": "\t\t\t (signal + noise) / noise);",
+  "fn": "t72_measure"
+ },
+ {
+  "label": "the ratio is signal over signal",
+  "find": "\t\t\t (signal + noise / 2) / noise);",
+  "replace": "\t\t\t (signal + noise / 2) / signal);",
+  "fn": "t72_measure"
+ },
+
+ {
+  "label": "the receiver's +0x238 is kept sixteen bits wide",
+  "find": "\tt3c_puti(obj, T72_FAACC,\t\t\t\t/* 0x67d92 */\n\t\t *(const int *)((const char *)rx + T72_RX_F238));",
+  "replace": "\ths_put(obj, T72_FAACC,\t\t\t\t\t/* 0x67d92 */\n\t\t    *(const short *)((const char *)rx + T72_RX_F238));",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the receiver's +0x23c is kept instead",
+  "find": "\t\t *(const int *)((const char *)rx + T72_RX_F238));",
+  "replace": "\t\t *(const int *)((const char *)rx + T72_RX_F238 + 4));",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the probe bank is reduced over four bins, not twenty-five",
+  "find": "\tdftenergy(obj->probe_bins, V34_PROBE_BINS, 2);\t\t/* 0x67da3 */",
+  "replace": "\tdftenergy(obj->probe_bins, V34_NL_BINS, 2);\t\t/* 0x67da3 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the probe bank is reduced at shift 6",
+  "find": "\tdftenergy(obj->probe_bins, V34_PROBE_BINS, 2);\t\t/* 0x67da3 */",
+  "replace": "\tdftenergy(obj->probe_bins, V34_PROBE_BINS, 6);\t\t/* 0x67da3 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the demodulator is set up for 3000 baud",
+  "find": "\tV34SetupDemodulator(obj, 0x960, 0);\t\t\t/* 0x67db5 */",
+  "replace": "\tV34SetupDemodulator(obj, 0xbb8, 0);\t\t\t/* 0x67db5 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the demodulator is given a carrier",
+  "find": "\tV34SetupDemodulator(obj, 0x960, 0);\t\t\t/* 0x67db5 */",
+  "replace": "\tV34SetupDemodulator(obj, 0x960, 1800);\t\t\t/* 0x67db5 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the demodulator is not set up at all",
+  "find": "\tV34SetupDemodulator(obj, 0x960, 0);\t\t\t/* 0x67db5 */",
+  "replace": "\t(void)0;\t\t\t\t\t\t/* 0x67db5 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the receiver's flag bit is 10, not 11",
+  "find": "\trx->flags = (unsigned short)(rx->flags | 0x800);\t/* 0x67e10 */",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x400);\t/* 0x67e10 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the flags word is replaced rather than ORed",
+  "find": "\trx->flags = (unsigned short)(rx->flags | 0x800);\t/* 0x67e10 */",
+  "replace": "\trx->flags = (unsigned short)0x800;\t\t\t/* 0x67e10 */",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the gain is restored from the receiver's +0x262",
+  "find": "\t\t\t((const char *)rx + T3M_RX_F264);",
+  "replace": "\t\t\t((const char *)rx + T3M_RX_F264 - 2);",
+  "fn": "t72_probe_done"
+ },
+ {
+  "label": "the gain is not restored",
+  "find": "\trx->agc_gain = (short)*(const unsigned short *)\t\t/* 0x67e17 */\n\t\t\t((const char *)rx + T3M_RX_F264);",
+  "replace": "\t/* 0x67e17 */;",
+  "fn": "t72_probe_done"
+ },
+
+ {
+  "label": "timing recovery does not run on the ladder",
+  "find": "\trxtiming(obj);\t\t\t\t\t/* 0x65524 */",
+  "replace": "\t(void)obj;\t\t\t\t\t/* 0x65524 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the ladder reads the counter BEFORE the increment",
+  "find": "\tcount = obj->faa78;",
+  "replace": "\tcount = (short)(obj->faa78 - 1);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the top rung is `>=` rather than `>`",
+  "find": "\tif (count > 0x300) {",
+  "replace": "\tif (count >= 0x300) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the top rung's constant is 0x301",
+  "find": "\tif (count > 0x300) {",
+  "replace": "\tif (count > 0x301) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the top rung's compare is UNSIGNED",
+  "find": "\tif (count > 0x300) {",
+  "replace": "\tif ((unsigned short)count > 0x300) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the top rung correlates four bins, not twenty-five",
+  "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
+  "replace": "\t\tdftupdate(obj->probe_bins, V34_NL_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the top rung also correlates the noise bank",
+  "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
+  "replace": "\t\tt72_update_both(obj, rx, n);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the probe measurement is at 0x301",
+  "find": "\t} else if (count == 0x300) {",
+  "replace": "\t} else if (count == 0x301) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the probe measurement writes the nl offsets",
+  "find": "\t\tt72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_PB_RATIO);",
+  "replace": "\t\tt72_measure(obj, T72_NL_NOISE, T72_NL_SIGNAL, T72_NL_RATIO);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the probe measurement's ratio goes to +0xaac4",
+  "find": "\t\tt72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_PB_RATIO);",
+  "replace": "\t\tt72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_NL_RATIO);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the probe measurement re-arms the nl banks instead",
+  "find": "\t\tdftfreqinit(obj->probe_bins);\t\t/* 0x69d78 */",
+  "replace": "\t\tdftnlinitSignalBins(obj->probe_bins);\t/* 0x69d78 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the probe measurement does not re-arm the bank",
+  "find": "\t\tdftfreqinit(obj->probe_bins);\t\t/* 0x69d78 */",
+  "replace": "\t\t/* 0x69d78 */;",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the upper window starts at 0x1c0",
+  "find": "\t} else if (count >= 0x1c1 && count <= 0x2ff) {",
+  "replace": "\t} else if (count >= 0x1c0 && count <= 0x2ff) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the upper window ends at 0x2fe",
+  "find": "\t} else if (count >= 0x1c1 && count <= 0x2ff) {",
+  "replace": "\t} else if (count >= 0x1c1 && count <= 0x2fe) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the upper window has no lower bound",
+  "find": "\t} else if (count >= 0x1c1 && count <= 0x2ff) {",
+  "replace": "\t} else if (count <= 0x2ff) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the upper window bumps the receiver's counter too",
+  "find": "\t\tt72_update_both(obj, rx, n);\n\t} else if (count == 0x180) {",
+  "replace": "\t\tt72_update_both(obj, rx, n);\n\t\trx->f124 = (short)(rx->f124 + 1);\n\t} else if (count == 0x180) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the nl measurement is at 0x181",
+  "find": "\t} else if (count == 0x180) {",
+  "replace": "\t} else if (count == 0x181) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the nl measurement writes the probe offsets",
+  "find": "\t\tt72_measure(obj, T72_NL_NOISE, T72_NL_SIGNAL, T72_NL_RATIO);",
+  "replace": "\t\tt72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_PB_RATIO);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the nl measurement re-arms the signal bank onto the noise bank",
+  "find": "\t\tdftnlinitSignalBins(obj->probe_bins);\t/* 0x6a760 */",
+  "replace": "\t\tdftnlinitSignalBins(obj->nl_noise_bins);\t/* 0x6a760 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the nl measurement does not re-arm the noise bank",
+  "find": "\t\tdftnlinitNoiseBins(obj->nl_noise_bins);\t/* 0x6a7aa */",
+  "replace": "\t\t/* 0x6a7aa */;",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the lower window starts at 0x40",
+  "find": "\t} else if (count >= 0x41 && count <= 0x17f) {",
+  "replace": "\t} else if (count >= 0x40 && count <= 0x17f) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the lower window ends at 0x180",
+  "find": "\t} else if (count >= 0x41 && count <= 0x17f) {",
+  "replace": "\t} else if (count >= 0x41 && count <= 0x180) {",
+  "fn": "t72_ladder",
+  "equivalent": true,
+  "why": "EQUIVALENT, AND THE OBJECT SAYS WHY.  0x180 has its own rung at 0x6a668, tested three compares EARLIER in the chain -- `cmp $0x180,%dx; je 6a668` at 0x65567, before the `lea -0x41(%edx); cmp $0x13e,%ax; jbe 69995` at 0x65572 -- so the value can never reach this window whatever its upper bound is.  The object's own encoding of the bound is 0x13e, which is 0x17f - 0x41, and that IS pinned: `the lower window ends at 0x17e` and `the lower window starts at 0x40` are both caught.  What is untestable is only the one value the earlier rung already owns."
+ },
+ {
+  "label": "the lower window ends at 0x17e",
+  "find": "\t} else if (count >= 0x41 && count <= 0x17f) {",
+  "replace": "\t} else if (count >= 0x41 && count <= 0x17e) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the lower window does not bump the receiver's counter",
+  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
+  "replace": "\t\t/* 0x699fd */;",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the receiver's counter is bumped by two",
+  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
+  "replace": "\t\trx->f124 = (short)(rx->f124 + 2);\t/* 0x699fd */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain rung is at 0x41",
+  "find": "\t} else if (count == 0x40) {",
+  "replace": "\t} else if (count == 0x41) {",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain rung's flag bit is 8, not 9",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x100);  /* 0x6a510 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain rung does not set a flag bit",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */",
+  "replace": "\t\t/* 0x6a510 */;",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain limit is `>=` rather than `>`",
+  "find": "\t\tif (rx->agc_gain > 0x34ff) {\t\t/* 0x6a50c, signed */",
+  "replace": "\t\tif (rx->agc_gain >= 0x34ff) {\t\t/* 0x6a50c, signed */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain limit is 0x3500",
+  "find": "\t\tif (rx->agc_gain > 0x34ff) {\t\t/* 0x6a50c, signed */",
+  "replace": "\t\tif (rx->agc_gain > 0x3500) {\t\t/* 0x6a50c, signed */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain limit is compared UNSIGNED",
+  "find": "\t\tif (rx->agc_gain > 0x34ff) {\t\t/* 0x6a50c, signed */",
+  "replace": "\t\tif ((unsigned short)rx->agc_gain > 0x34ff) {\t/* 0x6a50c */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the substituted gain is 0x6001",
+  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
+  "replace": "\t\t\trx->f262 = 0x6001;\t\t/* 0x6aed9 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the error path writes nothing",
+  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
+  "replace": "\t\t\t/* 0x6aed9 */;",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain is not doubled",
+  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "replace": "\t\t\trx->f262 = rx->agc_gain;\t\t/* 0x6a525 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the doubled gain goes to +0x264, not +0x262",
+  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "replace": "\t\t\t*(short *)((char *)rx + 0x264) =\n\t\t\t    (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the error line names the wrong thing",
+  "find": "\t\t\t\t    \"V34AGC, -- ERROR-- gainestimate in \"\n\t\t\t\t    \"RX_L1,0x%x\\n\", rx->agc_gain);",
+  "replace": "\t\t\t\t    \"V34AGC, -- ERROR-- gainestimate in \"\n\t\t\t\t    \"RX_L2,0x%x\\n\", rx->agc_gain);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain line prints the substituted value",
+  "find": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->agc_gain);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->f262);",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain line is inside the else and not after it",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\t\t\t/* 0x6a531 */",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON() && rx->f262 != 0x6000)\t/* 0x6a531 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain rung re-arms the noise bank onto the probe bank",
+  "find": "\t\tdftnlinitNoiseBins(obj->nl_noise_bins);\t/* 0x6a5a1 */",
+  "replace": "\t\tdftnlinitNoiseBins(obj->probe_bins);\t/* 0x6a5a1 */",
+  "fn": "t72_ladder"
+ },
+ {
+  "label": "the gain rung does not re-arm the signal bank",
+  "find": "\t\tdftnlinitSignalBins(obj->probe_bins);\t/* 0x6a54c */",
+  "replace": "\t\t/* 0x6a54c */;",
+  "fn": "t72_ladder"
+ }
+]

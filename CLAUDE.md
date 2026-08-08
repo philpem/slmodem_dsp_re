@@ -178,12 +178,27 @@ Task numbers are not safe across sessions either: two task stores exist whose
 
 ## Traps
 
-- **A `.c` may not call anything defined in a `.cpp`.** It compiles, it links
-  32-bit, `make one` passes -- and `make phase` fails at `t_spandsp_v23` with
-  an undefined reference, because the six interop binaries link only `$(SRC)`,
-  which is every `.c` under `src/`, with no C++ in the list. So "no mangled
-  symbol in it, therefore C" decides whether a function can be *compiled* as
-  C, not which file it can live in. Finding 333.
+- **A `.c` calling a `.cpp` is about the LINK LINE, and the link line has been
+  fixed.** This used to read "a `.c` may not call anything defined in a
+  `.cpp`", because the interop binaries linked only `$(SRC)` -- every `.c`
+  under `src/`, no C++ -- so such a call compiled, linked 32-bit, passed `make
+  one`, and failed `make phase` at `t_spandsp_v23` with an undefined
+  reference. They now also link `$(CXXOBJ64)`, a 64-bit build of the C++ half,
+  and `src/pump/v34/v34hshak.c` already calls `V34SetINFO1aBits` and
+  `V34SetINFO0aBits` across that boundary with `make phase` green. So the call
+  is allowed; what is NOT allowed is adding a link target that omits
+  `$(CXXOBJ64)`, which brings the whole failure straight back. `make test` and
+  `make one` still cannot see any of this.
+
+  **The link line is necessary and not sufficient.** The callee must also be
+  `extern "C"` -- otherwise its name is mangled and the C side's reference
+  matches nothing -- and a FREE FUNCTION, since a member takes a `this` and
+  has no unmangled form to name. So a `.cpp` of plain functions
+  (`v34hstx1.cpp`: `nm -g` shows nineteen `T v34tx1_*` and zero `_Z`) is
+  callable, and a `.cpp` of real classes (`VPcmFloModem`, `K56FlexFloModem`)
+  is not, whatever the Makefile does. Check with `nm -g`, not by reading.
+  Findings 333 and 344 for why `v34hstx1.cpp` is a `.cpp` at all; 711 for the
+  expiry and the three conditions.
 - **A relocation on a call proves nothing about the translation unit; its
   ABSENCE does.** A resolved PC-relative displacement with no relocation means
   the target is `LOCAL` and in the same TU. A relocation being present only

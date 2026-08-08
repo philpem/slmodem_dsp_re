@@ -49,6 +49,25 @@ import sys
 import tempfile
 
 INSN = re.compile(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*(\S+)\s*(.*)$")
+#
+# AND ITS CONTINUATION.  objdump wraps the hex column at SEVEN bytes and puts
+# the remainder on a line of its own -- an address, a tab, and bytes, with no
+# mnemonic:
+#
+#     65486:	66 83 bf 92 35 00 00 	cmpw   $0x34,0x3592(%edi)
+#     6548d:	34
+#
+# `INSN` cannot match that -- it requires a mnemonic -- so before this regex
+# existed those bytes were DISCARDED and the instruction was recorded seven
+# bytes long instead of eight.  131 lines in `v34handshak` alone, and the
+# report said so on every run and was read as a remark:
+#
+#     61410 bytes accounted of 61541
+#
+# Every walk-derived byte count in this tree was therefore a LOWER BOUND,
+# which is the likeliest source of two corrections made by hand against
+# address arithmetic (findings 719 and 727).  See `--selftest`.
+CONT = re.compile(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2}\s*)+)$")
 RELOC = re.compile(r"^\s+([0-9a-f]+):\s+(R_386_\S+)\s+(\S+)")
 TARGET = re.compile(r"^([0-9a-f]+)\s")
 INDIRECT = re.compile(r"^\*(0x[0-9a-f]+)\(,%e[a-z]{2},([0-9])\)")
@@ -100,9 +119,30 @@ def disassemble(obj, lo, hi):
             insns.append(Insn(int(m.group(1), 16), len(raw) // 2,
                               m.group(3), m.group(4).strip()))
             continue
+        m = CONT.match(line)
+        if m and insns:
+            # The tail of the instruction above, not an instruction of its own.
+            continue
         m = RELOC.match(line)
         if m and insns:
             insns[-1].reloc = m.group(3)
+    #
+    # SIZE FROM ADDRESS DELTAS, not from the bytes objdump printed.  Parsing
+    # the hex column cannot be made reliable: objdump wraps it at seven bytes
+    # and the continuation line carries no mnemonic, so a regex that demands
+    # one drops the tail and calls an eight-byte instruction seven bytes long.
+    # Recovering the wrapped bytes by hand got 109 of the 131 that
+    # `v34handshak` loses and still left 22 -- the encodings vary and chasing
+    # them is fitting the formatter.
+    #
+    # The distance to the next instruction is what "size" MEANS for this
+    # tool's accounting, it needs no formatting assumption at all, and it is
+    # exact by construction.  `--selftest` is the demonstration.
+    #
+    for i in range(len(insns) - 1):
+        gap = insns[i + 1].addr - insns[i].addr
+        if gap > 0:
+            insns[i].size = gap
     return insns
 
 
@@ -193,12 +233,68 @@ def reachable(blocks, entry):
     return seen
 
 
+def selftest(obj):
+    """
+    Two claims, both demonstrated rather than asserted.
+
+    1. THE ACCOUNTING IS COMPLETE.  Every byte of the range is attributed.
+    2. THE CHECK CAN FAIL.  With sizes taken from objdump's hex column again
+       -- the pre-fix behaviour -- `v34handshak` loses 131 bytes and the
+       check reports it.  Without this half, a clean run proves nothing:
+       `extcheck` printed "(none)" through four broken versions and there was
+       no way to tell a clean tree from a dead detector (finding 134).
+    """
+    ok = True
+    for func in ("v34handshak", "receiver", "v34handshakinit"):
+        lo, sz = symbol(obj, func)
+        if lo is None:
+            print("  SKIP  %-18s not defined in the object" % func)
+            continue
+        hi = lo + sz
+        insns = disassemble(obj, lo, hi)
+        total = sum(i.size for i in insns)
+        good = total == hi - lo
+        ok &= good
+        print("  %-4s  %-18s %6d of %6d bytes"
+              % ("ok" if good else "FAIL", func, total, hi - lo))
+
+    # The negative control: parse sizes the old way and watch the gap appear.
+    lo, sz = symbol(obj, "v34handshak")
+    hi = lo + sz
+    out = subprocess.run(["objdump", "-dr", "-j", ".text",
+                          "--start-address=0x%x" % lo,
+                          "--stop-address=0x%x" % hi, obj],
+                         capture_output=True, text=True).stdout
+    old_total = 0
+    for line in out.splitlines():
+        m = INSN.match(line)
+        if m:
+            old_total += len(m.group(2).replace(" ", "")) // 2
+    lost = (hi - lo) - old_total
+    print("  %-4s  %-18s %6d of %6d bytes  <- the defect, reproduced"
+          % ("ok" if lost > 0 else "FAIL", "(hex column)", old_total, hi - lo))
+    if lost <= 0:
+        print("\n  ERROR: the negative control did not fail, so a pass above\n"
+              "  is not evidence of anything.")
+        ok = False
+    else:
+        # Bytes, not lines: the line count would come from CONT, and CONT's
+        # coverage is exactly what could not be made reliable.  The loss is
+        # measured against the symbol's own size, which needs no regex.
+        print("\n  %d bytes were being dropped." % lost)
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
-    ap.add_argument("--func", required=True)
+    ap.add_argument("--func")
+    ap.add_argument("--selftest", action="store_true",
+                    help="prove the byte accounting is complete, and prove "
+                         "the check that says so can FAIL. A tool nobody has "
+                         "seen fire is not a tool -- gates.md rule 3.")
     ap.add_argument("--states", metavar="SEC:OFF:N",
                     help="table of state-name pointers, to label the cases")
     ap.add_argument("--table", action="append", default=[],
@@ -214,6 +310,10 @@ def main():
                          "reports no tables, which left the whole function "
                          "as 'reached by no case'.")
     args = ap.parse_args()
+    if args.selftest:
+        return selftest(args.obj)
+    if not args.func:
+        ap.error("--func is required (or --selftest)")
 
     lo, size = symbol(args.obj, args.func)
     if lo is None:
@@ -296,6 +396,18 @@ def main():
           % unreached)
     print("  %s %7d bytes accounted of %d"
           % (" " * 21, total, size))
+    #
+    # AND IT IS A FAILURE, not a remark.  gates.md's rule 1: make the tool
+    # COUNT what it examined and FAIL on the difference.  This line printed a
+    # 131-byte shortfall on every run of `v34handshak` for as long as the tool
+    # has existed, and nobody read it as a defect because nothing failed.
+    #
+    if total != size:
+        print("\n  ERROR: %d bytes of %s were not accounted for.\n"
+              "  The walk is INCOMPLETE and every byte count derived from it\n"
+              "  is a lower bound.  Do not quote it." % (size - total, func))
+        return 1
+    return 0
     print()
     print("  per case, exclusive bytes only:")
     rows = []

@@ -134,18 +134,20 @@
  },
  {
   "label": "81: the symbol counter is not advanced",
-  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
-  "replace": "\tif ((unsigned short)o->vect_idx == 0xc0u)"
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx != 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx != 0xc0u)"
  },
  {
   "label": "81: the wrap is at 0xc1",
-  "find": "\tif ((unsigned short)o->vect_idx == 0xc0u)",
-  "replace": "\tif ((unsigned short)o->vect_idx == 0xc1u)"
+  "find": "\tif ((unsigned short)o->vect_idx != 0xc0u)",
+  "replace": "\tif ((unsigned short)o->vect_idx != 0xc1u)"
  },
  {
   "label": "81: the wrap is tested before the counter is stored",
-  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == 0xc0u)",
-  "replace": "\tif ((unsigned short)(o->vect_idx + 1) == 0xc0u)\n\t\treturn V34TX1_MOH_WRAP;\n\to->vect_idx = (short)(o->vect_idx + 1);\n\tif (0)"
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx != 0xc0u)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63da2 */",
+  "replace": "\tif ((unsigned short)(o->vect_idx + 1) != 0xc0u) {\n\t\to->vect_idx = (short)(o->vect_idx + 1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63da2 */\n\t}\n\to->vect_idx = (short)(o->vect_idx + 1);",
+  "equivalent": true,
+  "why": "0x63d8b stores the incremented halfword and 0x63d90 compares the SAME register against 0xc0, so the object's order is store-then-test and this is the other one.  It cannot be OBSERVED: the value tested is `o->vect_idx + 1` promoted to int and cast to `unsigned short`, the value stored is that expression cast to `short`, and casting either back to `unsigned short` gives the same sixteen bits for every input -- so no seed separates them. Recorded equivalent rather than left NOT CAUGHT, which is what it read as before: the claim is real and the trial does not exist, which is finding 613's case rather than a gap in the fixture."
  },
  {
   "label": "86: TXMD sends vect4[0], as TXLEVEL does",
@@ -154,8 +156,8 @@
  },
  {
   "label": "86: the segment-complete test is missing",
-  "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))\n\t\treturn V34TX1_TXMD_DONE;\n",
-  "replace": ""
+  "find": "\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)tx1_get(o, TX1_COUNT)) {",
+  "replace": "\tif (1) {"
  },
  {
   "label": "86: the reconfiguration point is +0xaa78 rather than +0x35a6",
@@ -204,8 +206,8 @@
  },
  {
   "label": "86: the symbol counter is not advanced",
-  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))",
-  "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))"
+  "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)tx1_get(o, TX1_COUNT)) {",
+  "replace": "\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)tx1_get(o, TX1_COUNT)) {"
  },
  {
   "label": "86: the PCM argument reads only the K56flex receiver",
@@ -4042,5 +4044,169 @@
   "find": "\ttx1_put(o, TX1_F3590, 0x22);\n\treturn V34TX1_LOOP;",
   "replace": "\ttx1_put(o, TX1_F3590, 0x21);\n\treturn V34TX1_LOOP;",
   "fn": "tx1_ts_rates"
+ },
+ {
+  "label": "81: the wrap does not re-read the transmit state",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */\n\n",
+  "replace": ""
+ },
+ {
+  "label": "81: the wrap's state test is against MOH_ON_HOLD",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
+  "replace": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_ON_HOLD)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+ },
+ {
+  "label": "81: the wrap's state test is inverted",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
+  "replace": "\tif (tx1_get(o, TX1_TXSTATE) == V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+ },
+ {
+  "label": "81: the wrap reads the microstate rather than the transmit state",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
+  "replace": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+ },
+ {
+  "label": "81: the wrap's diagnostic is dropped",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);\n\n",
+  "replace": ""
+ },
+ {
+  "label": "81: the wrap's diagnostic prints moh_message twice",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);",
+  "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_message);"
+ },
+ {
+  "label": "81: the wrap's diagnostic prints its two arguments the other way round",
+  "fn": "v34tx1_moh_silence",
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);",
+  "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->fabec);"
+ },
+ {
+  "label": "81: the wrap reads only moh_message",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: the wrap reads only +0xabec",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: the wrap needs BOTH message fields at 1",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 && o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: +0xabec is read sixteen bits wide",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (*(const short *)&o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: +0xabec is tested for non-zero rather than for 1",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec != 0 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: moh_message is tested for non-zero rather than for 1",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message != 0)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: the two Modem-on-Hold states are exchanged",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_ON_HOLD : V34HS_MOH_FRR);"
+ },
+ {
+  "label": "81: the wrap always leaves MOH_ON_HOLD",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: the wrap stores the transmit state without the trace",
+  "fn": "v34tx1_moh_silence",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_put(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+ },
+ {
+  "label": "81: the wrap does not clear the symbol counter",
+  "fn": "v34tx1_moh_silence",
+  "find": "\to->vect_idx = 0;\t\t\t\t/* 0x66dec */\n",
+  "replace": ""
+ },
+ {
+  "label": "81: the wrap sets the symbol counter to one",
+  "fn": "v34tx1_moh_silence",
+  "find": "\to->vect_idx = 0;\t\t\t\t/* 0x66dec */",
+  "replace": "\to->vect_idx = 1;\t\t\t\t/* 0x66dec */"
+ },
+ {
+  "label": "86: the echo block does not clear f354c",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+ },
+ {
+  "label": "86: the echo block raises bit 2 of f25c2 rather than clearing it",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 | 4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+ },
+ {
+  "label": "86: the echo block clears bit 3 of f25c2",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~8u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+ },
+ {
+  "label": "86: the echo block leaves f3550 alone",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+ },
+ {
+  "label": "86: the echo block leaves f3552 alone",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n"
+ },
+ {
+  "label": "86: the echo block clears f3560 too, as 21's does",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->f3560 = 0;",
+  "note": "0x67613 in 21 TRNSEG4 clears the same four AND f3560; 0x66fe9 does not."
+ },
+ {
+  "label": "86: the echo block reports the start of echo adaptation, as 21's does",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+ },
+ {
+  "label": "86: the echo diagnostic is dropped",
+  "fn": "v34tx1_txmd",
+  "find": "\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"On MD - enabling echo adaptation...\\r\\n\");\n\n",
+  "replace": ""
+ },
+ {
+  "label": "86: the segment end returns rather than falling into the reconfiguration",
+  "fn": "v34tx1_txmd",
+  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
+  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
+  "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
  }
 ]

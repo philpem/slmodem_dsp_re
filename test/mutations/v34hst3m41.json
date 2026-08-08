@@ -64,14 +64,15 @@
  },
  {
   "label": "+0xabf0 tested for non-zero rather than for 1",
-  "find": "\tif (obj->moh_message == 1) {",
-  "replace": "\tif (obj->moh_message != 0) {",
-  "fn": "t41_after_guards"
+  "find": "\tif (obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
+  "replace": "\tif (obj->moh_message != 0) {\n\t\tt41_frr_nack(obj);",
+  "fn": "t41_after_guards",
+  "note": "The anchor carries `t41_frr_nack` because microstate 79's 0x6d57c guard is the same 32-bit test of the same field and made the one-line form match twice."
  },
  {
   "label": "+0xabf0 read sixteen bits wide",
-  "find": "\tif (obj->moh_message == 1) {",
-  "replace": "\tif (*(const short *)&obj->moh_message == 1) {",
+  "find": "\tif (obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
+  "replace": "\tif (*(const short *)&obj->moh_message == 1) {\n\t\tt41_frr_nack(obj);",
   "fn": "t41_after_guards"
  },
  {
@@ -106,8 +107,8 @@
  },
  {
   "label": "the 0x72 door moves the microstate to DET_CJ",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
+  "find": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
+  "replace": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
   "fn": "t41_to_det_info"
  },
  {
@@ -271,8 +272,8 @@
  },
  {
   "label": "the tone body runs on a silent detector",
-  "find": "\tif (t41_detect(obj) == 0) {",
-  "replace": "\tif (t41_detect(obj) != 0) {",
+  "find": "\tif (t41_detect(obj) == 0) {\n\t\tt41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */",
+  "replace": "\tif (t41_detect(obj) != 0) {\n\t\tt41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */",
   "fn": "t41_tone_ab"
  },
  {
@@ -331,8 +332,8 @@
  },
  {
   "label": "the tone body's last message starts at the second word",
-  "find": "\t\t    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],",
-  "replace": "\t\t    (unsigned)p[1], (unsigned)p[2], (unsigned)p[3],",
+  "find": "\t\t    \"V34INFO, rxinfo0\",\n\t\t    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],",
+  "replace": "\t\t    \"V34INFO, rxinfo0\",\n\t\t    (unsigned)p[1], (unsigned)p[2], (unsigned)p[3],",
   "fn": "t41_tone_ab"
  },
  {
@@ -459,26 +460,26 @@
  },
  {
   "label": "Info1c's record warms up for 0x4e",
-  "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4e);",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4e);",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0x11 at +0x28",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);\n\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c aims +0xaa6c at the other record",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
-  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0xff73",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72);",
-  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);",
+  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72);",
+  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);",
   "fn": "t41_info_marks"
  },
  {

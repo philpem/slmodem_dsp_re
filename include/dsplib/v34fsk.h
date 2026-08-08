@@ -45,6 +45,7 @@ extern "C" {
  */
 #define V34_PROBE_RESULTS	25	/* doubles at +0xa258 */
 #define V34_PROBE_BINS		25	/* DFT bins at +0xa320 */
+#define V34_NL_BINS		4	/* DFT bins at +0xa76c */
 #define V34_INFO0_BITS		41	/* one bit per int at +0xa8a4 */
 #define V34_RETRAIN_BINS	3	/* DFT bins at +0xa81c */
 
@@ -695,7 +696,26 @@ struct v34_object {
 	 * DFTC.c touches the accumulators.
 	 */
 	struct v34_dftbin probe_bins[V34_PROBE_BINS];	/* +0xa320 */
-	unsigned char unmapped_a76c[0xa81c - 0xa76c];
+	/*
+	 * +0xa76c.  The NOISE half of the nonlinear-distortion measurement,
+	 * four bins at 900, 1200, 1800 and 2400 Hz.
+	 *
+	 * NAMED FROM ITS CALLER, which is rxstate 72's arm and nothing else:
+	 * 0x6a5a1 and 0x6a7aa run `dftnlinitNoiseBins`' body on `obj +
+	 * 0xa76c` while 0x6a54c and 0x6a760 run `dftnlinitSignalBins`' on
+	 * `obj + 0xa320`, so the signal bank OVERLAYS `probe_bins[0..3]` and
+	 * the noise bank is the four bins immediately after the probe's
+	 * twenty-five.  0xa320 + 25 * 0x2c = 0xa76c exactly, and 0xa76c +
+	 * 4 * 0x2c = 0xa81c exactly, so the region this replaces held four
+	 * bins and nothing else -- it was `unmapped_a76c` until this arm gave
+	 * it a reader.  v34hshak.h's note that "neither initialiser has a
+	 * caller" was true when it was written; findings 738-745.
+	 *
+	 * The same arm reads both banks' `energy` across, at +0xa32c and
+	 * +0xa778, which is what makes 0xa320 the numerator of the ratio and
+	 * this the denominator.
+	 */
+	struct v34_dftbin nl_noise_bins[V34_NL_BINS];	/* +0xa76c */
 	/*
 	 * +0xa81c.  The retrain detector's three DFT bins, at 900, 1200 and
 	 * 1500 Hz -- `dftRetrainDetInit` gives them phase steps of 0x600,
@@ -877,9 +897,29 @@ struct v34_object {
 	 * MHnack that says the far end may NOT initiate MOH later -- and
 	 * read by nothing this tree has reconstructed.  The 0x77 MHnack,
 	 * which says it may, does not write it.
+	 *
+	 * AND SET TO 1 BY ONE PATH THAT IS NOT A MESSAGE AT ALL: microstate
+	 * 80's disconnect at 0x6c8f8, beside +0xabe4, when the far end never
+	 * sent its MH sequence under MHfrr.  Still read by nothing here.
 	 */
 	short fabe2;					/* +0xabe2 */
-	unsigned char unmapped_abe4[0xabf0 - 0xabe4];
+	unsigned char unmapped_abe4[0xabec - 0xabe4];
+	/*
+	 * +0xabec.  READ THIRTY-TWO BITS WIDE -- `cmpl $0x1,0xabec(%esi)` at
+	 * 0x66dac -- which is what makes it an `int` and not two more
+	 * halfwords of the region in front of it.
+	 *
+	 * AND THE OBJECT NAMES IT AGAINST `moh_message` FOUR BYTES ON.  81's
+	 * wrap prints the pair together -- "V34F MOH: After 192 silence, org
+	 * = %d , act = %d", this field as `org` and `moh_message` as `act`
+	 * -- and then goes to MOH_FRR rather than MOH_ON_HOLD when EITHER of
+	 * them is 1.  So it is the Modem-on-Hold message this end ORIGINALLY
+	 * asked for against the one it is building now, in `moh_message`'s
+	 * numbering where 1 is MHfrr.
+	 *
+	 * Nothing else this tree has reconstructed reads or writes it.
+	 */
+	int fabec;					/* +0xabec */
 	/*
 	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
 	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,

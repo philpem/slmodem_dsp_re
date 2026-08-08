@@ -314,8 +314,8 @@
  },
  {
   "label": "the entry compares the cursor against the limit the other way",
-  "find": "\tif (obj->txq.count < obj->f2aa0) {",
-  "replace": "\tif (obj->txq.count > obj->f2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
+  "replace": "\twhile (obj->txq.count > obj->f2aa0) {",
   "fn": "v34handshak"
  },
  {
@@ -337,16 +337,16 @@
  },
  {
   "label": "the entry reads the microstate before the demodulator runs",
-  "find": "\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);\n\n\tframe.mst = hs_get(obj, HS_MICROSTATE);",
-  "replace": "\tframe.mst = hs_get(obj, HS_MICROSTATE);\n\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
+  "find": "\tfskdemodulate(obj, fskin, &obj->fsk);\n\n\tframe.mst = hs_get(obj, HS_MICROSTATE);",
+  "replace": "\tframe.mst = hs_get(obj, HS_MICROSTATE);\n\tfskdemodulate(obj, fskin, &obj->fsk);",
   "equivalent": true,
   "why": "finding 285 swept the whole of .text: neither `V34agc` nor `fskdemodulate` writes +0x3592, +0x3594 or +0x3596, which is the property that makes this per-arm harness possible at all.  So the read can be moved across the call and no byte changes.  It becomes catchable again the day either function is found to write a state word.",
   "fn": "v34handshak"
  },
  {
   "label": "the fsk gate admits a non-zero +0xa8a0",
-  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0) {",
-  "replace": "\tif (0) {",
+  "find": "\tif (T3M_I32(&frame, T3M_FSKGATE) != 0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
+  "replace": "\tif (0\n\t    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {",
   "fn": "v34handshak"
  },
  {
@@ -2264,8 +2264,8 @@
  },
  {
   "label": "the frame's nbits is read AFTER the demodulator, not before",
-  "find": "\t/* 0x64a9e, and it has to be read HERE: `fskdemodulate` writes it. */\n\tframe.nbits = obj->fsk.nbits;\n\n\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);",
-  "replace": "\tfskdemodulate(obj, (const short *)((unsigned char *)frame.rx\n\t\t\t\t\t   + T3M_RX_FSKIN), &obj->fsk);\n\n\tframe.nbits = obj->fsk.nbits;",
+  "find": "\tframe.nbits = obj->fsk.nbits;\n\n\tfskdemodulate(obj, fskin, &obj->fsk);",
+  "replace": "\tfskdemodulate(obj, fskin, &obj->fsk);\n\n\tframe.nbits = obj->fsk.nbits;",
   "fn": "v34handshak"
  },
  {

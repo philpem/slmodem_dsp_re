@@ -1,0 +1,382 @@
+[
+ {
+  "note": "`v34handshak`'s rxstate 53 DET_AB arm at 0x65473, caught by build/test/t_v34hsrx53.  The arm is two entry guards, a tone detector, a threshold on the round-trip delay and two bodies chosen by +0x359c.  What the set has to prove is that each guard is driven from BOTH sides with the object's own constant and the object's own WIDTH -- 0x6845e is sixteen bits and 0x6af24 is thirty-two, which no small value can tell apart -- and that each body's stores are the object's.  Several are caught only through the transcript: six of the nine debug sites are `hs_setstate`'s, whose whole observable effect on a word already at its target is one missing line."
+ },
+ {
+  "note": "THE ANCHORS IN THE INFO1c BODY AND THE TAIL CARRY ADDRESSES because the source lines do.  Nine of the record's statements are character for character microstate 41's at 0x6d387 and six of the tail's are one line long, so every one of them was ambiguous until the arm's own addresses were written beside them -- finding 432's hazard answered with information rather than with indentation, which is the repair that moved seven anchors the last time it was tried."
+ },
+ {
+  "label": "the chain does not send 53 to its own arm",
+  "find": "\t\t\t\tt53_rx_det_ab(obj);\t/* 0x65473 */",
+  "replace": "\t\t\t\tt3c_txblock(obj);\t/* 0x65473 */",
+  "fn": "v34handshak"
+ },
+ {
+  "label": "the gain control does not run",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x65473 */",
+  "replace": "\t(void)rx;",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the entry guard's microstate is 51, not 52",
+  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
+  "replace": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L1) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the entry guard is inverted",
+  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
+  "replace": "\tif (hs_get(obj, HS_MICROSTATE) == V34HS_TX_L2) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the entry guard reads the receive state word",
+  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
+  "replace": "\tif (hs_get(obj, HS_RXSTATE) != V34HS_TX_L2) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the second guard is `<` rather than `<=`",
+  "find": "\tif (obj->vect_idx <= 0x5db) {",
+  "replace": "\tif (obj->vect_idx < 0x5db) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the second guard's constant is 0x5dc",
+  "find": "\tif (obj->vect_idx <= 0x5db) {",
+  "replace": "\tif (obj->vect_idx <= 0x5dc) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the second guard reads vect_idx unsigned",
+  "find": "\tif (obj->vect_idx <= 0x5db) {",
+  "replace": "\tif ((unsigned short)obj->vect_idx <= 0x5db) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the detector's answer is inverted",
+  "find": "\tif (t41_detect(obj) == 0) {\n\t\t/*\n\t\t * 0x6af24",
+  "replace": "\tif (t41_detect(obj) != 0) {\n\t\t/*\n\t\t * 0x6af24",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the retrain threshold is computed sixteen bits wide",
+  "find": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "replace": "\t\tif ((int)obj->vect_idx <= (short)(obj->rtd + 0x2418)) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the retrain threshold's constant is 0x2417",
+  "find": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "replace": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2417) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the round-trip delay is read unsigned",
+  "find": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "replace": "\t\tif ((int)obj->vect_idx <= (int)(unsigned short)obj->rtd + 0x2418) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the retrain threshold is `<` rather than `<=`",
+  "find": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "replace": "\t\tif ((int)obj->vect_idx < (int)obj->rtd + 0x2418) {",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "vect_idx is read unsigned at the retrain threshold",
+  "find": "\t\tif ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "replace": "\t\tif ((int)(unsigned short)obj->vect_idx <= (int)obj->rtd + 0x2418) {",
+  "fn": "t53_rx_det_ab",
+  "equivalent": true,
+  "why": "Guard 2 at 0x6845e has already established `vect_idx > 0x5db` SIGNED before this compare is reached, so the value arriving at 0x6af24 is in 1500..32767 and the two readings agree over every one of them.  The object's `movswl` is what the source says; the difference is unreachable rather than absent, and no trial this fixture can build reaches it.  The SAME mutation on the delay beside it IS caught, because nothing bounds that field."
+ },
+ {
+  "label": "the retrain asks for a cold start",
+  "find": "\t\tv34handshakinit(obj, 1);\t\t/* 0x6b0f4 */",
+  "replace": "\t\tv34handshakinit(obj, 0);\t\t/* 0x6b0f4 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the retrain does not re-initialise",
+  "find": "\t\tv34handshakinit(obj, 1);\t\t/* 0x6b0f4 */",
+  "replace": "\t\t(void)obj;\t\t\t\t/* 0x6b0f4 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the retrain says nothing",
+  "find": "\t\t\tdsplibs_debug_printf(\"V34RETRAIN, retrain is \"\n\t\t\t\t\t     \"initiated in DET_AB\\n\");",
+  "replace": "\t\t\t(void)obj;",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the end-of-L2 message reports the vect_idx as the gain",
+  "find": "\t\t\t\t     rx->agc_gain, obj->vect_idx);",
+  "replace": "\t\t\t\t     obj->vect_idx, rx->agc_gain);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the body is chosen by 0x66",
+  "find": "\tif (obj->f359c == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "replace": "\tif (obj->f359c == 0x66) {\n\t\t/*\n\t\t * 0x6b138.",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the body choice is inverted",
+  "find": "\tif (obj->f359c == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "replace": "\tif (obj->f359c != 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the INFO1c body transmits tone AB",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tprobeselect(obj);\t\t\t/* 0x6b1de */",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\n\t\tprobeselect(obj);\t\t\t/* 0x6b1de */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the probe is not selected",
+  "find": "\t\tprobeselect(obj);\t\t\t/* 0x6b1de */",
+  "replace": "\t\t(void)obj;\t\t\t\t/* 0x6b1de */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "+0xaa6c is aimed at the second record",
+  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + T41_BLK_A9AC);",
+  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + 0xa9dc);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "+0xaa6c is not re-aimed",
+  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + T41_BLK_A9AC);\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the encoder is handed the second record",
+  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + T41_BLK_A9AC));",
+  "replace": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + 0xa9dc));",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the encoder does not run",
+  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + T41_BLK_A9AC));\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the record's length is INFO1a's",
+  "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */",
+  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x26);   /* 0x6b1fb */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the record's head is not written",
+  "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x1c takes 0 rather than 8",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x1c, 8);\t    /* 0x6b219 */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x1c, 0);\t    /* 0x6b219 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x16 takes 0 rather than 1",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x16, 1);\t    /* 0x6b21f */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x16, 0);\t    /* 0x6b21f */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x28 takes 0x11",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);\t    /* 0x6b225 */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);\t    /* 0x6b225 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x2a takes 0x11",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\t    /* 0x6b22b */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x11);\t    /* 0x6b22b */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x20 is not cleared",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\t    /* 0x6b231 */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x24 is written sixteen bits wide",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x24, (short)0xff72); /* 0x6b23e */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x2c is written sixteen bits wide",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2c, (short)0xff72); /* 0x6b245 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x24 takes 0xff71",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */",
+  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff71); /* 0x6b23e */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "record +0x2c takes the sign-extended value",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */",
+  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, (int)(short)0xff72); /* 0x6b245 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "+0x358c is not cleared",
+  "find": "\t\ths_put(obj, T41_F358C, 0);\t\t/* 0x6b24c */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the INFO1c body leaves the receive machine waiting",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the INFO1c body does not reach INFODONE",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the INFO1c body moves the two machines in the other order",
+  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "+0xaa70 is aimed at the first record",
+  "find": "\t\tt3c_putp(obj, T41_PTR_AA70, (char *)obj + 0xa9dc);",
+  "replace": "\t\tt3c_putp(obj, T41_PTR_AA70, (char *)obj + T41_BLK_A9AC);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the second record's length is INFO1c's",
+  "find": "\t\ths_put(obj, 0xa9dc + 0x18, 0x26);",
+  "replace": "\t\ths_put(obj, 0xa9dc + 0x18, 0x4d);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the second record's length lands at its +0x14",
+  "find": "\t\ths_put(obj, 0xa9dc + 0x18, 0x26);",
+  "replace": "\t\ths_put(obj, 0xa9dc + 0x14, 0x26);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the txinfo1c dump reads the second record",
+  "find": "\t\t\t    (const unsigned short *)((const char *)obj\n\t\t\t\t\t\t     + T41_BLK_A9AC);",
+  "replace": "\t\t\t    (const unsigned short *)((const char *)obj\n\t\t\t\t\t\t     + 0xa9dc);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the txinfo1c dump starts at the second word",
+  "find": "\t\t\t    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],",
+  "replace": "\t\t\t    (unsigned)p[1], (unsigned)p[2], (unsigned)p[3],",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the state-only body transmits DPSK",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the state-only body reaches INFODONE",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the state-only body leaves the receive machine alone",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the state-only body moves the transmit machine last",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE3_ANS);\n\t\ths_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);\n\t\ths_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);\n",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the tail raises bit 8 of the receiver's flags",
+  "find": "\t/* 0x69933 */\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+  "replace": "\t/* 0x69933 */\n\trx->flags = (unsigned short)(rx->flags | 0x100);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the tail assigns the flag rather than adding it",
+  "find": "\t/* 0x69933 */\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+  "replace": "\t/* 0x69933 */\n\trx->flags = (unsigned short)V34_RX_FLAG_DET_PENDING;",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the tail does not touch the receiver's flags",
+  "find": "\t/* 0x69933 */\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the gain is restored from the halfword above",
+  "find": "\t\t\t\t\t\t\t+ T3M_RX_F264);",
+  "replace": "\t\t\t\t\t\t\t+ T3M_RX_F264 + 2);",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the gain is not restored",
+  "find": "\trx->agc_gain = (short)*(const unsigned short *)((const char *)rx\n\t\t\t\t\t\t\t+ T3M_RX_F264);\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the demodulator's shift register is not cleared",
+  "find": "\tobj->fsk.sr = 0;\t\t\t/* 0x6995f */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the demodulator's bit count is not cleared",
+  "find": "\tobj->fsk.nbits = 0;\t\t\t/* 0x69966 */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the demodulator's phase is not cleared",
+  "find": "\tobj->fsk.phase = 0;\t\t\t/* 0x6996d */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the demodulator's next state is cleared rather than set to six",
+  "find": "\tobj->fsk.next = 6;\t\t\t/* 0x69974 */",
+  "replace": "\tobj->fsk.next = 0;\t\t\t/* 0x69974 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the demodulator's next state is five",
+  "find": "\tobj->fsk.next = 6;\t\t\t/* 0x69974 */",
+  "replace": "\tobj->fsk.next = 5;\t\t\t/* 0x69974 */",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the vector index is not cleared",
+  "find": "\tobj->vect_idx = 0;\t\t\t/* 0x6997b */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ },
+ {
+  "label": "the counter is not cleared",
+  "find": "\ths_put(obj, T41_COUNT, 0);\t\t/* 0x69982 */\n",
+  "replace": "",
+  "fn": "t53_rx_det_ab"
+ }
+]

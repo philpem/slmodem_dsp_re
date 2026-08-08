@@ -3388,12 +3388,21 @@ guards(void)
 	s.txstate = 20;			/* 0x64509, interior */
 	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
 
-	/* The rxstate chain: only RX_DPSK reaches table 3. */
+	/*
+	 * The rxstate chain: only RX_DPSK reaches table 3.
+	 *
+	 * NEITHER OF THESE TWO RECORDS ANYTHING ANY MORE, and both stay.  35
+	 * WAIT was the first to change: its arm is 0x6752c, four instructions,
+	 * and writing it turned this trial from `T3M_UNWRITTEN_RXSTATE` into
+	 * `T3M_WRITTEN`.  4 RECEIVE is the second, for the same reason --
+	 * 0x653e4 is `t_v34hsrx4.c`'s arm now.  Both stay rather than being
+	 * deleted, because "this rxstate does not reach table 3" is the claim
+	 * the lines were making and that claim is still true; what changed is
+	 * only where each goes instead.  Findings 717, 549 and 731.
+	 */
 	s = plain;
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE,
-	      T3M_UNWRITTEN_RXSTATE, tag++);
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_WAIT, T3M_UNWRITTEN_RXSTATE,
-	      tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE, T3M_WRITTEN, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_WAIT, T3M_WRITTEN, tag++);
 
 	/*
 	 * The receiver's first halfword.  `v34hs_route` leaves it at 6; at 5
@@ -3437,7 +3446,19 @@ guards(void)
 	diff_eq_int("guard: a cursor above the limit reaches table 3",
 		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
-	/* And below it, which is table 1 and #56's. */
+	/*
+	 * And below it, which is table 1's per-sample loop.
+	 *
+	 * THIS TRIAL USED TO ASSERT `T3M_UNWRITTEN_TBL1` AND NOT STEP, on the
+	 * grounds that the loop was #56's and its default arm does not
+	 * terminate.  The loop and its nineteen arms are written now, so the
+	 * claim inverts: this reaches the loop, runs it to its exit at
+	 * 0x629ed and goes on into the rest of the function, and the step
+	 * makes that a differential comparison rather than a claim about a
+	 * guard.  It terminates because `T3MT_TXSTATE` is 18 SSEG, one of the
+	 * nineteen, and an arm that transmits advances the cursor the loop
+	 * test reads.  Finding 712.
+	 */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
@@ -3445,14 +3466,23 @@ guards(void)
 	v34hs_poke_short(0x2aa0, 5);
 	v34handshak_unwritten_reset();
 	v34hs_ours(1);
-	/* NOT stepped: table 1's default arm does not terminate (D59), and
-	   this is a claim about our guard, which needs no step at all. */
-	v34handshak((void *)v34hs_object(0));
+	v34hs_step();
+	v34hs_compare("a cursor below the limit runs table 1's loop", tag);
 	v34hs_ours(0);
-	diff_eq_int("guard: a cursor below the limit is table 1",
-		    v34handshak_unwritten(), T3M_UNWRITTEN_TBL1, tag++);
+	diff_eq_int("guard: a cursor below the limit runs table 1's loop",
+		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
-	/* The +0xa8a0 gate, which `v34hs_route` clears. */
+	/*
+	 * The +0xa8a0 gate, which `v34hs_route` clears.
+	 *
+	 * THIS TRIAL USED TO ASSERT `T3M_UNWRITTEN_FSKGATE` AND NOT COMPARE.
+	 * The arm at 0x6754b is written now, and it FALLS THROUGH -- all six
+	 * of its exits are `jmp 0x64a8f`, so a non-zero gate polls the retrain
+	 * detector and then runs exactly the code the cleared gate runs.  So
+	 * what this checks is no longer which guard fired but that the whole
+	 * step still agrees with the blob's, and `t_v34hsfsk.c` drives the arm
+	 * itself.  Finding 721.
+	 */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
@@ -3460,10 +3490,12 @@ guards(void)
 	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
+	v34hs_compare("guard: a non-zero +0xa8a0 polls the retrain detector",
+		      tag);
 	v34hs_ours(0);
-	diff_eq_int("guard: a non-zero +0xa8a0 diverts at 0x64a87",
-		    v34handshak_unwritten(), T3M_UNWRITTEN_FSKGATE,
-		    tag++);
+	diff_eq_int("guard: a non-zero +0xa8a0 polls the retrain detector "
+		    "and falls through",
+		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 }
 
 int

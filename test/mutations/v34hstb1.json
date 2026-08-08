@@ -1,0 +1,53 @@
+[
+ {
+  "label": "the loop runs its body once rather than while the test holds",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tif (obj->txq.count < obj->f2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {"
+ },
+ {
+  "label": "the entry guard admits a cursor equal to the limit",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
+  "replace": "\twhile (obj->txq.count <= obj->f2aa0) {"
+ },
+ {
+  "label": "the entry guard is the wrong way round",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
+  "replace": "\twhile (obj->txq.count > obj->f2aa0) {"
+ },
+ {
+  "label": "the limit is read once rather than every pass",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tshort t3m_lim = obj->f2aa0;\n\twhile (obj->txq.count < t3m_lim) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "equivalent": true,
+  "why": "0x62925 loads the limit into %dx before the loop and every rejoin block reloads it -- 0x629cf, 0x62d70, 0x63948, 0x640a1 and 0x64326 are all `movzwl 0x2aa0(reg),%edx` -- so the object re-reads it every pass and finding 710 says so. It cannot be OBSERVED to, because NOTHING WRITES +0x2aa0 while the loop is running: the five references in the loop's whole span 0x62950..0x64518 are those five reads, v34hstx1.cpp never assigns f2aa0, and the only write in src/ is v34handshakinit's `= 6` during bring-up. A cached limit and a re-read limit are therefore the same value on every pass. Recorded equivalent rather than left uncaught, and the `while` keeps the object's form. Finding 714."
+ },
+ {
+  "label": "68 J1TXMIT dispatches to a different arm",
+  "find": "\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n\t\t\tv34tx1_jtxmit(obj);",
+  "replace": "\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n\t\t\tv34tx1_sseg(obj);"
+ },
+ {
+  "label": "54 SILENCEINFO does not share 5's entry",
+  "find": "\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n\t\t\tv34tx1_silence(obj);",
+  "replace": "\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n\t\t\tv34tx1_silence(obj);\n\t\t\tbreak;\n\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n\t\t\tv34tx1_sseg(obj);",
+  "why": "54 and 74 share 5's table entry at 0x640b4; giving 54 a different arm has to be caught by the state's own trial."
+ },
+ {
+  "label": "83 MOH_FRR is not one of 81's four",
+  "find": "\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n\t\t\tv34tx1_moh_silence(obj);",
+  "replace": "\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n\t\t\tv34tx1_moh_silence(obj);\n\t\t\tbreak;\n\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n\t\t\tv34tx1_txmd(obj);"
+ },
+ {
+  "label": "the transmit state is read once, outside the loop",
+  "find": "\twhile (obj->txq.count < obj->f2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tshort t3m_tx0 = hs_get(obj, HS_TXSTATE);\n\twhile (obj->txq.count < obj->f2aa0) {\n\t\tswitch ((int)t3m_tx0) {",
+  "why": "0x62957 re-reads +0x3596 at the top of every pass, and several arms move the transmit machine, so a state hoisted out of the loop dispatches the second pass to the arm the first pass left behind."
+ },
+ {
+  "label": "the transmit state is read as unsigned rather than signed",
+  "find": "\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\t\tswitch ((int)(unsigned short)hs_get(obj, HS_TXSTATE)) {",
+  "equivalent": true,
+  "why": "0x62957 is `movswl 0x3596(%esi),%eax` and the sign IS forced -- the object could have used `movzwl` and did not. But the two readings agree over EVERY value the halfword can hold, so no differential test can separate them, and this is recorded equivalent rather than left as a silent uncaught. The range test is `sub $0x5,%eax; cmp $0x51,%eax; ja`, an UNSIGNED compare against 0x51: for a state in 0..0x7fff the two extensions are the same integer, and for a negative one the signed reading gives (s - 5), whose unsigned value is at least 0xffff7ffb, while the zero-extended reading gives (0x10000 + s - 5), which is at least 0x7ffb. Both are far above 0x51, so both take the loop bottom. The declared type is what keeps our `movswl` -- `hs_get` returns short -- and the codegen tier is what would see it move, not this one. Finding 714."
+ }
+]

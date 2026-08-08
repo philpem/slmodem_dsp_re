@@ -1,0 +1,1076 @@
+[
+ {
+  "note": "`v34handshak`'s rxstate 4 RECEIVE arm at 0x653e4, caught by build/test/t_v34hsrx4.  The arm is a retrain test, the TRN2 shift registers, the MP bit packer with its run-length half, the far end's J, and the tone detector with what follows it.  What the set has to prove is that each guard is driven from BOTH sides with the object's own constant and the object's own WIDTH -- 0x65427 is a 32-bit signed compare that no legal baud can separate from a 16-bit one, and 0x6cafd masks its COMPARE with 0x7fff while its STORE goes in unmasked -- and that each body's stores are the object's.  Ten of the fifteen exits write nothing of their own, so several claims here are caught only through the transcript or through the pairwise signature check."
+ },
+ {
+  "note": "TWO ANCHORS CARRY A LEADING NEWLINE AND ONE CARRIES AN ADDRESS, because the arm shares lines with the rest of the file.  `hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC)` appears three times in this arm alone and `t3c_txblock(obj);` appears in every arm in the file, so an anchor that is one statement long is finding 432's hazard by construction.  The repair is information rather than indentation: the enclosing statement, or the object address the source comment already carries."
+ },
+ {
+  "label": "the chain does not send 4 to its own arm",
+  "find": "\t\t\tt4_rx_receive(obj);\t\t/* 0x653e4 */",
+  "replace": "\t\t\tt3c_txblock(obj);\t\t/* 0x653e4 */",
+  "fn": "v34handshak"
+ },
+ {
+  "label": "the receive chain does not run at the entry",
+  "find": "\treceiver(obj);\t\t\t\t\t/* 0x653ee */",
+  "replace": "\t(void)obj;\t\t\t\t\t/* 0x653ee */",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's retrain flag is 0x20 RENEG, not 0x40",
+  "find": "\tif ((flags & V34_RX_FLAG_RETRAIN) != 0",
+  "replace": "\tif ((flags & V34_RX_FLAG_RENEG) != 0",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's retrain flag is not tested at all",
+  "find": "\tif ((flags & V34_RX_FLAG_RETRAIN) != 0",
+  "replace": "\tif (0",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's baud compare is `>=` rather than `>`",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
+  "replace": "\t    || ((int)rx->f124 >= 7 * (int)obj->faa96",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's multiplier is six, not seven",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
+  "replace": "\t    || ((int)rx->f124 > 6 * (int)obj->faa96",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's product is TRUNCATED to a short",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
+  "replace": "\t    || ((int)rx->f124 > (short)(7 * (int)obj->faa96)",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's baud rate is read UNSIGNED",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
+  "replace": "\t    || ((int)rx->f124 > 7 * (int)(unsigned short)obj->faa96",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's counter is read UNSIGNED",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
+  "replace": "\t    || ((int)(unsigned short)rx->f124 > 7 * (int)obj->faa96",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's second flag is 0x40, not 0x80",
+  "find": "\t\t&& (flags & 0x80) == 0)) {",
+  "replace": "\t\t&& (flags & 0x40) == 0)) {",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the entry's second flag is not tested",
+  "find": "\t\t&& (flags & 0x80) == 0)) {",
+  "replace": "\t\t)) {",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the retrain comes up cold rather than in mode 1",
+  "find": "\t\tv34handshakinit(obj, 1);\t\t/* 0x6544e */",
+  "replace": "\t\tv34handshakinit(obj, 0);\t\t/* 0x6544e */",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the retrain does not report itself",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\t\t\t/* 0x690e1 */",
+  "replace": "\t\tif (0)\t\t\t\t\t/* 0x690e1 */",
+  "fn": "t4_rx_receive"
+ },
+ {
+  "label": "the head's mask is 0x98 tested for ANY bit",
+  "find": "\tif ((flags & 0x98) != 0x98) {",
+  "replace": "\tif ((flags & 0x98) == 0) {",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the head's mask is 0x90, not 0x98",
+  "find": "\tif ((flags & 0x98) != 0x98) {",
+  "replace": "\tif ((flags & 0x90) != 0x90) {",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the packer gate reads 0x08 rather than 0x10",
+  "find": "\t\tif (flags & V34_RX_FLAG_TRN_WATCH) {\n\t\t\t/* 0x68bd8 */",
+  "replace": "\t\tif (flags & V34_RX_FLAG_LATE_TRN) {\n\t\t\t/* 0x68bd8 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the packer's second gate is not tested",
+  "find": "\t\t\tif (flags & V34_RX_FLAG_DATA)\n\t\t\t\tflags = t4_mp_packer(obj);",
+  "replace": "\t\t\tif (1)\n\t\t\t\tflags = t4_mp_packer(obj);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the TRN2 branch is taken on 0xbb8 as well",
+  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t} else if ((short)rx->f124 >= 0xbb8) {\t\t/* 0x679b5 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the TRN2 branch's threshold is 0xbb9",
+  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t} else if ((short)rx->f124 > 0xbb9) {\t\t/* 0x679b5 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the TRN2 branch runs beside the packer, not instead of it",
+  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t}\n\t\tif ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the J gate wants 0x10 rather than 0x08",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_TRN_WATCH\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the J gate's marker is 0x66, not 0x65",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x66) {",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the J path does not set the transmitter up",
+  "find": "\t\tv34setuptxmit(obj);\t\t\t\t/* 0x68e50 */",
+  "replace": "\t\t(void)obj;\t\t\t\t\t/* 0x68e50 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the gain estimate rounds down rather than to nearest",
+  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666) >> 15);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the gain estimate's ratio is 0x6667",
+  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6667 + 0x4000) >> 15);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the gain estimate shifts fourteen, not fifteen",
+  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 14);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the gain estimate reads the step rather than the gain",
+  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->f262 = (short)(((int)rx->agc_step * 0x6666 + 0x4000) >> 15);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the J path does not clear +0x1c0",
+  "find": "\t\trx->f1c0 = 0;\t\t\t\t\t/* 0x68fb1 */",
+  "replace": "\t\t;\t\t\t\t\t\t/* 0x68fb1 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the J path raises 0x08 rather than 0x10",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRN_WATCH);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the timing trace prints its two timers the other way round",
+  "find": "\t\t\t\t\t     T4_U32(rx, T3C_TIMER_HI) >> 16,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_HI) & 0xffff,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_LO) >> 16,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_LO) & 0xffff);",
+  "replace": "\t\t\t\t\t     T4_U32(rx, T3C_TIMER_LO) >> 16,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_LO) & 0xffff,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_HI) >> 16,\n\t\t\t\t\t     T4_U32(rx, T3C_TIMER_HI) & 0xffff);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the timing trace shifts its halves SIGNED",
+  "find": "\t\t\t\t\t     T4_U32(rx, T3C_TIMER_HI) >> 16,",
+  "replace": "\t\t\t\t\t     (unsigned)(T4_I32(rx, T3C_TIMER_HI) >> 16),",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the baud counter is capped at 0x61a6",
+  "find": "\tif (n <= 0x61a7)",
+  "replace": "\tif (n <= 0x61a6)",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the baud counter is capped UNSIGNED",
+  "find": "\tn = rx->f124;\n\tif (n <= 0x61a7)",
+  "replace": "\tn = rx->f124;\n\tif ((unsigned short)n <= 0x61a7)",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the baud counter is never stepped",
+  "find": "\tif (n <= 0x61a7)\n\t\trx->f124 = (short)(n + 1);",
+  "replace": "\tif (0)\n\t\trx->f124 = (short)(n + 1);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the data flag leaves the arm at 0x686f1 only when clear",
+  "find": "\tif (flags & V34_RX_FLAG_DATA)\t\t\t\t/* 0x67a4b */",
+  "replace": "\tif (!(flags & V34_RX_FLAG_DATA))\t\t\t/* 0x67a4b */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD-over door opens at +0x3570 == 2",
+  "find": "\tif (T4_I16(obj, T4_F3570) == 3) {\t\t\t/* 0x67a5b */",
+  "replace": "\tif (T4_I16(obj, T4_F3570) == 2) {\t\t\t/* 0x67a5b */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD-over door is +0x356c, not +0x3570",
+  "find": "\tif (T4_I16(obj, T4_F3570) == 3) {\t\t\t/* 0x67a5b */",
+  "replace": "\tif (T4_I16(obj, T4_F356C) == 3) {\t\t\t/* 0x67a5b */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the AGC freeze raises 0x200 rather than 0x100",
+  "find": "\tflags = (unsigned short)(flags | V34_RX_FLAG_TRAINED);\n\trx->flags = flags;",
+  "replace": "\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);\n\trx->flags = flags;",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the AGC freeze is not stored before the detector runs",
+  "find": "\tflags = (unsigned short)(flags | V34_RX_FLAG_TRAINED);\n\trx->flags = flags;",
+  "replace": "\tflags = (unsigned short)(flags | V34_RX_FLAG_TRAINED);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "+0xaa80 raises 0x100 rather than 0x200",
+  "find": "\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);\n\t\trx->flags = flags;",
+  "replace": "\t\tflags = (unsigned short)(flags | V34_RX_FLAG_TRAINED);\n\t\trx->flags = flags;",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "+0xaa80's second raise is unconditional",
+  "find": "\tif (T4_I16(obj, T4_FAA80) != 0) {\n\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);",
+  "replace": "\tif (1) {\n\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the detector's answer is inverted",
+  "find": "\tif (t41_detect(obj) == 0)\t\t\t\t/* 0x69b3c */",
+  "replace": "\tif (t41_detect(obj) != 0)\t\t\t\t/* 0x69b3c */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the S trace prints the gain it has not read yet",
+  "find": "\t\tdsplibs_debug_printf(\"S detected,rxflgs= 0x%x,rxgain=0x%x\\n\",\n\t\t\t\t     (unsigned)rx->flags, (int)rx->agc_gain);",
+  "replace": "\t\tdsplibs_debug_printf(\"S detected,rxflgs= 0x%x,rxgain=0x%x\\n\",\n\t\t\t\t     (unsigned)rx->flags, (int)rx->f262);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the S trace prints its two arguments the other way round",
+  "find": "\t\t\t\t     (unsigned)rx->flags, (int)rx->agc_gain);",
+  "replace": "\t\t\t\t     (unsigned)(int)rx->agc_gain, (int)rx->flags);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "S detected writes 0x1f to +0x356c",
+  "find": "\tT4_I16(obj, T4_F356C) = 0x1e;\t\t\t\t/* 0x67b17 */",
+  "replace": "\tT4_I16(obj, T4_F356C) = 0x1f;\t\t\t\t/* 0x67b17 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "S detected writes 2 to +0x3570",
+  "find": "\tT4_I16(obj, T4_F3570) = 3;\n\tT4_I16(obj, T4_F3576) = 0;",
+  "replace": "\tT4_I16(obj, T4_F3570) = 2;\n\tT4_I16(obj, T4_F3576) = 0;",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "S detected leaves +0x3576 alone",
+  "find": "\tT4_I16(obj, T4_F3570) = 3;\n\tT4_I16(obj, T4_F3576) = 0;",
+  "replace": "\tT4_I16(obj, T4_F3570) = 3;",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "S detected does not clear the baud counter",
+  "find": "\trx->f124 = 0;\n\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
+  "replace": "\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "S detected does not step the counter at +0x25da",
+  "find": "\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x67b37 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD length's ratio is 0x23e",
+  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23e) >> 14)",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD length shifts thirteen, not fourteen",
+  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 13)",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD length reads its baud rate UNSIGNED",
+  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)(unsigned short)obj->faa96 * 0x23d) >> 14)",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD length reads the descriptor SIGNED",
+  "find": "\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);",
+  "replace": "\t\t\t\t    * (int)T4_I16(obj, T4_MDLEN)) + 0x1e);",
+  "fn": "t4_receive_body",
+  "equivalent": true,
+  "why": "EQUIVALENT THROUGH A SIXTEEN-BIT STORE, and the object's own width is what says so.  0x6a4c1 stores `%ax`, so only the low halfword of the product survives; reading +0x35a2 signed instead of unsigned changes the multiplicand by exactly 65,536, and 65,536 times any integer is zero modulo 65,536.  The trace at 0x6d26f is no help either -- its `cwtl` sign-extends the same low halfword.  So no value of +0xaa96 or +0x35a2 can separate the two readings.  The object's `movzwl` at 0x67b46 is a CODEGEN fact and is kept for that reason, which is CLAUDE.md's rule for a load whose signedness the compiler was forced to encode but no test can see.  `t_v34hsrx4.c` drives a descriptor of 0x8000 anyway, because the trace's own %d does separate signed from unsigned there and that mutation IS caught."
+ },
+ {
+  "label": "the MD length's bias is 0x1f",
+  "find": "\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);",
+  "replace": "\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1f);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the MD length's bias is added before the multiply",
+  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);",
+  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14) + 0x1e)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN));",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the descriptor trace prints the length unsigned",
+  "find": "\t\t\t\t\t     \"waiting state for MD = %d\\n\",\n\t\t\t\t\t     (int)md);",
+  "replace": "\t\t\t\t\t     \"waiting state for MD = %d\\n\",\n\t\t\t\t\t     (int)(unsigned short)md);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the flags are NOT re-read after the detector",
+  "find": "\tflags = rx->flags;\n\trx->f1c0 = 1;",
+  "replace": "\trx->f1c0 = 1;",
+  "fn": "t4_receive_body",
+  "equivalent": true,
+  "why": "EQUIVALENT BECAUSE THE NEXT STATEMENT MASKS OFF THE ONLY BIT THAT MOVED.  `tone_detect` touches exactly one field of the receiver -- 0x73869 loads +0x122, 0x73870 ANDs it with 0xfffffdff and 0x73875 stores it back, and those are the ONLY reference to +0x122 in the function, whose extent is `nm --print-size`'s rather than a guess: 0x1a4 bytes at 0x736e0, so 0x736e0..0x73884.  So the cached value and the reloaded one differ in bit 9 and nothing else, and 0x67b69's `and $0xfffffcff` clears bits 8 and 9 of whichever it is used.  The object reloads at 0x67b56 and this reconstruction does too, because that is what is there; it cannot be shown to matter."
+ },
+ {
+  "label": "the commit writes 0 to +0x1c0 rather than 1",
+  "find": "\tflags = rx->flags;\n\trx->f1c0 = 1;",
+  "replace": "\tflags = rx->flags;\n\trx->f1c0 = 0;",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the commit clears only 0x100",
+  "find": "\tflags = (unsigned short)(flags & ~(V34_RX_FLAG_TRAINED\n\t\t\t\t\t   | V34_RX_FLAG_DET_PENDING));",
+  "replace": "\tflags = (unsigned short)(flags & ~V34_RX_FLAG_TRAINED);",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the commit clears 0x300 and 0x10 with it",
+  "find": "\tflags = (unsigned short)(flags & ~(V34_RX_FLAG_TRAINED\n\t\t\t\t\t   | V34_RX_FLAG_DET_PENDING));",
+  "replace": "\tflags = (unsigned short)(flags & ~(V34_RX_FLAG_TRAINED\n\t\t\t\t\t   | V34_RX_FLAG_TRN_WATCH\n\t\t\t\t\t   | V34_RX_FLAG_DET_PENDING));",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the last gate reads the flags BEFORE they were masked",
+  "find": "\tif ((flags & V34_RX_FLAG_TRN_WATCH) == 0) {\t\t/* 0x67b77 */",
+  "replace": "\tif ((rx->flags & V34_RX_FLAG_TRN_WATCH) != 0) {\t\t/* 0x67b77 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the last gate sends bit 4 SET to the baud scaling",
+  "find": "\tif ((flags & V34_RX_FLAG_TRN_WATCH) == 0) {\t\t/* 0x67b77 */",
+  "replace": "\tif ((flags & V34_RX_FLAG_TRN_WATCH) != 0) {\t\t/* 0x67b77 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the rtd is taken from the receiver's other timer",
+  "find": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
+  "replace": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_HI);\t/* 0x67b84 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "the rtd is committed sixteen bits wide",
+  "find": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
+  "replace": "\tT4_I16(obj, T4_RTSCALE) = T4_I16(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
+  "fn": "t4_receive_body"
+ },
+ {
+  "label": "3429 baud scales by 0xb4",
+  "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;",
+  "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb4) >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "3200 baud scales by 0xc1",
+  "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;",
+  "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc1) >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "3000 baud scales by 204",
+  "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 205) >> 8;",
+  "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 204) >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "2800 baud scales by 0xdc",
+  "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;",
+  "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdc) >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "the baud scaling shifts UNSIGNED",
+  "find": "\tint v = T4_I32(obj, T4_RTSCALE);",
+  "replace": "\tint v = (int)T4_U32(obj, T4_RTSCALE);\n\n\tif (v < 0)\n\t\tv = (int)((unsigned)v >> 8 << 8);",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "the baud scaling has a default arm",
+  "find": "\telse if (baud == 0xaf0)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;",
+  "replace": "\telse if (baud == 0xaf0)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;\n\telse\n\t\tT4_I32(obj, T4_RTSCALE) = v >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "3429 and 3200 select each other's scaling",
+  "find": "\tif (baud == 0xd65)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;\n\telse if (baud == 0xc80)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;",
+  "replace": "\tif (baud == 0xd65)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;\n\telse if (baud == 0xc80)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;",
+  "fn": "t4_scale_rtd"
+ },
+ {
+  "label": "the MD-over guard admits a zero descriptor",
+  "find": "\tif (md == 0)\t\t\t\t\t\t/* 0x6aad3 */\n\t\treturn;",
+  "replace": "\tif (0)\t\t\t\t\t\t\t/* 0x6aad3 */\n\t\treturn;",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over comparison is `<` rather than `<=`",
+  "find": "\tif ((short)rx->f124 <= (short)md)\t\t\t/* 0x6d293 */",
+  "replace": "\tif ((short)rx->f124 < (short)md)\t\t\t\t/* 0x6d293 */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over comparison is UNSIGNED",
+  "find": "\tif ((short)rx->f124 <= (short)md)\t\t\t/* 0x6d293 */",
+  "replace": "\tif ((unsigned short)rx->f124 <= md)\t\t\t/* 0x6d293 */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over trace prints the descriptor, not the counter",
+  "find": "\t\t\t\t     (int)rx->f124, (unsigned)flags,",
+  "replace": "\t\t\t\t     (int)(short)md, (unsigned)flags,",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over trace prints the flags as they are NOW",
+  "find": "\t\t\t\t     (int)rx->f124, (unsigned)flags,",
+  "replace": "\t\t\t\t     (int)rx->f124, (unsigned)rx->flags,",
+  "fn": "t4_md_over",
+  "equivalent": true,
+  "why": "EQUIVALENT BECAUSE THE CACHED VALUE IS THE FIELD ON EVERY PATH THAT REACHES HERE.  The trace's third argument is 0x67a48's `%esi`, which is the flags word as it stood at 0x67a1e.  Between there and 0x6a0c2 the only writer of +0x122 is the J block at 0x68edd, and 0x69007 reloads `%esi` from the field immediately afterwards; the two head branches either do not write it (0x6a3a4, 0x6b4a2) or write it and reload (0x6a3c1, 0x6cb5e, 0x68c85).  The packer cannot reach here at all -- it needs bit 10, which 0x67a4b leaves through.  So `%esi` == +0x122 whenever this line runs."
+ },
+ {
+  "label": "the MD-over trace's last two arguments are swapped",
+  "find": "\t\t\t\t     (int)rx->f1c0, (int)rx->agc_gain);",
+  "replace": "\t\t\t\t     (int)rx->agc_gain, (int)rx->f1c0);",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over path does not reconfigure the demodulator",
+  "find": "\tsetupreceiver(obj);\t\t\t\t\t/* 0x6a0c8 */",
+  "replace": "\t(void)obj;\t\t\t\t\t\t/* 0x6a0c8 */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over path leaves +0xaa80 alone",
+  "find": "\tT4_I16(obj, T4_FAA80) = 0;\t\t\t\t/* 0x6a22c */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x6a22c */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the second detectorinit uses the callee's warm-up",
+  "find": "\t\t     0, 10, 0x28, 0x600, 0);\t\t\t/* 0x6a25d */",
+  "replace": "\t\t     0, 8, 10, 0x600, 0);\t\t\t/* 0x6a25d */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the second detectorinit does not run",
+  "find": "\tdetectorinit(T41_DET(obj),",
+  "replace": "\tif (0) detectorinit(T41_DET(obj),",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over path does not re-raise the pending flag",
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
+  "replace": "\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
+  "fn": "t4_md_over",
+  "equivalent": true,
+  "why": "EQUIVALENT BECAUSE THE BIT IS ALREADY UP.  `setupreceiver` ends with its own `or $0x200` at 0x6a218, and between that and 0x6a276 the object does two things: a halfword store to +0xaa80 and a call to `detectorinit`, which src/pump/v34/detector.c shows writing only members of `struct v34_detector` -- x, y, coeff, polarity, armed, count, limit, state, thresh_hi, thresh_lo and level -- and taking no other pointer.  So the second raise is on a value that already has the bit, exactly as in microstate 44's arm at 0x6f0e9/0x6f146 -- where the same duplicate is recorded as an equivalence rather than dropped as a duplicate.  It is written because the object writes it."
+ },
+ {
+  "label": "the MD-over path leaves the descriptor length set",
+  "find": "\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x6a283 */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the MD-over path leaves the counter at +0x25da",
+  "find": "\tT4_I16(obj, T4_PLLCNT) = 0;\t\t\t\t/* 0x6a28a */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x6a28a */",
+  "fn": "t4_md_over"
+ },
+ {
+  "label": "the late-TRN register is chosen on 0x10 rather than 0x08",
+  "find": "\tif (f & V34_RX_FLAG_LATE_TRN) {\n\t\t/* 0x6a377 */",
+  "replace": "\tif (f & V34_RX_FLAG_TRN_WATCH) {\n\t\t/* 0x6a377 */",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the TRN2 shift takes three bits, not two",
+  "find": "\t\ta = (unsigned short)((((int)rx->best_index & 3) << 14)\n\t\t\t\t     | (T4_U16(rx, T4_RXF11C) >> 2));",
+  "replace": "\t\ta = (unsigned short)((((int)rx->best_index & 7) << 13)\n\t\t\t\t     | (T4_U16(rx, T4_RXF11C) >> 3));",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the late-TRN sync word is 0x899e",
+  "find": "\t\tif (a != 0x899f)",
+  "replace": "\t\tif (a != 0x899e)",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the late-TRN register is stored only when it matches",
+  "find": "\t\tT4_U16(rx, T4_RXF11C) = a;\n\t\tif (a != 0x899f)",
+  "replace": "\t\tif (a != 0x899f)",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the late-TRN match raises 0x08 rather than 0x10",
+  "find": "\t\trx->flags = (unsigned short)(f | V34_RX_FLAG_TRN_WATCH);\n\t\treturn rx->flags;",
+  "replace": "\t\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);\n\t\treturn rx->flags;",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the late-TRN match leaves +0x120 alone",
+  "find": "\t\tT4_U16(rx, T4_RXF120) = 0;\n\t\trx->flags = (unsigned short)(f | V34_RX_FLAG_TRN_WATCH);",
+  "replace": "\t\trx->flags = (unsigned short)(f | V34_RX_FLAG_TRN_WATCH);",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the second register is fed from itself rather than from the first",
+  "find": "\td = (unsigned short)(((a & 3) << 14) | (T4_U16(rx, T4_RXF11E) >> 2));",
+  "replace": "\td = (unsigned short)(((T4_U16(rx, T4_RXF11E) & 3) << 14)\n\t\t\t     | (T4_U16(rx, T4_RXF11E) >> 2));",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the first register is fed from the second rather than from itself",
+  "find": "\tb = (unsigned short)((((int)rx->best_index & 3) << 14) | (a >> 2));",
+  "replace": "\tb = (unsigned short)((((int)rx->best_index & 3) << 14)\n\t\t\t     | (T4_U16(rx, T4_RXF11E) >> 2));",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the decoder's two bits are read UNSIGNED",
+  "find": "\tb = (unsigned short)((((int)rx->best_index & 3) << 14) | (a >> 2));",
+  "replace": "\tb = (unsigned short)((((int)(unsigned short)rx->best_index & 3) << 14)\n\t\t\t     | (a >> 2));",
+  "fn": "t4_trn2",
+  "equivalent": true,
+  "why": "EQUIVALENT UNDER THE MASK.  Both spellings are `& 3` on the result, and bits 0 and 1 of a halfword are the same whichever way the upper sixteen are filled.  The object's `movswl` at 0x679f8 and 0x6a37f is therefore a CODEGEN fact and not a behaviour, which is CLAUDE.md's `-- free, so ignore it --` case seen from the other side: the extension is forced into the encoding, and the reconstruction spells it the object's way, but nothing in this tree can fail if it does not."
+ },
+ {
+  "label": "the two registers are compared for INEQUALITY",
+  "find": "\tif (b != d) {\t\t\t\t\t\t/* 0x67a0a */",
+  "replace": "\tif (b == d) {\t\t\t\t\t\t/* 0x67a0a */",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the second reported sync word is 0x89b1",
+  "find": "\tif (b != 0x8990 && b != 0x89b0) {",
+  "replace": "\tif (b != 0x8990 && b != 0x89b1) {",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "only one sync word is reported",
+  "find": "\tif (b != 0x8990 && b != 0x89b0) {",
+  "replace": "\tif (b != 0x8990) {",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the reported match stores the word rather than clearing it",
+  "find": "\tT4_U16(rx, T4_RXF11C) = 0;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
+  "replace": "\tT4_U16(rx, T4_RXF11C) = b;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the reported match raises 0x10 rather than 0x08",
+  "find": "\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);\n\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));\n\treturn rx->flags;",
+  "replace": "\trx->flags = (unsigned short)(f | V34_RX_FLAG_TRN_WATCH);\n\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));\n\treturn rx->flags;",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the reported timing offset is not multiplied by ten",
+  "find": "\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));\n\treturn rx->flags;",
+  "replace": "\tVPcmV34LogTimingOffset(obj, rx->f1d0);\n\treturn rx->flags;",
+  "fn": "t4_trn2"
+ },
+ {
+  "label": "the packer shifts by the bit count PLUS two",
+  "find": "\tint sh = (short)n;\t\t\t\t\t/* 0x68c05 */",
+  "replace": "\tint sh = (short)(n + 2);\t\t\t\t/* 0x68c05 */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the packer does not clear the bits above the shift",
+  "find": "\tacc = (acc & ~(0xffffffffu << sh))",
+  "replace": "\tacc = acc",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the packer keeps the bits above the shift instead",
+  "find": "\tacc = (acc & ~(0xffffffffu << sh))",
+  "replace": "\tacc = (acc & (0xffffffffu << sh))",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the packer takes three bits a block",
+  "find": "\tn = (unsigned short)(n + 2);\n\tT4_U16(obj, T4_MPBITS) = n;\t\t\t\t/* 0x68c1c */",
+  "replace": "\tn = (unsigned short)(n + 3);\n\tT4_U16(obj, T4_MPBITS) = n;\t\t\t\t/* 0x68c1c */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the run-length door opens on DET_INFO rather than DET_SYNC",
+  "find": "\tif (obj->microstate == V34HS_DET_SYNC)\t\t\t/* 0x68c2b */",
+  "replace": "\tif (obj->microstate == V34HS_DET_INFO)\t\t\t/* 0x68c2b */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the packer's limit is seventeen bits, not sixteen",
+  "find": "\tif ((short)n <= 0x10) {\t\t\t\t\t/* 0x68c35 */",
+  "replace": "\tif ((short)n <= 0x11) {\t\t\t\t\t/* 0x68c35 */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the packer's limit is compared UNSIGNED",
+  "find": "\tif ((short)n <= 0x10) {\t\t\t\t\t/* 0x68c35 */",
+  "replace": "\tif (n <= 0x10) {\t\t\t\t\t/* 0x68c35 */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the restart tests bit 15 of the accumulator",
+  "find": "\tif ((acc & 0x10000) == 0)\t\t\t\t/* 0x68c3f */",
+  "replace": "\tif ((acc & 0x8000) == 0)\t\t\t\t/* 0x68c3f */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the restart tests bit 16 for CLEAR",
+  "find": "\tif ((acc & 0x10000) == 0)\t\t\t\t/* 0x68c3f */",
+  "replace": "\tif ((acc & 0x10000) != 0)\t\t\t\t/* 0x68c3f */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the restart moves the microstate to DET_INFO",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the restart leaves the run counter alone",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */\n\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
+  "fn": "t4_mp_packer"
+ },
+ {
+  "label": "the word committed is MASKED with 0x7fff",
+  "find": "\ttbl[(short)idx] = (unsigned short)w;",
+  "replace": "\ttbl[(short)idx] = (unsigned short)(w & 0x7fff);",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the repeat compare does NOT mask",
+  "find": "\tif ((tbl[(short)idx] & 0x7fff) == (w & 0x7fff))",
+  "replace": "\tif (tbl[(short)idx] == (unsigned short)w)",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the repeat compare masks with 0xfff",
+  "find": "\tif ((tbl[(short)idx] & 0x7fff) == (w & 0x7fff))",
+  "replace": "\tif ((tbl[(short)idx] & 0xfff) == (w & 0xfff))",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "a repeat does not step the counter at +0xaa78",
+  "find": "\t\tT4_U16(obj, T3C_COUNT)++;\t\t/* 0x6ff1e */",
+  "replace": "\t\t;\t\t\t\t\t/* 0x6ff1e */",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the accumulator is shifted by sixteen, not seventeen",
+  "find": "\tT4_U32(obj, T4_MPACC) = acc >> 17;",
+  "replace": "\tT4_U32(obj, T4_MPACC) = acc >> 16;",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the accumulator is shifted SIGNED",
+  "find": "\tT4_U32(obj, T4_MPACC) = acc >> 17;",
+  "replace": "\tT4_U32(obj, T4_MPACC) = (unsigned)((int)acc >> 17);",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the bit count drops by sixteen, not seventeen",
+  "find": "\tT4_U16(obj, T4_MPBITS) = (unsigned short)(T4_U16(obj, T4_MPBITS) - 0x11);",
+  "replace": "\tT4_U16(obj, T4_MPBITS) = (unsigned short)(T4_U16(obj, T4_MPBITS) - 0x10);",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the index does not step",
+  "find": "\tidx = (unsigned short)(idx + 1);\n\tT4_U16(obj, T4_MPIDX) = idx;",
+  "replace": "\tT4_U16(obj, T4_MPIDX) = idx;",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the long sequence is nine words",
+  "find": "\t\tif (idx == 0xa)\t\t\t\t/* 0x6cb54 */",
+  "replace": "\t\tif (idx == 0x9)\t\t\t\t/* 0x6cb54 */",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the short sequence is five words",
+  "find": "\t\tif (idx == 4)\t\t\t\t/* 0x6d2de */",
+  "replace": "\t\tif (idx == 5)\t\t\t\t/* 0x6d2de */",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the two lengths select each other",
+  "find": "\tif (T4_U8(obj, T4_MPTBL) & 1) {\n\t\tif (idx == 0xa)\t\t\t\t/* 0x6cb54 */\n\t\t\treturn t4_mp_sequence_end(obj);\n\t} else {\n\t\tif (idx == 4)\t\t\t\t/* 0x6d2de */",
+  "replace": "\tif (T4_U8(obj, T4_MPTBL) & 1) {\n\t\tif (idx == 4)\t\t\t\t/* 0x6cb54 */\n\t\t\treturn t4_mp_sequence_end(obj);\n\t} else {\n\t\tif (idx == 0xa)\t\t\t\t/* 0x6d2de */",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "the length is chosen on bit 1 of the first word",
+  "find": "\tif (T4_U8(obj, T4_MPTBL) & 1) {\n\t\tif (idx == 0xa)\t\t\t\t/* 0x6cb54 */",
+  "replace": "\tif (T4_U8(obj, T4_MPTBL) & 2) {\n\t\tif (idx == 0xa)\t\t\t\t/* 0x6cb54 */",
+  "fn": "t4_mp_word"
+ },
+ {
+  "label": "MP1 is chosen on the LOW bit rather than on the sign",
+  "find": "\tif ((short)tbl[0] < 0) {",
+  "replace": "\tif ((tbl[0] & 1) != 0) {",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP1 is chosen on an UNSIGNED test",
+  "find": "\tif ((short)tbl[0] < 0) {",
+  "replace": "\tif (tbl[0] > 0x8000) {",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP1 raises 0x10 rather than 0x90",
+  "find": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98) | 0x90);",
+  "replace": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98) | 0x10);",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP1 leaves bit 3 alone",
+  "find": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98) | 0x90);",
+  "replace": "\t\trx->flags = (unsigned short)((rx->flags & ~0x90) | 0x90);",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP leaves bit 3 alone",
+  "find": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98)\n\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);",
+  "replace": "\t\trx->flags = (unsigned short)((rx->flags & ~0x90)\n\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP raises 0x90 rather than 0x10",
+  "find": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98)\n\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);",
+  "replace": "\t\trx->flags = (unsigned short)((rx->flags & ~0x98) | 0x90);",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP1 copies the coefficients whatever the low bit says",
+  "find": "\t\tif (T4_U8(tbl, 0) & 1)\n\t\t\tt4_mp_coeffs(obj, tbl);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tt4_mp_print(\"V34MP -MP1",
+  "replace": "\t\tif (1)\n\t\t\tt4_mp_coeffs(obj, tbl);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tt4_mp_print(\"V34MP -MP1",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "MP copies the coefficients too",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tt4_mp_print(\"V34MP -MP sequence,",
+  "replace": "\t\tt4_mp_coeffs(obj, tbl);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tt4_mp_print(\"V34MP -MP sequence,",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "the two sequence reports are swapped",
+  "find": "\t\t\tt4_mp_print(\"V34MP -MP1 sequence,%x,%x,%x,%x,%x,%x,\"\n\t\t\t\t    \"%x,%x,%x,%x\\n\", tbl);",
+  "replace": "\t\t\tt4_mp_print(\"V34MP -MP sequence,%x,%x,%x,%x,%x,%x,\"\n\t\t\t\t    \"%x,%x,%x,%x\\n\", tbl);",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "the sequence end moves the microstate to DET_INFO",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\t/* 0x6ff6f */",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\t/* 0x6ff6f */",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "the sequence end leaves the index set",
+  "find": "\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */\n\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
+  "replace": "\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
+  "fn": "t4_mp_sequence_end"
+ },
+ {
+  "label": "the report prints the ten words SIGNED",
+  "find": "\t\t\t     (unsigned)tbl[0], (unsigned)tbl[1],",
+  "replace": "\t\t\t     (unsigned)(int)(short)tbl[0], (unsigned)tbl[1],",
+  "fn": "t4_mp_print"
+ },
+ {
+  "label": "the report prints its first two words the other way round",
+  "find": "\t\t\t     (unsigned)tbl[0], (unsigned)tbl[1],",
+  "replace": "\t\t\t     (unsigned)tbl[1], (unsigned)tbl[0],",
+  "fn": "t4_mp_print"
+ },
+ {
+  "label": "the report starts at the second word",
+  "find": "\t\t\t     (unsigned)tbl[8], (unsigned)tbl[9]);",
+  "replace": "\t\t\t     (unsigned)tbl[8], (unsigned)tbl[10]);",
+  "fn": "t4_mp_print"
+ },
+ {
+  "label": "the coefficients are copied without negating the odd ones",
+  "find": "\td[1]  = (short)-tbl[3];",
+  "replace": "\td[1]  = (short)tbl[3];",
+  "fn": "t4_mp_coeffs"
+ },
+ {
+  "label": "the coefficients negate d[6] instead of d[1]",
+  "find": "\td[1]  = (short)-tbl[3];\n\td[6]  = (short)tbl[3];",
+  "replace": "\td[1]  = (short)tbl[3];\n\td[6]  = (short)-tbl[3];",
+  "fn": "t4_mp_coeffs"
+ },
+ {
+  "label": "the coefficients pair d[2] with d[8] rather than with d[9]",
+  "find": "\td[9]  = (short)tbl[4];\n\td[2]  = (short)tbl[4];\n\td[3]  = (short)-tbl[5];\n\td[8]  = (short)tbl[5];",
+  "replace": "\td[8]  = (short)tbl[4];\n\td[2]  = (short)tbl[4];\n\td[3]  = (short)-tbl[5];\n\td[9]  = (short)tbl[5];",
+  "fn": "t4_mp_coeffs"
+ },
+ {
+  "label": "the coefficients start at the first word, not the third",
+  "find": "\td[7]  = (short)tbl[2];\n\td[0]  = (short)tbl[2];",
+  "replace": "\td[7]  = (short)tbl[1];\n\td[0]  = (short)tbl[1];",
+  "fn": "t4_mp_coeffs"
+ },
+ {
+  "label": "the last coefficient pair is not copied",
+  "find": "\td[5]  = (short)-tbl[7];\n\td[10] = (short)tbl[7];",
+  "replace": "\td[5]  = (short)-tbl[7];",
+  "fn": "t4_mp_coeffs"
+ },
+ {
+  "label": "the run-length loop runs while the count is NON-zero only once",
+  "find": "\twhile (count != 0) {\t\t\t\t\t/* 0x6cbca */",
+  "replace": "\tif (count != 0) {\t\t\t\t\t/* 0x6cbca */",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the run-length loop takes the TOP bit of the accumulator",
+  "find": "\t\tint one = (int)(acc & 1);\t\t\t/* 0x6cbe0 */",
+  "replace": "\t\tint one = (int)(acc >> 31);\t\t\t/* 0x6cbe0 */",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the run-length loop does not store the count each pass",
+  "find": "\t\tcount = (unsigned short)(count - 1);\n\t\tT4_U16(obj, T4_MPBITS) = count;",
+  "replace": "\t\tcount = (unsigned short)(count - 1);",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the run-length loop shifts the accumulator SIGNED",
+  "find": "\t\tacc >>= 1;\n\n\t\tif (one) {",
+  "replace": "\t\tacc = (unsigned)((int)acc >> 1);\n\n\t\tif (one) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "a one bit does not step the run counter",
+  "find": "\t\t\trun = (unsigned short)(T4_U16(obj, T4_MPRUN) + 1);\n\t\t\tT4_U16(obj, T4_MPRUN) = run;",
+  "replace": "\t\t\trun = T4_U16(obj, T4_MPRUN);",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the E gate wants 0x10 rather than 0x90",
+  "find": "\t\t\tif ((f & 0x98) == 0x90 || (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "replace": "\t\t\tif ((f & 0x98) == 0x10 || (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the E gate's two halves are ANDed",
+  "find": "\t\t\tif ((f & 0x98) == 0x90 || (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "replace": "\t\t\tif ((f & 0x98) == 0x90 && (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the E gate ignores +0xaa3c",
+  "find": "\t\t\tif ((f & 0x98) == 0x90 || (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "replace": "\t\t\tif ((f & 0x98) == 0x90) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the E gate reads bit 1 of +0xaa3c",
+  "find": "\t\t\tif ((f & 0x98) == 0x90 || (T4_U8(obj, T4_MPCAPS) & 1)) {",
+  "replace": "\t\t\tif ((f & 0x98) == 0x90 || (T4_U8(obj, T4_MPCAPS) & 2)) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "E needs twenty-one ones, not twenty",
+  "find": "\t\t\t\tif ((short)run > 0x13)",
+  "replace": "\t\t\t\tif ((short)run > 0x14)",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "E's run threshold is compared UNSIGNED",
+  "find": "\t\t\t\tif ((short)run > 0x13)",
+  "replace": "\t\t\t\tif (run > 0x13)",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "MP ends on a run of sixteen rather than seventeen",
+  "find": "\t\t\tif ((short)T4_U16(obj, T4_MPRUN) > 0x10) {",
+  "replace": "\t\t\tif ((short)T4_U16(obj, T4_MPRUN) > 0xf) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "MP's end-of-run test is `>=`",
+  "find": "\t\t\tif ((short)T4_U16(obj, T4_MPRUN) > 0x10) {",
+  "replace": "\t\t\tif ((short)T4_U16(obj, T4_MPRUN) >= 0x10) {",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "MP's end moves the microstate to DET_SYNC",
+  "find": "\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);",
+  "replace": "\t\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "MP's end leaves the trace counter alone",
+  "find": "\t\t\t\tT4_I16(obj, T3C_COUNT) = 0;\n\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
+  "replace": "\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "a zero bit does not reset the run counter",
+  "find": "\t\t\tT4_U16(obj, T4_MPRUN) = 0;\n\t\t}\n\t}",
+  "replace": "\t\t}\n\t}",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "the drained accumulator is not stored",
+  "find": "\tT4_U32(obj, T4_MPACC) = acc;\t\t\t\t/* 0x6cc00 */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x6cc00 */",
+  "fn": "t4_mp_runlength"
+ },
+ {
+  "label": "E does not store what is left of the accumulator",
+  "find": "\tT4_U32(obj, T4_MPACC) = acc;\n\n\t/*\n\t * 0x710e4 jumps PAST",
+  "replace": "\t/*\n\t * 0x710e4 jumps PAST",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E reports itself early whatever the flags say",
+  "find": "\tif ((f & 0x98) != 0x90) {\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (1) {\n\t\tif (DSPLIB_DEBUG_ON())",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E's early report tests for 0x90 rather than against it",
+  "find": "\tif ((f & 0x98) != 0x90) {\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif ((f & 0x98) == 0x90) {\n\t\tif (DSPLIB_DEBUG_ON())",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E's early report prints the flags as they are now",
+  "find": "\t\t\t\t\t     \"rxflgs = 0x%x\\n\", (unsigned)f);",
+  "replace": "\t\t\t\t\t     \"rxflgs = 0x%x\\n\",\n\t\t\t\t\t     (unsigned)rx->flags);",
+  "fn": "t4_mp_e_sequence",
+  "equivalent": true,
+  "why": "EQUIVALENT BECAUSE NOTHING WRITES +0x122 IN BETWEEN.  `f` is 0x6cb94's load, taken on the same iteration of the run-length loop that reaches 0x710e1; the only statements between are 0x6cb83's step of +0xaa26 and 0x710e1's store of the accumulator to +0xaa30, both object fields.  The first thing that DOES write +0x122 is 0x7119b, which is past the report.  The object caches, so this does too."
+ },
+ {
+  "label": "E copies the coefficients outside the early-report branch",
+  "find": "\t\tif (T4_U8(tbl, 0) & 1)\n\t\t\tt4_mp_coeffs(obj, tbl);\n\t}\n\n\t/* 0x71189 */",
+  "replace": "\t}\n\tif (T4_U8(tbl, 0) & 1)\n\t\tt4_mp_coeffs(obj, tbl);\n\n\t/* 0x71189 */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E raises 0x90 rather than 0x98",
+  "find": "\trx->flags = (unsigned short)(rx->flags | 0x98);\n\trx->f266 = 0;",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x90);\n\trx->f266 = 0;",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E leaves +0x266 alone",
+  "find": "\trx->f266 = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
+  "replace": "\tT4_I16(obj, T3C_COUNT) = 0;",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E leaves the trace counter alone",
+  "find": "\trx->f266 = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
+  "replace": "\trx->f266 = 0;",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E's report prints the flags it had before raising 0x98",
+  "find": "\t\tdsplibs_debug_printf(\"V34MP - E sequence detected,\"\n\t\t\t\t     \"rxflgs= 0x%x\\n\", (unsigned)rx->flags);",
+  "replace": "\t\tdsplibs_debug_printf(\"V34MP - E sequence detected,\"\n\t\t\t\t     \"rxflgs= 0x%x\\n\", (unsigned)f);",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E does not report the timing offset",
+  "find": "\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));\t/* 0x711ee */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x711ee */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E's timing offset is multiplied by nine",
+  "find": "\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));\t/* 0x711ee */",
+  "replace": "\tVPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 9));\t/* 0x711ee */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "the precoder flag is raised on 0x2000 rather than on 0x4000",
+  "find": "\tif (rx->flags & 0x4000)\t\t\t\t\t/* 0x711fe */",
+  "replace": "\tif (rx->flags & 0x2000)\t\t\t\t\t/* 0x711fe */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "the precoder flag is raised unconditionally",
+  "find": "\tif (rx->flags & 0x4000)\t\t\t\t\t/* 0x711fe */",
+  "replace": "\tif (1)\t\t\t\t\t\t\t/* 0x711fe */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "the digital half comes up whatever +0x3598 says",
+  "find": "\tif (T4_I16(obj, T4_F3598) == 0) {\t\t\t/* 0x71216 */",
+  "replace": "\tif (1) {\t\t\t\t\t\t/* 0x71216 */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "the digital half's guard is not marked afterwards",
+  "find": "\t\tinitdigital(obj);\n\t\tT4_I16(obj, T4_F3598) = 1;",
+  "replace": "\t\tinitdigital(obj);",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "the digital half does not come up",
+  "find": "\t\tinitdigital(obj);\n\t\tT4_I16(obj, T4_F3598) = 1;",
+  "replace": "\t\tT4_I16(obj, T4_F3598) = 1;",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E writes 0x2000 to +0x218",
+  "find": "\trx->f218 = 0x4000;\t\t\t\t\t/* 0x7123d */",
+  "replace": "\trx->f218 = 0x2000;\t\t\t\t\t/* 0x7123d */",
+  "fn": "t4_mp_e_sequence"
+ },
+ {
+  "label": "E leaves +0x218 alone",
+  "find": "\trx->f218 = 0x4000;\t\t\t\t\t/* 0x7123d */",
+  "replace": "\t;\t\t\t\t\t\t\t/* 0x7123d */",
+  "fn": "t4_mp_e_sequence"
+ }
+]

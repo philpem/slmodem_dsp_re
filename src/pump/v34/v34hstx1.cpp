@@ -496,9 +496,33 @@ v34tx1_k56jatxmit(void *objp)
  * `txwritequeue` takes four shorts and the object hands it eight bytes of
  * stack it has just zeroed as two `int`s, which is the same four samples.
  *
- * At 0xc0 the arm leaves for 0x66d85, which re-reads `txstate` and is not
- * reconstructed here, so the wrap is REPORTED and not followed.  The count
- * is compared as sixteen bits, after the store.
+ * At 0xc0 the arm leaves for 0x66d85, and that block is written here now.
+ * The count is compared as sixteen bits, after the store.
+ *
+ * THE `txstate == 81` COMPARE AT 0x66d8e IS WHAT MAKES FOUR TXSTATES TWO
+ * BEHAVIOURS, AND IT IS LIVE.  Everything above the wrap is one body under
+ * four indices; 0x66d85 re-reads +0x3596 and returns to the loop test at
+ * 0x63941 for anything that is not 0x51, so 82, 83 and 84 reach the
+ * hundred-and-ninety-second sample and simply carry on, and only 81 decides
+ * anything.  That is finding 423's shape at 0x635cc -- most passes are one
+ * body under several indices and the wrap is two behaviours -- and it is why
+ * docs/v34handshak.md's "0x63d58 ... really is one behaviour" was wrong.
+ *
+ * WHAT 81 DECIDES.  The silence is over, and the transmit machine moves to
+ * MOH_FRR when either the Modem-on-Hold message this end originally asked
+ * for (+0xabec) or the one it is building now (`moh_message`) is 1 MHfrr,
+ * and to MOH_ON_HOLD otherwise.  BOTH ARE READ 32 BITS WIDE -- `cmpl $0x1`
+ * at 0x66dac and 0x66db9 -- and both are printed with `%d` by the
+ * diagnostic in front of them, which is where +0xabec's name comes from.
+ *
+ * The compares against 0x52 at 0x66dc6 and 0x53 at 0x68ae3 are
+ * `hs_setstate`'s own "already there" early return inlined, not a fifth
+ * state test: `jne 63941` has established that the halfword holds 0x51, so
+ * neither can be true.  Findings 722 and 730's shape.
+ *
+ * Both of the block's ways out are the loop test -- 0x63941 loads the object
+ * first and 0x63948 does not, and both fall into 0x629e7 -- so the wrap is
+ * `V34TX1_LOOP` on either side of the guard and nothing leaves the dispatch.
  */
 int
 v34tx1_moh_silence(void *objp)
@@ -513,9 +537,26 @@ v34tx1_moh_silence(void *objp)
 	txwritequeue(&o->txq, quiet);
 
 	o->vect_idx = (short)(o->vect_idx + 1);
-	if ((unsigned short)o->vect_idx == 0xc0u)
-		return V34TX1_MOH_WRAP;
-	return V34TX1_LOOP;
+	if ((unsigned short)o->vect_idx != 0xc0u)
+		return V34TX1_LOOP;			/* 0x63da2 */
+
+	/* 0x66d85 */
+	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)
+		return V34TX1_LOOP;			/* 0x63941 */
+
+	if (dsplibs_debug_level > 1)			/* 0x66d98 */
+		dsplibs_debug_printf(
+			"V34F MOH: After 192 silence, org = %d ,"
+			" act = %d\r\n",
+			o->fabec, o->moh_message);
+
+	/* 0x66dac */
+	hs_setstate(o, TX1_TXSTATE,
+		    (o->fabec == 1 || o->moh_message == 1)
+		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
+
+	o->vect_idx = 0;				/* 0x66dec */
+	return V34TX1_LOOP;				/* 0x63948 */
 }
 
 /*
@@ -525,10 +566,25 @@ v34tx1_moh_silence(void *objp)
  * Scramble two bits, transmit the point they select, and count the symbol.
  * Then two comparisons of `vect_idx`, in this order:
  *
- *   - against +0xaa78: the segment is over, and the arm leaves for 0x66fe9,
- *     which is not reconstructed here;
+ *   - against +0xaa78: the MD segment is over, echo adaptation is enabled,
+ *     and the arm falls straight into the second comparison;
  *   - against +0x35a6: the modulator is reconfigured for the negotiated rate
  *     and the transmit machine moves to SSEG.
+ *
+ * THE TWO ARE NOT EXCLUSIVE AND THE FIRST IS NOT AN EXIT.  0x66fe9's block
+ * ends `jmp 63e7f`, and 0x63e7f is the fall-through of the very block that
+ * jumped to it -- the +0x35a6 test.  So the object runs both bodies when
+ * +0xaa78 and +0x35a6 hold the same value, and the arm has ONE way out.
+ * This file used to report 0x66fe9 as a transfer (`V34TX1_TXMD_DONE`) and
+ * stop; the transfer does not exist.
+ *
+ * WHAT 0x66fe9 DOES is clear bit 2 of `f25c2` and zero `f354c`, `f3550` and
+ * `f3552` -- the four that gate and seed `adaptecho`'s slow path.  The same
+ * four are cleared at 0x67613 in 21 `TRNSEG4`, which ALSO zeroes `f3560`
+ * and calls `VPcmV34ReportStartOfEchoAdapt`; the two are near-twins and not
+ * one body, so they are written twice rather than factored.  The
+ * reconstruction's own diagnostic names what it is for: "On MD - enabling
+ * echo adaptation".
  *
  * `V34SetupModulator`'s fifth argument is one when EITHER of the two PCM
  * receivers at +0x24c and +0x250 is non-zero -- the object computes it as
@@ -554,8 +610,19 @@ v34tx1_txmd(void *objp)
 	txmit(o);
 
 	o->vect_idx = (short)(o->vect_idx + 1);
-	if ((unsigned short)o->vect_idx == (unsigned short)tx1_get(o, TX1_COUNT))
-		return V34TX1_TXMD_DONE;
+	if ((unsigned short)o->vect_idx
+	    == (unsigned short)tx1_get(o, TX1_COUNT)) {
+		/* 0x66fe9 */
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+				"On MD - enabling echo adaptation...\r\n");
+
+		o->f354c = 0;				/* 0x6700e */
+		o->f25c2 =				/* 0x67017 */
+			(short)((unsigned short)o->f25c2 & ~4u);
+		o->f3550 = 0;				/* 0x6701e */
+		o->f3552 = 0;				/* 0x67025 */
+	}
 
 	if ((unsigned short)o->vect_idx
 	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {

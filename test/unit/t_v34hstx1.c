@@ -96,6 +96,11 @@
 #define TX1_V90RX	0x024c		/* v90_receiver                    */
 #define TX1_K56RX	0x0250		/* k56flex_receiver                */
 #define TX1_F358C	0x358c		/* 60 masks it with one            */
+#define TX1_FABEC	0x00abec	/* int: 81's wrap, the org message */
+#define TX1_F354C	0x354c		/* int: adaptecho's call counter   */
+#define TX1_F3550	0x3550		/* the LMS step                    */
+#define TX1_F3552	0x3552		/* beta                            */
+#define TX1_MOHMSG	0x00abf0	/* int: `moh_message`, the act one */
 #define TX1_F25D0	0x25d0		/* the transmitted point, 32 bits  */
 #define TX1_RATENOW	0x0228		/* rate_now, int                   */
 #define TX1_RATEWANT	0x022c		/* rate_want, int                  */
@@ -181,10 +186,13 @@ apply(short txst, const struct tx1_poke *p, int np)
 /*
  * One case: the arm alone, then the arm against the blob.
  *
- * `want` is the exit the case is supposed to take.  When it is not
- * `V34TX1_LOOP` the arm has left the dispatch for a block this reconstruction
- * does not model, there is nothing to compare it against, and only the first
- * run happens -- named as a gap in finding 343 rather than left silent.
+ * `want` is the exit the case is supposed to take.  IT IS `V34TX1_LOOP` ON
+ * EVERY CASE IN THIS FILE NOW, and it is kept as a parameter rather than
+ * dropped because the check is still a check: an arm that returned anything
+ * else would be claiming a transfer out of the dispatch, and there is no
+ * longer any such transfer to claim.  Two cases used to pass something else
+ * -- 81's wrap and 86's segment end, finding 343's gap -- and both of those
+ * blocks are written now, so both run the differential half as well.
  *
  * `guard` IS THE SECOND ANTI-VACUITY GUARD, AND IT HAS THREE FORMS BECAUSE
  * ONE ARM HAS PATHS THAT DO NOT TRANSMIT.  What the guard is FOR is that side
@@ -244,6 +252,17 @@ run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 	snprintf(msg, sizeof(msg), "%s: the arm wrote something", what);
 	diff_eq_int(msg, nd != 0, 1, tag);
 
+	/*
+	 * AND THIS BRANCH IS UNREACHABLE NOW, ON PURPOSE.  It skipped the
+	 * differential half for a case that had left the dispatch for a block
+	 * this file did not model, and there is no such block left: every arm
+	 * returns `V34TX1_LOOP` on every path (finding 748).  It stays as an
+	 * ASSERTION -- if an arm ever reports something else the run says so
+	 * and does not silently compare -- and it is safe to have it stay
+	 * because the `exit code` check above has already failed by then.
+	 * Deleting it would leave a wrong return value to be caught by one
+	 * `diff_eq_int` alone.
+	 */
 	if (rc != V34TX1_LOOP) {
 		if (dump)
 			printf("  %-38s tx %2d  arm wrote %4u  exit %d\n",
@@ -407,20 +426,92 @@ case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 /* --- 81 MOH_SILENCE ------------------------------------------------------- */
 
 /*
- * The wrap at 0xc0 leaves for 0x66d85, which is not reconstructed, so that
- * run checks the exit code and stops: there is no oracle past a transfer this
- * file does not model.  Finding 343.
+ * The wrap at 0xc0 runs 0x66d85, which is written now, so the wrap runs are
+ * differential like every other case here.  Finding 343's gap is closed.
+ *
+ * THE THREE COMPANION RUNS ARE THE POINT, not the wrap itself.  0x66d85
+ * chooses MOH_FRR over MOH_ON_HOLD when EITHER +0xabec or `moh_message` is 1,
+ * so two runs leave a reconstruction that dropped one of the two reads
+ * passing: `wrap_org` has only the first set, `wrap_act` only the second and
+ * `wrap_hold` neither.
+ *
+ * AND +0xabec IS SET TO 0x10001 AND NOT TO 1 WHEREVER IT IS NOT THE ONE
+ * BEING TESTED.  The object reads it `cmpl $0x1`, 32 bits wide; a 16-bit
+ * read agrees with a 32-bit one over every value whose upper half is zero,
+ * so a seed of 1 cannot separate the two declarations and 0x10001 can.  This
+ * is the case rxstate 72's 0x6881e was NOT (finding 613) -- here a trial
+ * exists, so one is offered.
+ *
+ * AND 82, 83 AND 84 SHARE THE ENTRY AND NOT THE WRAP.  0x66d85 re-reads
+ * +0x3596 and returns to the loop for anything that is not 0x51, so their
+ * wrap decides nothing -- `vect_idx` stays at 0xc0 and the transmit machine
+ * does not move.  Both of those are asserted below rather than left to the
+ * byte comparison, because "the arm did nothing" and "the arm did the right
+ * nothing" read the same in a diff.
  */
 static const struct tx1_poke moh_run[] = { P16(TX1_VECTIDX, 0x10) };
 static const struct tx1_poke moh_wrap[] = { P16(TX1_VECTIDX, 0xbf) };
+static const struct tx1_poke moh_wrap_org[] = {
+	P16(TX1_VECTIDX, 0xbf), P32(TX1_FABEC, 1), P32(TX1_MOHMSG, 0)
+};
+static const struct tx1_poke moh_wrap_act[] = {
+	P16(TX1_VECTIDX, 0xbf), P32(TX1_FABEC, 0x10001), P32(TX1_MOHMSG, 1)
+};
+static const struct tx1_poke moh_wrap_hold[] = {
+	P16(TX1_VECTIDX, 0xbf), P32(TX1_FABEC, 0x10001), P32(TX1_MOHMSG, 0)
+};
 
 static void
 case_moh_silence(void)
 {
+	static const struct { short txst; const char *what; } shared[] = {
+		{ V34HS_MOH_ON_HOLD,   "82 MOH_ON_HOLD, wrap decides nothing"   },
+		{ V34HS_MOH_FRR,       "83 MOH_FRR, wrap decides nothing"       },
+		{ V34HS_MOH_CLEARDOWN, "84 MOH_CLEARDOWN, wrap decides nothing" }
+	};
+	int i;
+
 	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
 		 "81 MOH_SILENCE, counting", 8100, moh_run, 1);
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_MOH_WRAP,
+	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
 		 "81 MOH_SILENCE, wrap at 0xc0", 8101, moh_wrap, 1);
+	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+		 "81 MOH_SILENCE, wrap, org MHfrr", 8102,
+		 moh_wrap_org, NP(moh_wrap_org));
+	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+		 "81 MOH_SILENCE, wrap, act MHfrr", 8103,
+		 moh_wrap_act, NP(moh_wrap_act));
+	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+		 "81 MOH_SILENCE, wrap, neither MHfrr", 8104,
+		 moh_wrap_hold, NP(moh_wrap_hold));
+
+	for (i = 0; i < 3; i++) {
+		char msg[96];
+
+		run_case(shared[i].txst, v34tx1_moh_silence, V34TX1_LOOP,
+			 shared[i].what, 8105 + i,
+			 moh_wrap_org, NP(moh_wrap_org));
+
+		/*
+		 * The two things 81 would have moved, asserted on the ARM
+		 * ALONE -- `run_case`'s second half runs the blob's tail
+		 * after ours and the tail is entitled to move either word.
+		 * `vect_idx` is left AT the wrap value rather than reset,
+		 * and the transmit machine is where it was.  81's own runs
+		 * above assert the other side of both.
+		 */
+		apply(shared[i].txst, moh_wrap_org, NP(moh_wrap_org));
+		(void)v34tx1_moh_silence(v34hs_object(0));
+
+		snprintf(msg, sizeof(msg),
+			 "%s: vect_idx left at the wrap", shared[i].what);
+		diff_eq_int(msg, v34hs_peek_short(0, TX1_VECTIDX), 0xc0,
+			    8105 + i);
+		snprintf(msg, sizeof(msg),
+			 "%s: the transmit machine did not move", shared[i].what);
+		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXSTATE),
+			    shared[i].txst, 8105 + i);
+	}
 }
 
 /* --- 86 TXMD -------------------------------------------------------------- */
@@ -446,10 +537,38 @@ static const struct tx1_poke txmd_b[] = {
 	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x65),
 	P32(TX1_F25CC, TX1_SRSEED)
 };
+/*
+ * THE ECHO-ADAPTATION BLOCK'S FOUR STORES ARE INVISIBLE AGAINST A COLD
+ * OBJECT unless the fields already hold something else, which is finding
+ * 345's list in this file's own currency: `f25c2` is seeded with bit 2 SET,
+ * so the `& ~4` has something to clear, and the other three non-zero.
+ */
 static const struct tx1_poke txmd_done[] = {
 	P16(TX1_VECTIDX, 0x3f), P16(TX1_COUNT, 0x40),
 	P16(TX1_SEGLEN, 0x50), P16(TX1_F359C, 0x64),
-	P32(TX1_F25CC, TX1_SRSEED)
+	P32(TX1_F25CC, TX1_SRSEED),
+	P16(TX1_F25C2, 0x1005), P32(TX1_F354C, 0x1234),
+	P16(TX1_F3550, 0x55), P16(TX1_F3552, 0x66)
+};
+
+/*
+ * AND BOTH BODIES AT ONCE, which no run could reach before: 0x66fe9 used to
+ * be reported as an exit and the arm stopped there, so the second comparison
+ * was unreachable whenever the first held.  0x66fe9 ends `jmp 63e7f`, which
+ * is the fall-through of the block that jumped to it, so with +0xaa78 and
+ * +0x35a6 equal the object runs the echo block AND the reconfiguration.
+ */
+static const struct tx1_poke txmd_both[] = {
+	P16(TX1_VECTIDX, 0x3f), P16(TX1_COUNT, 0x40),
+	P16(TX1_SEGLEN, 0x40), P16(TX1_F359C, 0x64),
+	P32(TX1_F25CC, TX1_SRSEED),
+	P16(TX1_F25C2, 0x1005), P32(TX1_F354C, 0x1234),
+	P16(TX1_F3550, 0x55), P16(TX1_F3552, 0x66),
+	P16(TX1_F25C0, 0x1234),
+	P16(TX1_RATECFG + 0x00, 3200),		/* baud            */
+	P16(TX1_RATECFG + 0x10, 1829),		/* carrier         */
+	P16(TX1_RATECFG + 0x06, 0),		/* pre-emphasis    */
+	P32(TX1_V90RX, 0), P32(TX1_K56RX, 0)
 };
 
 /*
@@ -491,8 +610,11 @@ case_txmd(void)
 		 "86 TXMD, generator A", 8600, txmd_a, NP(txmd_a));
 	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
 		 "86 TXMD, generator B", 8601, txmd_b, NP(txmd_b));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_TXMD_DONE,
+	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
 		 "86 TXMD, segment complete", 8602, txmd_done, NP(txmd_done));
+	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+		 "86 TXMD, segment end and reconfiguration together", 8606,
+		 txmd_both, NP(txmd_both));
 	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
 		 "86 TXMD, reconfigure, no PCM", 8603,
 		 txmd_setup_nopcm, NP(txmd_setup_nopcm));
@@ -2851,9 +2973,8 @@ case_tx_dpsk(void)
  * compare uses.  The arm reads both and they are seeded apart on purpose.
  */
 #define TX1_FA244	0xa244		/* int: the segment's length       */
-#define TX1_F354C	0x354c		/* int: adaptecho's call counter   */
-#define TX1_F3550	0x3550		/* the LMS step                    */
-#define TX1_F3552	0x3552
+/* TX1_F354C, TX1_F3550 and TX1_F3552 are at the head of this file: 86's echo
+ * block at 0x66fe9 clears the same three, so they are no longer 21's alone. */
 #define TX1_F3560	0x3560		/* int: the accumulated energy     */
 #define TX1_FAA80	0xaa80		/* the completion writes one here  */
 #define TX1_RXBAUD	0xaa96		/* setupreceiver's rate switch     */

@@ -919,9 +919,10 @@
  },
  {
   "label": "the MOH tone exit goes to MOH_TONE",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);",
-  "fn": "t44_accept_len08"
+  "find": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);",
+  "replace": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);",
+  "fn": "t44_accept_len08",
+  "note": "A LEADING NEWLINE, and finding 432 is why.  Microstate 79 sets MOH_TONE_DROP too, at 0x6d5e2, and its copy is one tab deeper inside an `if` -- so the bare one-tab line is a SUBSTRING of it and the anchor matched twice.  The newline pins the indent."
  },
  {
   "label": "the INFO1a decoder's answer is inverted",

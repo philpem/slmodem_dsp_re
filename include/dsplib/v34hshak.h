@@ -379,9 +379,17 @@ void dftfreqinit(struct v34_dftbin *bins);
  * which is what makes the pair a measurement rather than two frequencies.
  *
  * `nl` is the author's; V.34 phase 2 measures nonlinear distortion from the
- * probe, and that is the obvious reading.  Which bank is the reference and
- * which the product is NOT settled by anything in the object -- neither
- * initialiser has a caller -- so nothing here reads across.
+ * probe, and that is the obvious reading.
+ *
+ * THIS PARAGRAPH USED TO SAY "neither initialiser has a caller -- so nothing
+ * here reads across", and to leave which bank is the reference and which the
+ * product unsettled.  IT HAS A CALLER NOW: `v34handshak`'s rxstate 72 arm
+ * inlines both, twice each, at 0x6a54c/0x6a760 on `obj->probe_bins` and
+ * 0x6a5a1/0x6a7aa on `obj->nl_noise_bins`.  So the SIGNAL bank overlays
+ * `probe_bins[0..3]`, the NOISE bank is the four bins immediately after the
+ * probe's twenty-five, and the averaging loops at 0x69d28 and 0x6a70f read
+ * `energy` out of both and compute `round(256 * signal / noise)` -- which
+ * makes 0xa320 the numerator and 0xa76c the denominator.  Finding 739.
  *
  * Both clear only the integer accumulators, not the double pair
  * `dftfreqinit` also clears.  That difference is the object's.

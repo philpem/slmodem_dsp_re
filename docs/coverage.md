@@ -7,20 +7,14 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#######...........................]  21.7%    159739 bytes, 417 symbols
-  tested      [##################################] 100.0%    159718 bytes, 412 of 417 that can be
+  translated  [##########........................]  30.1%    221280 bytes, 418 symbols
+  tested      [##################################] 100.0%    221259 bytes, 413 of 418 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
   the file-local symbols too -- 18 of ours (7987 bytes).
-
-  defined here only IN PART, and so counted in NEITHER figure
-  above -- the whole symbol size would land in `translated` the
-  moment a definition exists, which for a function being written
-  one dispatch case at a time is a claim nobody made:
-    v34handshak                     61541 bytes   landed one dispatch arm at a time (#56-#58); an arm nobody has written calls abort
 
   translated, alias exists, and NOT tested:
     _ZN5QueueIfE5resetEv                             13 bytes
@@ -84,7 +78,6 @@ dsplibs.o reconstruction coverage
   what is left, by translation-unit span:
     VPcmV34Main.cpp +72                           290315 bytes   739 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
-    V34hshak.c +13                                 61541 bytes     1 symbols
     V32mod.c +39                                   55694 bytes   119 symbols
     Dialer.c +18                                   16982 bytes    53 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
@@ -94,4 +87,5 @@ dsplibs.o reconstruction coverage
     class1.c                                        4626 bytes    14 symbols
     vpcm.c                                          2883 bytes     5 symbols
     class1rx.c                                      2495 bytes     5 symbols
+    (weak/linkonce, no .text address to attribute)    2243 bytes    35 symbols
 ```

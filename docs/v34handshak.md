@@ -8,6 +8,35 @@ Read `docs/largefunctions.md` first for *why* the work is split this way, and
 `docs/fastpass.md` for how #56, #57 and #58 came to be three tasks rather than
 seven. This file is the operating manual.
 
+## The guards, and what each covers TODAY
+
+Read this from the tree, not from here: `grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c`.
+As of the session that landed rxstate 53's arm:
+
+| guard | still covers | bytes |
+|---|---|--:|
+| `T3M_UNWRITTEN_TBL1` | **RETIRED.** 81's wrap at 0x66d85 and 86's segment end at 0x66fe9 are written, in the arms, and NEITHER turned out to be a transfer out of the loop -- so the loop's dispatch on an arm's return value has gone too, and with it two of `enum v34tx1_exit`'s three values. Finding 748 | -- |
+| `T3M_UNWRITTEN_RXSTATE` | **RETIRED.** rxstate 72 RX_L1 (0x650c6) is written and the guard has no call site left. All five arms of the chain and both transmit-dispatch doors are written; the constant is still in `v34hshak.h` beside the other four that no path reaches | -- |
+| `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
+| `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at ONE site: the table-3 `default:`, which is unreachable. 0x6d57c and 0x6c8f8 are written, and they were never microstate 44's -- finding 748 | -- |
+
+**THE TABLE-3 `default:` IS NOT WORK AND NEVER GOES AWAY.** Its own comment
+says so: the fifteen written arms and the twenty-four shared ones are forty
+labels over the forty values the range test admits, so it is unreachable and
+is kept because the range test and the label set are two statements of one
+fact. So "remove the `PARTIAL` line when the last guard goes" was always the
+wrong criterion -- one guard is a permanent structural assertion. The
+criterion is **when no REACHABLE arm is unwritten**.
+
+**THAT CRITERION IS MET AND `tools/coverage.py`'s `PARTIAL` ENTRY HAS COME
+OUT.** `v34handshak`'s 61,541 bytes now count as translated and `make
+coverage` reads **30.1%** where it read 21.7%. The number of guarded reachable
+bytes went 11,398 -> 10,310 (finding 725, 53 DET_AB) -> 8,678 (731, 4 RECEIVE)
+-> 3,811 -> zero for the rxstate chain (738, 72 RX_L1), and then table 1's two
+and the two Modem-on-Hold sites went with findings 748-753. Read the guard
+table above from the tree before quoting any of this; the grep at the top of
+this section is the check, and one call site is the pass.
+
 ## What the function is
 
 Three concurrent state machines and four dispatches, chosen by four guards
@@ -33,6 +62,48 @@ read off the prologue at 0x628f0:
 
 So table 2 has three entrances and not two; all three converge exactly, and
 that is measured over seventeen states rather than assumed (finding 361).
+
+**THE rxstate CHAIN IS 11,537 BYTES OVER FIVE ARMS, AND ALL FIVE ARE
+WRITTEN** -- not the inherited "~12.3 KB", which counts the shared tail at
+0x62a40 and the 0x64a8f preamble against the arms (finding 716). The number
+moved from 11,433 when `cfgsplit.py` stopped dropping 131 bytes of every walk
+(finding 737), so **every count in this section is a re-measurement and not a
+copy**, taken with barriers at 0x62af1, 0x62a40, 0x629ed, 0x62a02 and 0x62b71.
+The last three are not optional and the inherited note did not have them: a
+table-1 arm falls out of the per-sample loop at 0x629ed and reaches the whole
+chain, so without them every arm reaches every other and `cfgsplit.py` reports
+exclusive = 0 for all of them.
+
+```
+    0x653e4   rxstate  4 RECEIVE       4,881 bytes, 28 ranges, 165 blocks  DONE
+    0x650c6   rxstate 72 RX_L1         3,811 bytes, 24 ranges,  95 blocks  DONE
+    0x65473   rxstate 53 DET_AB        1,632 bytes, 10 ranges,  41 blocks  DONE
+    0x6754b   the FSK gate's body      1,182 bytes,  7 ranges,  39 blocks  DONE
+    0x6752c   rxstate 35 WAIT             31 bytes,  1 range,    1 block   DONE
+    0x64a87   the FSK gate's TEST      already written
+```
+
+**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING 719, AND IT IS NOT FINDING
+737.** 719 says 1,089 bytes over 38 blocks; this walk says 1,182 over 39, and
+so does the walk done with `cfgsplit.py`'s OLD instruction sizing, which gives
+1,181. The old sizing reproduces every other inherited number exactly --
+3,806 for rxstate 72, 1,629 for 53 (finding 716's figure, corrected to 1,632
+by hand in 727) and 4,875 for 4 RECEIVE -- so the tool is not the difference
+here and 737's 131 bytes are not either. The block COUNT is 39 both ways,
+which no byte-accounting change can move. 719's figure is not reproducible by
+any barrier set or dispatch-target set tried, and nobody has re-derived its
+method. Recorded rather than reconciled: that arm is landed and tested, so
+the disagreement is about accounting. Finding 747.
+
+**AND 3,811 HAS TWO INDEPENDENT DERIVATIONS**, which is the strongest thing
+about it: the handed analysis reached it with two barriers and a restricted
+set of other targets, this session's walk with five barriers and every table
+target, and they agree on the bytes, the twenty-four ranges and the
+ninety-five blocks.
+
+Every callee all five need is already defined in this tree, so unlike table 1
+-- where `probe` and `vectpp` had to be recovered before an arm could be
+written at all (421, 422) -- nothing here is blocked on a missing function.
 
 The three state words are plain halfwords in the object (finding 213):
 
@@ -88,11 +159,14 @@ puts side B's object back outside its arena and the sweep still passes.
 linker.**
 
 `v34hs_compare` compares the whole 44,096-byte object byte for byte with the
-thirty-five pointer fields excluded, every one of those thirty-five by offset
-from its own base, the rest of the arena -- five blocks, seven filler regions
-and the space around them -- and both transcripts. `v34hs_holes_check()`
-asserts once at the end of a run that every one of the thirty-five skips was
-exercised, so the list cannot go stale unnoticed.
+thirty-seven pointer fields excluded, every one of those thirty-seven by
+offset from its own base, the rest of the arena -- five blocks, seven filler
+regions and the space around them -- and both transcripts.
+`v34hs_holes_check()` asserts once at the end of a run that every one of the
+thirty-seven skips was exercised, so the list cannot go stale unnoticed. The
+list was thirty-five until the first case ran `initdigital` inside a step and
+the two shell contexts' `coeff` pointers came back as differing object bytes;
+finding 734.
 
 **Which block a pointer selects is checked now.** A pointer out of the object
 is classified three ways, not two: into its own object (offset compared), into
@@ -139,9 +213,12 @@ blob-against-blob property over forty-three cases most of which have no
 reconstruction. Finding 356. `V34HS_OURS` still compiles and now sets the
 default.
 
-**`v34handshak` is partial and HALTS on an arm nobody has written.**
-`t3c_unwritten()` calls `abort`. So a test that turns the switch on must drive
-only states some batch has landed, which today are:
+**`v34handshak` IS NO LONGER PARTIAL, and the list below is now a record of
+how it got there rather than a restriction on what a test may drive.**
+`t3c_unwritten()` still calls `abort`, and there is still exactly one call of
+it -- table 3's `default:`, which forty labels over the forty values the range
+test admits make unreachable. Every reachable arm of every dispatch is
+written:
 
 ```
   table 3   the arm 24 states share (0x6590b) and the default (0x65329)
@@ -152,9 +229,18 @@ only states some batch has landed, which today are:
                default at 0x6e552, and 0x6f438 (INFO1c), 0x6ed17 (INFO1a)
                and 0x6ea38 (Modem-on-Hold), which are selected by a message
                length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-448)
-  table 2   0x644c9 only -- txstates 24, 51, 54, 60, 74 -- and the tail at
-            0x62a40 that every arm of that dispatch falls into
-  the rest  halts
+  table 2   ALL SEVEN targets -- 0x64480, 0x644c9, 0x644d8, 0x644fa,
+            0x64509, 0x64518 and the default at 0x62a40, which is also the
+            tail every arm of that dispatch falls into. `t_v34hstbl2.c`
+            drives every one; the "0x644c9 only" this line used to say was
+            the FOURTH stale status line found in this file
+  the chain EVERY rxstate: 43 to table 3, 4 RECEIVE (0x653e4, findings
+            731-735), 35 WAIT, 53 DET_AB (0x65473, findings 724-729),
+            72 RX_L1 (0x650c6, findings 738-745) and the two default
+            doors into table 2.  `t_v34hsrxch.c` drives all eighty-seven
+  the rest  NOTHING.  Every reachable arm of every dispatch is written,
+            and the only `t3c_unwritten()` left is table 3's `default:`,
+            which forty labels over forty values make unreachable
 ```
 
 **Pick your txstate for the tail you want.** Every table-3 arm ends in the
@@ -370,9 +456,27 @@ Two things a per-case agent on table 1 or table 3 should take from it:
   `call` and no debug site, so both sides print zero lines and the transcript
   comparison passes by construction (finding 362).
 
-## Table 1, the per-sample transmit loop -- this is #56, and it is open
+## Table 1, the per-sample transmit loop -- DONE, arms AND loop
 
-Twenty targets over txstates 5..86, in the loop at 0x62950. **It compares,
+Twenty targets over txstates 5..86, in the loop at 0x62950.
+
+**THE ARMS AND THE LOOP ARE TWO THINGS AND THEY LANDED SEPARATELY.** All
+nineteen arms are in `src/pump/v34/v34hstx1.cpp` and compare through
+`test/unit/t_v34hstx1.c`, which drives each one directly and lets the blob's
+own `v34handshak` supply the loop around it. **The loop that dispatches to
+them was written later**, in `v34handshak` itself, and is tested by
+`test/unit/t_v34hstb1.c` -- our whole function against the blob's, so no arm
+can be compared against the blob's copy of itself. Reading "table 1 is
+complete" off the arms retires a guard that is still doing its job; finding
+712.
+
+**`T3M_UNWRITTEN_TBL1` IS RETIRED.** What was left of it -- 81's wrap at
+0xc0 -> 0x66d85 and 86's segment end -> 0x66fe9 -- is written, inside
+`v34tx1_moh_silence` and `v34tx1_txmd`, because neither block is a transfer
+out of its arm: 0x66d85 ends at the loop test and 0x66fe9 at the fall-through
+of the block that jumped to it. `V34TX1_MOH_WRAP` and `V34TX1_TXMD_DONE` are
+gone, the loop no longer tests what an arm returned, and `enum v34tx1_exit`
+has one value. Findings 748 and 750. **It compares,
 and it is in the default sweep.** It used not to; findings 319-322 are what
 that took and D60 is the retraction. Nothing about the route is special any
 more except that it is the one the harness's geometry could break, so if a
@@ -387,7 +491,7 @@ Finding 323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
-### Eighteen of the nineteen have landed, and this is how a case is landed
+### All nineteen have landed, and this is how a case is landed
 
 txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
 -- then 60, 18, 70 and 51, the four smallest of what those left, then 19, 20
@@ -463,8 +567,13 @@ the target for txstates 5, 54 and 74, and the shared prologue re-reads
 422). 0x635cc, shared by 64 and 68, re-reads it too -- but at 0x636ff, seven
 eighths of the way down and only on the pass where `vect_idx` wraps, so most
 passes are one body under two indices and the wrap is two behaviours (finding
-423). 0x63d58, shared by 81, 82, 83 and 84, really is one behaviour. Measure
-it; do not assume either way because finding 323 lists one representative.
+423). 0x63d58, shared by 81, 82, 83 and 84, IS ALSO TWO BEHAVIOURS AND THIS FILE
+SAID OTHERWISE. Above the wrap it is one body under four indices; at
+`vect_idx == 0xc0` it reaches 0x66d85, which re-reads +0x3596 and returns to
+the loop test for anything that is not 0x51 -- so 82, 83 and 84 decide nothing
+there and only 81 moves the transmit machine. That is 0x635cc's shape exactly
+(finding 423), and finding 750 is the correction. Measure it; do not assume
+either way because finding 323 lists one representative.
 
 **`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
 one shared harness object, so it demands all forty-three cases at once, and no
