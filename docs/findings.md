@@ -30277,3 +30277,59 @@ zeroes the last three at lines 495-502 and sets `f1ae` from the baud ladder at
 all.** So it is not two unlucky seeds; it is the first exercise of a path the
 fixture has never driven, and every future arm that calls `receiver` inherits
 it. That is the reason to spend a batch on it rather than to pin the seeds.
+
+### 755. Boundaries decoded twice, 1,773 symbols, no disagreement — and what that does and does not buy
+
+Finding 737 was a byte-accounting defect, and `cfgsplit --selftest` now closes
+that class: it sums instruction sizes and compares against the symbol's size
+from `nm -S`, which is genuinely two sources.
+
+**It cannot see a wrong BOUNDARY.** The sizes still sum correctly if every
+instruction start is misplaced — one instruction two bytes long and the next
+two bytes short is invisible to a total. Boundaries are what a control-flow
+walk actually runs on: a branch target that is not an instruction start
+becomes a block that does not exist, silently.
+
+`tools/boundarycheck.py` decodes the same `.text` with **capstone** and
+compares the boundary sets against objdump's. `gates.md` rule 4, with the
+disagreement as the failure rather than either number alone.
+
+```
+  1773 symbols checked, 0 disagree
+```
+
+#### What this is worth, stated honestly
+
+It is a **negative result**, and negative results from a tool nobody has seen
+fail are worth nothing (finding 134). So `--selftest` carries a negative
+control: decode `v34handshak` from one byte off and require the comparison to
+notice.
+
+```
+  ok    boundaries agree with themselves    12234
+  ok    a one-byte skew is detected             1 differ
+```
+
+**One.** That is not a weak test badly written, it is x86 being
+self-synchronising: a skewed decode re-syncs after a single instruction, so
+one differing boundary is the whole of what a one-byte skew can produce. The
+control fires, and the number is reported rather than dressed up.
+
+So what the sweep licenses is narrow and worth stating exactly: **objdump's
+instruction boundaries in this object are corroborated.** It does not
+corroborate mnemonics, operands, or relocation attachment — capstone was
+given the bytes and asked only where instructions begin.
+
+#### capstone is deliberately NOT installed system-wide
+
+`pip install capstone` wants `--break-system-packages` on this host, which is
+not a thing to do to the OS python for a cross-check. The tool is run from a
+venv, and **with no capstone it exits 77 and says nothing was checked** rather
+than exiting 0. A check that silently does nothing is precisely the defect it
+exists to catch, and `extcheck` printing "(none)" through four broken
+versions is why that matters here.
+
+Its own header carries the venv recipe, and it applies `whichfield.py`'s
+`sys.path` repair — `tools/dis.py` shadows the standard library's `dis`, which
+`inspect` imports, and the resulting `AttributeError` names neither the
+directory nor the file.
