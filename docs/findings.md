@@ -30333,3 +30333,59 @@ Its own header carries the venv recipe, and it applies `whichfield.py`'s
 `sys.path` repair — `tools/dis.py` shadows the standard library's `dis`, which
 `inspect` imports, and the resulting `AttributeError` names neither the
 directory nor the file.
+
+### 756. Ghidra 12.1 and 12.2 cannot run this tree's decompiler script at all, and the reason is Jython
+
+`tools/decompile.sh` pins `ghidra_11.4.2_PUBLIC`, reads `$GHIDRA`, and is the
+tree's only Ghidra entry point. `~/ghidra` also holds `ghidra_12.1_DEV` and
+`ghidra_12.2_DEV`, all three with a working `support/analyzeHeadless`, so
+promoting one looked like changing a default.
+
+**It is not.** Both 12.x builds fail outright:
+
+```
+ERROR SCRIPT ERROR: decompile.py : Ghidra was not started with PyGhidra.
+Python is not available (HeadlessAnalyzer)
+  ghidra.pyghidra.PyGhidraScriptProvider.getScriptInstance(...)
+```
+
+12.x has dropped the bundled **Jython** interpreter that `tools/ghidra/decompile.py`
+is written for; Python scripting now goes through **PyGhidra**, and
+`analyzeHeadless` offers no flag to select it — the launcher is a separate
+`support/pyghidraRun`. Measured on both: 12.1 and 12.2 give the identical
+error. The run still reports `Import succeeded` and `Post-analysis succeeded`,
+and `decompile.sh` sends stderr to `/dev/null` and filters stdout for its own
+`=====BEGIN` marker, **so the visible result is an empty file and exit 0.**
+
+That last part is the reusable lesson. A version bump here does not degrade
+the output, it produces NOTHING, and the wrapper is built to be quiet. Anyone
+who had changed the default and glanced at the exit status would have
+concluded it worked.
+
+#### The 11.4.2 yardstick still reproduces exactly
+
+Run on `chkForceBaudRate` — the function `decompile.sh`'s header records its
+assessment against, chosen because this tree had already reconstructed and
+differentially verified it by hand:
+
+```
+  ghidra-11.4.2   79 lines   2 `_2_1_` casts   3 distinct locals
+  ghidra-12.2      0 lines
+```
+
+Two `._2_1_` casts and three unrelated locals is precisely the recorded
+breakage of `unsigned char allow[6]`. So the assessment in that header is
+still true of the version the tree actually uses, and remains unmeasured for
+any other.
+
+#### What this settles
+
+**Do not promote 12.x.** Not because it is worse — nobody knows whether it is
+better — but because adopting it is not a default change, it is a port of
+`decompile.py` from Jython to PyGhidra plus a new launcher path in
+`decompile.sh`, and then the yardstick comparison still has to be run before
+anything is believed. That is a batch of work, and CLAUDE.md's rules on
+Ghidra output are unchanged by any of it.
+
+x87 remains unmeasured on every version, which matters because this object is
+`-mfpmath=387`.
