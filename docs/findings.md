@@ -29559,3 +29559,75 @@ green and which are not rather than leaving the next batch to find out, and
 this is recorded rather than repaired because repairing it means finding what
 the receive chain reads outside its object -- a task of its own, and one worth
 having a reproducer for.
+
+### 737. `cfgsplit.py` dropped 131 bytes of every walk, printed the shortfall on every run, and nobody read it as a defect
+
+`objdump` wraps its hex column at seven bytes and puts the remainder on a
+line of its own — an address, a tab, and bytes, with no mnemonic:
+
+```
+   65486:	66 83 bf 92 35 00 00 	cmpw   $0x34,0x3592(%edi)
+   6548d:	34
+```
+
+`cfgsplit.py`'s `INSN` regex requires a mnemonic, so it never matched that
+second line. The byte was discarded and the `cmpw` was recorded as seven
+bytes long instead of eight.
+
+**The tool has been reporting this on every run since it was written:**
+
+```
+                          61410 bytes accounted of 61541
+```
+
+131 bytes short, and the line was printed as a remark. Nothing failed, so
+nothing was investigated. **Every walk-derived byte count in this tree was a
+lower bound.**
+
+#### What it cost, and how it was noticed
+
+Two byte counts were corrected by hand in this session, both by summing
+ADDRESS RANGES against a walk and trusting the arithmetic: finding 719's
+1,088 → 1,089 for the FSK-gate arm, and finding 727's 1,629 → 1,632 for
+rxstate 53. Both are this defect. Neither was diagnosed at the time; the
+walk was simply overruled and the discrepancy left unexplained, which is how
+a systematic error survives as a run of one-off corrections.
+
+It was found only because a fourth measurement quoted "131 lines carrying
+163 bytes" and the two numbers did not reconcile with the 131-byte shortfall.
+**They still do not, and the honest report is bytes rather than lines:** the
+line count depends on a regex for continuation lines, and that regex's
+coverage is exactly what could not be made reliable. The loss is measured
+against the symbol's own size from `nm -S`, which needs no regex at all.
+
+#### The fix is not a better regex
+
+Recovering the wrapped bytes by hand got 109 of the 131 and left 22. The
+encodings vary and chasing them is fitting the formatter, which is the same
+mistake as fitting the compiler.
+
+**Size now comes from the distance to the next instruction.** That is what
+"size" means for this tool's accounting, it needs no assumption about how
+objdump lays out a column, and it is exact by construction. `v34handshak`
+now reports 61,541 of 61,541, and its exclusive total moves 48,958 → 49,072
+with shared 12,290 → 12,307.
+
+#### Two gates, not one
+
+- **The accounting line is now a hard failure**, not a remark. `gates.md`
+  rule 1: make the tool COUNT what it examined and FAIL on the difference. A
+  report that only reports is how this survived.
+- **`--selftest` proves the check can fail.** It accounts for three
+  functions and then re-parses `v34handshak` the old way as a NEGATIVE
+  CONTROL, and errors if that does not lose bytes. `gates.md` rule 3, and
+  finding 134's argument: `extcheck` printed "(none)" through four broken
+  versions and there was no way to tell a clean tree from a dead detector.
+
+#### And a caveat that is not this defect
+
+A re-measure of the FSK-gate arm with a different entry set gave 1,181 where
+finding 719 gives 1,089 — because adding the five rxstate-chain targets as
+entries repartitions blocks that were shared. Arms 4, 72 and 53 reproduce
+finding 716 exactly under both. **The entry set is part of the measurement
+and has to be quoted with the figure.** 719's five ranges remain the
+authority for that arm.
