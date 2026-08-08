@@ -28471,7 +28471,7 @@ exercised needs the rest of the V.90 receive path first — the 290 KB
 inside it. The modulator is the last 26 KB of a much longer road, not a
 shortcut onto it.
 
-### 703. `decompile.sh` exited 0 having produced nothing, and Ghidra 12 will not run our post-script
+### 703. `decompile.sh` exited 0 having produced nothing; and Ghidra 12.2-DEV, once made to run, decompiles identically to 11.4.2
 
 Two separate things, found together because the second was invisible until the
 first was fixed.
@@ -28509,17 +28509,74 @@ PyGhidra path needs that `support/analyzeHeadless` does not: it runs
 (`Features/PyGhidra/pypkg/dist/`, cp39–cp313; this machine is Python 3.12.3,
 so in range) — it is an install decision, not a blocker.
 
-**NOTHING IS CLAIMED ABOUT 12.x's DECOMPILER QUALITY.** The comparison never
-ran. `$GHIDRA` stays pinned to 11.4.2 because that is the version every claim
-in `decompile.sh`'s header was measured against, and a DEV snapshot is a poor
-thing to pin to regardless. If someone installs PyGhidra and retries, the bar
-is already written down: `chkForceBaudRate`'s `unsigned char allow[6]` must
-come back as an array and `sel` must stay one pointer, against the
-hand-verified ground truth at `src/pump/v34/v34pcmif.c:717`. 11.4.2's baseline,
-re-measured today, is unchanged from the header's account — three unrelated
-locals written through `local_2c._2_1_ = 1`.
+**THE COMPARISON THEN RAN, AND 12.2-DEV IS BYTE-IDENTICAL TO 11.4.2.**
+PyGhidra was installed from the bundled wheels (offline, no network) into the
+venv the launcher expects at `~/.config/ghidra/ghidra_12.2_DEV/venv`, plus a
+`python_command.save` beside it so the launcher does not stop to ask. Headless
+then works via
 
-**Scope of what was compared:** two small leaf functions, `chkForceBaudRate`
-and `V34EchoFilter`, on arrays and control flow only. x87 remains unmeasured —
-`V34EchoFilter` was picked as the x87 probe and turned out to be fixed-point
-shorts, so the header's "UNTESTED HERE: x87" still stands.
+    ~/.config/ghidra/ghidra_12.2_DEV/venv/bin/python3 \
+        $G/Ghidra/Features/PyGhidra/support/pyghidra_launcher.py $G -H <headless args>
+
+Eight functions over two runs, and the two versions agree exactly:
+
+    C    chkForceBaudRate, V34EchoFilter          1,842 B   md5 cd2c05ae…
+    C++  Resampler::resample, V90Resampler::resample,
+         ResamplerTiming::{timingCorrection ×3,
+         adjustHalfBaudBpfGain}                  12,161 B   md5 4eea93b9…
+
+The bar was set before the run and 12.2 does not clear it: `allow[6]` still
+comes back as three unrelated locals written through `local_2c._2_1_ = 1`,
+five such byte-field writes and zero array syntax, against the hand-verified
+ground truth at `src/pump/v34/v34pcmif.c:717`. Two major versions, no
+movement on the one weakness that matters here.
+
+**So `$GHIDRA` stays pinned to 11.4.2** — the version every claim in
+`decompile.sh`'s header was measured against, and there is now positive
+evidence rather than inertia behind the pin. A DEV snapshot dated 2026-03-11
+would be a poor thing to pin to even had it won.
+
+**Scope, and it is narrow.** Eight functions: leaf-ish, C and C++, arrays,
+control flow and virtual dispatch. NOT tested: a large function (`decompile.sh`
+exists for those), and x87 as such — the C++ set carries 81 `float`/`double`
+declarations and decompiled with no `float10` and no `unaff_ST` leakage, which
+says the x87 came out as ordinary floats here, NOT that the arithmetic is
+right. Only a differential test could say that, and Ghidra output is never
+evidence. The header's "UNTESTED HERE: x87" stands.
+
+**A vacuous comparison nearly got reported as a real one.** The first C++
+attempt passed mangled names, both versions matched nothing, both produced
+zero bytes, and `diff` reported them identical. Two empty files compare equal.
+The rc=1 added above is what caught it; the old script would have exited 0.
+Guard against the empty case explicitly, and see 704 for why the names did
+not match.
+
+### 704. `decompile.sh` cannot address a C++ function by the name we know it by
+
+Ghidra demangles. The blob symbol `_ZN9Resampler8resampleEPKfjPfRj` is stored
+as namespace `Resampler` + name `resample`, and `decompile.py` matches on
+`f.getName()`, so asking for the mangled name matches nothing:
+
+    tools/decompile.sh _ZN9Resampler8resampleEPKfjPfRj   ->  no such function
+    tools/decompile.sh resample                          ->  both Resampler::
+                                                             and V90Resampler::
+
+This matters more than it looks. **Every C++ name in this project's records is
+the mangled one** — `docs/modules.md`, the closure tools, `coverage.py`, every
+finding that names a method. So the one tool built for reading large functions
+cannot be pointed at the C++ half of the object using any name written down
+anywhere, and the failure is silent-ish: no match, no output, and before
+finding 703's fix, exit status 0.
+
+The remaining work is mostly C++. `VPcmV34Main.cpp` is 290,315 bytes over 739
+symbols and is where V.90 and V.92 live.
+
+**The short name is also ambiguous** — `resample` returns `Resampler::` and
+`V90Resampler::` both, which is why the C++ run above decompiled six functions
+from three requested names. Ambiguity is tolerable for reading; it is not
+tolerable if the output is ever keyed by name.
+
+Not fixed here. The fix is in `decompile.py`: accept `Class::method`, and
+accept a mangled name by demangling it first (`c++filt`, or Ghidra's own
+`DemanglerUtil`) rather than making the caller translate. Worth doing before
+anyone reads `VPcmV34Main.cpp` with it, not after.

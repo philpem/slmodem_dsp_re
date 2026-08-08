@@ -50,13 +50,27 @@
 # below: the function picked as an x87 probe, `V34EchoFilter`, turned out to
 # be fixed-point shorts.
 #
-# WHICH GHIDRA.  Pinned to 11.4.2, which is the version every claim above was
-# measured against.  `ghidra_12.1_DEV` and `ghidra_12.2_DEV` are also present
-# here and CANNOT RUN THIS SCRIPT as installed: Ghidra 12 hands `.py` to
-# PyGhidra instead of Jython, and PyGhidra needs `pip install`ing before any
-# `.py` post-script will load.  Nothing about 12.x's decompiler quality is
-# claimed either way -- the comparison did not get far enough to have an
-# opinion, and "newer" is not evidence.  Finding 703.
+# WHICH GHIDRA.  Pinned to 11.4.2, and the pin has evidence behind it rather
+# than inertia: `ghidra_12.2_DEV` produces BYTE-IDENTICAL output on all eight
+# functions tried, C and C++, arrays and virtual dispatch.  `allow[6]` is
+# still three unrelated locals.  Two major versions, no movement on the one
+# weakness that matters here, so there is nothing to gain by moving.
+#
+# 12.x needs setting up before it runs this at all -- Ghidra 12 hands `.py` to
+# PyGhidra rather than Jython, and PyGhidra must be pip-installed first.  It
+# is installed on this machine; the invocation is NOT `analyzeHeadless` but
+#
+#     ~/.config/ghidra/ghidra_12.2_DEV/venv/bin/python3 \
+#         $G/Ghidra/Features/PyGhidra/support/pyghidra_launcher.py $G -H ...
+#
+# so pointing $GHIDRA at a 12.x tree makes this script fail, by design, with
+# the reason printed.  Finding 703.
+#
+# C++ NAMES DO NOT WORK HERE.  Ghidra demangles, so ask for `resample`, never
+# `_ZN9Resampler8resampleEPKfjPfRj` -- which means no C++ name as written in
+# our own records will match, and the short name is ambiguous across classes.
+# That wants fixing before anyone reads `VPcmV34Main.cpp` with this.  Finding
+# 704.
 #
 # USAGE
 #
