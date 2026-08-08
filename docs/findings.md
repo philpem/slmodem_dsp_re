@@ -30214,3 +30214,66 @@ of things nobody has looked at.
 The two that remain uncaught in `v34hstx1` ("67: initdigital is not called",
 "67: +0x3598 is not set") and the one in `v34hst3core` ("the receiver-count
 guard excludes 5") are inherited and untouched by this batch.
+
+### 754. Finding 736's seed 7 and 20 fault, narrowed: the blob is deterministic, the objects are identical, and the cause is still not the obvious one
+
+736 recorded `t_v34hsrx4.c` failing at seeds 7 and 20 with the blob-on-both-sides
+control failing too, and said the cause was not established. It still is not.
+What follows is what has been ELIMINATED, so the next attempt does not repeat it.
+
+**The control really does fail, and the display cap hides it.** A first reading
+of the failure list concluded the controls passed, because the ten printed
+failures all carried tags below 1096 while `suite_control` uses 1600 upwards.
+`diff_max_report` is 10. Raised to 100,000, the answer is unambiguous: **tags
+1600, 1601, 1602, 1603 and 1604 each fail three checks.** 736 is right and the
+first reading was wrong.
+
+That matters beyond this bug: **a capped failure list is a biased sample, and
+the bias is toward whatever runs first.** Any conclusion of the form "X does
+not fail" drawn from a capped list is unsound unless X ran inside the cap.
+
+#### Four hypotheses, all eliminated by measurement
+
+- **The blob is not non-deterministic here.** `V34HS_PROBE=1` re-runs side B at
+  the same address and reports `B-vs-B differs in 0 bytes` on all 67 probes.
+- **The two objects are congruent at the start.** `PROBE after setup: 0 object
+  bytes differ; 0 padding bytes differ`, 67 times.
+- **The `DELTA DIFFERS` holes are not the discriminator.** PROBE flags twelve
+  pointer holes whose delta differs between the sides — +0x3564 (the
+  detector), +0x2a28, +0x2608, +0x2100, +0x20cc and seven more. **Twelve at
+  seed 3, which PASSES, and twelve at 7 and 20, which fail.** This is finding
+  324's third class — a pointer out of the arena, where side A holds ours and
+  side B the blob's — and it is normal.
+- **It is not the stack.** `V34HS_NOSCRUB=1` changes nothing: 737 of 8,240
+  either way.
+
+#### What it IS sensitive to, and that is the lead
+
+```
+  seed 7, default        FAIL  737 of 8240
+  seed 7, REFINIT=1      FAIL  785 of 8955     <- WORSE
+  seed 7, LOOSEOBJ=1     FAIL  402 of 7972     <- BETTER, not clean
+  seed 7, NOSCRUB=1      FAIL  737 of 8240     <- unchanged
+```
+
+`V34HS_LOOSEOBJ=1` puts side B's object outside its arena and **halves the
+failures**. So the fault is geometry-sensitive, which is findings 319-322's
+territory: the blocks the object points at have to be congruent, not merely
+equal. But it does not vanish, so a second cause is present or the geometry
+story is incomplete.
+
+`V34HS_REFINIT=1` — the blob's initialisers on BOTH sides — makes it worse
+rather than better, which weakens the "our library table differs from the
+blob's copy" reading that finding 359 would otherwise suggest.
+
+#### Where the damage lands
+
+Receiver +0x1ae, and +0x1cc..+0x1e3 — object +0x430, +0x43c, +0x444. All four
+are modelled fields, not `pad_*`: `f1ae`, `f1cc`, `f1d0`, `f1e0`. `v34rx.c`
+zeroes the last three at lines 495-502 and sets `f1ae` from the baud ladder at
+1091-1103, so a rate-dependent path is implicated.
+
+**This is the first test in the tree to call `receiver` through this fixture at
+all.** So it is not two unlucky seeds; it is the first exercise of a path the
+fixture has never driven, and every future arm that calls `receiver` inherits
+it. That is the reason to spend a batch on it rather than to pin the seeds.
