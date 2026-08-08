@@ -84,13 +84,23 @@ exclusive = 0 for all of them.
     0x64a87   the FSK gate's TEST      already written
 ```
 
-**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING 719 AND HAS NOT BEEN CHASED.**
-719 says 1,089 bytes over 38 blocks and this walk says 1,182 over 39. The
-likely cause is finding 737 -- `cfgsplit.py` was under-counting every walk
-until this session -- but the barrier sets are not known to be the same, and
-nobody has re-derived 719's. It is written down rather than reconciled: that
-arm is landed and tested, so the disagreement is about accounting, not about
-code.
+**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING 719, AND IT IS NOT FINDING
+737.** 719 says 1,089 bytes over 38 blocks; this walk says 1,182 over 39, and
+so does the walk done with `cfgsplit.py`'s OLD instruction sizing, which gives
+1,181. The old sizing reproduces every other inherited number exactly --
+3,806 for rxstate 72, 1,629 for 53 (finding 716's figure, corrected to 1,632
+by hand in 727) and 4,875 for 4 RECEIVE -- so the tool is not the difference
+here and 737's 131 bytes are not either. The block COUNT is 39 both ways,
+which no byte-accounting change can move. 719's figure is not reproducible by
+any barrier set or dispatch-target set tried, and nobody has re-derived its
+method. Recorded rather than reconciled: that arm is landed and tested, so
+the disagreement is about accounting. Finding 747.
+
+**AND 3,811 HAS TWO INDEPENDENT DERIVATIONS**, which is the strongest thing
+about it: the handed analysis reached it with two barriers and a restricted
+set of other targets, this session's walk with five barriers and every table
+target, and they agree on the bytes, the twenty-four ranges and the
+ninety-five blocks.
 
 Every callee all five need is already defined in this tree, so unlike table 1
 -- where `probe` and `vectpp` had to be recovered before an arm could be

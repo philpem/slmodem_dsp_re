@@ -29954,3 +29954,52 @@ Three things worth keeping:
 The seeds are now eleven explicit pokes with the initialiser's value in a
 comment beside each, which also makes the "is this still a change?" question
 answerable by reading rather than by arithmetic.
+
+### 747. The FSK gate arm's 1,089 bytes do not reproduce, and finding 737 is not why
+
+`docs/v34handshak.md`'s rxstate-chain table was re-measured this session
+because finding 737 fixed `cfgsplit.py`'s instruction sizing, and four of the
+five rows moved by a handful of bytes. The fifth did not behave.
+
+Walking the block graph from each arm with barriers at 0x62af1, 0x62a40 and
+0x629ed -- the third is REQUIRED, because a table-1 arm falls out of the
+per-sample loop there and reaches the whole chain, and without it every arm
+reports exclusive = 0 -- and intersecting against every table target and every
+other arm head:
+
+```
+                        new sizing      old sizing      recorded
+  0x653e4  4 RECEIVE    4,881 / 165     4,875 / 165     4,881  (731)
+  0x650c6  72 RX_L1     3,811 /  95     3,806 /  95     3,806  (the brief)
+  0x65473  53 DET_AB    1,632 /  41     1,629 /  41     1,632  (727, by hand)
+  0x6754b  FSK body     1,182 /  39     1,181 /  39     1,089 /  38  (719)
+  0x6752c  35 WAIT         31 /   1        31 /   1        31
+```
+
+**The old sizing reproduces every inherited number except that one**, which is
+a strong check on both the method and on 737: 3,806 and 1,629 are exactly what
+the brief and finding 716 carry, and 1,632 is exactly the value 727 arrived at
+by overruling the walk with address arithmetic. So the tool's old defect is
+fully accounted for, and the FSK gate's 93-byte gap is not it.
+
+Two further things rule out the obvious explanations:
+
+- **The BLOCK count differs, 38 against 39.** No byte-accounting change can
+  move a block count -- the leaders come from branch targets and the tables,
+  not from sizes -- so whatever produced 1,089 was reaching a different set of
+  blocks, not measuring the same set differently.
+- **Neither the barrier set nor the dispatch-target set is the difference.**
+  Adding 0x62a02 and 0x62b71 to the barriers changes nothing; dropping the
+  four other arm heads from the "others" set changes nothing; running with
+  only the table targets changes nothing. All three give 1,182 / 39.
+
+Left as a discrepancy rather than a correction to 719, because 719's method is
+not recorded and the arm it describes is landed and differentially tested --
+the number is about accounting, not about code. What would settle it is
+re-deriving 719's barrier set; what should not happen is a later session
+quoting 1,089 and 1,182 as if one of them followed from the other.
+
+> **A tool fix does not license re-writing every number it touched.** Three of
+> these five rows moved by exactly what 737 predicts and one did not, and the
+> way that was established was running the OLD code path on purpose --
+> gates.md rule 4, measure the same thing two ways and compare.
