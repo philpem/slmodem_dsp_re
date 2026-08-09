@@ -20,10 +20,38 @@ and the closure of those four is 588 symbols / 349,182 bytes, of which
 **487 symbols / 249,590 bytes are unwritten**. 256 of the symbols in it are
 `V90*` or `K56Flex*`.
 
-So a *properly constructed* V.34 modem and a V.90 modem are the same work.
-`test/unit/t_v34call.c` proves sequencing between two hand-brought-up arenas
-(findings 780-788) and deliberately does not connect; connecting needs this
-span. That is what settled the ordering rather than any preference for V.90.
+### CORRECTION — a V.34 connection does NOT need this span written
+
+**The first version of this document said "a properly constructed V.34 modem
+and a V.90 modem are the same work". That is wrong, and findings 800-806
+disproved it within the hour.** It is left recorded rather than quietly edited
+because the reasoning was plausible and someone will re-derive it.
+
+The blob's own constructors are aliasable, and a blob-constructed V.34 object
+turns out to be a VALID DIFFERENTIAL FIXTURE rather than a hybrid:
+
+    127 allocations, 265,520 bytes live across 125 regions
+    BLOB-CODE pointers in the whole graph:  2
+    blob DATA pointers (coefficient tables): 21
+    vtables in the root arena:               0   (2 of 4 in heap sub-objects)
+
+Both code pointers are `struct v34_object` function pointers —
+`ref_descrambleGPA` / `ref_scrambleGPC`, mirrored by `caller` — and
+`src/pump/v34/v34digital.c:85` installs that same pairing on that same
+condition. We have all four functions and four suites test them, so **two
+stores replace both pointers** and nothing routes our code into the blob's.
+Driving one block of our `datapumpv34` on a blob-constructed object leaves it
+byte-identical over all 53,848 bytes to what `ref_datapumpv34` leaves.
+
+So the constructor can be BORROWED. A genuine V.34 originate/answer connection
+is reachable now, and only V.90/V.92 actually need the 250 KB written. That
+does not change what this document plans — every byte below is still required
+for 56k — but it removes V.34 from the justification and it means **this span
+is no longer on the critical path to a working V.34 modem.**
+
+What the fixture cannot do is test the constructor itself: it uses the blob's
+construction and configuration. So wave 1 gains a reference object to diff
+against, not a free pass.
 
 `vpcm_create`'s prologue, read at 0x3a00, states the contract:
 
@@ -129,11 +157,25 @@ rule intact for everything above it.
 - Merge one batch at a time and grep for a distinctive string from each side
   afterwards — `git checkout --ours` takes the whole file (finding 700).
 
-## The caveat on the golden-object oracle
+## The golden-object oracle — MEASURED, and it holds
 
-It rests on a blob-constructed object being usable as a reference. If the
-object holds many pointers into blob code — the four `Resampler` vtables are
-the obvious risk — then driving our code on it is a hybrid that proves nothing,
-and every batch's constructor stays untestable until the span is complete.
-That measurement is the deciding one; do not plan around the oracle until it
-has been made.
+The caveat this section used to carry has been resolved. Findings 800-806: two
+blob-code pointers in 265,520 bytes, no vtable in the root arena, no
+function-pointer table, and our `datapumpv34` leaves a blob-constructed object
+byte-identical to what the blob's leaves. **Every later batch can diff its
+constructor's output field-by-field against a blob-constructed reference**
+instead of being untestable until the span is complete.
+
+Two things the next user of it must handle, both recorded in 806:
+
+- `VPcmV34Create` leaves `+0x2218` at **0** (the data branch); something must
+  write 2.
+- Two constructions must be made CONGRUENT, or pointer fields must be excluded
+  from the comparison — 125 heap regions come back at different addresses.
+
+And two configuration parameters are ADDRESSES, not numbers —
+`MDMPRM_DPRUNTIME` is dereferenced and `MDMPRM_DSPINFO` segfaults in
+`vpcm_delete` if the harness default is used. Five overrides were needed to
+construct at all (DPRUNTIME, DSPINFO, MIN_RATE 2400, MAX_RATE 33600, IODELAY
+40), which bounds the result: **the configuration is plausible, not
+recovered.** Deriving it properly is wave 1's job.
