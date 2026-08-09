@@ -47,6 +47,30 @@
  * put a guess where every other line here is a measurement.  Twenty-five of
  * them run consecutively from +0x300 to +0x360 and are very likely one array.
  *
+ * NINE OF THE FIFTY-ONE ARE FLOATS AND ARE STILL DECLARED `int`.  Finding 878
+ * measured them, and each is annotated below with the value the object stores.
+ * Two are FORCED -- an `fsts` writes a `float` and there is no other reading
+ * of that instruction -- and the other seven are settled by the bit pattern
+ * being an exact round decimal as a float and an arbitrary eight-digit integer
+ * as an int, three of them consecutive and in the same numeric band as the
+ * named float betas on either side.
+ *
+ * They are annotated rather than retyped, and that is a deferral with a reason
+ * rather than an oversight.  `setToDefault` writes the same four bytes either
+ * way, so nothing observable changes; what a retype does change is one
+ * mutation in `test/mutations/v90params.json` anchored on the literal
+ * `unnamed_1b8 = 0x2d83f0ff;`, and re-anchoring a mutation is how nine of them
+ * in another suite came to be measuring a different arm from the one their
+ * label named, all nine reported CAUGHT (finding 432).  **A LATER BATCH THAT
+ * READS ANY OF THESE NINE MUST READ IT AS A FLOAT**, and the batch that does
+ * is the one that should retype it, because it will have a reader to test the
+ * change against.
+ *
+ * `make params` structurally cannot see any of this: `paramcheck.py` compares
+ * the header with `loadParams`, and these are exactly the offsets `loadParams`
+ * does not read.  The gate is not weaker than it looks -- it answers a
+ * different question, over the 291 fields that have a name.
+ *
  * TWO FIELDS GO THE OTHER WAY -- +0x4f8 `SENSITIVE_ISP_DETECTED` and +0x4fc
  * `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` are read by `loadParams` and never
  * written by `setToDefault`, so they start as whatever the allocation left.
@@ -141,8 +165,8 @@ public:
 	float	AGC_K;	/* +0x060 */
 	int  	AGC_BLOCK_LEN;	/* +0x064 */
 	int  	AGC_ADAPTATION_DURATION;	/* +0x068 */
-	int	unnamed_06c;		/* +0x06c  setToDefault only */
-	int	unnamed_070;		/* +0x070  setToDefault only */
+	int	unnamed_06c;		/* +0x06c  setToDefault only; the object stores 1.0f (fsts) -- 878 */
+	int	unnamed_070;		/* +0x070  setToDefault only; the object stores 0.6f (0x3f19999a) -- 878 */
 	int	unnamed_074;		/* +0x074  setToDefault only */
 	int	unnamed_078;		/* +0x078  setToDefault only */
 	int	unnamed_07c;		/* +0x07c  setToDefault only */
@@ -175,7 +199,7 @@ public:
 	float	BLL_TRN1_QC_MEDIUM_K1;	/* +0x0e8 */
 	float	BLL_TRN1_QC_MEDIUM_K2;	/* +0x0ec */
 	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f0  alias BLL_TRN1_QC_SLOW_K1 */
-	int	unnamed_0f4;		/* +0x0f4  setToDefault only */
+	int	unnamed_0f4;		/* +0x0f4  setToDefault only; the object stores 2e-12f (0x2c0cbccc) -- 878 */
 	int  	BLL_TRN1D_INITIAL_TO_FAST_DURATION;	/* +0x0f8 */
 	int  	BLL_TRN1D_FAST_TO_SLOW_DURATION;	/* +0x0fc */
 	int	unnamed_100;		/* +0x100  setToDefault only */
@@ -222,9 +246,9 @@ public:
 	float	LINEAR_EQU_ALT_DIL_BETA;	/* +0x1a4 */
 	float	LINEAR_EQU_ALT_DIL_MED_UCODE_BETA;	/* +0x1a8 */
 	float	LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA;	/* +0x1ac */
-	int	unnamed_1b0;		/* +0x1b0  setToDefault only */
-	int	unnamed_1b4;		/* +0x1b4  setToDefault only */
-	int	unnamed_1b8;		/* +0x1b8  setToDefault only */
+	int	unnamed_1b0;		/* +0x1b0  setToDefault only; the object stores 8.5e-11f (0x2ebaeabf) -- 878 */
+	int	unnamed_1b4;		/* +0x1b4  setToDefault only; the object stores 6e-11f (0x2e83f0ff) -- 878 */
+	int	unnamed_1b8;		/* +0x1b8  setToDefault only; the object stores 1.5e-11f (fsts) -- 878 */
 	float	LINEAR_EQU_DIL_ERROR_RELAX_BETA;	/* +0x1bc */
 	float	LINEAR_EQU_TRN2D_INITIAL_BETA;	/* +0x1c0 */
 	float	LINEAR_EQU_TRN2D_BETA;	/* +0x1c4 */
@@ -316,7 +340,7 @@ public:
 	int	unnamed_31c;		/* +0x31c  setToDefault only */
 	int	unnamed_320;		/* +0x320  setToDefault only */
 	int	unnamed_324;		/* +0x324  setToDefault only */
-	int	unnamed_328;		/* +0x328  setToDefault only */
+	int	unnamed_328;		/* +0x328  setToDefault only; the object stores 0.96f (0x3f75c28f) -- 878 */
 	int	unnamed_32c;		/* +0x32c  setToDefault only */
 	int	unnamed_330;		/* +0x330  setToDefault only */
 	int	unnamed_334;		/* +0x334  setToDefault only */
@@ -383,10 +407,10 @@ public:
 	float	TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4;	/* +0x428 */
 	float	PHASE3_ERROR_FOR_V34_FALLBACK;	/* +0x42c */
 	float	PHASE4_ERROR_FOR_V34_FALLBACK;	/* +0x430 */
-	int	unnamed_434;		/* +0x434  setToDefault only */
+	int	unnamed_434;		/* +0x434  setToDefault only; the object stores 250.0f (0x437a0000) -- 878 */
 	float	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x438 */
 	float	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x43c */
-	int	unnamed_440;		/* +0x440  setToDefault only */
+	int	unnamed_440;		/* +0x440  setToDefault only; the object stores 10.0f (0x41200000) -- 878 */
 	int  	ENABLE_RRN_UP;	/* +0x444 */
 	int  	ENABLE_RRN_DOWN;	/* +0x448 */
 	int  	RATE_UP_DETECT_DURATION;	/* +0x44c */
