@@ -31485,3 +31485,168 @@ depend on the standard the tree happens to compile with. Clean before and
 after. The two halves are not redundant: the text comparison catches a header
 that has drifted from the object, the assertions catch a header that has
 drifted from itself, and neither can see the other's case.
+
+### 869. `Scrambler` and `Descrambler`: thirty-four members, and the member set is not the same across instantiations
+
+`tools/closure.py dp_vpcm_init vpcm_create VPCMXF_Create VPcmV34Create
+--missing` reports 2,242 bytes over 34 symbols for the group, and it is right
+about the total and wrong about which are outstanding: six of the thirty-four
+were written in the V.90 batch as inline template members, GCC inlines them at
+every call site, and no object under `build/src` therefore referenced them. So
+the tool reported them missing. **1,955 bytes over 28 symbols was the real
+remainder**, and that number is `2,242 - 287`, the 287 being
+`Scrambler<h,i>`'s `reset` 44, `process(h)` 118, `resetHistoryIndexes` 23 and
+`copyHistoryTail` 31, plus `Descrambler<i,i>`'s `reset` 48 and
+`resetHistoryIndexes` 23.
+
+The authority on the member set is the symbol table, not analogy:
+
+    readelf -sW dsplibs.o | grep -E '_ZN9ScramblerI|_ZN11DescramblerI'
+
+| member | `<h,h>` | `<h,i>` | `<i,h>` | `D<h,i>` | `D<i,i>` |
+|---|--:|--:|--:|--:|--:|
+| `C1(unsigned,unsigned,unsigned)` | 102 | 102 | 107 | 102 | 107 |
+| `D1()` | 29 | 29 | 29 | 29 | 29 |
+| `resetHistoryIndexes()` | 23 | 23 | 23 | 23 | 23 |
+| `copyHistoryTail()` | 31 | 31 | 36 | 31 | 36 |
+| `reset(T)` | 44 | 44 | 48 | 44 | 48 |
+| `process(T)` | 107 | 118 | — | 118 | 110 |
+| `process(const T *, I *, unsigned)` | 120 | — | 136 | 120 | — |
+| `processAllOnes(I *, unsigned)` | 120 | — | — | — | — |
+| `processAllZeros(I *, unsigned)` | 120 | — | — | — | — |
+| **bytes / symbols** | 696 / 9 | 347 / 6 | 379 / 6 | 467 / 7 | 353 / 6 |
+
+**`Scrambler<unsigned char,int>` HAS NO BULK `process`.** The batch brief said
+it had five members outstanding including the bulk form; it has two, the
+constructor and the destructor. It also said `<h,h>` had eleven (it has nine),
+`<i,h>` five (six) and `Descrambler<i,i>` five outstanding (four). The totals
+happen to cancel. Writing the bulk form for `<h,i>` would have produced a body
+with no blob symbol and therefore no `ref_` alias to compare against — a
+member the original does not contain, which is the exact thing
+`src/dsp/Queue.cpp`'s instantiation note exists to prevent.
+
+All thirty-four have a `ref_` alias — `nm build/dsplibs_ref.o` lists exactly
+thirty-four — so every one is driven directly by `test/unit/t_scrambler.cpp`
+rather than only through a caller. Reading them needs
+`objdump -dr --section=.gnu.linkonce.t.<symbol>`; `tools/dis.py` takes a weak
+symbol's zero `st_value` for a `.text` offset and silently disassembles the
+wrong function.
+
+### 870. The intermediate in `process` is `I`, and `Scrambler<int,unsigned char>` is what proves it
+
+`Scrambler<int, unsigned char>::process(const int *, unsigned char *,
+unsigned)` loads a full `int` tap and then does every remaining operation in
+eight bits:
+
+      30:  mov    (%edx),%ecx          ecx = *pTap1, all 32 bits
+      35:  xor    (%eax),%cl           ^= the low byte of in[i]
+      3d:  xor    (%eax),%cl           ^= the low byte of *pTap2
+      4a:  movzbl %cl,%edx
+      4d:  mov    %cl,0x0(%ebp)        out[i]  -- an unsigned char
+      54:  mov    %edx,(%ebx)          *pOut   -- an int, ZERO-EXTENDED
+
+So the history receives `(in[i] ^ *pTap1 ^ *pTap2) & 0xff`, not the 32-bit
+XOR. That fixes the temporary's declared type at `I`, and it is a
+**behavioural** difference rather than a codegen preference: a `T` intermediate
+puts a different value in the buffer, and `t_scrambler`'s `<i,h>` block sees it
+because that block seeds the history with values above 0xff on purpose and
+asserts it did (`an operand above 0xff reached the XOR`). The mutation
+`I r = (I)(in[i] ...)` -> `T r = (T)(in[i] ...)` is in the suite and is caught.
+
+The same reading explains an 11-byte discrepancy that has no test:
+`Scrambler<unsigned char,unsigned char>::process(h)` is **107** bytes and
+`Scrambler<unsigned char,int>::process(h)` is **118**. Same `T`, same body,
+and the first keeps its accumulator in a one-byte stack slot (`xor %al,
+0x13(%esp)`) where the second uses a 32-bit register — `I` again. For
+`T = unsigned char` the two spellings are **behaviourally identical**: every
+operand is already a byte, the store truncates and the return truncates. No
+gate in this tree can tell them apart, and both are inlined out of existence at
+every call site so `make similarity` cannot either. The single-value `process`
+therefore keeps the `T` temporary it was verified with (batch 2's), and this
+finding is the record so a later batch does not re-derive it. Acting on
+untestable codegen evidence by rewriting a passing body is the mistake
+CLAUDE.md's "free, so ignore it" rule is about; recording it is not.
+
+The return type is not mangled and nothing pins it either way: `<h,h>` returns
+a zero-extended byte and `<h,i>` a full register, which is what `T` or `I`
+would each give.
+
+**A third instance of the same shape, found by the mutation sweep.**
+`Descrambler::process` is `*pOut = in; r = *pOut ^ *pTap1 ^ *pTap2`, and the
+`*pOut` is the source's: `Descrambler<h,i>::process(h)` RELOADS `this->pOut`
+after the store, which a `r = in ^ ...` source would not make it do — a store
+through `unsigned char *` may alias the pointer field, so the reload is forced.
+It is nevertheless **behaviourally invisible**: a plain `T` store followed by a
+read of the same object yields the value stored, for every input and every
+aliasing of `pOut` with a tap or with the source, so both spellings compute the
+same number always. The two mutations that make the swap are in the set and
+recorded `equivalent` with that argument rather than as uncaught claims — and
+the aliased fixture pass written to catch them does not, because with
+`pTap1 == pOut` both forms reduce to `*pTap2`. What IS tested, and caught, is
+that the store happens BEFORE the taps are read: `r = ...; *pOut = in;` reads
+the old history value and fails 5,791 checks.
+
+### 871. Declaring the constructor and destructor: the union half was real, the `offsetof` half was stale
+
+`include/dsplib/Scrambler.h` deliberately declared neither, and gave two
+reasons. Measured, by adding the declarations and building:
+
+- **The union half is real.** `Scrambler` with a user-provided constructor has
+  no default constructor and a non-trivial destructor. `V90Phase3Modulator`
+  holds one at +0x20 and `V90Phase3Demodulator` a `Descrambler<int,int>` at
+  +0x3d0, so both lose their default constructor and gain a non-trivial
+  destructor, and a **union** holding either has both of its own deleted. Two
+  test fixtures are exactly that union. The whole cost is **two lines per
+  union** — a user-provided `slot() {}` and `~slot() {}`, which construct and
+  destroy no variant member — and it leaves every `.o` and `.raw` access site
+  untouched. Four unions across `t_v90p3mod.cpp` and `t_v90p3dreset.cpp`, plus
+  two bare `Scrambler`/`Descrambler` locals that became references into one.
+- **The `offsetof` half is stale.** `__builtin_offsetof` is conditionally
+  supported for a non-**standard-layout** type, and a user-provided constructor
+  does not affect standard layout — it affects **triviality**, and the two were
+  the same property only under C++03's `POD`. `CFLAGS` names no `-std=` and no
+  `-Werror`, so GCC 13 compiles it at C++17 with no diagnostic.
+  `src/dsp/Scrambler.cpp` now asserts all eight offsets and `sizeof == 0x20`
+  for all five instantiations and compiles clean.
+
+**Two things that do bite, neither of them the stated reasons.** A union with
+a user-provided constructor is no longer trivially copyable, so
+`memcpy(&slot, &other, sizeof(slot))` draws `-Wclass-memaccess`; copying
+`slot.raw` instead is the same bytes and no warning. And a **function-local
+static** of such a union wants `__cxa_guard_acquire`, which this tree links no
+libstdc++ for — three of them (two in `t_v90p3mod.cpp`, one added in
+`t_v90p3dreset.cpp`) are hoisted to file scope, verified with
+`nm build/test/t_v90p3mod | grep cxa_guard` returning nothing.
+
+`src/dsp/Queue.cpp` had already declared a constructor and destructor for the
+same kind of template and nothing had noticed, because no fixture puts a
+`Queue<float>` in a union.
+
+### 872. Emitting a weak template member, and what `closure.py` can then see
+
+`Scrambler`'s members were defined in the header and used only from code that
+inlines them, so `build/src/**` referenced none of them and
+`tools/closure.py --missing` reported all thirty-four missing whatever was
+written — the "result indistinguishable from success" of gates.md, one level
+up: not a detector that checked nothing, but a completeness measure that could
+not be moved by doing the work.
+
+`src/dsp/Scrambler.cpp` fixes it the way `src/dsp/Queue.cpp` already did, and
+the reason for member-by-member instantiation is sharper here:
+`template class Scrambler<unsigned char,int>;` would emit a bulk `process`,
+a `processAllOnes` and a `processAllZeros` the blob does not have, and
+`Descrambler<int,int>` a bulk `process` it does not have either — six weak
+symbols we define and the original does not. Naming each of the thirty-four
+keeps the symbol sets equal.
+
+What our compiler adds and GCC 3.4 did not: a `C2`/`D2` alias and an `n`-class
+`C5`/`D5` for every constructor and destructor, so `nm` shows **44** where the
+blob has 34. Queue.o has had the same five extra since it was written; it is an
+artefact of the modern ABI's base/complete-object split, not a member.
+
+`tools/refrename.py` needed no change — it enumerates the blob's
+`.gnu.linkonce.t.*` sections from `readelf` rather than carrying a list, so the
+ten new names are moved to `.text.ref_*` like the others. Modern GCC puts our
+copies in `.text._ZN...` inside a section group, so nothing collides today; the
+collision is only there under `tools/toolchain`, which is what `refrename.py`
+exists for (finding 349).

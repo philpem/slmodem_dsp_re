@@ -89,12 +89,35 @@ extern unsigned int ref_dsplibs_debug_level;
 /* The object, plus room past its end to catch a store that overruns it. */
 #define SLOT 1024
 
+/*
+ * THE TWO EMPTY SPECIAL MEMBERS ARE LOAD-BEARING.  `Scrambler` declares a
+ * constructor and a destructor (see dsplib/Scrambler.h and finding 871), which
+ * leaves `V90Phase3Modulator` with no default constructor and a non-trivial
+ * destructor, which DELETES both of a union holding one.  A user-provided pair
+ * that constructs and destroys no variant member restores them and changes
+ * nothing else: no `.o` or `.raw` access site below is affected.
+ *
+ * The consequence is that the union is no longer trivially copyable, so every
+ * whole-slot copy goes through `.raw` rather than `&slot` -- same bytes, and
+ * it keeps -Wclass-memaccess quiet without disabling it.
+ */
 union mod_slot {
 	V90Phase3Modulator o;
 	unsigned char raw[SLOT];
+
+	mod_slot() {}
+	~mod_slot() {}
 };
 
 static union mod_slot ours, theirs;
+
+/*
+ * `drive` and `compare_reset` each want a scratch pair.  They are file-scope
+ * rather than function-local statics because a non-trivial local static wants
+ * `__cxa_guard_acquire`, and this tree links no libstdc++.
+ */
+static union mod_slot drive_ca, drive_cb;
+static union mod_slot reset_ca, reset_cb;
 static tagV90DILdescriptor desc;
 
 static unsigned lfsr_state;
@@ -429,6 +452,22 @@ run_table(void)
 
 typedef Scrambler<unsigned char, int> ScramblerHI;
 
+/*
+ * A bare `ScramblerHI a;` no longer compiles -- the class has a constructor
+ * now and therefore no default one -- and calling the real constructor here
+ * would allocate a buffer `scr_place` immediately overwrites the pointer to.
+ * The union is the same device the object slot above uses.
+ */
+union scr_slot {
+	ScramblerHI o;
+	unsigned char raw[sizeof(ScramblerHI)];
+
+	scr_slot() {}
+	~scr_slot() {}
+};
+
+static union scr_slot scr_a, scr_b;
+
 static unsigned char scr_ours[SCR_BUF], scr_theirs[SCR_BUF];
 
 static void
@@ -495,7 +534,7 @@ scr_seed(int trial, int mode)
 static int
 run_scrambler(void)
 {
-	ScramblerHI a, b;
+	ScramblerHI &a = scr_a.o, &b = scr_b.o;
 	int trial, mode, i, restarts = 0, differed = 0, wide = 0;
 
 	diff_begin("Scrambler<unsigned char, int>");
@@ -713,7 +752,7 @@ prepare(int trial, int mode, unsigned int st)
 static void
 drive(int v92, long input)
 {
-	static union mod_slot ca, cb;
+	union mod_slot &ca = drive_ca, &cb = drive_cb;
 	unsigned int st = (unsigned int)ours.o.state;
 	const unsigned char *before = ours.o.scrambler.pOut;
 	unsigned int pos_before = ours.o.segmentPos;
@@ -727,8 +766,8 @@ drive(int v92, long input)
 
 	diff_eq_int("generateSymbol returned (case %ld)", a, b, input);
 
-	memcpy(&ca, &ours, sizeof(ca));
-	memcpy(&cb, &theirs, sizeof(cb));
+	memcpy(ca.raw, ours.raw, SLOT);
+	memcpy(cb.raw, theirs.raw, SLOT);
 	memset(ca.raw + 0x20, 0, 0x1c);		/* the Scrambler's seven */
 	memset(cb.raw + 0x20, 0, 0x1c);
 	memset(ca.raw + 0x44, 0, 0x0c);		/* the three bit vectors  */
@@ -1504,10 +1543,10 @@ prepare_reset(int trial, int mode, unsigned int flag)
 static void
 compare_reset(long input)
 {
-	static union mod_slot ca, cb;
+	union mod_slot &ca = reset_ca, &cb = reset_cb;
 
-	memcpy(&ca, &ours, sizeof(ca));
-	memcpy(&cb, &theirs, sizeof(cb));
+	memcpy(ca.raw, ours.raw, SLOT);
+	memcpy(cb.raw, theirs.raw, SLOT);
 	memset(ca.raw + 0x20, 0, 0x1c);		/* the Scrambler's seven */
 	memset(cb.raw + 0x20, 0, 0x1c);
 	memset(ca.raw + 0x44, 0, 0x0c);		/* the three bit vectors  */

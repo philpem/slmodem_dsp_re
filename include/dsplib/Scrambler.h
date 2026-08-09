@@ -1,57 +1,150 @@
 /*
  * Scrambler.h -- the object's own self-synchronising scrambler template.
  *
- * Reconstructed from dsplibs.o.  `Scrambler<T, I>` is a CLASS TEMPLATE, and
- * the blob carries four instantiations of it -- `<h,h>`, `<h,i>`, `<i,h>` and
- * the parallel `Descrambler<h,i>` / `Descrambler<i,i>` -- each emitted as
- * weak symbols in their own `.gnu.linkonce.t.*` sections.  Only
- * `Scrambler<unsigned char, int>` is reconstructed here, and only the four
- * members `V90Phase3Modulator` reaches:
+ * Reconstructed from dsplibs.o.  `Scrambler<T, I>` and `Descrambler<T, I>` are
+ * two SEPARATE CLASS TEMPLATES, and the blob carries five instantiations of
+ * them between them, every member emitted as a weak symbol in its own
+ * `.gnu.linkonce.t.*` section.  All thirty-four are now written and
+ * differentially tested; the table is the symbol table's, taken with
  *
- *     _ZN9ScramblerIhiE5resetEh                   44 B
- *     _ZN9ScramblerIhiE7processEh                118 B
- *     _ZN9ScramblerIhiE19resetHistoryIndexesEv    23 B
- *     _ZN9ScramblerIhiE15copyHistoryTailEv        31 B
+ *     readelf -sW dsplibs.o | grep -E '_ZN9ScramblerI|_ZN11DescramblerI'
  *
- * THOSE FOUR ARE PART OF TASK #60's BATCH 2 AND `callgraph.py` CANNOT SEE
- * THEM: it enumerates `T` symbols, and a weak template instantiation is `W`.
- * They are nevertheless renamed `ref_*` in the reference object like
- * everything else, so leaving them unwritten breaks the link for the whole
- * suite exactly as an unwritten ordinary callee does (docs/v90cpp.md).
+ * and it is the authority on WHICH members each instantiation has, because
+ * they differ and the difference is load-bearing:
  *
+ *   member                        <h,h>  <h,i>  <i,h>  D<h,i>  D<i,i>
+ *   ---------------------------   -----  -----  -----  ------  ------
+ *   C1(unsigned,unsigned,unsigned)  102    102    107     102     107
+ *   D1()                             29     29     29      29      29
+ *   resetHistoryIndexes()            23     23     23      23      23
+ *   copyHistoryTail()                31     31     36      31      36
+ *   reset(T)                         44     44     48      44      48
+ *   process(T)                      107    118      -     118     110
+ *   process(const T *, I *, j)      120      -    136     120       -
+ *   processAllOnes(I *, j)          120      -      -       -       -
+ *   processAllZeros(I *, j)         120      -      -       -       -
+ *   ---------------------------   -----  -----  -----  ------  ------
+ *   bytes                           696    347    379     467     353
+ *   symbols                           9      6      6       7       6
+ *
+ * 2,242 bytes over 34 symbols, which is what `tools/closure.py` reports for
+ * the group.  **`Scrambler<unsigned char,int>` HAS NO BULK `process`** and
+ * `Scrambler<int,unsigned char>` has no single-value one; a batch brief that
+ * says otherwise is wrong, and writing a member with no blob symbol would be a
+ * body with no `ref_` alias to compare against.
+ *
+ * Six of the thirty-four -- `<h,i>`'s reset, process(T), resetHistoryIndexes
+ * and copyHistoryTail, and `<i,i>`'s reset and resetHistoryIndexes, 287 bytes
+ * -- were written and tested earlier, through `V90Phase3Modulator` and
+ * `V90Phase3Demodulator`.  THEIR BODIES ARE UNCHANGED HERE.  The other 1,955
+ * bytes over 28 symbols are findings 869-872.
+ *
+ * `tools/closure.py --missing` used to report all thirty-four missing whatever
+ * was written, because a header-inlined template member leaves no reference in
+ * any object under `build/src` for it to resolve.  src/dsp/Scrambler.cpp names
+ * all thirty-four in explicit MEMBER-BY-MEMBER instantiations, exactly as
+ * `src/dsp/Queue.cpp` does and for the same reason -- a whole-class
+ * `template class Scrambler<...>;` would emit members the original does not
+ * have, and the member sets above are not the same across instantiations.  So
+ * the symbols are real now and the tool's answer is the true one.
+ *
+ * ---------------------------------------------------------------------------
  * THE HISTORY RUNS BACKWARDS THROUGH THE BUFFER.  `process()` writes at
  * `pOut` and reads two taps *above* it, then steps all three down by one; it
  * is the falling-address form of y[n] = x[n] ^ y[n-a] ^ y[n-b].  When `pOut`
  * would fall below `pLimit` the object restarts: the three pointers go back
- * to their initial values and the `tailLength` bytes at `pLimit` are copied
+ * to their initial values and the `tailLength` elements at `pLimit` are copied
  * up to just above the restart point, so the taps still see the history they
  * would have seen had the buffer been unbounded.
  *
- * ALL FOUR ARE NOW DIFFERENTIALLY TESTED, both through
- * `V90Phase3Modulator::generate*Symbol`, which own the subobject at +0x20,
- * and directly against the `ref__ZN9ScramblerIhiE*` aliases -- which exist:
- * symmap.py renames weak symbols like everything else.  test/unit/t_v90p3mod
- * drives them with a buffer small enough that `pOut` falls below `pLimit`,
- * because the restart is a third of the class and is invisible otherwise.
- * The reconstruction below needed no change to pass.
+ * `reset(value)` fills that same history -- the elements from `pInitOut + 1`
+ * up to and including `pInitTap2` -- with `value & 1`, one bit per element,
+ * which is the same one-element-per-bit convention V90Jd uses for its message.
  *
- * `reset(value)` fills that same history -- the bytes from `pInitOut + 1` up
- * to and including `pInitTap2` -- with `value & 1`, one bit per byte, which is
- * the same one-byte-per-bit convention V90Jd uses for its message.
+ * ---------------------------------------------------------------------------
+ * THE INTERMEDIATE IS `I`, NOT `T`, AND THAT IS FORCED (finding 870)
  *
- * The remaining members are declared for the record and deliberately left
- * undefined: nothing in batch 2 calls them, and defining one would re-open
- * the link closure.  There is deliberately no
- * `template class Scrambler<unsigned char, int>;` here for the same reason --
- * an explicit instantiation would demand a definition for every member.
+ * `Scrambler<int, unsigned char>::process(const int *, unsigned char *,
+ * unsigned)` computes the whole XOR in EIGHT BITS -- `mov (%edx),%ecx` loads
+ * the full `int` tap and every following operation is `xor r/m8,%cl` -- and
+ * then stores `movzbl %cl` into the `int` history.  A `T` intermediate would
+ * put the full 32-bit XOR there.  That is a difference a test can see, not a
+ * codegen preference, and it fixes the type of the temporary at `I` for every
+ * bulk member.  `t_scrambler`'s `<i,h>` block drives taps with bits above bit
+ * 7 set specifically to hold it.
+ *
+ * The same reading explains why `Scrambler<unsigned char,unsigned char>::
+ * process(h)` is 107 bytes and `Scrambler<unsigned char,int>::process(h)` is
+ * 118: same `T`, same body, and the byte-wide temporary of the first against
+ * the 32-bit one of the second is `I` again.  For `T = unsigned char` the two
+ * are BEHAVIOURALLY IDENTICAL -- every operand is already a byte and both the
+ * store and the return truncate -- so no test in this tree can tell them
+ * apart, and the single-value `process` keeps the `T` temporary it was
+ * verified with rather than being rewritten on evidence no gate can check.
+ * Recorded so a later batch does not re-derive it.
+ *
+ * The return type is not mangled and nothing pins it: `<h,h>` returns a
+ * zero-extended byte and `<h,i>` a full register, which is what either
+ * spelling gives.  `T` is kept for both templates.
+ *
+ * ---------------------------------------------------------------------------
+ * THE CONSTRUCTOR AND DESTRUCTOR ARE DECLARED, and the reason this file used
+ * to give for not declaring them was half right (finding 871).
+ *
+ *   - The UNION half is real.  Declaring either makes the class non-trivial
+ *     and leaves it with no default constructor, which DELETES the default
+ *     constructor and the destructor of any union holding one -- and the test
+ *     fixtures for `V90Phase3Modulator` and `V90Phase3Demodulator` are a union
+ *     of the object with a byte array.  The fix is two lines per union, a
+ *     user-provided `slot() {}` and `~slot() {}`, which construct and destroy
+ *     no variant member; every existing `.o` and `.raw` access site is
+ *     untouched.  A union that is also a FUNCTION-LOCAL STATIC then needs
+ *     hoisting to file scope, because a non-trivial local static wants
+ *     `__cxa_guard_acquire` and this tree links no libstdc++.
+ *   - The `__builtin_offsetof` half is STALE.  `offsetof` requires STANDARD
+ *     LAYOUT, which a user-provided constructor does not affect; it is
+ *     triviality that it does affect, and the two were the same thing only in
+ *     C++03's `POD`.  CFLAGS names no `-std=` and no `-Werror`, so this
+ *     compiles at C++17 with no diagnostic.  Verified by compiling, not read.
+ *
+ * The constructor's argument order is `(a, b, c)`: `a` is the NEAR tap's
+ * distance above `pInitOut`, `b` the FAR tap's and also `tailLength`, and `c`
+ * the distance `pInitOut` sits above `pLimit`.  `V90Phase3Demodulator` builds
+ * its `Descrambler<int,int>` with (0x12, 0x17, 0x63) -- V.90's taps 18 and 23.
  */
 
 #ifndef DSPLIB_SCRAMBLER_H
 #define DSPLIB_SCRAMBLER_H
 
+#include "dsplib/sysdep.h"
+
 template <class T, class I>
 class Scrambler {
 public:
+	/*
+	 * `sysdep_malloc` is NOT checked, exactly as in the blob: a null return
+	 * makes every init pointer a small address and the first `reset` stores
+	 * through it.  The count is `1 + b + c` ELEMENTS -- `<int,...>` emits
+	 * `shl $0x2` on it, which is where `sizeof(T)` is measured -- and the
+	 * body ends in a tail call to `reset(0)`.
+	 */
+	Scrambler(unsigned int a, unsigned int b, unsigned int c)
+	{
+		tailLength = b;
+		pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+		pInitOut = pLimit + c;
+		pInitTap1 = pInitOut + a;
+		pInitTap2 = pInitOut + b;
+		reset(0);
+	}
+
+	/* `pLimit` is NOT nulled, so a second destruction double-frees. */
+	~Scrambler()
+	{
+		if (pLimit)
+			sysdep_free(pLimit);
+	}
+
 	/*
 	 * Put the three running pointers back to their initial values.  This
 	 * is 23 bytes in the blob and does exactly three word copies.
@@ -99,6 +192,10 @@ public:
 	 * One symbol.  Both taps are read at their current positions and then
 	 * stepped down; the output is written where `pOut` points and `pOut`
 	 * steps down after.  Falling below `pLimit` restarts the buffer.
+	 *
+	 * The `T` temporary is the one this was verified with; see the note on
+	 * `I` in the file comment for why it is not `I` here and why nothing
+	 * can tell.
 	 */
 	T process(T in)
 	{
@@ -117,22 +214,79 @@ public:
 	}
 
 	/*
-	 * Declared, not defined.  The signatures are the mangling's, so this
-	 * is a specification rather than a guess; `I` is the wider type the
-	 * bulk overloads use, which is what makes `<unsigned char, int>` and
-	 * `<unsigned char, unsigned char>` two different instantiations.
-	 *
-	 * The constructor `Scrambler(unsigned, unsigned, unsigned)` and the
-	 * destructor are NOT declared, deliberately.  Declaring either makes
-	 * the class non-trivial, which deletes the default members of any
-	 * union holding one and makes `__builtin_offsetof` conditionally
-	 * supported -- and the test fixture is a union of the object with a
-	 * byte array, so both matter.  Their signatures are on the record in
-	 * docs/v90cpp.md instead.
+	 * `n` symbols.  The result goes to BOTH `out[i]` -- as an `I`, which
+	 * for `<int,unsigned char>` is narrower than the history -- and to the
+	 * history at `pOut`, in that order.  The blob stores `out[i]` first and
+	 * `*pOut` second, which is only observable if the caller aims `out`
+	 * into the history; it is reproduced rather than tidied.
 	 */
-	void process(const T *, I *, unsigned int);
-	void processAllOnes(T *, unsigned int);
-	void processAllZeros(T *, unsigned int);
+	void process(const T *in, I *out, unsigned int n)
+	{
+		unsigned int i;
+
+		for (i = 0; i < n; i++) {
+			T *p = pOut;
+			I r = (I)(in[i] ^ *pTap1 ^ *pTap2);
+
+			pTap1--;
+			pTap2--;
+			out[i] = r;
+			*p = (T)r;
+			if (--pOut < pLimit) {
+				resetHistoryIndexes();
+				copyHistoryTail();
+			}
+		}
+	}
+
+	/*
+	 * `process` with an all-ones input and with an all-zeros one, each
+	 * open-coded rather than calling `process`: the blob's bodies are the
+	 * bulk loop with `in[i]` replaced by the constant, so the all-ones one
+	 * carries an `xor $0x1` and the all-zeros one carries nothing at all.
+	 *
+	 * Only `<unsigned char, unsigned char>` instantiates these, where `T`
+	 * and `I` are the same type and the parameter's spelling is therefore
+	 * not recoverable from the mangling; `I *` is chosen to agree with
+	 * `process`'s output parameter.
+	 */
+	void processAllOnes(I *out, unsigned int n)
+	{
+		unsigned int i;
+
+		for (i = 0; i < n; i++) {
+			T *p = pOut;
+			I r = (I)(1 ^ *pTap1 ^ *pTap2);
+
+			pTap1--;
+			pTap2--;
+			out[i] = r;
+			*p = (T)r;
+			if (--pOut < pLimit) {
+				resetHistoryIndexes();
+				copyHistoryTail();
+			}
+		}
+	}
+
+	void processAllZeros(I *out, unsigned int n)
+	{
+		unsigned int i;
+
+		for (i = 0; i < n; i++) {
+			T *p = pOut;
+			I r = (I)(*pTap1 ^ *pTap2);
+
+			pTap1--;
+			pTap2--;
+			out[i] = r;
+			*p = (T)r;
+			if (--pOut < pLimit) {
+				resetHistoryIndexes();
+				copyHistoryTail();
+			}
+		}
+	}
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -147,7 +301,7 @@ public:
 	T *pOut;		/* +0x10 where the next output goes        */
 	T *pTap1;		/* +0x14 the near tap                      */
 	T *pTap2;		/* +0x18 the far tap                       */
-	unsigned int tailLength;	/* +0x1c bytes carried on restart  */
+	unsigned int tailLength;	/* +0x1c elements carried on restart */
 };
 
 /*
@@ -157,57 +311,68 @@ public:
  * `.gnu.linkonce.t.*` sections, so spelling it any other way emits symbols
  * that link against nothing.
  *
- * `V90Phase3Demodulator::reset` reaches two of its members and they are the
- * only two DEFINED here:
- *
- *     _ZN11DescramblerIiiE5resetEi                48 B
- *     _ZN11DescramblerIiiE19resetHistoryIndexesEv 23 B
- *
- * Both are differentially tested by test/unit/t_v90p3dreset.cpp -- through
- * `V90Phase3Demodulator::reset`, which owns the `<int,int>` subobject at
- * +0x3d0, and directly against the `ref__ZN11DescramblerIii*` aliases, which
- * exist because symmap.py renames weak symbols like everything else.
- *
  * THE LAYOUT IS THE SAME EIGHT FIELDS AS `Scrambler`, IN THE SAME ORDER, and
  * that is measured rather than assumed by analogy.  `resetHistoryIndexes`
  * gives +0x04 -> +0x10, +0x08 -> +0x14 and +0x0c -> +0x18; `reset` gives
- * +0x04 and +0x0c as the bounds of the fill; and the two members outside this
- * batch pin the other two -- `copyHistoryTail` reads +0x00 as the source and
- * +0x1c as the count, and `process` compares the stepped-down +0x10 against
- * +0x00.  All four disassembled with
+ * +0x04 and +0x0c as the bounds of the fill; `copyHistoryTail` reads +0x00 as
+ * the source and +0x1c as the count; `process` compares the stepped-down
+ * +0x10 against +0x00; and the constructor writes all five of the first
+ * fields plus +0x1c.  All of it disassembled with
  * `objdump -dr --section=.gnu.linkonce.t.<symbol>`, which is the only way to
  * read a weak member here (tools/dis.py takes its zero `st_value` for a
  * `.text` offset).
  *
- * WHERE IT DIFFERS FROM `Scrambler` IS `process`, WHICH IS NOT DEFINED HERE.
- * The scrambler writes its OUTPUT at `pOut`; the descrambler writes its INPUT
- * there, and returns `in ^ *pTap1 ^ *pTap2` -- which is what makes it the
- * inverse.  Nothing in this batch calls it, so it stays declared, exactly as
- * `Scrambler`'s bulk overloads do: defining a member no test drives would put
- * an unverified body in the tree.
- *
- * The constructor is on the record and not declared, for the reason given
- * above for `Scrambler`'s.  `V90Phase3Demodulator`'s constructor builds this
- * one with (0x12, 0x17, 0x63), and the blob's body is:
- *
- *     tailLength = b;
- *     pLimit     = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
- *     pInitOut   = pLimit + c;
- *     pInitTap1  = pInitOut + a;
- *     pInitTap2  = pInitOut + b;
- *     reset(0);
- *
- * which is where t_v90p3dreset.cpp's hand-built subobject comes from.
+ * WHERE IT DIFFERS FROM `Scrambler` IS `process`.  The scrambler writes its
+ * OUTPUT at `pOut`; the descrambler writes its INPUT there FIRST and then
+ * READS IT BACK -- `Descrambler<h,i>::process(h)` stores `in`, reloads
+ * `this->pOut` because a store through `unsigned char *` may alias it, and
+ * XORs `*pOut` rather than `in`.  Written as `r = in ^ ...` the reload would
+ * not be there, so the store-then-read is the source's and not the compiler's.
+ * That the input is stored BEFORE the taps are read is a behavioural claim and
+ * is tested; that the first XOR operand is spelled `*pOut` rather than `in` is
+ * NOT, and cannot be -- a plain `T` store followed by a read of the same
+ * object yields the value stored for every input and every aliasing, so the
+ * two spellings are the same number in every case.  Both mutations are in
+ * `test/mutations/scrambler.json`, recorded `equivalent` with that argument.
  */
 template <class T, class I>
 class Descrambler {
 public:
+	/* Byte for byte the shape of `Scrambler`'s; see its comment. */
+	Descrambler(unsigned int a, unsigned int b, unsigned int c)
+	{
+		tailLength = b;
+		pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+		pInitOut = pLimit + c;
+		pInitTap1 = pInitOut + a;
+		pInitTap2 = pInitOut + b;
+		reset(0);
+	}
+
+	~Descrambler()
+	{
+		if (pLimit)
+			sysdep_free(pLimit);
+	}
+
 	/* Three word copies, as in `Scrambler`. */
 	void resetHistoryIndexes()
 	{
 		pOut = pInitOut;
 		pTap1 = pInitTap1;
 		pTap2 = pInitTap2;
+	}
+
+	/* The count is `tailLength`, as in `Scrambler`. */
+	void copyHistoryTail()
+	{
+		T *dst = pInitOut + 1;
+		const T *src = pLimit;
+		unsigned int n = tailLength;
+		unsigned int i;
+
+		for (i = 0; i < n; i++)
+			dst[i] = src[i];
 	}
 
 	/*
@@ -226,10 +391,41 @@ public:
 			*p = bit;
 	}
 
-	/* Declared, not defined -- see the file comment above. */
-	T process(T);
-	void process(const T *, I *, unsigned int);
-	void copyHistoryTail();
+	/* One symbol.  Store, read back, XOR the two taps, step all three. */
+	T process(T in)
+	{
+		I r;
+
+		*pOut = in;
+		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
+		pTap1--;
+		pTap2--;
+		if (--pOut < pLimit) {
+			resetHistoryIndexes();
+			copyHistoryTail();
+		}
+		return (T)r;
+	}
+
+	/* `n` symbols, the result to `out[i]` as an `I` and nowhere else. */
+	void process(const T *in, I *out, unsigned int n)
+	{
+		unsigned int i;
+
+		for (i = 0; i < n; i++) {
+			I r;
+
+			*pOut = in[i];
+			r = (I)(*pOut ^ *pTap1 ^ *pTap2);
+			pTap1--;
+			pTap2--;
+			out[i] = r;
+			if (--pOut < pLimit) {
+				resetHistoryIndexes();
+				copyHistoryTail();
+			}
+		}
+	}
 
 	T *pLimit;		/* +0x00 lowest address `pOut` may reach   */
 	T *pInitOut;		/* +0x04 restart value for pOut            */
@@ -238,7 +434,7 @@ public:
 	T *pOut;		/* +0x10 where the next input is stored    */
 	T *pTap1;		/* +0x14 the near tap                      */
 	T *pTap2;		/* +0x18 the far tap                       */
-	unsigned int tailLength;	/* +0x1c words carried on restart  */
+	unsigned int tailLength;	/* +0x1c elements carried on restart */
 };
 
 #endif /* DSPLIB_SCRAMBLER_H */
