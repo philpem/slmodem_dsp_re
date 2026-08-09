@@ -31025,3 +31025,317 @@ hears decides where its state machine goes, which is the sequencing the test
 exists to check. Recorded here rather than left implied, because
 "the call is a call" is exactly the sort of thing that reads as obvious on the
 page and is a measurement.
+
+### 800. The blob's own constructor builds a complete, configured V.34 object, and it is reachable
+
+Finding 780 proved our `v34handshak` and the blob's do the same thing in the
+same order for 1,600 blocks, on endpoints that were **raw arenas** brought up
+by calling `v34handshakinit` directly — pseudorandom in every field the
+handshake initialiser does not write (finding 784). The call does not connect
+because nothing configured them, and the construction path is unwritten: 487
+symbols, 249,590 bytes, essentially all of `VPcmV34Main.cpp`.
+
+**But the blob contains the constructor and it is aliasable.** `ref_vpcm_op`
+is a `struct dp_operations` in the blob's `.data`, `ref_dp_vpcm_init`
+registers it, and `ref_vpcm_create` (0x3a00, file-static, globalised by the
+Makefile's two-pass `objcopy`) is behind `->create`. Called through the same
+path `t_v23dp.c` uses:
+
+```
+    ref_dp_vpcm_init()          registers ONE ops table under THREE ids:
+                                34 (V.34), 90 (V.90), 92 (V.92), all "VPCM"
+    ops->create(modem, 34, caller, 9600, 48, ops)  ->  non-NULL, both callers
+```
+
+**It constructs, and the allocation balances exactly.** 127 allocations
+totalling 279,600 bytes, of which 2 are freed inside `create`; 125 regions and
+265,520 bytes live afterwards; `->destroy` returns 0 and takes it to
+`frees=127, live=0, bad_free=0`.
+
+The object `vpcm_create` allocates is the 0xd258 = 53,848-byte root
+(`movl $0xd258,(%esp)` at 0x3a42) and **the V.34 object is at +0x2c of it** —
+`lea 0x2c(%ebx),%ebp` at 0x3add, and `ebp` is what `vpcm_create` passes to
+`VPcmV34Create` at 0x3c70, which passes the same pointer to `v34handshakinit`
+at 0xad36.
+
+The three guards read out of the prologue all hold and all were re-checked:
+`srate` must be exactly 9600 (`cmp $0x2580,%esi` at 0x3a1c, `jne` to the
+failure return), `max_frag` must be <= 48 (`cmpl $0x30,0x40(%esp)` / `jg` at
+0x3a37), and `caller` becomes a side flag through `test %edx,%edx / sete` at
+0x3a11 — which goes to `0x18(%esp)`, a **stack local**, so it is not readable
+off the returned object and finding 803 measures it the other way.
+
+### 801. What the construction asks its host for, and why two of the five are addresses
+
+`vpcm_create` makes five `modem_get_param` calls, and the harness's default
+answer — `0x5A000000 + 7*param` — is fatal for two of them and absurd for the
+other three. Both faults were found by running, not by reading:
+
+| param | what it is | what happens with the harness default |
+|---|---|---|
+| 10 `MDMPRM_DPRUNTIME` | reached via `dp_param_get`; stored at +0x28 | **dereferenced immediately**: `movl $0x0,0x78(%eax)` at 0x3ad2 |
+| 11 `MDMPRM_DSPINFO` | stored at +0x24 | `vpcm_delete` writes two words through it at 0x3ded — **SIGSEGV in `ref_vpcm_delete+29`** |
+| 3 `MDMPRM_MIN_RATE` | lower rate limit | lands in the dp-runtime at +0x30 |
+| 4 `MDMPRM_MAX_RATE` | upper rate limit | clamped to 0xdac0 = 56000 at 0x3b65 |
+| 5 `MDMPRM_IODELAY` | `+4` must be <= 0xf4 = 244 | takes the 0x3d6f arm, which `modem_set_param`s 13 and clamps |
+
+So the five overrides (`runtime_buf`, `dspinfo_buf`, 2400, 33600, 40) **are**
+the "configured" half of "constructed and configured", and any verdict from
+this experiment is bounded by them. They are a plausible configuration, not a
+recovered one.
+
+**Turn `ref_dsplibs_debug_level` up to 2 and the blob narrates its own
+construction — 70 lines of the original author's words**, which is worth more
+than any amount of inference from a NULL. It names its own version strings
+(`V90Modem Version: 2.98 (25-Mar-04)`, `V92Modem Version: 1.1 (9-Apr-01)`),
+reads back the configuration it was given (`vpcm: VPCM rate limits:
+2400-33600`, `vpcm: Delays: HW 44, DMA -4`), and ends with the three
+handshake state transitions:
+
+```
+    V34HSHAKE: txstate    NOSTATE0 => SILENCEINFO
+    V34HSHAKE: rxstate    NOSTATE0 => RX_DPSK
+    V34HSHAKE: microstate NOSTATE0 => DET_SYNC
+```
+
+which read back off the object as 54 / 43 / 41. That is a properly initialised
+handshake, not an arena.
+
+### 802. THE MEASUREMENT: two blob-code pointers in 265,520 bytes of construction
+
+The question the experiment exists to settle is how much of a
+blob-constructed object points back into blob code. Scanned as 4-byte words
+and classified **by the LINK MAP**, not by symbol-name prefix — 10 of the
+blob's file-locals keep their original unprefixed names (`symmap.py` names
+them each run) and our own C++ emits linkonce sections whose names collide
+with the blob's, so a `ref_` test would be wrong in both directions. The map
+records which input object contributed every output range, so "in
+`dsplibs_ref.o`" is exact. `nm -S` containment is a second, independent
+naming pass.
+
+**The root object alone would have understated it.** 53,848 bytes is the root
+of a 125-region, 265,520-byte graph, and a vtable in a sub-object is invisible
+from the root. `malloc`/`free` are interposed in the probe (the harness's own
+live set is a static in `runtime.c` with no sizes and no accessor) and the
+whole graph is scanned.
+
+```
+                              root only        whole graph
+    words                        13,462             66,380
+    BLOB code                         2                  2
+    BLOB data                        11                 21
+    OURS code                         0                  0
+    OURS data                         3                  5   (all the probe's
+                                                              own buffers)
+    into the graph / self            19                257
+    small int                    13,064             26,569
+    not an address                  355             39,511
+```
+
+**Two. Both in the root, both `struct v34_object` function pointers, and both
+functions this tree has already reconstructed:**
+
+```
+    caller=1  +0xe74  ref_descrambleGPA     +0x2a54  ref_scrambleGPC
+    caller=0  +0xe74  ref_descrambleGPC     +0x2a54  ref_scrambleGPA
+```
+
+`src/pump/v34/v34scram.c` has all four and `src/pump/v34/v34digital.c:85-89`
+installs exactly that pairing on exactly that condition. **The blob's
+constructor and our source agree on which scrambler goes where, and neither
+was written from the other** — this is the first place the two have been
+compared.
+
+**And all four are differentially tested already, which is what makes finding
+806's "two stores replace them" a real claim rather than a hope.** In the same
+`make phase` run: `t_v34scram.c` — `GPC and GPA over 64 steps` 3,584 checks,
+`the source runs out mid-run` 144, `across the 31-bit flush` 3,201, `the
+sink's 64-entry bound` 401, `a starting count that is already large` 336 — and
+`t_v34digital.c`'s `scrambler callbacks` 17,136 and `descrambler` 38,896. The
+names matching is a check on *which* function goes where; those are the check
+on *what* it computes.
+
+Neither offset is modelled yet: `tools/whichfield.py struct v34_object 0xe48`
+gives `unmapped_0404[2628]` and `0x2a28` gives `unmapped_25de[1098]`.
+
+**The scanner was calibrated before its count was believed.** A zero
+blob-pointer count and a dead scanner are the same output (`docs/method/gates.md`
+rule 3), so the probe writes `&ref_v34handshak` at +0x40 of a separate image
+and `&datapumpv34` (ours) at +0x44, and the scanner is required to name both:
+
+```
+    +0x40: expected ref_v34handshak, scanner says BLOB code ref_v34handshak+0
+    +0x44: expected our_datapumpv34, scanner says OURS code datapumpv34+0
+```
+
+It fired in both directions, and on the unspiked image the same check reports
+FAILED — which is correct, and is what a calibration that could not fail
+would not have shown.
+
+**One bug the calibration did not catch and the second naming pass did.** The
+link map lists non-allocated sections too, at address 0, and `.debug_info` is
+large: before those were filtered, 21 small integers in the object resolved to
+`.debug_*` ranges and were reported as real pointers into our objects. The
+signal was that every one of them was `NOT INSIDE a sized symbol` — which is
+why containment is worth running alongside the map rather than instead of it.
+
+### 803. `caller` configures 14 bytes, and the scrambler pair is most of it
+
+Two constructions in one process are not congruent — heap ASLR moves the base
+between runs and 30 pointer fields then differ for no reason. **One
+construction per process under `setarch -R`** gives the same 127 allocations
+at the same addresses, and the caller=0/caller=1 difference is then `caller`
+and nothing else:
+
+```
+    14 bytes in 9 runs        (offsets in the 0xd258 VPcm object)
+      +0x3b2   1     04 / 00
+      +0x534   1     two different filter coefficient tables
+      +0xe74   2     descrambleGPC   / descrambleGPA
+      +0x148c  1     hsine1200 + 0x20 / hsine1200
+      +0x25ee  1     05 / 04
+      +0x2a54  2     scrambleGPA     / scrambleGPC
+      +0x3590  1     two offsets into c2400_
+      +0x35c8  1     0x66 / 0x65   <- the answer/originate flag finding 780
+                                      reads at +0x359c of the V.34 object
+      +0xac54  4     0x55fc5a82 / 0
+```
+
+The blob says the same thing in words: the answerer's transmit modulator is
+set up at `carrier 2400` and the originator's at `carrier 1200`, and the
+answerer's V.90 upstream maximum comes out 4800 with rate mask 1 against the
+originator's 33600 with mask 0x1fff.
+
+**This is the step-1 anti-vacuity guard.** Had the two been identical apart
+from pointers, `caller` would have configured nothing and the whole experiment
+would be worthless whatever else it showed.
+
+### 804. The two vtable pointers, and which two of the four they are
+
+The four vtables in the object are `Resampler`, `V90Resampler`,
+`ResamplerTiming` and `ResamplerTimingOffset` (the Makefile's link comment).
+A V.34 construction instantiates **two of them, both in heap sub-objects and
+neither in the root**:
+
+```
+    ref__ZTV12V90Resampler          + 8   at +0x94 of a 664-byte region
+    ref__ZTV21ResamplerTimingOffset + 8   at +0x00 of a  76-byte region
+```
+
+The `+8` is the ordinary vptr convention — the pointer names slot 2 of the
+vtable, past the offset-to-top and typeinfo words. Only the derived pair
+appears, which is what `V90Resampler::resample` overriding
+`Resampler::resample` predicts. `ResamplerTimingOffset` is reconstructed here
+(`src/pump/v90/ResamplerTimingOffset.cpp`); **`V90Resampler` is not** — there
+is no `V90Resampler.cpp` in `src/`.
+
+The other 19 blob-data pointers are all constant tables and the ops table:
+`hsine1800`, `Convolve16` (twice), `V34TimingPrefilterCoeff`,
+`V34TimingHPFilterCoeff`, `ec_prem_coef_B3429`, `preemp0`,
+`entFiltNum`/`entFiltDen`, `IIR2100_Coef_{A,B}_{8000,9600}`, `v92TxPreFilter`,
+`V90PreFilter::preFilterCoefType1`, `bpv22high`, `c2400_`, `hsine1200`,
+`vpcm_op`.
+
+**Zero pointers escape the accounting.** The ten words the address heuristic
+first bucketed as "some other heap allocation" are `0xfffffff`, `0x9600000`,
+`0xbb80050`, `0xcfbff44` and friends — large integers that fall in the
+window, not addresses. Every genuine pointer in the graph resolves to the
+image, the graph, or the probe's own buffers.
+
+### 805. One driven block of our code on a blob-constructed object is byte-identical to the blob's
+
+Three passes, each from the same after-create image at the same address —
+snapshot, run ours, restore, run the blob's, compare the two after-images.
+Two separate constructions would not be congruent and the comparison would be
+junk; this is finding 780's arena trick applied to one object.
+
+```
+  pass 0  +0x2218 = 0 (as constructed, the DATA branch)   0 bytes changed
+  pass 1  +0x2218 = 2 (the handshake branch), undriven    0 bytes changed
+  pass 2  +0x2218 = 2, 24 samples pumped first           15 bytes changed
+```
+
+**Passes 0 and 1 are vacuous and the probe says so.** `txinit` leaves
+`txq.count` at 32 against the `+0x2aa0` limit of 16 and `rxq.count` at 0, so
+`while (txq.count < f2aa0 || rxq.count > 5)` is false on entry and
+`datapumpv34` returns without doing anything. **"It ran and did not fault" on
+a freshly constructed object is not a result** — it is the loop not being
+entered, and reporting it as a pass would have been the exact failure
+`docs/method/gates.md` catalogues. Note also that `VPcmV34Create` leaves
++0x2218 at **0**, so the object as constructed selects the data branch; the 2
+that finding 780 writes has to come from somewhere later.
+
+Pass 2 drives the object through **its own per-sample entry point** — 24
+samples of silence through `modem_serrint` on our side and `ref_modem_serrint`
+on the blob's — which takes `txq` to 8 and `rxq` to 24, so the loop must run.
+It does: `txq` 8 → 16, `rxq` 24 → 4, and **the two after-images are
+byte-identical over all 53,848 bytes**, 15 bytes changed on each side. This is
+one endpoint on a silent line, not a call.
+
+**The comparison was made to fail before it was believed.** Pass 3 is pass 2
+with one extra sample given to our side only; it reports 7 differing bytes at
++0x290, +0x298, +0x2248, +0x224c, +0x2250, +0x2ace, +0x2ad2 and says the
+comparison is live.
+
+**Our code dispatched into blob code zero times.** The two blob-code pointers
+were replaced by counting wrappers around our own `scrambleGPC` /
+`descrambleGPA` before the run; both counters read 0 for both sides, so this
+particular block never reached the scrambler. That is a measurement of this
+block, not a property of the path — a driven handshake will reach them.
+
+### 806. The verdict: a blob-constructed object is a VALID differential fixture, and the two pointers are the whole cost
+
+**Driving our code on a blob-constructed object is a valid differential test,
+not a hybrid that proves nothing**, and the measurement is what says so rather
+than the fact that it ran.
+
+The argument is the ratio. 265,520 bytes of construction contain **two** words
+that would make our code execute the blob's, both are ordinary `struct
+v34_object` function pointers, both name functions this tree has already
+reconstructed and tested, and **two stores replace them**. Everything else the
+construction produced is data: 19 constant tables, which are the same bytes
+whoever reads them, and two vtable pointers in V.90 resampler sub-objects that
+a V.34 handshake does not dispatch through. There is no function-pointer
+table, no vtable in the root arena, and nothing that would silently route a
+`datapumpv34` block into `VPcmV34Main.cpp`.
+
+So this is not the third case in the question. It is the first, with a stated
+cost: **the fixture is the blob's construction and the blob's configuration**,
+and it therefore cannot test the constructor. It tests everything downstream
+of it, which is the part that has 487 unwritten symbols in front of it and no
+oracle.
+
+**The bound on the claim, stated plainly.** Five parameters were chosen, not
+recovered (finding 801). The object is `caller`-configured but not
+V.8-negotiated: nothing has told it what the far end offered. And one block of
+one endpoint is one block — the strength of finding 780's four-way call came
+from 1,600 of them with two endpoints wired together.
+
+#### The smallest next step
+
+Re-point the two function pointers at ours and run **finding 780's existing
+four-way call on two blob-constructed endpoints instead of two arenas**.
+`t_v34call.c` already has the harness, the alarm, the state-triple reporting
+and the recorded per-endpoint numbers; what changes is where the two objects
+come from, and +0x2c is where the V.34 object sits inside each. That is a
+fixture swap in one file, and it is the difference between "the two implement
+the same state machine" and "the two complete the same call". Two things it
+will need: +0x2218 is 0 after construction and something must write 2
+(finding 805), and it must either make the two constructions congruent or give
+up comparing pointer-valued fields (finding 803).
+
+**It also settles the roadmap question the other way from what was expected.**
+A genuine V.34 connection does NOT require writing `VPcmV34Main.cpp` first, so
+it is not the same work as V.90 — the constructor can be borrowed, and only
+V.90 needs the 250 KB written. If the call still fails to connect on properly
+constructed endpoints, that is then a defect in the handshake and no longer an
+artefact of the fixture, which is a much better place to be looking.
+
+#### Kept out of the tree deliberately
+
+The probe is a throwaway and is **not committed**. It lives outside
+`test/unit/` on purpose: the Makefile wildcards that directory, so a file
+there joins `make phase`, and this is a measurement rather than a test. It
+interposes on `malloc`, sets both debug levels to 2, and depends on
+`setarch -R`; none of that belongs in the suite. What is committed is this
+record.
