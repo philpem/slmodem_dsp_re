@@ -282,7 +282,7 @@ static const struct {
 };
 #define NREGIONS	((unsigned)(sizeof(regions) / sizeof(regions[0])))
 
-static int pad_varied, ref_both, noscrub, force_refinit;
+static int pad_varied, ref_both, noscrub, force_refinit, force_oursinit;
 
 static const char *
 region_of(unsigned off)
@@ -365,15 +365,44 @@ static const unsigned holes[] = {
  */
 static int saw_hole[NHOLES];
 
+/*
+ * A BITMAP RATHER THAN A LINEAR SCAN, because this is called per BYTE.
+ *
+ * Thirty-seven entries times 44,096 bytes is 1.6 million comparisons for one
+ * whole-object sweep, and `t_v34call.c` takes 1,920 of them; the map takes it
+ * to one array read.  Built on first use rather than at start-up so the cost
+ * stays with the tests that pay it, and 44 KB of .bss is what every binary
+ * that links this fixture already spends many times over on the arenas.
+ */
+static unsigned char holemap[OBJ_SIZE];
+static int holemap_built;
+
 static int
 in_hole(unsigned off)
 {
-	unsigned k;
+	if (!holemap_built) {
+		unsigned k, j;
 
-	for (k = 0; k < NHOLES; k++)
-		if (off >= holes[k] && off < holes[k] + 4)
-			return 1;
-	return 0;
+		for (k = 0; k < NHOLES; k++)
+			for (j = 0; j < 4; j++)
+				if (holes[k] + j < OBJ_SIZE)
+					holemap[holes[k] + j] = 1;
+		holemap_built = 1;
+	}
+	return off < OBJ_SIZE ? holemap[off] : 0;
+}
+
+/*
+ * The same question from outside.  A test that compares two sequential RUNS
+ * over this memory rather than the two sides of one run needs exactly this
+ * exclusion, and for a reason of its own: across runs the pointer fields hold
+ * our library tables' addresses in one and the blob's in the other.  Exported
+ * rather than copied, so the list cannot go stale in two places at once.
+ */
+int
+v34hs_in_hole(unsigned off)
+{
+	return in_hole(off);
 }
 
 /* --- pokes and peeks ------------------------------------------------------ */
@@ -617,8 +646,21 @@ v34hs_setup(int mode)
 		V34InitializeImplementationSpecific(&obj_a);
 		v34handshakinit(&obj_a, mode);
 	}
-	ref_V34InitializeImplementationSpecific(obj_b);
-	ref_v34handshakinit(obj_b, mode);
+	/*
+	 * Side B is the blob's unless a test has said otherwise.  The mirror
+	 * of `ref_both` above and needed by the same kind of test for the
+	 * opposite reason: `t_v34call.c`'s two sides are the two ENDPOINTS of
+	 * one call, so a run that is meant to be entirely ours needs ours
+	 * here as well as on side A, or the two runs it compares differ in
+	 * their bring-up before a single sample has moved.
+	 */
+	if (force_oursinit) {
+		V34InitializeImplementationSpecific(obj_b);
+		v34handshakinit(obj_b, mode);
+	} else {
+		ref_V34InitializeImplementationSpecific(obj_b);
+		ref_v34handshakinit(obj_b, mode);
+	}
 
 	if (getenv("V34HS_EQPTR")) {
 		/*
@@ -766,6 +808,18 @@ void
 v34hs_refinit(int on)
 {
 	force_refinit = on;
+}
+
+/*
+ * ...and side B up with OURS, which is the same switch on the other side.
+ * `v34hs_refinit(0) + v34hs_oursinit(0)` is the historical default -- ours on
+ * A, the blob on B -- and the other three combinations are what a test needs
+ * when the two sides are two endpoints rather than two implementations.
+ */
+void
+v34hs_oursinit(int on)
+{
+	force_oursinit = on;
 }
 
 void
@@ -1130,6 +1184,82 @@ v34hs_step(void)
 	}
 
 	signal(SIGALRM, prev);
+}
+
+/*
+ * ONE SIDE's whole arena as a number, for a test that compares RUNS rather
+ * than sides.
+ *
+ * The exclusions are exactly `v34hs_compare`'s and for exactly its reasons:
+ * the thirty-seven pointer skips inside the object, because our bring-up
+ * installs our library tables and the blob's installs the blob's; and the
+ * session's four-byte pointer to the PCM block, which is an address this
+ * fixture writes itself.  Everything else -- the five blocks and all seven
+ * filler regions -- is in, because a step that writes one element off the end
+ * of a block is exactly what the padding was put there to catch (finding
+ * 322).
+ */
+unsigned
+v34hs_arena_hash(int side)
+{
+	const unsigned char *o = base(side);
+	const unsigned char *a = (const unsigned char *)(side ? &arena_b
+							      : &arena_a);
+	unsigned sp = AR_OFF(sess) + SESS_PCM;
+	unsigned h = 2166136261u;
+	unsigned i, k;
+
+	(void)in_hole(0);		/* build the map before the tight loop */
+	for (i = 0; i < OBJ_SIZE; i++) {
+		if (holemap[i])
+			continue;
+		h = (h ^ o[i]) * 16777619u;
+	}
+	/*
+	 * REGION BY REGION rather than byte by byte over the whole arena: the
+	 * five blocks are 51 KB of the arena's 316 and a per-byte predicate
+	 * over the other 265 costs more than the hash it is protecting.
+	 */
+	for (k = 0; k < NREGIONS; k++) {
+		if (regions[k].pad || k == 1)
+			continue;	/* the filler, and the object above */
+		for (i = 0; i < regions[k].len; i++) {
+			unsigned off = regions[k].off + i;
+
+			if (off >= sp && off < sp + 4)
+				continue;
+			h = (h ^ a[off]) * 16777619u;
+		}
+	}
+	return h;
+}
+
+/*
+ * The seven filler regions on their own, because they cost six times what
+ * everything else does and are the half a caller wants ONCE rather than per
+ * step: 224 KB of the arena's 316, and finding 322 measured that no step
+ * writes any of it.  Splitting the two took `t_v34call.c` from 4.9 s to 2.0
+ * s, which matters because `make phase` runs every binary twice -- once more
+ * under `debugcov`'s instrumented tree.
+ *
+ * `V34HS_PADVARY` deliberately makes the two sides' padding differ, so this
+ * is a claim about one side across time and never about the two sides.
+ */
+unsigned
+v34hs_padding_hash(int side)
+{
+	const unsigned char *a = (const unsigned char *)(side ? &arena_b
+							      : &arena_a);
+	unsigned h = 2166136261u;
+	unsigned i, k;
+
+	for (k = 0; k < NREGIONS; k++) {
+		if (!regions[k].pad)
+			continue;
+		for (i = 0; i < regions[k].len; i++)
+			h = (h ^ a[regions[k].off + i]) * 16777619u;
+	}
+	return h;
 }
 
 void

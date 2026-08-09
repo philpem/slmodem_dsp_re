@@ -64,6 +64,7 @@ argument list; read the disassembly before restoring.
 """
 
 import argparse
+import os
 import glob
 import re
 import subprocess
@@ -340,7 +341,9 @@ def main():
     ap = argparse.ArgumentParser(
         description="Audit dsplibs.o's diagnostic call sites against this "
                     "reconstruction.")
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj",
+                    default=os.environ.get("BLOB",
+                                           "../slmodemd/dsplibs.o"))
     ap.add_argument("--src", nargs="*", default=None)
     ap.add_argument("--missing", action="store_true")
     ap.add_argument("--strings", metavar="FUNC", nargs="?", const="",

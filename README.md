@@ -56,7 +56,7 @@ settled deliberately in August 2026 and should be changed the same way.
 | | step | phase | why here |
 |--:|---|---|---|
 | 1 | finish V.34 | 10 | the base V.90 builds on |
-| 2 | **two instances, one originating and one answering, against the blob** | 10 | the acceptance test for V.34 *as a call*, not as a pile of passing units |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | **done** — `test/unit/t_v34call.c`, findings 780-788 |
 | 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
 | 4 | V.92 | 11 | shares that span |
 | 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
@@ -64,11 +64,17 @@ settled deliberately in August 2026 and should be changed the same way.
 
 Two things about the shape of this.
 
-**Step 2 is a gate, not a formality.** Every test up to that point drives one
-function, or one dispatch case, and compares. None of them exercise the
-transitions *between* cases, the ordering, or the negotiated outcome of a whole
-call — and that is where a reconstruction assembled case by case is most
-likely to be wrong while every unit still passes.
+**Step 2 was a gate, not a formality, and it earned that.** Every test up to
+that point drives one function, or one dispatch case, and compares. None of
+them exercise the transitions *between* cases, the ordering, or the negotiated
+outcome of a whole call — and that is where a reconstruction assembled case by
+case is most likely to be wrong while every unit still passes.
+`test/unit/t_v34call.c` runs a 1,600-block call between two instances four
+ways — ours on both ends, the blob on both, and each mixed pair — and compares
+every block against the blob-blob run. It found a defect at **block 0**:
+`modem_serrint`'s history-ring wrap is `jbe` and this tree had it signed, so a
+negative index walked the write 1,385 elements below the ring. Every existing
+test seeds that index to zero. Findings 780-788.
 
 **Step 6 is last because it is the one part with no tier-1 oracle.** The blob
 is the *analogue client*: `VPCMXF_Create` derives its side from whether its

@@ -1349,11 +1349,26 @@ modem_serrint(void *objp)
 	sample = (short)(acc + cancel);
 	out = sample;
 
-	/* Per-symbol history, wrapping at 0x257: the RAW residual. */
+	/*
+	 * Per-symbol history, wrapping at 0x257: the RAW residual.
+	 *
+	 * THE WRAP TEST IS UNSIGNED, and it was signed here until a whole call
+	 * drove the index negative.  0x5d04c is `cmp $0x257,%dx` and 0x5d059
+	 * is `jbe`, so the object treats `idx + 1` as a sixteen-bit UNSIGNED
+	 * quantity: a negative index wraps to zero where a signed reading
+	 * leaves it alone and walks the write further and further below the
+	 * ring.  The two readings agree over 0..0x257 and over nothing else,
+	 * which is why `t_v34rx.c` could not see it -- it seeds `f2aa6` to
+	 * zero and runs 300 calls, so `idx + 1` never leaves 1..300.
+	 *
+	 * The `f2aa4` ring below has always been `(unsigned short)`, from the
+	 * same instruction pair one branch along, so the two sites now agree
+	 * with each other as well as with the object.  Finding 781.
+	 */
 	idx = obj->f2aa6;
 	obj->hist_2f58[idx] = sample;
 	obj->f2aa6 = (short)(idx + 1);
-	if ((short)(idx + 1) > 0x257)
+	if ((unsigned short)(idx + 1) > 0x257)
 		obj->f2aa6 = 0;
 
 	rxq->count = (short)(rxq->count + 1);
