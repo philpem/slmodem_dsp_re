@@ -274,6 +274,39 @@ fixture is deterministic, address independent and fully seeded — which is what
 a per-case agent has to be able to assume before its own failures mean
 anything.
 
+### And the door that is not for a case, or for a step, but for a CALL
+
+`test/unit/t_v34call.c` uses this fixture's two sides as the two ENDPOINTS of
+one call -- side A originating, side B answering -- and compares RUN AGAINST
+RUN rather than side against side. It never calls `v34hs_compare`: two
+endpoints hold different objects by design, so that comparison would fail by
+construction.
+
+```c
+    v34hs_refinit(!ours_on_A);   /* side A: the blob's bring-up or ours */
+    v34hs_oursinit(ours_on_B);   /* ...and side B's, the mirror of it   */
+    v34hs_setup(0);
+    /* then per endpoint: the role at +0x359c, the session block's two
+       pointers, and `v34handshakinit(obj, 0)` again with THAT endpoint's
+       implementation, because mode 0 calls `v34modeminit` and that branches
+       on the role */
+```
+
+Per sample it writes +0x260, calls `modem_serrint` and reads +0x25e; per block
+it calls `datapumpv34`. The whole call runs four times over the same two
+arenas -- ours on both ends, the blob on both, and each mixed pair -- and
+every block of every run is compared against the same block of the blob-blob
+run. Findings 780-788; 781 is the defect it found at block 0, and 784 is the
+one thing about the fixture a whole call needs and a single step does not: the
+session block at +0x3548 holds pointers the object dereferences, and the
+pseudorandom fill makes them faults.
+
+Three things were added to the fixture for it, all mirrors of what was
+already there: `v34hs_oursinit`, `v34hs_in_hole` and
+`v34hs_arena_hash`/`v34hs_padding_hash`. `in_hole` is a bitmap now rather
+than a linear scan over thirty-seven entries called per byte, which every
+other user of this file gets for free.
+
 ### And one door that is not for a case at all
 
 `v34hs_entry(a, b, log_a)` replaces the entry point on **both** sides -- ours

@@ -30888,3 +30888,51 @@ still hold.
   `strings` with `objdump: '../slmodemd/dsplibs.o': No such file` — and a gate
   that cannot run has no verdict. Both tools now read `$BLOB` with the same
   default, the Makefile exports it, and `debugcov`'s sub-make inherits it.
+
+### 788. Every claim in `t_v34call.c`, and the mutation that was watched failing it
+
+A test that passes on its first run has proved nothing until it has been MADE
+to fail. Eleven mutations were applied by hand, built, run, and reverted; each
+is named by what it broke rather than by what it proved, because "the check
+fired" is the observation and not the intent.
+
+| mutation | what fired |
+|---|---|
+| the `f2aa6` wrap made signed again (781) | `block 0 object`, `block 0 arena outside the object`, `pairs that agree` **0 of 3200** |
+| one word changed in `hs_setstate`'s txstate format string | `block 13 transcript` — and **nothing else**: the object bytes still agree |
+| `compare_run`'s loop bound halved | `pairs that agree` 1600 of 3200, alone |
+| the wire looped each endpoint back to itself | every literal, on **all four runs** — and NOT the run-to-run comparison |
+| the answerer's input muted | the same, and again not the comparison |
+| the pump never called for one endpoint | `non-zero transmit samples`, `the call left the state it started in` |
+| both endpoints given the originate role | `the two endpoints did not run the same call` |
+| brought up in mode 1 instead of mode 0 | `the triple the bring-up left` |
+| a byte written 0x100 below the object | `the seven filler regions are untouched by the call` |
+| txstate 30, which has no table-1 arm | **the alarm**, at block 4, naming both endpoints' triples and finding 287 |
+| the second bring-up skipped | the literals, and not the seed — `v34hs_setup` has already run mode 0 |
+
+The fourth and fifth rows are the point of the whole vacuity half: a mutation
+in the DRIVER changes all four runs identically, so the differential
+comparison stays green and only the recorded literals can see it. The second
+row is the transcript tier doing what only it can — one word, zero differing
+bytes, caught at the first block that prints.
+
+#### One claim is weaker than it looks, and this is what it is worth
+
+**`non-zero transmit samples` does not move when the wire is cut.** Silencing
+BOTH directions for the whole call leaves the count identical — 4,741 and
+6,320 — and not merely in total: **not one of the 3,200 block-endpoint
+pairs' counts differs.** So over these 1,600 blocks the number of non-zero
+samples each endpoint emits is independent of what it hears.
+
+That does not make the claim empty; it makes it a claim about the
+TRANSMITTER. It is what separates an endpoint that is emitting signal from
+one sitting silent, and the `never pump` mutation takes it to zero. It is
+**not** evidence that the two ends are coupled.
+
+**What IS evidence of coupling is the state trajectory.** Cutting the wire
+takes the originator from seven distinct state triples to three and from
+fifteen state moves to two, and the answerer likewise — so what each endpoint
+hears decides where its state machine goes, which is the sequencing the test
+exists to check. Recorded here rather than left implied, because
+"the call is a call" is exactly the sort of thing that reads as obvious on the
+page and is a measurement.
