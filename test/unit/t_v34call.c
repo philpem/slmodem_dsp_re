@@ -417,8 +417,18 @@ note_triple(struct total *t, unsigned triple)
 	for (i = 0; i < t->ntriple; i++)
 		if (t->triple[i] == triple)
 			return;
-	if (t->ntriple < NBLOCK)
-		t->triple[t->ntriple++] = triple;
+	/*
+	 * One block records at most one new triple, so `NBLOCK` entries is
+	 * exactly enough and running out means the loop bound moved.  The cap
+	 * used to be silent, with `distinct++` OUTSIDE it -- which would have
+	 * counted insert failures as new states, and read as a check while
+	 * measuring the array's length.
+	 */
+	if (t->ntriple >= NBLOCK) {
+		printf("FIXTURE: more than %d distinct state triples\n", NBLOCK);
+		exit(1);
+	}
+	t->triple[t->ntriple++] = triple;
 	t->distinct++;
 }
 

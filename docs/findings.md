@@ -30892,9 +30892,9 @@ still hold.
 ### 788. Every claim in `t_v34call.c`, and the mutation that was watched failing it
 
 A test that passes on its first run has proved nothing until it has been MADE
-to fail. Eleven mutations were applied by hand, built, run, and reverted; each
-is named by what it broke rather than by what it proved, because "the check
-fired" is the observation and not the intent.
+to fail. Fourteen mutations were applied by hand, built, run, and reverted;
+each is named by what it broke rather than by what it proved, because "the
+check fired" is the observation and not the intent.
 
 | mutation | what fired |
 |---|---|
@@ -30907,6 +30907,8 @@ fired" is the observation and not the intent.
 | both endpoints given the originate role | `the two endpoints did not run the same call` |
 | brought up in mode 1 instead of mode 0 | `the triple the bring-up left` |
 | a byte written 0x100 below the object | `the seven filler regions are untouched by the call` |
+| one byte of the session block written **only where the endpoint runs ours** | `block 0 arena outside the object`, **and not** `block 0 object` |
+| the same one byte in `shaped[4095]` | *both* — see below |
 | txstate 30, which has no table-1 arm | **the alarm**, at block 4, naming both endpoints' triples and finding 287 |
 | the second bring-up skipped | the literals, and not the seed — `v34hs_setup` has already run mode 0 |
 
@@ -30915,6 +30917,24 @@ in the DRIVER changes all four runs identically, so the differential
 comparison stays green and only the recorded literals can see it. The second
 row is the transcript tier doing what only it can — one word, zero differing
 bytes, caught at the first block that prints.
+
+#### The arena hash had to be shown to fire ON ITS OWN, and the first attempt did not
+
+`v34hs_arena_hash` costs 51 KB of hashing per block and every mutation up to
+that point fired it **together with** the object hash — which is exactly the
+shape of a check that is buying nothing. A detector nobody has seen fire
+independently is not a detector (finding 134's argument, gates.md rule 3).
+
+The discriminator has to write outside the object in SOME runs and not
+others, so the poke is conditional on the endpoint running ours; a driver
+mutation that changes all four runs equally can never separate the two. One
+byte at session +0x5000 fires `block 0 arena outside the object` and leaves
+`block 0 object` agreeing, which settles it.
+
+**The first attempt used `shaped[4095]` and fired both**, and that is a result
+rather than a failed mutation: the shaping buffer's LAST element is live
+within the same block, so a write there reaches the object through the
+modulator. A byte chosen to be inert turned out not to be.
 
 #### One claim is weaker than it looks, and this is what it is worth
 
