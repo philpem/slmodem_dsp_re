@@ -2480,3 +2480,42 @@ intermediate is used again from the 80-bit register AFTER its member store has
 rounded it, and `-ffloat-store` would break it. That is why the forcing is
 per-expression here and not a flag on the file.
 
+
+## D64 🐛 `Resampler::resample` reads one sample past the end of its input
+
+**Module** `src/pump/v90/Resampler.cpp` · original `VPcmV34Main.cpp`,
+`_ZN9Resampler8resampleEPKfjPfRj`, `.text 0x034da0`
+
+**Defect in the original, reproduced deliberately.** The function ends, on
+EVERY return path, with
+
+    350aa   mov  (%ebx),%esi          ; *in
+    350af   mov  %esi,0x14(%edi,%edx,4)   ; pending[pendingCount++]
+
+and `in` has already been advanced past the last sample the loop consumed. So
+when a call consumes all `n` inputs -- which is the common case at a 1:1 or
+downsampling ratio -- the sample it carries into `pending` is `in[n]`, one past
+the caller's buffer. The look-ahead arm reaches the same element by a second
+route: `history[historyIndex] = *in` at `.text+0x34f8c`, taken whenever the
+upper interpolation branch would be branch `phases`.
+
+**Not fixed, and not behind `DSPLIB_REPRODUCE_BUGS`.** The value is carried
+into the resampler's state and reaches the next call's output, so a "fix" would
+have to invent a replacement sample and every output after it would diverge
+from the blob. There is no defensible substitute: the original's behaviour here
+IS the filter's state.
+
+**What a caller must do.** Pad the input buffer by one element and initialise
+it. `test/unit/t_resampler.cpp` allocates `rin[RS_IN + 1]` and fills the pad
+for exactly this reason; without it the two sides disagree about uninitialised
+memory rather than about the resampler, which reads as a reconstruction error
+and is not one. `V90Equalizer` and everything else in
+`dp_vpcm_init`'s closure that drives a resampler inherits this requirement.
+
+**Evidence it is the original's and not a transcription slip.** The store is
+outside the loop and unconditional in the object; both return paths
+(`.text+0x350ba` and `+0x351ae`) fall through it, and `pendingCount` is
+incremented without a bound check even though `pending` is five elements. With
+`n >= 1` the queue never holds more than one sample, so the array is not
+overrun -- only the input is.
+

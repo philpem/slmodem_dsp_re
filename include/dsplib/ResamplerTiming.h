@@ -91,6 +91,12 @@ public:
 	 * declaration would silence the warning and would be an invention:
 	 * nothing in the object says the name was re-exported.  The pragma is
 	 * around the declaration because that is where GCC reports it.
+	 *
+	 * `tools/toolchain`'s gcc-3.4.3 does not know `#pragma GCC
+	 * diagnostic` and says `warning: ignoring #pragma GCC diagnostic`
+	 * three times per translation unit that includes this header.  It
+	 * still compiles and exits 0, so `make similarity` is unaffected
+	 * beyond the noise; measured rather than assumed.
 	 */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverloaded-virtual"
