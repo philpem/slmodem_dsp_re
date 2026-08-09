@@ -112,7 +112,16 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # -nostdinc++ keeps <stdio.h> and friends resolving to the plain C headers.
 # We use none of the C++ standard library (nor did the original), and the
 # 32-bit libstdc++ headers are typically absent on a 64-bit host.
-CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++
+# -Wno-invalid-offsetof, and it is not a warning being swept away.  This tree
+# pins every object map with `__builtin_offsetof` compile-time assertions, and
+# the four `Resampler` classes are polymorphic -- which is a measurement, not a
+# choice: the object has four vtables and `Resampler::resample` dispatches
+# through one.  A polymorphic class is not standard-layout, so `offsetof` on it
+# is "conditionally-supported" and GCC says so once per assertion.  GCC does
+# support it, the assertions are the only thing checking the maps, and the
+# alternative is 33 warnings out of V90Demodulator.cpp alone.
+CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
+              -Wno-invalid-offsetof
 
 # v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
 # here rather than inside one test file because #56-#58 are sixteen tests over

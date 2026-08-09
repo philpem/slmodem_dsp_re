@@ -1,0 +1,136 @@
+[
+ {
+  "label": "NOTE",
+  "why": "Anchors are whole statements including their leading tab, so a later edit that re-indents them makes the mutation UNUSABLE rather than silently re-pointing it (finding 432)."
+ },
+ {
+  "label": "taps is not rounded down to a multiple of four",
+  "find": "\ttaps = (nTaps >> 2) * 4;",
+  "replace": "\ttaps = nTaps;"
+ },
+ {
+  "label": "taps rounds UP instead of down",
+  "find": "\ttaps = (nTaps >> 2) * 4;",
+  "replace": "\ttaps = ((nTaps + 3) >> 2) * 4;"
+ },
+ {
+  "label": "history is 8*taps rather than 10*taps (designing ctor)",
+  "find": "\thistoryLen = (taps < minHistory) ? minHistory : 10 * taps;\n\n\thistory = 0;\n\tif (historyLen)\n\t\thistory = (float *)sysdep_malloc(historyLen * sizeof(float));\n\n\treset();\n\n\t{",
+  "replace": "\thistoryLen = (taps < minHistory) ? minHistory : 8 * taps;\n\n\thistory = 0;\n\tif (historyLen)\n\t\thistory = (float *)sysdep_malloc(historyLen * sizeof(float));\n\n\treset();\n\n\t{"
+ },
+ {
+  "label": "the two arms of the historyLen choice are swapped (adopting ctor)",
+  "find": "\thistoryLen = (taps < minHistory) ? minHistory : 10 * taps;\n\n\thistory = 0;\n\tif (historyLen)\n\t\thistory = (float *)sysdep_malloc(historyLen * sizeof(float));\n\n\treset();\n}",
+  "replace": "\thistoryLen = (taps < minHistory) ? 10 * taps : minHistory;\n\n\thistory = 0;\n\tif (historyLen)\n\t\thistory = (float *)sysdep_malloc(historyLen * sizeof(float));\n\n\treset();\n}"
+ },
+ {
+  "label": "the polyphase transpose does not reverse the taps",
+  "find": "fir.coefficients[(taps - 1 - k)",
+  "replace": "fir.coefficients[(k)"
+ },
+ {
+  "label": "the transpose drops the phase offset",
+  "find": "\t\t\t\t\t\t\t     * phases + p];",
+  "replace": "\t\t\t\t\t\t\t     * phases];"
+ },
+ {
+  "label": "the destination index has phases and taps transposed",
+  "find": "\t\t\t\t\tcoeffs[p * taps + k] =",
+  "replace": "\t\t\t\t\tcoeffs[k * phases + p] ="
+ },
+ {
+  "label": "the window is Hamming, not Blackman",
+  "find": "WINDOW_BLACKMAN, phases);",
+  "replace": "WINDOW_HAMMING, phases);"
+ },
+ {
+  "label": "the cutoff is not divided by the interpolation factor",
+  "find": "\t\tLowPassFIR<float> fir(taps * phases, cutoff / phases,",
+  "replace": "\t\tLowPassFIR<float> fir(taps * phases, cutoff,"
+ },
+ {
+  "label": "the designed filter is taps long, not taps*phases",
+  "find": "\t\tLowPassFIR<float> fir(taps * phases, cutoff / phases,",
+  "replace": "\t\tLowPassFIR<float> fir(taps, cutoff / phases,"
+ },
+ {
+  "label": "the design gain is 1 rather than phases",
+  "find": "WINDOW_BLACKMAN, phases);",
+  "replace": "WINDOW_BLACKMAN, 1.0f);"
+ },
+ {
+  "label": "the designed bank is marked borrowed",
+  "find": "\t\tcoeffsBorrowed = 0;",
+  "replace": "\t\tcoeffsBorrowed = 1;"
+ },
+ {
+  "label": "the adopted bank is marked owned",
+  "find": "\tcoeffsBorrowed = 1;",
+  "replace": "\tcoeffsBorrowed = 0;"
+ },
+ {
+  "label": "the destructor frees a borrowed bank",
+  "find": "\tif (!coeffsBorrowed && coeffs)\n\t\tsysdep_free(coeffs);",
+  "replace": "\tif (coeffs)\n\t\tsysdep_free(coeffs);"
+ },
+ {
+  "label": "the destructor never frees the history",
+  "find": "\tif (history)\n\t\tsysdep_free(history);",
+  "replace": "\tif (history && coeffsBorrowed == 2)\n\t\tsysdep_free(history);"
+ },
+ {
+  "label": "reset starts the history cursor at zero",
+  "find": "\thistoryIndex = taps;\n\n\tfor (i = 0; i < 5; i++)",
+  "replace": "\thistoryIndex = 0;\n\n\tfor (i = 0; i < 5; i++)"
+ },
+ {
+  "label": "reset clears four of the five pending slots",
+  "find": "\tfor (i = 0; i < 5; i++)\n\t\tpending[i] = 0;",
+  "replace": "\tfor (i = 0; i < 4; i++)\n\t\tpending[i] = 0;"
+ },
+ {
+  "label": "reset leaves the phase accumulator alone",
+  "find": "\tinputCredit = 0;\n\tphase = 0;",
+  "replace": "\tinputCredit = 0;"
+ },
+ {
+  "label": "reset zeroes the history only up to taps",
+  "find": "\t\tfor (i = 0; i < historyLen; i++)\n\t\t\thistory[i] = 0;",
+  "replace": "\t\tfor (i = 0; i < taps; i++)\n\t\t\thistory[i] = 0;"
+ },
+ {
+  "label": "setNormalizedPhase accepts 1.0",
+  "find": "\tif (p >= 0.0f && p < 1.0f)",
+  "replace": "\tif (p >= 0.0f && p <= 1.0f)"
+ },
+ {
+  "label": "setNormalizedPhase accepts a negative phase",
+  "find": "\tif (p >= 0.0f && p < 1.0f)",
+  "replace": "\tif (p < 1.0f)"
+ },
+ {
+  "label": "setNormalizedPhase scales by taps, not phases",
+  "find": "\t\tphase = p * phases;",
+  "replace": "\t\tphase = p * taps;"
+ },
+ {
+  "label": "getNormalizedPhase divides by taps, not phases",
+  "find": "\treturn phase / phases;",
+  "replace": "\treturn phase / taps;"
+ },
+ {
+  "label": "copyHistoryTail copies the head, not the tail",
+  "find": "\t\thistory[i] = history[historyLen - taps + i];",
+  "replace": "\t\thistory[i] = history[taps + i];"
+ },
+ {
+  "label": "copyHistoryTail copies one element too few",
+  "find": "\tfor (i = 0; i < taps; i++)\n\t\thistory[i] = history[historyLen - taps + i];",
+  "replace": "\tfor (i = 0; i + 1 < taps; i++)\n\t\thistory[i] = history[historyLen - taps + i];"
+ },
+ {
+  "label": "resetHistoryIndex uses zero",
+  "find": "\thistoryIndex = taps;\n}",
+  "replace": "\thistoryIndex = 0;\n}"
+ }
+]

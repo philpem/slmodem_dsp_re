@@ -1,0 +1,43 @@
+[
+ {
+  "label": "NOTE",
+  "why": "The four mutations on `setTimingOffset` itself live in the `v90rto` suite against build/test/t_v90leaves and are NOT repeated here."
+ },
+ {
+  "label": "reset does not clear timingOffset",
+  "find": "\tResampler::reset();\n\ttimingOffset = 0;",
+  "replace": "\tResampler::reset();"
+ },
+ {
+  "label": "timingCorrection subtracts the offset",
+  "find": "\tphase = phase + timingOffset;",
+  "replace": "\tphase = phase - timingOffset;"
+ },
+ {
+  "label": "timingCorrection scales by its argument",
+  "find": "ResamplerTimingOffset::timingCorrection(float)\n{\n\tphase = phase + timingOffset;",
+  "replace": "ResamplerTimingOffset::timingCorrection(float e)\n{\n\tphase = phase + timingOffset * e;"
+ },
+ {
+  "label": "getTimingOffsetPPM multiplies by ppmScale instead of dividing",
+  "find": "\treturn 1e6f * timingOffset / ppmScale;",
+  "replace": "\treturn 1e6f * timingOffset * ppmScale;"
+ },
+ {
+  "label": "getTimingOffsetPPM scales by 1e-6f",
+  "find": "\treturn 1e6f * timingOffset / ppmScale;",
+  "replace": "\treturn 1e-6f * timingOffset / ppmScale;"
+ },
+ {
+  "label": "the designing constructor does not set the timing offset",
+  "find": "\t: Resampler(nPhases, scale, nTaps, cutoff, minHistory)\n{\n\tResampler::reset();\n\tsetTimingOffset(ppm);",
+  "replace": "\t: Resampler(nPhases, scale, nTaps, cutoff, minHistory)\n{\n\tResampler::reset();"
+ },
+ {
+  "label": "the designing constructor's redundant Resampler::reset() is dropped",
+  "equivalent": true,
+  "why": "The base constructor's own body ends in `reset()`, and everything the designing constructor does after that -- design the LowPassFIR, allocate the bank, transpose it into it -- touches only `coeffs` and `coeffsBorrowed`, neither of which `reset` reads or writes.  So the second call cannot change a byte of the object.  The call is written because the OBJECT contains it (`call _ZN9Resampler5resetEv` at .text+0x35671); this entry records that the redundancy is the original's, not that the test is weak.",
+  "find": "\t: Resampler(nPhases, scale, nTaps, cutoff, minHistory)\n{\n\tResampler::reset();\n\tsetTimingOffset(ppm);",
+  "replace": "\t: Resampler(nPhases, scale, nTaps, cutoff, minHistory)\n{\n\tsetTimingOffset(ppm);"
+ }
+]
