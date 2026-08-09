@@ -31025,3 +31025,120 @@ hears decides where its state machine goes, which is the sequencing the test
 exists to check. Recorded here rather than left implied, because
 "the call is a call" is exactly the sort of thing that reads as obvious on the
 page and is a measurement.
+
+### 860. `vparse.py`, and the one instruction that made "0 unresolved" a lie
+
+`V90Parameters::loadParams(char *)` is 7,894 bytes containing nothing but 295
+calls, in a straight line, to two functions:
+
+    Vparser_read_int  (file, "NAME", &this->field)
+    Vparser_read_float(file, "NAME", &this->field)
+
+`V92Parameters::loadParams` is the same shape with 54. An `awk` over
+`objdump -dr` of the whole of `.text` says those two members are the **only**
+callers of either function anywhere in the object, and both callees are three
+bytes -- `xor %eax,%eax; ret`. So neither `loadParams` has any effect at run
+time, and both are nevertheless a complete field map of their class: the
+original author's own name for every field, its offset, and whether it is read
+as an `int` or a `float`. Nothing else in the object knows those names, and the
+mangling never carries a data member's (finding 226).
+
+`tools/vparse.py` reads them. GCC 3.4 shuffles the three arguments through
+whatever registers are free and writes them to the outgoing area in whatever
+order it likes, so it walks the instruction stream holding an abstract value
+per register and per stack slot -- `('str', section, addr)` from an `R_386_32`,
+`('this', off)` from a `lea` off `this`. Which incoming slot holds `this` is
+not assumed: every candidate is tried and the one resolving the most third
+arguments wins (`0x30` for the V.90 member, `0x20` for the V.92 one).
+
+**The first version reported 295 of 295 resolved and one of them was wrong.**
+The last call in the V.90 member is reached through
+
+    lea 0x550(%esi),%eax
+    add $0x554,%esi          <-- not modelled
+    mov %esi,0x8(%esp)
+
+and an unmodelled instruction left `%esi` holding its previous abstract value,
+so `TEMP_FLOAT_PARAMETER4` resolved to `this + 0` -- a plausible offset, in a
+class whose +0x000 really is a field, reported as a success. It was caught only
+because +0x000 is a `_tagModemParameters *` on the other reading and a `float`
+on this one.
+
+The repair is not the `add` handler. It is that **any instruction the
+interpreter does not model now clobbers its destination register**, so an
+unrecognised form becomes `unresolved` and is counted and reported. That is
+gates.md rule 1 applied to a tool written in the same session as the thing it
+measures: the `add` handler fixes the instance, the clobber rule fixes the
+class. `TEMP_FLOAT_PARAMETER4` then reads +0x554, which is where the other
+three `TEMP_FLOAT_PARAMETER*` and the malloc size both say it is.
+
+### 861. `V90Parameters` and `V92Parameters`, measured three ways
+
+The layout in `include/dsplib/V90Parameters.h` and `V92Parameters.h` is not one
+reading checked for plausibility. Three independent measurements, from three
+different functions, agree:
+
+| | V90Parameters | V92Parameters |
+|---|--:|--:|
+| `loadParams` (name, offset, type) | 291 offsets, +0x004..+0x554 | 54 offsets, +0x004..+0x0d8 |
+| `setToDefault` (offset, width, value) | 339 offsets, +0x004..+0x554 | 54 offsets, +0x004..+0x0d8 |
+| `sysdep_malloc` before the constructor | `0x558` at .text+0x19551, +0x197b1 | `0xdc` at .text+0x13d90, +0x13f20 |
+
+`loadParams`'s offsets are a subset of `setToDefault`'s in the V.90 case and
+the identical set in the V.92 case. On the 289 (resp. 54) offsets both cover,
+**the number of disagreements is zero**: every offset read with
+`Vparser_read_float` is given a default whose bit pattern is a plausible float,
+and every one read with `Vparser_read_int` a small integer. Every store in
+both is four bytes wide. The union has no hole -- +0x004 to the last field in
+steps of four -- and last + 4 is exactly the malloc size in both classes.
+
+Four things the third measurement settles that neither of the first two could:
+
+- **+0x000 is a `_tagModemParameters *`, not a parameter.** `setToDefault`
+  opens `mov 0x0(%ebp),%ebx` and later `mull 0x38(%ebx)`, so it is loaded and
+  dereferenced; the constructor's one argument has that type in the mangling.
+- **Fifty-one V.90 fields are written by `setToDefault` and never read by
+  `loadParams`** -- parameters the file cannot override. They are `unnamed_*`
+  in the header, four bytes each and in the right place, because a descriptive
+  name here would be a guess sitting among 291 measurements. Twenty-five run
+  consecutively from +0x300 to +0x360 and are very likely one array.
+- **Two go the other way**: +0x4f8 `SENSITIVE_ISP_DETECTED` and +0x4fc
+  `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` are read and never defaulted.
+- **Four offsets are read twice under two names**, marked `alias` in the
+  header; three of the four are a `GERMAN_PBX_` override of the name beside it.
+
+**`this` arrives at `0x20(%esp)` in `V92Parameters::loadParams` and at
+`0x4(%esp)` in its `setToDefault`.** Reading the second as the first shifts
+every offset down by four and produces +0x000..+0x0d4 -- a map that is entirely
+reasonable-looking and wrong in every line. It is the identical-sets check
+against the other member that catches it, not inspection.
+
+### 862. A header whose members are all unwritten is invisible to every gate
+
+Neither parameter header has one member defined. `make test` therefore cannot
+see them, `coverage.py` counts nothing, `check64` compiles only `$(SRC)` and
+`$(CXXSRC)` so it does not even parse them -- and half the constructors in
+`VPcmV34Main.cpp`'s span take a `V90Parameters *`. A later batch could move
+every field and the whole tree would stay green. That is gates.md's "result
+indistinguishable from success" with no code in it at all.
+
+`make params` is the answer, and it makes the blob the oracle directly rather
+than adding a test that would only compare the tree with itself: `vparse.py`
+re-extracts the map from the object at gate time and `tools/paramcheck.py`
+compares it against the `/* +0xNNN */` annotations in the header text, in both
+directions, plus the two `sysdep_malloc` sizes. It also `-fsyntax-only`s each
+header 32- and 64-bit, because nothing includes them yet and an uncompiled
+header is not a checked one.
+
+Shown to fire, per gates.md rule 3 -- clean before and after, and each of these
+exits 1 naming the field (`build/firecheck.sh` is the transcript):
+
+    HW_CODEC_TYPE moved +0x008 -> +0x00c   MISSING +0x008
+    PROBING_MODE declared `float`          TYPE    +0x004 ... object reads it as int
+    PROBING_MODE renamed                   NAME    +0x004 ... object says PROBING_MODE
+    the last field deleted                 MISSING +0x554  and  SIZE  ... asks for 0x558
+
+Also: both headers had to go in `SKIP_HEADERS` in `tools/offcheck.py`, which
+v90rest.md says wave 1 paid for twice. `offcheck` compiles every header it does
+not skip **as C**, so a `class` turns into `907 of 907 annotations do not match
+the layout` -- a message about offsets, from a parse error.
