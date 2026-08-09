@@ -3585,6 +3585,49 @@
     "the two decoders are swapped": "caught"
    }
   },
+  "v90params": {
+   "key": "1baf1de090549d3766874292a19c1ba433e74f5acfebd14a2f1ad1e0283e40db",
+   "summary": "37 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
+   "verdicts": {
+    "PROBING_MODE is set even when tempProbe is zero": "caught",
+    "SILENCE_SCR is written on the other arm": "caught",
+    "SILENCE_SCR is written unconditionally": "caught",
+    "a debug string is misspelt": "caught",
+    "init does not call loadModemParamsData": "caught",
+    "initSession's rate-index default is 13, not 14": "caught",
+    "one float default moves in its last digit": "caught",
+    "one integer default moves by one": "caught",
+    "one of the nine float-valued `unnamed_` slots is written as an int": "caught",
+    "tempProbe is bit 0, not bit 1": "caught",
+    "the ANSPCM length reads bit 1 of the session flags": "caught",
+    "the bottom rate index is 3, not 2": "caught",
+    "the connection type is taken when it is NOT already -1": "caught",
+    "the constructor calls setToDefault instead of init": "caught",
+    "the constructor does not call initSession": "caught",
+    "the crossed-rate arm is never taken": "caught",
+    "the crossed-rate default window is 2..2, not 2..14": "caught",
+    "the destructor is not empty": "equivalent",
+    "the last field of the object is not written": "caught",
+    "the power reduction divides by 10, not 5": "caught",
+    "the power reduction scale is 1.0, not 0.5": "caught",
+    "the power-reduction line is printed unconditionally": "caught",
+    "the printed fraction is scaled by 10, not 100": "caught",
+    "the printed fraction keeps its sign": "equivalent",
+    "the printed whole part keeps its sign": "equivalent",
+    "the rate mask is built with the index running UP": "caught",
+    "the rate mask never gets its bit": "caught",
+    "the rate mask shifts by four, not by two": "caught",
+    "the rate step is 4800, not 2400": "caught",
+    "the rate-mask diagnostic reports indices, not bit rates": "caught",
+    "the sensitive-ISP cap applies when the flag is CLEAR": "caught",
+    "the sensitive-ISP cap is applied to the MINIMUM index": "caught",
+    "the sign is `0 <= v`, so zero prints as plus": "caught",
+    "the top rate index is 13, not 14": "caught",
+    "the trn2d flag is bit 1, not bit 0": "caught",
+    "the two ANSPCM demodulation lengths are swapped": "caught",
+    "the two gated sites are at level > 2, not > 1": "caught"
+   }
+  },
   "v90prefilter": {
    "key": "764fd3c6f867a83768cb3285f876f3f9a5384cde4470c0984821b65a442eac8e",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3635,6 +3678,23 @@
     "print the field rather than the argument": "caught",
     "the delta is subtracted, not added": "caught",
     "the tap count follows the delay, not the change": "caught"
+   }
+  },
+  "v92params": {
+   "key": "ec932d482ebe316e2abd381bcecdb84c606f45ec1737350e99cac0ffcf4fc421",
+   "summary": "11 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "init does not call setToDefault": "caught",
+    "one float default moves in its last digit": "caught",
+    "one integer default moves by one": "caught",
+    "the constructor does not call init": "caught",
+    "the constructor does not store its argument": "caught",
+    "the destructor is not empty": "equivalent",
+    "the first field of the object is not written": "caught",
+    "the largest float default is out by a factor of ten": "caught",
+    "the last field of the object is not written": "caught",
+    "the negative default loses its sign": "caught",
+    "two adjacent defaults are transposed": "caught"
    }
   },
   "vpcmep3": {
