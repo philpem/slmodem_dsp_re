@@ -38,14 +38,23 @@ struct _tagModemParameters;
 class V92Parameters {
 public:
 	/*
-	 * Declared from the mangling, defined nowhere yet:
+	 * Four of the five members, defined in
+	 * src/pump/v90/V92Parameters.cpp:
 	 *
-	 *     loadParams(char *)          1384 B
 	 *     setToDefault()               477 B
 	 *     V92Parameters(_tagModemParameters *)   53 B
 	 *     init()                        49 B
 	 *     ~V92Parameters()               1 B   (a bare `ret`)
+	 *
+	 * The fifth, `loadParams(char *)` (1,384 B, 54 calls), is left out
+	 * for the reason given at the same place in V90Parameters.h and in
+	 * finding 879.
 	 */
+	V92Parameters(_tagModemParameters *mp);
+	~V92Parameters();
+
+	void	setToDefault();
+	void	init();
 	_tagModemParameters *modemParams;	/* +0x000 */
 	int  	VPCM_SESSION_TYPE;	/* +0x004 */
 	int  	V92_PHASE2_INFO_A_OR_MU;	/* +0x008 */

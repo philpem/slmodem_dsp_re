@@ -98,4 +98,54 @@
 extern long modem_get_param(void *modem, unsigned param);
 extern long modem_set_param(void *modem, unsigned param, int value);
 
+/*
+ * `struct _tagModemParameters` -- the block V.PCM is handed at construction.
+ *
+ * NOT slmodemd's `struct modem`, and not the numbering above: this is a
+ * separate, library-internal record whose address every `V90Parameters` and
+ * `V92Parameters` keeps at its own +0x000.  The mangling names the type --
+ * `_ZN13V90ParametersC1EP19_tagModemParameters` -- and nothing else in the
+ * object names anything inside it, so the fields below are those the members
+ * reconstructed so far actually touch, and nothing is claimed about the rest.
+ *
+ * THIS IS A PARTIAL LAYOUT AND IT IS MEANT TO BE EXTENDED, NOT REPLACED.
+ * `V90Modem`, `V92Modem`, `VPcmFloModem` and `K56FlexFloModem` all carry one
+ * of these and will read fields this does not name yet; the right move is to
+ * turn a slice of `unmapped_*` into fields, keeping every offset below where
+ * it is.  The true size is unknown and is at least 0x7c.
+ *
+ * THE FIELD NAMES ARE DESCRIPTIONS OF USE, NOT RECOVERED NAMES.  Finding 226:
+ * the mangling preserves the type name and never a data member's.  What IS
+ * measured is the offset, the width and the signedness of every access:
+ *
+ *   +0x000  `movzbl (%esi),%edx; and $0x1,%dl` in `V90Parameters::
+ *           setToDefault` at .text+0x2a536 -- one byte, bit 0 only.
+ *   +0x038  `mull 0x38(%ebx)` at +0x29971, against 0x1b4e81b5 with the
+ *   +0x03c  product's high half shifted right 8: the exact unsigned
+ *           magic-number division by 2400, so both are `unsigned int` bit
+ *           rates and the quotient is a rate index.  Then `jae`/`jbe`
+ *           throughout, which is unsigned again.
+ *   +0x040  `mul $0xcccccccd; shr $2` in `loadModemParamsData` at +0x2a718 --
+ *           unsigned division by 10, so `unsigned int`.  Printed `%d`.
+ *   +0x048  compared against and copied into `LINE_CONNECTION_TYPE`, which
+ *           the object initialises to -1 and tests for -1: signed.
+ *   +0x050  `movzbl 0x50(%ebx)` twice in `loadModemParamsData`, bit 1 at
+ *           +0x2a7bb and bit 0 at +0x2a7fa -- one byte.
+ *   +0x078  loaded and, when non-zero, passed as `loadParams(char *)`'s only
+ *           argument -- a parameter-file name.
+ */
+struct _tagModemParameters {
+	unsigned char	sessionFlags;		/* +0x000 */
+	unsigned char	unmapped_0001[0x38 - 0x01];
+	unsigned int	minRate;		/* +0x038 */
+	unsigned int	maxRate;		/* +0x03c */
+	unsigned int	powerReductionTenths;	/* +0x040 */
+	unsigned char	unmapped_0044[0x48 - 0x44];
+	int		connectionType;		/* +0x048 */
+	unsigned char	unmapped_004c[0x50 - 0x4c];
+	unsigned char	modeFlags;		/* +0x050 */
+	unsigned char	unmapped_0051[0x78 - 0x51];
+	char		*paramFile;		/* +0x078 */
+};
+
 #endif /* DSPLIB_MODEM_PARAMS_H */

@@ -77,18 +77,36 @@ struct _tagModemParameters;
 class V90Parameters {
 public:
 	/*
-	 * Declared from the mangling, defined nowhere yet.  Wave 0 lands the
-	 * LAYOUT; the bodies are a separate batch and are deliberately absent
-	 * rather than guessed -- see docs/vpcmv34main.md.
+	 * The members, from the mangling.  Six of the seven are defined in
+	 * src/pump/v90/V90Parameters.cpp:
 	 *
-	 *     loadParams(char *)          7894 B
 	 *     setToDefault()              3589 B
 	 *     loadModemParamsData()        344 B
 	 *     V90Parameters(_tagModemParameters *)   89 B
 	 *     init()                        63 B
 	 *     initSession()                 24 B
 	 *     ~V90Parameters()               1 B   (a bare `ret`)
+	 *
+	 * The seventh is NOT declared here, on purpose:
+	 *
+	 *     loadParams(char *)          7894 B
+	 *
+	 * It is 295 straight-line calls to two functions that are `xor
+	 * %eax,%eax; ret` in the shipped object, so it has no observable
+	 * behaviour, no differential oracle exists for it, and a declaration
+	 * with no definition is an invitation to add one that was checked
+	 * only against the disassembly it was copied from.  Finding 879
+	 * records the oracle that was evaluated and what decided it.  Its
+	 * value -- the field map below -- is already extracted, and
+	 * `make params` re-extracts it from the object at every gate.
 	 */
+	V90Parameters(_tagModemParameters *mp);
+	~V90Parameters();
+
+	void	setToDefault();
+	void	loadModemParamsData();
+	void	init();
+	void	initSession();
 
 	/*
 	 * +0x000 is a POINTER, not a parameter.  `setToDefault` opens with

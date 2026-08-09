@@ -1,0 +1,62 @@
+[
+ {
+  "note": "V92Parameters is 54 constant stores and three tiny members, so the set is small on purpose: there is no arithmetic to break.  What it has to show is that the constant table is CHECKED rather than merely present on both sides -- one value moved, one float moved in its last digit, one store removed -- and that the three members really run."
+ },
+ {
+  "label": "one integer default moves by one",
+  "find": "\tV92_ECHO_FILTER_LENGTH = 180;",
+  "replace": "\tV92_ECHO_FILTER_LENGTH = 181;"
+ },
+ {
+  "label": "the negative default loses its sign",
+  "find": "\tV92_ECHO_DELAY_OFFSET = -14;",
+  "replace": "\tV92_ECHO_DELAY_OFFSET = 14;"
+ },
+ {
+  "label": "one float default moves in its last digit",
+  "find": "\tV92_ECHO_SLOW_DECAY_FACTOR = 0.9987f;",
+  "replace": "\tV92_ECHO_SLOW_DECAY_FACTOR = 0.9988f;"
+ },
+ {
+  "label": "the largest float default is out by a factor of ten",
+  "find": "\tV92_AGC_NOMINAL_ENERGY = 24000000.0f;",
+  "replace": "\tV92_AGC_NOMINAL_ENERGY = 2400000.0f;"
+ },
+ {
+  "label": "the first field of the object is not written",
+  "find": "\tVPCM_SESSION_TYPE = 1;",
+  "replace": "\tif (0) VPCM_SESSION_TYPE = 1;"
+ },
+ {
+  "label": "the last field of the object is not written",
+  "find": "\tMODULATOR_QUEUE_LENGTH = 1000;",
+  "replace": "\tif (0) MODULATOR_QUEUE_LENGTH = 1000;"
+ },
+ {
+  "label": "two adjacent defaults are transposed",
+  "find": "\tERROR_ENERGY_PRINT_PERIOD_PHASE3 = 768;\n\tERROR_ENERGY_PRINT_PERIOD_PHASE4 = 768;\n\tV92_AGC_NOMINAL_ENERGY",
+  "replace": "\tERROR_ENERGY_PRINT_PERIOD_PHASE3 = 768;\n\tERROR_ENERGY_PRINT_PERIOD_PHASE4 = 767;\n\tV92_AGC_NOMINAL_ENERGY"
+ },
+ {
+  "label": "init does not call setToDefault",
+  "find": "V92Parameters::init()\n{\n\tsetToDefault();",
+  "replace": "V92Parameters::init()\n{\n\t;"
+ },
+ {
+  "label": "the constructor does not call init",
+  "find": "\tmodemParams = mp;\n\tinit();",
+  "replace": "\tmodemParams = mp;"
+ },
+ {
+  "label": "the constructor does not store its argument",
+  "find": "\tmodemParams = mp;\n\tinit();",
+  "replace": "\tinit();"
+ },
+ {
+  "label": "the destructor is not empty",
+  "find": "V92Parameters::~V92Parameters()\n{\n}",
+  "replace": "V92Parameters::~V92Parameters()\n{\n\tVPCM_SESSION_TYPE = 0;\n}",
+  "equivalent": true,
+  "why": "Same as v90params.json's entry of the same name, and for the same reason: GCC's `-flifetime-dse` is on at -O2 and deletes stores to `*this` in a destructor, so the mutated body and the empty one compile to the identical bare `ret`.  No mutation confined to the destroyed object can be caught here."
+ }
+]

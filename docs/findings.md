@@ -31650,3 +31650,293 @@ ten new names are moved to `.text.ref_*` like the others. Modern GCC puts our
 copies in `.text._ZN...` inside a section group, so nothing collides today; the
 collision is only there under `tools/toolchain`, which is what `refrename.py`
 exists for (finding 349).
+
+### 877. `struct _tagModemParameters` exists nowhere and had to be measured from its readers
+
+Half of `VPcmV34Main.cpp`'s span holds a `_tagModemParameters *`, the mangling
+names the type in eleven constructors, and **nothing in the tree defined it**.
+`include/dsplib/modem_params.h` was the parameter *numbering* -- 63 `MDMPRM_*`
+indices for `modem_get_param` -- and not a struct at all; slmodemd's
+`struct modem` is a different record entirely and does not fit.
+
+So it was read out of the two members that dereference it, and only as far as
+they reach. Seven fields, each from a specific access:
+
+| offset | evidence | type |
+|---|---|---|
+| +0x000 | `movzbl (%esi),%edx; and $0x1,%dl` at .text+0x2a536 | `unsigned char`, bit 0 |
+| +0x038 | `mull 0x38(%ebx)` at +0x29971 against 0x1b4e81b5, high half `shr $8` | `unsigned int` |
+| +0x03c | the same sequence at +0x2997e | `unsigned int` |
+| +0x040 | `mul $0xcccccccd; shr $2` at +0x2a718 | `unsigned int` |
+| +0x048 | copied into `LINE_CONNECTION_TYPE`, which is tested for -1 | `int` |
+| +0x050 | `movzbl 0x50(%ebx)` at +0x2a7bb (bit 1) and +0x2a7fa (bit 0) | `unsigned char` |
+| +0x078 | loaded, tested, passed as `loadParams(char *)`'s argument | `char *` |
+
+**The magic number is the measurement, not a guess about rates.** 0x1b4e81b5
+is 458,129,845, and ceil(2^40 / 2400) is 458,129,845 exactly -- so
+`(n * K) >> 40` is an unsigned divide by 2400 and nothing else. That fixes
++0x038 and +0x03c as bit rates and the quotient as a V.34/V.90 rate index,
+which the clamp to [2, 14] then confirms: 2 * 2400 = 4800 and 14 * 2400 =
+33600 are the ends of the V.34 rate ladder. `mul` rather than `imul`, and
+`jae`/`jbe` rather than `jge`/`jle`, make every one of these unsigned; that is
+forced encoding, not inference.
+
+**Its size is unknown and the struct is deliberately partial.** It is at least
+0x7c. The header says so, and says that wave 1 should turn slices of
+`unmapped_*` into fields rather than redefine it, because `V90Modem`,
+`V92Modem`, `VPcmFloModem` and `K56FlexFloModem` all carry one and will read
+fields these two members never touch.
+
+It went into `modem_params.h` rather than a new header on purpose: `offcheck`
+compiles every header it does not skip **as C**, so a plain C struct in a file
+already outside `SKIP_HEADERS` is gated for free -- it took the annotation
+count from 907 to 914 with no new machinery. A second file named
+`modem_parameters.h` beside `modem_params.h` would have been a trap for
+everyone after.
+
+### 878. `V90Parameters.cpp`: nine `unnamed_*` slots are floats, one divisor read as 10 that is 5, and the 48 mutations
+
+`V90Parameters.h` names 291 fields from `loadParams` and fills the other 51
+slots with `unnamed_NNN`, declared `int` because `loadParams` -- the only
+thing that knows a name or a reader -- does not mention them at all. Reading
+`setToDefault` instead gives a second, independent reader for exactly those 51,
+and **nine of them are floats**:
+
+| offset | value | how it is known |
+|---|--:|---|
+| +0x06c | 1.0 | `fld1` then `fsts 0x6c(%ebp)` |
+| +0x1b8 | 1.5e-11 | `flds .rodata.cst4+0x198` then `fsts 0x1b8(%ebp)` |
+| +0x070 | 0.6 | bit pattern 0x3f19999a |
+| +0x0f4 | 2e-12 | 0x2c0cbccc |
+| +0x1b0 | 8.5e-11 | 0x2ebaeabf |
+| +0x1b4 | 6e-11 | 0x2e83f0ff |
+| +0x328 | 0.96 | 0x3f75c28f |
+| +0x434 | 250.0 | 0x437a0000 |
+| +0x440 | 10.0 | 0x41200000 |
+
+The first two are settled by the instruction: an `fsts` writes a `float` and
+there is no other reading. The other seven are settled by the value, and the
+argument is the one finding 861 already makes for the 289 offsets both
+readings cover -- a bit pattern that is an exact round decimal as a float and
+an arbitrary eight-digit integer as an int, sitting among float neighbours,
+is a float. +0x1b0, +0x1b4 and +0x1b8 are three consecutive such slots between
+`LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA` and `LINEAR_EQU_DIL_ERROR_RELAX_BETA`,
+all three in the 6e-11..8.5e-11 band those betas occupy.
+
+**Reported and not acted on.** The layout is frozen for the span and a field's
+type is part of its layout, so `src/pump/v90/V90Parameters.cpp` writes the bit
+pattern through the declared `int` -- identical four bytes, and a comment on
+each of the nine naming the float the object stores. Changing the header is a
+conversation, not an edit, and it belongs to whoever merges wave 0.
+
+**`make params` cannot see this and never could.** `paramcheck.py` compares
+the header against `loadParams`, and these nine offsets are precisely the ones
+`loadParams` does not read. The gate is not weaker than it looked: it is
+answering a different question, over the 291 named fields, and the other 51
+have no reader in that member at all. The 42 that really are ints are equally
+measured -- 600, 1200, 2400, 3901, 21841 -- and nothing about them moved.
+
+### 879. The `loadParams` oracle WORKS, and the half of it that needs `loadParams` is the transcription check
+
+The proposal: `objcopy --weaken-symbol` the reference object's
+`ref_Vparser_read_int` and `ref_Vparser_read_float`, give the test strong
+definitions that log `(reader, name, offset)`, and compare the blob's log
+against ours across all 295 (and 54) calls in order. That is a differential
+test rather than a check of a transcription against the disassembly it was
+transcribed from, which is what the two `loadParams` members would otherwise
+get and what CLAUDE.md's one unrelaxed rule forbids.
+
+**The mechanism works, and it was run.** Weakening is clean -- `nm` shows
+`W ref_Vparser_read_int`, `W ref_Vparser_read_float` -- the strong definitions
+in the test win, and driving `ref__ZN13V90Parameters10loadParamsEPc` over a
+0x600-byte buffer logs
+
+    V90: 295 calls, 139 int, 156 float
+         first PROBING_MODE +0x4, last TEMP_FLOAT_PARAMETER4 +0x554
+    V92:  54 calls,  42 int,  12 float
+         first VPCM_SESSION_TYPE +0x4, last MODULATOR_QUEUE_LENGTH +0xd8
+
+The containment condition holds as measured: those two members are the only
+callers of either stub anywhere in `.text`, so weakening them changes nothing
+in any other binary.
+
+**And it proved something worth having.** All 349 runtime triples were
+compared, in order, against `tools/vparse.py`'s static walk of the same two
+functions: **identical on reader, name and offset, with zero differences.**
+That takes vparse's abstract interpreter out of the trusted path for the whole
+field map. It also confirms finding 860's repair from the other side --
+`TEMP_FLOAT_PARAMETER4` really is +0x554 and not the +0x000 the unmodelled
+`add $0x554,%esi` had produced -- and it is the first evidence for the map
+that does not come from reading instructions.
+
+#### Why `loadParams` is still not reconstructed
+
+**Because our `loadParams` would be vparse's output, so the half of the
+comparison that involves it is a transcription check after all.** Split the
+proposed test in two:
+
+- *blob log vs. static extraction* -- genuinely differential, since the two
+  come from an interpreter and from execution. This is the part that carries
+  all the value, and **it needs no reconstruction of `loadParams` at all**; it
+  is the run above.
+- *our log vs. blob log* -- our 295 calls would be generated from the same
+  triples the static extraction produced, so this compares vparse's output
+  with a copy of vparse's output. It catches a copying error and nothing else.
+
+So the oracle's differential content is obtained without writing the member,
+and writing the member adds 9,278 bytes of source with no observable
+behaviour, a second copy of the field map to keep in step with the header, and
+two new `Vparser_read_*` stubs in `src/`. The brief's condition -- "if it
+works, land `loadParams` behind it" -- is met on the mechanism and not on the
+argument, and this is a judgement rather than a blocked path: a merger who
+disagrees can land it cheaply, and the recipe is below.
+
+#### The recipe, if a later batch wants it
+
+Use `ld --wrap`, not `--weaken-symbol`. Weakening only reaches the reference
+object; our side's stubs would have to be weak in `src/` (a linkage
+infidelity introduced to serve a test -- the blob's are `T`) or built a second
+time for one target, which is surgery on the shared object rule.
+`-Wl,--wrap=Vparser_read_int -Wl,--wrap=ref_Vparser_read_int` on ONE test
+target's link line reaches both sides, needs no `objcopy`, and touches neither
+`src/` nor `$(REF)`.
+
+#### The cheap upgrade this DOES unlock, and it is not blocked on anything
+
+`make params` currently compares the header text against vparse's *static*
+walk. The run above shows the blob's own `loadParams` will hand over the same
+349 triples at run time for the cost of a link. Making that the gate's oracle
+removes the one piece of tooling the gate presently has to trust. Not done
+here -- `paramcheck.py` belongs to the batch that wrote it and this batch
+owns the headers, not the gate -- and recorded so it is not rediscovered.
+
+#### The defect the differential test found on its first run, and what it says about reading a magic divide
+
+`loadModemParamsData` opens
+
+    mov  $0xcccccccd,%ecx
+    mul  %ecx
+    shr  $0x2,%edx
+
+and the first reading of that was "divide by 10", because 0xcccccccd is the
+magic number everybody recognises for 10. **It is a divide by 5.** `mul` puts
+the high half in `%edx`, which is already a shift of 32, and `shr $0x2` makes
+the total 34; 2^34 / 0xcccccccd is 5.0 exactly, and a shift of 3 would have
+been 10. The constant is the same for both -- what distinguishes them is one
+character in the shift.
+
+Every field assertion in the test passed with the wrong divisor except the one
+on `DIGITAL_POWER_REDUCTION`, which came out at exactly half the blob's value
+across all sixteen power-reduction cases. Nothing else in the class moves:
+the printed line is the only other consumer, so had the transcript not been
+compared, a modem applying half the power reduction it was configured for
+would have shipped. **The lesson is the general one: a magic-number divide is
+a shift you have to read, not a constant you can recognise.**
+
+#### What landed, by member
+
+| member | blob | ours | how it is checked |
+|---|--:|--:|---|
+| `V90Parameters::setToDefault` | 3,589 | 3,536 | 675 checks over 24 fixtures x 4 debug levels |
+| `V90Parameters::loadModemParamsData` | 344 | 304 | 642 checks over 20 fixtures x 4 levels |
+| `V90Parameters::init` | 63 | 32 | in the constructor sweep |
+| `V90Parameters::initSession` | 24 | 24 | store count asserted at 2 |
+| `V90Parameters::V90Parameters` (C1, C2) | 89 | 64 | both bodies, both arms of the file branch |
+| `V90Parameters::~V90Parameters` (D1, D2) | 1 | 1 | see the destructor note below |
+| `V92Parameters::setToDefault` | 477 | 464 | 1,344 checks with the modem block varied |
+| `V92Parameters::init` | 49 | 32 | same sweep |
+| `V92Parameters::V92Parameters` (C1, C2) | 53 | 48 | same sweep |
+| `V92Parameters::~V92Parameters` (D1, D2) | 1 | 1 | as above |
+
+`init` and the constructor are smaller than the object's by about the size of
+the `loadParams` call site each, which is the whole of the difference.
+
+#### The mutation each assertion was watched failing under
+
+48 mutations over the two files: **44 caught, 0 uncaught, 4 recorded
+equivalent with an argument.** The set is weighted away from the 393 constant
+stores, which are easy, and towards the arithmetic, which is not. Of the
+caught ones, the load-bearing sample:
+
+| mutation | what fired |
+|---|---|
+| divide by 10 instead of 5 | `after loadModemParamsData` at +0x380, and the transcript |
+| scale 1.0 instead of 0.5 | the same two |
+| fraction scaled by 10 | the transcript alone -- no field moves |
+| sign test `0 <= v` | the transcript alone |
+| rate step 4800 | `ANALOG_RATE_MASK`, and the rate-mask diagnostic |
+| bottom index 3, top index 13 | `ANALOG_RATE_MASK` |
+| rate mask built with the index running UP | `ANALOG_RATE_MASK` -- the bit order |
+| `mask * 4` instead of `* 2` | `ANALOG_RATE_MASK` |
+| the crossed-rate arm never taken | `fields setToDefault wrote`, and the `bad upstream rate` line |
+| sensitive-ISP cap on the wrong flag / the wrong index | `ANALOG_RATE_MASK` |
+| `SILENCE_SCR` on the other arm, and unconditionally | the field-count assertion, at 339 against 338 |
+| ANSPCM lengths swapped, or reading bit 1 | +0x4cc |
+| tempProbe from bit 0 | +0x004 and the transcript |
+| connection type taken when NOT -1 | +0x00c |
+| a debug string misspelt by one letter | the transcript |
+| the two gated sites moved to `> 2` | the line count at levels 2 and 3 |
+| one integer default moved by one | `after setToDefault` |
+| one float default moved in its last digit | `after setToDefault` |
+| `unnamed_1b8` written as an int | `after setToDefault` -- so the nine bit patterns are checked |
+| the last field not written | `after setToDefault`, and the field count |
+| `initSession` defaulting to 13 | `after initSession`, and the store count at 2 |
+| the constructor skipping `initSession` | `after C1` |
+
+#### Registering a new mutation suite makes `make phase` FAIL, and two standing instructions collide there
+
+`tools/mutsnap.py --check` runs inside `refs`, inside `test`, inside `phase`.
+Staleness is reported and does not fail, deliberately -- almost any `src/` edit
+makes every entry stale and a gate that is red by default gets ignored. But
+**MISSING fails**, and MISSING is what a suite that has been registered and
+never recorded looks like. So the two instructions every batch gets --
+
+  - *register any mutation suite you add in the registry*, and
+  - *do not re-record the mutation snapshot; that happens once, after all the
+    batches merge*
+
+-- are in direct conflict for any batch that adds a suite, and nothing in the
+tree says so. The first makes `make phase` red and only the second clears it.
+
+**They are less in conflict than they look, and the resolution is per-suite.**
+What vpcmv34main.md forbids is the sweep: `mutsnap.py --update` with no
+arguments re-runs all 54 suites for twenty minutes and manufactures a baseline
+nobody examined. `mutsnap.py --update <name> <name>` re-runs only the named
+ones -- here 48 mutations that had just been run and read by hand -- and is
+the honest completion of the registration, not a re-record. Naming the suites
+is the whole difference and it is worth saying out loud, because the obvious
+reading of "do not re-record the snapshot" forbids both.
+
+The record for `v90params` and `v92params` is therefore MISSING as this batch
+lands, and
+
+    python3 tools/mutsnap.py --update v90params v92params
+
+is the one command that clears it. Every other `phase` target is green:
+`firewall`, `strings`, `offsets`, `refcheck`, `anchorcheck`, all 118 test
+binaries, `check64` in both configurations, `interop` at 48 checks, `params`
+at 291 + 54 fields, `coverage`, and `debugcov` with all seven of this batch's
+diagnostic sites executing.
+
+#### Two things no mutation here can reach, and neither is an untested claim
+
+**The two `abs` operations are unreachable over the whole input domain.**
+`tempPR` is `unsigned int`, `tempPR / 5` is at most 0x33333333, so
+`(int)(tempPR / 5)` is never negative and neither is `pr`. The object's own
+`fabs` at .text+0x2a731 and its `cltd; xor %edx,%eax; sub %edx,%eax` at
++0x2a78f are therefore dead in the shipped object too. Both are reproduced --
+they are in the object -- and both mutations are recorded `equivalent` with
+that proof rather than deleted, because "we tried this and here is why it
+cannot fail" is worth more than an absence.
+
+**A destructor whose only effect is a store to its own object cannot be
+mutated at all.** `-flifetime-dse` is on by default at `-O2` and deletes
+stores to `*this` in a destructor, so `~V90Parameters` compiles to one `ret`
+with `PROBING_MODE = 0;` in it and one `ret` without; `-fno-lifetime-dse`
+makes the three-instruction body reappear. This is a property of the
+mutation tier and not of the test, and it generalises: **every empty
+destructor in this tree is untestable by mutation in the same way, and none
+of them will say so.** It also weakens an argument that looks strong -- our
+one-byte destructor matching the object's one-byte destructor is not evidence
+that the original's body was empty, because a compiler could have emptied it.
+What settles that one is the date: `-flifetime-dse` postdates GCC 3.4.2.

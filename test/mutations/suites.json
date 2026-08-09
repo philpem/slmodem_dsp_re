@@ -54,5 +54,7 @@
  "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"],
  "v34hsrx53":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx53"],
  "v34hsrx4":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx4"],
- "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"]
+ "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"],
+ "v90params":      ["src/pump/v90/V90Parameters.cpp", "build/test/t_v90params"],
+ "v92params":      ["src/pump/v90/V92Parameters.cpp", "build/test/t_v90params"]
 }
