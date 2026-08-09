@@ -1,57 +1,235 @@
 {
- "_":              ["Which source each mutation set belongs to, and which test binary is", "supposed to catch it.  This is not decoration: run a set against the", "wrong binary and every mutation reads NOT CAUGHT, which is the same", "output a genuinely untested claim gives.  Six sets were misread that", "way before this file existed.", "", "Use it:  tools/mutate.py --suite v8jm"],
- "callprog":       ["src/callprog/callprog.c", "build/test/t_callprog_progress"],
- "cadence":        ["src/callprog/cadence.c", "build/test/t_cadence"],
- "dialer":         ["src/dialer/dialer.c", "build/test/t_dialerprog"],
- "dialer_grading": ["src/dialer/dialer.c", "build/test/t_dialer"],
- "pulse":          ["src/call/pulse.c", "build/test/t_pulse"],
- "v8agc":          ["src/v8/v8agc.c", "build/test/t_v8sig"],
- "v8dp":           ["src/v8/v8dp.c", "build/test/t_v8dp"],
- "v8handshak":     ["src/v8/v8handshak.c", "build/test/t_v8hs"],
- "v8hs":           ["src/v8/v8hs.c", "build/test/t_v8util"],
- "v8hsrx":         ["src/v8/v8hsrx.c", "build/test/t_v8hs"],
- "v8jm":           ["src/v8/v8jm.c", "build/test/t_v8jm"],
- "v8proc":         ["src/v8/v8proc.c", "build/test/t_v8dp"],
- "v8seq":          ["src/v8/v8seq.c", "build/test/t_v8util"],
- "v8sig":          ["src/v8/v8sig.c", "build/test/t_v8sig"],
- "v34pcmif":       ["src/pump/v34/v34pcmif.c", "build/test/t_v34pcmif"],
- "v34hshak":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hshak"],
- "v34hstxblock":   ["src/pump/v34/v34hshak.c",      "build/test/t_v34hstbl2"],
- "v34hst3core":    ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3core"],
- "v34datapump":    ["src/pump/v34/v34hshak.c", "build/test/t_v34datapump"],
- "v34datapump_rrn":["src/pump/v34/v34pcmif.c", "build/test/t_v34datapump"],
- "v34k56":         ["src/pump/v34/v34k56.cpp", "build/test/t_v34k56"],
- "v34filters":     ["src/pump/v34/v34filters.c", "build/test/t_v34ec"],
- "v34info":        ["src/pump/v34/v34info.c", "build/test/t_v34info"],
- "v34info1a":      ["src/pump/v34/v34info1a.cpp", "build/test/t_v34info1a"],
- "v34info1d":      ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34info1d"],
- "v34rx":          ["src/pump/v34/v34rx.c", "build/test/t_v34rx"],
- "v34shell":       ["src/pump/v34/v34shell.c", "build/test/t_v34shell"],
- "v90adid":        ["src/pump/v90/V90AutoDigitalImpDetector.cpp", "build/test/t_v90adid"],
- "v90dil":         ["src/pump/v90/V90Dil.cpp", "build/test/t_v90adid"],
- "dilpack":        ["src/pump/v90/DILdescriptorPacker.cpp", "build/test/t_dilpack"],
- "v90equ":         ["src/pump/v90/V90Equalizer.cpp", "build/test/t_v90equ"],
- "v92ec":          ["src/pump/v90/V92EchoCanceller.cpp", "build/test/t_v90leaves"],
- "v90rto":         ["src/pump/v90/ResamplerTimingOffset.cpp", "build/test/t_v90leaves"],
- "v90cd":          ["src/pump/v90/V90ConstellationDesigner.cpp", "build/test/t_v90leaves"],
- "v90prefilter":   ["src/pump/v90/V90PreFilter.cpp", "build/test/t_v90prefilter"],
- "v90sessionflag": ["src/pump/v90/V90SessionFlag.cpp", "build/test/t_v90sessionflag"],
- "vpcmflomodem":   ["src/pump/v90/VPcmFloModem.cpp", "build/test/t_vpcmflomodem"],
- "vpcmep3":        ["src/pump/v90/VPcmFloModem.cpp", "build/test/t_vpcmep3"],
- "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp", "build/test/t_v90p3dreset"],
- "v90demod":       ["src/pump/v90/V90Demodulator.cpp", "build/test/t_v90demod"],
- "v90p34":         ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v90p34"],
- "v34retrain":     ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34retrain"],
- "v34hstx1":       ["src/pump/v34/v34hstx1.cpp", "build/test/t_v34hstx1"],
- "v34ja":          ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34ja"],
- "v34hst3m41":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3m41"],
- "v34hst346":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hst346"],
- "v34hsmst44":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hsmst44"],
- "v34hst3mid":     ["src/pump/v34/v34hshak.c", "build/test/t_v34hst3mid"],
- "v34hstb1":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hstb1"],
- "v34hsrxch":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrxch"],
- "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"],
- "v34hsrx53":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx53"],
- "v34hsrx4":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx4"],
- "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"]
+ "_": [
+  "Which source each mutation set belongs to, and which test binary is",
+  "supposed to catch it.  This is not decoration: run a set against the",
+  "wrong binary and every mutation reads NOT CAUGHT, which is the same",
+  "output a genuinely untested claim gives.  Six sets were misread that",
+  "way before this file existed.",
+  "",
+  "Use it:  tools/mutate.py --suite v8jm"
+ ],
+ "callprog": [
+  "src/callprog/callprog.c",
+  "build/test/t_callprog_progress"
+ ],
+ "cadence": [
+  "src/callprog/cadence.c",
+  "build/test/t_cadence"
+ ],
+ "dialer": [
+  "src/dialer/dialer.c",
+  "build/test/t_dialerprog"
+ ],
+ "dialer_grading": [
+  "src/dialer/dialer.c",
+  "build/test/t_dialer"
+ ],
+ "pulse": [
+  "src/call/pulse.c",
+  "build/test/t_pulse"
+ ],
+ "v8agc": [
+  "src/v8/v8agc.c",
+  "build/test/t_v8sig"
+ ],
+ "v8dp": [
+  "src/v8/v8dp.c",
+  "build/test/t_v8dp"
+ ],
+ "v8handshak": [
+  "src/v8/v8handshak.c",
+  "build/test/t_v8hs"
+ ],
+ "v8hs": [
+  "src/v8/v8hs.c",
+  "build/test/t_v8util"
+ ],
+ "v8hsrx": [
+  "src/v8/v8hsrx.c",
+  "build/test/t_v8hs"
+ ],
+ "v8jm": [
+  "src/v8/v8jm.c",
+  "build/test/t_v8jm"
+ ],
+ "v8proc": [
+  "src/v8/v8proc.c",
+  "build/test/t_v8dp"
+ ],
+ "v8seq": [
+  "src/v8/v8seq.c",
+  "build/test/t_v8util"
+ ],
+ "v8sig": [
+  "src/v8/v8sig.c",
+  "build/test/t_v8sig"
+ ],
+ "v34pcmif": [
+  "src/pump/v34/v34pcmif.c",
+  "build/test/t_v34pcmif"
+ ],
+ "v34hshak": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hshak"
+ ],
+ "v34hstxblock": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hstbl2"
+ ],
+ "v34hst3core": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3core"
+ ],
+ "v34datapump": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34datapump"
+ ],
+ "v34datapump_rrn": [
+  "src/pump/v34/v34pcmif.c",
+  "build/test/t_v34datapump"
+ ],
+ "v34k56": [
+  "src/pump/v34/v34k56.cpp",
+  "build/test/t_v34k56"
+ ],
+ "v34filters": [
+  "src/pump/v34/v34filters.c",
+  "build/test/t_v34ec"
+ ],
+ "v34info": [
+  "src/pump/v34/v34info.c",
+  "build/test/t_v34info"
+ ],
+ "v34info1a": [
+  "src/pump/v34/v34info1a.cpp",
+  "build/test/t_v34info1a"
+ ],
+ "v34info1d": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34info1d"
+ ],
+ "v34rx": [
+  "src/pump/v34/v34rx.c",
+  "build/test/t_v34rx"
+ ],
+ "v34shell": [
+  "src/pump/v34/v34shell.c",
+  "build/test/t_v34shell"
+ ],
+ "v90adid": [
+  "src/pump/v90/V90AutoDigitalImpDetector.cpp",
+  "build/test/t_v90adid"
+ ],
+ "v90dil": [
+  "src/pump/v90/V90Dil.cpp",
+  "build/test/t_v90adid"
+ ],
+ "dilpack": [
+  "src/pump/v90/DILdescriptorPacker.cpp",
+  "build/test/t_dilpack"
+ ],
+ "v90equ": [
+  "src/pump/v90/V90Equalizer.cpp",
+  "build/test/t_v90equ"
+ ],
+ "v92ec": [
+  "src/pump/v90/V92EchoCanceller.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v90rto": [
+  "src/pump/v90/ResamplerTimingOffset.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v90cd": [
+  "src/pump/v90/V90ConstellationDesigner.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v90prefilter": [
+  "src/pump/v90/V90PreFilter.cpp",
+  "build/test/t_v90prefilter"
+ ],
+ "v90sessionflag": [
+  "src/pump/v90/V90SessionFlag.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "vpcmflomodem": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmflomodem"
+ ],
+ "vpcmep3": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmep3"
+ ],
+ "v90p3dreset": [
+  "src/pump/v90/V90Phase3Demodulator.cpp",
+  "build/test/t_v90p3dreset"
+ ],
+ "v90demod": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90demod"
+ ],
+ "v90p34": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v90p34"
+ ],
+ "v34retrain": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34retrain"
+ ],
+ "v34hstx1": [
+  "src/pump/v34/v34hstx1.cpp",
+  "build/test/t_v34hstx1"
+ ],
+ "v34ja": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34ja"
+ ],
+ "v34hst3m41": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3m41"
+ ],
+ "v34hst346": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst346"
+ ],
+ "v34hsmst44": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsmst44"
+ ],
+ "v34hst3mid": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3mid"
+ ],
+ "v34hstb1": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hstb1"
+ ],
+ "v34hsrxch": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrxch"
+ ],
+ "v34hsfsk": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsfsk"
+ ],
+ "v34hsrx53": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx53"
+ ],
+ "v34hsrx4": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx4"
+ ],
+ "v34hsrx72": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx72"
+ ],
+ "v90params": [
+  "src/pump/v90/V90Parameters.cpp",
+  "build/test/t_v90params"
+ ],
+ "v92params": [
+  "src/pump/v90/V92Parameters.cpp",
+  "build/test/t_v90params"
+ ]
 }

@@ -1,0 +1,116 @@
+/*
+ * V92Parameters.cpp -- the V.92 parameter block's own members.
+ *
+ * SEPARATE CLASS, SEPARATE ALLOCATION, and neither one's destructor calls the
+ * other's; V92Parameters.h says why that is not an assumption.  The contrast
+ * with the V.90 block is the interesting part of this file:
+ *
+ *   - `setToDefault` here is 477 bytes and 54 stores, ALL of them constants.
+ *     It reads nothing, branches nowhere, calls nothing, and does not touch
+ *     `modemParams`.  The V.90 one is 3,589 bytes, reads four things and
+ *     builds a rate mask in a loop.
+ *   - the constructor does NOT call `loadModemParamsData`, because there is
+ *     no V.92 equivalent -- the modem block's contribution is made once, to
+ *     the V.90 object.
+ *   - `init()` tail-calls `loadParams` and stops; the V.90 `init()` has a
+ *     third step after it.
+ *
+ * The 54 stores were extracted by the same abstract interpretation as the
+ * V.90 block's (finding 860's clobber rule; see V90Parameters.cpp), which
+ * resolved 54 of 54 with nothing computed and nothing unknown.  Every one of
+ * the 54 offsets is also read by `loadParams` under a name, so unlike the
+ * V.90 block there is not one `unnamed_*` field here and not one type to
+ * argue about -- the two readings cover the identical set (finding 861).
+ */
+
+#include "dsplib/V92Parameters.h"
+
+#include "dsplib/modem_params.h"
+
+void
+V92Parameters::setToDefault()
+{
+	VPCM_SESSION_TYPE = 1;
+	V92_PHASE2_INFO_A_OR_MU = 0;
+	V92_PHASE2_INFO_RTD = 0;
+	V92_PHASE2_INFO_UINFO = 78;
+	V92_PHASE2_INFO_MAX_TX_POWER = 23;
+	V92_PHASE2_INFO_TX_POWER_MEASURE_POINT = 1;
+	V92_EXTEND_EU = 0;
+	V92_DELAY_BEFOR_STEADY_STATE = 5000;
+	V92_RRN_START_DELAY = 4000;
+	V92_RRN_SIMULATION_SWITCH = 0;
+	V92_SILENCE_RRN_REQUESTE = 0;
+	V92_RRN_TRN2U_DD_LENGTH = 12000;
+	V92_MAX_SILENCE_LENGTH_FLAG = 0;
+	V92_SILENCE_LENGTH = 2400;
+	V92_FPE_SIMULATION_SWITCH = 0;
+	V92_FPE_START_DELAY = 20000;
+	V92A_DIGITAL_RATE_MASK = 0xfffffff;
+	V92A_MAX_SPECTRAL_SHAPER_LOOKAHEAD = 3;
+	V92A_PHASE4_CONSTELLATION = 0;
+	V92A_RRN_CONSTELLATION = 0;
+	V92_PHASE4_CONSTELLATION = 0;
+	V92_RRN_CONSTELLATION = 0;
+	V92_NOF_FILTER_SECTIONS = 3;
+	V92_MAX_TOTAL_NOF_COEFFS = 3;
+	V92_MAX_NOF_COEFFS_IN_EACH_SECTION = 3;
+	V92_APPLY_TX_SHAPING_FILTER = 1;
+	V92_ECHO_FILTER_LENGTH = 180;
+	V92_ECHO_INITIAL_DELAY = 840;
+	V92_ECHO_DELAY_OFFSET = -14;
+	V92_ECHO_FAST_BETA_FACTOR = 1.953125e-10f;
+	V92_ECHO_FAST_DECAY_FACTOR = 1.0f;
+	V92_ECHO_SLOW_BETA_FACTOR = 1.8554687e-10f;
+	V92_ECHO_SLOW_DECAY_FACTOR = 0.9987f;
+	V92_ECHO_FAST_UPDATE_DURATION = 9000;
+	V92_ECHO_SLOW_UPDATE_DURATION = 11000;
+	V92_RESAMPLER_RESULOTION = 1600;
+	V92_LINEAR_EQU_LENGTH = 128;
+	V92_LE_PHASE_3_BETA = 3e-10f;
+	V92_LE_BETA_I_DURATION = 5000;
+	V92_LE_PHASE_3_BETA_II = 1e-10f;
+	V92_DFE_LENGTH = 8;
+	V92_DFE_PHASE_3_BETA = 6e-10f;
+	V92_DFE_TRN1U_FREEZE_DURATION = 1700;
+	ERROR_ENERGY_PRINT_PERIOD_PHASE3 = 768;
+	ERROR_ENERGY_PRINT_PERIOD_PHASE4 = 768;
+	V92_AGC_NOMINAL_ENERGY = 24000000.0f;
+	V92_AGC_K = 0.6f;
+	V92_AGC_BLOCK_LEN = 150;
+	V92_AGC_ADAPTATION_DURATION = 1000;
+	SU_DETECTOR_ENERGY_THRESHOLD = 300.0f;
+	SU_DETECTOR_POSITIVE_CORR_THRESHOLD = 0.8f;
+	SU_DETECTOR_NEGATIVE_CORR_THRESHOLD = 0.4f;
+	SU_DETECTOR_DETECTION_COUNTER_THRESHOLD = 80;
+	MODULATOR_QUEUE_LENGTH = 1000;
+}
+
+void
+V92Parameters::init()
+{
+	setToDefault();
+
+	/*
+	 * `if (modemParams->paramFile) loadParams(modemParams->paramFile);`
+	 * in the object, as a tail call.  Not reconstructed -- finding 879,
+	 * and V90Parameters.cpp's `init()` for the same note.  The test runs
+	 * this with the pointer null and non-null and compares both against
+	 * the blob.
+	 */
+}
+
+/*
+ * `modemParams = mp; init();` -- three stores' worth less than the V.90 one,
+ * because nothing here reads a field that `setToDefault` does not write.
+ */
+V92Parameters::V92Parameters(_tagModemParameters *mp)
+{
+	modemParams = mp;
+	init();
+}
+
+/* One byte: `ret`. */
+V92Parameters::~V92Parameters()
+{
+}

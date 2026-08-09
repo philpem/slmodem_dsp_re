@@ -1,0 +1,196 @@
+[
+ {
+  "note": "The claims t_v90params.cpp makes about V90Parameters, each broken on purpose.  The set is deliberately weighted towards the four things `setToDefault` READS -- a table of 339 constants is easy to check and the arithmetic around it is not, and the divisor mutation below is the defect this file's first run actually had."
+ },
+ {
+  "label": "the power reduction divides by 10, not 5",
+  "find": "\t\tfloat pr = (float)(int)(tempPR / 5) * 0.5f;",
+  "replace": "\t\tfloat pr = (float)(int)(tempPR / 10) * 0.5f;"
+ },
+ {
+  "label": "the power reduction scale is 1.0, not 0.5",
+  "find": "\t\tfloat pr = (float)(int)(tempPR / 5) * 0.5f;",
+  "replace": "\t\tfloat pr = (float)(int)(tempPR / 5) * 1.0f;"
+ },
+ {
+  "label": "the printed fraction is scaled by 10, not 100",
+  "find": "\t\tint frac = (int)((pr - (float)(int)pr) * 100.0f);",
+  "replace": "\t\tint frac = (int)((pr - (float)(int)pr) * 10.0f);"
+ },
+ {
+  "label": "the printed whole part keeps its sign",
+  "find": "\t\tif (whole < 0)\n\t\t\twhole = -whole;",
+  "replace": "\t\tif (whole < 0 && 0)\n\t\t\twhole = -whole;",
+  "equivalent": true,
+  "why": "`tempPR` is `unsigned int` and the object divides it by 5, so `tempPR / 5` is at most 0x33333333 and `(int)(tempPR / 5)` can never be negative; `pr` is that times 0.5f and is therefore never negative either.  So `whole < 0` is unreachable over the WHOLE input domain and not merely over the fixture's.  The object has the same dead code -- `fabs` at .text+0x2a731 and `cltd; xor %edx,%eax; sub %edx,%eax` at +0x2a78f -- and it is reproduced because it is in the object, not because anything can reach it.  The identical argument covers the `frac < 0` line below."
+ },
+ {
+  "label": "the sign is `0 <= v`, so zero prints as plus",
+  "find": "\t\t\t (0 < DIGITAL_POWER_REDUCTION) ? '+' : '-',",
+  "replace": "\t\t\t (0 <= DIGITAL_POWER_REDUCTION) ? '+' : '-',"
+ },
+ {
+  "label": "the power-reduction line is printed unconditionally",
+  "find": "\tif (tempPR != 0) {",
+  "replace": "\tif (tempPR != 0 || 1) {"
+ },
+ {
+  "label": "tempProbe is bit 0, not bit 1",
+  "find": "\ttempProbe = (modemParams->modeFlags >> 1) & 1;",
+  "replace": "\ttempProbe = (modemParams->modeFlags >> 0) & 1;"
+ },
+ {
+  "label": "PROBING_MODE is set even when tempProbe is zero",
+  "find": "\tif (tempProbe != 0)\n\t\tPROBING_MODE = tempProbe;",
+  "replace": "\tPROBING_MODE = tempProbe;"
+ },
+ {
+  "label": "the connection type is taken when it is NOT already -1",
+  "find": "\tif (LINE_CONNECTION_TYPE == -1)",
+  "replace": "\tif (LINE_CONNECTION_TYPE != -1)"
+ },
+ {
+  "label": "the trn2d flag is bit 1, not bit 0",
+  "find": "\tTRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE = modemParams->modeFlags & 1;",
+  "replace": "\tTRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE = (modemParams->modeFlags >> 1) & 1;"
+ },
+ {
+  "label": "a debug string is misspelt",
+  "find": "\tedprintf(\"V90Parameters: Debug - tempProbe = %d\\r\\n\", tempProbe);",
+  "replace": "\tedprintf(\"V90Parameters: Debug - tempprobe = %d\\r\\n\", tempProbe);"
+ },
+ {
+  "label": "the rate step is 4800, not 2400",
+  "find": "#define V90_RATE_STEP\t\t2400u",
+  "replace": "#define V90_RATE_STEP\t\t4800u"
+ },
+ {
+  "label": "the bottom rate index is 3, not 2",
+  "find": "#define V90_MIN_RATE_INDEX\t2u",
+  "replace": "#define V90_MIN_RATE_INDEX\t3u"
+ },
+ {
+  "label": "the top rate index is 13, not 14",
+  "find": "#define V90_MAX_RATE_INDEX\t14u",
+  "replace": "#define V90_MAX_RATE_INDEX\t13u"
+ },
+ {
+  "label": "the sensitive-ISP cap applies when the flag is CLEAR",
+  "find": "\tif (SENSITIVE_ISP_DETECTED != 0\n\t    && maxIndex > (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP)",
+  "replace": "\tif (SENSITIVE_ISP_DETECTED == 0\n\t    && maxIndex > (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP)"
+ },
+ {
+  "label": "the sensitive-ISP cap is applied to the MINIMUM index",
+  "find": "\t\tmaxIndex = (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP;",
+  "replace": "\t\tminIndex = (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP;"
+ },
+ {
+  "label": "the crossed-rate default window is 2..2, not 2..14",
+  "find": "\t\tminIndex = V90_MIN_RATE_INDEX;\n\t\tmaxIndex = V90_MAX_RATE_INDEX;",
+  "replace": "\t\tminIndex = V90_MIN_RATE_INDEX;\n\t\tmaxIndex = V90_MIN_RATE_INDEX;"
+ },
+ {
+  "label": "the crossed-rate arm is never taken",
+  "find": "\tif (minIndex > maxIndex) {",
+  "replace": "\tif (minIndex > maxIndex && 0) {"
+ },
+ {
+  "label": "the rate mask is built with the index running UP",
+  "find": "\tfor (i = (int)V90_MAX_RATE_INDEX; i >= (int)V90_MIN_RATE_INDEX; i--)",
+  "replace": "\tfor (i = (int)V90_MIN_RATE_INDEX; i <= (int)V90_MAX_RATE_INDEX; i++)"
+ },
+ {
+  "label": "the rate mask never gets its bit",
+  "find": "\t\tANALOG_RATE_MASK = ANALOG_RATE_MASK * 2\n\t\t    | (((unsigned int)i <= maxIndex\n\t\t\t&& (unsigned int)i >= minIndex) ? 1 : 0);",
+  "replace": "\t\tANALOG_RATE_MASK = ANALOG_RATE_MASK * 2\n\t\t    | (((unsigned int)i < maxIndex\n\t\t\t&& (unsigned int)i > minIndex) ? 1 : 0);"
+ },
+ {
+  "label": "the rate mask shifts by four, not by two",
+  "find": "\t\tANALOG_RATE_MASK = ANALOG_RATE_MASK * 2\n\t\t    | (((unsigned int)i <= maxIndex",
+  "replace": "\t\tANALOG_RATE_MASK = ANALOG_RATE_MASK * 4\n\t\t    | (((unsigned int)i <= maxIndex"
+ },
+ {
+  "label": "the rate-mask diagnostic reports indices, not bit rates",
+  "find": "\t\t\t\t     minIndex * V90_RATE_STEP,\n\t\t\t\t     maxIndex * V90_RATE_STEP,",
+  "replace": "\t\t\t\t     minIndex,\n\t\t\t\t     maxIndex,"
+ },
+ {
+  "label": "the two gated sites are at level > 2, not > 1",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Parameters: bad upstream \"",
+  "replace": "\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\tdsplibs_debug_printf(\"V90Parameters: bad upstream \""
+ },
+ {
+  "label": "the two ANSPCM demodulation lengths are swapped",
+  "find": "\t    (modemParams->sessionFlags & 1) ? 2400 : 7740;",
+  "replace": "\t    (modemParams->sessionFlags & 1) ? 7740 : 2400;"
+ },
+ {
+  "label": "the ANSPCM length reads bit 1 of the session flags",
+  "find": "\t    (modemParams->sessionFlags & 1) ? 2400 : 7740;",
+  "replace": "\t    (modemParams->sessionFlags & 2) ? 2400 : 7740;"
+ },
+ {
+  "label": "SILENCE_SCR is written on the other arm",
+  "find": "\tif (SENSITIVE_ISP_DETECTED == 0)\n\t\tSILENCE_SCR = 1;",
+  "replace": "\tif (SENSITIVE_ISP_DETECTED != 0)\n\t\tSILENCE_SCR = 1;"
+ },
+ {
+  "label": "SILENCE_SCR is written unconditionally",
+  "find": "\tif (SENSITIVE_ISP_DETECTED == 0)\n\t\tSILENCE_SCR = 1;",
+  "replace": "\tSILENCE_SCR = 1;"
+ },
+ {
+  "label": "one integer default moves by one",
+  "find": "\tPHASE2_INFO_UINFO = 78;",
+  "replace": "\tPHASE2_INFO_UINFO = 79;"
+ },
+ {
+  "label": "one float default moves in its last digit",
+  "find": "\tAGC_K = 0.6f;",
+  "replace": "\tAGC_K = 0.61f;"
+ },
+ {
+  "label": "one of the nine float-valued `unnamed_` slots is written as an int",
+  "find": "\tunnamed_1b8 = 0x2d83f0ff;",
+  "replace": "\tunnamed_1b8 = 15;"
+ },
+ {
+  "label": "the last field of the object is not written",
+  "find": "\tTEMP_FLOAT_PARAMETER4 = ",
+  "replace": "\tif (0) TEMP_FLOAT_PARAMETER4 = "
+ },
+ {
+  "label": "initSession's rate-index default is 13, not 14",
+  "find": "\tMAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP = 14;",
+  "replace": "\tMAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP = 13;"
+ },
+ {
+  "label": "init does not call loadModemParamsData",
+  "find": "\tloadModemParamsData();\n}",
+  "replace": "\t;\n}"
+ },
+ {
+  "label": "the constructor does not call initSession",
+  "find": "\tinitSession();\n\tmodemParams = mp;",
+  "replace": "\tmodemParams = mp;"
+ },
+ {
+  "label": "the constructor calls setToDefault instead of init",
+  "find": "\tinitSession();\n\tmodemParams = mp;\n\tinit();",
+  "replace": "\tinitSession();\n\tmodemParams = mp;\n\tsetToDefault();"
+ },
+ {
+  "label": "the destructor is not empty",
+  "find": "V90Parameters::~V90Parameters()\n{\n}",
+  "replace": "V90Parameters::~V90Parameters()\n{\n\tPROBING_MODE = 0;\n}",
+  "equivalent": true,
+  "why": "Not an untested claim -- the mutation does not survive the COMPILER.  GCC's `-flifetime-dse`, on by default at -O2, deletes stores to `*this` in a destructor because the object's lifetime is ending, so `~V90Parameters` compiles to a bare `ret` with the mutation applied and without it; `objdump` shows one byte either way and `-fno-lifetime-dse` shows the three-instruction body reappear.  So NO mutation whose whole effect is a store to the destroyed object can ever be caught here, by anything.  Kept because the alternative -- deleting it -- reads as `nobody thought of testing the destructor`.  Finding 878's sibling note: this also means our one-byte destructor matching the object's one-byte destructor is weaker evidence than it looks, and what settles the original's is that GCC 3.4.2 predates -flifetime-dse entirely."
+ },
+ {
+  "label": "the printed fraction keeps its sign",
+  "find": "\t\tif (frac < 0)\n\t\t\tfrac = -frac;",
+  "replace": "\t\tif (frac < 0 && 0)\n\t\t\tfrac = -frac;",
+  "equivalent": true,
+  "why": "The same proof as the entry above: `pr >= 0`, so `pr - (int)pr` is in [0, 1) and `frac` is never negative.  Recorded separately because a reader who changes the divisor or the sign of the field invalidates BOTH and should see both go red."
+ }
+]
