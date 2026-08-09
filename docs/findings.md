@@ -28576,10 +28576,45 @@ symbols and is where V.90 and V.92 live.
 from three requested names. Ambiguity is tolerable for reading; it is not
 tolerable if the output is ever keyed by name.
 
-Not fixed here. The fix is in `decompile.py`: accept `Class::method`, and
-accept a mangled name by demangling it first (`c++filt`, or Ghidra's own
-`DemanglerUtil`) rather than making the caller translate. Worth doing before
-anyone reads `VPcmV34Main.cpp` with it, not after.
+**FIXED, and not by demangling.** The plan above was to demangle the requested
+name inside the script; the implementation does not, because the demangler API
+moves between Ghidra versions and this tree has to work on two of them.
+`decompile.sh` instead resolves each argument through `nm` and passes the
+address when the blob has a symbol of that name, so mangled and plain names go
+by one route with nothing to keep in step. Names `nm` does not know are passed
+through as names, which is what keeps `Resampler::resample` and a bare
+`resample` working.
+
+**The image base is 0x10000, MEASURED, not assumed.** Ghidra loads this
+relocatable object there, so `nm`'s 0x34da0 is Ghidra's 0x44da0. Four probes
+agreed on the offset exactly; the script still reads `getImageBase()` rather
+than baking it in.
+
+Seven checks, each one made to fail first:
+
+    _ZN9Resampler8resampleEPKfjPfRj  -> Resampler::resample     (was: nothing)
+    V90Resampler::resample           -> V90Resampler::resample
+    resample                         -> BOTH, and says so on stderr
+    definitelyNotAFunction           -> rc=1, "NO MATCH for ..."
+    chkForceBaudRate                 -> unchanged, md5 e66d5006
+    mangled + plain in one call      -> both
+    chkForceBaudRate + nosuchthing   -> rc=0, the good one AND the warning
+
+Note which of those the address route buys: asking for the MANGLED name of
+`Resampler::resample` returns exactly one function and the correct one of the
+two `resample`s. A demangle-and-match-by-name fix would have re-introduced the
+ambiguity it was meant to remove.
+
+**AND THE FIRST VERSION OF THE FIX WAS SILENTLY BROKEN IN THE SAME WAY 703
+WAS.** The NO MATCH and AMBIGUOUS lines are written to stderr by
+`decompile.py`, `decompile.sh` redirects the whole run into its log so failures
+can be explained, and the `=====BEGIN`/`=====END` extraction then drops
+anything outside the markers. So the diagnostics were emitted and discarded,
+one layer below the discarding this wrapper had just been fixed for. The first
+round of tests did not catch it because they asserted on the functions that
+came out, not on the warnings that should have. Asserting on stderr and
+getting an empty string is what found it. `grep '^decompile\.py:' "$LOG" >&2`
+is the fix, and the tests now check stderr on every path.
 ### 710. Both operands of the per-sample loop's test are re-read every pass, and only one of them could ever be seen to be
 
 `v34handshak`'s table-1 loop is entered at 0x62933 and re-tested at 0x629e0:

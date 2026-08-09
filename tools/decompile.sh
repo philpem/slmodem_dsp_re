@@ -66,16 +66,21 @@
 # so pointing $GHIDRA at a 12.x tree makes this script fail, by design, with
 # the reason printed.  Finding 703.
 #
-# C++ NAMES DO NOT WORK HERE.  Ghidra demangles, so ask for `resample`, never
-# `_ZN9Resampler8resampleEPKfjPfRj` -- which means no C++ name as written in
-# our own records will match, and the short name is ambiguous across classes.
-# That wants fixing before anyone reads `VPcmV34Main.cpp` with this.  Finding
-# 704.
+# USAGE.  Three ways to name a function, and the mangled one is the point:
+# Ghidra demangles, so it holds no symbol called `_ZN9Resampler8resample...`,
+# and every C++ name in this project's records is exactly that.  Finding 704.
 #
-# USAGE
-#
-#     tools/decompile.sh v34handshak
+#     tools/decompile.sh v34handshak                      plain
+#     tools/decompile.sh _ZN9Resampler8resampleEPKfjPfRj  mangled -- via nm
+#     tools/decompile.sh Resampler::resample              qualified
+#     tools/decompile.sh resample                         AMBIGUOUS: two
+#                                                         classes, both are
+#                                                         decompiled and it
+#                                                         says so on stderr
 #     tools/decompile.sh probeselect chkForceBaudRate > /tmp/draft.c
+#
+# A name that matches nothing is named on stderr rather than silently
+# contributing no output.
 #
 set -eu
 GHIDRA=${GHIDRA:-$HOME/ghidra/ghidra_11.4.2_PUBLIC}
@@ -87,8 +92,32 @@ BLOB=${BLOB:-../slmodemd/dsplibs.o}
 PROJ=$(mktemp -d)
 LOG=$(mktemp)
 trap 'rm -rf "$PROJ" "$LOG"' EXIT
-WANT=$(echo "$@" | tr ' ' ',')
-export WANT
+
+#
+# NAME RESOLUTION HAPPENS HERE, NOT IN GHIDRA.
+#
+# Ghidra demangles, so a C++ function is stored under its short name in a
+# namespace and the object's `_ZN9Resampler8resampleEPKfjPfRj` matches nothing
+# -- while every C++ name in this project's records is the mangled one.
+#
+# `nm` knows the answer already, so each argument is looked up in the blob and
+# passed as an ADDRESS when it is a symbol there.  That resolves mangled and
+# plain names by the same route, exactly, with no demangler API to track
+# across Ghidra versions.  Anything nm does not know is passed through as a
+# name, which is what makes `Resampler::resample` and a bare `resample` work.
+# Finding 704.
+#
+WANT=
+WANT_ADDR=
+for a in "$@"; do
+	off=$(nm "$BLOB" 2>/dev/null | awk -v s="$a" '$3 == s && $2 ~ /[TtWw]/ {print $1; exit}')
+	if [ -n "$off" ]; then
+		WANT_ADDR="$WANT_ADDR${WANT_ADDR:+,}$a=$off"
+	else
+		WANT="$WANT${WANT:+,}$a"
+	fi
+done
+export WANT WANT_ADDR
 
 #
 # THE EXIT STATUS OF analyzeHeadless SAYS NOTHING ABOUT THE SCRIPT.
@@ -113,12 +142,26 @@ export WANT
     -deleteProject >"$LOG" 2>&1 || true
 
 sed -n '/^=====BEGIN/,/^=====END=====$/p' "$LOG" >"$LOG.out"
+
+#
+# THE SCRIPT'S OWN DIAGNOSTICS HAVE TO BE DUG BACK OUT.
+#
+# Everything above is redirected into $LOG so that a failure can be explained,
+# which means decompile.py's NO MATCH and AMBIGUOUS lines land in there too --
+# and the marker extraction drops them, because they are not between =====BEGIN
+# and =====END.  So they were written, and nobody saw them: the identical
+# failure this wrapper was fixed for one layer down, and it survived the first
+# round of testing precisely because the tests only checked that the right
+# functions came out.  Caught by asserting on stderr and getting nothing.
+#
+grep '^decompile\.py:' "$LOG" >&2 || true
+
 if [ ! -s "$LOG.out" ]; then
 	echo "decompile.sh: $HEADLESS produced no decompilation." >&2
 	echo "  ghidra: $GHIDRA" >&2
-	echo "  wanted: $WANT" >&2
+	echo "  wanted: ${WANT:-}${WANT_ADDR:+ }${WANT_ADDR:-}" >&2
 	grep -i 'SCRIPT ERROR\|GhidraScriptLoadException\|Python is not available' \
-	    "$LOG" >&2 || echo "  (no script error in the log; ran the analysis but matched no function?)" >&2
+	    "$LOG" >&2 || echo "  (no script error; the analysis ran and matched no function)" >&2
 	rm -f "$LOG.out"
 	exit 1
 fi
