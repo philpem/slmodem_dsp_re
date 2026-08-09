@@ -179,3 +179,42 @@ And two configuration parameters are ADDRESSES, not numbers —
 construct at all (DPRUNTIME, DSPINFO, MIN_RATE 2400, MAX_RATE 33600, IODELAY
 40), which bounds the result: **the configuration is plausible, not
 recovered.** Deriving it properly is wave 1's job.
+
+## Where wave 0 got to
+
+**The two parameter blocks landed first and alone, and their layout is now
+frozen.** `include/dsplib/V90Parameters.h` (0x558, 342 slots) and
+`include/dsplib/V92Parameters.h` (0xdc, 55 slots) carry the ORIGINAL AUTHOR'S
+OWN NAMES for 291 and 54 of them. Findings 860-862.
+
+They came out of a shape nobody had looked at: `loadParams(char *)` is 7,894
+bytes of nothing but 295 straight-line calls to `Vparser_read_int` and
+`Vparser_read_float`, each carrying the parameter's name as a relocation and
+its offset as a `lea` displacement. Both callees are three-byte stubs, so the
+member has no behaviour at all — and it is a complete, self-describing field
+map, which nothing else in the object is. `tools/vparse.py` reads it.
+
+Three measurements agree and none disagrees: `loadParams`'s (name, offset,
+type), `setToDefault`'s (offset, width, value) from a separate walk of a
+separate function, and the `sysdep_malloc` immediately before each constructor.
+Last field plus four is the malloc size in both classes.
+
+**`make params` is a new phase gate and it exists for a specific hole.** A
+header with no member defined is invisible to `test`, to `coverage.py` and to
+`check64` alike, so a later batch could move every field and the tree would
+stay green. The gate re-extracts the map from the blob at gate time and
+compares it with the header text, AND compiles 397 emitted `offsetof`
+assertions. Both halves were shown to fire; the second was added because the
+first could not see a deleted `unnamed_*` slot, which moves every field after
+it while every comment stays put.
+
+Two things any later batch must know:
+
+- **The layout is not open for revision.** If you find evidence a field is
+  wrong, that is a conversation and not an edit; `make params` will fail the
+  build for the whole tree, which is the intent.
+- **Fifty-one V.90 fields are `unnamed_*` on purpose.** `setToDefault` writes
+  them and `loadParams` never reads them, so they have no recoverable name.
+  They are four bytes each and in the right place. Twenty-five run
+  consecutively from +0x300 to +0x360 and are very likely one array; naming
+  them needs a reader, not a writer.
