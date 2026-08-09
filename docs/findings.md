@@ -31142,3 +31142,216 @@ Also: both headers had to go in `SKIP_HEADERS` in `tools/offcheck.py`, which
 v90rest.md says wave 1 paid for twice. `offcheck` compiles every header it does
 not skip **as C**, so a `class` turns into `907 of 907 annotations do not match
 the layout` -- a message about offsets, from a parse error.
+
+### 873. `FloatARMA` is 52 bytes, and two of its claims are codegen-only
+
+`tools/cppstruct.py FloatARMA` gives five members and 1,770 bytes, the
+constructor and destructor each emitted twice byte-identically (C1/C2, D1/D2).
+**No deleting `D0`**, so offset 0 is a real member and there is no vptr --
+finding 228's argument, the same one `FloatFIR` rests on.
+
+The mangling gives `FloatARMA(unsigned, unsigned, float *, float *, unsigned)`
+and stops there. The object says which pair is which: the constructor divides
+**both** coefficient arrays by `arg3[0]` and then stores `0.0f` over
+`m_a[0]`, and `process` **subtracts** the second dot product from the first.
+That is the normalisation of a recursive filter, so the FIRST count/pointer
+pair is the DENOMINATOR:
+
+    y[n] = SUM(k < nB) b[k] x[n-k]  -  SUM(k = 1 .. nA-1) a[k] y[n-k]
+
+with `a[]` and `b[]` both pre-divided by the caller's `den[0]`, and `a[0]`
+forced to zero so the k = 0 feedback term contributes nothing. When `den[0]`
+is exactly 1.0f an `fcom`/`je` at 0x472b8 skips **both** scaling loops and
+only the `m_a[0] = 0.0f` remains.
+
+    +0x00 float *m_a       owned, m_nA entries, a[0] == 0.0f
+    +0x04 float *m_b       owned, m_nB entries
+    +0x08 float *m_xhist   owned, m_xlen entries
+    +0x0c float *m_yhist   owned, m_ylen entries
+    +0x10 unsigned m_nA    denominator taps, multiple of four
+    +0x14 unsigned m_nB    numerator taps, multiple of four
+    +0x18 unsigned m_xlen  m_nB + blockSize
+    +0x1c unsigned m_ylen  m_nA + blockSize
+    +0x20 int m_xpos       input write index, counts DOWN
+    +0x24 int m_ypos       output write index, counts DOWN
+    +0x28 unsigned m_idx   the fill loops' index, left behind (finding 874)
+    +0x2c float m_fwd      the b.x sum, then the output
+    +0x30 float m_fbk      the a.y sum
+                           0x34 bytes
+
+**Note the crossing**: `m_xlen` at +0x18 is built from the tap count at +0x14
+and `m_ylen` at +0x1c from the one at +0x10. It is the object's own pairing
+(0x47189 `lea (%edx,%ecx,1),%esi` against 0x4718c `add %ecx,%eax`), not a
+transcription slip, and it is the first thing a reader will assume is one.
+The size is 0x34 and not 0x2c: the largest displacement in `process(float)`
+is +0x30, and `process(const float *, float *, unsigned)` -- the member
+outside the closure -- reaches no further, so both were read before the size
+was written down.
+
+**The tap counts round UP**, which is the opposite of `FloatFIR` and
+`FloatIIR`: `and $0xfffffffc` then a conditional `add $0x4`. Asking for 5
+denominator taps gets 8, and the slots between the caller's count and the
+rounded one are zero-filled by a second loop. Both `process` overloads use
+`FloatFIR`'s two-extended-accumulator dot product with a one-at-a-time tail
+that, because of the rounding, can never run.
+
+**Two claims here are real and tier 1 provably cannot see either.**
+
+1. *The scaling forms a reciprocal and multiplies*: `fld1`, `flds den[0]`,
+   `fdivr`, `fmuls`, `fstps` -- not `fdivs`. Writing it as `b/d` instead
+   passes every differential test there can be. For the two to disagree the
+   exact quotient must fall within about 2**-63 of a float half-way point, and
+   it cannot: `b` and `d` are floats, so the quotient is `B/D` with `B` and
+   `D` 24-bit integers, and `|B/D - M/2**25| >= 1/(D * 2**25) >= 2**-49` for
+   every integer `M` -- fourteen binary orders above the double-rounding
+   error. Measured as well as argued: 40 million random pairs of the fixture's
+   own shape and 60 million drawn from the whole float space, both signs,
+   denormals and extremes included, gave **zero** separations. It is recorded
+   as an equivalent mutation carrying that argument, and it is the kind of
+   claim `make similarity` exists for.
+2. *`den[0]` is re-read on every iteration of both scaling loops*, because the
+   store to `m_a[i]`/`m_b[i]` may alias it. It provably cannot -- those arrays
+   are `sysdep_malloc` returns from three statements earlier in the same
+   constructor -- so hoisting the load is unobservable. Also recorded as
+   equivalent.
+
+**One thing the blob does that looks like a defect and is left alone.** With
+`nDen == 0` the constructor still executes `m_a[0] = 0.0f` (0x4731e and
+0x47379 are both unconditional), writing four bytes through a
+`sysdep_malloc(0)`. `t_floatarma` constructs and destroys that shape and does
+not drive it: with `m_nA == 0` the carry-tail loop's `dec %edx; jne` count
+underflows, which is `FloatFIR`'s zero-tap hazard in a second class.
+
+### 874. Two identical fill loops, two different exit values, and neither is an anomaly
+
+`FloatARMA` uses a MEMBER, `m_idx` at +0x28, as the index of every fill loop
+in the constructor and in `reset`. That is unusual enough to record on its
+own, because it makes each loop's exit value part of the object's observable
+state -- and the object appears to disagree with itself about what that value
+is.
+
+`reset` clears two buffers with two loops of identical shape. The first
+(0x470dd) writes `m_idx` at the top of each iteration and leaves it holding
+`m_xlen - 1`. The second (0x47330) keeps the index in `%eax` and stores it
+once at 0x4735c, leaving `m_ylen`. Same source shape, two different exit
+values, one of them off by one -- which reads as a compiler bug, or as two
+loops written two different ways, and is neither.
+
+**The first loop's final store is DEAD.** The instruction right after that
+loop, at 0x47102, is `movl $0x0,0x28(%ecx)` -- the second loop's `m_idx = 0`.
+GCC rotated the loop so the store of the incremented index happens at the top
+of the *next* iteration, and then simply did not emit the one store that would
+have been overwritten before anything could read it. So the value `m_xlen - 1`
+never exists in the object; it is an artefact of reading a loop's last
+executed store as its exit value.
+
+The consequence is the useful part: `for (m_idx = 0; m_idx < n; m_idx++)`
+written twice, the natural spelling, reproduces the object exactly, and
+**after `reset` -- and therefore after the constructor, whose tail is an
+inlined `reset` -- `m_idx` holds `m_ylen`, or 0 when `m_ylen` is 0.** No
+contortion is needed anywhere. The same reading applies to the constructor's
+four coefficient loops, whose exit values are all overwritten by the inlined
+`reset` and are likewise unobservable.
+
+The general rule, which cost this batch an hour: **before treating a loop's
+apparent exit value as a claim, look at the next store to the same location.**
+A partially dead store is invisible in the loop it belongs to and obvious one
+instruction later.
+
+### 875. `Psd` is 16 bytes; `OutputOption` is 0/1/2 and `WindowType` was already ours
+
+`tools/cppstruct.py Psd` gives six members and 900 bytes, C1/C2 and D1/D2
+byte-identical, no deleting `D0` -- not polymorphic, finding 228 again.
+
+    +0x00 unsigned m_length    segment and transform length
+    +0x04 unsigned m_overlap   samples shared between segments
+    +0x08 float *m_window      owned, m_length entries
+    +0x0c float *m_fft         owned, m_length + 1 entries
+                               0x10 bytes
+
+`getFrequencies`, the member outside the closure, reaches no further than
++0x00, so 16 bytes is read from all six and not from the three in scope.
+
+**Two type declarations were asked for and only one was needed.**
+`WindowType` is already `include/dsplib/DspMath.h`'s, with its four
+enumerators read from `designWindow`'s switch, and `designWindow<float>` is
+already reconstructed in `src/dsp/DspMath.cpp` and already compared against
+the blob by `t_dspmath` -- so `Psd`'s constructor test is two independent
+implementations meeting, not a hybrid. Only `Psd::OutputOption` was new. Its
+values come out of the compare chain at 0x4683b:
+
+    cmp $0x1 / je     1   10 * log10(sum / peak + 1e-25)
+    jle           ->  0   10 * log10(sum / segments + 1e-25); reached through
+                          a SIGNED jle and then `test %ebx,%ebx / jne`, so
+                          anything negative returns having done nothing
+    cmp $0x2 / je     2   sum / segments
+    fall through          anything else leaves the accumulated sum alone
+
+The two constants are `.rodata.cst4+0x3c4` = 10.0f and `.rodata.cst8+0x108` =
+1e-25. The enumerator NAMES are invented; an enum's names are never mangled.
+
+Three details worth carrying: the spectrum buffer is allocated with
+`m_length + 1` floats and written from index **1**, the Numerical Recipes
+convention `realfft` expects, and `m_fft[0]` is never touched; the window type
+is **not stored anywhere**, so the object cannot be asked which one it holds
+and `setWindowType`'s only trace is the window itself; and neither buffer is
+cleared by the constructor, so `m_fft` carries allocator fill out of it.
+
+**The flat window is this class's vacuous case.** `WINDOW_BOXCAR` is all
+ones, so a `setWindowType` that ignored its argument would agree with a boxcar
+reference for ever. `t_psd` therefore checks the four shapes against each
+other as well as against the blob, and the mutation `setWindowType always
+designs a boxcar` is what shows that check firing.
+
+`getFrequencies` needed one fixture row chosen against the x87 and not for
+coverage. It forms `(i * rate) * (1 / length)` and not `i * (rate / length)`,
+and the two agree to the last bit over every ordinary length and sample rate;
+a search over lengths to 512 and eight rates found the first separating triple
+at **length 104, rate 1234.5678, bin 39** -- 462.962891 against 462.962921.
+Before that row went in, the mutation `the product is associated the other
+way` was NOT CAUGHT. A claim about association order needs a fixture built
+against it; coverage will not stumble into one.
+
+### 876. `Psd::process` is blocked twice, and clearing either alone does not unblock it
+
+`Psd::process` (635 bytes, 0x46750) is the largest member of this batch and is
+**not written**. Two independent blockers, recorded together because fixing
+the first and re-discovering the second is the expensive order:
+
+1. **It calls `realfft`, which calls `four1`, and neither is reconstructed.**
+   That alone would not stop it -- except that the Makefile renames every
+   symbol the blob defines to `ref_*`, so a reference to `realfft` from our
+   side resolves to nothing and the link fails. Checked against the artefact
+   rather than inferred from the comment on `Makefile:149`:
+
+       $ nm build/dsplibs_ref.o | grep -E 'realfft|four1'
+       000536c0 T ref__Z5four1Pfmi
+       00053830 T ref__Z7realfftPfmi
+
+   `realfft` is 505 bytes and `four1` 368; both are free functions in
+   `docs/vpcmv34main.md`'s wave-1 group and belong to nobody yet. A test-local
+   weak definition of `_Z7realfftPfmi` forwarding to `ref__Z7realfftPfmi`
+   would link and would be exactly gates.md's "result indistinguishable from
+   success": a production symbol name defined inside a test object, silently
+   overridden or not depending on link order once wave 1 writes the real one.
+   Not done.
+
+2. **Two of its four output arms compute log10 with `fldlg2`/`fxch`/`fyl2x`**
+   (0x4691a and 0x469a9), which GCC emits only under
+   `-funsafe-math-optimizations`. That flag is not in this tree's derived set
+   (`tools/toolchain/build.sh`), so our build would call libm and the two
+   would differ in the last bit. Reproducing it means inline x87 asm, in a
+   file that is also built 64-bit for `$(CXXOBJ64)`.
+
+So `realfft` and `four1` are the unblocking work, and the log10 arms need a
+decision of their own after that. What IS recoverable from the disassembly
+without writing any of it, and is in `include/dsplib/Psd.h` so the next batch
+does not re-derive it: the segment count is
+`(count - m_overlap) / (m_length - m_overlap)`, each segment is windowed into
+`m_fft[1 .. m_length]` and transformed by `realfft(m_fft, m_length, 1)`, the
+accumulation is `out[i] += re*re + im*im` over `m_fft[2i+1]` and `m_fft[2i+2]`
+for `i < m_length / 2`, and the four arms are finding 875's table.
+
+The rest of the class is written and passes: constructor, destructor,
+`setOverlapLength`, `setWindowType` and `getFrequencies`. That is 265 bytes of
+the 900, and 140 of the 775 in the closure.

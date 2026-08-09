@@ -53,5 +53,7 @@
  "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"],
  "v34hsrx53":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx53"],
  "v34hsrx4":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx4"],
- "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"]
+ "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"],
+ "floatarma":      ["src/dsp/FloatARMA.cpp", "build/test/t_floatarma"],
+ "psd":            ["src/dsp/Psd.cpp", "build/test/t_psd"]
 }
