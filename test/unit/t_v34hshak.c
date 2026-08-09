@@ -857,7 +857,7 @@ run_setupreceiver(short baud, short carrier, short gain, long tag)
 
 static unsigned char preemp_obj[PREEMP_SIZE];
 
-static void
+static short
 run_preempindex(short limit, short meas, short baud, long tag)
 {
 	short got, want;
@@ -872,6 +872,32 @@ run_preempindex(short limit, short meas, short baud, long tag)
 	got = preempindex(preemp_obj, baud);
 	want = ref_preempindex(preemp_obj, baud);
 	diff_eq_int("preempindex", got, want, tag);
+	return got;
+}
+
+/*
+ * One case with the transcripts captured and compared.
+ *
+ * IT RETURNS THE INDEX because the transcript cannot say which exit ran:
+ * both of them can produce a 10, and the only difference between the two
+ * lines is one space.  A caller that wants to claim it drove a particular
+ * site needs the index and the reference's text, not either alone.
+ */
+static short
+run_preempindex_traced(short limit, short meas, short baud, long tag)
+{
+	short got;
+
+	dsplib_debug_capture_reset();
+	got = run_preempindex(limit, meas, baud, tag);
+	diff_eq_int("preempindex transcript",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("preempindex transcript non-empty",
+		    dsplib_debug_capture_text(1)[0] != 0, 1, tag);
+	diff_eq_int("and ours printed too",
+		    dsplib_debug_capture_text(0)[0] != 0, 1, tag);
+	return got;
 }
 
 /* --- v34handshakinit ------------------------------------------------------ */
@@ -1498,6 +1524,115 @@ main(void)
 			diff_eq_int("the sweep reached index 6", saw6, 1, 0);
 			diff_eq_int("the sweep reached index 10", saw10, 1, 0);
 		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE TWO REACHABLE EXITS ANNOUNCE THEMSELVES, and until this block
+	 * neither announcement had ever run.  Everything above drives
+	 * `preempindex` at level 0, where every gate is false, so both of
+	 * its live sites executed zero times over the whole suite and
+	 * `tools/debugcov.py` named v34hshak.c:823 and :834 as the file's
+	 * last two dead sites.  The function being under test is not the
+	 * same thing as its diagnostics being driven.
+	 *
+	 * The third gate does not appear in that list at all, and its
+	 * absence is not evidence of anything: "index is 0" is D36's dead
+	 * branch, GCC folds the `i == 5` body away, and gcov marks an
+	 * eliminated body NOT EXECUTABLE rather than executed-zero-times.
+	 * Finding 219, which nearly published the opposite.
+	 *
+	 * WHAT SEPARATES THE TWO LIVE SITES IS ONE SPACE.  The object
+	 * prints `baudrate= %d\n` where the multiply passed the limit and
+	 * `baudrate= %d \n` where the loop ran out, and BOTH can return 10
+	 * -- so the index does not say which site produced a line, and no
+	 * assertion here quotes a string of ours.  The blob's own capture
+	 * is the oracle, and the three cases are chosen so that it can be:
+	 *
+	 *   (0, 100, b)      the first multiply passes a zero limit, so
+	 *                    this is the compare exit at index 6
+	 *   (32767, 0, b)    no short is greater than 32767, so the
+	 *                    compare can never be taken and the loop must
+	 *                    run out: the other exit, index 10
+	 *   (100, 7, 2400)   the compare exit AT index 10
+	 *
+	 * The last two return the same index for the same baud rate and
+	 * must still print DIFFERENT lines.  That is the check that makes
+	 * this a test of two sites rather than of one: a reconstruction
+	 * that used either string at both exits, or dropped the space,
+	 * agrees with everything else in this file.
+	 */
+	diff_begin("v34 handshake: preempindex names the index it found");
+	{
+		static const short b[] = { 2400, 2800, 3000, 3200, 3429 };
+		unsigned lvl, k;
+		int saw_cmp = 0, saw_brk = 0;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++) {
+			char brk10_ours[256], brk10_ref[256];
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			for (k = 0; k < sizeof(b) / sizeof(b[0]); k++) {
+				long t = (long)lvl * 1000 + k;
+
+				if (run_preempindex_traced(0, 100, b[k],
+							   21000 + t) == 6)
+					saw_cmp = 1;
+				if (run_preempindex_traced(32767, 0, b[k],
+							   22000 + t) == 10)
+					saw_brk = 1;
+			}
+
+			/*
+			 * The pair that shares an index and not a site.
+			 * BOTH SIDES' TEXT IS COPIED OUT, and each side is
+			 * then compared with ITSELF at the other exit: our
+			 * compare-exit line against the reference's
+			 * loop-exhausted one would pass with our two exits
+			 * printing the same thing, which is the mutant this
+			 * check exists for.  The second run resets the
+			 * buffer both texts live in.
+			 */
+			diff_eq_int("the loop-exhausted exit returned 10",
+				    run_preempindex_traced(32767, 0, 2400,
+							   23000 + (long)lvl),
+				    10, (long)lvl);
+			snprintf(brk10_ours, sizeof(brk10_ours), "%s",
+				 dsplib_debug_capture_text(0));
+			snprintf(brk10_ref, sizeof(brk10_ref), "%s",
+				 dsplib_debug_capture_text(1));
+
+			diff_eq_int("and so did the compare exit",
+				    run_preempindex_traced(100, 7, 2400,
+							   23100 + (long)lvl),
+				    10, (long)lvl);
+			diff_eq_int("the object says the two exits apart",
+				    strcmp(dsplib_debug_capture_text(1),
+					   brk10_ref) != 0, 1, (long)lvl);
+			diff_eq_int("and so do we",
+				    strcmp(dsplib_debug_capture_text(0),
+					   brk10_ours) != 0, 1, (long)lvl);
+		}
+
+		/*
+		 * The two witnesses, and only two: a third saying "the
+		 * distinctness pair ran" would be set unconditionally inside
+		 * a loop with constant bounds and could not fail, which is a
+		 * comment rather than a check (gates.md, rule 2).  These two
+		 * can fail -- they are what says the designated cases still
+		 * land on the exits they are named for.
+		 */
+		diff_eq_int("the compare exit ran with the level up",
+			    saw_cmp, 1, 0);
+		diff_eq_int("the loop-exhausted exit ran too", saw_brk, 1, 0);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
@@ -3020,21 +3155,30 @@ main(void)
 			run_setfinalrate(0x0004, 0x0000, 0x0080, 0x00,
 					 9520 + (long)lvl);
 
-			/* A middle index and the index-10 arm.  The
+			/*
+			 * BOTH LIVE GATES, from the first pair onwards: the
+			 * loop-exhausted exit and then a middle index.  The
 			 * index-0 arm is unreachable -- see D36 -- so its
-			 * gate cannot be driven from here or anywhere. */
+			 * gate cannot be driven from here or anywhere.
+			 */
 			run_preempindex(4000, 100, 3200, 9541 + (long)lvl);
 			run_preempindex(0, 0x7fff, 3429, 9542 + (long)lvl);
 			/*
 			 * Four more combinations, compared at every level.
-			 * They do NOT reach the function's other two
-			 * announcements: those need the loop to return an
-			 * index in 6..10, and every set tried here comes back
-			 * 0 or 5.  Picking values that land in that range
-			 * means reading what the loop multiplies by per rate,
-			 * which is still to do -- the cases are kept because
-			 * more argument combinations differentially checked
-			 * is worth having on its own.
+			 *
+			 * THIS COMMENT USED TO SAY THEY REACH NEITHER OF THE
+			 * OTHER TWO ANNOUNCEMENTS, "because every set tried
+			 * here comes back 0 or 5" -- which the function
+			 * cannot do at all, its range being 6..10 (D36).
+			 * Measured instead of reasoned about, with the level
+			 * raised and the reference's transcript printed:
+			 * these return 9, 10, 10 and 10, so two of the six
+			 * calls in this section take the compare exit and
+			 * four the loop-exhausted one, and every gate this
+			 * function has that CAN be driven is driven here at
+			 * levels 0 and 1.  A note saying a site cannot be
+			 * reached is the thing that stops anyone looking, so
+			 * it is worth more than the four cases it describes.
 			 */
 			run_preempindex(100, 10, 2400, 9543 + (long)lvl);
 			run_preempindex(1000, 10, 2800, 9544 + (long)lvl);

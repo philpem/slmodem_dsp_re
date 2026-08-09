@@ -590,6 +590,90 @@ main(void)
 	rc |= diff_end();
 
 	/*
+	 * THE SAME SWEEP WITH THE SITES LIVE.  The block above runs at
+	 * level 0, where all six gates are false, so it executes none of
+	 * them: `tools/debugcov.py` named v34info.c:625 and :631 -- MHack
+	 * and MHnack -- as this file's last two dead sites.  The other four
+	 * are live only because `v34hstx1`'s arm 24 reaches selectors 0..3
+	 * with the level up, and that dispatch does nothing at all for a
+	 * `moh_message` outside 0..3: that is the whole of the four-live,
+	 * two-dead split.  The builder's other caller, `v34handshakinit`
+	 * mode 4, does pass the selector through, and `t_v34hshak.c`
+	 * sweeps all six -- at level 0, its mode-4 transcript block
+	 * seeding 9 on purpose.  So this could have been closed in two
+	 * places; it is closed here because this is where the function's
+	 * oracle is.
+	 *
+	 * THE TRANSCRIPT IS THE ONLY THING THAT SEPARATES THE SIX.  Each
+	 * arm's whole effect on state is one short, and two of them can
+	 * write the same one -- so a byte comparison cannot tell MHreq's
+	 * announcement from MHfrr's, and swapping two of the six strings
+	 * passes the block above without a murmur.  Nothing below quotes a
+	 * string: the blob's own capture is the oracle.
+	 *
+	 * THE LINE COUNT IS PART OF THE CLAIM.  In range each arm prints
+	 * exactly one line; out of range the object does nothing at all --
+	 * not even the debug line, since its single unsigned bound is
+	 * ahead of every arm -- so the count is the selector's range test
+	 * observed from the outside, on both sides.
+	 */
+	diff_begin("v34 info: SetMohMessageBits names what it built");
+	{
+		static const int sel[] = { 0, 1, 2, 3, 4, 5, 6, 7, 100,
+					   -1, -1000, 0x7fffffff };
+		unsigned lvl, si, r, v;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 2; lvl <= 3; lvl++)
+		for (si = 0; si < sizeof(sel) / sizeof(sel[0]); si++)
+		for (r = 0; r < 4; r++)
+		for (v = 0; v < 4; v++) {
+			static const unsigned char reasons[] = { 0, 1, 2,
+								 0xff };
+			static const short adds[] = { 0, 1, 0x0f,
+						      (short)0xffff };
+			long tag = (long)lvl * 10000 + (long)si * 100
+				 + r * 10 + v;
+			int lines = (sel[si] >= 0 && sel[si] <= 5) ? 1 : 0;
+			short m[V34_INFO_MSG_SHORTS];
+			int j;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			setup();
+			for (j = 0; j < V34_INFO_MSG_SHORTS; j++)
+				m[j] = (short)(0x7000 + j);
+			set_msg(m);
+			poke_int(0xabf0, sel[si]);
+			poke_byte(0xabfa, reasons[r]);
+			poke_short(0xabe0, adds[v]);
+			dsplib_debug_capture_reset();
+
+			VPcmV34SetMohMessageBits(&oa, msg_a);
+			ref_VPcmV34SetMohMessageBits(ob, msg_b);
+
+			compare_all("SetMohMessageBits, logging", tag);
+			diff_eq_int("SetMohMessageBits transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("the object said one line, or none",
+				    (int)dsplib_debug_capture_lines(1),
+				    lines, tag);
+			diff_eq_int("and so did ours",
+				    (int)dsplib_debug_capture_lines(0),
+				    lines, tag);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
 	 * EXHAUSTIVE OVER ALL 65,536 FIRST SHORTS, because the decision is a
 	 * function of that one value and nothing else.  There is no argument
 	 * to make about which values are interesting -- the arms are five
@@ -867,7 +951,7 @@ main(void)
 	{
 		short m[V34_INFO_MSG_SHORTS];
 		unsigned lvl;
-		int j;
+		int j, sel;
 
 		dsplib_debug_capture_on = 1;
 
@@ -905,8 +989,20 @@ main(void)
 			ref_V34GiveINFO0dBits(ob, msg_b);
 			V34GiveINFO1aBits(&oa, msg_a);
 			ref_V34GiveINFO1aBits(ob, msg_b);
-			VPcmV34SetMohMessageBits(&oa, msg_a);
-			ref_VPcmV34SetMohMessageBits(ob, msg_b);
+			/*
+			 * ALL SIX SELECTORS, one gate each.  The fixture
+			 * fills the object with HARNESS_MALLOC_FILL and
+			 * nothing here wrote +0xabf0, so this call used to
+			 * arrive with the selector out of range and reach no
+			 * arm at all: six `if (1)` mutants, all of them
+			 * alive, in the one block whose whole job is to
+			 * catch them.
+			 */
+			for (sel = 0; sel <= 5; sel++) {
+				poke_int(0xabf0, sel);
+				VPcmV34SetMohMessageBits(&oa, msg_a);
+				ref_VPcmV34SetMohMessageBits(ob, msg_b);
+			}
 			/*
 			 * Both an arm that matches and the one that does not,
 			 * since the latter is the only four-site arm in the

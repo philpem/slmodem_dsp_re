@@ -31339,3 +31339,152 @@ there joins `make phase`, and this is a measurement rather than a test. It
 interposes on `malloc`, sets both debug levels to 2, and depends on
 `setarch -R`; none of that belongs in the suite. What is committed is this
 record.
+
+======================================================================
+### 920. The MOH builder's last two announcements are the two arms its only live-level caller cannot reach
+
+`tools/debugcov.py` named `v34info.c:625` and `:631` -- the MHack and MHnack
+arms of `VPcmV34SetMohMessageBits` -- as that file's last two never-executed
+diagnostic call sites.  This is task #53, opened at three sites and reduced to
+two by finding 651, where `v34hstx1`'s arm 24 reached one of them.
+
+**Why exactly four of the six were live.**  Arm 24's dispatch **does nothing
+at all for a selector outside 0..3** -- t_v34hstx1.c's own note -- so the one
+caller that was being driven with the level up could reach four arms and never
+the other two.  That is the whole of the 4-live/2-dead split.
+
+**The other caller could have closed it and does not.**  `v34handshakinit`'s
+mode 4 hands the object straight to the builder, selector and all, and
+`t_v34hshak.c` sweeps that selector over all six messages plus one out of
+range -- at level 0.  Its mode-4 transcript block, which does raise the level,
+seeds `moh_message` = 9 deliberately ("above 5, builds nothing").  So there
+were two places this could have been fixed; it is fixed in `t_v34info.c`
+because that is where the function's own oracle is -- the message buffer, the
+object, the session and three sub-blocks, all compared byte for byte -- and a
+transcript is worth most beside the state it is a transcript of.
+
+**The sweep that drives the function is why they were dead, not an argument
+against driving them.**  `t_v34info.c` already sweeps the selector past its
+bound in both directions -- twelve values, four reason codes, four time-out
+codes -- and every one of those 192 cases runs at level 0, where all six gates
+are false.  Finding 209's sentence for the fifth time: the runs that drive the
+site sit above the level sweep.
+
+**The transcript is the only oracle these six arms have.**  Each arm's whole
+effect is one short, and two of them can write the same one, so a byte
+comparison cannot separate MHreq's announcement from MHfrr's.  Swapping the
+MHack and MHnack strings is invisible to the level-0 sweep, invisible to
+`debugaudit --invented` (both strings are still the object's), and invisible
+to the byte compare.  The new block catches it in 32 cases.  Shown to fire,
+per finding 134:
+
+```
+  MHack's string replaced by MHnack's   FAIL ... names what it built  32/6144
+  the level-0 sweep, same mutant        PASS
+```
+
+**The line COUNT is the range test observed from outside.**  In range each arm
+prints exactly one line; out of range the object prints nothing at all -- its
+single unsigned bound is ahead of every arm -- so `dsplib_debug_capture_lines`
+is checked on both sides at every case, which turns v34info.c's "not even the
+debug line" from a header comment into a check.
+
+**The gate half needed one line and had been passing vacuously.**  The
+"below the threshold, nothing is said" block already called the builder, but
+the fixture leaves `+0xabf0` at `HARNESS_MALLOC_FILL` and nothing there wrote
+it, so the call arrived with the selector out of range and reached no arm:
+**six `if (1)` mutants, all alive, in the block whose only job is to catch
+them.**  Measured both ways rather than argued -- `if (1)` on the MHack gate
+fails 16 of that block's 32 checks with the selector swept, and passes it
+without:
+
+```
+  for (sel = 0; sel <= 5; sel++) poke_int(0xabf0, sel);   FAIL 16/32
+  the same block with the poke removed                    PASS
+```
+
+That counterfactual is the finding.  A block named for catching ungated sites
+was reaching one arm of one function in the file it is about.
+
+======================================================================
+### 921. `preempindex`'s two live announcements differ by one space, and the note saying they could not be reached was arithmetic nobody had run
+
+`tools/debugcov.py` named `v34hshak.c:823` and `:834` as the file's last two
+never-executed sites.  Task #55, and both are the same shape as 920: the
+function is swept exhaustively -- five baud rates by eleven limits by sixteen
+measurements, 880 cases -- and every one of them runs at level 0.  **A
+function being under test is not its diagnostics being driven**, which is the
+whole point of the #50-#55 family.
+
+**Only two of its three gates can be driven, and the third's absence from the
+dead list proves nothing.**  "index is 0" is D36's branch: the counter is
+incremented at the top of the loop, so `i == 5` is false wherever it can be
+reached.  It does not appear in `debugcov`'s output because GCC folds the body
+away and gcov marks an eliminated body NOT EXECUTABLE rather than
+executed-zero-times -- finding 219, which nearly published the opposite
+reading of the same silence.  D37's unknown-baud-rate case is not swept and
+correctly is not: the object has no default arm and multiplies whatever the
+caller left in `%edx` and `%esi`.
+
+**WHAT SEPARATES THE TWO LIVE SITES IS ONE SPACE.**
+
+```
+    exit on the compare      'V34PREEMPHASIS, - index is %d, baudrate= %d\n'
+    exit on the loop count   'V34PREEMPHASIS, - index is 10, baudrate= %d \n'
+```
+
+and **both can return 10**, so the index does not say which site produced a
+line.  Three cases make the reference's own capture able to tell them apart:
+
+| case | exit | index |
+|---|---|---|
+| `(0, 100, b)` | the first multiply passes a zero limit | 6 |
+| `(32767, 0, b)` | no short exceeds 32767, so the compare is unreachable and the loop must run out | 10 |
+| `(100, 7, 2400)` | the compare, AT index 10 | 10 |
+
+The last two return the same index for the same baud rate and must still print
+different lines.  Nothing asserts against a literal -- the check is each
+side's text against ITSELF at the other exit, which is what a mutant that
+prints one string at both exits fails.  Shown to fire:
+
+```
+  the trailing space deleted    FAIL ... names the index it found   14/106
+                                including `and so do we` at both levels
+  the same mutant, the 880-case level-0 sweep                       PASS
+```
+
+**The first version of that check was weaker and the mutation said so.**  It
+compared OUR compare-exit text against the REFERENCE's loop-exhausted one,
+which differ for a reason unrelated to the claim; the space mutant left it
+passing while the per-case transcript compare failed.  Two sides and two
+exits is four texts, and the only comparison that is about our side is ours
+against ours.
+
+#### The comment that was the real defect
+
+The below-threshold block carried this, against four of its six calls:
+
+> They do NOT reach the function's other two announcements: those need the
+> loop to return an index in 6..10, and every set tried here comes back 0 or 5.
+
+**The function cannot return 0 or 5.**  D36 says its range is 6..10 and this
+file's own sweep asserts both ends of it, so the sentence contradicts two
+things already written down beside it.  Measured, by raising the level and
+printing the reference's line for each:
+
+```
+  (4000, 100, 3200) -> 10   loop-exhausted      (1000, 10, 2800) -> 10   loop-exhausted
+  (0, 32767, 3429)  ->  8   compare             (8000, 10, 3000) -> 10   loop-exhausted
+  (100, 10, 2400)   ->  9   compare             (32767, 1, 3429) -> 10   loop-exhausted
+```
+
+All six reach a live announcement; the two the block's other comment named
+were labelled the wrong way round as well.  So the gate half of task #55 was
+already covered and had been described as impossible -- confirmed by mutating
+the index-10 gate to `if (1)` and watching that block fail 2 of 120.
+
+**A note saying a site cannot be driven is worth more than the code it sits
+beside, and costs more when it is wrong.**  It is the thing that stops the
+next reader looking, and this one had survived long enough to be quoted into a
+task as the reason two sites were untestable.  Finding 210's lesson with the
+sign flipped: there a skip outlived its reason, here a reason was never true.
