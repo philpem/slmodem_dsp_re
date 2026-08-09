@@ -30604,3 +30604,287 @@ a coincidence worth a second finding.
 
 x87 remains unmeasured on every version, and this object is `-mfpmath=387`.
 That part stands.
+
+### 780. A whole V.34 call between two instances, run four ways, and all four agree block for block
+
+Every test of `v34handshak` before this one drives one function, or one
+dispatch case, and compares. None of them exercises the transitions *between*
+cases, the ordering, or what a sequence of blocks leaves behind — and that is
+where a reconstruction assembled case by case is most likely to be wrong while
+every unit still passes. `test/unit/t_v34call.c` is the oracle for that:
+
+```
+    per sample   obj->f260 is the sample off the line and obj->f25e the one
+                 onto it; `modem_serrint` reads the first, cancels the echo,
+                 pushes the residual onto the receive queue and pops the next
+                 transmit sample into the second
+    per block    `datapumpv34`, whose +0x2218 > 1 branch calls `v34handshak`
+                 until the transmit block is full AND the receive queue drained
+```
+
+Two objects, one originating (`+0x359c == 0x65`) and one answering (`0x66`),
+wired to each other with one sample of delay each way and nothing else — no
+attenuation, no noise. 1,600 blocks of four samples.
+
+**BOTH OF THE TWO SHAPES ASKED FOR ARE HERE, and the second is nearly free
+once the first is parameterised.** The call runs four times over the same two
+arenas:
+
+| run | originate | answer | |
+|---|---|---|---|
+| `blob-blob` | the blob's | the blob's | the oracle |
+| `ours-ours` | ours | ours | |
+| `ours-blob` | ours | the blob's | |
+| `blob-ours` | the blob's | ours | |
+
+Every block of every run is compared against the same block of `blob-blob`:
+the object as a hash with the thirty-seven pointer skips excluded, the arena
+outside it, the three state words, the block's transcript, its line count and
+its non-zero transmit-sample count. **All four runs agree on all 1,600 blocks
+and both endpoints — 3,200 block-endpoint pairs per run.** The two mixed runs
+are the stronger claim: our code and the blob's on the two ENDS of one call,
+so each side's output has to be acceptable to the other's input rather than
+merely equal to it.
+
+**The mixed runs cost one line, and only because the endpoint's implementation
+was a parameter from the first version.** `{init, pump, serrint}` per endpoint
+and a per-run table of which endpoint runs ours. Retrofitting that onto a
+driver that hardcoded "ours on A" would have been a rewrite.
+
+#### Compare per block, not once at the end
+
+A long sequence compounds divergence: one wrong bit anywhere becomes a wall of
+differing output with no first cause in it. The comparison stops at the FIRST
+differing block and reports the block number, the endpoint and both state
+triples, and then **replays both runs to that block** — `run_call` takes a
+block count for exactly this — and prints the differing object bytes. "The
+transcripts differ" is not a finding; "block 0, the originator, object
++0x02aa6: ours 0xfa9a, the blob 0x0003" is finding 781.
+
+### 781. `modem_serrint`'s history-ring wrap is UNSIGNED, and every existing test seeds the index to zero
+
+The first run of the two-instance call diverged at **block 0**, and the bytes
+named it at once:
+
+```
+    object +0x02486: ours a2 05 39 05 d8 04   the blob 00 00 00 00 00 00
+    object +0x02aa6: ours 9a fa               the blob 03 00
+    object +0x02f58: ours f8 c2 e9 c0 c2 9a   the blob a2 05 39 05 d8 04
+```
+
+The same three shorts appear in ours at +0x2486 and in the blob at +0x2f58.
++0x2f58 is `hist_2f58`, the per-symbol history ring `modem_serrint` fills, and
++0x2aa6 is its index. `0x2f58 + 2 * (-1385) = 0x2486`: ours was writing 1,385
+elements BELOW the ring, into the transmit queue's own storage.
+
+The object, at 0x5d042:
+
+```
+    5d042:  movswl 0x2aa6(%ecx),%eax        ; idx, sign-extended
+    5d049:  lea    0x1(%eax),%edx
+    5d04c:  cmp    $0x257,%dx
+    5d051:  mov    %si,0x2f58(%ecx,%eax,2)  ; hist_2f58[idx] = sample
+    5d059:  jbe    5d2e0                    ; UNSIGNED
+    5d063:  xor    %ebx,%ebx
+    5d065:  mov    %bx,0x2aa6(%ecx)         ; f2aa6 = 0
+```
+
+`jbe` and not `jle`. The object treats `idx + 1` as a sixteen-bit **unsigned**
+quantity, so a negative index wraps to zero; this tree had transcribed the
+test as `if ((short)(idx + 1) > 0x257)`, which leaves a negative index alone
+and walks the write further below the ring on every sample.
+
+**Why nothing saw it.** The two readings agree over 0..0x257 and over nothing
+else. `t_v34rx.c` seeds `f2aa6 = 0` and runs 300 calls per configuration, so
+`idx + 1` never leaves 1..300 — the divergence exists only over inputs that
+sweep does not produce, which is finding 613's shape one tier along. Nothing
+in the object initialises `f2aa6`; a whole call from a fixture that fills the
+object with pseudorandom bytes drives it negative on the first sample.
+
+**The site twenty lines below was already right.** `f2aa4`'s ring bound is
+`if ((unsigned short)obj->f2aa4 > 0x12b)`, from the same instruction pair on
+the other branch. Two adjacent counters, one signed and one unsigned, is a
+transcription slip and not a reading — and the two now agree with each other
+as well as with the object.
+
+**One line, and it is the whole value of the tier.** 1,600 blocks of agreement
+in four runs afterwards, from a defect no per-function test in the tree could
+reach.
+
+### 782. Finding 452 has expired: `datapumpv34`'s handshake loop CAN be driven, and this is the first thing that drives it
+
+Finding 452 said the `+0x2218 > 1` branch
+
+```c
+    while (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)
+        v34handshak(obj);
+```
+
+could not be entered at all, because table 1's arms were in `v34hstx1.cpp` as
+separate entry points and not wired into `v34handshak`, and no written arm
+lowered the receive count or raised the transmit cursor. Both halves have
+gone: table 1 is wired (`v34handshak`'s own `while (obj->txq.count <
+obj->f2aa0)`), and `modem_serrint` moves both queues from outside. The loop
+enters, iterates and terminates, 1,600 blocks a run and four runs.
+
+**What that closes and what it does not.** 452's named gap was the `||`: with
+both operands false, `&&` gives the same answer, so no seed could separate
+them. A whole call reaches blocks where one operand is true and the other
+false, which is the condition that separates them. The mutation registered
+against it in `test/mutations/v34datapump.json` is NOT re-run or re-recorded
+here — see 787.
+
+**The value `2` in +0x2218 is the object's, not the driver's.**
+`v34handshakinit` clears it, so a modem straight out of mode 0 would take the
+data branch; `src/pump/v34/v34pcmmain.cpp` writes 2 there immediately after
+its own `v34handshakinit` call. The driver does the same and cites it.
+
+### 783. The two-object fixture's two sides as the two ENDPOINTS of one call
+
+`test/harness/v34hsstep.c` was built as ours-on-A against the-blob-on-B. What
+a call needs is two DIFFERENT modems, and what it needs from that file is
+findings 319-322: the object and its five blocks at fixed offsets in one 64
+KB-aligned arena with 32 KB fillers, side B's a byte copy of side A's.
+Building that geometry a second time is building it wrong once.
+
+So side A is the originator and side B the answerer, and **what is compared is
+run against run rather than side against side** — `v34hs_compare` is never
+called, because two endpoints differ by design and comparing them would fail
+by construction. Both runs use literally the same memory at the same
+addresses, which makes the congruence exact rather than approximate; finding
+320's B-A-B probe already established that nothing is carried between calls,
+which is what makes four sequential runs sound.
+
+Three additions, all mirrors of things already there:
+
+- **`v34hs_oursinit(int)`** — bring side B up with OUR initialisers, the
+  mirror of `v34hs_refinit`. The two flags between them express all four
+  combinations of who brings up which side, which is what the four runs need.
+  Without it a run meant to be entirely ours differs from the oracle run in
+  its bring-up before a single sample has moved.
+- **`v34hs_in_hole(unsigned)`** — the thirty-seven pointer skips, exported
+  rather than copied. A test comparing two RUNS needs the same exclusion for
+  its own reason: our bring-up installs our library tables and the blob's
+  installs the blob's, so those fields hold two addresses of two copies across
+  runs.
+- **`v34hs_arena_hash` / `v34hs_padding_hash`** — `v34hs_compare`'s coverage
+  as a number. Split in two because the filler is 224 KB of the arena's 316
+  and is a claim worth making once per call rather than once per block.
+
+### 784. The fixture's pseudorandom fill is not a modem configuration, and one block of it is not even the modem's
+
+`v34hs_setup` fills the object and all five blocks with varied pseudorandom
+bytes and never zeroes them, which is right for what it was built for: zero is
+the one value that makes a field nothing has written look deliberate (finding
+230). Over a single step that is exactly what is wanted. Over a whole call it
+is not sufficient, and the first version of `t_v34call.c` **faulted inside
+`ref_V34SetINFO0aBits` at block 13**.
+
+The block at +0x3548 is `VPcmV34Main.cpp`'s session, not a modem field, and it
+holds POINTERS the object dereferences — `SESSION_CAPS` at +0x612c and
+`SESSION_UPSTREAM` at +0x1760, both read through by `V34SetINFO0aBits` and
+`V34GiveINFO0aBits`. A pseudorandom pointer is a fault and not a value, and a
+fault has no offset in it.
+
+So the driver configures, before the bring-up that matters:
+
+```
+    session +0x612c, +0x1760   aimed inside the session block, at 128-byte
+                               regions it then zeroes
+    session +0x6120            0 -- the INFO0d/"Caller" variant
+    +0x024c, +0x0250           0 -- no V.90 and no K.56Flex receiver
+    +0xabc6, +0xabca           0 -- no V.92 offered, no short phase 2
+    +0x359c                    0x65 on one endpoint and 0x66 on the other
+```
+
+Each pointer is aimed at its OWN side's block; one address written into both
+is precisely the asymmetry findings 319-322 are about. **The zeroes here are
+deliberate rather than defaults** — they describe a plain V.34 call — and they
+are the only invented configuration in the test.
+
+**The role has to be set before `v34handshakinit`, not after.** Mode 0 calls
+`v34modeminit`, which branches on +0x359c for five things at once, so the
+driver runs the mode-0 bring-up itself after writing the flag. That is not a
+fixture-only path: it is what the object does on every retrain.
+
+### 785. Two vacuity defects in the new test, found by writing the numbers down
+
+**A check that cannot fail.** The per-run verdict was `diff_eq_int(msg, 1, 1,
+r)` — "the comparison did not report a failure". That is exactly `gates.md`
+rule 1's shape: indistinguishable from a comparison that ran over zero blocks.
+It now asserts **how many of the `nblock * NEP` block-endpoint pairs agreed**,
+which fails on a wrong loop bound and on an early stop.
+
+**A claim that could only ever be about the oracle.** The padding check
+compared each run's filler hash against the ORACLE run's, which for the oracle
+run is a value compared with itself. It now compares each run's filler
+**before the call against after it**, per endpoint, which is finding 322's
+claim over a whole call and is a real check for all four runs.
+
+**And it has to be affordable.** The first working version took 4.9 s, which
+`make phase` pays twice — once more in `debugcov`'s instrumented tree. Two
+changes took it to 0.46 s at the same block count, and to 2.6 s at the 1,600
+blocks the committed test uses:
+
+- `in_hole` was a linear scan of thirty-seven entries called **per byte** —
+  1.6 M comparisons per whole-object sweep, 1,920 sweeps. It is a bitmap now,
+  built on first use, and every other user of the fixture got faster with it.
+- `v34hs_arena_hash` walked all 316 KB with a per-byte region predicate. It
+  walks the region table instead, and the filler moved to its own function.
+
+### 786. What the two-instance call reaches, and what it does not
+
+Both endpoints move, and the trajectory is a handshake rather than a
+heartbeat. The originator, by block:
+
+```
+      0   microstate 41 DET_SYNC   rxstate 43 RX_DPSK   txstate 54 SILENCEINFO
+     13                                                        24 TX_DPSK
+    109              44 DET_INFO
+    226                                                        60 TONE_AB
+    241              58
+    677              55        678   59        685   41        721   44
+```
+
+and the answerer the same shape one microstate short of it: 41 → 44 → 46, and
+46 with txstate 60. Seven distinct state triples on the originator and six on
+the answerer; fifteen and thirteen blocks in which a state word moved; 124 and
+112 diagnostic lines; 4,741 and 6,320 non-zero transmit samples out of 6,400.
+
+**IT DOES NOT CONNECT, and that was never the bar.** The two ends cycle
+between DET_SYNC and DET_INFO rather than converging: this is a bare wire with
+no delay and no loss between two objects whose unwritten fields are
+pseudorandom, not a telephone line between two configured modems. What the
+test asserts is that the reconstruction and the blob **do the same thing in
+the same order for 1,600 blocks**, which is the sequencing claim; "it
+connects" would need a configuration this tree has not derived and would add
+nothing to that claim.
+
+Every number above is asserted as an **exact literal, per endpoint** — never
+as an inequality, and never for the pair jointly, because one dead endpoint
+would otherwise hide behind a live one. Two calls that both go nowhere produce
+two identical empty transcripts and compare equal; these are what stops that
+passing. One more guards the case the literals cannot: the two endpoints'
+objects must DIFFER at the end, or a role flag that failed to take would leave
+two identical originators talking past each other, and every claim above would
+still hold.
+
+### 787. Deliberately not done in this batch, and why each
+
+- **No mutation suite is registered.** `test/mutations/suites.json` and
+  `snapshot.json` are being rewritten wholesale by another job as this lands,
+  and a suite added here would collide for no gain: every assertion was shown
+  to fail by hand, by editing the source, watching the named check fire, and
+  reverting. Registering it is a clean follow-up on a tree where the snapshot
+  is settled. **No file under `test/mutations/` is touched by this batch.**
+- **`test/mutations/v34datapump.json`'s `||`-versus-`&&` gap is not closed
+  here.** Finding 782 says the seed that separates them now exists; making the
+  mutation runner use it is that suite's work, not this test's.
+- **The call is not driven to a connection**, for the reason in 786.
+- **`make phase` could not run in a worktree at all until this batch**, and
+  the reason was not the Makefile. `BLOB` has been overridable for a while,
+  but `tools/debugaudit.py` and `tools/coverage.py` are invoked with no path
+  and defaulted to the sibling one, so `make BLOB=/abs/path phase` failed at
+  `strings` with `objdump: '../slmodemd/dsplibs.o': No such file` — and a gate
+  that cannot run has no verdict. Both tools now read `$BLOB` with the same
+  default, the Makefile exports it, and `debugcov`'s sub-make inherits it.

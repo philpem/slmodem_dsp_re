@@ -16,6 +16,15 @@
 # trees entirely.  `make BLOB=/abs/path/dsplibs.o` now covers both.
 #
 BLOB       ?= ../slmodemd/dsplibs.o
+#
+# EXPORTED, because the recipes are not the only thing that opens it.
+# `tools/debugaudit.py` and `tools/coverage.py` are invoked with no path and
+# default to the sibling one, so `make BLOB=/abs/path phase` used to fail at
+# `strings` in any worktree that is not beside slmodemd -- the override
+# covered the recipes and not the tools they run.  Both now read $BLOB with
+# the same default, and `debugcov`'s sub-make inherits it too.
+#
+export BLOB
 
 #
 # PARALLEL BY DEFAULT, because nobody remembers the flags.

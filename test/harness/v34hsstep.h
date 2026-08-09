@@ -250,6 +250,58 @@ short v34hs_peek_short(int side, unsigned off);
 void v34hs_refinit(int on);
 
 /*
+ * AND THE MIRROR OF IT: bring side B up with OUR initialisers.
+ *
+ * `v34hs_refinit` moves side A to the blob; this moves side B to ours, and
+ * the two together give all four combinations of who brings up which side.
+ * That is what a test needs when the two sides are not ours-and-the-blob but
+ * the TWO ENDPOINTS OF ONE CALL -- `t_v34call.c` runs the same call four
+ * ways (ours on both, the blob on both, and each mixed pair) and compares the
+ * runs against each other rather than the sides against each other.  Off by
+ * default, so every existing user is unaffected.
+ */
+void v34hs_oursinit(int on);
+
+/*
+ * Is this object offset inside one of the thirty-seven pointer skips?
+ *
+ * `v34hs_compare` excludes them because two objects at two addresses hold two
+ * different addresses in each, necessarily and forever.  A test comparing two
+ * sequential RUNS over the same memory needs the same exclusion for a
+ * different reason: our bring-up installs OUR library tables and the blob's
+ * installs the blob's, so the pointer fields hold two addresses of two copies
+ * across the runs.  Exposed rather than duplicated -- a second copy of the
+ * list is a second copy to go stale.
+ */
+int v34hs_in_hole(unsigned off);
+
+/*
+ * FNV-1a over ONE SIDE's whole arena: the object with the thirty-seven
+ * pointer skips excluded, the five blocks it points at, and the seven filler
+ * regions between and around them.
+ *
+ * This is `v34hs_compare`'s coverage expressed as a number rather than as a
+ * side-against-side check, for a test whose two sides are the two endpoints
+ * of a call and so must NOT be compared against each other.  What it is
+ * compared against is the same side in another RUN over the same memory,
+ * where every address is identical and the four bytes of the session's
+ * pointer to the PCM block are the only thing that has to be exempt.
+ *
+ * The object's hash is folded in first, so a difference inside the object and
+ * one outside it are not interchangeable.
+ */
+unsigned v34hs_arena_hash(int side);
+
+/*
+ * The seven filler regions on their own.  They are 224 KB of the arena's 316
+ * and no step writes any of them (finding 322), so they are a claim worth
+ * making ONCE per run rather than once per step, and keeping them out of
+ * `v34hs_arena_hash` is what makes that hash cheap enough to take every
+ * block.
+ */
+unsigned v34hs_padding_hash(int side);
+
+/*
  * Turn the diagnostics on for both sides.  `v34handshak` indexes `StateName`
  * unbounded (D42), so every state word must stay in 0..86 while this is on.
  */

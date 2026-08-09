@@ -319,7 +319,9 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj",
+                    default=os.environ.get("BLOB",
+                                           "../slmodemd/dsplibs.o"))
     ap.add_argument("--build", default="build")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--md", help="also write a markdown summary here")
