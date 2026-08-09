@@ -217,7 +217,9 @@
  {
   "label": "the clamp is >= 2 rather than > 2",
   "find": "\t\telse if (normFactor > 2.0f)",
-  "replace": "\t\telse if (normFactor >= 2.0f)"
+  "replace": "\t\telse if (normFactor >= 2.0f)",
+  "equivalent": true,
+  "why": "The two differ only when normFactor is exactly 2.0f, and both arms leave it at 2.0f: `> 2.0f` falls through to the `< 1.0f` floor, which is false, and `>= 2.0f` assigns the value it already has.  Nothing can observe it.  The dftMag == 175000 row of the fixture drives exactly 2.0f on purpose, so this is a claim about a case the test really reaches rather than one it misses."
  },
  {
   "label": "the floor is <= 1 rather than < 1",
@@ -284,6 +286,8 @@
  {
   "label": "addPhase writes the credit unconditionally",
   "find": "\t\twhile (phase >= (double)phases) {\n\t\t\tphase -= (double)phases;\n\t\t\tinputCredit++;\n\t\t}",
-  "replace": "\t\t{\n\t\t\tunsigned c = inputCredit;\n\n\t\t\twhile (phase >= (double)phases) {\n\t\t\t\tphase -= (double)phases;\n\t\t\t\tc++;\n\t\t\t}\n\t\t\tinputCredit = c;\n\t\t}"
+  "replace": "\t\t{\n\t\t\tunsigned c = inputCredit;\n\n\t\t\twhile (phase >= (double)phases) {\n\t\t\t\tphase -= (double)phases;\n\t\t\t\tc++;\n\t\t\t}\n\t\t\tinputCredit = c;\n\t\t}",
+  "equivalent": true,
+  "why": "The VALUE written is identical -- the replacement copies inputCredit into a local, runs the same loop and writes it back -- so no differential test can separate them.  What differs is that the object stores only inside the loop (.text+0x35fae) and the mutant stores on the no-wrap path too, which is a claim for the codegen tier and not for this one.  Recorded rather than deleted because the distinction is real and the reason it is invisible here is worth keeping."
  }
 ]

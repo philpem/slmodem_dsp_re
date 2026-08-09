@@ -2436,3 +2436,47 @@ matching `test`/`je` in the first dozen instructions.
 `unmeasured` — whether an allocation of this size fails in service is a
 question about the host, not about these three functions.
 
+
+## D63 ⚠ `Resampler::resample` forces two roundings the compiler will not emit
+
+**Module** `src/pump/v90/Resampler.cpp` · original `VPcmV34Main.cpp`,
+`_ZN9Resampler8resampleEPKfjPfRj`, `.text 0x034da0`
+
+**Bit-exact, different structure.** The function computes two polyphase inner
+products and interpolates between them. GCC 3.4 ran out of x87 registers
+across the second and spilled the first sum to a `float` stack slot --
+`fstps 0x34(%esp)` at `.text+0x34f76`, and `fstps`/`flds 0x30(%esp)` at
+`+0x34fee`/`+0x34ff6` for the second. **A spill to a `float` slot rounds.**
+
+The tree compiles `-mfpmath=387` with `-fexcess-precision=fast` and
+deliberately no `-ffloat-store`, and a modern GCC keeps both sums at 80 bits
+right through the interpolation. That is not below the noise floor: rounding
+`y0` before `y0 + (y1 - y0) * frac` moves the stored output sample by up to
+one ULP, and the differential tier compares bit patterns.
+
+**What is written instead.** A `volatile float` staging function, `round32`,
+applied at exactly the two points the object spills and nowhere else. The
+accumulation inside each loop stays at 80 bits on both sides, and so does
+everything after the two roundings.
+
+**Why not a source spelling.** Declaring the sums `float` does not restore the
+rounding, and neither does an inlined `float`-returning helper; both were
+tried and neither emits a store. The rounding is a property of GCC 3.4's
+register allocator rather than of the source, so no spelling of the source
+recovers it and "act on what the compiler was FORCED to encode" does not
+reach it. The alternative was a tolerance on `out[]`, which this tree does
+not do.
+
+**Domain and evidence.** Exact, not approximate: 15,491 `t_resampler.cpp`
+checks over eight resampling ratios -- 1:1, 4:1 up, 2.5:1 down, one-sample
+calls, a short ring that wraps, a run started inside the look-ahead arm and
+one whose credit exceeds the input on every pass -- agree with the blob bit
+for bit on every output sample, on `nOut` and on the whole object after each
+call.
+
+**Not general.** `ResamplerTiming::timingCorrection`, forty lines away, wants
+the opposite treatment: it has no spill to a stack slot anywhere, every
+intermediate is used again from the 80-bit register AFTER its member store has
+rounded it, and `-ffloat-store` would break it. That is why the forcing is
+per-expression here and not a flag on the file.
+

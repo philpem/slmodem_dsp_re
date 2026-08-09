@@ -137,8 +137,8 @@ public:
 	void resetHistoryIndex();
 
 	/*
-	 * See the file comment.  Inline, so it is folded into every D0 and
-	 * nothing references `::operator delete`.
+	 * See the file comment.  Inline, so it is folded into every deleting
+	 * destructor and nothing references `::operator delete`.
 	 */
 	static void operator delete(void *p) { sysdep_free(p); }
 

@@ -244,6 +244,7 @@ static int seeded_history;		/* a history buffer was non-zero     */
 static int seeded_coeffs;		/* a designed bank was non-zero      */
 static int seen_borrowed_free;		/* the borrow arm of ~Resampler ran  */
 static int seen_owned_free;		/* the owning arm did too            */
+static int seen_negative_var;		/* Var came out below zero           */
 
 static volatile float fsink;
 
@@ -429,9 +430,11 @@ static const struct shape shapes[] = {
 
 #define NSHAPE	((int)(sizeof shapes / sizeof shapes[0]))
 
-static void
+static int
 case_designing_ctor(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("Resampler(phases, ppmScale, taps, cutoff, minHistory)");
@@ -467,19 +470,22 @@ case_designing_ctor(void)
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
-static void
+static int
 case_adopting_ctor(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("Resampler(phases, ppmScale, taps, float *, minHistory)");
 	for (i = 0; i < NSHAPE; i++) {
 		const struct shape *s = &shapes[i];
 		unsigned j;
-		int f0, f1, base;
+		int f0, f1, base, b0, b1, badbase;
 
 		lfsr = 0x13572468u + (unsigned)i;
 		for (j = 0; j < BANK; j++)
@@ -510,11 +516,25 @@ case_adopting_ctor(void)
 		 * and the caller's bank is untouched.
 		 */
 		base = harness_alloc.frees;
+		badbase = harness_alloc.bad_free;
 		rs_dtor(obj[0]);
 		f0 = harness_alloc.frees - base;
+		b0 = harness_alloc.bad_free - badbase;
 		ref_rs_dtor(obj[1]);
 		f1 = harness_alloc.frees - base - f0;
+		b1 = harness_alloc.bad_free - badbase - b0;
 		diff_eq_int("shape %ld: frees from ~Resampler", f0, f1, i);
+		/*
+		 * THE `frees` COUNT CANNOT SEE THIS ONE.  `bank` is a static
+		 * array, so a destructor that frees it hands the allocator a
+		 * pointer it never issued; the harness counts that as
+		 * `bad_free` and deliberately does NOT pass it on, which
+		 * leaves `frees` identical either way.  Watching `bad_free`
+		 * is what makes "the borrowed bank is not freed" a claim with
+		 * a test behind it.
+		 */
+		diff_eq_int("shape %ld: bad frees from ~Resampler", b0, b1, i);
+		diff_eq_int("shape %ld: nothing unknown was freed", b0, 0, i);
 		diff_eq_int("shape %ld: the borrowed bank is not freed", f0,
 			    u32_at(0, 0x38) ? 1 : 0, i);
 		if (f0 == 1)
@@ -524,7 +544,8 @@ case_adopting_ctor(void)
 				    (long)fbits(bank[0][j]),
 				    (long)fbits(bank[1][j]), j);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /*
@@ -532,9 +553,11 @@ case_adopting_ctor(void)
  * -- identically on both sides -- and the history is filled with a pattern
  * that is not zero.  Two zeroed buffers compare equal whatever reset does.
  */
-static void
+static int
 case_reset(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("Resampler::reset");
@@ -589,12 +612,15 @@ case_reset(void)
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
-static void
+static int
 case_phase(void)
 {
+	int rc = 0;
+
 	int i, k;
 
 	diff_begin("Resampler::setNormalizedPhase / getNormalizedPhase");
@@ -632,12 +658,15 @@ case_phase(void)
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
-static void
+static int
 case_history_helpers(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("Resampler::copyHistoryTail / resetHistoryIndex");
@@ -683,14 +712,17 @@ case_history_helpers(void)
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* ------------------------------------------------- ResamplerTimingOffset */
 
-static void
+static int
 case_rto(void)
 {
+	int rc = 0;
+
 	int i, k;
 
 	diff_begin("ResamplerTimingOffset");
@@ -735,14 +767,17 @@ case_rto(void)
 		rto_dtor(obj[0]);
 		ref_rto_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* ------------------------------------------------------- ResamplerTiming */
 
-static void
+static int
 case_rt(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("ResamplerTiming");
@@ -798,14 +833,17 @@ case_rt(void)
 		rt_dtor(obj[0]);
 		ref_rt_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* ---------------------------------------------------------- V90Resampler */
 
-static void
+static int
 case_v90(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("V90Resampler");
@@ -834,6 +872,17 @@ case_v90(void)
 		for (st = 0; st < 18; st++) {
 			int state = (st < 16) ? st : (st == 16 ? 15 : 99);
 
+			/*
+			 * `stateSamples` is zero out of `reset` and only
+			 * `resample` moves it, so without this the store that
+			 * restarts it is invisible.
+			 */
+			{
+				unsigned n = 0x1234u + (unsigned)st;
+
+				memcpy(obj[0] + 0x98, &n, 4);
+				memcpy(obj[1] + 0x98, &n, 4);
+			}
 			dsplib_debug_capture_reset();
 			vr_setbll(obj[0], state, (unsigned)st + 1u);
 			ref_vr_setbll(obj[1], state, (unsigned)st + 1u);
@@ -846,6 +895,31 @@ case_v90(void)
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)),
 				    0, state);
+		}
+
+		/*
+		 * FROZEN and SECOND_ORDER_FROZEN zero one gain each and are
+		 * defined by WHICH.  Reached in numerical order they are
+		 * always entered from a state that has already zeroed both --
+		 * the constructor's -- so the difference is invisible.  Each
+		 * is therefore entered again from a state that sets real
+		 * gains, and the gains are checked to have been non-zero
+		 * first.
+		 */
+		for (st = 0; st < 2; st++) {
+			vr_setbll(obj[0], V90_BLL_STEADY_STATE, 1);
+			ref_vr_setbll(obj[1], V90_BLL_STEADY_STATE, 1);
+			diff_eq_int("both gains are non-zero before %ld",
+				    (u32_at(0, 0x4c) != 0)
+				    && (u32_at(0, 0x50) != 0), 1, st);
+			vr_setbll(obj[0], (V90BllState)st, 1);
+			ref_vr_setbll(obj[1], (V90BllState)st, 1);
+			cmp_obj("entering FROZEN from a live state", 0xb4,
+				skip_vr, st);
+			diff_eq_int("state %ld left K1 as it should",
+				    u32_at(0, 0x4c) == 0, st == 0, st);
+			diff_eq_int("state %ld cleared K2", u32_at(0, 0x50),
+				    0, st);
 		}
 
 		/*
@@ -880,6 +954,39 @@ case_v90(void)
 			}
 		}
 
+		/*
+		 * `Var` is `E[x^2] - E[x]^2` computed as two separate rounded
+		 * quantities, so over a nearly constant ring it can come out
+		 * NEGATIVE -- and that is the only input that separates
+		 * `sqrt(|v|)`, which the object computes, from `sqrt(v)`.
+		 * A spread of magnitudes is swept until one of them does it;
+		 * `seen_negative_var` records that one did.
+		 */
+		{
+			static const float flat[] = {
+				1.0f, 3.0f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f,
+				12345.678f, 0.1f, 7.7f
+			};
+			float *h0 = ptr_at(0, 0xa4);
+			float *h1 = ptr_at(1, 0xa4);
+			unsigned n = u32_at(0, 0xa8);
+			unsigned c, j;
+
+			for (c = 0; c < sizeof flat / sizeof flat[0]; c++) {
+				float d0, d1;
+
+				for (j = 0; j < n; j++)
+					h0[j] = h1[j] = flat[c];
+				d0 = vr_std(obj[0]);
+				d1 = ref_vr_std(obj[1]);
+				diff_eq_int("shape %ld: Std over a flat ring",
+					    (long)fbits(d0), (long)fbits(d1),
+					    i * 100 + (long)c);
+				if (fbits(d0) != 0 && fbits(d0) != 0x80000000u)
+					seen_negative_var = 1;
+			}
+		}
+
 		/* reset again, from a thoroughly dirty object. */
 		vr_reset(obj[0]);
 		ref_vr_reset(obj[1]);
@@ -895,7 +1002,8 @@ case_v90(void)
 		if (f0 >= 2)
 			seen_owned_free = 1;
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 
@@ -958,9 +1066,11 @@ static const struct rshape rshapes[] = {
 
 #define NRSHAPE ((int)(sizeof rshapes / sizeof rshapes[0]))
 
-static void
+static int
 case_resample(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("Resampler::resample");
@@ -1022,7 +1132,8 @@ case_resample(void)
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /*
@@ -1032,9 +1143,11 @@ case_resample(void)
  * configurations turn the evaluation off, so the arm that skips the ring
  * entirely is covered too.
  */
-static void
+static int
 case_v90_resample(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("V90Resampler::resample");
@@ -1086,7 +1199,8 @@ case_v90_resample(void)
 		vr_dtor(obj[0]);
 		ref_vr_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 
@@ -1116,9 +1230,11 @@ static int seen_d0_freed;		/* a deleting destructor released `this` */
  * separate body -- so calling them by name compares two things that are not
  * the same code, which is exactly the comparison worth making.
  */
-static void
+static int
 case_variants(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("the C2, D2, D0 and adopting variants");
@@ -1332,7 +1448,8 @@ case_variants(void)
 				    f0 >= 3, 1, i);
 		}
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* ------------------------------------------- ResamplerTiming, the loop */
@@ -1365,9 +1482,11 @@ static int seen_addphase_wrap;		/* addPhase's unwrap loop ran    */
  * `dftRe == dftIm == 0` exactly, `dftMag` comes out 0, and only the
  * `dftMag == 0` arm of the gain adjustment is ever reached.
  */
-static void
+static int
 case_rt_timing(void)
 {
+	int rc = 0;
+
 	static const float mags[] = {
 		0.0f,		/* the m == 0 arm                        */
 		50000.0f,	/* 350000/m == 7    -> the >4 reject     */
@@ -1469,7 +1588,7 @@ case_rt_timing(void)
 		rt_dtor(obj[0]);
 		ref_rt_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
 
 	diff_begin("ResamplerTiming::adjustHalfBaudBpfGain");
 	for (k = 0; k < (int)(sizeof mags / sizeof mags[0]); k++) {
@@ -1488,8 +1607,8 @@ case_rt_timing(void)
 			 */
 			memcpy(obj[0] + 0x80, &mags[k], 4);
 			memcpy(obj[1] + 0x80, &mags[k], 4);
-			rt_gain(obj[0], 1.0f);
-			ref_rt_gain(obj[1], 1.0f);
+			rt_gain(obj[0], 1.0f + 0.5f * (float)lvl);
+			ref_rt_gain(obj[1], 1.0f + 0.5f * (float)lvl);
 			cmp_obj("adjustHalfBaudBpfGain with the latch clear",
 				0x94, skip_rs, k);
 			diff_eq_int("mag %ld: nothing happened without the "
@@ -1502,8 +1621,15 @@ case_rt_timing(void)
 			dsplibs_debug_level = (unsigned)lvl;
 			ref_dsplibs_debug_level = (unsigned)lvl;
 			dsplib_debug_capture_reset();
-			rt_gain(obj[0], 1.0f);
-			ref_rt_gain(obj[1], 1.0f);
+			/*
+			 * THE ARGUMENT MUST BE SWEPT.  With `v` pinned at 1.0
+			 * the `dftMag = v * dftMag` at the top of the function
+			 * is an identity and dropping it changes nothing --
+			 * which is what the mutation sweep reported before
+			 * this line moved off the constant.
+			 */
+			rt_gain(obj[0], 0.25f + 0.75f * (float)lvl);
+			ref_rt_gain(obj[1], 0.25f + 0.75f * (float)lvl);
 			cmp_obj("after adjustHalfBaudBpfGain", 0x94, skip_rs,
 				k * 10 + lvl);
 			diff_eq_int("mag %ld: diagnostic lines",
@@ -1523,7 +1649,7 @@ case_rt_timing(void)
 	}
 	dsplibs_debug_level = 3;
 	ref_dsplibs_debug_level = 3;
-	diff_end();
+	rc |= diff_end();
 
 	/*
 	 * `addPhase` and `invertPhase`.  Neither has a caller in the object,
@@ -1553,7 +1679,13 @@ case_rt_timing(void)
 			/* A sentinel, so an unconditional store is visible. */
 			memcpy(obj[0] + 0x40, &credit, 4);
 			memcpy(obj[1] + 0x40, &credit, 4);
-			ph = (double)s->phases - 0.5;
+			/*
+			 * EXACTLY ON THE BOUNDARY.  With the phase below it, a
+			 * zero or negative argument leaves the same object
+			 * whether the guard is `> 0` or `>= 0`; sitting on it,
+			 * the mutant enters the loop and banks a credit.
+			 */
+			ph = (double)s->phases;
 			memcpy(obj[0] + 0x0c, &ph, 8);
 			memcpy(obj[1] + 0x0c, &ph, 8);
 
@@ -1577,7 +1709,8 @@ case_rt_timing(void)
 			ref_rt_dtor(obj[1]);
 		}
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* --------------------------------------------------------- the vtables */
@@ -1598,9 +1731,11 @@ case_rt_timing(void)
  * every other assertion in this file and fail here, because dispatching
  * through the base would then clear +0x4c..+0x93 as well.
  */
-static void
+static int
 case_vtables(void)
 {
+	int rc = 0;
+
 	int i;
 
 	diff_begin("the four vtables, through dispatch");
@@ -1715,7 +1850,8 @@ case_vtables(void)
 		vr_dtor(obj[0]);
 		ref_vr_dtor(obj[1]);
 	}
-	diff_end();
+	rc |= diff_end();
+	return rc;
 }
 
 /* ------------------------------------------------------------------ main */
@@ -1723,23 +1859,25 @@ case_vtables(void)
 int
 main(void)
 {
+	int rc = 0;
+
 	dsplib_debug_capture_on = 1;
 	dsplibs_debug_level = 3;
 	ref_dsplibs_debug_level = 3;
 
-	case_designing_ctor();
-	case_adopting_ctor();
-	case_reset();
-	case_phase();
-	case_history_helpers();
-	case_rto();
-	case_rt();
-	case_v90();
-	case_variants();
-	case_rt_timing();
-	case_resample();
-	case_v90_resample();
-	case_vtables();
+	rc |= case_designing_ctor();
+	rc |= case_adopting_ctor();
+	rc |= case_reset();
+	rc |= case_phase();
+	rc |= case_history_helpers();
+	rc |= case_rto();
+	rc |= case_rt();
+	rc |= case_v90();
+	rc |= case_variants();
+	rc |= case_rt_timing();
+	rc |= case_resample();
+	rc |= case_v90_resample();
+	rc |= case_vtables();
 
 	/*
 	 * The anti-vacuity gate.  Every one of these says "a comparison this
@@ -1770,5 +1908,18 @@ main(void)
 	diff_eq_int("addPhase's unwrap loop ran", seen_addphase_wrap, 1, 0);
 	diff_eq_int("a deleting destructor released its own storage",
 		    seen_d0_freed, 1, 0);
-	return diff_end();
+	diff_eq_int("a flat ring drove Var below zero", seen_negative_var, 1,
+		    0);
+	rc |= diff_end();
+
+	/*
+	 * `diff_end()` reports only the section it closes -- `diff_begin`
+	 * clears the failure count -- so `return diff_end()` alone would exit
+	 * 0 with fourteen of the fifteen sections red.  Every section's result
+	 * is OR-ed into `rc`.  This file exited 0 through a mutation sweep in
+	 * which 101 of 115 mutations were reported NOT CAUGHT before that was
+	 * noticed, which is gates.md's "a result indistinguishable from
+	 * success" with the test itself as the detector that had died.
+	 */
+	return rc;
 }

@@ -31142,3 +31142,266 @@ Also: both headers had to go in `SKIP_HEADERS` in `tools/offcheck.py`, which
 v90rest.md says wave 1 paid for twice. `offcheck` compiles every header it does
 not skip **as C**, so a `class` turns into `907 of 907 annotations do not match
 the layout` -- a message about offsets, from a parse error.
+
+### 863. The four `Resampler` vtables, the four sizes, and the override that is not there
+
+`Resampler <- ResamplerTimingOffset <- ResamplerTiming <- V90Resampler`, each
+arrow a DIRECT single non-virtual base. Read off the destructors, not guessed:
+`_ZN21ResamplerTimingOffsetD1Ev` calls `_ZN9ResamplerD2Ev`,
+`_ZN15ResamplerTimingD1Ev` calls `_ZN21ResamplerTimingOffsetD2Ev`, and
+`_ZN12V90ResamplerD1Ev` calls `_ZN15ResamplerTimingD2Ev`. A D1 that calls
+exactly one D2 is one non-virtual base, and the C1/C2 emission pattern
+`tools/cppstruct.py` lists for the four agrees.
+
+The virtual set comes out of `objdump -r --section=.gnu.linkonce.r._ZTV<name>`
+on all four tables, and **three of the five slots are easy to get backwards**:
+
+| slot | `_ZTV9Resampler` | RTO | `ResamplerTiming` | `V90Resampler` |
+|---|---|---|---|---|
+| +0x08 | `~Resampler` D1 | RTO D1 | RT D1 | V90R D1 |
+| +0x0c | `~Resampler` deleting | RTO | RT | V90R |
+| +0x10 | `Resampler::reset()` | `RTO::reset()` | **`RTO::reset()`** | `V90R::reset()` |
+| +0x14 | `Resampler::timingCorrection` | `RTO::` | `RT::` | `RT::` |
+| +0x18 | — | — | `RT::reset(unsigned)` | `RT::reset(unsigned)` |
+
+- **`ResamplerTiming` does NOT override `reset()`.** Its slot +0x10 is the
+  base's. A reconstruction that gives it one passes every byte comparison of a
+  constructed object and every direct call of every member; only dispatching
+  through a `Resampler *` separates them, which is why `t_resampler.cpp` calls
+  each slot through the object's own vptr on BOTH sides and diffs the result.
+  An override reached that way would clear +0x4c..+0x93 and the base's version
+  leaves them, so the test names the byte.
+- **`ResamplerTiming` introduces a NEW virtual, `reset(unsigned)`**, at a slot
+  no base table has. Being an overload of `reset` it HIDES the inherited
+  nullary form for itself and everything below -- which is why `V90ResamplerC1`
+  and `V90Resampler::reset` both reach it as the qualified, non-virtual
+  `ResamplerTiming::reset(1)`. `reset(1)` does not name-resolve inside
+  `V90Resampler` at all, so that spelling is forced rather than chosen.
+- **`resample` is in no vtable.** `V90Resampler::resample` HIDES
+  `Resampler::resample` and calls it explicitly. The Makefile's comment said it
+  overrode it; corrected in place.
+
+**The dispatch is live.** `Resampler::resample` ends each output sample with
+`mov (%ecx),%ebx` / `call *0xc(%ebx)` -- slot +0x14, `timingCorrection`. The
+base body is the one-byte weak `ret` in
+`.gnu.linkonce.t._ZN9Resampler16timingCorrectionEf`, which is what an in-class
+empty body compiles to.
+
+**The four sizes are 0x48, 0x4c, 0x94 and 0xb4**, each the span of `this`
+displacements the next constructor down starts above.
+`include/dsplib/ResamplerTimingOffset.h` had put `ppmScale` at +0x2c and an
+eight-byte accumulator at +0x0c in `ResamplerTimingOffset`, from
+`setTimingOffset` and `getTimingOffsetPPM` touching them. Both are real and
+**both are inherited**: `_ZN9ResamplerC2Ejfjfj` runs to completion before this
+class's constructor stores anything and writes +0x04 through +0x44, and the
+only store the derived constructor adds is `fstps 0x48(%ebx)`. The old header's
+"THE OBJECT IS 76 BYTES" was right and its reason was wrong, which is the more
+dangerous of the two: a size assertion that passes cannot tell "the map is
+right" from "the map is right about its total".
+
+0xb4 has a second, independent witness. `include/dsplib/V90Demodulator.h`
+embeds a `V90Resampler` at +0x094 and records from that class's constructor
+that it "ends at +0x148". 0x148 - 0x094 = 0xb4, and neither number came from
+the other.
+
+### 864. `operator delete` is a member and it calls `sysdep_free`
+
+The three deleting destructors end `jmp sysdep_free` and there is not one
+`_Zdl*` or `_Znw*` symbol in the 1.2 MB object. This is not a nicety: the tree
+links test binaries with `$(CC)` and no libstdc++, so the first
+`virtual ~Resampler()` written here makes GCC emit a deleting destructor, and
+one that reaches the default `::operator delete` leaves an undefined `_ZdlPvj`
+that breaks **every** test binary in the tree, not only this class's.
+
+Measured on the host compiler in both directions, per gates.md rule 3, before
+any of it was written:
+
+    static void operator delete(void *p) { sysdep_free(p); }
+        nm -C:  U sysdep_free                  and no operator delete
+    the same member removed
+        nm -C:  U operator delete(void*, unsigned int)
+
+The member is inline on the base, so it folds into every deleting destructor in
+the chain and what is emitted is the object's own tail call. `-fno-rtti` keeps
+the tables free of typeinfo: zero `_ZTI`/`_ZTS` beside four `_ZTV` is exactly
+what `-fno-rtti` WITH virtual functions emits.
+
+**Two consequences that are not about the link.** A polymorphic class is not
+standard-layout, so every `__builtin_offsetof` assertion naming one --
+including 33 in `V90Demodulator.cpp`, which embeds a `ResamplerTimingOffset` --
+becomes "conditionally-supported" and warns. `-Wno-invalid-offsetof` is now in
+`CXXFLAGS` with the reason beside it; those assertions are the only thing
+checking the object maps and GCC does support them. And a union with a
+polymorphic member has its implicit constructor and destructor deleted, which
+is what `test/unit/t_v90leaves.cpp`'s `union rt_slot` needed spelling out.
+
+### 865. Name a field from the code that USES it, not from the way `reset` zeroes it
+
+Three groupings in `ResamplerTiming` were read off nothing but how the
+constructor writes zero into each word -- `movl $0x0` for the integers, a
+zeroed register for the `0.0f` floats, `movb` for the byte. That separates
+integers from floats and nothing else, and **all three groupings were wrong**:
+
+| written as | what it is |
+|---|---|
+| `float bll[3]` at +0x54 | `lastHalfBaudErr`, a word written by nothing else, and `lastPhaseAdj` -- an error and a phase increment, stored on different paths |
+| `float half[5]` at +0x68 | a two-deep delay line of y-SQUARED, a two-deep delay line of y, and a one-deep delay of the error: three signals |
+| `float dftAcc[3]` at +0x80 | `dftMag`, a RESULT, and the two accumulators that produce it |
+
+A constant-index array store and a scalar store are the same instruction, so an
+array can never be *disproved*. What can be shown is that nothing indexes
+these, that the members receive semantically unrelated quantities, and that one
+of the three is written by a different function from the other two. That is the
+standard of evidence a data-member name needs, and "they are zeroed together"
+is not it.
+
+**The same error one level up: `SdHalfBaudDft` was declared `float` on nothing
+but its name. It returns `void`.** All three paths to `ret` leave the x87 stack
+empty and the arm at `.text+0x35902` is a bare `fstp %st(0)` whose only job is
+to discard the argument; `V90Equalizer::process` calls it three times and never
+pops a result. The contrast that makes the check meaningful is
+`V90Resampler::getTimingHistoryStd`, which really does return a float and ends
+`fsqrt; ret` with ST(0) live. A return type is not in the mangling for a
+non-template function (finding 226) and has to be read off the stack.
+
+Two fields stay unnamed rather than guessed: +0x58, written only by `reset`,
+and +0x64, written by nothing at all -- not even `reset`.
+
+`normBPFhBaudB0coef` at +0x90, `normFactor` and the "baud/2 dft bin" are the
+AUTHOR'S names, out of `adjustHalfBaudBpfGain`'s three diagnostic strings.
+The transcript tier naming what no other tier could, again.
+
+### 866. `diff_end()` reports one section, and a test that returns it exits 0
+
+`t_resampler.cpp` was fifteen `diff_begin` / `diff_end` sections and a
+`return diff_end();`. `diff_begin` clears the failure count, so `diff_end`
+reports **only the section it closes**: fourteen of the fifteen could be red
+and the binary would still exit 0. Every one of the 29,000 checks was real and
+every one was passing -- and nothing in the harness would have said otherwise
+if they had not been.
+
+What found it was the mutation sweep, and it found it by its shape rather than
+by anyone reading the file: **101 of 115 mutations reported NOT CAUGHT**,
+including several the file demonstrably tests. That is `tools/mutate.py`'s own
+documented signature for a suite pointed at the wrong binary -- "NOT CAUGHT for
+everything, the same output an untested claim gives" -- except that here the
+manifest was right and the DETECTOR had died. `make phase` was green
+throughout, because the binary exited 0.
+
+After OR-ing every section's result into the return value: **115 mutations, 111
+caught, 0 NOT caught, 0 unusable, 4 recorded equivalent** across the four
+suites. The four equivalents each carry an argument about the object rather
+than about the test -- a redundant base `reset` the original itself contains, a
+`>= 2.0f` boundary where both arms store 2.0f, a `<= 1.0f` boundary where both
+store 1.0f, and a store the object makes only inside a loop whose VALUE is
+identical either way, which is a claim for the codegen tier and not this one.
+
+Nine of the first pass's uncaught mutations survived the repair and were real
+gaps; each is worth naming because none is unusual:
+
+- **the destructor freeing a borrowed bank.** The harness refuses to free a
+  pointer it never issued and counts it `bad_free` INSTEAD of `frees`, so the
+  count the test watched was identical either way. Watching `bad_free` is what
+  made the claim testable.
+- **`adjustHalfBaudBpfGain`'s `dftMag = v * dftMag`.** The fixture passed
+  `v = 1.0f` every time, so the statement was an identity and deleting it
+  changed nothing.
+- **`setBllState`'s `stateSamples = 0`.** `stateSamples` is zero out of
+  `reset` and only `resample` moves it, so the store that restarts it had
+  nothing to restart.
+- **FROZEN and SECOND_ORDER_FROZEN**, which zero one gain each and are DEFINED
+  by which. Entered in numerical order they always follow a state that has
+  already zeroed both, so the difference was invisible; each needed entering
+  again from a state that sets real gains.
+- **`getTimingHistoryStd`'s magnitude.** `sqrt(|v|)` and `sqrt(v)` differ only
+  when `Var` comes out negative, which needs a nearly FLAT ring --
+  `E[x^2] - E[x]^2` as two separately rounded quantities. Random data never
+  does it.
+- **`addPhase`'s `v > 0.0f` guard.** With the phase below the wrap boundary,
+  `> 0` and `>= 0` leave the same object for `v == 0`; sitting exactly ON the
+  boundary, the mutant enters the unwrap loop and banks a credit.
+
+> Every one of those is a fixture that was varied in the dimension the code
+> does not care about and constant in the one it does.
+
+### 867. `V90Parameters` +0x0f0 and +0x0f4, from the code that reads them
+
+The frozen header declares +0x0f0 `BLL_TRN1_QC_SLOW_K2` -- with
+`BLL_TRN1_QC_SLOW_K1` beside it as an alias -- and +0x0f4 `unnamed_0f4`, an
+`int` that `setToDefault` writes and `loadParams` does not.
+
+`V90Resampler::setBllState`'s sixteenth arm settles both. It copies +0x0f0 into
+`bllK1` and +0x0f4 into `bllK2` with two plain 32-bit `mov`s and no conversion,
+exactly as its thirteen sibling arms copy the (K1, K2) pairs at +0x088, +0x090,
++0x098 and so on -- each pair four bytes apart, each arm printing its own name.
+So **+0x0f0 is the K1 of the pair, +0x0f4 is the K2, and +0x0f4 holds a
+float.**
+
+The header is not edited -- it is frozen and `make params` checks it against
+the object -- so `V90Resampler.cpp` reads +0x0f4 through a
+`__builtin_memcpy` helper. An `int`-typed read would CONVERT where the object
+COPIES, and 0.05f read as an `int` is 0.
+
+That the parameter-name table and the code disagree about which offset carries
+which name is worth knowing for the other 50 `unnamed_*` fields: `setToDefault`
+proves a field exists and gives its width, and only a READER proves its type.
+
+**The sixteen BLL states are the object's own words**, out of the `edprintf` in
+every arm of the jump table at `.rodata:0xbc0` -- FROZEN, SECOND ORDER FROZEN,
+INITIAL, FAST, MEDIUM, SLOW, SLOW2, DIL, TRN2 INITIAL, TRN2, STEADY_STATE,
+PRE_ANSPCM, TRN1_QC_INITIAL, TRN1_QC_FAST, TRN1_QC_MEDIUM, TRN1_QC_SLOW, in
+table-index order 0..15. Three things agree on each value: the table index, the
+string, and the `V90Parameters` pair the arm loads. `enum V90BllState` is read,
+not assigned.
+
+### 868. What the resampler chain is, and the two constructors that decide ownership
+
+For whoever writes the rest of `VPcmV34Main.cpp`, because none of it is
+obvious from the names.
+
+**`Resampler` is an interpolating polyphase FIR.** `phases` is the
+interpolation factor, `taps` the taps per branch, `coeffs` holds the branches
+consecutively at `coeffs + p * taps`, and `phase` is a `double` position
+measured in units of 1/`phases` of an input sample. `historyIndex` starts at
+`taps`, not 0, because the inner product always reaches `taps` samples BACK
+from the cursor; `copyHistoryTail` is what refills that when it wraps. +0x40 is
+an INPUT credit -- how many samples must be shifted in before the next output
+-- and not the output count its position next to `nOut` suggests.
+
+**The two constructors differ only in who owns the coefficients.** The `float`
+overload designs a Blackman-windowed `LowPassFIR<float>` of `taps * phases`
+taps at cutoff `cutoff / phases` and transposes it into a freshly allocated
+bank -- branch p, tap k, from `fir[(taps - 1 - k) * phases + p]`, reversed
+because `resample` walks history and coefficients forwards together -- and
+stores 0 in `coeffsBorrowed`. The `float *` overload adopts the caller's array
+and stores 1, and `~Resampler` frees `coeffs` only when the flag is 0. The
+designing one ALSO rounds `taps` down to a multiple of four and the adopting
+one does not; that asymmetry is in the object.
+
+**Only the `float` overloads are in `dp_vpcm_init`'s closure.** The adopting
+ones are written anyway, because without them `coeffsBorrowed` is never 1, the
+destructor's skip-the-free arm is unreachable, and a test claiming to cover the
+destructor covers one of its two arms. Two empty things compare equal; so do
+two arms of a branch only one of which is ever taken.
+
+**`ResamplerTiming` is where the timing loop is.** `timingCorrection` -- the
+base's per-output-sample hook -- runs `y[n] = b0*x[n] - 0.9604*y[n-2]`, a
+two-pole resonator whose poles sit at z = +/-0.98j, i.e. Fs/4.
+`V90Equalizer::process` feeds this chain two samples per symbol, so Fs/4 is
+BAUD/2, which is what every name in the group says. The squared output is
+second-differenced into a timing error and every OTHER call closes a PI loop
+over it with the `bllK1`/`bllK2` gains `setBllState` chose -- `halfBaudStep` is
+tested with `test $0x1,%al` and runs 0, 1, 2, 1, 2, ... `SdHalfBaudDft`
+accumulates 256 samples into the same bin and latches; `adjustHalfBaudBpfGain`
+renormalises b0 from it and does NOTHING AT ALL until that latch is set.
+`resetSdHalfBaudDft` restarts the accumulation and deliberately does NOT clear
+the latch.
+
+**Two things a later batch will trip over.** `reset()` leaves both loop gains
+at zero and `V90Resampler::reset` then enters FROZEN, which is DEFINED as both
+gains zero -- so the entire PI update multiplies by zero in a freshly
+constructed object while `lastHalfBaudErr`, `lastPhaseAdj` and `errZ1` still
+move, and a test looks live while the loop is untested. And `Resampler::resample`
+reads one sample past `in[n - 1]` on several paths; that is the original's own
+bug, reproduced deliberately, so a caller must pad the buffer or the two sides
+will disagree about uninitialised memory rather than about the resampler.
