@@ -172,6 +172,26 @@ void harness_modem_reset(const unsigned char *pattern, int len);
 extern struct alloc_log harness_alloc;
 void harness_alloc_reset(void);
 
+/*
+ * THE LIVE SET ITSELF, not just its size.
+ *
+ * A test that wants to snapshot and restore a whole allocated GRAPH -- 125
+ * regions for a V.34 construction (finding 802) -- needs the pointers, and
+ * the allocator already holds them.  Exposing them is what lets four
+ * sequential runs use literally the same memory at the same addresses, which
+ * is the congruence findings 780 and 783 get from a static arena and a
+ * constructed object cannot get any other way.
+ *
+ * Writes at most `max` pointers and returns HOW MANY THERE ARE, so a caller
+ * whose buffer is too small finds out rather than silently seeing a prefix.
+ * Sizes are `malloc_usable_size`'s; the allocator does not record them.
+ *
+ * The order is the hash table's, which is a function of the addresses alone
+ * -- so two calls with the same live set return the same order, and that is
+ * all a snapshot/restore pair needs.
+ */
+int harness_alloc_live_set(void **out, int max);
+
 extern int diff_checks;
 extern int diff_failures;
 extern int diff_max_report;

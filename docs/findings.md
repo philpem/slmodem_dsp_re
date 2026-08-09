@@ -31339,3 +31339,366 @@ there joins `make phase`, and this is a measurement rather than a test. It
 interposes on `malloc`, sets both debug levels to 2, and depends on
 `setarch -R`; none of that belongs in the suite. What is committed is this
 record.
+
+### 900. The blob's constructor driving BOTH ends of one call, and the snapshot that makes four runs congruent
+
+Finding 806 said the smallest next step was to re-point two function pointers
+and run finding 780's four-way call on two blob-constructed endpoints instead
+of two arenas. `test/unit/t_v34conn.c` is that, and it changes exactly one
+thing about `t_v34call.c`: where the two objects come from.
+
+```
+    ref_dp_vpcm_init()                                registers ops under 34
+    ops->create(0xD1A1, 34, caller=1, 9600, 48, ops)  the originator
+    ops->create(0xD1A1, 34, caller=0, 9600, 48, ops)  the answerer
+```
+
+and the V.34 object each run drives is the returned root plus 0x2c. **No
+`v34handshakinit` call, no `V34InitializeImplementationSpecific`, no invented
+session pointers and no role poke** -- the constructor does all four, and the
+role reads back 0x65 and 0x66 off +0x359c, asserted rather than assumed. What
+finding 784 had to invent for the arena is now the object's own.
+
+Every number finding 800 measured is re-asserted here as a literal, because a
+constructor that silently took another branch would move them before it moved
+anything else: **254 allocations for the two constructions, 4 freed inside
+`create`, 250 regions live, 559,200 bytes asked for, 0 bad frees**, and both
+scrambler callbacks pointing at the blob before anything re-points them.
+
+#### CONGRUENCE IS THE WHOLE PROBLEM, and a snapshot is the answer
+
+`t_v34call` compares four runs over two static arenas, so every address is
+identical by construction and finding 783's "literally the same memory at the
+same addresses" holds for free. Two constructions put 125 regions each at
+addresses that move between processes, and 19 pointer words in each root then
+differ run to run for a reason that is nothing to do with the modem.
+
+Constructing per run and hoping glibc hands back the same chunks after a
+125-region teardown is a coin flip. So the two endpoints are built **once**
+and the whole live allocation set is snapshotted; **every run restores it
+before it starts**. That is finding 805's snapshot-restore at graph scope, and
+it makes the four runs the same memory again -- verified rather than trusted:
+`graph0[r]` is the hash of the graph each run started from and every run must
+match the oracle's.
+
+Three things had to be true for that to be sound, and all three are asserted:
+
+- **the snapshot is live** -- one byte poked anywhere in the graph changes the
+  hash, and putting it back restores it (`docs/method/gates.md` rule 3, on a
+  detector whose failure mode is silence);
+- **nothing is allocated or freed by the call**, so the set is not stale after
+  the first run. `harness_alloc.allocs` and `.frees` are unchanged across all
+  four runs;
+- **the two roots are hashed separately from the rest**, because they are the
+  only regions holding a word that legitimately differs between runs.
+
+Cost: **1.8 s for four 1,600-block runs**, against `t_v34call`'s 2.6 s.
+
+### 901. +0x2218 decoded from its writers: 2 is handshaking and **1 is CONNECTED**
+
+`t_v34call` writes 2 into +0x2218 and cites `src/pump/v34/v34pcmmain.cpp` for
+it, which is right but does not say what the word IS. Every writer in the
+object, read out:
+
+```
+    5fad2  v34handshakinit                    ecx (0 on the cold start)
+    63d4d  v34handshak                        1
+    65db   VPcmV34InitiateRateRenegotiation   5
+    68f6   VPcmV34InitiateRetrain             2
+    6c91   VPcmV34InitiateHangUp              5
+    6da8   VPcmV34InitMOH                     2
+    a1d2   VPcmV34SetV90RateReneg             5
+    71b60  datapumpv34                        5
+    71bfa  datapumpv34                        2 or 3  (`setle` on +0x258,
+                                                       then `add $0x2`)
+    71c55  datapumpv34                        4
+    71ccb  datapumpv34                        5
+```
+
+and the readers are `cmpl $0x1,0x2218` at 0x71992 -- `datapumpv34`'s
+handshake-versus-data fork -- and `cmpl $0x3,0x2218` at 0x62f0d and 0x632dd
+inside `v34handshak`.
+
+**0x63d4d is the connection.** Five instructions earlier:
+
+```
+    63cf4:  mov    0x2218(%edi),%ebx        ; the mode, must be 0
+    63cfa:  movswl 0xaa98(%edi),%eax        ; the receive rate index
+    63d01:  test   %ebx,%ebx
+    63d0f:  jne    63d41
+    63d11:  cmpl   $0x1,0x0                 ; dsplibs_debug_level > 1
+    63d1a:  imul   $0x960,%eax,%ecx         ; * 2400
+    63d24:  movswl 0xaa88(%edi),%ebx        ; the transmit rate index
+    63d32:  imul   $0x960,%ebx,%eax         ; * 2400
+    63d3c:  call   ...                      ; print both
+    63d48:  mov    $0x1,%edi
+    63d4d:  mov    %edi,0x2218(%eax)
+```
+
+So the object prints the two connection rates in bit/s and immediately puts
+the datapump on the data branch. **+0x2218 == 1, and +0xaa88 / +0xaa98 as
+multiples of 2400, are the observable for "did this call connect"** -- chosen
+off the disassembly before the call was run rather than fitted to what it did.
+
+`t_v34conn.c` records the mode word per block and asserts all three.
+
+### 902. IT DOES NOT CONNECT -- and this is exactly where it stops
+
+The honest headline. Two properly constructed endpoints, 1,600 blocks of four
+samples, the blob on both ends: **neither endpoint's +0x2218 ever leaves 2,
+and both rate words are still 0 at the end.** Driven out to **200,000 blocks
+-- 800,000 samples, 83 seconds of line time at the 9,600 Hz the constructor
+insists on -- it is still 2.** This is not the call being too short.
+
+What it DOES do is a real V.34 startup for the first eleven hundred blocks.
+Every block number below is measured, and the quoted lines are the object's
+own:
+
+```
+  blk   originate                             answer
+    0   41 DET_SYNC / 43 RX_DPSK / 54 SILENCEINFO      (both, as constructed)
+   13   txstate 24 TX_DPSK                    txstate 24 TX_DPSK
+  181   44 DET_INFO                           44 DET_INFO
+  226   txstate 60 TONE_AB                    txstate 60 TONE_AB
+  312   "V34INFO, rxinfo0 0xff,0x84,0x47,0xec,0,0,0,0,0,0"   -- BOTH
+        58 RX_PHASE1_CALL                     46 TX_PHASE1_ANS
+  712                                         49 RX_PHASE1_ANS
+  821   "V34RETRAIN, RX_PHASE1_CALL received, count2=509,
+         rx->gain=0x437,filtdelay=45"
+        55 TX_PHASE1_CALL
+  872   59 RX_PHASE2_CALL
+  914   txstate 5 SILENCE
+  981                                         "On RX_PHASE1_ANS: is short=0,
+                                               bulkDelay=500, filtDelay=45"
+                                              47 TX_PHASE2_ANS
+ 1023                                         txstate 24, microstate 41
+ 1140   "Repeated info0 is detected, errorrecovery is initialized
+         in RX_PHASE2_CALL"
+        41 DET_SYNC, txstate 24
+ 1177+  41 DET_SYNC <-> 44 DET_INFO, txstate 24 TX_DPSK, for ever
+```
+
+**So the two ends complete phase 1 and enter phase 2, and phase 2 is where it
+fails.** Both exchange INFO0 and both accept it; the roles split correctly
+(`_CALL` on one side, `_ANS` on the other); the answerer measures a bulk delay
+of 500 and the originator a `count2` of 509, which is the round trip the wire
+actually has. Then the answerer, having reached TX_PHASE2_ANS, drops back to
+DET_SYNC and starts sending INFO0 again -- and the originator, sitting in
+RX_PHASE2_CALL waiting for what comes after INFO0, sees INFO0 a second time,
+says so, and error-recovers to DET_SYNC as well. From there neither ever
+leaves the INFO0 exchange again.
+
+**Where it stops, said plainly:** both endpoints end on microstate 44
+DET_INFO, rxstate 43 RX_DPSK, txstate 24 TX_DPSK, mode 2, rates 0 and 0.
+
+#### What this is NOT evidence of
+
+It is not a defect found in the reconstruction: all four runs agree block for
+block (finding 905), so the blob on its own does exactly the same thing.
+
+The first suspect remains the one finding 806 named. The configuration is
+plausible and not recovered (finding 801), and **the object has not been
+through V.8**: nothing has told either end what the other offered, and phase 2
+is precisely where a V.34 modem uses that. Deriving the configuration properly
+is #78's job and this batch deliberately did not touch it -- see finding 908
+for what is configuration-shaped here.
+
+### 903. The wire is 30 ms each way, because the object said the 1-sample one was out of spec
+
+`t_v34call`'s wire is one sample of delay each way. On a constructed object
+the blob says what it thinks of that, in its own words:
+
+```
+    RTD (1) lower than min (30), masking Far EC...
+    ...Modifying dma delay from 1556 to 1540
+```
+
+A round-trip delay of 1 against a floor of 30. 288 samples at 9,600 Hz is
+30 ms, so `t_v34conn.c` uses that, and the same pair of log lines then reads
+`bulkDelay=500` and `count2=509` rather than the degenerate 1.
+
+**It is worth more than the tidiness.** With the one-sample wire the call
+reaches TONE_AB and the INFO0 exchange and stops there; with 30 ms it goes on
+to complete phase 1 in the proper `_CALL`/`_ANS` order and enter phase 2 --
+three more microstates on each endpoint. More of `v34handshak` under the
+differential comparison is the whole point of the tier.
+
+**It cannot manufacture agreement.** The delay is a property of the LINE, it
+is identical in all four runs, and a run-to-run comparison is blind to
+anything applied to all four equally.
+
+Neither wire connects (finding 902), so this is not a knob that was turned
+until something happened. What it changed is how much of the handshake gets
+tested.
+
+### 904. The two stores are a PRECAUTION, not a tested path -- the scramblers are never called
+
+Finding 806's cost of the fixture is two function pointers, at
+`offsetof(struct v34_shell, scramble)` in the receive shell and
+`+ V34_SHELL_TX` in the transmit one -- v34 object +0xe48 and +0x2a28, root
++0xe74 and +0x2a54. `t_v34conn.c` writes ours there for whichever endpoints
+run our code, on `src/pump/v34/v34digital.c`'s condition and with
+`v34digital.c`'s pairing.
+
+**Two mutations settle what those stores are worth, and they disagree with the
+obvious expectation:**
+
+```
+  swap the polarity (GPA where GPC belongs, both ways)   ALL 128 CHECKS PASS
+  install NULL in both, on the originating endpoint      no fault; only the
+                                                         two "still ours"
+                                                         checks fail, 4 of 128
+```
+
+A NULL callback survives 1,600 blocks and 12,800 samples. **So neither
+scrambler is called anywhere in this call**, which is consistent with +0x2214
+`data_enable`: `modulatevector` sets it when the training-to-data symbol
+counter expires, and this call never gets past phase 2.
+
+That is worth stating in both directions. It means **the substitution is sound
+and untested here** -- it removes the only two words that could route our code
+into the blob's, and the run proves the removal is harmless rather than
+proving the replacements compute the right thing. What proves that is
+`t_v34scram.c` and `t_v34digital.c`, sixty thousand checks between them
+(finding 802).
+
+And it means the thing guarding the substitution is **not** the object
+comparison, which cannot see it, but the two claims that read the pointers
+back at the END of each run and require them to be ours exactly where the run
+says ours. Recorded because a later reader would otherwise assume the object
+hash was covering this.
+
+### 905. All four runs agree, 3,200 block-endpoint pairs each, on a CONSTRUCTED object
+
+The claim finding 780 made on two pseudorandom arenas, now made on two objects
+the blob built and configured:
+
+| run | originate | answer | pairs agreeing |
+|---|---|---|--:|
+| `blob-blob` | the blob's | the blob's | (the oracle) |
+| `ours-ours` | ours | ours | 3,200 of 3,200 |
+| `ours-blob` | ours | the blob's | 3,200 of 3,200 |
+| `blob-ours` | the blob's | ours | 3,200 of 3,200 |
+
+Per block and per endpoint: the whole 53,848-byte root as a hash, the three
+state words, the mode word, the transcript, its line count and the non-zero
+transmit-sample count. Plus, once per run, the **123 heap regions that are not
+the two roots** -- the session object `V34SetINFO0aBits` writes through lives
+out there, and a run agreeing on both roots while diverging in a sub-object
+would otherwise pass.
+
+**Two skips, and nothing else is excluded.** The two scrambler callbacks, for
+the reason in finding 904; and `v34hs_in_hole`'s thirty-seven pointer fields,
+mapped through the +0x2c the V.34 object sits at, because our bring-up
+installs our library tables where the blob installs its own. Nothing was
+widened pre-emptively: any other pointer-shaped divergence fails and
+`diagnose` names its offset.
+
+**Why this is stronger than finding 780's version.** Not because the numbers
+are bigger -- they are the same 3,200 -- but because the trajectory is a real
+handshake rather than a cycle. Eight distinct state triples on the originator
+and seven on the answerer, thirteen and ten blocks in which one moved, and the
+path runs DET_SYNC -> DET_INFO -> TONE_AB -> phase 1 in the correct
+`_CALL`/`_ANS` split -> phase 2. Every one of those transitions is a dispatch
+arm of `v34handshak` that the two implementations had to take in the same
+order on both sides of the same wire.
+
+It is also the first thing in the tree that runs our `datapumpv34` and our
+`modem_serrint` against an object nothing of ours configured.
+
+### 906. Every claim in `t_v34conn.c`, and the mutation that was watched failing it
+
+Ten mutations applied by hand, built, run and reverted. Named by what they
+broke rather than by what they proved.
+
+| mutation | what fired |
+|---|---|
+| the restore skipped for runs 1-3 | `block 0 object`, `pairs that agree` **0 of 3200**, every literal, and `the graph this run started from` |
+| `compare_run`'s loop bound halved | `pairs that agree` 1600 of 3200, **alone** |
+| a byte written in a non-root region, only where the endpoint runs ours | `the heap graph outside the two objects` on the three non-oracle runs, **and nothing else** |
+| both endpoints constructed with `caller=1` | `the role flag caller set`, then the trajectory collapses from 8/7 distinct triples to 3/3 and from 13/10 state moves to 2/2 |
+| the wire looped each endpoint back to itself | the same collapse, on **all four runs** -- and NOT the run-to-run comparison |
+| `mode` poked to 1 at the last block, with two rate words | `blocks in which the mode word left handshaking`, `the mode word at the end`, and both rate claims, on all four runs |
+| the mode left at 0, so `datapumpv34` takes the DATA branch | **SIGSEGV**, exit 139 -- loud, and not a passing run |
+| `src/pump/v34/v34rx.c`'s history-ring bound 0x257 -> 0x256 | `block 149 object`; `diagnose` names +0x2aa6 (the index), +0x2f58 and +0x3406 (the ring's first and last entries) |
+| one word of `v34hshak.c`'s txstate format string | `block 13 transcript` -- and **0 root bytes differ**, which only the transcript tier can see |
+| both scrambler pointers set NULL on the originator | the two `still ours` claims -- and see finding 904, because nothing else moved |
+
+The third row is `docs/method/gates.md` rule 3 on the one detector this test
+adds that `t_v34call` does not have. A hash that only ever fires alongside
+another hash is buying nothing, so the discriminator has to write outside the
+roots in SOME runs and not others -- which means the poke is conditional on the
+endpoint running ours, since a driver mutation that changes all four runs
+equally can never separate them. It fires on exactly the three non-oracle runs
+and leaves every per-block object hash agreeing.
+
+The fifth row is the vacuity half, as in finding 788: a mutation in the DRIVER
+changes all four runs identically, the differential comparison stays green, and
+only the recorded literals can see it.
+
+#### The literals, read twice before they were recorded
+
+`docs/method/gates.md`: a baseline read once, from one process, is a floor
+nobody can trust. These were taken from two separate processes -- different
+heap bases, because nothing here disables ASLR -- and are identical:
+
+```
+                lines  distinct  moved  nonzero  iterated  connected  mode
+  originate        25         8     13     4072       574          0     2
+  answer           20         7     10     6320       407          0     2
+```
+
+`iterated` is the anti-vacuity claim finding 805's passes 0 and 1 needed and
+did not have: a constructed object comes out with the transmit queue at 32
+against a block limit of 16, so `datapumpv34` returns without entering its loop
+and "it ran and did not fault" is not a result. It counts the blocks in which
+the pump RAISED the queue, which is exactly the blocks in which `v34handshak`
+was called -- 574 and 407 of 1,600, so the first blocks really are draining the
+queue and the rest really are handshaking.
+
+`connected` is finding 902 asserted rather than narrated. **It is a recorded
+frontier and not a requirement**: the day either endpoint reaches mode 1 this
+test fails, and the failure prints the mode word and both rate fields. That is
+the intended way to find out.
+
+### 907. One harness change, and it makes the mutation snapshot stale
+
+`harness_alloc_live_set(void **out, int max)` in `test/harness/runtime.c`, with
+its comment in `test/harness/harness.h`. Fifteen lines: the allocator already
+holds the live set in `alloc_slots` for the leak accounting, and a test that
+wants to snapshot a whole allocated graph needs the pointers rather than only
+the count. Sizes come from `malloc_usable_size`, which is why no parallel
+size-tracking array was added. It returns HOW MANY THERE ARE rather than how
+many it wrote, so a caller whose buffer is too small finds out.
+
+**The mutation snapshot's key covers `test/harness/`** (`tools/mutsnap.py`), so
+this one function marks all 54 registered suites STALE. That is reported and
+does not gate -- `make phase` is green -- and it is deliberately NOT re-recorded
+here: the snapshot is recorded once, after the merges, and a snapshot refreshed
+as a chore is worse than none (finding 545).
+
+**No file under `test/mutations/` is touched by this batch**, and no suite is
+registered for `t_v34conn.c`. Every claim above was shown to fail by hand.
+
+### 908. What this batch did not do, and what belongs to #78
+
+- **The configuration is still not recovered.** `MDMPRM_DPRUNTIME` and
+  `MDMPRM_DSPINFO` are two zeroed buffers this test owns, and 2400 / 33600 / 40
+  are a plain analogue modem's rate window and I/O delay. Nothing here was
+  tuned to make anything happen, and finding 902's negative result is the
+  reason to believe that. If the call is ever to connect, this is the first
+  place to look, and it is #78's.
+- **There is no V.8.** The two objects are `caller`-configured and have never
+  negotiated: neither knows what the other offered. Phase 2 is where V.34 uses
+  that, and phase 2 is where finding 902 stops.
+- **The constructor is not tested and cannot be.** The fixture IS the blob's
+  construction, so wave 1 of `docs/vpcmv34main.md` gains a reference object to
+  diff against, not a free pass.
+- **`t_v34call.c` is untouched.** Its fourteen hand-verified mutations
+  (finding 788) are pinned to its literals, and swapping its fixture would
+  invalidate that evidence and lose an independent gate. The two tests are the
+  same call over two different fixtures and both are worth having.
+- **The scrambler substitution is not exercised numerically** (finding 904).
+- **No variant with the one-sample wire is committed.** Finding 903 records
+  what that wire reaches; running both doubles the cost of a gate `make phase`
+  already pays twice.

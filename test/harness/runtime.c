@@ -93,6 +93,25 @@ alloc_remove(void *p)
 	return 0;
 }
 
+/*
+ * The live set as a list.  See harness.h: a test snapshotting a constructed
+ * object's whole heap graph needs the pointers, and this is where they are.
+ */
+int
+harness_alloc_live_set(void **out, int max)
+{
+	unsigned k;
+	int n = 0;
+
+	for (k = 0; k < HARNESS_ALLOC_SLOTS; k++)
+		if (alloc_slots[k] != 0) {
+			if (n < max)
+				out[n] = alloc_slots[k];
+			n++;
+		}
+	return n;
+}
+
 void
 harness_alloc_reset(void)
 {
