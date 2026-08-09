@@ -334,14 +334,13 @@ offsets:
 # `loadParams` members and paramcheck.py compares them with the header text.
 # The syntax check is here rather than in `check64` because nothing includes
 # either header yet, and an uncompiled header is not a checked one.
-params:
-	@$(PYTHON) tools/paramcheck.py
+params: | $(BUILD)
+	@$(PYTHON) tools/paramcheck.py --emit $(BUILD)
 	@for h in V90Parameters V92Parameters; do \
-	    echo '#include "dsplib/'$$h'.h"' > $(BUILD)/_$$h.cpp; \
 	    $(CXX) $(ARCH32) $(CXXFLAGS) -fsyntax-only $(BUILD)/_$$h.cpp || exit 1; \
 	    $(CXX) $(SYNCXXFLAGS) -fsyntax-only $(BUILD)/_$$h.cpp || exit 1; \
 	done
-	@echo "parameter headers: layout matches the object, and both compile"
+	@echo "parameter headers: layout matches the object, and the compiler agrees"
 
 # How many diagnostic call sites the suite never reaches.
 #

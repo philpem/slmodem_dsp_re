@@ -31142,3 +31142,32 @@ Also: both headers had to go in `SKIP_HEADERS` in `tools/offcheck.py`, which
 v90rest.md says wave 1 paid for twice. `offcheck` compiles every header it does
 not skip **as C**, so a `class` turns into `907 of 907 annotations do not match
 the layout` -- a message about offsets, from a parse error.
+
+#### And the first version of that gate could not see a layout change
+
+The text comparison holds the header to the OBJECT. Nothing held it to the
+COMPILER, and `offcheck.py` -- which does exactly that for every `struct` in
+the tree -- matches `^struct` and now skips both files anyway. Worse, the
+comparison skips every offset the blob map does not cover (`if b is None:
+continue`), which is +0x000 and the 51 `unnamed_*` slots.
+
+So: **delete one `unnamed_*` line and every named field after it really moves
+four bytes while its comment stays put, and the gate exits 0.** Measured, not
+argued -- with `unnamed_06c` deleted the text comparison printed its two
+ordinary OK lines and exited 0. Every other gate in the tree was green too.
+That is the file's whole purpose failing silently, in the one direction three
+concurrent batches were relying on.
+
+`paramcheck.py --emit` now generates the translation unit that `make params`
+compiles, with **342 + 55 `__builtin_offsetof` assertions and two `sizeof`
+ones** in the house `typedef char x[cond ? 1 : -1]` form, guarded on
+`__SIZEOF_POINTER__ == 4` because +0x000 is a pointer and every offset after it
+differs on the 64-bit pass. The same deletion then fails the build:
+
+    error: size '-1' of array 'pc_V90Parameters_TEMP_FLOAT_PARAMETER4' is negative
+
+which is a hard error rather than a `-Wnarrowing` warning, so it does not
+depend on the standard the tree happens to compile with. Clean before and
+after. The two halves are not redundant: the text comparison catches a header
+that has drifted from the object, the assertions catch a header that has
+drifted from itself, and neither can see the other's case.
