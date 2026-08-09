@@ -1,0 +1,60 @@
+[
+ {"label": "NOTE: what this set covers, and what it cannot",
+  "why": "Five of Psd's six members.  `Psd::process` is not reconstructed (finding 876), so nothing here touches the overlap arithmetic, the accumulation or the four OutputOption arms -- `m_overlap` is carried and never used, and this set can only check that it is carried.  The window assertions all have the same trap behind them: WINDOW_BOXCAR is all ones, so a call that ignored its argument would agree with a boxcar reference for ever.  `windows_differ` in the test is what makes those assertions non-vacuous, and the two `setWindowType` entries below are what show it firing.  As in floatarma.json, no entry is allowed to write past a buffer: where the natural mutation would overrun, the entry moves the value the other way and the same assertion catches it."},
+
+ {"label": "the spectrum buffer is two words longer than the map says",
+  "find": "\tm_fft = (float *)sysdep_malloc((m_length + 1) * sizeof(float));",
+  "replace": "\tm_fft = (float *)sysdep_malloc((m_length + 2) * sizeof(float));"},
+
+ {"label": "the window is designed into the spectrum buffer",
+  "find": "\tdesignWindow(window, m_window, m_length);\n\tm_overlap = overlap;",
+  "replace": "\tdesignWindow(window, m_fft, m_length);\n\tm_overlap = overlap;"},
+
+ {"label": "the window is one sample shorter than the transform",
+  "find": "\tdesignWindow(window, m_window, m_length);\n\tm_overlap = overlap;",
+  "replace": "\tdesignWindow(window, m_window, m_length - 1);\n\tm_overlap = overlap;"},
+
+ {"label": "the constructor stores the length as the overlap",
+  "find": "\tdesignWindow(window, m_window, m_length);\n\tm_overlap = overlap;",
+  "replace": "\tdesignWindow(window, m_window, m_length);\n\tm_overlap = length;"},
+
+ {"label": "the constructor stores the overlap as the length",
+  "find": "\tm_length = length;\n\tm_window",
+  "replace": "\tm_length = overlap;\n\tm_window"},
+
+ {"label": "setOverlapLength writes the length instead",
+  "find": "Psd::setOverlapLength(unsigned int overlap)\n{\n\tm_overlap = overlap;",
+  "replace": "Psd::setOverlapLength(unsigned int overlap)\n{\n\tm_length = overlap;"},
+
+ {"label": "setWindowType always designs a boxcar",
+  "find": "Psd::setWindowType(WindowType window)\n{\n\tdesignWindow(window, m_window, m_length);",
+  "replace": "Psd::setWindowType(WindowType window)\n{\n\tdesignWindow(WINDOW_BOXCAR, m_window, m_length);"},
+
+ {"label": "setWindowType redesigns the spectrum buffer, not the window",
+  "find": "Psd::setWindowType(WindowType window)\n{\n\tdesignWindow(window, m_window, m_length);",
+  "replace": "Psd::setWindowType(WindowType window)\n{\n\tdesignWindow(window, m_fft, m_length);"},
+
+ {"label": "the destructor forgets the spectrum buffer",
+  "find": "\tif (m_fft != 0)\n\t\tsysdep_free(m_fft);",
+  "replace": ""},
+
+ {"label": "the destructor frees the window twice",
+  "find": "\tif (m_fft != 0)\n\t\tsysdep_free(m_fft);",
+  "replace": "\tif (m_fft != 0)\n\t\tsysdep_free(m_window);"},
+
+ {"label": "getFrequencies fills every bin, not half of them",
+  "find": "\tunsigned int bins = m_length >> 1;",
+  "replace": "\tunsigned int bins = m_length;"},
+
+ {"label": "the bin spacing is one over the transform length plus one",
+  "find": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / m_length));",
+  "replace": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / (m_length + 1)));"},
+
+ {"label": "every bin gets the same frequency",
+  "find": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / m_length));",
+  "replace": "\t\tfreq[i] = (float)(sampleRate * (1.0L / m_length));"},
+
+ {"label": "the product is associated the other way",
+  "find": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / m_length));",
+  "replace": "\t\tfreq[i] = (float)((long double)i *\n\t\t\t\t  (sampleRate / m_length));"}
+]
