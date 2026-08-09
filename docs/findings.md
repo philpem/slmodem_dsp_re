@@ -30639,3 +30639,38 @@ a coincidence worth a second finding.
 
 x87 remains unmeasured on every version, and this object is `-mfpmath=387`.
 That part stands.
+
+### 705. A mutation run makes the working tree transiently wrong, and `git add -A` would commit it
+
+Met while committing 704's fix with `tools/mutate.py --all --jobs 8` running in
+the same tree. `git status` showed a source file modified that this session had
+never touched:
+
+     M src/pump/v90/ResamplerTimingOffset.cpp     (then, moments later)
+     M src/pump/v90/VPcmFloModem.cpp
+
+That is the mutation harness doing its job. `mutate.py` patches the source in
+place, builds, runs the suite, and restores in a `finally` — which covers an
+exception, and it turns SIGTERM into an exception so a kill restores too. The
+design is careful and the tree is only wrong *while a run is in flight*.
+
+**The gap is the commit, not the harness.** During a run the tree contains a
+file deliberately edited to be wrong, and `git add -A` or `git commit -a` will
+take it without complaint. The result compiles, and it is a defect nobody
+wrote and nobody will think to look for — the mutation labels are things like
+"the shift count is not masked to five bits", which is exactly the shape of a
+plausible reconstruction error.
+
+`tools/refcheck.py` already detects it and prints `LIVE MUTANT(S)`, and the
+Makefile runs it. That is what surfaced it here. But refcheck is a report, not
+a lock, and a session in a hurry can commit between the report and the read.
+
+**So: name the paths you are committing.** `git add docs/findings.md
+tools/decompile.sh` and not `git add -A`, whenever anything long-running might
+be touching `src/`. That is good practice generally and load-bearing here,
+because this project runs `--jobs 8` sweeps that last a long time and a
+parallel session may start one without telling you.
+
+A second reason, met the same minute: an agent worktree at
+`.claude/worktrees/agent-*` sits INSIDE the main working tree and shows up as
+an untracked `.claude/`. `git add -A` would commit that too.
