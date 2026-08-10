@@ -33277,14 +33277,78 @@ into it would have leaked from one of the four runs to the next. It is now
 heap-allocated, as the host allocates it, and the live-region count went 250
 -> 252 accordingly.
 
-### 837. `V92DILdescriptorPacker` is the V.90 packer plus two frames, and 837 is the number it was owed
+### 818. `refcheck`'s duplicate detector was blind to 263 of the findings, and union merges are what blinded it
 
-Sub-batch A reconstructed the 4,160-byte packer at 0x50020 and then ran out of
-finding numbers -- it owned 826-831 and had spent all six -- so its derivation
-went into the header comment of `src/pump/v90/V92DILdescriptorPacker.cpp` and
-nowhere else, with a note asking whoever held the next block to give it one.
-This is that number. **The comment remains the full derivation; what follows
-is the part the record needs to be able to find.**
+The tenth collision (finding 819) sat in `docs/findings.md` as two `### 837.`
+entries while `python3 tools/refcheck.py` printed
+`2950 references checked, 0 resolve to nothing` and exited 0. **The tool whose
+entire purpose is catching this reported the tree clean.**
+
+The cause is one line, and it is the same shape as the bug the function's own
+docstring describes catching:
+
+```python
+    if n < high - 20:        # "far below the running high-water mark,
+        continue             #  therefore a numbered list item"
+```
+
+That rests on entries CLIMBING through the file. They did when it was written.
+**Union merges ended it.** Every parallel batch appends its own block and the
+merge concatenates them, so this file now runs 820-825, 838, 839, 940-959,
+826-836, 819, 837 -- and the moment `high` reaches 959, every entry in the 826
+block is "far below" it and is silently dropped.
+
+Measured on the file rather than argued:
+
+```
+    headings the window skips as "list items"     267
+    of which numbered above 20, so NOT a restart  263
+    e.g. 543, 330, 251-263, 331 ... with high=622
+```
+
+**263 real findings were outside the check.** Any collision among them -- and
+they include every block this session merged -- was invisible.
+
+**The fix is one added condition, and it is the size of the number.** A
+numbered list restarts at 1 and stays short; that property survives
+reordering, and being-below-the-high-water-mark does not. So both must now
+hold: `n < high - 20 and n <= LIST_ITEM_MAX`. Findings 1-4 are unaffected,
+being at the top where `high` has not climbed past them.
+
+**It was made to fire before it was believed**, on three shapes and not one --
+`docs/method/gates.md` rule 3, and the more so for a detector that had been
+silently passing:
+
+```
+    the real 819/837 collision, reintroduced        DUPLICATE finding 837
+    a collision inside the 826 block                DUPLICATE finding 827
+    a collision against master's 940 block          DUPLICATE finding 940
+```
+
+all three exit 1, and the unmutated tree still exits 0. Before the fix the
+first of those was the live state of the tree and it printed nothing.
+
+**What this does not fix.** The docstring's other warning still stands: a
+citation that still RESOLVES but now points at the wrong finding is invisible
+to any of this, which is why 819 says in its own text what it used to be
+called.
+
+### 819. `V92DILdescriptorPacker` is the V.90 packer plus two frames
+
+**THIS WAS BRIEFLY NUMBERED 837 AND THAT WAS A COLLISION.** Sub-batch A
+reconstructed the 4,160-byte packer at 0x50020 and ran out of finding numbers
+-- it owned 826-831 and had spent all six -- so its derivation went into the
+header comment of `src/pump/v90/V92DILdescriptorPacker.cpp` and nowhere else,
+with a note asking whoever held the next block to give it one. 837 looked like
+the one number left in 820-839, because sub-batch B had committed 832-836 and
+not yet 837. **B owned 832-837 and its 837 landed an hour later**, so this is
+the tenth numbering collision in this tree and the first one a merge produced
+in a single session. It is 819 now -- 807-818 remain free -- and the citation
+in the `.cpp` moved with it. See finding 818 for why `refcheck` did not catch
+it, which is the more useful half.
+
+**The comment remains the full derivation; what follows is the part the record
+needs to be able to find.**
 
 The stream is a run of 17-position frames, position 17k of each a 0, frame 0
 seventeen 1s. **Positions 0 to 51 are byte for byte the V.90 packer's** --
@@ -33866,11 +33930,17 @@ alignment padding. Its 505 for `realfft` was right.
 
 The reconstruction in finding 832 was structurally right on its first build and
 still disagreed with the blob in about one output word in a hundred, by one to
-sixty ULP of a `float`. All of it was x87 excess precision, and **the two places
-it mattered are places the compiler was FREE to choose** -- which makes this an
-exception to `docs/method/tiers.md`'s forced/free rule worth naming. A spill
-decision is free, and here a spill decision changes the answer, because spilling
-an x87 register narrows it.
+sixty ULP of a `float`. All of it was x87 excess precision, and both places it
+mattered look at first like places the compiler was FREE to choose.
+
+**They are not, and the sharper statement keeps
+`docs/method/tiers.md`'s forced/free rule intact rather than carving an
+exception out of it: a spill is free, but a NARROWING spill is forced.** Where
+to keep a value is the compiler's business; changing the value is not, and
+storing an 80-bit x87 register into a 4-byte slot changes it. Register
+allocation stays in the "free, so ignore it" column exactly as finding 614 puts
+it. What moves into the "forced, so act on it" column is the width of the slot,
+which is the same kind of fact as the signedness of a load whose result is used.
 
 Both remedies were **ablated** -- removed, rebuilt, watched fail, put back --
 because a deviation nobody has seen matter is a deviation nobody should carry.
@@ -34005,3 +34075,102 @@ the x87 expansion with no Makefile change and no asm -- GCC 13 emits
 that does NOT settle, and what the next batch owns, is that `Psd.cpp` is also
 built 64-bit for `$(CXXOBJ64)`, where there is no x87 at all and the pragma buys
 nothing. That is the question to answer before writing `process`, not after.
+
+### 837. The two `printTitle` banners, and the transcript tier standing on its own
+
+`_ZN8V90Modem10printTitleEv` (0x19400, 0xd2 = 210 bytes) and
+`_ZN8V92Modem10printTitleEv` (0x13bf0, 0xac = 172 bytes), now
+`src/pump/v90/V90Modem.cpp` and `src/pump/v90/V92Modem.cpp` with
+`test/unit/t_printtitle.cpp`. The original TUs are `V90Modem.cpp` (STT_FILE
+#31) and `V92Modem.cpp` (#25). Both were single-symbol closures.
+
+**They are the first functions here whose ONLY output is the transcript.**
+Neither writes memory, neither returns anything and neither touches `this` --
+0x19400 and 0x13bf0 never read the incoming argument slot, and each
+OVERWRITES it with a string pointer before its tail jump (0x19475, 0x13c46),
+which is only correct if the value there was already dead. So there is no
+tier-1 comparison to fall back on and `docs/method/tiers.md` section 4 is the
+whole oracle. That also makes them callable through a pointer to nothing,
+which is what the test does, and what lets the class declarations in
+`include/dsplib/V90Modem.h` and `V92Modem.h` be **one member each and no data
+members at all**. Both headers say at length that they are not object maps;
+neither class has had a single field read off the disassembly.
+
+**Six of the nine lines are encoded and it does not matter.** `edprintf` puts
+its message through `src/core/encode.c`'s rotating key before handing it to
+`dsplibs_debug_printf`, so most of the transcript is `$!$ ...????`. Both sides
+encode -- ours with our `cEncodeChar`, the blob's with its own -- and the key
+resets at the top of every `edprintf`, so the comparison is exact.
+
+**The source order is not the disassembly order, and reading the layout would
+give the wrong transcript.** GCC split both bodies on the first
+`dsplibs_debug_level` test and moved the gated block to the end, so reading
+0x19400 downwards gives messages 1, 2, 3, 7, 8, 9, 10, 4, 5, 6. The edges say
+otherwise: 0x1942e jumps FORWARD to 0x19481 when the level is high and falls
+through to message 7 at 0x19430 when it is not, and the gated block ends by
+jumping back to 0x19430. Taking the layout at face value would put the version
+line after the description.
+
+**The two functions are nearly identical and differ in exactly two ways**,
+which makes "reconstruct one and copy it" the obvious mistake:
+
+- V.90 has a ninth message, `Components: Floreat, ADI, ACD, New BLL`; V.92
+  has no equivalent.
+- **The closing banner is gated in V.90 and ungated in V.92.** 0x19464 tests
+  the level and 0x1947c tail-jumps to `dsplibs_debug_printf`; 0x13c4d
+  tail-jumps to `edprintf` with no test in front of it at all.
+
+`t_printtitle.cpp` asserts that difference against the BLOB's two transcripts
+rather than against ours, so it is a statement about the object.
+
+**Four levels, because one level cannot see a gate at the wrong threshold.**
+Every gate in both functions is `> 1`, so 0 and 1 print nothing and 2 and 3
+print everything. Raising one gate to `DSPLIB_DEBUG_VERBOSE()` -- `> 2`, the
+threshold `cadence_progress` really uses (`include/dsplib/debug.h`) -- produces
+a byte-identical transcript at level 3 and a wrong one at level 2, so a test
+that picked a single level would have a one-in-two chance of seeing it. It was
+mutated and is caught.
+
+**Seven hand mutations, all seven caught, and each fired the check it should:**
+
+| mutation | fired |
+|---|---|
+| V.90 version string `2.98` -> `2.99` | `transcript text` |
+| V.90 loses its `Components:` line | `line count` + `text` |
+| V.90 closing banner made ungated (the V.92 shape) | `transcript text` |
+| V.92 closing banner made gated (the V.90 shape) | `transcript text` |
+| V.92 version and date arguments swapped | `transcript text` |
+| V.90 first gate raised to `> 2` | `line count` + `text`, **at level 2 only** |
+| V.92 body emptied entirely | `transcript is non-empty` + `line count` + `text` |
+
+**Level 0 is the vacuous case and is tested with its own guard rather than
+skipped.** With the level down `edprintf` still formats and encodes but prints
+nothing, and both sides emit an empty transcript -- which compares equal
+whatever either function does, and would pass against an empty body. So level 0
+asserts the transcript IS empty, level 2 asserts it is not, and the
+non-emptiness is asserted for the BLOB's side separately: `lines_ours > 0` is a
+statement about the reconstruction, and if the reference printed nothing the
+whole file would be two empty strings agreeing. The emptied-body mutation is
+what shows that guard firing.
+
+**The banner literals are per-TU copies in the object and the claim stops
+there.** `.rodata.str1.4+0x416c` and `+0x34a0` are two copies of the same 57
+asterisks, which is what two translation units each spelling out the literal
+look like after `ld -r`, and our two objects reproduce that -- each of
+`build/src/pump/v90/V90Modem.o` and `V92Modem.o` carries its own. **At link time
+they merge, on both sides**: `.rodata.str1.4` is `SHF_MERGE|SHF_STRINGS`, and
+`strings` finds exactly one copy of the banner in `build/test/t_printtitle`,
+ours and the blob's four copies all folded into it. So "the two TUs do not share
+the string" is true and checkable; "there are two copies in the program" is not,
+and was not claimed. The reason not to factor the literal into a shared header
+is therefore about which translation unit the original put it in, not about how
+many copies the linker leaves -- and nothing in the transcript tier can see
+either, since the emitted text is identical whichever way it goes.
+
+**One shared file was edited.** `tools/offcheck.py`'s `SKIP_HEADERS` gained
+`V90Modem.h` and `V92Modem.h`: that gate concatenates every
+`include/dsplib/*.h` into one C translation unit, and a header containing
+`class` fails it outright -- 914 of 914 annotations reported as not matching,
+which is what the list already exists for and why 39 other C++ headers are in
+it. The headers are still compiled, by the `.cpp` files that include them and
+by `check64`.
