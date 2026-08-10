@@ -88,7 +88,7 @@ dp_runtime_create(void *modem)
 	rt->unnamed_0058 = 0;
 	rt->unnamed_005c = 0;
 	rt->unnamed_0060 = 0;
-	rt->unnamed_006c = 0;
+	rt->addedDelay = 0;
 	rt->dmaDelay = 0;
 	rt->hwDelay = 0;
 

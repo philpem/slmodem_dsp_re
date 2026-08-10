@@ -186,6 +186,17 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  *           and 0x30 = 48 is slmodemd's own `ST7554_HW_IODELAY (48)`
  *           (`slmodemd/modem_main.c:682`).  Both are `%d`, so signed -- DMA
  *           is -44 for an iodelay of 0 and the object prints it that way.
+ *   +0x06c  the third `%d` of the SAME two format strings that name the pair
+ *           above: `vpcm: P2 FINISHED: increase delay!! init %d, ext %d,
+ *           add %d` at 0x4200 and `vpcm: P2 RESTART: decrease delay!!` at
+ *           0x4393, where init is +0x064 and ext is +0x068.  `vpcm_run`'s
+ *           phase-II arms are the only writers: arm 1 stores root +0xd254
+ *           into it and asks the host for that much more delay, arm 0 stores
+ *           zero and gives it back, and each is gated on the other having
+ *           happened -- so it is "how much extra delay is currently taken",
+ *           and `> 0` (0x432b, signed) is the test.  `vpcm_create` and
+ *           `dp_runtime_create` only ever zero it, which is why it was
+ *           `unnamed_006c` until finding 983.
  *   +0x078  loaded and, when non-zero, passed as `loadParams(char *)`'s only
  *           argument -- a parameter-file name.  `vpcm_create` NULLs it at
  *           0x3ad2, which is the store that made a bogus DPRUNTIME fault.
@@ -217,7 +228,7 @@ struct _tagModemParameters {
 	int		unnamed_0060;		/* +0x060 */  /* = 0 */
 	int		hwDelay;		/* +0x064 */
 	int		dmaDelay;		/* +0x068 */
-	int		unnamed_006c;		/* +0x06c */  /* = 0 */
+	int		addedDelay;		/* +0x06c */
 	unsigned char	unmapped_0070[0x78 - 0x70];
 	char		*paramFile;		/* +0x078 */
 	unsigned char	unmapped_007c[0x88 - 0x7c];
