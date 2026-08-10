@@ -33537,3 +33537,222 @@ clear the red and it is exactly how a false baseline gets manufactured (the
 argument above `cmd_check`).  A batch that merges this should re-record with
 `--update` at the merge, where the work has just been verified and refreshing
 the record is honest — that is what `--strict` exists for.
+
+### 826. The V.92 CP/DIL batch's data-symbol list is wrong: none of the ten functions references a data table
+
+The wave-1 sub-batch A brief named eighteen data symbols as "the data symbols
+they need" -- `TO` (512), `SP` (256), `TP` (256), `v92TxPreFilter` (144),
+`fltTable2`/`fltTable_2` (64), `v92echoPreFilter_a`/`_b` (48),
+`fltTable1`/`fltTable_1` (28), `entFiltNum`/`entFiltDen` (40), `pow10Table`
+(20), `H` (16), `REF` (16), `N`/`Lsp`/`Ltp` (2), and the four
+`IIR2100_Coef_{A,B}_{8000,9600}`. **Not one of them is reachable from any of
+the ten functions**, and writing them would have been 1.5 KB of table
+transcription with nothing to test it against.
+
+The relocations say so directly. Per range, everything `objdump -dr` reports
+between the symbol and its end:
+
+| range | function | relocations |
+|---|---|---|
+| 0x12d10-0x12e90 | `V92create*`, `V92deleteConstellations` | 16, all `sysdep_malloc`/`sysdep_free` |
+| 0x12e90-0x12f00 | `V92deleteFilterCoefficients` | 4, all `sysdep_free` |
+| 0x12f00-0x13990 | `V92setParamsInfoFromCPUnPck` | `dsplibs_debug_level`, `dsplibs_debug_printf`, `.rodata.cst4`, `.rodata.str1.*` |
+| 0x33330-0x33570 | the three constellation functions | **none at all** |
+| 0x33920-0x33c60 | `setV92CPpckFromParamsInfo` | **none at all** |
+| 0x50020-0x51060 | `V92DILdescriptorPacker` | `dsplibs_debug_*`, `.rodata.cst4`, `.rodata.str1.*` |
+
+Two of the six ranges hold no relocation of any kind, which is a stronger
+statement than "no table": they call nothing either, not even a debug printf,
+and every constant in them is an immediate.
+
+**The absence is positive evidence and it has to be read the right way round.**
+`tools/dis.py` prints its `[N relocation(s) in this range, all shown inline]`
+banner only when N is non-zero, so for 0x33330-0x33570 it prints nothing --
+and "the tool printed nothing" is exactly the shape finding 618 warns about.
+It was confirmed from the other end with `relocscan.py`: `--into fltTable`
+reports all four as `unreferenced`, and `--at .data:0x480` puts `TO`'s only
+two references at 0x31d04 and 0x31e9d, which are outside every range above.
+
+Where the list probably came from is the *neighbourhood*: `fltTable_1` and
+`fltTable_2` are read by `V92CP::infoToBits` and `V92CP::evaluateInfo`, and
+`pow10Table` by `V90SpectralShaper::advanceTrellis`. Those are adjacent
+subjects in adjacent translation units, and none of them is in this batch.
+
+### 827. `V90MappingParams`, measured from three unmangled functions
+
+The class name is the original's, from
+`_Z11V90CPPackerP16V90MappingParamsP22tagV90AdditionalCPinfoPsi`.
+`V90Demodulator.h` has carried `class V90MappingParams;` as a forward
+declaration and nothing defined it; `include/dsplib/V90MappingParams.h` is the
+first definition, and is a NEW header for the reason `DILdescriptorPacker.h`
+gives for being one -- so that a struct header several batches are merging
+against does not have to change to gain a definition.
+
+Everything below is from the displacements in `getConstellationsIndex`,
+`getConstellationMask` and `getCodecConstellationMask`, which are unmangled
+and therefore carry no type information at all:
+
+```
++0x000   4 bytes    not explained
++0x004   6 x 128    constellation[k][n]        lea 0x4(%ebx,%ecx,1), %ebx = k<<7
++0x304   6 x 128    codecConstellation[k][n]   lea 0x304(%ebx,%ecx,1)
++0x604   6 x 4      constellationSize[k]       mov 0x604(%ecx,%edx,4)
++0x61c   28 bytes   not explained
++0x638   6 x 4      distinctIndex[k]           mov 0x638(%ecx,%esi,4)
+```
+
+Six of everything: the outer loop is `cmpl $0x5,i; jbe`, and 6 * 0x80 = 0x300
+exactly, which is why the two byte tables abut with nothing between them.
+`getConstellationsIndex` compares both tables off ONE cursor, at `-0x300(%ecx)`
+and `(%ecx)`, which is what fixes their separation rather than leaving it as
+two independent guesses.
+
+**The length's signedness is forced; the index's is not.** Every use of
+`constellationSize` is an unsigned comparison -- `cmp %ebp,%esi; jb` in both
+mask functions, `cmp %esi,%ebx; ja` and `cmp $0x0,%ebx; jbe` in the index
+function -- so it is an unsigned type. `distinctIndex` is only ever loaded and
+used to scale, which says nothing either way, and `int` is a choice.
+
+**The two pads are pads, not fields.** No function in the file touches
++0x000..0x003 or +0x61c..0x637 and nothing else reconstructed reaches this
+struct, so they are named `pad_0` and `pad_61c` rather than guessed at. The
+total size is not known either: 0x650 is where the last member this tree can
+see ends, not a measured `sizeof`.
+
+### 828. Two empty constellations are the same constellation
+
+`getConstellationsIndex` decides whether constellation `i` duplicates an
+earlier one like this (0x333ab):
+
+```
+	xor  %esi,%esi		n = 0
+	cmp  $0x0,%ebx		length
+	jbe  .Ldone		  ... zero, so skip the loop entirely
+	  ... compare `length` byte pairs, breaking with n at the mismatch ...
+.Ldone:
+	cmp  %esi,%ebx		n == length ?
+	jne  .Lnext
+```
+
+`n` survives the loop and IS the acceptance test. A length of zero therefore
+leaves n = 0, the test compares 0 against 0, and the two constellations are
+declared identical having compared nothing at all.
+
+This is the tree's own "two empty things compare equal" rule appearing in the
+SUBJECT rather than in the instrument, and the consequence is that it must be
+driven rather than avoided: six constellations with six distinct byte tables
+and all six lengths zero collapse to ONE group. `t_v90cmask`'s shape 2 is
+exactly that, and `sawEmptyCollapse` asserts the blob returns 1 for it. A
+fixture of non-empty constellations never reaches 0x333b0 and would leave the
+whole branch untested while every differential check passed.
+
+The same shape is why the fixture also contains a difference planted at
+`length` and one planted at `length - 1`: the comparison stops at the length,
+so the first is not a difference and the second is.
+
+### 829. The mask functions do not mask the high nibble, and clear only half of what they can write
+
+`getConstellationMask` and `getCodecConstellationMask` are 130 bytes each and
+differ in one displacement -- 0x4 against 0x304, the two byte tables. Both do
+
+```
+	mask[0..7] = 0			movw $0x0; cmp $0x7,%eax; jbe
+	for n < constellationSize[k]:
+		v = table[n]
+		mask[v >> 4] |= 1 << (v & 15)
+```
+
+and the shift is `mov %dl,%al; shr $0x4,%al` -- an 8-bit shift with no
+subsequent masking. **So a table byte of 0x80 or more addresses `mask[8]` to
+`mask[15]`, eight entries the function never cleared and the caller may not
+have sized for.** Both halves of that are the object's: it clears eight and can
+write sixteen.
+
+`t_v90cmask` drives it with a 24-entry buffer -- 16 reachable, 8 guard -- and
+asserts (a) some mask reached entries 8..15, and (b) nothing past mask[15] was
+ever written. Without (a) the whole upper half is untested; a fixture of bytes
+below 0x80 makes it unreachable, and mode 2 in the test is deliberately such a
+fixture while mode 1 is deliberately the opposite.
+
+`which` is clamped, not wrapped, and the test is SIGNED: `cmp $0x6,%esi;
+setl %dl; neg %edx; and %edx,%esi`, which is `which < 6 ? which : 0`. A
+negative `which` is therefore passed straight through and indexes before
+`distinctIndex`; nothing in the object guards it.
+
+**The permutation in the test fixture is not the identity, on purpose.** The
+mask functions select through `distinctIndex[which]`, and with an identity
+permutation an implementation that used `which` directly agrees with the object
+on every input. Mutating our source to `k = which < 6 ? which : 0` fails 514 of
+2,806 checks with the fixture as written.
+
+### 830. The original's file names are recoverable, and three of them are ours
+
+`tools/tumap.py` recovers the STT_FILE sequence, and although the extents in
+the 0x9250-0x5af10 bracket are all shared rather than exact, the FILE ORDER is
+usable on its own: the tool reports `anchor order matches FILE order: True`.
+Three names in it place this batch's work:
+
+- `V90MappingParamsInt.cpp` sits between `V90SpectralShapingFilter.cpp` and
+  `V90Resampler.cpp`. The last `V90SpectralShapingFilter` method ends at
+  0x33280 and the first `V90Resampler` one begins at 0x34130; between them lie
+  `getConstellationsIndex`, `getConstellationMask`,
+  `getCodecConstellationMask`, `setConstellationMask`, `getDataBitRate`,
+  `setDataBitRate`, `setParamsInfoFromCPUnPck`, `setV92CPpckFromParamsInfo`,
+  `setParamsInfoFromV92CPUnPck` and `displaySpectralParams`.
+- `V92MappingParamsInt.cpp` sits between `V92Jd.cpp` and `V92Modem.cpp`. The
+  last `V92Jd` method ends at 0x12cf0 and `V92Modem`'s destructor begins at
+  0x13990; between them lie `V92createConstellations`,
+  `V92createFilterCoefficients`, `V92deleteConstellations`,
+  `V92deleteFilterCoefficients` and `V92setParamsInfoFromCPUnPck`.
+- `V90DILdesPCK.cpp` and `V92DILdesPCK.cpp` are the homes of
+  `DILdescriptorPacker` and `V92DILdescriptorPacker`; this tree already named
+  the first one `DILdescriptorPacker.cpp` after the symbol.
+
+**This is inference from an ordering, not a fact the object states**, and
+CLAUDE.md's rule that only `exact` extents are relied on for byte-level work
+still stands -- it is used here for a FILE NAME and for nothing else.
+`src/pump/v90/V90MappingParamsInt.cpp` is named from it and says so at the top.
+It is worth having because a name chosen from the symbol drifts from the
+original's module layout, and `compare.py`'s per-object rollup and
+`debugaudit.py`'s per-file one are both organised by translation unit.
+
+### 831. The V.92 workspace at `V92Modem+0xaa0` is a 180-byte POD, and what a test of its four allocators has to check
+
+`V92createConstellations`, `V92createFilterCoefficients`,
+`V92deleteConstellations` and `V92deleteFilterCoefficients` (121, 73, 173 and
+106 bytes at 0x12d10, 0x12d90, 0x12de0 and 0x12e90) all take one pointer and
+do nothing else. The pointer is `V92Modem`'s field at +0xaa0, and the
+constructor allocates it at 0x13f7f with `movl $0xb4,(%esp)` followed by a
+bare `sysdep_malloc` and NO constructor call -- so it is a plain 180-byte
+struct, not a class.
+
+```
+create constellations   6 x sysdep_malloc(0x200) -> +0x84,0x88,0x8c,0x90,0x94,0x98
+create filter coeffs    4 x sysdep_malloc(0x600) -> +0x5c,0x60,0x64,0x68
+delete                  the same slots, `if (p) sysdep_free(p)` each
+```
+
+**Neither delete writes anything.** There is not one store in either function;
+the freed slots keep their stale pointers. A helpful `= NULL` would be the
+wrong-but-plausible change the tree's rule forbids, and it is invisible to a
+test that only counts allocations.
+
+This is recorded rather than reconstructed because the four are ALL test and no
+code, and the test is the part that is easy to get vacuously right. What it has
+to check, for whoever writes it:
+
+- **the six pointers must be pairwise distinct.** A version assigning one
+  allocation to two slots changes the same set of dword offsets and passes any
+  "which offsets moved" comparison.
+- **`harness_alloc.bytes` and `.allocs`, per side**, which is the only way the
+  0x200 and 0x600 sizes are observable at all; the pointer values themselves
+  differ between the two sides for ever and must not be compared.
+- **`free_null == 0`.** The object tests `!= 0` BEFORE calling `sysdep_free`,
+  so a NULL slot produces no call. An implementation calling
+  `sysdep_free(NULL)` unconditionally is identical as far as memory goes and is
+  caught by nothing else.
+- **the struct is byte-identical before and after each delete**, which is the
+  no-store claim above.
+- **the vacuous case must be excluded explicitly:** a fixture whose slots are
+  all NULL frees nothing, and "0 frees on both sides" is what a delete that
+  does nothing at all also looks like.
