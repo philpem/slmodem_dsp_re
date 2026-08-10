@@ -34911,3 +34911,232 @@ proved by nothing green.
   edit, reverted, and nothing of it is committed except the finding.
 - **The 8,192-bit shim sink is still the BER's ceiling**, so both endpoints
   fill it and the measurement stops there -- finding 967's note, unchanged.
+
+### 1000. `vpcm_run` HAS A REGISTERED SUITE NOW, AND RUNNING IT MOVED THREE OF FINDING 987'S ROWS
+
+Finding 987's eighteen mutations were applied BY HAND, built, run and
+reverted, so the evidence lived in a commit message and nothing re-checked it
+when the code moved.  Three suites now do, on every merge:
+
+| suite | source | binary | mutations |
+|---|---|---|--:|
+| `vpcmrun` | `src/pump/v90/vpcm.c` | `t_vpcmrun` | 18 |
+| `vpcmguard` | `src/pump/v90/vpcm.c` | `t_vpcmguard` | 2 |
+| `vpcmweak` | `test/unit/t_vpcmguard.c` | `t_vpcmguard` | 1 |
+
+```
+  vpcmrun    18 mutations: 11 caught (11 by test), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted
+  vpcmguard   2 mutations:  2 caught (2 by test),  0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted
+  vpcmweak    1 mutations:  1 caught (1 by test),  0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted
+```
+
+**Four of the five equivalents are one fact**, and it is the fact the set
+exists to guard.  The host contract fixes `count` at `m->frag` == 48 (964),
+48 is a multiple of four, and the input queue is empty on every block -- so
+`nproc` is identically `count`, both input residues are identically zero and
+`in` is never rebound.  Dropping the quantisation, the residue copy or the
+rebinding cannot be seen by any test, because the arithmetic cannot move.  A
+driver whose `frag` is not a multiple of four turns all four CAUGHT, and
+mutate.py fails a run in which a recorded equivalent is caught -- which is the
+alarm this tree did not have before.
+
+**AND RUNNING THEM CORRECTED THE RECORD IN THREE PLACES.**  Finding 987's
+table has three rows that are wrong, and only running the mutations found it:
+
+- "the output queue is not compacted -- `0 + 48 - 48 == 0`" is **wrong**.
+  `outq.count` is a constant FOUR.  Finding 1001.
+- "the mute path is always taken" is caught, but the configuration it is
+  explained by -- the mute counter zero throughout -- is **wrong**.  The
+  first eleven blocks of every call are muted.  Finding 1002.
+- "float -> short rounds instead of truncating" is caught only for a BIASED
+  rounding rule.  A symmetric one cannot be seen at all.  Finding 1003.
+
+**The two stall mutations are recorded as UNCAUGHT and not as equivalent.**
+Finding 987 lists both among "the seven that survived, which are the result
+and not the gap", with reasons that read "the counter never approaches 3,000".
+That is `the test does not cover it`, which mutate.py's docstring puts in the
+uncaught list precisely so it cannot be dressed up as an argument about the
+code: nothing else resets `stall`, so removing the reset accumulates it across
+separate episodes of code 0, and `>` against `>=` on a specific block count is
+a difference at exactly that count.  Both change behaviour for inputs the host
+contract permits.  They survive because this call's 4,000-block trajectory
+never accumulates 3,000 unchanged code-0 blocks, which is a statement about
+the fixture and belongs on the fixture's side of the ledger.
+
+### 1001. THE OUTPUT QUEUE IS A LIVE FOUR-SAMPLE DELAY LINE: `outq.count` IS A CONSTANT 4, NOT 0
+
+Finding 987 recorded "the output queue is not compacted" as surviving, with
+`0 + 48 - 48 == 0` as the argument.  Registering it as `equivalent` and
+running it reported CAUGHT with 80 of 144 checks failing, which is exactly
+what that key is for.
+
+Measured, by probes that abort on a condition and are watched surviving or
+dying (`t_vpcmrun`, all 8,000 blocks, both endpoints):
+
+```
+    s->outq.count != 0                              ABORTS
+    s->outq.count >  3                              ABORTS
+    s->outq.count >  4                              survives
+    s->outq.count != s->outq.count + nproc - count  survives
+```
+
+so `outq.count` is **4 on every block and never changes**, and `vpcm_create`
+seeds it there.  What the tail actually does, therefore, is:
+
+```
+    outp = &outq.buf[4]                  the block is written to buf[4..51]
+    out  = buf[0..47]                    the caller gets the FIRST 48
+    memcpy(buf, &buf[48], 4 shorts)      and the last four become the next
+                                         block's first four
+```
+
+The output queue is a four-sample delay, the compaction moves four samples
+every block, and `buf[52]` is exactly `48 + 4` because of this.
+
+**THE CORRECTION TO FINDING 981 IS ABOUT THE OUTPUT QUEUE ONLY.**  Both queues
+span 0x6c and 981 explains both as "`max_frag` of 48 plus the four the block
+quantisation can leave behind".  For the INPUT queue that reason still stands:
+the capacity has to hold a residue for a driver whose `frag` is not a multiple
+of four, which is precisely the case finding 1000's four equivalents exist to
+guard.  For the OUTPUT queue the span is right and the reason is not -- the
+quantisation leaves nothing behind on any driver `slmodemd` has, and the four
+are this delay, which is present on every block of every call.
+
+The input queue really is dead code here: `s->inq.count == 0` survives as a
+probe on every block.  So the two queues are NOT symmetric -- one is a
+never-used residue buffer and the other is a live delay line of the same size
+-- and reading the tail as one pattern applied twice is what produced the
+wrong argument.
+
+### 1002. THE MUTE PATH IS EXERCISED: 528 SAMPLES, THE FIRST ELEVEN BLOCKS OF EVERY CALL
+
+`vpcm.c` annotates the mute counter "UNEXERCISED ... it is zero in every
+configuration this tree drives", finding 982 lists the mute path among the
+paths "reached by nothing this tree drives", and finding 987 explains the 78
+checks the mute mutation fails without contradicting either.  All three are
+wrong.  Probed the same way as 1001:
+
+```
+    s->mute > 0                            ABORTS      the path IS entered
+    s->mute < 0                            survives
+    s->mute > 480                          ABORTS
+    s->mute > 528                          survives
+    s->mute != 0 && s->mute % 48 != 0      survives
+    s->mute < nproc   (inside the branch)  survives
+    s->mute > 0 && s->status != 0          survives
+    s->mute > 0 && s->mode   != 0          survives
+```
+
+So `vpcm_create` seeds the counter at **528**, it is always a multiple of the
+48-sample block, it never goes negative and `left` is never clamped -- 528 / 48
+is exactly 11, so blocks 0 to 10 of every call are silenced, `VPcmV34Progress`
+is not called at all in them, and the counter is at zero from block 11 onward.
+It is only ever positive while `status` and `mode` are both still 0, which is
+why nothing downstream noticed: the mute ends 1,580 blocks before the connect.
+
+This is also why "the mute path is always taken" fails 78 checks rather than
+failing something narrower: the branch is real and driven, and the only thing
+keeping it from swallowing the whole call is a countdown.
+
+**The comment in `vpcm.c` is not corrected here.**  `src/` is in `mutsnap.py`'s
+CLOSURE and the snapshot is currently 66 of 66 CURRENT, so a comment edit would
+restale every suite in the tree for a line of prose.  The next batch to touch
+`vpcm.c` for any other reason should fix the annotation on the mute counter and
+finding 982's row with it; this finding is the record until then.
+
+### 1003. `fout` IS INTEGRAL, SO THE CONVERSION'S DIRECTION IS PINNED AND ITS ROUNDING RULE IS NOT OBSERVABLE
+
+`outp[i] = (short)s->fout[i]` is the object's `fnstcw / or $0xc00 / fistps` at
+0x40b4-0x40e2 -- round toward zero.  Finding 987 records "float -> short rounds
+instead of truncating" as caught on 4 checks.  WHICH mutation is meant turns
+out to matter:
+
+```
+    outp[i] = (short)(fout[i] + 0.5f)                      CAUGHT
+    outp[i] = (short)(fout[i] < 0 ? fout[i] - 0.5f
+                                  : fout[i] + 0.5f)        SURVIVES
+```
+
+because every value `VPcmV34Progress` writes into `fout` is a **whole number**.
+Probed: `s->fout[i] == (float)(int)s->fout[i]` survives all 8,000 blocks, as
+does `(short)fout[i] == (short)(round-half-away)`, and so does `-32768.0f <=
+fout[i] <= 32767.0f` -- so the conversion never has an out-of-range value to be
+undefined on either.
+
+On an integral value truncation and every SYMMETRIC rounding rule agree, so no
+test can separate them: a fact about the values the code converts, not about
+the checks, which is why the symmetric one is registered as `equivalent` and
+not as uncaught.  The unconditional `+0.5f` is not symmetric -- it moves every
+negative whole number by one -- and is caught at once.  The pair says the
+conversion is a truncation TOWARDS ZERO and not a biased round, and says the
+rest is unobservable here.
+
+**A METHOD NOTE THAT COST FOUR MEASUREMENTS.**  Both float loops and the
+receive-bit loop are
+
+```c
+    for (i = 0; i < nproc; i++)
+            outp[i] = (short)s->fout[i];
+```
+
+with NO BRACES.  A probe inserted "before" the body BECOMES the whole body, and
+the real statement then runs once, after the loop, with `i == nproc`.  That
+reads as a semantic difference of 96 out of 144 checks and looks exactly like a
+genuine catch.  It was diagnosed by inserting `if (i < 0) abort();`, which
+cannot fire, and watching it "fail" anyway.  A probe into a braceless loop must
+supply the braces, and a dead-code probe is the control that says whether it
+did.
+
+### 1004. THE WEAK DECLARATION IS ENCODABLE AS A MUTATION -- ON THE COMPARING TRANSLATION UNIT, NOT ON THE HEADER
+
+Finding 985: `t_vpcmguard.c` asserts that all five `VPcmV34*` entry points are
+ABSENT from its own binary, and with a PLAIN declaration GCC folds `f == 0` to
+false at compile time -- a function's address is never null -- so the first
+version reported all five PRESENT in a process that had, in the same run, just
+aborted on their absence.  Five checks, five wrong answers, and it cost a run.
+
+Both places the attribute could be removed were tried:
+
+```
+    include/dsplib/vpcm.h    #undef + empty #define, overriding every includer
+                             -> did not compile: UNUSABLE
+    test/unit/t_vpcmguard.c  its own #define, weak -> empty
+                             -> CAUGHT, 5 of the 6 checks in the first section
+```
+
+The header cannot carry it because the header only supplies an EMPTY fallback;
+the attribute itself comes from the `#define` each translation unit makes
+before the include.  Forcing the header to override both strips it from
+`vpcm.c` as well, which turns `vpcm.o`'s five references into strong undefined
+ones and `t_vpcmguard` stops LINKING.  That is `did not compile`, which
+mutate.py counts as unusable -- and an unusable mutation does not fail a run
+(finding 347), so registering it there would have looked like a pinned claim
+while pinning nothing.
+
+The test file's own `#define` is where it works, and `vpcmweak` is registered
+against `test/unit/t_vpcmguard.c` for it.  **It is a claim about the test's
+instrument and not about the object**, which is a different kind of claim from
+every other set in `test/mutations/`, and the set says so in its first note
+rather than letting the directory imply otherwise.
+
+### 1005. What this batch did not do
+
+- **Nothing under `src/`, `include/`, `Makefile` or `test/harness/` was
+  touched**, which is why the other 63 suites are still CURRENT in the
+  snapshot: `mutsnap.py --update` was given the three new names only, and the
+  diff to `snapshot.json` is 39 lines, every one an insertion.  Finding 988's
+  "the snapshot is stale anyway" has since stopped being true, and this batch
+  was careful to keep it that way.
+- **`vpcm.c`'s mute annotation is still wrong**, and finding 982's row with it.
+  Finding 1002 says why it was left.
+- **The two stall mutations are left UNCAUGHT rather than made catchable.**
+  Driving them needs `t_vpcmrun` to produce 3,000 unchanged code-0 blocks,
+  which a connecting call does not -- so it is a new fixture, not a wider
+  assertion on this one.
+- **`vpcm_create` is still the blob's**, so 1001's `outq.count == 4` and 1002's
+  `mute == 528` are measurements of the blob's initialisation and not claims
+  about a reconstruction of it.  They are the first two numbers to check when
+  `vpcm_create` is written.
+- **No probe is committed.**  Every measurement in 1001, 1002 and 1003 was a
+  scratch mutation run through `tools/mutate.py`'s three-argument form, which
+  works in a copy; nothing of them is in the tree except these findings.
