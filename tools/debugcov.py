@@ -51,6 +51,61 @@ See finding 192.  Worth re-checking if the flags ever change.
     tools/debugcov.py --no-build      reuse an existing build-cov tree
     tools/debugcov.py --summary       the two counts only, for `make phase`
     tools/debugcov.py --lines         whole-file line coverage as well
+    tools/debugcov.py --deviations    per-site coverage of docs/deviations.md
+
+THE DEVIATION PASS (--deviations), AND WHY IT LIVES HERE
+
+`tools/devaudit.py` asks a NECESSARY condition of each register entry: does a
+compiled test object reference the `ref_` alias of the function the entry
+names?  A "no" is conclusive and a "yes" is only an invitation to look, because
+a linked function is not a fired branch.  This pass asks the stronger question
+on the SAME instrumented tree that is already built for the debug sites: did
+the line at the deviation's own site EXECUTE, and where the site is a guard,
+which way did the branch go?
+
+It lives in this file rather than in a new tool for two reasons.  The
+instrumented build is the expensive part and it is already here, so the marginal
+cost is a second `gcov` over the ~20 files a deviation names.  And `make phase`
+already runs this script, so wiring the number into the gate needs no Makefile
+edit -- and the Makefile is inside `tools/mutsnap.py`'s closure, where an edit
+restales all 66 mutation suites for a report that changes no behaviour.
+
+HOW A SITE IS IDENTIFIED, and why the obvious regex is wrong
+
+`src/` already carries prose references of the form "see D26", "Registered as
+D30", "/* D8 */".  A bare `\bD[0-9]+\b` sweep of `src/` and `include/` returns
+129 hits and MOST OF THEM ARE NOT DEVIATIONS:
+
+  - `D0`/`D1`/`D2` in a header are Itanium-ABI destructor variants.  Every
+    `NOT POLYMORPHIC` note in `include/dsplib/` names them, and `D1` and `D2`
+    are also real register entries.
+  - `D8` in `src/dsp/FloatARMA.cpp` is the x87 opcode byte, in the comment that
+    records objdump's FSUBP/FSUBRP swap.  `D8` is also a real register entry.
+
+Neither is caught by checking the number against the register's id set, because
+both collide with ids that exist.  The filter that works is CROSS-CHECKING THE
+FILE: a tag counts as a site only when it appears in a file THE ENTRY ITSELF
+NAMES, in its `**Where:**` or `**Module**` line.  `FloatARMA.cpp` is not D8's
+module (`b103fp.c` is), so the opcode drops out; `include/` is never a module,
+so the destructor notes drop out.  A tag in some other file is reported as a
+CROSS-REFERENCE and measures nothing -- `fpm_phasor.c` mentioning D1 is prose
+about `fpm_sqrt.c`.
+
+WHAT THE RESULT MEANS, IN BOTH DIRECTIONS
+
+Zero coverage is the RIGHT answer for a whole class of entries: one that says a
+path is unreachable should show a dead site, and one that says the path fires
+in ordinary operation should not.  So this prints the count and does not judge
+it -- the judgement is against what the entry CLAIMS, which is prose.  Two
+off-diagonals are the valuable output:
+
+    entry says unreachable + branch taken   ->  THE ENTRY IS WRONG
+    entry says fires normally + site dead   ->  a gap in the test domain
+
+A tag sitting in a file-header comment with no executable line before it is
+reported as `header` and NOT as covered: the next executable line after it is
+the first function's entry, which everything executes, and reading that as
+"measured" is exactly the false pass this whole pass exists to remove.
 """
 
 import glob
@@ -130,7 +185,245 @@ def gcov_lines(src):
     return rows
 
 
+REG = "docs/deviations.md"
+
+# A prose reference, not an ABI destructor variant and not an x87 opcode: no
+# backtick or word character either side, and not followed by `(`, which is how
+# `include/dsplib/Scrambler.h` writes `D1()`.  The file cross-check in
+# dev_sites() is what actually does the work; this only keeps the candidate set
+# small enough to cross-check.
+TAGRE = re.compile(r"(?<![`\w])D(\d{1,2})(?![\w`(])")
+
+
+def dev_entries(path=None):
+    """{id: {head, files, claim}} for every `## D<n>` block in the register.
+
+    `path=None` and not `path=REG`: a default argument binds at def time, so
+    the module global could be repointed and this would go on reading the
+    original file -- which is how the empty-register guard below came to pass
+    its own test while doing nothing.
+    """
+    out = {}
+    for block in re.split(r"^## ", open(path or REG).read(), flags=re.M)[1:]:
+        head = block.split("\n", 1)[0].strip()
+        m = re.match(r"(D\d+)", head)
+        if not m:
+            continue
+        body = block.split("\n", 1)[1] if "\n" in block else ""
+        # Both spellings.  The older entries carry `**Module** `src/x.c``; the
+        # V.34 ones onwards carry `**Where:** `src/x.c`, `func``, which is
+        # better evidence because it names the function too.
+        where = re.search(r"\*\*(?:Where:|Modules?)\*\*(.*)", body)
+        line = where.group(1).strip() if where else ""
+        out[m.group(1)] = dict(
+            head=head, line=line,
+            files=re.findall(r"`(src/[^`]+\.(?:c|cpp))`", line),
+            retracted=("❌" in head or "RETRACTED" in head),
+            unmeasured=("unmeasured" in body or "not measured" in body))
+    return out
+
+
+def dev_sites(entries):
+    """[(id, file, lineno, text, is_site)] -- is_site false means cross-ref."""
+    hits = []
+    for f in sorted(glob.glob("src/**/*.c", recursive=True)
+                    + glob.glob("src/**/*.cpp", recursive=True)):
+        for n, line in enumerate(open(f, errors="replace"), 1):
+            for m in TAGRE.finditer(line):
+                did = "D" + m.group(1)
+                if did in entries:
+                    hits.append((did, f, n, line.strip()[:70],
+                                 f in entries[did]["files"]))
+    return hits
+
+
+def gcov_marked(src):
+    """{lineno: (count, [branch counts])} with -b, or None if never compiled."""
+    objdir = os.path.join(BUILD, os.path.dirname(src))
+    stem = os.path.splitext(os.path.basename(src))[0]
+    if not glob.glob(os.path.join(objdir, stem + ".gcda")):
+        return None
+    out = subprocess.run(["gcov", "-b", "-t", "-o", objdir, src],
+                         capture_output=True, text=True).stdout
+    rows, last = {}, None
+    for line in out.split("\n"):
+        #
+        # BRANCH LINES BELONG TO THE LINE ABOVE THEM.  gcov -b emits
+        # "branch  0 taken 5 (fallthrough)" AFTER the source line it describes,
+        # with no colons, so the ordinary parse skips it and the arc data --
+        # the only thing that separates "the guard ran" from "the guarded arm
+        # ran" -- is silently lost.  That distinction is the point of the -b.
+        #
+        b = re.match(r"\s*branch\s+\d+\s+(taken\s+(\d+)|never executed)", line)
+        if b and last is not None:
+            rows[last][1].append(int(b.group(2)) if b.group(2) else 0)
+            continue
+        p = line.split(":", 2)
+        if len(p) < 3:
+            continue
+        c, no = p[0].strip(), p[1].strip()
+        if not no.isdigit():
+            continue
+        last = int(no)
+        rows[last] = (None if c == "-" else c, [], p[2])
+    return rows
+
+
+def deviation_pass(quiet=False):
+    """(full, gap, header, nogcda, entries_with_a_site, folded)."""
+    if not os.path.exists(REG):
+        sys.exit("no %s -- nothing to measure" % REG)
+    entries = dev_entries()
+    if not entries:
+        sys.exit("%s parsed to zero entries -- the heading format has changed"
+                 % REG)
+    hits = dev_sites(entries)
+    #
+    # THE VACUOUS GUARD.  An empty tag set and a fully-covered tag set both
+    # print "0 dead", and the difference is the whole result.  `src/` carries
+    # these references today; if a rename or a comment sweep removes them this
+    # must fail loudly rather than report a clean sheet.
+    #
+    if not [h for h in hits if h[4]]:
+        sys.exit("no deviation site tags found in src/ -- either the prose "
+                 "convention changed or TAGRE no longer matches it")
+
+    cache, rows = {}, []
+    for did, f, n, text, is_site in hits:
+        if not is_site:
+            rows.append((did, f, n, "xref", None, text))
+            continue
+        if f not in cache:
+            cache[f] = gcov_marked(f)
+        g = cache[f]
+        if g is None:
+            rows.append((did, f, n, "nogcda", None, text))
+            continue
+        if not [k for k in g if k < n and g[k][0] is not None]:
+            # File-header comment: the next executable line is some function's
+            # entry, which everything runs.  Not a measurement.
+            rows.append((did, f, n, "header", None, text))
+            continue
+        rows.append((did, f, n) + region(g, n) + (text,))
+
+    kinds = {}
+    for r in rows:
+        kinds[r[3]] = kinds.get(r[3], 0) + 1
+    named = set(d for d, _, _, k, _, _ in rows if k in ("full", "gap", "folded"))
+    if not quiet:
+        for did in sorted(entries, key=lambda d: int(d[1:])):
+            e = entries[did]
+            mine = [r for r in rows if r[0] == did and r[3] != "xref"]
+            if not mine and not e["files"]:
+                continue                    # no file named: devaudit's ground
+            print("%-5s %-10s %s" % (did, "unmeasured" if e["unmeasured"]
+                                     else ("retracted" if e["retracted"]
+                                           else "claimed"), e["head"][:58]))
+            if not mine:
+                print("      %-6s %s -- entry names a file but src/ carries "
+                      "no `D%s` reference to anchor it"
+                      % ("notag", ", ".join(e["files"]), did[1:]))
+            for _, f, n, kind, det, text in mine:
+                if det is None:
+                    print("      %-6s %s:%d  | %s" % (kind, f, n, text))
+                    continue
+                lo, hi, deadl, nb = det
+                print("      %-6s %s:%d  fn lines %d-%d: %d never execute, "
+                      "%d branch arm(s) never taken"
+                      % (kind, f, n, lo, hi, len(deadl), len(nb)))
+                for k, t in (deadl + nb)[:4]:
+                    print("             %5d  %s" % (k, t))
+        print()
+    return (kinds.get("full", 0), kinds.get("gap", 0), kinds.get("header", 0),
+            kinds.get("nogcda", 0), len(named), kinds.get("folded", 0))
+
+
+def region(g, n):
+    """(kind, (lo, hi, dead lines, untaken branches, ...)) around line n.
+
+    The enclosing function, delimited by a `}` in column 1 -- which is what
+    this tree's style puts at the end of every function and nowhere else.
+    Reporting the NEAREST EXECUTABLE LINE instead was the first cut and it is
+    not worth having: the prose tag usually sits in the comment ABOVE the
+    function, so the nearest line is the function's own entry, whose count
+    says only that the function was called.  That is exactly the necessary
+    condition `devaudit.py` already gives.  What a deviation entry claims is
+    almost always about an ARM -- "nothing can select it", "cannot be taken",
+    "the sweep reaches it" -- so the answer has to be about arcs inside the
+    function, not about the function.
+    """
+    ends = sorted(k for k in g if g[k][2].startswith("}"))
+    lo = max([k for k in ends if k < n] or [0]) + 1
+    hi = min([k for k in ends if k >= n] or [max(g)])
+    dead = [(k, g[k][2].strip()[:56]) for k in sorted(g)
+            if lo <= k <= hi and g[k][0] in ("#####", "=====")]
+    untaken = [(k, "branch never taken: " + g[k][2].strip()[:36])
+               for k in sorted(g)
+               if lo <= k <= hi and g[k][1] and 0 in g[k][1]]
+    fold = [(k, "compiler folded: " + g[k][2].strip()[:40])
+            for k in sorted(g) if lo <= k <= hi and folded(g, k)]
+    return ("folded" if fold else ("gap" if dead or untaken else "full"),
+            (lo, hi, dead + fold, untaken))
+
+
+#
+# A STATEMENT GCOV MARKS NON-EXECUTABLE.  This is the strongest thing the pass
+# produces and it exists because the obvious detector misses it entirely.
+#
+# D36 and D53 both claim a branch "cannot be taken".  Both are right, and
+# NEITHER shows up as a dead line or as an untaken arc: GCC proved the guard
+# unsatisfiable and emitted no code at all for its body, so gcov marks those
+# lines `-` -- the same mark it gives a comment.  A detector looking for
+# `#####` or a zero arc reports the whole function as fully covered, which is
+# the exact opposite of the truth.  D53's entry records the same observation
+# about `debugcov`'s dead-SITE count and is the reason this is not a guess.
+#
+# So: a DIAGNOSTIC CALL SITE carrying no execution count, with an executed line
+# just above it.  The second clause keeps this off every comment and
+# declaration in the file, all of which are `-` too; the first is what keeps it
+# honest.  `return` and `goto` were tried as extra triggers and dropped: gcov
+# also marks a line `-` when the compiler MERGED it into another block, and
+# `preempindex`'s last `return i;` and `probeselect`'s last `return;` are both
+# that -- reachable, folded into the epilogue, and indistinguishable from a
+# proved-dead one by the mark alone.  A `dsplibs_debug_printf` is never merged
+# away: it is a call, and a call that emitted no code did not survive the
+# optimiser at all.
+#
+# This is also the category `debugcov`'s own dead-SITE count cannot hold, which
+# D53's entry states from the other direction: a site gcov marks non-executable
+# is neither live nor "executed zero times", so it silently leaves both
+# columns.  The deviation pass is where it now lands.
+#
+# Read a `folded` result as A PROOF OF UNREACHABILITY AT THE C LEVEL, reached
+# mechanically and agreeing with the object's instruction order.  It is the one
+# place this pass turns a necessary condition into a sufficient one.
+#
+# It does NOT distinguish "the compiler proved it dead" from "this arm was not
+# compiled into this build", which is what `#ifdef DSPLIB_REPRODUCE_BUGS` in
+# `fpm_div.c` produces.  Only one file in the tree has that, and its tags are
+# header tags, so the two do not collide today.
+#
+FOLDRE = re.compile(r"dsplibs_debug_printf\(")
+
+
+def folded(g, k):
+    if g[k][0] is not None or not FOLDRE.search(g[k][2]):
+        return False
+    for j in range(k - 1, max(k - 7, 0), -1):
+        if j in g and g[j][0] is not None:
+            return g[j][0] not in ("#####", "=====")
+    return False
+
+
 def main():
+    if "--deviations" in sys.argv and "--no-build" in sys.argv:
+        full, gap, hdr, no, n, fold = deviation_pass()
+        print("deviation sites: %d anchored in a function every line and arc "
+              "of which runs,\n                 %d in one with dead code or "
+              "an untaken arm, %d header-only, %d no data;\n"
+              "                 %d folded (compiler-proved dead), %d entries "
+              "carry an anchored site" % (full, gap, hdr, no, fold, n))
+        return 0
     if "--no-build" not in sys.argv:
         run(build())
     elif not glob.glob("%s/test/t_*" % BUILD):
@@ -188,6 +481,12 @@ def main():
                                         for n, s in sorted(worst, reverse=True))))
         print("             suite line coverage over src/ %.1f%% (%d/%d)"
               % (100.0 * ex / tot if tot else 0, ex, tot))
+        dr, dd, dh, dn, de, df = deviation_pass(quiet=True)
+        print("deviation sites: %d of %d anchored in a fully-covered function, %d"
+              " with dead code\n                 or an untaken arm, %d"
+              " compiler-folded, %d header-only, over %d entries\n"
+              "                 -- tools/debugcov.py --deviations --no-build"
+              % (dr, dr + dd + df, dd, df, dh, de))
     else:
         print("  %d of %d dsplibs_debug_printf call sites never execute"
               % (dead, sites))

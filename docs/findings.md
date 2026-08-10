@@ -35476,3 +35476,413 @@ on a lossy or echoing path; whether a SIP host that implements
 `MDMPRM_UPDATE_DELAY` faithfully could usefully report its true latency and
 let the pump negotiate it down; and whether the 384-sample floor in finding
 1024's over-cap path was chosen for a reason or is a constant nobody revisited.
+
+======================================================================
+### 1060. The deviation register audited entry by entry: 33 measured, 17 unmeasurable, 8 real gaps, 7 retracted
+
+Task #87, and the answer `docs/fastpass.md` deferred at the V.34 fast pass.
+The classification with its reasoning is **Appendix A of
+`docs/deviations.md`**, appended rather than written into the 64 entries
+because that file is shared with other sessions -- finding 622's "Owed"
+paragraph made the same call and for the same reason.
+
+The headline is not the counts. It is that finding 622 concluded **"zero of 59
+entries turn out to need a test written"**, and that conclusion was an artefact
+of the instrument. Three entries needed one, and each escaped `devaudit.py` by
+a DIFFERENT route -- which is the useful part, because it says the necessary
+condition has three failure modes and not one:
+
+| entry | `devaudit`'s verdict | why it was wrong |
+|---|---|---|
+| D5 | **covered** -- "via FPM_TONE_delete, create" | a FALSE PASS. The function is under test; only the `owned == 1` path is, and the caller-supplied state D5 is *about* is never built. |
+| D40 | **flagged** -- one of its five "no"s | a true flag, DISMISSED. 622 set it aside as "unreachable by this tier (D40, no alias at all)". Being unreachable by the tier is a statement about the tier. |
+| D56 | **neither** -- one of the 14 that "name nothing this tool can resolve" | INVISIBLE. Its heading names `~FloatIIR` and its body names no source file, so it never entered either column. |
+
+So the correct reading of 622 is narrower than it was written: zero of the
+entries `devaudit` flagged AND 622 chose to pursue needed a test. A false pass,
+a dismissal and a blind spot are three ways past that, and all three were
+taken.
+
+The 14 unresolvable entries deserve their own note: they are not a small
+residue. `devaudit` prints the count and moves on, and nothing has ever looked
+at them as a group. D56 was in there.
+
+Five more gaps are recorded in Appendix A with what each would need, and
+deliberately not written: D21, D23, D38, D41, D45. D38 is the interesting
+refusal -- it needs a test asserting the two sides DIFFER, which only D3 does
+in this tree, and that is a different contract from the rest of the suite.
+
+**Owed:** the three closed entries still say `unmeasured` in their own text.
+Not edited here, for the reason at the top.
+
+======================================================================
+### 1061. gcov marks a compiler-proved-dead branch NON-EXECUTABLE, which is neither dead nor covered, and D36 and D53 both live there
+
+The strongest result the new pass produces, and it exists because the obvious
+detector gets it exactly backwards.
+
+D36 and D53 each claim a branch "cannot be taken". Both are right. **Neither
+shows up as a zero-count line or as an untaken arc.** GCC proves the guard
+unsatisfiable and emits no code at all for its body, so gcov marks those lines
+`-` -- the same mark it gives a blank line. A detector looking for `#####` or a
+zero arc reports the whole function as fully covered:
+
+```
+      601:  815:			if (i == 5) {
+        -:  816:				if (DSPLIB_DEBUG_ON())
+        -:  817:					dsplibs_debug_printf(
+        -:  820:				return 0;
+```
+
+`debugcov.py --deviations` now classifies this as **`folded`**, on a narrow
+trigger: a `dsplibs_debug_printf` line with no execution count and an executed
+line above it. `return` and `goto` were tried as extra triggers and dropped --
+gcov also marks a line `-` when the compiler MERGED it into another block, and
+`preempindex`'s final `return i;` and `probeselect`'s final `return;` are both
+that: reachable, folded into the epilogue, indistinguishable from a proved-dead
+line by the mark alone. A call is not merged away; a call that emitted no code
+did not survive the optimiser.
+
+**Validated in both directions**, per finding 134 and the extcheck story. With
+`i == 5` changed to `i == 6` -- the first value the counter can actually hold
+at that exit -- rebuilt and rerun:
+
+```
+   baseline   817 marked `-`          folded(817) = True
+   i == 6     817 executes 10 times   folded(817) = False
+   restored   817 marked `-`          folded(817) = True   (t_v34hshak green)
+```
+
+So the detector fires, stops firing when the branch becomes satisfiable, and
+fires again on restore. That run is also an independent confirmation of D36
+itself: the guard is unreachable at 5 and reachable at 6, by construction.
+
+D53's own entry records the same observation from the other side -- that such
+a site leaves `debugcov`'s dead-SITE count without appearing in either column.
+This is where it now lands.
+
+======================================================================
+### 1062. A missing-guard defect has no arc to measure, which is why D5 read as covered under both instruments
+
+Neither `devaudit.py` nor the new gcov pass can see this class, and four
+entries are in it: **D5, D8, D18 and D62** are all "the original does not test
+something".
+
+The point is structural rather than a limitation to be fixed. `devaudit` asks
+whether the function is linked; gcov asks which arcs were taken. A defect that
+IS the absence of a branch offers neither instrument anything to look at --
+there is no arc to be untaken and no line to be dead, because the guard that
+would have produced them is the thing that is missing. `FPM_TONE_delete`'s
+enclosing function reports every line and every arc covered, and the deviation
+is untouched.
+
+What does measure them is **counting allocations**, which is what
+`harness_alloc`'s `live`/`frees`/`bad_free` exist for, and D8 is the worked
+example: `t_b103alloc.c` drives a caller-supplied state and asserts
+`bad_free == 1`. That the harness swallows frees of pointers it never handed
+out, instead of passing them to the real `free()`, is what lets a test observe
+a double free rather than crash on it.
+
+So the rule for reading Appendix A: for an entry whose defect is a missing
+check, **ignore both coverage instruments and go to the allocator counters.**
+D18 and D62 stay unmeasurable even there, because their distinguishing input
+faults the reference; D5 and D8 do not.
+
+======================================================================
+### 1063. D35's expiry condition has fired: three writers of `+0xaa96` now exist and none can put 2743 there
+
+D35 records a 2743-baud arm in `setupreceiver` that nothing appeared able to
+select, and was careful not to call it unreachable: *"the field is global
+state, and `v34handshak` and `probeselect` both write in that region; whether
+either can put 2743 there has not been measured."* It names its own trigger --
+`unmeasured` -- task #47, or whenever `probeselect` lands*. It has landed, at
+`src/pump/v34/v34hshak.c:1825-2336`.
+
+Every writer of `+0xaa96` in the reconstruction, and what it can write:
+
+| writer | rates it stores |
+|---|---|
+| `setfinalrate` (`:530`) | 2400, 2800, 3000, 3200, 3429 |
+| `probeselect` (`:1845`) | 0x960, 0xaf0, 0xbb8, 0xc80, 0xd65 -- the same five |
+| `:4002`, from `T3M_TXBAUD` | whatever the previous session's baud was |
+
+The third looked like the way in and is the opposite. Its switch has an arm
+for 2743 and that arm is **the only one that replaces the rate it matched**:
+
+```c
+case 0xab7:		/* 2743, and the only arm that REPLACES the rate */
+	... "V34HSHAK: Illegal prev session baud (2743), select 2800 instead"
+	T3M_U16(f, T3M_TXBAUD) = 0xaf0;
+```
+
+so by the time `:4002` copies `T3M_TXBAUD` into `faa96`, 2743 has become 2800.
+The object does not merely fail to produce 2743; it **detects it and refuses
+it, with its own diagnostic string**. That is positive evidence where D35 had
+only the absence of a writer, and it is a much better answer than the one the
+entry was waiting for.
+
+The arm is not untested, either: gcov reports `case 2743:` in `setupreceiver`
+executing 17 times, so its four constants are compared against the blob like
+every other rate's. What was unmeasured was service reachability, and that is
+now measured.
+
+**Owed:** D35's text still says `unmeasured`.
+
+======================================================================
+### 1064. `probeselect`'s bin-22 escape is never driven, and its twin one line below is
+
+Not a deviation and not in the register -- a gap in the sweep, found by the
+same gcov pass and worth the number because the two lines are adjacent and
+only one of them is exercised:
+
+```
+     1970: 2193:	if (e22 > 6)
+    #####: 2194:		goto rate_3000;
+     1970: 2195:	if (bins[2].shift > 6)
+      159: 2196:		goto rate_3000;
+```
+
+`t_v34hshak.c`'s four-thousand-probe sweep makes `bins[2].shift` exceed 6 on
+159 passes and never makes `bins[22].shift` do it once, so one of the two
+routes out of `rate_3200_alt` has never been taken. Nothing suggests the arm
+is unreachable -- it is the same test on a different bin, and D54 establishes
+that the sweep leaves one shift in thirty-two wide open, which is evidently
+not bin 22.
+
+Not closed here: the sweep lives in `test/unit/t_v34hshak.c`, which is inside
+`tools/mutsnap.py`'s closure, so widening it restales all 66 mutation suites
+for a coverage gain. Worth doing next to some other edit of that file rather
+than on its own.
+
+======================================================================
+### 1065. The vacuous guard that passed its own test while doing nothing
+
+`deviation_pass` has two guards, both required by "two empty things compare
+equal": the register parsing to zero entries, and the tag scan finding nothing
+in `src/`. Either would otherwise report a clean sheet, which is the same
+output as a clean tree.
+
+Checked by breaking each. The tag guard fired. The register guard did not, and
+the reason is worth the entry:
+
+```python
+def dev_entries(path=REG):      # binds at DEF time
+```
+
+Repointing `debugcov.REG` at an empty file changed the module global and
+changed nothing else, so `dev_entries()` went on reading
+`docs/deviations.md`, returned 64 entries, and the guard it was there to
+protect never saw an empty register. The test printed a pass. Now
+`path=None` with `open(path or REG)`, and the guard fires.
+
+This is finding 134's argument arriving in a new place. It is not enough to
+write the guard; it is not even enough to write a test for the guard -- the
+test has to be shown to FAIL, and this one could not, because the mechanism it
+used to inject the failure did not reach the code under test. Two guards, one
+real, and only the attempt to break both told them apart.
+
+**And once more through the Makefile, because that is where it will fire.**
+Both guards were checked by calling `deviation_pass` from Python, which is not
+the path `make phase` takes. With `docs/deviations.md` moved aside:
+
+```
+$ make debugcov
+debug sites: 16 of 514 never execute ...
+no docs/deviations.md -- nothing to measure
+make: *** [Makefile:368: debugcov] Error 1        exit=2
+```
+
+A clean `sys.exit` with the message and no traceback, so the gate failure names
+its own cause. Restored, `make debugcov` is exit 0 again. A guard that aborts
+the gate with a `KeyError` from inside a tool is worse than no guard, because
+the next person to hit it debugs the wrong thing.
+
+======================================================================
+### 1066. D40's plain-mode arm is now driven, and one sentence of D40 is wrong
+
+The gap finding 1060 lists for D40, closed. `test/unit/t_encodeplain.c` is new
+-- picked up by the `test/unit/t_*.c` wildcard, so no Makefile edit and no
+restaled mutation suites.
+
+Before, `src/core/encode.c:174` had branch 1 taken 0% over 9 executions of the
+refused path. After: taken 48% over 260. Six refused cases (132, 200, 255 and
+400 characters, a 140-character format with `%d`, and one inside a frame),
+each swept from all ten key start positions in both modes, 1689 checks.
+
+**What it establishes, which D40 asserted and nothing had checked:** on the
+REFUSED path the key does not move, in either mode, and ours ends where the
+blob ends. That is the invariant making the added switch invisible downstream,
+and it is not the invariant D40's own text offers -- see below.
+
+**The mutation, and why the ten-start sweep is load-bearing.** The plain-ON
+expectation `(start + 2) % 10` was replaced with `0`, which is what a plain
+mode that short-circuited the encoder would produce:
+
+```
+test/unit/t_encodeplain.c:413: plain ON did not move the key either [input 0]
+                               got 2, reference 0
+FAIL encodeplain: refused with plain ON 54/841 checks failed
+```
+
+54 of 60 cases red. **The six survivors are all `start == 8`**, where
+`(8 + 2) % 10` is 0 and the wrong answer coincides with the right one. A test
+pinned to one start position had a one-in-ten chance of being blind to the
+defect it exists to catch. Worth remembering the next time a sweep looks like
+an extravagance.
+
+**Two corrections to D40's text.**
+
+*Wrong.* "the switch is read only inside the `dsplibs_debug_level > 1` gate,
+**which is the last thing `edprintf` does**". There are TWO read sites --
+`encode.c` 173-174 and 199-200 -- and the first is followed by `return`. The
+substantive claim survives (both sites are inside the gate); the description
+of where does not.
+
+*Insufficient.* D40's "Two:" argues plain mode is safe because "`iEncodeOffset`
+is reset and advanced identically and `cEncodedTemp` is filled identically".
+On the refused path NEITHER happens: the counter is never touched and
+`cEncodedTemp` holds a fixed literal. The conclusion holds by a different
+mechanism, and that mechanism is what this test pins.
+
+Minor: plain mode prints `temp` as `vsnprintf` truncated it, so the
+400-character case shows 255 characters and not the whole message.
+
+======================================================================
+### 1067. D5 is measured -- five unowned frees on both sides -- and it is a CREATE-side precondition too
+
+The gap finding 1060 lists for D5, closed by `test/unit/t_fpm_tone_own.c`
+(new file, wildcard, no Makefile edit).
+
+`t_fpm_tone.c` already drove `FPM_TONE_delete` down both branches, which is why
+`devaudit` called D5 covered -- but it built every object with a NULL state, so
+`owned` was 1 on every case and it asserted `bad_free == 0`, the opposite of
+what the deviant path produces. The caller-supplied state D5 is *about* was
+never built.
+
+Measured, both sides identical and asserted absolutely:
+
+```
+  create, supplied state    allocs=0 frees=0 bad_free=0
+  delete, supplied state    allocs=0 frees=0 bad_free=5   <- D5
+  create(NULL)              allocs=5 frees=0 bad_free=0
+  delete(owned)             allocs=0 frees=5 bad_free=0
+```
+
+Five unowned pointers reach `sysdep_free`: `rev_acc`, `rev_block`, `history`,
+`kernel`, and then the caller's own state. `free_null == 0` is asserted beside
+it, or "five unknown pointers were freed" would be indistinguishable from "some
+slots were NULL and were swallowed cheaply". The self-allocated path runs in
+the same binary as the anti-vacuity contrast, since `allocs=0 frees=0` is also
+what a dead counter reports.
+
+**What D5's entry does not say.** It frames the defect as delete-side -- "four
+never-allocated pointer slots passed to `free`" -- which reads as though the
+slots are merely uninitialised until `delete`. **`FPM_TONE_create` WRITES
+THROUGH all four on the supplied path**, which the test measures rather than
+infers: with the four slots pointed at caller-owned arrays, the blob comes back
+having written `rev_block[0] == 0x4000` and `rev_block[3] == 0x3afb` -- the last
+values the function stores -- and the kernel no longer holding the prefill,
+with `allocs == 0` throughout.
+
+So the caller-supplied path is unusable without four caller-allocated buffers,
+at the sizes the allocation `create` skips would have used -- `len*2`,
+`(len+extra)*2`, 10 and 8 -- and that requirement is documented nowhere. D5 is
+as much an undocumented create-side precondition as a delete-side double free,
+and a caller following the library's "pass your own storage" idiom faults long
+before `delete` gets its chance.
+
+*Stated as measured, deliberately.* Whether the writes sit outside the
+ownership guard in the original's control flow is a claim about the object and
+would need `tools/dis.py`; what the counters and the buffer contents establish
+is that they happen, which is enough for the precondition.
+
+**And a note on the instruments.** Closing D5 moved no tally in
+`debugcov.py --deviations`: D5's anchor sits on `FPM_TONE_delete`, whose
+branches `t_fpm_tone.c` already drove, while the arm that was untaken is the
+false arm of the ownership test in `create` -- a different function, and not
+the anchored site. Finding 1062's point from the other end: the coverage
+instrument neither found this nor confirmed it, and the allocator counters did
+both.
+
+======================================================================
+### 1068. D56 is measured, and the double free is CONDITIONAL on the allocation having succeeded
+
+The gap finding 1060 lists for D56, closed by `test/unit/t_floatiirfree.cpp`
+(new file, `CXXTESTS` wildcard, no Makefile edit). Four geometries, 180 checks.
+
+```
+ncoeff=16 block=64        allocs/frees/live/bad
+  ours   built 1/0/1/0    once 1/1/0/0    twice 1/1/0/1
+  ref    built 1/0/1/0    once 1/1/0/0    twice 1/1/0/1
+```
+
+Three details that make it a measurement rather than a coincidence:
+
+- **A reset window per SIDE.** `harness_alloc` is one global. Measuring both
+  inside one window has the two snapshots reading the same summed counters,
+  which makes "the sides agree" true of any pair of implementations whatsoever.
+- **`bad_free == 1` AND `free_null == 0`** is the discriminating pair. Nulling
+  `m_hist` in either implementation makes the second destructor take the
+  `if (m_hist)` branch and do nothing: no free, no bad free, and `free_null`
+  stays 0 because `sysdep_free` is never entered. A tidied-up implementation
+  fails here instead of diverging silently.
+- **The second call survives the optimiser**, checked rather than assumed:
+  `objdump -dr` on the test object shows two relocations against
+  `_ZN8FloatIIRD1Ev` and two against `ref__ZN8FloatIIRD1Ev`.
+
+Made to fail by expecting `bad_free == 0` -- the direction a "fixed"
+implementation moves it -- which went red 8/180 with "got 1, reference 0".
+
+**What corrects D56's text.** It reads as though `m_hist` is unconditionally
+passed to `sysdep_free`. The blob's destructor at `0x57800` is five
+instructions and begins `mov 0x4(%eax),%eax; test %eax,%eax; jne`, so on D55's
+failed-allocation path (`m_hist == 0`) there is no call at all and a second
+destruction is a silent no-op. **The deviation is conditional on the allocation
+having succeeded** -- which is why `free_null == 0` is asserted beside the bad
+free, to pin that the pointer was non-null and was kept.
+
+**Still untested:** `D1` at `0x57800` and `D2` at `0x577e0` are byte-identical
+five-instruction bodies, both loading `+4` with no store back. This drives `D1`
+only.
+
+======================================================================
+### 1069. Two `make phase` runs in one worktree corrupt each other through `build-cov`, and it reads as a differential failure
+
+Three agents worked this worktree at once, each adding its own new test file
+and each running the gate. One of them saw `make phase` go red at `debugcov`:
+
+```
+  1 instrumented test(s) disagree with the blob: t_encodeplain
+```
+
+then a standalone `make debugcov` fail naming a DIFFERENT test
+(`t_fpm_tone_own`), then a third run pass. Run alone afterwards, with every
+agent finished and nothing else touching the tree, `make phase` is green and
+the mutation snapshot is untouched -- 66 current, 0 stale.
+
+**Nothing was wrong with either test.** The instrumented tier is not
+concurrency-safe with itself, for two reasons that are both in
+`tools/debugcov.py`:
+
+- `run()` begins by unlinking **every** `.gcda` under `build-cov`, because
+  counts must not carry over between invocations. A second invocation
+  therefore deletes the first one's counts from under it, mid-run.
+- `build()` recompiles into the same `build-cov` tree while the other run's
+  binaries are executing, so a test can be relinked under itself or run
+  against a half-updated object.
+
+The failure surfaces as `N instrumented test(s) disagree with the blob`, which
+is the loudest and most alarming message the tier has -- correctly, since a
+disagreement is the thing this project exists not to have. Here it was an
+artefact of two runs sharing one directory, and it named a different innocent
+test each time, which is the tell.
+
+**The rule:** one `make phase` at a time per worktree. Parallel agents want
+parallel WORKTREES, which is what `.gitignore`'s note about symlinking
+`third_party/spandsp` is for. If a `debugcov` disagreement names a test that
+has nothing to do with the change in hand, and names a different one on the
+next run, check `pgrep -af make` before believing it.
+
+This does not weaken finding 192, which says instrumentation costs nothing
+under these flags. That measurement was made by a single run, and a single run
+still passes.
