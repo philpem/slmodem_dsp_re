@@ -35621,7 +35621,9 @@ pump's own internal latency, 34 ticks = 136 samples = 14.167 ms at 9,600 Hz.**
   have to appear in 11.2 as a duration or a symbol count.  11.2's timings are
   75 +/- 5 ms, >= 50 ms, 10 ms, 40 +/- 1 ms, 160 ms, <= 500/550/670 ms and
   70 +/- 5 ms; in ticks those are 180, >= 120, 24, 96, 384, <= 1200/1320/1608
-  and 168.  **34 is none of them and neither is 136.**
+  and 168.  **34 is none of them and neither is 136.**  (L1's 160 ms is 384
+  TICKS; the 40 ms turnaround is 384 SAMPLES.  Two different 384s, and they
+  are not the same duration.)
 
 **A DECOMPOSITION THAT IS ARITHMETIC AND NOT YET EVIDENCE.**  Recorded as a
 lead, explicitly not as a derivation.  `VPcmV34SetDelays` sets three things
