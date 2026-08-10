@@ -37198,3 +37198,440 @@ re-reading the call site would have caught it.
 
 Recorded because it cost a measurement, and because every one of these is
 invisible to a reader who starts at the prologue and works forwards.
+
+
+### 1140. THREE BLOBS IN THE FORK, ONE BUILD: `.text` IS IDENTICAL IN ALL THREE, AND `.bak` IS OURS
+
+`cryan209/D-Modem` branch `pjsip2.15` ships `dsplibs.o`, `dsplibs.o.bak` and
+`dsplibs.o.mod` in `slmodemd/`. The first question is whether any of them is a
+different build of slmodem, because if one were, everything this tree knows
+would need qualifying.
+
+**None of them is.** Measured, not inferred:
+
+| | size | md5 | `.text` md5 |
+|---|--:|---|---|
+| `dsplibs.o.bak` | 1,233,728 | `1fd60268a1dcf5392f5520791f7a7059` | `d25e747af8636e4ee2250d33737bbc17` |
+| `dsplibs.o.mod` | 1,233,728 | `04fabcb2ba7f293165cd6ac6f4977f50` | `b971d8ce170fcdc8281f2ed6b540627e` |
+| `dsplibs.o` (linked) | 1,232,028 | `56745e1162d138b9a4c7d2025c9b69f2` | `d25e747af8636e4ee2250d33737bbc17` |
+
+- **`.bak` is byte-identical to `slmodemd/dsplibs.o` in this working tree** —
+  same md5, same size. Our reconstruction target is unchanged.
+- **The shipped `dsplibs.o` has the same `.text` as `.bak`**: `cmp` on the
+  extracted sections reports **zero** differing bytes.
+- `.comment` is the same string 279 times in all three -- `GCC: (GNU) 3.4.2
+  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)`, finding 606's
+  fingerprint exactly.
+- All three have 152 sections with identical names and identical sizes except
+  `.symtab`/`.strtab`, `.text` at offset 0x40 size 0x0b1cf0, the same 283
+  `FILE` symbols, and 18,317 relocations each.
+
+**The 1,700-byte difference is not code**, and finding 1141 says what it is.
+The lesson is the one `readelf -S` keeps teaching: overall file size is not
+the discriminator between two objects, section size and content are.
+
+### 1141. THE SHIPPED BLOB WEAKENS `VPCMXF_Create` AND ALIASES IT `__blob_VPCMXF_Create` -- A LINK-TIME OVERRIDE HOOK
+
+`.bak` has 3,082 symbols and the shipped `dsplibs.o` has 3,026. Diffing the
+two tables by (name, type, bind, section) gives 58 gone and 2 new, and there
+are exactly two kinds of change.
+
+**56 of the 58 are metadata.** They are `SECTION` symbols for `.rel.text`,
+`.rel.rodata`, `.rel.data`, the 51 `.rel.gnu.linkonce.*`, `.symtab`,
+`.strtab` and `.shstrtab`. Alongside them the file was visibly rewritten by a
+**modern binutils**: `.shstrtab` moved from section index 148 to 150, and
+every `REL` section gained `SHF_INFO_LINK`, which the 2005 toolchain did not
+set. `.symtab` shrinks 0xc0a0 -> 0xbd20 and `.strtab` 0xfba5 -> 0xf884; with
+padding that is the whole 1,700 bytes.
+
+**The 58th, and the two new ones, are the point:**
+
+```
+.bak     VPCMXF_Create         val=0x00fcf0  size=495  FUNC  GLOBAL
+shipped  VPCMXF_Create         val=0x00fcf0  size=495  FUNC  WEAK
+shipped  __blob_VPCMXF_Create  val=0x00fcf0  size=0    FUNC  GLOBAL
+```
+
+Same address, same size, binding changed `GLOBAL` -> `WEAK`, plus a new
+strong alias. That is the standard interposition idiom: a strong
+`VPCMXF_Create` in the fork's own source now wins at link time, and the
+original remains callable as `__blob_VPCMXF_Create`.
+
+**The code was not modified. Only the linkage was.** And the function they
+chose is precisely the one finding 701 identified as holding the side
+selection -- `VPCMXF_Create`'s first argument. So the fork's shipped mechanism
+is to wrap that call from C rather than to patch bytes.
+
+**The fork's own source confirms it, and says how the blob was made.** A
+comment in their `slmodemd/dp_vpcm_shim.c` records the invocation:
+
+```
+ * dsplibs.o has been patched with objcopy:
+ *   --weaken-symbol=VPCMXF_Create  (makes the blob's definition weak)
+ *   --add-symbol __blob_VPCMXF_Create=.text:0xfcf0,global,function
+```
+
+0xfcf0 is `VPCMXF_Create`'s address in our blob, unchanged. No Makefile rule
+performs that objcopy -- the patched `dsplibs.o` is a committed artefact and
+the recipe survives only as prose, so it is not reproducible from their repo.
+
+**And the override is gated OFF by default.** Their strong `VPCMXF_Create`
+forwards its first argument unchanged unless an environment variable is set:
+
+```c
+	if (vpcm_digital_side) {           /* getenv("SLMODEMD_VPCM_DIGITAL_SIDE") */
+		side = 1;                  /* "overriding side %d -> 1 (Digital)" */
+	}
+	return __blob_VPCMXF_Create(side, v34_obj, dp_runtime, frag_ms, session_type);
+```
+
+So the fork's default build is still the analogue client, exactly as ours is;
+the digital side is reachable at run time by an env var and by nothing else.
+Note their `side = 1` is the same value `.mod` writes at `vpcm_create+0xf5`,
+and their debug string calls it "Digital" -- the same name the blob's own
+trace uses (finding 1143). Two authors, two mechanisms, one meaning.
+
+For this tree: a reconstruction emitting `VPCMXF_Create` as an ordinary
+`GLOBAL` is correct. The weak alias is downstream packaging, not part of the
+original object, and nothing should be reconstructed to match it.
+
+### 1142. `.mod` IS 32 HAND-EDITED BYTES, ALL IN `.text`, ALL LENGTH-PRESERVING
+
+`cmp -l` over the whole 1,233,728-byte files reports **32 differing bytes and
+no others** -- symbol table, string table, relocations, `.rodata`, `.data` and
+section headers are untouched. Coalesced, they are 12 runs, and every run maps
+inside a named function:
+
+```
+.text 0x003607  v8_create +0xc7       0f85b3000000 -> e9b400000090
+.text 0x00362d  v8_create +0xed       0f95c2       -> b20190
+.text 0x00363b  v8_create +0xfb       20ca         -> 9090
+.text 0x003af5  vpcm_create +0xf5     00           -> 01
+.text 0x003b80  vpcm_create +0x180    31c0         -> b001
+.text 0x00d7e1  VPcmFloModem::externalReset +0x111   754f -> 9090
+.text 0x00fac0  VPcmFloModem ctor C1 +0x60          0f94c2 -> b20190
+.text 0x00fcbc  VPcmFloModem ctor C1 +0x25c         b3     -> bb
+.text 0x00ff40  VPcmFloModem ctor C2 +0x60          0f94c0 -> b00190
+.text 0x075d86  rebuildJMSequence +0x136            31d2   -> b201
+.text 0x0762f1  rebuildJMSequence +0x6a1            0f848bfcffff -> 6x 90
+.text 0x076438  rebuildJMSequence +0x7e8            0f94c1 -> 30c990
+```
+
+Every replacement is the same length as what it replaced, padded with `nop`
+where shorter. That is a hex editor, not a rebuild, and it is why `.mod`'s
+`.comment`, `FILE` symbols and relocation count are identical to `.bak`'s
+(finding 1140) -- it is `.bak` with twelve instructions overwritten.
+
+**`C1` and `C2` are GCC's two clones of the same `VPcmFloModem` constructor**,
+not two members named C1 and C2. The patch hits the same source construct at
+the same `+0x60` in both, with different registers (`%dl` vs `%al`) because
+the two clones allocated differently. That correspondence is a free
+consistency check on the reading, and it also shows the patcher was working
+from a disassembly, not from source.
+
+### 1143. `vpcm_create+0xf5` IS THE SIDE FLAG, AND `.mod` MAKES THE OBJECT THE DIGITAL SIDE -- THE BLOB'S OWN DEBUG STRING SAYS SO
+
+This is the question findings 701 and 702 turn on, so it is settled from three
+directions and not one.
+
+**The patched byte is the immediate of `VPCMXF_Create`'s first argument.**
+`vpcm_create` is at `.text+0x3a00`, so `+0xf5` is `0x3af5`:
+
+```
+    3af2:  c7 04 24 00 00 00 00   movl   $0x0,(%esp)      <-- imm32 begins at 3af5
+    3af9:  89 7c 24 08            mov    %edi,0x8(%esp)
+    3afd:  e8 fc ff ff ff         call   ...   <== R_386_PC32 VPCMXF_Create
+```
+
+In `.mod` that single byte is `01`, giving `movl $0x1,(%esp)`. It is the only
+argument-zero store on the only call to `VPCMXF_Create` in 1.2 MB.
+
+**Finding 701's derivation then runs backwards.** `VPCMXF_Create` opens
+`test %ebx,%ebx; sete %al` on that argument, so `side = (arg0 == NULL)`;
+`NULL` gives 1 and the literal `1` gives **0**, which
+`include/dsplib/V90SessionFlag.h` establishes is the **modulator**.
+
+**The object names the two values itself.** At `0xfd7a` it selects a string
+for its own trace:
+
+```
+    fd7a:  test %ebx,%ebx
+    fd7c:  mov  $0x89c,%eax     <== .rodata.str1.1 + 0x89c = "Digital"
+    fd81:  jne  fd88
+    fd83:  mov  $0x8a4,%eax     <== .rodata.str1.1 + 0x8a4 = "Analog"
+    fd88:  ...
+    fd8c:  movl $0x2f4c,(%esp)  <== .rodata.str1.4 + 0x2f4c =
+                                    "VPCMXF_Create: side is %s, maxDataBuffer - %d"
+```
+
+arg0 non-NULL prints **"Digital"**. This is the vendor's own name for the
+value, not an inference from an enum.
+
+**And the third argument is scaled differently on the two arms**, which is a
+physical corroboration:
+
+```
+non-NULL (Digital):  fildll ; fmuls  .rodata.cst4+0x54  = 8.0  ; fadds 0.5
+NULL     (Analog):   fildll ; fmull  .rodata.cst8+0x10  = 9.6  ; fadds 0.5
+```
+
+8.0 against 9.6 is 8000 Hz against 9600 Hz -- the network PCM rate against the
+analogue client's internal rate, which is the rate this tree spent findings 17
+and 23 pinning down. The result becomes `maxDataBuffer`.
+
+**Passing the literal `1` is safe.** `%ebx` holds arg0 only until `0xfdac`,
+where it is reloaded with `sysdep_malloc`'s return; the pointer is never
+dereferenced. It is a boolean and a string selector and nothing else.
+
+**So `.mod` unlocks the digital side**, and three further edits are consistent
+housekeeping for that switch (finding 1144). **What this does NOT establish is
+that the branch works.** It selects code the vendor never made reachable; the
+selection being one byte says nothing about whether `V90Modulator` was
+finished. Finding 702's central caution -- no tier-1 oracle, no evidence the
+dead branch was ever completed -- is untouched. What changes is only the cost
+of *reaching* it, and that was never the expensive part.
+
+**The patch's author agrees.** `.mod` entered their history as commit
+`75701d2c`, *"dodgy patches to dsplibs.o to see if it can be enticed to be PCM
+side"*, and left it at `01f430e7`, *"revert dsplibs.o"*. That is the same
+reading arrived at here from the bytes alone, in the author's own words, and
+it is the strongest possible corroboration of the identification -- but note
+that "reverted" is also the author's own verdict on whether it worked.
+
+**And the fork does not link `.mod`** (finding 1141): the blob on their link
+line has an unmodified `.text`, and the same switch is reached instead through
+the weak-symbol shim, gated behind an environment variable that is off by
+default. Nothing in their repository -- no log, no capture, no rate -- shows
+that a digital-side session was ever established by either route.
+
+### 1144. THE OTHER SIDE-RELATED EDITS, AND THE TWO V.8 CAPABILITY BITS `.mod` FORCES
+
+The remaining nine edits split into two groups.
+
+**Group 1 -- housekeeping for the side switch.** `VPcmFloModem`'s constructor
+computes a second side value from the first:
+
+```
+    fab7:  dec   %ebp             ; ebp = V90ModemSide - 1
+    fac0:  sete  %dl              ; dl  = (V90ModemSide == 1)      PATCHED -> mov $1,%dl
+    fad2:  movzbl %dl,%esi
+    fadc:  mov   %esi,0x4(%esp)
+    fae0:  call  V92Modem::V92Modem(V92ModemSide, ...)
+    ...
+    fcbb:  mov   %esi,0x6120(%ebx)                                 PATCHED -> mov %edi,...
+```
+
+`%esi` is written exactly once between those two points, so `+0x6120` caches
+the same value. The patch forces the *argument* to 1 while forcing the
+*cached field* to 0 (`%edi` is zeroed at `0xfca9`).
+
+`+0x6120` is what `externalReset` branches on:
+
+```
+    d74b:  mov  0x6120(%ebx),%eax
+    d75c:  test %eax,%eax
+    ...
+    d7e1:  jne  d832                                               PATCHED -> nop nop
+    d7e3:  <reset the V.92 / analogue state fields>
+    d832:  call V90Demodulator::reInit()
+```
+
+So `+0x25c` and `+0x111` both enforce the same outcome -- **never re-init the
+V90 demodulator** -- which is exactly right for a digital side that has no
+demodulator, and they enforce it twice over. The `+0x60` edit is the odd one:
+it keeps the `V92Modem` sub-object on the *analogue* side while `V90Modem`
+goes digital. Either it is deliberate, so that `V92Modem` still constructs
+down a path the vendor actually implemented, or the patcher forced a boolean
+without tracing it. **This tree cannot tell which, and should not pretend to.**
+
+**Group 2 -- two capability bits in `_tagModemParameters`.** `dp_vpcm_init`
+registers three datapump IDs, `0x22`, `0x5a`, `0x5c` -- 34, 90, 92, which
+`slmodemd/modem_defs.h` names `DP_V34`, `DP_V90`, `DP_V92`. Both `v8_create`
+and `vpcm_create` take `(modem, id, caller, srate, max_frag, op)`, so the
+values they compare against are the requested datapump and the call direction.
+
+`v8_create` builds the advertisement:
+
+```
+    3602:  test %edi,%edi          ; edi = caller
+    3607:  jne  36c0                                       PATCHED -> jmp 36c0
+    360d:  params[0x000] bit 3 = ebx & 1
+    36c0:  ebx = (id == 0x5a) | (id == 0x5c)               ; V.90 or V.92
+    ...
+    362b:  test %edi,%edi
+    362d:  setne %dl               ; dl = (caller != 0)    PATCHED -> mov $1,%dl
+    3635:  cmp  $0x5c,%ebp
+    3638:  sete %cl                ; cl = (id == V.92)
+    363b:  and  %cl,%dl                                    PATCHED -> nop nop
+    3640:  params[0x002] bit 4 = dl
+```
+
+- Original `params+0x000` bit 3 = `caller && (V.90 || V.92)`. Patched:
+  `(V.90 || V.92)` -- **offered when answering as well as when calling.**
+- Original `params+0x002` bit 4 = `caller && (id == V.92)`. Patched: **1,
+  unconditionally** -- the direction test and the V.92 test are both gone.
+
+`vpcm_create+0x180` forces the same bit from the other writer:
+
+```
+    3b80:  xor  %eax,%eax                                  PATCHED -> mov $1,%al
+    3b82:  cmpl $0x5c,0x34(%esp)          ; id == DP_V92
+    3b9e:  je   3d60                      ; if V.92, keep the existing bit
+    3ba4:  params[0x002] bit 4 = al & 1
+```
+
+Original: clear bit 4 unless V.92 was requested. Patched: **set** it unless
+V.92 was requested. `include/dsplib/modem_params.h` already documents
+`+0x002` bit 4 as "session type == V.92", written by `vpcm_create` at
+0x3ba4-0x3bb4 -- so the identification is this tree's own, arrived at
+independently, and the patch confirms the patcher read it the same way.
+
+Note the free-vs-forced asymmetry in how safely the edits were made: replacing
+a `setX` with `mov $1,%reg8` preserves the upper bits the original also left
+alone, but replacing `xor %eax,%eax` with `mov $1,%al` does not -- it leaves
+EAX's top 24 bits undefined. At `vpcm_create+0x180` that is harmless because
+only `%al` is consumed. At `rebuildJMSequence+0x136` it is not (finding 1145).
+
+### 1145. THE JM PATCH: TWO EDITS WORK, ONE IS A NO-OP, AND THE PAIR PROVES THE INTENT
+
+`rebuildJMSequence` (`.text+0x75c50`, 3,134 bytes) builds V.8's Joint Menu --
+the capability list the answering modem sends. Three of the twelve edits are
+here, and reading them together is what settles what the patch was *for*.
+
+**The two conditions.** The same two terms are tested twice in the function,
+once positively and once as their De Morgan complement:
+
+```
++0x136:  75d80:  testb $0x8,(%edi)        ; params[0x000] bit 3 -- V.90/V.92 offered
+         75d83:  setne %al
+         75d86:  xor   %edx,%edx                          PATCHED -> mov $1,%dl
+         75d88:  cmpw  $0x0,0x28(%esp)
+         75d8e:  setne %dl
+         75d91:  test  %edx,%eax
+         75d93:  je    761b0              ; skip the rich JM if !(bit3 && word28)
+
++0x7e8:  7642c:  testb $0x8,(%edi)
+         7642f:  sete  %al
+         76432:  cmpw  $0x0,0x28(%esp)
+         76438:  sete  %cl                                PATCHED -> xor %cl,%cl
+         7643b:  or    %ecx,%eax
+         7643d:  test  $0x1,%al
+         7643f:  jne   7645d              ; emit the bare JM word 0x00a9 instead
+```
+
+At `+0x7e8` the patch replaces **the `sete` itself**, forcing the
+`word28 == 0` term to false and removing the fallback that emits the minimal
+JM `0x00a9`. That works.
+
+At `+0x136` the patch replaces the `xor %edx,%edx` that *precedes* the
+`setne %dl` -- and `setne %dl` two instructions later **overwrites the byte
+the patch just set**. The intended forcing cannot happen on any path. The
+only thing that survives is that EDX's top 24 bits are no longer cleared,
+and `test %edx,%eax` is a 32-bit test.
+
+**Traced, because "probably harmless" is not an answer.** Three paths reach
+`0x75d80`. On the one from `0x75cec`, EDX still holds the
+`_tagModemParameters` pointer loaded at `0x75cd2` -- emphatically not zero --
+so the patch really does leave garbage in EDX's upper bytes. It still makes no
+difference, because EAX on that path comes from `movzbl 0x18(%edx),%eax` at
+`0x75ce4` followed by the `je` that proves `%al` was 0, so EAX's upper 24 bits
+are zero and the AND against EDX's garbage is zero regardless. On the path
+from `0x75d3c` the `jne` not being taken proves `%dx == 0` after a `movzwl`,
+so EDX is zero and the original and patched forms are identical. The third
+predecessor is `je 75d80` at `0x76146`.
+
+So: **ineffective everywhere, and on the two paths traced it is exactly a
+no-op.** `test %edx,%eax` still evaluates `%dl & %al`. **The correct edit was
+at `0x75d8e`, not `0x75d86`.**
+
+That the same two terms were attacked in both places, correctly in one and
+incorrectly in the other, is the strongest available evidence of intent: the
+author wanted the rich Joint Menu emitted whether or not those conditions
+held. **So the working hypothesis in the task -- "advertise and accept
+capabilities the modem otherwise declines" -- is CONFIRMED for this function**,
+and confirmed for `v8_create` too (finding 1144), where both capability bits
+are forced on.
+
+**The third edit** removes a guard rather than forcing a value:
+
+```
+    762ea:  movzbl 0x2(%esi),%edx      ; params[0x002], via ebp+0xa58
+    762ee:  test   $0x4,%dl            ; bit 2
+    762f1:  je     75f82                                  PATCHED -> six nop
+    762f7:  movzbl 0x18(%esi),%eax     ; the block bit 2 was gating
+```
+
+`0x75f82` is the head of the JM word dispatch (`cmp $0x107`, `$0x103`,
+`$0x10b`, `$0x109`, ...). Removing the `je` makes the block at `0x762f7`
+run unconditionally instead of being skipped when `params+0x002` bit 2 is
+clear.
+
+**And bit 2 is a NEGOTIATED flag, not a configuration one.** Neither
+`dp_runtime_create` nor `vpcm_create` ever writes it -- `dp_runtime_create`
+touches only bits 4, 5, 6 and 7 of that byte (0x5947-0x5972), and the
+`sysdep_memset` before it leaves bit 2 at zero. The only writer in 1.2 MB is
+`V8UpdateModemParameters`, in the middle of its own walk over V.8 menu words:
+
+```
+   74a61:  cmp  $0x109,%edx
+   74a6d:  cmp  $0x10b,%edx
+   74a79:  or   $0x4,%cl
+   74a7c:  mov  %cl,0x2(%edi)
+```
+
+-- the same word codes `rebuildJMSequence` dispatches on. So bit 2 records
+something **the far end offered in its CM**, and the original guard means
+"put this in the Joint Menu only if the other end asked for it". Removing the
+guard means **offer it regardless**. That is the task's working hypothesis in
+its purest form, and it is the third independent confirmation of it.
+
+**A caution for anyone tempted to copy this patch.** Eleven of the twelve
+edits are plausible; one is silently ineffective, and no test the patcher
+could run would have shown the difference. Finding 134's argument, arriving
+in someone else's tree.
+
+### 1146. THE FORK'S "56k" CLAIM IS NOT EXPLAINED BY ANY OF THE 32 BYTES
+
+Asked whether the patched blob is where the fork's connection-speed claim
+comes from. It is not, and the answer is clean enough to be worth recording as
+a negative.
+
+- **The 32 bytes of `.mod` are not what runs.** Their `slmodemd/Makefile`
+  names `dsplibs.o` on the link line and nothing else; `.bak` and `.mod` are
+  inert files beside it, and no rule generates one from another.
+- **The route that IS live is off by default.** The weak-symbol shim
+  (finding 1141) can reach the same digital side, but only when
+  `SLMODEMD_VPCM_DIGITAL_SIDE` is set in the environment. A default build of
+  the fork is the analogue client, exactly as ours is.
+- **THE CLAIM PREDATES THE BLOB WORK BY THIRTEEN MONTHS AND BELONGS TO
+  SOMEONE ELSE.** The README bullet about "up to full 56k" was added in
+  February 2025 by Michael Gernoth; every blob-related commit is from March
+  2026 by a different author. The 2025 work it describes is a resampler
+  bridging 8 kHz RTP to the blob's 9600 Hz rate (`RcFixed_Resample` in
+  `slmodemd/modem_main.c`, absent upstream) and a change to what
+  `MDMCTL_IODELAY` reports. Neither touches the object's code.
+- **None of the 32 bytes touches rate selection.** They sit in `v8_create`,
+  `vpcm_create`, `VPcmFloModem`'s constructor and reset, and
+  `rebuildJMSequence`. What they change is which capability bits V.8
+  advertises and which side the PCM object is. Nothing in the V.90 rate
+  tables, the constellation, the digital-impairment learning or the
+  `+0x030`/`+0x034` rate window is modified -- `vpcm_create` still clamps the
+  host's maximum to 0xdac0 = 56,000 and still writes the literals 4800 and
+  33600, unpatched.
+- **The side switch is a different claim entirely.** "The digital side of a
+  V.90 call" is not "a faster analogue client", and the two must not be blurred
+  together.
+
+So the answer is a clean negative twice over: the 56k claim is not about the
+blob, and it is not even about the same author's work. What it *is* about --
+resampling the VoIP path to the rate the object actually wants -- is a
+host-side fix, and this tree already knows that rate (findings 17 and 23).
+
+Finding 1090's warning generalises: a change that is present in name is not a
+capability. Here the change is not even present.
+
+**One caution about the fork as a source.** Its HEAD is not the configuration
+the 56k bullet was measured on -- `MDMCTL_IODELAY` was later hardcoded to 48
+where the tested tree returned `MODEM_FRAMESIZE` (192), and `MDMPRM_CODECTYPE`
+was changed to an "unknown codec" value. Anyone treating the fork's README as
+a measurement of the fork's current behaviour is reading across that gap.
