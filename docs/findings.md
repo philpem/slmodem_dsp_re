@@ -32925,3 +32925,212 @@ move, and a test looks live while the loop is untested. And `Resampler::resample
 reads one sample past `in[n - 1]` on several paths; that is the original's own
 bug, reproduced deliberately, so a caller must pad the buffer or the two sides
 will disagree about uninitialised memory rather than about the resampler.
+
+### 832. `four1` and `realfft`, the object's FFT pair, and the TU they came from
+
+`_Z5four1Pfmi` (0x536c0, 0x16d = 365 bytes) and `_Z7realfftPfmi` (0x53830,
+0x1f9 = 505 bytes), now `src/dsp/fft.cpp` with `include/dsplib/fft.h` and
+`test/unit/t_fft.cpp`. `realfft` calls `four1` and nothing else, so the pair is
+self-contained and `tools/closure.py _Z7realfftPfmi --missing` reported exactly
+the two.
+
+**The original file is called `fft.cpp` and holds exactly these two.** STT_FILE
+entry #290, between `V90CP.cpp` (#287) and `V92Transmitter.cpp` (#291); the
+address gap between `V90CP::printNofRecievedMpMpNot`, which ends at 0x536c0,
+and `V92Transmitter::~V92Transmitter` at 0x53a30 contains nothing else.
+`tools/tumap.py` puts the file in a shared bracket and is no help here -- the
+FILE ordering plus two adjacent anchors is.
+
+**It is Numerical Recipes in C's `four1` and `realft`, unmodified.** That was a
+hypothesis and it was checked rather than pasted: every constant, every loop
+bound and every comparison below was read out of `tools/dis.py` first.
+
+- **One-based.** `data[0]` is never read or written by either. `four1` uses
+  `data[1 .. 2*nn]`, `realfft` `data[1 .. n]`, and `realfft` passes its own
+  `data` to `four1` unchanged. Consistent with `Psd` allocating `m_length + 1`
+  floats (`include/dsplib/Psd.h`).
+- **Nothing is validated.** No power-of-two check, no null check and no length
+  check in either body; the first loop runs on the raw argument.
+- **Every comparison is unsigned** -- `jae`, `jbe`, `seta`, `jb` at 0x536de,
+  0x536e2, 0x5370b, 0x53710 -- and `(double)mmax` is produced by `fildll` off a
+  zero high word at 0x5373e-0x53747. Both say `unsigned long`, and the mangling
+  agrees: `m`, not `l` and not `j`.
+- **`tempr` and `tempi` are `float`**, round-tripped through `fstps`/`flds` at
+  0x537a0/0x537aa and 0x537b4/0x537bb. The twiddles are `double`; `c1` and `c2`
+  are `float` (`flds` from `.rodata.cst4`, `fmuls` operands, and `c2` has its
+  own 4-byte stack slot at 0x44(%esp) written by `movl $0x3f000000`).
+- **The constants**, from `.rodata`: `cst8+0x168 = 0x401921FB54442D1C`, which is
+  the literal **6.28318530717959** and NOT the nearest double to 2*pi (that ends
+  ...2D18); `cst8+0x170 = 0.5`; `cst8+0x178 = -2.0`;
+  `cst8+0x180 = 0x400921FB54442D18`, which IS pi exactly; `cst4+0x4e4 = 0.5f`
+  (c1), `cst4+0x4e8 = -0.5f` (c2, forward arm), `cst4+0x4ec = -2.0f`. A single
+  `M_PI`/`2*M_PI` spelling would be wrong in one of the two places, so both are
+  written out.
+
+**`-freciprocal-math` is visible and provably harmless.** 0x5374f divides 1.0 by
+`mmax` and 0x53753 multiplies the result by 6.28318530717959; 0x53856/0x53858 do
+the same with `n >> 1` and pi. That is `A/len` rewritten as `A * (1.0/len)`,
+which is exact only when `len` is a power of two -- and `mmax` and `n >> 1`
+always are, `1.0/2^k` is exact, and scaling by an exact power of two is exact.
+So the reciprocal form and the divide form agree bit for bit on every input
+these functions accept. **On a length that is not a power of two they would
+not**, which is the second reason -- after "neither function validates
+anything" -- that `test/unit/t_fft.cpp` tests no such length and says so where
+someone would otherwise add one.
+
+**The FDIVP/FSUBP swap decided six instructions and had to be applied six
+times**: `de fb` at 0x5374f, `de e1` at 0x5379e, 0x537ff and 0x53977, `de e4` at
+0x538ef and `de e2` at 0x53929. binutils prints `DE F8+i`/`DE E8+i` as
+`fdivrp`/`fsubrp` and they are FDIVP/FSUBP, and vice versa (finding 245). The
+check that the reading is right is that applying it consistently yields textbook
+NR in **both** functions independently -- `tempr = wr*d[j] - wi*d[j+1]`,
+`h1i = c1*(d[i2] - d[i4])`, `1.0/mmax` -- where a misread would produce nonsense
+in at least one of them.
+
+**Correction to finding 876**, which called `four1` 368 bytes: that is the span
+to the next symbol. The ELF symbol size is 365 and the last three bytes are
+alignment padding. Its 505 for `realfft` was right.
+
+### 833. Where the object rounds is not where a modern GCC rounds, and it is worth 47,662 words
+
+The reconstruction in finding 832 was structurally right on its first build and
+still disagreed with the blob in about one output word in a hundred, by one to
+sixty ULP of a `float`. All of it was x87 excess precision, and **the two places
+it mattered are places the compiler was FREE to choose** -- which makes this an
+exception to `docs/method/tiers.md`'s forced/free rule worth naming. A spill
+decision is free, and here a spill decision changes the answer, because spilling
+an x87 register narrows it.
+
+Both remedies were **ablated** -- removed, rebuilt, watched fail, put back --
+because a deviation nobody has seen matter is a deviation nobody should carry.
+
+| deviation | when removed | words wrong, of 476,100 |
+|---|---|---|
+| `volatile float tempr, tempi` in `four1` | plain `float` | **47,662** |
+| `(double)` on one operand of each of `realfft`'s `h1r`/`h1i`/`h2r`/`h2i` | plain expression | **2,509** |
+| `volatile double wi, wpr, wpi` in `realfft` | plain `double` | **0** -- taken back out |
+
+**`tempr`/`tempi`.** The object stores both to a single-precision stack slot in
+the middle of every butterfly (`fstps 0xc(%esp)` at 0x537a0 and 0x537b4) and
+reloads them. GCC 3.4.2 did that because it ran out of x87 registers; the
+rounding to 24 bits between the two halves of a butterfly is therefore real
+behaviour and not a spill artefact to be ignored. GCC 13 has registers to spare,
+keeps both at 80 bits, and diverges. A `float` declaration does not force the
+store and neither does a cast -- only `volatile` does, in exactly the two places
+the object does it. Same problem and same remedy as `round32` in
+`src/pump/v90/Resampler.cpp`, which makes this a pattern rather than a one-off.
+
+**The four `h` temporaries, where the trap is the C type rules and not the
+compiler.** The object never narrows them: they live on the x87 stack from
+0x538e9 to 0x5394a and are never stored. But `c1 * (data[i1] + data[i3])` is a
+**float** expression in C whatever the variable it is assigned to is declared as
+-- so declaring `h1r` `double` changes nothing, and GCC 13 spills the float
+expression with `fstps`. Widening one operand makes the arithmetic double, and
+double is exact here for the same reason the object's extended arithmetic is:
+each of the four is `(a +- b) * 0.5` over exactly-representable floats, so no
+rounding occurs at all. `c1` and `c2` stay `float` -- the object says so -- and
+a `float` times a `double` is still emitted as `fmuls`, so the instruction
+matches too.
+
+**And what the differential tier cannot see here.** Built with the
+`-funsafe-math-optimizations` pragma removed, the file contains **zero `fsin`**,
+calls libm's `sin`, and **passes all 489,322 checks**. That is not evidence the
+two agree: `fsin` returns an 80-bit result and glibc's `sin` a correctly-rounded
+64-bit one, so they differ near the 54th bit. It is that a 2^-53 relative
+difference in a twiddle seed is invisible once the answer is rounded to a 24-bit
+float, whereas `tempr`'s 2^-24 rounding shows up in a tenth of all compared
+words. The flag stays, on the disassembly's authority (`fsin` at 0x5376a,
+0x5378c, 0x5388c, 0x53890) rather than the test's. **Do not remove it because
+the suite stays green, and do not record the suite staying green as an
+equivalence** -- it is a sample, on finding 248's argument.
+
+The flag is a `#pragma GCC optimize` in `src/dsp/fft.cpp` and not a Makefile
+change, so its blast radius is one translation unit. Nothing else in the tree is
+built with it, and nothing else should start being built with it as a side
+effect of this file.
+
+### 834. The object's own regrouping settled a flag the differential tier could not
+
+`-funsafe-math-optimizations` implies `-fassociative-math`, and the obvious
+defensive move is to put `no-associative-math` back so reassociation cannot move
+the twiddle recurrences. It was tried, and **the object contradicts it.**
+
+`-2.0*wtemp*wtemp` parses as `((-2.0)*wtemp)*wtemp`. The object squares first
+and multiplies by -2.0 afterwards:
+
+    5376c:  d8 c8    fmul %st(0),%st        (four1)
+    5389a:  d8 c8    fmul %st(0),%st        (realfft)
+
+Nothing licenses that regrouping except `-fassociative-math`, so the original
+had it. With the flag whole, GCC 13 emits the same `fmul %st(0),%st` in both
+places; with `no-associative-math` it emits `fld %st(0)` and two separate
+multiplies. **Both spellings pass every differential check** -- multiplying by
+-2.0 is exact either way -- so the differential tier has no opinion, and the
+codegen tier decided it, which is what `docs/method/tiers.md` section 3 is for.
+The worry that prompted the flag is unfounded in the event: GCC 13 with
+associativity on still emits `(wr*wpr - wi*wpi)` and adds the old `wr` last, as
+0x537ff-0x53809 and 0x53977-0x53989 do.
+
+The general shape is the part worth keeping. **A defensive flag added against a
+hazard nobody has observed is a claim about the original's build, and the
+original's build left evidence.** Look before adding it.
+
+### 835. Fifteen hand mutations on `fft.cpp`: fourteen caught, one genuinely equivalent
+
+No mutation suite was registered -- `test/mutations/` was out of scope for this
+batch -- so these were applied by hand to `src/dsp/fft.cpp`, rebuilt, run and
+reverted. They are recorded here so that whoever registers the suite has the
+list rather than re-deriving it. Counts are failing checks out of the sweep's
+476,100.
+
+| mutation | verdict |
+|---|---|
+| bit-reversal guard `j > i` -> `j >= i` | **survived -- equivalent** |
+| bit-reversal mask `m = n >> 1` -> `n >> 2` | caught, 87,955 |
+| bit-reversal descent `j -= m` -> `j += m` | caught (and corrupts the run) |
+| `theta` loses its `isign` factor | caught, 42,780, **and the named `isign changes the answer` check fired** |
+| butterfly `data[j] = data[i] - tempr` -> `+ tempr` | caught, 86,520 |
+| recurrence loses its trailing `+ wr` | caught, 84,960 |
+| `n = nn << 1` -> `n = nn` | caught, 91,380, **and `four1 moved something` fired** |
+| `four1` writes `data[i - 1]`, hitting the `data[0]` sentinel | caught, 90,120 |
+| `realfft` `c2` swapped between the two `isign` arms | caught, 51,228 |
+| `realfft` loop bound `i <= (n >> 2)` -> `i <` | caught, 23,242 |
+| `realfft` forward arm no longer calls `four1` | caught, 30,480 |
+| `realfft` indexes zero-based (`i1 = i + i - 2`) | caught, 60,480 |
+| `realfft` inverse tail drops its `c1` scaling | caught, 15,300 |
+| TEST-SIDE: the fill becomes all zeros | caught -- `input is not all zero`, `input is not symmetric`, `isign changes the answer` and `realfft moved something` all fired |
+| the three precision ablations of finding 833 | two caught, one equivalent |
+
+**The equivalent one is genuinely equivalent and the argument is short.**
+`j >= i` admits only the extra case `j == i`, where `SWAP(data[j], data[i])`
+exchanges a location with itself and leaves it unchanged. Nothing in the harness
+can observe it because there is nothing to observe. Unlike the ten equivalences
+of finding 651, this one does not depend on what the harness prints, so a new
+observable will not expire it.
+
+**The zero-fill mutation is the one that earns its place.** A transform of zeros
+returns zeros on any implementation, and a symmetric real input makes reversing
+`isign` a no-op -- so either fill would have made `t_fft.cpp` agree with the blob
+while proving nothing about the sign convention or the twiddles. The file
+therefore checks its own generator, and this mutation shows all three guards
+firing rather than the file merely claiming they would.
+
+### 836. Finding 876's first blocker is cleared; the second is untouched
+
+`Psd::process` was blocked on two independent things. **The first is gone.**
+`_Z7realfftPfmi` and `_Z5four1Pfmi` are now defined in `src/dsp/fft.cpp`, so a
+call to `realfft` from our side resolves to our own symbol and the link failure
+finding 876 predicted no longer happens. The workaround recorded there and
+rejected -- a test-local weak definition forwarding to `ref__Z7realfftPfmi` --
+is now moot and should not be revived.
+
+**The second blocker stands, unchanged and not attempted here.** Two of
+`process`'s four output arms compute log10 with `fldlg2`/`fyl2x` at 0x4691a and
+0x469a9. Finding 876 read that as needing inline x87 asm; finding 833 makes a
+cheaper answer visible, since `src/dsp/fft.cpp` now demonstrates that a
+`#pragma GCC optimize("unsafe-math-optimizations")` on one translation unit gets
+the x87 expansion with no Makefile change and no asm -- GCC 13 emits
+`fldlg2`/`fyl2x` for `log10` under exactly that flag, verified directly. What
+that does NOT settle, and what the next batch owns, is that `Psd.cpp` is also
+built 64-bit for `$(CXXOBJ64)`, where there is no x87 at all and the pragma buys
+nothing. That is the question to answer before writing `process`, not after.
