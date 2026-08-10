@@ -33056,6 +33056,32 @@ the test asserts `harness_alloc.bytes == 0x88` -- that is the
 
 `dp_runtime_delete` is three bytes, `jmp sysdep_free`.
 
+#### What gates the 0x88 layout, and the one hole the two gates share
+
+`make params` covers `V90Parameters.h` and `V92Parameters.h` and nothing else,
+so it does NOT cover this header. Two other gates do, and both were made to
+fail rather than assumed:
+
+```
+    offcheck  29 offsetof assertions (25 fields + dsp_info's 4).
+              clockDeviation int -> long long      9 of 936 mismatch
+    t_dp_param  sizeof against the BLOB's malloc, not against a literal.
+              pad 0x88 -> 0x80    got 128, reference 136
+              pad 0x88 -> 0x90    got 144, reference 136
+```
+
+They are complementary and neither is redundant: `offsetof` cannot see the
+total size, and a size check cannot see a field in the wrong place.
+
+**The hole they share is a deleted `unnamed_*` slot that is layout-neutral.**
+Dropping `unnamed_0003` -- one byte at +0x03, in front of a four-byte-aligned
+field -- leaves every other offset and the total size unchanged, so both gates
+pass and 936 becomes 935 with no complaint. Nothing is WRONG after that edit;
+what is lost is the RECORD that the object writes that byte. This is finding
+878's concern on a header `make params` does not reach, and it is why the
+`unnamed_*` fields carry the constant the object stores in a comment beside
+them: the comment is the only surviving evidence if the field goes.
+
 ### 822. `struct dsp_info` is 16 bytes, and the object reaches all four of them
 
 MDMPRM_DSPINFO segfaulted on the harness default because `vpcm_delete` writes
