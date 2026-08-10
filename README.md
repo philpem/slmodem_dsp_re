@@ -56,7 +56,7 @@ settled deliberately in August 2026 and should be changed the same way.
 | | step | phase | why here |
 |--:|---|---|---|
 | 1 | finish V.34 | 10 | the base V.90 builds on |
-| 2 | **two instances, one originating and one answering, against the blob** | 10 | **PARTIAL** — the ORACLE now connects and carries data at BER 0 both ways (`t_v34link.c`, findings 960-967); the four-way comparison of *our* code still stops before data mode, because `vpcm_run` is not reconstructed. See below |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | **DONE** — ours at both ends connects and carries data at BER 0 both ways, four-way compared over 8,000 blocks (`t_vpcmrun.c`, findings 980-988) |
 | 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
 | 4 | V.92 | 11 | shares that span |
 | 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
@@ -91,10 +91,10 @@ far as phase 2**. Measured, so that nobody has to re-derive it:
 |---|---|
 | construction, both roles | yes — the blob's constructor, as a fixture |
 | handshake sequencing matches the blob | yes — 3,200 block-endpoint pairs, four ways |
-| the call reaches DATA MODE | **yes, for the blob** — `t_v34link.c`, 33,600 bit/s each way |
-| bits carried, either direction | **yes, for the blob** — both directions at once |
+| the call reaches DATA MODE | **yes** — 33,600 bit/s each way |
+| bits carried, either direction | **yes** — both directions at once |
 | BER | **zero**, over 6,112 and 5,572 bits, per endpoint |
-| any of the last three for OUR code | **no** — `vpcm_run` (.text 0x3e40) is the only caller of `modem_get_bits`/`modem_put_bits` for V.34 and is not reconstructed |
+| any of the last three for OUR code | **yes** — `vpcm_run` is reconstructed (`src/pump/v90/vpcm.c`); ours-blob, blob-ours and ours-ours are identical to the oracle on every one of 8,000 blocks |
 
 Compare phase 2's own entry above: Bell 103 is called done because it
 *"connects and carries data at BER 0"*, and `t_b103link.c`'s last section is a
