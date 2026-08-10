@@ -705,9 +705,24 @@ main(void)
 		snprintf(msg, sizeof(msg), "%s: ...with no error recovery",
 			 ep_name[ep]);
 		diff_eq_int(msg, r->repeats, 0, ep);
+		/*
+		 * THE OBJECT'S ARITHMETIC, NOT THE FITTED FORM.  This asserted
+		 * `35 + iodelay/4` and passed only because CFG_IODELAY is 216,
+		 * one of the values where the two agree.  `VPcmV34SetDelays`
+		 * computes `((hwDelay + 2) >> 2) + 0x22`, i.e.
+		 * `((IODELAY + 6) >> 2) + 34`, and the fitted form is one too
+		 * small whenever `IODELAY mod 4` is 2 or 3 -- at 150 the object
+		 * gives 73 and the fit gives 72.  Finding 1021.
+		 *
+		 * It matters beyond tidiness: at IODELAY 86 the object gives
+		 * 57, which IS the threshold, and the fit gives 56.  That is
+		 * the whole of the 86-versus-88 boundary correction.
+		 */
 		snprintf(msg, sizeof(msg),
-			 "%s: ...at filtdelay 35 + iodelay/4", ep_name[ep]);
-		diff_eq_int(msg, r->filtdelay, 35 + CFG_IODELAY / 4, ep);
+			 "%s: ...at filtdelay ((iodelay + 6) >> 2) + 34",
+			 ep_name[ep]);
+		diff_eq_int(msg, r->filtdelay,
+			    ((CFG_IODELAY + 6) >> 2) + 34, ep);
 		/*
 		 * `vpcm_run`'s OWN report to the host, and it is a DIFFERENT
 		 * EVENT from the V.34 object reaching mode 1 -- and it is the

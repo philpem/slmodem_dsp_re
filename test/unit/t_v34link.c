@@ -783,14 +783,22 @@ main(void)
 			 "all", ep_name[ep]);
 		diff_eq_int(msg, r->repeats, 0, ep);
 		/*
-		 * `filtdelay` is `35 + iodelay/4` and is what arm 47 enters
+		 * `filtdelay` is `((iodelay + 6) >> 2) + 34` and is what arm 47 enters
 		 * with; the wait it must then sit out is `0x5f - filtdelay`.
 		 * Asserted because it is the quantity the whole configuration
 		 * turns on -- finding 960.
 		 */
 		snprintf(msg, sizeof(msg),
-			 "%s: ...at filtdelay 35 + iodelay/4", ep_name[ep]);
-		diff_eq_int(msg, r->filtdelay, 35 + CFG_IODELAY / 4, ep);
+			 "%s: ...at filtdelay ((iodelay + 6) >> 2) + 34",
+			 ep_name[ep]);
+		/*
+		 * The object's arithmetic, not the fitted `35 + iodelay/4`
+		 * this asserted -- which passed only because CFG_IODELAY is
+		 * 216, a value where both agree, and is one too small when
+		 * `IODELAY mod 4` is 2 or 3.  Finding 1021.
+		 */
+		diff_eq_int(msg, r->filtdelay,
+			    ((CFG_IODELAY + 6) >> 2) + 34, ep);
 
 		/*
 		 * DATA MODE, AND BOTH DIRECTIONS AT ONCE.  `vpcm_run` is the

@@ -35147,3 +35147,332 @@ rather than letting the directory imply otherwise.
 - **No probe is committed.**  Every measurement in 1001, 1002 and 1003 was a
   scratch mutation run through `tools/mutate.py`'s three-argument form, which
   works in a copy; nothing of them is in the tree except these findings.
+### 1020. `pac3c` IS the `_tagModemParameters` block, and that closes the IODELAY chain
+
+The V.34 object's `+0xac3c` had no known producer.  It has one, and the whole
+path from the host's answer to `MDMCTL_IODELAY` down to the field that decides
+whether a V.34 call connects is now a chain of stores with no inference in it.
+
+**There is exactly ONE store to `+0xac3c` in 1.2 MB.**  That is the fact that
+makes this a derivation rather than an offset coincidence:
+
+```
+    vpcm_create  0x3c5a   mov 0x28(%ebx),%edx      ; root +0x28, the params block
+                 0x3c68   mov %edx,0xc(%esp)       ; = VPcmV34Create's 4th arg
+                 0x3c70   call VPcmV34Create
+    VPcmV34Create 0xaa7b  mov 0x4c(%esp),%ebp      ; the 4th arg
+                  0xab0f  mov %ebp,0xac3c(%ebx)    ; the only writer of +0xac3c
+```
+
+`%ebx` in `vpcm_create` is the `sysdep_malloc(0xd258)` result (0x3a42-0x3a52),
+so `0x28(%ebx)` is root `+0x28` -- which finding 820 identified as
+`MDMPRM_DPRUNTIME`, a `_tagModemParameters *`.  It is the SAME pointer whose
+`+0x64` `vpcm_create` wrote fourteen instructions earlier at 0x3c0c.
+
+**The layout agreed before the store was read, which is why this is a
+confirmation and not a coincidence.**  `v34pcmmain.cpp` had already named
+`pac3c` `+0x00`, `+0x02`, `+0x30`, `+0x34`, `+0x50`, `+0x54`, `+0x60`, `+0x64`
+and `+0x68` from their uses, and every one lands on a `_tagModemParameters`
+member.  And the object's own vocabulary matches across the boundary: the V.34
+side prints `params initial delay` for `+0x64` and `ext delay` for `+0x68`,
+while `vpcm_run` prints `init %d, ext %d, add %d` for `+0x64`, `+0x68`,
+`+0x6c` (finding 983).  Two different format strings, one block, the same two
+words.
+
+**What it opens.**  `configuration.md`'s note that the `+0x30`/`+0x34` rate
+pair "is what `vpcm: VPCM rate limits: %d-%d` prints and **nothing else
+reads**" is wrong.  `VPcmV34InitiateRetrain` reads that pair at THREE sites --
+0x66b5/0x66c5, 0x6870/0x6877, 0x6acc/0x6acf -- and divides by 2400 to get the
+V.34 rate indices.  `MODEM_MIN_RATE` 300 and `MODEM_MAX_RATE` 56000 become
+indices 0 and 23, clamped to 0 and 14, and 14 is the 33,600 the call converges
+to.  Corrected in `docs/configuration.md`.
+
+### 1021. `filtdelay` is `((IODELAY + 6) >> 2) + 34`, and `35 + iodelay/4` is one too small on half its inputs
+
+Findings 960 and 962 recorded `filtdelay = 35 + iodelay/4`, fitted to a table
+of thirteen swept values.  The object computes something else, and the two
+agree on eleven of those thirteen by luck.
+
+**The instruction sequence, at three sites.**  All three read `pac3c + 0x64`
+-- which finding 1020 shows is `params->hwDelay` -- and all three do the same
+arithmetic:
+
+```
+    8b 59 64      mov    0x64(%ecx),%ebx     ; params->hwDelay
+    8d 43 02      lea    0x2(%ebx),%eax      ; + 2
+    c1 f8 02      sar    $0x2,%eax           ; >> 2, ARITHMETIC
+    83 c0 22      add    $0x22,%eax          ; + 34
+    66 89 86 7c aa 00 00
+                  mov    %ax,0xaa7c(%esi)    ; -> filtdelay
+```
+
+at `VPcmV34Create+0x4a9` (0xaf19), `VPcmV34InitiateRetrain+0x103` (0x674a) and
+`_Z16VPcmV34SetDelaysP12tagV34Object+0x15` (0x6405).  The last of those is a
+function whose whole body is this conversion and whose name the object
+supplies: **`VPcmV34SetDelays`**.
+
+With `hwDelay = IODELAY + 4`:
+
+    filtdelay = ((IODELAY + 6) >> 2) + 34
+
+**Where the fit breaks.**  `((io+6)>>2) + 34` and `35 + io/4` are equal for
+`io = 4k` and `4k+1`, and differ by one for `4k+2` and `4k+3`.  Finding 962's
+own table already contradicts its own formula and nobody noticed: at iodelay
+150 the table records filtdelay **73**, and `35 + 150/4` is 72.
+
+**And it is measured, not only read.**  At iodelay 86, `t_v34link` reports the
+object's `+0xaa7c` as **57**, where `35 + 86/4 = 56`.  The tree's assertion
+prints the value it disagrees with, so the refutation is in the failure text.
+
+`test/unit/t_v34link.c:793` and `t_vpcmrun.c:710` still assert the
+approximation.  Both pass, because both run at iodelay 216 where the two
+formulas agree.  They are left alone deliberately -- this batch is docs and
+findings -- and the exact form is what a new value must be checked against.
+
+### 1022. The V.34 connect threshold is IODELAY 86, not 88, and the boundary is filtdelay 57 exactly
+
+Finding 962 swept iodelay in steps of 8 to 20 and reported "80 no, 88 yes".
+The gap was never opened.  Opening it, with `V34LINK_IODELAY` and nothing
+else changed:
+
+```
+  iodelay      80   82   84   85   86   87   88  ...  240   241
+  filtdelay   (55) (56) (56) (56)  57   57   57       95    95
+  connects     no   no   no   no  yes  yes  yes      yes   yes
+```
+
+**The `connects` row is entirely measured; the bracketed `filtdelay` values are
+NOT.**  `t_v34link` samples `+0xaa7c` only at the moment it connects, so a run
+that never connects never reads the field and reports 0.  The four bracketed
+cells are finding 1021's formula predicting what the field held, and the
+unbracketed ones are the object's own answer.  Said explicitly because this
+finding's neighbour is about a fitted formula that got recorded as a
+derivation, and repeating that shape inside the correction would be
+unfortunate.
+
+**85 fails and 86 connects**, and at 86 the ONLY two failing checks out of
+thirty-two are the two `35 + iodelay/4` assertions of finding 1021 comparing
+against the compile-time 216.  Connect block, mode, 33,600 each way, data mode
+and BER 0 both directions all pass.
+
+So the threshold on the derived quantity is **`filtdelay >= 57`**, and
+`((IODELAY + 6) >> 2) + 34 >= 57` gives **`IODELAY >= 86`**.
+
+**Why 57 -- what is derived and what is measured.**  Arm 47 `TX_PHASE2_ANS`
+enters with `counter = filtdelay` (arm 49 sets it at 0x66b13) and leaves for
+`TX_L1` when `counter + 1 > 0x5f`.  So the wait it must sit out is
+**`0x5f - filtdelay`** invocations of the four-sample block -- DERIVED, and it
+is why a LARGER I/O delay helps at all, which is the counter-intuitive part.
+Racing it is arm 47's own reset: four consecutive ones in `fsk.sr` on the line
+the caller has correctly gone silent on, which zeroes the counter and restarts
+INFO0.
+
+**The crossing is measured, and it is not a smooth function of filtdelay.**
+The two runs either side of the boundary:
+
+```
+  filtdelay 56 (iodelay 85)   blk 92  enters 47, counter 65, bulkDelay 424
+                              blk 95  all-ones wins, counter 93 of the 95 needed
+  filtdelay 57 (iodelay 86)   blk 91  enters 47, counter 58, bulkDelay 404
+                              blk 95  crosses 0x5f -> TX_L1
+```
+
+The decisive difference is not the one extra count.  It is that arm 49 exits
+**a whole block earlier** at filtdelay 57 -- arm 49's own exit is gated on
+`fsk.sr & 1` and not on its `filt + 0x50` threshold, and the bulk delay it
+computes, `(n - filtdelay) * 4 - 0x18c`, differs by 20 -- so the answerer gets
+twelve extra invocations it did not get at 56.  A constant-margin model of the
+race does not reproduce this boundary and should not be written down as if it
+did: what is derivable is the FORM, `filtdelay > 0x5f - D`, and `D` is set by
+the demodulator and by which invocation arm 49 leaves on.
+
+### 1023. `MDMPRM_IODELAY` is in SAMPLES at 9,600 Hz, and it is derived twice from opposite ends
+
+The name says delay and the drivers say a few hundred, but neither settles the
+unit.  Two independent uses do.
+
+**From the object.**  `filtdelay = ((hwDelay + 2) >> 2) + 34` (finding 1021)
+is a count of `datapumpv34` invocations, and each invocation is four samples
+(finding 960).  The `>> 2` is therefore a samples-to-blocks conversion, so
+`hwDelay` -- and hence `MDMPRM_IODELAY + 4` -- is in samples.  `srate` is
+guarded as exactly 9600 at `vpcm_create` 0x3a1c, so the rate is not a variable.
+
+**From the host, on the parameter that shares the unit.**  `vpcm_create` and
+`vpcm_run` both hand delays back through `MDMPRM_UPDATE_DELAY`, and
+`slmodemd`'s implementation is denominated in the same currency as
+`MDMCTL_IODELAY`'s answer:
+
+```
+    modem_param.c:194     MDMPRM_UPDATE_DELAY -> m->update_delay = val
+    modem_main.c:987      memset(outbuf, 0, m->update_delay * 2)
+    modem_main.c:988      device_write(dev, outbuf, m->update_delay)
+    modem_main.c:998      dev->delay += m->update_delay
+    modem_main.c:541      MDMCTL_IODELAY -> return dev->delay
+```
+
+`n * 2` bytes for `n` written frames is a 16-bit sample, and the count is
+added to the very `dev->delay` that `MDMCTL_IODELAY` returns.  So the pump's
+delay currency and the host's are the same, and it is samples.
+
+**What the drivers' numbers then mean.**  216 and 232 samples at 9,600 Hz are
+**22.5 ms and 24.2 ms** -- a plausible sound-card-plus-kernel round trip, which
+confirms the reading rather than establishing it.  The object's acceptance
+window, `IODELAY <= 240`, is **25 ms**.
+
+### 1024. Over the cap is a NEGOTIATION, not a refusal -- finding 962 is wrong about this
+
+Finding 962 read `if (0xf4 - (iodelay + 4) < 0) fail;` and recorded that ALSA's
+long-buffer 424 "would be refused outright".  The branch target is not a
+failure path.
+
+```
+    3bfd:  js   3d6f
+    3d6f:  modem_set_param(modem, 13 /* MDMPRM_UPDATE_DELAY */, esi)
+                                      ; esi = 0xf4 - (IODELAY+4), NEGATIVE:
+                                      ; the host is told to SHED that many samples
+    3d88:  eax = -esi                 ; the excess
+    3d8c:  if (eax < 0x180) eax = 0x180   ; a floor of 384
+    3d98:  root[0xd254] = eax         ; extradelay
+    3d9e:  edx = 0xf4                 ; hwDelay pinned at 244
+    3da3:  jmp 3c03                   ; rejoin the normal path
+```
+
+So for `IODELAY > 240` the constructor pins `hwDelay = 244` (filtdelay 95, the
+maximum the field can express), sets `extradelay` to `max(excess, 384)`, folds
+it into `dmaDelay = 244 - 48 + extradelay`, and asks the host to drop the
+excess through the same parameter `vpcm_run`'s phase-II arms use.
+
+**Measured, and it was predicted before it was run.**  iodelay 241 connects,
+with the object's `+0xaa7c` reading 95 -- identical to 240.  That alone only
+refutes the refusal, because 240 and 241 give 95 either way, so the pin was
+put to a value where the two readings disagree:
+
+```
+  iodelay 400   unpinned ((400+6)>>2)+34 would be 135
+                pinned   ((244+2)>>2)+34            95
+                MEASURED                            95, and it connects
+```
+
+`slmodemd` implements the shed at `modem_main.c:957-968`, discarding that many
+input samples and decrementing `dev->delay`.  So ALSA's long-buffer 424 is not
+refused either; it runs at the pinned maximum.
+
+This is the only path on which `extradelay` is non-zero at construction, so it
+is also the only path on which `dmaDelay != hwDelay - 48`.
+
+### 1025. Every consumer of `+0x64`/`+0x68`/`+0x6c`, and why IODELAY and `addedDelay` are not the same thing
+
+The block is on the heap, so grepping a disassembly for `0x64(%reg)` measures
+nothing (finding 604).  The bound that works: the pointer lives in exactly two
+places -- vpcm root `+0x28` and V.34 object `+0xac3c` (finding 1020) -- so
+every consumer is in a function that loads one of them.  Scanning those and
+reading each by hand gives a closed list.
+
+| function | site | field | what it does |
+|---|--:|---|---|
+| `dp_runtime_create` | 0x59df-0x59ed | all three | zeroes them |
+| `vpcm_create` | 0x3c0c | `+0x64` W | `IODELAY + 4` |
+| | 0x3c09, 0x3c1e | `+0x68` W | `hwDelay - 48`, then `+ extradelay` |
+| | 0x3c2c | `+0x6c` W | **zero, explicitly** |
+| | 0x3d07 | `+0x64` R | `vpcm: Delays: HW %d, DMA %d` |
+| `vpcm_run` | 0x41a9, 0x4328 | `+0x6c` R | the two phase-II gates |
+| | 0x41dc, 0x4369 | `+0x6c` W | take the delay / give it back |
+| | 0x41e8-0x4389 | `+0x64`, `+0x68` R | the two `init %d, ext %d, add %d` lines |
+| `VPcmV34Create` | 0xaf19, 0xaf3b, 0xaf55 | `+0x64`, `+0x68` R | the delay conversion |
+| `VPcmV34InitiateRetrain` | 0x674a, 0x676c, 0x6786 | `+0x64`, `+0x68` R | the same conversion |
+| `VPcmV34SetDelays` | 0x6405-0x64c1 | `+0x64`, `+0x68` R | the same conversion, alone |
+| `VPcmV34Progress` | 0xcfb4, 0xcfd0 | `+0x6c` R | adds it into `+0x23c` and prints it |
+
+**The three V.34-side sites do the same three things**, which is why the
+conversion is safe to state once:
+
+```
+    obj +0xaa7c  filtdelay = ((params->hwDelay + 2) >> 2) + 0x22
+    obj +0x025c  f25c      = 0x610 - params->dmaDelay
+                 V92EchoCanceller::setEchoDelay(params->dmaDelay + 0x68)
+```
+
+**THE DISTINCTION, SETTLED.**  `MDMPRM_IODELAY` and `addedDelay` are not two
+names for one quantity and they are not even the same direction:
+
+- `MDMPRM_IODELAY` is **host to pump**, parameter 5, read **once, at
+  construction**, and it lands in `+0x64`/`+0x68`.
+- `addedDelay` (`+0x6c`) is **pump to host**, written **only** by `vpcm_run`'s
+  V.90 phase-II arms, and `vpcm_create` sets it to zero at 0x3c2c before the
+  call starts.
+
+They cannot be confused in the direction that matters, because **no reader of
+`+0x64` or `+0x68` ever reads `+0x6c`, and `VPcmV34SetDelays` reads `+0x64`
+and `+0x68` only.**  The V.34 `filtdelay` derivation is structurally incapable
+of seeing `addedDelay`.  The single V.34-side reader of `+0x6c`,
+`VPcmV34Progress`, adds it into a different field entirely.
+
+**Where they do meet**, and it is one variable: `extradelay`, root `+0xd254`.
+`vpcm_create` folds it into `dmaDelay`; `vpcm_run` copies it into `addedDelay`
+when phase II completes and zeroes it on restart.  It is 0 at construction for
+every in-range `IODELAY`, and the evidence for that is the ALLOCATION, not a
+test: root comes from `sysdep_malloc(0xd258)` at 0x3a42 and nothing writes
+`+0xd254` before 0x3c0f reads it on the in-range path.  `t_v34conn.c:1324`'s
+passing assertion `dmaDelay == IODELAY + 4 - 48` confirms it at one point --
+that file runs at `CFG_IODELAY` 0 -- and cannot speak for the range.  The one
+exception is finding 1024's over-cap path, which is the only writer of
+`+0xd254` before the read.  V.34 never reaches the arms that move it.
+
+### 1026. What a SIP/RTP backhaul should set `MDMPRM_IODELAY` to -- ENGINEERING JUDGEMENT on a derived range
+
+`slmodemd`'s socket driver -- the one a SIP deployment would inherit -- returns
+**0** with the real expression commented out beside it
+(`modem_main.c:682-686`).  Finding 1022 makes that a modem that cannot
+complete a V.34 handshake, with no diagnostic beyond *"Repeated info0 is
+detected"*.  Something must be chosen.  What follows separates the two kinds
+of claim, because only the first kind is recoverable from the object.
+
+**DERIVED.**  The field is samples at 9,600 Hz (1023).  Values below 86 do not
+connect and 86..240 all do (1022).  Above 240 the constructor pins the
+internal delay at its maximum and asks the host to shed the excess (1024).
+Within 86..240 the only quantity that changes is `filtdelay`, from 57 to 95,
+and every value connects at 33,600 each way (962, 1022).
+
+**JUDGEMENT: 20 ms of RTP is 192 samples in this field's units, and that is a
+floor, not an answer.**  The arithmetic is right and the near-match with
+`modemap_start`'s 192 is not numerology -- both are 20 ms at the datapump's
+rate, the same duration in the same unit.  But packetisation is one term of
+three.  A real RTP path adds a jitter buffer, conventionally two to three
+packets, and 8 kHz-to-9.6 kHz resampling on top.  60 ms one way is 576 samples
+and a round trip is over 1,100 -- **more than four times the largest value the
+field accepts**.  So the honest statement is that this field cannot express a
+SIP round trip at all, and choosing it is not a measurement problem.
+
+**JUDGEMENT: set 240, and do not compute anything.**
+
+- It is the largest value inside the cap, so it maximises `filtdelay` at 95
+  and with it the margin in the one race `MDMPRM_IODELAY` demonstrably
+  governs.
+- It stays inside the acceptance window, so finding 1024's negotiation never
+  fires at construction and a new host is not required to implement
+  `MDMPRM_UPDATE_DELAY` correctly before its first call can connect.
+- Reporting the transport's true latency instead is worse, not better: it
+  trips the over-cap path, which asks the host to discard several hundred
+  samples of buffered audio -- destructive on a jitter buffer, and to no end,
+  since the pinned `hwDelay` of 244 is what 240 gives anyway.
+- **216 is the conservative alternative** and the only value with an
+  end-to-end proof in this tree (`t_v34link`, finding 963).  Prefer it if a
+  tested constant matters more than margin.
+
+**JUDGEMENT: the cost of a high value is not zero, and the measurement that
+said it was cannot see it.**  Finding 962 established that `dmaDelay` is inert
+by pinning `hwDelay` and varying DMA by 760 with no change.  That ran on a
+noiseless simulated wire with no echo path, and `dmaDelay`'s only consumers
+are `V92EchoCanceller::setEchoDelay(dmaDelay + 0x68)` and `+0x25c`, the base
+the echo filter's lag is measured from (1025).  A harness with no echo cannot
+observe an echo canceller pointed at the wrong lag.  So *"inert for the
+handshake trajectory on a clean wire"* is derived; *"free on a real line"* is
+not, and is untested at either end of the range.  On an RTP path there is no
+analogue hybrid to cancel, which is why the risk is judged acceptable rather
+than measured away.
+
+**What is NOT settled.**  Whether any value in 86..240 is better than another
+on a lossy or echoing path; whether a SIP host that implements
+`MDMPRM_UPDATE_DELAY` faithfully could usefully report its true latency and
+let the pump negotiate it down; and whether the 384-sample floor in finding
+1024's over-cap path was chosen for a reason or is a constant nobody revisited.
