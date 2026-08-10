@@ -74,6 +74,7 @@ and passes: the first tells you nothing about the tests.
 """
 
 import argparse
+import atexit
 import json
 import os
 import re
@@ -351,6 +352,93 @@ def run_all(jobs=None):
     return 1 if tot[3] or tot[4] or tot[6] else 0
 
 
+#
+# REFUSE TO START ON A TREE SOMEBODY ELSE IS MUTATING.
+#
+# This file patches `src/` IN PLACE and restores in a `finally`.  That covers
+# an exception and a SIGTERM, and it does NOT cover the process being killed
+# outright -- a session teardown, a SIGKILL, a machine losing power.  What is
+# left behind is a source file holding a deliberate defect, and the labels are
+# things like "the shift count is not masked to five bits": indistinguishable
+# from a plausible reconstruction error.
+#
+# EVERY test binary links ALL of `src/` (mutsnap.py's CLOSURE note), so ONE
+# stray mutant anywhere makes EVERY suite's verdicts meaningless.  That is not
+# hypothetical: it produced `cadence RUN FAILED` and `v34datapump FAILED` on
+# two consecutive `--all` runs, while both suites passed standalone with
+# identical counts, and the temptation was to blame concurrency and lower
+# --jobs.  Lowering --jobs would have hidden it.
+#
+# So: check before running, and hold a lock while running.  Both are cheap and
+# both fail loudly.  Finding 705 is the hazard; this is the guard.
+#
+LOCK = os.path.join("test", "mutations", ".running")
+
+
+def live_mutants():
+    """Sources that hold a mutation's `replace` and not its `find`."""
+    out = []
+    try:
+        suites = json.load(open(SUITES))
+    except (OSError, ValueError):
+        return out
+    for name, entry in sorted(suites.items()):
+        if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
+            continue
+        path = "test/mutations/%s.json" % name
+        if not os.path.exists(path) or not os.path.exists(entry[0]):
+            continue
+        try:
+            text = open(entry[0]).read()
+            muts = json.load(open(path))
+        except (OSError, ValueError):
+            continue
+        for m in muts:
+            if not isinstance(m, dict) or "find" not in m or "replace" not in m:
+                continue
+            if m["find"] not in text and m["replace"] in text:
+                out.append((entry[0], m.get("label", "?")))
+    return out
+
+
+def preflight(shard):
+    """Refuse a dirty or already-running tree.  Shards are inside a copy."""
+    if shard:
+        return
+    bad = live_mutants()
+    if bad:
+        sys.stderr.write(
+            "mutate.py: REFUSING TO RUN -- this tree already holds %d live "
+            "mutant(s)\n" % len(bad))
+        for path, label in bad:
+            sys.stderr.write("    %s: %s\n" % (path, label))
+        sys.stderr.write(
+            "  A killed run left them behind.  Every test binary links all of\n"
+            "  src/, so any verdict measured now is meaningless.  Restore with\n"
+            "  `git checkout -- <path>` and check `git status` before retrying.\n")
+        sys.exit(2)
+    if os.path.exists(LOCK):
+        try:
+            pid = int(open(LOCK).read().strip())
+        except (OSError, ValueError):
+            pid = -1
+        alive = False
+        if pid > 0:
+            try:
+                os.kill(pid, 0)
+                alive = True
+            except OSError:
+                alive = False
+        if alive:
+            sys.exit("mutate.py: another run is in progress (pid %d).  Two "
+                     "runs mutating one tree produce nonsense; wait for it or "
+                     "kill it with SIGTERM so its restore runs." % pid)
+        sys.stderr.write("mutate.py: stale lock from pid %d, taking it\n" % pid)
+    with open(LOCK, "w") as f:
+        f.write("%d\n" % os.getpid())
+    atexit.register(lambda: os.path.exists(LOCK) and os.remove(LOCK))
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Apply mutations one at a time and report which the "
@@ -379,6 +467,7 @@ def main():
     ap.add_argument("--shard", metavar="I/N",
                     help=argparse.SUPPRESS)   # set by --jobs on its workers
     args = ap.parse_args()
+    preflight(args.shard)
 
     if args.all:
         return run_all(args.jobs)
