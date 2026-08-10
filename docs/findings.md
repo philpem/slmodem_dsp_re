@@ -34544,3 +34544,370 @@ nothing of it is committed except this finding.
 - **The 8,192-bit shim sink is the BER's ceiling**, not the link's: both
   endpoints fill it and the measurement stops there. A longer measurement
   needs a bigger `HARNESS_SHIM_BITS`.
+
+### 980. `vpcm_run` IS NOT THE MODEM: it is two queues, a bit pipe and a seventeen-arm dispatch, and everything else is behind ONE call
+
+The reason it could not be written as a unit is real -- `tools/closure.py
+vpcm_run --missing` is 268 symbols and 199,967 bytes -- but the reason is not
+that seventeen arms each drag in a standard.  It is that ONE call does:
+
+```
+    405b   VPcmV34Progress          7,278 bytes, and the whole receive chain
+    407a   VPcmV34GetCleanedSamples    32
+    43e9   VPcmV34GetCurrentSessionDP  79
+    43f7   VPcmV34GetCurrentRxBitRate  90
+    4407   VPcmV34GetCurrentTxBitRate 213
+```
+
+Five entry points, all in `VPcmV34Main.cpp`, all `extern "C"` (no mangling on
+the relocations).  `VPcmV34Progress` is where V.34, V.90, V.92 and K56Flex
+part company; `vpcm_run` never learns which of them ran except by asking
+`VPcmV34GetCurrentSessionDP` afterwards.
+
+So the plan that said "write the V.34 arms and guard the V.90/V.92 ones" does
+not fit the function.  **All seventeen arms are written.**  The guard belongs
+on the five-name callee boundary, which is where the unwritten span is.
+
+What the 1,662 bytes do, in order:
+
+```
+    nproc = ((inq.count + count) / 4) * 4        quantise to four samples
+    inq.count > 0 -> append `in` to inq and READ FROM inq INSTEAD  (0x3eac)
+    nproc > 0:
+      mute > 0 -> zero nproc samples into outq and count the mute down
+      else:
+        modem_get_bits -> txbits, widened byte-to-int IN PLACE, downwards
+        in[] -> fin[] as floats                             (filds/fstps)
+        prog = VPcmV34Progress(v34, fin, fout, nproc, rxbits, &nrx,
+                               txbits, &nbits)
+        VPcmV34GetCleanedSamples -> modem_debug_log_data(m, 3, ...)
+        fout[] -> outq as shorts, TRUNCATING (fnstcw / or $0xc00 / fistps)
+        clamp nbits to 1024 and keep it for the next block
+        rxbits[] -> bytes IN PLACE, upwards -> modem_put_bits
+        dispatch on prog; then on the mode change that produced
+    leftover of `in` -> inq;  count samples of outq -> `out`;  compact outq
+```
+
+Both in-place widenings are the object's, not a liberty: 0x3ffa stores an int
+at `0xb178(%ebx,%edx,4)` having just read a byte from the same array, walking
+DOWN so no store overwrites an unread byte, and 0x4120/0x412b do it upwards
+for the receive direction.  One 4 KB array serves both widths each way.
+
+### 981. The V.PCM root IS its own `struct dp`, and the 0xd258 bytes are mapped
+
+`vpcm_create` allocates 0xd258 and stores the block's own address back into
+it:
+
+```
+    3a42  movl   $0xd258,(%esp)     sysdep_malloc
+    3a76  mov    %ebx,0x10(%ebx)    root->dp.dp_data = root
+    3a93  mov    %edi,(%ebx)        root->dp.id      = id
+    3a90  mov    %ecx,0x4(%ebx)     root->dp.modem   = modem
+```
+
+so `dp` and `dp->dp_data` are ONE pointer for this datapump.  That is the same
+identification `t_v34link.c` makes from the other side when it writes
+`root[ep] = (char *)dp[ep]` and finds the V.34 object at `root + 0x2c`.
+
+It also explains a difference in `vpcm_run` that would otherwise look like two
+objects: the bit pipe and the phase-II arms reach the modem handle through
+`0x70(%esp)`, the `dp` ARGUMENT, and the connect arm reaches it through
+`%ebx`, the ROOT (0x4439, 0x4455).  Two spellings, one value.  The
+reconstruction keeps both where the object has them.
+
+The map, every offset a literal access in `vpcm_run` or `vpcm_create`:
+
+| offset | field | evidence |
+|---|---|---|
+| +0x00000 | `struct dp` (id, modem, status, op, dp_data) | 0x4422, 0x4439, 0x3e55 |
+| +0x00014 | last progress code | 0x415b `cmp %ecx,0x14(%ebx)` |
+| +0x00018 | mode: -1 error, 0 idle, 1 connected | 0x3edb, 0x4218 |
+| +0x0001c | bits wanted next block | 0x3fbd, 0x4111 |
+| +0x00020 | training-stall counter, limit 0xbb8 | 0x4270 |
+| +0x00024 | `MDMPRM_DSPINFO` | 0x3abf |
+| +0x00028 | `MDMPRM_DPRUNTIME`, `struct _tagModemParameters *` | 0x41a6 |
+| +0x0002c | `tagV34Object`, 0xac4c bytes | 0x403b `lea 0x2c(%ebx)` |
+| +0x0ac78 | `float fin[160]` | 0x400f |
+| +0x0aef8 | `float fout[160]` | 0x40d0 |
+| +0x0b178 | `int txbits[1024]` | 0x3ffa |
+| +0x0c178 | `int rxbits[1024]` | 0x4120 |
+| +0x0d178 | output queue: `int count; short buf[52]` | 0x3eba, 0x3eca |
+| +0x0d1e4 | input queue, same shape | 0x3e68, 0x3ea0 |
+| +0x0d250 | mute counter | 0x3ed5 |
+| +0x0d254 | the phase-II delay adjustment | 0x419c |
+
+**52 is measured, not guessed.**  Each queue's span to what follows it is 0x6c
+-- four bytes of count and 104 of samples -- which is `vpcm_create`'s
+`max_frag` cap of 48 plus the four the block quantisation can leave behind.
+And both bit arrays are exactly the 0x400 clamp at four bytes each.
+
+### 982. The seventeen arms, and only two of them do anything but set a word
+
+The jump table is at `.rodata+0x164`, 17 entries, `ja` to the default above
+0x10.  The three entries after it belong to another function.
+
+| code | target | what it does |
+|--:|---|---|
+| 0 | 0x430b | "Re-starting phase II": stall = 0, mode = 0, and GIVE BACK the delay |
+| 1 | 0x418f | "Phase II completed !!!": TAKE the delay |
+| 2, 3 | 0x4210 | nothing |
+| 4, 5 | 0x42fd | mode = 1 |
+| 6, 7 | 0x42f2 | mode = 0 |
+| 8, 9 | 0x428c | mode = -1 |
+| 10 | 0x42d4 | "Same Line Verification Status", and nothing else |
+| 11-15 | 0x4210 | nothing |
+| 16 | 0x428c | mode = -1 |
+| >0x10 | 0x4210 | nothing |
+
+and the dispatch runs ONLY when the code changed.  An UNCHANGED code 0 counts
+towards a 3,000-block deadline instead (0x4274, `cmp $0xbb8`), and on expiry
+sets mode -1 -- "vpcm: train timeout!" -- without resetting the counter, so
+every block after the deadline fails again.
+
+Then the mode CHANGE, not the mode, is what reaches the host:
+
+- to -1: "vpcm: Link Error", and the return value is **-1**, which is not a
+  `DPSTAT_*` code at all (0x42b8 is `mov $0xffffffff`).
+- to 1: read the session type and both rates, rewrite `dp.id` to 0x22, 0x5a or
+  0x5c, `modem_set_param(MDMPRM_TX_RATE)` then `(MDMPRM_RX_RATE)`, return
+  DPSTAT_CONNECT.  The V.34 id is the **`else`** and not a third compare.
+- to 0: nothing but the store.
+
+**WHICH ARMS ACTUALLY FIRE IS MEASURED, NOT INFERRED.**  `t_vpcmrun.c` reads
+root +0x14 -- the code the dispatch saw -- after every one of the 4,000
+blocks, and the connecting call produces exactly
+
+```
+    codes {0, 1, 2, 3, 4}          both endpoints, all four runs
+```
+
+so five of the seventeen arms are exercised and twelve are not: 5, 6, 7, 8, 9,
+10 and 16, plus the five that fall through to the default.  Arm 10's "Same
+Line Verification Status" and all three link-error codes are among the twelve.
+
+**And arms 0 and 1 FIRE WITHOUT THEIR BODIES RUNNING**, which is a distinction
+the code-set alone would hide: both phase-II arms are gated on root +0xd254,
+and it is ZERO in this configuration, so neither asks the host to move the
+delay and `addedDelay` is still what `vpcm_create` left.  Both are asserted,
+so "arm 0 fired" cannot be read as "the delay adjustment is tested".
+
+The 0x5a and 0x5c session-type stores, the mute path, the input-residue copy
+and the training timeout are likewise read out of the disassembly and reached
+by nothing this tree drives -- finding 987 measures which, by mutation, rather
+than asserting it.
+
+### 983. `_tagModemParameters` +0x6c is the delay `vpcm_run` takes and gives back, and the format string names it
+
+It was `unnamed_006c` because `dp_runtime_create` and `vpcm_create` only ever
+zero it.  `vpcm_run`'s phase-II arms are its only real users, and they are a
+matched pair:
+
+```
+    arm 1  extradelay != 0 && params->addedDelay == 0
+             modem_set_param(m, MDMPRM_UPDATE_DELAY,  extradelay)
+             params->addedDelay = extradelay
+             "vpcm: P2 FINISHED: increase delay!! init %d, ext %d, add %d"
+    arm 0  params->addedDelay > 0 && extradelay != 0
+             modem_set_param(m, MDMPRM_UPDATE_DELAY, -extradelay)
+             params->addedDelay = 0
+             "vpcm: P2 RESTART: decrease delay!! init %d, ext %d, add %d"
+```
+
+The two strings are the SAME pair `vpcm: Delays: HW %d, DMA %d` prints, plus a
+third: `init` is +0x064, `ext` is +0x068, `add` is this field.  Each arm is
+gated on the other having happened, `> 0` at 0x432b is signed, and the
+quantity is root +0xd254.  So it is "how much extra delay is currently taken",
+and the name is the object's own word for it.
+
+Renamed `addedDelay`.  `src/core/dp_param.c` was the only other user.
+
+### 984. THE FOUR-WAY COMPARISON, AND OUR `vpcm_run` CARRIES THE CALL
+
+`test/unit/t_vpcmrun.c`.  One V.8 negotiation, snapshotted so that all four
+runs start from one state, then the same 4,000-block V.34 call four times with
+our `vpcm_run` at neither endpoint, at each, and at both:
+
+```
+  blob-blob originate connect 1591 shape 1561 rc blk 1584 x1  rates 14/14
+            gets 2409 puts 2409  0 errors over 6112 bits, lag 0
+  blob-blob answer    connect 1590 shape 1562 rc blk 1582 x1  rates 14/14
+            gets 2410 puts 2410  0 errors over 5572 bits, lag 27
+  ours-blob   ... identical ...
+  blob-ours   ... identical ...
+  ours-ours   ... identical ...
+```
+
+Every number in finding 963's transcript, reproduced with ours at both ends.
+
+**AND IT IS COMPARED PER BLOCK, NOT ONLY AT THE END.**  A run that diverged at
+block 900 and re-converged by block 4,000 passes every final literal, so each
+run records an FNV-1a digest of (return code, 48 output samples) for every
+block and every endpoint, and the claim is that all 8,000 are identical to the
+oracle's -- with the first differing block named when they are not.
+
+**AND THE DISPATCH'S INPUT AS WELL AS ITS OUTPUT.**  The digest sees what
+`vpcm_run` produced; root +0x14 -- the progress code it dispatched ON -- is
+read after every block too, and both the SET of codes (0x1f, finding 982) and
+a digest of the whole 4,000-long sequence are compared across the four runs.
+Without it "which arms ran" would rest on mutation survival, which is evidence
+about the test and not about the object.
+
+**AND THE MIXING IS ITSELF ASSERTED.**  Every claim above would hold if the
+selector had been ignored and the blob driven four times.  An endpoint driven
+by our code lands on `harness_modem_route_ours[]` and one driven by the blob's
+on `harness_modem_route_ref[]`, so "this endpoint's bits went through the
+`ours` shim exactly when this endpoint was ours" is checked for all eight.
+
+**The bit counts are per endpoint and never for the pair** -- finding 965's
+trap, which reads zero over zero bits either way.
+
+### 985. A WEAK DECLARATION IS THE GUARD, AND A PLAIN ONE FOLDS THE CHECK AWAY
+
+The five unwritten entry points are declared
+
+```c
+    #define DSPLIB_VPCM_UNWRITTEN  __attribute__((weak))
+    int VPcmV34Progress(...) DSPLIB_VPCM_UNWRITTEN;
+```
+
+so a binary that does not define them links with the references resolved to
+ZERO rather than failing.  That is what lets the other 77 test binaries --
+none of which calls `vpcm_run` -- link unchanged, and it is why this tree does
+NOT define a symbol named after 7,278 bytes of the object it has not written:
+a stub called `VPcmV34Progress` would make `debugaudit.py --missing` and
+`compare.py` count that span as reconstructed.  `vpcm_run` tests each pointer
+and takes `vpcm_notwritten()` when it is null, on `v34hshak.c`'s
+`t3m_notwritten` rule -- always record a code, and stop unless a test has said
+by name (`vpcm_unwritten_reset`) that it will read the code afterwards.
+
+**AND THE TRAP, WHICH COST A RUN.**  `t_vpcmguard.c` asserts that all five are
+absent from its own binary.  With a PLAIN declaration GCC folds `f == 0` to
+false at compile time -- a function's address is never null -- so the first
+version reported all five PRESENT in a process that had, in the same run, just
+died on their absence.  Five checks, five wrong answers, and the two halves of
+the file contradicting each other in one output.  The attribute has to be on
+the declaration in EVERY translation unit that compares, not only in the one
+that calls.
+
+The abort is watched rather than argued about: `t_vpcmguard.c` forks, calls
+`vpcm_run` on a hand-built root, and requires `WIFSIGNALED` with `SIGABRT`.  A
+guard that returned quietly would leave a `.process` running and carrying
+nothing, and its output -- a buffer of silence -- is exactly what a modem that
+correctly transmitted nothing produces.  gates.md's shape, in the worst place
+in the object for it.
+
+### 986. FINDING 968's SEGFAULT IS A NULL `short *` IN `modulatevector`, AND THE HANDSHAKE INSTALLS IT THIRTY BLOCKS BEFORE DATA MODE
+
+Finding 968 measured that handing `t_v34conn`'s direct-drive fixture the
+working configuration crashes the BLOB-BLOB oracle at block 21,707, once the
+originator reaches the DATA branch, and concluded that `vpcm_run` is
+load-bearing for state the fixture never sets up.  It is, and this is which
+state.
+
+Reproduced (`CFG_IODELAY` 0 -> 216, `NBLOCK` 1600 -> 22000, a throwaway edit,
+reverted) under gdb:
+
+```
+  Program received signal SIGSEGV
+  0x080d75fa in ref_modulatevector ()
+  => 0x80d75fa <ref_modulatevector+1338>: movswl 0x0(%ebp,%ecx,2),%edx
+     ebp 0x0
+```
+
+and `%ebp` comes from one place:
+
+```
+    5a286:  mov    0x2604(%ecx),%ebp      ; ecx = the V.34 object
+    5a2a4:  mov    %ebp,0x40(%esp)
+    5a37a:  movswl 0x0(%ebp,%ecx,2),%edx  ; and here it dies
+```
+
+**Object +0x2604 is the transmit shell context's +0x24** -- the transmit
+context is at +0x25e0 (`V34_SHELL_TX` = 0x1be0 past the receive one at +0xa00,
+`include/dsplib/v34shell.h`), so this is `shell_tx + 0x24`, a `short *` the
+modulator indexes.  It is the ONLY access to that offset in the whole 1.2 MB:
+nothing writes it through an `obj+0x2604` form, so its writer reaches it
+through the shell pointer.
+
+**And in a call that connects it is installed DURING the handshake, not on the
+data branch.**  `t_vpcmrun.c` samples it every block and asserts the number:
+
+```
+  originate  installed block 1561   mode word turns 1 at 1591
+  answer     installed block 1562   mode word turns 1 at 1590
+```
+
+So the direct-drive fixture's originator reached txstate 74 and put +0x2218
+back to 0 -- finding 901's DATA branch -- WITHOUT ever passing through
+whatever installs that pointer, and the first `modulatevector` on the data
+path dereferences null.  The fixture drives `modem_serrint` and `datapumpv34`
+directly and never calls `VPcmV34Progress`, which is the difference.
+
+This is now an assertion rather than an anecdote: the pointer being non-null,
+its block, and its being before the mode word are checked for both endpoints
+and across all four runs.
+
+### 987. Every claim in `t_vpcmrun.c` and `t_vpcmguard.c`, and the mutations watched failing them
+
+218 checks in seven sections -- 199 in `t_vpcmrun` and 19 in `t_vpcmguard`.
+Eighteen mutations, each applied by hand to `src/pump/v90/vpcm.c`, built, run
+and reverted, with the tree re-run green afterwards.  Finding 966's shape.
+
+| mutation | t_vpcmrun | t_vpcmguard |
+|---|--:|--:|
+| the mute path is always taken | **78** | **4** |
+| `nbits` is not carried to the next block | **20** | 0 |
+| output queue drained one sample late | **17** | 0 |
+| the connect arms go to mode 0 | **16** | 0 |
+| the tx widening loop runs upward | **12** | 0 |
+| the connect report is not edge-triggered | **12** | 0 |
+| the progress code is remembered wrong | **8** | 0 |
+| the two rate parameters are set in the other order | **8** | 0 |
+| float -> short rounds instead of truncating | **4** | 0 |
+| the session-type fallback picks V.90 | **4** | 0 |
+| the guard returns quietly instead of stopping | 0 | **3** |
+
+The counts are from the sweep run before the last twelve assertions were
+added, so they are a floor and not the current numbers.
+
+**AND THE SEVEN THAT SURVIVED, WHICH ARE THE RESULT AND NOT THE GAP.**  Each
+is EQUIVALENT under the one configuration the host contract allows, and each
+corresponds to a path `vpcm.c` already annotates as unexercised -- so the
+sweep confirms those annotations empirically instead of contradicting them:
+
+| survivor | why it cannot be seen |
+|---|---|
+| quantisation dropped | `count` is 48 and the queue starts empty, so `(0+48)/4*4 == 48` for ever |
+| input residue never copied back | the leftover is therefore always zero |
+| the float conversion reads the caller's buffer, not the queue | `in` is therefore never rebound |
+| the output queue is not compacted | `0 + 48 - 48 == 0` |
+| the rx bit mask dropped | `VPcmV34Progress` only ever writes 0 or 1 into `rxbits` -- a measurement about the callee, not about the mask |
+| the phase-II restart arm forgets to reset the stall counter | arm 0 DOES fire, but the stall counter never approaches its deadline either way |
+| the training timeout is off by one | same: the counter never approaches 3,000 |
+
+The first four are the same fact four times: **the host contract's `frag` of
+48 is a multiple of four, so the whole queueing apparatus is dead code on
+every driver `slmodemd` has.**  It is written from the disassembly and it is
+proved by nothing green.
+
+`t_vpcmguard` sees exactly one of the eleven, and that is what it is for.
+
+### 988. What this batch did not do
+
+- **`vpcm_create`, `vpcm_delete` and `vpcm_op` are still unwritten** -- 969,
+  110 and 24 bytes.  `vpcm.c` in this tree holds `vpcm_run` alone, and every
+  test builds its objects with `ref_vpcm_create`.
+- **The five `VPcmV34*` entry points are the blob's**, and always were.  What
+  is under test is `vpcm_run`'s own work; a mixed run through
+  `VPcmV34Progress` is not possible until `VPcmV34Main.cpp` is written.
+- **`vpcm_run` is not `static` here** and it is in the object.  It loses the
+  keyword for `v8_create`'s reason: a test calls it by name.
+- **No mutation suite was registered** in `test/mutations/suites.json` and
+  `test/harness/` was not touched.  **But the snapshot is stale anyway**:
+  `src/`, `include/` and `Makefile` are all in `mutsnap.py`'s CLOSURE, so any
+  batch that writes a line of source restales all 63 suites whatever it does
+  to the harness.  It needs a re-record.
+- **`t_v34conn.c` is unchanged.**  Finding 986's reproduction was a throwaway
+  edit, reverted, and nothing of it is committed except the finding.
+- **The 8,192-bit shim sink is still the BER's ceiling**, so both endpoints
+  fill it and the measurement stops there -- finding 967's note, unchanged.

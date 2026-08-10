@@ -7,14 +7,14 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [###########.......................]  33.4%    245085 bytes, 540 symbols
-  tested      [##################################] 100.0%    245064 bytes, 535 of 540 that can be
+  translated  [###########.......................]  33.6%    246747 bytes, 541 symbols
+  tested      [##################################] 100.0%    246726 bytes, 536 of 541 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 18 of ours (7987 bytes).
+  the file-local symbols too -- 19 of ours (9649 bytes).
 
   translated, alias exists, and NOT tested:
     _ZN5QueueIfE5resetEv                             13 bytes
@@ -74,6 +74,8 @@ dsplibs.o reconstruction coverage
     v34tx1_xmitmp
     v8_handshak_agc
     v8_handshak_demod
+    vpcm_unwritten
+    vpcm_unwritten_reset
 
   what is left, by translation-unit span:
     VPcmV34Main.cpp +72                           269056 bytes   654 symbols
@@ -85,7 +87,7 @@ dsplibs.o reconstruction coverage
     Fdspkrnl.c +13                                  7691 bytes    30 symbols
     b103.c +2                                       4885 bytes    28 symbols
     class1.c                                        4626 bytes    14 symbols
-    vpcm.c                                          2883 bytes     5 symbols
     class1rx.c                                      2495 bytes     5 symbols
     v32.c                                           1691 bytes     5 symbols
+    dp_init.c +2                                    1452 bytes     9 symbols
 ```
