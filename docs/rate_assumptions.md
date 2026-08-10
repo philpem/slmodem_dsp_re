@@ -128,6 +128,54 @@ V.25 figure in milliseconds precisely because the scaling assumes 8 kHz.
 period drifts. At 7200 Hz (where the B103 FSK core runs, R-8) the same config
 would give 500 ms instead of 450. Finding 19.
 
+## 🔴 R-11 — V.34's handshake counts in FOUR-SAMPLE TICKS, which are 2400-baud symbol periods only at 9600 Hz
+
+The V.34 microstate machine steps once per four received samples, and four
+samples at 9600 Hz **is** one symbol period at 2400 baud, V.34's reference
+symbol rate. The object never distinguishes the two readings, because at the
+only rate it runs at they are the same quantity — `vpcm_create` guards
+`srate == 9600` exactly at 0x3a1c. Findings 1040–1045.
+
+Three constants ride on that tick and they do **not** move together:
+
+```
+    filtdelay = ((hwDelay + 2) >> 2) + 34         V.34 object +0xaa7c
+                 \______ samples -> ticks         \__ the pump's own
+                                                      pipeline latency,
+                                                      136 samples
+    arm 47/55 leave when counter + 1 > 0x5f       i.e. at 96 ticks
+                                                  = 384 samples = 40.000 ms
+```
+
+- **`>> 2` is the STEP SIZE, not a rate conversion.** It divides by the number
+  of samples in a tick. Identical in form to the object's own
+  samples-to-symbols idiom, whose 2400 arm is literally `>> 2`
+  (`v34tx1_ppseg` 0x680ac).
+- **`+ 34` is SAMPLE-relative.** 136 samples of internal filter/pipeline
+  delay; unchanged in samples if the filters keep their tap counts, so the
+  constant changes only because the tick does.
+- **`0x5f` is TIME-relative and is the one that MUST change.** 96 ticks is the
+  40 ± 1 ms tone phase-reversal turnaround of V.34 §11.2.1.1.3 and §11.2.1.2.5,
+  measured *at the line terminals* — which is why the pipeline latency is
+  preloaded into the counter in the first place. At 8000 Hz with a four-sample
+  tick, 40 ms is **80** ticks, so `0x5f` becomes `0x4f`. Get this wrong and the
+  reversal lands outside the Recommendation's ±1 ms. **There are three
+  `0x5f` sites** — 0x6685d (arms 47/56), 0x65ba4 (arm 55) and 0x66027 (arm 58)
+  — and only the first two are the turnaround; arm 58's is unidentified and
+  must move with them anyway.
+- `0x18c` in arm 49's round-trip estimate has the shape of §11.2.1.2.4's
+  "minus 40 ms" in samples, but it is 396 where 40 ms is 384. The identification
+  is **not** made: understand the twelve samples before rescaling it.
+
+**Retarget:** decide the tick first — keeping four samples keeps `>> 2`
+verbatim and forces `0x5f`; keeping the tick a 2400-baud symbol is impossible
+at 8000 Hz, since 8000/2400 = 3.333. Either way this is a change to the
+block-versus-symbol relationship, not a rescale of the delay constants.
+
+**Latent, and to be reproduced rather than fixed:** `v34tx1_ppseg` at 0x68154
+adds `filtdelay` (ticks) to a count of symbols at the *negotiated* baud. The
+sum is dimensionally right only at 2400. Finding 1043.
+
 ## 🟡 R-7 — `dp_wrapper`'s rate table is a fixed list of six pairs
 
 `dp_wrapper_create` dispatches on literal rate pairs among {8000, 9600, 48000}

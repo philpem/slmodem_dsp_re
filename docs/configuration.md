@@ -262,13 +262,41 @@ not merely decorative:
     V92EchoCanceller::setEchoDelay(dmaDelay + 0x68)
 ```
 
+### What `filtdelay` IS — DERIVED
+
+It is a total **pipeline latency**, in units of one microstate step, and a
+microstate step is four samples at 9600 Hz (finding 1040):
+
+```
+    filtdelay  =  the HOST's I/O latency in steps  +  34 steps
+                                                      \_ the pump's OWN
+                                                         internal latency,
+                                                         136 samples
+```
+
+V.34 §11.2.1.1.3 and §11.2.1.2.5 require the tone phase-reversal turnaround to
+be 40 ± 1 ms **measured at the line terminals**. The state machine sees an
+incoming reversal one pipeline-latency late and its own reversal appears one
+pipeline-latency after it emits it, so it preloads its counter with
+`filtdelay` and counts to a fixed **96 steps = 384 samples = 40.000 ms**.
+Findings 1041 and 1042; `0x5f` is that 96 minus one, because the compare is on
+`counter + 1`.
+
 ### The working range — DERIVED, measured to the sample
 
 A V.34 answerer entering microstate 47 `TX_PHASE2_ANS` must count from
 `filtdelay` up past `0x5f` before its receiver declares all-ones on the line
-the caller has correctly gone silent on. **The wait is `0x5f - filtdelay`, so
-a LARGER I/O delay is a SHORTER wait** — that is the whole mechanism, and it is
-why the knob works in the direction it does (findings 960, 1022).
+the caller has correctly gone silent on. **The wait is `96 - filtdelay` steps,
+so a LARGER I/O delay is a SHORTER wait** — a larger I/O delay is already part
+of the 40 ms. That is the whole mechanism, and it is why the knob works in the
+direction it does (findings 960, 1022, 1041).
+
+> Findings 960 and 1022 say the wait is `0x5f - filtdelay`, which is the same
+> thing counted the other way: the compare is `n = counter + 1;
+> if (n <= 0x5f) stay`, so the state is left on the step at which `n` would be
+> 96 and `counter` is never seen holding 96. Whether that exiting step is
+> "sat out" is a convention. What is *not* a convention is the total from the
+> reference event, which is 96 steps whatever `filtdelay` is — finding 1041.
 
 | `MDMPRM_IODELAY` | `filtdelay` | V.34 |
 |---|--:|---|
