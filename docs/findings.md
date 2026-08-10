@@ -33185,13 +33185,16 @@ V.8's handover claim failed at 34 against -1 while everything else passed.
 
 61 checks in three sections. Named by what they broke.
 
-| mutation | what failed |
-|---|---|
-| `CFG_IODELAY` 216 -> 40 | mode 1 -> 2 on both endpoints, both rate words 14 -> 0, `repeats` 0 -> 2, `filtdelay` 89 -> 45, DATAXMIT lost, and every bit claim on both endpoints |
-| `pattern[other]` -> `pattern[ep]` in the BER alignment | both "locked to the FAR end's pattern" fail while the run is otherwise identical, which is the point |
-| `harness_modem_route_add` returning the existing index on a duplicate instead of -1 | "a repeat registration is refused" fails -- the check that stands between this file and finding 965's vacuous BER |
-| `V34_BLOCKS` 4000 -> 1600, which is `t_v34conn`'s length | the connection never happens inside the run: 1,591 blocks of startup leaves nothing for data, so the "enough bits" claims fail first |
-| routing `set_param` reverted to the unrouted shim | "asking the modem for DP_V34" fails at -1, on both endpoints; this one was found for real rather than injected |
+Each was applied by hand, built, run and reverted, and the tree was re-run
+green afterwards.
+
+| mutation | checks failed | what failed |
+|---|--:|---|
+| `CFG_IODELAY` 216 -> 40 | **24 of 32** | mode 1 -> 2 on both endpoints, both rate words 14 -> 0, `repeats` 0 -> 2, `filtdelay` 89 -> 45, DATAXMIT lost, and every bit and BER claim on both |
+| `pattern[other]` -> `pattern[ep]` in the BER alignment | **4 of 32** | "locked to the FAR end's pattern" and "NOT to its own", both endpoints. The run is otherwise byte-identical, which is the point: nothing else can see it |
+| `harness_modem_route_add` returning the existing index on a duplicate instead of -1 | **1 of 10** | "a repeat registration is refused" -- the one check standing between this file and finding 965's vacuous BER |
+| `V34_BLOCKS` 4000 -> 1600, which is `t_v34conn`'s length | **6 of 32** | the connection never happens inside the run: 1,591 blocks of startup leaves nothing for data, so the "enough bits" and BER claims go first |
+| routing `set_param` reverted to the unrouted shim | **2 of 19** | "asking the modem for DP_V34" at -1 against 34, both endpoints. Found for real rather than injected -- it was the first run's actual failure |
 
 ### 967. What this batch did not do
 
@@ -33209,6 +33212,12 @@ V.8's handover claim failed at 34 against -1 while everything else passed.
 - **No mutation suite was registered** in `test/mutations/suites.json`, and
   `tools/mutate.py` was not touched. The mutations above were applied by hand,
   built, run and reverted.
+- **BUT THE MUTATION SNAPSHOT IS STALE**, for finding 907's reason: this batch
+  changed `test/harness/runtime.c` and `test/harness/harness.h`, and the
+  harness is in every suite's build. Nothing in `make phase` opens the
+  snapshot, so nothing will say so; it needs a re-record, and this batch
+  deliberately did not run one because a full re-record was already in flight
+  elsewhere.
 - **The 8,192-bit shim sink is the BER's ceiling**, not the link's: both
   endpoints fill it and the measurement stops there. A longer measurement
   needs a bigger `HARNESS_SHIM_BITS`.
