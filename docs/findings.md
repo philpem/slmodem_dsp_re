@@ -36246,3 +36246,96 @@ made to compare is left out and the attempt recorded, and this is the record.
 The four things the next batch starts from are above: the two saved pointers,
 the double memset, the third argument, and the twelve callees that all exist
 now.
+
+**SUPERSEDED IN ITS CONCLUSION BY FINDING 1118**, which is left here rather
+than edited because the reasoning was right and the conclusion was not: the
+graph does not have to be built, it can be BORROWED, and findings 800-806
+already said so.
+
+### 1118. THE FIXTURE `VPcmV34Create` NEEDED WAS ALREADY IN THE TREE, AND IT IS ONE GRAPH AND NOT TWO
+
+Finding 1117 stopped at "a differential test needs the whole V.PCM graph
+standing up before the call".  That is true and it is not a blocker, because
+**nothing has to stand it up**.  Findings 800-806 measured that the blob's own
+constructor is aliasable and that a blob-constructed object is a valid
+differential fixture; `test/unit/t_v34conn.c` already builds one and already
+carries the derived configuration (findings 820-825, `docs/configuration.md`).
+So:
+
+```
+    ref_dp_vpcm_init()                            registers the ops table
+    ops->create(m, 34, caller, 9600, 48, ops)     builds the whole graph
+    ... and VPcmV34Create is driven on THAT
+```
+
+**AND FINDING 803'S CONGRUENCE PROBLEM DOES NOT ARISE, BECAUSE THERE IS ONLY
+ONE GRAPH.**  Two constructions come back at 125 different addresses and every
+pointer field then differs for a reason that is not a defect.  One graph, with
+finding 805's three-pass shape applied to a constructor instead of to
+`datapumpv34`, has no such problem:
+
+```
+    snapshot every live region
+    run OURS       -> copy every region away
+    restore        -> and CHECK that the restore restored
+    run the BLOB's -> compare region by region
+```
+
+Both sides run on the SAME memory at the SAME addresses, so every pointer
+field is identical by construction and no field is excluded.
+
+**THE COMPARISON IS THE WHOLE HEAP GRAPH.**  `harness_alloc_live_set`
+enumerates every live allocation with its size, so a store into a region the
+test could not have named is a failure and not a silence.  That is the one
+thing finding 806's uncommitted probe needed a `malloc` interposer for, and the
+harness has had it since `t_v34conn.c` landed.  **126 live regions** on a
+single endpoint.
+
+#### THE THREE MEASUREMENTS, all on the blob's own code
+
+**1.  `VPcmV34Create` IS IDEMPOTENT TO WITHIN ONE BYTE.**  This is the answer
+to "you are testing the re-initialisation path, not the from-`malloc` path;
+does that leave an arm undriven?"  `ops->create` has already called
+`ref_VPcmV34Create` once by the time it returns, so a second call is a
+re-initialisation -- and over the whole 126-region graph it moves
+
+```
+    a second VPcmV34Create at the SAME side    1 byte     root +0x34
+    and at the OTHER side                     16 bytes   in 6 regions
+```
+
+One byte.  So the virgin path and the re-init path leave the same state
+everywhere except `v34obj + 0x08`, and the bound on any claim this fixture
+makes is that single named byte rather than an unmeasured hope.  (`root +0x34`
+is `v34obj + 0x08`; the likeliest reading is that `vpcm_create` writes it
+AFTER `VPcmV34Create` returns, which a re-run then undoes -- a caller effect
+and not a virgin-only arm.  Not established, and stated as such.)
+
+**2.  THE SIDE ARGUMENT HAS TO MATCH THE ONE `create` USED, or the
+measurement is finding 803's and not this one.**  `vpcm_create` does
+`test %edx,%edx / sete` on `caller`, so a caller of 1 gives a SIDE of 0.  The
+first run of this probe passed side 1 against a caller of 1 and reported 14
+bytes -- which is finding 803's caller-configured 14, arrived at by accident.
+Getting it right gives 1.  The 16 bytes the other side moves are 803's 14 seen
+across the whole graph rather than only the root, and they are in six regions:
+`+0x48` of a 2-byte pair, `+0x41c` of a 4-byte one, `+0x611c` (which
+`VPcmFloModem.cpp` names `pcmSessionType`), four singles in the root's
+`0xabf2..0xabfe` run, and two more.  A modest extension of 803, which only
+looked at the root.
+
+**3.  THE COMPARISON WAS MADE TO FAIL.**  Finding 805's pass 3: run both
+sides, flip one byte of the V.34 object, require the comparison to report it,
+put it back and require it to go quiet.  Without that pass the whole file could
+be comparing an image against itself.
+
+#### What this changes for whoever writes it
+
+The blocker recorded in 1117 is gone and what is left is the FUNCTION: 508
+straight-line lines, twelve callees that all exist, and instant feedback --
+the test either agrees over 126 regions or names the first differing byte, its
+region and its offset.  `src/pump/v34/v34pcmmain.cpp` is the home, since it is
+the `.cpp` that already holds `VPcmV34InitiateRetrain` as an `extern "C"`
+export and already includes `K56FlexFloModem.h`,
+`V90ConstellationDesigner.h`, `V92EchoCanceller.h` and `VPcmFloModem.h` -- and
+already asserts `p3548`, `pac18` and `pac3c`, which are exactly the two
+pointers the function saves across its memset and the argument it stores.
