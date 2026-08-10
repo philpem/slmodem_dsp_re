@@ -42,6 +42,7 @@ void ref_fir_ctor(void *self, unsigned n, float *c, unsigned b)
 void ref_fir_dtor(void *self) asm("ref__ZN8FloatFIRD1Ev");
 
 void ref_selectFilter(void *self) asm("ref__ZN12V90PreFilter12selectFilterEv");
+void ref_reset(void *self) asm("ref__ZN12V90PreFilter5resetEv");
 void ref_setParamEia6(void *self) asm("ref__ZN12V90PreFilter12setParamEia6Ev");
 int ref_autoSelection(void *self) asm("ref__ZN12V90PreFilter13autoSelectionEv");
 int ref_isV90WithEia6(const void *self)
@@ -927,11 +928,85 @@ run_setparam(void)
 	return diff_end();
 }
 
+/*
+ * V90PreFilter::reset -- FloatFIR::reset, two stores, and the type 1 bank at
+ * gain 0 (task #88).
+ *
+ * THE FIR IS THE POINT.  A whole-object comparison would pass on a `reset`
+ * that never called `FloatFIR::reset` at all, because both sides start from
+ * the same fill and neither writes a coefficient it did not already have --
+ * so the check that the FIR really was reloaded is that `fir.coefficients`
+ * comes out pointing at `preFilterCoefType1` ROW 0 on the blob's side, read
+ * against the blob's OWN copy of the table.  The two copies are at different
+ * addresses, which is exactly why the check is worth making: our side must
+ * hold ours and the blob's must hold the blob's, and neither may hold the
+ * other's.
+ *
+ * The gain and the reference loop are asserted by value rather than only
+ * compared: two never-reset objects agree with each other (finding 1105), and
+ * -1 is the one value in `refLoop` that a random fill will not produce twice
+ * in a row by accident.
+ */
+static int
+run_reset(void)
+{
+	int trial, mode;
+	int saw_moved = 0;
+
+	diff_begin("V90PreFilter::reset");
+
+	for (mode = 0; mode < 4; mode++)
+		for (trial = 0; trial < 8; trial++) {
+			long tag = (long)mode * 100 + trial;
+			unsigned char before[SLOT];
+
+			setup(trial + 4000, mode);
+
+			/* Something other than what reset must produce. */
+			P(0)->gain = P(1)->gain = 17;
+			P(0)->refLoop = P(1)->refLoop = 5;
+
+			memcpy(before, slot[1], SLOT);
+
+			P(0)->reset();
+			ref_reset(slot[1]);
+
+			compare("after reset", (int)tag);
+			diff_eq_int("gain (%ld)", P(1)->gain, 0, tag);
+			diff_eq_int("refLoop (%ld)", P(1)->refLoop, -1, tag);
+
+			/*
+			 * The FIR was reloaded, and from the FIRST ROW: the
+			 * blob's coefficient pointer is the blob's own table
+			 * base and ours is ours.
+			 */
+			diff_eq_int("the blob took its own table (%ld)",
+				    P(1)->fir.coefficients == &ref_coef1[0][0],
+				    1, tag);
+			diff_eq_int("and ours took ours (%ld)",
+				    P(0)->fir.coefficients
+				    == &V90PreFilter::preFilterCoefType1[0][0],
+				    1, tag);
+			diff_eq_int("twenty taps (%ld)",
+				    (long)P(1)->fir.taps, 20, tag);
+
+			if (memcmp(before, slot[1], SLOT) != 0)
+				saw_moved = 1;
+
+			teardown();
+		}
+
+	diff_eq_int("reset changed the object", saw_moved, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 
+	rc |= run_reset();
 	rc |= run_display();
 	rc |= run_iseia6();
 	rc |= run_autoselection();

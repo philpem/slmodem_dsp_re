@@ -25,6 +25,14 @@
 #include <stddef.h>
 
 #include "dsplib/debug.h"
+/*
+ * For `V90Parameters` -- the NAMED 0x558 map, not `V90PreFilter.h`'s 0x504
+ * word block.  Two definitions of that class exist in this tree and no
+ * translation unit may include both (finding 1112); this one takes the named
+ * map, because the slot `reset` copies has a name in it and a numeric index
+ * would throw that away.
+ */
+#include "dsplib/V90Parameters.h"
 #include "dsplib/V90ConstellationDesigner.h"
 
 /*
@@ -40,10 +48,41 @@
 	    ((int)__builtin_offsetof(V90ConstellationDesigner, field) \
 	     == (off)) ? 1 : -1]
 
+V90CD_OFF(params,    0x00, params);
+V90CD_OFF(short_0a,  0x0a, short0a);
+V90CD_OFF(short_0c,  0x0c, short0c);
+V90CD_OFF(short_0e,  0x0e, short0e);
+V90CD_OFF(short_10,  0x10, short10);
+V90CD_OFF(word_24,   0x24, word24);
+V90CD_OFF(word_48,   0x48, word48);
 V90CD_OFF(maxRate, 0x4c, maxrate);
 V90CD_OFF(minRate, 0x50, minrate);
 typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
 #endif
+
+/*
+ * reset -- seven stores, no branch, no call, no diagnostic.
+ *
+ * The whole body is `movl $0x0,0x48(%eax)`, four `movw $0x0` and two copies,
+ * so the only thing that is not obvious from the disassembly is the widths,
+ * and those are the store encodings: 0x48 and 0x24 are `movl`, the four at
+ * +0x0a..+0x10 are `movw` with a `66` prefix.
+ *
+ * The parameter read is the last thing the object does and the FIRST thing
+ * the compiler scheduled -- `mov (%eax),%ecx` is the second instruction --
+ * which is register pressure and not statement order (CLAUDE.md's "free, so
+ * ignore it").  The order below is the store order.
+ */
+void
+V90ConstellationDesigner::reset()
+{
+	word_48 = 0;
+	short_0a = 0;
+	short_0c = 0;
+	short_0e = 0;
+	short_10 = 0;
+	word_24 = params->unnamed_39c;
+}
 
 void
 V90ConstellationDesigner::setMinMaxRates(unsigned int min, unsigned int max)

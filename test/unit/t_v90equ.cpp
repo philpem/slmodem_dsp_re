@@ -58,7 +58,7 @@ void ref_enterPhase3(void *self)
 }
 
 /* The object, plus room past its end to catch a store that overruns it. */
-#define SLOT 392
+#define SLOT 400
 
 union equ_slot {
 	V90Equalizer o;
@@ -463,6 +463,364 @@ run_enterphase3(void)
 	return diff_end();
 }
 
+/* ================================================================ task #88 */
+
+/*
+ * `reset` and `enterChannelVerification` need what the three setters did not:
+ * twelve arrays, a parameter block and a resampler.
+ *
+ * ONE ARENA, SHARED BY BOTH SIDES, AND A SNAPSHOT ROUND EACH CALL.  Finding
+ * 1105's rule is that identical argument pointers give identical stored
+ * pointers, and that is what makes `diff_eq_obj` usable on the object with no
+ * field excluded.  But the arrays are OUTPUTS, and two writers into one buffer
+ * would leave only the second one's work: so the arena is snapshotted, ours
+ * runs, the result is copied away, the arena is restored, and the blob's runs
+ * against the same starting bytes.  That is finding 805's shape applied to a
+ * single member instead of to a whole datapump block.
+ *
+ * WHAT THE ARENA HAS TO BE BIG ENOUGH FOR.  `reset` clears
+ * `linearEquLength`, `word_1c`, `dfeLength` and each of those plus eight
+ * entries; it plants 1.0f at `linearEquCoefs[cursor]` with the cursor clamped
+ * in UNSIGNED arithmetic -- so a zero-length equaliser does not clamp at all
+ * and the cursor lands wherever it was asked to -- and it hammings
+ * `2 * (unsigned)(ratio * length)` entries of two windows with the ratio
+ * clamped to [0, 0.5].  Every bound below is at least twice what the sweep
+ * can produce.
+ */
+
+#include "dsplib/V90Resampler.h"
+
+extern "C" {
+void ref_equ_reset(void *self, unsigned int cursor)
+	asm("ref__ZN12V90Equalizer5resetEj");
+void ref_equ_enterChannelVerification(void *self)
+	asm("ref__ZN12V90Equalizer24enterChannelVerificationEv");
+}
+
+#define ARR_F	64		/* entries in each float array  */
+#define ARR_S	64		/* entries in each short array  */
+#define RSLOT	(0xb4 + 32)	/* the V90Resampler, plus slack */
+
+struct equ_arena {
+	float		lecoefs[ARR_F];
+	float		a18[ARR_F];
+	float		lewin[ARR_F];
+	float		dfewin[ARR_F];
+	float		dfecoefs[ARR_F];
+	float		a44[ARR_F];
+	short		lemmx[ARR_S];
+	short		ad8[ARR_S];
+	short		aec[ARR_S];
+	short		dfemmx[ARR_S];
+	short		a118[ARR_S];
+	short		a12c[ARR_S];
+	unsigned char	rsamp[RSLOT];
+	unsigned char	parm[sizeof(V90Parameters) + 32];
+};
+
+static struct equ_arena arena, arena_save, arena_ours;
+
+#define ARENA_PARAMS ((V90Parameters *)arena.parm)
+#define ARENA_RSAMP  ((V90Resampler *)arena.rsamp)
+
+/* Varied bytes, never zeros (finding 230). */
+static void
+fill_arena(long trial)
+{
+	unsigned char *p = (unsigned char *)&arena;
+	unsigned s = 0x4d2fu + 0x9e37u * (unsigned)trial;
+	unsigned i;
+
+	for (i = 0; i < sizeof(arena); i++) {
+		s = (s >> 1) ^ (-(int)(s & 1u) & 0xb400u);
+		p[i] = (unsigned char)((s >> 3) | 1u);
+	}
+}
+
+/* Point both objects at the one arena, so every stored pointer agrees. */
+static void
+wire(V90Equalizer *o)
+{
+	o->linearEquCoefs = arena.lecoefs;
+	o->array_18 = arena.a18;
+	o->linearEquWindow = arena.lewin;
+	o->dfeWindow = arena.dfewin;
+	o->dfeCoefs = arena.dfecoefs;
+	o->array_44 = arena.a44;
+	o->linearEquMmxCoefs = arena.lemmx;
+	o->array_d8 = arena.ad8;
+	o->array_ec = arena.aec;
+	o->dfeMmxCoefs = arena.dfemmx;
+	o->array_118 = arena.a118;
+	o->array_12c = arena.a12c;
+	o->params = ARENA_PARAMS;
+	o->resampler = ARENA_RSAMP;
+}
+
+/* The fade ratios, one per clamp arm plus the two edges and a NaN. */
+static const float fade_v[] = {
+	-1.0f, -0.0f, 0.0f, 0.05f, 0.25f, 0.5f, 0.6f, 1.0f, 37.0f
+};
+#define NFADE ((int)(sizeof(fade_v) / sizeof(fade_v[0])))
+
+static int
+run_reset(void)
+{
+	static const unsigned int len_v[] = { 0u, 1u, 4u, 8u, 16u };
+	static const unsigned int m_v[]   = { 1u, 8u, 24u };
+	static const unsigned int dfe_v[] = { 0u, 3u, 12u };
+	static const unsigned int cur_v[] = { 0u, 1u, 7u, 40u };
+	long tag = 700000;
+	int li, mi, di, ci, fi, mmx;
+	int saw_clamped = 0, saw_kept = 0, saw_window = 0, saw_mmx = 0;
+
+	diff_begin("V90Equalizer::reset");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (li = 0; li < 5; li++)
+	    for (mi = 0; mi < 3; mi++)
+		for (di = 0; di < 3; di++)
+		    for (ci = 0; ci < 4; ci++)
+			for (fi = 0; fi < NFADE; fi++)
+			    for (mmx = 0; mmx < 2; mmx++) {
+				unsigned int len = len_v[li];
+				unsigned int m = m_v[mi];
+				unsigned int cursor = cur_v[ci];
+				unsigned int want;
+
+				/* array_18 runs down from word_1c. */
+				if (m < len)
+					continue;
+
+				tag++;
+				seed(tag);
+				fill_arena(tag);
+				wire(&ours.o);
+				wire(&theirs.o);
+
+				ours.o.linearEquLength =
+				    theirs.o.linearEquLength = len;
+				ours.o.word_1c = theirs.o.word_1c = m;
+				ours.o.dfeLength = theirs.o.dfeLength =
+				    dfe_v[di];
+				ours.o.mmxArraysPresent =
+				    theirs.o.mmxArraysPresent = mmx;
+
+				ARENA_PARAMS->LINEAR_EQU_FADE_LEFT_EDGE_RATIO =
+				    fade_v[fi];
+				ARENA_PARAMS->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO =
+				    fade_v[(fi + 3) % NFADE];
+				ARENA_PARAMS->ERROR_ENERGY_MEAN_BLOCK_LEN =
+				    (int)(0x1234 + tag);
+				ARENA_PARAMS->ERROR_ENERGY_MEAN_K = 0.375f;
+
+				memcpy(&arena_save, &arena, sizeof(arena));
+				dsplib_debug_capture_reset();
+
+				ours.o.reset(cursor);
+
+				memcpy(&arena_ours, &arena, sizeof(arena));
+				memcpy(&arena, &arena_save, sizeof(arena));
+
+				ref_equ_reset(&theirs.o, cursor);
+
+				diff_eq_obj("after reset", V90Equalizer,
+					    &ours.o, &theirs.o, tag);
+				diff_eq_obj("the arena after reset",
+					    struct equ_arena, &arena_ours,
+					    &arena, tag);
+				diff_eq_int("no store past the object (%ld)",
+					    guard_equal(), 1, tag);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+
+				/*
+				 * The fill is GONE.  Two never-reset objects
+				 * compare equal (finding 1105), so the values
+				 * the object must hold are asserted and not
+				 * only compared.
+				 */
+				diff_eq_int("state (%ld)", theirs.o.state,
+					    V90EQU_STATE_RESET, tag);
+				diff_eq_int("stateCount (%ld)",
+					    theirs.o.stateCount, 0, tag);
+				diff_eq_int("flag_144 (%ld)",
+					    (long)theirs.o.flag_144, 1, tag);
+				diff_eq_int("flag_146 (%ld)",
+					    (long)theirs.o.flag_146, 1, tag);
+				diff_eq_int("mmxMode (%ld)", theirs.o.mmxMode,
+					    0, tag);
+				diff_eq_int("word_20 = word_1c - len - 1 "
+					    "(%ld)", (long)theirs.o.word_20,
+					    (long)(unsigned int)(m - len - 1u),
+					    tag);
+				diff_eq_int("errorEnergyMeanBlockLen (%ld)",
+					    theirs.o.errorEnergyMeanBlockLen,
+					    (int)(0x1234 + tag), tag);
+				diff_eq_int("errorEnergyMeanK copied (%ld)",
+					    theirs.o.errorEnergyMeanK
+					    == 0.375f, 1, tag);
+				diff_eq_int("linearEquBeta zeroed (%ld)",
+					    theirs.o.linearEquBeta == 0.0f, 1,
+					    tag);
+				diff_eq_int("dfeBeta zeroed (%ld)",
+					    theirs.o.dfeBeta == 0.0f, 1, tag);
+
+				/*
+				 * The cursor, and the clamp that is unsigned:
+				 * a zero-length equaliser does not clamp.
+				 */
+				want = (len - 1u < cursor) ? len - 1u : cursor;
+				if (want != cursor)
+					saw_clamped = 1;
+				else
+					saw_kept = 1;
+				diff_eq_int("the 1.0f landed at the clamped "
+					    "cursor (%ld)",
+					    arena.lecoefs[want] == 1.0f, 1,
+					    tag);
+
+				/* And the window half really is a fraction. */
+				diff_eq_int("linearEquWindowHalf <= len/2 "
+					    "(%ld)",
+					    theirs.o.linearEquWindowHalf * 2u
+					    <= len, 1, tag);
+				if (theirs.o.linearEquWindowHalf > 0)
+					saw_window = 1;
+				if (mmx)
+					saw_mmx = 1;
+			}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the cursor was clamped somewhere", saw_clamped, 1, 0);
+	diff_eq_int("and left alone somewhere", saw_kept, 1, 0);
+	diff_eq_int("a non-empty window was built", saw_window, 1, 0);
+	diff_eq_int("the fixed-point arrays were cleared", saw_mmx, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * enterChannelVerification.  The one thing it does that `enterPhase3` does
+ * not is call `V90Resampler::setBllState(V90_BLL_PRE_ANSPCM, 1)`, so the
+ * resampler is a real object in the arena and the check that the call
+ * happened is that the RESAMPLER moved: its state, its sample counter and its
+ * two loop gains.  The early-out state is swept as well, and in that arm
+ * nothing anywhere may move.
+ */
+static int
+run_enterchannelverification(void)
+{
+	long tag = 800000;
+	int state, entered = 0, skipped = 0;
+
+	diff_begin("V90Equalizer::enterChannelVerification");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (state = -1; state <= 7; state++) {
+		int bll;
+
+		for (bll = 0; bll < 3; bll++) {
+			unsigned char before[SLOT];
+
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			wire(&ours.o);
+			wire(&theirs.o);
+			ours.o.state = theirs.o.state = state;
+
+			ARENA_RSAMP->params = ARENA_PARAMS;
+			ARENA_RSAMP->bllState = (V90BllState)
+			    (bll == 0 ? V90_BLL_FROZEN
+				      : bll == 1 ? V90_BLL_STEADY_STATE
+						 : V90_BLL_PRE_ANSPCM);
+			ARENA_RSAMP->stateSamples = 0x11223344u;
+			ARENA_RSAMP->countStateSamples = 0x55667788u;
+
+			memcpy(before, ours.raw, SLOT);
+			memcpy(&arena_save, &arena, sizeof(arena));
+			dsplib_debug_capture_reset();
+
+			ours.o.enterChannelVerification();
+
+			memcpy(&arena_ours, &arena, sizeof(arena));
+			memcpy(&arena, &arena_save, sizeof(arena));
+
+			ref_equ_enterChannelVerification(&theirs.o);
+
+			diff_eq_obj("after enterChannelVerification",
+				    V90Equalizer, &ours.o, &theirs.o, tag);
+			diff_eq_obj("the arena after "
+				    "enterChannelVerification",
+				    struct equ_arena, &arena_ours, &arena,
+				    tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+
+			if (state == V90EQU_STATE_CHANNEL_VERIFY) {
+				diff_eq_int("re-entry touched the object "
+					    "(%ld)",
+					    memcmp(before, ours.raw, SLOT)
+					    == 0, 1, tag);
+				diff_eq_int("re-entry touched the arena "
+					    "(%ld)",
+					    memcmp(&arena_save, &arena,
+						   sizeof(arena)) == 0, 1,
+					    tag);
+				skipped = 1;
+			} else {
+				diff_eq_int("state (%ld)", theirs.o.state,
+					    V90EQU_STATE_CHANNEL_VERIFY, tag);
+				diff_eq_int("stateCount (%ld)",
+					    theirs.o.stateCount, 0, tag);
+				diff_eq_int("linearEquBeta zeroed (%ld)",
+					    theirs.o.linearEquBeta == 0.0f, 1,
+					    tag);
+				diff_eq_int("dfeBeta zeroed (%ld)",
+					    theirs.o.dfeBeta == 0.0f, 1, tag);
+				/*
+				 * The resampler was told, and told the RIGHT
+				 * thing: 11 is V90_BLL_PRE_ANSPCM and the
+				 * count is 1.  Without this the call could
+				 * be missing entirely and every check above
+				 * would still pass.
+				 */
+				diff_eq_int("the resampler's state (%ld)",
+					    (long)ARENA_RSAMP->bllState,
+					    (long)V90_BLL_PRE_ANSPCM, tag);
+				if (bll != 2)
+					diff_eq_int("the resampler's sample "
+						    "count (%ld)",
+						    (long)ARENA_RSAMP
+						    ->countStateSamples, 1,
+						    tag);
+				entered = 1;
+			}
+		}
+	}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("enterChannelVerification ran its body", entered, 1, 0);
+	diff_eq_int("and skipped it when already verifying", skipped, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -473,6 +831,8 @@ main(void)
 	rc |= run_setters();
 	rc |= run_exact_powers();
 	rc |= run_enterphase3();
+	rc |= run_reset();
+	rc |= run_enterchannelverification();
 
 	return rc;
 }

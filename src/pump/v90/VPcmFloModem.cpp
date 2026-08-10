@@ -44,6 +44,12 @@
 #include "dsplib/DILdescriptorPacker.h"
 #include "dsplib/encode.h"
 #include "dsplib/v34pcmif.h"
+/*
+ * `V92Parameters::init()` is one of the three `externalReset` calls.  This
+ * header defines nothing else and includes nothing, so it cannot collide with
+ * the `V90Parameters` this file already has through `V90SessionFlag.h`.
+ */
+#include "dsplib/V92Parameters.h"
 #include "dsplib/VPcmFloModem.h"
 
 /*
@@ -76,7 +82,14 @@ VPCM_OFF(flag_173d,		0x173d, flag173d);
 VPCM_OFF(flag_173e,		0x173e, flag173e);
 VPCM_OFF(modem,			0x1758, modem);
 VPCM_OFF(pcmSessionType,	0x611c, sesstype);
+VPCM_OFF(byte_6118,		0x6118, byte6118);
+VPCM_OFF(byte_6119,		0x6119, byte6119);
 VPCM_OFF(info0Layout,		0x6120, layout);
+VPCM_OFF(v92Params,		0x6128, v92params);
+VPCM_OFF(word_6f98,		0x6f98, word6f98);
+VPCM_OFF(word_6fac,		0x6fac, word6fac);
+VPCM_OFF(word_6fb0,		0x6fb0, word6fb0);
+VPCM_OFF(word_6fb4,		0x6fb4, word6fb4);
 VPCM_OFF(v92Phase2Info,		0x612c, p92);
 VPCM_OFF(cpBitVector,		0x6fbc, cpbitvec);
 VPCM_OFF(cpNofBits,		0x7dcc, cpnofbits);
@@ -620,4 +633,84 @@ VPcmFloModem::enterPhase3()
 	DILdescriptorPacker(&dil, bitVector, &nofBits);
 
 	edprintf("VPcmFloModem: enterPhase3: Ja length = %d\r\n", nofBits);
+}
+
+/*
+ * externalReset -- `VPcmV34Create`'s way of putting a constructed modem back
+ * to its starting state.
+ *
+ * THE SIX FLAGS AT +0x217 ARE WRITTEN TWICE, with the same six values, once
+ * before the three parameter-block calls and once after.  That is what the
+ * object does -- 0xd6d8..0xd701 and 0xd786..0xd7a9, two runs of six `movb`
+ * with nothing between them that could touch the fields -- and it is left as
+ * two runs here rather than folded into one.  The most likely reading is that
+ * the source calls a small helper twice and GCC inlined both, but nothing in
+ * the object names it, so the duplication is transcribed and not explained.
+ *
+ * THE V.90 DEMODULATOR IS REINITIALISED ONLY WHEN `info0Layout` IS NON-ZERO,
+ * which is the one branch in the function.  `info0Layout` is otherwise a
+ * `setPhaseIIinfo` selector, so this couples the INFO0 layout to whether
+ * there is a demodulator worth re-initialising; that reading is not
+ * established, and the field keeps the name the earlier batch gave it.
+ *
+ * THE LAST DIAGNOSTIC IS A TAIL CALL and the first is not, which is why they
+ * are in this order: "reinitializing parameters" is printed at the TOP of the
+ * flag work and "external reset called" at the very end.
+ */
+void
+VPcmFloModem::externalReset()
+{
+	flags_0217[0] = 1;		/* +0x217 */
+	flags_0217[1] = 0;		/* +0x218 */
+	flags_0217[2] = 1;		/* +0x219 */
+	flags_0217[3] = 1;		/* +0x21a */
+	flags_0217[4] = 1;		/* +0x21b */
+	flags_0217[5] = 0;		/* +0x21c */
+
+	modem.ptr_49b4->initSession();
+	modem.ptr_49b4->init();
+	v92Params->init();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90_V34_Main: reinitializing parameters.\r\n");
+
+	flags_173a[0] = 0;		/* +0x173a */
+	bitPointer = 0;			/* +0x1738 */
+	nofBits = 0;			/* +0x1736 */
+	cpNofBits = 0;			/* +0x7dcc */
+	flags_173a[1] = 0;		/* +0x173b */
+	flags_173a[2] = 0;		/* +0x173c */
+	flag_173d = 0;			/* +0x173d */
+	flag_173e = 0;			/* +0x173e */
+
+	/* The second of the two runs; the same six values as above. */
+	flags_0217[0] = 1;		/* +0x217 again */
+	flags_0217[1] = 0;		/* +0x218 again */
+	flags_0217[2] = 1;		/* +0x219 again */
+	flags_0217[3] = 1;		/* +0x21a again */
+	flags_0217[4] = 1;		/* +0x21b again */
+	flags_0217[5] = 0;		/* +0x21c again */
+
+	terminateJa = 0;		/* +0x7dce */
+	terminateCp = 0;		/* +0x7dcf */
+	terminateCpNot = 0;		/* +0x7dd0 */
+	cpNotLoaded = 0;		/* +0x7dd1 */
+	nofBitsPerSymbol = 2;		/* +0x7dd2 */
+	nofTransmitSequences = 0;	/* +0x7dd4 */
+	minNofTransmitSequences = 1;	/* +0x7dd6 */
+
+	if (info0Layout != 0)
+		modem.demodulator->reInit();
+
+	byte_6118 = 0;
+	byte_6119 = 0;
+	word_6f98 = 0;
+	word_6fb0 = 0;
+	word_6fac = 0;
+	word_6fb4 = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90_V34_Main: external reset called.\r\n");
 }

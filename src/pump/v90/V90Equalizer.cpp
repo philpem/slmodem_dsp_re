@@ -69,7 +69,17 @@
 #include <stddef.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/DspMath.h"
 #include "dsplib/encode.h"
+
+/*
+ * `V90Resampler.h` brings in the NAMED `V90Parameters` map, which is the one
+ * this file wants -- `reset` copies four slots out of the parameter block and
+ * all four have the original author's own names (finding 861).  The other
+ * definition, `V90PreFilter.h`'s 0x504 word block, must not be included in
+ * the same translation unit; finding 1112.
+ */
+#include "dsplib/V90Resampler.h"
 
 #include "dsplib/V90Equalizer.h"
 
@@ -86,20 +96,65 @@
 	typedef char v90equ_off_##tag[ \
 	    ((int)__builtin_offsetof(V90Equalizer, field) == (off)) ? 1 : -1]
 
+V90EQU_OFF(resampler,			0x000, resampler);
+V90EQU_OFF(short_08,			0x008, short08);
+V90EQU_OFF(linearEquLength,		0x00c, linearequlength);
 V90EQU_OFF(linearEquBeta,		0x010, linearequbeta);
+V90EQU_OFF(linearEquCoefs,		0x014, linearequcoefs);
+V90EQU_OFF(array_18,			0x018, array18);
+V90EQU_OFF(word_1c,			0x01c, word1c);
+V90EQU_OFF(word_20,			0x020, word20);
+V90EQU_OFF(linearEquWindow,		0x024, lewindow);
+V90EQU_OFF(dfeWindow,			0x028, dfewindow);
+V90EQU_OFF(linearEquWindowHalf,		0x02c, lewindowhalf);
+V90EQU_OFF(dfeWindowHalf,		0x030, dfewindowhalf);
+V90EQU_OFF(word_34,			0x034, word34);
+V90EQU_OFF(dfeLength,			0x038, dfelength);
 V90EQU_OFF(dfeBeta,			0x03c, dfebeta);
+V90EQU_OFF(dfeCoefs,			0x040, dfecoefs);
+V90EQU_OFF(array_44,			0x044, array44);
 V90EQU_OFF(state,			0x060, state);
 V90EQU_OFF(stateCount,			0x064, statecount);
+V90EQU_OFF(word_68,			0x068, word68);
+V90EQU_OFF(word_6c,			0x06c, word6c);
+V90EQU_OFF(word_70,			0x070, word70);
+V90EQU_OFF(errorEnergyMeanBlockLen,	0x074, eemblocklen);
+V90EQU_OFF(word_78,			0x078, word78);
+V90EQU_OFF(word_7c,			0x07c, word7c);
+V90EQU_OFF(word_80,			0x080, word80);
+V90EQU_OFF(word_84,			0x084, word84);
+V90EQU_OFF(word_88,			0x088, word88);
+V90EQU_OFF(word_8c,			0x08c, word8c);
+V90EQU_OFF(errorEnergyMeanK,		0x090, eemk);
+V90EQU_OFF(word_94,			0x094, word94);
+V90EQU_OFF(word_9c,			0x09c, word9c);
+V90EQU_OFF(word_a0,			0x0a0, worda0);
+V90EQU_OFF(word_a4,			0x0a4, worda4);
+V90EQU_OFF(params,			0x0a8, params);
+V90EQU_OFF(mmxArraysPresent,		0x0ac, mmxarrays);
 V90EQU_OFF(mmxMode,			0x0b0, mmxmode);
 V90EQU_OFF(linearEquMmxRefLevel,	0x0bc, leref);
+V90EQU_OFF(word_c0,			0x0c0, wordc0);
 V90EQU_OFF(linearEquMmxBetaScale,	0x0c4, lescale);
 V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
+V90EQU_OFF(linearEquMmxCoefs,		0x0d4, lemmxcoefs);
+V90EQU_OFF(array_d8,			0x0d8, arrayd8);
+V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(dfeMmxRefLevel,		0x0fc, dferef);
+V90EQU_OFF(word_100,			0x100, word100);
 V90EQU_OFF(dfeMmxBetaScale,		0x104, dfescale);
 V90EQU_OFF(dfeMmxBeta,			0x10c, dfebetai);
 V90EQU_OFF(dfeMmxShift,			0x110, dfeshift);
-typedef char v90equ_size[(sizeof(V90Equalizer) == 0x148) ? 1 : -1];
+V90EQU_OFF(dfeMmxCoefs,			0x114, dfemmxcoefs);
+V90EQU_OFF(array_118,			0x118, array118);
+V90EQU_OFF(array_12c,			0x12c, array12c);
+V90EQU_OFF(word_13c,			0x13c, word13c);
+V90EQU_OFF(word_140,			0x140, word140);
+V90EQU_OFF(flag_144,			0x144, flag144);
+V90EQU_OFF(flag_146,			0x146, flag146);
+V90EQU_OFF(quickConnect,		0x148, quickconnect);
+typedef char v90equ_size[(sizeof(V90Equalizer) == 0x150) ? 1 : -1];
 #endif
 
 
@@ -268,4 +323,175 @@ V90Equalizer::enterPhase3()
 	setDfeBeta(0.0f);
 	state = V90EQU_STATE_PHASE3;
 	stateCount = 0;
+}
+
+/*
+ * enterChannelVerification -- `enterPhase3`'s shape with a resampler call on
+ * the end.
+ *
+ * The same early-out on the same field, the same two setters with zero, the
+ * same state-and-count pair; then the one thing this one does that the other
+ * does not, which is to put the resampler's band-limited loop into
+ * V90_BLL_PRE_ANSPCM with a one-sample count.  `V90Demodulator::
+ * enterChannelVerification` is the only caller.
+ */
+void
+V90Equalizer::enterChannelVerification()
+{
+	if (state == V90EQU_STATE_CHANNEL_VERIFY)
+		return;
+
+	edprintf("V90Equalizer: enterChannelVerification\r\n");
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+	state = V90EQU_STATE_CHANNEL_VERIFY;
+	stateCount = 0;
+
+	resampler->setBllState(V90_BLL_PRE_ANSPCM, 1);
+}
+
+/*
+ * The object's clamp, written as the object's predicates and not as the two
+ * comparisons a reader would reach for.
+ *
+ * `fcom / fnstsw / sahf / jae` takes the NOT-LESS branch, and an unordered
+ * compare sets C0, C2 and C3 -- so a NaN is "less" for this jump and comes
+ * out of here as 0.0f, where `x < 0.0f ? 0.0f : ...` would have kept it.
+ * The parameter is read out of a configuration block, so a NaN is not
+ * obviously unreachable, and V90PreFilter.cpp's `setParamEia6` has the same
+ * note for the same reason.
+ */
+static inline float
+clamp_fade_ratio(float x)
+{
+	if (!(x >= 0.0f))
+		return 0.0f;
+	if (!(x <= 0.5f))
+		return 0.5f;
+	return x;
+}
+
+/*
+ * reset -- the whole equaliser back to its constructed state, and the only
+ * member of the class that reads the parameter block.
+ *
+ * FIVE THINGS IN IT ARE NOT OBVIOUS FROM THE STORES.
+ *
+ * 1. THE TWO BETAS ARE SEEDED WITH A SENTINEL BEFORE THE SETTERS RUN.
+ *    `1e-14f` is exactly 0x283424dc, the immediate the object plants in
+ *    +0x10 and +0x3c; `setLinearEquBeta` and `setDfeBeta` compare their
+ *    argument against the field and return early when it matches, so seeding
+ *    a value nothing can legitimately hold is what forces both to do their
+ *    work for an argument of zero.  The header says the same thing from the
+ *    setter's side.
+ *
+ * 2. THE CURSOR IS CLAMPED WITH UNSIGNED ARITHMETIC AND THE EDGE CASE IS
+ *    REACHABLE.  `linearEquLength - 1` is 0xffffffff when the equaliser has
+ *    no taps, and `jae` is unsigned, so the clamp does nothing and the 1.0f
+ *    lands at `linearEquCoefs[cursor]` for whatever cursor was passed.  That
+ *    is what the object does; it is not defended against here.
+ *
+ * 3. THE TWO FLOAT ARRAYS ARE CLEARED IN ONE LOOP, IN OPPOSITE DIRECTIONS.
+ *    One counter, `linearEquCoefs[i]` ascending and `array_18[word_1c - 1 -
+ *    i]` descending.
+ *
+ * 4. THE FIXED-POINT ARRAYS ARE ALL `+ 8` LONGER than the filter they belong
+ *    to, and the whole group is skipped when `mmxArraysPresent` is clear --
+ *    which is a different field from `mmxMode`, zeroed a hundred
+ *    instructions earlier in the same function.
+ *
+ * 5. THE TWO WINDOW LENGTHS ARE BOTH SCALED BY THE LINEAR EQUALISER'S
+ *    LENGTH, not one each by its own.  `fildll` converts `linearEquLength`
+ *    once and `fmul` / `fmulp` apply it to both ratios, so `dfeWindowHalf`
+ *    is a fraction of the LINEAR length and `dfeLength` is not in it at all.
+ *    Read twice; it is what the object does.
+ */
+void
+V90Equalizer::reset(unsigned int cursor)
+{
+	unsigned int i, n;
+	float left, right, scale;
+
+	edprintf("V90Equalizer: reset\r\n");
+
+	short_08 = 0;
+	linearEquBeta = 1e-14f;
+	dfeBeta = 1e-14f;
+	mmxMode = 0;
+	linearEquMmxRefLevel = 0;
+	word_c0 = 0;
+	dfeMmxRefLevel = 0;
+	word_100 = 0;
+
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+
+	state = V90EQU_STATE_RESET;
+	stateCount = 0;
+
+	word_20 = word_1c - linearEquLength - 1;
+
+	for (i = 0; i < linearEquLength; i++) {
+		linearEquCoefs[i] = 0;
+		array_18[word_1c - 1 - i] = 0;
+	}
+
+	if (linearEquLength - 1 < cursor)
+		cursor = linearEquLength - 1;
+	linearEquCoefs[cursor] = 1.0f;
+
+	for (i = 0; i < dfeLength; i++) {
+		array_44[i] = 0;
+		dfeCoefs[i] = 0;
+	}
+
+	if (mmxArraysPresent) {
+		n = linearEquLength + 8;
+		for (i = 0; i < n; i++) {
+			linearEquMmxCoefs[i] = 0;
+			array_d8[i] = 0;
+		}
+
+		n = word_1c + 8;
+		for (i = 0; i < n; i++)
+			array_ec[i] = 0;
+
+		n = dfeLength + 8;
+		for (i = 0; i < n; i++) {
+			dfeMmxCoefs[i] = 0;
+			array_118[i] = 0;
+			array_12c[i] = 0;
+		}
+	}
+
+	word_6c = 0;
+	word_7c = 0;
+	word_80 = 0;
+	word_84 = 0;
+	word_88 = 0;
+	word_8c = 0;
+	word_13c = 0;
+	word_140 = 0;
+	errorEnergyMeanK = params->ERROR_ENERGY_MEAN_K;
+	word_68 = 0;
+	word_70 = 0;
+	errorEnergyMeanBlockLen = params->ERROR_ENERGY_MEAN_BLOCK_LEN;
+	word_9c = 0;
+	word_78 = 0;
+	word_a0 = 0;
+	word_a4 = 0;
+	word_94 = 0;
+	flag_144 = 1;
+	flag_146 = 1;
+	word_34 = 0;
+
+	left = clamp_fade_ratio(params->LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
+	right = clamp_fade_ratio(params->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
+
+	scale = (float)linearEquLength;
+	linearEquWindowHalf = (unsigned int)(left * scale);
+	dfeWindowHalf = (unsigned int)(right * scale);
+
+	hamming(linearEquWindow, 2 * linearEquWindowHalf);
+	hamming(dfeWindow, 2 * dfeWindowHalf);
 }

@@ -97,6 +97,9 @@
 #include "dsplib/V90Phase3Modulator.h"	/* tagV90DILdescriptor          */
 #include "dsplib/V92Phase2Info.h"
 
+/* A pointer only; src/pump/v90/VPcmFloModem.cpp includes the definition. */
+class V92Parameters;
+
 /*
  * How many entries of each of the four float arrays `getUinfoValue` clears:
  * `inc %edx; cmp $0x14,%edx; jle` is 0 through 20 inclusive.  The same bound
@@ -152,6 +155,15 @@ public:
 	 * path falls into the tail of `edprintf` and %eax is never set.
 	 */
 	void enterPhase3();
+
+	/*
+	 * `_ZN12VPcmFloModem13externalResetEv`, added by task #88.  It is
+	 * `VPcmV34Create`'s way of putting a constructed modem back to its
+	 * starting state, and its shape is nearly `enterPhase3`'s: the same
+	 * six flags, the same five cleared bytes, the same three CP fields.
+	 * Falls off the end into `dsplibs_debug_printf`'s tail, so `void`.
+	 */
+	void externalReset();
 
 	/* --- data members; see the file comment on the naming --- */
 
@@ -253,9 +265,14 @@ public:
 	/*
 	 * +0x6118  Four bytes between the end of V90Modem's modelled prefix
 	 * and the first field after it.  Which object they belong to is not
-	 * settled -- V90Modem's size is a floor, not a measurement.
+	 * settled -- V90Modem's size is a floor, not a measurement -- and
+	 * `externalReset` does not settle it either: it clears the first two
+	 * with two `movb $0x0`, through the VPcmFloModem and not through the
+	 * V90Modem, which is what the compiler emits either way.
 	 */
-	unsigned char pad_6118[4];
+	unsigned char byte_6118;
+	unsigned char byte_6119;
+	unsigned char pad_611a[2];
 
 	/*
 	 * +0x611c  V.90 or V.92, as a 0/1 int: `setPcmSessionType` stores
@@ -274,7 +291,15 @@ public:
 	 */
 	int info0Layout;
 
-	unsigned char pad_6124[8];		/* +0x6124 not modelled */
+	unsigned char pad_6124[4];		/* +0x6124 not modelled */
+
+	/*
+	 * +0x6128  The V.92 parameter block.  `externalReset` loads it and
+	 * calls `V92Parameters::init()` on it, immediately after doing the
+	 * same for the V.90 one at `modem.ptr_49b4`; that pairing is what
+	 * types it.  Not owned.
+	 */
+	V92Parameters *v92Params;
 
 	/*
 	 * +0x612c  The V.92 Phase 2 record.  `setPhaseIIinfo` copies four
@@ -284,7 +309,20 @@ public:
 	 */
 	V92Phase2Info *v92Phase2Info;
 
-	unsigned char pad_6130[0x6fbc - 0x6130];	/* +0x6130         */
+	unsigned char pad_6130[0x6f98 - 0x6130];	/* +0x6130         */
+
+	/*
+	 * +0x6f98, +0x6fac, +0x6fb0, +0x6fb4  Four words `externalReset`
+	 * zeroes, and the only four things it touches in the 3,660 bytes
+	 * between the V.92 parameter pointer and the CP bit vector.  Nothing
+	 * reconstructed reads any of them, so they are offset-named.
+	 */
+	unsigned int word_6f98;				/* +0x6f98         */
+	unsigned char pad_6f9c[0x6fac - 0x6f9c];	/* +0x6f9c         */
+	unsigned int word_6fac;				/* +0x6fac         */
+	unsigned int word_6fb0;				/* +0x6fb0         */
+	unsigned int word_6fb4;				/* +0x6fb4         */
+	unsigned char pad_6fb8[0x6fbc - 0x6fb8];	/* +0x6fb8         */
 
 	/*
 	 * +0x6fbc  The CP bit vector, `cpNofBits` long.  Filled by

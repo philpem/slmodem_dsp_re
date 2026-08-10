@@ -35,6 +35,14 @@ extern "C" {
 #include "dsplib/encode.h"
 }
 
+/*
+ * The header forward-declares this class, which is enough for the pointer
+ * member; `reset` CALLS a member of it, so this file needs the definition.
+ * V90ConstellationDesigner.h forward-declares `V90Parameters` and includes
+ * nothing, so it cannot collide with the definition V90PreFilter.h supplies
+ * below (finding 1112).
+ */
+#include "dsplib/V90ConstellationDesigner.h"
 #include "dsplib/V90Demodulator.h"
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -60,6 +68,7 @@ DEM_OFF(word_38,		0x038, word38);
 DEM_OFF(word_3c,		0x03c, word3c);
 DEM_OFF(word_40,		0x040, word40);
 DEM_OFF(word_44,		0x044, word44);
+DEM_OFF(agc,			0x04c, agc);
 DEM_OFF(preFilter,		0x06c, prefilter);
 DEM_OFF(resampler,		0x094, resampler);
 DEM_OFF(equalizer,		0x1d8, equalizer);
@@ -71,26 +80,27 @@ DEM_OFF(constellationDesigner,	0x208, constellationdesigner);
 DEM_OFF(connectionEvaluator,	0x20c, connectionevaluator);
 DEM_OFF(spectralVerifier,	0x210, spectralverifier);
 DEM_OFF(autoDigitalImpDetector,	0x23c, adid);
+DEM_OFF(word_24c,		0x24c, word24c);
+DEM_OFF(word_258,		0x258, word258);
+DEM_OFF(word_260,		0x260, word260);
 DEM_OFF(word_264,		0x264, word264);
+DEM_OFF(word_270,		0x270, word270);
+DEM_OFF(word_284,		0x284, word284);
 DEM_OFF(word_278,		0x278, word278);
 DEM_OFF(byte_280,		0x280, byte280);
 DEM_OFF(word_288,		0x288, word288);
+DEM_OFF(word_28c,		0x28c, word28c);
 DEM_OFF(word_290,		0x290, word290);
 DEM_OFF(word_294,		0x294, word294);
 
-/* Both settled by the allocation that precedes the constructor; finding 291. */
+/* Settled by the allocation that precedes the constructor; finding 291. */
 typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
-typedef char v90ce_size[(sizeof(V90ConnectionEvaluator) == 0xbc) ? 1 : -1];
 
-#define CE_OFF(field, off, tag) \
-	typedef char v90ce_off_##tag[ \
-	    ((int)__builtin_offsetof(V90ConnectionEvaluator, field) == (off)) \
-	    ? 1 : -1]
-
-CE_OFF(word_70, 0x70, word70);
-CE_OFF(word_74, 0x74, word74);
-CE_OFF(word_84, 0x84, word84);
-CE_OFF(word_88, 0x88, word88);
+/*
+ * `V90ConnectionEvaluator`'s size and its four offset assertions used to be
+ * here, because the class was defined in this file's header.  It has its own
+ * header and its own .cpp now (task #88) and they moved with it, unchanged.
+ */
 
 #endif
 
@@ -103,6 +113,43 @@ CE_OFF(word_88, 0x88, word88);
 #define PARAMS_TIMING_OFFSET	(0x084 / 4)
 #define PARAMS_WORD_264		(0x264 / 4)
 #define PARAMS_WORD_278		(0x278 / 4)
+
+/*
+ * The three `reset` adds.  The names in the comments are the ORIGINAL
+ * AUTHOR'S, out of `include/dsplib/V90Parameters.h` -- that header cannot be
+ * included here, because this file already has the other definition of the
+ * class (finding 1112), but the map it carries is still what these indices
+ * mean and writing them down without it would be throwing information away.
+ */
+#define PARAMS_AGC_NOMINAL_ENERGY	(0x05c / 4)	/* float */
+#define PARAMS_AGC_BLOCK_LEN		(0x064 / 4)	/* int   */
+#define PARAMS_LINEAR_EQU_CURSOR_PLACE	(0x184 / 4)	/* int   */
+
+/*
+ * `V90Resampler::reset()` BY ITS MANGLED NAME, and it is not a shortcut.
+ *
+ * The object at +0x94 is a V90Resampler -- the constructor builds one there
+ * and finding 804 finds `V90Resampler`'s vtable pointer at that offset -- and
+ * `reset` calls `_ZN12V90Resampler5resetEv` on it DIRECTLY, not through the
+ * vptr.  Three things rule out the obvious spellings:
+ *
+ *   - `resampler.reset()` would dispatch through the vptr, which no test
+ *     fixture here fills in, and would be an indirect call where the object
+ *     makes a direct one.
+ *   - `((V90Resampler *)&resampler)->V90Resampler::reset()` needs the class
+ *     to be complete, and `V90Resampler.h` includes the OTHER definition of
+ *     `V90Parameters`, which this file cannot have.
+ *   - Declaring the member type as `V90Resampler` in the header has the same
+ *     problem one level up, since `V90Demodulator.h` includes
+ *     `V90PreFilter.h`.
+ *
+ * So the symbol is named directly.  It takes `this` as its first stack
+ * argument like every other member here (finding 215), and
+ * `ResamplerTimingOffset` is `V90Resampler`'s base at offset zero, so the
+ * address is the same one `setTimingOffset` is already called on.
+ */
+extern void v90resampler_reset(ResamplerTimingOffset *self)
+	asm("_ZN12V90Resampler5resetEv");
 
 void
 V90Demodulator::enterPhase3()
@@ -191,4 +238,147 @@ V90Demodulator::enterPhase3()
 			 "retraining to V.34 upstream...\r\n");
 		word_3c = 0x20;
 	}
+}
+
+/*
+ * reInit -- two calls and nothing else.  41 bytes, the second a tail call.
+ *
+ * `VPcmFloModem::externalReset` is the only caller and reaches it only when
+ * its own +0x6120 is non-zero.
+ */
+void
+V90Demodulator::reInit()
+{
+	connectionEvaluator->reset();
+	phase3Demodulator->clearVerificationStatus();
+}
+
+/*
+ * reset -- the demodulator and five of the objects it owns.
+ *
+ * FOUR THINGS IN IT ARE WORTH WRITING DOWN.
+ *
+ * 1. IT RECONFIGURES THE AGC IMMEDIATELY AFTER RESETTING IT, through the
+ *    pointer it already had in a register: `Agc<float>::reset` clears the
+ *    block state, and then two words come out of the parameter block into
+ *    `blockLen` and `ref`.  Resetting an AGC does NOT restore its
+ *    configuration in this object -- the caller does.
+ *
+ * 2. THE BAUD-OFFSET DIAGNOSTIC IS UNGATED, and it is the only floating-point
+ *    arithmetic in the function.  It splits `INITIAL_BAUD_OFFSET` into a sign
+ *    character, a truncated magnitude and three decimal places, the same
+ *    `%c%d.%03d` shape `V90PreFilter::setParamEia6` uses at four places.  The
+ *    sign test is `0.0f < x`, taken from `fcomps` with zero on the stack and
+ *    the parameter as the operand, so a NaN offset prints '-'.
+ *
+ * 3. THE EQUALISER'S CURSOR IS EITHER CONFIGURED OR DERIVED.  A negative
+ *    `LINEAR_EQU_CURSOR_PLACE` means "the middle of the linear equaliser",
+ *    computed as `linearEquLength >> 1` -- a LOGICAL shift, which is the
+ *    second independent statement that the length is unsigned.  The test is
+ *    `js`, so zero takes the configured branch.
+ *
+ * 4. THE LAST STORE IS INTO ANOTHER OBJECT.  `quickConnect` goes to this
+ *    object's +0x294 and then to the EQUALISER's +0x148, which is the only
+ *    write anywhere in the blob to that offset of that class and the reason
+ *    `sizeof(V90Equalizer)` is 0x150 (finding 1107).
+ */
+void
+V90Demodulator::reset(unsigned int quickConnect)
+{
+	float offset;
+	int whole, frac, cursor;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90Demodulator reset, quick connect flag = %d\r\n",
+		    quickConnect);
+
+	inPhase3 = 0;
+	word_27c = 0;
+	word_270 = 0;
+	word_38 = 0;
+	word_3c = 0;
+	word_44 = 0;
+	word_40 = 0;
+
+	descrambler.reset(0);
+
+	agc.reset();
+	agc.blockLen = params->w[PARAMS_AGC_BLOCK_LEN];
+	agc.ref = params->f[PARAMS_AGC_NOMINAL_ENERGY];
+
+	preFilter.reset();
+
+	offset = params->f[PARAMS_TIMING_OFFSET];
+	whole = (int)offset;
+	frac = (int)((offset - (float)whole) * 1000.0f);
+	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
+		 (0.0f < offset) ? '+' : '-',
+		 (int)__builtin_fabsf(offset),
+		 (frac < 0) ? -frac : frac);
+
+	v90resampler_reset(&resampler);
+	resampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);
+
+	cursor = params->w[PARAMS_LINEAR_EQU_CURSOR_PLACE];
+	if (cursor < 0)
+		equalizer->reset(equalizer->linearEquLength >> 1);
+	else
+		equalizer->reset((unsigned int)cursor);
+
+	constellationDesigner->reset();
+
+	word_290 = 19200;
+	word_284 = 0;
+	word_24c = 0;
+	word_288 = 19200;
+	word_28c = 0;
+	word_258 = 0;
+	word_260 = 0;
+	word_278 = 0;
+	byte_280 = 0;
+	word_294 = quickConnect;
+
+	equalizer->quickConnect = quickConnect;
+}
+
+/*
+ * enterChannelVerification -- `reset(1)` and then the phase 3 chain.
+ *
+ * THE FIRST ARGUMENT IS NEVER READ.  `0x44(%esp)` is not loaded anywhere in
+ * the 215 bytes; only the second reaches anything, as `V90Phase3Demodulator::
+ * reset`'s ninth argument, sign-extended with `movswl` at the top of the
+ * function.  It is left unnamed rather than removed, because the mangling
+ * `_ZN14V90Demodulator24enterChannelVerificationEss` has two `s` in it and
+ * dropping one would emit a symbol that links against nothing.
+ *
+ * The phase 3 reset is the same eleven-argument call `enterPhase3` makes,
+ * with three of the arguments different: the state is WaitForQTS rather than
+ * WaitForSd, `altRbs` is 0 rather than the EIA-6 answer, and `short414` is
+ * the caller's second argument rather than 1.
+ */
+void
+V90Demodulator::enterChannelVerification(short, short short414)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90Demodulator: Enter Channel Verification called !\r\n");
+
+	reset(1);
+
+	inPhase3 = 5;
+	word_38 = 0;
+
+	phase3Demodulator->clearVerificationStatus();
+
+	phase3Demodulator->reset((PcmType)phase2Info->pcmType,
+				 phase2Info->Uinfo,
+				 P3D_STATE_WAIT_FOR_QTS, 0,
+				 jd, jdV92, dil,
+				 0, short414, 0.0f,
+				 (unsigned int)phase2Info->rtd);
+
+	equalizer->enterChannelVerification();
+
+	word_40 = 0;
 }
