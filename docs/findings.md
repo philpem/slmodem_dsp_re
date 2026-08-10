@@ -33011,7 +33011,24 @@ mutation run says so rather than the comment claiming it:
 ```
 
 Ten applied by hand, eight caught, **two genuinely equivalent** and named as
-such. They are the codegen tier's business, not the differential tier's.
+such.
+
+**"Equivalent" is a claim, so it was checked rather than asserted.** Saying a
+mutant belongs to the codegen tier is worthless if the codegen tier cannot see
+it either -- that would make it unfalsifiable, and the honest word would be
+"unverifiable" rather than "equivalent". Both were rebuilt under GCC 3.4.2 and
+the emitted `dp_runtime_create` compared:
+
+```
+    baseline                  75 instructions
+    drop the SECOND memset    67 instructions   DIFFERS
+    stop clearing bit 7       73 instructions   DIFFERS
+```
+
+So both ARE falsifiable, by the one tier that can see them, and both are in
+the object. The differential tier's blindness here is exactly the structural
+kind `docs/method/tiers.md` catalogues -- "anything that does not change an
+output" -- and not a gap in the test.
 
 **And the codegen tier did decide two things the differential tier cannot
 see.** Built with GCC 3.4.2 under `tools/toolchain/build.sh`, the first version
