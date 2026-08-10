@@ -34673,11 +34673,28 @@ Then the mode CHANGE, not the mode, is what reaches the host:
   DPSTAT_CONNECT.  The V.34 id is the **`else`** and not a third compare.
 - to 0: nothing but the store.
 
-**Written and unexercised, and the difference is recorded rather than smoothed
-over.**  The 0x5a and 0x5c stores, arms 0, 1 and 10, the mute path, the
-input-residue copy and the training timeout are all read out of the
-disassembly and reached by nothing this tree drives -- finding 987 measures
-exactly which, by mutation, rather than asserting it.
+**WHICH ARMS ACTUALLY FIRE IS MEASURED, NOT INFERRED.**  `t_vpcmrun.c` reads
+root +0x14 -- the code the dispatch saw -- after every one of the 4,000
+blocks, and the connecting call produces exactly
+
+```
+    codes {0, 1, 2, 3, 4}          both endpoints, all four runs
+```
+
+so five of the seventeen arms are exercised and twelve are not: 5, 6, 7, 8, 9,
+10 and 16, plus the five that fall through to the default.  Arm 10's "Same
+Line Verification Status" and all three link-error codes are among the twelve.
+
+**And arms 0 and 1 FIRE WITHOUT THEIR BODIES RUNNING**, which is a distinction
+the code-set alone would hide: both phase-II arms are gated on root +0xd254,
+and it is ZERO in this configuration, so neither asks the host to move the
+delay and `addedDelay` is still what `vpcm_create` left.  Both are asserted,
+so "arm 0 fired" cannot be read as "the delay adjustment is tested".
+
+The 0x5a and 0x5c session-type stores, the mute path, the input-residue copy
+and the training timeout are likewise read out of the disassembly and reached
+by nothing this tree drives -- finding 987 measures which, by mutation, rather
+than asserting it.
 
 ### 983. `_tagModemParameters` +0x6c is the delay `vpcm_run` takes and gives back, and the format string names it
 
@@ -34727,6 +34744,13 @@ block 900 and re-converged by block 4,000 passes every final literal, so each
 run records an FNV-1a digest of (return code, 48 output samples) for every
 block and every endpoint, and the claim is that all 8,000 are identical to the
 oracle's -- with the first differing block named when they are not.
+
+**AND THE DISPATCH'S INPUT AS WELL AS ITS OUTPUT.**  The digest sees what
+`vpcm_run` produced; root +0x14 -- the progress code it dispatched ON -- is
+read after every block too, and both the SET of codes (0x1f, finding 982) and
+a digest of the whole 4,000-long sequence are compared across the four runs.
+Without it "which arms ran" would rest on mutation survival, which is evidence
+about the test and not about the object.
 
 **AND THE MIXING IS ITSELF ASSERTED.**  Every claim above would hold if the
 selector had been ignored and the blob driven four times.  An endpoint driven
@@ -34825,9 +34849,9 @@ and across all four runs.
 
 ### 987. Every claim in `t_vpcmrun.c` and `t_vpcmguard.c`, and the mutations watched failing them
 
-194 checks in five sections.  Eighteen mutations, each applied by hand to
-`src/pump/v90/vpcm.c`, built, run and reverted, with the tree re-run green
-afterwards.  Finding 966's shape.
+218 checks in seven sections -- 199 in `t_vpcmrun` and 19 in `t_vpcmguard`.
+Eighteen mutations, each applied by hand to `src/pump/v90/vpcm.c`, built, run
+and reverted, with the tree re-run green afterwards.  Finding 966's shape.
 
 | mutation | t_vpcmrun | t_vpcmguard |
 |---|--:|--:|
@@ -34843,8 +34867,8 @@ afterwards.  Finding 966's shape.
 | the session-type fallback picks V.90 | **4** | 0 |
 | the guard returns quietly instead of stopping | 0 | **3** |
 
-The counts are from the sweep run before the last six assertions were added,
-so they are a floor and not the current numbers.
+The counts are from the sweep run before the last twelve assertions were
+added, so they are a floor and not the current numbers.
 
 **AND THE SEVEN THAT SURVIVED, WHICH ARE THE RESULT AND NOT THE GAP.**  Each
 is EQUIVALENT under the one configuration the host contract allows, and each
@@ -34858,8 +34882,8 @@ sweep confirms those annotations empirically instead of contradicting them:
 | the float conversion reads the caller's buffer, not the queue | `in` is therefore never rebound |
 | the output queue is not compacted | `0 + 48 - 48 == 0` |
 | the rx bit mask dropped | `VPcmV34Progress` only ever writes 0 or 1 into `rxbits` -- a measurement about the callee, not about the mask |
-| the phase-II restart arm forgets to reset the stall counter | arm 0 never fires on a code CHANGE in this call |
-| the training timeout is off by one | the stall counter never approaches 3,000 |
+| the phase-II restart arm forgets to reset the stall counter | arm 0 DOES fire, but the stall counter never approaches its deadline either way |
+| the training timeout is off by one | same: the counter never approaches 3,000 |
 
 The first four are the same fact four times: **the host contract's `frag` of
 48 is a multiple of four, so the whole queueing apparatus is dead code on

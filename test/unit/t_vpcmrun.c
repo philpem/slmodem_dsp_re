@@ -386,6 +386,19 @@ struct v34res {
 	 */
 	int	txshape;
 	int	txshape_blk;
+	/*
+	 * WHICH ARMS ACTUALLY FIRED, read out of `vpcm_run`'s own state
+	 * rather than inferred from its output.  Root +0x14 is the progress
+	 * code the dispatch last saw; `codemask` has bit N set if code N
+	 * occurred and `codeseq` is a digest of the whole 4,000-block
+	 * sequence, so the four runs are compared on the dispatch's INPUT as
+	 * well as on the samples it produced.
+	 */
+	unsigned codemask;
+	unsigned codeseq;
+	/* Root +0xd254 and the runtime block's +0x6c -- finding 983's pair. */
+	int	extradelay;
+	int	addeddelay;
 };
 
 static struct v34res v34res[NRUN][NEP];
@@ -472,6 +485,7 @@ run_v34(struct dp_operations *ops, int run)
 		v34res[run][ep].connect_blk = -1;
 		v34res[run][ep].connect_rc_blk = -1;
 		v34res[run][ep].txshape_blk = -1;
+		v34res[run][ep].codeseq = 2166136261u;
 		params_for(ep);
 		dp[ep] = ops->create(ep_modem[ep], 34, ep_caller[ep], SRATE,
 				     FRAG, ops);
@@ -491,7 +505,7 @@ run_v34(struct dp_operations *ops, int run)
 		for (ep = 0; ep < NEP; ep++) {
 			struct v34res *r = &v34res[run][ep];
 			const char *t;
-			int rc;
+			int rc, code;
 
 			cur_ep = ep;
 			memset(out[ep], 0, sizeof(out[ep]));
@@ -511,6 +525,11 @@ run_v34(struct dp_operations *ops, int run)
 			alarm(0);
 
 			blkdig[run][ep][blk] = digest(rc, out[ep], FRAG);
+
+			code = ((struct vpcm_root *)root[ep])->status;
+			if (code >= 0 && code < 32)
+				r->codemask |= 1u << code;
+			r->codeseq = (r->codeseq ^ (unsigned)code) * 16777619u;
 
 			if (rc == DPSTAT_CONNECT) {
 				if (r->connect_rc_blk < 0)
@@ -550,6 +569,12 @@ run_v34(struct dp_operations *ops, int run)
 		r->rx_len = s->rx_len;
 		r->dp_id = ((struct dp *)root[ep])->id;
 		r->txshape = peek32(ep, O_TXSHAPE);
+		r->extradelay = ((struct vpcm_root *)root[ep])->extradelay;
+		memcpy(&r->addeddelay,
+		       (const char *)rt_buf[ep]
+		       + __builtin_offsetof(struct _tagModemParameters,
+					    addedDelay),
+		       sizeof(r->addeddelay));
 		r->nparam = s->nparams;
 		if (s->nparams > 0) {
 			r->p0_name = (int)s->param_name[0];
@@ -756,6 +781,36 @@ main(void)
 			 "%s: ...before the mode word turns 1", ep_name[ep]);
 		diff_eq_int(msg, r->txshape_blk < r->connect_blk, 1,
 			    r->txshape_blk);
+		/*
+		 * WHICH ARMS FIRED, as a literal, read out of root +0x14
+		 * every block rather than inferred from the samples.  0x1f is
+		 * codes 0, 1, 2, 3 and 4: "re-starting phase II", "phase II
+		 * completed", the two that do nothing, and the connect.  So
+		 * five of the seventeen are exercised by this call and the
+		 * other twelve -- including 10's "Same Line Verification
+		 * Status" and all three link-error codes -- are written from
+		 * the disassembly and reached by nothing here.
+		 */
+		snprintf(msg, sizeof(msg),
+			 "%s: the progress codes this call produced",
+			 ep_name[ep]);
+		diff_eq_int(msg, (int)r->codemask, 0x1f, ep);
+		/*
+		 * AND WHY ARMS 0 AND 1 LEAVE NO TRACE THOUGH THEY RAN.  Both
+		 * phase-II arms are gated on root +0xd254 being non-zero, and
+		 * in this configuration it is zero -- so the bodies that ask
+		 * the host to move the delay never execute, and `addedDelay`
+		 * is still what `vpcm_create` left.  Asserted so that "arm 0
+		 * fired" is not read as "the delay adjustment is tested".
+		 */
+		snprintf(msg, sizeof(msg),
+			 "%s: ...with the phase-II delay adjustment at zero",
+			 ep_name[ep]);
+		diff_eq_int(msg, r->extradelay, 0, ep);
+		snprintf(msg, sizeof(msg),
+			 "%s: ...so nothing was added to the host's delay",
+			 ep_name[ep]);
+		diff_eq_int(msg, r->addeddelay, 0, ep);
 		snprintf(msg, sizeof(msg),
 			 "%s: the connect arm wrote two parameters",
 			 ep_name[ep]);
@@ -850,6 +905,23 @@ main(void)
 				 run_name[run], ep_name[ep]);
 			diff_eq_int(msg, r->txshape_blk,
 				    v34res[0][ep].txshape_blk, ep);
+			/*
+			 * THE DISPATCH'S INPUT, NOT ONLY ITS OUTPUT.  The
+			 * digest above sees `vpcm_run`'s return code and its
+			 * samples; this sees the progress code it dispatched
+			 * on in every one of the 4,000 blocks, which is the
+			 * state the seventeen arms exist to maintain.
+			 */
+			snprintf(msg, sizeof(msg),
+				 "%s %s: the same progress codes, in the same "
+				 "order, all 4,000 blocks",
+				 run_name[run], ep_name[ep]);
+			diff_eq_int(msg, (int)r->codeseq,
+				    (int)v34res[0][ep].codeseq, ep);
+			snprintf(msg, sizeof(msg),
+				 "%s %s: ...and the same set of them",
+				 run_name[run], ep_name[ep]);
+			diff_eq_int(msg, (int)r->codemask, 0x1f, ep);
 
 			/*
 			 * THE BIT PIPE, PER ENDPOINT AND WITH ITS COUNT.
@@ -930,6 +1002,9 @@ main(void)
 				       v34res[run][ep].lag,
 				       v34res[run][ep].aligned,
 				       v34res[run][ep].repeats,
-				       v34res[run][ep].self_locked);
+				       v34res[run][ep].self_locked),
+				printf("      codes %#x seq %#x\n",
+				       v34res[run][ep].codemask,
+				       v34res[run][ep].codeseq);
 	return rc;
 }
