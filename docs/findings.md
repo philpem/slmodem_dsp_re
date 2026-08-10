@@ -32925,3 +32925,332 @@ move, and a test looks live while the loop is untested. And `Resampler::resample
 reads one sample past `in[n - 1]` on several paths; that is the original's own
 bug, reproduced deliberately, so a caller must pad the buffer or the two sides
 will disagree about uninitialised memory rather than about the resampler.
+
+### 820. `dp_runtime` IS `_tagModemParameters`, and the other half of the ABI survives
+
+The block V.PCM is configured from had no known type, no known size and no
+known producer. It has all three, and the route to them is that
+**`slmodemd`'s own source is intact** -- `dsplibs.o` is a partial link against
+it, `modem_get_param` and `modem_set_param` are UNDEFINED in the object and
+DEFINED in `slmodemd/modem_param.c`, and the tree already treats that file as
+the authority for the parameter numbering (`include/dsplib/modem_params.h`'s
+header comment). It is not a side source; it is the caller.
+
+The identification is three steps and no step is a guess:
+
+```
+    vpcm_create 0x3ac2   call dp_param_get        -> root +0x28
+    dp_param_get 0x58c0  modem_get_param(m, 10)   MDMPRM_DPRUNTIME
+    modem_param.c:79     return (long)m->dp_runtime
+    modem.c:1136         m->dp_runtime = dp_runtime_create(m)
+    dsplibs.o 0x58e0     dp_runtime_create: sysdep_malloc(0x88)
+    vpcm_create 0x3af9   root +0x28 is VPCMXF_Create's 3rd argument
+    VPCMXF_Create 0xfdcd _ZN12VPcmFloModemC1EPv12V90ModemSide
+                         P19_tagModemParametersj20V90ComputationalMode
+                         20V92ComputationalMode
+```
+
+The last line is the one that closes it: the **mangling types that argument**
+`_tagModemParameters *`, and the pointer it receives came out of
+`dp_runtime_create`. So the type of `m->dp_runtime` is `_tagModemParameters`,
+its size is **0x88 = 136** by the same `sysdep_malloc`-before-the-initialiser
+argument wave 0 used for `V90Parameters`, and its producer is a function in
+this object that nobody had reconstructed because **no datapump calls it** --
+the host does, which is why it appears in no `create` closure.
+
+Three offsets agreed before the mangling was read, which is why this is a
+confirmation rather than a coincidence: `_tagModemParameters` +0x48 was
+already documented as "copied into `LINE_CONNECTION_TYPE`, which the object
+initialises to -1", and `dp_runtime_create` writes `dsp_info.connection_type`
+there; +0x50 was already "one byte, bits 0 and 1", and it writes the byte 1;
++0x78 was already "a parameter-file name", and `vpcm_create` NULLs it.
+
+`_ZN13V90ParametersC1EP19_tagModemParameters` had named the type since finding
+226. What was missing was that the type is the host's, not the library's.
+
+### 821. `dp_runtime_create` reconstructed, and the two mutants that cannot die
+
+`src/core/dp_param.c`, 0x58e0 and 0x5a10, joining the `dp_param_get` that was
+already there -- one translation unit, three functions, 0x58c0 / 0x58e0 /
+0x5a10 consecutive. `t_dp_param` compares the whole 136-byte block over eight
+`dsp_info` sweeps and reports 97 checks.
+
+What it builds, every field, and where each comes from:
+
+```
+    +0x02  bit4=1, bit5=0, bit6=dsp_info.qc_lapm & 1, bit7=0
+    +0x03  low three bits cleared
+    +0x04  60          +0x08  40          +0x0c  0
+    +0x10  dsp_info.qc_index, or the literal 9 if it is zero  (0x5a00)
+    +0x14  700         +0x40  0           +0x44  6
+    +0x48  dsp_info.connection_type     +0x4c  dsp_info.clock_deviation
+    +0x50  1 (byte)
+    +0x54  modem_get_param(m, MDMPRM_CODECTYPE)
+    +0x58 .. +0x6c  zero
+```
+
+**Every one of those zeroes is stored after a `memset` that already wrote it**,
+and the block is `sysdep_memset(r, 0, 0x88)` **twice** -- once at 0x5919 and
+again at 0x593e with only `modem_get_param` between, which does not touch it.
+Both are reproduced. Neither can be caught by any differential test, and the
+mutation run says so rather than the comment claiming it:
+
+```
+    qcIndex default 9 -> 8                    2 of 97 checks
+    +0x004 60 -> 59                           8
+    +0x014 700 -> 7000                        8
+    clockDeviation from connection_type       5
+    qcFlags bit 6 from qc_lapm bit 1          4
+    qcFlags bit 4 never set                   8
+    codecType asks for DPRUNTIME             24
+    dp_runtime_delete does not free           8
+    ---- and the two that survive ----
+    drop the SECOND memset                    equivalent: nothing writes
+                                              between the two
+    stop clearing bit 7                       equivalent: memset left it 0
+```
+
+Ten applied by hand, eight caught, **two genuinely equivalent** and named as
+such. They are the codegen tier's business, not the differential tier's.
+
+**The size claim is asked of the blob, not of our header.** `harness_alloc`
+records the requested size, so after a reset and one `ref_dp_runtime_create`
+the test asserts `harness_alloc.bytes == 0x88` -- that is the
+`movl $0x88,(%esp)` at 0x58ea, and it is the whole evidence for
+`sizeof(struct _tagModemParameters)`. Asserting our `sizeof` against a literal
+0x88 would only have restated the header.
+
+`dp_runtime_delete` is three bytes, `jmp sysdep_free`.
+
+### 822. `struct dsp_info` is 16 bytes, and the object reaches all four of them
+
+MDMPRM_DSPINFO segfaulted on the harness default because `vpcm_delete` writes
+through it. What it points at is now bounded from the object alone -- four
+accesses, four offsets, all four bytes wide, and no fifth:
+
+```
+    dp_runtime_create  0x5955  movzbl 0x8(%esi)      read   +0x08, bit 0
+                       0x5963  mov    0xc(%esi)      read   +0x0c
+                       0x5980  mov    0x4(%esi)      read   +0x04
+                       0x59ad  mov    (%esi)         read   +0x00
+    vpcm_delete        0x3df3  mov    %eax,(%ecx)    write  +0x00
+                       0x3ded  mov    %eax,0x4(%ecx) write  +0x04
+```
+
+slmodemd declares exactly four members in exactly that order and no more
+(`modem_defs.h:366`), so the OFFSETS and WIDTHS are this object's and the
+NAMES are the host's: `connection_type`, `clock_deviation`, `qc_lapm`,
+`qc_index`. Declared in `include/dsplib/modem_params.h` beside the block it
+feeds. `long clock_deviation` there is `int` here, because this tree also
+builds 64-bit and the object's width is four.
+
+**+0x00 and +0x04 make a round trip and that is the point of the field.**
+`dp_runtime_create` copies them INTO the runtime block at +0x48 and +0x4c;
+`vpcm_delete` copies them back OUT. So the connection type and clock deviation
+a call learns survive the datapump being torn down and rebuilt -- which is
+what a datapump change is.
+
+Nothing in this object allocates a `dsp_info`: it is `&m->dsp_info`, storage
+inside the host's own `struct modem`. A test that constructs V.PCM owns one.
+
+### 823. The five parameters, DERIVED -- and where each one lands
+
+Finding 801 listed five overrides and called them plausible. Each now has a
+producer, and two of the three numbers turn out to be host CONSTANTS rather
+than modem-shaped choices:
+
+| parameter | what answers it | value | lands at |
+|---|---|--:|---|
+| 10 DPRUNTIME | `m->dp_runtime`, i.e. `dp_runtime_create(m)` | 0x88 block | root +0x28 |
+| 11 DSPINFO | `&m->dsp_info` | 16 bytes | root +0x24 |
+| 3 MIN_RATE | `m->min_rate`, default `MODEM_MIN_RATE` | **300** | runtime +0x30 |
+| 4 MAX_RATE | `m->max_rate`, default `MODEM_MAX_RATE` | **56000** | runtime +0x34 |
+| 5 IODELAY | `m->driver.ioctl(m, MDMCTL_IODELAY, 0)` | the driver's | runtime +0x64/+0x68 |
+| 6 CODECTYPE | the same ioctl | the driver's | runtime +0x54 |
+
+and the two the constructor GUARDS were never free either:
+
+```
+    srate     cmp $0x2580   9600   =  MODEM_RATE                   (modem.h:85)
+    max_frag  cmpl $0x30    48     =  MODEM_FRAG = MODEM_RATE/200  (modem.h:86)
+```
+
+`modem.c:1051` passes `m->srate` and `m->frag` straight into
+`op->create(m, dp_id, m->caller, m->srate, m->frag, op)`. **48 is therefore
+the value, not merely a value the `<= 48` guard admits** -- which is exactly
+the shape of a number that looks derived and is not, and it happened to be
+right.
+
+**MODEM_MAX_RATE is 56000 and the constructor's clamp at 0x3b65 is 0xdac0,
+which is also 56000.** The host ceiling and the library ceiling are one number
+written twice, so the clamp is unreachable from slmodemd. That is a check on
+the reading of both.
+
+**The two rate pairs are not the same pair, and this is the trap.**
+MDMPRM_MIN_RATE and MDMPRM_MAX_RATE land at runtime +0x30 / +0x34, which is
+what `vpcm: VPCM rate limits: %d-%d\n` prints and nothing else reads. The pair
+`V90Parameters::setToDefault` divides by 2400 to get a rate index is
++0x38 / +0x3c, and `vpcm_create` writes those as the **literals 4800 and
+33600** on both arms at 0x3b90. So the host's rate window never reaches the
+rate machinery.
+
+**The I/O delay is a formula over a host MEASUREMENT and only the formula is
+recoverable.** HW = IODELAY + 4 and DMA = HW - 48 + root +0xd254, printed as
+`vpcm: Delays: HW %d, DMA %d\n`; the 48 is slmodemd's own
+`ST7554_HW_IODELAY (48)` (`modem_main.c:682`), which is an independent check
+on reading `lea -0x30(%edx)`. The INPUT is `m->driver.ioctl(...)`: **0** for
+slmodemd's socket driver, `dev->delay` for ALSA, `ioctl + dev->delay` for the
+kernel module. It is a property of the sound card, not of the library, and it
+is the one parameter here that no amount of reading this object can recover.
+
+`t_v34conn.c` asserts every landing site above against the blob's own
+construction. The mutations that were watched failing them:
+
+```
+    the +0x30 claim read from +0x38 instead        2 of 51
+    the +0x38 claim read from +0x30 instead        2
+    MAX_RATE 56000 -> 33600                        2
+    MAX_RATE 56000 -> 64000 (trips the clamp)      4
+    IODELAY 0 -> 1000 (trips the 0x3d6f arm)       4
+    a plain calloc'd block instead of
+        dp_runtime_create                          6, and the graph hash
+    constructed as V.92 (id 92, not 34)            6, and 44 of the call's 128
+    one dsp_info shared by both endpoints          1
+    one runtime block shared by both endpoints     8
+    the runtime block back OUT of the graph        the live-region count
+```
+
+### 824. THE SWEEP: this call consumes ONE of the six, and it is the one that cannot be derived
+
+Deriving a configuration is worth nothing if nothing measures what it does. So
+each parameter was swept and the whole 1,600-block call re-run, with the
+originating endpoint's recorded trajectory as the observable -- transcript
+lines, distinct state triples, state moves, non-zero transmit samples, blocks
+in which the pump iterated, the mode word, the first and last state triples,
+and both rate fields.
+
+```
+  baseline (derived)               25 8 13 4072 574  mode 2  292b36 -> 2c2b18
+  MIN_RATE   300 -> 2400           same
+  MIN_RATE   300 -> 33600          same
+  MAX_RATE   56000 -> 33600        same     (2 constructor claims fire)
+  MAX_RATE   56000 -> 2400         same     (2 fire)
+  MAX_RATE   56000 -> 64000        same     (4 fire: the clamp)
+  CODECTYPE  4 -> 0                same
+  dsp_info.qc_lapm 0 -> 1          same
+  dsp_info.connection_type -> 3    same
+  dsp_info.qc_index -> 5           same
+  IODELAY    0 -> 40               same
+  IODELAY    0 -> 240              *** MOVED ***  18 9 8 2551 957
+  IODELAY    0 -> 1000             *** MOVED ***  18 9 8 2551 957
+```
+
+**The sweep is live, and the same table proves it.** Every MAX_RATE row fires
+the constructor claims that read +0x34 -- so the parameter reached the object,
+was seen to reach it, and the call still did not notice. A sweep where nothing
+moves and a broken sweep are the same output (`docs/method/gates.md` rule 3);
+this one moves in two rows and fires assertions in five.
+
+**So five of the six are inert for a V.34 call.** The host's rate window is
+inert for the structural reason in finding 823 -- it lands at +0x30 / +0x34
+and the rate machinery reads +0x38 / +0x3c, which are literals. The codec type
+and all four `dsp_info` words are inert because nothing on this path reads
+them back: they are the host's storage passing through.
+
+**The exception is the I/O delay, and its effect is not small.** Between HW
+delay 44 and 244 the trajectory changes completely: the originator ends on
+**59 RX_PHASE2_CALL** rather than error-recovering back to 44 DET_INFO, nine
+distinct triples instead of eight, and the pump iterates in 957 blocks of
+1,600 instead of 574. 240 and 1000 give the identical result although their
+DMA delays differ by 760, so what the call is sensitive to is **HW delay, i.e.
+IODELAY + 4**, and not the DMA correction.
+
+**THIS WAS NOT TUNED AND IS NOT ADOPTED.** slmodemd's socket driver answers 0,
+and 0 is what is committed. A larger delay taking the handshake further into
+phase 2 is a lead for whoever holds the V.8 question, and it is recorded as a
+measurement, not used as a knob. A connection reached by fitting the one
+parameter that cannot be derived would be the worst possible outcome here.
+
+### 825. It still does not connect, and the trajectory did not move by one count
+
+`t_v34conn.c` now constructs both endpoints from the derived configuration:
+`ref_dp_runtime_create` builds each endpoint's runtime block on the heap, each
+gets its own zeroed `struct dsp_info`, and the three numbers are 300 / 56000 /
+0. Against finding 902's plausible 2400 / 33600 / 40 and two zeroed 512-word
+buffers, **every recorded literal is unchanged**:
+
+```
+                lines  distinct  moved  nonzero  iterated  connected  mode
+  originate        25         8     13     4072       574          0     2
+  answer           20         7     10     6320       407          0     2
+```
+
+Same first triple, same last triple, same rates of 0 and 0, same stop:
+microstate 44 DET_INFO, rxstate 43 RX_DPSK, txstate 24 TX_DPSK, mode 2, and
+the originator still says *"Repeated info0 is detected, errorrecovery is
+initialized in RX_PHASE2_CALL"* at block 1140. All four runs still agree over
+3,200 block-endpoint pairs.
+
+**That is the result, and it is worth more than a connection would have been
+if it had come from the other direction.** Finding 908 named the configuration
+as the first place to look if the call was ever to connect. It has been looked
+at, it is derived rather than chosen, and the call is byte-for-byte
+indifferent to it. **The configuration is retired as a suspect.** What remains
+is finding 908's second item: the two objects are `caller`-configured and have
+never been through V.8, so neither knows what the other offered, and phase 2
+is exactly where V.34 uses that.
+
+One real hole was closed on the way. The runtime block used to be a static
+array, which put it OUTSIDE the snapshotted graph, so anything the call wrote
+into it would have leaked from one of the four runs to the next. It is now
+heap-allocated, as the host allocates it, and the live-region count went 250
+-> 252 accordingly.
+
+### 838. Wave 1's construction path cannot be written yet, and by how much
+
+Recomputed with `tools/closure.py dp_vpcm_init vpcm_create VPCMXF_Create
+VPcmV34Create --missing` after a full build: the whole closure is **395
+symbols / 226,892 bytes** unwritten. Wave 1's own slice, grouped by class:
+
+| group | planned | recomputed |
+|---|--:|--:|
+| free functions | 31,127 / 69 | **31,072 / 65** |
+| `VPcmFloModem` | 7,020 / 6 | **7,020 / 6** |
+| `V90Modem`, `V92Modem`, `K56FlexFloModem` | 2,598 / 13 | **2,598 / 13** |
+| **total** | **40,745 / 88** | **40,690 / 84** |
+
+Closer than any previous recomputation -- 55 bytes and four symbols.
+
+**But the split is by CLOSURE and not by writability, and for wave 1 those are
+very different.** Every symbol was re-run through `closure.py <name> --missing`
+and asked whether its own closure is size 1:
+
+```
+    dp_vpcm_init          needs 394 more    VPcmV34Progress      needs 270
+    vpcm_create           needs 124         vpcm_run             needs 275
+    VPCMXF_Create         needs  66         VPcmV34Create        needs  11
+    VPcmFloModem::ctor    needs  65         VPcmFloModem::
+    V90Modem::ctor        needs  38           runPcmModem        needs 225
+    V92Modem::ctor        needs  18
+```
+
+**Not one of the functions this wave is named after can be compiled today.**
+`VPcmV34Create` is the closest at 11 symbols and 2,732 bytes, and all eleven
+are `reset` / `enterChannelVerification` members of WAVE-2 classes --
+`V90Equalizer`, `V90Demodulator`, `V90ConnectionEvaluator`, `V90PreFilter`,
+`V90Phase3Demodulator`, `V90ConstellationDesigner`, `VPcmFloModem`,
+`K56FlexFloModem`. Taking them would break one-class-one-owner for eight
+future batches, so they were left.
+
+About **14 KB** of wave 1 IS writable today, and it is the leaves: the FFT
+pair `realfft` / `four1` (870 bytes, and finding 876's block on
+`Psd::process`), the V.92 CP/DIL packers (`V92DILdescriptorPacker` 4,160,
+`V92setParamsInfoFromCPUnPck` 2,695, `setV92CPpckFromParamsInfo` 822), the
+rate-renegotiation pair, the diagnostic printers and about 2 KB of coefficient
+tables.
+
+**The consequence for the plan.** `docs/vpcmv34main.md` puts wave 1 early "for
+a reason beyond dependency" -- the oracle -- and findings 800-806 delivered
+that oracle without the span. The dependency reason runs the other way: the
+construction path is the LAST thing in this span that can be written, not the
+first, and the byte count says nothing about that.

@@ -27,8 +27,25 @@
  * configuration is the blob's.  Five parameters had to be chosen to construct
  * at all (finding 801) and two of them are ADDRESSES rather than numbers:
  * `MDMPRM_DPRUNTIME` is dereferenced at once and `MDMPRM_DSPINFO` is written
- * through by `vpcm_delete`.  They are a PLAUSIBLE configuration, not a
- * recovered one, and every result here is bounded by that.
+ * through by `vpcm_delete`.
+ *
+ * THOSE FIVE ARE NOW DERIVED RATHER THAN CHOSEN, which is the one thing about
+ * this file that has changed since finding 902 (findings 820-825).  Both
+ * addresses have types and both types have sizes: DPRUNTIME is a
+ * `struct _tagModemParameters` built by `dp_runtime_create`, which is in this
+ * object at 0x58e0 and is now reconstructed and differentially tested
+ * (`t_dp_param`), and DSPINFO is a 16-byte `struct dsp_info` whose four words
+ * are the four this object reads and writes.  The three numbers are the
+ * HOST's, not a modem-shaped guess: `MODEM_MIN_RATE` 300 and `MODEM_MAX_RATE`
+ * 56000 are what `slmodemd/modem.c` puts in `m->min_rate`/`m->max_rate`, and
+ * `MDMPRM_IODELAY` is `m->driver.ioctl(m, MDMCTL_IODELAY, 0)`, which is 0 for
+ * slmodemd's own socket driver.  `CFG_SRATE` 9600 is `MODEM_RATE` and
+ * `CFG_MAX_FRAG` 48 is `MODEM_FRAG`, which is `MODEM_RATE/200` -- so the two
+ * the constructor guards were never free either.
+ *
+ * IT STILL DOES NOT CONNECT, and the trajectory did not move (finding 825).
+ * That is the point of deriving them: the negative result now costs the
+ * configuration as a suspect instead of leaving it as one.
  *
  * CONGRUENCE, WHICH A CONSTRUCTED OBJECT DOES NOT GET FOR FREE.  `t_v34call`
  * compares four runs over the same two static arenas, so every address is
@@ -76,6 +93,7 @@
 #include "dsplib/v34shell.h"
 
 extern void ref_dp_vpcm_init(void);
+extern void *ref_dp_runtime_create(void *modem);
 extern void ref_datapumpv34(void *obj);
 extern int ref_modem_serrint(void *obj);
 extern unsigned int ref_dsplibs_debug_level;
@@ -115,27 +133,60 @@ extern unsigned int dsplibs_debug_level;
 #define MODE_HANDSHAKE	2
 #define MODE_CONNECTED	1
 
-/* --- the configuration, which is chosen and not recovered ----------------- */
+/* --- the configuration, DERIVED -------------------------------------------- */
 
 /*
- * Finding 801's five.  Two are addresses: +0x28 holds `MDMPRM_DPRUNTIME` and
- * `movl $0x0,0x78(%eax)` writes through it at once, and `vpcm_delete` writes
- * two words through `MDMPRM_DSPINFO` at 0x3ded.  Each endpoint gets its OWN
- * pair -- one buffer written into both constructions is exactly the shared
- * state findings 319-322 exist to avoid.
+ * Finding 801's five, each traced to what actually answers it.  Two are
+ * addresses: +0x28 holds `MDMPRM_DPRUNTIME` and `movl $0x0,0x78(%eax)` writes
+ * through it at once, and `vpcm_delete` writes two words through
+ * `MDMPRM_DSPINFO` at 0x3ded.  Each endpoint gets its OWN pair -- one block
+ * written into both constructions is exactly the shared state findings
+ * 319-322 exist to avoid.
  *
- * The three numbers are a plain analogue V.34 modem: the rate window V.34
- * itself spans, and an I/O delay inside the `+4 <= 0xf4` the 0x3d6f arm
- * requires.  Deriving them properly is a separate job; nothing here is tuned
- * to make anything happen, and the negative result below is the reason to
- * believe that.
+ * The three numbers are `slmodemd`'s, which is the host this object was
+ * compiled against and whose source survives:
+ *
+ *   MDMPRM_MIN_RATE   m->min_rate = MODEM_MIN_RATE = 300    (modem.h:89)
+ *   MDMPRM_MAX_RATE   m->max_rate = MODEM_MAX_RATE = 56000  (modem.h:90)
+ *   MDMPRM_IODELAY    m->driver.ioctl(m, MDMCTL_IODELAY, 0), which is 0 for
+ *                     the socket driver (modem_main.c:682) and `dev->delay`
+ *                     for ALSA -- a host MEASUREMENT, so what is derived is
+ *                     the formula the object applies to it, not the input
+ *   MDMPRM_CODECTYPE  the socket driver's 4 = CODEC_STLC7550; read only by
+ *                     `dp_runtime_create`, into +0x54
+ *
+ * MODEM_MAX_RATE 56000 is worth a second look: it is the SAME 0xdac0 the
+ * constructor clamps to at 0x3b65, so the host's ceiling and the library's
+ * are one number written twice, and the clamp is unreachable from slmodemd.
+ *
+ * CFG_SRATE and CFG_MAX_FRAG were recorded as the constructor's two guards.
+ * They are also exactly what the host passes: `m->srate = MODEM_RATE` = 9600
+ * and `m->frag = MODEM_FRAG` = MODEM_RATE/200 = 48 (modem.h:85-86, modem.c:
+ * 1930), reaching `op->create(m, dp_id, m->caller, m->srate, m->frag, op)` at
+ * modem.c:1051.  So 48 is the value, not merely a value the guard admits.
  */
-#define CFG_MIN_RATE	2400
-#define CFG_MAX_RATE	33600
-#define CFG_IODELAY	40
-#define CFG_SRATE	9600	/* `cmp $0x2580,%esi` -- the constructor       */
-#define CFG_MAX_FRAG	48	/* `cmpl $0x30,...` / `jg` -- and this one     */
-#define CFG_BUFWORDS	512	/* generous: the constructor writes to +0x78   */
+#define CFG_MIN_RATE	300
+#define CFG_MAX_RATE	56000
+#define CFG_IODELAY	0
+#define CFG_CODECTYPE	4
+#define CFG_SRATE	9600	/* `cmp $0x2580,%esi`, and MODEM_RATE          */
+#define CFG_MAX_FRAG	48	/* `cmpl $0x30,...` / `jg`, and MODEM_FRAG     */
+
+/*
+ * WHERE EACH ONE LANDS.  Read off `vpcm_create` and asserted below, so this
+ * is a claim about the blob's construction and not a restatement of the two
+ * lines that set it up.
+ */
+#define RT_RATE_LOW	0x30	/* MDMPRM_MIN_RATE, verbatim         (0x3b8a) */
+#define RT_RATE_HIGH	0x34	/* MDMPRM_MAX_RATE, min(., 0xdac0)   (0x3b8d) */
+#define RT_MINRATE	0x38	/* the LITERAL 4800                  (0x3b90) */
+#define RT_MAXRATE	0x3c	/* the LITERAL 33600                 (0x3b97) */
+#define RT_HWDELAY	0x64	/* MDMPRM_IODELAY + 4                (0x3c0c) */
+#define RT_DMADELAY	0x68	/* HW - 48 + root +0xd254            (0x3c1e) */
+#define O_ROOT_D250	0xd250	/* 0x210 unless runtime +2 bit 4     (0x3bdf) */
+#define O_ROOT_D254	0xd254	/* the delay correction, 0 unclamped          */
+#define O_ROOT_DSPINFO	0x24
+#define O_ROOT_RUNTIME	0x28
 
 /* --- the shape of a run --------------------------------------------------- */
 
@@ -240,8 +291,24 @@ static int dump;
 /* --- construction --------------------------------------------------------- */
 
 static char *root[NEP], *obj[NEP];
-static long runtime_buf[NEP][CFG_BUFWORDS];
-static long dspinfo_buf[NEP][CFG_BUFWORDS];
+
+/*
+ * THE HOST'S TWO BLOCKS, one pair per endpoint and both of a KNOWN TYPE now.
+ *
+ * `dsp_info` is the host's own storage -- nothing in this object allocates
+ * one -- so it stays a static here, zeroed, which is what a first call on a
+ * fresh slmodemd has: `datafile_load_info` has not run, and
+ * `m->dsp_info.qc_lapm` is `m->cfg.ec && m->cfg.ec_detector`.
+ *
+ * The runtime block is NOT a static, and that is a change worth its own line.
+ * `dp_runtime_create` heap-allocates it, so putting it on the heap here is
+ * what the host does -- and it also puts it inside the snapshotted graph.  A
+ * static one sat OUTSIDE the graph and was never restored between the four
+ * runs, so anything the call wrote into it would have leaked from one run to
+ * the next.  Nothing observed ever did, but the hole was real.
+ */
+static struct dsp_info dspinfo[NEP];
+static struct _tagModemParameters *runtime[NEP];
 
 #define MAXREG	512
 static void *reg[MAXREG];
@@ -264,6 +331,16 @@ peek32(int ep, unsigned off)
 	int v;
 
 	memcpy(&v, obj[ep] + off, sizeof(v));
+	return v;
+}
+
+/* The V.PCM root, not the V.34 object at +0x2c of it. */
+static int
+peek_root(int ep, unsigned off)
+{
+	int v;
+
+	memcpy(&v, root[ep] + off, sizeof(v));
 	return v;
 }
 
@@ -302,10 +379,24 @@ build(struct dp_operations *ops, int ep)
 {
 	struct dp *d;
 
-	memset(runtime_buf[ep], 0, sizeof(runtime_buf[ep]));
-	memset(dspinfo_buf[ep], 0, sizeof(dspinfo_buf[ep]));
-	harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime_buf[ep]);
-	harness_param_set(MDMPRM_DSPINFO, (long)(size_t)dspinfo_buf[ep]);
+	memset(&dspinfo[ep], 0, sizeof(dspinfo[ep]));
+	harness_param_set(MDMPRM_DSPINFO, (long)(size_t)&dspinfo[ep]);
+	harness_param_set(MDMPRM_CODECTYPE, CFG_CODECTYPE);
+
+	/*
+	 * THE HOST BUILDS THE RUNTIME BLOCK BEFORE IT BUILDS THE DATAPUMP --
+	 * `slmodemd/modem.c:1136` -- so this call is in the right place and
+	 * not a convenience.  The BLOB's `dp_runtime_create` is used, for the
+	 * same reason every other part of this fixture is the blob's: ours is
+	 * proved identical to it by `t_dp_param`, and a fixture that mixed
+	 * the two would need that proof restated here.
+	 */
+	runtime[ep] = (struct _tagModemParameters *)
+		ref_dp_runtime_create((void *)0xD1A1u);
+	if (runtime[ep] == 0)
+		return 0;
+
+	harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime[ep]);
 	harness_param_set(MDMPRM_MIN_RATE, CFG_MIN_RATE);
 	harness_param_set(MDMPRM_MAX_RATE, CFG_MAX_RATE);
 	harness_param_set(MDMPRM_IODELAY, CFG_IODELAY);
@@ -1120,12 +1211,105 @@ main(void)
 	 * anything else.
 	 */
 	diff_eq_int("allocations for two constructions", harness_alloc.allocs,
-		    254, 0);
+		    256, 0);
 	diff_eq_int("...freed inside create", harness_alloc.frees, 4, 0);
-	diff_eq_int("...live afterwards", harness_alloc.live, 250, 0);
-	diff_eq_int("...bytes asked for", (long)harness_alloc.bytes, 559200, 0);
+	diff_eq_int("...live afterwards", harness_alloc.live, 252, 0);
+	diff_eq_int("...bytes asked for", (long)harness_alloc.bytes, 559472, 0);
 	diff_eq_int("...and no bad free", harness_alloc.bad_free, 0, 0);
 	diff_eq_int("the two roots are distinct", root[0] != root[1], 1, 0);
+	/*
+	 * 254 and 559200 were the numbers before the runtime block moved to
+	 * the heap; the extra two allocations and 272 bytes are the two
+	 * `dp_runtime_create` blocks at 0x88 each, which is the whole of the
+	 * difference and is checked as such rather than left implicit.
+	 */
+	diff_eq_int("...of which the two runtime blocks are 0x88 each",
+		    (long)harness_alloc.bytes - 559200, 2 * 0x88, 0);
+
+	/*
+	 * WHERE EVERY CONFIGURATION PARAMETER LANDS IN THE CONSTRUCTED
+	 * OBJECT.  This is the block that turns "the configuration is
+	 * plausible" into "the configuration is derived": each claim reads a
+	 * field of the object the BLOB's constructor wrote and compares it
+	 * with what `vpcm_create`'s disassembly says should be there.
+	 *
+	 * The two rate claims are the interesting ones and they say the
+	 * OPPOSITE of what the parameter names suggest.  MDMPRM_MIN_RATE and
+	 * MDMPRM_MAX_RATE go to +0x30 and +0x34 and are never read again by
+	 * anything V.34; the pair `V90Parameters::setToDefault` divides by
+	 * 2400 to get a rate index is +0x38 and +0x3c, and `vpcm_create`
+	 * writes those as the LITERALS 4800 and 33600 on both arms.  So the
+	 * host's rate window does not reach the rate machinery at all, which
+	 * is why sweeping it changes nothing (finding 824).
+	 */
+	for (ep = 0; ep < NEP; ep++) {
+		char msg[128];
+		struct _tagModemParameters *rt = runtime[ep];
+
+		snprintf(msg, sizeof(msg), "%s: +0x24 is our dsp_info",
+			 ep_name[ep]);
+		diff_eq_int(msg, peek_root(ep, O_ROOT_DSPINFO)
+			    == (int)(size_t)&dspinfo[ep], 1, ep);
+		snprintf(msg, sizeof(msg), "%s: +0x28 is our runtime block",
+			 ep_name[ep]);
+		diff_eq_int(msg, peek_root(ep, O_ROOT_RUNTIME)
+			    == (int)(size_t)rt, 1, ep);
+
+		snprintf(msg, sizeof(msg),
+			 "%s: MDMPRM_MIN_RATE reached +0x30 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, (long)rt->vpcmRateLimitLow, CFG_MIN_RATE, ep);
+		snprintf(msg, sizeof(msg),
+			 "%s: MDMPRM_MAX_RATE reached +0x34 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, (long)rt->vpcmRateLimitHigh, CFG_MAX_RATE, ep);
+		snprintf(msg, sizeof(msg), "%s: ...and was not clamped, because "
+			 "MODEM_MAX_RATE is the clamp (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, CFG_MAX_RATE, 0xdac0, ep);
+
+		snprintf(msg, sizeof(msg), "%s: +0x38 is the literal 4800 "
+			 "whatever the host said (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, (long)rt->minRate, 4800, ep);
+		snprintf(msg, sizeof(msg), "%s: +0x3c is the literal 33600 "
+			 "(%%ld)", ep_name[ep]);
+		diff_eq_int(msg, (long)rt->maxRate, 33600, ep);
+
+		snprintf(msg, sizeof(msg),
+			 "%s: HW delay is MDMPRM_IODELAY + 4 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, rt->hwDelay, CFG_IODELAY + 4, ep);
+		snprintf(msg, sizeof(msg),
+			 "%s: DMA delay is that less 48 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, rt->dmaDelay, CFG_IODELAY + 4 - 48, ep);
+		snprintf(msg, sizeof(msg), "%s: ...so the delay correction at "
+			 "root +0xd254 stayed 0 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, peek_root(ep, O_ROOT_D254), 0, ep);
+
+		/*
+		 * `paramFile` NULLED AT 0x3ad2.  This is the store that
+		 * faulted on the harness's default answer and is the reason
+		 * DPRUNTIME had to be an address; asserting it makes the
+		 * derivation's central claim visible rather than implied.
+		 */
+		snprintf(msg, sizeof(msg),
+			 "%s: the constructor NULLed paramFile", ep_name[ep]);
+		diff_eq_int(msg, rt->paramFile == 0, 1, ep);
+
+		/*
+		 * The session type is V.34, so `vpcm_create` CLEARS runtime
+		 * +2 bit 4 that `dp_runtime_create` had set -- and root
+		 * +0xd250 is 0x210 exactly when that bit is clear.
+		 */
+		snprintf(msg, sizeof(msg),
+			 "%s: session type V.34 cleared runtime +2 bit 4",
+			 ep_name[ep]);
+		diff_eq_int(msg, rt->qcFlags & 0x10, 0, ep);
+		snprintf(msg, sizeof(msg),
+			 "%s: ...so root +0xd250 is 0x210 (%%ld)", ep_name[ep]);
+		diff_eq_int(msg, peek_root(ep, O_ROOT_D250), 0x210, ep);
+
+		/* Untouched by the datapump: it is the host's to keep. */
+		snprintf(msg, sizeof(msg), "%s: codecType survived (%%ld)",
+			 ep_name[ep]);
+		diff_eq_int(msg, rt->codecType, CFG_CODECTYPE, ep);
+	}
 
 	for (ep = 0; ep < NEP; ep++) {
 		char msg[128];
@@ -1167,7 +1351,12 @@ main(void)
 
 	diff_begin("the heap graph, snapshotted so four runs are congruent");
 	graph_take();
-	diff_eq_int("live regions", nreg, 250, 0);
+	/*
+	 * 252, not the 250 finding 900 recorded: the two `dp_runtime_create`
+	 * blocks are now IN the graph, which is the point of allocating them
+	 * rather than declaring them static.
+	 */
+	diff_eq_int("live regions", nreg, 252, 0);
 	{
 		unsigned h0 = graph_hash();
 		unsigned poked;

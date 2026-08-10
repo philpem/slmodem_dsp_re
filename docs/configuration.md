@@ -113,6 +113,80 @@ rather than this page going quietly stale.
 
 ---
 
+## V.PCM (V.34 / V.90 / V.92 / K56Flex) — there is no configuration block
+
+The one datapump that is **not** configured from a struct in `.data`. There is
+no `VPCM_CFG`. `vpcm_create` asks the host six questions through
+`modem_get_param`, and everything else it needs it writes as a literal.
+
+That matters more than it sounds, because the host is `slmodemd` and
+**slmodemd's source survives** — `modem_get_param` is undefined in the blob and
+defined in `slmodemd/modem_param.c`. So this configuration is not inferred from
+what makes the object behave; it is read off the caller, and then checked
+against where each value lands in the constructed object. Findings 820–825.
+
+| index | parameter | slmodemd answers | value | lands at |
+|--:|---|---|--:|---|
+| 10 | `MDMPRM_DPRUNTIME` | `m->dp_runtime` | a 136-byte block | root `+0x28` |
+| 11 | `MDMPRM_DSPINFO` | `&m->dsp_info` | 16 bytes | root `+0x24` |
+| 3 | `MDMPRM_MIN_RATE` | `m->min_rate` = `MODEM_MIN_RATE` | 300 | runtime `+0x30` |
+| 4 | `MDMPRM_MAX_RATE` | `m->max_rate` = `MODEM_MAX_RATE` | 56000 | runtime `+0x34` |
+| 5 | `MDMPRM_IODELAY` | `m->driver.ioctl(m, MDMCTL_IODELAY, 0)` | the driver's | runtime `+0x64`/`+0x68` |
+| 6 | `MDMPRM_CODECTYPE` | the same ioctl | the driver's | runtime `+0x54` |
+
+and the two arguments the constructor *guards* rather than fetches:
+
+| argument | guard | slmodemd passes |
+|---|---|--:|
+| `srate` | `cmp $0x2580` — must be exactly 9600 | `m->srate` = `MODEM_RATE` = 9600 |
+| `max_frag` | `cmpl $0x30` / `jg` — must be ≤ 48 | `m->frag` = `MODEM_FRAG` = `MODEM_RATE/200` = 48 |
+
+> **48 is the value, not merely a value the guard admits.** It is exactly the
+> shape of a number that looks derived and is not, and it happened to be right.
+
+### The two addresses are typed, and the type is the host's
+
+`MDMPRM_DPRUNTIME` is a **`struct _tagModemParameters`** — the type the
+mangling of `VPcmFloModem`'s constructor gives it — allocated and initialised
+by `dp_runtime_create` (`src/core/dp_param.c`, blob 0x58e0), which is a
+function *in this object that only the host calls*. That is why it is in no
+datapump's closure and why nobody had looked at it. It is 136 bytes, and
+`include/dsplib/modem_params.h` is the field map.
+
+`MDMPRM_DSPINFO` is a **`struct dsp_info`**, four words, declared in the same
+header. Two of them — `connection_type` and `clock_deviation` — go into the
+runtime block at construction and come back out in `vpcm_delete`, so what a
+call learns about the line survives the datapump being rebuilt.
+
+### The rate window is two different pairs and they are easy to confuse
+
+> The host's `MDMPRM_MIN_RATE` / `MDMPRM_MAX_RATE` land at runtime `+0x30` and
+> `+0x34`, which is what `vpcm: VPCM rate limits: %d-%d` prints and **nothing
+> else reads**. The pair `V90Parameters::setToDefault` divides by 2400 to get a
+> rate index is `+0x38` / `+0x3c`, and `vpcm_create` writes those as the
+> **literals 4800 and 33600** whatever the host asked for.
+
+So an AT+MS that narrows the modem's rate window does not narrow V.PCM's.
+
+### What the configuration actually changes, measured
+
+Every parameter above was swept and a whole 1,600-block V.34 call re-run
+against it (finding 824). **Five of the six are inert**: the rate window, the
+codec type and all four `dsp_info` words leave the call's trajectory identical
+to the last count, while the assertions that read them off the constructed
+object do fire — so the sweep is live and the call genuinely does not care.
+
+The exception is `MDMPRM_IODELAY`. HW delay is `IODELAY + 4` and DMA delay is
+`HW − 48` plus a correction at root `+0xd254`; the 48 is slmodemd's own
+`ST7554_HW_IODELAY`. Between HW 44 and HW 244 the handshake's trajectory
+changes completely. **The formula is recovered and the input is not
+recoverable** — it is `m->driver.ioctl(...)`, a property of the sound card: 0
+for slmodemd's socket driver, `dev->delay` for ALSA. 0 is what the tests use,
+and it was deliberately not tuned.
+
+
+---
+
 ## Bit-set fields
 
 Several fields are used as bit sets rather than scalars. They are documented
