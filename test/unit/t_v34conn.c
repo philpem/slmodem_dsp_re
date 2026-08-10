@@ -204,6 +204,14 @@ extern unsigned int dsplibs_debug_level;
  * and the pair would then be incoherent rather than merely approximate.
  *
  * The two move together or not at all. Whoever raises one raises the other.
+ *
+ * WHICH WAS THEN DONE, ten ways, and finding 839 has the table. A longer line
+ * takes BOTH endpoints three microstates further -- the answerer reaches
+ * 52/53/51 and the originator 59 RX_PHASE2_CALL -- and **not one of the ten
+ * connects**: mode 2 and four zero rate words every time. So the delay pairing
+ * is not what stops the call, and this file keeps the short line because
+ * finding 902's recorded numbers are the ones fourteen hand mutations are
+ * pinned to. Change both together or neither.
  */
 #define CFG_SRATE	9600	/* `cmp $0x2580,%esi`, and MODEM_RATE          */
 #define CFG_MAX_FRAG	48	/* `cmpl $0x30,...` / `jg`, and MODEM_FRAG     */

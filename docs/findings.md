@@ -33309,6 +33309,56 @@ that oracle without the span. The dependency reason runs the other way: the
 construction path is the LAST thing in this span that can be written, not the
 first, and the byte count says nothing about that.
 
+### 839. Raising the line delay and the I/O delay TOGETHER: further every time, connected never
+
+Finding 824 stopped at "the I/O delay and the wire are the same quantity
+modelled twice, so they move together or not at all", and then did not move
+them. Leaving it there would have been half an argument, because the reason
+for not adopting a real card's 424 was incoherence with a 288-sample wire --
+which is fixable by moving the wire. So both were moved, ten ways, and the
+whole 1,600-block call re-run each time.
+
+```
+  wire  iodelay | originate: lines dist moved nonzero iter -> final | answer
+   288        0 |   25   8  13  4072  574 -> 2c2b18 |  20  7  407 -> 2c2b18
+   288      424 |   18   9   8  2551  957 -> 3b4805 |  17 10  873 -> 343533
+   192      192 |   18   9   8  2443  984 -> 3b4805 |  19 10  909 -> 343533
+   192      424 |   20   9   8  2407  993 -> 3b4805 |  19 10  924 -> 343533
+   424      424 |   18   9   8  2767  903 -> 3b4805 |  17 10  795 -> 343533
+   428      424 |   18   9   8  2767  903 -> 3b4805 |  17 10  795 -> 343533
+    96       96 |   18   9   8  2371 1002 -> 3b4805 |  19 10  927 -> 343533
+    48       48 |   28   8  15  4432  484 -> 2c2b18 |  28  7  407 -> 2c2b18
+   960      424 |   13   8   7  3559  705 -> 3b2b05 |  16  9  495 -> 333533
+   960      960 |   13   8   7  3559  705 -> 3b2b05 |  16  9  495 -> 333533
+```
+
+**Every row is mode 2 on both endpoints with all four rate words 0. Nothing
+connects.**
+
+What DOES happen is that the answerer gets further than it has ever got. Eight
+of the ten rows end it on **0x34 / 0x35 / 0x33 = 52 / 53 / 51**, three
+microstates past the 44 DET_INFO / 43 RX_DPSK / 24 TX_DPSK it stops at in
+finding 902, with ten distinct triples instead of seven; the originator ends
+in 59 RX_PHASE2_CALL. The two rows that do NOT are the two smallest lines --
+wire 288 with I/O delay 0, and wire 48 with 48 -- which collapse back to
+finding 902's trajectory exactly. So the short line is what was holding both
+endpoints in the INFO0 loop, and lengthening it is worth three microstates on
+each side and nothing else.
+
+**Two rows settle that it is the I/O delay and not the wire that the
+handshake reads.** wire 424 / delay 424 and wire 428 / delay 424 are identical
+to the last count, and so are wire 960 / delay 424 and wire 960 / delay 960 --
+so a four-sample and a 536-sample change in one of the two moves nothing,
+while the delay column moves everything. The wire matters through what the
+object MEASURES over it; the delay is what the object is TOLD.
+
+**Nothing here is adopted and the committed fixture is unchanged** -- wire 288,
+I/O delay 0, finding 902's numbers. This is the experiment that the
+configuration work licensed, run to its end so that the next reader does not
+have to wonder, and its result is a second negative: **the delay pairing is
+not what stops the call either.** Findings 908 and 825 are still pointing at
+the same thing, and now with one fewer alternative: there is no V.8.
+
 ### 940. `mutate.py` now works in a copy, and the tree it is run from is never written
 
 Task #82.  The runner patched `src/` IN PLACE and restored in a `finally`.
