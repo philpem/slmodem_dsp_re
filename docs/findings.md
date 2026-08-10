@@ -15629,7 +15629,13 @@ test needs to.
 exercised without being named, and an ambiguous alias makes the absence of a
 test correct rather than missing. Of finding 621's five flagged entries, one
 was retracted, one names unreconstructed code, one is unreachable by this tier
-(D40, no alias at all), and the remaining two are these. **Zero of 59 entries
+(D40, no alias at all), and the remaining two are these. **CORRECTION: the claim below was wrong three separate ways -- see 1060.**
+Task #87 re-examined all 64 entries and found a false pass (D5), a
+dismissal (D40) and a blind spot (D56). The audit's two known
+false-negative shapes recorded here are real and still worth knowing; the
+COUNT is not.
+
+**Zero of 59 entries
 turn out to need a test written.**
 
 That is a good outcome for the register and a poor one for the tool, and the
@@ -34305,6 +34311,23 @@ in this configuration, in either direction. `vpcm_create` preserving `b0`,
 `b1`, `offered` and `menu` is real, and the handshake does not use them.
 
 ### 962. `MDMPRM_IODELAY` IS RECOVERED FROM THE HOST, AND IT IS THE WHOLE CONFIGURATION
+
+**CORRECTION -- BOTH HEADLINE CLAIMS BELOW ARE WRONG; READ 1021 AND 1023.**
+`35 + iodelay/4` is a FIT to the sweep in this table, not the object's
+arithmetic. `VPcmV34SetDelays` computes `((hwDelay + 2) >> 2) + 0x22`, i.e.
+`((IODELAY + 6) >> 2) + 34`, and the fit is **one too small whenever
+`IODELAY mod 4` is 2 or 3** -- the row at 150 below records 73 and the fit
+gives 72, so this table already contradicted itself. Two test assertions
+encoded the fit and passed only because they run at 216, where the two
+agree. The connect boundary is therefore **86, not 88**: at 86 the object
+gives 57, which IS the threshold. Finding 1021.
+
+And `IODELAY > 240` is **negotiated, not refused** -- the `js` at 0x3bfd
+calls `modem_set_param(m, MDMPRM_UPDATE_DELAY, 244 - (IODELAY+4))`, pins
+`hwDelay` at 244 and rejoins; ALSA's 424 works. Finding 1024.
+
+The mechanism this finding recovered stands. Only the arithmetic and the
+cap behaviour were wrong.
 
 `filtdelay` is `35 + iodelay/4`, measured across the range:
 
