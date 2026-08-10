@@ -117,5 +117,13 @@
   "replace": "\tcpNofBits = 0;",
   "equivalent": true,
   "why": "DILdescriptorPacker writes through its third argument on BOTH of its exits -- `*nbits = crcAt + 19` on the odd path and `crcAt + 18` on the even one -- and nothing between the store and the call reads the field.  So the zero cannot survive to be observed, by this test or by any other, and the store is dead in the object as well as here.  Held fixed: that the packer is the only writer of nofBits in this method, which the disassembly's single call and single `lea 0x1736` show."
+ },
+
+ {
+  "label": "externalReset writes the six flags only once",
+  "find": "\t/* The second of the two runs; the same six values as above. */\n\tflags_0217[0] = 1;\t\t/* +0x217 again */\n\tflags_0217[1] = 0;\t\t/* +0x218 again */\n\tflags_0217[2] = 1;\t\t/* +0x219 again */\n\tflags_0217[3] = 1;\t\t/* +0x21a again */\n\tflags_0217[4] = 1;\t\t/* +0x21b again */\n\tflags_0217[5] = 0;\t\t/* +0x21c again */\n\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "The object writes the six flags TWICE with the same six values -- 0xd6d8..0xd701 and 0xd786..0xd7a9, twelve `movb` in all -- and the three parameter-block calls between them cannot reach +0x217..+0x21c of this object. So the second run overwrites the first with what is already there and no reader exists between them (finding 1110). Deleting the second run is therefore unobservable HERE; it is not unobservable in the encoding, where it removes six instructions the blob has. Registered so that a batch which gives one of the three calls a way to touch those flags -- or which moves a reader between the runs -- sees this reported MIScounted instead of quietly staying green."
  }
 ]

@@ -150,5 +150,13 @@
   "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,",
   "replace": "\t\t\t\t (short)(int)preFilter.isV90WithEia6(), 1, 0.0f,",
   "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (params->w[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
+ },
+
+ {
+  "label": "the equaliser's cursor is halved with an arithmetic shift",
+  "find": "\t\tequalizer->reset(equalizer->linearEquLength >> 1);",
+  "replace": "\t\tequalizer->reset((unsigned int)\n\t\t    ((int)equalizer->linearEquLength >> 1));",
+  "equivalent": true,
+  "why": "0x1c1c2 is `d1 e9` -- `shr $1,%ecx`, a LOGICAL shift, and this makes it `sar`. The two differ only when bit 31 of `linearEquLength` is set, and that is a tap count: the coefficient array it bounds is `linearEquLength` floats inside a 0x150-byte object, so a length with bit 31 set is already out of every reachable range and both readings are wrong there together. This is finding 613's class of difference -- invisible to the differential tier for ever, visible in one instruction -- so the guard it needs is the codegen tier, not a test. Registered here so that if a future edit makes the length signed, the mutation stops being equivalent and is reported MIScounted."
  }
 ]

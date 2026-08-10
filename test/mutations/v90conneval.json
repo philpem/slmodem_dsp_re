@@ -1,0 +1,35 @@
+[
+ {"label": "V90ConnectionEvaluator's lifecycle.  tools/mutate.py --suite v90conneval"},
+
+ {"label": "NOTE: t_v90leaves drives TWO sources -- this one and",
+  "why": "V90ConstellationDesigner.cpp, whose mutations are the v90cd set. One binary, two sources, two sets; mutate.py takes one source per run."},
+
+ {"label": "NOTE: the last entry is the equivalent one and it is here so that a",
+  "why": "reordering of reset's stores turns it into MIScounted rather than into silence. The five above it are the anti-vacuity evidence that this set really is pointed at a binary that tests this class -- an equivalent mutation surviving in a set paired with the WRONG binary is indistinguishable from one surviving because it is equivalent."},
+
+ {"label": "the evaluator's initial period is 1500",
+  "find": "#define CONNEVAL_INITIAL_PERIOD\t1600",
+  "replace": "#define CONNEVAL_INITIAL_PERIOD\t1500"},
+
+ {"label": "reset leaves +0xa8 alone",
+  "find": "\tword_a4 = 0;\n\tword_a8 = 0;",
+  "replace": "\tword_a4 = 0;"},
+
+ {"label": "the phase 4 fallback error is truncated to an int",
+  "find": "\tphase4ErrorForV34Fallback = params->PHASE4_ERROR_FOR_V34_FALLBACK;",
+  "replace": "\tphase4ErrorForV34Fallback =\n\t    (float)(int)params->PHASE4_ERROR_FOR_V34_FALLBACK;"},
+
+ {"label": "RRN_UP and RRN_DOWN are swapped",
+  "find": "\tenableRrnDown = params->ENABLE_RRN_DOWN;",
+  "replace": "\tenableRrnDown = params->ENABLE_RRN_UP;"},
+
+ {"label": "the constructor does not reset",
+  "find": "\tparams = p;\n\treset();",
+  "replace": "\tparams = p;"},
+
+ {"label": "the +0x9c store is 32 bits wide",
+  "equivalent": true,
+  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `short_9e = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it.",
+  "find": "\tshort_9c = -1;",
+  "replace": "\t*(int *)&short_9c = -1;"}
+]
