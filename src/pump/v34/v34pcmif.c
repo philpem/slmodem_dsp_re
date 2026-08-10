@@ -42,6 +42,26 @@
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
+/*
+ * For `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` below.
+ * `DSPLIB_VPCM_UNWRITTEN` is deliberately NOT defined here: this file is the
+ * one that DEFINES two of the five, and a definition compiled under the weak
+ * macro would stop being one as soon as anything else defined the name.
+ */
+#include "dsplib/vpcm.h"
+
+/*
+ * The modulation numbers, which are the same five `VPcmV34InitiateRetrain`
+ * takes and `v34pcmmain.cpp` spells out at its own head -- both files are
+ * halves of `VPcmV34Main.cpp` and each carries the constants it uses, since
+ * splitting one translation unit by language leaves no shared private header
+ * to put them in.  56 is not one of `v8dp.h`'s ids and there is no V.8 code
+ * for it; finding 1090 has why.
+ */
+#define DP_V34			34
+#define DP_K56FLEX		56
+#define DP_V90			90
+#define DP_V92			92
 
 void
 VPcmV34LogTimingOffset(void *objp, short offset)
@@ -233,6 +253,94 @@ VPcmV34GetMaxUpstreamRateIndex(void *objp)
 	edprintf("on get max upstream rate, on regular ISP, returning %d\r\n",
 		 rate);
 	return rate;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TWO OF `vpcm_run`'s FIVE CALLEES, and they are the two that are leaves.
+ *
+ * `include/dsplib/vpcm.h` declares all five WEAK so that a binary which does
+ * not define them links with the reference resolved to zero, and `vpcm_run`
+ * tests each pointer before it calls through it.  These two are defined here
+ * -- so in every binary that links this file they are no longer null and
+ * `vpcm_run` takes the real call rather than `vpcm_notwritten`.  The other
+ * three stay unwritten: `VPcmV34Progress` is 7,278 bytes whose closure is the
+ * whole receive chain, and both rate getters need `V90Demodulator::getBitRate`
+ * (87 bytes), which is a const accessor and belongs to whoever owns that
+ * class's processing methods rather than to this batch.
+ *
+ * They belong in THIS file for the reason the header comment gives: they are
+ * `extern "C"` exports of `VPcmV34Main.cpp` -- no mangling on the relocation
+ * `vpcm_run` carries for either -- and nothing about them is C++.
+ *
+ * The declarations come from `vpcm.h` with `DSPLIB_VPCM_UNWRITTEN` left
+ * empty, which is what makes these definitions STRONG.  Defining them under
+ * the weak macro would link identically today and would silently stop being
+ * a definition the moment a real one appeared elsewhere.
+ */
+
+/*
+ * The echo-cancelled samples the host's data logger asks for, and the count
+ * it has accumulated since the last ask.
+ *
+ * `hist_2f58` is the ring `modem_serrint` fills and `f2aa6` is its write
+ * index, so the count handed back is the index and reading it RESETS it --
+ * this is a drain, not a peek, and the zeroing at 0x71e1 is the whole of the
+ * function's effect on the object.  The load is `movswl`, so the index is
+ * read SIGNED into the caller's int: `f2aa6` is a `short` and the object
+ * sign-extends it rather than masking.
+ *
+ * The return is `obj + 0x2f58` computed as an `add`, with no test of the
+ * count first -- a caller told "0 samples" still gets the buffer address.
+ */
+void *
+VPcmV34GetCleanedSamples(void *objp, int *n)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	*n = obj->f2aa6;
+	obj->f2aa6 = 0;
+	return obj->hist_2f58;
+}
+
+/*
+ * Which of the four modulations the session settled on, as a datapump id.
+ *
+ * The selector is `status`, the same word at +0 that `VPcmV34InitiateHangUp`
+ * and `VPcmV34InitiateRateRenegotiation` test with `(unsigned)(status-1) <= 1`
+ * to mean "a PCM receiver is running" -- so 1 and 2 are the two PCM cases
+ * here and they are exactly the two that do not answer V.34.
+ *
+ * 1 IS THE CASE THAT IS DECIDED BY SOMETHING ELSE, and it is decided by the
+ * V.92 pair `V34GiveINFO0dBits` names: the answer is V.92 only when BOTH
+ * `local_v92` and `remote_v92` are non-zero, and V.90 whenever either is
+ * zero.  That is the negotiation read the way it is stored -- one side's
+ * willingness is not enough.  2 answers V.92 outright, without consulting
+ * either, which is what makes it a different status and not a shorthand.
+ *
+ * 3 IS K56FLEX AND IT IS 56, not one of `v8dp.h`'s ids.  Finding 1090
+ * measured that the class behind it is `ret` throughout in this build, so
+ * this is the only place a K56flex session can be *named*; nothing downstream
+ * of the name does anything.  Everything else -- including every value the
+ * status word takes on a V.34 call -- falls through to 34.
+ */
+int
+VPcmV34GetCurrentSessionDP(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	switch (obj->status) {
+	case 1:
+		if (obj->local_v92 != 0 && obj->remote_v92 != 0)
+			return DP_V92;
+		return DP_V90;
+	case 2:
+		return DP_V92;
+	case 3:
+		return DP_K56FLEX;
+	default:
+		return DP_V34;
+	}
 }
 
 /*

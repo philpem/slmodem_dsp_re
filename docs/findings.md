@@ -35524,3 +35524,246 @@ cannot do K56flex -- faithfully.
   measures what must exist to LINK, never what must exist to WORK. The same
   trap in the other direction cost wave 1 (finding 838): a 1,662-byte function
   with a 268-symbol closure.
+
+======================================================================
+### 1100. THE "THREE NEARLY-FREE WEAK ENTRY POINTS" ARE NOT THE WEAK ENTRY POINTS -- and the real cheap pair is a different two
+
+Task #88 was briefed to take three easy wins first: "three of the five weak
+`VPcmV34*` entry points are nearly free -- `VPcmV34InitiateRetrain` needs 0
+more symbols, `VPcmV34Delete` 1, `VPcmV34Create` 12".  Every number in that
+sentence is right and the sentence is wrong, because **none of those three is
+one of the five**.
+
+The five weak ones are declared in `include/dsplib/vpcm.h` and are exactly
+`vpcm_run`'s five callees:
+
+```
+    VPcmV34Progress             7,278 B
+    VPcmV34GetCleanedSamples       32
+    VPcmV34GetCurrentSessionDP     79
+    VPcmV34GetCurrentRxBitRate     90
+    VPcmV34GetCurrentTxBitRate    213
+```
+
+`VPcmV34InitiateRetrain` is not among them and is not unwritten either: it is
+in `src/pump/v34/v34pcmmain.cpp`, `t_v34retrain.c` tests it and its closure is
+**0**.  `VPcmV34Create` and `VPcmV34Delete` were never weak.  So writing any
+of the briefed three moves the guard surface by nothing at all -- the thing
+the brief wanted from them cannot come from them.
+
+**THE SAME QUESTION ASKED OF THE ACTUAL FIVE GIVES A REAL ANSWER**, and it is
+better than the briefed one because these two ARE the guard:
+
+```
+  closure.py VPcmV34GetCleanedSamples   --missing   1 symbol,  32 bytes
+  closure.py VPcmV34GetCurrentSessionDP --missing   1 symbol,  79 bytes
+  closure.py VPcmV34GetCurrentRxBitRate
+             VPcmV34GetCurrentTxBitRate --missing   3 symbols, 390 bytes
+```
+
+The rate pair is blocked on one symbol, `V90Demodulator::getBitRate` (87 B),
+and that is a const accessor rather than a constructor, destructor, `reset` or
+lifecycle hook -- so under one-class-one-owner it belongs to whoever writes
+`V90Demodulator`'s processing methods and NOT to this batch.  Taking it to
+unlock 303 bytes would be taking a wave-2 method to make a report line look
+better.  Left, deliberately.
+
+**Both closure-1 entry points are now written** (finding 1101), so the guard
+surface is three, not five.
+
+### 1101. `VPcmV34GetCleanedSamples` IS A DRAIN AND `VPcmV34GetCurrentSessionDP` IS FOUR ARMS, ONE OF WHICH READS THE V.92 NEGOTIATION FROM BOTH ENDS
+
+Both are in `src/pump/v34/v34pcmif.c` -- the `extern "C"` half of
+`VPcmV34Main.cpp`, which is where every unmangled export of that translation
+unit already lives.
+
+`VPcmV34GetCleanedSamples` (0x71d0, 32 B) hands back the echo-cancelled ring
+and the count, and **the count is destroyed by reading it**:
+
+```
+    71d8  movswl 0x2aa6(%eax),%ecx     obj->f2aa6, SIGN-extended
+    71df  mov    %ecx,(%edx)           *n = it
+    71e3  mov    %dx,0x2aa6(%eax)      and it is zeroed
+    71ea  add    $0x2f58,%eax          return &obj->hist_2f58
+```
+
+`f2aa6` is already the write index of `hist_2f58` in `v34fsk.h`, so nothing
+about the layout was newly derived -- what is new is that the reader RESETS
+it, which makes this a drain rather than an accessor and is the one thing a
+single-call test cannot see.  The buffer address is returned unconditionally:
+a caller told "0 samples" still gets it.
+
+`VPcmV34GetCurrentSessionDP` (0x6eb0, 79 B) switches on `status`, the same
+word at +0 that `VPcmV34InitiateHangUp` and `VPcmV34InitiateRateRenegotiation`
+gate on with `(unsigned)(status - 1) <= 1`:
+
+```
+    status 1  ->  90, unless local_v92 AND remote_v92 are BOTH non-zero -> 92
+    status 2  ->  92
+    status 3  ->  56          K56flex, and see finding 1090
+    anything  ->  34
+```
+
+**The `&&` is the finding.**  `local_v92` and `remote_v92` are the pair
+`V34GiveINFO0dBits` prints and they are one end's willingness each, so the
+answer is V.92 only when both ends said so -- `je` at 0x6ee8 short-circuits to
+V.90 on the local one alone.  Status 2 answers V.92 without consulting either,
+which is what makes it a separate status rather than a shorthand for 1.
+
+The four returns are modulation numbers, which are the ids `vpcm_run` writes
+into `dp.id` and the same five `VPcmV34InitiateRetrain` accepts.  56 is not
+one of `v8dp.h`'s -- there is no V.8 code for K56flex -- and finding 1090 is
+why naming it is the whole of what a K56flex session can do in this build.
+
+### 1102. THE TWO NEW BLOCKS IN `t_v34pcmif.c`, AND THE FIVE MUTATIONS WATCHED FAILING THEM
+
+374 checks in two blocks, on `t_v34pcmif.c`'s existing fixture: both objects
+pre-filled with `HARNESS_MALLOC_FILL`, every case compared BYTE FOR BYTE over
+the whole 44 KB object, and the returned pointer compared as a DISPLACEMENT
+rather than as a pointer, because the two objects are at two addresses and
+always will be.
+
+Two shapes were built deliberately rather than inherited:
+
+- **Every `GetCleanedSamples` case calls it TWICE without re-seeding.**  The
+  first ask must return what was seeded and the second must return zero.  A
+  reconstruction that returned the index and left it alone passes every
+  single-call check there is; the second ask is what separates a drain from a
+  peek, and it is asserted to be zero rather than merely equal, because two
+  objects that were both left alone agree with each other.
+- **`GetCurrentSessionDP` crosses all four arms with all nine combinations of
+  the V.92 pair**, 33 cases, and the whole-object comparison is kept even
+  though the function writes nothing -- because "writes nothing" is a claim,
+  it shares its selector with two entry points a few lines away that DO write,
+  and a version that cleared the pair after reading it would look perfect from
+  the return value alone.
+
+Made to fail, five ways, each applied by hand and reverted:
+
+| mutation | block | checks failed |
+|---|---|--:|
+| the drain does not zero the index | GetCleanedSamples | **74 of 111** |
+| the index is read `movzwl`, not `movswl` | GetCleanedSamples | **3 of 77** |
+| the V.92 pair is OR, not AND | GetCurrentSessionDP | **4 of 297** |
+| the K56flex arm answers 34 | GetCurrentSessionDP | **9 of 297** |
+| both definitions renamed away | `t_vpcmguard` | **2 of 6** |
+
+The second is the interesting one: **three checks**, and all three are values
+the ring never produces.  A signed index and an unsigned one agree over
+0..0x257, so the only evidence that the object sign-extends is 0x8000 and
+0xffff being in the sweep -- CLAUDE.md's "forced, so act on it" observed from
+the test side instead of from the codegen.
+
+The fifth is the guard-surface assertion, and it is a check in BOTH directions
+now.  `t_vpcmguard.c` used to assert all five entry points null; it asserts
+three null and two DEFINED, so a definition that silently stopped being
+linked -- the file dropped from the link, or compiled under the weak macro and
+outranked -- puts `vpcm_run` back on `vpcm_notwritten` and fails immediately.
+Nothing else in the tree would notice: no run that stops short of the connect
+arm ever asks either of them anything.
+
+`t_vpcmrun.c` lost two of its five forwarders, because a forwarder beside a
+real definition is a duplicate symbol.  Its 8,000-block four-way call is
+therefore no longer "our `vpcm_run` on the blob's five callees": two of the
+five are ours as well, and every block still has to agree with the blob-blob
+run.  That is a strengthening of that file's claim and not a change to it.
+
+### 1103. A NEW FUNCTION IN AN OLD FILE BREAKS `anchorcheck`, AND THAT IS THE GATE WORKING
+
+Adding `VPcmV34GetCurrentSessionDP` to `v34pcmif.c` put a second one-tab
+`case 2:` and a second `case 3:` in the file, and `make phase` failed at
+`refs`:
+
+```
+  NOT UNIQUE  v34pcmif: reneg: case 2 no longer steps down    matches 2 time(s)
+  NOT UNIQUE  v34pcmif: reneg: case 3 becomes case 4          matches 2 time(s)
+```
+
+**Worth recording because the failure is loud and the defect it prevents is
+silent.**  A two-site anchor patches the first match; the label then names an
+arm the mutation never touched, and the verdict -- caught or not -- is
+attributed to the wrong claim.  `mutate.py` would have reported a perfectly
+ordinary "caught" for a mutation of a different function.
+
+The fix is CONTEXT, never a looser anchor and never a renamed case label:
+`case 2:` now carries the `case 5:` it falls through to, and `case 3:` carries
+its body.  Both still fire -- `mutate.py --suite v34pcmif --only 'reneg: case'`
+is four of four caught.  The general rule, for the next batch that extends a
+file that already has a suite: **a mutation anchor is only as unique as the
+file was on the day it was written**, so a batch that adds a function to such
+a file has to re-run `anchorcheck` even when it changed no mutation and no
+existing line.
+
+### 1104. THE FOUR CLOSURE FIGURES, RECOMPUTED, AND WHAT THE 127 SYMBOLS ACTUALLY ARE
+
+Recomputed on a full build, per finding 330's rule.  All four are UNCHANGED
+from the numbers task #88 was briefed with:
+
+```
+    dp_vpcm_init   127 symbols, 24,791 bytes      vpcm_create   123 / 24,566
+    vpcm_delete     49 symbols,  5,852 bytes      vpcm_op       126 / 24,719
+```
+
+Grouped by class -- 48 classes plus 24 free symbols -- the span is much
+flatter than the byte count suggests, and **seventeen of the 48 classes
+already have a header and a `.cpp` in this tree**:
+
+```
+  (free)                   24 syms  5,399 B   VPcmV34Create 2,376, vpcm_create
+                                              969, VPCMXF_Create 495, ...
+  V90Demodulator            6 syms  3,008 B   [header+cpp exist]
+  V90Equalizer              4 syms  2,251 B   [header+cpp exist]
+  V92Phase3Modulator        4 syms  1,915 B   [neither]
+  V92Modulator              2 syms  1,237 B   [neither]
+  VPcmFloModem              2 syms  1,038 B   [header+cpp exist]
+  V90Modem                  2 syms    918 B   [header+cpp exist]
+  ... 41 more, none over 750 B, 30 of them with neither file
+```
+
+**Two of the 127 are not lifecycle at all and cannot be written by this
+batch.**  `V92Phase3Modulator::reset` (351 B) reaches
+`V92Phase3Modulator::generateSymbol` (1,437 B), and `V90Demapper`'s
+destructor path reaches `V90Demapper::printErrorHistogramAndReset` (362 B).
+Both are processing methods belonging to wave-3 and wave-2 batches; taking
+either to complete a constructor would be taking that batch's work.  Recorded
+and left -- together they are 1,799 bytes, 7% of the span, and neither is on
+`VPcmV34Create`'s path.
+
+**The real cost of the 30 classes with neither file is not the code.**  Each
+needs its object size and every field offset derived from the disassembly --
+the `sysdep_malloc` immediately before the constructor's call site for the
+size, the constructor's own stores for the offsets -- before one line is
+writable.  The seventeen that already have headers are far cheaper per byte,
+and any fan-out over this span should be weighted that way rather than by
+bytes.
+
+### 1105. THE `ref_vpcm_create` ORACLE CANNOT FIRE UNTIL THE WHOLE SPAN IS WRITTEN, AND THE PER-CLASS ONE CAN FIRE NOW
+
+Findings 800-806 established the golden object: 53,848 bytes of root plus a
+125-region, 265,520-byte heap graph, two blob-code pointers in the lot.  It is
+a tier-1 oracle and task #88 was briefed to use it for construction.
+
+**It does not exist for any partial batch.**  It is produced by
+`ref_vpcm_create`, whose closure is 123 unwritten symbols; there is no version
+of it that compares a subset.  Nothing this batch or any wave-2 batch writes
+can be diffed against it until the last of the 127 lands, so it is the span's
+acceptance test and not its working oracle.
+
+What CAN fire from the first class onward is the per-class construction
+differential, and finding 803's congruence problem does not arise in it:
+
+```
+    our  Cls::Cls(a, b, c)  into buffer A, prefilled HARNESS_MALLOC_FILL
+    ref_Cls::Cls(a, b, c)   into buffer B, prefilled the same
+    THE SAME ARGUMENT POINTERS to both  ->  identical stored pointers
+    compare A and B byte for byte
+```
+
+Identical inputs mean identical pointer fields, so no field has to be
+excluded: 125 regions coming back at different addresses is a property of
+`vpcm_create` ALLOCATING, not of a constructor storing what it was handed.
+Two anti-vacuity requirements, both live for this exact test -- the fill
+pattern must be asserted GONE, because two never-constructed buffers compare
+equal, and a destructor comparison must look at what the destructor WROTE
+before the free, because two objects compared after `free` compare the
+allocator rather than the objects.

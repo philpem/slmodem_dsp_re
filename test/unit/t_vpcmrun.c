@@ -9,14 +9,17 @@
  * one endpoint, at the other, and at both, compared block by block against
  * the blob-blob run.
  *
- * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours; everything it calls into is
- * still the blob's, and the four forwarders below are how.  The five
- * `VPcmV34*` entry points are declared WEAK in `src/pump/v90/vpcm.c` so that
- * a binary which does not supply them links anyway and `vpcm_run` aborts if
- * it is called -- `t_vpcmguard.c` is the binary that watches it abort.  This
- * one supplies them, pointing at the blob's copies, so what is under test is
- * exactly `vpcm_run`'s own work: the block quantisation, the two sample
- * queues, the bit pipe in both directions and the seventeen-arm dispatch.
+ * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours, and so are two of the five
+ * entry points it calls: `VPcmV34GetCleanedSamples` and
+ * `VPcmV34GetCurrentSessionDP` are defined in `src/pump/v34/v34pcmif.c` and
+ * this binary links them.  The other three are still the blob's, and the
+ * three forwarders below are how.  All five are declared WEAK in
+ * `src/pump/v90/vpcm.c` so that a binary which supplies none of them links
+ * anyway and `vpcm_run` aborts if it is called -- `t_vpcmguard.c` is the
+ * binary that watches it abort.  So what is under test here is `vpcm_run`'s
+ * own work -- the block quantisation, the two sample queues, the bit pipe in
+ * both directions and the seventeen-arm dispatch -- plus those two callees,
+ * driven for 8,000 blocks of a real call.
  *
  * WHY THE COMPARISON IS PER BLOCK AND NOT ONLY AT THE END.  A run that
  * diverges at block 900 and re-converges by block 4,000 would pass every
@@ -75,8 +78,6 @@ extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
 
 extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
 			       int *rxbits, int *nrx, int *txbits, int *nbits);
-extern void *ref_VPcmV34GetCleanedSamples(void *obj, int *n);
-extern int ref_VPcmV34GetCurrentSessionDP(void *obj);
 extern int ref_VPcmV34GetCurrentRxBitRate(void *obj);
 extern int ref_VPcmV34GetCurrentTxBitRate(void *obj);
 
@@ -88,17 +89,15 @@ VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 				   nbits);
 }
 
-void *
-VPcmV34GetCleanedSamples(void *obj, int *n)
-{
-	return ref_VPcmV34GetCleanedSamples(obj, n);
-}
-
-int
-VPcmV34GetCurrentSessionDP(void *obj)
-{
-	return ref_VPcmV34GetCurrentSessionDP(obj);
-}
+/*
+ * `VPcmV34GetCleanedSamples` AND `VPcmV34GetCurrentSessionDP` USED TO BE
+ * FORWARDED HERE TOO, and they are not any more because they are WRITTEN:
+ * `src/pump/v34/v34pcmif.c` defines both, this binary links that file, and a
+ * forwarder beside it would be a duplicate symbol.  So the run below is no
+ * longer "our `vpcm_run` on the blob's five callees" -- two of the five are
+ * ours as well, and every block still has to agree with the blob-blob run.
+ * That is a strengthening of this file's claim rather than a change to it.
+ */
 
 int
 VPcmV34GetCurrentRxBitRate(void *obj)

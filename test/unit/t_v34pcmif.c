@@ -54,6 +54,13 @@
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34scram.h"
 #include "dsplib/v34shell.h"
+/*
+ * For the two `vpcm_run` callees `v34pcmif.c` defines.  Included WITHOUT
+ * `DSPLIB_VPCM_UNWRITTEN`, so the declarations here are plain: this file
+ * calls them and never compares their addresses, which is the one thing
+ * finding 985 says a plain declaration must not be used for.
+ */
+#include "dsplib/vpcm.h"
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -77,6 +84,8 @@ extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 extern void ref_chkForceBaudRate(void *obj, struct v34_dftbin *bins);
 extern short ref_GetVPcmMinimalTxPowerReduction(void *obj);
 extern int ref_VPcmV34GetMaxUpstreamRateIndex(void *obj);
+extern void *ref_VPcmV34GetCleanedSamples(void *obj, int *n);
+extern int ref_VPcmV34GetCurrentSessionDP(void *obj);
 
 extern short ref_scrambleGPC(void *obj, short n);
 extern short ref_scrambleGPA(void *obj, short n);
@@ -1238,6 +1247,140 @@ main(void)
 			VPcmV34LogTimingOffset(&oa, off[i]);
 			ref_VPcmV34LogTimingOffset(ob, off[i]);
 			compare("LogTimingOffset", 700 + i);
+		}
+	}
+	rc |= diff_end();
+
+	/* --- the two `vpcm_run` callees this file now defines ------------ */
+
+	/*
+	 * GetCleanedSamples IS A DRAIN, so the count and the RESET are two
+	 * separate claims and the second is the one a plausible wrong version
+	 * gets wrong.  Each case therefore calls it TWICE: the first call must
+	 * hand back what was seeded and the second must hand back zero.  A
+	 * reconstruction that returned the index and left it alone passes
+	 * every single-call check there is.
+	 *
+	 * The index is swept SIGNED and past its ring bound.  `f2aa6` is a
+	 * `short` and the object reads it with `movswl`, so 0x8000 and 0xffff
+	 * are the two values that separate that from a `movzwl`, and the two
+	 * agree over every value the ring actually produces -- which is
+	 * CLAUDE.md's "forced, so act on it" case observed from the test side
+	 * instead of from the codegen.  0x257 and 0x258 are the ring's last
+	 * entry and one past it, and nothing in the function bounds either.
+	 *
+	 * The RETURN is compared as an OFFSET from the object, not as a
+	 * pointer: the two objects are at two addresses and always will be, so
+	 * the pointer values differ for no reason and the displacement is the
+	 * whole of what the function computes.
+	 */
+	diff_begin("v34 pcm interface: GetCleanedSamples drains the ring and "
+		   "hands back its base");
+	{
+		static const short idx[] = {
+			0, 1, -1, 2, 0x257, 0x258, 0x259, 0x7fff,
+			(short)0x8000, (short)0xffff, 1234
+		};
+
+		for (i = 0; i < sizeof(idx) / sizeof(idx[0]); i++) {
+			int na = 0x5eed, nb = 0x5eed;
+			void *ra, *rb;
+			long oa_off, ob_off;
+
+			setup();
+			poke_short(0x2aa6, idx[i]);
+
+			ra = VPcmV34GetCleanedSamples(&oa, &na);
+			rb = ref_VPcmV34GetCleanedSamples(ob, &nb);
+			oa_off = (long)((unsigned char *)ra
+					- (unsigned char *)&oa);
+			ob_off = (long)((unsigned char *)rb - ob);
+
+			diff_eq_int("GetCleanedSamples: the count", na, nb,
+				    1200 + i);
+			diff_eq_int("GetCleanedSamples: the buffer offset",
+				    (int)oa_off, (int)ob_off, 1200 + i);
+			compare("GetCleanedSamples", 1200 + i);
+
+			/*
+			 * AND AGAIN, WITHOUT RE-SEEDING.  This is the half
+			 * that catches a peek written where a drain belongs;
+			 * without it the zeroing store is invisible to the
+			 * count check and visible to the object compare only
+			 * because the fill pattern happens to differ from 0.
+			 */
+			na = nb = 0x5eed;
+			ra = VPcmV34GetCleanedSamples(&oa, &na);
+			rb = ref_VPcmV34GetCleanedSamples(ob, &nb);
+			diff_eq_int("GetCleanedSamples: drained, so the "
+				    "second ask is zero", na, nb, 1300 + i);
+			diff_eq_int("...and it really is zero, not merely "
+				    "equal", na, 0, 1300 + i);
+			diff_eq_int("GetCleanedSamples: the buffer offset is "
+				    "unconditional",
+				    (int)((unsigned char *)ra
+					  - (unsigned char *)&oa),
+				    (int)((unsigned char *)rb - ob),
+				    1300 + i);
+			compare("GetCleanedSamples, second ask", 1300 + i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * GetCurrentSessionDP: THE SELECTOR AND THE V.92 PAIR ARE CROSSED, not
+	 * sampled.  `status` decides four arms and only one of them consults
+	 * the pair, so a version that tested the pair on the wrong arm -- or
+	 * that used `||` where the object uses `&&` -- differs from this one
+	 * on exactly two of the thirty-three combinations below and on nothing
+	 * else.  Both `local_v92` and `remote_v92` therefore take 0, 1 and -1,
+	 * and `status` takes every arm plus both sides of each boundary and
+	 * both extremes of the signed range, because the object's `cmp`s are
+	 * signed and an unsigned reconstruction would agree everywhere except
+	 * there.
+	 *
+	 * The function writes nothing, so the object comparison is the check
+	 * that it writes nothing -- which is not free: it shares its selector
+	 * with two entry points a few lines away that do write, and a
+	 * reconstruction that reset the pair after reading it would look
+	 * perfect from the return value alone.
+	 */
+	diff_begin("v34 pcm interface: GetCurrentSessionDP, every arm crossed "
+		   "with the V.92 pair");
+	{
+		static const int st[] = {
+			(-0x7fffffff - 1), -1, 0, 1, 2, 3, 4, 5, 90, 92,
+			0x7fffffff
+		};
+		static const short v92[] = { 0, 1, -1 };
+		unsigned l, r;
+
+		for (i = 0; i < sizeof(st) / sizeof(st[0]); i++)
+		for (l = 0; l < sizeof(v92) / sizeof(v92[0]); l++)
+		for (r = 0; r < sizeof(v92) / sizeof(v92[0]); r++) {
+			long tag = (long)(i * 9 + l * 3 + r);
+			int da, db;
+
+			setup();
+			poke_int(0x0000, st[i]);
+			poke_short(0xabc6, v92[l]);
+			poke_short(0xabc8, v92[r]);
+
+			da = VPcmV34GetCurrentSessionDP(&oa);
+			db = ref_VPcmV34GetCurrentSessionDP(ob);
+
+			diff_eq_int("GetCurrentSessionDP", da, db,
+				    2000 + tag);
+			/*
+			 * AND IT IS ONE OF THE FOUR.  Two wrong answers that
+			 * agree would pass the line above; nothing else in
+			 * this tree looks at the value, and `vpcm_run` puts it
+			 * straight into `dp.id` for the host to read.
+			 */
+			diff_eq_int("...and it is a modulation number",
+				    da == 34 || da == 56 || da == 90
+				    || da == 92, 1, 2000 + tag);
+			compare("GetCurrentSessionDP", 2000 + tag);
 		}
 	}
 	rc |= diff_end();
