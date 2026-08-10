@@ -33174,19 +33174,56 @@ and the rate machinery reads +0x38 / +0x3c, which are literals. The codec type
 and all four `dsp_info` words are inert because nothing on this path reads
 them back: they are the host's storage passing through.
 
-**The exception is the I/O delay, and its effect is not small.** Between HW
-delay 44 and 244 the trajectory changes completely: the originator ends on
-**59 RX_PHASE2_CALL** rather than error-recovering back to 44 DET_INFO, nine
-distinct triples instead of eight, and the pump iterates in 957 blocks of
-1,600 instead of 574. 240 and 1000 give the identical result although their
-DMA delays differ by 760, so what the call is sensitive to is **HW delay, i.e.
-IODELAY + 4**, and not the DMA correction.
+**The exception is the I/O delay, and its effect is not small.** Swept finely,
+because two rows are not enough to tell "sensitive to HW delay" from "anything
+at or above the clamp behaves the same" -- 240 and 1000 both pin HW to 244 and
+agree for that reason, not for the reason first written here:
 
-**THIS WAS NOT TUNED AND IS NOT ADOPTED.** slmodemd's socket driver answers 0,
-and 0 is what is committed. A larger delay taking the handshake further into
-phase 2 is a lead for whoever holds the V.8 question, and it is recorded as a
-measurement, not used as a knob. A connection reached by fitting the one
-parameter that cannot be derived would be the worst possible outcome here.
+```
+  IODELAY   HW   DMA   clamp        lines dist moved nonzero iter   final
+        0    4   -44   no            25    8    13    4072    574   2c2b18
+       40   44     0   no            25    8    13    4072    574   2c2b18
+      100  104    56   no            18    9     8    2659    930   3b4805
+      180  184   136   no            18    9     8    2599    945   3b4805
+      220  224   176   no            18    9     8    2563    954   3b4805
+      240  244   196   no            18    9     8    2551    957   3b4805
+     1000  244   956   YES           18    9     8    2551    957   3b4805
+```
+
+**It IS the HW delay and it is NOT the DMA correction, and the last two rows
+are the proof.** Same HW of 244, DMA differing by 760 because one is clamped
+and the other is not, and every one of the eight numbers identical. Above the
+threshold the state trajectory has a fixed shape -- 18 lines, nine distinct
+triples, ending in **59 RX_PHASE2_CALL** instead of error-recovering back to
+44 DET_INFO -- while the two continuous counts track HW delay monotonically.
+
+**AND THE DERIVED VALUE IS NOT 0 FOR A REAL SOUND CARD.** The three drivers
+slmodemd ships disagree, and the one that answers 0 is the one that is a stub:
+
+```
+  socket    0 -- and `modem_main.c:682` has the real expression COMMENTED OUT
+            beside it, noting the kernel module returns
+            `s->delay + ST7554_HW_IODELAY (48)`
+  ALSA      dev->delay = the 384 samples of silence `alsa_start` writes,
+            plus INTERNAL_DELAY 40  =  424           (modem_main.c:475-490)
+  modemap   the kernel's answer plus dev->delay, itself the 192 samples
+            `modemap_start` writes                   (modem_main.c:570-581)
+```
+
+424 + 4 trips the clamp, so a real ALSA host lands on HW 244 -- **the row
+where the handshake goes three microstates further.**
+
+**IT IS STILL NOT ADOPTED, and the reason is not timidity.** The I/O delay and
+`t_v34conn.c`'s wire are the same physical quantity modelled twice. The wire
+is 288 samples each way because finding 903 asked the object and it said one
+sample was out of spec; against that wire the object measures `bulkDelay=500,
+count2=509`, which is the round trip it actually has. An I/O delay of 424 with
+a 288-sample wire describes a line the test does not simulate, and the pair
+would be incoherent rather than merely approximate. **The two move together or
+not at all.** Neither value connects -- every row above is mode 2 with both
+rate words 0 -- so nothing here is a knob that was turned until something
+happened, and raising both together is the next experiment rather than this
+one's result.
 
 ### 825. It still does not connect, and the trajectory did not move by one count
 

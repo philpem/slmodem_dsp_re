@@ -178,11 +178,26 @@ object do fire — so the sweep is live and the call genuinely does not care.
 
 The exception is `MDMPRM_IODELAY`. HW delay is `IODELAY + 4` and DMA delay is
 `HW − 48` plus a correction at root `+0xd254`; the 48 is slmodemd's own
-`ST7554_HW_IODELAY`. Between HW 44 and HW 244 the handshake's trajectory
-changes completely. **The formula is recovered and the input is not
-recoverable** — it is `m->driver.ioctl(...)`, a property of the sound card: 0
-for slmodemd's socket driver, `dev->delay` for ALSA. 0 is what the tests use,
-and it was deliberately not tuned.
+`ST7554_HW_IODELAY`. **The formula is recovered; the input is a host
+measurement and differs per driver**, and the driver that answers 0 is the one
+that is a stub:
+
+| driver | answers | HW | note |
+|---|--:|--:|---|
+| socket | 0 | 4 | the real expression is commented out beside it (`modem_main.c:682`) |
+| ALSA | 424 | 244 | 384 startup samples + `INTERNAL_DELAY` 40; clamped |
+| modemap | ~192 + kernel | 196+ | `modemap_start` writes 192 samples |
+
+Somewhere between HW 44 and HW 104 the V.34 handshake's whole trajectory
+changes — above it the originator reaches `RX_PHASE2_CALL` instead of
+error-recovering to `DET_INFO`. It is the **HW** delay that matters and not
+the DMA correction: two settings that pin HW to the same clamped 244 with DMA
+differing by 760 give identical results to the last count.
+
+The tests use 0, deliberately and not by default. The I/O delay and the
+simulated wire are the same physical quantity modelled twice, so they move
+together or not at all — see the note on `CFG_IODELAY` in
+`test/unit/t_v34conn.c`. Neither setting connects.
 
 
 ---

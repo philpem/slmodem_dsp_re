@@ -94,6 +94,7 @@
 
 extern void ref_dp_vpcm_init(void);
 extern void *ref_dp_runtime_create(void *modem);
+extern void ref_dp_runtime_delete(void *runtime);
 extern void ref_datapumpv34(void *obj);
 extern int ref_modem_serrint(void *obj);
 extern unsigned int ref_dsplibs_debug_level;
@@ -148,10 +149,12 @@ extern unsigned int dsplibs_debug_level;
  *
  *   MDMPRM_MIN_RATE   m->min_rate = MODEM_MIN_RATE = 300    (modem.h:89)
  *   MDMPRM_MAX_RATE   m->max_rate = MODEM_MAX_RATE = 56000  (modem.h:90)
- *   MDMPRM_IODELAY    m->driver.ioctl(m, MDMCTL_IODELAY, 0), which is 0 for
- *                     the socket driver (modem_main.c:682) and `dev->delay`
- *                     for ALSA -- a host MEASUREMENT, so what is derived is
- *                     the formula the object applies to it, not the input
+ *   MDMPRM_IODELAY    m->driver.ioctl(m, MDMCTL_IODELAY, 0).  A host
+ *                     MEASUREMENT, so what is derived is the formula the
+ *                     object applies to it and not the input.  READ THE NOTE
+ *                     ON CFG_IODELAY BELOW BEFORE CHANGING IT: 0 is the
+ *                     socket driver's, ALSA's is 424, and the difference is
+ *                     visible in the handshake.
  *   MDMPRM_CODECTYPE  the socket driver's 4 = CODEC_STLC7550; read only by
  *                     `dp_runtime_create`, into +0x54
  *
@@ -169,6 +172,39 @@ extern unsigned int dsplibs_debug_level;
 #define CFG_MAX_RATE	56000
 #define CFG_IODELAY	0
 #define CFG_CODECTYPE	4
+
+/*
+ * CFG_IODELAY IS THE ONE VALUE HERE THAT IS A JUDGEMENT AND NOT A DERIVATION,
+ * AND IT IS THE ONE THE CALL IS SENSITIVE TO.  Say so loudly, because a later
+ * reader will otherwise change it and think they have found something.
+ *
+ * The three drivers slmodemd ships answer MDMCTL_IODELAY differently:
+ *
+ *   socket     0.  And it is a STUB -- `modem_main.c:682` has the real
+ *              expression commented out beside it, with the note that the
+ *              kernel module returns `s->delay + ST7554_HW_IODELAY (48)`.
+ *   ALSA       `dev->delay`, which `alsa_start` sets to the 384 samples of
+ *              silence it writes at startup plus `INTERNAL_DELAY` 40 =  424.
+ *   modemap    the kernel's answer plus `dev->delay`, itself the 192 samples
+ *              `modemap_start` writes.
+ *
+ * So a REAL sound card reports a few hundred, not zero, and 424 + 4 trips the
+ * 0x3d6f clamp: HW pins to 244 and the DMA correction at root +0xd254 becomes
+ * 384.  Finding 824 measures that this takes the handshake THREE MICROSTATES
+ * FURTHER -- the originator ends in 59 RX_PHASE2_CALL instead of error-
+ * recovering to 44 DET_INFO.
+ *
+ * 0 is committed anyway, for a reason that is not "it is what this project's
+ * host says", though it is: **the I/O delay and this file's wire are the same
+ * physical quantity modelled twice.** The wire below is 288 samples each way
+ * because finding 903 asked the object and it said 1 was out of spec; with
+ * that wire the object measures `bulkDelay=500, count2=509`, which is the
+ * round trip it actually has. Setting the I/O delay to a real card's 424 while
+ * leaving the wire at 288 would describe a line this test does not simulate,
+ * and the pair would then be incoherent rather than merely approximate.
+ *
+ * The two move together or not at all. Whoever raises one raises the other.
+ */
 #define CFG_SRATE	9600	/* `cmp $0x2580,%esi`, and MODEM_RATE          */
 #define CFG_MAX_FRAG	48	/* `cmpl $0x30,...` / `jg`, and MODEM_FRAG     */
 
@@ -1305,10 +1341,17 @@ main(void)
 			 "%s: ...so root +0xd250 is 0x210 (%%ld)", ep_name[ep]);
 		diff_eq_int(msg, peek_root(ep, O_ROOT_D250), 0x210, ep);
 
-		/* Untouched by the datapump: it is the host's to keep. */
+		/*
+		 * Untouched by the datapump: it is the host's to keep.  The
+		 * LITERAL 4 and not CFG_CODECTYPE, because a claim written
+		 * against the same macro the fixture feeds in cannot fail --
+		 * changing the macro changes both sides.  Against the literal
+		 * it fails if the fixture ever stops setting the parameter,
+		 * which is the failure it exists to catch.
+		 */
 		snprintf(msg, sizeof(msg), "%s: codecType survived (%%ld)",
 			 ep_name[ep]);
-		diff_eq_int(msg, rt->codecType, CFG_CODECTYPE, ep);
+		diff_eq_int(msg, rt->codecType, 4, ep);
 	}
 
 	for (ep = 0; ep < NEP; ep++) {
@@ -1428,5 +1471,41 @@ main(void)
 		diagnose(bad_run, bad_ep, bad_blk);
 
 	rc |= diff_end();
+
+	/*
+	 * --- teardown, and exactly how much of it ---------------------
+	 *
+	 * `dp_runtime_create` and `dp_runtime_delete` are a PAIR in the host
+	 * (`modem.c:1136` and `:1197`), so the fixture pairs them: a test that
+	 * modelled only the create half would be asserting a leak as correct.
+	 *
+	 * THE 250 V.PCM REGIONS ARE DELIBERATELY NOT TORN DOWN, and that is
+	 * not an oversight.  `ops->destroy` frees the whole graph, every
+	 * `reg[]` entry then dangles, and the run above has already finished
+	 * with it -- so calling it would test the destructor, which is a
+	 * different test with a different fixture, while adding a window in
+	 * which this one's snapshot machinery points at freed memory.  Finding
+	 * 800 measured that `->destroy` balances to `live=0, bad_free=0`; that
+	 * is where the claim belongs.
+	 */
+	diff_begin("the host's own blocks are freed by the host's own free");
+	{
+		int f0 = harness_alloc.frees;
+
+		for (ep = 0; ep < NEP; ep++)
+			ref_dp_runtime_delete(runtime[ep]);
+		diff_eq_int("two runtime blocks freed (%ld)",
+			    harness_alloc.frees - f0, 2, 0);
+		diff_eq_int("no bad free (%ld)", harness_alloc.bad_free, 0, 0);
+		/*
+		 * And the V.PCM graph is still outstanding, which is the
+		 * statement above made checkable rather than left in a
+		 * comment.
+		 */
+		diff_eq_int("the 250 V.PCM regions are still live (%ld)",
+			    harness_alloc.live, 250, 0);
+	}
+	rc |= diff_end();
+
 	return rc;
 }
