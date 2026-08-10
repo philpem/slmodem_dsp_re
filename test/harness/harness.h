@@ -163,11 +163,48 @@ struct modem_shim {
 	unsigned param_name[HARNESS_SHIM_PARAMS];
 	int param_value[HARNESS_SHIM_PARAMS];
 	int nparams;
+	/*
+	 * This shim's own stream.  NULL means the shared scripted one, which
+	 * is what every caller predating the routing below gets.
+	 */
+	const unsigned char *pattern;
+	int pattern_len;
 };
 
 extern struct modem_shim harness_modem_ours;
 extern struct modem_shim harness_modem_ref;
 void harness_modem_reset(const unsigned char *pattern, int len);
+
+/*
+ * ROUTING THE BIT PIPE ON THE MODEM HANDLE.
+ *
+ * One shim per SIDE is enough while a test drives one datapump.  Two
+ * endpoints of one CALL are a different shape: both are the blob's, so both
+ * land in `harness_modem_ref`, drawing from one `tx_pos` and writing into one
+ * `rx` sink.  A bit-error rate measured off that reads zero when the two
+ * endpoints are quietly sharing a stream -- gates.md's "result
+ * indistinguishable from success", and it cannot be argued away because the
+ * right answer and the vacuous answer are the same number.
+ *
+ * So a test may register a handle and get its own pair of shims and its own
+ * pattern.  Nothing is routed until something registers, so every existing
+ * test keeps the single pair it had.
+ */
+#define HARNESS_SHIM_ROUTES 4
+
+extern struct modem_shim harness_modem_route_ours[HARNESS_SHIM_ROUTES];
+extern struct modem_shim harness_modem_route_ref[HARNESS_SHIM_ROUTES];
+
+/* Forget every route.  `harness_modem_reset` does this too. */
+void harness_modem_route_reset(void);
+
+/*
+ * Give `m` its own shims and its own stream.  Returns the route's index, or
+ * -1 if the table is full or the handle is already registered -- a silently
+ * ignored duplicate would put two endpoints back on one shim, which is the
+ * whole thing this exists to prevent.
+ */
+int harness_modem_route_add(void *m, const unsigned char *pattern, int len);
 
 extern struct alloc_log harness_alloc;
 void harness_alloc_reset(void);
