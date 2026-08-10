@@ -287,6 +287,14 @@ def read(path):
     return open(path, encoding="utf-8").read()
 
 
+#
+# The largest number a numbered list inside a finding is credibly using.  The
+# real ones observed here run 1..9; 20 leaves room and is still far below any
+# allocated block.
+#
+LIST_ITEM_MAX = 20
+
+
 def check_duplicates():
     """Two entries sharing a number, which is what a merge produces.
 
@@ -311,14 +319,26 @@ def check_duplicates():
             # NUMBERED LISTS INSIDE A FINDING USE THE SAME MARKUP.  "### 1.
             # What six LSB actually costs" sits inside finding 20-odd and is
             # not finding 1; the heading level does not distinguish them,
-            # because real entries use both ## and ###.  What does is that
-            # the entries climb and a list restarts: anything far below the
-            # running high-water mark is a list item.  A genuine collision is
-            # a REPEAT OF A RECENT NUMBER -- the merge that caused all three
-            # of them appended 192, 193, 194 after 192, 193, 194 -- so it
-            # lands inside the window and a list at 1..9 does not.
+            # because real entries use both ## and ###.
             #
-            if n < high - 20:
+            # THE WINDOW USED TO BE `n < high - 20` ALONE AND IT WENT BLIND.
+            # That rested on entries CLIMBING through the file, so anything
+            # far below the running high-water mark had to be a list item.
+            # Union merges ended that: every parallel batch appends its own
+            # block, so the file now runs 820-825, 838, 839, 940-959,
+            # 826-836 -- and once `high` reaches 959 every one of the 826s is
+            # "far below" it.  Measured on this file, the bare window
+            # discarded 267 headings of which **263 were real findings**, and
+            # it duly missed a live 837/837 collision (finding 819) while
+            # reporting the tree clean.
+            #
+            # A list RESTARTS AT 1 and stays short, so the size of the number
+            # is the discriminator that survives reordering.  Both conditions
+            # now have to hold: far below the mark AND small enough to be a
+            # list item.  Findings 1-4 exist and are unaffected -- they are at
+            # the top, where `high` has not climbed past them.
+            #
+            if n < high - 20 and n <= LIST_ITEM_MAX:
                 continue
             high = max(high, n)
             seen.setdefault(num, []).append(title.strip())

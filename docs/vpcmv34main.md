@@ -95,12 +95,12 @@ to land before anyone forks.
 
 ### Wave 1 — the construction path, and the oracle it may unlock
 
-| group | bytes | sym |
+| group | planned | recomputed |
 |---|--:|--:|
-| free functions (`dp_vpcm_init`, `vpcm_create`, `VPCMXF_Create`, `VPcmV34Create`, …) | 31,127 | 69 |
-| `VPcmFloModem` | 7,020 | 6 |
-| `V90Modem`, `V92Modem`, `K56FlexFloModem` | 2,598 | 13 |
-| **total** | **40,745** | **88** |
+| free functions (`dp_vpcm_init`, `vpcm_create`, `VPCMXF_Create`, `VPcmV34Create`, …) | 31,127 / 69 | **31,072 / 65** |
+| `VPcmFloModem` | 7,020 / 6 | **7,020 / 6** |
+| `V90Modem`, `V92Modem`, `K56FlexFloModem` | 2,598 / 13 | **2,598 / 13** |
+| **total** | **40,745 / 88** | **40,690 / 84** |
 
 Big enough to split in two if it resists. It goes early for a reason beyond
 dependency: **the blob's own constructor is aliasable** — `ref_dp_vpcm_init`,
@@ -109,6 +109,30 @@ the Makefile globalizes file-locals before renaming. If a blob-constructed
 object can be used as a reference, every later batch can diff its constructor
 output field-by-field against it instead of being untestable until the whole
 span works. Whether that holds is being measured; see the caveat below.
+
+#### CORRECTION — WAVE 1 CANNOT GO FIRST, and the byte count does not show it
+
+**The split above is by CLOSURE, not by WRITABILITY, and for this wave those
+are very different things.** Every wave-1 symbol was re-run through
+`closure.py <name> --missing` and asked whether its own closure is size 1
+(finding 838):
+
+    dp_vpcm_init   needs 394 more     vpcm_create     needs 124
+    VPCMXF_Create  needs  66          VPcmV34Create   needs  11
+    VPcmFloModem::ctor needs 65       V90Modem::ctor  needs  38
+
+**Not one of the functions this wave is named after can be compiled today.**
+`VPcmV34Create` is the closest at 11 symbols, and all eleven are `reset` and
+`enterChannelVerification` members of WAVE-2 classes — taking them would break
+one-class-one-owner for eight future batches. So the construction path is the
+LAST thing in this span that can be written, not the first, and the ordering
+argument above survives only as the oracle argument, which findings 800-806
+delivered without needing the span written at all.
+
+About **14 KB of wave 1 is writable today** and it is all leaves: the FFT pair
+`realfft`/`four1` (which is also finding 876's block on `Psd::process`), the
+V.92 CP/DIL packers, the rate-renegotiation pair, the diagnostic printers, and
+about 2 KB of coefficient tables.
 
 ### Wave 2 — the receive chain, fan out freely
 
@@ -187,6 +211,31 @@ And two configuration parameters are ADDRESSES, not numbers —
 construct at all (DPRUNTIME, DSPINFO, MIN_RATE 2400, MAX_RATE 33600, IODELAY
 40), which bounds the result: **the configuration is plausible, not
 recovered.** Deriving it properly is wave 1's job.
+
+### THE CONFIGURATION IS NOW DERIVED — and the call still does not connect
+
+Done, findings 820-825, and `docs/configuration.md` has the field-by-field
+result. The route was not the object: **`slmodemd`'s own source survives**, and
+it is the other half of the ABI this object was partially linked against.
+`MDMPRM_DPRUNTIME` is `m->dp_runtime`, which is `dp_runtime_create(m)`, which
+is a function *in this blob at 0x58e0 that only the host calls* — so it is in
+no datapump's closure, which is why nobody had looked at it. It is a
+136-byte `struct _tagModemParameters`, the type the mangling of
+`VPcmFloModem`'s constructor names, and it is now reconstructed and
+differentially tested. `MDMPRM_DSPINFO` is a 16-byte `struct dsp_info`.
+MIN_RATE and MAX_RATE are `MODEM_MIN_RATE` 300 and `MODEM_MAX_RATE` 56000; and
+`max_frag` 48 is `MODEM_FRAG`, so the guard value was the real value.
+
+**Every parameter was then swept against the whole 1,600-block call, and five
+of the six are INERT.** The host's rate window lands at runtime +0x30/+0x34
+and the rate machinery reads +0x38/+0x3c, which `vpcm_create` writes as
+literals. `t_v34conn.c` now uses the derived configuration and **every recorded
+literal is unchanged from finding 902** — same trajectory, same stop, same
+zero rates.
+
+So the configuration is retired as the suspect for finding 902, and finding
+908's second item is what is left: **there is no V.8**, and phase 2 is where
+V.34 uses what V.8 negotiated.
 
 ## Where wave 0 got to
 
