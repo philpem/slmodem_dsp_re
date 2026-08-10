@@ -35002,9 +35002,18 @@ else changed:
 
 ```
   iodelay      80   82   84   85   86   87   88  ...  240   241
-  filtdelay    55   56   56   56   57   57   57       95    95
+  filtdelay   (55) (56) (56) (56)  57   57   57       95    95
   connects     no   no   no   no  yes  yes  yes      yes   yes
 ```
+
+**The `connects` row is entirely measured; the bracketed `filtdelay` values are
+NOT.**  `t_v34link` samples `+0xaa7c` only at the moment it connects, so a run
+that never connects never reads the field and reports 0.  The four bracketed
+cells are finding 1021's formula predicting what the field held, and the
+unbracketed ones are the object's own answer.  Said explicitly because this
+finding's neighbour is about a fitted formula that got recorded as a
+derivation, and repeating that shape inside the correction would be
+unfortunate.
 
 **85 fails and 86 connects**, and at 86 the ONLY two failing checks out of
 thirty-two are the two `35 + iodelay/4` assertions of finding 1021 comparing
@@ -35099,9 +35108,19 @@ it into `dmaDelay = 244 - 48 + extradelay`, and asks the host to drop the
 excess through the same parameter `vpcm_run`'s phase-II arms use.
 
 **Measured, and it was predicted before it was run.**  iodelay 241 connects,
-with the object's `+0xaa7c` reading 95 -- identical to 240.  `slmodemd`
-implements the shed at `modem_main.c:957-968`, discarding that many input
-samples and decrementing `dev->delay`.
+with the object's `+0xaa7c` reading 95 -- identical to 240.  That alone only
+refutes the refusal, because 240 and 241 give 95 either way, so the pin was
+put to a value where the two readings disagree:
+
+```
+  iodelay 400   unpinned ((400+6)>>2)+34 would be 135
+                pinned   ((244+2)>>2)+34            95
+                MEASURED                            95, and it connects
+```
+
+`slmodemd` implements the shed at `modem_main.c:957-968`, discarding that many
+input samples and decrementing `dev->delay`.  So ALSA's long-buffer 424 is not
+refused either; it runs at the pinned maximum.
 
 This is the only path on which `extradelay` is non-zero at construction, so it
 is also the only path on which `dmaDelay != hwDelay - 48`.
@@ -35156,9 +35175,13 @@ of seeing `addedDelay`.  The single V.34-side reader of `+0x6c`,
 **Where they do meet**, and it is one variable: `extradelay`, root `+0xd254`.
 `vpcm_create` folds it into `dmaDelay`; `vpcm_run` copies it into `addedDelay`
 when phase II completes and zeroes it on restart.  It is 0 at construction for
-every in-range `IODELAY`, which `t_v34conn.c:1324`'s passing assertion
-`dmaDelay == IODELAY + 4 - 48` proves; the one exception is finding 1024's
-over-cap path.  V.34 never reaches the arms that move it.
+every in-range `IODELAY`, and the evidence for that is the ALLOCATION, not a
+test: root comes from `sysdep_malloc(0xd258)` at 0x3a42 and nothing writes
+`+0xd254` before 0x3c0f reads it on the in-range path.  `t_v34conn.c:1324`'s
+passing assertion `dmaDelay == IODELAY + 4 - 48` confirms it at one point --
+that file runs at `CFG_IODELAY` 0 -- and cannot speak for the range.  The one
+exception is finding 1024's over-cap path, which is the only writer of
+`+0xd254` before the read.  V.34 never reaches the arms that move it.
 
 ### 1026. What a SIP/RTP backhaul should set `MDMPRM_IODELAY` to -- ENGINEERING JUDGEMENT on a derived range
 

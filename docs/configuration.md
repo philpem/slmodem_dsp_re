@@ -277,7 +277,10 @@ why the knob works in the direction it does (findings 960, 1022).
 | 241 and up | 95 | connects; see the negotiation below |
 
 **85 fails and 86 connects**, measured one value at a time; the old "somewhere
-between 88 and 80" was a sweep in steps of eight.
+between 88 and 80" was a sweep in steps of eight. The connect column is
+measured throughout. The `filtdelay` column is the formula above — below 86 it
+cannot be read off a run, because the harness samples the field only at the
+moment it connects.
 
 ### Above 240 the pump negotiates rather than failing — DERIVED
 
@@ -294,6 +297,11 @@ error path (finding 1024 corrects finding 962 on this):
 The host is asked to **shed** the excess — `slmodemd` does it by discarding
 that many input samples at `modem_main.c:957-968`. This is the only path on
 which `dmaDelay != hwDelay - 48`.
+
+Measured where the two readings disagree: at `IODELAY` 400 the object's
+`filtdelay` reads **95** (the pinned `hwDelay` of 244), not the 135 the
+unpinned formula gives, and the call still connects. So ALSA's long-buffer 424
+is not refused either — it runs at the pinned maximum.
 
 ### So what should a SIP/RTP host answer? — JUDGEMENT
 
