@@ -36174,3 +36174,62 @@ Recorded as carefully as what it did.
   `docs/vpcmv34main.md` warns must be merged by UNION.  It defines a class and
   no `struct`, so the tool would have skipped it anyway; it is listed for
   consistency with the other forty-one C++ headers.
+
+### 1117. `VPcmV34Create` IS WRITABLE AND ITS FIXTURE IS NOT -- READ, ASSESSED AND DELIBERATELY LEFT
+
+Its closure is now **1 symbol, 2,376 bytes: itself**.  It was read rather than
+written, and the reason it was left is the test and not the code.
+
+**THE CODE IS EASIER THAN ITS SIZE SUGGESTS.**  508 disassembly lines,
+straight-line, on `struct v34_object` -- which this tree already models:
+
+```
+   12 calls, ALL to functions that now exist
+      v34handshakinit                              VPcmFloModem::externalReset x2
+      V34InitializeImplementationSpecific          K56FlexFloModem::externalReset
+      V90ConstellationDesigner::setMinMaxRates     K56FlexFloModem::setMinMaxRates
+      V92EchoCanceller::setEchoDelay               GenericIIR<float,double>::reset
+      V90Demodulator::enterChannelVerification     sysdep_memset x2
+   13 gated dsplibs_debug_printf sites and one edprintf, 14 strings
+   ~50 distinct `this`-relative store offsets
+```
+
+**IT MEMSETS ITS OWN OBJECT AND RESTORES TWO POINTERS ACROSS THE MEMSET**, and
+that is the shape a reader has to have before anything else makes sense:
+
+```
+    aa7f  mov 0x3548(%ebx),%esi     saved
+    aa92  mov 0xac18(%ebx),%edi     saved
+    aacc  memset(obj, 0, 0xac4c)
+    aae2  memset(obj + 0x264, 0, 0x79c)
+    aaf9  mov %edi,0xac18(%ebx)     restored
+    ab15  mov %ecx,0x3548(%ebx)     restored
+    ab0f  mov %ebp,0xac3c(%ebx)     the third argument, a _tagModemParameters *
+```
+
+**`struct v34_object + 0x3548` IS A `VPcmFloModem *`.**  The saved value is
+later used as `edi` and dereferenced at `0x175c(%edi)` -- which is
+`VPcmFloModem::modem.demodulator` at exactly the offset
+`src/pump/v90/VPcmFloModem.cpp` already asserts -- and the result is handed to
+`V90Demodulator::enterChannelVerification`.  Two independent uses, one layout.
+So the V.PCM modem is NOT embedded in the V.34 object; it is pointed at, it is
+built by the caller, and `VPcmV34Create` is the CONFIGURATOR of an already
+allocated graph.
+
+**AND THAT IS WHY IT WAS LEFT.**  A differential test for it needs the whole
+graph standing up and configured before the call: a 0xac4c `struct
+v34_object`, a `VPcmFloModem` whose `externalReset` is called TWICE (so a
+V90Parameters with a `_tagModemParameters` behind it, a V92Parameters, and a
+V90Demodulator with its equaliser, connection evaluator, constellation
+designer and phase 3 demodulator all wired), a `K56FlexFloModem`, a
+`V92EchoCanceller`, a `GenericIIR<float,double>`, and whatever
+`v34handshakinit` and `V34InitializeImplementationSpecific` reach.  That is
+`test/harness/v90demfix.h` again with the V.92 and K56flex halves added -- a
+batch of its own, and the last one before finding 1105's `ref_vpcm_create`
+golden object can fire.
+
+**Nothing was committed for it.**  The rule is that a function which cannot be
+made to compare is left out and the attempt recorded, and this is the record.
+The four things the next batch starts from are above: the two saved pointers,
+the double memset, the third argument, and the twelve callees that all exist
+now.
