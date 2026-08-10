@@ -33196,6 +33196,45 @@ green afterwards.
 | `V34_BLOCKS` 4000 -> 1600, which is `t_v34conn`'s length | **6 of 32** | the connection never happens inside the run: 1,591 blocks of startup leaves nothing for data, so the "enough bits" and BER claims go first |
 | routing `set_param` reverted to the unrouted shim | **2 of 19** | "asking the modem for DP_V34" at -1 against 34, both endpoints. Found for real rather than injected -- it was the first run's actual failure |
 
+### 968. `vpcm_run` is not optional: the direct-drive fixture CANNOT survive data mode, and the oracle proves it
+
+The obvious cheap next step after finding 963 is to leave `t_v34conn.c`'s
+four-way comparison alone in shape and simply give it finding 962's
+configuration -- it drives `modem_serrint` and `datapumpv34` directly, so ours
+and the blob's can be mixed, which is exactly what a run through `vpcm_run`
+cannot do. It was tried, as a throwaway edit, and it does not work.
+
+```
+  t_v34conn.c, CFG_IODELAY 40 -> 216, NBLOCK 1600 -> 22000
+  ... blob-blob blk 21707 originate mst 44 rx 35 tx 74 mode 0
+      blob-blob blk 21707 answer    mst 63 rx 43 tx  5 mode 2
+  exit -11
+```
+
+**The crash is in the BLOB-BLOB run**, which is the oracle, so it is the
+fixture and not the reconstruction. It is also not the array sizes: raising
+`NBLOCK` to 22,000 with the configuration left at 40 runs to completion (and
+fails its recorded literals, which are written for 1,600 blocks, exactly as it
+should).
+
+What the last block shows is the originator having left the handshake --
+txstate 74, and `+0x2218` back to **0**, which finding 901 identified as
+`datapumpv34`'s DATA branch -- while the answerer is still at mode 2. So the
+segfault is the object entering data mode inside a driver that never calls
+`vpcm_run`, and `vpcm_run` is where the sample buffers are copied
+(sysdep_memcpy at 0x3ea8, 0x3f48, 0x3f78 and 0x3f99) and where
+`modem_get_bits` is called for the payload the data branch then expects.
+
+**So `vpcm_run` is not merely the route to the bit pipe.** It is required for
+the object to survive data mode at all, and no fixture that pokes +0x25e and
++0x260 a sample at a time can substitute for it once the handshake completes.
+That settles the order for the next batch: reconstruct `vpcm_run` first, then
+the four-way comparison of a connecting call comes with it -- rather than the
+other way round.
+
+`t_v34conn.c` was restored unchanged; this was a throwaway experiment and
+nothing of it is committed except this finding.
+
 ### 967. What this batch did not do
 
 - **`vpcm_run` is not reconstructed.** 1,664 bytes at .text 0x3e40, and the
@@ -33206,9 +33245,8 @@ green afterwards.
 - **`t_v34conn.c` is untouched**, deliberately: it is the control for the
   below-threshold configuration and its `expect[]` literals are the evidence
   that the trajectory changes. Re-running its four-way comparison at iodelay
-  216 -- driving `modem_serrint` and `datapumpv34` directly -- is the obvious
-  next experiment and would put OUR handshake into a connecting call. Not done
-  here.
+  216 was tried and does not work -- finding 968 -- which is why `vpcm_run`
+  comes first.
 - **No mutation suite was registered** in `test/mutations/suites.json`, and
   `tools/mutate.py` was not touched. The mutations above were applied by hand,
   built, run and reverted.
