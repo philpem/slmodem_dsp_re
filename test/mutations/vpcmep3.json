@@ -38,8 +38,8 @@
  },
  {
   "label": "one bit per CP symbol, not two",
-  "find": "\tnofBitsPerSymbol = 2;",
-  "replace": "\tnofBitsPerSymbol = 1;"
+  "find": "\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 2;",
+  "replace": "\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 1;"
  },
  {
   "label": "the 2 goes to +0x7dd1 and the 0 to +0x7dd2",
@@ -48,8 +48,8 @@
  },
  {
   "label": "no minimum: CP may give way immediately",
-  "find": "\tminNofTransmitSequences = 1;",
-  "replace": "\tminNofTransmitSequences = 0;"
+  "find": "\tnofTransmitSequences = 0;\n\tminNofTransmitSequences = 1;",
+  "replace": "\tnofTransmitSequences = 0;\n\tminNofTransmitSequences = 0;"
  },
  {
   "label": "the counter starts at 1 and the minimum at 0",

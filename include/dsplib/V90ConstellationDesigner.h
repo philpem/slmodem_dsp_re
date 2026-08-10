@@ -31,18 +31,35 @@
  * SECOND is printed as "set max rate" and stored at +0x4c.  So the offsets
  * descend as the arguments ascend, and the defaults confirm which is which.
  *
- * Everything below +0x4c is `pad_`.  Twenty-one other members write into that
- * region and none of them is reconstructed here, so naming any of it would be
- * a guess rather than a measurement.
+ * Everything the two written members do not touch is `pad_`.  Twenty other
+ * members write into that region and none of them is reconstructed here, so
+ * naming any of it would be a guess rather than a measurement.
+ *
+ * `reset()` (task #88, the lifecycle batch) added the seven fields it writes.
+ * It is 47 bytes of straight-line stores with no branch and no call, and the
+ * only thing it reads is the parameter block at +0x00 -- which is what makes
+ * +0x00 a `V90Parameters *` rather than merely the first four bytes of the
+ * padding: `mov (%eax),%ecx` and then `mov 0x39c(%ecx),%edx`.
  */
 
 #ifndef DSPLIB_V90CONSTELLATIONDESIGNER_H
 #define DSPLIB_V90CONSTELLATIONDESIGNER_H
 
+/*
+ * A POINTER ONLY, so a forward declaration is what belongs here.  Two
+ * different definitions of `V90Parameters` exist in this tree -- the 0x504
+ * word block in `V90PreFilter.h` and the 0x558 named map in
+ * `V90Parameters.h` -- and no translation unit may include both.  Declaring
+ * the class here keeps this header compatible with either; the .cpp picks
+ * one.  Finding 1112.
+ */
+class V90Parameters;
+
 class V90ConstellationDesigner {
 public:
 	/* Defined in src/pump/v90/V90ConstellationDesigner.cpp. */
 	void setMinMaxRates(unsigned int, unsigned int);
+	void reset();
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -51,7 +68,37 @@ public:
 	 * defined -- the .cpp asserts the offsets below against what the
 	 * compiler lays out.
 	 */
-	unsigned char pad_00[0x4c];	/* +0x00 twenty-one members' state  */
+
+	/* +0x00  The parameter block.  Not owned; `reset` reads +0x39c. */
+	V90Parameters *params;
+
+	unsigned char pad_04[6];	/* +0x04                            */
+
+	/*
+	 * +0x0a .. +0x10  Four consecutive 16-bit slots `reset` zeroes with
+	 * four `movw $0x0`.  Nothing reconstructed here reads any of them, so
+	 * they are offset-named; what makes them two bytes rather than four
+	 * is the store width and nothing else.
+	 */
+	short short_0a;			/* +0x0a */
+	short short_0c;			/* +0x0c */
+	short short_0e;			/* +0x0e */
+	short short_10;			/* +0x10 */
+
+	unsigned char pad_12[0x12];	/* +0x12                            */
+
+	/*
+	 * +0x24  Seeded by `reset` from the parameter block's +0x39c, which
+	 * `tools/vparse.py` reports as `unnamed_39c`: `setToDefault` writes it
+	 * and `loadParams` never reads it, so the original has no name for it
+	 * either (finding 878).
+	 */
+	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
+
+	unsigned char pad_28[0x20];	/* +0x28                            */
+
+	unsigned int word_48;		/* +0x48 zeroed by reset            */
+
 	unsigned int maxRate;		/* +0x4c defaults to 56000          */
 	unsigned int minRate;		/* +0x50 defaults to 28000          */
 };

@@ -52,8 +52,8 @@
  },
  {
   "label": "the phase 3 demodulator is handed maxTxPower, not Uinfo",
-  "find": "\t\t\t\t phase2Info->Uinfo,",
-  "replace": "\t\t\t\t phase2Info->maxTxPower,"
+  "find": "\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,",
+  "replace": "\t\t\t\t phase2Info->maxTxPower,\n\t\t\t\t (Phase3DemodulatorState)0, 0,"
  },
  {
   "label": "the phase 3 demodulator is started in state 1",
@@ -67,18 +67,18 @@
  },
  {
   "label": "the last argument is Uinfo rather than the round trip delay",
-  "find": "\t\t\t\t (unsigned int)phase2Info->rtd);",
-  "replace": "\t\t\t\t (unsigned int)phase2Info->Uinfo);"
+  "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);",
+  "replace": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->Uinfo);"
  },
  {
   "label": "the two Jd pointers are swapped",
-  "find": "\t\t\t\t jd, jdV92, dil,",
-  "replace": "\t\t\t\t (V90Jd *)jdV92, (V92Jd *)jd, dil,"
+  "find": "\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,",
+  "replace": "\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t (V90Jd *)jdV92, (V92Jd *)jd, dil,"
  },
  {
   "label": "the DIL descriptor is not passed on",
-  "find": "\t\t\t\t jd, jdV92, dil,",
-  "replace": "\t\t\t\t jd, jdV92, NULL,"
+  "find": "\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,",
+  "replace": "\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, NULL,"
  },
  {
   "label": "+0x294 is copied before the reset that clears +0x410",
@@ -107,8 +107,8 @@
  },
  {
   "label": "+0x280 is cleared as a word",
-  "find": "\tbyte_280 = 0;",
-  "replace": "\t*(unsigned int *)((char *)this + 0x280) = 0;"
+  "find": "\tconnectionEvaluator->word_88 = 0;\n\n\tbyte_280 = 0;",
+  "replace": "\tconnectionEvaluator->word_88 = 0;\n\n\t*(unsigned int *)((char *)this + 0x280) = 0;"
  },
  {
   "label": "the early exit reads the third byte, not the second",

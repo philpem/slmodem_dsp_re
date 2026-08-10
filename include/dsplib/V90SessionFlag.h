@@ -142,13 +142,17 @@ public:
 	 * V90Phase2Info's own offsets for those five -- see
 	 * include/dsplib/V92Phase2Info.h for the rest of that argument.
 	 *
-	 * `ptr_49b4` is not typed: `VPcmFloModem::getUinfoValue` loads it and
-	 * reads a signed short at its +0x20, and nothing else in the blob
-	 * that this tree has read touches it.
+	 * `ptr_49b4` USED TO BE UNTYPED -- `VPcmFloModem::getUinfoValue`
+	 * loads it and reads a signed short at its +0x20, which says nothing
+	 * about what it points at.  `VPcmFloModem::externalReset` (task #88)
+	 * hands the same field to `V90Parameters::initSession` and
+	 * `V90Parameters::init`, so it is a `V90Parameters *`.  The NAME is
+	 * kept as it was: two batches' worth of offset assertions and one
+	 * `+ 0x20` cast name it, and only its type is new.
 	 */
 	V90Phase2Info *phase2Info;		/* +0x0008                */
 	unsigned char pad_0c[0x49a8];		/* +0x000c not modelled   */
-	void *ptr_49b4;				/* +0x49b4                */
+	V90Parameters *ptr_49b4;		/* +0x49b4                */
 
 	unsigned int sessionFlag;		/* +0x49b8                */
 	int side;				/* +0x49bc V90ModemSide   */

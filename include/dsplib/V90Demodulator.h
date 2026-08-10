@@ -52,6 +52,16 @@
 #include "dsplib/Scrambler.h"
 #include "dsplib/V90Equalizer.h"
 #include "dsplib/V90Jd.h"
+/*
+ * `V90ConnectionEvaluator` used to be DEFINED here, because `enterPhase3`
+ * reaches four words into it and nothing else in the tree touched the class.
+ * It now has its own header and its own three members (task #88), so this is
+ * an include and not a definition.  Nothing else moved: the field names, the
+ * 0xbc size and the offset assertions are the same, and the assertions moved
+ * with the class to V90ConnectionEvaluator.cpp.
+ */
+#include "dsplib/Agc.h"
+#include "dsplib/V90ConnectionEvaluator.h"
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90PreFilter.h"
@@ -69,31 +79,6 @@ class V90MP;
 class V90Demapper;
 class V90ConstellationDesigner;
 class V90Phase4Demodulator;
-
-/*
- * Modelled only as far as `V90Demodulator::enterPhase3` reaches into it, which
- * is four words it clears.  The SIZE is not a guess: the constructor allocates
- * it with `sysdep_malloc(0xbc)` (finding 291).  Its own members are not in
- * task #60 and nothing here declares them.
- */
-class V90ConnectionEvaluator {
-public:
-	unsigned char pad_00[0x70];	/* +0x00 not modelled                */
-	unsigned int word_70;		/* +0x70 cleared by enterPhase3      */
-	unsigned int word_74;		/* +0x74 cleared by enterPhase3      */
-	/*
-	 * +0x78 and +0x7c were `pad_78` until the VPcmFloModem batch read a
-	 * second function that touches this object: `getV90CpBits` copies
-	 * +0x78 to +0x7c each time a CP sequence finishes.  Two batches, two
-	 * functions, one object -- neither would have found both.
-	 */
-	unsigned int word_78;		/* +0x78 copied to word_7c           */
-	unsigned int word_7c;		/* +0x7c                             */
-	unsigned char pad_80[4];	/* +0x80 not modelled                */
-	unsigned int word_84;		/* +0x84 cleared by enterPhase3      */
-	unsigned int word_88;		/* +0x88 cleared by enterPhase3      */
-	unsigned char pad_8c[0x30];	/* +0x8c not modelled, to 0xbc       */
-};
 
 class V90Demodulator {
 public:
@@ -199,8 +184,18 @@ public:
 	unsigned int word_40;		/* +0x040 cleared by `enterPhase3`   */
 	unsigned int word_44;		/* +0x044 receives the old +0x038    */
 
-	unsigned char pad_48[0x24];	/* +0x048 incl. an Agc<float> at
-					 *        +0x04c, not modelled       */
+	unsigned char pad_48[4];	/* +0x048                            */
+
+	/*
+	 * +0x04c  EMBEDDED, and now modelled: `V90Demodulator::reset` does
+	 * `lea 0x4c(%esi),%ebx`, calls `Agc<float>::reset` on it, and then
+	 * writes two of its fields through the SAME register -- `agc+0x18`
+	 * and `agc+0x0c`, which `Agc.h` already names `blockLen` and `ref`.
+	 * That the caller reconfigures the AGC immediately after resetting it
+	 * is what identifies the sub-object; 32 bytes takes it to +0x6c,
+	 * where the prefilter starts.
+	 */
+	Agc<float> agc;			/* +0x04c */
 
 	/*
 	 * +0x06c  EMBEDDED: `lea 0x6c(%ebx),%ebp` in the constructor before
@@ -272,24 +267,33 @@ public:
 	 * phase 3 and phase 4 demodulators. */
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
-	unsigned char pad_240[0x24];	/* +0x240 nothing in wave 2 reads it */
+	unsigned char pad_240[0xc];	/* +0x240 nothing reconstructed
+					 *        reads it                   */
+	unsigned int word_24c;		/* +0x24c zeroed by reset            */
+	unsigned char pad_250[8];	/* +0x250                            */
+	unsigned int word_258;		/* +0x258 zeroed by reset            */
+	unsigned char pad_25c[4];	/* +0x25c                            */
+	unsigned int word_260;		/* +0x260 zeroed by reset            */
 
 	unsigned int word_264;		/* +0x264 zeroed by the constructor  */
 	unsigned int word_268;		/* +0x268 zeroed by the constructor  */
 	unsigned int word_26c;		/* +0x26c zeroed by the constructor  */
-	unsigned char pad_270[8];	/* +0x270 nothing in wave 2 reads it */
+	unsigned int word_270;		/* +0x270 zeroed by reset            */
+	unsigned char pad_274[4];	/* +0x274 nothing reads it           */
 	unsigned int word_278;		/* +0x278 zeroed by the constructor  */
 	unsigned int word_27c;		/* +0x27c zeroed by the constructor  */
 
-	/* +0x280  Zeroed by the constructor and again by `enterPhase3`. */
+	/* +0x280  Zeroed by the constructor, by `enterPhase3` and by `reset`. */
 	unsigned char byte_280;
 
-	unsigned char pad_281[7];	/* +0x281 nothing in wave 2 reads it */
+	unsigned char pad_281[3];	/* +0x281 alignment                  */
+
+	unsigned int word_284;		/* +0x284 zeroed by reset            */
 
 	/* +0x288  `enterPhase3` copies `params`+0x264 into it. */
 	unsigned int word_288;
 
-	unsigned char pad_28c[4];	/* +0x28c nothing in wave 2 reads it */
+	unsigned int word_28c;		/* +0x28c zeroed by reset            */
 
 	/* +0x290  `enterPhase3` copies `params`+0x278 into it. */
 	unsigned int word_290;

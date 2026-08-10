@@ -61,6 +61,15 @@
 #include "dsplib/V92EchoCanceller.h"
 #include "dsplib/ResamplerTimingOffset.h"
 #include "dsplib/V90Phase4Modulator.h"
+#include "dsplib/V90ConnectionEvaluator.h"
+#include "dsplib/K56FlexFloModem.h"
+/*
+ * The NAMED V90Parameters map: `V90ConstellationDesigner::reset` and
+ * `V90ConnectionEvaluator::reset` read twenty slots out of the parameter
+ * block between them, and this test seeds those slots by name.  Finding
+ * 1112 is why only one of the two definitions may be included.
+ */
+#include "dsplib/V90Parameters.h"
 
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
@@ -75,6 +84,28 @@ void ref_rt_setTimingOffset(void *self, float ppm)
 	asm("ref__ZN21ResamplerTimingOffset15setTimingOffsetEf");
 void ref_p4_setSessionFlag(void *self, unsigned int f)
 	asm("ref__ZN18V90Phase4Modulator14setSessionFlagEj");
+
+/* Task #88's lifecycle members. */
+void ref_cd_reset(void *self)
+	asm("ref__ZN24V90ConstellationDesigner5resetEv");
+void ref_ce_reset(void *self)
+	asm("ref__ZN22V90ConnectionEvaluator5resetEv");
+void ref_k56_externalReset(void *self)
+	asm("ref__ZN15K56FlexFloModem13externalResetEv");
+
+/*
+ * THE CONSTRUCTOR AND DESTRUCTOR ARE REACHED BY THEIR MANGLED NAMES ON
+ * BOTH SIDES, ours as well as the blob's.  A constructor cannot be
+ * called on an existing buffer in C++ without placement new, and the
+ * tree builds -nostdinc++ with no <new>; naming the symbol is what the
+ * ABI does anyway, and it keeps the two sides exactly symmetric.
+ */
+void our_ce_ctor(void *self, void *params)
+	asm("_ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
+void ref_ce_ctor(void *self, void *params)
+	asm("ref__ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
+void our_ce_dtor(void *self) asm("_ZN22V90ConnectionEvaluatorD1Ev");
+void ref_ce_dtor(void *self) asm("ref__ZN22V90ConnectionEvaluatorD1Ev");
 }
 
 /* ------------------------------------------------------------------ seeds */
@@ -725,6 +756,394 @@ run_p4(void)
 	return diff_end();
 }
 
+/* ------------------------------------------ the parameter block, shared */
+
+/*
+ * One V90Parameters per side, seeded pairwise, and the ONE thing the three
+ * lifecycle members below have in common: each copies configuration out of
+ * it.  The two sides get identical bytes, so a copy that read the wrong slot
+ * would still produce the same value on both sides -- which is why the checks
+ * also assert what the BLOB stored against the parameter READ BY NAME through
+ * our own header.  That is the claim: this field receives that parameter.
+ */
+#define PARM_SLOT_L (sizeof(V90Parameters) + 64)
+
+static unsigned char parm_a[PARM_SLOT_L] __attribute__((aligned(8)));
+static unsigned char parm_b[PARM_SLOT_L] __attribute__((aligned(8)));
+
+#define PA ((V90Parameters *)parm_a)
+#define PB ((V90Parameters *)parm_b)
+
+/* --------------------------------- V90ConstellationDesigner::reset (47 B) */
+
+static int
+run_cd_reset(void)
+{
+	/* Every word the object writes, by absolute offset. */
+	static const int allow[] = { 0x08, 0x0c, 0x10, 0x24, 0x48 };
+	int seen[5] = { 0, 0, 0, 0, 0 };
+	int trial, printed = 0;
+	unsigned lvl;
+
+	diff_begin("V90ConstellationDesigner::reset");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+		for (trial = 0; trial < 24; trial++) {
+			unsigned char before[CD_SLOT];
+			long tag = (long)lvl * 1000 + trial;
+			int bad, first;
+
+			fill_pair(cd_a.raw, cd_b.raw, CD_SLOT, trial,
+				  trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT_L, trial + 77,
+				  trial & 3);
+			cd_a.o.params = PA;
+			cd_b.o.params = PA;
+			memcpy(before, cd_b.raw, CD_SLOT);
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			cd_a.o.reset();
+			ref_cd_reset(&cd_b.o);
+
+			dsplib_debug_capture_on = 0;
+
+			diff_eq_obj("after reset", V90ConstellationDesigner,
+				    &cd_a.o, &cd_b.o, tag);
+			diff_eq_int("no store past the object (%ld)",
+				    memcmp(cd_a.raw + sizeof(cd_a.o),
+					   cd_b.raw + sizeof(cd_b.o),
+					   CD_SLOT - sizeof(cd_a.o)) == 0,
+				    1, tag);
+			diff_eq_int("the parameter block was not written (%ld)",
+				    memcmp(parm_a, parm_b, PARM_SLOT_L) == 0,
+				    1, tag);
+
+			bad = only_wrote(before, cd_b.raw, CD_SLOT, allow, 5,
+					 seen, &first);
+			diff_eq_int("the blob wrote outside the five words at "
+				    "+0x%lx", bad == 0 ? -1 : first, -1, tag);
+
+			/*
+			 * The fill is GONE from every one of them, and the
+			 * copy came from the slot the header names.  Two
+			 * never-reset objects compare equal (finding 1105),
+			 * so the values are asserted and not only compared.
+			 */
+			diff_eq_int("blob's word_48 (%ld)",
+				    (long)cd_b.o.word_48, 0, tag);
+			diff_eq_int("blob's short_0a (%ld)",
+				    (long)cd_b.o.short_0a, 0, tag);
+			diff_eq_int("blob's short_0c (%ld)",
+				    (long)cd_b.o.short_0c, 0, tag);
+			diff_eq_int("blob's short_0e (%ld)",
+				    (long)cd_b.o.short_0e, 0, tag);
+			diff_eq_int("blob's short_10 (%ld)",
+				    (long)cd_b.o.short_10, 0, tag);
+			diff_eq_int("blob's word_24 is params->unnamed_39c "
+				    "(%ld)", (long)cd_b.o.word_24,
+				    (long)(unsigned int)PA->unnamed_39c, tag);
+
+			/*
+			 * NO DIAGNOSTIC AT ALL: 47 bytes, no call, no gate.
+			 * Both sides must be silent at every level, which is
+			 * the only thing the transcript can say here and is
+			 * still worth saying -- an invented message would be
+			 * invisible to every other check in this block.
+			 */
+			(void)printed;
+			diff_eq_int("ours said nothing (%ld)",
+				    (int)dsplib_debug_capture_lines(0), 0,
+				    tag);
+			diff_eq_int("the blob said nothing (%ld)",
+				    (int)dsplib_debug_capture_lines(1), 0,
+				    tag);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("+0x08 is a word reset writes", seen[0], 1, 0);
+	diff_eq_int("+0x0c is a word reset writes", seen[1], 1, 0);
+	diff_eq_int("+0x10 is a word reset writes", seen[2], 1, 0);
+	diff_eq_int("+0x24 is a word reset writes", seen[3], 1, 0);
+	diff_eq_int("+0x48 is a word reset writes", seen[4], 1, 0);
+
+	return diff_end();
+}
+
+/* ------------------------------- V90ConnectionEvaluator (188 bytes) */
+
+/*
+ * NOT A UNION.  The class has a user-declared constructor and destructor, so
+ * it is not trivial and cannot be a union member; the slot is a byte array
+ * and the object is reached through a cast.
+ */
+#define CE_SLOT_L 256
+
+static unsigned char ce_a[CE_SLOT_L] __attribute__((aligned(8)));
+static unsigned char ce_b[CE_SLOT_L] __attribute__((aligned(8)));
+
+#define CEA ((V90ConnectionEvaluator *)ce_a)
+#define CEB ((V90ConnectionEvaluator *)ce_b)
+
+/* Every word `reset` writes.  +0x00, +0x88, +0x98 and +0xb8 are not in it. */
+static const int ce_allow[] = {
+	0x04, 0x08, 0x0c, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c,
+	0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58,
+	0x5c, 0x60, 0x64, 0x68, 0x6c, 0x70, 0x74, 0x78, 0x7c, 0x80, 0x84,
+	0x8c, 0x90, 0x94, 0x9c, 0xa0, 0xa4, 0xa8, 0xac, 0xb0, 0xb4
+};
+#define CE_NALLOW ((int)(sizeof(ce_allow) / sizeof(ce_allow[0])))
+
+static int ce_seen[CE_NALLOW];
+
+/*
+ * What the configuration slots must come out holding, read out of the BLOB's
+ * object and compared against the parameter block BY NAME.
+ */
+static void
+ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
+{
+	diff_eq_int("enableRrnDown (%ld)", o->enableRrnDown,
+		    p->ENABLE_RRN_DOWN, tag);
+	diff_eq_int("enableRrnUp (%ld)", o->enableRrnUp,
+		    p->ENABLE_RRN_UP, tag);
+	diff_eq_int("nofRemoteRateRenegBeforeRetrain (%ld)",
+		    o->nofRemoteRateRenegBeforeRetrain,
+		    p->NOF_REMOTE_RATE_RENEG_BEFORE_RETRAIN, tag);
+	diff_eq_int("debugAlternateDebug (%ld)", o->debugAlternateDebug,
+		    p->DEBUG_CONNECTION_EVALUATOR_ALTERNATE_DEBUG, tag);
+	diff_eq_int("debugFallBack (%ld)", o->debugFallBack,
+		    p->DEBUG_CONNECTION_EVALUATOR_FALL_BACK, tag);
+	diff_eq_int("debugRetrain (%ld)", o->debugRetrain,
+		    p->DEBUG_CONNECTION_EVALUATOR_RETRAIN, tag);
+	diff_eq_int("debugRateUp (%ld)", o->debugRateUp,
+		    p->DEBUG_CONNECTION_EVALUATOR_RATE_UP, tag);
+	diff_eq_int("debugRateDown (%ld)", o->debugRateDown,
+		    p->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN, tag);
+	diff_eq_int("retrainCounterFadeCount (%ld)",
+		    o->retrainCounterFadeCount,
+		    p->RETRAIN_COUNTER_FADE_COUNT, tag);
+	diff_eq_int("remoteRrnCounterFadeCount (%ld)",
+		    o->remoteRrnCounterFadeCount,
+		    p->REMOTE_RRN_COUNTER_FADE_COUNT, tag);
+	diff_eq_int("rateUpDetectDuration (%ld)", o->rateUpDetectDuration,
+		    p->RATE_UP_DETECT_DURATION, tag);
+	diff_eq_int("minDurationInDataBeforeRrnUp (%ld)",
+		    o->minDurationInDataBeforeRrnUp,
+		    p->MINIMUM_DURATION_IN_DATA_BEFORE_RRN_UP, tag);
+	diff_eq_int("rateDownDetectDuration (%ld)", o->rateDownDetectDuration,
+		    p->RATE_DOWN_DETECT_DURATION, tag);
+	diff_eq_int("minDurationInDataBeforeRrnDown (%ld)",
+		    o->minDurationInDataBeforeRrnDown,
+		    p->MINIMUM_DURATION_IN_DATA_BEFORE_RRN_DOWN, tag);
+	diff_eq_int("retrainDetectDuration (%ld)", o->retrainDetectDuration,
+		    p->RETRAIN_DETECT_DURATION, tag);
+	diff_eq_int("debugPeriod (%ld)", o->debugPeriod,
+		    p->DEBUG_CONNECTION_EVALUATOR_PERIOD, tag);
+	diff_eq_int("phase4ErrorForV34Fallback (%ld)",
+		    memcmp(&o->phase4ErrorForV34Fallback,
+			   &p->PHASE4_ERROR_FOR_V34_FALLBACK, 4) == 0, 1, tag);
+
+	/* The constants, and the widths that make two of them different. */
+	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
+	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
+	diff_eq_int("word_8c (%ld)", (long)o->word_8c, -1, tag);
+	diff_eq_int("short_9c (%ld)", (long)o->short_9c, -1, tag);
+	diff_eq_int("short_9e (%ld)", (long)o->short_9e, 0, tag);
+	diff_eq_int("short_b0 (%ld)", (long)o->short_b0, 1, tag);
+	diff_eq_int("short_b2 (%ld)", (long)o->short_b2, 0, tag);
+	diff_eq_int("short_b4 (%ld)", (long)o->short_b4, 0, tag);
+	diff_eq_int("word_04 (%ld)", (long)o->word_04, 0, tag);
+	diff_eq_int("word_24 (%ld)", (long)o->word_24, 0, tag);
+	diff_eq_int("word_a8 (%ld)", (long)o->word_a8, 0, tag);
+}
+
+static int
+run_ce(void)
+{
+	int trial, printed = 0;
+	unsigned lvl;
+
+	diff_begin("V90ConnectionEvaluator::reset");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+		for (trial = 0; trial < 24; trial++) {
+			unsigned char before[CE_SLOT_L];
+			long tag = (long)lvl * 1000 + trial;
+			int bad, first;
+
+			fill_pair(ce_a, ce_b, CE_SLOT_L, trial, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT_L, trial + 31,
+				  trial & 3);
+			CEA->params = PA;
+			CEB->params = PA;
+			memcpy(before, ce_b, CE_SLOT_L);
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			CEA->reset();
+			ref_ce_reset(CEB);
+
+			dsplib_debug_capture_on = 0;
+
+			diff_eq_obj("after reset", V90ConnectionEvaluator,
+				    CEA, CEB, tag);
+			diff_eq_int("no store past the object (%ld)",
+				    memcmp(ce_a + sizeof(*CEA),
+					   ce_b + sizeof(*CEB),
+					   CE_SLOT_L - sizeof(*CEA)) == 0,
+				    1, tag);
+			diff_eq_int("the parameter block was not written (%ld)",
+				    memcmp(parm_a, parm_b, PARM_SLOT_L) == 0,
+				    1, tag);
+			diff_eq_int("the parameter pointer survived (%ld)",
+				    CEB->params == PA, 1, tag);
+
+			bad = only_wrote(before, ce_b, CE_SLOT_L, ce_allow,
+					 CE_NALLOW, ce_seen, &first);
+			diff_eq_int("the blob wrote a word reset does not "
+				    "name, at +0x%lx",
+				    bad == 0 ? -1 : first, -1, tag);
+
+			ce_check_values(CEB, PA, tag);
+
+			check_transcript(lvl, tag, &printed);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("the diagnostics were reached", printed, 1, 0);
+
+	/*
+	 * Every offset the allow-list names is one the BLOB really writes.
+	 * Without this the list is a permission and not a claim -- the file's
+	 * own rule, and `run_cd_reset` asserts the same five lines below its
+	 * sweep.
+	 */
+	{
+		int i;
+
+		for (i = 0; i < CE_NALLOW; i++)
+			diff_eq_int("+0x%lx is a word reset writes",
+				    ce_seen[i], 1, ce_allow[i]);
+	}
+
+	return diff_end();
+}
+
+/*
+ * The constructor and the destructor.
+ *
+ * The constructor is "store the parameter block, then reset", so the check is
+ * that a constructed object is byte-for-byte a reset one with +0x00 filled
+ * in.  The destructor is a bare `ret`, and comparing two objects AFTER a
+ * destructor would compare the allocator (finding 1105) -- so what is checked
+ * is that it wrote NOTHING, against the object's own image taken immediately
+ * before the call.  Two empty things compare equal, and this is the shape
+ * that says so.
+ */
+static int
+run_ce_lifecycle(void)
+{
+	int trial;
+
+	diff_begin("V90ConnectionEvaluator: constructor and destructor");
+	set_level(0);
+
+	for (trial = 0; trial < 16; trial++) {
+		unsigned char before[CE_SLOT_L];
+		long tag = 4000 + trial;
+
+		fill_pair(ce_a, ce_b, CE_SLOT_L, trial + 500, trial & 3);
+		memcpy(before, ce_b, CE_SLOT_L);
+		fill_pair(parm_a, parm_b, PARM_SLOT_L, trial + 501,
+			  trial & 3);
+
+		our_ce_ctor(ce_a, parm_a);
+		ref_ce_ctor(ce_b, parm_a);
+
+		diff_eq_obj("after construction", V90ConnectionEvaluator,
+			    CEA, CEB, tag);
+		diff_eq_int("the constructor stored the parameter block (%ld)",
+			    CEB->params == PA, 1, tag);
+		diff_eq_int("and the fill is gone from +0x00 (%ld)",
+			    memcmp(before, ce_b, 4) != 0, 1, tag);
+
+		/* It really did run reset: the configuration is in place. */
+		ce_check_values(CEB, PA, tag);
+
+		diff_eq_int("no store past the object (%ld)",
+			    memcmp(ce_a + sizeof(*CEA), ce_b + sizeof(*CEB),
+				   CE_SLOT_L - sizeof(*CEA)) == 0, 1, tag);
+
+		/* The destructor: it must write nothing at all. */
+		memcpy(before, ce_b, CE_SLOT_L);
+		our_ce_dtor(ce_a);
+		ref_ce_dtor(ce_b);
+		diff_eq_int("the destructor wrote nothing (%ld)",
+			    memcmp(before, ce_b, CE_SLOT_L) == 0, 1, tag);
+		diff_eq_obj("after destruction", V90ConnectionEvaluator,
+			    CEA, CEB, tag);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------- K56FlexFloModem::externalReset (1 byte) */
+
+/*
+ * One byte, `c3`.  The whole claim is that it touches nothing, and a
+ * comparison of two objects neither side wrote is the archetypal vacuous
+ * pass -- so the object is compared against its OWN pre-call image as well as
+ * against the blob's, and the slot is far bigger than the class so a store
+ * anywhere near it would show.
+ */
+#define K56_SLOT 128
+
+static unsigned char k56_a[K56_SLOT] __attribute__((aligned(8)));
+static unsigned char k56_b[K56_SLOT] __attribute__((aligned(8)));
+
+static int
+run_k56(void)
+{
+	int trial;
+
+	diff_begin("K56FlexFloModem::externalReset");
+	set_level(0);
+
+	for (trial = 0; trial < 16; trial++) {
+		unsigned char before[K56_SLOT];
+		long tag = 6000 + trial;
+
+		fill_pair(k56_a, k56_b, K56_SLOT, trial + 900, trial & 3);
+		memcpy(before, k56_b, K56_SLOT);
+
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+
+		((K56FlexFloModem *)k56_a)->externalReset();
+		ref_k56_externalReset(k56_b);
+
+		dsplib_debug_capture_on = 0;
+
+		diff_eq_int("the two objects agree (%ld)",
+			    memcmp(k56_a, k56_b, K56_SLOT) == 0, 1, tag);
+		diff_eq_int("the blob wrote nothing at all (%ld)",
+			    memcmp(before, k56_b, K56_SLOT) == 0, 1, tag);
+		diff_eq_int("and neither did ours (%ld)",
+			    memcmp(before, k56_a, K56_SLOT) == 0, 1, tag);
+		diff_eq_int("nothing was printed (%ld)",
+			    (int)dsplib_debug_capture_lines(1), 0, tag);
+	}
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -736,6 +1155,12 @@ main(void)
 	rc |= run_ec();
 	rc |= run_rt();
 	rc |= run_p4();
+
+	/* Task #88's lifecycle members. */
+	rc |= run_cd_reset();
+	rc |= run_ce();
+	rc |= run_ce_lifecycle();
+	rc |= run_k56();
 
 	set_level(0);
 	dsplib_debug_capture_on = 0;

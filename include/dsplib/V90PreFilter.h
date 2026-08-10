@@ -98,6 +98,21 @@ struct V90CodecEntry {
 
 class V90Parameters {
 public:
+	/*
+	 * DECLARED HERE AND DEFINED IN src/pump/v90/V90Parameters.cpp,
+	 * against the OTHER definition of this class.  That is not a
+	 * contradiction: the two headers describe the same class -- the same
+	 * allocation, the same mangled names -- one of them as a named map and
+	 * one as a block, and a member takes only `this`.  So a translation
+	 * unit that has the block form can still call a member the named form
+	 * defines, and this is how `VPcmFloModem::externalReset` reaches
+	 * `initSession` and `init` without pulling in a second definition of
+	 * the class it is embedded in.  Finding 1112 is the duplication
+	 * itself, which is a wart and not a design.
+	 */
+	void	init();
+	void	initSession();
+
 	union {
 		unsigned char b[V90PARAMETERS_BOUND];
 		int w[V90PARAMETERS_BOUND / 4];

@@ -51,8 +51,9 @@
  },
  {
   "label": "reneg: case 2 no longer steps down",
-  "find": "\tcase 2:\n",
-  "replace": "\tcase 9:\n",
+  "note": "CARRIES THE NEXT LINE, and it has to.  `VPcmV34GetCurrentSessionDP` arrived in the same file with its own one-tab `case 2:` and `case 3:`, and `anchorcheck` reported both of these as NOT UNIQUE -- which is right, and is the gate doing its job: a two-site anchor patches the first match and the label then names an arm the mutation did not touch.  The fix is context, not a looser rule, and the context chosen is the FALL-THROUGH that makes this arm this arm.",
+  "find": "\tcase 2:\n\tcase 5:\n",
+  "replace": "\tcase 9:\n\tcase 5:\n",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
@@ -63,8 +64,9 @@
  },
  {
   "label": "reneg: case 3 becomes case 4",
-  "find": "\tcase 3:\n",
-  "replace": "\tcase 4:\n",
+  "note": "Carries its body for the reason the `case 2` anchor above carries its fall-through.",
+  "find": "\tcase 3:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
+  "replace": "\tcase 4:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {

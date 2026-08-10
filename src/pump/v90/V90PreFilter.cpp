@@ -407,3 +407,31 @@ V90PreFilter::setParamEia6()
 	p->w[0x410 / 4] = p->w[0x484 / 4];
 	p->w[0x414 / 4] = p->w[0x48c / 4];
 }
+
+/*
+ * reset -- the FIR's own reset, then the type 1 bank at gain 0.
+ *
+ * Four steps and no diagnostic.  `FloatFIR::reset` clears the history and the
+ * index; the two stores put the filter back in the state the constructor
+ * leaves it in, with `refLoop` at -1 meaning "no reference loop selected"
+ * (`autoSelection` is what fills it in, and it returns -1 on no match); and
+ * the tail call reinstalls the FIRST ROW of the type 1 coefficient bank, 20
+ * taps, which is gain 0.
+ *
+ * THE RELOCATION IS THE EVIDENCE FOR THE ROW.  `mov $0x0,%eax` at 0x44b0c
+ * carries `R_386_32 _ZN12V90PreFilter18preFilterCoefType1E` with no addend,
+ * so it is the base of the table and not `bank1(gain)` for some gain the
+ * object happened to hold -- which a disassembly read without relocations
+ * would have shown as a plain zero.  CLAUDE.md's tools/dis.py rule, in the
+ * smallest possible instance.
+ */
+void
+V90PreFilter::reset()
+{
+	fir.reset();
+
+	refLoop = -1;
+	gain = 0;
+
+	fir.setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
+}

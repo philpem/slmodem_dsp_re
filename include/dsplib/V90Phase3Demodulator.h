@@ -261,7 +261,15 @@ public:
 	 */
 	float float_418;
 
-	unsigned char pad_41c[8];	/* +0x41c nothing reaches it     */
+	/*
+	 * +0x41c  The verification status.  `clearVerificationStatus()` is
+	 * nothing but a gated diagnostic and `movl $0x0` here, so the field is
+	 * named for the member that clears it and what it HOLDS is not
+	 * established by anything written so far.  A full 32-bit store.
+	 */
+	unsigned int verificationStatus;
+
+	unsigned char pad_420[4];	/* +0x420 nothing reaches it     */
 
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;

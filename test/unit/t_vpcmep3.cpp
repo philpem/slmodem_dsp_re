@@ -544,11 +544,211 @@ run_descriptor(void)
 	return diff_end();
 }
 
+/* ============================================ task #88: externalReset */
+
+/*
+ * `VPcmFloModem::externalReset` differs from `enterPhase3` in three ways and
+ * every one of them needs something this file did not have: it reinitialises
+ * a V90Parameters and a V92Parameters through two pointers the fixture never
+ * wired, and it calls `V90Demodulator::reInit` when `info0Layout` is
+ * non-zero.
+ *
+ * THE TWO PARAMETER BLOCKS ARE SHARED AND SNAPSHOTTED.  `V90Parameters::init`
+ * and `V92Parameters::init` WRITE, so per-side blocks would need the two
+ * pointers neutralised and would still compare only what each side wrote into
+ * its own copy.  One block, given to both sides, keeps every stored pointer
+ * identical (finding 1105) -- and the snapshot-run-restore-run shape (finding
+ * 805) is what stops the second writer from hiding the first.
+ */
+
+#include "dsplib/V92Parameters.h"
+
+extern "C" {
+void ref_vpcm_extreset(void *self)
+	asm("ref__ZN12VPcmFloModem13externalResetEv");
+}
+
+#define V90P_SLOT (V90PARAMETERS_BOUND + 64)
+#define V92P_SLOT (sizeof(V92Parameters) + 64)
+
+static unsigned char v90p[V90P_SLOT] __attribute__((aligned(8)));
+static unsigned char v90p_save[V90P_SLOT], v90p_ours[V90P_SLOT];
+static unsigned char v92p[V92P_SLOT] __attribute__((aligned(8)));
+static unsigned char v92p_save[V92P_SLOT], v92p_ours[V92P_SLOT];
+
+/*
+ * BOTH BLOCKS NEED A HOST PARAMETER RECORD.  `V90Parameters::init` calls
+ * `loadModemParamsData`, which dereferences the `_tagModemParameters *` at
+ * +0x00 for three fields; a seeded pointer there is a segfault, not a test.
+ * The record is zeroed rather than seeded, because what it holds is
+ * `t_v90params.cpp`'s claim and not this file's -- here it only has to be a
+ * real address and the same one on both sides.  It is written by neither
+ * side, which the comparison below would notice if it were.
+ */
+static unsigned char hostparams[256] __attribute__((aligned(8)));
+
+static int
+run_externalreset(void)
+{
+	struct vpcm_args a;
+	long tag = 60000;
+	int layout, trial;
+	unsigned lvl;
+	int sawReInit = 0, sawNoReInit = 0, printed = 0;
+
+	diff_begin("VPcmFloModem::externalReset");
+
+	dsplib_debug_capture_on = 1;
+
+	for (lvl = 0; lvl <= 2; lvl += 2) {
+		set_level(lvl);
+		for (layout = 0; layout < 2; layout++)
+			for (trial = 0; trial < 4; trial++) {
+				int side;
+				unsigned int was;
+
+				tag++;
+				a.dem.latch = 0;
+				a.dem.flag = 0;
+				a.dem.eia6 = 6;
+				a.dem.blockByte = 0;
+				a.dem.pcmType = trial & 1;
+				a.dem.idx = trial;
+				a.dilCount = 3;
+				a.seq1Length = 8;
+				a.seq2Length = 8;
+
+				vpcm_setup((int)tag, &a);
+
+				fill_pair(v90p, v90p_save, V90P_SLOT);
+				fill_pair(v92p, v92p_save, V92P_SLOT);
+				{
+					void *hp = hostparams;
+
+					memcpy(v90p, &hp, sizeof hp);
+					memcpy(v92p, &hp, sizeof hp);
+				}
+
+				for (side = 0; side < 2; side++) {
+					V(side)->modem.ptr_49b4 =
+					    (V90Parameters *)v90p;
+					V(side)->v92Params =
+					    (V92Parameters *)v92p;
+					V(side)->info0Layout =
+					    layout ? 0x1234 : 0;
+					((V90ConnectionEvaluator *)ce[side])
+					    ->params = (V90Parameters *)parm[0];
+				}
+				P3(0)->verificationStatus =
+				    P3(1)->verificationStatus = 0xc0de0000u;
+				was = P3(1)->verificationStatus;
+
+				memcpy(v90p_save, v90p, V90P_SLOT);
+				memcpy(v92p_save, v92p, V92P_SLOT);
+				dsplib_debug_capture_reset();
+
+				V(0)->externalReset();
+
+				memcpy(v90p_ours, v90p, V90P_SLOT);
+				memcpy(v92p_ours, v92p, V92P_SLOT);
+				memcpy(v90p, v90p_save, V90P_SLOT);
+				memcpy(v92p, v92p_save, V92P_SLOT);
+
+				ref_vpcm_extreset(V(1));
+
+				compare_everything("after externalReset", tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after externalReset",
+					     "V90Parameters (reinitialised)",
+					     v90p_ours, v90p, V90P_SLOT, tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after externalReset",
+					     "V92Parameters (reinitialised)",
+					     v92p_ours, v92p, V92P_SLOT, tag);
+
+				/*
+				 * Both `init`s really ran: the block came out
+				 * different from what it went in as.  A
+				 * reconstruction that dropped either call
+				 * would pass every comparison above.
+				 */
+				diff_eq_int("V90Parameters::init wrote (%ld)",
+					    memcmp(v90p_save, v90p, V90P_SLOT)
+					    != 0, 1, tag);
+				diff_eq_int("V92Parameters::init wrote (%ld)",
+					    memcmp(v92p_save, v92p, V92P_SLOT)
+					    != 0, 1, tag);
+
+				/* The flags, by value and not only compared. */
+				diff_eq_int("flags_0217[0] (%ld)",
+					    (long)V(1)->flags_0217[0], 1, tag);
+				diff_eq_int("flags_0217[1] (%ld)",
+					    (long)V(1)->flags_0217[1], 0, tag);
+				diff_eq_int("flags_0217[5] (%ld)",
+					    (long)V(1)->flags_0217[5], 0, tag);
+				diff_eq_int("nofBitsPerSymbol (%ld)",
+					    (long)V(1)->nofBitsPerSymbol, 2,
+					    tag);
+				diff_eq_int("minNofTransmitSequences (%ld)",
+					    (long)V(1)->minNofTransmitSequences,
+					    1, tag);
+				diff_eq_int("word_6f98 (%ld)",
+					    (long)V(1)->word_6f98, 0, tag);
+				diff_eq_int("word_6fb4 (%ld)",
+					    (long)V(1)->word_6fb4, 0, tag);
+				diff_eq_int("byte_6118 (%ld)",
+					    (long)V(1)->byte_6118, 0, tag);
+
+				/*
+				 * THE BRANCH.  `reInit` clears the phase 3
+				 * demodulator's verification status, so the
+				 * two arms are told apart by something the
+				 * object comparison alone would attribute to
+				 * the seed.
+				 */
+				if (layout) {
+					diff_eq_int("reInit ran (%ld)",
+						    (long)P3(1)
+						    ->verificationStatus, 0,
+						    tag);
+					diff_eq_int("the evaluator was reset "
+						    "(%ld)",
+						    ((V90ConnectionEvaluator *)
+						     ce[1])->word_64, 1600,
+						    tag);
+					sawReInit = 1;
+				} else {
+					diff_eq_int("reInit did not run (%ld)",
+						    (long)P3(1)
+						    ->verificationStatus,
+						    (long)was, tag);
+					sawNoReInit = 1;
+				}
+
+				if (lvl > 1 &&
+				    dsplib_debug_capture_lines(1) > 0)
+					printed = 1;
+
+				teardown();
+			}
+	}
+
+	dsplib_debug_capture_on = 0;
+	set_level(0);
+
+	diff_eq_int("the reInit arm was taken", sawReInit, 1, 0);
+	diff_eq_int("and skipped", sawNoReInit, 1, 0);
+	diff_eq_int("the diagnostics were reached", printed, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int bad = 0;
 
+	bad |= run_externalreset();
 	bad |= run_stores();
 	bad |= run_demodulator();
 	bad |= run_descriptor();

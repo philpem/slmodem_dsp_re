@@ -57,6 +57,8 @@ void ref_p3d_reset(void *self, int pcmType, unsigned char ucode, int state,
 		   unsigned int word14)
 	asm("ref__ZN20V90Phase3Demodulator5resetE7PcmTypeh22Phase3Demodulator"
 	    "StatejP5V90JdP5V92JdP19tagV90DILdescriptorssfj");
+void ref_p3d_clearVerificationStatus(void *self)
+	asm("ref__ZN20V90Phase3Demodulator23clearVerificationStatusEv");
 
 /*
  * The two weak `Descrambler<int,int>` members.  They are `W` in the blob and
@@ -708,6 +710,84 @@ run_openings_differ(void)
 	return diff_end();
 }
 
+/*
+ * V90Phase3Demodulator::clearVerificationStatus (task #88) -- one gated
+ * diagnostic and one store into +0x41c.
+ *
+ * THE WHOLE SLOT IS COMPARED, not just the field: the claim is that this is
+ * the ONLY thing the member writes, and the graph seed() stands up is right
+ * here, so a store into any of the eight sub-objects would show.  The value
+ * is asserted to be zero rather than only compared, because the fill puts
+ * something else there and two never-cleared objects agree with each other
+ * (finding 1105).
+ *
+ * The store is also asserted to have MOVED the field, per trial: the fill is
+ * pseudorandom and 0 comes up once in 2^32, so a member that did nothing
+ * would fail here on the first trial rather than pass silently.
+ */
+static int
+run_clearverification(void)
+{
+	int trial;
+	unsigned int lvl;
+	int printed = 0, silent = 0;
+
+	diff_begin("V90Phase3Demodulator::clearVerificationStatus");
+
+	for (lvl = 0; lvl <= 3; lvl++) {
+		if (lvl == 1)
+			continue;		/* the gate is `> 1` */
+		set_level(lvl);
+		for (trial = 0; trial < 12; trial++) {
+			long tag = (long)lvl * 100 + trial;
+			unsigned int was;
+
+			seed(trial + 7000);
+			slot[0].o.verificationStatus =
+			    slot[1].o.verificationStatus =
+				0xa5a50000u + (unsigned)trial;
+			was = slot[1].o.verificationStatus;
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			slot[0].o.clearVerificationStatus();
+			ref_p3d_clearVerificationStatus(&slot[1].o);
+
+			dsplib_debug_capture_on = 0;
+
+			compare_all("after clearVerificationStatus", tag);
+			diff_eq_int("the blob cleared +0x41c (%ld)",
+				    (long)slot[1].o.verificationStatus, 0,
+				    tag);
+			diff_eq_int("and it had held something else (%ld)",
+				    was != 0, 1, tag);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			if (lvl > 1) {
+				diff_eq_int("above the gate it printed (%ld)",
+					    dsplib_debug_capture_lines(1) > 0,
+					    1, tag);
+				printed = 1;
+			} else {
+				diff_eq_int("below the gate it was silent "
+					    "(%ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, tag);
+				silent = 1;
+			}
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("the diagnostic was reached", printed, 1, 0);
+	diff_eq_int("and skipped below the gate", silent, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -725,6 +805,7 @@ main(void)
 	 * once "WaitForSd ignores the symbol count" is false the sweep is no
 	 * longer a bounded computation.
 	 */
+	bad |= run_clearverification();
 	bad |= run_descrambler();
 	bad |= run_openings_differ();
 	if (bad)

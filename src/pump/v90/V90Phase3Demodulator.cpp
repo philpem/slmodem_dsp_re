@@ -79,6 +79,7 @@ P3D_OFF(dilLength,		0x40c, dillength);
 P3D_OFF(word_410,		0x410, word410);
 P3D_OFF(short_414,		0x414, short414);
 P3D_OFF(float_418,		0x418, float418);
+P3D_OFF(verificationStatus,	0x41c, verifstatus);
 P3D_OFF(byte_424,		0x424, byte424);
 P3D_OFF(ansamToneDetector,	0x428, ansam);
 
@@ -220,4 +221,25 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 	word_408 = 0;
 	dilLength = calculateDilLength(dil, pcmType);
 	word_410 = 0;
+}
+
+/*
+ * clearVerificationStatus -- one gated diagnostic and one store.
+ *
+ * `V90Demodulator::reInit` and `V90Demodulator::enterChannelVerification` are
+ * the two callers, and both reach it through the demodulator's +0x1dc.  The
+ * message is the object's own words for what the member is.
+ *
+ * The store is DUPLICATED in the object -- the arm at 0x20d9c and the one at
+ * 0x20d82 are the same three instructions -- which is the tail of an `if` the
+ * compiler chose to copy rather than to join, not two writes.
+ */
+void
+V90Phase3Demodulator::clearVerificationStatus()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90Phase3Demodulator: clearVerificationStatus called\r\n");
+
+	verificationStatus = 0;
 }

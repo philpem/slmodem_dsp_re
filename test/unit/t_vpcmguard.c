@@ -9,9 +9,18 @@
  * named after 7,278 bytes of the object it has not written.
  *
  * THIS BINARY IS THE ONE THAT DOES NOT SUPPLY THEM.  `t_vpcmrun.c` defines
- * all five as forwarders to the blob's `ref_*` copies; this file deliberately
- * defines none, so every one of them is null here and `vpcm_run`'s guard is
- * on the only path there is.
+ * the three that are still unwritten as forwarders to the blob's `ref_*`
+ * copies; this file deliberately defines none, so all three are null here and
+ * `vpcm_run`'s guard is on the only path there is.
+ *
+ * TWO OF THE FIVE ARE NO LONGER UNWRITTEN.  `VPcmV34GetCleanedSamples` and
+ * `VPcmV34GetCurrentSessionDP` are reconstructed in
+ * `src/pump/v34/v34pcmif.c`, which every test binary links, so they are
+ * non-null even here and no forwarder can make them otherwise.  The block
+ * below asserts that too: the guard surface is what this file is about, and
+ * it has to be counted in both directions or a definition that silently
+ * stopped being linked would go unremarked.  `VPcmV34Progress` is the one the
+ * abort actually rides on and it is untouched.
  *
  * WHY IT HAS TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
  * a guard that silently returned would leave a `.process` running and
@@ -80,20 +89,30 @@ main(void)
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
 
-	diff_begin("the five VPcmV34* entry points are ABSENT from this "
-		   "binary");
+	diff_begin("three VPcmV34* entry points are ABSENT from this binary "
+		   "and two are WRITTEN");
 	/*
-	 * Without these five the abort below proves nothing: a guard that
+	 * Without the three the abort below proves nothing: a guard that
 	 * fired because the symbol was null is only interesting if the symbol
 	 * really is null, and a binary that had quietly linked the blob's
 	 * copies would abort for some other reason entirely.
+	 *
+	 * TWO OF THE FIVE ARE NOW DEFINED, in `src/pump/v34/v34pcmif.c`, and
+	 * this block is where that is recorded.  It is asserted rather than
+	 * dropped for the reason the weak attribute exists at all: the guard
+	 * surface is the claim, so it has to be counted in both directions.
+	 * A definition that quietly disappeared -- the file dropped from the
+	 * link, or the definition compiled under the weak macro and outranked
+	 * -- would put `vpcm_run` back on `vpcm_notwritten` and NOTHING else
+	 * in this tree would notice, because a run that never reaches the
+	 * connect arm never asks either of them anything.
 	 */
 	diff_eq_int("VPcmV34Progress is unresolved", VPcmV34Progress == 0, 1,
 		    0);
-	diff_eq_int("VPcmV34GetCleanedSamples is unresolved",
-		    VPcmV34GetCleanedSamples == 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentSessionDP is unresolved",
-		    VPcmV34GetCurrentSessionDP == 0, 1, 0);
+	diff_eq_int("VPcmV34GetCleanedSamples is DEFINED",
+		    VPcmV34GetCleanedSamples != 0, 1, 0);
+	diff_eq_int("VPcmV34GetCurrentSessionDP is DEFINED",
+		    VPcmV34GetCurrentSessionDP != 0, 1, 0);
 	diff_eq_int("VPcmV34GetCurrentRxBitRate is unresolved",
 		    VPcmV34GetCurrentRxBitRate == 0, 1, 0);
 	diff_eq_int("VPcmV34GetCurrentTxBitRate is unresolved",

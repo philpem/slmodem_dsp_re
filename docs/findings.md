@@ -36293,3 +36293,908 @@ next run, check `pgrep -af make` before believing it.
 This does not weaken finding 192, which says instrumentation costs nothing
 under these flags. That measurement was made by a single run, and a single run
 still passes.
+
+======================================================================
+### 1100. THE "THREE NEARLY-FREE WEAK ENTRY POINTS" ARE NOT THE WEAK ENTRY POINTS -- and the real cheap pair is a different two
+
+Task #88 was briefed to take three easy wins first: "three of the five weak
+`VPcmV34*` entry points are nearly free -- `VPcmV34InitiateRetrain` needs 0
+more symbols, `VPcmV34Delete` 1, `VPcmV34Create` 12".  Every number in that
+sentence is right and the sentence is wrong, because **none of those three is
+one of the five**.
+
+The five weak ones are declared in `include/dsplib/vpcm.h` and are exactly
+`vpcm_run`'s five callees:
+
+```
+    VPcmV34Progress             7,278 B
+    VPcmV34GetCleanedSamples       32
+    VPcmV34GetCurrentSessionDP     79
+    VPcmV34GetCurrentRxBitRate     90
+    VPcmV34GetCurrentTxBitRate    213
+```
+
+`VPcmV34InitiateRetrain` is not among them and is not unwritten either: it is
+in `src/pump/v34/v34pcmmain.cpp`, `t_v34retrain.c` tests it and its closure is
+**0**.  `VPcmV34Create` and `VPcmV34Delete` were never weak.  So writing any
+of the briefed three moves the guard surface by nothing at all -- the thing
+the brief wanted from them cannot come from them.
+
+**THE SAME QUESTION ASKED OF THE ACTUAL FIVE GIVES A REAL ANSWER**, and it is
+better than the briefed one because these two ARE the guard:
+
+```
+  closure.py VPcmV34GetCleanedSamples   --missing   1 symbol,  32 bytes
+  closure.py VPcmV34GetCurrentSessionDP --missing   1 symbol,  79 bytes
+  closure.py VPcmV34GetCurrentRxBitRate
+             VPcmV34GetCurrentTxBitRate --missing   3 symbols, 390 bytes
+```
+
+The rate pair is blocked on one symbol, `V90Demodulator::getBitRate` (87 B),
+and that is a const accessor rather than a constructor, destructor, `reset` or
+lifecycle hook -- so under one-class-one-owner it belongs to whoever writes
+`V90Demodulator`'s processing methods and NOT to this batch.  Taking it to
+unlock 303 bytes would be taking a wave-2 method to make a report line look
+better.  Left, deliberately.
+
+**Both closure-1 entry points are now written** (finding 1101), so the guard
+surface is three, not five.
+
+### 1101. `VPcmV34GetCleanedSamples` IS A DRAIN AND `VPcmV34GetCurrentSessionDP` IS FOUR ARMS, ONE OF WHICH READS THE V.92 NEGOTIATION FROM BOTH ENDS
+
+Both are in `src/pump/v34/v34pcmif.c` -- the `extern "C"` half of
+`VPcmV34Main.cpp`, which is where every unmangled export of that translation
+unit already lives.
+
+`VPcmV34GetCleanedSamples` (0x71d0, 32 B) hands back the echo-cancelled ring
+and the count, and **the count is destroyed by reading it**:
+
+```
+    71d8  movswl 0x2aa6(%eax),%ecx     obj->f2aa6, SIGN-extended
+    71df  mov    %ecx,(%edx)           *n = it
+    71e3  mov    %dx,0x2aa6(%eax)      and it is zeroed
+    71ea  add    $0x2f58,%eax          return &obj->hist_2f58
+```
+
+`f2aa6` is already the write index of `hist_2f58` in `v34fsk.h`, so nothing
+about the layout was newly derived -- what is new is that the reader RESETS
+it, which makes this a drain rather than an accessor and is the one thing a
+single-call test cannot see.  The buffer address is returned unconditionally:
+a caller told "0 samples" still gets it.
+
+`VPcmV34GetCurrentSessionDP` (0x6eb0, 79 B) switches on `status`, the same
+word at +0 that `VPcmV34InitiateHangUp` and `VPcmV34InitiateRateRenegotiation`
+gate on with `(unsigned)(status - 1) <= 1`:
+
+```
+    status 1  ->  90, unless local_v92 AND remote_v92 are BOTH non-zero -> 92
+    status 2  ->  92
+    status 3  ->  56          K56flex, and see finding 1090
+    anything  ->  34
+```
+
+**The `&&` is the finding.**  `local_v92` and `remote_v92` are the pair
+`V34GiveINFO0dBits` prints and they are one end's willingness each, so the
+answer is V.92 only when both ends said so -- `je` at 0x6ee8 short-circuits to
+V.90 on the local one alone.  Status 2 answers V.92 without consulting either,
+which is what makes it a separate status rather than a shorthand for 1.
+
+The four returns are modulation numbers, which are the ids `vpcm_run` writes
+into `dp.id` and the same five `VPcmV34InitiateRetrain` accepts.  56 is not
+one of `v8dp.h`'s -- there is no V.8 code for K56flex -- and finding 1090 is
+why naming it is the whole of what a K56flex session can do in this build.
+
+### 1102. THE TWO NEW BLOCKS IN `t_v34pcmif.c`, AND THE FIVE MUTATIONS WATCHED FAILING THEM
+
+374 checks in two blocks, on `t_v34pcmif.c`'s existing fixture: both objects
+pre-filled with `HARNESS_MALLOC_FILL`, every case compared BYTE FOR BYTE over
+the whole 44 KB object, and the returned pointer compared as a DISPLACEMENT
+rather than as a pointer, because the two objects are at two addresses and
+always will be.
+
+Two shapes were built deliberately rather than inherited:
+
+- **Every `GetCleanedSamples` case calls it TWICE without re-seeding.**  The
+  first ask must return what was seeded and the second must return zero.  A
+  reconstruction that returned the index and left it alone passes every
+  single-call check there is; the second ask is what separates a drain from a
+  peek, and it is asserted to be zero rather than merely equal, because two
+  objects that were both left alone agree with each other.
+- **`GetCurrentSessionDP` crosses all four arms with all nine combinations of
+  the V.92 pair**, 33 cases, and the whole-object comparison is kept even
+  though the function writes nothing -- because "writes nothing" is a claim,
+  it shares its selector with two entry points a few lines away that DO write,
+  and a version that cleared the pair after reading it would look perfect from
+  the return value alone.
+
+Made to fail, five ways, each applied by hand and reverted:
+
+| mutation | block | checks failed |
+|---|---|--:|
+| the drain does not zero the index | GetCleanedSamples | **74 of 111** |
+| the index is read `movzwl`, not `movswl` | GetCleanedSamples | **3 of 77** |
+| the V.92 pair is OR, not AND | GetCurrentSessionDP | **4 of 297** |
+| the K56flex arm answers 34 | GetCurrentSessionDP | **9 of 297** |
+| both definitions renamed away | `t_vpcmguard` | **2 of 6** |
+
+The second is the interesting one: **three checks**, and all three are values
+the ring never produces.  A signed index and an unsigned one agree over
+0..0x257, so the only evidence that the object sign-extends is 0x8000 and
+0xffff being in the sweep -- CLAUDE.md's "forced, so act on it" observed from
+the test side instead of from the codegen.
+
+The fifth is the guard-surface assertion, and it is a check in BOTH directions
+now.  `t_vpcmguard.c` used to assert all five entry points null; it asserts
+three null and two DEFINED, so a definition that silently stopped being
+linked -- the file dropped from the link, or compiled under the weak macro and
+outranked -- puts `vpcm_run` back on `vpcm_notwritten` and fails immediately.
+Nothing else in the tree would notice: no run that stops short of the connect
+arm ever asks either of them anything.
+
+`t_vpcmrun.c` lost two of its five forwarders, because a forwarder beside a
+real definition is a duplicate symbol.  Its 8,000-block four-way call is
+therefore no longer "our `vpcm_run` on the blob's five callees": two of the
+five are ours as well, and every block still has to agree with the blob-blob
+run.  That is a strengthening of that file's claim and not a change to it.
+
+### 1103. A NEW FUNCTION IN AN OLD FILE BREAKS `anchorcheck`, AND THAT IS THE GATE WORKING
+
+Adding `VPcmV34GetCurrentSessionDP` to `v34pcmif.c` put a second one-tab
+`case 2:` and a second `case 3:` in the file, and `make phase` failed at
+`refs`:
+
+```
+  NOT UNIQUE  v34pcmif: reneg: case 2 no longer steps down    matches 2 time(s)
+  NOT UNIQUE  v34pcmif: reneg: case 3 becomes case 4          matches 2 time(s)
+```
+
+**Worth recording because the failure is loud and the defect it prevents is
+silent.**  A two-site anchor patches the first match; the label then names an
+arm the mutation never touched, and the verdict -- caught or not -- is
+attributed to the wrong claim.  `mutate.py` would have reported a perfectly
+ordinary "caught" for a mutation of a different function.
+
+The fix is CONTEXT, never a looser anchor and never a renamed case label:
+`case 2:` now carries the `case 5:` it falls through to, and `case 3:` carries
+its body.  Both still fire -- `mutate.py --suite v34pcmif --only 'reneg: case'`
+is four of four caught.  The general rule, for the next batch that extends a
+file that already has a suite: **a mutation anchor is only as unique as the
+file was on the day it was written**, so a batch that adds a function to such
+a file has to re-run `anchorcheck` even when it changed no mutation and no
+existing line.
+
+### 1104. THE FOUR CLOSURE FIGURES, RECOMPUTED, AND WHAT THE 127 SYMBOLS ACTUALLY ARE
+
+Recomputed on a full build, per finding 330's rule.  All four are UNCHANGED
+from the numbers task #88 was briefed with:
+
+```
+    dp_vpcm_init   127 symbols, 24,791 bytes      vpcm_create   123 / 24,566
+    vpcm_delete     49 symbols,  5,852 bytes      vpcm_op       126 / 24,719
+```
+
+Grouped by class -- 48 classes plus 24 free symbols -- the span is much
+flatter than the byte count suggests, and **seventeen of the 48 classes
+already have a header and a `.cpp` in this tree**:
+
+```
+  (free)                   24 syms  5,399 B   VPcmV34Create 2,376, vpcm_create
+                                              969, VPCMXF_Create 495, ...
+  V90Demodulator            6 syms  3,008 B   [header+cpp exist]
+  V90Equalizer              4 syms  2,251 B   [header+cpp exist]
+  V92Phase3Modulator        4 syms  1,915 B   [neither]
+  V92Modulator              2 syms  1,237 B   [neither]
+  VPcmFloModem              2 syms  1,038 B   [header+cpp exist]
+  V90Modem                  2 syms    918 B   [header+cpp exist]
+  ... 41 more, none over 750 B, 30 of them with neither file
+```
+
+**Two of the 127 are not lifecycle at all and cannot be written by this
+batch.**  `V92Phase3Modulator::reset` (351 B) reaches
+`V92Phase3Modulator::generateSymbol` (1,437 B), and `V90Demapper`'s
+destructor path reaches `V90Demapper::printErrorHistogramAndReset` (362 B).
+Both are processing methods belonging to wave-3 and wave-2 batches; taking
+either to complete a constructor would be taking that batch's work.  Recorded
+and left -- together they are 1,799 bytes, 7% of the span, and neither is on
+`VPcmV34Create`'s path.
+
+**The real cost of the 30 classes with neither file is not the code.**  Each
+needs its object size and every field offset derived from the disassembly --
+the `sysdep_malloc` immediately before the constructor's call site for the
+size, the constructor's own stores for the offsets -- before one line is
+writable.  The seventeen that already have headers are far cheaper per byte,
+and any fan-out over this span should be weighted that way rather than by
+bytes.
+
+### 1105. THE `ref_vpcm_create` ORACLE CANNOT FIRE UNTIL THE WHOLE SPAN IS WRITTEN, AND THE PER-CLASS ONE CAN FIRE NOW
+
+Findings 800-806 established the golden object: 53,848 bytes of root plus a
+125-region, 265,520-byte heap graph, two blob-code pointers in the lot.  It is
+a tier-1 oracle and task #88 was briefed to use it for construction.
+
+**It does not exist for any partial batch.**  It is produced by
+`ref_vpcm_create`, whose closure is 123 unwritten symbols; there is no version
+of it that compares a subset.  Nothing this batch or any wave-2 batch writes
+can be diffed against it until the last of the 127 lands, so it is the span's
+acceptance test and not its working oracle.
+
+What CAN fire from the first class onward is the per-class construction
+differential, and finding 803's congruence problem does not arise in it:
+
+```
+    our  Cls::Cls(a, b, c)  into buffer A, prefilled HARNESS_MALLOC_FILL
+    ref_Cls::Cls(a, b, c)   into buffer B, prefilled the same
+    THE SAME ARGUMENT POINTERS to both  ->  identical stored pointers
+    compare A and B byte for byte
+```
+
+Identical inputs mean identical pointer fields, so no field has to be
+excluded: 125 regions coming back at different addresses is a property of
+`vpcm_create` ALLOCATING, not of a constructor storing what it was handed.
+Two anti-vacuity requirements, both live for this exact test -- the fill
+pattern must be asserted GONE, because two never-constructed buffers compare
+equal, and a destructor comparison must look at what the destructor WROTE
+before the free, because two objects compared after `free` compare the
+allocator rather than the objects.
+
+### 1106. THE `VPcmV34Create` CLOSURE'S ELEVEN LIFECYCLE MEMBERS ARE ALL WRITTEN, AND THE CLOSURE IS NOW ONE SYMBOL
+
+`tools/closure.py VPcmV34Create --missing` reported 12 symbols and 5,108
+bytes.  Eleven of them were constructors, destructors, `reset` and the
+lifecycle hooks, and all eleven landed:
+
+```
+    862  V90Equalizer::reset(unsigned)                   t_v90equ
+    509  V90Demodulator::reset(unsigned)                 t_v90demod
+    433  V90ConnectionEvaluator::reset()                 t_v90leaves
+    387  VPcmFloModem::externalReset()                   t_vpcmep3
+    215  V90Demodulator::enterChannelVerification(s,s)   t_v90demod
+    116  V90Equalizer::enterChannelVerification()        t_v90equ
+     61  V90PreFilter::reset()                           t_v90prefilter
+     60  V90Phase3Demodulator::clearVerificationStatus() t_v90p3dreset
+     47  V90ConstellationDesigner::reset()               t_v90leaves
+     41  V90Demodulator::reInit()                        t_v90demod
+      1  K56FlexFloModem::externalReset()                t_v90leaves
+```
+
+plus `V90ConnectionEvaluator`'s constructor (15 B) and destructor (1 B),
+which are in that class's own closure rather than in `VPcmV34Create`'s but had
+to be written for the class to exist at all.  2,747 bytes over thirteen
+symbols.  **Nothing else was taken**: one-class-one-owner binds on methods,
+and every processing method of the eight classes involved is still unwritten
+and still belongs to whoever writes that class.
+
+`closure.py VPcmV34Create --missing` now reports **1 symbol, 2,376 bytes** --
+`VPcmV34Create` itself.
+
+### 1107. `V90Equalizer` IS 336 BYTES, NOT 328, AND A DISPLACEMENT SCAN OVER ONE CLASS CANNOT SEE WHY
+
+`include/dsplib/V90Equalizer.h` carried `sizeof == 0x148`, derived from the
+largest `this`-relative displacement across all twenty-nine `V90Equalizer`
+symbols in the blob -- a two-byte store at +0x146, so 0x148.  That derivation
+is correct within its stated scope, and the scope is the defect.
+
+**`V90Demodulator::reset` writes four bytes at +0x148 of the equaliser**, at
+0x1c194, through the pointer it loaded from its own +0x1d8 at 0x1c15d and
+never clobbered.  A scan restricted to one class's symbols cannot reach a
+write performed by another class, and no test could see it either: the field
+is at the end of the object, the test slot was over-allocated, and both sides
+wrote the same bytes past the declared end.
+
+The allocation settles it outright, and it is the same evidence finding 291
+used for the other three sizes in this graph:
+
+```
+   1c584:  c7 04 24 50 01 00 00    movl   $0x150,(%esp)
+   1c58b:  e8 ..                   call   sysdep_malloc
+   1c590:  89 c6                   mov    %eax,%esi     <- the equaliser
+```
+
+**`test/harness/v90demfix.h` had `#define EQU_SLOT 0x150` all along**, chosen
+as "the object plus slack" by a batch that never asserted a size.  The two
+numbers had been sitting in the same tree for weeks.
+
+The general rule, which is not in CLAUDE.md and now should be: a size derived
+from displacements is bounded by the SYMBOL SET the scan covered, and an
+embedded or pointed-to sub-object is written by its owner as often as by
+itself.  Prefer the `sysdep_malloc` immediately before the constructor's call
+site; use a displacement scan only when there is no allocation to find.
+
+### 1108. `V90Equalizer::reset`: A SENTINEL, AN UNSIGNED CLAMP THAT DOES NOT CLAMP, AND TWO WINDOWS SCALED BY ONE LENGTH
+
+862 bytes, the largest of the eleven, and five things in it are not visible
+from the store list.
+
+**1.  The two step sizes are seeded with `1e-14f` before the setters run.**
+`movl $0x283424dc` into +0x10 and +0x3c, and 0x283424dc is exactly `1e-14f`.
+`setLinearEquBeta` and `setDfeBeta` return early when the field already holds
+the argument, so seeding a value nothing can legitimately hold is what forces
+both to do their work for an argument of zero.  A reconstruction that omitted
+the seed would leave both betas where it found them.  Seeding 0.0f instead
+breaks **2,376 checks**.
+
+**2.  The cursor clamp is unsigned and the edge case is reachable.**
+`cursor = min(cursor, linearEquLength - 1)` with `jae`, so a zero-length
+equaliser computes 0xffffffff and does not clamp at all -- the 1.0f lands at
+whatever cursor was asked for.  Written as the object writes it and not
+defended against.  Spelling the comparison signed breaks **648 checks**.
+
+**3.  Two float arrays are cleared in one loop, in opposite directions.**
+`linearEquCoefs[i]` ascending and `array_18[word_1c - 1 - i]` descending, one
+counter.  Clearing the second upwards breaks **1,296 checks**.
+
+**4.  The six fixed-point arrays are all `+ 8` longer than the filter they
+belong to**, and the whole group is skipped when +0xac is clear -- which is a
+DIFFERENT field from `mmxMode`, zeroed a hundred instructions earlier in the
+same function.  Dropping the `+ 8` breaks **1,188 checks**.
+
+**5.  Both window lengths are scaled by the LINEAR equaliser's length.**
+`fildll` converts `linearEquLength` once and `fmul`/`fmulp` apply it to both
+clamped ratios, so `dfeWindowHalf` is a fraction of the linear length and
+`dfeLength` is not in the computation at all.  Read twice before believing
+it.  Scaling the DFE window by `dfeLength` breaks **2,064 checks**.
+
+  WHICH RATIO SCALES WHICH WINDOW is a SEPARATE claim from which length does,
+  and the sweep could not make it: both ratios are drawn from one table and
+  the anti-vacuity check only requires SOME window to be non-empty.  The two
+  x87 instructions are `dc c9` (FMUL ST(1),ST(0)) and `de ca` (FMULP
+  ST(2),ST(0)) -- two different destinations one instruction apart, and
+  FMUL/FMULP have no reversed form, so finding 245's swap does not apply here
+  and the destinations are the whole content.  Four explicit cases with
+  asymmetric ratios were added: 0.5 and 0.05 against a length of 16 truncate
+  to 8 and 0, so the pair is (8, 0) one way round and (0, 8) the other.
+  Taking both halves from the left ratio breaks **1,688 checks**.
+
+The two fade ratios are clamped to [0, 0.5] by `fcom`/`sahf`/`jae` against
+zero and `fcoms`/`jbe` against 0.5, so a NaN comes out as 0.0f where
+`x < 0.0f ? ...` would have kept it; the reconstruction writes the object's
+predicates (`if (!(x >= 0.0f))`), the same note `V90PreFilter::setParamEia6`
+carries.  Moving the upper clamp to 1.0 breaks **1,632 checks**.
+
+### 1109. `V90ConnectionEvaluator` CAME OUT OF `V90Demodulator.h`, AND NINETEEN OF ITS FORTY-EIGHT STORES NAME THEMSELVES
+
+The class was DEFINED inside `include/dsplib/V90Demodulator.h` from task #60
+onwards, because the only things that touched it were
+`V90Demodulator::enterPhase3` (four words) and `VPcmFloModem::getV90CpBits`
+(one copy).  It now has `include/dsplib/V90ConnectionEvaluator.h` and
+`src/pump/v90/V90ConnectionEvaluator.cpp`.
+
+**No field moved and no field was renamed.**  `word_70`, `word_74`,
+`word_78`, `word_7c`, `word_84` and `word_88` are the two earlier batches'
+names; the size stayed 0xbc (`sysdep_malloc(0xbc)` at 0x1c47e); the four
+`CE_OFF` assertions moved from `V90Demodulator.cpp` to the new .cpp unchanged
+and twenty-two more joined them.  `V90Demodulator.h` includes the header where
+it used to define the class, so every existing user compiles untouched.
+
+**`reset` is forty-eight stores and nineteen of them are configuration**, one
+word each out of the parameter block.  Every one of those nineteen slots has a
+name in `V90Parameters.h`, so the FIELDS are named for the parameter each
+receives -- `retrainDetectDuration` holds `RETRAIN_DETECT_DURATION`, and
+nothing reconstructed assigns to it otherwise.  That is a derivation and not a
+guess, and the test asserts it on the BLOB's object against the parameter read
+by name: swapping `ENABLE_RRN_UP` and `ENABLE_RRN_DOWN` breaks **52 checks**.
+
+Two constants are not copies: +0x64 and +0x68 both get `movl $0x640` with no
+relocation, so 1600 is a literal in the original's source.  1500 instead
+breaks **104 checks**.
+
+**The widths are half the content.**  +0x8c gets a 32-bit -1 and +0x9c gets a
+SIXTEEN-bit one from the same `mov $0xffffffff,%ecx`, so the two fields hold
+different values from one constant; +0xac is `PHASE4_ERROR_FOR_V34_FALLBACK`
+moved as a 32-bit word and never loaded into the x87 stack, so it is copied
+and not converted.  Converting it breaks **99 checks**.
+
+The constructor is fifteen bytes -- store the parameter block, tail-call
+`reset` -- and the destructor is one, `c3`.  Dropping the `reset` from the
+constructor breaks **32 checks**.
+
+### 1110. `VPcmFloModem::externalReset` WRITES THE SAME SIX FLAGS TWICE, AND NO TEST CAN SEE THE FIRST RUN
+
+0xd6d8..0xd701 and 0xd786..0xd7a9 are two runs of six `movb` writing 1, 0, 1,
+1, 1, 0 into +0x217..+0x21c, with three calls between them that touch a
+different object.  The reconstruction transcribes both runs.
+
+**The first run is unobservable and this is stated rather than hidden.**  A
+mutation that deletes it breaks **0 checks**, and no test could do better: the
+second run rewrites the same six bytes with the same six values a few
+instructions later, and nothing between them reads any of them.  The most
+likely reading is a small helper the compiler inlined twice, but nothing in
+the object names it, so the duplication is recorded as a transcription and not
+explained.  It is the same shape as the dead `nofBits` store this file's
+`enterPhase3` already carries.
+
+**`V90Modem::ptr_49b4` IS A `V90Parameters *`.**  It had been untyped since
+the VPcmFloModem batch -- `getUinfoValue` loads it and reads a signed short at
+its +0x20, which says nothing about what it points at.  `externalReset` hands
+the same field to `V90Parameters::initSession()` and `::init()`, which types
+it.  The NAME is kept: two batches' offset assertions and one `+ 0x20` cast
+use it, and only the type is new.
+
+The one branch is `if (info0Layout != 0) modem.demodulator->reInit();`.
+Inverting it breaks **32 checks**; dropping `V92Parameters::init()` breaks
+**16**; dropping `initSession()` breaks **16**.  +0x6128 is the V.92 parameter
+block, typed by that pairing.
+
+### 1111. `V90Demodulator::reset` RECONFIGURES THE AGC AFTER RESETTING IT, AND ITS LAST STORE IS IN ANOTHER OBJECT
+
+Four things worth having written down.
+
+**The AGC's configuration does not survive its own reset.**  `Agc<float>::
+reset` clears the block state; the caller then writes `agc.blockLen` from
+`AGC_BLOCK_LEN` and `agc.ref` from `AGC_NOMINAL_ENERGY`, through the register
+it already had.  `ref` is a `float` and the parameter is declared `float`, so
+the copy is a move and not a conversion -- reading it as an int breaks **242
+checks**.
+
+**The baud-offset diagnostic is UNGATED**, and it is the only floating-point
+arithmetic in the function: `INITIAL_BAUD_OFFSET` split into a sign character,
+a truncated magnitude and three decimals, `%c%d.%03d`, the same shape
+`V90PreFilter::setParamEia6` uses four times.  The sign test is `0.0f < x` --
+zero on the stack, the parameter as the operand -- so a NaN offset prints '-'.
+
+**The equaliser's cursor is either configured or derived.**  A negative
+`LINEAR_EQU_CURSOR_PLACE` means "the middle of the linear equaliser",
+`linearEquLength >> 1`, a LOGICAL shift; the test is `js`, so zero takes the
+configured branch.  The shift being logical is a second independent statement
+that the length is unsigned, and the mutation that makes it arithmetic breaks
+**0 checks** -- correctly, because no sweep here can give a filter 2^31 taps.
+Recorded as indistinguishable rather than as caught.
+
+**The last store is into the EQUALISER**, not into this object:
+`quickConnect` goes to +0x294 here and then to +0x148 there.  It is the only
+write anywhere in the blob to that offset of that class and it is why finding
+1107 exists.  Dropping it breaks **241 checks**.
+
+`enterChannelVerification(short, short)` NEVER READS ITS FIRST ARGUMENT.
+`0x44(%esp)` is not loaded in the 215 bytes; only the second reaches anything,
+as `V90Phase3Demodulator::reset`'s ninth argument, sign-extended with `movswl`
+at the top.  The parameter is left unnamed rather than removed, because the
+mangling has two `s` in it.  Forwarding the first instead breaks **40
+checks**; the sweep therefore varies BOTH and asserts the second is what
+arrives.
+
+### 1112. TWO DEFINITIONS OF `V90Parameters` EXIST IN THIS TREE AND NO TRANSLATION UNIT MAY INCLUDE BOTH
+
+Not a defect this batch introduced, but the thing that shaped every include
+line it wrote, so it is recorded once rather than re-derived by the next
+batch.
+
+```
+  include/dsplib/V90PreFilter.h    class V90Parameters { union { b[0x504];
+                                     w[0x504/4]; f[0x504/4] }; };
+  include/dsplib/V90Parameters.h   class V90Parameters { 342 named slots,
+                                     0x558 bytes, three members };
+```
+
+Both headers are guarded, neither guards against the other, and the second is
+a `make params` gate whose layout is explicitly closed to revision
+(`docs/vpcmv34main.md`).  `V90Demodulator.h` includes the first (through
+`V90PreFilter.h`, because a `V90PreFilter` is embedded at +0x6c);
+`V90Resampler.h` includes the second.  So `V90Demodulator.cpp` cannot include
+`V90Resampler.h`, and `V90Equalizer.cpp` cannot include `V90Demodulator.h`.
+
+**Three devices were used, and the order of preference matters:**
+
+1. **Forward-declare and let the .cpp pick.**  A header whose only use of the
+   class is `V90Parameters *` needs no definition.  `V90Equalizer.h`,
+   `V90ConstellationDesigner.h` and the new `V90ConnectionEvaluator.h` all do
+   this, and their .cpps take the NAMED map -- which is why
+   `V90ConnectionEvaluator::reset` reads `params->RETRAIN_DETECT_DURATION`
+   rather than `params->w[0x454 / 4]`.
+
+2. **Declare the member on the block form.**  `VPcmFloModem::externalReset`
+   calls `V90Parameters::initSession()` and `::init()`, and its translation
+   unit already has the block form through `V90SessionFlag.h`.  Two
+   declarations were added to `V90PreFilter.h`'s class.  They are not a second
+   definition of anything: it is the same class, the same allocation and the
+   same mangled names, and a member takes only `this`.
+
+3. **Name the symbol.**  `V90Demodulator::reset` calls `V90Resampler::reset()`
+   DIRECTLY on the sub-object at its own +0x94 -- not through the vptr, which
+   no fixture here fills in.  Neither (1) nor (2) reaches it: the call needs
+   the class complete.  So `V90Demodulator.cpp` declares
+
+   ```
+       extern void v90resampler_reset(ResamplerTimingOffset *self)
+           asm("_ZN12V90Resampler5resetEv");
+   ```
+
+   which is exactly the call the object makes, and is the device
+   `test/harness/v90demfix.h` and every `ref_` alias in `test/unit/` already
+   use.  **It is the only one of the three in `src/`, and it should stay that
+   way.**
+
+The clean repair is to give the named map the block form's `b`/`w`/`f` union
+as an anonymous member, delete the block form, and rewrite the twenty-odd
+numeric-index sites.  That is a tree-wide change to a gated header and it was
+deliberately NOT done here.
+
+### 1113. THE PER-CLASS CONSTRUCTION ORACLE, IN PRACTICE: ONE ARENA, SNAPSHOT, RUN, RESTORE, RUN
+
+Finding 1105 gives the shape and it works, with one addition it does not
+mention and which every lifecycle member here needed.
+
+Identical argument POINTERS give identical stored pointers, so the object
+comparison needs no field excluded.  But the arrays these members clear are
+OUTPUTS, and two writers into one buffer leave only the second one's work.  So
+every one of these tests does:
+
+```
+    snapshot the arena
+    ours runs           -> copy the arena away
+    restore the arena
+    the blob's runs     -> compare the two after-images
+```
+
+which is finding 805's four-pass shape applied to a single member instead of
+to a whole datapump block.  `t_v90equ.cpp`'s `struct equ_arena` (twelve
+arrays, a parameter block and a resampler), `t_v90demod.cpp`'s `struct
+life_arena` (the same twelve plus the resampler's two histories, a
+constellation designer and a descrambler buffer) and `t_vpcmep3.cpp`'s two
+parameter blocks are the three instances.
+
+**One thing the arena has to be shared for, and it is not obvious.**
+`test/harness/v90demfix.h` compares `equ[0]` against `equ[1]` RAW -- no pointer
+neutralisation at all, on purpose, so that a store landing on a pointer fails
+the test.  That only works if every pointer the equaliser holds is the same
+value on both sides, which is what one arena gives.  A per-side arena would
+have forced twelve more fields into the neutralised set and weakened that
+file's whole claim.
+
+**The embedded V90Resampler is wired by displacement**, and that is finding
+1112 and not laziness: `t_v90demod.cpp` cannot include `V90Resampler.h`.  Four
+fields are poked at +0x94, +0xa0, +0xa4 and +0xa8 of the sub-object, with the
+offsets named against that header's map.
+
+`V90Parameters::init` dereferences its `_tagModemParameters *` at +0x00
+through `loadModemParamsData`, so a seeded pointer there is a segfault and not
+a test; `t_vpcmep3.cpp` points both blocks at one zeroed record, which is
+enough for this file because what that record holds is `t_v90params.cpp`'s
+claim.
+
+### 1114. ADDING FUNCTIONS TO FIVE FILES BROKE FIFTEEN MUTATION ANCHORS, AND THE FIX WAS NOT ALWAYS CONTEXT
+
+Finding 1103 predicted this exactly -- "a mutation anchor is only as unique as
+the file was on the day it was written" -- and this is the second instance in
+the same task.  `tools/anchorcheck.py` reported fifteen NOT UNIQUE, five in
+`v90demod` and ten in `vpcmep3`.
+
+**Five were repaired the way 1103 says, by DEEPENING the anchor.**
+`V90Demodulator::enterChannelVerification` makes the same eleven-argument
+`V90Phase3Demodulator::reset` call `enterPhase3` makes, and three of its
+argument lines are identical text; but the STATE line differs
+(`(Phase3DemodulatorState)0` against `P3D_STATE_WAIT_FOR_QTS`), so each
+ambiguous anchor was extended to include it.  `byte_280 = 0;` was extended
+backwards through `connectionEvaluator->word_88 = 0;`.
+
+**Ten could not be, and that is the new part.**  `VPcmFloModem::externalReset`
+writes the same six flags, the same five bytes and the same three CP fields as
+`enterPhase3`, in runs whose SURROUNDING lines are identical too -- there was
+no context to deepen into.  The repair was in the new code: every duplicated
+statement in `externalReset` carries a trailing `/* +0xNNN */`, which is this
+tree's ordinary style, documents the offset, and makes the line text unique.
+Two anchors were then still ambiguous because their `find` was a line PREFIX
+(`\tnofBitsPerSymbol = 2;` matches the start of
+`\tnofBitsPerSymbol = 2;\t\t/* +0x7dd2 */`), and those two were deepened
+backwards by one line.
+
+**The rule to add to 1103.**  When the duplicate is a whole run of statements
+with identical neighbours, deepening cannot succeed and the anchor must not be
+loosened -- so the NEW code changes, by annotation and never by reordering.
+Reordering stores to break a text match would be fitting the test.
+
+### 1115. THE THIRTY MUTATIONS, AND THE FOUR THAT ARE EQUIVALENT
+
+Applied by hand, one at a time, each rebuilt, run and reverted -- finding
+1102's shape.  Twenty-six broke a named check:
+
+| mutation | test | checks |
+|---|---|--:|
+| the beta sentinel is 0, not 1e-14f | t_v90equ | **2,376** |
+| both window halves come from the left fade ratio | t_v90equ | **1,688** |
+| the dfe window is scaled by dfeLength | t_v90equ | **2,064** |
+| the fade ratio is clamped to 1.0 | t_v90equ | **1,632** |
+| array_18 is cleared upwards | t_v90equ | **1,296** |
+| the fixed-point arrays are not +8 | t_v90equ | **1,188** |
+| the resampler is not reset | t_v90demod | **726** |
+| the cursor clamp is signed | t_v90equ | **648** |
+| the demodulator's agc.ref is read as an int | t_v90demod | **242** |
+| word_290 gets 19199 | t_v90demod | **242** |
+| quickConnect is not stored in the equaliser | t_v90demod | **241** |
+| the evaluator's initial period is 1500 | t_v90leaves | **104** |
+| the evaluator leaves +0xa8 alone | t_v90leaves | **104** |
+| the phase 4 error is converted, not copied | t_v90leaves | **99** |
+| the prefilter reloads bank 1 row 1 | t_v90prefilter | **64** |
+| the evaluator swaps RRN_UP and RRN_DOWN | t_v90leaves | **52** |
+| enterChannelVerification asks for BLL state 10 | t_v90equ | **48** |
+| enterChannelVerification forwards its FIRST argument | t_v90demod | **40** |
+| clearVerificationStatus writes 1 | t_v90p3dreset | **36** |
+| the designer copies +0x398 | t_v90leaves | **36** |
+| the constructor does not reset | t_v90leaves | **32** |
+| the prefilter leaves refLoop alone | t_v90prefilter | **32** |
+| the reInit branch is inverted | t_vpcmep3 | **32** |
+| K56FlexFloModem::externalReset clears four bytes | t_v90leaves | **32** |
+| reInit does not clear the verification status | t_v90demod | **24** |
+| externalReset drops V92Parameters::init | t_vpcmep3 | **16** |
+| externalReset drops initSession | t_vpcmep3 | **16** |
+
+**Four broke nothing, and all four are equivalent rather than uncaught:**
+
+- *the designer's +0x0a is a 32-bit store* -- it clobbers +0x0c, which the
+  next statement sets to the same 0.
+- *the evaluator's +0x9c is a 32-bit -1* -- it clobbers +0x9e, which a later
+  statement sets to 0 anyway.  Both of these are equivalent because of the
+  STORE ORDER, so a batch that reorders those statements re-opens them.
+- *the equaliser's cursor is halved with an arithmetic shift* -- finding 1111;
+  no sweep can give a filter 2^31 taps.
+- *externalReset writes the six flags only once* -- finding 1110; the second
+  run overwrites the first and nothing between them reads the fields.
+
+### 1116. WHAT THIS BATCH DID NOT DO
+
+Recorded as carefully as what it did.
+
+- **No processing method was taken.**  `V90ConnectionEvaluator`'s other eleven
+  members (8,000-odd bytes, `evaluateConnection` alone 3,857) are declared in
+  the new header for the record and deliberately undefined.  Unlike finding
+  1104's two cases, **no `reset` here turned out to need a wave-2 or wave-3
+  method** -- the eleven are self-contained.
+- **`V90Demodulator::getBitRate` was left**, per finding 1100.  It is still
+  the only thing between `VPcmV34GetCurrentRxBitRate` /
+  `VPcmV34GetCurrentTxBitRate` and their definitions.
+- **The `V90Parameters` duplication was not repaired**, finding 1112.
+- **`tools/mutsnap.py` was NOT re-recorded and no new suite was registered.**
+  The mutations above were applied by hand and reverted;
+  `test/mutations/v90demod.json` and `test/mutations/vpcmep3.json` had seven
+  anchors deepened (finding 1114), which makes those two suites' snapshot
+  entries stale in the ordinary way and not MISSING.
+- **`V90Modem` was not modelled.**  `ptr_49b4` gained a type (finding 1110)
+  and nothing else about that class was touched;
+  `include/dsplib/V90Modem.h`'s warning stands.
+- **`include/dsplib/V90ConnectionEvaluator.h` was added to
+  `tools/offcheck.py`'s `SKIP_HEADERS`**, which is the single long line
+  `docs/vpcmv34main.md` warns must be merged by UNION.  It defines a class and
+  no `struct`, so the tool would have skipped it anyway; it is listed for
+  consistency with the other forty-one C++ headers.
+
+### 1117. `VPcmV34Create` IS WRITABLE AND ITS FIXTURE IS NOT -- READ, ASSESSED AND DELIBERATELY LEFT
+
+Its closure is now **1 symbol, 2,376 bytes: itself**.  It was read rather than
+written, and the reason it was left is the test and not the code.
+
+**THE CODE IS EASIER THAN ITS SIZE SUGGESTS.**  508 disassembly lines,
+straight-line, on `struct v34_object` -- which this tree already models:
+
+```
+   12 calls, ALL to functions that now exist
+      v34handshakinit                              VPcmFloModem::externalReset x2
+      V34InitializeImplementationSpecific          K56FlexFloModem::externalReset
+      V90ConstellationDesigner::setMinMaxRates     K56FlexFloModem::setMinMaxRates
+      V92EchoCanceller::setEchoDelay               GenericIIR<float,double>::reset
+      V90Demodulator::enterChannelVerification     sysdep_memset x2
+   13 gated dsplibs_debug_printf sites and one edprintf, 14 strings
+   ~50 distinct `this`-relative store offsets
+```
+
+**IT MEMSETS ITS OWN OBJECT AND RESTORES TWO POINTERS ACROSS THE MEMSET**, and
+that is the shape a reader has to have before anything else makes sense:
+
+```
+    aa7f  mov 0x3548(%ebx),%esi     saved
+    aa92  mov 0xac18(%ebx),%edi     saved
+    aacc  memset(obj, 0, 0xac4c)
+    aae2  memset(obj + 0x264, 0, 0x79c)
+    aaf9  mov %edi,0xac18(%ebx)     restored
+    ab15  mov %ecx,0x3548(%ebx)     restored
+    ab0f  mov %ebp,0xac3c(%ebx)     the third argument, a _tagModemParameters *
+```
+
+**`struct v34_object + 0x3548` IS A `VPcmFloModem *`.**  The saved value is
+later used as `edi` and dereferenced at `0x175c(%edi)` -- which is
+`VPcmFloModem::modem.demodulator` at exactly the offset
+`src/pump/v90/VPcmFloModem.cpp` already asserts -- and the result is handed to
+`V90Demodulator::enterChannelVerification`.  Two independent uses, one layout.
+So the V.PCM modem is NOT embedded in the V.34 object; it is pointed at, it is
+built by the caller, and `VPcmV34Create` is the CONFIGURATOR of an already
+allocated graph.
+
+**AND THAT IS WHY IT WAS LEFT.**  A differential test for it needs the whole
+graph standing up and configured before the call: a 0xac4c `struct
+v34_object`, a `VPcmFloModem` whose `externalReset` is called TWICE (so a
+V90Parameters with a `_tagModemParameters` behind it, a V92Parameters, and a
+V90Demodulator with its equaliser, connection evaluator, constellation
+designer and phase 3 demodulator all wired), a `K56FlexFloModem`, a
+`V92EchoCanceller`, a `GenericIIR<float,double>`, and whatever
+`v34handshakinit` and `V34InitializeImplementationSpecific` reach.  That is
+`test/harness/v90demfix.h` again with the V.92 and K56flex halves added -- a
+batch of its own, and the last one before finding 1105's `ref_vpcm_create`
+golden object can fire.
+
+**Nothing was committed for it.**  The rule is that a function which cannot be
+made to compare is left out and the attempt recorded, and this is the record.
+The four things the next batch starts from are above: the two saved pointers,
+the double memset, the third argument, and the twelve callees that all exist
+now.
+
+**SUPERSEDED IN ITS CONCLUSION BY FINDING 1118**, which is left here rather
+than edited because the reasoning was right and the conclusion was not: the
+graph does not have to be built, it can be BORROWED, and findings 800-806
+already said so.
+
+### 1118. THE FIXTURE `VPcmV34Create` NEEDED WAS ALREADY IN THE TREE, AND IT IS ONE GRAPH AND NOT TWO
+
+Finding 1117 stopped at "a differential test needs the whole V.PCM graph
+standing up before the call".  That is true and it is not a blocker, because
+**nothing has to stand it up**.  Findings 800-806 measured that the blob's own
+constructor is aliasable and that a blob-constructed object is a valid
+differential fixture; `test/unit/t_v34conn.c` already builds one and already
+carries the derived configuration (findings 820-825, `docs/configuration.md`).
+So:
+
+```
+    ref_dp_vpcm_init()                            registers the ops table
+    ops->create(m, 34, caller, 9600, 48, ops)     builds the whole graph
+    ... and VPcmV34Create is driven on THAT
+```
+
+**AND FINDING 803'S CONGRUENCE PROBLEM DOES NOT ARISE, BECAUSE THERE IS ONLY
+ONE GRAPH.**  Two constructions come back at 125 different addresses and every
+pointer field then differs for a reason that is not a defect.  One graph, with
+finding 805's three-pass shape applied to a constructor instead of to
+`datapumpv34`, has no such problem:
+
+```
+    snapshot every live region
+    run OURS       -> copy every region away
+    restore        -> and CHECK that the restore restored
+    run the BLOB's -> compare region by region
+```
+
+Both sides run on the SAME memory at the SAME addresses, so every pointer
+field is identical by construction and no field is excluded.
+
+**THE COMPARISON IS THE WHOLE HEAP GRAPH.**  `harness_alloc_live_set`
+enumerates every live allocation with its size, so a store into a region the
+test could not have named is a failure and not a silence.  That is the one
+thing finding 806's uncommitted probe needed a `malloc` interposer for, and the
+harness has had it since `t_v34conn.c` landed.  **126 live regions** on a
+single endpoint.
+
+#### THE THREE MEASUREMENTS, all on the blob's own code
+
+**1.  `VPcmV34Create` IS IDEMPOTENT TO WITHIN ONE BYTE.**  This is the answer
+to "you are testing the re-initialisation path, not the from-`malloc` path;
+does that leave an arm undriven?"  `ops->create` has already called
+`ref_VPcmV34Create` once by the time it returns, so a second call is a
+re-initialisation -- and over the whole 126-region graph it moves
+
+```
+    a second VPcmV34Create at the SAME side    1 byte     root +0x34
+    and at the OTHER side                     16 bytes   in 6 regions
+```
+
+One byte.  So the virgin path and the re-init path leave the same state
+everywhere except `v34obj + 0x08`, and the bound on any claim this fixture
+makes is that single named byte rather than an unmeasured hope.  (`root +0x34`
+is `v34obj + 0x08`; the likeliest reading is that `vpcm_create` writes it
+AFTER `VPcmV34Create` returns, which a re-run then undoes -- a caller effect
+and not a virgin-only arm.  Not established, and stated as such.)
+
+**2.  THE SIDE ARGUMENT HAS TO MATCH THE ONE `create` USED, or the
+measurement is finding 803's and not this one.**  `vpcm_create` does
+`test %edx,%edx / sete` on `caller`, so a caller of 1 gives a SIDE of 0.  The
+first run of this probe passed side 1 against a caller of 1 and reported 14
+bytes -- which is finding 803's caller-configured 14, arrived at by accident.
+Getting it right gives 1.
+
+**AND FLIPPING THE SIDE REPRODUCES FINDING 803 BYTE FOR BYTE, WHICH IS A
+CROSS-CHECK NEITHER MEASUREMENT COULD MAKE ALONE.**  Re-running at the other
+side moves 15 bytes: the one above, and then
+
+```
+    +0x3b2  1     +0x534   1     +0xe74   2     +0x148c 1
+    +0x25ee 1     +0x2a54  2     +0x3590  1     +0x35c8 1     +0xac54 4
+```
+
+-- which is finding 803's list of fourteen, at the same nine offsets with the
+same nine widths.  803 got them by building TWO objects under `setarch -R`
+with different `caller` values and diffing; this gets them by building ONE and
+re-running a single function with the side flipped.  So the two agree, and
+this adds what 803 could not say: **all fourteen are written by
+`VPcmV34Create` itself**, not by anything else in the 127-allocation
+construction.
+
+*(Corrected: an earlier version of this finding reported 16 bytes in six
+regions including `+0x611c`.  That measurement was taken with a FOUR-argument
+call, before finding 1119 established that `VPcmV34Create` takes five -- so
+the session type came from stack garbage.  The one-byte idempotence figure is
+unchanged under the correct signature; the other-side figure was not.)*
+
+**3.  THE COMPARISON WAS MADE TO FAIL.**  Finding 805's pass 3: run both
+sides, flip one byte of the V.34 object, require the comparison to report it,
+put it back and require it to go quiet.  Without that pass the whole file could
+be comparing an image against itself.
+
+#### What this changes for whoever writes it
+
+The blocker recorded in 1117 is gone and what is left is the FUNCTION: 508
+straight-line lines, twelve callees that all exist, and instant feedback --
+the test either agrees over 126 regions or names the first differing byte, its
+region and its offset.  `src/pump/v34/v34pcmmain.cpp` is the home, since it is
+the `.cpp` that already holds `VPcmV34InitiateRetrain` as an `extern "C"`
+export and already includes `K56FlexFloModem.h`,
+`V90ConstellationDesigner.h`, `V92EchoCanceller.h` and `VPcmFloModem.h` -- and
+already asserts `p3548`, `pac18` and `pac3c`, which are exactly the two
+pointers the function saves across its memset and the argument it stores.
+
+### 1119. `VPcmV34Create` TAKES FIVE ARGUMENTS, AND THE FIFTH IS ITS PRIMARY DISPATCH
+
+Finding 1117 read the prologue and reported four.  That was wrong, and it was
+wrong in the way a prologue read is always liable to be: `sub $0x2c,%esp`
+after four pushes puts arg1 at `0x40(%esp)`, and there is nothing in the
+prologue to say where the arguments STOP.  `0x50(%esp)` is read at five sites
+(`ac18 ac51 ac5c b0a0 b1a1`), so there is a fifth.
+
+Three independent confirmations, which is why this is settled rather than
+likely:
+
+- **The call site pushes five slots.**  `vpcm_create+0x252` writes
+  `0x10(%esp)` alongside `(%esp)`, `0x4`, `0x8` and `0xc`.
+- **The blob names it.**  `.rodata.str1.4+0x1bc8` is
+  `"VPcmV34Create, initial Session Type = %d\n"` and the value it prints is
+  `0x50(%esp)`.
+- **It is a five-way switch** on 0/1/2/3/4, and it selects everything else the
+  function does.
+
+```
+    int VPcmV34Create(struct v34_object *obj, int side, int arg3,
+                      void *dpRuntime, int sessionType);
+```
+
+**`vpcm_create` can only ever pass 0, 1 or 2.**  It computes
+`(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`, and `objdump -r` finds exactly ONE
+relocation against `VPcmV34Create` in the whole object -- so **the K56flex arms
+at 0xb320 and 0xb35a are unreachable from within this object**, which is
+finding 1090's point arriving from a third direction.  A negative session type
+takes the same arm as 0: the dispatch's second test is a SIGNED `jle`.
+
+**THIS INVALIDATED A MEASUREMENT AND THE CORRECTION IS IN 1118.**  The fixture
+was written against the four-argument reading, so the session type came from
+whatever was on the stack.  The one-byte idempotence figure survived the
+correction unchanged; the other-side figure did not.  A wrong arity is not a
+compile error in a C test that declares its own prototype, and nothing but
+re-reading the call site would have caught it.
+
+#### The other things a prologue read did not give, and which the next batch needs
+
+- **`%ebx` STOPS BEING THE OBJECT at 0xb253** (`mov 0x28(%esp),%ebx`), where it
+  becomes the `VPcmFloModem *`.  A transcription that assumed otherwise would
+  put `sete 0x7f5c(%ebx)` in the wrong object.
+- **`%esi` is `obj + 4` from 0xaa9c to 0xaf19**, so seventeen stores printed as
+  `0xNNN(%esi)` are `obj->0x(NNN+4)`.  This is the single most likely way to
+  get the field map wrong.
+- **There is no floating-point arithmetic at all.**  Zero x87 instructions in
+  the 2,376 bytes, so finding 245's FDIVP/FSUBP swap does not arise here.  The
+  only interesting arithmetic is two magic-number divisions --
+  `0xcccccccd` with `shr $3` over `x*24` is `x * 2.4`, and `0x1b4e81b5` with
+  `shr $8` is `x / 2400`, the V.34 rate index.  Both were verified numerically
+  rather than read off.
+- **It always returns 0.**  Both exits are `xor %eax,%eax`, so `vpcm_create`'s
+  `test %eax,%eax / jne 3da8` failure path is dead code.
+- **There is exactly one table**, and it is exactly the thing CLAUDE.md warns a
+  decompiler destroys: `mov 0xc0(,%eax,4),%eax` with an `R_386_32` against the
+  `.data` SECTION symbol and the 0xc0 as an inline addend.  It resolves to
+  `V34DisconnectThreshTable`, a local object symbol of size 0x20 --
+  `{ 71, 80, 90, 101, 113, 127, 142, 160 }` -- indexed by
+  `dpRuntime->0x60 + 0x30` with a single UNSIGNED `cmp $0x7 / jbe` that
+  rejects negative and >7 alike, defaulting to index 3.  Read without the
+  relocation folded in it is a load from absolute address 0xc0.
+- **One print is UNGATED**: the K56flex `edprintf` at 0xb33d.  The other
+  thirteen are `dsplibs_debug_printf` behind `cmpl $0x1` / `ja`.
+- **The side-to-`0x359C` polarity is NOT one rule.**  Session types 1 and 2
+  invert the flag before the common store (`sete` at 0xb0cb and 0xb05a), so
+  they map side 0 to 0x66 where types 0, 3 and 4 map it to 0x65.  A single
+  rule would be wrong for three of the five arms.
+
+Recorded because it cost a measurement, and because every one of these is
+invisible to a reader who starts at the prologue and works forwards.

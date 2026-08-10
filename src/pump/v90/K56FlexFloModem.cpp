@@ -1,8 +1,8 @@
 /*
- * K56FlexFloModem.cpp -- four members of a class that was never implemented.
+ * K56FlexFloModem.cpp -- five members of a class that was never implemented.
  *
- * Reconstructed from dsplibs.o.  Four of the class's seventeen members, and
- * eight of its forty bytes.  `include/dsplib/K56FlexFloModem.h` says why
+ * Reconstructed from dsplibs.o.  Five of the class's seventeen members, and
+ * nine of its forty bytes.  `include/dsplib/K56FlexFloModem.h` says why
  * there is no object map: not one instruction in any of the seventeen touches
  * `this`, so there is no displacement to bound a size with.
  *
@@ -10,6 +10,7 @@
  *
  *     _ZN15K56FlexFloModem21enterPhase3FullDuplexEv   c3
  *     _ZN15K56FlexFloModem14setMinMaxRatesEii         c3
+ *     _ZN15K56FlexFloModem13externalResetEv           c3
  *     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs       31 c0 c3
  *     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs       31 c0 c3
  *
@@ -50,5 +51,18 @@ K56FlexFloModem::setMinMaxRates(int, int)
 
 void
 K56FlexFloModem::enterPhase3FullDuplex()
+{
+}
+
+/*
+ * externalReset -- one byte, `c3`, and `VPcmV34Create` calls it.
+ *
+ * It is the K56flex half of the pair `VPcmFloModem::externalReset` completes,
+ * and the contrast between the two is the whole of finding 1090's point about
+ * this build: the V.90 side reinitialises three parameter blocks, twenty-odd
+ * flags and a demodulator, and the K56flex side does nothing whatever.
+ */
+void
+K56FlexFloModem::externalReset()
 {
 }

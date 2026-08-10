@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [###########.......................]  33.6%    246747 bytes, 541 symbols
-  tested      [##################################] 100.0%    246726 bytes, 536 of 541 that can be
+  translated  [############......................]  34.0%    249622 bytes, 558 symbols
+  tested      [##################################] 100.0%    249585 bytes, 551 of 558 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,9 +17,11 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 19 of ours (9649 bytes).
 
   translated, alias exists, and NOT tested:
+    _ZN22V90ConnectionEvaluatorC2EP13V90Parameters     15 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
+    _ZN22V90ConnectionEvaluatorD2Ev                   1 bytes
     _ZN15K56FlexFloModem21enterPhase3FullDuplexEv      1 bytes
     _ZN15K56FlexFloModem14setMinMaxRatesEii           1 bytes
 
@@ -78,14 +80,14 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           269056 bytes   654 symbols
+    VPcmV34Main.cpp +72                           266292 bytes   639 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
     V32mod.c +39                                   55694 bytes   119 symbols
     Dialer.c +18                                   16982 bytes    53 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Beepgen.c +3                                    7791 bytes    31 symbols
     Fdspkrnl.c +13                                  7691 bytes    30 symbols
-    b103.c +2                                       4885 bytes    28 symbols
+    b103.c +2                                       4774 bytes    26 symbols
     class1.c                                        4626 bytes    14 symbols
     class1rx.c                                      2495 bytes     5 symbols
     v32.c                                           1691 bytes     5 symbols
