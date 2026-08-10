@@ -563,12 +563,22 @@ run_ec(void)
 
 #define RT_SLOT 128
 
+/*
+ * The special members are written out because `ResamplerTimingOffset` is now
+ * a real polymorphic class with a user-declared constructor and destructor,
+ * which deletes a union's implicit ones.  Nothing here constructs the object;
+ * the raw bytes are seeded and the member called on them, exactly as before.
+ */
 union rt_slot {
 	ResamplerTimingOffset o;
 	unsigned char raw[RT_SLOT];
+	rt_slot() { }
+	~rt_slot() { }
 };
 
 static union rt_slot rt_a, rt_b;
+
+static void *const vptr_seed = (void *)0xdeadbeefu;
 
 static int
 run_rt(void)
@@ -603,8 +613,13 @@ run_rt(void)
 		 * both sit four bytes low and the blob's +0x48 would land in
 		 * a word this test declares as padding.  That is finding
 		 * 228's trap, and `only_wrote` below is what catches it.
+		 *
+		 * It is reached through `raw` rather than as a member, because
+		 * the vptr is now what `virtual` puts at +0x00 and not a field
+		 * the header declares.  The check is the same one.
 		 */
-		rt_a.o.vptr = rt_b.o.vptr = (void *)0xdeadbeefu;
+		memcpy(rt_a.raw, &vptr_seed, sizeof vptr_seed);
+		memcpy(rt_b.raw, &vptr_seed, sizeof vptr_seed);
 		rt_a.o.ppmScale = rt_b.o.ppmScale = s;
 
 		memcpy(before, rt_b.raw, RT_SLOT);
@@ -625,7 +640,8 @@ run_rt(void)
 			    bad == 0 ? -1 : first, -1, trial);
 
 		diff_eq_int("the vptr is untouched (%ld)",
-			    rt_b.o.vptr == (void *)0xdeadbeefu, 1, trial);
+			    memcmp(rt_b.raw, &vptr_seed, sizeof vptr_seed)
+			    == 0, 1, trial);
 		diff_eq_int("ppmScale is untouched (%ld)",
 			    rt_b.o.ppmScale == s, 1, trial);
 

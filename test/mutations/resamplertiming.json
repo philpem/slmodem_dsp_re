@@ -1,0 +1,293 @@
+[
+ {
+  "label": "the initial band-pass gain is 0.0398f, not 0.03981f",
+  "find": "\tnormBPFhBaudB0coef = 0.03981f;\n}",
+  "replace": "\tnormBPFhBaudB0coef = 0.0398f;\n}"
+ },
+ {
+  "label": "reset does not set the band-pass gain",
+  "find": "\tdftDone = 0;\n\tnormBPFhBaudB0coef = 0.03981f;",
+  "replace": "\tdftDone = 0;"
+ },
+ {
+  "label": "reset does not clear the DFT latch",
+  "find": "\tdftDone = 0;\n\tnormBPFhBaudB0coef = 0.03981f;",
+  "replace": "\tnormBPFhBaudB0coef = 0.03981f;"
+ },
+ {
+  "label": "reset leaves halfBaudStep alone",
+  "find": "\thalfBaudStep = 0;\n\n\tbllK1 = 0;",
+  "replace": "\tbllK1 = 0;"
+ },
+ {
+  "label": "reset leaves the loop gains alone",
+  "find": "\tbllK1 = 0;\n\tbllK2 = 0;\n\tlastHalfBaudErr = 0;",
+  "replace": "\tlastHalfBaudErr = 0;"
+ },
+ {
+  "label": "reset leaves the squared delay line alone",
+  "find": "\tbpfSq1 = 0;\n\tbpfSq2 = 0;\n\tbpfZ1 = 0;",
+  "replace": "\tbpfZ1 = 0;"
+ },
+ {
+  "label": "reset leaves the error delay alone",
+  "find": "\tbpfZ2 = 0;\n\terrZ1 = 0;",
+  "replace": "\tbpfZ2 = 0;"
+ },
+ {
+  "label": "reset does not reset the half-baud DFT",
+  "find": "\tresetSdHalfBaudDft();\n\n\tdftDone = 0;",
+  "replace": "\tdftDone = 0;"
+ },
+ {
+  "label": "reset does not call the base reset",
+  "find": "\tResamplerTimingOffset::reset();\n\n\thalfBaudStep = 0;",
+  "replace": "\thalfBaudStep = 0;"
+ },
+ {
+  "label": "resetSdHalfBaudDft leaves the count alone",
+  "find": "\tdftCount = 0;\n\tdftMag = 0;",
+  "replace": "\tdftMag = 0;"
+ },
+ {
+  "label": "resetSdHalfBaudDft leaves the magnitude alone",
+  "find": "\tdftCount = 0;\n\tdftMag = 0;",
+  "replace": "\tdftCount = 0;"
+ },
+ {
+  "label": "resetSdHalfBaudDft ALSO clears the latch",
+  "find": "\tdftRe = 0;\n\tdftIm = 0;\n}",
+  "replace": "\tdftRe = 0;\n\tdftIm = 0;\n\tdftDone = 0;\n}"
+ },
+ {
+  "label": "the constructor does not reset",
+  "find": "\t: ResamplerTimingOffset(nPhases, scale, nTaps, cutoff, ppm, minHistory)\n{\n\treset(0);",
+  "replace": "\t: ResamplerTimingOffset(nPhases, scale, nTaps, cutoff, ppm, minHistory)\n{"
+ },
+ {
+  "label": "the constructor does not re-set the timing offset",
+  "find": "\treset(0);\n\tsetTimingOffset(ppm);\n}\n\nResamplerTiming::ResamplerTiming(unsigned int nPhases, float scale,\n\t\t\t\t unsigned int nTaps, float *bank, float ppm,",
+  "replace": "\treset(0);\n}\n\nResamplerTiming::ResamplerTiming(unsigned int nPhases, float scale,\n\t\t\t\t unsigned int nTaps, float *bank, float ppm,"
+ },
+ {
+  "label": "the resonator pole is 0.98, not 0.98 squared",
+  "find": "\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ2;",
+  "replace": "\ty = normBPFhBaudB0coef * v - 0.98f * bpfZ2;"
+ },
+ {
+  "label": "the resonator ADDS the pole term",
+  "find": "\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ2;",
+  "replace": "\ty = normBPFhBaudB0coef * v + 0.9604f * bpfZ2;"
+ },
+ {
+  "label": "the resonator feeds back one sample, not two",
+  "find": "\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ2;",
+  "replace": "\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ1;"
+ },
+ {
+  "label": "the resonator delay line shifts the wrong way",
+  "find": "\tbpfZ2 = bpfZ1;\n\tbpfZ1 = y;",
+  "replace": "\tbpfZ1 = bpfZ2;\n\tbpfZ2 = y;"
+ },
+ {
+  "label": "the resonator delay line is updated before it is read",
+  "find": "\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ2;\n\tbpfZ2 = bpfZ1;",
+  "replace": "\tbpfZ2 = bpfZ1;\n\ty = normBPFhBaudB0coef * v - 0.9604f * bpfZ2;"
+ },
+ {
+  "label": "the second difference uses 0.00025f where it wants 0.0005f",
+  "find": "\te = 0.00025f * sq - 0.0005f * bpfSq1 + 0.00025f * bpfSq2;",
+  "replace": "\te = 0.00025f * sq - 0.00025f * bpfSq1 + 0.00025f * bpfSq2;"
+ },
+ {
+  "label": "the second difference swaps its two history terms",
+  "find": "\te = 0.00025f * sq - 0.0005f * bpfSq1 + 0.00025f * bpfSq2;",
+  "replace": "\te = 0.00025f * sq - 0.0005f * bpfSq2 + 0.00025f * bpfSq1;"
+ },
+ {
+  "label": "the squared delay line shifts the wrong way",
+  "find": "\tbpfSq2 = bpfSq1;\n\tbpfSq1 = sq;",
+  "replace": "\tbpfSq1 = bpfSq2;\n\tbpfSq2 = sq;"
+ },
+ {
+  "label": "the error monitor is never written",
+  "find": "\tlastHalfBaudErr = e;\n",
+  "replace": ""
+ },
+ {
+  "label": "the half-baud alternation tests bit 1, not bit 0",
+  "find": "\tif (halfBaudStep & 1) {",
+  "replace": "\tif (halfBaudStep & 2) {"
+ },
+ {
+  "label": "the two half-baud arms are swapped",
+  "find": "\tif (halfBaudStep & 1) {",
+  "replace": "\tif (!(halfBaudStep & 1)) {"
+ },
+ {
+  "label": "the loop halves the error twice",
+  "find": "\t\td = errZ1 * 0.5f;",
+  "replace": "\t\td = errZ1 * 0.25f;"
+ },
+ {
+  "label": "the integrator and the proportional gain are transposed",
+  "find": "\t\ttimingOffset = timingOffset + bllK2 * d;\n\t\tadj = bllK1 * d + timingOffset;",
+  "replace": "\t\ttimingOffset = timingOffset + bllK1 * d;\n\t\tadj = bllK2 * d + timingOffset;"
+ },
+ {
+  "label": "the proportional term is taken before the integrator updates",
+  "find": "\t\ttimingOffset = timingOffset + bllK2 * d;\n\t\tadj = bllK1 * d + timingOffset;",
+  "replace": "\t\tadj = bllK1 * d + timingOffset;\n\t\ttimingOffset = timingOffset + bllK2 * d;"
+ },
+ {
+  "label": "the even arm remembers +e rather than -e",
+  "find": "\t\terrZ1 = -e;",
+  "replace": "\t\terrZ1 = e;"
+ },
+ {
+  "label": "the even arm accumulates instead of replacing",
+  "find": "\t\terrZ1 = -e;",
+  "replace": "\t\terrZ1 -= e;"
+ },
+ {
+  "label": "the odd arm replaces instead of accumulating",
+  "find": "\t\terrZ1 += e;",
+  "replace": "\t\terrZ1 = e;"
+ },
+ {
+  "label": "the DFT ignores the completion latch",
+  "find": "\tif (dftDone)\n\t\treturn;",
+  "replace": "\tif (dftDone && 0)\n\t\treturn;"
+ },
+ {
+  "label": "the DFT quadrature runs the other way round",
+  "find": "\tcase 1:\n\t\tdftIm -= v;\n\t\tbreak;\n\tcase 2:\n\t\tdftRe -= v;\n\t\tbreak;\n\tcase 3:\n\t\tdftIm += v;",
+  "replace": "\tcase 1:\n\t\tdftIm += v;\n\t\tbreak;\n\tcase 2:\n\t\tdftRe -= v;\n\t\tbreak;\n\tcase 3:\n\t\tdftIm -= v;"
+ },
+ {
+  "label": "the DFT phase 2 adds instead of subtracting",
+  "find": "\tcase 2:\n\t\tdftRe -= v;",
+  "replace": "\tcase 2:\n\t\tdftRe += v;"
+ },
+ {
+  "label": "the DFT period is 2, not 4",
+  "find": "\tswitch (dftCount % 4) {",
+  "replace": "\tswitch (dftCount % 2) {"
+ },
+ {
+  "label": "the DFT latches at 255",
+  "find": "\tif (dftCount == 256) {",
+  "replace": "\tif (dftCount == 255) {"
+ },
+ {
+  "label": "the magnitude forgets the square root",
+  "find": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe + dftIm * dftIm);",
+  "replace": "\t\tdftMag = dftRe * dftRe + dftIm * dftIm;"
+ },
+ {
+  "label": "the magnitude uses only the real part",
+  "find": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe + dftIm * dftIm);",
+  "replace": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe);"
+ },
+ {
+  "label": "the gain adjustment ignores the completion latch",
+  "find": "\tif (!dftDone)\n\t\treturn;",
+  "replace": "\tif (!dftDone && 0)\n\t\treturn;"
+ },
+ {
+  "label": "the gain adjustment does not scale the bin by its argument",
+  "find": "\tdftMag = v * dftMag;",
+  "replace": "\tdftMag = dftMag;"
+ },
+ {
+  "label": "the numerator is 35000, not 350000",
+  "find": "\t\tnormFactor = 1.0f / dftMag * 350000.0f;",
+  "replace": "\t\tnormFactor = 1.0f / dftMag * 35000.0f;"
+ },
+ {
+  "label": "the reject threshold clamps to 4 instead of asking for nominal",
+  "find": "\t\tif (normFactor > 4.0f)\n\t\t\tnormFactor = 1.0f;",
+  "replace": "\t\tif (normFactor > 4.0f)\n\t\t\tnormFactor = 4.0f;"
+ },
+ {
+  "label": "the reject threshold is >= 4 rather than > 4",
+  "find": "\t\tif (normFactor > 4.0f)",
+  "replace": "\t\tif (normFactor >= 4.0f)"
+ },
+ {
+  "label": "the clamp is >= 2 rather than > 2",
+  "find": "\t\telse if (normFactor > 2.0f)",
+  "replace": "\t\telse if (normFactor >= 2.0f)",
+  "equivalent": true,
+  "why": "The two differ only when normFactor is exactly 2.0f, and both arms leave it at 2.0f: `> 2.0f` falls through to the `< 1.0f` floor, which is false, and `>= 2.0f` assigns the value it already has.  Nothing can observe it.  The dftMag == 175000 row of the fixture drives exactly 2.0f on purpose, so this is a claim about a case the test really reaches rather than one it misses."
+ },
+ {
+  "label": "the floor is <= 1 rather than < 1",
+  "find": "\tif (normFactor < 1.0f)\n\t\tnormFactor = 1.0f;",
+  "replace": "\tif (normFactor <= 1.0f)\n\t\tnormFactor = 1.0f;",
+  "equivalent": true,
+  "why": "The two differ only when normFactor is exactly 1.0f, and the arm they choose between both store 1.0f.  Nothing can observe it, and the mag == 350000 row of the fixture drives exactly that value on purpose so the claim is about a case the test really reaches."
+ },
+ {
+  "label": "the zero-magnitude arm falls through to the division",
+  "find": "\tif (dftMag == 0.0f) {\n\t\tnormFactor = 1.0f;\n\t} else {",
+  "replace": "\tif (dftMag != 0.0f) {\n\t\tnormFactor = 1.0f;\n\t} else {"
+ },
+ {
+  "label": "the coefficient is the factor itself, not the factor times b0",
+  "find": "\tnormBPFhBaudB0coef = normFactor * 0.03981f;",
+  "replace": "\tnormBPFhBaudB0coef = normFactor;"
+ },
+ {
+  "label": "the first diagnostic prints normFactor's digits",
+  "find": "\t\t    sign_of(dftMag), whole_of(dftMag),\n\t\t    frac_of(dftMag, 1000.0f));",
+  "replace": "\t\t    sign_of(dftMag), whole_of(normFactor),\n\t\t    frac_of(dftMag, 1000.0f));"
+ },
+ {
+  "label": "the second diagnostic scales the fraction by 100",
+  "find": "\t\t    frac_of(normFactor, 1000.0f));",
+  "replace": "\t\t    frac_of(normFactor, 100.0f));"
+ },
+ {
+  "label": "the third diagnostic is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"ResamplerTiming::adjustHalfBaudBpfGain  \"\n\t\t    \"normBPFhBaudB0coef = %c%d.%03d\\r\\n\",",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\n\t\t    \"ResamplerTiming::adjustHalfBaudBpfGain  \"\n\t\t    \"normBPFhBaudB0coef = %c%d.%03d\\r\\n\","
+ },
+ {
+  "label": "invertPhase subtracts the nominal step",
+  "find": "\tphase += ppmScale;\n\n\twhile (phase >= (double)phases) {",
+  "replace": "\tphase -= ppmScale;\n\n\twhile (phase >= (double)phases) {"
+ },
+ {
+  "label": "invertPhase's unwrap is > rather than >=",
+  "find": "\tphase += ppmScale;\n\n\twhile (phase >= (double)phases) {",
+  "replace": "\tphase += ppmScale;\n\n\twhile (phase > (double)phases) {"
+ },
+ {
+  "label": "invertPhase does not bank the whole steps",
+  "find": "\t\tphase -= (double)phases;\n\t\tinputCredit++;\n\t}\n}\n\n/*\n * Nudge `phase` by a fraction of a step.",
+  "replace": "\t\tphase -= (double)phases;\n\t}\n}\n\n/*\n * Nudge `phase` by a fraction of a step."
+ },
+ {
+  "label": "addPhase accepts a zero or negative argument",
+  "find": "\tif (v > 0.0f) {",
+  "replace": "\tif (v >= 0.0f) {"
+ },
+ {
+  "label": "addPhase's scale is 1/18, not 1/180",
+  "find": "\t\tphase += v * ppmScale * 0.00555555569f;",
+  "replace": "\t\tphase += v * ppmScale * 0.0555555569f;"
+ },
+ {
+  "label": "addPhase drops the nominal step from the product",
+  "find": "\t\tphase += v * ppmScale * 0.00555555569f;",
+  "replace": "\t\tphase += v * 0.00555555569f;"
+ },
+ {
+  "label": "addPhase writes the credit unconditionally",
+  "find": "\t\twhile (phase >= (double)phases) {\n\t\t\tphase -= (double)phases;\n\t\t\tinputCredit++;\n\t\t}",
+  "replace": "\t\t{\n\t\t\tunsigned c = inputCredit;\n\n\t\t\twhile (phase >= (double)phases) {\n\t\t\t\tphase -= (double)phases;\n\t\t\t\tc++;\n\t\t\t}\n\t\t\tinputCredit = c;\n\t\t}",
+  "equivalent": true,
+  "why": "The VALUE written is identical -- the replacement copies inputCredit into a local, runs the same loop and writes it back -- so no differential test can separate them.  What differs is that the object stores only inside the loop (.text+0x35fae) and the mutant stores on the no-wrap path too, which is a claim for the codegen tier and not for this one.  Recorded rather than deleted because the distinction is real and the reason it is invisible here is worth keeping."
+ }
+]

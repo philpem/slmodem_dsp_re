@@ -1,0 +1,127 @@
+[
+ {
+  "label": "the constructor seeds bllState with FROZEN, so setBllState no-ops",
+  "find": "\tbllState = V90_BLL_SECOND_ORDER_FROZEN;",
+  "replace": "\tbllState = V90_BLL_FROZEN;"
+ },
+ {
+  "label": "reset enters FROZEN without asking for sample counting",
+  "find": "\tsetBllState(V90_BLL_FROZEN, 1);",
+  "replace": "\tsetBllState(V90_BLL_FROZEN, 0);"
+ },
+ {
+  "label": "reset enters SLOW rather than FROZEN",
+  "find": "\tsetBllState(V90_BLL_FROZEN, 1);",
+  "replace": "\tsetBllState(V90_BLL_SLOW, 1);"
+ },
+ {
+  "label": "reset does not clear the timing-history ring",
+  "find": "\tfor (i = 0; i < timingHistoryLen; i++)\n\t\ttimingHistory[i] = 0;",
+  "replace": "\tfor (i = 0; i < 0u; i++)\n\t\ttimingHistory[i] = 0;"
+ },
+ {
+  "label": "reset does not clear the ring cursor",
+  "find": "\ttimingHistoryIndex = 0;\n\tperiodSamples = 0;",
+  "replace": "\tperiodSamples = 0;"
+ },
+ {
+  "label": "reset does not call the base reset",
+  "find": "\tResamplerTiming::reset(1);\n\n\tstateSamples = 0;",
+  "replace": "\tstateSamples = 0;"
+ },
+ {
+  "label": "setBllState re-enters the state it is already in",
+  "find": "\tif (bllState == state)\n\t\treturn;",
+  "replace": "\tif (bllState != state)\n\t\t(void)0;"
+ },
+ {
+  "label": "setBllState does not record the new state",
+  "find": "\tbllState = state;\n\tstateSamples = 0;",
+  "replace": "\tstateSamples = 0;"
+ },
+ {
+  "label": "setBllState does not restart the sample count",
+  "find": "\tbllState = state;\n\tstateSamples = 0;",
+  "replace": "\tbllState = state;"
+ },
+ {
+  "label": "setBllState ignores its second argument",
+  "find": "\tcountStateSamples = countSamples;",
+  "replace": "\tcountStateSamples = 1;"
+ },
+ {
+  "label": "FROZEN leaves the first-order gain alone",
+  "find": "\tcase V90_BLL_FROZEN:\n\t\tbllK1 = 0;\n\t\tbllK2 = 0;",
+  "replace": "\tcase V90_BLL_FROZEN:\n\t\tbllK2 = 0;"
+ },
+ {
+  "label": "SECOND_ORDER_FROZEN zeroes both gains",
+  "find": "\tcase V90_BLL_SECOND_ORDER_FROZEN:\n\t\tbllK2 = 0;",
+  "replace": "\tcase V90_BLL_SECOND_ORDER_FROZEN:\n\t\tbllK1 = 0;\n\t\tbllK2 = 0;"
+ },
+ {
+  "label": "SLOW and SLOW2 take each other's gains",
+  "find": "\tcase V90_BLL_SLOW:\n\t\tbllK1 = params->BLL_SLOW_K1;\n\t\tbllK2 = params->BLL_SLOW_K2;",
+  "replace": "\tcase V90_BLL_SLOW:\n\t\tbllK1 = params->BLL_SLOW2_K1;\n\t\tbllK2 = params->BLL_SLOW2_K2;"
+ },
+ {
+  "label": "TRN2_INITIAL takes TRN2's gains",
+  "find": "\tcase V90_BLL_TRN2_INITIAL:\n\t\tbllK1 = params->BLL_TRN2_INITIAL_K1;\n\t\tbllK2 = params->BLL_TRN2_INITIAL_K2;",
+  "replace": "\tcase V90_BLL_TRN2_INITIAL:\n\t\tbllK1 = params->BLL_TRN2_K1;\n\t\tbllK2 = params->BLL_TRN2_K2;"
+ },
+ {
+  "label": "TRN1_QC_SLOW reads +0x0f0 for both gains",
+  "find": "\t\tbllK2 = asFloat(params->unnamed_0f4);",
+  "replace": "\t\tbllK2 = params->BLL_TRN1_QC_SLOW_K2;"
+ },
+ {
+  "label": "TRN1_QC_SLOW converts +0x0f4 rather than copying its bits",
+  "find": "\t\tbllK2 = asFloat(params->unnamed_0f4);",
+  "replace": "\t\tbllK2 = (float)params->unnamed_0f4;"
+ },
+ {
+  "label": "MEDIUM prints SLOW2's name",
+  "find": "\t\tedprintf(\"V90Resampler: state = MEDIUM\\r\\n\");",
+  "replace": "\t\tedprintf(\"V90Resampler: state = SLOW2\\r\\n\");"
+ },
+ {
+  "label": "TRN2 prints without its trailing space",
+  "find": "\t\tedprintf(\"V90Resampler: state = TRN2 \\r\\n\");",
+  "replace": "\t\tedprintf(\"V90Resampler: state = TRN2\\r\\n\");"
+ },
+ {
+  "label": "an out-of-range state falls into the FROZEN arm",
+  "find": "\tswitch (state) {\n\tcase V90_BLL_FROZEN:",
+  "replace": "\tswitch (state) {\n\tdefault:\n\tcase V90_BLL_FROZEN:"
+ },
+ {
+  "label": "the ring length comes from the evaluation PERIOD",
+  "find": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_BUFFER_LENGTH;\n\n\treset();\n\tsetTimingOffset(ppm);\n}\n\nV90Resampler::V90Resampler(unsigned int nPhases, float scale,\n\t\t\t   unsigned int nTaps, float *bank,",
+  "replace": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_PERIOD;\n\n\treset();\n\tsetTimingOffset(ppm);\n}\n\nV90Resampler::V90Resampler(unsigned int nPhases, float scale,\n\t\t\t   unsigned int nTaps, float *bank,"
+ },
+ {
+  "label": "the destructor does not free the timing history",
+  "find": "\tif (timingHistory)\n\t\tsysdep_free(timingHistory);",
+  "replace": "\tif (timingHistory && timingHistoryLen == 0xffffffffu)\n\t\tsysdep_free(timingHistory);"
+ },
+ {
+  "label": "getTimingHistoryMean returns the variance",
+  "find": "\treturn mean(timingHistory, timingHistoryLen);",
+  "replace": "\treturn Var(timingHistory, timingHistoryLen);"
+ },
+ {
+  "label": "getTimingHistoryStd forgets the square root",
+  "find": "\treturn __builtin_sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
+  "replace": "\treturn var * (var < 0.0f ? -1.0f : 1.0f);"
+ },
+ {
+  "label": "getTimingHistoryStd does not take the magnitude",
+  "find": "\treturn __builtin_sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
+  "replace": "\treturn __builtin_sqrt(var);"
+ },
+ {
+  "label": "getTimingHistoryStd reads the wrong length",
+  "find": "\tfloat var = Var(timingHistory, timingHistoryLen);",
+  "replace": "\tfloat var = Var(timingHistory, timingHistoryLen - 1);"
+ }
+]
