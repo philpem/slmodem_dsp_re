@@ -74,7 +74,8 @@ extern unsigned int dsplibs_debug_level;
  * blob's is the ordinary `ref_` alias.  The signature is the call site's at
  * `vpcm_create+0x270`.
  */
-extern int ref_VPcmV34Create(void *obj, int side, int arg2, void *dpRuntime);
+extern int ref_VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
+			     int sessionType);
 
 /*
  * ============================================================================
@@ -306,7 +307,8 @@ build(struct dp_operations *ops, int caller)
  * second is.
  */
 static void
-one_case(int side, int arg2, long tag, long *changedp, int *reportedp)
+one_case(int side, int sessionType, long tag, long *changedp,
+	 int *reportedp)
 {
 	int rc_ours, rc_blob;
 	long n;
@@ -315,7 +317,7 @@ one_case(int side, int arg2, long tag, long *changedp, int *reportedp)
 	diff_eq_int("the restore restored the graph (%ld)",
 		    graph_diff_live(snap) == 0 ? 1 : 0, 1, tag);
 
-	rc_ours = VPcmV34Create(v34obj, side, arg2, runtime);
+	rc_ours = VPcmV34Create(v34obj, side, 0, runtime, sessionType);
 	graph_save_ours();
 
 	/*
@@ -333,7 +335,7 @@ one_case(int side, int arg2, long tag, long *changedp, int *reportedp)
 	diff_eq_int("the restore restored it again (%ld)",
 		    graph_diff_live(snap) == 0 ? 1 : 0, 1, tag);
 
-	rc_blob = ref_VPcmV34Create(v34obj, side, arg2, runtime);
+	rc_blob = ref_VPcmV34Create(v34obj, side, 0, runtime, sessionType);
 
 	diff_eq_int("the return value (%ld)", rc_ours, rc_blob, tag);
 
@@ -349,7 +351,17 @@ one_case(int side, int arg2, long tag, long *changedp, int *reportedp)
 static int
 run_create(void)
 {
-	static const int arg2_v[] = { 0, 1, 2, -1 };
+	/*
+	 * THE FIFTH ARGUMENT IS THE SESSION TYPE and it is the function's
+	 * primary dispatch: a five-way switch on 0/1/2/3/4.  `vpcm_create`
+	 * only ever passes 0, 1 or 2 -- it computes
+	 * `(x == 0x5c) ? 2 : (x == 0x5a)` -- so 3 and 4 are unreachable from
+	 * within this object and are swept here anyway, because a
+	 * reconstruction has to agree on them too.  A negative value takes
+	 * the same arm as 0: the dispatch's second test is a SIGNED `jle`.
+	 */
+	static const int type_v[] = { 0, 1, 2, 3, 4, -1 };
+#define NTYPE ((int)(sizeof(type_v) / sizeof(type_v[0])))
 	int side, ai;
 	long tag = 0;
 	long changed = 0;
@@ -358,8 +370,8 @@ run_create(void)
 	diff_begin("the VPcmV34Create fixture: blob against blob, whole graph");
 
 	for (side = 0; side < 2; side++)
-		for (ai = 0; ai < 4; ai++)
-			one_case(side, arg2_v[ai], tag++, &changed, &reported);
+		for (ai = 0; ai < NTYPE; ai++)
+			one_case(side, type_v[ai], tag++, &changed, &reported);
 
 	diff_eq_int("some case changed the graph", changed > 0 ? 1 : 0, 1,
 		    changed);
@@ -382,10 +394,10 @@ run_made_to_fail(void)
 	diff_begin("the VPcmV34Create fixture: the comparison is live");
 
 	graph_restore();
-	VPcmV34Create(v34obj, 1, 0, runtime);
+	VPcmV34Create(v34obj, 0, 0, runtime, 0);
 	graph_save_ours();
 	graph_restore();
-	ref_VPcmV34Create(v34obj, 1, 0, runtime);
+	ref_VPcmV34Create(v34obj, 0, 0, runtime, 0);
 
 	diff_eq_int("undisturbed, the two agree",
 		    graph_diff_live(ours) == 0 ? 1 : 0, 1, 0);
@@ -428,14 +440,14 @@ run_virgin_vs_reinit(void)
 	 * `caller`, so a caller of 1 gives a side of 0.
 	 */
 	graph_restore();
-	ref_VPcmV34Create(v34obj, 0, 0, runtime);
+	ref_VPcmV34Create(v34obj, 0, 0, runtime, 0);
 	n = graph_diff_live(snap);
 	printf("    a second VPcmV34Create at the SAME side moves %ld byte(s)"
 	       " of %d region(s)\n", n, nreg);
 	report_all_diffs("same side", snap);
 
 	graph_restore();
-	ref_VPcmV34Create(v34obj, 1, 0, runtime);
+	ref_VPcmV34Create(v34obj, 1, 0, runtime, 0);
 	n = graph_diff_live(snap);
 	printf("    and at the OTHER side, %ld byte(s)\n", n);
 	report_all_diffs("other side", snap);

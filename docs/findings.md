@@ -36316,12 +36316,30 @@ measurement is finding 803's and not this one.**  `vpcm_create` does
 `test %edx,%edx / sete` on `caller`, so a caller of 1 gives a SIDE of 0.  The
 first run of this probe passed side 1 against a caller of 1 and reported 14
 bytes -- which is finding 803's caller-configured 14, arrived at by accident.
-Getting it right gives 1.  The 16 bytes the other side moves are 803's 14 seen
-across the whole graph rather than only the root, and they are in six regions:
-`+0x48` of a 2-byte pair, `+0x41c` of a 4-byte one, `+0x611c` (which
-`VPcmFloModem.cpp` names `pcmSessionType`), four singles in the root's
-`0xabf2..0xabfe` run, and two more.  A modest extension of 803, which only
-looked at the root.
+Getting it right gives 1.
+
+**AND FLIPPING THE SIDE REPRODUCES FINDING 803 BYTE FOR BYTE, WHICH IS A
+CROSS-CHECK NEITHER MEASUREMENT COULD MAKE ALONE.**  Re-running at the other
+side moves 15 bytes: the one above, and then
+
+```
+    +0x3b2  1     +0x534   1     +0xe74   2     +0x148c 1
+    +0x25ee 1     +0x2a54  2     +0x3590  1     +0x35c8 1     +0xac54 4
+```
+
+-- which is finding 803's list of fourteen, at the same nine offsets with the
+same nine widths.  803 got them by building TWO objects under `setarch -R`
+with different `caller` values and diffing; this gets them by building ONE and
+re-running a single function with the side flipped.  So the two agree, and
+this adds what 803 could not say: **all fourteen are written by
+`VPcmV34Create` itself**, not by anything else in the 127-allocation
+construction.
+
+*(Corrected: an earlier version of this finding reported 16 bytes in six
+regions including `+0x611c`.  That measurement was taken with a FOUR-argument
+call, before finding 1119 established that `VPcmV34Create` takes five -- so
+the session type came from stack garbage.  The one-byte idempotence figure is
+unchanged under the correct signature; the other-side figure was not.)*
 
 **3.  THE COMPARISON WAS MADE TO FAIL.**  Finding 805's pass 3: run both
 sides, flip one byte of the V.34 object, require the comparison to report it,
@@ -36339,3 +36357,75 @@ export and already includes `K56FlexFloModem.h`,
 `V90ConstellationDesigner.h`, `V92EchoCanceller.h` and `VPcmFloModem.h` -- and
 already asserts `p3548`, `pac18` and `pac3c`, which are exactly the two
 pointers the function saves across its memset and the argument it stores.
+
+### 1119. `VPcmV34Create` TAKES FIVE ARGUMENTS, AND THE FIFTH IS ITS PRIMARY DISPATCH
+
+Finding 1117 read the prologue and reported four.  That was wrong, and it was
+wrong in the way a prologue read is always liable to be: `sub $0x2c,%esp`
+after four pushes puts arg1 at `0x40(%esp)`, and there is nothing in the
+prologue to say where the arguments STOP.  `0x50(%esp)` is read at five sites
+(`ac18 ac51 ac5c b0a0 b1a1`), so there is a fifth.
+
+Three independent confirmations, which is why this is settled rather than
+likely:
+
+- **The call site pushes five slots.**  `vpcm_create+0x252` writes
+  `0x10(%esp)` alongside `(%esp)`, `0x4`, `0x8` and `0xc`.
+- **The blob names it.**  `.rodata.str1.4+0x1bc8` is
+  `"VPcmV34Create, initial Session Type = %d\n"` and the value it prints is
+  `0x50(%esp)`.
+- **It is a five-way switch** on 0/1/2/3/4, and it selects everything else the
+  function does.
+
+```
+    int VPcmV34Create(struct v34_object *obj, int side, int arg3,
+                      void *dpRuntime, int sessionType);
+```
+
+**`vpcm_create` can only ever pass 0, 1 or 2.**  It computes
+`(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`, and `objdump -r` finds exactly ONE
+relocation against `VPcmV34Create` in the whole object -- so **the K56flex arms
+at 0xb320 and 0xb35a are unreachable from within this object**, which is
+finding 1090's point arriving from a third direction.  A negative session type
+takes the same arm as 0: the dispatch's second test is a SIGNED `jle`.
+
+**THIS INVALIDATED A MEASUREMENT AND THE CORRECTION IS IN 1118.**  The fixture
+was written against the four-argument reading, so the session type came from
+whatever was on the stack.  The one-byte idempotence figure survived the
+correction unchanged; the other-side figure did not.  A wrong arity is not a
+compile error in a C test that declares its own prototype, and nothing but
+re-reading the call site would have caught it.
+
+#### The other things a prologue read did not give, and which the next batch needs
+
+- **`%ebx` STOPS BEING THE OBJECT at 0xb253** (`mov 0x28(%esp),%ebx`), where it
+  becomes the `VPcmFloModem *`.  A transcription that assumed otherwise would
+  put `sete 0x7f5c(%ebx)` in the wrong object.
+- **`%esi` is `obj + 4` from 0xaa9c to 0xaf19**, so seventeen stores printed as
+  `0xNNN(%esi)` are `obj->0x(NNN+4)`.  This is the single most likely way to
+  get the field map wrong.
+- **There is no floating-point arithmetic at all.**  Zero x87 instructions in
+  the 2,376 bytes, so finding 245's FDIVP/FSUBP swap does not arise here.  The
+  only interesting arithmetic is two magic-number divisions --
+  `0xcccccccd` with `shr $3` over `x*24` is `x * 2.4`, and `0x1b4e81b5` with
+  `shr $8` is `x / 2400`, the V.34 rate index.  Both were verified numerically
+  rather than read off.
+- **It always returns 0.**  Both exits are `xor %eax,%eax`, so `vpcm_create`'s
+  `test %eax,%eax / jne 3da8` failure path is dead code.
+- **There is exactly one table**, and it is exactly the thing CLAUDE.md warns a
+  decompiler destroys: `mov 0xc0(,%eax,4),%eax` with an `R_386_32` against the
+  `.data` SECTION symbol and the 0xc0 as an inline addend.  It resolves to
+  `V34DisconnectThreshTable`, a local object symbol of size 0x20 --
+  `{ 71, 80, 90, 101, 113, 127, 142, 160 }` -- indexed by
+  `dpRuntime->0x60 + 0x30` with a single UNSIGNED `cmp $0x7 / jbe` that
+  rejects negative and >7 alike, defaulting to index 3.  Read without the
+  relocation folded in it is a load from absolute address 0xc0.
+- **One print is UNGATED**: the K56flex `edprintf` at 0xb33d.  The other
+  thirteen are `dsplibs_debug_printf` behind `cmpl $0x1` / `ja`.
+- **The side-to-`0x359C` polarity is NOT one rule.**  Session types 1 and 2
+  invert the flag before the common store (`sete` at 0xb0cb and 0xb05a), so
+  they map side 0 to 0x66 where types 0, 3 and 4 map it to 0x65.  A single
+  rule would be wrong for three of the five arms.
+
+Recorded because it cost a measurement, and because every one of these is
+invisible to a reader who starts at the prologue and works forwards.
