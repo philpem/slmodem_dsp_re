@@ -33308,3 +33308,165 @@ a reason beyond dependency" -- the oracle -- and findings 800-806 delivered
 that oracle without the span. The dependency reason runs the other way: the
 construction path is the LAST thing in this span that can be written, not the
 first, and the byte count says nothing about that.
+
+### 940. `mutate.py` now works in a copy, and the tree it is run from is never written
+
+Task #82.  The runner patched `src/` IN PLACE and restored in a `finally`.
+That covers an exception and — since the SIGTERM handler — a `kill`, and it
+does not cover SIGKILL, a session teardown, or the machine dying.  What
+survives one of those is a source file holding a deliberate defect whose label
+reads exactly like a plausible reconstruction error, and since **every test
+binary links all of `src/`** (mutsnap.py's CLOSURE note) one stray mutant makes
+every suite's verdicts meaningless.  It happened three times in one session,
+cost two full re-record runs, and looked convincingly like a concurrency bug.
+
+**Reproduced before the change, on the unmodified file**, by SIGKILLing a
+`--suite v34hshak` run the instant `git status` went dirty:
+
+```
+    M src/pump/v34/v34hshak.c
+
+    -#define HS_RXSTATE	0x3594
+    +#define HS_RXSTATE	0x3596
+```
+
+Two `#define`s left equal to each other.  It compiles, and nothing but the
+mutation harness's own pre-flight would ever have said why the tree had gone
+strange.  **The same kill after the change leaves `git status --porcelain --
+src/` clean**, and the only residue is a directory under `$TMPDIR` — garbage,
+which is a different kind of thing from a corrupted tree because nothing later
+can be misled by it.
+
+**What is copied, and what a plain copy costs.**  `Makefile src include test
+tools docs` is 9.7 MB and 20 ms of `cp -a`.  `build/` is copied too and must
+not be shared — the compiler writes objects by truncation — but only the
+OBJECTS: the 129 linked binaries directly under `build/test/` are 296 MB of the
+309 MB and all but one of them is useless to any one suite.  That takes the
+copy to 21 MB and 50 ms, and the copy's first `make` is then a LINK (128 ms)
+rather than a cold build (1.38 s).
+
+**Hardlinks were measured and rejected**, and the reasoning is worth keeping
+because `cp -al` is the obvious optimisation.  `open(path, "w")` on a
+hardlinked file truncates THROUGH the link into the original, so the bug
+relocates rather than goes away — `os.replace` would fix this file's own writes
+and not the compiler's, an editor's, or any other writer's.  `cp -al` cannot
+cross filesystems, and /tmp being the same volume as the tree is an accident of
+this machine.  And it buys 11 ms.
+
+**END TO END IT IS FASTER, which was not the expected result.**  `cadence`,
+`pulse` and `dilpack` back to back — the pessimal case, three small suites
+where fixed costs are most of the time — take 9.9 s / 10.3 s in a copy against
+13.0 s / 12.5 s in place.  The 180 ms of setup is more than paid for by
+dropping the restore-and-rebuild that used to follow the last mutation: that
+existed to leave the REAL tree's binaries matching its source, a copy about to
+be deleted does not need it, and it was a full build-test-and-`make strings`
+cycle at ~1.4 s.  A large suite amortises the setup to nothing.  (Those two
+timings were taken while `docs/` was still in the copy list; it was dropped
+afterwards, on finding that nothing either invoked target runs opens it, which
+moves 2.4 MB inside a 20 ms `cp -a` and no number here.)
+
+**The two paths are now one.**  `--jobs N` used to `shutil.copytree` a sibling
+tree per worker; it now starts N ordinary runs with `--shard i/N` and each
+makes its own copy through the same function a serial run uses.  The workers
+had to be SIBLINGS of the real tree because `third_party/spandsp` is a relative
+symlink that only resolves at the same depth; the copy resolves it to an
+ABSOLUTE symlink instead, which is what lets a copy live under `$TMPDIR` at
+all.  `$BLOB` is made absolute for the same reason and while the cwd is still
+the real tree — the Makefile's default is relative, an environment value wins
+over it, and getting it wrong builds and links perfectly and then dies inside
+`make strings`.
+
+**The guard against a corrupted tree stays; the lock relaxes.**  The
+live-mutant pre-flight runs in the REAL tree and BEFORE anything is copied, on
+every invocation including shards (50 ms over 63 suites), because copying a
+corrupted tree gives a corrupted copy and verdicts that mean nothing — and this
+runner can no longer be what corrupted it, so what it now detects is a hand
+edit, a bad merge, or a stale checkout.  The pid lock moved INTO the copy: two
+runs in one tree used to be nonsense and are now correct, so refusing them
+would have been the regression.  **Two concurrent `--jobs 8` runs of
+`v34hshak` in one tree — sixteen live copies — both exited 0 and agreed on all
+209 verdicts**, with the tree clean afterwards.
+
+**Shown to fire, per `docs/method/gates.md` rule 3.**  The lock was driven
+against a fabricated copy three ways: a live owner is refused, a dead owner is
+reported stale and taken, no lock proceeds silently.  The copy was shown to be
+the thing being used rather than decoration by diffing it against the tree
+mid-run — `Files <copy>/src/pump/v34/v34hshak.c and <tree>/src/pump/v34/
+v34hshak.c differ` — in the same instant that `git status` on the tree was
+clean.  Without that second observation every other check here is vacuous.
+
+**A SIGKILL leaks a directory, so the next run reaps it.**  Workdirs are named
+`mutate-<pid>-*` and a starting run deletes any whose pid is gone.  The
+dangerous direction does not exist: a live run's owner is alive by definition,
+so it is skipped, and a REUSED pid reads as alive, which errs towards keeping
+garbage.  Watched working — the directory left by the SIGKILL test above was
+gone after the next run.
+
+
+#### The hole the copy opened, and the guard for it
+
+Running in a copy makes ONE new way to write the real tree, and it is silent:
+`args.source` is turned into a path and then chdir'd away from, so a source
+given as an ABSOLUTE path goes on naming the real tree and gets mutated in
+place exactly as before.  `--suite` reads relative paths out of `suites.json`
+and cannot reach it; the documented three-positional-argument form is where
+someone can type one.  Nothing about such a run would look unusual — the
+transcript, the verdicts and the exit status are all normal — which is
+`gates.md`'s pattern, one level down from the defect just removed.
+
+So every path is spelled relative to the tree before the chdir, and one
+outside it is refused rather than silently copied from nowhere.  Watched
+firing both ways: an absolute in-tree source runs the suite normally and
+leaves `git status` clean, and `/tmp/bench/src/callprog/cadence.c` exits 1
+with `the source is outside the tree, so it cannot be mutated in a copy of it`.
+
+### 941. Editing `tools/mutate.py` invalidates the whole mutation snapshot, and the snapshot is right to say so
+
+Met while doing 940, and worth its own number because the premise that task
+#82 was written under is wrong in a way that will be repeated: *"`tools/` is
+NOT in mutsnap's CLOSURE key, so this change should invalidate nothing."*
+
+It is not `tools/` that is in the key, it is one file in it:
+
+```
+    CLOSURE = ("Makefile", "src", "include", "test/harness",
+               "tools/mutate.py")                       # mutsnap.py:84
+```
+
+and the comment beside it says why — the runner *is* the classification, so
+"what counts as caught, unusable or equivalent" changes when it changes.  So
+**any** edit to `mutate.py`, including one that provably cannot move a verdict,
+takes the snapshot from `63 current, 0 stale` to `0 current, 63 stale`.
+
+**`make phase` stays GREEN through this**, which is by design and is the part
+worth knowing: `cmd_check` fails on MISSING, ORPHANED and INCONSISTENT and
+only REPORTS staleness, because a gate that is red by default gets ignored or
+switched off (finding 545).  The phase boundary printed `0 current, 63 stale`
+and exited 0.
+
+**The verdicts themselves were unmoved, and that was measured rather than
+argued**: `tools/mutsnap.py --verify` runs the suites and diffs every LABEL
+against the record, and it never calls `suite_key` — so it works perfectly well
+against a stale-keyed snapshot, and it is the right instrument here:
+
+```
+    tools/mutsnap.py --verify --jobs 8
+      ... 63 lines, every one of them "N verdict(s), all unchanged"
+```
+
+3,590 mutations over 63 suites, not one label in a different class, exit 0.
+The record is therefore *true* and its key merely no longer vouches for it.
+
+That run is also the only exercise `run_all` needs.  `mutsnap.run_suite`
+spawns `[python, tools/mutate.py, --suite NAME, --jobs 8]` and captures its
+output; `run_all` spawns `[python, abspath(__file__), --suite NAME, --jobs N]`
+and captures its output.  Same file, same arguments, same 63 children each
+making their own copy — so `--all` was not re-run for 90 minutes to learn
+something already measured.  What that does NOT cover is `run_all`'s own
+summary-line arithmetic, which is untouched code that never sees a copy.
+
+**It was deliberately NOT re-recorded.**  Re-recording is the cheapest way to
+clear the red and it is exactly how a false baseline gets manufactured (the
+argument above `cmd_check`).  A batch that merges this should re-record with
+`--update` at the merge, where the work has just been verified and refreshing
+the record is honest — that is what `--strict` exists for.

@@ -39,9 +39,13 @@ where mutations.json is a list of objects:
       "replace": "..."}]
 
 Each mutation is applied alone, the target rebuilt, the test run, and the
-source restored -- in a `finally`, so an exception cannot leave a mutated tree
-behind.  Exit status is non-zero if any mutation went UNCAUGHT, which is the
-result worth failing on: an uncaught mutation is an untested claim.
+source restored.  ALL OF THAT HAPPENS IN A COPY of the tree, under $TMPDIR:
+this script never writes to the tree you are working in, so no way of killing
+it can leave a deliberate defect in your source.  See "THE RUN HAPPENS IN A
+COPY" below for what that costs and why a plain copy rather than hardlinks.
+
+Exit status is non-zero if any mutation went UNCAUGHT, which is the result
+worth failing on: an uncaught mutation is an untested claim.
 
 TWO OTHER KINDS OF ENTRY
 
@@ -75,24 +79,30 @@ and passes: the first tells you nothing about the tests.
 
 import argparse
 import atexit
+import glob
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 
 #
 # OPERATE ON THIS SCRIPT'S OWN TREE, whatever the caller's directory is.
 #
-# Every path below is relative, `make` inherits the cwd, and the restore in
-# the `finally` writes back to a relative path too.  Several worktrees of this
-# repository exist side by side and are edited at the same time; run from the
-# wrong one and this mutates another tree's source and rebuilds another tree's
-# objects, with the restore landing there as well.  Nothing about the output
-# would say so.
+# Every path below is relative and `make` inherits the cwd.  Several worktrees
+# of this repository exist side by side and are edited at the same time; run
+# from the wrong one and this reads another tree's source and reports on
+# another tree's objects.  Nothing about the output would say so.
 #
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Since the mutation itself now happens in a copy, this line decides which tree
+# gets COPIED rather than which tree gets written -- a smaller stake than it
+# used to be, and still the one that decides whose verdicts these are.
+#
+REAL_TREE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(REAL_TREE)
 
 
 #
@@ -120,18 +130,19 @@ RUN_TIMEOUT = 120
 
 
 #
-# AND THE RESTORE HAS TO SURVIVE BEING KILLED.
+# SIGTERM, AND WHAT IT IS STILL FOR.
 #
-# The source is restored in a `finally`, which covers an exception and a
-# Ctrl-C -- SIGINT raises KeyboardInterrupt -- and does NOT cover SIGTERM,
-# which terminates the interpreter outright.  So `kill` on a sweep that is
-# stuck leaves the tree carrying whichever mutation was live, and the next
-# thing anyone builds is a mutant.  That cost an hour: `t_v34hshak` hung, a
-# clean rebuild hung the same way, and the source looked right because the
-# mutation was forty lines from the function being examined.
+# This handler was the tree's safety net: the source was restored in a
+# `finally`, which covers an exception and a Ctrl-C -- SIGINT raises
+# KeyboardInterrupt -- and does NOT cover SIGTERM, which terminates the
+# interpreter outright, so `kill` on a stuck sweep left the tree carrying
+# whichever mutation was live.  That cost an hour once, and the `finally` was
+# never enough anyway, which is why the run now happens in a copy.
 #
-# Turning SIGTERM into an exception is enough -- `finally` then runs and the
-# tree is clean whichever way the sweep ends.
+# It stays because it is now what makes the COPY get cleaned up: an `atexit`
+# handler does not run on a SIGTERM either, and turning the signal into an
+# exception gets both the restore and the `shutil.rmtree` run.  `kill` on a
+# sweep leaves nothing behind; only SIGKILL leaves the directory.
 #
 def _term(signum, frame):
     raise KeyboardInterrupt("killed by signal %d" % signum)
@@ -175,24 +186,184 @@ def build_and_run(target, test):
 SUITES = "test/mutations/suites.json"
 
 #
-# RUNNING A SUITE IN PARALLEL, AND WHY IT NEEDS A TREE PER WORKER
+# THE RUN HAPPENS IN A COPY.  THE TREE YOU ARE WORKING IN IS NEVER WRITTEN.
 #
-# A mutation is: write the mutant over the source, build, run, put the source
-# back.  That is inherently serial IN ONE TREE -- two workers would be writing
+# Applying a mutation is: write the mutant over the source, build, run, put the
+# source back.  The restore was a `finally`, which covers an exception and --
+# with the handler above -- a SIGTERM, and does NOT cover SIGKILL, a session
+# teardown, or the machine dying.  What survived one of those was a source file
+# holding a deliberate defect whose label reads exactly like a plausible
+# reconstruction error ("rxstate and txstate offsets transposed"), and since
+# EVERY test binary links ALL of `src/` (mutsnap.py's CLOSURE note), ONE stray
+# mutant makes EVERY suite's verdicts meaningless.  Three of those in one
+# session cost two full re-record runs and looked convincingly like a
+# concurrency bug.
+#
+# So the mutating half of this script copies what a build needs into a
+# directory under $TMPDIR, chdirs into it, and does everything there.  A
+# SIGKILL now leaves a stale temp directory, which is garbage -- a different
+# kind of thing from a corrupted tree, and one no later run can be misled by.
+#
+# MEASURED on the tree this comment was written against, twelve cores:
+#
+#     cp -a Makefile src include test tools docs      20 ms    9.7 MB
+#     + build/ minus the linked test binaries         30 ms     21 MB total
+#     first `make` in the copy (a link, no compiles) 128 ms
+#     ... where a cold build of the same target is   1.38 s
+#
+# so setting a copy up costs about 180 ms, and it REPLACES the 1.4 s cold build
+# every shard used to do.  END TO END IT IS FASTER, not a tax: `cadence`,
+# `pulse` and `dilpack` run back to back -- the pessimal case, three small
+# suites where fixed costs are most of the time -- take
+#
+#     in place, as this file was          13.0 s   12.5 s
+#     in a copy, as it is now              9.9 s   10.3 s
+#
+# because the 180 ms is more than paid for by dropping the restore-and-rebuild
+# that used to follow the last mutation.  That rebuild existed to leave the
+# REAL tree's binaries matching its source; a copy about to be deleted does not
+# need it, and it was a full build-test-and-`make strings` cycle, ~1.4 s.
+# A large suite amortises the 180 ms to nothing, so this is the worst case.
+#
+# A PLAIN COPY, NOT `cp -al`.  Hardlinks are the obvious optimisation -- 13 ms
+# against 33 -- and they are wrong three ways.  `open(path, "w")` on a
+# hardlinked file truncates THROUGH the link into the original, so the bug
+# relocates rather than goes away: `os.replace` would fix this file's own
+# writes and not the compiler's, an editor's, or any other writer's.  `cp -al`
+# cannot cross filesystems, and /tmp being the same volume as the tree is an
+# accident of this machine -- it is tmpfs on plenty of others.  And it buys
+# 11 ms.
+#
+# `build/` IS COPIED AND MUST NOT BE SHARED: the compiler writes objects by
+# truncation, so a shared build/ would corrupt the parent's while it was being
+# read.  What is copied is every object; what is NOT copied is the 129 linked
+# binaries directly under `build/test/`, which are 296 MB of the 309 MB and all
+# but one of them useless to any one suite.  The one that is wanted gets linked
+# in the copy, in the 128 ms above.
+#
+# THE LIST IS SIZED TO WHAT `build_and_run` ACTUALLY INVOKES, which is `make
+# <the suite's test binary>` and `make strings` -- the latter runs
+# `tools/debugaudit.py`, which is why `tools/` is here.  `docs/` is NOT: no
+# tool either of those two targets runs opens it (coverage.py only NAMES a doc,
+# in a comment).  A target added to `build_and_run` later that does read it
+# will fail loudly and this list is where to fix it.
+#
+COPY = ("Makefile", "src", "include", "test", "tools")
+WORKDIR_PREFIX = "mutate-"
+
+
+def _cp(paths, dest):
+    """`cp -a`, because 20 ms of it is not worth reimplementing in Python."""
+    if paths:
+        subprocess.run(["cp", "-a"] + list(paths) + [dest], check=True)
+
+
+def reap_stale_workdirs():
+    """Delete copies a SIGKILLed run left behind.  Only ones whose pid is gone.
+
+    The dangerous direction does not exist: a running copy's owner is alive by
+    definition, so `os.kill(pid, 0)` succeeds and the directory is skipped.  A
+    pid that has been REUSED reads as alive, which errs towards keeping
+    garbage.  PermissionError likewise means the process exists.
+    """
+    for d in glob.glob(os.path.join(tempfile.gettempdir(),
+                                    WORKDIR_PREFIX + "*")):
+        m = re.match(WORKDIR_PREFIX + r"(\d+)-", os.path.basename(d))
+        if not m or not os.path.isdir(d):
+            continue
+        try:
+            os.kill(int(m.group(1)), 0)
+        except ProcessLookupError:
+            shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
+def tree_relative(p, what):
+    """Spell a path relative to the tree, so that it lands in the COPY.
+
+    AN ABSOLUTE PATH SURVIVES THE CHDIR and goes on naming the real tree, which
+    would restore the exact defect this file has just stopped having -- and a
+    run doing it would look completely ordinary, which is the shape of every
+    bug in `docs/method/gates.md`.  `--suite` reads relative paths out of
+    suites.json and cannot hit this; the three-positional-argument form is
+    where someone can type one.
+    """
+    rel = os.path.relpath(os.path.abspath(p), REAL_TREE)
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        sys.exit("mutate.py: the %s is outside the tree, so it cannot be "
+                 "mutated in a copy of it: %s" % (what, p))
+    return rel
+
+
+def enter_workdir():
+    """Copy what a build needs into a temp dir, chdir into it, return its path.
+
+    Everything after this point -- the mutation, the build, the test run, the
+    restore -- happens inside the copy.
+    """
+    reap_stale_workdirs()
+    #
+    # $BLOB is resolved HERE, while the cwd is still the real tree.  The
+    # Makefile's default is the RELATIVE `../slmodemd/dsplibs.o` and an
+    # environment value wins over it, so both spellings have to be made
+    # absolute or the copy compiles and links perfectly and then dies inside
+    # `make strings`, which is the late and confusing place to find out.
+    #
+    os.environ["BLOB"] = os.path.abspath(
+        os.environ.get("BLOB") or os.path.join("..", "slmodemd", "dsplibs.o"))
+    d = tempfile.mkdtemp(prefix=WORKDIR_PREFIX + "%d-" % os.getpid())
+    #
+    # Registered on the ABSOLUTE path and before the chdir, because atexit runs
+    # after it.  Same reason the lock below is absolute.
+    #
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
+    _cp([p for p in COPY if os.path.exists(p)], d)
+    if os.path.isdir("build"):
+        os.makedirs(os.path.join(d, "build"))
+        _cp([os.path.join("build", e) for e in sorted(os.listdir("build"))
+             if e != "test"], os.path.join(d, "build"))
+        bt = os.path.join("build", "test")
+        if os.path.isdir(bt):
+            os.makedirs(os.path.join(d, bt))
+            _cp([os.path.join(bt, e) for e in sorted(os.listdir(bt))
+                 if os.path.isdir(os.path.join(bt, e))], os.path.join(d, bt))
+    #
+    # `third_party/spandsp` is a real 36 MB directory in one tree and a symlink
+    # to that in every worktree.  Neither is copied: the copy gets an ABSOLUTE
+    # symlink to whatever it really is.  That is what lets a copy live under
+    # /tmp at all -- the shard trees this replaced had to be SIBLINGS of the
+    # real tree, because a RELATIVE symlink only resolves at the same depth and
+    # a worker elsewhere built everything and then died naming spandsp.
+    #
+    sp = os.path.join("third_party", "spandsp")
+    if os.path.exists(sp):
+        os.makedirs(os.path.join(d, "third_party"), exist_ok=True)
+        os.symlink(os.path.realpath(sp), os.path.join(d, sp))
+    os.chdir(d)
+    #
+    # STDERR, not stdout.  Three separate parsers read a child's stdout here --
+    # mutsnap.py's verdict regexes, run_parallel's SHARD_MARK, run_all's
+    # "mutations:" -- and none of them should have to know about this line.
+    #
+    sys.stderr.write("mutate.py: working in %s\n" % d)
+    return d
+
+
+#
+# RUNNING A SUITE IN PARALLEL
+#
+# A mutation is inherently serial IN ONE TREE -- two workers would be writing
 # the same file, which is finding 349's accident on purpose -- and it is why a
 # 749-mutation suite takes a quarter of an hour on a twelve-core machine that
 # is idle for all of it.  Measured: 0.67 s to rebuild and relink one
 # translation unit, 0.73 s to run the test.
 #
 # Mutations are INDEPENDENT of one another, so the fix is a tree per worker
-# rather than a lock.  The source tree without `.git` and the build
-# directories is 7.8 MB and a build directory for one test binary is 7.5 MB,
-# so eight workers cost about 120 MB of temporary disk and no cleverness.
-#
-# The workers are SIBLINGS of the real tree, not under /tmp, because
-# `third_party/spandsp` is a RELATIVE symlink (`../../claude_re/...`) that
-# only resolves at the same depth.  A worker under /tmp builds everything,
-# then dies naming spandsp -- the same trap a fresh worktree has.
+# rather than a lock -- and now that EVERY run works in a copy, that is no
+# longer a special case.  `--jobs N` starts N ordinary runs with `--shard i/N`
+# and each makes its own copy the same way a serial run does; there is one
+# piece of copy code and both paths go through it.
 #
 # A shard runs the ordinary serial path below; the classification is not
 # duplicated or reimplemented, it just hands its four lists back as JSON.
@@ -201,7 +372,6 @@ SUITES = "test/mutations/suites.json"
 # kind of thing that drifts apart from the first.
 #
 SHARD_MARK = "##SHARD##"
-COPY_SKIP = (".git", "build*")
 
 
 def report(total, uncaught, broken, equivalent, surprises, by):
@@ -239,76 +409,89 @@ def shard_of(muts, spec):
 
 
 #
-# A WORKER HAS TO EARN ITS SETUP.
+# A WORKER HAS TO EARN ITS SETUP -- AND THE PRICE HAS CHANGED.
 #
-# Copying the tree and doing one cold build costs a second or two per worker.
-# On a big suite that is nothing; on a small one it is the whole run, and
-# MEASURED, --jobs 4 over `cadence`, `pulse` and `dilpack` (6, 9 and 8
-# mutations) took 17.9 s against 11.2 s serial -- sharding made it 60%
-# SLOWER.  That matters because `--all --jobs 8` is the command someone will
-# reach for, and thirty of the forty-eight suites are that small.
+# THE MEASUREMENT THIS CONSTANT WAS SET FROM IS STALE.  It is kept here
+# because deleting it would only invite the next reader to re-derive it.  It
+# was taken against a fan-out that `shutil.copytree`d the WHOLE tree per worker
+# and then did a COLD BUILD in it -- a second or two each -- and it said:
+# --jobs 4 over `cadence`, `pulse` and `dilpack` (6, 9 and 8 mutations) took
+# 17.9 s against 11.2 s serial, so sharding three small suites was 60% SLOWER,
+# and thirty of the suites are that small.  Hence a floor of 12.
 #
-# So the fan-out degrades itself: a worker gets at least this many mutations
-# or it is not started, and one worker means the ordinary serial path.
+# A WORKER NOW COPIES THE OBJECTS TOO, so its first `make` is a link and not a
+# build: about 180 ms of setup where it used to be a second and a half.
+# Re-measured, same three suites, same machine, twice each:
 #
-MIN_PER_WORKER = 12
+#     serial                                  12.0 s   11.7 s
+#     --jobs 4, no floor at all                7.8 s    7.9 s
+#     --jobs 4, floor of 2 (as shipped)        8.0 s    8.3 s
+#     --jobs 4, floor of 4                    10.5 s   10.9 s
+#     --jobs 4, floor of 12 (the old value)     = serial, by construction
+#
+# So the cliff this constant existed to correct is GONE: on the exact suites
+# that motivated it, sharding is now a third FASTER rather than 60% slower, and
+# every floor above 2 costs time rather than saving it.  A worker earns its
+# setup at roughly ONE mutation, because what is left of the setup is the
+# baseline build-and-run each shard has to do anyway.
+#
+# It is kept at 2 as a TRIVIALITY GUARD and not as a cliff correction: starting
+# a process to run a single mutation is noise in the scheduler for no gain, and
+# 2 measures the same as no floor at all.  Anyone raising it again has the
+# table above to beat.
+#
+MIN_PER_WORKER = 2
 
 
 def run_parallel(args, jobs):
-    """Fan the suite out over `jobs` sibling trees and merge the verdicts."""
-    import shutil
-    here = os.getcwd()
-    root = os.path.dirname(here)
-    stamp = "%s-%d" % (os.path.basename(here), os.getpid())
-    trees, procs = [], []
-    try:
-        for i in range(jobs):
-            d = os.path.join(root, ".mutshard-%s-%d" % (stamp, i))
-            shutil.rmtree(d, ignore_errors=True)
-            shutil.copytree(here, d, symlinks=True,
-                            ignore=shutil.ignore_patterns(*COPY_SKIP))
-            trees.append(d)
-        cmd = [sys.executable, "tools/mutate.py"]
-        cmd += (["--suite", args.suite] if args.suite
-                else [args.source, args.test, args.mutations])
-        for i, d in enumerate(trees):
-            procs.append(subprocess.Popen(
-                cmd + ["--shard", "%d/%d" % (i, jobs)], cwd=d,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
-        uncaught, broken, equivalent, surprises = [], [], [], []
-        by, total, failed = {"test": 0, "strings": 0, "hang": 0}, 0, []
-        for i, p in enumerate(procs):
-            out = p.communicate()[0]
-            blob = [l for l in out.split("\n") if l.startswith(SHARD_MARK)]
-            if not blob:
-                #
-                # A shard that dies is NOT a shard with nothing to report.
-                # Losing one silently would drop an eighth of the suite and
-                # still print a total, which is the failure mode findings 347
-                # and 540 are both about.
-                #
-                failed.append((i, out[-2000:]))
-                continue
-            r = json.loads(blob[-1][len(SHARD_MARK):])
-            print(r["text"], end="")
-            uncaught += r["uncaught"]
-            broken += [tuple(x) for x in r["broken"]]
-            equivalent += [tuple(x) for x in r["equivalent"]]
-            surprises += r["surprises"]
-            total += r["total"]
-            for k in by:
-                by[k] += r["by"][k]
-        if failed:
-            for i, tail in failed:
-                print("\n  SHARD %d DIED -- its mutations were NOT run:\n%s"
-                      % (i, tail))
-            print("\n  %d of %d shards died; this run is not a result."
-                  % (len(failed), jobs))
-            return 2
-        return report(total, uncaught, broken, equivalent, surprises, by)
-    finally:
-        for d in trees:
-            shutil.rmtree(d, ignore_errors=True)
+    """Fan the suite out over `jobs` shards and merge the verdicts.
+
+    Each shard is an ordinary run with `--shard i/N`; it makes its own copy
+    through `enter_workdir` exactly as a serial run does, so there is no
+    second copy path here to drift away from the first.
+    """
+    #
+    # __file__ rather than a relative `tools/mutate.py`, for the reason
+    # `run_all` gives below: the module-level chdir has already happened.
+    #
+    cmd = [sys.executable, os.path.abspath(__file__)]
+    cmd += (["--suite", args.suite] if args.suite
+            else [args.source, args.test, args.mutations])
+    procs = [subprocess.Popen(cmd + ["--shard", "%d/%d" % (i, jobs)],
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True)
+             for i in range(jobs)]
+    uncaught, broken, equivalent, surprises = [], [], [], []
+    by, total, failed = {"test": 0, "strings": 0, "hang": 0}, 0, []
+    for i, p in enumerate(procs):
+        out = p.communicate()[0]
+        blob = [l for l in out.split("\n") if l.startswith(SHARD_MARK)]
+        if not blob:
+            #
+            # A shard that dies is NOT a shard with nothing to report.
+            # Losing one silently would drop an eighth of the suite and
+            # still print a total, which is the failure mode findings 347
+            # and 540 are both about.
+            #
+            failed.append((i, out[-2000:]))
+            continue
+        r = json.loads(blob[-1][len(SHARD_MARK):])
+        print(r["text"], end="")
+        uncaught += r["uncaught"]
+        broken += [tuple(x) for x in r["broken"]]
+        equivalent += [tuple(x) for x in r["equivalent"]]
+        surprises += r["surprises"]
+        total += r["total"]
+        for k in by:
+            by[k] += r["by"][k]
+    if failed:
+        for i, tail in failed:
+            print("\n  SHARD %d DIED -- its mutations were NOT run:\n%s"
+                  % (i, tail))
+        print("\n  %d of %d shards died; this run is not a result."
+              % (len(failed), jobs))
+        return 2
+    return report(total, uncaught, broken, equivalent, surprises, by)
 
 
 def run_all(jobs=None):
@@ -353,14 +536,13 @@ def run_all(jobs=None):
 
 
 #
-# REFUSE TO START ON A TREE SOMEBODY ELSE IS MUTATING.
+# REFUSE TO START ON A TREE THAT IS ALREADY WRONG.
 #
-# This file patches `src/` IN PLACE and restores in a `finally`.  That covers
-# an exception and a SIGTERM, and it does NOT cover the process being killed
-# outright -- a session teardown, a SIGKILL, a machine losing power.  What is
-# left behind is a source file holding a deliberate defect, and the labels are
-# things like "the shift count is not masked to five bits": indistinguishable
-# from a plausible reconstruction error.
+# This file no longer patches `src/` in place, so it can no longer be the thing
+# that leaves a mutant behind.  This check stays anyway, because it is not
+# really about this file: what it detects is a tree carrying a deliberate
+# defect for ANY reason -- a run killed before the copy landed, a half-applied
+# hand edit, a stale checkout, a merge that took the wrong side.
 #
 # EVERY test binary links ALL of `src/` (mutsnap.py's CLOSURE note), so ONE
 # stray mutant anywhere makes EVERY suite's verdicts meaningless.  That is not
@@ -369,8 +551,9 @@ def run_all(jobs=None):
 # identical counts, and the temptation was to blame concurrency and lower
 # --jobs.  Lowering --jobs would have hidden it.
 #
-# So: check before running, and hold a lock while running.  Both are cheap and
-# both fail loudly.  Finding 705 is the hazard; this is the guard.
+# It runs in the REAL tree and BEFORE anything is copied, so a tree in that
+# state is never the thing that gets copied.  50 ms over 63 suites.  Finding
+# 705 is the hazard; this is the guard that survives the copy.
 #
 LOCK = os.path.join("test", "mutations", ".running")
 
@@ -401,25 +584,44 @@ def live_mutants():
     return out
 
 
-def preflight(shard):
-    """Refuse a dirty or already-running tree.  Shards are inside a copy."""
-    if shard:
-        return
+def preflight():
+    """Refuse to start against a tree that already holds a live mutant.
+
+    Every invocation runs this, shards included, because it is 50 ms and it is
+    the one hazard a copy cannot help with: copying a corrupted tree gives you
+    a corrupted copy and verdicts that mean nothing.
+    """
     bad = live_mutants()
-    if bad:
-        sys.stderr.write(
-            "mutate.py: REFUSING TO RUN -- this tree already holds %d live "
-            "mutant(s)\n" % len(bad))
-        for path, label in bad:
-            sys.stderr.write("    %s: %s\n" % (path, label))
-        sys.stderr.write(
-            "  A killed run left them behind.  Every test binary links all of\n"
-            "  src/, so any verdict measured now is meaningless.  Restore with\n"
-            "  `git checkout -- <path>` and check `git status` before retrying.\n")
-        sys.exit(2)
-    if os.path.exists(LOCK):
+    if not bad:
+        return
+    sys.stderr.write(
+        "mutate.py: REFUSING TO RUN -- this tree already holds %d live "
+        "mutant(s)\n" % len(bad))
+    for path, label in bad:
+        sys.stderr.write("    %s: %s\n" % (path, label))
+    sys.stderr.write(
+        "  Every test binary links all of src/, so any verdict measured now\n"
+        "  is meaningless.  This runner works in a copy and cannot have left\n"
+        "  these, so look for a hand edit, a bad merge, or a run from before\n"
+        "  that change.  Restore with `git checkout -- <path>` and check\n"
+        "  `git status` before retrying.\n")
+    sys.exit(2)
+
+
+def take_lock(root=None):
+    """One run per COPY.
+
+    This was one run per TREE, and it had to be: two runs writing one source
+    file produce nonsense.  Now that each run mutates its own copy, two runs in
+    one tree are CORRECT and refusing them would be the regression -- so the
+    lock moved into the copy along with the mutation, which is the relaxation
+    the hazard allows rather than a weakening of it.  What it still catches is
+    a copy being used twice, and it still reports a lock whose owner has died.
+    """
+    lock = os.path.join(root or os.getcwd(), LOCK)
+    if os.path.exists(lock):
         try:
-            pid = int(open(LOCK).read().strip())
+            pid = int(open(lock).read().strip())
         except (OSError, ValueError):
             pid = -1
         alive = False
@@ -430,13 +632,18 @@ def preflight(shard):
             except OSError:
                 alive = False
         if alive:
-            sys.exit("mutate.py: another run is in progress (pid %d).  Two "
-                     "runs mutating one tree produce nonsense; wait for it or "
-                     "kill it with SIGTERM so its restore runs." % pid)
+            sys.exit("mutate.py: another run is already using %s (pid %d).  "
+                     "Two runs mutating one copy produce nonsense; wait for it "
+                     "or kill it with SIGTERM so its restore runs."
+                     % (os.path.dirname(lock), pid))
         sys.stderr.write("mutate.py: stale lock from pid %d, taking it\n" % pid)
-    with open(LOCK, "w") as f:
+    with open(lock, "w") as f:
         f.write("%d\n" % os.getpid())
-    atexit.register(lambda: os.path.exists(LOCK) and os.remove(LOCK))
+    #
+    # Absolute, and captured now: this handler runs at interpreter exit, by
+    # which time the cwd may be a directory that no longer exists.
+    #
+    atexit.register(lambda: os.path.exists(lock) and os.remove(lock))
 
 
 def main():
@@ -461,13 +668,13 @@ def main():
                          "is marked SUBSET and cannot be recorded as a "
                          "baseline")
     ap.add_argument("--jobs", type=int, metavar="N",
-                    help="run the suite over N sibling trees at once; each "
-                         "costs about 15 MB of temporary disk and the "
-                         "verdicts are identical to a serial run")
+                    help="run the suite over N copies at once; each costs "
+                         "about 21 MB of temporary disk and the verdicts are "
+                         "identical to a serial run")
     ap.add_argument("--shard", metavar="I/N",
                     help=argparse.SUPPRESS)   # set by --jobs on its workers
     args = ap.parse_args()
-    preflight(args.shard)
+    preflight()
 
     if args.all:
         return run_all(args.jobs)
@@ -488,6 +695,19 @@ def main():
         want = max(1, min(args.jobs, n // MIN_PER_WORKER))
         if want > 1:
             return run_parallel(args, want)
+
+    #
+    # THE LEAF COPIES, AND ONLY THE LEAF.  `--all` and `--jobs` do not mutate
+    # anything themselves; they spawn children that each do this for
+    # themselves.  A parent that copied as well would have its children copy
+    # the copy, and `run_all` would resolve `__file__` inside a temp directory
+    # that is about to be deleted.
+    #
+    args.source = tree_relative(args.source, "source")
+    args.test = tree_relative(args.test, "test binary")
+    args.mutations = tree_relative(args.mutations, "mutation file")
+    enter_workdir()
+    take_lock()
 
     entries = json.load(open(args.mutations))
     muts = [m for m in entries if "find" in m]
@@ -531,8 +751,11 @@ def main():
     if stdout:
         stdout.__enter__()
 
-    # Everything below runs against a mutated tree; the restore has to happen
-    # even if the build dies or the user interrupts.
+    # Everything below runs against a mutated COPY.  The restore is kept so
+    # that the copy is self-consistent at every point a reader might look at
+    # it; what is NOT kept is the rebuild that used to follow it, which existed
+    # to leave the real tree's binaries matching its source and is 0.2 s of
+    # pure waste in a directory about to be deleted.
     uncaught, broken, equivalent, surprises = [], [], [], []
     by = {"test": 0, "strings": 0, "hang": 0}
     try:
@@ -605,7 +828,6 @@ def main():
                     print("            %s" % f)
     finally:
         open(args.source, "w").write(good)
-        build_and_run(target, args.test)
         if stdout:
             stdout.__exit__(None, None, None)
 
