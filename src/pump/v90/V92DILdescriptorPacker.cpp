@@ -2,6 +2,9 @@
  * V92DILdescriptorPacker.cpp -- pack a tagV90DILdescriptor into the V.92
  * form of its bit stream.
  *
+ * Finding 837 is the record entry for this file; this comment is still the
+ * full derivation and 837 is the summary that makes it findable.
+ *
  * Reconstructed from dsplibs.o, 4,160 bytes at 0x50020.  A leaf apart from
  * its diagnostics: its only relocations are `dsplibs_debug_level`,
  * `dsplibs_debug_printf`, three floats in .rodata.cst4 and eight format
