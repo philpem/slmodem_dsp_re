@@ -159,10 +159,13 @@ Three constants ride on that tick and they do **not** move together:
   measured *at the line terminals* — which is why the pipeline latency is
   preloaded into the counter in the first place. At 8000 Hz with a four-sample
   tick, 40 ms is **80** ticks, so `0x5f` becomes `0x4f`. Get this wrong and the
-  reversal lands outside the Recommendation's ±1 ms.
-- `0x18c` in arm 49's round-trip estimate is the same 40 ms in samples
-  (§11.2.1.2.4's "minus 40 ms"), and is 396 where 40 ms is 384. The
-  twelve-sample residual is unexplained; understand it before rescaling it.
+  reversal lands outside the Recommendation's ±1 ms. **There are three
+  `0x5f` sites** — 0x6685d (arms 47/56), 0x65ba4 (arm 55) and 0x66027 (arm 58)
+  — and only the first two are the turnaround; arm 58's is unidentified and
+  must move with them anyway.
+- `0x18c` in arm 49's round-trip estimate has the shape of §11.2.1.2.4's
+  "minus 40 ms" in samples, but it is 396 where 40 ms is 384. The identification
+  is **not** made: understand the twelve samples before rescaling it.
 
 **Retarget:** decide the tick first — keeping four samples keeps `>> 2`
 verbatim and forces `0x5f`; keeping the tick a 2400-baud symbol is impossible

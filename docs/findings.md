@@ -35505,19 +35505,28 @@ Call the unit a **tick** below.  1 tick = 4 samples = 1/2400 s = 0.41667 ms.
 
 ### 1041. `0x5f` IS FORTY MILLISECONDS -- V.34 11.2.1.1.3 AND 11.2.1.2.5's TONE PHASE-REVERSAL TURNAROUND -- AND THE EXIT IS AT 96, NOT 95
 
-**The off-by-one first, because the number that matters is the one the object
-never stores.**  All three sites are `n = counter + 1; if (n <= 0x5f) store n
-and stay`.  The state is therefore left on the step at which `n` would be
-**96**, and `counter` is never seen holding 96.  Finding 960's "the answerer
-must sit out `0x5f - filtdelay` invocations" is one too few: the wait is
-**96 - filtdelay** ticks, and the total from the reference event is **96 ticks
-exactly, independent of `filtdelay`** -- which is the whole point of the
-preload.
+**The counting convention first, because the number that matters is the one
+the object never stores.**  All three sites are `n = counter + 1;
+if (n <= 0x5f) store n and stay`, so the state is left on the step at which
+`n` would be **96**, and `counter` is never seen holding 96.  Whether that
+step counts as "sat out" is a convention, so findings 960 and 1022's
+`0x5f - filtdelay` is not WRONG so much as counting the other way -- **but
+the quantity the specification is about is the total from the reference event,
+and that total is 96 ticks exactly, independent of `filtdelay`**, which is the
+whole point of the preload.
 
     96 ticks  =  384 samples  =  384 / 9600 s  =  40.000 ms
 
-**THREE ARMS, AND EVERY ONE OF THEM REVERSES A TONE PHASE AT THAT INSTANT.**
-Read off `v34hshak.c`, whose arms were written before this was asked:
+**AND 40.000 ms IS NOT WHAT PICKS 96 OVER 95.**  The tolerance is +/- 1 ms,
+which is +/- 2.4 ticks, so 95 ticks (39.583 ms) satisfies the Recommendation
+just as well; the specification cannot discriminate the two and is not being
+asked to.  What picks 96 is the instruction sequence.  The 40 ms below is
+evidence about what the constant MEANS, not about whether it is 95 or 96.
+
+**THREE ARMS CARRY `0x5f`, AND TWO OF THEM REVERSE A TONE PHASE AT THAT
+INSTANT.**  Read off `v34hshak.c`, whose arms were written before this was
+asked.  The third, arm 58, is a different use of the same constant and is
+treated below:
 
 | site | microstate | what crossing 96 does |
 |---|---|---|
@@ -35529,6 +35538,16 @@ and arm 49 `RX_PHASE1_ANS` (0x66b13) is 47's preload, the site finding 1022
 already names.  So the shape is a matched pair each way: the arm that DETECTS
 the far end's phase reversal preloads the counter with `filtdelay`, and the arm
 that EMITS this end's reversal counts to 96 and toggles `+0x358c` bit 0.
+
+**ARM 58's `0x5f` IS A THIRD USE AND IS NOT IDENTIFIED.**  It reverses
+nothing.  Its counter is NOT preloaded with `filtdelay`, it counts from
+wherever the previous state left it, and crossing 96 only makes the arm
+willing to believe `fsk.sr == 1` as the Tone A phase reversal -- at which
+point it does the preload for arm 55.  So it reads as a minimum dwell before a
+detection is accepted rather than as a turnaround, and 96 ticks would then be
+40 ms of "too early to be real".  **That is a shape, not a derivation**, and it
+is in 1046 as unsettled: it does not change what 0x5f means in arms 47 and 55,
+but it does mean `0x5f` has more than one job and a retarget must move both.
 
 **The specification, verbatim** (`itu-specs/T-REC-V.34-199802.pdf`, converted
 with `pdftotext -layout`):
@@ -35565,10 +35584,17 @@ argument is documented in this tree as "the round-trip delay **in samples**".
 11.2.1.2.4: *"RTDEa is the time interval between sending the Tone A phase
 reversal at the line terminals and receiving the Tone B phase reversal at the
 line terminals **minus 40 ms**."*  `(n - filtdelay)` removes the same pipeline
-latency, `* 4` converts ticks to samples, and `- 0x18c` is the "minus 40 ms".
-**The residual is recorded rather than explained**: 0x18c is 396 samples =
-41.25 ms = 99 ticks, three ticks MORE than the 96 the same paragraph pair
-implies.  Nothing here accounts for the twelve samples.
+latency and `* 4` converts ticks to samples, so **the SHAPE matches** -- a
+line-referenced interval with a constant subtracted, handed to a function whose
+argument this tree documents as a round-trip delay in samples.
+
+**It is not claimed as an identification, for two reasons.**  0x18c is 396
+samples = 41.25 ms = 99 ticks, three ticks MORE than the 96 the same paragraph
+pair gives, and nothing here accounts for the twelve samples -- a 3% miss on a
+fit to a single number, which is the shape findings 962 and 1021 went wrong
+in.  And it would additionally require arm 49's counter to start at the instant
+this end's Tone A phase reversal was emitted, which was assumed and not
+established.  Both are in 1046.
 
 ### 1042. `+34` IS THE PUMP'S OWN PIPELINE LATENCY, 136 SAMPLES, AND IT IS NOT PROTOCOL TIMING
 
@@ -35697,10 +35723,31 @@ on all three divides and not on the shift.
     0x092b9f             _send_silence_state_init
 ```
 
-**None is in code this tree has reconstructed** -- `modulatevector` and
-`_send_silence_state_init` are declared and not written -- so there is nothing
-to correct and the six sites are a note for whoever writes them: the source
-said `/ 2` and not `>> 1`.
+**One of the six IS in reconstructed code, and it AGREES.**  Checked with `nm
+--defined-only` over the 298 built objects rather than by grepping `src/` --
+which is the point, because a grep for `modulatevector` finds the header and
+three comments before it finds the definition, and a `| head` on it hides the
+definition entirely.  That mistake was made here first and caught second:
+
+| site | symbol | in `src/`? |
+|---|---|---|
+| 0x03b6f1, 0x03b9d1 | `V90Equalizer::V90Equalizer` | **no** -- `V90Equalizer.cpp` writes three of the class's twenty-seven members and the constructor is not one of them |
+| 0x03d022 | `V90TRN2Designer::V90TRN2Design` | **no** -- the class is forward-declared in `V90Demodulator.h` and nowhere defined |
+| 0x092b9f | `_send_silence_state_init` | **no** |
+| 0x059f68, 0x059f8a | `modulatevector` | **YES**, `v34shell.c:2020` |
+
+`modulatevector`'s two sites are the seven-halving bisection over `t3` at
+0x59f5c-0x59f95, and `v34shell.c:2065` and `:2068` spell them
+
+```
+    mid = (unsigned short)(short)((lo + hi)  / 2);
+    mid = (unsigned short)(short)((hi + mid) / 2);
+```
+
+`/ 2` on a signed int, which is what the object's fixup requires.  **So the
+sweep's one testable site is a confirmed agreement, not an untested claim**,
+and the other four are a note for whoever writes them: the source said `/ 2`
+and not `>> 1`.
 
 **And the converse holds for everything this batch read.**  `filtdelay`'s
 `sar $0x2` (1021), `v34tx1_sbarseg`'s `sar $0xe` at 0x678f9 and
@@ -35751,7 +35798,14 @@ there and are still deliberate.
   derivation.  They are counted from the state's entry with the counter at
   zero, so they are the OPPOSITE latency compensation to 1041's preload:
   `filtdelay + K` waits for the pipeline to flush and then K ticks more.
-- **The 12 samples in `0x18c`.**  396 where 11.2.1.2.4's 40 ms is 384.
+- **The 12 samples in `0x18c`.**  396 where 11.2.1.2.4's 40 ms is 384, and
+  the identification also assumes arm 49's counter starts when this end's Tone
+  A phase reversal is emitted, which was not established.  Establishing that
+  is what would turn 1041's "the shape matches" into a derivation.
+- **Arm 58 `RX_PHASE1_CALL`'s own `0x5f`.**  A third use of the constant, not
+  preloaded and reversing nothing; it reads as a minimum dwell before a
+  detection is believed.  Unidentified, and it means a retarget has to move
+  every `0x5f`, not only the two 1041 explains.
 - **Whether the unit mixing at 0x68154 (1043) is observable.**  It is a latent
   defect in the blob at every rate but 2400, and this tree has no test that
   reaches `PPSEG` at another rate.  It must be REPRODUCED, not repaired.

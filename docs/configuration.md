@@ -291,10 +291,12 @@ so a LARGER I/O delay is a SHORTER wait** — a larger I/O delay is already part
 of the 40 ms. That is the whole mechanism, and it is why the knob works in the
 direction it does (findings 960, 1022, 1041).
 
-> Findings 960 and 1022 say the wait is `0x5f - filtdelay`. It is one more
-> than that: the compare is `n = counter + 1; if (n <= 0x5f) stay`, so the
-> state is left at `n = 96` and `counter` is never seen holding 96 — finding
-> 1041.
+> Findings 960 and 1022 say the wait is `0x5f - filtdelay`, which is the same
+> thing counted the other way: the compare is `n = counter + 1;
+> if (n <= 0x5f) stay`, so the state is left on the step at which `n` would be
+> 96 and `counter` is never seen holding 96. Whether that exiting step is
+> "sat out" is a convention. What is *not* a convention is the total from the
+> reference event, which is 96 steps whatever `filtdelay` is — finding 1041.
 
 | `MDMPRM_IODELAY` | `filtdelay` | V.34 |
 |---|--:|---|
