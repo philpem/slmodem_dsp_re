@@ -1,0 +1,132 @@
+[
+ {
+  "note": "`vpcm_run`, the V.PCM datapump's `.process`.  It is not the modem: it is a block quantiser, two sample queues, a bit pipe in both directions and a seventeen-arm dispatch, with the whole of V.34, V.90, V.92 and K56Flex behind one call to `VPcmV34Progress` (findings 980, 982).  So what this set has to prove is that the queueing arithmetic is driven, that the bit pipe carries in both directions and remembers its count, that the dispatch fires on a CHANGE and the connect report on a TRANSITION, and that the connect arm tells the host the right two things in the right order.  The binary is `t_vpcmrun`, the four-way comparison of a connecting V.34 call (finding 984); `t_vpcmguard` is the other half of the function and has its own set."
+ },
+ {
+  "note": "THE FIVE EQUIVALENTS ARE THE POINT OF THIS SET, AND FOUR OF THEM ARE ONE FACT.  The host contract fixes `count` at `m->frag` == 48 (finding 964, vpcm.h), 48 is a multiple of four and the input queue is empty on every block, so `nproc` is identically `count`, both input residues are identically zero and `in` is never rebound.  That makes the input queue dead code on every driver `slmodemd` has -- and a driver whose `frag` is not a multiple of four turns all four CAUGHT, which is exactly the alarm wanted and does not otherwise exist.  Finding 1000."
+ },
+ {
+  "note": "THREE ROWS OF FINDING 987'S TABLE ARE WRONG AND THIS SET IS WHY THEY WERE FOUND.  The OUTPUT queue is not dead: `outq.count` is a constant FOUR, not zero, so the compaction moves four samples every block and dropping it is CAUGHT (finding 1001).  The mute path is not unexercised: `vpcm_create` seeds the counter at 528 and the first eleven blocks of every call are silenced (finding 1002).  And `fout` holds whole numbers on every sample of all 8,000 blocks, so a SYMMETRIC rounding rule cannot be seen while an unconditional `+0.5` is caught at once -- the conversion's direction is pinned and its rounding rule is not observable here (finding 1003)."
+ },
+ {
+  "note": "THE TWO STALL MUTATIONS ARE UNCAUGHT AND NOT EQUIVALENT.  Both change behaviour for inputs the host contract permits -- nothing else resets `stall`, and the deadline is a specific block count -- so the reason they survive is that this call's trajectory never accumulates 3,000 unchanged code-0 blocks.  That is `the test does not cover it`, which mutate.py's docstring puts in the uncaught list rather than dressing up as an argument about the code."
+ },
+ {
+  "label": "the mute path is always taken",
+  "find": "\t\tif (s->mute > 0) {\n",
+  "replace": "\t\tif (1) {\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "`nbits` is not carried to the next block",
+  "find": "\t\t\ts->nbits = nbits;\n",
+  "replace": "\t\t\t(void)0;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the caller's block is drained one sample into the output queue",
+  "find": "\tsysdep_memcpy(out, s->outq.buf, (size_t)count * sizeof(short));\n",
+  "replace": "\tsysdep_memcpy(out, &s->outq.buf[1], (size_t)count * sizeof(short));\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the output queue is not compacted",
+  "find": "\tsysdep_memcpy(s->outq.buf, &s->outq.buf[count],\n\t\t      (size_t)(s->outq.count + nproc - count) * sizeof(short));\n",
+  "replace": "\t(void)0;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the connect arms go to mode 0 rather than mode 1",
+  "find": "\t\t\t\tcase VPCM_PROG_CONNECT_A:\n\t\t\t\tcase VPCM_PROG_CONNECT_B:\n\t\t\t\t\tmode = VPCM_MODE_CONNECTED;\n",
+  "replace": "\t\t\t\tcase VPCM_PROG_CONNECT_A:\n\t\t\t\tcase VPCM_PROG_CONNECT_B:\n\t\t\t\t\tmode = VPCM_MODE_IDLE;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the tx widening loop runs upward, so a store eats an unread byte",
+  "find": "\t\t\t\tfor (i = nbits - 1; i >= 0; i--)\n",
+  "replace": "\t\t\t\tfor (i = 0; i < nbits; i++)\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the connect report is not edge-triggered",
+  "find": "\t\t\tif (s->mode != mode) {\n",
+  "replace": "\t\t\tif (1) {\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the progress code is remembered wrong",
+  "find": "\t\t\ts->status = prog;\n",
+  "replace": "\t\t\ts->status = mode;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the two rate parameters are set in the other order",
+  "find": "\t\t\t\t\tmodem_set_param(s->dp.modem,\n\t\t\t\t\t\t\tMDMPRM_TX_RATE, txrate);\n\t\t\t\t\tmodem_set_param(s->dp.modem,\n\t\t\t\t\t\t\tMDMPRM_RX_RATE, rxrate);\n",
+  "replace": "\t\t\t\t\tmodem_set_param(s->dp.modem,\n\t\t\t\t\t\t\tMDMPRM_RX_RATE, rxrate);\n\t\t\t\t\tmodem_set_param(s->dp.modem,\n\t\t\t\t\t\t\tMDMPRM_TX_RATE, txrate);\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "float -> short adds a half before truncating",
+  "find": "\t\t\t\toutp[i] = (short)s->fout[i];\n",
+  "replace": "\t\t\t\toutp[i] = (short)(s->fout[i] + 0.5f);\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the session-type fallback picks V.90 rather than V.34",
+  "find": "\t\t\t\t\t\ts->dp.id = VPCM_DP_V34;\n",
+  "replace": "\t\t\t\t\t\ts->dp.id = VPCM_DP_V90;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the block quantisation is dropped",
+  "equivalent": true,
+  "why": "`count` is the host's `m->frag`, which vpcm.h and finding 964 fix at 48 for this datapump, and `pending` is `s->inq.count`, which the tail assigns `pending + count - nproc` -- zero whenever the quantisation is exact.  48 % 4 == 0, so it is exact on the first block and `pending` is zero for ever after; `((0 + 48) / 4) * 4` and `0 + 48` are the same 48 on every block.  Measured as well as argued: a probe asserting `nproc == 48` and one asserting `s->inq.count == 0` both survive the whole 8,000-block run.  The `/4*4` and the signed fixup the object pays for at 0x4187 are unreachable arithmetic on every driver `slmodemd` has, and a `frag` that is not a multiple of four makes this CAUGHT.",
+  "find": "\tint nproc = ((pending + count) / 4) * 4;\n",
+  "replace": "\tint nproc = pending + count;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the input residue is never copied back to the front of the queue",
+  "equivalent": true,
+  "why": "The guard is `pending + count != nproc` and the copy's length is `pending + count - nproc` -- the same quantity tested and then used.  With `count` == 48 the quantisation above is exact, so that quantity is identically zero: the guard is false on every block and the body it guards would be a memcpy of zero bytes if it ever ran.  This removes a branch that is never taken, not a copy that ever moves a sample, and `s->inq.count` is still assigned so the queue's own state is untouched.",
+  "find": "\tif (pending + count != nproc)\n\t\tsysdep_memcpy(s->inq.buf, in + nproc,\n",
+  "replace": "\tif (0)\n\t\tsysdep_memcpy(s->inq.buf, in + nproc,\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the float conversion reads the caller's buffer, not the queue",
+  "equivalent": true,
+  "why": "`in` is rebound to `s->inq.buf` in exactly one place, under `if (pending > 0)`, and `pending` is `s->inq.count`, which the tail leaves at zero on every block for the reason above.  So the rebinding never happens, `in` and `in_v` name one address throughout the function, and reading the parameter directly reads the same 48 shorts.  The object's 0x3eac rebinding is kept in the source because the object has it; this mutation is what says nothing in this tree drives it.",
+  "find": "\t\t\tfor (i = 0; i < nproc; i++)\n\t\t\t\ts->fin[i] = in[i];\n",
+  "replace": "\t\t\tfor (i = 0; i < nproc; i++)\n\t\t\t\ts->fin[i] = ((short *)in_v)[i];\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the receive bit mask is dropped",
+  "equivalent": true,
+  "why": "`& 1` is the identity on 0 and 1, and `rxbits` holds one BIT per int -- `VPcmV34Progress`'s contract in vpcm.h is `*nrx` bits recovered, and `modem_put_bits` is called with a width of 1 -- so the mask can only alter a value the callee is not permitted to produce.  THIS ONE RESTS ON A MEASUREMENT OF THE CALLEE rather than on arithmetic: a probe asserting `(s->rxbits[i] & ~1) == 0` over every recovered bit of the 8,000 blocks survives, so the range is measured and not assumed.  It stops holding the moment `VPcmV34Main.cpp` is reconstructed differently.",
+  "find": "\t\t\t\t\trb[i] = (unsigned char)\n\t\t\t\t\t\t(s->rxbits[i] & 1);\n",
+  "replace": "\t\t\t\t\trb[i] = (unsigned char)s->rxbits[i];\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "float -> short rounds half away from zero rather than truncating",
+  "equivalent": true,
+  "why": "Every value `VPcmV34Progress` writes into `fout` is a WHOLE NUMBER: a probe asserting `s->fout[i] == (float)(int)s->fout[i]` survives all 8,000 blocks, as does one asserting that truncation and round-half-away return the same short for every sample.  On an integral value every SYMMETRIC rounding rule and truncation agree, so no test can separate them -- which is a fact about the values the code converts, not about the checks.  The direction is still pinned: the companion mutation adding an unconditional `+0.5f` is CAUGHT, because that is not symmetric and moves every negative whole number by one.  So the pair says the object's `fnstcw / or $0xc00 / fistps` is a truncation towards zero and not a biased round, and says the rest is unobservable here.",
+  "find": "\t\t\t\toutp[i] = (short)s->fout[i];\n",
+  "replace": "\t\t\t\toutp[i] = (short)(s->fout[i] < 0.0f\n\t\t\t\t\t\t  ? s->fout[i] - 0.5f\n\t\t\t\t\t\t  : s->fout[i] + 0.5f);\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the phase-II restart arm does not reset the stall counter",
+  "find": "\t\t\t\t\ts->stall = 0;\n",
+  "replace": "\t\t\t\t\t(void)0;\n",
+  "fn": "vpcm_run"
+ },
+ {
+  "label": "the training timeout fires one block early",
+  "find": "\t\t\t\tif (s->stall > VPCM_TRAIN_TIMEOUT) {\n",
+  "replace": "\t\t\t\tif (s->stall >= VPCM_TRAIN_TIMEOUT) {\n",
+  "fn": "vpcm_run"
+ }
+]

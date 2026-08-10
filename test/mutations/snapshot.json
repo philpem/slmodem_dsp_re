@@ -3974,6 +3974,45 @@
     "Uinfo: the second default flag is 1": "caught",
     "Uinfo: two adjacent mask positions are swapped": "caught"
    }
+  },
+  "vpcmguard": {
+   "key": "24bc97bda975b28cbb0b0df2023a381a685c6a134fb85d77edbd98cae59f9a9c",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the guard returns quietly instead of stopping": "caught",
+    "the mute path is always taken, so the guard is never reached": "caught"
+   }
+  },
+  "vpcmrun": {
+   "key": "4d190dffdee3982f18364534ab6297ba7d23a9ec89fb0c9d9b0c8b0b23e94ea2",
+   "summary": "18 mutations: 11 caught (11 by test, 0 by strings), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
+   "verdicts": {
+    "`nbits` is not carried to the next block": "caught",
+    "float -> short adds a half before truncating": "caught",
+    "float -> short rounds half away from zero rather than truncating": "equivalent",
+    "the block quantisation is dropped": "equivalent",
+    "the caller's block is drained one sample into the output queue": "caught",
+    "the connect arms go to mode 0 rather than mode 1": "caught",
+    "the connect report is not edge-triggered": "caught",
+    "the float conversion reads the caller's buffer, not the queue": "equivalent",
+    "the input residue is never copied back to the front of the queue": "equivalent",
+    "the mute path is always taken": "caught",
+    "the output queue is not compacted": "caught",
+    "the phase-II restart arm does not reset the stall counter": "uncaught",
+    "the progress code is remembered wrong": "caught",
+    "the receive bit mask is dropped": "equivalent",
+    "the session-type fallback picks V.90 rather than V.34": "caught",
+    "the training timeout fires one block early": "uncaught",
+    "the two rate parameters are set in the other order": "caught",
+    "the tx widening loop runs upward, so a store eats an unread byte": "caught"
+   }
+  },
+  "vpcmweak": {
+   "key": "2ad521c6e6aac8b407ff9b330ca5b327d61b9799718c3953fb3ca0b386b2e81c",
+   "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the comparing translation unit declares the five plain, not weak": "caught"
+   }
   }
  }
 }
