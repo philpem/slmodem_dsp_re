@@ -152,8 +152,22 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 		/*
 		 * The mute counter, root +0xd250: `vpcm_create` seeds it from
 		 * the runtime block's bit 4 and the line is silenced until it
-		 * runs out.  UNEXERCISED for the same reason as above -- it is
-		 * zero in every configuration this tree drives.
+		 * runs out.
+		 *
+		 * EXERCISED ON EVERY CALL, and this comment said the opposite
+		 * until finding 1002 measured it.  `vpcm_create` seeds it at
+		 * 528 -- exactly eleven 48-sample blocks -- so blocks 0 to 10
+		 * of every call take this arm and `VPcmV34Progress` is not
+		 * called at all in them.  Bisected with aborting probes:
+		 * `mute > 0` aborts, `mute > 480` aborts, `mute > 528`
+		 * survives, and `mute % 48 != 0` survives.
+		 *
+		 * Nothing downstream noticed because it is only ever positive
+		 * while `status` and `mode` are both still zero -- the mute
+		 * ends 1,580 blocks before the connect.  That is also why
+		 * "the mute path is always taken" fails 78 checks rather than
+		 * something narrower: the branch is real and driven, and only
+		 * the countdown stops it swallowing the whole call.
 		 */
 		if (s->mute > 0) {
 			int left;

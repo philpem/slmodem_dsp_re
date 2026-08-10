@@ -34691,10 +34691,17 @@ and it is ZERO in this configuration, so neither asks the host to move the
 delay and `addedDelay` is still what `vpcm_create` left.  Both are asserted,
 so "arm 0 fired" cannot be read as "the delay adjustment is tested".
 
-The 0x5a and 0x5c session-type stores, the mute path, the input-residue copy
-and the training timeout are likewise read out of the disassembly and reached
-by nothing this tree drives -- finding 987 measures which, by mutation, rather
-than asserting it.
+The 0x5a and 0x5c session-type stores, the input-residue copy and the training
+timeout are likewise read out of the disassembly and reached by nothing this
+tree drives -- finding 987 measures which, by mutation, rather than asserting
+it.
+
+**CORRECTION: THE MUTE PATH WAS IN THAT LIST AND DOES NOT BELONG THERE.**
+Finding 1002 bisected it with aborting probes: `vpcm_create` seeds the counter
+at 528, exactly eleven 48-sample blocks, so blocks 0 to 10 of EVERY call take
+it. It escaped notice because it is only positive while `status` and `mode`
+are both still zero -- the mute ends 1,580 blocks before the connect -- so
+nothing downstream ever saw a difference. Read 1002, not this sentence.
 
 ### 983. `_tagModemParameters` +0x6c is the delay `vpcm_run` takes and gives back, and the format string names it
 
