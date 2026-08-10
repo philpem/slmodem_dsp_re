@@ -39,6 +39,7 @@
  "vpcmflomodem":   ["src/pump/v90/VPcmFloModem.cpp", "build/test/t_vpcmflomodem"],
  "vpcmep3":        ["src/pump/v90/VPcmFloModem.cpp", "build/test/t_vpcmep3"],
  "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp", "build/test/t_v90p3dreset"],
+ "scrambler":      ["include/dsplib/Scrambler.h", "build/test/t_scrambler"],
  "v90demod":       ["src/pump/v90/V90Demodulator.cpp", "build/test/t_v90demod"],
  "v90p34":         ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v90p34"],
  "v34retrain":     ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34retrain"],
@@ -53,5 +54,9 @@
  "v34hsfsk":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsfsk"],
  "v34hsrx53":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx53"],
  "v34hsrx4":       ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx4"],
- "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"]
+ "v34hsrx72":      ["src/pump/v34/v34hshak.c", "build/test/t_v34hsrx72"],
+ "v90params":      ["src/pump/v90/V90Parameters.cpp", "build/test/t_v90params"],
+ "v92params":      ["src/pump/v90/V92Parameters.cpp", "build/test/t_v90params"],
+ "floatarma":      ["src/dsp/FloatARMA.cpp", "build/test/t_floatarma"],
+ "psd":            ["src/dsp/Psd.cpp", "build/test/t_psd"]
 }

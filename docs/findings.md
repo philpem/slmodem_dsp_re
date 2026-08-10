@@ -31850,3 +31850,816 @@ registered for `t_v34conn.c`. Every claim above was shown to fail by hand.
 - **No variant with the one-sample wire is committed.** Finding 903 records
   what that wire reaches; running both doubles the cost of a gate `make phase`
   already pays twice.
+### 860. `vparse.py`, and the one instruction that made "0 unresolved" a lie
+
+`V90Parameters::loadParams(char *)` is 7,894 bytes containing nothing but 295
+calls, in a straight line, to two functions:
+
+    Vparser_read_int  (file, "NAME", &this->field)
+    Vparser_read_float(file, "NAME", &this->field)
+
+`V92Parameters::loadParams` is the same shape with 54. An `awk` over
+`objdump -dr` of the whole of `.text` says those two members are the **only**
+callers of either function anywhere in the object, and both callees are three
+bytes -- `xor %eax,%eax; ret`. So neither `loadParams` has any effect at run
+time, and both are nevertheless a complete field map of their class: the
+original author's own name for every field, its offset, and whether it is read
+as an `int` or a `float`. Nothing else in the object knows those names, and the
+mangling never carries a data member's (finding 226).
+
+`tools/vparse.py` reads them. GCC 3.4 shuffles the three arguments through
+whatever registers are free and writes them to the outgoing area in whatever
+order it likes, so it walks the instruction stream holding an abstract value
+per register and per stack slot -- `('str', section, addr)` from an `R_386_32`,
+`('this', off)` from a `lea` off `this`. Which incoming slot holds `this` is
+not assumed: every candidate is tried and the one resolving the most third
+arguments wins (`0x30` for the V.90 member, `0x20` for the V.92 one).
+
+**The first version reported 295 of 295 resolved and one of them was wrong.**
+The last call in the V.90 member is reached through
+
+    lea 0x550(%esi),%eax
+    add $0x554,%esi          <-- not modelled
+    mov %esi,0x8(%esp)
+
+and an unmodelled instruction left `%esi` holding its previous abstract value,
+so `TEMP_FLOAT_PARAMETER4` resolved to `this + 0` -- a plausible offset, in a
+class whose +0x000 really is a field, reported as a success. It was caught only
+because +0x000 is a `_tagModemParameters *` on the other reading and a `float`
+on this one.
+
+The repair is not the `add` handler. It is that **any instruction the
+interpreter does not model now clobbers its destination register**, so an
+unrecognised form becomes `unresolved` and is counted and reported. That is
+gates.md rule 1 applied to a tool written in the same session as the thing it
+measures: the `add` handler fixes the instance, the clobber rule fixes the
+class. `TEMP_FLOAT_PARAMETER4` then reads +0x554, which is where the other
+three `TEMP_FLOAT_PARAMETER*` and the malloc size both say it is.
+
+### 861. `V90Parameters` and `V92Parameters`, measured three ways
+
+The layout in `include/dsplib/V90Parameters.h` and `V92Parameters.h` is not one
+reading checked for plausibility. Three independent measurements, from three
+different functions, agree:
+
+| | V90Parameters | V92Parameters |
+|---|--:|--:|
+| `loadParams` (name, offset, type) | 291 offsets, +0x004..+0x554 | 54 offsets, +0x004..+0x0d8 |
+| `setToDefault` (offset, width, value) | 339 offsets, +0x004..+0x554 | 54 offsets, +0x004..+0x0d8 |
+| `sysdep_malloc` before the constructor | `0x558` at .text+0x19551, +0x197b1 | `0xdc` at .text+0x13d90, +0x13f20 |
+
+`loadParams`'s offsets are a subset of `setToDefault`'s in the V.90 case and
+the identical set in the V.92 case. On the 289 (resp. 54) offsets both cover,
+**the number of disagreements is zero**: every offset read with
+`Vparser_read_float` is given a default whose bit pattern is a plausible float,
+and every one read with `Vparser_read_int` a small integer. Every store in
+both is four bytes wide. The union has no hole -- +0x004 to the last field in
+steps of four -- and last + 4 is exactly the malloc size in both classes.
+
+Four things the third measurement settles that neither of the first two could:
+
+- **+0x000 is a `_tagModemParameters *`, not a parameter.** `setToDefault`
+  opens `mov 0x0(%ebp),%ebx` and later `mull 0x38(%ebx)`, so it is loaded and
+  dereferenced; the constructor's one argument has that type in the mangling.
+- **Fifty-one V.90 fields are written by `setToDefault` and never read by
+  `loadParams`** -- parameters the file cannot override. They are `unnamed_*`
+  in the header, four bytes each and in the right place, because a descriptive
+  name here would be a guess sitting among 291 measurements. Twenty-five run
+  consecutively from +0x300 to +0x360 and are very likely one array.
+- **Two go the other way**: +0x4f8 `SENSITIVE_ISP_DETECTED` and +0x4fc
+  `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` are read and never defaulted.
+- **Four offsets are read twice under two names**, marked `alias` in the
+  header; three of the four are a `GERMAN_PBX_` override of the name beside it.
+
+**`this` arrives at `0x20(%esp)` in `V92Parameters::loadParams` and at
+`0x4(%esp)` in its `setToDefault`.** Reading the second as the first shifts
+every offset down by four and produces +0x000..+0x0d4 -- a map that is entirely
+reasonable-looking and wrong in every line. It is the identical-sets check
+against the other member that catches it, not inspection.
+
+### 862. A header whose members are all unwritten is invisible to every gate
+
+Neither parameter header has one member defined. `make test` therefore cannot
+see them, `coverage.py` counts nothing, `check64` compiles only `$(SRC)` and
+`$(CXXSRC)` so it does not even parse them -- and half the constructors in
+`VPcmV34Main.cpp`'s span take a `V90Parameters *`. A later batch could move
+every field and the whole tree would stay green. That is gates.md's "result
+indistinguishable from success" with no code in it at all.
+
+`make params` is the answer, and it makes the blob the oracle directly rather
+than adding a test that would only compare the tree with itself: `vparse.py`
+re-extracts the map from the object at gate time and `tools/paramcheck.py`
+compares it against the `/* +0xNNN */` annotations in the header text, in both
+directions, plus the two `sysdep_malloc` sizes. It also `-fsyntax-only`s each
+header 32- and 64-bit, because nothing includes them yet and an uncompiled
+header is not a checked one.
+
+Shown to fire, per gates.md rule 3 -- clean before and after, and each of these
+exits 1 naming the field (`build/firecheck.sh` is the transcript):
+
+    HW_CODEC_TYPE moved +0x008 -> +0x00c   MISSING +0x008
+    PROBING_MODE declared `float`          TYPE    +0x004 ... object reads it as int
+    PROBING_MODE renamed                   NAME    +0x004 ... object says PROBING_MODE
+    the last field deleted                 MISSING +0x554  and  SIZE  ... asks for 0x558
+
+Also: both headers had to go in `SKIP_HEADERS` in `tools/offcheck.py`, which
+v90rest.md says wave 1 paid for twice. `offcheck` compiles every header it does
+not skip **as C**, so a `class` turns into `907 of 907 annotations do not match
+the layout` -- a message about offsets, from a parse error.
+
+#### And the first version of that gate could not see a layout change
+
+The text comparison holds the header to the OBJECT. Nothing held it to the
+COMPILER, and `offcheck.py` -- which does exactly that for every `struct` in
+the tree -- matches `^struct` and now skips both files anyway. Worse, the
+comparison skips every offset the blob map does not cover (`if b is None:
+continue`), which is +0x000 and the 51 `unnamed_*` slots.
+
+So: **delete one `unnamed_*` line and every named field after it really moves
+four bytes while its comment stays put, and the gate exits 0.** Measured, not
+argued -- with `unnamed_06c` deleted the text comparison printed its two
+ordinary OK lines and exited 0. Every other gate in the tree was green too.
+That is the file's whole purpose failing silently, in the one direction three
+concurrent batches were relying on.
+
+`paramcheck.py --emit` now generates the translation unit that `make params`
+compiles, with **342 + 55 `__builtin_offsetof` assertions and two `sizeof`
+ones** in the house `typedef char x[cond ? 1 : -1]` form, guarded on
+`__SIZEOF_POINTER__ == 4` because +0x000 is a pointer and every offset after it
+differs on the 64-bit pass. The same deletion then fails the build:
+
+    error: size '-1' of array 'pc_V90Parameters_TEMP_FLOAT_PARAMETER4' is negative
+
+which is a hard error rather than a `-Wnarrowing` warning, so it does not
+depend on the standard the tree happens to compile with. Clean before and
+after. The two halves are not redundant: the text comparison catches a header
+that has drifted from the object, the assertions catch a header that has
+drifted from itself, and neither can see the other's case.
+
+### 869. `Scrambler` and `Descrambler`: thirty-four members, and the member set is not the same across instantiations
+
+`tools/closure.py dp_vpcm_init vpcm_create VPCMXF_Create VPcmV34Create
+--missing` reports 2,242 bytes over 34 symbols for the group, and it is right
+about the total and wrong about which are outstanding: six of the thirty-four
+were written in the V.90 batch as inline template members, GCC inlines them at
+every call site, and no object under `build/src` therefore referenced them. So
+the tool reported them missing. **1,955 bytes over 28 symbols was the real
+remainder**, and that number is `2,242 - 287`, the 287 being
+`Scrambler<h,i>`'s `reset` 44, `process(h)` 118, `resetHistoryIndexes` 23 and
+`copyHistoryTail` 31, plus `Descrambler<i,i>`'s `reset` 48 and
+`resetHistoryIndexes` 23.
+
+The authority on the member set is the symbol table, not analogy:
+
+    readelf -sW dsplibs.o | grep -E '_ZN9ScramblerI|_ZN11DescramblerI'
+
+| member | `<h,h>` | `<h,i>` | `<i,h>` | `D<h,i>` | `D<i,i>` |
+|---|--:|--:|--:|--:|--:|
+| `C1(unsigned,unsigned,unsigned)` | 102 | 102 | 107 | 102 | 107 |
+| `D1()` | 29 | 29 | 29 | 29 | 29 |
+| `resetHistoryIndexes()` | 23 | 23 | 23 | 23 | 23 |
+| `copyHistoryTail()` | 31 | 31 | 36 | 31 | 36 |
+| `reset(T)` | 44 | 44 | 48 | 44 | 48 |
+| `process(T)` | 107 | 118 | — | 118 | 110 |
+| `process(const T *, I *, unsigned)` | 120 | — | 136 | 120 | — |
+| `processAllOnes(I *, unsigned)` | 120 | — | — | — | — |
+| `processAllZeros(I *, unsigned)` | 120 | — | — | — | — |
+| **bytes / symbols** | 696 / 9 | 347 / 6 | 379 / 6 | 467 / 7 | 353 / 6 |
+
+**`Scrambler<unsigned char,int>` HAS NO BULK `process`.** The batch brief said
+it had five members outstanding including the bulk form; it has two, the
+constructor and the destructor. It also said `<h,h>` had eleven (it has nine),
+`<i,h>` five (six) and `Descrambler<i,i>` five outstanding (four). The totals
+happen to cancel. Writing the bulk form for `<h,i>` would have produced a body
+with no blob symbol and therefore no `ref_` alias to compare against — a
+member the original does not contain, which is the exact thing
+`src/dsp/Queue.cpp`'s instantiation note exists to prevent.
+
+All thirty-four have a `ref_` alias — `nm build/dsplibs_ref.o` lists exactly
+thirty-four — so every one is driven directly by `test/unit/t_scrambler.cpp`
+rather than only through a caller. Reading them needs
+`objdump -dr --section=.gnu.linkonce.t.<symbol>`; `tools/dis.py` takes a weak
+symbol's zero `st_value` for a `.text` offset and silently disassembles the
+wrong function.
+
+### 870. The intermediate in `process` is `I`, and `Scrambler<int,unsigned char>` is what proves it
+
+`Scrambler<int, unsigned char>::process(const int *, unsigned char *,
+unsigned)` loads a full `int` tap and then does every remaining operation in
+eight bits:
+
+      30:  mov    (%edx),%ecx          ecx = *pTap1, all 32 bits
+      35:  xor    (%eax),%cl           ^= the low byte of in[i]
+      3d:  xor    (%eax),%cl           ^= the low byte of *pTap2
+      4a:  movzbl %cl,%edx
+      4d:  mov    %cl,0x0(%ebp)        out[i]  -- an unsigned char
+      54:  mov    %edx,(%ebx)          *pOut   -- an int, ZERO-EXTENDED
+
+So the history receives `(in[i] ^ *pTap1 ^ *pTap2) & 0xff`, not the 32-bit
+XOR. That fixes the temporary's declared type at `I`, and it is a
+**behavioural** difference rather than a codegen preference: a `T` intermediate
+puts a different value in the buffer, and `t_scrambler`'s `<i,h>` block sees it
+because that block seeds the history with values above 0xff on purpose and
+asserts it did (`an operand above 0xff reached the XOR`). The mutation
+`I r = (I)(in[i] ...)` -> `T r = (T)(in[i] ...)` is in the suite and is caught.
+
+The same reading explains an 11-byte discrepancy that has no test:
+`Scrambler<unsigned char,unsigned char>::process(h)` is **107** bytes and
+`Scrambler<unsigned char,int>::process(h)` is **118**. Same `T`, same body,
+and the first keeps its accumulator in a one-byte stack slot (`xor %al,
+0x13(%esp)`) where the second uses a 32-bit register — `I` again. For
+`T = unsigned char` the two spellings are **behaviourally identical**: every
+operand is already a byte, the store truncates and the return truncates. No
+gate in this tree can tell them apart, and both are inlined out of existence at
+every call site so `make similarity` cannot either. The single-value `process`
+therefore keeps the `T` temporary it was verified with (batch 2's), and this
+finding is the record so a later batch does not re-derive it. Acting on
+untestable codegen evidence by rewriting a passing body is the mistake
+CLAUDE.md's "free, so ignore it" rule is about; recording it is not.
+
+The return type is not mangled and nothing pins it either way: `<h,h>` returns
+a zero-extended byte and `<h,i>` a full register, which is what `T` or `I`
+would each give.
+
+**A third instance of the same shape, found by the mutation sweep.**
+`Descrambler::process` is `*pOut = in; r = *pOut ^ *pTap1 ^ *pTap2`, and the
+`*pOut` is the source's: `Descrambler<h,i>::process(h)` RELOADS `this->pOut`
+after the store, which a `r = in ^ ...` source would not make it do — a store
+through `unsigned char *` may alias the pointer field, so the reload is forced.
+It is nevertheless **behaviourally invisible**: a plain `T` store followed by a
+read of the same object yields the value stored, for every input and every
+aliasing of `pOut` with a tap or with the source, so both spellings compute the
+same number always. The two mutations that make the swap are in the set and
+recorded `equivalent` with that argument rather than as uncaught claims — and
+the aliased fixture pass written to catch them does not, because with
+`pTap1 == pOut` both forms reduce to `*pTap2`. What IS tested, and caught, is
+that the store happens BEFORE the taps are read: `r = ...; *pOut = in;` reads
+the old history value and fails 5,791 checks.
+
+### 871. Declaring the constructor and destructor: the union half was real, the `offsetof` half was stale
+
+`include/dsplib/Scrambler.h` deliberately declared neither, and gave two
+reasons. Measured, by adding the declarations and building:
+
+- **The union half is real.** `Scrambler` with a user-provided constructor has
+  no default constructor and a non-trivial destructor. `V90Phase3Modulator`
+  holds one at +0x20 and `V90Phase3Demodulator` a `Descrambler<int,int>` at
+  +0x3d0, so both lose their default constructor and gain a non-trivial
+  destructor, and a **union** holding either has both of its own deleted. Two
+  test fixtures are exactly that union. The whole cost is **two lines per
+  union** — a user-provided `slot() {}` and `~slot() {}`, which construct and
+  destroy no variant member — and it leaves every `.o` and `.raw` access site
+  untouched. Four unions across `t_v90p3mod.cpp` and `t_v90p3dreset.cpp`, plus
+  two bare `Scrambler`/`Descrambler` locals that became references into one.
+- **The `offsetof` half is stale.** `__builtin_offsetof` is conditionally
+  supported for a non-**standard-layout** type, and a user-provided constructor
+  does not affect standard layout — it affects **triviality**, and the two were
+  the same property only under C++03's `POD`. `CFLAGS` names no `-std=` and no
+  `-Werror`, so GCC 13 compiles it at C++17 with no diagnostic.
+  `src/dsp/Scrambler.cpp` now asserts all eight offsets and `sizeof == 0x20`
+  for all five instantiations and compiles clean.
+
+**Two things that do bite, neither of them the stated reasons.** A union with
+a user-provided constructor is no longer trivially copyable, so
+`memcpy(&slot, &other, sizeof(slot))` draws `-Wclass-memaccess`; copying
+`slot.raw` instead is the same bytes and no warning. And a **function-local
+static** of such a union wants `__cxa_guard_acquire`, which this tree links no
+libstdc++ for — three of them (two in `t_v90p3mod.cpp`, one added in
+`t_v90p3dreset.cpp`) are hoisted to file scope, verified with
+`nm build/test/t_v90p3mod | grep cxa_guard` returning nothing.
+
+`src/dsp/Queue.cpp` had already declared a constructor and destructor for the
+same kind of template and nothing had noticed, because no fixture puts a
+`Queue<float>` in a union.
+
+### 872. Emitting a weak template member, and what `closure.py` can then see
+
+`Scrambler`'s members were defined in the header and used only from code that
+inlines them, so `build/src/**` referenced none of them and
+`tools/closure.py --missing` reported all thirty-four missing whatever was
+written — the "result indistinguishable from success" of gates.md, one level
+up: not a detector that checked nothing, but a completeness measure that could
+not be moved by doing the work.
+
+`src/dsp/Scrambler.cpp` fixes it the way `src/dsp/Queue.cpp` already did, and
+the reason for member-by-member instantiation is sharper here:
+`template class Scrambler<unsigned char,int>;` would emit a bulk `process`,
+a `processAllOnes` and a `processAllZeros` the blob does not have, and
+`Descrambler<int,int>` a bulk `process` it does not have either — six weak
+symbols we define and the original does not. Naming each of the thirty-four
+keeps the symbol sets equal.
+
+What our compiler adds and GCC 3.4 did not: a `C2`/`D2` alias and an `n`-class
+`C5`/`D5` for every constructor and destructor, so `nm` shows **44** where the
+blob has 34. Queue.o has had the same five extra since it was written; it is an
+artefact of the modern ABI's base/complete-object split, not a member.
+
+`tools/refrename.py` needed no change — it enumerates the blob's
+`.gnu.linkonce.t.*` sections from `readelf` rather than carrying a list, so the
+ten new names are moved to `.text.ref_*` like the others. Modern GCC puts our
+copies in `.text._ZN...` inside a section group, so nothing collides today; the
+collision is only there under `tools/toolchain`, which is what `refrename.py`
+exists for (finding 349).
+
+### 877. `struct _tagModemParameters` exists nowhere and had to be measured from its readers
+
+Half of `VPcmV34Main.cpp`'s span holds a `_tagModemParameters *`, the mangling
+names the type in eleven constructors, and **nothing in the tree defined it**.
+`include/dsplib/modem_params.h` was the parameter *numbering* -- 63 `MDMPRM_*`
+indices for `modem_get_param` -- and not a struct at all; slmodemd's
+`struct modem` is a different record entirely and does not fit.
+
+So it was read out of the two members that dereference it, and only as far as
+they reach. Seven fields, each from a specific access:
+
+| offset | evidence | type |
+|---|---|---|
+| +0x000 | `movzbl (%esi),%edx; and $0x1,%dl` at .text+0x2a536 | `unsigned char`, bit 0 |
+| +0x038 | `mull 0x38(%ebx)` at +0x29971 against 0x1b4e81b5, high half `shr $8` | `unsigned int` |
+| +0x03c | the same sequence at +0x2997e | `unsigned int` |
+| +0x040 | `mul $0xcccccccd; shr $2` at +0x2a718 | `unsigned int` |
+| +0x048 | copied into `LINE_CONNECTION_TYPE`, which is tested for -1 | `int` |
+| +0x050 | `movzbl 0x50(%ebx)` at +0x2a7bb (bit 1) and +0x2a7fa (bit 0) | `unsigned char` |
+| +0x078 | loaded, tested, passed as `loadParams(char *)`'s argument | `char *` |
+
+**The magic number is the measurement, not a guess about rates.** 0x1b4e81b5
+is 458,129,845, and ceil(2^40 / 2400) is 458,129,845 exactly -- so
+`(n * K) >> 40` is an unsigned divide by 2400 and nothing else. That fixes
++0x038 and +0x03c as bit rates and the quotient as a V.34/V.90 rate index,
+which the clamp to [2, 14] then confirms: 2 * 2400 = 4800 and 14 * 2400 =
+33600 are the ends of the V.34 rate ladder. `mul` rather than `imul`, and
+`jae`/`jbe` rather than `jge`/`jle`, make every one of these unsigned; that is
+forced encoding, not inference.
+
+**Its size is unknown and the struct is deliberately partial.** It is at least
+0x7c. The header says so, and says that wave 1 should turn slices of
+`unmapped_*` into fields rather than redefine it, because `V90Modem`,
+`V92Modem`, `VPcmFloModem` and `K56FlexFloModem` all carry one and will read
+fields these two members never touch.
+
+It went into `modem_params.h` rather than a new header on purpose: `offcheck`
+compiles every header it does not skip **as C**, so a plain C struct in a file
+already outside `SKIP_HEADERS` is gated for free -- it took the annotation
+count from 907 to 914 with no new machinery. A second file named
+`modem_parameters.h` beside `modem_params.h` would have been a trap for
+everyone after.
+
+### 878. `V90Parameters.cpp`: nine `unnamed_*` slots are floats, one divisor read as 10 that is 5, and the 48 mutations
+
+`V90Parameters.h` names 291 fields from `loadParams` and fills the other 51
+slots with `unnamed_NNN`, declared `int` because `loadParams` -- the only
+thing that knows a name or a reader -- does not mention them at all. Reading
+`setToDefault` instead gives a second, independent reader for exactly those 51,
+and **nine of them are floats**:
+
+| offset | value | how it is known |
+|---|--:|---|
+| +0x06c | 1.0 | `fld1` then `fsts 0x6c(%ebp)` |
+| +0x1b8 | 1.5e-11 | `flds .rodata.cst4+0x198` then `fsts 0x1b8(%ebp)` |
+| +0x070 | 0.6 | bit pattern 0x3f19999a |
+| +0x0f4 | 2e-12 | 0x2c0cbccc |
+| +0x1b0 | 8.5e-11 | 0x2ebaeabf |
+| +0x1b4 | 6e-11 | 0x2e83f0ff |
+| +0x328 | 0.96 | 0x3f75c28f |
+| +0x434 | 250.0 | 0x437a0000 |
+| +0x440 | 10.0 | 0x41200000 |
+
+The first two are settled by the instruction: an `fsts` writes a `float` and
+there is no other reading. The other seven are settled by the value, and the
+argument is the one finding 861 already makes for the 289 offsets both
+readings cover -- a bit pattern that is an exact round decimal as a float and
+an arbitrary eight-digit integer as an int, sitting among float neighbours,
+is a float. +0x1b0, +0x1b4 and +0x1b8 are three consecutive such slots between
+`LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA` and `LINEAR_EQU_DIL_ERROR_RELAX_BETA`,
+all three in the 6e-11..8.5e-11 band those betas occupy.
+
+**Reported and not acted on.** The layout is frozen for the span and a field's
+type is part of its layout, so `src/pump/v90/V90Parameters.cpp` writes the bit
+pattern through the declared `int` -- identical four bytes, and a comment on
+each of the nine naming the float the object stores. Changing the header is a
+conversation, not an edit, and it belongs to whoever merges wave 0.
+
+**`make params` cannot see this and never could.** `paramcheck.py` compares
+the header against `loadParams`, and these nine offsets are precisely the ones
+`loadParams` does not read. The gate is not weaker than it looked: it is
+answering a different question, over the 291 named fields, and the other 51
+have no reader in that member at all. The 42 that really are ints are equally
+measured -- 600, 1200, 2400, 3901, 21841 -- and nothing about them moved.
+
+### 879. The `loadParams` oracle WORKS, and the half of it that needs `loadParams` is the transcription check
+
+The proposal: `objcopy --weaken-symbol` the reference object's
+`ref_Vparser_read_int` and `ref_Vparser_read_float`, give the test strong
+definitions that log `(reader, name, offset)`, and compare the blob's log
+against ours across all 295 (and 54) calls in order. That is a differential
+test rather than a check of a transcription against the disassembly it was
+transcribed from, which is what the two `loadParams` members would otherwise
+get and what CLAUDE.md's one unrelaxed rule forbids.
+
+**The mechanism works, and it was run.** Weakening is clean -- `nm` shows
+`W ref_Vparser_read_int`, `W ref_Vparser_read_float` -- the strong definitions
+in the test win, and driving `ref__ZN13V90Parameters10loadParamsEPc` over a
+0x600-byte buffer logs
+
+    V90: 295 calls, 139 int, 156 float
+         first PROBING_MODE +0x4, last TEMP_FLOAT_PARAMETER4 +0x554
+    V92:  54 calls,  42 int,  12 float
+         first VPCM_SESSION_TYPE +0x4, last MODULATOR_QUEUE_LENGTH +0xd8
+
+The containment condition holds as measured: those two members are the only
+callers of either stub anywhere in `.text`, so weakening them changes nothing
+in any other binary.
+
+**And it proved something worth having.** All 349 runtime triples were
+compared, in order, against `tools/vparse.py`'s static walk of the same two
+functions: **identical on reader, name and offset, with zero differences.**
+That takes vparse's abstract interpreter out of the trusted path for the whole
+field map. It also confirms finding 860's repair from the other side --
+`TEMP_FLOAT_PARAMETER4` really is +0x554 and not the +0x000 the unmodelled
+`add $0x554,%esi` had produced -- and it is the first evidence for the map
+that does not come from reading instructions.
+
+#### Why `loadParams` is still not reconstructed
+
+**Because our `loadParams` would be vparse's output, so the half of the
+comparison that involves it is a transcription check after all.** Split the
+proposed test in two:
+
+- *blob log vs. static extraction* -- genuinely differential, since the two
+  come from an interpreter and from execution. This is the part that carries
+  all the value, and **it needs no reconstruction of `loadParams` at all**; it
+  is the run above.
+- *our log vs. blob log* -- our 295 calls would be generated from the same
+  triples the static extraction produced, so this compares vparse's output
+  with a copy of vparse's output. It catches a copying error and nothing else.
+
+So the oracle's differential content is obtained without writing the member,
+and writing the member adds 9,278 bytes of source with no observable
+behaviour, a second copy of the field map to keep in step with the header, and
+two new `Vparser_read_*` stubs in `src/`. The brief's condition -- "if it
+works, land `loadParams` behind it" -- is met on the mechanism and not on the
+argument, and this is a judgement rather than a blocked path: a merger who
+disagrees can land it cheaply, and the recipe is below.
+
+#### The recipe, if a later batch wants it
+
+Use `ld --wrap`, not `--weaken-symbol`. Weakening only reaches the reference
+object; our side's stubs would have to be weak in `src/` (a linkage
+infidelity introduced to serve a test -- the blob's are `T`) or built a second
+time for one target, which is surgery on the shared object rule.
+`-Wl,--wrap=Vparser_read_int -Wl,--wrap=ref_Vparser_read_int` on ONE test
+target's link line reaches both sides, needs no `objcopy`, and touches neither
+`src/` nor `$(REF)`.
+
+#### The cheap upgrade this DOES unlock, and it is not blocked on anything
+
+`make params` currently compares the header text against vparse's *static*
+walk. The run above shows the blob's own `loadParams` will hand over the same
+349 triples at run time for the cost of a link. Making that the gate's oracle
+removes the one piece of tooling the gate presently has to trust. Not done
+here -- `paramcheck.py` belongs to the batch that wrote it and this batch
+owns the headers, not the gate -- and recorded so it is not rediscovered.
+
+#### The defect the differential test found on its first run, and what it says about reading a magic divide
+
+`loadModemParamsData` opens
+
+    mov  $0xcccccccd,%ecx
+    mul  %ecx
+    shr  $0x2,%edx
+
+and the first reading of that was "divide by 10", because 0xcccccccd is the
+magic number everybody recognises for 10. **It is a divide by 5.** `mul` puts
+the high half in `%edx`, which is already a shift of 32, and `shr $0x2` makes
+the total 34; 2^34 / 0xcccccccd is 5.0 exactly, and a shift of 3 would have
+been 10. The constant is the same for both -- what distinguishes them is one
+character in the shift.
+
+Every field assertion in the test passed with the wrong divisor except the one
+on `DIGITAL_POWER_REDUCTION`, which came out at exactly half the blob's value
+across all sixteen power-reduction cases. Nothing else in the class moves:
+the printed line is the only other consumer, so had the transcript not been
+compared, a modem applying half the power reduction it was configured for
+would have shipped. **The lesson is the general one: a magic-number divide is
+a shift you have to read, not a constant you can recognise.**
+
+#### What landed, by member
+
+| member | blob | ours | how it is checked |
+|---|--:|--:|---|
+| `V90Parameters::setToDefault` | 3,589 | 3,536 | 675 checks over 24 fixtures x 4 debug levels |
+| `V90Parameters::loadModemParamsData` | 344 | 304 | 642 checks over 20 fixtures x 4 levels |
+| `V90Parameters::init` | 63 | 32 | in the constructor sweep |
+| `V90Parameters::initSession` | 24 | 24 | store count asserted at 2 |
+| `V90Parameters::V90Parameters` (C1, C2) | 89 | 64 | both bodies, both arms of the file branch |
+| `V90Parameters::~V90Parameters` (D1, D2) | 1 | 1 | see the destructor note below |
+| `V92Parameters::setToDefault` | 477 | 464 | 1,344 checks with the modem block varied |
+| `V92Parameters::init` | 49 | 32 | same sweep |
+| `V92Parameters::V92Parameters` (C1, C2) | 53 | 48 | same sweep |
+| `V92Parameters::~V92Parameters` (D1, D2) | 1 | 1 | as above |
+
+`init` and the constructor are smaller than the object's by about the size of
+the `loadParams` call site each, which is the whole of the difference.
+
+#### The mutation each assertion was watched failing under
+
+48 mutations over the two files: **44 caught, 0 uncaught, 4 recorded
+equivalent with an argument.** The set is weighted away from the 393 constant
+stores, which are easy, and towards the arithmetic, which is not. Of the
+caught ones, the load-bearing sample:
+
+| mutation | what fired |
+|---|---|
+| divide by 10 instead of 5 | `after loadModemParamsData` at +0x380, and the transcript |
+| scale 1.0 instead of 0.5 | the same two |
+| fraction scaled by 10 | the transcript alone -- no field moves |
+| sign test `0 <= v` | the transcript alone |
+| rate step 4800 | `ANALOG_RATE_MASK`, and the rate-mask diagnostic |
+| bottom index 3, top index 13 | `ANALOG_RATE_MASK` |
+| rate mask built with the index running UP | `ANALOG_RATE_MASK` -- the bit order |
+| `mask * 4` instead of `* 2` | `ANALOG_RATE_MASK` |
+| the crossed-rate arm never taken | `fields setToDefault wrote`, and the `bad upstream rate` line |
+| sensitive-ISP cap on the wrong flag / the wrong index | `ANALOG_RATE_MASK` |
+| `SILENCE_SCR` on the other arm, and unconditionally | the field-count assertion, at 339 against 338 |
+| ANSPCM lengths swapped, or reading bit 1 | +0x4cc |
+| tempProbe from bit 0 | +0x004 and the transcript |
+| connection type taken when NOT -1 | +0x00c |
+| a debug string misspelt by one letter | the transcript |
+| the two gated sites moved to `> 2` | the line count at levels 2 and 3 |
+| one integer default moved by one | `after setToDefault` |
+| one float default moved in its last digit | `after setToDefault` |
+| `unnamed_1b8` written as an int | `after setToDefault` -- so the nine bit patterns are checked |
+| the last field not written | `after setToDefault`, and the field count |
+| `initSession` defaulting to 13 | `after initSession`, and the store count at 2 |
+| the constructor skipping `initSession` | `after C1` |
+
+#### Registering a new mutation suite makes `make phase` FAIL, and two standing instructions collide there
+
+`tools/mutsnap.py --check` runs inside `refs`, inside `test`, inside `phase`.
+Staleness is reported and does not fail, deliberately -- almost any `src/` edit
+makes every entry stale and a gate that is red by default gets ignored. But
+**MISSING fails**, and MISSING is what a suite that has been registered and
+never recorded looks like. So the two instructions every batch gets --
+
+  - *register any mutation suite you add in the registry*, and
+  - *do not re-record the mutation snapshot; that happens once, after all the
+    batches merge*
+
+-- are in direct conflict for any batch that adds a suite, and nothing in the
+tree says so. The first makes `make phase` red and only the second clears it.
+
+**They are less in conflict than they look, and the resolution is per-suite.**
+What vpcmv34main.md forbids is the sweep: `mutsnap.py --update` with no
+arguments re-runs all 54 suites for twenty minutes and manufactures a baseline
+nobody examined. `mutsnap.py --update <name> <name>` re-runs only the named
+ones -- here 48 mutations that had just been run and read by hand -- and is
+the honest completion of the registration, not a re-record. Naming the suites
+is the whole difference and it is worth saying out loud, because the obvious
+reading of "do not re-record the snapshot" forbids both.
+
+The record for `v90params` and `v92params` is therefore MISSING as this batch
+lands, and
+
+    python3 tools/mutsnap.py --update v90params v92params
+
+is the one command that clears it. Every other `phase` target is green:
+`firewall`, `strings`, `offsets`, `refcheck`, `anchorcheck`, all 118 test
+binaries, `check64` in both configurations, `interop` at 48 checks, `params`
+at 291 + 54 fields, `coverage`, and `debugcov` with all seven of this batch's
+diagnostic sites executing.
+
+#### Two things no mutation here can reach, and neither is an untested claim
+
+**The two `abs` operations are unreachable over the whole input domain.**
+`tempPR` is `unsigned int`, `tempPR / 5` is at most 0x33333333, so
+`(int)(tempPR / 5)` is never negative and neither is `pr`. The object's own
+`fabs` at .text+0x2a731 and its `cltd; xor %edx,%eax; sub %edx,%eax` at
++0x2a78f are therefore dead in the shipped object too. Both are reproduced --
+they are in the object -- and both mutations are recorded `equivalent` with
+that proof rather than deleted, because "we tried this and here is why it
+cannot fail" is worth more than an absence.
+
+**A destructor whose only effect is a store to its own object cannot be
+mutated at all.** `-flifetime-dse` is on by default at `-O2` and deletes
+stores to `*this` in a destructor, so `~V90Parameters` compiles to one `ret`
+with `PROBING_MODE = 0;` in it and one `ret` without; `-fno-lifetime-dse`
+makes the three-instruction body reappear. This is a property of the
+mutation tier and not of the test, and it generalises: **every empty
+destructor in this tree is untestable by mutation in the same way, and none
+of them will say so.** It also weakens an argument that looks strong -- our
+one-byte destructor matching the object's one-byte destructor is not evidence
+that the original's body was empty, because a compiler could have emptied it.
+What settles that one is the date: `-flifetime-dse` postdates GCC 3.4.2.
+
+### 873. `FloatARMA` is 52 bytes, and two of its claims are codegen-only
+
+`tools/cppstruct.py FloatARMA` gives five members and 1,770 bytes, the
+constructor and destructor each emitted twice byte-identically (C1/C2, D1/D2).
+**No deleting `D0`**, so offset 0 is a real member and there is no vptr --
+finding 228's argument, the same one `FloatFIR` rests on.
+
+The mangling gives `FloatARMA(unsigned, unsigned, float *, float *, unsigned)`
+and stops there. The object says which pair is which: the constructor divides
+**both** coefficient arrays by `arg3[0]` and then stores `0.0f` over
+`m_a[0]`, and `process` **subtracts** the second dot product from the first.
+That is the normalisation of a recursive filter, so the FIRST count/pointer
+pair is the DENOMINATOR:
+
+    y[n] = SUM(k < nB) b[k] x[n-k]  -  SUM(k = 1 .. nA-1) a[k] y[n-k]
+
+with `a[]` and `b[]` both pre-divided by the caller's `den[0]`, and `a[0]`
+forced to zero so the k = 0 feedback term contributes nothing. When `den[0]`
+is exactly 1.0f an `fcom`/`je` at 0x472b8 skips **both** scaling loops and
+only the `m_a[0] = 0.0f` remains.
+
+    +0x00 float *m_a       owned, m_nA entries, a[0] == 0.0f
+    +0x04 float *m_b       owned, m_nB entries
+    +0x08 float *m_xhist   owned, m_xlen entries
+    +0x0c float *m_yhist   owned, m_ylen entries
+    +0x10 unsigned m_nA    denominator taps, multiple of four
+    +0x14 unsigned m_nB    numerator taps, multiple of four
+    +0x18 unsigned m_xlen  m_nB + blockSize
+    +0x1c unsigned m_ylen  m_nA + blockSize
+    +0x20 int m_xpos       input write index, counts DOWN
+    +0x24 int m_ypos       output write index, counts DOWN
+    +0x28 unsigned m_idx   the fill loops' index, left behind (finding 874)
+    +0x2c float m_fwd      the b.x sum, then the output
+    +0x30 float m_fbk      the a.y sum
+                           0x34 bytes
+
+**Note the crossing**: `m_xlen` at +0x18 is built from the tap count at +0x14
+and `m_ylen` at +0x1c from the one at +0x10. It is the object's own pairing
+(0x47189 `lea (%edx,%ecx,1),%esi` against 0x4718c `add %ecx,%eax`), not a
+transcription slip, and it is the first thing a reader will assume is one.
+The size is 0x34 and not 0x2c: the largest displacement in `process(float)`
+is +0x30, and `process(const float *, float *, unsigned)` -- the member
+outside the closure -- reaches no further, so both were read before the size
+was written down.
+
+**The tap counts round UP**, which is the opposite of `FloatFIR` and
+`FloatIIR`: `and $0xfffffffc` then a conditional `add $0x4`. Asking for 5
+denominator taps gets 8, and the slots between the caller's count and the
+rounded one are zero-filled by a second loop. Both `process` overloads use
+`FloatFIR`'s two-extended-accumulator dot product with a one-at-a-time tail
+that, because of the rounding, can never run.
+
+**Two claims here are real and tier 1 provably cannot see either.**
+
+1. *The scaling forms a reciprocal and multiplies*: `fld1`, `flds den[0]`,
+   `fdivr`, `fmuls`, `fstps` -- not `fdivs`. Writing it as `b/d` instead
+   passes every differential test there can be. For the two to disagree the
+   exact quotient must fall within about 2**-63 of a float half-way point, and
+   it cannot: `b` and `d` are floats, so the quotient is `B/D` with `B` and
+   `D` 24-bit integers, and `|B/D - M/2**25| >= 1/(D * 2**25) >= 2**-49` for
+   every integer `M` -- fourteen binary orders above the double-rounding
+   error. Measured as well as argued: 40 million random pairs of the fixture's
+   own shape and 60 million drawn from the whole float space, both signs,
+   denormals and extremes included, gave **zero** separations. It is recorded
+   as an equivalent mutation carrying that argument, and it is the kind of
+   claim `make similarity` exists for.
+2. *`den[0]` is re-read on every iteration of both scaling loops*, because the
+   store to `m_a[i]`/`m_b[i]` may alias it. It provably cannot -- those arrays
+   are `sysdep_malloc` returns from three statements earlier in the same
+   constructor -- so hoisting the load is unobservable. Also recorded as
+   equivalent.
+
+**One thing the blob does that looks like a defect and is left alone.** With
+`nDen == 0` the constructor still executes `m_a[0] = 0.0f` (0x4731e and
+0x47379 are both unconditional), writing four bytes through a
+`sysdep_malloc(0)`. `t_floatarma` constructs and destroys that shape and does
+not drive it: with `m_nA == 0` the carry-tail loop's `dec %edx; jne` count
+underflows, which is `FloatFIR`'s zero-tap hazard in a second class.
+
+### 874. Two identical fill loops, two different exit values, and neither is an anomaly
+
+`FloatARMA` uses a MEMBER, `m_idx` at +0x28, as the index of every fill loop
+in the constructor and in `reset`. That is unusual enough to record on its
+own, because it makes each loop's exit value part of the object's observable
+state -- and the object appears to disagree with itself about what that value
+is.
+
+`reset` clears two buffers with two loops of identical shape. The first
+(0x470dd) writes `m_idx` at the top of each iteration and leaves it holding
+`m_xlen - 1`. The second (0x47330) keeps the index in `%eax` and stores it
+once at 0x4735c, leaving `m_ylen`. Same source shape, two different exit
+values, one of them off by one -- which reads as a compiler bug, or as two
+loops written two different ways, and is neither.
+
+**The first loop's final store is DEAD.** The instruction right after that
+loop, at 0x47102, is `movl $0x0,0x28(%ecx)` -- the second loop's `m_idx = 0`.
+GCC rotated the loop so the store of the incremented index happens at the top
+of the *next* iteration, and then simply did not emit the one store that would
+have been overwritten before anything could read it. So the value `m_xlen - 1`
+never exists in the object; it is an artefact of reading a loop's last
+executed store as its exit value.
+
+The consequence is the useful part: `for (m_idx = 0; m_idx < n; m_idx++)`
+written twice, the natural spelling, reproduces the object exactly, and
+**after `reset` -- and therefore after the constructor, whose tail is an
+inlined `reset` -- `m_idx` holds `m_ylen`, or 0 when `m_ylen` is 0.** No
+contortion is needed anywhere. The same reading applies to the constructor's
+four coefficient loops, whose exit values are all overwritten by the inlined
+`reset` and are likewise unobservable.
+
+The general rule, which cost this batch an hour: **before treating a loop's
+apparent exit value as a claim, look at the next store to the same location.**
+A partially dead store is invisible in the loop it belongs to and obvious one
+instruction later.
+
+### 875. `Psd` is 16 bytes; `OutputOption` is 0/1/2 and `WindowType` was already ours
+
+`tools/cppstruct.py Psd` gives six members and 900 bytes, C1/C2 and D1/D2
+byte-identical, no deleting `D0` -- not polymorphic, finding 228 again.
+
+    +0x00 unsigned m_length    segment and transform length
+    +0x04 unsigned m_overlap   samples shared between segments
+    +0x08 float *m_window      owned, m_length entries
+    +0x0c float *m_fft         owned, m_length + 1 entries
+                               0x10 bytes
+
+`getFrequencies`, the member outside the closure, reaches no further than
++0x00, so 16 bytes is read from all six and not from the three in scope.
+
+**Two type declarations were asked for and only one was needed.**
+`WindowType` is already `include/dsplib/DspMath.h`'s, with its four
+enumerators read from `designWindow`'s switch, and `designWindow<float>` is
+already reconstructed in `src/dsp/DspMath.cpp` and already compared against
+the blob by `t_dspmath` -- so `Psd`'s constructor test is two independent
+implementations meeting, not a hybrid. Only `Psd::OutputOption` was new. Its
+values come out of the compare chain at 0x4683b:
+
+    cmp $0x1 / je     1   10 * log10(sum / peak + 1e-25)
+    jle           ->  0   10 * log10(sum / segments + 1e-25); reached through
+                          a SIGNED jle and then `test %ebx,%ebx / jne`, so
+                          anything negative returns having done nothing
+    cmp $0x2 / je     2   sum / segments
+    fall through          anything else leaves the accumulated sum alone
+
+The two constants are `.rodata.cst4+0x3c4` = 10.0f and `.rodata.cst8+0x108` =
+1e-25. The enumerator NAMES are invented; an enum's names are never mangled.
+
+Three details worth carrying: the spectrum buffer is allocated with
+`m_length + 1` floats and written from index **1**, the Numerical Recipes
+convention `realfft` expects, and `m_fft[0]` is never touched; the window type
+is **not stored anywhere**, so the object cannot be asked which one it holds
+and `setWindowType`'s only trace is the window itself; and neither buffer is
+cleared by the constructor, so `m_fft` carries allocator fill out of it.
+
+**The flat window is this class's vacuous case.** `WINDOW_BOXCAR` is all
+ones, so a `setWindowType` that ignored its argument would agree with a boxcar
+reference for ever. `t_psd` therefore checks the four shapes against each
+other as well as against the blob, and the mutation `setWindowType always
+designs a boxcar` is what shows that check firing.
+
+`getFrequencies` needed one fixture row chosen against the x87 and not for
+coverage. It forms `(i * rate) * (1 / length)` and not `i * (rate / length)`,
+and the two agree to the last bit over every ordinary length and sample rate;
+a search over lengths to 512 and eight rates found the first separating triple
+at **length 104, rate 1234.5678, bin 39** -- 462.962891 against 462.962921.
+Before that row went in, the mutation `the product is associated the other
+way` was NOT CAUGHT. A claim about association order needs a fixture built
+against it; coverage will not stumble into one.
+
+### 876. `Psd::process` is blocked twice, and clearing either alone does not unblock it
+
+`Psd::process` (635 bytes, 0x46750) is the largest member of this batch and is
+**not written**. Two independent blockers, recorded together because fixing
+the first and re-discovering the second is the expensive order:
+
+1. **It calls `realfft`, which calls `four1`, and neither is reconstructed.**
+   That alone would not stop it -- except that the Makefile renames every
+   symbol the blob defines to `ref_*`, so a reference to `realfft` from our
+   side resolves to nothing and the link fails. Checked against the artefact
+   rather than inferred from the comment on `Makefile:149`:
+
+       $ nm build/dsplibs_ref.o | grep -E 'realfft|four1'
+       000536c0 T ref__Z5four1Pfmi
+       00053830 T ref__Z7realfftPfmi
+
+   `realfft` is 505 bytes and `four1` 368; both are free functions in
+   `docs/vpcmv34main.md`'s wave-1 group and belong to nobody yet. A test-local
+   weak definition of `_Z7realfftPfmi` forwarding to `ref__Z7realfftPfmi`
+   would link and would be exactly gates.md's "result indistinguishable from
+   success": a production symbol name defined inside a test object, silently
+   overridden or not depending on link order once wave 1 writes the real one.
+   Not done.
+
+2. **Two of its four output arms compute log10 with `fldlg2`/`fxch`/`fyl2x`**
+   (0x4691a and 0x469a9), which GCC emits only under
+   `-funsafe-math-optimizations`. That flag is not in this tree's derived set
+   (`tools/toolchain/build.sh`), so our build would call libm and the two
+   would differ in the last bit. Reproducing it means inline x87 asm, in a
+   file that is also built 64-bit for `$(CXXOBJ64)`.
+
+So `realfft` and `four1` are the unblocking work, and the log10 arms need a
+decision of their own after that. What IS recoverable from the disassembly
+without writing any of it, and is in `include/dsplib/Psd.h` so the next batch
+does not re-derive it: the segment count is
+`(count - m_overlap) / (m_length - m_overlap)`, each segment is windowed into
+`m_fft[1 .. m_length]` and transformed by `realfft(m_fft, m_length, 1)`, the
+accumulation is `out[i] += re*re + im*im` over `m_fft[2i+1]` and `m_fft[2i+2]`
+for `i < m_length / 2`, and the four arms are finding 875's table.
+
+The rest of the class is written and passes: constructor, destructor,
+`setOverlapLength`, `setWindowType` and `getFrequencies`. That is 265 bytes of
+the 900, and 140 of the 775 in the closure.

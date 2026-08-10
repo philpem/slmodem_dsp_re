@@ -69,14 +69,22 @@ closure number written before it, in both directions.
 
 ### Wave 0 — SERIAL, before anything fans out
 
-| group | bytes | sym |
-|---|--:|--:|
-| `V90Parameters` | 12,004 | 7 |
-| `V92Parameters` | 1,964 | 5 |
-| `Resampler`, `V90Resampler`, `ResamplerTiming`, `ResamplerTimingOffset` | 4,981 | 32 |
-| `Scrambler`, `Descrambler` | 2,242 | 34 |
-| `FloatARMA`, `Psd` | 1,983 | 7 |
-| **total** | **23,174** | **85** |
+**RECOMPUTED, AND THE PLANNED FIGURES BELOW WERE WRONG IN BOTH DIRECTIONS.**
+The right-hand columns are what `tools/closure.py` reports after a full build;
+the `already` column is what it CANNOT see, because `Scrambler.h` defines six
+members as inline template functions and GCC inlines them, so `build/src/**/*.o`
+contains no symbol for them at all (finding 64, `nm` over every built object).
+
+| group | planned | recomputed | already | owner |
+|---|--:|--:|--:|---|
+| `V90Parameters` | 12,004 / 7 | 12,004 / 7 | | D |
+| `V92Parameters` | 1,964 / 5 | 1,964 / 5 | | D |
+| `Resampler`, `ResamplerTimingOffset`, `ResamplerTiming`, `V90Resampler` | 4,981 / 32 | 5,030 / 34 | | A |
+| `Scrambler`, `Descrambler` | 2,242 / 34 | 2,242 / 34 | 287 / 6 | B |
+| `FloatARMA`, `Psd` | 1,983 / 7 | 1,983 / 7 | | C |
+| **total** | **23,174 / 85** | **23,223 / 87** | **287 / 6** | |
+
+So wave 0's genuinely unwritten span is **22,936 bytes over 81 symbols**.
 
 **These are shared types and base classes, and they are nobody's.** Half the
 constructors in the span take a `V90Parameters *`, and the four `Resampler`
@@ -179,3 +187,95 @@ And two configuration parameters are ADDRESSES, not numbers —
 construct at all (DPRUNTIME, DSPINFO, MIN_RATE 2400, MAX_RATE 33600, IODELAY
 40), which bounds the result: **the configuration is plausible, not
 recovered.** Deriving it properly is wave 1's job.
+
+## Where wave 0 got to
+
+**The two parameter blocks landed first and alone, and their layout is now
+frozen.** `include/dsplib/V90Parameters.h` (0x558, 342 slots) and
+`include/dsplib/V92Parameters.h` (0xdc, 55 slots) carry the ORIGINAL AUTHOR'S
+OWN NAMES for 291 and 54 of them. Findings 860-862.
+
+They came out of a shape nobody had looked at: `loadParams(char *)` is 7,894
+bytes of nothing but 295 straight-line calls to `Vparser_read_int` and
+`Vparser_read_float`, each carrying the parameter's name as a relocation and
+its offset as a `lea` displacement. Both callees are three-byte stubs, so the
+member has no behaviour at all — and it is a complete, self-describing field
+map, which nothing else in the object is. `tools/vparse.py` reads it.
+
+Three measurements agree and none disagrees: `loadParams`'s (name, offset,
+type), `setToDefault`'s (offset, width, value) from a separate walk of a
+separate function, and the `sysdep_malloc` immediately before each constructor.
+Last field plus four is the malloc size in both classes.
+
+**`make params` is a new phase gate and it exists for a specific hole.** A
+header with no member defined is invisible to `test`, to `coverage.py` and to
+`check64` alike, so a later batch could move every field and the tree would
+stay green. The gate re-extracts the map from the blob at gate time and
+compares it with the header text, AND compiles 397 emitted `offsetof`
+assertions. Both halves were shown to fire; the second was added because the
+first could not see a deleted `unnamed_*` slot, which moves every field after
+it while every comment stays put.
+
+Two things any later batch must know:
+
+- **The layout is not open for revision.** If you find evidence a field is
+  wrong, that is a conversation and not an edit; `make params` will fail the
+  build for the whole tree, which is the intent.
+- **Fifty-one V.90 fields are `unnamed_*` on purpose.** `setToDefault` writes
+  them and `loadParams` never reads them, so they have no recoverable name.
+  They are four bytes each and in the right place. Twenty-five run
+  consecutively from +0x300 to +0x360 and are very likely one array; naming
+  them needs a reader, not a writer.
+
+### What each wave-0 batch landed
+
+| batch | classes | landed | suites | findings |
+|---|---|---|---|---|
+| B | `Scrambler`, `Descrambler` | all 28 unwritten members, 1,955 B | `scrambler` 36: 33 caught, 0 uncaught, 3 equivalent | 869-872 |
+| C | `FloatARMA`, `Psd` | `FloatARMA` whole; 5 of `Psd`'s 6 | `floatarma` 30: 27/0/3, `psd` 14: 14/0/0 | 873-876 |
+| D | `V90Parameters`, `V92Parameters` | 10 of 12 members, 4,542 B | `v90params` 37: 34/0/3, `v92params` 11: 10/0/1 | 877-879 |
+
+Three things they settled that are not in any of their own files:
+
+- **`Vparser_read_int` and `Vparser_read_float` are three-byte stubs**, so both
+  `loadParams` members have no observable behaviour. Batch D built the
+  `objcopy --weaken-symbol` oracle anyway, ran it, and compared all 349 logged
+  triples against `vparse.py`'s static walk: identical on reader, name and
+  offset. That takes the abstract interpreter out of the trusted path. It also
+  shows why the member is still not written — **our `loadParams` would BE
+  `vparse.py`'s output**, so our-log-against-blob-log compares the extraction
+  with a copy of itself. The differential content was obtained without writing
+  it. If a later batch does land it, use `ld --wrap` rather than
+  `--weaken-symbol`: it reaches both sides and touches neither `src/` nor the
+  reference object.
+- **`Psd::process` is blocked twice** and clearing either alone does not
+  unblock it: it calls `realfft` and `four1`, which are unwritten wave-1 free
+  functions whose only definitions in the reference object are `ref_`-renamed;
+  and two of its arms compute log10 with `fldlg2`/`fyl2x`, which GCC emits only
+  under `-funsafe-math-optimizations`. Finding 876.
+- **Nine of `V90Parameters`'s fifty-one `unnamed_*` slots are floats** and are
+  still declared `int`, annotated in the header with the value the object
+  stores. Finding 878, and the header says why the retype was deferred and who
+  should do it.
+
+### And what the merges themselves cost
+
+Four shared files conflict on every wave-0 merge and three of them must be
+resolved by UNION. `tools/offcheck.py`'s `SKIP_HEADERS` is the sharp one: a
+single long line that every batch appends a header name to, where taking one
+side entire drops another batch's entry and the symptom is
+`N of N annotations do not match the layout` — a message about offsets,
+produced by a parse error. `test/mutations/suites.json` is the same shape and
+worse in one way: one batch reformatted the whole file, so the conflict covered
+every line and taking its side would have silently dropped the batch that
+merged before it. `docs/coverage.md` is the one file where taking a side entire
+is right, because it is regenerated. Finding 700 in four instances in one
+afternoon.
+
+**Record each batch's own mutation suites by name at merge time** —
+`tools/mutsnap.py --update <suite> <suite>` re-runs only those mutations and is
+not the tree-wide sweep this document forbids. A registered-but-unrecorded
+suite is `MISSING`, which unlike staleness is a hard failure and is
+unambiguously a defect: the record cannot detect a change to a suite it has
+never seen. Two batches were denied permission to do this and correctly did not
+hand-write the file.

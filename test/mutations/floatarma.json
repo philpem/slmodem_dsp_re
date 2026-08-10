@@ -1,0 +1,130 @@
+[
+ {"label": "NOTE: what this set is for, and one rule it follows",
+  "why": "FloatARMA and its test were written by one hand at one sitting from one reading of 0x46e90-0x47880, so a green run says the two agree and not that either is right.  Every entry below is a claim the disassembly makes: a rounding rule, a buffer pairing, a divide's operand order, an accumulator pairing, or a loop bound.  The two the x87 fixtures exist for are `one accumulator, not two` and `double, not the register width`; ordinary coefficients cannot see either.  THE RULE: no entry may drive a history index outside its buffer.  Several obvious mutations -- swapping m_xlen and m_ylen, rewinding a position against the other tap count -- make a position negative for at least one shape and then corrupt the heap, and a run that dies of that tells you about the allocator rather than about the claim.  Where the natural mutation was unsafe the entry below moves the value the other way instead, which the same assertion catches."},
+
+ {"label": "the tap counts round up to a multiple of eight",
+  "find": "\tif (r < n)\n\t\tr += 4;",
+  "replace": "\tif (r < n)\n\t\tr += 8;"},
+
+ {"label": "the input history is one word longer than the map says",
+  "find": "\tm_xlen = m_nB + blockSize;",
+  "replace": "\tm_xlen = m_nB + blockSize + 1;"},
+
+ {"label": "the output history is one word longer than the map says",
+  "find": "\tm_ylen = m_nA + blockSize;",
+  "replace": "\tm_ylen = m_nA + blockSize + 1;"},
+
+ {"label": "the numerator array is allocated one word too long",
+  "find": "\tm_b = (float *)sysdep_malloc(m_nB * sizeof(float));",
+  "replace": "\tm_b = (float *)sysdep_malloc((m_nB + 1) * sizeof(float));"},
+
+ {"label": "the padding above the caller's denominator count is left as allocated",
+  "find": "\tfor (m_idx = nDen; m_idx < m_nA; m_idx++)\n\t\tm_a[m_idx] = 0.0f;",
+  "replace": ""},
+
+ {"label": "the normalisation divisor is compared against zero, not one",
+  "find": "\tif (den[0] != 1.0f) {",
+  "replace": "\tif (den[0] != 0.0f) {"},
+
+ {"label": "the scaling divides instead of multiplying by the reciprocal",
+  "equivalent": true,
+  "why": "No float can separate the two.  The object does `fld1 / flds den[0] / fdivr / fmuls / fstps`, so it forms the reciprocal in an x87 register and multiplies -- two roundings at 64 bits and one at 24.  b/d does one at 64 and one at 24.  For the two to disagree the exact quotient must fall within about 2**-63 of a float half-way point, and it cannot: b and d are floats, so the exact quotient is B/D with B and D 24-bit integers, and |B/D - M/2**25| >= 1/(D * 2**25) >= 2**-49 for every integer M.  2**-49 is fourteen binary orders above the double-rounding error, so the two always round alike.  MEASURED as well as argued: 40 million random coefficient pairs of the fixture's own shape and 60 million pairs drawn from the WHOLE float space -- both signs, denormals and extremes included -- gave zero separations (finding 873).  This claim is real and is a CODEGEN-tier claim: tier 3 sees the fdivr/fmuls pair, tier 1 provably never can.",
+  "find": "\t\t\tm_b[m_idx] = 1.0f / den[0] * m_b[m_idx];",
+  "replace": "\t\t\tm_b[m_idx] = m_b[m_idx] / den[0];"},
+
+ {"label": "den[0] is read once, before the loop the object re-reads it in",
+  "equivalent": true,
+  "why": "The object reloads den[0] on every iteration because the store to m_a[i] may alias it -- both are float * and GCC cannot prove otherwise.  It provably cannot: m_a is the return of a sysdep_malloc made three statements earlier in this same constructor, so it is memory no caller has ever had a pointer to, and den[0] therefore holds the same value at every iteration.  That is an argument about the code and not about the fixture -- no argument list can make the two overlap.  The reload is faithful to the instruction stream and unobservable.",
+  "find": "\t\tfor (m_idx = 1; m_idx < nDen; m_idx++)\n\t\t\tm_a[m_idx] = 1.0f / den[0] * m_a[m_idx];",
+  "replace": "\t\tfloat d0 = den[0];\n\t\tfor (m_idx = 1; m_idx < nDen; m_idx++)\n\t\t\tm_a[m_idx] = 1.0f / d0 * m_a[m_idx];"},
+
+ {"label": "m_a[0] is only zeroed on the scaling arm",
+  "find": "\t}\n\tm_a[0] = 0.0f;\n\n\treset();",
+  "replace": "\t\tm_a[0] = 0.0f;\n\t}\n\n\treset();"},
+
+ {"label": "the constructor rewinds the positions but does not clear the histories",
+  "find": "\tm_a[0] = 0.0f;\n\n\treset();",
+  "replace": "\tm_a[0] = 0.0f;\n\n\tm_xpos = (int)(m_xlen - m_nB);\n\tm_ypos = (int)(m_ylen - m_nA);\n\tm_idx = m_ylen;"},
+
+ {"label": "one accumulator, not two",
+  "find": "\t\teven += (long double)p[0] * c[0];\n\t\todd += (long double)p[1] * c[1];\n\t\teven += (long double)p[2] * c[2];\n\t\todd += (long double)p[3] * c[3];",
+  "replace": "\t\teven += (long double)p[0] * c[0];\n\t\teven += (long double)p[1] * c[1];\n\t\teven += (long double)p[2] * c[2];\n\t\teven += (long double)p[3] * c[3];"},
+
+ {"label": "the accumulators are double, not the x87 register width",
+  "find": "\tlong double even = 0.0L;\n\tlong double odd = 0.0L;",
+  "replace": "\tdouble even = 0.0;\n\tdouble odd = 0.0;"},
+
+ {"label": "the taps pair the other way round",
+  "find": "\t\teven += (long double)p[0] * c[0];\n\t\todd += (long double)p[1] * c[1];\n\t\teven += (long double)p[2] * c[2];",
+  "replace": "\t\todd += (long double)p[0] * c[0];\n\t\teven += (long double)p[1] * c[1];\n\t\todd += (long double)p[2] * c[2];"},
+
+ {"label": "the one-at-a-time tail folds into the odd accumulator",
+  "equivalent": true,
+  "why": "The tail cannot run.  arma_round4 is the only thing that ever writes m_nA or m_nB and it rounds UP to a multiple of four, so `n` is a multiple of four at all four call sites and the 4-way loop consumes all of it.  The object emits the tail for the same reason and never enters it either.  That is a statement about the code: no argument to the constructor can produce a tap count that is not a multiple of four.",
+  "find": "\twhile (n != 0) {\n\t\teven += (long double)p[0] * c[0];",
+  "replace": "\twhile (n != 0) {\n\t\todd += (long double)p[0] * c[0];"},
+
+ {"label": "the carry copies from one word higher",
+  "find": "\tfloat *src = hist + taps - 2;",
+  "replace": "\tfloat *src = hist + taps - 1;"},
+
+ {"label": "the carry moves one word too few",
+  "find": "\tunsigned int rem = taps - 1;",
+  "replace": "\tunsigned int rem = taps - 2;"},
+
+ {"label": "reset rewinds both positions to zero",
+  "find": "\tm_xpos = (int)(m_xlen - m_nB);\n\tm_ypos = (int)(m_ylen - m_nA);\n}",
+  "replace": "\tm_xpos = 0;\n\tm_ypos = 0;\n}"},
+
+ {"label": "reset clears only the input history",
+  "find": "\tfor (m_idx = 0; m_idx < m_ylen; m_idx++)\n\t\tm_yhist[m_idx] = 0.0f;",
+  "replace": ""},
+
+ {"label": "reset leaves m_idx on the input history's length, not the output's",
+  "find": "\tfor (m_idx = 0; m_idx < m_xlen; m_idx++)\n\t\tm_xhist[m_idx] = 0.0f;\n\tfor (m_idx = 0; m_idx < m_ylen; m_idx++)\n\t\tm_yhist[m_idx] = 0.0f;",
+  "replace": "\tfor (m_idx = 0; m_idx < m_ylen; m_idx++)\n\t\tm_yhist[m_idx] = 0.0f;\n\tfor (m_idx = 0; m_idx < m_xlen; m_idx++)\n\t\tm_xhist[m_idx] = 0.0f;"},
+
+ {"label": "the two sums land in the other member",
+  "find": "\tm_fwd = arma_convolve(x + xp, m_b, m_nB);\n\tm_fbk = arma_convolve(y + yp, m_a, m_nA);",
+  "replace": "\tm_fbk = arma_convolve(x + xp, m_b, m_nB);\n\tm_fwd = arma_convolve(y + yp, m_a, m_nA);"},
+
+ {"label": "the output is feedback minus forward",
+  "find": "\tm_fwd = m_fwd - m_fbk;\n\ty[yp] = m_fwd;\n\n\tif (yp - 1 < 0) {",
+  "replace": "\tm_fwd = m_fbk - m_fwd;\n\ty[yp] = m_fwd;\n\n\tif (yp - 1 < 0) {"},
+
+ {"label": "the input sample is written into the output history too",
+  "find": "\tx[xp] = in;\n\tm_fwd = arma_convolve",
+  "replace": "\tx[xp] = in;\n\ty[yp] = in;\n\tm_fwd = arma_convolve"},
+
+ {"label": "the output history wraps one sample early",
+  "find": "\tif (yp - 1 < 0) {\n\t\tm_ypos = (int)(m_ylen - m_nA);",
+  "replace": "\tif (yp - 2 < 0) {\n\t\tm_ypos = (int)(m_ylen - m_nA);"},
+
+ {"label": "process(float) never advances the input position",
+  "find": "\t} else {\n\t\tm_xpos = xp - 1;\n\t}",
+  "replace": "\t} else {\n\t\tm_xpos = xp;\n\t}"},
+
+ {"label": "the block form runs one sample too few",
+  "find": "\t} while (--count != 0);",
+  "replace": "\t} while (--count > 1);"},
+
+ {"label": "the block form writes the feedback sum, not the output",
+  "find": "\t\t*out++ = m_fwd;\n\n\t\txp--;",
+  "replace": "\t\t*out++ = m_fbk;\n\n\t\txp--;"},
+
+ {"label": "the block form leaves both positions where it found them",
+  "find": "\tm_xpos = xp;\n\tm_ypos = yp;",
+  "replace": ""},
+
+ {"label": "the block form's zero-count guard touches the object on its way out",
+  "find": "\tif (count == 0)\n\t\treturn;",
+  "replace": "\tif (count == 0) {\n\t\tm_xpos = 0;\n\t\treturn;\n\t}"},
+
+ {"label": "the destructor forgets the output history",
+  "find": "\tif (m_yhist != 0)\n\t\tsysdep_free(m_yhist);",
+  "replace": ""},
+
+ {"label": "the destructor frees the denominator twice and never the numerator",
+  "find": "\tif (m_b != 0)\n\t\tsysdep_free(m_b);",
+  "replace": "\tif (m_b != 0)\n\t\tsysdep_free(m_a);"}
+]

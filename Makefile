@@ -324,6 +324,24 @@ strings:
 offsets:
 	@$(PYTHON) tools/offcheck.py
 
+# V90Parameters.h and V92Parameters.h against the blob's own `loadParams`.
+#
+# Those two headers are LAYOUT ONLY -- not one member is written -- so `test`
+# cannot see them at all, and half the constructors in VPcmV34Main.cpp's span
+# take a pointer to one.  A later batch moving a field would leave every gate
+# in this tree green.  So the object is the oracle directly: tools/vparse.py
+# re-reads the 295 + 54 (name, offset, int-or-float) triples out of the two
+# `loadParams` members and paramcheck.py compares them with the header text.
+# The syntax check is here rather than in `check64` because nothing includes
+# either header yet, and an uncompiled header is not a checked one.
+params: | $(BUILD)
+	@$(PYTHON) tools/paramcheck.py --emit $(BUILD)
+	@for h in V90Parameters V92Parameters; do \
+	    $(CXX) $(ARCH32) $(CXXFLAGS) -fsyntax-only $(BUILD)/_$$h.cpp || exit 1; \
+	    $(CXX) $(SYNCXXFLAGS) -fsyntax-only $(BUILD)/_$$h.cpp || exit 1; \
+	done
+	@echo "parameter headers: layout matches the object, and the compiler agrees"
+
 # How many diagnostic call sites the suite never reaches.
 #
 # TRACKED, NOT GATED.  53 of 279 are dead today and retiring them is task #50;
@@ -373,7 +391,7 @@ refs:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: test check64 interop coverage debugcov
+phase: test check64 interop params coverage debugcov
 	@echo
 	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 

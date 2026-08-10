@@ -78,9 +78,29 @@ extern unsigned int ref_dsplibs_debug_level;
 /* The object is 0x42c; the slot is larger so an overrunning store shows up. */
 #define SLOT		(0x42c + 64)
 
+/*
+ * THE TWO EMPTY SPECIAL MEMBERS ARE LOAD-BEARING.  `Descrambler` declares a
+ * constructor and a destructor (see dsplib/Scrambler.h and finding 871), which
+ * leaves `V90Phase3Demodulator` with no default constructor and a non-trivial
+ * destructor, which DELETES both of a union holding one.  A user-provided pair
+ * that constructs and destroys no variant member restores them and changes
+ * nothing else.
+ */
 union p3d_slot {
 	V90Phase3Demodulator o;
 	unsigned char raw[SLOT];
+
+	p3d_slot() {}
+	~p3d_slot() {}
+};
+
+/* The same device, for the two hand-built descramblers driven directly. */
+union dsc_slot {
+	Descrambler<int, int> o;
+	unsigned char raw[sizeof(Descrambler<int, int>)];
+
+	dsc_slot() {}
+	~dsc_slot() {}
 };
 
 /*
@@ -106,6 +126,7 @@ union p3d_slot {
 #define PARAMS_BYTES	0x504
 
 static union p3d_slot slot[2];
+static union dsc_slot dsc_a, dsc_b;
 static V90AutoDigitalImpDetector adid[2];
 static V90SdDetector sdd[2];
 static float sdhist[2][SDD_HIST];
@@ -350,6 +371,7 @@ static const int desc_v[] = {
 static int
 run_descrambler(void)
 {
+	Descrambler<int, int> &a = dsc_a.o, &b = dsc_b.o;
 	int i, trial, sawOne = 0, sawZero = 0;
 
 	diff_begin("Descrambler<int,int>::reset and ::resetHistoryIndexes");
@@ -357,7 +379,6 @@ run_descrambler(void)
 	for (trial = 0; trial < 8; trial++) {
 		for (i = 0; i < NDESC; i++) {
 			long tag = (long)trial * 100 + i;
-			Descrambler<int, int> a, b;
 
 			lfsr_state = 0x71cu + 0x4f1bu * (unsigned)(trial * 32 + i);
 			fill_pair(dbuf[0], dbuf[1], sizeof(dbuf[0]));
