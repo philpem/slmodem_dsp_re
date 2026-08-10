@@ -147,6 +147,16 @@ main(void)
 	 * assertion that catches it.  Both transcripts are taken at level 2
 	 * from the reference side, so it is a statement about the OBJECT and
 	 * not about our copy of it.
+	 *
+	 * THIS SECTION MUST STAY LAST, and the reason is not obvious.  It
+	 * calls the reference side twice and our side not at all, so from here
+	 * on the two `edprintf` key counters have seen different numbers of
+	 * calls.  That is harmless because nothing follows -- but `edprintf`
+	 * resets its key at the top of every call EXCEPT the "too long print
+	 * string" path (include/dsplib/encode.h), so a section appended after
+	 * this one could see its first comparison fail for a reason that has
+	 * nothing to do with `printTitle`.  Append above, or call both sides
+	 * here and keep the two counters in step.
 	 */
 	diff_begin("V90 and V92 printTitle do not print the same thing");
 	{

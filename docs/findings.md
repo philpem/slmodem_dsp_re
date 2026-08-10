@@ -32995,11 +32995,17 @@ alignment padding. Its 505 for `realfft` was right.
 
 The reconstruction in finding 832 was structurally right on its first build and
 still disagreed with the blob in about one output word in a hundred, by one to
-sixty ULP of a `float`. All of it was x87 excess precision, and **the two places
-it mattered are places the compiler was FREE to choose** -- which makes this an
-exception to `docs/method/tiers.md`'s forced/free rule worth naming. A spill
-decision is free, and here a spill decision changes the answer, because spilling
-an x87 register narrows it.
+sixty ULP of a `float`. All of it was x87 excess precision, and both places it
+mattered look at first like places the compiler was FREE to choose.
+
+**They are not, and the sharper statement keeps
+`docs/method/tiers.md`'s forced/free rule intact rather than carving an
+exception out of it: a spill is free, but a NARROWING spill is forced.** Where
+to keep a value is the compiler's business; changing the value is not, and
+storing an 80-bit x87 register into a 4-byte slot changes it. Register
+allocation stays in the "free, so ignore it" column exactly as finding 614 puts
+it. What moves into the "forced, so act on it" column is the width of the slot,
+which is the same kind of fact as the signedness of a load whose result is used.
 
 Both remedies were **ablated** -- removed, rebuilt, watched fail, put back --
 because a deviation nobody has seen matter is a deviation nobody should carry.
@@ -33211,6 +33217,20 @@ non-emptiness is asserted for the BLOB's side separately: `lines_ours > 0` is a
 statement about the reconstruction, and if the reference printed nothing the
 whole file would be two empty strings agreeing. The emptied-body mutation is
 what shows that guard firing.
+
+**The banner literals are per-TU copies in the object and the claim stops
+there.** `.rodata.str1.4+0x416c` and `+0x34a0` are two copies of the same 57
+asterisks, which is what two translation units each spelling out the literal
+look like after `ld -r`, and our two objects reproduce that -- each of
+`build/src/pump/v90/V90Modem.o` and `V92Modem.o` carries its own. **At link time
+they merge, on both sides**: `.rodata.str1.4` is `SHF_MERGE|SHF_STRINGS`, and
+`strings` finds exactly one copy of the banner in `build/test/t_printtitle`,
+ours and the blob's four copies all folded into it. So "the two TUs do not share
+the string" is true and checkable; "there are two copies in the program" is not,
+and was not claimed. The reason not to factor the literal into a shared header
+is therefore about which translation unit the original put it in, not about how
+many copies the linker leaves -- and nothing in the transcript tier can see
+either, since the emitted text is identical whichever way it goes.
 
 **One shared file was edited.** `tools/offcheck.py`'s `SKIP_HEADERS` gained
 `V90Modem.h` and `V92Modem.h`: that gate concatenates every

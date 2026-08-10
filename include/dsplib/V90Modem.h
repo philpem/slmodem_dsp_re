@@ -15,8 +15,8 @@
  * already dead.  So the member is a banner printer that happens to be a
  * member, and calling it through a pointer to nothing works.
  *
- * The class is not polymorphic: two destructors, D1 at 0x192b0 and D2 at
- * 0x19160, and no D0.  A deleting destructor is what GCC emits for a virtual
+ * The class is not polymorphic: two destructors, `D1` at 0x192b0 and `D2` at
+ * 0x19160, and no `D0`.  A deleting destructor is what GCC emits for a virtual
  * one (finding 228), so there is no vptr at offset 0.  That is stated because
  * it is the one layout fact the object does give away, not because anything
  * here depends on it.

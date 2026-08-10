@@ -22,8 +22,9 @@
  *     and tail-jumps to `dsplibs_debug_printf` instead.
  *
  * The banner strings are this TU's own copies at .rodata.str1.4+0x34a0,
- * +0x34dc and +0x3518, textually identical to `V90Modem.cpp`'s at 0x416c and
- * not shared with them.
+ * +0x34dc and +0x3518, textually identical to `V90Modem.cpp`'s at 0x416c.
+ * Two separate copies in the OBJECT, one after the final link -- see the
+ * matching note in V90Modem.cpp for why that is not a contradiction.
  *
  * See docs/findings.md 837.
  */

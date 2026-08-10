@@ -31,8 +31,11 @@
  * The banner strings are this TU's own copies in `.rodata.str1.4` at 0x416c,
  * 0x41a8 and 0x41e4 -- `V92Modem.cpp` has an identical set at 0x34a0, 0x34dc
  * and 0x3518, which is what two translation units each spelling out the same
- * literal looks like after `ld -r`.  They are not shared and must not be
- * factored into a common header.
+ * literal looks like after `ld -r`.  Do not factor them into a shared header:
+ * the reason is which TU the original put the literal in, and NOT how many
+ * copies survive, because `.rodata.str1.4` is `SHF_MERGE|SHF_STRINGS` and the
+ * final link folds every copy -- ours and the blob's -- into one.  Nothing in
+ * the transcript tier can see it either way.
  *
  * See docs/findings.md 837.
  */
