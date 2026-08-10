@@ -2519,3 +2519,123 @@ incremented without a bound check even though `pending` is five elements. With
 `n >= 1` the queue never holds more than one sample, so the array is not
 overrun -- only the input is.
 
+
+---
+
+# Appendix A — is each entry MEASURED, or is it an assertion?
+
+*Task #87. Appended rather than written into the 64 entries above, because
+this file is shared with other sessions and an append does not conflict where
+64 in-place edits would — finding 622's "Owed" paragraph. The mechanical half
+regenerates with `tools/debugcov.py --deviations --no-build`; the judgement
+below is not mechanical and does not.*
+
+Every entry above is a CLAIM about behaviour. `docs/fastpass.md` deferred the
+follow-up — is the claim measured, or has nobody driven it — and this is it.
+
+## What the two instruments can and cannot say
+
+`tools/devaudit.py` answers a NECESSARY condition: does a compiled test object
+reference the `ref_` alias of the function the entry names? A "no" is
+conclusive; a "yes" only says the function is linked, not that the deviant
+ARM fired.
+
+`tools/debugcov.py --deviations` is the stronger instrument added here. It
+takes the `D<n>` references `src/` already carries, keeps only those in a file
+the entry itself names, and reports gcov's verdict on the enclosing function:
+every line and arc covered, or dead code, or **compiler-folded**. That last
+one is the only place the pass turns a necessary condition into a sufficient
+one, and it is what settles D36 and D53.
+
+**Neither instrument can see a missing-guard defect.** D5, D8, D18 and D62 are
+all "the original does not test something", and an absent branch has no arc to
+be untaken and no line to be dead. Those four are measurable only by counting
+allocations, which is what `harness_alloc` exists for. This is why D5 read as
+covered under both instruments and was in fact a gap.
+
+## `unmeasured` is used above in two different senses
+
+Twenty-two entries carry the word, and separating them is most of the work.
+
+- **Nothing drives this path** -- the sense this appendix is about, and the
+  only one a test can close. D5, D40 and D56 were this.
+- **Nothing establishes whether a real session gets here**, or what a constant
+  means. D43's 431,488, D48's ladder, D50's high byte, D51's wrap and D54's
+  negative shift are all of this kind: the arm IS driven and compared against
+  the blob, and what is open is a question about callers that are not
+  reconstructed, or about the original author's intent. No test in this tree
+  can close those, and writing one would not be progress.
+
+An entry in the second sense is MEASURED for the purpose of this audit and
+still correctly says `unmeasured` in its own text. The two are not in conflict,
+and reading them as one is how a register of 64 claims turns into a to-do list
+of 22 that nobody should do.
+
+## The classification
+
+**MEASURED — 33.** A named test drives the deviant path, not merely the
+function containing it.
+
+> D1 D3 D4 D8 D11 D12 D13 D14 D15 D16 D17 D19 D22 D24 D25 D26 D29 D30 D32 D35
+> D36 D39 D43 D48 D49 D50 D51 D52 D53 D54 D58 D63 D64
+
+Three of those deserve naming because the evidence is unusual. **D36** and
+**D53** are confirmed by the COMPILER: gcov emits no code at all for the body
+each entry calls unreachable, and `debugcov.py`'s `folded` classification
+finds both mechanically. **D49** is measured by an equivalent mutation that
+survives — `test/mutations/v34pcmif.json` — which is the correct instrument
+for a dead store, since nothing observable changes by construction.
+
+**UNMEASURABLE — 16.** The deviant path cannot be compared against the blob,
+and no test should be written for it. Four distinct reasons:
+
+- *The original has no behaviour to compare against.* D2 (above Q15 the
+  original reads whatever `.rodata` holds), D18, D20, D33, D55, D62 — the
+  distinguishing input segfaults or is undefined on the reference side.
+- *A comparison of a hang.* D9, D46, D57, D59 — driving these makes one or
+  both sides loop 2^32 times or spin for ever. `test/harness/v34hsstep.c`
+  already arms `SIGALRM` for D59's sake.
+- *Ambiguous alias or internal table* — finding 622's two blind spots. D6:
+  `ref_AGC_DEF_ALPHA` exists at six addresses because the name is file-static
+  in six translation units, so a test declaring it binds to whichever the
+  linker picks; measured by hand out of the object instead, and the absence of
+  an automated guard is correct. D42: the in-range case is thoroughly driven
+  by the transcript sweep with no test naming `ref_StateName`, and the
+  out-of-range case has the two sides reading different memory.
+- *Out of domain, or blocked on unreconstructed code.* D27 (a single wrap
+  provably suffices for every `lag` the delay line can answer), D37, D44
+  (receive side needs `demapFrame`), D61.
+
+**UNMEASURED BUT DRIVABLE — 5 open, 3 closed by this task.**
+
+Closed: **D5**, **D40** and **D56** — see the findings.
+
+Open, with what each needs:
+
+| entry | the path nothing drives | what it needs |
+|---|---|---|
+| D21 | the two V.23 receivers diverging at a carrier-loss limit of 65536 or more | `t_v23rx` pins the truncating path at 200 ms, far below the boundary. Both sides are deterministic at `0x10000`; a new differential case at that limit measures it. |
+| D23 | `V23ModemMain` with `rx_count != tx_count` | a padded transmit buffer, D64's precedent — otherwise the two sides disagree about memory past the end rather than about the function. |
+| D38 | a signalling NaN through `V34GiveProbeResults` | the ASSERT-THE-DIVERGENCE shape, which only D3 uses: `fld` quiets an sNaN and a byte copy does not, so a test here must assert the two sides differ. A different contract from the rest of the suite, and the reason this is recorded rather than written. |
+| D41 | `descram_tail`'s refill shift going negative | needs `nbits > 16` against a register holding fewer than 16 bits. The sweep drives 1..16, where it cannot. |
+| D45 | whether a set bit ever lands in both terms of `scrambleGP*`'s OR | not a new fixture at all — a property computable over the calls the existing sweep already makes. The cheapest of the five. |
+
+**RETRACTED — 7.** D7 D10 D28 D31 D34 D47 D60. Not claims about current
+behaviour; kept because the route to a wrong claim is worth as much as a right
+one.
+
+33 + 16 + 8 + 7 = 64, each entry in exactly one row. D40 is counted as a GAP
+and not as measured: `t_encode` drove its general claim on the ACCEPTED path,
+and the one arm nothing drove is the interaction -- the too-long path WITH the
+switch on. That arm is not a corner of the claim, it is the only place the
+claim could have been false, and D40's own safety argument does not reach it
+(finding 1066). An entry is measured when its own claim is driven, not when
+its function is.
+
+## One entry whose own expiry condition has now fired
+
+**D35** says of the 2743-baud arm that "whether either can put 2743 there has
+not been measured", and names its own trigger: "`unmeasured` — task #47, or
+whenever `probeselect` lands". `probeselect` has landed. All three writers of
+`+0xaa96` now exist in `src/pump/v34/v34hshak.c`, and none can write 2743 —
+see finding 1063. The entry is no longer resting on the absence of a writer.
