@@ -56,7 +56,7 @@ settled deliberately in August 2026 and should be changed the same way.
 | | step | phase | why here |
 |--:|---|---|---|
 | 1 | finish V.34 | 10 | the base V.90 builds on |
-| 2 | **two instances, one originating and one answering, against the blob** | 10 | **done** — `test/unit/t_v34call.c`, findings 780-788 |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | **PARTIAL** — sequencing agrees; the call does NOT connect and NO data is carried. See below |
 | 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
 | 4 | V.92 | 11 | shares that span |
 | 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
@@ -75,6 +75,34 @@ every block against the blob-blob run. It found a defect at **block 0**:
 `modem_serrint`'s history-ring wrap is `jbe` and this tree had it signed, so a
 negative index walked the write 1,385 elements below the ring. Every existing
 test seeds that index to zero. Findings 780-788.
+
+**But step 2 IS NOT FINISHED, and the bar is data in both directions.**
+`test/unit/t_v34conn.c` (findings 900-908) then re-ran that call on two
+endpoints built by the blob's own constructor, which produced a real V.34
+startup — DET_SYNC → DET_INFO → TONE_AB → phase 1 in the correct `_CALL`/`_ANS`
+split → phase 2. It still **does not connect**: `+0x2218` never leaves 2, out
+to 200,000 blocks (83 seconds of line time), stopping at *"Repeated info0 is
+detected"* and cycling 41/44 for ever.
+
+So what is proven today is **call setup, agreeing with the blob, and only as
+far as phase 2**. Measured, so that nobody has to re-derive it:
+
+| | proven |
+|---|---|
+| construction, both roles | yes — the blob's constructor, as a fixture |
+| handshake sequencing matches the blob | yes — 3,200 block-endpoint pairs, four ways |
+| the call reaches DATA MODE | **no** |
+| bits carried, either direction | **no** — `src/pump/v34/` contains no
+`modem_get_bits`/`modem_put_bits` at all |
+| BER | **no** |
+
+Compare phase 2's own entry above: Bell 103 is called done because it
+*"connects and carries data at BER 0"*, and `t_b103link.c`'s last section is a
+bit-error-rate sweep asserting **zero** errors on a noiseless channel. V.34 has
+no equivalent and cannot have one until it connects. The blocker is the
+configuration — five parameters had to be overridden to construct at all and
+two of them are addresses rather than numbers, so it is plausible and not
+recovered (findings 801, 908).
 
 **Step 6 is last because it is the one part with no tier-1 oracle.** The blob
 is the *analogue client*: `VPCMXF_Create` derives its side from whether its
