@@ -33035,9 +33035,9 @@ in this configuration, in either direction. `vpcm_create` preserving `b0`,
 `filtdelay` is `35 + iodelay/4`, measured across the range:
 
 ```
-  iodelay     0   40   80   88  100  120  140  150  160  180  200  240
-  filtdelay  35   45   55   57   60   65   70   73   75   80   85   95
-  connects    no   no   no  yes  yes  yes  yes  yes  yes  yes  yes  yes
+  iodelay     0   40   80   88  100  120  140  150  160  180  200  216  240
+  filtdelay  35   45   55   57   60   65   70   73   75   80   85   89   95
+  connects    no   no   no  yes  yes  yes  yes  yes  yes  yes  yes  yes  yes
 ```
 
 **A sharp boundary where the mechanism says the boundary is.** Arm 47's wait
@@ -33131,18 +33131,29 @@ Worth measuring before concluding anything about a driver that does not
 connect, because "the host was supposed to call something we did not" is
 otherwise an open suspect for ever.
 
-Of the 35 `VPcm*` symbols the object exports, sixteen have **no relocation
-anywhere in the object** -- among them `VPcmV34Delete`, `VPcmV34NotifyDP`,
-`VPcmV34RequestDPNotification`, `VPcmV34SetMaxBlockLength`,
-`VPcmV34InitiateHangUp`, `VPcmV34InitMOH`,
-`VPcmV34InitiateRateRenegotiation`, the six `Get*` accessors and
-`_Z16VPcmV34SetDelaysP12tagV34Object`. So they are host entry points.
+Counted rather than eyeballed, with `STT_FILE` excluded so that the
+`VPcmV34Main.cpp` file symbol does not join the tally:
+
+```
+    VPcm*/VPCMXF* function symbols:      37
+      with a relocation somewhere:       21
+      with NONE (host entry points):     16
+```
+
+The sixteen are `VPcmV34Delete`; the seven accessors
+`GetCurrentRx/TxBaudRate`, `GetCurrentRx/TxCarrier`, `GetDiagnostics`,
+`GetQuickConnectIndication`, `GetSNR` and `GetVisualDiagnostics`;
+`VPcmV34InitMOH`, `VPcmV34InitiateHangUp`,
+`VPcmV34InitiateRateRenegotiation`, `VPcmV34NotifyDP`,
+`VPcmV34RequestDPNotification`, `VPcmV34SetMaxBlockLength`; and
+`_Z16VPcmV34SetDelaysP12tagV34Object`. Nothing in the object reaches any of
+them, so every one is a host entry point.
 
 **And `slmodemd` calls none of them.** A grep for `VPcm` over the whole
 `slmodemd/` tree returns nothing. Its entire interaction with the datapump is
 `modem_dp_process`'s `m->dp->op->process(m->dp, in, out, cnt)` with `cnt`
 capped at `m->frag`, plus `do_modem_change_dp`'s create and the old pump's
-delete. The last of those sixteen is mangled and so is not callable from C at
+delete. The last of the sixteen is mangled and so is not callable from C at
 all.
 
 The parameters that contract fixes, and which this tree now matches:
