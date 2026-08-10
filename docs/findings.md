@@ -35476,3 +35476,51 @@ on a lossy or echoing path; whether a SIP host that implements
 `MDMPRM_UPDATE_DELAY` faithfully could usefully report its true latency and
 let the pump negotiate it down; and whether the 384-sample floor in finding
 1024's over-cap path was chosen for a reason or is a constant nobody revisited.
+
+### 1090. K56FLEX IS STUBBED OUT IN THIS BUILD -- present in name, absent in code
+
+Asked what it would take to bring V.34 up to K56flex, V.90 and V.92, the
+closure said K56flex needs **42 bytes over 19 symbols**, which looked like the
+cheapest capability in the object. It is not a capability at all.
+
+Nineteen of the twenty-four `K56Flex` code symbols are **three bytes or less**,
+and symbol-scoped disassembly says what they are:
+
+```
+K56FlexFloModem::externalReset          ret
+K56FlexFloModem::internalReset          ret
+K56FlexFloModem::k56FlexEnterPhase3     ret
+K56FlexFloModem::C1 / C2 / D1 / D2      ret
+K56FlexFloModem::getDFE                 xor %eax,%eax ; ret
+K56FlexFloModem::getConstellation       xor %eax,%eax ; ret      (and five
+K56FlexFloModem::getResamplerPhase      xor %eax,%eax ; ret       more of
+K56FlexFloModem::getLinearEqualizer     xor %eax,%eax ; ret       the same)
+K56FlexFloModem::k56FlexRunDemodulator  mov $0x5,%eax ; ret
+```
+
+The constructor and destructor are `ret`. The demodulator returns the constant
+**5** for every input. Only five K56flex symbols exceed three bytes, and two of
+those are `K56FLEX_Create`/`K56FLEX_Delete` at 19 and 23 bytes -- allocation
+wrappers, not signal processing. The largest is
+`V34XF_IndicateK56FlexJdReceived` at 247 bytes, which is the V.34 handshake
+*noticing* a K56flex Jd and is already reachable from written code.
+
+**So Smart Link shipped the class and not the modulation.** Whether it was
+removed or never finished, this object cannot do K56flex, and reconstructing
+every one of those 42 bytes byte-for-byte would produce a modem that still
+cannot do K56flex -- faithfully.
+
+### WHAT THIS MEANS FOR PLANNING
+
+- **K56flex is not a phase.** It is 42 bytes of `ret`, it is required for
+  byte-completeness, and it delivers no capability. Do it whenever the
+  surrounding class is being written, and do not schedule it.
+- **56k here means V.90**, and V.92 on top of it. The unwritten split is
+  **V.90 198,158 bytes / 425 symbols** against **V.92 52,911 / 184**, and V.92's
+  classes sit on V.90's engine -- so the order is forced by dependency, not by
+  preference.
+- **It is also a warning about closure size as a proxy for work.** 42 bytes
+  read as "nearly free"; the right reading was "nearly empty". A closure
+  measures what must exist to LINK, never what must exist to WORK. The same
+  trap in the other direction cost wave 1 (finding 838): a 1,662-byte function
+  with a 268-symbol closure.

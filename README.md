@@ -40,7 +40,7 @@ base V.90 builds on, not for its own sake.
 | 8 | remaining services (CID, DTMF, ring detect, voice, beep) | **not started** |
 | 9 | fax Class 1 (V.17 / V.27ter / V.29) | **not started** |
 | 10 | V.34 | **in progress** — the fast pass; see [docs/fastpass.md](docs/fastpass.md) |
-| 11 | V.90 / V.92 — *the end goal* | **not started**, beyond the 16,003 bytes of `VPcmV34Main.cpp` that `v34handshak` reaches (finding 215) |
+| 11 | V.90 / V.92 — *the end goal* | **in progress.** Unwritten: V.90 **198,158 B / 425 sym**, V.92 **52,911 / 184**; V.92's classes sit on V.90's engine, so the order is forced. **K56flex is NOT a third phase** — it is 42 bytes of `ret` and returns a constant; the object ships the class and not the modulation (finding 1090) |
 | 12 | 8 kHz retarget | **not started** — and it may not be a rescaling job: `vpcm_create` hard-guards `srate == 9600`, and 9,600 = 4 × 2,400, V.34's reference symbol rate. If `datapumpv34`'s four-sample block IS one symbol period, 8,000/2,400 is not an integer and the relationship breaks. Task #86 settles it before any work starts |
 
 Run `make coverage` for the live figure rather than trusting a number written
