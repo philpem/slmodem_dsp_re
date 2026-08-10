@@ -41,7 +41,7 @@ base V.90 builds on, not for its own sake.
 | 9 | fax Class 1 (V.17 / V.27ter / V.29) | **not started** |
 | 10 | V.34 | **in progress** — the fast pass; see [docs/fastpass.md](docs/fastpass.md) |
 | 11 | V.90 / V.92 — *the end goal* | **not started**, beyond the 16,003 bytes of `VPcmV34Main.cpp` that `v34handshak` reaches (finding 215) |
-| 12 | 8 kHz retarget | **not started** |
+| 12 | 8 kHz retarget | **not started** — and it may not be a rescaling job: `vpcm_create` hard-guards `srate == 9600`, and 9,600 = 4 × 2,400, V.34's reference symbol rate. If `datapumpv34`'s four-sample block IS one symbol period, 8,000/2,400 is not an integer and the relationship breaks. Task #86 settles it before any work starts |
 
 Run `make coverage` for the live figure rather than trusting a number written
 here; it reports translated bytes, what fraction of them a test drives against
