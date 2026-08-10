@@ -35865,6 +35865,17 @@ clamped ratios, so `dfeWindowHalf` is a fraction of the linear length and
 `dfeLength` is not in the computation at all.  Read twice before believing
 it.  Scaling the DFE window by `dfeLength` breaks **2,064 checks**.
 
+  WHICH RATIO SCALES WHICH WINDOW is a SEPARATE claim from which length does,
+  and the sweep could not make it: both ratios are drawn from one table and
+  the anti-vacuity check only requires SOME window to be non-empty.  The two
+  x87 instructions are `dc c9` (FMUL ST(1),ST(0)) and `de ca` (FMULP
+  ST(2),ST(0)) -- two different destinations one instruction apart, and
+  FMUL/FMULP have no reversed form, so finding 245's swap does not apply here
+  and the destinations are the whole content.  Four explicit cases with
+  asymmetric ratios were added: 0.5 and 0.05 against a length of 16 truncate
+  to 8 and 0, so the pair is (8, 0) one way round and (0, 8) the other.
+  Taking both halves from the left ratio breaks **1,688 checks**.
+
 The two fade ratios are clamped to [0, 0.5] by `fcom`/`sahf`/`jae` against
 zero and `fcoms`/`jbe` against 0.5, so a NaN comes out as 0.0f where
 `x < 0.0f ? ...` would have kept it; the reconstruction writes the object's
@@ -36103,14 +36114,15 @@ with identical neighbours, deepening cannot succeed and the anchor must not be
 loosened -- so the NEW code changes, by annotation and never by reordering.
 Reordering stores to break a text match would be fitting the test.
 
-### 1115. THE TWENTY-EIGHT MUTATIONS, AND THE FOUR THAT ARE EQUIVALENT
+### 1115. THE THIRTY MUTATIONS, AND THE FOUR THAT ARE EQUIVALENT
 
 Applied by hand, one at a time, each rebuilt, run and reverted -- finding
-1102's shape.  Twenty-four broke a named check:
+1102's shape.  Twenty-six broke a named check:
 
 | mutation | test | checks |
 |---|---|--:|
 | the beta sentinel is 0, not 1e-14f | t_v90equ | **2,376** |
+| both window halves come from the left fade ratio | t_v90equ | **1,688** |
 | the dfe window is scaled by dfeLength | t_v90equ | **2,064** |
 | the fade ratio is clamped to 1.0 | t_v90equ | **1,632** |
 | array_18 is cleared upwards | t_v90equ | **1,296** |
@@ -36121,6 +36133,7 @@ Applied by hand, one at a time, each rebuilt, run and reverted -- finding
 | word_290 gets 19199 | t_v90demod | **242** |
 | quickConnect is not stored in the equaliser | t_v90demod | **241** |
 | the evaluator's initial period is 1500 | t_v90leaves | **104** |
+| the evaluator leaves +0xa8 alone | t_v90leaves | **104** |
 | the phase 4 error is converted, not copied | t_v90leaves | **99** |
 | the prefilter reloads bank 1 row 1 | t_v90prefilter | **64** |
 | the evaluator swaps RRN_UP and RRN_DOWN | t_v90leaves | **52** |

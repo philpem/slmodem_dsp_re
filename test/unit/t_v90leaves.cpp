@@ -1019,6 +1019,20 @@ run_ce(void)
 	set_level(0);
 	diff_eq_int("the diagnostics were reached", printed, 1, 0);
 
+	/*
+	 * Every offset the allow-list names is one the BLOB really writes.
+	 * Without this the list is a permission and not a claim -- the file's
+	 * own rule, and `run_cd_reset` asserts the same five lines below its
+	 * sweep.
+	 */
+	{
+		int i;
+
+		for (i = 0; i < CE_NALLOW; i++)
+			diff_eq_int("+0x%lx is a word reset writes",
+				    ce_seen[i], 1, ce_allow[i]);
+	}
+
 	return diff_end();
 }
 

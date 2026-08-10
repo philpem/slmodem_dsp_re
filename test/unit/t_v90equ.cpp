@@ -703,6 +703,64 @@ run_reset(void)
 	diff_eq_int("a non-empty window was built", saw_window, 1, 0);
 	diff_eq_int("the fixed-point arrays were cleared", saw_mmx, 1, 0);
 
+	/*
+	 * WHICH RATIO SCALES WHICH WINDOW, asked with two ratios that cannot
+	 * give the same answer.  The sweep above draws both from one table and
+	 * requires only that SOME window came out non-empty, so it would agree
+	 * with a version that scaled both halves from the left ratio -- the
+	 * x87 sequence is `fmul %st,%st(1)` then `fmulp %st,%st(2)`, two
+	 * different destinations one instruction apart, and getting the second
+	 * wrong squares the first product instead of scaling the second ratio.
+	 * 0.5 * 16 truncates to 8 and 0.05 * 16 truncates to 0, so the pair is
+	 * (8, 0) one way round and (0, 8) the other.
+	 */
+	{
+		static const float lr[4][2] = {
+			{ 0.5f, 0.05f }, { 0.05f, 0.5f },
+			{ 0.25f, 0.5f }, { 0.5f, 0.25f }
+		};
+		int k;
+
+		for (k = 0; k < 4; k++) {
+			long tk = 780000 + k;
+
+			seed(tk);
+			fill_arena(tk);
+			wire(&ours.o);
+			wire(&theirs.o);
+			ours.o.linearEquLength = theirs.o.linearEquLength = 16;
+			ours.o.word_1c = theirs.o.word_1c = 24;
+			ours.o.dfeLength = theirs.o.dfeLength = 8;
+			ours.o.mmxArraysPresent =
+			    theirs.o.mmxArraysPresent = 0;
+			ARENA_PARAMS->LINEAR_EQU_FADE_LEFT_EDGE_RATIO =
+			    lr[k][0];
+			ARENA_PARAMS->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO =
+			    lr[k][1];
+			ARENA_PARAMS->ERROR_ENERGY_MEAN_BLOCK_LEN = 7;
+			ARENA_PARAMS->ERROR_ENERGY_MEAN_K = 0.5f;
+
+			memcpy(&arena_save, &arena, sizeof(arena));
+			ours.o.reset(3);
+			memcpy(&arena_ours, &arena, sizeof(arena));
+			memcpy(&arena, &arena_save, sizeof(arena));
+			ref_equ_reset(&theirs.o, 3);
+
+			diff_eq_obj("after reset (asymmetric ratios)",
+				    V90Equalizer, &ours.o, &theirs.o, tk);
+			diff_eq_obj("the arena (asymmetric ratios)",
+				    struct equ_arena, &arena_ours, &arena, tk);
+			diff_eq_int("linearEquWindowHalf (%ld)",
+				    (long)theirs.o.linearEquWindowHalf,
+				    (long)(unsigned int)(lr[k][0] * 16.0f),
+				    tk);
+			diff_eq_int("dfeWindowHalf (%ld)",
+				    (long)theirs.o.dfeWindowHalf,
+				    (long)(unsigned int)(lr[k][1] * 16.0f),
+				    tk);
+		}
+	}
+
 	return diff_end();
 }
 
