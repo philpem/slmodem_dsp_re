@@ -56,7 +56,7 @@ settled deliberately in August 2026 and should be changed the same way.
 | | step | phase | why here |
 |--:|---|---|---|
 | 1 | finish V.34 | 10 | the base V.90 builds on |
-| 2 | **two instances, one originating and one answering, against the blob** | 10 | **PARTIAL** — sequencing agrees; the call does NOT connect and NO data is carried. See below |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | **PARTIAL** — the ORACLE now connects and carries data at BER 0 both ways (`t_v34link.c`, findings 960-967); the four-way comparison of *our* code still stops before data mode, because `vpcm_run` is not reconstructed. See below |
 | 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
 | 4 | V.92 | 11 | shares that span |
 | 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
@@ -91,18 +91,23 @@ far as phase 2**. Measured, so that nobody has to re-derive it:
 |---|---|
 | construction, both roles | yes — the blob's constructor, as a fixture |
 | handshake sequencing matches the blob | yes — 3,200 block-endpoint pairs, four ways |
-| the call reaches DATA MODE | **no** |
-| bits carried, either direction | **no** — `src/pump/v34/` contains no
-`modem_get_bits`/`modem_put_bits` at all |
-| BER | **no** |
+| the call reaches DATA MODE | **yes, for the blob** — `t_v34link.c`, 33,600 bit/s each way |
+| bits carried, either direction | **yes, for the blob** — both directions at once |
+| BER | **zero**, over 6,112 and 5,572 bits, per endpoint |
+| any of the last three for OUR code | **no** — `vpcm_run` (.text 0x3e40) is the only caller of `modem_get_bits`/`modem_put_bits` for V.34 and is not reconstructed |
 
 Compare phase 2's own entry above: Bell 103 is called done because it
 *"connects and carries data at BER 0"*, and `t_b103link.c`'s last section is a
 bit-error-rate sweep asserting **zero** errors on a noiseless channel. V.34 has
-no equivalent and cannot have one until it connects. The blocker is the
-configuration — five parameters had to be overridden to construct at all and
-two of them are addresses rather than numbers, so it is plausible and not
-recovered (findings 801, 908).
+no equivalent and cannot have one until it connects. The blocker was the
+configuration, and it has since been **found and fixed**: `MDMPRM_IODELAY`.
+`filtdelay` is `35 + iodelay/4`, it is what microstate 47 `TX_PHASE2_ANS`
+starts its countdown from, and below a `filtdelay` of 57 that countdown loses
+a race against the receiver declaring all-ones on the silent line phase 2
+requires — which the object reports as *"Repeated info0 is detected"*.
+`t_v34conn`'s 40 was chosen only to satisfy the object's `+4 <= 0xf4`;
+slmodemd's own drivers measure 216 and 232. Findings 960-963; `t_v34conn.c` is
+left as the recorded control for the below-threshold case.
 
 **Step 6 is last because it is the one part with no tier-1 oracle.** The blob
 is the *analogue client*: `VPCMXF_Create` derives its side from whether its

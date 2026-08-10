@@ -34200,3 +34200,347 @@ either, since the emitted text is identical whichever way it goes.
 which is what the list already exists for and why 39 other C++ headers are in
 it. The headers are still compiled, by the `.cpp` files that include them and
 by `check64`.
+### 960. V.34 DOES NOT CONNECT because arm 47 races a silent line, and `filtdelay` is what decides the race
+
+Finding 902 said the call stops at *"Repeated info0 is detected"* and could not
+say why. This is why -- mechanism first and value second, and the order
+matters, because the value in finding 962 was found by reading the mechanism
+and not by moving a number until something happened.
+
+The four steps, each read out of `src/pump/v34/v34hshak.c` before any
+experiment:
+
+```
+  arm 49  RX_PHASE1_ANS   counter = filtdelay, THEN microstate -> TX_PHASE2_ANS
+  arm 47  TX_PHASE2_ANS   if (fsk.sr & 0xf) == 0xf && +0x3588 == 0
+                              -> t3m_errrec_reset, "Repeated info0 is detected"
+                          n = counter + 1
+                          n <= 0x5f  -> store it and stay
+                          otherwise  -> microstate = TX_L1   (transmit the probe)
+```
+
+So the answerer, on entering phase 2, must sit out **`0x5f - filtdelay`**
+invocations of arm 47 before it transmits the line probe. Each invocation is
+one four-sample `datapumpv34` block, so with `filtdelay` 45 that is 50
+invocations -- 200 samples, about 21 ms.
+
+**And the caller goes SILENT during exactly that window, correctly.** V.34
+phase 2 has the answer modem probe the line while the call modem listens; the
+originator's arm 59 `RX_PHASE2_CALL` sets txstate 5 `SILENCE` and stops
+transmitting. Measured on the wire, at 288 samples of delay and iodelay 40:
+
+```
+   blk   originate                          answer
+    87   txstate TONE_AB => SILENCE
+    92                                      -> TX_PHASE2_ANS, counter 46
+    93                                      rx-energy 8184844, fsk.sr 0008
+    94                                      rx-energy 0,       fsk.sr 0040
+    95                                      rx-energy 0,       fsk.sr 0203
+    96                                      rx-energy 0,       fsk.sr ffff
+                                            "Repeated info0 ... in TX_PHASE2_xxx"
+```
+
+The demodulator, given no carrier, fills `fsk.sr` with ones; four consecutive
+ones is arm 47's guard, and it trips at counter 94 against a threshold of 95.
+**It loses by one block -- about 22 samples out of 200.** The answerer then
+restarts INFO0; the originator now genuinely receives a second INFO0 and
+error-recovers as well at block 106, its own `+0x3588` reading 1 rather than
+the answerer's 4 because arm 59 uses the `|= 1` form and arm 47 the `= 4` one;
+and from there both cycle 41 `DET_SYNC` / 44 `DET_INFO` for ever.
+
+**Two things this is NOT.** It is not the exact-zero degeneracy of a perfect
+wire: uniform noise at +/-8, +/-64 and +/-512 leaves `fsk.sr` reaching 0xffff
+in the same block, because a slicer with no carrier decides all-ones whatever
+the noise floor is. And it is not the wire delay, which is why finding 903's
+knob could never have fixed it -- the answerer's ENTRY into phase 2 is itself
+triggered by the caller's signal, so both events move together and the silence
+always arrives one block after the entry:
+
+| one-way wire | caller silent | answerer enters 47 | silence arrives |
+|--:|--:|--:|--:|
+| 288 | 87 | 92 | 93 |
+| 384 | 91 | 98 | 99 |
+| 720 | 105 | 119 | 120 |
+
+The margin is invariant under the wire. The only quantity that changes it is
+`filtdelay`.
+
+### 961. V.8 RUNS, THE HANDOVER FIRES, AND IT IS NOT WHAT WAS MISSING
+
+Findings 806 and 902 named the missing V.8 as the first suspect. It is now
+driven, and it is retired.
+
+`test/unit/t_v34link.c` builds two V.8 datapumps out of the table
+`dp_v8_init` registers -- `ops->create(modem, DP_V34, caller, 9600, 48, ops)`
+-- runs them against each other over the same delayed wire, and hands over the
+way `slmodemd/modem.c`'s `do_modem_change_dp` does: the same
+`MDMPRM_DPRUNTIME` block goes on to `vpcm_create`, and the new datapump is
+`op->create(m, dp_requested, caller, srate, frag, op)` with `dp_requested`
+whatever `modem_set_param(m, 9, ...)` last wrote.
+
+**The handover is asserted three independent ways, per endpoint**, because
+"it returned CHANGEDP" is exactly the false positive available here:
+`v8_process` returns DPSTAT_CHANGEDP on TWO arms, and the idle timer's expiry
+at the bottom asks for datapump **0**.
+
+```
+  originate   505 blocks   DPSTAT_CHANGEDP   dp_requested 34   b0 a1 b1 40 b2 00
+  answer      506 blocks   DPSTAT_CHANGEDP   dp_requested 34   b0 a1 b1 40 b2 00
+```
+
+-- the return code, the value written through `modem_set_param`, and the two
+words `v8_process` publishes through the endpoint's OWN `MDMPRM_DSPINFO` block
+on the V8_OK arm and nowhere else.
+
+**AND THE CONTROL, WHICH IS THE POINT.** Running the identical V.34 phase in
+the identical driver with the runtime block left ZERO instead -- no V.8 at all
+-- gives the SAME trajectory: every state transition, every diagnostic line,
+the same "Repeated info0" at the same block. Diffing the two transcripts over
+the first two hundred blocks leaves one line of difference, and it is the V.8
+summary line itself.
+
+And from the other end: at iodelay 100 and at 240 the call connects **with V.8
+skipped entirely**. So the negotiated menu is not read by the V.34 handshake
+in this configuration, in either direction. `vpcm_create` preserving `b0`,
+`b1`, `offered` and `menu` is real, and the handshake does not use them.
+
+### 962. `MDMPRM_IODELAY` IS RECOVERED FROM THE HOST, AND IT IS THE WHOLE CONFIGURATION
+
+`filtdelay` is `35 + iodelay/4`, measured across the range:
+
+```
+  iodelay     0   40   80   88  100  120  140  150  160  180  200  216  240
+  filtdelay  35   45   55   57   60   65   70   73   75   80   85   89   95
+  connects    no   no   no  yes  yes  yes  yes  yes  yes  yes  yes  yes  yes
+```
+
+**A sharp boundary where the mechanism says the boundary is.** Arm 47's wait
+is `0x5f - filtdelay`: 40 steps at filtdelay 55 and 38 at 57, against about 39
+the run has to spare. Above the boundary every value connects identically at
+33,600 each way, so this is a half-open interval and not a lucky point.
+
+**And the value is derivable from the HOST rather than from the outcome**,
+which is what makes this a recovery rather than a fit. `vpcm_create` reads
+parameter 5 at .text 0x3bed:
+
+```
+    edx = iodelay + 4;  if (0xf4 - edx < 0) fail;
+    rt[0x64] = edx;     rt[0x68] = edx - 0x30 + root[0xd254];
+```
+
+-- so the object's own acceptance window is `iodelay <= 240`. What
+`slmodemd/modem_main.c` puts there, per driver:
+
+| driver | arithmetic | value |
+|---|---|--:|
+| `modemap` | `modemap_start` writes 192*2 bytes and sets `dev->delay = ret/2` = 192; `modemap_ioctl` adds the kernel's own answer, which its comment gives as `s->delay + ST7554_HW_IODELAY (48)` bytes = 24 samples | **~216** |
+| `alsa`, short buffer | `period * buf_periods` = 48 * `SHORT_BUFFER_PERIODS` (4) = 192 frames, plus `INTERNAL_DELAY` 40 | **232** |
+| `alsa`, long buffer | writes 384 frames, plus 40 | **424 -- ABOVE the object's 240 cap, and would be refused outright** |
+| `socket` | `ret = 0`, and its own comment says what the kernel module would have returned | **0**, a stub |
+
+Two independent measuring drivers land at 216 and 232, both inside [88, 240];
+the third is a stub; and one ALSA path is out of range altogether, recorded
+because it is a real asymmetry rather than something to smooth over.
+`t_v34link.c` uses **216**, the one derived from a driver that asks the
+hardware.
+
+**What this says about finding 801's caveat.** The IODELAY value is not
+recoverable from the OBJECT, which is what that finding said. It IS
+recoverable from the HOST, and `t_v34conn.c`'s 40 -- chosen only to satisfy
+`+4 <= 0xf4` -- is five times too small. That file is deliberately left
+unchanged: it is now the recorded control for the below-threshold
+configuration, and its `expect[]` literals are the evidence that the
+trajectory changes.
+
+### 963. THE FIRST V.34 CONNECTION: 33,600 EACH WAY, DATA MODE, AND BER 0 BOTH DIRECTIONS
+
+`test/unit/t_v34link.c`, two endpoints from the blob's own constructor over a
+288-sample wire, at iodelay 216:
+
+```
+  originate  connect blk 1591  mode 1  rates 14/14  txstate 70 DATAXMIT
+             gets 2409  puts 2409   0 errors over 6112 bits, lag 0
+  answer     connect blk 1590  mode 1  rates 14/14  txstate 70 DATAXMIT
+             gets 2410  puts 2410   0 errors over 5572 bits, lag 27
+```
+
+and the object's own words:
+
+```
+    vpcm: Link: DP is V.34, rate: rx 33600, tx 33600
+    V34DATA, getting into data mode from Handshake, Tx bit rate - 33600,
+             Rx bit Rate - 33600
+```
+
+**Which entry carries the payload, settled.** `vpcm_run` -- .text 0x3e40, the
+`.process` of the VPCM operations table at .data+0x30, registered under ids
+34, 90 and 92 -- is the ONLY function in the whole object that calls
+`modem_get_bits` (0x3fea) or `modem_put_bits` (0x4153) for V.34. The other
+four pumps' data entries are `v32_process`, `v23_process`, `v22_process` and
+`b103_process`; `dp_wrapper_run` is `.process` for four other tables and not
+for this one.
+
+**BOTH DIRECTIONS AT ONCE, and the claim is per endpoint.** Rung 4 is not
+skipped because rung 3 passed: the two endpoints run simultaneously over one
+wire, each sends its own pattern and each is required to have received the
+OTHER'S -- and required NOT to have locked to its own. Both bit counts are per
+endpoint, so a half-duplex defect cannot hide behind a pair total.
+
+**BER 0, not "low".** `t_b103link.c:382`'s bar and its argument: a noiseless
+channel with no impairment at all makes one error a defect rather than bad
+luck. The alignment is the same shape as `run_link`'s -- find the first offset
+from which the rest of the sink matches exactly, then require zero errors from
+there, over at least 2,048 bits.
+
+**WHAT THIS IS NOT.** Every line of it is the blob's. `vpcm_run` is not
+reconstructed, so no mixed run is possible through it and nothing of ours is
+under test here. What it establishes is the ORACLE -- a configuration in which
+the original connects and carries data -- which is exactly what
+`t_v34conn.c`'s four-way comparison has never had. Finding 967 for what that
+leaves.
+
+### 964. The host contract for V.34 is `create`, `process`, `delete` and nothing else
+
+Worth measuring before concluding anything about a driver that does not
+connect, because "the host was supposed to call something we did not" is
+otherwise an open suspect for ever.
+
+Counted rather than eyeballed, with `STT_FILE` excluded so that the
+`VPcmV34Main.cpp` file symbol does not join the tally:
+
+```
+    VPcm*/VPCMXF* function symbols:      37
+      with a relocation somewhere:       21
+      with NONE (host entry points):     16
+```
+
+The sixteen are `VPcmV34Delete`; the seven accessors
+`GetCurrentRx/TxBaudRate`, `GetCurrentRx/TxCarrier`, `GetDiagnostics`,
+`GetQuickConnectIndication`, `GetSNR` and `GetVisualDiagnostics`;
+`VPcmV34InitMOH`, `VPcmV34InitiateHangUp`,
+`VPcmV34InitiateRateRenegotiation`, `VPcmV34NotifyDP`,
+`VPcmV34RequestDPNotification`, `VPcmV34SetMaxBlockLength`; and
+`_Z16VPcmV34SetDelaysP12tagV34Object`. Nothing in the object reaches any of
+them, so every one is a host entry point.
+
+**And `slmodemd` calls none of them.** A grep for `VPcm` over the whole
+`slmodemd/` tree returns nothing. Its entire interaction with the datapump is
+`modem_dp_process`'s `m->dp->op->process(m->dp, in, out, cnt)` with `cnt`
+capped at `m->frag`, plus `do_modem_change_dp`'s create and the old pump's
+delete. The last of the sixteen is mangled and so is not callable from C at
+all.
+
+The parameters that contract fixes, and which this tree now matches:
+`MODEM_RATE` 9600, `MODEM_FRAG` = `MODEM_RATE/200` = 48, `MODEM_FORMAT`
+`MFMT_S16_LE`. `vpcm_create` independently requires `srate == 0x2580` and
+`max_frag <= 0x30`, which is the same pair seen from the other side.
+
+### 965. Two endpoints, one bit pipe: the BER that would have read zero either way
+
+`struct modem_shim` is one per SIDE -- one `tx_pos` cursor over the scripted
+pattern, one `rx` sink, and `modem_get_bits`'s `m` argument discarded. That is
+right for a test driving one datapump and **wrong for two endpoints of one
+call**, because both are the blob's and both land in `harness_modem_ref`: each
+would draw the bits the other should have had, and both would write into one
+sink.
+
+A bit-error rate measured off that reads zero when the link works and zero
+when the shim is quietly crossing the streams -- gates.md's shape exactly, in
+which the right answer and the vacuous answer are the same number, so no
+amount of staring at the result distinguishes them.
+
+So the shim now routes on the modem handle. `harness_modem_route_add(m,
+pattern, len)` gives a handle its own pair of shims and its own stream, and
+`get_bits`, `put_bits` and `set_param` all dispatch through `shim_for(side,
+m)`. **Nothing is routed until something registers**, so every existing binary
+keeps the single pair it had, and `harness_modem_reset` clears the table.
+
+Three claims make the routing worth having rather than merely present: the two
+handles differ; a second registration of the same handle is REFUSED (-1)
+rather than silently sharing a shim; and the two patterns are not the same
+bits. On top of that each endpoint must lock to the FAR pattern and must NOT
+lock to its own, which is false in both of the failure modes the routing
+exists to prevent.
+
+`set_param` had to be routed too, and finding that out cost a run: with only
+the two bit calls routed, `dp_requested` was logged in the unrouted shim and
+V.8's handover claim failed at 34 against -1 while everything else passed.
+
+### 966. Every claim in `t_v34link.c`, and the mutation that was watched failing it
+
+61 checks in three sections. Named by what they broke.
+
+Each was applied by hand, built, run and reverted, and the tree was re-run
+green afterwards.
+
+| mutation | checks failed | what failed |
+|---|--:|---|
+| `CFG_IODELAY` 216 -> 40 | **24 of 32** | mode 1 -> 2 on both endpoints, both rate words 14 -> 0, `repeats` 0 -> 2, `filtdelay` 89 -> 45, DATAXMIT lost, and every bit and BER claim on both |
+| `pattern[other]` -> `pattern[ep]` in the BER alignment | **4 of 32** | "locked to the FAR end's pattern" and "NOT to its own", both endpoints. The run is otherwise byte-identical, which is the point: nothing else can see it |
+| `harness_modem_route_add` returning the existing index on a duplicate instead of -1 | **1 of 10** | "a repeat registration is refused" -- the one check standing between this file and finding 965's vacuous BER |
+| `V34_BLOCKS` 4000 -> 1600, which is `t_v34conn`'s length | **6 of 32** | the connection never happens inside the run: 1,591 blocks of startup leaves nothing for data, so the "enough bits" and BER claims go first |
+| routing `set_param` reverted to the unrouted shim | **2 of 19** | "asking the modem for DP_V34" at -1 against 34, both endpoints. Found for real rather than injected -- it was the first run's actual failure |
+
+### 968. `vpcm_run` is not optional: the direct-drive fixture CANNOT survive data mode, and the oracle proves it
+
+The obvious cheap next step after finding 963 is to leave `t_v34conn.c`'s
+four-way comparison alone in shape and simply give it finding 962's
+configuration -- it drives `modem_serrint` and `datapumpv34` directly, so ours
+and the blob's can be mixed, which is exactly what a run through `vpcm_run`
+cannot do. It was tried, as a throwaway edit, and it does not work.
+
+```
+  t_v34conn.c, CFG_IODELAY 40 -> 216, NBLOCK 1600 -> 22000
+  ... blob-blob blk 21707 originate mst 44 rx 35 tx 74 mode 0
+      blob-blob blk 21707 answer    mst 63 rx 43 tx  5 mode 2
+  exit -11
+```
+
+**The crash is in the BLOB-BLOB run**, which is the oracle, so it is the
+fixture and not the reconstruction. It is also not the array sizes: raising
+`NBLOCK` to 22,000 with the configuration left at 40 runs to completion (and
+fails its recorded literals, which are written for 1,600 blocks, exactly as it
+should).
+
+What the last block shows is the originator having left the handshake --
+txstate 74, and `+0x2218` back to **0**, which finding 901 identified as
+`datapumpv34`'s DATA branch -- while the answerer is still at mode 2. So the
+segfault is the object entering data mode inside a driver that never calls
+`vpcm_run`, and `vpcm_run` is where the sample buffers are copied
+(sysdep_memcpy at 0x3ea8, 0x3f48, 0x3f78 and 0x3f99) and where
+`modem_get_bits` is called for the payload the data branch then expects.
+
+**So `vpcm_run` is not merely the route to the bit pipe.** It is required for
+the object to survive data mode at all, and no fixture that pokes +0x25e and
++0x260 a sample at a time can substitute for it once the handshake completes.
+That settles the order for the next batch: reconstruct `vpcm_run` first, then
+the four-way comparison of a connecting call comes with it -- rather than the
+other way round.
+
+`t_v34conn.c` was restored unchanged; this was a throwaway experiment and
+nothing of it is committed except this finding.
+
+### 967. What this batch did not do
+
+- **`vpcm_run` is not reconstructed.** 1,664 bytes at .text 0x3e40, and the
+  only route to `modem_get_bits`/`modem_put_bits` for V.34 -- so until it
+  exists there is no mixed run that carries data, and rungs 3 to 5 of the
+  ladder are the blob's alone. It is now the ONLY thing between this tree and
+  a differential data-mode test.
+- **`t_v34conn.c` is untouched**, deliberately: it is the control for the
+  below-threshold configuration and its `expect[]` literals are the evidence
+  that the trajectory changes. Re-running its four-way comparison at iodelay
+  216 was tried and does not work -- finding 968 -- which is why `vpcm_run`
+  comes first.
+- **No mutation suite was registered** in `test/mutations/suites.json`, and
+  `tools/mutate.py` was not touched. The mutations above were applied by hand,
+  built, run and reverted.
+- **BUT THE MUTATION SNAPSHOT IS STALE**, for finding 907's reason: this batch
+  changed `test/harness/runtime.c` and `test/harness/harness.h`, and the
+  harness is in every suite's build. Nothing in `make phase` opens the
+  snapshot, so nothing will say so; it needs a re-record, and this batch
+  deliberately did not run one because a full re-record was already in flight
+  elsewhere.
+- **The 8,192-bit shim sink is the BER's ceiling**, not the link's: both
+  endpoints fill it and the measurement stops there. A longer measurement
+  needs a bigger `HARNESS_SHIM_BITS`.

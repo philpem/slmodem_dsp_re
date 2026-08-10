@@ -484,6 +484,55 @@ struct modem_shim harness_modem_ref;
 static const unsigned char *shim_pattern;
 static int shim_pattern_len;
 
+/*
+ * The routing table.  Empty until a test fills it, and every unrouted handle
+ * lands on the one pair of shims that has always been there.
+ */
+struct modem_shim harness_modem_route_ours[HARNESS_SHIM_ROUTES];
+struct modem_shim harness_modem_route_ref[HARNESS_SHIM_ROUTES];
+static void *shim_route_m[HARNESS_SHIM_ROUTES];
+static int shim_nroutes;
+
+void
+harness_modem_route_reset(void)
+{
+	shim_nroutes = 0;
+	memset(shim_route_m, 0, sizeof(shim_route_m));
+	memset(harness_modem_route_ours, 0, sizeof(harness_modem_route_ours));
+	memset(harness_modem_route_ref, 0, sizeof(harness_modem_route_ref));
+}
+
+int
+harness_modem_route_add(void *m, const unsigned char *pattern, int len)
+{
+	int i;
+
+	for (i = 0; i < shim_nroutes; i++)
+		if (shim_route_m[i] == m)
+			return -1;
+	if (shim_nroutes >= HARNESS_SHIM_ROUTES)
+		return -1;
+	i = shim_nroutes++;
+	shim_route_m[i] = m;
+	harness_modem_route_ours[i].pattern = pattern;
+	harness_modem_route_ours[i].pattern_len = len;
+	harness_modem_route_ref[i].pattern = pattern;
+	harness_modem_route_ref[i].pattern_len = len;
+	return i;
+}
+
+static struct modem_shim *
+shim_for(int side, void *m)
+{
+	int i;
+
+	for (i = 0; i < shim_nroutes; i++)
+		if (shim_route_m[i] == m)
+			return side ? &harness_modem_route_ref[i]
+				    : &harness_modem_route_ours[i];
+	return side ? &harness_modem_ref : &harness_modem_ours;
+}
+
 void
 harness_modem_reset(const unsigned char *pattern, int len)
 {
@@ -491,17 +540,20 @@ harness_modem_reset(const unsigned char *pattern, int len)
 	shim_pattern_len = len;
 	memset(&harness_modem_ours, 0, sizeof(harness_modem_ours));
 	memset(&harness_modem_ref, 0, sizeof(harness_modem_ref));
+	harness_modem_route_reset();
 }
 
 static int
 shim_get_bits(struct modem_shim *s, unsigned char *buf, int n)
 {
+	const unsigned char *pat = s->pattern != 0 ? s->pattern : shim_pattern;
+	int len = s->pattern != 0 ? s->pattern_len : shim_pattern_len;
 	int i;
 
-	if (shim_pattern == 0 || shim_pattern_len == 0)
+	if (pat == 0 || len == 0)
 		return 0;
 	for (i = 0; i < n; i++) {
-		buf[i] = shim_pattern[s->tx_pos % shim_pattern_len];
+		buf[i] = pat[s->tx_pos % len];
 		s->tx_pos++;
 	}
 	s->gets++;
@@ -536,37 +588,36 @@ shim_set_param(struct modem_shim *s, unsigned name, int val)
 
 int modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
 {
-	(void)m; (void)nbits;
+	(void)nbits;
 	dbgcap_note(0, "<< get_bits %d >>\n", n);
-	return shim_get_bits(&harness_modem_ours, buf, n);
+	return shim_get_bits(shim_for(0, m), buf, n);
 }
 
 int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n)
 {
-	(void)m; (void)nbits;
+	(void)nbits;
 	dbgcap_note(0, "<< put_bits %d >>\n", n);
-	return shim_put_bits(&harness_modem_ours, buf, n);
+	return shim_put_bits(shim_for(0, m), buf, n);
 }
 
 long modem_set_param(void *m, unsigned name, int val)
 {
-	(void)m;
 	dbgcap_note(0, "<< set_param %u = %d >>\n", name, val);
-	return (int)shim_set_param(&harness_modem_ours, name, val);
+	return (int)shim_set_param(shim_for(0, m), name, val);
 }
 
 int ref_modem_get_bits(void *m, int nbits, unsigned char *buf, int n)
 {
-	(void)m; (void)nbits;
+	(void)nbits;
 	dbgcap_note(1, "<< get_bits %d >>\n", n);
-	return shim_get_bits(&harness_modem_ref, buf, n);
+	return shim_get_bits(shim_for(1, m), buf, n);
 }
 
 int ref_modem_put_bits(void *m, int nbits, unsigned char *buf, int n)
 {
-	(void)m; (void)nbits;
+	(void)nbits;
 	dbgcap_note(1, "<< put_bits %d >>\n", n);
-	return shim_put_bits(&harness_modem_ref, buf, n);
+	return shim_put_bits(shim_for(1, m), buf, n);
 }
 
 long ref_modem_get_param(void *m, unsigned param)
@@ -574,9 +625,8 @@ long ref_modem_get_param(void *m, unsigned param)
 
 long ref_modem_set_param(void *m, unsigned name, int val)
 {
-	(void)m;
 	dbgcap_note(1, "<< set_param %u = %d >>\n", name, val);
-	return shim_set_param(&harness_modem_ref, name, val);
+	return shim_set_param(shim_for(1, m), name, val);
 }
 
 /*
