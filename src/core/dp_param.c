@@ -41,6 +41,17 @@ dp_param_get(void *modem)
  *
  * The four `dsp_info` reads are the only thing the host tells it that is not
  * a parameter index, and two of them come back out again in `vpcm_delete`.
+ *
+ * TWO STATEMENTS SIT WHERE THE PERIOD COMPILER PUT THEM, not where they read
+ * most naturally, and both were MOVED and re-measured rather than guessed
+ * (finding 617's rule -- statement order is a hint, and the acceptance test is
+ * what GCC 3.4.2 emits).  `unnamed_0003 &= ~7` is after the `qcIndex` branch
+ * because the object's `andb $0xf8,0x3(%ebx)` is at the branch's MERGE POINT
+ * (0x596e) and not before it; putting the statement first put the instruction
+ * first.  The last three zeroes run 0x6c, 0x68, 0x64 because the object does,
+ * and writing them ascending emitted them ascending.  Neither is observable,
+ * so no differential test can see either -- which is exactly why the codegen
+ * tier exists.
  */
 void *
 dp_runtime_create(void *modem)
@@ -60,8 +71,8 @@ dp_runtime_create(void *modem)
 	rt->qcFlags &= (unsigned char)~0x20;
 	rt->qcFlags = (unsigned char)((rt->qcFlags & ~0x40)
 				      | ((info->qc_lapm & 1) << 6));
-	rt->unnamed_0003 &= (unsigned char)~0x07;
 	rt->qcIndex = info->qc_index ? (int)info->qc_index : 9;
+	rt->unnamed_0003 &= (unsigned char)~0x07;
 	rt->qcFlags &= (unsigned char)~0x80;
 
 	rt->unnamed_000c = 0;
@@ -77,9 +88,9 @@ dp_runtime_create(void *modem)
 	rt->unnamed_0058 = 0;
 	rt->unnamed_005c = 0;
 	rt->unnamed_0060 = 0;
-	rt->hwDelay = 0;
-	rt->dmaDelay = 0;
 	rt->unnamed_006c = 0;
+	rt->dmaDelay = 0;
+	rt->hwDelay = 0;
 
 	return rt;
 }

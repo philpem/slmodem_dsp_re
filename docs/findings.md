@@ -33013,6 +33013,23 @@ mutation run says so rather than the comment claiming it:
 Ten applied by hand, eight caught, **two genuinely equivalent** and named as
 such. They are the codegen tier's business, not the differential tier's.
 
+**And the codegen tier did decide two things the differential tier cannot
+see.** Built with GCC 3.4.2 under `tools/toolchain/build.sh`, the first version
+differed from the blob in exactly two places, both statement order and both
+recoverable by moving the statement and re-measuring (finding 617's rule):
+
+- `unnamed_0003 &= ~7` emitted BEFORE the `qcIndex` branch where the object
+  has `andb $0xf8,0x3(%ebx)` at the branch's MERGE POINT (0x596e). Moving the
+  statement after the `if` moved the instruction after the branch. A statement
+  crossing a branch is not something the compiler was free to choose.
+- the six trailing zeroes emitted ascending where the object runs
+  0x58, 0x5c, 0x60, **0x6c, 0x68, 0x64**. Two different source orders produced
+  two different emission orders, so the object's order IS the original's.
+
+What remains is one load hoisted and two registers chosen differently, which
+is what CLAUDE.md says to ignore. `dp_param_get` and `dp_runtime_delete` are
+both in the 144 identical-mnemonic sequences.
+
 **The size claim is asked of the blob, not of our header.** `harness_alloc`
 records the requested size, so after a reset and one `ref_dp_runtime_create`
 the test asserts `harness_alloc.bytes == 0x88` -- that is the
