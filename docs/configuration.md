@@ -161,10 +161,16 @@ call learns about the line survives the datapump being rebuilt.
 ### The rate window is two different pairs and they are easy to confuse
 
 > The host's `MDMPRM_MIN_RATE` / `MDMPRM_MAX_RATE` land at runtime `+0x30` and
-> `+0x34`, which is what `vpcm: VPCM rate limits: %d-%d` prints and **nothing
-> else reads**. The pair `V90Parameters::setToDefault` divides by 2400 to get a
-> rate index is `+0x38` / `+0x3c`, and `vpcm_create` writes those as the
-> **literals 4800 and 33600** whatever the host asked for.
+> `+0x34`, which is what `vpcm: VPCM rate limits: %d-%d` prints. The pair
+> `V90Parameters::setToDefault` divides by 2400 to get a rate index is `+0x38`
+> / `+0x3c`, and `vpcm_create` writes those as the **literals 4800 and 33600**
+> whatever the host asked for.
+>
+> **This used to say `+0x30`/`+0x34` are printed and "nothing else reads"
+> them, and that was wrong** — finding 1020. `VPcmV34InitiateRetrain` reads
+> that pair at three sites (0x66b5/0x66c5, 0x6870/0x6877, 0x6acc/0x6acf) and
+> divides *it* by 2400 for the V.34 rate indices, so 300 and 56000 become 0
+> and 14 after the clamp. Index 14 is the 33,600 a V.34 call converges to.
 
 So an AT+MS that narrows the modem's rate window does not narrow V.PCM's.
 
@@ -185,19 +191,144 @@ that is a stub:
 | driver | answers | HW | note |
 |---|--:|--:|---|
 | socket | 0 | 4 | the real expression is commented out beside it (`modem_main.c:682`) |
-| ALSA | 424 | 244 | 384 startup samples + `INTERNAL_DELAY` 40; clamped |
+| ALSA | 424 | 244 | 384 startup samples + `INTERNAL_DELAY` 40; over the cap, see below |
 | modemap | ~192 + kernel | 196+ | `modemap_start` writes 192 samples |
 
-Somewhere between HW 44 and HW 104 the V.34 handshake's whole trajectory
-changes — above it the originator reaches `RX_PHASE2_CALL` instead of
-error-recovering to `DET_INFO`. It is the **HW** delay that matters and not
-the DMA correction: two settings that pin HW to the same clamped 244 with DMA
-differing by 760 give identical results to the last count.
+It is the **HW** delay that matters and not the DMA correction: two settings
+that pin HW to the same 244 with DMA differing by 760 give identical results
+to the last count — on a wire with no echo, which is the caveat the next
+section keeps.
 
 The tests use 0, deliberately and not by default. The I/O delay and the
 simulated wire are the same physical quantity modelled twice, so they move
 together or not at all — see the note on `CFG_IODELAY` in
 `test/unit/t_v34conn.c`. Neither setting connects.
+
+
+## Choosing `MDMPRM_IODELAY` for a transport the original never had
+
+`MDMPRM_IODELAY` is the one configuration input that cannot be recovered from
+the object, because it is a **host measurement**: `slmodemd` answers it from
+`m->driver.ioctl(m, MDMCTL_IODELAY, 0)` and each driver measures its own path.
+It is also the difference between a V.34 call connecting and not. A SIP/RTP
+backhaul inherits `slmodemd`'s **socket driver, which is a stub returning 0**
+(`modem_main.c:682-686`), and 0 does not connect.
+
+Everything in this section is marked **DERIVED** — read off the object or off
+`slmodemd` — or **JUDGEMENT**, which is engineering opinion about a transport
+neither ever saw. Findings 1020-1026.
+
+### The unit is SAMPLES at 9,600 Hz — DERIVED, twice
+
+Not milliseconds and not blocks. Two independent uses agree:
+
+- The object divides it by four. `filtdelay = ((hwDelay + 2) >> 2) + 0x22`
+  produces a count of `datapumpv34` invocations, and an invocation is four
+  samples, so the input is samples. `srate` is guarded as exactly 9600
+  (`vpcm_create` 0x3a1c), so the rate is not a variable.
+- `slmodemd` writes it as 16-bit frames. `MDMPRM_UPDATE_DELAY` — the parameter
+  the pump uses to hand delay back — does `memset(outbuf, 0, n * 2)` and
+  `device_write(dev, outbuf, n)` into the same `dev->delay` that
+  `MDMCTL_IODELAY` returns (`modem_main.c:987-998`, `:541`).
+
+So 216 and 232 are **22.5 ms and 24.2 ms**, a sound card plus kernel; and the
+object's ceiling of 240 is **25 ms**.
+
+### The formula, exactly — DERIVED
+
+```
+    hwDelay   = MDMPRM_IODELAY + 4                        runtime +0x64
+    dmaDelay  = hwDelay - 48 + extradelay                 runtime +0x68
+    filtdelay = ((hwDelay + 2) >> 2) + 0x22               V.34 obj +0xaa7c
+              = ((MDMPRM_IODELAY + 6) >> 2) + 34
+```
+
+`>> 2` is arithmetic (`sar`). Three sites compute it — `VPcmV34Create` 0xaf19,
+`VPcmV34InitiateRetrain` 0x674a and `VPcmV34SetDelays` 0x6405, a function the
+object names itself — and all three read the delays out of the *same*
+`_tagModemParameters` block the host supplied, which reaches the V.34 object
+as its `pac3c` (finding 1020).
+
+> **Do not use `35 + iodelay/4`.** It appears in findings 960 and 962 and in
+> two test assertions, it was fitted to a sweep, and it is **one too small
+> whenever `IODELAY mod 4` is 2 or 3** — finding 1021. The tests that assert it
+> run at 216, where the two agree.
+
+The same two fields also set the echo canceller, which is why `dmaDelay` is
+not merely decorative:
+
+```
+    V.34 obj +0x25c  =  0x610 - dmaDelay
+    V92EchoCanceller::setEchoDelay(dmaDelay + 0x68)
+```
+
+### The working range — DERIVED, measured to the sample
+
+A V.34 answerer entering microstate 47 `TX_PHASE2_ANS` must count from
+`filtdelay` up past `0x5f` before its receiver declares all-ones on the line
+the caller has correctly gone silent on. **The wait is `0x5f - filtdelay`, so
+a LARGER I/O delay is a SHORTER wait** — that is the whole mechanism, and it is
+why the knob works in the direction it does (findings 960, 1022).
+
+| `MDMPRM_IODELAY` | `filtdelay` | V.34 |
+|---|--:|---|
+| 0 .. 85 | 35 .. 56 | **does not connect** — "Repeated info0 is detected", for ever |
+| 86 .. 240 | 57 .. 95 | connects, 33,600 each way, BER 0 |
+| 241 and up | 95 | connects; see the negotiation below |
+
+**85 fails and 86 connects**, measured one value at a time; the old "somewhere
+between 88 and 80" was a sweep in steps of eight.
+
+### Above 240 the pump negotiates rather than failing — DERIVED
+
+`vpcm_create` guards `IODELAY + 4 <= 0xf4`, but the failing branch is not an
+error path (finding 1024 corrects finding 962 on this):
+
+```
+    modem_set_param(modem, MDMPRM_UPDATE_DELAY, 244 - (IODELAY + 4))  ; negative
+    extradelay = max(-(that), 384)                    ; root +0xd254
+    hwDelay    = 244                                  ; pinned, filtdelay 95
+    dmaDelay   = 244 - 48 + extradelay
+```
+
+The host is asked to **shed** the excess — `slmodemd` does it by discarding
+that many input samples at `modem_main.c:957-968`. This is the only path on
+which `dmaDelay != hwDelay - 48`.
+
+### So what should a SIP/RTP host answer? — JUDGEMENT
+
+**Set 240.** Not a computed number.
+
+20 ms of RTP is **192 samples** in this field's units, and the resemblance to
+`modemap_start`'s 192 is real rather than numerology — both are 20 ms at the
+datapump's rate. But packetisation is one term of three: a real RTP path adds
+a jitter buffer (conventionally two to three packets) and 8 kHz↔9.6 kHz
+resampling. Sixty milliseconds one way is 576 samples and a round trip is over
+1,100 — **more than four times the largest value the field accepts**. The field
+cannot express a SIP round trip, so choosing it is not a measurement problem
+and 192 would be a floor mistaken for an estimate.
+
+Given that, 240 is the choice that maximises the only margin `MDMPRM_IODELAY`
+demonstrably buys, and it stays inside the acceptance window so the
+negotiation above never fires at construction — a new host is not required to
+implement `MDMPRM_UPDATE_DELAY` correctly before its first call can connect.
+Reporting the transport's true latency is *worse*: it trips the over-cap path,
+which asks the host to throw away several hundred buffered samples, and ends
+at the same pinned `hwDelay` of 244 that 240 gives anyway.
+
+**216 is the conservative alternative** — a real driver's measurement, and the
+only value with an end-to-end proof in this tree (`t_v34link`, finding 963).
+Prefer it if a tested constant matters more than margin.
+
+**The cost of a high value is not quite zero.** Every value in 86..240
+connects identically here, so this is not a fine-tuning knob — but the
+measurement that established `dmaDelay` is inert ran on a **noiseless wire
+with no echo path**, and `dmaDelay`'s only consumers are the echo canceller's
+delay and `+0x25c`. A harness with no echo cannot observe an echo canceller
+pointed at the wrong lag. "Inert for the handshake trajectory on a clean wire"
+is derived; "free on a real line" is not. On an RTP path there is no analogue
+hybrid to cancel, which is why the risk is judged acceptable rather than
+measured away.
 
 
 ---
