@@ -35476,3 +35476,285 @@ on a lossy or echoing path; whether a SIP host that implements
 `MDMPRM_UPDATE_DELAY` faithfully could usefully report its true latency and
 let the pump negotiate it down; and whether the 384-sample floor in finding
 1024's over-cap path was chosen for a reason or is a constant nobody revisited.
+
+### 1040. ONE MICROSTATE STEP IS FOUR SAMPLES AT 9,600 Hz -- WHICH IS ALSO ONE 2,400-BAUD SYMBOL PERIOD, AND THE OBJECT NEVER DISTINGUISHES THE TWO
+
+Everything in 1041-1045 is denominated in this unit, so it is settled first
+and from two directions.
+
+**Derived.**  `datapumpv34`'s handshake loop is
+`while (txq.count < f2aa0 || rxq.count > 5) v34handshak(obj)`, and
+`v34handshak` runs table 1 to fill the transmit block and then ONE step of the
+microstate machine (`docs/v34handshak.md`: table 3 is reached through rxstate
+43 `RX_DPSK`, which runs `V34agc` and `fskdemodulate` first).  `V34agc` reads
+a burst of **four** samples (`v34rx.c`, "over four samples instead of two").
+So one microstate step consumes four received samples at the guarded 9,600 Hz.
+
+**Measured, from this tree's own record and not re-run.**  Finding 1002 fixes
+the harness block at **48 samples** (528 mute samples are "exactly 11" blocks).
+Finding 1022 reports that at the connect boundary the answerer "gets twelve
+extra invocations" in one such block.  48 / 12 = 4.
+
+**And four samples at 9,600 Hz is exactly one symbol period at 2,400 baud.**
+That is not an observation about this code; it is why 9,600 is hard-guarded at
+`vpcm_create` 0x3a1c.  The consequence is that **no site in the object can
+distinguish the two readings**, because at the only rate the object runs at
+they are the same quantity.  1043 shows the object then mixing them.
+
+Call the unit a **tick** below.  1 tick = 4 samples = 1/2400 s = 0.41667 ms.
+
+### 1041. `0x5f` IS FORTY MILLISECONDS -- V.34 11.2.1.1.3 AND 11.2.1.2.5's TONE PHASE-REVERSAL TURNAROUND -- AND THE EXIT IS AT 96, NOT 95
+
+**The off-by-one first, because the number that matters is the one the object
+never stores.**  All three sites are `n = counter + 1; if (n <= 0x5f) store n
+and stay`.  The state is therefore left on the step at which `n` would be
+**96**, and `counter` is never seen holding 96.  Finding 960's "the answerer
+must sit out `0x5f - filtdelay` invocations" is one too few: the wait is
+**96 - filtdelay** ticks, and the total from the reference event is **96 ticks
+exactly, independent of `filtdelay`** -- which is the whole point of the
+preload.
+
+    96 ticks  =  384 samples  =  384 / 9600 s  =  40.000 ms
+
+**THREE ARMS, AND EVERY ONE OF THEM REVERSES A TONE PHASE AT THAT INSTANT.**
+Read off `v34hshak.c`, whose arms were written before this was asked:
+
+| site | microstate | what crossing 96 does |
+|---|---|---|
+| 0x6685d | 47 `TX_PHASE2_ANS` / 56 `TX_PHASE2_CALL` | counter = 0, **invert bit 0 of +0x358c**, microstate -> `TX_L1` |
+| 0x65ba4 | 55 `TX_PHASE1_CALL` | counter = 0, **invert bit 0 of +0x358c**, microstate -> `RX_PHASE2_CALL` |
+| 0x66027 | 58 `RX_PHASE1_CALL` | the OTHER end of the pair: on `fsk.sr == 1` it sets **counter = filtdelay** and hands to 55 |
+
+and arm 49 `RX_PHASE1_ANS` (0x66b13) is 47's preload, the site finding 1022
+already names.  So the shape is a matched pair each way: the arm that DETECTS
+the far end's phase reversal preloads the counter with `filtdelay`, and the arm
+that EMITS this end's reversal counts to 96 and toggles `+0x358c` bit 0.
+
+**The specification, verbatim** (`itu-specs/T-REC-V.34-199802.pdf`, converted
+with `pdftotext -layout`):
+
+> 11.2.1.1.3 ... The Tone B phase reversal shall be delayed so that the time
+> duration between receiving the Tone A phase reversal **at the line
+> terminals** and the appearance of the Tone B phase reversal **at the line
+> terminals** is **40 +/- 1 ms**.
+
+> 11.2.1.2.5 The answer modem shall then transmit a Tone A phase reversal.
+> The Tone A phase reversal shall be delayed so that the time duration between
+> receiving the Tone B phase reversal ... at the line terminals and the
+> appearance of the Tone A phase reversal at the line terminals is
+> **40 +/- 1 ms**.  Tone A shall be transmitted for 10 ms after the phase
+> reversal.  **Then the modem shall transmit signal L1 followed by signal L2**.
+
+Both directions, both 40 +/- 1 ms, and 11.2.1.2.5's own next sentence is arm
+47's own transition target, `TX_L1`.  Figure 16/V.34 draws the same 40 +/- 1 ms
+twice, once per modem.
+
+**"AT THE LINE TERMINALS" IS WHY `filtdelay` EXISTS AT ALL.**  The state
+machine sees the incoming reversal some latency after it reached the line
+terminals, and its own reversal reaches the line terminals some latency after
+it emits it.  Preloading the counter with the sum of the two and counting to a
+fixed 96 makes the LINE-TERMINAL-to-LINE-TERMINAL interval 40 ms while the
+machine's own elapsed count is `96 - filtdelay`.  That is a complete
+explanation of the counter-intuitive direction finding 1022 recorded as a bare
+fact: a larger I/O delay is a shorter wait because the delay is already part of
+the 40 ms.
+
+**Corroboration, from the paragraph in between.**  Arm 49 computes
+`rtd = (n - filtdelay) * 4 - 0x18c` at 0x66aae, and `ApplyBulkDelay`'s
+argument is documented in this tree as "the round-trip delay **in samples**".
+11.2.1.2.4: *"RTDEa is the time interval between sending the Tone A phase
+reversal at the line terminals and receiving the Tone B phase reversal at the
+line terminals **minus 40 ms**."*  `(n - filtdelay)` removes the same pipeline
+latency, `* 4` converts ticks to samples, and `- 0x18c` is the "minus 40 ms".
+**The residual is recorded rather than explained**: 0x18c is 396 samples =
+41.25 ms = 99 ticks, three ticks MORE than the 96 the same paragraph pair
+implies.  Nothing here accounts for the twelve samples.
+
+### 1042. `+34` IS THE PUMP'S OWN PIPELINE LATENCY, 136 SAMPLES, AND IT IS NOT PROTOCOL TIMING
+
+`filtdelay = ((hwDelay + 2) >> 2) + 34` (1021) reads, in 1041's terms, as
+
+    filtdelay  =  (the HOST's I/O latency in ticks)  +  (34 ticks)
+
+with 1041 showing the sum is a total detect-to-emit pipeline latency.  The 34
+is therefore the part of that pipeline the host does not supply: **the V.34
+pump's own internal latency, 34 ticks = 136 samples = 14.167 ms at 9,600 Hz.**
+
+**Three things support it and one would have refuted it.**
+
+- **The object names the field.**  Three format strings, `.rodata.str1.4`
+  0xe430, 0xf01c and 0xf4d8: `"...,filtdelay = %d, rxflgs= 0x%x,..."`,
+  `"...count2=%d,...,filtdelay=%d"` and
+  `"On RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d"`.  *Filter*
+  delay, and it is the constant part of the expression that the name can be
+  about, because the other part is the host's.
+- **It is not a round duration.**  136 samples is 14.167 ms and 34 ticks is
+  34 symbol periods; neither is a figure any part of V.34 quotes.  The one
+  protocol duration this batch did match (40 ms) came out round to the sample.
+- **The refutation that did not happen.**  If 34 were protocol timing it would
+  have to appear in 11.2 as a duration or a symbol count.  11.2's timings are
+  75 +/- 5 ms, >= 50 ms, 10 ms, 40 +/- 1 ms, 160 ms, <= 500/550/670 ms and
+  70 +/- 5 ms; in ticks those are 180, >= 120, 24, 96, 384, <= 1200/1320/1608
+  and 168.  **34 is none of them and neither is 136.**
+
+**A DECOMPOSITION THAT IS ARITHMETIC AND NOT YET EVIDENCE.**  Recorded as a
+lead, explicitly not as a derivation.  `VPcmV34SetDelays` sets three things
+from the same block (1025), and the other internal-latency constant in it is
+`V92EchoCanceller::setEchoDelay(dmaDelay + 0x68)` -- **104 samples**.  The
+difference `136 - 104 = 32` is one tap short of the Hilbert transformer's
+group delay, `(64 - 1) / 2 = 31.5` (`V34_HILBERT_TAPS` 64, `v34filt.h`), and
+the echo canceller taps the transmit signal *before* the receive-side Hilbert
+while `filtdelay` spans the whole detect-to-emit path.  **That is a fit to two
+numbers and it is exactly the shape of thing findings 962 and 1021 got wrong.**
+Settling it needs a tap-by-tap sum of the phase-2 chain -- echo prefilter 42,
+Hilbert 64, the 600-baud transmit shaping `tx600c1` 128, plus the DPSK
+demodulator's own decision lag -- which this batch did not do.
+
+### 1043. THE OBJECT'S OWN SAMPLES-TO-SYMBOLS IDIOM IS `n * baud / 9600`, ITS 2400 ARM **IS** `>> 2`, AND `PPSEG` ADDS THE TWO UNITS TOGETHER
+
+This is the check the task set as decisive -- a consumer of `+0xaa7c` that
+also reads a baud-rate table -- and there is one.
+
+**Every reader of `+0xaa7c` is in `v34handshak`.**  Twenty-one sites in 1.2 MB:
+three writers (`VPcmV34SetDelays` 0x6414, `VPcmV34InitiateRetrain` 0x675c,
+`VPcmV34Create` 0xaf2b) and **eighteen readers, all of them inside
+`v34handshak`**.  Not one filter, adaptive filter or coefficient routine
+touches it.  So the field is state-machine timing that a filter delay is an
+input to, and check 2's "it should move when the filters move" has nothing to
+attach to.
+
+**The object writes the conversion twice more, once with the rate as a literal
+and once as a table.**  `v34tx1_sbarseg`, 0x67885:
+
+```
+    V34SetupModulator(m, 4800, 2400, 0, 0, 0);
+    span   = (0x5e8 - f25c) << 14;
+    q      = span / 9600;                 ; 0x1b4e81b5 / sar $0xa / sub
+    count2 = ((q * 0x960) >> 14) + 0x96;  ; 0x960 = 2400
+```
+
+which is `(0x5e8 - f25c) * 2400 / 9600 + 150`, and `f25c = 0x610 - dmaDelay`
+(1025), so `0x5e8 - f25c = dmaDelay - 40`:
+
+    count2  =  (dmaDelay - 40) / 4  +  150      "echo start delay is %d"
+
+**the same shape as `filtdelay = (hwDelay + 2) / 4 + 34`**, with the `/ 4`
+spelled out as `* 2400 / 9600`.  And `v34tx1_ppseg`, 0x680ac/0x68154, does it
+with the NEGOTIATED rate out of the configuration at +0xaa84:
+
+```
+    2400  v >> 2                3000  (v * 0x1400) >> 14
+    2800  (v * 0x12ab) >> 14    3200  (v * 0x1555) >> 14
+                                3429  (v * 0x16dc) >> 14
+    ...
+    q      = (0x5e8 - f25c) * baud / 9600;
+    count2 = q + filtdelay + f25c0 + 1;          ; 0x68194 reads +0xaa7c
+```
+
+0x1000, 0x12ab, 0x1400, 0x1555 and 0x16dc over 0x4000 are `baud / 9600` to
+within a count, and **the 2400 arm of the object's own rate dispatch is
+literally `>> 2`** -- the same instruction `filtdelay` uses, with no dispatch
+around it.
+
+**THE VERDICT.**  The hypothesis is **CONFIRMED as arithmetic and REFUTED as a
+distinction the object draws.**  `>> 2` IS the object's samples-to-symbols
+conversion at V.34's 2,400-baud reference rate; it is also a samples-to-block
+conversion; at 9,600 Hz those are one operation and the object does not choose
+between them.  What settles that this is not merely a coincidence of reading is
+that **0x68154 adds the two units together**: `q` is a count of symbols at the
+NEGOTIATED baud (table-1 arms step once per symbol -- `v34tx1_ppseg` emits one
+point and calls `txmit`), and `filtdelay` is a count of 4-sample ticks, and
+they are summed.  The sum is dimensionally correct **only at baud 2400**.  At
+3429 the term should be `filtdelay * 3429 / 2400`; at `IODELAY` 216 that is
+127 where the object uses 89, an error of 38 symbols in an echo-adaptation
+start delay -- latent in the blob, to be reproduced faithfully and NOT fixed.
+
+### 1044. SIX SIGNED DIVIDES BY A POWER OF TWO IN 1.2 MB, AND THE DETECTOR WAS MADE TO FIRE BEFORE IT WAS BELIEVED
+
+The sweep the task asked for, and it is a null result with a positive control
+in front of it (finding 134's argument).
+
+**What the compiler is FORCED to emit.**  A signed `/ 2^k` must round toward
+zero, so GCC adds the fixup before the shift; `>> k` on the same value is a
+bare `sar`.  At `-march=i386` -- and CLAUDE.md's "no cmov in 1.2 MB" is what
+fixes that -- the two shapes are
+
+```
+    k >= 2   sar $0x1f,%A ; and $(2^k - 1),%A ; add %B,%A ; sar $k,%A
+    k == 1   shr $0x1f,%A ;                     add %B,%A ; sar $1,%A
+```
+
+verified by building `int d2/d4/d16(int x){return x/N;}` and
+`int s4(int x){return x>>2;}` with the project's own flags: the detector fires
+on all three divides and not on the shift.
+
+**In `dsplibs.o`: six sites, and every one is `/ 2`.**
+
+```
+    0x03b6f1, 0x03b9d1   V90Equalizer::V90Equalizer
+    0x03d022             V90TRN2Designer::V90TRN2Design
+    0x059f68, 0x059f8a   modulatevector
+    0x092b9f             _send_silence_state_init
+```
+
+**None is in code this tree has reconstructed** -- `modulatevector` and
+`_send_silence_state_init` are declared and not written -- so there is nothing
+to correct and the six sites are a note for whoever writes them: the source
+said `/ 2` and not `>> 1`.
+
+**And the converse holds for everything this batch read.**  `filtdelay`'s
+`sar $0x2` (1021), `v34tx1_sbarseg`'s `sar $0xe` at 0x678f9 and
+`v34tx1_ppseg`'s at 0x68188 all carry no fixup, so the source wrote `>>`, and
+`v34hstx1.cpp` already spells all three that way.  The `/ 9600` at 0x678dd and
+0x68178 IS a divide -- `imul` by 0x1b4e81b5, `sar $0xa`, `sub` the sign -- and
+`v34hstx1.cpp` already spells it `/ 9600`.  Object and source agree at every
+site this investigation touched.
+
+**A first pass with a looser detector reported 49 hits and was wrong.**  It
+counted the `sar $0x1f` of a `/ 9600` magic-multiply as the fixup for the
+NEXT, unrelated shift, which is how 0x678f9 came back as a divide.  Recorded
+because the loose version is the obvious one to write.
+
+### 1045. WHAT PHASE 12 HAS TO CHANGE, CONSTANT BY CONSTANT
+
+The task's framing was right: **phase 12 is a change to the block-versus-symbol
+relationship and not a rescale of delay constants.**  But the constants move
+for three different reasons, and treating them alike is the trap.
+
+| constant | what it is | under an 8 kHz retarget |
+|---|---|---|
+| the tick, 4 samples | one microstate step; ALSO one 2400-baud symbol at 9600 Hz (1040) | **the identity breaks.** 8000 / 2400 = 3.333 is not an integer, so a 4-sample step is no longer a symbol period and nothing can be both |
+| `>> 2` in `filtdelay` | samples -> ticks; identical to the object's `* 2400 / 9600` (1043) | stays `>> 2` **only if the step stays four samples**.  It is not a rate conversion to rewrite; it is the step size |
+| `+ 34` | the pump's own pipeline latency, 136 samples (1042) | **SAMPLE-relative.**  Unchanged in samples if the filters keep their tap counts; the CONSTANT changes only because the tick does.  Re-derive as `internal_samples / tick` |
+| `0x5f` (exit at 96) | 40 ms, V.34 11.2.1.1.3 / 11.2.1.2.5 (1041) | **TIME-relative, and the one that must change.**  40 ms at 8000 Hz with a 4-sample tick is **80 ticks**, so `cmp $0x5f` becomes `cmp $0x4f`.  Getting this wrong puts the tone phase reversal outside the +/- 1 ms the Recommendation allows |
+| `0x18c` in arm 49's `rtd` | samples, the "minus 40 ms" of 11.2.1.2.4 (1041) | **TIME-relative**, but it is 396 where 40 ms is 384; the 12-sample residual has to be understood before it is rescaled |
+| `0x4c`, `0x50`, `0x5c` | `filtdelay + K` windows in arms 49 and 50 | **NOT SETTLED** -- see 1046 |
+
+The `>> 2` row is the one that reads backwards at first.  It is not "the delay
+conversion, which scales with rate"; it is "divide by the number of samples in
+a step", and a retarget that keeps four-sample steps keeps it verbatim while
+having to move `0x5f`.
+
+**Nothing in `src/` was touched.**  `docs/rate_assumptions.md` gets the entry;
+the two test assertions finding 1021 left asserting `35 + iodelay/4` are still
+there and are still deliberate.
+
+### 1046. WHAT THIS BATCH DID NOT SETTLE
+
+- **The tap-by-tap sum behind `+ 34`.**  1042 establishes what it *is* and
+  bounds it against the specification's durations; it does not add the filters
+  up.  The 104/136/31.5 arithmetic is a lead and is labelled as one.
+- **`0x4c` (76), `0x50` (80) and `0x5c` (92)**, the three `filtdelay + K`
+  thresholds in arms 49 and 50.  In ticks they are 31.67 ms, 33.33 ms and
+  38.33 ms, none round, and `96 - K` is 20, 16 and 4 -- consistent with guard
+  bands opening before the 40 ms instant, which is a shape and not a
+  derivation.  They are counted from the state's entry with the counter at
+  zero, so they are the OPPOSITE latency compensation to 1041's preload:
+  `filtdelay + K` waits for the pipeline to flush and then K ticks more.
+- **The 12 samples in `0x18c`.**  396 where 11.2.1.2.4's 40 ms is 384.
+- **Whether the unit mixing at 0x68154 (1043) is observable.**  It is a latent
+  defect in the blob at every rate but 2400, and this tree has no test that
+  reaches `PPSEG` at another rate.  It must be REPRODUCED, not repaired.
+- **Nothing was re-measured.**  1040's four-samples-per-tick leans on findings
+  1002 and 1022's numbers rather than a fresh run; `make phase` was run and
+  passes, but as a baseline, not as a check of any claim here.
