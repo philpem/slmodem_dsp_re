@@ -8,6 +8,25 @@ route to 56k.
 agents in worktrees. What follows is the split, the order, and the things that
 have already cost this project time.
 
+## Two INDEPENDENT tracks, and only one of them is this document
+
+Findings 800-806 established that the blob's own constructor works as a
+differential fixture, so **V.34 does not need this span written**. That splits
+the remaining work in two, and they do not block each other:
+
+| track | what | needs this span? |
+|---|---|---|
+| **A — finish V.34** | connect, then carry data both ways at BER 0 (task #81) | **no** |
+| **B — V.90 / V.92** | this document | yes, all of it |
+
+Track A's blocker is not here: `t_v34conn.c` never runs V.8 before entering
+`datapumpv34`, so each endpoint waits for a negotiation the other never sends.
+V.8 is complete and already selects `DP_V34` and returns `DPSTAT_CHANGEDP`
+(`src/v8/v8proc.c:165`); the gap is in the test, not the reconstruction.
+
+Run the two tracks in parallel. Nothing in track A waits on a byte of this
+span, and treating them as one queue is what made the ordering wrong twice.
+
 ## Why this is also the V.34 construction path, which was not obvious
 
 There is no V.34 datapump. There is a **V.PCM** datapump, registered by
@@ -134,19 +153,46 @@ About **14 KB of wave 1 is writable today** and it is all leaves: the FFT pair
 V.92 CP/DIL packers, the rate-renegotiation pair, the diagnostic printers, and
 about 2 KB of coefficient tables.
 
-### Wave 2 — the receive chain, fan out freely
+### Wave 2 — the receive chain, and it is NOT a free-for-all
 
-| batch | groups | bytes |
-|---|---|--:|
-| A | `V90Equalizer` | 20,612 |
-| B | `V90ConstellationDesigner`, `V90ConstellationPower`, `V90TRN2Designer` | 25,754 |
-| C | `V90Phase3Demodulator`, `V90Phase3Modulator` | 18,192 |
-| D | `V90AutoDigitalImpDetector` | 16,728 |
-| E | `V90Demodulator`, `V90Demapper`, `V90PreFilter` | 17,238 |
-| F | `V90Phase4Demodulator`, `V90Phase4Modulator` | 15,129 |
-| G | `V90CP`, `V90MP`, `V90Jd`, `V90RDetector`, `V90SdDetector` | 14,925 |
-| H | `V90ConnectionEvaluator`, `V90SpectralShaper`, `V90SpectralVerifier`, `V90SpectralShapingFilter` | 12,149 |
-| I | `GenericToneDetector`, `ANSamToneDetector` + strays | ~1,300 |
+**ORDER BY WRITABILITY, NOT BY SIZE.** Wave 1 was planned by byte count and
+none of its four entry points could be compiled at all (finding 838). The same
+question was then asked of wave 2 — take each class's largest unwritten method
+and run `closure.py <symbol> --missing`, which says how many symbols must exist
+before that one can build:
+
+| batch | class | largest unwritten | closure still needs |
+|---|---|--:|--:|
+| G | `V90CP` | 2,785 B | **1** — writable now |
+| H | `V90ConnectionEvaluator` | 3,857 B | **1** — writable now |
+| D | `V90AutoDigitalImpDetector` | 5,335 B | **3** |
+| B | `V90ConstellationDesigner` | 4,887 B | **6** |
+| F | `V90Phase4Demodulator` | 3,252 B | 20 |
+| C | `V90Phase3Demodulator` | 8,616 B | 22 |
+| A | `V90Equalizer` | 9,364 B | 65 |
+| E | `V90Demodulator` | 7,276 B | 145 |
+
+So the fan-out order is **G, H, D, B first** — those four are writable today or
+nearly so — then F and C, then A, and `V90Demodulator` LAST of the receive
+chain, because it is the class everything else feeds. The original A-to-I
+lettering was by byte count and is kept only so earlier notes still resolve;
+ignore it for scheduling.
+
+A closure of 1 means the symbol itself: nothing blocks it. A closure of 145
+means `V90Demodulator` is a hub, not a leaf, and starting there would stall.
+
+### Wave 5 — the construction path, LAST
+
+What this document originally called wave 1. Moved here, unchanged in content,
+because finding 838 measured that none of it can be compiled until the classes
+below it exist:
+
+    dp_vpcm_init  needs 394 more    vpcm_create    needs 124
+    VPCMXF_Create needs  66         VPcmV34Create  needs  11
+
+Its ~14 KB of writable leaves have already been taken (the FFT pair, the V.92
+CP/DIL packers, the rate-renegotiation pair, the diagnostic printers). What
+remains is the construction path proper and it is genuinely last.
 
 ### Wave 3 — V.92
 
