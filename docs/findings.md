@@ -41964,5 +41964,222 @@ near-identical `if (p) { p->~Foo(); sysdep_free(p); }` arms in one file, which
 is finding 1264's exact failure mode.  Take every anchor from the distinctive
 part of an arm -- the type name, the offset -- never from the `sysdep_free(p)`
 boilerplate, and treat `anchorcheck.py` as the gate.
+### 1290. `V90Mapper` IS 0x704 BYTES, AND THE SPECTRAL SHAPER'S PINNED SIZE IS CONFIRMED FROM OUTSIDE IT
+
+`V90BitsToSymbol`'s constructor opens with
+
+    movl $0x704,(%esp) ; call sysdep_malloc ; ... ; call V90Mapper::C1
+
+which is not a displacement bound but **the original compiler's own
+`sizeof(V90Mapper)`**, written by the compiler that laid the class out.
+Finding 1246's oracle, applied to the innermost class of the V.90 modulator
+chain.
+
+Inside it, the two embedded subobjects are `lea`, never a load, so they are
+members and not pointers:
+
+    lea 0x670(%ebx),%edx ; call ModulusEncoder::C1
+    lea 0x68c(%ebx),%eax ; call V90SpectralShaper::C1
+
+`sizeof(ModulusEncoder)` is 0x1c, asserted in `src/pump/v90/ModulusCoder.cpp`
+since long before this work, and **0x670 + 0x1c = 0x68c** -- the two abut with
+nothing between.  `sizeof(V90SpectralShaper)` is 0x6c, asserted in
+`src/pump/v90/V90SpectralShaper.cpp` and derived independently from inside that
+class, and **0x68c + 0x6c = 0x6f8**, which is exactly the offset of the next
+field the constructor writes.
+
+So three sizes settled in three different places and one displacement measured
+here agree to the byte.  That is worth recording as its own finding because it
+is the first time the spectral shaper's 0x6c has been checked from OUTSIDE the
+class -- everything that pinned it before was internal to `V90SpectralShaper`,
+and a systematic error there would have been invisible.
+
+The destructor calls `V90SpectralShaper::~V90SpectralShaper` and nothing else.
+That is not an omission: `ModulusEncoder` has constructors and no destructor
+at all -- there is no `_ZN14ModulusEncoderD*` symbol anywhere in the blob --
+so it is trivially destructible and a compiler emits no call for it.
+
+======================================================================
+### 1291. `V90BitsToSymbol` IS 0x24 BYTES, AND TWO INDEPENDENT CALL SITES SAY SO
+
+`V90Phase4Modulator`'s constructor and `V90Modulator`'s constructor both
+allocate this class, and both spell the size the same way:
+
+    movl $0x24,(%esp) ; call sysdep_malloc ; ... ; call V90BitsToSymbol::C1
+
+Two call sites in two translation units, each emitting `sizeof` from the same
+class definition.  The last field the constructor writes is the byte at +0x20,
+so the object ends at 0x21 and pads to 0x24; the oracle and the displacement
+scan agree, and the oracle is the one that would have caught a member the
+constructor never touches.
+
+**Which matters here, because there are two such members.**  Nothing is stored
+at +0x14 or +0x18 by the constructor -- they are first written by `reset`,
+which sets +0x14 from the mapping parameters' first word and +0x18 to
+`(6 * mp[+0x624]) / mp[+0x620]` or to zero.  A differential test over
+never-zeroed storage is what makes that testable at all: on zeroed storage a
+constructor that helpfully initialised them would pass.  Both spellings are in
+`test/mutations/v90bits.json` and both are caught.
+
+======================================================================
+### 1292. A LOOP'S UPPER BOUND CAN BE UNTESTABLE BECAUSE THE WORD PAST IT BELONGS TO A SUBOBJECT THAT ALREADY ZEROED IT
+
+`V90Mapper`'s constructor ends with a six-word clear at +0x658, spelled in the
+blob as `cmp $0x5,%eax ; jbe` over an unsigned counter -- 0..5 inclusive,
+covering 0x658..0x66f, which is exactly the gap up to the modulus encoder.
+
+Mutating it to `i <= 6` is **NOT CAUGHT**, and the reason is structural rather
+than a gap in the test.  `cleared_658[6]` is the first word of the
+`ModulusEncoder` embedded at +0x670, and the mem-initializer list runs BEFORE
+the constructor body, so `ModulusEncoder::ModulusEncoder` has already stored
+zero over it.  The extra iteration writes the value that is already there.
+
+**The lesson is about which direction a bound is testable in.**  Under-running
+the loop (`i < 5`) leaves the seed in the sixth word and is caught; starting it
+late (`i = 1`) leaves the seed in the first word and is caught; over-running it
+into an adjacent subobject that the same constructor has just zeroed cannot be
+caught by any comparison of final state, because there is no difference in
+final state.  The mutation was removed rather than marked `equivalent`,
+because "equivalent" in this tree has meant "the compiler deletes it" (finding
+1224) and this is a different claim -- it is the OBJECT that makes the two
+outcomes identical, not the compiler, and that will stay true whatever flags
+change.
+
+======================================================================
+### 1293. `V90Phase4Modulator`'s 12,204 BYTES WERE A DISPLACEMENT BOUND AND ARE NOW A `sizeof`
+
+The header for this class has carried a careful hedge since the V.90 session:
+0x2fac is "the maximum displacement plus the width of what sits at it", and
+"it is not a claim that +0x5c..+0x2f63 contains no larger member -- nothing
+reaches past +0x2fab, which is all a displacement scan can say".
+
+`V90Modulator`'s constructor settles it:
+
+    movl $0x2fac,(%esp) ; call sysdep_malloc ; ... ; call V90Phase4Modulator::C1
+
+which is the ORIGINAL COMPILER'S `sizeof`, not a scan of anything (finding
+1246).  The two numbers agree exactly, which is the first independent
+confirmation the bound has had -- and it is worth recording that the hedge was
+right to be there and that the answer came from a different translation unit
+rather than from more of the same evidence.
+
+The same call site does it for `V90Phase3Modulator` (0x398) in passing.
+
+======================================================================
+### 1294. AN OWNERSHIP BIT, AND A DESTRUCTOR THAT READS IT BEFORE THE POINTER
+
+`V90Phase4Modulator`'s third argument is a `V90BitsToSymbol *` that may be
+null, and the constructor branches on it:
+
+    non-null:  +0x44 = the argument ;  +0x2fa4 = 1
+    null:      +0x44 = new V90BitsToSymbol(0x140, params) ;  +0x2fa4 = 0
+
+and the destructor is
+
+    if (+0x2fa4 == 0 && +0x44 != 0) { destroy ; free }
+
+-- the FLAG FIRST, then the pointer.  So +0x2fa4 is an ownership bit whose
+sense is inverted from the obvious reading: **1 means "not ours"**.
+
+**`V90Modulator` only ever takes the borrowing arm.**  It builds one
+`V90BitsToSymbol` of its own, hands it to the phase 4 modulator, and destroys
+it itself, so the allocating arm of this constructor is dead on the only path
+in the object that reaches it.  Both arms are still reconstructed and both are
+driven, because the code is there and a reconstruction that only implements
+the reachable arm is not the same program.
+
+**What it costs a test.**  Four combinations of (flag, pointer) are needed, not
+two, and three of them must free exactly what the embedded scrambler frees and
+no more.  `t_v90modchain` drives all four and, in the borrowing arm, compares
+the shared converter byte for byte before and after -- because "the free count
+did not go up" and "the converter was not released" are different claims and
+only the second is the one being made.
+
+======================================================================
+### 1295. `V90Modulator` IS 0x70 BYTES, AND THE PARTIAL MAP THAT PREDATED THE CONSTRUCTOR WAS RIGHT IN EVERY OFFSET IT NAMED
+
+`V90Modem`'s constructor allocates 0x70 immediately before calling this class's
+`C1`, which is finding 1246's oracle again.  The highest field the constructor
+writes is the pointer at +0x6c, so nothing is unaccounted for.
+
+`V90SessionFlag.h` had already declared a four-field version of the class --
+`pad_00[0x28]`, `sessionFlag`, `pad_2c[0x0c]`, then `phase3Modulator` and
+`phase4Modulator` -- derived from `mov 0x38(%esi),%edx` being a LOAD where the
+two demodulators embed their phase blocks.  Filling it in from the constructor
+confirms all three named offsets and both pads.  The class has moved to its own
+header, as `V90Phase3Demodulator` and `V90Demodulator` did before it, and
+`src/pump/v90/V90SessionFlag.cpp` still asserts the same three offsets by the
+same three names.
+
+**THE TWELVE ARGUMENTS DO NOT LAND IN ORDER, AND NOTHING IN THE SIGNATURE SAYS
+SO.**  Arguments 2..5 go to +0x00..+0x0c in order; 6 and 7 to +0x10 and +0x14;
+then 8, 9, 10, 11 go to +0x18, +0x1c, +0x20, +0x24 -- with the `V90CP`
+(argument 9) landing ABOVE the `V90MP` (argument 10).  Argument 1 goes to
++0x64, not +0x00, and argument 12 to +0x28, which is the session flag
+`V90Modem` later writes through `setSessionFlag`.
+
+The three nested constructors read their arguments back OUT OF THE MEMBERS --
+`mov 0x24(%ebx),%edx` after each allocator call -- which the compiler would not
+emit if the source had named the parameters, since it cannot prove the
+allocation does not alias `this`.  The three MALLOC SIZES go the other way:
+`%ebp` is used directly and never reloaded from +0x64, so those name the
+parameter.  Neither reading is distinguishable by behaviour and both are
+written the blob's way.
+
+======================================================================
+### 1296. TWO ARGUMENTS OF THE SAME TYPE CROSS BETWEEN `V90Modulator` AND `V90Phase4Modulator`, AND ONLY TWO DISTINCT INSTANCES CAN SEE IT
+
+`V90Modulator` takes two `V90MappingParams *`.  Argument 6 is stored at +0x10
+and argument 7 at +0x14, in order.  It then passes them on:
+
+    V90Phase4Modulator(params, flag, bts, mp, this->+0x14, this->+0x10, cp, 0xc)
+
+-- argument 7 as the phase 4 modulator's FIFTH argument, landing at its +0x4c,
+and argument 6 as its SIXTH, landing at +0x50.  **They swap.**  Written in the
+order they arrived, which is what anyone would write, the reconstruction is
+wrong and every field still holds a `V90MappingParams *` of the right type at
+the right offset.
+
+**This is the shape of defect a differential test only catches if it is built
+to.**  Point both sides at ONE shared instance and pass it twice and the swap
+is invisible -- both fields hold the same address either way.  Seed two
+separate instances per trial and hand out two different addresses and it fails
+on the first trial.  `t_v90modchain` does the second, for all ten pointed-to
+arguments, and asserts the crossing explicitly as well as through the
+whole-object comparison of the nested phase 4 modulator.
+
+`test/mutations/v90modulator.json` carries "the two mapping parameters do NOT
+cross on the way down" as a mutation, so the property is not merely observed
+once but is checked to be checkable.
+
+======================================================================
+### 1297. AN EMBEDDED SCRAMBLER CAN BE COMPARED ACROSS TWO HEAPS WITHOUT BEING MASKED, BY SUBTRACTING ITS OWN BASE
+
+Three of the four classes in the V.90 modulator chain embed a `Scrambler`,
+which is seven pointers and a length.  All seven point into ONE allocation
+made by the scrambler's own constructor, so on two different heaps all seven
+differ and a naive whole-object comparison fails on 28 bytes.
+
+Masking all seven is the obvious fix and throws away most of what is there.
+The distances between them are the whole content of the object: `pInitOut` is
+`pLimit + c`, `pInitTap1` is `pInitOut + a`, `pInitTap2` is `pInitOut + b`,
+and `pOut`, `pTap1`, `pTap2` start equal to those three.  A constructor that
+put a tap at the wrong distance produces seven pointers that are all still
+pointers and all still inside the buffer.
+
+So `t_v90modchain` canonicalises instead: replace each of the six derived
+pointers by its DISTANCE FROM `pLimit`, and mask only `pLimit` itself.  One
+word is lost and 24 bytes stay under comparison, and `tailLength` was never a
+pointer and is compared as it stands.  Three of `test/mutations/v90p4mctor.json`'s
+mutations move a tap and all three are caught.
+
+**It also caught a real gap.**  The first version of the test compared the
+`V90Phase3Modulator` that `V90Modulator` builds by masking every word that
+held a LIVE ALLOCATION, which is exact for allocation bases and silently wrong
+for pointers derived from one: that class's scrambler at +0x20 failed on four
+of its seven, and the failure named offsets in DECIMAL that read as plausible
+hex offsets elsewhere in the object.  The rule is that a value-based mask
+finds bases and nothing else; a subobject with internal structure needs its
+own canonicaliser.
 
 ======================================================================

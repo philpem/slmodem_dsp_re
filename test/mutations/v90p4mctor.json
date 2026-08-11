@@ -1,0 +1,111 @@
+[
+ {
+  "_": [
+   "The constructor and destructor of V90Phase4Modulator.  `setSessionFlag`",
+   "shares the file but is covered by t_v90leaves and has no anchor here.",
+   "The interesting claims are the eight arguments' offsets, the scrambler's",
+   "three taps, and the ownership flag at +0x2fa4 -- which the destructor",
+   "reads BEFORE the pointer, so both of its arms need a mutation each."
+  ]
+ },
+ {
+  "label": "ctor: the scrambler's near tap is 5, not 0x12",
+  "find": "\t: scrambler(0x12, 0x17, 0x63)",
+  "replace": "\t: scrambler(0x5, 0x17, 0x63)"
+ },
+ {
+  "label": "ctor: the scrambler's far tap is 0x12, not 0x17",
+  "find": "\t: scrambler(0x12, 0x17, 0x63)",
+  "replace": "\t: scrambler(0x12, 0x12, 0x63)"
+ },
+ {
+  "label": "ctor: the scrambler's buffer offset is 0x53, not 0x63",
+  "find": "\t: scrambler(0x12, 0x17, 0x63)",
+  "replace": "\t: scrambler(0x12, 0x17, 0x53)"
+ },
+ {
+  "label": "ctor: the two mapping-parameter arguments are swapped",
+  "find": "\tmappingParams = mpsA;\n\tsessionFlag = flag;",
+  "replace": "\tmappingParams = mpsB;\n\tsessionFlag = flag;"
+ },
+ {
+  "label": "ctor: mappingParams2 takes the fifth argument as well",
+  "find": "\tmappingParams2 = mpsB;",
+  "replace": "\tmappingParams2 = mpsA;"
+ },
+ {
+  "label": "ctor: the session flag and the eighth argument are swapped",
+  "find": "\tctorArg8 = arg8;",
+  "replace": "\tctorArg8 = flag;"
+ },
+ {
+  "label": "ctor: the V90MP and the V90CP land in each other's fields",
+  "find": "\tcp = cpArg;\n\tctorArg8 = arg8;\n\tmp = mpArg;",
+  "replace": "\tcp = (V90CP *)mpArg;\n\tctorArg8 = arg8;\n\tmp = (V90MP *)cpArg;"
+ },
+ {
+  "label": "ctor: +0x2f9c is left as it was found",
+  "find": "\tcleared_2f9c = 0;\n\tmappingParams2 = mpsB;",
+  "replace": "\tmappingParams2 = mpsB;"
+ },
+ {
+  "label": "ctor: +0x2fa0 is left as it was found",
+  "find": "\tcleared_2fa0 = 0;\n\tif (bts) {",
+  "replace": "\tif (bts) {"
+ },
+ {
+  "label": "ctor: the ownership flag is the wrong way round",
+  "find": "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 1;",
+  "replace": "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 0;"
+ },
+ {
+  "label": "ctor: the allocated converter is marked as borrowed",
+  "find": "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 0;",
+  "replace": "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 1;"
+ },
+ {
+  "label": "ctor: the owned converter takes 0x40 symbols, not 0x140",
+  "find": "\t\tv90p4_bts_ctor(own, 0x140, p);",
+  "replace": "\t\tv90p4_bts_ctor(own, 0x40, p);"
+ },
+ {
+  "label": "ctor: the owned converter is built with no parameters",
+  "find": "\t\tv90p4_bts_ctor(own, 0x140, p);",
+  "replace": "\t\tv90p4_bts_ctor(own, 0x140, 0);"
+ },
+ {
+  "label": "ctor: the converter is allocated whatever is supplied",
+  "find": "\tif (bts) {\n\t\tbitsToSymbol = bts;",
+  "replace": "\tif (!bts) {\n\t\tbitsToSymbol = bts;"
+ },
+ {
+  "label": "dtor: the ownership flag is not consulted",
+  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+  "replace": "\tif (bitsToSymbol) {"
+ },
+ {
+  "label": "dtor: the ownership flag is read the wrong way round",
+  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+  "replace": "\tif (externalBitsToSymbol && bitsToSymbol) {"
+ },
+ {
+  "label": "dtor: the null guard is dropped",
+  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+  "replace": "\tif (!externalBitsToSymbol) {"
+ },
+ {
+  "label": "dtor: the converter is freed without being destroyed",
+  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+  "replace": "\t\tsysdep_free(bitsToSymbol);"
+ },
+ {
+  "label": "dtor: the converter is destroyed and not freed",
+  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+  "replace": "\t\tbitsToSymbol->~V90BitsToSymbol();"
+ },
+ {
+  "label": "dtor: the pointer is nulled afterwards, which the blob does not do",
+  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+  "replace": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t\tbitsToSymbol = 0;"
+ }
+]

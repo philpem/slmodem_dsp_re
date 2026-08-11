@@ -59,6 +59,7 @@
 #define DSPLIB_V90SESSIONFLAG_H
 
 #include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Modulator.h"
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90Phase3Modulator.h"
@@ -96,19 +97,15 @@ public:
 };
 
 /*
- * The modulator holds POINTERS where the two demodulators embed:
- * `mov 0x38(%esi),%edx` is a load, and what it loads is passed as `this`.
+ * `V90Modulator` was declared here too, as
+ *
+ *     pad_00[0x28]; sessionFlag; pad_2c[0x0c]; two modulator POINTERS
+ *
+ * from `mov 0x38(%esi),%edx` being a LOAD where the two demodulators embed:
+ * what it loads is passed as `this`, so the phase blocks are pointed at and
+ * not contained.  V90Modulator.h keeps that sentence, fills the object in to
+ * its full 0x70 bytes, and keeps all three of the names asserted below.
  */
-class V90Modulator {
-public:
-	void setSessionFlag(unsigned int flag);
-
-	unsigned char pad_00[0x28];		/* +0x00 not modelled     */
-	unsigned int sessionFlag;		/* +0x28                  */
-	unsigned char pad_2c[0x0c];		/* +0x2c not modelled     */
-	V90Phase3Modulator *phase3Modulator;	/* +0x38                  */
-	V90Phase4Modulator *phase4Modulator;	/* +0x3c                  */
-};
 
 /*
  * The fan-out, and the only branch in the batch: +0x49bc selects which half

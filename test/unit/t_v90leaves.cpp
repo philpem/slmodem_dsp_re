@@ -1276,12 +1276,20 @@ run_rt(void)
 
 #define P4_SLOT 12288
 
-union p4_slot {
-	V90Phase4Modulator o;
-	unsigned char raw[P4_SLOT];
-};
+/*
+ * RAW STORAGE, NOT A UNION.  `V90Phase4Modulator` gained a constructor and a
+ * destructor when the V.90 modulator chain landed, which deletes a union's
+ * own and makes `static union p4_slot p4_a;` stop compiling.  The block is
+ * reached through a cast instead, which changes nothing about what is
+ * measured: `setSessionFlag` is still called over seeded storage that no
+ * constructor has run over.
+ */
+static unsigned char p4_raw[2][P4_SLOT] __attribute__((aligned(8)));
 
-static union p4_slot p4_a, p4_b;
+#define p4_a_raw	(p4_raw[0])
+#define p4_b_raw	(p4_raw[1])
+#define p4_a		((V90Phase4Modulator *)(void *)p4_raw[0])
+#define p4_b		((V90Phase4Modulator *)(void *)p4_raw[1])
 
 static int
 run_p4(void)
@@ -1300,29 +1308,30 @@ run_p4(void)
 		unsigned int f = flagv[trial & 7];
 		int bad, first;
 
-		fill_pair(p4_a.raw, p4_b.raw, P4_SLOT, trial, trial & 3);
+		fill_pair(p4_a_raw, p4_b_raw, P4_SLOT, trial, trial & 3);
 
 		/* Forced to differ from the value about to be stored. */
-		p4_a.o.sessionFlag = p4_b.o.sessionFlag = ~f;
+		p4_a->sessionFlag = p4_b->sessionFlag = ~f;
 
-		memcpy(before, p4_b.raw, P4_SLOT);
+		memcpy(before, p4_b_raw, P4_SLOT);
 
-		p4_a.o.setSessionFlag(f);
-		ref_p4_setSessionFlag(&p4_b.o, f);
+		p4_a->setSessionFlag(f);
+		ref_p4_setSessionFlag(p4_b, f);
 
 		diff_eq_obj("after setSessionFlag", V90Phase4Modulator,
-			    &p4_a.o, &p4_b.o, trial);
+			    p4_a, p4_b, trial);
 		diff_eq_int("no store past the object (%ld)",
-			    memcmp(p4_a.raw + sizeof(p4_a.o),
-				   p4_b.raw + sizeof(p4_b.o),
-				   P4_SLOT - sizeof(p4_a.o)) == 0, 1, trial);
+			    memcmp(p4_a_raw + sizeof(V90Phase4Modulator),
+				   p4_b_raw + sizeof(V90Phase4Modulator),
+				   P4_SLOT - sizeof(V90Phase4Modulator))
+			    == 0, 1, trial);
 
-		bad = only_wrote(before, p4_b.raw, P4_SLOT, allow, 1, seen,
+		bad = only_wrote(before, p4_b_raw, P4_SLOT, allow, 1, seen,
 				 &first);
 		diff_eq_int("the blob wrote outside +0x0000 at +0x%lx",
 			    bad == 0 ? -1 : first, -1, trial);
 		diff_eq_int("blob's sessionFlag (%ld)",
-			    (long)p4_b.o.sessionFlag, (long)f, trial);
+			    (long)p4_b->sessionFlag, (long)f, trial);
 	}
 
 	diff_eq_int("sessionFlag is written", seen[0], 1, 0);
