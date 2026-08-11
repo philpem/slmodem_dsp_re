@@ -50,6 +50,15 @@ void our_v92me(void *self) asm("_ZN17V92ModulusEncoderC1Ev");
 void our_v92me2(void *self) asm("_ZN17V92ModulusEncoderC2Ev");
 void ref_v92me(void *self) asm("ref__ZN17V92ModulusEncoderC1Ev");
 void ref_v92me2(void *self) asm("ref__ZN17V92ModulusEncoderC2Ev");
+
+void our_menc_prog(void *self, unsigned char *bytes, unsigned int *out)
+	asm("_ZN14ModulusEncoder8progressEPhPj");
+void ref_menc_prog(void *self, unsigned char *bytes, unsigned int *out)
+	asm("ref__ZN14ModulusEncoder8progressEPhPj");
+void our_mdec_prog(void *self, unsigned char *bytes, unsigned int *in)
+	asm("_ZN14ModulusDecoder8progressEPhPj");
+void ref_mdec_prog(void *self, unsigned char *bytes, unsigned int *in)
+	asm("ref__ZN14ModulusDecoder8progressEPhPj");
 }
 
 #define MOD_SIZE	0x1c
@@ -183,6 +192,222 @@ run_v92me(void)
 	return diff_end();
 }
 
+
+/* --------------------------------------------- the two progress members */
+
+/*
+ * The coder proper: a bit string in, six mixed-radix digits out, and back.
+ *
+ * NO MODULUS IS EVER ZERO.  The encoder divides by five of the seven members
+ * with no guard at all, so a zero one is a division by zero and a signal --
+ * not a difference either side could report.  That is a real property of the
+ * object and it is recorded in the source rather than driven here.
+ *
+ * THE LENGTHS GO PAST 63, on purpose.  The accumulator is SIGNED: the
+ * divisions are `__divdi3`/`__moddi3` and the decoder shifts with `sar`, so a
+ * 64-bit string with its top bit set is a NEGATIVE number, its first
+ * remainder comes out negative, and an unsigned reconstruction would disagree
+ * on every digit.  A sweep that stopped at 32 bits would call that untested.
+ *
+ * THE MODULI GO PAST 2^31 for the same reason from the other side: the
+ * divisors are zero-extended into the 64-bit helper, so a modulus of
+ * 0x80000000 is a large POSITIVE divisor.  Sign-extending it would make it
+ * negative and change every quotient.
+ */
+#define MC_BITS		72
+#define MC_GUARD	16
+
+static unsigned char mc_bytes_a[MC_BITS + MC_GUARD];
+static unsigned char mc_bytes_b[MC_BITS + MC_GUARD];
+static unsigned int mc_words_a[6 + 4];
+static unsigned int mc_words_b[6 + 4];
+
+/* field_00 .. field_10: five moduli, none of them zero. */
+static const unsigned int mc_mod[][5] = {
+	{ 2u, 2u, 2u, 2u, 2u },
+	{ 3u, 5u, 7u, 11u, 13u },
+	{ 128u, 64u, 32u, 16u, 8u },
+	{ 1u, 1u, 1u, 1u, 1u },
+	{ 1u, 2u, 1u, 3u, 1u },
+	{ 0x80000000u, 2u, 3u, 2u, 5u },
+	{ 0xffffffffu, 1u, 1u, 1u, 1u },
+	{ 6u, 6u, 6u, 6u, 6u },
+	/*
+	 * A modulus above 2^31 in the LAST slot as well as the first.  Each
+	 * divisor is zero-extended into the 64-bit helper, so these are large
+	 * positive numbers; a reconstruction that sign-extended one would make
+	 * it negative and change that digit and every one after it, and only a
+	 * set with a big value in that slot can see it.
+	 */
+	{ 2u, 3u, 5u, 7u, 0x80000000u },
+	{ 2u, 2u, 2u, 2u, 0xffffffffu }
+};
+#define MC_NMOD ((int)(sizeof(mc_mod) / sizeof(mc_mod[0])))
+
+static const unsigned int mc_len[] = { 0u, 1u, 2u, 7u, 8u, 31u, 32u, 33u,
+				       63u, 64u, 65u, 72u };
+#define MC_NLEN ((int)(sizeof(mc_len) / sizeof(mc_len[0])))
+
+static void
+mc_setup(void *obj, const unsigned int *mod, unsigned int len,
+	 unsigned int spare)
+{
+	unsigned int v[7];
+	int i;
+
+	for (i = 0; i < 5; i++)
+		v[i] = mod[i];
+	v[5] = spare;			/* +0x14, which neither member reads */
+	v[6] = len;			/* +0x18 */
+	memcpy(obj, v, sizeof(v));
+}
+
+static void
+mc_fill_bytes(int trial)
+{
+	int i;
+
+	unsigned lf = 0x51a7u + 0x9e37u * (unsigned)trial + 1u;
+
+	for (i = 0; i < MC_BITS + MC_GUARD; i++) {
+		unsigned char v;
+
+		lf = (lf >> 1) ^ (-(int)(lf & 1u) & 0xb400u);
+
+		switch (trial % 5) {
+		case 0:  v = 1;					break;
+		case 1:  v = 0;					break;
+		case 2:  v = (unsigned char)(i & 1);		break;
+		/*
+		 * The high bits of the byte must not matter -- the object
+		 * masks with 1 -- so two of the five kinds set them.
+		 */
+		case 3:  v = (unsigned char)(0xfe | (i & 1));	break;
+		default: v = (unsigned char)((lf >> 5) | (i & 1));	break;
+		}
+		mc_bytes_a[i] = mc_bytes_b[i] = v;
+	}
+}
+
+static int
+run_progress(void)
+{
+	int m, l, trial = 0;
+	int seenNegDigit = 0, seenBigDigit = 0, seenCarry = 0, seenRound = 0;
+	unsigned char obj_a[MOD_SLOT], obj_b[MOD_SLOT];
+	unsigned char decoded[MC_BITS];
+
+	diff_begin("ModulusEncoder::progress / ModulusDecoder::progress");
+
+	for (m = 0; m < MC_NMOD; m++) {
+		for (l = 0; l < MC_NLEN; l++) {
+			unsigned int len = mc_len[l];
+			unsigned int i;
+			int roundTrip;
+
+			trial++;
+			seed(trial);
+			memcpy(obj_a, ours, MOD_SLOT);
+			memcpy(obj_b, theirs, MOD_SLOT);
+			mc_setup(obj_a, mc_mod[m], len, 0xa5a5a5a5u);
+			mc_setup(obj_b, mc_mod[m], len, 0xa5a5a5a5u);
+			mc_fill_bytes(trial);
+
+			for (i = 0; i < 6 + 4; i++)
+				mc_words_a[i] = mc_words_b[i] =
+					0xdeadbe00u + i;
+
+			our_menc_prog(obj_a, mc_bytes_a, mc_words_a);
+			ref_menc_prog(obj_b, mc_bytes_b, mc_words_b);
+
+			diff_eq_obj_(__FILE__, __LINE__, "encoder object",
+				     "ModulusEncoder", obj_a, obj_b, MOD_SLOT,
+				     (long)trial);
+			diff_eq_int("the six digits (trial %ld)",
+				    memcmp(mc_words_a, mc_words_b,
+					   6 * sizeof(unsigned int)) == 0, 1,
+				    trial);
+			diff_eq_int("nothing past the six (trial %ld)",
+				    memcmp(mc_words_a + 6, mc_words_b + 6,
+					   4 * sizeof(unsigned int)) == 0
+				    && mc_words_b[6] == 0xdeadbe06u, 1, trial);
+			diff_eq_int("the encoder did not touch the bits"
+				    " (trial %ld)",
+				    memcmp(mc_bytes_a, mc_bytes_b,
+					   MC_BITS + MC_GUARD) == 0
+				    && mc_bytes_b[MC_BITS] == mc_bytes_a[MC_BITS],
+				    1, trial);
+
+			for (i = 0; i < 6; i++) {
+				if (mc_words_b[i] & 0x80000000u)
+					seenNegDigit++;
+				if (mc_words_b[i] > 1u
+				    && mc_words_b[i] != 0xdeadbe00u + i)
+					seenBigDigit++;
+			}
+			if (mc_words_b[5] != 0u)
+				seenCarry++;
+
+			/*
+			 * And back.  The decoder is the encoder's inverse
+			 * where the digits fit their moduli, so a round trip
+			 * that recovers the bit string is a check on both at
+			 * once -- and one that does NOT recover it is still
+			 * compared side against side, which is what matters.
+			 */
+			for (i = 0; i < MC_BITS + MC_GUARD; i++)
+				mc_bytes_a[i] = mc_bytes_b[i] = 0x5au;
+
+			our_mdec_prog(obj_a, mc_bytes_a, mc_words_a);
+			ref_mdec_prog(obj_b, mc_bytes_b, mc_words_b);
+
+			diff_eq_obj_(__FILE__, __LINE__, "decoder object",
+				     "ModulusDecoder", obj_a, obj_b, MOD_SLOT,
+				     (long)trial);
+			diff_eq_int("the bits back out (trial %ld)",
+				    memcmp(mc_bytes_a, mc_bytes_b,
+					   MC_BITS + MC_GUARD) == 0, 1, trial);
+			diff_eq_int("the decoder wrote no further (trial %ld)",
+				    mc_bytes_b[len] == 0x5au, 1, trial);
+			diff_eq_int("the decoder did not touch the digits"
+				    " (trial %ld)",
+				    memcmp(mc_words_a, mc_words_b,
+					   10 * sizeof(unsigned int)) == 0, 1,
+				    trial);
+
+			/*
+			 * The decoded bits have to be kept before the
+			 * original ones are regenerated over them, or the
+			 * comparison is of one array against itself.
+			 */
+			memcpy(decoded, mc_bytes_b, MC_BITS);
+			roundTrip = 1;
+			mc_fill_bytes(trial);
+			for (i = 0; i < len; i++)
+				if ((decoded[i] & 1u) != (mc_bytes_a[i] & 1u))
+					roundTrip = 0;
+			if (roundTrip && len != 0)
+				seenRound++;
+		}
+	}
+
+	/*
+	 * What the sweep is claiming to have reached.  A negative digit is
+	 * the signed accumulator showing; a round trip is the pair really
+	 * being inverses.
+	 */
+	diff_eq_int("a digit came out negative %ld times", seenNegDigit > 0,
+		    1, seenNegDigit);
+	diff_eq_int("a digit came out above one %ld times", seenBigDigit > 0,
+		    1, seenBigDigit);
+	diff_eq_int("the sixth word carried something %ld times",
+		    seenCarry > 0, 1, seenCarry);
+	diff_eq_int("a round trip recovered the bits %ld times", seenRound > 0,
+		    1, seenRound);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -193,6 +418,7 @@ main(void)
 	bad |= run_modulus("ModulusDecoder::ModulusDecoder", our_mdec,
 			   our_mdec2, ref_mdec, ref_mdec2);
 	bad |= run_v92me();
+	bad |= run_progress();
 
 	return bad;
 }

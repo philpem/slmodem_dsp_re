@@ -182,14 +182,32 @@
    }
   },
   "moduluscoder": {
-   "key": "84600d9fd0e3e11ecd9126793103055f53dd5211aa63db1e3f29dbc0ad1c898d",
-   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "f3746f93197fffd56f7c46248092a8f9168589cafe5aa84d216de9791c3a6b07",
+   "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the decoder clears one word that is not its own": "caught",
     "the decoder leaves its last word alone": "caught",
+    "the decoder loses its last stage": "caught",
+    "the decoder shifts by one too many": "caught",
+    "the decoder writes one bit too many": "caught",
+    "the decoder writes the whole low byte": "caught",
+    "the decoder's Horner starts at the wrong end": "caught",
+    "the decoder's accumulator is unsigned, so the shift is logical": "caught",
+    "the decoder's second stage takes the wrong digit": "caught",
+    "the decoder's second stage takes the wrong modulus": "caught",
     "the encoder leaves its first word alone": "caught",
     "the encoder leaves its last word alone": "caught",
-    "the encoder's middle word is set to one, not zero": "caught"
+    "the encoder reads the bit string the other way up": "caught",
+    "the encoder stops one bit short": "caught",
+    "the encoder takes the whole byte rather than its low bit": "caught",
+    "the encoder tests the byte for zero rather than masking it": "caught",
+    "the encoder's accumulator is unsigned": "caught",
+    "the encoder's middle word is set to one, not zero": "caught",
+    "the fifth modulus is sign-extended": "caught",
+    "the fourth digit is not divided out at all": "caught",
+    "the second digit is divided out by the first modulus": "caught",
+    "the second digit takes the third modulus": "caught",
+    "the sixth word is the fifth quotient's remainder instead": "caught"
    }
   },
   "psd": {
