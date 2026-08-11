@@ -89,8 +89,25 @@ class V90PreFilter;
  *
  * so the constructor asks "is the mode 1?" and nothing else.  What 1 is
  * called is not established here.
+ *
+ * SPELLED AS A DEFINITION BECAUSE C++98 HAS NO OPAQUE ENUM, and the author's
+ * compiler was C++98 -- `enum X : int;` is C++11 and GCC 3.4.2 rejects it
+ * outright, so it cannot be what was written here.  `_BASE_PIN` is OURS: the
+ * object names no enumerator, and the pin's only job is to fix the underlying
+ * type, which an empty enum does not -- it leaves the range 0..0 and the
+ * casts this type exists for undefined.  A single negative enumerator makes
+ * the base signed and every `int` representable, measured identical to the
+ * C++11 spelling under both compilers.  docs/method/compilers.md, V2.
+ *
+ * THIS HEADER IS THE TYPE'S ONLY HOME.  It used to be declared here AND in
+ * V90Modem.h, which an opaque declaration permits and a definition does not;
+ * V90Modem.h now includes this file instead.  One definition, one place, and
+ * the file's own include guard is the only guard needed.
  */
-enum V90ComputationalMode : int;
+enum V90ComputationalMode { V90ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
+
+typedef char v90equ_compmode_is_signed[
+    ((enum V90ComputationalMode)-1 < (enum V90ComputationalMode)0) ? 1 : -1];
 
 #define V90EQU_COMP_MODE_1	1
 

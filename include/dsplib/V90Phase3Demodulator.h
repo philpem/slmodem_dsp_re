@@ -83,11 +83,20 @@ class ANSamToneDetector;
  * The underlying type is fixed so that every `int` value is representable and
  * the differential test may sweep the irregular range without reaching for
  * undefined behaviour.  It does not affect the mangling, which is by name.
+ *
+ * SPELLED AS A PIN RATHER THAN A BASE, because `: int` on an enum is C++11
+ * and the author's compiler was C++98.  Dropping it alone would not be
+ * harmless here: the three values below give C++98 a range of 0..31, and the
+ * sweep this comment relies on would then be undefined for every state above
+ * 31.  `_BASE_PIN` is ours and restores exactly what `: int` gave.  Measured
+ * identical -- 4 bytes, signed -- under both compilers.
+ * docs/method/compilers.md, V2.
  */
-enum Phase3DemodulatorState : int {
+enum Phase3DemodulatorState {
 	P3D_STATE_WAIT_FOR_SD = 0,		/* the Sd detector runs      */
 	P3D_STATE_TRN1D_KNOWN_DATA = 3,		/* TRN1d, known data         */
-	P3D_STATE_WAIT_FOR_QTS = 26		/* V.92: wait for QTS        */
+	P3D_STATE_WAIT_FOR_QTS = 26,		/* V.92: wait for QTS        */
+	P3D_STATE_BASE_PIN = -0x7fffffff - 1	/* ours: pins the base       */
 };
 
 class V90Phase3Demodulator {

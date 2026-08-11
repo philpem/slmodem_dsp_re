@@ -54,6 +54,7 @@
 #include "dsplib/encode.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/V90CodecType.h"
 #include "dsplib/V90Jd.h"
 #include "dsplib/V90Modulator.h"
 #include "dsplib/V90Parameters.h"
@@ -61,14 +62,15 @@
 #include "dsplib/V92Jd.h"
 
 /*
- * `V90PreFilter.h` spells this and this file cannot have that header; an
- * opaque-enum declaration may be repeated as long as the base agrees, and it
- * does.  The value comes from `_tagModemParameters::codecType` at +0x54,
- * which `modem_params.h` types `int`; the object loads it with a plain 32-bit
+ * `__tHardwareCodecTypes__` comes from V90CodecType.h rather than from
+ * V90PreFilter.h, which this file must not have -- the trade above.  It used
+ * to be repeated here as an opaque declaration; C++98 has no such thing, so
+ * the type now has exactly one home and both consumers include it.  The value
+ * comes from `_tagModemParameters::codecType` at +0x54, which
+ * `modem_params.h` types `int`; the object loads it with a plain 32-bit
  * `mov 0x54(%edx),%ecx` and passes it straight on, so the cast below is a
  * conversion the compiler was going to make either way.
  */
-enum __tHardwareCodecTypes__ : int;
 
 /*
  * `sizeof(V90Demodulator)`, which this translation unit cannot spell; the
