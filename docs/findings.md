@@ -39935,3 +39935,143 @@ one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
 over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
+
+### 1235. THE THREE MESSAGE-PARAMETER CLASSES' OBJECT MAPS, WITH EVERY SIZE PINNED FROM BOTH ENDS
+
+`V90CP`, `V92CP` and `V90MP` are the V.90/V.92 CP and MP message objects.  None
+had a header or a source file in this tree; all three now do, and the
+interesting part is that not one of the three sizes is an inference from the
+highest offset a method touches.  Each has an independent upper bound:
+
+| class | size | upper bound, and where it comes from |
+|---|---|---|
+| `V90CP` | `0x3bc0` | `V90Modem` builds it at `+0xdf4` and holds a `V90Parameters *` at `+0x49b4` |
+| `V92CP` | `0x918` | `V92Modem` calls `sysdep_malloc(0x918)` at 0x13dd3 and passes the block straight to the constructor |
+| `V90MP` | `0x124` | `V90Modem` builds it at `+0xcd0` and `V90CP` at `+0xdf4` |
+
+and in each case the last field the class writes is four bytes ending exactly
+at that bound -- `+0x3bbc`, `+0x914`, `+0x120`.  Lower bound meets upper bound,
+so `sizeof` is asserted in the .cpp rather than padded to a guess.
+
+The three have the same SHAPE and are not the same struct.  Each holds a
+detector block, then a bit vector one byte per bit, then a sixteen-byte CRC
+register, then the sequence-length arithmetic:
+
+                       V90CP     V92CP     V90MP
+    detector counter   +0xca4    +0x114    +0x014
+    two flags          +0xca9    +0x119    +0x019
+                       +0xcaa    +0x11a    +0x01a
+    the constant 18    +0xcac    +0x11c    +0x01b
+    bit vector         +0xcb8    +0x129    +0x01c
+    CRC[16]            +0x3b98   +0x8f9    +0x102
+
+The bit vector's start is not a guess either: `getBitVector` returns
+`this + <that offset>` in each of the three (0x519d0, 0x4ebe0, 0x1f700), and
+its end is where `resetCRC`'s sixteen byte stores begin (0x512b0, 0x4e5d0,
+0x1f150).  What is a modelling choice is that the whole span between is ONE
+array; the methods that walk it are not written here.
+
+**The constant 18 is a BYTE in `V90MP` and a four-byte field in both CP
+classes** -- `movb $0x12,0x1b(%eax)` at 0x1f3c4 against `movl $0x12` at 0x51514
+and 0x4e834.  So the three detectors are not one shared sub-object that the
+compiler laid out three times, and a header that modelled them as one would be
+wrong about `V90MP` in a way no differential test could see, because every
+value the field holds fits in a byte.
+
+### 1236. A 173-BYTE DESTRUCTOR AGAINST A 193-BYTE CONSTRUCTOR: SIX BUFFERS, AND THE HARNESS'S ALLOCATOR IS WHAT MAKES THE NULL GUARD TESTABLE
+
+`V90CP::V90CP` (0x51590) makes six `sysdep_malloc(0x200)` calls and stores the
+results at `+0xc88`..`+0xc9c`.  `V90CP::~V90CP` (0x51200) is those six frees in
+the same order, each behind its own null test:
+
+    51208:  mov 0xc88(%ebx),%eax
+    5120e:  test %eax,%eax
+    51210:  jne 512a0                  -> mov %eax,(%esp); call sysdep_free
+
+and it does NOT clear the pointer afterwards -- the object is left holding six
+dangling addresses.  That is what 173 bytes against 193 buys, and it is why
+the destructor is worth reading rather than assuming: `V92CP` and `V90MP`, the
+two classes in the same batch that allocate nothing, have one-byte destructors.
+
+The null guard is the part a differential test normally cannot reach, because
+the obvious way to exercise it is to hand the destructor a wild pointer and
+that aborts the run.  It does not here: `test/harness/runtime.c`'s `sysdep_free`
+counts a free of NULL as `free_null` and a free of a pointer it never handed
+out as `bad_free`, and SWALLOWS the latter instead of passing it to `free()`.
+So `t_v90cp` runs the destructor over all 64 null/non-null combinations of the
+six seeded pointers, identical on both sides, and reads the two counts back:
+an unguarded `sysdep_free(buf[i])` shows up as `free_null` instead of
+`bad_free`, and a missing free shows up as one attempt too few.  Both branches
+of all six guards, no crash, 450 checks.
+
+### 1237. THE CONSTRUCTOR AND `reset` ARE THE SAME CODE, AND THE SECTION HEADER SAYS THE COMPILER DID NOT PUT IT THERE
+
+`V90MP::V90MP` (0x1f410, 40 bytes) and `V90MP::reset` (0x1f3e0, 40 bytes)
+disassemble alike instruction for instruction, down to the register
+allocation.  `V92CP::V92CP` is `V92CP::reset` plus one store, `movb $0x0,0x4`.
+`V90CP::V90CP` is `V90CP::reset` plus the six allocations and `movb $0x0,0x13`.
+
+The tempting reading is that each constructor calls `reset()` and the compiler
+inlined it.  It did not.  `readelf -sW` puts all six symbols in section 1,
+which is `.text`, as ordinary `GLOBAL FUNC`s -- not in a
+`.gnu.linkonce.t._ZN5V90MP5resetEv`, which is where GCC would put `reset` if
+the class body defined it and it were therefore implicitly inline.  GCC 3.4 at
+`-O2` does not enable `-finline-functions`, so an ordinary global function
+defined out of line is not inlined into its caller.
+
+So the original REPEATED the assignments in the constructor, and the
+reconstruction repeats them too.  This is worth writing down because the
+alternative -- `V90MP::V90MP() { reset(); }` -- would have been the natural
+thing to write, would have compiled to the same forty bytes under a modern
+compiler that does inline it, and would have quietly put a definition of
+`reset` in the tree that nothing tested.
+
+### 1238. A STORE TO A MEMBER IN A DESTRUCTOR IS DEAD, SO "THE DESTRUCTOR IS EMPTY" IS NOT A FALSIFIABLE CLAIM -- MEASURED, NOT REASONED
+
+The mutation "the destructor clears the counters" was recorded NOT CAUGHT the
+first time `v90mp` ran, and the test looked wrong.  It was not.  The mutated
+source
+
+    V90MP::~V90MP() { nofRecievedMp = 0; }
+
+compiles, under this tree's g++ at `-O2`, to the same one-byte `ret` as the
+empty body: GCC ends a destructor with a clobber of `*this`, so every store to
+a member inside it is dead and is deleted.  `objdump` on the mutated object is
+the whole argument -- `00000030 <_ZN5V90MPD1Ev>: ret`.
+
+Three consequences, and the third is the one that generalises:
+
+- The mutation is EQUIVALENT, not uncaught, and is recorded that way with the
+  reason.  The suites also carry the same defect written through a `volatile`
+  lvalue, which survives the optimiser and IS caught -- so the test's
+  sensitivity to a store in a destructor is demonstrated rather than asserted.
+- A one-byte destructor in the blob is therefore consistent with a source that
+  assigns members, and the reconstruction cannot be held to the difference.
+  (Whether GCC 3.4 did the same deletion is not established; it predates the
+  CLOBBER representation this rests on.  It does not matter here, because the
+  blob stores nothing either way.)
+- **A mutation that the compiler deletes reads exactly like a test that does
+  not look.** `mutate.py`'s NOT CAUGHT list is a list of untested claims, and
+  this is the first case in this tree where an entry on it was a property of
+  the mutation instead.  The check that told them apart was disassembling the
+  mutated object, which costs one command; guessing costs a rewritten test.
+
+### 1239. THE V.90 CP DEBUG STRING CALLS ITSELF MP
+
+`V90CP::printNofRecievedMpMpNot` (0x53680) prints its two counters through
+`.rodata.str1.4 + 0xd6b0`, which is
+
+    "V90MP: received %d MP, %d MPNot\r\n"
+
+and `V90MP::printNofRecievedMpMpNot` (0x20bc0) prints through
+`.rodata.str1.4 + 0x5a34`, which is the same thirty-two characters.  Two
+copies of one string literal, in two translation units, and the CP one is
+labelled MP.
+
+It is a diagnostic label and nothing branches on it, so it is recorded as
+D162 and reproduced rather than corrected -- but it is also evidence about the
+source: the two classes were written by copying one from the other, which is
+consistent with the shape they share (finding 1235) and with the CP classes'
+`printNofRecievedMpMpNot` existing at all in a message that carries no MP
+count under that name.  It also fixes which of the pair is the original: the
+label that travelled is MP's.

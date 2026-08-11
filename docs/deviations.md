@@ -4237,6 +4237,14 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D162 🐛 💤 `V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"` — the CP class's debug line names the other class
+
+*V.90/V.92 message-parameter batch. **Reachability: unmeasured** — diagnostic only, and only above `dsplibs_debug_level > 1`. Status: CONFIRMED — the literal at `.rodata.str1.4+0xd6b0` is byte for byte `V90MP`'s at `+0x5a34`. Fix class: documentation only; reproduced, not corrected.*
+
+**Finding 1239.**
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
