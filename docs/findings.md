@@ -39935,3 +39935,66 @@ one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
 over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
+
+======================================================================
+
+### 1211. A HOST-FORCED RETRAIN DOUBLES OUR RECEIVE RATE — 7 OF 8, NO CHANGE TO THE BLOB
+
+*Task #109.  Confirms 1209's prediction, and it needs no code: `ATO1` is
+"return to online data mode AND retrain", so the second Phase 3 pass can be
+demanded from the far end's AT interface.*
+
+**Paired design, which is why 8 calls is enough here.** The rate before and the
+rate after the forced retrain come from the SAME call, over the same path,
+seconds apart. Every between-call confounder that has wrecked a claim on this
+bench -- and four have -- is held constant by construction rather than by
+sample size.
+
+`+++`, guard time, `ATO1`, then 45 s for the handshake. Equaliser error is
+measured per pass by splitting the `V34EQU` series at the second `S-S1 is
+detected`, and rates are read off the object's own threshold table (1210).
+
+| call | equerr before | after | rate before | rate after |
+|---|---|---|---|---|
+| rt-1 | 3340 | **239** | 12000 | **24000** |
+| rt-2 | 3026 | **175** | 12000 | **26400** |
+| rt-3 | 3042 | **257** | 12000 | **24000** |
+| rt-4 | 2807 | **733** | 12000 | **19200** |
+| rt-5 | 2712 | **152** | 12000 | **26400** |
+| rt-6 | 9293 | **120** | 7200 | **28800** |
+| rt-7 | 11337 | **6198** | 4800 | **9600** |
+| rt-8 | 49 | 220 | 33600 | 24000 |
+
+**Seven of eight improved**, typically by an order of magnitude -- from the
+~2900 that finding 1208 showed is the modal single-pass outcome, to 120-260,
+which is index 10-12 territory. That is the 14x that 1210 said 26400 requires,
+and it is being achieved on the same path, in the same call, a minute later.
+
+**Independently confirmed at the far end.** `AT&V1` persists until the next
+`ATZ`, so `rt-8`'s registers could be read after the run:
+
+```
+LAST TX rate ....... 24000 BPS      <- the far end's transmit, i.e. OUR RECEIVE
+LAST RX rate ....... 26400 BPS      <- our transmit
+HIGHEST RX rate .... 33600 BPS
+```
+
+Our receive ended at **24000**, and the threshold table applied to that call's
+post-retrain equaliser error predicts **exactly 24000**. Two independent routes
+-- our own equaliser diagnostics, and the far modem's own register -- agree.
+
+**The one that got worse is informative.** `rt-8` began at 49, already index-14
+territory, and the retrain took it to 220. Retraining from an excellent state
+can cost you; the intervention is for the modal call, not a blanket win.
+
+**What this does NOT change.** The blob is untouched, the reconstruction is
+untouched, and nothing here is a fix to either -- `ATO1` is a command to the
+FAR modem, over its own serial port. It is an operational finding about running
+V.34 across a packet path, not a defect and not a capability addition. The
+governing rule is not engaged.
+
+**And it retires the earlier candidates by demonstration.** The echo is still
+at 205.62 ms and still uncancellable during the second pass; the jitter buffers
+are unchanged; the clocks are as unlocked as ever. The rate doubles anyway. What
+was costing us two rate steps was the equaliser's first-pass convergence, and
+nothing else on the list.
