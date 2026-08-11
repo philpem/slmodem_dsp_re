@@ -32,6 +32,10 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "k56flexalloc": [
+  "src/pump/v90/K56FlexFloModem.cpp",
+  "build/test/t_v92alloc"
+ ],
  "psd": [
   "src/dsp/Psd.cpp",
   "build/test/t_psd"
@@ -300,6 +304,10 @@
   "src/pump/v90/V90SpectralShapingFilter.cpp",
   "build/test/t_v90spectral"
  ],
+ "v92alloc": [
+  "src/pump/v90/V92ParamsInfo.c",
+  "build/test/t_v92alloc"
+ ],
  "v92cp": [
   "src/pump/v90/V92CP.cpp",
   "build/test/t_v90cp"
@@ -339,6 +347,10 @@
  "vpcmrun": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmrun"
+ ],
+ "vpcmtabs": [
+  "src/pump/v90/vpcm_tables.c",
+  "build/test/t_vpcmtabs"
  ],
  "vpcmweak": [
   "test/unit/t_vpcmguard.c",

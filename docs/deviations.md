@@ -4320,6 +4320,23 @@ would report it dangling.)
 displacement. Three hit, and only three — the two constructor copies, both
 `mov %reg,0x50(%ebx)` with `%ebx` as `this`, and `reset`, whose `mov
 0x50(%esp),%ebp` is a stack slot and not the object at all.
+## D170 🐛 `V92deleteConstellations` and `V92deleteFilterCoefficients` free all ten arrays and null none of them, so `V92ParamsInfo` comes back from either deleter holding ten dangling pointers
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED from the disassembly — there is no store to any of +0x5c..+0x68 or +0x84..+0x98 in either function. Fix class: documentation only until a caller is found that deletes without freeing the block.*
+
+**Finding 1226.** The one caller in the object, `V92Modem`'s destructor, frees the block itself immediately afterwards, so the dangling values are never read there. Reproduced, and `t_v92alloc.c`'s `run_delete_live` asserts they survive.
+
+**This entry and D171 were drafted under two higher numbers and renumbered before the branch left its worktree**, so no citation to the old pair exists anywhere and CLAUDE.md's renumbering rule has nothing to protect. The old-to-new mapping is in the commit message and deliberately not here: `refcheck.py` reads a bare `D` and digits as a citation, a retired number would be reported dangling, and writing it without the `D` is worse — a bare number is read as a FINDING reference and both of these resolve to real and unrelated findings, which is the silent failure CLAUDE.md warns about.
+
+---
+
+## D171 🐛 `V92createConstellations` and `V92createFilterCoefficients` store ten `sysdep_malloc` results without testing one of them, and their caller carries on regardless
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED — six and four consecutive `movl $size` / `call` / `mov %eax,off(%ebx)` with no `test` between. Fix class: documentation only.*
+
+**Finding 1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
+
+*Numbering: D170 and D171 are the block this batch was assigned, and the gap below them is not this batch's to fill. Three sessions independently picked the number after D161 as "the next free one", which is exactly why blocks are now handed out rather than taken; the numbers between D161 and D170 are reserved for resolving those collisions. Bare `D` and digits read as a citation to `refcheck.py`, so they are not spelled out here — the same trap the D64 gap note records.*
 
 ---
 

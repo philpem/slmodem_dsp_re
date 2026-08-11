@@ -69,4 +69,23 @@ public:
 	void k56FlexEnterPhase3();
 };
 
+/*
+ * The two C-linkage helpers that share the class's translation unit; see
+ * src/pump/v90/K56FlexFloModem.cpp for why they are attributed there.
+ *
+ * `K56FLEX_OBJECT_SIZE` is the `movl $0x14,(%esp)` at .text+0x102a3 and
+ * nothing else is known about the twenty bytes: `K56FLEX_Create` does not
+ * write them, `K56FLEX_Delete` does not read them, and `vpcm_create` only
+ * stores the pointer at root +0xac44 and tests it for null.  Whether the block
+ * is `K56FlexFloModem` itself is NOT settled by this -- the class's own header
+ * says not one of its seventeen members touches `this`, so no member bounds a
+ * size to compare against twenty.
+ */
+#define K56FLEX_OBJECT_SIZE	0x14
+
+extern "C" {
+void *K56FLEX_Create(void *, void *, void *, int);
+void K56FLEX_Delete(void *obj);
+}
+
 #endif /* DSPLIB_K56FLEXFLOMODEM_H */
