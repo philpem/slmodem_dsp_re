@@ -40,8 +40,12 @@
  * them.  The `__builtin_offsetof` half was STALE: `offsetof` wants STANDARD
  * LAYOUT, which a user-provided constructor does not affect, and every
  * assertion in the .cpp still compiles.  So the old reasoning costs nothing
- * to drop, and it has to be dropped: `V90Modulator` calls the constructor,
- * so the symbol must exist for the modulator's link closure to close.
+ * to drop, and it has to be dropped: the constructor has callers, so the
+ * symbol must exist for their link closures to close.  There are TWO, taken
+ * by scanning the blob's .text relocations rather than assumed --
+ * `V90Modulator::V90Modulator` and, less obviously,
+ * `V90Phase3Demodulator::V90Phase3Demodulator`, which builds and destroys one
+ * of these as well (finding 1258).
  *
  * Data member names below are invented and descriptive: the mangling
  * preserves method names and type names but never a data member's name
@@ -282,13 +286,17 @@ public:
 	unsigned char *jdV92PhaseBits;	/* +0x04c ...getJdPhaseBitVector() */
 
 	/*
-	 * The constructor's `V90Parameters *`, stored and never read again by
-	 * any of this class's twenty-one symbols.  It was `pad_50` until the
+	 * The constructor's `V90Parameters *`.  It was `pad_50` until the
 	 * constructor was reconstructed; `mov 0x34(%esp),%eax; mov
 	 * %eax,0x50(%ebx)` at .text+0x2c4ce is the whole of the evidence, and
 	 * it fixes the width at four bytes and the type at the one the
-	 * mangling names.  What reads it, if anything, is `V90Modulator`'s
-	 * business and was not read for this batch.
+	 * mangling names.
+	 *
+	 * NO SYMBOL OF THIS CLASS READS IT, and that is a sweep: all nineteen
+	 * were disassembled and searched for a `0x50` displacement, and the
+	 * only hits are the two constructor copies' stores and `reset`'s `mov
+	 * 0x50(%esp),%ebp`, which is a stack slot.  What reads it from
+	 * outside, if anything, was not looked for -- D190, finding 1257.
 	 */
 	V90Parameters *params;		/* +0x050                          */
 

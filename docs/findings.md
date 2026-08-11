@@ -39999,6 +39999,38 @@ caught but one recorded `equivalent` — passing 1000 instead of 4000 as `reset`
 first argument, which cannot be observed because that parameter is dead (the
 amplitude is `reset`'s own `movw $0xfa0` literal).
 
+**THE C2 AND D2 VARIANTS ARE SEPARATE BODIES IN THE BLOB.** C1 at .text+0x2c4a0
+against C2 at +0x2c520, and D1 at +0x2ac30 against D2 at +0x2ac10 — four
+distinct copies, which is GCC 3.4 emitting both for a class with no virtual
+base. Ours are one function under two names, so both tests drive the reference
+C2 and D2 on alternate trials against the same one of ours: "the second copy is
+the first copy" is measured, not assumed, and `docs/coverage.md` stays at 100%
+tested rather than gaining four `alias exists, and NOT tested` lines.
+
+### 1258. THE V.90 PHASE 3 MODULATOR HAS TWO OWNERS, AND ONE OF THEM IS THE DEMODULATOR
+
+The constructor's callers, taken by walking `objdump -dr --section=.text` over
+the blob and reading back to each hit's enclosing symbol:
+
+| built by | ctor | dtor |
+|---|---|---|
+| `V90Modulator::V90Modulator(unsigned, V90Phase2Info *, V90Jd *, V92Jd *, tagV90DILdescriptor *, V90MappingParams *, V90MappingParams *, tagV90AdditionalCPinfo *, V90CP *, V90MP *, V90Parameters *, unsigned)` | yes | yes |
+| **`V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *, unsigned, V90AutoDigitalImpDetector *)`** | yes | yes |
+
+`V92Phase3Modulator` has one owner, `V92Modulator`, which is what its header
+already said.
+
+**THE DEMODULATOR OWNING A MODULATOR IS THE SURPRISING HALF** and it is why this
+is its own finding: `V90Phase3Demodulator` constructs and destroys a
+`V90Phase3Modulator`, so the downstream symbol source is not reached only
+through `V90Modulator`. A later batch reading either class needs to know that
+before it decides what "the only pointer to the object" means — which is a
+phrase the first draft of finding 1257 used, on no evidence, and it was wrong.
+
+Each caller appears twice in the scan because each has its own C1/C2 (or
+D1/D2) pair and each copy carries the call; that is duplication in the CALLER,
+not two call sites.
+
 ### 1256. A 22-BYTE DESTRUCTOR IS NOT AN EMPTY ONE, AND THE ONLY WITNESS TO IT IS THE ALLOCATOR
 
 Both destructors are 22 bytes and both are one unguarded call:
@@ -40041,16 +40073,28 @@ header needs and the include set is unchanged. `src/pump/v90/V90Phase3Modulator.
 now asserts the offset with the rest, which it did not before — +0x50 was the
 one gap in that block.
 
-**NOTHING IN THE CLASS READS IT.** Twenty-three declared members, seven defined,
-and +0x50 appears in exactly one of them — the store above. That asymmetry is
-worth recording, because the V.92 sibling's equivalent field is NOT dead:
-`V92Phase3Modulator::reset` reads `params->V92_ECHO_FAST_UPDATE_DURATION` and
-`V92_ECHO_SLOW_UPDATE_DURATION` to compute `trn1uLength`. That is what makes the
-V.92 constructor's store order testable, and it is why `sessionFlag` is the only
-ordering claim on the V.90 side.
+**NOTHING IN THE CLASS READS IT, AND THAT IS A SWEEP AND NOT AN IMPRESSION.**
+Every one of the nineteen `V90Phase3Modulator` text symbols was disassembled and
+searched for a `0x50` displacement. Exactly three hit:
 
-Whether anything OUTSIDE the class reads +0x50 was not looked for — `V90Modulator`
-holds the only pointer to the object and was not read for this batch — so the
-field is recorded as D162 `unmeasured` rather than as dead. Finding 1107's rule
-applies in spirit: "this class does not write it" is not "nothing does", and the
-same goes for reads.
+    2c4d8:  mov %eax,0x50(%ebx)     C1, the store
+    2c558:  mov %ecx,0x50(%ebx)     C2, the same store in the duplicate
+    2c2e0:  mov 0x50(%esp),%ebp     reset -- a STACK slot, not the object
+
+So the field is written twice and read never, by this class. Say it that way:
+the first draft of this finding said "+0x50 appears in exactly one of them",
+which the old header could not have established either — `pad_50` was there
+because only four of twenty-one members had been read, not because anyone had
+looked.
+
+That asymmetry is worth recording, because the V.92 sibling's equivalent field
+is NOT dead: `V92Phase3Modulator::reset` reads
+`params->V92_ECHO_FAST_UPDATE_DURATION` and `V92_ECHO_SLOW_UPDATE_DURATION` to
+compute `trn1uLength`. That is what makes the V.92 constructor's store order
+testable, and it is why `sessionFlag` is the only ordering claim on the V.90
+side.
+
+Whether anything OUTSIDE the class reads +0x50 was not looked for, so the field
+is D190 `unmeasured` rather than dead. Finding 1107's rule applies in spirit:
+"this class does not write it" is not "nothing does", and the same goes for
+reads.
