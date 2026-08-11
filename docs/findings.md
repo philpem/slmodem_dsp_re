@@ -39078,3 +39078,251 @@ BEEN RETRACTED.  Task #92 re-ran that sweep at five calls per point and got
 value the original single-sample sweep called a failure, scored best of the
 four.  There is no cliff, so there is no unexplained cause left over.  What
 survives is this finding's own result, which does not depend on it.
+### 1195. `DP_V32BIS` IS AN ALIAS OF `DP_V32`: ONE DRIVER, TWO IDS, AND THE OBJECT NEVER READS THE ID BACK
+
+`slmodemd` offers datapump id **132** in `AT+MS=?` and the driver table
+carries it as a row of its own — `{DP_V32BIS,"V32bis","132"}` in
+`modem.c`'s `modem_dp_drivers` — so it looks like a second modulation.  It is
+not.  `dp_v32_init` registers the
+**same** `struct dp_operations` under both ids:
+
+```
+$ python3 tools/dis.py ../slmodemd/dsplibs.o dp_v32_init
+    4bb3:  mov    $0x48,%ecx   <== R_386_32 .data      ; ops = .data+0x48
+    4bbc:  movl   $0x20,(%esp)                          ; id  = 32
+    4bc3:  call   ...          <== R_386_PC32 modem_dp_register
+    4bc8:  movl   $0x84,(%esp)                          ; id  = 132
+    4bcf:  mov    $0x48,%edx   <== R_386_32 .data      ; ops = .data+0x48  (same)
+    4bd8:  call   ...          <== R_386_PC32 modem_dp_register
+```
+
+`dp_v32_exit` deregisters the pair the same way.  The table at `.data+0x48` is
+a real one, not a stub:
+
+| field | value |
+|---|---|
+| `name` | `.rodata.str1.1+0x526` = **`"v32"`** — one name, for both rows |
+| `use_count` | 0 |
+| `create` | `.text+0x4560` = `v32_create` |
+| `delete` | `.text+0x47e0` = `v32_delete` |
+| `process` | `dp_wrapper_run` (a named relocation, not a section one) |
+| `hangup` | **NULL** |
+
+**The id argument is write-only.**  `v32_create(m, id, caller, srate,
+max_frag, op)` takes `id` at `0x54(%esp)`, stores it at offset 0 of the
+allocation it returns — `45cc: mov %edx,(%esi)`, which is `dp->id` — and
+nothing in the translation unit ever loads offset 0 again.  Every
+zero-offset dereference in `0x4560..0x4be1` is that one store; the reads are
+all `0x4`, `0x8`, `0x10`, `0x14`, `0x18`, `0x1c`, `0x20`, `0x24`, `0x28`,
+`0x1b8`.  `v32_process` reaches the state through `dp->dp_data` and reads
+`dp->status`, never `dp->id`.
+
+**And no code anywhere in the object compares anything against 132.**  The
+immediate `$0x84` occurs **nine** times in 1.2 MB of `.text`:
+
+```
+$ objdump -d -r -j .text ../slmodemd/dsplibs.o | grep -E '\$0x84\b'
+    4bc8  dp_v32_init+0x18        register   132
+    4c08  dp_v32_exit+0x18        deregister 132
+    7d5e  V34SetINFO0aBits+0x4e   movw $0x84 into an INFO0a field
+    7e06  V34SetINFO0aBits+0xf6           "
+    7f05  V34SetINFO0aBits+0x1f5          "
+   2a229  _ZN13V90Parameters12setToDefaultEv+0x949
+   96e8a  GetT30FrameIDFromBuffer+0x3a
+   b08b6  linear2ulaw+0x56
+   b0900  ulaw2linear+0x30
+```
+
+Two registrations and seven unrelated constants.  There is no `id == 132`
+arm, no V.32bis-only configuration, and no second implementation.
+
+**So `AT+MS=132` and `AT+MS=32` build the identical datapump** with the
+identical configuration and the identical 14400 ceiling (finding 1196).  The
+only difference either side of the ABI is cosmetic: `modem_report_result`
+prints `get_dp_driver(m->dp->id)->name`, so the `Modulation:` line reads
+`V32bis` against `V32` — and that name comes from `slmodemd`'s own table, not
+from the object, whose single name string for both rows is `"v32"`.
+
+**This is not a deviation and takes no D-number.**  Nothing misbehaves: one
+driver deliberately registered under the two ids it implements is the same
+pattern as `dp_b103_init` (103 and 21) and `dp_v22_init` (122, 22, 212) —
+finding 4.  A D-entry here would grade CANNOT FIRE and would be a to-do item
+rather than a defect, which is what the register's preamble exists to prevent.
+
+**What it means for the bench report that 132 never connects.**  The object
+cannot tell 132 from 32, so a run that fails at 132 and succeeds at 32 is not
+being decided in `dsplibs.o`.  Two facts from the object bear on the shape of
+the report rather than its cause:
+
+- **Every debug print in the `v32` module is gated on `dsplibs_debug_level >
+  1`** — eleven reads of the variable across `v32_create`, `v32_delete` and
+  `v32_process`, seven of them the folded `cmpl $0x1,dsplibs_debug_level`
+  and four a `mov` into a register with the compare after it; one gate, two
+  encodings.  At the default level the module is
+  *silent*, so "`slmodemd` reports no datapump at all" is not evidence that no
+  datapump ran — `v32: create...`, `v32: phys. delay is %d` and `v32: V32
+  config S%d,R%d,T%d,A%d,L%d` appear only from level 2.
+- **`hangup` is NULL**, and `modem_hup` calls it only when non-NULL, so
+  `DP_ESTAB` → `DP_DISC` with nothing in between is the *normal* shape of a
+  failed V.32/V.32bis call, not a symptom of a missing driver.
+
+**And the host log already separates the two things that shape can mean.**
+`do_modem_change_dp` has exactly one failure arm: if `op->create` returns NULL
+it prints `change dp -> 132 error.` and calls `modem_hup` **there and then**,
+which sets `RESULT_NOCARRIER` and schedules the stop 48 ticks later.  That
+disconnect is immediate and it is announced.  The other shape is a datapump
+that was created and never trained: `modem_update_status` is simply never
+called with `STATUS_DP_LINK`, so the state stays `DP_ESTAB` until the answer
+or carrier timer hangs up — a disconnect **at the timeout**, with no error
+line, which is what the bench reports.  So the report is the second shape, and
+the presence or absence of `change dp -> 132 error.` in the log settles it
+without touching the object.
+
+The one asymmetry that does exist is host-side and upstream of the object:
+**V.8 never asks for 132.**  `v8_process` picks the next datapump from the
+surviving negotiation bits as 90, 34 or 32 (finding 168), so a V.8 call that
+agrees on V.32 hands off to id **32**; 132 can only be reached by an explicit
+`AT+MS=132`, which bypasses V.8 entirely — `do_modem_change_dp` substitutes
+`DP_V8` only for the ids `IS_FAST_DP` names, and those are V.34, V.90 and
+V.92.  Whether the working `DP_V32` runs went through V.8 and the
+failing `132` runs did not is a question for the bench, not for the object.
+
+### 1196. THE OBJECT'S "V.32" DRIVER IS A V.32bis DRIVER, AND 14400 MEANS 14400
+
+`slmodemd` reporting `CONNECT 14400` on datapump 32 is not a mislabelled rate:
+the rate set the object carries is V.32bis's, and 14400 is the value it pins
+its own ceiling to.
+
+**The rate table.**  `RATEv32`, `.data:0x775c`, six `unsigned short`:
+
+```
+$ python3 tools/tabdump.py ../slmodemd/dsplibs.o --sym RATEv32 --type u16
+    4800, 9600, 9600, 7200, 12000, 14400
+```
+
+7200, 12000 and 14400 are V.32bis rates; plain V.32 stops at 9600.  The two
+9600 entries are the 16-point non-trellis and 32-point trellis codings.
+
+**`GetRateV32` is that table's exact inverse**, mapping the state's rate in
+bit/s (`state+0x04`, `u16`) back to a code: 14400→5, 12000→4, 7200→3, 4800→0,
+9600→1 or 2 depending on `state+0x1c`, **anything else→6**.
+
+**Code 6 is "no rate", which is why the sibling tables are seven long and
+`RATEv32` is six.**  `V32_RATE_SEQ`, `V32_FINAL_RATE_SEQ`, `V32_CONNECT`,
+`V32_TX_MODE` and `V32_RX_MODE` are all `0x0e` bytes = seven `u16`, and all
+five are indexed by a `GetRateV32`/`SeqToRate` code (`V32LocLoopNextState+0x56`
+indexes `V32_TX_MODE` and `V32_RX_MODE`, `+0xec` indexes `V32_CONNECT`).
+`SeqToRate` returns 6 when the two ends' rate sequences have nothing in common.
+
+**`RATEv32` is not indexed by any of those codes, so there is no D1-shaped
+overrun here** — which was worth checking, because a 6 into a six-entry table
+would read `PROTOCOL[0]` at `.data:0x7768`.  Its only two references are in
+`V32FP_status`:
+
+```
+$ python3 tools/relocscan.py ../slmodemd/dsplibs.o --at .data:0x775c
+  .text+0x084986 -> .data:0x00775c  = RATEv32+0
+  .text+0x084996 -> .data:0x00775c  = RATEv32+0
+   84982:  movzwl 0x775c(%eax,%eax,1),%edx   ; eax = (s16)state+0x2c  -> status+2
+   84992:  movzwl 0x775c(%ebx,%ebx,1),%eax   ; ebx = (s16)state+0x2e  -> status+4
+```
+
+and `state+0x2c` / `state+0x2e` are written **only** by `SetTxModeV32` and
+`SetRxModeV32`, as the literals 0, 1, 3, 4, 5 — never 6 (`movw $imm,0x2c(%edx)`
+at `0x81701/0x8174b/0x8178d/0x8182e/0x8186d`, `movw $imm,0x2e(%e?x)` at
+`0x8191a/0x81983/0x819ed/0x81a42/0x81a77/0x81ab1`; those are the only accesses
+to either field in `0x81600..0x86800`).  Both mode setters open with
+`cmp $0x6,%eax` into a jump table, so the seventh arm exists and does not
+write a rate code.
+
+**The ceiling is pinned at 14400 in `v32_create`**, three ways:
+
+```
+   45ab:  movl   $0x6,0x14(%esi)        ; bits per symbol = 6
+   45ba:  movl   $0x3840,0x18(%esi)     ; rate = 14400
+   463c:  call   modem_get_param        ; arg 4 = MDMPRM_MAX_RATE
+   4641:  cmp    $0x3840,%eax
+   4646:  ja     46c5                   ; -> eax = 0x3840
+   4648:  mov    %ax,0x36(%esp)         ; config+0x16
+   4652:  mov    %ax,0x34(%esp)         ; config+0x14
+```
+
+6 bits/symbol at 2400 baud is 14400 — the V.32bis top rate, and 2400 baud is
+the `frag = 40` (5 ms = 12 symbols) `v32_create` passes to `dp_wrapper_create`
+(finding 15).  Note the clamp is one-sided: a host `MDMPRM_MAX_RATE` *below*
+a legal V.32 rate is passed through unsnapped.
+
+**And that rate is what reaches the host.**  `v32_process`'s connect arm calls
+`V32FP_status`, reads the two `RATEv32` lookups back out of the status block at
+`+0x32` and `+0x34`, recomputes bits/symbol as `rate/2400` (the reciprocal
+`0x1b4e81b5`, `mull` then `shr $8`, i.e. `>>40`), and publishes both rates to
+`slmodemd`:
+
+```
+   4a4f:  cmp $0x2580 / 0x2ee0 / 0x3840 / 0x12c0 / 0x1c20   ; 9600 12000 14400 4800 7200
+   4aae:  call modem_set_param          ; arg 2 = MDMPRM_TX_RATE, value = status+0x32
+   4acb:  call modem_set_param          ; arg 1 = MDMPRM_RX_RATE, value = status+0x34
+```
+
+`m->tx_rate` / `m->rx_rate` are exactly what `modem_report_result` prints after
+`CONNECT`.  The five rates it recognises are the five in `RATEv32`.
+
+The modulation tables agree: `DECv32_ANGL14400` and `DECv32_MAG14400` are
+0x100 bytes each, `DECv32_ANGL12000` / `DECv32_MAG12000` 0x80 each, beside
+`SMCv32_encoder_tcm` and `SMCv32_encoder_dif`.  A 9600-only V.32 needs none of
+them.
+
+**So the answer to "how is `DP_V32` reaching 14400" is that it is a V.32bis
+datapump.**  The rate reporting means what it appears to mean, and the id is
+the only thing in the system that says "V.32" rather than "V.32bis".
+
+### 1197. `v32_create` IS THE ONLY 8 kHz PUMP THAT READS `MDMPRM_IODELAY`, AND IT CONVERTS 9600 → 8000 BY ×5/6
+
+`b103_create`, `v22_create` and `v23_create` do not call `modem_get_param` at
+all.  `v32_create` calls it twice — `MDMPRM_MAX_RATE` (4) for the ceiling
+above, and `MDMPRM_IODELAY` (5), which no other 8 kHz datapump asks for.  V.32
+is the only one of the four with an echo canceller, and the delay is what it
+needs to place it.
+
+```
+   465e:  call modem_get_param          ; arg 5 = MDMPRM_IODELAY
+   4663:  lea  0x30(%eax),%ebx          ; phys = IODELAY + 48
+   4666:  cmp  $0xd8,%ebx
+   466c:  jg   46e1
+   46e1:  mov  $0xd8,%eax ; sub %ebx,%eax
+   46fd:  call modem_set_param          ; arg 13 = MDMPRM_UPDATE_DELAY, 216 - phys  (negative)
+   46f4:  mov  $0xd8,%ebx               ; phys pinned at 216
+   467d:  lea  (%ebx,%ebx,4),%ebx       ; *5
+   4687:  imul $0x2aaaaaab ...          ; /6      -> config+0x04
+```
+
+**5/6 is 8000/9600 exactly — and this reading is DERIVED**, from the
+arithmetic and not from a measurement.  `MDMPRM_IODELAY` is in host samples
+and the host runs at 9600 (finding 5); the V.32 core runs at its native 8 kHz
+behind `dp_wrapper`, so a round-trip delay handed to it has to be rescaled on
+the way in.  The ceiling of 216 host samples is 180 at 8 kHz — 22.5 ms.
+
+**The `+48` is the same units, which is what makes the reading hard to argue
+with.**  `dp_wrapper_create` computes the host-side fragment as
+`dp_frag * host_srate / dp_srate`, and `v32_create` passes `dp_frag = 40` and
+`dp_srate = 8000` (finding 15), so at a 9600 host that fragment is exactly
+**48** — the literal `lea 0x30(%eax),%ebx` adds.  The whole expression is
+therefore `(IODELAY + one host fragment)` in host samples, clamped in host
+samples, and only then converted to the pump's.  Two constants baked at 9600,
+not one.
+
+The over-range branch is the same shape as `vpcm_create`'s and, like it, is not
+an error path: the negative `MDMPRM_UPDATE_DELAY` asks the host to *shed* the
+excess, which `slmodemd` does by discarding input samples
+(`docs/configuration.md`, "Above 240 the pump negotiates rather than failing",
+finding 1024).  So, no D-number here either.  Worked values: the fork's
+hardcoded `MDMCTL_IODELAY` of 48 gives phys 96 → 80 samples at 8 kHz; stock
+`MODEM_FRAMESIZE` 192 gives phys 240, over the limit, so the delay pins at 216
+→ 180 and the host is told `UPDATE_DELAY = -24`.
+
+`v32_create` ignores its `max_frag` argument entirely (`0x60(%esp)` is never
+read) and the five other config fields it writes are the ones its own debug
+line names — `v32: V32 config S%d,R%d,T%d,A%d,L%d` — as
+`(caller == 0)`, the rate, 60000, 1 and 700.  The delay itself is not in that
+line; it gets its own, `v32: phys. delay is %d`, printing the value *after* the
+clamp.  Both need `dsplibs_debug_level > 1`.
