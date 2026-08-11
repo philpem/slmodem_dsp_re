@@ -42183,3 +42183,226 @@ finds bases and nothing else; a subobject with internal structure needs its
 own canonicaliser.
 
 ======================================================================
+======================================================================
+### 1310. `VPCMXF_SessionTermination` IS NINETEEN BYTES AND THE ONLY THING IT ADDS TO THE MAP IS AN OFFSET, SO THE TEST OCCUPIES THE NEIGHBOURS
+
+*Batch of 2026-08-11, the three remaining leaves of the V.PCM construction
+path.  Blob 0xf730, `extern "C"`.*
+
+The whole function is a load and a tail jump: `mov 0x4(%esp),%edx`,
+`mov 0x175c(%edx),%eax`, `mov %eax,0x4(%esp)`, `jmp
+V90Demodulator::sessionTermination`.
+
++0x175c is `modem.demodulator`, which is not a new measurement: a V90Modem is
+embedded in a VPcmFloModem at +0x1758 and `demodulator` is its +0x04
+(`VPcmFloModem.h`, and `VPcmFloModem.cpp`'s
+`VPCM_OFF(modem.demodulator, 0x175c)`).  So the handle the V.PCM interface
+passes around is a `VPcmFloModem *`.
+
+**What a naive test cannot see.**  The method it forwards to is already swept
+nine patterns wide by `t_v90demod.cpp`, so a wrapper reading +0x1758 or +0x1760
+instead would pass every check that only looks at the demodulator it was handed
+-- the fixture only ever stands one up.  The test therefore points BOTH
+neighbours at a second, differently seeded demodulator-sized object and
+requires it to be byte-identical to its pre-call image on both sides.  That is
+the one claim beyond forwarding this function has to make, and it is the only
+check in the suite that fails when the offset moves: `vpcmxfterm`'s five
+mutations are four wrong pointers and no pointer at all, and all five are
+caught by it.
+
+**The two sides' handles hold different values on purpose** -- each points at
+its own demodulator -- so the handle is compared against its own pre-image per
+side rather than side to side, and "nothing is written through the handle" is
+the whole claim.
+
+**The return type is not recoverable.**  `V90Demodulator::sessionTermination`
+returns `int`; GCC compiles both the `void` spelling and the `return` spelling
+to the same `jmp`, because the sibling call is taken either way.  The one
+caller, `vpcm_delete` (0x3dd0), reloads its own pointer for `VPCMXF_Delete`
+immediately afterwards and never looks at `%eax`.  `void` is written, the
+ambiguity is in the file head, and no test compares a return value because
+there is nothing there to compare.
+
+**Its own translation unit, ahead of the collision.**  In the object it is not:
+0xf730 sits between `VPCMXF_Delete` and `VPcmFloModem::qcLineVerification`.
+`src/pump/v90/VPcmXfTerm.cpp` exists for finding 1264's reason -- one source
+file is one mutation suite's namespace, `VPcmFloModem.cpp` already carries two,
+and the rest of the `VPCMXF_` family is unwritten and will want its own
+anchors.
+
+======================================================================
+### 1311. `ANSamToneDetector` DERIVES RATHER THAN CONTAINS, AND THE ABI VARIANT IS THE ONLY EVIDENCE THAT SAYS WHICH
+
+*Same batch.  Blob 0x108b0 / 0x10950 (146 bytes) and 0x109f0 / 0x10a10 (19
+bytes); both pairs byte-identical.*
+
+The class has exactly two symbols in the object -- no `reset`, no `process` --
+so it adds no behaviour to `GenericToneDetector`.  What it adds is a table.
+
+**THE C2/D2 VARIANT IS THE DISCRIMINATOR.**  The constructor calls
+`_ZN19GenericToneDetectorC2EjjPdS0_jjfjfjj` and the destructor
+`_ZN19GenericToneDetectorD2Ev`.  A `GenericToneDetector` held as a MEMBER at
+offset zero would be built with `C1` and destroyed with `D1`, because a member
+is a complete object and only a base subobject uses the C2/D2 pair.  `this` is
+passed through unchanged, so the base is at offset zero -- which is also the
+only place a single non-virtual base can be, and the test checks it anyway by
+casting, because every field comparison would still pass if it were wrong.
+
+**The sixth argument is a SELECTOR and is never forwarded.**  It is compared
+against 8000 three separate times -- `cmp $0x1f40,%edx` at +0x17, +0x55 and
++0x6d, with no reuse of the flag, which is what three conditional expressions
+in one argument list compile to -- and each comparison picks one of a pair:
+
+    nden = nnum   8000 ? 13 : 11     (`sete`, then `lea 0xb(%eax,%eax,1)`)
+    den           8000 ? .data+0x2a0 : .data+0x240
+    num           8000 ? .data+0x1c0 : .data+0x160
+
+The other seven arguments go straight through in order: samples1, samples2,
+threshold, flag, ratio, blockLen, blockSize.
+
+**The other rate is 9600, and both call sites spell every argument as a
+constant.**  Four relocations name `_ZN17ANSamToneDetectorC1Ejjfjfjjj`, which
+is two constructors emitted twice each: `VPcmFloModem`'s (0xfb61 in C1, 0xffe1
+in C2) builds one EMBEDDED at `this+0x6f5c` (`lea 0x6f5c(%ebx),%ecx`) with
+`6000, 450, 0x48742400, 1, 0x3f147ae1, 9600, 50, 99` -- the selector is
+`mov $0x2580,%edi` at 0xfafe, spilled to its slot at 0xfb2b -- and
+`V90Phase3Demodulator`'s (0x213ce, 0x2153e) builds one on the HEAP with
+`400, 100, 0x48960000, 0, 0.5f, 8000, 50, 99`.  So the 13-tap pair is the V.90
+phase 3 demodulator's at 8000 and the 11-tap pair is the PCM modem's at 9600.
+Both use `C1`, which is the same discriminator read the other way: both are
+complete objects, and only a base subobject gets `C2`.
+
+**And the heap one MEASURES the size.**  `movl $0x3c,(%esp); call
+sysdep_malloc` at 0x21377, the result into `%esi`, and `%esi` is the `this` of
+the `C1` call at 0x213cd.  Sixty bytes is `sizeof(GenericToneDetector)`
+exactly, so the derived class adds no member of its own -- which the
+constructor already suggested by writing nothing into `*this`, and which this
+turns from a reconstruction choice into a reading.
+
+The tables are still NAMED by their tap count rather than by a rate, because
+the tap count is what the object's own arithmetic produces and a third caller
+at a third rate would take the 11-tap arm too.
+
+**NO x87 IS INVOLVED IN THE DERIVED MEMBER.**  Both float arguments are copied
+from one stack slot to another with 32-bit integer `mov`s, never loaded onto
+the x87 stack, so the constructor cannot round, quieten or flush anything.  The
+bit-pattern sweep the test runs over them -- zero of both signs, both denormal
+bounds, an exactly representable value, one that is not, both infinities --
+proves the COPY is bit-exact and is deliberately not evidence about
+floating-point arithmetic, of which there is none here.  The sweep the parent
+task asked for therefore belongs to `GenericToneDetector`'s batch, which
+already has it.
+
+**The four tables are 48 doubles and they are compared, not transcribed on
+trust.**  `GenericIIR` borrows its coefficient arrays rather than copying them,
+so ours point into this tree's `.data` and the blob's into the blob's and the
+two pointers can never agree.  `compare_filters_` grew an `ownCoeffs` arm that
+neutralises exactly those two words and then compares the arrays they name in
+full, on every trial -- which turns "the transcription is right" from a claim
+into a measurement.  Two of `ansamtone`'s twelve mutations are a single digit
+changed in a single coefficient, and both are caught.
+
+======================================================================
+### 1312. THE ECHO CANCELLER'S FILTER LENGTH IS A SIGNED DIVIDE-AND-MULTIPLY, NOT A MASK -- D72's DERIVATION CORRECTED, ITS VERDICT UNTOUCHED
+
+*Same batch, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0,
+313 bytes).*
+
+D72 and finding 1188 both spell the filter length
+`V92_ECHO_FILTER_LENGTH & ~3`.  The object does not mask: it loads
+`0x6c(%eax)`, tests it, and on the negative arm at +0x131 adds 3 before falling
+into `and $0xfffffffc,%eax`.
+
+That is GCC's `x / 4 * 4` on a signed `int` -- rounding toward zero -- and the
+mask rounds toward minus infinity.  The two agree for every non-negative value
+and differ for every negative one: -6 is -4 under the object's arithmetic and
+-8 under the mask.  **At the shipped 180 they agree, so nothing about D72's
+CONFIRMED . CANNOT FIRE verdict moves**; what is corrected is the arithmetic
+where it is stated, in D72, in 1188 and in `V92EchoCanceller.h`.
+
+**The arm cannot be driven, and that is why it went unnoticed.**  The rounded
+value is stored into an UNSIGNED `filterLength` and shifted left by two four
+instructions later, so any negative parameter asks `sysdep_malloc` for about
+16 GB and the null result is used by the `reset()` the constructor tail-calls.
+No test that reaches the arm survives it (D229), so the signed reading is
+established from the instruction stream alone -- CLAUDE.md's rule about acting
+on what the compiler was FORCED to encode, which a signed divide is.
+
+**And the constructor IS where D72's sizing happens**, confirmed rather than
+inferred: `historyAlloc` (+0x1c) is computed at +0xb6, stored, shifted left by
+two and handed to `sysdep_malloc` as the byte count for `echoHistory`.  Nothing
+reallocates it; `setEchoDelay` moves `echoLength` -- the bound every consumer
+clears to -- without reference to it.  The header now names +0x1c and the
+`filterLength - 1` beside it, both use-derived, and one hole is left at
++0x0c..+0x13, which is the only part of the object no member written here
+touches.
+
+======================================================================
+### 1313. A CONSTRUCTOR THAT SIZES ITS OWN BUFFERS IS TESTED BY THE ALLOCATOR'S BYTE COUNT, NOT BY A GUARD
+
+*Same batch.  The technique, and why the reset test's guard could not be
+carried over unchanged.*
+
+`V92EchoCanceller::reset`'s test puts a compared guard past two buffers IT
+owns, because the test chose their lengths.  The constructor's test cannot:
+the buffers are `sysdep_malloc`'s, exactly sized by the code under test, and
+there is no room past them that belongs to anybody.  Three checks replace the
+guard and are collectively stronger.
+
+1. **The byte count.**  `harness_alloc.bytes` and `.allocs` are snapshotted
+   around the pair of calls, and the total is predicted in the test from the
+   parameter block and the two scalar arguments -- the coefficients, the
+   history, `sizeof(FloatARMA)` and the ARMA's own four buffers of 12, 12, 111
+   and 111 floats -- fourteen allocations for the two sides.  A buffer one
+   float short is then a number, not a silence: `v92ec`'s "the history is
+   allocated one float short" is caught by this check alone, and nothing else
+   in the suite sees it.
+2. **The tail.**  `reset()` clears `echoLength` floats of a buffer
+   `historyAlloc` floats long, so the bytes between them must still hold
+   `HARNESS_MALLOC_FILL` on both sides.  That is D72's guard built out of the
+   object's own two numbers instead of the test's: a `reset` bounded by the
+   allocation rather than by `echoLength` fails it on both sides, and a history
+   one float short fails it on the side that overran.
+3. **The fit, asserted first.**  Every trial checks that `echoLength` is at
+   most `historyAlloc` before it dereferences anything.  Driving the overrun
+   would corrupt the test process's heap, which is not the same thing as
+   testing D72; D72 is CONFIRMED and CANNOT FIRE (finding 1188) and a fixture
+   is not where that gets re-opened.
+
+The same shape covers the sub-object: the `FloatARMA` the constructor builds is
+compared with its four owned pointers neutralised and all four buffers it owns
+compared in full, which is what makes "the ARMA gets a different block size"
+and "one coefficient of the ARMA numerator is mistyped" catchable at all.
+
+======================================================================
+### 1314. THE ECHO CANCELLER'S CONSTRUCTOR READS TWO MEMBERS BEFORE ANYTHING HAS WRITTEN THEM, AND THE READ IS DEAD -- SO NO MUTATION TESTS IT
+
+*Same batch.  D225.*
+
+`setEchoDelay(params->V92_ECHO_INITIAL_DELAY)` is INLINED in the object at
++0x32..+0x4d, and its first act is `mov 0x38(%esi),%ecx` -- a load of
+`echoDelay` out of storage `sysdep_malloc` returned moments earlier.  The
+difference `delay0 - garbage` is then folded into `echoLength`, which is
+equally uninitialised.
+
+**The result is dead, and tracing that is what decided the mutation set.**
+Nothing reads `echoLength` between there and the tail call to `reset()`, which
+rebuilds it from `filterLength`, `echoDelay` and the parameter block; and
+`historyAlloc` is built from +0x18 and +0x38, never from +0x2c.  So a mutation
+whose only effect is on that add would survive every check and read NOT CAUGHT
+-- which FAILS the gate, unlike UNUSABLE -- and none was written.  The
+behaviour is recorded in the source, in D225 and here instead.
+
+**Two other things follow from it.**  Both sides are seeded with the SAME bytes
+before every trial, so the garbage is identical and the comparison stays
+deterministic; and reproducing the read at all depends on `-fno-lifetime-dse`
+being in CXXFLAGS (finding 1224), because without it the compiler is entitled
+to treat the pre-constructor contents of `*this` as unreachable.
+
+**`setEchoDelay` is CALLED here and INLINED in the object**, which is the
+sanctioned factoring difference and not a compromise: GCC at -O2 does not
+inline a non-`inline` external function, so the original's source said
+something ours does not, and the emitted behaviour is the same.  Writing it as
+a call is also what keeps `v92ec`'s anchors unique -- the same three statements
+twice in one file would have put a third of the suite's `find` strings on two
+occurrences each, which is finding 1264's failure mode.

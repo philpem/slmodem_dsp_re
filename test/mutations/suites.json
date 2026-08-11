@@ -28,6 +28,10 @@
   "src/pump/v90/DILdescriptorPacker.cpp",
   "build/test/t_dilpack"
  ],
+ "ansamtone": [
+  "src/dsp/ANSamToneDetector.cpp",
+  "build/test/t_gtonedet"
+ ],
  "floatarma": [
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
@@ -407,6 +411,10 @@
  "vpcmguard": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmguard"
+ ],
+ "vpcmxfterm": [
+  "src/pump/v90/VPcmXfTerm.cpp",
+  "build/test/t_v90demod"
  ],
  "vpcmrun": [
   "src/pump/v90/vpcm.c",

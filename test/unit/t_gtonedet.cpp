@@ -55,6 +55,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/ANSamToneDetector.h"
 #include "dsplib/GenericToneDetector.h"
 
 typedef void (*gtd_ctor_t)(void *self, unsigned int, unsigned int,
@@ -237,9 +238,22 @@ guard_intact(void)
  * full.  Reported through `diff_eq_obj_` rather than as a boolean, so a
  * mismatch names the offset instead of saying only that one exists.
  */
+/*
+ * `ownCoeffs` IS FOR THE DERIVED CLASS AND CHANGES NOTHING FOR THIS ONE.
+ * `GenericToneDetector`'s caller supplies the coefficient arrays, so both
+ * sides' filters borrow the SAME two and the pointers compare equal;
+ * `ANSamToneDetector` supplies its own, so ours points into our .data and the
+ * blob's into the blob's and the two can never agree.  Passing 1 neutralises
+ * those two pointers AND compares the arrays they point at in full, which is
+ * a stronger claim than the equal-pointer case makes: it is what checks that
+ * 48 transcribed coefficients are the blob's.
+ */
+#define IIR_DEN		0x00
+#define IIR_NUM		0x04
+
 static void
-compare_filters(unsigned int nden, unsigned int nnum, unsigned int blockSize,
-		int tag)
+compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
+		 int ownCoeffs, int tag)
 {
 	unsigned char *fa = (unsigned char *)((GenericToneDetector *)ours)
 				->filter;
@@ -311,6 +325,35 @@ compare_filters(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 	memset(cb + IIR_INHIST, 0, 2 * sizeof(void *));
 	memset(ca + IIR_SCRATCH, 0, IIR_SCRATCH_LEN);
 	memset(cb + IIR_SCRATCH, 0, IIR_SCRATCH_LEN);
+	if (ownCoeffs) {
+		double *da, *db, *na, *nb;
+
+		memcpy(&da, fa + IIR_DEN, sizeof(da));
+		memcpy(&db, fb + IIR_DEN, sizeof(db));
+		memcpy(&na, fa + IIR_NUM, sizeof(na));
+		memcpy(&nb, fb + IIR_NUM, sizeof(nb));
+
+		diff_eq_int("four coefficient pointers, all non-null and "
+			    "neither side sharing (%ld)",
+			    da != 0 && db != 0 && na != 0 && nb != 0 &&
+			    da != db && na != nb && da != nb && na != db,
+			    1, tag);
+		if (da != 0 && db != 0 && na != 0 && nb != 0) {
+			diff_eq_int("the denominator table is the blob's, all "
+				    "%ld bytes of it",
+				    memcmp(da, db,
+					   nden * sizeof(double)) == 0, 1,
+				    (long)(nden * sizeof(double)));
+			diff_eq_int("the numerator table is the blob's, all "
+				    "%ld bytes of it",
+				    memcmp(na, nb,
+					   nnum * sizeof(double)) == 0, 1,
+				    (long)(nnum * sizeof(double)));
+		}
+
+		memset(ca + IIR_DEN, 0, 2 * sizeof(void *));
+		memset(cb + IIR_DEN, 0, 2 * sizeof(void *));
+	}
 	diff_eq_obj_(__FILE__, __LINE__, "the filter the constructor built",
 		     "GenericIIR<float, double>", ca, cb, IIR_BYTES,
 		     (long)tag);
@@ -373,7 +416,7 @@ run_ctor(void)
 			diff_eq_int("six allocations, three a side (%ld)",
 				    harness_alloc.live - live, 6, tag);
 
-			compare_filters(nden, nnum, blockSize, tag);
+			compare_filters_(nden, nnum, blockSize, 0, tag);
 
 			/*
 			 * The two filter POINTERS are two different heap
@@ -524,6 +567,215 @@ run_dtor(void)
 	return diff_end();
 }
 
+/* ------------------------------------------------- ANSamToneDetector ---- */
+
+/*
+ * THE DERIVED CLASS ADDS ONE THING AND THE TEST IS BUILT AROUND IT: a table.
+ * Seven of its eight arguments go straight through to the base, whose
+ * constructor is swept above; what is unproven until here is the selector --
+ * that `sampleRate == 8000` picks a 13-tap pair and anything else picks an
+ * 11-tap pair, and that the four transcribed arrays are the blob's.
+ *
+ * SO THE COEFFICIENTS ARE COMPARED, NOT THE POINTERS.  Ours point into this
+ * reconstruction's .data and the blob's into the blob's; they can never
+ * agree, and comparing them would fail on a correct reconstruction.  What is
+ * compared instead is `nden`/`nnum` doubles at each, in full, on every trial
+ * -- so any one of the 48 values being mistyped is a failure here.  The
+ * exclusion is exactly two pointers wide and everything else in the filter,
+ * the object and the guard is compared as it stands.
+ *
+ * BOTH ARMS ARE REQUIRED TO HAVE BEEN REACHED.  A selector sweep that only
+ * ever saw 8000 would pass with the two tables swapped, so the rates below
+ * bracket 8000 on both sides -- 7999 and 8001 -- as well as covering zero and
+ * 0xffffffff, and the run asserts that the 13-tap and the 11-tap arm were
+ * both taken and that the base saw a DIFFERENT tap count on the two.
+ *
+ * THE BASE'S OFFSET IS CHECKED, not assumed: the C2/D2 variants say the base
+ * is a base rather than a member, and `(GenericToneDetector *)p == p` is what
+ * says it starts at offset zero.  If it did not, every field comparison here
+ * would still pass and the object map would still be wrong.
+ *
+ * The float sweep and the object fill are `run_ctor`'s -- same slot, same
+ * `seed`, same guard -- because the derived object IS the base object and
+ * nothing here would be served by a second fixture.
+ */
+
+typedef void (*ansam_ctor_t)(void *self, unsigned int, unsigned int, float,
+			     unsigned int, float, unsigned int, unsigned int,
+			     unsigned int);
+
+extern "C" {
+void our_ansam_c1(void *, unsigned int, unsigned int, float, unsigned int,
+		  float, unsigned int, unsigned int, unsigned int)
+	asm("_ZN17ANSamToneDetectorC1Ejjfjfjjj");
+void our_ansam_c2(void *, unsigned int, unsigned int, float, unsigned int,
+		  float, unsigned int, unsigned int, unsigned int)
+	asm("_ZN17ANSamToneDetectorC2Ejjfjfjjj");
+void ref_ansam_c1(void *, unsigned int, unsigned int, float, unsigned int,
+		  float, unsigned int, unsigned int, unsigned int)
+	asm("ref__ZN17ANSamToneDetectorC1Ejjfjfjjj");
+void ref_ansam_c2(void *, unsigned int, unsigned int, float, unsigned int,
+		  float, unsigned int, unsigned int, unsigned int)
+	asm("ref__ZN17ANSamToneDetectorC2Ejjfjfjjj");
+void our_ansam_d1(void *) asm("_ZN17ANSamToneDetectorD1Ev");
+void our_ansam_d2(void *) asm("_ZN17ANSamToneDetectorD2Ev");
+void ref_ansam_d1(void *) asm("ref__ZN17ANSamToneDetectorD1Ev");
+void ref_ansam_d2(void *) asm("ref__ZN17ANSamToneDetectorD2Ev");
+}
+
+/* 8000 twice over, and both its neighbours. */
+static const unsigned int ansam_rates[] = {
+	8000u, 0u, 1u, 7999u, 8001u, 8000u, 9600u, 16000u, 0xffffffffu
+};
+#define NRATE	((int)(sizeof(ansam_rates) / sizeof(ansam_rates[0])))
+
+#define ANSAM_TRIALS	(NRATE * 7)
+
+static int
+run_ansam(void)
+{
+	int trial, variant, moved = 0;
+	int saw13 = 0, saw11 = 0;
+
+	diff_begin("ANSamToneDetector::ANSamToneDetector");
+
+	for (variant = 0; variant < 2; variant++) {
+		ansam_ctor_t ctor_a = variant ? (ansam_ctor_t)our_ansam_c2
+					      : (ansam_ctor_t)our_ansam_c1;
+		ansam_ctor_t ctor_b = variant ? (ansam_ctor_t)ref_ansam_c2
+					      : (ansam_ctor_t)ref_ansam_c1;
+		gtd_dtor_t dtor_a = variant ? (gtd_dtor_t)our_ansam_d2
+					    : (gtd_dtor_t)our_ansam_d1;
+		gtd_dtor_t dtor_b = variant ? (gtd_dtor_t)ref_ansam_d2
+					    : (gtd_dtor_t)ref_ansam_d1;
+
+		for (trial = 0; trial < ANSAM_TRIALS; trial++) {
+			unsigned int rate = ansam_rates[trial % NRATE];
+			unsigned int s1 = durations[trial % NDUR];
+			unsigned int s2 = durations[(trial + 3) % NDUR];
+			unsigned int blockLen = blocklens[trial % NBLOCKLEN];
+			unsigned int blockSize = (unsigned)(trial % 3);
+			unsigned int flag = (unsigned)(trial * 5 + variant);
+			float thr = as_float(floatbits[trial % NFLOATS]);
+			float rat = as_float(floatbits[(trial + 4) % NFLOATS]);
+			unsigned int taps = (rate == 8000u) ? 13u : 11u;
+			int tag = trial * 2 + variant;
+			int live;
+
+			seed(trial);
+			live = harness_alloc.live;
+
+			ctor_a(ours, s1, s2, thr, flag, rat, rate, blockLen,
+			       blockSize);
+			ctor_b(theirs, s1, s2, thr, flag, rat, rate, blockLen,
+			       blockSize);
+
+			if (rate == 8000u)
+				saw13 = 1;
+			else
+				saw11 = 1;
+
+			/*
+			 * The base's own three allocations and no fourth: the
+			 * derived constructor allocates nothing of its own.
+			 */
+			diff_eq_int("six allocations, three a side (%ld)",
+				    harness_alloc.live - live, 6, tag);
+
+			/* The base subobject starts at offset zero. */
+			diff_eq_int("the base is at offset zero (%ld)",
+				    (unsigned char *)(GenericToneDetector *)
+					(ANSamToneDetector *)ours ==
+				    (unsigned char *)ours,
+				    1, tag);
+
+			/*
+			 * The tap count the base was handed, predicted from
+			 * the selector and read out of the BLOB's filter, so
+			 * the claim does not go through our source.
+			 */
+			{
+				unsigned char *fb = (unsigned char *)
+				    ((GenericToneDetector *)theirs)->filter;
+				unsigned int nden, nnum;
+
+				memcpy(&nden, fb + 0x10, sizeof nden);
+				memcpy(&nnum, fb + 0x14, sizeof nnum);
+				diff_eq_int("the blob's nden (%ld)",
+					    (long)nden, (long)taps, tag);
+				diff_eq_int("the blob's nnum (%ld)",
+					    (long)nnum, (long)taps, tag);
+			}
+
+			compare_filters_(taps, taps, blockSize, 1, tag);
+
+			{
+				GenericIIR<float, double> *pa =
+					((GenericToneDetector *)ours)->filter;
+				GenericIIR<float, double> *pb =
+					((GenericToneDetector *)theirs)->filter;
+
+				((GenericToneDetector *)ours)->filter = 0;
+				((GenericToneDetector *)theirs)->filter = 0;
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after constructor",
+					     "ANSamToneDetector", ours, theirs,
+					     (int)sizeof(ANSamToneDetector),
+					     (long)tag);
+				((GenericToneDetector *)ours)->filter = pa;
+				((GenericToneDetector *)theirs)->filter = pb;
+			}
+
+			diff_eq_int("no store past the object (%ld)",
+				    guard_intact(), 1, tag);
+
+			diff_eq_int("threshold is bit-exact (%ld)",
+				    memcmp(ours + 4, theirs + 4, 4) == 0 &&
+				    memcmp(ours + 4, &thr, 4) == 0, 1, tag);
+			diff_eq_int("ratio is bit-exact (%ld)",
+				    memcmp(ours + 8, theirs + 8, 4) == 0 &&
+				    memcmp(ours + 8, &rat, 4) == 0, 1, tag);
+
+			if (memcmp(before, ours, SLOT) != 0)
+				moved = 1;
+
+			/*
+			 * The destructor, in the same trial: it writes
+			 * nothing, and it hands back everything the base
+			 * allocated.
+			 */
+			{
+				unsigned char aa[SLOT], ab[SLOT];
+
+				memcpy(aa, ours, SLOT);
+				memcpy(ab, theirs, SLOT);
+
+				dtor_a(ours);
+				dtor_b(theirs);
+
+				diff_eq_int("the destructor wrote nothing "
+					    "(%ld)",
+					    memcmp(aa, ours, SLOT) == 0 &&
+					    memcmp(ab, theirs, SLOT) == 0,
+					    1, tag);
+				diff_eq_int("it left `filter` dangling, not "
+					    "null (%ld)",
+					    ((GenericToneDetector *)ours)
+						->filter != 0, 1, tag);
+				diff_eq_int("the destructor freed all six "
+					    "(%ld)",
+					    harness_alloc.live - live, 0, tag);
+			}
+		}
+	}
+
+	diff_eq_int("the constructor changed the object", moved, 1, 0);
+	diff_eq_int("the 13-tap arm was reached", saw13, 1, 0);
+	diff_eq_int("the 11-tap arm was reached", saw11, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -531,6 +783,7 @@ main(void)
 
 	rc |= run_ctor();
 	rc |= run_dtor();
+	rc |= run_ansam();
 
 	return rc;
 }

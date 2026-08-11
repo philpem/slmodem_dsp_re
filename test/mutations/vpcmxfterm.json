@@ -1,0 +1,27 @@
+[
+ {
+  "label": "the modulator is forwarded rather than the demodulator",
+  "find": "\tv90dem_sessionTermination(self->modem.demodulator);",
+  "replace": "\tv90dem_sessionTermination((V90Demodulator *)self->modem.modulator);"
+ },
+ {
+  "label": "the phase 2 record is forwarded rather than the demodulator",
+  "find": "\tv90dem_sessionTermination(self->modem.demodulator);",
+  "replace": "\tv90dem_sessionTermination((V90Demodulator *)self->modem.phase2Info);"
+ },
+ {
+  "label": "the handle itself is forwarded",
+  "find": "\tv90dem_sessionTermination(self->modem.demodulator);",
+  "replace": "\tv90dem_sessionTermination((V90Demodulator *)self);"
+ },
+ {
+  "label": "the embedded modem is forwarded rather than its demodulator",
+  "find": "\tv90dem_sessionTermination(self->modem.demodulator);",
+  "replace": "\tv90dem_sessionTermination((V90Demodulator *)&self->modem);"
+ },
+ {
+  "label": "nothing is forwarded at all",
+  "find": "\tv90dem_sessionTermination(self->modem.demodulator);",
+  "replace": "\t(void)self;"
+ }
+]

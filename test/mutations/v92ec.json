@@ -143,5 +143,95 @@
   "label": "the null guards are dropped",
   "find": "\tif (echoCoeff != NULL) {\n\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;\n\t}",
   "replace": "\t{\n\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;\n\t}"
+ },
+ {
+  "label": "the construction notice is gated one level too low",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");"
+ },
+ {
+  "label": "the construction notice's typo is corrected",
+  "find": "dsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");",
+  "replace": "dsplibs_debug_printf(\"V92EchoCanceller: construction\\r\\n\");"
+ },
+ {
+  "label": "the initial delay is taken from the delay offset",
+  "find": "\tsetEchoDelay((unsigned int)params->V92_ECHO_INITIAL_DELAY);",
+  "replace": "\tsetEchoDelay((unsigned int)params->V92_ECHO_DELAY_OFFSET);"
+ },
+ {
+  "label": "the delay is stored without going through setEchoDelay",
+  "find": "\tsetEchoDelay((unsigned int)params->V92_ECHO_INITIAL_DELAY);",
+  "replace": "\techoDelay = (unsigned int)params->V92_ECHO_INITIAL_DELAY;"
+ },
+ {
+  "label": "the filter length is not rounded to a multiple of four",
+  "find": "\tlength = params->V92_ECHO_FILTER_LENGTH / 4 * 4;",
+  "replace": "\tlength = params->V92_ECHO_FILTER_LENGTH;"
+ },
+ {
+  "label": "word_18 is the filter length rather than one less",
+  "find": "\tword_18 = (unsigned int)length - 1u;",
+  "replace": "\tword_18 = (unsigned int)length;"
+ },
+ {
+  "label": "the coefficient array is sized in doubles",
+  "find": "\techoCoeff = (float *)sysdep_malloc(filterLength * sizeof(float));",
+  "replace": "\techoCoeff = (float *)sysdep_malloc(filterLength * sizeof(double));"
+ },
+ {
+  "label": "the history's span leaves out the delay",
+  "find": "\tspan = word_18 + echoDelay;",
+  "replace": "\tspan = word_18;"
+ },
+ {
+  "label": "the history's block term is not doubled",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + blockLen + span / blockLen * blockLen\n\t\t       + extra;"
+ },
+ {
+  "label": "the history leaves out the rounded-down span",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + 2u * blockLen + extra;"
+ },
+ {
+  "label": "the history leaves out the final addend",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen;"
+ },
+ {
+  "label": "the history is allocated one float short",
+  "find": "\techoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));",
+  "replace": "\techoHistory = (float *)sysdep_malloc((historyAlloc - 1u) * sizeof(float));"
+ },
+ {
+  "label": "the ARMA gets the numerator where it wanted the denominator",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaNum, v92EchoArmaDen, 99u);"
+ },
+ {
+  "label": "the ARMA gets a different block size",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 98u);"
+ },
+ {
+  "label": "the ARMA gets eight denominator taps",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 8u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);"
+ },
+ {
+  "label": "one coefficient of the ARMA denominator is mistyped",
+  "find": "\t1.0f, 0.709f, -2.3002f,",
+  "replace": "\t1.0f, 0.7091f, -2.3002f,"
+ },
+ {
+  "label": "one coefficient of the ARMA numerator is mistyped",
+  "find": "\t1.4986f, 0.622f, -2.7333f,",
+  "replace": "\t1.4986f, 0.6221f, -2.7333f,"
+ },
+ {
+  "label": "the constructor does not reset what it built",
+  "find": "\tarma = m;\n\n\treset();",
+  "replace": "\tarma = m;"
  }
 ]
