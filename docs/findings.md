@@ -40332,3 +40332,56 @@ is what the 4800/7200 outliers look like.
 That is an ordinary latency-reduction exercise in code this project owns, with
 a measurement already in place to confirm any change: run a call, `echoscan`
 the 8k pair, and see whether the number moved.
+
+======================================================================
+
+### 1218. HALVING THE PACKET TIME TOOK 20 ms OFF AND PUT THE ECHO INSIDE THE WINDOW — BUT ASTERISK WILL NOT HONOUR ptime AND THE RATES WENT BIMODAL
+
+*Task #111, and it is REPORTED INCOMPLETE on purpose: the delay half worked and
+is measured, the rate half is unstable and is not.*
+
+**The delay result, which is unambiguous.** `PTIME_MS` 20 -> 10 in `modem.h`
+halves `MODEM_FRAMESIZE` (192 -> 96) and `SIP_FRAMESIZE` (160 -> 80), both still
+whole and still 6:5 so the resampler is unaffected.
+
+| | 8k boundary | 9600 boundary |
+|---|---|---|
+| 20 ms framing | 161.6 / 171.6 ms | 165.6 / 175.6 ms |
+| **10 ms framing** | **141.6 / 151.6 ms** | **145.6 / 155.6 ms** |
+
+**Exactly 20 ms off the round trip**, which is what 1217 predicted: a frame plus
+the half-frame average phase offset between two unsynchronised loops, both
+proportional to the packet time. **The echo now sits inside the canceller's
+172.5 ms window with 17-27 ms of margin**, for the first time.
+
+**A correction to what I first concluded.** Seeing `a=ptime:20` in the log I
+said the ptime fix "did not take". Wrong: that was ASTERISK'S ANSWER. Our INVITE
+carried no `a=ptime` at all, because `pjsua` does not emit the attribute --
+`frm_per_pkt` changes what we PRODUCE, not what we ASK FOR, and only the second
+is visible to the far end. Separating TX from RX in the log is what showed it;
+grepping both together is what hid it.
+
+Fixed by adding the attribute in `on_call_sdp_created`, which is the sanctioned
+hook for touching the local SDP. **Our offer now says `ptime:10`. Asterisk still
+answers `ptime:20`.** With Direct Media not in effect (no re-INVITE, our RTP
+peer is Asterisk's own address) it sits in the media path and repacketises, so
+what returns to us is still 20 ms packets whatever we ask for.
+
+**The rate half is NOT settled.** Across the 10 ms runs: 33600, 21600, 16800,
+16800, 4800, 7200, 4800, and two calls that did not connect. Both ends of that
+range are new -- 16800 and 21600 had never been seen, and 33600 only once
+before -- but so is the instability, and the connect rate is worse than the 4-in-5
+baseline. One call reached `equerr` 250 and still came out at 4800, which the
+threshold table of 1210 cannot explain and nothing else here does either.
+
+**So the honest state is:** the delay objective of #111 is met and measured; the
+rate objective is unproven and the configuration is not one to ship. Generating
+10 ms frames while the far end repacketises to 20 is a mismatch nobody would
+choose deliberately, and it is the obvious suspect for the instability -- but
+that is a hypothesis, and this bench has killed five of those.
+
+**What would settle it**, in order of cost: get Asterisk to honour 10 ms (or get
+Direct Media working, which removes it from the path and makes the ATA's own
+packetisation the only one that matters -- `codec g711alaw bytes 80` on the
+VG204 dial-peer); then a 30-call batch against the n=30 control, because five
+calls cannot distinguish a rate distribution from a run of luck.
