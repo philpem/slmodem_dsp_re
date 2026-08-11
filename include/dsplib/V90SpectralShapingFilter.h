@@ -23,10 +23,32 @@
  *                   are four floats and they are the filter's coefficients.
  *     +0x10..+0x1c  `reset()` stores zero into exactly these four and nothing
  *                   else, so they are the filter's state.
- *     +0x20         the constructor's only non-zero store: 2.  `progress`
- *                   and `getMetric` both read it; neither is reconstructed,
- *                   so the word gets an offset-derived name rather than an
- *                   invented purpose.
+ *     +0x20         the constructor's only non-zero store: 2.  It is the
+ *                   number of SAMPLES `progress` consumes per call and the
+ *                   number `getMetric` consumes per block, which is what
+ *                   renamed it from `word_20` once those two were read.
+ *
+ * WHAT THE FOUR STATE WORDS ARE was decided by `progress`, which loads all
+ * four before its loop and stores all four after it:
+ *
+ *     state[0]  the previous input sample
+ *     state[1]  the previous output of the first section
+ *     state[2]  the previous output of the second section
+ *     state[3]  a running sum of the SQUARES of the second section's output,
+ *               which neither member ever clears -- only `reset()` does
+ *
+ * THE RECURRENCE IS THE SAME IN BOTH `progress` AND `getMetric`, and that is
+ * how the popping-form reading was checked rather than assumed (finding
+ * 1400).  Per input sample x:
+ *
+ *     a = (x - state[0] * coeff[2]) + state[1] * coeff[0]
+ *     y = (a - state[1] * coeff[3]) + state[2] * coeff[1]
+ *     state[3] += y * y
+ *
+ * Two cascaded first-order sections -- zero at coeff[2] and pole at coeff[0],
+ * then zero at coeff[3] and pole at coeff[1] -- with an energy accumulator on
+ * the output.  The bracketing is the object's and is not free to move:
+ * addition is commutative, association is not.
  *
  * FOUR SCALARS OR AN ARRAY OF FOUR IS NOT DECIDABLE from the object: every
  * access to both groups is at a constant displacement and compiles the same
@@ -40,13 +62,24 @@
 
 class V90SpectralShapingFilter {
 public:
-	/* Defined in src/pump/v90/V90SpectralShapingFilter.cpp. */
+	/* All five are defined in src/pump/v90/V90SpectralShapingFilter.cpp. */
 	V90SpectralShapingFilter();
+
+	void	setFilterCoeff(float c0, float c1, float c2, float c3);
+	void	reset();
+	void	progress(const short *in);
+
+	/*
+	 * Returns the accumulator, and is `const`: it runs the same recurrence
+	 * over `blocks * blockLength` samples in x87 registers and writes not
+	 * one word of the object back.
+	 */
+	float	getMetric(const short *in, unsigned int blocks) const;
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	float		coeff[4];	/* +0x00 setFilterCoeff's arguments  */
 	float		state[4];	/* +0x10 what reset() clears         */
-	unsigned int	word_20;	/* +0x20 constructed as 2            */
+	unsigned int	blockLength;	/* +0x20 samples per call; ctor's 2  */
 };
 
 #endif /* DSPLIB_V90SPECTRALSHAPINGFILTER_H */
