@@ -38624,6 +38624,17 @@ it, is what catches this.
 
 ### 1152. WHAT TASK #91 DID NOT DO
 
+- **One commit on this branch was red when it was made, and it was mine.**
+  `a81f724` registers `v90conneval` in `suites.json`.  `make phase` was run
+  BEFORE that edit, not after, so what was committed had a suite with no
+  recorded verdicts -- MISSING to `mutsnap --check`, which the `refs` gate
+  fails on.  The next batch found it and recorded the verdicts, so the branch
+  is green from `f1f29db` onward and green at HEAD, but `a81f724` as committed
+  is not.  Disclosed rather than rebased away: five commits sit on top of it,
+  three of them another agent's, and history surgery to hide a red commit
+  costs more than the record it would erase.  The rule this is the instance of
+  is in finding 1151; this is where it says who broke it.
+
 - **`t_vpcmrun.c` still builds its endpoints with `ref_vpcm_create`**, and
   will until the last of `dp_vpcm_init`'s closure lands.  That is finding
   1105, not an omission here: no version of that oracle compares a subset, and
@@ -38639,9 +38650,20 @@ it, is what catches this.
   method to make a closure figure smaller is taking another batch's work.
 - **`V90Demapper`'s constructor** is blocked on `ModulusDecoder`, which has no
   header, no `.cpp` and no other symbol in this tree (finding 1174).
-- **The 69 pre-existing mutation snapshot entries are still stale.**  The key
-  is coarse by design -- it covers all of `src/`, `include/`, the Makefile and
+- **67 of the 72 mutation snapshot entries are still stale.**  The key is
+  coarse by design -- it covers all of `src/`, `include/`, the Makefile and
   `test/harness/` -- so adding four source files and six headers invalidates
-  every entry by construction.  Five entries are current: the four re-run for
-  finding 1151 and `v92p3mod`.  A full re-record is a run of all 72 suites and
-  was not attempted.
+  every entry by construction.  Five are current: the four re-run for finding
+  1151 and `v92p3mod`.  A full re-record is a run of all 72 suites, 3,733
+  mutations, and was not attempted.
+
+  **This is a named handover cost, not a gate this batch failed.**
+  `mutsnap.py --check --strict` exits 1 here, and `--strict` is by the tool's
+  own description "what a MERGE has to pass; deliberately not what `make
+  phase` runs".  `make phase` is exit 0 because the thing it fails on is
+  MISSING, and `0 never recorded, of 72 registered` says there is none.
+  What IS clean across all 72 is `anchorcheck.py` -- 3,733 mutations, 0
+  matching other than exactly once, 0 vacuous, 0 landing in an arm their label
+  does not name -- which is the check that three batches adding functions to
+  shared files could plausibly have broken.  It is not in `make phase`'s
+  dependency list, so it was run by hand.
