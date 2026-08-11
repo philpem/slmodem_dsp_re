@@ -44261,3 +44261,56 @@ reference object in the same process) ruled out the test being at fault and
 made this a finding about `src/`. That reasoning was wrong: reading the
 expectation from the reference at runtime removes a HARDCODED assumption but
 not a shared environmental one, because both sides read the same allocator.
+
+### 1354. `narrow32` IS NOT A GCC 13 SHIM AFTER ALL — THE PERIOD COMPILER NEEDS IT TOO, AND THE OBJECT HAS NOTHING LIKE IT
+
+Stage 2 of task #113 began by deleting what finding 1352 called a shim, and
+the period differential refused it. The rule the task was filed with — *a shim
+the period compiler also needs is a real finding about the object, not a thing
+to delete* — fired on the first removal attempted.
+
+**The three variants, each run through `make period`:**
+
+| `src/pump/v90/Resampler.cpp` | GCC 3.4.2 | GCC 13 |
+|---|---|---|
+| helper + `volatile` | pass | pass |
+| helper, plain | **pass** | fail — 100/15491 and 592/4356 |
+| **no helper at all** | **FAIL — 592/4356** | — |
+
+1352 could not distinguish these: it compared instruction sequences and said
+so (*"Nor has it been shown that the plain GCC 3.4.2 build passes the
+differential test... would need harness work"*). That harness now exists, and
+it moves the conclusion. The `volatile` was a GCC 13 shim and is gone; **the
+helper is not**, and 1352's implication that the author's plain `float y0`
+would do is refuted for OUR source.
+
+**The mechanism, and it is not excess precision as such.** GCC 3.4's `-O2`
+does not enable `-finline-functions` — that arrived at `-O3` — so the helper
+stays out of line as `_Z8narrow32f` and its argument is materialised in a
+four-byte slot. **That slot is the narrowing.** Modern GCC inlines it at `-O2`
+and narrows nothing. So the two compilers differ over *inlining policy*, not
+over floating point, and the `volatile` was compensating for the wrong thing.
+
+**Why our source needs it and the object does not.** The blob's `resample` is
+367 instructions to our 263, with 18 `faddp` to our 4 — its inner loop is
+unrolled and ours is not. The author's code ran out of x87 registers where
+ours does not, so GCC spilled the accumulator for free at `.text+0x34f76`.
+The helper compensates for **our factoring differing from the author's**, not
+for a compiler differing from the author's. That makes it a deviation of a
+better-understood kind, and it points at the real repair: match the object's
+loop structure and the helper becomes unnecessary. Filed.
+
+**IT IS ALSO NOT A ROUNDING CALL, and the name said it was.** It was
+`round32`, which reads like something the author wrote. Ruled out three ways:
+`roundf`/`trunc`/`rint` round to an INTEGER, which would destroy the
+`y0 + (y1 - y0) * frac` interpolation two lines later; the blob imports no
+libm function to inline from, its entire undefined list being
+`dsplibs_debug_printf`, `sysdep_sprintf` and `sysdep_vsnprintf`; and GCC 3.4
+does not compile a rounding call to a bare `fstps` — it emits the control-word
+dance the same function already shows for the `(int)phase` cast. Renamed
+`narrow32`, because what it does is drop 80-bit excess precision to 32 bits.
+
+`tools/gccdiverge.json` carries the modern build's two divergent checks, and
+`tools/debugcov.py` reads the same register — the instrumented build fails
+identically and was the last thing holding the tree to a standard the
+compiler cannot meet. `make period` has no allow-list and passes 155 of 155.

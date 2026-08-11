@@ -1,1 +1,10 @@
-{}
+{
+  "t_resampler": {
+    "finding": 1354,
+    "checks": [
+      "Resampler::resample",
+      "V90Resampler::resample"
+    ],
+    "why": "x87 excess precision. The object narrows its accumulator to float by spilling it (fstps 0x34(%esp)); src/pump/v90/Resampler.cpp does it with an out-of-line narrow32(), which GCC 3.4.2 keeps out of line because -O2 there does not imply -finline-functions. Modern GCC inlines it at -O2 and narrows nothing, so 80 bits reach the interpolation and the stored sample moves by up to one ULP. `make period` passes all 155."
+  }
+}

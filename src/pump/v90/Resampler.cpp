@@ -236,30 +236,60 @@ Resampler::resetHistoryIndex()
 }
 
 /*
- * Round an x87 accumulator to `float`, and mean it.
+ * Narrow an x87 accumulator from 80 bits to `float`.
  *
- * THIS EXISTS BECAUSE THE OBJECT ROUNDS AND OUR COMPILER WILL NOT, and it is
- * a deviation rather than a transcription: GCC 3.4 ran out of x87 registers
- * across the second inner product and spilled the first sum to a `float`
- * stack slot -- `fstps 0x34(%esp)` at .text+0x34f76, and `fstps`/`flds
- * 0x30(%esp)` at +0x34fee/+0x34ff6 for the second -- which rounds it.  A
- * modern GCC at the tree's flags keeps both sums at 80 bits (-mfpmath=387,
- * -fexcess-precision=fast, and deliberately no -ffloat-store), and the
- * difference reaches the OUTPUT: rounding `y0` before `y0 + (y1 - y0) * frac`
- * moves the stored sample by up to one ULP.
+ * IT IS NOT A ROUNDING CALL AND THE OBJECT CONTAINS NO SUCH THING.  It was
+ * named `round32`, which read like something the author wrote; nothing of the
+ * kind is in the blob.  `roundf`/`trunc`/`rint` round to an INTEGER, which
+ * would destroy the interpolation two lines later -- and the blob imports no
+ * libm function to inline from, its whole undefined list being
+ * dsplibs_debug_printf, sysdep_sprintf and sysdep_vsnprintf.  GCC 3.4 does
+ * not compile a rounding call to a bare `fstps` either; it emits the
+ * control-word dance this file already shows for the `(int)phase` cast.
  *
- * That is not a tolerance to widen -- any disagreement with the blob is a
- * hard failure -- so the rounding is forced here.  Declaring the sums `float`
- * does NOT do it, and neither does an inlined `float`-returning helper: both
- * were tried and neither emits a store.  `volatile` does, once, in exactly
- * the place the object does it, and nowhere else -- the accumulation inside
- * each loop stays at 80 bits on both sides, and so does everything after the
- * two roundings.
+ * What it does is drop 80-bit excess precision to 32 bits, which is what a
+ * store to a `float` does and is all the blob does.
+ *
+ * THE OBJECT HAS NO SUCH FUNCTION, and this comment used to explain the wrong
+ * thing.  At `.text+0x34f76` the blob simply spills its accumulator --
+ * `fstps 0x34(%esp)`, once, after the loop -- which is ordinary register
+ * spilling of a variable whose declared type is `float`.  The author wrote
+ * `float y0` and thought no more about it (finding 1352).
+ *
+ * SO WHY IS IT HERE.  Because the rounding is real and reaches the OUTPUT:
+ * rounding `y0` before `y0 + (y1 - y0) * frac` moves the stored sample by up
+ * to one ULP, and any disagreement with the blob is a hard failure.  The
+ * blob's `resample` is 367 instructions to our 263, with 18 `faddp` to our 4
+ * -- its inner loop is unrolled and ours is not -- so the author's code ran
+ * out of x87 registers where ours does not.  This helper compensates for OUR
+ * FACTORING DIFFERING FROM THE AUTHOR'S, not for a compiler difference.  It
+ * is a deviation, and it is the honest kind: named, and explained by a
+ * measurement rather than by a preference.
+ *
+ * AND UNDER THE PERIOD COMPILER IT IS A REAL CALL, which is the whole
+ * mechanism.  GCC 3.4's `-O2` does not enable `-finline-functions` -- that
+ * arrived at `-O3` -- so this stays out of line as `_Z8narrow32f` and the
+ * argument is materialised in a four-byte slot.  That slot is the rounding.
+ * Modern GCC inlines it at `-O2` and rounds nothing, which is why a
+ * `volatile` was once needed here and is not any more.
+ *
+ * THE THREE VARIANTS, ALL RUN THROUGH `make period` (finding 1354):
+ *
+ *      helper + volatile   period PASS   modern PASS
+ *      helper, plain       period PASS   modern FAIL   <- this one
+ *      no helper at all    period FAIL   -
+ *
+ * The last line is why the helper stays: with the accumulators left plain,
+ * the period compiler does not round either, and 592 of 4356 checks in
+ * `V90Resampler::resample` disagree with the blob.  A shim the period
+ * compiler also needs is a fact about the object, not a thing to delete.
+ * The `volatile` on top of it was the part that only GCC 13 wanted, and that
+ * part is gone; tools/gccdiverge.json carries what it cost the modern build.
  */
 static float
-round32(float v)
+narrow32(float v)
 {
-	volatile float r = v;
+	float r = v;
 
 	return r;
 }
@@ -360,7 +390,7 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		y0 = 0;
 		for (i = 0; i < taps; i++)
 			y0 += h[i] * c[i];
-		y0 = round32(y0);
+		y0 = narrow32(y0);
 
 		if ((unsigned int)(ph + 1) < phases) {
 			h = history + historyIndex - taps;
@@ -381,7 +411,7 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 			for (i = 0; i < taps; i++)
 				y1 += h[i] * c[i];
 		}
-		y1 = round32(y1);
+		y1 = narrow32(y1);
 
 		frac = (float)(phase - ph);
 		y = y0 + (y1 - y0) * frac;
