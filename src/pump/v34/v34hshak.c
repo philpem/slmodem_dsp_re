@@ -7373,7 +7373,7 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_F3570	0x3570	/* short: 3 once S has been detected       */
 #define T4_F3576	0x3576	/* short: cleared with it                  */
 #define T4_F3598	0x3598	/* short: "initdigital has run"            */
-#define T4_MDLEN	0x35a2	/* short: the message-descriptor length    */
+#define T4_MDLEN	0x35a2	/* short: MD's length in bauds -- see below */
 #define T4_MPTBL	0xaa0c	/* ten shorts, the MP sequence received    */
 #define T4_MPRUN	0xaa26	/* short: the current run of one bits      */
 #define T4_MPIDX	0xaa2a	/* short: which of the ten comes next      */
@@ -7938,7 +7938,15 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 }
 
 /*
- * 0x6a090 -- the message descriptor's bauds have run out.
+ * 0x6a090 -- MD's bauds have run out.
+ *
+ * MD IS "MANUFACTURER-DEFINED", NOT "message descriptor", which is what this
+ * file used to call it here and at `T4_MDLEN`.  ITU-T V.34 (02/98) 10.1.3.5:
+ * an OPTIONAL signal a transmitting modem sends to train its echo canceller
+ * when the phase-3 TRN cannot do it, whose length is carried in that modem's
+ * INFO1 and is **0 when the signal is absent** -- which is exactly the `md ==
+ * 0` guard below, and why the object's own trace reads "RX MDLENGTH over, it
+ * was %d bauds".  Bauds, not bytes: nothing here is a descriptor.
  *
  * `setupreceiver` INLINED, and then a SECOND `detectorinit` over the same
  * detector with different arguments: 8/10 for the one inside the callee
@@ -8418,7 +8426,8 @@ t4_rx_receive(struct v34_object *obj)
 #define T72_PB_RATIO	0xaac8	/* int:   the same, for the 0x300 rung      */
 #define T72_FAACC	0xaacc	/* int:   copied from the receiver's +0x238 */
 #define T72_RX_SAMPS	0x010c	/* receiver: the burst every bank reads     */
-#define T72_RX_F238	0x0238	/* receiver: an int this arm only copies    */
+#define T72_RX_F238	0x0238	/* receiver: an int, and rxstate 4 copies   */
+				/* it too, at 0x67b84 -- not this arm's    */
 
 /*
  * How many samples `rxtiming` left in the burst.
