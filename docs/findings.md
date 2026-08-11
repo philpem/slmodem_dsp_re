@@ -42721,3 +42721,151 @@ combination of eleven of them and of six more, and that counter asserted at
 zero on both sides is the whole of the evidence that the guards exist.
 
 ======================================================================
+
+### 1320. `V92Modem` IS 0xAAC BYTES, AND THE DERIVATION IS TWO BOUNDS MEETING RATHER THAN AN ALLOCATION
+
+`V92Modem` is the one class in the V.PCM construction chain that the
+allocation oracle of finding 1246 CANNOT size, because nothing ever allocates
+it: it is an embedded member of `VPcmFloModem`, and its constructor is called
+on `lea 0x6124(%ebx),%eax` at .text+0xfae0.  There is no `sysdep_malloc`
+immediate to read.
+
+Two bounds close it anyway.
+
+**Below.**  The constructor stores a four-byte `modemSide` at +0xaa8
+(`mov %ebx,0xaa8(%esi)`, .text+0x13d8a), so `sizeof` is at least 0xaac.
+
+**Above.**  The member `VPcmFloModem`'s constructor builds NEXT is at
+`lea 0x6bd0(%ebx),%edx`, .text+0xfae9 -- six instructions later, in the same
+run of construction calls.  A member's offset is at least the previous
+member's offset plus the previous member's size, so `sizeof(V92Modem)` is at
+most 0x6bd0 - 0x6124 = 0xaac.
+
+The two are the same number, so the size is exact.  Alignment corroborates
+rather than merely permitting: +0x6124 is 4-aligned and NOT 8-aligned, so
+`alignof(V92Modem)` is at most 4 -- the class holds no double and no
+eight-byte member -- and 0xaac needs no tail padding.
+
+The general form is worth keeping.  **Two consecutive member constructions in
+an enclosing class's constructor bound the first member's size from above, and
+that bound is as good as an allocation immediate when the low bound from the
+field span meets it.**  It applies to every embedded member of `VPcmFloModem`,
+which is where the V.PCM chain's remaining unsized classes live.
+
+`src/pump/v90/V92Modem.cpp` asserts it with
+`typedef char v92modem_size[(sizeof(V92Modem) == 0xaac) ? 1 : -1]`.
+
+### 1321. `V92MappingParams` AND `struct V92ParamsInfo` ARE THE SAME 180-BYTE BLOCK, REACHED FROM TWO ENDS
+
+`include/dsplib/V92ParamsInfo.h` named its block from
+`V92setParamsInfoFromCPUnPck`, by the complement of three functions' store
+sets, and said in as many words that it is "the 180-byte block `V92Modem`
+hangs off +0xaa0".  It could not say what the ORIGINAL called it, because all
+four functions that touch it are unmangled.
+
+`V92Modem`'s constructor says.  It allocates the block with
+`sysdep_malloc(0xb4)` at .text+0x13def, calls no constructor on it, fills it
+with `V92createConstellations` and `V92createFilterCoefficients` -- and then
+passes the very same pointer, reloaded from +0xaa0 at .text+0x13e82, as the
+SIXTH argument of
+
+    _ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptor
+    P5V92CPP16V92MappingParamsP13V92Parameters
+
+whose sixth parameter the mangling spells `V92MappingParams *`.  One 180-byte
+block, one pointer, two names: the C name the four free functions carry and
+the C++ name the mangling records.  `sizeof(struct V92ParamsInfo) == 0xb4` was
+already asserted in `t_v92alloc.c`; the 0xb4 here is the same literal from the
+other side of the identification.
+
+The reconstruction declares the member with the MANGLING'S type, so that the
+argument the modulator receives needs no explanation, and casts at the four C
+call sites.  That is the honest way round: the mangling is evidence about the
+original's declaration and the C prototypes are not.
+
+### 1322. A NULL GUARD CAN BE UNREACHABLE IN THE OBJECT ITSELF, AND THEN NO MUTATION TESTS IT
+
+`~V92Modem` releases the parameter block in three steps:
+
+    139c1:  call V92deleteConstellations      <- argument 0xaa0(%esi)
+    139cf:  call V92deleteFilterCoefficients  <- argument 0xaa0(%esi)
+    139da:  test %eax,%eax ; jne  ->  sysdep_free(0xaa0(%esi))
+
+The guard on the third is real code and it is dead.  Both deleters
+dereference their argument with no null test of their own -- they test the
+ten POINTERS INSIDE the block, not the block -- so a null +0xaa0 faults at
+.text+0x139c1, two calls before the guard is read.  There is no state of the
+object in which the guard's false branch runs.
+
+This has three consequences and all three are worth writing down.
+
+**The fixture cannot sweep it.**  `t_v92modem.cpp`'s subset sweep is over the
+FOUR pointers that can be nulled, not five, and the file says why rather than
+quietly running sixteen combinations where a reader would expect thirty-two.
+
+**No mutation may claim it.**  Deleting the guard is behaviourally identical
+on every input that does not fault, so a "the guard is dropped" entry would
+read NOT CAUGHT for ever.  It is not in `v92modem.json`; the set's NOTE entry
+records the reason, which is the pattern `v92mod.json`'s NOTE established.
+
+**It is not a deviation either.**  Nothing about the object's behaviour
+differs from the reconstruction's; the guard is reproduced because it is
+there.  A defect entry would be claiming a fault the object cannot take.
+
+The general form: **an unguarded dereference of the same pointer EARLIER in a
+function makes every later guard on it unreachable, and unreachable-in-the-
+object is a stronger statement than untested.**  Look for it whenever a
+destructor calls a helper on a member before testing it.
+
+### 1323. THE ILLEGAL-SIDE ARM OF A CONSTRUCTOR STORES NOTHING, AND THAT IS A CLAIM THE SEEDED FIXTURE CAN CHECK
+
+`V92Modem`'s constructor ends in a three-way switch on `modemSide`:
+
+    13e1d:  test %eax,%eax ; je   13e50   ->  movl $0x0,(%esi)     ; side 0
+    13e21:  dec %eax       ; je   13e6a   ->  build a V92Modulator ; side 1
+    13e24:  <default>                     ->  a diagnostic, and RETURN
+
+The digital arm nulls +0x000.  The analog arm fills it.  The third arm does
+NEITHER: it prints "V92Modem Constructor: Illegal modemSide" when the level
+allows and returns, and +0x000 keeps whatever the storage held before the
+constructor ran.
+
+That is testable only because the fixture seeds and never zeroes.  Both sides
+are given the same varied bytes; after a construction with side 2, 3, 0x7f or
+0xffffffff, +0x000 must still BE those bytes -- on ours and on the blob's.  A
+reconstruction that tidied the switch by nulling the modulator in the default
+arm passes every other check in the file and fails that one.
+
+The same argument covers the 2,704 bytes at +0x00c: the embedded `V92Ja` is
+neither constructed nor written, so the seed survives the whole constructor,
+and asserting that is what turns "the constructor does not touch it" from a
+reading into a test.
+
+It also forces the fixture to disarm before destroying.  With +0x000 still
+holding seed bytes, `~V92Modem` would run `~V92Modulator` over them; nulling
+it first is the fixture's bookkeeping and is commented as such, AFTER the
+check that the seed was still there.
+
+### 1324. C1 AND C2 ARE BYTE-IDENTICAL HERE AND D1 AND D2 DIFFER IN TWO BYTES, BOTH FREE CHOICES
+
+For the record, since a reader who diffs the four ranges will find it:
+
+    C1 .text+0x13d30, C2 +0x13ec0, 393 bytes -- identical, all 393
+    D1 .text+0x13a80, D2 +0x13990, 229 bytes -- differ at +0x6c and +0x7f
+
+Both differing bytes are the scratch register the epilogue pops the frame's
+last word into: `58` (`pop %eax`) in D2 where D1 has `5a` (`pop %edx`).  Two
+`ret` paths, one byte each.  Nothing else in 229 bytes differs -- same
+displacements, same relocations, same order.
+
+`V92Modem` has no virtual base, so C1/C2 and D1/D2 are the same body emitted
+twice and GCC allocated one register differently on the second pass.  Per
+CLAUDE.md's rule for reading a codegen difference this is a FREE choice and
+is ignored: no source permutation is attempted and the reconstruction defines
+each function once, as everywhere else in this tree.
+
+The reason to record it at all is that the byte comparison is a cheap check
+somebody will run, and "D1 and D2 are not identical" looks like a finding
+until you see which two bytes they are.
+
+======================================================================

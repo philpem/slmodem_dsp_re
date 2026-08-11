@@ -436,6 +436,10 @@
   "src/pump/v90/V92Modulator.cpp",
   "build/test/t_v92mod"
  ],
+ "v92modem": [
+  "src/pump/v90/V92Modem.cpp",
+  "build/test/t_v92modem"
+ ],
  "v92p4mod": [
   "src/pump/v90/V92Phase4Modulator.cpp",
   "build/test/t_v92p4mod"

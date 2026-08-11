@@ -4904,3 +4904,21 @@ new hardware.
 *V.92 modulator batch. **Reachability: UNMEASURED** -- no member that reads either word has been written. Status: OBSERVED, not driven. Fix class: none proposed.*
 
 **Findings 1283, 1287.** Twenty-eight of the object's thirty-one declared fields are written between the constructor and the inlined `reset`; the other three are these two words and the two bytes of alignment at +0x0e, which no constructor would write. +0x24 and +0x3c sit between named fields on both sides rather than at the end where an alignment hole would be. Whether anything reads them before some other member fills them is a question the sixteen unwritten members hold the answer to -- hence 💤 rather than 🐛.
+
+## D230 🐛 the constructor's illegal-`modemSide` arm leaves the modulator pointer uninitialised, and the destructor then destroys it
+
+*Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0xf4 and +0x13a. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor at .text+0xfac0, computes the argument as `dec %ebp; sete %dl; movzbl %dl,%esi`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1323.** The digital arm writes `movl $0x0,(%esi)` and the analog arm writes the allocation; the third arm prints "V92Modem Constructor: Illegal modemSide" and returns, storing nothing. `~V92Modem` then reads +0x000, finds whatever the enclosing storage held, and calls `_ZN12V92ModulatorD1Ev` on it followed by `sysdep_free`. Reproduced exactly, and `t_v92modem.cpp` asserts the word is still the fixture's seed before nulling it to make the destructor safe.
+
+## D231 🐛 `~V92Modem` nulls one of the five pointers it releases and leaves the other four dangling
+
+*Batch of 2026-08-11, from `V92Modem::~V92Modem` (blob 0x13a80 / 0x13990), +0x44..+0x7f. **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1322**, and the same family as D210 for `~V92Transmitter`. `movl $0x0,0x8(%esi)` writes back over `phase2Info` and there is no store anywhere near the other four -- `mappingParams`, `modulator`, `cp` and `parameters` all keep the addresses they were freed at. Harmless as shipped, because the object is an embedded member of `VPcmFloModem` that is destroyed once and never reused, but a second destruction would double-free four blocks and destroy three freed objects. Reproduced; `-fno-lifetime-dse` is what keeps our single store from being optimised away (finding 1272).
+
+## D232 🐛 `V92Modem`'s constructor uses five `sysdep_malloc` results with no null test
+
+*Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0x67, +0x8a, +0xb4, +0xc6 and +0x141. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
+
+Each allocation is followed immediately by a constructor call or, for the 0xb4 parameter block, by `V92createConstellations` -- and in every case by a store into `*this` -- with no `test` between them, so a failed allocation is dereferenced at once. The same shape as D177's family and as finding 1303's reading of `~V90Demapper`'s guards. Reproduced; the null tests that would have to precede these five are not there.
