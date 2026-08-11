@@ -1,6 +1,7 @@
 /*
- * t_v92precoder.cpp -- differential test of V92Precoder's and V92PreFilter's
- * constructors and destructors against the blob.
+ * t_v92precoder.cpp -- differential test of V92Precoder and V92PreFilter
+ * against the blob: both constructors and destructors, and all six of the
+ * members that do the work.
  *
  * THE OBJECTS CANNOT LIVE IN A UNION and cannot be assigned into.  Both
  * classes declare a constructor and a destructor -- which are the four
@@ -53,6 +54,8 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
+#include "dsplib/V92ParamsInfo.h"
 #include "dsplib/V92Precoder.h"
 #include "dsplib/V92PreFilter.h"
 
@@ -83,6 +86,44 @@ void ref_pf_dtor2(void *self) asm("ref__ZN12V92PreFilterD2Ev");
  * constructors and are torn down by the matching ones. */
 void ref_fir_dtor(void *self) asm("ref__ZN8FloatFIRD1Ev");
 void ref_iir_dtor(void *self) asm("ref__ZN8FloatIIRD1Ev");
+
+/*
+ * The three V92PreFilter members that do the work.  `this` is the first
+ * STACK argument -- plain cdecl, finding 215 -- so a free function of the
+ * right shape reaches them, and none of the three returns anything the
+ * object leaves in %eax.
+ */
+void our_pf_reset(void *self) asm("_ZN12V92PreFilter5resetEv");
+void ref_pf_reset(void *self) asm("ref__ZN12V92PreFilter5resetEv");
+void our_pf_setcoef(void *self, float *cf, float *ci, unsigned int tf,
+		    unsigned int ti)
+	asm("_ZN12V92PreFilter15setCoefficientsEPfS0_jj");
+void ref_pf_setcoef(void *self, float *cf, float *ci, unsigned int tf,
+		    unsigned int ti)
+	asm("ref__ZN12V92PreFilter15setCoefficientsEPfS0_jj");
+void our_pf_process(void *self, float *in, float *out)
+	asm("_ZN12V92PreFilter7processEPfS0_");
+void ref_pf_process(void *self, float *in, float *out)
+	asm("ref__ZN12V92PreFilter7processEPfS0_");
+
+/* And V92Precoder's three.  `reset()` -- the one with no argument -- is not
+ * written in this tree and is not driven here. */
+void our_pre_reset(void *self, void *params)
+	asm("_ZN11V92Precoder5resetEP16V92MappingParams");
+void ref_pre_reset(void *self, void *params)
+	asm("ref__ZN11V92Precoder5resetEP16V92MappingParams");
+void our_pre_setcoef(void *self, float *c1, float *c2, unsigned int t1,
+		     unsigned int t2)
+	asm("_ZN11V92Precoder15setCoefficientsEPfS0_jj");
+void ref_pre_setcoef(void *self, float *c1, float *c2, unsigned int t1,
+		     unsigned int t2)
+	asm("ref__ZN11V92Precoder15setCoefficientsEPfS0_jj");
+void our_pre_process(void *self, unsigned int *in, int a, int b, int *out,
+		     float *outf) asm("_ZN11V92Precoder7processEPjiiPiPf");
+void ref_pre_process(void *self, unsigned int *in, int a, int b, int *out,
+		     float *outf) asm("ref__ZN11V92Precoder7processEPjiiPiPf");
+
+extern unsigned int ref_dsplibs_debug_level;
 }
 
 /*
@@ -605,15 +646,874 @@ run_prefilter_dtor(void)
 	return diff_end();
 }
 
+/*
+ * V92PreFilter::reset, ::setCoefficients and ::process.
+ *
+ * WHAT MAKES THIS MORE THAN A FORWARDING CHECK.  All three members are thin
+ * over FloatFIR and FloatIIR, and both filters carry state, so the only way
+ * to see an argument passed to the wrong filter -- or a block routed the
+ * wrong way -- is to give the two filters DIFFERENT coefficients and then run
+ * enough blocks for the histories to fill and wrap.  A single call would
+ * compare equal for either routing whenever the histories are still zero.
+ *
+ * The output buffer is filled with junk before every call, both sides alike,
+ * so a `process` that wrote nothing would be caught rather than agreeing.
+ * The guard past the end catches the twelve becoming thirteen.
+ */
+#define PF_COEF		20
+#define PF_GUARD	4
+#define PF_BLOCKS	40
+
+/*
+ * ONE COEFFICIENT ARRAY PER FILTER, SHARED BY THE TWO SIDES.  A filter stores
+ * the pointer it was handed at +0x00 and does not own it, so giving each side
+ * its own copy would put two different addresses in a field this file
+ * compares -- a difference the fixture created.  Both sides therefore point
+ * at the same read-only arrays, and that nothing wrote through them is
+ * checked against a snapshot instead.
+ */
+static float pf_cf[PF_COEF], pf_ci[PF_COEF];
+static float pf_cf_copy[PF_COEF], pf_ci_copy[PF_COEF];
+static float pf_in_ours[V92PREFILTER_SAMPLES];
+static float pf_in_theirs[V92PREFILTER_SAMPLES];
+static float pf_out_ours[V92PREFILTER_SAMPLES + PF_GUARD];
+static float pf_out_theirs[V92PREFILTER_SAMPLES + PF_GUARD];
+
+/* A deterministic spread of magnitudes and both signs; nothing denormal and
+ * nothing that overflows a float when convolved with twenty taps. */
+static float
+pf_next(unsigned int *state)
+{
+	unsigned int v = *state;
+
+	v = v * 1103515245u + 12345u;
+	*state = v;
+	return (float)((int)((v >> 9) & 0xffffu) - 32768) / 512.0f;
+}
+
+static void
+pf_fill_pair(float *a, float *b, int n, unsigned int seedval)
+{
+	unsigned int st = seedval;
+	int i;
+
+	for (i = 0; i < n; i++) {
+		a[i] = pf_next(&st);
+		b[i] = a[i];
+	}
+}
+
+struct pf_case {
+	unsigned int tapsFir;
+	unsigned int tapsIir;
+};
+
+/* One block of output, named so diff_eq_obj can say which sample differed. */
+struct pf_out {
+	float s[V92PREFILTER_SAMPLES];
+};
+
+/*
+ * The four arms of `process`, and counts that are not multiples of four so
+ * the filters' rounding is in play.
+ *
+ * NO COUNT IS 1, 2 OR 3, AND THAT IS A DEVIATION AND NOT AN OVERSIGHT.  Such
+ * a count leaves +0x0c or +0x10 non-zero and the filter behind it with no
+ * taps at all, and `process` gates on the count it was given rather than on
+ * the filter's -- so it calls a filter that then walks its history backwards
+ * without a bound.  The blob's own loop is the same one
+ * (`FloatFIR::process`, 0x46c20: `dec %edx; jne` entered with the tap count
+ * already decremented from zero), so this is the object's behaviour and not
+ * ours; docs/deviations.md D260.
+ *
+ * NO COUNT EXCEEDS PF_COEF either.  A filter given more taps than the
+ * coefficient array holds reads past it, and that would be a difference this
+ * file created rather than one the reconstruction has.
+ */
+static const struct pf_case pf_cases[] = {
+	{  0,  0 },
+	{  4,  0 },
+	{  0,  4 },
+	{  4,  4 },
+	{  8, 16 },
+	{ 16,  8 },
+	{ 20, 20 },
+	{  5,  7 },
+	{  7,  5 },
+	{ 12,  4 },
+	{ 20,  0 },
+	{  0, 20 }
+};
+
+static int
+run_prefilter_methods(void)
+{
+	int ci;
+	int ncase = (int)(sizeof(pf_cases) / sizeof(pf_cases[0]));
+	int moved = 0, differed = 0;
+
+	diff_begin("V92PreFilter::reset / setCoefficients / process");
+
+	for (ci = 0; ci < ncase; ci++) {
+		unsigned int tf = pf_cases[ci].tapsFir;
+		unsigned int ti = pf_cases[ci].tapsIir;
+		unsigned char sa[PF_SIZE], sb[PF_SIZE];
+		int blk;
+
+		seed(pf_ours, pf_theirs, PF_SLOT, 400 + ci);
+		harness_alloc_reset();
+		our_pf_ctor(pf_ours, 0x140);
+		ref_pf_ctor(pf_theirs, 0x140);
+
+		/* Two different coefficient sets, so a call that gave the IIR
+		 * the FIR's array produces different numbers. */
+		pf_fill_pair(pf_cf, pf_cf_copy, PF_COEF, 0x51a3u + ci);
+		pf_fill_pair(pf_ci, pf_ci_copy, PF_COEF, 0x9e37u + ci);
+
+		our_pf_setcoef(pf_ours, pf_cf, pf_ci, tf, ti);
+		ref_pf_setcoef(pf_theirs, pf_cf, pf_ci, tf, ti);
+
+		pf_snapshot(sa, FO());
+		pf_snapshot(sb, FT());
+		diff_eq_obj_(__FILE__, __LINE__, "after setCoefficients",
+			     "V92PreFilter", sa, sb, PF_SIZE, (long)ci);
+		diff_eq_int("setCoefficients stored the caller's fir count"
+			    " (case %ld)", FO()->tapsFir, tf, ci);
+		diff_eq_int("setCoefficients stored the caller's iir count"
+			    " (case %ld)", FO()->tapsIir, ti, ci);
+		diff_eq_int("no store past the object (case %ld)",
+			    memcmp(pf_ours + PF_SIZE, pf_theirs + PF_SIZE,
+				   PF_SLOT - PF_SIZE) == 0, 1, ci);
+		diff_eq_int("neither coefficient array was written (case %ld)",
+			    memcmp(pf_cf, pf_cf_copy, sizeof(pf_cf)) == 0
+			    && memcmp(pf_ci, pf_ci_copy, sizeof(pf_ci)) == 0, 1,
+			    ci);
+		cmp_filter("fir after setCoefficients", "FloatFIR", FO()->fir,
+			   FT()->fir, (long)ci);
+		cmp_filter("iir after setCoefficients", "FloatIIR", FO()->iir,
+			   FT()->iir, (long)ci);
+
+		/*
+		 * Forty blocks of twelve: the histories are 419 entries, so
+		 * this fills them and wraps, which is where a filter driven
+		 * with the wrong input diverges from one driven with the
+		 * right one.
+		 */
+		for (blk = 0; blk < PF_BLOCKS; blk++) {
+			unsigned int st = 0x2f81u + 977u * (unsigned)blk
+					  + 13u * (unsigned)ci;
+			int i;
+
+			for (i = 0; i < V92PREFILTER_SAMPLES; i++) {
+				float v;
+
+				switch (blk & 3) {
+				case 0:
+					v = pf_next(&st);
+					break;
+				case 1:	/* an impulse, then silence */
+					v = (i == 0) ? 64.0f : 0.0f;
+					break;
+				case 2:	/* alternating full scale */
+					v = (i & 1) ? -32.0f : 32.0f;
+					break;
+				default:	/* a step */
+					v = (i < 6) ? 0.0f : 16.0f;
+					break;
+				}
+				pf_in_ours[i] = v;
+				pf_in_theirs[i] = v;
+			}
+
+			/* Junk in the output, both sides alike, so writing
+			 * nothing is not the same as writing zeroes. */
+			pf_fill_pair(pf_out_ours, pf_out_theirs,
+				     V92PREFILTER_SAMPLES + PF_GUARD,
+				     0x7c11u + 31u * (unsigned)blk);
+
+			our_pf_process(pf_ours, pf_in_ours, pf_out_ours);
+			ref_pf_process(pf_theirs, pf_in_theirs, pf_out_theirs);
+
+			diff_eq_obj_(__FILE__, __LINE__, "process output",
+				     "struct pf_out", pf_out_ours,
+				     pf_out_theirs, sizeof(struct pf_out),
+				     (long)(ci * 100 + blk));
+			diff_eq_int("process wrote no thirteenth sample"
+				    " (case %ld)",
+				    memcmp(pf_out_ours + V92PREFILTER_SAMPLES,
+					   pf_out_theirs + V92PREFILTER_SAMPLES,
+					   PF_GUARD * sizeof(float)) == 0, 1,
+				    ci * 100 + blk);
+			diff_eq_int("process did not write its input"
+				    " (case %ld)",
+				    memcmp(pf_in_ours, pf_in_theirs,
+					   sizeof(pf_in_ours)) == 0, 1,
+				    ci * 100 + blk);
+
+			pf_snapshot(sa, FO());
+			pf_snapshot(sb, FT());
+			diff_eq_obj_(__FILE__, __LINE__, "after process",
+				     "V92PreFilter", sa, sb, PF_SIZE,
+				     (long)(ci * 100 + blk));
+			cmp_filter("fir after process", "FloatFIR", FO()->fir,
+				   FT()->fir, (long)(ci * 100 + blk));
+			cmp_filter("iir after process", "FloatIIR", FO()->iir,
+				   FT()->iir, (long)(ci * 100 + blk));
+
+			/* Two samples of one block differing says the buffer
+			 * holds a signal and not the fill. */
+			if (pf_out_ours[0] != pf_out_ours[1])
+				differed = 1;
+		}
+
+		/*
+		 * `reset` reaches both filters, and after forty blocks both
+		 * histories are full of numbers, so the zeroing is visible.
+		 */
+		memcpy(sa, pf_ours, PF_SIZE);
+		our_pf_reset(pf_ours);
+		ref_pf_reset(pf_theirs);
+
+		diff_eq_int("reset left the object itself alone (case %ld)",
+			    memcmp(pf_ours, sa, PF_SIZE) == 0, 1, ci);
+		pf_snapshot(sa, FO());
+		pf_snapshot(sb, FT());
+		diff_eq_obj_(__FILE__, __LINE__, "after reset", "V92PreFilter",
+			     sa, sb, PF_SIZE, (long)ci);
+		cmp_filter("fir after reset", "FloatFIR", FO()->fir, FT()->fir,
+			   (long)ci);
+		cmp_filter("iir after reset", "FloatIIR", FO()->iir, FT()->iir,
+			   (long)ci);
+
+		{
+			unsigned int i, n = filt_word(FO()->fir, FILT_LEN);
+			const float *h = (const float *)filt_hist(FO()->fir);
+			int nonzero = 0;
+
+			for (i = 0; i < n; i++)
+				if (h[i] != 0.0f)
+					nonzero = 1;
+			diff_eq_int("reset zeroed the fir history (case %ld)",
+				    nonzero, 0, ci);
+			if (filt_word(FO()->fir, FILT_TAPS) != 0)
+				moved = 1;
+		}
+
+		our_pf_dtor(pf_ours);
+		ref_pf_dtor(pf_theirs);
+		diff_eq_int("nothing left live (case %ld)", harness_alloc.live,
+			    0, ci);
+	}
+
+	/* The sweep really did run filters with taps, and really did produce
+	 * varying output -- findings 223 and 224. */
+	diff_eq_int("some case ran a filter with taps (%ld)", moved, 1, 0);
+	diff_eq_int("process produced varying samples (%ld)", differed, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * V92Precoder::reset(V92MappingParams *), ::setCoefficients and ::process.
+ *
+ * THE PARAMETER BLOCK IS A `struct V92ParamsInfo`, which is finding 1321's
+ * identification and not this file's guess -- one 180-byte block, the sixth
+ * argument of V92Modulator's constructor by the mangling and the argument of
+ * the four C functions that fill it.  `reset` copies twenty-five of its words
+ * and takes a pointer to its last twenty-four bytes; the six pointers it
+ * copies out of +0x84 are the constellations, and `process` dereferences the
+ * one it is told to.
+ *
+ * ONE BLOCK AND ONE SET OF CONSTELLATIONS, SHARED BY BOTH SIDES.  Everything
+ * `reset` copies is an input, and a pointer copied out of two different
+ * blocks would differ in the object for a reason this file created.  That
+ * nothing wrote through them is checked against a snapshot instead.
+ *
+ * WHAT THE SWEEP HAS TO REACH, beyond agreeing:
+ *
+ *   - the UNSIGNED conversion of a constellation entry.  A signed reading
+ *     differs only for entries above 2^31, and such an entry can only ever
+ *     win the search if the carried state is about -2^31 -- so one case pokes
+ *     `state0` there and fills a constellation with values just above the
+ *     boundary.  Without it the two readings choose the same point every
+ *     time and the `fildll` is untested.
+ *   - the fourth symbol's parity, which is why `b` is swept and why `out` is
+ *     seeded rather than zeroed: the parity reads out[0..2].
+ *   - the EMPTY interval, which is D261.  A negative modulus produces one,
+ *     and it is driven on the second symbol and never the first, because on
+ *     the first the two locals the object reads back are two different pieces
+ *     of uninitialised stack and comparing them would be comparing the
+ *     fixtures.
+ */
+#define PRE_CONST	6
+#define PRE_POINTS	1024
+#define PRE_SYMBOLS	4
+#define PRE_IN		12
+
+static unsigned int pre_const[PRE_CONST][PRE_POINTS];
+static unsigned int pre_const_huge[PRE_POINTS];
+static unsigned int pre_const_falling[PRE_POINTS];
+static float pre_cf[PF_COEF], pre_ci[PF_COEF];
+static unsigned char pre_params[sizeof(struct V92ParamsInfo)]
+	__attribute__((aligned(8)));
+static unsigned char pre_params_copy[sizeof(struct V92ParamsInfo)];
+
+/* Which set of constellations a block points at. */
+enum {
+	PRE_KIND_PLAIN = 0,	/* six unrelated small ones               */
+	PRE_KIND_HUGE,		/* one whose points are just above 2^31   */
+	PRE_KIND_FALLING	/* one whose points fall as the index rises */
+};
+
+struct pre_spec {
+	int kind;
+	int selectors[6];	/* +0x9c, what `process` indexes mod six  */
+	int moduli[6];		/* +0x6c, tableB                          */
+	int steps[12];		/* +0x1c, tableA -- never zero, it divides */
+};
+
+/*
+ * Six constellations of small points, and a seventh of points just above 2^31
+ * for the unsigned reading.
+ *
+ * THE POINTS ARE SMALL ON PURPOSE.  The search keeps whichever candidate
+ * minimises the square of `state0 + point + state1` and starts from 1e12, so
+ * a constellation big enough to push that square past 1e12 makes EVERY
+ * candidate lose -- and then the two locals the object reads back afterwards
+ * are uninitialised, which is D261 and not a comparison between two
+ * reconstructions.  The precoder's own filters are given coefficients small
+ * enough that the two carried samples contract rather than grow, for the same
+ * reason: this sweep is meant to exercise the search, and D261 is driven
+ * deliberately, once, where the values are still comparable.
+ */
+static void
+build_constellations(void)
+{
+	unsigned int lfsr = 0x5eedu;
+	int c, t;
+
+	for (c = 0; c < PRE_CONST; c++) {
+		for (t = 0; t < PRE_POINTS; t++) {
+			lfsr = lfsr * 1103515245u + 12345u;
+			pre_const[c][t] = ((lfsr >> 11) % 1000u) + 1u;
+		}
+	}
+	for (t = 0; t < PRE_POINTS; t++)
+		pre_const_huge[t] = 0x80000000u
+				    + (unsigned int)((t * 7) % 1000);
+
+	/*
+	 * A CONSTELLATION WHOSE POINTS FALL AS THE INDEX RISES, which is what
+	 * makes the two ENDS of the search interval observable. With unrelated
+	 * points the winner is somewhere in the middle and an interval one
+	 * candidate too long usually chooses the same one anyway: two claims
+	 * about the bounds -- the `(m - 1) / 2` and the parity in the fourth
+	 * symbol's numerator -- survived their mutations until this existed.
+	 * Here the outermost candidate has the smallest magnitude and
+	 * therefore wins, so an interval off by one at either end picks a
+	 * different point.
+	 */
+	for (t = 0; t < PRE_POINTS; t++)
+		pre_const_falling[t] = (unsigned int)(4096 - 4 * t);
+}
+
+static void
+build_params(const struct pre_spec *spec, int trial)
+{
+	struct V92ParamsInfo *p = (struct V92ParamsInfo *)(void *)pre_params;
+	unsigned int lfsr = 0x3bd1u + 0x77u * (unsigned int)trial;
+	int *w;
+	int i;
+
+	/* Seeded, never zeroed: the words `reset` does not copy must be able
+	 * to show up if it copies them by mistake. */
+	for (i = 0; i < (int)sizeof(pre_params); i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		pre_params[i] = (unsigned char)((lfsr >> 3) | 1u);
+	}
+
+	w = (int *)(void *)p->pad_00;
+	for (i = 0; i < 12; i++)
+		w[7 + i] = spec->steps[i];	/* +0x1c .. +0x48 */
+	w = (int *)(void *)p->pad_6c;
+	for (i = 0; i < 6; i++)
+		w[i] = spec->moduli[i];		/* +0x6c .. +0x80 */
+	w = (int *)(void *)p->pad_9c;
+	for (i = 0; i < 6; i++)
+		w[i] = spec->selectors[i];	/* +0x9c .. +0xb0 */
+	for (i = 0; i < PRE_CONST; i++) {
+		switch (spec->kind) {
+		case PRE_KIND_HUGE:
+			p->constellations[i] = (void *)&pre_const_huge[0];
+			break;
+		case PRE_KIND_FALLING:
+			p->constellations[i] = (void *)&pre_const_falling[0];
+			break;
+		default:
+			p->constellations[i] = (void *)&pre_const[i][0];
+			break;
+		}
+	}
+
+	memcpy(pre_params_copy, pre_params, sizeof(pre_params));
+}
+
+/* The blocks the sweep uses.  Every step is non-zero because `process`
+ * divides by it, and every modulus but the negative ones keeps the chosen
+ * index inside PRE_POINTS. */
+static const struct pre_spec pre_specs[] = {
+	{ PRE_KIND_PLAIN,
+	  { 0, 1, 2, 3, 4, 5 },
+	  { 64, 128, 96, 256, 512, 32 },
+	  { 1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 8, 16 } },
+	{ PRE_KIND_PLAIN,
+	  { 5, 4, 3, 2, 1, 0 },
+	  { 32, 512, 256, 96, 128, 64 },
+	  { 8, 4, 2, 1, 16, 8, 4, 2, 3, 5, 7, 9 } },
+	{ PRE_KIND_PLAIN,
+	  { 2, 2, 2, 2, 2, 2 },
+	  { 16, 16, 300, 16, 16, 16 },
+	  { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4 } },
+	/*
+	 * D261: symbol 0 has a modulus and symbol 1 has a NEGATIVE one, which
+	 * makes its interval empty -- `lo` comes out above `hi` and the loop
+	 * never runs.  Symbol 0 having run first is what makes the two locals
+	 * the object then reads back comparable: they hold symbol 0's answer
+	 * on both sides rather than two different stacks.
+	 */
+	{ PRE_KIND_PLAIN,
+	  { 0, 1, 2, 3, 4, 5 },
+	  { 64, -8, 96, 256, 512, 32 },
+	  { 1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 8, 16 } },
+	/* Every symbol on the constellation above 2^31. */
+	{ PRE_KIND_HUGE,
+	  { 0, 1, 2, 3, 4, 5 },
+	  { 64, 64, 64, 64, 64, 64 },
+	  { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 } },
+	/*
+	 * Eight candidates on a falling constellation, so the outermost one
+	 * wins and both ends of the interval decide the answer.
+	 */
+	{ PRE_KIND_FALLING,
+	  { 0, 1, 2, 3, 4, 5 },
+	  { 4, 4, 4, 4, 4, 4 },
+	  { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 } },
+	{ PRE_KIND_FALLING,
+	  { 0, 1, 2, 3, 4, 5 },
+	  { 6, 5, 4, 7, 6, 5 },
+	  { 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2 } }
+};
+#define PRE_SPEC_EMPTY	3	/* the one whose symbol 1 finds nothing */
+#define PRE_SPEC_HUGE	4	/* the one above 2^31                   */
+#define NPRESPEC ((int)(sizeof(pre_specs) / sizeof(pre_specs[0])))
+
+static int
+run_precoder_reset(void)
+{
+	int trial;
+	int varied = 0;
+	unsigned int lvl;
+
+	diff_begin("V92Precoder::reset(V92MappingParams *)");
+
+	dsplib_debug_capture_on = 1;
+
+	for (trial = 0; trial < NPRESPEC * 2; trial++) {
+		const struct pre_spec *spec = &pre_specs[trial % NPRESPEC];
+		unsigned char sa[PRE_SIZE], sb[PRE_SIZE];
+		int i;
+
+		seed(pre_ours, pre_theirs, PRE_SLOT, 500 + trial);
+		harness_alloc_reset();
+		our_pre_ctor(pre_ours, 0x140);
+		ref_pre_ctor(pre_theirs, 0x140);
+		build_params(spec, trial);
+
+		/* Sweep the level so a site at the wrong threshold shows up
+		 * (the argument in dsplib/debug.h). */
+		lvl = (unsigned int)(trial % 4);
+		dsplibs_debug_level = lvl;
+		ref_dsplibs_debug_level = lvl;
+		dsplib_debug_capture_reset();
+
+		our_pre_reset(pre_ours, pre_params);
+		ref_pre_reset(pre_theirs, pre_params);
+
+		diff_eq_int("the same diagnostics (level %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), lvl);
+		diff_eq_int("and the same text (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)), 0, lvl);
+		diff_eq_int("one line above level 1, none below (level %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    lvl > 1 ? 1 : 0, lvl);
+
+		pre_snapshot(sa, PO());
+		pre_snapshot(sb, PT());
+		diff_eq_obj_(__FILE__, __LINE__, "after reset", "V92Precoder",
+			     sa, sb, PRE_SIZE, (long)trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    memcmp(pre_ours + PRE_SIZE, pre_theirs + PRE_SIZE,
+				   PRE_SLOT - PRE_SIZE) == 0, 1, trial);
+		diff_eq_int("the parameter block was not written (trial %ld)",
+			    memcmp(pre_params, pre_params_copy,
+				   sizeof(pre_params)) == 0, 1, trial);
+
+		/* The map, field by field, against the block itself. */
+		diff_eq_int("paramsAt9c points at the block's +0x9c"
+			    " (trial %ld)",
+			    (int)((unsigned char *)PO()->paramsAt9c
+				  - pre_params), 0x9c, trial);
+		for (i = 0; i < 6; i++) {
+			const int *six = (const int *)(void *)
+			    (pre_params + 0x6c);
+
+			const struct V92ParamsInfo *p =
+			    (const struct V92ParamsInfo *)(void *)pre_params;
+
+			diff_eq_int("head[%ld] is the block's constellation",
+				    (int)((void *)PO()->head[i]
+					  == p->constellations[i]), 1, i);
+			diff_eq_int("tableB[%ld] came from +0x6c",
+				    PO()->tableB[i], six[i], i);
+		}
+		for (i = 0; i < 12; i++) {
+			const int *w = (const int *)(void *)
+			    (pre_params + 0x1c);
+
+			diff_eq_int("tableA[%ld] came from +0x1c",
+				    PO()->tableA[i], w[i], i);
+		}
+		diff_eq_int("state0 was zeroed (trial %ld)",
+			    PO()->state0 == 0.0f, 1, trial);
+		diff_eq_int("state1 was zeroed (trial %ld)",
+			    PO()->state1 == 0.0f, 1, trial);
+
+		/* +0x00, the two filters and the two tap counts are NOT
+		 * reset's: the first and the last two still hold the seed. */
+		diff_eq_int("+0x00 keeps its seed (trial %ld)",
+			    memcmp(pre_ours, seed_copy, 4) == 0, 1, trial);
+		diff_eq_int("the two tap counts keep theirs (trial %ld)",
+			    memcmp(pre_ours + 0x78, seed_copy + 0x78,
+				   PRE_SLOT - 0x78) == 0, 1, trial);
+		diff_eq_int("both filters survived (trial %ld)",
+			    PO()->fir1 != 0 && PO()->fir2 != 0, 1, trial);
+		cmp_filter("fir1 across reset", "FloatFIR", PO()->fir1,
+			   PT()->fir1, (long)trial);
+		cmp_filter("fir2 across reset", "FloatFIR", PO()->fir2,
+			   PT()->fir2, (long)trial);
+
+		if (trial > 0 && PO()->tableA[0] != pre_specs[0].steps[0])
+			varied = 1;
+
+		our_pre_dtor(pre_ours);
+		ref_pre_dtor(pre_theirs);
+		diff_eq_int("nothing left live (trial %ld)",
+			    harness_alloc.live, 0, trial);
+	}
+
+	dsplibs_debug_level = 0;
+	ref_dsplibs_debug_level = 0;
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_int("the sweep used more than one block (%ld)", varied, 1, 0);
+
+	return diff_end();
+}
+
+static int
+run_precoder_setcoef(void)
+{
+	static const unsigned int t1[] = { 0, 4, 8, 20, 4, 16 };
+	static const unsigned int t2[] = { 0, 0, 16, 4, 20, 8 };
+	int trial;
+	unsigned int lvl;
+
+	diff_begin("V92Precoder::setCoefficients");
+
+	dsplib_debug_capture_on = 1;
+
+	for (trial = 0; trial < (int)(sizeof(t1) / sizeof(t1[0])); trial++) {
+		unsigned char sa[PRE_SIZE], sb[PRE_SIZE];
+
+		seed(pre_ours, pre_theirs, PRE_SLOT, 600 + trial);
+		harness_alloc_reset();
+		our_pre_ctor(pre_ours, 0x140);
+		ref_pre_ctor(pre_theirs, 0x140);
+
+		pf_fill_pair(pf_cf, pf_cf_copy, PF_COEF, 0x11a3u + trial);
+		pf_fill_pair(pf_ci, pf_ci_copy, PF_COEF, 0x8e37u + trial);
+
+		lvl = (unsigned int)(trial % 4);
+		dsplibs_debug_level = lvl;
+		ref_dsplibs_debug_level = lvl;
+		dsplib_debug_capture_reset();
+
+		our_pre_setcoef(pre_ours, pf_cf, pf_ci, t1[trial], t2[trial]);
+		ref_pre_setcoef(pre_theirs, pf_cf, pf_ci, t1[trial],
+				t2[trial]);
+
+		diff_eq_int("the same diagnostics (level %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), lvl);
+		diff_eq_int("and the same text (level %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)), 0, lvl);
+		diff_eq_int("one line above level 1, none below (level %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    lvl > 1 ? 1 : 0, lvl);
+
+		pre_snapshot(sa, PO());
+		pre_snapshot(sb, PT());
+		diff_eq_obj_(__FILE__, __LINE__, "after setCoefficients",
+			     "V92Precoder", sa, sb, PRE_SIZE, (long)trial);
+		diff_eq_int("taps1 is the caller's (trial %ld)", PO()->taps1,
+			    t1[trial], trial);
+		diff_eq_int("taps2 is the caller's (trial %ld)", PO()->taps2,
+			    t2[trial], trial);
+		diff_eq_int("neither coefficient array was written (trial %ld)",
+			    memcmp(pf_cf, pf_cf_copy, sizeof(pf_cf)) == 0
+			    && memcmp(pf_ci, pf_ci_copy, sizeof(pf_ci)) == 0, 1,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    memcmp(pre_ours + PRE_SIZE, pre_theirs + PRE_SIZE,
+				   PRE_SLOT - PRE_SIZE) == 0, 1, trial);
+		cmp_filter("fir1 after setCoefficients", "FloatFIR",
+			   PO()->fir1, PT()->fir1, (long)trial);
+		cmp_filter("fir2 after setCoefficients", "FloatFIR",
+			   PO()->fir2, PT()->fir2, (long)trial);
+
+		our_pre_dtor(pre_ours);
+		ref_pre_dtor(pre_theirs);
+		diff_eq_int("nothing left live (trial %ld)",
+			    harness_alloc.live, 0, trial);
+	}
+
+	dsplibs_debug_level = 0;
+	ref_dsplibs_debug_level = 0;
+	dsplib_debug_capture_on = 0;
+
+	return diff_end();
+}
+
+/* One call's two outputs, named so diff_eq_obj can say which symbol moved. */
+struct pre_out {
+	int idx[PRE_SYMBOLS];
+};
+
+struct pre_outf {
+	float sum[PRE_SYMBOLS];
+};
+
+#define PRE_CALLS	24
+
+static int
+run_precoder_process(void)
+{
+	int spec_i;
+	int wrote = 0, varied = 0, empty_seen = 0;
+
+	diff_begin("V92Precoder::process");
+
+	for (spec_i = 0; spec_i < NPRESPEC * 2; spec_i++) {
+		int which = spec_i % NPRESPEC;
+		const struct pre_spec *spec = &pre_specs[which];
+		int huge = which == PRE_SPEC_HUGE;
+		unsigned int t1 = huge ? 0u : 8u;
+		unsigned int t2 = huge ? 0u : 4u;
+		unsigned char sa[PRE_SIZE], sb[PRE_SIZE];
+		int call;
+		int prev = 0;
+		int i;
+
+		seed(pre_ours, pre_theirs, PRE_SLOT, 700 + spec_i);
+		harness_alloc_reset();
+		our_pre_ctor(pre_ours, 0x140);
+		ref_pre_ctor(pre_theirs, 0x140);
+		build_params(spec, spec_i);
+		our_pre_reset(pre_ours, pre_params);
+		ref_pre_reset(pre_theirs, pre_params);
+
+		/*
+		 * Coefficients an order of magnitude smaller than the
+		 * pre-filter's: both filters are inside the loop that feeds
+		 * them their own output's neighbourhood, and a gain above one
+		 * walks the carried state out of the search's range within a
+		 * dozen calls.
+		 */
+		for (i = 0; i < PF_COEF; i++) {
+			unsigned int st = 0x21a3u + 37u * (unsigned int)i
+					  + 5u * (unsigned int)spec_i;
+
+			pre_cf[i] = pf_next(&st) / 1024.0f;
+			pre_ci[i] = pf_next(&st) / 1024.0f;
+		}
+		our_pre_setcoef(pre_ours, pre_cf, pre_ci, t1, t2);
+		ref_pre_setcoef(pre_theirs, pre_cf, pre_ci, t1, t2);
+
+		/*
+		 * The constellation above 2^31 is only reachable with the
+		 * carried state down there too; with the filters switched off
+		 * it stays put across all four symbols.
+		 */
+		if (huge) {
+			PO()->state0 = -2147483648.0f;
+			PT()->state0 = -2147483648.0f;
+		}
+
+		for (call = 0; call < PRE_CALLS; call++) {
+			unsigned int in_ours[PRE_IN], in_theirs[PRE_IN];
+			int out_seed[PRE_SYMBOLS];
+			int out_ours[PRE_SYMBOLS], out_theirs[PRE_SYMBOLS];
+			float outf_ours[PRE_SYMBOLS], outf_theirs[PRE_SYMBOLS];
+			unsigned int st = 0x4d21u + 131u * (unsigned int)call
+					  + 7u * (unsigned int)spec_i;
+			int a = call % 3;
+			int b = (call >> 1) & 1;
+			int i;
+
+			for (i = 0; i < PRE_IN; i++) {
+				int v;
+
+				switch (call & 3) {
+				case 0:
+					v = 0;
+					break;
+				case 1:
+					v = (i & 1) ? -7 : 7;
+					break;
+				case 2:
+					v = 1000 + i;
+					break;
+				default:
+					st = st * 1103515245u + 12345u;
+					v = (int)((st >> 13) % 4096u) - 2048;
+					break;
+				}
+				in_ours[i] = (unsigned int)v;
+				in_theirs[i] = (unsigned int)v;
+			}
+
+			/*
+			 * Seeded outputs, with a sentinel no index the search
+			 * can produce ever collides with: the parity reads
+			 * out[0..2] before anything writes them, an unwritten
+			 * symbol has to keep what was there, and "was this
+			 * symbol written" has to be answerable.  The low bit
+			 * varies so the parity does too.
+			 */
+			for (i = 0; i < PRE_SYMBOLS; i++) {
+				out_seed[i] = 0x40000000 + i * 7 + call;
+				out_ours[i] = out_seed[i];
+				out_theirs[i] = out_seed[i];
+				st = st * 1103515245u + 12345u;
+				outf_ours[i] = (float)((int)(st >> 18) - 4096);
+				outf_theirs[i] = outf_ours[i];
+			}
+
+			our_pre_process(pre_ours, in_ours, a, b, out_ours,
+					outf_ours);
+			ref_pre_process(pre_theirs, in_theirs, a, b,
+					out_theirs, outf_theirs);
+
+			/*
+			 * EVERY CALL MUST HAVE FOUND SOMETHING FOR SYMBOL 0.
+			 * Without this the sweep can drift into the state
+			 * where nothing is ever accepted -- every square above
+			 * the initial 1e12 -- and then it compares two
+			 * uninitialised locals and reports whatever the two
+			 * stacks happened to hold.  It did, before this line
+			 * existed.
+			 */
+			diff_eq_int("symbol 0 chose a point (call %ld)",
+				    out_ours[0] != out_seed[0], 1,
+				    spec_i * 100 + call);
+			/*
+			 * The empty interval, and only where it is one: the
+			 * negative modulus is `selectors[1]`, which symbol 1
+			 * uses when `a` is zero and does not otherwise.
+			 */
+			if (which == PRE_SPEC_EMPTY && a == 0) {
+				diff_eq_int("and symbol 1 found nothing to"
+					    " choose (call %ld)",
+					    out_ours[1] == out_seed[1], 1,
+					    spec_i * 100 + call);
+				empty_seen = 1;
+			}
+
+			diff_eq_obj_(__FILE__, __LINE__, "process indices",
+				     "struct pre_out", out_ours, out_theirs,
+				     sizeof(struct pre_out),
+				     (long)(spec_i * 100 + call));
+			diff_eq_obj_(__FILE__, __LINE__, "process sums",
+				     "struct pre_outf", outf_ours, outf_theirs,
+				     sizeof(struct pre_outf),
+				     (long)(spec_i * 100 + call));
+			diff_eq_int("process did not write its input"
+				    " (call %ld)",
+				    memcmp(in_ours, in_theirs, sizeof(in_ours))
+				    == 0, 1, spec_i * 100 + call);
+			diff_eq_int("nor the parameter block (call %ld)",
+				    memcmp(pre_params, pre_params_copy,
+					   sizeof(pre_params)) == 0, 1,
+				    spec_i * 100 + call);
+
+			pre_snapshot(sa, PO());
+			pre_snapshot(sb, PT());
+			diff_eq_obj_(__FILE__, __LINE__, "after process",
+				     "V92Precoder", sa, sb, PRE_SIZE,
+				     (long)(spec_i * 100 + call));
+			diff_eq_int("no store past the object (call %ld)",
+				    memcmp(pre_ours + PRE_SIZE,
+					   pre_theirs + PRE_SIZE,
+					   PRE_SLOT - PRE_SIZE) == 0, 1,
+				    spec_i * 100 + call);
+			cmp_filter("fir1 after process", "FloatFIR", PO()->fir1,
+				   PT()->fir1, (long)(spec_i * 100 + call));
+			cmp_filter("fir2 after process", "FloatFIR", PO()->fir2,
+				   PT()->fir2, (long)(spec_i * 100 + call));
+
+			if (out_ours[0] != out_theirs[0])
+				break;	/* already reported */
+			if (call > 0 && out_ours[0] != prev)
+				varied = 1;
+			prev = out_ours[0];
+			if (outf_ours[0] != 0.0f)
+				wrote = 1;
+		}
+
+		our_pre_dtor(pre_ours);
+		ref_pre_dtor(pre_theirs);
+		diff_eq_int("nothing left live (spec %ld)", harness_alloc.live,
+			    0, spec_i);
+	}
+
+	/* The search really ran, and did not choose the same point every
+	 * time -- findings 223 and 224. */
+	diff_eq_int("process produced sums (%ld)", wrote, 1, 0);
+	diff_eq_int("and not one fixed index (%ld)", varied, 1, 0);
+	/* And D261 was actually driven, rather than merely provided for. */
+	diff_eq_int("an empty interval was reached (%ld)", empty_seen, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int bad = 0;
 
+	build_constellations();
+
 	bad |= run_precoder_ctor();
 	bad |= run_precoder_dtor();
 	bad |= run_prefilter_ctor();
 	bad |= run_prefilter_dtor();
+	bad |= run_prefilter_methods();
+	bad |= run_precoder_reset();
+	bad |= run_precoder_setcoef();
+	bad |= run_precoder_process();
 
 	return bad;
 }

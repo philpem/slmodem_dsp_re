@@ -52,5 +52,129 @@
   "label": "the destructor frees the first filter twice and the second never",
   "find": "\t\tfir2->~FloatFIR();\n\t\tsysdep_free(fir2);",
   "replace": "\t\tfir2->~FloatFIR();\n\t\tsysdep_free(fir1);"
+ },
+ {
+  "label": "NOTE: and what the other three members' entries are for",
+  "why": "reset(V92MappingParams *), setCoefficients and process were written from one reading of 0x56de0-0x57232, and t_v92precoder.cpp's three new fixtures by the same hand at the same sitting. The entries below are the claims that reading makes: which word of the parameter block each field comes from, which filter gets which argument, how the search interval is derived, what the constellation index means on the fourth symbol, that the entry is unsigned, and that the running minimum stays at extended precision."
+ },
+ {
+  "label": "reset copies tableA from one word too early",
+  "find": "\t\ttableA[i] = scalars[7 + i];",
+  "replace": "\t\ttableA[i] = scalars[6 + i];"
+ },
+ {
+  "label": "reset takes the pointer to the block's start rather than to +0x9c",
+  "find": "\tparamsAt9c = (int *)p->pad_9c;",
+  "replace": "\tparamsAt9c = (int *)p->pad_00;"
+ },
+ {
+  "label": "reset copies the constellations in reverse",
+  "find": "\t\thead[i] = (unsigned int *)p->constellations[i];",
+  "replace": "\t\thead[i] = (unsigned int *)p->constellations[5 - i];"
+ },
+ {
+  "label": "reset copies tableB from the six words above it",
+  "find": "\t\ttableB[i] = six[i];",
+  "replace": "\t\ttableB[i] = six[i + 1];"
+ },
+ {
+  "label": "reset leaves the second carried sample alone",
+  "find": "\tstate0 = 0.0f;\n\tstate1 = 0.0f;",
+  "replace": "\tstate0 = 0.0f;"
+ },
+ {
+  "label": "reset's diagnostic is gated one level lower",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Precoder: reset 1 (with cfg) \"",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V92Precoder: reset 1 (with cfg) \""
+ },
+ {
+  "label": "setCoefficients hands each filter the other's array",
+  "find": "\tfir1->setCoefficients(coefFir1, taps1Arg);\n\tfir2->setCoefficients(coefFir2, taps2Arg);",
+  "replace": "\tfir1->setCoefficients(coefFir2, taps1Arg);\n\tfir2->setCoefficients(coefFir1, taps2Arg);"
+ },
+ {
+  "label": "setCoefficients stores the two counts the other way round",
+  "find": "\ttaps1 = taps1Arg;\n\ttaps2 = taps2Arg;",
+  "replace": "\ttaps1 = taps2Arg;\n\ttaps2 = taps1Arg;"
+ },
+ {
+  "label": "process selects the constellation with the frame index rather than the block's",
+  "find": "\t\tint sel = paramsAt9c[n % 6];",
+  "replace": "\t\tint sel = (int)(n % 6);"
+ },
+ {
+  "label": "process takes the step from the selector rather than from n",
+  "find": "\t\tint step = tableA[n];",
+  "replace": "\t\tint step = tableA[sel];"
+ },
+ {
+  "label": "the lower bound is not negated",
+  "find": "\t\t\tlo = -((m / 2 + x) / step);",
+  "replace": "\t\t\tlo = ((m / 2 + x) / step);"
+ },
+ {
+  "label": "the upper bound uses the modulus rather than one less than it",
+  "find": "\t\t\thi = ((m - 1) / 2 - x) / step;",
+  "replace": "\t\t\thi = (m / 2 - x) / step;"
+ },
+ {
+  "label": "the fourth symbol's interval is over the step rather than twice it",
+  "find": "\t\t\thi = ((m - 1) / 2 - 2 * x) / (2 * step);",
+  "replace": "\t\t\thi = ((m - 1) / 2 - 2 * x) / step;"
+ },
+ {
+  "label": "the fourth symbol's index is not doubled",
+  "find": "\t\t\t\tj = 2 * (k * step + x) + parity;",
+  "replace": "\t\t\t\tj = (k * step + x) + parity;"
+ },
+ {
+  "label": "the parity ignores the caller's third argument",
+  "find": "\t\t\tint parity = (out[0] + out[1] + out[2] + b) & 1;\n\n\t\t\tlo",
+  "replace": "\t\t\tint parity = (out[0] + out[1] + out[2]) & 1;\n\n\t\t\tlo"
+ },
+ {
+  "label": "the negative half of the constellation is off by one",
+  "find": "\t\t\tpoint = (j < 0) ? -(long double)table[-j - 1]",
+  "replace": "\t\t\tpoint = (j < 0) ? -(long double)table[-j]"
+ },
+ {
+  "label": "the negative half is not negated",
+  "find": "\t\t\tpoint = (j < 0) ? -(long double)table[-j - 1]\n\t\t\t\t\t: (long double)table[j];",
+  "replace": "\t\t\tpoint = (j < 0) ? (long double)table[-j - 1]\n\t\t\t\t\t: (long double)table[j];"
+ },
+ {
+  "label": "the constellation entry is read as a signed int",
+  "find": "\t\t\t\t\t: (long double)table[j];",
+  "replace": "\t\t\t\t\t: (long double)(int)table[j];"
+ },
+ {
+  "label": "the sum leaves out the second carried sample",
+  "find": "\t\t\tsum = state0 + point + state1;",
+  "replace": "\t\t\tsum = state0 + point;"
+ },
+ {
+  "label": "the search keeps the largest square rather than the smallest",
+  "find": "\t\t\tif (sum * sum < best) {",
+  "replace": "\t\t\tif (sum * sum <= best) {"
+ },
+ {
+  "label": "the running minimum is rounded to a float on each update",
+  "find": "\t\tlong double best = 1e12f;",
+  "replace": "\t\tfloat best = 1e12f;"
+ },
+ {
+  "label": "the two filters are fed each other's value",
+  "find": "\t\tif (taps1 != 0)\n\t\t\tstate0 = fir1->process(bestPoint);\n\t\tif (taps2 != 0)\n\t\t\tstate1 = fir2->process(bestSum);",
+  "replace": "\t\tif (taps1 != 0)\n\t\t\tstate0 = fir1->process(bestSum);\n\t\tif (taps2 != 0)\n\t\t\tstate1 = fir2->process(bestPoint);"
+ },
+ {
+  "label": "the first filter runs whatever its tap count is",
+  "find": "\t\tif (taps1 != 0)\n\t\t\tstate0 = fir1->process(bestPoint);",
+  "replace": "\t\tstate0 = fir1->process(bestPoint);"
+ },
+ {
+  "label": "the caller's float output gets the chosen point rather than the sum",
+  "find": "\t\toutf[i] = bestSum;",
+  "replace": "\t\toutf[i] = bestPoint;"
  }
 ]

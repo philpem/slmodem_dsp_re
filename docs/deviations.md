@@ -5027,3 +5027,51 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 *Batch of 2026-08-11, from `dtmf_modem` (blob 0x0911e0), +0x4c6. **Reachability: FIRES** when `sens == 1` and no digit string has been started (`ndigits == -1`). Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1410.** With `sens == 1` and `ndigits == -1`, any tone-bank result other than 13 is DISCARDED and replaced by `stable + 20`, where `stable` is how many consecutive blocks agreed -- so the value that goes on to be compared against `last_digit`, and to be written into the digit string if it is 9 or less, is a count and not a code. 20 and up is outside the keypad range, so the immediate effect is that nothing is ever accepted while this holds; the path only leaves itself when the bank returns exactly 13 ('D'), which then resets the machine. It reads like a diagnostic or a bring-up hook left in. Reproduced exactly, and `test/unit/t_dtmfrx.c` drives `sens == 1` from `ndigits == -1` so the arm is compared rather than merely written.
+## D260 🐛 `V92PreFilter::process` runs a filter whose tap count rounded to zero, and the filter then walks off its history
+
+*Batch of 2026-08-11, from `V92PreFilter::process` (blob 0x574b0) and `V92PreFilter::setCoefficients` (blob 0x57450). **Reachability: unmeasured** -- it needs `setCoefficients` called with a count of 1, 2 or 3, and nothing this tree has reconstructed does. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1371.** `setCoefficients` stores the CALLER's counts at +0x0c and +0x10 and hands the same counts to the two filters, which round them DOWN to a multiple of four -- so a count of three leaves +0x0c non-zero and the filter behind it with no taps at all. `process` gates on +0x0c and +0x10 and not on the filters' own counts, so it calls a filter that has none, and `FloatFIR::process`'s carry-tail loop (blob 0x46c20: `dec %edx; jne`, entered with the tap count already decremented) then decrements from zero and copies backwards without a bound. The blob's loop and ours are the same loop, so this is the object's behaviour and not the reconstruction's; `test/unit/t_v92precoder.cpp` says in as many words why its sweep contains no count of 1, 2 or 3, because driving one is a segmentation fault on both sides rather than a comparison.
+
+## D261 🐛 `V92Precoder::process` reads two locals the search may never have written, and feeds them to both filters
+
+*Batch of 2026-08-11, from `V92Precoder::process` (blob 0x56f50), frame slots +0x18 and +0x1c. **Reachability: unmeasured** -- it needs a symbol whose candidate interval is empty or whose every candidate squares above 1e12, and what the parameter block actually holds is not modelled. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1374.** The search writes `0x18(%esp)` and `0x1c(%esp)` only from inside its accept arm, and the code after the loop reads both unconditionally: `flds 0x18(%esp)` into `FloatFIR::process` for +0x70, `flds 0x1c(%esp)` into the other for +0x74, and again for `outf[i]`. Two ways to reach that with neither written: `lo > hi`, which a negative modulus produces, and every candidate's square exceeding the initial 1e12. On the first of the four symbols the values are whatever the frame held; on a later one they are the previous symbol's, and `out[i]` is left holding whatever the caller put there. Reproduced exactly, with the `-Wmaybe-uninitialized` the honest spelling produces suppressed at the function and explained there. `t_v92precoder.cpp` drives the case where symbol 0 has run first, which is the only one where the two sides hold the same values and the comparison means anything; the first-symbol case is undrivable by construction, since it would compare two fixtures' stacks.
+
+## D262 🐛 `V92ConvolutionEncoder::process` stores and returns two registers nothing on that path wrote
+
+*Batch of 2026-08-11, from `V92ConvolutionEncoder::process` (blob 0x54f40), +0x35. **Reachability: unmeasured** -- it needs `mode` outside 0, 1 and 2, and what supplies `mode` is a runtime value nothing here has modelled; see the caller survey below. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1375.** `process` switches on `mode` against 0, 1 and 2 to narrow `inverseMap`'s coset label to an index, and the two table lookups, the store to `state` and the `return` all sit AFTER the switch. There is no `default:` arm, so a fourth mode reaches them with the index never written -- and the object is explicit about what that costs:
+
+    54f75:  89 7b 04    mov %edi,0x4(%ebx)
+    54f78:  89 f0       mov %esi,%eax
+
+two callee-saved registers that nothing on that path assigned, stored into `state` and returned. There is no load from either table on that arm at all: with the index undefined the loads are undefined too, and GCC 3.4.2 simply dropped them, which is why the arm is four bytes rather than twenty. The next call then indexes `nextState` with whatever `state` now holds.
+
+Reproduced exactly, by leaving the index uninitialised; the `-Wmaybe-uninitialized` that produces is suppressed at the function and explained there, the same trade as D261 one class over. Initialising it, or adding a `default:`, would be a different function.
+
+**THE CALLER SURVEY IS THE BLOB'S, NOT THE RECONSTRUCTION'S, AND IT IS COMPLETE.** Within the class only `reset` writes +0x00 -- `makeStateTtransitionTable` and `process` read it and nothing else touches it -- so `mode` can only be whatever `reset` is passed. `objdump -dr` over the whole 1.2 MB finds EXACTLY ONE `R_386_PC32` against `_ZN21V92ConvolutionEncoder5resetEi`, at 0x53db3 inside `V92Transmitter::reset(V92MappingParams *)`, and no resolved same-TU call to 0x54d60 either -- which is the half that matters, because a relocation's presence only says the symbol is global while its ABSENCE is what would have hidden a caller in the same translation unit (findings 306 and 333). `process` is the same shape: one relocation, from `V92Transmitter::process` at 0x5464c, and no other call site. `makeStateTtransitionTable` likewise has exactly one, from `reset`.
+
+And what that one caller passes is NOT a constant:
+
+    53da6:  8b 56 10    mov 0x10(%esi),%edx     the mode
+    53da9:  89 54 24 04 mov %edx,0x4(%esp)
+    53dad:  8b 47 54    mov 0x54(%edi),%eax     this->convolutionEncoder
+    53db3:  e8 ..       call V92ConvolutionEncoder::reset(int)
+
+`+0x10` of the `V92MappingParams` block the caller was handed. Whether that field can hold anything but 0, 1 or 2 is not modelled here and `V92Transmitter::reset` is not reconstructed in this tree, so the class is `unmeasured` and not `CANNOT FIRE`. The three arms the switches DO name are 16-, 32- and 64-state trellis codes, which is a plausible complete set for the field -- but plausible is not measured, and the earlier draft of this entry said `CANNOT FIRE` on exactly that reasoning before the relocation scan was run.
+
+**It is deliberately not driven.** Both sides would be reading two different pieces of stack, so any difference the fixture reported would be one the fixture created -- the same reason `t_v92precoder.cpp` leaves D261's first-symbol case alone. `t_v92convmapper.cpp` says so where it drives `process`, and drives modes 0, 1 and 2 only. The unnamed modes ARE driven through `makeStateTtransitionTable` and `reset`, where the missing arm is well-defined behaviour -- nothing is built -- and the assertion that a seeded 0x2008 comes back byte for byte on both sides is a real check.
+## D263 ⚠ `V92ModulusEncoder::reset` stores the first half-product to +0x08 and then overwrites it on both paths
+
+*Batch of 2026-08-11, from `V92ModulusEncoder::reset` (blob 0x550f0, 0x8a5 = 2,213 bytes), +0x3d8 and +0x401. **Reachability: FIRES** on every call -- the store is unconditional -- but is unobservable, because both arms of the `if` that follows write the same two words before anything can read them. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1376.** `reset` computes the product of the first six moduli, stores it to +0x08 as a 64-bit pair at 0x55418/0x55445, and then stores over it at 0x5567a (the `n == 8` arm, with zero) or at 0x5593c (the other arm, with `u >> (62 - n)`). It is a dead store, and it is in the object because GCC 3.4.2 does not eliminate a dead store through a pointer -- `this` may alias anything, so the store is live as far as the compiler can prove. It is reproduced rather than dropped, for the usual reason: the goal is an object that behaves identically, and "identically" includes the write a debugger or a concurrent reader would see. No test can distinguish the two, so no mutation is offered for it either; a mutation that deletes the store would be `equivalent` and unprovable by instruction text, since the blob's own text contains it.
+
+## D264 ⚠ `progress`'s twelfth digit is a bare quotient, bounded by nothing, while the same function advertises `m11 - 1` as its range
+
+*Batch of 2026-08-11, from `V92ModulusEncoder::progress` (blob 0x559a0, 0x11f9 = 4,601 bytes), 0x565b3 against 0x55aa1. **Reachability: FIRES** whenever the bit count admits a value at or above the product -- the parameter block carries the count and the twelve moduli as independent fields, so nothing in the object ties them together. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1379.** Case 0 extracts eleven digits with `out[k] = v % m[k]` and then stores the leftover quotient: `out[11] = (v - out[10]) / m10`, with no reduction modulo the twelfth modulus and no reference to +0x44 anywhere in the case -- it is the ONE field of the object that case 0 never reads. Cases 1 and 2 of the same function, which exist to report each digit's range, do read it: case 2 writes `out[11] = m11 - 1`. So a caller that trusts case 2's answer and feeds case 0 more bits than the product holds gets a twelfth digit past the range it was told to expect, and the eleven below it are all correctly reduced. Reproduced exactly; `test/unit/t_moduluscoder.cpp` drives bit counts both under and over the product, and the mutation that reduces `out[11]` modulo the twelfth modulus is caught, so the difference is measured rather than assumed.

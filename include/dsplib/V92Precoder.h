@@ -66,9 +66,10 @@ public:
 	~V92Precoder();
 
 	/*
-	 * Declared and deliberately not defined.  The signatures are the
-	 * mangling's; a return type is never mangled, so all four are unknown
-	 * and spelled `void` where nothing in the caller uses a result.
+	 * The signatures are the mangling's; a return type is never mangled,
+	 * so all four are unknown and spelled `void` where nothing in the
+	 * caller uses a result.  `reset()` is the one member of this class
+	 * this tree has not written.
 	 */
 	void reset();
 	void reset(V92MappingParams *params);
@@ -101,24 +102,40 @@ public:
 
 	/*
 	 * +0x04  `lea 0x9c(%ebx),%edx` in `reset(V92MappingParams *)`: a
-	 * pointer INTO the parameter block, not a copy out of it.  What it
-	 * points at is inside V92MappingParams and is not modelled.
+	 * pointer INTO the parameter block, not a copy out of it.  It lands
+	 * on `struct V92ParamsInfo`'s +0x9c, the eighteen bytes that header
+	 * records as reached by nothing -- and `process` reaches them, as SIX
+	 * INTS indexed `(i + 4 * a) % 6`, which is exactly the 0x18 bytes
+	 * between +0x9c and the end of the 0xb4 block.  Each one selects a
+	 * constellation and a modulus below.
 	 */
-	void *paramsAt9c;
+	int *paramsAt9c;
 
-	/* +0x08 .. +0x1c  Six words copied from the parameters' +0x84..+0x98. */
-	int head[6];
+	/*
+	 * +0x08 .. +0x1c  Six words copied from the parameters' +0x84..+0x98,
+	 * which is `struct V92ParamsInfo::constellations` -- so these are the
+	 * six constellation ARRAYS and not six scalars.  `process`
+	 * dereferences the one `paramsAt9c` selects, and does it with
+	 * `push $0; push value; fildll`, the sequence for an UNSIGNED 32-bit
+	 * to floating conversion; a signed element would be one `fildl`.
+	 */
+	unsigned int *head[6];
 
 	/*
 	 * +0x20 .. +0x4c  Twelve words from the parameters' +0x1c..+0x48.
 	 * `process` indexes this one -- `mov 0x20(%ebx,%ebp,4),%esi` -- which
-	 * is what makes it an array rather than twelve fields.
+	 * is what makes it an array rather than twelve fields.  The index is
+	 * `i + 4 * a` over four symbols, so `a` is a frame number in 0..2 and
+	 * twelve is three frames of four.  It is the step between
+	 * constellation points: every candidate is `k * tableA[n] + in[n]`.
 	 */
 	int tableA[12];
 
 	/*
 	 * +0x50 .. +0x64  Six words from the parameters' +0x6c..+0x80, also
-	 * indexed by `process` (`mov 0x50(%edi,%edx,4),%esi`).
+	 * indexed by `process` (`mov 0x50(%edi,%edx,4),%esi`) -- through
+	 * `paramsAt9c`'s selector rather than through `n`.  Twice the entry
+	 * is the modulus the search interval is derived from.
 	 */
 	int tableB[6];
 
@@ -135,7 +152,10 @@ public:
 	/*
 	 * +0x70, +0x74  Floats: `reset(V92MappingParams *)` zeroes both with
 	 * an integer store and `process` reads them with `flds` and writes
-	 * them back with `fstps`.  Two samples of carried state.
+	 * them back with `fstps`.  Two samples of carried state: both are
+	 * added to every candidate point, and each is replaced by one
+	 * filter's output at the end of a symbol -- +0x70 from `fir1` fed the
+	 * chosen point, +0x74 from `fir2` fed the sum.
 	 */
 	float state0;
 	float state1;

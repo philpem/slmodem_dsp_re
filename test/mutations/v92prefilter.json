@@ -54,5 +54,44 @@
   "why": "The two classes are behaviourally identical -- same layout, same rounding, same allocation, same zero fill, same starting index -- so this changes which constructor symbol is called and nothing an object comparison or an allocation counter can reach. It is recorded here so that the day it IS caught, somebody looks at why: either FloatIIR has diverged from FloatFIR, or a new check in t_v92precoder.cpp has become sensitive to something it should not be.",
   "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
   "replace": "\tv92prefilter_floatfir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;"
+ },
+ {
+  "label": "NOTE: and what the second half of this set is for",
+  "why": "The three working members were written from one reading of 0x57420-0x57569, and t_v92precoder.cpp's run_prefilter_methods was written by the same hand at the same sitting. Every entry below is a claim about which filter gets which argument and which of process's four arms runs, and only a sweep long enough to fill both histories can tell most of them apart: with the histories still zero, routing a block through the wrong filter produces the same numbers."
+ },
+ {
+  "label": "reset resets the FIR twice and the IIR never",
+  "find": "\tfir->reset();\n\tiir->reset();",
+  "replace": "\tfir->reset();\n\tfir->reset();"
+ },
+ {
+  "label": "setCoefficients hands each filter the other's array",
+  "find": "\tfir->setCoefficients(coefFir, tapsFirArg);\n\tiir->setCoefficients(coefIir, tapsIirArg);",
+  "replace": "\tfir->setCoefficients(coefIir, tapsFirArg);\n\tiir->setCoefficients(coefFir, tapsIirArg);"
+ },
+ {
+  "label": "setCoefficients stores the two counts the other way round",
+  "find": "\ttapsFir = tapsFirArg;\n\ttapsIir = tapsIirArg;",
+  "replace": "\ttapsFir = tapsIirArg;\n\ttapsIir = tapsFirArg;"
+ },
+ {
+  "label": "process chains the IIR into the FIR rather than the other way round",
+  "find": "\t\t\tfir->process(in, tmp, V92PREFILTER_SAMPLES);\n\t\t\tiir->process(tmp, out, V92PREFILTER_SAMPLES);",
+  "replace": "\t\t\tiir->process(in, tmp, V92PREFILTER_SAMPLES);\n\t\t\tfir->process(tmp, out, V92PREFILTER_SAMPLES);"
+ },
+ {
+  "label": "process gates the FIR on the IIR's count",
+  "find": "\tif (tapsFir != 0) {\n\t\tif (tapsIir != 0) {",
+  "replace": "\tif (tapsIir != 0) {\n\t\tif (tapsIir != 0) {"
+ },
+ {
+  "label": "process moves eleven samples through the FIR alone, not twelve",
+  "find": "\t\t\tfir->process(in, out, V92PREFILTER_SAMPLES);",
+  "replace": "\t\t\tfir->process(in, out, V92PREFILTER_SAMPLES - 1);"
+ },
+ {
+  "label": "the both-off arm copies eleven samples",
+  "find": "\t\tfor (i = 0; i < V92PREFILTER_SAMPLES; i++)",
+  "replace": "\t\tfor (i = 0; i < V92PREFILTER_SAMPLES - 1; i++)"
  }
 ]

@@ -57,8 +57,9 @@ public:
 	~V92PreFilter();
 
 	/*
-	 * Declared and deliberately not defined; the signatures are the
-	 * mangling's and the return types are not recoverable.
+	 * Written.  The argument types are the mangling's; a return type is
+	 * never mangled and none of the three leaves anything meaningful in
+	 * %eax, so all three are `void`.
 	 *
 	 * `reset` forwards to both filters' `reset`.  `setCoefficients` gives
 	 * the FIR the first pair and the IIR the second, and then stores the

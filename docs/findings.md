@@ -44015,6 +44015,260 @@ So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
 ======================================================================
+
+### 1370. `V92Mapper::process` KEEPS A SIXTEEN-BIT ACCUMULATOR, AND NO CALLER CAN MAKE IT MATTER
+
+The bit packer is `for (i = bits - 1; i >= 0; i--) acc = (short)(2 * acc | in[i]);` and the `(short)` is not decoration: the loop body ends `movswl %ax,%edx`, so every partial result is truncated and sign-extended again. `reset` installs `bits` = 2 or 3 and nothing else, and at three bits nothing can overflow -- so the width is invisible to every call the object itself can make, and a reconstruction using `int` would pass any test that only drove the class as its callers drive it.
+
+`t_v92convmapper.cpp` therefore drives `bits` up to 24 with an input whose only set bit is above 16, which is the one shape where the two spellings differ AND the index stays inside the sixteen-entry table: truncated it is 0, untruncated it is 65,536, and the second reads whatever follows each side's own copy of the table. The general lesson is the one this project keeps relearning -- a field's width is a claim, and a claim no test distinguishes from its alternative is not tested by a green suite.
+
+The static table is sixteen INTS, two rows of eight indexed by `mode`, and that is the `fildl (,%ebx,4)` reading rather than the size: 0x40 bytes is also sixteen floats or thirty-two shorts. Row 0 is `1, 3, -1, -3` and four unused zeros, row 1 is `1, 3, 5, 7, -1, -3, -5, -7`, which agrees with `reset` pairing row 0 with two bits and row 1 with three. The test compares all sixteen entries against the blob's own `ref_` copy, because `process` can only reach an entry the caller's bits select and a wrong one outside that set would survive every call.
+
+**The square root is inline asm and had to be.** The object is one bare `fsqrt` on a field, and `__builtin_sqrt` only compiles to that where GCC can prove the argument is non-negative -- which is why `ResamplerTiming::SdHalfBaudDft` gets away with it (a sum of squares) and this does not. What the builtin emitted here was a compare against zero and a call to libm for the negative arm, which would return a different NaN. `agc_fsqrt` in `dsplib/Agc.h` had already made the same trade for the same reason. `long double` throughout, so the divide sees the extended value the object's `fsqrt` leaves in st(0).
+
+### 1371. `V92PreFilter` IS FOUR PATHS AND A TWELVE-SAMPLE BLOCK, AND ITS TAP COUNTS ARE THE CALLER'S AND NOT THE FILTERS'
+
+`process` gates on +0x0c and +0x10, which `setCoefficients` fills with the counts it was GIVEN -- not the ones the filters ended up with, which both classes round down to a multiple of four. So the four arms are: FIR then IIR through a twelve-float stack buffer at `lea 0x10(%esp)` inside a 0x40-byte frame; FIR alone; IIR alone; and a twelve-word copy loop with the count in the loop's own `cmp $0xb`. Twelve is the block everywhere, including the `$0xc` both filter calls pass, which is what makes the constructor's 99 words of slack slack for exactly eight blocks.
+
+The gap between the two counts is D260: three taps stores three and leaves the filter with none, and the filter is still called.
+
+### 1372. `V92Precoder::reset` READS THE EIGHTEEN BYTES `V92ParamsInfo.h` SAYS NOTHING REACHES, AND THEY ARE SIX INTS
+
+`include/dsplib/V92ParamsInfo.h` accounted for every offset of the 180-byte block except `+0x9c..+0xb3`, which it recorded as "inside the 0xb4 allocation and reached by nothing". `V92Precoder::reset` takes `lea 0x9c(%ebx),%edx` and keeps the result at +0x04, and `V92Precoder::process` indexes it `paramsAt9c[(i + 4 * a) % 6]` -- six ints, which is exactly the 0x18 bytes between +0x9c and the end of the block. Each is a selector: the value picks both a constellation out of +0x08 and a modulus out of +0x50.
+
+The other twenty-four words `reset` copies land where that header pads: `head[6]` at +0x08 is the parameters' +0x84..+0x98, which IS `constellations[6]`, so those six words are POINTERS and not scalars -- `process` dereferences the one it is told to. `tableA[12]` at +0x20 is +0x1c..+0x48 and `tableB[6]` at +0x50 is +0x6c..+0x80, both inside `pad_00` and `pad_6c`. The reconstruction reads them through those pad arrays rather than through a cast of the whole block, so the offsets are the object's in the 32-bit build and self-consistent in the 64-bit one.
+
+**The modulus is doubled and then halved.** The object computes `2 * tableB[sel]` into a stack slot and recovers `tableB[sel]` from it with a bare `sar $1` -- not the four-instruction sequence a signed division by two needs -- because GCC can prove `x + x` is even. So the source variable is the doubled one and the expressions are `m / 2` and `(m - 1) / 2`, which is what the odd one's full `dec; shr $31; add; sar` says.
+
+### 1373. THE CONSTELLATION ENTRY IS UNSIGNED, THE SEARCH IS EXTENDED PRECISION, AND ONLY ONE OF THE TWO COST ANYTHING TO GET WRONG
+
+`V92Precoder::process` converts a constellation entry with `push $0; push v; fildll` -- a 64-bit load whose high word is a literal zero, which is GCC's unsigned-32-to-floating sequence; a signed element would have been one `fildl`. Half the constellation is stored: a negative index reads `table[-j - 1]` and negates the result with `fchs`, so entry 0 is the smallest positive point and there is no zero.
+
+The unsigned reading is nearly untestable. Both readings of an entry above 2^31 give a magnitude over 2.1e9, whose square is far above the 1e12 the search starts from, so neither can ever win and the chosen point is the same either way. It becomes observable only when the carried state is about -2^31, which is what `t_v92precoder.cpp`'s last case pokes into +0x70 with both filters switched off so it stays there.
+
+**The running minimum is on the x87 stack and never in memory** -- `fstp %st(5)` writes it back into a register -- so every comparison is at a 64-bit mantissa. Spelt `float` in the reconstruction it is rounded to 24 bits on each update, and thirty-five of that file's 2,374 comparisons then pick a different point among near-equal candidates. `long double` for the point, the sum and the minimum reproduces the object exactly. This is the second time in this batch that a float-typed local was the defect and the x87 stack was the specification.
+
+### 1374. THE FOURTH SYMBOL IS THE ONLY ONE THAT CARRIES A PARITY, AND THE OBJECT SAYS SO TWICE
+
+Three of `V92Precoder::process`'s four symbols search `k * tableA[n] + in[n]` over the interval the modulus allows. The fourth doubles the index and adds `(out[0] + out[1] + out[2] + b) & 1` to it, and divides by twice the step rather than by the step -- and the object computes that parity in two places, once for the bounds and once inside the loop, reading `out[0..2]` on every iteration although nothing in the loop can change them. That is the 4D trellis's coset constraint spent on the last of the four, and it is what makes `b` an argument at all.
+
+The empty interval this creates is D261.
+
+### 1375. THE TRELLIS ENCODER'S TWO ARRAYS ARE THE OTHER WAY ROUND, AND THE THREE ARMS SIZE THEM TO 1,024 A SECOND TIME
+
+`V92ConvolutionEncoder`'s header called +0x08 the transition table and +0x1008
+the output table. `process` says the reverse in two adjacent instructions:
+
+    8b bc b3 08 10 00 00   mov 0x1008(%ebx,%esi,4),%edi   esi = state*16 + in
+    89 7b 04               mov %edi,0x4(%ebx)             and it IS the new state
+    8b 74 8b 08            mov 0x8(%ebx,%ecx,4),%esi      ecx = newstate*16 + in
+
+so +0x1008 is indexed by the CURRENT state and yields the NEXT one, and +0x08
+is indexed by the NEXT state and yields what `process` returns.
+`makeStateTtransitionTable` writes both the same way round, in one statement
+each. They are now `nextState` and `output`, declared in offset order.
+
+**Three trellis codes, one per mode, and the widths are measured.**
+`makeStateTtransitionTable` is a switch on +0x00 whose third arm is
+`test %eax,%eax; jne <epilogue>` -- so it is `case 0`, not a `default`, and a
+mode outside 0..2 builds nothing at all. Each arm is a nest of
+`for (x = 0; x <= 1; x++)` over one bit apiece, and the nests are 6, 8 and 10
+deep:
+
+    mode 0   4 state bits, 2 input bits   16 states   largest index 15*16+3  =  243
+    mode 1   5 state bits, 3 input bits   32 states   largest index 31*16+7  =  503
+    mode 2   6 state bits, 4 input bits   64 states   largest index 63*16+15 = 1023
+
+The row stride is sixteen in all three and in `process` too (`shl $0x4`), so
+the 1,024 ints of finding 1249 -- derived there from `sizeof` alone -- fall
+out of the code a second time and independently. `process`'s three arms agree:
+`r % 4`, `(r & 3) | ((r & 8) >> 1)` and `r % 16` produce exactly 2, 3 and 4
+bits of index, as wide as each arm of the builder filled and no wider, which
+is why no reachable call can read a slot the builder left alone.
+
+**Only mode 2 has a multiply**, and it has two: `imul` at 0x549e3 is
+`u2 * ((u1 + k0) % 2)`, and the stack accumulator at 0x5c(%esp) that gains
+`u2` once per innermost-but-two iteration is a strength-reduced `u2 * k1`.
+Every `% 2` and `% 4` in the file is the signed idiom -- `shr $31; add;
+and $~1; sub` -- so the source uses `%` on plain `int`s and not a mask,
+although no test can tell the two apart over 0 and 1.
+
+**Nothing clears either array.** There is no `memset`, no clearing loop and no
+store outside the nest in 0x616 bytes, so modes 0 and 1 leave twelve and eight
+of every sixteen columns holding whatever the allocation did.
+`t_v92convmapper.cpp` seeds both objects with the same varied bytes and
+compares the whole 0x2008 after every call, which is a real check over the
+written subset and a deliberate no-op over the rest -- and the check that a
+mode the switch does not name writes *nothing at all* is the one that needs
+the seed most.
+
+**The two static tables are `int`, not `char`.** `inverseMap` indexes both
+with a scale of four against their relocations, and `nm`'s 0x100 and 0x40 then
+give `cosetMapping4D[64]` and `subsetLabelTable[16]`. Both are `D`, so neither
+is const. The reachable index of each is closed by construction: the four
+residues are 0..3 so the label index is 0..15, and its sixteen values cover
+0..7 so `8 * a + b` covers all 64 -- which is why the exhaustive 256-way
+residue sweep in the fixture reaches every entry of both tables, and why the
+sixteen distinct return values it asserts is a coverage measurement and not a
+coincidence.
+
+`inverseMap`'s rotation is `((x + 2) % 4 + 4) % 4`, two rounds of the signed
+power-of-two remainder, which is why the object has eight `js` branches and
+not four. **`+ 2` and `- 2` are the same rotation modulo four**, so that one
+substitution passes every test there is; only `lea 0x2(%ecx),%edx` at 0x54d8a
+says which was written, and `test/mutations/v92convenc.json` records it as
+unreachable rather than entering it.
+
+**The arm layout is not the source order.** The blob lays the three arms out
+1, 2, 0 -- mode 0 last, at +0x490, reached by the `jle` -- and writing the
+cases in the natural order 0, 1, 2 reproduces that exactly under GCC 3.4.2:
+the same twelve-instruction dispatch and arms at +0x39, +0x206 and +0x441
+against the blob's +0x39, +0x205 and +0x490. `reset` and `inverseMap` are
+byte-for-byte the blob's size and match on their instruction sequence;
+`makeStateTtransitionTable` comes out 1,460 bytes against 1,558 because the
+compiler hoisted one `shl $0x4` out of the store that the blob left in it,
+which is scheduling and is free. None of that is evidence about the LOOP
+ORDER, which no test can reach either -- for each fixed input every arm's
+state-to-next-state map is a bijection, so permuting the nest writes the same
+slots in a different sequence and produces a byte-identical object. The order
+rests on the strength-reduced accumulators alone, and
+`test/mutations/v92convenc.json`'s NOTE says so.
+
+The uninitialised default arm of `process` is D262.
+### 1376. THE V.92 MODULUS ENCODER'S FIRST SIX WORDS ARE THREE `long long`, AND ITS SELECTOR IS SIGNED
+
+The object map in `include/dsplib/V92ModulusEncoder.h` was written from the
+constructor alone, which touches +0x18..+0x48 and says nothing about the six
+words below or the two above.  `reset` (blob 0x550f0, 0x8a5) and `progress`
+(0x559a0, 0x11f9) settle all eight, and two of the answers are FORCED by the
+encoding rather than chosen:
+
+**+0x00, +0x08 and +0x10 are three 64-bit members, not six 32-bit ones.**
+`reset` writes each as a pair with a carry between the halves, and `progress`
+loads +0x08 and +0x10 as 64-bit values and shifts and divides them
+ARITHMETICALLY -- `sar`, `shrd`, and the add-the-sign-bit-then-`>>1` that GCC
+emits for a signed division by 2 -- so they are `long long` and not `unsigned
+long long`.  What they hold is the product of the twelve moduli: +0x00
+truncated to 64 bits, +0x08 and +0x10 the same product carried exactly as two
+limbs in base 2^63.  +0x10 is masked with `0x7fffffffffffffff` at both of
+`reset`'s exits and +0x08 takes exactly the bits above it (`u >> (62 - n)`
+against `(u << (n + 1)) & MASK`), which is what makes it a base and not two
+unrelated words.
+
+**+0x50 is SIGNED and +0x48 is UNSIGNED.**  `progress` opens
+`cmp $1 / je / jle / cmp $2 / je`, and GCC emits `jle`/`jg` for a switch over
+a signed index and `jbe`/`ja` over an unsigned one; case 0 then tests the bit
+count with `cmp $0x3f / jbe`, which is the other one.  Neither difference is
+observable by any test -- every value either field takes in service is small
+and positive -- so this is exactly the class of defect finding 613 is about,
+found by reading what the compiler was not free to choose.  The header was
+`unsigned int` for both and is now `int` for +0x50.
+
+**+0x18..+0x44 are twelve unsigned moduli and +0x48 is a bit count.**  Every
+one of the twelve is loaded zero-extended into a 64-bit multiply or pushed as
+the divisor of a `__divdi3` with an explicit zero high half, so unsigned is
+forced too.  +0x48 is the number of bits `progress` reads out of its byte
+array, one bit per byte, from `bytes[+0x48 - 1]` down to `bytes[0]`.
+
+**AND +0x08 IS WRITTEN TWICE BY `reset`, THE FIRST TIME FOR NOTHING.**  The
+product of the first six moduli is stored there at 0x55418/0x55445 and both
+arms of the `if` that follows store over it before anything can read it.  It
+is a dead store, it is in the object because GCC 3.4.2 does not eliminate one
+made through a pointer, and it is reproduced rather than dropped:
+docs/deviations.md D263.
+
+======================================================================
+
+### 1377. THIRTEEN OF `V92ParamsInfo`'s TWENTY-THREE UNKNOWN WORDS ARE NAMED BY ITS READER
+
+`V92ParamsInfo` (finding 1321's identification of `V92MappingParams`) leaves
++0x00..+0x5b as `pad_00[0x5c]`, twenty-three slots whose only writer,
+`V92setParamsInfoFromCPUnPck`, does not say what they are.  `reset` is the
+first READER of that region in this tree, and it copies exactly thirteen of
+them into members whose use is known:
+
+    params +0x00              -> +0x48  the bit count
+    params +0x1c .. +0x48     -> +0x18 .. +0x44  the twelve moduli
+
+so the twelve consecutive words at +0x1c are a modulus table and +0x00 is a
+frame length in bits.  `include/dsplib/V92ParamsInfo.h` is not touched here --
+it belongs to a different batch and naming half a `pad` array from one reader
+is how a header acquires two conflicting stories -- but the offsets are
+recorded so that whoever does name them has a second, independent witness.
+
+======================================================================
+
+### 1378. GCC EMITS `x > 0` FOR A 64-BIT `x` AS `(x >> 63) - x` READ OFF BIT 63
+
+Both members contain this, four times over, and it does not look like a
+comparison at all:
+
+    mov %ebx,%esi ; mov %ebx,%edx        ; the high half, twice
+    sar $0x1f,%esi ; sar $0x1f,%edx      ; 0 or -1: that is x >> 63
+    sub %ecx,%esi ; sbb %ebx,%edx        ; (x >> 63) - x, 64 bits
+    mov %edx,%eax ; shr $0x1f,%eax       ; its bit 63, as a 0 or 1
+
+It is `emit_store_flag`'s expansion for `x > 0` where a VALUE and not a branch
+is wanted -- here because the `&& n <= 7` beside it was flattened into a
+`test %al,%bl` of two booleans.  It is that comparison exactly, over all 2^64
+inputs, and not an approximation of it: for `x > 0` the difference is `-x`,
+which is negative; for `x < 0` it is `~x`, which is not; and for `x == 0` it is
+`0`, which is not.  Written `> 0` in the reconstruction, which is the point --
+recovering the SOURCE means undoing this, not reproducing it.
+
+The same reading disposes of the other DImode oddity beside it, `n <= 7`
+compiled as `setle` into a byte that is then `test`ed against the first: the
+`&&` is not short-circuited because neither side can trap or have an effect.
+
+======================================================================
+
+### 1379. THE NORMALISATION BLOCK IS WRITTEN OUT THREE TIMES, AND THE PROOF IS A CALL THAT COULD NOT BE REMATERIALISED
+
+`V92ModulusEncoder::reset` contains it once and `progress` twice -- the same
+eight lines, shifting one factor right until the product stops wrapping:
+
+    n = 0;
+    while (a * (b >> n) > 0 && n <= 7) n++;
+    if (n == 8)  x = <the exact product, written again>;
+    else       { u = a * (b >> (n + 1)); x = (u << (n + 1)) & MASK; }
+
+It is tempting to reconstruct that as a function or a macro and call it three
+times, and the object says it was neither -- or at most a macro.  **The
+`n == 8` arm RE-ISSUES the divisions.**  In `progress` the arm's value is
+`(2^63 / m) * (d % m) * m`, and at 0x55f6a and 0x55fa8 the object calls
+`__divdi3` and `__moddi3` a second time for values it already has in `q` and
+`r` twenty instructions earlier.  GCC cannot do that: a call is not rematerial-
+isable, so it was in the source text twice.  A function would have had the
+value in a parameter; only textual substitution puts the expression back.  The
+same holds in `reset`, where the arm's value is the twelve-fold product spelled
+out for the second time.
+
+So the reconstruction writes it out three times too.  A `static inline` helper
+would behave identically and read better, and it would also evaluate the
+exact product on the path that does not need it -- which is a division by a
+modulus, on a path where the object performs none.
+
+**AND THE ARM IS REACHABLE, which took a mutation to establish.**  The first
+reading here was that it is dead: `2^63 / m` is negative for every modulus and
+`(d % m) * m` is not, so `a * (b >> n) > 0` should fail at the first test.
+That is wrong, because the product WRAPS -- the loop is an overflow detector
+and overflow is exactly what it is looking at.  A search over m and `d % m`
+finds m = 170 with a remainder of 128 keeps the wrapped product positive
+through all eight shifts, and the fixture now drives it as the first modulus
+and as the second.  The claim "unreachable" would have gone into the record as
+a derivation and been wrong; what caught it was that `if (n == 8)` -> `if (n
+== 9)` was NOT caught by a sweep of 3,203 comparisons, which is finding 134's
+argument in its usual form: a branch nothing distinguishes is a branch nothing
+is testing.  Five branches of `progress` were found that way and all five now
+have a value chosen for them.
+
+**A SECOND THING THE SAME READING SETTLES: `progress`'s case 0 never reads the
+twelfth modulus.**  Digits 0 to 10 are `v % m[k]` with `v` reduced after each,
+and the twelfth is the bare quotient the eleventh division leaves -- `out[11]
+= (v - out[10]) / m10`, with no reduction and no reference to +0x44 anywhere
+in the case.  +0x44 is the one field of the object case 0 does not touch,
+while case 2 of the same function reports `m11 - 1` as that digit's range.
+docs/deviations.md D264.
 ======================================================================
 
 ### 1350. THE ATA PLAYOUT CHANGE, MEASURED PROPERLY: THE MODE MOVES 12000 -> 14400
