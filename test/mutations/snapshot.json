@@ -7,6 +7,24 @@
   "were true of a different tree and must not be quoted as a baseline."
  ],
  "suites": {
+  "ansamtone": {
+   "key": "0e81669bb770550d2d362528e7818311bf37658ab6cbcbe94f7957ca1b7f67b5",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "one coefficient of the 13-tap denominator is mistyped": "caught",
+    "the 11-tap numerator's first zero is not zero": "caught",
+    "the 13-tap denominator serves the 11-tap arm too": "caught",
+    "the 13-tap numerator serves the 11-tap arm too": "caught",
+    "the destructor writes through this": "caught",
+    "the filter's slack is the block length": "caught",
+    "the numerator is passed as the denominator and back": "caught",
+    "the selector rate is 9600 rather than 8000": "caught",
+    "the tap count is 13 whatever the rate": "caught",
+    "the tap counts follow the selector the other way round": "caught",
+    "the threshold and the ratio are exchanged": "caught",
+    "the two durations are exchanged": "caught"
+   }
+  },
   "cadence": {
    "key": "256fa9fcdcc2a906c9b91369193d0285eb0a18e55a8f31644dfcf470370aa9d1",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
