@@ -8074,7 +8074,10 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 
 	/*
 	 * 0x67a1e.  The far end's J: 0x08 raised with 0x10 and 0x80 clear,
-	 * and the marker at +0x359c saying this end is the one that answers.
+	 * and the marker at +0x359c saying this end is the one that
+	 * ORIGINATES -- 0x65, which `v34modeminit` reads as `originate` and
+	 * every other site in this file agrees with.  This clause used to say
+	 * "answers", against the guard three lines below it.
 	 * `v34setuptxmit` FORCES txstate 18 SSEG, which is the only path in
 	 * this arm that moves a state word the caller did not seed.
 	 */
