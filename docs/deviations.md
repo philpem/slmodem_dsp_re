@@ -4348,7 +4348,7 @@ is the usual answer.
 
 **LATENT — 31.** The mechanism is in the object; no path to it is
 known. Documentation only until one is found. Several are one reconstructed
-caller away from being reclassified, and `PPSEG`'s unit mix (D111) is the one
+caller away from being reclassified, and `PPSEG`'s unit mix (D112) is the one
 to watch: it is latent at every symbol rate except 2400, and essentially every
 real connection negotiates something else.
 
@@ -4365,3 +4365,239 @@ entry from LATENT to FIRES TODAY needs one named caller. Moving it the other
 way needs a proof of unreachability, which is why CANNOT FIRE is the smallest
 group and the only one where the compiler was used as a witness (gcov marking
 a body NOT EXECUTABLE settles D142 and D143).
+
+---
+
+# Appendix C — would fixing any of this improve connect reliability or rate?
+
+*The owner's question, answered per entry rather than in general. Two bench
+measurements are the thing to explain, and both are recent and real:*
+
+* *Five IDENTICAL V.34 calls at one setting: **4 of 5 connected**, at 14400,
+  14400, 4800, none, 14400.*
+* *The far end reports **33600/ARQ on every successful call** while our side
+  reports 14400 or worse. Consistent across five calls and two modems.*
+
+## The short answer
+
+**Most of this register cannot affect a V.34 call, and saying so is most of the
+value.** Of 156 entries, the great majority are in Bell 103, V.21, V.22, V.23,
+the call-progress and dialler code, the tooling-adjacent margins, or in arms
+nothing reaches. Fixing them would change nothing a user sees.
+
+**The candidates that survive the filter are all in the RECEIVE path**, and
+that is not a coincidence worth glossing over: an asymmetric rate — them 33600,
+us 14400 — points at our receiver, because that is the direction whose quality
+*we* report and *they* adapt to. Every entry in the ranked list below sits
+there.
+
+**Before anything else, the most likely explanation is not a bug at all.** V.34
+negotiates the two directions INDEPENDENTLY. A link that genuinely runs 33600
+one way and 14400 the other is a correct report from both ends, not a
+contradiction, and asymmetric impairment is the normal state of a
+hybrid-plus-VoIP path. Rule that in or out first — it costs one call with the
+two directions' rates read from the same end — because if the link really is
+asymmetric then nothing below applies and the effort belongs in the transport.
+
+## The one that is definitely NOT it
+
+**D4 is out, and this is now proved rather than assumed.** It is the register's
+only defect with a measured user-visible effect (zero reciprocal → AGC drives
+the block to silence → receiver never regains lock, 46 of 700 blocks), so it
+attracts attention. Its full caller closure, counted from the blob's
+relocations: `FPM_div` ← `FPM_AGC_agc`, `FPM_atan`, `V32FP_status`;
+`FPM_AGC_agc` ← seventeen functions across Bell 103, V.21, V.22, V.23, V.17,
+V.27, V.29, V.32; `FPM_atan` ← `FPM_FSE_receive`, `FPM_SRE_recover`,
+`V22_FSE_receive`, `V22_SRE_recover`, and those four are called only by
+`DemodDataV17/V27/V29/V32`. **Nothing in V.34, V.90 or V.92 reaches it.** D4 is
+serious for the legacy pumps and irrelevant to this problem.
+
+## Would fixing it change observable behaviour at all?
+
+Three groups, and only the third is worth any effort.
+
+**Group 1 — no observable change, by construction. Fixing buys robustness and
+nothing else.** D1 is the worked example: `FPM_sqrt` reads one past its table
+and gets the *right answer*, because the neighbouring table starts with 32768
+which is exactly `sqrt(1.0)` in Q15. The 21 CANNOT-FIRE entries are here too,
+as are the entries recorded as equivalent mutations — a dead store is by
+definition not observable. Roughly 30 entries.
+
+**Group 2 — changes behaviour, on a path this call never takes.** Everything
+Bell 103, V.21, V.22, V.23, dialler, call progress, cadence, V.8-only,
+K56flex, V.90/V.92-only. Includes several genuinely bad defects (D4, D6, D11,
+D13, D22, D80, D81, D82) that will matter the day somebody uses those pumps and
+matter not at all today. Roughly 100 entries.
+
+**Group 3 — changes behaviour in the V.34 path.** What follows.
+
+## Ranked: could it touch CONNECT SUCCESS or RATE?
+
+### 1. D77 — V.34 does not connect below `IODELAY` 86. CONNECT. Measured.
+
+The only entry with a **measured** connect failure in V.34. Arm 47
+`TX_PHASE2_ANS` reads an all-ones `fsk.sr` from a carrierless slicer as
+"repeated INFO0" while the far end is correctly silent, and **loses the race by
+one block — about 22 samples in 200**. 85 fails, 86 connects.
+
+Why it stays top of the list even though D74 already set the default to 120: a
+one-block race is a *cliff*, and the margin from 120 down to 86 is consumed by
+anything that makes the effective delay vary. A SIP/RTP path with a jitter
+buffer is exactly that. **4-of-5 connects is the shape a marginal race
+produces**, and this is the only such race in the record.
+
+*Fix:* already host-side (`SLMODEMD_IODELAY`). The action is to measure, not to
+code — see the experiment below.
+
+### 2. D72 — the echo canceller may overrun its history at HIGH `IODELAY`. SUSPECTED.
+
+The buffer is sized in the constructor from the delay at that moment;
+`setEchoDelay` then raises the delay at runtime from `MDMPRM_IODELAY` **without
+reallocating**, and `resetEchoHistory` zeroes the new, larger length. V.32
+measurably works at 108 and 180 and fails at 240 and 300.
+
+**Read 1 and 2 together: the usable band is bounded below by a connect race and
+above by a suspected heap overrun.** If the transport pushes you up to escape
+D77 you may walk into D72. That pincer, not either entry alone, is the most
+actionable thing in this appendix.
+
+### 3. D137 / D61 — the object's answer depends on where its memory is. UNPROVEN CAUSE.
+
+**The only recorded mechanism in the object that can give different results
+from identical inputs.** Byte-identical objects placed differently produced
+different answers, and `v34handshakinit` left two fields holding
+`ref_Convolve32` on one side and `ref_Convolve32 + 0x40` on the other — *the
+same table, sixty-four bytes in, from identical inputs and identical code*.
+Ruled out: bring-up, stack residue, x87 residue, absolute address, alignment,
+object placement, object-to-block distance, neighbourhood contents within
+32 KB. What is NOT established is which byte it reads.
+
+If it holds outside the fixture, then which filter block the receiver selects
+depends on where `malloc` put things, and that varies between processes. **That
+is "five identical calls, three different outcomes" exactly.** It is also the
+weakest-evidenced item here, and finding 324 records that once both sides are
+brought up congruently the two pointers agree — so this may be a fixture
+artefact and not a live nondeterminism. Do not quote it as established.
+
+### 4. D112 — `PPSEG` adds symbols-at-baud to a count of 4-sample ticks. RATE, and worse the faster you go.
+
+`0x68154` sums `q`, a count of symbols at the **negotiated** baud, with
+`filtdelay`, a count of 4-sample ticks. **Dimensionally correct only at 2400
+baud.** At 3429 the term should be `filtdelay * 3429 / 2400`; at `IODELAY` 216
+that is 127 where the object uses 89 — **an error of 38 symbols in an
+echo-adaptation start delay.**
+
+Why this is the leading hypothesis for the *asymmetric rate*: the echo canceller
+cancels our own transmit leaking into our own receive. Start its adaptation at
+the wrong moment and **our receive** SNR suffers while our transmit is
+untouched — so the far end sees us at 33600 and we report 14400. And the error
+scales with symbol rate, so it is worst exactly where 33600 lives (3429 baud)
+and vanishes at 2400.
+
+**It predicts a discriminating experiment** (below), which is why it is ranked
+above entries with better evidence.
+
+### 5. D29, D30, D32 — a family that starts from uninitialised memory. VARIANCE.
+
+* **D29** — `V34TimingFiltersInit` zeroes eighty *shorts* over a region holding
+  a 40-short history followed by 40 *ints*, so **the upper twenty entries of
+  the timing prefilter keep whatever was there**. Fires on every setup. The
+  prefilter convolves 40 taps against a state whose upper half was never
+  initialised; output is wrong for about 20 symbols. Consequence explicitly
+  unmeasured.
+* **D30** — `cursor` is seeded from the OLD `dline` field a few instructions
+  before `dline` is written. On a first initialisation that field has never
+  been written, so the cursor comes from uninitialised memory.
+* **D32** — `V34ModulatorProcess` seeds its delay-line shift from a stale
+  register.
+
+Individually each is "unmeasured". Together they are three places where V.34
+**acquisition starts from heap garbage**, and heap garbage differs between
+calls. That is a mechanism for run-to-run variance that needs no unknown cause,
+unlike item 3 — and D29 lands in *timing recovery during acquisition*, which is
+precisely what decides whether you connect and at what rate.
+
+**This is the cheapest hypothesis to test and I would test it first.**
+
+### 6. D84 — the predictor rounds the real axis the wrong way, every symbol. RATE.
+
+`receiver`'s complex predictor forms the real accumulator as
+`b.hist_i - (0x2000 + a.hist_q)`, applying the rounding constant with the wrong
+sign on the real axis only — half an LSB, on every symbol, at both call sites
+(precoding and the adapting predictor). A systematic, *axis-asymmetric* bias in
+the receive predictor costs SNR margin, and at 33600's constellation density
+margin is what buys the top rate. Receive-only, so it fits the asymmetry.
+Reproduced; the consequence is not separable from the rest of the chain without
+a full-path measurement nobody has made.
+
+### 7. D114 — the slicer's squared distance truncates to 16 bits. RATE, speculative.
+
+A constellation point far enough from the target wraps to a small distance and
+can win, producing a symbol error. Most likely during acquisition, before the
+equaliser converges, which is when errors are most expensive. The metric exists
+**twice** — inlined in `decoderv34` as well as in `decision` — so a fix to one
+would not reach the other. Unmeasured against a real V.34 constellation.
+
+### 8. The rest of group 3, and why they are lower
+
+* **D26, D27** — echo canceller delay-line handling. Both argued dormant with
+  numbers: D26's window is `taps` samples of provably zero output, D27's single
+  wrap covers the whole domain in which the function returns anything
+  meaningful (`lag <= 1513`). Fixing changes nothing.
+* **D111** — the receive-rate completion. The five-way at 0x62f9c is the only
+  writer of the rate and its floor, and it has **no default arm**: two
+  uninitialised stack slots then drive about 1,600 bytes of rate-ladder
+  arithmetic into the capability record. Catastrophic for rate *if* an
+  `rx_baud` outside the five V.34 symbol rates ever arrives — and nothing shows
+  one does. Worth an assertion precisely because the failure mode is "a
+  plausible wrong rate" rather than a crash.
+* **D87** — the restart path's inlined `SetINFO0dBits` drops the
+  `v90_receiver` guard the real function has. Answering side, after a CRC
+  failure in `DET_INFO`. Affects handshake robustness on a retry path.
+* **D59** — the per-sample dispatch does not terminate on an unhandled state:
+  it spins. Demonstrated (`V34HS_HANG=1` exits 3, and the harness arms
+  `SIGALRM` because of it). This is a **hang**, not a bad rate — the candidate
+  for the one call in five that produced nothing, *if* an unhandled state is
+  reachable, which nothing shows.
+* **D44** — `t3`'s tail stays at -1 for ring sizes 15, 17 and 18, which
+  `MMaxTable` produces often. Settled harmless on transmit; open on receive,
+  where `shellDemapper` indexes `t3[d1 + d2]` with nothing bounding the sum.
+  Re-open when `demapFrame` lands.
+
+## Three experiments, in the order I would run them
+
+None of the above is measured on a live call; the register's evidence is
+fixtures and disassembly. These are what turn it into an answer, and none needs
+new hardware.
+
+1. **Poison the heap.** D29/D30/D32 say acquisition reads uninitialised memory.
+   Run the same call twenty times with the allocator's fill set to a different
+   constant per group (`MALLOC_PERTURB_` is enough to start). **If the rate
+   distribution moves with the fill pattern, the variance is in that family**
+   and it is the answer. If it does not move, that family is out and item 3
+   moves up. This is one afternoon and it is decisive either way.
+2. **Sweep `IODELAY`.** Five calls each at 86, 100, 120, 150, 180, 240. D77
+   predicts failures clustering at the bottom; D72 predicts failures appearing
+   again at the top. A U-shaped connect rate confirms the pincer and hands you
+   the setting; a flat one rules both out.
+3. **Force 2400 baud.** D112 is exactly correct at 2400 and wrong in proportion
+   to baud above it. If the rate ceiling drops (as it must) but **the
+   call-to-call variance collapses**, that is strong evidence for D112 and
+   therefore for the asymmetry. If the variance survives at 2400, D112 is not
+   the cause.
+
+## What I could not determine
+
+* **Whether any entry here actually fires on the bench.** Nothing in this
+  register has been observed on a live call; the strongest evidence in it is a
+  differential fixture, which by construction compares us against the blob and
+  is blind to whether the blob is doing the right thing.
+* **The cause of the placement dependence (item 3).** Ruled out eight
+  hypotheses; the byte it reads is still unnamed.
+* **Whether the reported asymmetry is a defect at all.** V.34's two directions
+  negotiate independently and this may simply be a correct report of an
+  asymmetric line. Nothing in the object can settle that; one call with both
+  directions read from the same end can.
+* **What the far end's "33600/ARQ" actually names** — its transmit rate, the
+  negotiated maximum, or the achieved receive rate. Three different claims, and
+  which one it is decides whether there is an asymmetry to explain.
