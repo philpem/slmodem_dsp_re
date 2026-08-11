@@ -388,6 +388,10 @@
   "src/pump/v90/V92Jd.cpp",
   "build/test/t_v92jd"
  ],
+ "v92mapper": [
+  "src/pump/v90/V92Mapper.cpp",
+  "build/test/t_v92convmapper"
+ ],
  "v92modulusencoder": [
   "src/pump/v90/V92ModulusEncoder.cpp",
   "build/test/t_moduluscoder"

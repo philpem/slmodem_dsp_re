@@ -43512,3 +43512,41 @@ So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
 ======================================================================
+
+### 1370. `V92Mapper::process` KEEPS A SIXTEEN-BIT ACCUMULATOR, AND NO CALLER CAN MAKE IT MATTER
+
+The bit packer is `for (i = bits - 1; i >= 0; i--) acc = (short)(2 * acc | in[i]);` and the `(short)` is not decoration: the loop body ends `movswl %ax,%edx`, so every partial result is truncated and sign-extended again. `reset` installs `bits` = 2 or 3 and nothing else, and at three bits nothing can overflow -- so the width is invisible to every call the object itself can make, and a reconstruction using `int` would pass any test that only drove the class as its callers drive it.
+
+`t_v92convmapper.cpp` therefore drives `bits` up to 24 with an input whose only set bit is above 16, which is the one shape where the two spellings differ AND the index stays inside the sixteen-entry table: truncated it is 0, untruncated it is 65,536, and the second reads whatever follows each side's own copy of the table. The general lesson is the one this project keeps relearning -- a field's width is a claim, and a claim no test distinguishes from its alternative is not tested by a green suite.
+
+The static table is sixteen INTS, two rows of eight indexed by `mode`, and that is the `fildl (,%ebx,4)` reading rather than the size: 0x40 bytes is also sixteen floats or thirty-two shorts. Row 0 is `1, 3, -1, -3` and four unused zeros, row 1 is `1, 3, 5, 7, -1, -3, -5, -7`, which agrees with `reset` pairing row 0 with two bits and row 1 with three. The test compares all sixteen entries against the blob's own `ref_` copy, because `process` can only reach an entry the caller's bits select and a wrong one outside that set would survive every call.
+
+**The square root is inline asm and had to be.** The object is one bare `fsqrt` on a field, and `__builtin_sqrt` only compiles to that where GCC can prove the argument is non-negative -- which is why `ResamplerTiming::SdHalfBaudDft` gets away with it (a sum of squares) and this does not. What the builtin emitted here was a compare against zero and a call to libm for the negative arm, which would return a different NaN. `agc_fsqrt` in `dsplib/Agc.h` had already made the same trade for the same reason. `long double` throughout, so the divide sees the extended value the object's `fsqrt` leaves in st(0).
+
+### 1371. `V92PreFilter` IS FOUR PATHS AND A TWELVE-SAMPLE BLOCK, AND ITS TAP COUNTS ARE THE CALLER'S AND NOT THE FILTERS'
+
+`process` gates on +0x0c and +0x10, which `setCoefficients` fills with the counts it was GIVEN -- not the ones the filters ended up with, which both classes round down to a multiple of four. So the four arms are: FIR then IIR through a twelve-float stack buffer at `lea 0x10(%esp)` inside a 0x40-byte frame; FIR alone; IIR alone; and a twelve-word copy loop with the count in the loop's own `cmp $0xb`. Twelve is the block everywhere, including the `$0xc` both filter calls pass, which is what makes the constructor's 99 words of slack slack for exactly eight blocks.
+
+The gap between the two counts is D260: three taps stores three and leaves the filter with none, and the filter is still called.
+
+### 1372. `V92Precoder::reset` READS THE EIGHTEEN BYTES `V92ParamsInfo.h` SAYS NOTHING REACHES, AND THEY ARE SIX INTS
+
+`include/dsplib/V92ParamsInfo.h` accounted for every offset of the 180-byte block except `+0x9c..+0xb3`, which it recorded as "inside the 0xb4 allocation and reached by nothing". `V92Precoder::reset` takes `lea 0x9c(%ebx),%edx` and keeps the result at +0x04, and `V92Precoder::process` indexes it `paramsAt9c[(i + 4 * a) % 6]` -- six ints, which is exactly the 0x18 bytes between +0x9c and the end of the block. Each is a selector: the value picks both a constellation out of +0x08 and a modulus out of +0x50.
+
+The other twenty-four words `reset` copies land where that header pads: `head[6]` at +0x08 is the parameters' +0x84..+0x98, which IS `constellations[6]`, so those six words are POINTERS and not scalars -- `process` dereferences the one it is told to. `tableA[12]` at +0x20 is +0x1c..+0x48 and `tableB[6]` at +0x50 is +0x6c..+0x80, both inside `pad_00` and `pad_6c`. The reconstruction reads them through those pad arrays rather than through a cast of the whole block, so the offsets are the object's in the 32-bit build and self-consistent in the 64-bit one.
+
+**The modulus is doubled and then halved.** The object computes `2 * tableB[sel]` into a stack slot and recovers `tableB[sel]` from it with a bare `sar $1` -- not the four-instruction sequence a signed division by two needs -- because GCC can prove `x + x` is even. So the source variable is the doubled one and the expressions are `m / 2` and `(m - 1) / 2`, which is what the odd one's full `dec; shr $31; add; sar` says.
+
+### 1373. THE CONSTELLATION ENTRY IS UNSIGNED, THE SEARCH IS EXTENDED PRECISION, AND ONLY ONE OF THE TWO COST ANYTHING TO GET WRONG
+
+`V92Precoder::process` converts a constellation entry with `push $0; push v; fildll` -- a 64-bit load whose high word is a literal zero, which is GCC's unsigned-32-to-floating sequence; a signed element would have been one `fildl`. Half the constellation is stored: a negative index reads `table[-j - 1]` and negates the result with `fchs`, so entry 0 is the smallest positive point and there is no zero.
+
+The unsigned reading is nearly untestable. Both readings of an entry above 2^31 give a magnitude over 2.1e9, whose square is far above the 1e12 the search starts from, so neither can ever win and the chosen point is the same either way. It becomes observable only when the carried state is about -2^31, which is what `t_v92precoder.cpp`'s last case pokes into +0x70 with both filters switched off so it stays there.
+
+**The running minimum is on the x87 stack and never in memory** -- `fstp %st(5)` writes it back into a register -- so every comparison is at a 64-bit mantissa. Spelt `float` in the reconstruction it is rounded to 24 bits on each update, and thirty-five of that file's 2,374 comparisons then pick a different point among near-equal candidates. `long double` for the point, the sum and the minimum reproduces the object exactly. This is the second time in this batch that a float-typed local was the defect and the x87 stack was the specification.
+
+### 1374. THE FOURTH SYMBOL IS THE ONLY ONE THAT CARRIES A PARITY, AND THE OBJECT SAYS SO TWICE
+
+Three of `V92Precoder::process`'s four symbols search `k * tableA[n] + in[n]` over the interval the modulus allows. The fourth doubles the index and adds `(out[0] + out[1] + out[2] + b) & 1` to it, and divides by twice the step rather than by the step -- and the object computes that parity in two places, once for the bounds and once inside the loop, reading `out[0..2]` on every iteration although nothing in the loop can change them. That is the 4D trellis's coset constraint spent on the last of the four, and it is what makes `b` an argument at all.
+
+The empty interval this creates is D261.

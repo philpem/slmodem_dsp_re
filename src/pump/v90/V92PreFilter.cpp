@@ -83,3 +83,70 @@ V92PreFilter::~V92PreFilter()
 		sysdep_free(iir);
 	}
 }
+
+/*
+ * Both filters, unconditionally -- neither pointer is tested here, although
+ * the destructor tests both.  The second call is a tail jump in the object,
+ * which is the compiler's business and not the source's.
+ */
+void
+V92PreFilter::reset()
+{
+	fir->reset();
+	iir->reset();
+}
+
+/*
+ * The FIR takes the first pair and the IIR the second, and the two counts are
+ * stored AFTER both calls: `mov %esi,0xc(%ebx)` and `mov %edi,0x10(%ebx)` sit
+ * between the second call and the epilogue.  Neither filter's return value is
+ * looked at.
+ *
+ * The counts stored are the caller's, not the ones the filters ended up with
+ * -- FloatFIR and FloatIIR both round a tap count down to a multiple of four
+ * and keep the result in their own fields.  So a caller asking for three taps
+ * leaves +0x0c non-zero and the filter with none, and `process` still runs it.
+ */
+void
+V92PreFilter::setCoefficients(float *coefFir, float *coefIir,
+			      unsigned int tapsFirArg, unsigned int tapsIirArg)
+{
+	fir->setCoefficients(coefFir, tapsFirArg);
+	iir->setCoefficients(coefIir, tapsIirArg);
+
+	tapsFir = tapsFirArg;
+	tapsIir = tapsIirArg;
+}
+
+/*
+ * Twelve samples, by whichever of the four paths the two tap counts select.
+ *
+ * WHEN BOTH ARE ON THE FIR'S OUTPUT GOES TO A STACK BUFFER and the IIR reads
+ * it: `lea 0x10(%esp),%ebx` inside a 0x40-byte frame, passed as the FIR's
+ * output and then as the IIR's input.  Twelve floats is 0x30, which is
+ * exactly what the frame has above +0x10.
+ *
+ * When neither is on the input is copied straight through, one word at a
+ * time, with the loop's own `cmp $0xb,%edx; jle` for the count -- twelve
+ * again, and not V92PREFILTER_SAMPLES read out of anywhere.
+ */
+void
+V92PreFilter::process(float *in, float *out)
+{
+	float tmp[V92PREFILTER_SAMPLES];
+	int i;
+
+	if (tapsFir != 0) {
+		if (tapsIir != 0) {
+			fir->process(in, tmp, V92PREFILTER_SAMPLES);
+			iir->process(tmp, out, V92PREFILTER_SAMPLES);
+		} else {
+			fir->process(in, out, V92PREFILTER_SAMPLES);
+		}
+	} else if (tapsIir != 0) {
+		iir->process(in, out, V92PREFILTER_SAMPLES);
+	} else {
+		for (i = 0; i < V92PREFILTER_SAMPLES; i++)
+			out[i] = in[i];
+	}
+}

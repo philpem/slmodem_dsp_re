@@ -29,8 +29,11 @@ public:
 	~V92Mapper();
 
 	/*
-	 * Declared and deliberately not defined; the signatures are the
-	 * mangling's, `Esh` being (short, unsigned char).
+	 * Written.  The argument types are the mangling's, `Esh` being
+	 * (short, unsigned char); the return types are not mangled, so
+	 * `reset` leaves nothing meaningful in %eax and is `void`, while
+	 * `process` ends `fistps` into a 16-bit slot and `cwtl`, which is a
+	 * short's worth of value widened to an int.
 	 *
 	 * `reset` stores its two arguments at +0x00 and +0x02 and then picks
 	 * a pair from the second: zero gives +0x26 = 2 and +0x28 = 5.0f,
@@ -39,13 +42,13 @@ public:
 	 * +0x28, multiplies by +0x00 and rounds toward zero.
 	 */
 	void reset(short scale, unsigned char mode);
-	void process(unsigned char *bits);
+	int process(unsigned char *bits);
 
 	/*
-	 * DECLARED, NOT DEFINED.  `D` in the blob, so not const, and 0x40
-	 * bytes.  `process` reads it with `fildl (,%ebx,4)` -- a 32-bit
-	 * INTEGER load, not a float one -- so it is sixteen ints, and that is
-	 * the one thing about it this file does claim.
+	 * `D` in the blob, so not const, and 0x40 bytes.  `process` reads it
+	 * with `fildl (,%ebx,4)` -- a 32-bit INTEGER load, not a float one --
+	 * so it is sixteen ints; the values are in the .cpp and the test
+	 * compares them with the blob's own copy word for word.
 	 */
 	static int constelAmplitudeTable[16];
 
