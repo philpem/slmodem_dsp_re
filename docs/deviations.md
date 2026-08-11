@@ -4237,6 +4237,24 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D180 🐛 `V92deleteConstellations` and `V92deleteFilterCoefficients` free all ten arrays and null none of them, so `V92ParamsInfo` comes back from either deleter holding ten dangling pointers
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED from the disassembly — there is no store to any of +0x5c..+0x68 or +0x84..+0x98 in either function. Fix class: documentation only until a caller is found that deletes without freeing the block.*
+
+**Finding 1226.** The one caller in the object, `V92Modem`'s destructor, frees the block itself immediately afterwards, so the dangling values are never read there. Reproduced, and `t_v92alloc.c`'s `run_delete_live` asserts they survive.
+
+---
+
+## D181 🐛 `V92createConstellations` and `V92createFilterCoefficients` store ten `sysdep_malloc` results without testing one of them, and their caller carries on regardless
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED — six and four consecutive `movl $size` / `call` / `mov %eax,off(%ebx)` with no `test` between. Fix class: documentation only.*
+
+**Finding 1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
+
+*Numbering: this pair starts at D180 and the eighteen numbers between it and D161 are deliberately left unused. Eight other sessions were in flight in sibling worktrees when it was written and none had claimed past D161; the gap is there so a concurrent claim does not collide. The numbers are not spelled out, for the reason the D64 gap note gives — `refcheck.py` reads a bare `D` and digits as a citation and would call every one of them dangling.*
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect

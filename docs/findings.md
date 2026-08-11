@@ -39935,3 +39935,190 @@ one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
 over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
+
+---
+
+### 1225. A FILE-LOCAL DATA SYMBOL ATTRIBUTES ITS TRANSLATION UNIT EXACTLY, WHICH NO BRACKET AND NO CONTIGUITY FILL CAN DO
+
+`tools/tuattrib.py`'s header is careful about what it cannot do: `ld -r`
+discarded the per-input section boundaries, so a data address resolves to a
+*bracket* and not to a translation unit, and an earlier version that voted by
+following relocations scored 33%.
+
+That is true of a GLOBAL data symbol and false of a LOCAL one, and the ten
+tables in this batch are the worked example. A `static` array has no external
+name, so the only code that can name it is code in the same file. Every one of
+these ten is `OBJECT LOCAL` and every one has exactly one referencing function
+(twice over, because the C1 and C2 constructor variants are separate bodies):
+
+| table | referenced only from | so it was defined in |
+|---|---|---|
+| `entFiltNum`, `entFiltDen`, `v34initialbauds` | `VPcmFloModem`'s constructor | `VPcmFloModem.cpp` |
+| `IIR2100_Coef_{A,B}_{8000,9600}` | `ANSamToneDetector`'s constructor | `ANSamToneDetector.cpp` |
+| `v92echoPreFilter_{a,b}` | `V92EchoCanceller`'s constructor | `V92EchoCanceller.cpp` |
+| `v92TxPreFilter` | `V92Modulator`'s constructor | `V92Modulator.cpp` |
+
+No inference and no adjacency: the C language settles it. `tuattrib` cannot
+use this because it attributes `.text` functions and the input is a `.data`
+symbol, but a human attributing a table has a better tool than the bracket and
+should reach for it first.
+
+**The route matters as much as the result.** These are file-local, so
+`relocscan.py --into <name>` finds nothing for four of the ten -- the
+relocation is against the SECTION symbol with the offset as an inline addend,
+finding 604's trap in its data form. `relocscan.py --at .data:0xNN` is what
+answers it.
+
+**And it is not free.** Acting on it would mean putting `entFiltNum` back into
+a `VPcmFloModem.cpp` that does not exist yet, so this batch gathers all ten in
+`src/pump/v90/vpcm_tables.c` under the precedent `v34pcm_tables.c` already set
+for `V34DisconnectThreshTable`. That is a debt with a specific failure mode,
+recorded in the file's header: a later `static double entFiltNum[5]` in the
+real file links perfectly beside the global one, the two copies diverge in
+silence, and `t_vpcmtabs.c` keeps passing against the copy nobody uses.
+
+---
+
+### 1226. FOUR LEAF ALLOCATORS, TEN MALLOCS, AND THE 180-BYTE BLOCK IS IDENTIFIED BY THE COMPLEMENT OF ITS STORE SET
+
+`V92Modem`'s constructor allocates a 180-byte block with a bare
+`sysdep_malloc(0xb4)` at .text+0x13def, hangs it off +0xaa0, calls no
+constructor on it, and hands it to `V92createConstellations` and
+`V92createFilterCoefficients`. The destructor calls the two matching deleters
+and then frees it with a bare `sysdep_free`. So it is a C struct in a C++
+neighbourhood, and `tuattrib` brackets the four functions as
+`V92Jd.cpp|V92Modem.cpp` -- a contiguity fill, which is to say it does not
+know.
+
+**What names the block is the store set of a fifth function.**
+`V92setParamsInfoFromCPUnPck` (.text+0x12f00, 2,695 bytes) writes twenty-eight
+distinct offsets into its first pointer argument: +0x00..+0x58 and
++0x6c..+0x80. The four functions here write +0x5c..+0x68 and +0x84..+0x98. The
+unpacker skips EXACTLY the four slots that hold filter-coefficient pointers and
+stops below the six that hold constellation pointers, and its whole range fits
+inside 0xb4. Two functions writing disjoint halves of one 180-byte extent is
+not adjacency, so the block is the "params info" the unpacker's name refers to
+and `struct V92ParamsInfo` is named from a blob symbol rather than invented.
+
+**The shape, all of it read off immediates:**
+
+    V92createConstellations       6 x sysdep_malloc(0x200) -> +0x84 .. +0x98
+    V92createFilterCoefficients   4 x sysdep_malloc(0x600) -> +0x5c .. +0x68
+    V92deleteConstellations       6 x if (p) sysdep_free(p)
+    V92deleteFilterCoefficients   4 x if (p) sysdep_free(p)
+
+**Two defects, both reproduced.** Not one of the ten allocations is tested
+(D181) -- six and four consecutive `movl`/`call`/`mov %eax,off(%ebx)` with no
+`test` between -- and not one of the ten pointers is nulled after being freed
+(D180), so either deleter leaves the block full of dangling values. The
+contrast that makes the first a property of these functions rather than a house
+style is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create`
+returns, at .text+0x3b31, and branches into a failure unwind.
+
+**What the arrays hold is not known and is not guessed.** None of the four
+dereferences what it stores, so the element type is `void *`; 0x200 bytes is
+128 floats or 256 shorts and nothing in these 411 bytes distinguishes them.
+
+---
+
+### 1227. TESTING A MALLOC WRAPPER DIFFERENTIALLY: CANONICALISE THE CREATORS, AND DRIVE THE DELETERS WITH POINTERS THE ALLOCATOR NEVER ISSUED
+
+Both sides share `sysdep_malloc` -- it is in `symmap.py`'s `SHARED_IMPORTS` and
+sharing an allocator is safe -- so the two runs come back at different
+addresses and every stored pointer differs for a reason that is not a defect.
+Finding 224's rule applies, and it splits the six functions two ways.
+
+**The creators are canonicalised.** Each stored pointer is checked separately
+for being non-null, distinct from its siblings, and present in
+`harness_alloc_live_set`; then the slot is overwritten with its own index and
+the whole fixture -- block plus a 64-byte guard -- is compared as bytes. Every
+byte that is not one of the slots is ALSO compared against the seed image
+rather than against the other side, so a stray store that both sides would have
+to make is still caught.
+
+**The deleters need no canonicalisation at all, and that was the useful
+realisation.** Drive them with pointers the allocator never handed out: the
+harness counts a free of an unknown pointer in `bad_free` and swallows it
+rather than passing it to `free()`, so both sides can be given byte-identical
+fixtures and compared byte for byte with nothing excluded. That is only
+available because the deleters write nothing back -- which is D180, the defect
+turned into the strongest available test shape.
+
+**The null arm's assertion is the inverse of the obvious one.**
+`harness_alloc.free_null` counts `sysdep_free(NULL)`, and the first draft
+asserted it equalled the number of NULL slots. It is ZERO, in every mode, on
+both sides: the object tests the pointer itself, so a NULL slot produces no
+call whatever. Written the right way round, that check now distinguishes the
+object from the equally correct unconditional `sysdep_free(p->x)` -- a version
+that behaves identically and that nothing else in the file could tell apart.
+
+**What is NOT proved, stated because it would otherwise read as proved.** The
+harness's allocation log counts calls and totals bytes; it has no per-call
+size. "Six allocations of 512" is established as "six allocations, 3,072 bytes,
+and the blob's totals are the same", not element by element. A mutation that
+shrinks one allocation to half is caught, because the total moves; a pair of
+errors that cancelled exactly would not be.
+
+**The order of the six is not checked and there is nothing to check.** All six
+constellation requests are the same size and all four coefficient requests are
+the same size, so which result lands in which slot is not observable.
+
+---
+
+### 1228. THREE MUTATIONS SURVIVED, AND ALL THREE ARE THE SAME FACT ABOUT DECIMAL LITERALS
+
+`vpcmtabs`'s first run was 15 caught, 3 NOT CAUGHT. All three were the natural
+first mutation to write against a coefficient table -- perturb the last digit:
+
+    -3.8513500390114781 -> -3.8513500390114780    same double, 0xc00ecf909bf8055f
+    0.467999995f        -> 0.468f                  same float,  0x3eef9db2
+    -0.0616387613f      -> -0.0616387614f          same float,  0xbd7c78ed
+
+Not a gap in the test. `tabdump.py` emits at the round-trip width -- 17
+significant figures for a double, 9 for a float -- which is by construction the
+shortest decimal that names the value uniquely, so the last digit carries no
+bit and a one-digit edit cannot move the bytes. All three are recorded
+`"equivalent": true` with that argument, and each is paired with a version that
+does move the value and IS caught.
+
+**Which is also the answer to "is a table file a vacuous mutation target".** It
+was worth checking before registering the suite: `mutate.py` is a text
+substitution and has no notion of code, so a data-only source mutates perfectly
+well. `vpcmtabs` runs 21 mutations, 18 caught, 0 uncaught, 3 equivalent.
+
+**And the shape of what is caught is worth keeping.** `-0.0f` in
+`v92TxPreFilter`'s pad slot instead of `+0.0f` is caught, which is the check
+that the comparison is over BYTES and not over float values; so is a table one
+element short, whose missing initialiser is a silent zero rather than an error.
+
+---
+
+### 1229. `K56FLEX_Create` TAKES FOUR ARGUMENTS AND READS NONE, AND ONLY THE CALL SITE SAYS SO
+
+Nineteen bytes: `sub $0xc,%esp` / `movl $0x14,(%esp)` / `call sysdep_malloc` /
+`add` / `ret`. Nothing reads `0x10(%esp)`, so the body cannot say how many
+arguments there are, and a reconstruction reading only the function would
+declare `void` and break the first caller written against it.
+
+`vpcm_create` says four. At .text+0x3b10..+0x3b22 it fills four stack slots --
+NULL, `lea 0x2c(%ebx)`, what `dp_param_get` returned, and a computed count --
+in the same shape as the `VPCMXF_Create` call eight instructions earlier, whose
+own four-slot setup at +0x3ae7..+0x3af9 is the control that says the fourth
+slot belongs to this call and is not left over.
+
+**Where the pair lives, and why the coarse bracket is the wrong evidence.**
+`tuattrib` puts .text+0x102a0 in `V34.c|GenericToneDetector.cpp`, which is the
+same ambiguous bracket `src/pump/v34/v34k56.cpp`'s header quotes -- so "beside
+v34k56.cpp" is a defensible reading of the bracket. Contiguity is finer:
+`K56FLEX_Create` is the very next symbol after
+`K56FlexFloModem::getK56MPsReceiver` at +0x10290, and the class's seventeen
+members run unbroken from +0x10190 up to it. So they share the class's
+translation unit and go in `src/pump/v90/K56FlexFloModem.cpp` as `extern "C"`,
+which is also what the unmangled names require.
+
+**The twenty bytes are not identified as anything.** `K56FLEX_Create` does not
+write them, `K56FLEX_Delete` does not read them, and `vpcm_create` only stores
+the pointer and tests it for null. Whether the block is a `K56FlexFloModem` is
+NOT settled by the size, because that class's header records that not one of
+its seventeen members touches `this` and so no member bounds a size to compare
+against. D154 is the same class's emptiness from the other side.

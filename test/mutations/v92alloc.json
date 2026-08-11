@@ -1,0 +1,57 @@
+[
+ {
+  "label": "shrink one constellation allocation to half",
+  "find": "\tp->constellations[2] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);",
+  "replace": "\tp->constellations[2] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ / 2);"
+ },
+ {
+  "label": "drop the sixth constellation allocation",
+  "find": "\tp->constellations[5] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n}",
+  "replace": "}"
+ },
+ {
+  "label": "store the first constellation at the fourth slot",
+  "find": "\tp->constellations[0] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n\tp->constellations[1]",
+  "replace": "\tp->constellations[3] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n\tp->constellations[1]"
+ },
+ {
+  "label": "allocate the coefficient banks at the constellation size",
+  "find": "\tp->filterCoefficients[1] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);",
+  "replace": "\tp->filterCoefficients[1] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);"
+ },
+ {
+  "label": "drop the fourth coefficient bank",
+  "find": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
+  "replace": "}"
+ },
+ {
+  "label": "add a fifth coefficient bank the object does not allocate",
+  "find": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
+  "replace": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n\tp->constellations[0] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}"
+ },
+ {
+  "label": "null the constellation slot after freeing it",
+  "find": "\tif (p->constellations[0] != 0)\n\t\tsysdep_free(p->constellations[0]);",
+  "replace": "\tif (p->constellations[0] != 0) {\n\t\tsysdep_free(p->constellations[0]);\n\t\tp->constellations[0] = 0;\n\t}"
+ },
+ {
+  "label": "null every coefficient slot after freeing it",
+  "find": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);",
+  "replace": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);\n\tp->filterCoefficients[2] = 0;"
+ },
+ {
+  "label": "delegate the null test to the allocator",
+  "find": "\tif (p->constellations[4] != 0)\n\t\tsysdep_free(p->constellations[4]);",
+  "replace": "\tsysdep_free(p->constellations[4]);"
+ },
+ {
+  "label": "invert the null test on a constellation slot",
+  "find": "\tif (p->constellations[3] != 0)\n\t\tsysdep_free(p->constellations[3]);",
+  "replace": "\tif (p->constellations[3] == 0)\n\t\tsysdep_free(p->constellations[3]);"
+ },
+ {
+  "label": "free the third coefficient bank twice and the fourth never",
+  "find": "\tif (p->filterCoefficients[3] != 0)\n\t\tsysdep_free(p->filterCoefficients[3]);",
+  "replace": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);"
+ }
+]

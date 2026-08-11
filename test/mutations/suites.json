@@ -295,5 +295,17 @@
  "v92p3mod": [
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
+ ],
+ "v92alloc": [
+  "src/pump/v90/V92ParamsInfo.c",
+  "build/test/t_v92alloc"
+ ],
+ "k56flexalloc": [
+  "src/pump/v90/K56FlexFloModem.cpp",
+  "build/test/t_v92alloc"
+ ],
+ "vpcmtabs": [
+  "src/pump/v90/vpcm_tables.c",
+  "build/test/t_vpcmtabs"
  ]
 }

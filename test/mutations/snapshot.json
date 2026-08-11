@@ -129,6 +129,18 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "k56flexalloc": {
+   "key": "1ed806eafc0e230af74b3b1369062ddb640c4024164b3af798ba4e472ec6256f",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "K56FLEX_Create allocates twice": "caught",
+    "K56FLEX_Create asks for sixteen bytes": "caught",
+    "K56FLEX_Create asks for twenty-four bytes": "caught",
+    "K56FLEX_Create reads the argument it is not supposed to read": "caught",
+    "K56FLEX_Delete frees nothing": "caught",
+    "K56FLEX_Delete loses its null test": "caught"
+   }
+  },
   "psd": {
    "key": "e93c6f05ba5f3450573a17663123ae05e86621416f4bbee2ca571d1cf597569f",
    "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3969,6 +3981,23 @@
     "the modulator's flag goes to +0x2c": "caught"
    }
   },
+  "v92alloc": {
+   "key": "a7e4ed1f2f37c8c3f2e3df3f0c8938e52173f15eb5eb59c783d530c7980fc347",
+   "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "add a fifth coefficient bank the object does not allocate": "caught",
+    "allocate the coefficient banks at the constellation size": "caught",
+    "delegate the null test to the allocator": "caught",
+    "drop the fourth coefficient bank": "caught",
+    "drop the sixth constellation allocation": "caught",
+    "free the third coefficient bank twice and the fourth never": "caught",
+    "invert the null test on a constellation slot": "caught",
+    "null every coefficient slot after freeing it": "caught",
+    "null the constellation slot after freeing it": "caught",
+    "shrink one constellation allocation to half": "caught",
+    "store the first constellation at the fourth slot": "caught"
+   }
+  },
   "v92ec": {
    "key": "8b46fdbaf740bd892fc9c316078034e204604ea0dbe073ce8936d63506949d3d",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -4163,6 +4192,33 @@
     "the training timeout fires one block early": "uncaught",
     "the two rate parameters are set in the other order": "caught",
     "the tx widening loop runs upward, so a store eats an unread byte": "caught"
+   }
+  },
+  "vpcmtabs": {
+   "key": "df777654c7e4a98bf72640923bd1073c5b43a8aba0e06f4f97976746942b560d",
+   "summary": "21 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
+   "verdicts": {
+    "break v92TxPreFilter's mirror for real, on the high side only": "caught",
+    "break v92TxPreFilter's mirror on one side only": "equivalent",
+    "clear one of v34initialbauds' six allowances": "caught",
+    "drop the last tap of IIR2100_Coef_A_8000": "caught",
+    "fill in an odd tap of the 9600 Hz numerator": "caught",
+    "flatten the echo pre-filter's smallest tap to zero": "caught",
+    "flatten v92TxPreFilter's near-zero taps to zero": "caught",
+    "get the 9600 Hz binomial sign pattern wrong": "caught",
+    "lose the last digit of an entFiltNum coefficient": "equivalent",
+    "make entFiltNum exactly symmetric, which it is not": "caught",
+    "make v34initialbauds one entry short": "caught",
+    "make v92TxPreFilter's pad slot -0.0f instead of +0.0f": "caught",
+    "move an entFiltNum coefficient past the round-trip boundary": "caught",
+    "negate one tap of IIR2100_Coef_B_8000": "caught",
+    "round an echo pre-filter tap to four decimals, which does move it": "caught",
+    "round an echo pre-filter tap to three decimals": "equivalent",
+    "round entFiltDen to six decimals": "caught",
+    "shift v92TxPreFilter by one tap, putting the pad first": "caught",
+    "swap the two echo pre-filter halves": "caught",
+    "transpose two taps of IIR2100_Coef_A_9600": "caught",
+    "unnormalise the 8000 Hz denominator's leading coefficient": "caught"
    }
   },
   "vpcmweak": {
