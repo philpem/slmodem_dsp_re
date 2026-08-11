@@ -399,5 +399,21 @@
  "vpcmweak": [
   "test/unit/t_vpcmguard.c",
   "build/test/t_vpcmguard"
+ ],
+ "v92btos": [
+  "src/pump/v90/V92BitsToSymbol.cpp",
+  "build/test/t_v92tx"
+ ],
+ "v92mod": [
+  "src/pump/v90/V92Modulator.cpp",
+  "build/test/t_v92mod"
+ ],
+ "v92p4mod": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4mod"
+ ],
+ "v92tx": [
+  "src/pump/v90/V92Transmitter.cpp",
+  "build/test/t_v92tx"
  ]
 }

@@ -107,7 +107,17 @@ public:
 	/* +0x108  `setSUV`'s argument. */
 	unsigned int suv;
 
-	unsigned char pad_10c[8];	/* +0x10c read by methods not written */
+	unsigned char pad_10c[4];	/* +0x10c read by methods not written */
+
+	/*
+	 * +0x110  Cleared by `V92Phase4Modulator::V92Phase4Modulator`, which
+	 * is the only writer of it anywhere in this tree and is not a member
+	 * of this class: `mov %edi,0x74(%ebx); mov %esi,0x110(%edi)` at
+	 * .text+0x179ed with %esi zero.  A four-byte store, so a word; what
+	 * it counts is not established, because no member of V92CP that reads
+	 * it is written.  Named out of `pad_10c` by that batch (finding 1282).
+	 */
+	unsigned int word_110;
 
 	/* +0x114  Zeroed by `resetDetector`, and so by `reset` and the ctor. */
 	unsigned int word_114;

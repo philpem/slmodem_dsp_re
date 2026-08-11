@@ -4297,6 +4297,27 @@
     "store the first constellation at the fourth slot": "caught"
    }
   },
+  "v92btos": {
+   "key": "912ce8eae607420001efab1ed2f6e23832740f4d9ad0daf194a6830069c90a1c",
+   "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the block size is not cleared": "caught",
+    "the constructor also clears the bit count at +0x14, which it does NOT": "caught",
+    "the destructor nulls what it frees": "caught",
+    "the element count is not stored": "caught",
+    "the element count is the buffer's size in bytes": "caught",
+    "the flag is cleared rather than set": "caught",
+    "the flag is written as a word": "caught",
+    "the parameter block is not stored": "caught",
+    "the symbol buffer carries ten elements of slack": "caught",
+    "the symbol buffer is sized in bytes rather than in shorts": "caught",
+    "the symbol buffer's null test is dropped": "caught",
+    "the symbol cursor is not cleared": "caught",
+    "the transmitter is freed without being destroyed": "caught",
+    "the transmitter's allocation is four bytes larger": "caught",
+    "the transmitter's null test is dropped": "caught"
+   }
+  },
   "v92cp": {
    "key": "f071593c08cbc5044497f3dea4b1e76225d12814a0ba465fc7cf88260367da45",
    "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -4370,6 +4391,52 @@
     "the rate mask is read from the V.90 parameter": "caught",
     "the second rate group runs to V90Jd's twelve bits": "caught",
     "the two lookahead bits are transposed": "caught"
+   }
+  },
+  "v92mod": {
+   "key": "4469f22f3cc70e3533c5ce7d2e76abcb250e780d3f7433aa92766e24305d458b",
+   "summary": "40 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "reset does not copy the block size into +0x08": "caught",
+    "reset does not put the scrambler back at all": "equivalent",
+    "reset leaves +0x2c alone": "caught",
+    "reset leaves +0x38 alone": "caught",
+    "reset seeds the scrambler with ones": "caught",
+    "reset writes a one into the float at +0x28": "caught",
+    "the bit-to-symbol stage is given three times the argument": "caught",
+    "the bit-to-symbol stage is given twice the block": "caught",
+    "the bit-to-symbol stage's null test is dropped": "caught",
+    "the block size is six fifths of the argument": "caught",
+    "the block size truncates instead of rounding": "caught",
+    "the constructor's diagnostic is gated at the verbose level": "caught",
+    "the destructor nulls the transmit filter after freeing it": "caught",
+    "the fifth buffer is sized from the block rather than from the argument": "caught",
+    "the first buffer has no slack": "caught",
+    "the first buffer is a buffer of ints": "caught",
+    "the fourth buffer is released twice and the fifth never": "caught",
+    "the fourth buffer is sized from the block rather than from the argument": "caught",
+    "the inlined reset's diagnostic loses its carriage return": "caught",
+    "the last buffer is never released": "caught",
+    "the phase 3 modulator is freed without being destroyed": "caught",
+    "the phase 3 modulator's null test is dropped": "caught",
+    "the phase 4 modulator is handed the mapping parameters as its CP": "caught",
+    "the priming loop does not run at all": "caught",
+    "the priming loop runs one extra time": "caught",
+    "the queue is freed without being destroyed": "caught",
+    "the queue is one slot shorter": "caught",
+    "the queue is primed with the whole parameter rather than half of it": "caught",
+    "the resampler is given four more taps": "caught",
+    "the resampler is given one more phase": "caught",
+    "the resampler's null test is dropped": "equivalent",
+    "the second argument is not stored": "caught",
+    "the second buffer is a buffer of shorts": "caught",
+    "the sixth argument is filed where the fifth belongs": "caught",
+    "the third buffer carries the same ten elements of slack as its neighbours": "caught",
+    "the third buffer's null test is dropped": "caught",
+    "the transmit filter gets one fewer sample of block slack": "caught",
+    "the transmit filter gets one fewer tap": "caught",
+    "the transmit filter is given the echo pre-filter's numerator": "caught",
+    "the two diagnostic lines are exchanged": "caught"
    }
   },
   "v92modulusencoder": {
@@ -4466,6 +4533,29 @@
     "the warm-up loop is one symbol short": "caught"
    }
   },
+  "v92p4mod": {
+   "key": "cb0526ad176a058656fe7a8202b1527b94889bb4bdff8f560453070313ae1d7c",
+   "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x18 is not cleared": "caught",
+    "+0x1c is cleared as a word rather than as a byte": "caught",
+    "+0x1c is not cleared": "caught",
+    "+0x1c0 is not cleared": "caught",
+    "+0x1c4 is not cleared": "caught",
+    "the caller's V92CP is cleared through the mapping parameters instead": "caught",
+    "the caller's V92CP is left alone": "caught",
+    "the destructor nulls the mapper after freeing it": "caught",
+    "the destructor releases the caller's V92CP as well as the mapper": "caught",
+    "the fourth argument is filed where the first belongs": "caught",
+    "the mapper's allocation is four bytes larger": "caught",
+    "the mapper's null test is dropped": "caught",
+    "the scrambler's history has one element less of slack": "caught",
+    "the scrambler's near tap is 6": "caught",
+    "the scrambler's two taps are exchanged": "caught",
+    "the second and third arguments are exchanged": "caught",
+    "the word cleared in the caller's V92CP is +0x114": "caught"
+   }
+  },
   "v92params": {
    "key": "c60db0a051fc84aa6f4c78b3e5e3edd00d2dee9ca5933e3e5c3a50eab931375b",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -4513,6 +4603,30 @@
     "the destructor frees the FIR twice and the IIR never": "caught",
     "the second sub-object is a FloatFIR, not a FloatIIR": "equivalent",
     "the two stores are swapped": "caught"
+   }
+  },
+  "v92tx": {
+   "key": "b8f13b4a200194bde3648f8d3312a22d0e632d10b64d2f0339ea224dfbc4d585",
+   "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x04 is not cleared": "caught",
+    "+0x0c is not cleared": "caught",
+    "the convolution encoder is never released": "caught",
+    "the convolution encoder's allocation is four bytes larger": "caught",
+    "the destructor frees the precoder where it should free the pre-filter": "caught",
+    "the modulus encoder is given the pre-filter's size": "caught",
+    "the modulus encoder's null test is dropped": "caught",
+    "the one-byte buffer is a word": "caught",
+    "the one-byte buffer is allocated and not cleared": "caught",
+    "the one-byte buffer's null test is dropped": "caught",
+    "the pre-filter is built with four fewer taps": "caught",
+    "the pre-filter is nulled after its free as well": "caught",
+    "the precoder is built with four fewer taps": "caught",
+    "the precoder is not nulled after its free": "caught",
+    "the precoder's allocation is four bytes larger": "caught",
+    "the precoder's null test is dropped": "caught",
+    "the raw buffer at +0x08 is a byte short": "caught",
+    "the raw buffer's null test is dropped": "caught"
    }
   },
   "vpcmcreate": {
