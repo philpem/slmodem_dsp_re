@@ -4052,7 +4052,7 @@
    }
   },
   "v90modemctor": {
-   "key": "defd36a37227560ce5055841818ce5ecdec3279a93fdd69d8d557643668dfcdb",
+   "key": "8f6a399af9232825006cf013f8aa0cc55ae93ea3c5ff33dc6d9c6d4ef53b4144",
    "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the DIL descriptor is not stored": "caught",
@@ -5032,7 +5032,7 @@
    }
   },
   "vpcmctor": {
-   "key": "858c654e7995f33e81dae4629915876900b97c1c4af6c726c50c9b7344c357c3",
+   "key": "a57ff27c5a6c66f1bd7f9a21ae25df2785d21e8b8b512dd047c566e4df249aeb",
    "summary": "32 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "minNofTransmitSequences starts at VPCMXF_Create's 1 and not at 0": "caught",
@@ -5070,7 +5070,7 @@
    }
   },
   "vpcmdp": {
-   "key": "1cc238631b0d2adaca849429fe43338d9b180fdfb3258c39660ff583abd2738a",
+   "key": "6efa61b5a8f72634f2a1a0b58d55912e65cb974792fe24fe4a4aae1174b2f467",
    "summary": "96 mutations: 88 caught (88 by test, 0 by strings), 0 NOT caught, 0 unusable, 8 equivalent, 0 MIScounted",
    "verdicts": {
     "MDMPRM_MIN_RATE and MDMPRM_MAX_RATE are swapped": "caught",
@@ -5322,7 +5322,7 @@
    }
   },
   "vpcmxfcreate": {
-   "key": "b81b5e68662ab0c6d4f7973547d2a75b431c4be67c3a6b8f2d21cf171af5f692",
+   "key": "37c35aca166a3cbd712cf1c8e3ed5a38594a5838080f7285bff2111b7a203800",
    "summary": "24 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",

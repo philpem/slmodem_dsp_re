@@ -108,9 +108,11 @@ struct tagV90DILdescriptor;
  * comparison, where a signed `side > 1` would be `jle`.  That is V92Modem.h's
  * argument for `V92ModemSide` applied to the same shape in the same place.
  * `V90ComputationalMode` is `int` because nothing here constrains it and
- * V90Equalizer.h chose `int` first; the guard is there because that header
- * and this one can both be included, and repeating an opaque-enum
- * declaration is legal but repeating it with a different base is not.
+ * V90Equalizer.h chose `int` first.  It is REDECLARED here rather than
+ * guarded: repeating an opaque-enum declaration is legal exactly as long as
+ * the base agrees, so the duplicate is a check that the two headers still
+ * agree and not a hazard.  V90Equalizer.h does reach the same translation
+ * unit as this file, through V90SessionFlag.h, so the check runs.
  */
 enum V90ModemSide : unsigned int;
 enum V90ComputationalMode : int;

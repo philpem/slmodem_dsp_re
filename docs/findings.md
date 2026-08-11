@@ -43493,6 +43493,18 @@ the two `name` pointers compares a string with itself and would pass however
 wrong either was.  Each side is pinned to its OWN literal instead.  Any
 cross-side comparison of a string POINTER is suspect for this reason.
 
+**And the two `~VPcmFloModem` symbols the blob has and we do not are DEAD IN
+THE BLOB.**  `objdump -dr` over the whole 1.2 MB finds zero `R_386_PC32`
+relocations against `_ZN12VPcmFloModemD1Ev` or `D2Ev`: the blob's own
+`VPCMXF_Delete` inlines the six member destructor calls exactly as ours does,
+and the out-of-line copies GCC 3.4.2 emitted beside them are called by
+nothing.  So `tools/closure.py dp_vpcm_init --missing` reporting 0 symbols and
+0 bytes is CORRECT and not an inlining artefact -- the pair is in no call
+graph to be missing from -- and D237 is a symbol-table difference with no
+behavioural consequence at all.  It was worth ten minutes to check, because
+"our object is missing two symbols the blob has" and "the blob has 194 bytes
+nothing can reach" are very different claims and only one of them is true.
+
 **Finding 1250 is now asserted in a second place.**  `t_vpcmctor` checks all
 four halves of the `GenericIIR` `m_i`/`m_acc` divergence, because the filter is
 an embedded member of `VPcmFloModem` and the constructor's output includes it.

@@ -181,6 +181,35 @@ ignore it for scheduling.
 A closure of 1 means the symbol itself: nothing blocks it. A closure of 145
 means `V90Demodulator` is a hub, not a leaf, and starting there would stall.
 
+### Wave 5 IS DONE — `dp_vpcm_init` builds the whole modem out of this tree
+
+**Landed 2026-08-11.  `tools/closure.py dp_vpcm_init --missing` reports 0
+symbols and 0 bytes.**  The last nine symbols were 3,348 bytes:
+
+    V90Modem::V90Modem            597    VPCMXF_Create      495
+    V90Modem::~V90Modem           321    VPCMXF_Delete      109
+    VPcmFloModem::VPcmFloModem    651    vpcm_create        969
+    vpcm_delete    110   vpcm_op    24   dp_vpcm_init        72
+
+Four suites, 178 mutations, 0 NOT caught: `v90modemctor` (26: 24/0/2),
+`vpcmctor` (32: 31/0/1), `vpcmxfcreate` (24: 21/0/3), `vpcmdp` (96: 88/0/8).
+Findings 1330-1344; deviations D235, D236, D237.
+
+Three things the next reader of this file should have:
+
+- **Finding 806's question is answered and its premise was wrong.**  Nothing
+  in the construction path writes the V.34 object's `+0x2218`; it is a
+  run-time handshake state and `datapumpv34` at .text+0x71bfa is what writes
+  2.  Finding 1331 has the enumeration of all eleven writers.
+- **`sizeof(VPcmFloModem)` is 0x7f68 and `V90Modem` has no `pad_` left.**
+  Findings 1332 and 1333; the header floors both files used to carry are gone.
+- **D237 is the only difference left and it is a symbol-table one.**  The
+  blob's `~VPcmFloModem` `D1`/`D2` are called by nothing in the blob; ours are
+  inlined into `VPCMXF_Delete` and emitted nowhere.
+
+The plan that used to be here is kept below, unedited, because the ordering
+argument it makes is the one that turned out to be right.
+
 ### Wave 5 — the construction path, LAST
 
 What this document originally called wave 1. Moved here, unchanged in content,
