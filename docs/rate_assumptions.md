@@ -185,3 +185,18 @@ no converter.
 **Retarget:** harmless if R-1 makes the rates equal, but if a new rate is ever
 introduced the table needs extending — it will not fail loudly, it will just
 produce no conversion. Noted in `src/core/dp_wrapper.c`.
+
+## 🔴 R-12 — `v32_create` rescales `MDMPRM_IODELAY` from 9600 to 8000 by ×5/6
+
+`v32_create` is the only one of the four 8 kHz datapump constructors that reads
+`MDMPRM_IODELAY` at all (`b103_create`, `v22_create` and `v23_create` never
+call `modem_get_param`).  It computes `phys = IODELAY + 48`, pins it at 216,
+and hands the V.32 core `phys * 5 / 6` — and 5/6 is exactly 8000/9600.  The
+host's delay is in host samples; the echo canceller behind `dp_wrapper` wants
+its own 8 kHz ones.  Finding 1197.
+
+**Retarget:** if R-1 makes the host 8000 the ×5/6 becomes wrong, not
+redundant — the factor has to go to 1 at the same time as the host rate
+changes.  The 216-sample ceiling is likewise in host samples (22.5 ms at
+9600) and would have to be restated, or the pump silently pins a delay it
+should have accepted.
