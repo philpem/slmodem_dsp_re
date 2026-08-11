@@ -63,6 +63,10 @@ void ref_reset(void *self, int law, unsigned char code, int st,
 	asm("ref__ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj");
 int ref_generateV92Symbol(void *self)
 	asm("ref__ZN18V90Phase3Modulator17generateV92SymbolEv");
+int ref_generateSymbol(void *self)
+	asm("ref__ZN18V90Phase3Modulator14generateSymbolEv");
+void ref_exitDIL(void *self)
+	asm("ref__ZN18V90Phase3Modulator7exitDILEv");
 
 /*
  * The four weak Scrambler members.  They are `W` in the blob, not `T`, and
@@ -1971,6 +1975,204 @@ run_ctor_dtor(void)
 }
 
 
+
+/*
+ * `generateSymbol` -- one branch on `sessionFlag` over the two generators
+ * this file already drives in full.  What is left to test is the BRANCH, and
+ * the way to test a dispatcher is to check it against the thing it dispatches
+ * to: for every state, the same object is driven twice from identical
+ * starting points, once through the dispatcher and once through the generator
+ * the flag should have chosen, and the two must agree byte for byte and not
+ * merely in their return values.
+ *
+ * THE FLAG IS SWEPT PAST ITS ZERO/NON-ZERO BOUNDARY, and 1 is not enough: the
+ * object tests the whole word with `test %edx,%edx`, so a reconstruction
+ * reading a byte or a low bit would agree on 1 and disagree on 0x100.
+ */
+static const unsigned int gs_flags[] = { 0u, 1u, 2u, 0x100u, 0x80000000u,
+					 0xffffffffu };
+#define GS_NFLAG ((int)(sizeof(gs_flags) / sizeof(gs_flags[0])))
+
+static union mod_slot gs_a, gs_b, gs_c, gs_d;
+
+/*
+ * The two sides' objects are NEVER byte-equal: the scrambler's seven cursors
+ * point into that side's own buffer and the three bit-vector pointers into
+ * that side's own arrays, so the regions holding them are blanked before the
+ * comparison and compared separately -- exactly as `drive` does, and for the
+ * same reason.  Blanking them here rather than skipping the comparison keeps
+ * everything between them in the compare.
+ */
+static void
+p3m_compare(const char *what, long input)
+{
+	memcpy(gs_c.raw, ours.raw, SLOT);
+	memcpy(gs_d.raw, theirs.raw, SLOT);
+	memset(gs_c.raw + 0x20, 0, 0x1c);
+	memset(gs_d.raw + 0x20, 0, 0x1c);
+	memset(gs_c.raw + 0x44, 0, 0x0c);
+	memset(gs_d.raw + 0x44, 0, 0x0c);
+	diff_eq_obj_(__FILE__, __LINE__, what, "V90Phase3Modulator",
+		     &gs_c.o, &gs_d.o, sizeof(V90Phase3Modulator), input);
+	scr_compare(&ours.o.scrambler, &theirs.o.scrambler, input);
+}
+
+static int
+run_generate_symbol(void)
+{
+	int st, f, seenV90 = 0, seenV92 = 0;
+
+	diff_begin("V90Phase3Modulator::generateSymbol");
+
+	for (st = 0; st < 16; st++) {
+		for (f = 0; f < GS_NFLAG; f++) {
+			unsigned int flag = gs_flags[f];
+			long input = st * 100 + f;
+			int viaDispatch, viaDirect, refDispatch;
+
+			prepare(st * GS_NFLAG + f, f % 4, (unsigned int)st);
+			ours.o.sessionFlag = theirs.o.sessionFlag = flag;
+
+			/* The starting point, kept for the second run. */
+			memcpy(gs_a.raw, ours.raw, SLOT);
+			memcpy(gs_b.raw, theirs.raw, SLOT);
+
+			viaDispatch = ours.o.generateSymbol();
+			refDispatch = ref_generateSymbol(&theirs.o);
+
+			diff_eq_int("the dispatcher returned (case %ld)",
+				    viaDispatch, refDispatch, input);
+			p3m_compare("after generateSymbol", input);
+			diff_eq_int("no store past the object (case %ld)",
+				    guard_equal(), 1, input);
+
+			/*
+			 * And now the BLOB's same start through the generator
+			 * the flag names, compared against the blob's own
+			 * result from the dispatcher.  Both runs are the same
+			 * side, so this one is a plain memcmp and it is an
+			 * absolute check rather than a cross-side one: if the
+			 * branch were inverted, this fails where the
+			 * comparison above would not, because both sides
+			 * would be inverted together.
+			 */
+			memcpy(gs_c.raw, theirs.raw, SLOT);
+			memcpy(theirs.raw, gs_b.raw, SLOT);
+			viaDirect = flag != 0
+				? ref_generateV92Symbol(&theirs.o)
+				: ref_generateV90Symbol(&theirs.o);
+			diff_eq_int("the dispatcher chose the right generator"
+				    " (case %ld)",
+				    refDispatch, viaDirect, input);
+			diff_eq_int("and left the same object (case %ld)",
+				    memcmp(gs_c.raw, theirs.raw, SLOT) == 0, 1,
+				    input);
+			memcpy(ours.raw, gs_a.raw, SLOT);
+
+			if (flag != 0)
+				seenV92 = 1;
+			else
+				seenV90 = 1;
+		}
+	}
+
+	diff_eq_int("the V.90 arm was taken (%ld)", seenV90, 1, 0);
+	diff_eq_int("the V.92 arm was taken (%ld)", seenV92, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `exitDIL` -- three guards and two arms, and every one of the five outcomes
+ * has to be produced.  The state is swept over all sixteen so that the guard
+ * is tested against every value it can hold and not only against a
+ * neighbouring one; `symbolCount` over zero and non-zero; `segmentPos` over
+ * zero and non-zero, which is what chooses between running the segment out
+ * and terminating.
+ */
+static int
+run_exit_dil(void)
+{
+	int st, sc, sp;
+	int seenWrongState = 0, seenNoCount = 0, seenEnd = 0, seenTerm = 0;
+
+	diff_begin("V90Phase3Modulator::exitDIL");
+
+	for (st = 0; st < 16; st++) {
+		for (sc = 0; sc < 3; sc++) {
+			for (sp = 0; sp < 3; sp++) {
+				unsigned int count = sc == 0 ? 0u
+					: (sc == 1 ? 1u : 0x1234u);
+				unsigned int pos = sp == 0 ? 0u
+					: (sp == 1 ? 1u : 0xffffffffu);
+				long input = (st * 3 + sc) * 3 + sp;
+				unsigned int before;
+
+				prepare((int)input, (int)input % 4,
+					(unsigned int)st);
+				ours.o.symbolCount = theirs.o.symbolCount =
+					count;
+				ours.o.segmentPos = theirs.o.segmentPos = pos;
+				before = ours.o.state;
+
+				ours.o.exitDIL();
+				ref_exitDIL(&theirs.o);
+
+				p3m_compare("after exitDIL", input);
+				diff_eq_int("no store past the object"
+					    " (case %ld)", guard_equal(), 1,
+					    input);
+
+				if (st != P3M_STATE_DIL) {
+					diff_eq_int("a state that is not DIL"
+						    " is untouched (case %ld)",
+						    (unsigned)theirs.o.state,
+						    before, input);
+					seenWrongState = 1;
+				} else if (count == 0) {
+					diff_eq_int("no symbols sent, no exit"
+						    " (case %ld)",
+						    (unsigned)theirs.o.state,
+						    before, input);
+					seenNoCount = 1;
+				} else if (pos != 0) {
+					diff_eq_int("mid-segment goes to"
+						    " DIL_END (case %ld)",
+						    (unsigned)theirs.o.state,
+						    P3M_STATE_DIL_END, input);
+					diff_eq_int("and does not clear the"
+						    " count (case %ld)",
+						    theirs.o.symbolCount,
+						    count, input);
+					seenEnd = 1;
+				} else {
+					diff_eq_int("on a boundary it"
+						    " terminates (case %ld)",
+						    (unsigned)theirs.o.state,
+						    P3M_STATE_TERMINATED,
+						    input);
+					diff_eq_int("and clears the count"
+						    " (case %ld)",
+						    theirs.o.symbolCount, 0u,
+						    input);
+					diff_eq_int("and raises event 6"
+						    " (case %ld)",
+						    theirs.o.eventCode, 6u,
+						    input);
+					seenTerm = 1;
+				}
+			}
+		}
+	}
+
+	diff_eq_int("the wrong-state guard fired (%ld)", seenWrongState, 1, 0);
+	diff_eq_int("the zero-count guard fired (%ld)", seenNoCount, 1, 0);
+	diff_eq_int("the DIL_END arm was taken (%ld)", seenEnd, 1, 0);
+	diff_eq_int("the terminating arm was taken (%ld)", seenTerm, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1982,6 +2184,8 @@ main(void)
 	rc |= run_scrambler();
 	rc |= run_generate(0);
 	rc |= run_generate(1);
+	rc |= run_generate_symbol();
+	rc |= run_exit_dil();
 	rc |= run_sequence(0);
 	rc |= run_sequence(1);
 	rc |= run_diagnostics(0);

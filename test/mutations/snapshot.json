@@ -4287,8 +4287,8 @@
    }
   },
   "v90p3mod": {
-   "key": "07be17c9a8a41ec6a6ba3848a247c1aa87103c131ae00bd9640e26fdbde8e87e",
-   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1d6baf91662e5905a51daeb1f419927a5562f01cc246cb41824cdd53746dddee",
+   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the V90Parameters * is not stored": "caught",
     "ctor: the code companded is 0x41, not 0x40": "caught",
@@ -4301,7 +4301,20 @@
     "ctor: the scrambler taps are the wrong way round": "caught",
     "ctor: the session flag is stored after reset, not before": "caught",
     "ctor: the timeout base is 1, not 0": "caught",
-    "dtor: the scrambler's history is not freed": "caught"
+    "dtor: the scrambler's history is not freed": "caught",
+    "exitDIL clears the count on the mid-segment arm too": "caught",
+    "exitDIL exits from any state": "caught",
+    "exitDIL exits with nothing sent": "caught",
+    "exitDIL guards on the state it exits TO": "caught",
+    "exitDIL leaves the event alone": "caught",
+    "exitDIL raises the wrong event": "caught",
+    "exitDIL runs the segment out into the wrong state": "caught",
+    "exitDIL terminates without clearing the count": "caught",
+    "exitDIL's two arms are swapped": "caught",
+    "generateSymbol dispatches the other way round": "caught",
+    "generateSymbol tests the flag for one rather than for non-zero": "caught",
+    "generateSymbol tests the low byte of the session flag": "caught",
+    "generateSymbol truncates the symbol to a byte": "caught"
    }
   },
   "v90p4dctor": {

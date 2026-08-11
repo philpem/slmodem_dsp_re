@@ -215,6 +215,26 @@ public:
 	int generateV92Symbol();
 
 	/*
+	 * The dispatcher over the two above, and `int` for the same reason
+	 * they are: it ends `cwtl; ret`.  It sign-extends the callee's value
+	 * a SECOND time, which is one instruction our build does not emit --
+	 * the original declared the two it calls as returning `short` where
+	 * this tree declares them `int` (see just above), and the extension
+	 * is a consequence of that recorded choice rather than of behaviour.
+	 * Both spellings return the same number: the callees' own `cwtl` has
+	 * already made the value a sign-extended short.
+	 */
+	int generateSymbol();
+
+	/*
+	 * The one state exit that carries a message.  Returns nothing: the
+	 * object's four exits are the object's four exits, and `exitDIL`
+	 * ends with a bare `ret` and eax carrying whatever the last store
+	 * left there.
+	 */
+	void exitDIL();
+
+	/*
 	 * Declared, not defined -- see the file comment.  A return type is not
 	 * mangled, so it is unknown for all of them.
 	 */
@@ -225,10 +245,8 @@ public:
 	void generateJdNot();
 	void generateJdPhase();
 	void generateV92Jd();
-	void generateSymbol();
 	void generateTRN1d();
 	void updateCodeSegmentPointer();
-	void exitDIL();
 	void exitJd();
 	void exitJdPhase();
 
