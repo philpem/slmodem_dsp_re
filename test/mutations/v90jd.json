@@ -54,8 +54,8 @@
  },
  {
   "label": "the CRC's two feedback taps are transposed",
-  "find": "\t\tcrc[3] = tap3;\n\t\tcrc[10] = tap10;",
-  "replace": "\t\tcrc[3] = tap10;\n\t\tcrc[10] = tap3;"
+  "find": "\n\t\tcrc[3] = tap3;\n\t\tcrc[10] = tap10;",
+  "replace": "\n\t\tcrc[3] = tap10;\n\t\tcrc[10] = tap3;"
  },
  {
   "label": "the destructor is not empty",
@@ -111,5 +111,90 @@
   "label": "getMaxLookahead reads the framed positions",
   "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
   "replace": "\treturn (unsigned char)((bits[49] & 1) + ((bits[50] & 1) << 1));"
+ },
+ {
+  "label": "the run length counts zero bits too",
+  "find": "\tif (bit)\n\t\tones = (unsigned char)(unpack[0] + 1);",
+  "replace": "\tones = (unsigned char)(unpack[0] + 1);"
+ },
+ {
+  "label": "the run length restarts at one rather than accumulating",
+  "find": "\t\tones = (unsigned char)(unpack[0] + 1);",
+  "replace": "\t\tones = 1;"
+ },
+ {
+  "label": "the hunt accepts sixteen ones, not seventeen",
+  "find": "\t\tif (ones > 16)\n\t\t\tunpackWord = 1;",
+  "replace": "\t\tif (ones >= 16)\n\t\t\tunpackWord = 1;"
+ },
+ {
+  "label": "group 2's marker is accepted as a 1 rather than a 0",
+  "find": "\tcase 3:\n\t\t/* Group 2's leading 0. */\n\t\tif (bit) {",
+  "replace": "\tcase 3:\n\t\t/* Group 2's leading 0. */\n\t\tif (!bit) {"
+ },
+ {
+  "label": "the first payload run is fifteen bytes",
+  "find": "\t\tif (n == 16)\n\t\t\tunpackWord = 3;",
+  "replace": "\t\tif (n == 15)\n\t\t\tunpackWord = 3;"
+ },
+ {
+  "label": "the second payload run is V92Jd's eleven",
+  "find": "\t\tif (n == 28)\n\t\t\tunpackWord = 5;",
+  "replace": "\t\tif (n == 27)\n\t\t\tunpackWord = 5;"
+ },
+ {
+  "label": "the third payload run is one byte short",
+  "find": "\t\tif (n == 32)\n\t\t\tunpackWord = 6;",
+  "replace": "\t\tif (n == 31)\n\t\t\tunpackWord = 6;"
+ },
+ {
+  "label": "the received CRC field is fifteen bytes",
+  "find": "\t\tn++;\n\t\tif (n != 48) {",
+  "replace": "\t\tn++;\n\t\tif (n != 47) {"
+ },
+ {
+  "label": "the payload store takes the bit's truth, not its low byte",
+  "find": "\t\tbits[n] = (unsigned char)bit;\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)",
+  "replace": "\t\tbits[n] = (unsigned char)(bit != 0);\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)"
+ },
+ {
+  "label": "the unpacker's CRC register starts at zero, not all ones",
+  "find": "\t\tfor (i = 0; i <= 15; i++)\n\t\t\tcrc[i] = 1;",
+  "replace": "\t\tfor (i = 0; i <= 15; i++)\n\t\t\tcrc[i] = 0;"
+ },
+ {
+  "label": "the unpacker's CRC runs over sixteen payload bytes, not thirty-two",
+  "find": "\t\tfor (k = 0; k <= 31; k++) {",
+  "replace": "\t\tfor (k = 0; k <= 15; k++) {"
+ },
+ {
+  "label": "the unpacker's CRC taps are transposed",
+  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;",
+  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;"
+ },
+ {
+  "label": "the received CRC is compared as a low bit, not a magnitude",
+  "find": "\t\t\tint d = crc[i] - bits[32 + i];\n\n\t\t\tsum += d < 0 ? -d : d;",
+  "replace": "\t\t\tint d = (crc[i] ^ bits[32 + i]) & 1;\n\n\t\t\tsum += d;"
+ },
+ {
+  "label": "the received CRC is read from the framed positions",
+  "find": "\t\t\tint d = crc[i] - bits[32 + i];",
+  "replace": "\t\t\tint d = crc[i] - bits[V90JD_GROUP3 + 1 + i];"
+ },
+ {
+  "label": "the trailing count stops one bit early",
+  "find": "\t\tif (n == 0x34)\n\t\t\treturn 1;",
+  "replace": "\t\tif (n == 0x33)\n\t\t\treturn 1;"
+ },
+ {
+  "label": "an unknown state clears the run length instead of keeping it",
+  "find": "\tdefault:\n\t\tunpack[0] = ones;",
+  "replace": "\tdefault:\n\t\tunpack[0] = 0;"
+ },
+ {
+  "label": "unPackData reports a completed message on every call",
+  "find": "\t}\n\n\treturn 0;\n}",
+  "replace": "\t}\n\n\treturn 1;\n}"
  }
 ]

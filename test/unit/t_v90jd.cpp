@@ -45,6 +45,14 @@ unsigned char *ref_getBitVector(void *self)
 void ref_unPackReset(void *self) asm("ref__ZN5V90Jd11unPackResetEv");
 
 /*
+ * The unpacker.  `int` is V90Jd.cpp's reading of `%eax` and not the
+ * mangling's, so declaring it that way here is itself a check: a blob-side
+ * function that left `%eax` alone would hand this fixture whatever the call
+ * left there, and our side's genuine 0 would not match it.
+ */
+int ref_unPackData(void *self, int bit) asm("ref__ZN5V90Jd10unPackDataEi");
+
+/*
  * The three accessors.  Their return types are the ones V90Jd.cpp derives
  * from the object -- `int`, void and `unsigned char` -- and the declarations
  * here are what would fail if that reading were wrong on the blob's side: a
@@ -523,6 +531,283 @@ run_accessors(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * The unpacker, driven as a state machine and as a round trip.
+ *
+ * THE ROUND TRIP IS THE ONLY THING THAT REACHES THE CRC.  Roughly half of
+ * `unPackData`'s 879 bytes is the check it runs when the sixteenth CRC bit
+ * arrives, and that code is unreachable unless the preceding fifty-two bits
+ * walked the framing exactly: seventeen 1 bits, a 0, sixteen, a 0, sixteen, a
+ * 0.  A sequence of random bits would never get there.  So the message is
+ * built by the packer this file already tests -- construct from parameters,
+ * `getBitVector()`, take the 72 bytes -- and fed back in one bit at a time.
+ * It closes: the packer's two sixteen-byte CRC runs at framed 18 and 35 are
+ * the unpacker's single thirty-two-byte run over payload 0..31, so the
+ * register agrees and the message is accepted on its 72nd bit.
+ *
+ * AND THE ROUND TRIP IS THE ANSWER TO D270.  `expect[]` below is the payload
+ * lifted out of the WIRE message by the framing rule -- not by reading our
+ * own object -- and the run asserts that `bits[0..47]` holds exactly it, then
+ * that the three accessors decode it.  That is an oracle the blob does not
+ * supply, and it is what says the payload-contiguous layout has a producer.
+ *
+ * EVERY CALL IS COMPARED, not just the last: the return value, the whole
+ * object and the guard past its end.  A divergence that corrects itself
+ * later is still a divergence.
+ *
+ * THE FOUR CORRUPTIONS each aim at one instruction:
+ *
+ *   - a payload bit flipped        the CRC must not be ignored
+ *   - a CRC byte or'd with 2       `abs(crc[i] - bits[32+i])`, not `& 1`
+ *   - every 1 sent as 0x100        the store is `mov %cl` -- the LOW BYTE --
+ *                                  while the marker tests are `test %ecx`
+ *                                  on the whole word, so the message walks
+ *                                  the framing and stores zeros
+ *   - a 1 at a group marker        the restart, and after it no run of
+ *                                  seventeen exists in the rest of the
+ *                                  message (the longest is sixteen), so the
+ *                                  state stays 0 to the end
+ * ===========================================================================
+ */
+static int uk_moved, uk_complete, uk_zero;
+
+/* Payload index to its position in the framed message. */
+static int
+framed_of(int p)
+{
+	if (p < 16)
+		return V90JD_GROUP1 + 1 + p;
+	if (p < 32)
+		return V90JD_GROUP2 + 1 + (p - 16);
+	return V90JD_GROUP3 + 1 + (p - 32);
+}
+
+static int
+feed_one(int bit, long sample)
+{
+	unsigned char before[SLOT];
+	int ra, rb;
+
+	memcpy(before, ours.raw, SLOT);
+	ra = OURS.unPackData(bit);
+	rb = ref_unPackData(&THEIRS, bit);
+
+	diff_eq_int("unPackData return value (sample %ld)", ra, rb, sample);
+	diff_eq_obj("after unPackData", V90Jd, &OURS, &THEIRS, sample);
+	diff_eq_int("no store past the object (sample %ld)", guard_equal(), 1,
+		    sample);
+
+	if (memcmp(before, ours.raw, SLOT) != 0)
+		uk_moved = 1;
+	if (ra)
+		uk_complete++;
+	else
+		uk_zero++;
+	return ra;
+}
+
+/* Seeded storage on both sides, then the unpacker's own reset. */
+static void
+start(int trial)
+{
+	seed(trial, trial % 4);
+	OURS.unPackReset();
+	ref_unPackReset(&THEIRS);
+}
+
+#define NMSG 16
+
+static int
+run_unpackdata(void)
+{
+	int trial;
+	int first_mask = 0, mask_distinct = 0, late_complete = 0;
+
+	uk_moved = 0;
+	uk_complete = 0;
+	uk_zero = 0;
+
+	diff_begin("V90Jd::unPackData");
+
+	for (trial = 0; trial < NMSG; trial++) {
+		unsigned char msg[V90JD_BITS];
+		unsigned char expect[48];
+		int wire[V90JD_BITS];
+		V90Parameters *p = (V90Parameters *)params.raw;
+		long base = (long)trial * 1000L;
+		int i, rc, mask;
+		unsigned char c0 = 0, c1 = 0;
+
+		/* A real message, straight off the packer. */
+		seed(trial, trial % 4);
+		seed_params(trial);
+		our_ctor1(&OURS, p);
+		OURS.getBitVector();
+		memcpy(msg, OURS.bits, V90JD_BITS);
+		for (i = 0; i < 48; i++)
+			expect[i] = msg[framed_of(i)];
+
+		/* (1) The message, one bit at a time. */
+		start(trial);
+		for (i = 0; i < V90JD_BITS; i++) {
+			rc = feed_one(msg[i], base + i);
+			diff_eq_int("completes on the last bit and no other "
+				    "(sample %ld)", rc,
+				    i == V90JD_BITS - 1, base + i);
+		}
+
+		diff_eq_int("the unpacker left the payload flat at bits[0] "
+			    "(trial %ld)", memcmp(OURS.bits, expect, 48), 0,
+			    trial);
+		diff_eq_int("the counter stopped at 0x34 (trial %ld)",
+			    OURS.unpack[1], 0x34, trial);
+		diff_eq_int("the state stopped at 8 (trial %ld)",
+			    OURS.unpackWord, 8, trial);
+
+		/* And the accessors decode what it left. */
+		mask = 0;
+		for (i = 0; i < 28; i++)
+			if (expect[i])
+				mask |= 1 << i;
+		diff_eq_int("getRatesMask reads the unpacked payload "
+			    "(trial %ld)", OURS.getRatesMask(), mask, trial);
+		OURS.getConstelationSize(&c0, &c1);
+		diff_eq_int("getConstelationSize reads bits[28] (trial %ld)",
+			    c0, expect[28], trial);
+		diff_eq_int("getConstelationSize reads bits[29] (trial %ld)",
+			    c1, expect[29], trial);
+		diff_eq_int("getMaxLookahead reads bits[30..31] (trial %ld)",
+			    OURS.getMaxLookahead(),
+			    (expect[30] & 1) + ((expect[31] & 1) << 1), trial);
+
+		if (trial == 0)
+			first_mask = mask;
+		else if (mask != first_mask)
+			mask_distinct = 1;
+
+		/*
+		 * (2) Keep going past the end.  The state stays at 8 and the
+		 * counter runs on as a BYTE, so it wraps through 255 and fires
+		 * again 256 bits later.
+		 */
+		for (i = 0; i < 300; i++)
+			if (feed_one(i & 1, base + 100 + i))
+				late_complete = 1;
+
+		/* (3) One payload bit flipped: the CRC must reject it. */
+		start(trial);
+		for (i = 0; i < V90JD_BITS; i++)
+			wire[i] = msg[i];
+		wire[framed_of(trial % 48)] ^= 1;
+		for (i = 0; i < V90JD_BITS; i++)
+			diff_eq_int("a corrupt message never completes "
+				    "(sample %ld)", feed_one(wire[i],
+				    base + 400 + i), 0, base + 400 + i);
+		diff_eq_int("and the corrupt message reset it (trial %ld)",
+			    OURS.unpackWord, 0, trial);
+
+		/* (4) A CRC byte of 2 or 3: the compare is a magnitude. */
+		start(trial);
+		for (i = 0; i < V90JD_BITS; i++)
+			wire[i] = msg[i];
+		wire[framed_of(32 + trial % 16)] |= 2;
+		for (i = 0; i < V90JD_BITS; i++)
+			diff_eq_int("a CRC byte of 2 is rejected (sample %ld)",
+				    feed_one(wire[i], base + 800 + i), 0,
+				    base + 800 + i);
+		diff_eq_int("and the high CRC byte reset it (trial %ld)",
+			    OURS.unpackWord, 0, trial);
+
+		/* (5) Every 1 sent as 0x100: truthy, but it stores 0. */
+		start(trial);
+		for (i = 0; i < V90JD_BITS; i++)
+			diff_eq_int("a payload of 0x100 never completes "
+				    "(sample %ld)",
+				    feed_one(msg[i] ? 0x100 : 0,
+					     base + 1200 + i), 0,
+				    base + 1200 + i);
+		diff_eq_int("0x100 walked the framing and stored zeros "
+			    "(trial %ld)", OURS.unpackWord, 0, trial);
+
+		/* (6) A 1 -- or a 0x100 -- where a group marker belongs. */
+		start(trial);
+		for (i = 0; i < V90JD_BITS; i++)
+			wire[i] = msg[i];
+		wire[V90JD_GROUP1] = (trial & 1) ? 0x100 : 1;
+		for (i = 0; i < V90JD_BITS; i++)
+			feed_one(wire[i], base + 1600 + i);
+		diff_eq_int("a 1 at group 1's marker restarts the hunt "
+			    "(trial %ld)", OURS.unpackWord, 0, trial);
+	}
+
+	diff_eq_int("unPackData changed the object", uk_moved, 1, 0);
+	diff_eq_int("it completed a message", uk_complete >= NMSG, 1, 0);
+	diff_eq_int("it completed again after the counter wrapped",
+		    late_complete, 1, 0);
+	diff_eq_int("and it returned 0 far more often", uk_zero > uk_complete,
+		    1, 0);
+	diff_eq_int("the recovered rate mask is not the same on every trial",
+		    mask_distinct, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * The same function driven from seeded state rather than from a reset, over
+ * every state the jump table has and the two either side of it, every counter
+ * value that is a boundary in some state, four run lengths including the two
+ * around the byte wrap, and an argument domain wide enough to tell
+ * `test %ecx,%ecx` from a byte test.  `unpack[1]` is held below 72 so that
+ * `bits[unpack[1]] = bit` stays inside the vector: the object bounds it
+ * nowhere, and a seeded 200 would write 200 bytes past `this` on both sides
+ * and prove nothing about either.
+ */
+static int
+run_unpackdata_states(void)
+{
+	static const int states[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 100, -1,
+				      0x7fffffff };
+	static const int counters[] = { 0, 15, 16, 27, 31, 47, 51, 71 };
+	static const int runs[] = { 0, 16, 254, 255 };
+	static const int args[] = { 0, 1, 2, 0x80, 0xff, 0x100, 0x101, -1,
+				    0x7fffffff, (int)0x80000000u };
+	int si, ci, ri, ai;
+	long sample = 0;
+
+	uk_moved = 0;
+	uk_complete = 0;
+	uk_zero = 0;
+
+	diff_begin("V90Jd::unPackData over seeded state");
+
+	for (si = 0; si < (int)(sizeof(states) / sizeof(states[0])); si++)
+		for (ci = 0; ci < (int)(sizeof(counters) / sizeof(counters[0]));
+		     ci++)
+			for (ri = 0;
+			     ri < (int)(sizeof(runs) / sizeof(runs[0])); ri++)
+				for (ai = 0;
+				     ai < (int)(sizeof(args) / sizeof(args[0]));
+				     ai++) {
+					seed((int)sample, (int)(sample % 4));
+					OURS.unpackWord = THEIRS.unpackWord =
+					    states[si];
+					OURS.unpack[1] = THEIRS.unpack[1] =
+					    (unsigned char)counters[ci];
+					OURS.unpack[0] = THEIRS.unpack[0] =
+					    (unsigned char)runs[ri];
+					feed_one(args[ai], sample);
+					sample++;
+				}
+
+	diff_eq_int("the seeded sweep changed the object", uk_moved, 1, 0);
+	diff_eq_int("the seeded sweep completed a message at least once",
+		    uk_complete > 0, 1, 0);
+	diff_eq_int("and did not complete on every call", uk_zero > 0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -533,6 +818,8 @@ main(void)
 	rc |= run_ctor();
 	rc |= run_dtor();
 	rc |= run_accessors();
+	rc |= run_unpackdata();
+	rc |= run_unpackdata_states();
 
 	return rc;
 }
