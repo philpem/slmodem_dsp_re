@@ -4237,6 +4237,14 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D162 🐛 💤 `V90Phase3Modulator`'s constructor stores its `V90Parameters *` at +0x50 and not one of the class's other twenty-two symbols ever reads it — the V.92 sibling's equivalent field IS read, by `reset`
+
+*Batch: the two Phase 3 modulator constructors. **Reachability: unmeasured.** Status: unmeasured — what reads +0x50 outside this class was not looked for.*
+
+**Finding 1257.**
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect

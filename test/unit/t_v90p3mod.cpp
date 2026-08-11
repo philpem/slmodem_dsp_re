@@ -1703,6 +1703,260 @@ run_reset(void)
 }
 
 
+/*
+ * ===========================================================================
+ * THE CONSTRUCTOR AND THE DESTRUCTOR
+ *
+ * BOTH SIDES ARE CALLED BY SYMBOL.  C++ has no syntax for running a
+ * constructor over storage that already exists -- there is no placement new
+ * here, the tree builds -nostdinc++ and the object used none -- and the
+ * alternative, `ours.o = V90Phase3Modulator(par, flag)`, would construct a
+ * temporary over uninitialised stack and copy 920 bytes of it in, destroying
+ * the seeded-and-never-zeroed property this whole file depends on.  So our
+ * constructor is reached through an asm() label exactly as the reference one
+ * is, and the two calls are symmetric.
+ *
+ * WHAT THE CONSTRUCTOR LEAVES ALONE IS MOST OF THE OBJECT.  It calls
+ * `reset(..., d = NULL, ...)`, `resetDILGenerator(NULL)` clears `dilCount`
+ * and returns, and `nSymbols` is 0 -- so `seq1`, `seq2`, `segmentLength`,
+ * `segmentLevel`, all 512 bytes of `dilLevel` and the four DIL cursors are
+ * never written.  That is precisely why the seeded slot matters here: those
+ * ~830 bytes are compared, and they agree only because both sides left the
+ * same seed in place.
+ *
+ * THE ONLY BRANCH IS `sessionFlag`.  `reset` reads it -- which is what forces
+ * the constructor to store it BEFORE calling reset -- and takes one of two
+ * arms: zero writes `jdBits` (NULL here, since `jd` is NULL) and leaves the
+ * two V.92 vectors holding their seed; nonzero writes both V.92 vectors NULL
+ * and leaves `jdBits` holding its seed.  The sweep is therefore 0 against
+ * nonzero rather than "varied values", and it includes a flag whose only set
+ * bits are above bit 15, which separates `!= 0` from a narrower test.
+ *
+ * THE SEVEN SCRAMBLER POINTERS ARE THE ONLY THING NEUTRALISED.  Each side's
+ * constructor mallocs its own history, so those addresses differ for ever;
+ * they are compared as offsets from each side's own `pLimit`, and the 123
+ * bytes of history are compared as bytes.  `tailLength`, the three bit
+ * vectors and `params` are compared as they stand -- one parameter block
+ * serves both sides, so a constructor that failed to store it would show.
+ * ===========================================================================
+ */
+
+extern "C" {
+void our_ctor(void *self, void *p, unsigned int flag)
+	asm("_ZN18V90Phase3ModulatorC1EP13V90Parametersj");
+void our_dtor(void *self) asm("_ZN18V90Phase3ModulatorD1Ev");
+void ref_ctor(void *self, void *p, unsigned int flag)
+	asm("ref__ZN18V90Phase3ModulatorC1EP13V90Parametersj");
+void ref_dtor(void *self) asm("ref__ZN18V90Phase3ModulatorD1Ev");
+
+/*
+ * THE C2 AND D2 VARIANTS ARE SEPARATE BODIES IN THE BLOB, not aliases: the
+ * symbol table gives C1 at .text+0x2c4a0 and C2 at +0x2c520, two distinct
+ * 123-byte copies, and D1 at +0x2ac30 against D2 at +0x2ac10.  GCC 3.4
+ * duplicated them; ours are one function under two names, which is what a
+ * class with no virtual base gets from a modern compiler.  They are driven
+ * on alternate trials against the same one of ours, so "the second copy is
+ * the first copy" is measured rather than assumed.
+ */
+void ref_ctor2(void *self, void *p, unsigned int flag)
+	asm("ref__ZN18V90Phase3ModulatorC2EP13V90Parametersj");
+void ref_dtor2(void *self) asm("ref__ZN18V90Phase3ModulatorD2Ev");
+}
+
+/* Scrambler(18, 23, 99): 1 + 23 + 99 history elements, one byte each. */
+#define CTOR_B		23
+#define CTOR_C		99
+#define CTOR_WORDS	(1u + CTOR_B + CTOR_C)
+
+static union mod_slot ctor_ca, ctor_cb;
+
+/*
+ * The parameter block.  ONE block for both sides, because the constructor
+ * stores the pointer and dereferences nothing: two blocks would compare
+ * unequal at +0x50 on every trial whatever either side did with it, and a
+ * difference in WHICH field was read would be invisible.  It is seeded per
+ * trial so that a reading in which something does read through it would not
+ * be reading zeros.
+ */
+static unsigned char par_block[256] __attribute__((aligned(8)));
+
+static void
+ctor_compare(long input)
+{
+	union mod_slot &ca = ctor_ca, &cb = ctor_cb;
+	const ScramblerHI *a = &ours.o.scrambler;
+	const ScramblerHI *b = &theirs.o.scrambler;
+
+	memcpy(ca.raw, ours.raw, SLOT);
+	memcpy(cb.raw, theirs.raw, SLOT);
+	memset(ca.raw + 0x20, 0, 0x1c);		/* the Scrambler's seven */
+	memset(cb.raw + 0x20, 0, 0x1c);
+	diff_eq_obj("after the constructor", V90Phase3Modulator, &ca.o, &cb.o,
+		    input);
+
+	diff_eq_int("scrambler pInitOut above pLimit (case %ld)",
+		    a->pInitOut - a->pLimit, b->pInitOut - b->pLimit, input);
+	diff_eq_int("scrambler pInitTap1 above pLimit (case %ld)",
+		    a->pInitTap1 - a->pLimit, b->pInitTap1 - b->pLimit, input);
+	diff_eq_int("scrambler pInitTap2 above pLimit (case %ld)",
+		    a->pInitTap2 - a->pLimit, b->pInitTap2 - b->pLimit, input);
+	diff_eq_int("scrambler pOut above pLimit (case %ld)",
+		    a->pOut - a->pLimit, b->pOut - b->pLimit, input);
+	diff_eq_int("scrambler pTap1 above pLimit (case %ld)",
+		    a->pTap1 - a->pLimit, b->pTap1 - b->pLimit, input);
+	diff_eq_int("scrambler pTap2 above pLimit (case %ld)",
+		    a->pTap2 - a->pLimit, b->pTap2 - b->pLimit, input);
+	diff_eq_int("the scrambler history (case %ld)",
+		    memcmp(a->pLimit, b->pLimit, CTOR_WORDS) == 0, 1, input);
+	diff_eq_int("no store past the object (case %ld)", guard_equal(), 1,
+		    input);
+}
+
+static int
+run_ctor_dtor(void)
+{
+	static const unsigned int ctor_flag_v[] = {
+		0u, 1u, 2u, 0x8000u, 0x10000u, 0x5a5a5a5au,
+		0x80000000u, 0xffffffffu
+	};
+	static unsigned char before[SLOT], first[SLOT];
+	int f, mode, trial = 0;
+	int moved = 0, distinct = 0, have_first = 0;
+	int saw_v90 = 0, saw_v92 = 0, saw_park90 = 0, saw_park92 = 0;
+	int saw_params = 0, saw_history = 0;
+	int saw_variant[2];
+
+	saw_variant[0] = saw_variant[1] = 0;
+
+	diff_begin("V90Phase3Modulator::V90Phase3Modulator and ~");
+
+	for (f = 0;
+	     f < (int)(sizeof(ctor_flag_v) / sizeof(ctor_flag_v[0]));
+	     f++) {
+		for (mode = 0; mode < 4; mode++, trial++) {
+			unsigned int flag = ctor_flag_v[f];
+			long input = (long)f * 10L + mode;
+			int al0, fr0, bad0, fr_ours, fr_theirs;
+			int variant = trial & 1;
+			unsigned int by0, i;
+
+			seed(trial, mode);
+			memcpy(before, ours.raw, SLOT);
+			for (i = 0; i < sizeof(par_block); i++)
+				par_block[i] = next_byte();
+
+			al0 = harness_alloc.allocs;
+			by0 = harness_alloc.bytes;
+
+			our_ctor(&ours.o, par_block, flag);
+			if (variant)
+				ref_ctor2(&theirs.o, par_block, flag);
+			else
+				ref_ctor(&theirs.o, par_block, flag);
+			saw_variant[variant] = 1;
+
+			diff_eq_int("both constructors allocated once "
+				    "(case %ld)",
+				    harness_alloc.allocs - al0, 2, input);
+			diff_eq_int("1 + b + c bytes each (case %ld)",
+				    (long)(harness_alloc.bytes - by0),
+				    (long)(2u * CTOR_WORDS), input);
+
+			ctor_compare(input);
+
+			/*
+			 * Anti-vacuity, read off OUR object -- the comparison
+			 * above has already established that the two agree.
+			 */
+			if (memcmp(before, ours.raw, SLOT) != 0)
+				moved = 1;
+			if (!have_first) {
+				memcpy(first, ours.raw, SLOT);
+				have_first = 1;
+			} else if (memcmp(first, ours.raw, SLOT) != 0) {
+				distinct = 1;
+			}
+
+			if ((void *)ours.o.params == (void *)par_block)
+				saw_params = 1;
+			if (memcmp(ours.o.scrambler.pLimit,
+				   before + 0x20, CTOR_WORDS) != 0)
+				saw_history = 1;
+
+			if (flag == 0) {
+				if (ours.o.jdBits == NULL)
+					saw_v90 = 1;
+				if (memcmp(ours.raw + 0x48, before + 0x48, 8)
+				    == 0)
+					saw_park92 = 1;
+			} else {
+				if (ours.o.jdV92Bits == NULL &&
+				    ours.o.jdV92PhaseBits == NULL)
+					saw_v92 = 1;
+				if (memcmp(ours.raw + 0x44, before + 0x44, 4)
+				    == 0)
+					saw_park90 = 1;
+			}
+
+			/*
+			 * The destructor, each side measured on its own.  It
+			 * frees the scrambler's history and must write
+			 * nothing: the object is compared again afterwards,
+			 * with the same seven pointers neutralised because
+			 * `~Scrambler` does not null `pLimit` and the two
+			 * still hold two different addresses.
+			 */
+			bad0 = harness_alloc.bad_free;
+			fr0 = harness_alloc.frees;
+			our_dtor(&ours.o);
+			fr_ours = harness_alloc.frees - fr0;
+			fr0 = harness_alloc.frees;
+			if (variant)
+				ref_dtor2(&theirs.o);
+			else
+				ref_dtor(&theirs.o);
+			fr_theirs = harness_alloc.frees - fr0;
+
+			diff_eq_int("our destructor freed exactly once "
+				    "(case %ld)", fr_ours, 1, input);
+			diff_eq_int("their destructor freed exactly once "
+				    "(case %ld)", fr_theirs, 1, input);
+			diff_eq_int("neither freed something unknown "
+				    "(case %ld)",
+				    harness_alloc.bad_free - bad0, 0, input);
+
+			memcpy(ctor_ca.raw, ours.raw, SLOT);
+			memcpy(ctor_cb.raw, theirs.raw, SLOT);
+			memset(ctor_ca.raw + 0x20, 0, 0x1c);
+			memset(ctor_cb.raw + 0x20, 0, 0x1c);
+			diff_eq_obj("after the destructor",
+				    V90Phase3Modulator, &ctor_ca.o,
+				    &ctor_cb.o, input);
+			diff_eq_int("no store past the object after the "
+				    "destructor (case %ld)", guard_equal(), 1,
+				    input);
+		}
+	}
+
+	diff_eq_int("the constructor changed the object", moved, 1, 0);
+	diff_eq_int("and not to the same thing every trial", distinct, 1, 0);
+	diff_eq_int("the V.90 arm nulled jdBits", saw_v90, 1, 0);
+	diff_eq_int("the V.92 arm nulled both V.92 vectors", saw_v92, 1, 0);
+	diff_eq_int("the V.90 arm left the V.92 vectors on their seed",
+		    saw_park92, 1, 0);
+	diff_eq_int("the V.92 arm left jdBits on its seed", saw_park90, 1, 0);
+	diff_eq_int("the constructor stored its V90Parameters *", saw_params,
+		    1, 0);
+	diff_eq_int("the scrambler history is not the object's own bytes",
+		    saw_history, 1, 0);
+	diff_eq_int("the C1 and D1 variants were driven", saw_variant[0], 1, 0);
+	diff_eq_int("the C2 and D2 variants were driven too", saw_variant[1],
+		    1, 0);
+
+	return diff_end();
+}
+
+
 int
 main(void)
 {
@@ -1719,6 +1973,7 @@ main(void)
 	rc |= run_diagnostics(0);
 	rc |= run_diagnostics(1);
 	rc |= run_reset();
+	rc |= run_ctor_dtor();
 
 	return rc;
 }

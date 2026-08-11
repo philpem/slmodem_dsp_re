@@ -13,9 +13,9 @@
  * displacement is not a size (finding 229's last section); the .cpp asserts
  * both the size and every offset below.
  *
- * Twenty-one members are declared and FOUR are defined -- `setSessionFlag`,
- * `resetDILGenerator`, `generateV90Symbol` and `generateV92Symbol`.  `reset`
- * is the fifth member of task #60's batch 2 and is not written yet.
+ * Twenty-three members are declared and SEVEN are defined -- `setSessionFlag`,
+ * `resetDILGenerator`, `generateV90Symbol`, `generateV92Symbol`, `reset`, and
+ * now the constructor and the destructor.
  * Everything else is declared for the record and deliberately left undefined,
  * because defining a method whose callees are not written breaks the link for
  * the entire test suite (docs/v90cpp.md).  Nothing defined here calls an
@@ -26,6 +26,22 @@
  * the two `generate*Symbol` bodies pass the same address to `process`.  Those
  * four weak template members are part of this batch even though
  * `tools/callgraph.py` does not list them; see include/dsplib/Scrambler.h.
+ * The constructor is the third statement of the same thing: it does not store
+ * a pointer at +0x20, it takes `lea 0x20(%ebx),%edx` and hands that to
+ * `Scrambler<unsigned char, int>::Scrambler`.
+ *
+ * THE CONSTRUCTOR AND THE DESTRUCTOR ARE NOW DECLARED, and this file used to
+ * say the opposite.  The reason it gave was finding 871's, and finding 871
+ * split it in two: the UNION half was real -- a union holding a class with no
+ * default constructor and a non-trivial destructor loses both of its own, and
+ * the fixtures for this class are exactly such unions -- and it is already
+ * paid for, because `Scrambler` acquired a constructor and a destructor first
+ * and every one of those unions carries the two-line empty pair that restores
+ * them.  The `__builtin_offsetof` half was STALE: `offsetof` wants STANDARD
+ * LAYOUT, which a user-provided constructor does not affect, and every
+ * assertion in the .cpp still compiles.  So the old reasoning costs nothing
+ * to drop, and it has to be dropped: `V90Modulator` calls the constructor,
+ * so the symbol must exist for the modulator's link closure to close.
  *
  * Data member names below are invented and descriptive: the mangling
  * preserves method names and type names but never a data member's name
@@ -39,6 +55,16 @@
 #include "dsplib/Scrambler.h"
 #include "dsplib/V90Jd.h"
 #include "dsplib/V92Jd.h"
+
+/*
+ * The constructor's first parameter.  It is STORED AND NOTHING ELSE -- the
+ * whole use is `mov 0x34(%esp),%eax; mov %eax,0x50(%ebx)` at .text+0x2c4ce --
+ * so an incomplete type is all this header needs, and forward-declaring it
+ * rather than including V90Parameters.h keeps this header's include set as it
+ * was.  The tag is `class` to agree with include/dsplib/V90Parameters.h; the
+ * mangling is `P13V90Parameters` either way.
+ */
+class V90Parameters;
 
 /*
  * The companding law in force.  The mangling names the type; the enumerator
@@ -132,6 +158,39 @@ struct tagV90DILdescriptor {
 
 class V90Phase3Modulator {
 public:
+	/*
+	 * .text+0x2c4a0, 123 bytes.  Three statements and no branch:
+	 *
+	 *   - the `Scrambler<unsigned char, int>` subobject at +0x20 is built
+	 *     `(0x12, 0x17, 0x63)` -- V.90's taps 18 and 23, and the same 99
+	 *     `V90Phase3Demodulator` gives its descrambler;
+	 *   - `params` (+0x50) and then `sessionFlag` (+0x00) are stored;
+	 *   - `reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL,
+	 *     NULL, 0)`.
+	 *
+	 * THE ORDER OF THE LAST TWO IS FORCED, not a reading of the store
+	 * order: `reset` branches on `sessionFlag` to choose which of the
+	 * three bit-vector pointers it writes, so a constructor that stored
+	 * the flag afterwards would take the wrong arm for every nonzero
+	 * argument.  That is the mutation `store the session flag after
+	 * reset` in test/mutations/v90p3mod.json, and it is caught.
+	 *
+	 * `nSymbols` is 0, so the warm-up loop never runs and neither
+	 * generator is reachable from here; `d` is NULL, so
+	 * `resetDILGenerator` clears `dilCount` and returns without touching
+	 * any of the 800-odd DIL bytes.
+	 */
+	V90Phase3Modulator(V90Parameters *, unsigned int);
+
+	/*
+	 * .text+0x2ac30, 22 bytes, AND IT IS NOT EMPTY: the whole body is
+	 * `Scrambler<unsigned char, int>::~Scrambler` called on `this + 0x20`,
+	 * which is what the compiler emits for a destructor whose own body is
+	 * empty over a class with one non-trivially-destructible member.  It
+	 * frees the scrambler's history buffer and nothing else.
+	 */
+	~V90Phase3Modulator();
+
 	/* The five that batch 2 defines. */
 	void setSessionFlag(unsigned int);
 	void resetDILGenerator(const tagV90DILdescriptor *);
@@ -154,13 +213,6 @@ public:
 	/*
 	 * Declared, not defined -- see the file comment.  A return type is not
 	 * mangled, so it is unknown for all of them.
-	 *
-	 * The constructor `V90Phase3Modulator(V90Parameters *, unsigned int)`
-	 * and the destructor are NOT declared, deliberately: declaring either
-	 * makes the class non-trivial, which deletes the default members of a
-	 * union holding one -- and the fixture is exactly such a union -- and
-	 * makes `__builtin_offsetof` conditionally supported.  Their
-	 * signatures stay on the record in docs/v90cpp.md.
 	 */
 	void generateDIL();
 	void generateSd();
@@ -228,7 +280,17 @@ public:
 	unsigned char *jdBits;		/* +0x044 V90Jd::getBitVector()    */
 	unsigned char *jdV92Bits;	/* +0x048 V92Jd::getJdBitVector()  */
 	unsigned char *jdV92PhaseBits;	/* +0x04c ...getJdPhaseBitVector() */
-	unsigned char pad_50[4];	/* +0x050                          */
+
+	/*
+	 * The constructor's `V90Parameters *`, stored and never read again by
+	 * any of this class's twenty-one symbols.  It was `pad_50` until the
+	 * constructor was reconstructed; `mov 0x34(%esp),%eax; mov
+	 * %eax,0x50(%ebx)` at .text+0x2c4ce is the whole of the evidence, and
+	 * it fixes the width at four bytes and the type at the one the
+	 * mangling names.  What reads it, if anything, is `V90Modulator`'s
+	 * business and was not read for this batch.
+	 */
+	V90Parameters *params;		/* +0x050                          */
 
 	/* The DIL generator's copy of the descriptor, expanded to levels. */
 	unsigned char dilCount;		/* +0x054                          */

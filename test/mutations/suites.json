@@ -295,5 +295,9 @@
  "v92p3mod": [
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
+ ],
+ "v90p3mod": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90p3mod"
  ]
 }
