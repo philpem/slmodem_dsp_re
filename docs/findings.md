@@ -39938,7 +39938,12 @@ eighteen.
 
 ======================================================================
 
-### 1211. A HOST-FORCED RETRAIN DOUBLES OUR RECEIVE RATE — 7 OF 8, NO CHANGE TO THE BLOB
+### 1211. A HOST-FORCED RETRAIN IMPROVES THE EQUALISER 7 OF 8, AND REACHES 24000-26400 — NO CHANGE TO THE BLOB
+
+> **Headline corrected by finding 1213.** The "7 of 8" is the equaliser error
+> and the rate inferred from it, measured just after the retrain. Directly-read
+> far-end rates at hangup are 2 improved / 1 worse of 3 clean readings, and
+> measure a different instant.
 
 *Task #109.  Confirms 1209's prediction, and it needs no code: `ATO1` is
 "return to online data mode AND retrain", so the second Phase 3 pass can be
@@ -40060,3 +40065,50 @@ transport-specific configuration -- "there is no near hybrid on a packet path"
 **And there is already a working alternative needing no code at all:** the
 forced `ATO1` retrain of 1211, which reaches the same second-pass state from
 the far end's AT interface and doubles the receive rate today.
+
+======================================================================
+
+### 1213. TEMPERING 1211: THE FAR END'S OWN REGISTERS GIVE 2 IMPROVED, 1 WORSE OF 3 CLEAN READINGS — AND THEY MEASURE A DIFFERENT INSTANT
+
+*A correction to my own headline, before it hardens into a claim the data does
+not carry.*
+
+1211 reported "seven of eight improved". **That seven-of-eight is the equaliser
+error and the rate INFERRED from it via 1210's threshold table** -- both
+measured immediately after the forced retrain. It is not seven of eight
+directly-measured rates, and the title overstated it.
+
+A follow-up run read the far end's `AT&V1` per call instead of inferring:
+
+| call | our RX at connect | our RX at hangup |
+|---|---|---|
+| 1 | (not captured) | 14400 |
+| 5 | 12000 | **26400** |
+| 6 | 12000 | **4800** |
+| 8 | 12000 | **26400** |
+| 3, 4, 7 | 7200, 4800, 14400 | readback failed |
+| 2 | - | readback failed |
+
+Three clean paired rows: **two improved, one got worse.**
+
+**The two measurements are not the same question, which is the main point.**
+`LAST TX rate` is the rate at DISCONNECT, after the whole data phase; the
+equaliser error is the state moments after the retrain. V.34 renegotiates during
+data -- the original asymmetry run caught a link falling 12000 to 4800 mid-call
+(1101's row 5) -- so a call can retrain well and still end low. Call 6 is
+consistent with exactly that.
+
+**What survives, stated at the strength the evidence supports:**
+
+- The forced retrain reliably improves the EQUALISER: 7 of 8, typically an
+  order of magnitude, measured directly per pass. That is solid.
+- It reaches rates of 24000-26400 immediately afterwards, confirmed twice
+  against the far end's own register (rt-8 at 24000, matching the threshold
+  table exactly; a later call at 26400).
+- Whether the link HOLDS that rate to the end of the call is a separate
+  question, answered here 2 of 3, and this bench has no data on it beyond that.
+
+**Harness defect found doing this**: the `AT&V1` readback failed on 3 of 8 calls,
+almost certainly the same not-settled-yet fault that aborted the first n=30
+batch -- the modem is asked for its registers immediately after teardown. It
+needs the same retry the pre-flight got.
