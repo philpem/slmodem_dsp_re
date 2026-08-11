@@ -25,23 +25,19 @@
  * before the object comparison and checked separately for pointing at the
  * same PLACE -- the embedded window or the caller's block.
  *
- * WHAT THE PAIR TEST DOES NOT ASSERT, AND WHY (finding 1416).
+ * WHAT THE 9600 Hz PAIR TEST ASSERTS, AND WHY IT IS NOT SYMMETRIC (1416).
  *
- * The first version of it asserted that each of the sixteen tone pairs
- * decodes to its own keypad code.  It does not, in the OBJECT: over one
- * 160-sample block the LOW half of the answer is right for all sixteen pairs
- * and the HIGH half is right for four of them, at every level from 600 to
- * 6000 and at both rates.  Our code agrees with the object on every one of
- * those blocks, so this is a property of the original and not of the
- * reconstruction -- and it is the reason `dtmf_modem` will not accept a code
- * until two consecutive blocks agree AND `band_pass` has said there is
- * signal.  The `dtmf_modem` test below does collect a digit string, which is
- * the end-to-end statement worth making.
+ * At 8000 Hz the bank decodes all sixteen tone pairs from a single
+ * 160-sample block, both halves of the answer, and the test asserts exactly
+ * that.  At 9600 Hz the LOW half is still right for all sixteen and the HIGH
+ * half is wrong for ELEVEN of them, and the eleven are not scattered: they
+ * are the ones that involve 1477 Hz, which is the tone whose 9600 Hz
+ * coefficient table is defective (D250).
  *
- * So the pair test asserts the half that holds, plus the coverage of all
- * sixteen codes across the run.  It does not assert a table of observed
- * answers: that would be fitting the test to the object rather than testing
- * against it.
+ * So the asymmetry is asserted as a count rather than smoothed over.  Our
+ * code agrees with the object on every one of those blocks; what is being
+ * recorded is a measurement of the original, and the count is the thing that
+ * would change if either the table or the search were transcribed wrongly.
  */
 
 #include <math.h>
@@ -354,6 +350,7 @@ main(void)
 	double p1, p2;
 	int rc = 0;
 	int i, lo, hi, r, k;
+	int wrong_9600 = 0;
 	int rate_i;
 
 	seed = 0x51ee7a11UL;
@@ -439,12 +436,10 @@ main(void)
 						    + (lo * 4 + hi) * 10 + i);
 				}
 				/*
-				 * The LOW half of the answer is right for all
-				 * sixteen pairs and the HIGH half is not --
-				 * see the note above `main`.  Asserting the
-				 * half that holds is worth more than
-				 * asserting nothing, and worth more than
-				 * asserting a table of observed answers.
+				 * At 8000 Hz all sixteen pairs decode, both
+				 * halves.  At 9600 the LOW half still does and
+				 * the HIGH half is wrong for eleven of them --
+				 * finding 1416, and D250 is why.
 				 */
 				for (k = 0; k < 16; k++)
 					if (keycode[k] == r)
@@ -455,8 +450,16 @@ main(void)
 				diff_eq_int(
 				    "the reference got pair %ld's LOW tone right",
 				    k / 4, lo, lo * 4 + hi);
+				if (rate_i == 0)
+					diff_eq_int(
+					    "8000 Hz: pair %ld's HIGH tone",
+					    k % 4, hi, lo * 4 + hi);
+				else
+					wrong_9600 += (k % 4 != hi);
 			}
 	}
+	diff_eq_int("eleven of the sixteen 9600 Hz pairs mis-decode (%ld)",
+		    wrong_9600, 11, 0);
 	rc |= diff_end();
 
 	diff_begin("dtmf_rx: the tone bank on what is not a digit");

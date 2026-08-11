@@ -112,7 +112,7 @@
    }
   },
   "dtmf": {
-   "key": "a6a083cfd624243c0df2a72a188cdebe46c0ba173da9e8342f8305e2a669a4f3",
+   "key": "bce9b14b3b3e38bee97dd0e98663501c5534da2d39ef0353e15ec45b4d7fba6c",
    "summary": "38 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Europe's block is the same length as the US's": "caught",
@@ -156,7 +156,7 @@
    }
   },
   "dtmfmtd": {
-   "key": "6cba0062777edbd1ff18040b68096e39f3c8f5337cf4652dee932beefb9020de",
+   "key": "12d6fd66d5881fcb128a61f8a919d252b2531f86517acdffd2e5ea580e316e69",
    "summary": "24 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a group with no survivor reports tone 0 instead of nothing": "caught",
@@ -186,7 +186,7 @@
    }
   },
   "dtmfrx": {
-   "key": "62914b5a17497df94ed3b0108a9aef40f62b6c453e00845290be4a7f180ef945",
+   "key": "04eafaaa973a8245b4bead3190a5912fc12e42a5759e0cc4a257e7496c54f4b5",
    "summary": "49 mutations: 49 caught (49 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "'C' does not terminate the string": "caught",
@@ -322,7 +322,7 @@
    }
   },
   "notch": {
-   "key": "b975c4a53ed1f19c3e63db57623c80d4746e7fecb9537c250007b1f23c513f2a",
+   "key": "c8307dfd9d2df77bdb434619506df34c5c346f6c5d92ef2f9116dd9f2878c93b",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the first state word takes the input rather than the gained input": "caught",

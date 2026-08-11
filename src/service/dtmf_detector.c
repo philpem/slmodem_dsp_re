@@ -17,11 +17,12 @@
  * and why no ninth or tenth table exists.
  *
  * The per-tone bias, +i for i = 0..3 and +(7-i) for i = 4..7 in units of
- * wideband/4096, is the compensation that goes with it: the pre-notch is
- * only 90% radius, so it still tilts the group it passes, and the tone
- * nearest the other group is the one it attenuates least.  Nothing else in
- * the object does this, and it is the reason the search can use one flat
- * threshold across four unequal sections.
+ * wideband/4096, is measured; the reading that it compensates the pre-notch's
+ * tilt -- the pre-notch is only 90% radius, so the tone nearest the other
+ * group is the one it attenuates least -- is a reading and not a derivation,
+ * and it is not what makes this bank get things wrong.  What does is the
+ * 1477 Hz table at 9600 Hz: see finding 1416 and D250, where the bias was
+ * first blamed and then measured out of it.
  */
 
 #include <string.h>

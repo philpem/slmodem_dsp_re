@@ -20,6 +20,14 @@
 #include "dsplib/notch.h"
 
 /*
+ * `create_dtmf` allocates 0x98 bytes for this object (blob 0x0adfa7).  Same
+ * argument as dtmf_rx.c's: the field offsets are checked by `make offsets`
+ * and the total is checked by nothing, and `diff_eq_obj` compares
+ * `sizeof(type)` bytes.
+ */
+typedef char dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1];
+
+/*
  * The block length, in decimated (4 kHz) samples.  Europe accumulates five
  * more than the US does, which is 11.25 ms against 10.
  */
@@ -62,6 +70,16 @@
  * compiler's to choose.  The plain form is the one that disagrees with the
  * object under the object's own compiler.  If the tree settles on a different
  * remedy for the general problem, this is a site to convert.
+ *
+ * PROVISIONAL, AND LANDED AGAINST AN INSTRUCTION NOT TO.  The tree is
+ * deciding what to do about x87 excess precision in general and the standing
+ * direction was to avoid this idiom entirely; it is here because the
+ * alternative is to leave `dtmf_detect` -- and with it `dtmf_progress`,
+ * `dtmf_test` and `dtmf_set_easy` -- uncommitted, and because the
+ * measurement above says the barrier reproduces the object rather than
+ * departing from it.  Whoever settles the general question should revisit
+ * this line first; reverting it is `x = notch(x, d->bias_state, biascoef)`
+ * and nothing else.
  *
  * Only the bias assignment needs it.  The per-tone loop squares `notch`'s
  * result straight out of st(0) in the object too (`fmul %st(0),%st` with no

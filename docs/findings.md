@@ -43570,7 +43570,11 @@ between `Fifo8.c` (ends 0x0af150) and `Rx.c` (starts 0x0af190).  It is NOT
 different TU; the names invite the confusion and nothing else connects them.
 
 **`check_for_valid` and `check_for_valid_easy` are dead.**  Both are global
-`T` symbols and no relocation anywhere in the 1.2 MB names either.
+`T` symbols and NO relocation in ANY of the object's 53 `.rel.*` sections
+names either -- `.rel.text`, `.rel.data`, `.rel.rodata` and the fifty
+`.rel.gnu.linkonce.*` the C++ templates bring, all scanned, because a
+function-pointer table would put the reference in `.rel.data` and a
+`.rel.text`-only scan would have missed it.
 `dtmf_detect` carries both INLINE -- the comparison chains at 0x0ade8d and
 0x0adec9 are the same tests instruction for instruction -- so GCC 3.4.2 emitted
 out-of-line copies of two helpers nothing calls.  That is why `closure.py`'s 27
@@ -43783,41 +43787,55 @@ difference of the kind CLAUDE.md says to ignore.
 
 ======================================================================
 
-### 1416. THE FIXED-POINT TONE BANK DECODES THE LOW GROUP AND GUESSES THE HIGH ONE, AND THAT IS WHY `dtmf_modem` ASKS TWICE
+### 1416. D250 IS NOT COSMETIC: THE 1477 Hz TABLE BREAKS HIGH-GROUP DETECTION AT 9600 Hz, AND ONLY THERE
 
 Driving `DTMF_MTD_detect` with each of the sixteen DTMF pairs -- clean
-sinusoids, one 160-sample block, both rates, levels from 600 to 6000 -- the
-object returns:
+sinusoids, one 160-sample block, both rates:
 
-- the correct LOW-group index for all sixteen pairs, at every level tried;
-- the correct HIGH-group index for four of them.
+    8000 Hz    16 of 16 decode correctly, both halves of the answer
+    9600 Hz    16 of 16 get the LOW group right; 11 of 16 get the HIGH
+               group wrong
 
-It always returns SOME code; it is not that the high group fails to decide.
 The reconstruction agrees with the object on every one of those blocks, so
-this is a measurement of the original and not a defect in the copy.
+this is a measurement of the original.
 
-The reason is in the search, and it is the other half of finding 1414.  The
-low group is compared against 1.2x the wideband mean and the high group
-against 1.5x, so the high group's gate is half again as loose; and the
-per-tone bias runs 0,1,2,3 across the low group but 3,2,1,0 across the high
-one, so in the high group it is the tone NEAREST the low group that is
-penalised most.  Between a looser gate and a tilt that works against the
-group's own low end, the high decision is carried by the bias rather than by
-the notches whenever the tone energies are close.
+**The eleven are not scattered.**  Seven of them are reported as high index 2,
+which is 1477 Hz, for pairs whose actual high tone is 1209, 1336 or 1633.  The
+other four are the pairs whose high tone IS 1477, and those come back as 1336
+or 1633.  Every error is 1477 Hz being chosen when it is absent or missed when
+it is present -- and 1477 Hz at 9600 is exactly `MTD7_COEF_9600`, the one
+table of sixteen whose numerator does not match its denominator (D250, finding
+1413).  Its zeros sit at 1328 Hz while its poles sit at 1477.
 
-**This is not a fault to be repaired, it is a design that expects its
-front end.**  `dtmf_modem` will not accept a code until `band_pass` says the
-block carries signal AND the same code comes back from two consecutive
-blocks -- and `band_pass` is a limiter, a DC blocker and a coarse gain before
-it is a filter, so what the bank actually sees in service is level-normalised
-in a way a bare sinusoid is not.  Driven that way end to end, the receiver
-does collect a correct digit string, which `test/unit/t_dtmfrx.c` asserts.
+So the two follow from each other.  A section whose zeros are at 1328 nulls
+1328 and does NOT null 1477: its output is anomalously small whenever there is
+energy near 1328 -- which the 941 Hz group pre-notch leaves plenty of -- so it
+wins the minimum search it should not, and it stays large when 1477 is present
+so it loses the one it should win.  Both halves of the observed failure, from
+one wrong coefficient.
 
-**The testing point generalises.**  The first version of the test asserted
-"pair (lo, hi) decodes to keypad code X" for all sixteen, and eleven of them
-failed while every differential comparison passed.  Two responses were
-available: encode the observed answers as the expectation, or assert the part
-that holds.  The first is fitting the test to the object -- it would pass
-whatever the object did, including if the object changed -- so the test
-asserts the low index, the presence of a code, and coverage of all sixteen
-codes across the run, and this finding records the rest.
+**This upgrades D250 from a table that looks wrong to a defect with a measured
+consequence**, and it is why `test/unit/t_dtmfrx.c` asserts sixteen correct
+decodes at 8000 and a count of eleven wrong at 9600, rather than smoothing the
+two rates together.
+
+**A first reading of this got the mechanism wrong and is worth recording.**
+The failures were attributed to the search's asymmetry -- the low group is
+gated at 1.2x the wideband mean and the high group at 1.5x, and the per-tone
+bias runs 3,2,1,0 across the high group -- which is all true and all
+irrelevant, because that asymmetry is identical at both rates and 8000 Hz
+decodes perfectly.  What hid it was the harness: `diff_max_report` caps the
+printed failures at ten, so a run with eleven failures at 9600 and none at
+8000 printed a list that looked like a mixture of both.  **A truncated failure
+list is not a sample of the failures**; it is the first ten, which here were
+all from one arm of a two-arm loop.  Print the arm, or count per arm, before
+reasoning about which failures happened.
+
+**And the mechanism was checked rather than argued.**  The two candidate
+explanations -- the bias, and the table -- predict different things: the bias
+predicts the answers concentrating on the tone with the SMALLEST bias, which
+is 1633 (index 3), and the data concentrates on 1477 (index 2).  Ten lines of
+temporary instrumentation printing the eight scaled energies settled it in one
+run.  The bias hypothesis was already contradicted by its own arithmetic
+before any of that; it survived as long as it did because it was written down
+before it was tested.

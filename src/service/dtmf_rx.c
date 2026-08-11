@@ -19,6 +19,24 @@
 #include "dsplib/fpm_iir.h"
 
 /*
+ * `create_cid_dtmf` allocates 0x38c bytes for this object (blob 0x090d0f).
+ * `make offsets` checks every field's offset and nothing checks the total,
+ * so the size is asserted here: `diff_eq_obj` compares `sizeof(type)` bytes,
+ * and a size read wrongly off one disassembly would silently narrow every
+ * comparison in t_dtmfrx.
+ */
+#if defined(__i386__)
+/*
+ * 32-bit only, and the reason is `bufp`: the object has a POINTER in it, so
+ * its size is ABI-dependent and 0x38c is a claim about the target the blob
+ * was built for.  `make check64` compiles this file as 64-bit to catch
+ * pointer-size assumptions, and an unguarded assertion here fires there --
+ * which is the check doing its job, not a mistake to suppress.
+ */
+typedef char dtmf_rx_size_check[sizeof(struct dtmf_rx) == 0x38c ? 1 : -1];
+#endif
+
+/*
  * band_pass's four coefficient sets, all FPM_iir_filt sections in the order
  * { a2, b2, a1, b1, b0 }.
  *

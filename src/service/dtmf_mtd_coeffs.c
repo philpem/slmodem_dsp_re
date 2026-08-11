@@ -35,7 +35,10 @@
  * table, and its b1 does not -- it is -21143 where the design gives -18613,
  * putting the notch's ZEROS at 1328 Hz while its POLES stay at 1477.  The
  * bytes are reproduced as they are; D250 records it and nothing here
- * speculates about how it happened.
+ * speculates about how it happened.  It is NOT cosmetic: at 9600 Hz eleven
+ * of the sixteen DTMF pairs come back with the wrong high-group tone, and
+ * all eleven are 1477 Hz being chosen when absent or missed when present
+ * (finding 1416).  At 8000 Hz all sixteen decode.
  */
 
 #include "dsplib/dtmf_rx.h"
