@@ -240,6 +240,10 @@
   "src/pump/v90/V90ConstellationPower.cpp",
   "build/test/t_v90designers"
  ],
+ "v90demapctor": [
+  "src/pump/v90/V90Demapper.cpp",
+  "build/test/t_v90demapctor"
+ ],
  "v90demapper": [
   "src/pump/v90/V90Demapper.cpp",
   "build/test/t_v90leaves"

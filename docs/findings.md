@@ -41759,3 +41759,210 @@ uncatchable and the symptom will be twelve NOT CAUGHT verdicts, not a compile
 error.  Each file's note says so.
 
 ======================================================================
+
+### 1300. THE V.90 RECEIVE CONSTRUCTION CHAIN IS GATED ON TWO CLASSES THAT BELONG TO NEITHER END OF IT
+
+The batch brief for the V.90 receive chain said its eight symbols "depend only
+on the others here plus classes already written", and listed fifteen written
+classes.  That premise is false, and it costs 2,478 of the chain's 2,671
+bytes.
+
+Two classes are reached from inside the chain, are in nobody's written list,
+and are in nobody's *batch*:
+
+| missing symbol | bytes | what it gates |
+| --- | --- | --- |
+| `ANSamToneDetector::ANSamToneDetector(j,j,f,j,f,j,j,j)` and its `~` | 146 + 19 | `V90Phase3Demodulator`'s ctor and dtor -- 530 B |
+| `V90Phase4Modulator::V90Phase4Modulator(...)` and its `~` | 213 + 94 | `V90Phase4Demodulator`'s ctor and dtor -- 277 B |
+
+and because `V90Demodulator`'s constructor builds a `V90Phase3Demodulator` and
+its destructor destroys a `V90Phase4Demodulator`, the demodulator's own 1,671
+bytes are behind both.  The dependency is a CHAIN and not a set: one missing
+symbol four levels down stops the top.
+
+**WHY NEITHER WAS ADOPTED, and this is the part worth keeping.**  A relocation
+scan over the blob for every caller of the four symbols says who else wants
+them:
+
+    ANSamToneDetector::ANSamToneDetector   <- VPcmFloModem's ctor
+                                           <- V90Phase3Demodulator's ctor
+    ANSamToneDetector::~ANSamToneDetector  <- VPCMXF_Delete, VPcmFloModem's dtor
+                                           <- V90Phase3Demodulator's dtor
+    V90Phase4Modulator::V90Phase4Modulator  <- V90Modulator's ctor
+                                            <- V90Phase4Demodulator's ctor
+    V90Phase4Modulator::~V90Phase4Modulator <- V90Modulator's dtor
+                                            <- V90Phase4Demodulator's dtor
+
+`V90Modulator` is the transmit chain and `VPcmFloModem` is the top of the
+graph -- two of the other three agents running in parallel on this same tree.
+`ANSamToneDetector` is worse than it looks: its constructor calls
+`GenericToneDetector`'s **C2** and its destructor calls that class's **D2**,
+which is INHERITANCE and not composition, so adopting it means editing
+`GenericToneDetector.h` as well.  A shared header, two branches, and finding
+700's merge failure waiting.
+
+**THE RULE THIS ARGUES FOR.**  When several agents are cut from one
+construction graph, the cut must be made on the CALL GRAPH and not on the
+class list.  A class every chain reaches is not "already written" merely
+because nobody claimed it; it is a shared dependency, and it has to be
+sequenced FIRST, in a batch of its own, before the chains that need it start.
+Splitting by class name produced four batches of which at least one cannot
+compile.
+
+### 1301. THE V.90 PHASE 4 DEMODULATOR'S OBJECT MAP CLOSES ON THREE EXACT MEETINGS, AND THE COMPILER IS MADE TO CHECK ALL THREE
+
+`V90Phase4Demodulator` is 0x351c bytes -- from `movl $0x351c,(%esp)` before
+the `sysdep_malloc` whose result its constructor is handed, which is finding
+1107's rule rather than a displacement scan.  Fourteen of its fields are named
+by the 225-byte constructor, and three of them are embedded subobjects whose
+bases meet their neighbours exactly:
+
+    +0x0050  V90Phase4Modulator   sizeof 0x2fac   ends 0x2ffc
+    +0x2ffc  V90RDetector         sizeof 0x002c   ends 0x3028
+    +0x3028  V90RDetector         sizeof 0x002c   ends 0x3054   <- next field
+
+Three independent bases, read off `lea 0x50(%ebx)`, `lea 0x2ffc(%ebx)` and
+`lea 0x3028(%ebx)` in the constructor and corroborated by the destructor
+destroying the same three in reverse, and each end landing on the next base.
+
+**THE MEETINGS ARE ASSERTED, NOT WRITTEN DOWN.**
+`src/pump/v90/V90Phase4Demodulator.cpp` defines no function -- it cannot, see
+1300 -- and consists of fourteen `__builtin_offsetof` assertions, the 0x351c
+`sizeof`, and the two subobject `sizeof`s the meetings rest on.  Both of those
+sizes are themselves bounds from displacement scans and so may move; when one
+does, the offsets on the far side stop agreeing and the file stops compiling
+rather than the map rotting in a comment.  A header full of arithmetic that
+nothing evaluates is a header that is right until it is quietly wrong.
+
+**THE ONE PROVABLE CROSSING.**  The embedded modulator is built with the
+constructor's two `V90MappingParams *` arguments SWAPPED --
+`mov 0x48(%esp),%edx` into outgoing slot 0x14 and `mov 0x44(%esp),%ebp` into
+slot 0x18 -- while the demodulator's own object stores them the other way
+round, argument 1 at +0x0c and argument 2 at +0x10.  So it is a crossing and
+not a misreading of which is which, and a test that ever drives this
+constructor must pass two DISTINGUISHABLE pointers or the whole claim is
+invisible.
+
+### 1302. A STORE BETWEEN TWO MEMBER CONSTRUCTOR CALLS IS A MEM-INITIALIZER, AND THAT IS A PROOF RATHER THAN A GUESS
+
+`V90Demapper::V90Demapper` opens with
+
+    3071d:  lea   0x648(%esi),%eax
+    30726:  call  ModulusDecoder::ModulusDecoder()
+    3072b:  movb  $0x0,0x664(%esi)
+    30732:  lea   0x668(%esi),%ecx
+    3073b:  call  V90SignBitsExtractor::V90SignBitsExtractor()
+
+and the position of that one `movb` settles two things about the source that
+no differential test can reach.
+
+The compiler was NOT free to put it there.  A store to `this + 0x664` cannot
+be sunk past a call to a function that may alias it, and cannot be hoisted
+above the one in front of it, for the same reason.  So it sits between the two
+member constructions because it IS one.  Every statement of a constructor's
+BODY runs after all of them, so the store cannot be a body statement; members
+are constructed in DECLARATION order, so the field at +0x664 is declared
+between `modulusDecoder` and `signBits`; and the constructor's list is
+`: byte_664(0)`.
+
+**THIS IS A CODEGEN CLAIM AND IT WAS TESTED AS ONE.**  The byte holds zero
+whichever way it is written, so `make phase` is blind to it -- writing
+`byte_664 = 0;` in the body passes every differential check in
+`t_v90demapctor.cpp` and all seventeen of its mutations.  What decides it is
+`make similarity`, which lists `_ZN11V90DemapperC1E...` and
+`_ZN11V90DemapperC2E...` among the identical mnemonic sequences.  That is the
+right instrument for this particular claim and not merely the available one:
+`compare.py` compares mnemonics and not operands, and a claim about WHERE an
+instruction sits relative to two `call`s is entirely inside the mnemonic
+sequence even though `0x664(%esi)` is not.
+
+CLAUDE.md's forced/free rule, applied to something other than a load's
+signedness: the ordering of a store against an opaque call is forced, so it is
+acted on.
+
+It also retired a pad.  `V90Demapper.h` carried `unsigned char
+modulusDecoder[0x1c]` with a comment saying `ModulusDecoder` "has no header,
+no .cpp and no other symbol in this tree"; finding 1247 wrote the class, its
+seven `unsigned int` fields are 0x1c bytes exactly, and the member is now the
+real type.  Making it real is what lets the compiler emit the first of those
+two calls, so the conversion and the mem-initializer are one change and not
+two.
+
+### 1303. A CONSTRUCTOR CAN CAUSE AN ALLOCATION IT DOES NOT NAME, AND THE BLOCK COUNT IS WHAT FINDS IT
+
+`V90Demapper::V90Demapper` contains exactly two `sysdep_malloc` calls, at
++0x1c and +0x20.  `t_v90demapctor.cpp` was written asserting two allocations
+and failed on its first run with three, and with a differing pointer at
++0x684 that the object comparison named before any of the counters did.
+
++0x684 is inside the embedded `V90SignBitsExtractor` at +0x668: its
+`ParallelDifferentialDecoder<unsigned char>` at +0x1c takes a six-byte buffer
+in ITS constructor, which the compiler calls on our behalf.  So the demapper's
+construction takes three blocks and its destruction gives three back, and only
+one of the three appears in either function's source.
+
+Two things follow, and the second is the general one.
+
+- **The excluded-word list of a constructor test is not the list of pointers
+  the constructor stores.**  It is the list of pointers the constructed OBJECT
+  holds, wherever they came from.  Here that is +0x1c, +0x20 and +0x684, and
+  the third was found by the test rather than by reading the function.
+- **`bytes asked for` is the check that cannot be satisfied by accident.**
+  The test asserts `levels * 5 + 6` against the allocator's byte total: a
+  reconstruction that allocated four bytes per element for BOTH arrays agrees
+  with the blob on every content comparison, because the extra bytes are never
+  read, and disagrees here.  `malloc_usable_size` would not have caught it
+  either -- glibc rounds both to the same bucket for small counts.
+
+The round-trip suite in the same file is the other half: neither a constructor
+test that frees its own blocks nor a destructor test that plants blocks of its
+own can see whether the PAIR balances on an object neither of them built by
+hand.
+
+### 1304. WHAT THE NEXT BATCH ON THE V.90 RECEIVE CHAIN INHERITS
+
+Recorded so that the work already done is not done again.  Everything below
+was read out of the blob with `tools/dis.py` and is in the headers; what is
+missing is only the two classes of finding 1300.
+
+**`V90Phase3Demodulator`'s pair** needs `ANSamToneDetector` and nothing else.
+The full argument lists are in `V90Phase3Demodulator.h`, including the
+constructor's own closing `reset(0, 0x40, 0, 0, NULL, NULL, NULL, 0, 1, 0.0f,
+0)` and the `ANSamToneDetector(0x190, 0x64, 307200.0f, 0, 0.5f, 0x1f40, 0x32,
+0)` it is blocked on.  **Argument 2 is never loaded** -- `0x48(%esp)` appears
+nowhere in the 365 bytes -- so no test may assert a placement for it.
+
+**`V90Phase4Demodulator`'s pair** needs `V90Phase4Modulator` and nothing else;
+the map is asserted in `V90Phase4Demodulator.cpp` and the argument crossing is
+finding 1301.
+
+**`V90Demodulator`'s pair** needs both.  Its constructor's thirteen
+allocations, six embedded constructions and every stored offset are in
+`V90Demodulator.h`; the five heap fields at +0x244, +0x248, +0x250, +0x254 and
++0x25c were named by reading it and are `n * 4`, `n * 12`, `n * 4`, `n * 8`
+and `n * 8` bytes.  Argument 13 (`V90ComputationalMode`) is never stored --
+its only use is the equaliser's eleventh argument -- and argument 14 lands at
++0x30 and is RELOADED from there for the two later calls that pass it on, so
+the source reads the member and not the argument.
+
+**THE TEST SHAPE THAT BATCH WILL NEED, and it is not `t_v90equ.cpp`'s.**
+`V90Equalizer`'s constructor test blanks fifteen pointer words and pairs each
+block's contents by field.  That does not transfer, because the demodulator's
+blocks contain CONSTRUCTED OBJECTS that hold pointers of their own -- the
+phase 3 demodulator alone holds a `params` that agrees, an `adid` that does
+not, and two allocations of its own that do not.  Use `harness_alloc_live_set`
+and findings 780 and 783's address congruence instead: seed one slot, run
+ours, copy the slot and every new block out keyed BY ADDRESS, free them,
+re-seed the identical slot, run the blob's into the same addresses, compare.
+If the addresses line up, every stored pointer is identical and `diff_eq_obj`
+works with NOTHING excluded -- strictly stronger than a skip-list.  If they do
+not, that shows up as a match failure and `t_v90equ.cpp`'s recipe extended one
+level is the fallback.
+
+**AND THE ANCHOR HAZARD, in advance.**  `~V90Demodulator` is thirteen
+near-identical `if (p) { p->~Foo(); sysdep_free(p); }` arms in one file, which
+is finding 1264's exact failure mode.  Take every anchor from the distinctive
+part of an arm -- the type name, the offset -- never from the `sysdep_free(p)`
+boilerplate, and treat `anchorcheck.py` as the gate.
+
+======================================================================

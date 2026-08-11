@@ -4830,3 +4830,9 @@ new hardware.
 *Batch of 2026-08-11, from `V90Demodulator::sessionTermination` (blob 0x1ab30). **Reachability: FIRES** whenever `TIMING_HISTORY_EVALUATION_ENABLED` is zero and the call reached the data state. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.
+
+## D220 ⚠ `V90Demapper::V90Demapper` stores both `sysdep_malloc` results without checking either, and its own destructor is the only code that ever tests them
+
+*Batch of 2026-08-11, from `V90Demapper::V90Demapper` (blob 0x30640/0x30710). **Reachability: FIRES** on allocation failure only. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1303.** `mov %eax,0x1c(%esi)` and `mov %eax,0x20(%esi)` follow their calls with no `test`, so a failed allocation leaves the object holding NULL where `count_24` says there are `levels` elements; `~V90Demapper`'s two null tests then read as guards against a state the constructor is not supposed to be able to produce, and they are the only ones anywhere. With `levels == 0` the same two calls ask for `levels * 4` and `levels` bytes -- two zero-byte blocks taken and freed for nothing, which `t_v90demapctor.cpp` sweeps and both sides do identically. Reproduced rather than repaired.

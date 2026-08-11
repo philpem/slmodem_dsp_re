@@ -118,6 +118,19 @@ public:
 	 * destructor are not declared at all, for the reason
 	 * V90Phase3Modulator.h gives.
 	 *
+	 * THE LIFECYCLE PAIR IS BLOCKED, AND ON ONE SYMBOL.  Both were read in
+	 * full -- the constructor's fourteen arguments, its six embedded
+	 * constructions, its thirteen allocations and every offset each lands
+	 * at are in this file, and the five heap fields at +0x244 came out of
+	 * it -- but `~V90Demodulator` destroys a `V90Phase4Demodulator`, whose
+	 * own destructor calls `V90Phase4Modulator`'s, and that class has
+	 * neither constructor nor destructor written here.  The constructor is
+	 * blocked twice over: it also builds a `V90Phase3Demodulator`, whose
+	 * constructor calls `ANSamToneDetector`'s, equally unwritten.  Both
+	 * missing classes are reached from the TRANSMIT side as well
+	 * (`V90Modulator` and `VPcmFloModem` respectively), so they are not
+	 * this chain's to adopt.
+	 *
 	 *     V90Demodulator(unsigned int, V90Phase2Info *, V90Jd *, V92Jd *,
 	 *                    tagV90DILdescriptor *, V90MappingParams *,
 	 *                    V90MappingParams *, tagV90AdditionalCPinfo *,
@@ -298,12 +311,49 @@ public:
 	 * phase 3 and phase 4 demodulators. */
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
-	unsigned char pad_240[0xc];	/* +0x240 nothing reconstructed
+	unsigned char pad_240[4];	/* +0x240 nothing reconstructed
 					 *        reads it                   */
-	unsigned int word_24c;		/* +0x24c zeroed by reset            */
-	unsigned char pad_250[8];	/* +0x250                            */
-	unsigned int word_258;		/* +0x258 zeroed by reset            */
-	unsigned char pad_25c[4];	/* +0x25c                            */
+
+	/*
+	 * +0x244 .. +0x25c  FIVE HEAP BLOCKS, ALL SIZED FROM THE
+	 * CONSTRUCTOR'S FIRST ARGUMENT, and all five freed -- with a bare
+	 * `sysdep_free` and no destructor -- by `~V90Demodulator`.  They were
+	 * `pad_240`, `pad_250` and `pad_25c` until the constructor was read;
+	 * the five allocations are consecutive and the widths come off the
+	 * address arithmetic in front of each one:
+	 *
+	 *     1c7da:  8d 3c b5 00 00 00 00  lea  0x0(,%esi,4),%edi
+	 *     1c7e9:  e8 ..                 call sysdep_malloc  -> +0x244
+	 *     1c7f4:  8d 04 36              lea  (%esi,%esi,1),%eax   ; n * 2
+	 *     1c7fb:  01 f0                 add  %esi,%eax            ; n * 3
+	 *     1c7fd:  c1 e0 02              shl  $0x2,%eax            ; n * 12
+	 *     1c803:  e8 ..                 call sysdep_malloc  -> +0x248
+	 *     1c80e:  c1 e6 03              shl  $0x3,%esi            ; n * 8
+	 *     1c811:  mov %edi,(%esp)                                 ; n * 4
+	 *     1c814:  e8 ..                 call sysdep_malloc  -> +0x250
+	 *     1c81f:  mov %esi,(%esp)                                 ; n * 8
+	 *     1c822:  e8 ..                 call sysdep_malloc  -> +0x254
+	 *     1c82d:  mov %esi,(%esp)                                 ; n * 8
+	 *     1c832:  e8 ..                 call sysdep_malloc  -> +0x25c
+	 *
+	 * `%esi` is the first argument throughout and `%edi` holds `n * 4`
+	 * across the middle three.  So the widths are 4, 12, 4, 8 and 8 bytes
+	 * an element -- and the ELEMENT TYPES are not derivable from that, so
+	 * all five are `void *` until something that reads them is written.
+	 * The `n * 12` one is the only interesting shape: three words an
+	 * element, built as `(n + n) + n` and then shifted, which is a
+	 * multiply the compiler chose and not a `* 3` in the source that can
+	 * be read back.
+	 */
+	void *array_244;		/* +0x244 n * 4 bytes                */
+	void *array_248;		/* +0x248 n * 12 bytes               */
+	unsigned int word_24c;		/* +0x24c zeroed by the constructor
+					 *        AND by reset               */
+	void *array_250;		/* +0x250 n * 4 bytes                */
+	void *array_254;		/* +0x254 n * 8 bytes                */
+	unsigned int word_258;		/* +0x258 zeroed by the constructor
+					 *        AND by reset               */
+	void *array_25c;		/* +0x25c n * 8 bytes                */
 	unsigned int word_260;		/* +0x260 zeroed by reset            */
 
 	unsigned int word_264;		/* +0x264 zeroed by the constructor  */

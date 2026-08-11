@@ -3735,6 +3735,29 @@
     "the destructor clears the first byte, volatile so it survives": "caught"
    }
   },
+  "v90demapctor": {
+   "key": "d681db612a0889a852636f64dabc40c295b5643633e988a69bb9b500408b954a",
+   "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x664 is cleared a word wide, taking the alignment with it": "caught",
+    "the constellation counts start at one apiece": "caught",
+    "the constructor also empties the constellation table": "caught",
+    "the constructor also empties the two histograms": "caught",
+    "the counts loop takes its bound from the levels rather than the rows": "caught",
+    "the detector argument is dropped on the floor": "caught",
+    "the detector lands where the parameter block belongs": "caught",
+    "the element count is the byte count": "caught",
+    "the flag at +0x664 starts set rather than clear": "caught",
+    "the four-byte array is sized in elements rather than bytes": "caught",
+    "the histogram counter keeps whatever it found": "caught",
+    "the last constellation count is left as the constructor found it": "caught",
+    "the one-byte array is sized four bytes to the element": "caught",
+    "the parameter block is never stored": "caught",
+    "the two allocations are stored the other way round": "caught",
+    "word_04 keeps its seed": "caught",
+    "word_2c keeps its seed": "caught"
+   }
+  },
   "v90demapper": {
    "key": "174d23cf336a188a77c409e05a15d35e11ed9ad3db6db2aad8140e6315022d09",
    "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",

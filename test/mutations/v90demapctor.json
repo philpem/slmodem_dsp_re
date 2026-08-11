@@ -1,0 +1,90 @@
+[
+ {
+  "note": "V90Demapper::V90Demapper, against t_v90demapctor.  EVERY `find` BELOW IS TEXT THAT APPEARS ONCE IN THE FILE, and that is a rule and not a preference: `printErrorHistogramAndReset` shares this translation unit and iterates the same six constellations, so an anchor taken from the loop header alone would match twice, mutate.py would call the entry UNUSABLE, and UNUSABLE DOES NOT FAIL A RUN (finding 1264).  The loop anchors here carry their body with them for exactly that reason."
+ },
+ {
+  "label": "the detector argument is dropped on the floor",
+  "find": "\tadiDetector = adi;",
+  "replace": "\t(void)adi;"
+ },
+ {
+  "label": "the detector lands where the parameter block belongs",
+  "find": "\tadiDetector = adi;",
+  "replace": "\tadiDetector = (V90AutoDigitalImpDetector *)params;"
+ },
+ {
+  "label": "the parameter block is never stored",
+  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
+  "replace": "\terrorHistogramCount = 0;\n\t(void)params;"
+ },
+ {
+  "label": "the histogram counter keeps whatever it found",
+  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
+  "replace": "\tthis->params = params;"
+ },
+ {
+  "label": "the four-byte array is sized in elements rather than bytes",
+  "find": "\tarray_1c = sysdep_malloc(levels * 4);",
+  "replace": "\tarray_1c = sysdep_malloc(levels);"
+ },
+ {
+  "label": "the one-byte array is sized four bytes to the element",
+  "find": "\tarray_20 = sysdep_malloc(levels);",
+  "replace": "\tarray_20 = sysdep_malloc(levels * 4);"
+ },
+ {
+  "label": "the two allocations are stored the other way round",
+  "find": "\tarray_1c = sysdep_malloc(levels * 4);\n\tarray_20 = sysdep_malloc(levels);",
+  "replace": "\tarray_20 = sysdep_malloc(levels * 4);\n\tarray_1c = sysdep_malloc(levels);"
+ },
+ {
+  "label": "the element count is the byte count",
+  "find": "\tcount_24 = levels;",
+  "replace": "\tcount_24 = levels * 4;"
+ },
+ {
+  "label": "the flag at +0x664 starts set rather than clear",
+  "find": "\t: byte_664(0)",
+  "replace": "\t: byte_664(1)"
+ },
+ {
+  "label": "+0x664 is cleared a word wide, taking the alignment with it",
+  "find": "\tadiDetector = adi;",
+  "replace": "\t*(unsigned int *)&byte_664 = 0;\n\tadiDetector = adi;"
+ },
+ {
+  "label": "the last constellation count is left as the constructor found it",
+  "find": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)\n\t\tconstellationSize[i] = 0;",
+  "replace": "\tfor (i = 0; i + 1 < V90DEMAPPER_CONSTELLATIONS; i++)\n\t\tconstellationSize[i] = 0;"
+ },
+ {
+  "label": "the constellation counts start at one apiece",
+  "find": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)\n\t\tconstellationSize[i] = 0;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)\n\t\tconstellationSize[i] = 1;"
+ },
+ {
+  "label": "the counts loop takes its bound from the levels rather than the rows",
+  "find": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)\n\t\tconstellationSize[i] = 0;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_LEVELS; i++)\n\t\tconstellationSize[i] = 0;"
+ },
+ {
+  "label": "word_04 keeps its seed",
+  "find": "\tword_04 = 0;\n\tword_08 = 0;",
+  "replace": "\tword_08 = 0;"
+ },
+ {
+  "label": "word_2c keeps its seed",
+  "find": "\tword_28 = 0;\n\tword_2c = 0;",
+  "replace": "\tword_28 = 0;"
+ },
+ {
+  "label": "the constructor also empties the two histograms",
+  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++) {\n\t\terrorSum[0][i] = 0;\n\t\terrorCount[0][i] = 0;\n\t}\n\terrorHistogramCount = 0;\n\tthis->params = params;"
+ },
+ {
+  "label": "the constructor also empties the constellation table",
+  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++)\n\t\tconstellation[0][i] = 0;\n\terrorHistogramCount = 0;\n\tthis->params = params;"
+ }
+]

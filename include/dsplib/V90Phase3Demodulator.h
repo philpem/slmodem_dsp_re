@@ -106,6 +106,31 @@ public:
 	 *                                                  C1,C2   365 B
 	 *     ~V90Phase3Demodulator()                      D1,D2   165 B
 	 *
+	 * BOTH WERE READ IN FULL AND BOTH ARE BLOCKED ON ONE UNWRITTEN CLASS.
+	 * The constructor builds `phase3Modulator` with (params, argument 3),
+	 * zeroes `word_3cc`, builds `descrambler` with (0x12, 0x17, 0x63),
+	 * stores arguments 1, 3 and 4 at +0x0c, +0x08 and +0x00, then takes
+	 * `sysdep_malloc(0x1c)` for an `V90SdDetector(params->+0x284,
+	 * +0x288, +0x28c, +0x290)` and `sysdep_malloc(0x3c)` for an
+	 * `ANSamToneDetector(0x190, 0x64, 307200.0f, 0, 0.5f, 0x1f40, 0x32,
+	 * 0)`, and ends by calling its own `reset(0, 0x40, 0, 0, NULL, NULL,
+	 * NULL, 0, 1, 0.0f, 0)`.  The destructor frees the two allocations
+	 * behind their own null tests -- SD detector first -- and then lets
+	 * the compiler destroy `descrambler` and `phase3Modulator`.
+	 *
+	 * `ANSamToneDetector` has no constructor and no destructor in this
+	 * tree, so neither member can link.  In the blob its constructor is
+	 * also called from `VPcmFloModem`'s, so the class belongs to whichever
+	 * batch writes that rather than to this chain.
+	 *
+	 * ARGUMENT 2 -- THE `V90SpectralVerifier *` -- IS NEVER LOADED.  The
+	 * constructor reads 0x40 (`this`), 0x44, 0x4c and 0x50 off its frame
+	 * and `0x48(%esp)` appears nowhere in the 365 bytes.  So it is
+	 * accepted and dropped, no field holds it, and no test of this
+	 * constructor can assert a placement for it.  `V90Demodulator` passes
+	 * the address of its own embedded verifier, which is why the argument
+	 * looks load-bearing from the caller's side and is not.
+	 *
 	 * A return type is not mangled, so every one below is spelled `void`
 	 * for want of evidence rather than because the blob returns nothing.
 	 */

@@ -102,6 +102,58 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
 #endif
 
 /*
+ * `V90Demapper::V90Demapper` -- 193 bytes at 0x30640 (C1) and again at
+ * 0x30710 (C2).
+ *
+ * `this` is the first STACK argument, so after `push esi; push ebx; sub $4`
+ * the frame is this 0x10, levels 0x14, params 0x18, adi 0x1c -- and every
+ * store below was read off that.
+ *
+ * THE ELEMENT COUNT IS THE FIRST ARGUMENT AND THE TWO WIDTHS ARE FOUR AND
+ * ONE.  `lea 0x0(,%ebx,4),%eax` before the first `sysdep_malloc` and a bare
+ * `mov %ebx,(%esp)` before the second, with `%ebx` the first argument
+ * throughout; `count_24` then receives `%ebx` itself.  The element TYPES are
+ * still unknown -- see the header -- so the two stay `void *`.
+ *
+ * THE ORDER OF THE STORES IS NOT THE OBJECT'S ORDER, and only one part of it
+ * was forced.  `adiDetector` is stored BEFORE the two allocations and the
+ * compiler could not have moved it there: a store to `*this` cannot cross a
+ * call to `sysdep_malloc`, which may alias anything.  The eight zeroed words
+ * and the two trailing stores are plain stores with no call between them, so
+ * their order in the object is the scheduler's and is not evidence.
+ *
+ * THE SIX COUNTS ARE A ROLLED LOOP, not six stores.  `mov %ebx,0x630(%esi,
+ * %eax,4); inc %eax; cmp $0x5,%eax; jbe` -- one store and a back edge, where
+ * the eight words above really are eight separate `movl $0x0`.
+ */
+V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
+			 V90AutoDigitalImpDetector *adi)
+	: byte_664(0)
+{
+	unsigned int i;
+
+	adiDetector = adi;
+	array_1c = sysdep_malloc(levels * 4);
+	array_20 = sysdep_malloc(levels);
+	count_24 = levels;
+
+	word_04 = 0;
+	word_08 = 0;
+	word_0c = 0;
+	word_10 = 0;
+	word_14 = 0;
+	word_18 = 0;
+	word_28 = 0;
+	word_2c = 0;
+
+	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
+		constellationSize[i] = 0;
+
+	errorHistogramCount = 0;
+	this->params = params;
+}
+
+/*
  * `printErrorHistogramAndReset` -- 362 bytes at 0x30b80.
  *
  * THE SIX-WAY GUARD IS A CHAIN OF `&&` AND NOT A LOOP.  Six loads into six
@@ -198,8 +250,10 @@ V90Demapper::printErrorHistogramAndReset()
  * non-trivial destructor, so GCC emits its destruction after the body and
  * this file must not write it.  The embedded `ModulusDecoder` at +0x648 gets
  * no such call in the object, which is the evidence that ITS destructor is
- * trivial -- and the reason the member can be declared as bytes here without
- * losing anything the destructor does.
+ * trivial -- and it stayed true when the member stopped being a pad and
+ * became the real class, because `ModulusCoder.h` declares no destructor for
+ * it either.  If it ever gains one this destructor grows a call it must not
+ * have, and nothing but this comment says so.
  */
 V90Demapper::~V90Demapper()
 {
