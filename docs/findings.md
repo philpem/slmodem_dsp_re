@@ -40279,3 +40279,56 @@ equaliser error.
 ~101 ms while `slmodemd` and `d-modem` contribute ~74 ms internally (1215), so
 the echo sits at ~175 ms, about 3 ms outside the 172.5 ms window. Every further
 millisecond has to come from our own pipeline. **Recommended setting: 20.**
+
+======================================================================
+
+### 1217. THE INTERNAL 74 ms DECOMPOSED: 4 ms IS THE RESAMPLER AND ~60 ms IS THE d-modem/slmodemd LINK
+
+*Task following 1215. No new instrumentation was needed -- `modem_main.c`
+already dumps all four points, and nobody had compared them.*
+
+`slmodemd` writes the SIP audio twice per direction: `modem_{rx,tx}_8k.raw` at
+8000 Hz, its socket end, before and after resampling; and
+`modem_{rx,tx}.raw` at 9600 Hz, the same audio as the datapump sees it.
+Running `echoscan` at BOTH boundaries on the same calls measures the segment
+between them directly, with no cross-file alignment problem: each pair is
+opened together and lives in one timebase.
+
+| call | 8k boundary | 9600 boundary | difference |
+|---|---|---|---|
+| n20-1 | 161.62 ms | 165.62 ms | **+4.00** |
+| n20-2 | 161.62 ms | 165.62 ms | **+4.00** |
+| n20-4 | 171.62 ms | 175.62 ms | **+4.00** |
+| n10-2 | 171.62 ms | 175.62 ms | **+4.00** |
+| n10-3 | 171.62 ms | 175.62 ms | **+4.00** |
+
+**Exactly 4.00 ms in five of five**, across two ATA settings and both values of
+the 10 ms quantum. That is the 8000<->9600 resampler, both directions, and it is
+not worth attacking.
+
+**The full budget, every term measured:**
+
+| segment | round trip | how |
+|---|---|---|
+| network + ATA + hybrid | **~101 ms** | chirp at the RTP boundary (1215) |
+| `d-modem` <-> `slmodemd` link and its framing | **~60 ms** | 8k boundary minus external |
+| 8000<->9600 resampler | **4 ms** | 9600 boundary minus 8k boundary |
+| = what the canceller sees | ~165-175 ms | `echoscan` on the datapump pair |
+| canceller covers up to | 172.5 ms | `dlen` at 9600 Hz |
+
+**So ~60 ms of round trip -- about 30 ms each way -- is in the hop between the
+two processes.** At 20 ms per frame that is roughly a frame and a half in each
+direction, which is what plain frame buffering plus one frame in flight would
+cost. Nothing about it is echo-canceller-specific and nothing about it is in the
+blob: `dmodem_put_frame` writes a frame to the socket, `dmodem_get_frame` reads
+one back, and `slmodemd` buffers on its side before the resampler.
+
+**Why this is the whole remaining problem.** The external loop has bottomed out
+(1216: 20 ms is the ATA's optimum, and 0 is worse). The resampler is 4 ms. The
+echo therefore sits ~3 ms outside a 172.5 ms window, and **shedding 10 ms of
+the 60 would put every call inside it** rather than straddling the edge, which
+is what the 4800/7200 outliers look like.
+
+That is an ordinary latency-reduction exercise in code this project owns, with
+a measurement already in place to confirm any change: run a call, `echoscan`
+the 8k pair, and see whether the number moved.
