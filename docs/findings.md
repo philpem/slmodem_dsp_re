@@ -43632,3 +43632,137 @@ rests on the strength-reduced accumulators alone, and
 `test/mutations/v92convenc.json`'s NOTE says so.
 
 The uninitialised default arm of `process` is D262.
+### 1376. THE V.92 MODULUS ENCODER'S FIRST SIX WORDS ARE THREE `long long`, AND ITS SELECTOR IS SIGNED
+
+The object map in `include/dsplib/V92ModulusEncoder.h` was written from the
+constructor alone, which touches +0x18..+0x48 and says nothing about the six
+words below or the two above.  `reset` (blob 0x550f0, 0x8a5) and `progress`
+(0x559a0, 0x11f9) settle all eight, and two of the answers are FORCED by the
+encoding rather than chosen:
+
+**+0x00, +0x08 and +0x10 are three 64-bit members, not six 32-bit ones.**
+`reset` writes each as a pair with a carry between the halves, and `progress`
+loads +0x08 and +0x10 as 64-bit values and shifts and divides them
+ARITHMETICALLY -- `sar`, `shrd`, and the add-the-sign-bit-then-`>>1` that GCC
+emits for a signed division by 2 -- so they are `long long` and not `unsigned
+long long`.  What they hold is the product of the twelve moduli: +0x00
+truncated to 64 bits, +0x08 and +0x10 the same product carried exactly as two
+limbs in base 2^63.  +0x10 is masked with `0x7fffffffffffffff` at both of
+`reset`'s exits and +0x08 takes exactly the bits above it (`u >> (62 - n)`
+against `(u << (n + 1)) & MASK`), which is what makes it a base and not two
+unrelated words.
+
+**+0x50 is SIGNED and +0x48 is UNSIGNED.**  `progress` opens
+`cmp $1 / je / jle / cmp $2 / je`, and GCC emits `jle`/`jg` for a switch over
+a signed index and `jbe`/`ja` over an unsigned one; case 0 then tests the bit
+count with `cmp $0x3f / jbe`, which is the other one.  Neither difference is
+observable by any test -- every value either field takes in service is small
+and positive -- so this is exactly the class of defect finding 613 is about,
+found by reading what the compiler was not free to choose.  The header was
+`unsigned int` for both and is now `int` for +0x50.
+
+**+0x18..+0x44 are twelve unsigned moduli and +0x48 is a bit count.**  Every
+one of the twelve is loaded zero-extended into a 64-bit multiply or pushed as
+the divisor of a `__divdi3` with an explicit zero high half, so unsigned is
+forced too.  +0x48 is the number of bits `progress` reads out of its byte
+array, one bit per byte, from `bytes[+0x48 - 1]` down to `bytes[0]`.
+
+**AND +0x08 IS WRITTEN TWICE BY `reset`, THE FIRST TIME FOR NOTHING.**  The
+product of the first six moduli is stored there at 0x55418/0x55445 and both
+arms of the `if` that follows store over it before anything can read it.  It
+is a dead store, it is in the object because GCC 3.4.2 does not eliminate one
+made through a pointer, and it is reproduced rather than dropped:
+docs/deviations.md D263.
+
+======================================================================
+
+### 1377. THIRTEEN OF `V92ParamsInfo`'s TWENTY-THREE UNKNOWN WORDS ARE NAMED BY ITS READER
+
+`V92ParamsInfo` (finding 1321's identification of `V92MappingParams`) leaves
++0x00..+0x5b as `pad_00[0x5c]`, twenty-three slots whose only writer,
+`V92setParamsInfoFromCPUnPck`, does not say what they are.  `reset` is the
+first READER of that region in this tree, and it copies exactly thirteen of
+them into members whose use is known:
+
+    params +0x00              -> +0x48  the bit count
+    params +0x1c .. +0x48     -> +0x18 .. +0x44  the twelve moduli
+
+so the twelve consecutive words at +0x1c are a modulus table and +0x00 is a
+frame length in bits.  `include/dsplib/V92ParamsInfo.h` is not touched here --
+it belongs to a different batch and naming half a `pad` array from one reader
+is how a header acquires two conflicting stories -- but the offsets are
+recorded so that whoever does name them has a second, independent witness.
+
+======================================================================
+
+### 1378. GCC EMITS `x > 0` FOR A 64-BIT `x` AS `(x >> 63) - x` READ OFF BIT 63
+
+Both members contain this, four times over, and it does not look like a
+comparison at all:
+
+    mov %ebx,%esi ; mov %ebx,%edx        ; the high half, twice
+    sar $0x1f,%esi ; sar $0x1f,%edx      ; 0 or -1: that is x >> 63
+    sub %ecx,%esi ; sbb %ebx,%edx        ; (x >> 63) - x, 64 bits
+    mov %edx,%eax ; shr $0x1f,%eax       ; its bit 63, as a 0 or 1
+
+It is `emit_store_flag`'s expansion for `x > 0` where a VALUE and not a branch
+is wanted -- here because the `&& n <= 7` beside it was flattened into a
+`test %al,%bl` of two booleans.  It is that comparison exactly, over all 2^64
+inputs, and not an approximation of it: for `x > 0` the difference is `-x`,
+which is negative; for `x < 0` it is `~x`, which is not; and for `x == 0` it is
+`0`, which is not.  Written `> 0` in the reconstruction, which is the point --
+recovering the SOURCE means undoing this, not reproducing it.
+
+The same reading disposes of the other DImode oddity beside it, `n <= 7`
+compiled as `setle` into a byte that is then `test`ed against the first: the
+`&&` is not short-circuited because neither side can trap or have an effect.
+
+======================================================================
+
+### 1379. THE NORMALISATION BLOCK IS WRITTEN OUT THREE TIMES, AND THE PROOF IS A CALL THAT COULD NOT BE REMATERIALISED
+
+`V92ModulusEncoder::reset` contains it once and `progress` twice -- the same
+eight lines, shifting one factor right until the product stops wrapping:
+
+    n = 0;
+    while (a * (b >> n) > 0 && n <= 7) n++;
+    if (n == 8)  x = <the exact product, written again>;
+    else       { u = a * (b >> (n + 1)); x = (u << (n + 1)) & MASK; }
+
+It is tempting to reconstruct that as a function or a macro and call it three
+times, and the object says it was neither -- or at most a macro.  **The
+`n == 8` arm RE-ISSUES the divisions.**  In `progress` the arm's value is
+`(2^63 / m) * (d % m) * m`, and at 0x55f6a and 0x55fa8 the object calls
+`__divdi3` and `__moddi3` a second time for values it already has in `q` and
+`r` twenty instructions earlier.  GCC cannot do that: a call is not rematerial-
+isable, so it was in the source text twice.  A function would have had the
+value in a parameter; only textual substitution puts the expression back.  The
+same holds in `reset`, where the arm's value is the twelve-fold product spelled
+out for the second time.
+
+So the reconstruction writes it out three times too.  A `static inline` helper
+would behave identically and read better, and it would also evaluate the
+exact product on the path that does not need it -- which is a division by a
+modulus, on a path where the object performs none.
+
+**AND THE ARM IS REACHABLE, which took a mutation to establish.**  The first
+reading here was that it is dead: `2^63 / m` is negative for every modulus and
+`(d % m) * m` is not, so `a * (b >> n) > 0` should fail at the first test.
+That is wrong, because the product WRAPS -- the loop is an overflow detector
+and overflow is exactly what it is looking at.  A search over m and `d % m`
+finds m = 170 with a remainder of 128 keeps the wrapped product positive
+through all eight shifts, and the fixture now drives it as the first modulus
+and as the second.  The claim "unreachable" would have gone into the record as
+a derivation and been wrong; what caught it was that `if (n == 8)` -> `if (n
+== 9)` was NOT caught by a sweep of 3,203 comparisons, which is finding 134's
+argument in its usual form: a branch nothing distinguishes is a branch nothing
+is testing.  Five branches of `progress` were found that way and all five now
+have a value chosen for them.
+
+**A SECOND THING THE SAME READING SETTLES: `progress`'s case 0 never reads the
+twelfth modulus.**  Digits 0 to 10 are `v % m[k]` with `v` reduced after each,
+and the twelfth is the bare quotient the eleventh division leaves -- `out[11]
+= (v - out[10]) / m10`, with no reduction and no reference to +0x44 anywhere
+in the case.  +0x44 is the one field of the object case 0 does not touch,
+while case 2 of the same function reports `m11 - 1` as that digit's range.
+docs/deviations.md D264.
