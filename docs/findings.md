@@ -39045,14 +39045,28 @@ being decided in `dsplibs.o`.  Two facts from the object bear on the shape of
 the report rather than its cause:
 
 - **Every debug print in the `v32` module is gated on `dsplibs_debug_level >
-  1`** — eleven `cmpl $0x1,dsplibs_debug_level; ja` sites across
-  `v32_create`, `v32_delete` and `v32_process`.  At the default level the module is
+  1`** — eleven reads of the variable across `v32_create`, `v32_delete` and
+  `v32_process`, seven of them the folded `cmpl $0x1,dsplibs_debug_level`
+  and four a `mov` into a register with the compare after it; one gate, two
+  encodings.  At the default level the module is
   *silent*, so "`slmodemd` reports no datapump at all" is not evidence that no
   datapump ran — `v32: create...`, `v32: phys. delay is %d` and `v32: V32
   config S%d,R%d,T%d,A%d,L%d` appear only from level 2.
 - **`hangup` is NULL**, and `modem_hup` calls it only when non-NULL, so
   `DP_ESTAB` → `DP_DISC` with nothing in between is the *normal* shape of a
   failed V.32/V.32bis call, not a symptom of a missing driver.
+
+**And the host log already separates the two things that shape can mean.**
+`do_modem_change_dp` has exactly one failure arm: if `op->create` returns NULL
+it prints `change dp -> 132 error.` and calls `modem_hup` **there and then**,
+which sets `RESULT_NOCARRIER` and schedules the stop 48 ticks later.  That
+disconnect is immediate and it is announced.  The other shape is a datapump
+that was created and never trained: `modem_update_status` is simply never
+called with `STATUS_DP_LINK`, so the state stays `DP_ESTAB` until the answer
+or carrier timer hangs up — a disconnect **at the timeout**, with no error
+line, which is what the bench reports.  So the report is the second shape, and
+the presence or absence of `change dp -> 132 error.` in the log settles it
+without touching the object.
 
 The one asymmetry that does exist is host-side and upstream of the object:
 **V.8 never asks for 132.**  `v8_process` picks the next datapump from the
@@ -39172,10 +39186,20 @@ needs to place it.
    4687:  imul $0x2aaaaaab ...          ; /6      -> config+0x04
 ```
 
-**5/6 is 8000/9600 exactly.**  `MDMPRM_IODELAY` is in host samples and the host
-runs at 9600 (finding 5); the V.32 core runs at its native 8 kHz behind
-`dp_wrapper`, so the round-trip delay has to be rescaled on the way in.  The
-ceiling of 216 host samples is 180 at 8 kHz — 22.5 ms.
+**5/6 is 8000/9600 exactly — and this reading is DERIVED**, from the
+arithmetic and not from a measurement.  `MDMPRM_IODELAY` is in host samples
+and the host runs at 9600 (finding 5); the V.32 core runs at its native 8 kHz
+behind `dp_wrapper`, so a round-trip delay handed to it has to be rescaled on
+the way in.  The ceiling of 216 host samples is 180 at 8 kHz — 22.5 ms.
+
+**The `+48` is the same units, which is what makes the reading hard to argue
+with.**  `dp_wrapper_create` computes the host-side fragment as
+`dp_frag * host_srate / dp_srate`, and `v32_create` passes `dp_frag = 40` and
+`dp_srate = 8000` (finding 15), so at a 9600 host that fragment is exactly
+**48** — the literal `lea 0x30(%eax),%ebx` adds.  The whole expression is
+therefore `(IODELAY + one host fragment)` in host samples, clamped in host
+samples, and only then converted to the pump's.  Two constants baked at 9600,
+not one.
 
 The over-range branch is the same shape as `vpcm_create`'s and, like it, is not
 an error path: the negative `MDMPRM_UPDATE_DELAY` asks the host to *shed* the

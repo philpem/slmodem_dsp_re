@@ -195,8 +195,9 @@ and hands the V.32 core `phys * 5 / 6` — and 5/6 is exactly 8000/9600.  The
 host's delay is in host samples; the echo canceller behind `dp_wrapper` wants
 its own 8 kHz ones.  Finding 1197.
 
-**Retarget:** if R-1 makes the host 8000 the ×5/6 becomes wrong, not
-redundant — the factor has to go to 1 at the same time as the host rate
-changes.  The 216-sample ceiling is likewise in host samples (22.5 ms at
-9600) and would have to be restated, or the pump silently pins a delay it
-should have accepted.
+**Retarget:** if R-1 makes the host 8000, **three** constants move together,
+not one.  The ×5/6 has to go to 1; the `+48` is one host fragment
+(`dp_wrapper_create`'s `40 * 9600/8000`) and becomes 40; and the 216-sample
+ceiling is in host samples (22.5 ms at 9600) and has to be restated as 180, or
+the pump silently pins a delay it should have accepted.  Changing the factor
+alone leaves the offset a rate dependency in disguise.
