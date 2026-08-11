@@ -9,7 +9,13 @@
 #
 set -e
 cd "$(dirname "$0")/../.."
-OUT=${TC_OUT:-/tmp/tc_out}
+#
+# UNDER build/, NOT UNDER /tmp, so `make clean` reaches it.  This defaulted to
+# /tmp/tc_out and wrote its manifest to /tmp/tc_manifest.txt -- 152 objects and
+# an index that nothing in the tree ever removed, and that two concurrent
+# worktrees would have written over each other.
+#
+OUT=${TC_OUT:-$PWD/build/tc_out}
 # THE SAME FLAGS `make period` USES, and they must stay the same.  The two
 # diverged once and it cost real coverage: this script passed neither
 # -D__SIZEOF_POINTER__=4 nor the compat header, so it compiled a smaller set
@@ -36,8 +42,15 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 # called `dp` produce the same string.  Record the mapping rather than guess it.
 for f in $SRC $CXXSRC; do
     echo "$(echo "$f" | tr / _).o $f"
-done > "$OUT/../tc_manifest.txt"
-docker run --rm --platform linux/386 \
+done > "$OUT/tc_manifest.txt"
+# See tools/toolchain/period.sh for why --rm alone is not the whole of
+# cleaning up: --name gives the trap a handle, and --user keeps root-owned
+# objects out of the tree.
+NAME="dsplibs-tcbuild-$$"
+cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+
+docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" --platform linux/386 \
   -v "$PWD:/src" -v "$OUT:/out" -w /src dsplibs-tc sh -c "
     fail=0
     for f in $SRC; do
