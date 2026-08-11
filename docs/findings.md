@@ -40441,7 +40441,10 @@ by halving the packet time (1218).
 
 ======================================================================
 
-### 1220. THE ATA PLAYOUT CHANGE, MEASURED PROPERLY: 97% CONNECT AGAINST 73%, AND THE MODE MOVES 12000 -> 14400
+### 1350. THE ATA PLAYOUT CHANGE, MEASURED PROPERLY: THE MODE MOVES 12000 -> 14400
+
+*Renumbered from 1220, which collided with the `ctorpath-complete` branch's
+1220-1344 block. Nothing referenced it before the renumber.*
 
 *Task #111's closing measurement. 30 calls at one fixed configuration against
 the 30-call control of 1208, one variable changed.*
@@ -40502,3 +40505,51 @@ still explains nothing, which is now three batches saying so.
 connected at 4800. The same shape appeared once before (`equerr` 250 -> 4800).
 So the table predicts the bulk and something occasionally overrides it, and that
 something is not in any covariate measured here.
+
+======================================================================
+
+### 1351. THE CLEAN CONTROL: THE RATE SHIFT IS REAL (p = 0.0008), THE CONNECT-RATE SHIFT IS NOT
+
+*Re-run of 1350's control at `playout-delay nominal 80` on a line with no
+orphaned `slmodemd`, because 1350 declined to claim the connect-rate figure
+until that confound was removed. Three runs of 30 calls, one variable.*
+
+| run | connected | median | mode | distribution |
+|---|---|---|---|---|
+| playout 80, ORPHAN present | 22/30 | 12000 | 12000 | 4800:2 7200:2 9600:1 **12000:12** 14400:3 24000:1 26400:1 |
+| playout 80, clean | 27/30 | 12000 | 12000 | 4800:5 7200:1 9600:1 **12000:15** 14400:3 26400:2 |
+| playout 20, clean | 29/30 | 14400 | 14400 | 4800:3 7200:3 12000:4 **14400:16** 26400:2 33600:1 |
+
+**The rate improvement is real and it is the ATA's.** With the orphan removed and
+one variable changed:
+
+```
+calls at >= 14400 :  19% (5/27)  ->  66% (19/29)   p = 0.0008
+rank-sum over the whole distribution                p = 0.0127
+mean rate           11733 -> 13820
+```
+
+**And it is specifically the GOOD calls getting better, not the bad ones going
+away**: calls reaching 12000 or more are 74% against 79%, p = 0.76 -- unchanged.
+The buffer reduction moves the modal call up one step; it does not rescue the
+calls that were already failing to converge.
+
+**The connect-rate figure of 1350 is withdrawn.** Neither comparison survives:
+
+```
+orphan 22/30 vs clean-80 27/30 : p = 0.18   the orphan's apparent cost
+clean-80 27/30 vs clean-20 29/30: p = 0.61   the ATA's apparent residual
+```
+
+So the 73% -> 97% that looked striking is consistent with one underlying connect
+rate and n = 30. 1350 was right to refuse to claim it, and it is now measured
+rather than merely doubted.
+
+**A methodological correction, recorded because this bench's discipline is the
+point.** The first test run on these two samples was a permutation test on the
+MEDIAN, which returned p = 0.28 and would have been reported as "no significant
+difference". That is the wrong statistic: the two medians are ADJACENT
+categories in a discrete distribution, so a large shift in where the mass sits
+barely moves them. The rank-sum over the full distribution, and the proportion
+above a threshold, both find the effect immediately. **Choosing a statistic that
+cannot see the effect is a way of being wrong that looks like rigour.**
