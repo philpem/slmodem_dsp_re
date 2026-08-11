@@ -3664,6 +3664,27 @@
     "the parameter block lands at +0x280c rather than +0x2814": "caught"
    }
   },
+  "v90bits": {
+   "key": "a0f666dccc91ab7e0dcad86b9b7005579110ec35d10a1ee4768466efe25e2609",
+   "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ctor: bitsPerFrame is initialised, which the blob does not do": "caught",
+    "ctor: extraSymbols is initialised, which the blob does not do": "caught",
+    "ctor: extraSymbolsPending starts clear": "caught",
+    "ctor: nofSymbols is one more than the argument": "caught",
+    "ctor: params is not stored": "caught",
+    "ctor: symbolsBlockSize starts at one": "caught",
+    "ctor: symbolsDone is left as it was found": "caught",
+    "ctor: the mapper allocation is four bytes short": "caught",
+    "ctor: the mapper is built with a null V90Parameters": "caught",
+    "ctor: the symbol buffer is one byte per symbol": "caught",
+    "dtor: the mapper guard is inverted": "caught",
+    "dtor: the mapper is destroyed and not freed": "caught",
+    "dtor: the mapper is freed without being destroyed": "caught",
+    "dtor: the symbol buffer is not released": "caught",
+    "dtor: the symbol buffer's free is not guarded": "caught"
+   }
+  },
   "v90cd": {
    "key": "319ee5a1f3a41a3dcc0605446ebfd68cc80a14f40e41afedab4f512820a4652b",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -3890,6 +3911,23 @@
     "the two lookahead bits are transposed": "caught",
     "the unpacker's second byte is left as it was": "caught",
     "the unpacker's word is left as it was": "caught"
+   }
+  },
+  "v90mapper": {
+   "key": "248f88a61c576e340a2b17513b36e77df0065b2e4b616b687b997fae912b2397",
+   "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ctor: +0x04 is left as it was found": "caught",
+    "ctor: +0x1c is left as it was found": "caught",
+    "ctor: +0x6f8 is left as it was found": "caught",
+    "ctor: params is not stored": "caught",
+    "ctor: the buffer is 0x40 bytes, not 0x50": "caught",
+    "ctor: the flag byte at +0x6fc is set rather than cleared": "caught",
+    "ctor: the loop clears five words, not six": "caught",
+    "ctor: the loop skips the first word": "caught",
+    "dtor: the buffer is nulled after the free": "caught",
+    "dtor: the free is not guarded": "caught",
+    "dtor: the guard is inverted": "caught"
    }
   },
   "v90mp": {

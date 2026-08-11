@@ -220,6 +220,10 @@
   "src/pump/v90/V90AutoDigitalImpDetector.cpp",
   "build/test/t_v90designers"
  ],
+ "v90bits": [
+  "src/pump/v90/V90BitsToSymbol.cpp",
+  "build/test/t_v90modchain"
+ ],
  "v90cd": [
   "src/pump/v90/V90ConstellationDesigner.cpp",
   "build/test/t_v90leaves"
@@ -263,6 +267,10 @@
  "v90jd": [
   "src/pump/v90/V90Jd.cpp",
   "build/test/t_v90jd"
+ ],
+ "v90mapper": [
+  "src/pump/v90/V90Mapper.cpp",
+  "build/test/t_v90modchain"
  ],
  "v90mp": [
   "src/pump/v90/V90MP.cpp",

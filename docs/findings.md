@@ -41759,3 +41759,85 @@ uncatchable and the symptom will be twelve NOT CAUGHT verdicts, not a compile
 error.  Each file's note says so.
 
 ======================================================================
+### 1290. `V90Mapper` IS 0x704 BYTES, AND THE SPECTRAL SHAPER'S PINNED SIZE IS CONFIRMED FROM OUTSIDE IT
+
+`V90BitsToSymbol`'s constructor opens with
+
+    movl $0x704,(%esp) ; call sysdep_malloc ; ... ; call V90Mapper::C1
+
+which is not a displacement bound but **the original compiler's own
+`sizeof(V90Mapper)`**, written by the compiler that laid the class out.
+Finding 1246's oracle, applied to the innermost class of the V.90 modulator
+chain.
+
+Inside it, the two embedded subobjects are `lea`, never a load, so they are
+members and not pointers:
+
+    lea 0x670(%ebx),%edx ; call ModulusEncoder::C1
+    lea 0x68c(%ebx),%eax ; call V90SpectralShaper::C1
+
+`sizeof(ModulusEncoder)` is 0x1c, asserted in `src/pump/v90/ModulusCoder.cpp`
+since long before this work, and **0x670 + 0x1c = 0x68c** -- the two abut with
+nothing between.  `sizeof(V90SpectralShaper)` is 0x6c, asserted in
+`src/pump/v90/V90SpectralShaper.cpp` and derived independently from inside that
+class, and **0x68c + 0x6c = 0x6f8**, which is exactly the offset of the next
+field the constructor writes.
+
+So three sizes settled in three different places and one displacement measured
+here agree to the byte.  That is worth recording as its own finding because it
+is the first time the spectral shaper's 0x6c has been checked from OUTSIDE the
+class -- everything that pinned it before was internal to `V90SpectralShaper`,
+and a systematic error there would have been invisible.
+
+The destructor calls `V90SpectralShaper::~V90SpectralShaper` and nothing else.
+That is not an omission: `ModulusEncoder` has constructors and no destructor
+at all -- there is no `_ZN14ModulusEncoderD*` symbol anywhere in the blob --
+so it is trivially destructible and a compiler emits no call for it.
+
+======================================================================
+### 1291. `V90BitsToSymbol` IS 0x24 BYTES, AND TWO INDEPENDENT CALL SITES SAY SO
+
+`V90Phase4Modulator`'s constructor and `V90Modulator`'s constructor both
+allocate this class, and both spell the size the same way:
+
+    movl $0x24,(%esp) ; call sysdep_malloc ; ... ; call V90BitsToSymbol::C1
+
+Two call sites in two translation units, each emitting `sizeof` from the same
+class definition.  The last field the constructor writes is the byte at +0x20,
+so the object ends at 0x21 and pads to 0x24; the oracle and the displacement
+scan agree, and the oracle is the one that would have caught a member the
+constructor never touches.
+
+**Which matters here, because there are two such members.**  Nothing is stored
+at +0x14 or +0x18 by the constructor -- they are first written by `reset`,
+which sets +0x14 from the mapping parameters' first word and +0x18 to
+`(6 * mp[+0x624]) / mp[+0x620]` or to zero.  A differential test over
+never-zeroed storage is what makes that testable at all: on zeroed storage a
+constructor that helpfully initialised them would pass.  Both spellings are in
+`test/mutations/v90bits.json` and both are caught.
+
+======================================================================
+### 1292. A LOOP'S UPPER BOUND CAN BE UNTESTABLE BECAUSE THE WORD PAST IT BELONGS TO A SUBOBJECT THAT ALREADY ZEROED IT
+
+`V90Mapper`'s constructor ends with a six-word clear at +0x658, spelled in the
+blob as `cmp $0x5,%eax ; jbe` over an unsigned counter -- 0..5 inclusive,
+covering 0x658..0x66f, which is exactly the gap up to the modulus encoder.
+
+Mutating it to `i <= 6` is **NOT CAUGHT**, and the reason is structural rather
+than a gap in the test.  `cleared_658[6]` is the first word of the
+`ModulusEncoder` embedded at +0x670, and the mem-initializer list runs BEFORE
+the constructor body, so `ModulusEncoder::ModulusEncoder` has already stored
+zero over it.  The extra iteration writes the value that is already there.
+
+**The lesson is about which direction a bound is testable in.**  Under-running
+the loop (`i < 5`) leaves the seed in the sixth word and is caught; starting it
+late (`i = 1`) leaves the seed in the first word and is caught; over-running it
+into an adjacent subobject that the same constructor has just zeroed cannot be
+caught by any comparison of final state, because there is no difference in
+final state.  The mutation was removed rather than marked `equivalent`,
+because "equivalent" in this tree has meant "the compiler deletes it" (finding
+1224) and this is a different claim -- it is the OBJECT that makes the two
+outcomes identical, not the compiler, and that will stay true whatever flags
+change.
+
+======================================================================
