@@ -40385,3 +40385,56 @@ Direct Media working, which removes it from the path and makes the ATA's own
 packetisation the only one that matters -- `codec g711alaw bytes 80` on the
 VG204 dial-peer); then a 30-call batch against the n=30 control, because five
 calls cannot distinguish a rate distribution from a run of luck.
+
+======================================================================
+
+### 1219. DIRECT MEDIA WORKS AND IS WORTH ZERO MILLISECONDS — A NEGATIVE RESULT WORTH KEEPING
+
+*Recorded so nobody spends another afternoon on it. Four of my theories about
+why it would not engage were wrong; the one thing that found the answer was
+Asterisk's own debug log.*
+
+**Getting it working** took clearing one global FreePBX feature code. The chain
+of wrong guesses, in order: a codec mismatch forcing transcoding (refuted --
+`pjsip show channelstats` says `alaw` on both legs); the Dial options being set
+on the wrong extension (they were, but fixing that changed nothing); the Dial
+options at all (`D_OPTIONS=r` confirmed, still `simple_bridge`). What actually
+answered it was one line, after enabling `core set debug 3 bridge_native_rtp`:
+
+```
+can not use native RTP bridge as channel 'PJSIP/4242-...' has features which prevent it
+```
+
+`ast_bridge_channel_has_dtmf_features()` -- our channel carried `apprecord` in
+`DYNAMIC_FEATURES`, attached by FreePBX's global **In-Call Asterisk Toggle Call
+Recording** feature code. It is inherited (`__DYNAMIC_FEATURES`), so it rides
+every channel regardless of the extension's four recording policies, all of
+which had already been set to Never.
+
+**The result, once working:**
+
+| | |
+|---|---|
+| bridge technology | `native_rtp` |
+| RTP peer | 10.1.1.2, the VG204 itself, not 10.0.0.26 |
+| re-INVITEs | 2 |
+| chirp round trip | **101.38 ms, sd 0.00** |
+| chirp round trip, relayed | **101.38 ms** |
+
+**Zero difference.** Asterisk's relay contributed no measurable delay, which its
+own statistics had already said: 0% loss, 0.000 jitter, 1 ms RTT on a LAN. The
+hop was never the problem and the whole exercise bought nothing in latency.
+
+**What it did buy, and what then failed.** With Asterisk out of the path the
+ATA's own packetisation becomes the only one in the loop, which is the one thing
+that could not be changed while a repacketiser sat in the middle. `codec
+g711alaw bytes 80` on the VG204 dial-peer -- 10 ms at 8 kHz -- was applied and
+the ATA still offers `a=ptime:20` and the round trip still measures 101.38 ms.
+So the ATA is not honouring it either, and that avenue is closed too.
+
+**The lesson for the register.** Every delay term outside this project has now
+been measured and found either already minimal (network, 1 ms) or immovable
+(the ATA's 101 ms, which resists both its own playout setting below 20 ms and
+its packetisation setting entirely). **What remains is ours**: ~60 ms in the
+`d-modem` <-> `slmodemd` hop (1217), of which 20 ms has already been recovered
+by halving the packet time (1218).
