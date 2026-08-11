@@ -56,6 +56,25 @@ typedef void (*dtor_t)(void *self);
 
 extern "C" {
 
+/*
+ * V90RDetector's run members.  `this` is the first stack argument as
+ * everywhere else, and the sample is declared `int` on purpose: a `short`
+ * argument occupies a whole stack slot in cdecl, and passing the widened
+ * value is what the object's `movswl 0xc(%esp)` reads.
+ */
+void our_rd_reset(void *, unsigned, unsigned)
+	asm("_ZN12V90RDetector5resetEjj");
+void ref_rd_reset(void *, unsigned, unsigned)
+	asm("ref__ZN12V90RDetector5resetEjj");
+int our_rd_detR(void *, int) asm("_ZN12V90RDetector7detectREs");
+int ref_rd_detR(void *, int) asm("ref__ZN12V90RDetector7detectREs");
+int our_rd_detRNot(void *, int) asm("_ZN12V90RDetector10detectRNotEs");
+int ref_rd_detRNot(void *, int) asm("ref__ZN12V90RDetector10detectRNotEs");
+int our_rd_detRf(void *, int) asm("_ZN12V90RDetector8detectRfEs");
+int ref_rd_detRf(void *, int) asm("ref__ZN12V90RDetector8detectRfEs");
+int our_rd_detRfNot(void *, int) asm("_ZN12V90RDetector11detectRfNotEs");
+int ref_rd_detRfNot(void *, int) asm("ref__ZN12V90RDetector11detectRfNotEs");
+
 /* V90ConstellationDesigner(V90Parameters *, V90PreFilter *, V90ConstellationPower *) */
 void our_cd_c1(void *, void *, void *, void *)
 	asm("_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower");
@@ -596,6 +615,232 @@ run_adid(void)
 	return diff_end();
 }
 
+
+/* ------------------------------------- V90RDetector, the five run members */
+
+/*
+ * `reset` turns two SAMPLE COUNTS into four limits by rounding down, so the
+ * arguments are swept around every multiple of 6 and 12 and past the point
+ * where the reciprocal division could go wrong.  0xffffffff is there because
+ * the object divides UNSIGNED: a signed division of it would round the other
+ * way and land on a different limit.
+ */
+static const unsigned rd_counts[] = {
+	0u, 1u, 5u, 6u, 7u, 11u, 12u, 13u, 23u, 24u, 71u, 72u, 0xffffffffu
+};
+#define RD_NCOUNT ((int)(sizeof(rd_counts) / sizeof(rd_counts[0])))
+
+/*
+ * Sign patterns, oldest bit first as the register shifts them in.  The four
+ * the detectors look for, their complements, and three that match nothing --
+ * because the branch that matches NEITHER pattern clears both run counters
+ * and is as much a decision as the ones that do.
+ */
+static const unsigned rd_pat6[] = { 0x38u, 0x07u, 0x3fu, 0x00u, 0x2au, 0x15u,
+				    0x1cu };
+#define RD_NPAT6 ((int)(sizeof(rd_pat6) / sizeof(rd_pat6[0])))
+
+static const unsigned rd_pat12[] = { 0xcccu, 0x333u, 0xfffu, 0x000u, 0x555u,
+				     0xaaau, 0x666u };
+#define RD_NPAT12 ((int)(sizeof(rd_pat12) / sizeof(rd_pat12[0])))
+
+/*
+ * The sample for one bit.  A set bit must be STRICTLY positive and a clear
+ * one must not be, so zero belongs on the clear side -- the object tests
+ * `jle` on the 16-bit value and a reconstruction using `>= 0` or `!= 0` would
+ * differ on exactly that sample.  The magnitudes vary so that nothing can be
+ * reading the value rather than its sign.
+ */
+static short
+rd_sample(int bit, int k)
+{
+	static const short pos[] = { 1, 2, 300, 32767, 7 };
+	static const short neg[] = { 0, -1, -300, -32768, -7 };
+
+	return bit ? pos[k % 5] : neg[k % 5];
+}
+
+static int
+run_rd_detect(void)
+{
+	static const int obj = (int)sizeof(V90RDetector);
+	const int slot = obj + GUARD;
+	int seen0 = 0, seenPos = 0, seenNeg = 0, seenNot = 0, seenClear = 0;
+	int which, trial;
+
+	diff_begin("V90RDetector::reset and the four detectors");
+
+	/* First `reset` alone, over every count pair. */
+	for (trial = 0; trial < RD_NCOUNT * RD_NCOUNT; trial++) {
+		unsigned a = rd_counts[trial % RD_NCOUNT];
+		unsigned b = rd_counts[(trial / RD_NCOUNT) % RD_NCOUNT];
+
+		seed(slot, trial);
+		our_rd_reset(ours, a, b);
+		ref_rd_reset(theirs, a, b);
+
+		diff_eq_obj("after reset", V90RDetector, ours, theirs, trial);
+		diff_eq_int("reset stored nothing past the object (%ld)",
+			    guard_intact(obj, slot), 1, trial);
+
+		/*
+		 * The four limits at their ABSOLUTE offsets on the BLOB's
+		 * object, computed here a different way -- by subtracting the
+		 * remainder rather than by dividing and multiplying -- so the
+		 * check is not the implementation restated.
+		 */
+		diff_eq_int("blob: +0x04 is argument 1 down to a six (%ld)",
+			    (unsigned)((V90RDetector *)theirs)->int_04,
+			    a - a % 6u, a);
+		diff_eq_int("blob: +0x08 is argument 2 down to a six (%ld)",
+			    (unsigned)((V90RDetector *)theirs)->int_08,
+			    b - b % 6u, b);
+		diff_eq_int("blob: +0x0c is argument 1 down to a twelve (%ld)",
+			    (unsigned)((V90RDetector *)theirs)->int_0c,
+			    a - a % 12u, a);
+		diff_eq_int("blob: +0x10 is argument 2 down to a twelve (%ld)",
+			    (unsigned)((V90RDetector *)theirs)->int_10,
+			    b - b % 12u, b);
+		diff_eq_int("blob: the polarity starts at +1 (%ld)",
+			    ((V90RDetector *)theirs)->int_24, 1, trial);
+		diff_eq_int("ours: the polarity starts at +1 (%ld)",
+			    ((V90RDetector *)ours)->int_24, 1, trial);
+		diff_eq_int("blob: +0x28 is not reset's business (%ld)",
+			    memcmp(theirs + 0x28, before + 0x28, 4) == 0, 1,
+			    trial);
+	}
+
+	/*
+	 * Then each detector over a repeated pattern, COMPARED AFTER EVERY
+	 * SAMPLE.  Every one of them answers 0 five times in six and does its
+	 * work on the sixth, so comparing at the end of a run would compare
+	 * two objects that had just been cleared.
+	 */
+	for (which = 0; which < 4; which++) {
+		int longGroup = which >= 2;
+		int npat = longGroup ? RD_NPAT12 : RD_NPAT6;
+		int bits = longGroup ? 12 : 6;
+
+		for (trial = 0; trial < npat * 6; trial++) {
+			unsigned pat = longGroup
+				? rd_pat12[trial % RD_NPAT12]
+				: rd_pat6[trial % RD_NPAT6];
+			unsigned limR = rd_counts[(trial / npat) % 6 + 4];
+			unsigned limNot = rd_counts[(trial / npat) % 5 + 6];
+			int polarity = (trial % 3) - 1;
+			int step;
+
+			/*
+			 * THE TWO LIMITS ARE DIFFERENT, and that is not
+			 * decoration.  `detectR` measures against +0x04 and
+			 * `detectRNot` against +0x08; reset fills them from
+			 * its two arguments, so passing one count twice makes
+			 * the two fields equal and a detector reading the
+			 * wrong one indistinguishable from one reading the
+			 * right one.  Same for +0x0c against +0x10.
+			 *
+			 * AND THE POLARITY TAKES THREE VALUES, including 0:
+			 * the `Not` detectors choose their pattern with a
+			 * signed `> 0`, so a reconstruction using `>= 0` or
+			 * `!= 0` differs on exactly that value and on no
+			 * other.
+			 */
+			seed(slot, trial + 500);
+			our_rd_reset(ours, limR, limNot);
+			ref_rd_reset(theirs, limR, limNot);
+
+			/*
+			 * The two `Not` detectors choose their pattern from
+			 * the polarity, so it is set from OUTSIDE on both
+			 * sides: reaching -1 through detectR first would test
+			 * one arm of the choice and never the other.
+			 */
+			((V90RDetector *)ours)->int_24 = polarity;
+			((V90RDetector *)theirs)->int_24 = polarity;
+
+			for (step = 0; step < bits * 8; step++) {
+				/*
+				 * THE PATTERN CHANGES EVERY THIRD GROUP.  A
+				 * run of one pattern can never show what a
+				 * non-matching group does to a run counter
+				 * that is already up, and both the "clear
+				 * both" branch and the "clear the Not run"
+				 * branch are only visible against a counter
+				 * with something in it.
+				 */
+				unsigned live = ((step / bits) % 3) == 2
+					? (longGroup
+					   ? rd_pat12[(trial + 1) % RD_NPAT12]
+					   : rd_pat6[(trial + 1) % RD_NPAT6])
+					: pat;
+				int b = (int)((live
+					       >> (bits - 1 - step % bits))
+					      & 1u);
+				short v = rd_sample(b, step);
+				int ra, rb;
+
+				memcpy(before, ours, (size_t)slot);
+				switch (which) {
+				case 0:
+					ra = our_rd_detR(ours, v);
+					rb = ref_rd_detR(theirs, v);
+					break;
+				case 1:
+					ra = our_rd_detRNot(ours, v);
+					rb = ref_rd_detRNot(theirs, v);
+					break;
+				case 2:
+					ra = our_rd_detRf(ours, v);
+					rb = ref_rd_detRf(theirs, v);
+					break;
+				default:
+					ra = our_rd_detRfNot(ours, v);
+					rb = ref_rd_detRfNot(theirs, v);
+					break;
+				}
+
+				diff_eq_int("the verdict (sample %ld)", ra, rb,
+					    step);
+				diff_eq_obj("after a sample", V90RDetector,
+					    ours, theirs, step);
+				diff_eq_int("nothing past the object"
+					    " (sample %ld)",
+					    guard_intact(obj, slot), 1, step);
+
+				if (rb == 0)
+					seen0++;
+				if (rb == 1
+				    && ((V90RDetector *)theirs)->int_24 > 0)
+					seenPos++;
+				if (rb == 1
+				    && ((V90RDetector *)theirs)->int_24 < 0)
+					seenNeg++;
+				if (rb == -1)
+					seenNot++;
+				if (((step + 1) % bits) == 0
+				    && ((V90RDetector *)theirs)->int_14 == 0
+				    && ((V90RDetector *)theirs)->int_18 == 0)
+					seenClear++;
+			}
+		}
+	}
+
+	/*
+	 * Every outcome, or the sweep proves only that two objects agree
+	 * about saying no (findings 149 and 223).
+	 */
+	diff_eq_int("a group answered 0 on %ld samples", seen0 > 0, 1, seen0);
+	diff_eq_int("a run reached its limit positive %ld times",
+		    seenPos > 0, 1, seenPos);
+	diff_eq_int("a run reached its limit negative %ld times",
+		    seenNeg > 0, 1, seenNeg);
+	diff_eq_int("a Not detector fired %ld times", seenNot > 0, 1, seenNot);
+	diff_eq_int("a group matched neither pattern %ld times",
+		    seenClear > 0, 1, seenClear);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -604,6 +849,7 @@ main(void)
 	rc |= run_cd();
 	rc |= run_trn2();
 	rc |= run_rd();
+	rc |= run_rd_detect();
 	rc |= run_cp();
 	rc |= run_adid();
 

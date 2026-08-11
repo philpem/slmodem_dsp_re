@@ -103,3 +103,86 @@ V90SdDetector::reset()
 
 	count = 0;
 }
+
+/*
+ * One sample in, one of three verdicts out.  The header names the fields;
+ * what this function adds is what the numbers ARE and where the decisions sit.
+ *
+ * THE SHIFT IS A DO-WHILE AND IS WRITTEN AS ONE.  `historyLength - 1` is
+ * computed, then the body runs and decrements: a length of 1 does not skip the
+ * loop, it runs it 2^32 times through history[-1].  The object is written that
+ * way and the constructor's 12 means nothing ever reaches it; a `for` would be
+ * a different function on an input the object cannot receive, so the object's
+ * shape is kept and the test drives the length the constructor sets.
+ *
+ * SIX LAGS AND SIX PRODUCTS, not `historyLength` of them.  The correlation
+ * loop's bound is the immediate 5 (`cmp $0x5,%eax; jbe`), so it runs for
+ * i = 0..5 whatever the length field says, reading history[i] and
+ * history[i + 6] -- which is what makes twelve the right allocation and not a
+ * coincidence.  Both sums stay in x87 registers for all six terms and are
+ * never rounded to float; only the two threshold loads are float-wide.
+ *
+ * THE QUOTIENT IS NaN WHENEVER THE ENERGY IS ZERO, and that is why the
+ * middle comparison is spelt `!(a >= b)` and not `a < b` (finding 1401).
+ * A silent history divides zero by zero; `fcom` then reports UNORDERED, which
+ * sets CF as well as ZF, and the object's `jae` is not taken -- so the
+ * unordered case goes down the COUNTING arm.  `thresh_0c < ratio` in C is
+ * false on a NaN and would go down the other one.  The other two comparisons
+ * need no such care and are written the obvious way: `ja` on
+ * thresh_08 : energy is not taken when unordered, which is what `>` does,
+ * and `jbe` on value_10 : ratio IS taken when unordered, which is what the
+ * `else` of `>` does.  All three senses are the object's, measured against it
+ * over a history that really does go silent.
+ *
+ * FIVE EXITS, THREE RESULTS, AND ONE PATH THAT LEAVES THE COUNTER ALONE:
+ *
+ *     energy below thresh_08          count = 0,   returns 0
+ *     quotient above thresh_0c        count += 1,  returns 0 while
+ *                                     count < limit and 1 once it is not
+ *     quotient below value_10 too     count = 0,   returns 0
+ *     quotient between the two        count UNTOUCHED, returns -1
+ *
+ * The limit compare is `jb` -- UNSIGNED -- and it is made on the incremented
+ * value before it is stored, so a limit of 0 latches 1 on the first sample.
+ */
+int
+V90SdDetector::process(float sample)
+{
+	unsigned int i = historyLength - 1;
+	long double energy = 0.0L;
+	long double correlation = 0.0L;
+	long double ratio;
+	unsigned int run;
+
+	do {
+		history[i] = history[i - 1];
+	} while (--i != 0);
+
+	history[0] = sample;
+
+	for (i = 0; i <= 5; i++) {
+		long double h = history[i];
+
+		energy = energy + h * h;
+		correlation = correlation + h * history[i + 6];
+	}
+
+	if (thresh_08 > energy) {
+		count = 0;
+		return 0;
+	}
+
+	ratio = correlation / energy;
+
+	if (!(thresh_0c >= ratio)) {
+		run = count + 1;
+		count = run;
+		return run < limit ? 0 : 1;
+	}
+
+	if (value_10 > ratio)
+		return -1;
+
+	count = 0;
+	return 0;
+}

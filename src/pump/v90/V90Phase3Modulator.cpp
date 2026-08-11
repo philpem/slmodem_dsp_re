@@ -843,3 +843,64 @@ V90Phase3Modulator::V90Phase3Modulator(V90Parameters *p, unsigned int flag)
 V90Phase3Modulator::~V90Phase3Modulator()
 {
 }
+
+/*
+ * THE DISPATCHER: one test of `sessionFlag` and a tail call to whichever of
+ * the two symbol generators the session is running.  It is the entry point
+ * the modulator's caller uses, and it is why `sessionFlag` is at +0x00 --
+ * the field a dispatcher tests first is the one that costs no displacement
+ * byte to reach.
+ *
+ * The object sign-extends the callee's value again before returning it; the
+ * header says why that instruction is not in our build and why it cannot
+ * change the number.
+ */
+int
+V90Phase3Modulator::generateSymbol()
+{
+	if (sessionFlag != 0)
+		return generateV92Symbol();
+
+	return generateV90Symbol();
+}
+
+/*
+ * LEAVE THE DIL STATE, and only from the DIL state: three guards before
+ * anything is written, in this order, and the object tests them one at a
+ * time rather than as a conjunction.
+ *
+ *   state must be P3M_STATE_DIL      -- 9, `cmpl $0x9,0x14`
+ *   symbolCount must be non-zero     -- nothing has been sent yet otherwise
+ *   segmentPos decides which exit    -- mid-segment goes to DIL_END, which
+ *                                       runs the segment out; on a segment
+ *                                       boundary the sequence is over
+ *
+ * THE TERMINATION ARM IS THE ONE `generateV90Symbol` ALREADY CONTAINS, and
+ * identically: the same message with the same symbol count, then
+ * TERMINATED, then the count cleared and event 6 raised.  Both are in the
+ * object, in full, at 0x2ae6b and 0x2b79b; the two are not a shared helper
+ * and this reconstruction does not make them one.
+ *
+ * `eventCode` is written ONLY on that arm.  The DIL_END arm changes the
+ * state and leaves the event alone, so a caller polling the event sees
+ * nothing until the sequence really ends.
+ */
+void
+V90Phase3Modulator::exitDIL()
+{
+	if (state != P3M_STATE_DIL)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	if (segmentPos != 0) {
+		state = P3M_STATE_DIL_END;
+		return;
+	}
+
+	edprintf("V90Phase3Modulator: Phase3 Terminated @ %d\r\n",
+		 (int)symbolCount);
+	state = P3M_STATE_TERMINATED;
+	symbolCount = 0;
+	eventCode = 6;
+}

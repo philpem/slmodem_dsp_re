@@ -1,13 +1,13 @@
 [
  {"label": "NOTE: what this set covers, and what it cannot",
-  "why": "V90SpectralShapingFilter.cpp entire: the constructor, which is the only one of the class's five members reconstructed.  Nine stores, eight of them the same value, so what can be mutated is WHICH word gets which value and how many get one at all.  Two things cannot: the order of the nine stores (no observer can distinguish it, and the object's order is recorded in the file rather than relied on), and the choice between four scalars and an array of four (identical layout, identical code).  The set is small because the function is; every entry below must be caught, and a set that padded itself with uncatchable entries would be recording NOT CAUGHT as if it meant something."},
+  "why": "V90SpectralShapingFilter.cpp entire: all five members of the class.  The constructor's nine stores are eight of one value and one of another, so what can be mutated there is WHICH word gets which value and how many get one at all.  The two run members share one recurrence, so what can be mutated there is every coefficient index, every sign, the BRACKETING -- addition is commutative and association is not -- and the shape of both loops.  Three things cannot be mutated into a caught failure and are absent.  The order of the constructor's nine stores, which no observer can distinguish.  The choice between four scalars and an array of four: identical layout, identical code.  And the ROUNDING of getMetric's return, because the object leaves 64 significand bits in st(0) where ours rounds to float, and a caller that captures a float cannot tell -- which is why the test captures a float and says so.  One more thing about the file's shape belongs here: reset() is written as a chained assignment where the constructor writes four statements, and that is not style.  It is what keeps every anchor over either of them unique in one source file (finding 1264)."},
 
  {"label": "the constant at +0x20 is one rather than two",
-  "find": "\tword_20 = 2;",
-  "replace": "\tword_20 = 1;"},
+  "find": "\tblockLength = 2;",
+  "replace": "\tblockLength = 1;"},
 
  {"label": "the constant lands in the last state word instead",
-  "find": "\tword_20 = 2;",
+  "find": "\tblockLength = 2;",
   "replace": "\tstate[3] = 2.0f;"},
 
  {"label": "the first coefficient is left as allocated",
@@ -28,5 +28,77 @@
 
  {"label": "the coefficients are cleared and the state is not",
   "find": "\tstate[0] = 0.0f;\n\tstate[1] = 0.0f;\n\tstate[2] = 0.0f;\n\tstate[3] = 0.0f;",
-  "replace": "\tcoeff[0] = 0.0f;\n\tcoeff[1] = 0.0f;\n\tcoeff[2] = 0.0f;\n\tcoeff[3] = 0.0f;"}
+  "replace": "\tcoeff[0] = 0.0f;\n\tcoeff[1] = 0.0f;\n\tcoeff[2] = 0.0f;\n\tcoeff[3] = 0.0f;"},
+
+ {"label": "setFilterCoeff swaps its first two arguments",
+  "find": "\tcoeff[0] = c0;\n\tcoeff[1] = c1;",
+  "replace": "\tcoeff[0] = c1;\n\tcoeff[1] = c0;"},
+
+ {"label": "setFilterCoeff drops its last argument into the state instead",
+  "find": "\tcoeff[3] = c3;",
+  "replace": "\tstate[3] = c3;"},
+
+ {"label": "reset clears the coefficients rather than the state",
+  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
+  "replace": "\tcoeff[0] = coeff[1] = coeff[2] = coeff[3] = 0.0f;"},
+
+ {"label": "reset leaves the energy accumulator alone",
+  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
+  "replace": "\tstate[0] = state[1] = state[2] = 0.0f;"},
+
+ {"label": "reset clears the block length as well",
+  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
+  "replace": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;\n\tblockLength = 0;"},
+
+ {"label": "the first section adds where the object subtracts",
+  "find": "\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;",
+  "replace": "\t\tlong double mid = (sample + prevIn * b2) + prevMid * b0;"},
+
+ {"label": "the first section's feedback uses the second section's pole",
+  "find": "\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;",
+  "replace": "\t\tlong double mid = (sample - prevIn * b2) + prevMid * b1;"},
+
+ {"label": "the second section feeds back its input rather than its output",
+  "find": "\t\tlong double out = (mid - prevMid * b3) + prevOut * b1;",
+  "replace": "\t\tlong double out = (mid - prevMid * b3) + prevMid * b1;"},
+
+ {"label": "the bracketing moves, which is the same value and not the same rounding",
+  "find": "\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;",
+  "replace": "\t\tlong double mid = sample - (prevIn * b2 - prevMid * b0);"},
+
+ {"label": "the accumulator takes the output rather than its square",
+  "find": "\t\tenergy = energy + out * out;",
+  "replace": "\t\tenergy = energy + out;"},
+
+ {"label": "the accumulator is restarted every block",
+  "find": "\tenergy  = state[3];",
+  "replace": "\tenergy  = 0.0L;"},
+
+ {"label": "the last two state words are stored into each other's slots",
+  "find": "\tstate[3] = (float)energy;\n\tstate[2] = (float)prevOut;",
+  "replace": "\tstate[2] = (float)energy;\n\tstate[3] = (float)prevOut;"},
+
+ {"label": "the state is rounded to float on every sample rather than on every block",
+  "find": "\t\tprevIn = sample;\n\t\tprevMid = mid;\n\t\tprevOut = out;",
+  "replace": "\t\tprevIn = (float)sample;\n\t\tprevMid = (float)mid;\n\t\tprevOut = (float)out;"},
+
+ {"label": "getMetric scores with the other section's zero",
+  "find": "\t\t\tlong double w = (m - lastMid * a3) + lastOut * a1;",
+  "replace": "\t\t\tlong double w = (m - lastMid * a2) + lastOut * a1;"},
+
+ {"label": "getMetric starts its accumulator at zero rather than at the object's",
+  "find": "\tsum     = state[3];",
+  "replace": "\tsum     = 0.0L;"},
+
+ {"label": "getMetric runs one block too few",
+  "find": "\t} while (--blocks != 0);",
+  "replace": "\t} while (--blocks > 1u);"},
+
+ {"label": "getMetric takes its inner bound from the block count",
+  "find": "\t\tunsigned int n = blockLength;",
+  "replace": "\t\tunsigned int n = blocks;"},
+
+ {"label": "progress is the natural translation, which loads and stores over a zero-length block",
+  "find": "\tif (left == 0)\n\t\treturn;\n\n\tprevIn  = state[0];\n\tprevMid = state[1];\n\tprevOut = state[2];\n\tenergy  = state[3];\n\n\tb0 = coeff[0];\n\tb1 = coeff[1];\n\tb2 = coeff[2];\n\tb3 = coeff[3];\n\n\tdo {\n\t\tlong double sample = *in++;\n\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;\n\t\tlong double out = (mid - prevMid * b3) + prevOut * b1;\n\n\t\tenergy = energy + out * out;\n\n\t\tprevIn = sample;\n\t\tprevMid = mid;\n\t\tprevOut = out;\n\t} while (--left != 0);",
+  "replace": "\tprevIn  = state[0];\n\tprevMid = state[1];\n\tprevOut = state[2];\n\tenergy  = state[3];\n\n\tb0 = coeff[0];\n\tb1 = coeff[1];\n\tb2 = coeff[2];\n\tb3 = coeff[3];\n\n\twhile (left-- != 0) {\n\t\tlong double sample = *in++;\n\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;\n\t\tlong double out = (mid - prevMid * b3) + prevOut * b1;\n\n\t\tenergy = energy + out * out;\n\n\t\tprevIn = sample;\n\t\tprevMid = mid;\n\t\tprevOut = out;\n\t}"}
 ]

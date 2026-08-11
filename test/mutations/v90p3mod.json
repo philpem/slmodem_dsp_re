@@ -69,5 +69,60 @@
   "label": "dtor: the scrambler's history is not freed",
   "find": "V90Phase3Modulator::~V90Phase3Modulator()\n{\n}",
   "replace": "V90Phase3Modulator::~V90Phase3Modulator()\n{\n\tscrambler.pLimit = NULL;\n}"
- }
+ },
+
+ {"label": "NOTE: generateSymbol and exitDIL",
+  "why": "Two small members added to a file that already carries the two large ones they lead to.  generateSymbol is a single branch, so what can be mutated is the branch and the width of the field it tests; the test checks the dispatcher against the generator it should have chosen, on the BLOB's side alone, because a cross-side comparison of an inverted branch would agree with itself.  exitDIL is three guards and two arms, and its terminating arm is TEXTUALLY DISTINCT from the identical block inside generateV90Symbol -- different indentation and a different line split -- which is what keeps every anchor here matching once (finding 1264).  Nothing here mutates the message: the string is checked by the debug-site audit, not by this set."},
+
+ {"label": "generateSymbol dispatches the other way round",
+  "find": "\tif (sessionFlag != 0)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",
+  "replace": "\tif (sessionFlag != 0)\n\t\treturn generateV90Symbol();\n\n\treturn generateV92Symbol();"},
+
+ {"label": "generateSymbol tests the low byte of the session flag",
+  "find": "\tif (sessionFlag != 0)\n\t\treturn generateV92Symbol();",
+  "replace": "\tif ((unsigned char)sessionFlag != 0)\n\t\treturn generateV92Symbol();"},
+
+ {"label": "generateSymbol tests the flag for one rather than for non-zero",
+  "find": "\tif (sessionFlag != 0)\n\t\treturn generateV92Symbol();",
+  "replace": "\tif (sessionFlag == 1)\n\t\treturn generateV92Symbol();"},
+
+ {"label": "generateSymbol truncates the symbol to a byte",
+  "find": "\treturn generateV90Symbol();\n}",
+  "replace": "\treturn (signed char)generateV90Symbol();\n}"},
+
+ {"label": "exitDIL guards on the state it exits TO",
+  "find": "\tif (state != P3M_STATE_DIL)\n\t\treturn;",
+  "replace": "\tif (state != P3M_STATE_DIL_END)\n\t\treturn;"},
+
+ {"label": "exitDIL exits from any state",
+  "find": "\tif (state != P3M_STATE_DIL)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;",
+  "replace": "\tif (symbolCount == 0)\n\t\treturn;"},
+
+ {"label": "exitDIL exits with nothing sent",
+  "find": "\tif (symbolCount == 0)\n\t\treturn;\n\n\tif (segmentPos != 0) {",
+  "replace": "\n\tif (segmentPos != 0) {"},
+
+ {"label": "exitDIL's two arms are swapped",
+  "find": "\tif (segmentPos != 0) {\n\t\tstate = P3M_STATE_DIL_END;\n\t\treturn;\n\t}",
+  "replace": "\tif (segmentPos == 0) {\n\t\tstate = P3M_STATE_DIL_END;\n\t\treturn;\n\t}"},
+
+ {"label": "exitDIL runs the segment out into the wrong state",
+  "find": "\t\tstate = P3M_STATE_DIL_END;\n\t\treturn;",
+  "replace": "\t\tstate = P3M_STATE_TERMINATED;\n\t\treturn;"},
+
+ {"label": "exitDIL clears the count on the mid-segment arm too",
+  "find": "\t\tstate = P3M_STATE_DIL_END;\n\t\treturn;",
+  "replace": "\t\tstate = P3M_STATE_DIL_END;\n\t\tsymbolCount = 0;\n\t\treturn;"},
+
+ {"label": "exitDIL terminates without clearing the count",
+  "find": "\tstate = P3M_STATE_TERMINATED;\n\tsymbolCount = 0;\n\teventCode = 6;",
+  "replace": "\tstate = P3M_STATE_TERMINATED;\n\teventCode = 6;"},
+
+ {"label": "exitDIL raises the wrong event",
+  "find": "\tstate = P3M_STATE_TERMINATED;\n\tsymbolCount = 0;\n\teventCode = 6;",
+  "replace": "\tstate = P3M_STATE_TERMINATED;\n\tsymbolCount = 0;\n\teventCode = 5;"},
+
+ {"label": "exitDIL leaves the event alone",
+  "find": "\tstate = P3M_STATE_TERMINATED;\n\tsymbolCount = 0;\n\teventCode = 6;",
+  "replace": "\tstate = P3M_STATE_TERMINATED;\n\tsymbolCount = 0;"}
 ]

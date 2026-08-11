@@ -27,7 +27,13 @@
  *            accumulator; the comparison failing is what zeroes +0x00.
  *     +0x0c  CONSTRUCTOR ARGUMENT 2.  `flds`, compared against a quotient
  *            formed from that accumulator.
- *     +0x10  CONSTRUCTOR ARGUMENT 3, and read by none of the six.
+ *     +0x10  CONSTRUCTOR ARGUMENT 3.  This line used to read "and read by
+ *            none of the six", which was true of the six members bounded here
+ *            and false of the class: `process(float)` loads it on the branch
+ *            where the correlation ratio did NOT exceed +0x0c, and compares
+ *            it against that same ratio.  It is the lower of two thresholds
+ *            on one quotient, and the band between them is the only path that
+ *            leaves +0x00 alone.
  *
  * ARGUMENTS 3 AND 4 ARE STORED OUT OF ORDER -- argument 4 into +0x04 and
  * argument 3 into +0x10 -- which is why the test sweeps three DISTINCT float
@@ -58,6 +64,13 @@ public:
 	~V90SdDetector();
 
 	void reset();
+
+	/*
+	 * Returns 1 when the counter has reached `limit`, -1 for the band
+	 * between the two ratio thresholds, and 0 otherwise.  Three results
+	 * over five exits; the source says which is which.
+	 */
+	int process(float sample);
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	unsigned int count;		/* +0x00 the run-length counter     */

@@ -1,6 +1,6 @@
 [
  {"label": "NOTE: what this set covers, and what it cannot",
-  "why": "All three of V90SdDetector.cpp's functions: the constructor, the destructor and reset().  Two things here cannot be mutated into a caught failure and are deliberately absent.  The first is the STORE ORDER of the four arguments, which no observer can distinguish.  The second is the spelling of the float copies: the object copies bits and our build converts through x87 (finding 1242), so a mutation that made the copy a conversion would already agree with our build and a mutation that made it a bit copy would agree with the blob -- neither is a difference this binary can see, and the sweep leaves signalling NaNs out for that reason.  The argument-to-offset mapping IS covered, and it is covered by absolute offset on the blob's object as well as ours, which is what makes the two out-of-order stores (+0x10 and +0x04) non-vacuous."},
+  "why": "All three of V90SdDetector.cpp's functions: the constructor, the destructor and reset().  Two things here cannot be mutated into a caught failure and are deliberately absent.  The first is the STORE ORDER of the four arguments, which no observer can distinguish.  The second is the spelling of the float copies: the object copies bits and our build converts through x87 (finding 1242), so a mutation that made the copy a conversion would already agree with our build and a mutation that made it a bit copy would agree with the blob -- neither is a difference this binary can see, and the sweep leaves signalling NaNs out for that reason.  The argument-to-offset mapping IS covered, and it is covered by absolute offset on the blob's object as well as ours, which is what makes the two out-of-order stores (+0x10 and +0x04) non-vacuous.  `process(float)` is covered too, and the entries for it are worth a word: its three comparisons resolve the UNORDERED case in two different directions (finding 1401), so the middle one is spelt as a negation and the mutation that spells it the natural way is the entry that proves the negation is not decoration.  A QUIET NaN is therefore very much in this half of the sweep -- it arrives from the object's own 0/0 rather than from an argument -- and it is the signalling one, and only the signalling one, that stays out."},
 
  {"label": "arguments 1 and 2 are stored into each other's fields",
   "find": "\tthresh_08 = thresh08;\n\tthresh_0c = thresh0c;",
@@ -54,5 +54,85 @@
 
  {"label": "reset clears one element too many",
   "find": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < historyLength; i++)",
-  "replace": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i <= historyLength; i++)"}
+  "replace": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i <= historyLength; i++)"},
+
+ {"label": "process shifts the history the wrong way",
+  "find": "\t\thistory[i] = history[i - 1];",
+  "replace": "\t\thistory[i - 1] = history[i];"},
+
+ {"label": "process leaves the oldest sample in place",
+  "find": "\tunsigned int i = historyLength - 1;",
+  "replace": "\tunsigned int i = historyLength - 2;"},
+
+ {"label": "the incoming sample lands at the far end of the history",
+  "find": "\thistory[0] = sample;",
+  "replace": "\thistory[historyLength - 1] = sample;"},
+
+ {"label": "the correlation runs over five lags rather than six",
+  "find": "\tfor (i = 0; i <= 5; i++) {",
+  "replace": "\tfor (i = 0; i <= 4; i++) {"},
+
+ {"label": "the correlation runs over historyLength lags",
+  "find": "\tfor (i = 0; i <= 5; i++) {",
+  "replace": "\tfor (i = 0; i < historyLength; i++) {"},
+
+ {"label": "the correlation lag is five samples, not six",
+  "find": "\t\tcorrelation = correlation + h * history[i + 6];",
+  "replace": "\t\tcorrelation = correlation + h * history[i + 5];"},
+
+ {"label": "the energy sums the samples rather than their squares",
+  "find": "\t\tenergy = energy + h * h;",
+  "replace": "\t\tenergy = energy + h;"},
+
+ {"label": "the quotient is inverted",
+  "find": "\tratio = correlation / energy;",
+  "replace": "\tratio = energy / correlation;"},
+
+ {"label": "the energy threshold admits the equal case",
+  "find": "\tif (thresh_08 > energy) {",
+  "replace": "\tif (thresh_08 >= energy) {"},
+
+ {"label": "the energy is compared against the other threshold",
+  "find": "\tif (thresh_08 > energy) {",
+  "replace": "\tif (thresh_0c > energy) {"},
+
+ {"label": "the ratio test is spelt the natural way, which parts company on 0/0",
+  "find": "\tif (!(thresh_0c >= ratio)) {",
+  "replace": "\tif (thresh_0c < ratio) {"},
+
+ {"label": "the ratio test admits the equal case",
+  "find": "\tif (!(thresh_0c >= ratio)) {",
+  "replace": "\tif (!(thresh_0c > ratio)) {"},
+
+ {"label": "the band test uses the upper threshold twice",
+  "find": "\tif (value_10 > ratio)\n\t\treturn -1;",
+  "replace": "\tif (thresh_0c > ratio)\n\t\treturn -1;"},
+
+ {"label": "the band test admits the equal case",
+  "find": "\tif (value_10 > ratio)\n\t\treturn -1;",
+  "replace": "\tif (value_10 >= ratio)\n\t\treturn -1;"},
+
+ {"label": "the band clears the counter on its way out",
+  "find": "\tif (value_10 > ratio)\n\t\treturn -1;",
+  "replace": "\tif (value_10 > ratio) {\n\t\tcount = 0;\n\t\treturn -1;\n\t}"},
+
+ {"label": "the limit is reached one sample late",
+  "find": "\t\treturn run < limit ? 0 : 1;",
+  "replace": "\t\treturn run <= limit ? 0 : 1;"},
+
+ {"label": "the limit is compared signed",
+  "find": "\t\treturn run < limit ? 0 : 1;",
+  "replace": "\t\treturn (int)run < (int)limit ? 0 : 1;"},
+
+ {"label": "the counter is compared before it is incremented",
+  "find": "\t\trun = count + 1;\n\t\tcount = run;",
+  "replace": "\t\trun = count;\n\t\tcount = run + 1;"},
+
+ {"label": "the quiet exit leaves the counter alone",
+  "find": "\tif (thresh_08 > energy) {\n\t\tcount = 0;",
+  "replace": "\tif (thresh_08 > energy) {\n\t\t;"},
+
+ {"label": "the last exit leaves the counter alone",
+  "find": "\tcount = 0;\n\treturn 0;\n}",
+  "replace": "\treturn 0;\n}"}
 ]

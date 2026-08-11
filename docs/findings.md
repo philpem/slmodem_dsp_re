@@ -44849,3 +44849,145 @@ temporary instrumentation printing the eight scaled energies settled it in one
 run.  The bias hypothesis was already contradicted by its own arithmetic
 before any of that; it survived as long as it did because it was written down
 before it was tested.
+### 1400. THE POPPING SUBTRACT IN `progress` IS CHECKED BY THE REGISTER SUBTRACT IN `getMetric`, AND THEY AGREE
+
+Finding 245 says objdump prints the `DE` popping forms as their own opposite:
+`de f1` reads `fdivp` and IS `FDIVRP`.  The rule is easy to state and easy to
+misapply, because the only way to be sure of a `DE E0+i` is to read the bytes
+and trust a table -- and a table read backwards gives a filter that is
+plausible, self-consistent and wrong.
+
+`V90SpectralShapingFilter` supplies its own check.  Its two run members
+compute the SAME recurrence over the same state and the same coefficients:
+
+    a = (x - state[0] * coeff[2]) + state[1] * coeff[0]
+    y = (a - state[1] * coeff[3]) + state[2] * coeff[1]
+    state[3] += y * y
+
+`progress` (0x33280) forms both differences with popping encodings -- `de e2`
+and `de e4` -- which under finding 245 are `FSUBRP`, `ST(i) = ST(0) - ST(i)`.
+`getMetric` (0x331d0) forms the first of them with `d8 ef`, a REGISTER form
+that CLAUDE.md's trap list explicitly exempts: objdump prints `fsubr
+%st(7),%st` and it is `ST(0) = ST(7) - ST(0)`, no reversal to remember.
+
+The two readings produce the same recurrence.  Had the popping form been read
+the other way round, `progress` would compute `state[0] * coeff[2] - x` where
+`getMetric` computes `x - state[0] * coeff[2]`, and the two members of one
+class -- which the object's own `V90SpectralShaper::advanceTrellis` uses
+interchangeably, calling `getMetric` to score a branch it then commits with
+`progress` -- would be different filters.
+
+**So the check is free and it is worth taking wherever it exists.**  Where a
+class has a `const` scoring member beside a mutating one, they are the same
+arithmetic written twice by the same compiler under different register
+pressure, and the encodings will differ.  Read both and let them referee each
+other, rather than reading one and reciting the rule at it.
+
+======================================================================
+
+### 1401. A ZERO/ZERO QUOTIENT PUTS `V90SdDetector::process` DOWN THE ARM `a < b` DOES NOT, AND A SILENT LINE IS HOW YOU GET THERE
+
+`V90SdDetector::process` divides a correlation by an energy and compares the
+quotient against two thresholds.  The energy is the sum of six squares of the
+newest six history samples, so it is zero exactly when those six samples are
+zero -- a silent input, which is not an exotic case but the first thing a
+detector sees.  Zero over zero is a NaN, and every comparison after it is
+UNORDERED.
+
+`fcom` reports unordered by setting C0 and C3, which `sahf` puts in CF and ZF
+-- the same CF that "below" means.  So each of the object's three branches
+resolves the unordered case in whichever direction its own condition code
+happens to point, and the three do not agree with each other:
+
+    ja  thresh_08 : energy    NOT taken when unordered   `a > b` agrees
+    jae thresh_0c : ratio     NOT taken when unordered   `a < b` DISAGREES
+    jbe value_10  : ratio     TAKEN when unordered       the `else` agrees
+
+Two of the three are what the obvious C spelling gives.  The middle one is
+not: `jae` not taken sends the unordered case down the COUNTING arm, where
+`if (thresh_0c < ratio)` in C sends it down the other one, because `<` is
+false on a NaN.  The faithful spelling is `if (!(thresh_0c >= ratio))`, which
+is the negation of the branch the object actually makes and is identical to
+`<` over every ordered pair.
+
+**The test found this, and it found it by accident on purpose.**  The sweep
+includes a threshold set of all zeroes and a signal phase of all zeroes, so
+`thresh_08 > energy` is `0 > 0` -- false, the early exit is not taken -- and
+the division that follows is 0/0.  The blob counted up where the
+reconstruction stayed quiet, on the second sample of the second phase.  A
+sweep of plausible thresholds over a plausible signal would have missed it
+entirely, and the reconstruction would have been wrong on silence.
+
+**The general rule this is a case of:** a `j<cc>` after `fnstsw`/`sahf` encodes
+FOUR outcomes, not three, and the fourth is only visible when an operand can
+be NaN.  Reading such a branch as its ordered meaning is right two times in
+three by luck.  Where a quotient, a square root or a logarithm can reach the
+comparison, the branch has to be written as the negation of the condition the
+object tests rather than as the relation a reader would infer -- and the test
+has to reach the unordered case deliberately, which `t_v90spectral` now
+asserts it did (`the quotient was 0/0 on %ld calls`).
+
+======================================================================
+
+### 1402. THE PERIOD COMPILER EMITS `Psd::process`'s ROUNDING FROM PLAIN SOURCE -- SAME TWO INSTRUCTIONS, SAME STACK SLOT
+
+`Psd::process` ends its two logarithmic arms with a rounding the object makes
+and a naive translation might not:
+
+    fyl2x                     ; log10(x), 64 significand bits
+    fstps 0x28(%esp)          ; ROUND TO FLOAT
+    flds  0x28(%esp)          ; and read it back
+    fmul  %st(1),%st          ; then multiply by 10.0f
+    fstps (%ebp,%eax,4)
+
+The reconstruction writes that as a plain `float` local:
+
+    float l = (float)psd_x87_log10((long double)out[i] * scale + 1e-25);
+
+    out[i] = (float)(l * 10.0f);
+
+**Compiled by GCC 3.4.2 -- `make period` -- that source gives the object's
+sequence exactly, in both arms:**
+
+| | the blob, 0x4691a | ours, period build, +0x315 |
+|---|---|---|
+| | `fldlg2` | `fldlg2` |
+| | `fxch %st(1)` | `fxch %st(1)` |
+| | `fyl2x` | `fyl2x` |
+| | `fstps 0x28(%esp)` | **`fstps 0x28(%esp)`** |
+| | `flds 0x28(%esp)` | **`flds 0x28(%esp)`** |
+| | `fmul %st(1),%st` | `fmul %st(1),%st` |
+| | `fstps 0x0(%ebp,%eax,4)` | `fstps 0x0(%ebp,%esi,4)` |
+
+Seven instructions, and the SAME SPILL SLOT -- `0x28(%esp)` on both sides.
+The only difference in the whole sequence is which register indexes the
+store, which is register allocation and free (CLAUDE.md's rule for reading a
+codegen difference). Nothing was tuned to get this; the source is the obvious
+one.
+
+**So no barrier belongs here, and adding one would be the error.** Finding
+1352 established that `round32`'s `volatile` is a GCC 13 shim for a spill the
+period compiler performs unaided. This is the neighbouring case and it comes
+out the same way for a different reason: there the source has no narrower
+local at all and 3.4.2 spills an accumulator, here the source HAS a `float`
+local and 3.4.2 honours it. Both say the same thing about method -- write what
+the author would have written, then ask the period compiler what it makes of
+it, rather than reaching for `volatile` to force a modern build into shape.
+The DTMF agent measured a third site where plain assignment emits NO store
+under 3.4.2 and `volatile` reproduces one the object has; that is a real
+divergence and it is site-specific. **The idiom is not transferable. Measure
+each site.**
+
+**The modern build agrees too, and that was measured first.** At the tree's
+own flags -- `-mfpmath=387` with GCC's default `-fexcess-precision=fast`,
+which PERMITS keeping the extra bits -- the same source is bit-exact against
+the blob over 2,164 differential checks, and the mutation
+`the logarithm is not rounded to float before the multiply`, which declares
+`l` a `long double`, is CAUGHT. That is worth keeping because the two tiers
+answer different questions: the mutation shows the differential test could
+tell the two apart, and the period build shows the author's source was the
+plain one.
+
+**And the mutation is what makes either measurement mean anything.** A test
+passing proves the two agree; it does not prove the test could see a
+difference. One entry in `test/mutations/psd.json` is that second question.

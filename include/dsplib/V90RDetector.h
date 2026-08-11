@@ -52,6 +52,31 @@
  *                             bytes and SIGNED, because -1 is one of the two
  *                             values stored and `detectRNot` branches on
  *                             `test %edx,%edx; jle`.
+ *
+ * WHAT THE FIVE UNWRITTEN MEMBERS TURNED OUT TO DO WITH THEM.  The names are
+ * left as offsets -- they are what the existing test and mutation set name --
+ * but the meanings are no longer unknown, and this is the record of them:
+ *
+ *   +0x00  the number of samples taken so far in the current GROUP.  Every
+ *          detector increments it, compares it against 6 (R) or 12 (Rf), and
+ *          returns 0 without doing anything else until it matches.
+ *   +0x20  a shift register of SIGN BITS, one per sample, newest in bit 0:
+ *          `bits = bits * 2; if (sample > 0) bits |= 1`.  Truncated to 16
+ *          bits by the store, which is what bounds the patterns below.
+ *   +0x04  what +0x14 and +0x18 are compared against, and it is `reset`'s
+ *          FIRST argument rounded down to a multiple of 6.
+ *   +0x08  the same for +0x1c, from `reset`'s SECOND argument.
+ *   +0x0c  +0x04's twelve-sample counterpart: argument 1 rounded down to a
+ *          multiple of 12, and what `detectRf` compares against.
+ *   +0x10  argument 2 rounded down to a multiple of 12, for `detectRfNot`.
+ *   +0x14  a run length in SAMPLES of the pattern that starts positive
+ *          (0x38 for R, 0xccc for Rf), incremented by the group size.
+ *   +0x18  the same for the pattern that starts negative (0x07, 0x333).
+ *   +0x1c  the run length the two `Not` detectors keep, against whichever of
+ *          the two patterns +0x24 selects.
+ *   +0x24  which pattern is the live one: +1 selects the positive-first
+ *          pattern and -1 the other.  `reset` starts it at +1, and the two
+ *          plain detectors set it when their run reaches the limit.
  */
 
 #ifndef DSPLIB_V90RDETECTOR_H
@@ -76,6 +101,18 @@ public:
 	 */
 	V90RDetector(V90Parameters *params);
 	~V90RDetector();
+
+	/*
+	 * `reset` takes two sample counts and rounds each DOWN to a multiple
+	 * of 6 and of 12; the four detectors take one sample each and answer
+	 * 0 until a whole group of 6 or 12 has arrived.  The source has the
+	 * shape and the sign patterns.
+	 */
+	void reset(unsigned int rSamples, unsigned int rNotSamples);
+	int detectR(short sample);
+	int detectRNot(short sample);
+	int detectRf(short sample);
+	int detectRfNot(short sample);
 
 	/*
 	 * Public for `offsetof`; the original's access specifiers are not

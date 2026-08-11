@@ -73,6 +73,33 @@ void our_ssf_ctor2(void *self) asm("_ZN24V90SpectralShapingFilterC2Ev");
 void ref_ssf_ctor(void *self) asm("ref__ZN24V90SpectralShapingFilterC1Ev");
 void ref_ssf_ctor2(void *self) asm("ref__ZN24V90SpectralShapingFilterC2Ev");
 
+/*
+ * The four coefficients are declared `unsigned` for the reason the detector's
+ * three are: one stack slot each either way, and a bit pattern the CALLER
+ * cannot round on its way in.
+ */
+void our_ssf_setcoeff(void *self, unsigned c0, unsigned c1, unsigned c2,
+		      unsigned c3)
+	asm("_ZN24V90SpectralShapingFilter14setFilterCoeffEffff");
+void ref_ssf_setcoeff(void *self, unsigned c0, unsigned c1, unsigned c2,
+		      unsigned c3)
+	asm("ref__ZN24V90SpectralShapingFilter14setFilterCoeffEffff");
+void our_ssf_reset(void *self) asm("_ZN24V90SpectralShapingFilter5resetEv");
+void ref_ssf_reset(void *self) asm("ref__ZN24V90SpectralShapingFilter5resetEv");
+void our_ssf_progress(void *self, const short *in)
+	asm("_ZN24V90SpectralShapingFilter8progressEPKs");
+void ref_ssf_progress(void *self, const short *in)
+	asm("ref__ZN24V90SpectralShapingFilter8progressEPKs");
+float our_ssf_metric(const void *self, const short *in, unsigned blocks)
+	asm("_ZNK24V90SpectralShapingFilter9getMetricEPKsj");
+float ref_ssf_metric(const void *self, const short *in, unsigned blocks)
+	asm("ref__ZNK24V90SpectralShapingFilter9getMetricEPKsj");
+
+int our_sd_process(void *self, unsigned sample)
+	asm("_ZN13V90SdDetector7processEf");
+int ref_sd_process(void *self, unsigned sample)
+	asm("ref__ZN13V90SdDetector7processEf");
+
 void our_sd_ctor(void *self, unsigned a, unsigned b, unsigned c, unsigned n)
 	asm("_ZN13V90SdDetectorC1Efffj");
 void our_sd_ctor2(void *self, unsigned a, unsigned b, unsigned c, unsigned n)
@@ -245,6 +272,405 @@ run_ssf(void)
 			    2, trial);
 		diff_eq_int("ours: +0x20 is 2 (trial %ld)", w32(ssf_a, 0x20),
 			    2, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * Coefficient patterns.  Both zeroes, both signs, a denormal of each sign,
+ * one value that is exactly representable in binary (0.25) and one that is
+ * not (0.1f), and 1.0 as the largest magnitude in the set -- the two POLES
+ * are coeff[0] and coeff[1], so a magnitude above one would make the
+ * recurrence diverge over forty blocks and end both sides at the same
+ * infinity, which is a comparison that proves nothing.
+ *
+ * NO NaN HERE, signalling or quiet.  A NaN in a coefficient poisons every
+ * subsequent sample on both sides at once, and the loop stops distinguishing
+ * anything after the first multiply.
+ */
+static const unsigned ssf_coef[] = {
+	0x00000000u,	/* +0                          */
+	0x80000000u,	/* -0                          */
+	0x3e800000u,	/* 0.25f, exactly representable */
+	0xbe800000u,	/* -0.25f                      */
+	0x3dcccccdu,	/* 0.1f, which is not          */
+	0xbf000000u,	/* -0.5f                       */
+	0x00000001u,	/* smallest positive denormal   */
+	0x80000001u,	/* the negative of it          */
+	0x3f800000u	/* 1.0f                        */
+};
+#define SSF_NCOEF ((int)(sizeof(ssf_coef) / sizeof(ssf_coef[0])))
+
+/* State patterns: the same idea, plus one large value so the accumulator
+ * starts somewhere the block cannot reach by itself. */
+static const unsigned ssf_st[] = {
+	0x00000000u,	/* +0        */
+	0x80000000u,	/* -0        */
+	0x3f800000u,	/* 1.0f      */
+	0xc1200000u,	/* -10.0f    */
+	0x4b800001u,	/* 16777218.0f */
+	0x00000001u,	/* denormal  */
+	0x3dcccccdu	/* 0.1f      */
+};
+#define SSF_NST ((int)(sizeof(ssf_st) / sizeof(ssf_st[0])))
+
+/* Written into the object, not passed: both sides get identical bytes. */
+static void
+ssf_setup(int trial, unsigned len)
+{
+	int i;
+
+	seed_pair(ssf_a, ssf_b, SSF_SLOT, trial + 300);
+
+	for (i = 0; i < 4; i++) {
+		unsigned c = ssf_coef[(trial + i) % SSF_NCOEF];
+		unsigned s = ssf_st[(trial + 2 * i) % SSF_NST];
+
+		memcpy(ssf_a + i * 4, &c, 4);
+		memcpy(ssf_b + i * 4, &c, 4);
+		memcpy(ssf_a + 0x10 + i * 4, &s, 4);
+		memcpy(ssf_b + 0x10 + i * 4, &s, 4);
+	}
+	memcpy(ssf_a + 0x20, &len, 4);
+	memcpy(ssf_b + 0x20, &len, 4);
+}
+
+/*
+ * A block of samples that reaches the ends of the short range as well as the
+ * middle of it, and that is not the same block twice.
+ */
+static void
+ssf_signal(short *out, int n, int block, int trial)
+{
+	static const short edge[] = { 0, 1, -1, 32767, -32768, 32766, -32767 };
+	int i;
+
+	lfsr_state = 0x1234u + 0x2f1bu * (unsigned)(block + 32 * trial) + 1u;
+	for (i = 0; i < n; i++) {
+		if (((block + i) & 3) == 0)
+			out[i] = edge[(block + i + trial) % 7];
+		else
+			out[i] = (short)(lfsr() & 0xffffu);
+	}
+}
+
+/*
+ * `setFilterCoeff` and `reset`: two write sets of four words each, on
+ * disjoint halves of the object, and neither may touch the other's half or
+ * the block length.
+ */
+static int
+run_ssf_setters(void)
+{
+	int trial;
+
+	diff_begin("V90SpectralShapingFilter::setFilterCoeff / reset");
+
+	for (trial = 0; trial < SSF_NCOEF * 4; trial++) {
+		unsigned c[4];
+		int i;
+
+		ssf_setup(trial, 5u);
+		for (i = 0; i < 4; i++)
+			c[i] = ssf_coef[(trial + 3 * i) % SSF_NCOEF];
+
+		our_ssf_setcoeff(ssf_a, c[0], c[1], c[2], c[3]);
+		ref_ssf_setcoeff(ssf_b, c[0], c[1], c[2], c[3]);
+
+		diff_eq_obj("after setFilterCoeff", V90SpectralShapingFilter,
+			    ssf_a, ssf_b, trial);
+		guard_intact(ssf_a, ssf_b, sizeof(V90SpectralShapingFilter),
+			     SSF_SLOT, trial);
+
+		/*
+		 * Argument to offset, by ABSOLUTE offset, on the blob's
+		 * object as well as ours: four equal arguments would make a
+		 * permuted store invisible, so the four are drawn apart.
+		 */
+		for (i = 0; i < 4; i++) {
+			diff_eq_int("blob: +0x%02lx is that argument",
+				    w32(ssf_b, i * 4), c[i], i * 4);
+			diff_eq_int("ours: +0x%02lx is that argument",
+				    w32(ssf_a, i * 4), c[i], i * 4);
+		}
+		diff_eq_int("blob: setFilterCoeff left the length (%ld)",
+			    w32(ssf_b, 0x20), 5u, trial);
+
+		our_ssf_reset(ssf_a);
+		ref_ssf_reset(ssf_b);
+
+		diff_eq_obj("after reset", V90SpectralShapingFilter, ssf_a,
+			    ssf_b, trial);
+		guard_intact(ssf_a, ssf_b, sizeof(V90SpectralShapingFilter),
+			     SSF_SLOT, trial);
+
+		for (i = 0; i < 4; i++) {
+			diff_eq_int("blob: state +0x%02lx cleared",
+				    w32(ssf_b, 0x10 + i * 4), 0u,
+				    0x10 + i * 4);
+			diff_eq_int("ours: state +0x%02lx cleared",
+				    w32(ssf_a, 0x10 + i * 4), 0u,
+				    0x10 + i * 4);
+			diff_eq_int("blob: reset left coeff +0x%02lx",
+				    w32(ssf_b, i * 4), c[i], i * 4);
+			diff_eq_int("ours: reset left coeff +0x%02lx",
+				    w32(ssf_a, i * 4), c[i], i * 4);
+		}
+		diff_eq_int("blob: reset left the length (%ld)",
+			    w32(ssf_b, 0x20), 5u, trial);
+		diff_eq_int("ours: reset left the length (%ld)",
+			    w32(ssf_a, 0x20), 5u, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * `progress` over forty consecutive blocks, COMPARED AFTER EVERY ONE.  The
+ * filter is recursive: a divergence in block three that the next block damps
+ * back out is still a divergence, and comparing only the last block would
+ * report it as agreement.
+ *
+ * THE LENGTH IS SWEPT INCLUDING ZERO, and the zero trials are the reason the
+ * state words are left as SEEDED BYTES rather than set to floats.  The object
+ * tests the count before it loads anything, so a zero-length block must leave
+ * all 36 bytes exactly as they were -- and a translation that loaded and
+ * stored four floats would be invisible over ordinary values, because storing
+ * a float back where it came from changes nothing.  Over a signalling NaN it
+ * is not invisible: x87 quietens it on the way through.  So the zero trials
+ * put 0x7fa00000 in the state and assert the bytes are untouched, which is
+ * the one place in this file where that pattern is wanted rather than avoided.
+ */
+static int
+run_ssf_progress(void)
+{
+	static const unsigned lens[] = { 0u, 1u, 2u, 3u, 8u };
+	int trial;
+
+	diff_begin("V90SpectralShapingFilter::progress over blocks");
+
+	for (trial = 0; trial < 5 * SSF_NCOEF; trial++) {
+		unsigned len = lens[trial % 5];
+		unsigned char before_a[SSF_SLOT], before_b[SSF_SLOT];
+		unsigned char first[SSF_SLOT];
+		short sig[16];
+		int block;
+		int moved = 0;
+
+		ssf_setup(trial, len);
+		if (len == 0) {
+			unsigned snan = 0x7fa00000u;
+			int i;
+
+			for (i = 0; i < 4; i++) {
+				memcpy(ssf_a + 0x10 + i * 4, &snan, 4);
+				memcpy(ssf_b + 0x10 + i * 4, &snan, 4);
+			}
+		}
+
+		for (block = 0; block < 40; block++) {
+			ssf_signal(sig, 16, block, trial);
+			memcpy(before_a, ssf_a, SSF_SLOT);
+			memcpy(before_b, ssf_b, SSF_SLOT);
+
+			our_ssf_progress(ssf_a, sig);
+			ref_ssf_progress(ssf_b, sig);
+
+			diff_eq_obj("after a block",
+				    V90SpectralShapingFilter, ssf_a, ssf_b,
+				    block);
+			guard_intact(ssf_a, ssf_b,
+				     sizeof(V90SpectralShapingFilter),
+				     SSF_SLOT, block);
+
+			if (len == 0) {
+				diff_eq_int("blob: a zero-length block writes"
+					    " nothing (block %ld)",
+					    memcmp(before_b, ssf_b, SSF_SLOT)
+					    == 0, 1, block);
+				diff_eq_int("ours: a zero-length block writes"
+					    " nothing (block %ld)",
+					    memcmp(before_a, ssf_a, SSF_SLOT)
+					    == 0, 1, block);
+			} else if (memcmp(before_a, ssf_a,
+					  sizeof(V90SpectralShapingFilter))
+				   != 0) {
+				moved = 1;
+			}
+
+			/* The coefficients and the length are read-only. */
+			diff_eq_int("blob: progress left the length (%ld)",
+				    w32(ssf_b, 0x20), len, block);
+			diff_eq_int("blob: progress left coeff 0 (%ld)",
+				    w32(ssf_b, 0), w32(before_b, 0), block);
+
+			if (block == 0)
+				memcpy(first, ssf_a, SSF_SLOT);
+		}
+
+		diff_eq_int("a non-empty block changed the state (trial %ld)",
+			    len == 0 ? 1 : moved, 1, trial);
+		diff_eq_int("forty blocks are not one block forty times"
+			    " (trial %ld)",
+			    len == 0
+			    ? 1
+			    : memcmp(first, ssf_a,
+				     sizeof(V90SpectralShapingFilter)) != 0,
+			    1, trial);
+	}
+
+	/*
+	 * ONE LONG BLOCK THROUGH AN UNSTABLE FILTER, which is what makes the
+	 * BRACKETING visible -- and it took a deliberate construction, which
+	 * is the point worth recording.  `(x - prevIn * b2) + prevMid * b0`
+	 * and `x - (prevIn * b2 - prevMid * b0)` are the same real number and
+	 * not the same float: they round in different places, and the
+	 * difference is about one part in 2^64.
+	 *
+	 * NOTHING IN THE SWEEP ABOVE CAN SEE THAT.  A relative difference of
+	 * 1e-19 is nineteen orders below the 24-bit state the block ends by
+	 * storing, and a STABLE filter does not amplify it -- the error and
+	 * the signal grow together, so the ratio stays where it started.  The
+	 * mutation went uncaught over 45 trials of forty blocks each until
+	 * this case was added, which is the honest measure of how far a broad
+	 * sweep gets on a question like this one.
+	 *
+	 * SO THE ERROR IS AMPLIFIED AND THE SIGNAL IS CANCELLED, separately.
+	 * A pole of 2.0 doubles the first section every sample, carrying the
+	 * low bits up to 2^99 times their original weight over one 100-sample
+	 * block; a zero of 2.0 in the second section then subtracts the two
+	 * consecutive first-section outputs that differ by exactly that
+	 * factor, so what is left of a value near 2^32 is the part that
+	 * disagrees.  One block, because a second would store an infinity.
+	 */
+	{
+		static const unsigned cancel[4] = {
+			0x40000000u,	/* b0 = 2.0, an unstable pole */
+			0x3f000000u,	/* b1 = 0.5                   */
+			0x3f7fffffu,	/* b2 = 0.99999994            */
+			0x40000000u	/* b3 = 2.0, cancelling it    */
+		};
+		static short big[100];
+		unsigned len = 100u;
+		int block, i;
+
+		seed_pair(ssf_a, ssf_b, SSF_SLOT, 777);
+		for (i = 0; i < 4; i++) {
+			unsigned z = 0;
+
+			memcpy(ssf_a + i * 4, &cancel[i], 4);
+			memcpy(ssf_b + i * 4, &cancel[i], 4);
+			memcpy(ssf_a + 0x10 + i * 4, &z, 4);
+			memcpy(ssf_b + 0x10 + i * 4, &z, 4);
+		}
+		memcpy(ssf_a + 0x20, &len, 4);
+		memcpy(ssf_b + 0x20, &len, 4);
+
+		for (block = 0; block < 1; block++) {
+			lfsr_state = 0x77u + 0x1111u * (unsigned)block + 1u;
+			for (i = 0; i < 100; i++)
+				big[i] = (short)(32000 + (int)(lfsr() % 700u));
+
+			our_ssf_progress(ssf_a, big);
+			ref_ssf_progress(ssf_b, big);
+
+			diff_eq_obj("after a long block",
+				    V90SpectralShapingFilter, ssf_a, ssf_b,
+				    block);
+			guard_intact(ssf_a, ssf_b,
+				     sizeof(V90SpectralShapingFilter),
+				     SSF_SLOT, block);
+		}
+	}
+
+	return diff_end();
+}
+
+/*
+ * `getMetric`: the same recurrence, a return value instead of a state, and a
+ * `const` object that must come back byte for byte.
+ *
+ * THE RESULT IS CAPTURED AS A `float`.  The object leaves the accumulator in
+ * st(0) at 64-bit significand and ours rounds it before returning; rounding
+ * to float twice is rounding to float once, so as a float the two agree
+ * exactly -- and as a `double` they would not, which is a property of the
+ * calling convention rather than of either implementation.
+ */
+static int
+run_ssf_metric(void)
+{
+	static const unsigned lens[] = { 0u, 1u, 2u, 3u, 8u };
+	static const unsigned nblk[] = { 0u, 1u, 2u, 5u };
+	int trial;
+
+	diff_begin("V90SpectralShapingFilter::getMetric");
+
+	for (trial = 0; trial < 5 * 4 * SSF_NCOEF; trial++) {
+		unsigned len = lens[trial % 5];
+		unsigned blocks = nblk[(trial / 5) % 4];
+		unsigned char before_a[SSF_SLOT], before_b[SSF_SLOT];
+		short sig[64];
+		float ma, mb;
+		int i;
+
+		ssf_setup(trial, len);
+		for (i = 0; i < 4; i++)
+			ssf_signal(sig + i * 16, 16, i, trial);
+
+		memcpy(before_a, ssf_a, SSF_SLOT);
+		memcpy(before_b, ssf_b, SSF_SLOT);
+
+		ma = our_ssf_metric(ssf_a, sig, blocks);
+		mb = ref_ssf_metric(ssf_b, sig, blocks);
+
+		diff_eq_int("the metric (len %ld)", fbits(ma), fbits(mb),
+			    len);
+		diff_eq_int("blob: getMetric wrote nothing (trial %ld)",
+			    memcmp(before_b, ssf_b, SSF_SLOT) == 0, 1, trial);
+		diff_eq_int("ours: getMetric wrote nothing (trial %ld)",
+			    memcmp(before_a, ssf_a, SSF_SLOT) == 0, 1, trial);
+
+		/* No blocks at all is the accumulator, unchanged. */
+		if (blocks == 0 || len == 0) {
+			diff_eq_int("blob: nothing to do returns state[3]"
+				    " (trial %ld)", fbits(mb),
+				    w32(ssf_b, 0x1c), trial);
+			diff_eq_int("ours: nothing to do returns state[3]"
+				    " (trial %ld)", fbits(ma),
+				    w32(ssf_a, 0x1c), trial);
+		}
+	}
+
+	/*
+	 * And it is not the accumulator every time: the same object over the
+	 * same signal with more blocks must give a different answer.  Two
+	 * coefficient sets are chosen rather than swept so that the filter is
+	 * known to be excited.
+	 */
+	{
+		short sig[64];
+		float m1, m2;
+		int i;
+
+		ssf_setup(3, 8u);
+		for (i = 0; i < 4; i++)
+			ssf_signal(sig + i * 16, 16, i, 3);
+		for (i = 0; i < 4; i++) {
+			unsigned c = ssf_coef[2 + i % 3];
+
+			memcpy(ssf_a + i * 4, &c, 4);
+			memcpy(ssf_b + i * 4, &c, 4);
+		}
+		m1 = our_ssf_metric(ssf_a, sig, 1u);
+		m2 = our_ssf_metric(ssf_a, sig, 4u);
+		diff_eq_int("one block and four give different metrics (%ld)",
+			    fbits(m1) != fbits(m2), 1, 0);
+		diff_eq_int("and the blob agrees with both (%ld)",
+			    fbits(ref_ssf_metric(ssf_b, sig, 1u))
+			    == fbits(m1)
+			    && fbits(ref_ssf_metric(ssf_b, sig, 4u))
+			    == fbits(m2), 1, 0);
 	}
 
 	return diff_end();
@@ -485,6 +911,251 @@ run_sd_reset(void)
 		our_sd_dtor(sd_a);
 		ref_sd_dtor(sd_b);
 	}
+
+	return diff_end();
+}
+
+/*
+ * `process(float)` -- five exits, three results, and a test that has to
+ * produce all five.  A detector that always says "no" passes a weak test
+ * perfectly (findings 149 and 223), so this one classifies every call from
+ * the BLOB's own history and asserts at the end that each exit was taken.
+ *
+ * THE SIGNALS ARE PERIOD-SIX, which is what makes the classification
+ * controllable at all: the quotient is the correlation of history[0..5]
+ * against history[6..11] over their energy, so six equal samples repeated
+ * give +1, six repeated with the sign flipped give -1, and six followed by
+ * six zeroes give 0.  Then thresholds either side of those three values pick
+ * the exit.
+ *
+ * EVERY SAMPLE IS COMPARED, not every phase: the counter is a running one
+ * and a wrong verdict that the next sample overwrites is still a wrong
+ * verdict.
+ */
+#define SD_PHASE_LEN 12
+
+static const unsigned sd_phase[][SD_PHASE_LEN] = {
+	/* six of one value, repeated: the quotient is +1 */
+	{ 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u,
+	  0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u,
+	  0x447a0000u, 0x447a0000u },
+	/* zero, both signs: no energy at all */
+	{ 0u, 0x80000000u, 0u, 0x80000000u, 0u, 0x80000000u, 0u,
+	  0x80000000u, 0u, 0x80000000u, 0u, 0x80000000u },
+	/* six positive then six negative: the quotient is -1 */
+	{ 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u,
+	  0x447a0000u, 0xc47a0000u, 0xc47a0000u, 0xc47a0000u, 0xc47a0000u,
+	  0xc47a0000u, 0xc47a0000u },
+	/* six then six zeroes: the quotient is 0 */
+	{ 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u, 0x447a0000u,
+	  0x447a0000u, 0u, 0u, 0u, 0u, 0u, 0u },
+	/* denormals: real bits, and an energy that underflows to nothing */
+	{ 0x00000001u, 0x80000001u, 0x00000001u, 0x807fffffu, 0x00000001u,
+	  0x00000001u, 0x80000001u, 0x00000001u, 0x00000001u, 0x00000001u,
+	  0x807fffffu, 0x00000001u },
+	/* exactly representable, not exactly representable, and large */
+	{ 0x3e800000u, 0x3dcccccdu, 0xbf000000u, 0x4b800001u, 0x3f800000u,
+	  0xbe4ccccdu, 0x3e800000u, 0x40000000u, 0xbf800000u, 0x3dcccccdu,
+	  0x4b800001u, 0x3f000000u }
+};
+#define SD_NPHASE ((int)(sizeof(sd_phase) / sizeof(sd_phase[0])))
+
+/*
+ * ONE MORE PHASE, AND IT IS THE ONLY ONE THAT CHANGES ITS MIND.  Every table
+ * row above settles on a single quotient, so the counter either climbs for
+ * ever or never starts -- and the exit that leaves the counter ALONE can only
+ * be told from the exit that clears it while the counter is not already zero.
+ * A square wave of period 24 gives a quotient of +1 where the two halves of
+ * the window fall inside one run and -1 where they straddle, so the same
+ * object counts up and then lands in the band with something to lose.
+ */
+#define SD_PHASE_SQUARE SD_NPHASE
+
+static unsigned
+sd_sample(int phase, int step)
+{
+	if (phase == SD_PHASE_SQUARE)
+		return (step % 24) < 12 ? 0x447a0000u : 0xc47a0000u;
+	return sd_phase[phase][step % SD_PHASE_LEN];
+}
+
+/* thresh_08, thresh_0c, value_10, limit. */
+static const unsigned sd_thr[][4] = {
+	{ 0x3f800000u, 0x3f000000u, 0xbf000000u, 3u },	/* 1, .5, -.5     */
+	{ 0x3f800000u, 0x3f000000u, 0xbf000000u, 0u },	/* limit 0        */
+	{ 0x3f800000u, 0x3f000000u, 0xbf000000u, 1u },	/* limit 1        */
+	{ 0x00000000u, 0x00000000u, 0x00000000u, 2u },	/* all thresholds 0 */
+	{ 0x501502f9u, 0x3f666666u, 0xbf666666u, 5u },	/* 1e10: always quiet */
+	{ 0x3f800000u, 0xc0000000u, 0xc0400000u, 4u },	/* -2, -3: always loud */
+	/*
+	 * A limit with its top bit set, which is what tells an unsigned
+	 * compare from a signed one: as unsigned the counter never reaches
+	 * it, as signed it is past it from the first sample.
+	 */
+	{ 0x3f800000u, 0xc0000000u, 0xc0400000u, 0x80000000u },
+	/*
+	 * The two ratio thresholds nearly touching, which is what lets the
+	 * band be entered with a counter worth losing.  Everywhere else in
+	 * this table the middle exit -- quotient between the two -- sits
+	 * between the counting arm and the band and clears the counter on
+	 * the way past, so the band is only ever reached from zero and
+	 * "the band clears the counter" cannot be told from the truth.
+	 * With 0.5 and 0.4 the middle region holds none of the quotients the
+	 * square wave produces, and the counter walks straight in.
+	 */
+	{ 0x3f800000u, 0x3f000000u, 0x3ecccccdu, 3u }
+};
+#define SD_NTHR ((int)(sizeof(sd_thr) / sizeof(sd_thr[0])))
+
+static int
+run_sd_process(void)
+{
+	int seen[6];
+	int t;
+
+	diff_begin("V90SdDetector::process");
+
+	for (t = 0; t < 6; t++)
+		seen[t] = 0;
+
+	for (t = 0; t < SD_NTHR * (SD_NPHASE + 1); t++) {
+		unsigned thr0 = sd_thr[t % SD_NTHR][0];
+		unsigned thr1 = sd_thr[t % SD_NTHR][1];
+		unsigned thr2 = sd_thr[t % SD_NTHR][2];
+		unsigned lim = sd_thr[t % SD_NTHR][3];
+		int phase = (t / SD_NTHR) % (SD_NPHASE + 1);
+		unsigned char sa[sizeof(V90SdDetector)];
+		unsigned char sb[sizeof(V90SdDetector)];
+		float *ha, *hb;
+		int step;
+
+		harness_alloc_reset();
+		seed_pair(sd_a, sd_b, SD_SLOT, t + 400);
+		our_sd_ctor(sd_a, thr0, thr1, thr2, lim);
+		ref_sd_ctor(sd_b, thr0, thr1, thr2, lim);
+		ha = ((V90SdDetector *)sd_a)->history;
+		hb = ((V90SdDetector *)sd_b)->history;
+
+		for (step = 0; step < 6 * SD_PHASE_LEN; step++) {
+			unsigned bits = sd_sample(phase, step);
+			unsigned was_a = ((V90SdDetector *)sd_a)->count;
+			unsigned was_b = ((V90SdDetector *)sd_b)->count;
+			long double e = 0.0L, corr = 0.0L, r;
+			int ra, rb, i, which;
+
+			ra = our_sd_process(sd_a, bits);
+			rb = ref_sd_process(sd_b, bits);
+
+			diff_eq_int("the verdict (step %ld)", ra, rb, step);
+			sd_snapshot(sa, sd_a);
+			sd_snapshot(sb, sd_b);
+			diff_eq_obj_(__FILE__, __LINE__, "after process",
+				     "V90SdDetector", sa, sb,
+				     sizeof(V90SdDetector), (long)step);
+			diff_eq_obj_(__FILE__, __LINE__, "the history",
+				     "float", ha, hb, SD_HIST_BYTES,
+				     (long)step);
+			guard_intact(sd_a, sd_b, sizeof(V90SdDetector),
+				     SD_SLOT, step);
+
+			/*
+			 * Which exit that was, computed from the object's own
+			 * history rather than assumed from the phase -- and
+			 * then checked against the verdict and the counter,
+			 * so a right answer reached by the wrong branch is
+			 * still a failure.
+			 */
+			for (i = 0; i < 6; i++) {
+				e += (long double)hb[i] * hb[i];
+				corr += (long double)hb[i] * hb[i + 6];
+			}
+			if ((long double)((V90SdDetector *)sd_b)->thresh_08
+			    > e) {
+				which = 0;
+			} else {
+				r = corr / e;
+				/*
+				 * `!(a >= b)` and not `a < b`: a silent
+				 * history makes the quotient 0/0, and the
+				 * two spellings part company there --
+				 * which is the whole of finding 1401 and
+				 * would be classified away if this line
+				 * were the natural one.
+				 */
+				if (!((long double)
+				      ((V90SdDetector *)sd_b)->thresh_0c >= r))
+					which = rb == 1 ? 2 : 1;
+				else if ((long double)
+					 ((V90SdDetector *)sd_b)->value_10 > r)
+					which = 3;
+				else
+					which = 4;
+				if (!(r == r))
+					seen[5]++;
+			}
+			seen[which]++;
+
+			switch (which) {
+			case 0:
+			case 4:
+				diff_eq_int("a quiet exit returns 0 (step %ld)",
+					    rb, 0, step);
+				diff_eq_int("and clears the counter (step %ld)",
+					    ((V90SdDetector *)sd_b)->count, 0u,
+					    step);
+				break;
+			case 1:
+				diff_eq_int("counting returns 0 (step %ld)",
+					    rb, 0, step);
+				diff_eq_int("and increments (step %ld)",
+					    ((V90SdDetector *)sd_b)->count,
+					    was_b + 1u, step);
+				break;
+			case 2:
+				diff_eq_int("the limit returns 1 (step %ld)",
+					    rb, 1, step);
+				diff_eq_int("and still increments (step %ld)",
+					    ((V90SdDetector *)sd_b)->count,
+					    was_b + 1u, step);
+				break;
+			default:
+				diff_eq_int("the band returns -1 (step %ld)",
+					    rb, -1, step);
+				diff_eq_int("and leaves the counter (step %ld)",
+					    ((V90SdDetector *)sd_b)->count,
+					    was_b, step);
+				break;
+			}
+			diff_eq_int("ours counts the same (step %ld)",
+				    ((V90SdDetector *)sd_a)->count,
+				    ((V90SdDetector *)sd_b)->count, step);
+			diff_eq_int("and had been counting the same (step %ld)",
+				    was_a, was_b, step);
+		}
+
+		our_sd_dtor(sd_a);
+		ref_sd_dtor(sd_b);
+	}
+
+	/* EVERY exit, or the sweep did not test what it claims to. */
+	diff_eq_int("exit: energy below thresh_08 was taken %ld times",
+		    seen[0] > 0, 1, seen[0]);
+	diff_eq_int("exit: counting up was taken %ld times", seen[1] > 0, 1,
+		    seen[1]);
+	diff_eq_int("exit: the limit reached was taken %ld times",
+		    seen[2] > 0, 1, seen[2]);
+	diff_eq_int("exit: the band, counter untouched, %ld times",
+		    seen[3] > 0, 1, seen[3]);
+	diff_eq_int("exit: below both ratio thresholds %ld times",
+		    seen[4] > 0, 1, seen[4]);
+	/*
+	 * And the unordered quotient really was reached.  Without this the
+	 * sweep could stop dividing zero by zero -- by a threshold changing,
+	 * not by anyone deciding to -- and finding 1401 would go untested
+	 * while every other line here still passed.
+	 */
+	diff_eq_int("the quotient was 0/0 on %ld calls", seen[5] > 0, 1,
+		    seen[5]);
 
 	return diff_end();
 }
@@ -956,8 +1627,12 @@ main(void)
 	int bad = 0;
 
 	bad |= run_ssf();
+	bad |= run_ssf_setters();
+	bad |= run_ssf_progress();
+	bad |= run_ssf_metric();
 	bad |= run_sd_ctor();
 	bad |= run_sd_reset();
+	bad |= run_sd_process();
 	bad |= run_sv();
 	bad |= run_ss();
 
