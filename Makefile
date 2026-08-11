@@ -297,8 +297,17 @@ one: firewall strings offsets refs
 #
 RUNTESTS := $(addprefix run-,$(TESTS) $(CXXTESTS))
 .PHONY: $(RUNTESTS)
+#
+# Through tools/gccdiverge.py rather than bare, so that a site where MODERN
+# GCC provably cannot reproduce the object can be declared instead of being
+# forced from the source.  The register is empty by default and the wrapper
+# is then exactly `./$<` with an extra process; see that tool for the
+# discipline, and docs/method/compilers.md for why it exists at all.
+#
+# `make period` has NO allow-list and is not getting one.
+#
 $(RUNTESTS): run-%: $(BUILD)/test/%
-	@./$<
+	@$(PYTHON) tools/gccdiverge.py $* ./$<
 
 test: firewall strings offsets refs $(RUNTESTS)
 
