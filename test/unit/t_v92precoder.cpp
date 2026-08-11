@@ -31,7 +31,8 @@
  *   - V92Precoder's two filters are built with identical arguments, so
  *     swapping the two stores produces a byte-identical object.  The only
  *     observable is which allocation each pointer holds, so the relation
- *     `fir1 < fir2` is compared against the REFERENCE's own answer -- a
+ *     which allocation each field holds is compared against the REFERENCE's
+ *     own answer, BY ORDINAL rather than by address (finding 1353) -- a
  *     differential comparison, not an assumption about the allocator.
  *   - V92PreFilter's second sub-object is a FloatIIR, and FloatIIR and
  *     FloatFIR have the same layout and the same constructor behaviour.  A
@@ -318,10 +319,21 @@ run_precoder_ctor(void)
 		 * The only thing that separates the two identical filters is
 		 * which allocation each holds, and the reference's own answer
 		 * is what it is compared against.
+		 *
+		 * BY ORDINAL, NOT BY ADDRESS.  This asked `fir1 < fir2`, and
+		 * an address comparison does not answer it: both allocators
+		 * recycle LIFO, so the destructor's free(fir1); free(fir2)
+		 * makes the NEXT construction hand fir2's chunk out first and
+		 * the comparison inverts on alternate trials.  It agreed with
+		 * the reference under one libc and not under another, for
+		 * reasons that had nothing to do with either.  Finding 1353.
 		 */
 		diff_eq_int("stored in the reference's allocation order"
-			    " (taps %ld)", PO()->fir1 < PO()->fir2,
-			    PT()->fir1 < PT()->fir2, n);
+			    " (taps %ld)",
+			    harness_alloc_ordinal(PO()->fir1) <
+			    harness_alloc_ordinal(PO()->fir2),
+			    harness_alloc_ordinal(PT()->fir1) <
+			    harness_alloc_ordinal(PT()->fir2), n);
 
 		cmp_filter("fir1 after construction", "FloatFIR", PO()->fir1,
 			   PT()->fir1, (long)n);
@@ -509,9 +521,13 @@ run_prefilter_ctor(void)
 
 		diff_eq_int("both filters exist (taps %ld)",
 			    FO()->fir != 0 && FO()->iir != 0, 1, n);
+		/* By ordinal, not by address -- see the V92Precoder case. */
 		diff_eq_int("stored in the reference's allocation order"
-			    " (taps %ld)", (void *)FO()->fir < (void *)FO()->iir,
-			    (void *)FT()->fir < (void *)FT()->iir, n);
+			    " (taps %ld)",
+			    harness_alloc_ordinal(FO()->fir) <
+			    harness_alloc_ordinal(FO()->iir),
+			    harness_alloc_ordinal(FT()->fir) <
+			    harness_alloc_ordinal(FT()->iir), n);
 
 		cmp_filter("fir after construction", "FloatFIR", FO()->fir,
 			   FT()->fir, (long)n);

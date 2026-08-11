@@ -44194,3 +44194,70 @@ store, `taps` times. Register allocation is not reachable by any flag. What is
 available is to make the shim's conditionality explicit, so the period build
 compiles the plain source the author wrote and only a modern compiler gets the
 helper. That is a source change and is not made here.
+
+### 1353. THE TWO PERIOD-BUILD FAILURES WERE THE ALLOCATOR, NOT EITHER COMPILER — AND THE CHECKS WERE ASKING THE WRONG QUESTION
+
+The period differential's first two disagreements, and the diagnosis went the
+opposite way to the one the evidence first suggested. Both `t_v92precoder` and
+`t_v90equ` built and ran under GCC 3.4.2, disagreed with the blob, and passed
+every check under GCC 13:
+
+    t_v92precoder  "stored in the reference's allocation order"  got 0, ref 1
+    t_v90equ       "block size"                                  got 132, ref 140
+
+**Neither is a compiler difference, and the argument that settles it needs no
+disassembly.** Our `V92Precoder::V92Precoder` allocates `fir1` and then `fir2`
+in two sequenced statements — there is no freedom for a compiler to reorder
+them — and the blob is a fixed binary whose behaviour cannot vary with what
+compiles the other half of the process. So the only term left that can change
+between the two builds is the C library, and the period build links a **2005
+static glibc** where the modern one links glibc 2.3x dynamically.
+
+**Both allocators recycle LIFO, identically.** Forty trials of
+`a = malloc(0x14); b = malloc(0x14); free(a); free(b)`:
+
+| libc | non-monotonic pairs |
+|---|---|
+| 2005 static glibc (period) | **20 of 40** |
+| modern glibc | **20 of 40** |
+
+The destructor frees `fir1` then `fir2`, so the next construction is handed
+`fir2`'s chunk first and `fir1 < fir2` **inverts on alternate trials**. It is
+not that one libc is monotonic and the other is not; neither is, and whether
+our side happened to be in phase with the blob's was luck that held under one
+build and not the other.
+
+`malloc_usable_size` is the same mistake in a second costume. It reports the
+CHUNK the request was served from, and glibc hands over a remainder too small
+to split rather than wasting it — so two allocations that asked for the same
+number of bytes report 132 and 140. Recording the requested size proves they
+did ask for the same thing: with `harness_alloc_reqsize` the check passes.
+
+**WHAT THE CHECKS MEANT TO ASK IS REAL; THE PROXY WAS NOT.** "Did `fir1` get
+the FIRST of the two allocations, as the blob's does" is a genuine property of
+the reconstruction, and so is "is our block the same size as the blob's". An
+address comparison answers neither, and `malloc_usable_size` answers neither.
+The allocator is the only thing that knows, so it now records both:
+
+    unsigned long harness_alloc_ordinal(const void *p);   /* 1, 2, 3, ... */
+    unsigned      harness_alloc_reqsize(const void *p);   /* bytes asked for */
+
+With those, all four checks pass under both compilers and the period
+differential is **155 of 155**.
+
+**THE METHODOLOGICAL POINT, which is the durable part.** A differential check
+must compare something both sides *compute*, not something the environment
+hands them. Three properties of an allocation are visible to a test — its
+address, its usable size, and its ordinal — and only the last is a fact about
+the code under test. The first two are facts about the C library, and a test
+that reads them is green or red for reasons no one in this tree controls. That
+they were green for years under one libc is not evidence they were right; it
+is the same "passing for the wrong reason" that finding 134 is about, and it
+took changing the compiler to expose it.
+
+It also revises what task #114 was filed believing. Its triage said the
+runtime-derived expectation (`PT()->fir1 < PT()->fir2`, read from the
+reference object in the same process) ruled out the test being at fault and
+made this a finding about `src/`. That reasoning was wrong: reading the
+expectation from the reference at runtime removes a HARDCODED assumption but
+not a shared environmental one, because both sides read the same allocator.

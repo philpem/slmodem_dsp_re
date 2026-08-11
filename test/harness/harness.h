@@ -210,6 +210,30 @@ extern struct alloc_log harness_alloc;
 void harness_alloc_reset(void);
 
 /*
+ * WHICH sysdep_malloc HANDED A POINTER OUT -- 1 for the run's first, 2 for
+ * its second, 0 if it is not live.
+ *
+ * Use this, not an address comparison, to ask "did this field get the FIRST
+ * of the two allocations".  Both allocators recycle LIFO, so after
+ * free(a); free(b) the next two mallocs return b's chunk and then a's, and
+ * `a < b` inverts on alternate trials -- 20 non-monotonic pairs in 40 on
+ * 2005 static glibc and 20 in 40 on a modern one.  A check written that way
+ * is reading the allocator, not the code under test.  See finding 1353.
+ */
+unsigned long harness_alloc_ordinal(const void *p);
+
+/*
+ * How many bytes this pointer's sysdep_malloc was ASKED for, 0 if not live.
+ *
+ * Use this, not `malloc_usable_size`, to compare our block's size against the
+ * reference's.  Usable size reports the CHUNK the allocator served the
+ * request from, and glibc hands over a remainder too small to split rather
+ * than wasting it -- so two identical requests differ whenever one was carved
+ * from the top and the other recycled something larger.  Finding 1353.
+ */
+unsigned harness_alloc_reqsize(const void *p);
+
+/*
  * THE LIVE SET ITSELF, not just its size.
  *
  * A test that wants to snapshot and restore a whole allocated GRAPH -- 125

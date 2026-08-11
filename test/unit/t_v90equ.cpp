@@ -1334,12 +1334,25 @@ run_ctor(void)
 								   block_v[i]
 								   .len) == 0,
 							    1, trial);
+						/*
+						 * The size ASKED for, not
+						 * malloc_usable_size: that
+						 * reports the chunk the
+						 * request was served from,
+						 * and two identical requests
+						 * differ whenever one was
+						 * carved from the top and the
+						 * other recycled something
+						 * larger.  It read 132
+						 * against 140 for two equal
+						 * allocations.  Finding 1353.
+						 */
 						diff_eq_int("block size (%ld)",
 							    (long)
-							    malloc_usable_size(
+							    harness_alloc_reqsize(
 								pa),
 							    (long)
-							    malloc_usable_size(
+							    harness_alloc_reqsize(
 								pb), trial);
 					}
 

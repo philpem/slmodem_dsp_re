@@ -243,20 +243,49 @@ be passed to the period compiler:
 | `-fno-pie` | no PIE to disable |
 | `-fno-stack-protector` | the Gentoo `ssp`/`pie` patches were off in the object |
 
-### V9 — two tests that pass under GCC 13 and FAIL against the blob under 3.4.2
-
-**Open, and this is the tier earning its keep.** Both build and run; both
-disagree with the object:
+### V9 — two tests that failed against the blob · **CLOSED, and it was NEITHER compiler**
 
 | test | disagreement |
 |---|---|
-| `t_v90equ` | `block size` — got 132, reference 140, on many samples |
-| `t_v92precoder` | `stored in the reference's allocation order` — got 0, reference 1, at 13/281 and 14/252 checks |
+| `t_v90equ` | `block size` — got 132, reference 140 |
+| `t_v92precoder` | `stored in the reference's allocation order` — got 0, reference 1 |
 
-Under GCC 13 both pass every check. A period-build failure can mean our
-source has a defect the modern compiler papers over, **or** that the test
-itself leans on modern-compiler behaviour. Either is a finding; neither is
-diagnosed yet.
+**It was the C LIBRARY, and the argument needs no disassembly.** Our
+`V92Precoder::V92Precoder` allocates `fir1` then `fir2` in two sequenced
+statements — no compiler may reorder them — and the blob is a fixed binary
+whose behaviour cannot vary with what compiles the other half of the process.
+The only term left that changes between the two builds is libc: the period
+build links a 2005 **static** glibc.
+
+Both allocators recycle LIFO, *identically* — 40 trials of
+`a=malloc(0x14); b=malloc(0x14); free(a); free(b)`:
+
+| libc | non-monotonic pairs |
+|---|---|
+| 2005 static glibc | **20 of 40** |
+| modern glibc | **20 of 40** |
+
+The destructor frees `fir1` then `fir2`, so the next construction gets
+`fir2`'s chunk first and `fir1 < fir2` **inverts on alternate trials**.
+Neither libc is monotonic; our side being in phase with the blob's was luck
+that held under one build and not the other. `malloc_usable_size` is the same
+mistake in a second costume — it reports the chunk served, and glibc hands
+over a remainder too small to split, so two equal requests read 132 and 140.
+
+**The checks meant to ask something real; the proxy was not.** "Did `fir1`
+get the FIRST allocation" and "is our block the same size as the blob's" are
+genuine properties of the reconstruction. The allocator is the only thing
+that knows either, so it records both now:
+
+```c
+unsigned long harness_alloc_ordinal(const void *p);   /* 1, 2, 3, ... */
+unsigned      harness_alloc_reqsize(const void *p);   /* bytes asked for */
+```
+
+**The durable lesson: a differential check must compare something both sides
+COMPUTE, not something the environment hands them.** Of the three properties
+of an allocation a test can see — address, usable size, ordinal — only the
+last is a fact about the code under test. Finding 1353.
 
 ---
 
@@ -265,7 +294,7 @@ diagnosed yet.
 | | |
 |---|---|
 | `src/` under GCC 3.4.2 | **152 of 152** compile (was 132 of 152) |
-| period differential | **153 pass**, 2 fail against the blob (V9) |
+| period differential | **155 of 155 pass** |
 | `make phase` (GCC 13) | green, and still required |
 
 The modern build stays. It compiles in seconds against minutes, it is the
