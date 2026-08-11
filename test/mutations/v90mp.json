@@ -1,40 +1,62 @@
 [
- {"label": "the detector's counter left alone",
+ {
+  "label": "the detector's counter left alone",
   "find": "\tword_14 = 0;\n",
-  "replace": ""},
- {"label": "the detector's counter cleared as a byte",
+  "replace": ""
+ },
+ {
+  "label": "the detector's counter cleared as a byte",
   "find": "\tword_14 = 0;",
-  "replace": "\t*(unsigned char *)&word_14 = 0;"},
- {"label": "the detector's first flag left alone",
+  "replace": "\t*(unsigned char *)&word_14 = 0;"
+ },
+ {
+  "label": "the detector's first flag left alone",
   "find": "\tbyte_19 = 0;\n",
-  "replace": ""},
- {"label": "the detector's second flag left alone",
+  "replace": ""
+ },
+ {
+  "label": "the detector's second flag left alone",
   "find": "\tbyte_1a = 0;\n",
-  "replace": ""},
- {"label": "+0x1b starts at 17, not 18",
+  "replace": ""
+ },
+ {
+  "label": "+0x1b starts at 17, not 18",
   "find": "\tbyte_1b = 18;",
-  "replace": "\tbyte_1b = 17;"},
- {"label": "+0x1b is four bytes wide, as it is in the CP classes",
+  "replace": "\tbyte_1b = 17;"
+ },
+ {
+  "label": "+0x1b is four bytes wide, as it is in the CP classes",
   "find": "\tbyte_1b = 18;",
-  "replace": "\t*(unsigned int *)&byte_1b = 18;"},
- {"label": "+0x1b left alone",
+  "replace": "\t*(unsigned int *)&byte_1b = 18;"
+ },
+ {
+  "label": "+0x1b left alone",
   "find": "\tbyte_1b = 18;\n",
-  "replace": ""},
- {"label": "the MP counter left alone",
+  "replace": ""
+ },
+ {
+  "label": "the MP counter left alone",
   "find": "\tnofRecievedMp = 0;\n",
-  "replace": ""},
- {"label": "the MPNot counter left alone",
+  "replace": ""
+ },
+ {
+  "label": "the MPNot counter left alone",
   "find": "\tnofRecievedMpNot = 0;\n",
-  "replace": ""},
- {"label": "the MP counter starts at 1",
+  "replace": ""
+ },
+ {
+  "label": "the MP counter starts at 1",
   "find": "\tnofRecievedMp = 0;",
-  "replace": "\tnofRecievedMp = 1;"},
- {"label": "the destructor clears the counters",
-  "equivalent": true,
-  "why": "The compiler DELETES it.  A store to a member in a destructor is dead -- the object's lifetime ends with the call -- so this compiles to the same one-byte `ret` as an empty body, and no test can tell the two apart.  Finding 1238.  The entry below is the same defect written `volatile`, which survives the optimiser and IS caught, so this is a property of the mutation and not a hole in the test.",
+  "replace": "\tnofRecievedMp = 1;"
+ },
+ {
+  "label": "the destructor clears the counters",
   "find": "V90MP::~V90MP()\n{\n}",
-  "replace": "V90MP::~V90MP()\n{\n\tnofRecievedMp = 0;\n}"},
- {"label": "the destructor clears the counters, volatile so it survives",
+  "replace": "V90MP::~V90MP()\n{\n\tnofRecievedMp = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the counters, volatile so it survives",
   "find": "V90MP::~V90MP()\n{\n}",
-  "replace": "V90MP::~V90MP()\n{\n\t*(volatile int *)&nofRecievedMp = 0;\n}"}
+  "replace": "V90MP::~V90MP()\n{\n\t*(volatile int *)&nofRecievedMp = 0;\n}"
+ }
 ]

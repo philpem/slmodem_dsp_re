@@ -1,6 +1,6 @@
 [
  {
-  "note": "V92Parameters is 54 constant stores and three tiny members, so the set is small on purpose: there is no arithmetic to break.  What it has to show is that the constant table is CHECKED rather than merely present on both sides -- one value moved, one float moved in its last digit, one store removed -- and that the three members really run."
+  "note": "V92Parameters is 54 constant stores and three tiny members, so the set is small on purpose: there is no arithmetic to break.  What it has to show is that the constant table is CHECKED rather than merely present on both sides -- one value moved, one float moved in its last digit, one store removed -- and that the three members really run. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error."
  },
  {
   "label": "one integer default moves by one",
@@ -55,8 +55,6 @@
  {
   "label": "the destructor is not empty",
   "find": "V92Parameters::~V92Parameters()\n{\n}",
-  "replace": "V92Parameters::~V92Parameters()\n{\n\tVPCM_SESSION_TYPE = 0;\n}",
-  "equivalent": true,
-  "why": "Same as v90params.json's entry of the same name, and for the same reason: GCC's `-flifetime-dse` is on at -O2 and deletes stores to `*this` in a destructor, so the mutated body and the empty one compile to the identical bare `ret`.  No mutation confined to the destroyed object can be caught here."
+  "replace": "V92Parameters::~V92Parameters()\n{\n\tVPCM_SESSION_TYPE = 0;\n}"
  }
 ]

@@ -22,9 +22,7 @@
  {
   "label": "the destructor clears the parameter block pointer",
   "find": "V90RDetector::~V90RDetector()\n{\n}",
-  "replace": "V90RDetector::~V90RDetector()\n{\n\tparams = 0;\n}",
-  "equivalent": true,
-  "why": "GCC ELIMINATES A DESTRUCTOR'S STORE TO ITS OWN MEMBER, so this mutation does not merely go unobserved -- it is not emitted. The object's lifetime ends when the destructor returns, so the store is dead, and -O2 removes it: the mutated source compiles to the same one-byte `ret` the original does, measured with objdump on exactly this replacement. It is registered rather than deleted because the next reader will otherwise write it again and read NOT CAUGHT as an untested claim. The `volatile` spelling in the entry after this one is the same defect in a form the compiler must emit, and that one IS caught -- which is what makes the destructor's claim tested rather than vacuous. Finding 1251."
+  "replace": "V90RDetector::~V90RDetector()\n{\n\tparams = 0;\n}"
  },
  {
   "label": "the destructor clears the parameter block pointer, volatile so it survives",

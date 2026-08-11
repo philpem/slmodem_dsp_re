@@ -130,15 +130,15 @@
    }
   },
   "gtonedet": {
-   "key": "00cda3fea8fe3f99fb0e8a6d12e7c9ef2e134f7f778d1d466eb9e26f76b858fa",
-   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "c685d024d83013354c381652a18bc4e6a6b03443067cbf567bfa34043add6cde",
+   "summary": "16 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "blockLen is not kept, only used": "caught",
     "flag is stored as its complement": "caught",
     "one of the four accumulators is left as it was found": "caught",
     "the answer is not cleared": "caught",
     "the destructor frees nothing": "caught",
-    "the destructor nulls the pointer it just freed": "equivalent",
+    "the destructor nulls the pointer it just freed": "caught",
     "the destructor nulls the pointer it just freed, volatile so it survives": "caught",
     "the filter gets blockLen where it wanted blockSize": "caught",
     "the filter is never reset": "equivalent",
@@ -3653,13 +3653,13 @@
    }
   },
   "v90adidctor": {
-   "key": "ac85d48aab4514eab71bc90df8007023f5b455ae83b7035c77d08af53837a22f",
-   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "321d960c66b2dbf4a0cfcfc3bd505e2cc74d5d1592960e888be8b45533db5ef9",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor also clears a field above the parameter block": "caught",
     "the constructor also clears the first linear-mapping entry": "caught",
     "the constructor stores nothing": "caught",
-    "the destructor clears the parameter block pointer": "equivalent",
+    "the destructor clears the parameter block pointer": "caught",
     "the destructor clears the parameter block pointer, volatile so it survives": "caught",
     "the parameter block lands at +0x280c rather than +0x2814": "caught"
    }
@@ -3675,12 +3675,12 @@
    }
   },
   "v90cdctor": {
-   "key": "e4f868a9d464a194a8f53ef81f1d972ffb23b825a61df5b420e7bbbb73750513",
-   "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "98174701531217fb2bcd421c5984c651674e6d18dc5eb67d2afc394705c3e7ff",
+   "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x08 is cleared four bytes wide rather than one": "caught",
     "+0x38 defaults to 0x15 rather than 0x16": "caught",
-    "the destructor clears the rate limits": "equivalent",
+    "the destructor clears the rate limits": "caught",
     "the destructor clears the rate limits, volatile so it survives": "caught",
     "the pre-filter and the power model are swapped": "caught",
     "the pre-filter is not stored": "caught",
@@ -3725,13 +3725,13 @@
    }
   },
   "v90cpower": {
-   "key": "9df399251b33002684c08f92f7cf5348c925f5a5a2bdb48a7365674001f7279c",
-   "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "e8b0c94ec6a8c7872ccb8d1d5447d7e9d1ddf947cc4bf835f18b5c7dee0f8d1f",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor clears the whole 144 bytes": "caught",
     "the constructor initialises the first byte of the object": "caught",
     "the constructor writes the LAST byte only": "caught",
-    "the destructor clears the first byte": "equivalent",
+    "the destructor clears the first byte": "caught",
     "the destructor clears the first byte, volatile so it survives": "caught"
    }
   },
@@ -3875,13 +3875,13 @@
    }
   },
   "v90jd": {
-   "key": "1b08c694d57fa9072a0866d4e4b5430fdb91aa8658d4cbed081d1b1aff41063f",
-   "summary": "12 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "620ad28133b434c7191cd25ec084d8e6cd061c44a31c9e446ea144f0e1db4d07",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "group 0 is one bit short": "caught",
     "the CRC's two feedback taps are transposed": "caught",
     "the constellation bits carry the whole word, not its low byte": "caught",
-    "the destructor is not empty": "equivalent",
+    "the destructor is not empty": "caught",
     "the first rate group is one bit short": "caught",
     "the rate mask is read from the wrong parameter": "caught",
     "the second rate group starts one bit low in the mask": "caught",
@@ -3893,8 +3893,8 @@
    }
   },
   "v90mp": {
-   "key": "bc879610c9186b2661f6e6811358df91dc4148b9ff82b05866ec64d8bcf76da1",
-   "summary": "12 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "ffa5cfa6190fca95a8d30e355465f95f9fc2784c9d9f30468ed6bb870320d7e6",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x1b is four bytes wide, as it is in the CP classes": "caught",
     "+0x1b left alone": "caught",
@@ -3902,7 +3902,7 @@
     "the MP counter left alone": "caught",
     "the MP counter starts at 1": "caught",
     "the MPNot counter left alone": "caught",
-    "the destructor clears the counters": "equivalent",
+    "the destructor clears the counters": "caught",
     "the destructor clears the counters, volatile so it survives": "caught",
     "the detector's counter cleared as a byte": "caught",
     "the detector's counter left alone": "caught",
@@ -4053,8 +4053,8 @@
    }
   },
   "v90params": {
-   "key": "6597c0521c9556f37f1466cecf8021f766467b66b0a78cbe58cd1abe7ecca839",
-   "summary": "37 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
+   "key": "499690ceaeca5048e91ab57c30fa0b84b6dced24e6f68b012172400eeded9930",
+   "summary": "37 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "PROBING_MODE is set even when tempProbe is zero": "caught",
     "SILENCE_SCR is written on the other arm": "caught",
@@ -4073,7 +4073,7 @@
     "the constructor does not call initSession": "caught",
     "the crossed-rate arm is never taken": "caught",
     "the crossed-rate default window is 2..2, not 2..14": "caught",
-    "the destructor is not empty": "equivalent",
+    "the destructor is not empty": "caught",
     "the last field of the object is not written": "caught",
     "the power reduction divides by 10, not 5": "caught",
     "the power reduction scale is 1.0, not 0.5": "caught",
@@ -4112,13 +4112,13 @@
    }
   },
   "v90rdet": {
-   "key": "cb814aa68d8f3118acb68c5278e2ca85b499fc40b12549962f18a2f43d7562db",
-   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "b1cd664d02d2526a969374a780edd6852abdda6f3287d6f39e3c6c0585d23107",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor also clears the counter at +0x00": "caught",
     "the constructor clears the shift register too": "caught",
     "the constructor stores nothing": "caught",
-    "the destructor clears the parameter block pointer": "equivalent",
+    "the destructor clears the parameter block pointer": "caught",
     "the destructor clears the parameter block pointer, volatile so it survives": "caught",
     "the parameter block lands at +0x24": "caught"
    }
@@ -4175,7 +4175,7 @@
    }
   },
   "v90sddet": {
-   "key": "41e3099ca2feee098647a85da1e292f0c7eb48cb90891f4f928a900b76383344",
+   "key": "8803b47817bfa447e1b316f29422734f41f337eea531aecd82d37b743146014b",
    "summary": "13 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "argument 3 is stored where argument 1 belongs": "caught",
@@ -4269,13 +4269,13 @@
    }
   },
   "v90trn2": {
-   "key": "4950c5fb6d741fb8c98fc3ce8e2584c06513514e59d8dd79d97b86012434f227",
-   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "8cf6f9fe76fab0e66c050b70e1cf9dec2e32084bf5ccd243bddf8f3f89a816f1",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "only the first is stored": "caught",
     "only the second is stored": "caught",
     "the constructor also writes at +0x08, past what four members reach": "caught",
-    "the destructor clears both pointers": "equivalent",
+    "the destructor clears both pointers": "caught",
     "the destructor clears both pointers, volatile so it survives": "caught",
     "the two collaborators are swapped": "caught"
    }
@@ -4298,8 +4298,8 @@
    }
   },
   "v92cp": {
-   "key": "f6bab785455bc93a5e1e7b75a0b7322e556a0fc4b9f53c90d673d1b8457c9ec6",
-   "summary": "14 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "f071593c08cbc5044497f3dea4b1e76225d12814a0ba465fc7cf88260367da45",
+   "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 cleared as a word": "caught",
     "+0x04 left alone, as reset() leaves it": "caught",
@@ -4308,7 +4308,7 @@
     "+0x120 left alone": "caught",
     "+0x914 left alone": "caught",
     "+0x914 starts at 0, not -1": "caught",
-    "the destructor clears the detector": "equivalent",
+    "the destructor clears the detector": "caught",
     "the destructor clears the detector, volatile so it survives": "caught",
     "the detector's counter left alone": "caught",
     "the detector's first flag left alone": "caught",
@@ -4353,11 +4353,11 @@
    }
   },
   "v92jd": {
-   "key": "3b2ccd99bd509bcbed3238f333d1fc52f5c64abc20a5c36c7fe7b33a572faa85",
-   "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "6c2a0abea8b7d8775dc08db593ef662ba447e36ed5610c6c703a57826e8e0985",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the data message's constant is set, not cleared": "caught",
-    "the destructor is not empty": "equivalent",
+    "the destructor is not empty": "caught",
     "the first rate group is one bit short": "caught",
     "the fixed-point scale is one bit out": "caught",
     "the phase bits start one place up the word": "caught",
@@ -4467,15 +4467,15 @@
    }
   },
   "v92params": {
-   "key": "a40a8ab1f17dbb0ad29ad0d35a4fca136f932360254b0969dc517cb2a8f90a33",
-   "summary": "11 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "c60db0a051fc84aa6f4c78b3e5e3edd00d2dee9ca5933e3e5c3a50eab931375b",
+   "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "init does not call setToDefault": "caught",
     "one float default moves in its last digit": "caught",
     "one integer default moves by one": "caught",
     "the constructor does not call init": "caught",
     "the constructor does not store its argument": "caught",
-    "the destructor is not empty": "equivalent",
+    "the destructor is not empty": "caught",
     "the first field of the object is not written": "caught",
     "the largest float default is out by a factor of ten": "caught",
     "the last field of the object is not written": "caught",

@@ -1,6 +1,6 @@
 [
  {
-  "note": "V92Jd's constructor is V90Jd's plus a fixed-point conversion through the coprocessor, and the two differ in three small ways that a reconstruction assembled from the V.90 one would get wrong: the second rate group is ELEVEN bits and not twelve, `bits[47]` is stored as a constant 0 rather than copied from a parameter, and the phase message's three trailing bytes are set to 1, 0, 0.  Every one of those is a mutation below.  The scale mutations exist because the conversion is the only arithmetic in the file: 65536 is 16 bits of fraction, and a reconstruction that used 32768 agrees with the object on exactly the values that happen to be even."
+  "note": "V92Jd's constructor is V90Jd's plus a fixed-point conversion through the coprocessor, and the two differ in three small ways that a reconstruction assembled from the V.90 one would get wrong: the second rate group is ELEVEN bits and not twelve, `bits[47]` is stored as a constant 0 rather than copied from a parameter, and the phase message's three trailing bytes are set to 1, 0, 0.  Every one of those is a mutation below.  The scale mutations exist because the conversion is the only arithmetic in the file: 65536 is 16 bits of fraction, and a reconstruction that used 32768 agrees with the object on exactly the values that happen to be even. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error."
  },
  {
   "label": "the fixed-point scale is one bit out",
@@ -70,8 +70,6 @@
  {
   "label": "the destructor is not empty",
   "find": "V92Jd::~V92Jd()\n{\n}",
-  "replace": "V92Jd::~V92Jd()\n{\n\tunpackWord = 0x5a5a;\n}",
-  "equivalent": true,
-  "why": "GCC's `-flifetime-dse` is on at -O2 and deletes stores to `*this` in a destructor, so the mutated body and the empty one compile to the identical bare `ret`.  See v90jd.json's entry of the same name."
+  "replace": "V92Jd::~V92Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
  }
 ]

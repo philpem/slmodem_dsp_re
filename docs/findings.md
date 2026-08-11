@@ -41702,3 +41702,60 @@ too.  **One source file is one mutation suite's namespace**, so before adding a
 function to a file that already carries a suite, ask whether it repeats any of
 that file's text -- and if it does, give it its own file.  Splitting is cheap;
 a silently disabled suite is the most expensive failure this tree has.
+
+======================================================================
+
+### 1224. TWELVE `equivalent` MUTATION VERDICTS WERE TRUE WHEN MEASURED AND FALSE AFTER A COMPILER FLAG, AND THE SNAPSHOT SAID SO
+
+*The integration of the nine parallel construction-path batches.  The one
+cross-batch contradiction they produced, and the reason the tree-wide
+re-record is deferred to after the last merge rather than run per batch.*
+
+**What four batches found independently, and each of them measured.**  A
+mutation that gives an empty destructor a body -- `~V90Jd() { unpackWord =
+0x5a5a; }` -- cannot be caught, because GCC's `-flifetime-dse` is on at `-O2`
+and deletes a store to `*this` in a destructor: the mutated body and the empty
+one compile to the same bare `ret`.  Four batches wrote that reasoning into a
+`why` and marked the entry `equivalent`.  Two of them checked it by compiling
+both forms and comparing the text.  It was correct.
+
+**What a fifth batch then did, for an unrelated and good reason.**
+`V92EchoCanceller`'s destructor ends with `arma = NULL`, which the blob keeps
+and modern GCC deletes -- the same optimisation seen from the other side.  The
+fix is `-fno-lifetime-dse` in `CXXFLAGS`, restoring the semantics GCC 3.4.2
+had, and it is right: the blob is the specification and the blob has the
+store.  `tools/toolchain/build.sh` carries its own flags so the codegen tier
+is unaffected.
+
+**And that falsified twelve recorded verdicts across twelve suites** --
+`v90jd`, `v92jd`, `v90params`, `v92params`, `v90mp`, `v92cp`, `gtonedet`,
+`v90cdctor`, `v90trn2`, `v90rdet`, `v90adidctor`, `v90cpower`.  Re-recording
+them reported **1 MIScounted each**: an entry claiming to be uncatchable had
+been caught.  The `equivalent` flag and its `why` are retired from all twelve,
+each file's note keeps the history, and the re-record now reads 0 MIScounted
+and 0 NOT caught.
+
+**Three things this is evidence for.**
+
+- **`MIScounted` earns its place.**  Nothing else would have found this.
+  `make phase` was green before and after; every test passed; the twelve
+  entries would simply have gone on asserting something untrue about the
+  compiler.  It is the only check in the tree that compares a recorded
+  JUDGEMENT against a fresh measurement rather than comparing outputs.
+- **The per-batch re-record ban is not bookkeeping.**  `docs/vpcmv34main.md`
+  forbids it to save wall-clock.  The stronger reason is here: each of the
+  five batches was individually correct and green, and the contradiction
+  exists only in the merged tree.  A per-batch re-record cannot see it by
+  construction.
+- **A recorded reason rots differently from a recorded number.**  A stale
+  COUNT is visibly stale and the tooling says so.  A stale ARGUMENT -- "this
+  cannot be caught, because the compiler deletes it" -- stays plausible, keeps
+  being quoted, and is only falsified by re-running the thing it claims not to
+  need.  That is why the twelve entries lost their `why` rather than keeping
+  it with a caveat.
+
+**If `-fno-lifetime-dse` is ever removed**, all twelve go back to being
+uncatchable and the symptom will be twelve NOT CAUGHT verdicts, not a compile
+error.  Each file's note says so.
+
+======================================================================
