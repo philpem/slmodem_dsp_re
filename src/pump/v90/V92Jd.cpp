@@ -125,9 +125,15 @@ V92Jd::~V92Jd()
  * along than V90Jd's does -- V90Jd's is `bits[28], bits[29]` and this one is
  * `phaseBits[29], phaseBits[30]`, which is +0x48 (the second vector's
  * displacement) plus one.  Reproduced and recorded as D271, not reconciled.
- * In the FRAMED layout those two bytes are not a constellation size at all --
- * `phaseBits[29..30]` is where the constructor puts bits 11 and 12 of the Q16
- * phase, and `packJdPhaseData` leaves both alone.
+ *
+ * THE INDEX IS EXPLAINED AND THE VECTOR IS NOT.  All four read the UNFRAMED
+ * layout the unpackers fill (D270), and in the phase message payload 28 is the
+ * always-1 tag `unPackJdPhaseData` checks, so the constellation pair sits one
+ * later there than in the data message -- payload 29..30 rather than 28..29.
+ * What no reading accounts for is that this accessor takes them out of
+ * `phaseBits` while its two siblings read `bits`: a V92Jd that has received a
+ * data message answers `getConstelationSize` out of the phase vector.  D271 is
+ * that half.
  *
  * THE PHASE IS THE CONSTRUCTOR'S CONVERSION RUN BACKWARDS.  Sixteen bytes of
  * `phaseBits` are gathered into an integer, least significant first, and

@@ -122,10 +122,12 @@ V90Jd::~V90Jd()
  *
  * -- a payload-contiguous layout with no group markers in it, 28 rate bits
  * then two and two, ending at `bits[31]`.  Nothing that PACKS in this class
- * writes that, so the accessors and the packer disagree about where the same
- * four quantities live.  Recorded as D270 rather than reconciled: the
- * disassembly is unambiguous, both readings are reproduced as the object has
- * them, and each is driven against the blob.
+ * writes that.  `unPackData` DOES: it strips the framing off an incoming
+ * message and fills `bits[0..47]` flat, which is why these three read where
+ * they read.  The class has two layouts because it has two directions, and
+ * D270 -- opened here when the accessors landed and the unpacker had not --
+ * says so now.  Both are reproduced as the object has them and each is driven
+ * against the blob.
  *
  * A BYTE COUNTS AS SET IF IT IS NON-ZERO, and that is not the same rule the
  * two small fields use.  `getRatesMask` tests `cmpb $0x0`, so a byte of 2
