@@ -3916,6 +3916,24 @@
     "the two decoders are swapped": "caught"
    }
   },
+  "v90p3mod": {
+   "key": "07be17c9a8a41ec6a6ba3848a247c1aa87103c131ae00bd9640e26fdbde8e87e",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ctor: the V90Parameters * is not stored": "caught",
+    "ctor: the code companded is 0x41, not 0x40": "caught",
+    "ctor: the constructor warms up one symbol": "caught",
+    "ctor: the far tap is 24, not 23": "caught",
+    "ctor: the near tap is 17, not 18": "caught",
+    "ctor: the object starts in A-law": "caught",
+    "ctor: the object starts in SdNot, not Sd": "caught",
+    "ctor: the scrambler history is one element short": "caught",
+    "ctor: the scrambler taps are the wrong way round": "caught",
+    "ctor: the session flag is stored after reset, not before": "caught",
+    "ctor: the timeout base is 1, not 0": "caught",
+    "dtor: the scrambler's history is not freed": "caught"
+   }
+  },
   "v90params": {
    "key": "6597c0521c9556f37f1466cecf8021f766467b66b0a78cbe58cd1abe7ecca839",
    "summary": "37 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
@@ -4183,8 +4201,8 @@
    }
   },
   "v92p3mod": {
-   "key": "3a253735aa917736772125f300bbf60aff937f399819b40c73f002930142747e",
-   "summary": "47 mutations: 45 caught (45 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "762a4d1b6f4ec3913a2c3926f4bede41735a9d52829fc86bc3a6b3d7439cd52a",
+   "summary": "58 mutations: 55 caught (55 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "Ja indexes the vector from 24 rather than 25": "caught",
     "Ja leaves its constant-bit run one symbol early": "caught",
@@ -4214,6 +4232,17 @@
     "TRN1u's limit is a lower bound rather than an equality": "caught",
     "TRN1uSecondEnd ignores the twelve-symbol boundary": "caught",
     "TRN1uSecondEnd's floor is 2027 rather than 2039": "caught",
+    "ctor: params is stored after reset, not before": "caught",
+    "ctor: reset's last argument is 1, not 0": "caught",
+    "ctor: the V92Parameters * is not stored": "caught",
+    "ctor: the constructor warms up one symbol": "caught",
+    "ctor: the level argument is 1000, not 4000": "equivalent",
+    "ctor: the near tap is 6, not 5": "caught",
+    "ctor: the object starts in RuNot, not Ru": "caught",
+    "ctor: the scrambler history is one element short": "caught",
+    "ctor: the scrambler tap pair is the wrong way round": "caught",
+    "ctor: the upstream scrambler takes the downstream taps": "caught",
+    "dtor: the scrambler's history is not freed": "caught",
     "reset does not clear eventCode": "caught",
     "reset drops its last argument": "caught",
     "reset seeds the scrambler with a one bit": "caught",

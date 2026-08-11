@@ -4303,6 +4303,23 @@ next-free number out of this file, and the two before it took D162 and D163.
 CLAUDE.md's rule is that the entry says what it used to be called, because a
 citation that still resolves but now points at the wrong entry is the one
 thing `tools/refcheck.py` cannot catch.
+## D190 🐛 💤 `V90Phase3Modulator`'s constructor stores its `V90Parameters *` at +0x50 and no other symbol of the class reads it — the V.92 sibling's equivalent field IS read, by `reset`
+
+*Batch: the two Phase 3 modulator constructors. **Reachability: unmeasured.** Status: unmeasured — what reads +0x50 from OUTSIDE the class was not looked for.*
+
+**This entry was numbered 162 in this register before merge and was renumbered
+to 190** on the coordinator's assignment, three batches having picked the same
+next-free number independently. Nothing outside this batch ever cited it, and
+the one finding that does — 1257 — was updated in the same commit. (The old
+number is spelled out rather than written in its usual form because
+`tools/refcheck.py` reads any `D` followed by digits as a live reference and
+would report it dangling.)
+
+**Finding 1257.** Measured, not inferred: every one of the nineteen
+`V90Phase3Modulator` text symbols was disassembled and searched for a `0x50`
+displacement. Three hit, and only three — the two constructor copies, both
+`mov %reg,0x50(%ebx)` with `%ebx` as `this`, and `reset`, whose `mov
+0x50(%esp),%ebp` is a stack slot and not the object at all.
 
 ---
 

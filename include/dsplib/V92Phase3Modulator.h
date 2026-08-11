@@ -40,11 +40,12 @@
  * puts its `V92Parameters *` argument at +0x4c; and the body ends in
  * `reset(4000, (V92Phase3ModulatorState)0, 0, NULL, NULL, 0)`.
  *
- * TWO OF THE THIRTEEN SYMBOLS ARE DEFINED -- `reset` and `generateSymbol`.
- * The other eleven are declared for the record and deliberately left
- * undefined: one class, one owner applies to methods, and defining a method
- * whose callers are not written re-opens the link closure for the whole test
- * suite (docs/v90cpp.md).  Nothing defined here calls an undefined one.
+ * FOUR OF THE THIRTEEN SYMBOLS ARE DEFINED -- `reset`, `generateSymbol` and
+ * now the constructor and the destructor.  The other nine are declared for
+ * the record and deliberately left undefined: one class, one owner applies to
+ * methods, and defining a method whose callers are not written re-opens the
+ * link closure for the whole test suite (docs/v90cpp.md).  Nothing defined
+ * here calls an undefined one.
  *
  * Data member names are invented and descriptive -- the mangling preserves
  * method and type names and never a data member's (finding 226).  Fields whose
@@ -129,6 +130,36 @@ enum V92Phase3ModulatorState {
 class V92Phase3Modulator {
 public:
 	/*
+	 * .text+0x16d00, 105 bytes.  The scrambler subobject at +0x18 is built
+	 * `(5, 23, 99)` -- NOT the V.90 downstream sibling's `(18, 23, 99)`,
+	 * which is one more place the two classes are not the same class with
+	 * different constants -- then `params` is stored at +0x4c, then
+	 * `reset(4000, (V92Phase3ModulatorState)0, 0, NULL, NULL, 0)`.
+	 *
+	 * THE `params` STORE MUST PRECEDE THE `reset` CALL, and that is
+	 * behaviour rather than store order: `reset` computes `trn1uLength`
+	 * out of two `V92Parameters` fields, so a constructor that stored the
+	 * pointer afterwards would read through whatever +0x4c happened to
+	 * hold.  Both orderings are mutations in
+	 * test/mutations/v92p3mod.json.
+	 *
+	 * `nSymbols` is 0 and `ja` is NULL, so no symbol is generated and
+	 * `jaBits`/`jaBitCount` come out NULL and 0.  The 4000 is the dead
+	 * first parameter -- see `reset` below; the amplitude is `reset`'s own
+	 * literal and the argument cannot change it.
+	 */
+	V92Phase3Modulator(V92Parameters *);
+
+	/*
+	 * .text+0x16290, 22 bytes, AND IT IS NOT EMPTY: the body is
+	 * `Scrambler<unsigned char, int>::~Scrambler` on `this + 0x18` and
+	 * nothing else, which is what an empty destructor over one
+	 * non-trivially-destructible member compiles to.  It frees the
+	 * scrambler's history buffer.
+	 */
+	~V92Phase3Modulator();
+
+	/*
 	 * THE FIRST PARAMETER IS DEAD.  `reset`'s `short` arrives at
 	 * `0x24(%esp)` and that slot is never read; the amplitude is the
 	 * literal `movw $0xfa0,0x4(%esi)` in both of the tail-duplicated
@@ -152,10 +183,17 @@ public:
 
 	/*
 	 * Declared, not defined -- see the file comment.  A return type is not
-	 * mangled, so none of these has a known one.  The constructor and
-	 * destructor are NOT declared, deliberately: declaring either makes
-	 * the class non-trivial, which deletes the default members of a union
-	 * holding one -- and the test fixture is exactly such a union.
+	 * mangled, so none of these has a known one.
+	 *
+	 * This block used to say the constructor and destructor were left
+	 * undeclared on purpose, because declaring either makes the class
+	 * non-trivial and a union holding one loses its own default members.
+	 * The union half was true and finding 871 already paid for it:
+	 * `Scrambler` gained a constructor and a destructor first, so this
+	 * class was non-trivial before this batch touched it and every fixture
+	 * union already carries the two empty special members that restore
+	 * theirs.  The `__builtin_offsetof` half was stale -- `offsetof` wants
+	 * standard layout, which a user-provided constructor does not affect.
 	 */
 	void generateRu();
 	void generateRuNot();

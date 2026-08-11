@@ -57,6 +57,7 @@ P3M_OFF(polarity,	0x040, polarity);
 P3M_OFF(jdBits,		0x044, jdbits);
 P3M_OFF(jdV92Bits,	0x048, jdv92bits);
 P3M_OFF(jdV92PhaseBits,	0x04c, jdv92phasebits);
+P3M_OFF(params,		0x050, params);
 P3M_OFF(dilCount,	0x054, dilcount);
 P3M_OFF(seq1Length,	0x055, seq1length);
 P3M_OFF(seq2Length,	0x056, seq2length);
@@ -787,4 +788,58 @@ V90Phase3Modulator::reset(PcmType law, unsigned char code,
 		else
 			generateV90Symbol();
 	}
+}
+
+/*
+ * ===========================================================================
+ * V90Phase3Modulator::V90Phase3Modulator (.text+0x2c4a0, 123 bytes)
+ *
+ * Three statements, no branch, and the whole of the disassembly is:
+ *
+ *     lea    0x20(%ebx),%edx                  <- the scrambler subobject
+ *     Scrambler<unsigned char,int>::Scrambler(0x12, 0x17, 0x63)
+ *     mov    0x34(%esp),%eax ; mov %eax,0x50(%ebx)     params
+ *     mov    0x38(%esp),%ecx ; mov %ecx,(%ebx)         sessionFlag
+ *     reset(0, 0x40, 0, 0, NULL, NULL, NULL, 0)
+ *
+ * THE MEMBER-INITIALISER IS NOT A CHOICE.  `Scrambler` has no default
+ * constructor, so `scrambler(18, 23, 99)` is the only legal spelling and it
+ * happens to give the blob's ordering -- subobject first, body second -- for
+ * free.  (18, 23) are V.90's scrambler taps, the same pair
+ * `V90Phase3Demodulator` gives its descrambler; 99 is the distance the
+ * initial output position sits above the buffer's floor, so the buffer is
+ * 1 + 23 + 99 = 123 bytes.
+ *
+ * THE STORE ORDER IS BEHAVIOUR.  `sessionFlag` must be written before `reset`
+ * runs, because `reset` reads it to choose between writing `jdBits` and
+ * writing the two V.92 vectors.  It is asserted by t_v90p3mod's constructor
+ * block and by a mutation.
+ *
+ * `0x40` is the argument `reset` companded into `codeLevel`, and the two
+ * enum arguments are both zero -- mu-law and the Sd state.  The trailing
+ * count is 0, so `reset`'s warm-up loop does not run; the descriptor is NULL,
+ * so `resetDILGenerator` clears `dilCount` and returns without touching one
+ * of the 800-odd DIL bytes, which is why the whole DIL half of the object is
+ * still whatever the allocation left there.
+ * ===========================================================================
+ */
+V90Phase3Modulator::V90Phase3Modulator(V90Parameters *p, unsigned int flag)
+	: scrambler(18, 23, 99)
+{
+	params = p;
+	sessionFlag = flag;
+	reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);
+}
+
+/*
+ * .text+0x2ac30, 22 bytes -- and 22 bytes is not an empty function.  The body
+ * is one call, `Scrambler<unsigned char, int>::~Scrambler` on `this + 0x20`,
+ * with no test of anything first: that is exactly what GCC emits for a
+ * destructor whose own body is empty over a class with one member that has a
+ * non-trivial destructor.  So the source is an empty body, and what frees the
+ * scrambler's buffer is the implicit member destruction the compiler appends.
+ * Nothing else here owns memory.
+ */
+V90Phase3Modulator::~V90Phase3Modulator()
+{
 }

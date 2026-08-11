@@ -40382,3 +40382,165 @@ right-to-left order a chained assignment evaluates in), then 2 into +0x20,
 then +0x10..+0x1c to zero. `setFilterCoeff(float, float, float, float)` writes
 its four arguments into +0x00..+0x0c in order, and `reset()` clears exactly
 +0x10..+0x1c and nothing else, which is what names the two groups.
+### 1255. THE TWO PHASE 3 MODULATOR CONSTRUCTORS, AND THE HEADER RULE THAT HAD ALREADY EXPIRED
+
+`V90Phase3Modulator::V90Phase3Modulator(V90Parameters *, unsigned)`
+(.text+0x2c4a0, 123 B), `V92Phase3Modulator::V92Phase3Modulator(V92Parameters *)`
+(+0x16d00, 105 B) and both destructors are now written and differentially
+tested. All four have a link closure of 1 and none has a branch.
+
+Both bodies are three statements:
+
+| | V.90 | V.92 |
+|---|---|---|
+| scrambler subobject | +0x20, `(18, 23, 99)` | +0x18, `(5, 23, 99)` |
+| the stored pointer | `params` at +0x50 | `params` at +0x4c |
+| the stored argument | `sessionFlag` at +0x00 | — |
+| `reset(...)` | `(MU_LAW, 0x40, SD, 0, NULL, NULL, NULL, 0)` | `(4000, RU, 0, NULL, NULL, 0)` |
+
+**THE TAPS ARE NOT THE SAME PAIR.** 18 and 23 downstream, 5 and 23 upstream.
+The third argument, 99, and therefore the 1 + 23 + 99 = 123-byte history are
+the same in both. Reading the second across from the first would have been
+wrong in exactly the way `V92Phase3Modulator.h`'s file comment warns about, and
+the mutation `the upstream scrambler takes the downstream taps` is in the suite
+for that reason.
+
+**THE STORE ORDER IS BEHAVIOUR IN BOTH, AND FOR TWO DIFFERENT REASONS.** V.90's
+`sessionFlag` must be written before `reset` runs, because `reset` branches on
+it to choose which of the three bit-vector pointers it writes; V.92's `params`
+must be written before `reset` runs, because `reset` dereferences it to compute
+`trn1uLength`. Both orderings are mutations and both are caught. The V.92 test
+pre-loads +0x4c with a DECOY parameter block whose two durations differ from the
+real one's, so the wrong ordering reads a valid object and is caught by a number
+rather than by a segfault — which is worth copying: an ordering mutation that
+crashes is caught for the wrong reason and stops being a measurement of the
+test.
+
+**THE HEADERS SAID NOT TO DECLARE THESE, AND THAT REASON HAD ALREADY EXPIRED.**
+Both `V90Phase3Modulator.h` and `V92Phase3Modulator.h` carried a paragraph
+saying the constructor and destructor were deliberately undeclared, because
+declaring either makes the class non-trivial, which deletes the default
+constructor and destructor of a union holding one — and the fixtures are exactly
+such unions. Finding 871 had already split that argument in two and paid the
+real half: `Scrambler` gained a constructor and a destructor first, so both
+classes were non-trivial before this batch touched them, and every fixture union
+already carries the two-line `slot() {}` / `~slot() {}` pair. The
+`__builtin_offsetof` half was stale — `offsetof` wants standard layout, which a
+user-provided constructor does not affect. Not one line of any fixture needed
+changing, and both headers now say so instead of contradicting their own code.
+
+**Tests.** `t_v90p3mod`'s `V90Phase3Modulator and ~` block, 520 checks, and
+`t_v92p3mod`'s, 712 checks. Both sides are called by symbol through `asm()`
+labels, because C++ has no syntax for running a constructor over storage that
+already exists and the alternative — assigning from a temporary — would copy 920
+bytes of uninitialised stack over the seeded slot the whole file depends on.
+Most of the V.90 object is what the constructor does NOT write: `d` is NULL, so
+`resetDILGenerator` clears `dilCount` and returns, and `nSymbols` is 0, so
+`seq1`, `seq2`, the segment tables, all 512 bytes of `dilLevel` and the four DIL
+cursors are never touched and agree only because both sides left the same seed
+in place.
+
+Suites: `v90p3mod` is new, 12 mutations, 12 caught. `v92p3mod` gained 11, all
+caught but one recorded `equivalent` — passing 1000 instead of 4000 as `reset`'s
+first argument, which cannot be observed because that parameter is dead (the
+amplitude is `reset`'s own `movw $0xfa0` literal).
+
+**THE C2 AND D2 VARIANTS ARE SEPARATE BODIES IN THE BLOB.** C1 at .text+0x2c4a0
+against C2 at +0x2c520, and D1 at +0x2ac30 against D2 at +0x2ac10 — four
+distinct copies, which is GCC 3.4 emitting both for a class with no virtual
+base. Ours are one function under two names, so both tests drive the reference
+C2 and D2 on alternate trials against the same one of ours: "the second copy is
+the first copy" is measured, not assumed, and `docs/coverage.md` stays at 100%
+tested rather than gaining four `alias exists, and NOT tested` lines.
+
+### 1258. THE V.90 PHASE 3 MODULATOR HAS TWO OWNERS, AND ONE OF THEM IS THE DEMODULATOR
+
+The constructor's callers, taken by walking `objdump -dr --section=.text` over
+the blob and reading back to each hit's enclosing symbol:
+
+| built by | ctor | dtor |
+|---|---|---|
+| `V90Modulator::V90Modulator(unsigned, V90Phase2Info *, V90Jd *, V92Jd *, tagV90DILdescriptor *, V90MappingParams *, V90MappingParams *, tagV90AdditionalCPinfo *, V90CP *, V90MP *, V90Parameters *, unsigned)` | yes | yes |
+| **`V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *, unsigned, V90AutoDigitalImpDetector *)`** | yes | yes |
+
+`V92Phase3Modulator` has one owner, `V92Modulator`, which is what its header
+already said.
+
+**THE DEMODULATOR OWNING A MODULATOR IS THE SURPRISING HALF** and it is why this
+is its own finding: `V90Phase3Demodulator` constructs and destroys a
+`V90Phase3Modulator`, so the downstream symbol source is not reached only
+through `V90Modulator`. A later batch reading either class needs to know that
+before it decides what "the only pointer to the object" means — which is a
+phrase the first draft of finding 1257 used, on no evidence, and it was wrong.
+
+Each caller appears twice in the scan because each has its own C1/C2 (or
+D1/D2) pair and each copy carries the call; that is duplication in the CALLER,
+not two call sites.
+
+### 1256. A 22-BYTE DESTRUCTOR IS NOT AN EMPTY ONE, AND THE ONLY WITNESS TO IT IS THE ALLOCATOR
+
+Both destructors are 22 bytes and both are one unguarded call:
+
+    2ac30:  sub $0xc,%esp; mov 0x10(%esp),%eax; add $0x20,%eax
+            mov %eax,(%esp); call Scrambler<unsigned char,int>::~Scrambler
+            add $0xc,%esp; ret
+
+That is what GCC emits for a destructor whose own body is EMPTY over a class
+with one non-trivially-destructible member. So the source is `{ }` and the free
+is the compiler's implicit member destruction — there is nothing to write, and
+the byte count is the whole of the evidence that anything happens at all.
+
+**WHICH MAKES IT UNTESTABLE BY OBJECT COMPARISON.** `Scrambler::~Scrambler`
+frees `pLimit` and does NOT null it, so the destructor writes not one byte of
+either object; comparing the two afterwards passes whatever either side did,
+including doing nothing at all. The only observable is the allocator, so the
+test takes `harness_alloc.frees` around each side separately and asserts exactly
+one free each with `bad_free` unmoved — t_scrambler's device (findings 869-872),
+reused here. The mutation that shows the assertion has teeth is a destructor
+that clears `scrambler.pLimit` before the implicit destruction runs, so it leaks
+instead of freeing; it is caught in both suites.
+
+The object comparison is still run after the destructor, with the seven
+scrambler pointers neutralised, because "writes nothing" is itself a claim and a
+gate that is not run cannot fail.
+
+### 1257. +0x50 IS A `V90Parameters *` THAT `V90Phase3Modulator` NEVER READS
+
+`pad_50` in `V90Phase3Modulator.h` is now `V90Parameters *params`. The whole of
+the evidence is two instructions in the constructor —
+
+    2c4ce:  mov 0x34(%esp),%eax
+    2c4d8:  mov %eax,0x50(%ebx)
+
+— which fix the width at four bytes and the type at the one the mangling names,
+`P13V90Parameters`. It is forward-declared rather than included: the constructor
+stores the pointer and dereferences nothing, so an incomplete type is all the
+header needs and the include set is unchanged. `src/pump/v90/V90Phase3Modulator.cpp`
+now asserts the offset with the rest, which it did not before — +0x50 was the
+one gap in that block.
+
+**NOTHING IN THE CLASS READS IT, AND THAT IS A SWEEP AND NOT AN IMPRESSION.**
+Every one of the nineteen `V90Phase3Modulator` text symbols was disassembled and
+searched for a `0x50` displacement. Exactly three hit:
+
+    2c4d8:  mov %eax,0x50(%ebx)     C1, the store
+    2c558:  mov %ecx,0x50(%ebx)     C2, the same store in the duplicate
+    2c2e0:  mov 0x50(%esp),%ebp     reset -- a STACK slot, not the object
+
+So the field is written twice and read never, by this class. Say it that way:
+the first draft of this finding said "+0x50 appears in exactly one of them",
+which the old header could not have established either — `pad_50` was there
+because only four of twenty-one members had been read, not because anyone had
+looked.
+
+That asymmetry is worth recording, because the V.92 sibling's equivalent field
+is NOT dead: `V92Phase3Modulator::reset` reads
+`params->V92_ECHO_FAST_UPDATE_DURATION` and `V92_ECHO_SLOW_UPDATE_DURATION` to
+compute `trn1uLength`. That is what makes the V.92 constructor's store order
+testable, and it is why `sessionFlag` is the only ordering claim on the V.90
+side.
+
+Whether anything OUTSIDE the class reads +0x50 was not looked for, so the field
+is D190 `unmeasured` rather than dead. Finding 1107's rule applies in spirit:
+"this class does not write it" is not "nothing does", and the same goes for
+reads.

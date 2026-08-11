@@ -5,8 +5,9 @@
  * the object map, the 80-byte allocation it comes from and the evidence for
  * every state name.
  *
- * TWO OF THE THIRTEEN SYMBOLS ARE HERE -- `generateSymbol` (.text+0x16600,
- * 1,437 bytes) and `reset` (+0x16ba0, 351 bytes).  The other eleven belong to
+ * FOUR OF THE THIRTEEN SYMBOLS ARE HERE -- `generateSymbol` (.text+0x16600,
+ * 1,437 bytes), `reset` (+0x16ba0, 351 bytes), the constructor (+0x16d00, 105
+ * bytes) and the destructor (+0x16290, 22 bytes).  The other nine belong to
  * whoever owns the rest of the class; they are declared in the header and left
  * undefined, and nothing below calls one.
  *
@@ -470,4 +471,55 @@ V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
 
 	for (i = 0; i < nSymbols; i++)
 		generateSymbol();
+}
+
+/*
+ * ===========================================================================
+ * V92Phase3Modulator::V92Phase3Modulator (.text+0x16d00, 105 bytes)
+ *
+ * The whole body, with nothing elided:
+ *
+ *     lea    0x18(%ebx),%edx                  <- the scrambler subobject
+ *     Scrambler<unsigned char,int>::Scrambler(0x5, 0x17, 0x63)
+ *     mov    0x34(%esp),%eax ; mov %eax,0x4c(%ebx)     params
+ *     reset(0xfa0, (V92Phase3ModulatorState)0, 0, NULL, NULL, 0)
+ *
+ * THE TAPS ARE (5, 23), NOT V.90's (18, 23).  This is the upstream scrambler
+ * and it is a different polynomial; the third argument, 99, and therefore the
+ * 1 + 23 + 99 = 123-byte history are the same in both.  Reading it across
+ * from `V90Phase3Modulator` would have been wrong, which is the file
+ * comment's point about these two classes.
+ *
+ * THE `params` STORE MUST PRECEDE THE CALL, and unlike a bare store order
+ * that is a behavioural claim: `reset` computes `trn1uLength` out of
+ * `params->V92_ECHO_FAST_UPDATE_DURATION` and
+ * `params->V92_ECHO_SLOW_UPDATE_DURATION`, so ordering it the other way round
+ * dereferences whatever +0x4c held before construction.  Both orderings are
+ * mutations and both are caught.
+ *
+ * The 4000 is `reset`'s dead first parameter -- the header says why the
+ * amplitude is `reset`'s own literal and the argument cannot reach it -- and
+ * it is passed anyway because that is what the object passes.  `nSymbols` is
+ * 0, so nothing is generated, and `ja` is NULL, so `jaBits` and `jaBitCount`
+ * come out NULL and 0.  The NULL descriptor is what keeps the "no Ja Object,
+ * DIL descriptor available" complaint quiet.
+ * ===========================================================================
+ */
+V92Phase3Modulator::V92Phase3Modulator(V92Parameters *p)
+	: scrambler(5, 23, 99)
+{
+	params = p;
+	reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);
+}
+
+/*
+ * .text+0x16290, 22 bytes, and 22 bytes is not an empty function: the body is
+ * a single call to `Scrambler<unsigned char, int>::~Scrambler` on
+ * `this + 0x18`, unguarded.  That is what GCC emits for an empty destructor
+ * over a class whose one non-trivially-destructible member is the scrambler,
+ * so the source is the empty body and the free is the compiler's implicit
+ * member destruction.
+ */
+V92Phase3Modulator::~V92Phase3Modulator()
+{
 }

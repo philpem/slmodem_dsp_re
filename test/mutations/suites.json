@@ -256,6 +256,10 @@
   "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90p3dreset"
  ],
+ "v90p3mod": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90p3mod"
+ ],
  "v90params": [
   "src/pump/v90/V90Parameters.cpp",
   "build/test/t_v90params"

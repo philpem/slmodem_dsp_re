@@ -245,5 +245,62 @@
   "replace": "\tdouble scaled;",
   "equivalent": true,
   "why": "The float intermediate is derived from the ENCODING and not from a test: .text+0x16c65 stores the double product as four bytes (`fstps`) and +0x16c69 loads it back (`flds`) before +0x16c6d adds a FOUR-byte 0.5, neither of which a double expression throughout would need.  It is unobservable because `reset` sets `codeLevel` to the literal 4000 and no symbol of this class writes that field otherwise, so 4000 is the only input: 4000*sqrt(3/2) is 4898.979485566356, its float rounding is 4898.97949, and both give 4899 after +0.5 and truncation.  The argument expires if any caller ever gives the object another codeLevel."
+ },
+ {
+  "label": "ctor: params is stored after reset, not before",
+  "find": "\tparams = p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);\n\tparams = p;"
+ },
+ {
+  "label": "ctor: the V92Parameters * is not stored",
+  "find": "\tparams = p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "\t(void)p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the upstream scrambler takes the downstream taps",
+  "find": ": scrambler(5, 23, 99)\n{",
+  "replace": ": scrambler(18, 23, 99)\n{"
+ },
+ {
+  "label": "ctor: the scrambler tap pair is the wrong way round",
+  "find": ": scrambler(5, 23, 99)\n{",
+  "replace": ": scrambler(23, 5, 99)\n{"
+ },
+ {
+  "label": "ctor: the near tap is 6, not 5",
+  "find": ": scrambler(5, 23, 99)\n{",
+  "replace": ": scrambler(6, 23, 99)\n{"
+ },
+ {
+  "label": "ctor: the scrambler history is one element short",
+  "find": ": scrambler(5, 23, 99)\n{",
+  "replace": ": scrambler(5, 23, 98)\n{"
+ },
+ {
+  "label": "ctor: the object starts in RuNot, not Ru",
+  "find": "reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "reset(4000, V92P3M_STATE_RU_NOT, 0, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: reset's last argument is 1, not 0",
+  "find": "reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 1);"
+ },
+ {
+  "label": "ctor: the constructor warms up one symbol",
+  "find": "reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "reset(4000, V92P3M_STATE_RU, 1, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the level argument is 1000, not 4000",
+  "find": "reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "reset(1000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "equivalent": true,
+  "why": "`reset`'s first parameter is DEAD.  The amplitude is `reset`'s own literal -- `movw $0xfa0,0x4(%esi)` in both tail-duplicated blocks, .text+0x16c35 and +0x16cc1 -- and the argument's slot at 0x24(%esp) is never read.  The reconstruction reproduces that with `(void)levelArg`, so no value passed here can reach the object and no test in this tree can tell 4000 from 1000.  The constant is kept because it is what the object passes, not because it does anything."
+ },
+ {
+  "label": "dtor: the scrambler's history is not freed",
+  "find": "V92Phase3Modulator::~V92Phase3Modulator()\n{\n}",
+  "replace": "V92Phase3Modulator::~V92Phase3Modulator()\n{\n\tscrambler.pLimit = NULL;\n}"
  }
 ]
