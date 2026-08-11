@@ -1271,6 +1271,260 @@ run_sessterm(void)
 	return diff_end();
 }
 
+/* --------------------------------- VPCMXF_SessionTermination (19 bytes) */
+
+/*
+ * NINETEEN BYTES, AND ONLY ONE OF THE THREE THINGS THEY DO IS NEW.  The
+ * function loads `+0x175c` of its argument and tail-jumps to
+ * `V90Demodulator::sessionTermination`, which `run_sessterm` above already
+ * sweeps against the blob nine patterns wide.  So what is left to prove is
+ * the forwarding itself and the OFFSET -- and the offset is the part a naive
+ * test cannot see, because a wrapper reading +0x1758 or +0x1760 instead would
+ * pass every check that only looks at the demodulator it was handed.
+ *
+ * SO THE NEIGHBOURS ARE OCCUPIED.  `modem.modulator` (+0x1758) and
+ * `modem.phase2Info` (+0x1760) are pointed at a SECOND, differently seeded
+ * V90Demodulator-sized slot, and that slot is required to be byte-identical
+ * to its pre-call image on both sides.  A wrapper off by one word would run
+ * the method on it and the check would fail; nothing else here would.
+ *
+ * THE HANDLE ITSELF IS COMPARED AGAINST ITS PRE-IMAGE rather than side to
+ * side, because the two sides' handles hold different pointers on purpose --
+ * each points at its own demodulator.  The method writes nothing through the
+ * handle, so "unchanged" is the whole claim and it is made per side.
+ *
+ * THE FOUR ARMS ARE STILL DRIVEN.  A forwarder that reached the method only
+ * on the arm that prints, or only on the arm that stores, would be a
+ * forwarder that is wrong; the sweep requires the saving arm, the
+ * evaluation-disabled arm and the not-data-state arm all to have been reached
+ * THROUGH THE WRAPPER, and the ClockDeviation word is predicted from the
+ * blob's own summary of the blob's own history, exactly as `run_sessterm`
+ * predicts it.
+ *
+ * The return value is not compared: this function is written `void` because
+ * the object cannot say (see src/pump/v90/VPcmXfTerm.cpp), so there is
+ * nothing here that a comparison would be comparing.
+ */
+
+#define XF_SLOT		0x1800		/* the handle's prefix, generously  */
+#define XF_MODULATOR	0x1758		/* VPcmFloModem::modem.modulator    */
+#define XF_DEMODULATOR	0x175c		/* VPcmFloModem::modem.demodulator  */
+#define XF_PHASE2INFO	0x1760		/* VPcmFloModem::modem.phase2Info   */
+
+static unsigned char xf[2][XF_SLOT] __attribute__((aligned(8)));
+static unsigned char xfd[2][DEM_SLOT] __attribute__((aligned(8)));
+
+extern "C" {
+/*
+ * Both sides by symbol, ours as well as the blob's: the entry point is
+ * `extern "C"`, so its name is its own, and naming it here keeps this file
+ * free of `VPcmFloModem.h` -- which it cannot have beside the V90Parameters
+ * definition the fixture already carries (finding 1112).
+ */
+void our_xf_sessterm(void *self) asm("VPCMXF_SessionTermination");
+void ref_xf_sessterm(void *self) asm("ref_VPCMXF_SessionTermination");
+}
+
+static int
+run_vpcmxf_sessterm(void)
+{
+	static const unsigned int xf_len[] = { 1u, ST_HIST };
+	static const float xf_minstd[] = { -1.0f, 1.0e9f };
+	static const unsigned int xf_state[] = { 3u, 1u };
+	struct trial_args t;
+	int lvl, ii;
+	int sawSaved = 0, sawRefused = 0, sawDisabled = 0, sawElse = 0;
+	int sawPrinted = 0;
+
+	diff_begin("VPCMXF_SessionTermination");
+
+	dsplib_debug_capture_on = 1;
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level((unsigned int)lvl);
+
+		for (ii = 0; ii < ST_PATTERNS * 2 * 2 * 2 * 2; ii++) {
+			static unsigned char xa[XF_SLOT], xb[XF_SLOT];
+			static unsigned char da[DEM_SLOT], db[DEM_SLOT];
+			static unsigned char ba[BLK_SLOT], bb[BLK_SLOT];
+			void *hp[2], *dp[2], *cp[2];
+			long tag = (long)lvl * 100000 + ii;
+			int pat, li, mi, si, gi, side, k;
+			unsigned int n, state;
+			float minstd, rmean, rstd;
+			int eval, mainArm, saveArm;
+
+			pat = ii % ST_PATTERNS;
+			li  = (ii / ST_PATTERNS) % 2;
+			mi  = (ii / (ST_PATTERNS * 2)) % 2;
+			si  = (ii / (ST_PATTERNS * 4)) % 2;
+			gi  = (ii / (ST_PATTERNS * 8)) % 2;
+
+			n = xf_len[li];
+			minstd = xf_minstd[mi];
+			state = xf_state[si];
+			/*
+			 * The evaluation switch rides on the pattern rather
+			 * than on a dimension of its own: it only has to be
+			 * seen both ways, and the two arms it selects are
+			 * asserted reached below.
+			 */
+			eval = (pat & 1) ^ gi;
+
+			t.latch = state;
+			t.flag = 0;
+			t.eia6 = gi ? 6 : 0;
+			t.blockByte = 0;
+			t.pcmType = 0;
+			t.idx = ii;
+
+			setup(ii, &t);
+
+			/* The handle and the decoy, on the fixture's LFSR. */
+			fill_pair(xf[0], xf[1], XF_SLOT);
+			fill_pair(xfd[0], xfd[1], DEM_SLOT);
+
+			for (side = 0; side < 2; side++) {
+				unsigned int i;
+
+				for (i = 0; i < ST_HIST; i++)
+					st_hist[side][i] =
+					    st_value(pat, (int)i);
+
+				hp[side] = st_hist[side];
+				memcpy(&dem[side][RS_HIST], &hp[side],
+				       sizeof(void *));
+				memcpy(&dem[side][RS_HLEN], &n, sizeof n);
+				set_int(side, PARAMS_EVAL, eval);
+				set_float(side, PARAMS_MINSTD, minstd);
+
+				dp[side] = D(side);
+				cp[side] = xfd[side];
+				memcpy(&xf[side][XF_DEMODULATOR], &dp[side],
+				       sizeof(void *));
+				memcpy(&xf[side][XF_MODULATOR], &cp[side],
+				       sizeof(void *));
+				memcpy(&xf[side][XF_PHASE2INFO], &cp[side],
+				       sizeof(void *));
+			}
+
+			memcpy(xa, xf[0], XF_SLOT);
+			memcpy(xb, xf[1], XF_SLOT);
+			memcpy(da, xfd[0], DEM_SLOT);
+			memcpy(db, xfd[1], DEM_SLOT);
+			memcpy(ba, blk[0], BLK_SLOT);
+			memcpy(bb, blk[1], BLK_SLOT);
+
+			rmean = ref_timingHistoryMean(&dem[1][0x94]);
+			rstd = ref_timingHistoryStd(&dem[1][0x94]);
+			mainArm = (state == 3u && t.eia6 != 6);
+			saveArm = mainArm && eval && (minstd >= rstd);
+
+			dsplib_debug_capture_reset();
+
+			our_xf_sessterm(xf[0]);
+			ref_xf_sessterm(xf[1]);
+
+			teardown();
+
+			/* Nothing is written through the handle, either side. */
+			diff_eq_int("ours left the handle alone (%ld)",
+				    memcmp(xa, xf[0], XF_SLOT) == 0, 1, tag);
+			diff_eq_int("the blob left the handle alone (%ld)",
+				    memcmp(xb, xf[1], XF_SLOT) == 0, 1, tag);
+
+			/*
+			 * THE OFFSET.  +0x1758 and +0x1760 point at this
+			 * object; a wrapper reading either would have run the
+			 * method on it.
+			 */
+			diff_eq_int("ours left +0x1758/+0x1760's object "
+				    "alone (%ld)",
+				    memcmp(da, xfd[0], DEM_SLOT) == 0, 1, tag);
+			diff_eq_int("the blob left +0x1758/+0x1760's object "
+				    "alone (%ld)",
+				    memcmp(db, xfd[1], DEM_SLOT) == 0, 1, tag);
+
+			for (side = 0; side < 2; side++) {
+				diff_eq_int("timingHistory is untouched "
+					    "(%ld)",
+					    memcmp(&dem[side][RS_HIST],
+						   &hp[side],
+						   sizeof(void *)) == 0,
+					    1, tag * 10 + side);
+				memset(&dem[side][RS_HIST], 0,
+				       sizeof(void *));
+			}
+
+			compare_all("after VPCMXF_SessionTermination", tag);
+			transcripts_agree(tag);
+
+			diff_eq_obj_(__FILE__, __LINE__,
+				     "after VPCMXF_SessionTermination",
+				     "the timing history itself",
+				     st_hist[0], st_hist[1],
+				     sizeof(st_hist[0]), tag);
+
+			/*
+			 * The forwarding, made visible: the one store the
+			 * method makes has to have been made THROUGH the
+			 * wrapper, on exactly the arm the gates select.
+			 */
+			{
+				int outside = 0, want, got;
+
+				for (k = 0; k < BLK_SLOT; k++) {
+					if (k >= BLK_DEVIATION
+					    && k < BLK_DEVIATION + 4)
+						continue;
+					if (bb[k] != blk[1][k])
+						outside = 1;
+				}
+				diff_eq_int("the blob changed nothing but "
+					    "+0x4c of the block (%ld)",
+					    outside, 0, tag);
+
+				memcpy(&got, &blk[1][BLK_DEVIATION],
+				       sizeof got);
+				if (saveArm) {
+					want = (int)(1000.0f * rmean);
+					sawSaved = 1;
+				} else {
+					memcpy(&want, &bb[BLK_DEVIATION],
+					       sizeof want);
+					if (mainArm && eval)
+						sawRefused = 1;
+				}
+				diff_eq_int("the saved ClockDeviation (%ld)",
+					    (long)got, (long)want, tag);
+
+				if (mainArm && !eval)
+					sawDisabled = 1;
+				if (!mainArm)
+					sawElse = 1;
+			}
+
+			if (lvl > 1 && dsplib_debug_capture_lines(1) != 0)
+				sawPrinted = 1;
+		}
+	}
+
+	dsplib_debug_capture_on = 0;
+	set_level(0);
+
+	diff_eq_int("the saving arm was reached through the wrapper",
+		    sawSaved, 1, 0);
+	diff_eq_int("the too-noisy arm was reached through the wrapper",
+		    sawRefused, 1, 0);
+	diff_eq_int("the evaluation-disabled arm was reached through the "
+		    "wrapper", sawDisabled, 1, 0);
+	diff_eq_int("the not-data-state arm was reached through the wrapper",
+		    sawElse, 1, 0);
+	diff_eq_int("the blob printed through the wrapper", sawPrinted, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1284,6 +1538,7 @@ main(void)
 	bad |= run_enterchannelverification();
 	bad |= run_getbitrate();
 	bad |= run_sessterm();
+	bad |= run_vpcmxf_sessterm();
 
 	return bad;
 }

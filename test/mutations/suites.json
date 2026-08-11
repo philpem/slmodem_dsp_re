@@ -388,6 +388,10 @@
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmguard"
  ],
+ "vpcmxfterm": [
+  "src/pump/v90/VPcmXfTerm.cpp",
+  "build/test/t_v90demod"
+ ],
  "vpcmrun": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmrun"

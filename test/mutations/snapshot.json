@@ -4701,6 +4701,17 @@
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "caught"
    }
+  },
+  "vpcmxfterm": {
+   "key": "296b31726b867b68a33addf2f5cb03e6e92d5447f66d56ccc158b3fb07848357",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "nothing is forwarded at all": "caught",
+    "the embedded modem is forwarded rather than its demodulator": "caught",
+    "the handle itself is forwarded": "caught",
+    "the modulator is forwarded rather than the demodulator": "caught",
+    "the phase 2 record is forwarded rather than the demodulator": "caught"
+   }
   }
  }
 }
