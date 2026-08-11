@@ -92,6 +92,13 @@
 #include "dsplib/V90Resampler.h"
 
 #include "dsplib/V90Equalizer.h"
+/*
+ * Explicitly, because this file READS the parameter block's named fields.  It
+ * used to arrive through `V90Resampler.h`, which now only declares the class
+ * -- it holds one as a pointer and never dereferences it.  A translation unit
+ * that dereferences a type is the translation unit that must include it.
+ */
+#include "dsplib/V90Parameters.h"
 
 /*
  * Hold the compiler to the map in the header.  tools/offcheck.py only parses

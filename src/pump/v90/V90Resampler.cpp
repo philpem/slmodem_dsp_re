@@ -45,6 +45,11 @@
 #include "dsplib/DspMath.h"
 #include "dsplib/encode.h"
 #include "dsplib/V90Resampler.h"
+/*
+ * Explicitly: the header declares `V90Parameters` and holds one as a pointer,
+ * and this file is where it is dereferenced.
+ */
+#include "dsplib/V90Parameters.h"
 #include "dsplib/sysdep.h"
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */

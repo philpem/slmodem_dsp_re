@@ -61,7 +61,24 @@
 #define DSPLIB_V90RESAMPLER_H
 
 #include "dsplib/ResamplerTiming.h"
-#include "dsplib/V90Parameters.h"
+
+/*
+ * DECLARED, NOT INCLUDED, and that is load-bearing rather than tidy.
+ *
+ * This header uses `V90Parameters` only as a pointer -- one member at +0xa0
+ * and two constructor parameters -- so a declaration satisfies all three.  The
+ * two `params->` in the comments below are prose about what the blob reads,
+ * not code.
+ *
+ * It used to `#include` the 342-slot header, and that forced
+ * `V90Demodulator.h` into claiming `DSPLIB_V90PARAMETERS_H` for itself --
+ * defining another header's include guard so its own block form of the class
+ * would survive.  That works, and it makes a collision fail as "no member
+ * named ..." at the field instead of as a redefinition naming the class, which
+ * points an hour of debugging at the wrong file.  Removing the include removes
+ * the reason for the hijack.
+ */
+class V90Parameters;
 
 enum V90BllState {
 	V90_BLL_FROZEN			= 0,

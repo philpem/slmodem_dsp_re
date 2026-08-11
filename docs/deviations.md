@@ -4922,3 +4922,27 @@ new hardware.
 *Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0x67, +0x8a, +0xb4, +0xc6 and +0x141. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
 
 Each allocation is followed immediately by a constructor call or, for the 0xb4 parameter block, by `V92createConstellations` -- and in every case by a store into `*this` -- with no `test` between them, so a failed allocation is dereferenced at once. The same shape as D177's family and as finding 1303's reading of `~V90Demapper`'s guards. Reproduced; the null tests that would have to precede these five are not there.
+
+## D221 ⚠ `V90Phase3Demodulator`'s constructor zeroes +0x3cc and then calls `reset`, which zeroes it again
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::V90Phase3Demodulator` (blob 0x212c0/0x21430). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1305.** `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two member constructor calls, and the constructor's last act is `reset(...)`, which has `movl $0x0,0x3cc(%ebx)` of its own. The first store is dead in every execution. It is reproduced because the instruction is in the object and because its POSITION -- between two member constructions, which is what makes it a mem-initializer rather than a body statement -- is the evidence for where the field is declared. The cost of the redundancy is one store per construction and there is one construction per call.
+
+## D222 ⚠ `~V90Phase3Demodulator` frees two pointers and nulls neither, so a second destruction double-frees
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::~V90Phase3Demodulator` (blob 0x20cb0/0x20c00). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1306.** Both arms are `test`/`jne` then destroy-and-free, with no store back to +0x3f0 or +0x428 afterwards, so the guards protect against a pointer the constructor never wrote rather than against re-entry. `~V90Demodulator` has the same shape across thirteen slots and `V90Modulator`'s destructor across five, so it is the object's house style and not a local slip. Reproduced rather than repaired; `t_v90rxctor.cpp` asserts the object is byte-identical after the destructor runs, which is what pins the absence of the stores.
+
+## D223 ⚠ `~V90Demodulator` releases thirteen slots and nulls none of them, so a second destruction double-frees all thirteen
+
+*Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1309.** Each of the eight destroy-and-free arms and each of the five bare frees is followed by no store back to the slot, so the thirteen pointers are still there when the function returns and every one of them is stale. `V90Modulator`'s destructor, `V90BitsToSymbol`'s and `~V90Phase3Demodulator` (D222) all have the same shape, so it is the object's house style rather than a local slip. `t_v90demctor.cpp` asserts the object is byte-identical after the destructor except at +0x094, which is what pins the absence of the stores.
+
+## D224 ⚠ Destroying a `V90Demodulator` prints four diagnostics and writes back a persisted modem parameter
+
+*Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010) via `sessionTermination` (0x1ab30). **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1309.** The destructor's first act is an unconditional `sessionTermination()`, which is not a teardown helper: it emits four `edprintf` diagnostics and stores into `params->modemParams->clockDeviation`. So tearing a session down has a side effect on state that outlives the object, and it happens whether or not the caller wanted a session terminated -- a `delete` issued during error recovery writes the same parameter a clean shutdown does. Reproduced rather than repaired; D200 records a separate defect in one of the four strings.

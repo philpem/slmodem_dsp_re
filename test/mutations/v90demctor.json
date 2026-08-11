@@ -1,0 +1,419 @@
+[
+ {
+  "_": [
+   "V90Demodulator's lifecycle pair: fourteen arguments, six embedded",
+   "constructions, thirteen allocations, twelve scalar stores, and a",
+   "destructor of thirteen guarded arms.  Almost nothing here is a wrong",
+   "VALUE -- the whole class of defect is a PERMUTATION: an argument landing",
+   "at a neighbouring offset, one sub-object handed another's, a guard",
+   "reading the field beside the one it releases.  So most of these move a",
+   "pointer rather than change a number, and they are catchable only because",
+   "t_v90demctor.cpp gives every pointed-to object its own distinct block,",
+   "shares each with both sides, and compares the CONTENTS of all thirteen",
+   "allocations rather than only the pointers to them.",
+   "",
+   "THREE THINGS ARE DELIBERATELY NOT MUTATED, and each is want of an",
+   "observable rather than an oversight:",
+   "",
+   "  - `V90Phase3Demodulator`'s second argument.  That constructor accepts a",
+   "    `V90SpectralVerifier *` and never loads it -- `0x48(%esp)` appears",
+   "    nowhere in its 365 bytes (t_v90rxctor.cpp) -- so handing it a",
+   "    different address changes nothing anywhere.",
+   "",
+   "  - Swapping +0x244 with +0x250, or +0x254 with +0x25c.  Both pairs are",
+   "    the same width, both blocks are freed with a bare `sysdep_free` and",
+   "    neither is ever written, so the two orders are the same program.",
+   "",
+   "  - The ORDER of the five bare frees in the destructor, for the same",
+   "    reason: the harness allocator counts frees and does not record their",
+   "    sequence."
+  ]
+ },
+
+ {
+  "label": "ctor: the resampler is built with 50 phases, not 100",
+  "find": "#define V90DEM_RESAMPLER_PHASES\t\t100u",
+  "replace": "#define V90DEM_RESAMPLER_PHASES\t\t50u"
+ },
+ {
+  "label": "ctor: the resampler's ppm scale is 30.0f, not 60.0f",
+  "find": "#define V90DEM_RESAMPLER_PPM_SCALE\t60.0f",
+  "replace": "#define V90DEM_RESAMPLER_PPM_SCALE\t30.0f"
+ },
+ {
+  "label": "ctor: the resampler is built with 0x20 taps, not 0x10",
+  "find": "#define V90DEM_RESAMPLER_TAPS\t\t0x10u",
+  "replace": "#define V90DEM_RESAMPLER_TAPS\t\t0x20u"
+ },
+ {
+  "label": "ctor: the resampler's cutoff is 0.5f, not 0.98f",
+  "find": "#define V90DEM_RESAMPLER_CUTOFF\t\t0.98f",
+  "replace": "#define V90DEM_RESAMPLER_CUTOFF\t\t0.5f"
+ },
+ {
+  "label": "ctor: the resampler's initial ppm is 1.0f, not zero",
+  "find": "#define V90DEM_RESAMPLER_PPM\t\t0.0f",
+  "replace": "#define V90DEM_RESAMPLER_PPM\t\t1.0f"
+ },
+ {
+  "_": [
+   "1000, and not 4: `Resampler` computes `historyLen` as",
+   "`(taps < minHistory) ? minHistory : 10 * taps`, and with the object's",
+   "sixteen taps every minimum below seventeen gives the same 160.  A",
+   "mutation to 4 IS the unmutated program and would have been an uncaught",
+   "claim that says nothing (finding 572's shape)."
+  ],
+  "label": "ctor: the resampler asks for a minimum history of 1000, not 0",
+  "find": "#define V90DEM_RESAMPLER_MIN_HISTORY\t0u",
+  "replace": "#define V90DEM_RESAMPLER_MIN_HISTORY\t1000u"
+ },
+ {
+  "label": "ctor: the descrambler's near tap is 5, not 0x12",
+  "find": "#define V90DEM_DSC_TAP1\t\t\t0x12u",
+  "replace": "#define V90DEM_DSC_TAP1\t\t\t0x5u"
+ },
+ {
+  "label": "ctor: the descrambler's tail is 0x12, not 0x17",
+  "find": "#define V90DEM_DSC_TAIL\t\t\t0x17u",
+  "replace": "#define V90DEM_DSC_TAIL\t\t\t0x12u"
+ },
+ {
+  "label": "ctor: the descrambler's output run is 0x62, not 0x63",
+  "find": "#define V90DEM_DSC_OUT\t\t\t0x63u",
+  "replace": "#define V90DEM_DSC_OUT\t\t\t0x62u"
+ },
+
+ {
+  "label": "ctor: the prefilter is built with a constant codec type",
+  "find": "\t  preFilter(codec, phase2, par),",
+  "replace": "\t  preFilter((__tHardwareCodecTypes__)0, phase2, par),"
+ },
+ {
+  "label": "ctor: the prefilter is handed no Phase 2 record",
+  "find": "\t  preFilter(codec, phase2, par),",
+  "replace": "\t  preFilter(codec, (V90Phase2Info *)0, par),"
+ },
+
+ {
+  "label": "ctor: the two Jd pointers land in each other's fields",
+  "find": "\tjd = jdArg;\n\tphase2Info = phase2;\n\tjdV92 = jdV92Arg;",
+  "replace": "\tjd = (V90Jd *)jdV92Arg;\n\tphase2Info = phase2;\n\tjdV92 = (V92Jd *)jdArg;"
+ },
+ {
+  "label": "ctor: the two mapping-parameter pointers are swapped",
+  "find": "\tmappingParams = mappingParams1;\n\tdil = dilArg;\n\tmappingParamsAlt = mappingParams2;",
+  "replace": "\tmappingParams = mappingParams2;\n\tdil = dilArg;\n\tmappingParamsAlt = mappingParams1;"
+ },
+ {
+  "label": "ctor: the V90CP and the V90MP land in each other's fields",
+  "find": "\tmp = mpArg;\n\tcp = cpArg;",
+  "replace": "\tmp = (V90MP *)cpArg;\n\tcp = (V90CP *)mpArg;"
+ },
+ {
+  "label": "ctor: the additional CP info is not stored",
+  "find": "\tadditionalCPinfo = cpInfo;\n\tmp = mpArg;",
+  "replace": "\tmp = mpArg;"
+ },
+ {
+  "label": "ctor: the DIL descriptor takes the CP info pointer",
+  "find": "\tdil = dilArg;\n\tmappingParamsAlt",
+  "replace": "\tdil = (tagV90DILdescriptor *)cpInfo;\n\tmappingParamsAlt"
+ },
+ {
+  "label": "ctor: the Phase 2 record is not stored",
+  "find": "\tphase2Info = phase2;\n\tjdV92 = jdV92Arg;",
+  "replace": "\tjdV92 = jdV92Arg;"
+ },
+ {
+  "label": "ctor: +0x30 takes argument 13 rather than argument 14",
+  "find": "\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = (unsigned int)compMode;"
+ },
+ {
+  "label": "ctor: the codec type is not stored at +0x00",
+  "find": "\tcodecType = codec;\n\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = flag;"
+ },
+ {
+  "label": "ctor: +0x00 takes the session flag rather than the codec type",
+  "find": "\tcodecType = codec;\n\tsessionFlag = flag;",
+  "replace": "\tcodecType = (__tHardwareCodecTypes__)flag;\n\tsessionFlag = flag;"
+ },
+
+ {
+  "label": "ctor: the first array is 8 bytes an element, not 4",
+  "find": "#define V90DEM_ARRAY_244_WIDTH\t\t4u",
+  "replace": "#define V90DEM_ARRAY_244_WIDTH\t\t8u"
+ },
+ {
+  "label": "ctor: the second array is 8 bytes an element, not 12",
+  "find": "#define V90DEM_ARRAY_248_WIDTH\t\t12u",
+  "replace": "#define V90DEM_ARRAY_248_WIDTH\t\t8u"
+ },
+ {
+  "label": "ctor: the third array is 12 bytes an element, not 4",
+  "find": "#define V90DEM_ARRAY_250_WIDTH\t\t4u",
+  "replace": "#define V90DEM_ARRAY_250_WIDTH\t\t12u"
+ },
+ {
+  "label": "ctor: the fourth array is 4 bytes an element, not 8",
+  "find": "#define V90DEM_ARRAY_254_WIDTH\t\t8u",
+  "replace": "#define V90DEM_ARRAY_254_WIDTH\t\t4u"
+ },
+ {
+  "label": "ctor: the fifth array is 16 bytes an element, not 8",
+  "find": "#define V90DEM_ARRAY_25C_WIDTH\t\t8u",
+  "replace": "#define V90DEM_ARRAY_25C_WIDTH\t\t16u"
+ },
+ {
+  "label": "ctor: the n*4 and n*12 blocks land in each other's slots",
+  "find": "\tarray_244 = sysdep_malloc(levels * V90DEM_ARRAY_244_WIDTH);\n\tarray_248 = sysdep_malloc(levels * V90DEM_ARRAY_248_WIDTH);",
+  "replace": "\tarray_244 = sysdep_malloc(levels * V90DEM_ARRAY_248_WIDTH);\n\tarray_248 = sysdep_malloc(levels * V90DEM_ARRAY_244_WIDTH);"
+ },
+ {
+  "label": "ctor: the five array widths are all four bytes",
+  "find": "\tarray_254 = sysdep_malloc(levels * V90DEM_ARRAY_254_WIDTH);",
+  "replace": "\tarray_254 = sysdep_malloc(levels * 4u);"
+ },
+
+ {
+  "label": "ctor: +0x258 keeps whatever the allocator left",
+  "find": "\tword_258 = 0;\n\tword_24c = 0;",
+  "replace": "\tword_24c = 0;"
+ },
+ {
+  "label": "ctor: +0x24c keeps whatever the allocator left",
+  "find": "\tword_258 = 0;\n\tword_24c = 0;",
+  "replace": "\tword_258 = 0;"
+ },
+ {
+  "label": "ctor: +0x264 is not cleared",
+  "find": "\tword_264 = 0;\n\tword_26c = 0;",
+  "replace": "\tword_26c = 0;"
+ },
+ {
+  "label": "ctor: +0x26c is not cleared",
+  "find": "\tword_264 = 0;\n\tword_26c = 0;",
+  "replace": "\tword_264 = 0;"
+ },
+ {
+  "label": "ctor: +0x268 is not cleared",
+  "find": "\tword_268 = 0;\n\tword_278 = 0;",
+  "replace": "\tword_278 = 0;"
+ },
+ {
+  "label": "ctor: +0x278 is not cleared",
+  "find": "\tword_268 = 0;\n\tword_278 = 0;",
+  "replace": "\tword_268 = 0;"
+ },
+ {
+  "label": "ctor: +0x280 is not cleared",
+  "find": "\tbyte_280 = 0;\n\tword_27c = 0;",
+  "replace": "\tword_27c = 0;"
+ },
+ {
+  "label": "ctor: +0x27c is not cleared",
+  "find": "\tbyte_280 = 0;\n\tword_27c = 0;",
+  "replace": "\tbyte_280 = 0;"
+ },
+ {
+  "label": "ctor: +0x34 is cleared, which the object does not do",
+  "find": "\tword_264 = 0;\n\tword_26c = 0;",
+  "replace": "\tinPhase3 = 0;\n\tword_264 = 0;\n\tword_26c = 0;"
+ },
+ {
+  "label": "ctor: the constellation power block is written as well",
+  "find": "\tword_264 = 0;\n\tword_26c = 0;",
+  "replace": "\tconstellationPower.pad_00[0] = 0;\n\tword_264 = 0;\n\tword_26c = 0;"
+ },
+
+ {
+  "label": "ctor: the phase 3 demodulator is given a zero session flag",
+  "find": "\tv90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,",
+  "replace": "\tv90dem_p3d_ctor(p3d, params, &spectralVerifier, 0,"
+ },
+ {
+  "label": "ctor: the phase 3 demodulator gets the connection evaluator as its detector",
+  "find": "\t\t\tautoDigitalImpDetector);\n\tphase3Demodulator = p3d;",
+  "replace": "\t\t\t(V90AutoDigitalImpDetector *)connectionEvaluator);\n\tphase3Demodulator = p3d;"
+ },
+ {
+  "label": "ctor: the demapper is given levels rather than twice levels",
+  "find": "\tv90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);",
+  "replace": "\tv90dem_demapper_ctor(dem, levels, params, autoDigitalImpDetector);"
+ },
+ {
+  "label": "ctor: the demapper is given three times levels",
+  "find": "\tv90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);",
+  "replace": "\tv90dem_demapper_ctor(dem, levels * 3, params, autoDigitalImpDetector);"
+ },
+
+ {
+  "label": "ctor: the phase 4 demodulator's mapping parameters are swapped",
+  "find": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,",
+  "replace": "\tv90dem_p4d_ctor(p4d, mappingParamsAlt, mappingParams, demapper, cp, mp,"
+ },
+ {
+  "label": "ctor: the phase 4 demodulator's CP and MP are swapped",
+  "find": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,",
+  "replace": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper,\n\t\t\t(V90CP *)mp, (V90MP *)cp,"
+ },
+ {
+  "label": "ctor: the phase 4 demodulator gets the verifier as its descrambler",
+  "find": "\t\t\t&descrambler, connectionEvaluator, params,",
+  "replace": "\t\t\t(Descrambler<unsigned char, int> *)&spectralVerifier,\n\t\t\tconnectionEvaluator, params,"
+ },
+ {
+  "label": "ctor: the phase 4 demodulator gets the demapper as its evaluator",
+  "find": "\t\t\t&descrambler, connectionEvaluator, params,",
+  "replace": "\t\t\t&descrambler, (V90ConnectionEvaluator *)demapper, params,"
+ },
+ {
+  "label": "ctor: the phase 4 demodulator gets the demapper as its phase 3",
+  "find": "\t\t\tphase3Demodulator, autoDigitalImpDetector, sessionFlag);",
+  "replace": "\t\t\t(V90Phase3Demodulator *)demapper, autoDigitalImpDetector,\n\t\t\tsessionFlag);"
+ },
+ {
+  "label": "ctor: the phase 4 demodulator's session flag is zero",
+  "find": "\t\t\tphase3Demodulator, autoDigitalImpDetector, sessionFlag);",
+  "replace": "\t\t\tphase3Demodulator, autoDigitalImpDetector, 0);"
+ },
+
+ {
+  "label": "ctor: the equaliser's two lengths come from each other's parameters",
+  "find": "\tv90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t(unsigned int)params->w[PARAMS_DFE_LENGTH],",
+  "replace": "\tv90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_DFE_LENGTH],\n\t\t\t(unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],"
+ },
+ {
+  "label": "ctor: the equaliser's linear length comes from +0x174",
+  "find": "#define PARAMS_LINEAR_EQU_LENGTH\t(0x170 / 4)\t/* int */",
+  "replace": "#define PARAMS_LINEAR_EQU_LENGTH\t(0x174 / 4)\t/* int */"
+ },
+ {
+  "label": "ctor: the equaliser's DFE length comes from +0x1f8",
+  "find": "#define PARAMS_DFE_LENGTH\t\t(0x1fc / 4)\t/* int */",
+  "replace": "#define PARAMS_DFE_LENGTH\t\t(0x1f8 / 4)\t/* int */"
+ },
+ {
+  "label": "ctor: the equaliser is given a constant computational mode",
+  "find": "\t\t\t&resampler, &preFilter, compMode);",
+  "replace": "\t\t\t&resampler, &preFilter, (V90ComputationalMode)0);"
+ },
+ {
+  "label": "ctor: the equaliser's resampler and prefilter are swapped",
+  "find": "\t\t\t&resampler, &preFilter, compMode);",
+  "replace": "\t\t\t(V90Resampler *)&preFilter, (V90PreFilter *)&resampler,\n\t\t\tcompMode);"
+ },
+ {
+  "label": "ctor: the equaliser is given the descrambler as its verifier",
+  "find": "\t\t\tconnectionEvaluator, &spectralVerifier, params,",
+  "replace": "\t\t\tconnectionEvaluator,\n\t\t\t(V90SpectralVerifier *)&descrambler, params,"
+ },
+ {
+  "label": "ctor: the equaliser's phase 3 and phase 4 demodulators are swapped",
+  "find": "\t\t\tphase3Demodulator, phase4Demodulator, demapper,",
+  "replace": "\t\t\t(V90Phase3Demodulator *)phase4Demodulator,\n\t\t\t(V90Phase4Demodulator *)phase3Demodulator, demapper,"
+ },
+
+ {
+  "label": "ctor: the TRN2 designer is given the descrambler as its power",
+  "find": "\tv90dem_trn2_ctor(trn2, params, &constellationPower);",
+  "replace": "\tv90dem_trn2_ctor(trn2, params,\n\t\t\t (V90ConstellationPower *)&descrambler);"
+ },
+ {
+  "label": "ctor: the constellation designer is given the resampler as its prefilter",
+  "find": "\tv90dem_cd_ctor(cd, params, &preFilter, &constellationPower);",
+  "replace": "\tv90dem_cd_ctor(cd, params, (V90PreFilter *)&resampler,\n\t\t       &constellationPower);"
+ },
+ {
+  "label": "ctor: the constellation designer is given the verifier as its power",
+  "find": "\tv90dem_cd_ctor(cd, params, &preFilter, &constellationPower);",
+  "replace": "\tv90dem_cd_ctor(cd, params, &preFilter,\n\t\t       (V90ConstellationPower *)&spectralVerifier);"
+ },
+
+ {
+  "label": "dtor: the session is not terminated first",
+  "find": "\tsessionTermination();\n\n\tif (equalizer) {",
+  "replace": "\tif (equalizer) {"
+ },
+ {
+  "label": "dtor: the equaliser is freed without being destroyed",
+  "find": "\t\tequalizer->~V90Equalizer();\n\t\tsysdep_free(equalizer);",
+  "replace": "\t\tsysdep_free(equalizer);"
+ },
+ {
+  "label": "dtor: the equaliser is destroyed but not freed",
+  "find": "\t\tequalizer->~V90Equalizer();\n\t\tsysdep_free(equalizer);",
+  "replace": "\t\tequalizer->~V90Equalizer();"
+ },
+ {
+  "label": "dtor: the equaliser arm is guarded on the phase 4 demodulator",
+  "find": "\tif (equalizer) {",
+  "replace": "\tif (phase4Demodulator) {"
+ },
+ {
+  "label": "dtor: the phase 4 demodulator is never released",
+  "find": "\tif (phase4Demodulator) {\n\t\tphase4Demodulator->~V90Phase4Demodulator();\n\t\tsysdep_free(phase4Demodulator);\n\t}\n",
+  "replace": ""
+ },
+ {
+  "label": "dtor: the demapper arm frees the phase 4 demodulator instead",
+  "find": "\t\tdemapper->~V90Demapper();\n\t\tsysdep_free(demapper);",
+  "replace": "\t\tdemapper->~V90Demapper();\n\t\tsysdep_free(phase4Demodulator);"
+ },
+ {
+  "label": "dtor: the TRN2 designer arm is guarded on the constellation designer",
+  "find": "\tif (trn2Designer) {",
+  "replace": "\tif (constellationDesigner) {"
+ },
+ {
+  "label": "dtor: the constellation designer is destroyed but not freed",
+  "find": "\t\tconstellationDesigner->~V90ConstellationDesigner();\n\t\tsysdep_free(constellationDesigner);",
+  "replace": "\t\tconstellationDesigner->~V90ConstellationDesigner();"
+ },
+ {
+  "label": "dtor: the impairment detector is never released",
+  "find": "\tif (autoDigitalImpDetector) {\n\t\tautoDigitalImpDetector->~V90AutoDigitalImpDetector();\n\t\tsysdep_free(autoDigitalImpDetector);\n\t}\n",
+  "replace": ""
+ },
+ {
+  "label": "dtor: the connection evaluator arm is guarded on the detector",
+  "find": "\tif (connectionEvaluator) {",
+  "replace": "\tif (autoDigitalImpDetector) {"
+ },
+ {
+  "label": "dtor: the first bare block is freed unguarded",
+  "find": "\tif (array_244)\n\t\tsysdep_free(array_244);",
+  "replace": "\tsysdep_free(array_244);"
+ },
+ {
+  "label": "dtor: the second bare block is freed unguarded",
+  "find": "\tif (array_248)\n\t\tsysdep_free(array_248);",
+  "replace": "\tsysdep_free(array_248);"
+ },
+ {
+  "label": "dtor: the last bare block is freed unguarded",
+  "find": "\tif (array_25c)\n\t\tsysdep_free(array_25c);",
+  "replace": "\tsysdep_free(array_25c);"
+ },
+ {
+  "label": "dtor: the third bare block is never freed",
+  "find": "\tif (array_250)\n\t\tsysdep_free(array_250);\n",
+  "replace": ""
+ },
+ {
+  "label": "dtor: the fourth bare block arm frees the third again",
+  "find": "\tif (array_254)\n\t\tsysdep_free(array_254);",
+  "replace": "\tif (array_254)\n\t\tsysdep_free(array_250);"
+ },
+ {
+  "label": "dtor: the first bare block is nulled after being freed",
+  "find": "\tif (array_244)\n\t\tsysdep_free(array_244);",
+  "replace": "\tif (array_244) {\n\t\tsysdep_free(array_244);\n\t\tarray_244 = 0;\n\t}"
+ },
+ {
+  "label": "dtor: the equaliser pointer is nulled after being released",
+  "find": "\t\tequalizer->~V90Equalizer();\n\t\tsysdep_free(equalizer);",
+  "replace": "\t\tequalizer->~V90Equalizer();\n\t\tsysdep_free(equalizer);\n\t\tequalizer = 0;"
+ }
+]

@@ -42869,3 +42869,249 @@ somebody will run, and "D1 and D2 are not identical" looks like a finding
 until you see which two bytes they are.
 
 ======================================================================
+
+======================================================================
+
+### 1305. A MUTATION THAT WILL NOT BE CAUGHT IS SOMETIMES A DEFECT IN THE HEADER, NOT IN THE TEST
+
+`V90Phase3Demodulator.h` said of +0x3cc: "Zeroed by the constructor; `reset`
+does not touch it."  A mutation deleting the constructor's `word_3cc(0)` came
+back NOT CAUGHT against a test that asserts the field is zero on BOTH sides,
+which should have been impossible if the sentence were true.
+
+It was not true.  `reset` has `movl $0x0,0x3cc(%ebx)` of its own, and the
+constructor's LAST ACT is to call `reset` -- so the constructor's store is
+overwritten by an identical one a few instructions later, and deleting it
+changes nothing any differential test can see.  The header now says so.
+
+**THE GENERAL SHAPE, and it is worth having a name for.**  An uncatchable
+mutation has three possible causes and they need different responses:
+
+1. **The test is too weak.**  Strengthen it.  Six of this batch's mutations
+   were this, and finding 1306 is the fix.
+2. **The claim is codegen-only.**  `V90Demapper`'s `byte_664(0)` is this: the
+   byte holds zero either way, and `make similarity` is the instrument
+   (finding 1302).
+3. **THE RECORD IS WRONG.**  Something the header asserts about the object is
+   false, and the uncatchability is the symptom.  This one.
+
+Cause 3 is the one worth writing down, because it inverts the usual reading.
+`mutate.py` is documented as measuring TEST strength; here it measured
+DERIVATION accuracy, and it was the only thing in the tree that could have.
+`make phase` was green throughout, every test passed, and the wrong sentence
+would have gone on being quoted by whoever wrote this class's remaining
+members next.
+
+The entry is not in the suite.  `test/mutations/v90p3dctor.json` carries a
+`note` in its place saying why, so that the next reader does not write it
+again and reach the same dead end.
+
+### 1306. EXCLUDING A POINTER FROM A CONSTRUCTOR TEST HIDES EVERYTHING IT POINTS AT, AND SIX MUTATIONS SAID SO AT ONCE
+
+`V90Phase3Demodulator`'s constructor takes two blocks and builds a
+`V90SdDetector` in one and an `ANSamToneDetector` in the other, from four
+parameter-block slots and eight literals respectively.  The two sides allocate
+separately, so the two pointer words can never agree and are excluded from the
+object comparison -- which is right, and which silently excluded the twelve
+arguments as well.
+
+Six mutations proved it in one run: swapping the SD detector's first two
+thresholds, reading its limit as a float, taking its third value from the
+second slot, swapping the ANSam detector's two sample counts, and exchanging
+its threshold with its ratio all came back NOT CAUGHT.  Every one of those is
+a defect a reader would call obvious, and the test agreed with all of them.
+
+**THE FIX IS TO COMPARE THE BLOCK, NOT THE POINTER**, and the awkward part is
+that the blocks contain pointers of their own -- `ANSamToneDetector` derives
+from `GenericToneDetector`, which holds two `GenericIIR`s, which hold two
+history buffers each.  `cmp_block` in `t_v90rxctor.cpp` copies both sides'
+block and zeroes any word whose value lies INSIDE a live harness allocation --
+on BOTH sides if EITHER side's value is such a pointer, because a word that is
+a pointer on one side and a plain number on the other is exactly the shape a
+real defect takes, and dropping it from one side only would hide it.
+
+Two mechanical notes that cost a debugging cycle each:
+
+- **`harness_alloc_live_set` plus a RANGE test, never an equality test.**  A
+  scrambler holds seven pointers into the MIDDLE of its buffer (`pOut`,
+  `pTap1`, `pTap2` and the three `pInit*`), so comparing against the block's
+  base address finds the base and misses the six beside it.
+  `malloc_usable_size` gives the upper bound.
+- **A destructor test may not plant a raw block in a slot whose destructor is
+  non-trivial.**  `sysdep_malloc(0x3c)` of `HARNESS_MALLOC_FILL` under
+  `~ANSamToneDetector` is a wild pointer three frames down, in `~GenericIIR`.
+  Build the object properly and, for the null arm, destroy it and null the
+  field.
+
+### 1307. FINDING 1301'S ARGUMENT CROSSING, CONFIRMED BY MUTATION FROM A THIRD DIRECTION
+
+`V90Phase4Demodulator`'s constructor hands the embedded `V90Phase4Modulator`
+its two `V90MappingParams *` arguments swapped.  That was derived twice
+independently -- once here from the demodulator's side of the call and once by
+the V.90 modulator batch from the modulator's -- on branches neither could
+see.
+
+It now has a third, different kind of evidence.  The mutation "the modulator
+gets the two mapping-parameter blocks unswapped" is CAUGHT, which says the
+blob really does behave differently from the unswapped version and not merely
+that two readers agree about an instruction.  That took the fixture giving
+every one of the eleven arguments its own distinct per-trial-seeded block: a
+fixture that shared one instance between the two mapping-parameter slots would
+store identical bytes either way round and the mutation would have read NOT
+CAUGHT, which is the vacuous pass finding 224 is about.
+
+Ten of the sixteen mutations in `v90p4dctor.json` are placement mutations of
+this shape, and all ten depend on the same property of the fixture.
+
+### 1308. TEN OF THE FIFTEEN PERIOD-TOOLCHAIN FAILURES ARE ONE C++11 SYNTAX, AND IT HIDES MOST OF THE V.90 TREE FROM THE SECOND TIER
+
+`make similarity` reports "period toolchain: 130 objects, 15 failed" and has
+done for some time without anyone asking which fifteen or why. Compiling each
+by hand inside the container answers it, and the answer is concentrated:
+
+    v34info1a.cpp          V90Demodulator.cpp        V90SessionFlag.cpp
+    v34pcmcreate.cpp       V90Equalizer.cpp          VPcmFloModem.cpp
+    v34pcmmain.cpp         V90Phase3Demodulator.cpp  VPcmXfTerm.cpp
+                           V90PreFilter.cpp
+
+-- ten of them, all with the same first error:
+
+    error: use of enum `V90ComputationalMode' without previous declaration
+    error: use of enum `Phase3DemodulatorState' without previous declaration
+    error: use of enum `__tHardwareCodecTypes__' without previous declaration
+
+GCC 3.4.2 predates C++11 and rejects BOTH forms of the fixed underlying type
+-- the opaque declaration `enum X : int;` and the definition
+`enum X : int { ... }`. Three headers use it: `V90Equalizer.h` line 93,
+`V90Phase3Demodulator.h` line 87 and `V90PreFilter.h` line 124. The remaining
+five failures are unrelated and individual (`V90Dil.cpp`, `V90Jd.cpp` and
+`V92Jd.cpp` each fail on an ordinary name-lookup difference).
+
+**WHAT IT COSTS.** `compare.py` compares 645 symbols, and everything defined
+in those ten translation units is not among them -- so for `V90Equalizer`,
+`V90PreFilter`, `VPcmFloModem`, `V90Demodulator` and `V90Phase3Demodulator`
+the codegen tier is not weak evidence, it is NO evidence. That is worth
+knowing before quoting the tier about any of them: this batch wrote a
+mem-initializer claim about `V90Phase3Demodulator+0x3cc` that `make
+similarity` could not corroborate, and the reason was not the claim.
+
+**IT IS NOT FIXED HERE, and the reason is not budget.** `: int` was chosen
+deliberately and the header says why: it makes every `int` value
+representable, so a differential test may sweep an enum's IRREGULAR range --
+`Phase3DemodulatorState` has enumerators 0, 3 and 26, and without a fixed
+underlying type the range is 0..31 and passing 100 is undefined behaviour.
+Removing it would need every such sweep to cast, in tests belonging to four
+different owners. The trade is real and belongs to whoever owns the sweeps,
+not to a batch that happened to notice.
+
+**WHAT WOULD MAKE THIS SELF-ANNOUNCING.** `build.sh` discards the compiler's
+output (`2>/dev/null`) and prints only a count, so a failure that is one
+syntax across ten files and a failure that is ten unrelated defects look
+identical. Keeping the first error line per failing file would have made this
+visible the day the first `: int` was written rather than some dozens of
+commits later. Finding 134's argument -- a tool must be shown to fire -- has a
+sibling here: a tool that reports only a count cannot be acted on.
+
+### 1309. TWO THINGS `V90Demodulator`'s LIFECYCLE PAIR SETTLES, AND WHY THEY SHARE A NUMBER
+
+This batch's block ran from 1300 to 1309 and both claims below arrived after
+1308 was spent, so they are recorded together rather than renumbered into
+somebody else's block.  They are related in one respect worth stating: each is
+about something the construction path does NOT establish.
+
+**(a) A FRESH `V90Demodulator` HAS SIX UNINITIALISED WORDS, AND TWO OF THEM
+ARE LATER READ AS STATE.**  The 1,002-byte constructor writes +0x000..+0x030,
+its six embedded subobjects, its thirteen allocated slots and eight zero
+stores.  It writes NOTHING at +0x034, +0x038, +0x03c, +0x040, +0x044 or
++0x048 -- a scan of the constructor for `0x3[4-9](%ebx)` and `0x4[0-8](%ebx)`
+returns zero hits.  `V90Modem`'s constructor hands it a bare
+`sysdep_malloc(0x298)` and nothing in the chain zeroes it, so on a fresh
+object `enterPhase3`'s `if (inPhase3 == 1)` and `sessionTermination`'s
+`inPhase3 == 3` both test allocator garbage.  Finding 1273 established that
++0x34 is a STATE and not a latch -- 1 phase 3, 3 data, 5 channel verification
+-- which is what makes reading it before a `reset` meaningful rather than
+merely untidy.  `V90Demodulator::reset` is the first thing that writes
++0x034..+0x044, so the object is only well defined after a reset the
+constructor does not perform.  This is the blob's, not a reconstruction
+artefact, and `t_v90demctor.cpp` asserts the seed survives at all six offsets
+on both sides so that a reconstruction which helpfully zeroed them would fail.
+
+**(b) THE DESTRUCTOR HAS A GUARD THE OBJECT CANNOT REACH.**
+`~V90Demodulator` opens with an unconditional
+`call _ZN14V90Demodulator18sessionTerminationEv`, and fifty-five bytes into
+that function is
+
+    1ab67:  8b 96 dc 01 00 00   mov  0x1dc(%esi),%edx
+    1ab6d:  89 14 24            mov  %edx,(%esp)
+    1ab70:  e8 ..               call V90Phase3Demodulator::
+                                        clearVerificationStatus()
+
+-- a load and a call with no `test` between them.  So by the time the
+destructor reaches its own `if (phase3Demodulator)` at +0x1dc, any object that
+could have taken the false arm has already faulted.  Eleven of the other
+twelve guards are drivable both ways and `t_v90demctor.cpp` drives them both
+ways; this one is exercised in the true direction only, and the slot table
+carries the reason rather than the test quietly running twelve cases and
+calling it thirteen.
+
+**The consequence is the uncomfortable one.**  A reconstruction that DROPPED
+this guard would pass every test in this tree, because the state it guards
+against cannot be constructed.  It is written anyway -- the `test`/`jne` is in
+the object at 0x1b02f -- which is CLAUDE.md's rule about reproducing what the
+blob does rather than what can be shown to matter.  The general shape is worth
+keeping: an unreachable guard is not the same as a dead store, because the
+differential tier can refute a dead store and cannot refute this.
+
+======================================================================
+
+### 1325. A HEADER CLAIMED ANOTHER HEADER'S INCLUDE GUARD, AND THE FIX WAS TO DELETE AN INCLUDE THAT WAS NEVER NEEDED
+
+*The number the V.90 receive batch asked for, allocated by the integrator
+because that batch's block was spent.  It reports the hazard the batch found;
+what it records is that the hazard is gone.*
+
+**What the batch did, and why it was reasonable.**  `V90Demodulator.h` needs
+`V90Parameters` in its BLOCK form -- an untyped array -- because it embeds a
+`V90Resampler` and reaches fields by index.  `V90Resampler.h` included the
+342-slot `V90Parameters.h`, which defines the class in its NAMED form, and two
+definitions of one class in one translation unit is an error.  So the header
+opened with
+
+    #ifndef DSPLIB_V90PARAMETERS_H
+    #define DSPLIB_V90PARAMETERS_H
+    #endif
+    #include "dsplib/V90Resampler.h"
+
+-- defining another header's guard so that header's contents could never
+arrive.  It works, `make phase` was green with it, and the batch documented it
+fully and flagged it rather than leaving it to be found.
+
+**Why it was still worth removing.**  Not because it failed, but because of
+the SHAPE OF THE FAILURE it sets up.  A translation unit that wanted the named
+map and included this header used to get a redefinition error naming
+`V90Parameters`, which says what happened.  With the guard claimed it silently
+gets the block form instead, and the first named field it touches fails with
+`no member named ...` -- an error that points at the field, in a file that is
+not the one at fault.  The batch's own header comment estimates an hour.
+
+**The include was never needed.**  `V90Resampler.h` uses `V90Parameters` in
+exactly three places -- one member at +0xa0 and two constructor parameters --
+and all three are POINTERS.  The two `params->` in that header are prose in
+comments about what the blob reads, not code.  A forward declaration satisfies
+every use, so the include came out, the class is declared instead, and the
+guard hijack came out with it.
+
+**What that exposed, which is the part worth keeping.**  Three translation
+units were reading the parameter block's named fields while getting the
+definition TRANSITIVELY, through a header that only ever held a pointer:
+`src/pump/v90/V90Equalizer.cpp`, `src/pump/v90/V90Resampler.cpp` and
+`test/unit/t_v90equ.cpp` (which takes `sizeof(V90Parameters)` for its arena).
+Each now includes it directly.  **A translation unit that dereferences a type
+is the translation unit that must include it** -- and an include kept alive
+only by transitivity is an include nobody can see they depend on.
+
+`make phase` exit 0 with 1,414 PASS and 0 FAIL after the change, so the block
+form and the named form now coexist because nothing forces them into the same
+translation unit, rather than because one of them was suppressed.
+
+======================================================================

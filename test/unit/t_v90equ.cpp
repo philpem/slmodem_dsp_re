@@ -505,6 +505,13 @@ run_enterphase3(void)
  */
 
 #include "dsplib/V90Resampler.h"
+/*
+ * Explicitly: this fixture takes `sizeof(V90Parameters)` for its arena, and
+ * `V90Resampler.h` now only DECLARES the class -- it holds one as a pointer
+ * and never dereferences it, so it no longer drags the 342-slot definition in
+ * behind it.
+ */
+#include "dsplib/V90Parameters.h"
 
 extern "C" {
 void ref_equ_reset(void *self, unsigned int cursor)

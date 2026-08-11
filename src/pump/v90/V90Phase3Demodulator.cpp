@@ -243,3 +243,151 @@ V90Phase3Demodulator::clearVerificationStatus()
 
 	verificationStatus = 0;
 }
+
+/* ==================================================== the lifecycle pair */
+
+#include "dsplib/sysdep.h"
+/*
+ * The BLOCK form of `V90Parameters`, because the constructor reads four
+ * unnamed slots out of it and this file's `reset` already compiles against a
+ * forward declaration.  No translation unit may hold both definitions;
+ * finding 1112.
+ */
+#include "dsplib/V90PreFilter.h"
+#include "dsplib/ANSamToneDetector.h"
+
+/*
+ * THE TWO CONSTRUCTORS ARE CALLED BY THEIR MANGLED NAMES, and that is this
+ * tree's settled idiom rather than a workaround invented here:
+ * `src/pump/v90/V90BitsToSymbol.cpp` sets out the argument in full and
+ * `V90Modulator.cpp` and `V92Precoder.cpp` do the same.  The build is
+ * `-nostdinc++`, so there is no <new>; declaring a replacement global
+ * `operator new` inline is ill-formed; and a user-declared PLACEMENT form
+ * makes GCC emit a null test the blob does not have.  The original almost
+ * certainly wrote `new V90SdDetector(...)` over an inline `operator new`, and
+ * the instruction sequence is the same either way -- only the spelling
+ * differs.  The destructor needs no trick at all, because an explicit
+ * destructor call is ordinary C++.
+ */
+extern "C" {
+void v90p3d_sd_ctor(void *self, float a, float b, float c, unsigned int d)
+	asm("_ZN13V90SdDetectorC1Efffj");
+void v90p3d_ansam_ctor(void *self, unsigned int s1, unsigned int s2, float t,
+		       unsigned int flag, float ratio, unsigned int rate,
+		       unsigned int blockLen, unsigned int blockSize)
+	asm("_ZN17ANSamToneDetectorC1Ejjfjfjjj");
+}
+
+/* The four parameter-block slots the SD detector is built from. */
+#define PARAMS_SD_THRESH_08	(0x284 / 4)	/* float */
+#define PARAMS_SD_THRESH_0C	(0x288 / 4)	/* float */
+#define PARAMS_SD_VALUE_10	(0x28c / 4)	/* float */
+#define PARAMS_SD_LIMIT		(0x290 / 4)	/* int   */
+
+/*
+ * The descrambler's three constants, and the ANSam detector's eight.  All
+ * eleven are immediates in the object, so they are constants of the source
+ * and not values derived from anything.  0x48960000 is 307200.0f and
+ * 0x3f000000 is 0.5f; 0x1f40 is 8000, which `ANSamToneDetector.h` records as
+ * the sample rate that selects the 13-tap coefficient pair.
+ */
+#define P3D_DSC_TAP1		0x12u
+#define P3D_DSC_TAIL		0x17u
+#define P3D_DSC_OUT		0x63u
+
+#define P3D_ANSAM_SAMPLES1	0x190u
+#define P3D_ANSAM_SAMPLES2	0x64u
+#define P3D_ANSAM_THRESHOLD	307200.0f
+#define P3D_ANSAM_RATIO		0.5f
+#define P3D_ANSAM_SAMPLE_RATE	8000u
+#define P3D_ANSAM_BLOCK_LEN	0x32u
+#define P3D_ANSAM_BLOCK_SIZE	0x63u
+
+/*
+ * `V90Phase3Demodulator::V90Phase3Demodulator` -- 365 bytes at 0x212c0 (C1)
+ * and again at 0x21430 (C2).
+ *
+ * `this` is the first STACK argument, so after `push edi; push esi; push ebx;
+ * sub $0x30` the frame is this 0x40, params 0x44, verifier 0x48, sessionFlag
+ * 0x4c, adid 0x50.
+ *
+ * ARGUMENT 2 IS ACCEPTED AND DROPPED.  `0x48(%esp)` appears nowhere in the
+ * 365 bytes: the entry loads are 0x40, 0x44 and 0x4c, and 0x50 later.  It is
+ * cast to void below rather than quietly renamed, because a reader who found
+ * a `V90SpectralVerifier *` parameter and no use of it should be told that is
+ * the object's doing.  `V90Demodulator` passes the address of its own
+ * embedded verifier, which is what makes the argument look load-bearing from
+ * the caller's side.
+ *
+ * `word_3cc` IS IN THE INITIALIZER LIST AND NOT THE BODY, by finding 1302's
+ * argument: `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two
+ * member constructor calls and could not have been moved across either.
+ *
+ * THE FOUR SD-DETECTOR ARGUMENTS ARE RELOADED FROM THE MEMBER, NOT THE
+ * PARAMETER.  `mov 0xc(%ebx),%eax` appears four times, once before each of
+ * +0x284, +0x288, +0x28c and +0x290 -- so the source reads `params->...`
+ * where `params` is `this->params`, which the line above has just stored, and
+ * not the argument still sitting in a register.  Three of the four are copied
+ * with `mov` and never loaded onto the x87 stack, so they are floats copied
+ * bit-exactly rather than converted; the fourth is the `unsigned` limit.
+ */
+V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
+					   V90SpectralVerifier *unused,
+					   unsigned int flag,
+					   V90AutoDigitalImpDetector *adid)
+	: phase3Modulator(p, flag), word_3cc(0),
+	  descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)
+{
+	V90SdDetector *sd;
+	ANSamToneDetector *an;
+
+	(void)unused;
+
+	params = p;
+	sessionFlag = flag;
+	autoDigitalImpDetector = adid;
+
+	sd = (V90SdDetector *)sysdep_malloc(sizeof(V90SdDetector));
+	v90p3d_sd_ctor(sd, params->f[PARAMS_SD_THRESH_08],
+		       params->f[PARAMS_SD_THRESH_0C],
+		       params->f[PARAMS_SD_VALUE_10],
+		       (unsigned int)params->w[PARAMS_SD_LIMIT]);
+	sdDetector = sd;
+
+	an = (ANSamToneDetector *)sysdep_malloc(sizeof(ANSamToneDetector));
+	v90p3d_ansam_ctor(an, P3D_ANSAM_SAMPLES1, P3D_ANSAM_SAMPLES2,
+			  P3D_ANSAM_THRESHOLD, 0, P3D_ANSAM_RATIO,
+			  P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_LEN,
+			  P3D_ANSAM_BLOCK_SIZE);
+	ansamToneDetector = an;
+
+	reset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,
+	      0.0f, 0);
+}
+
+/*
+ * `~V90Phase3Demodulator` -- 165 bytes at 0x20cb0 (D1) and 0x20c00 (D2).
+ *
+ * Two guarded heap arms and then two calls this file must NOT write: the
+ * compiler emits `descrambler`'s and `phase3Modulator`'s destruction after
+ * the body, in reverse declaration order, and both are visible at 0x20c2c
+ * and 0x20c37 in the object.
+ *
+ * THE NULL TESTS ARE NOT DECORATION.  This tree's `sysdep_free` tolerates
+ * NULL, so dropping either `if` leaves every byte comparison unchanged; what
+ * moves is `harness_alloc.free_null`, which is what the test asserts.  The
+ * SD detector is freed FIRST, which is the reverse of nothing -- the two
+ * allocations are independent -- but it is the object's order and is
+ * reproduced.
+ */
+V90Phase3Demodulator::~V90Phase3Demodulator()
+{
+	if (sdDetector) {
+		sdDetector->~V90SdDetector();
+		sysdep_free(sdDetector);
+	}
+	if (ansamToneDetector) {
+		ansamToneDetector->~ANSamToneDetector();
+		sysdep_free(ansamToneDetector);
+	}
+}

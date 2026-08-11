@@ -1,0 +1,123 @@
+[
+ {
+  "note": "V90Phase3Demodulator's constructor and destructor, against t_v90rxctor.  The file's other suite is `v90p3dreset`, which drives `reset` from t_v90p3dreset; two suites may share a source file (the v90cd/v90cdctor precedent) but NOT anchor text, so every `find` below is taken from the lifecycle pair and appears once in the file (finding 1264)."
+ },
+ {
+  "label": "the parameter block is never stored",
+  "find": "\tparams = p;\n\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = flag;"
+ },
+ {
+  "label": "the session flag and the parameter block swap fields",
+  "find": "\tparams = p;\n\tsessionFlag = flag;\n\tautoDigitalImpDetector = adid;",
+  "replace": "\tparams = p;\n\tsessionFlag = (unsigned int)(long)adid;\n\tautoDigitalImpDetector = (V90AutoDigitalImpDetector *)(long)flag;"
+ },
+ {
+  "label": "the detector argument is dropped",
+  "find": "\tautoDigitalImpDetector = adid;",
+  "replace": "\t(void)adid;"
+ },
+ {
+  "label": "argument 2 is stored where the detector belongs",
+  "find": "\tautoDigitalImpDetector = adid;",
+  "replace": "\tautoDigitalImpDetector = (V90AutoDigitalImpDetector *)unused;"
+ },
+ {
+  "note": "THE CONSTRUCTOR'S `word_3cc(0)` HAS NO MUTATION AND CANNOT HAVE ONE.  Deleting it was tried and read NOT CAUGHT, and the reason is not a gap in the test: the constructor's last act is to call `reset`, and `reset` writes the same zero to the same word.  So the store is behaviourally invisible whatever the fixture does.  Its PRESENCE and its POSITION -- between the two member constructor calls, which is what makes it a mem-initializer -- are `make similarity` claims, finding 1302's class, and the header records them as such.  Finding the mutation uncatchable is also what corrected V90Phase3Demodulator.h, which used to claim `reset` did not touch this field."
+ },
+ {
+  "label": "the modulator is built with the parameter block and no flag",
+  "find": "\t: phase3Modulator(p, flag), word_3cc(0),",
+  "replace": "\t: phase3Modulator(p, 0), word_3cc(0),"
+ },
+ {
+  "label": "the descrambler's two taps are swapped",
+  "find": "\t  descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)",
+  "replace": "\t  descrambler(P3D_DSC_TAIL, P3D_DSC_TAP1, P3D_DSC_OUT)"
+ },
+ {
+  "label": "the descrambler's output length is its tail length",
+  "find": "\t  descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)",
+  "replace": "\t  descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_TAIL)"
+ },
+ {
+  "label": "the SD detector's first two thresholds are swapped",
+  "find": "\tv90p3d_sd_ctor(sd, params->f[PARAMS_SD_THRESH_08],\n\t\t       params->f[PARAMS_SD_THRESH_0C],",
+  "replace": "\tv90p3d_sd_ctor(sd, params->f[PARAMS_SD_THRESH_0C],\n\t\t       params->f[PARAMS_SD_THRESH_08],"
+ },
+ {
+  "label": "the SD detector's limit is read as a float",
+  "find": "\t\t       (unsigned int)params->w[PARAMS_SD_LIMIT]);",
+  "replace": "\t\t       (unsigned int)params->f[PARAMS_SD_LIMIT]);"
+ },
+ {
+  "label": "the SD detector's third value comes from the second slot",
+  "find": "\t\t       params->f[PARAMS_SD_VALUE_10],",
+  "replace": "\t\t       params->f[PARAMS_SD_THRESH_0C],"
+ },
+ {
+  "label": "the ANSam detector's two sample counts are swapped",
+  "find": "\tv90p3d_ansam_ctor(an, P3D_ANSAM_SAMPLES1, P3D_ANSAM_SAMPLES2,",
+  "replace": "\tv90p3d_ansam_ctor(an, P3D_ANSAM_SAMPLES2, P3D_ANSAM_SAMPLES1,"
+ },
+ {
+  "label": "the ANSam detector is built for 9600 rather than 8000",
+  "find": "\t\t\t  P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_LEN,",
+  "replace": "\t\t\t  9600u, P3D_ANSAM_BLOCK_LEN,"
+ },
+ {
+  "label": "the ANSam detector's block length and block size are swapped",
+  "find": "\t\t\t  P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_LEN,\n\t\t\t  P3D_ANSAM_BLOCK_SIZE);",
+  "replace": "\t\t\t  P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_SIZE,\n\t\t\t  P3D_ANSAM_BLOCK_LEN);"
+ },
+ {
+  "label": "the ANSam detector's threshold and ratio change places",
+  "find": "\t\t\t  P3D_ANSAM_THRESHOLD, 0, P3D_ANSAM_RATIO,",
+  "replace": "\t\t\t  P3D_ANSAM_RATIO, 0, P3D_ANSAM_THRESHOLD,"
+ },
+ {
+  "label": "the constructor's own reset opens in TRN1dKnownData",
+  "find": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);",
+  "replace": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)3, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);"
+ },
+ {
+  "label": "the constructor's own reset is handed ucode 0x41",
+  "find": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);",
+  "replace": "\treset((PcmType)0, 0x41, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);"
+ },
+ {
+  "label": "the constructor's own reset gets 0 where the object passes 1",
+  "find": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);",
+  "replace": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 0,\n\t      0.0f, 0);"
+ },
+ {
+  "label": "the constructor's own reset is A-law rather than mu-law",
+  "find": "\treset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);",
+  "replace": "\treset((PcmType)1, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,\n\t      0.0f, 0);"
+ },
+ {
+  "label": "the destructor forgets to test the SD detector for null",
+  "find": "\tif (sdDetector) {\n\t\tsdDetector->~V90SdDetector();",
+  "replace": "\tif (1) {\n\t\tsdDetector->~V90SdDetector();"
+ },
+ {
+  "label": "the destructor frees the SD detector without destroying it",
+  "find": "\t\tsdDetector->~V90SdDetector();\n\t\tsysdep_free(sdDetector);",
+  "replace": "\t\tsysdep_free(sdDetector);"
+ },
+ {
+  "label": "the destructor destroys the SD detector and leaks it",
+  "find": "\t\tsdDetector->~V90SdDetector();\n\t\tsysdep_free(sdDetector);",
+  "replace": "\t\tsdDetector->~V90SdDetector();"
+ },
+ {
+  "label": "the destructor leaves the ANSam detector alone",
+  "find": "\tif (ansamToneDetector) {\n\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t}",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the destructor nulls the two pointers it released",
+  "find": "\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t}",
+  "replace": "\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t\tansamToneDetector = 0;\n\t\tsdDetector = 0;\n\t}"
+ }
+]
