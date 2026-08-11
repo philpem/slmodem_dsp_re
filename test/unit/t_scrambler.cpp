@@ -236,18 +236,28 @@ cmp(const S *a, const S *b, const T *ba, const T *bb, unsigned int n, long tag)
 }
 
 /*
- * A slot big enough for the object, with the two empty special members that a
- * union holding a class with a user-provided constructor needs.  It is what
- * lets the destructor be called on an object this file laid out by hand -- see
- * dsplib/Scrambler.h and finding 871.
+ * A slot big enough for the object, holding STORAGE and ALIGNMENT only.  It is
+ * what lets the destructor be called on an object this file laid out by hand
+ * -- see dsplib/Scrambler.h and finding 871.
+ *
+ * `o` IS A REFERENCE, and that is the whole trick.  This was a union with an
+ * `S o` member and a user-provided empty constructor and destructor, which is
+ * C++11: C++98 forbids a union member whose type has a non-trivial
+ * constructor or destructor outright, and the author's compiler was C++98
+ * (V7 in docs/method/compilers.md).  Binding a reference to the raw bytes
+ * instead keeps every `x.o.member()` at the use sites reading exactly as
+ * before -- 613 of them across the five files this affected -- while the
+ * storage is a plain array that nothing constructs or destroys.
  */
 template <class S>
-union slot {
-	S o;
-	unsigned char raw[sizeof(S)];
+struct slot {
+	union {
+		unsigned char raw[sizeof(S)];
+		double align_;		/* alignment only; trivial */
+	};
+	S &o;
 
-	slot() {}
-	~slot() {}
+	slot() : o(*(S *)raw) {}
 };
 
 /* ------------------------------------------------------------------------ */
