@@ -40438,3 +40438,67 @@ been measured and found either already minimal (network, 1 ms) or immovable
 its packetisation setting entirely). **What remains is ours**: ~60 ms in the
 `d-modem` <-> `slmodemd` hop (1217), of which 20 ms has already been recovered
 by halving the packet time (1218).
+
+======================================================================
+
+### 1220. THE ATA PLAYOUT CHANGE, MEASURED PROPERLY: 97% CONNECT AGAINST 73%, AND THE MODE MOVES 12000 -> 14400
+
+*Task #111's closing measurement. 30 calls at one fixed configuration against
+the 30-call control of 1208, one variable changed.*
+
+Everything the day tried that needed non-standard framing has been reverted:
+`d-modem` and `slmodemd` are back to their tracked sources, 20 ms RTP and 20 ms
+internally, which is what SIP uses and what every other box on the network
+offers. What remains changed from the control is the ATA's
+`playout-delay nominal` (80 -> 20, 1216) and Asterisk direct media (1219, worth
+zero milliseconds).
+
+| | control (playout 80) | this run (playout 20) |
+|---|---|---|
+| connected | 22 / 30 (73%) | **29 / 30 (97%)** |
+| data both ways | 14 of 22 | 19 of 29 |
+| our TX | 33600, all | 33600, all |
+| our RX median | 12000 | **14400** |
+| our RX mode | 12000, 12 calls | **14400, 16 calls** |
+| our RX range | 4800 - 26400 | 4800 - **33600** |
+
+**The connect rate is the surprise, and it was not predicted.** Nothing in the
+delay account says a shorter playout buffer should make calls *establish* more
+often. Two candidate explanations and no data separating them:
+
+- the ATA's 80 ms buffer was hurting the V.8/V.34 handshake, not just the rate
+- **the control is contaminated.** An orphaned `slmodemd` was registered to the
+  PBX as 4242 for six hours, including the whole of the control run. It was
+  found and killed after it. A duplicate registration is exactly the kind of
+  thing that costs an outbound call now and then.
+
+The second is at least as likely as the first, so **the 73% -> 97% figure should
+not be quoted as the ATA's doing** without re-running the control on a clean
+line. The rate distribution is unaffected by this: it is measured per call from
+each call's own logs.
+
+**The rate result stands on its own.** The mode moves one full step, 12000 to
+14400, and the top of the range moves from 26400 to 33600 -- the first 33600 in
+a batch rather than as a one-off.
+
+**Covariates, same discipline as 1208** (worst-case leave-one-out and a
+permutation p, and a covariate only counts if no single call carries it):
+
+| covariate | n | r | worst LOO | p | |
+|---|---|---|---|---|---|
+| **equaliser error, pre-CONNECT** | 29 | **-0.611** | **-0.585** | **0.0024** | **SURVIVES** |
+| equaliser error, post-CONNECT | 29 | -0.496 | -0.447 | 0.019 | no |
+| seconds dial to CONNECT | 29 | +0.586 | +0.461 | 0.0044 | no |
+| echo return loss | 29 | -0.060 | -0.002 | 0.75 | no |
+| signal-to-echo | 29 | -0.012 | -0.004 | 0.95 | no |
+| echo lag | 29 | +0.136 | -0.004 | 0.44 | no |
+
+`equerr_pre` survives a third time, on a third independent sample. The echo
+still explains nothing, which is now three batches saying so.
+
+**Two calls the threshold table of 1210 cannot explain.** `final-28` measured
+`equerr` 80 -- index-14 territory, worth 33600 -- and connected at 7200.
+`final-10` measured 2360, comfortably inside the 14400 threshold of 2571, and
+connected at 4800. The same shape appeared once before (`equerr` 250 -> 4800).
+So the table predicts the bulk and something occasionally overrides it, and that
+something is not in any covariate measured here.
