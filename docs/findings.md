@@ -40889,3 +40889,210 @@ a map that can be asserted rather than annotated.
 The same two functions also pin the only arguments these constructors are ever
 given: `$0x140` — 320 taps — to both the precoder and the pre-filter, and to
 nothing else in the object.
+---
+
+### 1230. THE V90EQUALIZER CONSTRUCTOR NAMES TWENTY-ONE PAD WORDS, AND THE ARGUMENT MAP CHECKS ITSELF
+
+*Task: the V.90 lifecycle batch.  `V90EqualizerC1/C2` (732 B) and `D1/D2`
+(541 B), both landed with a differential test.*
+
+The constructor takes eleven arguments and stores seven of them:
+
+| argument | type | offset |
+|---|---|---|
+| 3 | `V90Phase3Demodulator *` | +0x48 |
+| 4 | `V90Phase4Demodulator *` | +0x4c |
+| 5 | `V90Demapper *` | +0x50 |
+| 6 | `V90ConnectionEvaluator *` | +0x54 |
+| 7 | `V90SpectralVerifier *` | +0x58 |
+| 8 | `V90Parameters *` | +0xa8 |
+| 9 | `V90Resampler *` | +0x00 |
+| 10 | `V90PreFilter *` | +0x5c |
+
+**Two of those eight were already typed, from other functions.** `+0xa8` is
+`params`, named by `reset`'s four copies out of the parameter block; `+0x00`
+is `resampler`, named by `enterChannelVerification` handing it to
+`V90Resampler::setBllState`. The constructor reaches both by the same route
+and agrees with both. That agreement is what makes the *other* six evidence
+rather than an ordering guess: the argument list is not in offset order --
+argument 9 lands at +0x00 and argument 8 at +0xa8 -- so a mapping that had
+slipped by one would have put a demodulator where the resampler provably is.
+
+Twenty-one words the header called `pad_*` are now named: the six above,
+`block_98` (a 0x4b0 block, the one allocation `reset` cannot see and the
+reason it was pad), `block_b4`/`block_b8` (0x400 and 0x200, taken only under
+`mmxArraysPresent`), and the twelve of finding 1231.
+
+**The two length arguments are masked, not scaled.** `shr $2` then a scale by
+four is `& ~3u` spelled so the quotient can be reused as the allocation's
+scale, and it is a LOGICAL shift -- which says the same thing about the
+arguments' signedness that the mangling's two `j`s already said.
+**Fewer than four taps allocates nothing and `reset` writes to it anyway**:
+the mask gives zero, `sysdep_malloc(0)` succeeds, and `reset`'s unsigned
+clamp does not fire on a zero length, so `linearEquCoefs[0] = 1.0f` lands in
+a zero-length block. Driven by the constructor sweep, not hypothetical.
+docs/deviations.md D179.
+
+`word_1c` is different: it is `2 * (LINEAR_EQU_HISTORY_LENGTH / 2)` with a
+SIGNED divide (`shr $31; add; sar $1`), so that parameter is an `int` and a
+negative one makes the length negative and the allocation enormous. See
+docs/deviations.md D175.
+
+**The constructor ends in a tail call to `reset(linearEquLength / 2)`**, which
+is why every field it does not itself write is nevertheless initialised, and
+why the allocations are all EXACTLY the size `reset` then clears -- including
+the `+ 8` the fixed-point arrays carry.
+
+### 1231. THE EQUALISER'S SIX FIXED-POINT ARRAYS ARE THREE SLOTS EACH, AND ONLY THE FIRST OF THE THREE MAY BE FREED
+
+Each of the six `sysdep_malloc`s under `mmxArraysPresent` is followed by
+
+    lea 0x7(%p),%d ; and $0xfffffff8,%d ; sub %p,%d ; shr $1,%d
+    lea (%p,%d,2),%a
+
+which is `skew = (align8(raw) - raw) / 2` and `aligned = raw + 2 * skew`, and
+the object keeps all three:
+
+| raw | aligned | skew |
+|---|---|---|
+| +0xd4 | +0xdc | +0xe4 |
+| +0xd8 | +0xe0 | +0xe8 |
+| +0xec | +0xf0 | +0xf4 |
+| +0x114 | +0x11c | +0x124 |
+| +0x118 | +0x120 | +0x128 |
+| +0x12c | +0x130 | +0x134 |
+
+**The division by two is a type declaration.** A byte distance halved to give
+an element count says the elements are two bytes wide -- the same thing
+`reset`'s `movw` stride says, from the other end, and it is why the header can
+call these `short *` without a single load's width being read.
+
+**The destructor frees the six RAW pointers and not the six aligned ones**,
+which is the only thing it could do: an aligned pointer is up to six bytes
+into a block `sysdep_free` was never given. The eight bytes of headroom the
+`+ 8` gives every one of these arrays is what makes the skew safe.
+
+**AND THE ARITHMETIC IS NOT OBSERVABLE HERE, WHICH IS WORTH SAYING PLAINLY.**
+glibc's malloc on i386 aligns to 8 (`MALLOC_ALIGNMENT = 2 * SIZE_SZ`), so
+`align8(p) == p` for every pointer this constructor can be given: all six
+skews are 0, all six aligned pointers equal their raw one, and a mutation that
+drops the `shr $1` entirely survives the whole sweep. It is recorded in
+`test/mutations/v90equ.json` as an equivalent mutant with that argument, not
+as a gap. The evidence that the shift is there is the blob's `d1 ea` and
+nothing else -- which is exactly the case where transcribing rather than
+simplifying earns its keep, because the modem's own allocator is not glibc's
+and nothing here says it aligns to 8.
+
+### 1232. THE EQUALISER'S FIXED-POINT MODE IS DECIDED BY THE HOST'S PARAMETER BLOCK, AND THE TWO ARMS DO NOT AGREE
+
+`mmxArraysPresent` is set by three things, not one:
+
+    if (params->ENABLE_EQUALIZER_MMX)
+        if (mode == 1)  { if (hw != 2) present = 1; }
+        else            { if (hw == 1) present = 1; }
+
+where `hw` is `params->modemParams->unnamed_005c` -- +0x5c of the HOST's
+`_tagModemParameters`, reached through the pointer at `V90Parameters` +0x00.
+So a field of the block slmodemd fills in decides whether 1,536 bytes of
+fixed-point workspace plus six aligned arrays exist at all.
+
+**The asymmetry is in the object.** Mode 1 accepts every value of `hw` except
+2; every other mode accepts only 1. GCC cross-jumps the two arms -- the `je`
+at 0x3b774 lands in the middle of the other arm's comparison at 0x3b932 --
+which is what makes the disassembly read as one tangled condition and is
+exactly the shape two separate arms produce.
+
+`mmxArraysPresent` is NOT `mmxMode`: `reset`, called from the end of this same
+constructor, zeroes `mmxMode` and leaves this field alone. The object can
+therefore hold the arrays and not be using them, which is the state it is
+handed back in.
+
+### 1233. V90PREFILTER'S CONSTRUCTOR: THE REGISTRY DECIDES, THE ARGUMENT IS ONLY THE FALLBACK, AND THE RANGE CHECK IS ONE SHORT
+
+552 bytes, and its shape is:
+
+1. `FloatFIR(40, NULL, 99)` -- the filter is built with no coefficients at
+   all, forty taps and ninety-nine samples of block slack.
+   `test/harness/v90demfix.h` had already written those two numbers down as
+   `FIR_TAPS` and `FIR_SLACK`, from the other side; they agree.
+2. `phase2` and `params` are stored.
+3. **If `params->HW_CODEC_TYPE` is NEGATIVE** the constructor's own
+   `__tHardwareCodecTypes__` argument is used; otherwise the registry's value
+   goes through a SIXTEEN-ARM SWITCH whose arms store 0 through 15 and whose
+   default stores 0.
+4. The index is checked against `dataBase`, and rejected with the "External
+   Hardware Codec Index exceeds table length" banner if it is too large.
+5. `reset()` -- the FIR's own reset, `refLoop = -1`, `gain = 0`, and the first
+   row of `preFilterCoefType1` at twenty taps.
+
+**The switch is not a range test, and the jump table is the evidence.**
+.rodata+0xd8c is sixteen `R_386_32 .text` entries, one per arm, each storing
+its own constant. A `(unsigned)v <= 15 ? v : 0` would have been a compare and
+a conditional move. The case labels are VALUES; what the enumeration calls
+them is not in the object.
+
+**The check in step 4 is one short.** `dataBase` is walked to its first empty
+name and the count is DECREMENTED before the comparison, so the last named
+entry of the table is unreachable through the argument path -- and the message
+prints the decremented number as "table length". docs/deviations.md D176.
+
+**And it is bounded from above only.** Nothing puts a floor under
+`codecType`, so a negative constructor argument -- which is what the
+negative-registry path passes through unexamined -- is stored intact, and
+`isV90WithEia6`, `autoSelection` and `selectFilter` all index `dataBase` with
+it and no gate. docs/deviations.md D178.
+
+**These diagnostics are plain, not encoded.** The constructor calls
+`dsplibs_debug_printf` directly under its own `dsplibs_debug_level > 1` test,
+four separate times, rather than going through `edprintf` as the rest of this
+class does. So it neither encodes its output nor moves `edprintf`'s rotating
+key -- which matters, because that key is shared state and encode.h's own
+comment says a caller that mixes the two gets different characters out.
+
+### 1234. A CONSTRUCTOR THAT ALLOCATES CAN BE MADE DIFFERENTIAL WITHOUT TOUCHING THE ALLOCATOR
+
+The problem the V.90 lifecycle batch had to solve: `V90Equalizer`'s
+constructor takes fifteen `sysdep_malloc`s, the two sides allocate separately,
+and fifteen pointer words plus twelve words derived from six of them therefore
+hold different values for ever. `diff_eq_obj` on the object fails on a correct
+run.
+
+The tempting fix -- a deterministic arena inside `test/harness/runtime.c`, so
+both sides get identical addresses -- was NOT taken. It buys byte-identical
+pointers at the cost of a change to the one file every test includes. What
+was done instead, and what it costs:
+
+- **the object**, with those words blanked (t_resampler's `cmp_obj` idiom) --
+  and with the twelve derived words blanked ONLY when the arrays exist, so in
+  the other half of the sweep they are compared and prove the constructor did
+  not write them;
+- **every block's CONTENTS**, paired by the field that points at it, over the
+  length the object's own lengths imply. This is what compares `reset`'s work
+  inside buffers that are not the same buffers;
+- **every block's SIZE**, from `malloc_usable_size`, per field;
+- **the allocation COUNT and the exact BYTES ASKED FOR**, as deltas of
+  `harness_alloc` round each side's call. `bytes` is cumulative and never
+  decremented, so the delta is the sum of that side's requested sizes -- the
+  only check that can see an allocation of the wrong size whose contents
+  happen to agree;
+- **the skew/aligned relation, on each side against its OWN pointer.**
+  `aligned == raw + 2 * skew` and `skew == (align8(raw) - raw) / 2` are
+  statements two different addresses can both satisfy.
+
+**The destructor is tested one slot at a time.** All fifteen pointers are
+NULLed except the one under test, which gets a real block on each side; the
+number of frees then names the slot, because only one slot can produce one.
+Run over all fifteen slots and both settings of `mmxArraysPresent`, that
+distinguishes "freed the right seven" from "freed seven things" -- which a
+total cannot. `free_null` staying at zero is what tests the null guards, and
+comparing each side against its OWN pre-call bytes is what tests that the
+destructor does not clear the pointers (it does not).
+
+**And one thing this cost.** `debugaudit.py --invented` blanks lines starting
+with `#` and joins literals separated only by whitespace, so two multi-line
+`#define` string macros in a row arrive as one concatenated string and fail
+the `strings` gate, while a macro whose literal is SPLIT across continuation
+lines is never rejoined and each half is audited as a truncated string. A
+string macro therefore has to be ONE literal on ONE line with code before it.
+The gate caught this; `make phase` at the time did not, because the batch had
+only built its own test target.

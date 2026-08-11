@@ -134,14 +134,30 @@ public:
 	void displayParamEia6();
 
 	/*
-	 * Declared, not defined.  The signatures are the mangling's, so this
-	 * is a specification and not a guess; return types are not mangled and
-	 * are therefore unknown for all of them.
+	 * Written -- the lifecycle batch, finding 1233.  The constructor's
+	 * signature is the mangling's, so it is a specification and not a
+	 * guess; a return type is never mangled, and both of these have none
+	 * to recover.
+	 *
+	 * The constructor is what makes `fir` a MEMBER rather than a base as
+	 * far as this reconstruction is concerned: it is initialised in the
+	 * member initialiser list with (40, NULL, 99), which is what the blob
+	 * does first and with `this` unadjusted.  Nothing in the object
+	 * distinguishes the two spellings; the file comment above says why
+	 * this one is chosen.
 	 */
 	V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 		     V90Parameters *params);
 	~V90PreFilter();
+
+	/* Written -- batch 3. */
 	void reset();
+
+	/*
+	 * Declared, not defined.  The signatures are the mangling's, so this
+	 * is a specification and not a guess; return types are not mangled and
+	 * are therefore unknown for all of them.
+	 */
 	void setFilter(unsigned int gain);
 	void setFilter(PreFilterCoefType type, unsigned int gain);
 	void getFilterPointer(unsigned int gain);

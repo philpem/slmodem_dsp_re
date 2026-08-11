@@ -1,14 +1,52 @@
 [
- {"label": "L2 read from the object itself, not through the pointer",
+ {
+  "label": "L2 read from the object itself, not through the pointer",
   "find": "\tconst float *measured = phase2->L2;",
-  "replace": "\tconst float *measured = (const float *)phase2;"},
- {"label": "the reference level is entry 15, not 14",
+  "replace": "\tconst float *measured = (const float *)phase2;"
+ },
+ {
+  "label": "the reference level is entry 15, not 14",
   "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
-  "replace": "\t\ttarget[i] = measured[0x3c / 4] - measured[0x3c / 4 + i];"},
- {"label": "the signature starts one entry later",
+  "replace": "\t\ttarget[i] = measured[0x3c / 4] - measured[0x3c / 4 + i];"
+ },
+ {
+  "label": "the signature starts one entry later",
   "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
-  "replace": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x40 / 4 + i];"},
- {"label": "the difference is the other way round",
+  "replace": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x40 / 4 + i];"
+ },
+ {
+  "label": "the difference is the other way round",
   "find": "\t\ttarget[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];",
-  "replace": "\t\ttarget[i] = measured[0x3c / 4 + i] - measured[0x38 / 4];"}
+  "replace": "\t\ttarget[i] = measured[0x3c / 4 + i] - measured[0x38 / 4];"
+ },
+ {
+  "label": "the registry's codec type is rejected at zero as well as below it",
+  "find": "\tif (params->w[0x008 / 4] < 0) {",
+  "replace": "\tif (params->w[0x008 / 4] <= 0) {"
+ },
+ {
+  "label": "the table's length is not decremented before the range check",
+  "find": "\tfor (n = 0; dataBase[n].name[0] != 0; n++)\n\t\t;\n\tn--;",
+  "replace": "\tfor (n = 0; dataBase[n].name[0] != 0; n++)\n\t\t;"
+ },
+ {
+  "label": "the FIR is built with one more sample of block slack",
+  "find": "\t: fir(0x28, (float *)0, 0x63)",
+  "replace": "\t: fir(0x28, (float *)0, 0x64)"
+ },
+ {
+  "label": "the out-of-range banner is printed at any debug level",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(BUGBAR);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90PreFilter: External Hardware\"",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(BUGBAR);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90PreFilter: External Hardware\""
+ },
+ {
+  "label": "an out-of-range index is left alone rather than reset to zero",
+  "find": "\t\tcodecType = 0;\n\t}\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90PreFilter: HardwareCodecType: %s\\r\\n\",",
+  "replace": "\t\t(void)0;\n\t}\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90PreFilter: HardwareCodecType: %s\\r\\n\","
+ },
+ {
+  "label": "the switch's default keeps the value instead of falling back to zero",
+  "find": "\t\tdefault:\tcodecType = 0;\tbreak;",
+  "replace": "\t\tdefault:\tcodecType = params->w[0x008 / 4];\tbreak;"
+ }
 ]

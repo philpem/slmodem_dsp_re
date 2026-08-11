@@ -30,11 +30,19 @@
  * and the V90Jd 0x8c -> 144 worked example in docs/v90cpp.md); a
  * displacement scan over one class is not a bound either.  Finding 1107.
  *
- * ONLY THE FIELDS THE THREE WRITTEN METHODS TOUCH ARE NAMED.  Everything else
- * is `pad_*`, because a field this batch cannot see written is a field this
+ * ONLY THE FIELDS THE WRITTEN METHODS TOUCH ARE NAMED.  Everything else is
+ * `pad_*`, because a field this batch cannot see written is a field this
  * batch cannot claim (findings 223, 224 -- the harness fill makes untouched
  * memory compare equal on both sides, so a passing test says nothing about
  * where an untouched field lives).
+ *
+ * THE CONSTRUCTOR NAMED TWENTY-ONE MORE OF THEM (finding 1230).  It is the
+ * one member that touches every allocation the object owns, so six argument
+ * pointers, three fixed-size blocks and the twelve words of the six
+ * raw/aligned/skew triples came out of it -- `pad_48`, `pad_98`, `pad_b4`,
+ * `pad_dc`, `pad_11c` and most of `pad_f0` and `pad_130` are gone.  Nothing
+ * else moved; the offsets the earlier batches asserted are unchanged and the
+ * .cpp still asserts every one of them.
  *
  * THE MEMBER NAMES ARE THE AUTHOR'S; THE FIELD NAMES ARE NOT.  C++ mangling
  * preserves method names and signatures, so `setLinearEquBeta(float)` and
@@ -56,6 +64,35 @@
  */
 class V90Parameters;
 class V90Resampler;
+
+/*
+ * The constructor's other six object arguments, which it does nothing with
+ * except store.  Forward declarations only, for the same reason: the class
+ * holds a pointer to each and dereferences none of them.
+ */
+class V90Phase3Demodulator;
+class V90Phase4Demodulator;
+class V90Demapper;
+class V90ConnectionEvaluator;
+class V90SpectralVerifier;
+class V90PreFilter;
+
+/*
+ * The constructor's last argument.  The name is the mangling's
+ * (`20V90ComputationalMode`); the enumerators are not recoverable, so this is
+ * an opaque enumeration with a fixed underlying type, the way
+ * `V90PreFilter.h` spells `__tHardwareCodecTypes__`.  Only one of its values
+ * is distinguished in this class:
+ *
+ *      3b767:  4f              dec    %edi
+ *      3b768:  0f 84 c2 01 ..  je     3b930
+ *
+ * so the constructor asks "is the mode 1?" and nothing else.  What 1 is
+ * called is not established here.
+ */
+enum V90ComputationalMode : int;
+
+#define V90EQU_COMP_MODE_1	1
 
 /*
  * The values `state` (+0x60) takes.  Each of the four `enter*` methods opens
@@ -95,6 +132,35 @@ public:
 	 */
 	void reset(unsigned int cursor);
 	void enterChannelVerification();
+
+	/*
+	 * The lifecycle pair.  The constructor's signature is the mangling's,
+	 * argument for argument:
+	 *
+	 *   _ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodul\
+	 *   atorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifie\
+	 *   rP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computationa\
+	 *   lMode
+	 *
+	 * and the two `j`s are unsigned because the mangling says so; the
+	 * object treats both the same way, masking each to a multiple of four
+	 * with `shr $2` followed by a scale, which is the LOGICAL shift.
+	 *
+	 * ALL ELEVEN ARGUMENTS ARE ACCOUNTED FOR AND SEVEN OF THEM NAME A
+	 * FIELD.  The eighth (`V90Parameters *`) lands at +0xa8 and the ninth
+	 * (`V90Resampler *`) at +0x00 -- two slots this header had already
+	 * typed from `reset` and `enterChannelVerification`, which are other
+	 * functions entirely.  That agreement is what makes the argument-to-
+	 * offset mapping evidence rather than an ordering guess, and it is
+	 * what licenses naming +0x48 .. +0x5c from the argument types.
+	 */
+	V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
+		     V90Phase3Demodulator *p3d, V90Phase4Demodulator *p4d,
+		     V90Demapper *dem, V90ConnectionEvaluator *ce,
+		     V90SpectralVerifier *sv, V90Parameters *parms,
+		     V90Resampler *rs, V90PreFilter *pf,
+		     V90ComputationalMode mode);
+	~V90Equalizer();
 
 	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
@@ -209,7 +275,19 @@ public:
 	float *dfeCoefs;		/* +0x40 */
 	float *array_44;		/* +0x44 */
 
-	unsigned char pad_48[0x18];	/* +0x48 */
+	/*
+	 * +0x48 .. +0x5c  THE CONSTRUCTOR'S THIRD TO SEVENTH AND TENTH
+	 * ARGUMENTS, in the order it is given them and stored nowhere else.
+	 * Nothing in the class dereferences any of the six; they are held for
+	 * members this batch does not write.  Not owned -- the destructor
+	 * frees fifteen pointers and none of these is among them.
+	 */
+	V90Phase3Demodulator *phase3Demod;	/* +0x48 */
+	V90Phase4Demodulator *phase4Demod;	/* +0x4c */
+	V90Demapper *demapper;			/* +0x50 */
+	V90ConnectionEvaluator *connEval;	/* +0x54 */
+	V90SpectralVerifier *spectralVerifier;	/* +0x58 */
+	V90PreFilter *preFilter;		/* +0x5c */
 
 	int state;			/* +0x60 see V90EQU_STATE_* above */
 
@@ -249,7 +327,17 @@ public:
 	float errorEnergyMeanK;		/* +0x90 */
 
 	unsigned int word_94;		/* +0x94 */
-	unsigned char pad_98[4];	/* +0x98 reset does not reach it  */
+
+	/*
+	 * +0x98  A 1,200-BYTE BLOCK, AND THE ONLY ONE THE CONSTRUCTOR TAKES
+	 * UNCONDITIONALLY.  `movl $0x4b0,(%esp); call sysdep_malloc` is the
+	 * last thing it does before handing over to `reset`, and the
+	 * destructor frees it under a null test like all the others.  This
+	 * header used to call it `pad_98` and say "reset does not reach it",
+	 * which was true and is why the allocation could only be seen from
+	 * the constructor.  What 1,200 bytes hold is still not established.
+	 */
+	void *block_98;			/* +0x98 */
 	unsigned int word_9c;		/* +0x9c */
 	unsigned int word_a0;		/* +0xa0 */
 	unsigned int word_a4;		/* +0xa4 */
@@ -280,7 +368,15 @@ public:
 	 */
 	int mmxMode;			/* +0xb0 */
 
-	unsigned char pad_b4[0x8];	/* +0xb4 */
+	/*
+	 * +0xb4, +0xb8  Two fixed-size blocks the constructor takes only when
+	 * `mmxArraysPresent` came out set, 0x400 and 0x200 bytes, allocated in
+	 * that order (+0xb8 first).  The destructor frees both under the same
+	 * flag.  Neither has a size that depends on any length in the object,
+	 * and nothing this batch writes reads either of them.
+	 */
+	void *block_b4;			/* +0xb4  0x400 bytes */
+	void *block_b8;			/* +0xb8  0x200 bytes */
 
 	/*
 	 * The four slots the linear equaliser's fixed-point step size is built
@@ -302,15 +398,35 @@ public:
 	 * two-byte store with a two-byte stride, which is what says 16-bit.
 	 * Cleared only when `mmxArraysPresent` is set.
 	 */
-	short *linearEquMmxCoefs;	/* +0xd4 */
-	short *array_d8;		/* +0xd8 */
+	/*
+	 * EACH FIXED-POINT ARRAY IS THREE SLOTS, NOT ONE.  The constructor
+	 * follows every one of the six `sysdep_malloc`s below with
+	 *
+	 *      lea    0x7(%p),%d ; and $0xfffffff8,%d ; sub %p,%d ; shr $1,%d
+	 *      lea    (%p,%d,2),%a
+	 *
+	 * which is `skew = (align8(p) - p) / 2` and `aligned = p + 2 * skew`:
+	 * the raw pointer kept for `sysdep_free`, the count of SHORTS that
+	 * have to be stepped over to reach an eight-byte boundary, and the
+	 * aligned pointer itself.  The division by two is what says the arrays
+	 * are 16-bit -- the same thing `reset`'s `movw` stride says -- and the
+	 * eight-byte target is what an MMX load wants.  Only the raw pointer
+	 * is freed; the other two are interior and are never passed anywhere.
+	 */
+	short *linearEquMmxCoefs;	/* +0xd4 raw    */
+	short *array_d8;		/* +0xd8 raw    */
 
-	unsigned char pad_dc[0x10];	/* +0xdc */
+	short *linearEquMmxCoefsAligned;	/* +0xdc */
+	short *array_d8Aligned;			/* +0xe0 */
+	unsigned int linearEquMmxCoefsSkew;	/* +0xe4 */
+	unsigned int array_d8Skew;		/* +0xe8 */
 
 	/* +0xec  `word_1c + 8` shorts, cleared under the same condition. */
-	short *array_ec;		/* +0xec */
+	short *array_ec;		/* +0xec raw    */
+	short *array_ecAligned;		/* +0xf0 */
+	unsigned int array_ecSkew;	/* +0xf4 */
 
-	unsigned char pad_f0[0xc];	/* +0xf0 */
+	unsigned char pad_f8[0x4];	/* +0xf8 */
 
 	/* The same four for the decision-feedback filter, +0x40 further on. */
 	float dfeMmxRefLevel;		/* +0xfc */
@@ -324,14 +440,20 @@ public:
 	 * +0x114, +0x118, +0x12c  The decision-feedback half's fixed-point
 	 * arrays, `dfeLength + 8` shorts each, all three cleared in one loop.
 	 */
-	short *dfeMmxCoefs;		/* +0x114 */
-	short *array_118;		/* +0x118 */
+	short *dfeMmxCoefs;		/* +0x114 raw   */
+	short *array_118;		/* +0x118 raw   */
 
-	unsigned char pad_11c[0x10];	/* +0x11c */
+	/* The same three-slot shape as +0xd4; see the note there. */
+	short *dfeMmxCoefsAligned;	/* +0x11c */
+	short *array_118Aligned;	/* +0x120 */
+	unsigned int dfeMmxCoefsSkew;	/* +0x124 */
+	unsigned int array_118Skew;	/* +0x128 */
 
-	short *array_12c;		/* +0x12c */
+	short *array_12c;		/* +0x12c raw   */
+	short *array_12cAligned;	/* +0x130 */
+	unsigned int array_12cSkew;	/* +0x134 */
 
-	unsigned char pad_130[0xc];	/* +0x130 */
+	unsigned char pad_138[0x4];	/* +0x138 */
 
 	unsigned int word_13c;		/* +0x13c zeroed by reset         */
 	unsigned int word_140;		/* +0x140 zeroed by reset         */

@@ -1,5 +1,6 @@
 /*
- * t_v90prefilter.cpp -- differential test of V90PreFilter's five members.
+ * t_v90prefilter.cpp -- differential test of V90PreFilter's five members,
+ * plus `reset` and the constructor and destructor (finding 1233).
  *
  * FOUR BLOCKS OF MEMORY PER SIDE, not one.  The object holds pointers to a
  * V90Parameters and a V90Phase2Info, the Phase 2 block points at the
@@ -31,6 +32,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/V90PreFilter.h"
 
 extern "C" {
@@ -1001,11 +1003,355 @@ run_reset(void)
 	return diff_end();
 }
 
+/* ================================================================ lifecycle */
+
+/*
+ * THE CONSTRUCTOR AND THE DESTRUCTOR, DRIVEN BY SYMBOL.
+ *
+ * C++ HAS NO SYNTAX FOR RUNNING A CONSTRUCTOR OVER STORAGE THAT ALREADY
+ * EXISTS.  `P(0) = V90PreFilter(...)` would construct a temporary over
+ * uninitialised stack and copy it in, which destroys the one property the
+ * fixture depends on -- that the object is SEEDED and never zeroed, so a slot
+ * the constructor does not write is visibly the seed rather than a plausible
+ * zero (findings 223, 224).  So both sides are called through asm() labels,
+ * and BOTH the C1 and the C2 variant are driven: the blob has them as two
+ * identical copies at different addresses and our compiler emits one function
+ * under both names, so a test that drove only one would leave half the pair
+ * unexercised.  Same for D1 and D2.
+ *
+ * WHAT THE ALLOCATOR SEES IS PART OF THE ANSWER.  The FIR inside the object
+ * takes one `sysdep_malloc` and the destructor gives it back; neither is
+ * visible in any field, because the two sides' history pointers hold
+ * different addresses and `snapshot` has always reduced that field to
+ * null/not-null.  So the allocation COUNT and the exact number of BYTES
+ * REQUESTED are compared between the sides as well, and the pair is required
+ * to balance.  A constructor that took the wrong buffer size would pass every
+ * field comparison in this file and fail here.
+ */
+
+extern "C" {
+void pf_ctor1(void *self, int codec, void *info, void *parms)
+	asm("_ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2Info"
+	    "P13V90Parameters");
+void pf_ctor2(void *self, int codec, void *info, void *parms)
+	asm("_ZN12V90PreFilterC2E23__tHardwareCodecTypes__P13V90Phase2Info"
+	    "P13V90Parameters");
+void ref_pf_ctor1(void *self, int codec, void *info, void *parms)
+	asm("ref__ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2Info"
+	    "P13V90Parameters");
+void ref_pf_ctor2(void *self, int codec, void *info, void *parms)
+	asm("ref__ZN12V90PreFilterC2E23__tHardwareCodecTypes__P13V90Phase2Info"
+	    "P13V90Parameters");
+
+void pf_dtor1(void *self) asm("_ZN12V90PreFilterD1Ev");
+void pf_dtor2(void *self) asm("_ZN12V90PreFilterD2Ev");
+void ref_pf_dtor1(void *self) asm("ref__ZN12V90PreFilterD1Ev");
+void ref_pf_dtor2(void *self) asm("ref__ZN12V90PreFilterD2Ev");
+
+extern unsigned int ref_dsplibs_debug_level;
+
+void *sysdep_malloc(unsigned int size);
+void sysdep_free(void *mem);
+}
+
+/*
+ * The last index the constructor's range check will accept: `dataBase` is
+ * walked to its first empty name and ONE IS SUBTRACTED, so the last entry of
+ * the table cannot be selected through the argument.  Computed here rather
+ * than written down, because the expectation has to follow the table.
+ */
+static int
+last_codec(void)
+{
+	int n = 0;
+
+	while (V90PreFilter::dataBase[n].name[0] != '\0')
+		n++;
+	return n - 1;
+}
+
+/* What the constructor must leave in `codecType`, from its two inputs. */
+static int
+expected_codec(int hw, int codec)
+{
+	int c;
+
+	if (hw < 0)
+		c = codec;
+	else
+		c = (hw >= 0 && hw <= 15) ? hw : 0;
+
+	if (c > last_codec())
+		c = 0;
+	return c;
+}
+
+/*
+ * The fill and the wiring `setup` does, WITHOUT the FloatFIR constructor and
+ * without the five field stores: the object's own constructor is what is
+ * under test and it does both itself.  The object slot keeps its seed.
+ */
+static void
+setup_bare(int trial, int mode)
+{
+	int side;
+
+	lfsr_state = 0x71c3u + 0x9e37u * (unsigned)trial;
+	fill(slot[0], slot[1], SLOT, mode);
+	fill(parm[0], parm[1], PARMSLOT, mode);
+	fill(ph2[0], ph2[1], PH2SLOT, mode);
+	fill(meas[0], meas[1], MEASSLOT, mode);
+	fill(blk[0], blk[1], BLKSLOT, mode);
+
+	for (side = 0; side < 2; side++) {
+		P2(side)->L2 = (float *)meas[side];
+		*(void **)&parm[side][0] = blk[side];
+	}
+}
+
+static int
+run_ctor(void)
+{
+	/*
+	 * The registry's codec type.  Negative means "not configured" and
+	 * hands the decision to the argument; 0 .. 15 are the switch's arms;
+	 * 16 and up take its default.
+	 */
+	static const int hw_v[] = {
+		-1, -3, (int)0x80000000, 0, 1, 7, 15, 16, 99, 0x7fffffff
+	};
+	static const int codec_v[] = { 0, 3, 15, 16, 40 };
+	int hi, ci, mode, lvl;
+	long trial = 900000;
+	int saw_arg = 0, saw_switch = 0, saw_default = 0;
+	int saw_over = 0, saw_inrange = 0;
+
+	diff_begin("V90PreFilter::V90PreFilter");
+
+	dsplib_debug_capture_on = 1;
+
+	for (hi = 0; hi < (int)(sizeof(hw_v) / sizeof(hw_v[0])); hi++)
+	    for (ci = 0; ci < (int)(sizeof(codec_v) / sizeof(codec_v[0])); ci++)
+		for (mode = 0; mode < 4; mode++)
+		    for (lvl = 0; lvl < 2; lvl++) {
+			struct alloc_log a0, a1, a2, a3, a4;
+			int codec = codec_v[ci];
+			int hw = hw_v[hi];
+
+			trial++;
+
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+			    lvl ? 2u : 0u;
+
+			setup_bare((int)trial, mode);
+			set_int(0x08, hw);
+			dsplib_debug_capture_reset();
+
+			a0 = harness_alloc;
+			if (trial & 1)
+				pf_ctor1(slot[0], codec, ph2[0], parm[0]);
+			else
+				pf_ctor2(slot[0], codec, ph2[0], parm[0]);
+			a1 = harness_alloc;
+			if (trial & 1)
+				ref_pf_ctor1(slot[1], codec, ph2[1], parm[1]);
+			else
+				ref_pf_ctor2(slot[1], codec, ph2[1], parm[1]);
+			a2 = harness_alloc;
+
+			compare("after the constructor", (int)trial);
+
+			diff_eq_int("allocations (%ld)",
+				    a1.allocs - a0.allocs,
+				    a2.allocs - a1.allocs, trial);
+			diff_eq_int("bytes asked for (%ld)",
+				    (long)(a1.bytes - a0.bytes),
+				    (long)(a2.bytes - a1.bytes), trial);
+			diff_eq_int("one allocation, the FIR's (%ld)",
+				    a1.allocs - a0.allocs, 1, trial);
+			diff_eq_int("and it is (taps + slack) floats (%ld)",
+				    (long)(a1.bytes - a0.bytes),
+				    (long)(FIR_BUF * sizeof(float)), trial);
+
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, trial);
+			diff_eq_int("the level gates the transcript (%ld)",
+				    dsplib_debug_capture_lines(0) != 0,
+				    lvl ? 1 : 0, trial);
+
+			/*
+			 * The state the constructor is required to leave,
+			 * asserted and not only compared: two never-touched
+			 * objects would agree with each other.
+			 */
+			diff_eq_int("gain (%ld)", P(1)->gain, 0, trial);
+			diff_eq_int("refLoop (%ld)", P(1)->refLoop, -1, trial);
+			diff_eq_int("taps (%ld)", (long)P(1)->fir.taps, 20,
+				    trial);
+			diff_eq_int("bufferLength (%ld)",
+				    (long)P(1)->fir.bufferLength, FIR_BUF,
+				    trial);
+			diff_eq_int("phase2 (%ld)",
+				    P(1)->phase2 == P2(1), 1, trial);
+			diff_eq_int("params (%ld)",
+				    (void *)P(1)->params ==
+				    (void *)parm[1], 1, trial);
+			diff_eq_int("coefficients are bank 1 row 0 (%ld)",
+				    P(0)->fir.coefficients ==
+				    &V90PreFilter::preFilterCoefType1[0][0],
+				    1, trial);
+			diff_eq_int("and the blob's are its own (%ld)",
+				    P(1)->fir.coefficients == &ref_coef1[0][0],
+				    1, trial);
+
+			diff_eq_int("codecType (%ld)", P(1)->codecType,
+				    expected_codec(hw, codec), trial);
+			diff_eq_int("and ours agrees (%ld)", P(0)->codecType,
+				    expected_codec(hw, codec), trial);
+
+			if (hw < 0) {
+				saw_arg = 1;
+				if (codec > last_codec())
+					saw_over = 1;
+				else
+					saw_inrange = 1;
+			} else if (hw <= 15) {
+				saw_switch = 1;
+			} else {
+				saw_default = 1;
+			}
+
+			/* And the destructor gives the one block back. */
+			a3 = harness_alloc;
+			if (trial & 1)
+				pf_dtor1(slot[0]);
+			else
+				pf_dtor2(slot[0]);
+			a4 = harness_alloc;
+			if (trial & 1)
+				ref_pf_dtor1(slot[1]);
+			else
+				ref_pf_dtor2(slot[1]);
+
+			diff_eq_int("frees (%ld)", a4.frees - a3.frees,
+				    harness_alloc.frees - a4.frees, trial);
+			diff_eq_int("the pair balances (%ld)",
+				    harness_alloc.frees - a3.frees,
+				    a2.allocs - a0.allocs, trial);
+			diff_eq_int("nothing wild was freed (%ld)",
+				    harness_alloc.bad_free - a3.bad_free, 0,
+				    trial);
+			diff_eq_int("live back to where it started (%ld)",
+				    harness_alloc.live, a0.live, trial);
+
+			/*
+			 * The destructor changes NOTHING in the object -- it
+			 * does not clear the pointer it just freed -- so the
+			 * two sides still agree, and `fir.history` is still
+			 * not null on either.
+			 */
+			diff_eq_int("the destructor left the object alone "
+				    "(%ld)",
+				    P(0)->fir.history != 0 &&
+				    P(1)->fir.history != 0, 1, trial);
+		    }
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the argument was used", saw_arg, 1, 0);
+	diff_eq_int("the switch was used", saw_switch, 1, 0);
+	diff_eq_int("the switch's default was used", saw_default, 1, 0);
+	diff_eq_int("an index past the table was seen", saw_over, 1, 0);
+	diff_eq_int("an index inside it was seen", saw_inrange, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * The destructor on its own, with the FIR's history pointer chosen rather
+ * than allocated: null on one arm and a real block on the other, so the null
+ * test inside `FloatFIR::~FloatFIR` is exercised in both directions and a
+ * missing guard shows up as `free_null` moving.
+ */
+static int
+run_dtor(void)
+{
+	int mode, null, which;
+	long trial = 950000;
+	int saw_freed = 0, saw_null = 0;
+
+	diff_begin("V90PreFilter::~V90PreFilter");
+
+	for (mode = 0; mode < 4; mode++)
+	    for (null = 0; null < 2; null++)
+		for (which = 0; which < 2; which++) {
+			struct alloc_log a0, a1, a2;
+			unsigned char before[SLOT];
+
+			trial++;
+			setup_bare((int)trial, mode);
+
+			P(0)->fir.history = P(1)->fir.history = 0;
+			if (!null) {
+				P(0)->fir.history =
+				    (float *)sysdep_malloc(FIR_BUF *
+							   sizeof(float));
+				P(1)->fir.history =
+				    (float *)sysdep_malloc(FIR_BUF *
+							   sizeof(float));
+			}
+			memcpy(before, slot[1], SLOT);
+
+			a0 = harness_alloc;
+			if (which)
+				pf_dtor1(slot[0]);
+			else
+				pf_dtor2(slot[0]);
+			a1 = harness_alloc;
+			if (which)
+				ref_pf_dtor1(slot[1]);
+			else
+				ref_pf_dtor2(slot[1]);
+			a2 = harness_alloc;
+
+			diff_eq_int("frees (%ld)", a1.frees - a0.frees,
+				    a2.frees - a1.frees, trial);
+			diff_eq_int("free(NULL) (%ld)",
+				    a1.free_null - a0.free_null,
+				    a2.free_null - a1.free_null, trial);
+			diff_eq_int("wild frees (%ld)",
+				    a1.bad_free - a0.bad_free,
+				    a2.bad_free - a1.bad_free, trial);
+			diff_eq_int("freed what it was given (%ld)",
+				    a1.frees - a0.frees, null ? 0 : 1, trial);
+			diff_eq_int("and never freed a null (%ld)",
+				    a2.free_null - a0.free_null, 0, trial);
+			diff_eq_int("the object is untouched (%ld)",
+				    memcmp(before, slot[1], SLOT) == 0, 1,
+				    trial);
+
+			if (null)
+				saw_null = 1;
+			else
+				saw_freed = 1;
+		}
+
+	diff_eq_int("a block was freed", saw_freed, 1, 0);
+	diff_eq_int("a null was skipped", saw_null, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 
+	rc |= run_ctor();
+	rc |= run_dtor();
 	rc |= run_reset();
 	rc |= run_display();
 	rc |= run_iseia6();

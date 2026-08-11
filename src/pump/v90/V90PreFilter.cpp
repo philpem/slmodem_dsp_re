@@ -1,10 +1,12 @@
 /*
  * V90PreFilter.cpp -- choosing the V.90 receive pre-filter.
  *
- * Reconstructed from dsplibs.o V90PreFilter.cpp.  Five of the class's
+ * Reconstructed from dsplibs.o V90PreFilter.cpp.  Eight of the class's
  * twenty-four members -- `selectFilter`, `setParamEia6`, `autoSelection`,
- * `isV90WithEia6` and `displayParamEia6`.  `include/dsplib/V90PreFilter.h`
- * carries the object map and the two table shapes.
+ * `isV90WithEia6` and `displayParamEia6` from batch 3, `reset`, and the
+ * constructor and destructor from the lifecycle batch (finding 1233).
+ * `include/dsplib/V90PreFilter.h` carries the object map and the two table
+ * shapes.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, `this` first on the stack
  * (finding 215).  `isV90WithEia6` is `const` and the mangling records it:
@@ -24,6 +26,7 @@
  * clamp entirely when no reference loop was selected.  Reproduced literally.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/V90PreFilter.h"
 
@@ -434,4 +437,137 @@ V90PreFilter::reset()
 	gain = 0;
 
 	fir.setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
+}
+
+/* ================================================================ lifecycle */
+
+/*
+ * The banner the constructor puts round its out-of-range complaint.  102
+ * characters of "*#", EXCEPT THAT ONE PAIR IS DOUBLED -- ".. *#**#* .." at
+ * .rodata.str1.4+0xb930 -- which is in the object's bytes and is transcribed
+ * rather than tidied (docs/deviations.md D177).
+ *
+ * IT IS ONE LITERAL ON ONE OVER-LONG LINE, AND IT LIVES HERE RATHER THAN
+ * BESIDE `BUGMSG`, FOR THE AUDIT'S SAKE.  `debugaudit.py --invented` blanks
+ * any line STARTING with `#` and then scans what is left in a single pass,
+ * joining literals separated only by whitespace.  So two multi-line `#define`
+ * string macros one after the other arrive as one concatenated string that is
+ * in no `.rodata` and fails the `strings` gate; and a macro whose literal is
+ * SPLIT across continuation lines is never rejoined, because the `\` between
+ * the halves is not whitespace, so each half is audited as a truncated string
+ * of its own.  Whole, and preceded by code, it is checked against the blob --
+ * which is the only reason the doubled pair above is known to be the object's
+ * and not a typing slip here.
+ */
+#define BUGBAR \
+	"*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#**#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*\r\n"
+
+/*
+ * THE FILTER IS BUILT BEFORE ANYTHING IS DECIDED.  The first thing the
+ * constructor does is run `FloatFIR`'s own, with forty taps, a NULL
+ * coefficient pointer and ninety-nine samples of block slack:
+ *
+ *      44b31:  ba 63 00 00 00      mov    $0x63,%edx      ; blockSize
+ *      44b36:  b9 28 00 00 00      mov    $0x28,%ecx      ; nTaps
+ *      44b49:  89 5c 24 08         mov    %ebx,0x8(%esp)  ; coef = 0
+ *
+ * so the FIR allocates 40 + 99 floats and starts with no coefficients at all;
+ * the tail of this function is what gives it some.  `test/harness/v90demfix.h`
+ * calls the same two numbers FIR_TAPS and FIR_SLACK, from the other side.
+ *
+ * WHICH CODEC.  The registry wins if it has an opinion: a NEGATIVE
+ * `HW_CODEC_TYPE` means "not configured", and only then is the constructor's
+ * own argument used.  Otherwise the registry's value goes through a sixteen
+ * arm switch -- the object has a real jump table at .rodata+0xd8c, sixteen
+ * `R_386_32 .text` entries, so the source had a `switch` and not a range test
+ * -- whose every arm stores its own index and whose default stores zero.  The
+ * CASE LABELS BELOW ARE VALUES, NOT RECOVERED ENUMERATOR NAMES: what
+ * `__tHardwareCodecTypes__` calls 0 through 15 is not in the object.
+ *
+ * THE INDEX IS THEN CHECKED AGAINST THE TABLE, and the bound is one less than
+ * the number of entries -- `dataBase` is walked to its first empty name and
+ * the count is decremented before the comparison.  So the LAST entry of the
+ * table is unreachable through this path.  Transcribed; see
+ * docs/deviations.md D176.
+ *
+ * THE DIAGNOSTICS HERE ARE PLAIN, NOT ENCODED.  This is one of the few places
+ * in the V.90 half that calls `dsplibs_debug_printf` directly under its own
+ * `dsplibs_debug_level > 1` test instead of going through `edprintf`, so it
+ * neither encodes its output nor disturbs `edprintf`'s rotating key.  Each
+ * message has its own test, which is what the object's four separate reloads
+ * of the level say.
+ */
+V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
+			   V90Parameters *parms)
+	: fir(0x28, (float *)0, 0x63)
+{
+	int n;
+
+	phase2 = info;
+	params = parms;
+
+	if (params->w[0x008 / 4] < 0) {
+		codecType = (int)codec;
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90PreFilter: HardwareCodecType"
+					     " loaded by configuration"
+					     " parameters\r\n");
+
+		switch (params->w[0x008 / 4]) {
+		case 0:		codecType = 0;	break;
+		case 1:		codecType = 1;	break;
+		case 2:		codecType = 2;	break;
+		case 3:		codecType = 3;	break;
+		case 4:		codecType = 4;	break;
+		case 5:		codecType = 5;	break;
+		case 6:		codecType = 6;	break;
+		case 7:		codecType = 7;	break;
+		case 8:		codecType = 8;	break;
+		case 9:		codecType = 9;	break;
+		case 10:	codecType = 10;	break;
+		case 11:	codecType = 11;	break;
+		case 12:	codecType = 12;	break;
+		case 13:	codecType = 13;	break;
+		case 14:	codecType = 14;	break;
+		case 15:	codecType = 15;	break;
+		default:	codecType = 0;	break;
+		}
+	}
+
+	for (n = 0; dataBase[n].name[0] != 0; n++)
+		;
+	n--;
+
+	if (codecType > n) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(BUGBAR);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90PreFilter: External Hardware"
+					     " Codec Index exceeds table"
+					     " length (codec inx = %d, table"
+					     " length = %d)\r\n",
+					     codecType, n);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(BUGBAR);
+
+		codecType = 0;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90PreFilter: HardwareCodecType: %s\r\n",
+				     dataBase[codecType].name);
+
+	reset();
+}
+
+/*
+ * The destructor is nineteen bytes and all of them are the FIR's: it sets up
+ * one argument, calls `FloatFIR::~FloatFIR` on `this` unadjusted, and
+ * returns.  Nothing in this class's own five words is owned -- `phase2` and
+ * `params` are the constructor's arguments and the three ints are indices --
+ * so the body is empty and the member's destructor is the whole function.
+ */
+V90PreFilter::~V90PreFilter()
+{
 }

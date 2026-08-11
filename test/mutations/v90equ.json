@@ -1,14 +1,79 @@
 [
- {"label": "log10 via libm rather than the coprocessor",
+ {
+  "label": "log10 via libm rather than the coprocessor",
   "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));\n\treturn r;",
-  "replace": "\t(void)r;\n\treturn (long double)log10((double)x);"},
- {"label": "the shift count is not masked to five bits",
+  "replace": "\t(void)r;\n\treturn (long double)log10((double)x);"
+ },
+ {
+  "label": "the shift count is not masked to five bits",
   "find": "\treturn (int)(1u << ((unsigned int)n & 31u));",
-  "replace": "\treturn (int)(1u << (unsigned int)n);"},
- {"label": "log2 instead of log10 (drop the fldlg2 scale)",
+  "replace": "\treturn (int)(1u << (unsigned int)n);"
+ },
+ {
+  "label": "log2 instead of log10 (drop the fldlg2 scale)",
   "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));",
-  "replace": "\t__asm__ (\"fld1\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));"},
- {"label": "the intermediate is double, not long double",
+  "replace": "\t__asm__ (\"fld1\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));"
+ },
+ {
+  "label": "the intermediate is double, not long double",
   "find": "static inline long double\nx87_log10(long double x)\n{\n\tlong double r;",
-  "replace": "static inline long double\nx87_log10(long double x)\n{\n\tdouble r;"}
+  "replace": "static inline long double\nx87_log10(long double x)\n{\n\tdouble r;"
+ },
+ {
+  "label": "the linear equaliser's length is not masked to a multiple of four",
+  "find": "\tlinearEquLength = linearEquLen & ~3u;",
+  "replace": "\tlinearEquLength = linearEquLen;"
+ },
+ {
+  "label": "the history length is not rounded down to a multiple of two",
+  "find": "\tword_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);",
+  "replace": "\tword_1c = (unsigned int)params->LINEAR_EQU_HISTORY_LENGTH;"
+ },
+ {
+  "label": "the DFE's window is sized by the DFE's length, not the equaliser's",
+  "find": "\tdfeWindow = (float *)sysdep_malloc(linearEquLength * sizeof(float));",
+  "replace": "\tdfeWindow = (float *)sysdep_malloc(dfeLength * sizeof(float));"
+ },
+ {
+  "label": "mode 1 tests the value the way every other mode does",
+  "find": "\t\t\tif (params->modemParams->unnamed_005c != 2)",
+  "replace": "\t\t\tif (params->modemParams->unnamed_005c == 1)"
+ },
+ {
+  "label": "array_ec is sized like the equaliser's arrays rather than the history's",
+  "find": "\t\tarray_ec = (short *)sysdep_malloc(\n\t\t    (word_1c + 8) * sizeof(short));",
+  "replace": "\t\tarray_ec = (short *)sysdep_malloc(\n\t\t    (linearEquLength + 8) * sizeof(short));"
+ },
+ {
+  "label": "the fixed-point arrays carry no headroom",
+  "find": "\t\tdfeMmxCoefs = (short *)sysdep_malloc(\n\t\t    (dfeLength + 8) * sizeof(short));",
+  "replace": "\t\tdfeMmxCoefs = (short *)sysdep_malloc(\n\t\t    dfeLength * sizeof(short));"
+ },
+ {
+  "label": "the skew is a byte count rather than a count of shorts",
+  "find": "\treturn (unsigned int)((((a + 7) & ~7ul) - a) >> 1);",
+  "replace": "\treturn (unsigned int)(((a + 7) & ~7ul) - a);",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is the allocator that makes it so.  The skew is `(align8(p) - p) / 2` over a `sysdep_malloc` return, and glibc's malloc on i386 has MALLOC_ALIGNMENT = 2 * SIZE_SZ = 8 -- so `align8(p) == p` for every pointer this constructor can ever be given, the difference is zero, and zero halved and zero unhalved are the same number.  All six skews are 0 and all six aligned pointers equal their raw one in every trial, which is also why the object comparison cannot see it.  Held fixed: that the shift is THERE, which is a statement about the blob's bytes (`d1 ea`, finding 1231) and not about any value.  If this ever starts being caught, the harness allocator has stopped 8-aligning and the triples have become testable -- which is the good outcome, not a regression."
+ },
+ {
+  "label": "the equaliser is reset from its whole length rather than half of it",
+  "find": "\treset(linearEquLength / 2);",
+  "replace": "\treset(linearEquLength);"
+ },
+ {
+  "label": "the destructor frees the fixed-point arrays whether they exist or not",
+  "find": "\tif (mmxArraysPresent != 0) {\n\t\tif (block_b8 != 0)",
+  "replace": "\tif (1) {\n\t\tif (block_b8 != 0)"
+ },
+ {
+  "label": "the destructor frees the aligned pointer rather than the raw one",
+  "find": "\t\tif (linearEquMmxCoefs != 0)\n\t\t\tsysdep_free(linearEquMmxCoefs);",
+  "replace": "\t\tif (linearEquMmxCoefs != 0)\n\t\t\tsysdep_free(linearEquMmxCoefsAligned);"
+ },
+ {
+  "label": "the destructor does not guard the unconditional blocks against null",
+  "find": "\tif (block_98 != 0)\n\t\tsysdep_free(block_98);",
+  "replace": "\tsysdep_free(block_98);"
+ }
 ]

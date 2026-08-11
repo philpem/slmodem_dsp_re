@@ -3754,13 +3754,24 @@
    }
   },
   "v90equ": {
-   "key": "904602645636dd8d1267bb56db6cb3c5a544a25baf1bf1086a133fe29ac5ac46",
-   "summary": "4 mutations: 1 caught (1 by test, 0 by strings), 2 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1ffbdde383b83adfa11f8e276dd8205f465138fe2dd674c835cc70008a57307e",
+   "summary": "15 mutations: 11 caught (10 by test, 0 by strings), 2 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
+    "array_ec is sized like the equaliser's arrays rather than the history's": "caught",
     "log10 via libm rather than the coprocessor": "unusable",
     "log2 instead of log10 (drop the fldlg2 scale)": "caught",
+    "mode 1 tests the value the way every other mode does": "caught",
+    "the DFE's window is sized by the DFE's length, not the equaliser's": "caught",
+    "the destructor does not guard the unconditional blocks against null": "caught",
+    "the destructor frees the aligned pointer rather than the raw one": "caught",
+    "the destructor frees the fixed-point arrays whether they exist or not": "caught",
+    "the equaliser is reset from its whole length rather than half of it": "caught",
+    "the fixed-point arrays carry no headroom": "caught",
+    "the history length is not rounded down to a multiple of two": "caught",
     "the intermediate is double, not long double": "uncaught",
-    "the shift count is not masked to five bits": "uncaught"
+    "the linear equaliser's length is not masked to a multiple of four": "caught",
+    "the shift count is not masked to five bits": "uncaught",
+    "the skew is a byte count rather than a count of shorts": "equivalent"
    }
   },
   "v90getbitrate": {
@@ -4001,13 +4012,19 @@
    }
   },
   "v90prefilter": {
-   "key": "4e59d7e857f44a81ce69a570561b995ab1bb20a8beb68847915a7f64e7ba5131",
-   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "67bfe8d00e1c64ca258ece0129e2b5a5d715db231b389c5e0975b05d4ddcb9be",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "L2 read from the object itself, not through the pointer": "caught",
+    "an out-of-range index is left alone rather than reset to zero": "caught",
+    "the FIR is built with one more sample of block slack": "caught",
     "the difference is the other way round": "caught",
+    "the out-of-range banner is printed at any debug level": "caught",
     "the reference level is entry 15, not 14": "caught",
-    "the signature starts one entry later": "caught"
+    "the registry's codec type is rejected at zero as well as below it": "caught",
+    "the signature starts one entry later": "caught",
+    "the switch's default keeps the value instead of falling back to zero": "caught",
+    "the table's length is not decremented before the range check": "caught"
    }
   },
   "v90resampler": {
