@@ -475,5 +475,21 @@
  "v92tx": [
   "src/pump/v90/V92Transmitter.cpp",
   "build/test/t_v92tx"
+ ],
+ "notch": [
+  "src/dsp/notch.c",
+  "build/test/t_notch"
+ ],
+ "dtmf": [
+  "src/service/dtmf.c",
+  "build/test/t_dtmf"
+ ],
+ "dtmfmtd": [
+  "src/service/dtmf_detector.c",
+  "build/test/t_dtmfrx"
+ ],
+ "dtmfrx": [
+  "src/service/dtmf_rx.c",
+  "build/test/t_dtmfrx"
  ]
 }
