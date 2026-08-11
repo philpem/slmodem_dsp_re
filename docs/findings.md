@@ -43592,3 +43592,43 @@ comparison, the branch has to be written as the negation of the condition the
 object tests rather than as the relation a reader would infer -- and the test
 has to reach the unordered case deliberately, which `t_v90spectral` now
 asserts it did (`the quotient was 0/0 on %ld calls`).
+
+======================================================================
+
+### 1402. A PLAIN `float` LOCAL DOES ROUND AT THIS TREE'S FLAGS, AND THE MUTATION THAT PROVES IT
+
+`Psd::process` ends its two logarithmic arms with a rounding the object makes
+and a naive translation does not:
+
+    fyl2x                     ; log10(x), 64 significand bits
+    fstps 0x28(%esp)          ; ROUND TO FLOAT
+    flds  0x28(%esp)          ; and read it back
+    fmul  %st(1),%st          ; then multiply by 10.0f
+    fstps (%ebp,%eax,4)
+
+GCC 3.4 emitted the store/reload because the source assigned the logarithm to
+a `float` before using it.  The worry -- and it is a real one elsewhere in
+this tree -- is that a MODERN GCC at these flags keeps the value in st(0) at
+64 bits, silently drops the rounding, and produces a different last place.
+Under `-mfpmath=387` GCC's default is `-fexcess-precision=fast`, which
+PERMITS keeping the extra bits, so nothing in the flag set promises the
+rounding will happen.
+
+**It happens.** `float l = (float)psd_x87_log10(...); out[i] = (float)(l *
+10.0f);` is bit-exact against the blob over 2,164 checks, and the mutation
+`the logarithm is not rounded to float before the multiply` -- the same two
+lines with `l` declared `long double` -- is CAUGHT.  So at this tree's exact
+flags a plain `float` local is a rounding barrier in fact, and no `volatile`,
+no memory clobber and no helper is needed to make one.
+
+**What this does and does not settle.** It settles the case where the source
+has somewhere to put the value: a named local of the narrower type. It says
+nothing about the harder case, where GCC 3.4 rounded because it ran out of
+x87 registers and SPILLED an accumulator that the source never narrowed --
+there is no `float` local to write there, and inventing one is inventing
+source. Those are different problems and only the first one is measured here.
+
+**And the measurement is only worth having because the mutation exists.** The
+test passing proves the two agree; it does not prove the test could tell them
+apart. One entry in `test/mutations/psd.json` is that second question, and its
+verdict is the finding.

@@ -43,8 +43,8 @@
   "replace": "\tif (m_fft != 0)\n\t\tsysdep_free(m_window);"},
 
  {"label": "getFrequencies fills every bin, not half of them",
-  "find": "\tunsigned int bins = m_length >> 1;",
-  "replace": "\tunsigned int bins = m_length;"},
+  "find": "\tunsigned int i;\n\tunsigned int bins = m_length >> 1;",
+  "replace": "\tunsigned int i;\n\tunsigned int bins = m_length;"},
 
  {"label": "the bin spacing is one over the transform length plus one",
   "find": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / m_length));",
@@ -56,5 +56,76 @@
 
  {"label": "the product is associated the other way",
   "find": "\t\tfreq[i] = (float)((long double)i * sampleRate *\n\t\t\t\t  (1.0L / m_length));",
-  "replace": "\t\tfreq[i] = (float)((long double)i *\n\t\t\t\t  (sampleRate / m_length));"}
+  "replace": "\t\tfreq[i] = (float)((long double)i *\n\t\t\t\t  (sampleRate / m_length));"},
+
+ {"label": "NOTE: process, and the one mutation that is a measurement rather than a claim",
+  "why": "process is Welch's method, and most of what can go wrong in it is an index or a constant.  One entry is different in kind: 'the logarithm is not rounded to float before the multiply'.  The object stores the result of fyl2x to a four-byte slot and reads it back before multiplying by 10, and this reconstruction reproduces that with a plain float local rather than with a volatile -- so the entry asks whether the tree's compiler really does keep that promise at these flags, and its verdict is the answer.  If it is CAUGHT, a float local rounds here and no barrier is needed.  Nothing in this set touches src/dsp/fft.cpp, whose own rounding question is somebody else's.  TWO CANDIDATE ENTRIES WERE WRITTEN AND THEN REMOVED, because no input to process() can decide them and a set that records NOT CAUGHT for those is reporting a gap it does not have.  The first spelled the peak search as `!(out[i] < peak)`: it differs from `out[i] > peak` only on an UNORDERED comparison, and a NaN anywhere in a frame comes out of the transform in every bin, so the mutant reaches the logarithm through a NaN peak where the original reaches it through a division by zero -- and both give NaN in every bin.  The second made the 1e-25 floor a float constant: the two differ by 4e-8 relative, which is 7e-10 relative in the logarithm of them, and the result is then rounded to a float whose spacing there is 1.2e-7.  Both facts are evidenced by the ENCODING instead -- `fcom`/`ja` for the first and `fldl` rather than `flds` for the second -- and are recorded in the source comment where the mutation set cannot carry them."},
+
+ {"label": "the window loop writes from the base of the buffer",
+  "find": "\t\t\tm_fft[1 + j] = in[pos + j] * m_window[j];",
+  "replace": "\t\t\tm_fft[j] = in[pos + j] * m_window[j];"},
+
+ {"label": "the window is applied to the wrong sample",
+  "find": "\t\t\tm_fft[1 + j] = in[pos + j] * m_window[j];",
+  "replace": "\t\t\tm_fft[1 + j] = in[j] * m_window[j];"},
+
+ {"label": "the transform is asked for the inverse",
+  "find": "\t\trealfft(m_fft, m_length, 1);",
+  "replace": "\t\trealfft(m_fft, m_length, -1);"},
+
+ {"label": "the magnitudes are read from the base of the buffer",
+  "find": "\t\t\tlong double re = m_fft[1 + 2 * i];\n\t\t\tlong double im = m_fft[2 + 2 * i];",
+  "replace": "\t\t\tlong double re = m_fft[2 * i];\n\t\t\tlong double im = m_fft[1 + 2 * i];"},
+
+ {"label": "the accumulator takes the magnitude rather than its square",
+  "find": "\t\t\tout[i] = (float)(re * re + im * im + out[i]);",
+  "replace": "\t\t\tout[i] = (float)(re + im + out[i]);"},
+
+ {"label": "each frame replaces the accumulator instead of adding to it",
+  "find": "\t\t\tout[i] = (float)(re * re + im * im + out[i]);",
+  "replace": "\t\t\tout[i] = (float)(re * re + im * im);"},
+
+ {"label": "the frames do not overlap",
+  "find": "\t\tpos += m_length - m_overlap;",
+  "replace": "\t\tpos += m_length;"},
+
+ {"label": "the frame count ignores the overlap",
+  "find": "\tunsigned int frames = (count - m_overlap) / (m_length - m_overlap);",
+  "replace": "\tunsigned int frames = count / m_length;"},
+
+ {"label": "the bin count is the whole transform",
+  "find": "\tunsigned int bins = m_length >> 1;\n\tunsigned int frames",
+  "replace": "\tunsigned int bins = m_length;\n\tunsigned int frames"},
+
+ {"label": "the output is not cleared first",
+  "find": "\tfor (i = 0; i < bins; i++)\n\t\tout[i] = 0.0f;",
+  "replace": "\t;"},
+
+ {"label": "the peak arm scales by the frame count instead",
+  "find": "\t\tscale = 1.0L / peak;",
+  "replace": "\t\tscale = 1.0L / (long double)frames;"},
+
+ {"label": "the peak search finds the minimum",
+  "find": "\t\t\tif (out[i] > peak)\n\t\t\t\tpeak = out[i];",
+  "replace": "\t\t\tif (out[i] < peak)\n\t\t\t\tpeak = out[i];"},
+
+ {"label": "the peak arm loses its floor",
+  "find": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {",
+  "replace": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {"},
+
+ {"label": "the decibel arm is an amplitude one",
+  "find": "\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}",
+  "replace": "\t\t\tout[i] = (float)(l * 20.0f);\n\t\t}\n\t}\n}"},
+
+ {"label": "the logarithm is not rounded to float before the multiply",
+  "find": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}",
+  "replace": "\t\t\tlong double l = psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t      * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}"},
+
+ {"label": "the linear arm does not scale by the frame count",
+  "find": "\t\t\tout[i] = (float)((long double)out[i] * scale);",
+  "replace": "\t\t\tout[i] = out[i];"},
+
+ {"label": "the option chain treats an unknown option as decibels",
+  "find": "\t} else if (option == OUTPUT_DB) {",
+  "replace": "\t} else {"}
 ]

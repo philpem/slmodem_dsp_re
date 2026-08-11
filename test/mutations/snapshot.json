@@ -193,23 +193,40 @@
    }
   },
   "psd": {
-   "key": "e93c6f05ba5f3450573a17663123ae05e86621416f4bbee2ca571d1cf597569f",
-   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "daa0e906169fe450af48f7084a64db9656e035cb0dda7428c09c8630e137c7b5",
+   "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "each frame replaces the accumulator instead of adding to it": "caught",
     "every bin gets the same frequency": "caught",
     "getFrequencies fills every bin, not half of them": "caught",
     "setOverlapLength writes the length instead": "caught",
     "setWindowType always designs a boxcar": "caught",
     "setWindowType redesigns the spectrum buffer, not the window": "caught",
+    "the accumulator takes the magnitude rather than its square": "caught",
+    "the bin count is the whole transform": "caught",
     "the bin spacing is one over the transform length plus one": "caught",
     "the constructor stores the length as the overlap": "caught",
     "the constructor stores the overlap as the length": "caught",
+    "the decibel arm is an amplitude one": "caught",
     "the destructor forgets the spectrum buffer": "caught",
     "the destructor frees the window twice": "caught",
+    "the frame count ignores the overlap": "caught",
+    "the frames do not overlap": "caught",
+    "the linear arm does not scale by the frame count": "caught",
+    "the logarithm is not rounded to float before the multiply": "caught",
+    "the magnitudes are read from the base of the buffer": "caught",
+    "the option chain treats an unknown option as decibels": "caught",
+    "the output is not cleared first": "caught",
+    "the peak arm loses its floor": "caught",
+    "the peak arm scales by the frame count instead": "caught",
+    "the peak search finds the minimum": "caught",
     "the product is associated the other way": "caught",
     "the spectrum buffer is two words longer than the map says": "caught",
+    "the transform is asked for the inverse": "caught",
+    "the window is applied to the wrong sample": "caught",
     "the window is designed into the spectrum buffer": "caught",
-    "the window is one sample shorter than the transform": "caught"
+    "the window is one sample shorter than the transform": "caught",
+    "the window loop writes from the base of the buffer": "caught"
    }
   },
   "pulse": {

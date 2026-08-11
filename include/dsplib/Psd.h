@@ -6,18 +6,21 @@
  * D1/D2 -- which GCC emits from one definition.  NOT POLYMORPHIC, by the same
  * argument as FloatFIR: no deleting destructor, so offset 0 is a real member.
  *
- * FIVE OF THE SIX ARE HERE.  `Psd::process` is NOT reconstructed and its
- * declaration below has no definition anywhere in `src/`.  Two independent
- * blockers, and clearing either alone does not unblock it -- see finding 876:
+ * ALL SIX ARE NOW HERE.  `Psd::process` was blocked twice and both blockers
+ * are gone; the record of what they were is worth keeping, because the second
+ * of them is a shape this tree meets repeatedly (finding 876):
  *
- *   1. it calls `realfft`, which calls `four1`; neither is written, and the
+ *   1. it calls `realfft`, which calls `four1`.  Neither was written, and the
  *      Makefile renames every symbol the blob defines to `ref_*`, so a
- *      reference to `realfft` from our side resolves to nothing.  Confirmed
- *      against `build/dsplibs_ref.o`, not inferred from the Makefile.
- *   2. two of its four output arms compute log10 with `fldlg2`/`fyl2x`, which
- *      GCC emits only under `-funsafe-math-optimizations` -- not in this
- *      tree's derived flag set -- so our build would call libm and the two
- *      would differ in the last bit.
+ *      reference to `realfft` from our side resolved to nothing.  Both are
+ *      written now, in src/dsp/fft.cpp.
+ *   2. two of its three output arms compute log10 with `fldlg2`/`fyl2x`,
+ *      which GCC emits only under `-funsafe-math-optimizations` -- not in
+ *      this tree's derived flag set, and not a flag to reach for, because it
+ *      changes every other expression in the translation unit too.  A libm
+ *      `log10` is a different function in the last place.  Psd.cpp uses an
+ *      inline-asm helper that is the object's own two instructions, as
+ *      V90Equalizer.cpp and VPcmFloModem.cpp already do.
  *
  * THE WINDOW TYPE IS NOT STORED.  `setWindowType` redesigns the window in
  * place and keeps nothing, so the object cannot be asked which one it holds.
