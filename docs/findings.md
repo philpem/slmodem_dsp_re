@@ -40112,3 +40112,50 @@ consistent with exactly that.
 almost certainly the same not-settled-yet fault that aborted the first n=30
 batch -- the modem is asked for its registers immediately after teardown. It
 needs the same retry the pre-flight got.
+
+======================================================================
+
+### 1214. DIGITAL TERMINATION IS A MODE, NOT A SIP WORKAROUND — AND THE PLANNED V.90 CONVERSION NEEDS THE SAME TOGGLE
+
+*A design note, recorded because it changes what a later piece of work should
+assume rather than what any current code does.*
+
+The near echo canceller exists to cancel the reflection at the modem's own
+2-wire hybrid. **An end that is digitally terminated has no hybrid**, so there
+is nothing for it to find, and 1212 measured what it does instead: adapts to
+80-198 RMS over 144 taps on the first pass, collapses to 2.5-10.9 on the second,
+and the second pass equalises fourteen times better.
+
+That reasoning is not about SIP. It is about digital termination, and it applies
+to:
+
+- **the SIP end today.** `d-modem` is a socket; the only real reflection is the
+  VG204's FXS hybrid at 205.62 ms, which is the FAR echo and outside both
+  cancellers' 172.5 ms delay line anyway (1205).
+- **the V.90 conversion planned for this tree.** V.90's whole premise is that
+  one end is digitally attached to the PSTN, which is precisely the condition
+  that makes a near echo canceller meaningless. Whatever that work does about
+  it, it should not rediscover this from scratch.
+
+So the lever wanted is a **mode** -- "digital termination: there is no near
+hybrid" -- and not a transport-specific hack. Task #110 carries it.
+
+**And it is a mode, not a bug fix.** On a real PSTN line the near canceller is
+doing its job; disabling it there would be actively wrong. The object is
+entitled to assume a hybrid, because in 1996 there was always a hybrid. This is
+the same class as 1205's delay-line enlargement: opt-in, off by default, with
+`make phase` green when off.
+
+**What this retires.** The forced `ATO1` retrain of 1211 reaches the same
+second-pass state and was worth running -- it is what proved the second pass is
+where the improvement lives -- but it is a workaround, not a solution: a second
+full handshake on every call, and 1213 found the link does not reliably hold the
+better rate afterwards. It should be read as the diagnostic that localised the
+mechanism, not as the fix.
+
+**Check the object's own lever first.** `v34FreezeEcho` (`0x5e200`) sets
+`V34_EC_FROZEN` in `obj->f25c2` and is already called from the handshake state
+machine (`v34tx1_jatxmit`, "on J1TXMIT - forced freeze echo"). A freeze path
+therefore exists in the object. If the near canceller can be frozen from the
+start through that path, no symbol needs weakening at all -- which is a better
+answer than replacing `V34EchoAdapt`, and it should be tried first.
