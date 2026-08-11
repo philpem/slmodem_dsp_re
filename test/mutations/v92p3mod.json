@@ -1,0 +1,249 @@
+[
+ {
+  "label": "Ru emits its two halves the wrong way round",
+  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn m->codeLevel;",
+  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn (short)-m->codeLevel;"
+ },
+ {
+  "label": "Ru cycles over three symbols, not six",
+  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {",
+  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 3u) {"
+ },
+ {
+  "label": "RuNot is not the inversion of Ru",
+  "find": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn (short)-m->codeLevel;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\treturn m->codeLevel;",
+  "replace": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn m->codeLevel;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\treturn (short)-m->codeLevel;"
+ },
+ {
+  "label": "Su has no zero symbols",
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn 0;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn m->suLevel;"
+ },
+ {
+  "label": "Su takes the Ru amplitude",
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->codeLevel;"
+ },
+ {
+  "label": "Su's zeros sit at 3 and 5 rather than 1 and 4",
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn 0;\n\tcase 3:\n\tcase 5:\n\t\treturn (short)-m->suLevel;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn (short)-m->suLevel;\n\tcase 3:\n\tcase 5:\n\t\treturn 0;"
+ },
+ {
+  "label": "SuNot is not the inversion of Su",
+  "find": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn (short)-m->suLevel;",
+  "replace": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;"
+ },
+ {
+  "label": "Ja leaves its constant-bit run one symbol early",
+  "find": "\tif (m->symbolCount > 24u)\n\t\tbit = m->jaBits[(m->symbolCount - 25u) % m->jaBitCount];",
+  "replace": "\tif (m->symbolCount >= 24u)\n\t\tbit = m->jaBits[(m->symbolCount - 25u) % m->jaBitCount];"
+ },
+ {
+  "label": "Ja indexes the vector from 24 rather than 25",
+  "find": "(m->symbolCount - 25u) % m->jaBitCount",
+  "replace": "(m->symbolCount - 24u) % m->jaBitCount"
+ },
+ {
+  "label": "Ja's constant bit is 0",
+  "find": "\tunsigned char bit = 1;\n\tshort sample;",
+  "replace": "\tunsigned char bit = 0;\n\tshort sample;"
+ },
+ {
+  "label": "Ja's polarity chooses the wrong sign",
+  "find": "\tsample = m->codeLevel;\n\tif (m->polarity != 0u)\n\t\tsample = (short)-sample;",
+  "replace": "\tsample = m->codeLevel;\n\tif (m->polarity == 0u)\n\t\tsample = (short)-sample;"
+ },
+ {
+  "label": "Ja replaces the polarity instead of accumulating into it",
+  "find": "\tm->polarity ^= m->scrambler.process(bit);",
+  "replace": "\tm->polarity = m->scrambler.process(bit);"
+ },
+ {
+  "label": "TRN1u chooses the wrong sign",
+  "find": "\tif (m->scrambler.process(1) != 0)\n\t\treturn (short)-m->codeLevel;\n\treturn m->codeLevel;",
+  "replace": "\tif (m->scrambler.process(1) != 0)\n\t\treturn m->codeLevel;\n\treturn (short)-m->codeLevel;"
+ },
+ {
+  "label": "TRN1u drives the scrambler with a zero bit",
+  "find": "if (m->scrambler.process(1) != 0)",
+  "replace": "if (m->scrambler.process(0) != 0)"
+ },
+ {
+  "label": "the symbol count is not incremented",
+  "find": "\tshort sample = 0;\n\n\tsymbolCount++;",
+  "replace": "\tshort sample = 0;\n"
+ },
+ {
+  "label": "Ru runs for 383 symbols",
+  "find": "\t\tsample = ruSymbol(this);\n\t\tif (symbolCount == 384u) {",
+  "replace": "\t\tsample = ruSymbol(this);\n\t\tif (symbolCount == 383u) {"
+ },
+ {
+  "label": "Ru hands on to TRN1u rather than RuNot",
+  "find": "\t\tif (symbolCount == 384u) {\n\t\t\tstate = V92P3M_STATE_RU_NOT;",
+  "replace": "\t\tif (symbolCount == 384u) {\n\t\t\tstate = V92P3M_STATE_TRN1U;"
+ },
+ {
+  "label": "RuNot does not reseed the scrambler on its way out",
+  "find": "\t\t\tstate = V92P3M_STATE_TRN1U;\n\t\t\tsymbolCount = 0;\n\t\t\tscrambler.reset(0);\n\t\t\teventCode = 2;",
+  "replace": "\t\t\tstate = V92P3M_STATE_TRN1U;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 2;"
+ },
+ {
+  "label": "RuNot reports event 3 rather than 2",
+  "find": "\t\t\teventCode = 2;",
+  "replace": "\t\t\teventCode = 3;"
+ },
+ {
+  "label": "TRN1u's limit is a lower bound rather than an equality",
+  "find": "\t\tif (symbolCount == trn1uLength) {",
+  "replace": "\t\tif (symbolCount >= trn1uLength) {",
+  "note": "only reachable because prepare()'s trn1uMode 2 puts the count PAST the limit"
+ },
+ {
+  "label": "TRN1u seeds the polarity from the wrong side of zero",
+  "find": "\t\t\teventCode = 3;\n\t\t\tpolarity = (sample <= 0);",
+  "replace": "\t\t\teventCode = 3;\n\t\t\tpolarity = (sample > 0);",
+  "note": "this is V90Phase3Modulator's sense, which is the mistake worth checking"
+ },
+ {
+  "label": "JaEnd ends on a six-symbol boundary rather than twelve",
+  "find": "\t\tsample = jaSymbol(this);\n\t\tif ((symbolCount % 12u) == 0u) {\n\t\t\tstate = V92P3M_STATE_SILENCE;",
+  "replace": "\t\tsample = jaSymbol(this);\n\t\tif ((symbolCount % 6u) == 0u) {\n\t\t\tstate = V92P3M_STATE_SILENCE;"
+ },
+ {
+  "label": "JaEnd hands on past Silence",
+  "find": "\t\t\tstate = V92P3M_STATE_SILENCE;\n\t\t\tsymbolCount = 0;",
+  "replace": "\t\t\tstate = V92P3M_STATE_END;\n\t\t\tsymbolCount = 0;"
+ },
+ {
+  "label": "state 14 falls into the illegal-state arm",
+  "find": "\tcase V92P3M_STATE_SILENCE:\n\tcase V92P3M_STATE_END:\n\tcase V92P3M_STATE_SILENT_15:",
+  "replace": "\tcase V92P3M_STATE_SILENCE:\n\tcase V92P3M_STATE_SILENT_15:",
+  "note": "NOTHING IN THE OBJECT SEPARATES THESE TWO BLOCKS -- both write zero to eventCode and return zero.  Only the transcript at debug level 2 can catch it, which is why run_diagnostics exists"
+ },
+ {
+  "label": "state 2 joins the silent group instead of the illegal one",
+  "find": "\tcase V92P3M_STATE_SILENCE:\n\tcase V92P3M_STATE_END:",
+  "replace": "\tcase V92P3M_STATE_ILLEGAL_2:\n\tcase V92P3M_STATE_SILENCE:\n\tcase V92P3M_STATE_END:",
+  "note": "the other half of the same claim: state 2's jump-table entry is the DEFAULT label, and only the printed line says so"
+ },
+ {
+  "label": "Su runs for 72 symbols",
+  "find": "\t\tif (symbolCount == 144u) {",
+  "replace": "\t\tif (symbolCount == 72u) {"
+ },
+ {
+  "label": "SuNot does not report event 5",
+  "find": "\t\t\tstate = V92P3M_STATE_SU_SECOND;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 5;",
+  "replace": "\t\t\tstate = V92P3M_STATE_SU_SECOND;\n\t\t\tsymbolCount = 0;"
+ },
+ {
+  "label": "SuSecondEnd skips SuSecondNot",
+  "find": "\t\t\tstate = V92P3M_STATE_SU_SECOND_NOT;",
+  "replace": "\t\t\tstate = V92P3M_STATE_TRN1U_SECOND;"
+ },
+ {
+  "label": "SuSecondNot does not reseed the scrambler",
+  "find": "\t\t\tscrambler.reset(0);\n\t\t\teventCode = 7;",
+  "replace": "\t\t\teventCode = 7;"
+ },
+ {
+  "label": "TRN1uSecondEnd's floor is 2027 rather than 2039",
+  "find": "\t\tif (symbolCount > 2039u && (symbolCount % 12u) == 0u) {",
+  "replace": "\t\tif (symbolCount > 2027u && (symbolCount % 12u) == 0u) {",
+  "note": "2028 is the first multiple of twelve the two readings disagree about, and only the free run reaches it"
+ },
+ {
+  "label": "TRN1uSecondEnd ignores the twelve-symbol boundary",
+  "find": "if (symbolCount > 2039u && (symbolCount % 12u) == 0u) {",
+  "replace": "if (symbolCount > 2039u) {"
+ },
+ {
+  "label": "the illegal-state arm does not clear eventCode",
+  "find": "\tdefault:\n\t\teventCode = 0;\n\t\tsample = 0;",
+  "replace": "\tdefault:\n\t\tsample = 0;"
+ },
+ {
+  "label": "reset uses the amplitude it was passed",
+  "find": "\tcodeLevel = 4000;",
+  "replace": "\tcodeLevel = levelArg;",
+  "note": "the whole point of the dead-parameter finding: the object stores the literal 0xfa0 and never reads 0x24(%esp)"
+ },
+ {
+  "label": "reset's floor is 8148",
+  "find": "\t\tlength = 8160u;",
+  "replace": "\t\tlength = 8148u;"
+ },
+ {
+  "label": "reset's floor is a ceiling",
+  "find": "\tif (length < 8160u)",
+  "replace": "\tif (length > 8160u)"
+ },
+ {
+  "label": "the duration sum is divided as unsigned",
+  "find": "\tlength = (unsigned int)(12 *\n\t    ((params->V92_ECHO_FAST_UPDATE_DURATION +\n\t      params->V92_ECHO_SLOW_UPDATE_DURATION + 12) / 12));",
+  "replace": "\tlength = 12u *\n\t    (((unsigned int)(params->V92_ECHO_FAST_UPDATE_DURATION +\n\t      params->V92_ECHO_SLOW_UPDATE_DURATION + 12)) / 12u);",
+  "note": "the `imul`/`sar $0x1f`/`sub` fixup at .text+0x16bf2 is the evidence, and par_pairs' three negative rows are what make it observable"
+ },
+ {
+  "label": "the duration sum is not rounded up",
+  "find": "\t      params->V92_ECHO_SLOW_UPDATE_DURATION + 12) / 12));",
+  "replace": "\t      params->V92_ECHO_SLOW_UPDATE_DURATION) / 12));"
+ },
+ {
+  "label": "suLevel is not rounded",
+  "find": "\tsuLevel = (short)(scaled + 0.5f);",
+  "replace": "\tsuLevel = (short)scaled;"
+ },
+ {
+  "label": "the Su amplitude ratio is 1.5 rather than sqrt(3/2)",
+  "find": "1.224744871391589;",
+  "replace": "1.5;"
+ },
+ {
+  "label": "the warm-up loop is one symbol short",
+  "find": "\tfor (i = 0; i < nSymbols; i++)\n\t\tgenerateSymbol();",
+  "replace": "\tfor (i = 0; i + 1u < nSymbols; i++)\n\t\tgenerateSymbol();"
+ },
+ {
+  "label": "reset seeds the scrambler with a one bit",
+  "find": "\tscrambler.reset(0);\n\tsymbolCount = 0;",
+  "replace": "\tscrambler.reset(1);\n\tsymbolCount = 0;"
+ },
+ {
+  "label": "the null-Ja arm leaves the bit count behind",
+  "find": "\t\tjaBitCount = 0;\n\t\tjaBits = NULL;",
+  "replace": "\t\tjaBits = NULL;"
+ },
+ {
+  "label": "the no-Ja warning fires when there is no descriptor either",
+  "find": "\t\tif (dilArg != NULL && DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (dilArg == NULL && DSPLIB_DEBUG_ON())",
+  "note": "transcript-only, like the two state-group mutations above"
+ },
+ {
+  "label": "reset drops its last argument",
+  "find": "\tword_00 = lastArg;",
+  "replace": "\tword_00 = 0;"
+ },
+ {
+  "label": "reset does not clear eventCode",
+  "find": "\teventCode = 0;\n\tcodeLevel = 4000;",
+  "replace": "\tcodeLevel = 4000;"
+ },
+ {
+  "label": "the two echo durations are added the other way round",
+  "find": "((params->V92_ECHO_FAST_UPDATE_DURATION +\n\t      params->V92_ECHO_SLOW_UPDATE_DURATION + 12) / 12)",
+  "replace": "((params->V92_ECHO_SLOW_UPDATE_DURATION +\n\t      params->V92_ECHO_FAST_UPDATE_DURATION + 12) / 12)",
+  "equivalent": true,
+  "why": "The object reads +0x88 into %ecx and +0x8c into %eax and immediately does `add %ecx,%eax` at .text+0x16beb; neither field is read anywhere else in any of this class's thirteen symbols, so only the SUM reaches any store.  No observable in the object, let alone in this harness, can order two addends.  The argument expires the moment some other member reads one of the two fields on its own."
+ },
+ {
+  "label": "the product is kept in double rather than narrowed to float",
+  "find": "\tfloat scaled;",
+  "replace": "\tdouble scaled;",
+  "equivalent": true,
+  "why": "The float intermediate is derived from the ENCODING and not from a test: .text+0x16c65 stores the double product as four bytes (`fstps`) and +0x16c69 loads it back (`flds`) before +0x16c6d adds a FOUR-byte 0.5, neither of which a double expression throughout would need.  It is unobservable because `reset` sets `codeLevel` to the literal 4000 and no symbol of this class writes that field otherwise, so 4000 is the only input: 4000*sqrt(3/2) is 4898.979485566356, its float rounding is 4898.97949, and both give 4899 after +0.5 and truncation.  The argument expires if any caller ever gives the object another codeLevel."
+ }
+]

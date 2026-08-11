@@ -38176,3 +38176,319 @@ so the two new C++ class headers join the forty-three already in its
 two `.cpp`s assert seventeen offsets and both sizes with
 `__builtin_offsetof`, and the test's region checks are absolute offsets rather
 than field names.
+
+
+### 1180. `V92Phase3Modulator` IS 80 BYTES, AND THE WHOLE FIELD MAP CAME OUT OF THE CONSTRUCTOR
+
+The class had no header, no `.cpp` and not one mention anywhere in this tree
+(finding 1104's "neither" column).  Thirteen symbols, 2,928 bytes.
+
+**The size is an allocation, not a displacement scan** -- finding 1107's rule
+applied first rather than checked afterwards.  `V92Modulator`'s constructor at
+.text+0x15299, and identically at +0x15579 in the `C2` copy:
+
+```
+   15299:  c7 04 24 50 00 00 00   movl   $0x50,(%esp)
+   152a0:  e8 ..                  call   sysdep_malloc
+   152a5:  89 c3                  mov    %eax,%ebx
+   152aa:  89 1c 24               mov    %ebx,(%esp)
+   152b1:  e8 ..                  call   _ZN18V92Phase3ModulatorC1EP13V92Parameters
+   152b6:  89 5e 44               mov    %ebx,0x44(%esi)
+```
+
+So **0x50 = 80 bytes**, and the modulator lives at `V92Modulator + 0x44`.  The
+largest displacement any of the thirteen symbols uses is +0x4c, so here the two
+readings agree -- but they agree by luck and the difference is worth stating:
+**+0x44 and +0x48 are touched by NOTHING in this class.**  They are `pad_44[8]`
+in the header because this class does not write them, not because nothing does;
+`V92Modulator` holds the only pointer and was not read for this batch.
+
+The constructor (105 bytes, .text+0x16d00) settles the two offsets no method
+would have:
+
+```
+   16d23:  8d 53 18               lea    0x18(%ebx),%edx   <- Scrambler at +0x18
+   16d26:  89 14 24               mov    %edx,(%esp)
+   16d29:  e8 ..                  call   _ZN9ScramblerIhiEC1Ejjj    (5, 23, 99)
+   16d2e:  8b 44 24 34            mov    0x34(%esp),%eax
+   16d36:  89 43 4c               mov    %eax,0x4c(%ebx)   <- V92Parameters* at +0x4c
+   ...
+   16d5f:  e8 ..                  call   V92Phase3Modulator::reset  (4000, 0, 0, 0, 0, 0)
+```
+
+and the destructor is 22 bytes whose entire body is a tail call to
+`Scrambler<unsigned char,int>::~Scrambler` on `this + 0x18`, which is the
+second independent statement that the scrambler is a subobject.  `readelf`
+lists `D1` and `D2` and no `D0`, so the class is not polymorphic and +0x00 is a
+real member.  **`D2` at +0x16270 was read too, not assumed to be a copy of its
+twin** -- it is the same five instructions ending in the same
+`R_386_PC32 _ZN9ScramblerIhiED1Ev`, and its largest displacement is +0x18.  All
+THIRTEEN symbols have been disassembled, which is what makes the sentence below
+about +0x4c a measurement rather than a sample.
+
+The map, every entry from a store or a load in one of the thirteen:
+
+```
+   +0x00  unsigned int   word_00      reset's last argument; read by nothing here
+   +0x04  short          codeLevel    Ru / Ja / TRN1u amplitude, literal 4000
+   +0x06  short          suLevel      Su amplitude, codeLevel * sqrt(3/2) + 0.5
+   +0x08  enum           state
+   +0x0c  unsigned int   symbolCount
+   +0x10  unsigned int   trn1uLength  named by the object's own message
+   +0x14  unsigned int   eventCode
+   +0x18  Scrambler<unsigned char,int>  (32 bytes, ends at +0x38)
+   +0x38  unsigned int   polarity
+   +0x3c  unsigned char *jaBits        `ja + 4`
+   +0x40  unsigned int   jaBitCount    `*(unsigned int *)ja`
+   +0x44  unsigned char  pad_44[8]     NOT TOUCHED BY THIS CLASS
+   +0x4c  V92Parameters *params
+```
+
+`trn1uLength`'s name is not invented: `reset` prints
+`V92Phase3Modulator: TRN1u state length set to %d` (.rodata.str1.4+0x3b5c) with
+that field as its argument.
+
+**`V92Ja` gets a PARTIAL header and no more.**  The blob carries no
+`_ZN5V92Ja*` symbol at all -- the string matches only inside three other
+symbols' mangled parameter lists -- so nothing here owns the class and nothing
+here can size it.  Two facts are established and both come from
+`V92Phase3Modulator::reset` at .text+0x16c41: an unsigned 32-bit count at +0x00
+(it is a `divl` divisor with no sign fixup) and a byte vector at +0x04.
+`include/dsplib/V92Ja.h` says so in its first paragraph.
+
+### 1181. THE SIXTEEN-STATE ALPHABET, NAMED BY THE OBJECT'S OWN METHODS -- AND STATE 2 IS THE DEFAULT LABEL
+
+`generateSymbol` increments `symbolCount` and then dispatches through a
+sixteen-entry table at .rodata:0x5e4 under `cmp $0xf,%eax; ja` -- unsigned.
+Resolving the table's relocations gives:
+
+```
+   state  0 -> .text+0x1685c   state  8 -> .text+0x167a3
+   state  1 -> .text+0x16679   state  9 -> .text+0x16759
+   state  2 -> .text+0x16625   state 10 -> .text+0x166e0
+   state  3 -> .text+0x1696c   state 11 -> .text+0x169c9
+   state  4 -> .text+0x16920   state 12 -> .text+0x16a44
+   state  5 -> .text+0x168b0   state 13 -> .text+0x16a75
+   state  6 -> .text+0x1666e   state 14 -> .text+0x1666e
+   state  7 -> .text+0x167f8   state 15 -> .text+0x1666e
+```
+
+**+0x16625 is the `ja` target -- the DEFAULT label**, the one that prints
+`V92Phase3Modulator: Illegal state`.  So state 2 is not a case in the source at
+all, while 6, 14 and 15 share a different, SILENT block at +0x1666e.  The
+minimal source producing this table is `case 6: case 14: case 15:` and no
+`case 2`.
+
+Each generating arm is one of the small `generate*` methods inlined verbatim,
+and matching the two is a byte comparison rather than a guess: arm 0 is
+`generateRu` (+0x163a0), arm 1 `generateRuNot` (+0x16400), arms 7/9/10
+`genereteSu` (+0x16460 -- the misspelling is the original's), arms 8/11
+`genereteSuNot` (+0x164e0), arms 4/5 `generateJa` (+0x16570), arms 3/12/13
+`generateTRN1u` (+0x165c0).
+
+The four `exit*` methods name the rest, each guarding exactly one value:
+`exitJa` (+0x162b0) acts on 4, to 6 on the twelve-symbol boundary else to 5;
+`exitSilence` (+0x16300) acts on 6, to 7; `exitSuSecond` (+0x16330) acts on 9,
+to 11 or 10; `exitTRN1u` (+0x16380) acts on 12, to 13.
+
+**They do not agree about clearing the count, and the pattern is not the
+obvious one.**  Write it down in full, because the short version --
+"`exitTRN1u` is the odd one out" -- is FALSE and is what the next batch will
+quote:
+
+```
+   exitJa        0x162e4  movl $0x0,0xc(%ecx)   only on the state = 6 arm
+                 0x162ed  (state = 5)           no store: the count survives
+   exitSuSecond  0x16364  movl $0x0,0xc(%ecx)   only on the state = 11 arm
+                 0x1636d  (state = 10)          no store
+   exitSilence   0x1631e  movl $0x0,0xc(%eax)   its single arm, always
+   exitTRN1u     0x16397  (state = 13)          no store on any path
+```
+
+So the two boundary-testing exits clear the count when they hand on to the
+NEXT stage and leave it when they move to their own `*End` state; `exitSilence`
+always clears; `exitTRN1u` never does.  That last one is what lets
+TRN1uSecondEnd's `symbolCount > 2039` guard see a count that has been running
+since TRN1uSecond began.
+
+The chain the arms themselves wire up:
+
+```
+   Ru --384--> RuNot --24--> TRN1u --trn1uLength--> Ja
+     [exitJa]--> JaEnd --12--> Silence
+     [exitSilence]--> Su --144--> SuNot --24--> SuSecond
+     [exitSuSecond]--> SuSecondEnd --12--> SuSecondNot --24-->
+   TRN1uSecond [exitTRN1u]--> TRN1uSecondEnd --past 2039, on 12--> End(14)
+```
+
+Five `eventCode` values occur and no others: 2 leaving RuNot, 3 leaving TRN1u,
+5 leaving SuNot, 7 leaving SuSecondNot, 8 leaving TRN1uSecondEnd.
+
+Two of the arm groupings are lowered differently and that is what identifies
+them.  Ru's three-and-three split is a RANGE test (`cmp $0x2; jbe`, then
+`cmp $0x5; ja` at +0x1669b); Su's `{0,2} {1,4} {3,5}` is a BIT TEST
+(`mov $1,%eax; shl %cl,%eax; test $0x05,%al; test $0x12,%al; test $0x28,%al` at
++0x16705), because the groups are not consecutive.  The three masks read off
+directly as the three case groups.
+
+### 1182. `V92Phase3Modulator::reset`'s FIRST PARAMETER IS DEAD, AND BOTH CALLERS PASS THE VALUE IT IGNORES
+
+The mangled name is
+`_ZN18V92Phase3Modulator5resetEs23V92Phase3ModulatorStatejP5V92JaPK19tagV90DILdescriptorj`,
+so the first parameter is a `short`.  After `push edi/esi/ebx` and
+`sub $0x10,%esp` it lives at `0x24(%esp)`, and **that slot is never read.**
+Every other slot is: 0x20 -> `%esi`, 0x28 -> `%eax`, 0x2c -> `%edi`,
+0x30 -> `%ebx`, 0x34 -> `%ebx` at +0x16ccd, 0x38 -> `%ecx`.
+
+What sets the amplitude is a literal, in both of the tail-duplicated blocks:
+
+```
+   16c35:  66 c7 46 04 a0 0f      movw   $0xfa0,0x4(%esi)
+   16cc1:  66 c7 46 04 a0 0f      movw   $0xfa0,0x4(%esi)
+```
+
+0xfa0 is 4000, and both callers pass exactly 4000 -- the constructor at
+.text+0x16d4b and `V92Modulator::enterPhase3` at +0x144ab -- so the object could
+not tell the difference either.  It is kept, named `levelArg` and unused, so
+that the mutation `codeLevel = levelArg` exists and is CAUGHT; without a name
+there is no way to write that mutation and the claim would be untested prose.
+
+`reset` also never dereferences its `tagV90DILdescriptor *`.  The whole use is
+`mov 0x34(%esp),%ebx; test %ebx,%ebx` at +0x16ccd, gating one diagnostic:
+`BUG BUG BUG BUG BUG - V92Phase3Modulator: no Ja Object, DIL descriptor
+available !`.  So `include/dsplib/V92Phase3Modulator.h` declares the type
+INCOMPLETE and does not include the V.90 header at all.
+
+### 1183. V.92 IS NOT V.90 WITH DIFFERENT CONSTANTS -- THREE INVERSIONS, ANY OF WHICH THE SIBLING WOULD HAVE GOT WRONG
+
+`V90Phase3Modulator` was read first as a hypothesis, exactly as briefed, and
+three of its readings are the OPPOSITE of this class's.  Each was read from
+this class's own bytes:
+
+- **The scrambler is at +0x18, not +0x20**, and is built `(5, 23, 99)` rather
+  than V.90's taps.  `lea 0x18(%ebx)` in the constructor, the destructor and
+  every arm that calls `process`.
+- **The Ja arms emit `polarity ? -codeLevel : codeLevel`.**  At +0x165af:
+  `test %eax,%eax; je 165b5; neg %edx` -- the negation is on the NON-zero side.
+  `V90Phase3Modulator`'s Jd arms are `polarity ? codeLevel : -codeLevel`
+  (src/pump/v90/V90Phase3Modulator.cpp, `jdSymbol`).
+- **The TRN1u polarity seed is `setle`, i.e. `sample <= 0`.**  At +0x169be:
+  `xor %ecx,%ecx; test %bx,%bx; setle %cl; mov %ecx,0x38(%esi)`.  V.90's TRN1d
+  seeds `sample > 0`.
+
+The sibling was still worth reading: the file shape, the "one class, one owner"
+split between defined and declared members, the union fixture and the
+compare-pointers-as-offsets idiom all carried across unchanged and saved most of
+a batch.  **Shape carries; values do not.**
+
+### 1184. THE TRN1u LENGTH IS A SIGNED DIVIDE WITH AN UNSIGNED FLOOR, AND ONE INPUT SEPARATES THE TWO READINGS
+
+`reset` computes `trn1uLength` from two `V92Parameters` fields:
+
+```
+   16bd7:  8b 8a 88 00 00 00      mov    0x88(%edx),%ecx    V92_ECHO_FAST_UPDATE_DURATION
+   16be0:  8b 82 8c 00 00 00      mov    0x8c(%edx),%eax    V92_ECHO_SLOW_UPDATE_DURATION
+   16beb:  01 c8                  add    %ecx,%eax
+   16bed:  8d 48 0c               lea    0xc(%eax),%ecx     + 12
+   16bf2:  f7 ea                  imul   %edx               0x2aaaaaab
+   16bf6:  c1 f8 1f               sar    $0x1f,%eax
+   16bf9:  d1 fa                  sar    $1,%edx
+   16bfb:  29 c2                  sub    %eax,%edx          <- the SIGNED fixup
+   16bfd:  8d 14 52               lea    (%edx,%edx,2),%edx
+   16c00:  8d 04 95 00 00 00 00   lea    0x0(,%edx,4),%eax  <- 12 * q
+   16c07:  3d df 1f 00 00         cmp    $0x1fdf,%eax
+   16c0c:  0f 87 90 00 00 00      ja     16ca2              <- UNSIGNED
+```
+
+So `length = 12 * ((a + b + 12) / 12)` with a SIGNED division -- `imul` plus
+the `sar $0x1f` / `sub` fixup, which unsigned division does not need -- and
+then `if (length < 8160) length = 8160` with an UNSIGNED comparison.
+
+**Over every non-negative sum the two readings are identical**, which is
+finding 613's class exactly: a differential suite that never drives the sum
+negative cannot see the difference, and declaring the division `int` would be
+faith.  `test/unit/t_v92p3mod.cpp`'s `par_pairs` therefore carries three
+negative rows.  At `a = b = -100` the sum is -188; signed gives -180 and stores
+0xffffff4c, unsigned gives 0xffffff60.  The mutation `the duration sum is
+divided as unsigned` is CAUGHT only because those rows exist.
+
+The same argument runs a second time inside `generateSymbol`: all four residues
+(`% 6` and `% 12`) are `mul $0xaaaaaaab` with a logical shift and no fixup, so
+`symbolCount` is unsigned.  The sweep drives it to 0x80000003, where the
+unsigned `% 12` of the incremented count is 0 and the signed one is -4, so the
+arm taken differs.
+
+`suLevel` is the third: `filds 0x4(%esi)`, `fmull` an EIGHT-byte
+1.224744871391589 (sqrt(3/2) to sixteen digits), then `fstps`/`flds` -- a round
+trip through four bytes -- and `fadds` a FOUR-byte 0.5 before a truncating
+`fistps`.  The float intermediate and the `0.5f` are both forced by that
+encoding; a double expression throughout would need neither.
+
+### 1185. WHAT THE OBJECT COMPARISON CANNOT SEE IN THIS CLASS, AND WHAT DOES SEE IT
+
+Three claims here are invisible to a whole-object differential, and this
+finding names all three rather than letting any of them pass as `equivalent`
+(finding 651's failure mode).
+
+**1. State 2 against states 6, 14 and 15.**  Both blocks write zero to
+`eventCode` and return zero; the ONLY difference is the `Illegal state` line,
+gated `dsplibs_debug_level > 1`.  So folding case 2 into the silent group, or
+dropping state 14 out of it, changes no byte of the object under any input.
+`run_diagnostics` raises both levels, captures each side's text and compares it
+byte for byte, and asserts by name that state 2 printed one line and state 6
+printed none -- because a comparison of two empty strings passes for ever.  Both
+mutations are CAUGHT, by the transcript and by nothing else.  The `no Ja Object`
+warning in `reset` is the third transcript-only mutation and the same argument.
+
+**2. The order of the two echo durations.**  Recorded `equivalent` with the
+evidence: the object reads +0x88 and +0x8c and immediately does
+`add %ecx,%eax` at .text+0x16beb, and neither field is read anywhere else in any
+of the thirteen symbols, so only the sum reaches a store.  Nothing in the object
+can order two addends.  **This expires the moment another member reads one of
+the two on its own.**
+
+**3. float against double for `suLevel`.**  Also recorded `equivalent`, and the
+honest statement is narrower than "it does not matter": the narrowing is FORCED
+by the encoding above and is written that way for that reason, but it is
+unobservable because `reset` sets `codeLevel` to the literal 4000 and no symbol
+of this class writes that field otherwise.  4000*sqrt(3/2) is 4898.979485566356,
+its float rounding 4898.97949, and both give 4899 after +0.5 and truncation.
+The derivation is codegen; the test can only confirm 4899.
+
+**Tier 2, recorded and not quoted from scrollback.**  One new suite,
+`v92p3mod`: **47 mutations, 45 caught (45 by test), 0 NOT caught, 0 unusable,
+2 equivalent, 0 MIScounted**, recorded with `tools/mutsnap.py --update
+v92p3mod`.  Three of the 45 are transcript-only and say so in their notes.
+
+**One sweep input exists only to make a mutation catchable.**  `prepare`'s
+`trn1uMode` has three settings -- miss the limit, hit it exactly, and start
+PAST it -- and only the third separates `symbolCount == trn1uLength` from
+`>=`.  Without it that mutation is NOT CAUGHT and the `==` is a guess.
+
+### 1186. WHAT THIS BATCH DID NOT DO, AND WHAT IS LEFT ON `V92Phase3Modulator`
+
+Two of the thirteen symbols are written: `generateSymbol` (1,437 B) and `reset`
+(351 B), which is finding 1104's whole named blocker on `dp_vpcm_init` --
+`reset` was blocked solely by `generateSymbol`, and `generateSymbol` is a leaf.
+
+**Eleven are declared and deliberately left undefined**, because one class, one
+owner applies to methods and defining a method whose callers are not written
+re-opens the link closure for the whole test suite: `generateRu`,
+`generateRuNot`, `genereteSu`, `genereteSuNot`, `generateJa`, `generateTRN1u`,
+`exitJa`, `exitSilence`, `exitSuSecond`, `exitTRN1u`, and the constructor and
+destructor -- those last two not even declared, so the class stays trivial and
+the test's union fixture keeps its default members.  Their bodies were all READ
+(they are what names the states, finding 1181) and each is mirrored by a
+file-static helper in the `.cpp`, so whoever defines them has the derivation
+already.
+
+Three things are recorded as NOT settled, none of them blocking:
+
+- **+0x44 and +0x48.**  No symbol of this class touches them.  The allocation
+  says they exist; whether `V92Modulator` writes them through its +0x44 pointer
+  was not checked, and finding 1107 is the reason that distinction is in the
+  header rather than a silent `pad_`.
+- **`word_00` at +0x00.**  `reset` stores its last argument there and nothing in
+  this class reads it.  `enterPhase3` sources that argument from
+  `*(int *)(V92Modulator->+0x10 + 4)`, an object this batch did not read.
+- **`V92Ja`'s size and its vector's length.**  See finding 1180.
