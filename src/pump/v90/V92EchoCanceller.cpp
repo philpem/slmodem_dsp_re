@@ -2,10 +2,12 @@
  * V92EchoCanceller.cpp -- moving the echo canceller's delay, clearing it, and
  * tearing it down.
  *
- * Reconstructed from dsplibs.o.  Four of the class's twelve members: the
+ * Reconstructed from dsplibs.o.  Seven of the class's twelve members: the
  * constructor, `setEchoDelay`, which is the one `v34handshak` reaches,
- * `reset` and the destructor.  `include/dsplib/V92EchoCanceller.h` carries
- * the object map and the argument that +0x2c is a tap count rather than a
+ * `reset`, the destructor, and -- below the second banner -- `setState`,
+ * `updateEchoHistory` and `process`, which are the state machine and the two
+ * signal paths.  `include/dsplib/V92EchoCanceller.h` carries the object map,
+ * the four states, and the argument that +0x2c is a tap count rather than a
  * pointer.
  *
  * `reset` AND `~V92EchoCanceller` ARE BOTH 195 BYTES AND ARE NOT THE SAME
@@ -56,7 +58,9 @@ extern "C" {
 
 V92EC_OFF(params,       0x00, params);
 V92EC_OFF(arma,         0x04, arma);
-V92EC_OFF(word_08,      0x08, word08);
+V92EC_OFF(state,        0x08, state);
+V92EC_OFF(updateDuration, 0x0c, updateduration);
+V92EC_OFF(word_10,      0x10, word10);
 V92EC_OFF(filterLength, 0x14, filterlength);
 V92EC_OFF(word_18,      0x18, word18);
 V92EC_OFF(historyAlloc, 0x1c, historyalloc);
@@ -79,6 +83,26 @@ typedef char v92ec_off_filterlength[
 typedef char v92ec_off_initialdelay[
     ((int)__builtin_offsetof(V92Parameters, V92_ECHO_INITIAL_DELAY) == 0x70)
     ? 1 : -1];
+
+/* And the six `setState` reads: three fast, three slow. */
+typedef char v92ec_off_fastbeta[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_FAST_BETA_FACTOR) == 0x78)
+    ? 1 : -1];
+typedef char v92ec_off_fastdecay[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_FAST_DECAY_FACTOR) == 0x7c)
+    ? 1 : -1];
+typedef char v92ec_off_slowbeta[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_SLOW_BETA_FACTOR) == 0x80)
+    ? 1 : -1];
+typedef char v92ec_off_slowdecay[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_SLOW_DECAY_FACTOR) == 0x84)
+    ? 1 : -1];
+typedef char v92ec_off_fastdur[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_FAST_UPDATE_DURATION)
+     == 0x88) ? 1 : -1];
+typedef char v92ec_off_slowdur[
+    ((int)__builtin_offsetof(V92Parameters, V92_ECHO_SLOW_UPDATE_DURATION)
+     == 0x8c) ? 1 : -1];
 #endif
 
 /*
@@ -254,7 +278,7 @@ V92EchoCanceller::reset()
 	for (i = 0; i < echoLength; i++)
 		echoHistory[i] = 0.0f;
 
-	word_08 = 0;
+	state = V92_ECHO_FILTER_ONLY;
 
 	echoBeta = 0.0f;
 	edprintf("V92EchoCanceller: echoBeta = %c%d.%06d\r\n", '-', 0, 0);
@@ -297,4 +321,433 @@ V92EchoCanceller::~V92EchoCanceller()
 		sysdep_free(arma);
 		arma = NULL;
 	}
+}
+
+/*
+ * ==========================================================================
+ * The state machine and the two signal paths.
+ * ==========================================================================
+ */
+
+/*
+ * The three arguments every float this class prints is broken into.
+ *
+ * The object formats its own fixed-point decimal and hands `edprintf` a
+ * character and two ints; the same shape as `V90Phase2Info`'s, and written
+ * the same way for the reason finding 256 gives -- the products are computed
+ * on the x87 stack at 64 significand bits and `long double` is the spelling
+ * that does not depend on the excess precision being there.
+ *
+ * THE SIGN IS `!(v <= 0.0f)` AND NOT `0.0f < v`, and the difference is a NaN.
+ * `fldz; fcomps v; sahf; sbb %edx,%edx; and $0xfffffffe,%edx; add $0x2d,%edx`
+ * selects on CF alone, CF is C0, and FCOM sets C0 for LESS-THAN and for
+ * UNORDERED both -- so the object prints '+' for a NaN coefficient where
+ * `0.0f < v` prints '-'.  Zero prints as '-'.  Same reading as
+ * `V90Equalizer::setLinearEquBeta`, and the coefficient dump below is fed
+ * whatever the adaptation left behind, so it is reachable.
+ */
+static char
+sign_of(float v)
+{
+	return !(v <= 0.0f) ? '+' : '-';
+}
+
+/* `fld %st(0); fabs; fistpl` with the control word set to truncate. */
+static int
+whole_of(float v)
+{
+	return (int)__builtin_fabsf(v);
+}
+
+/*
+ * `fildl` the truncation back, subtract it from the value, scale by 1e6,
+ * truncate again, and `cltd; xor %edx,%eax; sub %edx,%eax` -- which is abs().
+ * The subtraction is `v - (int)v` here, the way round that keeps the value's
+ * sign; the abs() makes the order untestable either way (finding 256).
+ */
+static int
+frac_of(float v)
+{
+	return __builtin_abs((int)(((long double)v - (long double)(int)v)
+				   * 1.0e6f));
+}
+
+/*
+ * `V92EchoCanceller::setEchoBeta(float)` and
+ * `V92EchoCanceller::setDecayFactor(float)`, INLINED -- the same two bodies
+ * `reset` carries with their argument constant-folded (finding 1271).
+ *
+ * `setState` reaches them three times over, at 0x113ab, 0x1145b and 0x11598,
+ * and the object has the whole body at each site: store the field, then print
+ * the field's sign and the argument's magnitude.  Neither member is written
+ * in this tree, so a call to one would be a call to nothing; the shared body
+ * is spelled once as a file-static instead, which GCC inlines back into the
+ * three sites.  Writing it out three times would also put three occurrences
+ * behind every `find` string the mutation suite has here, and an anchor must
+ * be unique (finding 1264).
+ *
+ * The sign comes from the FIELD and the two integers from the ARGUMENT, which
+ * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
+ * register for the magnitude and `fcomps 0x30(%ebx)` reads the store back for
+ * the sign.  They are the same float; the spelling is the object's.
+ */
+static void
+ec_set_echo_beta(V92EchoCanceller *self, float beta)
+{
+	self->echoBeta = beta;
+	edprintf("V92EchoCanceller: echoBeta = %c%d.%06d\r\n",
+		 sign_of(self->echoBeta), whole_of(beta), frac_of(beta));
+}
+
+static void
+ec_set_decay_factor(V92EchoCanceller *self, float decay)
+{
+	self->echoBetaDecay = decay;
+	edprintf("V92EchoCanceller: echoBetaDecay = %c%d.%06d\r\n",
+		 sign_of(self->echoBetaDecay), whole_of(decay),
+		 frac_of(decay));
+}
+
+/*
+ * Enter a state: announce it, load the state's parameters, and restart the
+ * sample count.
+ *
+ * A REPEATED STATE IS A NO-OP AND DOES NOT RESTART THE COUNT.  `cmp
+ * %eax,0x8(%ebx); je` jumps past the `movl $0x0,0x10(%ebx)` that every other
+ * arm falls into, so `word_10` survives a redundant call and is cleared by a
+ * real change -- including a change to the ILLEGAL arm, which prints and
+ * clears the count without touching the state.
+ *
+ * THE DISPATCH IS SIGNED.  `cmp $0x1; je; jle; cmp $0x2; je; cmp $0x3; je`,
+ * and `jle` is the signed branch -- see the enum's comment in the header for
+ * why that decides the underlying type.
+ *
+ * THE COEFFICIENT DUMP IS THE EXIT FROM TRAINING.  `mov 0x8(%ebx),%eax; sub
+ * $0x2,%eax; cmp $0x1,%eax; jbe` is GCC's range test for `old == 2 || old ==
+ * 3`, so the filter is printed on the way from either training state to
+ * FILTER_ONLY and on no other transition.  It is `filterLength` lines of
+ * `edprintf` and it runs whatever the debug level is -- `edprintf` self-gates
+ * one level down, so at level 0 the formatting and the encoding still happen
+ * and only the printing is skipped (see encode.h).
+ */
+void
+V92EchoCanceller::setState(V92EchoCancellerState newState)
+{
+	unsigned int i;
+
+	if (state == newState)
+		return;
+
+	switch (newState) {
+	case V92_ECHO_FILTER_ONLY:
+		edprintf("V92EchoCanceller: echo state set to filter only\r\n");
+
+		if (state == V92_ECHO_FAST_TRAINING
+		    || state == V92_ECHO_SLOW_TRAINING) {
+			edprintf("**************** NEAR ECHO FILTER "
+				 "*************** \n");
+			for (i = 0; i < filterLength; i++)
+				edprintf("   = %c%d.%06d\r\n",
+					 sign_of(echoCoeff[i]),
+					 whole_of(echoCoeff[i]),
+					 frac_of(echoCoeff[i]));
+		}
+
+		state = V92_ECHO_FILTER_ONLY;
+		ec_set_echo_beta(this, 0.0f);
+		ec_set_decay_factor(this, 0.0f);
+		break;
+
+	case V92_ECHO_COUNT_DELAY:
+		edprintf("V92EchoCanceller: echo state set to count delay "
+			 "before training\r\n");
+		state = V92_ECHO_COUNT_DELAY;
+		/*
+		 * `mov 0x38(%ebx),%eax; add $0x190,%eax` -- the only place the
+		 * duration is built rather than read, and the only use of
+		 * `echoDelay` outside the tap-count arithmetic.
+		 */
+		updateDuration = echoDelay + 400u;
+		break;
+
+	case V92_ECHO_FAST_TRAINING:
+		edprintf("V92EchoCanceller: echo state set to fast echo "
+			 "training\r\n");
+		state = V92_ECHO_FAST_TRAINING;
+		ec_set_echo_beta(this, params->V92_ECHO_FAST_BETA_FACTOR);
+		ec_set_decay_factor(this, params->V92_ECHO_FAST_DECAY_FACTOR);
+		updateDuration =
+			(unsigned int)params->V92_ECHO_FAST_UPDATE_DURATION;
+		break;
+
+	case V92_ECHO_SLOW_TRAINING:
+		edprintf("V92EchoCanceller: echo state set to slow echo "
+			 "training\r\n");
+		state = V92_ECHO_SLOW_TRAINING;
+		ec_set_echo_beta(this, params->V92_ECHO_SLOW_BETA_FACTOR);
+		ec_set_decay_factor(this, params->V92_ECHO_SLOW_DECAY_FACTOR);
+		updateDuration =
+			(unsigned int)params->V92_ECHO_SLOW_UPDATE_DURATION;
+		break;
+
+	default:
+		/*
+		 * THE ONE GATED DIAGNOSTIC IN THE CLASS BESIDES THE
+		 * DESTRUCTOR'S: `cmpl $0x1,dsplibs_debug_level; ja` around a
+		 * plain `dsplibs_debug_printf`, so this message is readable
+		 * text where every other one here is encoded.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V92EchoCanceller: setState "
+					     "ERROR: illegal state\r\n");
+		break;
+	}
+
+	word_10 = 0;
+}
+
+/*
+ * Fill the history with the ARMA's view of the transmitted signal.
+ *
+ * THIS IS THE WRITER AND `process` IS THE READER, and they do not share a
+ * cursor: this one appends at `echoHistory[echoLength]` and moves +0x2c,
+ * `process` reads a `filterLength`-long window at `echoHistory[historyIndex]`
+ * and moves +0x28.  Nothing here touches +0x28.
+ *
+ * THE BUFFER IS BOUNDED BY `historyAlloc` HERE, WHICH IS D72's OTHER SIDE --
+ * AND THE BOUND IS CONDITIONAL, NOT A SAFETY NET.  `reset` clears
+ * `echoLength` entries of a buffer allocated for `historyAlloc`; this
+ * function, entered with `echoLength <= historyAlloc - 1`, never writes past
+ * `historyAlloc - 1`, because the fast path is guarded by `echoLength + count
+ * < historyAlloc` and the slow one compacts as the next index reaches it.
+ *
+ * Entered with `echoLength >= historyAlloc` -- which is exactly what D72 says
+ * `setEchoDelay` can leave behind -- neither holds.  The fast guard is false,
+ * so the slow path runs; its first store is already past the end; and the
+ * compaction trigger is an EQUALITY, `cmp 0x1c(%ecx),%eax; je` at 0x117c7 and
+ * not `jae`, against a cursor that only ever grows.  So it never matches
+ * again and the writer runs `count` words off the end with nothing to stop
+ * it.  That is a D72 DATAPOINT and not a second deviation: the disagreement
+ * is still the one D72 records, CONFIRMED and CANNOT FIRE at any real
+ * `V92_ECHO_INITIAL_DELAY` (finding 1188).  Nothing here clamps anything, the
+ * test never asks the object to cross the line, and it carries a compared
+ * guard at BOTH ends of the buffer so a spelling that overran would fail
+ * rather than pass.
+ *
+ * THE COMPACTION KEEPS `filterLength - 1` SAMPLES, which is exactly the
+ * overlap `process` needs: its window runs from `historyIndex` to
+ * `historyIndex + filterLength - 1` and its cursor wraps at `historyAlloc -
+ * word_18`, so the last `filterLength - 1` written samples are the ones a
+ * wrapped reader is still looking at.  The copy runs DOWNWARD, from the
+ * sample just written to the front of the buffer, and the loop is
+ * BOTTOM-TESTED with no guard -- `lea -0x1(%esi),%edx` then `dec %edx; jne`
+ * -- so it always runs at least once.  With `filterLength < 2` the count
+ * underflows and it runs 2**32 - 1 times; the shipped 180 cannot reach that.
+ * D273.
+ *
+ * `FloatARMA::process(float)` IS CALLED PER SAMPLE, on both arms, with the
+ * pointer at +0x04 -- two call sites, which is why the object has the loop
+ * body twice.
+ */
+void
+V92EchoCanceller::updateEchoHistory(float *in, unsigned int count)
+{
+	float *w = &echoHistory[echoLength];
+	unsigned int i;
+
+	if (echoLength + count < historyAlloc) {
+		for (i = 0; i < count; i++)
+			*w++ = arma->process(in[i]);
+		echoLength += count;
+		return;
+	}
+
+	while (count != 0) {
+		*w++ = arma->process(*in++);
+
+		if (echoLength + 1 == historyAlloc) {
+			float *src = &echoHistory[echoLength];
+			float *dst = &echoHistory[filterLength - 2];
+			unsigned int n = filterLength - 1;
+
+			do {
+				*dst-- = *src--;
+			} while (--n != 0);
+
+			echoLength = filterLength - 1;
+			w = &echoHistory[filterLength - 1];
+		} else {
+			echoLength++;
+		}
+		count--;
+	}
+}
+
+/*
+ * The dot product `process` runs once per sample, and the reason it is a
+ * function.
+ *
+ * THE OBJECT'S SUMMATION ORDER IS NOT A COMPILER'S CHOICE.  It steps four
+ * taps at a time into TWO alternating accumulators -- `faddp %st,%st(1)` for
+ * the even terms, `faddp %st,%st(2)` for the odd ones -- and adds the two
+ * together at the end.  Float addition does not associate, so no flag this
+ * object was built with permits GCC to invent that from a one-tap loop: the
+ * unrolling is the original's source, and it is reproduced.  The tail loop
+ * adds into the even accumulator.
+ *
+ * AND OVER ORDINARY DATA IT MAKES NO DIFFERENCE, which was measured rather
+ * than assumed.  A product of two floats needs 48 significand bits and these
+ * accumulators have 64, so a filter of taps within a factor of 2**16 of each
+ * other sums EXACTLY however it is grouped -- and a mutation that merges the
+ * two accumulators passed the whole differential suite until the test was
+ * given a filter with a cancellation in it and a dynamic range of 2**100.
+ * What the grouping decides is where a cancellation lands, so that is the
+ * shape the test now carries; the last bits agree because the arithmetic is
+ * exact, not because the order was copied.
+ *
+ * `long double` FOR THE ACCUMULATORS, because `flds; fmuls; faddp` keeps the
+ * product and the running sum at 64 significand bits and never rounds to
+ * float.  A `float` accumulator says the same thing only for as long as the
+ * compiler's excess precision is `fast`; this spelling does not depend on it
+ * (V90Phase2Info.cpp's finding 256 is the same argument).
+ *
+ * Written once and called from both loops: GCC inlines it, and a `long
+ * double` return is passed in st(0) with no rounding even when it does not.
+ */
+static long double
+ec_filter_sum(const float *h, const float *c, unsigned int n)
+{
+	long double s0 = 0.0L, s1 = 0.0L;
+
+	while (n > 3) {
+		s0 += (long double)h[0] * c[0];
+		s1 += (long double)h[1] * c[1];
+		s0 += (long double)h[2] * c[2];
+		s1 += (long double)h[3] * c[3];
+		h += 4;
+		c += 4;
+		n -= 4;
+	}
+	while (n != 0) {
+		s0 += (long double)*h++ * *c++;
+		n--;
+	}
+	return s1 + s0;
+}
+
+/*
+ * Cancel the echo from one block, adapt if the state says to, and hand the
+ * state machine on when the state's duration is up.
+ *
+ * IT READS `out[0]` BEFORE IT READS ANYTHING ELSE, INCLUDING `count`.  `flds
+ * (%edx); fcomps <177.0f>` is the first thing the function does, so a call
+ * with `count == 0` still dereferences the second buffer.  177.0f is
+ * referenced from this one instruction and from nowhere else in the 1.2 MB
+ * object (`relocscan.py --at .rodata.cst4:0x8c`), so nothing else in the blob
+ * says what it means; when it matches, the block is copied through unfiltered
+ * and the read cursor is stepped as if it had been filtered, and none of the
+ * state machine runs.  Reproduced as measured.  D272.
+ *
+ * THE COMPARISON IS SPELLED `<` OR `>` FOR THE SAME REASON
+ * `V90Equalizer::setLinearEquBeta`'s is: the object branches on ZF alone and
+ * FCOM sets C3 for EQUAL and for UNORDERED both, so a NaN in `out[0]` takes
+ * the copy path where C's `!=` would take the filter path.  The negated
+ * `<`/`>` pair is the predicate the object has (finding 236's shape).
+ *
+ * FOUR PATHS, AND ONLY TWO OF THEM ADAPT.  State 0 filters and returns
+ * without touching `word_10`, so a canceller that has finished training never
+ * changes state again.  State 1 copies the block through, advances the cursor
+ * by the whole block at once, and counts.  States 2 and 3 -- and, because the
+ * dispatch is `if (state == 0) ... else if (state == 1) ... else`, every
+ * ILLEGAL state too -- filter, adapt, decay the beta, and count.
+ *
+ * THE ERROR THAT DRIVES THE ADAPTATION IS NOT THE ONE THAT IS WRITTEN OUT.
+ * `fld %st(0); fstps (%edx,%eax,4)` stores a float copy of the error to
+ * `out[i]` and keeps the 64-bit-significand original in the register for
+ * `err * echoBeta`, so the update uses more precision than the caller sees.
+ * `long double err` is that, spelled so it does not depend on excess
+ * precision.
+ *
+ * THE CURSOR WRAPS AT `historyAlloc - word_18` AND +0x18 IS WHAT IT READS --
+ * not `filterLength - 1` recomputed, which is what `updateEchoHistory`'s
+ * compaction does with the same quantity.  Two fields holding one number, and
+ * each function picks a different one; that is why +0x18 is a real member and
+ * not a value the constructor could have folded away.
+ */
+void
+V92EchoCanceller::process(float *in, float *out, unsigned int count)
+{
+	unsigned int i, j, mod;
+	long double sum, err, mu;
+
+	if (!(out[0] < 177.0f || out[0] > 177.0f)) {
+		mod = historyAlloc - word_18;
+		for (i = 0; i < count; i++) {
+			out[i] = in[i];
+			if (historyIndex + 1 == mod)
+				historyIndex = 0;
+			else
+				historyIndex = historyIndex + 1;
+		}
+		return;
+	}
+
+	if (state == V92_ECHO_FILTER_ONLY) {
+		for (i = 0; i < count; i++) {
+			sum = ec_filter_sum(&echoHistory[historyIndex],
+					    echoCoeff, filterLength);
+			out[i] = in[i] - sum;
+
+			if (historyIndex + 1 == historyAlloc - word_18)
+				historyIndex = 0;
+			else
+				historyIndex = historyIndex + 1;
+		}
+		return;
+	}
+
+	if (state == V92_ECHO_COUNT_DELAY) {
+		for (i = 0; i < count; i++)
+			out[i] = in[i];
+
+		/*
+		 * ONE CONDITIONAL SUBTRACTION, NOT A MODULO.  `cmp %eax,%edx;
+		 * jae; sub %eax,%edx` -- a block longer than the modulus
+		 * leaves the cursor past the end of the buffer and the object
+		 * does not loop.  D274, and it cannot fire at any block
+		 * length the modem uses.
+		 */
+		mod = historyAlloc - word_18;
+		historyIndex += count;
+		if (historyIndex >= mod)
+			historyIndex -= mod;
+
+		word_10 += count;
+		if (word_10 >= updateDuration)
+			setState(V92_ECHO_FAST_TRAINING);
+		return;
+	}
+
+	for (i = 0; i < count; i++) {
+		sum = ec_filter_sum(&echoHistory[historyIndex], echoCoeff,
+				    filterLength);
+		err = in[i] - sum;
+		out[i] = err;
+
+		mu = err * echoBeta;
+		for (j = 0; j < filterLength; j++)
+			echoCoeff[j] += echoHistory[historyIndex + j] * mu;
+
+		echoBeta = echoBeta * echoBetaDecay;
+
+		if (historyIndex + 1 == historyAlloc - word_18)
+			historyIndex = 0;
+		else
+			historyIndex = historyIndex + 1;
+	}
+
+	word_10 += count;
+	if (word_10 >= updateDuration)
+		setState(state == V92_ECHO_FAST_TRAINING
+			 ? V92_ECHO_SLOW_TRAINING : V92_ECHO_FILTER_ONLY);
 }
