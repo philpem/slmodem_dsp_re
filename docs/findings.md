@@ -40212,11 +40212,20 @@ range. **Our own 74 ms is.** To bring the echo inside the window, 48.1 ms has to
 come out of a pipeline that is entirely `slmodemd` and `d-modem` -- code in this
 project, not a vendor device.
 
-**What this retires.** The proposal to shorten the VG204's jitter buffer is
-withdrawn: it addresses a term that was already small enough. The
-delay-line enlargement of 1205 remains valid but is no longer the only route --
-shedding 48 ms of internal latency reaches the same place without touching the
-object's data structures.
+**What this changes.** The delay-line enlargement of 1205 is no longer the only
+route: shedding 48 ms of internal latency reaches the same place without
+touching the object's data structures.
+
+> **CORRECTION.** This finding first said the proposal to shorten the VG204's
+> jitter buffer was "withdrawn: it addresses a term that was already small
+> enough". That reasoning is wrong. "Already inside the reach" describes the
+> EXTERNAL loop alone, but the canceller sees external PLUS internal --
+> 131.38 + 74.24 = 205.62 ms. Cutting EITHER term moves the echo toward the
+> window, and if the ATA's buffer is a real ~60 ms of the 131, removing it puts
+> the datapump-seen echo near 146 ms, inside 157.5 ms without any change to our
+> pipeline. The ATA route is live; what this finding actually establishes is
+> that the internal 74 ms is a second, larger and previously unrecognised term,
+> not that the first one is worthless.
 
 **What it does not say.** Where the 74 ms sits is not yet known. IODELAY 240 is
 25 ms at 9600 Hz and is a candidate, but the earlier sweep saw the datapump echo
