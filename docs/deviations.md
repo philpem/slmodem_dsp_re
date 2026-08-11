@@ -4337,6 +4337,19 @@ displacement. Three hit, and only three — the two constructor copies, both
 **Finding 1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
 
 *Numbering: D170 and D171 are the block this batch was assigned, and the gap below them is not this batch's to fill. Three sessions independently picked the number after D161 as "the next free one", which is exactly why blocks are now handed out rather than taken; the numbers between D161 and D170 are reserved for resolving those collisions. Bare `D` and digits read as a citation to `refcheck.py`, so they are not spelled out here — the same trap the D64 gap note records.*
+## D180 🐛 `V92Precoder` and `V92PreFilter` run a filter constructor over `sysdep_malloc`'s return without checking it, so a failed allocation constructs a `FloatFIR` through a null pointer
+
+*Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision — the allocator never fails in the harness.*
+
+**Finding 1245.** `movl $0x14,(%esp); call sysdep_malloc; call FloatFIR::FloatFIR` with nothing between the two, four times across the pair. `FloatFIR`'s constructor stores five fields, so the fault is at the first store and not deferred. The same shape as D5's family and the same as `FloatFIR`'s own unchecked history allocation.
+
+---
+
+## D181 🐛 💤 `~V92Precoder` and `~V92PreFilter` do not null what they free, and `V92Precoder::reset(V92MappingParams *)` is the one writer that skips those two words
+
+*Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that resets after destroying.*
+
+**Finding 1245.** The destructor leaves +0x68 and +0x6c holding freed addresses; `reset` rewrites +0x04..+0x64 and +0x70, +0x74 and deliberately leaves those two alone, which is right for a live object and would use a dangling pointer on a destroyed one. `V92Transmitter::~V92Transmitter` frees the precoder immediately after destroying it, so no path in the object reaches it — hence 💤.
 
 ---
 

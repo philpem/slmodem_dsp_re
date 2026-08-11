@@ -36,6 +36,10 @@
   "src/pump/v90/K56FlexFloModem.cpp",
   "build/test/t_v92alloc"
  ],
+ "moduluscoder": [
+  "src/pump/v90/ModulusCoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
  "psd": [
   "src/dsp/Psd.cpp",
   "build/test/t_psd"
@@ -320,6 +324,10 @@
   "src/pump/v90/V92Jd.cpp",
   "build/test/t_v92jd"
  ],
+ "v92modulusencoder": [
+  "src/pump/v90/V92ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
  "v92p2info": [
   "src/pump/v90/V92Phase2Info.cpp",
   "build/test/t_v92p2info"
@@ -331,6 +339,14 @@
  "v92params": [
   "src/pump/v90/V92Parameters.cpp",
   "build/test/t_v90params"
+ ],
+ "v92precoder": [
+  "src/pump/v90/V92Precoder.cpp",
+  "build/test/t_v92precoder"
+ ],
+ "v92prefilter": [
+  "src/pump/v90/V92PreFilter.cpp",
+  "build/test/t_v92precoder"
  ],
  "vpcmep3": [
   "src/pump/v90/VPcmFloModem.cpp",

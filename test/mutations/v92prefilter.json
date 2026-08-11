@@ -1,0 +1,58 @@
+[
+ {
+  "label": "NOTE: what this set is for",
+  "why": "V92PreFilter's constructor and destructor and t_v92precoder.cpp's second half were written by one hand at one sitting from one reading of 0x57240-0x573ac, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes. One entry is recorded as EQUIVALENT on purpose and is the interesting one: FloatFIR and FloatIIR have the same five fields at the same offsets, round their tap counts down to a multiple of four the same way, allocate and zero the same buffer and leave the same write index -- so building a FIR where the object builds an IIR is byte-for-byte undetectable here, and what settles the class is the relocation `R_386_PC32 _ZN8FloatIIRC1EjPfj` at 0x572a7. That is a codegen-tier fact, not a differential one, and pretending a test covers it would be worse than saying so."
+ },
+ {
+  "label": "the FIR gets one more sample of slack",
+  "find": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK + 1);"
+ },
+ {
+  "label": "the IIR gets one fewer sample of slack",
+  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK - 1);"
+ },
+ {
+  "label": "the IIR is built with no taps",
+  "find": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, 0, 0, V92PREFILTER_BLOCK);"
+ },
+ {
+  "label": "the two stores are swapped",
+  "find": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
+  "replace": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = (FloatIIR *)f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = (FloatFIR *)i;"
+ },
+ {
+  "label": "the FIR allocation is four bytes larger than the object",
+  "find": "\tf = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));",
+  "replace": "\tf = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR) + 4);"
+ },
+ {
+  "label": "the constructor also clears the word at +0x00",
+  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n}",
+  "replace": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n\tword_00 = 0;\n}"
+ },
+ {
+  "label": "the FIR free's null test is dropped",
+  "find": "\tif (fir != 0) {\n\t\tfir->~FloatFIR();\n\t\tsysdep_free(fir);\n\t}",
+  "replace": "\tif (fir != 0)\n\t\tfir->~FloatFIR();\n\tsysdep_free(fir);"
+ },
+ {
+  "label": "the IIR free's null test is dropped",
+  "find": "\tif (iir != 0) {\n\t\tiir->~FloatIIR();\n\t\tsysdep_free(iir);\n\t}",
+  "replace": "\tif (iir != 0)\n\t\tiir->~FloatIIR();\n\tsysdep_free(iir);"
+ },
+ {
+  "label": "the destructor frees the FIR twice and the IIR never",
+  "find": "\t\tiir->~FloatIIR();\n\t\tsysdep_free(iir);",
+  "replace": "\t\tiir->~FloatIIR();\n\t\tsysdep_free(fir);"
+ },
+ {
+  "label": "the second sub-object is a FloatFIR, not a FloatIIR",
+  "equivalent": true,
+  "why": "The two classes are behaviourally identical -- same layout, same rounding, same allocation, same zero fill, same starting index -- so this changes which constructor symbol is called and nothing an object comparison or an allocation counter can reach. It is recorded here so that the day it IS caught, somebody looks at why: either FloatIIR has diverged from FloatFIR, or a new check in t_v92precoder.cpp has become sensitive to something it should not be.",
+  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
+  "replace": "\tv92prefilter_floatfir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;"
+ }
+]
