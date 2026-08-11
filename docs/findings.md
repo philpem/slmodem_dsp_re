@@ -44581,3 +44581,55 @@ three times and the base-2 printer twice, exactly as it wrote the
 constructor's body again for `reset`.
 
 ======================================================================
+
+======================================================================
+
+### 1387. `make period` REPORTED 0 PASSED, 157 FAILED, AND THE CAUSE WAS A STALE ARTEFACT NO PREREQUISITE COVERS
+
+The first `make period` run on a branch merged up to the period-toolchain work
+gave:
+
+    period differential: 0 passed, 157 failed
+
+with every binary failing at LINK and every failure reading
+
+    ref__ZTV12V90Resampler: discarded in section
+        `.gnu.linkonce.r._ZTV12V90Resampler' from build/dsplibs_ref.o
+
+**Nothing was wrong with the branch.**  `build/dsplibs_ref.o` had been built an
+hour earlier by `make phase`, before the merge, and the merge brought a new
+`tools/refrename.py` -- the fix for variance V5 in `docs/method/compilers.md`,
+which moves the blob's 83 linkonce sections out of COMDAT so the period
+linker does not discard them.  The Makefile's recipe RUNS `refrename.py`:
+
+    $(REF): $(SYMMAP) $(BLOB)
+        objcopy --globalize-symbols=... ; objcopy --redefine-syms=... 
+        python3 tools/refrename.py $@
+
+but `tools/refrename.py` is not among its prerequisites, so make saw an
+up-to-date target and did not re-run it.  `rm -f build/dsplibs_ref.o
+build/dsplibs_glob.o build/symmap.txt` and a re-run gave **155 passed, 2
+failed**, the two being `t_v90equ` and `t_v92precoder` and neither belonging to
+this branch.
+
+**THE FAILURE MODE IS WHAT MAKES THIS WORTH A NUMBER.**  A total, uniform
+failure of every binary, whose message names a vtable section and a file in
+`build/`, arriving immediately after a merge and a batch of new work, reads
+exactly like "the merge broke the tree" or "my new code did this".  It is
+neither, and there is nothing in the output that says so.  Every agent who
+merges master and runs `make period` for the first time will meet it once.
+
+The general rule this tree already applies elsewhere and not here: **a recipe
+that runs a tool must list that tool as a prerequisite**, or the tool's own
+changes are invisible to `make`.  `$(SYMMAP)` does this correctly --
+`$(SYMMAP): tools/symmap.py $(BLOB)` -- so the pattern is present in the same
+file, eight lines above the recipe that omits it.  The one-line repair belongs
+to whoever owns the Makefile; it is recorded here rather than made, because a
+branch that edits the Makefile is a branch that collides with every other one.
+
+**And a diagnostic worth keeping:** if `make period` fails *uniformly* at link,
+delete `build/dsplibs_ref.o`, `build/dsplibs_glob.o` and `build/symmap.txt` and
+re-run before believing anything the run said.  A partial failure -- some
+binaries passing -- is a real result; a total one is almost certainly this.
+
+======================================================================
