@@ -44129,3 +44129,332 @@ categories in a discrete distribution, so a large shift in where the mass sits
 barely moves them. The rank-sum over the full distribution, and the proportion
 above a threshold, both find the effect immediately. **Choosing a statistic that
 cannot see the effect is a way of being wrong that looks like rigour.**
+
+### 1360. THREE OF THE DETECTOR'S FIELD TYPES WERE WRONG AND NOTHING COULD HAVE CAUGHT IT
+
+`V90AutoDigitalImpDetector`'s object map was written from `reset` and
+`resetLinearMapping`, which are the two methods that only ever store ZERO into
+the measurement arrays.  A zero is a zero whatever the declared type, so the
+lifecycle batch's `int int_1000[6][128]` and `int int_1c00[6][128]` both
+compiled to the same `movl $0x0` the object has, passed a whole-object
+differential comparison over 64 seeded trials, and were wrong.
+
+Reading the processing methods settles them, and each from an instruction that
+had no choice:
+
+  * **+0x1000 is `float`.**  `calculateLinearMeanAndVar` reaches it with
+    `fadds 0x1000(%ebx,%ecx,4)` / `fstps`, and `updateUref` with `flds`.  An
+    `int` array cannot be added to with `fadds`.
+  * **+0x1c00 and +0x9d30 are `unsigned int`.**  Every conversion of them to
+    floating point is `push $0x0; push %eax; fildll (%esp)` -- a 64-bit load
+    of a value with a forced zero high word, which is GCC's unsigned-to-float
+    sequence.  A signed `int` is a bare `fildl` of the four bytes.
+
+**What is worth taking from this is which tier can see what.**  `make offsets`
+checks offsets and says nothing about types.  The differential tier compares
+bytes and cannot distinguish two types with the same width when the only
+values written are zero.  The codegen tier would have seen it -- `fildll`
+against `fildl` is exactly the kind of forced encoding CLAUDE.md says to act
+on -- and nobody ran it on this class, because the class had two methods and
+neither of them converts anything.  So the defect was invisible until a THIRD
+method existed, and it was invisible for a reason that generalises: a field
+whose only writer stores a constant is untyped as far as this project's
+machinery is concerned.
+
+======================================================================
+
+### 1361. THE 25,320-BYTE PAD IS ONE ARRAY, AND THE MULTIPLIER PROVES ITS SHAPE
+
+`pad_2818[0x62e8]` was the biggest unmodelled region in the V.PCM run path.
+`addReceivedSampleToStorage` names it in six instructions:
+
+    imul   $0x83e,%ecx,%esi          ; ecx = phase
+    mov    0x9100(%edi,%ecx,4),%ebx  ; ebx = the phase's sample count
+    add    %ebx,%esi
+    mov    %ax,0x2818(%edi,%esi,2)
+
+`0x83e` is 2,110, the scale is 2, and 6 x 2110 x 2 is 0x62e8 -- which is
+EXACTLY the distance from +0x2818 to the next field the map already had, at
++0x8b00.  The stride and the extent agree, so `short sampleStore[6][2110]` is
+measured rather than assumed: a wrong depth would leave a remainder.
+
+Three smaller regions fall the same way.  +0x0c00 is `short prevLinMapp[128]`
+-- `setPrevSessionLinearMapping`'s loop runs a `short` index to 0x7f
+inclusive, and 128 shorts is the whole 256 bytes to +0x0d00.  +0xa956 is
+`unsigned char maxUcode[6]`, which is `setMaxUcodeArray`'s entire body.
++0xa9a6 is the `short` threshold `isAltRbs` compares a distance against.
+
+The class's map is now 20 named fields and 39 bytes of pad, from 43,440 bytes
+of which 25,576 were unmodelled.
+
+======================================================================
+
+### 1362. `reset` AND `setConnectionType` INSTALL THE SAME FOUR CONSTANTS AND DISAGREE ABOUT ONE STORE
+
+Both methods choose between (1, 88, 0.35f, 1.75f) and (0, 80, 0.25f, 1.5f) on
+whether a connection type is 2, and they write them to the same four offsets.
+`reset` writes all four on both arms.  `setConnectionType` writes four on the
+first arm and THREE on the second: +0xa978 is set to 1 when the type is 2 and
+is not touched otherwise.
+
+    402c2: mov $0x1,%ecx            ; the type == 2 arm
+    402cc: mov %cx,0xa978(%edx)
+    ...
+    4029f: mov $0x3e800000,%eax     ; the else arm: 0xa97c, 0xa97a, 0xa980
+    402a9: mov %eax,0xa97c(%edx)    ; and no fourth store in 97 bytes
+
+So the object's state after `setConnectionType(0)` depends on whether a
+`setConnectionType(2)` ever preceded it, where after `reset` it does not.
+Recorded as D255 and reproduced; the mutation that ADDS the missing store is
+caught, which is what turns "there is no fourth store" from a reading of the
+disassembly into a property of the test.
+
+======================================================================
+
+### 1363. TWO UNBOUNDED INDICES IN ONE 149-BYTE METHOD, AND ONE OF THEM LANDS ON THE OTHER'S COUNTER
+
+`addReceivedSampleToStorage` stores at `sampleStore[phase][int_9100[phase]++]`
+with no comparison against the row's 2,110 entries anywhere (D256), and
+increments `short_8b00[phase][code]` with the full `unsigned char` code (D259).
+The second is the interesting one, because the two arrays are adjacent:
+`short_8b00` is 6 x 128 shorts ending at +0x9100, and +0x9100 is `int_9100[0]`.
+
+    phase 5, code 128  ->  0x8b00 + (5*128 + 128)*2  =  0x9100
+
+So a code of 128 or more on phase 5 increments the low half of phase 0's
+sample-store index, and codes 128..139 reach all six of them.  The two
+defects then compose: the corrupted index is what the next sample stores at,
+and nothing bounds it.
+
+**This was found by the test failing at its own bookkeeping**, not by reading.
+The forty-block sequence asserted that phase 0 had stored 240 samples and got
+65,777, while every differential comparison in the run passed -- both sides
+were doing the same wrong thing to their own objects, and the only thing that
+noticed was an assertion about the test's own arithmetic.  The lesson is the
+cheap one: a differential test says the two agree, and an assertion about what
+SHOULD have happened is a second, independent claim worth writing down even
+when it looks redundant.
+
+======================================================================
+
+### 1364. FOUR ARGUMENTS THE OBJECT DOES NOT READ, AND WHY THE `Alt` HALF EXPLAINS THEM
+
+`clearCamulativeAltVal(short, short)` never loads its second argument: the
+thirty-one bytes touch `0x4(%esp)` and `0x8(%esp)` and nothing else.  Its pair
+`clearCamulativeVal(short, short)` uses both, as `phase * 128 + code`.
+
+The class is built in pairs -- `calculateLinearMeanAndVar` /
+`...Alt`, `updateLinMappMeanAndVar` / `...Alt`, `updateUref` / `updateUrefAlt`
+-- and the rule across all of them is that the plain half keeps state per
+phase per code and the `Alt` half keeps it per phase only.  So the alternate
+accumulators have no code dimension for a second argument to select, and the
+signature is the plain half's signature kept for symmetry.  That is a reading,
+not a measurement; what IS measured is that the argument is unread, and the
+mutation that starts using it is caught because the test sweeps it
+independently of the phase.  D257.
+
+======================================================================
+
+### 1365. THE PHASE WALK WRAPS BY TESTING FOR SIX, WHICH IS NOT A MODULUS
+
+`adjustUinfoToPhaseOffset` rotates one column of `linMapp` so that it starts
+at a given phase.  The advance is
+
+    lea 0x1(%ebx),%edx ; movswl %dx,%edx      ; next = (short)(phase + 1)
+    cmp $0x6,%dx ; setne %bl ; neg %ebx ; and %edx,%ebx
+
+which is `next == 6 ? 0 : next` -- branchless, and equal to a modulus ONLY for
+a phase already inside 0..5.  An offset of 6 walks 6,7,8,9,10,11 and reads
+`linMappAlt` and `prevLinMapp` as though they were rows of `linMapp`; a
+negative one reads in front of the object.  The write-back loop is
+unconditionally 0..5, so nothing outside the table is written.  D258.
+
+The test sweeps the offset over 0..6 and asserts both cases were reached.  It
+stops at 6 deliberately: the mutation that replaces the test with `% 6` is
+caught by the offset-6 case alone, and going below zero would have the test
+reading memory it does not own -- which measures the test, not the object.
+
+======================================================================
+
+### 1366. THE OBJECT DIVIDES IN ONE METHOD AND MULTIPLIES BY A RECIPROCAL IN TWO, AND ONLY A CONSTRUCTED PAIR TELLS THEM APART
+
+Three methods form a mean from a sum and a count, and they do not agree on
+how:
+
+    updateLinMappMeanAndVar   fdivrs (1.0f)      then fmul   -- sum * (1/n)
+    updateUrefAlt             fld1, fdivr        then fmuls  -- sum * (1/n)
+    updateLinMappMeanAndVarAlt  fdivrs sum                   -- sum / n
+
+GCC will not turn one into the other without `-ffast-math`, so each was
+written the way the object has it.  The claim that they are not
+interchangeable then has to be earned, and the first three attempts did not
+earn it: the mutations swapping the two forms were **NOT CAUGHT** by 64 seeded
+trials plus 10,700 comparisons over forty blocks of samples.  Random floats
+almost never land close enough to a rounding boundary for a 1-ulp difference
+in the mean to survive `+ 0.5f` and a truncating `fistp`.
+
+So it was searched for -- and the search had to be done twice, because the
+first one was wrong in a way worth recording.
+
+A probe holding only the mean, `inv = 1.0f/n; mean = sum*inv;` against
+`mean = sum/n`, reports `n = 25, sum = 12.5` as the first disagreement.  Feed
+that pair to the real method and BOTH forms answer 1: it does not disagree
+there at all.  The difference is the variance line either side of the mean --
+`var = sq*inv - mean*mean` -- which changes which x87 register the mean lives
+in and therefore whether it is rounded on the way to the `fistp`.  **A probe
+for a floating-point question has to mirror the whole body, not the
+expression**, because on x87 the surrounding code is part of the arithmetic.
+
+With the body mirrored, over every `n` below 6,000 against every multiple of
+0.5 below 30,000, the first disagreement is
+
+    n = 41, sum = 143.5:  sum / n = 3.5 exactly      -> +0.5 -> 4.0 -> 4
+                          sum * (1/n) a hair under   -> +0.5 -> <4  -> 3
+
+`n = 3` and `n = 25`, the two obvious candidates and the two tried first, both
+agree.  One arm of the test now seeds exactly that pair, and all three
+mutations are caught.
+
+**The general point is the one finding 149 keeps making.** "These two forms
+differ" was true, written in a header comment, and untested -- and it stayed
+untested through two rounds of adding trials, because the inputs that separate
+them are a vanishing fraction of the input space and no amount of sweeping
+finds them by accident.  A claim about floating-point rounding needs a
+constructed witness, and the search that finds one is cheap.
+
+======================================================================
+
+### 1367. SIXTEEN METHODS, 1,684 BYTES, AND EVERY ONE OF THEM IS A LEAF
+
+`V90AutoDigitalImpDetector` has 28 unwritten methods over 17,533 bytes.
+Sixteen of them call nothing this tree has not written -- `linear2alaw`,
+`linear2ulaw` and each other's absence -- and those sixteen are 1,684 bytes:
+
+    calculateLinearMeanAndVar 175   addReceivedSampleToStorage 149
+    updateUrefAlt             168   adjustUinfoToPhaseOffset   162
+    isAltRbs                  146   applyPadGainToLinMapp      141
+    unSuspectedPhaseNearestLinMapp 132  updateLinMappMeanAndVar 128
+    updateLinMappMeanAndVarAlt 118  setConnectionType           97
+    isThereAnyAltRbsPhase      57   calculateLinearMeanAndVarAlt 49
+    clearCamulativeVal         48   setPrevSessionLinearMapping  42
+    setMaxUcodeArray           41   clearCamulativeAltVal        31
+
+`updateUref` (240 bytes) is decoded and NOT landed: it calls
+`unitePhasesInfoOfUref`, which is not written, and defining a method whose
+callee is missing leaves an undefined symbol that breaks the link for every
+test binary in the tree, not just its own.  **Its decode is written down here
+so that the next run does not have to repeat it**, and it is the same shape as
+`updateUrefAlt` with the plain accumulators in place of the alternate ones:
+
+    for (short p = 0; p < 6; p++) {
+            unsigned idx = p * 128 + ucode;          /* ecx += 0x80 per turn */
+            if (uint_1c00[idx] != 0) {
+                    float inv = 1.0f / uint_1c00[idx];      /* fld1 hoisted */
+                    float mean = float_1000[idx] * inv;
+                    float_9d48[idx] = float_9118[idx] * inv - mean * mean;
+                    linMapp[p][ucode] = (short)(mean + 0.5f);
+            }
+    }
+    unitePhasesInfoOfUref(ucode);                    /* the blocking call */
+    for (short p = 0; p < 6; p++) {
+            unsigned idx = p * 128 + ucode;
+            float_1000[idx] = 0.0f;
+            uint_1c00[idx] = 0;
+            float_9118[idx] = 0.0f;
+    }
+
+`ucode` is read ONCE, before the first loop, and kept on the stack across the
+call -- `movzbl 0xa96b(%ebx),%eax; mov %al,0xb(%esp)` at the head and `movzbl
+0xb(%esp),%ecx` before the call -- but it is re-read from the object at
+0x410d2, AFTER `unitePhasesInfoOfUref` returns, for the clearing loop.  So the
+callee is allowed to change it and the clearing loop uses the new value.
+
+**THE OTHER TWELVE ARE ALMOST ALL LEAVES TOO, and that was measured rather
+than assumed** -- one grep over all 28 disassemblies for `R_386_PC32` gives
+the whole intra-class call graph, which is four edges:
+
+    setQcLinearMapping     566  -> updateAltRbsPhaseInDil
+    porcessSecondStudy     831  -> updateAltRbsPhaseInDil
+    updateUref             240  -> unitePhasesInfoOfUref
+    studyUrefHandler      5335  -> getAltVarThresh, unitePhasesInfoOfUref
+
+Everything else in the class calls only `linear2alaw`, `linear2ulaw`,
+`alaw2linear`, `ulaw2linear`, `memcpy`, `edprintf` and
+`dsplibs_debug_printf`, all of which this tree has.  So NINE of the remaining
+twelve are writable today -- `unitePhasesInfoOfUref` 748,
+`uniteLinMappInfoOfUnsuspectedPhases` 601, `getAltVarThresh` 581,
+`determineMaxUcode` 1189, `resetStudyUrefHandler` 976, `porcessFirstStudy`
+779, `updateAltRbsPhaseInDil` 1124, `findPadGain` 2879 and
+`setQcLinearMapping`'s and `porcessSecondStudy`'s blocker
+`updateAltRbsPhaseInDil` -- and the class closes in two waves, not in a
+chain.  `unitePhasesInfoOfUref` is a leaf, so it plus `updateUref` is 988
+bytes for one decode and retires the only item this batch had to leave
+blocked.
+
+**Three of the sixteen have a return type**, which the mangling does not carry
+and which therefore had to be read out of what the object leaves in %eax:
+`isAltRbs` and `isThereAnyAltRbsPhase` return a 0/1 built in a register zeroed
+on entry, and `unSuspectedPhaseNearestLinMapp` returns a `movswl` of a
+`linMapp` entry.  The last is declared `short` rather than `int` because both
+spellings emit the same sign-extending load, so the narrower one carries the
+extra fact for free.
+
+======================================================================
+
+### 1368. 87 MUTATIONS ON ONE SOURCE FILE, AND SIX ANCHORS THAT STOPPED BEING UNIQUE THE MOMENT A SECOND METHOD LANDED
+
+The `v90adid` set grew from 31 mutations to 87.  Six of the original 31 broke,
+and they broke in the two ways finding 1264 predicts:
+
+  * **Four went to zero matches**, because the batch retyped and renamed the
+    fields they anchored on -- `int_1c00` became `uint_1c00`, `int_1000`
+    became `float_1000`, `float_a94c` became `padGain`.
+  * **Five went to two matches**, because `setConnectionType` writes the same
+    four constants to the same four offsets as `reset` does, VERBATIM.
+    `\t\tshort_a97a = 88;` had matched once for a year and now matched twice.
+
+The second kind is the dangerous one: `mutate.py` reports it UNUSABLE, and
+**UNUSABLE does not fail a run**.  A suite that silently loses five mutations
+still prints `0 NOT caught`.  They were repaired by deepening each anchor
+until it spans something only `reset` has -- its `else` arm's `short_a978 = 0`,
+which is the store `setConnectionType` does not make (D255) -- so the two
+methods' anchors are told apart by the very asymmetry the batch recorded.
+
+    87 mutations: 87 caught, 0 NOT caught, 0 unusable, 0 equivalent
+
+`anchorcheck.py` is clean.  No `equivalent` verdict was claimed: the three
+that looked equivalent were floating-point reassociations, and finding 1366 is
+what happened instead of claiming them.
+
+======================================================================
+
+### 1369. A DETECTOR THAT ALWAYS SAYS NO PASSES A SWEEP PERFECTLY, AND TWO OF THIS CLASS'S BRANCHES ONLY EXIST WHEN FORCED
+
+`isAltRbs` has three outcomes -- an early return on an unflagged phase, a
+distance inside its threshold, and a distance outside it -- and a seeded
+object reaches exactly one of them.  `short_2800[phase]` is nonzero for 65,535
+of 65,536 seeds, so the early return is unreachable by sweeping; and the
+threshold at +0xa9a6 is a seeded `short` against a distance built from a
+seeded `short` and a seeded float, which is outside it almost always.
+
+Four things are forced and each is asserted to have been observed:
+
+  * the flag, cleared on one trial in four, for the early return;
+  * the flag pattern that makes the six-phase total positive, negative and
+    zero, for `isThereAnyAltRbsPhase`'s two answers;
+  * the threshold and the mapping entry, straddled, for the other two arms;
+  * **the sample and the entry with OPPOSITE SIGNS**, which is the only thing
+    that separates `|(|v| - m)|` from `|v - m|`.  The mutation that moves the
+    magnitude past the subtraction was NOT CAUGHT until a directed block of
+    five such pairs existed, because every trial the sweep generated happened
+    to agree in sign.
+
+And one more, for a width rather than a branch: `isThereAnyAltRbsPhase`
+accumulates into a `short`, which the object shows by truncating with `movswl
+%ax,%ecx` after every add.  Six flags cannot overflow it in any realistic
+state, so the claim looked untestable -- until four phases of 10,000.  That
+totals 40,000, which is positive in an `int` and NEGATIVE once truncated, so
+the method answers "yes" with a 32-bit accumulator and "no" with a 16-bit one.
+The mutation that widens it is caught by that one arm and by nothing else.
+
+======================================================================
