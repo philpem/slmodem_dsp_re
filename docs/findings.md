@@ -44277,10 +44277,10 @@ asserts it did (`the quotient was 0/0 on %ld calls`).
 
 ======================================================================
 
-### 1402. A PLAIN `float` LOCAL DOES ROUND AT THIS TREE'S FLAGS, AND THE MUTATION THAT PROVES IT
+### 1402. THE PERIOD COMPILER EMITS `Psd::process`'s ROUNDING FROM PLAIN SOURCE -- SAME TWO INSTRUCTIONS, SAME STACK SLOT
 
 `Psd::process` ends its two logarithmic arms with a rounding the object makes
-and a naive translation does not:
+and a naive translation might not:
 
     fyl2x                     ; log10(x), 64 significand bits
     fstps 0x28(%esp)          ; ROUND TO FLOAT
@@ -44288,29 +44288,54 @@ and a naive translation does not:
     fmul  %st(1),%st          ; then multiply by 10.0f
     fstps (%ebp,%eax,4)
 
-GCC 3.4 emitted the store/reload because the source assigned the logarithm to
-a `float` before using it.  The worry -- and it is a real one elsewhere in
-this tree -- is that a MODERN GCC at these flags keeps the value in st(0) at
-64 bits, silently drops the rounding, and produces a different last place.
-Under `-mfpmath=387` GCC's default is `-fexcess-precision=fast`, which
-PERMITS keeping the extra bits, so nothing in the flag set promises the
-rounding will happen.
+The reconstruction writes that as a plain `float` local:
 
-**It happens.** `float l = (float)psd_x87_log10(...); out[i] = (float)(l *
-10.0f);` is bit-exact against the blob over 2,164 checks, and the mutation
-`the logarithm is not rounded to float before the multiply` -- the same two
-lines with `l` declared `long double` -- is CAUGHT.  So at this tree's exact
-flags a plain `float` local is a rounding barrier in fact, and no `volatile`,
-no memory clobber and no helper is needed to make one.
+    float l = (float)psd_x87_log10((long double)out[i] * scale + 1e-25);
 
-**What this does and does not settle.** It settles the case where the source
-has somewhere to put the value: a named local of the narrower type. It says
-nothing about the harder case, where GCC 3.4 rounded because it ran out of
-x87 registers and SPILLED an accumulator that the source never narrowed --
-there is no `float` local to write there, and inventing one is inventing
-source. Those are different problems and only the first one is measured here.
+    out[i] = (float)(l * 10.0f);
 
-**And the measurement is only worth having because the mutation exists.** The
-test passing proves the two agree; it does not prove the test could tell them
-apart. One entry in `test/mutations/psd.json` is that second question, and its
-verdict is the finding.
+**Compiled by GCC 3.4.2 -- `make period` -- that source gives the object's
+sequence exactly, in both arms:**
+
+| | the blob, 0x4691a | ours, period build, +0x315 |
+|---|---|---|
+| | `fldlg2` | `fldlg2` |
+| | `fxch %st(1)` | `fxch %st(1)` |
+| | `fyl2x` | `fyl2x` |
+| | `fstps 0x28(%esp)` | **`fstps 0x28(%esp)`** |
+| | `flds 0x28(%esp)` | **`flds 0x28(%esp)`** |
+| | `fmul %st(1),%st` | `fmul %st(1),%st` |
+| | `fstps 0x0(%ebp,%eax,4)` | `fstps 0x0(%ebp,%esi,4)` |
+
+Seven instructions, and the SAME SPILL SLOT -- `0x28(%esp)` on both sides.
+The only difference in the whole sequence is which register indexes the
+store, which is register allocation and free (CLAUDE.md's rule for reading a
+codegen difference). Nothing was tuned to get this; the source is the obvious
+one.
+
+**So no barrier belongs here, and adding one would be the error.** Finding
+1352 established that `round32`'s `volatile` is a GCC 13 shim for a spill the
+period compiler performs unaided. This is the neighbouring case and it comes
+out the same way for a different reason: there the source has no narrower
+local at all and 3.4.2 spills an accumulator, here the source HAS a `float`
+local and 3.4.2 honours it. Both say the same thing about method -- write what
+the author would have written, then ask the period compiler what it makes of
+it, rather than reaching for `volatile` to force a modern build into shape.
+The DTMF agent measured a third site where plain assignment emits NO store
+under 3.4.2 and `volatile` reproduces one the object has; that is a real
+divergence and it is site-specific. **The idiom is not transferable. Measure
+each site.**
+
+**The modern build agrees too, and that was measured first.** At the tree's
+own flags -- `-mfpmath=387` with GCC's default `-fexcess-precision=fast`,
+which PERMITS keeping the extra bits -- the same source is bit-exact against
+the blob over 2,164 differential checks, and the mutation
+`the logarithm is not rounded to float before the multiply`, which declares
+`l` a `long double`, is CAUGHT. That is worth keeping because the two tiers
+answer different questions: the mutation shows the differential test could
+tell the two apart, and the period build shows the author's source was the
+plain one.
+
+**And the mutation is what makes either measurement mean anything.** A test
+passing proves the two agree; it does not prove the test could see a
+difference. One entry in `test/mutations/psd.json` is that second question.
