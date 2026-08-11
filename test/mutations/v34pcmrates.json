@@ -1,0 +1,200 @@
+[
+ {
+  "label": "VPcmV34GetCurrentRxBitRate and VPcmV34GetCurrentTxBitRate.  Run it with: tools/mutate.py --suite v34pcmrates.  EVERY MUTATION BELOW MUST LIE INSIDE ONE OF THOSE TWO: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34, VPcmV34InitiateRetrain, V34GiveINFO1dBits and indicateJaTransmission, and the v90p34, v34retrain, v34info1d and v34ja suites map the same file to four other binaries.  `obj->status == 2` in particular appears verbatim inside VPcmV34InitiateRetrain and carries a two-tab indent there, so every anchor here carries its own function's surrounding text.  Finding 1103 is the failure this avoids and finding 432 is what it costs when it is not avoided."
+ },
+ {
+  "label": "the receiver takes its PCM arm when the role is NOT 0x66 -- the fork read backwards",
+  "find": "\tif (obj->f359c == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tif (obj->f359c != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
+ },
+ {
+  "label": "the receiver's PCM window is statuses 1..3 rather than 1..2",
+  "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;",
+  "replace": "\t\tif ((unsigned)(obj->status - 1) <= 2) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;"
+ },
+ {
+  "label": "the receiver's window is SIGNED, so status 0 joins it",
+  "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;",
+  "replace": "\t\tif (obj->status - 1 <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;"
+ },
+ {
+  "label": "the receiver's middle arm is status 2, not status 3",
+  "find": "\t} else if (obj->status == 3) {\n\t\treturn *(const int *)obj->pac18;",
+  "replace": "\t} else if (obj->status == 2) {\n\t\treturn *(const int *)obj->pac18;"
+ },
+ {
+  "label": "the middle arm reads pac18's +0x04 rather than its first word",
+  "find": "\t\treturn *(const int *)obj->pac18;",
+  "replace": "\t\treturn *(const int *)((const unsigned char *)obj->pac18 + 4);"
+ },
+ {
+  "label": "the middle arm scales pac18 by 2400 like the configuration arm",
+  "find": "\t\treturn *(const int *)obj->pac18;",
+  "replace": "\t\treturn *(const int *)obj->pac18 * (int)RATE_STEP;"
+ },
+ {
+  "label": "the demodulator is reached at +0x1758 -- the modulator -- rather than +0x175c",
+  "find": "\t\t\treturn (int)sess->modem.demodulator->getBitRate();",
+  "replace": "\t\t\treturn (int)((V90Demodulator *)sess->modem.modulator)\n\t\t\t\t->getBitRate();"
+ },
+ {
+  "label": "the receiver's default arm hands back txbits, the transmitter's half of the record",
+  "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
+  "replace": "\treturn cfg->txbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "rxbits is read UNSIGNED -- movzwl where the object has movswl",
+  "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
+  "replace": "\treturn (int)(unsigned short)cfg->rxbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "the rate index is handed back unscaled",
+  "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
+  "replace": "\treturn cfg->rxbits;"
+ },
+ {
+  "label": "the transmitter takes its V.90 arm when the role IS 0x66 -- the fork read backwards",
+  "find": "\tif (obj->f359c != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tif (obj->f359c == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
+ },
+ {
+  "label": "the transmitter's V.90 window is statuses 1..3",
+  "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\ttx = (const unsigned char *)sess->modem.modulator;",
+  "replace": "\t\tif ((unsigned)(obj->status - 1) <= 2) {\n\t\t\ttx = (const unsigned char *)sess->modem.modulator;"
+ },
+ {
+  "label": "the transmitter's V.90 window is SIGNED, so status 0 and everything below joins it",
+  "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\ttx = (const unsigned char *)sess->modem.modulator;",
+  "replace": "\t\tif (obj->status - 1 <= 1) {\n\t\t\ttx = (const unsigned char *)sess->modem.modulator;"
+ },
+ {
+  "label": "the V.90 arm reads the demodulator at +0x175c rather than the modulator at +0x1758",
+  "find": "\t\t\ttx = (const unsigned char *)sess->modem.modulator;",
+  "replace": "\t\t\ttx = (const unsigned char *)sess->modem.demodulator;"
+ },
+ {
+  "label": "the V.90 transmit gate accepts anything at or above 3",
+  "find": "\t\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\t\treturn 0;",
+  "replace": "\t\t\tif (*(const int *)(tx + PCMTX_STATE) < PCMTX_READY)\n\t\t\t\treturn 0;"
+ },
+ {
+  "label": "a closed V.90 gate falls out of the if instead of answering zero",
+  "find": "\t\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\t\treturn 0;",
+  "replace": "\t\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\t\treturn cfg->txbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "the V.90 chain is one dereference short -- the count read off the FIRST pointer",
+  "find": "\t\t\tn = *(const unsigned int *)\n\t\t\t    (**(const unsigned char *const *const *)\n\t\t\t       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);",
+  "replace": "\t\t\tn = *(const unsigned int *)\n\t\t\t    (*(const unsigned char *const *)\n\t\t\t       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);"
+ },
+ {
+  "label": "the V.90 arm reads +0x4c, the V.92 one's frame record",
+  "find": "\t\t\t       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);",
+  "replace": "\t\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);"
+ },
+ {
+  "label": "the V.90 arm uses the V.92 granularity, 8000/12",
+  "find": "\t\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 6.0f)\n\t\t\t\t\t       + 0.5f);",
+  "replace": "\t\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 12.0f)\n\t\t\t\t\t       + 0.5f);"
+ },
+ {
+  "label": "the V.90 arm truncates instead of rounding",
+  "find": "\t\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 6.0f)\n\t\t\t\t\t       + 0.5f);",
+  "replace": "\t\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 6.0f)\n\t\t\t\t\t       + 0.0f);"
+ },
+ {
+  "label": "the V.90 frame count is SIGNED going into the conversion",
+  "find": "\t\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 6.0f)\n\t\t\t\t\t       + 0.5f);",
+  "replace": "\t\t\treturn (int)(unsigned)((int)(n * 8000u) * (1.0f / 6.0f)\n\t\t\t\t\t       + 0.5f);"
+ },
+ {
+  "label": "the V.92 arm answers statuses 1 and 2 rather than 2 alone",
+  "find": "\t} else if (obj->status == 2) {\n\t\ttx = *(const unsigned char *const *)sess->pad_6124;",
+  "replace": "\t} else if ((unsigned)(obj->status - 1) <= 1) {\n\t\ttx = *(const unsigned char *const *)sess->pad_6124;"
+ },
+ {
+  "label": "the V.92 object is the one at +0x6120, the INFO0 layout gate next door",
+  "find": "\t\ttx = *(const unsigned char *const *)sess->pad_6124;",
+  "replace": "\t\ttx = *(const unsigned char *const *)&sess->info0Layout;"
+ },
+ {
+  "label": "the V.92 transmit gate accepts anything at or above 3",
+  "find": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\n\t\tn = *(const unsigned int *)",
+  "replace": "\t\tif (*(const int *)(tx + PCMTX_STATE) < PCMTX_READY)\n\t\t\treturn 0;\n\n\t\tn = *(const unsigned int *)"
+ },
+ {
+  "label": "a closed V.92 gate falls out of the if instead of answering zero",
+  "find": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\n\t\tn = *(const unsigned int *)",
+  "replace": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn cfg->txbits * (int)RATE_STEP;\n\n\t\tn = *(const unsigned int *)"
+ },
+ {
+  "label": "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone",
+  "find": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\n\t\tn = *(const unsigned int *)",
+  "replace": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\t\t*(int *)(tx + PCMTX_STATE) = 0;\n\n\t\tn = *(const unsigned int *)"
+ },
+ {
+  "label": "the V.92 chain is one dereference short",
+  "find": "\t\tn = *(const unsigned int *)\n\t\t    (**(const unsigned char *const *const *)\n\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);",
+  "replace": "\t\tn = *(const unsigned int *)\n\t\t    (*(const unsigned char *const *)\n\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);"
+ },
+ {
+  "label": "the V.92 chain reads +0x40 like the V.90 one rather than +0x4c",
+  "find": "\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);",
+  "replace": "\t\t       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);"
+ },
+ {
+  "label": "the V.92 arm uses the V.90 granularity, 8000/6",
+  "find": "\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);",
+  "replace": "\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 6.0f) + 0.5f);"
+ },
+ {
+  "label": "the V.92 arm truncates instead of rounding",
+  "find": "\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);",
+  "replace": "\t\treturn (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.0f);"
+ },
+ {
+  "label": "the K56flex arm is status 4",
+  "find": "\t} else if (obj->status == 3) {\n\t\treturn K56FLEX_TX_BITRATE;",
+  "replace": "\t} else if (obj->status == 4) {\n\t\treturn K56FLEX_TX_BITRATE;"
+ },
+ {
+  "label": "the K56flex constant is 33600, the V.34 ceiling, rather than 0x7530",
+  "find": "#define K56FLEX_TX_BITRATE\t30000",
+  "replace": "#define K56FLEX_TX_BITRATE\t33600"
+ },
+ {
+  "label": "the K56flex arm falls out of the if to the configuration",
+  "find": "\t} else if (obj->status == 3) {\n\t\treturn K56FLEX_TX_BITRATE;",
+  "replace": "\t} else if (obj->status == 3) {\n\t\treturn cfg->txbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "the transmitter's default arm hands back rxbits",
+  "find": "\treturn cfg->txbits * (int)RATE_STEP;",
+  "replace": "\treturn cfg->rxbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "txbits is read UNSIGNED -- movzwl where the object has movswl",
+  "find": "\treturn cfg->txbits * (int)RATE_STEP;",
+  "replace": "\treturn (int)(unsigned short)cfg->txbits * (int)RATE_STEP;"
+ },
+ {
+  "label": "the role both functions fork on is 0x65, the other value f359c takes",
+  "find": "#define PCM_ROLE\t\t0x66",
+  "replace": "#define PCM_ROLE\t\t0x65"
+ },
+ {
+  "label": "the transmit gate is at +0x30",
+  "find": "#define PCMTX_STATE\t\t0x2c",
+  "replace": "#define PCMTX_STATE\t\t0x30"
+ },
+ {
+  "label": "the gate opens on 1 rather than 3",
+  "find": "#define PCMTX_READY\t\t3",
+  "replace": "#define PCMTX_READY\t\t1"
+ },
+ {
+  "label": "the frame count is at +0x00 of the record rather than +0x04",
+  "find": "#define PCMTX_FRAME_BITS\t0x04",
+  "replace": "#define PCMTX_FRAME_BITS\t0x00"
+ }
+]

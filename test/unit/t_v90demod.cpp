@@ -54,9 +54,17 @@
  * definition V90PreFilter.h has already supplied (finding 1112).
  */
 #include "dsplib/V90ConstellationDesigner.h"
+/*
+ * `getBitRate` dereferences `mappingParamsAlt`, which the shared fixture
+ * leaves as a seeded pattern because nothing else in this file follows it.
+ * The block below gives it a real one; the definition is needed for that.
+ */
+#include "dsplib/V90MappingParams.h"
 
 extern "C" {
 void ref_enterPhase3(void *self) asm("ref__ZN14V90Demodulator11enterPhase3Ev");
+unsigned int ref_dem_getBitRate(const void *self)
+    asm("ref__ZNK14V90Demodulator10getBitRateEv");
 }
 
 
@@ -787,6 +795,190 @@ run_enterchannelverification(void)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * getBitRate, and this block DELIBERATELY DOES NOT USE THE SHARED FIXTURE.
+ *
+ * The method reads two things -- a byte at +0x280 and one word through
+ * `mappingParamsAlt` -- calls nothing, and writes nothing.  `setup()` would
+ * bring sixteen blocks, a `fir_ctor` allocation and a `teardown` with it for
+ * two loads, and it would need `snap_dem` taught to neutralise a pointer it
+ * neutralises for nobody else; both t_v90demod.cpp and t_vpcmep3.cpp share
+ * that header, so the cheaper change is the one that stays local.  Two slots
+ * of the right size, `fill_pair` for identical seeds, and one hole.
+ *
+ * THE THREE THINGS THIS HAS TO SEPARATE, none of which a sampled input does:
+ *
+ *   1. `cmpb $0x0` is ANY-non-zero.  0x80 and 0xff take the computing arm,
+ *      and a `signed char > 0` reading would return zero for both.
+ *   2. THE MULTIPLICAND IS UNSIGNED.  `word_0 * 8000` crosses 2^31 at
+ *      word_0 = 268435, and only above that do `fildll`-with-zero-high and
+ *      `fildl` disagree -- by 2^32/6, which is not subtle.  268434, 268435
+ *      and 268436 are in the sweep for that, plus 0x80000000 and 0xffffffff.
+ *      This is finding 613's case: below the crossing the two readings agree
+ *      over every value, so a sweep that stops at plausible rates tests
+ *      nothing about the type.
+ *   3. THE `+ 0.5f` IS A ROUNDING AND NOT DECORATION.  8000 mod 6 is 2, so
+ *      the exact quotient's fraction is 0, 1/3 or 2/3 as word_0 is 0, 1 or 2
+ *      mod 3 -- and only the 2-mod-3 case rounds UP.  Dropping the constant
+ *      changes nothing at all for a third of the inputs and one count for
+ *      another third, so both residues are present at several magnitudes.
+ *
+ * The object is compared with the four bytes of `mappingParamsAlt` held out,
+ * because they are the one field this block gives two different values.
+ */
+static unsigned char gbr_dem[2][DEM_SLOT] __attribute__((aligned(8)));
+static unsigned char gbr_mpa[2][32] __attribute__((aligned(8)));
+/*
+ * AND A SECOND MAPPING BLOCK, ON THE FIELD NEXT DOOR.  `mappingParams` at
+ * +0x14 and `mappingParamsAlt` at +0x18 are adjacent pointers of the same
+ * type; the object loads +0x18.  Left as the seeded pattern the two would be
+ * separated only by a segmentation fault, which is a crash and not a
+ * diagnosis, so +0x14 gets a real block holding a DIFFERENT count and reading
+ * the wrong one is a wrong number instead.
+ */
+static unsigned char gbr_mp0[2][32] __attribute__((aligned(8)));
+
+/*
+ * Where the two held-out pointers are.  They are adjacent, so one hole of two
+ * words covers both; the assert is what says they still are.
+ */
+#define GBR_HOLE ((unsigned)__builtin_offsetof(V90Demodulator, mappingParams))
+typedef char gbr_holes_adjacent[
+    ((int)__builtin_offsetof(V90Demodulator, mappingParamsAlt)
+     == (int)__builtin_offsetof(V90Demodulator, mappingParams)
+	+ (int)sizeof(void *)) ? 1 : -1];
+
+static int
+run_getbitrate(void)
+{
+	/*
+	 * 21, 22 and 23 are 28000, 29333 and 30667 -- the bottom three V.90
+	 * downstream rates -- and they are also 0, 1 and 2 mod 3, so the
+	 * three roundings appear at a real rate as well as at the extremes.
+	 */
+	static const unsigned int nbits[] = {
+		0u, 1u, 2u, 3u, 4u, 5u,
+		21u, 22u, 23u, 41u, 42u, 43u,
+		268434u, 268435u, 268436u,
+		0x7ffffffeu, 0x7fffffffu, 0x80000000u,
+		0xfffffffdu, 0xfffffffeu, 0xffffffffu
+	};
+	/*
+	 * AND THE ANSWER, COMPUTED BY HAND, for the twelve inputs a V.90
+	 * session could plausibly hold.  Agreement with the blob is the
+	 * oracle; this is the second, independent one, and it is what makes
+	 * the `+ 0.5f` a checked claim rather than a shared assumption -- the
+	 * four values that are 1 mod 3 round DOWN and the four that are 2 mod
+	 * 3 round UP, and a version without the constant gets the second four
+	 * wrong by one and everything else right.  -1 means "swept for
+	 * agreement only": above 268435 the product wraps and the arithmetic
+	 * stops being a rate.
+	 */
+	static const long want_bps[] = {
+		0, 1333, 2667, 4000, 5333, 6667,
+		28000, 29333, 30667, 54667, 56000, 57333,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1
+	};
+	static const unsigned char flag[] = { 0, 1, 2, 0x7f, 0x80, 0xff };
+	unsigned i, f;
+	long tag = 96000;
+	int saw_zero = 0, saw_rate = 0;
+
+	diff_begin("V90Demodulator::getBitRate");
+
+	for (f = 0; f < sizeof(flag) / sizeof(flag[0]); f++)
+	for (i = 0; i < sizeof(nbits) / sizeof(nbits[0]); i++) {
+		static unsigned char a[DEM_SLOT], b[DEM_SLOT];
+		unsigned int got, want;
+		int side;
+
+		tag++;
+		lfsr_state = 0x51edu + 0x9e37u * (unsigned)tag;
+		fill_pair(gbr_dem[0], gbr_dem[1], DEM_SLOT);
+		fill_pair(gbr_mpa[0], gbr_mpa[1], sizeof(gbr_mpa[0]));
+		fill_pair(gbr_mp0[0], gbr_mp0[1], sizeof(gbr_mp0[0]));
+
+		for (side = 0; side < 2; side++) {
+			V90Demodulator *d = (V90Demodulator *)gbr_dem[side];
+			V90MappingParams *mp =
+			    (V90MappingParams *)gbr_mpa[side];
+			V90MappingParams *mp0 =
+			    (V90MappingParams *)gbr_mp0[side];
+
+			d->mappingParams = mp0;
+			d->mappingParamsAlt = mp;
+			d->byte_280 = flag[f];
+			mp->word_0 = nbits[i];
+			/*
+			 * Never equal to the one next door, and never zero:
+			 * either would let a read of +0x14 pass.
+			 */
+			mp0->word_0 = nbits[i] + 6u + (i & 1u);
+		}
+
+		got = ((const V90Demodulator *)gbr_dem[0])->getBitRate();
+		want = ref_dem_getBitRate(gbr_dem[1]);
+
+		diff_eq_int("getBitRate (%ld)", (long)got, (long)want, tag);
+
+		/*
+		 * AND IT IS THE ARITHMETIC, not merely agreement.  Two
+		 * versions that both returned zero would pass the line above
+		 * for every case; this records that the computing arm was
+		 * reached at all and that the gate really gates.
+		 */
+		if (flag[f] == 0) {
+			diff_eq_int("...the gate returns zero (%ld)",
+				    (long)want, 0, tag);
+			saw_zero = 1;
+		} else if (want_bps[i] >= 0) {
+			diff_eq_int("...and an open gate gives the rate "
+				    "computed by hand (%ld)",
+				    (long)want, want_bps[i], tag);
+			if (want_bps[i] != 0)
+				saw_rate = 1;
+		} else if (nbits[i] == 0x80000000u) {
+			/*
+			 * 2^31 * 8000 is 2^37 * 125, so the low 32 bits are
+			 * ZERO and an open gate answers zero.  The multiply
+			 * really is a wrapping 32-bit one on both sides, and
+			 * this is the case that says so by name -- a version
+			 * that widened it before multiplying would answer
+			 * 2863311530 here and agree everywhere else in this
+			 * sweep except the last three entries.
+			 */
+			diff_eq_int("...2^31 bits wraps the product to zero "
+				    "(%ld)", (long)want, 0, tag);
+		}
+
+		/* Neither side may write anything, including the pointer. */
+		memcpy(a, gbr_dem[0], DEM_SLOT);
+		memcpy(b, gbr_dem[1], DEM_SLOT);
+		memset(a + GBR_HOLE, 0, 2 * sizeof(void *));
+		memset(b + GBR_HOLE, 0, 2 * sizeof(void *));
+		diff_eq_obj_(__FILE__, __LINE__, "getBitRate writes nothing",
+			     "V90Demodulator slot", a, b, DEM_SLOT, tag);
+		diff_eq_obj_(__FILE__, __LINE__,
+			     "getBitRate leaves the mapping block alone",
+			     "V90MappingParams head",
+			     gbr_mpa[0], gbr_mpa[1], sizeof(gbr_mpa[0]), tag);
+		diff_eq_obj_(__FILE__, __LINE__,
+			     "...and the one next door", "V90MappingParams +14",
+			     gbr_mp0[0], gbr_mp0[1], sizeof(gbr_mp0[0]), tag);
+	}
+
+	/*
+	 * The anti-vacuity pair for the sweep itself: a fixture that never
+	 * reached one of the two arms would report a clean run.
+	 */
+	diff_eq_int("the zero arm was reached (%ld)", (long)saw_zero, 1, tag);
+	diff_eq_int("the computing arm was reached (%ld)", (long)saw_rate, 1,
+		    tag);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -798,6 +990,7 @@ main(void)
 	bad |= run_reinit();
 	bad |= run_reset();
 	bad |= run_enterchannelverification();
+	bad |= run_getbitrate();
 
 	return bad;
 }

@@ -36548,6 +36548,13 @@ better.  Left, deliberately.
 **Both closure-1 entry points are now written** (finding 1101), so the guard
 surface is three, not five.
 
+**SUPERSEDED IN ITS CONCLUSION, NOT IN ITS ARGUMENT.**  Task #91 was briefed to
+take `getBitRate` precisely because it blocks the rate pair, so the
+one-class-one-owner objection above was overruled by the batch that owned the
+decision rather than being wrong.  All three landed (findings 1160-1163) and
+**the guard surface is one**: `VPcmV34Progress`, whose own closure is 255
+symbols and 194,175 bytes.
+
 ### 1101. `VPcmV34GetCleanedSamples` IS A DRAIN AND `VPcmV34GetCurrentSessionDP` IS FOUR ARMS, ONE OF WHICH READS THE V.92 NEGOTIATION FROM BOTH ENDS
 
 Both are in `src/pump/v34/v34pcmif.c` -- the `extern "C"` half of
@@ -36672,6 +36679,14 @@ a file has to re-run `anchorcheck` even when it changed no mutation and no
 existing line.
 
 ### 1104. THE FOUR CLOSURE FIGURES, RECOMPUTED, AND WHAT THE 127 SYMBOLS ACTUALLY ARE
+
+**THE FOUR NUMBERS BELOW ARE SUPERSEDED -- see finding 1150.**  They were
+correct when written and stopped being correct within the same batch: #88 then
+landed the thirteen symbols of finding 1106 and nothing recomputed the span.
+1150 has the figures as of task #91, before and after.  Everything else in
+this finding -- the per-class grouping, the two named blockers, the cost
+argument about the thirty classes with neither file -- still stands, and both
+named blockers have since been retired (findings 1170-1174 and 1180-1186).
 
 Recomputed on a full build, per finding 330's rule.  All four are UNCHANGED
 from the numbers task #88 was briefed with:
@@ -37151,9 +37166,13 @@ Recorded as carefully as what it did.
   method** -- the eleven are self-contained.
 - **`V90Demodulator::getBitRate` was left**, per finding 1100.  It is still
   the only thing between `VPcmV34GetCurrentRxBitRate` /
-  `VPcmV34GetCurrentTxBitRate` and their definitions.
+  `VPcmV34GetCurrentTxBitRate` and their definitions.  *(Closed by task #91:
+  all three are written, findings 1160-1163.)*
 - **The `V90Parameters` duplication was not repaired**, finding 1112.
 - **`tools/mutsnap.py` was NOT re-recorded and no new suite was registered.**
+  *(This is the gap task #91 closed: the four survivors of finding 1115 were
+  re-derived from the blob's bytes and registered, and `V90ConnectionEvaluator`
+  got the suite it never had -- finding 1151.)*
   The mutations above were applied by hand and reverted;
   `test/mutations/v90demod.json` and `test/mutations/vpcmep3.json` had seven
   anchors deepened (finding 1114), which makes those two suites' snapshot
@@ -37930,3 +37949,1021 @@ their address explained in prose within forty lines. Over task #65:
 
 The thin count barely moves because that is the design -- the address stays.
 What changes is whether anything nearby says what it is for.
+
+### 1160. `V90Demodulator::getBitRate` IS EIGHTY-SEVEN BYTES OF ROUNDING, AND ITS RETURN TYPE CAME OUT OF THE STORE WIDTH
+
+The header carried `void getBitRate() const;` -- a placeholder, because a
+mangling carries no return type and `_ZNK14V90Demodulator10getBitRateEv` is
+all the object says about the signature.  The type was recovered from the code
+generation instead, and both halves of the recovery are CLAUDE.md's "forced,
+so act on it":
+
+```
+   1b8d9  80 ba 80 02 00 00 00  cmpb   $0x0,0x280(%edx)
+   1b8e0  74 41                 je     1b923              -> %eax stays 0
+   1b8e2  d9 05 <cst4+0x10c>    flds   0.5f
+   1b8e8  8b 42 18              mov    0x18(%edx),%eax    mappingParamsAlt
+   1b8eb  31 d2                 xor    %edx,%edx          the HIGH word, first
+   1b8ed  69 08 40 1f 00 00     imul   $0x1f40,(%eax),%ecx
+   1b8f3  52 51 df 2c 24        push;push;fildll (%esp)
+   1b8fb  d8 0d <cst4+0x108>    fmuls  0.16666667f
+   1b90a  de c1                 faddp  %st,%st(1)
+   1b919  df 3c 24              fistpll (%esp)
+   1b920  8b 04 24              mov    (%esp),%eax        the LOW half only
+```
+
+- **Going in.** The product is pushed as a 64-bit pair whose high word was
+  zeroed BEFORE the multiply and read with `fildll`.  A signed `int` converts
+  with a bare 32-bit `fildl` off the stack slot and no push at all.  So the
+  value entering the arithmetic is UNSIGNED.
+- **Coming out.** `fistpll` stores SIXTY-FOUR bits and only the low half is
+  taken.  That is GCC's float-to-`unsigned int` idiom; float-to-`int` is a
+  32-bit `fistpl` and nothing else.  Both were put through
+  `-m32 -O2 -mfpmath=387 -march=i386 -mtune=i686 -fomit-frame-pointer` to
+  confirm the pair rather than asserting it from memory.
+
+So the declaration is now `unsigned int getBitRate() const;`.
+
+**THE CONSTANTS ARE `float` AND THE OPERATION IS A MULTIPLY.**  `.rodata.cst4`
+holds 0x3e2aaaab at +0x108 and 0x3f000000 at +0x10c -- the nearest `float` to
+1/6, and 0.5 exactly -- and both are four-byte `flds`/`fmuls`.  A source that
+said `/ 6.0f` would have emitted `fdivs`; one that said `* (1.0 / 6.0)` an
+eight-byte `fmull` out of `.rodata.cst8`.
+
+**THE GATE IS ANY-NON-ZERO.**  `cmpb $0x0` on the byte at +0x280 -- the one
+`V90Demodulator.h` already described as zeroed by the constructor, by
+`enterPhase3` and by `reset` -- so 0x80 takes the computing arm and a
+`signed char > 0` reading would not.
+
+**AND +0x000 OF `V90MappingParams` HAS A READER NOW.**  It was
+`unsigned char pad_0[4]`; it is `unsigned int word_0`.  It is TYPED and still
+named for its offset, deliberately.  What is forced is that the value entering
+the conversion is unsigned; that `8000/6` is the V.90 downstream rate
+granularity and this is therefore a bit count per six-sample frame is an
+INTERPRETATION of the arithmetic, correct-looking and unstated by the object,
+and it belongs in this paragraph rather than in a member name in a header two
+other batches are merging against.
+
+### 1161. THE TWO RATE GETTERS ARE FIVE CHAINS AND ONE CROSSED FORK, AND 90 BYTES AGAINST 213 IS NOT AN ACCIDENT
+
+`VPcmV34GetCurrentRxBitRate` (0x6f40, 90 B) and `VPcmV34GetCurrentTxBitRate`
+(0x6fa0, 213 B) are the last two of `vpcm_run`'s five callees that are not
+`VPcmV34Progress`.  Both open on the same two tests and **neither asks the
+other's question**:
+
+```
+   6f48  cmpw   $0x66,0x359c(%edx)          Rx
+   6f62  je     6f78                          == 0x66 -> status in 1..2
+   6f64  cmpl   $0x3,(%edx)                   != 0x66 -> status == 3
+
+   6fad  cmpw   $0x66,0x359c(%edx)          Tx
+   6fb5  je     6fd1                          == 0x66 -> status 2, then 3
+   6fb7  mov (%edx),%eax; dec; cmp $1; ja     != 0x66 -> status in 1..2
+```
+
+The receiver takes its PCM arm when the role IS 0x66; the transmitter's V.90
+arm when it is NOT.  A reconstruction that put either test on the wrong side
+of the other agrees with the blob on most (role, status) pairs and differs on
+a few, which is why the test crosses six roles with ten statuses rather than
+sampling.
+
+`(unsigned)(status - 1) <= 1` is the same test the three Initiate entry points
+fork on -- v34pcmif.c's comment already said that is where the meaning of
+status 1 and 2 comes from -- and 0x66 is `f359c`, the field
+`VPcmV34InitiateRetrain` reads as `role`.
+
+**THE FIVE CHAINS.**
+
+```
+  Rx  role 0x66, status 1|2   p3548 +0x175c -> V90Demodulator::getBitRate(),
+                              gated inside it on the demodulator's +0x280
+  Rx  role != 0x66, status 3  pac18 +0x00, an int, returned WHOLE
+  Tx  role != 0x66, st 1|2    p3548 +0x1758 (modem.modulator) +0x40 -> * -> +4
+  Tx  role 0x66, status 2     p3548 +0x6124 +0x4c -> * -> +0x04
+  Tx  role 0x66, status 3     0x7530, a flat 30000
+  both, anything else         the rate configuration at +0xaa84, times 2400
+```
+
+**THE TWO TRANSMIT CHAINS ARE THREE DEREFERENCES, NOT TWO.**
+`mov 0x40(%edx),%ecx` then `mov (%ecx),%eax` then `0x4(%eax)`: the field at
++0x40 (and +0x4c) points at something whose FIRST word points at the record
+the count is in.  The first draft here read the count off the first pointer
+and was wrong by one level; the disassembly is what said so, and the test
+keeps the two links in separate buffers so that a version one dereference
+short reads fill rather than the same bytes.
+
+**BOTH TRANSMIT CHAINS ARE GATED ON `+0x2c == 3` AND ANSWER ZERO OTHERWISE**,
+and the zero is a `ret` rather than a fall-through to the 2400 arm:
+
+```
+   6fc5  31 c0        xor  %eax,%eax
+   6fc7  83 7a 2c 03  cmpl $0x3,0x2c(%edx)
+   6fcb  74 24        je   6ff1
+   6fcd  83 c4 14 c3  add;ret            <- 0 goes out, not txbits * 2400
+```
+
+**THE TWO GRANULARITIES ARE THE FINDING.**  The V.90 arm multiplies by the
+`float` nearest 1/6 and the V.92 one by the `float` nearest 1/12 --
+`.rodata.cst4` +0xc and +0x4 -- with 0.5 added before the truncation in both.
+8000/6 is the V.90 downstream step (28000, 29333, ... 56000) and 8000/12 the
+V.92 upstream one, so the arm selected by `role == 0x66 && status == 2` is the
+V.92 upstream rate and the one selected by `role != 0x66` is a V.90-style
+six-sample frame.  That is also why the pair is not symmetric: the receiver
+has one PCM chain and the transmitter two, plus a constant.
+
+**0x7530 IS A CONSTANT AND NOT A COMPUTATION.**  Status 3 is K56flex --
+finding 1101's `GetCurrentSessionDP` returns 56 there -- and the transmit rate
+for it is 30000 flat: no chain, no gate, nothing read.  Finding 1090 is why
+naming the modulation is the whole of what a K56flex session does in this
+build.
+
+**AND `rxbits` FINALLY HAS A READER.**  `struct v34_ratecfg`'s note in
+`v34fsk.h` lists four "current" getters and names a reader for `baud`,
+`txbits`, `carrier` and `rx_baud` but none for `rxbits` at +0x14.
+`VPcmV34GetCurrentRxBitRate`'s default arm is it: `movswl 0x14(%ecx)` with
+`%ecx = obj + 0xaa84`, times 0x960.  Both getters load their half with
+`movswl`, so both are SIGNED, and 0x8000 is the only value that separates that
+from `movzwl` -- finding 1102's three-check case again, and in the sweep for
+the same reason.
+
+**LINKAGE PUT THEM IN THE `.cpp`.**  `VPcmV34GetCurrentRxBitRate` carries an
+`R_386_PC32` against `_ZNK14V90Demodulator10getBitRateEv`, and a C translation
+unit cannot name that symbol, so the two live in `src/pump/v34/v34pcmmain.cpp`
+as `extern "C"` free functions beside `VPcmV34InitiateRetrain` rather than in
+`v34pcmif.c` with the other three exports.  CLAUDE.md's "the link line is
+necessary and not sufficient".
+
+### 1162. THE FIXTURE WAS BUILT BESIDE `t_v34pcmif.c`'s AND NOT INSIDE IT, AND AN EQUIVALENCE ARGUMENT WAS WRONG
+
+**2,066 new checks in `t_v34pcmif.c` and 592 in `t_v90demod.cpp`**, and both
+blocks are ADDITIVE on purpose.
+
+`t_v34pcmif.c`'s fixture is shared with fifteen existing blocks and two
+RECORDED mutation suites (`v34pcmif`, `v34datapump_rrn`).  The rate getters
+need five more links than it has -- a demodulator long enough to hold a gate
+byte at +0x280 where `DEMOD_LEN` is 0x240, a modulator, the object at the
+session's +0x6124, two two-level frame chains and a block behind `pac18`.
+Widening `ptr_skip`, `sess_hole`, `compare_link` or `DEMOD_LEN` would have
+moved bytes in every one of the existing cases, which is tiers.md's "adding a
+check to a file that has a mutation suite is not free, and the phase gate
+cannot see the cost".  So the block seeds its own links on top of
+`seed_chain()`, re-points the one it shares, and does its own comparing;
+`compare_rates` is a twenty-line copy of `compare()` with one more hole.  Not
+one existing helper changed.
+
+The same argument put `getBitRate`'s block outside `test/harness/v90demfix.h`:
+two loads and no writes do not justify teaching the shared `snap_dem` to
+neutralise a pointer it neutralises for nobody else, in a header
+`t_vpcmep3.cpp` also includes.
+
+**TWO NEW SUITES: `v34pcmrates` 39 of 39 CAUGHT, `v90getbitrate` 9 of 10 with
+1 equivalent.**  Both are new files; no existing suite was edited.
+`anchorcheck.py` passes at 69 suites and 3,667 mutations, which was not free
+either -- finding 1103's rule that a batch adding a function to a file with a
+suite must re-run it applies here twice over, and every anchor in
+`v34pcmrates` carries its own function's surrounding text because
+`obj->status == 2` appears verbatim inside `VPcmV34InitiateRetrain`.
+
+**THE WRITE-CHECKS NEEDED A MUTATION OF THEIR OWN, AND HAD NONE.**  Roughly
+half the checks in each new case are the object and link comparisons, and the
+first draft's 47 mutations ALL changed a return value -- not one added a
+store.  So a skip predicate that had quietly swallowed everything would have
+left every mutation CAUGHT and nothing would have said the comparison was
+dead.  That is worse here than in general, because the claim is written into
+the file in so many words ("a getter that cleared a gate after reading it
+would look perfect from the return value alone") and because finding 1101
+found that one of these very entry points IS a drain.
+
+One mutation per suite now backs it, each chosen so the return value cannot
+move: `v34pcmrates` zeroes the V.92 gate after testing it, `v90getbitrate`
+zeroes the mapping count after reading it into a local.  Both are CAUGHT, and
+the first was applied by hand to confirm WHERE:
+
+```
+  t_v34pcmif.c:473  the rate getters write nothing down the chain
+                    [input 47004]  got 0, reference 3
+```
+
+-- byte 0x2c of the V.92 link, reported by `compare_link` and by nothing else.
+No return-value check fired at all, which is the point.
+
+**ONE MUTATION ESCAPED, AND IT FOUND A REAL DUPLICATION.**  "txbits is read
+UNSIGNED" came back NOT CAUGHT: the first draft returned
+`cfg->txbits * RATE_STEP` from TWO places -- once when the role-0x65 status
+window was missed and once at the bottom -- and the anchor patched only the
+second.  The object has ONE such site, at 0x6fe0, reached from both the `ja`
+at 0x6fbd and the role-0x66 switch falling through.  The function was
+restructured to fall out of the `if` instead, which is both closer to the
+object and one place to keep in step; the mutation is caught now.  A
+duplication a differential test cannot see is exactly what the mutation tier
+is for.
+
+**AND ONE EQUIVALENCE ARGUMENT WAS WRONG.**  `v90getbitrate` filed "the
+reciprocal is a DOUBLE" as `equivalent`, on the argument that `fmuls` against
+`fmull` is an ENCODING difference and that under 80-bit x87 evaluation the two
+constants are too close to separate.  The runner answered `RECORDED AS
+EQUIVALENT AND CAUGHT ANYWAY` on the first pass.  The second half of the
+argument is arithmetic and it is false: the nearest `float` to 1/6 is high by
+5e-9 RELATIVE, this function multiplies it by a product reaching 4.3e9, and
+the absolute error therefore reaches ELEVEN -- far more than the one count a
+truncation can hide.  At `word_0` = 268435 the two spellings give 357913344
+and 357913333, and that input was already in the sweep for the signedness
+claim.  The flag was dropped and the argument replaced by what actually
+happened.  tiers.md says an equivalence argument is a claim about the harness
+rather than about the object; this one was a claim about neither, and only
+running it said so.
+
+**The one genuine equivalent is the return type.**  `(int)` for
+`(unsigned int)` changes `fistpll` to `fistpl`, and the two disagree only at
+or above 2^31; the value here is at most `(2^32-1)/6 + 0.5` = 715,827,882, so
+no input can reach the disagreement and no differential test ever will.  The
+evidence for `unsigned int` is the store width at 0x1b919 and the pair of test
+compilations -- tier 3, exactly as tiers.md's table says.
+
+### 1163. THE GUARD SURFACE IS ONE, AND WHAT THIS BATCH DID NOT DO
+
+`vpcm_run`'s five callees were five weak references; finding 1101 took them to
+three and this takes them to **one**.  `VPcmV34Progress` -- 7,278 bytes whose
+closure is the whole receive chain -- is the only entry point `t_vpcmguard.c`
+can still watch `vpcm_run` abort on, and that file now asserts one absent and
+four DEFINED rather than three and two.  `t_vpcmrun.c` lost two more of its
+forwarders for the reason finding 1102 gives, and its 8,000-block four-way
+comparison is now our `vpcm_run` on FOUR of its own callees -- and the first
+thing in the tree that puts our `V90Demodulator::getBitRate` on the path of a
+real connecting call.  It still agrees with the blob-blob run at every block.
+
+**NOT DONE, and named rather than left to be noticed:**
+
+- **The two transmit chain objects are not modelled and are not named.**
+  `p3548 + 0x1758` is `VPcmFloModem::modem.modulator`, a `V90Modulator *` this
+  tree forward-declares and nothing defines; `p3548 + 0x6124` is inside
+  `pad_6124` and has no name at all.  Both are reached as bytes with `+0x2c`,
+  `+0x40`/`+0x4c` and `+0x04` spelled out, because a struct for either would
+  be a guess from three offsets.  That the two are read at the SAME two shapes
+  is a hint that they are the same type and it is not evidence.
+- **`pac18 + 0x00` is not named either.**  `V34GiveINFO1aBits` reads +0xc of
+  the same pointer as the local PCM type; +0x00 has no other reader.
+- **Nothing was done about the codegen tier for these three.**  They are not
+  in `compare.py`'s matched set and no attempt was made to make them so.
+- **`tools/mutsnap.py --check` was failing at HEAD and not because of this
+  work.**  `v90conneval` was registered in `suites.json` with no recorded
+  verdicts, which `--check` calls MISSING and fails on, so `make phase` was
+  red at `refs` before this batch touched anything.  It is recorded now,
+  along with the two new suites, at 5 caught of 6 with 1 equivalent -- a
+  measurement of another batch's suite and not a change to it;
+  `v90conneval.json` is untouched.  The other 66 entries remain stale, as
+  they were.
+
+======================================================================
+### 1170. `V90Demapper` IS 0x1eb8 = 7,864 BYTES, AND FOUR PARALLEL `[6][128]` ARRAYS MEET EXACTLY THREE TIMES
+
+The class had no header and no `.cpp` in this tree -- the only mention of the
+name anywhere was one sentence in `V90Demodulator.h` -- so the whole cost of
+its destructor path was the layout, exactly as finding 1104 predicted for the
+thirty classes with neither file.
+
+**The size is an allocation, not a displacement bound**, which is finding
+1107's rule and the thing that cost `V90Equalizer` eight bytes:
+
+```
+   1c4d9:  c7 04 24 b8 1e 00 00   movl  $0x1eb8,(%esp)
+   1c4e0:  e8 ..                  call  sysdep_malloc
+   1c4e5:  89 c6                  mov   %eax,%esi
+   ...
+   1c503:  e8 ..                  call  V90Demapper::V90Demapper(unsigned,
+                                          V90Parameters *,
+                                          V90AutoDigitalImpDetector *)
+   1c508:  89 b3 e4 01 00 00      mov   %esi,0x1e4(%ebx)
+```
+
+inside `V90Demodulator::V90Demodulator`, and the same three instructions at
+0x1c8c9/0x1c8d0/0x1c8f3 inside its C2 twin.  **A displacement scan over all
+eleven `V90Demapper` symbols says 0x1e94**, because the last 0x24 bytes are
+touched only at mixed widths by `reset` and `linearMappingStudy` and the
+highest of those is +0x1eb4.  The two numbers differ by 36, and only the
+allocation is evidence.
+
+**Four arrays, three exact meetings.**  `printErrorHistogramAndReset` runs `i`
+over 0..5 (`cmpl $0x5,0x18(%esp)`, `jbe`) and `j` over 0..127 (`cmp $0x7f,%edx`,
+`jbe`), addressing with `edi = i * 128 + j` -- `shl $0x7` on `i` at 0x30c3c,
+then `inc %edi` per step:
+
+```
+    0x0030  short        constellation[6][128]   0x30   + 0x600 = 0x630
+    0x0630  unsigned     constellationSize[6]    0x630  +  0x18 = 0x648
+    0x0690  unsigned     errorSum[6][128]        0x690  + 0xc00 = 0x1290
+    0x1290  unsigned     errorCount[6][128]      0x1290 + 0xc00 = 0x1e90
+```
+
+Four independent bases -- `0x30(%ebx,%edi,2)`, `0x630(%ebx,%ecx,4)`,
+`0x690(%ebx,%edi,4)`, `0x1290(%ebx,%edi,4)` -- and each one's end is the next
+one's start.  Nothing else settles the shape: a `[6][128]` and a `[768]` are
+the same bytes, and the `shl $0x7` is what says which the author wrote.
+
+**Which of the two histogram arrays is which** comes from `hardDecision`, not
+from this function: it does `add` at +0x690 and `incl` at +0x1290, so +0x690
+accumulates and +0x1290 counts.  `printErrorHistogramAndReset` divides the
+first by the second, which agrees but does not by itself say which way round.
+
+**Three offsets that are NOT this object's, and the trap they set.**  A
+displacement scan that does not track the base register reports +0x1000 as a
+float array, +0x1c00 as a counter array and +0x2800 as a `short` -- all three
+inside the span the histogram arrays occupy, which cannot be.  They are
+offsets into the `V90AutoDigitalImpDetector` at +0x1ea0:
+`mov 0x1ea0(%eax),%esi` at 0x3130a, then `cmpw $0x0,0x2800(%esi,%edx,2)` at
+0x31323.  Track the base register or the map contradicts itself.
+
+**Two things the compiler was FORCED to encode**, so they are acted on:
+
+- `0f bf 54 7b 30   movswl 0x30(%ebx,%edi,2),%edx` at 0x30c69 SIGN-extends and
+  hands the 32-bit result to a varargs slot, so `constellation` is `short`.
+  Finding 613's class exactly: no test whose levels stay positive can see it.
+- `f7 f1   div %ecx` at 0x30c57, not `idiv`, and no signed-division fixup:
+  both histogram arrays are UNSIGNED.  The row bound agrees --
+  `cmp %ebp,0x630(%ebx,%eax,4)` followed by `ja`.
+
+### 1171. `printErrorHistogramAndReset` SUPPRESSES THE RESET AS WELL AS THE PRINT, AND THE RESET HALF IS DECIDED BY TIER 1
+
+The name says PRINT and the differential tier is blind to printing, so the
+batch was briefed to decide early which half is decidable where.  **The split
+is not down the middle, and this is where it falls.**
+
+The function's first act is six loads into six different registers, each with
+its own `test`/`je` to one join point -- %eax at 0x30b97, %edx at 0x30ba5,
+%ecx at 0x30bb3, %esi at 0x30bc1, %edi at 0x30bcf, %ebp at 0x30bdd.  A chain
+of `&&`, not a rolled loop; a rolled test would be one load, one compare and a
+back edge.  **The join point is 0x30cd0, which is past the zeroing loops as
+well as past the five `edprintf` calls.**  So a demapper with any one of its
+six constellations empty neither prints nor resets, and the only thing that
+happens is `incl 0x1e90(%ebx)`.
+
+What that buys is that most of the function is ordinary memory:
+
+- both 3,072-byte arrays are zeroed in full, over 6 * 128 entries;
+- `errorHistogramCount` at +0x1e90 moves on EVERY call, printing or not;
+- and the two bounds are different numbers.  The print loop runs
+  `constellationSize[i]` times; the zeroing loop runs 128 times with the row
+  length nowhere in it (`cmp $0x7f,%edx` at 0x30c9f is a constant).  A
+  constellation shorter than 128 separates them, and every case in
+  `t_v90leaves.cpp` is short.
+
+So the arena comparison decides the loop bounds, both bases, the guard and the
+position of the increment relative to it.  **The print half is not skipped
+either**: `t_v90leaves.cpp` already sweeps `dsplibs_debug_level` 0..2 across
+both sides and compares the captured text, and five of the thirteen mutations
+in `test/mutations/v90demapper.json` are caught by nothing else -- the row
+bound, the argument order, the unsigned read of a level, the average printed
+for a level nothing landed on, and an off-by-one on the printed histogram
+number.
+
+The line count is exact and was predicted before it was measured:
+**2 banners + 1 number + 6 headers + the sum of the six row lengths**, because
+`edprintf` makes exactly one `dsplibs_debug_printf` call (src/core/encode.c).
+`{1,2,3,4,5,6}` gives 30 lines and the test asserts that number, which is what
+makes "the row loop runs to 128" catchable at all.
+
+**THERE IS NO `DSPLIB_DEBUG_ON()` IN THIS FUNCTION.**  The five `edprintf`
+sites at 0x30beb, 0x30c0a, 0x30c26, 0x30c7a and 0x30cc4 are unconditional; the
+level gate lives inside `edprintf` itself.  Only two gates exist in the whole
+path and neither is the debug level -- see 1172 for the other.
+
+### 1172. THE DESTRUCTOR'S GATE IS A PARAMETER-BLOCK FIELD, AND A FIXTURE THAT SEEDS THAT BLOCK WITH THE HARNESS FILL TURNS IT ON AT EVERY DEBUG LEVEL
+
+`~V90Demapper` opens by dereferencing its own +0x00:
+
+```
+   30f58:  8b 13                 mov  (%ebx),%edx
+   30f5a:  8b 82 2c 05 00 00     mov  0x52c(%edx),%eax
+   30f60:  85 c0                 test %eax,%eax
+   30f62:  75 21                 jne  30f85          -> printErrorHistogram...
+```
+
+and +0x52c of `V90Parameters` is `DEBUG_DEMAPPER_ERROR_HISTOGRAM`, which
+`include/dsplib/V90Parameters.h` has carried by name since the `vparse.py`
+batch.  **It is not `dsplibs_debug_level` and it is not gated by it.**
+
+That is a trap for any fixture in this tree, and it is worth stating as a rule
+rather than as an anecdote.  Finding 230 says seed everything with varied
+non-zero bytes; `HARNESS_MALLOC_FILL` is 0xa5.  A parameter block seeded that
+way has `DEBUG_DEMAPPER_ERROR_HISTOGRAM == 0xa5a5a5a5`, so **the destructor
+enters the histogram at debug level 0** -- and once inside, the six-way guard
+reads `constellationSize[0..5]`, which the same fill makes non-zero, so the
+inner loop bound becomes 0xa5a5a5a5 while `edi` indexes a 3,072-byte array.
+The run walks off a 7,864-byte object within a few thousand iterations.
+
+So `dem_seed` in `t_v90leaves.cpp` sets the six lengths and the gate on every
+trial, and the gate is set to zero on a third of them -- which is the arm
+where the destructor must do nothing at all but free.
+
+**The three `if (p)` guards are invisible to every byte comparison.**  The
+destructor tests +0x1c and +0x20, and the member's destructor tests the
+decoder state, before each `sysdep_free`; this tree's `sysdep_free` tolerates
+NULL.  Dropping all three changes no byte anywhere.  `harness_alloc.free_null`
+is the only observable that separates them, and the null arm asserts its delta
+is 0 -- which is what catches the mutation "the destructor frees +0x1c whether
+or not it holds anything".
+
+### 1173. `V90SignBitsExtractor` IS 0x28 BY CONTAINMENT, WHICH IS WHAT TO DO WHEN THERE IS NO ALLOCATION TO READ
+
+Finding 1107 says to prefer the `sysdep_malloc` before the constructor's call
+site.  **For this class there is none**: every instance is embedded, and the
+one this tree can see is `V90Demapper`'s at +0x668 (`lea 0x668(%esi),%ecx` at
+0x30662, then a call to the constructor).
+
+The containment argument is as strong as an allocation here, because the next
+field is not a scan bound.  `V90Demapper::printErrorHistogramAndReset` indexes
+`0x690(%ebx,%edi,4)` over `edi` in 0..767, so +0x690 is the BASE of a
+3,072-byte array and not the highest displacement anybody happened to use.
+The extractor therefore occupies exactly 0x690 - 0x668 = 0x28 bytes.
+
+**And the other side agrees to the byte.**  The last member is the parallel
+differential decoder at +0x1c -- `add $0x1c,%eax` at 0x318e7, then a call to
+`ParallelDifferentialDecoder<unsigned char>::~ParallelDifferentialDecoder` --
+and that class is 12 bytes (`state_`, `capacity_`, `size_`, DiffCoder.h).
+0x1c + 0xc = 0x28, with no trailing padding.  Two derivations from opposite
+ends meeting is the check finding 1107 asks for and could not have on
+`V90Equalizer`.
+
+**The constructor was taken deliberately, and the reason is not size.**  It is
+44 bytes and its one call already exists and is already tested
+(`t_diffcoder`), but the point is that it is what allocates the block the
+destructor frees: construct-then-destruct is the only shape in which the free
+is provably freeing what the class itself took, rather than a pointer the test
+planted.  It is also the only evidence in the object for +0x10 and +0x18, on a
+class with no header at all.  `mov $0x6,%edx` at 0x31901 fixes the decoder's
+capacity at six -- one per sample of the V.90 frame -- which `DiffCoder.h`'s
+file comment had already recorded from the caller side.
+
+The destructor is 22 bytes and **every one of them is the compiler's**: an
+empty body, and GCC emits the member's destruction because the member's type
+has one.  That is also why `~V90Demapper`'s last instruction pair is
+`lea 0x668(%ebx),%ecx` and a call -- our compiler emits it, in that position,
+for free, and only because `signBits` is declared as a `V90SignBitsExtractor`
+and not as bytes.  The embedded `ModulusDecoder` at +0x648 gets no such call
+in the object, which is the evidence that ITS destructor is trivial and the
+reason that member CAN be bytes.
+
+### 1174. WHAT THIS BATCH DID NOT DO: `V90Demapper`'s CONSTRUCTOR IS BLOCKED ON `ModulusDecoder`, WHICH HAS NO SYMBOL IN THIS TREE
+
+Seven symbols landed, 740 bytes: `printErrorHistogramAndReset` (362),
+`V90Demapper` D1 and D2 (123 each), `V90SignBitsExtractor` C1 and C2 (44 each)
+and D1 and D2 (22 each).  `tools/closure.py --missing` now reports 0
+symbols and 0 bytes for **each of `_ZN11V90DemapperD1Ev`, its D2 twin,
+`_ZN11V90Demapper27printErrorHistogramAndResetEv`,
+`_ZN20V90SignBitsExtractorC1Ev` and `_ZN20V90SignBitsExtractorD1Ev`** -- the
+constructor included, because taking an optional symbol and not running its
+own closure is how a batch opens a hole while reporting one closed.  That
+retires the blocker finding 1104 named on `dp_vpcm_init`'s span.
+
+**`_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector` was
+offered to this batch and was left out.**  Its first act is
+
+```
+   3064d:  8d 86 48 06 00 00   lea  0x648(%esi),%eax
+   30656:  e8 ..               call ModulusDecoder::ModulusDecoder()
+```
+
+and `ModulusDecoder` has no header, no `.cpp` and no other symbol anywhere in
+`src/` or `include/`.  Defining the demapper's constructor would mean either
+writing that class -- another owner's work and another layout derivation -- or
+declaring the member as bytes, which would silently drop a call the object
+makes.  So the embedded decoder is `unsigned char modulusDecoder[0x1c]` and
+the constructor is declared in the header and not defined.  **The evidence its
+stores carry is not lost**: every offset it settles is written into
+`V90Demapper.h` beside the instruction that settles it, where it is evidence
+rather than code -- +0x1c and +0x20 sized from `lea 0x0(,%ebx,4)` and `%ebx`,
++0x24 the count, six words zeroed at +0x04..+0x18, +0x1ea0 the detector.
+
+Also not done, and deliberately: the other twelve `V90Demapper` members
+(`process`, `hardDecision`, `linearMappingStudy`, `updateConstelation`, the
+three resets, ...) and the other three `V90SignBitsExtractor` members.  They
+are declared in the two headers for the record, with the signatures the
+mangling gives and no return type, and left undefined.  One class, one owner.
+
+**Two regions of the demapper are honestly unmodelled** -- +0x1e94..+0x1e9f
+and +0x1ea4..+0x1eb7 -- and the second is bounded by the 0x1eb8 allocation
+alone.  An offset landing in either is itself the answer that it is not
+modelled yet.
+
+**The `ACTIONS` enum is named and empty.**
+`_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_` gives the
+enum's name and not its enumerators, so the header declares it with one
+placeholder spelled `V90SBE_ACTION_NOT_YET_DERIVED`.  Nothing may read it
+until `applyFrameAction` is written.
+
+**Tier 1.**  `t_v90leaves.cpp` grew three blocks -- 304, 367 and 691 checks --
+on finding 1113's shape, with the addition that the demapper's histogram needs
+no arena at all: it produces and frees no pointer, so the two 7,928-byte slots
+compare RAW over their whole length.  Only the destructor excludes anything,
+and it excludes exactly three words (+0x1c, +0x20, +0x684) because each side
+frees its own blocks and two allocations are never the same address.
+
+**And it is worth being exact about which check pins the OFFSETS, because it
+is not the one it looks like.**  The seeding goes through the header's field
+names, so a header with `errorCount` at the wrong offset would seed both sides
+at the wrong offset and the absolute-offset partition -- "nothing below
++0x690 moved", "the fill was there to remove", "every error count is zero" --
+would still pass: the anti-vacuity check ranges over 3,072 bytes and one
+misplaced seeded word does not empty them.  What pins placement is the RAW
+whole-slot `memcmp(dem_a, dem_b, 0x1ef8)`: our code would clear the header's
+location and the blob would clear 0x1290, and the two can only agree where the
+two offsets do.  So the partition checks decide the EFFECT -- which regions
+moved, by how much, on which arm -- and the raw comparison decides the
+PLACEMENT.  Both are needed and neither substitutes for the other.
+
+**Tier 2, recorded and not quoted from scrollback.**  Two new suites,
+`v90demapper` (13) and `v90sbe` (4): 17 mutations, **17 caught, 0 NOT caught,
+0 unusable, 0 equivalent**.  Five of the thirteen are transcript-only and say
+so in their labels.  `tools/mutsnap.py --update v90demapper v90sbe` recorded
+both; the other 69 entries are stale as they were, because adding two files to
+`src/` and two to `include/` invalidates every key by construction and the
+Makefile's `refs` target does not fail on staleness for exactly that reason.
+
+**The C2 and D2 variants are driven on their own trials.**  GCC gives our D1
+and D2 one address, so on our side the alternation changes nothing; on the
+blob's they are separate functions and it is 189 more bytes that a test drives
+against the object rather than being assumed to be a copy of its twin.
+
+**One tool change.**  `tools/offcheck.py` compiles `include/dsplib/*.h` as C,
+so the two new C++ class headers join the forty-three already in its
+`SKIP_HEADERS`.  Their layouts are not unchecked, they are checked harder: the
+two `.cpp`s assert seventeen offsets and both sizes with
+`__builtin_offsetof`, and the test's region checks are absolute offsets rather
+than field names.
+
+
+### 1187. `V92Phase3Modulator` IS 80 BYTES, AND THE WHOLE FIELD MAP CAME OUT OF THE CONSTRUCTOR
+
+*Renumbered from 1180 at merge: the comment-pass batch had independently
+taken 1180 for the mutation-anchor hazard in `v34hshak.c`. Both were written
+against the same highest-in-use number on different branches. Cited as 1180
+nowhere outside this batch — checked before moving it.*
+
+The class had no header, no `.cpp` and not one mention anywhere in this tree
+(finding 1104's "neither" column).  Thirteen symbols, 2,928 bytes.
+
+**The size is an allocation, not a displacement scan** -- finding 1107's rule
+applied first rather than checked afterwards.  `V92Modulator`'s constructor at
+.text+0x15299, and identically at +0x15579 in the `C2` copy:
+
+```
+   15299:  c7 04 24 50 00 00 00   movl   $0x50,(%esp)
+   152a0:  e8 ..                  call   sysdep_malloc
+   152a5:  89 c3                  mov    %eax,%ebx
+   152aa:  89 1c 24               mov    %ebx,(%esp)
+   152b1:  e8 ..                  call   _ZN18V92Phase3ModulatorC1EP13V92Parameters
+   152b6:  89 5e 44               mov    %ebx,0x44(%esi)
+```
+
+So **0x50 = 80 bytes**, and the modulator lives at `V92Modulator + 0x44`.  The
+largest displacement any of the thirteen symbols uses is +0x4c, so here the two
+readings agree -- but they agree by luck and the difference is worth stating:
+**+0x44 and +0x48 are touched by NOTHING in this class.**  They are `pad_44[8]`
+in the header because this class does not write them, not because nothing does;
+`V92Modulator` holds the only pointer and was not read for this batch.
+
+The constructor (105 bytes, .text+0x16d00) settles the two offsets no method
+would have:
+
+```
+   16d23:  8d 53 18               lea    0x18(%ebx),%edx   <- Scrambler at +0x18
+   16d26:  89 14 24               mov    %edx,(%esp)
+   16d29:  e8 ..                  call   _ZN9ScramblerIhiEC1Ejjj    (5, 23, 99)
+   16d2e:  8b 44 24 34            mov    0x34(%esp),%eax
+   16d36:  89 43 4c               mov    %eax,0x4c(%ebx)   <- V92Parameters* at +0x4c
+   ...
+   16d5f:  e8 ..                  call   V92Phase3Modulator::reset  (4000, 0, 0, 0, 0, 0)
+```
+
+and the destructor is 22 bytes whose entire body is a tail call to
+`Scrambler<unsigned char,int>::~Scrambler` on `this + 0x18`, which is the
+second independent statement that the scrambler is a subobject.  `readelf`
+lists `D1` and `D2` and no `D0`, so the class is not polymorphic and +0x00 is a
+real member.  **`D2` at +0x16270 was read too, not assumed to be a copy of its
+twin** -- it is the same five instructions ending in the same
+`R_386_PC32 _ZN9ScramblerIhiED1Ev`, and its largest displacement is +0x18.  All
+THIRTEEN symbols have been disassembled, which is what makes the sentence below
+about +0x4c a measurement rather than a sample.
+
+The map, every entry from a store or a load in one of the thirteen:
+
+```
+   +0x00  unsigned int   word_00      reset's last argument; read by nothing here
+   +0x04  short          codeLevel    Ru / Ja / TRN1u amplitude, literal 4000
+   +0x06  short          suLevel      Su amplitude, codeLevel * sqrt(3/2) + 0.5
+   +0x08  enum           state
+   +0x0c  unsigned int   symbolCount
+   +0x10  unsigned int   trn1uLength  named by the object's own message
+   +0x14  unsigned int   eventCode
+   +0x18  Scrambler<unsigned char,int>  (32 bytes, ends at +0x38)
+   +0x38  unsigned int   polarity
+   +0x3c  unsigned char *jaBits        `ja + 4`
+   +0x40  unsigned int   jaBitCount    `*(unsigned int *)ja`
+   +0x44  unsigned char  pad_44[8]     NOT TOUCHED BY THIS CLASS
+   +0x4c  V92Parameters *params
+```
+
+`trn1uLength`'s name is not invented: `reset` prints
+`V92Phase3Modulator: TRN1u state length set to %d` (.rodata.str1.4+0x3b5c) with
+that field as its argument.
+
+**`V92Ja` gets a PARTIAL header and no more.**  The blob carries no
+`_ZN5V92Ja*` symbol at all -- the string matches only inside three other
+symbols' mangled parameter lists -- so nothing here owns the class and nothing
+here can size it.  Two facts are established and both come from
+`V92Phase3Modulator::reset` at .text+0x16c41: an unsigned 32-bit count at +0x00
+(it is a `divl` divisor with no sign fixup) and a byte vector at +0x04.
+`include/dsplib/V92Ja.h` says so in its first paragraph.
+
+### 1181. THE SIXTEEN-STATE ALPHABET, NAMED BY THE OBJECT'S OWN METHODS -- AND STATE 2 IS THE DEFAULT LABEL
+
+`generateSymbol` increments `symbolCount` and then dispatches through a
+sixteen-entry table at .rodata:0x5e4 under `cmp $0xf,%eax; ja` -- unsigned.
+Resolving the table's relocations gives:
+
+```
+   state  0 -> .text+0x1685c   state  8 -> .text+0x167a3
+   state  1 -> .text+0x16679   state  9 -> .text+0x16759
+   state  2 -> .text+0x16625   state 10 -> .text+0x166e0
+   state  3 -> .text+0x1696c   state 11 -> .text+0x169c9
+   state  4 -> .text+0x16920   state 12 -> .text+0x16a44
+   state  5 -> .text+0x168b0   state 13 -> .text+0x16a75
+   state  6 -> .text+0x1666e   state 14 -> .text+0x1666e
+   state  7 -> .text+0x167f8   state 15 -> .text+0x1666e
+```
+
+**+0x16625 is the `ja` target -- the DEFAULT label**, the one that prints
+`V92Phase3Modulator: Illegal state`.  So state 2 is not a case in the source at
+all, while 6, 14 and 15 share a different, SILENT block at +0x1666e.  The
+minimal source producing this table is `case 6: case 14: case 15:` and no
+`case 2`.
+
+Each generating arm is one of the small `generate*` methods inlined verbatim,
+and matching the two is a byte comparison rather than a guess: arm 0 is
+`generateRu` (+0x163a0), arm 1 `generateRuNot` (+0x16400), arms 7/9/10
+`genereteSu` (+0x16460 -- the misspelling is the original's), arms 8/11
+`genereteSuNot` (+0x164e0), arms 4/5 `generateJa` (+0x16570), arms 3/12/13
+`generateTRN1u` (+0x165c0).
+
+The four `exit*` methods name the rest, each guarding exactly one value:
+`exitJa` (+0x162b0) acts on 4, to 6 on the twelve-symbol boundary else to 5;
+`exitSilence` (+0x16300) acts on 6, to 7; `exitSuSecond` (+0x16330) acts on 9,
+to 11 or 10; `exitTRN1u` (+0x16380) acts on 12, to 13.
+
+**They do not agree about clearing the count, and the pattern is not the
+obvious one.**  Write it down in full, because the short version --
+"`exitTRN1u` is the odd one out" -- is FALSE and is what the next batch will
+quote:
+
+```
+   exitJa        0x162e4  movl $0x0,0xc(%ecx)   only on the state = 6 arm
+                 0x162ed  (state = 5)           no store: the count survives
+   exitSuSecond  0x16364  movl $0x0,0xc(%ecx)   only on the state = 11 arm
+                 0x1636d  (state = 10)          no store
+   exitSilence   0x1631e  movl $0x0,0xc(%eax)   its single arm, always
+   exitTRN1u     0x16397  (state = 13)          no store on any path
+```
+
+So the two boundary-testing exits clear the count when they hand on to the
+NEXT stage and leave it when they move to their own `*End` state; `exitSilence`
+always clears; `exitTRN1u` never does.  That last one is what lets
+TRN1uSecondEnd's `symbolCount > 2039` guard see a count that has been running
+since TRN1uSecond began.
+
+The chain the arms themselves wire up:
+
+```
+   Ru --384--> RuNot --24--> TRN1u --trn1uLength--> Ja
+     [exitJa]--> JaEnd --12--> Silence
+     [exitSilence]--> Su --144--> SuNot --24--> SuSecond
+     [exitSuSecond]--> SuSecondEnd --12--> SuSecondNot --24-->
+   TRN1uSecond [exitTRN1u]--> TRN1uSecondEnd --past 2039, on 12--> End(14)
+```
+
+Five `eventCode` values occur and no others: 2 leaving RuNot, 3 leaving TRN1u,
+5 leaving SuNot, 7 leaving SuSecondNot, 8 leaving TRN1uSecondEnd.
+
+Two of the arm groupings are lowered differently and that is what identifies
+them.  Ru's three-and-three split is a RANGE test (`cmp $0x2; jbe`, then
+`cmp $0x5; ja` at +0x1669b); Su's `{0,2} {1,4} {3,5}` is a BIT TEST
+(`mov $1,%eax; shl %cl,%eax; test $0x05,%al; test $0x12,%al; test $0x28,%al` at
++0x16705), because the groups are not consecutive.  The three masks read off
+directly as the three case groups.
+
+### 1182. `V92Phase3Modulator::reset`'s FIRST PARAMETER IS DEAD, AND BOTH CALLERS PASS THE VALUE IT IGNORES
+
+The mangled name is
+`_ZN18V92Phase3Modulator5resetEs23V92Phase3ModulatorStatejP5V92JaPK19tagV90DILdescriptorj`,
+so the first parameter is a `short`.  After `push edi/esi/ebx` and
+`sub $0x10,%esp` it lives at `0x24(%esp)`, and **that slot is never read.**
+Every other slot is: 0x20 -> `%esi`, 0x28 -> `%eax`, 0x2c -> `%edi`,
+0x30 -> `%ebx`, 0x34 -> `%ebx` at +0x16ccd, 0x38 -> `%ecx`.
+
+What sets the amplitude is a literal, in both of the tail-duplicated blocks:
+
+```
+   16c35:  66 c7 46 04 a0 0f      movw   $0xfa0,0x4(%esi)
+   16cc1:  66 c7 46 04 a0 0f      movw   $0xfa0,0x4(%esi)
+```
+
+0xfa0 is 4000, and both callers pass exactly 4000 -- the constructor at
+.text+0x16d4b and `V92Modulator::enterPhase3` at +0x144ab -- so the object could
+not tell the difference either.  It is kept, named `levelArg` and unused, so
+that the mutation `codeLevel = levelArg` exists and is CAUGHT; without a name
+there is no way to write that mutation and the claim would be untested prose.
+
+`reset` also never dereferences its `tagV90DILdescriptor *`.  The whole use is
+`mov 0x34(%esp),%ebx; test %ebx,%ebx` at +0x16ccd, gating one diagnostic:
+`BUG BUG BUG BUG BUG - V92Phase3Modulator: no Ja Object, DIL descriptor
+available !`.  So `include/dsplib/V92Phase3Modulator.h` declares the type
+INCOMPLETE and does not include the V.90 header at all.
+
+### 1183. V.92 IS NOT V.90 WITH DIFFERENT CONSTANTS -- THREE INVERSIONS, ANY OF WHICH THE SIBLING WOULD HAVE GOT WRONG
+
+`V90Phase3Modulator` was read first as a hypothesis, exactly as briefed, and
+three of its readings are the OPPOSITE of this class's.  Each was read from
+this class's own bytes:
+
+- **The scrambler is at +0x18, not +0x20**, and is built `(5, 23, 99)` rather
+  than V.90's taps.  `lea 0x18(%ebx)` in the constructor, the destructor and
+  every arm that calls `process`.
+- **The Ja arms emit `polarity ? -codeLevel : codeLevel`.**  At +0x165af:
+  `test %eax,%eax; je 165b5; neg %edx` -- the negation is on the NON-zero side.
+  `V90Phase3Modulator`'s Jd arms are `polarity ? codeLevel : -codeLevel`
+  (src/pump/v90/V90Phase3Modulator.cpp, `jdSymbol`).
+- **The TRN1u polarity seed is `setle`, i.e. `sample <= 0`.**  At +0x169be:
+  `xor %ecx,%ecx; test %bx,%bx; setle %cl; mov %ecx,0x38(%esi)`.  V.90's TRN1d
+  seeds `sample > 0`.
+
+The sibling was still worth reading: the file shape, the "one class, one owner"
+split between defined and declared members, the union fixture and the
+compare-pointers-as-offsets idiom all carried across unchanged and saved most of
+a batch.  **Shape carries; values do not.**
+
+### 1184. THE TRN1u LENGTH IS A SIGNED DIVIDE WITH AN UNSIGNED FLOOR, AND ONE INPUT SEPARATES THE TWO READINGS
+
+`reset` computes `trn1uLength` from two `V92Parameters` fields:
+
+```
+   16bd7:  8b 8a 88 00 00 00      mov    0x88(%edx),%ecx    V92_ECHO_FAST_UPDATE_DURATION
+   16be0:  8b 82 8c 00 00 00      mov    0x8c(%edx),%eax    V92_ECHO_SLOW_UPDATE_DURATION
+   16beb:  01 c8                  add    %ecx,%eax
+   16bed:  8d 48 0c               lea    0xc(%eax),%ecx     + 12
+   16bf2:  f7 ea                  imul   %edx               0x2aaaaaab
+   16bf6:  c1 f8 1f               sar    $0x1f,%eax
+   16bf9:  d1 fa                  sar    $1,%edx
+   16bfb:  29 c2                  sub    %eax,%edx          <- the SIGNED fixup
+   16bfd:  8d 14 52               lea    (%edx,%edx,2),%edx
+   16c00:  8d 04 95 00 00 00 00   lea    0x0(,%edx,4),%eax  <- 12 * q
+   16c07:  3d df 1f 00 00         cmp    $0x1fdf,%eax
+   16c0c:  0f 87 90 00 00 00      ja     16ca2              <- UNSIGNED
+```
+
+So `length = 12 * ((a + b + 12) / 12)` with a SIGNED division -- `imul` plus
+the `sar $0x1f` / `sub` fixup, which unsigned division does not need -- and
+then `if (length < 8160) length = 8160` with an UNSIGNED comparison.
+
+**Over every non-negative sum the two readings are identical**, which is
+finding 613's class exactly: a differential suite that never drives the sum
+negative cannot see the difference, and declaring the division `int` would be
+faith.  `test/unit/t_v92p3mod.cpp`'s `par_pairs` therefore carries three
+negative rows.  At `a = b = -100` the sum is -188; signed gives -180 and stores
+0xffffff4c, unsigned gives 0xffffff60.  The mutation `the duration sum is
+divided as unsigned` is CAUGHT only because those rows exist.
+
+The same argument runs a second time inside `generateSymbol`: all four residues
+(`% 6` and `% 12`) are `mul $0xaaaaaaab` with a logical shift and no fixup, so
+`symbolCount` is unsigned.  The sweep drives it to 0x80000003, where the
+unsigned `% 12` of the incremented count is 0 and the signed one is -4, so the
+arm taken differs.
+
+`suLevel` is the third: `filds 0x4(%esi)`, `fmull` an EIGHT-byte
+1.224744871391589 (sqrt(3/2) to sixteen digits), then `fstps`/`flds` -- a round
+trip through four bytes -- and `fadds` a FOUR-byte 0.5 before a truncating
+`fistps`.  The float intermediate and the `0.5f` are both forced by that
+encoding; a double expression throughout would need neither.
+
+### 1185. WHAT THE OBJECT COMPARISON CANNOT SEE IN THIS CLASS, AND WHAT DOES SEE IT
+
+Three claims here are invisible to a whole-object differential, and this
+finding names all three rather than letting any of them pass as `equivalent`
+(finding 651's failure mode).
+
+**1. State 2 against states 6, 14 and 15.**  Both blocks write zero to
+`eventCode` and return zero; the ONLY difference is the `Illegal state` line,
+gated `dsplibs_debug_level > 1`.  So folding case 2 into the silent group, or
+dropping state 14 out of it, changes no byte of the object under any input.
+`run_diagnostics` raises both levels, captures each side's text and compares it
+byte for byte, and asserts by name that state 2 printed one line and state 6
+printed none -- because a comparison of two empty strings passes for ever.  Both
+mutations are CAUGHT, by the transcript and by nothing else.  The `no Ja Object`
+warning in `reset` is the third transcript-only mutation and the same argument.
+
+**2. The order of the two echo durations.**  Recorded `equivalent` with the
+evidence: the object reads +0x88 and +0x8c and immediately does
+`add %ecx,%eax` at .text+0x16beb, and neither field is read anywhere else in any
+of the thirteen symbols, so only the sum reaches a store.  Nothing in the object
+can order two addends.  **This expires the moment another member reads one of
+the two on its own.**
+
+**3. float against double for `suLevel`.**  Also recorded `equivalent`, and the
+honest statement is narrower than "it does not matter": the narrowing is FORCED
+by the encoding above and is written that way for that reason, but it is
+unobservable because `reset` sets `codeLevel` to the literal 4000 and no symbol
+of this class writes that field otherwise.  4000*sqrt(3/2) is 4898.979485566356,
+its float rounding 4898.97949, and both give 4899 after +0.5 and truncation.
+The derivation is codegen; the test can only confirm 4899.
+
+**Tier 2, recorded and not quoted from scrollback.**  One new suite,
+`v92p3mod`: **47 mutations, 45 caught (45 by test), 0 NOT caught, 0 unusable,
+2 equivalent, 0 MIScounted**, recorded with `tools/mutsnap.py --update
+v92p3mod`.  Three of the 45 are transcript-only and say so in their notes.
+
+**One sweep input exists only to make a mutation catchable.**  `prepare`'s
+`trn1uMode` has three settings -- miss the limit, hit it exactly, and start
+PAST it -- and only the third separates `symbolCount == trn1uLength` from
+`>=`.  Without it that mutation is NOT CAUGHT and the `==` is a guess.
+
+### 1186. WHAT THIS BATCH DID NOT DO, AND WHAT IS LEFT ON `V92Phase3Modulator`
+
+Two of the thirteen symbols are written: `generateSymbol` (1,437 B) and `reset`
+(351 B), which is finding 1104's whole named blocker on `dp_vpcm_init` --
+`reset` was blocked solely by `generateSymbol`, and `generateSymbol` is a leaf.
+
+**Eleven are declared and deliberately left undefined**, because one class, one
+owner applies to methods and defining a method whose callers are not written
+re-opens the link closure for the whole test suite: `generateRu`,
+`generateRuNot`, `genereteSu`, `genereteSuNot`, `generateJa`, `generateTRN1u`,
+`exitJa`, `exitSilence`, `exitSuSecond`, `exitTRN1u`, and the constructor and
+destructor -- those last two not even declared, so the class stays trivial and
+the test's union fixture keeps its default members.  Their bodies were all READ
+(they are what names the states, finding 1181) and each is mirrored by a
+file-static helper in the `.cpp`, so whoever defines them has the derivation
+already.
+
+Three things are recorded as NOT settled, none of them blocking:
+
+- **+0x44 and +0x48.**  No symbol of this class touches them.  The allocation
+  says they exist; whether `V92Modulator` writes them through its +0x44 pointer
+  was not checked, and finding 1107 is the reason that distinction is in the
+  header rather than a silent `pad_`.
+- **`word_00` at +0x00.**  `reset` stores its last argument there and nothing in
+  this class reads it.  `enterPhase3` sources that argument from
+  `*(int *)(V92Modulator->+0x10 + 4)`, an object this batch did not read.
+- **`V92Ja`'s size and its vector's length.**  See finding 1187.
+
+### 1150. THE FOUR CLOSURE FIGURES, RE-DERIVED A THIRD TIME: THE BRIEF WAS CURRENT AND FINDING 1104 WAS STALE
+
+Task #91 was briefed with 114 symbols / 22,043 bytes for `dp_vpcm_init` and
+told to re-derive rather than trust it, on the grounds that briefed numbers
+have been found stale before.  Re-derived on a full build, per finding 330's
+rule and closure.py's own requirement that `build/src/**/*.o` exists:
+
+```
+    dp_vpcm_init   114 symbols, 22,043 bytes     vpcm_create   110 / 21,818
+    vpcm_delete     47 symbols,  5,791 bytes     vpcm_op       113 / 21,971
+```
+
+**The brief was right to the byte and finding 1104 is the stale one.**  1104
+records 127 / 24,791 and says all four are UNCHANGED from what #88 was
+briefed with; #88 then landed thirteen symbols (finding 1106) and nothing
+recomputed the span afterwards.  The gap is exactly those thirteen.  This is
+the inverse of the failure the brief was guarding against, and it is the same
+mechanism: a number is stale from the moment the tree moves under it, whoever
+wrote it.
+
+**A closure figure computed in a fresh worktree is not stale, it is
+meaningless.**  `closure.py` reads what `src/` defines out of
+`build/src/**/*.o`, so before a build the have-set is empty and every symbol
+in the graph reports as unwritten -- 799 symbols and 432,840 bytes for
+`dp_vpcm_init`, thirty-six times the real number.  The tool says so on stderr
+and the line is easy to miss above a 700-line report.  Build first.
+
+**Two environment facts, because two of them cost this session turns.**  The
+blob is at `../slmodemd/dsplibs.o` relative to the MAIN checkout, so in a
+worktree under `.claude/worktrees/` every tool needs `BLOB=` set to an
+absolute path and every make needs `make BLOB=...`; and `third_party/spandsp`
+is gitignored, so a fresh worktree has to symlink it from the main checkout
+or `make phase` dies at `t_spandsp_b103` with the library missing -- which is
+an interop-tier failure that says nothing about the work in hand.
+
+**Where this batch left them** (findings 1160-1163, 1170-1174, 1180-1186):
+
+```
+    dp_vpcm_init   108 symbols, 19,704 bytes     vpcm_create   104 / 19,479
+    vpcm_delete     44 symbols,  5,284 bytes     vpcm_op       107 / 19,632
+```
+
+Six symbols and 2,339 bytes off `dp_vpcm_init`, which is finding 1104's two
+named blockers plus the destructor path each of them was blocking.  The three
+rate symbols are not in that count: they hang off `vpcm_run`'s weak entry
+points, not off `dp_vpcm_init`.
+
+### 1151. A HAND-APPLIED EQUIVALENCE IS PROSE UNTIL IT IS REGISTERED, AND ALL FOUR OF #88's WERE PROSE
+
+Finding 1115 records thirty mutations applied by hand, one at a time, each
+rebuilt and reverted.  Twenty-six broke a named check.  **Four survived and
+were recorded as equivalent with nothing registered to hold the claim**, and
+two of those four are equivalent only because of the STORE ORDER of a
+following statement, so a later reordering re-opens them.
+
+Finding 1000's alarm -- a recorded equivalent that is later caught fails the
+run -- is a property of `mutate.py` reading a `"equivalent": true` entry out
+of a suite JSON.  A mutation that was applied at a keyboard and reverted is
+not in any suite, so nothing can ever check it again.  The gap is not that
+#88 was careless; it is that **"applied by hand" and "registered" look
+identical in a findings table**, and only one of them survives the session.
+
+Each was re-derived from the blob's own encoding before being registered,
+because registering an unverified claim only records it:
+
+```
+  4abdd  66 c7 40 0a 00 00      movw $0x0,0xa(%eax)     designer  +0x0a
+  3e40e  66 89 8b 9c 00 00 00   mov  %cx,0x9c(%ebx)     evaluator +0x9c
+  1c1c2  d1 e9                  shr  $1,%ecx            the cursor halving
+  d6d8 .. d701, d786 .. d7a9    twelve movb, six each   the flags at +0x217
+```
+
+All four confirm what `src/` has: two 16-bit stores where the mutation widens
+to 32, a LOGICAL shift where the mutation makes it arithmetic, and two runs of
+six byte stores where the mutation deletes the second.  So every equivalence
+claim in 1115 is true, and **every one of them is a difference the codegen
+tier can see and the differential tier cannot** -- finding 613's class exactly.
+That is the honest statement of what "equivalent" means for these four: not
+"the same code", but "no reachable input separates them".
+
+Registered, with the argument in each `why`, and re-run on the final tree:
+
+```
+  v90conneval   6 mutations: 5 caught, 0 NOT caught, 0 unusable, 1 equivalent
+  v90cd         4 mutations: 3 caught, 0 NOT caught, 0 unusable, 1 equivalent
+  vpcmep3      23 mutations: 21 caught, 0 NOT caught, 0 unusable, 2 equivalent
+  v90demod     31 mutations: 28 caught, 2 NOT caught, 0 unusable, 1 equivalent
+```
+
+v90demod's two NOT caught are the pre-existing documented pair and did not
+move.  **The guard this buys is specific**: reorder the +0x0a and +0x0c stores,
+or move a reader between the two runs of six, and the mutation stops being
+equivalent, `mutate.py` reports `CAUGHT, recorded as equivalent`, and the run
+fails as MIScounted.  Prose cannot do that.
+
+**`V90ConnectionEvaluator.cpp` had no suite at all**, so one was created --
+and NOT with the equivalent mutation alone.  A set whose only member is an
+equivalent mutation is indistinguishable from a set pointed at the wrong
+binary, which is the failure `test/mutations/suites.json` exists to prevent
+and which six sets suffered before it did.  Five of #88's caught mutations
+are registered beside it as the anti-vacuity evidence that the pairing is
+real.
+
+**A registered suite with no recorded verdicts fails `make phase`.**
+Registering `v90conneval` in `suites.json` and committing without running
+`mutsnap.py --update` left the entry MISSING rather than stale, and MISSING is
+what `--check` fails on.  The commit that adds a suite must carry its
+snapshot entry; `make phase` after the edit, not after the run that preceded
+it, is what catches this.
+
+### 1152. WHAT TASK #91 DID NOT DO
+
+- **One commit on this branch was red when it was made, and it was mine.**
+  `a81f724` registers `v90conneval` in `suites.json`.  `make phase` was run
+  BEFORE that edit, not after, so what was committed had a suite with no
+  recorded verdicts -- MISSING to `mutsnap --check`, which the `refs` gate
+  fails on.  The next batch found it and recorded the verdicts, so the branch
+  is green from `f1f29db` onward and green at HEAD, but `a81f724` as committed
+  is not.  Disclosed rather than rebased away: five commits sit on top of it,
+  three of them another agent's, and history surgery to hide a red commit
+  costs more than the record it would erase.  The rule this is the instance of
+  is in finding 1151; this is where it says who broke it.
+
+- **`t_vpcmrun.c` still builds its endpoints with `ref_vpcm_create`**, and
+  will until the last of `dp_vpcm_init`'s closure lands.  That is finding
+  1105, not an omission here: no version of that oracle compares a subset, and
+  this batch wrote nine symbols of a hundred-and-fourteen-symbol span.
+- **No codegen-tier work.**  Finding 1151 establishes that all four registered
+  equivalences are differences `make similarity` can see and no test can.
+  Nothing was run through the period compiler to check whether our spelling of
+  the four sites matches the object's, and `compare.py --ratchet` was not run
+  for this batch at all.
+- **The other sixteen `V90Demapper` members, eleven `V92Phase3Modulator`
+  members and eleven `V90ConnectionEvaluator` members** are declared and
+  undefined.  One class, one owner binds on methods, and taking a processing
+  method to make a closure figure smaller is taking another batch's work.
+- **`V90Demapper`'s constructor** is blocked on `ModulusDecoder`, which has no
+  header, no `.cpp` and no other symbol in this tree (finding 1174).
+- **67 of the 72 mutation snapshot entries are still stale.**  The key is
+  coarse by design -- it covers all of `src/`, `include/`, the Makefile and
+  `test/harness/` -- so adding four source files and six headers invalidates
+  every entry by construction.  Five are current: the four re-run for finding
+  1151 and `v92p3mod`.  A full re-record is a run of all 72 suites, 3,733
+  mutations, and was not attempted.
+
+  **This is a named handover cost, not a gate this batch failed.**
+  `mutsnap.py --check --strict` exits 1 here, and `--strict` is by the tool's
+  own description "what a MERGE has to pass; deliberately not what `make
+  phase` runs".  `make phase` is exit 0 because the thing it fails on is
+  MISSING, and `0 never recorded, of 72 registered` says there is none.
+  What IS clean across all 72 is `anchorcheck.py` -- 3,733 mutations, 0
+  matching other than exactly once, 0 vacuous, 0 landing in an arm their label
+  does not name -- which is the check that three batches adding functions to
+  shared files could plausibly have broken.  It is not in `make phase`'s
+  dependency list, so it was run by hand.

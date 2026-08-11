@@ -70,6 +70,15 @@
  * 1112 is why only one of the two definitions may be included.
  */
 #include "dsplib/V90Parameters.h"
+/*
+ * The demapper's destructor path.  `V90Demapper.h` and
+ * `V90SignBitsExtractor.h` forward-declare `V90Parameters` rather than
+ * defining it, so both are safe to include after the named map -- finding
+ * 1112 again.
+ */
+#include "dsplib/sysdep.h"
+#include "dsplib/V90Demapper.h"
+#include "dsplib/V90SignBitsExtractor.h"
 
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
@@ -106,6 +115,38 @@ void ref_ce_ctor(void *self, void *params)
 	asm("ref__ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
 void our_ce_dtor(void *self) asm("_ZN22V90ConnectionEvaluatorD1Ev");
 void ref_ce_dtor(void *self) asm("ref__ZN22V90ConnectionEvaluatorD1Ev");
+
+/*
+ * The V90Demapper destructor path.  Both sides are reached by their mangled
+ * names for the reason given above: the two must be exactly symmetric, and
+ * a destructor called as `p->~V90Demapper()` on one side and as a symbol on
+ * the other is not.
+ */
+void our_dem_dtor(void *self) asm("_ZN11V90DemapperD1Ev");
+void ref_dem_dtor(void *self) asm("ref__ZN11V90DemapperD1Ev");
+void our_dem_hist(void *self)
+	asm("_ZN11V90Demapper27printErrorHistogramAndResetEv");
+void ref_dem_hist(void *self)
+	asm("ref__ZN11V90Demapper27printErrorHistogramAndResetEv");
+void our_sbe_ctor(void *self) asm("_ZN20V90SignBitsExtractorC1Ev");
+void ref_sbe_ctor(void *self) asm("ref__ZN20V90SignBitsExtractorC1Ev");
+void our_sbe_dtor(void *self) asm("_ZN20V90SignBitsExtractorD1Ev");
+void ref_sbe_dtor(void *self) asm("ref__ZN20V90SignBitsExtractorD1Ev");
+
+/*
+ * THE C2/D2 VARIANTS ARE SEPARATE FUNCTIONS IN THE BLOB and are driven on
+ * their own trials.  GCC emits the base-object and complete-object forms as
+ * two symbols at ONE address for these three classes -- `nm` gives our D1 and
+ * D2 the same value -- so on our side the alternation changes nothing, and on
+ * the blob's it is 189 more bytes of `.text` that some test drives against
+ * the object rather than being assumed to be a copy of its twin.
+ */
+void our_dem_dtor2(void *self) asm("_ZN11V90DemapperD2Ev");
+void ref_dem_dtor2(void *self) asm("ref__ZN11V90DemapperD2Ev");
+void our_sbe_ctor2(void *self) asm("_ZN20V90SignBitsExtractorC2Ev");
+void ref_sbe_ctor2(void *self) asm("ref__ZN20V90SignBitsExtractorC2Ev");
+void our_sbe_dtor2(void *self) asm("_ZN20V90SignBitsExtractorD2Ev");
+void ref_sbe_dtor2(void *self) asm("ref__ZN20V90SignBitsExtractorD2Ev");
 }
 
 /* ------------------------------------------------------------------ seeds */
@@ -1144,6 +1185,537 @@ run_k56(void)
 	return diff_end();
 }
 
+/* --------------------------- V90SignBitsExtractor: constructor, destructor */
+
+/*
+ * Forty bytes, three stores and one embedded parallel differential decoder.
+ *
+ * THE ONE WORD THE COMPARISON EXCLUDES IS +0x1c, `decoder.state_`, and it is
+ * excluded because each side's constructor calls `sysdep_malloc` for itself
+ * and two allocations are never the same address.  Finding 1113's shared
+ * arena is not available here -- the pointer is produced by the code under
+ * test rather than seeded into it -- so instead the two allocations are
+ * checked to be DISTINCT, both live, and to hold the same six zeroed bytes.
+ */
+#define SBE_SLOT_L	(0x28 + 32)
+#define SBE_OFF_STATE	0x1c
+
+static unsigned char sbe_a[SBE_SLOT_L] __attribute__((aligned(8)));
+static unsigned char sbe_b[SBE_SLOT_L] __attribute__((aligned(8)));
+
+#define SA ((V90SignBitsExtractor *)sbe_a)
+#define SB ((V90SignBitsExtractor *)sbe_b)
+
+/* Everything but the four bytes at +0x1c, raw, so a stray store fails. */
+static int
+sbe_same_but_state(void)
+{
+	return memcmp(sbe_a, sbe_b, SBE_OFF_STATE) == 0 &&
+	       memcmp(sbe_a + SBE_OFF_STATE + 4, sbe_b + SBE_OFF_STATE + 4,
+		      SBE_SLOT_L - SBE_OFF_STATE - 4) == 0;
+}
+
+static int
+run_sbe_lifecycle(void)
+{
+	int trial;
+
+	diff_begin("V90SignBitsExtractor: constructor and destructor");
+	set_level(0);
+
+	for (trial = 0; trial < 16; trial++) {
+		unsigned char before[SBE_SLOT_L];
+		struct alloc_log base;
+		long tag = 6000 + trial;
+		int i, nonzero;
+
+		fill_pair(sbe_a, sbe_b, SBE_SLOT_L, trial + 600, trial & 3);
+		memcpy(before, sbe_b, SBE_SLOT_L);
+
+		base = harness_alloc;
+		if (trial & 1) {
+			our_sbe_ctor2(sbe_a);
+			ref_sbe_ctor2(sbe_b);
+		} else {
+			our_sbe_ctor(sbe_a);
+			ref_sbe_ctor(sbe_b);
+		}
+
+		diff_eq_int("each constructor allocated once (%ld)",
+			    harness_alloc.allocs - base.allocs, 2, tag);
+		diff_eq_int("identical but for the state pointer (%ld)",
+			    sbe_same_but_state(), 1, tag);
+
+		/* The three stores, read off the BLOB's object. */
+		diff_eq_int("+0x10 is zeroed (%ld)", (long)SB->word_10, 0,
+			    tag);
+		diff_eq_int("+0x18 is zeroed (%ld)", (long)SB->byte_18, 0,
+			    tag);
+		diff_eq_int("the decoder's capacity is six (%ld)",
+			    (long)SB->decoder.capacity_, 6, tag);
+		diff_eq_int("and its active width is zero (%ld)",
+			    (long)SB->decoder.size_, 0, tag);
+
+		/*
+		 * Anti-vacuity: the fill must be GONE from both stored
+		 * fields, or "it is zero" is a statement about the seed.
+		 */
+		diff_eq_int("the fill is gone from +0x10 (%ld)",
+			    memcmp(before + 0x10, sbe_b + 0x10, 4) != 0, 1,
+			    tag);
+		diff_eq_int("the fill is gone from +0x18 (%ld)",
+			    before[0x18] != sbe_b[0x18], 1, tag);
+
+		/* And what the constructor must NOT have touched. */
+		diff_eq_int("+0x00..+0x0f is untouched (%ld)",
+			    memcmp(before, sbe_b, 0x10) == 0, 1, tag);
+		diff_eq_int("+0x14 is untouched (%ld)",
+			    memcmp(before + 0x14, sbe_b + 0x14, 4) == 0, 1,
+			    tag);
+		diff_eq_int("no store past the object (%ld)",
+			    memcmp(before + 0x28, sbe_b + 0x28,
+				   SBE_SLOT_L - 0x28) == 0, 1, tag);
+
+		/* Two allocations, not one shared one, and both are cleared. */
+		diff_eq_int("the two states are distinct blocks (%ld)",
+			    SA->decoder.state_ != SB->decoder.state_, 1, tag);
+		diff_eq_int("and neither is null (%ld)",
+			    SA->decoder.state_ != 0 &&
+			    SB->decoder.state_ != 0, 1, tag);
+		nonzero = 0;
+		for (i = 0; i < 6; i++)
+			nonzero |= SA->decoder.state_[i] |
+				   SB->decoder.state_[i];
+		diff_eq_int("the six state bytes are cleared (%ld)", nonzero,
+			    0, tag);
+
+		/*
+		 * The destructor.  Finding 1113: compare what it WROTE, taken
+		 * immediately before the call -- two objects compared after a
+		 * free compare the allocator.  It must write nothing, and
+		 * free exactly what the constructor took.
+		 */
+		memcpy(before, sbe_b, SBE_SLOT_L);
+		base = harness_alloc;
+		if (trial & 1) {
+			our_sbe_dtor2(sbe_a);
+			ref_sbe_dtor2(sbe_b);
+		} else {
+			our_sbe_dtor(sbe_a);
+			ref_sbe_dtor(sbe_b);
+		}
+
+		diff_eq_int("each destructor freed once (%ld)",
+			    harness_alloc.frees - base.frees, 2, tag);
+		diff_eq_int("live is back where it started (%ld)",
+			    harness_alloc.live, base.live - 2, tag);
+		diff_eq_int("no bad free (%ld)", harness_alloc.bad_free, 0,
+			    tag);
+		diff_eq_int("the destructor wrote nothing (%ld)",
+			    memcmp(before, sbe_b, SBE_SLOT_L) == 0, 1, tag);
+	}
+
+	/*
+	 * The null arm.  `~ParallelDifferentialDecoder` tests its pointer, so
+	 * a destructor run over a null state must reach `sysdep_free` not at
+	 * all -- `free_null` is what tells that apart from a call that was
+	 * made and swallowed.
+	 */
+	for (trial = 0; trial < 4; trial++) {
+		unsigned char before[SBE_SLOT_L];
+		struct alloc_log base;
+		long tag = 6100 + trial;
+
+		fill_pair(sbe_a, sbe_b, SBE_SLOT_L, trial + 700, trial & 3);
+		SA->decoder.state_ = 0;
+		SB->decoder.state_ = 0;
+		memcpy(before, sbe_b, SBE_SLOT_L);
+
+		base = harness_alloc;
+		our_sbe_dtor(sbe_a);
+		ref_sbe_dtor(sbe_b);
+
+		diff_eq_int("a null state frees nothing (%ld)",
+			    harness_alloc.frees - base.frees, 0, tag);
+		diff_eq_int("and does not call free(NULL) either (%ld)",
+			    harness_alloc.free_null - base.free_null, 0, tag);
+		diff_eq_int("nothing written on the null arm (%ld)",
+			    memcmp(before, sbe_b, SBE_SLOT_L) == 0, 1, tag);
+		diff_eq_int("still identical (%ld)",
+			    memcmp(sbe_a, sbe_b, SBE_SLOT_L) == 0, 1, tag);
+	}
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------ the V.90 demapper */
+
+/*
+ * 7,864 bytes, and the size is the `movl $0x1eb8,(%esp)` in
+ * `V90Demodulator`'s constructor rather than a displacement bound -- finding
+ * 1107, which is what cost `V90Equalizer` eight bytes.
+ *
+ * EVERY REGION CHECK BELOW IS BY ABSOLUTE OFFSET, deliberately.  The seeding
+ * goes through the header's field names, so if the header had an array at the
+ * wrong offset both sides would be seeded at the wrong offset and agree; what
+ * cannot agree is the set of bytes the BLOB's object actually moved, and that
+ * is compared against a partition written as numbers.  Findings 223 and 224.
+ */
+#define DEM_SZ		0x1eb8
+#define DEM_SLOT_L	(DEM_SZ + 64)
+#define DEM_OFF_CONST	0x0030		/* short constellation[6][128]      */
+#define DEM_OFF_SIZE	0x0630		/* unsigned constellationSize[6]    */
+#define DEM_OFF_SBST	(0x668 + 0x1c)	/* signBits.decoder.state_          */
+#define DEM_OFF_SUM	0x0690		/* unsigned errorSum[6][128]        */
+#define DEM_OFF_COUNT	0x1290		/* unsigned errorCount[6][128]      */
+#define DEM_OFF_HIST	0x1e90		/* unsigned errorHistogramCount     */
+#define DEM_ARR		(6 * 128 * 4)
+
+static unsigned char dem_a[DEM_SLOT_L] __attribute__((aligned(8)));
+static unsigned char dem_b[DEM_SLOT_L] __attribute__((aligned(8)));
+
+#define DA ((V90Demapper *)dem_a)
+#define DB ((V90Demapper *)dem_b)
+
+/*
+ * The six per-constellation lengths, and what each set is for.  `lines` is the
+ * exact number of `edprintf` calls the printing arm makes: two banners, the
+ * histogram number, six constellation headers, and one row per LEVEL THAT
+ * EXISTS -- which is the whole distinction between the printing bound
+ * (`constellationSize[i]`) and the zeroing bound (a constant 128).
+ */
+struct dem_case {
+	unsigned int size[6];
+	int gated;			/* the six-way guard rejects       */
+	unsigned int lines;		/* edprintf calls when it does not */
+};
+
+static const struct dem_case dem_cases[] = {
+	{ { 1, 2, 3, 4, 5, 6 },		0, 9 + 21  },
+	{ { 8, 1, 7, 2, 6, 3 },		0, 9 + 27  },
+	{ { 2, 2, 2, 60, 2, 2 },	0, 9 + 70  },
+	{ { 0, 4, 4, 4, 4, 4 },		1, 0	   },
+	{ { 4, 4, 0, 4, 4, 4 },		1, 0	   },
+	{ { 4, 4, 4, 4, 4, 0 },		1, 0	   },
+};
+#define DEM_NCASE ((int)(sizeof dem_cases / sizeof dem_cases[0]))
+
+/*
+ * Seed both objects identically.  `params` is the SAME block on both sides on
+ * purpose: the destructor only reads one word of it, and one pointer value is
+ * what lets the object comparison run raw.
+ */
+static void
+dem_seed(int trial, const struct dem_case *c)
+{
+	unsigned int i;
+
+	fill_pair(dem_a, dem_b, DEM_SLOT_L, trial + 800, trial & 3);
+	DA->params = PA;
+	DB->params = PA;
+	for (i = 0; i < 6; i++) {
+		DA->constellationSize[i] = c->size[i];
+		DB->constellationSize[i] = c->size[i];
+		/*
+		 * One level per constellation with a zero sample count, so
+		 * the `test`/`je` on the divisor at 0x30c48 is exercised on
+		 * every trial rather than whenever the fill happens to lay
+		 * down four zero bytes in a row.  Its error SUM is left
+		 * filled, so an average of zero and an average of "the sum"
+		 * are different numbers.
+		 */
+		DA->errorCount[i][0] = 0;
+		DB->errorCount[i][0] = 0;
+	}
+}
+
+/* Was any byte of the range non-zero before the call?  Anti-vacuity. */
+static int
+dem_any_set(const unsigned char *p, unsigned off, unsigned n)
+{
+	unsigned i;
+
+	for (i = 0; i < n; i++)
+		if (p[off + i] != 0)
+			return 1;
+	return 0;
+}
+
+static int
+dem_all_clear(const unsigned char *p, unsigned off, unsigned n)
+{
+	unsigned i;
+
+	for (i = 0; i < n; i++)
+		if (p[off + i] != 0)
+			return 0;
+	return 1;
+}
+
+/*
+ * What the BLOB's object did, by absolute offset, as a partition of the whole
+ * slot: everything below +0x690 untouched, the two arrays either emptied or
+ * left alone, the counter up by one, everything above +0x1e94 untouched.
+ */
+static void
+dem_check_effect(const unsigned char *before, int gated, long tag)
+{
+	unsigned int was, now;
+
+	memcpy(&was, before + DEM_OFF_HIST, 4);
+	memcpy(&now, dem_b + DEM_OFF_HIST, 4);
+	diff_eq_int("the histogram number went up by one (%ld)",
+		    (long)(unsigned int)(now - was), 1, tag);
+
+	diff_eq_int("nothing below +0x690 moved (%ld)",
+		    memcmp(before, dem_b, DEM_OFF_SUM) == 0, 1, tag);
+	diff_eq_int("nothing above +0x1e94 moved (%ld)",
+		    memcmp(before + DEM_OFF_HIST + 4, dem_b + DEM_OFF_HIST + 4,
+			   DEM_SLOT_L - DEM_OFF_HIST - 4) == 0, 1, tag);
+
+	if (gated) {
+		/*
+		 * The guard suppresses the RESET as well as the print, which
+		 * is the part the function's name does not tell you.
+		 */
+		diff_eq_int("gated: the error sums are left alone (%ld)",
+			    memcmp(before + DEM_OFF_SUM, dem_b + DEM_OFF_SUM,
+				   DEM_ARR) == 0, 1, tag);
+		diff_eq_int("gated: the error counts are left alone (%ld)",
+			    memcmp(before + DEM_OFF_COUNT,
+				   dem_b + DEM_OFF_COUNT, DEM_ARR) == 0, 1,
+			    tag);
+		return;
+	}
+
+	/*
+	 * ALL 6 * 128 entries of both arrays, not `constellationSize[i]` of
+	 * them: the zeroing loop's bound is the constant 0x7f and the row
+	 * length is nowhere in it.
+	 */
+	diff_eq_int("the fill was there to remove (%ld)",
+		    dem_any_set(before, DEM_OFF_SUM, DEM_ARR) &&
+		    dem_any_set(before, DEM_OFF_COUNT, DEM_ARR), 1, tag);
+	diff_eq_int("every error sum is zero (%ld)",
+		    dem_all_clear(dem_b, DEM_OFF_SUM, DEM_ARR), 1, tag);
+	diff_eq_int("every error count is zero (%ld)",
+		    dem_all_clear(dem_b, DEM_OFF_COUNT, DEM_ARR), 1, tag);
+}
+
+/* The transcript, with the exact line count this case must produce. */
+static void
+dem_transcript(unsigned lvl, unsigned want, long tag, int *printed)
+{
+	diff_eq_int("transcript matches (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("line counts match (%ld)",
+		    (int)dsplib_debug_capture_lines(0),
+		    (int)dsplib_debug_capture_lines(1), tag);
+	if (lvl > 1) {
+		diff_eq_int("the blob printed exactly the rows that exist "
+			    "(%ld)", (int)dsplib_debug_capture_lines(1),
+			    (int)want, tag);
+		if (want != 0) {
+			*printed = 1;
+			transcripts_seen = 1;
+		}
+	} else {
+		diff_eq_int("below the gate ours was silent (%ld)",
+			    (int)dsplib_debug_capture_lines(0), 0, tag);
+		diff_eq_int("below the gate the blob was silent (%ld)",
+			    (int)dsplib_debug_capture_lines(1), 0, tag);
+	}
+}
+
+static int
+run_dem_histogram(void)
+{
+	unsigned lvl;
+	int trial, printed = 0;
+
+	diff_begin("V90Demapper::printErrorHistogramAndReset");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+		for (trial = 0; trial < DEM_NCASE * 2; trial++) {
+			const struct dem_case *c =
+				&dem_cases[trial % DEM_NCASE];
+			unsigned char before[DEM_SLOT_L];
+			long tag = (long)lvl * 1000 + trial;
+
+			dem_seed(trial, c);
+			memcpy(before, dem_b, DEM_SLOT_L);
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			our_dem_hist(dem_a);
+			ref_dem_hist(dem_b);
+
+			dsplib_debug_capture_on = 0;
+
+			/*
+			 * No pointer is produced or freed here, so the two
+			 * objects compare RAW over the whole slot -- finding
+			 * 1113's point about not weakening the comparison.
+			 */
+			diff_eq_int("the two objects are identical (%ld)",
+				    memcmp(dem_a, dem_b, DEM_SLOT_L) == 0, 1,
+				    tag);
+			dem_check_effect(before, c->gated, tag);
+			dem_transcript(lvl, c->lines, tag, &printed);
+		}
+	}
+
+	diff_eq_int("the histogram printed at some level", printed, 1, 0);
+	return diff_end();
+}
+
+/*
+ * The destructor.  Three heap blocks per side, because each side frees its
+ * own: +0x1c, +0x20 and the sign-bit extractor's decoder state at +0x684.
+ * Those three words are the ONLY ones the object comparison excludes.
+ */
+#define DEM_NPTR 3
+
+static int
+dem_pointers(int null_them, long tag)
+{
+	if (null_them) {
+		DA->array_1c = 0;
+		DB->array_1c = 0;
+		DA->array_20 = 0;
+		DB->array_20 = 0;
+		DA->signBits.decoder.state_ = 0;
+		DB->signBits.decoder.state_ = 0;
+		return 1;
+	}
+	DA->array_1c = sysdep_malloc(16);
+	DB->array_1c = sysdep_malloc(16);
+	DA->array_20 = sysdep_malloc(8);
+	DB->array_20 = sysdep_malloc(8);
+	DA->signBits.decoder.state_ =
+		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
+	DB->signBits.decoder.state_ =
+		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
+	diff_eq_int("six blocks handed out (%ld)",
+		    DA->array_1c != 0 && DB->array_1c != 0 &&
+		    DA->array_20 != 0 && DB->array_20 != 0 &&
+		    DA->signBits.decoder.state_ != 0 &&
+		    DB->signBits.decoder.state_ != 0, 1, tag);
+	return 0;
+}
+
+/* Everything but the three pointer words, raw. */
+static int
+dem_same_but_pointers(void)
+{
+	return memcmp(dem_a, dem_b, 0x1c) == 0 &&
+	       memcmp(dem_a + 0x24, dem_b + 0x24, DEM_OFF_SBST - 0x24) == 0 &&
+	       memcmp(dem_a + DEM_OFF_SBST + 4, dem_b + DEM_OFF_SBST + 4,
+		      DEM_SLOT_L - DEM_OFF_SBST - 4) == 0;
+}
+
+static int
+run_dem_lifecycle(void)
+{
+	unsigned lvl;
+	int trial, printed = 0;
+
+	diff_begin("V90Demapper: the destructor path");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+		for (trial = 0; trial < DEM_NCASE * 3; trial++) {
+			const struct dem_case *c =
+				&dem_cases[trial % DEM_NCASE];
+			/*
+			 * Every third trial takes the null arm, and every
+			 * third has the parameter gate OFF -- which is the
+			 * arm on which the destructor must do nothing at all
+			 * but free.
+			 */
+			int null_them = (trial % 3) == 1;
+			int gate_off = (trial % 3) == 2;
+			int gated = c->gated || gate_off;
+			unsigned char before[DEM_SLOT_L];
+			struct alloc_log base;
+			long tag = 4000 + (long)lvl * 1000 + trial;
+			int want = null_them ? 0 : 2 * DEM_NPTR;
+
+			dem_seed(trial + 40, c);
+			fill_pair(parm_a, parm_b, PARM_SLOT_L, trial + 41,
+				  trial & 3);
+			/*
+			 * THE GATE IS A PARAMETER-BLOCK FIELD, NOT
+			 * `dsplibs_debug_level`.  Seeded with the harness
+			 * fill it is non-zero, so it has to be set on every
+			 * trial or the "off" arm never runs.
+			 */
+			PA->DEBUG_DEMAPPER_ERROR_HISTOGRAM = gate_off ? 0 : 1;
+
+			dem_pointers(null_them, tag);
+			memcpy(before, dem_b, DEM_SLOT_L);
+			base = harness_alloc;
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			if (trial & 1) {
+				our_dem_dtor2(dem_a);
+				ref_dem_dtor2(dem_b);
+			} else {
+				our_dem_dtor(dem_a);
+				ref_dem_dtor(dem_b);
+			}
+
+			dsplib_debug_capture_on = 0;
+
+			diff_eq_int("the two objects are identical but for "
+				    "the three heap pointers (%ld)",
+				    dem_same_but_pointers(), 1, tag);
+			diff_eq_int("both destructors freed their blocks "
+				    "(%ld)", harness_alloc.frees - base.frees,
+				    want, tag);
+			diff_eq_int("live is back where it started (%ld)",
+				    harness_alloc.live, base.live - want, tag);
+			diff_eq_int("no bad free (%ld)", harness_alloc.bad_free,
+				    0, tag);
+			/*
+			 * The three `if (p)` guards.  `sysdep_free` tolerates
+			 * NULL, so dropping them changes no byte anywhere --
+			 * this counter is the only thing that sees it.
+			 */
+			diff_eq_int("and free(NULL) was never called (%ld)",
+				    harness_alloc.free_null - base.free_null,
+				    0, tag);
+
+			if (gate_off) {
+				diff_eq_int("gate off: the destructor wrote "
+					    "nothing (%ld)",
+					    memcmp(before, dem_b, DEM_SLOT_L)
+					    == 0, 1, tag);
+				diff_eq_int("gate off: and printed nothing "
+					    "(%ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, tag);
+				diff_eq_int("gate off: ours printed nothing "
+					    "either (%ld)",
+					    (int)dsplib_debug_capture_lines(0),
+					    0, tag);
+				continue;
+			}
+			dem_check_effect(before, gated, tag);
+			dem_transcript(lvl, gated ? 0 : c->lines, tag,
+				       &printed);
+		}
+	}
+
+	diff_eq_int("the destructor reached the histogram", printed, 1, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1161,6 +1733,11 @@ main(void)
 	rc |= run_ce();
 	rc |= run_ce_lifecycle();
 	rc |= run_k56();
+
+	/* The V90Demapper destructor path. */
+	rc |= run_sbe_lifecycle();
+	rc |= run_dem_histogram();
+	rc |= run_dem_lifecycle();
 
 	set_level(0);
 	dsplib_debug_capture_on = 0;
