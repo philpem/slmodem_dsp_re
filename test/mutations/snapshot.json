@@ -3230,9 +3230,10 @@
    }
   },
   "v34pcmrates": {
-   "key": "731e24f705b5a67a46c13f62c74a25c818fc9a6183161ce8e868c96d4e86c102",
-   "summary": "38 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "6c8aca3193528db00f9761b245bd92b08dca055a007138025ae18a06fbf9c2aa",
+   "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone": "caught",
     "a closed V.90 gate falls out of the if instead of answering zero": "caught",
     "a closed V.92 gate falls out of the if instead of answering zero": "caught",
     "rxbits is read UNSIGNED -- movzwl where the object has movswl": "caught",
@@ -3695,15 +3696,16 @@
    }
   },
   "v90getbitrate": {
-   "key": "96c84514802e20fb3a2b0e0d4986792e6b714e473c6d6488eabb8a1fa87675b7",
-   "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "058d87dbc2d874a46ba959fb714bb52fb109ecb1b9767fc18f4e600b11ad3d48",
+   "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
+    "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it": "caught",
     "the count is read through mappingParams at +0x14, not mappingParamsAlt at +0x18": "caught",
     "the gate is a SIGNED byte tested > 0, so 0x80 and 0xff close it": "caught",
     "the gate is gone: every call computes a rate, including the ones made before there is one": "caught",
     "the granularity is the V.92 upstream one, 8000/12, not the V.90 downstream 8000/6": "caught",
     "the product is SIGNED going into the conversion -- fildl rather than fildll off a zeroed high word": "caught",
-    "the reciprocal is a DOUBLE -- and this one is OBSERVABLE, which is not what it was filed as": "caught",
+    "the reciprocal is a DOUBLE -- observable, see the note above": "caught",
     "the return is (int), so the object's 64-bit fistpll becomes a 32-bit fistpl": "equivalent",
     "the rounding is dropped: n*8000/6 truncates instead": "caught",
     "the sample rate is 7200 rather than 8000": "caught"

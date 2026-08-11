@@ -128,6 +128,11 @@
   "replace": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn cfg->txbits * (int)RATE_STEP;\n\n\t\tn = *(const unsigned int *)"
  },
  {
+  "label": "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone",
+  "find": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\n\t\tn = *(const unsigned int *)",
+  "replace": "\t\tif (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)\n\t\t\treturn 0;\n\t\t*(int *)(tx + PCMTX_STATE) = 0;\n\n\t\tn = *(const unsigned int *)"
+ },
+ {
   "label": "the V.92 chain is one dereference short",
   "find": "\t\tn = *(const unsigned int *)\n\t\t    (**(const unsigned char *const *const *)\n\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);",
   "replace": "\t\tn = *(const unsigned int *)\n\t\t    (*(const unsigned char *const *)\n\t\t       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);"

@@ -37802,13 +37802,36 @@ two loads and no writes do not justify teaching the shared `snap_dem` to
 neutralise a pointer it neutralises for nobody else, in a header
 `t_vpcmep3.cpp` also includes.
 
-**TWO NEW SUITES: `v34pcmrates` 38 of 38 CAUGHT, `v90getbitrate` 8 of 9 with
+**TWO NEW SUITES: `v34pcmrates` 39 of 39 CAUGHT, `v90getbitrate` 9 of 10 with
 1 equivalent.**  Both are new files; no existing suite was edited.
 `anchorcheck.py` passes at 69 suites and 3,667 mutations, which was not free
 either -- finding 1103's rule that a batch adding a function to a file with a
 suite must re-run it applies here twice over, and every anchor in
 `v34pcmrates` carries its own function's surrounding text because
 `obj->status == 2` appears verbatim inside `VPcmV34InitiateRetrain`.
+
+**THE WRITE-CHECKS NEEDED A MUTATION OF THEIR OWN, AND HAD NONE.**  Roughly
+half the checks in each new case are the object and link comparisons, and the
+first draft's 47 mutations ALL changed a return value -- not one added a
+store.  So a skip predicate that had quietly swallowed everything would have
+left every mutation CAUGHT and nothing would have said the comparison was
+dead.  That is worse here than in general, because the claim is written into
+the file in so many words ("a getter that cleared a gate after reading it
+would look perfect from the return value alone") and because finding 1101
+found that one of these very entry points IS a drain.
+
+One mutation per suite now backs it, each chosen so the return value cannot
+move: `v34pcmrates` zeroes the V.92 gate after testing it, `v90getbitrate`
+zeroes the mapping count after reading it into a local.  Both are CAUGHT, and
+the first was applied by hand to confirm WHERE:
+
+```
+  t_v34pcmif.c:473  the rate getters write nothing down the chain
+                    [input 47004]  got 0, reference 3
+```
+
+-- byte 0x2c of the V.92 link, reported by `compare_link` and by nothing else.
+No return-value check fired at all, which is the point.
 
 **ONE MUTATION ESCAPED, AND IT FOUND A REAL DUPLICATION.**  "txbits is read
 UNSIGNED" came back NOT CAUGHT: the first draft returned
