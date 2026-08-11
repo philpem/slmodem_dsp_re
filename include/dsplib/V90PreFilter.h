@@ -120,9 +120,19 @@ public:
 	};
 };
 
-/* Named by the constructor's and setFilter's manglings; values not recovered. */
-enum __tHardwareCodecTypes__ : int;
-enum PreFilterCoefType : int;
+/*
+ * `__tHardwareCodecTypes__` has its own header because V90ModemCtor.cpp needs
+ * the type and must not have this one -- see V90CodecType.h.
+ */
+#include "dsplib/V90CodecType.h"
+
+/*
+ * Named by setFilter's mangling; values not recovered.  A definition rather
+ * than an opaque declaration because C++98 has none and the author's compiler
+ * was C++98; `_BASE_PIN` is ours and fixes only the underlying type.
+ * docs/method/compilers.md, V2.
+ */
+enum PreFilterCoefType { PreFilterCoefType_BASE_PIN = -0x7fffffff - 1 };
 
 class V90PreFilter {
 public:

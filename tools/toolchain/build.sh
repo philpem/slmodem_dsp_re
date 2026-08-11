@@ -10,7 +10,18 @@
 set -e
 cd "$(dirname "$0")/../.."
 OUT=${TC_OUT:-/tmp/tc_out}
-FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude"
+# THE SAME FLAGS `make period` USES, and they must stay the same.  The two
+# diverged once and it cost real coverage: this script passed neither
+# -D__SIZEOF_POINTER__=4 nor the compat header, so it compiled a smaller set
+# than the period differential AND silently elided the 81 offset assertions
+# guarded on that predefine -- V3 in docs/method/compilers.md, the variance
+# that fails OPEN.
+#
+# -std=gnu99 is NOT here and is not an oversight: it is the C dialect the
+# TEST HARNESS needs, and this script compiles only src/.
+# ONE LINE, deliberately: $FLAGS is interpolated into the `docker ... sh -c`
+# string below, where a newline ends the command rather than separating words.
+FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
 # MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
 # make recipe, both leak `make[1]: Entering directory ...` and a jobserver
