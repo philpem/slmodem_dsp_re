@@ -6,13 +6,21 @@
  * evidence for it and the recurrence the last two share.
  *
  * THE RETURN OF `getMetric` IS ROUNDED HERE AND IS NOT IN THE OBJECT, which
- * leaves the 64-bit-significand accumulator in st(0) for the caller.  The one
- * caller in the object, `V90SpectralShaper::advanceTrellis`, does `fcoms`
- * against a float and then `fstps` it into one, so the difference is
- * unobservable there and it is unobservable in the test for the same reason:
- * a value rounded to float and then rounded to float again is the value
- * rounded to float.  The test therefore captures the result as a `float` and
- * would be comparing something the object does not promise if it did not.
+ * leaves the 64-bit-significand accumulator in st(0) for the caller.  That is
+ * unobservable TO A STORE -- a value rounded to float and then rounded to
+ * float again is the value rounded to float -- which is why the test captures
+ * the result as a `float`, and why capturing it as a `double` would be
+ * comparing something the object does not promise.
+ *
+ * IT IS NOT UNOBSERVABLE TO A COMPARISON, and the one caller in the object
+ * makes one.  `V90SpectralShaper::advanceTrellis` does `fcoms` against a
+ * float in memory and only then `fstps` the value into one.  If the
+ * accumulator sits strictly above some float c while rounding to exactly c,
+ * the object's compare says "greater" and a caller of ours says "equal" --
+ * one branch apart on a trellis decision.  Whoever writes `advanceTrellis`
+ * has to decide whether that is reachable in the values it sees; this comment
+ * is not permission to skip the question.  Nothing in this tree calls
+ * `getMetric` yet, so nothing is wrong today.
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215).
  *
