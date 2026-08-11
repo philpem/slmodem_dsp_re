@@ -48,10 +48,25 @@
  * notch state within a few samples -- 2,534 of 46,080 comparisons on the
  * European plan before this was forced.  Not a tolerance to widen.
  *
+ * THIS ONE IS MEASURED AGAINST THE PERIOD COMPILER, not argued from the
+ * modern one (finding 1415).  Both forms of this file were built in
+ * tools/toolchain's GCC 3.4.2 container:
+ *
+ *   plain    `x = notch(...)`   call, then straight to the next block --
+ *                               no store, so 3.4.2 keeps 80 bits too
+ *   volatile                    call; fstps 0x2c(%esp); flds 0x2c(%esp)
+ *   the blob                    call; fstps 0x30(%esp); flds 0x30(%esp)
+ *
+ * so the barrier REPRODUCES a store the object has rather than adding one it
+ * lacks -- same two instructions, different slot, and the slot is the
+ * compiler's to choose.  The plain form is the one that disagrees with the
+ * object under the object's own compiler.  If the tree settles on a different
+ * remedy for the general problem, this is a site to convert.
+ *
  * Only the bias assignment needs it.  The per-tone loop squares `notch`'s
  * result straight out of st(0) in the object too (`fmul %st(0),%st` with no
- * intervening store), so there both sides carry 80 bits and must.  This is
- * the same argument, and the same fix, as Resampler.cpp's `round32`.
+ * intervening store), so there both sides carry 80 bits and must -- forcing a
+ * round there would BREAK the comparison rather than repair it.
  */
 static float
 round32(float v)

@@ -43512,3 +43512,312 @@ So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
 ======================================================================
+
+======================================================================
+
+### 1410. THE DTMF CLOSURE IS FOUR TRANSLATION UNITS, AND `band_pass` IS IN NEITHER OF THE TWO `attribution.md` OFFERS
+
+`docs/attribution.md` puts `band_pass` (0x090d30) in `Data.c|Dtmf.c` and marks
+it *ambiguous*.  Both are wrong: it is in **`Dtmf_Rx.c`**, a file
+`attribution.md` does not list at all.
+
+The derivation, which is the reusable part.  `readelf -sW` on the blob shows
+**283 `STT_FILE` symbols**, one per input object of the partial link, and the
+LOCAL symbols that follow each in the symbol table belong to that file.  That
+gives an address range for every TU that has a `static` function or a `static`
+object -- and, because `ld -r` lays `.text` out in link order, the FILE
+sequence between two anchored TUs is monotone in address.  So a TU with no
+locals of its own can still be placed, by counting.
+
+`class1.c` is the anchor here: its four `t` symbols start at 0x092c00 and its
+first global (`_put_silence`) at 0x092b70.  Working backwards through the FILE
+list, indices 157..163 are `cid.c`, `Data.c`, `Dtmf_Rx.c`, `Rxcid.c`,
+`Cidfsd.c`, `Cidmtd.c`, `Dtmf_Detector.c`, and the `.text` in front of
+0x092b70 falls into exactly seven name-coherent runs:
+
+    0x08fce0  cid.c            cid_reset .. _look_for_other_than   (10)
+    0x090470  Data.c           data_raw, data_unformatted_output,
+                               data_formatted_output               (3)
+    0x090a90  Dtmf_Rx.c        reset_dtmf, create_cid_dtmf,
+                               band_pass, dtmf_modem               (4)
+    0x0918b0  Rxcid.c          reset_cid, create_cid,
+                               pack_next_bit, cid_modem            (4)
+    0x092280  Cidfsd.c         CID_FSD_demodulate                  (1)
+    0x0926a0  Cidmtd.c         CID_MTD_detect                      (1)
+    0x0927b0  Dtmf_Detector.c  DTMF_MTD_detect                     (1)
+
+**State the residual assumption rather than hide it.**  Monotonicity alone
+does not force the Data.c / Dtmf_Rx.c boundary -- `Data.c` could in principle
+have swallowed `reset_dtmf`, `create_cid_dtmf` and `band_pass`, leaving
+`Dtmf_Rx.c` with `dtmf_modem` only.  What settles it is that no other
+partition is name-coherent: every function in the third run is a `dtmf`
+function, `band_pass` is called by `dtmf_modem` and by nothing in `Data.c`,
+and the two `data_*` triples are a complete file on their own.  What IS forced,
+with no assumption at all, is the exclusion of `Dtmf.c`, which sits 180 KB
+away at index ~264.
+
+**And `Dtmf.c` is a fourth file, not the same one.**  0x0ada10..0x0ae061:
+`dtmf_test`, `check_for_valid`, `check_for_valid_easy`, `dtmf_detect`,
+`create_dtmf`, `dtmf_progress`, `dtmf_set_easy`.  Its detector is FLOAT and
+runs at 4 kHz; `Dtmf_Rx.c`'s is FIXED POINT and runs at the line rate.  Two
+DTMF receivers, no shared code, no shared data, reached from different
+services -- `detector_progress` and `cid_progress` respectively.  Anyone who
+reads "the DTMF detector" as one thing will merge two of them.
+
+**`notch` (0x0af150, 56 bytes) is `Notch.c` and is the whole file**, wedged
+between `Fifo8.c` (ends 0x0af150) and `Rx.c` (starts 0x0af190).  It is NOT
+`notch_filter` (0x0783b0, 161 bytes), which is a different function in a
+different TU; the names invite the confusion and nothing else connects them.
+
+**`check_for_valid` and `check_for_valid_easy` are dead.**  Both are global
+`T` symbols and no relocation anywhere in the 1.2 MB names either.
+`dtmf_detect` carries both INLINE -- the comparison chains at 0x0ade8d and
+0x0adec9 are the same tests instruction for instruction -- so GCC 3.4.2 emitted
+out-of-line copies of two helpers nothing calls.  That is why `closure.py`'s 27
+symbols do not include them, and why `src/service/dtmf.c` has them `static`.
+
+======================================================================
+
+### 1411. THE LIBRARY'S `notch` SECTION, AND WHY ITS COEFFICIENT ROLES ARE PROVEN RATHER THAN GUESSED
+
+`notch(float x, float *state, const float *coef)` is a transposed direct form
+II biquad, hand-traced from 56 bytes of x87:
+
+    in       = coef[3] * x
+    w        = state[0] + in
+    state[0] = coef[1] * w + coef[0] * in + state[1]
+    state[1] = in + coef[2] * w
+    return w
+
+that is,
+
+                    1 + c0 z^-1 + z^-2
+    H(z) = c3 * ---------------------------
+                  1 - c1 z^-1 - c2 z^-2
+
+An x87 trace is the least trustworthy thing in this tree -- Ghidra's modelling
+is weak and unmeasured here, so this was read by hand, and four coefficients
+are four chances to swap a pair.  **The callers' own data settles it at no
+cost.**  Across all seventeen sections in the object (`eur_coef` 8, `us_coef`
+8, `biascoef` 1):
+
+    c2 == -c3*c3        and        c1 == -c0*c3
+
+hold to better than 1e-6 relative, which is what a `float` carries.  Those two
+identities are exactly what the reading above predicts if
+
+    c0 = -2 cos(w0)   c1 = 2 r cos(w0)   c2 = -r^2   c3 = r
+
+and no permutation of the four satisfies them.  So the assignment is confirmed
+by construction: poles and zeros at the SAME angle, zeros ON the unit circle,
+`r` both the pole radius and the section gain.  A notch, and `notch` is the
+right name for it.
+
+The fixed-point bank in `Dtmf_Rx.c` is the same filter in Q14 through
+`FPM_iir_filt` -- numerator `1 - 2cos(w0) z^-1 + z^-2`, poles at r = 0.9 -- so
+the design appears twice in the object at two precisions.
+
+**The general point is worth more than the filter.**  A coefficient table is
+an ORACLE for the code that reads it.  Where a hand-traced routine has N
+interchangeable parameters and the shipped tables obey N-1 independent
+algebraic identities, the trace is pinned without any test being written.
+This cost about ten minutes and would have caught a swapped pair that every
+differential test would also have caught -- but only after the fact, and with
+no idea which pair.
+
+======================================================================
+
+### 1412. `dtmf_detect` RUNS AT 4000 Hz, AND THE COEFFICIENTS ARE WHAT SAY SO
+
+`dtmf_detect` increments a counter at +0x76, does nothing until it reaches 2,
+and then resets it -- so it processes every SECOND sample it is handed.  That
+alone says "decimate by two" and not what the rate is on either side.
+
+The coefficients say it.  Solving `c0 = -2 cos(w0)` for each of `eur_coef`'s
+and `us_coef`'s eight sections and evaluating at 4000 Hz gives
+
+    697.000  770.000  852.000  941.000  1209.000  1336.000  1477.000  1633.000
+
+to three decimal places -- the eight DTMF tones exactly -- and `biascoef` gives
+**49.999 Hz**, a mains-hum notch.  At 8000 Hz the same numbers read as 1394,
+1540 ... 3266 and 100, which are not tone frequencies and not a hum.  So the
+caller feeds `dtmf_detect` at 8000 Hz and everything past the `phase` counter
+is a 4 kHz signal path.  All eight tones are below the 2 kHz Nyquist, so this
+is a sound design and not an accident.
+
+Three further readings fall out of the same fit:
+
+- **The two plans differ only in pole radius.**  `eur_coef` and `us_coef` have
+  BIT-IDENTICAL `c0` in all eight sections -- same tones -- and differ only in
+  `r`: 0.925..0.955 for Europe against 0.965..0.98 for the US.  A narrower
+  notch is a tighter frequency acceptance, which is the regional difference
+  the two DTMF specifications actually have.
+- **`mode == 1` is Europe**, and it is also the only mode that runs the input
+  through the 50 Hz notch first, and the only one that accumulates 45
+  decimated samples per block instead of 40.  One argument, three
+  consequences, none of which the code names.
+- **The detector looks for a MINIMUM.**  The bank is notches, so the tone that
+  is present is the one its own section removes.  Reading `dtmf_test`'s search
+  as an argmax -- the natural assumption for a tone detector -- inverts it.
+
+======================================================================
+
+### 1413. THE FIXED-POINT TONE BANK'S CLOSED FORM, AND THE ONE TABLE THAT DOES NOT FIT IT
+
+The sixteen `MTD{1..8}_COEF_{8000,9600}` tables are five shorts each, one
+`FPM_iir_filt` section in the order `{a2, b2, a1, b1, b0}`:
+
+    a2 = -13271 = -round(0.81 * 2^14)          r = 0.9, in every table
+    b0 = b2 =  16384                           unit numerator ends
+    a1 =  round(2 * 0.9 * cos(w0) * 2^14)
+    b1 = -round(2 * cos(w0) * 2^14)
+
+with `w0 = 2*pi*f/fs`.  Solving `a1` and `b1` back for `f` gives, for fifteen
+of the sixteen tables, the eight DTMF frequencies at that table's own rate to
+within 0.05 Hz.
+
+**The question asked was whether the `_8000`/`_9600` PAIR has a closed form,
+and the answer is no -- they are not related to each other at all.**  Each is
+generated independently from (tone, rate); neither can be resampled or scaled
+into the other, and the derivation above is what makes regeneration at a third
+rate possible, not any relation between the two that exist.
+
+**The generator does not reproduce the bytes.**  It lands within +-1 LSB on
+both `a1` and `b1` for all fifteen, but the residuals are not a consistent
+rounding rule: solving the pair jointly puts MTD1_8000 at f = 697.00 and
+MTD2_8000 at f = 770.10, which is more spread than any rounding mode explains.
+Something carrying less than a double stood between the frequency and the
+table; a design tool's printed output is the obvious guess and is recorded as
+a guess and not as a derivation.  So the tables stay literal bytes and
+`test/unit/t_dtmfrx.c` compares them against the object's own `ref_` symbols.
+
+**MTD7_COEF_9600 is the sixteenth.**  Its `a1 = 16751` fits 1477.04 Hz like
+every other table.  Its `b1 = -21143` does not: the design gives -18613, and
+-21143 puts the numerator's zeros at **1328.45 Hz** while the denominator's
+poles stay at 1477.  A notch whose zeros and poles are 150 Hz apart is not a
+notch.  Every other table has the two within 0.1 Hz of each other.  Recorded
+as D250, reproduced as found, and no mechanism is proposed -- the value is not
+a bit flip of the right one, not a digit transposition of it, and not the right
+value for 1477 Hz at any rate this library uses.
+
+======================================================================
+
+### 1414. `DTMF_MTD_detect` PRE-NOTCHES EACH GROUP WITH THE OTHER GROUP'S TABLE, AND BIASES THE INNER TONES TO PAY FOR IT
+
+The tone bank calls `FPM_iir_filt` ten times per sample, not eight.  The two
+extra calls are the interesting ones and neither has a coefficient table of its
+own: **the low group's four sections are fed through `MTD5_COEF` (1209 Hz) and
+the high group's four through `MTD4_COEF` (941 Hz)**, reusing two of the eight
+tone tables as group-splitting pre-notches.  Their state lives at +0x364 and
++0x360, ahead of the eight at +0x368.
+
+That is why `coef[4]` and `coef[3]` are loaded before the inner loops in code
+that otherwise indexes `coef[]` by the loop variable, and it is the single
+detail most likely to be transcribed as "the first section" by someone reading
+the disassembly quickly.
+
+**The per-tone bias goes with it.**  Each tone's energy accumulator gets
+
+    (wideband >> 12) * i          for i = 0..3
+    (wideband >> 12) * (7 - i)    for i = 4..7
+
+added every sample -- 0, 1, 2, 3, 3, 2, 1, 0 across the eight, zero at the
+outside of the pair of groups and largest in the middle.  A pre-notch at radius
+0.9 is broad, so it attenuates 941 Hz far more than 697 Hz on its way to
+removing 1209; the bias is a fixed tilt that pays that back, and it is what
+lets the search at the bottom use ONE flat threshold across four unequally
+treated sections.
+
+The search then rejects anything at or above 1.2x the wideband mean in the low
+group and 1.5x in the high group -- **the two thresholds are different and that
+asymmetry is the object's, not a transcription slip** -- and takes the smallest
+survivor of each.  A group with no survivor leaves its index at 9, and either
+index above 3 returns -9.
+
+======================================================================
+
+### 1415. THE ONE PLACE IN THE DTMF PATH WHERE EXCESS PRECISION HAD TO BE FORCED BACK, MEASURED AGAINST THE PERIOD COMPILER
+
+`dtmf_detect`'s European arm assigns the bias notch's result back over its own
+`float` argument.  The object stores and reloads -- `fstps 0x30(%esp)` at
+0x0ade5e, `flds 0x30(%esp)` at 0x0adc72 -- and that store ROUNDS, because
+`notch` returns an 80-bit value in st(0).  A modern GCC at this tree's flags
+(`-mfpmath=387`, `-fexcess-precision=fast`, deliberately no `-ffloat-store`)
+keeps the 80 bits, and the difference reached `total` and every notch state
+within a few samples: **2,534 of 46,080** whole-object comparisons failed.
+
+**The interesting part is that this was checked against GCC 3.4.2 and not
+argued from the modern compiler.**  The worry about a `volatile float`
+barrier is that it forces a store under a modern compiler and might force an
+EXTRA one under the original's, which would pass `make phase` and fail the
+standard that matters.  Both forms of `src/service/dtmf.c` were built in
+`tools/toolchain`'s container and the bias arm disassembled:
+
+    plain  `x = notch(...)`   call; jmp -- 3.4.2 emits NO store either, so
+                              the plain form disagrees with the object under
+                              the object's own compiler
+    volatile                  call; fstps 0x2c(%esp); flds 0x2c(%esp)
+    the object               call; fstps 0x30(%esp); flds 0x30(%esp)
+
+Same two instructions in the same order; only the stack slot differs, and the
+slot is the compiler's to choose.  So here the barrier REPRODUCES a store the
+object has rather than adding one it lacks, and the plain form is the one that
+is wrong under both compilers.  That is a narrow result about one site, not a
+general licence: the measurement is the point, and any other site has to be
+measured the same way before the same conclusion is drawn.
+
+**Five other roundings in the same function must NOT be forced.**  The
+per-tone loop squares `notch`'s result straight out of st(0) in the object too
+-- `fmul %st(0),%st` with no store between -- so there both sides carry 80 bits
+and a barrier would BREAK the comparison.  The rule is per store, read off the
+object, and never a property of the file.
+
+**Where 3.4.2 and the object still differ, and it is not this.**  Our
+`dtmf_detect` spills the sample to a scratch slot inside the tone loop
+(`fstps 0x10(%esp)` / `flds 0x10(%esp)`) where the object keeps it in its
+incoming parameter slot and reloads that.  Both round to `float` at the same
+points, so nothing observable turns on it; it is a register-allocation
+difference of the kind CLAUDE.md says to ignore.
+
+======================================================================
+
+======================================================================
+
+### 1416. THE FIXED-POINT TONE BANK DECODES THE LOW GROUP AND GUESSES THE HIGH ONE, AND THAT IS WHY `dtmf_modem` ASKS TWICE
+
+Driving `DTMF_MTD_detect` with each of the sixteen DTMF pairs -- clean
+sinusoids, one 160-sample block, both rates, levels from 600 to 6000 -- the
+object returns:
+
+- the correct LOW-group index for all sixteen pairs, at every level tried;
+- the correct HIGH-group index for four of them.
+
+It always returns SOME code; it is not that the high group fails to decide.
+The reconstruction agrees with the object on every one of those blocks, so
+this is a measurement of the original and not a defect in the copy.
+
+The reason is in the search, and it is the other half of finding 1414.  The
+low group is compared against 1.2x the wideband mean and the high group
+against 1.5x, so the high group's gate is half again as loose; and the
+per-tone bias runs 0,1,2,3 across the low group but 3,2,1,0 across the high
+one, so in the high group it is the tone NEAREST the low group that is
+penalised most.  Between a looser gate and a tilt that works against the
+group's own low end, the high decision is carried by the bias rather than by
+the notches whenever the tone energies are close.
+
+**This is not a fault to be repaired, it is a design that expects its
+front end.**  `dtmf_modem` will not accept a code until `band_pass` says the
+block carries signal AND the same code comes back from two consecutive
+blocks -- and `band_pass` is a limiter, a DC blocker and a coarse gain before
+it is a filter, so what the bank actually sees in service is level-normalised
+in a way a bare sinusoid is not.  Driven that way end to end, the receiver
+does collect a correct digit string, which `test/unit/t_dtmfrx.c` asserts.
+
+**The testing point generalises.**  The first version of the test asserted
+"pair (lo, hi) decodes to keypad code X" for all sixteen, and eleven of them
+failed while every differential comparison passed.  Two responses were
+available: encode the observed answers as the expectation, or assert the part
+that holds.  The first is fitting the test to the object -- it would pass
+whatever the object did, including if the object changed -- so the test
+asserts the low index, the presence of a code, and coverage of all sixteen
+codes across the run, and this finding records the rest.

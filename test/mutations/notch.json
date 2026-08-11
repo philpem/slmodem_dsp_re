@@ -1,0 +1,42 @@
+[
+ {
+  "label": "the gain is applied to the recursive node instead of the input",
+  "find": "\tfloat in = coef[3] * x;\n\tfloat w = state[0] + in;",
+  "replace": "\tfloat in = x;\n\tfloat w = coef[3] * (state[0] + in);"
+ },
+ {
+  "label": "the numerator's middle coefficient and the denominator's are swapped",
+  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
+  "replace": "\tstate[0] = coef[0] * w + coef[1] * in + state[1];"
+ },
+ {
+  "label": "the second state word is dropped from the first's update",
+  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
+  "replace": "\tstate[0] = coef[1] * w + coef[0] * in;"
+ },
+ {
+  "label": "the first state word takes the input rather than the gained input",
+  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
+  "replace": "\tstate[0] = coef[1] * w + coef[0] * x + state[1];"
+ },
+ {
+  "label": "the second state word loses the feed-forward term",
+  "find": "\tstate[1] = in + coef[2] * w;",
+  "replace": "\tstate[1] = coef[2] * w;"
+ },
+ {
+  "label": "the second state word uses the first's denominator coefficient",
+  "find": "\tstate[1] = in + coef[2] * w;",
+  "replace": "\tstate[1] = in + coef[1] * w;"
+ },
+ {
+  "label": "the section returns its stored state instead of the node it just formed",
+  "find": "\tstate[1] = in + coef[2] * w;\n\n\treturn w;",
+  "replace": "\tstate[1] = in + coef[2] * w;\n\n\treturn state[0];"
+ },
+ {
+  "label": "the two state words are updated in the other order",
+  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];\n\tstate[1] = in + coef[2] * w;",
+  "replace": "\tstate[1] = in + coef[2] * w;\n\tstate[0] = coef[1] * w + coef[0] * in + state[1];"
+ }
+]

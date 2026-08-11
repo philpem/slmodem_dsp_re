@@ -456,3 +456,87 @@ shift square root.
 Unlike `costbl`, this one **is** reproducible from its generator — the only
 V.34 table so far that is. It is still emitted as data: the generator is a
 claim about intent, the bytes are the reference.
+
+## DTMF: two detectors, two coefficient families, one design
+
+The object has **two DTMF receivers** that share no code and no data
+(finding 1410).  `Dtmf.c`'s is float and runs at 4 kHz off a bank of eight
+notches; `Dtmf_Rx.c`/`Dtmf_Detector.c`'s is Q14 fixed point, runs at the line
+rate, and is what Caller ID uses.  Their coefficient tables are laid out
+differently and are derived here separately, but they are the same filter
+design at two precisions: **a notch at the tone, zeros ON the unit circle,
+poles just inside it.**
+
+### The float bank: `eur_coef`, `us_coef`, `biascoef`
+
+Four floats per section, read by `notch()` (see `include/dsplib/notch.h`):
+
+                        1 + c0 z^-1 + z^-2
+        H(z) =  c3 * ---------------------------
+                      1 - c1 z^-1 - c2 z^-2
+
+        c0 = -2 cos(w0)     c1 = 2 r cos(w0)     c2 = -r^2     c3 = r
+
+| bank | sections | w0 | r |
+|---|--:|---|---|
+| `us_coef` | 8 | 2*pi*f/4000, f = the eight DTMF tones | 0.98 0.98 0.98 0.98 0.97 0.97 0.97 0.965 |
+| `eur_coef` | 8 | the same eight | 0.955 0.95 0.945 0.945 0.945 0.93 0.93 0.925 |
+| `biascoef` | 1 | 2*pi*50/4000 | 0.85 |
+
+**Solving `c0` for `f` gives 697.000 770.000 852.000 941.000 1209.000
+1336.000 1477.000 1633.000 at fs = 4000, and 49.999 for `biascoef`** -- three
+decimal places, no residual worth reporting.  At 8000 the same numbers read
+as 1394, 1540, ... 3266 and 100, which is how the sample rate was settled
+(finding 1412): `dtmf_detect` is called at 8000 and processes every second
+sample.
+
+`c0` is BIT-IDENTICAL between the two plans in all eight sections, so the two
+differ only in pole radius -- a narrower notch is a tighter frequency
+acceptance, which is the real difference between the two regional DTMF
+specifications.
+
+**Regenerating at another rate** is therefore: pick r from the table above,
+compute `c0 = -2 cos(2*pi*f/fs)`, and set `c1 = -c0*r`, `c2 = -r*r`, `c3 = r`.
+The identities `c2 == -c3*c3` and `c1 == -c0*c3` hold in the shipped bytes to
+1e-6 relative, which is what a float carries, so the generator reproduces the
+tables to within a float's precision.  They are kept literal all the same,
+because the differential test compares them against the object byte for byte.
+
+### The fixed-point bank: `MTD{1..8}_COEF_{8000,9600}`
+
+Five shorts per section, one `FPM_iir_filt` biquad, in that engine's order
+`{a2, b2, a1, b1, b0}`, everything Q14:
+
+        a2 = -13271 = -round(0.81 * 2^14)       r = 0.9, all sixteen tables
+        b0 = b2 =  16384                        unit numerator ends
+        a1 =  round(2 * 0.9 * cos(w0) * 2^14)
+        b1 = -round(2 * cos(w0) * 2^14)
+
+with `w0 = 2*pi*f/fs` and `fs` the table's own rate.
+
+**The `_8000` and `_9600` members of a pair are not related to each other.**
+Each is generated independently from (tone, rate); neither is a resampling or
+a scaling of the other, and there is no closed form that takes one to the
+other.  What the derivation above buys is regeneration at a THIRD rate, which
+is the point of this document.
+
+**Accuracy of the generator.** Solving `a1` and `b1` back for `f` gives the
+eight DTMF frequencies at the table's own rate to within 0.05 Hz for fifteen
+of the sixteen tables, and the generator reproduces those fifteen to within
++-1 LSB -- but not bit-exactly, and the residuals are not a consistent
+rounding rule.  Solving the pair jointly puts MTD1_8000 at f = 697.00 and
+MTD2_8000 at f = 770.10; something carrying less precision than a double
+stood between the frequency and the table.  So the bytes stay literal.
+
+**MTD7_COEF_9600 does not fit.**  `a1 = 16751` is 1477.04 Hz like every other
+table; `b1 = -21143` is 1328.45 Hz where the design gives -18613.  Its zeros
+and its poles are 150 Hz apart, which is not a notch at either frequency.
+D250 and finding 1413; reproduced as found, with no mechanism proposed.
+
+### Where the two extra fixed-point sections come from
+
+`DTMF_MTD_detect` runs TEN sections per sample, not eight.  The two extra are
+group-splitting pre-notches and they have no tables of their own: the low
+group is fed through `MTD5_COEF` (1209 Hz) and the high group through
+`MTD4_COEF` (941 Hz).  Anyone regenerating this bank at a new rate gets those
+two for free and must not generate a ninth and tenth table.  Finding 1414.

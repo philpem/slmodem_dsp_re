@@ -1,0 +1,192 @@
+[
+ {
+  "label": "the decimation phase wraps at 3 instead of 2",
+  "find": "\tif (phase != 2) {",
+  "replace": "\tif (phase != 3) {"
+ },
+ {
+  "label": "the decimation phase is not reset, so every sample after the first is processed",
+  "find": "\td->phase = 0;\n\n\tif (mode == DTMF_MODE_EUR)",
+  "replace": "\td->phase = 2;\n\n\tif (mode == DTMF_MODE_EUR)"
+ },
+ {
+  "label": "the bias notch runs in the US plan instead of the European one",
+  "find": "\tif (mode == DTMF_MODE_EUR)\n\t\tx = round32(notch(x, d->bias_state, biascoef));",
+  "replace": "\tif (mode != DTMF_MODE_EUR)\n\t\tx = round32(notch(x, d->bias_state, biascoef));"
+ },
+ {
+  "label": "the bias notch's result is discarded",
+  "find": "\t\tx = round32(notch(x, d->bias_state, biascoef));",
+  "replace": "\t\t(void)round32(notch(x, d->bias_state, biascoef));"
+ },
+ {
+  "label": "the bias notch shares the first tone's state",
+  "find": "\t\tx = round32(notch(x, d->bias_state, biascoef));",
+  "replace": "\t\tx = round32(notch(x, d->notch_state[0], biascoef));"
+ },
+ {
+  "label": "the two coefficient banks are swapped",
+  "find": "\tcoef = (mode == DTMF_MODE_EUR) ? eur_coef : us_coef;",
+  "replace": "\tcoef = (mode == DTMF_MODE_EUR) ? us_coef : eur_coef;"
+ },
+ {
+  "label": "the notch states advance by one float instead of two",
+  "find": "\t\td->energy[i] = y * y + d->energy[i];\n\t\tstate += 2;\n\t\tcoef += 4;",
+  "replace": "\t\td->energy[i] = y * y + d->energy[i];\n\t\tstate += 1;\n\t\tcoef += 4;"
+ },
+ {
+  "label": "the total energy is taken after the bank rather than before it",
+  "find": "\td->total = x * x + d->total;",
+  "replace": "\td->total = d->total;"
+ },
+ {
+  "label": "Europe's block is the same length as the US's",
+  "find": "\tblock = (short)(DTMF_BLOCK\n\t\t\t+ (mode == DTMF_MODE_EUR ? DTMF_BLOCK_EUR : 0));",
+  "replace": "\tblock = (short)(DTMF_BLOCK);"
+ },
+ {
+  "label": "the block boundary is a >= rather than an equality",
+  "find": "\tif (d->count != block)",
+  "replace": "\tif (d->count < block)"
+ },
+ {
+  "label": "the decision history shifts the wrong way",
+  "find": "\tfor (i = 7; i > 0; i--)\n\t\td->hist[i] = d->hist[i - 1];",
+  "replace": "\tfor (i = 0; i < 7; i++)\n\t\td->hist[i] = d->hist[i + 1];"
+ },
+ {
+  "label": "the history shift leaves the oldest entry in place",
+  "find": "\tfor (i = 7; i > 0; i--)\n\t\td->hist[i] = d->hist[i - 1];",
+  "replace": "\tfor (i = 6; i > 0; i--)\n\t\td->hist[i] = d->hist[i - 1];"
+ },
+ {
+  "label": "the held digit is reported when the tone starts rather than when it stops",
+  "find": "\t\tif (digit == DTMF_NO_DIGIT) {\n\t\t\tresult = d->digit;",
+  "replace": "\t\tif (digit != DTMF_NO_DIGIT) {\n\t\t\tresult = d->digit;"
+ },
+ {
+  "label": "the hold is not released when the digit is reported",
+  "find": "\t\t\tresult = d->digit;\n\t\t\td->held = 0;",
+  "replace": "\t\t\tresult = d->digit;\n\t\t\td->held = 1;"
+ },
+ {
+  "label": "the easy rule is applied instead of the strict one rather than as well",
+  "find": "\t\tif (d->easy && check_for_valid_easy(d->hist)) {",
+  "replace": "\t\tif (!d->easy && check_for_valid_easy(d->hist)) {"
+ },
+ {
+  "label": "the energies are not cleared at the end of a block",
+  "find": "\tfor (i = 0; i <= 7; i++)\n\t\td->energy[i] = 0.0f;\n\td->total = 0.0f;",
+  "replace": "\td->total = 0.0f;"
+ },
+ {
+  "label": "the total is not cleared at the end of a block",
+  "find": "\t\td->energy[i] = 0.0f;\n\td->total = 0.0f;",
+  "replace": "\t\td->energy[i] = 0.0f;"
+ },
+ {
+  "label": "strict validity accepts a digit that also appeared four blocks ago",
+  "find": "\tif (h[0] == h[3])\n\t\treturn 0;\n\tif (h[0] == h[4])",
+  "replace": "\tif (h[0] == h[3])\n\t\treturn 1;\n\tif (h[0] == h[4])"
+ },
+ {
+  "label": "strict validity needs only one repeat instead of two",
+  "find": "\tif (h[0] != h[2])\n\t\treturn 0;\n\tif (h[0] == h[3])",
+  "replace": "\tif (h[0] == h[2])\n\t\treturn 0;\n\tif (h[0] == h[3])"
+ },
+ {
+  "label": "easy validity looks one block further back",
+  "find": "\tif (h[0] == h[3])\n\t\treturn 0;\n\treturn 1;",
+  "replace": "\tif (h[0] == h[4])\n\t\treturn 0;\n\treturn 1;"
+ },
+ {
+  "label": "the group searches take the maximum instead of the minimum",
+  "find": "\t\tif (e[i] < min_lo) {\n\t\t\tmin_lo = e[i];\n\t\t\tlo = i;\n\t\t}",
+  "replace": "\t\tif (e[i] > min_lo) {\n\t\t\tmin_lo = e[i];\n\t\t\tlo = i;\n\t\t}"
+ },
+ {
+  "label": "the high group's search runs over the low group's entries",
+  "find": "\t\tif (e[i + 4] < min_hi) {\n\t\t\tmin_hi = e[i + 4];\n\t\t\thi = (short)(i + 4);\n\t\t}",
+  "replace": "\t\tif (e[i] < min_hi) {\n\t\t\tmin_hi = e[i];\n\t\t\thi = (short)(i + 4);\n\t\t}"
+ },
+ {
+  "label": "the group maxima track the minima",
+  "find": "\t\tif (e[i] > max_lo)\n\t\t\tmax_lo = e[i];",
+  "replace": "\t\tif (e[i] < max_lo)\n\t\t\tmax_lo = e[i];"
+ },
+ {
+  "label": "the two energy thresholds are swapped",
+  "find": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.002f;",
+  "replace": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.002f : 0.0022f;"
+ },
+ {
+  "label": "the level gate is inverted",
+  "find": "\tif (total < threshold)\n\t\treturn DTMF_NO_DIGIT;",
+  "replace": "\tif (total > threshold)\n\t\treturn DTMF_NO_DIGIT;"
+ },
+ {
+  "label": "the six remaining notches are averaged over eight instead of six",
+  "find": "\trest = rest * (1.0f / 6.0f);",
+  "replace": "\trest = rest * (1.0f / 8.0f);"
+ },
+ {
+  "label": "the picked pair is not removed from the remainder",
+  "find": "\trest = (sum - ehi) - elo;",
+  "replace": "\trest = sum;"
+ },
+ {
+  "label": "the twist limits are made symmetric",
+  "find": "\tok = (elo * 7.94f >= ehi)\n\t    && (ehi * 2.82f >= elo)",
+  "replace": "\tok = (elo * 7.94f >= ehi)\n\t    && (ehi * 7.94f >= elo)"
+ },
+ {
+  "label": "the low group's own-group test uses the high group's maximum",
+  "find": "\t    && (max_lo * 0.96f >= elo)",
+  "replace": "\t    && (max_hi * 0.96f >= elo)"
+ },
+ {
+  "label": "the remainder's lower bound is dropped",
+  "find": "\t    && (rest * 1.36f >= pair);",
+  "replace": "\t    && (rest * 1.36f >= 0.0f);"
+ },
+ {
+  "label": "the remainder's upper bound is dropped",
+  "find": "\tif (rest * 0.79f > pair)\n\t\treturn DTMF_NO_DIGIT;",
+  "replace": "\tif (rest * 0.79f > 1e30f)\n\t\treturn DTMF_NO_DIGIT;"
+ },
+ {
+  "label": "the digit index is formed with the groups the other way round",
+  "find": "\treturn (short)(lo + hi * 4 - 16);",
+  "replace": "\treturn (short)(hi + lo * 4 - 16);"
+ },
+ {
+  "label": "the high group's offset is not taken back out of the index",
+  "find": "\treturn (short)(lo + hi * 4 - 16);",
+  "replace": "\treturn (short)(lo + hi * 4);"
+ },
+ {
+  "label": "the running minima are reused instead of re-reading the array",
+  "find": "\tehi = e[hi];\n\telo = e[lo];",
+  "replace": "\tehi = min_hi;\n\telo = min_lo;"
+ },
+ {
+  "label": "dtmf_progress keeps the first real digit rather than the last",
+  "find": "\t\tif (digit != DTMF_NOT_YET && digit != DTMF_NO_DIGIT)\n\t\t\tresult = digit;",
+  "replace": "\t\tif (digit != DTMF_NOT_YET && digit != DTMF_NO_DIGIT\n\t\t    && result == DTMF_NO_DIGIT)\n\t\t\tresult = digit;"
+ },
+ {
+  "label": "dtmf_progress lets the -1 blocks through",
+  "find": "\t\tif (digit != DTMF_NOT_YET && digit != DTMF_NO_DIGIT)",
+  "replace": "\t\tif (digit != DTMF_NOT_YET)"
+ },
+ {
+  "label": "dtmf_progress starts from -2 instead of -1",
+  "find": "\tshort result = DTMF_NO_DIGIT;\n\tint i;",
+  "replace": "\tshort result = DTMF_NOT_YET;\n\tint i;"
+ },
+ {
+  "label": "dtmf_set_easy clears the flag instead of setting it",
+  "find": "\td->easy = 1;",
+  "replace": "\td->easy = 0;"
+ }
+]

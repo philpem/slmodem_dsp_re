@@ -4968,3 +4968,33 @@ Each allocation is followed immediately by a constructor call or, for the 0xb4 p
 **AND NOTHING IN THE BLOB CALLS EITHER OF THEM.** `objdump -dr` over the whole 1.2 MB finds ZERO `R_386_PC32` relocations against `_ZN12VPcmFloModemD1Ev` or `D2Ev`; the blob's own `VPCMXF_Delete` at 0xf6c0 inlines the six calls exactly as ours does. So the blob's two symbols are DEAD CODE -- GCC 3.4.2 emitted an out-of-line copy of an inline function nothing referenced, and modern GCC does not -- and `tools/closure.py dp_vpcm_init --missing` reporting 0 symbols and 0 bytes is CORRECT rather than a measurement artefact, because the pair is in no call graph to be missing from. Neither `debugaudit.py --missing` nor `coverage.py` lists them either. It is filed as a deviation because the SYMBOL TABLES differ and a count taken symbol-by-symbol will see it; the behavioural consequence is nil, and 194 of the blob's own bytes are unreachable in the blob. `test/unit/t_vpcmctor.cpp` drives the blob's `D1` directly by symbol, so the code at 0xd0a0 is differentially tested against ours even though ours lives inside `VPCMXF_Delete`.
 
 Neither way of forcing the symbols out is right: an out-of-line definition cannot be inlined into `VPCMXF_Delete` and would turn its six calls into one, and an in-header one comes out weak and in a comdat group where the blob's are global.
+
+## D250 🐛 `MTD7_COEF_9600`'s numerator puts the notch's zeros at 1328 Hz while its poles stay at 1477
+
+*Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES** whenever `DTMF_MTD_detect` runs on a 9600 Hz object -- the section is in the bank unconditionally. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1413.** Every one of the sixteen tables is a notch with `b1 = -round(2 cos(w0) * 2^14)` matching its own `a1 = round(1.8 cos(w0) * 2^14)` to within 0.1 Hz. This one does not: `a1 = 16751` is 1477.04 Hz and `b1 = -21143` is 1328.45 Hz, where the design gives -18613. A biquad whose zeros and poles are 150 Hz apart is not a notch at either frequency, so the 1477 Hz section of the 9600 Hz bank has a materially different response from its 8000 Hz twin. Reproduced byte for byte; `test/unit/t_dtmfrx.c` compares the table against the object's own `ref_MTD7_COEF_9600`. No mechanism is proposed -- the value is not a bit flip of -18613, not a digit transposition of it, and not the right coefficient for 1477 Hz at 8000, 9600 or 7200 Hz.
+
+## D251 ⚠ `reset_dtmf` clears seven of the receiver's eight filter states and leaves the low group's pre-notch alone
+
+*Batch of 2026-08-11, from `reset_dtmf` (blob 0x090a90), +0x67..+0x9c against `DTMF_MTD_detect` (0x0927b0) +0x140. **Reachability: FIRES** on every reset, but its effect is bounded -- the section is a 0.9-radius biquad, so whatever is left decays by 40 dB in about 40 samples. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1414.** `reset_dtmf` zeroes eight shorts at +0x354, +0x358, +0x35c and +0x360 -- four biquad states -- and then the eight tone states at +0x368..+0x387. `DTMF_MTD_detect` uses +0x360 as the HIGH group's pre-notch and **+0x364 as the LOW group's**, and +0x364 is in neither range. So a receiver that is reset while the low pre-notch is ringing carries that ringing into the next detection. The four cleared states are also one more than the two the code uses, which is the other half of the same off-by-one: the loop looks written for a bank that has since moved. Not reconstructed here -- `reset_dtmf` is outside this closure -- and recorded so that whoever writes it reproduces the range rather than "fixing" it.
+
+## D252 🐛 `dtmf_modem` copies its caller's whole block into a 198-entry stack array with no bound check
+
+*Batch of 2026-08-11, from `dtmf_modem` (blob 0x0911e0), +0x26. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `cid_progress`, hands it a block whose length is set by the datapump's frame size. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1410.** The copy loop's bound is the `count` argument and nothing else; the destination is 0x18c bytes of frame. A caller passing more than 198 samples writes over the return address. The object's own `hold` buffer at +0x262 is 100 shorts, so a block above 200 would also overrun that on the realignment path, one field short of `last_digit`. Reproduced as it is, with the limit stated in `include/dsplib/dtmf_rx.h` rather than enforced, because enforcing it would change what the function does for inputs the object accepts.
+
+## D253 ⚠ `band_pass` builds two five-coefficient filter sections on every call and reads neither
+
+*Batch of 2026-08-11, from `band_pass` (blob 0x090d30), +0x64..+0xa9. **Reachability: FIRES** on every call -- ten stores, no reads. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1410.** Four sections are initialised into the frame: a 244 Hz high-pass at each of the two rates (+0x30, +0x40) and the 870 Hz band-pass at each (+0x50, +0x60). Only the band-pass pair is ever loaded -- the rate test selects between +0x50 and +0x60 and nothing else takes the address of, or reads, +0x30 or +0x40. GCC 3.4.2 emitted the stores anyway. The reconstruction declares all four, so the source says what the original said; a modern compiler deletes the two dead ones again, which changes nothing observable and is why this is `⚠` and not `🐛`. What it suggests is that the high-pass was once in the chain and was removed without removing its table, which would make the DC blocker three statements further down its replacement.
+
+## D254 🐛 `dtmf_modem`'s sensitivity-1 path reports a block counter where a keypad code belongs
+
+*Batch of 2026-08-11, from `dtmf_modem` (blob 0x0911e0), +0x4c6. **Reachability: FIRES** when `sens == 1` and no digit string has been started (`ndigits == -1`). Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1410.** With `sens == 1` and `ndigits == -1`, any tone-bank result other than 13 is DISCARDED and replaced by `stable + 20`, where `stable` is how many consecutive blocks agreed -- so the value that goes on to be compared against `last_digit`, and to be written into the digit string if it is 9 or less, is a count and not a code. 20 and up is outside the keypad range, so the immediate effect is that nothing is ever accepted while this holds; the path only leaves itself when the bank returns exactly 13 ('D'), which then resets the machine. It reads like a diagnostic or a bring-up hook left in. Reproduced exactly, and `test/unit/t_dtmfrx.c` drives `sens == 1` from `ndigits == -1` so the arm is compared rather than merely written.

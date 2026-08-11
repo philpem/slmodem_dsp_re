@@ -1,0 +1,247 @@
+[
+ {
+  "label": "band_pass uses the high-pass sections instead of the band-pass ones",
+  "find": "\tcoef = (rx->rate == DTMF_RX_RATE_9600) ? bp_9600 : bp_8000;",
+  "replace": "\tcoef = (rx->rate == DTMF_RX_RATE_9600) ? hp_9600 : hp_8000;"
+ },
+ {
+  "label": "band_pass's two rate tables are swapped",
+  "find": "\tcoef = (rx->rate == DTMF_RX_RATE_9600) ? bp_9600 : bp_8000;",
+  "replace": "\tcoef = (rx->rate == DTMF_RX_RATE_9600) ? bp_8000 : bp_9600;"
+ },
+ {
+  "label": "the limiter counts samples at or above the threshold",
+  "find": "\t\tif (samples[i] > 20000)\n\t\t\tn_20k++;",
+  "replace": "\t\tif (samples[i] >= 20000)\n\t\t\tn_20k++;"
+ },
+ {
+  "label": "the limiter's two counters are swapped",
+  "find": "\tif (lim < n_20k) {",
+  "replace": "\tif (lim < n_10k) {"
+ },
+ {
+  "label": "the limiter divides by 8 where it should divide by 16",
+  "find": "\t\t\tsamples[i] = (short)((samples[i] + 8) >> 4);",
+  "replace": "\t\t\tsamples[i] = (short)((samples[i] + 4) >> 3);"
+ },
+ {
+  "label": "the limiter's fraction of the block is 1/64 rather than 1/128",
+  "find": "\tlim = (short)(count >> 7);",
+  "replace": "\tlim = (short)(count >> 6);"
+ },
+ {
+  "label": "the DC blocker adds the mean instead of removing it",
+  "find": "\t\tsamples[i] = (short)((unsigned short)samples[i] - sum / count);",
+  "replace": "\t\tsamples[i] = (short)((unsigned short)samples[i] + sum / count);"
+ },
+ {
+  "label": "the DC blocker divides by a fixed block length",
+  "find": "\t\tsamples[i] = (short)((unsigned short)samples[i] - sum / count);",
+  "replace": "\t\tsamples[i] = (short)((unsigned short)samples[i] - sum / 160);"
+ },
+ {
+  "label": "the coarse gain's middle threshold is 200 rather than 300",
+  "find": "\t\t} else if (a > 300) {",
+  "replace": "\t\t} else if (a > 200) {"
+ },
+ {
+  "label": "the loud counter also counts the middle band",
+  "find": "\t\tif (a > 600) {\n\t\t\tn150++;\n\t\t\tn300++;\n\t\t\tn600++;\n\t\t} else if (a > 300) {\n\t\t\tn150++;\n\t\t\tn300++;\n\t\t}",
+  "replace": "\t\tif (a > 600) {\n\t\t\tn150++;\n\t\t\tn300++;\n\t\t\tn600++;\n\t\t} else if (a > 300) {\n\t\t\tn150++;\n\t\t\tn300++;\n\t\t\tn600++;\n\t\t}"
+ },
+ {
+  "label": "the quietest blocks get a gain of 4 rather than 6",
+  "find": "\t\t\tsamples[i] = (short)(samples[i] * 6);",
+  "replace": "\t\t\tsamples[i] = (short)(samples[i] * 4);"
+ },
+ {
+  "label": "the middle gain step is skipped",
+  "find": "\t} else {\n\t\tfor (i = 0; i < count; i++)\n\t\t\tsamples[i] = (short)(samples[i] * 3);\n\t}",
+  "replace": "\t} else {\n\t\t(void)0;\n\t}"
+ },
+ {
+  "label": "the loudest blocks are doubled instead of left alone",
+  "find": "\t\tif (n600 <= 2)\n\t\t\tfor (i = 0; i < count; i++)\n\t\t\t\tsamples[i] = (short)(samples[i] * 2);",
+  "replace": "\t\tfor (i = 0; i < count; i++)\n\t\t\tsamples[i] = (short)(samples[i] * 2);"
+ },
+ {
+  "label": "the raw energy is taken after the filter rather than before it",
+  "find": "\t\traw_acc += x * x;\n\t\tsamples[i] = FPM_iir_filt((short)x, coef, rx->bp_state, 1);",
+  "replace": "\t\tsamples[i] = FPM_iir_filt((short)x, coef, rx->bp_state, 1);\n\t\tx = samples[i];\n\t\traw_acc += x * x;"
+ },
+ {
+  "label": "the filtered energy loses its shift",
+  "find": "\t\ttone_acc += (y * y + 4) >> 3;",
+  "replace": "\t\ttone_acc += (y * y + 4);"
+ },
+ {
+  "label": "the raw energy is scaled by 2^15 like the filtered one",
+  "find": "\traw = ((unsigned)raw_acc + 0x20000) >> 18;",
+  "replace": "\traw = ((unsigned)raw_acc + 0x4000) >> 15;"
+ },
+ {
+  "label": "the threshold staircase runs the other way",
+  "find": "\tif (raw > 1375)\n\t\tthresh = 2719;\n\telse if (raw > 687)\n\t\tthresh = 4984;\n\telse if (raw > 343)\n\t\tthresh = 8156;",
+  "replace": "\tif (raw > 1375)\n\t\tthresh = 8156;\n\telse if (raw > 687)\n\t\tthresh = 4984;\n\telse if (raw > 343)\n\t\tthresh = 2719;"
+ },
+ {
+  "label": "the quietest step of the staircase is lost",
+  "find": "\tint thresh = 14500;",
+  "replace": "\tint thresh = 8156;"
+ },
+ {
+  "label": "sensitivity 2 and 4 are swapped",
+  "find": "\tif (rx->sens == 2)\n\t\tthresh = (short)((thresh * 8 - thresh + 4) >> 3);",
+  "replace": "\tif (rx->sens == 4)\n\t\tthresh = (short)((thresh * 8 - thresh + 4) >> 3);"
+ },
+ {
+  "label": "sensitivity 3 scales by 1/4 rather than 3/4",
+  "find": "\t\tthresh = (short)((thresh * 3 + 2) >> 2);",
+  "replace": "\t\tthresh = (short)((thresh + 2) >> 2);"
+ },
+ {
+  "label": "the tone/raw comparison is the other way round",
+  "find": "\tif ((((unsigned)(thresh * (int)raw)) + 0x4000) >> 15 >= tone)\n\t\treturn 0;",
+  "replace": "\tif ((((unsigned)(thresh * (int)raw)) + 0x4000) >> 15 <= tone)\n\t\treturn 0;"
+ },
+ {
+  "label": "the level memory gate is dropped",
+  "find": "\tif ((unsigned)(int)(short)level >= raw)\n\t\treturn 0;",
+  "replace": "\tif (0)\n\t\treturn 0;"
+ },
+ {
+  "label": "any block length may move the level memory",
+  "find": "\tif (count > 100) {\n\t\tlevel = (unsigned short)(raw >> 3);",
+  "replace": "\tif (count > 0) {\n\t\tlevel = (unsigned short)(raw >> 3);"
+ },
+ {
+  "label": "the level memory takes the whole raw energy rather than an eighth",
+  "find": "\t\tlevel = (unsigned short)(raw >> 3);",
+  "replace": "\t\tlevel = (unsigned short)raw;"
+ },
+ {
+  "label": "a zero level is not floored at one",
+  "find": "\tif ((short)level == 0)\n\t\trx->level = 1;",
+  "replace": "\tif ((short)level == 0)\n\t\trx->level = 0;"
+ },
+ {
+  "label": "dtmf_modem's give-up window is one second rather than three",
+  "find": "\t\tif (rx->nsamples > 3 * rate)\n\t\t\tresult = -1;",
+  "replace": "\t\tif (rx->nsamples > rate)\n\t\t\tresult = -1;"
+ },
+ {
+  "label": "the inter-digit timeout is 3 seconds rather than 300 ms",
+  "find": "\t\tif (rx->nsamples > rate * 300 / 1000)\n\t\t\trx->state = 3;",
+  "replace": "\t\tif (rx->nsamples > rate * 3000 / 1000)\n\t\t\trx->state = 3;"
+ },
+ {
+  "label": "the digit-count guard on the give-up is dropped",
+  "find": "\tif (ndigits_in > 2) {\n\t\tresult = 2;",
+  "replace": "\tif (ndigits_in > -2) {\n\t\tresult = 2;"
+ },
+ {
+  "label": "the hunt looks for a falling edge instead of a rising one",
+  "find": "\t\tif (first == 0 && second == 1) {",
+  "replace": "\t\tif (first == 1 && second == 0) {"
+ },
+ {
+  "label": "the realignment keeps the first half of the block rather than the second",
+  "find": "\t\t\tfor (j = 0; j < (unsigned short)half; j++)\n\t\t\t\trx->hold[j] = buf[(unsigned short)half + j];",
+  "replace": "\t\t\tfor (j = 0; j < (unsigned short)half; j++)\n\t\t\t\trx->hold[j] = buf[j];"
+ },
+ {
+  "label": "a tone already in progress still sets the realignment flag",
+  "find": "\t\tif (first == 1 && second == 1) {\n\t\t\t/* Already inside a tone: no realignment needed. */\n\t\t\trx->aligned = 0;",
+  "replace": "\t\tif (first == 1 && second == 1) {\n\t\t\t/* Already inside a tone: no realignment needed. */\n\t\t\trx->aligned = 1;"
+ },
+ {
+  "label": "the aligned window is assembled with its two halves the other way round",
+  "find": "\t\t\t\trx->samples[j] = rx->hold[j];\n\t\t\t\trx->samples[(unsigned short)half + j] = buf[j];",
+  "replace": "\t\t\t\trx->samples[j] = buf[j];\n\t\t\t\trx->samples[(unsigned short)half + j] = rx->hold[j];"
+ },
+ {
+  "label": "the carried-over half is not refreshed",
+  "find": "\t\t\t\trx->hold[j] = buf[(unsigned short)half + j];\n\t\t\t}\n\t\t\trx->bufp = rx->samples;",
+  "replace": "\t\t\t}\n\t\t\trx->bufp = rx->samples;"
+ },
+ {
+  "label": "the tone bank is always given the caller's block",
+  "find": "\t\t\trx->bufp = rx->samples;\n\t\t} else {\n\t\t\trx->bufp = buf;\n\t\t}",
+  "replace": "\t\t\trx->bufp = buf;\n\t\t} else {\n\t\t\trx->bufp = buf;\n\t\t}"
+ },
+ {
+  "label": "the sample counter is not restarted after a decision",
+  "find": "\t\trx->nsamples = 0;\n\n\t\tif (rx->sens == 1) {",
+  "replace": "\t\tif (rx->sens == 1) {"
+ },
+ {
+  "label": "a repeated code is committed on the first block rather than the second",
+  "find": "\t\tif (rx->last_digit != digit) {\n\t\t\trx->last_digit = digit;",
+  "replace": "\t\tif (rx->last_digit == digit) {\n\t\t\trx->last_digit = digit;"
+ },
+ {
+  "label": "the letters A and B are accepted as digits",
+  "find": "\t\tif (digit != -9 && digit <= 13 && digit != 10 && digit != 11) {",
+  "replace": "\t\tif (digit != -9 && digit <= 13) {"
+ },
+ {
+  "label": "'C' does not terminate the string",
+  "find": "\t\t\tif (digit == 12) {\n\t\t\t\tn = rx->ndigits;\n\t\t\t\trx->digits[n] = 0;",
+  "replace": "\t\t\tif (digit == 13) {\n\t\t\t\tn = rx->ndigits;\n\t\t\t\trx->digits[n] = 0;"
+ },
+ {
+  "label": "digits are stored as their code rather than as ASCII",
+  "find": "\t\t\t\trx->digits[n] = (char)(digit + 0x30);",
+  "replace": "\t\t\t\trx->digits[n] = (char)digit;"
+ },
+ {
+  "label": "the string length limit is 16 rather than 20",
+  "find": "\t\t\tif (rx->ndigits == 20)\n\t\t\t\tresult = -1;",
+  "replace": "\t\t\tif (rx->ndigits == 16)\n\t\t\t\tresult = -1;"
+ },
+ {
+  "label": "the silence path commits the pending digit without checking it is stable",
+  "find": "\t\t\tif (rx->stable <= 0) {",
+  "replace": "\t\t\tif (rx->stable < 0) {"
+ },
+ {
+  "label": "the silence path's digit is taken as signed rather than unsigned",
+  "find": "\t\t\t} else if ((unsigned short)rx->last_digit <= 9) {",
+  "replace": "\t\t\t} else if (rx->last_digit <= 9) {"
+ },
+ {
+  "label": "the quiet counter's give-up is five blocks rather than six",
+  "find": "\t\t\tif (rx->quiet > 5 && rx->ndigits > 2)\n\t\t\t\tresult = -1;\n\t\t\trx->state = 1;",
+  "replace": "\t\t\tif (rx->quiet > 4 && rx->ndigits > 2)\n\t\t\t\tresult = -1;\n\t\t\trx->state = 1;"
+ },
+ {
+  "label": "silence returns the machine to idle rather than to hunting",
+  "find": "\t\t\trx->state = 1;\n\t\t\trx->stable = 0;\n\t\t\trx->last_digit = -1;",
+  "replace": "\t\t\trx->state = 0;\n\t\t\trx->stable = 0;\n\t\t\trx->last_digit = -1;"
+ },
+ {
+  "label": "state 0 needs BOTH halves quiet before it starts hunting",
+  "find": "\t\tif (first == 0 || second == 0)\n\t\t\trx->state = 1;",
+  "replace": "\t\tif (first == 0 && second == 0)\n\t\t\trx->state = 1;"
+ },
+ {
+  "label": "the sens == 1 substitution uses the code rather than the stable count",
+  "find": "\t\t\tif (fresh && digit != 13)\n\t\t\t\tdigit = (short)(stable + 20);",
+  "replace": "\t\t\tif (fresh && digit != 13)\n\t\t\t\tdigit = (short)(digit + 20);"
+ },
+ {
+  "label": "sens == 1 no longer resets the machine on 'D'",
+  "find": "\t\t\tif (fresh && digit == 13) {",
+  "replace": "\t\t\tif (0) {"
+ },
+ {
+  "label": "the not-started marker is left alone instead of being cleared",
+  "find": "\t\t} else if (rx->ndigits == -1) {\n\t\t\trx->ndigits = 0;\n\t\t}",
+  "replace": "\t\t}"
+ },
+ {
+  "label": "a new code sets stable to one unconditionally",
+  "find": "\t\t\trx->stable = (short)(rx->ndigits > 0);",
+  "replace": "\t\t\trx->stable = 1;"
+ }
+]

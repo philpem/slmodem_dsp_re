@@ -1,0 +1,122 @@
+[
+ {
+  "label": "the two rates' coefficient banks are swapped",
+  "find": "\tif (rx->rate == DTMF_RX_RATE_9600) {\n\t\tcoef[0] = MTD1_COEF_9600;",
+  "replace": "\tif (rx->rate != DTMF_RX_RATE_9600) {\n\t\tcoef[0] = MTD1_COEF_9600;"
+ },
+ {
+  "label": "two adjacent tone tables are transposed in the 8000 Hz bank",
+  "find": "\t\tcoef[5] = MTD6_COEF_8000;\n\t\tcoef[6] = MTD7_COEF_8000;",
+  "replace": "\t\tcoef[5] = MTD7_COEF_8000;\n\t\tcoef[6] = MTD6_COEF_8000;"
+ },
+ {
+  "label": "the input is not scaled by 0.9",
+  "find": "\t\tv = (short)(((int)samples[i] * DTMF_MTD_INSCALE + 0x4000) >> 15);",
+  "replace": "\t\tv = samples[i];"
+ },
+ {
+  "label": "the input scaling rounds down instead of to nearest",
+  "find": "\t\tv = (short)(((int)samples[i] * DTMF_MTD_INSCALE + 0x4000) >> 15);",
+  "replace": "\t\tv = (short)(((int)samples[i] * DTMF_MTD_INSCALE) >> 15);"
+ },
+ {
+  "label": "the wideband reference is accumulated after the tones instead of before",
+  "find": "\t\twide += ((int)v * v + 4) >> 3;\n\n\t\ty = FPM_iir_filt(v, coef[4], rx->pre_low, 1);",
+  "replace": "\t\ty = FPM_iir_filt(v, coef[4], rx->pre_low, 1);"
+ },
+ {
+  "label": "the low group's pre-notch uses the first tone's table instead of the high group's",
+  "find": "\t\ty = FPM_iir_filt(v, coef[4], rx->pre_low, 1);",
+  "replace": "\t\ty = FPM_iir_filt(v, coef[0], rx->pre_low, 1);"
+ },
+ {
+  "label": "the high group's pre-notch uses the low group's table",
+  "find": "\t\ty = FPM_iir_filt(v, coef[3], rx->pre_high, 1);",
+  "replace": "\t\ty = FPM_iir_filt(v, coef[0], rx->pre_high, 1);"
+ },
+ {
+  "label": "the two pre-notches share one state",
+  "find": "\t\ty = FPM_iir_filt(v, coef[3], rx->pre_high, 1);",
+  "replace": "\t\ty = FPM_iir_filt(v, coef[3], rx->pre_low, 1);"
+ },
+ {
+  "label": "the high group is fed the raw sample rather than the pre-notched one",
+  "find": "\t\tfor (j = 4; j <= 7; j++) {\n\t\t\tshort z = FPM_iir_filt(y, coef[j], rx->tone_state[j],\n\t\t\t\t\t       1);",
+  "replace": "\t\tfor (j = 4; j <= 7; j++) {\n\t\t\tshort z = FPM_iir_filt(v, coef[j], rx->tone_state[j],\n\t\t\t\t\t       1);"
+ },
+ {
+  "label": "the low group's per-tone bias is dropped",
+  "find": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)j\n\t\t\t    + (unsigned)(((int)z * z + 4) >> 3);",
+  "replace": "\t\t\tenergy[j] += (unsigned)(((int)z * z + 4) >> 3);"
+ },
+ {
+  "label": "the high group's bias runs the same way as the low group's",
+  "find": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)(7 - j)\n\t\t\t    + (unsigned)(((int)z * z + 4) >> 3);",
+  "replace": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)j\n\t\t\t    + (unsigned)(((int)z * z + 4) >> 3);"
+ },
+ {
+  "label": "the bias is scaled by 2^11 rather than 2^12",
+  "find": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)j",
+  "replace": "\t\t\tenergy[j] += (wide >> 11) * (unsigned)j"
+ },
+ {
+  "label": "the tone energy loses its rounding term",
+  "find": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)(7 - j)\n\t\t\t    + (unsigned)(((int)z * z + 4) >> 3);",
+  "replace": "\t\t\tenergy[j] += (wide >> 12) * (unsigned)(7 - j)\n\t\t\t    + (unsigned)(((int)z * z) >> 3);"
+ },
+ {
+  "label": "the wideband scale is 1.5x where the object has it and the low threshold follows",
+  "find": "\tscale = (3 * scale + 1) >> 1;",
+  "replace": "\tscale = (3 * scale + 1) >> 2;"
+ },
+ {
+  "label": "the tighter threshold is not applied to the low group",
+  "find": "\t\tif (energy[j] < tight && energy[j] < best) {",
+  "replace": "\t\tif (energy[j] < scale && energy[j] < best) {"
+ },
+ {
+  "label": "the high group gets the tighter threshold too",
+  "find": "\t\tif (energy[j + 4] < scale && energy[j + 4] < best) {",
+  "replace": "\t\tif (energy[j + 4] < tight && energy[j + 4] < best) {"
+ },
+ {
+  "label": "the 1.2 factor becomes 0.8",
+  "find": "\ttight = (scale * DTMF_MTD_TIGHT + 0x4000) >> 15;",
+  "replace": "\ttight = (scale * (DTMF_MTD_TIGHT / 2) + 0x4000) >> 15;"
+ },
+ {
+  "label": "the high group's running best is not restarted",
+  "find": "\tbest = scale;\n\tfor (j = 0; j <= 3; j++)\n\t\tif (energy[j + 4] < scale",
+  "replace": "\tfor (j = 0; j <= 3; j++)\n\t\tif (energy[j + 4] < scale"
+ },
+ {
+  "label": "a group with no survivor reports tone 0 instead of nothing",
+  "find": "\tshort lo = 9, hi = 9;",
+  "replace": "\tshort lo = 0, hi = 0;"
+ },
+ {
+  "label": "the keypad index is formed with the groups the other way round",
+  "find": "\t\treturn digits[hi + lo * 4];",
+  "replace": "\t\treturn digits[lo + hi * 4];"
+ },
+ {
+  "label": "the keypad table's last row is in the obvious order rather than * 0 # D",
+  "find": "\t\t14, 0, 15, 13,",
+  "replace": "\t\t0, 14, 15, 13,"
+ },
+ {
+  "label": "no agreement is reported as -1 rather than -9",
+  "find": "\treturn -9;",
+  "replace": "\treturn -1;"
+ },
+ {
+  "label": "the energies are scaled without their rounding term",
+  "find": "\t\tenergy[j] = (energy[j] + 0x4000) >> 15;",
+  "replace": "\t\tenergy[j] = energy[j] >> 15;"
+ },
+ {
+  "label": "the energy accumulators are not cleared between calls",
+  "find": "\tmemset(energy, 0, sizeof(energy));",
+  "replace": "\tmemset(energy, 1, sizeof(energy));"
+ }
+]

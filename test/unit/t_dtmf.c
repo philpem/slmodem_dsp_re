@@ -571,6 +571,204 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * Vectors built to sit ON each of the six decision boundaries.
+	 *
+	 * Random energy vectors reach almost none of them: a DTMF energy
+	 * vector has a SHAPE -- the notch at the low tone passes the high
+	 * tone, the notch at the high tone passes the low tone, and the other
+	 * six pass both -- so `rest` and `elo + ehi` are naturally within
+	 * about 30% of each other and the two bounds on their ratio bracket
+	 * that.  Nothing drawn uniformly lands there.  These are built from
+	 * that shape and then walked off it one condition at a time.
+	 */
+	diff_begin("dtmf: dtmf_test on each decision boundary");
+	{
+		/* E_low = 1, E_high = 2: the shape a real pair produces. */
+		static const float shape[8] = {
+			2.0f, 3.0f, 3.0f, 3.0f, 1.0f, 3.0f, 3.0f, 3.0f
+		};
+		float e[8];
+		int m;
+
+		memcpy(e, shape, sizeof(e));
+		for (m = 0; m < 2; m++) {
+			short mode = (short)m;
+
+			diff_eq_int("boundary: the plain shape decodes (%ld)",
+				    dtmf_test(e, 1.0f, mode),
+				    ref_dtmf_test(e, 1.0f, mode), m);
+			diff_eq_int("boundary: reference decoded it (%ld)",
+				    ref_dtmf_test(e, 1.0f, mode), 0, m);
+		}
+		/* between the two level thresholds: 0.002 <= t < 0.0022 */
+		diff_eq_int("boundary: 0.0021 is above the US threshold (%ld)",
+			    dtmf_test(e, 0.0021f, 0),
+			    ref_dtmf_test(e, 0.0021f, 0), 0);
+		diff_eq_int("boundary: 0.0021 is below Europe's (%ld)",
+			    dtmf_test(e, 0.0021f, 1),
+			    ref_dtmf_test(e, 0.0021f, 1), 0);
+		diff_eq_int("boundary: the US decodes it (%ld)",
+			    ref_dtmf_test(e, 0.0021f, 0), 0, 0);
+		diff_eq_int("boundary: Europe does not (%ld)",
+			    ref_dtmf_test(e, 0.0021f, 1), -1, 0);
+
+		/* twist: ehi * 2.82 < elo <= ehi * 7.94, everything else clear */
+		e[0] = 4.0f;
+		e[1] = e[2] = e[3] = 5.0f;
+		e[4] = 1.0f;
+		e[5] = e[6] = e[7] = 5.0f;
+		diff_eq_int("boundary: past the tight twist limit (%ld)",
+			    dtmf_test(e, 1.0f, 0), ref_dtmf_test(e, 1.0f, 0), 0);
+		diff_eq_int("boundary: the reference rejects that twist (%ld)",
+			    ref_dtmf_test(e, 1.0f, 0), -1, 0);
+
+		/* the low group's own-group test, with unequal group maxima */
+		e[0] = 2.0f;
+		e[1] = e[2] = e[3] = 4.0f;
+		e[4] = 1.0f;
+		e[5] = e[6] = e[7] = 1.5f;
+		diff_eq_int("boundary: unequal group maxima (%ld)",
+			    dtmf_test(e, 1.0f, 0), ref_dtmf_test(e, 1.0f, 0), 0);
+		diff_eq_int("boundary: the reference still decodes it (%ld)",
+			    ref_dtmf_test(e, 1.0f, 0), 0, 0);
+		/* and the mirror, so max_hi is the one that matters */
+		e[0] = 1.0f;
+		e[1] = e[2] = e[3] = 1.5f;
+		e[4] = 2.0f;
+		e[5] = e[6] = e[7] = 4.0f;
+		diff_eq_int("boundary: unequal group maxima, mirrored (%ld)",
+			    dtmf_test(e, 1.0f, 0), ref_dtmf_test(e, 1.0f, 0), 0);
+
+		/*
+		 * Every entry of a group at or above the search's starting
+		 * value, so the search never runs and the index stays 0.  It
+		 * is the one input for which "the running minimum" and "the
+		 * array entry the index names" are different numbers, and the
+		 * object re-reads the array.
+		 */
+		e[0] = e[1] = e[2] = e[3] = 1.5e38f;
+		e[4] = 0.9e38f;
+		e[5] = e[6] = e[7] = 1.4e38f;
+		diff_eq_int("boundary: no low entry below the search's start (%ld)",
+			    dtmf_test(e, 1.0f, 0), ref_dtmf_test(e, 1.0f, 0), 0);
+		/*
+		 * Tuned so the two readings of `elo` land on OPPOSITE sides of
+		 * the own-group test: 1.5e38 is above 0.96 * max_lo and the
+		 * search's untouched starting value is below it.  The
+		 * reference says "no digit"; anything that reused the running
+		 * minimum would say 0.
+		 */
+		diff_eq_int("boundary: the reference refuses it (%ld)",
+			    ref_dtmf_test(e, 1.0f, 0), -1, 0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The validity rules' back half.  `check_for_valid` looks six blocks
+	 * back and `check_for_valid_easy` three, and the blocks past the
+	 * second are reachable only when the SAME code repeats while no digit
+	 * is being held -- which a tone never produces, because the first
+	 * repeat arms the hold.  Reached here by seeding the history and the
+	 * energies together and letting one sample close the block.
+	 */
+	diff_begin("dtmf: the deep entries of both validity rules");
+	{
+		static const float shape[8] = {
+			2.0f, 3.0f, 3.0f, 3.0f, 1.0f, 3.0f, 3.0f, 3.0f
+		};
+		static const short pattern[6][8] = {
+			/* {v,v,v,u,u,u,u,u} -> after the shift h[0..3] all v */
+			{ 0, 0, 0, 5, 5, 5, 5, 5 },
+			/* h[3] differs, h[4] does not */
+			{ 0, 5, 0, 5, 5, 5, 5, 5 },
+			/* the easy rule's two blocks, and one past them */
+			{ 0, 5, 5, 0, 5, 5, 5, 5 },
+			{ 0, 5, 5, 5, 0, 5, 5, 5 },
+			/* the strict rule's ordinary accept */
+			{ 0, 5, 5, 5, 5, 5, 5, 5 },
+			/* everything the same, six deep */
+			{ 0, 0, 0, 0, 0, 0, 0, 0 },
+		};
+		int p, easy;
+
+		for (easy = 0; easy < 2; easy++)
+			for (p = 0; p < 6; p++) {
+				int k;
+
+				fresh(&a, &b);
+				for (k = 0; k < DTMF_TONES; k++) {
+					a.d.notch_state[k][0] = 0.0f;
+					a.d.notch_state[k][1] = 0.0f;
+					a.d.energy[k] = shape[k];
+					a.d.hist[k] = pattern[p][k];
+				}
+				a.d.bias_state[0] = 0.0f;
+				a.d.bias_state[1] = 0.0f;
+				a.d.total = 1.0f;
+				a.d.count = 39;
+				a.d.phase = 1;
+				a.d.held = 0;
+				a.d.digit = -1;
+				a.d.easy = (short)easy;
+				memcpy(&b, &a, sizeof(a));
+
+				{
+					int ra = dtmf_detect(0.0f, &a.d, 0);
+					int rb = ref_dtmf_detect(0.0f, &b.d, 0);
+					char nm[64];
+
+					snprintf(nm, sizeof(nm),
+						 "validity easy=%d pattern %%ld",
+						 easy);
+					diff_eq_int(nm, ra, rb, p);
+					compare("validity", &a, &b,
+						easy * 100L + p);
+					if (b.d.held)
+						seen_hold++;
+				}
+			}
+	}
+	rc |= diff_end();
+
+	/*
+	 * dtmf_progress over a buffer holding TWO keypresses, so the "keep
+	 * the last real digit" rule has something to choose between.  One
+	 * digit per call cannot distinguish first from last.
+	 */
+	diff_begin("dtmf: progress over two digits in one call");
+	{
+		static float two[2400];
+		double q1 = 0.0, q2 = 0.0;
+		int n = 0;
+		int k;
+		short ra, rb;
+		static const double f[2][2] = {
+			{ 697.0, 1209.0 }, { 941.0, 1633.0 }
+		};
+
+		fresh(&a, &b);
+		for (k = 0; k < 2; k++) {
+			int j;
+
+			for (j = 0; j < 480; j++, n++) {
+				two[n] = (float)(0.5 * sin(q1)
+						 + 0.5 * sin(q2));
+				q1 += TWOPI * f[k][0] / FS;
+				q2 += TWOPI * f[k][1] / FS;
+			}
+			for (j = 0; j < 720; j++, n++)
+				two[n] = 0.0f;
+		}
+		ra = dtmf_progress(&a.d, two, (short)n, 0);
+		rb = ref_dtmf_progress(&b.d, two, (short)n, 0);
+		diff_eq_int("two digits in one call (%ld)", ra, rb, 0);
+		compare("two digits", &a, &b, 0);
+		diff_eq_int("the reference kept the LAST of the two (%ld)",
+			    rb, 15, 0);
+	}
+	rc |= diff_end();
+
 	/* ---- dtmf_set_easy ---- */
 
 	diff_begin("dtmf: set_easy");
