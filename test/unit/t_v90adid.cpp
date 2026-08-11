@@ -46,6 +46,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90Dil.h"
 
@@ -111,6 +112,33 @@ void ref_unitePhasesInfoOfUref(void *self, int at)
 	asm("ref__ZN25V90AutoDigitalImpDetector21unitePhasesInfoOfUrefEs");
 void ref_updateUref(void *self)
 	asm("ref__ZN25V90AutoDigitalImpDetector10updateUrefEv");
+
+/*
+ * The four study methods.
+ *
+ * `getAltVarThresh` RETURNS A FLOAT and the mangling does not say so; the
+ * object leaves the value in %st(0) with `flds 0x34(%esp)` at 0x4088c and
+ * nothing in %eax.  Declaring the alias `float` is what makes the return
+ * value compared at all -- and it is compared as a BIT PATTERN, because one
+ * arm of the method returns a NaN and `==` is false for a NaN on both sides.
+ *
+ * The `unsigned char` and `unsigned int` parameters are `int` and
+ * `unsigned int` here for the reason above: a promoted slot is four bytes.
+ */
+float ref_getAltVarThresh(void *self, float *var, float factor)
+	asm("ref__ZN25V90AutoDigitalImpDetector15getAltVarThreshEPff");
+void ref_uniteLinMappInfoOfUnsuspectedPhases(void *self, int at)
+	asm("ref__ZN25V90AutoDigitalImpDetector35uniteLinMappInfoOfUnsuspectedPhasesEh");
+void ref_porcessFirstStudy(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector17porcessFirstStudyEv");
+void ref_resetStudyUrefHandler(void *self, unsigned int qc)
+	asm("ref__ZN25V90AutoDigitalImpDetector21resetStudyUrefHandlerEj");
+
+/*
+ * The reference side's copy of the debug level.  Raising ours alone would put
+ * the two sides on different branches of `porcessFirstStudy`'s only gate.
+ */
+extern unsigned int ref_dsplibs_debug_level;
 }
 
 /* The object, plus room past its end to catch a store that overruns it. */
@@ -197,6 +225,21 @@ seed(int trial, int mode)
 
 	ours_o.params = (V90Parameters *)params_block;
 	theirs_o.params = (V90Parameters *)params_block;
+}
+
+/*
+ * A float compared as an INTEGER.  `getAltVarThresh` returns a NaN whenever
+ * nothing is below the average of its six inputs, and `==` is false for a NaN
+ * on both sides -- so an equality comparison of the return value would pass
+ * for ever on exactly the arm that is hardest to get right.
+ */
+static unsigned int
+fbits(float f)
+{
+	unsigned int u;
+
+	memcpy(&u, &f, sizeof u);
+	return u;
 }
 
 static int
@@ -1132,6 +1175,18 @@ run_signal(void)
 	diff_eq_obj("after the run's reset", V90AutoDigitalImpDetector,
 		    &ours_o, &theirs_o, 0);
 
+	/*
+	 * The study's own reset, once, with a gain that misses every clamp --
+	 * so the thresholds the rest of the run uses are the ones the object
+	 * computes rather than seeded bytes, and `linMapp[p][ucode]` starts at
+	 * `ucodeLevel / gain` rather than at `ucodeLevel`.
+	 */
+	BOTH(float_a950, 2.0f);
+	ours_o.resetStudyUrefHandler(1u);
+	ref_resetStudyUrefHandler(&theirs_o, 1u);
+	diff_eq_obj("after the run's resetStudyUrefHandler",
+		    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+
 	for (block = 0; block < 40; block++) {
 		int p, k;
 
@@ -1287,6 +1342,84 @@ run_signal(void)
 				    V90AutoDigitalImpDetector, &ours_o,
 				    &theirs_o, block);
 			calls += 3;
+		}
+
+		/*
+		 * THE STUDY METHODS, over the state the block just built.
+		 *
+		 * `getAltVarThresh` is offered the six variances the block's
+		 * `updateLinMappMeanAndVar` calls actually produced, so its
+		 * input evolves with the run instead of being a table -- and
+		 * its answer is compared as a bit pattern, because a run that
+		 * flattens the variances makes the count zero and the answer a
+		 * NaN.
+		 *
+		 * `uniteLinMappInfoOfUnsuspectedPhases` needs its flag forced
+		 * EVERY TIME.  It groups on +0x280c, which `porcessFirstStudy`
+		 * writes below, and that method sets all six when the mapping
+		 * is smooth -- which is exactly the state where the object
+		 * forms no group and reads `bestGroup` uninitialised (D284).
+		 * Two different stack frames; leaving the flag to the previous
+		 * call would make this test nondeterministic.  This guard is a
+		 * different one from the `short_2800` guard above, which is
+		 * D281's.
+		 */
+		{
+			float var[NPHASE];
+			unsigned int got, want;
+			int p;
+
+			for (p = 0; p < NPHASE; p++)
+				var[p] = ours_o.float_9d48[p][0x2a];
+
+			got = fbits(ours_o.getAltVarThresh(var,
+						1.5f + (float)block * 0.25f));
+			want = fbits(ref_getAltVarThresh(&theirs_o, var,
+						1.5f + (float)block * 0.25f));
+			diff_eq_int("block: getAltVarThresh (%ld)", got, want,
+				    block);
+			diff_eq_obj("block: getAltVarThresh stored nothing",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
+		}
+
+		if (block % 5 == 4) {
+			unsigned char at =
+			    (unsigned char)((block * 11 + 3) & 0x7f);
+			int p;
+
+			for (p = 0; p < NPHASE; p++)
+				BOTH(byte_280c[p],
+				     (unsigned char)((block + p) % 4 == 0 ? 0
+						     : 1));
+
+			ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+			ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+			diff_eq_obj("block: uniteLinMappInfoOfUnsuspectedPhases",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
+		}
+
+		/*
+		 * The first study, every tenth block.  It clears every
+		 * accumulator and every mapping entry but the reference code's,
+		 * so running it per block would flatten the state the rest of
+		 * the sequence is building; every tenth lets the run rebuild in
+		 * between and still exercise the study over evolved input.
+		 */
+		if (block % 10 == 9) {
+			BOTH(trn1Sigma, 20.0f + (float)block);
+			BOTH(neighborUcodeMinDistance, (short)(100 + block));
+			BOTH(neighborUcodeMaxDistance, (short)(4000 + block));
+
+			ours_o.porcessFirstStudy();
+			ref_porcessFirstStudy(&theirs_o);
+			diff_eq_obj("block: porcessFirstStudy",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
 		}
 
 		diff_eq_int("no store past the object (block %ld)",
@@ -1634,6 +1767,954 @@ run_updateuref(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * THE FOUR STUDY METHODS, and the one thing that is new about testing them:
+ * THEY TALK.
+ *
+ * Between them they make twelve `edprintf` calls and one
+ * `dsplibs_debug_printf`, and a format string or an argument list is exactly
+ * the kind of claim a whole-object comparison is blind to -- finding 126 is
+ * `updateAlpha`, which had all three wrong and passed everything.  So these
+ * sweeps raise BOTH debug levels, turn the harness's capture on, and compare
+ * the two transcripts as well as the two objects.
+ *
+ * WHAT IS COMPARED IS THE ENCODED TEXT, not the readable one.  `edprintf`
+ * runs its formatted output through the rotating key before handing it to
+ * `dsplibs_debug_printf`, and `dsplib_encode_plain` -- which would show the
+ * readable form -- is ours and not the object's (D40), so turning it on would
+ * make our transcript differ from the blob's for a reason that is not a
+ * defect.  The encoding is a deterministic function of the formatted text and
+ * the key is reset at the head of every successful call, so comparing the
+ * encoded form compares the formatted form exactly.
+ *
+ * The capture buffer is 16 KB and `resetStudyUrefHandler` alone writes about
+ * 810 bytes per side per call, so it is reset every trial rather than once.
+ * ==========================================================================
+ */
+static void
+study_debug_on(void)
+{
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2u;
+}
+
+static void
+study_debug_off(void)
+{
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+}
+
+/*
+ * resetStudyUrefHandler.
+ *
+ * The argument is a flag and the two branches share nothing: zero copies six
+ * words out of the parameter block at +0x348, installs five constants and
+ * returns without printing, and nonzero copies a different six from +0x4a8
+ * and derives every threshold from `1.0f / float_a950`.  Both are swept, and
+ * the run asserts each was taken.
+ *
+ * THE GAIN IS WHAT MAKES THE THREE CLAMPS TESTABLE.  Each of +0xa9a8, +0xa9ac
+ * and +0xa9ae is `constant / gain` limited to the value the zero branch would
+ * have installed, and the three limits are reached together at a gain of 1
+ * and missed together at a gain of 2 -- so the sweep has to carry both, and
+ * it asserts that it did.  A gain of zero is in the table as well: the
+ * division is NOT guarded, so it produces infinities that every `fistp` turns
+ * into 0x8000, and only the seeding of the mapping tables is skipped.
+ *
+ * `ucode` is swept over the whole byte without clamping.  The seeding writes
+ * `linMapp[5][ucode]` and `linMappAlt[5][ucode]`, and at 0xff those are
+ * +0x6fe and +0xcfe -- inside `linMappAlt` and inside `prevLinMapp`, both
+ * well within the object.  The out-of-row index is the object's behaviour and
+ * is exercised rather than avoided.
+ */
+static int
+run_studyreset(void)
+{
+	static const float gain[] = {
+		1.0f, 2.0f, 0.5f, 0.0f, 0.9f, 100.0f, -4.0f, 1.0e-30f
+	};
+	static const unsigned int qcv[] = {
+		0u, 1u, 0u, 2u, 0xffffffffu, 0u, 0x80000000u, 7u
+	};
+	static const short level[] = {
+		0, 1, -1, 8031, (short)0x8000, 4096, -4096, 32767
+	};
+	int trial, moved = 0, distinct = 0;
+	int sawqc = 0, sawplain = 0, sawzerogain = 0, sawgain = 0;
+	int clamped = 0, unclamped = 0, printed = 0, silent = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::resetStudyUrefHandler");
+	study_debug_on();
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		unsigned int qc = qcv[IDX(trial, 1)];
+		float g = gain[IDX(trial, 3)];
+
+		seed(trial, trial % 4);
+		BOTH(float_a950, g);
+		BOTH(ucode, (unsigned char)((trial * 41) & 0xff));
+		BOTH(ucodeLevel, level[IDX(trial, 5)]);
+		memcpy(params_copy, params_block, PARAMS_BYTES);
+		memcpy(before, ours.raw, SLOT);
+		dsplib_debug_capture_reset();
+
+		ours_o.resetStudyUrefHandler(qc);
+		ref_resetStudyUrefHandler(&theirs_o, qc);
+
+		diff_eq_obj("after resetStudyUrefHandler",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("resetStudyUrefHandler wrote nothing through "
+			    "params (trial %ld)",
+			    memcmp(params_copy, params_block, PARAMS_BYTES), 0,
+			    trial);
+		diff_eq_int("the QC report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+
+		if (qc == 0) {
+			sawplain = 1;
+			if (dsplib_debug_capture_lines(0) == 0)
+				silent = 1;
+		} else {
+			sawqc = 1;
+			if (dsplib_debug_capture_lines(0) == 8)
+				printed = 1;
+			if (g == 0.0f)
+				sawzerogain = 1;
+			else
+				sawgain = 1;
+			if (ours_o.neighborUcodeMaxDistance == 6000
+			    && ours_o.neighborUcodeMinDistance == 2500)
+				clamped = 1;
+			else if (ours_o.neighborUcodeMaxDistance < 6000
+				 && ours_o.neighborUcodeMaxDistance > 0)
+				unclamped = 1;
+		}
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.short_a9a4;
+		else if (ours_o.short_a9a4 != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED GAIN GRID.
+	 *
+	 * The five thresholds are `constant / gain` rounded to an integer and
+	 * then clamped, and the eight gains above are all round numbers -- so a
+	 * constant moved by less than one in a thousand lands on the same
+	 * integer at every one of them.  Measured: the mutations that moved
+	 * 2777.7778 to 2777 and 6666.667 to 6666 both survived the sweep.
+	 *
+	 * Ninety-six gains from 1.0 up in steps of 1/80 put the reciprocal
+	 * between 0.45 and 1, which is below the clamps for most of the range
+	 * and moves each scaled constant by about 35 per step -- so the
+	 * fractional part sweeps the whole unit interval several times over and
+	 * a shift of 0.7 crosses an integer many times.
+	 */
+	{
+		int k;
+
+		study_debug_on();
+		for (k = 0; k < 96; k++) {
+			seed(920 + k, 0);
+			BOTH(float_a950, 1.0f + (float)k * 0.0125f);
+			BOTH(ucode, (unsigned char)(0x2a + (k & 7)));
+			BOTH(ucodeLevel, (short)(1000 + k * 13));
+			dsplib_debug_capture_reset();
+
+			ours_o.resetStudyUrefHandler(1u);
+			ref_resetStudyUrefHandler(&theirs_o, 1u);
+			diff_eq_obj("studyreset: the gain grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("the gain grid's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, k);
+		}
+		diff_eq_int("no store past the object (gain grid)",
+			    guard_equal(), 1, 0);
+	}
+
+	study_debug_off();
+
+	diff_eq_int("resetStudyUrefHandler changed the object", moved, 1, 0);
+	diff_eq_int("the unite threshold is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("the QC branch was exercised", sawqc, 1, 0);
+	diff_eq_int("the default branch was exercised", sawplain, 1, 0);
+	diff_eq_int("a zero gain was exercised", sawzerogain, 1, 0);
+	diff_eq_int("a nonzero gain was exercised", sawgain, 1, 0);
+	diff_eq_int("the neighbour clamps were reached", clamped, 1, 0);
+	diff_eq_int("the neighbour clamps were missed", unclamped, 1, 0);
+	diff_eq_int("the QC branch printed eight lines", printed, 1, 0);
+	diff_eq_int("the default branch printed nothing", silent, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * getAltVarThresh.
+ *
+ * The six variances live in the CALLER's array, so both sides are handed the
+ * same pointer and the array is checked afterwards for a store the method has
+ * no business making.
+ *
+ * THE COUNT CAN BE ZERO AND THE RESULT IS THEN A NaN.  Nothing is below the
+ * average when all six entries are equal -- which a freshly cleared object
+ * gives -- so the divisor is zero, the mean is 0.0f/0 and the return value is
+ * the x87 real indefinite.  That is why the return is compared as a bit
+ * pattern: `==` is false for a NaN on both sides and would pass for ever.
+ * D282, and the table below carries the constant row that reaches it.
+ *
+ * THE NaN ROW IS NOT DECORATION EITHER.  The object accumulates an entry when
+ * `jae` is NOT taken, and an unordered compare sets CF -- so a NaN variance
+ * JOINS the average where the readable spelling `var[i] < lim` would exclude
+ * it.  One 32-bit pattern in 128 is a NaN, so a seeded object reaches this and
+ * the reconstruction has to have the branch the right way round.
+ */
+static int
+run_altvarthresh(void)
+{
+	static const float vars[8][NPHASE] = {
+		{ 100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f },
+		{ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f },
+		{ -1.0f, -2.0f, 3.0f, 4.0f, -5.0f, 600.0f },
+		{ 1.0e-40f, 2048.0f, 0.1f, -0.1f, -32768.0f, 1.0e9f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+		{ 25.0f, 25.0f, 25.0f, 25.0f, 25.0f, 1.0f },
+		{ 4.0f, 4.0f, 4.0f, 4.0f, 4.0f, 4.0f }
+	};
+	static const float minv[] = {
+		0.0f, 1.0f, 1.0e6f, -1.0f, 100.0f, 1.0e-30f, 4000.0f, 0.5f
+	};
+	int trial, floored = 0, unfloored = 0, nanned = 0, finite = 0;
+	int distinct = 0;
+	unsigned int first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::getAltVarThresh");
+	study_debug_on();
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		float var[NPHASE], varcopy[NPHASE];
+		float factor = fsweep[IDX(trial, 1)];
+		unsigned int got, want;
+		int i;
+
+		seed(trial, trial % 4);
+		BOTH(altMinVarThresh, minv[IDX(trial, 5)]);
+
+		for (i = 0; i < NPHASE; i++)
+			var[i] = vars[IDX(trial, 3)][i];
+
+		/*
+		 * A NaN variance on every eighth trial, which is the row the
+		 * merge-sense claim rests on.
+		 */
+		if ((trial & 7) == 4)
+			var[trial % NPHASE] = __builtin_nanf("");
+
+		memcpy(varcopy, var, sizeof var);
+		memcpy(before, ours.raw, SLOT);
+		dsplib_debug_capture_reset();
+
+		got = fbits(ours_o.getAltVarThresh(var, factor));
+		want = fbits(ref_getAltVarThresh(&theirs_o, var, factor));
+
+		diff_eq_int("getAltVarThresh (trial %ld)", got, want, trial);
+		diff_eq_int("the variance array is unchanged (trial %ld)",
+			    memcmp(varcopy, var, sizeof var), 0, trial);
+		diff_eq_int("getAltVarThresh stored nothing (trial %ld)",
+			    memcmp(before, ours.raw, SLOT), 0, trial);
+		diff_eq_obj("getAltVarThresh left both objects alike",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the threshold report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed three lines (trial %ld)",
+			    (long)dsplib_debug_capture_lines(0), 3, trial);
+
+		if ((got & 0x7f800000u) == 0x7f800000u
+		    && (got & 0x007fffffu) != 0)
+			nanned = 1;
+		else
+			finite = 1;
+		if (got == fbits(ours_o.altMinVarThresh))
+			floored = 1;
+		else
+			unfloored = 1;
+		if (trial == 0)
+			first = got;
+		else if (got != first)
+			distinct = 1;
+	}
+
+	study_debug_off();
+
+	diff_eq_int("the threshold is not the same on every trial", distinct, 1,
+		    0);
+	diff_eq_int("an empty below-average set was exercised", nanned, 1, 0);
+	diff_eq_int("a non-empty below-average set was exercised", finite, 1,
+		    0);
+	diff_eq_int("the floor at altMinVarThresh was applied", floored, 1, 0);
+	diff_eq_int("the floor at altMinVarThresh was not applied", unfloored,
+		    1, 0);
+
+	return diff_end();
+}
+
+/*
+ * uniteLinMappInfoOfUnsuspectedPhases.
+ *
+ * The same shape as `run_unite`, and driven from the same kind of tables, but
+ * every decision is a different one: the flag is the BYTE at +0x280c and not
+ * the short at +0x2800, the merge test is `d*d < variance/4` and not a
+ * distance against `short_a9a4`, and there is no convergence loop.  So the
+ * per-phase variance at +0x9d48 has to be forced as well, and it is what the
+ * threshold sweep runs on.
+ *
+ * ONE ARM IS DELIBERATELY NOT REACHED, for D284: with all five of phases 0..4
+ * flagged the object forms no group and reads `bestGroup` uninitialised.  The
+ * flag pattern below always leaves phase `trial % 5` clear.
+ *
+ * THE ZERO POOLED TOTAL IS A DISTINCT ARM AND NOT JUST A ZERO MEAN: it
+ * returns before the clearing loop, so the three accumulators keep whatever
+ * they held.  Every other path empties them.  The seeded fill is what turns
+ * that into a comparison -- a zeroed object could not tell "left alone" from
+ * "cleared".
+ */
+static int
+run_uniteunsuspected(void)
+{
+	static const short maps[8][NPHASE] = {
+		{  100,  102,  400,  402, 1000,  100 },
+		{    0,    0,    0,    0,    0,    0 },
+		{ -100, -102,  100,  102,    0, 3000 },
+		{ 32767, -32768, 0, 1, -1, 2 },
+		{  500,  600,  700,  800,  900, 1000 },
+		{    7,    7,    7,    7,    7,    7 },
+		{ 1234, 1235, 1236, 1237, 1238, 1239 },
+		{ -5000, 5000, -5000, 5000, 0, 0 }
+	};
+	static const float vars[8] = {
+		0.0f, 4.0f, 400.0f, 40000.0f, 4000000.0f, 1.0f, 1.0e12f,
+		-1.0f
+	};
+	static const unsigned counts[8][NPHASE] = {
+		{ 1, 2, 3, 4, 5, 6 },
+		{ 0, 0, 0, 0, 0, 0 },
+		{ 0, 41, 0, 41, 0, 41 },
+		{ 10, 0, 0, 0, 0, 0 },
+		{ 25, 25, 25, 25, 25, 25 },
+		{ 0, 0, 7, 0, 0, 0 },
+		{ 100, 200, 300, 400, 500, 600 },
+		/* Pools to -25,536 in the object's `short` -- see run_unite. */
+		{ 40000, 0, 41, 0, 41, 0 }
+	};
+	int trial, moved = 0, distinct = 0;
+	int merged = 0, unmerged = 0, zerototal = 0, nonzerototal = 0;
+	int anyflagged = 0, noneflagged = 0, nanvar = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspected"
+		   "Phases");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		unsigned char at = (unsigned char)((trial * 23) & 0x7f);
+		const short *mp = maps[IDX(trial, 1)];
+		const unsigned *cp = counts[IDX(trial, 3)];
+		float v = vars[IDX(trial, 5)];
+		int p, q, sawpair = 0, sawflag = 0;
+
+		seed(trial, trial % 4);
+
+		for (p = 0; p < NPHASE; p++) {
+			/* Phase (trial % 5) is always clear -- D284. */
+			unsigned char flag =
+			    (unsigned char)((p == trial % 5) ? 0
+					    : ((trial >> p) & 1));
+
+			BOTH(byte_280c[p], flag);
+			BOTH(linMapp[p][at], mp[p]);
+			BOTH(uint_1c00[p][at], cp[p]);
+			BOTH(float_1000[p][at], (float)((int)cp[p] * 3));
+			BOTH(float_9118[p][at], (float)((int)cp[p] * 41));
+			/*
+			 * THE VARIANCE VARIES WITH THE PHASE, which is what
+			 * makes "a quarter of the LEADER's variance" a claim:
+			 * a table that gave all six the same value agrees with
+			 * one that reads the candidate's, and the mutation
+			 * that swaps them was NOT CAUGHT until this multiplier
+			 * existed.
+			 */
+			BOTH(float_9d48[p][at], v * (float)(p + 1));
+
+			if (flag != 0)
+				sawflag = 1;
+			if (cp[p] != 0)
+				nonzerototal = 1;
+			else
+				zerototal = 1;
+		}
+
+		/*
+		 * A NaN variance on the leader every eighth trial: the object
+		 * merges on an unordered compare, so this row is what pins the
+		 * sense of the test rather than only its value.
+		 */
+		if ((trial & 7) == 6) {
+			BOTH(float_9d48[trial % 5][at], __builtin_nanf(""));
+			nanvar = 1;
+		}
+
+		for (p = 0; p < NPHASE - 1; p++)
+			for (q = p + 1; q < NPHASE; q++)
+				if (ours_o.byte_280c[p] == 0
+				    && ours_o.byte_280c[q] == 0) {
+					float d = (float)(mp[p] - mp[q]);
+					float lim = v * (float)(p + 1) * 0.25f;
+
+					if (!(d * d >= lim))
+						sawpair = 1;
+				}
+
+		if (sawpair)
+			merged = 1;
+		else
+			unmerged = 1;
+		if (sawflag)
+			anyflagged = 1;
+		else
+			noneflagged = 1;
+
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+		ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+
+		diff_eq_obj("after uniteLinMappInfoOfUnsuspectedPhases",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[0][at];
+		else if (ours_o.linMapp[0][at] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE RUNNING GROUP SIZE (D283).
+	 *
+	 * The object sets the size to 1 ONCE, outside the scan, so the second
+	 * group starts counting from where the first stopped and the "biggest"
+	 * group is whichever merged last.  Two groups of two, phases 0-1 and
+	 * 2-3, with different means: reset-per-group picks the first (size 2
+	 * against a running best of 2, which is not greater), and the object's
+	 * running counter makes the second group size 3 and picks IT.  The two
+	 * spellings write different means into every unsuspected phase.
+	 *
+	 * Phases 4 and 5 are suspected so that they neither join a group nor
+	 * receive the answer, which leaves the pooled mean visible.
+	 */
+	{
+		static const short e[NPHASE] = { 100, 101, 900, 901, 0, 0 };
+		static const float fs[NPHASE] = {
+			100.0f, 100.0f, 900.0f, 900.0f, 0.0f, 0.0f
+		};
+		unsigned char at = 0x2d;
+		int p;
+
+		seed(903, 0);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(byte_280c[p], (unsigned char)(p >= 4 ? 1 : 0));
+			BOTH(linMapp[p][at], e[p]);
+			BOTH(uint_1c00[p][at], 1u);
+			BOTH(float_1000[p][at], fs[p]);
+			BOTH(float_9118[p][at], fs[p] * fs[p]);
+			BOTH(float_9d48[p][at], 400.0f);
+		}
+
+		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+		ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+		diff_eq_obj("unite: the running group size",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (group-size block)",
+			    guard_equal(), 1, 0);
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE RECIPROCAL, which is finding 1366's witness
+	 * again: this method forms `1.0f / total` and multiplies, and a
+	 * straight `fsum / total` agrees over every table above.  Count 41
+	 * against a sum of 143.5 divides to exactly 3.5, so the `+ 0.5f` lands
+	 * on 4.0 and the truncating `fistp` stores 4; the reciprocal is a hair
+	 * under and stores 3.  One phase only in the group, so the pooled sum
+	 * is the phase's own and the witness is not diluted.
+	 */
+	{
+		unsigned char at = 0x37;
+		int p;
+
+		seed(904, 0);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(byte_280c[p], (unsigned char)(p == 0 ? 0 : 1));
+			BOTH(linMapp[p][at], (short)(p * 1000));
+			BOTH(uint_1c00[p][at], (unsigned)(p == 0 ? 41 : 0));
+			BOTH(float_1000[p][at], p == 0 ? 143.5f : 0.0f);
+			BOTH(float_9118[p][at], p == 0 ? 600.0f : 0.0f);
+			BOTH(float_9d48[p][at], 4.0f);
+		}
+
+		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+		ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+		diff_eq_obj("unite: the reciprocal witness",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (reciprocal block)",
+			    guard_equal(), 1, 0);
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE "ALREADY GROUPED" TEST.
+	 *
+	 * The inner loop skips a phase that already has a group number, and
+	 * nothing in a sweep separates that from skipping only the suspected
+	 * ones: it needs a phase that a LATER leader would also have taken.
+	 * Entries 0, 250 and 100 with a tolerance of 200 do it -- phase 0
+	 * takes phase 2 (100 away) and cannot reach phase 1 (250 away), and
+	 * phase 1 then leads and IS within 200 of phase 2, which the object
+	 * refuses and the mutation allows.  The variance is 160,000, whose
+	 * quarter is 40,000 = 200 squared.
+	 *
+	 * It doubles as the witness for the quarter: at half the variance the
+	 * tolerance is 283 and phase 0 takes phase 1 as well, so the first
+	 * group is different from the first instruction on.
+	 */
+	{
+		static const short e[NPHASE] = { 0, 250, 100, 0, 0, 0 };
+		static const float fs[NPHASE] = {
+			10.0f, 700.0f, 400.0f, 0.0f, 0.0f, 0.0f
+		};
+		unsigned char at = 0x41;
+		int p;
+
+		seed(905, 0);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(byte_280c[p], (unsigned char)(p >= 3 ? 1 : 0));
+			BOTH(linMapp[p][at], e[p]);
+			BOTH(uint_1c00[p][at], (unsigned)(p + 1));
+			BOTH(float_1000[p][at], fs[p]);
+			BOTH(float_9118[p][at], fs[p] * 8.0f);
+			BOTH(float_9d48[p][at], 160000.0f);
+		}
+
+		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+		ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+		diff_eq_obj("unite: a phase a later leader could also take",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (regroup block)",
+			    guard_equal(), 1, 0);
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR WHOSE VARIANCE THE TOLERANCE COMES FROM.
+	 *
+	 * The object reads `float_9d48[LEADER][at]`, and a table that gives the
+	 * two phases the same variance cannot tell that from reading the
+	 * candidate's -- measured: the mutation that swaps the index survived
+	 * even the per-phase multiplier above.  So: a distance of 150, a
+	 * leader variance of 40,000 whose quarter is 10,000, and a candidate
+	 * variance of 400,000 whose quarter is 100,000.  22,500 is above the
+	 * first and below the second, so the object refuses the merge and the
+	 * mutation makes it.
+	 */
+	{
+		unsigned char at = 0x53;
+		int p;
+
+		seed(906, 0);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(byte_280c[p], (unsigned char)(p >= 2 ? 1 : 0));
+			BOTH(linMapp[p][at], (short)(p == 1 ? 150 : 0));
+			BOTH(uint_1c00[p][at], (unsigned)(p + 3));
+			BOTH(float_1000[p][at], (float)(p * 700 + 90));
+			BOTH(float_9118[p][at], (float)(p * 9000 + 500));
+			BOTH(float_9d48[p][at], p == 0 ? 40000.0f : 400000.0f);
+		}
+
+		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
+		ref_uniteLinMappInfoOfUnsuspectedPhases(&theirs_o, at);
+		diff_eq_obj("unite: the tolerance is the leader's",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (tolerance block)",
+			    guard_equal(), 1, 0);
+	}
+
+	diff_eq_int("uniting the unsuspected changed the object", moved, 1, 0);
+	diff_eq_int("the united entry is not the same on every trial", distinct,
+		    1, 0);
+	diff_eq_int("a mergeable pair was offered", merged, 1, 0);
+	diff_eq_int("a trial with nothing to merge was offered", unmerged, 1,
+		    0);
+	diff_eq_int("a zero pooled count was exercised", zerototal, 1, 0);
+	diff_eq_int("a nonzero pooled count was exercised", nonzerototal, 1, 0);
+	diff_eq_int("a suspected phase was exercised", anyflagged, 1, 0);
+	diff_eq_int("a trial with no suspected phase was exercised", noneflagged,
+		    1, 0);
+	diff_eq_int("a NaN leader variance was exercised", nanvar, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * porcessFirstStudy.
+ *
+ * THE STUDY IS OVER SIXTEEN CODES, 0x40..0x4f, and the sweep has to put the
+ * counts and the sums there rather than anywhere in the row: everything
+ * outside that window is only ever cleared.  `ucode` is swept over the whole
+ * byte, and the values inside the window are what reach the `ucode == code`
+ * skip.
+ *
+ * NOTHING IS CLAMPED HERE.  The clearing loops index `[phase][k]` with a byte
+ * `k`, and the worst case the method can reach is phase 5, k = 254 -- which
+ * lands at +0x9f14 in `float_9118`'s row, 2,716 bytes short of the end of the
+ * object.  The unbounded index is exercised for real rather than avoided.
+ *
+ * THE DEBUG LEVEL IS PART OF THE SWEEP.  This is the class's only member with
+ * a gate on it, and the gated branch reloads `ucode` from the object after the
+ * call -- so running only at level 0 would leave both the branch and the
+ * reload untested.  Both levels are exercised and both are asserted.
+ */
+static int
+run_firststudy(void)
+{
+	static const float sigma[] = {
+		1000.0f, 0.0f, 40.0f, 4000.0f, -100.0f, 1.0e9f, 0.5f, 100.0f
+	};
+	static const short nmin[] = { 2500, 0, 100, 1, 25, 2500, -50, 1000 };
+	static const short nmax[] = { 6000, 6000, 200, 30000, 25, 4, 0, 2000 };
+	static const unsigned char uc[] = {
+		0x2a, 0x00, 0x40, 0x4f, 0x7f, 0xff, 0x45, 0x80
+	};
+	int trial, moved = 0, distinct = 0;
+	int susp = 0, unsusp = 0, zerocount = 0, nonzerocount = 0;
+	int skipped = 0, level0 = 0, level2 = 0;
+	unsigned char firsttally = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::porcessFirstStudy");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		unsigned char at = uc[IDX(trial, 1)];
+		int p, c;
+
+		seed(trial, trial % 4);
+		BOTH(trn1Sigma, sigma[IDX(trial, 3)]);
+		BOTH(neighborUcodeMinDistance, nmin[IDX(trial, 5)]);
+		BOTH(neighborUcodeMaxDistance, nmax[IDX(trial, 7)]);
+		BOTH(ucode, at);
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p],
+			     (short)(((trial >> p) & 1) ? p + 1 : 0));
+
+			for (c = 0x40; c <= 0x4f; c++) {
+				unsigned n = ((trial + c) & 3) == 0
+					     ? 0u : (unsigned)(c - 0x3f);
+
+				BOTH(uint_1c00[p][c], n);
+				/*
+				 * A HALF IN THE MEAN, deliberately: a sum that
+				 * divides exactly makes the `+ 0.5f` invisible
+				 * and the mutation that drops it survived until
+				 * this was 100.5 rather than 100.
+				 */
+				BOTH(float_1000[p][c],
+				     (float)n * (100.5f + 37.0f * (float)p));
+				BOTH(float_9118[p][c],
+				     (float)((int)n * (20000 + 11 * c)));
+
+				if (n == 0)
+					zerocount = 1;
+				else
+					nonzerocount = 1;
+			}
+
+			/*
+			 * A saw-tooth mapping outside the window, so the
+			 * clearing pass has something varied to zero and the
+			 * one spared entry is visibly spared.
+			 */
+			for (c = 0; c < V90ADID_CODES; c++)
+				BOTH(linMapp[p][c],
+				     (short)((c * 251 + p * 37) & 0x7fff));
+		}
+
+		if (at >= 0x40 && at <= 0x4f)
+			skipped = 1;
+
+		if ((trial & 1) == 0) {
+			study_debug_on();
+			level2 = 1;
+		} else {
+			level0 = 1;
+		}
+		dsplib_debug_capture_reset();
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.porcessFirstStudy();
+		ref_porcessFirstStudy(&theirs_o);
+
+		diff_eq_obj("after porcessFirstStudy",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the study report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+		diff_eq_int("the gated line is there exactly when the level is "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (trial & 1) == 0 ? 2 : 0, trial);
+		study_debug_off();
+
+		for (p = 0; p < NPHASE; p++) {
+			if (ours_o.byte_280c[p] != 0)
+				susp = 1;
+			else
+				unsusp = 1;
+		}
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			firsttally = ours_o.byte_a96a;
+		else if (ours_o.byte_a96a != firsttally)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE ROUGHNESS COUNT.
+	 *
+	 * The counter starts at 1 and the phase is trusted only when it ends
+	 * above 9, so the boundary is at exactly nine large differences: eight
+	 * leaves it at 9 and suspected, nine takes it to 10 and unsuspected.
+	 * A sweep never lands there -- the mappings above are either flat or
+	 * saw-toothed all the way -- and without the boundary neither the
+	 * initial 1 nor the `> 9` is a tested claim.
+	 *
+	 * All sixteen counts are zero so the mean loop leaves the mapping
+	 * exactly as it is written here, and `ucode` is outside the window so
+	 * nothing is skipped.  The threshold is 2500 and the two levels are
+	 * 0 and 5000, so a step is 25,000,000 and a flat run is 0.
+	 */
+	{
+		int k;
+
+		for (k = 7; k <= 10; k++) {
+			int p, c;
+
+			seed(910 + k, 0);
+			BOTH(trn1Sigma, 1000.0f);
+			BOTH(neighborUcodeMinDistance, 2500);
+			BOTH(neighborUcodeMaxDistance, 6000);
+			BOTH(ucode, 0x2a);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], 0);
+				for (c = 0x40; c <= 0x4f; c++) {
+					int i = c - 0x40;
+					int j = i <= k ? i : k;
+
+					BOTH(uint_1c00[p][c], 0u);
+					BOTH(linMapp[p][c],
+					     (short)((j & 1) ? 5000 : 0));
+				}
+			}
+
+			ours_o.porcessFirstStudy();
+			ref_porcessFirstStudy(&theirs_o);
+			diff_eq_obj("porcessFirstStudy: the roughness boundary",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("no store past the object (boundary %ld)",
+				    guard_equal(), 1, k);
+			diff_eq_int("nine differences trust the phase (%ld)",
+				    ours_o.byte_280c[0] == 0, k >= 9 ? 1 : 0,
+				    k);
+
+			if (ours_o.byte_280c[0] == 0)
+				unsusp = 1;
+			else
+				susp = 1;
+		}
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE FIRST STUDY'S OWN ARITHMETIC AND ITS REPORT.
+	 *
+	 * Two claims that the sweep above cannot separate, in one state:
+	 *
+	 * Count 41 against a sum of 143.5 is finding 1366's witness again --
+	 * the division is exactly 3.5 and rounds to 4, the reciprocal is a hair
+	 * under and truncates to 3.  It pins the `1.0f / count` spelling AND
+	 * the `+ 0.5f`, both of which survived the sweep.
+	 *
+	 * A sigma of 100.3 makes 2.5 * it 250.75, whose reported value is 251
+	 * with the rounding term and 250 without.  Every sigma in the table
+	 * above is a whole number after scaling, so the mutation that drops the
+	 * rounding from the report was invisible; the clamps are set wide so
+	 * that neither of them hides it.
+	 */
+	{
+		int p, c;
+
+		seed(930, 0);
+		BOTH(trn1Sigma, 100.3f);
+		BOTH(neighborUcodeMinDistance, 10);
+		BOTH(neighborUcodeMaxDistance, 30000);
+		BOTH(ucode, 0x2a);
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], 0);
+			for (c = 0x40; c <= 0x4f; c++) {
+				BOTH(uint_1c00[p][c], 41u);
+				BOTH(float_1000[p][c], 143.5f);
+				BOTH(float_9118[p][c], 600.0f);
+			}
+		}
+
+		study_debug_on();
+		dsplib_debug_capture_reset();
+		ours_o.porcessFirstStudy();
+		ref_porcessFirstStudy(&theirs_o);
+		diff_eq_obj("porcessFirstStudy: the reciprocal witness",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("the fractional report matched",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, 0);
+		diff_eq_int("no store past the object (witness block)",
+			    guard_equal(), 1, 0);
+		study_debug_off();
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE FIRST STUDY'S MEAN, WHICH IS OTHERWISE DEAD.
+	 *
+	 * EVERY MAPPING ENTRY THE MEAN LOOP WRITES IS CLEARED BY THE SAME CALL:
+	 * the clearing pass at the end covers 0..127 except `ucode`, and the
+	 * mean loop writes 0x40..0x4f except `ucode`.  So the rounded mean
+	 * leaves the object only through the roughness count between them --
+	 * and that is a comparison against a threshold, which a mean that is
+	 * one code out crosses only if the differences are arranged to straddle
+	 * it.  Both the mutation that drops the `+ 0.5f` and the one that
+	 * divides instead of multiplying by the reciprocal survived every other
+	 * state in this file for exactly that reason.
+	 *
+	 * Both witnesses put the mean on alternate codes and leave the codes
+	 * between them empty with a mapping entry of zero, so the fifteen
+	 * neighbouring differences are all the mean itself and one threshold
+	 * decides the whole phase:
+	 *
+	 *   count 41, sum 143.5, threshold 12.  Dividing gives exactly 3.5,
+	 *   which the `+ 0.5f` lifts to 4.0 and the truncation keeps as 4 --
+	 *   16 against the threshold, fifteen rough neighbours, trusted.  The
+	 *   reciprocal is a hair under, stores 3, and 9 is below the threshold
+	 *   -- suspected.  The object takes the reciprocal, so the ASSERTION
+	 *   below is that the phase comes out SUSPECTED.
+	 *
+	 *   count 2, sum 21, threshold 110.  A half is exact either way, so
+	 *   this one says nothing about the division -- it separates the
+	 *   rounding: 10.5 rounds to 11 and 121 is above the threshold, and
+	 *   truncating to 10 puts 100 below it.
+	 */
+	{
+		static const unsigned cnt[2] = { 41u, 2u };
+		static const float sum[2] = { 143.5f, 21.0f };
+		static const float sig[2] = { 4.8f, 44.0f };
+		static const int want[2] = { 1, 0 };
+		int w;
+
+		for (w = 0; w < 2; w++) {
+			int p, c;
+
+			seed(931 + w, 0);
+			BOTH(trn1Sigma, sig[w]);
+			BOTH(neighborUcodeMinDistance, 0);
+			BOTH(neighborUcodeMaxDistance, 30000);
+			BOTH(ucode, 0x2a);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], 0);
+				for (c = 0x40; c <= 0x4f; c++) {
+					int odd = c & 1;
+
+					BOTH(uint_1c00[p][c],
+					     odd ? cnt[w] : 0u);
+					BOTH(float_1000[p][c],
+					     odd ? sum[w] : 0.0f);
+					BOTH(float_9118[p][c],
+					     odd ? 600.0f : 0.0f);
+					BOTH(linMapp[p][c], 0);
+				}
+			}
+
+			ours_o.porcessFirstStudy();
+			ref_porcessFirstStudy(&theirs_o);
+			diff_eq_obj("porcessFirstStudy: the mean inside the "
+				    "roughness count",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, w);
+			diff_eq_int("the witness lands where it was aimed (%ld)",
+				    ours_o.byte_280c[0] != 0, want[w], w);
+			diff_eq_int("no store past the object (roughness %ld)",
+				    guard_equal(), 1, w);
+		}
+	}
+
+	diff_eq_int("porcessFirstStudy changed the object", moved, 1, 0);
+	diff_eq_int("the suspect tally is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("a suspected phase came out", susp, 1, 0);
+	diff_eq_int("an unsuspected phase came out", unsusp, 1, 0);
+	diff_eq_int("a zero count was exercised", zerocount, 1, 0);
+	diff_eq_int("a nonzero count was exercised", nonzerocount, 1, 0);
+	diff_eq_int("a reference code inside the studied window was exercised",
+		    skipped, 1, 0);
+	diff_eq_int("the gate was exercised open", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1650,6 +2731,10 @@ main(void)
 	rc |= run_queries();
 	rc |= run_unite();
 	rc |= run_updateuref();
+	rc |= run_studyreset();
+	rc |= run_altvarthresh();
+	rc |= run_uniteunsuspected();
+	rc |= run_firststudy();
 	rc |= run_signal();
 
 	return rc;

@@ -21,8 +21,8 @@
  },
  {
   "label": "leave the byte at +0x280c alone",
-  "find": "\t\tbyte_280c[phase] = 0;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tuint_9d30[phase] = 0;\n\t\tbyte_280c[phase] = 0;",
+  "replace": "\t\tuint_9d30[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the int at +0x9d30 alone",
@@ -254,13 +254,13 @@
  },
  {
   "label": "drop the rounding term on the mean",
-  "find": "\tlinMapp[phase][code] = (short)(mean + 0.5f);",
-  "replace": "\tlinMapp[phase][code] = (short)mean;"
+  "find": "- mean * mean;\n\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "- mean * mean;\n\tlinMapp[phase][code] = (short)mean;"
  },
  {
   "label": "form the mean from the sum of squares",
-  "find": "\tmean = float_1000[phase][code] * inv;",
-  "replace": "\tmean = float_9118[phase][code] * inv;"
+  "find": "1.0f / uint_1c00[phase][code];\n\tmean = float_1000[phase][code] * inv;",
+  "replace": "1.0f / uint_1c00[phase][code];\n\tmean = float_9118[phase][code] * inv;"
  },
  {
   "label": "divide directly where the object multiplies by a reciprocal",
@@ -394,8 +394,8 @@
  },
  {
   "label": "write updateUrefAlt's mean into the plain table",
-  "find": "\t\t\tlinMappAlt[phase][ucode] =",
-  "replace": "\t\t\tlinMapp[phase][ucode] ="
+  "find": "\t\t\tlinMappAlt[phase][ucode] =\n",
+  "replace": "\t\t\tlinMapp[phase][ucode] =\n"
  },
  {
   "label": "divide in updateUrefAlt where the object multiplies by a reciprocal",
@@ -557,13 +557,13 @@
  },
  {
   "label": "leave updateUref's count uncleared",
-  "find": "\t\tuint_1c00[phase][ucode] = 0;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave updateUref's sum uncleared",
-  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\t/* deliberately removed */\n\t\tuint_1c00[phase][ucode] = 0;"
  },
  {
   "label": "drop the rounding term on updateUref's mean",
@@ -574,5 +574,603 @@
   "label": "reverse updateUref's variance subtraction",
   "find": "\t\t\t    float_9118[phase][ucode] * inv - mean * mean;",
   "replace": "\t\t\t    mean * mean - float_9118[phase][ucode] * inv;"
+ },
+ {
+  "label": "NOTE: the four study methods.  Several anchors below have to reach past the line they change: unitePhasesInfoOfUref and uniteLinMappInfoOfUnsuspectedPhases share whole statements, and so do the two clearing runs inside porcessFirstStudy.  Finding 1264 again -- an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+ },
+ {
+  "label": "print the sign with the ordered test rather than its negation",
+  "find": "#define ADID_PRINT_SIGN(v)\t((0.0f >= (v)) ? '-' : '+')",
+  "replace": "#define ADID_PRINT_SIGN(v)\t(((v) > 0.0f) ? '+' : '-')"
+ },
+ {
+  "label": "drop the magnitude from the printed whole part",
+  "find": "#define ADID_PRINT_WHOLE(v)\t((int)__builtin_fabsf(v))",
+  "replace": "#define ADID_PRINT_WHOLE(v)\t((int)(v))"
+ },
+ {
+  "label": "print tenths where the object prints hundredths",
+  "find": "\tadid_abs((int)((scale) * ((v) - (float)(int)(v))))",
+  "replace": "\tadid_abs((int)((scale) * 0.1f * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "drop the magnitude from the printed fraction",
+  "find": "\tadid_abs((int)((scale) * ((v) - (float)(int)(v))))",
+  "replace": "\t((int)((scale) * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "average the six variances over five",
+  "find": "\tlim = sum * 0.16666667f;",
+  "replace": "\tlim = sum * 0.2f;"
+ },
+ {
+  "label": "take the average of the whole set rather than of the below-average half",
+  "find": "\tmean = below / count;",
+  "replace": "\tmean = sum / count;"
+ },
+ {
+  "label": "divide the below-average sum by six rather than by its own count",
+  "find": "\tmean = below / count;",
+  "replace": "\tmean = below / V90ADID_PHASES;"
+ },
+ {
+  "label": "include the entries equal to the average",
+  "find": "\t\tif (var[i] >= lim)\n\t\t\tcontinue;",
+  "replace": "\t\tif (var[i] > lim)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "keep the entries above the average instead",
+  "find": "\t\tif (var[i] >= lim)\n\t\t\tcontinue;",
+  "replace": "\t\tif (var[i] < lim)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "sum only five of the six variances",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES; i++)\n\t\tsum += var[i];",
+  "replace": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++)\n\t\tsum += var[i];"
+ },
+ {
+  "label": "add the factor to the mean rather than scaling by it",
+  "find": "\tthresh = factor * mean;",
+  "replace": "\tthresh = factor + mean;"
+ },
+ {
+  "label": "turn the floor at altMinVarThresh into a ceiling",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;",
+  "replace": "\tif (altMinVarThresh < thresh)\n\t\tthresh = altMinVarThresh;"
+ },
+ {
+  "label": "drop the floor at altMinVarThresh",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;",
+  "replace": "\tif (0)\n\t\tthresh = altMinVarThresh;"
+ },
+ {
+  "label": "return the unscaled mean",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;\n\n\treturn thresh;",
+  "replace": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;\n\n\treturn mean;"
+ },
+ {
+  "label": "report the factor where getAltVarThresh reports the mean variance",
+  "find": "\t\t \"%c%d.%02d\\r\\n\", ADID_PRINT_SIGN(mean), ADID_PRINT_WHOLE(mean),\n\t\t ADID_PRINT_FRAC(mean, 100.0));",
+  "replace": "\t\t \"%c%d.%02d\\r\\n\", ADID_PRINT_SIGN(factor),\n\t\t ADID_PRINT_WHOLE(factor), ADID_PRINT_FRAC(factor, 100.0));"
+ },
+ {
+  "label": "misspell getAltVarThresh's first message",
+  "find": "getAltVarThresh: meanVar = \"",
+  "replace": "getAltVarThresh: meanvar = \""
+ },
+ {
+  "label": "report the mean where getAltVarThresh reports the scaled threshold",
+  "find": "\t\t \"= %c%d.%02d\\r\\n\", ADID_PRINT_SIGN(thresh),\n\t\t ADID_PRINT_WHOLE(thresh), ADID_PRINT_FRAC(thresh, 100.0));",
+  "replace": "\t\t \"= %c%d.%02d\\r\\n\", ADID_PRINT_SIGN(mean),\n\t\t ADID_PRINT_WHOLE(mean), ADID_PRINT_FRAC(mean, 100.0));"
+ },
+ {
+  "label": "group on the short at +0x2800 rather than the byte at +0x280c",
+  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
+  "replace": "\t\tif (short_2800[i] != 0 || group[i] != ADID_NO_GROUP)"
+ },
+ {
+  "label": "let an already-grouped phase lead a second group",
+  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
+  "replace": "\t\tif (byte_280c[i] != 0)"
+ },
+ {
+  "label": "let the last phase lead a group",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {\n\t\tif (byte_280c[i] != 0",
+  "replace": "\tfor (i = 0; i < V90ADID_PHASES; i++) {\n\t\tif (byte_280c[i] != 0",
+  "equivalent": true,
+  "why": "`count` never decreases and `best` is set to `count` whenever it is exceeded, so after every group `best == count` and the test at a sixth leader can never fire.  Phase 5 would take a group number without ever becoming `bestGroup`, and the pooling compares against `bestGroup`, which is always one of 0..4 -- so nothing downstream reads the change.  The one path where it WOULD differ is the one where no group forms at all, and that path reads `bestGroup` uninitialised (D284).  The bound is real and D283's running counter is what makes it unobservable."
+ },
+ {
+  "label": "let a phase join a group it is already in",
+  "find": "\t\t\tif (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)",
+  "replace": "\t\t\tif (byte_280c[j] != 0)"
+ },
+ {
+  "label": "look backwards as well as forwards for group members",
+  "find": "\t\tfor (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {",
+  "replace": "\t\tfor (j = 0; j < V90ADID_PHASES; j++) {",
+  "equivalent": true,
+  "why": "A phase below the current leader is either suspected -- caught by the first half of the same test -- or was itself a leader and has a group number, which the second half catches.  There is no third state: the outer loop makes every unsuspected ungrouped phase a leader when it reaches it.  So the extra iterations j < i can only ever `continue`."
+ },
+ {
+  "label": "merge on a quarter of the CANDIDATE's variance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d >= float_9d48[j][at] * 0.25f)"
+ },
+ {
+  "label": "merge on half the leader's variance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d >= float_9d48[i][at] * 0.5f)"
+ },
+ {
+  "label": "merge when the difference EXCEEDS the tolerance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d < float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "merge on an exactly equal difference too",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d > float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "merge on the distance rather than on its square",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d >= float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "take the merge distance backwards",
+  "find": "\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);",
+  "replace": "\t\t\td = (float)(linMapp[j][at] - linMapp[i][at]);",
+  "equivalent": true,
+  "why": "The distance is used only as `d * d`, negation of a float is exact, and the difference of two shorts is exactly representable -- so (a-b)^2 and (b-a)^2 are the same bit pattern for every input.  The object's operand order is recorded in the source; it cannot be measured."
+ },
+ {
+  "label": "reset the running group size at every group, as the readable spelling would",
+  "find": "\n\n\t\tgroup[i] = i;\n\n\t\tfor (j = (unsigned char)(i + 1);",
+  "replace": "\n\n\t\tgroup[i] = i;\n\t\tcount = 1;\n\n\t\tfor (j = (unsigned char)(i + 1);"
+ },
+ {
+  "label": "start the running group size at zero",
+  "find": "\tshort count = 1;",
+  "replace": "\tshort count = 0;"
+ },
+ {
+  "label": "keep the FIRST group of the largest size rather than the last",
+  "find": "\t\tif (count > best) {\n\t\t\tbest = count;",
+  "replace": "\t\tif (count >= best) {\n\t\t\tbest = count;"
+ },
+ {
+  "label": "pool every unsuspected phase rather than the chosen group",
+  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
+  "replace": "\t\tif (byte_280c[j] != 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "pool the chosen group's suspected members too",
+  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
+  "replace": "\t\tif (group[j] != bestGroup)\n\t\t\tcontinue;",
+  "equivalent": true,
+  "why": "A suspected phase is never given a group number: the inner loop skips it before the assignment and `group[]` starts at -1.  `bestGroup` is one of 0..4, so `group[j] != bestGroup` already excludes every suspected phase and the flag test in front of it decides nothing.  It is written because the object writes it -- `cmpb $0x0,0x280c(%eax,%edi,1)` at 0x415f3 precedes the group compare -- not because it is reachable."
+ },
+ {
+  "label": "subtract the pooled samples rather than adding them",
+  "find": "\t\ttotal = (short)(total + uint_1c00[j][at]);\n\t}",
+  "replace": "\t\ttotal = (short)(total - uint_1c00[j][at]);\n\t}"
+ },
+ {
+  "label": "count one per pooled phase rather than its samples",
+  "find": "\t\ttotal = (short)(total + uint_1c00[j][at]);\n\t}",
+  "replace": "\t\ttotal = (short)(total + 1);\n\t}"
+ },
+ {
+  "label": "read the pooled count back as unsigned",
+  "find": "\tinv = 1.0f / total;",
+  "replace": "\tinv = 1.0f / (unsigned short)total;"
+ },
+ {
+  "label": "treat a negative pooled count as empty",
+  "find": "\tif (total == 0)\n\t\treturn;",
+  "replace": "\tif (total <= 0)\n\t\treturn;"
+ },
+ {
+  "label": "clear the accumulators even when the pool is empty",
+  "find": "\tif (total == 0)\n\t\treturn;\n\n\tinv = 1.0f / total;",
+  "replace": "\tif (total == 0) {\n\t\tfor (j = 0; j < V90ADID_PHASES; j++) {\n\t\t\tfloat_1000[j][at] = 0.0f;\n\t\t\tuint_1c00[j][at] = 0;\n\t\t\tfloat_9118[j][at] = 0.0f;\n\t\t}\n\t\treturn;\n\t}\n\n\tinv = 1.0f / total;"
+ },
+ {
+  "label": "divide by the pooled count rather than multiplying by its reciprocal",
+  "find": "\tinv = 1.0f / total;\n\tmean = fsum * inv;",
+  "replace": "\tinv = 1.0f / total;\n\tmean = fsum / total;"
+ },
+ {
+  "label": "reverse the pooled variance",
+  "find": "\tvar = fsq * inv - mean * mean;",
+  "replace": "\tvar = mean * mean - fsq * inv;"
+ },
+ {
+  "label": "drop the pooled mean's rounding term",
+  "find": "\tr = (short)(mean + 0.5f);",
+  "replace": "\tr = (short)mean;"
+ },
+ {
+  "label": "write the pooled answer only to the chosen group",
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
+  "replace": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {\n\t\t\tlinMapp[j][at] = r;"
+ },
+ {
+  "label": "write the pooled answer to the suspected phases instead",
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
+  "replace": "\t\tif (byte_280c[j] != 0) {\n\t\t\tlinMapp[j][at] = r;"
+ },
+ {
+  "label": "clear only the phases that got the pooled answer",
+  "find": "\t\tfloat_1000[j][at] = 0.0f;\n\t\tuint_1c00[j][at] = 0;\n\t\tfloat_9118[j][at] = 0.0f;\n\t}\n}",
+  "replace": "\t\tif (byte_280c[j] == 0) {\n\t\t\tfloat_1000[j][at] = 0.0f;\n\t\t\tuint_1c00[j][at] = 0;\n\t\t\tfloat_9118[j][at] = 0.0f;\n\t\t}\n\t}\n}"
+ },
+ {
+  "label": "write the pooled mean into the alternate table",
+  "find": "\t\t\tlinMapp[j][at] = r;\n\t\t\tfloat_9d48[j][at] = var;",
+  "replace": "\t\t\tlinMappAlt[j][at] = r;\n\t\t\tfloat_9d48[j][at] = var;"
+ },
+ {
+  "label": "study two sigma rather than two and a half",
+  "find": "\tt = trn1Sigma * 2.5f;",
+  "replace": "\tt = trn1Sigma * 2.0f;"
+ },
+ {
+  "label": "floor the squared-difference threshold at the MAXIMUM neighbour distance",
+  "find": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? t : (float)neighborUcodeMinDistance;",
+  "replace": "\tt = (t >= (float)neighborUcodeMaxDistance)\n\t\t? t : (float)neighborUcodeMaxDistance;"
+ },
+ {
+  "label": "take the smaller of sigma and the minimum neighbour distance",
+  "find": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? t : (float)neighborUcodeMinDistance;",
+  "replace": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? (float)neighborUcodeMinDistance : t;"
+ },
+ {
+  "label": "take the larger of the clamp and the maximum neighbour distance",
+  "find": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? t : (float)neighborUcodeMaxDistance;",
+  "replace": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? (float)neighborUcodeMaxDistance : t;"
+ },
+ {
+  "label": "report the threshold before the maximum clamp",
+  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(t + 0.5));"
+ },
+ {
+  "label": "drop the rounding from the reported threshold",
+  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)sqrDiffThresh);"
+ },
+ {
+  "label": "study one code fewer",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x40; code <= 0x4e; code++) {"
+ },
+ {
+  "label": "study one code more",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x40; code <= 0x50; code++) {"
+ },
+ {
+  "label": "start the studied window one code lower",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x3f; code <= 0x4f; code++) {"
+ },
+ {
+  "label": "study only the reference code",
+  "find": "\t\t\tif (ucode == code)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (ucode != code)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "study the reference code as well",
+  "find": "\t\t\tif (ucode == code)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (0)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "study the cells with no samples",
+  "find": "\t\t\tif (uint_1c00[phase][code] == 0)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (uint_1c00[phase][code] != 0)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "reverse the first study's variance",
+  "find": "\t\t\tfloat_9d48[phase][code] =\n\t\t\t    inv * float_9118[phase][code] - mean * mean;",
+  "replace": "\t\t\tfloat_9d48[phase][code] =\n\t\t\t    mean * mean - inv * float_9118[phase][code];"
+ },
+ {
+  "label": "divide rather than multiply by the reciprocal in the first study",
+  "find": "\t\t\tinv = 1.0f / uint_1c00[phase][code];\n\t\t\tmean = float_1000[phase][code] * inv;",
+  "replace": "\t\t\tinv = 1.0f / uint_1c00[phase][code];\n\t\t\tmean = float_1000[phase][code] / uint_1c00[phase][code];"
+ },
+ {
+  "label": "drop the first study's rounding term",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMapp[phase][code] = (short)mean;"
+ },
+ {
+  "label": "write the first study's mean into the alternate table",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5f);"
+ },
+ {
+  "label": "count the roughness from zero",
+  "find": "\t\tshort n = 1;",
+  "replace": "\t\tshort n = 0;"
+ },
+ {
+  "label": "compare the difference rather than its square",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d > sqrDiffThresh)"
+ },
+ {
+  "label": "count a difference exactly on the threshold as rough",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d * d >= sqrDiffThresh)"
+ },
+ {
+  "label": "count the SMOOTH neighbours instead",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d * d < sqrDiffThresh)"
+ },
+ {
+  "label": "take one difference fewer",
+  "find": "\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\t\tfor (code = 0x40; code <= 0x4d; code++) {"
+ },
+ {
+  "label": "take the difference backwards",
+  "find": "\t\t\t\tfloat d = (float)(linMapp[phase][code + 1]\n\t\t\t\t\t\t  - linMapp[phase][code]);",
+  "replace": "\t\t\t\tfloat d = (float)(linMapp[phase][code]\n\t\t\t\t\t\t  - linMapp[phase][code + 1]);",
+  "equivalent": true,
+  "why": "Same argument as the merge distance: `porcessFirstStudy` squares the neighbour difference before comparing it, so the two orders give the same bit pattern for every pair of shorts."
+ },
+ {
+  "label": "trust a phase with exactly nine rough neighbours",
+  "find": "\t\t\tif (n > 9) {",
+  "replace": "\t\t\tif (n >= 9) {"
+ },
+ {
+  "label": "need one more rough neighbour to trust the phase",
+  "find": "\t\t\tif (n > 9) {",
+  "replace": "\t\t\tif (n > 10) {"
+ },
+ {
+  "label": "count the roughness of an already-flagged phase too",
+  "find": "\t\tif (short_2800[phase] == 0) {",
+  "replace": "\t\tif (short_2800[phase] != 1) {"
+ },
+ {
+  "label": "suspect the trusted phases and trust the suspected ones",
+  "find": "\t\t\t\tbyte_280c[phase] = 0;\n\t\t\t\tcontinue;",
+  "replace": "\t\t\t\tbyte_280c[phase] = 1;\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "leave the suspected flag clear",
+  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
+  "replace": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 0;"
+ },
+ {
+  "label": "start the suspected tally at one",
+  "find": "\tbyte_a96a = 0;",
+  "replace": "\tbyte_a96a = 1;"
+ },
+ {
+  "label": "count the trusted phases in the tally instead",
+  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
+  "replace": "\t\tbyte_280c[phase] = 1;"
+ },
+ {
+  "label": "gate the study report on the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \"",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \""
+ },
+ {
+  "label": "report the pattern ungated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \"",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \""
+ },
+ {
+  "label": "report the pattern in the wrong order",
+  "find": "\t\t\t\t     \"patern  %d%d%d%d%d%d\\r\\n\", byte_280c[0],\n\t\t\t\t     byte_280c[1], byte_280c[2], byte_280c[3],\n\t\t\t\t     byte_280c[4], byte_280c[5]);",
+  "replace": "\t\t\t\t     \"patern  %d%d%d%d%d%d\\r\\n\", byte_280c[5],\n\t\t\t\t     byte_280c[4], byte_280c[3], byte_280c[2],\n\t\t\t\t     byte_280c[1], byte_280c[0]);"
+ },
+ {
+  "label": "clear the reference code's mapping entry too",
+  "find": "\t\tuint_1c00[phase][ucode] = 0;\n\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tfloat_9118[phase][ucode] = 0.0f;",
+  "replace": "\t\tuint_1c00[phase][ucode] = 0;\n\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tfloat_9118[phase][ucode] = 0.0f;\n\t\tlinMapp[phase][ucode] = 0;"
+ },
+ {
+  "label": "clear up to and including the reference code",
+  "find": "\t\tfor (k = 0; k < ucode; k++) {",
+  "replace": "\t\tfor (k = 0; k <= ucode; k++) {"
+ },
+ {
+  "label": "start the second clearing run at the reference code",
+  "find": "\t\tfor (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {",
+  "replace": "\t\tfor (k = ucode; k < V90ADID_CODES; k++) {"
+ },
+ {
+  "label": "leave the mapping alone in the first clearing run",
+  "find": "\t\t\tfloat_9118[phase][k] = 0.0f;\n\t\t\tlinMapp[phase][k] = 0;\n\t\t}\n\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\t\tfloat_9118[phase][k] = 0.0f;\n\t\t}\n\n\t\tuint_1c00[phase][ucode] = 0;"
+ },
+ {
+  "label": "take the QC branch on a zero argument",
+  "find": "\tif (qc == 0) {\n\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN",
+  "replace": "\tif (qc != 0) {\n\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN"
+ },
+ {
+  "label": "read the QC block on the default branch",
+  "find": "\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x00);",
+  "replace": "\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);"
+ },
+ {
+  "label": "read the default block's second word twice",
+  "find": "\t\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x08);",
+  "replace": "\t\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x04);"
+ },
+ {
+  "label": "skip the default block's last word",
+  "find": "\t\tint_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);",
+  "replace": "\t\tint_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x18);"
+ },
+ {
+  "label": "read the QC block one word low",
+  "find": "\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);",
+  "replace": "\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC - 0x04);"
+ },
+ {
+  "label": "swap two of the QC block's destinations",
+  "find": "\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);\n\tint_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);",
+  "replace": "\tint_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);\n\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);"
+ },
+ {
+  "label": "move the default unite threshold by one",
+  "find": "\t\tshort_a9a4 = 25;",
+  "replace": "\t\tshort_a9a4 = 26;"
+ },
+ {
+  "label": "move the default alt-RBS threshold by one",
+  "find": "\t\tshort_a9a6 = 50;",
+  "replace": "\t\tshort_a9a6 = 51;"
+ },
+ {
+  "label": "move the default variance floor by one",
+  "find": "\t\taltMinVarThresh = 4000.0f;",
+  "replace": "\t\taltMinVarThresh = 4001.0f;"
+ },
+ {
+  "label": "move the default minimum neighbour distance by one",
+  "find": "\t\tneighborUcodeMinDistance = 2500;",
+  "replace": "\t\tneighborUcodeMinDistance = 2501;"
+ },
+ {
+  "label": "move the default maximum neighbour distance by one",
+  "find": "\t\tneighborUcodeMaxDistance = 6000;",
+  "replace": "\t\tneighborUcodeMaxDistance = 6001;"
+ },
+ {
+  "label": "leave the default branch's two counters alone",
+  "find": "\t\tint_a984 = 0;\n\t\tint_a988 = 0;\n\t\treturn;",
+  "replace": "\t\tint_a988 = 0;\n\t\treturn;"
+ },
+ {
+  "label": "scale by the gain rather than by its reciprocal",
+  "find": "\tinv = 1.0f / float_a950;",
+  "replace": "\tinv = float_a950;"
+ },
+ {
+  "label": "drop the unite threshold's rounding term",
+  "find": "\tshort_a9a4 = (short)(inv * 25.0f + 0.5f);",
+  "replace": "\tshort_a9a4 = (short)(inv * 25.0f);"
+ },
+ {
+  "label": "scale the unite threshold by the alt-RBS constant",
+  "find": "\tshort_a9a4 = (short)(inv * 25.0f + 0.5f);",
+  "replace": "\tshort_a9a4 = (short)(inv * 50.0f + 0.5f);"
+ },
+ {
+  "label": "drop the alt-RBS threshold's rounding term",
+  "find": "\tshort_a9a6 = (short)(inv * 50.0f + 0.5f);",
+  "replace": "\tshort_a9a6 = (short)(inv * 50.0f);"
+ },
+ {
+  "label": "move the scaled variance constant",
+  "find": "\t\tfloat f = inv * 4444.4443f;",
+  "replace": "\t\tfloat f = inv * 4444.0f;"
+ },
+ {
+  "label": "turn the variance ceiling into a floor",
+  "find": "\t\tif (f > 4000.0f)\n\t\t\tf = 4000.0f;",
+  "replace": "\t\tif (f < 4000.0f)\n\t\t\tf = 4000.0f;"
+ },
+ {
+  "label": "drop the variance ceiling",
+  "find": "\t\tif (f > 4000.0f)\n\t\t\tf = 4000.0f;",
+  "replace": "\t\tif (0)\n\t\t\tf = 4000.0f;"
+ },
+ {
+  "label": "move the scaled minimum-distance constant",
+  "find": "\tv = (short)(inv * 2777.7778f + 0.5f);",
+  "replace": "\tv = (short)(inv * 2777.0f + 0.5f);"
+ },
+ {
+  "label": "drop the minimum neighbour distance's clamp",
+  "find": "\tif (v > 2500)\n\t\tv = 2500;",
+  "replace": "\tif (0)\n\t\tv = 2500;"
+ },
+ {
+  "label": "clamp the minimum neighbour distance one low",
+  "find": "\tif (v > 2500)\n\t\tv = 2500;",
+  "replace": "\tif (v > 2499)\n\t\tv = 2499;"
+ },
+ {
+  "label": "move the scaled maximum-distance constant",
+  "find": "\tv = (short)(inv * 6666.667f + 0.5f);",
+  "replace": "\tv = (short)(inv * 6666.0f + 0.5f);"
+ },
+ {
+  "label": "drop the maximum neighbour distance's clamp",
+  "find": "\tif (v > 6000)\n\t\tv = 6000;",
+  "replace": "\tif (0)\n\t\tv = 6000;"
+ },
+ {
+  "label": "seed the mapping only when the gain IS zero",
+  "find": "\tif (float_a950 != 0.0f) {",
+  "replace": "\tif (float_a950 == 0.0f) {"
+ },
+ {
+  "label": "seed the mapping whatever the gain",
+  "find": "\tif (float_a950 != 0.0f) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "drop the seeded level's rounding term",
+  "find": "\t\tshort seed = (short)(ucodeLevel * inv + 0.5f);",
+  "replace": "\t\tshort seed = (short)(ucodeLevel * inv);"
+ },
+ {
+  "label": "scale the seeded level by the gain rather than its reciprocal",
+  "find": "\t\tshort seed = (short)(ucodeLevel * inv + 0.5f);",
+  "replace": "\t\tshort seed = (short)(ucodeLevel * float_a950 + 0.5f);"
+ },
+ {
+  "label": "seed only the plain mapping table",
+  "find": "\t\t\tlinMapp[phase][ucode] = seed;\n\t\t\tlinMappAlt[phase][ucode] = seed;",
+  "replace": "\t\t\tlinMapp[phase][ucode] = seed;"
+ },
+ {
+  "label": "seed five of the six phases",
+  "find": "\t\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\t\tlinMapp[phase][ucode] = seed;",
+  "replace": "\t\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\t\tlinMapp[phase][ucode] = seed;"
+ },
+ {
+  "label": "leave the QC branch's two counters alone",
+  "find": "\tint_a984 = 0;\n\tint_a988 = 0;\n}",
+  "replace": "\tint_a984 = 0;\n}"
+ },
+ {
+  "label": "report the alternate table's reference column",
+  "find": "\t\t linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],\n\t\t linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);",
+  "replace": "\t\t linMappAlt[0][ucode], linMappAlt[1][ucode], linMappAlt[2][ucode],\n\t\t linMappAlt[3][ucode], linMappAlt[4][ucode], linMappAlt[5][ucode]);"
+ },
+ {
+  "label": "report the two thresholds the other way round",
+  "find": "\tedprintf(\"uniteUrefDistanceThresh = %d\\r\\n\", short_a9a4);\n\tedprintf(\"altRbsDistanceThresh = %d\\r\\n\", short_a9a6);",
+  "replace": "\tedprintf(\"uniteUrefDistanceThresh = %d\\r\\n\", short_a9a6);\n\tedprintf(\"altRbsDistanceThresh = %d\\r\\n\", short_a9a4);"
+ },
+ {
+  "label": "report the neighbour distances the other way round",
+  "find": "\t\t neighborUcodeMinDistance, neighborUcodeMaxDistance);",
+  "replace": "\t\t neighborUcodeMaxDistance, neighborUcodeMinDistance);"
+ },
+ {
+  "label": "drop one of the two rules from the QC report",
+  "find": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"-------\\r\\n\");\n\tedprintf(\"V90AutoDigitalImpDetector::resetStudyUrefHandler QC report \"",
+  "replace": "\tedprintf(\"V90AutoDigitalImpDetector::resetStudyUrefHandler QC report \""
+ },
+ {
+  "label": "shorten the QC report's rule by one dash",
+  "find": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"-------\\r\\n\");\n\n\tint_a984 = 0;",
+  "replace": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"------\\r\\n\");\n\n\tint_a984 = 0;"
  }
 ]

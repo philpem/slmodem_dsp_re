@@ -22,6 +22,8 @@
 
 extern "C" {
 #include "dsplib/pcm.h"
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
 }
 
 #include "dsplib/V90AutoDigitalImpDetector.h"
@@ -96,6 +98,48 @@ ADID_OFF(short_a978,   0xa978, shorta978);
 ADID_OFF(short_a97a,   0xa97a, shorta97a);
 ADID_OFF(float_a97c,   0xa97c, floata97c);
 ADID_OFF(float_a980,   0xa980, floata980);
+
+/*
+ * THE ELEVEN THE STUDY BATCH ADDS, which between them retire every `pad_`
+ * region in the object outside the sample store.  Each names the instruction
+ * that fixed it; a `pad_` split is a claim about memory nothing tests, so the
+ * disassembly is the whole of the evidence.
+ *
+ * +0xa950  `flds 0xa950(%ebx)` at 0x408b4 in resetStudyUrefHandler -- a float,
+ *          and the divisor every threshold that method installs is scaled by.
+ * +0xa964  `flds 0xa964(%esi)` at 0x4124b in porcessFirstStudy, printed under
+ *          the name "2.5*trn1Sigma"; `fsts 0xa964(%ebx)` in studyUrefHandler.
+ * +0xa96a  `movb $0x0,0xa96a(%esi)` and `incb 0xa96a(%esi)` in
+ *          porcessFirstStudy -- one byte, counting the phases it flags.
+ * +0xa984  `mov %ecx,0xa984(%ebx)` (zero) in resetStudyUrefHandler and
+ *          `mov 0xa984(%ebx),%eax` in studyUrefHandler: 32 bits, integer.
+ * +0xa988  `incl 0xa988(%ebx)` in studyUrefHandler -- a 32-bit counter, so
+ *          not a float whatever the zero store alone would allow.
+ * +0xa98c..+0xa9a0  six 32-bit `mov` copies out of the parameter block, at
+ *          0x408cc..0x40913 and again at 0x40a36..0x40a94; five of the six are
+ *          then compared against +0xa988 with `cmp`/`je` in studyUrefHandler.
+ * +0xa9a8  `fstps 0xa9a8(%ebx)` at 0x40954 and `flds 0xa9a8(%edx)` at 0x40875
+ *          in getAltVarThresh -- a float, printed as "altMinVarThresh".
+ * +0xa9ac  `mov %ax,0xa9ac(%ebx)` at 0x4099c and `filds 0xa9ac(%esi)` at
+ *          0x41251 -- a short, printed as "neighborUcodeMinDistance".
+ * +0xa9ae  `mov %cx,0xa9ae(%ebx)` and `filds 0xa9ae(%esi)` at 0x4126c -- a
+ *          short, and the displacement the object's size is measured from.
+ */
+ADID_OFF(float_a950,   0xa950, floata950);
+ADID_OFF(trn1Sigma,    0xa964, trn1sigma);
+ADID_OFF(byte_a96a,    0xa96a, bytea96a);
+ADID_OFF(int_a984,     0xa984, inta984);
+ADID_OFF(int_a988,     0xa988, inta988);
+ADID_OFF(int_a98c,     0xa98c, inta98c);
+ADID_OFF(int_a990,     0xa990, inta990);
+ADID_OFF(int_a994,     0xa994, inta994);
+ADID_OFF(int_a998,     0xa998, inta998);
+ADID_OFF(int_a99c,     0xa99c, inta99c);
+ADID_OFF(int_a9a0,     0xa9a0, inta9a0);
+ADID_OFF(altMinVarThresh,          0xa9a8, altminvarthresh);
+ADID_OFF(neighborUcodeMinDistance, 0xa9ac, neighborucodemin);
+ADID_OFF(neighborUcodeMaxDistance, 0xa9ae, neighborucodemax);
+
 typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 
 #endif /* 32-bit */
@@ -109,10 +153,25 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
  */
 #define V90PARAMETERS_CONNECTION_TYPE 0x0c
 
+/*
+ * The two six-word blocks `resetStudyUrefHandler` copies into +0xa98c..+0xa9a0.
+ * Which one it takes is its argument: nonzero picks the first.  Both are read
+ * as 32-bit words and nothing here interprets them, so they stay numeric for
+ * the same reason the connection type does.
+ */
+#define V90PARAMETERS_STUDY_QC		0x4a8
+#define V90PARAMETERS_STUDY_PLAIN	0x348
+
 static short
 paramShort(const V90Parameters *p, unsigned int off)
 {
 	return *(const short *)((const unsigned char *)p + off);
+}
+
+static int
+paramWord(const V90Parameters *p, unsigned int off)
+{
+	return *(const int *)((const unsigned char *)p + off);
 }
 
 /*
@@ -844,4 +903,490 @@ V90AutoDigitalImpDetector::updateUref()
 		uint_1c00[phase][ucode] = 0;
 		float_9118[phase][ucode] = 0.0f;
 	}
+}
+
+/*
+ * ==========================================================================
+ * The study methods -- the four that set the thresholds up, run the first
+ * study over them, and pool what it found.
+ *
+ * ALL FOUR TALK, AND THAT IS HALF OF WHY THEY ARE WORTH HAVING.  Between them
+ * they make twelve `edprintf` calls and one `dsplibs_debug_printf`, and the
+ * format strings are the original author's names for six fields this batch
+ * would otherwise have had to call `short_a9ac` and `float_a9a8`.
+ * `trn1Sigma`, `neighborUcodeMinDistance`, `neighborUcodeMaxDistance`,
+ * `altMinVarThresh`, `uniteUrefDistanceThresh` and `altRbsDistanceThresh` are
+ * all read straight off the wire this way.
+ *
+ * A FLOAT IS PRINTED AS `%c%d.%02d`, never with `%f`.  The object has no
+ * floating-point formatting at all: every one of these sites takes the sign,
+ * the truncated magnitude and a hundredths digit as three integers.  The
+ * three macros below are that idiom, and each is written to the branch the
+ * object actually encodes rather than to the one that reads naturally --
+ * see ADID_PRINT_SIGN.
+ * ==========================================================================
+ */
+
+/*
+ * THE SIGN TEST IS BACKWARDS FROM THE OBVIOUS SPELLING, and a NaN is what
+ * separates them.  The object compares with `fcom` against a zero in %st(0)
+ * and takes '+' when CF is set -- and an UNORDERED compare sets CF, so a NaN
+ * prints '+' where `v > 0.0f ? '+' : '-'` would print '-'.  Written as the
+ * negation of the ordered test, which is what the branch encodes.  A seeded
+ * object reaches this: one 32-bit pattern in 128 is a NaN.
+ */
+#define ADID_PRINT_SIGN(v)	((0.0f >= (v)) ? '-' : '+')
+
+/* `fabs` then a truncating `fistpl`. */
+#define ADID_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
+
+/*
+ * The hundredths: the fractional part scaled and truncated, then made
+ * positive with the integer `cltd; xor; sub` the class uses everywhere.  The
+ * scale is passed in because it is NOT the same constant at the two sites --
+ * `getAltVarThresh` multiplies by the double at `.rodata.cst8+0xe0` and
+ * `resetStudyUrefHandler` by the float at `.rodata.cst4+0x320`, both 100.
+ */
+#define ADID_PRINT_FRAC(v, scale) \
+	adid_abs((int)((scale) * ((v) - (float)(int)(v))))
+
+/*
+ * The variance threshold the alternate-RBS test runs against, from the six
+ * per-phase variances the caller hands in.
+ *
+ * IT IS THE MEAN OF THE BELOW-AVERAGE HALF, not the mean.  The six are summed,
+ * the sum is multiplied by 1/6 to get the average, and only the entries
+ * strictly below the average are averaged again -- so a single wild phase is
+ * excluded from the threshold it would otherwise set.  That answer is scaled
+ * by the caller's factor and then floored at `altMinVarThresh`.
+ *
+ * THE TWO COMPARISONS ARE WRITTEN AS THE OBJECT'S BRANCHES AND NOT AS THEIR
+ * READABLE OPPOSITES.  `jae` over the accumulate means the entry joins the
+ * average when it is NOT ordered-greater-or-equal, so a NaN variance joins
+ * where `var[i] < lim` would exclude it.  The floor at the end is an ordered
+ * `>` and needs no such care.
+ *
+ * NOTHING BOUNDS THE COUNT.  If every entry equals the average -- six equal
+ * variances, which a cleared object has -- none is below it, the count stays
+ * zero and the mean is 0.0f/0, a NaN that propagates through the factor and
+ * past the floor into the return value.  docs/deviations.md D282.
+ */
+float
+V90AutoDigitalImpDetector::getAltVarThresh(float *var, float factor)
+{
+	float sum = 0.0f;
+	float below = 0.0f;
+	float lim, mean, thresh;
+	short count = 0;
+	short i;
+
+	for (i = 0; i < V90ADID_PHASES; i++)
+		sum += var[i];
+
+	lim = sum * 0.16666667f;
+
+	for (i = 0; i < V90ADID_PHASES; i++) {
+		if (var[i] >= lim)
+			continue;
+		below += var[i];
+		count = (short)(count + 1);
+	}
+
+	mean = below / count;
+	thresh = factor * mean;
+
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: meanVar = "
+		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(mean), ADID_PRINT_WHOLE(mean),
+		 ADID_PRINT_FRAC(mean, 100.0));
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: factor = "
+		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(factor),
+		 ADID_PRINT_WHOLE(factor), ADID_PRINT_FRAC(factor, 100.0));
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: initial varThresh "
+		 "= %c%d.%02d\r\n", ADID_PRINT_SIGN(thresh),
+		 ADID_PRINT_WHOLE(thresh), ADID_PRINT_FRAC(thresh, 100.0));
+
+	if (altMinVarThresh > thresh)
+		thresh = altMinVarThresh;
+
+	return thresh;
+}
+
+/*
+ * Pool the unsuspected phases' accumulators for one code and give every
+ * unsuspected phase the pooled answer.
+ *
+ * The shape is `unitePhasesInfoOfUref`'s -- group the phases that are not
+ * flagged, pick the biggest group, average it -- with three differences that
+ * are the object's and are each written down:
+ *
+ * THE FLAG IS +0x280c, NOT +0x2800.  `unitePhasesInfoOfUref` groups on the
+ * per-phase short at +0x2800; this groups on the byte at +0x280c, which is
+ * what `porcessFirstStudy` writes.  So the two methods answer to different
+ * flags and the pair is not a copy.
+ *
+ * THE MERGE TEST IS AGAINST A VARIANCE, NOT A CONSTANT DISTANCE.  Two phases
+ * join when the square of the difference between their entries is less than
+ * a quarter of the LEADER's variance, so the tolerance is per phase and per
+ * code rather than the single `short_a9a4` the other method uses.  An
+ * unordered compare MERGES -- `jae` skips and CF is set by an unordered
+ * `fcompp` -- so a NaN variance at +0x9d48 pools everything behind it, which
+ * `updateLinMappMeanAndVar` can produce and a seeded object reaches directly.
+ *
+ * THERE IS NO CONVERGENCE LOOP.  One pass, not `unitePhasesInfoOfUref`'s
+ * do/while.
+ *
+ * `count` IS NEVER RESET PER GROUP (D283) and `bestGroup` is read
+ * uninitialised when no group is ever formed (D284); both are below.
+ */
+void
+V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
+{
+	short group[V90ADID_PHASES];
+	short best = 0;
+	short total;
+	float fsum, fsq, inv, mean, var;
+	short r;
+	unsigned char i, j;
+
+	/*
+	 * THE RUNNING SIZE IS SET ONCE, OUTSIDE THE LOOP THAT USES IT.  The
+	 * object stores 1 into it at 0x4159a, before the scan begins, and the
+	 * only other write is the increment inside the inner loop -- so a
+	 * second group starts counting from wherever the first one finished
+	 * and "the biggest group" is really "the last group that merged
+	 * anything".  docs/deviations.md D283.
+	 */
+	short count = 1;
+
+	/*
+	 * Left uninitialised because the object leaves it uninitialised: the
+	 * only path that reads it unwritten needs all five of phases 0..4
+	 * flagged at +0x280c, and there the object's answer is not a function
+	 * of its inputs at all.  docs/deviations.md D284, and the test keeps
+	 * off it for D281's reason.
+	 */
+	short bestGroup;
+
+	for (i = 0; i < V90ADID_PHASES; i++)
+		group[i] = ADID_NO_GROUP;
+
+	/*
+	 * i stops at 4: the inner loop only ever looks forward, so the last
+	 * phase can never lead a group.
+	 */
+	for (i = 0; i < V90ADID_PHASES - 1; i++) {
+		if (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)
+			continue;
+
+		group[i] = i;
+
+		for (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {
+			float d;
+
+			if (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)
+				continue;
+
+			d = (float)(linMapp[i][at] - linMapp[j][at]);
+
+			/* Unordered merges -- see the head comment. */
+			if (d * d >= float_9d48[i][at] * 0.25f)
+				continue;
+
+			group[j] = i;
+			count = (short)(count + 1);
+		}
+
+		if (count > best) {
+			best = count;
+			bestGroup = i;
+		}
+	}
+
+	total = 0;
+	fsum = 0.0f;
+	fsq = 0.0f;
+
+	for (j = 0; j < V90ADID_PHASES; j++) {
+		if (byte_280c[j] != 0 || group[j] != bestGroup)
+			continue;
+
+		fsum += float_1000[j][at];
+		fsq += float_9118[j][at];
+
+		/*
+		 * The pooled count is a `short` and the counts it pools are
+		 * `unsigned int`: the object truncates with `cwtl` after every
+		 * add, the same as `unitePhasesInfoOfUref`.
+		 */
+		total = (short)(total + uint_1c00[j][at]);
+	}
+
+	/*
+	 * AN EMPTY POOL LEAVES EVERYTHING ALONE -- not the mapping, not the
+	 * variance, and NOT the accumulators, which every other exit clears.
+	 * The object returns straight out at 0x41618 with two values still on
+	 * the FPU stack and nothing written.
+	 */
+	if (total == 0)
+		return;
+
+	inv = 1.0f / total;
+	mean = fsum * inv;
+	var = fsq * inv - mean * mean;
+	r = (short)(mean + 0.5f);
+
+	/*
+	 * EVERY unsuspected phase gets the answer, not just the members of the
+	 * chosen group -- there is no `group[j] == bestGroup` test here, only
+	 * the flag.  The clearing below it is unconditional and covers the
+	 * suspected phases too.
+	 */
+	for (j = 0; j < V90ADID_PHASES; j++) {
+		if (byte_280c[j] == 0) {
+			linMapp[j][at] = r;
+			float_9d48[j][at] = var;
+		}
+
+		float_1000[j][at] = 0.0f;
+		uint_1c00[j][at] = 0;
+		float_9118[j][at] = 0.0f;
+	}
+}
+
+/*
+ * The first study: turn the middle of each phase's accumulators into a
+ * mapping, decide which phases are too rough to trust, and empty everything.
+ *
+ * THE MEAN LOOP ONLY COVERS CODES 0x40..0x4f.  Sixteen codes out of the 128,
+ * and the reference code is skipped inside them -- so this is a study of the
+ * middle of the companding law and not of the whole of it.  The rough-phase
+ * test that follows runs over the fifteen adjacent differences inside the
+ * same window.
+ *
+ * A PHASE IS SUSPECTED UNLESS MORE THAN NINE OF ITS FIFTEEN NEIGHBOURING
+ * DIFFERENCES ARE LARGE.  The counter starts at 1 rather than 0, so "more
+ * than nine" needs nine differences over the threshold and not ten; a phase
+ * already flagged at +0x2800 skips the count entirely and is suspected on
+ * that alone.  Every suspected phase also bumps the tally at +0xa96a.
+ *
+ * THE CLEARING PASS SPARES ONE ENTRY.  `linMapp[phase][ucode]` is the only
+ * mapping entry not zeroed, because the loop is split around `ucode` and the
+ * middle step clears the three accumulators without touching the mapping --
+ * so the seed `resetLinearMapping` put there survives the study.  `ucode` is
+ * a byte and the row is 128 wide, and the object masks it nowhere: a
+ * reference code of 128 or more walks the split into the next phase's row.
+ */
+void
+V90AutoDigitalImpDetector::porcessFirstStudy()
+{
+	float sqrDiffThresh;
+	float t;
+	unsigned char phase;
+	unsigned char code;
+
+	/*
+	 * 2.5 sigma, clamped between the two neighbour distances.  Both
+	 * comparisons are the object's `fcom`/`jae` and keep the RIGHT operand
+	 * when the compare is unordered, which is what the ternaries spell.
+	 */
+	t = trn1Sigma * 2.5f;
+	t = (t >= (float)neighborUcodeMinDistance)
+		? t : (float)neighborUcodeMinDistance;
+	sqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)
+		? t : (float)neighborUcodeMaxDistance;
+
+	edprintf("V90AutoDigitalImpDetector::porcessFirstStudy()  "
+		 "2.5*trn1Sigma=%d , sqrDiffThresh=%d\n",
+		 (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		for (code = 0x40; code <= 0x4f; code++) {
+			float inv, mean;
+
+			if (ucode == code)
+				continue;
+			if (uint_1c00[phase][code] == 0)
+				continue;
+
+			inv = 1.0f / uint_1c00[phase][code];
+			mean = float_1000[phase][code] * inv;
+
+			float_9d48[phase][code] =
+			    inv * float_9118[phase][code] - mean * mean;
+			linMapp[phase][code] = (short)(mean + 0.5f);
+		}
+	}
+
+	byte_a96a = 0;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		short n = 1;
+
+		if (short_2800[phase] == 0) {
+			for (code = 0x40; code <= 0x4e; code++) {
+				float d = (float)(linMapp[phase][code + 1]
+						  - linMapp[phase][code]);
+
+				if (d * d > sqrDiffThresh)
+					n = (short)(n + 1);
+			}
+
+			if (n > 9) {
+				byte_280c[phase] = 0;
+				continue;
+			}
+		}
+
+		byte_a96a++;
+		byte_280c[phase] = 1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90AutoDigitalImpDetector: suspected rbs "
+				     "patern  %d%d%d%d%d%d\r\n", byte_280c[0],
+				     byte_280c[1], byte_280c[2], byte_280c[3],
+				     byte_280c[4], byte_280c[5]);
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		unsigned char k;
+
+		for (k = 0; k < ucode; k++) {
+			float_1000[phase][k] = 0.0f;
+			uint_1c00[phase][k] = 0;
+			float_9118[phase][k] = 0.0f;
+			linMapp[phase][k] = 0;
+		}
+
+		uint_1c00[phase][ucode] = 0;
+		float_1000[phase][ucode] = 0.0f;
+		float_9118[phase][ucode] = 0.0f;
+
+		/*
+		 * The counter is a byte and the object tests its SIGN bit, so
+		 * this stops at 127 and a `ucode` of 0xff wraps the start to 0
+		 * and clears the whole row.  Both are what `unsigned char k =
+		 * ucode + 1; k < 128` does in C.
+		 */
+		for (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {
+			uint_1c00[phase][k] = 0;
+			float_1000[phase][k] = 0.0f;
+			float_9118[phase][k] = 0.0f;
+			linMapp[phase][k] = 0;
+		}
+	}
+}
+
+/*
+ * Install the study's thresholds, either from the parameter block's QC set or
+ * from the fixed defaults, and report what was installed.
+ *
+ * THE ARGUMENT IS A FLAG AND NOT A COUNT.  Zero takes the second branch
+ * entirely: six words out of the parameter block at +0x348, five constants,
+ * and a return -- no arithmetic, no scaling and NOT ONE `edprintf`.  Nonzero
+ * takes the first: a different six words at +0x4a8, and every threshold
+ * derived from `1.0f / float_a950` and then clamped at exactly the value the
+ * zero branch would have used.  So the two branches agree when the gain is 1
+ * for three of the five and differ for the other two, which is how the
+ * constants were read as a scale rather than as replacements.
+ *
+ * THE SEEDING OF THE MAPPING IS GUARDED ON THE GAIN BEING NONZERO, and the
+ * DIVISION IS NOT.  `1.0f / float_a950` is formed at the top of the branch
+ * whatever the gain is, so a gain of zero still produces infinities and
+ * stores 0x8000 through every `fistp` on the way; only the write of
+ * `ucodeLevel / gain` into the two mapping tables is skipped.  That ordering
+ * is the object's -- the compare against 0.0f is at 0x409d2, five stores
+ * later -- and it is why a zero gain is a state this method leaves behind
+ * rather than one it refuses.
+ */
+void
+V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
+{
+	float inv;
+	short v;
+	short phase;
+
+	if (qc == 0) {
+		int_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x00);
+		int_a990 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x04);
+		int_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x08);
+		int_a998 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x0c);
+		int_a99c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x10);
+		int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);
+
+		short_a9a4 = 25;
+		short_a9a6 = 50;
+		altMinVarThresh = 4000.0f;
+		neighborUcodeMinDistance = 2500;
+		neighborUcodeMaxDistance = 6000;
+
+		int_a984 = 0;
+		int_a988 = 0;
+		return;
+	}
+
+	inv = 1.0f / float_a950;
+
+	int_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);
+	int_a990 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x04);
+	int_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);
+	int_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);
+	int_a99c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x10);
+	int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x14);
+
+	short_a9a4 = (short)(inv * 25.0f + 0.5f);
+
+	/*
+	 * Clamped BEFORE the store, not after it: the object compares the
+	 * product while it is still in %st(0) at extended precision and stores
+	 * once.  A local keeps the comparison on the same value.
+	 */
+	{
+		float f = inv * 4444.4443f;
+
+		if (f > 4000.0f)
+			f = 4000.0f;
+		altMinVarThresh = f;
+	}
+
+	short_a9a6 = (short)(inv * 50.0f + 0.5f);
+
+	v = (short)(inv * 2777.7778f + 0.5f);
+	if (v > 2500)
+		v = 2500;
+	neighborUcodeMinDistance = v;
+
+	v = (short)(inv * 6666.667f + 0.5f);
+	if (v > 6000)
+		v = 6000;
+	neighborUcodeMaxDistance = v;
+
+	if (float_a950 != 0.0f) {
+		short seed = (short)(ucodeLevel * inv + 0.5f);
+
+		for (phase = 0; phase < V90ADID_PHASES; phase++) {
+			linMapp[phase][ucode] = seed;
+			linMappAlt[phase][ucode] = seed;
+		}
+	}
+
+	edprintf("--------------------------------------------------------"
+		 "-------\r\n");
+	edprintf("V90AutoDigitalImpDetector::resetStudyUrefHandler QC report "
+		 ":\r\n");
+	edprintf("prevSession uinfo : %d %d %d %d %d %d\r\n",
+		 linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],
+		 linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);
+	edprintf("uniteUrefDistanceThresh = %d\r\n", short_a9a4);
+	edprintf("altRbsDistanceThresh = %d\r\n", short_a9a6);
+	edprintf("neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d\r\n",
+		 neighborUcodeMinDistance, neighborUcodeMaxDistance);
+	edprintf("altMinVarThresh = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(altMinVarThresh),
+		 ADID_PRINT_WHOLE(altMinVarThresh),
+		 ADID_PRINT_FRAC(altMinVarThresh, 100.0f));
+	edprintf("--------------------------------------------------------"
+		 "-------\r\n");
+
+	int_a984 = 0;
+	int_a988 = 0;
 }

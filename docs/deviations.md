@@ -5025,3 +5025,40 @@ It does not make the method loop for ever or terminate early in any way that has
 The grouping loop runs `i` over 0..4 and skips any phase that is flagged, so if all five are flagged it never executes, the two locals are never written, and the final loop stores a NaN and four bytes of stack residue into `linMapp` and `float_9d48` for all six phases. Reproduced as it is -- `bestValue` is declared and deliberately not initialised, because giving it a value would be inventing behaviour rather than reproducing it, and the blob's behaviour on that path is not a function of its inputs.
 
 **The test cannot compare that path and says so at the line that avoids it.** Two builds have two stack frames, so the residue differs between the sides for reasons that have nothing to do with the reconstruction; `t_v90adid` therefore always leaves at least one of phases 0..4 clear. Every other arm of the method is driven and compared.
+
+## D282 🐛 `getAltVarThresh` divides by a count that can be zero
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::getAltVarThresh` (blob 0x40650, 581 bytes), +0x7c (`de fa`, which prints `fdivrp` and IS `FDIVP` -- finding 245). **Reachability: needs no entry strictly below the average of the six**, which SIX EQUAL VALUES give -- and six equal zeros is what `reset` leaves at +0x9d48 until a study has run. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1424.** The method averages the six per-phase variances, averages again over only the entries strictly below that average, and scales the second average by its caller's factor. The second average is `below / count` with `count` a `short` counted in the same loop that selects the entries, and there is nothing between the loop and the division -- no test, no default. If every entry equals the average, nothing is selected, `count` is zero, `below` is zero, and the division is 0.0f/0, which the x87 answers with the real indefinite 0xffc00000. That NaN survives the multiplication by the factor, survives the floor at `altMinVarThresh` -- an ordered `>` is false against a NaN -- and is what the method returns.
+
+The floor is what makes it look defended and is not: `if (altMinVarThresh > thresh)` fires only when the comparison is ordered, so the one value the floor exists to prevent is the one value it lets through.
+
+Reproduced as it is, and `t_v90adid` carries a row of six equal entries and a row of six zeros precisely to reach it. The return value is compared as a BIT PATTERN rather than with `==`, because `==` is false for a NaN on both sides and would have passed for ever on exactly this arm.
+
+## D283 🐛 `uniteLinMappInfoOfUnsuspectedPhases` never resets its running group size
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases` (blob 0x41550, 601 bytes), +0x4a. **Reachability: FIRES whenever more than one group forms**, which needs three unsuspected phases with two of them out of each other's tolerance. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1426.** The method groups the unsuspected phases, keeps the largest group, and pools that group's accumulators. The size counter is set to 1 exactly once, at 0x4159a, BEFORE the scan that uses it:
+
+    41586: mov    $0x1,%ebp
+    4159a: mov    %ebp,0x24(%esp)        ; count = 1, outside the loop
+    415a8: ...                           ; the scan over i starts here
+    41772: mov    %eax,0x24(%esp)        ; the only other write: count + 1
+
+`unitePhasesInfoOfUref`, which is the same shape, sets its own counter to 1 inside the loop beside `group[i] = i`. Here it is hoisted out, and a store of a constant cannot be hoisted out of a loop that also increments it -- so this is the source and not the optimiser. The consequence is that the second group starts counting from wherever the first finished: "the largest group" is really "the last group that merged anything", and a first group of three followed by a second group of two selects the second.
+
+`t_v90adid` separates the two spellings with a directed block -- two groups of two, phases 0-1 and 2-3, with different means. Reset-per-group makes both size 2 and keeps the first; the object's running counter makes the second size 3 and keeps IT, and the two write different means into every unsuspected phase.
+
+It also makes one of the method's other bounds untestable, which is recorded as a proven-equivalent mutation rather than as an uncaught one: because `count` never decreases, `best` always equals `count` by the end of an iteration, so letting the sixth phase lead a group can never beat the running best and the change cannot be observed. That argument is finding 1426's, above.
+
+## D284 🐛 `uniteLinMappInfoOfUnsuspectedPhases` reads an uninitialised group number
+
+*Batch of 2026-08-12, same function, +0xad (`mov 0x1c(%esp),%ebp`). **Reachability: needs `byte_280c[0..4]` ALL nonzero**, and unlike D281's condition this one has a producer -- `porcessFirstStudy` sets all six on a mapping smooth enough that no phase collects nine rough neighbours. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1427.** The scan writes `bestGroup` at 0x4178c and nothing else does; the pooling loop at 0x415fd reads it. The scan skips a phase that is suspected or already grouped, so if all five of phases 0..4 are suspected it never executes and the stack slot at `0x1c(%esp)` is read having never been written. The pooling then keeps whatever phases happen to match four bytes of stack residue, and the mean it writes into every unsuspected phase is a function of the frame rather than of the object.
+
+It is the same shape as D281 and reproduced the same way -- `bestGroup` is declared and deliberately left uninitialised, because giving it a value would invent behaviour the blob does not have. **The test cannot compare that path**, for D281's reason: two builds have two stack frames. `t_v90adid` always leaves phase `trial % 5` unsuspected in the sweep, and the forty-block sequence forces `byte_280c` explicitly before every call rather than letting `porcessFirstStudy`'s output arrange it -- which is exactly the state that would reach this.
+
+The difference from D281 is that this one is reachable from inside the class. D281 needs a caller to flag every phase at +0x2800; this needs `porcessFirstStudy` to find every phase smooth, which is what a clean line produces.

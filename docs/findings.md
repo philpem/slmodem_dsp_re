@@ -44610,3 +44610,233 @@ installed.  All three are the same lesson as finding 1366: the witness has to
 be constructed from what the code does, and a sweep will not find it.
 
 ======================================================================
+
+### 1424. THE FOUR STUDY METHODS, AND THE LAST OF THE OBJECT'S PAD REGIONS
+
+`getAltVarThresh` (0x40650, 581 bytes), `resetStudyUrefHandler` (0x408a0, 976),
+`porcessFirstStudy` (0x41240, 779) and `uniteLinMappInfoOfUnsuspectedPhases`
+(0x41550, 601) are reconstructed and differentially tested, taking
+`V90AutoDigitalImpDetector` to twenty-four of its thirty-two members and 2,937
+more bytes.  All four are leaves: measured over every `R_386_PC32` in the
+class, they call `edprintf` and `dsplibs_debug_printf` and nothing else.
+
+**BETWEEN THEM THEY TAKE THE OBJECT'S FOUR REMAINING `pad_` RUNS FROM 57 BYTES
+TO 8.**  The four were +0xa950 (6), +0xa960 (11), +0xa984 (32) and +0xa9a8 (8);
+49 of those bytes are now named, the last two runs are gone entirely, and what
+is left is three small gaps -- `pad_a954[2]`, `pad_a960[4]` and `pad_a968[2]`
+-- which no member of the class touches.  Two older two-byte runs at +0x2812
+and +0xa94a are untouched by this batch, so the object still carries 12 bytes
+of `pad_` in five runs.  Each name below is the instruction that fixed it and
+nothing else, because no test in this tree can see a field's type or its
+extent:
+
+    +0xa950  float   flds  0xa950(%ebx)   resetStudyUrefHandler 0x408b4
+    +0xa964  float   flds  0xa964(%esi)   porcessFirstStudy     0x4124b
+    +0xa96a  uchar   incb  0xa96a(%esi)   porcessFirstStudy     0x41407
+    +0xa984  int     mov   %ecx,0xa984    resetStudyUrefHandler 0x40abd
+    +0xa988  int     incl  0xa988(%ebx)   studyUrefHandler      0x421c1
+    +0xa98c..+0xa9a0  six 32-bit words out of the parameter block, five of
+                      which studyUrefHandler compares against +0xa988
+    +0xa9a8  float   fstps 0xa9a8(%ebx)   resetStudyUrefHandler 0x40954
+    +0xa9ac  short   filds 0xa9ac(%esi)   porcessFirstStudy     0x41251
+    +0xa9ae  short   filds 0xa9ae(%esi)   porcessFirstStudy     0x4126c
+
+The six words at +0xa98c are eight scalars and not an array, because the object
+copies them with eight independent instruction pairs and a loop over an array
+would be a loop.  A 32-bit `mov` names no type, so the copy alone settles
+nothing; it is `studyUrefHandler`'s `incl` and `cmp` on the same addresses that
+rules out `float`, and the signedness is still open because every compare seen
+is an equality.
+
+**`getAltVarThresh` RETURNS A FLOAT** and the mangling does not say so -- a
+return type is never mangled.  The evidence is `flds 0x34(%esp)` immediately
+before the epilogue at 0x4088c, leaving a value in %st(0) and nothing in %eax.
+x87 cannot distinguish a `float` return from a `double` one here, since both
+come back in %st(0) and the value loaded is a float either way; `float` is the
+narrower reading and carries the extra fact that what comes back is a float
+local.  The header used to declare it `void`, which would have thrown the
+answer away.
+
+**FOUR OF THE FIVE FLOATING-POINT BRANCHES IN THESE METHODS HAD TO BE WRITTEN
+AS THE NEGATION OF THE READABLE TEST**, and a NaN is what separates them.  An
+unordered `fcom` sets CF, so `jae` is NOT taken and the fall-through arm runs:
+
+  - `getAltVarThresh` accumulates an entry when `jae` is not taken, so a NaN
+    variance JOINS the below-average set where `var[i] < lim` would exclude it;
+  - the same idiom in the printing helper takes '+' for a NaN where
+    `v > 0.0f ? '+' : '-'` would take '-';
+  - `uniteLinMappInfoOfUnsuspectedPhases` MERGES on an unordered compare, so a
+    NaN leader variance pools everything behind it;
+  - `porcessFirstStudy`'s two clamps keep the right-hand operand when the
+    compare is unordered, which is what the ternaries spell.
+
+None of this is hypothetical.  One 32-bit pattern in 128 is a NaN, so a seeded
+object reaches every one of them, and `updateLinMappMeanAndVar` can put a NaN
+at +0x9d48 from ordinary inputs.  `t_v90adid` carries a NaN row in the variance
+table and a NaN entry in the six-element input array for that reason.
+
+======================================================================
+
+### 1425. THE OBJECT NAMES SIX OF ITS OWN FIELDS, THROUGH ITS FORMAT STRINGS
+
+Data member names are not mangled (finding 226) and every name in this class
+was invented until this batch.  The study methods print, and what they print
+their own fields as is the original author's spelling:
+
+    +0xa964  "2.5*trn1Sigma=%d"                      -> trn1Sigma
+    +0xa9a4  "uniteUrefDistanceThresh = %d"          -> the grouping threshold
+    +0xa9a6  "altRbsDistanceThresh = %d"             -> the isAltRbs threshold
+    +0xa9ac  "neighborUcodeMinDistance=%d ..."       -> the lower clamp
+    +0xa9ae  "... neighborUcodeMaxDistance=%d"       -> the upper clamp
+    +0xa9a8  "altMinVarThresh = %c%d.%02d"           -> getAltVarThresh's floor
+
+Each is a `%d` whose argument is a load of exactly that displacement, so the
+association is an instruction and not a guess.  Two more come free: "prevSession
+uinfo : %d %d %d %d %d %d" prints `linMapp[0..5][ucode]`, which names the
+reference code's column *uinfo*, and the method that computes them is called
+`resetStudyUrefHandler` -- so `uref` is the reference code and the class's
+`updateUref`/`unitePhasesInfoOfUref` are about that column.
+
+**FOUR OF THE SIX ARE ADOPTED AS IDENTIFIERS AND TWO ARE NOT.**  +0xa9a4 and
++0xa9a6 were already spelled `short_a9a4` and `short_a9a6` in three files and a
+mutation set before this batch read the strings, and a rename that resolves
+everywhere is exactly the change `refcheck.py` cannot check.  The names are
+recorded in the header comment at each field instead, which is the same
+information at none of the risk.  If they are ever renamed, this finding is
+where to say what they used to be called.
+
+**THE OBJECT HAS NO FLOATING-POINT FORMATTING AT ALL.**  Every float it prints
+goes out as `%c%d.%02d` from three integers: the sign, `(int)fabsf(v)`, and
+`abs((int)(100 * (v - (float)(int)v)))`.  It is spelled out four times across
+these two methods, and the scale is NOT the same constant at the two sites --
+`getAltVarThresh` multiplies by the double at `.rodata.cst8+0xe0` and
+`resetStudyUrefHandler` by the float at `.rodata.cst4+0x320`, both 100.  The
+two give identical results on an x87 and are written as they are found.
+
+======================================================================
+
+### 1426. A RUNNING COUNTER THAT MAKES ITS OWN LOOP BOUND UNTESTABLE
+
+`uniteLinMappInfoOfUnsuspectedPhases` sets its group-size counter to 1 once,
+outside the scan that uses it -- docs/deviations.md D283 has the disassembly
+and what it costs the method.  The part worth recording here is the second
+effect, because it is the reason one of this batch's mutations is filed as
+proven-equivalent rather than as an uncaught gap.
+
+`best` is updated only when `count` exceeds it, and `count` never decreases.
+So after any iteration, either `best` was just set to `count` or `count` was
+already no greater than `best` -- and since `count` only grows and `best` is
+one of its past values, that means `best == count` at the end of every
+iteration.  The test at a hypothetical sixth leader can therefore NEVER fire.
+
+That is what makes "let the last phase lead a group" -- the outer bound of 5
+widened to 6 -- unobservable: phase 5 would take a group number without ever
+becoming `bestGroup`, and the pooling compares against `bestGroup`, which is
+always one of 0..4.  The only path where the two differ is the one where no
+group forms at all, and that path reads `bestGroup` uninitialised (D284) and
+cannot be compared.
+
+**A BOUND THAT CANNOT BE MEASURED IS STILL A BOUND**, and this is the
+distinction mutate.py's `equivalent` key exists for: the entry stays in the set
+with the argument attached, because "we tried this and it survived for a
+reason" is worth more than the absence of an entry, which reads as nobody
+having thought of it.  Two more in the same method are equivalent for their own
+reasons -- looking backwards for group members can only ever `continue`,
+because a phase below the leader is either suspected or was itself a leader;
+and dropping the suspected test from the pooling changes nothing, because a
+suspected phase is never given a group number in the first place.
+
+======================================================================
+
+### 1427. THE FIRST STUDY IS THE PRODUCER FOR THE UNINITIALISED READ
+
+D281 records `unitePhasesInfoOfUref` reading an uninitialised local when every
+phase is flagged at +0x2800, and says that no written caller produces that
+state.  D284 is the same shape in `uniteLinMappInfoOfUnsuspectedPhases`, on the
+BYTE at +0x280c rather than the short at +0x2800 -- and this one has a producer
+inside the class.
+
+`porcessFirstStudy` writes +0x280c for all six phases, and it writes 1 --
+suspected -- unless the phase collects MORE THAN NINE rough neighbours out of
+fifteen.  A rough neighbour is one whose squared difference exceeds
+2.5 * `trn1Sigma`, clamped between the two neighbour distances.  A smooth
+mapping, which is what a clean line produces, collects none: the counter starts
+at 1, ends at 1, and every phase comes out suspected.  Feed that straight into
+`uniteLinMappInfoOfUnsuspectedPhases` and no group forms.
+
+So the two methods compose into the uninitialised read, and a test that chained
+them the obvious way would be nondeterministic -- passing or failing on what
+two different stack frames happen to hold.  `t_v90adid`'s forty-block sequence
+therefore forces +0x280c explicitly before every unite call rather than letting
+the study's output arrange it, and says so at the line that does it.  That is a
+DIFFERENT guard from the one the same run already had, which is on +0x2800 for
+D281; the two flags are separate fields and separate hazards.
+
+**THE GENERAL SHAPE:** when a batch lands two methods where one writes the
+state the other reads uninitialised, the composition is the test's problem
+before it is the modem's.  Chaining them is the realistic sequence and is
+exactly what must not be done.
+
+======================================================================
+
+### 1428. COMPARING THE ENCODED DIAGNOSTIC CHANNEL, AND WHAT IT COST
+
+These four methods make twelve `edprintf` calls and one
+`dsplibs_debug_printf`, and a format string or an argument list is invisible to
+a whole-object comparison -- finding 126 is `updateAlpha`, which had all three
+wrong and passed everything.  So `t_v90adid` raises BOTH debug levels, turns
+the harness's capture on, and compares the two transcripts as well as the two
+objects.  **Seventeen of this batch's 117 mutations change nothing but a format
+string, a printf argument or the level a report is gated on** -- so no
+comparison of the object can see them by construction, and the transcript is
+the only thing that catches them.  The NaN sign convention above is one of the
+seventeen.
+
+**WHAT IS COMPARED IS THE ENCODED TEXT.**  `dsplib_encode_plain` would show the
+readable form, but it is ours and not the object's (D40), so turning it on
+would make our transcript differ from the blob's for a reason that is not a
+defect.  The encoding is a deterministic function of the formatted text and the
+key is reset at the head of every successful call, so comparing the encoded
+form compares the formatted form exactly.  The capture buffer is 16 KB and
+`resetStudyUrefHandler` writes about 810 bytes per side per call, so it is
+reset every trial rather than once.
+
+**THE FIRST STUDY'S MAPPING WRITES ARE DEAD WITHIN THE SAME CALL**, and it took
+two uncaught mutations to notice.  The mean loop writes `linMapp[phase][code]`
+for codes 0x40..0x4f, and the clearing pass at the end of the same method zeros
+`linMapp[phase][k]` for every k in 0..127 except `ucode` -- which covers all
+sixteen.  So neither the rounding term nor the reciprocal spelling can be seen
+in `linMapp` at all.  The mean escapes only through the roughness count between
+the two loops, which is a comparison against a threshold, and only if the
+neighbouring differences are arranged to straddle it.  Two directed blocks do
+that: count 41 against a sum of 143.5 puts the reciprocal one code below the
+division (finding 1366's witness again), and count 2 against a sum of 21 puts
+the rounded mean one code above the truncated one; a threshold of 12 and one of
+110 turn each into fifteen rough neighbours against none, and a trusted phase
+against a suspected one.
+
+**FOUR OTHER MUTATIONS NEEDED THE INPUT WIDENED RATHER THAN A WITNESS
+CONSTRUCTED.**  A per-phase variance multiplier, because a table that gives all
+six phases the same variance cannot tell "a quarter of the LEADER's" from "a
+quarter of the CANDIDATE's".  A ninety-six point gain grid in
+`resetStudyUrefHandler`, because its five thresholds are a constant over the
+gain rounded to an integer, and eight round gains land on the same integer
+whether the constant is 2777.7778 or 2777.  A sum with a half in it, because a
+mean that divides exactly makes every rounding term invisible.  And a chain of
+three entries where a later leader would also have taken a phase an earlier one
+already grouped, which is the only way to separate "skip the grouped" from
+"skip the suspected".
+
+    231 mutations: 226 caught, 0 NOT caught, 0 unusable, 5 equivalent
+
+**SIX ANCHORS IN THE EXISTING SET WENT AMBIGUOUS THE MOMENT THIS BATCH
+LANDED**, and none of them failed anything: `UNUSABLE` does not fail a run
+(finding 1264).  The statement that rounds a mean into `linMapp` at one tab of
+indentation is a substring of the same statement at three, so
+`updateLinMappMeanAndVar`'s mutation started matching `porcessFirstStudy` as
+well.  Adding a method to a file silently disarms the mutations of every method
+already in it whose statements the new one repeats, and the only thing that
+catches it is reading the UNUSABLE list -- which is why the count is quoted
+here with the unusable figure in it and not just the caught one.
+
+======================================================================

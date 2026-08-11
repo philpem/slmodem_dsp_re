@@ -23,11 +23,12 @@
  * and taking the largest displacement in each, then checking by hand that the
  * base register of the winner is `this`.  Finding 251.
  *
- * TWENTY OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote `reset`
- * and `resetLinearMapping`; the first processing batch added the sixteen
- * whose only callees were already written, and the second adds
+ * TWENTY-FOUR OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
+ * `reset` and `resetLinearMapping`; the first processing batch added the
+ * sixteen whose only callees were already written, the second added
  * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
- * exactly that one call.  The rest stay declared for the record and
+ * exactly that one call, and the study batch added the four that read and
+ * write the study state at the top of the object.  The rest stay declared and
  * deliberately undefined, because defining a method whose callees are not
  * written breaks the link for the entire test suite (docs/v90cpp.md).  The
  * intra-class call graph is four edges and is written down in finding 1367,
@@ -197,6 +198,25 @@ public:
 	void updateUrefAlt();
 
 	/*
+	 * THE FOUR THE STUDY BATCH DEFINES.  All four are leaves -- measured
+	 * over every `R_386_PC32` in the class, they call only `edprintf` and
+	 * `dsplibs_debug_printf` -- and between them they name every byte of
+	 * the object that was still `pad_` outside the sample store.
+	 *
+	 * `getAltVarThresh` RETURNS A FLOAT, and the mangling does not say so:
+	 * the evidence is `flds 0x34(%esp)` immediately before the epilogue at
+	 * 0x4088c, which leaves a value in %st(0) and nothing in %eax.  x87
+	 * cannot distinguish a `float` return from a `double` one -- both come
+	 * back in %st(0) and the value loaded is a float either way -- so
+	 * `float` is the narrower reading and carries the extra fact that what
+	 * is returned is a float local.
+	 */
+	float getAltVarThresh(float *, float);
+	void porcessFirstStudy();
+	void resetStudyUrefHandler(unsigned int);
+	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char);
+
+	/*
 	 * Declared, not defined -- see the file comment.
 	 *
 	 * The constructor `V90AutoDigitalImpDetector(V90Parameters *)` and the
@@ -208,13 +228,9 @@ public:
 	 */
 	void determineMaxUcode(short);
 	void findPadGain();
-	void getAltVarThresh(float *, float);
-	void porcessFirstStudy();
 	void porcessSecondStudy();
-	void resetStudyUrefHandler(unsigned int);
 	void setQcLinearMapping();
 	void studyUrefHandler(float, unsigned int);
-	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char);
 	void updateAltRbsPhaseInDil();
 
 	/*
@@ -335,7 +351,19 @@ public:
 	 */
 	float padGain;						/* +0xa94c */
 
-	unsigned char pad_a950[0x06];				/* +0xa950 */
+	/*
+	 * THE DIVISOR EVERY DISTANCE THRESHOLD IS SCALED BY.
+	 * `resetStudyUrefHandler` forms `1.0f / float_a950` once and derives
+	 * +0xa9a4, +0xa9a6, +0xa9a8, +0xa9ac and +0xa9ae from it, and it is
+	 * the only reader in the class: `flds 0xa950(%ebx)` at 0x408b4.  The
+	 * five constants it scales are 25, 50, 4444.4443, 2777.7778 and
+	 * 6666.667, and the five values the same method installs when its
+	 * argument is zero are 25, 50, 4000, 2500 and 6000 -- so a gain of 1
+	 * reproduces three of the five defaults exactly and the field is a
+	 * scale rather than an offset.  What sets it is not written yet.
+	 */
+	float float_a950;					/* +0xa950 */
+	unsigned char pad_a954[2];				/* +0xa954 */
 
 	/*
 	 * Six bytes -- one per phase -- that `setMaxUcodeArray` copies in from
@@ -347,7 +375,28 @@ public:
 	/* The companding law, stored as a full 32-bit copy of the argument. */
 	PcmType pcmType;					/* +0xa95c */
 
-	unsigned char pad_a960[0x0b];				/* +0xa960 */
+	unsigned char pad_a960[4];				/* +0xa960 */
+
+	/*
+	 * THE OBJECT NAMES THIS ONE ITSELF.  `porcessFirstStudy` reaches it
+	 * with `flds 0xa964(%esi)` and prints the product through a format
+	 * string reading "2.5*trn1Sigma=%d", so the name is the original
+	 * author's and not offset-derived.  `studyUrefHandler` is the writer
+	 * -- `fsts 0xa964(%ebx)` at 0x42c5f and 0x42eef -- and is not written
+	 * here yet.  It is the standard deviation the TRN1 segment measured,
+	 * and 2.5 of it is the squared-difference threshold that decides
+	 * whether a phase's mapping is smooth enough to trust.
+	 */
+	float trn1Sigma;					/* +0xa964 */
+	unsigned char pad_a968[2];				/* +0xa968 */
+
+	/*
+	 * How many of the six phases `porcessFirstStudy` ended up calling
+	 * suspected: it stores 0 before the per-phase loop and `incb`s it on
+	 * every phase it flags at +0x280c.  A byte, and no other member of
+	 * the class touches it.
+	 */
+	unsigned char byte_a96a;				/* +0xa96a */
 
 	/*
 	 * The reference PCM code and the linear level it companded to.  `reset`
@@ -378,12 +427,33 @@ public:
 	float float_a980;					/* +0xa980 */
 
 	/*
-	 * 32 bytes still not modelled.  `resetStudyUrefHandler` fills
-	 * +0xa98c..+0xa998 from the parameter block and writes the short at
-	 * +0xa9ae and the float at +0xa9a8; +0xa9ae is the displacement the
-	 * object's size comes from.
+	 * THE STUDY HANDLER'S OWN STATE, and the six durations it runs
+	 * against.  `resetStudyUrefHandler` zeroes the first two and copies
+	 * the other six in as 32-bit words from the parameter block -- from
+	 * +0x4a8..+0x4bc when its argument is nonzero and from +0x348..+0x35c
+	 * when it is zero, six separate `mov` pairs either way.
+	 *
+	 * A 32-bit `mov` does not name a type, so the copy alone settles
+	 * nothing.  `studyUrefHandler` does: it `incl`s +0xa988, loads
+	 * +0xa984 with `mov`, and compares +0xa988 against +0xa98c, +0xa990,
+	 * +0xa994, +0xa998 and +0xa99c with `cmp`/`je`.  Those are integer
+	 * operations on all seven, which rules out `float` and leaves the
+	 * signedness open -- every compare seen is an equality.  +0xa9a0 is
+	 * copied by `resetStudyUrefHandler` and read by nothing that is
+	 * disassembled, so only its width is measured.
+	 *
+	 * They are eight scalars rather than one array because the object
+	 * copies them with eight independent instruction pairs; a loop over
+	 * an array would be a loop.
 	 */
-	unsigned char pad_a984[0x20];				/* +0xa984 */
+	int int_a984;						/* +0xa984 */
+	int int_a988;						/* +0xa988 */
+	int int_a98c;						/* +0xa98c */
+	int int_a990;						/* +0xa990 */
+	int int_a994;						/* +0xa994 */
+	int int_a998;						/* +0xa998 */
+	int int_a99c;						/* +0xa99c */
+	int int_a9a0;						/* +0xa9a0 */
 
 	/*
 	 * The grouping threshold: `unitePhasesInfoOfUref` merges two phases
@@ -391,17 +461,43 @@ public:
 	 * STRICTLY LESS than this.  Its neighbour at +0xa9a6 is the same shape
 	 * for a single sample against a single entry, and the two are set
 	 * together by `resetStudyUrefHandler`.
+	 *
+	 * THE OBJECT'S OWN NAME FOR THIS FIELD IS `uniteUrefDistanceThresh`.
+	 * `resetStudyUrefHandler` prints it with the format string
+	 * "uniteUrefDistanceThresh = %d\r\n" and passes exactly
+	 * `movswl 0xa9a4(%ebx)` as the argument.  The identifier is left
+	 * offset-derived because it is spelled in three files and a rename
+	 * buys nothing the comment does not; finding 1425.
 	 */
 	short short_a9a4;					/* +0xa9a4 */
 
 	/*
 	 * The distance threshold `isAltRbs` compares against: it answers yes
 	 * when |sample - linMapp[phase][code]| is strictly greater than this.
-	 * `resetStudyUrefHandler` is what puts a value here.
+	 * `resetStudyUrefHandler` is what puts a value here, and prints it
+	 * under the object's own name: "altRbsDistanceThresh = %d\r\n" with
+	 * `movswl 0xa9a6(%ebx)` as its only argument.  The identifier stays
+	 * offset-derived for the reason given at +0xa9a4.
 	 */
 	short short_a9a6;					/* +0xa9a6 */
 
-	unsigned char pad_a9a8[0x08];				/* +0xa9a8 */
+	/*
+	 * THE LAST EIGHT BYTES, and all three are named by the object's own
+	 * format strings rather than by their offsets.
+	 * `resetStudyUrefHandler` prints them as "altMinVarThresh = %c%d.%02d"
+	 * and "neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d", and
+	 * writes exactly these three fields either side of those calls.
+	 *
+	 * `altMinVarThresh` is a float -- `fstps 0xa9a8` in
+	 * `resetStudyUrefHandler`, `flds 0xa9a8` in `getAltVarThresh`, which
+	 * is the floor that method raises its answer to.  The other two are
+	 * shorts: `filds 0xa9ac`/`filds 0xa9ae` in `porcessFirstStudy`, which
+	 * clamps 2.5 * `trn1Sigma` between them.  +0xa9ae is the displacement
+	 * the object's 0xa9b0 size is measured from (finding 251).
+	 */
+	float altMinVarThresh;					/* +0xa9a8 */
+	short neighborUcodeMinDistance;				/* +0xa9ac */
+	short neighborUcodeMaxDistance;				/* +0xa9ae */
 };
 
 #endif /* DSPLIB_V90AUTODIGITALIMPDETECTOR_H */
