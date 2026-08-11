@@ -6,25 +6,32 @@
    "names: the function ends in `v34handshakinit(obj, 0)`, which rewrites a",
    "large part of the object with the same code on both sides, so a store",
    "the handshake later overwrites is invisible to the differential tier",
-   "however wide its sweep is (finding 253).  Each entry here is anchored on",
+   "however wide its sweep is (finding 253).  Each entry is anchored on",
    "text that appears in THIS function only.  `VPcmV34InitiateRetrain`",
    "shares five verbatim blocks with it, which is why the two are in",
    "separate translation units at all -- see the head of",
    "src/pump/v34/v34pcmcreate.cpp, and finding 1264.",
    "",
-   "ONE ENTRY IS EXPECTED TO SURVIVE and is here for that reason: the",
-   "second memset is redundant, because 0x264 + 0x79c is entirely inside",
-   "the 0xac4c the first one already cleared.  It is transcribed because the",
-   "object has it, and a mutation set that did not show it to be",
-   "unobservable would be claiming more than the tier can see.  22 of 23,",
-   "and the survivor is that one.",
+   "31 entries: 29 caught, 1 equivalent and recorded as such, 1 survivor",
+   "that is deliberate.",
+   "",
+   "THE DELIBERATE SURVIVOR is the second memset, which is redundant --",
+   "0x264 + 0x79c is entirely inside the 0xac4c the first one already",
+   "cleared (D195).  It is transcribed because the object has it, and a",
+   "set that did not show it to be unobservable would be claiming more",
+   "than the tier can see.",
    "",
    "TWO SURVIVED BEFORE THE TEST SEEDED THE OBJECT.  The other was the",
    "LEADING memset shortened to the receiver's length, which is a real",
    "claim and was invisible for a real reason: every case is a",
    "re-initialisation, so a byte the memset failed to clear was already 0",
    "from the previous run.  `seed_v34` in t_vpcmcreate.c is what closed it,",
-   "and this entry is the measurement that says so."
+   "and that entry is the measurement which says so (finding 1262).",
+   "",
+   "FOUR ENTRIES TEST DIAGNOSTICS and none of them could before",
+   "`run_transcripts` existed: thirteen of this function's fourteen print",
+   "sites are dark at debug level 0, which is what the whole-graph sweep",
+   "runs at."
   ]
  },
  {
@@ -141,5 +148,64 @@
   "label": "the entrance filter is forced on by 2 rather than by 1",
   "find": "\t\t} else if (stream == 1) {",
   "replace": "\t\t} else if (stream == 2) {"
+ },
+ {
+  "label": "the Uqts announcement prints the ANSpcm index",
+  "find": "\t\tdsplibs_debug_printf(\"VPcmV34Create: Uqts index is %d\\r\\n\",\n\t\t\t\t     uqts);",
+  "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Create: Uqts index is %d\\r\\n\",\n\t\t\t\t     ansLevel);"
+ },
+ {
+  "label": "the TX MD announcement is dropped",
+  "find": "\t\tdsplibs_debug_printf(\"On Create: Setting desired TX MD\"\n\t\t\t\t     \" (%d mSec)!\\n\", (int)obj->f35a4);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "+0xa23c is left at zero",
+  "find": "\tobj->fa23c = 1;",
+  "replace": "\tobj->fa23c = 0;"
+ },
+ {
+  "label": "the channel-verification status is 3 rather than 4",
+  "find": "\t\t\tobj->status = 4;",
+  "replace": "\t\t\tobj->status = 3;"
+ },
+ {
+  "label": "the two indices reach channel verification the other way round",
+  "find": "\t\t\t\t->enterChannelVerification((short)uqts,\n\t\t\t\t\t\t\t   (short)ansLevel);",
+  "replace": "\t\t\t\t->enterChannelVerification((short)ansLevel,\n\t\t\t\t\t\t\t   (short)uqts);"
+ },
+ {
+  "label": "+0x254's scale short is read unsigned",
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
+  "equivalent": true,
+  "why": "336 * 65536 is exactly 336 * 2^16 and so zero modulo 2^16, and a signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them at any entry point; `v34retrain` records the identical mutation on the identical block as equivalent for the same reason.  `movswl` is what the object writes and so is this."
+ },
+ {
+  "label": "+0x262 is left at zero",
+  "find": "\t*(short *)(m + OB_F0262) = 1;",
+  "replace": "\t*(short *)(m + OB_F0262) = 0;"
+ },
+ {
+  "_": [
+   "THE SCALE ITSELF IS NOT OBSERVABLE THROUGH THIS ENTRY POINT, and",
+   "the mutation that would test it was removed rather than left to",
+   "read NOT CAUGHT.  `VPcmV34Create` stores 0 into +0x35a4 seven",
+   "hundred bytes before it reads it back, and `v34handshakinit(obj,",
+   "0)` -- the only thing that runs in between -- leaves it there, so",
+   "the multiplicand is 0 in all 960 cases and 335 and 336 give the",
+   "same answer.  That is a property of the function, not a gap in the",
+   "sweep: no argument, configuration or seed can reach a non-zero",
+   "+0x35a4 here, because the function zeroes its own input to it.",
+   "",
+   "The SAME BLOCK in `VPcmV34InitiateRetrain` is reached with +0x35a4",
+   "already set, and `v34retrain`'s '+0x254's scale is 335' is recorded",
+   "CAUGHT.  The offset mutation below survives the zero and is kept."
+  ]
+ },
+ {
+  "label": "+0x254's offset is 10001 rather than 10000",
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);"
  }
 ]

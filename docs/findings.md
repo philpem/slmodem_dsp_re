@@ -39958,6 +39958,17 @@ The sweep is five dimensions and every one of them was needed:
 | the configuration | 20 variants | the entrance filter, the threshold table, the four rate clamps, quick connect, the designer and K56flex arms |
 | the seed | off, on | the leading memset -- see 1262 |
 
+**AND A SECOND PASS AT DEBUG LEVEL 2**, because the sweep runs at level 0
+and `DSPLIB_DEBUG_ON()` is `> 1`, so thirteen of the function's fourteen
+print sites are dark in all 960 cases and a dropped announcement or a wrong
+argument would pass.  96 cases with both transcripts captured and compared,
+193 checks, and four mutations that only it can catch.  The one print it
+cannot reach is the ungated `edprintf` in arms 3 and 4: the harness does not
+interpose it, so its two sides encode through two separate rotating counters
+and cannot be compared as text.  Its argument is compared as a graph byte and
+its string is `debugaudit`'s; the call itself is the only unverified part of
+this function.
+
 **WHY IT IS NOT IN `v34pcmif.c` WITH THE OTHER `VPcmV34*` EXPORTS.**  It calls
 SEVEN C++ member functions, and a member has a `this` and no unmangled form to
 name, so a C translation unit cannot reach one whatever the link line says.
@@ -40072,8 +40083,9 @@ deterministic pattern before the call -- what a fresh `sysdep_malloc` hands over
 and never zeroes -- putting back only the two words the function reads BEFORE
 the memset and restores after it, +0x3548 and +0xac18.  The seed goes in
 identically on both legs, so it is not a source of disagreement; it is a source
-of OBSERVABILITY.  The mutation went from NOT CAUGHT to caught and the suite
-from 21/23 to **22/23**.
+of OBSERVABILITY.  The mutation went from NOT CAUGHT to caught.  The suite as
+committed is 31 entries: **29 caught, 1 equivalent and recorded as such, and
+one deliberate survivor**.
 
 **The one that still survives is deliberate and is D195**: the second memset,
 0x79c bytes at +0x264, is entirely inside the first one's 0xac4c.  Seeding

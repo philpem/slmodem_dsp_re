@@ -839,6 +839,93 @@ run_create(void)
 }
 
 /*
+ * THE FOURTEEN DIAGNOSTICS, WHICH THE SWEEP ABOVE CANNOT SEE AT ALL.
+ *
+ * `main` runs at debug level 0 and `DSPLIB_DEBUG_ON()` is `> 1`, so thirteen
+ * of this function's fourteen print sites are dark in every one of the 960
+ * cases above and the fourteenth writes nothing to the heap.  A wrong format
+ * string, a wrong argument, or a whole announcement dropped would all pass.
+ * `debugaudit.py --invented` proves the STRINGS are the blob's; only this pass
+ * says anything about the arguments, and one of them needed saying -- the
+ * object folds the `+0x35a4` load in "Setting desired TX MD" to a constant,
+ * so a literal 0 and a field read are the same code and only the transcript
+ * distinguishes them from a wrong field.
+ *
+ * `t_v34retrain.c` carries the same pass for the neighbouring function and its
+ * five diagnostic mutations are all recorded caught, which is what says the
+ * mechanism works rather than that it ran.
+ *
+ * EIGHT CONFIGURATIONS, NOT TWENTY: the ones that separate the print sites
+ * from each other -- the three entrance-filter arms, the threshold fallback,
+ * quick connect and the negative delays.  The other twelve differ only in
+ * values the sweep above already compares.
+ *
+ * THE ONE THING THIS DOES NOT REACH is the ungated `edprintf` in arms 3 and 4.
+ * It is not `dsplibs_debug_printf` and the harness does not interpose it, so
+ * its two sides encode through two separate rotating counters and cannot be
+ * compared as text.  Its argument is `k56 + 0xc`, which the sweep above does
+ * compare, and its string is `debugaudit`'s; the call itself is unverified and
+ * is the only part of this function that is.
+ */
+static int
+run_transcripts(void)
+{
+	static const int type_v[] = { 0, 1, 2, 3, 4, -1 };
+	static const int cfg_v[] = { 0, 1, 2, 3, 4, 7, 13, 17 };
+	int side, ai, ci;
+	long tag = 0;
+	int printed = 0;
+
+	diff_begin("VPcmV34Create's diagnostics, both sides talking");
+
+	for (side = 0; side < 2; side++)
+		for (ai = 0; ai < (int)(sizeof type_v / sizeof type_v[0]); ai++)
+			for (ci = 0;
+			     ci < (int)(sizeof cfg_v / sizeof cfg_v[0]); ci++) {
+				graph_restore();
+				cfg_apply(cfg_v[ci]);
+
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+				dsplibs_debug_level = 2;
+				ref_dsplibs_debug_level = 2;
+
+				VPcmV34Create(v34obj, side, 0, runtime,
+					      type_v[ai]);
+				graph_save_ours();
+				graph_restore();
+				cfg_apply(cfg_v[ci]);
+				ref_VPcmV34Create(v34obj, side, 0, runtime,
+						  type_v[ai]);
+
+				dsplibs_debug_level = 0;
+				ref_dsplibs_debug_level = 0;
+				dsplib_debug_capture_on = 0;
+
+				diff_eq_int("the transcripts agree (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0 ? 1 : 0, 1, tag);
+				diff_eq_int("and the graph still agrees (%ld)",
+					    graph_diff_live(ours, 1) == 0
+					    ? 1 : 0, 1, tag);
+				if (dsplib_debug_capture_lines(1) > 0)
+					printed = 1;
+				tag++;
+			}
+
+	/*
+	 * ANTI-VACUITY.  Two empty transcripts compare equal, which is exactly
+	 * the state every case in `run_create` is in.
+	 */
+	diff_eq_int("and some case actually printed something", printed, 1, 0);
+
+	graph_restore();
+
+	return diff_end();
+}
+
+/*
  * THE COMPARISON MADE TO FAIL.  Finding 805's pass 3 is the model: run ours,
  * poke one byte of the graph, and require the comparison to say so.  Without
  * this the whole file could be comparing an image against itself.
@@ -1039,6 +1126,7 @@ main(void)
 	rc |= run_alias_words();
 	rc |= run_virgin_vs_reinit();
 	rc |= run_create();
+	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 
 	return rc;

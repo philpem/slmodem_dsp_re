@@ -608,3 +608,85 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 	return 0;
 }
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned.  Same argument as v34pcmmain.cpp's block: the fields this
+ * file reaches by offset sit in regions that are otherwise padding, so a field
+ * that drifted would compile silently.  This function writes forty-odd NAMED
+ * fields as well, and every one of them is asserted here -- a rename that
+ * moved one would still compile and would be caught only by the differential
+ * sweep, which is the wrong place to find out.  The offsets are the
+ * disassembly's, not v34fsk.h's, so this is a check and not a restatement.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define V34PCMCREATE_ASSERT(name, field, off) \
+	typedef char v34pcmcreate_off_##name[ \
+		(__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34PCMCREATE_ASSERT(status,   status,           0x0000);
+V34PCMCREATE_ASSERT(f0004,    f0004,            0x0004);
+V34PCMCREATE_ASSERT(ptc,      ptc,              0x0008);
+V34PCMCREATE_ASSERT(nofbits,  nof_tx_bits,      0x0010);
+V34PCMCREATE_ASSERT(rxn,      rx_n,             0x0114);
+V34PCMCREATE_ASSERT(txn,      tx_n,             0x0218);
+V34PCMCREATE_ASSERT(txrd,     tx_rd,            0x021c);
+V34PCMCREATE_ASSERT(rmin,     rate_min,         0x0220);
+V34PCMCREATE_ASSERT(rmax,     rate_max,         0x0224);
+V34PCMCREATE_ASSERT(rnow,     rate_now,         0x0228);
+V34PCMCREATE_ASSERT(rwant,    rate_want,        0x022c);
+V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
+V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
+V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
+V34PCMCREATE_ASSERT(f25c,     f25c,             0x025c);
+V34PCMCREATE_ASSERT(f2aa6,    f2aa6,            0x2aa6);
+V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
+V34PCMCREATE_ASSERT(f3554,    f3554,            0x3554);
+V34PCMCREATE_ASSERT(f3558,    f3558,            0x3558);
+V34PCMCREATE_ASSERT(f355c,    f355c,            0x355c);
+V34PCMCREATE_ASSERT(f359c,    f359c,            0x359c);
+V34PCMCREATE_ASSERT(f35a4,    f35a4,            0x35a4);
+V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
+V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
+V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
+V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
+V34PCMCREATE_ASSERT(fa23c,    fa23c,            0xa23c);
+V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
+V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
+V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
+V34PCMCREATE_ASSERT(lshort,   local_short,      0xabca);
+V34PCMCREATE_ASSERT(isshort,  is_short,         0xabcc);
+V34PCMCREATE_ASSERT(fabce,    fabce,            0xabce);
+V34PCMCREATE_ASSERT(fabd0,    fabd0,            0xabd0);
+V34PCMCREATE_ASSERT(fabd2,    fabd2,            0xabd2);
+V34PCMCREATE_ASSERT(fabe0,    fabe0,            0xabe0);
+V34PCMCREATE_ASSERT(fabe2,    fabe2,            0xabe2);
+V34PCMCREATE_ASSERT(txbps,    tx_bps,           0xac04);
+V34PCMCREATE_ASSERT(rxbps,    rx_bps,           0xac08);
+V34PCMCREATE_ASSERT(fac0c,    fac0c,            0xac0c);
+V34PCMCREATE_ASSERT(rrnl,     rrn_local,        0xac0e);
+V34PCMCREATE_ASSERT(rrnr,     rrn_remote,       0xac10);
+V34PCMCREATE_ASSERT(latched,  rates_latched,    0xac16);
+V34PCMCREATE_ASSERT(pac18,    pac18,            0xac18);
+V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
+
+/*
+ * The receiver, reached as `obj + OB_RECEIVER`, and the one field of it this
+ * function names.  `sizeof` is asserted too: it IS the second memset's length,
+ * and if it stopped being 0x79c the memset would silently clear a different
+ * span (D195).
+ */
+typedef char v34pcmcreate_rxsize[
+	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
+typedef char v34pcmcreate_rxf262[
+	((int)__builtin_offsetof(struct v34_receiver, f262) == 0x262)
+	? 1 : -1];
+
+/* And the V.34 object's own extent, which is the first memset's length. */
+typedef char v34pcmcreate_objlen[
+	((int)VPCM_V34_BYTES == 0xac4c) ? 1 : -1];
+
+#endif /* 32-bit */
