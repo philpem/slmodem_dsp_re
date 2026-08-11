@@ -130,7 +130,7 @@
    }
   },
   "k56flexalloc": {
-   "key": "1ed806eafc0e230af74b3b1369062ddb640c4024164b3af798ba4e472ec6256f",
+   "key": "fba1f22a849906c10bdc036ba85903cd8e8d8950c54d97d39fb59a02bbe6885a",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "K56FLEX_Create allocates twice": "caught",
@@ -3982,7 +3982,7 @@
    }
   },
   "v92alloc": {
-   "key": "a7e4ed1f2f37c8c3f2e3df3f0c8938e52173f15eb5eb59c783d530c7980fc347",
+   "key": "3c8364565b616566f5a9ca4627e0252276cd7da2b7a43a8da33c5abd4db5908d",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "add a fifth coefficient bank the object does not allocate": "caught",
@@ -4195,7 +4195,7 @@
    }
   },
   "vpcmtabs": {
-   "key": "df777654c7e4a98bf72640923bd1073c5b43a8aba0e06f4f97976746942b560d",
+   "key": "c4271fd02a041913c8044ac60cfeee139412239f099d98e0ea3cee2a652a5b96",
    "summary": "21 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "break v92TxPreFilter's mirror for real, on the high side only": "caught",

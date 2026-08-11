@@ -84,7 +84,7 @@ void V92createFilterCoefficients(struct V92ParamsInfo *p);
  * BOTH DELETERS LEAVE THE POINTERS DANGLING.  Each slot is tested, freed if
  * non-null, and NOT written back -- there is no store to any of the ten
  * offsets anywhere in the two functions.  That is the object's behaviour and
- * it is reproduced rather than repaired; docs/deviations.md D180.
+ * it is reproduced rather than repaired; docs/deviations.md D170.
  */
 void V92deleteConstellations(struct V92ParamsInfo *p);
 void V92deleteFilterCoefficients(struct V92ParamsInfo *p);

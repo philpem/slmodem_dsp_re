@@ -40008,9 +40008,9 @@ and `struct V92ParamsInfo` is named from a blob symbol rather than invented.
     V92deleteFilterCoefficients   4 x if (p) sysdep_free(p)
 
 **Two defects, both reproduced.** Not one of the ten allocations is tested
-(D181) -- six and four consecutive `movl`/`call`/`mov %eax,off(%ebx)` with no
+(D171) -- six and four consecutive `movl`/`call`/`mov %eax,off(%ebx)` with no
 `test` between -- and not one of the ten pointers is nulled after being freed
-(D180), so either deleter leaves the block full of dangling values. The
+(D170), so either deleter leaves the block full of dangling values. The
 contrast that makes the first a property of these functions rather than a house
 style is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create`
 returns, at .text+0x3b31, and branches into a failure unwind.
@@ -40041,7 +40041,7 @@ realisation.** Drive them with pointers the allocator never handed out: the
 harness counts a free of an unknown pointer in `bad_free` and swallows it
 rather than passing it to `free()`, so both sides can be given byte-identical
 fixtures and compared byte for byte with nothing excluded. That is only
-available because the deleters write nothing back -- which is D180, the defect
+available because the deleters write nothing back -- which is D170, the defect
 turned into the strongest available test shape.
 
 **The null arm's assertion is the inverse of the obvious one.**

@@ -11,10 +11,10 @@
  * with no `test %eax,%eax` between them, so a failing allocator leaves nulls
  * in the block and the constructor carries on.  `vpcm_create` DOES check the
  * one it makes for `K56FLEX_Create` -- .text+0x3b31 -- so this is a property
- * of these four functions and not a house style.  docs/deviations.md D181.
+ * of these four functions and not a house style.  docs/deviations.md D171.
  *
  * WHAT THE DELETERS DO NOT DO is in the header: no slot is nulled after being
- * freed, which is D180.  Both facts are the object's and both are reproduced.
+ * freed, which is D170.  Both facts are the object's and both are reproduced.
  *
  * THE BLOCK PLACEMENT IN THE OBJECT IS GCC'S AND NOT THE SOURCE'S.  Each
  * `if (p) sysdep_free(p)` compiles to a forward `jne` into an out-of-line

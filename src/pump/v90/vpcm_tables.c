@@ -32,11 +32,19 @@
  * against the copy nobody uses.
  *
  * THEY ARE NOT `const`, AND THAT IS DELIBERATE.  All nine of the coefficient
- * tables are in `.data`, not `.rodata`, so the original declared them
- * writable; `v34initialbauds` is the one in `.rodata` and is the one declared
- * `const` here.  Section placement is forced by the declaration rather than
- * chosen by the compiler, so it is evidence in CLAUDE.md's sense and is
- * reproduced.  Nothing writes to any of them.
+ * tables are in the blob's `.data` (section 143), not its `.rodata` (129), so
+ * the original declared them writable; `v34initialbauds` is the one in
+ * `.rodata` and is the one declared `const` here.  Section placement is forced
+ * by the declaration rather than chosen by the compiler, so it is evidence in
+ * CLAUDE.md's sense and is reproduced.  Nothing writes to any of them.
+ *
+ * AND THAT CLAIM HAS BEEN LOOKED AT RATHER THAN ASSERTED, because no test can
+ * see it -- `t_vpcmtabs.c` compares bytes and a byte in `.rodata` is the same
+ * byte.  `readelf -sW build/src/pump/v90/vpcm_tables.o` puts the nine in this
+ * object's `.data` (`WA`) and `v34initialbauds` alone in its `.rodata` (`A`),
+ * which is the blob's 143/129 split reproduced.  If somebody later adds
+ * `const` to one of the nine for tidiness, nothing in `make phase` will
+ * notice; that command is the check.
  *
  * THE VALUES ARE REFERENCE BYTES, NOT A GENERATOR.  Deriving a filter design
  * back out of its coefficients is `docs/fastpass.md`'s deferred work; until
@@ -59,12 +67,15 @@
  *
  * The five are NEARLY symmetric and NEARLY binomial, and neither is exact.
  * b[0] and b[4] agree to fifteen significant figures and differ in the
- * sixteenth; b[1]/b[0] is -3.99998 and b[2]/b[0] is 5.99995, which is four and
- * six wrong in the fifth figure -- far too coarse to be rounding.  So this is
- * a computed design that came out close to (1 - z^-1)^4 rather than that
- * polynomial with rounded coefficients, and it is recorded as an observation
- * about the numbers and not as a derivation.  Contrast `IIR2100_Coef_B_9600`
- * below, where the ratios ARE exact to an ulp and the derivation holds.
+ * sixteenth; but b[1]/b[0] is -3.9999759042982252 and b[2]/b[0] is
+ * 5.999951808669026, which miss -4 and 6 in the SIXTH significant figure --
+ * relative errors of 6.0e-06 and 8.0e-06, a hundred million times coarser than
+ * the sixteenth-figure disagreement above and far too coarse to be rounding.
+ * So this is a computed design that came out close to (1 - z^-1)^4 rather than
+ * that polynomial with rounded coefficients, and it is recorded as an
+ * observation about the numbers and not as a derivation.  Contrast
+ * `IIR2100_Coef_B_9600` below, where the ratios ARE exact to an ulp and the
+ * derivation holds.
  */
 double entFiltNum[VPCM_ENTFILT_TAPS] = {
 	0.96284330984918198, -3.8513500390114781, 5.777013458394471,
