@@ -4237,6 +4237,40 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D175 ⚠ `V90Equalizer`'s constructor stores fifteen `sysdep_malloc` returns and checks none of them, then hands them to `reset` to write through
+
+`FloatFIR`'s constructor tests its one allocation; this one tests none of its fifteen, and its last act is a tail call to `reset`, which writes through six of them. A negative `LINEAR_EQU_HISTORY_LENGTH` reaches the same place by another route: the length is a SIGNED divide by two, so the allocation size is enormous, the return is null, and `reset` writes through it. Reproduced as written (finding 1230). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+---
+
+## D176 🐛 `V90PreFilter`'s constructor can never select the last entry of `dataBase`
+
+The table is walked to its first empty name and the count is decremented before `codecType` is compared against it, so the highest index the constructor will accept is `count - 2`, and an index of `count - 1` -- a real, named entry -- is rejected with "External Hardware Codec Index exceeds table length" and replaced by 0. The message prints the decremented number as "table length", which is where the off-by-one shows. Reproduced (finding 1233). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+---
+
+## D177 `V90PreFilter`'s out-of-range banner has one doubled `*`
+
+`.rodata.str1.4+0xb904` is 102 characters of `*#` except at +0xb930, where the pattern reads `*#**#*`. Cosmetic, in the object's own bytes, transcribed rather than tidied. `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+
+---
+
+## D178 🐛 `V90PreFilter`'s constructor bounds `codecType` from above and not from below
+
+The range check is `if (codecType > count - 1)`, and there is no other. When `HW_CODEC_TYPE` is negative the constructor stores its own `__tHardwareCodecTypes__` argument straight into `codecType` with no floor, so a negative argument reaches the field intact -- and `isV90WithEia6`, `autoSelection` and `selectFilter`, all three already written in `src/pump/v90/V90PreFilter.cpp`, index `dataBase[codecType]` with no gate of any kind. The constructor is therefore where a wild table index is STORED, and the reads that follow it are at the shipped debug level, not behind `dsplibs_debug_level > 1` like the constructor's own `dataBase[codecType].name`.
+
+Reproduced (finding 1233). `t_v90prefilter.cpp`'s constructor sweep deliberately stops at zero: a negative index has each side reading below the base of its OWN table, so the object comparison and the transcript would both fail for a reason belonging to the harness rather than to the function, and the test would be reporting the fixture. `unmeasured`.
+
+---
+
+## D179 🐛 `V90Equalizer` with fewer than four taps allocates nothing and then writes to it
+
+`linearEquLength` is `len & ~3`, so any `len` below four gives zero, and the constructor asks `sysdep_malloc` for zero bytes. Its tail call to `reset` then clamps the cursor with `if (linearEquLength - 1 < cursor)` -- unsigned, so `0xffffffff < 0` is false, the clamp does not fire, and `linearEquCoefs[0] = 1.0f` is written into a zero-length block. Both halves are the object's: the mask is in the constructor and the clamp is in `reset`, and neither is wrong on its own.
+
+Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 and 1, so both sides take this path in every trial that uses them. It survives only because glibc's smallest chunk has twelve usable bytes. `unmeasured`.
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
