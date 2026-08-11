@@ -39804,3 +39804,73 @@ converge to ~2900 on two thirds of calls and ~200 on a few, with the same
 pre-emphasis, the same symbol rate, the same AGC gain and the same echo?** That
 is a question about Phase 3 training, and it is a much better question than the
 one this investigation started with.
+
+======================================================================
+
+### 1209. THE DISCRETE STATE IS THE NUMBER OF PHASE 3 TRAINING PASSES — AND NO SINGLE-PASS CALL EVER EXCEEDED 14400 IN EIGHTEEN
+
+*Task #108, second pass over the same 22 calls.  Identifies the discrete
+variable 1208 established must exist, and repairs a confound in 1208's own
+metric.*
+
+**The variable is how many times the call runs Phase 3.** Counting `S-S1 is
+detected` in the pre-CONNECT window -- equivalently `V34AGC, setup receiver
+gain`, or `VPcmV34Main: Wait (after P2 COMPLETE)`, all of which move together
+because a pass runs the whole sequence -- separates the sample with **no
+overlap at all**:
+
+| passes | calls | `equerr_pre` | rates |
+|---|---|---|---|
+| 1 | **18** | **2413 - 9115** | 4800, 7200, 12000, 14400 |
+| 2 | 3 | 182, 466, 1794 | 26400, 24000, 7200 |
+| 5 | 1 | 204 | 9600 |
+
+Every multi-pass call is at or below 1794; every single-pass call is at or above
+2413. Twenty-two calls, zero exceptions.
+
+**A confound in 1208's metric, which this exposes.** `equerr_pre` is the median
+over the whole pre-CONNECT window, and a multi-pass call's window contains two
+or more separate convergence runs. Its median is therefore not comparable to a
+single-pass call's, and 1208's headline r = -0.689 is partly measuring pass
+count. **The trustworthy analysis holds pass count constant.**
+
+**Within the eighteen single-pass calls the relationship is much stronger, not
+weaker:**
+
+```
+    r = -0.921    worst leave-one-out r = -0.894    p = 0.0002    n = 18
+    equerr_pre 2413-9115, rates 4800-14400
+```
+
+Controlling the confound raised the correlation, which is the signature of a
+real relationship that pass count was adding noise to. So the equaliser's
+convergence during Phase 3 predicts the rate almost deterministically, and it is
+not an artefact of how the metric was built.
+
+**The headline result:**
+
+> In eighteen single-pass calls the maximum rate achieved was **14400**.
+> Both calls that exceeded it -- 24000 and 26400 -- ran Phase 3 **twice**.
+
+**Multi-pass is necessary but not sufficient** on this data: two of the four
+multi-pass calls came out at 7200 and 9600. So a second pass is not a fix by
+itself, and n = 4 is far too small to say what distinguishes the good ones.
+
+**The modal call is extraordinarily reproducible.** Fifteen of eighteen
+single-pass calls converge to `equerr_pre` between 2413 and 3149 -- a band 13%
+wide -- and twelve of those produce exactly 12000. That is not a noisy channel:
+the SIP path delivers a very *stable* one, the equaliser settles on it to the
+same place every time, and that place is worth 12000. The rate is not being lost
+to variance; it is being lost to a repeatable convergence outcome.
+
+**What triggers the second pass**, from `batch-28`: the transmit state machine
+goes `JTXMIT => J1TXMIT => TRNSEG4A`, i.e. re-entry into a training segment
+rather than a full retrain from Phase 2. J and J' mark the end of TRN in Phase
+3, so this is Phase 3 restarting, not Phase 2.
+
+**The intervention this suggests, and it is testable:** force a second training
+pass and see whether rates above 14400 become common. That is a capability
+question about `v34handshak`'s state machine rather than a parameter, and the
+prediction is specific enough to be wrong -- if forced second passes still
+cap at 14400, the extra pass is a symptom of whatever produced the good calls
+rather than its cause.
