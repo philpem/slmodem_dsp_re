@@ -1,0 +1,32 @@
+[
+ {"label": "NOTE: what this set covers, and what it cannot",
+  "why": "V90SpectralShapingFilter.cpp entire: the constructor, which is the only one of the class's five members reconstructed.  Nine stores, eight of them the same value, so what can be mutated is WHICH word gets which value and how many get one at all.  Two things cannot: the order of the nine stores (no observer can distinguish it, and the object's order is recorded in the file rather than relied on), and the choice between four scalars and an array of four (identical layout, identical code).  The set is small because the function is; every entry below must be caught, and a set that padded itself with uncatchable entries would be recording NOT CAUGHT as if it meant something."},
+
+ {"label": "the constant at +0x20 is one rather than two",
+  "find": "\tword_20 = 2;",
+  "replace": "\tword_20 = 1;"},
+
+ {"label": "the constant lands in the last state word instead",
+  "find": "\tword_20 = 2;",
+  "replace": "\tstate[3] = 2.0f;"},
+
+ {"label": "the first coefficient is left as allocated",
+  "find": "\tcoeff[0] = coeff[1] = coeff[2] = coeff[3] = 0.0f;",
+  "replace": "\tcoeff[1] = coeff[2] = coeff[3] = 0.0f;"},
+
+ {"label": "the fourth coefficient is left as allocated",
+  "find": "\tcoeff[0] = coeff[1] = coeff[2] = coeff[3] = 0.0f;",
+  "replace": "\tcoeff[0] = coeff[1] = coeff[2] = 0.0f;"},
+
+ {"label": "the state's second word is cleared twice and its third not at all",
+  "find": "\tstate[1] = 0.0f;\n\tstate[2] = 0.0f;",
+  "replace": "\tstate[1] = 0.0f;\n\tstate[1] = 0.0f;"},
+
+ {"label": "the state's last word is left as allocated",
+  "find": "\tstate[3] = 0.0f;\n}",
+  "replace": "}"},
+
+ {"label": "the coefficients are cleared and the state is not",
+  "find": "\tstate[0] = 0.0f;\n\tstate[1] = 0.0f;\n\tstate[2] = 0.0f;\n\tstate[3] = 0.0f;",
+  "replace": "\tcoeff[0] = 0.0f;\n\tcoeff[1] = 0.0f;\n\tcoeff[2] = 0.0f;\n\tcoeff[3] = 0.0f;"}
+]

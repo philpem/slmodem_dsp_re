@@ -1,0 +1,68 @@
+[
+ {"label": "NOTE: what this set covers, and what it cannot",
+  "why": "V90SpectralVerifier.cpp entire: the constructor, the destructor and reset().  The reciprocal entry below is the one that matters most -- objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding 245), so a reconstruction that believed the mnemonic would divide the other way round and BOTH sides of a side-against-side comparison would agree.  t_v90spectral.cpp computes the quotient itself and compares the bit pattern, which is what makes that entry catchable at all.  The store order of the eight words is not mutated: no observer can distinguish it.  The `edprintf` in reset() is not mutated either -- its transcript is compared in t_v90leaves.cpp, not here."},
+
+ {"label": "the bin width is the reciprocal of the object's",
+  "find": "\tbinWidth = sampleFreq / fftLength;",
+  "replace": "\tbinWidth = fftLength / sampleFreq;"},
+
+ {"label": "the bin width is halved, as if it were the spectrum's stride",
+  "find": "\tbinWidth = sampleFreq / fftLength;",
+  "replace": "\tbinWidth = sampleFreq / (fftLength / 2);"},
+
+ {"label": "the two lengths are read out of each other's parameter slots",
+  "find": "\tfftLength = p->SPECTRAL_VERIFIER_FFT_LEN;",
+  "replace": "\tfftLength = p->SPECTRAL_VERIFIER_PSD_LEN;"},
+
+ {"label": "the first buffer is sized from the transform length",
+  "find": "\tbuf_18 = (float *)sysdep_malloc(psdLength * sizeof(float));",
+  "replace": "\tbuf_18 = (float *)sysdep_malloc(fftLength * sizeof(float));"},
+
+ {"label": "the spectrum holds a bin per sample rather than per pair",
+  "find": "\tspectrum = (float *)sysdep_malloc((fftLength / 2) * sizeof(float));",
+  "replace": "\tspectrum = (float *)sysdep_malloc(fftLength * sizeof(float));"},
+
+ {"label": "the spectrum is cleared, which the object leaves as allocated",
+  "find": "\tpsd = (Psd *)sysdep_malloc(sizeof(Psd));",
+  "replace": "\tspectrum[0] = 0.0f;\n\tpsd = (Psd *)sysdep_malloc(sizeof(Psd));"},
+
+ {"label": "the Psd is built with the PSD length rather than the transform length",
+  "find": "\tpsd_construct(psd, fftLength,",
+  "replace": "\tpsd_construct(psd, psdLength,"},
+
+ {"label": "the Psd's window and overlap slots are swapped",
+  "find": "\t\t      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,\n\t\t      params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);",
+  "replace": "\t\t      (WindowType)params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN,\n\t\t      params->SPECTRAL_VERIFIER_FFT_WINDOW);"},
+
+ {"label": "the window is always the boxcar",
+  "find": "\t\t      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,",
+  "replace": "\t\t      WINDOW_BOXCAR,"},
+
+ {"label": "the constructor does not clear +0x28",
+  "find": "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);\n\n\tword_28 = 0;\n}",
+  "replace": "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);\n}"},
+
+ {"label": "the constructor clears the accumulation counter too",
+  "find": "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);\n\n\tword_28 = 0;\n}",
+  "replace": "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);\n\n\taccumCount = 0;\n\tword_28 = 0;\n}"},
+
+ {"label": "the destructor forgets the spectrum",
+  "find": "\tif (spectrum != 0)\n\t\tsysdep_free(spectrum);\n",
+  "replace": ""},
+
+ {"label": "the destructor releases the Psd's storage without destroying it",
+  "find": "\t\tpsd_destruct(psd);\n\t\tsysdep_free(psd);",
+  "replace": "\t\tsysdep_free(psd);"},
+
+ {"label": "the destructor frees the first buffer without testing it",
+  "find": "\tif (buf_18 != 0)\n\t\tsysdep_free(buf_18);",
+  "replace": "\tsysdep_free(buf_18);"},
+
+ {"label": "reset leaves the running flag alone",
+  "find": "\taccumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;",
+  "replace": "\taccumCount = 0;\n\tword_28 = 0;"},
+
+ {"label": "reset clears the transform length instead of the counter",
+  "find": "\taccumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;",
+  "replace": "\tfftLength = 0;\n\taccumulating = 0;\n\tword_28 = 0;"}
+]

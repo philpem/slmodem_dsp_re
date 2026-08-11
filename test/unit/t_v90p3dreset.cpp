@@ -130,7 +130,15 @@ union dsc_slot {
 static union p3d_slot slot[2];
 static union dsc_slot dsc_a, dsc_b;
 static V90AutoDigitalImpDetector adid[2];
-static V90SdDetector sdd[2];
+/*
+ * `V90SdDetector` has a user-declared constructor and destructor since its
+ * lifecycle was reconstructed, so an array of them cannot be default
+ * constructed.  The rows are exactly `sizeof`, so `&sdd[i]`, `sizeof(sdd[i])`
+ * and `sdd[i].field` all still mean what they meant.
+ */
+static unsigned char sdd_[2][sizeof(V90SdDetector)]
+    __attribute__((aligned(8)));
+#define sdd ((V90SdDetector *)sdd_)
 static float sdhist[2][SDD_HIST];
 static V90Jd jdo[2];
 static V92Jd jd92o[2];

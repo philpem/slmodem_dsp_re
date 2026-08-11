@@ -33,9 +33,12 @@
  *
  * EACH OBJECT SITS IN A UNION WITH A LARGER BYTE ARRAY, and the bytes past
  * the object are compared separately, so a store past the end shows up as a
- * failure rather than as silence.  No constructor or destructor is declared
- * for any of these classes, which is what keeps them trivial enough to live
- * in a union (docs/v90cpp.md).
+ * failure rather than as silence.  Two of the six -- `V90SdDetector` and
+ * `V90SpectralVerifier` -- have had their constructors and destructors
+ * reconstructed since, and a class with either cannot be a union MEMBER, so
+ * those two unions now hold storage and alignment only and the object is
+ * reached through a cast (`SD_A`, `SV_B` and the rest).  The rest are still
+ * trivial enough to live in one (docs/v90cpp.md).
  *
  * THE DIAGNOSTICS ARE COMPARED AS TEXT.  Three of the six print, and
  * `dsplibs_debug_level` ships at zero, so a wrong format string behaves
@@ -343,12 +346,22 @@ run_cd(void)
 #define SD_SLOT 64
 #define SD_HIST 24
 
+/*
+ * The union holds the STORAGE and the alignment only.  `V90SdDetector` has
+ * a user-declared constructor and destructor since its lifecycle was
+ * reconstructed, and a class with either cannot be a union member; the object
+ * is reached through a cast instead, which is also what keeps the "seeded,
+ * never zeroed" property this file depends on.
+ */
 union sd_slot {
-	V90SdDetector o;
+	double align;
 	unsigned char raw[SD_SLOT];
 };
 
 static union sd_slot sd_a, sd_b;
+
+#define SD_A (*(V90SdDetector *)sd_a.raw)
+#define SD_B (*(V90SdDetector *)sd_b.raw)
 static float sd_ha[SD_HIST], sd_hb[SD_HIST];
 
 static int
@@ -378,29 +391,29 @@ run_sd(void)
 		 * untouched afterwards and then blanked, so nothing is
 		 * skipped silently -- finding 224.
 		 */
-		sd_a.o.history = sd_ha;
-		sd_b.o.history = sd_hb;
-		sd_a.o.historyLength = sd_b.o.historyLength = n;
+		SD_A.history = sd_ha;
+		SD_B.history = sd_hb;
+		SD_A.historyLength = SD_B.historyLength = n;
 
 		/*
 		 * Forced non-zero, or clearing it would be invisible: the
 		 * pseudorandom fill hits zero once in 2^32 but seed mode 1
 		 * and 2 never do and mode 3 rarely does.
 		 */
-		sd_a.o.count = sd_b.o.count = 0x5a5a0000u + (unsigned)trial;
+		SD_A.count = SD_B.count = 0x5a5a0000u + (unsigned)trial;
 
 		memcpy(before, sd_b.raw, SD_SLOT);
 		memcpy(hbefore, sd_hb, sizeof hbefore);
 
-		sd_a.o.reset();
-		ref_sd_reset(&sd_b.o);
+		SD_A.reset();
+		ref_sd_reset(&SD_B);
 
 		diff_eq_int("our history pointer untouched (%ld)",
-			    sd_a.o.history == sd_ha, 1, trial);
+			    SD_A.history == sd_ha, 1, trial);
 		diff_eq_int("the blob's history pointer untouched (%ld)",
-			    sd_b.o.history == sd_hb, 1, trial);
+			    SD_B.history == sd_hb, 1, trial);
 		diff_eq_int("historyLength untouched (%ld)",
-			    (long)sd_b.o.historyLength, (long)n, trial);
+			    (long)SD_B.historyLength, (long)n, trial);
 
 		diff_eq_int("the two buffers agree (%ld)",
 			    memcmp(sd_ha, sd_hb, sizeof sd_ha) == 0, 1, trial);
@@ -424,15 +437,15 @@ run_sd(void)
 		diff_eq_int("the blob wrote the object outside +0x00 at +0x%lx",
 			    bad == 0 ? -1 : first, -1, trial);
 		diff_eq_int("the blob's count is zero (%ld)",
-			    (long)sd_b.o.count, 0, trial);
+			    (long)SD_B.count, 0, trial);
 
-		sd_a.o.history = sd_b.o.history = (float *)0;
-		diff_eq_obj("after reset", V90SdDetector, &sd_a.o, &sd_b.o,
+		SD_A.history = SD_B.history = (float *)0;
+		diff_eq_obj("after reset", V90SdDetector, &SD_A, &SD_B,
 			    trial);
 		diff_eq_int("no store past the object (%ld)",
-			    memcmp(sd_a.raw + sizeof(sd_a.o),
-				   sd_b.raw + sizeof(sd_b.o),
-				   SD_SLOT - sizeof(sd_a.o)) == 0, 1, trial);
+			    memcmp(sd_a.raw + sizeof(SD_A),
+				   sd_b.raw + sizeof(SD_B),
+				   SD_SLOT - sizeof(SD_A)) == 0, 1, trial);
 	}
 
 	diff_eq_int("count is a word the function writes", seen[0], 1, 0);
@@ -446,12 +459,16 @@ run_sd(void)
 
 #define SV_SLOT 96
 
+/* Storage and alignment only; see `union sd_slot` above. */
 union sv_slot {
-	V90SpectralVerifier o;
+	double align;
 	unsigned char raw[SV_SLOT];
 };
 
 static union sv_slot sv_a, sv_b;
+
+#define SV_A (*(V90SpectralVerifier *)sv_a.raw)
+#define SV_B (*(V90SpectralVerifier *)sv_b.raw)
 
 static int
 run_sv(void)
@@ -474,11 +491,11 @@ run_sv(void)
 				  trial & 3);
 
 			/* Forced non-zero: see run_sd. */
-			sv_a.o.accumCount = sv_b.o.accumCount =
+			SV_A.accumCount = SV_B.accumCount =
 			    0x11110000u + (unsigned)trial;
-			sv_a.o.accumulating = sv_b.o.accumulating =
+			SV_A.accumulating = SV_B.accumulating =
 			    1u + (unsigned)trial;
-			sv_a.o.word_28 = sv_b.o.word_28 =
+			SV_A.word_28 = SV_B.word_28 =
 			    0x22220000u + (unsigned)trial;
 
 			memcpy(before, sv_b.raw, SV_SLOT);
@@ -486,17 +503,17 @@ run_sv(void)
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
 
-			sv_a.o.reset();
-			ref_sv_reset(&sv_b.o);
+			SV_A.reset();
+			ref_sv_reset(&SV_B);
 
 			dsplib_debug_capture_on = 0;
 
 			diff_eq_obj("after reset", V90SpectralVerifier,
-				    &sv_a.o, &sv_b.o, tag);
+				    &SV_A, &SV_B, tag);
 			diff_eq_int("no store past the object (%ld)",
-				    memcmp(sv_a.raw + sizeof(sv_a.o),
-					   sv_b.raw + sizeof(sv_b.o),
-					   SV_SLOT - sizeof(sv_a.o)) == 0,
+				    memcmp(sv_a.raw + sizeof(SV_A),
+					   sv_b.raw + sizeof(SV_B),
+					   SV_SLOT - sizeof(SV_A)) == 0,
 				    1, tag);
 
 			bad = only_wrote(before, sv_b.raw, SV_SLOT, allow, 3,
@@ -505,11 +522,11 @@ run_sv(void)
 				    "+0x%lx", bad == 0 ? -1 : first, -1, tag);
 
 			diff_eq_int("blob's accumCount (%ld)",
-				    (long)sv_b.o.accumCount, 0, tag);
+				    (long)SV_B.accumCount, 0, tag);
 			diff_eq_int("blob's accumulating (%ld)",
-				    (long)sv_b.o.accumulating, 0, tag);
+				    (long)SV_B.accumulating, 0, tag);
 			diff_eq_int("blob's word_28 (%ld)",
-				    (long)sv_b.o.word_28, 0, tag);
+				    (long)SV_B.word_28, 0, tag);
 
 			check_transcript(lvl, tag, &printed);
 		}

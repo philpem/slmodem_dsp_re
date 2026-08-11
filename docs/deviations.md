@@ -4237,6 +4237,26 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D162 ⚠ 💤 `V90SpectralVerifier`'s constructor initialises +0x28 but not +0x20 or +0x24 -- the accumulation counter and the running flag `startAccumulation` and `process` both test -- so a verifier that is constructed and never `reset()` runs on allocator garbage
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: one store.*
+
+**Finding 1240.** Asserted in test/unit/t_v90spectral.cpp against the seeded
+bytes, so the omission is measured; whether any caller reaches an accumulation
+without a `reset()` first is not.
+
+---
+
+## D163 ⚠ 💤 `V90SdDetector`'s constructor stores its third float argument into +0x10 and no member of the class ever reads it
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: none until a reader turns up.*
+
+**Finding 1241.** All six members were scanned for a load at +0x10 and none
+has one; a seventh reader outside the class would have to reach it through a
+`V90SdDetector *`, which has not been swept.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect

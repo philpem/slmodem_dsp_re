@@ -1,0 +1,58 @@
+[
+ {"label": "NOTE: what this set covers, and what it cannot",
+  "why": "All three of V90SdDetector.cpp's functions: the constructor, the destructor and reset().  Two things here cannot be mutated into a caught failure and are deliberately absent.  The first is the STORE ORDER of the four arguments, which no observer can distinguish.  The second is the spelling of the float copies: the object copies bits and our build converts through x87 (finding 1242), so a mutation that made the copy a conversion would already agree with our build and a mutation that made it a bit copy would agree with the blob -- neither is a difference this binary can see, and the sweep leaves signalling NaNs out for that reason.  The argument-to-offset mapping IS covered, and it is covered by absolute offset on the blob's object as well as ours, which is what makes the two out-of-order stores (+0x10 and +0x04) non-vacuous."},
+
+ {"label": "arguments 1 and 2 are stored into each other's fields",
+  "find": "\tthresh_08 = thresh08;\n\tthresh_0c = thresh0c;",
+  "replace": "\tthresh_08 = thresh0c;\n\tthresh_0c = thresh08;"},
+
+ {"label": "argument 3 is stored where argument 1 belongs",
+  "find": "\tvalue_10 = value10;",
+  "replace": "\tvalue_10 = thresh08;"},
+
+ {"label": "the limit is the third argument rather than the fourth",
+  "find": "\tlimit = limitArg;",
+  "replace": "\tlimit = (unsigned int)value10;"},
+
+ {"label": "the history is sized from the fourth argument",
+  "find": "\thistoryLength = 12;",
+  "replace": "\thistoryLength = limitArg;"},
+
+ {"label": "the history is one float longer than the object asks for",
+  "find": "\thistory = (float *)sysdep_malloc(historyLength * sizeof(float));",
+  "replace": "\thistory = (float *)sysdep_malloc((historyLength + 1) * sizeof(float));"},
+
+ {"label": "the constructor leaves the last element of the history",
+  "find": "\thistory = (float *)sysdep_malloc(historyLength * sizeof(float));\n\n\tfor (i = 0; i < historyLength; i++)",
+  "replace": "\thistory = (float *)sysdep_malloc(historyLength * sizeof(float));\n\n\tfor (i = 0; i + 1 < historyLength; i++)"},
+
+ {"label": "the constructor does not clear the counter",
+  "find": "\tfor (i = 0; i < historyLength; i++)\n\t\thistory[i] = 0.0f;\n\n\tcount = 0;\n}\n\n/*\n * THE POINTER IS TESTED",
+  "replace": "\tfor (i = 0; i < historyLength; i++)\n\t\thistory[i] = 0.0f;\n}\n\n/*\n * THE POINTER IS TESTED"},
+
+ {"label": "the destructor frees nothing",
+  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
+  "replace": ""},
+
+ {"label": "the destructor frees without testing the pointer",
+  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
+  "replace": "\tsysdep_free(history);"},
+
+ {"label": "the destructor nulls what it freed",
+  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
+  "replace": "\tif (history != 0) {\n\t\tsysdep_free(history);\n\t\thistory = 0;\n\t}",
+  "equivalent": true,
+  "why": "NO TEST CAN CATCH THIS ONE, and not because the test is weak: the store is not in the binary.  A store to a member in a DESTRUCTOR is dead by definition -- the object's lifetime is ending -- and `-flifetime-dse`, on by default at -O2, deletes it.  Measured, not argued: compiling this file with and without the store under the tree's exact flags gives BYTE-IDENTICAL text for the whole object, and adding `-fno-lifetime-dse` makes `movl $0x0,0x14(%ebx)` appear in `~V90SdDetector` in the second one and not the first.  The blob does not null either, so the reconstruction is right whichever way the compiler went; what this entry records is that the claim in the source comment is unfalsifiable under this build and must not be asserted in the test as though it were checked."},
+
+ {"label": "reset clears twelve elements rather than historyLength",
+  "find": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < historyLength; i++)",
+  "replace": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < 12u; i++)"},
+
+ {"label": "reset does not clear the counter",
+  "find": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < historyLength; i++)\n\t\thistory[i] = 0.0f;\n\n\tcount = 0;\n}",
+  "replace": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < historyLength; i++)\n\t\thistory[i] = 0.0f;\n}"},
+
+ {"label": "reset clears one element too many",
+  "find": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < historyLength; i++)",
+  "replace": "V90SdDetector::reset()\n{\n\tunsigned int i;\n\n\tfor (i = 0; i <= historyLength; i++)"}
+]
