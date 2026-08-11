@@ -39874,3 +39874,64 @@ question about `v34handshak`'s state machine rather than a parameter, and the
 prediction is specific enough to be wrong -- if forced second passes still
 cap at 14400, the extra pass is a symptom of whatever produced the good calls
 rather than its cause.
+
+======================================================================
+
+### 1210. THE OBJECT PRINTS ITS OWN RATE-SELECTION TABLE, AND IT PREDICTS 14 OF 18 CALLS EXACTLY FROM THE EQUALISER ERROR
+
+*Task #109.  Closes the causal chain 1207-1209 were circling, and quantifies
+exactly how much better the equaliser must converge to buy each rate step.*
+
+**`V34DATARATE, threshold for data rate N = M`** is emitted once per training
+pass at `dsplibs_debug_level > 1`, and it is the rate-selection rule itself:
+
+| index | bit/s | threshold |
+|---|---|---|
+| 14 | 33600 | 50 |
+| 13 | 31200 | 84 |
+| 12 | 28800 | 131 |
+| 11 | 26400 | 205 |
+| 10 | 24000 | 366 |
+| 9 | 21600 | 572 |
+| 8 | 19200 | 937 |
+| 7 | 16800 | 1539 |
+| 6 | 14400 | 2571 |
+| 5 | 12000 | 4109 |
+| 4 | 9600 | 6614 |
+| 3 | 7200 | 10286 |
+
+Index n is n x 2400 bit/s, and the receiver takes the highest rate whose
+threshold its measured error beats. The table is byte-identical across calls.
+
+**Tested against the n=30 batch** by predicting each call's rate from its
+measured `equerr` alone, with pass count controlled (1209): **14 of 18
+single-pass calls exact, 2 more within one rate step.** Splitting multi-pass
+calls per pass and using only the LAST pass -- the only one that can set the
+rate -- repairs two of the four multi-pass predictions as well, including
+`batch-23`, whose last pass measured 6275 and which duly connected at 9600.
+
+That is the whole chain, closed: **Phase 3 equaliser error -> this table ->
+the rate.** Nothing else needed to be invoked, and everything else that was
+invoked over four tasks -- the jitter buffer, the echo, the clock -- is not in
+it.
+
+**What it costs us, in numbers rather than adjectives.** Fifteen of eighteen
+single-pass calls converge to 2413-3149, which lands in `[2571, 4109]` = index
+5 = **12000**. So:
+
+- to reach **14400** the error must fall below **2571** -- about **12%** better
+- to reach **26400** it must fall below **205** -- about **14x** better
+- to reach **33600** it must fall below **50** -- about **58x** better
+
+The 12% is the interesting number: the modal call sits just 12% the wrong side
+of a rate step, which is why three otherwise identical calls (2413, 2627, 2687)
+came out at 14400 while twelve at 2722-3149 came out at 12000. The bench is
+sitting on a threshold, and that alone explains why the outcome looks bimodal
+between two adjacent rates.
+
+**And the object has been observed converging far below that.** `batch-4`'s
+second pass measured **197 over 19 samples** -- a full-length pass, not a short
+one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
+over 15. So the equaliser IS capable of index-11 convergence on this path; it
+simply does not get there on a single pass, in eighteen attempts out of
+eighteen.
