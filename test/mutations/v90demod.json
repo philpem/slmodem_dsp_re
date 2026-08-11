@@ -151,12 +151,136 @@
   "replace": "\t\t\t\t (short)(int)preFilter.isV90WithEia6(), 1, 0.0f,",
   "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (params->w[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
  },
-
  {
   "label": "the equaliser's cursor is halved with an arithmetic shift",
   "find": "\t\tequalizer->reset(equalizer->linearEquLength >> 1);",
   "replace": "\t\tequalizer->reset((unsigned int)\n\t\t    ((int)equalizer->linearEquLength >> 1));",
   "equivalent": true,
   "why": "0x1c1c2 is `d1 e9` -- `shr $1,%ecx`, a LOGICAL shift, and this makes it `sar`. The two differ only when bit 31 of `linearEquLength` is set, and that is a tap count: the coefficient array it bounds is `linearEquLength` floats inside a 0x150-byte object, so a length with bit 31 set is already out of every reachable range and both readings are wrong there together. This is finding 613's class of difference -- invisible to the differential tier for ever, visible in one instruction -- so the guard it needs is the codegen tier, not a test. Registered here so that if a future edit makes the length signed, the mutation stops being equivalent and is reported MIScounted."
+ },
+ {
+  "label": "sessionTermination: the data state is any state but 3",
+  "find": "\tif (inPhase3 == 3 && !preFilter.isV90WithEia6()) {",
+  "replace": "\tif (inPhase3 != 3 && !preFilter.isV90WithEia6()) {"
+ },
+ {
+  "label": "sessionTermination: the data state is tested for 1, not 3",
+  "find": "\tif (inPhase3 == 3 && !preFilter.isV90WithEia6()) {",
+  "replace": "\tif (inPhase3 == 1 && !preFilter.isV90WithEia6()) {"
+ },
+ {
+  "label": "sessionTermination: EIA-6 selects the saving arm rather than refusing it",
+  "find": "\tif (inPhase3 == 3 && !preFilter.isV90WithEia6()) {",
+  "replace": "\tif (inPhase3 == 3 && preFilter.isV90WithEia6()) {"
+ },
+ {
+  "label": "sessionTermination: the EIA-6 answer is cached for the diagnostic",
+  "find": "\t\t\t inPhase3 == 3, preFilter.isV90WithEia6());",
+  "replace": "\t\t\t inPhase3 == 3, 0);"
+ },
+ {
+  "label": "sessionTermination: the two printed flags are swapped",
+  "find": "\t\t\t inPhase3 == 3, preFilter.isV90WithEia6());",
+  "replace": "\t\t\t preFilter.isV90WithEia6(), inPhase3 == 3);"
+ },
+ {
+  "label": "sessionTermination: the evaluation gate is read from +0x164",
+  "find": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
+  "replace": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL + 1] != 0) {"
+ },
+ {
+  "label": "sessionTermination: the evaluation gate is inverted",
+  "find": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
+  "replace": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] == 0) {"
+ },
+ {
+  "label": "sessionTermination: the mean and the deviation are swapped",
+  "find": "\t\t\tfloat mean = v90resampler_timingHistoryMean(&resampler);\n\t\t\tfloat std = v90resampler_timingHistoryStd(&resampler);",
+  "replace": "\t\t\tfloat std = v90resampler_timingHistoryMean(&resampler);\n\t\t\tfloat mean = v90resampler_timingHistoryStd(&resampler);"
+ },
+ {
+  "label": "sessionTermination: the fraction is scaled by 1000, not 10000",
+  "find": "\t\t\tfrac = (int)((mean - (float)(int)mean) * 10000.0f);",
+  "replace": "\t\t\tfrac = (int)((mean - (float)(int)mean) * 1000.0f);"
+ },
+ {
+  "label": "sessionTermination: the fraction keeps its sign",
+  "find": "\t\t\t\t (int)__builtin_fabsf(mean),\n\t\t\t\t (frac < 0) ? -frac : frac);",
+  "replace": "\t\t\t\t (int)__builtin_fabsf(mean),\n\t\t\t\t frac);"
+ },
+ {
+  "label": "sessionTermination: the magnitude keeps its sign",
+  "find": "\t\t\t\t (int)__builtin_fabsf(mean),",
+  "replace": "\t\t\t\t (int)mean,"
+ },
+ {
+  "label": "sessionTermination: zero prints '+' rather than '-'",
+  "find": "\t\t\t\t (0.0f < mean) ? '+' : '-',",
+  "replace": "\t\t\t\t (0.0f <= mean) ? '+' : '-',"
+ },
+ {
+  "label": "sessionTermination: the deviation's sign test is on the mean",
+  "find": "\t\t\t\t (0.0f < std) ? '+' : '-',",
+  "replace": "\t\t\t\t (0.0f < mean) ? '+' : '-',"
+ },
+ {
+  "label": "sessionTermination: 1000*std is printed as 10000*std",
+  "find": "\t\t\t\t \"1000* std = %d\\r\\n\", (int)(std * 1000.0f));",
+  "replace": "\t\t\t\t \"1000* std = %d\\r\\n\", (int)(std * 10000.0f));"
+ },
+ {
+  "label": "sessionTermination: the save threshold is strict",
+  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] > std) {"
+ },
+ {
+  "label": "sessionTermination: the save threshold is the other way round",
+  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] <= std) {"
+ },
+ {
+  "label": "sessionTermination: the threshold is compared against the mean",
+  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= mean) {"
+ },
+ {
+  "label": "sessionTermination: the threshold comes from the timing offset slot",
+  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (params->f[PARAMS_TIMING_OFFSET] >= std) {"
+ },
+ {
+  "label": "sessionTermination: the deviation is saved unscaled",
+  "find": "\t\t\t\t    (int)(1000.0f * mean);",
+  "replace": "\t\t\t\t    (int)mean;"
+ },
+ {
+  "label": "sessionTermination: the deviation saved is the standard deviation",
+  "find": "\t\t\t\t    (int)(1000.0f * mean);",
+  "replace": "\t\t\t\t    (int)(1000.0f * std);"
+ },
+ {
+  "label": "sessionTermination: the registry word is +0x50, not +0x4c",
+  "find": "\t\t\t\tmodemParams[MODEM_CLOCK_DEVIATION] =",
+  "replace": "\t\t\t\tmodemParams[MODEM_CLOCK_DEVIATION + 1] ="
+ },
+ {
+  "label": "sessionTermination: the deviation is written into the parameter block itself",
+  "find": "\t\t\t\tmodemParams = *(int *const *)&params->b[0];",
+  "replace": "\t\t\t\tmodemParams = &params->w[0];"
+ },
+ {
+  "label": "sessionTermination: the verification status is cleared only on the saving arm",
+  "find": "\tphase3Demodulator->clearVerificationStatus();\n\n\treturn 0;",
+  "replace": "\treturn 0;"
+ },
+ {
+  "label": "sessionTermination: it returns 1",
+  "find": "\tphase3Demodulator->clearVerificationStatus();\n\n\treturn 0;",
+  "replace": "\tphase3Demodulator->clearVerificationStatus();\n\n\treturn 1;"
+ },
+ {
+  "label": "sessionTermination: the disabled notice ends CRLF like the others",
+  "find": "\t\t\t\t \"EVALUATION DISABLED !\\n\");",
+  "replace": "\t\t\t\t \"EVALUATION DISABLED !\\r\\n\");"
  }
 ]

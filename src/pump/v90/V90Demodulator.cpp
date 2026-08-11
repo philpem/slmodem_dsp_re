@@ -129,6 +129,27 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #define PARAMS_WORD_278		(0x278 / 4)
 
 /*
+ * `sessionTermination`'s two.  The names in the comments are the ORIGINAL
+ * AUTHOR'S, out of `include/dsplib/V90Parameters.h`, for the reason the three
+ * `reset` indices below give: this file cannot include that header, and
+ * writing the offsets down without the names it carries throws information
+ * away.  `TIMING_OFFESET` is the author's spelling.
+ */
+#define PARAMS_TIMING_HISTORY_EVAL	(0x160 / 4)	/* int   */
+#define PARAMS_MIN_STD_FOR_SAVE		(0x16c / 4)	/* float */
+
+/*
+ * Where the timing offset is SAVED, which is not in the parameter block at
+ * all: it is +0x4c of the `_tagModemParameters` the block's first word points
+ * at, as a signed count of thousandths.  The same word is what
+ * `V90PreFilter::setParamEia6` READS as "prev params ClockDeviation", by the
+ * same two-step dereference and with the reciprocal scale (`* 0.001f`).
+ * Finding 1274; the pairing is why "saved in Registry" is not a figure of
+ * speech.
+ */
+#define MODEM_CLOCK_DEVIATION	(0x04c / 4)
+
+/*
  * The three `reset` adds.  The names in the comments are the ORIGINAL
  * AUTHOR'S, out of `include/dsplib/V90Parameters.h` -- that header cannot be
  * included here, because this file already has the other definition of the
@@ -164,6 +185,18 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  */
 extern void v90resampler_reset(ResamplerTimingOffset *self)
 	asm("_ZN12V90Resampler5resetEv");
+
+/*
+ * `sessionTermination`'s two summaries of the resampler's timing history,
+ * named the same way and for the same reason.  Both are NON-virtual and both
+ * are called directly on the embedded object's address, and both read
+ * `V90Resampler`'s own +0xa4 and +0xa8 -- the history and its length -- which
+ * is why the address handed over must be the base subobject's and not a copy.
+ */
+extern float v90resampler_timingHistoryMean(ResamplerTimingOffset *self)
+	asm("_ZN12V90Resampler20getTimingHistoryMeanEv");
+extern float v90resampler_timingHistoryStd(ResamplerTimingOffset *self)
+	asm("_ZN12V90Resampler19getTimingHistoryStdEv");
 
 void
 V90Demodulator::enterPhase3()
@@ -252,6 +285,135 @@ V90Demodulator::enterPhase3()
 			 "retraining to V.34 upstream...\r\n");
 		word_3c = 0x20;
 	}
+}
+
+/*
+ * sessionTermination -- decide whether this call's timing offset is worth
+ * keeping, and either write it into the registry or say why not.
+ *
+ * ONE STORE AND FIVE DIAGNOSTICS, and the store is the point.  Everything
+ * else is a reason, printed: the connection was not in the data state, or it
+ * was EIA-6, or the evaluation is switched off, or the offset was too noisy.
+ * `V90Phase3Demodulator::clearVerificationStatus` runs on every path,
+ * including all four refusals.
+ *
+ * WHAT IT WRITES, AND WHERE.  `(int)(1000.0f * mean)` goes to +0x4c of the
+ * `_tagModemParameters` the parameter block's first word points at -- NOT
+ * into the parameter block.  `V90PreFilter::setParamEia6` reads that same
+ * word back as "prev params ClockDeviation" and multiplies it by 0.001f, so
+ * the two functions are the write and the read of one persisted number and
+ * the scale factors are reciprocal.  Finding 1274.
+ *
+ * `+0x34` IS A STATE, NOT A LATCH, and this function is what says so.  The
+ * diagnostic below prints `isDataState = %d` for `+0x34 == 3`, and
+ * `enterChannelVerification` sets the same field to 5; the name `inPhase3` in
+ * the header dates from `enterPhase3`, which returns early when it is exactly
+ * 1.  The name is left alone -- it is invented either way (finding 226) and
+ * eight parallel worktrees share the header -- and corrected here.  Finding
+ * 1273.
+ *
+ * `isV90WithEia6()` IS CALLED TWICE, and the second call is kept because the
+ * blob makes it.  The `if` tests it and the `else` prints it, and between the
+ * two nothing runs at all -- so caching it would be equivalent and the
+ * mutation that does so is uncaught.  Same shape and same reason as
+ * `enterPhase3`'s double call, finding 293.  `+0x34 == 3` is likewise
+ * recomputed for the printed argument.
+ *
+ * THE RETURN TYPE IS NOT `void`, AND IT IS NOT DECIDABLE FURTHER.  The single
+ * exit is
+ *
+ *     1ab75  83 c4 34     add    $0x34,%esp
+ *     1ab78  31 c0        xor    %eax,%eax
+ *     1ab7a  5b 5e c3     pop; pop; ret
+ *
+ * and a `void` member emits no `xor` at all where `int` and `unsigned int`
+ * both emit exactly that one and are byte-identical to each other.  That was
+ * measured on THIS TREE'S g++ under `-m32 -O2 -fomit-frame-pointer
+ * -march=i386 -mtune=i686 -mfpmath=387`, and NOT in `tools/toolchain/`'s GCC
+ * 3.4.2 container, which is what `getBitRate`'s comment above means by the
+ * same phrase -- so the experiment is weaker than that one by exactly that
+ * much.  The conclusion survives the difference: a `void` function leaving a
+ * dead register clear behind is not a thing any GCC does at -O2, and the
+ * positive direction is the ABI's rather than any pass's.  So the constant
+ * zero is forced and its signedness is not; `int` is written and the
+ * ambiguity is recorded rather than hidden.  Nothing in the tree calls this
+ * method, so the choice binds no caller.
+ *
+ * THE `%c%d.%04d` SHAPE IS THE ONE V90PreFilter.cpp ALREADY CARRIES: a sign
+ * character from `0.0f < x`, the truncated magnitude of `x`, and the first
+ * four decimals as `|(int)((x - (int)x) * 10000.0f)|`.  Two details of it are
+ * the object's rather than the idiom's -- the sign comes from `fldz; fcomps`
+ * with the VALUE as the operand, so a NaN prints '-', and the fractional part
+ * is truncated twice rather than rounded.  10000.0f is loaded once for both
+ * calls and spilled as a `double`, which is GCC hoisting one constant and not
+ * two different ones.
+ */
+int
+V90Demodulator::sessionTermination()
+{
+	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
+		if (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {
+			float mean = v90resampler_timingHistoryMean(&resampler);
+			float std = v90resampler_timingHistoryStd(&resampler);
+			int frac;
+
+			frac = (int)((mean - (float)(int)mean) * 10000.0f);
+			edprintf("V90Demodulator on sessionTermination: mean "
+				 "of timing offset History  = %c%d.%04d\r\n",
+				 (0.0f < mean) ? '+' : '-',
+				 (int)__builtin_fabsf(mean),
+				 (frac < 0) ? -frac : frac);
+
+			frac = (int)((std - (float)(int)std) * 10000.0f);
+			edprintf("V90Demodulator on sessionTermination: std "
+				 "of timing offset History  = %c%d.%04d\r\n",
+				 (0.0f < std) ? '+' : '-',
+				 (int)__builtin_fabsf(std),
+				 (frac < 0) ? -frac : frac);
+
+			edprintf("V90Demodulator on sessionTermination: "
+				 "1000* std = %d\r\n", (int)(std * 1000.0f));
+
+			/*
+			 * The threshold is on the LEFT of the comparison in
+			 * the object -- `flds 0x16c(%ecx); fcomps std; jb` --
+			 * so the arm that saves is the one where the
+			 * parameter is at least as large as the deviation.
+			 * Its name reads the other way round: the author
+			 * called it TIMING_OFFESET_MIN_STD_FOR_SAVE and uses
+			 * it as a maximum.
+			 */
+			if (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {
+				int *modemParams;
+
+				edprintf("V90Demodulator on "
+					 "sessionTermination: Timing offset "
+					 "saved in Registry!\r\n");
+
+				modemParams = *(int *const *)&params->b[0];
+				modemParams[MODEM_CLOCK_DEVIATION] =
+				    (int)(1000.0f * mean);
+			}
+		} else {
+			/*
+			 * The one message in this function that ends in a
+			 * bare "\n" rather than "\r\n".  It is the object's
+			 * and it is reproduced rather than tidied; D200.
+			 */
+			edprintf("V90Demodulator on sessionTermination: "
+				 "Timing offset NOT saved to registry, "
+				 "EVALUATION DISABLED !\n");
+		}
+	} else {
+		edprintf("V90Demodulator on sessionTermination: Timing offset "
+			 "NOT saved to registry (isDataState = %d, "
+			 "isEia6 = %d)\r\n",
+			 inPhase3 == 3, preFilter.isV90WithEia6());
+	}
+
+	phase3Demodulator->clearVerificationStatus();
+
+	return 0;
 }
 
 /*

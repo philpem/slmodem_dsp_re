@@ -41318,3 +41318,154 @@ compile error in a file the batch never opened, so grep `test/` for the class
 name BEFORE declaring the constructor, not after.
 
 ---
+### 1270. TWO 195-BYTE FUNCTIONS OF ONE CLASS ARE NOT THE SAME CODE, AND THE PAIR THAT IS DUPLICATED IS D1/D2
+
+`V92EchoCanceller::reset` (blob 0x10fd0) and `V92EchoCanceller::~V92EchoCanceller`
+(0x10b20 as `D2`, 0x10bf0 as `D1`) are all 0xc3 = 195 bytes. Three functions of
+one class at one size invites the assumption that the destructor and `reset`
+are the same body twice, or that one calls the other. **Neither is true.**
+
+    reset   push %ebx; xor %eax,%eax; sub $0x18,%esp   ... jmp FloatARMA::reset
+    D1/D2   sub $0xc,%esp; cmpl $0x1,dsplibs_debug_level ... three guarded frees
+
+`reset` clears two buffers, a cursor, a tap count and two floats and tail-calls
+into the ARMA. The destructor prints one gated line and frees three owned
+pointers. They share no instruction sequence and neither calls the other. The
+size is coincidence.
+
+**What IS duplicated is `D1` and `D2`, byte for byte, 0xd0 apart.** That is
+not a defect and not a second body to reconstruct: GCC emits the
+complete-object and base-object destructors as two symbols for any class with
+a user-declared destructor, and for a class with no virtual bases -- which
+this one is, `nm` lists no `D0` and there is no vptr -- the two are identical.
+**One `~V92EchoCanceller()` in the source produces exactly that pair**, which
+is why `src/pump/v90/V92EchoCanceller.cpp` has one destructor and
+`test/unit/t_v90leaves.cpp` drives both symbols on alternate trials rather
+than assuming the second is a copy of the first.
+
+The cost of declaring it is recorded beside it: a class with a user-declared
+destructor cannot be a union member, so `union ec_slot` in t_v90leaves.cpp
+gained an explicit `ec_slot() { }` / `~ec_slot() { }` pair -- the same shape
+`rt_slot` in the same file already had for `ResamplerTimingOffset`.
+
+### 1271. `V92EchoCanceller::reset` IS FOUR OF ITS OWN MEMBERS INLINED, AND THE FACTORING IS RECORDED RATHER THAN REPRODUCED
+
+195 bytes of `reset` are, in order:
+
+    0x10fd0..0x10ffb   byte-for-byte the body of `zeroEchoCoeff`   (0x10f60, 45 B)
+    0x10ffc..0x1102b   byte-for-byte the body of `resetEchoHistory` (0x10f90, 62 B)
+    0x1102c            word_08 = 0
+    0x11037..0x1105a   `setEchoBeta(0.0f)`    (0x10cc0) constant-folded
+    0x1105b..0x11082   `setDecayFactor(0.0f)` (0x10d60) constant-folded
+    0x11083..0x1108e   tail call to `FloatARMA::reset`
+
+The two loops match their standalone counterparts down to the order of the
+`historyIndex` store and the `echoLength` recomputation, so `reset` calling
+them is by far the most likely source. The two diagnostics settle the same
+way: `setEchoBeta` prints the sign of the FIELD it has just stored, so with a
+zero argument `fldz; fcomps 0x30(%ecx)` is false, the character folds to
+`'-'` (0x2d), and the magnitude and fractional terms fold to zero -- which is
+exactly the `$0x2d, $0, $0` `reset` passes. There is no other value of the
+argument that produces those three constants and also stores zero.
+
+**None of the four is written in this tree, so `reset` spells them inline.**
+Writing calls to functions that do not exist is not an option, and the emitted
+code is the same either way because the original's compiler inlined them too.
+This is CLAUDE.md's rule that a different factoring may differ for ever while
+behaving identically, used deliberately: the differential test is against
+`reset`, and the four inlined bodies are named here so that a later batch
+writing `zeroEchoCoeff` knows to fold this one back rather than to discover
+the duplication again.
+
+`reset` is also the second writer of `echoLength` after `setEchoDelay`, and
+they agree: `setEchoDelay` moves it by the change in delay, `reset` rebuilds
+it as `(filterLength >> 1) + echoDelay + params->V92_ECHO_DELAY_OFFSET`. That
+is D72's invariant, from D72's other end.
+
+### 1272. MODERN GCC DELETES THE LAST MEMBER STORE IN A DESTRUCTOR, AND ONLY A DIFFERENTIAL TEST SEES IT
+
+`~V92EchoCanceller` frees three owned pointers and writes NULL over each. Our
+first build of it agreed with the blob on two of the three and disagreed on
++0x04 -- ours left the freed `FloatARMA *` in place where the blob nulled it.
+The source was right and the compiler was the difference.
+
+GCC since 5 ends an object's lifetime at the closing brace of its destructor
+(`-flifetime-dse`, on by default) and deletes any store to a member that no
+call follows. The first two `= NULL` stores survive because an opaque
+`sysdep_free` call comes after each and the compiler cannot prove it does not
+read the object; the third is the last statement in the function and is dead
+by that rule. GCC 3.4.2 has no such pass, so the blob keeps all three.
+
+The fix is `-fno-lifetime-dse` in `CXXFLAGS`, which restores the original
+compiler's semantics rather than papering over ours. It is the only flag in
+that variable that exists to make a whole optimisation era go away, and it is
+worth knowing that it can change any destructor in the tree -- today it
+changes exactly one, because no other reconstructed destructor stores to a
+member.
+
+**What is worth taking from this beyond the flag**: the disagreement was four
+bytes at one offset, on one of the eight null-mask combinations, and every
+other check in the suite passed. A test that had compared only "did it free
+what it held" -- which is what a destructor test naturally looks like -- would
+have been green. It was `diff_eq_obj` over the whole object that caught it.
+
+### 1273. `V90Demodulator+0x34` IS A STATE, NOT A LATCH, AND `sessionTermination` IS WHAT SAYS SO
+
+`V90Demodulator.h` has called +0x34 `inPhase3` since wave 2, on the evidence
+of `enterPhase3`: it returns immediately when the field is exactly 1 and sets
+it to 1 otherwise, which is what a latch looks like from one caller. Three
+more members make it a state variable instead:
+
+    enterPhase3               tests == 1, sets 1
+    enterChannelVerification  sets 5
+    sessionTermination        tests == 3, and PRINTS the answer as `isDataState`
+
+The third is the one that settles it, because the name is the object's own:
+the format string is "V90Demodulator on sessionTermination: Timing offset NOT
+saved to registry (isDataState = %d, isEia6 = %d)\r\n" and the `%d` is
+`sete` on `cmpl $0x3,0x34(%esi)`. So 3 is the data state, 1 is phase 3, 5 is
+channel verification, and "exactly 1" in `enterPhase3` is a state test rather
+than a latch test -- which was already recorded as mattering, and now has a
+reason.
+
+**The field is NOT renamed.** Data member names are invented here either way
+(finding 226), eight worktrees share this header at the moment, and a rename
+that collides is a worse outcome than a name that reads a little narrow. The
+header comment carries the correction; that is where a reader looks.
+
+### 1274. THE TIMING OFFSET IS PERSISTED AND RESTORED THROUGH ONE WORD, AND THE TWO ENDS ARE IN DIFFERENT CLASSES
+
+`V90Demodulator::sessionTermination` ends a call by saving the mean timing
+offset, and `V90PreFilter::setParamEia6` starts one by reading it back. They
+never mention each other and the word they share is not in the parameter
+block: it is +0x4c of the `_tagModemParameters` record the parameter block's
+FIRST word points at, reached by the same two-step dereference at both ends.
+
+    write   V90Demodulator::sessionTermination, blob 0x1ad2a
+              mov 0x2c(%esi),%ecx ; mov (%ecx),%edx
+              flds .rodata.cst4+0xfc (1000.0f) ; fmuls mean ; fistpl 0x4c(%edx)
+
+    read    V90PreFilter::setParamEia6, src/pump/v90/V90PreFilter.cpp
+              blk = *(const int *const *)&p->b[0];
+              x   = (long double)blk[0x4c / 4] * 0.001f;
+              edprintf("V90PreFilter: prev params ClockDeviation is = ...")
+
+The scale factors are reciprocal -- 1000 in, 0.001 out -- so the stored
+quantity is the offset in thousandths, as a signed `int`, and the prefilter's
+name for it is **ClockDeviation**. "Timing offset saved in Registry!", which
+is what the write arm prints, is therefore literal rather than a figure of
+speech: it is the one number this library carries from one call to the next.
+
+**What the write costs and what gates it.** Three conditions, all of which
+must hold: the demodulator is in the data state (+0x34 == 3), the connection
+is not EIA-6, and `TIMING_HISTORY_EVALUATION_ENABLED` (V90Parameters +0x160)
+is non-zero. Then one more: the standard deviation of the timing history must
+be no larger than `TIMING_OFFESET_MIN_STD_FOR_SAVE` (+0x16c, the author's
+spelling), which is compared as `param >= std` and is therefore a MAXIMUM
+whatever its name says. Each of the four refusals prints its own reason.
+
+`V90PreFilter::setParamEia6` then only applies what it read when the value is
+non-zero, by a `fcompp; sahf; jne` that treats a NaN as zero -- so a call that
+never reaches `sessionTermination`'s saving arm leaves the next call's
+prefilter untouched, and the two halves are consistent about the meaning of
+zero.
