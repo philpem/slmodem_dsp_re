@@ -1,10 +1,15 @@
 /*
  * V92EchoCanceller.h -- the V.92 upstream echo canceller's state.
  *
- * Reconstructed from dsplibs.o.  Twelve members, 3,622 bytes; three of them
- * are written here -- `setEchoDelay`, which is the one `v34handshak` reaches,
- * `reset`, and the destructor, which the object emits as the byte-identical
- * pair `D1` and `D2` (finding 1270).
+ * Reconstructed from dsplibs.o.  Twelve members, 3,622 bytes; four of them
+ * are written here -- the constructor, which the object emits as the
+ * byte-identical pair `C1` and `C2`, `setEchoDelay`, which is the one
+ * `v34handshak` reaches, `reset`, and the destructor, which it emits as the
+ * byte-identical pair `D1` and `D2` (finding 1270).
+ *
+ * THE CONSTRUCTOR IS WHERE THE SIZING HAPPENS, which is D72's whole premise
+ * made concrete: it allocates `echoHistory` once, `historyAlloc` floats long,
+ * and nothing reallocates it afterwards.  See the .cpp.
  *
  * NOT POLYMORPHIC: `~V92EchoCanceller` is listed with `D1` and `D2` and no
  * `D0`, so there is no vptr.
@@ -58,9 +63,20 @@
  *          "V92EchoCanceller: echoBeta = %c%d.%06d\r\n" and
  *          "V92EchoCanceller: echoBetaDecay = %c%d.%06d\r\n".
  *
- * The three holes stay `pad_`.  D72 records +0x1c as the history's ALLOCATED
- * length, from a constructor nothing here has read; it is left unnamed rather
- * than transcribed, which is the same rule the rest of this file follows.
+ * ONE HOLE IS LEFT, +0x0c..+0x13, and it is the only part of the object no
+ * member written here touches -- the constructor initialises everything else,
+ * so eight bytes it leaves alone is a measured statement rather than an
+ * unexplored gap.  D72's +0x1c and the `filterLength - 1` beside it are named
+ * below now that the constructor that writes them has been read.
+ *
+ * A CORRECTION TO D72's DERIVATION, not to its verdict.  D72 and finding 1188
+ * both spell the filter length `V92_ECHO_FILTER_LENGTH & ~3`.  The object
+ * does a SIGNED divide-and-multiply -- `test %eax,%eax; js; add $0x3; and
+ * $0xfffffffc` -- which is `x / 4 * 4` on an `int`, and the two readings
+ * differ for every negative value: -6 gives -8 under the mask and -4 under
+ * the object's rounding-toward-zero.  At the shipped 180 they agree, so
+ * nothing about D72's CANNOT FIRE verdict moves; the arithmetic is corrected
+ * where it is stated.  Finding 1312.
  */
 
 #ifndef DSPLIB_V92ECHOCANCELLER_H
@@ -71,6 +87,19 @@ class V92Parameters;
 
 class V92EchoCanceller {
 public:
+	/*
+	 * THREE ARGUMENTS, and only the first is a thing.  The second and
+	 * third appear nowhere but in the history length: the second is the
+	 * `div` divisor and the multiplier of the `2 *` term, the third the
+	 * final addend.  Finding 1188 traced both to `VPcmFloModem`'s
+	 * constructors and read them as 40 and 199 for the shipped
+	 * configuration; the names here describe what THIS constructor does
+	 * with them, which is all it can say.  A zero `blockLen` traps at the
+	 * divide -- the object does not guard it and neither does this.
+	 */
+	V92EchoCanceller(V92Parameters *params, unsigned int blockLen,
+			 unsigned int extra);
+
 	/* Defined in src/pump/v90/V92EchoCanceller.cpp. */
 	void setEchoDelay(unsigned int);
 	void reset();
@@ -91,7 +120,27 @@ public:
 	unsigned int word_08;		/* +0x08 cleared by `reset`          */
 	unsigned char pad_0c[0x08];	/* +0x0c                             */
 	unsigned int filterLength;	/* +0x14 taps in `echoCoeff`         */
-	unsigned char pad_18[0x08];	/* +0x18 (+0x1c: see D72)            */
+	/*
+	 * +0x18 IS `filterLength - 1` AND IS NOTHING ELSE.  The constructor
+	 * writes it as `lea -0x1(%eax),%ecx` one instruction before it writes
+	 * `filterLength` from the same `%eax`, and the only other reader in
+	 * the class is the constructor itself, four instructions later, where
+	 * it is the first term of the history length.  So the field is real
+	 * and its VALUE is measured; what it was called is not, and inventing
+	 * a name for a quantity no method name and no diagnostic mentions is
+	 * what finding 226 warns against.  `word_18` it stays.
+	 */
+	unsigned int word_18;		/* +0x18 == filterLength - 1         */
+	/*
+	 * +0x1c IS THE HISTORY'S ALLOCATED LENGTH, and it is use-derived
+	 * rather than named: the constructor computes it, stores it here,
+	 * shifts a copy left by two and hands that to `sysdep_malloc` as the
+	 * byte count for `echoHistory`.  A number that is the argument of the
+	 * allocation is the allocation's length.  Nothing else in the class
+	 * reads it -- `reset` bounds its clear by `echoLength` and never by
+	 * this -- which is D72's whole mechanism.
+	 */
+	unsigned int historyAlloc;	/* +0x1c floats in `echoHistory`     */
 	float *echoCoeff;		/* +0x20 OWNED; freed by ~this       */
 	float *echoHistory;		/* +0x24 OWNED; freed by ~this       */
 	unsigned int historyIndex;	/* +0x28 invented; see the comment   */

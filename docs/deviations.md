@@ -4830,3 +4830,33 @@ new hardware.
 *Batch of 2026-08-11, from `V90Demodulator::sessionTermination` (blob 0x1ab30). **Reachability: FIRES** whenever `TIMING_HISTORY_EVALUATION_ENABLED` is zero and the call reached the data state. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.
+
+## D225 ⚠ `V92EchoCanceller`'s constructor reads `echoDelay` and `echoLength` before anything has written them, and folds the difference into a value it then discards
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1314.** The constructor's third instruction group is `setEchoDelay(params->V92_ECHO_INITIAL_DELAY)` inlined -- `mov 0x38(%esi),%ecx` at +0x35 loads `echoDelay` out of storage `sysdep_malloc` has just returned, and `add %edx,0x2c(%esi)` folds `delay0 - garbage` into `echoLength`, which is equally uninitialised. The result is DEAD: the tail call to `reset()` rebuilds `echoLength` from `filterLength`, `echoDelay` and the parameter block, and the history's allocated length at +0x1c is built from +0x18 and +0x38 and never from +0x2c. Reproduced rather than tidied, and reproducing it depends on `-fno-lifetime-dse` (finding 1224). Not D72: that entry is about the buffer this constructor sizes, not about what it reads before sizing it.
+
+## D226 🐛 `V92EchoCanceller`'s constructor divides by its second argument and does not guard it
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0), +0x98. **Reachability: CANNOT FIRE** on the shipped path -- finding 1188 threads the argument back to `VPCMXF_Create`'s `(int)trunc(arg4 * 8.0 + 0.5)` and reads it as 40. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1188 already names this** as "a divide-by-zero, a different defect, not an overrun"; it is registered here so that the constructor's own entry exists. `div %edi` takes the block length straight from the argument, so a caller passing zero traps before the second allocation. Reproduced: the reconstruction divides in the same place and adds no check.
+
+## D227 ⚠ the echo canceller's construction notice says "constraction"
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), .rodata.str1.4+0x30ac. **Reachability: FIRES** whenever `dsplibs_debug_level` is above 1. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1310.** The string is `"V92EchoCanceller: constraction\r\n"`. It is the original's typo, it goes through `dsplibs_debug_printf` unencoded, and it is reproduced character for character -- `v92ec`'s "the construction notice's typo is corrected" mutation exists to make sure a later reader cannot quietly fix it.
+
+## D228 🐛 a zero `V92_ECHO_FILTER_LENGTH` makes the constructor's `filterLength - 1` wrap, and at a zero initial delay the history allocation wraps with it
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x62 and +0x8f. **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180 (finding 1188); it needs a parameter file, which slmodemd never supplies (finding 879). Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1312.** `lea -0x1(%eax),%ecx` stores `filterLength - 1` at +0x18 as an unsigned word, and the history length adds `echoDelay` to it. At `filterLength == 0` that term is 0xffffffff; an initial delay of 1 or more brings the sum back into range and the object allocates a small buffer, which the differential test drives on both sides. An initial delay of 0 leaves 0xffffffff, and the `sysdep_malloc` four instructions later is asked for 16 GB with no check on the result. Reproduced, unguarded, and not driven.
+
+## D229 🐛 a negative `V92_ECHO_FILTER_LENGTH` becomes a four-billion tap count and an unchecked allocation
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x49..+0x85. **Reachability: CANNOT FIRE** at the shipped 180, for D228's reason. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding 1188 write, since no test that reaches it survives.

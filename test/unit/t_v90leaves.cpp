@@ -1164,6 +1164,413 @@ run_ec_dtor(void)
 	return diff_end();
 }
 
+/* ------------------------ V92EchoCanceller::V92EchoCanceller (313 bytes) */
+
+/*
+ * THE CONSTRUCTOR IS WHERE THE SIZING HAPPENS, so this is the first test in
+ * the tree that can see a mis-sizing.  `reset`'s test above puts a synthetic
+ * guard past two buffers IT owns; here the buffers are the constructor's own,
+ * `historyAlloc` and `filterLength` are its own arithmetic, and the checks
+ * are built the other way round:
+ *
+ *   - the total BYTES each side asked the allocator for are predicted here,
+ *     from the parameter block and the two scalar arguments, and compared.
+ *     A buffer one float short is a byte count, not a silence.
+ *   - `reset` then clears `echoLength` floats of a buffer `historyAlloc`
+ *     floats long, and the TAIL between them must still hold the harness's
+ *     0xa5 fill on both sides.  That is D72's guard made out of the object's
+ *     own numbers rather than out of the test's.
+ *   - every trial asserts `echoLength <= historyAlloc` BEFORE it believes any
+ *     of that.  Driving the overrun would corrupt this process's heap, which
+ *     is not the same thing as testing D72; D72 is CONFIRMED and CANNOT FIRE
+ *     (finding 1188) and this is not the place to re-open it.
+ *
+ * TWO ARMS ARE NOT DRIVEN AND THE REASON IS THE SAME BOTH TIMES: the object
+ * faults before anything could be compared.
+ *
+ *   - A NEGATIVE `V92_ECHO_FILTER_LENGTH` takes the `js; add $0x3` arm at
+ *     +0x131.  The result is a huge unsigned `filterLength`, and the next
+ *     instruction but four asks `sysdep_malloc` for four times it.  So the
+ *     signed `x / 4 * 4` and the `& ~3` that D72 and finding 1188 write are
+ *     indistinguishable to any test that survives, and the correction is
+ *     recorded rather than measured (finding 1312).
+ *   - `blockLen == 0` divides by zero at +0x98.  Finding 1188 already calls
+ *     that a different defect; every trial below uses a nonzero divisor and
+ *     says so rather than avoiding it quietly.
+ *
+ * `filterLength == 0` IS DRIVEN, and it is not the same thing.  `word_18` is
+ * then `0 - 1`, and the wrap is real: the history length is built from it as
+ * unsigned, so an initial delay of 1 brings the sum back to 0 and the object
+ * allocates a small buffer.  Both sides wrap identically; the trials that do
+ * it keep the delay at or above 1, because at zero the wrap survives into the
+ * allocation size.
+ *
+ * THE PARAMETER BLOCK IS SHARED between the sides.  The constructor only
+ * reads it, so one block means +0x00 compares as a value rather than being
+ * excluded -- which is one more field measured, not one fewer.
+ */
+
+extern "C" {
+void our_ec_ctor(void *self, void *params, unsigned int blockLen,
+		 unsigned int extra)
+	asm("_ZN16V92EchoCancellerC1EP13V92Parametersjj");
+void ref_ec_ctor(void *self, void *params, unsigned int blockLen,
+		 unsigned int extra)
+	asm("ref__ZN16V92EchoCancellerC1EP13V92Parametersjj");
+void our_ec_ctor2(void *self, void *params, unsigned int blockLen,
+		  unsigned int extra)
+	asm("_ZN16V92EchoCancellerC2EP13V92Parametersjj");
+void ref_ec_ctor2(void *self, void *params, unsigned int blockLen,
+		  unsigned int extra)
+	asm("ref__ZN16V92EchoCancellerC2EP13V92Parametersjj");
+}
+
+/* The three fields of V92Parameters the constructor reads. */
+#define ECC_FILTER_LENGTH	0x6c
+#define ECC_INITIAL_DELAY	0x70
+#define ECC_DELAY_OFFSET	0x74
+
+/* What FloatARMA(12, 12, den, num, 99) allocates, in floats. */
+#define ECC_ARMA_NA	12u
+#define ECC_ARMA_NB	12u
+#define ECC_ARMA_XLEN	(ECC_ARMA_NB + 99u)
+#define ECC_ARMA_YLEN	(ECC_ARMA_NA + 99u)
+
+/* FloatARMA's four owned pointers, +0x00..+0x0f. */
+#define ECC_ARMA_PTRS	0x10
+
+static unsigned char ecc_parm[ECR_PARM] __attribute__((aligned(8)));
+
+struct ecc_case {
+	int filterLength;	/* V92_ECHO_FILTER_LENGTH, +0x6c */
+	int initialDelay;	/* V92_ECHO_INITIAL_DELAY, +0x70 */
+	int delayOffset;	/* V92_ECHO_DELAY_OFFSET,  +0x74 */
+	unsigned int blockLen;	/* argument 2, the divisor        */
+	unsigned int extra;	/* argument 3, the final addend   */
+};
+
+/*
+ * The shipped configuration is the last row, scaled down: 180, 840 and -14 are
+ * the real defaults (finding 1188) and are used as they stand, because the
+ * allocation they imply is 2,298 floats, which is nothing.
+ */
+static const struct ecc_case ecc_cases[] = {
+	{   4,   1,   0,	1u,	0u   },
+	{   4,   1,   0,	1u,	7u   },
+	{   8,   4,   3,	2u,	1u   },
+	{   9,   4,   3,	2u,	1u   },	/* 9/4*4 == 8: the truncation */
+	{  10,   4,   3,	3u,	0u   },
+	{  11,   4,   3,	3u,	5u   },
+	{  40,  60,  16,	7u,	19u  },
+	{  64, 100,  12,	40u,	199u },
+	{  63,  17,   5,	5u,	3u   },
+	{   0,   1,   0,	1u,	4u   },	/* word_18 wraps; see the head */
+	{   0,   8,   2,	4u,	9u   },
+	{ 180, 840, -14,	40u,	199u }	/* the shipped configuration  */
+};
+#define ECC_NCASE ((int)(sizeof(ecc_cases) / sizeof(ecc_cases[0])))
+
+static int
+run_ec_ctor(void)
+{
+	static const int allow[] = {
+		0x00, 0x04, 0x08, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c,
+		0x30, 0x34, 0x38
+	};
+	int seen[13];
+	int trial, printed = 0, i;
+	int sawWrap = 0, sawDistinct = 0;
+	unsigned int firstAlloc = 0;
+	unsigned lvl;
+
+	for (i = 0; i < 13; i++)
+		seen[i] = 0;
+
+	diff_begin("V92EchoCanceller::V92EchoCanceller");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+
+		for (trial = 0; trial < ECC_NCASE * 4 * 2; trial++) {
+			const struct ecc_case *c =
+			    &ecc_cases[trial % ECC_NCASE];
+			int useC2 = (trial / ECC_NCASE) & 1;
+			unsigned char before[EC_SLOT], sa[EC_SLOT], sb[EC_SLOT];
+			long tag = (long)lvl * 1000 + trial;
+			int bad, first;
+			unsigned int len, w18, span, want, need, wantBytes;
+			float *coeff[2], *hist[2];
+			unsigned char *arma[2];
+			int liveWas, allocWas;
+			unsigned int bytesWas;
+
+			/*
+			 * The arithmetic, spelled independently of the source
+			 * under test: a signed divide-and-multiply, an
+			 * unsigned decrement that may wrap, and the two
+			 * unsigned sums the object builds from them.
+			 */
+			len = (unsigned int)(c->filterLength / 4 * 4);
+			w18 = len - 1u;
+			span = w18 + (unsigned int)c->initialDelay;
+			need = span + 2u * c->blockLen
+			       + span / c->blockLen * c->blockLen + c->extra;
+			want = (len >> 1) + (unsigned int)c->initialDelay
+			       + (unsigned int)c->delayOffset;
+			wantBytes = len * 4u + need * 4u
+				    + (unsigned int)sizeof(FloatARMA)
+				    + (ECC_ARMA_NA + ECC_ARMA_NB
+				       + ECC_ARMA_XLEN + ECC_ARMA_YLEN) * 4u;
+
+			/*
+			 * Believed before anything is dereferenced: `reset`
+			 * clears `want` floats of a buffer `need` long.
+			 */
+			diff_eq_int("the trial fits its own allocation (%ld)",
+				    want <= need && need < 0x100000u, 1, tag);
+			if (want > need || need >= 0x100000u)
+				continue;
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial,
+				  trial & 3);
+			fill_pair(ecc_parm, ecc_parm, ECR_PARM, trial + 9,
+				  trial & 3);
+			memcpy(&ecc_parm[ECC_FILTER_LENGTH], &c->filterLength,
+			       sizeof(int));
+			memcpy(&ecc_parm[ECC_INITIAL_DELAY], &c->initialDelay,
+			       sizeof(int));
+			memcpy(&ecc_parm[ECC_DELAY_OFFSET], &c->delayOffset,
+			       sizeof(int));
+
+			memcpy(before, ec_b.raw, EC_SLOT);
+
+			liveWas = harness_alloc.live;
+			allocWas = harness_alloc.allocs;
+			bytesWas = harness_alloc.bytes;
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			if (useC2) {
+				our_ec_ctor2(&ec_a.o, ecc_parm, c->blockLen,
+					     c->extra);
+				ref_ec_ctor2(&ec_b.o, ecc_parm, c->blockLen,
+					     c->extra);
+			} else {
+				our_ec_ctor(&ec_a.o, ecc_parm, c->blockLen,
+					    c->extra);
+				ref_ec_ctor(&ec_b.o, ecc_parm, c->blockLen,
+					    c->extra);
+			}
+
+			dsplib_debug_capture_on = 0;
+
+			/*
+			 * SEVEN ALLOCATIONS A SIDE, and the BYTES are the
+			 * check that matters: three here -- the coefficients,
+			 * the history and the ARMA object -- and four inside
+			 * `FloatARMA`.
+			 */
+			diff_eq_int("fourteen allocations, seven a side (%ld)",
+				    harness_alloc.allocs - allocWas, 14, tag);
+			diff_eq_int("both sides asked for the same %ld bytes",
+				    (long)(harness_alloc.bytes - bytesWas),
+				    (long)(2u * wantBytes), tag);
+
+			coeff[0] = ec_a.o.echoCoeff;
+			coeff[1] = ec_b.o.echoCoeff;
+			hist[0] = ec_a.o.echoHistory;
+			hist[1] = ec_b.o.echoHistory;
+			arma[0] = (unsigned char *)ec_a.o.arma;
+			arma[1] = (unsigned char *)ec_b.o.arma;
+
+			diff_eq_int("six pointers, all non-null and no two "
+				    "shared (%ld)",
+				    coeff[0] != 0 && coeff[1] != 0 &&
+				    hist[0] != 0 && hist[1] != 0 &&
+				    arma[0] != 0 && arma[1] != 0 &&
+				    coeff[0] != coeff[1] &&
+				    hist[0] != hist[1] &&
+				    arma[0] != arma[1], 1, tag);
+			if (coeff[0] == 0 || coeff[1] == 0 || hist[0] == 0 ||
+			    hist[1] == 0 || arma[0] == 0 || arma[1] == 0)
+				return diff_end();
+
+			diff_eq_int("both sides kept the parameter block they "
+				    "were given (%ld)",
+				    ec_a.o.params == (V92Parameters *)ecc_parm
+				    && ec_b.o.params ==
+					(V92Parameters *)ecc_parm, 1, tag);
+
+			/*
+			 * The three heap pointers are each side's own address
+			 * and always will be; everything else in the slot,
+			 * INCLUDING the parameter pointer and the guard past
+			 * the object, is compared as it stands.
+			 */
+			memcpy(sa, ec_a.raw, EC_SLOT);
+			memcpy(sb, ec_b.raw, EC_SLOT);
+			memset(sa + 0x04, 0, 4);
+			memset(sb + 0x04, 0, 4);
+			memset(sa + 0x20, 0, 8);
+			memset(sb + 0x20, 0, 8);
+			diff_eq_obj_(__FILE__, __LINE__, "after the constructor",
+				     "V92EchoCanceller slot", sa, sb, EC_SLOT,
+				     tag);
+
+			/* Both buffers, in full, at the length it chose. */
+			diff_eq_int("the coefficients match, all %ld bytes",
+				    memcmp(coeff[0], coeff[1], len * 4u) == 0,
+				    1, (long)(len * 4u));
+			diff_eq_int("the history matches, all %ld bytes",
+				    memcmp(hist[0], hist[1], need * 4u) == 0,
+				    1, (long)(need * 4u));
+
+			/*
+			 * D72's TAIL.  `reset` cleared `want` floats; the
+			 * remaining `need - want` are still the harness's
+			 * fill, on both sides.  A history one float short
+			 * would have this fail on the side that overran, and
+			 * a `reset` bounded by the ALLOCATION rather than by
+			 * `echoLength` would have it fail on both.
+			 */
+			{
+				unsigned int k;
+				int tailA = 1, tailB = 1;
+
+				for (k = want * 4u; k < need * 4u; k++) {
+					if (((unsigned char *)hist[0])[k]
+					    != HARNESS_MALLOC_FILL)
+						tailA = 0;
+					if (((unsigned char *)hist[1])[k]
+					    != HARNESS_MALLOC_FILL)
+						tailB = 0;
+				}
+				diff_eq_int("ours left the history's tail "
+					    "unwritten (%ld)", tailA, 1, tag);
+				diff_eq_int("the blob left the history's tail "
+					    "unwritten (%ld)", tailB, 1, tag);
+			}
+
+			/*
+			 * The ARMA: its four owned pointers are two sets of
+			 * four addresses, so they are excluded and the four
+			 * buffers they name are compared instead.
+			 */
+			{
+				unsigned char aa[sizeof(FloatARMA)];
+				unsigned char ab[sizeof(FloatARMA)];
+				FloatARMA *ma = (FloatARMA *)arma[0];
+				FloatARMA *mb = (FloatARMA *)arma[1];
+
+				diff_eq_int("the ARMA's four buffers are all "
+					    "there and no two shared (%ld)",
+					    ma->m_a != 0 && mb->m_a != 0 &&
+					    ma->m_b != 0 && mb->m_b != 0 &&
+					    ma->m_xhist != 0 &&
+					    mb->m_xhist != 0 &&
+					    ma->m_yhist != 0 &&
+					    mb->m_yhist != 0 &&
+					    ma->m_a != mb->m_a &&
+					    ma->m_b != mb->m_b &&
+					    ma->m_xhist != mb->m_xhist &&
+					    ma->m_yhist != mb->m_yhist, 1, tag);
+
+				memcpy(aa, arma[0], sizeof aa);
+				memcpy(ab, arma[1], sizeof ab);
+				memset(aa, 0, ECC_ARMA_PTRS);
+				memset(ab, 0, ECC_ARMA_PTRS);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after the constructor",
+					     "FloatARMA", aa, ab, sizeof aa,
+					     tag);
+
+				diff_eq_int("the denominator the ARMA copied "
+					    "matches (%ld)",
+					    memcmp(ma->m_a, mb->m_a,
+						   ECC_ARMA_NA * 4u) == 0,
+					    1, tag);
+				diff_eq_int("the numerator the ARMA copied "
+					    "matches (%ld)",
+					    memcmp(ma->m_b, mb->m_b,
+						   ECC_ARMA_NB * 4u) == 0,
+					    1, tag);
+				diff_eq_int("the ARMA's x history matches "
+					    "(%ld)",
+					    memcmp(ma->m_xhist, mb->m_xhist,
+						   ECC_ARMA_XLEN * 4u) == 0,
+					    1, tag);
+				diff_eq_int("the ARMA's y history matches "
+					    "(%ld)",
+					    memcmp(ma->m_yhist, mb->m_yhist,
+						   ECC_ARMA_YLEN * 4u) == 0,
+					    1, tag);
+			}
+
+			/* The numbers, predicted rather than read back. */
+			diff_eq_int("the blob's filterLength (%ld)",
+				    (long)ec_b.o.filterLength, (long)len, tag);
+			diff_eq_int("the blob's word_18 (%ld)",
+				    (long)ec_b.o.word_18, (long)w18, tag);
+			diff_eq_int("the blob's historyAlloc (%ld)",
+				    (long)ec_b.o.historyAlloc, (long)need, tag);
+			diff_eq_int("the blob's echoDelay (%ld)",
+				    (long)ec_b.o.echoDelay,
+				    (long)(unsigned int)c->initialDelay, tag);
+			diff_eq_int("the blob's echoLength (%ld)",
+				    (long)ec_b.o.echoLength, (long)want, tag);
+
+			bad = only_wrote(before, ec_b.raw, EC_SLOT, allow, 13,
+					 seen, &first);
+			diff_eq_int("the blob wrote outside the thirteen "
+				    "fields at +0x%lx", bad == 0 ? -1 : first,
+				    -1, tag);
+
+			diff_eq_int("transcript matches (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("line counts match (%ld)",
+				    (int)dsplib_debug_capture_lines(0),
+				    (int)dsplib_debug_capture_lines(1), tag);
+			if (lvl > 1 && dsplib_debug_capture_lines(1) != 0)
+				printed = 1;
+			if (lvl == 0)
+				diff_eq_int("silent below the gate (%ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, tag);
+
+			if (c->filterLength == 0)
+				sawWrap = 1;
+			if (trial == 0)
+				firstAlloc = ec_b.o.historyAlloc;
+			else if (ec_b.o.historyAlloc != firstAlloc)
+				sawDistinct = 1;
+
+			/* Hand all fourteen back before the next trial. */
+			our_ec_dtor(&ec_a.o);
+			ref_ec_dtor(&ec_b.o);
+
+			diff_eq_int("both destructors freed all fourteen "
+				    "(%ld)", harness_alloc.live - liveWas, 0,
+				    tag);
+			diff_eq_int("no wild free (%ld)",
+				    harness_alloc.bad_free, 0, tag);
+		}
+	}
+
+	set_level(0);
+	for (i = 0; i < 13; i++)
+		diff_eq_int("every declared field is one the constructor "
+			    "writes (+0x%lx)", seen[i] ? -1 : allow[i], -1, 0);
+	diff_eq_int("the diagnostics were reached", printed, 1, 0);
+	diff_eq_int("the zero filter length was driven", sawWrap, 1, 0);
+	diff_eq_int("the history length was not the same every trial",
+		    sawDistinct, 1, 0);
+
+	return diff_end();
+}
+
 /* ------------------------------------- ResamplerTimingOffset (76 bytes) */
 
 #define RT_SLOT 128
@@ -2260,6 +2667,7 @@ main(void)
 	rc |= run_ec();
 	rc |= run_ec_reset();
 	rc |= run_ec_dtor();
+	rc |= run_ec_ctor();
 	rc |= run_rt();
 	rc |= run_p4();
 
