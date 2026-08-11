@@ -32,6 +32,8 @@
 
 #include "dsplib/K56FlexFloModem.h"
 
+#include "dsplib/sysdep.h"
+
 int
 K56FlexFloModem::getK56FlexMpBits(short *)
 {
@@ -65,4 +67,67 @@ K56FlexFloModem::enterPhase3FullDuplex()
 void
 K56FlexFloModem::externalReset()
 {
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `K56FLEX_Create` and `K56FLEX_Delete`, .text+0x102a0 and +0x102c0.
+ *
+ * WHY THEY ARE HERE AND NOT BESIDE `src/pump/v34/v34k56.cpp`.  Both readings
+ * put them in the same ambiguous bracket -- `tools/tuattrib.py` reports
+ * .text+0xa790..+0x10310 as `V34.c|GenericToneDetector.cpp`, which is exactly
+ * the bracket `v34k56.cpp`'s header quotes for `k56FlexPhase34`.  What breaks
+ * the tie is CONTIGUITY, which is finer than the bracket: `K56FLEX_Create` is
+ * the very next symbol after `K56FlexFloModem::getK56MPsReceiver` at +0x10290,
+ * and the class's seventeen members run unbroken from +0x10190 up to it.  So
+ * the members and these two share a translation unit, and this file is the one
+ * this tree gives that class.
+ *
+ * THEY ARE `extern "C"` BECAUSE THE OBJECT SAYS SO -- both names are exported
+ * unmangled, and a member function could not be.  Neither takes a `this`.
+ * ---------------------------------------------------------------------------
+ */
+
+extern "C" {
+
+/*
+ * `K56FLEX_Create` -- twenty bytes of heap, and not one of its four arguments
+ * is read.
+ *
+ * The arity is the CALL SITE's and not the body's: `vpcm_create` sets up four
+ * stack slots at .text+0x3b10..+0x3b22 immediately before the call, in the
+ * same shape as the `VPCMXF_Create` call eight instructions earlier, and
+ * passes NULL, `lea 0x2c(%ebx)`, what `dp_param_get` returned, and a computed
+ * count.  The body is `sub`/`movl $0x14`/`call sysdep_malloc`/`add`/`ret` --
+ * nineteen bytes that never read 0x10(%esp).  The parameters are therefore
+ * unnamed: the declaration exists so that a future `vpcm_create` calls it with
+ * the right stack, and naming them would put a meaning in the record that the
+ * object does not give.
+ *
+ * `vpcm_create` DOES check the result -- `test %eax,%eax` at .text+0x3b31 and
+ * a branch into the failure unwind -- so the null return matters to the caller
+ * even though nothing but a failing allocator can produce one.
+ */
+void *
+K56FLEX_Create(void *, void *, void *, int)
+{
+	return sysdep_malloc(K56FLEX_OBJECT_SIZE);
+}
+
+/*
+ * `K56FLEX_Delete` -- the null test is the object's, at .text+0x102c7.
+ *
+ * Both call sites (`vpcm_create`'s failure unwind at .text+0x3dbf and
+ * `vpcm_delete` at +0x3e1a) load the pointer out of the root at +0xac44 and
+ * pass it straight in, and neither clears that slot afterwards.  So the test
+ * is load bearing rather than defensive: the unwind path runs with the slot
+ * holding whatever the failed create left in it.
+ */
+void
+K56FLEX_Delete(void *obj)
+{
+	if (obj != 0)
+		sysdep_free(obj);
+}
+
 }

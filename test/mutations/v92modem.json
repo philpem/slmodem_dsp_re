@@ -1,0 +1,211 @@
+[
+ {
+  "label": "NOTE: what this set reaches, what it cannot, and why one guard has no entry",
+  "why": "V92Modem's constructor and destructor and t_v92modem.cpp were written by one hand at one sitting from one reading of .text+0x13d30-0x13eb8 and +0x13990-0x13a74. Every entry below is a claim the disassembly makes: the two diagnostic lines and the two `> 1` gates on each, the five sysdep_malloc immediates, the two argument stores, the three arms of the switch, the seven arguments of the V92Modulator call, the five releases and the ONE nulling. THREE CLAIMS HAVE A CHECK OF THEIR OWN BECAUSE THE POINTER THEY LIVE BEHIND CANNOT AGREE: every allocation size (compared as harness_alloc.bytes against the reference, which is the only witness the ten arrays inside the parameter block have), the seven modulator arguments (compared by ADDRESS on both sides, since two constructors making the same mistake would agree), and the destructor's single store (spelled as `+0x008 is zero afterwards exactly when it was not before, and nothing else moved'). WHAT NO ENTRY HERE CAN REACH, and each for a stated reason. (1) `if (mappingParams)' in the destructor: V92deleteConstellations dereferences the same pointer two calls earlier with no null test of its own, so the guard's false branch is unreachable in the OBJECT and deleting the guard is behaviourally identical on every input that does not fault both sides -- finding 1322, and this is why the subset sweep is over four pointers and not five. (2) The ORDER of the five releases: the harness allocator counts frees and does not sequence them, exactly as v92mod.json records for the eleven. (3) The switch reading the MEMBER rather than the parameter: the two are the same value at that point and the difference is an instruction, not a behaviour. (4) The fifth argument, V92ComputationalMode: no entry can make a function read a value it must not read, so it is swept as data instead -- varied per trial, same on both sides."
+ },
+ {
+  "label": "the construction notice's two arms are exchanged",
+  "find": "\t\t\t\t     side == V92_MODEM_SIDE_DIGITAL\n\t\t\t\t     ? \"Digital\" : \"Analog\");",
+  "replace": "\t\t\t\t     side == V92_MODEM_SIDE_DIGITAL\n\t\t\t\t     ? \"Analog\" : \"Digital\");"
+ },
+ {
+  "label": "the construction notice is gated at the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\r\\n\",",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\r\\n\","
+ },
+ {
+  "label": "the construction notice loses its carriage return",
+  "find": "dsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\r\\n\",",
+  "replace": "dsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\n\","
+ },
+ {
+  "label": "the construction notice tests the member rather than the parameter, before the member is written",
+  "find": "\t\t\t\t     side == V92_MODEM_SIDE_DIGITAL",
+  "replace": "\t\t\t\t     modemSide == V92_MODEM_SIDE_DIGITAL"
+ },
+ {
+  "label": "the title is printed before the construction notice rather than after",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\r\\n\",\n\t\t\t\t     side == V92_MODEM_SIDE_DIGITAL\n\t\t\t\t     ? \"Digital\" : \"Analog\");\n\n\tprintTitle();",
+  "replace": "\tprintTitle();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modem Construction (as %s Modem)\\r\\n\",\n\t\t\t\t     side == V92_MODEM_SIDE_DIGITAL\n\t\t\t\t     ? \"Digital\" : \"Analog\");"
+ },
+ {
+  "label": "the title is not printed at all",
+  "find": "\tprintTitle();\n",
+  "replace": ""
+ },
+ {
+  "label": "the modem side is not stored",
+  "find": "\tmodemSide = side;\n",
+  "replace": ""
+ },
+ {
+  "label": "the descriptor is not stored",
+  "find": "\tdil = dilDescriptor;\n",
+  "replace": ""
+ },
+ {
+  "label": "the V92Parameters allocation is a word too large",
+  "find": "\tp = sysdep_malloc(sizeof(V92Parameters));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92Parameters) + 4);"
+ },
+ {
+  "label": "the V92Phase2Info allocation is a word too small",
+  "find": "\tp = sysdep_malloc(sizeof(V92Phase2Info));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92Phase2Info) - 4);"
+ },
+ {
+  "label": "the V92CP allocation is a word too large",
+  "find": "\tp = sysdep_malloc(sizeof(V92CP));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92CP) + 4);"
+ },
+ {
+  "label": "the parameter block is allocated a word too large",
+  "find": "\t    sizeof(struct V92ParamsInfo));",
+  "replace": "\t    sizeof(struct V92ParamsInfo) + 4);"
+ },
+ {
+  "label": "the modulator allocation is a word too large",
+  "find": "\t\tp = sysdep_malloc(sizeof(V92Modulator));",
+  "replace": "\t\tp = sysdep_malloc(sizeof(V92Modulator) + 4);"
+ },
+ {
+  "label": "the phase 2 info is built from the modem block rather than from the V92Parameters",
+  "find": "\tv92modem_p2i_ctor(p, parameters);",
+  "replace": "\tv92modem_p2i_ctor(p, modemParams);"
+ },
+ {
+  "label": "the V92Parameters is built from the descriptor rather than from the modem block",
+  "find": "\tv92modem_params_ctor(p, modemParams);",
+  "replace": "\tv92modem_params_ctor(p, dilDescriptor);"
+ },
+ {
+  "label": "the constellations are never created",
+  "find": "\tV92createConstellations((struct V92ParamsInfo *)mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the filter coefficients are never created",
+  "find": "\tV92createFilterCoefficients((struct V92ParamsInfo *)mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the two sides are exchanged: the digital one builds the modulator",
+  "find": "\tcase V92_MODEM_SIDE_DIGITAL:",
+  "replace": "\tcase V92_MODEM_SIDE_ANALOG + 1:"
+ },
+ {
+  "label": "the digital side leaves the modulator pointer alone instead of nulling it",
+  "find": "\t\tmodulator = 0;\n\t\tbreak;",
+  "replace": "\t\tbreak;"
+ },
+ {
+  "label": "the illegal arm tidies up by nulling the modulator pointer",
+  "find": "\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Constructor: Illegal modemSide\\r\\n\");\n\t\tbreak;",
+  "replace": "\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Constructor: Illegal modemSide\\r\\n\");\n\t\tmodulator = 0;\n\t\tbreak;"
+ },
+ {
+  "label": "the constructor's illegal-side notice is gated at the verbose level",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Constructor: Illegal modemSide\\r\\n\");",
+  "replace": "\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Constructor: Illegal modemSide\\r\\n\");"
+ },
+ {
+  "label": "the modulator is given the phase 2 info and the parameters the other way round",
+  "find": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, cp,\n\t\t\t\t  mappingParams, parameters);",
+  "replace": "\t\tv92modem_mod_ctor(p, nSamples, parameters, ja, dil, cp,\n\t\t\t\t  mappingParams, phase2Info);"
+ },
+ {
+  "label": "the modulator is given the CP and the parameter block the other way round",
+  "find": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, cp,\n\t\t\t\t  mappingParams, parameters);",
+  "replace": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, mappingParams,\n\t\t\t\t  cp, parameters);"
+ },
+ {
+  "label": "the modulator is given the whole modem where the V92Ja belongs",
+  "find": "phase2Info, ja, dil, cp,",
+  "replace": "phase2Info, this, dil, cp,"
+ },
+ {
+  "label": "the modulator is given the descriptor a word past where it starts",
+  "find": "phase2Info, ja, dil, cp,",
+  "replace": "phase2Info, ja, (void *)((char *)dil + 4), cp,"
+ },
+ {
+  "label": "the modulator is given one sample too many",
+  "find": "v92modem_mod_ctor(p, nSamples, phase2Info",
+  "replace": "v92modem_mod_ctor(p, nSamples + 1, phase2Info"
+ },
+ {
+  "label": "the destruction notice is gated at the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modem Destruction\\r\\n\");",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V92Modem Destruction\\r\\n\");"
+ },
+ {
+  "label": "the destruction notice loses its carriage return",
+  "find": "dsplibs_debug_printf(\"V92Modem Destruction\\r\\n\");",
+  "replace": "dsplibs_debug_printf(\"V92Modem Destruction\\n\");"
+ },
+ {
+  "label": "the destructor's illegal-side test admits the analog side too",
+  "find": "\tif (modemSide > V92_MODEM_SIDE_ANALOG) {",
+  "replace": "\tif (modemSide >= V92_MODEM_SIDE_ANALOG) {"
+ },
+ {
+  "label": "the destructor's illegal-side test is read as signed",
+  "find": "\tif (modemSide > V92_MODEM_SIDE_ANALOG) {",
+  "replace": "\tif ((int)modemSide > V92_MODEM_SIDE_ANALOG) {"
+ },
+ {
+  "label": "the destructor's illegal-side notice is gated at the verbose level",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Destructor: Illegal modemSide\\r\\n\");",
+  "replace": "\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modem Destructor: Illegal modemSide\\r\\n\");"
+ },
+ {
+  "label": "the constellations are never released",
+  "find": "\tV92deleteConstellations((struct V92ParamsInfo *)mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the filter coefficients are never released",
+  "find": "\tV92deleteFilterCoefficients((struct V92ParamsInfo *)mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the parameter block itself is never freed",
+  "find": "\tif (mappingParams != 0)\n\t\tsysdep_free(mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the modulator is destroyed and not freed",
+  "find": "\t\tsysdep_free(modulator);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the CP is destroyed and not freed",
+  "find": "\t\tsysdep_free(cp);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the V92Parameters is destroyed and not freed",
+  "find": "\t\tsysdep_free(parameters);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the phase 2 info's null guard is dropped",
+  "find": "\tif (phase2Info != 0) {\n\t\tsysdep_free(phase2Info);\n\t\tphase2Info = 0;\n\t}",
+  "replace": "\tsysdep_free(phase2Info);\n\tphase2Info = 0;"
+ },
+ {
+  "label": "the phase 2 info is not nulled after it is freed",
+  "find": "\t\tsysdep_free(phase2Info);\n\t\tphase2Info = 0;",
+  "replace": "\t\tsysdep_free(phase2Info);"
+ },
+ {
+  "label": "the other four pointers are nulled as well",
+  "find": "\t\tsysdep_free(modulator);\n\t}",
+  "replace": "\t\tsysdep_free(modulator);\n\t\tmodulator = 0;\n\t}"
+ },
+ {
+  "label": "the phase 2 info is nulled before it is freed rather than after",
+  "find": "\t\tsysdep_free(phase2Info);\n\t\tphase2Info = 0;",
+  "replace": "\t\tphase2Info = 0;\n\t\tsysdep_free(phase2Info);"
+ }
+]

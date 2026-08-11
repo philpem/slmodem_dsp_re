@@ -1,0 +1,36 @@
+[
+ {
+  "label": "NOTE: what this set is for",
+  "why": "V92ModulusEncoder.cpp and t_moduluscoder.cpp's third run were written together from one reading of 0x55030-0x55090, so a green run says they agree. The whole content of the claim is WHERE the cleared range starts and stops -- +0x18 through +0x48, thirteen words, with six words below it and two above it left as the storage found them -- so every entry below moves one of its two ends or its length. The fixture seeds every byte non-zero and reseeds each trial; over a zero-filled slot none of these would be visible."
+ },
+ {
+  "label": "the cleared range starts one word lower",
+  "find": "\t: field_18(0), field_1c(0),",
+  "replace": "\t: head(), field_18(0), field_1c(0),"
+ },
+ {
+  "label": "the cleared range stops one word short",
+  "find": "\t  field_40(0), field_44(0), field_48(0)",
+  "replace": "\t  field_40(0), field_44(0)"
+ },
+ {
+  "label": "the cleared range runs one word too far",
+  "find": "\t  field_40(0), field_44(0), field_48(0)\n{\n}",
+  "replace": "\t  field_40(0), field_44(0), field_48(0), field_4c(0)\n{\n}"
+ },
+ {
+  "label": "the range is cleared with a memset over the whole object",
+  "find": "\t: field_18(0), field_1c(0), field_20(0), field_24(0), field_28(0),\n\t  field_2c(0), field_30(0), field_34(0), field_38(0), field_3c(0),\n\t  field_40(0), field_44(0), field_48(0)\n{\n}",
+  "replace": "{\n\t__builtin_memset(this, 0, sizeof *this);\n}"
+ },
+ {
+  "label": "one of the thirteen is set to one, not zero",
+  "find": "\t  field_2c(0), field_30(0), field_34(0),",
+  "replace": "\t  field_2c(0), field_30(1), field_34(0),"
+ },
+ {
+  "label": "the constructor also touches the six words below the range",
+  "find": "\t  field_40(0), field_44(0), field_48(0)\n{\n}\n",
+  "replace": "\t  field_40(0), field_44(0), field_48(0)\n{\n\thead[5] = 0;\n}\n"
+ }
+]

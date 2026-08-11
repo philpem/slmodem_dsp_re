@@ -1,6 +1,6 @@
 [
  {
-  "note": "The claims t_v90params.cpp makes about V90Parameters, each broken on purpose.  The set is deliberately weighted towards the four things `setToDefault` READS -- a table of 339 constants is easy to check and the arithmetic around it is not, and the divisor mutation below is the defect this file's first run actually had."
+  "note": "The claims t_v90params.cpp makes about V90Parameters, each broken on purpose.  The set is deliberately weighted towards the four things `setToDefault` READS -- a table of 339 constants is easy to check and the arithmetic around it is not, and the divisor mutation below is the defect this file's first run actually had. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error."
  },
  {
   "label": "the power reduction divides by 10, not 5",
@@ -182,9 +182,7 @@
  {
   "label": "the destructor is not empty",
   "find": "V90Parameters::~V90Parameters()\n{\n}",
-  "replace": "V90Parameters::~V90Parameters()\n{\n\tPROBING_MODE = 0;\n}",
-  "equivalent": true,
-  "why": "Not an untested claim -- the mutation does not survive the COMPILER.  GCC's `-flifetime-dse`, on by default at -O2, deletes stores to `*this` in a destructor because the object's lifetime is ending, so `~V90Parameters` compiles to a bare `ret` with the mutation applied and without it; `objdump` shows one byte either way and `-fno-lifetime-dse` shows the three-instruction body reappear.  So NO mutation whose whole effect is a store to the destroyed object can ever be caught here, by anything.  Kept because the alternative -- deleting it -- reads as `nobody thought of testing the destructor`.  Finding 878's sibling note: this also means our one-byte destructor matching the object's one-byte destructor is weaker evidence than it looks, and what settles the original's is that GCC 3.4.2 predates -flifetime-dse entirely."
+  "replace": "V90Parameters::~V90Parameters()\n{\n\tPROBING_MODE = 0;\n}"
  },
  {
   "label": "the printed fraction keeps its sign",

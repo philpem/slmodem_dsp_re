@@ -1,0 +1,84 @@
+[
+ {
+  "label": "the two durations are swapped",
+  "find": "\tn = samples1 / blockLen_;\n\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;\n\n\tn = samples2 / blockLen_;\n\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks2 = n;",
+  "replace": "\tn = samples2 / blockLen_;\n\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks1 = n;\n\n\tn = samples1 / blockLen_;\n\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks2 = n;"
+ },
+ {
+  "label": "the first duration rounds DOWN",
+  "find": "\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;",
+  "replace": "\tif (n * blockLen_ > samples1)\n\t\tn++;\n\tblocks1 = n;"
+ },
+ {
+  "label": "the first duration rounds up even when it divides exactly",
+  "find": "\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;",
+  "replace": "\tif (n * blockLen_ <= samples1)\n\t\tn++;\n\tblocks1 = n;"
+ },
+ {
+  "label": "the second duration rounds DOWN",
+  "find": "\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks2 = n;",
+  "replace": "\tif (n * blockLen_ > samples2)\n\t\tn++;\n\tblocks2 = n;"
+ },
+ {
+  "label": "the two floats are swapped",
+  "find": "\tthreshold = threshold_;\n\tratio = ratio_;",
+  "replace": "\tthreshold = ratio_;\n\tratio = threshold_;"
+ },
+ {
+  "label": "blockLen is not kept, only used",
+  "find": "\tblockLen = blockLen_;\n\tthreshold = threshold_;",
+  "replace": "\tblockLen = 0;\n\tthreshold = threshold_;"
+ },
+ {
+  "label": "the filter's numerator and denominator arrays are swapped",
+  "find": "\tfilter = new GenericIIR<float, double>(nden, nnum, den, num, blockSize);",
+  "replace": "\tfilter = new GenericIIR<float, double>(nden, nnum, num, den, blockSize);"
+ },
+ {
+  "label": "the filter's two orders are swapped",
+  "find": "\tfilter = new GenericIIR<float, double>(nden, nnum, den, num, blockSize);",
+  "replace": "\tfilter = new GenericIIR<float, double>(nnum, nden, den, num, blockSize);"
+ },
+ {
+  "label": "the filter gets blockLen where it wanted blockSize",
+  "find": "\tfilter = new GenericIIR<float, double>(nden, nnum, den, num, blockSize);",
+  "replace": "\tfilter = new GenericIIR<float, double>(nden, nnum, den, num, blockLen_);"
+ },
+ {
+  "label": "the filter is never reset",
+  "find": "\tfilter->reset();\n\tacc_0c = 0;",
+  "replace": "\tacc_0c = 0;",
+  "equivalent": true,
+  "why": "EQUIVALENT ONLY BECAUSE `GenericIIR`'s OWN CONSTRUCTOR ALREADY RESETS. `src/dsp/FloatIIR.cpp`'s GenericIIR(...) ends with `reset();`, so by the time this line runs every field that reset writes already holds the value it would write: both history buffers are zero and both positions are at their start. Calling it a second time is idempotent, so removing the call leaves the filter in a state no comparison can distinguish. THE OBJECT'S CALL IS REAL AND IS REPRODUCED -- `call _ZN10GenericIIRIfdE5resetEv` at 0x1073d, with its own R_386_PC32 -- and what is untestable is only whether removing it changes anything here. Registered rather than deleted because the equivalence is CONDITIONAL: let GenericIIR's constructor stop resetting, or give reset() a field it does not idempotently rewrite, and this becomes a real defect that will then be CAUGHT and reported MIScounted -- which is the notification this entry exists to produce."
+ },
+ {
+  "label": "one of the four accumulators is left as it was found",
+  "find": "\tacc_14 = 0;\n\tacc_18 = 0;",
+  "replace": "\tacc_18 = 0;"
+ },
+ {
+  "label": "the answer is not cleared",
+  "find": "\tsampleCount = 0;\n\tdetected = 0;",
+  "replace": "\tsampleCount = 0;"
+ },
+ {
+  "label": "flag is stored as its complement",
+  "find": "\tflag = flag_;",
+  "replace": "\tflag = ~flag_;"
+ },
+ {
+  "label": "the destructor frees nothing",
+  "find": "\tdelete filter;",
+  "replace": "\t(void)filter;"
+ },
+ {
+  "label": "the destructor nulls the pointer it just freed",
+  "find": "\tdelete filter;",
+  "replace": "\tdelete filter;\n\tfilter = 0;"
+ },
+ {
+  "label": "the destructor nulls the pointer it just freed, volatile so it survives",
+  "find": "\tdelete filter;",
+  "replace": "\tdelete filter;\n\t*(GenericIIR<float, double> * volatile *)&filter = 0;"
+ }
+]

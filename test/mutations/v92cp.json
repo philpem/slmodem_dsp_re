@@ -1,0 +1,74 @@
+[
+ {
+  "label": "+0x04 left alone, as reset() leaves it",
+  "find": "\tbyte_04 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x04 cleared as a word",
+  "find": "\tbyte_04 = 0;",
+  "replace": "\t*(unsigned int *)&byte_04 = 0;"
+ },
+ {
+  "label": "the detector's counter left alone",
+  "find": "\tword_114 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the detector's first flag left alone",
+  "find": "\tbyte_119 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the detector's second flag left alone",
+  "find": "\tbyte_11a = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the two flags are one 16-bit field",
+  "equivalent": true,
+  "why": "This is the code the compiler emits from the two byte stores anyway: `mov %dx,0x119(%eax)`.  It is only the blob's own GCC 3.4 that keeps them apart, as two `movb $0x0` at 0x4e8c4 and 0x4e8cb, and both orders of that choice leave the same two bytes at zero.",
+  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;",
+  "replace": "\t*(unsigned short *)&byte_119 = 0;"
+ },
+ {
+  "label": "the two flags are one 32-bit field",
+  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;",
+  "replace": "\t*(unsigned int *)&byte_119 = 0;"
+ },
+ {
+  "label": "+0x11c starts at 17, not 18",
+  "find": "\tword_11c = 18;",
+  "replace": "\tword_11c = 17;"
+ },
+ {
+  "label": "+0x11c written as a byte",
+  "find": "\tword_11c = 18;",
+  "replace": "\t*(unsigned char *)&word_11c = 18;"
+ },
+ {
+  "label": "+0x120 left alone",
+  "find": "\tword_120 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x914 starts at 0, not -1",
+  "find": "\tword_914 = -1;",
+  "replace": "\tword_914 = 0;"
+ },
+ {
+  "label": "+0x914 left alone",
+  "find": "\tword_914 = -1;\n",
+  "replace": ""
+ },
+ {
+  "label": "the destructor clears the detector",
+  "find": "V92CP::~V92CP()\n{\n}",
+  "replace": "V92CP::~V92CP()\n{\n\tword_114 = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the detector, volatile so it survives",
+  "find": "V92CP::~V92CP()\n{\n}",
+  "replace": "V92CP::~V92CP()\n{\n\t*(volatile unsigned int *)&word_114 = 0;\n}"
+ }
+]

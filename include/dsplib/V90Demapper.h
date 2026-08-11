@@ -58,6 +58,7 @@
 #ifndef DSPLIB_V90DEMAPPER_H
 #define DSPLIB_V90DEMAPPER_H
 
+#include "dsplib/ModulusCoder.h"
 #include "dsplib/V90SignBitsExtractor.h"
 
 /*
@@ -87,19 +88,14 @@ public:
 	~V90Demapper();
 
 	/*
-	 * THE CONSTRUCTOR IS DECLARED AND NOT DEFINED, and the reason is not
-	 * budget.  Its first act is
-	 *
-	 *     3064d:  8d 86 48 06 00 00   lea  0x648(%esi),%eax
-	 *     30656:  e8 ..               call ModulusDecoder::ModulusDecoder()
-	 *
-	 * and `ModulusDecoder` has no header, no .cpp and no other symbol in
-	 * this tree.  Defining the constructor here would mean either writing
-	 * that class -- another owner's work -- or declaring the member as
-	 * bytes and losing the call the object makes.  So the embedded
-	 * modulus decoder stays a pad, the constructor stays undefined, and
-	 * what the constructor's stores DO settle is written into the offsets
-	 * below, where it is evidence rather than code.
+	 * THE CONSTRUCTOR IS NOW DEFINED, and what unblocked it was
+	 * `ModulusDecoder` being written (finding 1247).  The comment this
+	 * replaces said the class "has no header, no .cpp and no other symbol
+	 * in this tree", which was true and is not any more:
+	 * `include/dsplib/ModulusCoder.h` declares it, its default constructor
+	 * is defined, and `sizeof(ModulusDecoder)` is 0x1c -- exactly the
+	 * distance the pad measured.  So the member below is the real class
+	 * and the constructor's first act is the compiler's, not ours.
 	 */
 	V90Demapper(unsigned int levels, V90Parameters *params,
 		    V90AutoDigitalImpDetector *adi);
@@ -194,14 +190,42 @@ public:
 	/*
 	 * +0x648 .. +0x663  An embedded `ModulusDecoder`, constructed by
 	 * `V90Demapper::V90Demapper` at `lea 0x648(%esi)` and NOT destroyed
-	 * by `~V90Demapper` -- so whatever it is, its destructor is trivial.
-	 * The class has no other symbol in this tree; the 0x1c bytes are the
-	 * distance to the next field and an upper bound, not a size.
+	 * by `~V90Demapper` -- which is what says its destructor is trivial,
+	 * and `ModulusCoder.h` declares none.  Its seven `unsigned int` fields
+	 * are 0x1c bytes, which is exactly the distance to the field below;
+	 * the pad this replaces was that distance measured, and the class now
+	 * fills it exactly.
 	 */
-	unsigned char modulusDecoder[0x1c];
+	ModulusDecoder modulusDecoder;
 
 	/*
 	 * +0x664  `movb $0x0,0x664(%esi)` -- one byte, so a `char`-width flag.
+	 *
+	 * IT IS A MEM-INITIALIZER AND NOT A BODY STATEMENT, and the position of
+	 * that one instruction is the whole argument:
+	 *
+	 *     3071d:  lea   0x648(%esi),%eax
+	 *     30726:  call  ModulusDecoder::ModulusDecoder()
+	 *     3072b:  movb  $0x0,0x664(%esi)          <-- here
+	 *     30732:  lea   0x668(%esi),%ecx
+	 *     3073b:  call  V90SignBitsExtractor::V90SignBitsExtractor()
+	 *
+	 * A store to `this + 0x664` cannot be sunk past a call to a function
+	 * that may alias it, nor hoisted before the one in front of it, so the
+	 * compiler was not free to put it there: it is between the two member
+	 * constructors because it IS a member construction.  Every body
+	 * statement runs after all of them.  That fixes the declaration order
+	 * as modulusDecoder, byte_664, signBits and the constructor's list as
+	 * `: byte_664(0)`.
+	 *
+	 * THIS IS A CODEGEN CLAIM AND NOT A DIFFERENTIAL ONE.  The byte holds
+	 * zero either way, so `make phase` cannot see the difference.  The
+	 * evidence is the instruction above plus `make similarity`, which
+	 * lists both `_ZN11V90DemapperC1E...` and `_ZN11V90DemapperC2E...`
+	 * among the identical mnemonic sequences -- and a mnemonic sequence is
+	 * exactly what a claim about POSITION needs, since where the `movb`
+	 * sits relative to the two `call`s is in the sequence even though its
+	 * operands are not compared.
 	 */
 	unsigned char byte_664;
 	unsigned char pad_665[3];

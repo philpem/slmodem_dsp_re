@@ -1,10 +1,12 @@
 /*
- * V90Equalizer.cpp -- the two step-size setters and the Phase 3 entry.
+ * V90Equalizer.cpp -- the step-size setters, the state entries, and the
+ * object's lifecycle.
  *
- * Three of the class's twenty-seven members: `setLinearEquBeta(float)`,
- * `setDfeBeta(float)` and `enterPhase3()`.  They are one unit because
- * `enterPhase3` calls the other two, and they are a closed batch because
- * between them they reach nothing outside the class except `edprintf`.
+ * Seven of the class's twenty-seven members: `setLinearEquBeta(float)`,
+ * `setDfeBeta(float)` and `enterPhase3()` (which calls the other two);
+ * `reset(unsigned)` and `enterChannelVerification()`; and the constructor and
+ * destructor, which are one unit with `reset` because the constructor's last
+ * act is a tail call to it (findings 1230-1232).
  * `include/dsplib/V90Equalizer.h` carries the object map.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
@@ -71,6 +73,14 @@
 #include "dsplib/debug.h"
 #include "dsplib/DspMath.h"
 #include "dsplib/encode.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * The constructor reaches one word of the HOST's parameter block, through
+ * `V90Parameters::modemParams`, to decide whether the fixed-point arrays are
+ * wanted at all.  `V90Parameters.h` only forward-declares that structure.
+ */
+#include "dsplib/modem_params.h"
 
 /*
  * `V90Resampler.h` brings in the NAMED `V90Parameters` map, which is the one
@@ -82,6 +92,13 @@
 #include "dsplib/V90Resampler.h"
 
 #include "dsplib/V90Equalizer.h"
+/*
+ * Explicitly, because this file READS the parameter block's named fields.  It
+ * used to arrive through `V90Resampler.h`, which now only declares the class
+ * -- it holds one as a pointer and never dereferences it.  A translation unit
+ * that dereferences a type is the translation unit that must include it.
+ */
+#include "dsplib/V90Parameters.h"
 
 /*
  * Hold the compiler to the map in the header.  tools/offcheck.py only parses
@@ -126,13 +143,22 @@ V90EQU_OFF(word_84,			0x084, word84);
 V90EQU_OFF(word_88,			0x088, word88);
 V90EQU_OFF(word_8c,			0x08c, word8c);
 V90EQU_OFF(errorEnergyMeanK,		0x090, eemk);
+V90EQU_OFF(phase3Demod,			0x048, phase3demod);
+V90EQU_OFF(phase4Demod,			0x04c, phase4demod);
+V90EQU_OFF(demapper,			0x050, demapper);
+V90EQU_OFF(connEval,			0x054, conneval);
+V90EQU_OFF(spectralVerifier,		0x058, specverif);
+V90EQU_OFF(preFilter,			0x05c, prefilter);
 V90EQU_OFF(word_94,			0x094, word94);
+V90EQU_OFF(block_98,			0x098, block98);
 V90EQU_OFF(word_9c,			0x09c, word9c);
 V90EQU_OFF(word_a0,			0x0a0, worda0);
 V90EQU_OFF(word_a4,			0x0a4, worda4);
 V90EQU_OFF(params,			0x0a8, params);
 V90EQU_OFF(mmxArraysPresent,		0x0ac, mmxarrays);
 V90EQU_OFF(mmxMode,			0x0b0, mmxmode);
+V90EQU_OFF(block_b4,			0x0b4, blockb4);
+V90EQU_OFF(block_b8,			0x0b8, blockb8);
 V90EQU_OFF(linearEquMmxRefLevel,	0x0bc, leref);
 V90EQU_OFF(word_c0,			0x0c0, wordc0);
 V90EQU_OFF(linearEquMmxBetaScale,	0x0c4, lescale);
@@ -140,7 +166,13 @@ V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
 V90EQU_OFF(linearEquMmxCoefs,		0x0d4, lemmxcoefs);
 V90EQU_OFF(array_d8,			0x0d8, arrayd8);
+V90EQU_OFF(linearEquMmxCoefsAligned,	0x0dc, lemmxalign);
+V90EQU_OFF(array_d8Aligned,		0x0e0, arrayd8align);
+V90EQU_OFF(linearEquMmxCoefsSkew,	0x0e4, lemmxskew);
+V90EQU_OFF(array_d8Skew,		0x0e8, arrayd8skew);
 V90EQU_OFF(array_ec,			0x0ec, arrayec);
+V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
+V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
 V90EQU_OFF(dfeMmxRefLevel,		0x0fc, dferef);
 V90EQU_OFF(word_100,			0x100, word100);
 V90EQU_OFF(dfeMmxBetaScale,		0x104, dfescale);
@@ -148,7 +180,13 @@ V90EQU_OFF(dfeMmxBeta,			0x10c, dfebetai);
 V90EQU_OFF(dfeMmxShift,			0x110, dfeshift);
 V90EQU_OFF(dfeMmxCoefs,			0x114, dfemmxcoefs);
 V90EQU_OFF(array_118,			0x118, array118);
+V90EQU_OFF(dfeMmxCoefsAligned,		0x11c, dfemmxalign);
+V90EQU_OFF(array_118Aligned,		0x120, array118align);
+V90EQU_OFF(dfeMmxCoefsSkew,		0x124, dfemmxskew);
+V90EQU_OFF(array_118Skew,		0x128, array118skew);
 V90EQU_OFF(array_12c,			0x12c, array12c);
+V90EQU_OFF(array_12cAligned,		0x130, array12calign);
+V90EQU_OFF(array_12cSkew,		0x134, array12cskew);
 V90EQU_OFF(word_13c,			0x13c, word13c);
 V90EQU_OFF(word_140,			0x140, word140);
 V90EQU_OFF(flag_144,			0x144, flag144);
@@ -494,4 +532,202 @@ V90Equalizer::reset(unsigned int cursor)
 
 	hamming(linearEquWindow, 2 * linearEquWindowHalf);
 	hamming(dfeWindow, 2 * dfeWindowHalf);
+}
+
+/* ================================================================ lifecycle */
+
+/*
+ * How many SHORTS have to be stepped over to reach an eight-byte boundary.
+ *
+ *      8d 51 07    lea 0x7(%ecx),%edx
+ *      83 e2 f8    and $0xfffffff8,%edx
+ *      29 ca       sub %ecx,%edx
+ *      d1 ea       shr $1,%edx
+ *
+ * -- transcribed rather than written as `(-(unsigned)p) & 7`, which is the
+ * same number by a different route.  The shift is LOGICAL and the difference
+ * is at most seven, so the divide is exact and the count is 0, 1, 2 or 3.
+ */
+static inline unsigned int
+mmx_skew(const short *p)
+{
+	unsigned long a = (unsigned long)p;
+
+	return (unsigned int)((((a + 7) & ~7ul) - a) >> 1);
+}
+
+/*
+ * THE CONSTRUCTOR IS AN ALLOCATOR AND NOTHING ELSE.  Eleven arguments in,
+ * seven of them stored untouched, three lengths derived, fifteen
+ * `sysdep_malloc`s, six alignment triples, one diagnostic, and a tail call to
+ * `reset`.  It initialises no other field: everything the object holds when
+ * it is handed back that is not a pointer or a length was written by `reset`.
+ *
+ * THE THREE LENGTHS ARE ROUNDED DOWN, TWO OF THEM TO A MULTIPLE OF FOUR.
+ * `shr $2` then a scale by four is `& ~3u` written so the quotient can be
+ * reused as the malloc's scale -- `shl $4` on the same register is
+ * `length * sizeof(float)` -- and it is a LOGICAL shift, which is what makes
+ * both arguments unsigned as the mangling already said.  `word_1c` is rounded
+ * to a multiple of two instead, and from a SIGNED divide:
+ *
+ *      c1 ea 1f    shr $0x1f,%edx      ; sign bit
+ *      01 d1       add %edx,%ecx       ; round toward zero
+ *      d1 f9       sar $1,%ecx
+ *
+ * so `LINEAR_EQU_HISTORY_LENGTH` is an int and a negative one would make the
+ * length negative and the allocation enormous.  See docs/deviations.md D175.
+ *
+ * WHAT DECIDES `mmxArraysPresent`.  Three things: the parameter block's
+ * `ENABLE_EQUALIZER_MMX`, the computational mode, and one word of the host's
+ * modem parameter block reached through `params->modemParams`.  The two arms
+ * do not test that word the same way -- mode 1 accepts everything except 2,
+ * every other mode accepts only 1 -- and the object writes it as two arms
+ * that GCC then cross-jumps, the `je` at 3b774 landing in the middle of the
+ * other arm's comparison.  Written here as the two arms it came from.
+ *
+ * THE FIXED-POINT ARRAYS ARE ALLOCATED RAW AND USED ALIGNED.  Each of the six
+ * is followed by `skew = (align8(p) - p) / 2` and `aligned = p + 2 * skew`;
+ * see the note in the header.  `reset` clears the RAW array, not the aligned
+ * one, so the last `skew` shorts of each allocation are cleared and the eight
+ * extra entries the length carries are what keeps that inside the block.
+ */
+V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
+			   V90Phase3Demodulator *p3d, V90Phase4Demodulator *p4d,
+			   V90Demapper *dem, V90ConnectionEvaluator *ce,
+			   V90SpectralVerifier *sv, V90Parameters *parms,
+			   V90Resampler *rs, V90PreFilter *pf,
+			   V90ComputationalMode mode)
+{
+	params = parms;
+	resampler = rs;
+
+	phase3Demod = p3d;
+	phase4Demod = p4d;
+	demapper = dem;
+	connEval = ce;
+	spectralVerifier = sv;
+	preFilter = pf;
+
+	linearEquLength = linearEquLen & ~3u;
+	linearEquCoefs = (float *)sysdep_malloc(linearEquLength *
+						sizeof(float));
+
+	word_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);
+	array_18 = (float *)sysdep_malloc(word_1c * sizeof(float));
+
+	linearEquWindow = (float *)sysdep_malloc(linearEquLength *
+						 sizeof(float));
+	dfeWindow = (float *)sysdep_malloc(linearEquLength * sizeof(float));
+
+	dfeLength = dfeLen & ~3u;
+	dfeCoefs = (float *)sysdep_malloc(dfeLength * sizeof(float));
+	array_44 = (float *)sysdep_malloc(dfeLength * sizeof(float));
+
+	mmxArraysPresent = 0;
+	if (params->ENABLE_EQUALIZER_MMX != 0) {
+		if ((int)mode == V90EQU_COMP_MODE_1) {
+			if (params->modemParams->unnamed_005c != 2)
+				mmxArraysPresent = 1;
+		} else {
+			if (params->modemParams->unnamed_005c == 1)
+				mmxArraysPresent = 1;
+		}
+	}
+
+	if (mmxArraysPresent != 0) {
+		block_b8 = sysdep_malloc(0x200);
+		block_b4 = sysdep_malloc(0x400);
+
+		linearEquMmxCoefs = (short *)sysdep_malloc(
+		    (linearEquLength + 8) * sizeof(short));
+		array_d8 = (short *)sysdep_malloc(
+		    (linearEquLength + 8) * sizeof(short));
+		array_ec = (short *)sysdep_malloc(
+		    (word_1c + 8) * sizeof(short));
+		dfeMmxCoefs = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+		array_118 = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+		array_12c = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+
+		linearEquMmxCoefsSkew = mmx_skew(linearEquMmxCoefs);
+		linearEquMmxCoefsAligned = linearEquMmxCoefs +
+		    linearEquMmxCoefsSkew;
+
+		array_d8Skew = mmx_skew(array_d8);
+		array_d8Aligned = array_d8 + array_d8Skew;
+
+		array_ecSkew = mmx_skew(array_ec);
+		array_ecAligned = array_ec + array_ecSkew;
+
+		dfeMmxCoefsSkew = mmx_skew(dfeMmxCoefs);
+		dfeMmxCoefsAligned = dfeMmxCoefs + dfeMmxCoefsSkew;
+
+		array_118Skew = mmx_skew(array_118);
+		array_118Aligned = array_118 + array_118Skew;
+
+		array_12cSkew = mmx_skew(array_12c);
+		array_12cAligned = array_12c + array_12cSkew;
+
+		edprintf("V90Equalizer: Created - MMX mode is enabled.\r\n");
+	} else {
+		edprintf("V90Equalizer: Created - MMX mode is disabled.\r\n");
+	}
+
+	block_98 = sysdep_malloc(0x4b0);
+
+	reset(linearEquLength / 2);
+}
+
+/*
+ * The destructor frees the fifteen blocks the constructor took, each under
+ * its own null test, and does nothing else: it does not clear the pointers,
+ * so a second call frees every one of them again.  The eight fixed-point
+ * blocks are gated on `mmxArraysPresent` exactly as their allocation was --
+ * the one field that has to survive from the constructor for the object to be
+ * destroyed correctly.
+ *
+ * THE ORDER IS NOT THE ALLOCATION ORDER: +0x40 and +0x44 come before +0x24
+ * and +0x28, and +0x98 -- allocated last -- is freed seventh, before the
+ * fixed-point group.  It is transcribed rather than tidied.
+ *
+ * The six aligned pointers are NOT freed, and must not be: each points into
+ * the middle of a block whose raw pointer is freed beside it.
+ */
+V90Equalizer::~V90Equalizer()
+{
+	if (linearEquCoefs != 0)
+		sysdep_free(linearEquCoefs);
+	if (array_18 != 0)
+		sysdep_free(array_18);
+	if (dfeCoefs != 0)
+		sysdep_free(dfeCoefs);
+	if (array_44 != 0)
+		sysdep_free(array_44);
+	if (linearEquWindow != 0)
+		sysdep_free(linearEquWindow);
+	if (dfeWindow != 0)
+		sysdep_free(dfeWindow);
+	if (block_98 != 0)
+		sysdep_free(block_98);
+
+	if (mmxArraysPresent != 0) {
+		if (block_b8 != 0)
+			sysdep_free(block_b8);
+		if (block_b4 != 0)
+			sysdep_free(block_b4);
+		if (linearEquMmxCoefs != 0)
+			sysdep_free(linearEquMmxCoefs);
+		if (array_d8 != 0)
+			sysdep_free(array_d8);
+		if (array_ec != 0)
+			sysdep_free(array_ec);
+		if (dfeMmxCoefs != 0)
+			sysdep_free(dfeMmxCoefs);
+		if (array_118 != 0)
+			sysdep_free(array_118);
+		if (array_12c != 0)
+			sysdep_free(array_12c);
+	}
 }

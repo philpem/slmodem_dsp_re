@@ -4237,6 +4237,177 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D162 🐛 `V92Jd`'s constructor leaves one constellation bit unwritten
+
+**Where:** `src/pump/v90/V92Jd.cpp`, `V92Jd::V92Jd(V90Parameters *)`, from
+0x11c80.
+
+**What the original does:** stores a literal 0 into `bits[47]` and never
+writes `bits[48]`, so that byte keeps whatever was in the storage the object
+was built over.
+
+**Why it looks wrong:** `V90Jd`'s constructor, which is otherwise the same
+function, fills BOTH of those bytes — `bits[47]` from
+`V34_PHASE4_CONSTELLATION` and `bits[48]` from `V34_RRN_CONSTELLATION` — and
+the header's bit map calls the pair "constellation size, 2 bits".  A two-bit
+field with one bit initialised and one bit inherited is the shape of a slip.
+
+**Reachable?** On every construction.  Whether it can be OBSERVED is a
+different question and is not settled here: `packJdData` is not written yet
+and may fill `bits[48]` before anything transmits the vector.  **Unmeasured**,
+and it stays that way until that member is read.
+
+**Not fixed.** `t_v92jd.cpp` seeds the slot with varied bytes and compares the
+whole object, so a reconstruction that helpfully cleared `bits[48]` fails
+rather than passes.  Finding 1223.
+## D163 🐛 💤 `V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"` — the CP class's debug line names the other class
+
+*V.90/V.92 message-parameter batch. **Reachability: unmeasured** — diagnostic only, and only above `dsplibs_debug_level > 1`. Status: CONFIRMED — the literal at `.rodata.str1.4+0xd6b0` is byte for byte `V90MP`'s at `+0x5a34`. Fix class: documentation only; reproduced, not corrected.*
+
+**Finding 1239.**
+
+**RENUMBERED.  This entry was committed as `D162` on its own branch** and so
+was the `V92Jd` entry above it: three of the nine parallel construction-path
+batches independently picked 162 as the next free number, which is what a
+shared append-only register does when only the finding numbers are blocked
+out.  D-number blocks were assigned to the remaining batches when the second
+collision surfaced.  CLAUDE.md's rule for a renumbering is that the entry says
+what it used to be called, because a reference that still resolves but now
+points at the wrong entry is the one thing `tools/refcheck.py` cannot catch.
+## D164 ⚠ 💤 `V90SpectralVerifier`'s constructor initialises +0x28 but not +0x20 or +0x24 -- the accumulation counter and the running flag `startAccumulation` and `process` both test -- so a verifier that is constructed and never `reset()` runs on allocator garbage
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: one store.*
+
+**Finding 1240.** Asserted in test/unit/t_v90spectral.cpp against the seeded
+bytes, so the omission is measured; whether any caller reaches an accumulation
+without a `reset()` first is not.
+
+**RENUMBERED at the merge**, from `D162`, the number this batch committed on its own branch: three of the nine parallel construction-path batches picked the same
+next-free number out of this file, and the two before it took D162 and D163.
+CLAUDE.md's rule is that the entry says what it used to be called, because a
+citation that still resolves but now points at the wrong entry is the one
+thing `tools/refcheck.py` cannot catch.
+
+---
+
+## D165 ⚠ 💤 `V90SdDetector`'s constructor stores its third float argument into +0x10 and no member of the class ever reads it
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: none until a reader turns up.*
+
+**Finding 1241.** All six members were scanned for a load at +0x10 and none
+has one; a seventh reader outside the class would have to reach it through a
+`V90SdDetector *`, which has not been swept.
+
+**RENUMBERED at the merge**, from `D163`, the number this batch committed on its own branch: three of the nine parallel construction-path batches picked the same
+next-free number out of this file, and the two before it took D162 and D163.
+CLAUDE.md's rule is that the entry says what it used to be called, because a
+citation that still resolves but now points at the wrong entry is the one
+thing `tools/refcheck.py` cannot catch.
+## D190 🐛 💤 `V90Phase3Modulator`'s constructor stores its `V90Parameters *` at +0x50 and no other symbol of the class reads it — the V.92 sibling's equivalent field IS read, by `reset`
+
+*Batch: the two Phase 3 modulator constructors. **Reachability: unmeasured.** Status: unmeasured — what reads +0x50 from OUTSIDE the class was not looked for.*
+
+**This entry was numbered 162 in this register before merge and was renumbered
+to 190** on the coordinator's assignment, three batches having picked the same
+next-free number independently. Nothing outside this batch ever cited it, and
+the one finding that does — 1257 — was updated in the same commit. (The old
+number is spelled out rather than written in its usual form because
+`tools/refcheck.py` reads any `D` followed by digits as a live reference and
+would report it dangling.)
+
+**Finding 1257.** Measured, not inferred: every one of the nineteen
+`V90Phase3Modulator` text symbols was disassembled and searched for a `0x50`
+displacement. Three hit, and only three — the two constructor copies, both
+`mov %reg,0x50(%ebx)` with `%ebx` as `this`, and `reset`, whose `mov
+0x50(%esp),%ebp` is a stack slot and not the object at all.
+## D170 🐛 `V92deleteConstellations` and `V92deleteFilterCoefficients` free all ten arrays and null none of them, so `V92ParamsInfo` comes back from either deleter holding ten dangling pointers
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED from the disassembly — there is no store to any of +0x5c..+0x68 or +0x84..+0x98 in either function. Fix class: documentation only until a caller is found that deletes without freeing the block.*
+
+**Finding 1226.** The one caller in the object, `V92Modem`'s destructor, frees the block itself immediately afterwards, so the dangling values are never read there. Reproduced, and `t_v92alloc.c`'s `run_delete_live` asserts they survive.
+
+**This entry and D171 were drafted under two higher numbers and renumbered before the branch left its worktree**, so no citation to the old pair exists anywhere and CLAUDE.md's renumbering rule has nothing to protect. The old-to-new mapping is in the commit message and deliberately not here: `refcheck.py` reads a bare `D` and digits as a citation, a retired number would be reported dangling, and writing it without the `D` is worse — a bare number is read as a FINDING reference and both of these resolve to real and unrelated findings, which is the silent failure CLAUDE.md warns about.
+
+---
+
+## D171 🐛 `V92createConstellations` and `V92createFilterCoefficients` store ten `sysdep_malloc` results without testing one of them, and their caller carries on regardless
+
+*V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED — six and four consecutive `movl $size` / `call` / `mov %eax,off(%ebx)` with no `test` between. Fix class: documentation only.*
+
+**Finding 1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
+
+*Numbering: D170 and D171 are the block this batch was assigned, and the gap below them is not this batch's to fill. Three sessions independently picked the number after D161 as "the next free one", which is exactly why blocks are now handed out rather than taken; the numbers between D161 and D170 are reserved for resolving those collisions. Bare `D` and digits read as a citation to `refcheck.py`, so they are not spelled out here — the same trap the D64 gap note records.*
+## D180 🐛 `V92Precoder` and `V92PreFilter` run a filter constructor over `sysdep_malloc`'s return without checking it, so a failed allocation constructs a `FloatFIR` through a null pointer
+
+*Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision — the allocator never fails in the harness.*
+
+**Finding 1245.** `movl $0x14,(%esp); call sysdep_malloc; call FloatFIR::FloatFIR` with nothing between the two, four times across the pair. `FloatFIR`'s constructor stores five fields, so the fault is at the first store and not deferred. The same shape as D5's family and the same as `FloatFIR`'s own unchecked history allocation.
+
+---
+
+## D181 🐛 💤 `~V92Precoder` and `~V92PreFilter` do not null what they free, and `V92Precoder::reset(V92MappingParams *)` is the one writer that skips those two words
+
+*Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that resets after destroying.*
+
+**Finding 1245.** The destructor leaves +0x68 and +0x6c holding freed addresses; `reset` rewrites +0x04..+0x64 and +0x70, +0x74 and deliberately leaves those two alone, which is right for a live object and would use a dangling pointer on a destroyed one. `V92Transmitter::~V92Transmitter` frees the precoder immediately after destroying it, so no path in the object reaches it — hence 💤.
+
+---
+
+## D175 ⚠ `V90Equalizer`'s constructor stores fifteen `sysdep_malloc` returns and checks none of them, then hands them to `reset` to write through
+
+`FloatFIR`'s constructor tests its one allocation; this one tests none of its fifteen, and its last act is a tail call to `reset`, which writes through six of them. A negative `LINEAR_EQU_HISTORY_LENGTH` reaches the same place by another route: the length is a SIGNED divide by two, so the allocation size is enormous, the return is null, and `reset` writes through it. Reproduced as written (finding 1230). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+---
+
+## D176 🐛 `V90PreFilter`'s constructor can never select the last entry of `dataBase`
+
+The table is walked to its first empty name and the count is decremented before `codecType` is compared against it, so the highest index the constructor will accept is `count - 2`, and an index of `count - 1` -- a real, named entry -- is rejected with "External Hardware Codec Index exceeds table length" and replaced by 0. The message prints the decremented number as "table length", which is where the off-by-one shows. Reproduced (finding 1233). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+---
+
+## D177 `V90PreFilter`'s out-of-range banner has one doubled `*`
+
+`.rodata.str1.4+0xb904` is 102 characters of `*#` except at +0xb930, where the pattern reads `*#**#*`. Cosmetic, in the object's own bytes, transcribed rather than tidied. `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+
+
+---
+
+## D178 🐛 `V90PreFilter`'s constructor bounds `codecType` from above and not from below
+
+The range check is `if (codecType > count - 1)`, and there is no other. When `HW_CODEC_TYPE` is negative the constructor stores its own `__tHardwareCodecTypes__` argument straight into `codecType` with no floor, so a negative argument reaches the field intact -- and `isV90WithEia6`, `autoSelection` and `selectFilter`, all three already written in `src/pump/v90/V90PreFilter.cpp`, index `dataBase[codecType]` with no gate of any kind. The constructor is therefore where a wild table index is STORED, and the reads that follow it are at the shipped debug level, not behind `dsplibs_debug_level > 1` like the constructor's own `dataBase[codecType].name`.
+
+Reproduced (finding 1233). `t_v90prefilter.cpp`'s constructor sweep deliberately stops at zero: a negative index has each side reading below the base of its OWN table, so the object comparison and the transcript would both fail for a reason belonging to the harness rather than to the function, and the test would be reporting the fixture. `unmeasured`.
+
+---
+
+## D179 🐛 `V90Equalizer` with fewer than four taps allocates nothing and then writes to it
+
+`linearEquLength` is `len & ~3`, so any `len` below four gives zero, and the constructor asks `sysdep_malloc` for zero bytes. Its tail call to `reset` then clamps the cursor with `if (linearEquLength - 1 < cursor)` -- unsigned, so `0xffffffff < 0` is false, the clamp does not fire, and `linearEquCoefs[0] = 1.0f` is written into a zero-length block. Both halves are the object's: the mask is in the constructor and the clamp is in `reset`, and neither is wrong on its own.
+
+Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 and 1, so both sides take this path in every trial that uses them. It survives only because glibc's smallest chunk has twelve usable bytes. `unmeasured`.
+---
+
+## D185 🐛 💤 `GenericToneDetector`'s constructor divides by its tenth argument twice with no zero guard, so a `blockLen` of 0 traps before the object exists
+
+*The constructor/destructor batch. **Reachability: unmeasured.** Status: CONFIRMED from the disassembly. Fix class: documentation only — reproduced, not repaired.*
+
+**Finding 1253.** Both sites are `div %edi` at 0x10704 and 0x1071b with `%edi` loaded straight from the argument slot at `0x58(%esp)`, and there is no test of it anywhere in the 267 bytes. `test/unit/t_gtonedet.cpp` sweeps seven nonzero divisors and says in its file comment that zero is excluded on purpose rather than avoiding it quietly. Nothing in this tree constructs a `GenericToneDetector`, so which callers exist and what they pass is unmeasured — that is what the marker means here, and it is why the entry claims a trap rather than a live defect.
+## D195 🐛 `VPcmV34Create`'s second `sysdep_memset` clears 0x79c bytes at +0x264 that the first one, 0xac4c bytes at +0, has already cleared — the receiver is zeroed twice and no path reaches the second without the first
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Transcribed and kept; `test/mutations/vpcmcreate.json`'s "the redundant second memset is dropped" is the recorded survivor that says it is unobservable.
+
+---
+
+## D196 🐛 `VPcmV34Create` re-loads `sess + 0x612c` between the two byte stores it makes through it, so the two stores are not guaranteed to reach the same record
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Read from the disassembly; the reconstruction keeps both loads rather than folding them.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
@@ -4653,3 +4824,147 @@ new hardware.
 * **What the far end's "33600/ARQ" actually names** — its transmit rate, the
   negotiated maximum, or the achieved receive rate. Three different claims, and
   which one it is decides whether there is an asymmetry to explain.
+
+## D200 ⚠ `sessionTermination`'s "EVALUATION DISABLED" notice ends in a bare `\n` where its four siblings in the same function end in `\r\n`
+
+*Batch of 2026-08-11, from `V90Demodulator::sessionTermination` (blob 0x1ab30). **Reachability: FIRES** whenever `TIMING_HISTORY_EVALUATION_ENABLED` is zero and the call reached the data state. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.
+
+## D220 ⚠ `V90Demapper::V90Demapper` stores both `sysdep_malloc` results without checking either, and its own destructor is the only code that ever tests them
+
+*Batch of 2026-08-11, from `V90Demapper::V90Demapper` (blob 0x30640/0x30710). **Reachability: FIRES** on allocation failure only. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1303.** `mov %eax,0x1c(%esi)` and `mov %eax,0x20(%esi)` follow their calls with no `test`, so a failed allocation leaves the object holding NULL where `count_24` says there are `levels` elements; `~V90Demapper`'s two null tests then read as guards against a state the constructor is not supposed to be able to produce, and they are the only ones anywhere. With `levels == 0` the same two calls ask for `levels * 4` and `levels` bytes -- two zero-byte blocks taken and freed for nothing, which `t_v90demapctor.cpp` sweeps and both sides do identically. Reproduced rather than repaired.
+## D225 ⚠ `V92EchoCanceller`'s constructor reads `echoDelay` and `echoLength` before anything has written them, and folds the difference into a value it then discards
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1314.** The constructor's third instruction group is `setEchoDelay(params->V92_ECHO_INITIAL_DELAY)` inlined -- `mov 0x38(%esi),%ecx` at +0x35 loads `echoDelay` out of storage `sysdep_malloc` has just returned, and `add %edx,0x2c(%esi)` folds `delay0 - garbage` into `echoLength`, which is equally uninitialised. The result is DEAD: the tail call to `reset()` rebuilds `echoLength` from `filterLength`, `echoDelay` and the parameter block, and the history's allocated length at +0x1c is built from +0x18 and +0x38 and never from +0x2c. Reproduced rather than tidied, and reproducing it depends on `-fno-lifetime-dse` (finding 1224). Not D72: that entry is about the buffer this constructor sizes, not about what it reads before sizing it.
+
+## D226 🐛 `V92EchoCanceller`'s constructor divides by its second argument and does not guard it
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0), +0x98. **Reachability: CANNOT FIRE** on the shipped path -- finding 1188 threads the argument back to `VPCMXF_Create`'s `(int)trunc(arg4 * 8.0 + 0.5)` and reads it as 40. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1188 already names this** as "a divide-by-zero, a different defect, not an overrun"; it is registered here so that the constructor's own entry exists. `div %edi` takes the block length straight from the argument, so a caller passing zero traps before the second allocation. Reproduced: the reconstruction divides in the same place and adds no check.
+
+## D227 ⚠ the echo canceller's construction notice says "constraction"
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), .rodata.str1.4+0x30ac. **Reachability: FIRES** whenever `dsplibs_debug_level` is above 1. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1310.** The string is `"V92EchoCanceller: constraction\r\n"`. It is the original's typo, it goes through `dsplibs_debug_printf` unencoded, and it is reproduced character for character -- `v92ec`'s "the construction notice's typo is corrected" mutation exists to make sure a later reader cannot quietly fix it.
+
+## D228 🐛 a zero `V92_ECHO_FILTER_LENGTH` makes the constructor's `filterLength - 1` wrap, and at a zero initial delay the history allocation wraps with it
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x62 and +0x8f. **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180 (finding 1188); it needs a parameter file, which slmodemd never supplies (finding 879). Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1312.** `lea -0x1(%eax),%ecx` stores `filterLength - 1` at +0x18 as an unsigned word, and the history length adds `echoDelay` to it. At `filterLength == 0` that term is 0xffffffff; an initial delay of 1 or more brings the sum back into range and the object allocates a small buffer, which the differential test drives on both sides. An initial delay of 0 leaves 0xffffffff, and the `sysdep_malloc` four instructions later is asked for 16 GB with no check on the result. Reproduced, unguarded, and not driven.
+
+## D229 🐛 a negative `V92_ECHO_FILTER_LENGTH` becomes a four-billion tap count and an unchecked allocation
+
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x49..+0x85. **Reachability: CANNOT FIRE** at the shipped 180, for D228's reason. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding 1188 write, since no test that reaches it survives.
+---
+
+## D210 🐛 💤 `~V92Transmitter` nulls one of the six pointers it releases and leaves the other five dangling
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that destroys twice.*
+
+**Finding 1281.** `movl $0x0,0x4c(%esi)` at .text+0x53aa6 follows the precoder's release and nothing follows the other five, so a second destruction frees +0x08, +0x48, +0x58, +0x50 and +0x54 again and skips +0x4c. The asymmetry is the object's; both halves are reproduced. D181 is the same shape one level down, and no path in the object reaches either -- hence 💤.
+
+---
+
+## D211 🐛 💤 `~V92BitsToSymbol`, `~V92Phase4Modulator` and `~V92Modulator` null nothing at all, so a second destruction double-frees fourteen buffers between them
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only.*
+
+**Findings 1281, 1288.** Two pointers in the bit-to-symbol stage, one in the phase 4 modulator and eleven in the modulator, every one left holding a freed address; the modulator's own member scrambler is the fifteenth, through `Scrambler`'s destructor, which its header already records. The three fixtures drive every null combination of those pointers and assert `harness_alloc.free_null` at zero, which is what says the guards exist; nothing drives a second destruction, because a double free is what it would be measuring.
+
+---
+
+## D212 🐛 `V92Transmitter`, `V92BitsToSymbol`, `V92Phase4Modulator` and `V92Modulator` make twenty allocations between them and check none of them
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision -- the allocator never fails in the harness.*
+
+**Findings 1280, 1285.** Six, two, one and eleven `sysdep_malloc` calls, and in twelve of the twenty the very next instruction is a constructor call on the returned pointer -- `movl $0x60; call sysdep_malloc; call V92Transmitter::V92Transmitter` at .text+0x4deee is the shape. The same family as D171, D175 and D180, and the same reasoning: a null return faults at the sub-object's first store rather than being deferred. The five raw buffers are worse only in that nothing writes through them until a member this tree has not written runs.
+
+---
+
+## D213 ⚠ `V92BitsToSymbol`'s constructor initialises +0x10, +0x18 and +0x1c and skips +0x14, which `nofBitsForNextTime` multiplies by
+
+*V.92 modulator batch. **Reachability: UNMEASURED** -- it needs a call to `nofBitsForNextTime` or `setSymbolsBlockSize` before `reset`, and no caller has been read. Status: OBSERVED, not driven. Fix class: none proposed.*
+
+**Finding 1287.** `reset(V92MappingParams *)` at .text+0x4e070 fills +0x14 from the mapping parameters' first word and the constructor at +0x4ded0 does not, so between construction and the first `reset` the field holds whatever `sysdep_malloc` left. `nofBitsForNextTime` (+0x4e0c0) and `setSymbolsBlockSize` (+0x4e130) both `imul` by it and return the product. The same shape as D164 and as finding 1248's hole in `V92ModulusEncoder`.
+
+---
+
+## D214 ⚠ 💤 `V92Modulator`'s constructor and the `reset` it inlines write every word of the object except +0x24 and +0x3c
+
+*V.92 modulator batch. **Reachability: UNMEASURED** -- no member that reads either word has been written. Status: OBSERVED, not driven. Fix class: none proposed.*
+
+**Findings 1283, 1287.** Twenty-eight of the object's thirty-one declared fields are written between the constructor and the inlined `reset`; the other three are these two words and the two bytes of alignment at +0x0e, which no constructor would write. +0x24 and +0x3c sit between named fields on both sides rather than at the end where an alignment hole would be. Whether anything reads them before some other member fills them is a question the sixteen unwritten members hold the answer to -- hence 💤 rather than 🐛.
+
+## D230 🐛 the constructor's illegal-`modemSide` arm leaves the modulator pointer uninitialised, and the destructor then destroys it
+
+*Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0xf4 and +0x13a. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor at .text+0xfac0, computes the argument as `dec %ebp; sete %dl; movzbl %dl,%esi`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1323.** The digital arm writes `movl $0x0,(%esi)` and the analog arm writes the allocation; the third arm prints "V92Modem Constructor: Illegal modemSide" and returns, storing nothing. `~V92Modem` then reads +0x000, finds whatever the enclosing storage held, and calls `_ZN12V92ModulatorD1Ev` on it followed by `sysdep_free`. Reproduced exactly, and `t_v92modem.cpp` asserts the word is still the fixture's seed before nulling it to make the destructor safe.
+
+## D231 🐛 `~V92Modem` nulls one of the five pointers it releases and leaves the other four dangling
+
+*Batch of 2026-08-11, from `V92Modem::~V92Modem` (blob 0x13a80 / 0x13990), +0x44..+0x7f. **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1322**, and the same family as D210 for `~V92Transmitter`. `movl $0x0,0x8(%esi)` writes back over `phase2Info` and there is no store anywhere near the other four -- `mappingParams`, `modulator`, `cp` and `parameters` all keep the addresses they were freed at. Harmless as shipped, because the object is an embedded member of `VPcmFloModem` that is destroyed once and never reused, but a second destruction would double-free four blocks and destroy three freed objects. Reproduced; `-fno-lifetime-dse` is what keeps our single store from being optimised away (finding 1272).
+
+## D232 🐛 `V92Modem`'s constructor uses five `sysdep_malloc` results with no null test
+
+*Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0x67, +0x8a, +0xb4, +0xc6 and +0x141. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
+
+Each allocation is followed immediately by a constructor call or, for the 0xb4 parameter block, by `V92createConstellations` -- and in every case by a store into `*this` -- with no `test` between them, so a failed allocation is dereferenced at once. The same shape as D177's family and as finding 1303's reading of `~V90Demapper`'s guards. Reproduced; the null tests that would have to precede these five are not there.
+
+## D221 ⚠ `V90Phase3Demodulator`'s constructor zeroes +0x3cc and then calls `reset`, which zeroes it again
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::V90Phase3Demodulator` (blob 0x212c0/0x21430). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1305.** `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two member constructor calls, and the constructor's last act is `reset(...)`, which has `movl $0x0,0x3cc(%ebx)` of its own. The first store is dead in every execution. It is reproduced because the instruction is in the object and because its POSITION -- between two member constructions, which is what makes it a mem-initializer rather than a body statement -- is the evidence for where the field is declared. The cost of the redundancy is one store per construction and there is one construction per call.
+
+## D222 ⚠ `~V90Phase3Demodulator` frees two pointers and nulls neither, so a second destruction double-frees
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::~V90Phase3Demodulator` (blob 0x20cb0/0x20c00). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1306.** Both arms are `test`/`jne` then destroy-and-free, with no store back to +0x3f0 or +0x428 afterwards, so the guards protect against a pointer the constructor never wrote rather than against re-entry. `~V90Demodulator` has the same shape across thirteen slots and `V90Modulator`'s destructor across five, so it is the object's house style and not a local slip. Reproduced rather than repaired; `t_v90rxctor.cpp` asserts the object is byte-identical after the destructor runs, which is what pins the absence of the stores.
+
+## D223 ⚠ `~V90Demodulator` releases thirteen slots and nulls none of them, so a second destruction double-frees all thirteen
+
+*Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1309.** Each of the eight destroy-and-free arms and each of the five bare frees is followed by no store back to the slot, so the thirteen pointers are still there when the function returns and every one of them is stale. `V90Modulator`'s destructor, `V90BitsToSymbol`'s and `~V90Phase3Demodulator` (D222) all have the same shape, so it is the object's house style rather than a local slip. `t_v90demctor.cpp` asserts the object is byte-identical after the destructor except at +0x094, which is what pins the absence of the stores.
+
+## D224 ⚠ Destroying a `V90Demodulator` prints four diagnostics and writes back a persisted modem parameter
+
+*Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010) via `sessionTermination` (0x1ab30). **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1309.** The destructor's first act is an unconditional `sessionTermination()`, which is not a teardown helper: it emits four `edprintf` diagnostics and stores into `params->modemParams->clockDeviation`. So tearing a session down has a side effect on state that outlives the object, and it happens whether or not the caller wanted a session terminated -- a `delete` issued during error recovery writes the same parameter a clean shutdown does. Reproduced rather than repaired; D200 records a separate defect in one of the four strings.
+
+## D235 🐛 `V90Modem`'s constructor leaves BOTH the modulator and the demodulator pointers uninitialised on an illegal `side`, and the destructor then destroys and frees whatever it finds
+
+*Batch of 2026-08-11, from `V90Modem::V90Modem` (blob 0x194e0 / 0x19740), +0xfe onwards. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor, passes its own `side` argument through unchanged, and `VPCMXF_Create` computes that as `sete %al`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1332.** The same shape as D230 for `V92Modem`, one class up and twice as bad: `V92Modem`'s third arm leaves ONE word uninitialised, and this one leaves TWO. The switch is `test`/`je` for 0, `dec`/`je` for 1, then a fall-through that prints "V90Modem Constructor: Illegal modemSide" and returns; +0x00 and +0x04 keep whatever the storage held. `~V90Modem` then tests each, calls `_ZN12V90ModulatorD1Ev` or `_ZN14V90DemodulatorD1Ev` on it, and frees it. Reproduced exactly. `test/unit/t_v90modemctor.cpp` drives `side = 2` and asserts our allocator counters EQUAL the blob's rather than asserting they are zero, which is the only assertion that is true of the object.
+
+## D236 🐛 `VPCMXF_Create` constructs into its allocation before it tests it for NULL
+
+*Batch of 2026-08-11, from `VPCMXF_Create` (blob 0xfcf0), +0xaf and +0xe2. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1333.** `call sysdep_malloc` at 0xfd9f, `call _ZN12VPcmFloModemC1E...` at 0xfdcd with nothing between them, and `test %ebx,%ebx` at 0xfdd2 -- so on a failed allocation the 651-byte constructor runs over a null pointer and the process is gone before the "new VPcmFloModem() failed." message it would have printed. The guard is real code and it is unreachable in the only circumstance it was written for. Reproduced where it is rather than moved to where it would work: moving it is a different function, and the same family as D232 for `V92Modem`'s five allocations.
+
+## D237 ⚠ `~VPcmFloModem` exists in the blob as two global symbols and in our object as none
+
+*Batch of 2026-08-11, from `VPcmFloModem::~VPcmFloModem` (blob 0xd0a0 D1, 0xd030 D2, 0x61 = 97 bytes each). **Reachability: n/a** -- this is a symbol-table difference, not a behavioural one. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1334.** The destructor is IMPLICITLY DECLARED on both sides -- it is six member destructor calls in reverse declaration order and nothing else, which is exactly what GCC generates and exactly what 0xd0a0 contains. An implicit destructor is implicitly inline, and our build has one call site for it, `VPCMXF_Delete`, into which GCC inlines it and then emits no out-of-line copy. The blob has both `D1` and `D2` as ordinary global `T` symbols.
+
+**AND NOTHING IN THE BLOB CALLS EITHER OF THEM.** `objdump -dr` over the whole 1.2 MB finds ZERO `R_386_PC32` relocations against `_ZN12VPcmFloModemD1Ev` or `D2Ev`; the blob's own `VPCMXF_Delete` at 0xf6c0 inlines the six calls exactly as ours does. So the blob's two symbols are DEAD CODE -- GCC 3.4.2 emitted an out-of-line copy of an inline function nothing referenced, and modern GCC does not -- and `tools/closure.py dp_vpcm_init --missing` reporting 0 symbols and 0 bytes is CORRECT rather than a measurement artefact, because the pair is in no call graph to be missing from. Neither `debugaudit.py --missing` nor `coverage.py` lists them either. It is filed as a deviation because the SYMBOL TABLES differ and a count taken symbol-by-symbol will see it; the behavioural consequence is nil, and 194 of the blob's own bytes are unreachable in the blob. `test/unit/t_vpcmctor.cpp` drives the blob's `D1` directly by symbol, so the code at 0xd0a0 is differentially tested against ours even though ours lives inside `VPCMXF_Delete`.
+
+Neither way of forcing the symbols out is right: an out-of-line definition cannot be inlined into `VPCMXF_Delete` and would turn its six calls into one, and an in-header one comes out weak and in a comdat group where the blob's are global.

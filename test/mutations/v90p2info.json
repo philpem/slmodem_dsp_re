@@ -1,0 +1,40 @@
+[
+ {
+  "note": "V90Phase2Info.cpp is the constructor and `printInfo`.  The constructor is five copies, and two of them TEST the parameter rather than carrying it -- `cmpl $0x0` then `setne` -- so the mutation that matters is the one that turns a test back into a copy.  It is caught only because the test sweeps parameter values other than 0 and 1; a suite over small values would report it NOT CAUGHT and be right to."
+ },
+ {
+  "label": "pcmType carries the parameter instead of testing it",
+  "find": "\tpcmType = (p->PHASE2_INFO_A_OR_MU != 0);",
+  "replace": "\tpcmType = p->PHASE2_INFO_A_OR_MU;"
+ },
+ {
+  "label": "txPowerMeasurementPoint carries the parameter instead of testing it",
+  "find": "\ttxPowerMeasurementPoint = (p->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);",
+  "replace": "\ttxPowerMeasurementPoint = p->PHASE2_INFO_TX_POWER_MEASURE_POINT;"
+ },
+ {
+  "label": "the two boolean copies are transposed",
+  "find": "\tpcmType = (p->PHASE2_INFO_A_OR_MU != 0);",
+  "replace": "\tpcmType = (p->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);"
+ },
+ {
+  "label": "Uinfo and maxTxPower are transposed",
+  "find": "\tUinfo = (unsigned char)p->PHASE2_INFO_UINFO;\n\tmaxTxPower = (unsigned char)p->PHASE2_INFO_MAX_TX_POWER;",
+  "replace": "\tUinfo = (unsigned char)p->PHASE2_INFO_MAX_TX_POWER;\n\tmaxTxPower = (unsigned char)p->PHASE2_INFO_UINFO;"
+ },
+ {
+  "label": "rtd is read from the neighbouring parameter",
+  "find": "\trtd = p->PHASE2_INFO_RTD;",
+  "replace": "\trtd = p->PHASE2_INFO_UINFO;"
+ },
+ {
+  "label": "the parameter block is not kept",
+  "find": "\tparams = p;\n\tpcmType",
+  "replace": "\tpcmType"
+ },
+ {
+  "label": "rtd is not written",
+  "find": "\trtd = p->PHASE2_INFO_RTD;",
+  "replace": "\t;"
+ }
+]

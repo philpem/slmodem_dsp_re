@@ -1,13 +1,16 @@
 /*
  * t_v90equ.cpp -- differential test of V90Equalizer::setLinearEquBeta,
- * ::setDfeBeta and ::enterPhase3.
+ * ::setDfeBeta, ::enterPhase3, ::reset, ::enterChannelVerification, and the
+ * constructor and destructor.
  *
- * The fixture is t_v90jd.cpp's: the object lives in a union with a byte
- * array, both sides are seeded with the SAME varied pseudorandom bytes and
- * never with zeros, the whole object is compared with `diff_eq_obj`, and the
- * bytes from `sizeof` to the end of an over-large slot are compared
- * separately so a store past the object's end is a failure rather than
- * silence (findings 223, 224, 230).
+ * The fixture is t_v90jd.cpp's: the object lives in a byte array carried by a
+ * union for its alignment, both sides are seeded with the SAME varied
+ * pseudorandom bytes and never with zeros, the whole object is compared with
+ * `diff_eq_obj`, and the bytes from `sizeof` to the end of an over-large slot
+ * are compared separately so a store past the object's end is a failure
+ * rather than silence (findings 223, 224, 230).  The lifecycle pair needs
+ * more than that and finding 1234 is what it needs; see the comment above
+ * `run_ctor`.
  *
  * WHAT THIS TEST HAS TO SEE THAT AN ORDINARY ONE WOULD NOT
  *
@@ -57,15 +60,28 @@ void ref_enterPhase3(void *self)
 	asm("ref__ZN12V90Equalizer11enterPhase3Ev");
 }
 
-/* The object, plus room past its end to catch a store that overruns it. */
+/*
+ * The object, plus room past its end to catch a store that overruns it.
+ *
+ * THE UNION NO LONGER HAS THE OBJECT IN IT.  `V90Equalizer` has a
+ * user-declared constructor and destructor as of the lifecycle batch, so a
+ * union holding one has both of its own implicitly deleted and the fixture
+ * stops compiling.  The union stays for its ALIGNMENT and the object is
+ * reached through a cast -- which is the same shape the constructor test
+ * needs anyway, since C++ has no syntax for running a constructor over
+ * storage that already exists and already holds a seed.
+ */
 #define SLOT 400
 
 union equ_slot {
-	V90Equalizer o;
 	unsigned char raw[SLOT];
+	double align_;
 };
 
 static union equ_slot ours, theirs;
+
+#define OURS	(*(V90Equalizer *)ours.raw)
+#define THEIRS	(*(V90Equalizer *)theirs.raw)
 
 static void
 seed(long trial)
@@ -207,26 +223,26 @@ sweep_setter(int which, unsigned level, struct outcome *out, long *tagp)
 
 				seed(tag);
 
-				ours.o.mmxMode = theirs.o.mmxMode = mmx;
-				ours.o.linearEquMmxRefLevel =
-				    theirs.o.linearEquMmxRefLevel = ref_v[ri];
-				ours.o.dfeMmxRefLevel =
-				    theirs.o.dfeMmxRefLevel = ref_v[ri];
-				ours.o.linearEquMmxBetaScale =
-				    theirs.o.linearEquMmxBetaScale =
+				OURS.mmxMode = THEIRS.mmxMode = mmx;
+				OURS.linearEquMmxRefLevel =
+				    THEIRS.linearEquMmxRefLevel = ref_v[ri];
+				OURS.dfeMmxRefLevel =
+				    THEIRS.dfeMmxRefLevel = ref_v[ri];
+				OURS.linearEquMmxBetaScale =
+				    THEIRS.linearEquMmxBetaScale =
 					scale_v[si];
-				ours.o.dfeMmxBetaScale =
-				    theirs.o.dfeMmxBetaScale = scale_v[si];
+				OURS.dfeMmxBetaScale =
+				    THEIRS.dfeMmxBetaScale = scale_v[si];
 
 				/*
 				 * `prev` drives both arms of the diagnostic's
 				 * guard: with it set the field already holds
 				 * the value, so the object must not print.
 				 */
-				ours.o.linearEquBeta =
-				    theirs.o.linearEquBeta =
+				OURS.linearEquBeta =
+				    THEIRS.linearEquBeta =
 					prev ? beta : -7.5f;
-				ours.o.dfeBeta = theirs.o.dfeBeta =
+				OURS.dfeBeta = THEIRS.dfeBeta =
 					prev ? beta : -7.5f;
 
 				memcpy(before, ours.raw, SLOT);
@@ -234,15 +250,15 @@ sweep_setter(int which, unsigned level, struct outcome *out, long *tagp)
 					dsplib_debug_capture_reset();
 
 				if (which == 0) {
-					ours.o.setLinearEquBeta(beta);
-					ref_setLinearEquBeta(&theirs.o, beta);
+					OURS.setLinearEquBeta(beta);
+					ref_setLinearEquBeta(&THEIRS, beta);
 				} else {
-					ours.o.setDfeBeta(beta);
-					ref_setDfeBeta(&theirs.o, beta);
+					OURS.setDfeBeta(beta);
+					ref_setDfeBeta(&THEIRS, beta);
 				}
 
 				diff_eq_obj("after setBeta", V90Equalizer,
-					    &ours.o, &theirs.o, tag);
+					    &OURS, &THEIRS, tag);
 				diff_eq_int("no store past the object "
 					    "(trial %ld)", guard_equal(), 1,
 					    tag);
@@ -259,13 +275,13 @@ sweep_setter(int which, unsigned level, struct outcome *out, long *tagp)
 						out->silent = 1;
 				}
 
-				shift = which == 0 ? ours.o.linearEquMmxShift
-						   : ours.o.dfeMmxShift;
+				shift = which == 0 ? OURS.linearEquMmxShift
+						   : OURS.dfeMmxShift;
 				if (mmx) {
 					note_shift(out, shift);
 					if ((which == 0
-					     ? ours.o.linearEquMmxBeta
-					     : ours.o.dfeMmxBeta) != 0)
+					     ? OURS.linearEquMmxBeta
+					     : OURS.dfeMmxBeta) != 0)
 						out->nonzero_beta = 1;
 				}
 				if (memcmp(before, ours.raw, SLOT) != 0)
@@ -339,28 +355,28 @@ run_exact_powers(void)
 
 	for (m = -8; m <= 12; m++) {
 		seed(tag);
-		ours.o.mmxMode = theirs.o.mmxMode = 1;
-		ours.o.linearEquMmxRefLevel =
-		    theirs.o.linearEquMmxRefLevel = 1.0f;
-		ours.o.dfeMmxRefLevel = theirs.o.dfeMmxRefLevel = 1.0f;
-		ours.o.linearEquMmxBetaScale =
-		    theirs.o.linearEquMmxBetaScale = 1.0f;
-		ours.o.dfeMmxBetaScale = theirs.o.dfeMmxBetaScale = 1.0f;
-		ours.o.linearEquBeta = theirs.o.linearEquBeta = -7.5f;
-		ours.o.dfeBeta = theirs.o.dfeBeta = -7.5f;
+		OURS.mmxMode = THEIRS.mmxMode = 1;
+		OURS.linearEquMmxRefLevel =
+		    THEIRS.linearEquMmxRefLevel = 1.0f;
+		OURS.dfeMmxRefLevel = THEIRS.dfeMmxRefLevel = 1.0f;
+		OURS.linearEquMmxBetaScale =
+		    THEIRS.linearEquMmxBetaScale = 1.0f;
+		OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale = 1.0f;
+		OURS.linearEquBeta = THEIRS.linearEquBeta = -7.5f;
+		OURS.dfeBeta = THEIRS.dfeBeta = -7.5f;
 
-		ours.o.setLinearEquBeta(pow2f(-24 - m));
-		ref_setLinearEquBeta(&theirs.o, pow2f(-24 - m));
-		diff_eq_obj("after setLinearEquBeta", V90Equalizer, &ours.o,
-			    &theirs.o, m);
+		OURS.setLinearEquBeta(pow2f(-24 - m));
+		ref_setLinearEquBeta(&THEIRS, pow2f(-24 - m));
+		diff_eq_obj("after setLinearEquBeta", V90Equalizer, &OURS,
+			    &THEIRS, m);
 		diff_eq_int("linear equaliser shift at 2**%ld",
-			    ours.o.linearEquMmxShift, m, m);
+			    OURS.linearEquMmxShift, m, m);
 
-		ours.o.setDfeBeta(pow2f(-20 - m));
-		ref_setDfeBeta(&theirs.o, pow2f(-20 - m));
-		diff_eq_obj("after setDfeBeta", V90Equalizer, &ours.o,
-			    &theirs.o, m);
-		diff_eq_int("DFE shift at 2**%ld", ours.o.dfeMmxShift, m, m);
+		OURS.setDfeBeta(pow2f(-20 - m));
+		ref_setDfeBeta(&THEIRS, pow2f(-20 - m));
+		diff_eq_obj("after setDfeBeta", V90Equalizer, &OURS,
+			    &THEIRS, m);
+		diff_eq_int("DFE shift at 2**%ld", OURS.dfeMmxShift, m, m);
 
 		diff_eq_int("no store past the object (m = %ld)",
 			    guard_equal(), 1, m);
@@ -392,26 +408,26 @@ run_enterphase3(void)
 				unsigned char before[SLOT];
 
 				seed(tag);
-				ours.o.state = theirs.o.state = state;
-				ours.o.mmxMode = theirs.o.mmxMode = mmx;
-				ours.o.linearEquMmxRefLevel =
-				    theirs.o.linearEquMmxRefLevel = ref_v[ri];
-				ours.o.dfeMmxRefLevel =
-				    theirs.o.dfeMmxRefLevel = ref_v[ri];
-				ours.o.linearEquMmxBetaScale =
-				    theirs.o.linearEquMmxBetaScale = 1.0f;
-				ours.o.dfeMmxBetaScale =
-				    theirs.o.dfeMmxBetaScale = 1.0f;
+				OURS.state = THEIRS.state = state;
+				OURS.mmxMode = THEIRS.mmxMode = mmx;
+				OURS.linearEquMmxRefLevel =
+				    THEIRS.linearEquMmxRefLevel = ref_v[ri];
+				OURS.dfeMmxRefLevel =
+				    THEIRS.dfeMmxRefLevel = ref_v[ri];
+				OURS.linearEquMmxBetaScale =
+				    THEIRS.linearEquMmxBetaScale = 1.0f;
+				OURS.dfeMmxBetaScale =
+				    THEIRS.dfeMmxBetaScale = 1.0f;
 
 				memcpy(before, ours.raw, SLOT);
 				if (level > 1)
 					dsplib_debug_capture_reset();
 
-				ours.o.enterPhase3();
-				ref_enterPhase3(&theirs.o);
+				OURS.enterPhase3();
+				ref_enterPhase3(&THEIRS);
 
 				diff_eq_obj("after enterPhase3", V90Equalizer,
-					    &ours.o, &theirs.o, tag);
+					    &OURS, &THEIRS, tag);
 				diff_eq_int("no store past the object "
 					    "(trial %ld)", guard_equal(), 1,
 					    tag);
@@ -436,17 +452,17 @@ run_enterphase3(void)
 					skipped = 1;
 				} else {
 					diff_eq_int("state (trial %ld)",
-						    ours.o.state,
+						    OURS.state,
 						    V90EQU_STATE_PHASE3, tag);
 					diff_eq_int("stateCount (trial %ld)",
-						    ours.o.stateCount, 0, tag);
+						    OURS.stateCount, 0, tag);
 					diff_eq_int("linearEquBeta zeroed "
 						    "(trial %ld)",
-						    ours.o.linearEquBeta
+						    OURS.linearEquBeta
 						    == 0.0f, 1, tag);
 					diff_eq_int("dfeBeta zeroed "
 						    "(trial %ld)",
-						    ours.o.dfeBeta == 0.0f, 1,
+						    OURS.dfeBeta == 0.0f, 1,
 						    tag);
 					entered = 1;
 				}
@@ -489,6 +505,13 @@ run_enterphase3(void)
  */
 
 #include "dsplib/V90Resampler.h"
+/*
+ * Explicitly: this fixture takes `sizeof(V90Parameters)` for its arena, and
+ * `V90Resampler.h` now only DECLARES the class -- it holds one as a pointer
+ * and never dereferences it, so it no longer drags the 342-slot definition in
+ * behind it.
+ */
+#include "dsplib/V90Parameters.h"
 
 extern "C" {
 void ref_equ_reset(void *self, unsigned int cursor)
@@ -597,16 +620,16 @@ run_reset(void)
 				tag++;
 				seed(tag);
 				fill_arena(tag);
-				wire(&ours.o);
-				wire(&theirs.o);
+				wire(&OURS);
+				wire(&THEIRS);
 
-				ours.o.linearEquLength =
-				    theirs.o.linearEquLength = len;
-				ours.o.word_1c = theirs.o.word_1c = m;
-				ours.o.dfeLength = theirs.o.dfeLength =
+				OURS.linearEquLength =
+				    THEIRS.linearEquLength = len;
+				OURS.word_1c = THEIRS.word_1c = m;
+				OURS.dfeLength = THEIRS.dfeLength =
 				    dfe_v[di];
-				ours.o.mmxArraysPresent =
-				    theirs.o.mmxArraysPresent = mmx;
+				OURS.mmxArraysPresent =
+				    THEIRS.mmxArraysPresent = mmx;
 
 				ARENA_PARAMS->LINEAR_EQU_FADE_LEFT_EDGE_RATIO =
 				    fade_v[fi];
@@ -619,15 +642,15 @@ run_reset(void)
 				memcpy(&arena_save, &arena, sizeof(arena));
 				dsplib_debug_capture_reset();
 
-				ours.o.reset(cursor);
+				OURS.reset(cursor);
 
 				memcpy(&arena_ours, &arena, sizeof(arena));
 				memcpy(&arena, &arena_save, sizeof(arena));
 
-				ref_equ_reset(&theirs.o, cursor);
+				ref_equ_reset(&THEIRS, cursor);
 
 				diff_eq_obj("after reset", V90Equalizer,
-					    &ours.o, &theirs.o, tag);
+					    &OURS, &THEIRS, tag);
 				diff_eq_obj("the arena after reset",
 					    struct equ_arena, &arena_ours,
 					    &arena, tag);
@@ -644,31 +667,31 @@ run_reset(void)
 				 * the object must hold are asserted and not
 				 * only compared.
 				 */
-				diff_eq_int("state (%ld)", theirs.o.state,
+				diff_eq_int("state (%ld)", THEIRS.state,
 					    V90EQU_STATE_RESET, tag);
 				diff_eq_int("stateCount (%ld)",
-					    theirs.o.stateCount, 0, tag);
+					    THEIRS.stateCount, 0, tag);
 				diff_eq_int("flag_144 (%ld)",
-					    (long)theirs.o.flag_144, 1, tag);
+					    (long)THEIRS.flag_144, 1, tag);
 				diff_eq_int("flag_146 (%ld)",
-					    (long)theirs.o.flag_146, 1, tag);
-				diff_eq_int("mmxMode (%ld)", theirs.o.mmxMode,
+					    (long)THEIRS.flag_146, 1, tag);
+				diff_eq_int("mmxMode (%ld)", THEIRS.mmxMode,
 					    0, tag);
 				diff_eq_int("word_20 = word_1c - len - 1 "
-					    "(%ld)", (long)theirs.o.word_20,
+					    "(%ld)", (long)THEIRS.word_20,
 					    (long)(unsigned int)(m - len - 1u),
 					    tag);
 				diff_eq_int("errorEnergyMeanBlockLen (%ld)",
-					    theirs.o.errorEnergyMeanBlockLen,
+					    THEIRS.errorEnergyMeanBlockLen,
 					    (int)(0x1234 + tag), tag);
 				diff_eq_int("errorEnergyMeanK copied (%ld)",
-					    theirs.o.errorEnergyMeanK
+					    THEIRS.errorEnergyMeanK
 					    == 0.375f, 1, tag);
 				diff_eq_int("linearEquBeta zeroed (%ld)",
-					    theirs.o.linearEquBeta == 0.0f, 1,
+					    THEIRS.linearEquBeta == 0.0f, 1,
 					    tag);
 				diff_eq_int("dfeBeta zeroed (%ld)",
-					    theirs.o.dfeBeta == 0.0f, 1, tag);
+					    THEIRS.dfeBeta == 0.0f, 1, tag);
 
 				/*
 				 * The cursor, and the clamp that is unsigned:
@@ -687,9 +710,9 @@ run_reset(void)
 				/* And the window half really is a fraction. */
 				diff_eq_int("linearEquWindowHalf <= len/2 "
 					    "(%ld)",
-					    theirs.o.linearEquWindowHalf * 2u
+					    THEIRS.linearEquWindowHalf * 2u
 					    <= len, 1, tag);
-				if (theirs.o.linearEquWindowHalf > 0)
+				if (THEIRS.linearEquWindowHalf > 0)
 					saw_window = 1;
 				if (mmx)
 					saw_mmx = 1;
@@ -726,13 +749,13 @@ run_reset(void)
 
 			seed(tk);
 			fill_arena(tk);
-			wire(&ours.o);
-			wire(&theirs.o);
-			ours.o.linearEquLength = theirs.o.linearEquLength = 16;
-			ours.o.word_1c = theirs.o.word_1c = 24;
-			ours.o.dfeLength = theirs.o.dfeLength = 8;
-			ours.o.mmxArraysPresent =
-			    theirs.o.mmxArraysPresent = 0;
+			wire(&OURS);
+			wire(&THEIRS);
+			OURS.linearEquLength = THEIRS.linearEquLength = 16;
+			OURS.word_1c = THEIRS.word_1c = 24;
+			OURS.dfeLength = THEIRS.dfeLength = 8;
+			OURS.mmxArraysPresent =
+			    THEIRS.mmxArraysPresent = 0;
 			ARENA_PARAMS->LINEAR_EQU_FADE_LEFT_EDGE_RATIO =
 			    lr[k][0];
 			ARENA_PARAMS->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO =
@@ -741,21 +764,21 @@ run_reset(void)
 			ARENA_PARAMS->ERROR_ENERGY_MEAN_K = 0.5f;
 
 			memcpy(&arena_save, &arena, sizeof(arena));
-			ours.o.reset(3);
+			OURS.reset(3);
 			memcpy(&arena_ours, &arena, sizeof(arena));
 			memcpy(&arena, &arena_save, sizeof(arena));
-			ref_equ_reset(&theirs.o, 3);
+			ref_equ_reset(&THEIRS, 3);
 
 			diff_eq_obj("after reset (asymmetric ratios)",
-				    V90Equalizer, &ours.o, &theirs.o, tk);
+				    V90Equalizer, &OURS, &THEIRS, tk);
 			diff_eq_obj("the arena (asymmetric ratios)",
 				    struct equ_arena, &arena_ours, &arena, tk);
 			diff_eq_int("linearEquWindowHalf (%ld)",
-				    (long)theirs.o.linearEquWindowHalf,
+				    (long)THEIRS.linearEquWindowHalf,
 				    (long)(unsigned int)(lr[k][0] * 16.0f),
 				    tk);
 			diff_eq_int("dfeWindowHalf (%ld)",
-				    (long)theirs.o.dfeWindowHalf,
+				    (long)THEIRS.dfeWindowHalf,
 				    (long)(unsigned int)(lr[k][1] * 16.0f),
 				    tk);
 		}
@@ -792,9 +815,9 @@ run_enterchannelverification(void)
 			tag++;
 			seed(tag);
 			fill_arena(tag);
-			wire(&ours.o);
-			wire(&theirs.o);
-			ours.o.state = theirs.o.state = state;
+			wire(&OURS);
+			wire(&THEIRS);
+			OURS.state = THEIRS.state = state;
 
 			ARENA_RSAMP->params = ARENA_PARAMS;
 			ARENA_RSAMP->bllState = (V90BllState)
@@ -808,15 +831,15 @@ run_enterchannelverification(void)
 			memcpy(&arena_save, &arena, sizeof(arena));
 			dsplib_debug_capture_reset();
 
-			ours.o.enterChannelVerification();
+			OURS.enterChannelVerification();
 
 			memcpy(&arena_ours, &arena, sizeof(arena));
 			memcpy(&arena, &arena_save, sizeof(arena));
 
-			ref_equ_enterChannelVerification(&theirs.o);
+			ref_equ_enterChannelVerification(&THEIRS);
 
 			diff_eq_obj("after enterChannelVerification",
-				    V90Equalizer, &ours.o, &theirs.o, tag);
+				    V90Equalizer, &OURS, &THEIRS, tag);
 			diff_eq_obj("the arena after "
 				    "enterChannelVerification",
 				    struct equ_arena, &arena_ours, &arena,
@@ -840,15 +863,15 @@ run_enterchannelverification(void)
 					    tag);
 				skipped = 1;
 			} else {
-				diff_eq_int("state (%ld)", theirs.o.state,
+				diff_eq_int("state (%ld)", THEIRS.state,
 					    V90EQU_STATE_CHANNEL_VERIFY, tag);
 				diff_eq_int("stateCount (%ld)",
-					    theirs.o.stateCount, 0, tag);
+					    THEIRS.stateCount, 0, tag);
 				diff_eq_int("linearEquBeta zeroed (%ld)",
-					    theirs.o.linearEquBeta == 0.0f, 1,
+					    THEIRS.linearEquBeta == 0.0f, 1,
 					    tag);
 				diff_eq_int("dfeBeta zeroed (%ld)",
-					    theirs.o.dfeBeta == 0.0f, 1, tag);
+					    THEIRS.dfeBeta == 0.0f, 1, tag);
 				/*
 				 * The resampler was told, and told the RIGHT
 				 * thing: 11 is V90_BLL_PRE_ANSPCM and the
@@ -879,6 +902,644 @@ run_enterchannelverification(void)
 	return diff_end();
 }
 
+/* ================================================================ lifecycle */
+
+/*
+ * THE CONSTRUCTOR AND THE DESTRUCTOR.
+ *
+ * Both sides are driven through asm() labels, and both the C1 and the C2
+ * variant of each: C++ has no syntax for running a constructor over storage
+ * that already exists, and `OURS = V90Equalizer(...)` would build a temporary
+ * over uninitialised stack and copy it in, throwing away the seed the whole
+ * fixture rests on (findings 223, 224).  The blob holds C1 and C2 as two
+ * identical copies at different addresses and our compiler emits one function
+ * under both names, so both names are called or half the pair is untested.
+ *
+ * FIFTEEN OF THE FIELDS CANNOT BE COMPARED AND ARE NOT.  The constructor
+ * takes fifteen `sysdep_malloc`s and the two sides allocate separately, so
+ * fifteen pointer words -- and, when the fixed-point arrays are present, the
+ * twelve derived words beside them -- hold different addresses for ever.
+ * What is compared instead is everything those addresses stand for:
+ *
+ *   - the OBJECT with those words blanked, byte for byte (`cmp_equ`);
+ *   - the CONTENTS of every block, paired by the field that points at it,
+ *     over the exact length the object's own lengths imply -- so `reset`'s
+ *     work inside them is compared even though the buffers are not the same
+ *     buffers;
+ *   - the SIZE of every block, from `malloc_usable_size`, per field;
+ *   - the NUMBER of allocations and the exact number of BYTES ASKED FOR,
+ *     which is the only thing that can see an allocation that is the wrong
+ *     size in a way the contents do not reach;
+ *   - the SKEW/ALIGNED relation, on each side separately, because
+ *     `aligned = raw + 2 * skew` and `skew = (align8(raw) - raw) / 2` are
+ *     statements about one side's own pointer that survive the addresses
+ *     being different.
+ *
+ * With the fixed-point arrays ABSENT the twelve derived words are compared
+ * rather than blanked, which is what says the constructor did not write them.
+ */
+
+#include <malloc.h>
+
+#include "dsplib/modem_params.h"
+
+extern "C" {
+void equ_ctor1(void *self, unsigned int le, unsigned int dfe, void *p3d,
+	       void *p4d, void *dem, void *ce, void *sv, void *parms,
+	       void *rs, void *pf, int mode)
+	asm("_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodul"
+	    "atorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifie"
+	    "rP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computationa"
+	    "lMode");
+void equ_ctor2(void *self, unsigned int le, unsigned int dfe, void *p3d,
+	       void *p4d, void *dem, void *ce, void *sv, void *parms,
+	       void *rs, void *pf, int mode)
+	asm("_ZN12V90EqualizerC2EjjP20V90Phase3DemodulatorP20V90Phase4Demodul"
+	    "atorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifie"
+	    "rP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computationa"
+	    "lMode");
+void ref_equ_ctor1(void *self, unsigned int le, unsigned int dfe, void *p3d,
+		   void *p4d, void *dem, void *ce, void *sv, void *parms,
+		   void *rs, void *pf, int mode)
+	asm("ref__ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Dem"
+	    "odulatorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVer"
+	    "ifierP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computat"
+	    "ionalMode");
+void ref_equ_ctor2(void *self, unsigned int le, unsigned int dfe, void *p3d,
+		   void *p4d, void *dem, void *ce, void *sv, void *parms,
+		   void *rs, void *pf, int mode)
+	asm("ref__ZN12V90EqualizerC2EjjP20V90Phase3DemodulatorP20V90Phase4Dem"
+	    "odulatorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVer"
+	    "ifierP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computat"
+	    "ionalMode");
+
+void equ_dtor1(void *self) asm("_ZN12V90EqualizerD1Ev");
+void equ_dtor2(void *self) asm("_ZN12V90EqualizerD2Ev");
+void ref_equ_dtor1(void *self) asm("ref__ZN12V90EqualizerD1Ev");
+void ref_equ_dtor2(void *self) asm("ref__ZN12V90EqualizerD2Ev");
+
+void *sysdep_malloc(unsigned int size);
+void sysdep_free(void *mem);
+}
+
+/*
+ * The blocks, in the order the field map has them.  The first seven are taken
+ * unconditionally; the last eight only when the fixed-point arrays are
+ * wanted.  `len` is filled in per trial from the object's own lengths.
+ */
+struct equ_block {
+	unsigned	off;		/* where the pointer lives   */
+	const char	*name;
+	unsigned	len;		/* bytes, this trial         */
+	int		mmx;		/* only present when set     */
+};
+
+static struct equ_block block_v[] = {
+	{ 0x014, "linearEquCoefs",		0, 0 },
+	{ 0x018, "array_18",			0, 0 },
+	{ 0x024, "linearEquWindow",		0, 0 },
+	{ 0x028, "dfeWindow",			0, 0 },
+	{ 0x040, "dfeCoefs",			0, 0 },
+	{ 0x044, "array_44",			0, 0 },
+	{ 0x098, "block_98",			0, 0 },
+	{ 0x0b4, "block_b4",			0, 1 },
+	{ 0x0b8, "block_b8",			0, 1 },
+	{ 0x0d4, "linearEquMmxCoefs",		0, 1 },
+	{ 0x0d8, "array_d8",			0, 1 },
+	{ 0x0ec, "array_ec",			0, 1 },
+	{ 0x114, "dfeMmxCoefs",			0, 1 },
+	{ 0x118, "array_118",			0, 1 },
+	{ 0x12c, "array_12c",			0, 1 }
+};
+
+#define NBLOCK ((int)(sizeof(block_v) / sizeof(block_v[0])))
+
+/* The three raw/aligned/skew triples of each half, as (raw, aligned, skew). */
+static const unsigned triple_v[6][3] = {
+	{ 0x0d4, 0x0dc, 0x0e4 },
+	{ 0x0d8, 0x0e0, 0x0e8 },
+	{ 0x0ec, 0x0f0, 0x0f4 },
+	{ 0x114, 0x11c, 0x124 },
+	{ 0x118, 0x120, 0x128 },
+	{ 0x12c, 0x130, 0x134 }
+};
+
+/* The words that can never agree: the fifteen pointers, and the twelve
+ * derived from six of them.  Terminated by ~0u, t_resampler's idiom. */
+static const unsigned skip_plain[] = {
+	0x014, 0x018, 0x024, 0x028, 0x040, 0x044, 0x098, ~0u
+};
+static const unsigned skip_mmx[] = {
+	0x014, 0x018, 0x024, 0x028, 0x040, 0x044, 0x098,
+	0x0b4, 0x0b8, 0x0d4, 0x0d8, 0x0dc, 0x0e0, 0x0e4, 0x0e8,
+	0x0ec, 0x0f0, 0x0f4, 0x114, 0x118, 0x11c, 0x120, 0x124, 0x128,
+	0x12c, 0x130, 0x134, ~0u
+};
+
+static unsigned char scratch[2][SLOT];
+
+static void *
+ptr_at(int side, unsigned off)
+{
+	void *p;
+
+	memcpy(&p, (side ? theirs.raw : ours.raw) + off, sizeof p);
+	return p;
+}
+
+static unsigned
+u32_at(int side, unsigned off)
+{
+	unsigned v;
+
+	memcpy(&v, (side ? theirs.raw : ours.raw) + off, sizeof v);
+	return v;
+}
+
+static void
+cmp_equ(const char *what, const unsigned *skip, long trial)
+{
+	int i;
+
+	memcpy(scratch[0], ours.raw, SLOT);
+	memcpy(scratch[1], theirs.raw, SLOT);
+	for (i = 0; skip[i] != ~0u; i++) {
+		memset(scratch[0] + skip[i], 0, 4);
+		memset(scratch[1] + skip[i], 0, 4);
+	}
+	diff_eq_obj_(__FILE__, __LINE__, what, "V90Equalizer", scratch[0],
+		     scratch[1], sizeof(V90Equalizer), trial);
+	diff_eq_int("no store past the object (%ld)",
+		    memcmp(scratch[0] + sizeof(V90Equalizer),
+			   scratch[1] + sizeof(V90Equalizer),
+			   SLOT - sizeof(V90Equalizer)) == 0, 1, trial);
+}
+
+/* The parameter block and the host block the constructor reads. */
+static unsigned char mp_block[sizeof(struct _tagModemParameters) + 32]
+	__attribute__((aligned(8)));
+
+#define ARENA_MP ((struct _tagModemParameters *)mp_block)
+
+/* Six pointers the constructor stores and never dereferences. */
+static unsigned char dummy_obj[6][8] __attribute__((aligned(8)));
+
+static void
+free_blocks(int side, int mmx)
+{
+	int i;
+
+	for (i = 0; i < NBLOCK; i++) {
+		void *p = ptr_at(side, block_v[i].off);
+
+		if (block_v[i].mmx && !mmx)
+			continue;
+		if (p != 0)
+			sysdep_free(p);
+	}
+}
+
+static int
+run_ctor(void)
+{
+	static const unsigned int le_v[]  = { 0u, 1u, 4u, 7u, 16u, 32u };
+	static const unsigned int dfe_v[] = { 0u, 5u, 12u };
+	static const int hist_v[]         = { 0, 33, 64 };
+	static const int hw_v[]           = { 0, 1, 2, 3 };
+	static const int mode_v[]         = { 1, 2 };
+	long trial = 800000;
+	int li, di, hi, wi, mi, mmxen, lvl, i;
+	int saw_mmx = 0, saw_plain = 0, saw_mode1 = 0, saw_other = 0;
+
+	diff_begin("V90Equalizer::V90Equalizer");
+
+	dsplib_debug_capture_on = 1;
+
+	for (li = 0; li < 6; li++)
+	    for (di = 0; di < 3; di++)
+		for (hi = 0; hi < 3; hi++)
+		    for (wi = 0; wi < 4; wi++)
+			for (mi = 0; mi < 2; mi++)
+			    for (mmxen = 0; mmxen < 2; mmxen++)
+				for (lvl = 0; lvl < 2; lvl++) {
+					struct alloc_log a0, a1, a2;
+					unsigned int lelen = le_v[li] & ~3u;
+					unsigned int dfelen = dfe_v[di] & ~3u;
+					unsigned int hist =
+					    2u * (unsigned int)(hist_v[hi] / 2);
+					int mmx;
+
+					/*
+					 * `reset` clears `array_18` from
+					 * `word_1c` downwards over
+					 * `linearEquLength` entries, so a
+					 * history shorter than the equaliser
+					 * would run off the front of it.  The
+					 * blob does that too; it is not what
+					 * this test is for.
+					 */
+					if (hist < lelen)
+						continue;
+
+					trial++;
+
+					dsplibs_debug_level =
+					    ref_dsplibs_debug_level =
+						lvl ? 2u : 0u;
+
+					seed(trial);
+					fill_arena(trial);
+					memset(mp_block, 0x5a,
+					       sizeof(mp_block));
+
+					ARENA_PARAMS->modemParams = ARENA_MP;
+					ARENA_PARAMS->ENABLE_EQUALIZER_MMX =
+					    mmxen;
+					ARENA_PARAMS
+					    ->LINEAR_EQU_HISTORY_LENGTH =
+						hist_v[hi];
+					ARENA_MP->unnamed_005c = hw_v[wi];
+					ARENA_PARAMS
+					    ->LINEAR_EQU_FADE_LEFT_EDGE_RATIO =
+						0.25f;
+					ARENA_PARAMS
+					    ->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO =
+						0.5f;
+					ARENA_PARAMS
+					    ->ERROR_ENERGY_MEAN_BLOCK_LEN =
+						(int)(0x1234 + trial);
+					ARENA_PARAMS->ERROR_ENERGY_MEAN_K =
+					    0.375f;
+
+					mmx = mmxen &&
+					    (mode_v[mi] == V90EQU_COMP_MODE_1
+					     ? hw_v[wi] != 2 : hw_v[wi] == 1);
+
+					dsplib_debug_capture_reset();
+
+					a0 = harness_alloc;
+					if (trial & 1)
+						equ_ctor1(ours.raw, le_v[li],
+							  dfe_v[di],
+							  dummy_obj[0],
+							  dummy_obj[1],
+							  dummy_obj[2],
+							  dummy_obj[3],
+							  dummy_obj[4],
+							  ARENA_PARAMS,
+							  ARENA_RSAMP,
+							  dummy_obj[5],
+							  mode_v[mi]);
+					else
+						equ_ctor2(ours.raw, le_v[li],
+							  dfe_v[di],
+							  dummy_obj[0],
+							  dummy_obj[1],
+							  dummy_obj[2],
+							  dummy_obj[3],
+							  dummy_obj[4],
+							  ARENA_PARAMS,
+							  ARENA_RSAMP,
+							  dummy_obj[5],
+							  mode_v[mi]);
+					a1 = harness_alloc;
+					if (trial & 1)
+						ref_equ_ctor1(theirs.raw,
+							      le_v[li],
+							      dfe_v[di],
+							      dummy_obj[0],
+							      dummy_obj[1],
+							      dummy_obj[2],
+							      dummy_obj[3],
+							      dummy_obj[4],
+							      ARENA_PARAMS,
+							      ARENA_RSAMP,
+							      dummy_obj[5],
+							      mode_v[mi]);
+					else
+						ref_equ_ctor2(theirs.raw,
+							      le_v[li],
+							      dfe_v[di],
+							      dummy_obj[0],
+							      dummy_obj[1],
+							      dummy_obj[2],
+							      dummy_obj[3],
+							      dummy_obj[4],
+							      ARENA_PARAMS,
+							      ARENA_RSAMP,
+							      dummy_obj[5],
+							      mode_v[mi]);
+					a2 = harness_alloc;
+
+					cmp_equ("after the constructor",
+						mmx ? skip_mmx : skip_plain,
+						trial);
+
+					/* The lengths, asserted not compared. */
+					diff_eq_int("linearEquLength (%ld)",
+						    (long)THEIRS.linearEquLength,
+						    (long)lelen, trial);
+					diff_eq_int("dfeLength (%ld)",
+						    (long)THEIRS.dfeLength,
+						    (long)dfelen, trial);
+					diff_eq_int("word_1c (%ld)",
+						    (long)THEIRS.word_1c,
+						    (long)hist, trial);
+					diff_eq_int("mmxArraysPresent (%ld)",
+						    THEIRS.mmxArraysPresent,
+						    mmx, trial);
+					diff_eq_int("params (%ld)",
+						    (void *)THEIRS.params ==
+						    (void *)ARENA_PARAMS, 1,
+						    trial);
+					diff_eq_int("resampler (%ld)",
+						    (void *)THEIRS.resampler ==
+						    (void *)ARENA_RSAMP, 1,
+						    trial);
+					diff_eq_int("phase3Demod (%ld)",
+						    (void *)THEIRS.phase3Demod
+						    == (void *)dummy_obj[0], 1,
+						    trial);
+					diff_eq_int("phase4Demod (%ld)",
+						    (void *)THEIRS.phase4Demod
+						    == (void *)dummy_obj[1], 1,
+						    trial);
+					diff_eq_int("demapper (%ld)",
+						    (void *)THEIRS.demapper ==
+						    (void *)dummy_obj[2], 1,
+						    trial);
+					diff_eq_int("connEval (%ld)",
+						    (void *)THEIRS.connEval ==
+						    (void *)dummy_obj[3], 1,
+						    trial);
+					diff_eq_int("spectralVerifier (%ld)",
+						    (void *)THEIRS
+						    .spectralVerifier ==
+						    (void *)dummy_obj[4], 1,
+						    trial);
+					diff_eq_int("preFilter (%ld)",
+						    (void *)THEIRS.preFilter ==
+						    (void *)dummy_obj[5], 1,
+						    trial);
+					diff_eq_int("reset ran (%ld)",
+						    THEIRS.state,
+						    V90EQU_STATE_RESET, trial);
+
+					/* The allocator's view. */
+					diff_eq_int("allocations (%ld)",
+						    a1.allocs - a0.allocs,
+						    a2.allocs - a1.allocs,
+						    trial);
+					diff_eq_int("bytes asked for (%ld)",
+						    (long)(a1.bytes - a0.bytes),
+						    (long)(a2.bytes - a1.bytes),
+						    trial);
+					diff_eq_int("how many blocks (%ld)",
+						    a1.allocs - a0.allocs,
+						    mmx ? 15 : 7, trial);
+
+					/* Every block, paired by its field. */
+					block_v[0].len = lelen * 4;
+					block_v[1].len = hist * 4;
+					block_v[2].len = lelen * 4;
+					block_v[3].len = lelen * 4;
+					block_v[4].len = dfelen * 4;
+					block_v[5].len = dfelen * 4;
+					block_v[6].len = 0x4b0;
+					block_v[7].len = 0x400;
+					block_v[8].len = 0x200;
+					block_v[9].len = (lelen + 8) * 2;
+					block_v[10].len = (lelen + 8) * 2;
+					block_v[11].len = (hist + 8) * 2;
+					block_v[12].len = (dfelen + 8) * 2;
+					block_v[13].len = (dfelen + 8) * 2;
+					block_v[14].len = (dfelen + 8) * 2;
+
+					for (i = 0; i < NBLOCK; i++) {
+						void *pa, *pb;
+
+						if (block_v[i].mmx && !mmx)
+							continue;
+						pa = ptr_at(0, block_v[i].off);
+						pb = ptr_at(1, block_v[i].off);
+						diff_eq_int("a block was "
+							    "allocated (%ld)",
+							    pa != 0 && pb != 0,
+							    1, trial);
+						if (pa == 0 || pb == 0)
+							continue;
+						diff_eq_int("block contents "
+							    "(%ld)",
+							    memcmp(pa, pb,
+								   block_v[i]
+								   .len) == 0,
+							    1, trial);
+						diff_eq_int("block size (%ld)",
+							    (long)
+							    malloc_usable_size(
+								pa),
+							    (long)
+							    malloc_usable_size(
+								pb), trial);
+					}
+
+					/*
+					 * The alignment triples, each checked
+					 * against its OWN side's pointer --
+					 * the one statement about them that
+					 * two different addresses can both
+					 * satisfy.
+					 */
+					if (mmx) {
+						int side;
+
+						for (side = 0; side < 2; side++)
+						    for (i = 0; i < 6; i++) {
+							unsigned long raw =
+							    (unsigned long)
+							    ptr_at(side,
+								   triple_v[i][0]);
+							unsigned long al =
+							    (unsigned long)
+							    ptr_at(side,
+								   triple_v[i][1]);
+							unsigned skew =
+							    u32_at(side,
+								   triple_v[i][2]);
+
+							diff_eq_int("skew "
+								    "(%ld)",
+								    (long)skew,
+								    (long)
+								    ((((raw + 7)
+								       & ~7ul) -
+								      raw) / 2),
+								    trial);
+							diff_eq_int("aligned "
+								    "(%ld)",
+								    al == raw +
+								    2 * skew, 1,
+								    trial);
+						    }
+					}
+
+					diff_eq_int("transcript (%ld)",
+						    strcmp(dsplib_debug_capture_text(0),
+							   dsplib_debug_capture_text(1))
+						    == 0, 1, trial);
+
+					if (mmx)
+						saw_mmx = 1;
+					else
+						saw_plain = 1;
+					if (mode_v[mi] == V90EQU_COMP_MODE_1)
+						saw_mode1 = 1;
+					else
+						saw_other = 1;
+
+					/* Give it all back, both sides. */
+					free_blocks(0, mmx);
+					free_blocks(1, mmx);
+					diff_eq_int("nothing wild was freed "
+						    "(%ld)",
+						    harness_alloc.bad_free -
+						    a0.bad_free, 0, trial);
+					diff_eq_int("live is back (%ld)",
+						    harness_alloc.live,
+						    a0.live, trial);
+				}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the fixed-point arrays were taken", saw_mmx, 1, 0);
+	diff_eq_int("and skipped", saw_plain, 1, 0);
+	diff_eq_int("mode 1 was seen", saw_mode1, 1, 0);
+	diff_eq_int("and another mode", saw_other, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * The destructor, one slot at a time.
+ *
+ * Every one of the fifteen pointers is set to NULL except the one under test,
+ * which gets a real block on each side, and the number of frees says whether
+ * that slot was freed.  A count is enough to name the slot because only one
+ * slot is ever non-null, and it is the only shape that can tell "freed the
+ * right seven" from "freed seven things".  The mmx flag runs both ways, so
+ * the eight gated slots are seen both freed and skipped.
+ */
+static int
+run_dtor(void)
+{
+	long trial = 850000;
+	int k, mmx, which, i, side;
+	int saw_freed = 0, saw_skipped = 0;
+
+	diff_begin("V90Equalizer::~V90Equalizer");
+
+	for (k = 0; k <= NBLOCK; k++)
+	    for (mmx = 0; mmx < 2; mmx++)
+		for (which = 0; which < 2; which++) {
+			struct alloc_log a0, a1, a2;
+			unsigned char before[SLOT], before_ours[SLOT];
+			int want;
+
+			trial++;
+			seed(trial);
+
+			for (i = 0; i < NBLOCK; i++)
+				for (side = 0; side < 2; side++) {
+					void *p = 0;
+
+					if (k == NBLOCK || i == k)
+						p = sysdep_malloc(32);
+					memcpy((side ? theirs.raw : ours.raw) +
+					       block_v[i].off, &p, sizeof p);
+				}
+
+			OURS.mmxArraysPresent = THEIRS.mmxArraysPresent = mmx;
+			memcpy(before, theirs.raw, SLOT);
+			memcpy(before_ours, ours.raw, SLOT);
+
+			want = 0;
+			for (i = 0; i < NBLOCK; i++) {
+				if (k != NBLOCK && i != k)
+					continue;
+				if (block_v[i].mmx && !mmx)
+					continue;
+				want++;
+			}
+
+			a0 = harness_alloc;
+			if (which)
+				equ_dtor1(ours.raw);
+			else
+				equ_dtor2(ours.raw);
+			a1 = harness_alloc;
+			if (which)
+				ref_equ_dtor1(theirs.raw);
+			else
+				ref_equ_dtor2(theirs.raw);
+			a2 = harness_alloc;
+
+			diff_eq_int("frees (%ld)", a1.frees - a0.frees,
+				    a2.frees - a1.frees, trial);
+			diff_eq_int("free(NULL) (%ld)",
+				    a1.free_null - a0.free_null,
+				    a2.free_null - a1.free_null, trial);
+			diff_eq_int("wild frees (%ld)",
+				    a1.bad_free - a0.bad_free,
+				    a2.bad_free - a1.bad_free, trial);
+			diff_eq_int("freed exactly the right slots (%ld)",
+				    a1.frees - a0.frees, want, trial);
+			diff_eq_int("and never freed a null (%ld)",
+				    a2.free_null - a0.free_null, 0, trial);
+			diff_eq_int("the object is untouched (%ld)",
+				    memcmp(before, theirs.raw, SLOT) == 0, 1,
+				    trial);
+			/*
+			 * NEITHER object is written -- the destructor does
+			 * not clear the pointers it frees, which is why
+			 * calling it twice frees every one of them again.
+			 * Each side is compared against its OWN state
+			 * before the call: the fifteen slots hold different
+			 * addresses on the two sides, so a comparison
+			 * ACROSS the sides would fail here for a reason
+			 * that has nothing to do with the destructor.
+			 */
+			diff_eq_int("and ours is untouched too (%ld)",
+				    memcmp(before_ours, ours.raw, SLOT) == 0,
+				    1, trial);
+
+			if (want != 0)
+				saw_freed = 1;
+			if (k != NBLOCK && block_v[k].mmx && !mmx)
+				saw_skipped = 1;
+
+			/* Whatever it did not free, free here. */
+			for (i = 0; i < NBLOCK; i++) {
+				if (k != NBLOCK && i != k)
+					continue;
+				if (!(block_v[i].mmx && !mmx))
+					continue;
+				for (side = 0; side < 2; side++) {
+					void *p = ptr_at(side,
+							 block_v[i].off);
+
+					if (p != 0)
+						sysdep_free(p);
+				}
+			}
+		}
+
+	diff_eq_int("a block was freed", saw_freed, 1, 0);
+	diff_eq_int("a gated block was skipped", saw_skipped, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -886,6 +1547,8 @@ main(void)
 
 	build_betas();
 
+	rc |= run_ctor();
+	rc |= run_dtor();
 	rc |= run_setters();
 	rc |= run_exact_powers();
 	rc |= run_enterphase3();

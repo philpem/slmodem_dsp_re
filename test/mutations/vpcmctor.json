@@ -1,0 +1,216 @@
+[
+ {
+  "_": [
+   "VPcmFloModem's constructor: six member objects, one of which is an entire",
+   "V90Modem and another an entire V92Modem, four calls whose arguments are",
+   "all immediates, three memsets and thirty constant stores.",
+   "",
+   "THE INTERESTING DEFECTS ARE ALL WIRING.  Six arguments reach eleven",
+   "places between them and two of the eleven take the SAME address --",
+   "`&this->dil` goes to the V90Modem's third slot and the V92Modem's",
+   "fourth -- so the class of mistake this file exists to catch is an",
+   "argument landing in a neighbouring slot, not a wrong number.",
+   "",
+   "TWO OF THESE ARE CAUGHT IN A WORD THAT CAN NEVER COMPARE EQUAL, and that",
+   "is the point worth stating.  `GenericIIR` BORROWS its coefficient",
+   "arrays, so the entrance filter holds two pointers to static tables: ours",
+   "into our .data and the blob's into its own.  A comparison that merely",
+   "excluded them would let a swap of `entFiltDen` and `entFiltNum` through,",
+   "which is exactly findings 1301 and 1307's shape.  t_vpcmctor.cpp instead",
+   "pins each word to a NAMED symbol on each side AND checks that the two",
+   "targets are byte-identical over the filter's own declared order, so the",
+   "swap fails twice over.  Verified by making the swap and watching both",
+   "checks fire.",
+   "",
+   "THE STORES THE CONSTRUCTOR MAKES THAT `VPCMXF_Create` IMMEDIATELY",
+   "CONTRADICTS are mutated here as well -- `nofBitsPerSymbol` 0 against its",
+   "2, `minNofTransmitSequences` 0 against its 1, `flags_0217` all ones",
+   "against its {1,0,1,1,1,0}.  Those are only observable in the direct",
+   "constructor sweep, because a modem that came out of `VPCMXF_Create`",
+   "never has the constructor's values for them."
+  ]
+ },
+
+ {
+  "label": "the entrance filter's coefficients are the other way round",
+  "find": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 99)",
+  "replace": "\t  entFilt(5, 5, entFiltNum, entFiltDen, 99)"
+ },
+ {
+  "label": "the entrance filter's denominator order is 4, not 5",
+  "find": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 99)",
+  "replace": "\t  entFilt(4, 5, entFiltDen, entFiltNum, 99)"
+ },
+ {
+  "label": "the entrance filter's block size is 98, not 99",
+  "find": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 99)",
+  "replace": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 98)"
+ },
+
+ {
+  "label": "the V90Modem is given a DIL descriptor that is not this object's",
+  "find": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 1),",
+  "replace": "\t  modem(side, modemParams, (tagV90DILdescriptor *)&word_1740,\n\t\tnSamples, v90Mode, 1),"
+ },
+ {
+  "label": "the V92Modem is given a DIL descriptor that is not the V90Modem's",
+  "find": "\t\t   nSamples, &dil, v92Mode),",
+  "replace": "\t\t   nSamples, (tagV90DILdescriptor *)&word_1740, v92Mode),"
+ },
+ {
+  "label": "the V90Modem's session flag is 0 and not the literal 1",
+  "find": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 1),",
+  "replace": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 0),"
+ },
+ {
+  "label": "the V90Modem is given the V.92 computational mode",
+  "find": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 1),",
+  "replace": "\t  modem(side, modemParams, &dil, nSamples,\n\t\t(V90ComputationalMode)v92Mode, 1),"
+ },
+ {
+  "label": "the V92Modem's side is the digital test and not the analog one",
+  "find": "\t  v92modem((V92ModemSide)(side == V90_MODEM_SIDE_ANALOG), modemParams,",
+  "replace": "\t  v92modem((V92ModemSide)(side == V90_MODEM_SIDE_DIGITAL), modemParams,"
+ },
+ {
+  "equivalent": true,
+  "why": [
+   "`V92Modem::V92Modem`'S FIFTH ARGUMENT IS NEVER READ.  Nothing in either",
+   "copy of that constructor touches `0x54(%esp)`, which is where",
+   "`V92ComputationalMode` lands after its `sub $0x3c,%esp` -- read off the",
+   "blob and recorded in src/pump/v90/V92Modem.cpp, whose reconstruction",
+   "spells the fact as `(void)mode;`.  So handing it the V.90 mode instead",
+   "of the V.92 one cannot change a byte anywhere, on either side, for any",
+   "input.",
+   "",
+   "It is kept rather than deleted because the SAME mutation against the",
+   "V90Modem's fifth argument IS caught, and the pair together is the",
+   "evidence that the two are wired differently: one mode is forwarded into",
+   "a callee that stores it and the other is forwarded into one that",
+   "ignores it.  Deleting this entry would leave the asymmetry looking like",
+   "an oversight."
+  ],
+  "label": "the V92Modem gets the V.90 computational mode",
+  "find": "\t\t   nSamples, &dil, v92Mode),",
+  "replace": "\t\t   nSamples, &dil, (V92ComputationalMode)v90Mode),"
+ },
+
+ {
+  "label": "the echo canceller's tail is 198 and not 199",
+  "find": "\t  echoCanceller(v92modem.parameters, nSamples, 199),",
+  "replace": "\t  echoCanceller(v92modem.parameters, nSamples, 198),"
+ },
+ {
+  "label": "the echo canceller is given the V.90 parameters",
+  "find": "\t  echoCanceller(v92modem.parameters, nSamples, 199),",
+  "replace": "\t  echoCanceller((V92Parameters *)modem.ptr_49b4, nSamples, 199),"
+ },
+ {
+  "label": "the ANSam detector's first tone is 6001 Hz",
+  "find": "\t  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),",
+  "replace": "\t  ansam(6001, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),"
+ },
+ {
+  "label": "the ANSam detector's threshold is 0.59 and not 0.58",
+  "find": "\t  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),",
+  "replace": "\t  ansam(6000, 450, 250000.0f, 1, 0.59f, 9600, 50, 99),"
+ },
+ {
+  "label": "the ANSam detector's sample rate is 8000 and not 9600",
+  "find": "\t  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),",
+  "replace": "\t  ansam(6000, 450, 250000.0f, 1, 0.58f, 8000, 50, 99),"
+ },
+ {
+  "label": "the sine wave's frequency and amplitude are swapped",
+  "find": "\t  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),",
+  "replace": "\t  sineWave(980.0f, 4800.0f, 0.0f, 9600.0f),"
+ },
+ {
+  "label": "the sine wave's sample rate is 8000.0f",
+  "find": "\t  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),",
+  "replace": "\t  sineWave(4800.0f, 980.0f, 0.0f, 8000.0f),"
+ },
+ {
+  "label": "the V.34 object is not stored",
+  "find": "\t: v34Object(v34Obj),",
+  "replace": "\t: v34Object(0),"
+ },
+
+ {
+  "label": "the bit vector is cleared four bytes short",
+  "find": "\tsysdep_memset(bitVector, 0, sizeof(bitVector));",
+  "replace": "\tsysdep_memset(bitVector, 0, sizeof(bitVector) - 4);"
+ },
+ {
+  "label": "the CP bit vector is cleared four bytes short",
+  "find": "\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector));",
+  "replace": "\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector) - 4);"
+ },
+ {
+  "label": "the 848-byte block is not cleared at all",
+  "find": "\tsysdep_memset(block_6c0c, 0, sizeof(block_6c0c));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the six flags are set to zero and not to one",
+  "find": "static const unsigned char vpcm_ctor_flags_0217[6] = { 1, 1, 1, 1, 1, 1 };",
+  "replace": "static const unsigned char vpcm_ctor_flags_0217[6] = { 0, 0, 0, 0, 0, 0 };"
+ },
+ {
+  "label": "only five of the six flags are written",
+  "find": "\tfor (i = 0; i < sizeof(flags_0217); i++)",
+  "replace": "\tfor (i = 0; i + 1 < sizeof(flags_0217); i++)"
+ },
+
+ {
+  "label": "the layout flag is the digital test and not the analog one",
+  "find": "\tinfo0Layout = (side == V90_MODEM_SIDE_ANALOG);",
+  "replace": "\tinfo0Layout = (side == V90_MODEM_SIDE_DIGITAL);"
+ },
+ {
+  "label": "the runtime block's bit 3 is cleared and not bit 2",
+  "find": "\tmodemParams->unnamed_0003 &= (unsigned char)~0x04u;",
+  "replace": "\tmodemParams->unnamed_0003 &= (unsigned char)~0x08u;"
+ },
+ {
+  "label": "the runtime block's bit 2 is SET and not cleared",
+  "find": "\tmodemParams->unnamed_0003 &= (unsigned char)~0x04u;",
+  "replace": "\tmodemParams->unnamed_0003 |= (unsigned char)0x04u;"
+ },
+ {
+  "label": "the runtime block is not touched at all",
+  "find": "\tmodemParams->unnamed_0003 &= (unsigned char)~0x04u;",
+  "replace": "\t(void)modemParams;"
+ },
+
+ {
+  "label": "nofBitsPerSymbol starts at VPCMXF_Create's 2 and not at 0",
+  "find": "\tnofBitsPerSymbol = 0;",
+  "replace": "\tnofBitsPerSymbol = 2;"
+ },
+ {
+  "label": "minNofTransmitSequences starts at VPCMXF_Create's 1 and not at 0",
+  "find": "\tminNofTransmitSequences = 0;",
+  "replace": "\tminNofTransmitSequences = 1;"
+ },
+ {
+  "label": "the CP-not-loaded flag is left holding the storage's bytes",
+  "find": "\tcpNotLoaded = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "word_1740 is left holding the storage's bytes",
+  "find": "\tword_1740 = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the last of the four words after the sine wave is not cleared",
+  "find": "\tword_6fb4 = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the three tail fields after the entrance filter are not cleared",
+  "find": "\tbyte_7f5c = 0;\n\tword_7f60 = 0;\n\tword_7f64 = 0;",
+  "replace": "\t(void)0;"
+ }
+]

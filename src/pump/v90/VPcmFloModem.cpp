@@ -85,12 +85,12 @@ VPCM_OFF(pcmSessionType,	0x611c, sesstype);
 VPCM_OFF(byte_6118,		0x6118, byte6118);
 VPCM_OFF(byte_6119,		0x6119, byte6119);
 VPCM_OFF(info0Layout,		0x6120, layout);
-VPCM_OFF(v92Params,		0x6128, v92params);
+VPCM_OFF(v92modem.parameters,	0x6128, v92params);
 VPCM_OFF(word_6f98,		0x6f98, word6f98);
 VPCM_OFF(word_6fac,		0x6fac, word6fac);
 VPCM_OFF(word_6fb0,		0x6fb0, word6fb0);
 VPCM_OFF(word_6fb4,		0x6fb4, word6fb4);
-VPCM_OFF(v92Phase2Info,		0x612c, p92);
+VPCM_OFF(v92modem.phase2Info,	0x612c, p92);
 VPCM_OFF(cpBitVector,		0x6fbc, cpbitvec);
 VPCM_OFF(cpNofBits,		0x7dcc, cpnofbits);
 VPCM_OFF(terminateJa,		0x7dce, termja);
@@ -122,35 +122,15 @@ typedef char vpcm_modem_size[(sizeof(V90Modem) == 0x49c0) ? 1 : -1];
 typedef char vpcm_dil_size[(sizeof(tagV90DILdescriptor) == 0x213) ? 1 : -1];
 
 /*
- * V92Phase2Info's, because this is the only translation unit that uses the
- * class and it has no .cpp of its own -- it is data-only, none of its three
- * members in the blob is written here, and a header with no source file has
- * nowhere else to put an assertion.  Without these, `pad_0a[2]` and
- * `pad_14[3]` are load-bearing and unguarded.
- *
- * FOUR OF THESE ARE NOT PINNED BY THE DIFFERENTIAL TEST, and that is why they
- * are worth asserting: nothing here reads `Uinfo`, `shortPhase2Local` or
- * `v90UseHighCarrier`, and their offsets come from V92Phase2Info::printInfo's
- * disassembly rather than from anything that runs.
+ * V92Phase2Info's assertions USED TO BE HERE, parked in this file because it
+ * was "the only translation unit that uses the class and it has no .cpp of
+ * its own".  It has one now -- src/pump/v90/V92Phase2Info.cpp, added with the
+ * constructor -- so they live beside the class they describe, with four more
+ * that the constructor earned: the three fields at +0x14..+0x16 that this
+ * header used to call `pad_14[3]`, and `params` at +0x28, which makes the
+ * object 0x2c and not the 0x28 the four array pointers alone suggested.
+ * Finding 1222.
  */
-#define V92P2I_OFF(field, off, tag) \
-	typedef char v92p2i_off_##tag[ \
-	    ((int)__builtin_offsetof(V92Phase2Info, field) == (off)) ? 1 : -1]
-
-V92P2I_OFF(pcmType,			0x00, pcmtype);
-V92P2I_OFF(rtd,				0x04, rtd);
-V92P2I_OFF(Uinfo,			0x08, uinfo);
-V92P2I_OFF(maxTxPower,			0x09, maxtxpower);
-V92P2I_OFF(txPowerMeasurementPoint,	0x0c, txpmp);
-V92P2I_OFF(shortPhase2Local,		0x10, sp2local);
-V92P2I_OFF(v92CapabilitiesLocal,	0x11, v92local);
-V92P2I_OFF(shortPhase2Remote,		0x12, sp2remote);
-V92P2I_OFF(v92CapabilitiesRemote,	0x13, v92remote);
-V92P2I_OFF(v90UseHighCarrier,		0x17, highcarrier);
-V92P2I_OFF(array_18,			0x18, a18);
-V92P2I_OFF(array_1c,			0x1c, a1c);
-V92P2I_OFF(L2,				0x20, l2);
-V92P2I_OFF(array_24,			0x24, a24);
 #endif /* 32-bit host */
 
 /*
@@ -331,7 +311,7 @@ VPcmFloModem::setPcmSessionType(int sessionType)
 	edprintf("VPcmFloModem: setting PCM session to V.%d\n",
 		 sessionType != 0 ? 92 : 90);
 
-	p92 = v92Phase2Info;
+	p92 = v92modem.phase2Info;
 	pcmSessionType = (sessionType != 0);
 	p92->v92CapabilitiesLocal = (unsigned char)sessionType;
 
@@ -381,7 +361,7 @@ VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
 		p90->pcmType = (info0[39] != 0);
 	}
 
-	p92 = v92Phase2Info;
+	p92 = v92modem.phase2Info;
 	p92->maxTxPower = p90->maxTxPower;
 	p92->txPowerMeasurementPoint = p90->txPowerMeasurementPoint;
 	p92->pcmType = p90->pcmType;
@@ -669,7 +649,7 @@ VPcmFloModem::externalReset()
 
 	modem.ptr_49b4->initSession();
 	modem.ptr_49b4->init();
-	v92Params->init();
+	v92modem.parameters->init();
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(

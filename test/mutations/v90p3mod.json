@@ -1,0 +1,73 @@
+[
+ {
+  "_": [
+   "V90Phase3Modulator's constructor and destructor, against t_v90p3mod.",
+   "",
+   "The constructor has no branch of its own: every mutation below changes a",
+   "constant it hands to something else, or the ORDER of its two stores,",
+   "which is the only thing in it that is not a constant.  The destructor's",
+   "one claim is that its 22 bytes free the scrambler's history, so the",
+   "mutation for it is a destructor that keeps the buffer instead."
+  ]
+ },
+ {
+  "label": "ctor: the session flag is stored after reset, not before",
+  "find": "\tparams = p;\n\tsessionFlag = flag;\n\treset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "\tparams = p;\n\treset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);\n\tsessionFlag = flag;"
+ },
+ {
+  "label": "ctor: the V90Parameters * is not stored",
+  "find": "\tparams = p;\n\tsessionFlag = flag;",
+  "replace": "\t(void)p;\n\tsessionFlag = flag;"
+ },
+ {
+  "label": "ctor: the scrambler taps are the wrong way round",
+  "find": ": scrambler(18, 23, 99)\n{",
+  "replace": ": scrambler(23, 18, 99)\n{"
+ },
+ {
+  "label": "ctor: the near tap is 17, not 18",
+  "find": ": scrambler(18, 23, 99)\n{",
+  "replace": ": scrambler(17, 23, 99)\n{"
+ },
+ {
+  "label": "ctor: the far tap is 24, not 23",
+  "find": ": scrambler(18, 23, 99)\n{",
+  "replace": ": scrambler(18, 24, 99)\n{"
+ },
+ {
+  "label": "ctor: the scrambler history is one element short",
+  "find": ": scrambler(18, 23, 99)\n{",
+  "replace": ": scrambler(18, 23, 98)\n{"
+ },
+ {
+  "label": "ctor: the code companded is 0x41, not 0x40",
+  "find": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "reset(PCM_TYPE_MU_LAW, 0x41, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the object starts in A-law",
+  "find": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "reset(PCM_TYPE_A_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the object starts in SdNot, not Sd",
+  "find": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD_NOT, 0, NULL, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the constructor warms up one symbol",
+  "find": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 1, NULL, NULL, NULL, 0);"
+ },
+ {
+  "label": "ctor: the timeout base is 1, not 0",
+  "find": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 0);",
+  "replace": "reset(PCM_TYPE_MU_LAW, 0x40, P3M_STATE_SD, 0, NULL, NULL, NULL, 1);"
+ },
+ {
+  "label": "dtor: the scrambler's history is not freed",
+  "find": "V90Phase3Modulator::~V90Phase3Modulator()\n{\n}",
+  "replace": "V90Phase3Modulator::~V90Phase3Modulator()\n{\n\tscrambler.pLimit = NULL;\n}"
+ }
+]

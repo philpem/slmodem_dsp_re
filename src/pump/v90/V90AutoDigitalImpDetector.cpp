@@ -113,6 +113,24 @@ paramShort(const V90Parameters *p, unsigned int off)
  * 0x3e800000, 0x3eb33333, 0x3fe00000 -- read out of the immediate operands,
  * not out of a decompilation.
  */
+/*
+ * The constructor -- one store, and the header says why that is the whole of
+ * it.  Nothing is cleared here, so a detector is unusable until `reset` and
+ * `resetLinearMapping` have run; the test's whole-object comparison is what
+ * makes "leaves the other 43,425 bytes alone" a measurement.
+ */
+V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)
+{
+	params = p;
+}
+
+/*
+ * One byte, `ret`.  Declared because the blob has the symbol; see the header.
+ */
+V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()
+{
+}
+
 void
 V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 {

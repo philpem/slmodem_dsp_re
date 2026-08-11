@@ -1,0 +1,32 @@
+[
+ {
+  "label": "the two collaborators are swapped",
+  "find": "\tparams = p;\n\tpower = cp;",
+  "replace": "\tparams = (V90Parameters *)cp;\n\tpower = (V90ConstellationPower *)p;"
+ },
+ {
+  "label": "only the first is stored",
+  "find": "\tparams = p;\n\tpower = cp;",
+  "replace": "\tparams = p;\n\t(void)cp;"
+ },
+ {
+  "label": "only the second is stored",
+  "find": "\tparams = p;\n\tpower = cp;",
+  "replace": "\t(void)p;\n\tpower = cp;"
+ },
+ {
+  "label": "the constructor also writes at +0x08, past what four members reach",
+  "find": "\tparams = p;\n\tpower = cp;",
+  "replace": "\tparams = p;\n\tpower = cp;\n\t((int *)this)[2] = 0;"
+ },
+ {
+  "label": "the destructor clears both pointers",
+  "find": "V90TRN2Designer::~V90TRN2Designer()\n{\n}",
+  "replace": "V90TRN2Designer::~V90TRN2Designer()\n{\n\tparams = 0;\n\tpower = 0;\n}"
+ },
+ {
+  "label": "the destructor clears both pointers, volatile so it survives",
+  "find": "V90TRN2Designer::~V90TRN2Designer()\n{\n}",
+  "replace": "V90TRN2Designer::~V90TRN2Designer()\n{\n\t*(V90Parameters * volatile *)&params = 0;\n\t*(V90ConstellationPower * volatile *)&power = 0;\n}"
+ }
+]

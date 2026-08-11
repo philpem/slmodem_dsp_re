@@ -101,11 +101,36 @@ static unsigned char blk[2][BLK_SLOT] __attribute__((aligned(8)));
 static unsigned char equ[2][EQU_SLOT] __attribute__((aligned(8)));
 static unsigned char ce[2][CE_SLOT] __attribute__((aligned(8)));
 
-static V90AutoDigitalImpDetector adid[2];
-static V90SdDetector sdd[2];
+/*
+ * THE FOUR CLASS-TYPED PAIRS ARE HELD AS BYTES, and it is the constructor
+ * batch that forced it.
+ *
+ * `static V90Jd jdo[2];` needs a default constructor, and a class the blob
+ * gives a real one -- `_ZN5V90JdC1EP13V90Parameters` -- has none.  It needs a
+ * destructor too, and the blob has `_ZN5V90JdD1Ev` as a one-byte `ret`, which
+ * GCC emits ONLY for a user-declared destructor: a trivial implicit one
+ * produces no symbol at all, so leaving it out would leave the symbol
+ * undefined for every caller that destroys one.  So the classes gain both,
+ * and this fixture stops being able to declare them by value.
+ *
+ * The cast-through-a-macro keeps every call site below unchanged, including
+ * `&adid[0]`, `sizeof(adid[0])` and `adid[side].params`: the rows are exactly
+ * `sizeof(class)` wide, so indexing the cast pointer is the same arithmetic
+ * the array notation did.  The alternative -- an accessor function -- would
+ * have meant editing twenty-odd sites in a header six tests include.
+ */
+static unsigned char adid_[2][sizeof(V90AutoDigitalImpDetector)]
+	__attribute__((aligned(8)));
+static unsigned char sdd_[2][sizeof(V90SdDetector)]
+	__attribute__((aligned(8)));
 static float sdhist[2][SDD_HIST];
-static V90Jd jdo[2];
-static V92Jd jd92o[2];
+static unsigned char jdo_[2][sizeof(V90Jd)] __attribute__((aligned(8)));
+static unsigned char jd92o_[2][sizeof(V92Jd)] __attribute__((aligned(8)));
+
+#define adid	((V90AutoDigitalImpDetector *)adid_)
+#define sdd	((V90SdDetector *)sdd_)
+#define jdo	((V90Jd *)jdo_)
+#define jd92o	((V92Jd *)jd92o_)
 static tagV90DILdescriptor dilo[2];
 static int dbuf[2][DSC_WORDS];
 static unsigned char sbuf[2][SCR_BUF];
@@ -462,7 +487,15 @@ compare_all(const char *what, long tag)
 	diff_eq_obj_(__FILE__, __LINE__, what, "the block params points at",
 		     blk[0], blk[1], BLK_SLOT, tag);
 	{
-		static V90AutoDigitalImpDetector aa, ab;
+		/* Storage plus a cast, for the reason given at `adid_` above. */
+		static unsigned char aa_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		static unsigned char ab_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		V90AutoDigitalImpDetector &aa =
+			*(V90AutoDigitalImpDetector *)aa_;
+		V90AutoDigitalImpDetector &ab =
+			*(V90AutoDigitalImpDetector *)ab_;
 
 		/* Its `params` is each side's own block; everything else is
 		 * memory the detector's own reset writes. */

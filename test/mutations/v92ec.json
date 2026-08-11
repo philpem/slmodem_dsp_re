@@ -1,12 +1,237 @@
 [
- {"label": "fold the delta in after the store (old delay lost)",
+ {
+  "label": "fold the delta in after the store (old delay lost)",
   "find": "\techoLength += delay - echoDelay;\n\techoDelay = delay;",
-  "replace": "\techoDelay = delay;\n\techoLength += delay - echoDelay;"},
- {"label": "the tap count follows the delay, not the change",
-  "find": "\techoLength += delay - echoDelay;", "replace": "\techoLength = delay;"},
- {"label": "the delta is subtracted, not added",
-  "find": "\techoLength += delay - echoDelay;", "replace": "\techoLength -= delay - echoDelay;"},
- {"label": "print the field rather than the argument",
+  "replace": "\techoDelay = delay;\n\techoLength += delay - echoDelay;"
+ },
+ {
+  "label": "the tap count follows the delay, not the change",
+  "find": "\techoLength += delay - echoDelay;",
+  "replace": "\techoLength = delay;"
+ },
+ {
+  "label": "the delta is subtracted, not added",
+  "find": "\techoLength += delay - echoDelay;",
+  "replace": "\techoLength -= delay - echoDelay;"
+ },
+ {
+  "label": "print the field rather than the argument",
   "find": "\"V92EchoCanceller: echoDelay updated to: %d\\n\", delay);",
-  "replace": "\"V92EchoCanceller: echoDelay updated to: %d\\n\", echoLength);"}
+  "replace": "\"V92EchoCanceller: echoDelay updated to: %d\\n\", echoLength);"
+ },
+ {
+  "label": "the coefficient loop is bounded by the tap count, not the filter length",
+  "find": "\tfor (i = 0; i < filterLength; i++)\n\t\techoCoeff[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i < echoLength; i++)\n\t\techoCoeff[i] = 0.0f;"
+ },
+ {
+  "label": "the coefficient loop runs one entry long",
+  "find": "\tfor (i = 0; i < filterLength; i++)\n\t\techoCoeff[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i <= filterLength; i++)\n\t\techoCoeff[i] = 0.0f;"
+ },
+ {
+  "label": "the coefficient loop runs one entry short",
+  "find": "\tfor (i = 0; i < filterLength; i++)\n\t\techoCoeff[i] = 0.0f;",
+  "replace": "\tfor (i = 1; i < filterLength; i++)\n\t\techoCoeff[i] = 0.0f;"
+ },
+ {
+  "label": "the coefficient loop clears the history instead",
+  "find": "\tfor (i = 0; i < filterLength; i++)\n\t\techoCoeff[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i < filterLength; i++)\n\t\techoHistory[i] = 0.0f;"
+ },
+ {
+  "label": "the write cursor is not rewound",
+  "find": "\thistoryIndex = 0;\n\techoLength =",
+  "replace": "\techoLength ="
+ },
+ {
+  "label": "the filter length is not halved",
+  "find": "\techoLength = (filterLength >> 1) + echoDelay",
+  "replace": "\techoLength = filterLength + echoDelay"
+ },
+ {
+  "label": "the filter length is quartered",
+  "find": "\techoLength = (filterLength >> 1) + echoDelay",
+  "replace": "\techoLength = (filterLength >> 2) + echoDelay"
+ },
+ {
+  "label": "the parameter block's delay offset is left out of the tap count",
+  "find": "\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;",
+  "replace": "\t\t     + 0u;"
+ },
+ {
+  "label": "the tap count is built from the initial delay, not the delay offset",
+  "find": "params->V92_ECHO_DELAY_OFFSET;",
+  "replace": "params->V92_ECHO_INITIAL_DELAY;"
+ },
+ {
+  "label": "the history loop uses the filter length, not the tap count",
+  "find": "\tfor (i = 0; i < echoLength; i++)\n\t\techoHistory[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i < filterLength; i++)\n\t\techoHistory[i] = 0.0f;"
+ },
+ {
+  "label": "the history loop runs one entry long",
+  "find": "\tfor (i = 0; i < echoLength; i++)\n\t\techoHistory[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i <= echoLength; i++)\n\t\techoHistory[i] = 0.0f;"
+ },
+ {
+  "label": "the tap count is left at zero after the loop that uses it",
+  "find": "\techoLength = (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;\n\tfor (i = 0; i < echoLength; i++)\n\t\techoHistory[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i < (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET; i++)\n\t\techoHistory[i] = 0.0f;\n\techoLength = 0;"
+ },
+ {
+  "label": "word_08 is left alone",
+  "find": "\tword_08 = 0;\n\n\techoBeta = 0.0f;",
+  "replace": "\techoBeta = 0.0f;"
+ },
+ {
+  "label": "the beta is cleared and the decay factor is not",
+  "find": "\techoBetaDecay = 0.0f;\n\tedprintf(\"V92EchoCanceller: echoBetaDecay",
+  "replace": "\tedprintf(\"V92EchoCanceller: echoBetaDecay"
+ },
+ {
+  "label": "the two diagnostics print each other's format string",
+  "find": "\tedprintf(\"V92EchoCanceller: echoBeta = %c%d.%06d\\r\\n\", '-', 0, 0);",
+  "replace": "\tedprintf(\"V92EchoCanceller: echoBetaDecay = %c%d.%06d\\r\\n\", '-', 0, 0);"
+ },
+ {
+  "label": "the sign character folds to '+' rather than '-'",
+  "find": "\tedprintf(\"V92EchoCanceller: echoBeta = %c%d.%06d\\r\\n\", '-', 0, 0);",
+  "replace": "\tedprintf(\"V92EchoCanceller: echoBeta = %c%d.%06d\\r\\n\", '+', 0, 0);"
+ },
+ {
+  "label": "the ARMA behind the canceller is not reset",
+  "find": "\tarma->reset();",
+  "replace": "\t(void)arma;"
+ },
+ {
+  "label": "the destruction notice is gated one level too low",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92EchoCanceller Destruction",
+  "replace": "\tif (dsplibs_debug_level != 0)\n\t\tdsplibs_debug_printf(\"V92EchoCanceller Destruction"
+ },
+ {
+  "label": "the coefficient array is freed but not nulled",
+  "find": "\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;",
+  "replace": "\t\tsysdep_free(echoCoeff);"
+ },
+ {
+  "label": "the history is freed but not nulled",
+  "find": "\t\tsysdep_free(echoHistory);\n\t\techoHistory = NULL;",
+  "replace": "\t\tsysdep_free(echoHistory);"
+ },
+ {
+  "label": "the ARMA pointer is freed but not nulled",
+  "find": "\t\tsysdep_free(arma);\n\t\tarma = NULL;",
+  "replace": "\t\tsysdep_free(arma);"
+ },
+ {
+  "label": "the ARMA is freed without being destroyed",
+  "find": "\t\tarma->~FloatARMA();\n\t\tsysdep_free(arma);",
+  "replace": "\t\tsysdep_free(arma);"
+ },
+ {
+  "label": "the ARMA pointer is nulled before it is freed",
+  "find": "\t\tarma->~FloatARMA();\n\t\tsysdep_free(arma);\n\t\tarma = NULL;",
+  "replace": "\t\tarma->~FloatARMA();\n\t\tarma = NULL;\n\t\tsysdep_free(arma);"
+ },
+ {
+  "label": "the history is freed twice and the coefficients not at all",
+  "find": "\tif (echoCoeff != NULL) {\n\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;\n\t}",
+  "replace": "\tif (echoHistory != NULL) {\n\t\tsysdep_free(echoHistory);\n\t\techoHistory = NULL;\n\t}"
+ },
+ {
+  "label": "the null guards are dropped",
+  "find": "\tif (echoCoeff != NULL) {\n\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;\n\t}",
+  "replace": "\t{\n\t\tsysdep_free(echoCoeff);\n\t\techoCoeff = NULL;\n\t}"
+ },
+ {
+  "label": "the construction notice is gated one level too low",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");"
+ },
+ {
+  "label": "the construction notice's typo is corrected",
+  "find": "dsplibs_debug_printf(\"V92EchoCanceller: constraction\\r\\n\");",
+  "replace": "dsplibs_debug_printf(\"V92EchoCanceller: construction\\r\\n\");"
+ },
+ {
+  "label": "the initial delay is taken from the delay offset",
+  "find": "\tsetEchoDelay((unsigned int)params->V92_ECHO_INITIAL_DELAY);",
+  "replace": "\tsetEchoDelay((unsigned int)params->V92_ECHO_DELAY_OFFSET);"
+ },
+ {
+  "label": "the delay is stored without going through setEchoDelay",
+  "find": "\tsetEchoDelay((unsigned int)params->V92_ECHO_INITIAL_DELAY);",
+  "replace": "\techoDelay = (unsigned int)params->V92_ECHO_INITIAL_DELAY;"
+ },
+ {
+  "label": "the filter length is not rounded to a multiple of four",
+  "find": "\tlength = params->V92_ECHO_FILTER_LENGTH / 4 * 4;",
+  "replace": "\tlength = params->V92_ECHO_FILTER_LENGTH;"
+ },
+ {
+  "label": "word_18 is the filter length rather than one less",
+  "find": "\tword_18 = (unsigned int)length - 1u;",
+  "replace": "\tword_18 = (unsigned int)length;"
+ },
+ {
+  "label": "the coefficient array is sized in doubles",
+  "find": "\techoCoeff = (float *)sysdep_malloc(filterLength * sizeof(float));",
+  "replace": "\techoCoeff = (float *)sysdep_malloc(filterLength * sizeof(double));"
+ },
+ {
+  "label": "the history's span leaves out the delay",
+  "find": "\tspan = word_18 + echoDelay;",
+  "replace": "\tspan = word_18;"
+ },
+ {
+  "label": "the history's block term is not doubled",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + blockLen + span / blockLen * blockLen\n\t\t       + extra;"
+ },
+ {
+  "label": "the history leaves out the rounded-down span",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + 2u * blockLen + extra;"
+ },
+ {
+  "label": "the history leaves out the final addend",
+  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "replace": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen;"
+ },
+ {
+  "label": "the history is allocated one float short",
+  "find": "\techoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));",
+  "replace": "\techoHistory = (float *)sysdep_malloc((historyAlloc - 1u) * sizeof(float));"
+ },
+ {
+  "label": "the ARMA gets the numerator where it wanted the denominator",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaNum, v92EchoArmaDen, 99u);"
+ },
+ {
+  "label": "the ARMA gets a different block size",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 98u);"
+ },
+ {
+  "label": "the ARMA gets eight denominator taps",
+  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tfloatarma_ctor(m, 8u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);"
+ },
+ {
+  "label": "one coefficient of the ARMA denominator is mistyped",
+  "find": "\t1.0f, 0.709f, -2.3002f,",
+  "replace": "\t1.0f, 0.7091f, -2.3002f,"
+ },
+ {
+  "label": "one coefficient of the ARMA numerator is mistyped",
+  "find": "\t1.4986f, 0.622f, -2.7333f,",
+  "replace": "\t1.4986f, 0.6221f, -2.7333f,"
+ },
+ {
+  "label": "the constructor does not reset what it built",
+  "find": "\tarma = m;\n\n\treset();",
+  "replace": "\tarma = m;"
+ }
 ]

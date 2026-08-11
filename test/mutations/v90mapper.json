@@ -1,0 +1,74 @@
+[
+ {
+  "_": [
+   "V90Mapper's constructor is eleven stores, a 0x50-byte allocation and a",
+   "six-word loop; its destructor is one guarded free.  Every mutation here",
+   "is meant to be caught by t_v90modchain's whole-object comparison over",
+   "never-zeroed storage, by its absolute allocation accounting, or by the",
+   "free/free_null split that makes the null guard testable."
+  ]
+ },
+ {
+  "label": "ctor: the buffer is 0x40 bytes, not 0x50",
+  "find": "\tbuf = sysdep_malloc(0x50);",
+  "replace": "\tbuf = sysdep_malloc(0x40);"
+ },
+ {
+  "label": "ctor: the flag byte at +0x6fc is set rather than cleared",
+  "find": "\tcleared_6fc = 0;\n\tbuf = sysdep_malloc(0x50);",
+  "replace": "\tcleared_6fc = 1;\n\tbuf = sysdep_malloc(0x50);"
+ },
+ {
+  "label": "ctor: +0x1c is left as it was found",
+  "find": "\tcleared_01c = 0;\n\tcleared_6f8 = 0;",
+  "replace": "\tcleared_6f8 = 0;"
+ },
+ {
+  "label": "ctor: +0x6f8 is left as it was found",
+  "find": "\tcleared_6f8 = 0;\n\tcleared_014 = 0;",
+  "replace": "\tcleared_014 = 0;"
+ },
+ {
+  "label": "ctor: +0x04 is left as it was found",
+  "find": "\tcleared_008 = 0;\n\tcleared_004 = 0;",
+  "replace": "\tcleared_008 = 0;"
+ },
+ {
+  "label": "ctor: the loop clears five words, not six",
+  "find": "\tfor (i = 0; i <= 5; i++)",
+  "replace": "\tfor (i = 0; i < 5; i++)"
+ },
+ {
+  "_": [
+   "OVER-RUNNING THE LOOP CANNOT BE TESTED.  `for (i = 0; i <= 6; i++)` was",
+   "tried and is NOT CAUGHT: cleared_658[6] is the first word of the",
+   "ModulusEncoder embedded at +0x670, whose own constructor has already",
+   "stored zero over it by the time the body runs.  The extra iteration",
+   "writes the value that is there.  Under-running it is testable and is",
+   "the mutation above; starting late is testable and is the one below."
+  ],
+  "label": "ctor: the loop skips the first word",
+  "find": "\tfor (i = 0; i <= 5; i++)\n\t\tcleared_658[i] = 0;",
+  "replace": "\tfor (i = 1; i <= 5; i++)\n\t\tcleared_658[i] = 0;"
+ },
+ {
+  "label": "ctor: params is not stored",
+  "find": "\tparams = p;",
+  "replace": "\tparams = 0;"
+ },
+ {
+  "label": "dtor: the free is not guarded",
+  "find": "\tif (buf)\n\t\tsysdep_free(buf);",
+  "replace": "\tsysdep_free(buf);"
+ },
+ {
+  "label": "dtor: the guard is inverted",
+  "find": "\tif (buf)\n\t\tsysdep_free(buf);",
+  "replace": "\tif (!buf)\n\t\tsysdep_free(buf);"
+ },
+ {
+  "label": "dtor: the buffer is nulled after the free",
+  "find": "\tif (buf)\n\t\tsysdep_free(buf);",
+  "replace": "\tif (buf) {\n\t\tsysdep_free(buf);\n\t\tbuf = 0;\n\t}"
+ }
+]

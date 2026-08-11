@@ -1,0 +1,142 @@
+[
+ {
+  "_": [
+   "Twelve arguments, five allocations and three nested constructors.  Most",
+   "of what can go wrong here is a permutation rather than a wrong value, so",
+   "most of these mutations move an argument to a neighbouring field or hand",
+   "a sub-object the wrong one -- which is only catchable because every",
+   "pointed-to instance in t_v90modchain is distinct and shared between the",
+   "two sides."
+  ]
+ },
+ {
+  "label": "ctor: the scrambler's near tap is 5, not 0x12",
+  "find": "\t: scrambler(0x12, 0x17, 0x63)",
+  "replace": "\t: scrambler(0x5, 0x17, 0x63)"
+ },
+ {
+  "label": "ctor: the scrambler's far tap is 0x12, not 0x17",
+  "find": "\t: scrambler(0x12, 0x17, 0x63)",
+  "replace": "\t: scrambler(0x12, 0x12, 0x63)"
+ },
+ {
+  "label": "ctor: the two mapping-parameter arguments are swapped on arrival",
+  "find": "\tmappingParams = mpsA;\n\tphase2Info = p2;",
+  "replace": "\tmappingParams = mpsB;\n\tphase2Info = p2;"
+ },
+ {
+  "label": "ctor: mappingParams2 takes the sixth argument as well",
+  "find": "\tmappingParams2 = mpsB;\n\tparams = par;",
+  "replace": "\tmappingParams2 = mpsA;\n\tparams = par;"
+ },
+ {
+  "label": "ctor: the V90CP and the V90MP land in each other's fields",
+  "find": "\tcp = cpArg;\n\tmp = mpArg;",
+  "replace": "\tcp = (V90CP *)mpArg;\n\tmp = (V90MP *)cpArg;"
+ },
+ {
+  "label": "ctor: the Jd and the V.92 Jd land in each other's fields",
+  "find": "\tjd = jdArg;\n\tv92Jd = v92JdArg;",
+  "replace": "\tjd = (V90Jd *)v92JdArg;\n\tv92Jd = (V92Jd *)jdArg;"
+ },
+ {
+  "label": "ctor: the session flag is not stored",
+  "find": "\tsessionFlag = flag;\n\tnofSymbols = n;",
+  "replace": "\tnofSymbols = n;"
+ },
+ {
+  "label": "ctor: nofSymbols is not stored",
+  "find": "\tsessionFlag = flag;\n\tnofSymbols = n;",
+  "replace": "\tsessionFlag = flag;"
+ },
+ {
+  "label": "ctor: the symbol buffer is one byte per symbol",
+  "find": "\tsymbolBuf = (short *)sysdep_malloc(2 * n);",
+  "replace": "\tsymbolBuf = (short *)sysdep_malloc(n);"
+ },
+ {
+  "label": "ctor: the frame buffer is four bytes per symbol, not eight",
+  "find": "\tframeBuf = sysdep_malloc(8 * n);",
+  "replace": "\tframeBuf = sysdep_malloc(4 * n);"
+ },
+ {
+  "label": "ctor: the converter takes 2n + 0x1388 symbols, not 3n",
+  "find": "\tv90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);",
+  "replace": "\tv90mod_bts_ctor(bts, 2 * n + 0x1388, params);"
+ },
+ {
+  "label": "ctor: the converter's constant is 0x1388 decimal, not hex",
+  "find": "\tv90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);",
+  "replace": "\tv90mod_bts_ctor(bts, 2 * n + n + 1388, params);"
+ },
+ {
+  "label": "ctor: the phase 3 modulator is built with no session flag",
+  "find": "\tv90mod_p3_ctor(p3, params, sessionFlag);",
+  "replace": "\tv90mod_p3_ctor(p3, params, 0);"
+ },
+ {
+  "label": "ctor: the phase 3 modulator's allocation is short",
+  "find": "\tp3 = (V90Phase3Modulator *)sysdep_malloc(V90MOD_PHASE3_SIZE);",
+  "replace": "\tp3 = (V90Phase3Modulator *)sysdep_malloc(V90MOD_PHASE3_SIZE - 8);"
+ },
+ {
+  "label": "ctor: the phase 4 modulator's allocation is short",
+  "find": "\tp4 = (V90Phase4Modulator *)sysdep_malloc(V90MOD_PHASE4_SIZE);",
+  "replace": "\tp4 = (V90Phase4Modulator *)sysdep_malloc(V90MOD_PHASE4_SIZE - 8);"
+ },
+ {
+  "label": "ctor: the two mapping parameters do NOT cross on the way down",
+  "find": "\t\t       mappingParams2, mappingParams, cp, 0xc);",
+  "replace": "\t\t       mappingParams, mappingParams2, cp, 0xc);"
+ },
+ {
+  "label": "ctor: the phase 4 modulator's eighth argument is 0xd, not 0xc",
+  "find": "\t\t       mappingParams2, mappingParams, cp, 0xc);",
+  "replace": "\t\t       mappingParams2, mappingParams, cp, 0xd);"
+ },
+ {
+  "label": "ctor: the phase 4 modulator is given no converter",
+  "find": "\tv90mod_p4_ctor(p4, params, sessionFlag, bitsToSymbol, mp,",
+  "replace": "\tv90mod_p4_ctor(p4, params, sessionFlag, 0, mp,"
+ },
+ {
+  "label": "ctor: the phase 4 modulator is given no session flag",
+  "find": "\tv90mod_p4_ctor(p4, params, sessionFlag, bitsToSymbol, mp,",
+  "replace": "\tv90mod_p4_ctor(p4, params, 0, bitsToSymbol, mp,"
+ },
+ {
+  "label": "dtor: the phase 3 modulator's guard is dropped",
+  "find": "\tif (phase3Modulator) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "dtor: the phase 4 modulator is freed without being destroyed",
+  "find": "\t\tv90mod_p4_dtor(phase4Modulator);\n\t\tsysdep_free(phase4Modulator);",
+  "replace": "\t\tsysdep_free(phase4Modulator);"
+ },
+ {
+  "label": "dtor: the phase 3 modulator is destroyed and not freed",
+  "find": "\t\tv90mod_p3_dtor(phase3Modulator);\n\t\tsysdep_free(phase3Modulator);",
+  "replace": "\t\tv90mod_p3_dtor(phase3Modulator);"
+ },
+ {
+  "label": "dtor: the converter is not released",
+  "find": "\tif (bitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();",
+  "replace": "\tif (!bitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();"
+ },
+ {
+  "label": "dtor: the symbol buffer's free is not guarded",
+  "find": "\tif (symbolBuf)\n\t\tsysdep_free(symbolBuf);",
+  "replace": "\tsysdep_free(symbolBuf);"
+ },
+ {
+  "label": "dtor: the frame buffer is not released",
+  "find": "\tif (frameBuf)\n\t\tsysdep_free(frameBuf);",
+  "replace": "\tif (!frameBuf)\n\t\tsysdep_free(frameBuf);"
+ },
+ {
+  "label": "dtor: the two buffers are nulled, which the blob does not do",
+  "find": "\tif (frameBuf)\n\t\tsysdep_free(frameBuf);",
+  "replace": "\tif (frameBuf) {\n\t\tsysdep_free(frameBuf);\n\t\tframeBuf = 0;\n\t}"
+ }
+]

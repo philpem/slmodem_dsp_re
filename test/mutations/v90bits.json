@@ -1,0 +1,88 @@
+[
+ {
+  "_": [
+   "V90BitsToSymbol's constructor owns a V90Mapper and a symbol buffer and",
+   "writes five scalars; two more fields at +0x14 and +0x18 it deliberately",
+   "leaves alone.  The mutations below split into three groups: the ones a",
+   "whole-object comparison over never-zeroed storage catches, the ones the",
+   "allocation accounting catches, and the ones only the free/free_null",
+   "split catches.  A mutation that makes the destructor dereference null",
+   "is caught by the run dying, which is still a failing run."
+  ]
+ },
+ {
+  "label": "ctor: the mapper is built with a null V90Parameters",
+  "find": "\tv90bts_mapper_ctor(m, params);",
+  "replace": "\tv90bts_mapper_ctor(m, 0);"
+ },
+ {
+  "label": "ctor: the mapper allocation is four bytes short",
+  "find": "\tm = (V90Mapper *)sysdep_malloc(sizeof(V90Mapper));",
+  "replace": "\tm = (V90Mapper *)sysdep_malloc(sizeof(V90Mapper) - 4);"
+ },
+ {
+  "label": "ctor: the symbol buffer is one byte per symbol",
+  "find": "\tsymbols = (short *)sysdep_malloc(2 * n);",
+  "replace": "\tsymbols = (short *)sysdep_malloc(n);"
+ },
+ {
+  "label": "ctor: nofSymbols is one more than the argument",
+  "find": "\tnofSymbols = n;",
+  "replace": "\tnofSymbols = n + 1;"
+ },
+ {
+  "label": "ctor: params is not stored",
+  "find": "\tparams = p;",
+  "replace": "\tparams = 0;"
+ },
+ {
+  "label": "ctor: symbolsDone is left as it was found",
+  "find": "\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;",
+  "replace": "\tsymbolsBlockSize = 0;"
+ },
+ {
+  "label": "ctor: symbolsBlockSize starts at one",
+  "find": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;",
+  "replace": "\tsymbolsBlockSize = 1;\n\textraSymbolsPending = 1;"
+ },
+ {
+  "label": "ctor: extraSymbolsPending starts clear",
+  "find": "\textraSymbolsPending = 1;\n}",
+  "replace": "\textraSymbolsPending = 0;\n}"
+ },
+ {
+  "label": "ctor: bitsPerFrame is initialised, which the blob does not do",
+  "find": "\textraSymbolsPending = 1;\n}",
+  "replace": "\textraSymbolsPending = 1;\n\tbitsPerFrame = 0;\n}"
+ },
+ {
+  "label": "ctor: extraSymbols is initialised, which the blob does not do",
+  "find": "\textraSymbolsPending = 1;\n}",
+  "replace": "\textraSymbolsPending = 1;\n\textraSymbols = 0;\n}"
+ },
+ {
+  "label": "dtor: the mapper is freed without being destroyed",
+  "find": "\t\tmapper->~V90Mapper();\n\t\tsysdep_free(mapper);",
+  "replace": "\t\tsysdep_free(mapper);"
+ },
+ {
+  "label": "dtor: the mapper is destroyed and not freed",
+  "find": "\t\tmapper->~V90Mapper();\n\t\tsysdep_free(mapper);",
+  "replace": "\t\tmapper->~V90Mapper();"
+ },
+ {
+  "label": "dtor: the symbol buffer's free is not guarded",
+  "find": "\tif (symbols)\n\t\tsysdep_free(symbols);",
+  "replace": "\tsysdep_free(symbols);"
+ },
+ {
+  "label": "dtor: the symbol buffer is not released",
+  "find": "\tif (symbols)\n\t\tsysdep_free(symbols);",
+  "replace": "\tif (!symbols)\n\t\tsysdep_free(symbols);"
+ },
+ {
+  "label": "dtor: the mapper guard is inverted",
+  "find": "\tif (mapper) {",
+  "replace": "\tif (!mapper) {"
+ }
+]

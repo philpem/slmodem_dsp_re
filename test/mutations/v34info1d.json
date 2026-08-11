@@ -52,8 +52,8 @@
 
  {
   "label": "the three-way conjunction is a disjunction in its first term",
-  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
-  "replace": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    || obj->remote_v92 != 0"
+  "find": "\tif (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0\n\t    || obj->remote_v92 != 0"
  },
  {
   "label": "the three-way conjunction is a disjunction in its last term",
@@ -62,18 +62,18 @@
  },
  {
   "label": "the local capability is the byte before it, ShortPhase2: local",
-  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
-  "replace": "\tif (sess->v92Phase2Info->shortPhase2Local != 0\n\t    && obj->remote_v92 != 0"
+  "find": "\tif (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92modem.phase2Info->shortPhase2Local != 0\n\t    && obj->remote_v92 != 0"
  },
  {
   "label": "the local capability is the remote's, two bytes on",
-  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
-  "replace": "\tif (sess->v92Phase2Info->v92CapabilitiesRemote != 0\n\t    && obj->remote_v92 != 0"
+  "find": "\tif (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif (sess->v92modem.phase2Info->v92CapabilitiesRemote != 0\n\t    && obj->remote_v92 != 0"
  },
  {
   "label": "the capability byte is tested by its low bit, not against zero",
-  "find": "\tif (sess->v92Phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
-  "replace": "\tif ((sess->v92Phase2Info->v92CapabilitiesLocal & 1) != 0\n\t    && obj->remote_v92 != 0"
+  "find": "\tif (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0\n\t    && obj->remote_v92 != 0",
+  "replace": "\tif ((sess->v92modem.phase2Info->v92CapabilitiesLocal & 1) != 0\n\t    && obj->remote_v92 != 0"
  },
  {
   "label": "remote_v92 is tested a byte wide",
@@ -118,8 +118,8 @@
  },
  {
   "label": "the local capability is printed signed",
-  "find": "\t\t\tsess->v92Phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,",
-  "replace": "\t\t\t(signed char)sess->v92Phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,"
+  "find": "\t\t\tsess->v92modem.phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,",
+  "replace": "\t\t\t(signed char)sess->v92modem.phase2Info->v92CapabilitiesLocal,\n\t\t\tobj->remote_v92,"
  },
  {
   "label": "remote_v92 is printed unsigned",

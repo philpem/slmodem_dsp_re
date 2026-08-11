@@ -243,10 +243,16 @@ Sizes in bytes.  Method names are shown without the class prefix.
 | 11 | `setSessionFlag(unsigned int)` | `_ZN18V90Phase3Modulator14setSessionFlagEj` |
 
 All five are written, with the 64-byte static member and the four weak
-`Scrambler<unsigned char,int>` members the closure needed.  Two signatures the
-header deliberately does **not** declare, because declaring a constructor or
-destructor makes the class non-trivial and deletes the default members of the
-union the test fixture uses:
+`Scrambler<unsigned char,int>` members the closure needed.  Two more signatures
+were left undeclared for a while, on the argument that declaring a constructor
+or destructor makes the class non-trivial and deletes the default members of
+the union the test fixture uses — **that is no longer the position** (finding
+1255).  `Scrambler` acquired both first (finding 871), so the class was
+non-trivial before either of these was declared and every fixture union already
+carries the empty pair that restores its own; and the constructor has two
+callers — `V90Modulator::V90Modulator` and `V90Phase3Demodulator::V90Phase3Demodulator`,
+measured off the blob's .text relocations, finding 1258 — so the symbol has to
+exist.  Both are written and tested:
 
     V90Phase3Modulator(V90Parameters *, unsigned int)   C1,C2   123 B
     ~V90Phase3Modulator()                               D1,D2    22 B

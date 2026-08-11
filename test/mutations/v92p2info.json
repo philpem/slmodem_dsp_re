@@ -1,0 +1,65 @@
+[
+ {
+  "note": "V92Phase2Info.cpp is one constructor and fourteen stores.  Half of this set is aimed at the three fields at +0x14..+0x16, because those are the ones the header called `pad_14[3]` until this constructor was read: if they were transposed, or read from the wrong parameter, nothing else in the tree would notice -- neither reader touches them.  The other half is the four constants, where the failure mode is a store dropped entirely rather than a value got wrong."
+ },
+ {
+  "label": "pcmType carries the parameter instead of testing it",
+  "find": "\tpcmType = (p->V92_PHASE2_INFO_A_OR_MU != 0);",
+  "replace": "\tpcmType = p->V92_PHASE2_INFO_A_OR_MU;"
+ },
+ {
+  "label": "txPowerMeasurementPoint carries the parameter instead of testing it",
+  "find": "\t    (p->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);",
+  "replace": "\t    p->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT;"
+ },
+ {
+  "label": "Uinfo and maxTxPower are transposed",
+  "find": "\tUinfo = (unsigned char)p->V92_PHASE2_INFO_UINFO;\n\tmaxTxPower = (unsigned char)p->V92_PHASE2_INFO_MAX_TX_POWER;",
+  "replace": "\tUinfo = (unsigned char)p->V92_PHASE2_INFO_MAX_TX_POWER;\n\tmaxTxPower = (unsigned char)p->V92_PHASE2_INFO_UINFO;"
+ },
+ {
+  "label": "rtd is read from the neighbouring parameter",
+  "find": "\trtd = p->V92_PHASE2_INFO_RTD;",
+  "replace": "\trtd = p->V92_PHASE2_INFO_UINFO;"
+ },
+ {
+  "label": "the local capability byte is cleared rather than set",
+  "find": "\tv92CapabilitiesLocal = 1;",
+  "replace": "\tv92CapabilitiesLocal = 0;"
+ },
+ {
+  "label": "the local capability byte is set on the wrong field",
+  "find": "\tshortPhase2Local = 0;\n\tv92CapabilitiesLocal = 1;",
+  "replace": "\tshortPhase2Local = 1;\n\tv92CapabilitiesLocal = 0;"
+ },
+ {
+  "label": "the remote pair is left as it was",
+  "find": "\tshortPhase2Remote = 0;\n\tv92CapabilitiesRemote = 0;",
+  "replace": "\t;"
+ },
+ {
+  "label": "v90UseHighCarrier is left as it was",
+  "find": "\tv90UseHighCarrier = 0;",
+  "replace": "\t;"
+ },
+ {
+  "label": "the three filter counts are rotated",
+  "find": "\tnofFilterSections = (unsigned char)p->V92_NOF_FILTER_SECTIONS;\n\tmaxTotalNofCoeffs = (unsigned char)p->V92_MAX_TOTAL_NOF_COEFFS;",
+  "replace": "\tnofFilterSections = (unsigned char)p->V92_MAX_TOTAL_NOF_COEFFS;\n\tmaxTotalNofCoeffs = (unsigned char)p->V92_NOF_FILTER_SECTIONS;"
+ },
+ {
+  "label": "the third filter count is not written",
+  "find": "\tmaxNofCoeffsInEachSection =\n\t    (unsigned char)p->V92_MAX_NOF_COEFFS_IN_EACH_SECTION;",
+  "replace": "\t;"
+ },
+ {
+  "label": "a filter count carries the whole word, not its low byte",
+  "find": "\tnofFilterSections = (unsigned char)p->V92_NOF_FILTER_SECTIONS;",
+  "replace": "\tnofFilterSections = (unsigned char)(p->V92_NOF_FILTER_SECTIONS >> 8);"
+ },
+ {
+  "label": "the parameter block is not kept",
+  "find": "\tparams = p;\n\tpcmType",
+  "replace": "\tpcmType"
+ }
+]

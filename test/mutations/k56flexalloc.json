@@ -1,0 +1,32 @@
+[
+ {
+  "label": "K56FLEX_Create asks for twenty-four bytes",
+  "find": "\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
+  "replace": "\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE + 4);"
+ },
+ {
+  "label": "K56FLEX_Create asks for sixteen bytes",
+  "find": "\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
+  "replace": "\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE - 4);"
+ },
+ {
+  "label": "K56FLEX_Create allocates twice",
+  "find": "\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
+  "replace": "\tsysdep_malloc(K56FLEX_OBJECT_SIZE);\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);"
+ },
+ {
+  "label": "K56FLEX_Create reads the argument it is not supposed to read",
+  "find": "K56FLEX_Create(void *, void *, void *, int)\n{\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
+  "replace": "K56FLEX_Create(void *, void *, void *a3, int)\n{\n\t*(unsigned char *)a3 = 0;\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);"
+ },
+ {
+  "label": "K56FLEX_Delete loses its null test",
+  "find": "\tif (obj != 0)\n\t\tsysdep_free(obj);",
+  "replace": "\tsysdep_free(obj);"
+ },
+ {
+  "label": "K56FLEX_Delete frees nothing",
+  "find": "\tif (obj != 0)\n\t\tsysdep_free(obj);",
+  "replace": "\tif (obj == 0)\n\t\tsysdep_free(obj);"
+ }
+]

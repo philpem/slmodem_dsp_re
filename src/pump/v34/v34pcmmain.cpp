@@ -1153,7 +1153,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 	 * high byte cannot reach this decision.  Measured, not assumed.
 	 */
 	ispcm = 0;
-	if (sess->v92Phase2Info->v92CapabilitiesLocal != 0
+	if (sess->v92modem.phase2Info->v92CapabilitiesLocal != 0
 	    && obj->remote_v92 != 0
 	    && ((unsigned short)bits[7] & 0x20) != 0)
 		ispcm = 1;
@@ -1165,7 +1165,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 			"VPcmV34Main: upstream selection: local cap - %d, "
 			"remote cap - %d, requested in info1 - %d, "
 			"isPCM - %d\r\n",
-			sess->v92Phase2Info->v92CapabilitiesLocal,
+			sess->v92modem.phase2Info->v92CapabilitiesLocal,
 			obj->remote_v92,
 			(unsigned short)bits[7] & 0x20,
 			sess->pcmSessionType);
@@ -1402,6 +1402,13 @@ VPcmV34GetCurrentRxBitRate(void *objp)
  * object multiplies (`fmuls`) by the nearest `float` to the reciprocal and a
  * division would have been `fdivs`.
  *
+ * THE V.92 ARM'S `tx` USED TO BE `*(const unsigned char *const *)sess->
+ * pad_6124`, a pointer read out of a four-byte pad.  It is the SAME field
+ * the V.90 arm spells `sess->modem.modulator`, one class along: +0x6124 is
+ * where the `VPcmFloModem`'s `V92Modem` starts and +0x000 of a `V92Modem` is
+ * its `V92Modulator *`.  The construction path named the member; the offset
+ * and the read are unchanged, and nothing here was re-measured.
+ *
  * The conversion in and out is UNSIGNED at both ends, by the same `fildll`
  * off a zeroed high word and `fistpll` with the low half taken that settled
  * `getBitRate`'s return type.  Written as `unsigned` here for that reason and
@@ -1440,7 +1447,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 					       + 0.5f);
 		}
 	} else if (obj->status == 2) {
-		tx = *(const unsigned char *const *)sess->pad_6124;
+		tx = (const unsigned char *)sess->v92modem.modulator;
 		if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
 			return 0;
 

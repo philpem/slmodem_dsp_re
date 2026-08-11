@@ -62,8 +62,69 @@ struct vpcm_queue {
  */
 #define VPCM_V34_BYTES		0xac4c
 
+/*
+ * TWO WORDS OF IT ARE NOT OPAQUE, AND THEY ARE `vpcm_create`'s.
+ *
+ * `vpcm_create` stores `VPCMXF_Create`'s answer at root +0x3574 and
+ * `K56FLEX_Create`'s at root +0xac44, and `vpcm_delete` reads both back;
+ * root +0x2c is where this block starts, so those are the V.34 object's own
+ * +0x3548 and +0xac18.  `tools/whichfield.py struct v34_object 0x3548` and
+ * `0xac18` both answer with a modelled `void *` -- this tree's partial map of
+ * `tagV34Object` already carries them, as `p3548` and `pac18`.
+ *
+ * They are named here for what stores them.  `VPcmV34Create` is the other
+ * witness and it is a strong one: at 0xaa7f and 0xaa92 it SAVES both words,
+ * memsets the whole 0xac4c to zero, and puts both back (0xaaf9, 0xab15).  A
+ * constructor that preserves exactly two words across a wholesale clear is
+ * telling you those two were written before it ran and must survive it.
+ *
+ * The block is a struct rather than a byte array so the two are typed
+ * members with `__builtin_offsetof` behind them.  It was
+ * `unsigned char v34[VPCM_V34_BYTES]`, and `vpcm_run`'s five uses became
+ * `&s->v34` where they were `s->v34`; nothing else changed.
+ */
+struct vpcm_v34 {
+	unsigned char	opaque_0000[0x3548];	/* +0x0000              */
+	void		*xf;			/* +0x3548 VPCMXF_Create */
+	unsigned char	opaque_354c[0xac18 - 0x354c];
+	void		*k56;			/* +0xac18 K56FLEX_Create */
+	unsigned char	opaque_ac1c[VPCM_V34_BYTES - 0xac1c];
+};
+
 /* `nbits` is clamped to this, and both bit arrays hold exactly this many. */
 #define VPCM_MAX_BITS		0x400u
+
+/*
+ * ---------------------------------------------------------------------------
+ * `vpcm_create`'s literals.  Every one is an immediate in the disassembly at
+ * the address named; none is derived from another.
+ */
+
+/* `cmp $0x2580,%esi; jne` at 0x3a1c -- an EQUALITY test, not a bound. */
+#define VPCM_SRATE		9600
+
+/* `cmpl $0x30,0x40(%esp); jg` at 0x3a37.  48 is the host's `MODEM_FRAG`. */
+#define VPCM_MAX_FRAG		48
+
+/* `cmp $0xdac0,%eax; jbe` at 0x3b65 -- UNSIGNED -- caps MDMPRM_MAX_RATE. */
+#define VPCM_MAX_RATE_CAP	0xdac0u		/* 56000 */
+
+/* Written into the runtime block's +0x38 and +0x3c as literals at 0x3b90. */
+#define VPCM_PARAM_MIN_RATE	0x12c0		/*  4800 */
+#define VPCM_PARAM_MAX_RATE	0x8340		/* 33600 */
+
+/*
+ * `and $0x210,%edi` at 0x3bd9.  528 samples of silence, and the mask survives
+ * when the V.92 bit is CLEAR -- see the note above `vpcm_create` in
+ * src/pump/v90/vpcm.c, because the `sbb` idiom reads the other way round.
+ */
+#define VPCM_MUTE_SAMPLES	0x210
+
+/* `mov $0xf4,%ecx` at 0x3bf1: the largest hardware delay this will accept. */
+#define VPCM_DELAY_CAP		0xf4
+
+/* `cmp $0x180,%eax; jge` at 0x3d8c: the floor on the compensation. */
+#define VPCM_EXTRADELAY_MIN	0x180
 
 /*
  * How many blocks of an unchanged progress code 0 `vpcm_run` will sit through
@@ -116,7 +177,7 @@ struct vpcm_root {
 	int		stall;		/* +0x00020 blocks of unchanged code 0   */
 	struct dsp_info	*info;		/* +0x00024 MDMPRM_DSPINFO               */
 	struct _tagModemParameters *params;	/* +0x00028 MDMPRM_DPRUNTIME     */
-	unsigned char	v34[VPCM_V34_BYTES];	/* +0x0002c tagV34Object         */
+	struct vpcm_v34	v34;		/* +0x0002c tagV34Object         */
 	float		fin[160];	/* +0x0ac78 one block, as floats         */
 	float		fout[160];	/* +0x0aef8                              */
 	int		txbits[1024];	/* +0x0b178 bits going out on the line   */
@@ -207,6 +268,45 @@ void vpcm_unwritten_reset(void);
  * datapump the host contract fixes at 48 (finding 964).
  */
 int vpcm_run(struct dp *dp, void *in, void *out, int count);
+
+/*
+ * ---------------------------------------------------------------------------
+ * The rest of the datapump: `vpcm_create` (0x3a00, 969 B), `vpcm_delete`
+ * (0x3dd0, 110 B), the operations table at .data+0x30, and the registration.
+ *
+ * The first two are file-static in the object and reached only through
+ * `vpcm_op`; they lose the `static` here for `vpcm_run`'s reason, which is
+ * that a test calls them by name.
+ */
+struct dp *vpcm_create(void *modem, int id, int caller, int srate,
+		       int max_frag, struct dp_operations *op);
+int vpcm_delete(struct dp *dp);
+
+/* .data+0x30, 24 bytes; `dp_vpcm_init` registers it under three ids. */
+extern struct dp_operations vpcm_op;
+
+/* 0x44c0, 72 bytes: three `modem_dp_register` calls and a zero. */
+int dp_vpcm_init(void);
+
+/*
+ * ---------------------------------------------------------------------------
+ * The two `VPCMXF_` entry points `vpcm_create` and `vpcm_delete` call, and
+ * the one `vpcm_delete` calls before them.  All three are `extern "C"` free
+ * functions defined in C++ translation units, which is what makes the call
+ * from this C one legal -- CLAUDE.md's three conditions, and the interop link
+ * line already carries `$(CXXOBJ64)`.
+ *
+ * THE HANDLE IS A `VPcmFloModem *` and is spelled `void *` here, because this
+ * header is included by C.  src/pump/v90/VPcmXfCreate.cpp declares the same
+ * two with the real type; the two declarations never meet in one translation
+ * unit and describe the same ABI.  `VPCMXF_SessionTermination` is declared in
+ * src/pump/v90/VPcmXfTerm.cpp the same way and for the same reason, and is
+ * repeated here because this is the caller.
+ */
+void *VPCMXF_Create(int digitalSide, void *v34Object, void *dpRuntime,
+		    unsigned int durationMs, int mode);
+void VPCMXF_Delete(void *self);
+void VPCMXF_SessionTermination(void *self);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,234 @@
+/*
+ * VPcmXfCreate.cpp -- `VPCMXF_Create` (0xfcf0, 0x1ef = 495 bytes) and
+ * `VPCMXF_Delete` (0xf6c0, 0x6d = 109 bytes): the V.PCM interface's
+ * constructor and destructor for a `VPcmFloModem`.
+ *
+ * Both are `extern "C"` in the object -- their relocations carry no mangling
+ * -- and `vpcm_create` and `vpcm_delete`, which are C, call them across that
+ * boundary.  See CLAUDE.md's note on the link line for the three conditions
+ * that makes legal; these two meet all three (extern "C", free functions,
+ * and `$(CXXOBJ64)` is on the interop link line).
+ *
+ * ===========================================================================
+ * FIVE ARGUMENTS AND ONLY THE FIRST TWO ARE OBVIOUS
+ * ===========================================================================
+ *
+ *   digitalSide  Tested for zero three times and never stored.  It picks the
+ *                message's "%s", and it is INVERTED on its way into the
+ *                modem: `sete %al` at 0xfd07 puts `(digitalSide == 0)` into
+ *                the V90ModemSide slot.  So a zero here is the ANALOG side,
+ *                which is the one `vpcm_create` always asks for -- it passes
+ *                a literal 0 (findings 701, 702).
+ *   v34Object    Passed straight through to the modem's first argument.
+ *   dpRuntime    Likewise, to its third.
+ *   durationMs   A DURATION IN MILLISECONDS, converted to a sample count
+ *                below; see the next block.
+ *   mode         A two-bit mask, unpacked into the two computational modes.
+ *
+ * ===========================================================================
+ * WHY THE CONVERSION IS TWO DIFFERENT MULTIPLIES
+ * ===========================================================================
+ *
+ * The object has two paths into one tail:
+ *
+ *     digitalSide != 0   fmuls .rodata.cst4+0x54    (8.0)
+ *     digitalSide == 0   fmull .rodata.cst8+0x10    (9.6)
+ *     both               fadds .rodata.cst4+0x58    (0.5), then a truncating
+ *                        fistpl with the rounding control forced to 11
+ *
+ * 8.0 samples per millisecond is 8000 Hz and 9.6 is 9600 Hz, which are the
+ * codec rate and the V.PCM rate; `vpcm_create` requires its `srate` to be
+ * exactly 9600 and passes 0 here, so the shipped path is the second one and
+ * a `max_frag` of 48 comes back out as 48.  The `+ 0.5` before a TRUNCATION
+ * is a round-to-nearest for a non-negative value.
+ *
+ * THE TWO CONSTANTS ARE WRITTEN `8.0` AND `9.6`, both `double`, and the
+ * narrowing to `fmuls` is the compiler's: GCC loads a `double` constant that
+ * is exactly representable as a `float` with the four-byte form, which is
+ * also why the shared `+ 0.5` is an `fadds` and not an `faddl`.  Writing
+ * `8.0f` would say something about the source that the object does not.
+ *
+ * `fildll` with the high word ZEROED is what types the argument: the value is
+ * widened to 64 bits with no sign extension, which is an `unsigned int`
+ * conversion and not an `int` one.
+ *
+ * ===========================================================================
+ * THE NULL TEST IS AFTER THE CONSTRUCTION, NOT BEFORE IT
+ * ===========================================================================
+ *
+ * 0xfd9f allocates, 0xfdcd constructs into whatever came back, and 0xfdd2
+ * `test %ebx,%ebx` is the first look at the pointer.  So a failed allocation
+ * is constructed into before it is noticed -- the object faults and then
+ * prints.  Reproduced exactly; the guard is not moved to where it would have
+ * done some good, because moving it would be a different function and the
+ * blob is the specification.  Recorded as D236.
+ *
+ * ===========================================================================
+ * TWENTY-ONE STORES THE CALLER MAKES INTO THE OBJECT IT JUST BUILT
+ * ===========================================================================
+ *
+ * And five of them CONTRADICT the constructor, which is the interesting part:
+ * `nofBitsPerSymbol` is 0 from the constructor and 2 from here,
+ * `minNofTransmitSequences` is 0 and then 1, and `flags_0217` is
+ * {1,1,1,1,1,1} and then {1,0,1,1,1,0}.  A constructed-and-returned
+ * `VPcmFloModem` therefore never has the constructor's values for those, and
+ * a test that drove only the constructor would be measuring a state the
+ * program never sees.  Both are written as found.
+ *
+ * The pattern here is `VPcmFloModem::externalReset`'s -- the same six flags,
+ * the same five cleared bytes, the same three CP fields (VPcmFloModem.h).  It
+ * is NOT a call to it: `externalReset` also re-initialises both parameter
+ * blocks and prints, and does neither here.  The duplication is the
+ * original's.  This file exists partly because of it: finding 1264, one
+ * source file is one mutation suite's namespace, and putting a near-copy of
+ * `externalReset`'s tail into `VPcmFloModem.cpp` would make anchors in both
+ * match twice -- which `tools/mutate.py` calls UNUSABLE, and unusable does
+ * not fail a run.
+ */
+
+#include <stddef.h>
+
+#include "dsplib/VPcmFloModem.h"
+
+#include "dsplib/debug.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * No header carries these two prototypes as `VPcmFloModem *`: the only
+ * callers in the object are `vpcm_create` and `vpcm_delete`, which are C and
+ * see them through `include/dsplib/vpcm.h` as `void *`.  They are declared
+ * here so that the definitions below are not their first declaration --
+ * src/pump/v90/VPcmXfTerm.cpp's rule, and the same shape.
+ */
+extern "C" VPcmFloModem *VPCMXF_Create(int digitalSide, void *v34Object,
+				       _tagModemParameters *dpRuntime,
+				       unsigned int durationMs, int mode);
+extern "C" void VPCMXF_Delete(VPcmFloModem *self);
+
+/*
+ * The complete-object constructor, by the name the relocation at 0xfdcd
+ * carries.  NOT placement `new`: the blob allocates and then constructs with
+ * NOTHING between the two instructions, and a user-declared placement
+ * `operator new` -- which is what this build would need, being `-nostdinc++`
+ * with no <new> -- makes GCC emit a null test in front of the constructor
+ * call.  The object's null test is AFTER it, which is a different function.
+ * src/pump/v90/V92Modem.cpp and V92Modulator.cpp give the same reason at
+ * length; this is the one site in the chain where the difference would have
+ * been visible in the control flow rather than only in the instruction count.
+ */
+void vpcmxf_modem_ctor(void *self, void *v34Object,
+				    V90ModemSide side, void *dpRuntime,
+				    unsigned int nSamples,
+				    V90ComputationalMode v90Mode,
+				    V92ComputationalMode v92Mode)
+	asm("_ZN12VPcmFloModemC1EPv12V90ModemSideP19_tagModemParametersj"
+	    "20V90ComputationalMode20V92ComputationalMode");
+
+extern "C" VPcmFloModem *
+VPCMXF_Create(int digitalSide, void *v34Object,
+	      _tagModemParameters *dpRuntime, unsigned int durationMs,
+	      int mode)
+{
+	VPcmFloModem *self;
+	V90ModemSide side;
+	V90ComputationalMode v90Mode;
+	V92ComputationalMode v92Mode;
+	int maxDataBuffer;
+
+	side = (V90ModemSide)(digitalSide == 0);
+
+	if (digitalSide != 0)
+		maxDataBuffer = (int)(durationMs * 8.0 + 0.5);
+	else
+		maxDataBuffer = (int)(durationMs * 9.6 + 0.5);
+
+	/*
+	 * A two-bit mask and a four-arm switch: bit 0 is the V.90 mode and
+	 * bit 1 the V.92 one.  The object writes it as four arms and not as
+	 * two shifts -- `cmp $0x2` / `jg` / `cmp $0x3` / `dec` / `je` -- so
+	 * the source is a switch, and the `jg` is SIGNED, which is what makes
+	 * `mode` an `int`.  Anything outside 1..3, including a negative, is
+	 * the default and gives both modes zero.
+	 */
+	switch (mode) {
+	case 1:
+		v90Mode = (V90ComputationalMode)1;
+		v92Mode = (V92ComputationalMode)0;
+		break;
+	case 2:
+		v90Mode = (V90ComputationalMode)0;
+		v92Mode = (V92ComputationalMode)1;
+		break;
+	case 3:
+		v90Mode = (V90ComputationalMode)1;
+		v92Mode = (V92ComputationalMode)1;
+		break;
+	default:
+		v90Mode = (V90ComputationalMode)0;
+		v92Mode = (V92ComputationalMode)0;
+		break;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "VPCMXF_Create: side is %s, maxDataBuffer - %d\r\n",
+		    digitalSide != 0 ? "Digital" : "Analog", maxDataBuffer);
+
+	self = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem));
+	vpcmxf_modem_ctor(self, v34Object, side, dpRuntime,
+			  (unsigned int)maxDataBuffer, v90Mode, v92Mode);
+
+	/* See the file comment: the object tests AFTER it constructs. */
+	if (self == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPCMXF_Create: new VPcmFloModem() failed.\n");
+		return 0;
+	}
+
+	self->flags_173a[0] = 0;
+	self->bitPointer = 0;
+	self->flags_173a[1] = 0;
+	self->flags_173a[2] = 0;
+	self->flag_173d = 0;
+	self->flag_173e = 0;
+
+	self->flags_0217[0] = 1;
+	self->flags_0217[1] = 0;
+	self->flags_0217[2] = 1;
+	self->flags_0217[3] = 1;
+	self->flags_0217[4] = 1;
+	self->flags_0217[5] = 0;
+
+	self->nofBits = 0;
+	self->cpNofBits = 0;
+	self->terminateJa = 0;
+	self->terminateCp = 0;
+	self->terminateCpNot = 0;
+	self->cpNotLoaded = 0;
+	self->nofBitsPerSymbol = 2;
+	self->nofTransmitSequences = 0;
+	self->minNofTransmitSequences = 1;
+
+	return self;
+}
+
+/*
+ * `VPCMXF_Delete` is `if (p) { p->~VPcmFloModem(); sysdep_free(p); }` and the
+ * object proves it is exactly that rather than six hand-written calls:
+ * `_ZN12VPcmFloModemD1Ev` at 0xd0a0 is the SAME six calls in the same order,
+ * 0x61 bytes of it, and it exists as a symbol because an implicitly-declared
+ * destructor is implicitly inline -- GCC emits an out-of-line copy and still
+ * inlines it at a call site.  So one source statement produces both.
+ *
+ * A hand-written sequence here would give us a function with no
+ * `~VPcmFloModem` behind it and the blob's 0xd0a0 unaccounted for.
+ */
+extern "C" void
+VPCMXF_Delete(VPcmFloModem *self)
+{
+	if (self != 0) {
+		self->~VPcmFloModem();
+		sysdep_free(self);
+	}
+}

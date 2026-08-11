@@ -57,6 +57,17 @@
 class V90Parameters;
 
 /*
+ * DECLARED, NOT INCLUDED.  `V90SpectralVerifier` is a constructor argument
+ * this class accepts and never stores, so nothing here needs its layout;
+ * `ANSamToneDetector` is a pointer member, so nothing here needs its layout
+ * either, and including it would pull `GenericToneDetector.h` into every
+ * translation unit that includes this file.  `V90Phase3Demodulator.cpp`
+ * includes the one definition the destructor's call needs.
+ */
+class V90SpectralVerifier;
+class ANSamToneDetector;
+
+/*
  * The state `reset` is told to start in.  The mangled name is
  * `22Phase3DemodulatorState`, so the TYPE's name is the author's; the
  * enumerators' are not, and only three of them are recoverable at all --
@@ -87,6 +98,19 @@ public:
 	 * `const`, emits a different symbol that links against nothing.
 	 */
 	void setSessionFlag(unsigned int flag);
+
+	/*
+	 * C1 at 0x212c0 and C2 at 0x21430, 365 bytes each; D1 at 0x20cb0 and
+	 * D2 at 0x20c00, 165 bytes each.  The parameter list is the
+	 * mangling's:
+	 * `_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifier`
+	 * `jP25V90AutoDigitalImpDetector`.
+	 */
+	V90Phase3Demodulator(V90Parameters *params, V90SpectralVerifier *unused,
+			     unsigned int sessionFlag,
+			     V90AutoDigitalImpDetector *adid);
+	~V90Phase3Demodulator();
+
 	void reset(PcmType pcmType, unsigned char ucode,
 		   Phase3DemodulatorState state, unsigned int word2c,
 		   V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
@@ -95,16 +119,22 @@ public:
 
 	/*
 	 * Declared for the record and deliberately not defined; their callees
-	 * are not written, and defining one re-opens the link closure.  The
-	 * constructor and destructor are not declared at all, for the reason
-	 * V90Phase3Modulator.h gives: declaring either makes the class
-	 * non-trivial, which deletes the default members of the union the test
-	 * fixture is, and makes `__builtin_offsetof` conditionally supported.
+	 * are not written, and defining one re-opens the link closure.
 	 *
-	 *     V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *,
-	 *                          unsigned int, V90AutoDigitalImpDetector *)
-	 *                                                  C1,C2   365 B
-	 *     ~V90Phase3Demodulator()                      D1,D2   165 B
+	 * THE CONSTRUCTOR AND DESTRUCTOR ARE NOW WRITTEN, and what unblocked
+	 * them was `ANSamToneDetector` landing.  Declaring them makes the
+	 * class non-trivial, which deletes the special members of a union
+	 * holding one -- `t_v90p3dreset.cpp`'s `p3d_slot` already provides its
+	 * own pair for exactly that reason, so nothing had to move.
+	 *
+	 * ARGUMENT 2 -- THE `V90SpectralVerifier *` -- IS NEVER LOADED.  The
+	 * constructor reads 0x40 (`this`), 0x44, 0x4c and 0x50 off its frame
+	 * and `0x48(%esp)` appears nowhere in the 365 bytes.  So it is
+	 * accepted and dropped, no field holds it, and no test of this
+	 * constructor can assert a placement for it.  `V90Demodulator` passes
+	 * the address of its own embedded verifier, which is why the argument
+	 * looks load-bearing from the caller's side and is not.  The parameter
+	 * is named `unused` below and the definition casts it to void.
 	 *
 	 * A return type is not mangled, so every one below is spelled `void`
 	 * for want of evidence rather than because the blob returns nothing.
@@ -206,7 +236,36 @@ public:
 	 */
 	V90Phase3Modulator phase3Modulator;
 
-	/* +0x3cc  Zeroed by the constructor; `reset` does not touch it. */
+	/*
+	 * +0x3cc  Zeroed by the constructor AND by `reset`.
+	 *
+	 * THIS COMMENT USED TO SAY "`reset` does not touch it", AND THAT WAS
+	 * WRONG.  `reset` has `movl $0x0,0x3cc(%ebx)` of its own, and since
+	 * the constructor's last act is to call `reset`, the constructor's
+	 * store is overwritten by an identical one microseconds later.  A
+	 * mutation that deletes the constructor's store is therefore
+	 * BEHAVIOURALLY INVISIBLE -- it was written, it read NOT CAUGHT, and
+	 * that is how the error was found.  See test/mutations/v90p3dctor.json
+	 * for why it is not in the suite.
+	 *
+	 * IT IS A MEM-INITIALIZER, by finding 1302's argument and this is the
+	 * second instance of it.  `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits
+	 * BETWEEN the call to `V90Phase3Modulator`'s constructor and the call
+	 * to `Descrambler<int,int>`'s, and a store to `this + 0x3cc` can be
+	 * moved across neither.  Body statements run after every member
+	 * construction, so it is not one; members are constructed in
+	 * declaration order, so this field is declared between the two
+	 * subobjects, which is where it sits.
+	 *
+	 * AND UNLIKE `V90Demapper`'s CASE, `make similarity` DOES NOT
+	 * CORROBORATE IT.  That is not a disagreement: this translation unit
+	 * is one of the fifteen the period toolchain cannot compile at all --
+	 * it was already on that list before this batch, and the ratchet
+	 * gained rather than lost -- so none of its symbols reach the
+	 * comparison.  The argument above stands on the instruction ordering
+	 * alone, which is weaker evidence than 1302 had, and saying so is the
+	 * point of this paragraph.
+	 */
 	unsigned int word_3cc;
 
 	/*
@@ -277,12 +336,20 @@ public:
 	unsigned char pad_425[3];	/* +0x425 alignment              */
 
 	/*
-	 * +0x428  Allocated by the constructor with `sysdep_malloc(0x3c)` and
-	 * handed to `ANSamToneDetector(unsigned, unsigned, float, unsigned,
-	 * float, unsigned, unsigned, unsigned)`.  The class is not modelled;
-	 * the field is here because it is what makes the object 0x42c.
+	 * +0x428  Allocated by the constructor with `sysdep_malloc(0x3c)` --
+	 * which is `sizeof(ANSamToneDetector)` exactly -- and built with
+	 * (0x190, 0x64, 307200.0f, 0, 0.5f, 8000, 50, 99).  OWNED: the
+	 * destructor destroys it and frees it.  It is what makes the object
+	 * 0x42c.
+	 *
+	 * The type is a pointer to an INCOMPLETE class here on purpose.  A
+	 * pointer member needs only the declaration, and pulling
+	 * `ANSamToneDetector.h` in would drag `GenericToneDetector.h` into
+	 * every one of the six translation units that include this header.
+	 * `V90Phase3Demodulator.cpp` includes the definition, which is all the
+	 * destructor's call needs.
 	 */
-	void *ansamToneDetector;
+	ANSamToneDetector *ansamToneDetector;
 };
 
 /*

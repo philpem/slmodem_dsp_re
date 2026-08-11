@@ -1,0 +1,32 @@
+[
+ {
+  "label": "the constructor stores nothing",
+  "find": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tparams = p;\n}",
+  "replace": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\t(void)p;\n}"
+ },
+ {
+  "label": "the parameter block lands at +0x280c rather than +0x2814",
+  "find": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tparams = p;\n}",
+  "replace": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\t*(V90Parameters **)&byte_280c[0] = p;\n}"
+ },
+ {
+  "label": "the constructor also clears the first linear-mapping entry",
+  "find": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tparams = p;\n}",
+  "replace": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tlinMapp[0][0] = 0;\n\tparams = p;\n}"
+ },
+ {
+  "label": "the constructor also clears a field above the parameter block",
+  "find": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tparams = p;\n}",
+  "replace": "V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)\n{\n\tparams = p;\n\tint_9100[0] = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the parameter block pointer",
+  "find": "V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()\n{\n}",
+  "replace": "V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()\n{\n\tparams = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the parameter block pointer, volatile so it survives",
+  "find": "V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()\n{\n}",
+  "replace": "V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()\n{\n\t*(V90Parameters * volatile *)&params = 0;\n}"
+ }
+]

@@ -45,6 +45,19 @@ extern "C" {
 #include "dsplib/V90ConstellationDesigner.h"
 #include "dsplib/V90Demodulator.h"
 /*
+ * The four classes the constructor allocates whose destructors the destructor
+ * calls explicitly, and which the header only forward-declares.  Each of the
+ * four headers either includes nothing or includes only classes that forward-
+ * declare `V90Parameters`, so none of them collides with the block definition
+ * V90PreFilter.h supplies through the header above (finding 1112).  The other
+ * four -- V90Equalizer, V90Phase3Demodulator, V90AutoDigitalImpDetector and
+ * V90ConnectionEvaluator -- arrive with V90Demodulator.h already.
+ */
+#include "dsplib/V90Demapper.h"
+#include "dsplib/V90Phase4Demodulator.h"
+#include "dsplib/V90TRN2Designer.h"
+#include "dsplib/sysdep.h"
+/*
  * The header forward-declares this one too, and `getBitRate` DEREFERENCES it.
  * Same argument as V90ConstellationDesigner above.
  */
@@ -57,6 +70,7 @@ extern "C" {
 	    ((int)__builtin_offsetof(V90Demodulator, field) == (off)) \
 	    ? 1 : -1]
 
+DEM_OFF(codecType,		0x000, codectype);
 DEM_OFF(phase2Info,		0x004, phase2info);
 DEM_OFF(jd,			0x008, jd);
 DEM_OFF(jdV92,			0x00c, jdv92);
@@ -64,6 +78,7 @@ DEM_OFF(dil,			0x010, dil);
 DEM_OFF(mappingParams,		0x014, mapping);
 DEM_OFF(mappingParamsAlt,	0x018, mappingalt);
 DEM_OFF(trn2Designer,		0x01c, trn2);
+DEM_OFF(additionalCPinfo,	0x020, acpinfo);
 DEM_OFF(cp,			0x024, cp);
 DEM_OFF(mp,			0x028, mp);
 DEM_OFF(params,			0x02c, params);
@@ -76,6 +91,7 @@ DEM_OFF(word_44,		0x044, word44);
 DEM_OFF(agc,			0x04c, agc);
 DEM_OFF(preFilter,		0x06c, prefilter);
 DEM_OFF(resampler,		0x094, resampler);
+DEM_OFF(constellationPower,	0x148, cpower);
 DEM_OFF(equalizer,		0x1d8, equalizer);
 DEM_OFF(phase3Demodulator,	0x1dc, phase3demodulator);
 DEM_OFF(phase4Demodulator,	0x1e0, phase4demodulator);
@@ -85,8 +101,13 @@ DEM_OFF(constellationDesigner,	0x208, constellationdesigner);
 DEM_OFF(connectionEvaluator,	0x20c, connectionevaluator);
 DEM_OFF(spectralVerifier,	0x210, spectralverifier);
 DEM_OFF(autoDigitalImpDetector,	0x23c, adid);
+DEM_OFF(array_244,		0x244, array244);
+DEM_OFF(array_248,		0x248, array248);
 DEM_OFF(word_24c,		0x24c, word24c);
+DEM_OFF(array_250,		0x250, array250);
+DEM_OFF(array_254,		0x254, array254);
 DEM_OFF(word_258,		0x258, word258);
+DEM_OFF(array_25c,		0x25c, array25c);
 DEM_OFF(word_260,		0x260, word260);
 DEM_OFF(word_264,		0x264, word264);
 DEM_OFF(word_270,		0x270, word270);
@@ -129,6 +150,27 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #define PARAMS_WORD_278		(0x278 / 4)
 
 /*
+ * `sessionTermination`'s two.  The names in the comments are the ORIGINAL
+ * AUTHOR'S, out of `include/dsplib/V90Parameters.h`, for the reason the three
+ * `reset` indices below give: this file cannot include that header, and
+ * writing the offsets down without the names it carries throws information
+ * away.  `TIMING_OFFESET` is the author's spelling.
+ */
+#define PARAMS_TIMING_HISTORY_EVAL	(0x160 / 4)	/* int   */
+#define PARAMS_MIN_STD_FOR_SAVE		(0x16c / 4)	/* float */
+
+/*
+ * Where the timing offset is SAVED, which is not in the parameter block at
+ * all: it is +0x4c of the `_tagModemParameters` the block's first word points
+ * at, as a signed count of thousandths.  The same word is what
+ * `V90PreFilter::setParamEia6` READS as "prev params ClockDeviation", by the
+ * same two-step dereference and with the reciprocal scale (`* 0.001f`).
+ * Finding 1274; the pairing is why "saved in Registry" is not a figure of
+ * speech.
+ */
+#define MODEM_CLOCK_DEVIATION	(0x04c / 4)
+
+/*
  * The three `reset` adds.  The names in the comments are the ORIGINAL
  * AUTHOR'S, out of `include/dsplib/V90Parameters.h` -- that header cannot be
  * included here, because this file already has the other definition of the
@@ -145,25 +187,41 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * The object at +0x94 is a V90Resampler -- the constructor builds one there
  * and finding 804 finds `V90Resampler`'s vtable pointer at that offset -- and
  * `reset` calls `_ZN12V90Resampler5resetEv` on it DIRECTLY, not through the
- * vptr.  Three things rule out the obvious spellings:
+ * vptr.  ONE thing rules out the obvious spelling, and it is enough:
+ * `resampler.reset()` dispatches through the vptr, which no test fixture here
+ * fills in, and would be an indirect call where the object makes a direct one.
  *
- *   - `resampler.reset()` would dispatch through the vptr, which no test
- *     fixture here fills in, and would be an indirect call where the object
- *     makes a direct one.
- *   - `((V90Resampler *)&resampler)->V90Resampler::reset()` needs the class
- *     to be complete, and `V90Resampler.h` includes the OTHER definition of
- *     `V90Parameters`, which this file cannot have.
- *   - Declaring the member type as `V90Resampler` in the header has the same
- *     problem one level up, since `V90Demodulator.h` includes
- *     `V90PreFilter.h`.
+ * TWO FURTHER REASONS USED TO BE GIVEN HERE AND ARE NOW FALSE.  Both said the
+ * class could not be named at all -- that `V90Resampler.h` brings the OTHER
+ * definition of `V90Parameters` (finding 1112) and that declaring the member's
+ * type as `V90Resampler` had the same problem one level up.  Writing the
+ * lifecycle pair forced that to be solved rather than worked around, because a
+ * member typed as the base gets the BASE's constructor and destructor emitted
+ * and those are the wrong two symbols; `V90Demodulator.h` now claims the
+ * parameter header's include guard and declares the member as what it is.  So
+ * `((V90Resampler *)&resampler)->V90Resampler::reset()` WOULD compile today.
+ * It is not written, because the first reason stands on its own and the
+ * qualified-call spelling is the less obvious of the two.
  *
- * So the symbol is named directly.  It takes `this` as its first stack
- * argument like every other member here (finding 215), and
- * `ResamplerTimingOffset` is `V90Resampler`'s base at offset zero, so the
- * address is the same one `setTimingOffset` is already called on.
+ * The symbol takes `this` as its first stack argument like every other member
+ * here (finding 215), and `ResamplerTimingOffset` is `V90Resampler`'s base at
+ * offset zero, so the address is the same one `setTimingOffset` is already
+ * called on.
  */
 extern void v90resampler_reset(ResamplerTimingOffset *self)
 	asm("_ZN12V90Resampler5resetEv");
+
+/*
+ * `sessionTermination`'s two summaries of the resampler's timing history,
+ * named the same way and for the same reason.  Both are NON-virtual and both
+ * are called directly on the embedded object's address, and both read
+ * `V90Resampler`'s own +0xa4 and +0xa8 -- the history and its length -- which
+ * is why the address handed over must be the base subobject's and not a copy.
+ */
+extern float v90resampler_timingHistoryMean(ResamplerTimingOffset *self)
+	asm("_ZN12V90Resampler20getTimingHistoryMeanEv");
+extern float v90resampler_timingHistoryStd(ResamplerTimingOffset *self)
+	asm("_ZN12V90Resampler19getTimingHistoryStdEv");
 
 void
 V90Demodulator::enterPhase3()
@@ -252,6 +310,135 @@ V90Demodulator::enterPhase3()
 			 "retraining to V.34 upstream...\r\n");
 		word_3c = 0x20;
 	}
+}
+
+/*
+ * sessionTermination -- decide whether this call's timing offset is worth
+ * keeping, and either write it into the registry or say why not.
+ *
+ * ONE STORE AND FIVE DIAGNOSTICS, and the store is the point.  Everything
+ * else is a reason, printed: the connection was not in the data state, or it
+ * was EIA-6, or the evaluation is switched off, or the offset was too noisy.
+ * `V90Phase3Demodulator::clearVerificationStatus` runs on every path,
+ * including all four refusals.
+ *
+ * WHAT IT WRITES, AND WHERE.  `(int)(1000.0f * mean)` goes to +0x4c of the
+ * `_tagModemParameters` the parameter block's first word points at -- NOT
+ * into the parameter block.  `V90PreFilter::setParamEia6` reads that same
+ * word back as "prev params ClockDeviation" and multiplies it by 0.001f, so
+ * the two functions are the write and the read of one persisted number and
+ * the scale factors are reciprocal.  Finding 1274.
+ *
+ * `+0x34` IS A STATE, NOT A LATCH, and this function is what says so.  The
+ * diagnostic below prints `isDataState = %d` for `+0x34 == 3`, and
+ * `enterChannelVerification` sets the same field to 5; the name `inPhase3` in
+ * the header dates from `enterPhase3`, which returns early when it is exactly
+ * 1.  The name is left alone -- it is invented either way (finding 226) and
+ * eight parallel worktrees share the header -- and corrected here.  Finding
+ * 1273.
+ *
+ * `isV90WithEia6()` IS CALLED TWICE, and the second call is kept because the
+ * blob makes it.  The `if` tests it and the `else` prints it, and between the
+ * two nothing runs at all -- so caching it would be equivalent and the
+ * mutation that does so is uncaught.  Same shape and same reason as
+ * `enterPhase3`'s double call, finding 293.  `+0x34 == 3` is likewise
+ * recomputed for the printed argument.
+ *
+ * THE RETURN TYPE IS NOT `void`, AND IT IS NOT DECIDABLE FURTHER.  The single
+ * exit is
+ *
+ *     1ab75  83 c4 34     add    $0x34,%esp
+ *     1ab78  31 c0        xor    %eax,%eax
+ *     1ab7a  5b 5e c3     pop; pop; ret
+ *
+ * and a `void` member emits no `xor` at all where `int` and `unsigned int`
+ * both emit exactly that one and are byte-identical to each other.  That was
+ * measured on THIS TREE'S g++ under `-m32 -O2 -fomit-frame-pointer
+ * -march=i386 -mtune=i686 -mfpmath=387`, and NOT in `tools/toolchain/`'s GCC
+ * 3.4.2 container, which is what `getBitRate`'s comment above means by the
+ * same phrase -- so the experiment is weaker than that one by exactly that
+ * much.  The conclusion survives the difference: a `void` function leaving a
+ * dead register clear behind is not a thing any GCC does at -O2, and the
+ * positive direction is the ABI's rather than any pass's.  So the constant
+ * zero is forced and its signedness is not; `int` is written and the
+ * ambiguity is recorded rather than hidden.  Nothing in the tree calls this
+ * method, so the choice binds no caller.
+ *
+ * THE `%c%d.%04d` SHAPE IS THE ONE V90PreFilter.cpp ALREADY CARRIES: a sign
+ * character from `0.0f < x`, the truncated magnitude of `x`, and the first
+ * four decimals as `|(int)((x - (int)x) * 10000.0f)|`.  Two details of it are
+ * the object's rather than the idiom's -- the sign comes from `fldz; fcomps`
+ * with the VALUE as the operand, so a NaN prints '-', and the fractional part
+ * is truncated twice rather than rounded.  10000.0f is loaded once for both
+ * calls and spilled as a `double`, which is GCC hoisting one constant and not
+ * two different ones.
+ */
+int
+V90Demodulator::sessionTermination()
+{
+	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
+		if (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {
+			float mean = v90resampler_timingHistoryMean(&resampler);
+			float std = v90resampler_timingHistoryStd(&resampler);
+			int frac;
+
+			frac = (int)((mean - (float)(int)mean) * 10000.0f);
+			edprintf("V90Demodulator on sessionTermination: mean "
+				 "of timing offset History  = %c%d.%04d\r\n",
+				 (0.0f < mean) ? '+' : '-',
+				 (int)__builtin_fabsf(mean),
+				 (frac < 0) ? -frac : frac);
+
+			frac = (int)((std - (float)(int)std) * 10000.0f);
+			edprintf("V90Demodulator on sessionTermination: std "
+				 "of timing offset History  = %c%d.%04d\r\n",
+				 (0.0f < std) ? '+' : '-',
+				 (int)__builtin_fabsf(std),
+				 (frac < 0) ? -frac : frac);
+
+			edprintf("V90Demodulator on sessionTermination: "
+				 "1000* std = %d\r\n", (int)(std * 1000.0f));
+
+			/*
+			 * The threshold is on the LEFT of the comparison in
+			 * the object -- `flds 0x16c(%ecx); fcomps std; jb` --
+			 * so the arm that saves is the one where the
+			 * parameter is at least as large as the deviation.
+			 * Its name reads the other way round: the author
+			 * called it TIMING_OFFESET_MIN_STD_FOR_SAVE and uses
+			 * it as a maximum.
+			 */
+			if (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {
+				int *modemParams;
+
+				edprintf("V90Demodulator on "
+					 "sessionTermination: Timing offset "
+					 "saved in Registry!\r\n");
+
+				modemParams = *(int *const *)&params->b[0];
+				modemParams[MODEM_CLOCK_DEVIATION] =
+				    (int)(1000.0f * mean);
+			}
+		} else {
+			/*
+			 * The one message in this function that ends in a
+			 * bare "\n" rather than "\r\n".  It is the object's
+			 * and it is reproduced rather than tidied; D200.
+			 */
+			edprintf("V90Demodulator on sessionTermination: "
+				 "Timing offset NOT saved to registry, "
+				 "EVALUATION DISABLED !\n");
+		}
+	} else {
+		edprintf("V90Demodulator on sessionTermination: Timing offset "
+			 "NOT saved to registry (isDataState = %d, "
+			 "isEia6 = %d)\r\n",
+			 inPhase3 == 3, preFilter.isV90WithEia6());
+	}
+
+	phase3Demodulator->clearVerificationStatus();
+
+	return 0;
 }
 
 /*
@@ -456,4 +643,365 @@ V90Demodulator::getBitRate() const
 
 	return (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)
 			      + 0.5f);
+}
+
+/*
+ * ===========================================================================
+ * THE LIFECYCLE PAIR
+ * ===========================================================================
+ *
+ * `V90Demodulator::V90Demodulator` -- 1002 bytes at 0x1c2b0 (C1) and again at
+ * 0x1c6a0 (C2).  `~V90Demodulator` -- 669 bytes at 0x1ad70 (D1) and 0x1b010
+ * (D2).  Plain cdecl, `this` as the first STACK argument (finding 215): after
+ * `push ebp; push edi; push esi; push ebx; sub $0x4c,%esp` the constructor's
+ * fourteen incoming words are at 0x60 through 0x98.
+ *
+ * FOURTEEN ARGUMENTS, SIX EMBEDDED CONSTRUCTIONS, THIRTEEN ALLOCATIONS AND
+ * TWELVE SCALAR STORES.  The six embedded constructions are in the
+ * mem-initializer list, in the order the object makes them -- which is
+ * DECLARATION order, +0x04c, +0x06c, +0x094, +0x148, +0x1e8, +0x210, so the
+ * compiler would put them there whatever the list said.  Writing them out is
+ * what gives them their arguments; the two with none, `Agc<float>` and
+ * `V90ConstellationPower`, are listed for the record.
+ *
+ * `Agc<float>` GETS NO DESTRUCTOR AND THAT IS CHECKED, not assumed: `Agc.h`
+ * declares `Agc()` and nothing else, so the implicit destructor is trivial and
+ * no symbol is emitted for it.  The blob agrees -- the five calls at the end of
+ * D2 are the verifier, the descrambler, the constellation power, the resampler
+ * and the prefilter, and there is no sixth.
+ *
+ * FOUR THINGS THE COMPILER WAS FORCED TO ENCODE, and all four are written the
+ * object's way rather than the obvious way:
+ *
+ *  1. `compMode`, ARGUMENT 13, IS NEVER STORED.  `0x94(%esp)` is read exactly
+ *     once, at 0x1c982, as the equaliser's eleventh argument.  Argument 14 --
+ *     `0x98(%esp)` -- is what lands at +0x30, so the two are not confusable
+ *     even though both are word-sized.
+ *
+ *  2. EVERY LATER USE OF A STORED ARGUMENT RELOADS IT FROM THE MEMBER.
+ *     `mov 0x2c(%ebx),...` appears at seven call sites for `params` and
+ *     `mov 0x30(%ebx),%ecx` at 0x1c8a9 and 0x1c90a for the session flag, and
+ *     `V90Phase4Demodulator`'s eleven arguments come out of +0x14, +0x18,
+ *     +0x1e4, +0x24, +0x28, +0x20c, +0x2c, +0x1dc, +0x23c and +0x30 rather
+ *     than out of the stack slots they were stored from.  GCC cannot prove
+ *     `sysdep_malloc` does not alias `this`, so it must reload what the source
+ *     names as a member -- and would NOT reload what the source names as a
+ *     parameter.  So the source says `this->`.  The three mem-initializers are
+ *     the other way round and for the same reason: they run before any store,
+ *     `%edi` is used directly, and they name the PARAMETER.
+ *
+ *  3. EVERY ALLOCATION KEEPS THE FRESH POINTER IN A LOCAL ACROSS THE
+ *     CONSTRUCTOR CALL AND STORES IT TO THE MEMBER AFTERWARDS.  Assigning the
+ *     member first and passing the member would make GCC store and then reload
+ *     across the call, for the aliasing reason above; V90BitsToSymbol.cpp sets
+ *     the argument out in full and V90Modulator.cpp follows it.
+ *
+ *  4. THE NESTED CONSTRUCTORS ARE CALLED BY THEIR MANGLED NAMES.  The build is
+ *     `-nostdinc++`, so there is no <new> and C++ has no other syntax for
+ *     running a constructor over storage that already exists; a user-declared
+ *     placement form makes GCC emit a null test the blob does not have.  The
+ *     original almost certainly wrote `new V90Equalizer(...)` over an inline
+ *     `operator new`, and the instruction sequence is the same either way.
+ *     The DESTRUCTOR needs no trick: an explicit destructor call is ordinary
+ *     C++ and every one of the eight classes is complete here.
+ *
+ * WHAT THE CONSTRUCTOR DOES NOT WRITE is as much a claim as what it does.
+ * +0x034 through +0x048, +0x240, +0x260, +0x270..+0x274 and +0x284..+0x294 are
+ * left exactly as the allocator handed them over, so a fresh demodulator's
+ * `inPhase3` -- which `enterPhase3` tests against 1 and `sessionTermination`
+ * against 3 -- is uninitialised memory.  `V90Modem`'s constructor hands this
+ * one a bare `sysdep_malloc(0x298)`, so there is no zeroing anywhere in the
+ * chain.  test/unit/t_v90demctor.cpp asserts the seed survives at all fifteen.
+ *
+ * ---------------------------------------------------------------------------
+ * THE STORE ORDER BELOW IS THE OBJECT'S ONLY WHERE THE OBJECT FORCED IT
+ *
+ * The twelve scalar stores are emitted interleaved with the loads that feed
+ * them, and the two zero stores at +0x24c and +0x258 come out in the opposite
+ * order to the fields.  That is scheduling, which CLAUDE.md's forced/free rule
+ * puts among the things the compiler was free to choose; they are written in
+ * the object's sequence where it is legible and not permuted to chase it.
+ */
+
+extern "C" {
+/*
+ * The eight nested constructors, by the names the blob calls at 0x1c863,
+ * 0x1c886, 0x1c8be, 0x1c8f3, 0x1c969, 0x1c9ed, 0x1ca18 and 0x1ca48.  C1 is the
+ * complete-object variant, which is what a `new` expression uses.
+ */
+void v90dem_adid_ctor(void *self, V90Parameters *params)
+	asm("_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters");
+void v90dem_ce_ctor(void *self, V90Parameters *params)
+	asm("_ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
+void v90dem_p3d_ctor(void *self, V90Parameters *params,
+		     V90SpectralVerifier *verifier, unsigned int flag,
+		     V90AutoDigitalImpDetector *adid)
+	asm("_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifie"
+	    "rjP25V90AutoDigitalImpDetector");
+void v90dem_demapper_ctor(void *self, unsigned int levels,
+			  V90Parameters *params,
+			  V90AutoDigitalImpDetector *adid)
+	asm("_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector");
+void v90dem_p4d_ctor(void *self, V90MappingParams *mappingParams1,
+		     V90MappingParams *mappingParams2, V90Demapper *demapper,
+		     V90CP *cp, V90MP *mp,
+		     Descrambler<unsigned char, int> *descrambler,
+		     V90ConnectionEvaluator *connectionEvaluator,
+		     V90Parameters *params,
+		     V90Phase3Demodulator *phase3Demodulator,
+		     V90AutoDigitalImpDetector *adid, unsigned int flag)
+	asm("_ZN20V90Phase4DemodulatorC1EP16V90MappingParamsS1_P11V90DemapperP"
+	    "5V90CPP5V90MPP11DescramblerIhiEP22V90ConnectionEvaluatorP13V90Par"
+	    "ametersP20V90Phase3DemodulatorP25V90AutoDigitalImpDetectorj");
+void v90dem_equ_ctor(void *self, unsigned int linearEquLen,
+		     unsigned int dfeLen,
+		     V90Phase3Demodulator *phase3Demodulator,
+		     V90Phase4Demodulator *phase4Demodulator,
+		     V90Demapper *demapper,
+		     V90ConnectionEvaluator *connectionEvaluator,
+		     V90SpectralVerifier *verifier, V90Parameters *params,
+		     V90Resampler *resampler, V90PreFilter *preFilter,
+		     V90ComputationalMode mode)
+	asm("_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodula"
+	    "torP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP"
+	    "13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMo"
+	    "de");
+void v90dem_trn2_ctor(void *self, V90Parameters *params,
+		      V90ConstellationPower *power)
+	asm("_ZN15V90TRN2DesignerC1EP13V90ParametersP21V90ConstellationPower");
+void v90dem_cd_ctor(void *self, V90Parameters *params, V90PreFilter *preFilter,
+		    V90ConstellationPower *power)
+	asm("_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP2"
+	    "1V90ConstellationPower");
+}
+
+/*
+ * The resampler's five immediates.  0x42700000 is 60.0f and 0x3f7ae148 is
+ * 0.98f; `V90Resampler`'s own header names the parameters they land in, and
+ * the two `float`s pick the `float cutoff` overload rather than the
+ * `float *coeffs` one -- which is what the mangling `C1EjfjfP13V90Parametersfj`
+ * says was called.
+ */
+#define V90DEM_RESAMPLER_PHASES		100u
+#define V90DEM_RESAMPLER_PPM_SCALE	60.0f
+#define V90DEM_RESAMPLER_TAPS		0x10u
+#define V90DEM_RESAMPLER_CUTOFF		0.98f
+#define V90DEM_RESAMPLER_PPM		0.0f
+#define V90DEM_RESAMPLER_MIN_HISTORY	0u
+
+/*
+ * The descrambler's three, the same triple `V90Phase3Demodulator` and
+ * `V90Modulator` build their own scrambler and descrambler from.
+ */
+#define V90DEM_DSC_TAP1			0x12u
+#define V90DEM_DSC_TAIL			0x17u
+#define V90DEM_DSC_OUT			0x63u
+
+/*
+ * The five bare heap blocks are `levels` elements of 4, 12, 4, 8 and 8 bytes;
+ * the header reads the widths off the address arithmetic in front of each
+ * allocation and says why the element TYPES are not derivable from it.  The
+ * demapper's first argument is `levels * 2` from the same variable -- the
+ * object computes it once, at 0x1c7f4, and uses it for both the twelve-byte
+ * width and the demapper.
+ */
+#define V90DEM_ARRAY_244_WIDTH		4u
+#define V90DEM_ARRAY_248_WIDTH		12u
+#define V90DEM_ARRAY_250_WIDTH		4u
+#define V90DEM_ARRAY_254_WIDTH		8u
+#define V90DEM_ARRAY_25C_WIDTH		8u
+
+/*
+ * The equaliser's two lengths, which are the only arguments this constructor
+ * reads out of the parameter block.  The names are the ORIGINAL AUTHOR'S, out
+ * of include/dsplib/V90Parameters.h, which this file cannot include (finding
+ * 1112) -- the same convention the three `reset` indices above follow.
+ */
+#define PARAMS_LINEAR_EQU_LENGTH	(0x170 / 4)	/* int */
+#define PARAMS_DFE_LENGTH		(0x1fc / 4)	/* int */
+
+V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
+			       V90Jd *jdArg, V92Jd *jdV92Arg,
+			       tagV90DILdescriptor *dilArg,
+			       V90MappingParams *mappingParams1,
+			       V90MappingParams *mappingParams2,
+			       tagV90AdditionalCPinfo *cpInfo, V90CP *cpArg,
+			       V90MP *mpArg, __tHardwareCodecTypes__ codec,
+			       V90Parameters *par,
+			       V90ComputationalMode compMode, unsigned int flag)
+	: agc(),
+	  preFilter(codec, phase2, par),
+	  resampler(V90DEM_RESAMPLER_PHASES, V90DEM_RESAMPLER_PPM_SCALE,
+		    V90DEM_RESAMPLER_TAPS, V90DEM_RESAMPLER_CUTOFF, par,
+		    V90DEM_RESAMPLER_PPM, V90DEM_RESAMPLER_MIN_HISTORY),
+	  constellationPower(),
+	  descrambler(V90DEM_DSC_TAP1, V90DEM_DSC_TAIL, V90DEM_DSC_OUT),
+	  spectralVerifier(par)
+{
+	V90AutoDigitalImpDetector *adid;
+	V90ConnectionEvaluator *ce;
+	V90Phase3Demodulator *p3d;
+	V90Demapper *dem;
+	V90Phase4Demodulator *p4d;
+	V90Equalizer *equ;
+	V90TRN2Designer *trn2;
+	V90ConstellationDesigner *cd;
+
+	params = par;
+	jd = jdArg;
+	phase2Info = phase2;
+	jdV92 = jdV92Arg;
+	mappingParams = mappingParams1;
+	dil = dilArg;
+	mappingParamsAlt = mappingParams2;
+	additionalCPinfo = cpInfo;
+	mp = mpArg;
+	cp = cpArg;
+	codecType = codec;
+	sessionFlag = flag;
+
+	array_244 = sysdep_malloc(levels * V90DEM_ARRAY_244_WIDTH);
+	array_248 = sysdep_malloc(levels * V90DEM_ARRAY_248_WIDTH);
+	array_250 = sysdep_malloc(levels * V90DEM_ARRAY_250_WIDTH);
+	array_254 = sysdep_malloc(levels * V90DEM_ARRAY_254_WIDTH);
+	array_25c = sysdep_malloc(levels * V90DEM_ARRAY_25C_WIDTH);
+	word_258 = 0;
+	word_24c = 0;
+
+	adid = (V90AutoDigitalImpDetector *)
+	    sysdep_malloc(sizeof(V90AutoDigitalImpDetector));
+	v90dem_adid_ctor(adid, params);
+	autoDigitalImpDetector = adid;
+
+	ce = (V90ConnectionEvaluator *)
+	    sysdep_malloc(sizeof(V90ConnectionEvaluator));
+	v90dem_ce_ctor(ce, params);
+	connectionEvaluator = ce;
+
+	p3d = (V90Phase3Demodulator *)
+	    sysdep_malloc(sizeof(V90Phase3Demodulator));
+	v90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,
+			autoDigitalImpDetector);
+	phase3Demodulator = p3d;
+
+	dem = (V90Demapper *)sysdep_malloc(sizeof(V90Demapper));
+	v90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);
+	demapper = dem;
+
+	p4d = (V90Phase4Demodulator *)
+	    sysdep_malloc(sizeof(V90Phase4Demodulator));
+	v90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,
+			&descrambler, connectionEvaluator, params,
+			phase3Demodulator, autoDigitalImpDetector, sessionFlag);
+	phase4Demodulator = p4d;
+
+	equ = (V90Equalizer *)sysdep_malloc(sizeof(V90Equalizer));
+	v90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],
+			(unsigned int)params->w[PARAMS_DFE_LENGTH],
+			phase3Demodulator, phase4Demodulator, demapper,
+			connectionEvaluator, &spectralVerifier, params,
+			&resampler, &preFilter, compMode);
+	equalizer = equ;
+
+	trn2 = (V90TRN2Designer *)sysdep_malloc(sizeof(V90TRN2Designer));
+	v90dem_trn2_ctor(trn2, params, &constellationPower);
+	trn2Designer = trn2;
+
+	cd = (V90ConstellationDesigner *)
+	    sysdep_malloc(sizeof(V90ConstellationDesigner));
+	v90dem_cd_ctor(cd, params, &preFilter, &constellationPower);
+	constellationDesigner = cd;
+
+	word_264 = 0;
+	word_26c = 0;
+	word_268 = 0;
+	word_278 = 0;
+	byte_280 = 0;
+	word_27c = 0;
+}
+
+/*
+ * `~V90Demodulator` -- an unconditional `sessionTermination()`, then thirteen
+ * guarded releases, then the five subobject destructions the compiler emits.
+ *
+ * THE FIRST INSTRUCTION AFTER THE PROLOGUE IS `call
+ * _ZN14V90Demodulator18sessionTerminationEv`, unconditionally, and its 572
+ * bytes are not passive: it dereferences `params`, reads the embedded
+ * resampler's timing history, prints, and ends by calling
+ * `phase3Demodulator->clearVerificationStatus()` with no null test.  So
+ * destroying a demodulator whose +0x1dc is null faults inside
+ * `sessionTermination`, BEFORE the guard at +0x1dc below can decline to
+ * destroy it -- the guard is real code that this object can never reach with a
+ * null, and t_v90demctor.cpp records that rather than pretending to test it.
+ *
+ * The return value is discarded.  `sessionTermination` returns a constant zero
+ * whose signedness is want of evidence (see its own comment); no caller in the
+ * blob uses it and this one does not either.
+ *
+ * THE ORDER OF THE THIRTEEN IS THE OBJECT'S and is not the order of the
+ * fields: the equaliser first at +0x1d8, then the two phase demodulators and
+ * the demapper, then the TRN2 designer from +0x1c, the constellation designer,
+ * the impairment detector, the connection evaluator, and last the five bare
+ * blocks with no destructor at all.
+ *
+ * THE NULL TESTS ARE NOT DECORATION.  This tree's `sysdep_free` tolerates
+ * NULL, so dropping one leaves every byte comparison unchanged; what moves is
+ * `harness_alloc.free_null`, which is what the test asserts.
+ *
+ * NOTHING IS NULLED AFTER BEING RELEASED, so a second destruction double-frees.
+ * That is the blob's behaviour and is reproduced, as it is in
+ * V90Modulator.cpp and V90BitsToSymbol.cpp.
+ *
+ * THE LAST FIVE CALLS ARE NOT WRITTEN HERE and must not be: the compiler emits
+ * `~V90SpectralVerifier`, `~Descrambler<unsigned char,int>`,
+ * `~V90ConstellationPower`, `~V90Resampler` and `~V90PreFilter` after the body
+ * in reverse declaration order, which is exactly the sequence at 0x1b0e3
+ * through 0x1b112.  `Agc<float>` has no destructor and gets no call.
+ */
+V90Demodulator::~V90Demodulator()
+{
+	sessionTermination();
+
+	if (equalizer) {
+		equalizer->~V90Equalizer();
+		sysdep_free(equalizer);
+	}
+	if (phase3Demodulator) {
+		phase3Demodulator->~V90Phase3Demodulator();
+		sysdep_free(phase3Demodulator);
+	}
+	if (phase4Demodulator) {
+		phase4Demodulator->~V90Phase4Demodulator();
+		sysdep_free(phase4Demodulator);
+	}
+	if (demapper) {
+		demapper->~V90Demapper();
+		sysdep_free(demapper);
+	}
+	if (trn2Designer) {
+		trn2Designer->~V90TRN2Designer();
+		sysdep_free(trn2Designer);
+	}
+	if (constellationDesigner) {
+		constellationDesigner->~V90ConstellationDesigner();
+		sysdep_free(constellationDesigner);
+	}
+	if (autoDigitalImpDetector) {
+		autoDigitalImpDetector->~V90AutoDigitalImpDetector();
+		sysdep_free(autoDigitalImpDetector);
+	}
+	if (connectionEvaluator) {
+		connectionEvaluator->~V90ConnectionEvaluator();
+		sysdep_free(connectionEvaluator);
+	}
+	if (array_244)
+		sysdep_free(array_244);
+	if (array_248)
+		sysdep_free(array_248);
+	if (array_250)
+		sysdep_free(array_250);
+	if (array_254)
+		sysdep_free(array_254);
+	if (array_25c)
+		sysdep_free(array_25c);
 }

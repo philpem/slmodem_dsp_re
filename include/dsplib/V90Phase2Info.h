@@ -36,12 +36,24 @@
  * mangling's (`V90Phase2Info(V90Parameters *)`) but a data member's name
  * never is, so that one is invented.
  *
- * NO CONSTRUCTOR IS DECLARED HERE, deliberately, exactly as in
- * V90Phase3Modulator.h: declaring one makes the class non-trivial and deletes
- * the default members of the union the test fixture needs.  Both the
- * constructor and `setToDefault` are single-expression copies out of
- * V90Parameters and are recorded in finding 255 rather than written, because
- * writing them would mean modelling V90Parameters, which nothing here does.
+ * THE CONSTRUCTOR IS NOW DECLARED, and the paragraph that used to stand here
+ * saying it deliberately was not is superseded rather than deleted, because
+ * its reasoning was sound and someone will re-derive it.  It said: declaring
+ * one makes the class non-trivial and deletes the default members of the
+ * union the test fixture needs, and writing it would mean modelling
+ * V90Parameters, which nothing here did.
+ *
+ * Both halves have expired.  V90Parameters IS modelled -- 342 slots with the
+ * author's own names, findings 860-862 -- so the five copies below can be
+ * written by name instead of by offset.  And the fixture cost is now a cost
+ * worth paying: `vpcm_create` cannot link without this symbol, so a class
+ * that cannot be constructed is a class that keeps the whole construction
+ * path unbuildable.  The union in t_v90p2info.cpp became a byte array and a
+ * cast; that is the whole of the damage.
+ *
+ * `setToDefault` is still not written.  It repeats the constructor's five
+ * copies without storing `params`, nothing in the construction closure needs
+ * it, and finding 255 records it.
  *
  * ------------------------------------------------------------------------
  * THE COLLISION IS RESOLVED.  include/dsplib/V90PreFilter.h used to carry its
@@ -78,6 +90,19 @@ class V90Parameters;
 
 class V90Phase2Info {
 public:
+	/*
+	 * Five copies out of the parameter block, and the block itself kept at
+	 * +0x20.  Two of the five are `cmpl $0x0` + `setne`, so what lands in
+	 * `pcmType` and `txPowerMeasurementPoint` is 0 or 1 and never the
+	 * parameter's own value.
+	 *
+	 * NO DESTRUCTOR.  `tools/cppstruct.py` lists none for this class and
+	 * `nm` has no `_ZN13V90Phase2InfoD1Ev`, so the original declared none
+	 * and neither do we -- which is why this class, unlike V90Jd, is still
+	 * trivially destructible.
+	 */
+	V90Phase2Info(V90Parameters *params);
+
 	/*
 	 * Print the whole record.  `const` is not decoration: the method is
 	 * `_ZNK...`, and dropping it mangles to a different symbol that links

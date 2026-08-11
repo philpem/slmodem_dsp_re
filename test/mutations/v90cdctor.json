@@ -1,0 +1,42 @@
+[
+ {
+  "label": "the two rate defaults are swapped",
+  "find": "\tminRate = 28000;\n\tmaxRate = 56000;",
+  "replace": "\tminRate = 56000;\n\tmaxRate = 28000;"
+ },
+ {
+  "label": "+0x38 defaults to 0x15 rather than 0x16",
+  "find": "\tbyte_38 = 0x16;",
+  "replace": "\tbyte_38 = 0x15;"
+ },
+ {
+  "label": "the pre-filter and the power model are swapped",
+  "find": "\tpower = cp;\n\tparams = p;",
+  "replace": "\tpower = (V90ConstellationPower *)pf;\n\tparams = p;"
+ },
+ {
+  "label": "the pre-filter is not stored",
+  "find": "\tpreFilter = pf;\n}",
+  "replace": "\t(void)pf;\n}"
+ },
+ {
+  "label": "+0x08 is cleared four bytes wide rather than one",
+  "find": "\tbyte_08 = 0;\n\tword_48 = 0;",
+  "replace": "\t*(int *)&byte_08 = 0;\n\tword_48 = 0;"
+ },
+ {
+  "label": "word_48 is left as the constructor found it",
+  "find": "\tbyte_08 = 0;\n\tword_48 = 0;",
+  "replace": "\tbyte_08 = 0;"
+ },
+ {
+  "label": "the destructor clears the rate limits",
+  "find": "V90ConstellationDesigner::~V90ConstellationDesigner()\n{\n}",
+  "replace": "V90ConstellationDesigner::~V90ConstellationDesigner()\n{\n\tminRate = 0;\n\tmaxRate = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the rate limits, volatile so it survives",
+  "find": "V90ConstellationDesigner::~V90ConstellationDesigner()\n{\n}",
+  "replace": "V90ConstellationDesigner::~V90ConstellationDesigner()\n{\n\t*(volatile unsigned int *)&minRate = 0;\n\t*(volatile unsigned int *)&maxRate = 0;\n}"
+ }
+]

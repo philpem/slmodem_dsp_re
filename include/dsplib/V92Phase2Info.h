@@ -53,14 +53,35 @@
  */
 #define V92PHASE2INFO_L2	21
 
+/*
+ * Declared, not defined: the constructor takes one only to read eight fields
+ * out of it, and `params` below is only ever a pointer.  `V92Phase2Info.cpp`
+ * includes the 55-slot header.
+ */
+class V92Parameters;
+
 class V92Phase2Info {
 public:
 	/*
-	 * DATA ONLY.  None of the three members in the blob is written here;
-	 * declaring one and leaving it undefined would be harmless, and
-	 * declaring one and defining it would re-open the link closure for
-	 * V92Parameters.  See docs/v90cpp.md.
+	 * THE CONSTRUCTOR IS NOW WRITTEN, and the note that used to stand here
+	 * -- "DATA ONLY ... declaring one and defining it would re-open the
+	 * link closure for V92Parameters" -- is superseded.  V92Parameters is
+	 * modelled (55 slots, the author's own names for 54 of them, findings
+	 * 860-862), so there is no closure to re-open; and `vpcm_create`
+	 * cannot link without this symbol.
+	 *
+	 * IT ALSO SETTLED TWO THINGS THE HEADER HAD WRONG, both recorded in
+	 * finding 1222: the object is 0x2c bytes and not 0x28, because the
+	 * constructor stores its argument at +0x28; and +0x14..+0x16, called
+	 * `pad_14[3]` here on the grounds that neither reader reached them,
+	 * are three real fields the constructor fills from the V.92 filter
+	 * parameters.  A padding run is only padding until a third function is
+	 * read.
+	 *
+	 * NO DESTRUCTOR.  `nm` has no `_ZN13V92Phase2InfoD1Ev`, so the
+	 * original declared none and neither do we.
 	 */
+	V92Phase2Info(V92Parameters *params);
 
 	/*
 	 * +0x00  `printInfo` compares it against 1 and prints "A_LAW" for 1
@@ -112,8 +133,23 @@ public:
 	unsigned char shortPhase2Remote;
 	unsigned char v92CapabilitiesRemote;
 
-	/* +0x14  Reached by neither reader. */
-	unsigned char pad_14[3];
+	/*
+	 * +0x14, +0x15, +0x16  THREE FIELDS, not the padding this used to
+	 * call them.  The constructor copies the low byte of
+	 * `V92_NOF_FILTER_SECTIONS`, `V92_MAX_TOTAL_NOF_COEFFS` and
+	 * `V92_MAX_NOF_COEFFS_IN_EACH_SECTION` here, in that order and in
+	 * three separate whole-word loads with byte stores -- so each is a
+	 * count small enough to fit in a byte and the parameter block's own
+	 * `int` width is not carried.
+	 *
+	 * THE NAMES ARE THE PARAMETERS', NOT THE CLASS'S.  Neither
+	 * `printInfo` nor `setPhaseIIinfo` touches these three, so no format
+	 * string names them; what is recoverable is which parameter fills
+	 * each, and that is what they are named after.  Finding 1222.
+	 */
+	unsigned char nofFilterSections;
+	unsigned char maxTotalNofCoeffs;
+	unsigned char maxNofCoeffsInEachSection;
 
 	/* +0x17  "v90UseHighCarrier = %d", `movzbl`. */
 	unsigned char v90UseHighCarrier;
@@ -134,6 +170,17 @@ public:
 	float *array_1c;
 	float *L2;
 	float *array_24;
+
+	/*
+	 * +0x28  The V92Parameters the constructor was handed, stored first
+	 * and read back by nothing this tree has written.  It is what SIZES
+	 * the object: a four-byte store at +0x28 makes the class 0x2c, where
+	 * the four array pointers alone would have stopped at 0x28.  The same
+	 * shape as V90Phase2Info's `params` at its own +0x20, and the name is
+	 * borrowed from there -- a data member's name is not mangled and so
+	 * is not recoverable.
+	 */
+	V92Parameters *params;
 };
 
 #endif /* DSPLIB_V92PHASE2INFO_H */

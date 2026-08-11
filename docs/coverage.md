@@ -7,20 +7,22 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [############......................]  34.4%    252540 bytes, 570 symbols
-  tested      [##################################] 100.0%    252503 bytes, 563 of 570 that can be
+  translated  [#############.....................]  38.8%    285048 bytes, 749 symbols
+  tested      [##################################] 100.0%    285009 bytes, 740 of 749 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 19 of ours (9649 bytes).
+  the file-local symbols too -- 21 of ours (10728 bytes).
 
   translated, alias exists, and NOT tested:
     _ZN22V90ConnectionEvaluatorC2EP13V90Parameters     15 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
+    _ZN5V92JdD2Ev                                     1 bytes
+    _ZN5V90JdD2Ev                                     1 bytes
     _ZN22V90ConnectionEvaluatorD2Ev                   1 bytes
     _ZN15K56FlexFloModem21enterPhase3FullDuplexEv      1 bytes
     _ZN15K56FlexFloModem14setMinMaxRatesEii           1 bytes
@@ -49,6 +51,8 @@ dsplibs.o reconstruction coverage
   either a helper split out of a larger function, or drift:
     _ZN10GenericIIRIfdE10compactOutEv
     _ZN10GenericIIRIfdE9compactInEv
+    _ZN10GenericIIRIfdEdlEPv
+    _ZN10GenericIIRIfdEnwEj
     hs_get
     hs_put
     hs_setstate
@@ -80,7 +84,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           263677 bytes   629 symbols
+    VPcmV34Main.cpp +72                           232320 bytes   453 symbols
     class1tx.c +94                                 89322 bytes   332 symbols
     V32mod.c +39                                   55694 bytes   119 symbols
     Dialer.c +18                                   16982 bytes    53 symbols

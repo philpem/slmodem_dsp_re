@@ -1,0 +1,85 @@
+[
+ {
+  "note": "V90Phase4Demodulator's constructor and destructor, against t_v90rxctor.  The constructor's body is eleven stores and its initializer list is three member constructions, so the mutations are placement mutations: each moves one argument to a field another argument owns, which the test catches only because every argument is a DISTINCT block (finding 1301).  The destructor is empty and its fifty-two bytes are all the compiler's; the two entries at the end are what `-fno-lifetime-dse` makes catchable (finding 1224 -- do not mark them equivalent)."
+ },
+ {
+  "label": "the modulator gets the two mapping-parameter blocks unswapped",
+  "find": "\t: phase4Modulator(par, flag, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),",
+  "replace": "\t: phase4Modulator(par, flag, 0, 0, mp1, mp2, 0, V90P4D_MODULATOR_ARG8),"
+ },
+ {
+  "label": "the modulator is handed the CP record it is meant to get null",
+  "find": "\t: phase4Modulator(par, flag, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),",
+  "replace": "\t: phase4Modulator(par, flag, 0, 0, mp2, mp1, cpArg, V90P4D_MODULATOR_ARG8),"
+ },
+ {
+  "label": "the modulator is handed the MP record rather than a null",
+  "find": "\t: phase4Modulator(par, flag, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),",
+  "replace": "\t: phase4Modulator(par, flag, 0, mpArg, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),"
+ },
+ {
+  "label": "the modulator's trailing count is 13 rather than 12",
+  "find": "#define V90P4D_MODULATOR_ARG8\t0xcu",
+  "replace": "#define V90P4D_MODULATOR_ARG8\t0xdu"
+ },
+ {
+  "label": "the modulator gets no session flag",
+  "find": "\t: phase4Modulator(par, flag, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),",
+  "replace": "\t: phase4Modulator(par, 0, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),"
+ },
+ {
+  "label": "the second R detector is built from the first mapping block",
+  "find": "\t  rDetector1(par), rDetector2(par)",
+  "replace": "\t  rDetector1(par), rDetector2((V90Parameters *)mp1)"
+ },
+ {
+  "label": "the two mapping-parameter pointers land in each other's fields",
+  "find": "\tmappingParams1 = mp1;\n\tmappingParams2 = mp2;",
+  "replace": "\tmappingParams1 = mp2;\n\tmappingParams2 = mp1;"
+ },
+ {
+  "label": "the CP and MP records land in each other's fields",
+  "find": "\tcp = cpArg;\n\tmp = mpArg;",
+  "replace": "\tcp = (V90CP *)mpArg;\n\tmp = (V90MP *)cpArg;"
+ },
+ {
+  "label": "the demapper and the descrambler land in each other's fields",
+  "find": "\tdemapper = dem;\n\tdescrambler = dsc;",
+  "replace": "\tdemapper = (V90Demapper *)dsc;\n\tdescrambler = (Descrambler<unsigned char, int> *)dem;"
+ },
+ {
+  "label": "the connection evaluator lands where the detector belongs",
+  "find": "\tconnectionEvaluator = ce;\n\tautoDigitalImpDetector = adid;",
+  "replace": "\tautoDigitalImpDetector = (V90AutoDigitalImpDetector *)ce;\n\tconnectionEvaluator = (V90ConnectionEvaluator *)adid;"
+ },
+ {
+  "label": "the phase 3 demodulator is never stored",
+  "find": "\tphase3Demodulator = p3d;",
+  "replace": "\t(void)p3d;"
+ },
+ {
+  "label": "the session flag is never stored",
+  "find": "\tsessionFlag = flag;\n\tparams = par;",
+  "replace": "\tparams = par;"
+ },
+ {
+  "label": "the parameter block lands where the session flag belongs",
+  "find": "\tsessionFlag = flag;\n\tparams = par;",
+  "replace": "\tsessionFlag = (unsigned int)(long)par;\n\tparams = par;"
+ },
+ {
+  "label": "the constructor also clears the word at +0x08",
+  "find": "\tautoDigitalImpDetector = adid;\n}",
+  "replace": "\tautoDigitalImpDetector = adid;\n\t*(unsigned int *)pad_0008 = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the demapper pointer",
+  "find": "V90Phase4Demodulator::~V90Phase4Demodulator()\n{\n}",
+  "replace": "V90Phase4Demodulator::~V90Phase4Demodulator()\n{\n\tdemapper = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the session flag, volatile so it survives",
+  "find": "V90Phase4Demodulator::~V90Phase4Demodulator()\n{\n}",
+  "replace": "V90Phase4Demodulator::~V90Phase4Demodulator()\n{\n\t*(volatile unsigned int *)&sessionFlag = 0;\n}"
+ }
+]

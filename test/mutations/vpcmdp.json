@@ -1,0 +1,509 @@
+[
+{
+ "note": "Mutations of `vpcm_create`, `vpcm_delete`, `dp_vpcm_init` and the `vpcm_op` table, caught by build/test/t_vpcmdp.  `vpcm_run` lives in the same file and is test/mutations/vpcmrun.json's; nothing here touches it."
+},
+{
+ "note": "THREE STORES IN THIS FUNCTION CANNOT BE MUTATED AT ALL, and that is a property of the object rather than a gap in the test: `s->status = 0`, `s->mode = VPCM_MODE_IDLE` and `s->stall = 0` write zero into a block that `sysdep_memset(s, 0, sizeof(struct vpcm_root))` cleared three lines earlier, so deleting any of them changes nothing any differential test can observe.  They are registered below as `equivalent` with the memset as the proof, which is the honest record; deleting them from the source would ALSO be a behaviour-preserving change and is not proposed, because the object has three separate stores at 0x3a9c, 0x3aa3 and 0x3aaa after its memset and the source says so."
+},
+{
+ "label": "srate: the equality test becomes a lower bound",
+ "find": "\tif (srate != VPCM_SRATE)\n\t\treturn 0;\n",
+ "replace": "\tif (srate < VPCM_SRATE)\n\t\treturn 0;\n"
+},
+{
+ "label": "srate: the guard is dropped altogether",
+ "find": "\tif (srate != VPCM_SRATE)\n\t\treturn 0;\n\n",
+ "replace": ""
+},
+{
+ "label": "srate: the guard compares against 8000",
+ "find": "\tif (srate != VPCM_SRATE)\n",
+ "replace": "\tif (srate != 8000)\n"
+},
+{
+ "label": "max_frag: the cap becomes >=",
+ "find": "\tif (max_frag > VPCM_MAX_FRAG)\n",
+ "replace": "\tif (max_frag >= VPCM_MAX_FRAG)\n"
+},
+{
+ "label": "max_frag: the cap is one too high",
+ "find": "\tif (max_frag > VPCM_MAX_FRAG)\n",
+ "replace": "\tif (max_frag > VPCM_MAX_FRAG + 1)\n"
+},
+{
+ "label": "max_frag: the guard is dropped altogether",
+ "find": "\tif (max_frag > VPCM_MAX_FRAG)\n\t\treturn 0;\n\n",
+ "replace": ""
+},
+{
+ "label": "the max_frag guard moves ABOVE the announcement",
+ "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"vpcm: create: dp %d, caller %d, frag %d (size %d).\\n\",\n\t\t    id, caller, max_frag, (int)sizeof(struct vpcm_root));\n\n\tif (max_frag > VPCM_MAX_FRAG)\n\t\treturn 0;\n",
+ "replace": "\tif (max_frag > VPCM_MAX_FRAG)\n\t\treturn 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"vpcm: create: dp %d, caller %d, frag %d (size %d).\\n\",\n\t\t    id, caller, max_frag, (int)sizeof(struct vpcm_root));\n",
+ "note": "Only the transcript can see this: both arms return NULL and write nothing, so every memory comparison in t_vpcmdp is blind to it."
+},
+{
+ "label": "the srate guard moves BELOW the announcement",
+ "find": "\tif (srate != VPCM_SRATE)\n\t\treturn 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"vpcm: create: dp %d, caller %d, frag %d (size %d).\\n\",\n\t\t    id, caller, max_frag, (int)sizeof(struct vpcm_root));\n",
+ "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"vpcm: create: dp %d, caller %d, frag %d (size %d).\\n\",\n\t\t    id, caller, max_frag, (int)sizeof(struct vpcm_root));\n\n\tif (srate != VPCM_SRATE)\n\t\treturn 0;\n",
+ "note": "The other half of the guard order, and the same reasoning."
+},
+{
+ "label": "the root memset is four bytes short",
+ "find": "\tsysdep_memset(s, 0, sizeof(struct vpcm_root));\n",
+ "replace": "\tsysdep_memset(s, 0, sizeof(struct vpcm_root) - 4);\n"
+},
+{
+ "label": "dp.dp_data is not stored",
+ "find": "\ts->dp.dp_data = s;\n",
+ "replace": ""
+},
+{
+ "label": "dp.dp_data points at the V.34 object rather than the root",
+ "find": "\ts->dp.dp_data = s;\n",
+ "replace": "\ts->dp.dp_data = &s->v34;\n"
+},
+{
+ "label": "outq.count starts empty",
+ "find": "\ts->outq.count = 4;\n",
+ "replace": ""
+},
+{
+ "label": "outq.count starts at 8",
+ "find": "\ts->outq.count = 4;\n",
+ "replace": "\ts->outq.count = 8;\n"
+},
+{
+ "label": "inq.count is seeded instead of outq.count",
+ "find": "\ts->outq.count = 4;\n",
+ "replace": "\ts->inq.count = 4;\n"
+},
+{
+ "label": "dp.modem is not stored",
+ "find": "\ts->dp.modem = modem;\n",
+ "replace": ""
+},
+{
+ "label": "dp.id stores the caller flag",
+ "find": "\ts->dp.id = id;\n",
+ "replace": "\ts->dp.id = caller;\n"
+},
+{
+ "label": "dp.op is not stored",
+ "find": "\ts->dp.op = op;\n",
+ "replace": ""
+},
+{
+ "label": "the dsp_info is fetched under MDMPRM_VOICEINFO",
+ "find": "modem_get_param(modem, MDMPRM_DSPINFO)",
+ "replace": "modem_get_param(modem, MDMPRM_VOICEINFO)"
+},
+{
+ "label": "paramFile is not nulled",
+ "find": "\ts->params->paramFile = 0;\n",
+ "replace": ""
+},
+{
+ "label": "status is not zeroed",
+ "find": "\ts->status = 0;\n",
+ "replace": "",
+ "equivalent": true,
+ "why": "`sysdep_memset(s, 0, sizeof(struct vpcm_root))` runs eight lines earlier and nothing between the two writes root +0x14, so the store writes zero over zero for every input.  The store is in the source because the object has it -- 0x3a9c, a separate `movl $0x0,0x14(%ebx)` AFTER the memset -- and not because anything can see it.  If the memset is ever shortened or moved this becomes a real defect and will be reported MIScounted, which is why it is registered."
+},
+{
+ "label": "mode does not start IDLE",
+ "find": "\ts->mode = VPCM_MODE_IDLE;\n",
+ "replace": "",
+ "equivalent": true,
+ "why": "VPCM_MODE_IDLE is 0 and the memset already cleared root +0x18; the argument is `status is not zeroed`'s exactly, for the object's store at 0x3aa3."
+},
+{
+ "label": "stall is not zeroed",
+ "find": "\ts->mode = VPCM_MODE_IDLE;\n\ts->stall = 0;\n",
+ "replace": "\ts->mode = VPCM_MODE_IDLE;\n",
+ "equivalent": true,
+ "why": "The memset already cleared root +0x20; the object's store is at 0x3aaa.  Same argument as `status is not zeroed`."
+},
+{
+ "label": "nsamples is computed at 8000 rather than the sample rate",
+ "find": "\tnsamples = (max_frag * 1000) / srate;\n",
+ "replace": "\tnsamples = (max_frag * 1000) / 8000;\n"
+},
+{
+ "label": "nsamples is milliseconds times ten",
+ "find": "\tnsamples = (max_frag * 1000) / srate;\n",
+ "replace": "\tnsamples = (max_frag * 10000) / srate;\n"
+},
+{
+ "label": "nsamples divides by the sample rate's literal",
+ "find": "\tnsamples = (max_frag * 1000) / srate;\n",
+ "replace": "\tnsamples = (max_frag * 1000) / VPCM_SRATE;\n",
+ "equivalent": true,
+ "why": "`srate` is provably 9600 at this point: the only path here runs through `if (srate != VPCM_SRATE) return 0;` twenty-nine lines above, and nothing between the two assigns to `srate` -- it is a parameter and its address is never taken.  So the divisor is the same value either way for every input that reaches the statement."
+},
+{
+ "label": "MDMPRM_MIN_RATE and MDMPRM_MAX_RATE are swapped",
+ "find": "\tminRate = modem_get_param(modem, MDMPRM_MIN_RATE);\n\tmaxRate = modem_get_param(modem, MDMPRM_MAX_RATE);\n",
+ "replace": "\tminRate = modem_get_param(modem, MDMPRM_MAX_RATE);\n\tmaxRate = modem_get_param(modem, MDMPRM_MIN_RATE);\n"
+},
+{
+ "label": "the 56000 cap is applied to the minimum instead",
+ "find": "\tif ((unsigned int)maxRate > VPCM_MAX_RATE_CAP)\n\t\tmaxRate = (int)VPCM_MAX_RATE_CAP;\n",
+ "replace": "\tif ((unsigned int)minRate > VPCM_MAX_RATE_CAP)\n\t\tminRate = (int)VPCM_MAX_RATE_CAP;\n"
+},
+{
+ "label": "the 56000 cap is a SIGNED comparison",
+ "find": "\tif ((unsigned int)maxRate > VPCM_MAX_RATE_CAP)\n",
+ "replace": "\tif (maxRate > (int)VPCM_MAX_RATE_CAP)\n"
+},
+{
+ "label": "the 56000 cap is 28000",
+ "find": "\t\tmaxRate = (int)VPCM_MAX_RATE_CAP;\n",
+ "replace": "\t\tmaxRate = (int)VPCM_MAX_RATE_CAP / 2;\n"
+},
+{
+ "label": "the 56000 cap is inclusive",
+ "find": "\tif ((unsigned int)maxRate > VPCM_MAX_RATE_CAP)\n",
+ "replace": "\tif ((unsigned int)maxRate >= VPCM_MAX_RATE_CAP)\n",
+ "equivalent": true,
+ "why": "The body is `maxRate = 0xdac0`, so the only input the mutation adds to the true branch is maxRate == 0xdac0, where the assignment stores 0xdac0 over 0xdac0.  The two forms therefore agree on every value of maxRate.  The sweep DOES drive that exact input (cfg 10, `maxRate exactly the cap`), so this is equivalence and not a hole."
+},
+{
+ "label": "the two rate limits are stored crossed",
+ "find": "\ts->params->vpcmRateLimitLow = (unsigned int)minRate;\n\ts->params->vpcmRateLimitHigh = (unsigned int)maxRate;\n",
+ "replace": "\ts->params->vpcmRateLimitLow = (unsigned int)maxRate;\n\ts->params->vpcmRateLimitHigh = (unsigned int)minRate;\n"
+},
+{
+ "label": "the two rate literals are stored crossed",
+ "find": "\ts->params->minRate = VPCM_PARAM_MIN_RATE;\n\ts->params->maxRate = VPCM_PARAM_MAX_RATE;\n",
+ "replace": "\ts->params->minRate = VPCM_PARAM_MAX_RATE;\n\ts->params->maxRate = VPCM_PARAM_MIN_RATE;\n"
+},
+{
+ "label": "the rate literals are the host's window instead",
+ "find": "\ts->params->minRate = VPCM_PARAM_MIN_RATE;\n\ts->params->maxRate = VPCM_PARAM_MAX_RATE;\n",
+ "replace": "\ts->params->minRate = (unsigned int)minRate;\n\ts->params->maxRate = (unsigned int)maxRate;\n"
+},
+{
+ "label": "the V.92 bit survives for the V.90 id instead",
+ "find": "\tif (id == VPCM_DP_V92)\n\t\tqcFlags = (s->params->qcFlags >> 4) & 1;\n",
+ "replace": "\tif (id == VPCM_DP_V90)\n\t\tqcFlags = (s->params->qcFlags >> 4) & 1;\n"
+},
+{
+ "label": "the V.92 bit survives for every id",
+ "find": "\tif (id == VPCM_DP_V92)\n\t\tqcFlags = (s->params->qcFlags >> 4) & 1;\n\telse\n\t\tqcFlags = 0;\n",
+ "replace": "\tqcFlags = (s->params->qcFlags >> 4) & 1;\n"
+},
+{
+ "label": "the V.92 bit is read out of bit 5",
+ "find": "\t\tqcFlags = (s->params->qcFlags >> 4) & 1;\n",
+ "replace": "\t\tqcFlags = (s->params->qcFlags >> 5) & 1;\n"
+},
+{
+ "label": "the first read-modify-write keeps the old bit 4 as well",
+ "find": "\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));\n",
+ "replace": "\t    ((s->params->qcFlags & 0xff) | ((qcFlags & 1) << 4));\n"
+},
+{
+ "label": "the first read-modify-write puts the bit back at 5",
+ "find": "\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));\n",
+ "replace": "\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 5));\n"
+},
+{
+ "label": "the first read-modify-write clears the whole byte",
+ "find": "\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));\n",
+ "replace": "\t    ((s->params->qcFlags & 0x00) | ((qcFlags & 1) << 4));\n"
+},
+{
+ "label": "the second read-modify-write clears nothing",
+ "find": "\ts->params->qcFlags &= (unsigned char)0xdf;\n",
+ "replace": "\ts->params->qcFlags &= (unsigned char)0xff;\n"
+},
+{
+ "label": "the second read-modify-write clears bit 4 as well",
+ "find": "\ts->params->qcFlags &= (unsigned char)0xdf;\n",
+ "replace": "\ts->params->qcFlags &= (unsigned char)0xcf;\n"
+},
+{
+ "label": "the second read-modify-write is dropped",
+ "find": "\ts->params->qcFlags &= (unsigned char)0xdf;\n",
+ "replace": ""
+},
+{
+ "label": "the two read-modify-writes are reordered",
+ "find": "\ts->params->qcFlags = (unsigned char)\n\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));\n\ts->params->qcFlags &= (unsigned char)0xdf;\n",
+ "replace": "\ts->params->qcFlags &= (unsigned char)0xdf;\n\ts->params->qcFlags = (unsigned char)\n\t    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));\n",
+ "equivalent": true,
+ "why": "THE TWO STORES TOUCH DISJOINT BITS AND NEITHER READS THE OTHER'S.  The second clears bit 5 and leaves the rest; the first writes bit 4 from the LOCAL `qcFlags`, which was computed from the ORIGINAL byte before either store, and preserves every other bit through `& 0xef`.  So in either order the result is (original & 0xcf) | (kept << 4): bit 4 from the local, bit 5 zero, the other six as they were.  It is an ordering the object fixes -- 0x3ba4-0x3bb4 then 0x3bbf -- and which no input can distinguish, which is exactly why the ORDER is written from the disassembly and cannot be recovered from behaviour."
+},
+{
+ "label": "the mute counter takes the mask when the V.92 bit is SET",
+ "find": "\ts->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;\n",
+ "replace": "\ts->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? 0 : VPCM_MUTE_SAMPLES;\n",
+ "note": "THE INVERTED `sbb`, and the reason the sweep has to drive bit 4 both ways: with one value of that bit the two readings are the same function."
+},
+{
+ "label": "the mute counter reads bit 5",
+ "find": "\ts->mute = (((s->params->qcFlags >> 4) & 1) < 1)",
+ "replace": "\ts->mute = (((s->params->qcFlags >> 5) & 1) < 1)"
+},
+{
+ "label": "the mute counter is half as long",
+ "find": "? VPCM_MUTE_SAMPLES : 0;\n",
+ "replace": "? VPCM_MUTE_SAMPLES / 2 : 0;\n"
+},
+{
+ "label": "the mute counter uses the local rather than re-reading the byte",
+ "find": "\ts->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;\n",
+ "replace": "\ts->mute = ((qcFlags & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;\n",
+ "equivalent": true,
+ "why": "THE RE-READ CANNOT RETURN ANYTHING ELSE, and this entry is here because it was WRITTEN AS A CATCHABLE MUTATION AND SURVIVED -- the proof was found by asking why.  The two statements above are `params->qcFlags = (params->qcFlags & 0xef) | ((qcFlags & 1) << 4)` and `params->qcFlags &= 0xdf`; the first sets bit 4 to `qcFlags & 1` and the second touches only bit 5, so at this statement `(params->qcFlags >> 4) & 1` IS `qcFlags & 1` for every input.  Nothing between the store and the read can write the block: it is reached only through `s->params`, which was set eight statements earlier and not since.  So the object's re-load at 0x3bca is a codegen-tier fact -- it says the source spells the read as a field and not as the local -- and no differential test can ever see it."
+},
+{
+ "label": "hwDelay is IODELAY + 3",
+ "find": "\thwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 4;\n",
+ "replace": "\thwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 3;\n"
+},
+{
+ "label": "hwDelay is read from MDMPRM_CODECTYPE",
+ "find": "\thwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 4;\n",
+ "replace": "\thwDelay = modem_get_param(modem, MDMPRM_CODECTYPE) + 4;\n"
+},
+{
+ "label": "the 0xf4 cap fires when the delay merely reaches it",
+ "find": "\tif (VPCM_DELAY_CAP - hwDelay < 0) {\n",
+ "replace": "\tif (VPCM_DELAY_CAP - hwDelay <= 0) {\n"
+},
+{
+ "label": "the 0xf4 cap fires the other way round",
+ "find": "\tif (VPCM_DELAY_CAP - hwDelay < 0) {\n",
+ "replace": "\tif (VPCM_DELAY_CAP - hwDelay > 0) {\n"
+},
+{
+ "label": "the delay reported to the host is the excess, not the shortfall",
+ "find": "\t\tmodem_set_param(modem, MDMPRM_UPDATE_DELAY,\n\t\t\t\tVPCM_DELAY_CAP - hwDelay);\n",
+ "replace": "\t\tmodem_set_param(modem, MDMPRM_UPDATE_DELAY,\n\t\t\t\thwDelay - VPCM_DELAY_CAP);\n"
+},
+{
+ "label": "the host is not told about the excess at all",
+ "find": "\t\tmodem_set_param(modem, MDMPRM_UPDATE_DELAY,\n\t\t\t\tVPCM_DELAY_CAP - hwDelay);\n",
+ "replace": ""
+},
+{
+ "label": "the extradelay floor is a ceiling",
+ "find": "\t\tif (excess < VPCM_EXTRADELAY_MIN)\n",
+ "replace": "\t\tif (excess > VPCM_EXTRADELAY_MIN)\n"
+},
+{
+ "label": "the extradelay floor is a sixteenth of 0x180",
+ "find": "\t\t\texcess = VPCM_EXTRADELAY_MIN;\n",
+ "replace": "\t\t\texcess = VPCM_EXTRADELAY_MIN / 16;\n"
+},
+{
+ "label": "the extradelay clamp is dropped",
+ "find": "\t\tif (excess < VPCM_EXTRADELAY_MIN)\n\t\t\texcess = VPCM_EXTRADELAY_MIN;\n",
+ "replace": ""
+},
+{
+ "label": "the extradelay floor is inclusive",
+ "find": "\t\tif (excess < VPCM_EXTRADELAY_MIN)\n",
+ "replace": "\t\tif (excess <= VPCM_EXTRADELAY_MIN)\n",
+ "equivalent": true,
+ "why": "The body is `excess = 0x180`, so the only input the mutation adds to the true branch is excess == 0x180, where the assignment stores 0x180 over 0x180.  The `jge` at 0x3d8c is therefore not recoverable from behaviour in this direction, and the sweep drives the exact boundary (cfg 4, iodelay 0x270) to say so rather than to catch it."
+},
+{
+ "label": "the delay cap is one sample higher",
+ "find": "\t\thwDelay = VPCM_DELAY_CAP;\n",
+ "replace": "\t\thwDelay = VPCM_DELAY_CAP + 1;\n"
+},
+{
+ "label": "the second pass uses the measured delay and not the cap",
+ "find": "\t\ts->extradelay = excess;\n\t\thwDelay = VPCM_DELAY_CAP;\n",
+ "replace": "\t\ts->extradelay = excess;\n"
+},
+{
+ "label": "extradelay is not stored",
+ "find": "\t\ts->extradelay = excess;\n",
+ "replace": ""
+},
+{
+ "label": "dmaDelay and hwDelay are stored crossed",
+ "find": "\ts->params->dmaDelay = hwDelay - 0x30;\n\ts->params->hwDelay = hwDelay;\n",
+ "replace": "\ts->params->hwDelay = hwDelay - 0x30;\n\ts->params->dmaDelay = hwDelay;\n"
+},
+{
+ "label": "the DMA offset is added rather than subtracted",
+ "find": "\ts->params->dmaDelay = hwDelay - 0x30;\n",
+ "replace": "\ts->params->dmaDelay = hwDelay + 0x30;\n"
+},
+{
+ "label": "the DMA offset is 0x300 and not 0x30",
+ "find": "\ts->params->dmaDelay = hwDelay - 0x30;\n",
+ "replace": "\ts->params->dmaDelay = hwDelay - 0x300;\n"
+},
+{
+ "label": "the extradelay is never added to the DMA delay",
+ "find": "\ts->params->dmaDelay += s->extradelay;\n",
+ "replace": ""
+},
+{
+ "label": "the extradelay lands on the HW delay instead",
+ "find": "\ts->params->dmaDelay += s->extradelay;\n",
+ "replace": "\ts->params->hwDelay += s->extradelay;\n"
+},
+{
+ "label": "the extradelay REPLACES the DMA delay",
+ "find": "\ts->params->dmaDelay += s->extradelay;\n",
+ "replace": "\ts->params->dmaDelay = s->extradelay;\n"
+},
+{
+ "label": "addedDelay is left as the host had it",
+ "find": "\ts->params->addedDelay = 0;\n\n\tif (id == VPCM_DP_V92)\n",
+ "replace": "\n\tif (id == VPCM_DP_V92)\n"
+},
+{
+ "label": "addedDelay is seeded with the extradelay",
+ "find": "\ts->params->addedDelay = 0;\n\n\tif (id == VPCM_DP_V92)\n",
+ "replace": "\ts->params->addedDelay = s->extradelay;\n\n\tif (id == VPCM_DP_V92)\n"
+},
+{
+ "label": "the V.92 session type is 1",
+ "find": "\tif (id == VPCM_DP_V92)\n\t\tsessionType = 2;\n",
+ "replace": "\tif (id == VPCM_DP_V92)\n\t\tsessionType = 1;\n"
+},
+{
+ "label": "the V.90 session type is 0",
+ "find": "\t\tsessionType = (id == VPCM_DP_V90);\n",
+ "replace": "\t\tsessionType = 0;\n"
+},
+{
+ "label": "the session type tests V.34 rather than V.90",
+ "find": "\t\tsessionType = (id == VPCM_DP_V90);\n",
+ "replace": "\t\tsessionType = (id == VPCM_DP_V34);\n"
+},
+{
+ "label": "the side is the caller and not its negation",
+ "find": "\tside = (caller == 0);\n",
+ "replace": "\tside = (caller != 0);\n"
+},
+{
+ "label": "the side is always the analogue one",
+ "find": "\tside = (caller == 0);\n",
+ "replace": "\tside = 0;\n"
+},
+{
+ "label": "delete: its one announcement is dropped",
+ "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"vpcm: delete...\\n\");\n\n",
+ "replace": "",
+ "note": "The only claim `vpcm_delete` makes that memory cannot carry, and the only thing that proves the transcript pass can see this function at all rather than only `vpcm_create`."
+},
+{
+ "label": "delete: the two dsp_info words are crossed",
+ "find": "\ts->info->connection_type = (unsigned int)s->params->connectionType;\n\ts->info->clock_deviation = s->params->clockDeviation;\n",
+ "replace": "\ts->info->connection_type = (unsigned int)s->params->clockDeviation;\n\ts->info->clock_deviation = s->params->connectionType;\n"
+},
+{
+ "label": "delete: connection_type is not copied out",
+ "find": "\ts->info->connection_type = (unsigned int)s->params->connectionType;\n",
+ "replace": ""
+},
+{
+ "label": "delete: clock_deviation is not copied out",
+ "find": "\ts->info->clock_deviation = s->params->clockDeviation;\n",
+ "replace": ""
+},
+{
+ "label": "delete: clock_deviation is written to qc_lapm's word",
+ "find": "\ts->info->clock_deviation = s->params->clockDeviation;\n",
+ "replace": "\ts->info->qc_lapm = (unsigned int)s->params->clockDeviation;\n"
+},
+{
+ "label": "delete: the VPCMXF object is not deleted",
+ "find": "\tVPCMXF_Delete(s->v34.xf);\n\tK56FLEX_Delete(s->v34.k56);\n",
+ "replace": "\tK56FLEX_Delete(s->v34.k56);\n"
+},
+{
+ "label": "delete: the K56flex object is not deleted",
+ "find": "\tK56FLEX_Delete(s->v34.k56);\n\tsysdep_free(s);\n",
+ "replace": "\tsysdep_free(s);\n"
+},
+{
+ "label": "delete: the root is not freed",
+ "find": "\tK56FLEX_Delete(s->v34.k56);\n\tsysdep_free(s);\n",
+ "replace": "\tK56FLEX_Delete(s->v34.k56);\n"
+},
+{
+ "label": "delete: the session is not terminated",
+ "find": "\tVPCMXF_SessionTermination(s->v34.xf);\n",
+ "replace": ""
+},
+{
+ "label": "delete: it returns 1",
+ "find": "\tsysdep_free(s);\n\n\treturn 0;\n}\n",
+ "replace": "\tsysdep_free(s);\n\n\treturn 1;\n}\n"
+},
+{
+ "label": "init: V.90 is registered under 0x5b",
+ "find": "\tmodem_dp_register(VPCM_DP_V90, &vpcm_op);\n",
+ "replace": "\tmodem_dp_register(0x5b, &vpcm_op);\n"
+},
+{
+ "label": "init: V.34 is registered under the V.92 number",
+ "find": "\tmodem_dp_register(VPCM_DP_V34, &vpcm_op);\n",
+ "replace": "\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n"
+},
+{
+ "label": "init: the first and last registrations are swapped",
+ "find": "\tmodem_dp_register(VPCM_DP_V34, &vpcm_op);\n\tmodem_dp_register(VPCM_DP_V90, &vpcm_op);\n\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n",
+ "replace": "\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n\tmodem_dp_register(VPCM_DP_V90, &vpcm_op);\n\tmodem_dp_register(VPCM_DP_V34, &vpcm_op);\n"
+},
+{
+ "label": "init: only two ids are registered",
+ "find": "\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n",
+ "replace": ""
+},
+{
+ "label": "init: the V.90 registration carries no table",
+ "find": "\tmodem_dp_register(VPCM_DP_V90, &vpcm_op);\n",
+ "replace": "\tmodem_dp_register(VPCM_DP_V90, 0);\n"
+},
+{
+ "label": "init: it returns 1",
+ "find": "\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n\treturn 0;\n",
+ "replace": "\tmodem_dp_register(VPCM_DP_V92, &vpcm_op);\n\treturn 1;\n"
+},
+{
+ "label": "the table's name is not VPCM",
+ "find": "\t.name = \"VPCM\",\n",
+ "replace": "\t.name = \"PCM\",\n"
+},
+{
+ "label": "the table's use_count starts at one",
+ "find": "\t.name = \"VPCM\",\n",
+ "replace": "\t.name = \"VPCM\",\n\t.use_count = 1,\n"
+},
+{
+ "label": "the table carries a hangup entry",
+ "find": "\t.process = vpcm_run\n",
+ "replace": "\t.process = vpcm_run,\n\t.hangup = vpcm_delete\n"
+},
+{
+ "label": "the table's .process is empty",
+ "find": "\t.process = vpcm_run\n",
+ "replace": "\t.process = 0\n"
+},
+{
+ "label": "the table's .process is the WRONG function",
+ "find": "\t.process = vpcm_run\n",
+ "replace": "\t.process = (int (*)(struct dp *, void *, void *, int))vpcm_create\n",
+ "note": "`.process` holding something plausible rather than nothing.  The cast is needed because the two signatures differ; what the test asserts is the symbol, not the type."
+},
+{
+ "label": "the table's .create is empty",
+ "find": "\t.create = vpcm_create,\n",
+ "replace": "\t.create = 0,\n"
+},
+{
+ "label": "the table's .destroy is empty",
+ "find": "\t.destroy = vpcm_delete,\n",
+ "replace": "\t.destroy = 0,\n"
+}
+]

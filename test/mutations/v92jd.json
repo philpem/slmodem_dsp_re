@@ -1,0 +1,75 @@
+[
+ {
+  "note": "V92Jd's constructor is V90Jd's plus a fixed-point conversion through the coprocessor, and the two differ in three small ways that a reconstruction assembled from the V.90 one would get wrong: the second rate group is ELEVEN bits and not twelve, `bits[47]` is stored as a constant 0 rather than copied from a parameter, and the phase message's three trailing bytes are set to 1, 0, 0.  Every one of those is a mutation below.  The scale mutations exist because the conversion is the only arithmetic in the file: 65536 is 16 bits of fraction, and a reconstruction that used 32768 agrees with the object on exactly the values that happen to be even. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error."
+ },
+ {
+  "label": "the fixed-point scale is one bit out",
+  "find": "\tscaled = (long long)(65536.0f * params->V92_JD_PHASE);",
+  "replace": "\tscaled = (long long)(32768.0f * params->V92_JD_PHASE);"
+ },
+ {
+  "label": "the phase is rounded rather than truncated",
+  "find": "\tscaled = (long long)(65536.0f * params->V92_JD_PHASE);",
+  "replace": "\tscaled = (long long)(65536.0f * params->V92_JD_PHASE + 0.5f);"
+ },
+ {
+  "label": "the phase is read from the neighbouring parameter",
+  "find": "\tscaled = (long long)(65536.0f * params->V92_JD_PHASE);",
+  "replace": "\tscaled = (long long)(65536.0f * (float)params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD);"
+ },
+ {
+  "label": "the phase bits start one place up the word",
+  "find": "\t\tphaseBits[V90JD_GROUP1 + 1 + u] =\n\t\t    (unsigned char)((phase & (1 << u)) != 0);",
+  "replace": "\t\tphaseBits[V90JD_GROUP1 + 1 + u] =\n\t\t    (unsigned char)((phase & (2 << u)) != 0);"
+ },
+ {
+  "label": "the phase loop is one bit short",
+  "find": "\tfor (u = 0; u <= 15; u++)",
+  "replace": "\tfor (u = 0; u <= 14; u++)"
+ },
+ {
+  "label": "the second rate group runs to V90Jd's twelve bits",
+  "find": "\tfor (i = 0; i <= 10; i++)",
+  "replace": "\tfor (i = 0; i <= 11; i++)"
+ },
+ {
+  "label": "the first rate group is one bit short",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);",
+  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);"
+ },
+ {
+  "label": "the rate mask is read from the V.90 parameter",
+  "find": "\tmask = params->V92_DIGITAL_RATE_MASK;",
+  "replace": "\tmask = params->DIGITAL_RATE_MASK;"
+ },
+ {
+  "label": "the phase message's leading constant is cleared, not set",
+  "find": "\tphaseBits[47] = 1;",
+  "replace": "\tphaseBits[47] = 0;"
+ },
+ {
+  "label": "the data message's constant is set, not cleared",
+  "find": "\tbits[47] = 0;",
+  "replace": "\tbits[47] = 1;"
+ },
+ {
+  "label": "the phase message's two trailing bytes are left as they were",
+  "find": "\tphaseBits[48] = 0;\n\tphaseBits[49] = 0;",
+  "replace": "\tphaseBits[48] = 0;"
+ },
+ {
+  "label": "the two lookahead bits are transposed",
+  "find": "\tbits[50] = (unsigned char)\n\t    ((params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);\n\tbits[49] = (unsigned char)\n\t    (params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);",
+  "replace": "\tbits[49] = (unsigned char)\n\t    ((params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);\n\tbits[50] = (unsigned char)\n\t    (params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);"
+ },
+ {
+  "label": "the phase unpacker's word is left as it was",
+  "find": "\tunpackWord = 0;\n\tunpackPhaseWord = 0;",
+  "replace": "\tunpackWord = 0;"
+ },
+ {
+  "label": "the destructor is not empty",
+  "find": "V92Jd::~V92Jd()\n{\n}",
+  "replace": "V92Jd::~V92Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
+ }
+]

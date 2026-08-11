@@ -67,7 +67,7 @@ void ref_mdm_setSessionFlag(void *self, unsigned int flag)
 #define P4M_SLOT (0x2fac + SLACK)
 #define P3D_SLOT (0x42c + SLACK)
 #define P4D_SLOT (0x50 + 0x2fac + SLACK)
-#define MOD_SLOT (0x40 + SLACK)
+#define MOD_SLOT (0x70 + SLACK)	/* 0x40 while the map was partial */
 #define DEM_SLOT (0x298 + SLACK)
 #define MDM_SLOT (0x49c0 + SLACK)
 
@@ -385,8 +385,8 @@ run_modem(void)
 				seed(i + 31 * s + lvl * NFLAG);
 				wire(0);
 				wire(1);
-				((V90Modem *)mdm[0])->side = side_v[s];
-				((V90Modem *)mdm[1])->side = side_v[s];
+				((V90Modem *)mdm[0])->side = (V90ModemSide)side_v[s];
+				((V90Modem *)mdm[1])->side = (V90ModemSide)side_v[s];
 				dsplib_debug_capture_reset();
 
 				((V90Modem *)mdm[0])

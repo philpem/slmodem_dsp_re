@@ -1,0 +1,65 @@
+[
+ {
+  "note": "V90Jd.cpp is the constructor, the destructor and the two packing leaves.  The constructor is where this set is aimed: it is fourteen stores and two loops, and the whole of what it can get wrong is WHICH bit of the parameter reaches WHICH byte of the message.  So most of the mutations below transpose a pair or move a loop bound by one -- the failures a comparison of the two objects can see and a reading of the disassembly can miss.  Two entries cover the CRC in getBitVector so the file's older half is not left unmeasured now that it has a suite. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error."
+ },
+ {
+  "label": "the two lookahead bits are transposed",
+  "find": "\tbits[49] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);\n\tbits[50] = (unsigned char)\n\t    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);",
+  "replace": "\tbits[50] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);\n\tbits[49] = (unsigned char)\n\t    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);"
+ },
+ {
+  "label": "the two constellation parameters are transposed",
+  "find": "\tbits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;\n\tbits[48] = (unsigned char)params->V34_RRN_CONSTELLATION;",
+  "replace": "\tbits[47] = (unsigned char)params->V34_RRN_CONSTELLATION;\n\tbits[48] = (unsigned char)params->V34_PHASE4_CONSTELLATION;"
+ },
+ {
+  "label": "the constellation bits carry the whole word, not its low byte",
+  "find": "\tbits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;",
+  "replace": "\tbits[47] = (unsigned char)(params->V34_PHASE4_CONSTELLATION != 0);"
+ },
+ {
+  "label": "the first rate group is one bit short",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);",
+  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);"
+ },
+ {
+  "label": "the second rate group stops where V92Jd's does",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tbits[V90JD_GROUP2 + 1 + i] =",
+  "replace": "\tfor (i = 0; i <= 10; i++)\n\t\tbits[V90JD_GROUP2 + 1 + i] ="
+ },
+ {
+  "label": "the second rate group starts one bit low in the mask",
+  "find": "\t\t    (unsigned char)((mask >> (i + 16)) & 1);",
+  "replace": "\t\t    (unsigned char)((mask >> (i + 15)) & 1);"
+ },
+ {
+  "label": "the rate mask is read from the wrong parameter",
+  "find": "\tmask = params->DIGITAL_RATE_MASK;",
+  "replace": "\tmask = params->V92_DIGITAL_RATE_MASK;"
+ },
+ {
+  "label": "the unpacker's word is left as it was",
+  "find": "\tunpack[0] = 0;\n\tunpack[1] = 0;\n\tunpackWord = 0;",
+  "replace": "\tunpack[0] = 0;\n\tunpack[1] = 0;"
+ },
+ {
+  "label": "the unpacker's second byte is left as it was",
+  "find": "\tunpack[0] = 0;\n\tunpack[1] = 0;\n\tunpackWord = 0;",
+  "replace": "\tunpack[0] = 0;\n\tunpackWord = 0;"
+ },
+ {
+  "label": "group 0 is one bit short",
+  "find": "\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "the CRC's two feedback taps are transposed",
+  "find": "\t\tcrc[3] = tap3;\n\t\tcrc[10] = tap10;",
+  "replace": "\t\tcrc[3] = tap10;\n\t\tcrc[10] = tap3;"
+ },
+ {
+  "label": "the destructor is not empty",
+  "find": "V90Jd::~V90Jd()\n{\n}",
+  "replace": "V90Jd::~V90Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
+ }
+]

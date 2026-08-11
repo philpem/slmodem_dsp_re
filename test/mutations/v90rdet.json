@@ -1,0 +1,32 @@
+[
+ {
+  "label": "the constructor stores nothing",
+  "find": "\tparams = p;\n}",
+  "replace": "\t(void)p;\n}"
+ },
+ {
+  "label": "the parameter block lands at +0x24",
+  "find": "\tparams = p;\n}",
+  "replace": "\t*(V90Parameters **)&int_24 = p;\n}"
+ },
+ {
+  "label": "the constructor also clears the counter at +0x00",
+  "find": "\tparams = p;\n}",
+  "replace": "\tint_00 = 0;\n\tparams = p;\n}"
+ },
+ {
+  "label": "the constructor clears the shift register too",
+  "find": "\tparams = p;\n}",
+  "replace": "\tparams = p;\n\tushort_20 = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the parameter block pointer",
+  "find": "V90RDetector::~V90RDetector()\n{\n}",
+  "replace": "V90RDetector::~V90RDetector()\n{\n\tparams = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the parameter block pointer, volatile so it survives",
+  "find": "V90RDetector::~V90RDetector()\n{\n}",
+  "replace": "V90RDetector::~V90RDetector()\n{\n\t*(V90Parameters * volatile *)&params = 0;\n}"
+ }
+]

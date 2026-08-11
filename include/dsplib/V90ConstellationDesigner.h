@@ -31,9 +31,18 @@
  * SECOND is printed as "set max rate" and stored at +0x4c.  So the offsets
  * descend as the arguments ascend, and the defaults confirm which is which.
  *
- * Everything the two written members do not touch is `pad_`.  Twenty other
- * members write into that region and none of them is reconstructed here, so
- * naming any of it would be a guess rather than a measurement.
+ * Everything the written members do not touch is `pad_`.  The other members
+ * write into that region and none of them is reconstructed here, so naming
+ * any of it would be a guess rather than a measurement.
+ *
+ * THE CONSTRUCTOR NAMED FOUR MORE SLOTS, and they were `pad_` until it was
+ * read (task: the ctor/dtor batch).  `+0x30` and `+0x44` are its third and
+ * second arguments -- a `V90ConstellationPower *` and a `V90PreFilter *`, and
+ * the mangling is what types them.  `+0x08` and `+0x38` are bytes by their
+ * store encodings (`c6 40 08 00` and `c6 40 38 16`, neither with an
+ * operand-size prefix), seeded 0 and 22.  The constructor also writes the
+ * two rate defaults documented above and zeroes `word_48`, so `reset()` is
+ * not the only thing that clears it.
  *
  * `reset()` (task #88, the lifecycle batch) added the seven fields it writes.
  * It is 47 bytes of straight-line stores with no branch and no call, and the
@@ -55,8 +64,36 @@
  */
 class V90Parameters;
 
+/*
+ * The constructor's other two arguments, and pointers only, so forward
+ * declarations are what belongs here for the same reason `V90Parameters` is
+ * one: `V90PreFilter.h` is one of the two headers that DEFINE
+ * `V90Parameters`, so including it here would decide for every translation
+ * unit which of the two definitions it gets.
+ */
+class V90PreFilter;
+class V90ConstellationPower;
+
 class V90ConstellationDesigner {
 public:
+	/*
+	 * THE CONSTRUCTOR IS 54 BYTES OF STORES -- no call, no branch, and it
+	 * reads nothing it is handed.  It keeps the three collaborators and
+	 * seeds four constants: the rate ladder's two ends, a zero byte at
+	 * +0x08 and 22 at +0x38.
+	 *
+	 * THE DESTRUCTOR IS ONE BYTE, a bare `ret` at 0x47900.  It is declared
+	 * because the blob HAS the symbol: GCC emits an out-of-line destructor
+	 * only for a user-declared one, so a class whose destructor were
+	 * implicit would contribute no `D1`/`D2` at all.  The blob has both,
+	 * one byte each, so the original declared it and left the body empty.
+	 * `test/unit/t_v90designers.cpp` drives it and asserts that it writes
+	 * nothing, rather than assuming it.
+	 */
+	V90ConstellationDesigner(V90Parameters *params, V90PreFilter *preFilter,
+				 V90ConstellationPower *power);
+	~V90ConstellationDesigner();
+
 	/* Defined in src/pump/v90/V90ConstellationDesigner.cpp. */
 	void setMinMaxRates(unsigned int, unsigned int);
 	void reset();
@@ -72,7 +109,18 @@ public:
 	/* +0x00  The parameter block.  Not owned; `reset` reads +0x39c. */
 	V90Parameters *params;
 
-	unsigned char pad_04[6];	/* +0x04                            */
+	unsigned char pad_04[4];	/* +0x04                            */
+
+	/*
+	 * +0x08  `movb $0x0,0x8(%eax)` in the constructor, and a BYTE: the
+	 * encoding is `c6 40 08 00`, which has no operand-size prefix and no
+	 * 32-bit immediate.  Nothing reconstructed here reads it, so it is
+	 * offset-named; what the constructor proves is the width and the
+	 * initial value, not the meaning.  It used to be inside `pad_04`.
+	 */
+	unsigned char byte_08;		/* +0x08                            */
+
+	unsigned char pad_09;		/* +0x09                            */
 
 	/*
 	 * +0x0a .. +0x10  Four consecutive 16-bit slots `reset` zeroes with
@@ -95,7 +143,32 @@ public:
 	 */
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 
-	unsigned char pad_28[0x20];	/* +0x28                            */
+	unsigned char pad_28[8];	/* +0x28                            */
+
+	/*
+	 * +0x30 and +0x44  The constructor's third and second arguments,
+	 * stored and never read by anything reconstructed here.  What makes
+	 * them pointers rather than four-byte integers is that they are copies
+	 * of arguments the MANGLING types: the constructor is
+	 * `_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower`,
+	 * so argument 2 is a `V90PreFilter *` and argument 3 a
+	 * `V90ConstellationPower *`, and the object puts argument 3 at +0x30
+	 * and argument 2 at +0x44.  Both used to be inside `pad_28`.
+	 */
+	V90ConstellationPower *power;	/* +0x30 = constructor argument 3   */
+
+	unsigned char pad_34[4];	/* +0x34                            */
+
+	/*
+	 * +0x38  `movb $0x16,0x38(%eax)`, again a byte by its encoding
+	 * (`c6 40 38 16`).  22 is not one of the rate-ladder constants and
+	 * nothing here reads it, so it is offset-named too.
+	 */
+	unsigned char byte_38;		/* +0x38 defaults to 22             */
+
+	unsigned char pad_39[11];	/* +0x39                            */
+
+	V90PreFilter *preFilter;	/* +0x44 = constructor argument 2   */
 
 	unsigned int word_48;		/* +0x48 zeroed by reset            */
 
