@@ -243,6 +243,8 @@ all 256 code inputs, both directions, plus the saturation branch beyond
 
 ## 13. `FPM_sqrt` reads one element past the end of its own table
 
+> **Deviation D1** (`docs/deviations.md`): `FPM_sqrt` reads one element past the end of its table.
+
 `FPM_sqrt` normalises its Q15 argument into `[0x4000, 0x7fff]`, then indexes
 `FPM_sqrt_table` with `((mantissa + 64) >> 7) - 64`. Over the legal Q15 domain
 that index runs 0..**192** — but the table has 192 entries, indices 0..191.
@@ -937,6 +939,8 @@ default config and only bites if a caller lowers the value.
 
 ## 21. The `fpm_*` dependency web
 
+> **Deviation D132** (`docs/deviations.md`): `FPM_sqrt_dp`'s mantissa can be 17 bits.
+
 Mapped while scoping `FPM_AGC`. The six modules Bell 103 needs are not
 independent — they bottom out in a small set of arithmetic primitives, and the
 order they have to be reconstructed in follows from that.
@@ -1428,6 +1432,8 @@ discriminator output has to be resolved.
 
 ## 28. `FPM_AGC` — complete
 
+> **Deviation D133** (`docs/deviations.md`): the AGC's block partition can exceed what `FPM_rms` is dimensioned for.
+
 `fpm_agc.c` is reconstructed and bit-exact: `src/dsp/fpm_agc.c`,
 `include/dsplib/fpm_agc.h`, tested by `test/unit/t_fpm_agc.c` (50,200
 differential checks). This supersedes the partial readings in finding 22.
@@ -1503,6 +1509,8 @@ convention.
 
 ## 29. `FPM_sqrt_dp` saturates at 32703 — which is load-bearing
 
+> **Deviation D133** (`docs/deviations.md`): the AGC's block partition can exceed what `FPM_rms` is dimensioned for.
+
 `FPM_sqrt_dp` clamps its table index (unlike `FPM_sqrt`, see D1), so its
 return never exceeds **32703** for any 32-bit input:
 
@@ -1547,6 +1555,8 @@ aiming at; `t_fpm_agc` picks amplitudes against what `FPM_rms` actually
 returns, and says so.
 
 ## 30. `FPM_TONE_detect` — the detector half, and what it says about D6
+
+> **Deviation D85** (`docs/deviations.md`): the slow AGC pair does not sum to unity.
 
 `FPM_TONE_detect` (`.text 0x0aaf80`, 488 bytes) is reconstructed and
 bit-exact. It closes out `fpm_tone.c` apart from `FPM_TONE_find_rev` and
@@ -1682,6 +1692,8 @@ output: a discriminator whose two states are both the same sign is one
 mis-sited threshold away from never toggling.
 
 ## 32. `FPM_FSD_demodulate` — complete, and why loopback still carries no data
+
+> **Deviation D131** (`docs/deviations.md`): `FPM_FSD_demodulate` discards input past its bit cap.
 
 `.text 0x0a79f0`, 745 bytes, reconstructed and bit-exact:
 `src/dsp/fpm_fsd.c`, 130,447 differential checks driven by **real** Bell 103
@@ -2018,6 +2030,8 @@ someone deciding whether to point this at real hardware.
 
 ## 36. `B103FP_create` — the common path, mapped
 
+> **Deviation D117** (`docs/deviations.md`): `B103FP_create`'s 700-tick floor is an unsigned compare on a signed quotient.
+
 Working notes for the 2151-byte constructor. The three call-type branches and
 the four allocation paths are not yet decoded; **everything below is the path
 all three call types share**, and it is recorded now so the mapping is not
@@ -2305,6 +2319,8 @@ interface problem rather than a numerical one.
 
 ## 40. SpanDSP interop — the transmitter is validated, the receiver has a level sensitivity
 
+> **Deviation D76** (`docs/deviations.md`): `FPM_div` reads past its table and drops the call.
+
 The first test in this tree that is not a comparison with the blob. Every
 other one establishes equivalence, which proves nothing about correctness: if
 the blob were wrong, a bit-exact reconstruction would be wrong identically and
@@ -2428,6 +2444,8 @@ larger when pointers are eight bytes. `check64` only compiles; this ran.
 
 ## 41. The call-progress path runs at 8000 Hz, whatever the host rate
 
+> **Deviation D82** (`docs/deviations.md`): the calling tone is built for 9600 Hz and runs at 8000.
+
 `call_create` takes the host sample rate as its last argument and builds two
 resamplers around the supervisor:
 
@@ -2458,6 +2476,8 @@ Note this is also the *first* module whose rate is genuinely fixed. Bell 103
 runs at the host rate; call progress does not.
 
 ## 42. `Dual_TONE_detect` is an answer-tone detector, not a call-progress one
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 Six verdicts, from a state 68 bytes long, decided by comparing three leaky
 energy estimates:
@@ -2582,6 +2602,8 @@ should make cadence.c substantially easier: its magic numbers are named.
 
 ## 45. CallingTone.c was written for 9600 Hz and is used at 8000
 
+> **Deviation D82** (`docs/deviations.md`): the calling tone is built for 9600 Hz and runs at 8000.
+
 Three of its constants only make sense at 9600:
 
 ```
@@ -2611,6 +2633,8 @@ on.
 ---
 
 ## 46. toneiir's configuration, and an unresolved question about it
+
+> **Deviation D153** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 `toneiir_create(state, cfg)` copies 44 bytes of configuration into the head of
 its 168-byte object and hangs the coefficients off pointers rather than
@@ -2685,6 +2709,8 @@ made a second time.)
 ---
 
 ## 47. The cadence detector, and the level it needs
+
+> **Deviation D81** (`docs/deviations.md`): a loud busy tone is not detected.
 
 `cadence_progress` is the piece that tells dial tone from ringback from busy.
 They share frequencies; what separates them is rhythm. It takes one sample,
@@ -2831,6 +2857,8 @@ other way, or simply is not detected, is a question for `CALLPROG_Progress`.
 
 ## 49. Each filter bank falls back to its own default, and a near-miss
 
+> **Deviation D79** (`docs/deviations.md`): `GetDialToneFilterSubindex` is hardcoded to zero, and 21 filter banks are dead.
+
 `cadence_create`'s eight-way filter dispatch selects a `Filter_*` bank for
 five of its indices, and each of those needs a subindex in 1..7 to pick one
 of the bank's seven designs. **slmodemd returns 0 for
@@ -2895,6 +2923,8 @@ keeping -- for a claim about what the original does, drive the original.
 ---
 
 ## 50. Cadence.c is complete, and busy tone is the one that refuses to fail
+
+> **Deviation D79** (`docs/deviations.md`): `GetDialToneFilterSubindex` is hardcoded to zero, and 21 filter banks are dead.
 
 `cadence_create` is reconstructed. Three details were only settled by driving
 the blob, and each of them was a plausible wrong guess first:
@@ -3001,6 +3031,8 @@ have shown it.
 
 ## 52. The dial-string parser, and three flags that mean the opposite of their names
 
+> **Deviation D83** (`docs/deviations.md`): `modifier_validation` is tested the wrong way round.
+
 `AnalyseDialString` grades a dial string on a four-point scale the object
 names itself, at `.rodata+0x613c`:
 
@@ -3079,6 +3111,8 @@ one.** Check before writing the prototype, not after the comparison fails.
 
 ## 53. The pulse dialler
 
+> **Deviation D98** (`docs/deviations.md`): a zero break time gives a pulse dialler that sends no pulses.
+
 Five functions in call.c, and the only part of the library that operates a
 relay rather than a filter. Dialer.c calls across to them; nothing else does.
 
@@ -3124,6 +3158,8 @@ to avoid.
 ---
 
 ## 54. DialerCreate, and a bound that lives in another function
+
+> **Deviation D97** (`docs/deviations.md`): `DialerCreate`'s `strcpy` has no bound of its own.
 
 `DialerCreate` does not allocate. It takes an object, fills in the country's
 rules, resets eleven fields, pushes the pulse timings through to the call
@@ -3171,6 +3207,8 @@ host nothing.
 ---
 
 ## 55. The 221 callback is an S-register, and CALLPROG_Delete does not free
+
+> **Deviation D101, D102** (`docs/deviations.md`): `V92deleteConstellations` and `V92deleteFilterCoefficients` leave ten dangling pointers.
 
 Two things settled by reading `CALLPROG_Create` and `CALLPROG_Delete`, ahead
 of reconstructing them.
@@ -3230,6 +3268,8 @@ at all, by something other than a cadence detector.
 ---
 
 ## 56. Three national pulse-dialling conventions
+
+> **Deviation D98, D118** (`docs/deviations.md`): a zero break time gives a pulse dialler that sends no pulses.
 
 `DialerProgress`'s pulse state turns the keypad position `GetNextDigit...`
 produced -- `row * 3 + col`, so `1` is 0 and `0` is 10 -- into a count of loop
@@ -3382,6 +3422,8 @@ they were doing; the calling tone is not a limitation of the technique.
 
 ## 59. The dialler's generator: the parser chooses the state
 
+> **Deviation D98, D118** (`docs/deviations.md`): a zero break time gives a pulse dialler that sends no pulses.
+
 `DialerProgress` is a switch on `d->progress_state` over eleven states, and
 the surprise is where those numbers come from. There is no mapping step:
 `GetNextDigitAndReturnNextState` returns the state number directly, and every
@@ -3446,6 +3488,8 @@ fixed, and noted here rather than in `deviations.md`.
 That completes the decode of Dialer.c.
 
 ## 60. CALLPROG_Progress: one transition per buffer, decided sample by sample
+
+> **Deviation D80, D152** (`docs/deviations.md`): the dial-tone threshold conversion wraps, and a country table can disable detection.
 
 The supervisor's per-buffer step does three things in order, and separating
 them is what makes it readable:
@@ -3659,6 +3703,8 @@ samples where there were none.
 
 ## 62. V.8, and why it comes before V.23
 
+> **Deviation D119** (`docs/deviations.md`): three leaf defects in V.8.
+
 V.8 is the negotiation that runs once a call is answered and before any
 datapump starts. It is pulled ahead of V.23 because it is the direct
 successor to `call.c` -- which hands over with `DPSTAT_CHANGEDP` the moment it
@@ -3841,6 +3887,8 @@ but the fix is different: those had to be compared as offsets, these have to
 be compared by dereferencing.
 
 ## 66. initTxSequence: where V.8's negotiation becomes bits
+
+> **Deviation D134** (`docs/deviations.md`): `initTxSequence` reads a fourth byte it does not own.
 
 This is the function the monitoring goal depends on. It reads the call menu
 -- three flag bytes and two optional four-character extension fields -- and
@@ -4181,6 +4229,8 @@ called it. Nothing in the differential harness would have noticed -- both
 sides would have been equally silent, and equal.
 ## 73. Four kilobytes, and the half that a passing test did not reach
 
+> **Deviation D94, D136** (`docs/deviations.md`): the V.8 CM/JM collector checks its bound after the read.
+
 `v8handshak` reconstructed as 188 lines of C against 4243 bytes of x86 was
 already suspicious, but the differential test said 114,572 checks and zero
 failures, so nothing pushed back. What eventually did was `V8Process`: three
@@ -4297,6 +4347,8 @@ would have gone missing quietly -- which is the argument for sweeping the
 symbol table rather than working from a list.
 
 ## 75. A whole negotiation, against something that has never seen this object
+
+> **Deviation D86** (`docs/deviations.md`): the V.21 offer can never be withdrawn.
 
 Everything up to here proves the reconstruction agrees with the blob, plus a
 signal-layer check that our ANSam is ANSam. Neither answers the question the
@@ -4646,6 +4698,8 @@ following the declared type rather than the instruction would break it.
 
 ## 81. The V.23 acquisition gate counts detections, not consecutive ones
 
+> **Deviation D109** (`docs/deviations.md`): the V.23 acquisition gate counts detections, not consecutive ones.
+
 `v23FP_rx_progress` and `DemodDataB103` are the same function with different
 constants -- the same private copy for the detector, the same `+= 5` on a
 state counter, the same freeze of the data gain when it reaches its target.
@@ -4672,6 +4726,8 @@ block counts at all. Modulated data spends half its time at 2100 Hz and cannot
 pass that test, which is what makes a two-detection gate with no reset safe.
 
 ## 82. A receiver that demodulates and then throws the bits away
+
+> **Deviation D108** (`docs/deviations.md`): `v23FP_rx_progress` leaves the caller's output and its own status unwritten.
 
 Once carrier is up, `v23FP_rx_progress` charges the silence counter on any
 block where the gain control reports no signal, and resets it on any block
@@ -4740,6 +4796,8 @@ Bell 103 -- zero the modulator's scale rather than the output -- applied to a
 state machine instead of a sample buffer.
 
 ## 84. Two accidents that put V.25's silence back in spec
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 The answer-tone sequence's two durations come from the configured sample
 rate: `rate * 3` and `rate / 20`. At 8000 that is 24000 samples of tone --
@@ -4910,6 +4968,8 @@ because 91% of `.text` is still untranslated and a null result over the part
 that is translated is not evidence.
 
 ## 90. The V.34 detector scales its two sections differently
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 `tone_detect` runs two second-order sections in cascade and divides by 16
 between them, which is ordinary headroom management. What is not ordinary is
@@ -5158,6 +5218,8 @@ so `V34ModulatorProcess` can be reconstructed knowing that a "filter" here is
 
 ## 98. The echo canceller's arrays are one contiguous block, and it closes two open entries
 
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
+
 `V34InitializeImplementationSpecific` (0x71d70, 181 bytes) does nothing but
 fill in the two `struct v34_echo` objects. It was one of the two functions
 this reconstruction could not attribute to a translation unit; what it
@@ -5245,6 +5307,8 @@ what the four `V34TimingIIR_*` tables are for — nothing here reads them — an
 what the function returns.
 
 ## 100. The FSK discriminator's delay line lives inside the echo canceller
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 Two things this reconstruction mapped independently turn out to be the same
 memory.
@@ -5796,6 +5860,8 @@ unread.
 
 ## 110. Three places the reconstruction looks wrong against the standard and is not
 
+> **Deviation D114** (`docs/deviations.md`): the slicer's distance metric wraps at 16 bits.
+
 Collected because they share a failure mode: someone checks the code against
 ITU-T V.34, sees a discrepancy, and "fixes" a function that was bit-exact.
 The differential test would catch it — but only if it is re-run, and a
@@ -6118,6 +6184,8 @@ tool call and settled what three rounds of analysis could not.
 
 ## 116. `txmit`: the transmit path in one function, and a second ring
 
+> **Deviation D141** (`docs/deviations.md`): two producers on the transmit queue account differently.
+
 Read to 0x5d904; the last ~50 bytes are unread. **Not written.**
 
 ```
@@ -6304,6 +6372,8 @@ session's work rather than an increment. `V34agc` (827 B, GLOBAL),
 independently testable and cheaper.
 
 ## 119. `decoderv34`'s opening: a four-point slicer over `rxvect4`
+
+> **Deviation D114** (`docs/deviations.md`): the slicer's distance metric wraps at 16 bits.
 
 Read to 0x5bc88 of 714 bytes. **Not written.**
 
@@ -7156,6 +7226,8 @@ exists to stop anyone "fixing" it.
 
 ### 123. The receive burst has fourteen shorts of headroom, then eats the loop counter
 
+> **Deviation D71** (`docs/deviations.md`): a one-sample overrun in the receive path.
+
 `rxtiming` points `rx_samples` at `+0x10c` and `V34demodulate` appends one
 gained sample per pull.  What follows `+0x10c` is not spare buffer -- it is
 the receiver's own bookkeeping:
@@ -7284,6 +7356,8 @@ comparing them meant carrying a guess.
 
 ### 127. `updateAlpha` divides by zero on a small negative energy
 
+> **Deviation D113** (`docs/deviations.md`): `updateAlpha` divides by zero.
+
 `(1 << (shift + 21)) / ((energy + 0x8000) >> 16)` traps when the divisor is
 zero, which needs `energy` in [-0x8000, -1]: the normalisation loop stops
 immediately because bit 30 is already set in a negative value, so no shift
@@ -7297,6 +7371,8 @@ that belongs with task #47.  The test sweep avoids the range deliberately and
 says so, rather than silently not covering it.
 
 ### 128. `modem_serrint`'s filter path replaces the value, not just the output
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 The per-symbol tick builds its complex sample three ways, chosen by the
 receiver's flags: store the residual raw (bit 15), run a 60-tap FIR (bit 11),
@@ -7333,6 +7409,8 @@ using as fractional coefficients.  One region, three readers, none of them
 live at the same time.
 
 ### 129. The shell demapper's tables are indexed with nothing bounding them
+
+> **Deviation D88** (`docs/deviations.md`): `shellDemapper` indexes four tables with unclamped running sums.
 
 `shellDemapper` indexes three tables -- `t1` at +0xa48, `t2` at +0xb48 and
 `t3` at +0xc48 -- with running totals of the eight sub-indices, and clamps
@@ -7802,6 +7880,8 @@ answer it until the value overflows.  This tree has three more such places
 short, and all three are written that way.
 
 ### 140. `receiver` is complete, and its own strings name six of its fields
+
+> **Deviation D84** (`docs/deviations.md`): `receiver`'s complex predictor rounds the real axis the wrong way.
 
 4326 bytes, the last function of `V34RX.c`, and the file is now fully
 translated.  The spine went in with the three flag gates held clear, then
@@ -8874,6 +8954,8 @@ is noise in the metric.
 
 ### 169. v8ControlName, the last of V.8, and the deferred renames
 
+> **Deviation D156** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 The third exported table, .rodata+0x5380, eleven entries indexed by
 V8Control's request:
 
@@ -9448,6 +9530,8 @@ pinning before the states are.
 
 ### 180. The three machines are settled, and `StateName` had no other check
 
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
+
 `v34handshakinit` is written, and the two things finding 179 left open are
 closed.  Both were closed by reading the object rather than by reasoning
 about it, which is the point of the entry.
@@ -9940,6 +10024,8 @@ worth more than another round on the leaf.
 
 ### 186. `initdigital` is the rate negotiation, and its own strings name it
 
+> **Deviation D89** (`docs/deviations.md`): `initdigital` reads `divtab[-1]`, and indexes `rx_divtab` from two unvalidated halfwords.
+
 `initdigital` (0x59980, 1206 bytes) became ready the moment `initV34` and
 `preinitdigital` landed, because it is the thing that calls them.  Now
 reconstructed and passing; this entry was written first, from the five
@@ -10098,6 +10184,8 @@ this paragraph contradicted it.  And the timer group WAS corroborated, but by
 three of the four fields and leaves +0x244 alone.
 
 ### 189. The rate group is named, and the request entry points do not agree on what a request is
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 `VPcmV34InitiateHangUp` (258 B), `VPcmV34InitiateRateRenegotiation` (259 B)
 and `VPcmV34SetV90RateReneg` (274 B) are written.  Finding 180 listed them
@@ -10643,6 +10731,8 @@ in v34rx.c. This runs in `make test`, where a false positive is worse than a
 miss, so the keyword stays required. Write the word and it is covered.
 
 ### 197. The silence check, everywhere, and what it says about drivers
+
+> **Deviation D143** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 Finding 189 built one section — capture ON, level DOWN — for `t_v34pcmif`,
 on the grounds that every transcript comparison in the tree raises the debug
@@ -11268,6 +11358,8 @@ gate-closed kind that four files' worth of one-loop fixes cleared out.
 
 ### 212. The DFT bin's spare int is two thresholds, and only its owner knows
 
+> **Deviation D115** (`docs/deviations.md`): `detectRetrainReq` widens the two sides of its compare differently.
+
 *Written as 204 on the `v34hshak` branch and renumbered on merge: master had
 taken 204 and 205 meanwhile.  Both numbers were quoted in a hand-over before
 the merge, so anything citing "finding 204" for the DFT bin or "finding 205"
@@ -11726,6 +11818,8 @@ scheduling is the split, which both agree on: about 8.7 KB was writable,
 
 ### 218. `probeselect`'s shape, before it is reconstructed
 
+> **Deviation D142, D160** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 *Superseded by finding 219, which reconstructs it. This map is kept because
 219 records what it got right and wrong, and because everything below is still
 the fastest way to read the function.*
@@ -11890,6 +11984,8 @@ is `obj + 0xa97e`, so two more field names come out of this function when it
 is written.
 
 ### 219. `probeselect` is written, and the mutations did all the work
+
+> **Deviation D142** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 Finding 218 mapped `probeselect` without reconstructing it. It is now
 reconstructed and passing, and this records what the map got right, the one
@@ -12611,6 +12707,8 @@ matched nothing and printed `None` for every constructor in the object,
 silently, because a missing annotation looks like an absent feature.
 ### 227. The #59 warm-up trio, and the byte past `getbit` settled
 
+> **Deviation D93** (`docs/deviations.md`): `ApplyBulkDelay`'s bound is unsigned and `getbit`'s index has none.
+
 *(Numbered 226 on branch `v90cpp` while it was being written; renumbered to
 227 on merge, because master had meanwhile taken 226 for `cppstruct.py`.  If
 you find a reference to "finding 226" meaning the warm-up trio, it means
@@ -13042,6 +13140,8 @@ directions — and `unPackJdPhaseReset` clearing the data word.
 
 ### 231. The six were nine: `callgraph.py` cannot see a weak template member
 
+> **Deviation D135** (`docs/deviations.md`): the A-law boundary row's last entry can never be reached.
+
 Task #60 batch 2: `V90Phase3Modulator`, five methods and a 64-byte static
 data member.  All six landed and all six are covered by
 `test/unit/t_v90p3mod.cpp`.  The batch was briefed as callee-closed and was
@@ -13241,6 +13341,8 @@ original.
 
 ### 232. Four ways a passing comparison of this class proved nothing
 
+> **Deviation D107** (`docs/deviations.md`): the DIL segment search runs one past its row when `dilCount` is zero.
+
 Everything below was found by injecting a mutation, watching it survive, and
 fixing the *test*.  Fifty-eight mutations were injected across batch 2 and
 fifty-seven were killed; the fifty-eighth is equivalent and is the last item
@@ -13331,6 +13433,8 @@ measured; it says that where the object uses the coprocessor for integer
 arithmetic, transcribing the coprocessor is both necessary and sufficient.
 
 ### 234. A fourth closure: data that points at data
+
+> **Deviation D70, D106, D157** (`docs/deviations.md`): `selectFilter`'s ISDN and PBX arms do not clamp the row.
 
 Task #60 batch 3: `V90PreFilter`'s five methods, all of `FloatFIR`, and all
 ten of `V90PreFilter`'s static data members.  Everything landed, and
@@ -13533,6 +13637,8 @@ has been deleted.  A fallback that quietly tests less is worth an assertion
 that it is unreachable.
 
 ### 236. Two unordered compares, and coefficients built to see an accumulator
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 Batch 3's differential tests found one reconstruction error and could not,
 at first, see three claims about floating point at all.  Both halves are worth
@@ -13883,6 +13989,8 @@ that placement is settled.  The day's total: 30 dead sites to 10.
 
 ### 242. One v34rx site was missed by three, the other cannot be reached at all
 
+> **Deviation D144** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 `v34rx.c`'s two dead debug sites had different answers, and only measurement
 separated them.
 
@@ -14094,6 +14202,8 @@ here; the raw bytes are in its output already.
 
 ### 246. The three cosine windows, and three windows are not one loop
 
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
+
 `hanning`, `hamming`, `blackman` and the `designWindow` that selects between
 them, 480 bytes across four weak sections.  630,272 differential checks over
 every n from 0 to 300, the whole buffer each time so that writing one element
@@ -14235,6 +14345,8 @@ Two smaller traps found alongside, both mine:
 
 ### 601. Four weak class templates, and a drift decision taken once for all of them
 
+> **Deviation D140** (`docs/deviations.md`): `SineWave::generate` advances the phase once more than it emits, and no caller is named.
+
 *Renumbered from **341** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
 `Queue<float>`, `SineWave<float,float>`, the four differential coders and
@@ -14282,6 +14394,8 @@ the parameter type is unrecoverable, and the header says so.  Likewise
 instantiation can distinguish.
 
 ### 602. `LowPassFIR` designs a filter it cannot run, and the five-argument form is the primitive
+
+> **Deviation D95** (`docs/deviations.md`): `LowPassFIR` leaks its window on every rejected design.
 
 *Renumbered from **342** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
@@ -14578,6 +14692,8 @@ oracle for questions of the form "did the author write this, or did their
 compiler do it?", which the differential tier cannot answer even in principle.
 
 ### 608. `Agc<float>`, and three readings that no ordinary input can separate
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 *Renumbered from **348** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
@@ -15268,6 +15384,8 @@ One candidate is newly surfaced by the wider window and is NOT investigated:
 
 ### 620. Two of task #47's deferred derivations, and one of them corrects a guess
 
+> **Deviation D143** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 *Renumbered from **360** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
 `docs/fastpass.md` deferred coefficient derivations to #47 on the grounds that
@@ -15587,6 +15705,8 @@ DEVIANT PATH, not merely the function -- is the part `fastpass.md` was right to
 call expensive. It is not done here.
 
 ### 622. Two of the three deviation gaps were not gaps
+
+> **Deviation D85** (`docs/deviations.md`): the slow AGC pair does not sum to unity.
 
 *Renumbered from **362** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
@@ -16563,6 +16683,8 @@ whole difference between the two functions' state machines.
 
 ### 280. The K56flex idle symbol is not `txmitdibit`, in three ways
 
+> **Deviation D138** (`docs/deviations.md`): two idle-symbol emitters hardcode the scrambler polarity.
+
 Case 4 of `k56FlexPhase34` scrambles two bits, maps them onto `vect4` and
 tail-calls `txmit`. So does `txmitdibit`. They are not the same function, and
 a reconstruction that called the published emitter would compile, link, read
@@ -16596,6 +16718,8 @@ and not this function's, so the mask is recorded as a surviving mutation and
 not written into the code.
 
 ### 281. Two arms no differential test can enter, and the eight mutations that measure it
+
+> **Deviation D155** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 `k56FlexPhase34` has ten arms. Eight are reachable. The other two are the
 completion arms -- the one that ends the Ja sequence and the one that ends the
@@ -16837,6 +16961,8 @@ Table 1's 20 targets are txstates 5/54/74 (0x640b4), 18, 19, 20, 21, 24, 51,
 
 ### 287. Table 1's default arm is the loop bottom, so an unhandled txstate does not terminate
 
+> **Deviation D159** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 The per-sample dispatch is inside a loop, and the loop's test is the same
 block the dispatch falls into when no case matches:
 
@@ -16953,6 +17079,8 @@ dispatches are proved, and the third is not.** Table 3 is the one #57 needs
 and it is the 27.6 KB.
 
 ### 290. What the step harness proves, and what it cannot
+
+> **Deviation D90** (`docs/deviations.md`): `StateName` is indexed unbounded and the result goes to `vsnprintf`.
 
 `test/harness/v34hsstep.c`, `test/unit/t_v34hsstep.c`, 1,493 checks.
 
@@ -17780,6 +17908,8 @@ twice. **If that batch resolves the destination, `f35a4` can be named then.**
 
 ### 312. `V34SetINFO1aBits` landed, and what its file split means for `V34GiveINFO1dBits`
 
+> **Deviation D139** (`docs/deviations.md`): `bits[7] &= 0xdf` takes the whole high byte with it.
+
 1,401 bytes, closure of one after a build (finding 271's warning, obeyed).
 Coverage 20.6% -> 20.7%, 149,685 -> 151,086 bytes, 364 -> 365 symbols.
 `make phase` green; `t_v34info1a` is 68,561 checks.
@@ -17898,6 +18028,8 @@ and both mutations that weaken a gate are caught only at that level.
 
 ### 303. Case 5's dispatch is three-way, and 0x8990 IS privileged
 
+> **Deviation D138** (`docs/deviations.md`): two idle-symbol emitters hardcode the scrambler polarity.
+
 `k56FlexPhase34`'s idle symbol tests `f382` against 0x89b0 and takes the
 four-point map for everything else; `src/pump/v34/v34k56.cpp` says in as many
 words that "0x8990 is not privileged over any other value". THIS FUNCTION IS
@@ -18014,6 +18146,8 @@ EXACTNESS is not: a count that steps over 0x10 never advances at all, and
 
 ### 306. The fixture's skip list grew four entries the function installs itself
 
+> **Deviation D89** (`docs/deviations.md`): `initdigital` reads `divtab[-1]`, and indexes `rx_divtab` from two unvalidated halfwords.
+
 `t_v34k56.c` scans its pointer-skip list in `setup()` and asserts every entry
 holds two different addresses (finding 283). That scan cannot work here.
 
@@ -18046,6 +18180,8 @@ were tests:
 `bulk_head`/`bulk_tail` still need seeding for the reason `t_v34k56.c` gives,
 and +0x20cc is still NOT in the skip list for the reason finding 283 gives.
 ### 313. `VPcmV34InitiateRetrain` has two switches on one argument, and they mean opposite things
+
+> **Deviation D91** (`docs/deviations.md`): `VPcmV34InitiateRetrain` skips its validation exactly when a receiver is up.
 
 1,406 bytes at `.text+0x6640`, reconstructed into
 `src/pump/v34/v34pcmmain.cpp` as
@@ -18213,6 +18349,8 @@ nothing in the object reads it back yet.
 
 ### 318. Seven of `VPcmV34InitiateRetrain`'s mutations cannot fail, and one of them is the object's own dead store
 
+> **Deviation D154** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 `test/mutations/v34retrain.json`: **74 mutations, 67 caught, 7 measured
 equivalent, none uncaught.** The set exists because this function is the
 easiest possible shape to test vacuously -- every path ends in
@@ -18308,6 +18446,8 @@ trusting a green build, because the build will be green either way.
 
 ======================================================================
 ### 319. Table 1 compares. It was where the fixture put the blocks the object points at, not the object
+
+> **Deviation D137** (`docs/deviations.md`): the blob disagrees with itself on the receive path.
 
 Finding 289 and D60 said the per-sample transmit route's result "is not a
 function of the object", on the strength of three of table 1's nineteen
@@ -18497,6 +18637,8 @@ result in finding 322 is from after that was fixed.
 ======================================================================
 ### 322. How far the agreement was pushed, and what is still not known
 
+> **Deviation D137** (`docs/deviations.md`): the blob disagrees with itself on the receive path.
+
 A green sweep at one layout would be worth nothing here: the failing set moved
 every time the fixture was edited, so "it passes now" is what the last five
 edits also said. What is asserted is that it passes under every perturbation
@@ -18598,6 +18740,8 @@ are exactly the six that write nothing below +0x234.
 
 ======================================================================
 ### 324. Which block a pointer selects is now checked, and closing it retired a bring-up asymmetry nobody had seen
+
+> **Deviation D137** (`docs/deviations.md`): the blob disagrees with itself on the receive path.
 
 `docs/v34handshak.md` listed one hole in the harness: a pointer that lands
 outside the object was checked only for landing outside, never for what it
@@ -18790,6 +18934,8 @@ instruction, and the mutation that replaces it with bit 5 is caught.
 
 ### 335. Four widths no state comparison can see, and the three debug levels that find them
 
+> **Deviation D139** (`docs/deviations.md`): `bits[7] &= 0xdf` takes the whole high byte with it.
+
 `V34GiveINFO1dBits` changes at most one int, one byte and whatever the retrain
 changes. Everything else it does is diagnostics -- and every one of its four
 printed quantities is loaded at a width the value alone would not reveal:
@@ -18907,6 +19053,8 @@ worktree.** Verified against `origin/master` (237... 246) and against the
 local maximum (331) before use, as that file instructs.
 ======================================================================
 ### 360. Table 2's closure is closed, and that is the whole reason it could be taken as a batch
+
+> **Deviation D116** (`docs/deviations.md`): the low-level block counter is unsaturated and compared signed.
 
 `v34handshak` is 61,541 bytes and nobody takes it as a unit. What decides
 whether a *dispatch* of it can be taken as a unit is not the size of its arms
@@ -19292,6 +19440,8 @@ bracketed TU, and do not read a relocation's PRESENCE as evidence of anything
 -- it only means the symbol is `GLOBAL`.
 ======================================================================
 ### 340. Table 1's six small arms, and the two pairs that look like one arm and are not
+
+> **Deviation D158** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 txstates 65, 71, 78, 81, 85 and 86 of `.rodata+0x2da0` -- finding 323's six
 that write nothing below +0x234. All six are reconstructed in
@@ -20643,6 +20793,8 @@ collide.
 
 ### 381. The dead arm of `indicateJaTransmission` is its INTERIOR, not its position
 
+> **Deviation D154** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 **`K56FlexFloModem::enterPhase3FullDuplex` is a bare `ret` at 0x101d0** -- one
 byte, no instruction touching `this`, and an empty body in
 `src/pump/v90/K56FlexFloModem.cpp`. Everything downstream of the second test
@@ -21036,6 +21188,8 @@ them.
 ======================================================================
 
 ### 402. The arm's inlined `SetINFO0dBits` drops the guard the real one has
+
+> **Deviation D87** (`docs/deviations.md`): the restart's inlined `SetINFO0dBits` lost its guard.
 
 `v34handshakinit` mode 0 already contains
 
@@ -22197,6 +22351,8 @@ is a claim that can fail rather than a description.
 
 ### 431. Finding 376 says 58 is on the `= 4` side. It has one of each
 
+> **Deviation D145** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 Finding 375 split the twenty-five-store error-recovery reset three ways because
 its nine inlinings disagree on one word: four store the constant 4 into +0x3588
 and five set bit 0 of whatever is there. Finding 376's handover summarised that
@@ -22483,6 +22639,8 @@ otherwise look exactly like a guard that never took.
   body that is otherwise identical, and it is asserted directly.
 ### 442. The INFO1a arm's two rate tables, and eight constants that are half an array length
 
+> **Deviation D150, D151** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 0x6ed17 calls `V34GiveProbeResults` and then `V34GiveINFO1aBits`, and that
 function's answer decides everything. **The test is sixteen bits wide** --
 0x6ed50 is `test %ax,%ax` -- and a non-zero answer ends the phase with WAIT
@@ -22718,6 +22876,8 @@ rename.
 
 ### 444. What the blob does when the byte copy runs past ten slots, measured
 
+> **Deviation D92** (`docs/deviations.md`): microstate 44's accept arm copies past its ten-short buffer and then reads the byte it corrupted.
+
 The brief for this batch expected the unbounded copy at 0x6e5c8 to be met
 immediately at a message length of 0x4d. **It cannot be**: 0x6e534's dispatch
 is AHEAD of the copy, so a 77-bit message goes to 0x6f438 and never reaches
@@ -22891,6 +23051,8 @@ one, which is the convention CLAUDE.md asks for when a measurement moves.
 ======================================================================
 
 ### 448. The guards of these arms that cannot be driven from both sides, and why that is structural
+
+> **Deviation D146** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 Six `hs_setstate` calls across the three arms compare the current state
 against the one they are about to write and skip the diagnostic when they are
@@ -24589,6 +24751,8 @@ left are 21 `TRNSEG4` (0x64339) and 66 `TRNSEG4A` (0x62e28).
 
 ### 420. Table 1's remaining thirteen: eleven landed, and the hand-over for 21 and 66
 
+> **Deviation D159** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 *Written last, numbered first: 420 is the head of this batch's block 420-429
 and this is its index.  The per-arm records are findings 421 (60, 70, 18, 51),
 422 (19, 20, 5/54/74), 423 (69, 64/68), 424 (67) and 425 (24).  426-429 are
@@ -25386,6 +25550,8 @@ actually in?" should have been asked after the second.
 
 ======================================================================
 ### 428. Table 1's 66, which settles the receive rate, and the fall-through that is not one
+
+> **Deviation D111, D147** (`docs/deviations.md`): the receive-rate completion has no default arm.
 
 Finding 420 handed over two open targets. This is `0x62e28`, txstate 66
 `TRNSEG4A`, 3,583 bytes by that finding's level-0 count and the largest single
@@ -29777,6 +29943,8 @@ V34HS_DET_SYNC);` appears three times in this one arm.
 
 ### 736. Two fills at which the handshake fixture disagrees with ITSELF, and the one that faults
 
+> **Deviation D89, D137** (`docs/deviations.md`): `initdigital` reads `divtab[-1]`, and indexes `rx_divtab` from two unvalidated halfwords.
+
 `t_v34hsrx4.c` is the first test to call `receiver` through
 `test/harness/v34hsstep.c` -- rxstate 4 is the only dispatch case whose arm
 begins with it -- and running it across fills found two things the fixture
@@ -30483,6 +30651,8 @@ guard excludes 5") are inherited and untouched by this batch.
 
 ### 754. Finding 736's seed 7 and 20 fault, narrowed: the blob is deterministic, the objects are identical, and the cause is still not the obvious one
 
+> **Deviation D137** (`docs/deviations.md`): the blob disagrees with itself on the receive path.
+
 736 recorded `t_v34hsrx4.c` failing at seeds 7 and 20 with the blob-on-both-sides
 control failing too, and said the cause was not established. It still is not.
 What follows is what has been ELIMINATED, so the next attempt does not repeat it.
@@ -30737,6 +30907,8 @@ transcripts differ" is not a finding; "block 0, the originator, object
 +0x02aa6: ours 0xfa9a, the blob 0x0003" is finding 781.
 
 ### 781. `modem_serrint`'s history-ring wrap is UNSIGNED, and every existing test seeds the index to zero
+
+> **Deviation D130** (`docs/deviations.md`): nothing initialises the history-ring index, and the store precedes the range test.
 
 The first run of the two-instance call diverged at **block 0**, and the bytes
 named it at once:
@@ -31072,6 +31244,8 @@ failure return), `max_frag` must be <= 48 (`cmpl $0x30,0x40(%esp)` / `jg` at
 off the returned object and finding 803 measures it the other way.
 
 ### 801. What the construction asks its host for, and why two of the five are addresses
+
+> **Deviation D96** (`docs/deviations.md`): `vpcm_create` dereferences two host answers without validating either.
 
 `vpcm_create` makes five `modem_get_param` calls, and the harness's default
 answer — `0x5A000000 + 7*param` — is fatal for two of them and absurd for the
@@ -32254,6 +32428,8 @@ measured -- 600, 1200, 2400, 3901, 21841 -- and nothing about them moved.
 
 ### 879. The `loadParams` oracle WORKS, and the half of it that needs `loadParams` is the transcription check
 
+> **Deviation D148** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 The proposal: `objcopy --weaken-symbol` the reference object's
 `ref_Vparser_read_int` and `ref_Vparser_read_float`, give the test strong
 definitions that log `(reader, name, offset)`, and compare the blob's log
@@ -32458,6 +32634,8 @@ that the original's body was empty, because a compiler could have emptied it.
 What settles that one is the date: `-flifetime-dse` postdates GCC 3.4.2.
 
 ### 873. `FloatARMA` is 52 bytes, and two of its claims are codegen-only
+
+> **Deviation D105** (`docs/deviations.md`): `FloatARMA` with zero denominator taps.
 
 `tools/cppstruct.py FloatARMA` gives five members and 1,770 bytes, the
 constructor and destructor each emitted twice byte-identically (C1/C2, D1/D2).
@@ -33121,6 +33299,8 @@ inside the host's own `struct modem`. A test that constructs V.PCM owns one.
 
 ### 823. The five parameters, DERIVED -- and where each one lands
 
+> **Deviation D78, D161** (`docs/deviations.md`): `MDMPRM_MIN_RATE` and `MDMPRM_MAX_RATE` reach nothing.
+
 Finding 801 listed five overrides and called them plausible. Each now has a
 producer, and two of the three numbers turn out to be host CONSTANTS rather
 than modem-shaped choices:
@@ -33187,6 +33367,8 @@ construction. The mutations that were watched failing them:
 ```
 
 ### 824. THE SWEEP: this call consumes ONE of the six, and it is the one that cannot be derived
+
+> **Deviation D78, D161** (`docs/deviations.md`): `MDMPRM_MIN_RATE` and `MDMPRM_MAX_RATE` reach nothing.
 
 Deriving a configuration is worth nothing if nothing measures what it does. So
 each parameter was swept and the whole 1,600-block call re-run, with the
@@ -33757,6 +33939,8 @@ see ends, not a measured `sizeof`.
 
 ### 828. Two empty constellations are the same constellation
 
+> **Deviation D100** (`docs/deviations.md`): two empty constellations are declared identical having compared nothing.
+
 `getConstellationsIndex` decides whether constellation `i` duplicates an
 earlier one like this (0x333ab):
 
@@ -33787,6 +33971,8 @@ The same shape is why the fixture also contains a difference planted at
 so the first is not a difference and the second is.
 
 ### 829. The mask functions do not mask the high nibble, and clear only half of what they can write
+
+> **Deviation D99** (`docs/deviations.md`): `getConstellationMask` clears eight entries and can write sixteen.
 
 `getConstellationMask` and `getCodecConstellationMask` are 130 bytes each and
 differ in one displacement -- 0x4 against 0x304, the two byte tables. Both do
@@ -33854,6 +34040,8 @@ original's module layout, and `compare.py`'s per-object rollup and
 
 ### 831. The V.92 workspace at `V92Modem+0xaa0` is a 180-byte POD, and what a test of its four allocators has to check
 
+> **Deviation D101** (`docs/deviations.md`): `V92deleteConstellations` and `V92deleteFilterCoefficients` leave ten dangling pointers.
+
 `V92createConstellations`, `V92createFilterCoefficients`,
 `V92deleteConstellations` and `V92deleteFilterCoefficients` (121, 73, 173 and
 106 bytes at 0x12d10, 0x12d90, 0x12de0 and 0x12e90) all take one pointer and
@@ -33894,6 +34082,8 @@ to check, for whoever writes it:
   does nothing at all also looks like.
 
 ### 832. `four1` and `realfft`, the object's FFT pair, and the TU they came from
+
+> **Deviation D110** (`docs/deviations.md`): `four1` and `realfft` validate nothing.
 
 `_Z5four1Pfmi` (0x536c0, 0x16d = 365 bytes) and `_Z7realfftPfmi` (0x53830,
 0x1f9 = 505 bytes), now `src/dsp/fft.cpp` with `include/dsplib/fft.h` and
@@ -34207,6 +34397,8 @@ which is what the list already exists for and why 39 other C++ headers are in
 it. The headers are still compiled, by the `.cpp` files that include them and
 by `check64`.
 ### 960. V.34 DOES NOT CONNECT because arm 47 races a silent line, and `filtdelay` is what decides the race
+
+> **Deviation D77** (`docs/deviations.md`): v.34 cannot connect below `IODELAY` 86, and one shipped driver answers 0.
 
 Finding 902 said the call stops at *"Repeated info0 is detected"* and could not
 say why. This is why -- mechanism first and value second, and the order
@@ -34665,6 +34857,8 @@ The map, every offset a literal access in `vpcm_run` or `vpcm_create`:
 And both bit arrays are exactly the 0x400 clamp at four bytes each.
 
 ### 982. The seventeen arms, and only two of them do anything but set a word
+
+> **Deviation register** (`docs/deviations.md`, Part III): D28 is retracted, so this passage cites a claim that no longer stands; `taps` IS 144 and there is no over-read.
 
 The jump table is at `.rodata+0x164`, 17 entries, `ja` to the default above
 0x10.  The three entries after it belong to another function.
@@ -35254,6 +35448,8 @@ findings -- and the exact form is what a new value must be checked against.
 
 ### 1022. The V.34 connect threshold is IODELAY 86, not 88, and the boundary is filtdelay 57 exactly
 
+> **Deviation D77** (`docs/deviations.md`): v.34 cannot connect below `IODELAY` 86, and one shipped driver answers 0.
+
 Finding 962 swept iodelay in steps of 8 to 20 and reported "80 no, 88 yes".
 The gap was never opened.  Opening it, with `V34LINK_IODELAY` and nothing
 else changed:
@@ -35443,6 +35639,8 @@ exception is finding 1024's over-cap path, which is the only writer of
 
 ### 1026. What a SIP/RTP backhaul should set `MDMPRM_IODELAY` to -- ENGINEERING JUDGEMENT on a derived range
 
+> **Deviation D77** (`docs/deviations.md`): v.34 cannot connect below `IODELAY` 86, and one shipped driver answers 0.
+
 `slmodemd`'s socket driver -- the one a SIP deployment would inherit -- returns
 **0** with the real expression commented out beside it
 (`modem_main.c:682-686`).  Finding 1022 makes that a modem that cannot
@@ -35501,6 +35699,8 @@ let the pump negotiate it down; and whether the 384-sample floor in finding
 1024's over-cap path was chosen for a reason or is a constant nobody revisited.
 
 ### 1090. K56FLEX IS STUBBED OUT IN THIS BUILD -- present in name, absent in code
+
+> **Deviation D154** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 Asked what it would take to bring V.34 up to K56flex, V.90 and V.92, the
 closure said K56flex needs **42 bytes over 19 symbols**, which looked like the
@@ -35710,6 +35910,8 @@ demodulator's own decision lag -- which this batch did not do.
 
 ### 1043. THE OBJECT'S OWN SAMPLES-TO-SYMBOLS IDIOM IS `n * baud / 9600`, ITS 2400 ARM **IS** `>> 2`, AND `PPSEG` ADDS THE TWO UNITS TOGETHER
 
+> **Deviation D112** (`docs/deviations.md`): `PPSEG` adds two different units together.
+
 This is the check the task set as decisive -- a consumer of `+0xaa7c` that
 also reads a baud-rate table -- and there is one.
 
@@ -35860,6 +36062,8 @@ there and are still deliberate.
 
 ### 1046. WHAT THIS BATCH DID NOT SETTLE
 
+> **Deviation D112** (`docs/deviations.md`): `PPSEG` adds two different units together.
+
 - **The tap-by-tap sum behind `+ 34`.**  1042 establishes what it *is* and
   bounds it against the specification's durations; it does not add the filters
   up.  The 104/136/31.5 arithmetic is a lead and is labelled as one.
@@ -35924,6 +36128,8 @@ Not edited here, for the reason at the top.
 
 ======================================================================
 ### 1061. gcov marks a compiler-proved-dead branch NON-EXECUTABLE, which is neither dead nor covered, and D36 and D53 both live there
+
+> **Deviation D143** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
 The strongest result the new pass produces, and it exists because the obvious
 detector gets it exactly backwards.
@@ -36156,6 +36362,8 @@ Minor: plain mode prints `temp` as `vsnprintf` truncated it, so the
 
 ======================================================================
 ### 1067. D5 is measured -- five unowned frees on both sides -- and it is a CREATE-side precondition too
+
+> **Deviation D103** (`docs/deviations.md`): the caller-supplied `FPM_TONE` path frees five pointers it never obtained.
 
 The gap finding 1060 lists for D5, closed by `test/unit/t_fpm_tone_own.c`
 (new file, wildcard, no Makefile edit).
@@ -36601,6 +36809,8 @@ itself.  Prefer the `sysdep_malloc` immediately before the constructor's call
 site; use a displacement scan only when there is no allocation to find.
 
 ### 1108. `V90Equalizer::reset`: A SENTINEL, AN UNSIGNED CLAMP THAT DOES NOT CLAMP, AND TWO WINDOWS SCALED BY ONE LENGTH
+
+> **Deviation D104** (`docs/deviations.md`): `V90Equalizer::reset`'s cursor clamp does not clamp at length zero.
 
 862 bytes, the largest of the eleven, and five things in it are not visible
 from the store list.
@@ -37129,6 +37339,8 @@ pointers the function saves across its memset and the argument it stores.
 
 ### 1119. `VPcmV34Create` TAKES FIVE ARGUMENTS, AND THE FIFTH IS ITS PRIMARY DISPATCH
 
+> **Deviation D149** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
+
 Finding 1117 read the prologue and reported four.  That was wrong, and it was
 wrong in the way a prologue read is always liable to be: `sub $0x2c,%esp`
 after four pushes puts arg1 at `0x40(%esp)`, and there is nothing in the
@@ -37201,6 +37413,8 @@ invisible to a reader who starts at the prologue and works forwards.
 
 
 ### 1140. THREE BLOBS IN THE FORK, ONE BUILD: `.text` IS IDENTICAL IN ALL THREE, AND `.bak` IS OURS
+
+> **Deviation D75** (`docs/deviations.md`): a one-sample overrun in the receive path.
 
 `cryan209/D-Modem` branch `pjsip2.15` ships `dsplibs.o`, `dsplibs.o.bak` and
 `dsplibs.o.mod` in `slmodemd/`. The first question is whether any of them is a
@@ -37493,6 +37707,8 @@ EAX's top 24 bits undefined. At `vpcm_create+0x180` that is harmless because
 only `%al` is consumed. At `rebuildJMSequence+0x136` it is not (finding 1145).
 
 ### 1145. THE JM PATCH: TWO EDITS WORK, ONE IS A NO-OP, AND THE PAIR PROVES THE INTENT
+
+> **Deviation D75** (`docs/deviations.md`): a one-sample overrun in the receive path.
 
 `rebuildJMSequence` (`.text+0x75c50`, 3,134 bytes) builds V.8's Joint Menu --
 the capability list the answering modem sends. Three of the twelve edits are
