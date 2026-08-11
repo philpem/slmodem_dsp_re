@@ -44129,3 +44129,68 @@ categories in a discrete distribution, so a large shift in where the mass sits
 barely moves them. The rank-sum over the full distribution, and the proportion
 above a threshold, both find the effect immediately. **Choosing a statistic that
 cannot see the effect is a way of being wrong that looks like rigour.**
+
+======================================================================
+
+### 1352. `round32`'s `volatile` IS A GCC 13 SHIM, NOT A TRANSCRIPTION — THE PERIOD COMPILER ROUNDS FROM PLAIN SOURCE
+
+*Asked because no 1990s DSP author would write `volatile float r = v;` to force
+a rounding, and that intuition is right. Investigation only; no code changed.*
+
+**What the object does**, `_ZN9Resampler8resampleEPKfjPfRj` at `.text+0x34da0`:
+
+```
+34f55:  flds  (%eax)        h[i]
+34f5a:  fmuls (%edx)        * c[i]
+34f60:  faddp %st,%st(2)    accumulate -- into st(2), NO store in the loop
+34f62:  jne   34f55
+...
+34f76:  fstps 0x34(%esp)    the spill, ONCE, after the loop
+```
+
+The running sum stays on the x87 stack at 80 bits for the whole inner product
+and is then stored **once** to a four-byte slot. That is ordinary register
+spilling of a variable whose declared type is `float`; the 24-bit rounding is a
+side effect of where GCC put it, not of anything in the source. The author wrote
+`float y0` and thought no more about it.
+
+**What our period compiler does with plain source.** `Resampler.cpp` was
+compiled in the tree's own GCC 3.4.2 container at the tree's flags, twice: once
+as it stands, and once with `round32`'s `volatile` removed so the helper is the
+identity function.
+
+| | accumulation | `fstps` | spill/reload pairs |
+|---|---|---|---|
+| the object | `faddp %st,%st(2)` | 4 | 2 |
+| **plain**, GCC 3.4.2 | **`faddp %st,%st(2)`** | 5 | 2 (`0x20`, `0x4c`, each stored then reloaded) |
+| with `volatile`, GCC 3.4.2 | `faddp %st,%st(1)` | 5 | 2 |
+
+**The plain source spills anyway.** GCC 3.4.2 runs out of x87 registers and
+stores the accumulators to four-byte slots with no help at all, and it does so
+using the same `faddp %st,%st(2)` stack discipline the object uses, which the
+`volatile` version does not.
+
+**So the `volatile` is a shim for the modern build only.** GCC 13 has the
+registers to keep both sums at 80 bits and therefore does not round; the helper
+forces what GCC 3.4.2 does for free. The existing comment says "the object
+rounds and our compiler will not", which is true but understates it: the ORIGINAL
+SOURCE almost certainly contained nothing of the kind, and the reconstruction is
+carrying a modern-toolchain artefact in a file whose purpose is to record what
+the author wrote.
+
+**What is NOT established.** The mnemonic similarity of the two variants against
+the blob is 38.4% (plain) against 36.9% (volatile) -- a 1.5-point gap that is
+far too small to lean on, and both are low because the blob's `resample` is 367
+instructions to our 263 with 18 `faddp` to our 4: its inner loop is unrolled and
+ours is not. The similarity tier cannot adjudicate this. Nor has it been shown
+that the plain GCC 3.4.2 build passes the differential test -- the harness builds
+with the modern toolchain, so running tier 1 against a period-compiled object
+would need harness work.
+
+**Options, given the above.** `-ffloat-store` and `-fexcess-precision=standard`
+are both wrong for a reason the disassembly settles: they round at every
+assignment, and the object's loop demonstrably does NOT round -- `faddp` with no
+store, `taps` times. Register allocation is not reachable by any flag. What is
+available is to make the shim's conditionality explicit, so the period build
+compiles the plain source the author wrote and only a modern compiler gets the
+helper. That is a source change and is not made here.
