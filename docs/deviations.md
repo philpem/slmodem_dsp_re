@@ -4260,6 +4260,20 @@ and it stays that way until that member is read.
 **Not fixed.** `t_v92jd.cpp` seeds the slot with varied bytes and compares the
 whole object, so a reconstruction that helpfully cleared `bits[48]` fails
 rather than passes.  Finding 1223.
+## D163 🐛 💤 `V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"` — the CP class's debug line names the other class
+
+*V.90/V.92 message-parameter batch. **Reachability: unmeasured** — diagnostic only, and only above `dsplibs_debug_level > 1`. Status: CONFIRMED — the literal at `.rodata.str1.4+0xd6b0` is byte for byte `V90MP`'s at `+0x5a34`. Fix class: documentation only; reproduced, not corrected.*
+
+**Finding 1239.**
+
+**RENUMBERED.  This entry was committed as `D162` on its own branch** and so
+was the `V92Jd` entry above it: three of the nine parallel construction-path
+batches independently picked 162 as the next free number, which is what a
+shared append-only register does when only the finding numbers are blocked
+out.  D-number blocks were assigned to the remaining batches when the second
+collision surfaced.  CLAUDE.md's rule for a renumbering is that the entry says
+what it used to be called, because a reference that still resolves but now
+points at the wrong entry is the one thing `tools/refcheck.py` cannot catch.
 
 ---
 
