@@ -166,6 +166,23 @@ handing the AGC a zero gain, which silences a block and drops a Bell 103 call
 on 6.6% of blocks. Everything else the original gets wrong is reproduced
 faithfully and recorded in [docs/deviations.md](docs/deviations.md).
 
+### Fixing the blob itself
+
+The reconstruction is unfinished, so anything running today still links the
+blob, and a defect in the register is a defect that ships. Two of them —
+**D1** and **D4**, both a table declared one entry shorter than its own index
+expression can reach — can now be repaired *in the object*, without modifying
+`slmodemd/dsplibs.o`:
+
+```
+make blobfix         # build/blobfix/{blobfix.c,dsplibs_fixed.o}
+make blobfix-check   # 20 checks, including a watchpoint on the byte it overran into
+```
+
+Opt-in, off by default, and not part of `make phase`. Read
+**[docs/blobfix.md](docs/blobfix.md)** before adding a third: the mechanism
+suits a *missing value* and is actively unsafe against a *missing decision*.
+
 ## Ground rules
 
 - **This tree builds standalone.** It never modifies `slmodemd/` or its
