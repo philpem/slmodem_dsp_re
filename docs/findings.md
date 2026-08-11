@@ -44042,7 +44042,8 @@ So the message a Jd object PACKS cannot be read back by the same object's own
 accessors, and vice versa.  Both readings are reproduced, both are driven
 against the blob, and neither is repaired: D270.  Whether the unframed layout is
 what an unpacker leaves behind is a question for `unPackData`, and the answer
-does not change what these three do.
+does not change what these three do.  **It is yes -- finding 1395**, which is
+why D270 is retracted rather than standing.
 
 **A byte counts as set if it is non-zero, EXCEPT in the lookahead.**
 `getRatesMask` tests `cmpb $0x0`, so a byte of 2 contributes its bit;
@@ -44395,3 +44396,242 @@ reference object in the same process) ruled out the test being at fault and
 made this a finding about `src/`. That reasoning was wrong: reading the
 expectation from the reference at runtime removes a HARDCODED assumption but
 not a shared environmental one, because both sides read the same allocator.
+
+### 1395. THE UNPACKER IS THE PRODUCER THE ACCESSORS WERE WRITTEN FOR, AND D270 IS TWO DIRECTIONS
+
+Finding 1390 left one question open: the seven Jd accessors read a
+payload-contiguous layout that no packer in either class writes, and whether
+anything writes it was a question for `unPackData`.  It does.
+
+`V90Jd::unPackData` (0x1eba0) strips the framing off an incoming message and
+fills `bits[0..47]` FLAT, one byte per received bit, in arrival order, storing
+no group marker anywhere.  The stores are `mov %cl,0x2(%ebx,%esi,1)` at
+0x1ec51 (the sixteen low mask bits), 0x1ec89 (the twelve high ones), 0x1ecaf
+(the constellation and lookahead pairs) and 0x1ecfd (the sixteen CRC bits as
+received).  The two V.92 unpackers do the same to their own vector at 0x12989,
+0x129bd, 0x129e3, 0x12a0a, 0x12a4f and at 0x125b1, 0x125e9, 0x1260f, 0x1265d.
+
+That range is exactly what `getRatesMask` (0..27), `getConstelationSize`
+(28..29), `getMaxLookahead` (30..31) and `V92Jd::getJdPhase` (phase 0..15)
+read.  The mapping between the two layouts is
+
+    framed 18 + p        for payload p in 0..15
+    framed 35 + (p - 16) for payload p in 16..31
+    framed 52 + (p - 32) for payload p in 32..47
+
+and it is the same in all three unpackers.  **So the class has two layouts
+because it has two directions**: the constructor and the packs build the
+framed message for the wire, the unpacker leaves the payload flat for the
+accessors, and D270 -- opened when the accessors landed and the unpacker had
+not -- is explained rather than repaired.  The round trip is now driven end to
+end: `t_v90jd.cpp` and `t_v92jd.cpp` pack a message with the code this tree
+already tests, feed it back one bit at a time, and read it out through the
+accessors.
+
+**Half of D271 goes with it and half does not.**  In the phase message,
+payload 28 is the always-1 tag (finding 1396), so the constellation pair sits
+one position later there than in the data message -- which accounts for
+`V92Jd::getConstelationSize` reading index 29..30 where `V90Jd`'s reads 28..29.
+What no reading accounts for is that it takes them out of `phaseBits` while
+its two siblings read `bits`: a `V92Jd` that has received a DATA message
+answers `getConstelationSize` out of the phase vector.  D271 is that half.
+
+### 1396. THE Jd RECEIVER: A NINE-STATE MACHINE, A CRC COMPARED BY MAGNITUDE, AND A ONE-BYTE MESSAGE TAG
+
+What the three state bytes hold, measured from the three unpackers:
+
+- `unpack[0]` is the length of the current run of 1 bits, kept as a BYTE and
+  wrapping at 255 (`movzbl (%ebx); inc %al` against `test %ecx,%ecx; je`).
+- `unpack[1]` is how many payload bytes have been stored.
+- `unpackWord` / `unpackPhaseWord` is the state: `cmp $0x8,%eax; ja` over a
+  nine-entry jump table at .rodata+0x794 (V.90) and +0x598 (V.92 phase), and
+  `cmp $0x9` over a TEN-entry table at +0x5bc (V.92 data).
+
+The return type is not mangled and is measured as `int`, 0 or 1: every path
+reaches `xor %edx,%edx` before `mov %edx,%eax` and the completion path jumps
+past it (0x1ec18, 0x12cc6, 0x128d1).  The restart block at 0x1ec40 / 0x1297e /
+0x125a6 is the matching `unPackReset` method's three stores in that method's
+order, byte for byte -- an inlined call, and written as one.
+
+**THE CRC IS THE PACKER'S, OVER ONE RUN OF 32 INSTEAD OF TWO OF 16.**
+`cmpl $0x1f,0x3c(%esp)` where the packer's helper stops at 15 and is called
+twice with a 17-byte stride.  The payload is contiguous here, so the same 32
+bytes arrive in the same order and the register agrees with what the packer
+put on the wire; the round trip closes on the message's 72nd bit.
+
+**AND IT IS COMPARED AS A SUM OF ABSOLUTE DIFFERENCES, NOT BITWISE.**
+`sub %edi,%edx; mov %edx,%eax; sar $0x1f,%eax; xor %eax,%edx; sub %eax,%edx`
+accumulated over sixteen positions and tested for zero.  Since the received
+byte is stored unmasked, a CRC byte of 2 FAILS here where `(x ^ y) & 1` would
+pass.  Driven directly.
+
+**EACH V.92 UNPACKER VERIFIES A CONSTANT TAG BYTE BEFORE DECLARING A
+MESSAGE.**  `cmpb $0x0,0x1e(%ebx)` at 0x12cac is `bits[28]`; `cmpb $0x1,
+0x66(%ebx)` at 0x128bc is `phaseBits[28]`.  A mismatch takes the reset path
+and returns 0.  Payload 28 is framed 47 -- exactly the byte each constructor
+writes as a constant and neither pack touches (`bits[47] = 0`,
+`phaseBits[47] = 1`).  So the pair is a MESSAGE-TYPE TAG: the two messages are
+otherwise interchangeable (same framing, same CRC coverage), and feeding one
+to the other's unpacker walks the whole message, passes the CRC and is refused
+on that one byte.  Both directions are driven.  `V90Jd::unPackData` has no
+such check.
+
+It also completes D162 from the other side: `bits[47]` MUST be written by the
+V.92 constructor because it is the tag the data unpacker demands, and
+`bits[48]` need not be because `packJdData` clears it (finding 1392).
+
+**V.92's DATA UNPACKER SPLITS THE SECOND RATE RUN 11 + 1.**  `cmp $0x1b,%al`
+at 0x129cd takes eleven bytes and then a state of its own at 0x129e3 takes the
+twelfth with NO comparison at all, storing one byte and advancing
+unconditionally -- which is the extra jump-table entry.  V90Jd's unpacker and
+V92Jd's phase unpacker take twelve in one state (`cmp $0x1c` at 0x1ec99 and
+0x125f9).  It is the same eleven the V.92 constructor writes (finding 1223),
+so the twelfth bit -- payload 27, framed 46 -- is the one V.92 does not use as
+a rate bit and `packJdData` forces to zero.  **The bytes written are
+identical; only the state number differs, so the split is observable in
+`unpackWord` alone** -- which is why the fixture compares the whole object
+after every bit rather than the vector at the end.
+
+### 1397. THREE DEFECTS IN THE Jd RECEIVERS THAT HAVE NO DEVIATION NUMBER YET
+
+All three are measured, reproduced and driven; none is repaired.  They are
+recorded here rather than in `docs/deviations.md` because this batch's
+allocated block was D270-D274 and the echo canceller's three (D272-D274) are
+already committed into source comments.  **Whoever allocates the next block
+should give these three entries numbers of their own; this finding is their
+text.**
+
+**The two V.92 directions cannot receive concurrently.**  `V92Jd` has ONE pair
+of state bytes and two state words: both unpackers store to +0x00 and +0x01
+(`mov %dl,(%ebx)`, `mov %al,0x1(%ebx)` in each) while one switches on +0xd4
+and the other on +0xd8.  A data bit fed part-way through a phase message
+advances the phase message's own run length and payload count.  Measured from
+the offsets; that a receiver cannot therefore run both at once is the
+one-line inference.
+
+**A preamble longer than seventeen 1 bits desynchronises the message.**  State
+0 leaves on the seventeenth (`cmp $0x10,%dl; jbe`), state 1 treats a 1 as an
+error, and the reset stores `movb $0x0,(%ebx)` -- ZERO, not one -- so the
+offending bit is not counted toward the next run.  A receiver that sees
+eighteen 1 bits must wait for a fresh seventeen.  Driven in both test files.
+
+**The accepting state has no exit.**  V.90 state 8 and V.92 states 9 and 8
+only increment `unpack[1]`; nothing changes the state word and there is no
+transition out of it.  A caller that keeps feeding after a completed message
+gets a spurious completion every 256 bits, on stale payload, because the byte
+counter wraps back to 0x34.  The tests' `late_complete` counter asserts
+exactly that.
+
+**One hazard that is deliberately NOT one of the three.**
+`vec[unpack[1]] = bit` is bounds-checked nowhere in any of the three
+unpackers.  It is unreachable in normal use -- from a constructed or reset
+object the counter is capped by each storing state (16 / 27-28 / 32 / 48), and
+the only state that walks it past 71 is the accepting one, which never returns
+to a storing state without an explicit reset.  It is written down because the
+next reader will see the unbounded index and reach for a fix; the tests clamp
+seeded `unpack[1]` below 72 for the same reason.
+
+### 1398. THE ECHO CANCELLER'S FOUR STATES, ITS CLOCK, AND ITS TWO CURSORS
+
+**THE OBJECT NAMES ITS OWN STATES.**  `setState`'s arms open with
+"V92EchoCanceller: echo state set to filter only" (0), "... to count delay
+before training" (1), "... to fast echo training" (2), "... to slow echo
+training" (3), and anything else prints "V92EchoCanceller: setState ERROR:
+illegal state".  States 2 and 3 are confirmed twice over, because 2 loads
+`V92_ECHO_FAST_BETA_FACTOR`, `_FAST_DECAY_FACTOR` and `_FAST_UPDATE_DURATION`
+and 3 the three `_SLOW_` fields.  The enum's underlying type is SIGNED and
+that is forced: the dispatch is `cmp $0x1,%eax; je; jle`, and `jle` is the
+signed branch where an enum of 0..3 would have given GCC `unsigned int` and
+`jbe`.  C++98 has no fixed base, so it is pinned with a negative enumerator of
+ours (docs/method/compilers.md, V2).
+
+The state machine `process` drives is 1 -> 2 -> 3 -> 0, and **0 is terminal**:
+the FILTER_ONLY arm filters and returns without touching the sample counter,
+so a canceller that has finished training never changes state again.  The
+illegal-state message is the one diagnostic here besides the destructor's that
+goes through `dsplibs_debug_printf` directly, gated at the call site by
+`cmpl $0x1,dsplibs_debug_level; ja`, so it is readable text where every other
+message in the class is encoded.
+
+**+0x0c AND +0x10 ARE THE STATE'S CLOCK, AND IT RESTARTS ONLY ON A REAL
+CHANGE.**  `setState` stores the duration at +0x0c -- the parameter block's for
+2 and 3, and `echoDelay + 400` for 1, the only place the field is built rather
+than read, which is what names it `updateDuration`.  `process` adds each
+block's length to +0x10 and asks for the next state when it reaches +0x0c.
+And `cmp %eax,0x8(%ebx); je` jumps past the `movl $0x0,0x10(%ebx)` every other
+arm falls into, so a `setState` to the state already held writes NOTHING,
+while a change to the illegal arm still clears the count without changing the
+state.  The comparison `cmp 0xc(%edi),%esi; jb` is unsigned, which needs one
+unsigned operand; which of the two the object cannot say.  That closes the
+class's one unexplored hole: `pad_0c[8]` is `updateDuration` and `word_10`,
+and +0x08 -- `word_08`, "cleared by reset" -- is the state itself.
+
+**TWO CURSORS, AND ONE NUMBER REACHED TWO WAYS.**  `updateEchoHistory` appends
+at `echoHistory[echoLength]` and moves +0x2c; `process` reads a
+`filterLength`-long window at `echoHistory[historyIndex]` and moves +0x28,
+wrapping at `historyAlloc - word_18`.  Neither touches the other's, which
+settles +0x28's invented name (finding 226) in the reader's direction and
+makes +0x2c a FILL LEVEL rather than a tap count.  The geometry is exact: a
+maximum cursor of `historyAlloc - filterLength` plus a window of
+`filterLength - 1` is `historyAlloc - 1`.  And `word_18` is a member the
+constructor could not have folded away, because the same quantity is reached
+two ways -- `process` loads +0x18 while the compaction loads +0x14 and
+computes `filterLength - 1` on the fly.
+
+**A D72 DATAPOINT, AND THE VERDICT DOES NOT MOVE.**  The writer bounds the
+buffer by `historyAlloc` where `reset` bounds it by `echoLength` -- but that
+bound is conditional and unrecoverable.  Entered with
+`echoLength <= historyAlloc - 1` the writer never passes `historyAlloc - 1`.
+Entered with `echoLength >= historyAlloc`, which is precisely what D72 says
+`setEchoDelay` can leave behind, the fast guard `echoLength + count <
+historyAlloc` is false, the slow path's first store is already past the end,
+and the compaction trigger is an EQUALITY (`cmp 0x1c(%ecx),%eax; je` at
+0x117c7, not `jae`) against a cursor that only grows -- so it never matches
+again and the writer runs `count` words off the end with nothing to stop it.
+D72's CANNOT FIRE verdict stands on the delay's real range; this says what the
+consequence would be if it ever did.
+
+### 1399. FOUR THINGS THE ECHO CANCELLER'S TESTS HAD TO BE SHAPED TO SEE
+
+**A TWO-ACCUMULATOR DOT PRODUCT IS INVISIBLE OVER ORDINARY DATA.**  The object
+steps four taps at a time into two alternating x87 accumulators (`faddp
+%st,%st(1)` for the even terms, `%st(2)` for the odd) and adds them at the end,
+with the one-at-a-time tail feeding the even one.  No flag this object was
+built with lets GCC invent that, so the unrolling is the original's source --
+and a mutation that merged the two accumulators passed the ENTIRE differential
+suite.  The reason is arithmetic: a product of two floats needs 48 significand
+bits and an x87 accumulator has 64, so a filter whose taps are within a factor
+of 2**16 sums exactly however it is grouped.  What the grouping decides is
+where a cancellation lands, so the fixture now carries a shape with a uniform
+history and coefficients spanning 2**100, on which the merged form and an
+unroll-by-eight both die.  **The last bits agreed because the arithmetic was
+exact, not because the order had been copied**, and only a shape chosen to
+break the exactness could tell the two apart.
+
+**THE PRINTED SIGN IS `!(v <= 0.0f)` AND THE DIFFERENCE IS A NaN.**
+`fldz; fcomps v; sahf; sbb %edx,%edx; and $0xfffffffe,%edx; add $0x2d,%edx`
+selects on CF alone; CF is C0, and FCOM sets C0 for less-than AND for
+unordered, so the object prints '+' for a NaN where `0.0f < v` prints '-'.
+Zero prints as '-'.  Confirmed against the codegen -- the `!(v <= 0.0f)`
+spelling compiles to exactly that `sbb`-on-CF sequence and the other to
+`fcomip`/`cmovbe` -- and it is the same reading `V90Equalizer::setLinearEquBeta`
+carries.  It is now TESTED rather than argued: the mutation only died once a
+NaN could reach a training arm.
+
+**A MODULAR SWEEP SCHEDULE CAN BE PROVABLY UNABLE TO REACH AN ARM.**  The
+first parameter sweep stepped the interesting float patterns by five modulo
+twelve.  Only two of the eight destination states load a beta at all, and
+those two fall on a fixed residue, so the NaN pattern could never reach either
+and the sign reading above went untested with a live mutation to prove it.
+Indexing by `o * 2 + v` instead covers every pattern in every arm.  The same
+shape as `run_ec`'s unsatisfiable schedule; it is a recurring trap and worth
+naming.
+
+**A TRAILING GUARD CANNOT SEE A LOOP THAT RUNS DOWNWARD.**  The history
+compaction copies TOWARD THE FRONT of the buffer, so a count one too long
+walks off the front, and the mutation for it survived a fixture whose guard
+was only past the end.  Both history arrays now carry a compared guard at both
+ends.  The general form: a guard is a claim about a direction, and a buffer
+that is written in two directions needs two.
+
+================================================================

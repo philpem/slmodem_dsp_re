@@ -117,16 +117,22 @@ class V92Parameters;
  * the dispatch is `cmp $0x1,%eax; je; jle; cmp $0x2 ...`, and `jle` is the
  * SIGNED branch.  An enum whose enumerators are 0..3 gets `unsigned int` from
  * GCC by default and would have compared with `jbe`, so the parameter is an
- * `int` and the base is fixed here to say so.  Fixing it also makes every
+ * `int` and the base is pinned here to say so.  Pinning it also makes every
  * `int` value representable, so the differential test may sweep outside the
  * four without reaching for undefined behaviour -- the argument
  * `V90Phase3Demodulator.h` gives for `Phase3DemodulatorState`.
+ *
+ * SPELLED AS A PIN RATHER THAN `: int`, because a fixed base is C++11 and the
+ * author's compiler was C++98 (docs/method/compilers.md, V2).  `_BASE_PIN` is
+ * OURS: the object names no enumerator -- the mangling carries the type's name
+ * and nothing about its contents -- and the pin claims only the base.
  */
-enum V92EchoCancellerState : int {
+enum V92EchoCancellerState {
 	V92_ECHO_FILTER_ONLY = 0,	/* filter, do not adapt             */
 	V92_ECHO_COUNT_DELAY = 1,	/* count the delay before training  */
 	V92_ECHO_FAST_TRAINING = 2,	/* adapt with the FAST parameters   */
-	V92_ECHO_SLOW_TRAINING = 3	/* adapt with the SLOW parameters   */
+	V92_ECHO_SLOW_TRAINING = 3,	/* adapt with the SLOW parameters   */
+	V92EchoCancellerState_BASE_PIN = -0x7fffffff - 1  /* ours: the base */
 };
 
 class V92EchoCanceller {
