@@ -1,0 +1,207 @@
+[
+ {
+  "label": "NOTE: what this set is for, and the five claims it cannot reach",
+  "why": "V92ConvolutionEncoder's four processing members, its two static tables and t_v92convmapper.cpp's five new fixtures were written by one hand at one sitting from one reading of 0x54740-0x55030 and .data 0x6ac0/0x6bc0, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes: the residue rotation and its positive fixup, which label indexes which table, the state and input bit weights of all three trellis arms, which array each store lands in, and that process carries the state forward. WHAT NO ENTRY HERE CAN REACH, and why not. (1) PERMUTING THE for LOOPS OF ANY ARM. For each fixed input the arm's state->nextState map is a bijection, so every reachable slot is written exactly once and a different visiting order produces a byte-identical object. A loop-swap mutation would read NOT CAUGHT, and it is not `equivalent` either -- the instruction text differs -- so it is recorded here rather than entered above. The loop order is claimed from the object's strength-reduced stack accumulators alone. (2) MOVING `state = 0` ABOVE the makeStateTtransitionTable() call in reset. The builder never reads +0x04, so the two orders are indistinguishable from outside; only the object's instruction order says the store comes after the call. The other half of that statement order IS tested -- `the mode is stored after the tables are built` below. (3) THE ORDER OF THE TWO STATIC DEFINITIONS. cosetMapping4D precedes subsetLabelTable because .data puts 0x6ac0 before 0x6bc0; nothing executable can see it. (4) THE DEFAULT ARM OF process's switch, deviation D262: it stores and returns two registers nothing wrote, so driving it would compare two different pieces of stack. No mutation here changes behaviour only on that arm, and none should. (5) THE SIGN OF THE ROTATION. `((x - 2) % 4 + 4) % 4` is the same function as `((x + 2) % 4 + 4) % 4` -- two quadrants one way and two the other are the same rotation modulo four -- and that mutation was tried here and read NOT CAUGHT, correctly. It is not entered above because it is not `equivalent` in this file's sense either: the instruction text differs (`lea 0x2(%ecx)` against `lea -0x2(%ecx)`, and different fixup constants on both `js` arms). The object's `lea 0x2(%ecx),%edx` at 0x54d8a is the only thing that says which of the two was written. `+ 3` is entered instead, and is caught."
+ },
+ {
+  "label": "the mode is stored after the tables are built",
+  "find": "\tmode = m;\n\tmakeStateTtransitionTable();\n\tstate = 0;\n",
+  "replace": "\tmakeStateTtransitionTable();\n\tmode = m;\n\tstate = 0;\n"
+ },
+ {
+  "label": "reset leaves the state where it found it",
+  "find": "\tmakeStateTtransitionTable();\n\tstate = 0;\n}",
+  "replace": "\tmakeStateTtransitionTable();\n}"
+ },
+ {
+  "label": "the first residue is rotated by three quadrants, not two",
+  "find": "\tint r0 = ((in[0] + 2) % 4 + 4) % 4;",
+  "replace": "\tint r0 = ((in[0] + 3) % 4 + 4) % 4;"
+ },
+ {
+  "label": "the second residue is rotated by one quadrant, not two",
+  "find": "\tint r1 = ((in[1] + 2) % 4 + 4) % 4;",
+  "replace": "\tint r1 = ((in[1] + 1) % 4 + 4) % 4;"
+ },
+ {
+  "label": "the third residue's positive fixup is off by one",
+  "find": "\tint r2 = ((in[2] + 2) % 4 + 4) % 4;",
+  "replace": "\tint r2 = ((in[2] + 2) % 4 + 5) % 4;"
+ },
+ {
+  "label": "the fourth residue is not reduced a second time",
+  "find": "\tint r3 = ((in[3] + 2) % 4 + 4) % 4;",
+  "replace": "\tint r3 = ((in[3] + 2) % 4 + 6) % 4;"
+ },
+ {
+  "label": "the first subset label takes its pair in the other order",
+  "find": "\tint a = subsetLabelTable[r0 + 4 * r1];",
+  "replace": "\tint a = subsetLabelTable[r1 + 4 * r0];"
+ },
+ {
+  "label": "the second subset label reads the first pair's slot",
+  "find": "\tint b = subsetLabelTable[r2 + 4 * r3];",
+  "replace": "\tint b = subsetLabelTable[r2 + 4 * r2];"
+ },
+ {
+  "label": "the coset index scales the wrong one of the two labels",
+  "find": "\treturn cosetMapping4D[8 * a + b];",
+  "replace": "\treturn cosetMapping4D[8 * b + a];"
+ },
+ {
+  "label": "cosetMapping4D's first row has one entry wrong",
+  "find": "\t 0,  0,  1,  1,  8,  8,  9,  9,\n",
+  "replace": "\t 0,  0,  1,  1,  8,  8,  9,  8,\n"
+ },
+ {
+  "label": "cosetMapping4D's last row has one entry wrong",
+  "find": "\t14, 15, 15, 14,  6,  7,  7,  6\n",
+  "replace": "\t14, 15, 15, 14,  6,  7,  7,  7\n"
+ },
+ {
+  "label": "subsetLabelTable's first row has one entry wrong",
+  "find": "\t0, 7, 4, 3, 5, 2, 1, 6,\n",
+  "replace": "\t0, 7, 4, 3, 5, 2, 1, 5,\n"
+ },
+ {
+  "label": "subsetLabelTable's two rows are swapped",
+  "find": "\t0, 7, 4, 3, 5, 2, 1, 6,\n\t4, 3, 0, 7, 1, 6, 5, 2\n",
+  "replace": "\t4, 3, 0, 7, 1, 6, 5, 2,\n\t0, 7, 4, 3, 5, 2, 1, 6\n"
+ },
+ {
+  "label": "mode 0 keeps one input bit too few",
+  "find": "\t\ti = r % 4;\n",
+  "replace": "\t\ti = r % 2;\n"
+ },
+ {
+  "label": "mode 1's third input bit is shifted down one place too far",
+  "find": "\t\ti = (r & 3) | ((r & 8) >> 1);\n",
+  "replace": "\t\ti = (r & 3) | ((r & 8) >> 2);\n"
+ },
+ {
+  "label": "mode 2 keeps one input bit too few",
+  "find": "\t\ti = r % 16;\n",
+  "replace": "\t\ti = r % 8;\n"
+ },
+ {
+  "label": "process does not carry the state forward",
+  "find": "\tns = nextState[(state << 4) + i];\n\tstate = ns;\n\treturn output[(ns << 4) + i];",
+  "replace": "\tns = nextState[(state << 4) + i];\n\treturn output[(ns << 4) + i];"
+ },
+ {
+  "label": "process returns out of the transition table instead of the output one",
+  "find": "\tstate = ns;\n\treturn output[(ns << 4) + i];",
+  "replace": "\tstate = ns;\n\treturn nextState[(ns << 4) + i];"
+ },
+ {
+  "label": "process indexes the output table with the state it came from",
+  "find": "\tns = nextState[(state << 4) + i];\n\tstate = ns;\n\treturn output[(ns << 4) + i];",
+  "replace": "\tns = nextState[(state << 4) + i];\n\tstate = ns;\n\treturn output[(state << 4) + i];",
+  "equivalent": "`state` has just been assigned `ns`, so the two index expressions denote the same value. NOT ASSERTED -- PROVEN: both forms were compiled with the tree's own flags and the objdump text of _ZN21V92ConvolutionEncoder7processEPi is identical, all 48 lines, operands included. The object cannot distinguish them either -- it indexes with %edi, the same register the store to +0x04 just used -- so `ns` is written above only because it is the value that was loaded."
+ },
+ {
+  "label": "mode 0's two low state bits are weighted the other way round",
+  "find": "\tint st = s0 + 2 * s1 + 4 * s2 + 8 * s3;",
+  "replace": "\tint st = s1 + 2 * s0 + 4 * s2 + 8 * s3;"
+ },
+ {
+  "label": "mode 0's two input bits are weighted the other way round",
+  "find": "\tint in = i0 + 2 * i1;",
+  "replace": "\tint in = i1 + 2 * i0;"
+ },
+ {
+  "label": "mode 0's output bit is taken from the other input bit",
+  "find": "\tint y = (s2 + i0) % 2;",
+  "replace": "\tint y = (s2 + i1) % 2;"
+ },
+ {
+  "label": "mode 0's next state leads with the wrong state bit",
+  "find": "\tint ns = s3 + 2 * ((s0 + s3 + i1) % 2\n",
+  "replace": "\tint ns = s2 + 2 * ((s0 + s3 + i1) % 2\n"
+ },
+ {
+  "label": "mode 0's middle term loses its state bit",
+  "find": "\t\t\t   + 2 * ((s1 + i1) % 2 + 2 * y));",
+  "replace": "\t\t\t   + 2 * ((s1 + s1) % 2 + 2 * y));"
+ },
+ {
+  "label": "mode 0 files the output bit under the current state, not the next",
+  "find": "\toutput[ns * V92CONV_ROW + in] = y;\n\t\t     }",
+  "replace": "\toutput[st * V92CONV_ROW + in] = y;\n\t\t     }"
+ },
+ {
+  "label": "mode 1's top state bit is weighted onto the wrong loop",
+  "find": "\tint st = t0 + 2 * t1 + 4 * t2 + 8 * t3 + 16 * t4;",
+  "replace": "\tint st = t0 + 2 * t1 + 4 * t2 + 8 * t3 + 16 * t3;"
+ },
+ {
+  "label": "mode 1's three input bits lose their middle weight",
+  "find": "\tint in = j0 + 2 * j1 + 4 * j2;",
+  "replace": "\tint in = j0 + 2 * j0 + 4 * j2;"
+ },
+ {
+  "label": "mode 1's output bit is taken from the first input bit",
+  "find": "\tint y = (t3 + j1) % 2;",
+  "replace": "\tint y = (t3 + j0) % 2;"
+ },
+ {
+  "label": "mode 1's second term takes the third input bit",
+  "find": "\t\t\t   + 2 * ((t1 + j0) % 2\n",
+  "replace": "\t\t\t   + 2 * ((t1 + j2) % 2\n"
+ },
+ {
+  "label": "mode 1's next state leads with a state bit one place down",
+  "find": "\tint ns = t4 + 2 * ((t0 + j1) % 2\n",
+  "replace": "\tint ns = t3 + 2 * ((t0 + j1) % 2\n"
+ },
+ {
+  "label": "mode 1's two stores land in each other's array",
+  "find": "\tnextState[st * V92CONV_ROW + in] = ns;\n\toutput[ns * V92CONV_ROW + in] = y;\n\t\t       }",
+  "replace": "\toutput[st * V92CONV_ROW + in] = ns;\n\tnextState[ns * V92CONV_ROW + in] = y;\n\t\t       }"
+ },
+ {
+  "label": "mode 2's top state bit is weighted onto the wrong loop",
+  "find": "\tint st = u0 + 2 * u1 + 4 * u2 + 8 * u3 + 16 * u4 + 32 * u5;",
+  "replace": "\tint st = u0 + 2 * u1 + 4 * u2 + 8 * u3 + 16 * u4 + 32 * u4;"
+ },
+ {
+  "label": "mode 2's four input bits lose their top weight",
+  "find": "\tint in = k0 + 2 * k1 + 4 * k2 + 8 * k3;",
+  "replace": "\tint in = k0 + 2 * k1 + 4 * k2 + 8 * k2;"
+ },
+ {
+  "label": "mode 2's output bit takes the first input bit, not the second",
+  "find": "\tint y = (u4 + u2 + k1) % 2;",
+  "replace": "\tint y = (u4 + u2 + k0) % 2;"
+ },
+ {
+  "label": "mode 2's first product -- the object's imul -- is dropped",
+  "find": "\tint ns = (u0 + u1 + u2 * ((u1 + k0) % 2) + k3) % 2\n",
+  "replace": "\tint ns = (u0 + u1 + ((u1 + k0) % 2) + k3) % 2\n"
+ },
+ {
+  "label": "mode 2's first product multiplies the wrong input bit in",
+  "find": "\tint ns = (u0 + u1 + u2 * ((u1 + k0) % 2) + k3) % 2\n",
+  "replace": "\tint ns = (u0 + u1 + u2 * ((u1 + k1) % 2) + k3) % 2\n"
+ },
+ {
+  "label": "mode 2's second product -- the 0x5c(%esp) accumulator -- is dropped",
+  "find": "\t\t + 2 * ((u0 + u1 + u3 + k2 + u2 * k1) % 2\n",
+  "replace": "\t\t + 2 * ((u0 + u1 + u3 + k2 + k1) % 2\n"
+ },
+ {
+  "label": "mode 2's third term loses the state bit it shares with the fourth",
+  "find": "\t\t\t+ 2 * ((u1 + k0 + u2) % 2\n",
+  "replace": "\t\t\t+ 2 * ((u1 + k0) % 2\n"
+ },
+ {
+  "label": "mode 2's two bare state bits are the wrong way round in the tail",
+  "find": "\t\t\t       + 2 * (u2 + 2 * (u5 + 2 * y))));",
+  "replace": "\t\t\t       + 2 * (u5 + 2 * (u2 + 2 * y))));"
+ },
+ {
+  "label": "mode 2 files the output bit under the current state, not the next",
+  "find": "\toutput[ns * V92CONV_ROW + in] = y;\n\t\t\t }",
+  "replace": "\toutput[st * V92CONV_ROW + in] = y;\n\t\t\t }"
+ }
+]

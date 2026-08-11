@@ -4980,3 +4980,29 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 *Batch of 2026-08-11, from `V92Precoder::process` (blob 0x56f50), frame slots +0x18 and +0x1c. **Reachability: unmeasured** -- it needs a symbol whose candidate interval is empty or whose every candidate squares above 1e12, and what the parameter block actually holds is not modelled. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1374.** The search writes `0x18(%esp)` and `0x1c(%esp)` only from inside its accept arm, and the code after the loop reads both unconditionally: `flds 0x18(%esp)` into `FloatFIR::process` for +0x70, `flds 0x1c(%esp)` into the other for +0x74, and again for `outf[i]`. Two ways to reach that with neither written: `lo > hi`, which a negative modulus produces, and every candidate's square exceeding the initial 1e12. On the first of the four symbols the values are whatever the frame held; on a later one they are the previous symbol's, and `out[i]` is left holding whatever the caller put there. Reproduced exactly, with the `-Wmaybe-uninitialized` the honest spelling produces suppressed at the function and explained there. `t_v92precoder.cpp` drives the case where symbol 0 has run first, which is the only one where the two sides hold the same values and the comparison means anything; the first-symbol case is undrivable by construction, since it would compare two fixtures' stacks.
+
+## D262 🐛 `V92ConvolutionEncoder::process` stores and returns two registers nothing on that path wrote
+
+*Batch of 2026-08-11, from `V92ConvolutionEncoder::process` (blob 0x54f40), +0x35. **Reachability: unmeasured** -- it needs `mode` outside 0, 1 and 2, and what supplies `mode` is a runtime value nothing here has modelled; see the caller survey below. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1375.** `process` switches on `mode` against 0, 1 and 2 to narrow `inverseMap`'s coset label to an index, and the two table lookups, the store to `state` and the `return` all sit AFTER the switch. There is no `default:` arm, so a fourth mode reaches them with the index never written -- and the object is explicit about what that costs:
+
+    54f75:  89 7b 04    mov %edi,0x4(%ebx)
+    54f78:  89 f0       mov %esi,%eax
+
+two callee-saved registers that nothing on that path assigned, stored into `state` and returned. There is no load from either table on that arm at all: with the index undefined the loads are undefined too, and GCC 3.4.2 simply dropped them, which is why the arm is four bytes rather than twenty. The next call then indexes `nextState` with whatever `state` now holds.
+
+Reproduced exactly, by leaving the index uninitialised; the `-Wmaybe-uninitialized` that produces is suppressed at the function and explained there, the same trade as D261 one class over. Initialising it, or adding a `default:`, would be a different function.
+
+**THE CALLER SURVEY IS THE BLOB'S, NOT THE RECONSTRUCTION'S, AND IT IS COMPLETE.** Within the class only `reset` writes +0x00 -- `makeStateTtransitionTable` and `process` read it and nothing else touches it -- so `mode` can only be whatever `reset` is passed. `objdump -dr` over the whole 1.2 MB finds EXACTLY ONE `R_386_PC32` against `_ZN21V92ConvolutionEncoder5resetEi`, at 0x53db3 inside `V92Transmitter::reset(V92MappingParams *)`, and no resolved same-TU call to 0x54d60 either -- which is the half that matters, because a relocation's presence only says the symbol is global while its ABSENCE is what would have hidden a caller in the same translation unit (findings 306 and 333). `process` is the same shape: one relocation, from `V92Transmitter::process` at 0x5464c, and no other call site. `makeStateTtransitionTable` likewise has exactly one, from `reset`.
+
+And what that one caller passes is NOT a constant:
+
+    53da6:  8b 56 10    mov 0x10(%esi),%edx     the mode
+    53da9:  89 54 24 04 mov %edx,0x4(%esp)
+    53dad:  8b 47 54    mov 0x54(%edi),%eax     this->convolutionEncoder
+    53db3:  e8 ..       call V92ConvolutionEncoder::reset(int)
+
+`+0x10` of the `V92MappingParams` block the caller was handed. Whether that field can hold anything but 0, 1 or 2 is not modelled here and `V92Transmitter::reset` is not reconstructed in this tree, so the class is `unmeasured` and not `CANNOT FIRE`. The three arms the switches DO name are 16-, 32- and 64-state trellis codes, which is a plausible complete set for the field -- but plausible is not measured, and the earlier draft of this entry said `CANNOT FIRE` on exactly that reasoning before the relocation scan was run.
+
+**It is deliberately not driven.** Both sides would be reading two different pieces of stack, so any difference the fixture reported would be one the fixture created -- the same reason `t_v92precoder.cpp` leaves D261's first-symbol case alone. `t_v92convmapper.cpp` says so where it drives `process`, and drives modes 0, 1 and 2 only. The unnamed modes ARE driven through `makeStateTtransitionTable` and `reset`, where the missing arm is well-defined behaviour -- nothing is built -- and the assertion that a seeded 0x2008 comes back byte for byte on both sides is a real check.

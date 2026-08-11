@@ -43550,3 +43550,85 @@ The unsigned reading is nearly untestable. Both readings of an entry above 2^31 
 Three of `V92Precoder::process`'s four symbols search `k * tableA[n] + in[n]` over the interval the modulus allows. The fourth doubles the index and adds `(out[0] + out[1] + out[2] + b) & 1` to it, and divides by twice the step rather than by the step -- and the object computes that parity in two places, once for the bounds and once inside the loop, reading `out[0..2]` on every iteration although nothing in the loop can change them. That is the 4D trellis's coset constraint spent on the last of the four, and it is what makes `b` an argument at all.
 
 The empty interval this creates is D261.
+
+### 1375. THE TRELLIS ENCODER'S TWO ARRAYS ARE THE OTHER WAY ROUND, AND THE THREE ARMS SIZE THEM TO 1,024 A SECOND TIME
+
+`V92ConvolutionEncoder`'s header called +0x08 the transition table and +0x1008
+the output table. `process` says the reverse in two adjacent instructions:
+
+    8b bc b3 08 10 00 00   mov 0x1008(%ebx,%esi,4),%edi   esi = state*16 + in
+    89 7b 04               mov %edi,0x4(%ebx)             and it IS the new state
+    8b 74 8b 08            mov 0x8(%ebx,%ecx,4),%esi      ecx = newstate*16 + in
+
+so +0x1008 is indexed by the CURRENT state and yields the NEXT one, and +0x08
+is indexed by the NEXT state and yields what `process` returns.
+`makeStateTtransitionTable` writes both the same way round, in one statement
+each. They are now `nextState` and `output`, declared in offset order.
+
+**Three trellis codes, one per mode, and the widths are measured.**
+`makeStateTtransitionTable` is a switch on +0x00 whose third arm is
+`test %eax,%eax; jne <epilogue>` -- so it is `case 0`, not a `default`, and a
+mode outside 0..2 builds nothing at all. Each arm is a nest of
+`for (x = 0; x <= 1; x++)` over one bit apiece, and the nests are 6, 8 and 10
+deep:
+
+    mode 0   4 state bits, 2 input bits   16 states   largest index 15*16+3  =  243
+    mode 1   5 state bits, 3 input bits   32 states   largest index 31*16+7  =  503
+    mode 2   6 state bits, 4 input bits   64 states   largest index 63*16+15 = 1023
+
+The row stride is sixteen in all three and in `process` too (`shl $0x4`), so
+the 1,024 ints of finding 1249 -- derived there from `sizeof` alone -- fall
+out of the code a second time and independently. `process`'s three arms agree:
+`r % 4`, `(r & 3) | ((r & 8) >> 1)` and `r % 16` produce exactly 2, 3 and 4
+bits of index, as wide as each arm of the builder filled and no wider, which
+is why no reachable call can read a slot the builder left alone.
+
+**Only mode 2 has a multiply**, and it has two: `imul` at 0x549e3 is
+`u2 * ((u1 + k0) % 2)`, and the stack accumulator at 0x5c(%esp) that gains
+`u2` once per innermost-but-two iteration is a strength-reduced `u2 * k1`.
+Every `% 2` and `% 4` in the file is the signed idiom -- `shr $31; add;
+and $~1; sub` -- so the source uses `%` on plain `int`s and not a mask,
+although no test can tell the two apart over 0 and 1.
+
+**Nothing clears either array.** There is no `memset`, no clearing loop and no
+store outside the nest in 0x616 bytes, so modes 0 and 1 leave twelve and eight
+of every sixteen columns holding whatever the allocation did.
+`t_v92convmapper.cpp` seeds both objects with the same varied bytes and
+compares the whole 0x2008 after every call, which is a real check over the
+written subset and a deliberate no-op over the rest -- and the check that a
+mode the switch does not name writes *nothing at all* is the one that needs
+the seed most.
+
+**The two static tables are `int`, not `char`.** `inverseMap` indexes both
+with a scale of four against their relocations, and `nm`'s 0x100 and 0x40 then
+give `cosetMapping4D[64]` and `subsetLabelTable[16]`. Both are `D`, so neither
+is const. The reachable index of each is closed by construction: the four
+residues are 0..3 so the label index is 0..15, and its sixteen values cover
+0..7 so `8 * a + b` covers all 64 -- which is why the exhaustive 256-way
+residue sweep in the fixture reaches every entry of both tables, and why the
+sixteen distinct return values it asserts is a coverage measurement and not a
+coincidence.
+
+`inverseMap`'s rotation is `((x + 2) % 4 + 4) % 4`, two rounds of the signed
+power-of-two remainder, which is why the object has eight `js` branches and
+not four. **`+ 2` and `- 2` are the same rotation modulo four**, so that one
+substitution passes every test there is; only `lea 0x2(%ecx),%edx` at 0x54d8a
+says which was written, and `test/mutations/v92convenc.json` records it as
+unreachable rather than entering it.
+
+**The arm layout is not the source order.** The blob lays the three arms out
+1, 2, 0 -- mode 0 last, at +0x490, reached by the `jle` -- and writing the
+cases in the natural order 0, 1, 2 reproduces that exactly under GCC 3.4.2:
+the same twelve-instruction dispatch and arms at +0x39, +0x206 and +0x441
+against the blob's +0x39, +0x205 and +0x490. `reset` and `inverseMap` are
+byte-for-byte the blob's size and match on their instruction sequence;
+`makeStateTtransitionTable` comes out 1,460 bytes against 1,558 because the
+compiler hoisted one `shl $0x4` out of the store that the blob left in it,
+which is scheduling and is free. None of that is evidence about the LOOP
+ORDER, which no test can reach either -- for each fixed input every arm's
+state-to-next-state map is a bijection, so permuting the nest writes the same
+slots in a different sequence and produces a byte-identical object. The order
+rests on the strength-reduced accumulators alone, and
+`test/mutations/v92convenc.json`'s NOTE says so.
+
+The uninitialised default arm of `process` is D262.

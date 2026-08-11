@@ -1,6 +1,26 @@
 /*
- * t_v92convmapper.cpp -- differential test of the two empty constructor and
- * destructor pairs: V92ConvolutionEncoder and V92Mapper.
+ * t_v92convmapper.cpp -- differential test of V92ConvolutionEncoder and
+ * V92Mapper: the two empty constructor and destructor pairs, V92Mapper's
+ * table, `reset` and `process`, and V92ConvolutionEncoder's two static
+ * tables, `makeStateTtransitionTable`, `reset`, `inverseMap` and `process`.
+ *
+ * THREE THINGS THE SECOND HALF OF THIS FILE IS ORGANISED AROUND.
+ *
+ * The builder's arms are compared as WHOLE 0x2008 OBJECTS, per mode, which is
+ * the strongest assertion available: 244, 504 and 1,024 written entries of
+ * each array for modes 0, 1 and 2, plus the untouched remainder, which is a
+ * real check that nothing was cleared and a deliberate no-op otherwise.
+ *
+ * `process` IS A CODER, so it is driven as a sequence of 240 symbols with the
+ * whole object compared after every one -- a divergence at symbol 40 that
+ * self-corrects by symbol 60 is still a defect, and a comparison of the final
+ * state would miss it.
+ *
+ * AND `inverseMap` IS SWEPT EXHAUSTIVELY over what it can see: its result
+ * depends on its four inputs only through `((x + 2) % 4 + 4) % 4`, so 256
+ * residue combinations is the whole domain, and each is driven at thirteen
+ * multiples of four either side of zero because the negative arms of that
+ * idiom are the only place it could differ from a plain `%`.
  *
  * WHAT IS BEING CLAIMED.  Each of these four symbols is one byte in the blob
  * -- a `ret` -- and the reason they exist at all is that GCC emits an
@@ -65,8 +85,33 @@ int our_map_process(void *self, unsigned char *bits)
 int ref_map_process(void *self, unsigned char *bits)
 	asm("ref__ZN9V92Mapper7processEPh");
 
+/*
+ * V92ConvolutionEncoder's four processing members, reached the same way: all
+ * four take `this` as the first stack argument.
+ */
+void our_conv_maketable(void *self)
+	asm("_ZN21V92ConvolutionEncoder25makeStateTtransitionTableEv");
+void ref_conv_maketable(void *self)
+	asm("ref__ZN21V92ConvolutionEncoder25makeStateTtransitionTableEv");
+void our_conv_reset(void *self, int mode)
+	asm("_ZN21V92ConvolutionEncoder5resetEi");
+void ref_conv_reset(void *self, int mode)
+	asm("ref__ZN21V92ConvolutionEncoder5resetEi");
+int our_conv_inversemap(void *self, int *in)
+	asm("_ZN21V92ConvolutionEncoder10inverseMapEPi");
+int ref_conv_inversemap(void *self, int *in)
+	asm("ref__ZN21V92ConvolutionEncoder10inverseMapEPi");
+int our_conv_process(void *self, int *in)
+	asm("_ZN21V92ConvolutionEncoder7processEPi");
+int ref_conv_process(void *self, int *in)
+	asm("ref__ZN21V92ConvolutionEncoder7processEPi");
+
 /* The blob's own copy of the static table, for a word-for-word comparison. */
 extern int ref_map_table[16] asm("ref__ZN9V92Mapper21constelAmplitudeTableE");
+extern int ref_conv_coset[64]
+	asm("ref__ZN21V92ConvolutionEncoder14cosetMapping4DE");
+extern int ref_conv_subset[16]
+	asm("ref__ZN21V92ConvolutionEncoder16subsetLabelTableE");
 }
 
 /* The sizes are the ones the callers' sysdep_malloc measures; see the two
@@ -459,6 +504,473 @@ run_mapper_process(void)
 	return diff_end();
 }
 
+/* ---------------------------------------------------------------------- *
+ *  V92ConvolutionEncoder: the table builder, reset, inverseMap, process.
+ * ---------------------------------------------------------------------- */
+
+/*
+ * The three modes both switches name, and four they do not.  An unnamed mode
+ * is a real case and not a curiosity: the builder's switch has no arm for it
+ * and writes nothing, which is checkable, whereas `process`'s switch leaves
+ * its index uninitialised, which is NOT -- see the note above
+ * `run_conv_process` and docs/deviations.md D262.
+ */
+static const int conv_modes[3] = { 0, 1, 2 };
+static const int conv_unnamed[4] = { 3, -1, 7, 0x10000 };
+
+/* A snapshot taken after `mode` is planted, so "changed" excludes the plant. */
+static unsigned char conv_snap[CONV_SLOT];
+
+static unsigned
+conv_sig(const unsigned char *p, int n)
+{
+	unsigned s = 0;
+	int i;
+
+	for (i = 0; i < n; i++)
+		s = s * 33u + p[i];
+	return s;
+}
+
+/*
+ * The two static tables, word for word against the blob's own copies.
+ *
+ * The sweep in `run_conv_inversemap` does reach every entry of both -- the
+ * four residues are 0..3 so all sixteen `subsetLabelTable` indices occur, and
+ * its values cover 0..7 so all sixty-four `8 * a + b` do too -- but that is an
+ * argument, and the direct comparison is a measurement.  Both are here.
+ */
+static int
+run_conv_tables(void)
+{
+	int i;
+
+	diff_begin("V92ConvolutionEncoder::cosetMapping4D / subsetLabelTable");
+
+	for (i = 0; i < 64; i++)
+		diff_eq_int("cosetMapping4D[%ld]",
+			    V92ConvolutionEncoder::cosetMapping4D[i],
+			    ref_conv_coset[i], i);
+	for (i = 0; i < 16; i++)
+		diff_eq_int("subsetLabelTable[%ld]",
+			    V92ConvolutionEncoder::subsetLabelTable[i],
+			    ref_conv_subset[i], i);
+
+	/* Neither is a constant fill, so the loops above are looking at
+	 * something -- findings 223 and 224 applied to a table. */
+	diff_eq_int("cosetMapping4D is not uniform (%ld)",
+		    V92ConvolutionEncoder::cosetMapping4D[2]
+		    != V92ConvolutionEncoder::cosetMapping4D[4], 1, 0);
+	diff_eq_int("subsetLabelTable is not uniform (%ld)",
+		    V92ConvolutionEncoder::subsetLabelTable[0]
+		    != V92ConvolutionEncoder::subsetLabelTable[1], 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * The table builder, and the strongest assertion in this file: the whole
+ * 0x2008 object diffed against the blob's after every call.
+ *
+ * WHAT THAT DOES AND DOES NOT COVER.  Nothing in the object clears either
+ * array, and modes 0 and 1 write only the first four and eight columns of
+ * each sixteen-wide row, so the compare is a real check over the written
+ * subset -- 244, 504 and 1,024 entries of each array for modes 0, 1 and 2 --
+ * and a vacuous one over the rest, where both sides still hold the identical
+ * seed.  It is stated that way rather than as "8 KB of coverage".  The seed
+ * is what makes even the vacuous part worth having: a reconstruction that
+ * cleared the arrays, or wrote one slot the object leaves alone, fails here.
+ *
+ * Each mode is run at several seeds and the seeds are compared across trials,
+ * and the three modes are compared against each other at a fixed seed, so
+ * neither "the fixture stopped seeding" nor "the mode is being ignored" can
+ * pass.
+ */
+static int
+run_conv_maketable(void)
+{
+	unsigned sig[3][NTRIAL];
+	int m, trial, varied_seed = 0, varied_mode = 1;
+
+	diff_begin("V92ConvolutionEncoder::makeStateTtransitionTable()");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		for (m = 0; m < 3; m++) {
+			V92ConvolutionEncoder *a =
+				(V92ConvolutionEncoder *)(void *)ours;
+			V92ConvolutionEncoder *b =
+				(V92ConvolutionEncoder *)(void *)theirs;
+			long mode = conv_modes[m];
+
+			/* The same seed for all three modes of a trial, so a
+			 * difference between them is the mode's and not the
+			 * seed's. */
+			seed(CONV_SLOT, 200 + trial);
+			a->mode = b->mode = conv_modes[m];
+			memcpy(conv_snap, ours, CONV_SLOT);
+
+			our_conv_maketable(ours);
+			ref_conv_maketable(theirs);
+
+			diff_eq_obj_(__FILE__, __LINE__,
+				     "after makeStateTtransitionTable",
+				     "V92ConvolutionEncoder", ours, theirs,
+				     CONV_SIZE, mode);
+			diff_eq_int("nor past the object (mode %ld)",
+				    memcmp(ours + CONV_SIZE, theirs + CONV_SIZE,
+					   CONV_SLOT - CONV_SIZE) == 0, 1, mode);
+			diff_eq_int("the builder changed the object (mode %ld)",
+				    memcmp(ours, conv_snap, CONV_SIZE) != 0, 1,
+				    mode);
+			diff_eq_int("and touched neither mode nor state "
+				    "(mode %ld)",
+				    memcmp(ours, conv_snap, 8) == 0, 1, mode);
+
+			sig[m][trial] = conv_sig(ours, CONV_SIZE);
+		}
+
+		if (sig[0][trial] == sig[1][trial]
+		    || sig[1][trial] == sig[2][trial]
+		    || sig[0][trial] == sig[2][trial])
+			varied_mode = 0;
+		if (trial > 0 && sig[0][trial] != sig[0][trial - 1])
+			varied_seed = 1;
+	}
+
+	diff_eq_int("the three modes build three different tables (%ld)",
+		    varied_mode, 1, 0);
+	diff_eq_int("and the untouched bytes are still live (%ld)", varied_seed,
+		    1, 0);
+
+	/*
+	 * A mode the switch does not name.  The builder has no arm for it, so
+	 * it writes NOTHING -- not the arrays, not `mode`, not `state` -- and
+	 * the seeded slot must come back byte for byte on BOTH sides.  With
+	 * live bytes underneath that is a real check and not a vacuous one.
+	 */
+	for (m = 0; m < 4; m++) {
+		V92ConvolutionEncoder *a = (V92ConvolutionEncoder *)(void *)ours;
+		V92ConvolutionEncoder *b =
+			(V92ConvolutionEncoder *)(void *)theirs;
+		long mode = conv_unnamed[m];
+
+		seed(CONV_SLOT, 300 + m);
+		a->mode = b->mode = conv_unnamed[m];
+		memcpy(conv_snap, ours, CONV_SLOT);
+
+		our_conv_maketable(ours);
+		ref_conv_maketable(theirs);
+
+		diff_eq_obj_(__FILE__, __LINE__, "after an unnamed mode",
+			     "V92ConvolutionEncoder", ours, theirs, CONV_SIZE,
+			     mode);
+		diff_eq_int("an unnamed mode writes nothing, ours (mode %ld)",
+			    memcmp(ours, conv_snap, CONV_SLOT) == 0, 1, mode);
+		diff_eq_int("nor the blob's (mode %ld)",
+			    memcmp(theirs, conv_snap, CONV_SLOT) == 0, 1, mode);
+	}
+
+	return diff_end();
+}
+
+/*
+ * `reset` -- three statements whose ORDER is the claim.  Two of the three are
+ * observable from outside: `mode` must be stored before the builder runs, or
+ * the tables come out of the previous mode, and that is what the per-mode
+ * table comparison below catches.  `state = 0` after the call rather than
+ * before is NOT observable -- the builder never reads +0x04 -- and is
+ * recorded as such in test/mutations/v92convenc.json rather than claimed
+ * here.
+ */
+static int
+run_conv_reset(void)
+{
+	int m, trial, varied = 0;
+	unsigned prev = 0;
+
+	diff_begin("V92ConvolutionEncoder::reset(int)");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		for (m = 0; m < 7; m++) {
+			V92ConvolutionEncoder *a =
+				(V92ConvolutionEncoder *)(void *)ours;
+			long mode = m < 3 ? conv_modes[m] : conv_unnamed[m - 3];
+			unsigned s;
+
+			seed(CONV_SLOT, 400 + trial * 8 + m);
+			memcpy(conv_snap, ours, CONV_SLOT);
+
+			our_conv_reset(ours, (int)mode);
+			ref_conv_reset(theirs, (int)mode);
+
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "V92ConvolutionEncoder", ours, theirs,
+				     CONV_SIZE, mode);
+			diff_eq_int("nor past the object (mode %ld)",
+				    memcmp(ours + CONV_SIZE, theirs + CONV_SIZE,
+					   CONV_SLOT - CONV_SIZE) == 0, 1, mode);
+			diff_eq_int("reset stored the mode (%ld)", a->mode, mode,
+				    mode);
+			diff_eq_int("reset zeroed the state (mode %ld)",
+				    a->state, 0, mode);
+
+			if (m < 3)
+				diff_eq_int("reset rebuilt the tables "
+					    "(mode %ld)",
+					    memcmp(ours + 8, conv_snap + 8,
+						   CONV_SIZE - 8) != 0, 1, mode);
+			else
+				diff_eq_int("an unnamed mode leaves both tables "
+					    "alone (mode %ld)",
+					    memcmp(ours + 8, conv_snap + 8,
+						   CONV_SIZE - 8) == 0, 1, mode);
+
+			s = conv_sig(ours, CONV_SIZE);
+			if ((trial || m) && s != prev)
+				varied = 1;
+			prev = s;
+		}
+	}
+
+	diff_eq_int("reset does not produce one fixed object (%ld)", varied, 1,
+		    0);
+
+	return diff_end();
+}
+
+/*
+ * `inverseMap` -- four positive-modulo reductions and two table lookups.
+ *
+ * THE SWEEP IS EXHAUSTIVE OVER WHAT THE FUNCTION CAN SEE.  The result depends
+ * on the four inputs only through `((x + 2) % 4 + 4) % 4`, so 256 residue
+ * combinations is the whole domain; each is driven at thirteen offsets of
+ * four, positive and negative, which is what makes the two `js` arms of each
+ * reduction -- the only place where the idiom and a plain `%` differ -- carry
+ * the same 256 answers as the positive path.
+ *
+ * NOTHING NEAR INT_MAX.  `in[k] + 2` overflowing is undefined in the
+ * reconstruction and merely wraps in the blob, so a value the original could
+ * never see could legitimately disagree; +-400,002 is as large as this goes
+ * and the widest offset used is 100,000.
+ */
+#define CONV_NOFF 13
+
+static int
+run_conv_inversemap(void)
+{
+	static const int offs[CONV_NOFF] = {
+		0, 1, -1, 2, -2, 3, -3, 250, -250, 1000, -1000, 100000, -100000
+	};
+	unsigned lfsr = 0x3d97u;
+	int seen[16];
+	int oi, c, i, k, ndistinct = 0, trial = 0;
+
+	diff_begin("V92ConvolutionEncoder::inverseMap(int *)");
+
+	for (i = 0; i < 16; i++)
+		seen[i] = 0;
+
+	/* The object is seeded once and must survive every call untouched:
+	 * `inverseMap` reads two statics and its argument and nothing else. */
+	seed(CONV_SLOT, 500);
+	memcpy(conv_snap, ours, CONV_SLOT);
+
+	for (oi = 0; oi < CONV_NOFF; oi++) {
+		for (c = 0; c < 256; c++) {
+			int ourin[4], theirin[4], ra, rb;
+
+			for (k = 0; k < 4; k++) {
+				ourin[k] = ((c >> (2 * k)) & 3) - 2
+					   + 4 * offs[oi];
+				theirin[k] = ourin[k];
+			}
+
+			ra = our_conv_inversemap(ours, ourin);
+			rb = ref_conv_inversemap(theirs, theirin);
+
+			diff_eq_int("inverseMap returned the same (case %ld)",
+				    ra, rb, trial);
+			diff_eq_int("inverseMap wrote nothing to its input "
+				    "(case %ld)",
+				    memcmp(ourin, theirin, sizeof ourin) == 0, 1,
+				    trial);
+
+			if (ra >= 0 && ra < 16 && !seen[ra]) {
+				seen[ra] = 1;
+				ndistinct++;
+			}
+			trial++;
+		}
+	}
+
+	/* Values no residue sweep produces on its own: mixed magnitudes, both
+	 * signs, and a pseudorandom block over a safe range. */
+	for (c = 0; c < 512; c++) {
+		int ourin[4], theirin[4], ra, rb;
+
+		for (k = 0; k < 4; k++) {
+			lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+			ourin[k] = (int)(lfsr & 0xffffu) - 0x8000;
+			if ((c & 3) == k)
+				ourin[k] = (c & 4) ? 0x3fffffff : -0x3fffffff;
+			theirin[k] = ourin[k];
+		}
+
+		ra = our_conv_inversemap(ours, ourin);
+		rb = ref_conv_inversemap(theirs, theirin);
+
+		diff_eq_int("inverseMap returned the same, wide (case %ld)", ra,
+			    rb, c);
+		diff_eq_int("inverseMap wrote nothing to its input, wide "
+			    "(case %ld)",
+			    memcmp(ourin, theirin, sizeof ourin) == 0, 1, c);
+
+		if (ra >= 0 && ra < 16 && !seen[ra]) {
+			seen[ra] = 1;
+			ndistinct++;
+		}
+	}
+
+	diff_eq_int("inverseMap wrote nothing to the object (%ld)",
+		    memcmp(ours, conv_snap, CONV_SLOT) == 0, 1, 0);
+	diff_eq_int("nor to the blob's object (%ld)",
+		    memcmp(theirs, conv_snap, CONV_SLOT) == 0, 1, 0);
+
+	/* All sixteen values cosetMapping4D holds came back, so the sweep
+	 * reached the whole table and not one corner of it. */
+	diff_eq_int("every coset label was returned (%ld)", ndistinct, 16, 0);
+
+	return diff_end();
+}
+
+/*
+ * `process` -- and this is the one that carries `state`, so it is driven as a
+ * sequence and compared after EVERY call.  A divergence at symbol 40 that
+ * self-corrects by symbol 60 is still a defect, and a comparison of the final
+ * object would miss it.
+ *
+ * EVERY CALL IS ON A `reset`-BUILT OBJECT AND AT A MODE THE SWITCH NAMES, and
+ * both are load-bearing.  On a merely seeded object `nextState[...]` returns
+ * an arbitrary int and `(ns << 4) + i` leaves the array entirely, so the two
+ * sides would read two unrelated pieces of memory; after `reset` the reachable
+ * set is closed, because `i` is 0..3, 0..7 or 0..15 exactly as wide as the
+ * mode's arm of the builder filled, and every `nextState` value it wrote is a
+ * state that arm also filled a row for.  An UNNAMED mode is not driven here at
+ * all: the object's default arm stores and returns two registers nothing
+ * wrote (D262), so the two sides would be comparing two different pieces of
+ * stack -- a difference the fixture created.
+ */
+#define CONV_SYMS 240
+
+static int
+run_conv_process(void)
+{
+	int m, run, sym, varied = 0, nonzero = 0, states = 0;
+	int seenstate[64];
+	int prev = -1;
+
+	diff_begin("V92ConvolutionEncoder::process(int *)");
+
+	for (m = 0; m < 3; m++) {
+		for (run = 0; run < 4; run++) {
+			unsigned lfsr = 0x7c1bu
+					+ 0x2b9du * (unsigned)(m * 4 + run);
+			V92ConvolutionEncoder *a =
+				(V92ConvolutionEncoder *)(void *)ours;
+
+			for (sym = 0; sym < 64; sym++)
+				seenstate[sym] = 0;
+			states = 0;
+
+			seed(CONV_SLOT, 600 + m * 4 + run);
+			our_conv_reset(ours, conv_modes[m]);
+			ref_conv_reset(theirs, conv_modes[m]);
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "V92ConvolutionEncoder", ours, theirs,
+				     CONV_SIZE, (long)conv_modes[m]);
+
+			/*
+			 * A sequence is only worth driving from a state the
+			 * two sides agree on.  If `reset` already diverged the
+			 * failure is reported above, and going on would index
+			 * a table one side never built -- a wild read this
+			 * fixture would have created, reported as a
+			 * difference.  Stop instead.
+			 */
+			if (memcmp(ours, theirs, CONV_SIZE) != 0)
+				continue;
+
+			for (sym = 0; sym < CONV_SYMS; sym++) {
+				int ourin[4], theirin[4], k, ra, rb;
+
+				for (k = 0; k < 4; k++) {
+					lfsr = (lfsr >> 1)
+					       ^ (-(int)(lfsr & 1u) & 0xb400u);
+					/* -3..4: both signs of the modulo
+					 * idiom, every residue. */
+					ourin[k] = (int)((lfsr >> 3) & 7u) - 3;
+					if (run == 1)
+						ourin[k] = 0;
+					else if (run == 2)
+						ourin[k] = (sym + k) & 3;
+					theirin[k] = ourin[k];
+				}
+
+				ra = our_conv_process(ours, ourin);
+				rb = ref_conv_process(theirs, theirin);
+
+				diff_eq_int("process returned the same "
+					    "(symbol %ld)", ra, rb, sym);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after process",
+					     "V92ConvolutionEncoder", ours,
+					     theirs, CONV_SIZE, (long)sym);
+				diff_eq_int("nor past the object (symbol %ld)",
+					    memcmp(ours + CONV_SIZE,
+						   theirs + CONV_SIZE,
+						   CONV_SLOT - CONV_SIZE) == 0,
+					    1, sym);
+				diff_eq_int("process wrote nothing to its "
+					    "input (symbol %ld)",
+					    memcmp(ourin, theirin,
+						   sizeof ourin) == 0, 1, sym);
+
+				if (ra != 0)
+					nonzero = 1;
+				if (prev >= 0 && ra != prev)
+					varied = 1;
+				prev = ra;
+
+				if (a->state >= 0 && a->state < 64
+				    && !seenstate[a->state]) {
+					seenstate[a->state] = 1;
+					states++;
+				}
+
+				/* Reported at the symbol it happened on; a
+				 * diverged coder is not driven further. */
+				if (memcmp(ours, theirs, CONV_SIZE) != 0)
+					break;
+			}
+
+			/* The trellis is being walked, not sat in: a `process`
+			 * that never updated +0x04 would show one state. */
+			if (run != 1)
+				diff_eq_int("the state moved (mode %ld)",
+					    states > 4, 1, conv_modes[m]);
+		}
+	}
+
+	/* Neither always zero nor always the same -- findings 223 and 224.
+	 * `process` returns one bit out of `output`, so this is the whole of
+	 * its range. */
+	diff_eq_int("process returns something (%ld)", nonzero, 1, 0);
+	diff_eq_int("process does not return one fixed value (%ld)", varied, 1,
+		    0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -469,6 +981,12 @@ main(void)
 	bad |= run_mapper_table();
 	bad |= run_mapper_reset();
 	bad |= run_mapper_process();
+
+	bad |= run_conv_tables();
+	bad |= run_conv_maketable();
+	bad |= run_conv_reset();
+	bad |= run_conv_inversemap();
+	bad |= run_conv_process();
 
 	return bad;
 }

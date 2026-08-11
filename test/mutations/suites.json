@@ -376,6 +376,10 @@
   "src/pump/v90/V92ParamsInfo.c",
   "build/test/t_v92alloc"
  ],
+ "v92convenc": [
+  "src/pump/v90/V92ConvolutionEncoder.cpp",
+  "build/test/t_v92convmapper"
+ ],
  "v92cp": [
   "src/pump/v90/V92CP.cpp",
   "build/test/t_v90cp"
