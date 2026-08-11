@@ -41835,10 +41835,30 @@ in one argument list compile to -- and each comparison picks one of a pair:
     num           8000 ? .data+0x1c0 : .data+0x160
 
 The other seven arguments go straight through in order: samples1, samples2,
-threshold, flag, ratio, blockLen, blockSize.  Which rate is "not 8000" is NOT
-recoverable -- nothing in the object constructs an ANSamToneDetector, so there
-is no relocation against either constructor and no call site to thread the
-argument back through.  The two arms are named by their tap count.
+threshold, flag, ratio, blockLen, blockSize.
+
+**The other rate is 9600, and both call sites spell every argument as a
+constant.**  Four relocations name `_ZN17ANSamToneDetectorC1Ejjfjfjjj`, which
+is two constructors emitted twice each: `VPcmFloModem`'s (0xfb61 in C1, 0xffe1
+in C2) builds one EMBEDDED at `this+0x6f5c` (`lea 0x6f5c(%ebx),%ecx`) with
+`6000, 450, 0x48742400, 1, 0x3f147ae1, 9600, 50, 99` -- the selector is
+`mov $0x2580,%edi` at 0xfafe, spilled to its slot at 0xfb2b -- and
+`V90Phase3Demodulator`'s (0x213ce, 0x2153e) builds one on the HEAP with
+`400, 100, 0x48960000, 0, 0.5f, 8000, 50, 99`.  So the 13-tap pair is the V.90
+phase 3 demodulator's at 8000 and the 11-tap pair is the PCM modem's at 9600.
+Both use `C1`, which is the same discriminator read the other way: both are
+complete objects, and only a base subobject gets `C2`.
+
+**And the heap one MEASURES the size.**  `movl $0x3c,(%esp); call
+sysdep_malloc` at 0x21377, the result into `%esi`, and `%esi` is the `this` of
+the `C1` call at 0x213cd.  Sixty bytes is `sizeof(GenericToneDetector)`
+exactly, so the derived class adds no member of its own -- which the
+constructor already suggested by writing nothing into `*this`, and which this
+turns from a reconstruction choice into a reading.
+
+The tables are still NAMED by their tap count rather than by a rate, because
+the tap count is what the object's own arithmetic produces and a third caller
+at a third rate would take the 11-tap arm too.
 
 **NO x87 IS INVOLVED IN THE DERIVED MEMBER.**  Both float arguments are copied
 from one stack slot to another with 32-bit integer `mov`s, never loaded onto

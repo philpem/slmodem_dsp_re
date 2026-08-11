@@ -22,14 +22,16 @@
  * a vptr -- the constructor's only stores are the eleven argument slots it
  * builds for the base call.
  *
- * NO MEMBER OF ITS OWN IS MODELLED, and the object is why.  The constructor
- * writes nothing into `*this` at all; every store it makes is to its own
- * outgoing argument area, and the base constructor initialises all fifteen of
- * the base's fields.  A member added here would therefore be a member no
- * constructor initialises, which is a claim the object does not support, so
- * the class is the base and nothing more and `sizeof` stays at the base's
- * 0x3c.  That is a reconstruction choice about a thing the object leaves
- * silent, stated rather than implied.
+ * NO MEMBER OF ITS OWN, AND THE SIZE IS MEASURED RATHER THAN CHOSEN.  Two
+ * things say so.  The constructor writes nothing into `*this` at all -- every
+ * store it makes is to its own outgoing argument area, and the base
+ * constructor initialises all fifteen of the base's fields -- so a member
+ * added here would be a member no constructor initialises.  And
+ * `V90Phase3Demodulator`'s constructor allocates one on the heap:
+ * `movl $0x3c,(%esp); call sysdep_malloc` at 0x21377, the result into `%esi`,
+ * and `%esi` is the `this` of the `C1` call twenty instructions later.  Sixty
+ * bytes is `sizeof(GenericToneDetector)` exactly, so the derived class adds
+ * nothing to it.
  *
  * THE SIXTH ARGUMENT IS A SELECTOR AND IS NEVER FORWARDED.  It is compared
  * against 8000 three separate times -- `cmp $0x1f40,%edx` at +0x17, +0x55 and
@@ -45,10 +47,25 @@
  * src/dsp/ANSamToneDetector.cpp in the order the object lays them out.  The
  * other seven arguments go straight through in order.
  *
- * WHICH RATE IS "NOT 8000" IS NOT RECOVERABLE HERE.  Nothing in the object
- * constructs an ANSamToneDetector -- there is no relocation against either
- * constructor -- so the argument's provenance is unknown and the two arms are
- * named by their tap count rather than by a rate this file cannot prove.
+ * THE OTHER RATE IS 9600, AND BOTH CALL SITES SAY SO.  Four relocations name
+ * `_ZN17ANSamToneDetectorC1Ejjfjfjjj`, and they are two constructors emitted
+ * twice each -- `VPcmFloModem`'s (0xfb61 in C1, 0xffe1 in C2) and
+ * `V90Phase3Demodulator`'s (0x213ce, 0x2153e).  Both use `C1`, because both
+ * build a COMPLETE object: the first embeds one (`lea 0x6f5c(%ebx),%ecx`), the
+ * second owns one on the heap (`sysdep_malloc(0x3c)`).  Both spell every
+ * argument as a constant:
+ *
+ *   VPcmFloModem, embedded at +0x6f5c   6000, 450, 0x48742400, 1,
+ *                                       0x3f147ae1, 9600, 50, 99
+ *   V90Phase3Demodulator, heap          400, 100, 0x48960000, 0,
+ *                                       0.5f, 8000, 50, 99
+ *
+ * So the 13-tap pair is the V.90 phase 3 demodulator's at 8000 and the 11-tap
+ * pair is the PCM modem's at 9600 -- `mov $0x2580,%edi` at 0xfafe, spilled to
+ * the selector slot at 0xfb2b.  The tables below are still NAMED by their tap
+ * count rather than by a rate, because the tap count is what the object's own
+ * arithmetic produces and a third caller at a third rate would take the
+ * 11-tap arm too.
  *
  * NO x87 IS INVOLVED IN EITHER MEMBER.  The two float arguments are copied
  * from one stack slot to another with 32-bit integer `mov`s
