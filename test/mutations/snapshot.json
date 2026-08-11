@@ -4049,6 +4049,35 @@
     "two adjacent defaults are transposed": "caught"
    }
   },
+  "vpcmcreate": {
+   "key": "921081134ea0110f6ea66bfef781d1db600366d3938be605e2e09e7076aa73b3",
+   "summary": "23 mutations: 22 caught (22 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x3558 is one less": "caught",
+    "+0xaa80 is left at zero": "caught",
+    "AorMu is set for session type 3 rather than 4": "caught",
+    "arm 1 does not invert the side": "caught",
+    "channel verification is entered on either condition, not both": "caught",
+    "session type 0 and the negatives join arm 1": "caught",
+    "the K56flex pointer is not restored across the memset": "caught",
+    "the TX MD scale is 3 rather than 2.4": "caught",
+    "the bulk length is 9584 rather than 9600": "caught",
+    "the bulk ring is aimed one short past +0x35b8": "caught",
+    "the channel-verification progress code is 9": "caught",
+    "the entrance filter is forced on by 2 rather than by 1": "caught",
+    "the handshake is started in retrain mode rather than cold": "caught",
+    "the hardware entrance-filter test is inverted": "caught",
+    "the mark at +0x248 loses its low byte": "caught",
+    "the object memset is the receiver's length": "caught",
+    "the quick-connect bit is bit 5 rather than bit 4": "caught",
+    "the rate ceiling starts at 0 rather than 14": "caught",
+    "the receiver's +0x262 is 0x610 rather than 0x600": "caught",
+    "the redundant second memset is dropped": "uncaught",
+    "the session pointer is not restored across the memset": "caught",
+    "the side-to-role polarity is reversed": "caught",
+    "the wanted rate starts at 0 rather than -1": "caught"
+   }
+  },
   "vpcmep3": {
    "key": "7debfe7fca09b3f3c565ff269ead5596b44e2c77442d19afb4a037fbc46f0969",
    "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",

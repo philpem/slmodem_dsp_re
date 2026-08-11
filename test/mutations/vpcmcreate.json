@@ -1,0 +1,145 @@
+[
+ {
+  "_": [
+   "VPcmV34Create.  Every entry below breaks one claim the reconstruction",
+   "makes, and the set is chosen against the same trap v34retrain.json",
+   "names: the function ends in `v34handshakinit(obj, 0)`, which rewrites a",
+   "large part of the object with the same code on both sides, so a store",
+   "the handshake later overwrites is invisible to the differential tier",
+   "however wide its sweep is (finding 253).  Each entry here is anchored on",
+   "text that appears in THIS function only.  `VPcmV34InitiateRetrain`",
+   "shares five verbatim blocks with it, which is why the two are in",
+   "separate translation units at all -- see the head of",
+   "src/pump/v34/v34pcmcreate.cpp, and finding 1264.",
+   "",
+   "ONE ENTRY IS EXPECTED TO SURVIVE and is here for that reason: the",
+   "second memset is redundant, because 0x264 + 0x79c is entirely inside",
+   "the 0xac4c the first one already cleared.  It is transcribed because the",
+   "object has it, and a mutation set that did not show it to be",
+   "unobservable would be claiming more than the tier can see.  22 of 23,",
+   "and the survivor is that one.",
+   "",
+   "TWO SURVIVED BEFORE THE TEST SEEDED THE OBJECT.  The other was the",
+   "LEADING memset shortened to the receiver's length, which is a real",
+   "claim and was invisible for a real reason: every case is a",
+   "re-initialisation, so a byte the memset failed to clear was already 0",
+   "from the previous run.  `seed_v34` in t_vpcmcreate.c is what closed it,",
+   "and this entry is the measurement that says so."
+  ]
+ },
+ {
+  "label": "the object memset is the receiver's length",
+  "find": "\tsysdep_memset(obj, 0, VPCM_V34_BYTES);",
+  "replace": "\tsysdep_memset(obj, 0, 0x79c);"
+ },
+ {
+  "label": "the redundant second memset is dropped",
+  "find": "\tsysdep_memset(rx, 0, sizeof(struct v34_receiver));",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the K56flex pointer is not restored across the memset",
+  "find": "\tobj->pac18 = k56;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the session pointer is not restored across the memset",
+  "find": "\tobj->p3548 = sess;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "+0xaa80 is left at zero",
+  "find": "\t*(short *)(m + OB_FAA80) = 1;",
+  "replace": "\t*(short *)(m + OB_FAA80) = 0;"
+ },
+ {
+  "label": "the bulk ring is aimed one short past +0x35b8",
+  "find": "\tobj->bulk_ring = (short *)(m + OB_BULK_RING);",
+  "replace": "\tobj->bulk_ring = (short *)(m + OB_BULK_RING + 2);"
+ },
+ {
+  "label": "the bulk length is 9584 rather than 9600",
+  "find": "\tobj->bulk_len = 0x2580;",
+  "replace": "\tobj->bulk_len = 0x2570;"
+ },
+ {
+  "label": "the TX MD scale is 3 rather than 2.4",
+  "find": "\t\t(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);",
+  "replace": "\t\t(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 8u);"
+ },
+ {
+  "label": "the quick-connect bit is bit 5 rather than bit 4",
+  "find": "\tint quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;",
+  "replace": "\tint quick = (cfg[CFG_V92LITE] & 0x20) != 0;"
+ },
+ {
+  "label": "channel verification is entered on either condition, not both",
+  "find": "\t\tif (quick != 0 && side == 0) {",
+  "replace": "\t\tif (quick != 0 || side == 0) {"
+ },
+ {
+  "label": "the channel-verification progress code is 9",
+  "find": "\t\t\tobj->f0004 = 10;",
+  "replace": "\t\t\tobj->f0004 = 9;"
+ },
+ {
+  "label": "session type 0 and the negatives join arm 1",
+  "find": "\t} else if (sessionType == 1) {",
+  "replace": "\t} else if (sessionType <= 1) {"
+ },
+ {
+  "label": "arm 1 does not invert the side",
+  "find": "\t\tside = (side == 0);",
+  "replace": "\t\tside = (side != 0);"
+ },
+ {
+  "label": "AorMu is set for session type 3 rather than 4",
+  "find": "\t\t*(int *)(k56 + K56_AORMU) = (sessionType == 4);",
+  "replace": "\t\t*(int *)(k56 + K56_AORMU) = (sessionType == 3);"
+ },
+ {
+  "label": "the side-to-role polarity is reversed",
+  "find": "\tobj->f359c = (short)(side != 0 ? 0x66 : 0x65);",
+  "replace": "\tobj->f359c = (short)(side != 0 ? 0x65 : 0x66);"
+ },
+ {
+  "label": "the rate ceiling starts at 0 rather than 14",
+  "find": "\tobj->rate_max = RATE_INDEX_MAX;\n\tobj->rate_now = 0;",
+  "replace": "\tobj->rate_max = 0;\n\tobj->rate_now = 0;"
+ },
+ {
+  "label": "the wanted rate starts at 0 rather than -1",
+  "find": "\tobj->rate_want = -1;",
+  "replace": "\tobj->rate_want = 0;"
+ },
+ {
+  "label": "the mark at +0x248 loses its low byte",
+  "find": "\t*(int *)(m + OB_F0248) = (int)0xfffe8900;",
+  "replace": "\t*(int *)(m + OB_F0248) = (int)0xfffe8000;"
+ },
+ {
+  "label": "the receiver's +0x262 is 0x610 rather than 0x600",
+  "find": "\trx->f262 = 0x600;",
+  "replace": "\trx->f262 = 0x610;"
+ },
+ {
+  "label": "the handshake is started in retrain mode rather than cold",
+  "find": "\tv34handshakinit(obj, 0);",
+  "replace": "\tv34handshakinit(obj, 1);"
+ },
+ {
+  "label": "+0x3558 is one less",
+  "find": "\tobj->f3558 = 0x7fdf;",
+  "replace": "\tobj->f3558 = 0x7fde;"
+ },
+ {
+  "label": "the hardware entrance-filter test is inverted",
+  "find": "\t\t\t\t(*(const int *)(cfg + CFG_F54) == 14);",
+  "replace": "\t\t\t\t(*(const int *)(cfg + CFG_F54) != 14);"
+ },
+ {
+  "label": "the entrance filter is forced on by 2 rather than by 1",
+  "find": "\t\t} else if (stream == 1) {",
+  "replace": "\t\t} else if (stream == 2) {"
+ }
+]

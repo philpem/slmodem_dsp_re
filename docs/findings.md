@@ -39935,3 +39935,225 @@ one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
 over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
+
+======================================================================
+### 1260. `VPcmV34Create` IS RECONSTRUCTED WHOLE, ALL FIVE ARMS, AND THE FIXTURE THAT WAS WAITING FOR IT BECAME A DIFFERENTIAL TEST
+
+> **Deviations D195, D196** (`docs/deviations.md`): a memset that runs twice, and a pointer re-loaded between two stores through it.
+
+All 2,376 bytes of it, in `src/pump/v34/v34pcmcreate.cpp` as an
+`extern "C"` export -- a new translation unit, for the reason finding 1264
+gives.  `test/unit/t_vpcmcreate.c` was committed as a FIXTURE with both sides
+of every comparison the blob's and a note saying what to delete to turn it into
+a test; that note is now spent.  **4,803 checks, 960 cases, agreeing byte for
+byte over the whole 265,520-byte heap graph.**
+
+The sweep is five dimensions and every one of them was needed:
+
+| dimension | values | what it reaches |
+|---|--:|---|
+| `side` | 0, 1 | the 0x65 / 0x66 role |
+| `sessionType` | 0, 1, 2, 3, 4, -1 | the five arms and the signed `jle` |
+| `arg3` | 0, 0x55aa1234 | +0x8, which nothing else reads |
+| the configuration | 20 variants | the entrance filter, the threshold table, the four rate clamps, quick connect, the designer and K56flex arms |
+| the seed | off, on | the leading memset -- see 1262 |
+
+**WHY IT IS NOT IN `v34pcmif.c` WITH THE OTHER `VPcmV34*` EXPORTS.**  It calls
+SEVEN C++ member functions, and a member has a `this` and no unmangled form to
+name, so a C translation unit cannot reach one whatever the link line says.
+That is CLAUDE.md's trap and finding 711's third condition, arriving as a
+placement decision rather than as a link error.  `tools/tuattrib.py` has
+nothing to say about this symbol; the placement rests on that constraint plus
+the interleaving `v34pcmif.c` already records.
+
+#### The five arms, and the two things a reader will get wrong
+
+- **THE DISPATCH IS NOT A `switch` WITH 0 IN `default`.**  The object tests
+  `== 2`, then a SIGNED `jle`, then `== 3` and `== 4`, so 0, every negative
+  value and everything above 4 share one body.  A `switch` would put 0 in its
+  own arm and be wrong for every negative.
+- **THE SIDE-TO-ROLE POLARITY IS NOT ONE RULE**, which finding 1119 already
+  said and which the mutation "the side-to-role polarity is reversed" now
+  measures: arms 1 and 2 invert `side` before the common store, so they map
+  side 0 to 0x66 where arms 0, 3 and 4 map it to 0x65.  Arm 2 inverts it in a
+  second place too, and stores 1 into `sess + 0x611c` on the branch it does not
+  take.
+
+Everything else is a long list of stores whose offsets are in the source.  Two
+are worth naming: **+0x254 is computed AFTER `v34handshakinit` returns**
+(`movswl 0x35a4` at 0xad3b, five bytes after the call), so it carries what the
+handshake left and not the zero stored 700 bytes earlier; and the `x * 2.4` at
++0xabfc is GCC's unsigned divide-by-ten of `x * 24`, not a fixed-point scale.
+
+======================================================================
+### 1261. THIRTEEN WORDS OF THE CONSTRUCTED GRAPH CAN NEVER AGREE, AND THEY ARE NOT WHAT FINDING 803 WARNED ABOUT
+
+The interesting half of this work was not the transcription.  It was finding
+out what a whole-graph comparison of a constructor is allowed to exclude.
+
+Finding 803's congruence problem -- 125 heap regions coming back at 125
+different addresses, so every pointer-valued field differs for a reason that is
+not a defect -- **does not arise**, because `t_vpcmcreate.c` builds ONE graph
+and runs both implementations over the same memory at the same addresses.
+Every HEAP pointer is identical by construction and none is excluded.
+
+**What has to be excluded is a different thing entirely: thirteen words holding
+the address of a STATIC object.**  Both our copy and the blob's are linked into
+the same test binary, at different addresses, so a word holding one of them
+differs by construction:
+
+| callee | words | what they hold |
+|---|--:|---|
+| `V34InitializeImplementationSpecific` | **0** | asserted, not assumed |
+| `v34handshakinit` | 12 | ten coefficient tables and two scrambler entry points |
+| `V90Demodulator::enterChannelVerification` | 1 | `V90PreFilter::preFilterCoefType1` |
+
+Resolved by name against `nm -S` on the linked binary, every one is an `X` /
+`ref_X` pair: `hsine1800`, `bpv22high`, `V34TimingPrefilterCoeff`,
+`V34TimingHPFilterCoeff`, `Convolve16` (twice), `hsine1200`,
+`ec_prem_coef_B3429`, `preemp0`, `c2400_`, and the two function slots.  **The
+two function slots do not always hold the same function**: the descrambler slot
+holds `descrambleGPA` or `descrambleGPC` and the scrambler slot `scrambleGPA`
+or `scrambleGPC`, chosen per role, which is why a by-name check written against
+one observed state failed on another and the test lists both candidates.
+
+**52 bytes of 265,520, and this is 802's measurement from the other side.**
+Finding 802 counted two blob-code pointers in a blob-CONSTRUCTED graph and
+concluded the fixture was valid.  Drive OUR code on that graph and the count
+comes back as thirteen, because our code installs our copies.  Both numbers are
+small for the same reason and neither is a defect.
+
+#### The mechanism, which is the reusable part
+
+The exclusion is **learned, not listed**.  `run_alias_words` runs each of the
+three callees alone -- ours against the blob's, same snapshot, same memory --
+and marks the aligned words they disagree on; the sweep then excludes exactly
+the marked set.  Three properties follow that a hand-written offset list does
+not have:
+
+- it asserts each callee disagrees on **nothing else**, which is what bounds
+  the hole: a store of `VPcmV34Create`'s own cannot hide behind the exclusion
+  without also being a store one of the three makes at the same word;
+- it survives region renumbering, which matters because **the live-set index of
+  the V.PCM root is not stable between runs** (5, 21, 57, 99 and 106 across
+  five runs of the same binary) and one of the thirteen is not in the root at
+  all but in a 668-byte sub-object of the demodulator;
+- `check_alias_words` then requires each of the twelve in the root to hold two
+  DIFFERENT addresses whose targets are byte-identical over the size of the
+  object named, so "these are pointers into two images of the same data" is
+  measured and not asserted.
+
+**The member function is reached from a C test by its MANGLED NAME declared as
+a C identifier.**  `_ZN14V90Demodulator24enterChannelVerificationEss` is a
+legal C identifier and a non-virtual member's `this` is an ordinary leading
+argument on this ABI, so a `.c` can call one where it cannot call it by its C++
+spelling.  That is worth knowing: it is the cheap way to drive one class method
+from a C fixture without making the whole file C++.
+
+======================================================================
+### 1262. A CONSTRUCTOR'S MEMSET IS INVISIBLE TO A RE-INITIALISATION TEST, AND SEEDING THE OBJECT IS WHAT MAKES IT VISIBLE
+
+`t_vpcmcreate.c` borrows a blob-constructed graph, so `ops->create` has already
+run `VPcmV34Create` once and every case is a RE-initialisation.  The file said
+so from the day it was written, as a bound on its claim.  **It is a sharper
+bound than it sounds, and the mutation suite is what showed how sharp.**
+
+Shortening the leading `sysdep_memset(obj, 0, 0xac4c)` to 0x79c -- dropping
+41,648 bytes of it -- **survived**.  Not because nothing reads those bytes, but
+because they were already zero: the previous run's memset had cleared them and
+nothing since had written anything else there.  A differential sweep of any
+width cannot see that, and no amount of argument or configuration variation
+helps, because the state being compared is downstream of a clear that happened
+before the test started.
+
+**The fix is nine lines and it is finding 784's argument applied to a
+constructor.**  Half the sweep now seeds the whole V.34 object with a varied,
+deterministic pattern before the call -- what a fresh `sysdep_malloc` hands over
+and never zeroes -- putting back only the two words the function reads BEFORE
+the memset and restores after it, +0x3548 and +0xac18.  The seed goes in
+identically on both legs, so it is not a source of disagreement; it is a source
+of OBSERVABILITY.  The mutation went from NOT CAUGHT to caught and the suite
+from 21/23 to **22/23**.
+
+**The one that still survives is deliberate and is D195**: the second memset,
+0x79c bytes at +0x264, is entirely inside the first one's 0xac4c.  Seeding
+cannot make a redundant clear observable, and a suite that did not show it to
+be redundant would be claiming more than the tier can see.
+
+======================================================================
+### 1263. WHAT THE NEXT AGENT ON THE V.PCM CONSTRUCTION PATH GETS FOR FREE
+
+`dp_vpcm_init -> vpcm_create -> VPCMXF_Create -> VPcmV34Create` was 108
+unwritten symbols and 19,704 bytes.  The anchor at the bottom is now written,
+and four things it established transfer straight up the chain:
+
+- **The fixture works and is committed.**  `test/unit/t_vpcmcreate.c` snapshots
+  and restores a 126-region graph, checks the restore, proves the comparison is
+  live by flipping one byte, and reports the first difference as a region and
+  an offset.  `VPCMXF_Create`'s test is that file with a different call in the
+  middle.
+- **The exclusion problem is solved and the solution is `run_alias_words`.**
+  Anything above this one reaches `v34handshakinit` transitively and will hit
+  the same thirteen words; learn them the same way rather than re-deriving
+  them.
+- **`VPcmV34Create` returns 0 on every path**, so `vpcm_create`'s
+  `test %eax,%eax / jne 3da8` is dead (D149) and a reconstruction of
+  `vpcm_create` must not invent a failure path to match it.
+- **+0x2218 is left at 0.**  `v34handshakinit` clears it and nothing in
+  `VPcmV34Create` puts it back; `VPcmV34InitiateRetrain` is what writes 2.
+  Finding 806 named this as the cost a downstream handshake fixture pays, and
+  it is now confirmed to be the constructor's actual behaviour rather than a
+  gap in the transcription -- whatever writes 2 is above `VPcmV34Create` or
+  after it, and is not in it.
+
+**And one thing that did NOT transfer.**  `VPcmV34Main.cpp` is now spread over
+THREE files here -- `v34pcmif.c`, `v34pcmmain.cpp` and `v34pcmcreate.cpp` --
+and the rule for the third is finding 1264's, not the object's.
+`VPCMXF_Create` is in a different translation unit and gets to decide
+separately.
+
+======================================================================
+### 1264. TWO FUNCTIONS THAT SHARE VERBATIM BLOCKS CANNOT SHARE A FILE, BECAUSE THE MUTATION TIER MATCHES SUBSTRINGS OVER THE WHOLE FILE
+
+`VPcmV34Create` and `VPcmV34InitiateRetrain` are two functions of the same
+translation unit and they share FIVE VERBATIM BLOCKS: the three-armed rate
+block, the disconnect threshold, the filter and DMA delays, the echo delay, and
+the 32 bytes at +0xac1c.  The object has each of them twice, because the
+compiler emitted them twice, and a faithful reconstruction has them twice too.
+
+Landing the second function in `v34pcmmain.cpp` beside the first therefore made
+**44 of `v34retrain`'s 74 mutation anchors match twice**.
+
+**That is not a cosmetic problem, it is finding 347's failure mode.**
+`mutate.py` matches `find` as a substring of the whole source file, requires
+exactly one hit, and reports anything else UNUSABLE -- and **UNUSABLE DOES NOT
+FAIL A RUN**.  Three fifths of a recorded suite would have stopped testing
+anything while the suite went on printing `0 NOT caught` and its snapshot went
+on being quoted as a baseline.  Four batches have lost mutations this way
+before.
+
+`tools/anchorcheck.py` is what caught it, and this is the first time it has
+fired on a collision created by a NEW FUNCTION rather than by a new arm of an
+existing one.  It costs one command and is not in `make phase`; run it after
+landing anything into a file that already has a suite.
+
+#### Three repairs were available and only one is right
+
+| repair | why not |
+|---|---|
+| re-anchor `v34retrain` (`tools/reanchor.py`) | extends 44 anchors upward through blocks that are identical for 14 lines, picks the occurrence by a macro prefix neither function has, and forces a re-record of a suite this batch did not touch |
+| factor the five blocks into shared static helpers | moves every one of the 44 anchors by a tab, which BREAKS them rather than de-duplicating them -- and four of the collisions (`obj->status = 0;`, `obj->is_short = 0;`, `obj->local_short = 0;`, `*(int *)(m + OB_F0234) = 0;`) are single statements no factoring can separate |
+| **a separate translation unit** | `anchorcheck.py` and `mutate.py` BOTH scope every check to the suite's own source file, so this is not a workaround for the tool -- the file is the unit the tool measures |
+
+So `src/pump/v34/v34pcmcreate.cpp` exists, and its head says the reason is
+about the tier and not about the object, because that is unusual enough to have
+to be stated rather than implied.  Both suites are clean, `anchorcheck.py`
+reports **0 anchors matching other than exactly once across 73 suites and 3,756
+mutations**, and `v34retrain`'s recorded verdicts are untouched.
+
+**The general rule, for whoever lands the next large function.**  The object
+duplicates code freely and a reconstruction that is faithful will duplicate it
+too.  **One source file is one mutation suite's namespace**, so before adding a
+function to a file that already carries a suite, ask whether it repeats any of
+that file's text -- and if it does, give it its own file.  Splitting is cheap;
+a silently disabled suite is the most expensive failure this tree has.

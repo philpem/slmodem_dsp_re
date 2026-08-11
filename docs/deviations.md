@@ -4237,6 +4237,22 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D195 🐛 `VPcmV34Create`'s second `sysdep_memset` clears 0x79c bytes at +0x264 that the first one, 0xac4c bytes at +0, has already cleared — the receiver is zeroed twice and no path reaches the second without the first
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Transcribed and kept; `test/mutations/vpcmcreate.json`'s "the redundant second memset is dropped" is the recorded survivor that says it is unobservable.
+
+---
+
+## D196 🐛 `VPcmV34Create` re-loads `sess + 0x612c` between the two byte stores it makes through it, so the two stores are not guaranteed to reach the same record
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Read from the disassembly; the reconstruction keeps both loads rather than folding them.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
