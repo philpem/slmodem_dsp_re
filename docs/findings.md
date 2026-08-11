@@ -43512,3 +43512,241 @@ So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
 ======================================================================
+
+======================================================================
+
+### 1380. THREE MEMBERS OF `V90ConnectionEvaluator` RETURN A VERDICT, THE TAIL CALL THAT LOOKS LIKE THE SAME EVIDENCE IS NOT, AND THE COUNTER RESTARTS ONLY WHEN THEY GIVE UP
+
+The header said, of all eleven undefined members, that "a return type is not
+mangled and is therefore unknown", and declared every one of them `void`.  For
+three of the six written in this batch that is wrong, and the disassembly says
+so without ambiguity.
+
+**Two constants, one per branch, both reaching `%eax`.**
+`indicateLocalRetrain` (0x40020) and `indicateRemoteRetrain` (0x400b0) each
+load one of a pair of immediates into `%esi` and move it out:
+
+    40031:  be 04 00 00 00   mov $0x4,%esi     the path that just counts
+    40074:  be 05 00 00 00   mov $0x5,%esi     the path that also prints
+                                              "initiating fall back to V34"
+
+There is no reading of that which is not a return value, and a void function
+has no reason to build one.  The strings name the two: 5 is "give up on V.90",
+4 is "retrain and carry on".  `evaluateMeanErrorStdPhase4` (0x3fac0) is the
+third and is three bytes, `31 c0 c3` -- `xor %eax,%eax; ret` -- and the `xor`
+is the whole argument, because a void function does not clear `%eax` before
+returning.  Its phase 3 twin at 0x3f9d0 is 234 bytes and really computes
+something, so the pair is an asymmetry in the ORIGINAL: two members with the
+same name doing the same job in two phases, one of which was never written.
+Same shape as `V90Parameters::loadParams`' three-byte callees (findings
+860-862), and it means anything downstream branching on the phase 4 mean error
+is branching on a constant.
+
+**THE CONTRAST IS THE POINT, because a fourth function looks like the same
+evidence and is not.**  `updateCurrentConstellationData` ends in `jmp
+edprintf`, a tail call into a function that returns `int`, so `%eax` on exit
+holds `edprintf`'s answer.  That proves nothing whatever about the caller's
+return type: a `void` function tail-jumping to a non-void one is ordinary GCC
+output and this object is full of it.  The rule that separates the two cases is
+CLAUDE.md's -- act on what the compiler was FORCED to encode.  Building a
+constant into `%eax` on two different paths is forced.  Leaving whatever a tail
+call left there is free.
+
+The three are `int` now, and the two verdicts are `V90CE_VERDICT_RETRAIN` and
+`V90CE_VERDICT_FALLBACK_V34` in the header -- deliberately macros with a
+prefix rather than an `enum` claiming to be the whole type, since
+`evaluateConnection` is 3,857 unread bytes and whatever else the enumeration
+holds is in there.
+
+**AND THE COUNTER RESTARTS ONLY ON THE PATH THAT GIVES UP.**  Both functions
+clear +0x18 and +0x1c on BOTH paths and clear their own counter on ONE:
+0x40085 stores zero to +0x04 after the diagnostic, and the ordinary path does
+not.  So the object counts up to `MAX_NOF_V90_RETRAINS`, reports once, and
+starts again from zero; it neither resets every time nor saturates.
+
+**A test that compared only the verdict would agree with the blob for ever
+while getting that wrong**, because the verdict is a function of the counter
+BEFORE the branch and the restart happens after it -- the divergence appears
+only on the call AFTER the limit is first passed.  That is why
+`t_v90conneval.cpp` drives each limit case several calls past its own limit
+rather than stopping at the first 5, and why the mutations "does not restart
+its counter" and "restarts its counter every time" are both caught; both would
+have survived a one-call-per-case fixture.  Findings 149 and 223 in their
+smallest form: an evaluator that always answers the same thing agrees with
+anything.
+
+======================================================================
+
+### 1381. SEVEN FIELDS OF THE CONNECTION EVALUATOR ARE NAMED BY ONE FORMAT STRING AND TWO PARAMETER SLOTS
+
+`reset` could only number most of this object, because a store of zero says
+nothing about what a field holds (the header's own words).  The six small
+members of the processing half name seven of them outright, from evidence that
+is the original author's rather than ours.
+
+**One string names four.**  `updateCurrentConstellationData` passes its
+arguments to
+
+    "V90ConnectionEvaluator UPDATE: curDmin = %d, 10*threshUp = %d,
+     10*threshDown = %d, 10*threshRetrain = %d"
+
+and stores the same four values, in the same order, to +0x9e, +0xa0, +0xa4 and
++0xa8.  The three `fsts` fix the order beyond doubt -- 0x3e61c takes the first
+float argument, 0x3e624 the second, 0x3e62c the third -- so +0xa0 is
+`threshUp`, +0xa4 `threshDown`, +0xa8 `threshRetrain` and +0x9e `curDmin`.
+All four carried offset names; three of them are FLOATS, which the four-byte
+x87 stores prove and which no zero-filling `reset` could have shown.
+
+**Two parameter comparisons name two more, and a third string names the last.**
++0x04 is compared against `params->MAX_NOF_V90_RETRAINS` and printed as "%d V90
+retrains"; +0x0c against `params->MAX_NOF_REMOTE_RETRAINS` and printed as "%d
+remote retrains"; +0x08 is printed as "(rrn no %d)".  They are
+`nofV90Retrains`, `nofRemoteRetrains` and `nofRemoteRateReneg`.
+
+**AND THE COMPARISON'S BRANCH FIXES THEIR SIGNEDNESS.**  0x40045 is `cmp
+0x460(%eax),%edx; ja` -- an UNSIGNED branch against a slot `V90Parameters.h`
+declares `int`.  That is what GCC emits when the left operand is `unsigned
+int`; a signed counter would have given `jg`.  The forced case again, and not
+decorative: the two readings disagree exactly when the limit is negative or the
+counter has passed 2^31, and `t_v90conneval.cpp` drives both -- a negative
+limit, where the unsigned reading never fires and the signed one always does,
+and a counter stepped across 2^31, where it is the other way round.
+
+**Two fields were deliberately NOT renamed.**  +0x70 and +0x74 are the running
+average PDSNR and its weight (finding 1382), but `V90Demodulator.cpp` and
+`VPcmFloModem.cpp` refer to +0x70, +0x74, +0x78, +0x7c, +0x84 and +0x88 by
+their offset names and belong to other work; renaming them would edit files
+this batch does not own, and the derivation is recorded in the header instead.
+What did change is the TYPE of +0x70, from `unsigned int` to `float`, and that
+is invisible to both files: each assigns it a literal 0, and `0` into a float
+is the same four zero bytes.
+
+======================================================================
+
+### 1382. THE AVERAGE PDSNR IS A WEIGHTED MEAN WITH AN UNSIGNED WEIGHT, AND objdump PRINTS ITS DIVIDE BACKWARDS
+
+`updateAvePdsnr` is 113 bytes and contains all three of the traps this tree
+keeps a list of.
+
+**It is a weighted mean and not an exponential one.**  The zero test at 0x3e599
+is on the COUNT at +0x74, not on the average at +0x70, so the FIRST call
+assigns outright and every later one folds in:
+
+    +0x74 == 0  ->  +0x70 = pdsnr;  +0x74 = nofSymbols
+    otherwise   ->  +0x70 = (+0x74 * +0x70 + pdsnr * nofSymbols)
+                            / (+0x74 + nofSymbols);   +0x74 += nofSymbols
+
+**`de f9` IS `FDIVP` AND objdump PRINTS `fdivrp`** -- finding 245's swap, and
+this is the case it was written for.  Read the mnemonic and the quotient comes
+out as count/sum instead of sum/count: a plausible float, and one that NO
+side-against-side comparison could catch, because both sides would be wrong
+together.  The registered mutation "the average PDSNR is the reciprocal of the
+object's" is caught only because the fixture asserts what the first call leaves
+behind, bit for bit, rather than only comparing the two sides.
+
+**THE WEIGHT IS UNSIGNED AND THE PROOF IS THE CONVERSION SEQUENCE.**  Both
+conversions of the count are
+
+    push %edx        (%edx = 0)
+    push %eax
+    fildll (%esp)
+
+-- a 64-bit load whose high word is a hard zero, which is what GCC emits for
+`unsigned int` to floating point and never for `int`, which needs no high word
+at all.  The two readings agree on every total below 2^31 and disagree above
+it, and the count really can get there: it is a sum of symbol counts that only
+`reset` and `V90Demodulator::enterPhase3` clear.  Three of the fixture's runs
+start it near the boundary and the run asserts it crossed.
+
+**One rounding, at the end.**  The whole expression stays on the x87 stack at
+80-bit and `fstps` rounds once, which is why it is written as a single
+expression.  Our GCC produced the same instruction sequence -- `fildll`,
+`fmuls`, `fmulp`, `faddp`, `fildll`, `de f9` and all.
+
+======================================================================
+
+### 1383. THREE WAYS A MUTATION SUITE STOPS TESTING ANYTHING WITHOUT FAILING A RUN
+
+All three cost this batch a re-run, none of them would have failed a gate, and
+all three are general.
+
+**1. THE SOURCE GREW A SECOND COPY OF THE TEXT THE ANCHORS POINT AT.**  Finding
+1237 established that `V90MP::reset` (0x1f3e0) and `V90MP::V90MP` (0x1f410) are
+the same forty bytes instruction for instruction, and that the original
+repeated the assignments rather than calling one from the other -- so the
+reconstruction repeats them too.  The moment `reset` landed, the six
+assignments existed TWICE in `V90MP.cpp`, verbatim, and all ten of the set's
+constructor anchors -- `"\tword_14 = 0;\n"`, `"\tbyte_1b = 18;"` -- started
+matching twice.  `mutate.py` calls that UNUSABLE and **UNUSABLE DOES NOT FAIL A
+RUN**: the suite would have gone from twelve caught to two caught and ten
+unusable while still printing `0 NOT caught` and exiting zero.  Finding 1264 is
+the same failure at `v34handshak` scale.  The general form is worth stating:
+**a set is stale the moment its source grows a second copy of the text it
+anchors on, and what makes the second copy appear is precisely a finding like
+1237 -- "the original repeated this" -- being acted on.**  Landing the repeated
+function and re-anchoring the set are one change, not two.  Every anchor now
+carries its function's signature; four new entries mutate the `reset` copy, so
+both forty-byte functions are separately proved tested.
+
+**2. A DESTRUCTOR MUTATION IS INVISIBLE ON A CONSTRUCTED OBJECT.**  `t_v90mp.cpp`
+was written to construct and then destroy the same storage, which is the
+natural shape -- and both destructor mutations came back NOT CAUGHT, because
+`nofRecievedMp = 0` in a destructor writes the value the constructor has just
+written.  The store is real, `-fno-lifetime-dse` keeps it (finding 1224), the
+object changes -- from 0 to 0.  The same trap was waiting in
+`t_v90conneval.cpp`, where every field a destructor might plausibly clear is
+one `reset` has already zeroed.  The fix is to destroy storage NO CONSTRUCTOR
+HAS TOUCHED, comparing each side against the seed rather than against the
+other, since the mutation lands on OUR side and the blob's object would not
+move.  Generally: **a mutation that stores a constant is testable only against
+a state that does not already hold that constant** -- the never-zero rule
+(finding 230) applied to the ORDER of calls rather than to the seed.
+
+**3. REPOINTING A SUITE MOVES AN OBLIGATION WITH IT.**  `suites.json` gives each
+set ONE source and ONE binary, and both of this batch's sets had to move --
+`v90conneval` from `t_v90leaves`, which cannot reach `updateAvePdsnr` or either
+`indicate*Retrain`, and `v90mp` from `t_v90cp`, which drives only the
+lifecycle.  The moment a set is repointed, **every mutation already recorded
+against it becomes a claim about the NEW binary**: eighteen lifecycle
+mutations would have reported NOT CAUGHT, which is exactly the output an
+untested claim gives.  So `t_v90conneval.cpp` and `t_v90mp.cpp` each drive
+their class's constructor, destructor and `reset` as well, duplicating what the
+old binaries do.  The duplication is the mechanism and not waste -- the old
+binaries keep their coverage -- and the check that the repoint was safe is
+arithmetic: `v90conneval` had 5 caught + 1 equivalent before and has the same
+six verdicts among its 36 after; `v90mp` had 12 caught and has the same twelve
+among its 23.
+
+======================================================================
+
+### 1384. TWO MUTATIONS THAT CANNOT FAIL, AND ONE OF THEM DISPROVED A SENTENCE IN OUR OWN SOURCE
+
+Two of `v90conneval`'s new entries survived.  Both were proven equivalent the
+way the rule requires -- by compiling the mutated form with this tree's own
+`CXXFLAGS` and diffing `objdump -d` over the affected symbol.  Both diffs are
+EMPTY, operands included.
+
+**"the running average rounds at every step" is equivalent because a `float`
+LOCAL is not a rounding point.**  The mutation cuts the single expression into
+two named temporaries and a divide, which reads like three roundings instead of
+one -- and produces identical instruction text, because with `-mfpmath=387` and
+no `-ffloat-store` GCC keeps the temporaries in x87 registers at 80-bit and
+rounds only where a value reaches memory.  Assign to a MEMBER instead of a
+local and it becomes a real defect.  This is worth knowing beyond this file:
+naming a temporary does not create a rounding point on this target, so a
+reconstruction is free to name one for legibility.
+
+**"the scale is a double, not a float" is equivalent, and the comment it was
+testing was WRONG.**  The source said the `flds` from `.rodata.cst4` proved the
+ten was written as an `int` rather than as `10.0`, since a double would have
+landed in `.rodata.cst8`.  It would not: ten is exactly representable, GCC
+narrows the constant back, and the mutated form gives the same four-byte
+`.rodata.cst4` and the same instructions.  The comment now says what the four
+bytes actually rule out, which is a double that is NOT exactly representable.
+
+That is the second half of the rule finding 1305 established: **an uncatchable
+mutation may mean the RECORD is wrong rather than the test.**  Here it did, and
+the mutation set is what found it -- nothing else in the tree examines a claim
+of that shape.
+
+======================================================================

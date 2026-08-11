@@ -20,6 +20,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/V90MP.h"
 
 /* Hold the compiler to the map in the header; see V90CP.cpp for why. */
@@ -60,4 +61,69 @@ V90MP::V90MP()
  */
 V90MP::~V90MP()
 {
+}
+
+/*
+ * reset -- the constructor's forty bytes again, instruction for instruction.
+ *
+ * 0x1f3e0 and 0x1f410 differ in nothing but their address: the same six
+ * stores in the same order, with the same two scratch registers zeroed ahead
+ * of the pair of four-byte ones.  Finding 1237 is why the assignments are
+ * repeated here rather than written as a call to `resetDetector` plus two
+ * counters -- `resetDetector` is a separate GLOBAL symbol at 0x1f3c0 and GCC
+ * 3.4 at -O2 does not inline one of those, so an original that called it
+ * would have left a call behind.
+ */
+void
+V90MP::reset()
+{
+	word_14 = 0;
+	byte_19 = 0;
+	byte_1a = 0;
+	byte_1b = 18;
+
+	nofRecievedMp = 0;
+	nofRecievedMpNot = 0;
+}
+
+/*
+ * getBitVector -- hand back the vector and its length.
+ *
+ * Twenty-one bytes and no branch:
+ *
+ *     1f708:  0f b6 88 18 01 00 00   movzbl 0x118(%eax),%ecx
+ *     1f70f:  83 c0 1c               add    $0x1c,%eax
+ *     1f712:  89 0a                  mov    %ecx,(%edx)
+ *
+ * so the length is the ONE BYTE at +0x118 widened without sign, written
+ * whole into the caller's `unsigned int`, and the pointer is `this + 0x1c`
+ * -- which is what fixes the bit vector's start.  `movzbl` into a register
+ * whose whole 32 bits are then stored is the forced-signedness case
+ * CLAUDE.md names: it is why +0x118 is `unsigned char` and not `char`.
+ */
+unsigned char *
+V90MP::getBitVector(unsigned int &length)
+{
+	length = byte_118;
+	return bits;
+}
+
+/*
+ * printNofRecievedMpMpNot -- the two counters, by the debug string's words.
+ *
+ * The gate is the object's own: `cmpl $0x1,dsplibs_debug_level; ja`, which
+ * is `DSPLIB_DEBUG_ON()`.  This one is NOT an `edprintf` -- the call at
+ * 0x20bef relocates against `dsplibs_debug_printf` directly -- so unlike
+ * every diagnostic in `V90ConnectionEvaluator` it says nothing at all below
+ * the gate, and there is no encoder key to move.
+ *
+ * The argument order is the object's: +0x11c is the first `%d` and +0x120
+ * the second, which is what names the two fields.
+ */
+void
+V90MP::printNofRecievedMpMpNot()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
+				     nofRecievedMp, nofRecievedMpNot);
 }

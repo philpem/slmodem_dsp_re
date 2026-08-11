@@ -1,19 +1,19 @@
 [
- {"label": "V90ConnectionEvaluator's lifecycle.  tools/mutate.py --suite v90conneval"},
+ {"label": "V90ConnectionEvaluator's lifecycle and the six small members of its processing half.  tools/mutate.py --suite v90conneval"},
 
- {"label": "NOTE: t_v90leaves drives TWO sources -- this one and",
-  "why": "V90ConstellationDesigner.cpp, whose mutations are the v90cd set. One binary, two sources, two sets; mutate.py takes one source per run."},
+ {"label": "NOTE: the suite's binary moved with this batch",
+  "why": "It was build/test/t_v90leaves, which drives TWO sources -- this one and V90ConstellationDesigner.cpp, whose mutations are the v90cd set.  t_v90leaves cannot reach `updateAvePdsnr` or either `indicate*Retrain`, so the set now points at build/test/t_v90conneval, which drives the lifecycle AND the six.  t_v90leaves keeps its own copy of the lifecycle coverage; that duplication is what makes the repoint safe, since a set pointed at a binary that does not drive it reports NOT CAUGHT for everything and is indistinguishable from an untested claim."},
 
- {"label": "NOTE: the last entry is the equivalent one and it is here so that a",
-  "why": "reordering of reset's stores turns it into MIScounted rather than into silence. The five above it are the anti-vacuity evidence that this set really is pointed at a binary that tests this class -- an equivalent mutation surviving in a set paired with the WRONG binary is indistinguishable from one surviving because it is equivalent."},
+ {"label": "NOTE: the equivalent entry is deliberately kept last",
+  "why": "so that a reordering of reset's stores turns it into MIScounted rather than into silence.  Everything above it is the anti-vacuity evidence that this set really is pointed at a binary that tests this class -- an equivalent mutation surviving in a set paired with the WRONG binary is indistinguishable from one surviving because it is equivalent."},
 
  {"label": "the evaluator's initial period is 1500",
   "find": "#define CONNEVAL_INITIAL_PERIOD\t1600",
   "replace": "#define CONNEVAL_INITIAL_PERIOD\t1500"},
 
  {"label": "reset leaves +0xa8 alone",
-  "find": "\tword_a4 = 0;\n\tword_a8 = 0;",
-  "replace": "\tword_a4 = 0;"},
+  "find": "\tthreshDown = 0;\n\tthreshRetrain = 0;",
+  "replace": "\tthreshDown = 0;"},
 
  {"label": "the phase 4 fallback error is truncated to an int",
   "find": "\tphase4ErrorForV34Fallback = params->PHASE4_ERROR_FOR_V34_FALLBACK;",
@@ -27,9 +27,137 @@
   "find": "\tparams = p;\n\treset();",
   "replace": "\tparams = p;"},
 
+ {"label": "the destructor clears the parameter pointer",
+  "why": "Catchable only because t_v90conneval.cpp runs the destructor a second time over storage no constructor has touched: on a constructed object a store of a value the constructor already left there is invisible.  `-fno-lifetime-dse` is what keeps the store from being deleted outright (finding 1224).",
+  "find": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n}",
+  "replace": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n\tparams = 0;\n}"},
+
+ {"label": "the destructor clears a counter, volatile so it survives",
+  "find": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n}\n",
+  "replace": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n\t*(volatile unsigned int *)&word_90 = 0;\n}\n"},
+
+ {"label": "the average PDSNR is the reciprocal of the object's",
+  "why": "THE ONE THAT MATTERS MOST in this set.  objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding 245), so a reconstruction that believed the mnemonic would divide the other way round -- and a side-against-side comparison would not care, because both sides would be wrong together.  It is catchable only because t_v90conneval.cpp asserts what the FIRST call leaves behind and drives two hundred accumulating calls after it.",
+  "find": "\tword_70 = (nofOldSymbols * word_70 + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
+  "replace": "\tword_70 = (nofOldSymbols + nofSymbols)\n\t\t  / (nofOldSymbols * word_70 + pdsnr * nofSymbols);"},
+
+ {"label": "the weight is a signed count",
+  "why": "`push $0; push %eax; fildll` is the zero-extending conversion GCC uses for `unsigned int`; a signed count would have been a bare `fildl`.  The two agree on every total below 2^31, which is why the fixture starts three of its runs near the boundary and asserts it crossed.",
+  "find": "\tunsigned int nofOldSymbols = word_74;",
+  "replace": "\tint nofOldSymbols = (int)word_74;"},
+
+ {"label": "the new sample carries a weight of one",
+  "find": "pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
+  "replace": "pdsnr)\n\t\t  / (nofOldSymbols + 1);"},
+
+ {"label": "the first-call test is on the average, not on the count",
+  "find": "\tif (nofOldSymbols == 0) {",
+  "replace": "\tif (word_70 == 0.0f) {"},
+
+ {"label": "the first call averages rather than assigns",
+  "find": "\tif (nofOldSymbols == 0) {\n\t\tword_70 = pdsnr;",
+  "replace": "\tif (nofOldSymbols == 0) {\n\t\tword_70 = (word_70 + pdsnr) / 2;"},
+
+ {"label": "the running average rounds at every step",
+  "equivalent": true,
+  "why": "PROVEN, not assumed.  The two forms were compiled with this tree's own CXXFLAGS and `objdump -d` diffed over `_ZN22V90ConnectionEvaluator14updateAvePdsnrEfj`: the instruction text is IDENTICAL, operands included.  The reason is the one CLAUDE.md gives for not using -ffloat-store -- a `float` LOCAL is not a rounding point, because GCC keeps it in an x87 register at 80-bit extended and rounds only where a value reaches memory.  Both forms round exactly once, at the `fstps` into +0x70.  So this is a mutation that cannot fail, and the interesting part is that the obvious reading of it -- 'three roundings instead of one' -- is wrong: naming a temporary does not create a rounding point on this target.  Assign it to a MEMBER instead of a local and it becomes a real defect.",
+  "find": "\tword_70 = (nofOldSymbols * word_70 + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);\n",
+  "replace": "\t{\n\t\tfloat a = nofOldSymbols * word_70;\n\t\tfloat b = pdsnr * nofSymbols;\n\n\t\tword_70 = (a + b) / (nofOldSymbols + nofSymbols);\n\t}\n"},
+
+ {"label": "the two thresholds are stored in each other's slots",
+  "find": "\tthreshUp = up;\n\tthreshDown = down;",
+  "replace": "\tthreshUp = down;\n\tthreshDown = up;"},
+
+ {"label": "updateCurrentConstellationData leaves +0x90 alone",
+  "find": "\tcurDmin = dmin;\n\tword_90 = 0;",
+  "replace": "\tcurDmin = dmin;"},
+
+ {"label": "the printed thresholds are not scaled by ten",
+  "find": "\t\t dmin, (int)(10 * up), (int)(10 * down), (int)(10 * retrain));",
+  "replace": "\t\t dmin, (int)up, (int)down, (int)retrain);"},
+
+ {"label": "curDmin is printed unsigned",
+  "find": "\t\t dmin, (int)(10 * up)",
+  "replace": "\t\t (unsigned short)dmin, (int)(10 * up)"},
+
+ {"label": "the scale is a double, not a float",
+  "equivalent": true,
+  "why": "PROVEN by compiling both forms with this tree's CXXFLAGS and diffing `objdump -d` over `_ZN22V90ConnectionEvaluator30updateCurrentConstellationDataEsfff`: IDENTICAL instruction text, and `.rodata.cst4` stays four bytes with no `.rodata.cst8` appearing at all.  Ten is exactly representable as a float, the multiply happens at 80-bit extended either way, and GCC narrows the constant back.  So the section the relocation names does NOT prove `10` was written as an int rather than as `10.0` -- what it proves is only that the constant is four bytes wide, which both spellings give.  Recorded rather than deleted because 'we tried to tell these apart and could not' is the useful half of that.",
+  "find": "(int)(10 * up), (int)(10 * down), (int)(10 * retrain));",
+  "replace": "(int)(10.0 * up), (int)(10.0 * down), (int)(10.0 * retrain));"},
+
+ {"label": "the rate-renegotiation count is the local retrain count",
+  "find": "\tnofRemoteRateReneg++;",
+  "replace": "\tnofV90Retrains++;"},
+
+ {"label": "indicateRemoteRateReneg leaves +0x90 alone",
+  "find": "\tword_90 = 0;\n\tnofRemoteRateReneg++;",
+  "replace": "\tnofRemoteRateReneg++;"},
+
+ {"label": "the local retrain limit is compared SIGNED",
+  "why": "`ja` and `jg` agree on every ordinary pair of numbers.  Caught only because the fixture includes a negative limit, where the unsigned reading never fires and the signed one always does, and a counter stepped across 2^31, where it is the other way round.",
+  "find": "\tif (nofV90Retrains > (unsigned int)params->MAX_NOF_V90_RETRAINS) {",
+  "replace": "\tif ((int)nofV90Retrains > params->MAX_NOF_V90_RETRAINS) {"},
+
+ {"label": "the local retrain limit is >=, not >",
+  "find": "\tif (nofV90Retrains > (unsigned int)params->MAX_NOF_V90_RETRAINS) {",
+  "replace": "\tif (nofV90Retrains >= (unsigned int)params->MAX_NOF_V90_RETRAINS) {"},
+
+ {"label": "indicateLocalRetrain reads the REMOTE limit",
+  "find": "(unsigned int)params->MAX_NOF_V90_RETRAINS) {",
+  "replace": "(unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {"},
+
+ {"label": "indicateLocalRetrain does not restart its counter",
+  "find": "\t\tnofV90Retrains = 0;\n\t\tword_1c = 0;",
+  "replace": "\t\tword_1c = 0;"},
+
+ {"label": "indicateLocalRetrain restarts its counter every time",
+  "find": "\tword_1c = 0;\n\tword_18 = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\tnofV90Retrains = 0;\n\tword_1c = 0;\n\tword_18 = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain"},
+
+ {"label": "indicateLocalRetrain gives up on both paths",
+  "find": "\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\treturn V90CE_VERDICT_FALLBACK_V34;\n}\n\n/*\n * indicateRemoteRetrain"},
+
+ {"label": "indicateLocalRetrain leaves +0x18 alone on the ordinary path",
+  "find": "\tword_1c = 0;\n\tword_18 = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\tword_1c = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain"},
+
+ {"label": "the local fall-back diagnostic prints the limit, not the count",
+  "find": "\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);",
+  "replace": "\t\t\t \"due to %d V90 retrains\\r\\n\",\n\t\t\t params->MAX_NOF_V90_RETRAINS);"},
+
+ {"label": "the remote retrain limit is compared SIGNED",
+  "find": "\tif (nofRemoteRetrains > (unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {",
+  "replace": "\tif ((int)nofRemoteRetrains > params->MAX_NOF_REMOTE_RETRAINS) {"},
+
+ {"label": "indicateRemoteRetrain reads the LOCAL limit",
+  "find": "(unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {",
+  "replace": "(unsigned int)params->MAX_NOF_V90_RETRAINS) {"},
+
+ {"label": "indicateRemoteRetrain counts the local retrains",
+  "find": "\tnofRemoteRetrains++;",
+  "replace": "\tnofV90Retrains++;"},
+
+ {"label": "indicateRemoteRetrain gives up on both paths",
+  "find": "\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * evaluateMeanErrorStdPhase4",
+  "replace": "\treturn V90CE_VERDICT_FALLBACK_V34;\n}\n\n/*\n * evaluateMeanErrorStdPhase4"},
+
+ {"label": "the remote fall-back diagnostic uses the local wording",
+  "find": "\"due to %d remote retrains\\r\\n\"",
+  "replace": "\"due to %d V90 retrains\\r\\n\""},
+
+ {"label": "evaluateMeanErrorStdPhase4 answers one",
+  "find": "\treturn 0;\n}",
+  "replace": "\treturn 1;\n}"},
+
+ {"label": "evaluateMeanErrorStdPhase4 answers with its first argument",
+  "find": "V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)\n{\n\treturn 0;",
+  "replace": "V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float x, float)\n{\n\treturn (int)x;"},
+
  {"label": "the +0x9c store is 32 bits wide",
   "equivalent": true,
-  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `short_9e = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it.",
+  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `curDmin = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it.",
   "find": "\tshort_9c = -1;",
   "replace": "\t*(int *)&short_9c = -1;"}
 ]

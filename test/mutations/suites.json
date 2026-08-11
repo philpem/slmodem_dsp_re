@@ -238,7 +238,7 @@
  ],
  "v90conneval": [
   "src/pump/v90/V90ConnectionEvaluator.cpp",
-  "build/test/t_v90leaves"
+  "build/test/t_v90conneval"
  ],
  "v90cp": [
   "src/pump/v90/V90CP.cpp",
@@ -302,7 +302,7 @@
  ],
  "v90mp": [
   "src/pump/v90/V90MP.cpp",
-  "build/test/t_v90cp"
+  "build/test/t_v90mp"
  ],
  "v90p2info": [
   "src/pump/v90/V90Phase2Info.cpp",

@@ -1,62 +1,100 @@
 [
- {
-  "label": "the detector's counter left alone",
-  "find": "\tword_14 = 0;\n",
-  "replace": ""
- },
- {
-  "label": "the detector's counter cleared as a byte",
-  "find": "\tword_14 = 0;",
-  "replace": "\t*(unsigned char *)&word_14 = 0;"
- },
- {
-  "label": "the detector's first flag left alone",
-  "find": "\tbyte_19 = 0;\n",
-  "replace": ""
- },
- {
-  "label": "the detector's second flag left alone",
-  "find": "\tbyte_1a = 0;\n",
-  "replace": ""
- },
- {
-  "label": "+0x1b starts at 17, not 18",
-  "find": "\tbyte_1b = 18;",
-  "replace": "\tbyte_1b = 17;"
- },
- {
-  "label": "+0x1b is four bytes wide, as it is in the CP classes",
-  "find": "\tbyte_1b = 18;",
-  "replace": "\t*(unsigned int *)&byte_1b = 18;"
- },
- {
-  "label": "+0x1b left alone",
-  "find": "\tbyte_1b = 18;\n",
-  "replace": ""
- },
- {
-  "label": "the MP counter left alone",
-  "find": "\tnofRecievedMp = 0;\n",
-  "replace": ""
- },
- {
-  "label": "the MPNot counter left alone",
-  "find": "\tnofRecievedMpNot = 0;\n",
-  "replace": ""
- },
- {
-  "label": "the MP counter starts at 1",
-  "find": "\tnofRecievedMp = 0;",
-  "replace": "\tnofRecievedMp = 1;"
- },
- {
-  "label": "the destructor clears the counters",
+ {"label": "NOTE: EVERY LIFECYCLE ANCHOR CARRIES ITS FUNCTION'S SIGNATURE, and",
+  "why": "that is not decoration.  `V90MP::reset` is the constructor's forty bytes repeated instruction for instruction (finding 1237), so the six assignments appear TWICE in the source, verbatim.  The ten anchors below used to be the bare assignment; the moment `reset` landed every one of them matched twice, which mutate.py reports UNUSABLE -- and UNUSABLE DOES NOT FAIL A RUN, so the set would have gone silent while still printing `0 NOT caught`.  Finding 1264.  A mutation of a body the original repeats has to say WHICH copy it means, and the four `reset` entries at the end are the other copy, driven separately by t_v90mp.cpp."},
+
+ {"label": "NOTE: the suite's binary moved with this batch",
+  "why": "It was build/test/t_v90cp, which drives the constructor and destructor of V90CP, V92CP and V90MP together.  It is now build/test/t_v90mp, which drives those AND `reset`, `getBitVector` and `printNofRecievedMpMpNot`.  t_v90cp keeps its own lifecycle coverage; the duplication is what makes the repoint safe, since a set pointed at a binary that does not drive it reports NOT CAUGHT for everything and is indistinguishable from an untested claim."},
+
+ {"label": "the detector's counter left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n",
+  "replace": "V90MP::V90MP()\n{\n"},
+
+ {"label": "the detector's counter cleared as a byte",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;",
+  "replace": "V90MP::V90MP()\n{\n\t*(unsigned char *)&word_14 = 0;"},
+
+ {"label": "the detector's first flag left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n"},
+
+ {"label": "the detector's second flag left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n"},
+
+ {"label": "+0x1b starts at 17, not 18",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 17;"},
+
+ {"label": "+0x1b is four bytes wide, as it is in the CP classes",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\t*(unsigned int *)&byte_1b = 18;\n"},
+
+ {"label": "+0x1b left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n"},
+
+ {"label": "the MP counter left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 0;\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n"},
+
+ {"label": "the MPNot counter left alone",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 0;\n\tnofRecievedMpNot = 0;\n",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 0;\n"},
+
+ {"label": "the MP counter starts at 1",
+  "find": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 0;",
+  "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 1;"},
+
+ {"label": "the destructor clears the counters",
   "find": "V90MP::~V90MP()\n{\n}",
-  "replace": "V90MP::~V90MP()\n{\n\tnofRecievedMp = 0;\n}"
- },
- {
-  "label": "the destructor clears the counters, volatile so it survives",
-  "find": "V90MP::~V90MP()\n{\n}",
-  "replace": "V90MP::~V90MP()\n{\n\t*(volatile int *)&nofRecievedMp = 0;\n}"
- }
+  "replace": "V90MP::~V90MP()\n{\n\tnofRecievedMp = 0;\n}"},
+
+ {"label": "the destructor clears the counters, volatile so it survives",
+  "find": "V90MP::~V90MP()\n{\n}\n",
+  "replace": "V90MP::~V90MP()\n{\n\t*(volatile int *)&nofRecievedMp = 0;\n}\n"},
+
+ {"label": "reset leaves the detector's counter alone",
+  "find": "V90MP::reset()\n{\n\tword_14 = 0;\n",
+  "replace": "V90MP::reset()\n{\n"},
+
+ {"label": "reset clears the detector's counter as a byte",
+  "find": "V90MP::reset()\n{\n\tword_14 = 0;",
+  "replace": "V90MP::reset()\n{\n\t*(unsigned char *)&word_14 = 0;"},
+
+ {"label": "reset starts +0x1b at 17, not 18",
+  "find": "V90MP::reset()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;",
+  "replace": "V90MP::reset()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 17;"},
+
+ {"label": "reset leaves the MP counter alone",
+  "find": "V90MP::reset()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n\tnofRecievedMp = 0;\n",
+  "replace": "V90MP::reset()\n{\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\tbyte_1b = 18;\n\n"},
+
+ {"label": "the length is the byte SIGN-extended",
+  "why": "The one thing getBitVector says beyond the +0x1c.  `movzbl` and `movsbl` agree on every value below 0x80, so this is caught only because t_v90mp.cpp sweeps +0x118 across the boundary and asserts it did.",
+  "find": "\tlength = byte_118;",
+  "replace": "\tlength = (unsigned int)(int)(signed char)byte_118;"},
+
+ {"label": "the length reported is the group size, not the sequence length",
+  "find": "\tlength = byte_118;\n",
+  "replace": "\tlength = word_114;\n"},
+
+ {"label": "the bit vector starts at the object, not at +0x1c",
+  "find": "\treturn bits;",
+  "replace": "\treturn (unsigned char *)this;"},
+
+ {"label": "the bit vector is the CRC register",
+  "find": "\treturn bits;\n",
+  "replace": "\treturn crc;\n"},
+
+ {"label": "the counters print in the other order",
+  "find": "\t\t\t\t     nofRecievedMp, nofRecievedMpNot);",
+  "replace": "\t\t\t\t     nofRecievedMpNot, nofRecievedMp);"},
+
+ {"label": "the gate is one level lower",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90MP",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V90MP"},
+
+ {"label": "the diagnostic is not gated at all",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90MP:",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90MP:"}
 ]

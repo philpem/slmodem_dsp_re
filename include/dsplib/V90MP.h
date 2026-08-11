@@ -85,6 +85,14 @@ public:
 	void calcSequenceLength();
 	void infoToBits();
 	void bitsToInfo(int);
+	/*
+	 * Void, and MEASURED rather than assumed: 0x20bef is a CALL to
+	 * `dsplibs_debug_printf` and the two instructions after it are
+	 * `add $0xc,%esp; ret`.  Nothing arranges %eax, so whatever is in it
+	 * is the callee's return by accident.  `reset` reads the same way:
+	 * %eax is left holding `this` because that is where the argument was
+	 * loaded, not because anything returns it.
+	 */
 	void printNofRecievedMpMpNot();
 	void PrintBase2(char *, unsigned long, unsigned short);
 
