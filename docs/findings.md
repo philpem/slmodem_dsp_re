@@ -43750,3 +43750,153 @@ the mutation set is what found it -- nothing else in the tree examines a claim
 of that shape.
 
 ======================================================================
+
+### 1385. THE V.90 MP MESSAGE IS ELEVEN 17-BIT FRAMES, AND ONE FORMAT STRING NAMES THIRTEEN FIELDS AT ONCE
+
+`V90MP`'s `pad_00[0x14]` was the whole of the decoded message and nobody had a
+name for any of it.  `bitsToInfo` prints six of the thirteen fields by name in
+one line:
+
+    V90MP: MP detected. Type%d,Rate%d,Trellis%d,NonLin%d,Shaping%d,CPack%d
+
+with the arguments loaded, in that order, from +0x00, +0x01 (multiplied by
+`imul $0x960` = 2400, so `Rate` is in units of 2400 bit/s), +0x02, +0x03,
++0x04 and +0x05 -- every one with `movsbl`, which is what makes the six of them
+`char` and not `unsigned char`.  Three more strings name the rest: `Rate Mask
+- %s` for +0x06, printed base 2 from the mask 0x2000 and therefore fourteen
+bits wide, and `h1 real = %d, imag = %d` (h2, h3) for the six `short`s at
++0x08..+0x12, loaded with `movswl`.  That is 6 + 14 = 20 = 0x14 bytes with no
+padding, which is also why `word_14` stays four-aligned and `sizeof` stays
+0x124.
+
+**THE LAYOUT `infoToBits` WRITES IS THE V.90 MP SEQUENCE, and reading it is
+what turns thirteen offsets into a message.**  Seventeen ones, then 17-bit
+frames of one zero framing bit and sixteen data bits:
+
+    0x00..0x10 ones          0x11 framing   0x12 Type      0x13..0x17 zero
+    0x18..0x1b Rate          0x1c zero      0x1d..0x1e Trellis
+    0x1f NonLin  0x20 Shaping  0x21 CPack   0x22..0x23 zero
+    0x24..0x31 rate mask      0x32..0x33 zero
+    0x34..0x43 h1Real   0x45..0x54 h1Imag   0x56..0x65 h2Real
+    0x67..0x76 h2Imag   0x78..0x87 h3Real   0x89..0x98 h3Imag
+    0x9a..0xa9 zero           0xab..0xba the CRC
+
+Eleven frames, 0xbb bits, which is exactly the byte the object puts at +0x119.
+A message whose `Type` is zero stops after frame 4: the h-values are never sent,
+the CRC lands at 0x45..0x54, and +0x119 is 0x55.  **The type flag is therefore
+three things at once** -- the first data bit, the sequence length, and the
+extent of the CRC (`type ? 0xaa : 0x44`, which is +0x119 minus 0x11) -- and it
+is kept at +0x18 separately from `Type` at +0x00 because the receiver needs it
+in state 2, long before `evaluateInfo` runs.
+
+Two things the object was forced to encode and that no test could have found:
+
+  - **`nofRecievedMp` is UNSIGNED.**  `printNofRecievedMpMpNot` prints it with
+    `%d` and that settles nothing, but `bitsToInfo` gates its diagnostics on
+    `cmp $0x2,%ebp; ja` (0x20a34) -- and `ja` is unsigned.  The two readings
+    part at 0x80000000, where the unsigned one is above two and suppresses the
+    transcript while the signed one is below two and prints it, so the header's
+    `int` was wrong and `t_v90mp.cpp` now drives exactly that value.
+
+  - **`bitsToInfo` returns `int`**, which the mangled name does not record and
+    the header had as `void`.  %edi is zeroed at entry (0x201ab) and set to 3
+    for Ed, 1 for MP and 2 for MPnot, and it is moved to %eax at both returns.
+    The four outcomes are separately reachable and the test asserts each was
+    seen.
+
+**The MP and MPnot arms do not log at the same level.**  Both announce the
+message at level 2, but the MP arm's four follow-ups (rate mask, h1, h2, h3)
+compare `cmpl $0x2` and need level 3 while the MPnot arm's compare `cmpl $0x1`
+and need only level 2.  That is finding 150's trap in a class that has one
+`DSPLIB_DEBUG_ON` and one `DSPLIB_DEBUG_VERBOSE` site side by side, and it is
+invisible to any test that runs at a single level.
+
+**A SWEEP INDEXED BY ONE COUNTER IS NOT A SWEEP, and the mutation set caught
+it twice in this one file.**  Both blocks below looked like they covered
+everything and covered a proper subset, because the table sizes share a factor
+with each other:
+
+  - `word_14 = trial % 6` and `bit = bit_vals[trial % 9]` -- six states, nine
+    arguments, and 3 divides both.  `trial % 6 == 1` and `trial % 9 == 0` never
+    coincide, so state 1 was never once handed a zero, which is the only value
+    it reacts to.  `the framing zero goes straight to state 3` survived.
+  - `h1Real = info_vals[(trial + 6) % 14]` with the counter's start taken from
+    a table of 7.  The MP arm takes even trials, `info_vals`' negative entries
+    sit at odd indices, and every even trial reaching an odd index landed on
+    the one counter start that suppresses the diagnostic.  Every h1 line ever
+    printed at level 3 carried a positive value, and `h1 is printed as an
+    unsigned short` survived.
+
+Neither is visible by reading the test, both were invisible to 10,000 passing
+differential checks, and the fix in each case is the cross product (`st =
+trial % 6`, `bit = bit_vals[(trial / 6) % 9]`) or an explicit assignment.  This
+is finding 1383's family: the run stays green and the coverage quietly is not
+there.
+
+**AND A GATE THAT PASSES ON A FILE IT NEVER READS.**  `make offsets` reported
+"957 annotations, all match" over this batch, and it was not looking: a
+`/* +0xNNN */` in `V90MP.h` was deliberately falsified and the count and the
+verdict did not move.  `tools/offcheck.py` matches `^struct\s+(\w+)\s*\{` and
+therefore has NEVER covered a single C++ class -- not `V90MP`, not `V90CP`, not
+any of the sixty-odd classes under `src/pump/v90`.  What actually holds this
+class's map is the `V90MP_OFF` block in `V90MP.cpp`, a `typedef char x[cond ?
+1 : -1]` per field, which WAS shown to fire: the same falsified offset turns
+into `narrowing conversion of '-1'` and the translation unit does not build.
+Finding 134's argument, in the place it is easiest to miss -- the gate is
+green either way, so only breaking something on purpose tells the two apart.
+The two counts are not interchangeable and a batch that lands a class should
+quote the compile-time assertions, not the 957.
+
+======================================================================
+
+### 1386. THE SHORT MP MESSAGE DESTROYS ITS OWN CRC, AND THE LONG ONE REPAIRS A BIT BY GUESSING
+
+Two defects of the original, both reproduced deliberately because the goal is a
+replacement that behaves identically.
+
+**`infoToBits` overwrites the CRC it has just written, whenever `Type` is
+zero.**  The two arms end the same way -- copy the sixteen CRC bits into
+`bits`, zero the one bit after them, then pad to the sequence length -- and the
+long arm's constants are right: CRC at 0xab..0xba, `movb $0x0,0xd7(%ebx)` is
+bits[0xbb], the pad loop starts at 0xbc.  The short arm puts the CRC at
+0x45..0x54 and then writes `movb $0x0,0x61(%ebx)`, which is bits[0x45], and
+starts its pad loop at 0x45 as well.  Both constants are the FIRST CRC bit
+rather than the one after the last, so a type-zero message goes out with its
+CRC zeroed from the front.  It is not a boundary case: +0x118 is the sequence
+length rounded up from 0x56, so it exceeds 0x45 for every non-zero group size
+and the loop always runs.  One slip explains both constants -- an index
+advanced through the CRC copy and then not advanced past it.
+
+**`bitsToInfo` inverts bits[0x70] and re-checks.**  When the sixteen received
+CRC bits do not match the computed ones and the message is the long one
+(+0x119 above 0x6f), the object does `cmpb $0x0,0x8c(%ebx); sete 0x8c(%ebx)`,
+recomputes the whole CRC and compares again, reporting `recieved MP with
+modified good CRC` if that rescued it and `recieved MP with bad CRC` if it did
+not.  bits[0x70] is inside h2Imag.  The flip is destructive and unconditional
+on failure: the bit stays inverted whether or not it helped, so the message the
+caller eventually reads is not the one that arrived.
+
+**A third thing that looked like a defect, and turned out to be a lesson about
+the mutation tier instead.**  The pad loop reads +0x118 ONCE, into %edx, before
+it starts, and it can reach index 0xfc, which IS +0x118 -- so a loop written
+`i < byte_118` in C should re-read the field it had just zeroed and stop early,
+and the local copy our source keeps should be load-bearing.  It is not.  `bits`
+is declared 0xe6 long, GCC uses that bound to conclude that `bits[i]` cannot
+alias the member at +0x118, and hoists the load in BOTH forms: compiled with
+this tree's own `CXXFLAGS`, the two differ in exactly one line of
+`objdump -d --no-show-raw-insn`, which is the file name in objdump's banner.
+The mutation is recorded as `equivalent` with that diff as its proof, which is
+the honest verdict -- and the underlying reason is worth writing down, because
+it means an out-of-bounds subscript in this tree is not merely undefined in
+principle: the compiler is ALREADY using the bound to reason with.  A group
+size of 254 does reach index 0xfc, and the test asserts what the object does
+there.
+
+The whole batch also rests on finding 1237's argument three times over:
+`resetCRC`, `calcCRC` and `PrintBase2` are all plain GLOBAL symbols in `.text`,
+GCC 3.4 at -O2 does not inline one of those, and there is no call to any of
+them in these 5,027 bytes -- so the original wrote the CRC shift register out
+three times and the base-2 printer twice, exactly as it wrote the
+constructor's body again for `reset`.
+
+======================================================================
