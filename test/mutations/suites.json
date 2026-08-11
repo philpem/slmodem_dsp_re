@@ -32,6 +32,10 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "gtonedet": [
+  "src/dsp/GenericToneDetector.cpp",
+  "build/test/t_gtonedet"
+ ],
  "k56flexalloc": [
   "src/pump/v90/K56FlexFloModem.cpp",
   "build/test/t_v92alloc"
@@ -212,9 +216,17 @@
   "src/pump/v90/V90AutoDigitalImpDetector.cpp",
   "build/test/t_v90adid"
  ],
+ "v90adidctor": [
+  "src/pump/v90/V90AutoDigitalImpDetector.cpp",
+  "build/test/t_v90designers"
+ ],
  "v90cd": [
   "src/pump/v90/V90ConstellationDesigner.cpp",
   "build/test/t_v90leaves"
+ ],
+ "v90cdctor": [
+  "src/pump/v90/V90ConstellationDesigner.cpp",
+  "build/test/t_v90designers"
  ],
  "v90conneval": [
   "src/pump/v90/V90ConnectionEvaluator.cpp",
@@ -223,6 +235,10 @@
  "v90cp": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cp"
+ ],
+ "v90cpower": [
+  "src/pump/v90/V90ConstellationPower.cpp",
+  "build/test/t_v90designers"
  ],
  "v90demapper": [
   "src/pump/v90/V90Demapper.cpp",
@@ -276,6 +292,10 @@
   "src/pump/v90/V90PreFilter.cpp",
   "build/test/t_v90prefilter"
  ],
+ "v90rdet": [
+  "src/pump/v90/V90RDetector.cpp",
+  "build/test/t_v90designers"
+ ],
  "v90resampler": [
   "src/pump/v90/V90Resampler.cpp",
   "build/test/t_resampler"
@@ -307,6 +327,10 @@
  "v90ssfilter": [
   "src/pump/v90/V90SpectralShapingFilter.cpp",
   "build/test/t_v90spectral"
+ ],
+ "v90trn2": [
+  "src/pump/v90/V90TRN2Designer.cpp",
+  "build/test/t_v90designers"
  ],
  "v92alloc": [
   "src/pump/v90/V92ParamsInfo.c",

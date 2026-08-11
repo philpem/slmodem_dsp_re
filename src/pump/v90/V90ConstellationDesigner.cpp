@@ -49,16 +49,54 @@
 	     == (off)) ? 1 : -1]
 
 V90CD_OFF(params,    0x00, params);
+V90CD_OFF(byte_08,   0x08, byte08);
 V90CD_OFF(short_0a,  0x0a, short0a);
 V90CD_OFF(short_0c,  0x0c, short0c);
 V90CD_OFF(short_0e,  0x0e, short0e);
 V90CD_OFF(short_10,  0x10, short10);
 V90CD_OFF(word_24,   0x24, word24);
+V90CD_OFF(power,     0x30, power);
+V90CD_OFF(byte_38,   0x38, byte38);
+V90CD_OFF(preFilter, 0x44, prefilter);
 V90CD_OFF(word_48,   0x48, word48);
 V90CD_OFF(maxRate, 0x4c, maxrate);
 V90CD_OFF(minRate, 0x50, minrate);
 typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
 #endif
+
+/*
+ * The constructor -- eight stores, no branch, no call, and it reads none of
+ * the three pointers it is handed.  The statement order below is the object's
+ * store order; only the two rate defaults are constants a reader could have
+ * predicted, and the header says why 28000 lands at +0x50 and 56000 at +0x4c
+ * rather than the other way round.
+ *
+ * The 0x16 at +0x38 is written as `0x16` and not `22` because the object's
+ * immediate is the measurement and its decimal reading is not: nothing here
+ * knows what the field counts.
+ */
+V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
+						   V90PreFilter *pf,
+						   V90ConstellationPower *cp)
+{
+	byte_08 = 0;
+	word_48 = 0;
+	byte_38 = 0x16;
+	power = cp;
+	params = p;
+	minRate = 28000;
+	maxRate = 56000;
+	preFilter = pf;
+}
+
+/*
+ * The destructor -- one byte, `ret`.  See the header: the symbol exists only
+ * because the original declared the destructor, so declaring and emptying it
+ * here is the reconstruction, not a placeholder.
+ */
+V90ConstellationDesigner::~V90ConstellationDesigner()
+{
+}
 
 /*
  * reset -- seven stores, no branch, no call, no diagnostic.

@@ -262,12 +262,22 @@ check_transcript(unsigned lvl, long tag, int *printed)
 
 #define CD_SLOT 128
 
-union cd_slot {
-	V90ConstellationDesigner o;
+/*
+ * STORAGE PLUS A CAST, WHERE THIS WAS A UNION OF THE CLASS AND A BYTE ARRAY.
+ * `V90ConstellationDesigner` gained a user-declared constructor and destructor
+ * when they were reconstructed, and a union may not hold a member with a
+ * non-trivial one.  The alias below is the same reinterpretation the union
+ * performed, and it is what this fixture wants anyway: seeded storage that no
+ * constructor has run over.
+ */
+struct cd_slot {
 	unsigned char raw[CD_SLOT];
-};
+} __attribute__((aligned(8)));
 
-static union cd_slot cd_a, cd_b;
+static struct cd_slot cd_a, cd_b;
+
+#define cd_a_o	(*(V90ConstellationDesigner *)cd_a.raw)
+#define cd_b_o	(*(V90ConstellationDesigner *)cd_b.raw)
 
 static int
 run_cd(void)
@@ -299,18 +309,18 @@ run_cd(void)
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
 
-			cd_a.o.setMinMaxRates(lo, hi);
-			ref_cd_setMinMaxRates(&cd_b.o, lo, hi);
+			cd_a_o.setMinMaxRates(lo, hi);
+			ref_cd_setMinMaxRates(&cd_b_o, lo, hi);
 
 			dsplib_debug_capture_on = 0;
 
 			diff_eq_obj("after setMinMaxRates",
 				    V90ConstellationDesigner,
-				    &cd_a.o, &cd_b.o, tag);
+				    &cd_a_o, &cd_b_o, tag);
 			diff_eq_int("no store past the object (%ld)",
-				    memcmp(cd_a.raw + sizeof(cd_a.o),
-					   cd_b.raw + sizeof(cd_b.o),
-					   CD_SLOT - sizeof(cd_a.o)) == 0,
+				    memcmp(cd_a.raw + sizeof(cd_a_o),
+					   cd_b.raw + sizeof(cd_b_o),
+					   CD_SLOT - sizeof(cd_a_o)) == 0,
 				    1, tag);
 
 			/* What the BLOB's object did, by absolute offset. */
@@ -325,9 +335,9 @@ run_cd(void)
 			 * own declaration, which is the claim being made.
 			 */
 			diff_eq_int("blob's minRate (%ld)",
-				    (long)cd_b.o.minRate, (long)lo, tag);
+				    (long)cd_b_o.minRate, (long)lo, tag);
 			diff_eq_int("blob's maxRate (%ld)",
-				    (long)cd_b.o.maxRate, (long)hi, tag);
+				    (long)cd_b_o.maxRate, (long)hi, tag);
 
 			check_transcript(lvl, tag, &printed);
 		}
@@ -856,24 +866,24 @@ run_cd_reset(void)
 				  trial & 3);
 			fill_pair(parm_a, parm_b, PARM_SLOT_L, trial + 77,
 				  trial & 3);
-			cd_a.o.params = PA;
-			cd_b.o.params = PA;
+			cd_a_o.params = PA;
+			cd_b_o.params = PA;
 			memcpy(before, cd_b.raw, CD_SLOT);
 
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
 
-			cd_a.o.reset();
-			ref_cd_reset(&cd_b.o);
+			cd_a_o.reset();
+			ref_cd_reset(&cd_b_o);
 
 			dsplib_debug_capture_on = 0;
 
 			diff_eq_obj("after reset", V90ConstellationDesigner,
-				    &cd_a.o, &cd_b.o, tag);
+				    &cd_a_o, &cd_b_o, tag);
 			diff_eq_int("no store past the object (%ld)",
-				    memcmp(cd_a.raw + sizeof(cd_a.o),
-					   cd_b.raw + sizeof(cd_b.o),
-					   CD_SLOT - sizeof(cd_a.o)) == 0,
+				    memcmp(cd_a.raw + sizeof(cd_a_o),
+					   cd_b.raw + sizeof(cd_b_o),
+					   CD_SLOT - sizeof(cd_a_o)) == 0,
 				    1, tag);
 			diff_eq_int("the parameter block was not written (%ld)",
 				    memcmp(parm_a, parm_b, PARM_SLOT_L) == 0,
@@ -891,17 +901,17 @@ run_cd_reset(void)
 			 * so the values are asserted and not only compared.
 			 */
 			diff_eq_int("blob's word_48 (%ld)",
-				    (long)cd_b.o.word_48, 0, tag);
+				    (long)cd_b_o.word_48, 0, tag);
 			diff_eq_int("blob's short_0a (%ld)",
-				    (long)cd_b.o.short_0a, 0, tag);
+				    (long)cd_b_o.short_0a, 0, tag);
 			diff_eq_int("blob's short_0c (%ld)",
-				    (long)cd_b.o.short_0c, 0, tag);
+				    (long)cd_b_o.short_0c, 0, tag);
 			diff_eq_int("blob's short_0e (%ld)",
-				    (long)cd_b.o.short_0e, 0, tag);
+				    (long)cd_b_o.short_0e, 0, tag);
 			diff_eq_int("blob's short_10 (%ld)",
-				    (long)cd_b.o.short_10, 0, tag);
+				    (long)cd_b_o.short_10, 0, tag);
 			diff_eq_int("blob's word_24 is params->unnamed_39c "
-				    "(%ld)", (long)cd_b.o.word_24,
+				    "(%ld)", (long)cd_b_o.word_24,
 				    (long)(unsigned int)PA->unnamed_39c, tag);
 
 			/*

@@ -4387,6 +4387,14 @@ Reproduced (finding 1233). `t_v90prefilter.cpp`'s constructor sweep deliberately
 Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 and 1, so both sides take this path in every trial that uses them. It survives only because glibc's smallest chunk has twelve usable bytes. `unmeasured`.
 ---
 
+## D185 🐛 💤 `GenericToneDetector`'s constructor divides by its tenth argument twice with no zero guard, so a `blockLen` of 0 traps before the object exists
+
+*The constructor/destructor batch. **Reachability: unmeasured.** Status: CONFIRMED from the disassembly. Fix class: documentation only — reproduced, not repaired.*
+
+**Finding 1253.** Both sites are `div %edi` at 0x10704 and 0x1071b with `%edi` loaded straight from the argument slot at `0x58(%esp)`, and there is no test of it anywhere in the 267 bytes. `test/unit/t_gtonedet.cpp` sweeps seven nonzero divisors and says in its file comment that zero is excluded on purpose rather than avoiding it quietly. Nothing in this tree constructs a `GenericToneDetector`, so which callers exist and what they pass is unmeasured — that is what the marker means here, and it is why the entry claims a trap rather than a live defect.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect

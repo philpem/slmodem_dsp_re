@@ -41096,3 +41096,225 @@ lines is never rejoined and each half is audited as a truncated string. A
 string macro therefore has to be ONE literal on ONE line with code before it.
 The gate caught this; `make phase` at the time did not, because the batch had
 only built its own test target.
+### 1250. OUR `GenericIIR` LEAVES TWO SCRATCH MEMBERS IN A DIFFERENT STATE FROM THE BLOB'S, AND AN OUTPUT-ONLY TEST CANNOT SEE IT
+
+Found by the first test in this tree to compare a `GenericIIR<float, double>`
+OBJECT against the blob's rather than its output samples —
+`test/unit/t_gtonedet.cpp`, which has to, because `GenericToneDetector`'s
+constructor allocates one and the reconstruction's claim is that it built it
+identically.
+
+Construct a `GenericToneDetector` on both sides with the same eleven arguments
+and compare the 52-byte filter it owns. Eleven of the thirteen words agree
+exactly, including both borrowed coefficient pointers, both orders, both
+buffer lengths and both write positions. Two do not:
+
+    +0x28  m_i      ours 0        blob m_outLen
+    +0x2c  m_acc    ours 0        blob untouched (the allocator's 0xa5 fill)
+
+`m_i` is not noise. The blob leaves it holding `m_outLen` exactly, which is
+what a `reset()` that uses the member itself as the loop variable of its
+second clearing loop leaves behind — and `GenericIIR.h` already says `m_i` is
+"loop counter, a member in the original". Predicted before it was read on a
+second parameter set and confirmed: nden 2, nnum 3, blockSize 1 gives
+m_outLen 3 and the blob leaves 3; nden 3, nnum 1, blockSize 2 gives m_outLen 5
+and it leaves 5. Ours uses a local `k` and additionally writes `m_i = 0;
+m_acc = 0;` in the constructor.
+
+**WHY `t_genericiir` IS GREEN AND ALWAYS WILL BE.** It compares OUTPUT SAMPLES
+— `diff_eq_int("sample %ld", bits(b), bits(a), i)` over 2,000 of them, then the
+same again after a reset — and never looks at the object. Both members are
+pure scratch: `process` opens by writing `m_i` in its own loop header and
+assigns `m_acc` before reading it, so the residue cannot reach an output. The
+divergence is therefore invisible to every test that class has, and would have
+stayed invisible.
+
+**WHAT THIS IS AND IS NOT.** It is not a defect in `GenericToneDetector`: that
+constructor passes five arguments through and calls `reset()`, and every field
+either constructor is responsible for agrees. It is a state divergence in
+`src/dsp/FloatIIR.cpp`, which is a different batch's work, and repairing it
+means changing that class and extending its test to compare the object — so it
+is recorded here and not fixed.
+
+**THE TEST ASSERTS THE DIVERGENCE RATHER THAN LOOKING AWAY FROM IT**, and that
+distinction matters. `t_gtonedet.cpp` excludes exactly those twelve bytes from
+the field-by-field comparison — but it then asserts all four halves of what is
+written above: that ours holds zero in both, that the blob holds `m_outLen` in
+`m_i`, and that the blob's `m_acc` is not zero. The two history POINTERS are
+excluded because they can never agree; these two CAN, and an exclusion that
+merely skipped them would keep the test green after `FloatIIR.cpp` is repaired
+and nothing would ever say the exclusion had gone obsolete. Repair that class
+and those four checks fail, which is the notification. Same argument as 1251's
+equivalent-mutation pairs, applied to a test instead of a mutation.
+
+**THE GENERAL POINT, which is the reason this is worth a number.** A test that
+compares outputs certifies the transfer function. It certifies nothing about
+the state left behind, and "identical behaviour" in this tree means the object
+too — every field, because the next member to be reconstructed may read one of
+them. Findings 223 and 224 make that argument for seeding; this is the same
+argument for what is COMPARED. Any class whose test drives it through a
+functional interface rather than comparing the object is carrying this risk,
+and the way to find out is to construct one and diff it.
+
+---
+
+### 1251. A DESTRUCTOR'S STORE TO ITS OWN MEMBER IS DEAD CODE, SO THAT MUTATION IS EQUIVALENT AND THE OBVIOUS ONE MEASURES NOTHING
+
+Five of the six suites in the constructor/destructor batch carry the same
+mutation — "the destructor clears the field it was handed" — and all five
+came back NOT CAUGHT. That reads as an untested claim and it is not one.
+
+GCC removes the store. The object's lifetime ends when the destructor returns,
+so a store to one of its own members is dead, and at -O2 the mutated source
+compiles to the same one-byte `ret` as the original. Measured directly rather
+than inferred:
+
+    V90RDetector::~V90RDetector() { }              ->  10: ret
+    V90RDetector::~V90RDetector() { params = 0; }  ->  10: ret
+
+So the mutation is equivalent in the strict sense — not merely unobservable,
+but never emitted — and a suite that leaves it as NOT CAUGHT is reporting a
+compiler transformation as a hole in a test.
+
+**THE SPELLING THAT DOES MEASURE IT** is a volatile store, which the compiler
+must emit:
+
+    *(V90Parameters * volatile *)&params = 0;      ->  mov 0x4(%esp),%eax
+                                                       movl $0x0,0x28(%eax)
+                                                       ret
+
+and that one is CAUGHT by all five suites. Both are registered: the plain form
+marked `equivalent` with the reason, immediately followed by the volatile form.
+Deleting the plain one would be worse than keeping it, because the next reader
+writes it again and reads the result as a gap. The pair also keeps working if
+the compiler changes — a future GCC that stops eliding would flip the first to
+CAUGHT and mutate.py would report it MIScounted, which is the notification.
+
+**THIS IS NOT SPECIFIC TO EMPTY DESTRUCTORS.** It applies to any store in any
+destructor whose target is a member of the object being destroyed, so it is a
+general trap for mutation-testing destructors in this tree. Five one-byte
+destructors landed in this batch — `V90ConstellationDesigner`,
+`V90TRN2Designer`, `V90RDetector`, `V90ConstellationPower` and
+`V90AutoDigitalImpDetector` — and every one of them would otherwise have shown
+a false hole.
+
+---
+
+### 1252. THE CONSTRUCTOR COPIES ITS TWO FLOATS AS INTEGERS AND WE COPY THEM THROUGH THE x87 STACK, WHICH IS IDENTICAL EXCEPT FOR SIGNALLING NaN
+
+`GenericToneDetector`'s constructor moves both `float` arguments into the
+object with 32-bit integer moves:
+
+    106ef:  mov 0x4c(%esp),%ecx      ; argument 7
+    106f8:  mov %ecx,0x4(%esi)
+    106fb:  mov 0x54(%esp),%edx      ; argument 9
+    106ff:  mov %edx,0x8(%esi)
+
+The x87 stack is never touched, so the copy is bit-exact for every input
+including denormals, both zeros, both infinities and every NaN.
+
+`float threshold = threshold_;` compiled by the tree's host GCC at `-O2
+-mfpmath=387` emits `flds 0x5c(%esp)` / `fstps 0x4(%ebx)` instead — a
+round trip through the 80-bit register. For every value the test sweeps that is
+exactly equivalent: single-to-extended-to-single is lossless, and both zeros,
+both infinities, denormals and quiet NaNs come back bit-identical. It differs
+for exactly one class of input: `flds` of a SIGNALLING NaN raises the masked
+invalid-operation exception and delivers the quieted form, so a signalling NaN
+in would be a quiet NaN out where the blob would have copied the bits.
+
+**THIS IS COMPILER DRIFT AND NOT A SOURCE DIFFERENCE, and the reason to believe
+that is that GCC is entitled to do it.** `-fno-signaling-nans` is the default:
+the compiler is told it may assume signalling NaNs do not occur, and the x87
+round trip is legal only under that assumption. GCC 3.4.2 emitted the integer
+move for the same source. This is CLAUDE.md's "free, so ignore it" — the
+compiler chose how to implement a copy — and permuting the source until the
+host emits `mov` would be fitting the compiler rather than recovering the
+source.
+
+**IT IS RECORDED RATHER THAN IGNORED** because the test looks like it proves
+more than it does. `t_gtonedet.cpp` sweeps ten bit patterns and asserts
+bit-exactness with `memcmp`, which is the right comparison — `==` calls +0.0
+and -0.0 equal and says nothing at all about a NaN — but a signalling NaN is
+excluded on purpose, and a reader who did not know why might add one and be
+puzzled by the failure. The sweep proves the COPY is bit-exact over every value
+a caller can plausibly pass; it is deliberately not evidence about
+floating-point arithmetic, because the constructor performs none.
+
+---
+
+### 1253. THE ROUND-UP IS A MULTIPLY AND NOT A REMAINDER, WHICH THE INSTRUCTION SETTLES AND THE BEHAVIOUR CANNOT
+
+`GenericToneDetector`'s constructor turns two durations in samples into
+durations in whole blocks, rounding up, and does it twice:
+
+    10704:  div  %edi            ; n = samples / blockLen, remainder in %edx
+    10706:  mov  %eax,%ecx
+    10708:  imul %edi,%eax       ; n * blockLen
+    1070b:  cmp  %ebx,%eax
+    1070d:  jae  10780           ; exact: store n
+    1070f:  lea  0x1(%ecx),%ebx  ; otherwise store n + 1
+
+Two source forms produce this result and they agree over every pair of
+unsigned inputs:
+
+    n = s / b; if (n * b < s) n++;        <- what the object did
+    n = s / b; if (s % b) n++;            <- what it did not
+
+The remainder of that very division is ALREADY IN `%edx` when the comparison
+happens, so the second form needs no arithmetic at all — one `test %edx,%edx`.
+The object issues an `imul` to reconstruct a number it could have had for
+nothing. A compiler does not add a multiply it can avoid, so the multiply was
+written.
+
+This is the CLAUDE.md rule working in the direction it is usually quoted for —
+act on what the compiler was forced to encode — with the twist that here the
+forcing runs backwards. The two forms are behaviourally identical, so no
+differential test can ever separate them, and `imul` versus `test %edx,%edx` is
+the only evidence there is or can be. Recorded because a later reader
+simplifying the source to the `%` form would lose nothing a test could see and
+would silently make the codegen comparison worse.
+
+The division is not guarded against a zero divisor at either site — D185.
+
+---
+
+### 1254. FOUR ONE-BYTE CONSTRUCTORS AND FIVE ONE-BYTE DESTRUCTORS ARE EVIDENCE, AND WHAT THEY ARE EVIDENCE OF IS A DECLARATION
+
+Nine of the twelve symbols in the constructor/destructor batch are a single
+`ret`. It is tempting to read those as stubs the original never finished, in
+the way `K56FlexFloModem` genuinely is (D154). They are not, and the argument
+is one line of compiler behaviour:
+
+**GCC emits an out-of-line destructor symbol ONLY for a user-declared
+destructor.** A class with an implicit trivial destructor contributes no `D1`
+and no `D2` at all — not an empty one, none. So a one-byte `D1` in the object
+is proof that the original's author WROTE `~V90ConstellationPower();` and left
+the body empty. The same holds for `C1`/`C2` and a user-declared constructor
+that initialises nothing: `V90ConstellationPower::V90ConstellationPower()` is
+one byte at 0x3dd40 and its existence is the evidence that the declaration
+existed.
+
+That is why they are reconstructed as declared-and-empty rather than omitted,
+and it is a different claim from "this function does nothing useful". The
+reconstruction has to reproduce the SYMBOL, and only a declaration produces it.
+
+**AND THE COST IS REAL, which is the part worth warning the next batch about.**
+Giving a class a user-declared constructor removes its implicit default one,
+and a user-declared destructor makes it non-trivially-destructible. Both
+consequences reach code that never mentions the constructor:
+
+  - `static V90AutoDigitalImpDetector adid[2];` stops compiling — no default
+    constructor. Two sites.
+  - `union { V90AutoDigitalImpDetector o; unsigned char raw[N]; }` stops
+    compiling — a union may not hold a member with a non-trivial constructor
+    or destructor. Two sites, one of them `V90ConstellationDesigner`'s.
+
+Four test fixtures in three files that had nothing to do with this batch. All
+four wanted the same thing — raw seeded storage that no constructor has run
+over — and all four now say so directly: a byte array plus a cast, which keeps
+every call site's spelling (`adid[i]`, `&adid[i]`, `sizeof(adid[0])`) intact.
+The fixtures are better for it, but the breakage is silent until it is a
+compile error in a file the batch never opened, so grep `test/` for the class
+name BEFORE declaring the constructor, not after.
+
+---

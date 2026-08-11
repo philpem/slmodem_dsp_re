@@ -487,7 +487,15 @@ compare_all(const char *what, long tag)
 	diff_eq_obj_(__FILE__, __LINE__, what, "the block params points at",
 		     blk[0], blk[1], BLK_SLOT, tag);
 	{
-		static V90AutoDigitalImpDetector aa, ab;
+		/* Storage plus a cast, for the reason given at `adid_` above. */
+		static unsigned char aa_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		static unsigned char ab_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		V90AutoDigitalImpDetector &aa =
+			*(V90AutoDigitalImpDetector *)aa_;
+		V90AutoDigitalImpDetector &ab =
+			*(V90AutoDigitalImpDetector *)ab_;
 
 		/* Its `params` is each side's own block; everything else is
 		 * memory the detector's own reset writes. */
