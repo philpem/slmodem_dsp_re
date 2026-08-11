@@ -42406,3 +42406,145 @@ something ours does not, and the emitted behaviour is the same.  Writing it as
 a call is also what keeps `v92ec`'s anchors unique -- the same three statements
 twice in one file would have put a third of the suite's `find` strings on two
 occurrences each, which is finding 1264's failure mode.
+
+======================================================================
+
+### 1305. A MUTATION THAT WILL NOT BE CAUGHT IS SOMETIMES A DEFECT IN THE HEADER, NOT IN THE TEST
+
+`V90Phase3Demodulator.h` said of +0x3cc: "Zeroed by the constructor; `reset`
+does not touch it."  A mutation deleting the constructor's `word_3cc(0)` came
+back NOT CAUGHT against a test that asserts the field is zero on BOTH sides,
+which should have been impossible if the sentence were true.
+
+It was not true.  `reset` has `movl $0x0,0x3cc(%ebx)` of its own, and the
+constructor's LAST ACT is to call `reset` -- so the constructor's store is
+overwritten by an identical one a few instructions later, and deleting it
+changes nothing any differential test can see.  The header now says so.
+
+**THE GENERAL SHAPE, and it is worth having a name for.**  An uncatchable
+mutation has three possible causes and they need different responses:
+
+1. **The test is too weak.**  Strengthen it.  Six of this batch's mutations
+   were this, and finding 1306 is the fix.
+2. **The claim is codegen-only.**  `V90Demapper`'s `byte_664(0)` is this: the
+   byte holds zero either way, and `make similarity` is the instrument
+   (finding 1302).
+3. **THE RECORD IS WRONG.**  Something the header asserts about the object is
+   false, and the uncatchability is the symptom.  This one.
+
+Cause 3 is the one worth writing down, because it inverts the usual reading.
+`mutate.py` is documented as measuring TEST strength; here it measured
+DERIVATION accuracy, and it was the only thing in the tree that could have.
+`make phase` was green throughout, every test passed, and the wrong sentence
+would have gone on being quoted by whoever wrote this class's remaining
+members next.
+
+The entry is not in the suite.  `test/mutations/v90p3dctor.json` carries a
+`note` in its place saying why, so that the next reader does not write it
+again and reach the same dead end.
+
+### 1306. EXCLUDING A POINTER FROM A CONSTRUCTOR TEST HIDES EVERYTHING IT POINTS AT, AND SIX MUTATIONS SAID SO AT ONCE
+
+`V90Phase3Demodulator`'s constructor takes two blocks and builds a
+`V90SdDetector` in one and an `ANSamToneDetector` in the other, from four
+parameter-block slots and eight literals respectively.  The two sides allocate
+separately, so the two pointer words can never agree and are excluded from the
+object comparison -- which is right, and which silently excluded the twelve
+arguments as well.
+
+Six mutations proved it in one run: swapping the SD detector's first two
+thresholds, reading its limit as a float, taking its third value from the
+second slot, swapping the ANSam detector's two sample counts, and exchanging
+its threshold with its ratio all came back NOT CAUGHT.  Every one of those is
+a defect a reader would call obvious, and the test agreed with all of them.
+
+**THE FIX IS TO COMPARE THE BLOCK, NOT THE POINTER**, and the awkward part is
+that the blocks contain pointers of their own -- `ANSamToneDetector` derives
+from `GenericToneDetector`, which holds two `GenericIIR`s, which hold two
+history buffers each.  `cmp_block` in `t_v90rxctor.cpp` copies both sides'
+block and zeroes any word whose value lies INSIDE a live harness allocation --
+on BOTH sides if EITHER side's value is such a pointer, because a word that is
+a pointer on one side and a plain number on the other is exactly the shape a
+real defect takes, and dropping it from one side only would hide it.
+
+Two mechanical notes that cost a debugging cycle each:
+
+- **`harness_alloc_live_set` plus a RANGE test, never an equality test.**  A
+  scrambler holds seven pointers into the MIDDLE of its buffer (`pOut`,
+  `pTap1`, `pTap2` and the three `pInit*`), so comparing against the block's
+  base address finds the base and misses the six beside it.
+  `malloc_usable_size` gives the upper bound.
+- **A destructor test may not plant a raw block in a slot whose destructor is
+  non-trivial.**  `sysdep_malloc(0x3c)` of `HARNESS_MALLOC_FILL` under
+  `~ANSamToneDetector` is a wild pointer three frames down, in `~GenericIIR`.
+  Build the object properly and, for the null arm, destroy it and null the
+  field.
+
+### 1307. FINDING 1301'S ARGUMENT CROSSING, CONFIRMED BY MUTATION FROM A THIRD DIRECTION
+
+`V90Phase4Demodulator`'s constructor hands the embedded `V90Phase4Modulator`
+its two `V90MappingParams *` arguments swapped.  That was derived twice
+independently -- once here from the demodulator's side of the call and once by
+the V.90 modulator batch from the modulator's -- on branches neither could
+see.
+
+It now has a third, different kind of evidence.  The mutation "the modulator
+gets the two mapping-parameter blocks unswapped" is CAUGHT, which says the
+blob really does behave differently from the unswapped version and not merely
+that two readers agree about an instruction.  That took the fixture giving
+every one of the eleven arguments its own distinct per-trial-seeded block: a
+fixture that shared one instance between the two mapping-parameter slots would
+store identical bytes either way round and the mutation would have read NOT
+CAUGHT, which is the vacuous pass finding 224 is about.
+
+Ten of the sixteen mutations in `v90p4dctor.json` are placement mutations of
+this shape, and all ten depend on the same property of the fixture.
+
+### 1308. TEN OF THE FIFTEEN PERIOD-TOOLCHAIN FAILURES ARE ONE C++11 SYNTAX, AND IT HIDES MOST OF THE V.90 TREE FROM THE SECOND TIER
+
+`make similarity` reports "period toolchain: 130 objects, 15 failed" and has
+done for some time without anyone asking which fifteen or why. Compiling each
+by hand inside the container answers it, and the answer is concentrated:
+
+    v34info1a.cpp          V90Demodulator.cpp        V90SessionFlag.cpp
+    v34pcmcreate.cpp       V90Equalizer.cpp          VPcmFloModem.cpp
+    v34pcmmain.cpp         V90Phase3Demodulator.cpp  VPcmXfTerm.cpp
+                           V90PreFilter.cpp
+
+-- ten of them, all with the same first error:
+
+    error: use of enum `V90ComputationalMode' without previous declaration
+    error: use of enum `Phase3DemodulatorState' without previous declaration
+    error: use of enum `__tHardwareCodecTypes__' without previous declaration
+
+GCC 3.4.2 predates C++11 and rejects BOTH forms of the fixed underlying type
+-- the opaque declaration `enum X : int;` and the definition
+`enum X : int { ... }`. Three headers use it: `V90Equalizer.h` line 93,
+`V90Phase3Demodulator.h` line 87 and `V90PreFilter.h` line 124. The remaining
+five failures are unrelated and individual (`V90Dil.cpp`, `V90Jd.cpp` and
+`V92Jd.cpp` each fail on an ordinary name-lookup difference).
+
+**WHAT IT COSTS.** `compare.py` compares 645 symbols, and everything defined
+in those ten translation units is not among them -- so for `V90Equalizer`,
+`V90PreFilter`, `VPcmFloModem`, `V90Demodulator` and `V90Phase3Demodulator`
+the codegen tier is not weak evidence, it is NO evidence. That is worth
+knowing before quoting the tier about any of them: this batch wrote a
+mem-initializer claim about `V90Phase3Demodulator+0x3cc` that `make
+similarity` could not corroborate, and the reason was not the claim.
+
+**IT IS NOT FIXED HERE, and the reason is not budget.** `: int` was chosen
+deliberately and the header says why: it makes every `int` value
+representable, so a differential test may sweep an enum's IRREGULAR range --
+`Phase3DemodulatorState` has enumerators 0, 3 and 26, and without a fixed
+underlying type the range is 0..31 and passing 100 is undefined behaviour.
+Removing it would need every such sweep to cast, in tests belonging to four
+different owners. The trade is real and belongs to whoever owns the sweeps,
+not to a batch that happened to notice.
+
+**WHAT WOULD MAKE THIS SELF-ANNOUNCING.** `build.sh` discards the compiler's
+output (`2>/dev/null`) and prints only a count, so a failure that is one
+syntax across ten files and a failure that is ten unrelated defects look
+identical. Keeping the first error line per failing file would have made this
+visible the day the first `: int` was written rather than some dozens of
+commits later. Finding 134's argument -- a tool must be shown to fire -- has a
+sibling here: a tool that reports only a count cannot be acted on.

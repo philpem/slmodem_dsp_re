@@ -4865,3 +4865,15 @@ new hardware.
 *Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x49..+0x85. **Reachability: CANNOT FIRE** at the shipped 180, for D228's reason. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding 1188 write, since no test that reaches it survives.
+
+## D221 ⚠ `V90Phase3Demodulator`'s constructor zeroes +0x3cc and then calls `reset`, which zeroes it again
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::V90Phase3Demodulator` (blob 0x212c0/0x21430). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1305.** `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two member constructor calls, and the constructor's last act is `reset(...)`, which has `movl $0x0,0x3cc(%ebx)` of its own. The first store is dead in every execution. It is reproduced because the instruction is in the object and because its POSITION -- between two member constructions, which is what makes it a mem-initializer rather than a body statement -- is the evidence for where the field is declared. The cost of the redundancy is one store per construction and there is one construction per call.
+
+## D222 ⚠ `~V90Phase3Demodulator` frees two pointers and nulls neither, so a second destruction double-frees
+
+*Batch of 2026-08-11, from `V90Phase3Demodulator::~V90Phase3Demodulator` (blob 0x20cb0/0x20c00). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1306.** Both arms are `test`/`jne` then destroy-and-free, with no store back to +0x3f0 or +0x428 afterwards, so the guards protect against a pointer the constructor never wrote rather than against re-entry. `~V90Demodulator` has the same shape across thirteen slots and `V90Modulator`'s destructor across five, so it is the object's house style and not a local slip. Reproduced rather than repaired; `t_v90rxctor.cpp` asserts the object is byte-identical after the destructor runs, which is what pins the absence of the stores.

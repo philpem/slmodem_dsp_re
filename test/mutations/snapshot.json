@@ -4110,6 +4110,35 @@
     "the two bit sources are handed f25c6 rather than f25c8": "caught"
    }
   },
+  "v90p3dctor": {
+   "key": "f0a1fb2ca5e9482861bd6e3ead9e4b542049ba9ff8698320a796664c2fda5c92",
+   "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "argument 2 is stored where the detector belongs": "caught",
+    "the ANSam detector is built for 9600 rather than 8000": "caught",
+    "the ANSam detector's block length and block size are swapped": "caught",
+    "the ANSam detector's threshold and ratio change places": "caught",
+    "the ANSam detector's two sample counts are swapped": "caught",
+    "the SD detector's first two thresholds are swapped": "caught",
+    "the SD detector's limit is read as a float": "caught",
+    "the SD detector's third value comes from the second slot": "caught",
+    "the constructor's own reset gets 0 where the object passes 1": "caught",
+    "the constructor's own reset is A-law rather than mu-law": "caught",
+    "the constructor's own reset is handed ucode 0x41": "caught",
+    "the constructor's own reset opens in TRN1dKnownData": "caught",
+    "the descrambler's output length is its tail length": "caught",
+    "the descrambler's two taps are swapped": "caught",
+    "the destructor destroys the SD detector and leaks it": "caught",
+    "the destructor forgets to test the SD detector for null": "caught",
+    "the destructor frees the SD detector without destroying it": "caught",
+    "the destructor leaves the ANSam detector alone": "caught",
+    "the destructor nulls the two pointers it released": "caught",
+    "the detector argument is dropped": "caught",
+    "the modulator is built with the parameter block and no flag": "caught",
+    "the parameter block is never stored": "caught",
+    "the session flag and the parameter block swap fields": "caught"
+   }
+  },
   "v90p3dreset": {
    "key": "2a3fd79ade2b3b07cea7aa72acc0f906042c3a68869aa89804abba41ed0ca80d",
    "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -4161,6 +4190,28 @@
     "ctor: the session flag is stored after reset, not before": "caught",
     "ctor: the timeout base is 1, not 0": "caught",
     "dtor: the scrambler's history is not freed": "caught"
+   }
+  },
+  "v90p4dctor": {
+   "key": "0f67ee4274a0a39de4bdb1c57805817c32d4e1364c38c78798362c6dd5098f6f",
+   "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the CP and MP records land in each other's fields": "caught",
+    "the connection evaluator lands where the detector belongs": "caught",
+    "the constructor also clears the word at +0x08": "caught",
+    "the demapper and the descrambler land in each other's fields": "caught",
+    "the destructor clears the demapper pointer": "caught",
+    "the destructor clears the session flag, volatile so it survives": "caught",
+    "the modulator gets no session flag": "caught",
+    "the modulator gets the two mapping-parameter blocks unswapped": "caught",
+    "the modulator is handed the CP record it is meant to get null": "caught",
+    "the modulator is handed the MP record rather than a null": "caught",
+    "the modulator's trailing count is 13 rather than 12": "caught",
+    "the parameter block lands where the session flag belongs": "caught",
+    "the phase 3 demodulator is never stored": "caught",
+    "the second R detector is built from the first mapping block": "caught",
+    "the session flag is never stored": "caught",
+    "the two mapping-parameter pointers land in each other's fields": "caught"
    }
   },
   "v90p4mctor": {

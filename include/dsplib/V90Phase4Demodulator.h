@@ -64,21 +64,32 @@
  * is why the two must be distinguishable.
  *
  * ---------------------------------------------------------------------------
- * WHY THE CONSTRUCTOR AND DESTRUCTOR ARE DECLARED AND NOT DEFINED
+ * THE THREE MEMBER CONSTRUCTIONS ARE THE COMPILER'S, AND THE ORDER PROVES THE
+ * DECLARATION ORDER
  *
- * Both call `V90Phase4Modulator`'s, and that class has neither written in
- * this tree: `V90Phase4Modulator.h` defines one member out of forty-three and
- * `nm` on our objects finds no `_ZN18V90Phase4ModulatorC1E...` and no
- * `_ZN18V90Phase4ModulatorD1Ev`.  Defining either member below would fail to
- * link.  In the blob those two symbols are also reached from
- * `V90Modulator`'s constructor and destructor -- the TRANSMIT chain -- so the
- * class belongs to whichever batch writes that, and this one records the map
- * rather than adopting it.
+ * The constructor calls `V90Phase4Modulator`'s at +0x50, then
+ * `V90RDetector`'s at +0x2ffc, then `V90RDetector`'s at +0x3028; the
+ * destructor calls them at +0x3028, +0x2ffc and +0x50.  Exactly reversed, and
+ * no body statement of either sits between any pair -- which is what a
+ * compiler emits for three members in declaration order and nothing else.
+ * So the .cpp writes none of the six calls: it writes the mem-initializer
+ * list, and the twelve stores that ARE the body.
  *
- * 277 of the 2,671 bytes of the V.90 receive construction chain are behind
- * that, and another 1,671 behind it in turn: `~V90Demodulator` destroys a
- * `V90Phase4Demodulator`, so the demodulator's own lifecycle pair waits on
- * the same symbol.
+ * Both member constructions of `V90RDetector` take the same argument, so the
+ * two detectors are told apart by their offsets alone and by nothing in the
+ * source.  `rDetector1` and `rDetector2` name positions, not roles.
+ *
+ * ---------------------------------------------------------------------------
+ * ALL FOUR SYMBOLS MATCH THE BLOB'S INSTRUCTION SEQUENCE
+ *
+ * `make similarity` lists `C1`, `C2`, `D1` and `D2` -- 225, 225, 52 and 52
+ * bytes -- among the identical mnemonic sequences.  That is a second,
+ * independent tier agreeing with the differential one, and it is worth having
+ * on a function whose whole body is eleven stores: `compare.py` compares
+ * mnemonics and not operands, so it says nothing about WHICH field each store
+ * reached, and the test's eleven placement assertions say nothing about the
+ * instruction the compiler chose.  Neither alone is the claim; together they
+ * are close to it.
  */
 
 #ifndef DSPLIB_V90PHASE4DEMODULATOR_H
@@ -106,26 +117,22 @@ class V90AutoDigitalImpDetector;
 class V90Phase4Demodulator {
 public:
 	/*
-	 * DECLARED AND DELIBERATELY NOT DEFINED; see the file comment for what
-	 * blocks them.  The parameter list is the mangling's and not a choice:
-	 * an `int` where the original had `unsigned` emits a different symbol.
-	 *
-	 *     V90Phase4Demodulator(V90MappingParams *, V90MappingParams *,
-	 *                          V90Demapper *, V90CP *, V90MP *,
-	 *                          Descrambler<unsigned char, int> *,
-	 *                          V90ConnectionEvaluator *, V90Parameters *,
-	 *                          V90Phase3Demodulator *,
-	 *                          V90AutoDigitalImpDetector *, unsigned int)
-	 *                                                  C1,C2   225 B
-	 *     ~V90Phase4Demodulator()                      D1,D2    52 B
-	 *
-	 * They are NOT declared as members below, and that is deliberate: a
-	 * user-declared constructor removes the default one and a
-	 * user-declared destructor makes the class non-trivially destructible,
-	 * which would delete the special members of any fixture holding one by
-	 * value -- for a pair that cannot be defined yet and so cannot be
-	 * tested.  Declaring them the day they are written is the same edit.
+	 * Defined in src/pump/v90/V90Phase4Demodulator.cpp.  The parameter
+	 * list is the mangling's and not a choice: an `int` where the original
+	 * had `unsigned` emits a different symbol that links against nothing.
+	 * C1 at 0x25a20 and C2 at 0x25930, 225 bytes each; D1 at 0x25b50 and
+	 * D2 at 0x25b10, 52 bytes each.
 	 */
+	V90Phase4Demodulator(V90MappingParams *mappingParams1,
+			     V90MappingParams *mappingParams2,
+			     V90Demapper *demapper, V90CP *cp, V90MP *mp,
+			     Descrambler<unsigned char, int> *descrambler,
+			     V90ConnectionEvaluator *connectionEvaluator,
+			     V90Parameters *params,
+			     V90Phase3Demodulator *phase3Demodulator,
+			     V90AutoDigitalImpDetector *autoDigitalImpDetector,
+			     unsigned int sessionFlag);
+	~V90Phase4Demodulator();
 
 	/*
 	 * The rest of the class -- `getV90Decision`, `getV92Decision`,
