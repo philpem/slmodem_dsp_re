@@ -93,8 +93,13 @@
 #ifndef DSPLIB_VPCMFLOMODEM_H
 #define DSPLIB_VPCMFLOMODEM_H
 
+#include "dsplib/ANSamToneDetector.h"	/* embedded at +0x6f5c, 0x3c    */
+#include "dsplib/GenericIIR.h"		/* embedded at +0x7f28, 0x34    */
+#include "dsplib/SineWave.h"		/* embedded at +0x6f9c, 0x10    */
 #include "dsplib/V90SessionFlag.h"	/* V90Modem, and V90Phase2Info */
 #include "dsplib/V90Phase3Modulator.h"	/* tagV90DILdescriptor          */
+#include "dsplib/V92EchoCanceller.h"	/* embedded at +0x6bd0, 0x3c    */
+#include "dsplib/V92Modem.h"		/* embedded at +0x6124, 0xaac   */
 #include "dsplib/V92Phase2Info.h"
 
 /* A pointer only; src/pump/v90/VPcmFloModem.cpp includes the definition. */
@@ -116,6 +121,24 @@ class V92Parameters;
 
 class VPcmFloModem {
 public:
+	/*
+	 * 0xfa60 (C1) and 0xfee0 (C2), 0x28b = 651 bytes each.  Six member
+	 * objects and the wiring between them; see
+	 * src/pump/v90/VPcmFloModemCtor.cpp, which is where every argument
+	 * this hands on is accounted for.
+	 *
+	 * THERE IS NO DECLARED DESTRUCTOR AND THAT IS DELIBERATE.  `D1` at
+	 * 0xd0a0 and `D2` at 0xd030 are six member destructor calls in
+	 * reverse declaration order and nothing else, which is exactly what
+	 * GCC emits for an IMPLICITLY-DECLARED one over these six members.
+	 * Declaring an empty one would not be the same function: CXXFLAGS
+	 * carries `-fno-lifetime-dse`, so a written body is not elided.
+	 */
+	VPcmFloModem(void *v34Object, V90ModemSide side,
+		     _tagModemParameters *modemParams, unsigned int nSamples,
+		     V90ComputationalMode v90Mode,
+		     V92ComputationalMode v92Mode);
+
 	/*
 	 * Turn the V.34 line probe into the Phase 2 record, and report
 	 * whatever the modem already knows about Uinfo.
@@ -253,7 +276,18 @@ public:
 	 */
 	unsigned char flag_173e;
 
-	unsigned char pad_173f[0x1758 - 0x173f];	/* +0x173f         */
+	unsigned char pad_173f[1];			/* +0x173f         */
+
+	/*
+	 * +0x1740  Four bytes the constructor zeroes
+	 * (`mov %ebp,0x1740(%ebx)` at 0xfc10, with %ebp zero) and nothing
+	 * else in this tree touches.  Carved out of `pad_173f`, which used to
+	 * run from +0x173f to +0x1758; the two spans either side of it are
+	 * still unmodelled.  Offset-named -- a store of zero says a field is
+	 * there and four bytes wide, and nothing else.
+	 */
+	unsigned int word_1740;				/* +0x1740         */
+	unsigned char pad_1744[0x1758 - 0x1744];	/* +0x1744         */
 
 	/*
 	 * +0x1758  The V90Modem, EMBEDDED.  See the file comment for the
@@ -291,34 +325,78 @@ public:
 	 */
 	int info0Layout;
 
-	unsigned char pad_6124[4];		/* +0x6124 not modelled */
+	/*
+	 * +0x6124  The V92Modem, EMBEDDED, 0xaac bytes.  The constructor
+	 * calls `_ZN8V92ModemC1E...` on `this + 0x6124` -- an ADD off `this`
+	 * and not a load -- and `VPCMXF_Delete` and `~VPcmFloModem` both call
+	 * `_ZN8V92ModemD1Ev` on the same address.  `sizeof(V92Modem)` is
+	 * 0xaac (src/pump/v90/V92Modem.cpp), and 0x6bd0 - 0x6124 is 0xaac, so
+	 * the two agree and the object stops exactly where the next member
+	 * begins.  This is finding 1320's technique and V92Modem.h's own
+	 * upper bound, seen from the other side.
+	 *
+	 * THIS SPAN USED TO BE `pad_6124[4]`, `v92Params`, `v92Phase2Info`
+	 * and `pad_6130[0x6f98 - 0x6130]`.  Those two pointers were read
+	 * correctly and are still at exactly the offsets they were recorded
+	 * at: they are `V92Modem::parameters` (+0x004 of the V92Modem, so
+	 * +0x6128) and `V92Modem::phase2Info` (+0x008, so +0x612c).  What
+	 * changed is that they are now reached through the member that owns
+	 * them, which is what makes the constructor's
+	 * `mov 0x6128(%ebx),%ecx` -- a load of the V92Modem's OWN field to
+	 * pass to `V92EchoCanceller` -- readable as what it is.
+	 */
+	V92Modem v92modem;
 
 	/*
-	 * +0x6128  The V.92 parameter block.  `externalReset` loads it and
-	 * calls `V92Parameters::init()` on it, immediately after doing the
-	 * same for the V.90 one at `modem.ptr_49b4`; that pairing is what
-	 * types it.  Not owned.
+	 * +0x6bd0  The V92EchoCanceller, EMBEDDED and 0x3c bytes; the
+	 * constructor builds it on `this + 0x6bd0` with the V92Modem's
+	 * `parameters`, and both destructors run `_ZN16V92EchoCancellerD1Ev`
+	 * there.  `sizeof(V92EchoCanceller)` is 0x3c
+	 * (src/pump/v90/V92EchoCanceller.cpp).
 	 */
-	V92Parameters *v92Params;
+	V92EchoCanceller echoCanceller;
 
 	/*
-	 * +0x612c  The V.92 Phase 2 record.  `setPhaseIIinfo` copies four
-	 * fields into it from the V.90 one at their V90Phase2Info offsets and
-	 * installs the same four float arrays eight bytes further along; see
-	 * include/dsplib/V92Phase2Info.h for why that identifies the type.
+	 * +0x6c0c  848 bytes the constructor CLEARS and nothing else in this
+	 * tree touches: `lea 0x6c0c(%ebx),%eax` then
+	 * `sysdep_memset(p, 0, 0x350)`.
+	 *
+	 * IT IS NOT PART OF THE ECHO CANCELLER, and the arithmetic is the
+	 * proof rather than the guess: 0x6c0c is 0x6bd0 + 0x3c, which is one
+	 * past the last byte of a `V92EchoCanceller`, and 0x6c0c + 0x350 is
+	 * 0x6f5c, which is exactly where the `ANSamToneDetector` below
+	 * begins.  So the span is bounded on both sides by objects whose
+	 * sizes are asserted elsewhere, and it belongs to this class.
+	 * Offset-named: a memset says how big a thing is and nothing about
+	 * what it holds.
 	 */
-	V92Phase2Info *v92Phase2Info;
+	unsigned char block_6c0c[0x6f5c - 0x6c0c];	/* +0x6c0c         */
 
-	unsigned char pad_6130[0x6f98 - 0x6130];	/* +0x6130         */
+	/*
+	 * +0x6f5c  The ANSamToneDetector, EMBEDDED and 0x3c bytes
+	 * (src/pump/v90/ANSamToneDetector.cpp asserts it).  0x6f5c + 0x3c is
+	 * 0x6f98, which is the next field, so the two bound each other.
+	 */
+	ANSamToneDetector ansam;
 
 	/*
 	 * +0x6f98, +0x6fac, +0x6fb0, +0x6fb4  Four words `externalReset`
-	 * zeroes, and the only four things it touches in the 3,660 bytes
-	 * between the V.92 parameter pointer and the CP bit vector.  Nothing
-	 * reconstructed reads any of them, so they are offset-named.
+	 * zeroes and the constructor zeroes again, and the only four things
+	 * either touches between the V.92 modem and the CP bit vector.
+	 * Nothing reconstructed reads any of them, so they are offset-named.
 	 */
 	unsigned int word_6f98;				/* +0x6f98         */
-	unsigned char pad_6f9c[0x6fac - 0x6f9c];	/* +0x6f9c         */
+
+	/*
+	 * +0x6f9c  A SineWave<float, float>, EMBEDDED and 16 bytes -- four
+	 * `Tparam`s, and `Tparam` is `float` here.  The constructor builds it
+	 * with (4800.0f, 980.0f, 0.0f, 9600.0f) and both destructors run
+	 * `_ZN8SineWaveIffED1Ev` on `this + 0x6f9c`.  0x6f9c + 0x10 is
+	 * 0x6fac, the next field, which is finding 1320's bound again and
+	 * agrees with SineWave.h's own four-field map.
+	 */
+	SineWave<float, float> sineWave;
+
 	unsigned int word_6fac;				/* +0x6fac         */
 	unsigned int word_6fb0;				/* +0x6fb0         */
 	unsigned int word_6fb4;				/* +0x6fb4         */
@@ -383,6 +461,31 @@ public:
 	float array_7e2c[VPCM_L2];
 	float L2[VPCM_L2];
 	float array_7ed4[VPCM_L2];
+
+	/*
+	 * +0x7f28  A GenericIIR<float, double>, EMBEDDED and 0x34 bytes
+	 * (include/dsplib/GenericIIR.h reaches the same 52 from
+	 * `GenericToneDetector`'s heap allocation of it).  The constructor
+	 * builds it with (5, 5, entFiltDen, entFiltNum, 99) and both
+	 * destructors run `_ZN10GenericIIRIfdED1Ev` on `this + 0x7f28`.
+	 *
+	 * THE LAST FLOAT ARRAY ENDS EXACTLY HERE: 0x7ed4 + 21*4 is 0x7f28.
+	 * That was already the map; what is new is that the filter fills the
+	 * span from there to +0x7f5c, and 0x7f28 + 0x34 is 0x7f5c.
+	 */
+	GenericIIR<float, double> entFilt;
+
+	/*
+	 * +0x7f5c, +0x7f60, +0x7f64  A byte and two words the constructor
+	 * clears last, after every member is built.  They are the reason
+	 * `sizeof` is 0x7f68 and not 0x7f5c, and they are what turns the
+	 * allocation size into a field map: the three of them plus three
+	 * bytes of alignment fill the object exactly.  Offset-named.
+	 */
+	unsigned char byte_7f5c;			/* +0x7f5c         */
+	unsigned char pad_7f5d[3];			/* +0x7f5d         */
+	unsigned int word_7f60;				/* +0x7f60         */
+	unsigned int word_7f64;				/* +0x7f64         */
 };
 
 #endif /* DSPLIB_VPCMFLOMODEM_H */

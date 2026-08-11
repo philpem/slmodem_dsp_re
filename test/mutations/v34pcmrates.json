@@ -109,12 +109,12 @@
  },
  {
   "label": "the V.92 arm answers statuses 1 and 2 rather than 2 alone",
-  "find": "\t} else if (obj->status == 2) {\n\t\ttx = *(const unsigned char *const *)sess->pad_6124;",
-  "replace": "\t} else if ((unsigned)(obj->status - 1) <= 1) {\n\t\ttx = *(const unsigned char *const *)sess->pad_6124;"
+  "find": "\t} else if (obj->status == 2) {\n\t\ttx = (const unsigned char *)sess->v92modem.modulator;",
+  "replace": "\t} else if ((unsigned)(obj->status - 1) <= 1) {\n\t\ttx = (const unsigned char *)sess->v92modem.modulator;"
  },
  {
   "label": "the V.92 object is the one at +0x6120, the INFO0 layout gate next door",
-  "find": "\t\ttx = *(const unsigned char *const *)sess->pad_6124;",
+  "find": "\t\ttx = (const unsigned char *)sess->v92modem.modulator;",
   "replace": "\t\ttx = *(const unsigned char *const *)&sess->info0Layout;"
  },
  {

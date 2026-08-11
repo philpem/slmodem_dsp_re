@@ -59,6 +59,7 @@
 #define DSPLIB_V90SESSIONFLAG_H
 
 #include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Modem.h"
 #include "dsplib/V90Modulator.h"
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Phase3Demodulator.h"
@@ -108,51 +109,27 @@ public:
  */
 
 /*
- * The fan-out, and the only branch in the batch: +0x49bc selects which half
- * gets the flag.  0 takes the modulator at +0x00, 1 the demodulator at +0x04,
- * and ANY OTHER VALUE stores the flag and calls nothing -- `test`/`je`, then
- * `dec`/`je`, then fall through to `ret`.
+ * `V90Modem` MOVED TO include/dsplib/V90Modem.h, whole, when the construction
+ * path was written.  It used to be declared here as
  *
- * The mangling of the constructor is `V90Modem(V90ModemSide, ...)`, so the
- * field's TYPE has a name in the original.  Which of its enumerators is 0 and
- * which is 1 does not, so it is spelled `int` here and the two values are
- * named by what they do, rather than an enum being invented (finding 226).
+ *     modulator; demodulator; phase2Info; pad_0c[0x49a8]; ptr_49b4;
+ *     sessionFlag; side
+ *
+ * with `side` spelled `int` and `pad_0c` unmodelled.  `V90Modem::V90Modem`
+ * names every field in that span, so the class has real weight now and this
+ * file's own rule -- "the first batch to give any of these classes real
+ * weight should split it rather than grow it" -- applies to it as it already
+ * did to V90Demodulator and V90Phase3Demodulator.  The fan-out sentence that
+ * used to sit here is the one thing that was about `setSessionFlag` rather
+ * than about the layout, so it stays:
+ *
+ * +0x49bc selects which half gets the flag.  0 takes the modulator at +0x00,
+ * 1 the demodulator at +0x04, and ANY OTHER VALUE stores the flag and calls
+ * nothing -- `test`/`je`, then `dec`/`je`, then fall through to `ret`.  The
+ * constructor's switch has exactly that shape at exactly that field, which is
+ * why `side` is now a `V90ModemSide` rather than an `int`: the DESTRUCTOR
+ * compares it unsigned (`cmpl $0x1,0x49bc(%esi); jbe`), and V90Modem.h
+ * carries that argument.  `int which = side;` below is unaffected.
  */
-class V90Modem {
-public:
-	void setSessionFlag(unsigned int flag);
-
-	V90Modulator *modulator;		/* +0x0000 side == 0      */
-	V90Demodulator *demodulator;		/* +0x0004 side == 1      */
-
-	/*
-	 * +0x0008 and +0x49b4 were carved out of `pad_08` by the
-	 * VPcmFloModem batch, which reaches both through the V90Modem
-	 * EMBEDDED in a VPcmFloModem at +0x1758 -- so what that batch reads
-	 * as `this + 0x1760` and `this + 0x610c` is this object's +0x08 and
-	 * +0x49b4.  Neither is reached by anything in the setSessionFlag
-	 * chain; splitting them out moved no offset.
-	 *
-	 * `phase2Info` is a V90Phase2Info because
-	 * `VPcmFloModem::setPhaseIIinfo` fills the pointee's `pcmType`,
-	 * `rtd`, `maxTxPower`, `txPowerMeasurementPoint` and `L2` at
-	 * V90Phase2Info's own offsets for those five -- see
-	 * include/dsplib/V92Phase2Info.h for the rest of that argument.
-	 *
-	 * `ptr_49b4` USED TO BE UNTYPED -- `VPcmFloModem::getUinfoValue`
-	 * loads it and reads a signed short at its +0x20, which says nothing
-	 * about what it points at.  `VPcmFloModem::externalReset` (task #88)
-	 * hands the same field to `V90Parameters::initSession` and
-	 * `V90Parameters::init`, so it is a `V90Parameters *`.  The NAME is
-	 * kept as it was: two batches' worth of offset assertions and one
-	 * `+ 0x20` cast name it, and only its type is new.
-	 */
-	V90Phase2Info *phase2Info;		/* +0x0008                */
-	unsigned char pad_0c[0x49a8];		/* +0x000c not modelled   */
-	V90Parameters *ptr_49b4;		/* +0x49b4                */
-
-	unsigned int sessionFlag;		/* +0x49b8                */
-	int side;				/* +0x49bc V90ModemSide   */
-};
 
 #endif /* DSPLIB_V90SESSIONFLAG_H */

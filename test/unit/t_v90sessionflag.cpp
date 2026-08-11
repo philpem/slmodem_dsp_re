@@ -385,8 +385,8 @@ run_modem(void)
 				seed(i + 31 * s + lvl * NFLAG);
 				wire(0);
 				wire(1);
-				((V90Modem *)mdm[0])->side = side_v[s];
-				((V90Modem *)mdm[1])->side = side_v[s];
+				((V90Modem *)mdm[0])->side = (V90ModemSide)side_v[s];
+				((V90Modem *)mdm[1])->side = (V90ModemSide)side_v[s];
 				dsplib_debug_capture_reset();
 
 				((V90Modem *)mdm[0])

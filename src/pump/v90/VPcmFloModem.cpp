@@ -85,12 +85,12 @@ VPCM_OFF(pcmSessionType,	0x611c, sesstype);
 VPCM_OFF(byte_6118,		0x6118, byte6118);
 VPCM_OFF(byte_6119,		0x6119, byte6119);
 VPCM_OFF(info0Layout,		0x6120, layout);
-VPCM_OFF(v92Params,		0x6128, v92params);
+VPCM_OFF(v92modem.parameters,	0x6128, v92params);
 VPCM_OFF(word_6f98,		0x6f98, word6f98);
 VPCM_OFF(word_6fac,		0x6fac, word6fac);
 VPCM_OFF(word_6fb0,		0x6fb0, word6fb0);
 VPCM_OFF(word_6fb4,		0x6fb4, word6fb4);
-VPCM_OFF(v92Phase2Info,		0x612c, p92);
+VPCM_OFF(v92modem.phase2Info,	0x612c, p92);
 VPCM_OFF(cpBitVector,		0x6fbc, cpbitvec);
 VPCM_OFF(cpNofBits,		0x7dcc, cpnofbits);
 VPCM_OFF(terminateJa,		0x7dce, termja);
@@ -311,7 +311,7 @@ VPcmFloModem::setPcmSessionType(int sessionType)
 	edprintf("VPcmFloModem: setting PCM session to V.%d\n",
 		 sessionType != 0 ? 92 : 90);
 
-	p92 = v92Phase2Info;
+	p92 = v92modem.phase2Info;
 	pcmSessionType = (sessionType != 0);
 	p92->v92CapabilitiesLocal = (unsigned char)sessionType;
 
@@ -361,7 +361,7 @@ VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
 		p90->pcmType = (info0[39] != 0);
 	}
 
-	p92 = v92Phase2Info;
+	p92 = v92modem.phase2Info;
 	p92->maxTxPower = p90->maxTxPower;
 	p92->txPowerMeasurementPoint = p90->txPowerMeasurementPoint;
 	p92->pcmType = p90->pcmType;
@@ -649,7 +649,7 @@ VPcmFloModem::externalReset()
 
 	modem.ptr_49b4->initSession();
 	modem.ptr_49b4->init();
-	v92Params->init();
+	v92modem.parameters->init();
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
