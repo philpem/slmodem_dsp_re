@@ -39673,3 +39673,63 @@ are not locked, so a slow slip is present by construction and V.34's timing
 recovery has to track it. The object publishes `pllcnt` and `rxsymcnt` for
 exactly that loop (finding at `V34RX.c`'s debug strings), which is where to
 look next rather than at the echo.
+
+======================================================================
+
+### 1207. THE CLOCK HYPOTHESIS IS NOT SUPPORTED, `equerr` EXPLAINS NOTHING EITHER — BUT ONE CALL PROVES THE SIP PATH CAN CARRY 28800
+
+*Task #107.  The fourth covariate to fail on this data, and the reason to stop
+proposing them.  Uses the diagnostics already present at `-d9`: no new calls.*
+
+**The hypothesis was clock slip.** There is no synchronisation across SIP -- the
+VG204's codec clock and our resampler are independent -- so a slow sample slip
+is present by construction and V.34's timing recovery must track it. A hybrid
+over copper has one clock; this path has two, and that asymmetry has the shape
+of the deficit.
+
+**Not supported.** Drift predicts an equaliser that converges and then loses it.
+Splitting each call's `V34EQU` series into thirds, six of nine are stationary or
+IMPROVE; exactly one degrades. The predicted signature is absent.
+
+**And `equerr` does not explain the rate.** V.34 fixes the rate in Phase 4, so
+the test is the equaliser error BEFORE `CONNECT`:
+
+| call | median equerr pre-CONNECT | our RX |
+|---|---|---|
+| ec2-supra-4 | **142** | **28800** |
+| ec2-supra-3 | 2519 | 12000 |
+| ec2-supra-2 | 2736 | 12000 |
+| ec2-supra-1 | 2907 | 12000 |
+| ec2-supra-5 | 3018 | 12000 |
+| ec3-courier-2 | 3236 | 14400 |
+| ec3-courier-3 | 3628 | 12000 |
+| ec3-courier-4 | 3814 | 19200 |
+| ec3-courier-1 | 4993 | 7200 |
+
+`r = -0.787` over all nine, which looks convincing. **Leave-one-out kills it:**
+drop `ec2-supra-4` and `r` falls to **-0.263**. One call carries the entire
+correlation, and on the remaining eight -- equerr 2519-4993, rates 7200-19200 --
+there is no relationship. This is the same failure as the echo story, which was
+also convincing at n=5 and gone by n=9.
+
+**Four covariates have now been proposed and refuted on this bench:** the jitter
+buffer (1206's underflow measurement), per-call ERL (r = +0.43), between-modem
+ERL (11 dB, no effect), and now `equerr`. Every one looked strong on a small
+sample. The lesson is methodological and it is the same one three earlier
+retractions taught: **n = 9 cannot distinguish a covariate from an outlier**, and
+proposing a fifth mechanism before enlarging the sample would repeat the error a
+fifth time.
+
+**What IS established, and it reframes the problem.** `ec2-supra-4` reached
+28800 with a pre-CONNECT equaliser error an order of magnitude below every other
+call. **So the SIP path is capable of 28800.** The deficit is not a ceiling
+imposed by the transport, the codec, the echo or the canceller's reach -- all of
+which are present on that call too, unchanged. Something intermittent degrades
+most calls and occasionally does not, which is a different question from "why is
+this path bad" and consistent with the bench's known flakiness (4 connects in 5
+at a fixed configuration, rates varying threefold between successes).
+
+**The next step is samples, not hypotheses.** Thirty-plus calls at one fixed
+configuration, recording rate, ERL, pre-CONNECT `equerr` and connect success
+together, then test covariates against a sample that can actually reject one.
+The instrumentation for all of it already exists and runs at `-d9`.
