@@ -295,5 +295,21 @@
  "v92p3mod": [
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
+ ],
+ "v92precoder": [
+  "src/pump/v90/V92Precoder.cpp",
+  "build/test/t_v92precoder"
+ ],
+ "v92prefilter": [
+  "src/pump/v90/V92PreFilter.cpp",
+  "build/test/t_v92precoder"
+ ],
+ "moduluscoder": [
+  "src/pump/v90/ModulusCoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
+ "v92modulusencoder": [
+  "src/pump/v90/V92ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
  ]
 }

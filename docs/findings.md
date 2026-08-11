@@ -39935,3 +39935,163 @@ one -- after its first pass measured 8358. `batch-28`'s second pass measured 201
 over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
+
+### 1245. THE V.92 PRECODER'S MAP, AND THE ONE THING THAT PROVES WHICH TWO WORDS IT OWNS
+
+`V92Precoder` is 0x80 bytes: a word at +0x00 nothing references, a pointer at
++0x04 into the caller's `V92MappingParams`, twenty-four words of parameters
+copied out of that block at +0x08..+0x64, **two `FloatFIR *` at +0x68 and
++0x6c**, two floats of carried state at +0x70 and +0x74, and the two tap counts
+`setCoefficients` was asked for at +0x78 and +0x7c.
+
+The constructor does one thing: `sysdep_malloc(0x14)`, `FloatFIR(nTaps, 0, 99)`,
+store; twice. It writes eight bytes of a 128-byte object and leaves the rest as
+it found them.
+
+**What settles which two words are owned is `reset(V92MappingParams *)`.** It
+refills the object a word at a time from the parameter block and writes +0x04
+through +0x64 and then +0x70 and +0x74 — **skipping exactly +0x68 and +0x6c**.
+A reset that overwrote those would leak both filters and leave the object
+pointing at parameter words; the skip is a hole in an otherwise contiguous run
+of 29 stores, and it lands precisely on the two the constructor allocated. That
+is the map's strongest single piece of evidence, and it is the kind that only
+appears when a member you are NOT writing is read for its layout rather than
+its meaning.
+
+Both filters are built from the constructor's one argument, so they are
+identical in every field and **a swap of the two stores is invisible to any
+byte comparison**. The only observable is which allocation each pointer holds,
+so `t_v92precoder.cpp` compares the relation `fir1 < fir2` against the
+REFERENCE's own answer rather than against an assumption about the allocator.
+The mutation `the two stores are swapped` is caught by that check and by
+nothing else, and the mutation set says so, so the day it stops being caught
+somebody will know the claim has gone unsupported.
+
+Two deviations out of the same reading: **D180**, the filter constructor runs
+over `sysdep_malloc`'s return unchecked, and **D181**, the destructor does not
+null what it frees while `reset` is the one writer that skips those words.
+
+### 1246. THE PRE-FILTER IS THE PRECODER WRITTEN TWICE — AND "NO `D0`" IS NOT THE ARGUMENT THAT SETTLES A VPTR
+
+`V92PreFilter` is 0x14 bytes: an unreferenced word at +0x00, a `FloatFIR *` at
++0x04, a `FloatIIR *` at +0x08, and the two tap counts at +0x0c and +0x10 that
+`process` gates on. Its constructor is 127 bytes and the precoder's is 127
+bytes; its destructor is 108 and the precoder's is 108; the instruction
+sequences are the same one with the offsets and the second class name changed.
+They are one piece of source written twice.
+
+**Both classes have a word at +0x00 that no member of either class ever
+touches**, and the temptation is to call it a vptr. `tools/cppstruct.py` says
+no `D0` for either, and finding 228 reads that as "not polymorphic" — but that
+inference is narrower than it looks. GCC emits a deleting destructor only for a
+VIRTUAL DESTRUCTOR; a class may have virtual functions and a non-virtual
+destructor, and then there is a vptr and no `D0`. What actually settles it here
+is the constructor: **a polymorphic class's constructor always stores the
+vptr**, and neither of these constructors writes offset 0 at all. So +0x00 is a
+real member in both, and what it holds is not recoverable from these classes.
+
+**And the second sub-object being a `FloatIIR` cannot be tested.** `FloatIIR`
+and `FloatFIR` have the same five fields at the same offsets, round their tap
+counts down to a multiple of four the same way, allocate and zero the same
+buffer and leave the same write index — so a reconstruction that built two FIRs
+would produce byte-identical objects and identical allocator counters. The
+relocation `_ZN8FloatIIRC1EjPfj` at 0x572a7 is the evidence, which is a codegen
+fact and not a differential one. `test/mutations/v92prefilter.json` carries that
+swap as `equivalent: true` with the argument attached, rather than leaving a
+claim the suite silently does not reach.
+
+### 1247. THE MODULUS CODERS ARE 0x1c BYTES, FROM TWO BOUNDS THAT MEET
+
+`ModulusEncoder` and `ModulusDecoder` are the same object: seven `unsigned int`
+at +0x00..+0x18, a default constructor that zeroes all seven in seven separate
+`movl $0x0`, and a seven-argument constructor whose mangling is `C1Ejjjjjjj` and
+whose body is seven stores in parameter order with no arithmetic. A constructor
+whose whole content is a member-initialiser list is what that looks like, so
+**the seven parameters are the seven members and their order is settled** even
+though their meanings are not.
+
+The size closes from both directions. From below: the last member ends at 0x1c
+and `progress` reaches no further. From above, and this is the clean one:
+
+    2ff58:  8d 93 70 06 00 00   lea 0x670(%ebx),%edx
+    2ff61:  e8 ..               call ModulusEncoder::ModulusEncoder()
+    2ff66:  8d 83 8c 06 00 00   lea 0x68c(%ebx),%eax
+    2ff6f:  e8 ..               call V90SpectralShaper::V90SpectralShaper()
+
+— `V90Mapper::V90Mapper` constructing two embedded members **0x1c apart**. That
+is a ceiling and not an inference from a displacement: the second object starts
+where the first ends. `V90Demapper` says the same for the decoder, +0x648 to a
+next field at +0x664, and `include/dsplib/V90Demapper.h` already records that
+0x1c as "the distance to the next field and an upper bound, not a size". This is
+the other half of that sentence, and the two agree exactly — so the bound is now
+a measurement.
+
+**And it unblocks something in someone else's file.** `V90Demapper.h` gives, as
+its reason for declaring `V90Demapper::V90Demapper` and not defining it, that
+"`ModulusDecoder` has no header, no .cpp and no other symbol in this tree" —
+so defining the constructor would have meant either writing that class or
+declaring the member as bytes and losing the call. That reason no longer holds:
+the class now has both, and its default constructor is the one the demapper's
+constructor calls at `lea 0x648(%esi)`. **The `unsigned char
+modulusDecoder[0x1c]` declaration is deliberately left in place all the same**,
+because turning it into a real `ModulusDecoder` member makes `V90Demapper`
+non-trivially-constructible and breaks every existing fixture that holds one by
+value or in a union (finding 232) — that is the owner of `V90Demapper`'s call to
+make, with the fixtures in front of them, and not a side effect of this batch. Neither
+class has a destructor symbol of any kind in the blob, which is why neither
+declares one here, and `~V90Demapper` running no destructor over its embedded
+decoder is the same fact from the other side.
+
+### 1248. THE V.92 MODULUS ENCODER'S CONSTRUCTOR HAS A HOLE IN IT, AND THE HOLE IS THE CLAIM
+
+`V92ModulusEncoder::V92ModulusEncoder()` is 96 bytes of `movl $0x0` and a `ret`.
+It clears **thirteen consecutive words from +0x18 to +0x48** and leaves
++0x00..+0x14 and +0x4c, +0x50 exactly as the storage was found. The object is
+0x54 bytes, so the constructor initialises 52 of its 84 bytes and nothing else
+does until `reset(V92MappingParams *)` runs — which fills the six words below
+the range and writes the two above it.
+
+Thirteen individual stores in descending address order is a member-initialiser
+list over thirteen scalars, not an array: a loop or a `memset` is neither that
+shape nor that length, and `memset(this, 0, sizeof *this)` would additionally
+have cleared the eight words the object demonstrably does not touch. The
+mutation `the range is cleared with a memset over the whole object` is in the
+set for exactly that reason and is caught on both edges.
+
+Reconstructing this needs a fixture that never zeroes: over a zero-filled slot
+every one of "starts one word lower", "stops one word short" and "runs one word
+too far" survives, because the byte it failed to clear was already zero
+(findings 223, 224). `t_moduluscoder.cpp` seeds every byte non-zero, reseeds per
+trial, and asserts the seed was not already clear before it asserts the clear.
+
+### 1249. THE EMBEDDING CONSTRUCTOR IS A SIZE ORACLE, AND IT SETTLED FIVE OBJECTS IN ONE FUNCTION
+
+A `this`-relative displacement gives a LOWER bound on an object's size and
+nothing more; finding 234 is the tree's worked example of that bound being read
+as a size and being wrong by a factor of thirty. The reliable oracle is the
+code that ALLOCATES the object, because `sizeof` is compiled into it:
+
+    V92Transmitter::V92Transmitter (0x53b90)
+        movl $0x54,(%esp)   ... call V92ModulusEncoder::V92ModulusEncoder()
+        movl $0x2008,(%esp) ... call V92ConvolutionEncoder::V92ConvolutionEncoder()
+        movl $0x80,(%esp)   ... mov $0x140,%eax ; call V92Precoder::V92Precoder(unsigned)
+        movl $0x14,(%esp)   ... mov $0x140,%ecx ; call V92PreFilter::V92PreFilter(unsigned)
+
+    V92Phase4Modulator::V92Phase4Modulator (0x17986)
+        movl $0x2c,(%esp)   ... call V92Mapper::V92Mapper()
+
+Five sizes from two functions, each of them the original compiler's own
+`sizeof`, and every one agreed with the largest displacement plus its width —
+which is worth knowing, because it says the displacement bound was tight here
+and not that it is tight in general.
+
+**Where it earned its keep is `V92ConvolutionEncoder`.** Its members index two
+arrays, at +0x08 and at +0x1008 with a scale of four. The first is 0x1000 bytes
+because the second begins there; the second's length is not bounded by anything
+in the class, and the honest reconstruction without the oracle would have been a
+head plus a documented BOUND. `$0x2008` closes it exactly: 1,024 ints each, and
+a map that can be asserted rather than annotated.
+
+The same two functions also pin the only arguments these constructors are ever
+given: `$0x140` — 320 taps — to both the precoder and the pre-filter, and to
+nothing else in the object.

@@ -129,6 +129,17 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "moduluscoder": {
+   "key": "84600d9fd0e3e11ecd9126793103055f53dd5211aa63db1e3f29dbc0ad1c898d",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the decoder clears one word that is not its own": "caught",
+    "the decoder leaves its last word alone": "caught",
+    "the encoder leaves its first word alone": "caught",
+    "the encoder leaves its last word alone": "caught",
+    "the encoder's middle word is set to one, not zero": "caught"
+   }
+  },
   "psd": {
    "key": "e93c6f05ba5f3450573a17663123ae05e86621416f4bbee2ca571d1cf597569f",
    "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3979,6 +3990,18 @@
     "the tap count follows the delay, not the change": "caught"
    }
   },
+  "v92modulusencoder": {
+   "key": "4ea0f77652f9ebb2bcc08eab2a06925b9d87a7a654cd9568cf755098440c95bf",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "one of the thirteen is set to one, not zero": "caught",
+    "the cleared range runs one word too far": "caught",
+    "the cleared range starts one word lower": "caught",
+    "the cleared range stops one word short": "caught",
+    "the constructor also touches the six words below the range": "caught",
+    "the range is cleared with a memset over the whole object": "caught"
+   }
+  },
   "v92p3mod": {
    "key": "3a253735aa917736772125f300bbf60aff937f399819b40c73f002930142747e",
    "summary": "47 mutations: 45 caught (45 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
@@ -4047,6 +4070,38 @@
     "the last field of the object is not written": "caught",
     "the negative default loses its sign": "caught",
     "two adjacent defaults are transposed": "caught"
+   }
+  },
+  "v92precoder": {
+   "key": "4ec413ccb5d00d024a207223f4f491cb222890a0783116d326afb4e04f4754c7",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the constructor also clears the word at +0x00": "caught",
+    "the destructor frees the first filter twice and the second never": "caught",
+    "the destructor nulls the pointer it has just freed": "caught",
+    "the filter allocation is four bytes larger than the object": "caught",
+    "the first filter gets one more sample of slack": "caught",
+    "the first free's null test is dropped": "caught",
+    "the second filter gets one fewer sample of slack": "caught",
+    "the second filter is built with no taps": "caught",
+    "the second free's null test is dropped": "caught",
+    "the two stores are swapped": "caught"
+   }
+  },
+  "v92prefilter": {
+   "key": "0d980d749102cbd1ae189e450ec9b46a27a0e59599933ac22428360225b51ddf",
+   "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the FIR allocation is four bytes larger than the object": "caught",
+    "the FIR free's null test is dropped": "caught",
+    "the FIR gets one more sample of slack": "caught",
+    "the IIR free's null test is dropped": "caught",
+    "the IIR gets one fewer sample of slack": "caught",
+    "the IIR is built with no taps": "caught",
+    "the constructor also clears the word at +0x00": "caught",
+    "the destructor frees the FIR twice and the IIR never": "caught",
+    "the second sub-object is a FloatFIR, not a FloatIIR": "equivalent",
+    "the two stores are swapped": "caught"
    }
   },
   "vpcmep3": {
