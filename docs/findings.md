@@ -39549,3 +39549,68 @@ were found by reading an index expression against `nm -S`'s symbol size, and
 any future entry of this shape will have to be found the same way. That is
 also the honest answer to "could we have caught this earlier": not with tools,
 only with the arithmetic.
+
+======================================================================
+
+### 1205. THE V.34 ECHO CANCELLER CANNOT REACH A SIP ECHO BY ANY SETTING: ITS DELAY LINE HOLDS 172.5 ms AND THE ECHO IS AT 205.62 ms
+
+*Task #105.  Settles the "size the history buffer for the transport's delay"
+idea D72 leaves open.  Answer: it is a STRUCTURE change, not a parameter, and
+D72's numbers do not apply to it.*
+
+**The measurement.** Against the SupraExpress 56e PRO over the SIP path
+(Asterisk -> Cisco VG204 FXS, `fax protocol none`), our own transmit returns
+in our own receive at **1974 samples = 205.62 ms**, the same lag in eight of
+nine connected calls to within one sample, about **20 dB down** (mean 20.47,
+sd 1.96).  `testbench/echoscan.py` cross-correlates the two directions, which
+`row.sh` writes from the same loop on the same timebase, so no alignment step
+is involved and the lag is a real delay rather than two clocks drifting.
+Our transmit rate was 33600 in all nine; our receive 12000 in the majority.
+A ~20 dB echo caps receive SNR at ~20 dB, and ~20 dB is what V.34 needs for
+12000.  The ceiling is accounted for; the call-to-call variation around it is
+not, and nothing here explains it.
+
+**The bound, from the object.**  `V34InitializeImplementationSpecific` sets
+both cancellers to `dlen = 0x678` (1656) and `taps = 0x90` (144), and
+`V34EchoFilter` reads at `cursor + lag + taps - 1`.  So:
+
+| quantity | samples | at 9600 Hz |
+|---|---|---|
+| `V34_ECHO_DLEN` — history the delay line holds | 1656 | **172.5 ms** |
+| `V34_ECHO_TAPS` — the tap window | 144 | 15.0 ms |
+| largest meaningful `lag` (D27) | 1513 | 157.6 ms |
+| **the measured echo** | **1974** | **205.62 ms** |
+
+The echo is **462 samples — 48.1 ms — older than the delay line's oldest
+sample.**  There is no `lag` that points at it, because by the time the
+reflection arrives the sample it is a copy of has been overwritten.  D27
+already states the ceiling from the other direction: a `lag` above 1513 is
+"asking for a sample older than the delay line holds".  Two cancellers exist
+(`echo0`, `echo1`) but each has its own 1656-sample line, so neither sees
+further back.
+
+**What this corrects, and it is my own error.**  Task #105 was written
+proposing `IODELAY ~= 1914` on the grounds that finding #97 puts an overrun
+threshold at `IODELAY > ~2103`, leaving headroom.  **Those are a different
+canceller.**  `echo_delay = IODELAY + 60`, `echoLength = echoDelay + 76` and
+the ~2103 figure are all `V92EchoCanceller` (D72), reached by V.90/V.92.  The
+V.34 datapump uses `V34EchoFilter` with the 1656-sample line above, and the
+two share neither structure nor arithmetic.  D72's own entry warns against
+conflating them; the task did it anyway.
+
+**Fix class: capability addition, opt-in, and not by parameter.**  Covering a
+205.62 ms echo needs `dlen >= lag + taps = 1974 + 144 = 2118` shorts against
+the object's 1656 — enlarging a structure the object's own layout fixes, which
+is the "capability addition" D72 already describes rather than a bug fix.  It
+therefore lands under the governing rule as an opt-in extension, off by
+default, with `make phase` green when off.  Nothing on the faithful path
+changes: the object was built for a hybrid's echo, whose whole reachable range
+is ~11-31 ms, and it is not defective for failing to anticipate a packet
+network.
+
+**And shortening the path is not an alternative.**  About 160 ms of the 206 is
+buffering — 40 ms our jitter buffer, 80 ms the VG204's, 2x20 ms packetisation.
+Cutting both to nothing still leaves ~105 ms against a 172.5 ms line, so it
+would fit — but only in combination with pointing `lag` there, which is the
+same structure question.  As a standalone measure it lowers the delay without
+giving anything the ability to cancel at it.

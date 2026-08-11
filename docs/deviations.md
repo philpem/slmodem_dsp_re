@@ -2914,6 +2914,14 @@ SIP jitter buffer, which the object was never built for (its whole reachable
 delay range is a hybrid's echo, ~11-31 ms) -- but that is a capability
 addition, not a bug fix: nothing on the faithful path triggers the overrun.
 
+**The SIP echo has since been measured, and it is out of reach of BOTH
+cancellers.** Finding 1205: over the bench's SIP path the reflection arrives at
+205.62 ms, while `V34EchoFilter`'s delay line holds 172.5 ms (D27) -- so no
+`lag` reaches it, and the sizing question above is a structure change rather
+than a setting. Note the arithmetic on THIS page is `V92EchoCanceller`'s and
+does not carry over: the V.34 datapump shares neither the structure nor the
+`echo_delay = IODELAY + 60` mapping.
+
 ## D73 🐛 `DP_V32BIS` (132) never connects
 
 *Task #98 sweep, from fix list §2. **Reachability: FIRES TODAY.** Status: SUSPECTED.*
