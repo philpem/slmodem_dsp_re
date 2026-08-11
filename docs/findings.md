@@ -37635,3 +37635,82 @@ the 56k bullet was measured on -- `MDMCTL_IODELAY` was later hardcoded to 48
 where the tested tree returned `MODEM_FRAMESIZE` (192), and `MDMPRM_CODECTYPE`
 was changed to an "unknown codec" value. Anyone treating the fork's README as
 a measurement of the fork's current behaviour is reading across that gap.
+### 1180. A third of `v34hshak.c`'s bare-address comments are load-bearing for a mutation anchor, and `anchorcheck.py` is what says so
+
+*Numbered at 1180 to clear 1146, the highest in use on any branch at the time
+(`master` and `worktree-agent-a8aacbf0a764df71a`), because four sessions were
+appending in parallel.*
+
+`src/pump/v34/v34hshak.c` carries **270 comments whose entire text is an
+object address** -- `/* 0x6abae */`, `/* 0x6aa0b, 0x6c9aa */`, `/* else
+0x6c133 */`. They are what task #65's comment pass exists to replace. **168 of
+them cannot be touched**, and the reason is not style:
+
+    $ tools/cmtsites.py src/pump/v34/v34hshak.c
+    270 thin comments, 168 frozen by a mutation anchor, 102 free
+
+`tools/mutate.py` locates every mutation by an EXACT SUBSTRING of the source,
+and **1,673 of the tree's 3,611 anchors match inside this one file**. Many
+carry a bare address deliberately -- `test/mutations/v34hsrx72.json`'s own
+note says so, because `t72_update_both(obj, rx, n);` is four separate rungs'
+statement and the trailing address is the only thing making each anchor
+unique. Finding 432's hazard, answered with information rather than with
+indentation. So an anchor reads
+
+    "find": "\t\t\t\tt72_rx_l1(obj);\t\t/* 0x650c6 */"
+
+and rewriting that comment is a one-line change to the reader and a deleted
+mutation to the suite.
+
+**What that costs, and what catches it.** An UNUSABLE mutation does not fail
+its own run (finding 347), and `make phase` does not run the mutation suites
+at all -- so the obvious conclusion is that the loss is silent. **It is not,
+and this was worth checking rather than assuming.** `anchorcheck.py` runs in
+the `refs` target, which IS in `make phase`, and returns 1 on any anchor
+matching other than exactly once. Rewriting one frozen thin comment in a
+throwaway copy of the tree:
+
+    === control: untouched copy ===
+      0 anchor(s) match other than exactly once
+    === after rewriting ONE frozen thin comment ===
+      NOT UNIQUE  v34hsrxch: 72 RX_L1 is not one of the second chain's two ...
+      2 anchor(s) match other than exactly once
+    anchorcheck exit: 1
+
+Two anchors, not one, from a single comment: they overlap.
+
+**So the gate is red, not silent -- and it is still the wrong tool for
+planning.** It is retrospective. It tells you an edit was wrong after you made
+it, over 3,611 anchors, with no way to know in advance which of 270 comments
+are the dangerous ones or where a new line may go. `tools/cmtsites.py` answers
+that before anything is edited: per site, `frozen`, `append_ok`, and
+`insert_above` -- the nearest line at or above the site where inserting does
+not split an anchor's span.
+
+**And that reframes the whole comment pass.** The instinct is to rewrite the
+bare comment in place. The correct move is to leave it exactly as it is and
+put the prose in a block comment ABOVE it -- which needs no test-infrastructure
+edit, keeps the address as the cross-reference into the disassembly it always
+was, and has more room than the twenty columns a trailing append leaves. 220
+of the 270 sites can take an insertion directly above themselves; 33 need to
+go one line further up, 8 more than that, and 4 are stranded fifty lines from
+a legal point.
+
+**One collision survived the plan and only the gate caught it.** An inserted
+block ending ` */` immediately above `for (i = 0; i <= 3; i++) {` created a
+second copy of the anchor `"\t */\n\tfor (i = 0; i <= 3; i++) {"`, which
+already existed a thousand lines earlier -- so an insertion that touched no
+anchor's span still made one match twice. The fix was to place the block above
+the two accumulators instead of tight against the `for`, and the reason is now
+written beside it so nobody moves it back. **Inserting text cannot delete an
+anchor, but it can duplicate one**, and that is not a case `insert_above`
+predicts.
+
+**Measuring the pass.** `cmtsites.py` also reports how many thin comments have
+their address explained in prose within forty lines. Over task #65:
+
+    before   270 thin,  18 explained,  252 bare
+    after    256 thin, 209 explained,   47 bare
+
+The thin count barely moves because that is the design -- the address stays.
+What changes is whether anything nearby says what it is for.

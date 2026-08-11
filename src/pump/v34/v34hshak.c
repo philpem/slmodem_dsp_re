@@ -84,24 +84,65 @@
  * them here rather than in a constants file.  Their .rodata addresses sit
  * between V34RX.c's locals and v34filters.c's, which is consistent.
  *
- * Coefficient derivation is deferred to task #47 (docs/fastpass.md): a
- * byte-exact copy is byte-exact, and the differential test proves it with no
- * derivation at all.
+ * Coefficient derivation was deferred to task #47 (docs/fastpass.md) on the
+ * grounds that a byte-exact copy is byte-exact and the differential test
+ * proves it with no derivation at all.  That holds right up to the 8 kHz
+ * retarget, where the tables have to be REGENERATED rather than copied, and
+ * a table nobody can regenerate is a table that pins the sample rate.
+ *
+ * Finding 620 did two of this file's three, and both are folded in below
+ * rather than left in the findings file: the ten carrier descriptors are
+ * solved exactly, the 2800 baud timing constants are solved exactly, and the
+ * five transmit power scales are still open -- but open with the two obvious
+ * answers DISPROVED rather than untried, which is worth more than an
+ * untested guess.  Each table below says which of the three it is.
  */
 
 /*
- * The transmit power scales, one table per symbol rate, indexed by a
- * pre-emphasis index.  TWO ROWS OF FOURTEEN, and the split is visible in the
- * data rather than assumed: each row is a decreasing sequence that runs out
- * into zeros, and the second starts again at roughly the first's head.  The
- * row length is fourteen for every rate; the number of non-zero entries is
- * not, and grows with the symbol rate -- nine at 2400, thirteen at 3429 --
- * which is the ten pre-emphasis characteristics V.34 defines plus the
- * flat one, truncated where the rate cannot use them all.
+ * The transmit power scales, one table per symbol rate.  TWO ROWS OF
+ * FOURTEEN, and the split is visible in the data rather than assumed: each
+ * row is a decreasing sequence that runs out into zeros, and the second
+ * starts again at roughly the first's head.  The row length is fourteen for
+ * every rate; the number of non-zero entries is not, and grows with the
+ * symbol rate -- nine at 2400, thirteen at 3429.
  *
- * `setfinalrate` only ever stores the ADDRESS of one of these.  What indexes
- * it is `preempindex` below, and the two are not connected by anything in
- * this object: no function reads a scale table and calls preempindex.
+ * WHAT INDEXES THEM IS NOT KNOWN.  This note used to answer "the ten
+ * pre-emphasis characteristics V.34 defines plus the flat one, truncated
+ * where the rate cannot use them all".  Finding 620 is task #47's attempt on
+ * these tables, and it disproves that reading and one other:
+ *
+ *   NOT the pre-emphasis index.  V.34 defines eleven, in two template
+ *   families -- indices 0-5 a linear tilt in dB with alpha from Table
+ *   3/V.34, indices 6-10 flat to 0.8 of the band and then a step and a ramp
+ *   with beta and gamma from Table 4/V.34.  Integrating both families over
+ *   each rate's band (Table 2/V.34 gives the centre, the band is +/-0.45
+ *   wide) predicts a JUMP BACK UP at the family boundary: 2400's prediction
+ *   runs 4579, 3913, 3321, 2799, 2343, 1949 and then 4404 at index 6,
+ *   because a template that is flat over most of the band has nearly unity
+ *   gain.  The real rows march smoothly down across that boundary and do not
+ *   know it exists.  Eleven indices also cannot fill 3429's thirteen.
+ *
+ *   NOT one row per carrier.  Table 2/V.34 gives two carriers per rate,
+ *   which is the obvious reading of two rows.  3429 refutes it: its low and
+ *   high carriers are BOTH 1959, so its two rows would have to be identical,
+ *   and they are not -- 3400 against 3403, 2047 against 2146.
+ *
+ * WHAT IS ESTABLISHED IS THE SHAPE.  Each row is close to a geometric ladder
+ * in dB, and the step scales inversely with the symbol rate: -2.958, -2.603,
+ * -2.398, -2.281 and -2.115 dB at the five rates, every one of which
+ * `step_dB = 7200/S` predicts to within 0.05 dB.  That is a
+ * CHARACTERISATION AND NOT A DERIVATION, and the difference is measurable
+ * rather than rhetorical: the within-row residuals reach 0.6 dB, an order of
+ * magnitude more than the rule's own error, so something further is shaping
+ * the rows and writing 7200/S down as the closed form would be fitting five
+ * numbers with one.  Do not regenerate from it at 8 kHz.
+ *
+ * `setfinalrate` only ever stores the ADDRESS of one of these.  The obvious
+ * candidate for what indexes it is `preempindex` below, and that does not
+ * work either: `preempindex` sets `i = 5` and increments BEFORE its first
+ * test, so it can only ever return 6 or more, and nothing here selects
+ * entries 1 to 5.  The two are not connected by anything in this object --
+ * no function reads a scale table and calls preempindex.
  */
 const short scale2400[V34_SCALE_ENTRIES] = {
 	4579, 3527, 2512, 1767, 1248,  882,  626,
@@ -144,11 +185,32 @@ const short scale3429[V34_SCALE_ENTRIES] = {
  * Eight entries of four shorts, and the first two of every one are zero --
  * so this is a four-field record whose leading pair is a cleared state and
  * whose trailing pair is `{-k, 15735}` twice, with k rising as the carrier
- * frequency falls.  15735 is 0.9604 in Q14 and is the same in all eight;
- * only the first of each pair moves.  A resonator's two coefficients, at a
- * guess, but the object never dereferences these here -- `setfinalrate` and
- * `probeselect` store the address and nothing else -- so the guess stays a
- * guess and the derivation is #47's.
+ * frequency falls.  The object never dereferences these here: `setfinalrate`
+ * and `probeselect` store the address and nothing else.
+ *
+ * EACH ONE IS A PAIR OF TWO-POLE RESONATORS, TWO HERTZ EITHER SIDE OF THE
+ * CARRIER.  That was task #47's, and finding 620 settled it exactly rather
+ * than suggestively.  Read each pair as Q14 denominator coefficients
+ *
+ *      { -2*r*cos(2*pi*f/9600), r^2 }
+ *
+ * 15735/16384 is 0.9604, so r is 0.98 in all eight -- which is why only the
+ * first of each pair moves -- and solving for f at the object's 9600 Hz
+ * sample rate puts every pole on a whole hertz:
+ *
+ *      c2000  1998, 2002        c1829   1827, 1831      c1680  1678, 1682
+ *      c1959  1961, 1957        c1800_  1798, 1802      c1600  1598, 1602
+ *      c1920  1918, 1922        c1867   1865, 1869
+ *
+ * Every midpoint is the table's own name.  `c1959` is the one oddity worth
+ * recording: its poles run high-then-low where the other seven run
+ * low-then-high, and the midpoint is still exactly 1959.  A transcription
+ * slip in the original, and harmless, because the pair is summed and not
+ * ordered.
+ *
+ * This is the form the 8 kHz retarget needs.  At another sample rate these
+ * are REGENERATED from r and f, not resampled: two hertz of detuning either
+ * side is a design intent, and nothing about it survives a resampler.
  *
  * The names are the object's, `c1800_` included.  The trailing underscore is
  * the original author's, presumably to dodge a collision.
@@ -164,11 +226,21 @@ const short c1600[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -16093, 15735, -16020, 1573
 
 /*
  * And two more of the same shape for the phase-2 signalling carriers, which
- * `v34modeminit` hands to the tone detector rather than storing.  Their
- * second coefficient is 15993 where the eight above all use 15735, and
- * `c2400_`'s first is zero -- a resonator at a quarter of the sample rate
- * needs no rotation, which is what a zero there would mean.  The trailing
- * underscores are the object's.
+ * `v34modeminit` hands to the tone detector rather than storing.  Same form,
+ * two differences, and finding 620 has both exactly.
+ *
+ * 15993/16384 is 0.97614, so r is 0.988 here against 0.98 above -- a pole
+ * nearer the unit circle, so a narrower and longer-ringing resonance, which
+ * is what a signalling tone wants and a data carrier does not.  And both
+ * poles of each pair sit on the SAME frequency rather than straddling it:
+ * 1200.0 and 2400.0 exactly, one resonator written twice.
+ *
+ * `c2400_`'s first coefficient is zero because cos(2*pi*2400/9600) is
+ * cos(90 degrees).  A resonator at a quarter of the sample rate needs no
+ * rotation term, which is exactly what a zero there means -- so the zero is
+ * the arithmetic and not a missing entry.
+ *
+ * The trailing underscores are the object's.
  */
 const short c1200_[V34_CARRIER_DESC] = { 0, 0, 0, 0, -22892, 15993, -22892, 15993 };
 const short c2400_[V34_CARRIER_DESC] = { 0, 0, 0, 0,      0, 15993,      0, 15993 };
@@ -650,6 +722,30 @@ setfinalrate(void *objp)
  * baud, which is V.34's optional sixth symbol rate; nothing can put it in
  * +0xaa96 through `setfinalrate`, so either another writer can or the arm is
  * left over.  It is reproduced and recorded (D35).
+ *
+ * WHY 2800 USES 0x3e82 AND 0x1f41 WHERE EVERY OTHER RATE USES 0x3e80 AND
+ * 0x1f40.  This is the second of task #47's derivations (finding 620), and
+ * the rule is that `step/wrap` is EXACTLY `2400/baud` at every rate:
+ *
+ *      baud   step    wrap    step/wrap   2400/baud
+ *      2400   0x3e80  0x3e80     1          1
+ *      2743   0x36b0  0x3e80     7/8        7/8
+ *      2800   0x3594  0x3e82     6/7        6/7
+ *      3000   0x3200  0x3e80     4/5        4/5
+ *      3200   0x2ee0  0x3e80     3/4        3/4
+ *      3429   0x2bc0  0x3e80     7/10       7/10
+ *
+ * 2743 and 3429 are rounded display names for 19200/7 and 24000/7 --
+ * 2742.857 and 3428.571 -- which is why their ratios are sevenths and why
+ * 2400/2743 does not look exact until the rate is written as a fraction.
+ *
+ * So the wrap is 16000 wherever the fraction is representable over it, and
+ * 2800 is the one rate whose denominator needs a factor of seven: 16000 is
+ * not divisible by 7, and 13716/16000 is merely close, while 16002 = 7*2286
+ * makes 13716/16002 exactly 6/7.  Two counts on the wrap and one on the
+ * half-step initial phase, and the interpolator is exact instead of drifting
+ * one part in 6000.  Not, as this file used to say elsewhere, "a closer
+ * rational fit" -- it is not close, it is exact, and only for 2800.
  *
  * The debug string is `V34SetupDemodulator`'s, shared by string pooling --
  * `V34SetupDemodulator` at 0x5def0 prints the same one.  This is a second
@@ -3489,6 +3585,14 @@ t3m_micro48(struct t3m_frame *f)
 	}
 
 	if (n == 0xa2) {
+		/*
+		 * 0x6c670.  Both transitions are `hs_setstate` inlined, and
+		 * the first leaves 5 in %ecx on BOTH arms of its already-there
+		 * test -- the value loaded from +0x3596 when it matches,
+		 * 0x6c6a4's `mov $0x5,%ecx` when it does not -- which is why
+		 * the dispatch is reached with a literal SILENCE and not with
+		 * a re-read.
+		 */
 		/* 0x6c670. */
 		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
 		hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_RX_PHASE2_ANS);
@@ -3544,12 +3648,23 @@ t3m_micro47(struct t3m_frame *f)
 					     "errorrecovery is initialized in "
 					     "TX_PHASE2_xxx\n");
 
+		/*
+		 * 0x6ce34 clears the counter and 0x6ce3b jumps back to
+		 * 0x6684e, the increment below -- so the clear is the reset's
+		 * last act, and 0x6684e re-loads the object pointer from
+		 * 0xc0(%esp) because it is a join and not a straight line.
+		 */
 		T3M_U16(f, T3M_COUNTER) = 0;
 	}
 
 	/* 0x6684e. */
 	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
 
+	/*
+	 * The `jle 6aaf9` at 0x66861 selects three instructions that are the
+	 * whole low path: the txstate is read into %cx at 0x6ab00 and only
+	 * then is the counter stored, at 0x6ab07.
+	 */
 	if ((short)n <= 0x5f) {
 		/* 0x6aaf9. */
 		T3M_U16(f, T3M_COUNTER) = n;
@@ -3588,6 +3703,11 @@ t3m_micro63(struct t3m_frame *f)
 	short tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
 	unsigned short n;
 
+	/*
+	 * 0x6d160 is the BODY and not the test: 0x6592c compares the txstate
+	 * already in %cx against 0x3c and jumps there, and 0x6d160 itself is
+	 * the counter increment -- `movzwl 0xaa78`, `inc`, `cmp $0xf,%ax`.
+	 */
 	if (tx == V34HS_TONE_AB) {			/* 0x6d160 */
 		n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
 
@@ -3602,6 +3722,13 @@ t3m_micro63(struct t3m_frame *f)
 		 * The incremented counter is stored before either ending, and
 		 * that is not bookkeeping: it is `[2]` in the txstate
 		 * transition printed next, and the originate ending keeps it.
+		 */
+		/*
+		 * `cmpw $0x65,0x359c` at 0x6d179 picks the ending, and GCC
+		 * sank this store into both of them: unconditional at 0x6de9d
+		 * on the originate side, and on the answer side only where the
+		 * print needs it, at 0x6d1a0 -- 0x6d21e replaces it with 0x1e
+		 * or 0x96 either way.
 		 */
 		T3M_U16(f, T3M_COUNTER) = n;
 
@@ -3694,6 +3821,13 @@ t3m_micro49(struct t3m_frame *f)
 
 	T3M_U16(f, T3M_COUNTER) = n;
 
+	/*
+	 * 0x66a2d loads +0xaa7c zero-extended and 0x66a37 sign-extends it for
+	 * the compare.  The four addresses below are the four conjuncts in
+	 * source order -- `cmp $0x28,%ax`/`jle`, `cmp %ebx,%ebp`/`jge`,
+	 * `cmp $0x372`/`je`, then `cmpw $0x0,0x3588`/`jne` out at 0x70d71 --
+	 * and 0x70d7f, the reset itself, is that last one's fall-through.
+	 */
 	filt = T3M_I16(f, T3M_FILTDELAY);
 
 	/* 0x66a1c, 0x66a3d, 0x66a4d and 0x70d71. */
@@ -3726,6 +3860,11 @@ t3m_micro49(struct t3m_frame *f)
 		return;
 	}
 
+	/*
+	 * 0x6ce40.  The copy is one halfword move, +0xac02 into +0xaa7e at
+	 * 0x6ce4e, and it is made BEFORE the debug-level branch at 0x6ce5c, so
+	 * only the line is conditional.
+	 */
 	if (f->obj->is_short != 0) {
 		/* 0x6ce40. */
 		f->obj->rtd = f->obj->prev_bulk_delay;
@@ -3768,7 +3907,7 @@ t3m_micro49(struct t3m_frame *f)
 	T3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);
 	hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);
 
-	/* 0x66b47. */
+	/* 0x66b47, and 0x66b55 reads +0x3596 for the exit. */
 	*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;
 
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -3813,6 +3952,12 @@ t3m_micro50(struct t3m_frame *f)
 
 	T3M_U16(f, T3M_COUNTER) = n;
 
+	/*
+	 * Four inline compares, one per conjunct: `cmp $0x32,%ax`/`jle 6af11`,
+	 * `cmp %eax,%ebp`/`jge 66724`, `cmp $0x200,%edx`/`jle 66724` and
+	 * `cmpw $0x0,0x3588`/`jne 66724`.  Arm 49's fourth conjunct is
+	 * out-lined at 0x70d71; this arm's is inline with the other three.
+	 */
 	filt = T3M_I16(f, T3M_FILTDELAY);
 
 	/* 0x664c7, 0x664e8, 0x664fd and 0x66509. */
@@ -3827,6 +3972,11 @@ t3m_micro50(struct t3m_frame *f)
 					     "RX_PHASE2_ANS\n");
 	}
 
+	/*
+	 * 0x66724, where the last three guards above converge.  The COUNTER is
+	 * re-read off the object -- `movswl 0xaa78(%ebx),%ebp` -- while the
+	 * delay is still the +0xaa7c that 0x664d8 left in %cx.
+	 */
 	/* 0x66724. */
 	if ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {
 		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -3896,6 +4046,12 @@ t3m_micro51(struct t3m_frame *f)
 		return;
 	}
 
+	/*
+	 * 0x6b5f5 opens the `is_short == 0` body with the txstate transition
+	 * inlined -- `movzwl 0x3596`, `cmp $0x33`, `je 6b67d` -- and 0x33 is
+	 * 51, the microstate this arm already is, so both transitions below
+	 * can be no-ops and the object still emits both compares.
+	 */
 	if (f->obj->is_short == 0) {
 		/* 0x6b5f5. */
 		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_L1);
@@ -4131,7 +4287,7 @@ t3m_micro59(struct t3m_frame *f)
 		T3M_U16(f, T3M_COUNTER) = 0;
 	}
 
-	/* 0x662e0. */
+	/* 0x662e0.  One load of +0xaa78 feeds both compares. */
 	c = (short)T3M_U16(f, T3M_COUNTER);
 
 	/*
@@ -4143,6 +4299,12 @@ t3m_micro59(struct t3m_frame *f)
 		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
 
 	if (c > 0x125f) {
+		/*
+		 * 0x662fc tests +0x19e sixteen bits wide (`cmpw $0x0`) and
+		 * only a non-zero one reaches 0x6bb57, where the detector call
+		 * is built out of +0x130 and +0x3564 -- so the `&&`
+		 * short-circuits in the object as well as here.
+		 */
 		/* 0x662fc and 0x6bb57. */
 		if (f->rx->f19e != 0
 		    && tone_detect(f->rx,
@@ -4316,6 +4478,12 @@ t3m_micro55(struct t3m_frame *f)
 	/* 0x65b95.  Unsigned increment, SIGNED sixteen-bit compare. */
 	n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
 
+	/*
+	 * 0x6ab9b is out of line and it does NOT leave: the store of the
+	 * incremented counter, then `jmp 65c1d` back into the arm.  That is
+	 * what separates this low arm from 47's at 0x6aaf9, which reads the
+	 * txstate and goes to the dispatch.
+	 */
 	if ((short)n <= 0x5f) {
 		/* 0x6ab9b. */
 		T3M_U16(f, T3M_COUNTER) = n;
@@ -4340,6 +4508,11 @@ t3m_micro55(struct t3m_frame *f)
 	}
 
 	/* 0x65c24 and 0x6d243 -- one 32-bit compare of two halfwords. */
+	/*
+	 * 0x6fff7, the body that guard selects, opens by building the call:
+	 * `xor %ebx,%ebx` into 0x4(%esp), so the second argument is a literal
+	 * zero and not the 1 the retraining sites pass.
+	 */
 	if (T3M_I32(f, T3M_F3588) == 0x20002
 	    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)) {
 		/* 0x6fff7. */
@@ -4473,9 +4646,15 @@ t3m_micro58(struct t3m_frame *f)
 		}
 	}
 
-	/* 0x66061. */
+	/* 0x66061.  One load, and both thresholds read it from %cx. */
 	c = (short)T3M_U16(f, T3M_COUNTER);
 
+	/*
+	 * The four guards in source order, and only the last is out of line:
+	 * `cmp $0x3bf,%cx`; `test $0x2,%dl`, a BYTE test of the halfword
+	 * loaded at 0x66071; `cmpw $0x2,0x358a`; and at 0x6d709 the masked
+	 * `cmp $0x372`, whose failure joins the first three at 0x6608b.
+	 */
 	/* 0x66068, 0x66071, 0x6607d and 0x6d709. */
 	if (c > 0x3bf && (T3M_U16(f, T3M_F3588) & 2) != 0
 	    && T3M_U16(f, T3M_F358A) == 2
@@ -4502,6 +4681,13 @@ t3m_micro58(struct t3m_frame *f)
 		c = (short)T3M_U16(f, T3M_COUNTER);
 	}
 
+	/*
+	 * Three disjuncts and three DIFFERENT out-of-line exits:
+	 * `cmp $0x4b0,%cx`/`jle 6ade3`, `cmpw $0x0,0x3588`/`jne 6c3e0` and
+	 * `cmpw $0x0,0xaae2`/`je 6e322`.  Each of the three branches away, so
+	 * the reset below is the fall-through and runs only when all three
+	 * fail.
+	 */
 	/* 0x6608b, 0x6609d and 0x660ab. */
 	if (c <= 0x4b0 || T3M_U16(f, T3M_F3588) != 0
 	    || (unsigned short)f->obj->fsk.sr == 0) {
@@ -4509,6 +4695,10 @@ t3m_micro58(struct t3m_frame *f)
 		return;
 	}
 
+	/*
+	 * 0x660b9's first instruction is `mov $0x4,%ebx` -- the `= 4` form of
+	 * the reset, not the `|= 1` one block 2 above takes at 0x6d709.
+	 */
 	/* 0x660b9. */
 	t3m_errrec_reset(f);
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -4602,10 +4792,16 @@ t3c_txblock(struct v34_object *obj)
  * comparable against the blob without the other three dispatches existing,
  * and it is the only reason this name is external.
  *
- * IT IS `t3c_txblock` AND NOT A SECOND SPELLING OF IT.  The entry the object
- * reaches at 0x62af1 reads +0x3596 itself, so every route in leaves `%cx`
- * holding the object's own txstate; a test entry that took a txstate would be
- * testing a call the object never makes.  What that costs is recorded rather
+ * IT IS `t3c_txblock` AND NOT A SECOND SPELLING OF IT.  Every route in reads
+ * +0x3596 on the instruction BEFORE the entry -- 0x62aea is `movzwl
+ * 0x3596(%edi),%ecx` and 0x62af1 is already the dispatch, `movswl %cx,%eax;
+ * sub $0x5,%eax; cmp $0x45,%eax; ja 62a40` -- so `%cx` arrives holding the
+ * object's own txstate whichever route was taken, and a test entry that took
+ * a txstate would be testing a call the object never makes.  The read belongs
+ * to the routes in and not to the dispatch, and one route proves it: the exit
+ * at 0x6c991 jumps to 0x62af1 with NO re-read at all, because `%cx` already
+ * holds MOH_CLEARDOWN -- 0x54 -- either from the read at 0x6c90c or from the
+ * literal at 0x6c939 that follows the transition storing it at 0x6c932.  What that costs is recorded rather
  * than hidden: the reload at 0x62b5f cannot be reached with a `tx` that
  * differs from +0x3596 through this entry, so the one thing `t3m_tail` models
  * that its predecessors did not is not tested from here.  Finding 591.
@@ -4635,6 +4831,12 @@ t3c_micro_rx_phase3_call(struct v34_object *obj)
 	struct v34_receiver *rx = T3C_RX(obj);
 
 	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
+		/*
+		 * 0x6abae.  Bit 0 clear -- `testb $0x1,0xaae2` at 0x65c81 --
+		 * and the counter at +0xaa78 keeps whatever it had: the copy
+		 * from +0xaa7c is on the other side of that branch, at 0x65c8e
+		 * and 0x65c99.
+		 */
 		t3c_txblock(obj);			/* 0x6abae */
 		return;
 	}
@@ -4680,11 +4882,21 @@ static void
 t3c_micro_moh_tone(struct v34_object *obj)
 {
 	if (t3c_moh_step_detector(obj) == 0) {
+		/*
+		 * 0x6afc4.  The detector said nothing -- `test %ax,%ax` at
+		 * 0x65806 -- and the counter step at 0x657ea/0x657eb stands,
+		 * so the count below resumes from it on the next block.
+		 */
 		t3c_txblock(obj);			/* 0x6afc4 */
 		return;
 	}
 
 	if (hs_get(obj, T3C_COUNT) < hs_get(obj, T3C_FABFC)) {
+		/*
+		 * 0x6c701.  `cmp 0xabfc(%esi),%ax` at 0x6581d and a SIGNED
+		 * `jl`: the count and the limit are both halfwords and both
+		 * read off the object by adjacent instructions.
+		 */
 		t3c_txblock(obj);			/* 0x6c701 */
 		return;
 	}
@@ -4711,6 +4923,11 @@ t3c_micro_moh_tone(struct v34_object *obj)
 		detectorinit(T3C_DET(obj),
 			     obj->f359c == 0x65 ? c2400_ : c1200_,
 			     1, 0xf0, 0x32, 0x800, 0x400);
+		/*
+		 * 0x6d5db sits BETWEEN the microstate load at 0x6d5d4 and the
+		 * `cmp $0x50` at 0x6d5e2, so +0x356a takes its 1 whether or
+		 * not the transition below turns out to be a move.
+		 */
 		hs_put(obj, T3C_F356A, 1);		/* 0x6d5db */
 		hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);
 	} else {
@@ -4744,6 +4961,12 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 
 	/* The round-trip delay sets how long the drop has to persist. */
 	if ((int)hs_get(obj, T3C_COUNT) < (((int)obj->rtd) >> 2) + 0x12c0) {
+		/*
+		 * 0x6aae6.  Both halfwords are sign-extended before the
+		 * arithmetic -- `movswl 0xaa7e`, `movswl 0xaa78`, `sar $0x2`,
+		 * `add $0x12c0` -- so a negative delay shortens the wait
+		 * rather than wrapping it.
+		 */
 		t3c_txblock(obj);			/* 0x6aae6 */
 		return;
 	}
@@ -4771,8 +4994,21 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 		hs_setstate(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);
 		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
 		hs_put(obj, T3C_FABE4, 1);		/* 0x6c983 */
+		/*
+		 * 0x6c983 and 0x6c98a are two halfword stores of the same
+		 * constant, out of %ax and %di loaded at 0x6c979 and 0x6c97e
+		 * -- so both fields are shorts, where the two guards that
+		 * chose this path read bytes.
+		 */
 		obj->fabe2 = 1;				/* 0x6c98a */
 
+		/*
+		 * 0x62af1 IS the dispatch entry and not one of the stubs that
+		 * re-read +0x3596: 0x6c991 jumps straight in, because the
+		 * transition at 0x6c8f8 already left MOH_CLEARDOWN in %cx,
+		 * which the four stores between 0x6c93e and 0x6c991 do not
+		 * disturb.
+		 */
 		t3c_txblock(obj);			/* 0x62af1 */
 		return;
 	}
@@ -4892,15 +5128,28 @@ t41_record_head(struct v34_object *obj, unsigned base, short f18)
 static void
 t41_frr_nack(struct v34_object *obj)
 {
+	/*
+	 * 0x6dca7's `cmpw $0x31,0x35a0` and `jle 6dd19`: the counter has to be
+	 * past 0x31 and not at it, and the compare is signed.
+	 */
 	if (hs_get(obj, T41_F35A0) <= 0x31) {
 		t3c_txblock(obj);			/* 0x6dd19 */
 		return;
 	}
 	if (obj->fsk.sr != 0) {
+		/*
+		 * 0x6dd06.  `cmpw $0x0,0xaae2` at 0x6dcb1 -- sixteen bits,
+		 * where the arm's entry test on the same field is eight.
+		 */
 		t3c_txblock(obj);			/* 0x6dd06 */
 		return;
 	}
 	if (t3c_getb(obj, T41_FABF8) != 0) {
+		/*
+		 * 0x6dcf3.  `cmpb $0x0,0xabf8` at 0x6dcbb: the drop has
+		 * already been reported, and reporting it is all the
+		 * fall-through has left to do.
+		 */
 		t3c_txblock(obj);			/* 0x6dcf3 */
 		return;
 	}
@@ -4925,14 +5174,25 @@ t41_frr_nack(struct v34_object *obj)
 static void
 t41_after_guards(struct v34_object *obj, unsigned char abe8)
 {
+	/*
+	 * 0x6ab33's `test %cl,%cl` is a BYTE test of the +0xabe8 its callers
+	 * loaded, and 0x669fa is also where the arm's first door leaves -- one
+	 * stub for two paths.
+	 */
 	if (abe8 == 0) {
 		t3c_txblock(obj);			/* 0x669fa */
 		return;
 	}
+	/*
+	 * 0x6ab42's `cmpl $0x1,0xabf0` is THIRTY-TWO bits wide, so a low
+	 * halfword of 1 with anything at all in the high half does not reach
+	 * 0x6dca7.
+	 */
 	if (obj->moh_message == 1) {
 		t41_frr_nack(obj);			/* 0x6dca7 */
 		return;
 	}
+	/* 0x6ab4f, the fall-through: +0xabe8 set, +0xabf0 not 1. */
 	t3c_txblock(obj);				/* 0x6ab4f */
 }
 
@@ -4989,6 +5249,12 @@ t41_tone_search(struct v34_object *obj)
 
 	det = t41_detect(obj);
 	if (det == 0 && obj->fsk.nbits <= 0x384) {
+		/*
+		 * 0x70f8f.  Both halves of the guard: `test %ax,%ax` at
+		 * 0x70a1b and `cmpw $0x384,0xaae0` at 0x70a20.  The flag
+		 * lowered at 0x709f8 stays lowered on this exit -- it is
+		 * cleared before the detector runs, not after it answers.
+		 */
 		t3c_txblock(obj);			/* 0x70f8f */
 		return;
 	}
@@ -5015,10 +5281,22 @@ t41_tone_search(struct v34_object *obj)
 	 * that int through `obj + 4`, so it is +0x24c and not +0x248.
 	 */
 	if (obj->f359c == 0x65 && obj->v90_receiver != 0)
+		/*
+		 * ONE record with two heads.  0x70bd7 falls into the 0x11 head
+		 * at 0x70bdd, and 0x70d41's `test`/`je` jumps BACK to it when
+		 * the int loaded at 0x70d39 is zero, so 0x70d47 is reached
+		 * only with both conditions -- and both heads end at 0x70c07.
+		 */
 		t41_record_head(obj, T41_BLK_A94C, 0x1e);	/* 0x70d47 */
 	else
 		t41_record_head(obj, T41_BLK_A94C, 0x11);	/* 0x70bdd */
 
+	/*
+	 * 0x70c07 is where the two heads MEET: it is the next instruction
+	 * after the 0x11 arm's `movw $0x11,0x18` and it is the 0x1e arm's
+	 * `jmp` target at 0x70d6c, so everything from here down is emitted
+	 * once.
+	 */
 	hs_put(obj, T41_BLK_A94C + 0x1c, 8);			/* 0x70c07 */
 	hs_put(obj, T41_BLK_A94C + 0x16, 1);
 	t3c_puti(obj, T41_BLK_A94C + 0x24, 0xf72);
@@ -5052,6 +5330,11 @@ t41_tone_ab(struct v34_object *obj)
 	short *out;
 	int i;
 
+	/*
+	 * 0x6dac7's `test %ax,%ax` sends a silent detector to 0x6de83, which
+	 * re-reads +0xabe8 with a `movzbl` before jumping to the junction --
+	 * the re-read the note above says is why `abe8` is a parameter.
+	 */
 	if (t41_detect(obj) == 0) {
 		t41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */
 		return;
@@ -5059,6 +5342,11 @@ t41_tone_ab(struct v34_object *obj)
 
 	rec = (const unsigned char *)t41_getp(obj, T41_PTR_AA6C);
 	if ((rec[4] & 0x80) == 0) {
+		/*
+		 * 0x6dae1's `testb $0x80,0x4(%eax)` on the record +0xaa6c
+		 * points at, and 0x6de70 re-reads +0xabe8 exactly as 0x6de83
+		 * does -- two stubs three instructions apart, one junction.
+		 */
 		t41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de70 */
 		return;
 	}
@@ -5126,12 +5414,22 @@ static void
 t41_marks_late(struct v34_object *obj, short aae0)
 {
 	if ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1ea) {
+		/*
+		 * 0x6dfd5 is the `jl` itself, straight into the dispatch entry
+		 * with no stub, and the delay it compares against is the spill
+		 * at 0x42(%esp) -- read there at 0x6dfc2, not off the object.
+		 */
 		t3c_txblock(obj);			/* 0x6dfd5 */
 		return;
 	}
 
 	if (obj->f359c != 0x65) {
 		if (obj->retrain_state != 1) {
+			/*
+			 * 0x6dffb, another `jne` straight to the dispatch, on
+			 * the `cmpw $0x1,0xa24a` at 0x6dff3 -- sixteen bits
+			 * wide.
+			 */
 			t3c_txblock(obj);		/* 0x6dffb */
 			return;
 		}
@@ -5139,12 +5437,17 @@ t41_marks_late(struct v34_object *obj, short aae0)
 			dsplibs_debug_printf("DET_SYNC not detected, during "
 					     "search for info1c initiating a "
 					     "retrain\n");
+		/*
+		 * 0x6e029.  The second argument is built at 0x6e01d as a
+		 * literal 1, and 0x6e02e reloads +0x3596 after the call, so
+		 * the dispatch runs on whatever `v34handshakinit` left there.
+		 */
 		v34handshakinit(obj, 1);		/* 0x6e029 */
 		t3c_txblock(obj);
 		return;
 	}
 
-	/* 0x6e03a */
+	/* 0x6e03a, and +0x3588 gets bit 1 before any transition. */
 	hs_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));
 	hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);
 	hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
@@ -5182,10 +5485,20 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 	short tx;
 
 	if ((int)aae0 <= base + 100) {
+		/*
+		 * 0x6ceba's `jle` goes straight to the junction at 0x6ab33
+		 * with no stub, and 0x6cead has already spilled the delay to
+		 * 0x42(%esp) -- the copy `t41_marks_late` reads at 0x6dfc2.
+		 */
 		t41_after_guards(obj, abe8);		/* 0x6ceba */
 		return;
 	}
 
+	/*
+	 * 0x6ceca.  The reset is BEFORE the sentinel step at 0x6cef0, so
+	 * below the second threshold +0x35a0 never climbs: it is zero or
+	 * one whatever the sentinel does (finding 391).
+	 */
 	if ((int)aae0 <= base + 400)
 		hs_put(obj, T41_F35A0, 0);		/* 0x6ceca */
 
@@ -5194,16 +5507,31 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 		next = (short)((unsigned short)hs_get(obj, T41_F35A0) + 1);
 
 	tx = hs_get(obj, HS_TXSTATE);
+	/*
+	 * 0x6da8e, out of line: `cmp $0x3c,%cx` at 0x6cf0f -- TONE_AB --
+	 * jumps here, zeroes +0x35a0 and returns to 0x6cf27 past the store,
+	 * so transmitting the tone discards the stepped value.
+	 */
 	if (tx == V34HS_TONE_AB)
 		hs_put(obj, T41_F35A0, 0);		/* 0x6da8e */
 	else
 		hs_put(obj, T41_F35A0, next);
 
+	/*
+	 * 0x6cf39.  The base is rebuilt here from the delay spilled at
+	 * 0x6cead -- `movswl 0x42(%esp)` then `sar $0x4` at 0x6cf27 -- and
+	 * `jl 62af1` is the once-per-block transmit dispatch (finding 390).
+	 */
 	if ((int)aae0 < base + 400) {
 		t3c_txblock(obj);			/* 0x6cf39 */
 		return;
 	}
 
+	/*
+	 * 0x6cf4e tests a +0x35a0 RE-READ at 0x6cf46, not the value the
+	 * step above stored: the TONE_AB arm at 0x6da8e wrote zero there
+	 * and rejoined below the store, so only memory has the answer.
+	 */
 	if (hs_get(obj, T41_F35A0) <= 0x31) {
 		t41_marks_late(obj, aae0);		/* 0x6cf4e */
 		return;
@@ -5239,11 +5567,16 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 	}
 
 	if (aae2 != 0) {
+		/*
+		 * 0x6cf61.  Finding 391's third answer: -1 took 0x6d2f8 at
+		 * 0x6cf58 and zero falls through to 0x6cf67, so every other
+		 * +0xaae2 lands in the late half.
+		 */
 		t41_marks_late(obj, aae0);		/* 0x6cf61 */
 		return;
 	}
 
-	/* 0x6cf67 */
+	/* 0x6cf67, +0xaae2 exactly zero -- finding 391's second answer. */
 	hs_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));
 	hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);
 	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
@@ -5279,6 +5612,11 @@ t41_micro_det_sync(struct v34_object *obj)
 	hs_put(obj, T41_FAA7A, 0);
 
 	if ((unsigned char)aae2 == 0x72) {
+		/*
+		 * 0x6c862 opens with `cmp $0x2c,%si` -- `hs_setstate`'s
+		 * folded guard on DET_INFO, and one the dispatch that read
+		 * 41 can never satisfy (finding 392).
+		 */
 		t41_to_det_info(obj);			/* 0x6c862 */
 		return;
 	}
@@ -5288,14 +5626,32 @@ t41_micro_det_sync(struct v34_object *obj)
 
 	if (abe8 == 0 && f358a == 0) {
 		if (obj->fsk.nbits > 0x64) {
+			/*
+			 * 0x709e1 clears bit 9 of the receiver's
+			 * +0x122 unconditionally (`and $0xfffffdff`
+			 * at 0x709f2), where the DET_INFO body only
+			 * does it when +0x358a is clear (finding 390).
+			 */
 			t41_tone_search(obj);		/* 0x709e1 */
 			return;
 		}
+		/*
+		 * 0x669fa.  A hundred blocks have not passed, so nothing
+		 * happens this call beyond the entry's +0xaa7a clear; the
+		 * tail loads +0x3596 into %ecx and jumps to 0x62af1.
+		 */
 		t3c_txblock(obj);			/* 0x669fa */
 		return;
 	}
 
 	/* 0x6ab21, which the two doors above arrive at with the same two. */
+	/*
+	 * 0x6ce8b and 0x6da9c, the junction's two bodies.  The first reads
+	 * the delay at +0xaa7e and spills it to 0x42(%esp) at 0x6cead, so
+	 * every threshold below sees the value the first one saw; the
+	 * second loads the receiver and aims the detector at obj+0x3564
+	 * (0x6dab1) before anything else.
+	 */
 	if (f358a == 2) {
 		t41_info_marks(obj, aae2, abe8);	/* 0x6ce8b */
 		return;
@@ -5454,6 +5810,11 @@ t46_body_repeated(struct v34_object *obj)
 		dsplibs_debug_printf("Repeated info0 is detected, errorrecovery "
 				     "is initialized in TX_PHASE1_ANS\n");
 
+	/*
+	 * 0x6adbd re-reads +0x3588 at 0x6adb6 before `cmp $0x2,%ax`, so
+	 * the 4 this body has just stored is what the chain sees and the
+	 * only way out is 0x6add0 (finding 418).
+	 */
 	t46_chain_full(obj);			/* 0x6adbd */
 }
 
@@ -5470,6 +5831,11 @@ t46_body_detected(struct v34_object *obj)
 		dsplibs_debug_printf("info0 is detected, info0 is initialized "
 				     "in TX_PHASE1_ANS\n");
 
+	/*
+	 * 0x6adc7 enters the chain one compare in, past the `== 2` test.
+	 * Its `test %ax,%ax` cannot fire from here -- this body stored 4
+	 * into +0x3588 -- which is finding 418's unreachable arm.
+	 */
 	t46_chain_tail(obj, hs_get(obj, T46_F3588));	/* 0x6adc7 */
 }
 
@@ -5514,10 +5880,21 @@ t46_info0_counting(struct v34_object *obj)
 	short n;
 
 	if (hs_get(obj, T3C_COUNT) <= T46_CNT_LOW) {
+		/*
+		 * 0x6add0, the tail the whole chain funnels into: reload
+		 * the object, put +0x3596 in %ecx, jump to 0x62af1.  The
+		 * guard above it is `cmpw $0xc7,0xaa78(%ebx)` at 0x6c3fa.
+		 */
 		t3c_txblock(obj);			/* 0x6add0 */
 		return;
 	}
 	if ((obj->fsk.sr & 0xfff) != 0xf72) {
+		/*
+		 * 0x6add0 again, and this guard is TWELVE bits wide:
+		 * `and $0xfff` then `cmp $0xf72` at 0x6c410, where the
+		 * head at 0x65dbb masks ten and compares 0x372.  0xf72 &
+		 * 0x3ff is 0x372, so this test is the stricter of the two.
+		 */
 		t3c_txblock(obj);			/* 0x6add0 */
 		return;
 	}
@@ -5527,12 +5904,22 @@ t46_info0_counting(struct v34_object *obj)
 				     (int)hs_get(obj, T46_COUNT3));
 
 	n = (short)(hs_get(obj, T46_COUNT3) + 1);
+	/*
+	 * 0x70c7f stores the stepped count and re-enters the chain at
+	 * 0x6adc7 with +0x3588 re-read at 0x70c8d -- still the 2 that
+	 * got here, so its zero arm cannot fire (finding 418).
+	 */
 	if (n <= T46_COUNT3_LIM) {			/* 0x70c7f */
 		hs_put(obj, T46_COUNT3, n);
 		t46_chain_tail(obj, hs_get(obj, T46_F3588));
 		return;
 	}
 
+	/*
+	 * 0x6c459.  The give-up zeroes +0xaa7a at 0x6c462 rather than
+	 * leaving the thirteenth step there -- 0x6c447 re-read the count
+	 * and `inc %eax`, and only 0x70c7f's arm stores it back.
+	 */
 	t46_body_detected(obj);				/* 0x6c459 */
 }
 
@@ -5546,14 +5933,29 @@ static void
 t46_past_the_counter(struct v34_object *obj)
 {
 	if (hs_get(obj, T3C_COUNT) <= T46_CNT_HIGH) {
+		/*
+		 * 0x6c120, another copy of the tail: the object, +0x3596
+		 * into %ecx, and `jmp 62af1` at 0x6c12e.  The counter was
+		 * re-read at 0x65dd4 for the compare above.
+		 */
 		t3c_txblock(obj);			/* 0x6c120 */
 		return;
 	}
+	/*
+	 * 0x65de6 is `cmpw $0x0,0xaae2(%edi)` -- sixteen bits wide, not
+	 * the byte spelling microstate 62 keeps (findings 417 and 553) --
+	 * and 0x6bd7a is one more copy of the transmit tail.
+	 */
 	if (obj->fsk.sr == 0) {
 		t3c_txblock(obj);			/* 0x6bd7a */
 		return;
 	}
 
+	/*
+	 * 0x65df4 opens with the 1 for +0x358a in %eax and a 4 staged in
+	 * %ebp: this body STORES +0x3588, where 0x6f90c ORs into it
+	 * (finding 410).
+	 */
 	t46_body_repeated_late(obj);			/* 0x65df4 */
 }
 
@@ -5571,6 +5973,11 @@ t46_chain_full(struct v34_object *obj)
 {
 	short sub = hs_get(obj, T46_F3588);
 
+	/*
+	 * 0x6c3f3 reloads the object and gates on the same 199 the head
+	 * uses at 0x65dad -- `cmpw $0xc7,0xaa78(%ebx)` at 0x6c3fa -- on
+	 * a path along which the head never read the counter at all.
+	 */
 	if (sub == 2) {
 		t46_info0_counting(obj);		/* 0x6c3f3 */
 		return;
@@ -5581,10 +5988,21 @@ t46_chain_full(struct v34_object *obj)
 static void
 t46_chain_tail(struct v34_object *obj, short sub)
 {
+	/*
+	 * 0x65dcd is the second limit on one counter: 0xc7 at the head
+	 * (0x65dad) and 0x4b0 here (0x65ddb), both `jle`, and this one
+	 * re-reads +0xaa78 at 0x65dd4 through a freshly loaded object.
+	 */
 	if (sub == 0) {
 		t46_past_the_counter(obj);		/* 0x65dcd */
 		return;
 	}
+	/*
+	 * 0x6add0.  With +0x3588 at 4 or 2 on every entry (finding 418),
+	 * this is where the two bodies that tail-call the chain really
+	 * end up, and it is two instructions and `jmp 62af1` -- `mov
+	 * 0xc0(%esp),%ebp` then `movzwl 0x3596(%ebp),%ecx`.
+	 */
 	t3c_txblock(obj);				/* 0x6add0 */
 }
 
@@ -5602,6 +6020,11 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 {
 	short tx = hs_get(obj, HS_TXSTATE);
 
+	/*
+	 * 0x6b5b0, reached by `cmp $0x18,%cx; je` at 0x65d7b.  The two
+	 * fields are two compares with their own `je 65d8f` (0x6b5bb and
+	 * 0x6b5c6), so either one clear leaves the counter alone.
+	 */
 	if (tx == V34HS_TX_DPSK) {			/* 0x6b5b0 */
 		short *r = *(short **)((char *)obj + T3C_PTR_AA6C);
 
@@ -5609,17 +6032,45 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 			hs_put(obj, T3C_COUNT, 0);
 			r[0x20 / 2] = 0;
 		}
+	/*
+	 * 0x6b4ba, reached by `cmp $0x3c,%cx` at 0x65d85 on the transmit
+	 * state the head read once.  It re-reads +0xaa78 through its own
+	 * object load, steps it, and only then compares: `inc %eax` then
+	 * `cmp $0x18f,%ax`.
+	 */
 	} else if (tx == V34HS_TONE_AB) {		/* 0x6b4ba */
 		short n = (short)(hs_get(obj, T3C_COUNT) + 1);
 
 		if (n <= T46_TONE_LIMIT) {
+			/*
+			 * 0x6f8f9 stores the step and jumps
+			 * back to 0x65d8f -- the head's
+			 * +0x3588 test, not the transmit tail.
+			 */
 			hs_put(obj, T3C_COUNT, n);	/* 0x6f8f9 */
 		} else if (obj->fsk.sr != 0) {
+			/*
+			 * 0x6fb6e is its twin for the
+			 * past-399 path with +0xaae2 set:
+			 * same store, same `jmp 65d8f`.
+			 */
 			hs_put(obj, T3C_COUNT, n);	/* 0x6fb6e */
 		} else if (t3c_getb(obj, T46_RETRAIN) != 0) {
 			hs_put(obj, T3C_COUNT, n);
+			/*
+			 * 0x6f90c stores the step through
+			 * the %edi 0x6b4ba loaded, then
+			 * aims +0xaa6c at obj+0xa94c and
+			 * +0xaa70 at obj+0xa97c.
+			 */
 			t46_body_retrain(obj);		/* 0x6f90c */
 			return;
+		/*
+		 * 0x6b4ee is the one path of the four that does NOT keep
+		 * the step: `xor %eax,%eax` and `mov %ax,0xaa78(%esi)`
+		 * restart the counter, and +0x358c is `xor $0x1` at
+		 * 0x6b50e, stored back sixteen bits wide (finding 413).
+		 */
 		} else {				/* 0x6b4ee */
 			hs_put(obj, T3C_COUNT, 0);
 			hs_put(obj, T46_F358C,
@@ -5631,19 +6082,30 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 		}
 	}
 
-	/* 0x65d8f */
+	/* 0x65d8f, where both head guards rejoin, 0x6f8f9 included. */
+	/* 0x6adbd re-reads +0x3588 at 0x6adb6; 0x65d96 is this test's. */
 	if (hs_get(obj, T46_F3588) != 0) {
 		t46_chain_full(obj);			/* 0x6adbd */
 		return;
 	}
 
-	/* 0x65da6 */
+	/* 0x65da6, on the %esi 0x65d8f loaded, and a ten-bit mask. */
 	if (hs_get(obj, T3C_COUNT) > T46_CNT_LOW
 	    && (obj->fsk.sr & 0x3ff) == 0x372) {
+		/*
+		 * 0x6abc1 opens by clearing +0xabca and storing 4 into
+		 * +0x3588 at 0x6abd8 -- a store, like the other two, and
+		 * not 0x6f90c's OR (finding 410).
+		 */
 		t46_body_repeated(obj);			/* 0x6abc1 */
 		return;
 	}
 
+	/*
+	 * 0x65dcd, and the head is the only thing that reaches it: the
+	 * chain's own `test %ax,%ax` at 0x6adc7 never sees zero
+	 * (finding 418).
+	 */
 	t46_past_the_counter(obj);			/* 0x65dcd */
 }
 
@@ -5814,7 +6276,7 @@ t44_det_info_restart(struct v34_object *obj)
 			dsplibs_debug_printf("SetINFO0dBits  \n");
 	}
 
-	/* 0x6bf18 */
+	/* 0x6bf18, where the +0x359c == 0x66 arm rejoins. */
 	hs_put(obj, T44_F358A, 1);
 	t3c_putp(obj, T44_PTR_AA6C, blk);
 	hs_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));
@@ -5848,6 +6310,16 @@ t44_det_info_restart(struct v34_object *obj)
 	 * 0x71920 falls back into the 0x11 arm when it is not, so this is one
 	 * condition and not two arms.  Everything from +0x1c on is common.
 	 */
+	/*
+	 * 0x6c0ca is the head of the 0x11 arm and not the store: the
+	 * four common stores run from here and `movw $0x11,0x18(%ebx)`
+	 * is 0x6c0e2.  The 0x1e arm repeats all four at 0x71932.
+	 *
+	 * 0x71920 reads `0x248(%edx)` with %edx the obj+4 base -- +0x24c,
+	 * `v90_receiver`, the same base finding 412 resolved for
+	 * microstate 46 -- and a zero receiver takes `je 6c0ca` at
+	 * 0x7192c straight back into the 0x11 arm.
+	 */
 	nbits = 0x11;					/* 0x6c0ca */
 	if (obj->f359c == 0x65 && obj->v90_receiver != 0)
 		nbits = 0x1e;				/* 0x71920 */
@@ -5858,6 +6330,11 @@ t44_det_info_restart(struct v34_object *obj)
 	t44_recput(blk, T44_R_F22, 0);
 	t44_recput(blk, T44_R_NBITS, nbits);
 
+	/*
+	 * 0x6c0e8 is where the 0x1e arm rejoins -- `jmp 6c0e8` at
+	 * 0x71950 -- so +0x1c and everything after it is written once
+	 * for both lengths.
+	 */
 	t44_recput(blk, T44_R_F1C, 8);			/* 0x6c0e8 */
 	t44_recput(blk, T44_R_F16, 1);
 	t44_recputi(blk, T44_R_F24, 0xf72);
@@ -5968,6 +6445,10 @@ t44_accept_len08(struct v34_object *obj, short *rec, short count2)
 		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 		t44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);
 		obj->fsk.sr = -1;
+		/*
+		 * 0x6ebda is `jmp 66956`: the arm rejoins the byte
+		 * clock rather than returning (finding 401).
+		 */
 		return 0;				/* 0x6ebda */
 	}
 
@@ -5981,8 +6462,18 @@ t44_accept_len08(struct v34_object *obj, short *rec, short count2)
 	 */
 	detectorinit(T3C_DET(obj), obj->f359c == 0x65 ? c2400_ : c1200_,
 		     1, 0x64, 0x32, 0x800, 0x400);
+	/*
+	 * 0x6ec4a stores the %ebp loaded at 0x6ec2f, before the
+	 * `detectorinit` call it survives, and it lands between
+	 * `hs_setstate`'s load of +0x3592 at 0x6ec43 and its compare
+	 * against 0x50 at 0x6ec51.
+	 */
 	hs_put(obj, T44_F356A, 1);			/* 0x6ec4a */
 	hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);
+	/*
+	 * 0x6ecd5, with MOH_TONE_DROP stored at 0x6ecce: another
+	 * `jmp 66956` into the byte clock, not a return.
+	 */
 	return 0;					/* 0x6ecd5 */
 }
 
@@ -6123,13 +6614,17 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 	 * equivalence with that condition named.
 	 */
 	if ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {
-		/* 0x6ed59 */
+		/* 0x6ed59, and +0x3594 against 0x23 is the WAIT guard. */
 		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
 		hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
+		/*
+		 * 0x6ee72, with INFODONE stored at 0x6ee6b:
+		 * `jmp 66956` back into the byte clock.
+		 */
 		return 0;				/* 0x6ee72 */
 	}
 
-	/* 0x6ee77 */
+	/* 0x6ee77, with bitreverse's 7 already staged in %eax. */
 	(void)t44_mdlength(obj);
 	setfinalrate(obj);
 	hs_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);
@@ -6171,12 +6666,30 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 		     0, 8, 0x78, 0x600, 0);
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 
+	/*
+	 * 0x6f146 follows the second `or $0x200` into the receiver's
+	 * +0x122 at 0x6f13f, so the counter is cleared after both
+	 * detector set-ups rather than between them.
+	 */
 	hs_put(obj, T44_COUNT, 0);			/* 0x6f146 */
+	/*
+	 * 0x6f15c is scheduled INSIDE the trace's guard: 0x6f155 compares
+	 * dsplibs_debug_level and 0x6f163 is the `jbe` that leaves for the
+	 * byte clock, and the store sits between them.  The 1 has been in
+	 * %esi since 0x6f10b, held across the second `detectorinit`.
+	 */
 	hs_put(obj, T44_FAA80, 1);			/* 0x6f15c */
 
 	if (DSPLIB_DEBUG_ON())
 		t44_print10("V34PROBE, rxinfo1a",
 			    (const short *)((const char *)obj + T44_REC_A9DC));
+	/*
+	 * 0x6f1d1 is `jmp 66956` and it belongs to BOTH sized arms: the
+	 * 0x4d arm's trace jumps into this one's argument setup at 0x6f7b6,
+	 * so the format string at 0x6f1c5, the call and this exit are one
+	 * copy.  Only the label differs -- .rodata.str1.1+0x2c1f here and
+	 * +0x2c45 there.
+	 */
 	return 0;					/* 0x6f1d1 */
 }
 
@@ -6197,6 +6710,12 @@ t44_accept_len4d(struct v34_object *obj)
 {
 	short *blk;
 
+	/*
+	 * 0x6f443 and 0x6f44a, from the %ebx and %ecx zeroed at 0x6f43f and
+	 * 0x6f441.  The arm's FIRST instruction is neither store: 0x6f438
+	 * reads +0x3596 for the `hs_setstate` below, whose `cmp $0x18` --
+	 * TX_DPSK is 24 -- is at 0x6f451.
+	 */
 	obj->vect_idx = 0;			/* 0x6f443 */
 	hs_put(obj, T44_COUNT, 0);			/* 0x6f44a */
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
@@ -6248,12 +6767,22 @@ t44_accept_len4d(struct v34_object *obj)
 	t44_recputi(blk, T44_R_F24, 0xff72);
 	t44_recputi(blk, T44_R_F2C, 0xff72);
 
+	/*
+	 * 0x6f6ba, and the microstate it is about to move has already been
+	 * read: 0x6f6a5 loads +0x3592 between the +0x20 and +0x24 stores
+	 * above, and 0x6f6c1 is the `cmp $0x3f` against it.
+	 */
 	hs_put(obj, T44_F358C, 0);			/* 0x6f6ba */
 	hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
 
 	if (DSPLIB_DEBUG_ON())
 		t44_print10("V34PROBE, txinfo1a",
 			    (const short *)((const char *)obj + T44_REC_A9AC));
+	/*
+	 * 0x6f1d1 ONLY WHEN THE TRACE IS ON.  With it off the arm leaves at
+	 * 0x6f74d, a `jbe 66956` of its own; with it on, 0x6f7b6 jumps into
+	 * the 0x26 arm's print at 0x6f1c5 and exits through its jump.
+	 */
 	return 0;					/* 0x6f1d1 */
 }
 
@@ -6329,13 +6858,20 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 			hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 			t44_recput(t44_record(obj, T44_PTR_AA70),
 				   T44_R_CRC, -1);
+			/*
+			 * 0x6e739 puts -1 in +0xaae2 and 0x6e740 is one
+			 * `jmp 62af1`.  The `return 1` has no instructions
+			 * of its own -- caller and callee leave through the
+			 * same jump, which is why the caller's `return`
+			 * carries this address too.
+			 */
 			obj->fsk.sr = -1;
 			t3c_txblock(obj);		/* 0x6e740 */
 			return 1;
 		}
 	}
 
-	/* 0x6e745 */
+	/* 0x6e745: F358A != 1 (0x6e561) and +0x04 bit 7 set (0x6e5f5). */
 	hs_put(obj, T44_COUNT, 0);
 
 	/*
@@ -6369,6 +6905,12 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 	 * The originating side skips BOTH the `sr` reset at 0x6e814 and the
 	 * counter reload at 0x6e8ac; the answering side does the reset either
 	 * way and the reload only on the short-phase-2 branch.
+	 *
+	 * The reset is one instruction sitting BETWEEN the compare and its
+	 * branch -- 0x6e80c is `cmpw $0x0,0xabcc(%eax)`, 0x6e814 is the store
+	 * to +0xaae2, and 0x6e81b is the `je`.  So "either way" is not a
+	 * reading of the control flow, it is what the instruction order
+	 * forces: the store has already happened whichever way the `je` goes.
 	 */
 	if (obj->f359c == 0x65) {
 		hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);
@@ -6376,6 +6918,12 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 		obj->fsk.sr = -1;			/* 0x6e814 */
 		if (obj->is_short != 0) {
 			hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);
+			/*
+			 * 0x6e8ac is also where the inlined `hs_setstate`
+			 * lands when the microstate ALREADY holds 0x31 --
+			 * `je 6e8ac` at 0x6e82c -- so the reload of +0xaa78
+			 * from +0xaa7c runs whether the state moved or not.
+			 */
 			hs_put(obj, T44_COUNT,		/* 0x6e8ac */
 			       hs_get(obj, T44_COUNT_SRC));
 		} else {
@@ -6431,6 +6979,13 @@ t44_micro_det_info(struct v34_object *obj)
 		if ((obj->fsk.sr & 1) != 0)
 			fb ^= 1;
 		crc <<= 1;
+		/*
+		 * The `else` is a whole out-of-line block, not a fallthrough:
+		 * `mov %ax,0x14(%ecx)` exists twice, at 0x66927 after the xor
+		 * and at 0x6c133 without it; `je 6c133` at 0x66915 picks it.
+		 * The shift is unconditional -- 0x66905 `add %eax,%eax` runs
+		 * before the test.
+		 */
 		if (fb != 0)
 			crc ^= 0x1021;			/* else 0x6c133 */
 		t44_recput(rec, T44_R_CRC, (short)crc);
@@ -6450,6 +7005,12 @@ t44_micro_det_info(struct v34_object *obj)
 			if (t44_det_info_accept(obj, rec, next) != 0)
 				return;			/* 0x6e740 */
 		} else {
+			/*
+			 * The restart is the fallthrough of `je 6e534` at
+			 * 0x6bdab, and 0x6bdb1 is its FIRST instruction: the
+			 * debug-level test.  The compare feeding it is
+			 * 0x6bda4, sixteen bits, +0xaae2 against +0x14.
+			 */
 			t44_det_info_restart(obj);	/* 0x6bdb1 */
 		}
 	}
@@ -6467,10 +7028,19 @@ t44_micro_det_info(struct v34_object *obj)
 
 	/* Only every eighth bit completes a byte. */
 	if ((next & 7) != 0) {
+		/*
+		 * 0x66966 `jne 6bd8d`, and the test at 0x66964 is
+		 * `test $0x7,%al` -- ONE BYTE of a counter the source
+		 * carries as a short.
+		 */
 		t3c_txblock(obj);			/* 0x6bd8d */
 		return;
 	}
 	if (next <= 0) {
+		/*
+		 * 0x6696c `test %ax,%ax` + `jle 7186a`: sixteen bits and
+		 * SIGNED, so a negative counter leaves here too.
+		 */
 		t3c_txblock(obj);			/* 0x7186a */
 		return;
 	}
@@ -6549,6 +7119,11 @@ t53_rx_det_ab(struct v34_object *obj)
 
 	/* 0x65486, `cmpw $0x34`: 52 is TX_L2, not TX_PHASE3_ANS. */
 	if (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {
+		/*
+		 * The object tests the other way: 0x65486 `cmpw $0x34` and
+		 * `je 6845e` jump TO the guard, so 0x65494 is the not-equal
+		 * fallthrough.
+		 */
 		t3c_txblock(obj);			/* 0x65494 */
 		return;
 	}
@@ -6578,6 +7153,11 @@ t53_rx_det_ab(struct v34_object *obj)
 		 */
 		v34handshakinit(obj, 1);		/* 0x6b0f4 */
 
+		/*
+		 * The trace is exiled past the end of the arm: `ja 7170a` at
+		 * 0x6b100, and it does not come back.  0x71716 is its own
+		 * copy of the exit below, so that exit is in the object twice.
+		 */
 		if (DSPLIB_DEBUG_ON())			/* 0x7170a */
 			dsplibs_debug_printf("V34RETRAIN, retrain is "
 					     "initiated in DET_AB\n");
@@ -6640,6 +7220,14 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * Finding 432's hazard, answered with information rather than
 		 * with indentation.
 		 */
+		/*
+		 * 0x6b1fb IS FIVE STORES: +0x14 = 0xffff, +0x1a, +0x1e and
+		 * +0x22 = 0, then +0x18 = 0x4d, all through the %ebp reloaded
+		 * at 0x6b1f5.  The six that follow are in the object's order,
+		 * +0x1c, +0x16, +0x28, +0x2a, +0x20 -- and 0x6f669..0x6f6b3
+		 * writes the same twelve offsets in the same order with 0x26
+		 * at +0x18 (finding 443).
+		 */
 		t41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */
 		hs_put(obj, T41_BLK_A9AC + 0x1c, 8);	    /* 0x6b219 */
 		hs_put(obj, T41_BLK_A9AC + 0x16, 1);	    /* 0x6b21f */
@@ -6654,6 +7242,13 @@ t53_rx_det_ab(struct v34_object *obj)
 		t3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */
 		t3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */
 
+		/*
+		 * 0x6b24c and the 0x26 arm's 0x6f6ba are the same seven
+		 * bytes, `mov %di,0x358c(%esi)`, and both clear +0x358c
+		 * immediately before a state move.  The word that move
+		 * compares was loaded at 0x6b237, in the middle of the record
+		 * fill: `cmp $0x2b` -- RX_DPSK is 43 -- is at 0x6b253.
+		 */
 		hs_put(obj, T41_F358C, 0);		/* 0x6b24c */
 
 		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
@@ -6703,13 +7298,33 @@ t53_rx_det_ab(struct v34_object *obj)
 	rx->agc_gain = (short)*(const unsigned short *)((const char *)rx
 							+ T3M_RX_F264);
 
+	/*
+	 * +0xaae2 `sr` (finding 553), +0xaae0 `nbits`, +0xaadc `phase`,
+	 * +0xaade `next`: the object stores them in THAT order, which is
+	 * not the order they lie in, and all four values were already in
+	 * registers -- 0x69928, 0x6992a, 0x6992c and `mov $0x6,%ebx` at
+	 * 0x6992e -- before the flag word above was even read.
+	 */
 	obj->fsk.sr = 0;			/* 0x6995f */
 	obj->fsk.nbits = 0;			/* 0x69966 */
 	obj->fsk.phase = 0;			/* 0x6996d */
 	obj->fsk.next = 6;			/* 0x69974 */
+	/*
+	 * 0x6997b and 0x69982 store registers the block above cleared -- `xor
+	 * %eax,%eax` at 0x6994d, `xor %edi,%edi` at 0x6995d -- and both fields
+	 * are ones the state-transition trace reports: 0x6ff94 pushes +0x2aa2
+	 * and +0xaa78, finding 633's busiest counter, as two of its arguments.
+	 * The whole run of six goes through the object pointer reloaded at
+	 * 0x69956.
+	 */
 	obj->vect_idx = 0;			/* 0x6997b */
 	hs_put(obj, T41_COUNT, 0);		/* 0x69982 */
 
+	/*
+	 * 0x69989 is an exit and not a call: `movzwl 0x3596(%ecx),%ecx` and
+	 * `jmp 62af1`, where the txstate is sign-extended, has 5 subtracted
+	 * and is bounds-checked against 0x45 before the dispatch.
+	 */
 	t3c_txblock(obj);				/* 0x69989 */
 }
 
@@ -6758,7 +7373,7 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_F3570	0x3570	/* short: 3 once S has been detected       */
 #define T4_F3576	0x3576	/* short: cleared with it                  */
 #define T4_F3598	0x3598	/* short: "initdigital has run"            */
-#define T4_MDLEN	0x35a2	/* short: the message-descriptor length    */
+#define T4_MDLEN	0x35a2	/* short: MD's length in bauds -- see below */
 #define T4_MPTBL	0xaa0c	/* ten shorts, the MP sequence received    */
 #define T4_MPRUN	0xaa26	/* short: the current run of one bits      */
 #define T4_MPIDX	0xaa2a	/* short: which of the ten comes next      */
@@ -6853,6 +7468,14 @@ t4_mp_sequence_end(struct v34_object *obj)
 	unsigned short *tbl = (unsigned short *)(T4_M(obj) + T4_MPTBL);
 
 	if ((short)tbl[0] < 0) {
+		/*
+		 * 0x70282.  Bit 15 of word 0 is MP bit 33, the ACKNOWLEDGE bit
+		 * of Tables 20 and 21/V.34 -- "0 = modem has not received MP
+		 * from far end" -- so the sign test above it is what separates
+		 * MP' from MP.  This arm ORs 0x90 where 0x6ff47 ORs 0x10, and
+		 * 0x90 is exactly what 0x710e4 compares for before printing "E
+		 * received before MP'".
+		 */
 		/* 0x70282 */
 		rx->flags = (unsigned short)((rx->flags & ~0x98) | 0x90);
 		if (T4_U8(tbl, 0) & 1)
@@ -6861,6 +7484,11 @@ t4_mp_sequence_end(struct v34_object *obj)
 			t4_mp_print("V34MP -MP1 sequence,%x,%x,%x,%x,%x,%x,"
 				    "%x,%x,%x,%x\n", tbl);
 	} else {
+		/*
+		 * 0x6ff47.  `and $0xffffff67` is ~0x98 done thirty-two bits
+		 * wide on a halfword that was loaded `movzwl`, and only the
+		 * store at 0x6ff62 narrows it again.
+		 */
 		/* 0x6ff47 */
 		rx->flags = (unsigned short)((rx->flags & ~0x98)
 					     | V34_RX_FLAG_TRN_WATCH);
@@ -6869,7 +7497,20 @@ t4_mp_sequence_end(struct v34_object *obj)
 				    "%x,%x,%x,%x\n", tbl);
 	}
 
+	/*
+	 * 0x6ff6f reads +0x3592 and 0x6ff7d compares it with 0x29; equal jumps
+	 * straight to the clears at 0x68c6e and stores nothing.  The `jbe` at
+	 * 0x6ff8e skips the trace body at 0x6ff94, and that body is shared:
+	 * 0x7093f, which the packer's own `ja` at 0x68c55 reaches, does
+	 * nothing but reload the object and jump into it.
+	 */
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);	/* 0x6ff6f */
+	/*
+	 * 0x68c6e and 0x68c78 are one shared pair of `movw $0x0` through %ebx
+	 * = obj+0xaa0c, +0x1e and +0x1a.  0x6ff81's `je` lands on the first of
+	 * them and the packer's resync falls into it from 0x68c67, which is
+	 * why the same two addresses appear twice in this file.
+	 */
 	T4_I16(obj, T4_MPIDX) = 0;				/* 0x68c6e */
 	T4_I16(obj, T4_MPRUN) = 0;				/* 0x68c78 */
 	return rx->flags;
@@ -6896,8 +7537,21 @@ t4_mp_word(struct v34_object *obj, unsigned acc)
 	short w = (short)acc;
 
 	if ((tbl[(short)idx] & 0x7fff) == (w & 0x7fff))
+		/*
+		 * 0x6ff1e steps +0xaa78, finding 633's busiest counter, and
+		 * comes back by way of a reload: 0x6ff34 re-reads the index
+		 * from +0xaa2a because the increment used %ecx.  The 0x7fff
+		 * mask above drops bit 15, which in word 0 is the acknowledge
+		 * bit, so an MP and the MP' that follows it count as a repeat.
+		 */
 		T4_U16(obj, T3C_COUNT)++;		/* 0x6ff1e */
 
+	/*
+	 * 0x6cb21, and seventeen is not a typo for sixteen: `shr $0x11` at
+	 * 0x6cb24 and `sub $0x11` at 0x6cb40.  A group is sixteen data bits
+	 * plus the start bit behind them -- MP bits 34, 51, 68 in Tables 20
+	 * and 21/V.34 -- and the store at 0x6cb2a keeps only the low half.
+	 */
 	/* 0x6cb21 */
 	tbl[(short)idx] = (unsigned short)w;
 	T4_U32(obj, T4_MPACC) = acc >> 17;
@@ -6911,6 +7565,14 @@ t4_mp_word(struct v34_object *obj, unsigned acc)
 	 * the index just written, so a sequence that overruns either count
 	 * never ends -- which is the object's behaviour and not a defect of
 	 * this reading.
+	 */
+	/*
+	 * TEN AND FOUR ARE THE TWO MP TYPES.  The bit 0x6cb43 tests is bit 0
+	 * of word 0, which is MP bit 18: "Type: 0" in Table 20/V.34 and "Type:
+	 * 1" in Table 21.  Type 0 carries four sixteen-bit fields (bits 18:33,
+	 * 35:50, 52:67, 69:84) and Type 1 carries ten, the extra six being the
+	 * precoding coefficients h(1) to h(3), real and imaginary.  0x6cb54
+	 * and 0x6d2de are those two counts.
 	 */
 	if (T4_U8(obj, T4_MPTBL) & 1) {
 		if (idx == 0xa)				/* 0x6cb54 */
@@ -6943,6 +7605,13 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34MP- E received before MP', "
 					     "rxflgs = 0x%x\n", (unsigned)f);
+		/*
+		 * 0x71111's `testb $0x1,(%ebx)` is the Type bit again, and
+		 * only a Type 1 sequence carries coefficients (Table 21/V.34),
+		 * so a Type 0 leaves the twelve shorts alone.  0x71114's `je`
+		 * and 0x710ea's both arrive at 0x71189, through 0x71249 and
+		 * 0x71259, and 0x71189 is where the flag word is written.
+		 */
 		if (T4_U8(tbl, 0) & 1)
 			t4_mp_coeffs(obj, tbl);
 	}
@@ -6955,15 +7624,37 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 		dsplibs_debug_printf("V34MP - E sequence detected,"
 				     "rxflgs= 0x%x\n", (unsigned)rx->flags);
 
+	/*
+	 * 0x711ee.  The argument is built by `lea 0x0(%ebp,%ebp,4)` and `add
+	 * %eax,%eax` -- times five, then doubled -- and the `cwtl` at 0x711e9
+	 * cuts the product to sixteen bits before sign-extending it again,
+	 * which is what the (short) is.  +0x1d0 itself is read `movswl`.
+	 */
 	VPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));	/* 0x711ee */
 
+	/*
+	 * 0x711fe is `test $0x40,%ah`, bit 14 of the word loaded at 0x711f7,
+	 * and the bit it sets is 0x2000.  The store at 0x71208 is INSIDE the
+	 * branch, so a clear 0x4000 leaves +0x122 untouched rather than
+	 * rewriting it with the value just read.
+	 */
 	if (rx->flags & 0x4000)					/* 0x711fe */
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PRECODE);
 
+	/*
+	 * 0x71216 is `cmpw $0x0,0x3598(%esi)`, and the 1 that replaces it is
+	 * materialised in %ebx at 0x71223 -- before the call, because %ebx
+	 * survives it -- and stored at 0x7122d once `initdigital` returns.
+	 */
 	if (T4_I16(obj, T4_F3598) == 0) {			/* 0x71216 */
 		initdigital(obj);
 		T4_I16(obj, T4_F3598) = 1;
 	}
+	/*
+	 * 0x7123d, and then `jmp 68c7e` -- PAST the two clears at 0x68c6e and
+	 * 0x68c78, onto the flag reload behind them.  E leaves the index and
+	 * the run where they are; only the framing paths clear them.
+	 */
 	rx->f218 = 0x4000;					/* 0x7123d */
 	return rx->flags;
 }
@@ -6983,7 +7674,19 @@ t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 {
 	struct v34_receiver *rx = T4_RX(obj);
 
+	/*
+	 * 0x6cbca re-reads the count from +0xaa34 at the top of every pass
+	 * instead of keeping it in a register, and the accumulator lives in a
+	 * stack slot: 0x6cbd3 and 0x6cbd8 both load 0x70(%esp), one copy for
+	 * the low bit and one for the shift.
+	 */
 	while (count != 0) {					/* 0x6cbca */
+		/*
+		 * 0x6cbe0 takes the bit BEFORE the shift and from the second
+		 * copy, and 0x6cbdc has already written the decremented count
+		 * back to +0xaa34 -- so a return from inside this loop leaves
+		 * the object holding exactly the bits it has not consumed.
+		 */
 		int one = (int)(acc & 1);			/* 0x6cbe0 */
 
 		count = (unsigned short)(count - 1);
@@ -6991,6 +7694,14 @@ t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 		acc >>= 1;
 
 		if (one) {
+			/*
+			 * 0x6cb83 keeps the incremented run in BOTH places,
+			 * +0xaa26 and 0x3c(%esp), and 0x6cbbe compares the
+			 * stack copy.  Twenty ones is E, "a 20-bit sequence of
+			 * binary ones used to signal the end of MP" (V.34
+			 * 10.1.3.2), which is why the test is `cmpw $0x13`
+			 * with `jg`.
+			 */
 			/* 0x6cb83 */
 			unsigned short run;
 			unsigned short f;
@@ -7003,8 +7714,21 @@ t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 					return t4_mp_e_sequence(obj, acc, f);
 			}
 		} else {
+			/*
+			 * 0x6cbed reads the run straight out of +0xaa26 --
+			 * `cmpw $0x10,0x1a(%ebx)` -- so more than sixteen ones
+			 * followed by a zero is the seventeen-bit frame sync
+			 * with its start bit behind it, MP bits 0:16 and 17 of
+			 * Tables 20 and 21/V.34.
+			 */
 			/* 0x6cbed */
 			if ((short)T4_U16(obj, T4_MPRUN) > 0x10) {
+				/*
+				 * 0x71264 stores %ecx, the accumulator AFTER
+				 * 0x6cbe3's shift, so the zero that ended the
+				 * run is already out of it when the collector
+				 * starts.
+				 */
 				/* 0x71264 */
 				T4_U32(obj, T4_MPACC) = acc;
 				hs_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);
@@ -7017,6 +7741,11 @@ t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 		}
 	}
 
+	/*
+	 * 0x6cc00 stores the accumulator and jumps to 0x6a4e4 -- one
+	 * instruction PAST the identical store at 0x6a4e1 -- so both ways out
+	 * of the packer share the flag reload and the `jmp 67a1e` behind it.
+	 */
 	T4_U32(obj, T4_MPACC) = acc;				/* 0x6cc00 */
 	return rx->flags;
 }
@@ -7033,8 +7762,30 @@ static unsigned short
 t4_mp_packer(struct v34_object *obj)
 {
 	struct v34_receiver *rx = T4_RX(obj);
+	/*
+	 * %ebx IS obj+0xaa0c from 0x68bf1, so five of the packer's fields are
+	 * addressed off one base and the disassembly names them by their
+	 * displacement: +0x0 the table, +0x1a the run, +0x1e the index, +0x24
+	 * the accumulator, +0x28 the bit count.  0x68bf7 is a full 32-bit
+	 * `mov` and 0x68bfa a `movzwl`.
+	 */
 	unsigned acc = T4_U32(obj, T4_MPACC);			/* 0x68bf7 */
 	unsigned short n = T4_U16(obj, T4_MPBITS);		/* 0x68bfa */
+	/*
+	 * 0x68c05 is `movswl %bp,%ecx`: the shift count is the SIGNED halfword
+	 * although 0x68bfa loaded it zero-extended.  The mask is built the
+	 * long way -- $0xffffffff into %esi at 0x68be8, `shl %cl`, `not` --
+	 * and that is a thirty-two-bit object being cleared from bit `sh`
+	 * upwards.
+	 *
+	 * AND THE VALUE GOING IN IS NOT MASKED.  0x68bfe reads +0x126 with
+	 * `movswl` and 0x68c0c shifts it straight, so the `or` at 0x68c17
+	 * carries every bit above bit 1 into the accumulator.  The TRN2 path
+	 * reading the same field does mask it -- 0x679f8 `movswl`, then
+	 * 0x67a02 `and $0x3` -- so the two readers of +0x126 disagree about
+	 * its width, and this one is the object's behaviour, not an omission
+	 * here.
+	 */
 	int sh = (short)n;					/* 0x68c05 */
 
 	acc = (acc & ~(0xffffffffu << sh))
@@ -7042,17 +7793,48 @@ t4_mp_packer(struct v34_object *obj)
 	n = (unsigned short)(n + 2);
 	T4_U16(obj, T4_MPBITS) = n;				/* 0x68c1c */
 
+	/*
+	 * 0x68c2b's `je 6cb70` hands the run counter the accumulator and the
+	 * count it has just computed: 0x68c27 spilled the accumulator to
+	 * 0x70(%esp) and %ax still holds the count, so nothing is re-read
+	 * across the split.
+	 */
 	if (obj->microstate == V34HS_DET_SYNC)			/* 0x68c2b */
 		return t4_mp_runlength(obj, acc, n);
 
+	/*
+	 * 0x68c35 is `cmp $0x10,%ax` with `jle`, a SIGNED sixteen-bit compare.
+	 * Falling through means seventeen or more bits are in the accumulator,
+	 * which is what lets 0x68c3f treat bit 16 as the group's start bit.
+	 */
 	if ((short)n <= 0x10) {					/* 0x68c35 */
+		/*
+		 * 0x6a4e1 is shared with the run counter: 0x6cb73's
+		 * empty-count exit jumps to this store and 0x6cc00 jumps one
+		 * instruction past it.
+		 */
 		T4_U32(obj, T4_MPACC) = acc;			/* 0x6a4e1 */
 		return rx->flags;
 	}
 
+	/*
+	 * THIS IS MP'S START BIT.  Every group in Tables 20 and 21/V.34 is
+	 * sixteen bits followed by a start bit of 0 -- MP bits 17, 34, 51, 68
+	 * and on -- so bit 16 of the accumulator is 0 while the framing holds
+	 * and 1 once it has been lost.  0x68c3f tests it thirty-two bits wide
+	 * and 0x68c45 takes the good case to the word store.
+	 */
 	if ((acc & 0x10000) == 0)				/* 0x68c3f */
 		return t4_mp_word(obj, acc);
 
+	/*
+	 * The framing is gone, so 0x68c52 keeps the accumulator and the arm
+	 * goes back to counting ones for the seventeen-bit frame sync.  There
+	 * is no "already there" compare in front of this transition: 0x68c2b
+	 * has already proved the microstate is not 0x29 on this path and the
+	 * compiler kept that, which is finding 392's case.  The two clears
+	 * below are 0x68c6e and 0x68c78, the pair 0x6ff81 also jumps into.
+	 */
 	T4_U32(obj, T4_MPACC) = acc;				/* 0x68c52 */
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 	T4_I16(obj, T4_MPIDX) = 0;				/* 0x68c6e */
@@ -7076,6 +7858,14 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 	unsigned short f = rx->flags;			/* 0x679c0, re-read */
 	unsigned short a, b, d;
 
+	/*
+	 * 0x899f IS J', Table 19/V.34.  Its sixteen bits are 1111100110010001
+	 * with the leftmost first in time, and read into this register --
+	 * first bit at bit 0 -- that is 0x899f exactly.  The arm 0x679c7's
+	 * `test $0x8,%di` selects is the one that looks for it, only +0x11c is
+	 * fed here, and 0x6a39d's store sits between the compare and the
+	 * branch, so both ways out store.
+	 */
 	if (f & V34_RX_FLAG_LATE_TRN) {
 		/* 0x6a377 */
 		a = (unsigned short)((((int)rx->best_index & 3) << 14)
@@ -7088,23 +7878,57 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 		return rx->flags;
 	}
 
+	/*
+	 * 0x679d2.  The two halfwords are ONE thirty-two-bit shift register:
+	 * the new pair enters at the top of +0x11c and +0x11c's bottom two
+	 * bits enter the top of +0x11e, so +0x11e is +0x11c delayed by eight
+	 * blocks.  Comparing them compares a sixteen-bit window with the
+	 * sixteen bits before it, which is what "a whole number of repetitions
+	 * of one of the two 16-bit patterns" (V.34 10.1.3.3) makes equal.
+	 */
 	/* 0x679d2 */
 	a = T4_U16(rx, T4_RXF11C);
 	d = (unsigned short)(((a & 3) << 14) | (T4_U16(rx, T4_RXF11E) >> 2));
 	T4_U16(rx, T4_RXF11E) = d;
 	b = (unsigned short)((((int)rx->best_index & 3) << 14) | (a >> 2));
 
+	/*
+	 * 0x67a0a compares the two windows in registers, `cmp %dx,%bx`, and
+	 * the unequal path at 0x67a17 stores the new one and falls straight
+	 * into the merge at 0x67a1e -- which reads %esi, the flags the arm was
+	 * called with.  +0x122 is not re-read on this path.
+	 */
 	if (b != d) {						/* 0x67a0a */
 		T4_U16(rx, T4_RXF11C) = b;			/* 0x67a17 */
 		return flags;
 	}
 
+	/*
+	 * BOTH CONSTANTS ARE J, Table 18/V.34.  0000100110010001 is the
+	 * 4-point pattern and 0000110110010001 the 16-point one, leftmost bit
+	 * first in time; read into this register, first bit at bit 0, they are
+	 * 0x8990 and 0x89b0 exactly.  0x6b47a tests them branchlessly -- `sete
+	 * %dl`, `sete %al`, `or`, `test $0x1,%al` -- so both compares always
+	 * run.
+	 */
 	/* 0x6b47a */
 	if (b != 0x8990 && b != 0x89b0) {
+		/*
+		 * 0x6b49b is the same store as 0x67a17 and the object did not
+		 * share it: a window that repeated but is not J leaves through
+		 * its own copy, so the address is the only thing telling the
+		 * two returns apart.
+		 */
 		T4_U16(rx, T4_RXF11C) = b;			/* 0x6b49b */
 		return flags;
 	}
 
+	/*
+	 * 0x6fe67.  BOTH registers are cleared, not only the one that matched,
+	 * and the bit is OR'ed into the value read back at 0x679c0 rather than
+	 * into a fresh load of +0x122.  The timing offset is built the same
+	 * way as at 0x711e3: times five, doubled, `cwtl`.
+	 */
 	/* 0x6fe67 */
 	T4_U16(rx, T4_RXF11C) = 0;
 	T4_U16(rx, T4_RXF120) = 0;
@@ -7114,7 +7938,15 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 }
 
 /*
- * 0x6a090 -- the message descriptor's bauds have run out.
+ * 0x6a090 -- MD's bauds have run out.
+ *
+ * MD IS "MANUFACTURER-DEFINED", NOT "message descriptor", which is what this
+ * file used to call it here and at `T4_MDLEN`.  ITU-T V.34 (02/98) 10.1.3.5:
+ * an OPTIONAL signal a transmitting modem sends to train its echo canceller
+ * when the phase-3 TRN cannot do it, whose length is carried in that modem's
+ * INFO1 and is **0 when the signal is absent** -- which is exactly the `md ==
+ * 0` guard below, and why the object's own trace reads "RX MDLENGTH over, it
+ * was %d bauds".  Bauds, not bytes: nothing here is a descriptor.
  *
  * `setupreceiver` INLINED, and then a SECOND `detectorinit` over the same
  * detector with different arguments: 8/10 for the one inside the callee
@@ -7127,25 +7959,67 @@ t4_md_over(struct v34_object *obj, unsigned short flags)
 	struct v34_receiver *rx = T4_RX(obj);
 	unsigned short md = T4_U16(obj, T4_MDLEN);
 
+	/*
+	 * BOTH ADDRESSES BELOW NAME EXITS, not compares.  The compares are
+	 * back at the head, 0x6a09e and 0x6a0b2; 0x6aad3 and 0x6d293 are the
+	 * nineteen-byte "read txstate, jump 0x62af1" idiom the block comment
+	 * above counts fifteen of.  A zero length is the signal's absence --
+	 * the INFO1 length indication is 0 when it is not sent (V.34
+	 * 10.1.3.5).
+	 */
 	if (md == 0)						/* 0x6aad3 */
 		return;
+	/* 0x6d293 again, and 0x6a0b2's `cmp %ax,%cx`/`jle` is signed. */
 	if ((short)rx->f124 <= (short)md)			/* 0x6d293 */
 		return;
 
+	/*
+	 * 0x71667 is the diagnostic's BODY, placed out of line: the level test
+	 * is back at 0x6a0bb and the body returns to 0x6a0c8.  The object's
+	 * own format string names two of the fields it pushes -- +0x1c0 is
+	 * "pllcnt" and +0x136 is "rxgain" -- and every argument is loaded
+	 * `movswl`.
+	 */
 	if (DSPLIB_DEBUG_ON())					/* 0x71667 */
 		dsplibs_debug_printf("RX MDLENGTH over, it was %d bauds,"
 				     "rxflgs = 0x%x,pllcnt = %d,rxgain=0x%x\n",
 				     (int)rx->f124, (unsigned)flags,
 				     (int)rx->f1c0, (int)rx->agc_gain);
 
+	/*
+	 * 0x6a0c8.  The call there is `rxinit`; the rest of `setupreceiver`
+	 * runs inline to 0x6a225 -- the ladder on +0xaa96, +0x128 = 4, the
+	 * +0xaaa8 ladder, +0x13a = 0x2000, +0x136 out of +0x262, flags &=
+	 * 0xf0ff, its own `detectorinit(det, *(+0xaab0), 0, 8, 10, 0x600, 0)`
+	 * at 0x6a200 and flags |= 0x200.  Finding 426 read that inline store
+	 * for store in another arm.
+	 */
 	setupreceiver(obj);					/* 0x6a0c8 */
 
+	/*
+	 * 0x6a22c.  %ax was zeroed at 0x6a20c: this clears the same +0xaa80
+	 * the freeze at 0x67a82 tests with `cmpw $0x0`, so the rate change
+	 * that would have raised 0x200 on the next block is cancelled before
+	 * the detector below is armed.
+	 */
 	T4_I16(obj, T4_FAA80) = 0;				/* 0x6a22c */
 	detectorinit(T41_DET(obj),
 		     *(const short **)(T4_M(obj) + T4_RXCARRDESC),
 		     0, 10, 0x28, 0x600, 0);			/* 0x6a25d */
+	/*
+	 * 0x6a276 raises 0x200 for the SECOND time in this function -- the
+	 * inlined `setupreceiver` already raised it at 0x6a218 -- and 0x6a283
+	 * then clears +0x35a2, the word the entry test at 0x6a097 reads, so
+	 * the wait runs once and the next block falls straight through.
+	 */
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 	T4_I16(obj, T4_MDLEN) = 0;				/* 0x6a283 */
+	/*
+	 * 0x6a28a.  `mov %ax,0x3be(%ebp)`, %ebp reloaded from 0x4c(%esp) at
+	 * 0x6a272 -- the base the increment at 0x67b37 works on, which is what
+	 * the `T4_PLLCNT` define means by 0x4c(%esp) plus 0x3be.  Detecting S
+	 * counts it up; the end of the wait puts it back to zero.
+	 */
 	T4_I16(obj, T4_PLLCNT) = 0;				/* 0x6a28a */
 }
 
@@ -7182,12 +8056,25 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	struct v34_receiver *rx = T4_RX(obj);
 	short n;
 
-	/* 0x679a4 */
+	/* 0x679a4.  `je 67a1e` -- all three up skips both TRN arms. */
 	if ((flags & 0x98) != 0x98) {
+		/*
+		 * 0x679af `test $0x10,%dl; jne 68bd8` takes the watch arm out
+		 * of line, and 0x68bd8's first act is `test $0x4,%dh; je
+		 * 67a1e` -- with 0x400 clear it goes back to the J test
+		 * without touching the packer.
+		 */
 		if (flags & V34_RX_FLAG_TRN_WATCH) {
 			/* 0x68bd8 */
 			if (flags & V34_RX_FLAG_DATA)
 				flags = t4_mp_packer(obj);
+		/*
+		 * 0x679b5.  `cmp $0xbb8,%di` with `jle 67a1e`: a SIGNED
+		 * sixteen-bit compare on the same counter the cap at 0x67a3a
+		 * bounds, so the J registers are fed only past 3,000 bauds and
+		 * a counter that has gone negative takes the same exit as a
+		 * small one.
+		 */
 		} else if ((short)rx->f124 > 0xbb8) {		/* 0x679b5 */
 			flags = t4_trn2(obj, flags);
 		}
@@ -7195,20 +8082,36 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 
 	/*
 	 * 0x67a1e.  The far end's J: 0x08 raised with 0x10 and 0x80 clear,
-	 * and the marker at +0x359c saying this end is the one that answers.
+	 * and the marker at +0x359c saying this end is the one that
+	 * ORIGINATES -- 0x65, which `v34modeminit` reads as `originate` and
+	 * every other site in this file agrees with.  This clause used to say
+	 * "answers", against the guard three lines below it.
 	 * `v34setuptxmit` FORCES txstate 18 SSEG, which is the only path in
 	 * this arm that moves a state word the caller did not seed.
 	 */
 	if ((flags & 0x98) == V34_RX_FLAG_LATE_TRN
 	    && T4_I16(obj, 0x359c) == 0x65) {
+		/*
+		 * 0x68e50 is the body, not a call: `settxlevel` against the
+		 * +0xa9dc record, `V34SetupModulator` on the three shorts at
+		 * +0xaa84, +0xaa94 and +0xaa8a, +0x122 &= ~0x800, +0x3594
+		 * driven to 0x23 and txstate +0x3596 to 0x12 -- each behind
+		 * `hs_setstate`'s compare-then-trace -- +0x25c0 cleared with
+		 * 0x200 raised in +0x25c2, and `txinit` last.
+		 */
 		v34setuptxmit(obj);				/* 0x68e50 */
 
-		/* 0x68f86 */
+		/* 0x68f86.  0x6666 is 0.8 in Q15, 0x4000 the rounding. */
 		rx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Agc gain estimate at the end of "
 					     "phase 3 is %d\n", (int)rx->f262);
 
+		/*
+		 * 0x68fb1 zeroes +0x1c0 and 0x68fbd raises 0x10 in the same
+		 * flag word; 0x68fc7 then copies the stored value back into
+		 * %esi, which is the `flags` the rest of the arm works from.
+		 */
 		rx->f1c0 = 0;					/* 0x68fb1 */
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRN_WATCH);
 		if (DSPLIB_DEBUG_ON())
@@ -7226,10 +8129,34 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	if (n <= 0x61a7)
 		rx->f124 = (short)(n + 1);
 
+	/*
+	 * 0x67a4b.  `test $0x4,%dh` -- bit 0x400, tested in the high byte of
+	 * the working copy in %si.  Taken, it leaves at 0x686f1: nothing below
+	 * this line runs while the data bit is up.
+	 */
 	if (flags & V34_RX_FLAG_DATA)				/* 0x67a4b */
+		/*
+		 * 0x686f1 is not a `ret`: `movzwl 0x3596(%ebp),%ecx; jmp
+		 * 62af1`, the tail into `t3c_txblock` with the tx state word
+		 * already in %ecx. 0x69b3c, 0x6a291, 0x6d155 and 0x67b90 all
+		 * end the same way.
+		 */
 		return;						/* 0x686f1 */
 
+	/*
+	 * 0x67a5b.  `cmpw $0x3,0x3570(%ecx)` straight against memory, and the
+	 * 3 is the one 0x67b22 stores when the tone is detected: the arm sets
+	 * the state it later tests.
+	 */
 	if (T4_I16(obj, T4_F3570) == 3) {			/* 0x67a5b */
+		/*
+		 * 0x67a63 `je 6a090` -- a branch, not a call, and all three
+		 * exits of that block are the shared tail.  MD is V.34's
+		 * optional Manufacturer-Defined echo-canceller training signal
+		 * (10.1.3.5); the modem that sends it announces its length in
+		 * INFO1, and the receiver sits out that length before it looks
+		 * for S again.
+		 */
 		t4_md_over(obj, flags);				/* 0x6a090 */
 		return;
 	}
@@ -7256,16 +8183,38 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	 * so the value 0x67b56 reads back is not the one stored above.
 	 * Finding 429's trap in a new place.
 	 */
+	/*
+	 * 0x67acd `je 69b3c`, and 0x69b3c is three instructions: reload obj,
+	 * `movzwl 0x3596`, `jmp 62af1`.  A detector that does not assert ends
+	 * the block there without another store.
+	 */
 	if (t41_detect(obj) == 0)				/* 0x69b3c */
 		return;
 
+	/*
+	 * 0x67ad3.  This trace is inline -- `jbe 67afe` steps over it -- where
+	 * the arm's others are cold blocks reached by `ja`.  Its two arguments
+	 * are read at different widths: `movzwl 0x122` for the flags and
+	 * `movswl 0x136` for the gain.
+	 */
 	if (DSPLIB_DEBUG_ON())					/* 0x67ad3 */
 		dsplibs_debug_printf("S detected,rxflgs= 0x%x,rxgain=0x%x\n",
 				     (unsigned)rx->flags, (int)rx->agc_gain);
 
+	/*
+	 * 0x67b17.  Four stores in one group, out of constants loaded at
+	 * 0x67b05-0x67b12: +0x356c = 0x1e, +0x3570 = 3, +0x3576 = 0 and the
+	 * baud counter back to zero.  The 3 is what 0x67a5b reads on every
+	 * block after this one.
+	 */
 	T4_I16(obj, T4_F356C) = 0x1e;				/* 0x67b17 */
 	T4_I16(obj, T4_F3570) = 3;
 	T4_I16(obj, T4_F3576) = 0;
+	/*
+	 * 0x67b30 puts the baud counter back to zero, and 0x67b37 is
+	 * `movzwl`/`inc`/`mov` on +0x3be: sixteen bits, unsigned and with no
+	 * cap, so this counter wraps where the one at 0x67a3a saturates.
+	 */
 	rx->f124 = 0;
 	T4_U16(obj, T4_PLLCNT)++;				/* 0x67b37 */
 
@@ -7280,6 +8229,14 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 				    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);
 
 		T4_I16(obj, T4_MDLEN) = md;
+		/*
+		 * 0x6d26f's argument is the `cwtl` at 0x6d276 -- %ax, the
+		 * value the store at 0x6a4c1 truncated, sign-extended -- so
+		 * the trace prints what landed in +0x35a2 and not the 32-bit
+		 * product.  The 0x23d over 2^14 above is 0.03497 s: one of the
+		 * 35 ms increments V.34's INFO1 counts an MD length in
+		 * (10.1.3.5).
+		 */
 		if (DSPLIB_DEBUG_ON())				/* 0x6d26f */
 			dsplibs_debug_printf("RX MDLENGTH, getting into "
 					     "waiting state for MD = %d\n",
@@ -7294,11 +8251,30 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 					   | V34_RX_FLAG_DET_PENDING));
 	rx->flags = flags;
 
+	/*
+	 * 0x67b6e `test $0x10,%al` runs between the `and` and the store, so
+	 * the bit is read out of the register on its way to +0x122; 0x67b77's
+	 * `je` sends the not-watching case to 0x6d111.
+	 */
 	if ((flags & V34_RX_FLAG_TRN_WATCH) == 0) {		/* 0x67b77 */
+		/*
+		 * 0x6d111 re-reads +0xaa96 and compares it against 0xd65,
+		 * 0xc80, 0xbb8 and 0xaf0 -- the top four of V.34's six symbol
+		 * rates.  There is no default: 0xab7 and 0x960, which the
+		 * ladder at 0x6a104 shows the object does know, leave +0xaacc
+		 * unscaled.  Every arm of it ends in the shared tail, so this
+		 * is the last thing the block does.
+		 */
 		t4_scale_rtd(obj);				/* 0x6d111 */
 		return;
 	}
 
+	/*
+	 * 0x67b84.  `mov 0x238(%edi),%edx; mov %edx,0xaacc(%esi)` -- 32 bits
+	 * at both ends, which is what declares the pair int.  rxstate 72
+	 * copies the same two fields with the same instruction pair at
+	 * 0x67d92.
+	 */
 	T4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_LO);	/* 0x67b84 */
 }
 
@@ -7322,19 +8298,46 @@ t4_rx_receive(struct v34_object *obj)
 	struct v34_receiver *rx;
 	unsigned short flags;
 
+	/*
+	 * 0x653ee.  The arm's first act, ahead of the retrain test at 0x65401:
+	 * the block is demodulated even on the call that hands the handshake
+	 * back to `v34handshakinit`.
+	 */
 	receiver(obj);					/* 0x653ee */
 
 	rx = T4_RX(obj);
+	/*
+	 * 0x653f7.  `movzwl 0x122(%edx),%esi` -- read once, and %esi carries
+	 * it into the whole arm as the working copy -- 0x67999 reads it as
+	 * `flags` -- while the retrain test below works on a second copy, in
+	 * %ebx.
+	 */
 	flags = rx->flags;				/* 0x653f7 */
 
 	if ((flags & V34_RX_FLAG_RETRAIN) != 0
 	    || ((int)rx->f124 > 7 * (int)obj->faa96
 		&& (flags & 0x80) == 0)) {
+		/*
+		 * 0x6544e.  The second argument is a literal 1, pushed at
+		 * 0x65447, and nothing follows the call but the trace and the
+		 * shared tail -- the retrain path writes no state of its own.
+		 */
 		v34handshakinit(obj, 1);		/* 0x6544e */
+		/*
+		 * 0x690e1 is a cold block: the format string and no arguments
+		 * at all, then `movzwl 0x3596`/`jmp 62af1` rather than a
+		 * return to the gate at 0x65453.
+		 */
 		if (DSPLIB_DEBUG_ON())			/* 0x690e1 */
 			dsplibs_debug_printf("V34RETRAIN, going into retrain "
 					     "in Handshake\n");
 	} else {
+		/*
+		 * 0x67999 is the merge of both not-retraining branches -- the
+		 * `jle` at 0x65429 and the `jne` at 0x65435 -- and it is
+		 * entered with the flags in %si and the baud counter in %di,
+		 * where the entry left them.
+		 */
 		t4_receive_body(obj, flags);		/* 0x67999 */
 	}
 
@@ -7423,7 +8426,8 @@ t4_rx_receive(struct v34_object *obj)
 #define T72_PB_RATIO	0xaac8	/* int:   the same, for the 0x300 rung      */
 #define T72_FAACC	0xaacc	/* int:   copied from the receiver's +0x238 */
 #define T72_RX_SAMPS	0x010c	/* receiver: the burst every bank reads     */
-#define T72_RX_F238	0x0238	/* receiver: an int this arm only copies    */
+#define T72_RX_F238	0x0238	/* receiver: an int, and rxstate 4 copies   */
+				/* it too, at 0x67b84 -- not this arm's    */
 
 /*
  * How many samples `rxtiming` left in the burst.
@@ -7451,7 +8455,17 @@ t72_update_both(struct v34_object *obj, struct v34_receiver *rx, short n)
 {
 	const short *in = (const short *)((const char *)rx + T72_RX_SAMPS);
 
+	/*
+	 * 0x68dfd.  Four bins at obj+0xa320, which is `probe_bins[0]`: the
+	 * signal bank overlays the first four of the twenty-five the 0x686ba
+	 * rung fills.
+	 */
 	dftupdate(obj->probe_bins, V34_NL_BINS, in, n);		/* 0x68dfd */
+	/*
+	 * 0x68e23.  obj+0xa76c, and the burst pointer in %ebx is the one the
+	 * call above already used -- one `add $0x10c` serves both.  Finding
+	 * 739 is what says +0xa76c is exactly four bins.
+	 */
 	dftupdate(obj->nl_noise_bins, V34_NL_BINS, in, n);	/* 0x68e23 */
 }
 
@@ -7488,12 +8502,41 @@ t72_measure(struct v34_object *obj, unsigned noise_off, unsigned signal_off,
 	unsigned int signal;
 	short i;
 
+	/*
+	 * 0x69cec.  The noise bank is reduced with `scale` 6 and the signal
+	 * bank at 0x69d03 with 2 -- the only argument that differs between the
+	 * two calls, and 0x67da3 reduces the same signal array over
+	 * twenty-five bins with that same scale of 2.
+	 */
 	dftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);	/* 0x69cec */
+	/*
+	 * 0x69d03.  The array 0x67da3 reduces over twenty-five bins, reduced
+	 * here over four and with the same `scale` of 2.
+	 */
 	dftenergy(obj->probe_bins, V34_NL_BINS, 2);	/* 0x69d03 */
 
+	/*
+	 * %esi is zeroed at 0x69cd0, before the second `dftupdate`, and comes
+	 * back through the call because %esi is callee-saved: that is how the
+	 * stores at 0x69d1a and 0x69d22 are known to be zeroes rather than
+	 * leftovers.
+	 */
 	t3c_puti(obj, noise_off, 0);			/* 0x69d1a */
-	t3c_puti(obj, signal_off, 0);			/* 0x69d22 */
+	t3c_puti(obj, signal_off, 0);			/* 0x69d22, dead */
 
+	/*
+	 * 0x69d28.  The loop reads +0xc of each bank -- 0xa32c and 0xa778 --
+	 * and walks both with one `add $0x2c,%edx`, the bin stride.  `i` is
+	 * narrowed by `movswl %bp,%ebx` every turn and closed by a signed
+	 * sixteen-bit compare against 3, which is what makes it a short.  The
+	 * `shl $0x8` is per bin, before the add.
+	 *
+	 * The block sits above the accumulators rather than tight against the
+	 * `for`, and that placement is forced: a comment CLOSE immediately
+	 * above `for (i = 0; i <= 3; i++) {` is a mutation anchor elsewhere in
+	 * this file, and a second copy of it makes that anchor match twice.
+	 * `anchorcheck.py` catches it; nothing else would.
+	 */
 	noise = 0;
 	signal = 0;
 	for (i = 0; i <= 3; i++) {			/* 0x69d28 */
@@ -7502,12 +8545,29 @@ t72_measure(struct v34_object *obj, unsigned noise_off, unsigned signal_off,
 			  (unsigned short)obj->probe_bins[i].energy << 8;
 	}
 
+	/*
+	 * 0x69d55 stores the signal and 0x69d5b the noise -- the reverse of
+	 * the zeroing order above -- and `test %ecx,%ecx` at 0x69d53 is
+	 * scheduled ahead of both, so the guard below reads the register and
+	 * not the field it has just written.
+	 */
 	t3c_puti(obj, signal_off, signal);		/* 0x69d55 */
 	t3c_puti(obj, noise_off, noise);		/* 0x69d5b */
 
+	/*
+	 * The zero-noise arm is out of line in both rungs -- 0x6aa0b writes
+	 * +0xaac8 and 0x6c9aa writes +0xaac4 -- and each `jmp`s back into its
+	 * rung, at 0x69d78 and 0x6a760.  It has to exist because 0x69d70 is a
+	 * hardware `div`, which faults on a zero divisor.
+	 */
 	if (noise == 0)
 		t3c_puti(obj, ratio_off, 0);		/* 0x6aa0b, 0x6c9aa */
 	else
+		/*
+		 * 0x69d69 halves the noise with `shr $1` and 0x69d70 divides
+		 * with `f7 f1` -- DIV, not IDIV -- so both accumulators are
+		 * unsigned, and the halved denominator is the rounding term.
+		 */
 		t3c_puti(obj, ratio_off,		/* 0x69d72, 0x6a75a */
 			 (signal + noise / 2) / noise);
 }
@@ -7523,14 +8583,39 @@ t72_measure(struct v34_object *obj, unsigned noise_off, unsigned signal_off,
 static void
 t72_probe_done(struct v34_object *obj, struct v34_receiver *rx)
 {
+	/*
+	 * 0x67d85 loads the receiver's +0x238 and 0x67d92 stores it to
+	 * +0xaacc, both 32 bits -- the same pair rxstate 4 copies at 0x67b84
+	 * before it scales it per baud.
+	 */
 	t3c_puti(obj, T72_FAACC,				/* 0x67d92 */
 		 *(const int *)((const char *)rx + T72_RX_F238));
 
+	/*
+	 * 0x67da3.  `$0x19` bins -- the whole bank, not the four the rungs
+	 * used -- and `scale` 2, the same scale as 0x69d03.
+	 */
 	dftenergy(obj->probe_bins, V34_PROBE_BINS, 2);		/* 0x67da3 */
 
+	/*
+	 * 0x67db5 is the body, not a call: the baud argument has already
+	 * folded into constants on the receiver -- +0x1ac = 0x1f40, and
+	 * +0x1ae, +0x1b0 and +0x1be all 0x3e80 -- with +0x128 = 4 alongside.
+	 */
 	V34SetupDemodulator(obj, 0x960, 0);			/* 0x67db5 */
 
+	/*
+	 * 0x67dd2 reads +0x122 eight instructions ahead of the demodulator's
+	 * stores and 0x67e10 writes it back; 0x67e10 is the only write to
+	 * +0x122 in the block.  The bit it raises is the one rxstate 4 clears
+	 * at 0x68edd.
+	 */
 	rx->flags = (unsigned short)(rx->flags | 0x800);	/* 0x67e10 */
+	/*
+	 * 0x67de0 `movzwl 0x264` and 0x67e17 `mov %si,0x136`: sixteen bits
+	 * copied, so the zero-extension never reaches the field -- which
+	 * 0x67adc reads back with `movswl`.
+	 */
 	rx->agc_gain = (short)*(const unsigned short *)		/* 0x67e17 */
 			((const char *)rx + T3M_RX_F264);
 }
@@ -7551,6 +8636,11 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 	short count;
 	short n;
 
+	/*
+	 * 0x65524.  Everything the ladder below needs is read on the
+	 * instructions that follow the call: 0x65529 takes the counter at
+	 * +0xaa78 and 0x65534 the receiver's +0x130.
+	 */
 	rxtiming(obj);					/* 0x65524 */
 
 	n = t72_nsamples(rx);
@@ -7567,6 +8657,14 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		/* 0x69c7a.  The probe's own signal-to-noise, and re-arm. */
 		t72_update_both(obj, rx, n);
 		t72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_PB_RATIO);
+		/*
+		 * 0x69d78.  The re-arm: ninety-two bytes of `dftfreqinit`
+		 * inlined, twenty-five bins at the probe's own 150 Hz
+		 * spacing, and the only one of the three initialisers that
+		 * clears the double accumulators as well.  0x69d7f and
+		 * 0x69d89 are its first two stores, `movw $0x0,(%edx)` and
+		 * `movl $0x0,0x4(%edx)`.
+		 */
 		dftfreqinit(obj->probe_bins);		/* 0x69d78 */
 	} else if (count >= 0x1c1 && count <= 0x2ff) {
 		/* 0x68dd2.  Accumulate only. */
@@ -7575,7 +8673,22 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		/* 0x6a668.  The nonlinear measurement, and re-arm. */
 		t72_update_both(obj, rx, n);
 		t72_measure(obj, T72_NL_NOISE, T72_NL_SIGNAL, T72_NL_RATIO);
+		/*
+		 * 0x6a760.  Four bins at 1050, 1350, 1950 and 2550 Hz laid
+		 * over `probe_bins[0..3]` -- the four-bin clear at stride
+		 * 0x2c, then `inc` written at +0x2, +0x2e, +0x5a and +0x86.
+		 * Re-arming the signal bank destroys the probe bank's first
+		 * four bins, and finding 739 reads the 0x40 and 0x180 rungs
+		 * as doing that on purpose.
+		 */
 		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a760 */
+		/*
+		 * 0x6a7aa.  Its partner on obj + 0xa76c: 900, 1200, 1800 and
+		 * 2400 Hz, each one 150 Hz step below the signal bin above
+		 * it, which is what makes the pair a distortion measurement
+		 * and 0xa76c the denominator of the ratio just stored.
+		 * Finding 739.
+		 */
 		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a7aa */
 	} else if (count >= 0x41 && count <= 0x17f) {
 		/*
@@ -7584,6 +8697,12 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * separates the two windows.
 		 */
 		t72_update_both(obj, rx, n);
+		/*
+		 * 0x699fd.  `inc %ebp` then `mov %bp,0x124(%ecx)`, and the
+		 * rung ends there: 0x69a04 reloads the txstate from +0x3596
+		 * into %ecx and 0x69a0b jumps to the once-per-block dispatch
+		 * at 0x62af1.
+		 */
 		rx->f124 = (short)(rx->f124 + 1);	/* 0x699fd */
 	} else if (count == 0x40) {
 		/*
@@ -7593,24 +8712,71 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * path REJOINS at 0x6a52c, so the "beginning of RX_L1"
 		 * message prints on both.
 		 */
+		/*
+		 * 0x6a510, AND THE STORE PRECEDES THE BRANCH: `or
+		 * $0x200,%ecx` at 0x6a506 and `cmp $0x34ff,%ax` at 0x6a50c
+		 * both run before the store, and the `jg 6aec1` that picks
+		 * the substituted gain is at 0x6a517 -- after it.  So the
+		 * flag is raised on the out-of-range path too.
+		 */
 		rx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */
 
 		if (rx->agc_gain > 0x34ff) {		/* 0x6a50c, signed */
+			/*
+			 * 0x71343 is out of line and it comes back: the
+			 * string, `cwtl` so the gain reaches printf
+			 * sign-extended, the call, a reload of
+			 * `dsplibs_debug_level`, then `jmp 6aed0` -- the
+			 * store below.
+			 */
 			if (DSPLIB_DEBUG_ON())		/* 0x71343 */
 				dsplibs_debug_printf(
 				    "V34AGC, -- ERROR-- gainestimate in "
 				    "RX_L1,0x%x\n", rx->agc_gain);
+			/*
+			 * 0x6aed9.  The `%edx` that 0x6a52c tests below is
+			 * loaded at 0x6a51d on the in-range path and at
+			 * 0x6aec1 on this one, reloaded at 0x71354 across
+			 * the call -- three loads, and 0x6aec1's serves
+			 * both tests.
+			 */
 			rx->f262 = 0x6000;		/* 0x6aed9 */
 		} else {
+			/*
+			 * 0x6a525.  `add %eax,%eax` on the same register
+			 * 0x6a50c compared, then a halfword store to
+			 * receiver +0x262 -- so the doubled gain is
+			 * truncated to sixteen bits, not saturated.
+			 */
 			rx->f262 = (short)(rx->agc_gain * 2);	/* 0x6a525 */
 		}
 
+		/*
+		 * 0x6a531 is the body; the test is `cmp $0x1,%edx; jbe
+		 * 6a54c` at 0x6a52c.  The argument is re-read `movswl
+		 * 0x136(%edi),%esi` -- SIGNED, and forced, because the whole
+		 * 32-bit value goes to a vararg.
+		 */
 		if (DSPLIB_DEBUG_ON())			/* 0x6a531 */
 			dsplibs_debug_printf("V34AGC, rx->gain = 0x%x, at "
 					     "the beginning of RX_L1\n",
 					     rx->agc_gain);
 
+		/*
+		 * 0x6a54c.  The counter only counts up, so this rung runs
+		 * FIRST: it arms both nl banks, 0x41..0x17f accumulates into
+		 * them, 0x180 reduces them and arms them again, 0x300 does
+		 * the same for the probe bank, and everything above 0x300 is
+		 * the probe itself.  Finding 739.
+		 */
 		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a54c */
+		/*
+		 * 0x6a5a1.  The other half, on obj + 0xa76c.  The two banks
+		 * are told apart by their phase steps --
+		 * 0x700/0x900/0xd00/0x1100 for the signal bank and
+		 * 0x600/0x800/0xc00/0x1000 for this one, each 0x100 step
+		 * being 150 Hz.  Finding 739.
+		 */
 		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a5a1 */
 	}
 }
@@ -7634,10 +8800,24 @@ t72_rx_l1(struct v34_object *obj)
 
 	if (obj->faa78 <= 0x440) {
 		t72_ladder(obj, rx);
+		/*
+		 * 0x65597.  The ladder's exit, one of the arm's seventeen
+		 * `jmp 62af1`s: `mov 0xc0(%esp),%edi`, `movzwl
+		 * 0x3596(%edi),%ecx`, jump.  The txstate is reloaded into
+		 * %ecx first because the tail dispatches on whatever the
+		 * jumping arm left there.
+		 */
 		t3c_txblock(obj);			/* 0x65597 */
 		return;
 	}
 
+	/*
+	 * 0x650ee.  The `jle 6551a` at 0x650e1 keeps this off the ladder
+	 * path entirely, so the AGC runs only once the counter is past
+	 * 0x440 -- which on the originating end is every block of the
+	 * tone-A wait below, not one.  Its argument is `0x74(%esp)` --
+	 * the receiver at obj + 0x264 -- pushed with no displacement.
+	 */
 	V34agc(rx);					/* 0x650ee */
 
 	if (obj->f359c != 0x65) {
@@ -7649,19 +8829,71 @@ t72_rx_l1(struct v34_object *obj)
 		 */
 		t72_probe_done(obj, rx);
 
+		/*
+		 * 0x67e1e.  `movzwl 0x3594(%ecx),%edx; cmp $0x2b,%dx; je
+		 * 67e4b` -- and the `je` can never take, because the arm is
+		 * entered with the rxstate at 72 and nothing between 0x650c6
+		 * and here writes +0x3594.  The store and its trace always
+		 * run.
+		 */
 		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);	 /* 0x67e1e */
+		/*
+		 * 0x67e4b.  `cmp $0x3c,%dx`, and it is NOT one of the three
+		 * the head of this section calls unreachable: those three
+		 * compare +0x3594 and this one compares +0x3596.  An end
+		 * already in TONE_AB stores nothing and prints nothing.
+		 */
 		hs_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);	 /* 0x67e4b */
+		/*
+		 * 0x67e7f.  `cmp $0x29,%dx` on +0x3592: microstate 41, whose
+		 * arm at 0x669a4 is the table-3 case at the bottom of this
+		 * file.  This store is what sends the next block there.
+		 */
 		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC); /* 0x67e7f */
 
+		/*
+		 * 0x67eb3.  Inlined, and it runs to 0x67f4d: `mov
+		 * %bx,0xaae6(%esi,%eax,2)` at 0x67ebe is the head of the
+		 * hundred-halfword clear, and the two stores at 0x67f46 and
+		 * 0x67f4d -- +0xaae2 to all ones, +0xaae0 to zero -- are the
+		 * last two of `fsk_state_init`'s eleven, not statements of
+		 * this arm.
+		 */
 		dpskDetectInfo1Init(obj);			 /* 0x67eb3 */
 
+		/*
+		 * 0x67f54.  `movw $0x4d,0x18(%ebp)`, and %ebp already holds
+		 * obj + 0xa9dc: the length field is filled in BEFORE 0x67f6e
+		 * publishes the pointer to the record.  Microstate 41 puts
+		 * INFO1a's 0x26 in the same field of the same record at
+		 * 0x6b379 before aiming the same pointer at it -- which
+		 * sequence the end expects is the whole difference.
+		 */
 		hs_put(obj, T72_BLK_A9DC + 0x18, 0x4d);		 /* 0x67f54 */
 		obj->vect_idx = 0;				 /* 0x67f5a */
+		/*
+		 * 0x67f68.  `mov %ebx,0xa8a0(%esi)`, thirty-two bits.  This
+		 * is the gate 0x64a87 tests, so from the next block on the
+		 * RX_DPSK path polls the retrain detector as well -- and
+		 * falls through to the FSK demodulator either way, which is
+		 * finding 721.
+		 */
 		t3c_puti(obj, T72_FSKGATE, 1);			 /* 0x67f68 */
 		t3c_putp(obj, T72_PTR_AA70,			 /* 0x67f6e */
 			 (char *)obj + T72_BLK_A9DC);
+		/*
+		 * 0x67f74.  `mov %di,0xaa78(%esi)`, a halfword.  +0xaa78 is
+		 * not this arm's private counter -- six arms bump it and it
+		 * is the `[2]` every state trace prints -- so leaving it at
+		 * 0x441 on the way out would be visible everywhere.
+		 */
 		obj->faa78 = 0;					 /* 0x67f74 */
 
+		/*
+		 * 0x67f7b.  The exit, and the %ecx it dispatches on was
+		 * loaded from +0x3596 at 0x67f61 -- scheduled into the middle
+		 * of the store run, three stores before the jump.
+		 */
 		t3c_txblock(obj);				 /* 0x67f7b */
 		return;
 	}
@@ -7675,24 +8907,48 @@ t72_rx_l1(struct v34_object *obj)
 		 */
 		t72_probe_done(obj, rx);
 
+		/*
+		 * 0x696d0.  `cmp $0x3c,%cx; je 69702`: when the txstate is
+		 * already 60 the store at 0x696f6 and the trace are both
+		 * skipped -- and both paths leave 0x3c in %ecx, which is what
+		 * the exit at 0x6971e dispatches on.
+		 */
 		hs_setstate(obj, HS_TXSTATE, V34HS_TONE_AB);	/* 0x696d0 */
 
+		/*
+		 * 0x69710.  `mov $0xffffffff,%ebp` and then a halfword store,
+		 * so +0xaae2 gets 0xffff.  It is the shift register's reset
+		 * value and this arm writes it at three sites -- 0x67f46,
+		 * 0x68851 and here.
+		 */
 		obj->fsk.sr = -1;				/* 0x69710 */
 		obj->fsk.nbits = 0;				/* 0x69717 */
 
+		/* 0x6971e, and %ecx still holds TONE_AB from 0x696d0. */
 		t3c_txblock(obj);				/* 0x6971e */
 		return;
 	}
 
+	/*
+	 * 0x65140, and the two guards below read what it writes:
+	 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
+	 * 0x65153, both sixteen bits, both on fields this call has
+	 * just filled in.  No fixture can choose them by poking.
+	 */
 	fskdemodulate(obj,					/* 0x65140 */
 		      (const short *)((const char *)rx + T72_RX_SAMPS),
 		      &obj->fsk);
 
 	if (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {
 		/*
-		 * 0x6881e.  Not enough bits, or they are not all ones: no
-		 * tone A this block, so all that is left is the timeout
-		 * ladder.  See the head of this section for why the 32-bit
+		 * 0x6881e.  Not enough bits, or the twelve are not all ZERO:
+		 * no tone A this block, so all that is left is the timeout
+		 * ladder.  The polarity is the object's and is worth stating,
+		 * because this comment used to have it backwards: 0x65153 is
+		 * `testw $0xfff,0xaae2(%esi)` with `jne 6881e`, so it is a
+		 * NON-zero masked register that fails.  The register is reset
+		 * to all ones at all three sites above, so twelve ZEROS
+		 * shifting in is what tone A looks like here.  See the head of this section for why the 32-bit
 		 * arithmetic here cannot be separated from a 16-bit spelling
 		 * by any trial, and what is tested instead.
 		 */
@@ -7700,16 +8956,43 @@ t72_rx_l1(struct v34_object *obj)
 		int count = obj->faa78;
 
 		if (count > 0xf10 + limit) {
+			/*
+			 * 0x68851, AND THE STORE PRECEDES THE BRANCH: it
+			 * sits between `cmp %ebx,%ecx` at 0x6884f and `je
+			 * 6afd7` at 0x68858, so every block past 0xf10 +
+			 * rtd/4 clears the shift register, not only the one
+			 * that matches 0xf14.
+			 */
 			obj->fsk.sr = -1;		/* 0x68851 */
 
 			if (count == 0xf14 + limit) {
+				/*
+				 * 0x6afe8 sits between the debug
+				 * test at 0x6afe1 and its `ja
+				 * 6b120` at 0x6afef -- the toggle
+				 * happens whether or not the
+				 * message prints.
+				 */
 				obj->f358c ^= 1;	/* 0x6afe8 */
+				/*
+				 * 0x6b120 is out of line and does
+				 * not come back: it prints,
+				 * reloads +0x3596 into %ecx and
+				 * jumps to 0x62af1 itself.
+				 */
 				if (DSPLIB_DEBUG_ON())	/* 0x6b120 */
 					dsplibs_debug_printf(
 					    "V34RETRAIN, waiting for tone A "
 					    "at the end of RX_L2\n");
 			} else if (count == 0xf2c + limit) {
 				/* 0x6c9f1: give up and go round again. */
+				/*
+				 * 0x6c9fa zeroes the counter
+				 * before either transition below,
+				 * and 0x6ca01's `cmp $0x2b` is one
+				 * of the three that can never
+				 * match.
+				 */
 				obj->faa78 = 0;		/* 0x6c9fa */
 				hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
 				hs_setstate(obj, HS_MICROSTATE, V34HS_TX_L1);
@@ -7724,9 +9007,25 @@ t72_rx_l1(struct v34_object *obj)
 	 * 0x65162.  Tone A: hand the receive machine to phase 2's DPSK and
 	 * the microstate to the caller's phase-3 wait.
 	 */
+	/*
+	 * 0x65162.  `cmp $0x2b,%dx` on +0x3594, and the `je 651e9`
+	 * can never take -- the arm is entered with the rxstate at 72
+	 * and nothing on the way here writes it -- so the store and
+	 * its trace always run.
+	 */
 	hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);		/* 0x65162 */
+	/*
+	 * 0x651e9.  `cmp $0x3e,%dx` on +0x3592 -- 62 -- and it is
+	 * also 0x6516d's `je` target, so the microstate transition is
+	 * where the rxstate transition's "already there" exit lands.
+	 */
 	hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE3_CALL);	/* 0x651e9 */
 
+	/*
+	 * 0x65289.  The exit, and its %ecx was loaded from +0x3596 at
+	 * 0x6527b -- after the trace call at 0x6526a and one
+	 * instruction before the microstate store at 0x65282.
+	 */
 	t3c_txblock(obj);					/* 0x65289 */
 }
 
@@ -7919,18 +9218,48 @@ v34handshak(void *vobj)
 
 	if (rxst != V34HS_RX_DPSK) {
 		if (rxst > V34HS_RX_DPSK) {
-			/* 0x62b71, and 72 is the one that is not written. */
+			/*
+			 * 0x62b71 `cmp $0x35,%eax` heads the above-DPSK
+			 * half of the chain, and the clause that used to
+			 * sit here -- "72 is the one that is not written"
+			 * -- is stale: `t72_rx_l1` is defined just above
+			 * and called below.
+			 */
+			/*
+			 * 0x62b74's `je` target, and like 0x653e4 below it
+			 * names the argument setup rather than the call:
+			 * `mov 0x74(%esp),%esi; mov %esi,(%esp)` ahead of
+			 * the `V34agc` at 0x6547a.
+			 */
 			if (rxst == V34HS_DET_AB) {
 				t53_rx_det_ab(obj);	/* 0x65473 */
 				return;
 			}
+			/*
+			 * 0x62b7d's `je` target.  0x650c6 is the counter
+			 * increment at the head of the arm: `movzwl
+			 * 0xaa78`, `inc`, `cmp $0x440`, the store, then
+			 * `jle 6551a`.
+			 */
 			if (rxst == V34HS_RX_L1) {
 				t72_rx_l1(obj);		/* 0x650c6 */
 				return;
 			}
+			/*
+			 * 0x62b83.  `mov 0xc0(%esp),%esi; movzwl
+			 * 0x3596(%esi),%ecx; jmp 62af1` -- the second
+			 * chain's fall-through, reached by every rxstate
+			 * above 43 that is not 53 or 72.  Finding 717.
+			 */
 			t3c_txblock(obj);		/* 0x62b83 */
 			return;
 		}
+		/*
+		 * 0x62a18's `je` target, and 0x653e4 is not the arm's first
+		 * statement but the argument setup for it: `mov
+		 * 0xc0(%esp),%ecx; mov %ecx,(%esp)` ahead of the `receiver`
+		 * call at 0x653ee.
+		 */
 		if (rxst == V34HS_RECEIVE) {
 			t4_rx_receive(obj);		/* 0x653e4 */
 			return;
@@ -7948,6 +9277,12 @@ v34handshak(void *vobj)
 			t3c_txblock(obj);		/* 0x67546 -> 0x62af1 */
 			return;
 		}
+		/*
+		 * 0x62a2a IS the dispatch rather than a jump to it: the same
+		 * `movswl %cx,%eax; sub $0x5; cmp $0x45` that 0x62af1 has,
+		 * `jbe 62b00` into table 2's indirect jump, and an
+		 * out-of-range txstate falling into the tail at 0x62a40.
+		 */
 		t3c_txblock(obj);			/* 0x62a2a */
 		return;
 	}
@@ -7999,6 +9334,14 @@ v34handshak(void *vobj)
 	 * $0x80` and `je`, EQUALITY and not `>=`, so its signedness is moot
 	 * and a caller arriving out of step with four would never measure.
 	 * Four is what the receive queue drains everywhere.
+	 */
+	/*
+	 * The action block below ends with four halfword stores at
+	 * 0x695f0..0x69605, all through one base: +0x2aa2, +0xaa78,
+	 * +0xaae2 and +0xaae0 -- the vector index, the counter six
+	 * arms share, the FSK shift register and its bit count.
+	 * 0x6960c is the `jmp 64a8f` finding 721 describes, so this
+	 * is a reset and not an exit.
 	 */
 	if (T3M_I32(&frame, T3M_FSKGATE) != 0
 	    && detectRetrainReq(obj, V34_RETRAIN_BINS, fskin, 4)) {
@@ -8069,6 +9412,11 @@ v34handshak(void *vobj)
 	frame.mst = hs_get(obj, HS_MICROSTATE);
 
 	if ((unsigned)((int)frame.mst - T3M_TBL3_FIRST) >= T3M_TBL3_COUNT) {
+		/*
+		 * 0x65329.  `mov 0xc0(%esp),%ebx; movzwl 0x3596(%ebx),%ecx;
+		 * jmp 62af1`: a microstate outside table 3's range leaves
+		 * through the same transmit dispatch as everything else here.
+		 */
 		t3c_txblock(obj);			/* 0x65329 */
 		return;
 	}
